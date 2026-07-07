@@ -18,6 +18,7 @@ def test_supported_types():
     assert {t.value for t in AgentType} == {
         "claude_code",
         "codex",
+        "opencode",
     }
 
 

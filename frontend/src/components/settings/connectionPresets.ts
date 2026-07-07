@@ -37,14 +37,14 @@ export function defaultCompatibleAgents(protocol: Protocol | ""): AgentType[] {
     case "anthropic":
       return ["claude_code"];
     case "openai":
-      return ["codex"];
+      return ["codex", "opencode"];
     case "unknown":
     case "": // custom, before a wire is picked
-      return ["claude_code", "codex"];
+      return ["claude_code", "codex", "opencode"];
     default: // ollama
       return [];
   }
 }
 
 // The agents a user can tick a connection as compatible with.
-export const SELECTABLE_AGENTS: AgentType[] = ["claude_code", "codex"];
+export const SELECTABLE_AGENTS: AgentType[] = ["claude_code", "codex", "opencode"];

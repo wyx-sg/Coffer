@@ -181,3 +181,62 @@ def test_per_connection_api_key_helper_is_written_and_removed() -> None:
     assert "apiKeyHelper" not in json.loads(remove_anthropic_settings(out))
     legacy = '{"apiKeyHelper": "coffer provider key --wire anthropic"}'
     assert "apiKeyHelper" not in json.loads(remove_anthropic_settings(legacy))
+
+
+# --- opencode (ADR-040) — openai-compatible provider block in opencode.json ----
+
+
+def test_opencode_provider_writes_block_and_selects_model() -> None:
+    from coffer.domain.provider.projection import apply_opencode_provider
+
+    out = apply_opencode_provider('{"theme": "system"}', base_url="https://gw/v1", model="gpt-5")
+    d = json.loads(out)
+    assert d["theme"] == "system"  # unrelated key preserved
+    block = d["provider"][CODEX_PROVIDER_ID]
+    assert block["npm"] == "@ai-sdk/openai-compatible"
+    assert block["options"]["baseURL"] == "https://gw/v1"
+    # The raw key is never written — only an {env:...} reference.
+    assert block["options"]["apiKey"] == f"{{env:{CODEX_ENV_KEY}}}"
+    assert "gpt-5" in block["models"]
+    assert d["model"] == f"{CODEX_PROVIDER_ID}/gpt-5"
+
+
+def test_opencode_provider_unbound_model_leaves_top_level_model() -> None:
+    from coffer.domain.provider.projection import apply_opencode_provider
+
+    out = apply_opencode_provider('{"model": "user/own"}', base_url="https://gw/v1", model=None)
+    d = json.loads(out)
+    assert d["model"] == "user/own"  # untouched when the agent is unbound
+    assert "provider" in d
+
+
+def test_opencode_remove_strips_block_and_coffer_model() -> None:
+    from coffer.domain.provider.projection import apply_opencode_provider, remove_opencode_provider
+
+    out = apply_opencode_provider('{"keep": 1}', base_url="https://gw/v1", model="gpt-5")
+    back = json.loads(remove_opencode_provider(out))
+    assert "provider" not in back  # provider object removed once empty
+    assert "model" not in back  # coffer/* model cleared
+    assert back["keep"] == 1  # unrelated key preserved
+
+
+def test_opencode_remove_keeps_user_model_and_other_providers() -> None:
+    from coffer.domain.provider.projection import remove_opencode_provider
+
+    text = json.dumps(
+        {
+            "model": "openai/gpt-4o",  # user-chosen, not coffer/*
+            "provider": {CODEX_PROVIDER_ID: {"npm": "x"}, "mine": {"npm": "y"}},
+        }
+    )
+    back = json.loads(remove_opencode_provider(text))
+    assert back["model"] == "openai/gpt-4o"  # not a coffer/* model → left alone
+    assert CODEX_PROVIDER_ID not in back["provider"]
+    assert back["provider"]["mine"] == {"npm": "y"}  # other provider preserved
+
+
+def test_target_for_agent_opencode() -> None:
+    t = target_for_agent(AgentType.OPENCODE)
+    assert t is not None
+    assert t.config_key == "opencode"
+    assert t.format.value == "json"

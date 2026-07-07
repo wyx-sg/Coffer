@@ -14,7 +14,7 @@ import { translateApiError } from "@/lib/api/errors";
 import type { AgentCreate, AgentType } from "@/lib/api/agents";
 import { useRegisterAgent } from "@/lib/hooks/useAgents";
 
-const TYPES: AgentType[] = ["claude_code", "codex"];
+const TYPES: AgentType[] = ["claude_code", "codex", "opencode"];
 
 export function AgentManualAddForm({ onAdded }: { onAdded: (name: string) => void }) {
   const { t } = useTranslation();

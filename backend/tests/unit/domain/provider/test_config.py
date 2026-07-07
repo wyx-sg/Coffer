@@ -82,10 +82,15 @@ def test_compatible_agents_defaults_by_protocol() -> None:
     assert anthropic.compatible_agents is None
     assert anthropic.resolved_compatible_agents() == [AgentType.CLAUDE_CODE]
     openai = ProviderConfig(protocol="openai", base_url="x", credential_ref="r")  # type: ignore[arg-type]
-    assert openai.resolved_compatible_agents() == [AgentType.CODEX]
+    # openai-wire defaults to every openai-compatible agent (Codex + opencode, ADR-040).
+    assert openai.resolved_compatible_agents() == [AgentType.CODEX, AgentType.OPENCODE]
     # unknown is offered to every agent; the user narrows it via checkboxes.
     unknown = ProviderConfig(protocol="unknown", base_url="x", credential_ref="r")  # type: ignore[arg-type]
-    assert unknown.resolved_compatible_agents() == [AgentType.CLAUDE_CODE, AgentType.CODEX]
+    assert unknown.resolved_compatible_agents() == [
+        AgentType.CLAUDE_CODE,
+        AgentType.CODEX,
+        AgentType.OPENCODE,
+    ]
     # ollama is internal-only: it projects into no agent.
     ollama = ProviderConfig(protocol="ollama", base_url="http://x")  # type: ignore[arg-type]
     assert ollama.resolved_compatible_agents() == []

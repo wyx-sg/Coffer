@@ -30,6 +30,23 @@ async def _register_codex(bundle, home: pathlib.Path):
     await bundle.svc.register(agent_type=AgentType.CODEX, name="cx", actor="cli")
 
 
+async def _register_opencode(bundle, home: pathlib.Path):
+    (home / ".config" / "opencode" / "skills").mkdir(parents=True, exist_ok=True)
+    await bundle.svc.register(agent_type=AgentType.OPENCODE, name="oc", actor="cli")
+
+
+async def test_opencode_native_memory_disable_is_unsupported(agent_bundle, tmp_path, monkeypatch):
+    # opencode has no native write-side memory (ADR-040): the toggle is an absent
+    # facet, so the service rejects it (422) rather than raising AssertionError/500.
+    from coffer.domain.workspace_errors import NativeMemoryDisableUnsupported
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_opencode(agent_bundle, tmp_path)
+
+    with pytest.raises(NativeMemoryDisableUnsupported):
+        await agent_bundle.svc.set_disable_native_memory(name="oc", enabled=True, actor="ui")
+
+
 async def test_enable_persists_field_and_writes_claude_settings(
     agent_bundle, tmp_path, monkeypatch
 ):

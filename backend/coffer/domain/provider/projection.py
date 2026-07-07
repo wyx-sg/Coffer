@@ -82,6 +82,8 @@ _AGENT_TARGETS: dict[AgentType, ProjectionTarget] = {
         AgentType.CLAUDE_CODE, "settings", ConfigFileFormat.JSON
     ),
     AgentType.CODEX: ProjectionTarget(AgentType.CODEX, "config", ConfigFileFormat.TOML),
+    # opencode projects an openai-compatible `provider` block into opencode.json.
+    AgentType.OPENCODE: ProjectionTarget(AgentType.OPENCODE, "opencode", ConfigFileFormat.JSON),
 }
 
 
@@ -210,3 +212,63 @@ def remove_codex_provider(text: str, *, provider_id: str = CODEX_PROVIDER_ID) ->
         doc.pop("model_provider", None)
         doc.pop("model", None)
     return tomlkit.dumps(doc)
+
+
+def apply_opencode_provider(
+    text: str,
+    *,
+    base_url: str,
+    model: str | None,
+    provider_id: str = CODEX_PROVIDER_ID,
+    env_key: str = CODEX_ENV_KEY,
+) -> str:
+    """Return new ``opencode.json`` text with Coffer's openai-compatible provider.
+
+    Merges into the user's existing JSON (unrelated keys preserved). Writes a
+    ``provider.<provider_id>`` block using opencode's ``@ai-sdk/openai-compatible``
+    npm loader whose ``apiKey`` REFERENCES the env var Coffer injects at spawn time
+    (``{env:COFFER_PROVIDER_KEY}``) — the raw key is never written to disk, same as
+    the Codex/Claude projections. When a ``model`` is bound, it is declared in the
+    provider's ``models`` map and selected as the top-level ``model``
+    (``<provider_id>/<model>``); an unbound agent leaves the top-level ``model``
+    untouched so opencode uses its own default.
+    """
+    data = json.loads(text) if text.strip() else {}
+    if not isinstance(data, dict):  # a hand-edit left a non-object root
+        data = {}
+    provider = data.get("provider")
+    if not isinstance(provider, dict):
+        provider = {}
+        data["provider"] = provider
+    block: dict[str, object] = {
+        "npm": "@ai-sdk/openai-compatible",
+        "name": "Coffer",
+        "options": {"baseURL": base_url, "apiKey": f"{{env:{env_key}}}"},
+    }
+    if model:
+        block["models"] = {model: {}}
+        data["model"] = f"{provider_id}/{model}"
+    provider[provider_id] = block
+    return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+
+
+def remove_opencode_provider(text: str, *, provider_id: str = CODEX_PROVIDER_ID) -> str:
+    """Inverse of :func:`apply_opencode_provider` — drop Coffer's ``provider`` entry
+    so opencode falls back to its OWN provider/model. The ``provider.<provider_id>``
+    block is always removed (and the ``provider`` object when it becomes empty); the
+    top-level ``model`` is cleared ONLY when it points at Coffer (``<provider_id>/``).
+    Unrelated keys are preserved."""
+    if not text.strip():
+        return ""
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        return "{}\n"
+    provider = data.get("provider")
+    if isinstance(provider, dict):
+        provider.pop(provider_id, None)
+        if not provider:
+            data.pop("provider", None)
+    model = data.get("model")
+    if isinstance(model, str) and model.startswith(f"{provider_id}/"):
+        data.pop("model", None)
+    return json.dumps(data, indent=2, ensure_ascii=False) + "\n"

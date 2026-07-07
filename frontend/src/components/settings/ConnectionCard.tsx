@@ -21,6 +21,7 @@ interface Props {
 const AGENT_LABEL_KEY: Record<AgentType, string> = {
   claude_code: "settings.connections.agentClaudeCode",
   codex: "settings.connections.agentCodex",
+  opencode: "settings.connections.agentOpencode",
 };
 
 export function ConnectionCard({ provider: p, deletePending, onEdit, onDelete }: Props) {

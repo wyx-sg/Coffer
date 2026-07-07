@@ -47,6 +47,7 @@ from coffer.infrastructure.chat.agentic_rag import DEFAULT_RECURSION_LIMIT, make
 from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
 from coffer.infrastructure.chat.gateway_tool_provider import GatewayToolProvider
+from coffer.infrastructure.chat.opencode_provider import OpencodeProvider
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.knowledge import paths
@@ -341,6 +342,22 @@ def wire_chat(
     registry.register(
         CodexAppServerProvider(conversations=conv_repo, resolve_key=_resolve_codex_key),
         display_name="Codex",
+    )
+
+    # opencode reads Coffer's projected key from COFFER_PROVIDER_KEY too (its
+    # opencode.json provider block references {env:COFFER_PROVIDER_KEY}); resolve
+    # the connection active for opencode per turn and inject it, else None so
+    # opencode uses its own configured provider (ADR-032 / ADR-040).
+    async def _resolve_opencode_key() -> str | None:
+        try:
+            key: str = await get_provider_service().resolve_active_key_for_agent(AgentType.OPENCODE)
+            return key
+        except (NoActiveProvider, CredentialMissing):
+            return None
+
+    registry.register(
+        OpencodeProvider(conversations=conv_repo, resolve_key=_resolve_opencode_key),
+        display_name="opencode",
     )
 
     # 7. Application services + the agent-agnostic turn orchestrator.

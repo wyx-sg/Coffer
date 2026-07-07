@@ -33,6 +33,7 @@ from coffer.domain.errors import (
     SkillDirNotWritable,
 )
 from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.workspace_errors import NativeMemoryDisableUnsupported
 
 # Privileged path defence. Each entry is matched at component boundary (the
 # entry itself or entry + os.sep) — so "/var" rejects "/var/run/x" but NOT
@@ -367,7 +368,12 @@ class AgentService:
         existing = await self.get(name)
         cfg = AgentConfig.model_validate(existing.config)
         # Resolve the config file holding the native-memory toggle for this type.
-        config_key, fmt = native_memory_disable_target(cfg.type)
+        # A type with no native write-side memory (e.g. opencode) has no target —
+        # the toggle is absent, not broken (capability matrix, ADR-040).
+        target = native_memory_disable_target(cfg.type)
+        if target is None:
+            raise NativeMemoryDisableUnsupported(cfg.type.value)
+        config_key, fmt = target
         spec = spec_for(cfg.type, config_key, cfg.resolved_config_dir())
         text = self._config_file_store.read_text(spec.path) or ""
         if enabled:

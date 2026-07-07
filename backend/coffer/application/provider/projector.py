@@ -21,8 +21,10 @@ from coffer.domain.provider.projection import (
     anthropic_api_key_helper,
     apply_anthropic_settings,
     apply_codex_provider,
+    apply_opencode_provider,
     remove_anthropic_settings,
     remove_codex_provider,
+    remove_opencode_provider,
     target_for_agent,
 )
 from coffer.domain.resource import Resource
@@ -101,6 +103,15 @@ class ProviderProjector:
                 fast_model=agent_cfg.fast_model,
                 api_key_helper=anthropic_api_key_helper(name),
             )
+        elif agent_type is AgentType.OPENCODE:
+            # opencode reads the key from COFFER_PROVIDER_KEY (injected into the
+            # subprocess env at spawn time, same seam as Codex) via the
+            # `{env:...}` reference in its provider block.
+            new_text = apply_opencode_provider(
+                text,
+                base_url=cfg.base_url,
+                model=agent_cfg.model,
+            )
         else:
             new_text = apply_codex_provider(
                 text,
@@ -119,6 +130,8 @@ class ProviderProjector:
             return  # nothing was ever projected
         if agent_type is AgentType.CLAUDE_CODE:
             new_text = remove_anthropic_settings(text)
+        elif agent_type is AgentType.OPENCODE:
+            new_text = remove_opencode_provider(text)
         else:
             new_text = remove_codex_provider(text)
         self._config_store.write_text_atomic(spec.path, new_text)
