@@ -44,6 +44,41 @@ async def test_unaddressed_group_message_is_ignored(env: ChannelEnv) -> None:
     assert await env.peers.get_by_chat(resource.id, "grp-1") is None
 
 
+@pytest.mark.acceptance(
+    spec="009-channels", scenario="an empty sender_id in a group cannot bypass the owner gate"
+)
+async def test_empty_sender_id_in_a_group_is_refused_not_treated_as_owner(
+    env: ChannelEnv,
+) -> None:
+    """Regression: a group message with no resolvable ``sender_id`` (the
+    transport could not supply one) must be refused like any other
+    non-owner, never silently treated as the owner. A group chat is shared,
+    so falling through here would let an unidentifiable member drive turns
+    on the owner's agent."""
+    resource, adapter = await env.paired_channel(sender_id="owner-1")
+
+    await env.processor.on_message(
+        inbound(
+            "tg",
+            "grp-1",
+            "@bot help me",
+            chat_kind="group",
+            addressed=True,
+            sender_id="",
+            thread_id="th-1",
+        )
+    )
+
+    assert len(adapter.sent) == 1
+    chat_id, text = adapter.sent[0]
+    assert chat_id == "grp-1"
+    assert "Not authorized" in text
+    assert adapter.sent_routed[0] == (chat_id, text, "th-1", "group")
+    # No turn was started and no peer row was created for the unverified sender.
+    assert await env.chat.list_conversations() == []
+    assert await env.peers.get_by_chat(resource.id, "grp-1") is None
+
+
 @pytest.mark.acceptance(spec="009-channels", scenario="a non-owner @mention in a group is refused")
 async def test_non_owner_mention_in_a_group_is_refused(env: ChannelEnv) -> None:
     """An @mention from someone other than the channel's paired owner gets a

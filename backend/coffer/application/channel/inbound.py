@@ -152,7 +152,13 @@ class InboundProcessor:
                 # owner sender id yet) — a group @mention cannot bootstrap
                 # pairing; only the paired DM/pairing-code flow can.
                 return
-            if msg.sender_id and msg.sender_id != owner:
+            if not msg.sender_id or msg.sender_id != owner:
+                # A group chat is shared, unlike a DM's 1:1 chat_id match — an
+                # empty sender_id here (the transport failed to supply one)
+                # must never fall through as "assume it's the owner": that
+                # would let any member without a resolvable sender_id drive
+                # turns on the owner's agent. Refuse whenever ownership can't
+                # be proven, not just when it is provably wrong.
                 await self._safe_send(
                     binding,
                     msg.chat_id,
@@ -212,6 +218,8 @@ class InboundProcessor:
                 text,
                 self._session(binding.name, peer.chat_id, msg.thread_id),
                 self._safe_send,
+                chat_kind=msg.chat_kind,
+                thread_id=msg.thread_id,
             )
             return
         if (

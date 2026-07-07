@@ -28,18 +28,12 @@ from coffer.domain.channel.envelopes import (
 from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.infrastructure.channel.seatalk_parse import (
-    flatten_combined_forwarded as _flatten_combined_forwarded,
+    flatten_combined_forwarded,
+    interactive_card,
+    message_to_item,
+    split_to_byte_limit,
+    strip_group_mentions,
 )
-from coffer.infrastructure.channel.seatalk_parse import (
-    interactive_card as _interactive_card,
-)
-from coffer.infrastructure.channel.seatalk_parse import (
-    message_to_item as _message_to_item,
-)
-from coffer.infrastructure.channel.seatalk_parse import (
-    split_to_byte_limit as _split_to_byte_limit,
-)
-from coffer.infrastructure.channel.seatalk_parse import strip_group_mentions
 
 _logger = logging.getLogger(__name__)
 
@@ -108,7 +102,7 @@ class SeaTalkAdapter:
             if tag == "text":
                 text = str((message.get("text") or {}).get("content", ""))
             elif tag == "combined_forwarded_chat_history":
-                text = _flatten_combined_forwarded(message)
+                text = flatten_combined_forwarded(message)
             await self._callbacks.on_message(
                 InboundMessage(
                     channel=self._name,
@@ -132,7 +126,7 @@ class SeaTalkAdapter:
             tag = str(message.get("tag", ""))
             if tag == "combined_forwarded_chat_history":
                 # Same flattening as the DM path (a bare plain_text lookup would drop it).
-                plain_text = _flatten_combined_forwarded(message)
+                plain_text = flatten_combined_forwarded(message)
             else:
                 body = message.get("text") or {}
                 plain_text = strip_group_mentions(
@@ -194,12 +188,12 @@ class SeaTalkAdapter:
         if buttons:
             # Selection prompts are short — one interactive card, no chunking.
             result = await self._send(
-                chat_id, _interactive_card(markdown, buttons), thread_id, chat_kind
+                chat_id, interactive_card(markdown, buttons), thread_id, chat_kind
             )
             return SentMessage(message_id=str(result.get("message_id", "")))
         last = ""
         for chunk in chunk_text(markdown, self.capabilities.max_message_chars):
-            for piece in _split_to_byte_limit(chunk, _BYTE_LIMIT):
+            for piece in split_to_byte_limit(chunk, _BYTE_LIMIT):
                 result = await self._send(
                     chat_id,
                     {"tag": "text", "text": {"format": 1, "content": piece}},
@@ -264,7 +258,7 @@ class SeaTalkAdapter:
             )
             return []
         messages = payload.get("thread_messages") or [] if isinstance(payload, dict) else []
-        return [_message_to_item(m) for m in messages if isinstance(m, dict)]
+        return [message_to_item(m) for m in messages if isinstance(m, dict)]
 
     # -- transport -------------------------------------------------------------
 

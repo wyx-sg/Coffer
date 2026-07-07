@@ -325,20 +325,20 @@ async def test_fetch_thread_maps_thread_page_to_forwarded_items(fake_seatalk: Fa
     assert params == {"group_id": "gid-1", "thread_id": "t1", "page_size": "50"}
 
 
-async def test_message_to_item_maps_non_text_tags() -> None:
-    from coffer.infrastructure.channel.seatalk import _message_to_item
+async def testmessage_to_item_maps_non_text_tags() -> None:
+    from coffer.infrastructure.channel.seatalk import message_to_item
 
-    image_item = _message_to_item(
+    image_item = message_to_item(
         {"sender": {"email": "a@x.com"}, "tag": "image", "image": {"content": "img-key-1"}}
     )
     assert (image_item.sender, image_item.text) == ("a@x.com", "[image] img-key-1")
 
-    file_item = _message_to_item(
+    file_item = message_to_item(
         {"sender": {"email": "a@x.com"}, "tag": "file", "file": {"filename": "report.pdf"}}
     )
     assert (file_item.sender, file_item.text) == ("a@x.com", "[file] report.pdf")
 
-    forwarded_item = _message_to_item(
+    forwarded_item = message_to_item(
         {"sender": {"email": "a@x.com"}, "tag": "combined_forwarded_chat_history"}
     )
     assert (forwarded_item.sender, forwarded_item.text) == (
@@ -346,11 +346,11 @@ async def test_message_to_item_maps_non_text_tags() -> None:
         "[forwarded chat record]",
     )
 
-    other_item = _message_to_item({"sender": {}, "tag": "sticker"})
+    other_item = message_to_item({"sender": {}, "tag": "sticker"})
     assert (other_item.sender, other_item.text) == ("unknown", "[sticker]")
 
     # single-chat text uses "content" instead of group's "plain_text"
-    single_chat_item = _message_to_item(
+    single_chat_item = message_to_item(
         {"sender": {"email": "a@x.com"}, "tag": "text", "text": {"content": "hi"}}
     )
     assert single_chat_item.text == "hi"

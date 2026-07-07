@@ -764,6 +764,22 @@ status / notify`.
 - **Then** the bot replies that the sender is not authorized and no turn is
   started
 
+### Scenario: an empty sender_id in a group cannot bypass the owner gate
+
+- **Given** a paired channel with a known owner and a group chat
+- **When** an addressed group message arrives with no resolvable `sender_id`
+  (the transport failed to supply one)
+- **Then** the bot refuses it exactly like a non-owner sender — no turn is
+  started and no peer row is created
+
+### Scenario: a group slash-command reply routes to the group/thread
+
+- **Given** a paired channel and a group chat/thread the owner has messaged in
+- **When** the owner sends a slash command (e.g. `/status`) inside that
+  group/thread
+- **Then** the command's reply is routed with the same `chat_kind`/`thread_id`
+  as the triggering message, not the DM defaults
+
 ### Scenario: the owner @mentions the bot inside a thread
 
 - **Given** a paired channel and a group chat with a thread, on a transport

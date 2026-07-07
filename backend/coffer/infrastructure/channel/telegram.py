@@ -1,9 +1,8 @@
 """Telegram transport: long polling in, Bot API methods out.
 
-No SDK — the seven Bot API methods used here are plain POSTs. Long polling
-(`getUpdates`) needs no public ingress, which is what a local-first daemon
-wants; the update offset is committed only after a dispatch attempt, so a
-reconnect never re-delivers what the core already saw.
+No SDK — the seven Bot API methods used here are plain POSTs. Long polling (`getUpdates`) needs
+no public ingress, which is what a local-first daemon wants; the update offset is committed
+only after a dispatch attempt, so a reconnect never re-delivers what the core already saw.
 """
 
 from __future__ import annotations
@@ -65,8 +64,7 @@ class TelegramAdapter:
     ) -> None:
         self._name = channel_name
         self._base = f"{base_url}/bot{bot_token}"
-        # File downloads use a different URL shape than the Bot API methods:
-        # {base}/file/bot{token}/{file_path}, not {base}/bot{token}/{method}.
+        # File downloads use {base}/file/bot{token}/{path}, not {base}/bot{token}/{method}.
         self._file_base = f"{base_url}/file/bot{bot_token}"
         self._media_dir = media_dir or default_media_dir()
         self._client = client or httpx.AsyncClient(
@@ -341,9 +339,8 @@ class TelegramAdapter:
                 **extra,
             )
         except ChannelSendFailed as e:
-            # Retry as plain text ONLY when the platform explicitly rejected
-            # the formatted message (400 = can't parse entities). A transport
-            # error may mean the first send actually got through — resending
+            # Retry as plain text only when the platform rejected formatting (400 = bad
+            # entities). A transport error may mean the send got through already — retrying
             # would duplicate; a 429 needs backoff, not an instant resend.
             if not (e.api_rejected and e.status == 400):
                 raise
