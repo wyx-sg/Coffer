@@ -109,3 +109,47 @@ async def test_status_reports_agent(env: ChannelEnv) -> None:
 
     status = adapter.texts()[-1]
     assert "codex" in status.lower()
+
+
+# -- group command replies route back to the group/thread, not a DM (regression) -
+
+
+@pytest.mark.acceptance(
+    spec="009-channels", scenario="a group slash-command reply routes to the group/thread"
+)
+async def test_group_status_command_reply_routes_to_group_and_thread(env: ChannelEnv) -> None:
+    """Regression: an owner's ``/status`` sent inside a group thread must have
+    its reply routed with ``chat_kind="group"`` and that same ``thread_id`` —
+    not fall through to the ``_safe_send`` DM defaults, which would target the
+    wrong endpoint (and, on SeaTalk, get silently rejected)."""
+    _resource, adapter = await env.paired_channel(sender_id="owner-1")
+
+    await env.processor.on_message(
+        inbound(
+            "tg",
+            "grp-1",
+            "/status",
+            chat_kind="group",
+            addressed=True,
+            sender_id="owner-1",
+            thread_id="th-1",
+        )
+    )
+
+    assert len(adapter.sent) == 1
+    chat_id, text = adapter.sent[0]
+    assert chat_id == "grp-1"
+    assert "Conversation" in text
+    assert adapter.sent_routed[0] == (chat_id, text, "th-1", "group")
+
+
+async def test_dm_status_command_reply_still_routes_direct(env: ChannelEnv) -> None:
+    """DM regression: a ``/status`` command in a DM still replies with the
+    untouched defaults (``chat_kind="direct"``, ``thread_id=""``)."""
+    _resource, adapter = await env.paired_channel()
+
+    await env.processor.on_message(inbound("tg", "owner", "/status"))
+
+    assert len(adapter.sent) == 1
+    chat_id, text = adapter.sent[0]
+    assert adapter.sent_routed[0] == (chat_id, text, "", "direct")

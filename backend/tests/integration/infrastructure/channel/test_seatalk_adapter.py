@@ -8,6 +8,7 @@ normalization of subscriber messages and approval clicks.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 
@@ -189,6 +190,85 @@ async def test_send_text_with_buttons_emits_interactive_card(fake_seatalk: FakeS
     ]
 
 
+# -- group / thread send (Task 4) --------------------------------------------
+
+
+async def test_send_text_group_posts_group_chat_with_thread_id(fake_seatalk: FakeSeaTalk) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        sent = await adapter.send_text("gid-1", "hi", chat_kind="group", thread_id="t1")
+    finally:
+        await adapter.stop()
+    assert fake_seatalk.single_chat_calls == []  # group send never hits single_chat
+    [(body, _auth)] = fake_seatalk.group_chat_calls
+    assert body == {
+        "group_id": "gid-1",
+        "message": {"tag": "text", "text": {"format": 1, "content": "hi"}},
+        "thread_id": "t1",
+    }
+    assert sent.message_id == "m1"
+
+
+async def test_send_text_group_without_thread_id_omits_thread_field(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        await adapter.send_text("gid-1", "hi", chat_kind="group")
+    finally:
+        await adapter.stop()
+    [(body, _auth)] = fake_seatalk.group_chat_calls
+    assert "thread_id" not in body
+
+
+async def test_send_text_direct_still_uses_single_chat(fake_seatalk: FakeSeaTalk) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        await adapter.send_text("emp-1", "hi")
+    finally:
+        await adapter.stop()
+    assert fake_seatalk.group_chat_calls == []
+    [(body, _auth)] = fake_seatalk.single_chat_calls
+    assert body["employee_code"] == "emp-1"
+
+
+async def test_send_text_direct_with_thread_id_threads_the_reply(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """FR-026: a DM reply sent inside a thread must carry thread_id on the
+    single_chat message body so SeaTalk threads it — documented wire
+    placement, not yet live-verified against the real platform."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        await adapter.send_text("emp-1", "hi", thread_id="t1")
+    finally:
+        await adapter.stop()
+    [(body, _auth)] = fake_seatalk.single_chat_calls
+    assert body["employee_code"] == "emp-1"
+    assert body["message"]["thread_id"] == "t1"
+
+
+async def test_send_text_direct_without_thread_id_omits_thread_field(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        await adapter.send_text("emp-1", "hi")
+    finally:
+        await adapter.stop()
+    [(body, _auth)] = fake_seatalk.single_chat_calls
+    assert "thread_id" not in body["message"]
+
+
+async def test_capabilities_declare_groups_and_history_fetch(fake_seatalk: FakeSeaTalk) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        assert adapter.capabilities.supports_groups is True
+        assert adapter.capabilities.supports_history_fetch is True
+    finally:
+        await adapter.stop()
+
+
 async def test_interactive_message_click_routes_to_on_callback(fake_seatalk: FakeSeaTalk) -> None:
     adapter = make_seatalk_adapter(fake_seatalk)
     recorder = RecordingCallbacks()
@@ -215,3 +295,303 @@ async def test_interactive_message_click_routes_to_on_callback(fake_seatalk: Fak
         "agent:codex",
     )
     assert cb.platform_message_id == "card-9"
+
+
+# -- context fetch (Task 5) ---------------------------------------------------
+
+
+def _text_message(email: str, plain_text: str) -> dict:
+    return {"sender": {"email": email}, "tag": "text", "text": {"plain_text": plain_text}}
+
+
+async def test_fetch_thread_maps_thread_page_to_forwarded_items(fake_seatalk: FakeSeaTalk) -> None:
+    fake_seatalk.thread_response = {
+        "code": 0,
+        "thread_messages": [
+            _text_message("alice@example.com", "in the thread"),
+            _text_message("bob@example.com", "replying"),
+        ],
+    }
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        items = await adapter.fetch_thread("gid-1", "t1", limit=50)
+    finally:
+        await adapter.stop()
+    assert [(it.sender, it.text) for it in items] == [
+        ("alice@example.com", "in the thread"),
+        ("bob@example.com", "replying"),
+    ]
+    [params] = fake_seatalk.thread_calls
+    assert params == {"group_id": "gid-1", "thread_id": "t1", "page_size": "50"}
+
+
+async def testmessage_to_item_maps_non_text_tags() -> None:
+    from coffer.infrastructure.channel.seatalk import message_to_item
+
+    image_item = message_to_item(
+        {"sender": {"email": "a@x.com"}, "tag": "image", "image": {"content": "img-key-1"}}
+    )
+    assert (image_item.sender, image_item.text) == ("a@x.com", "[image] img-key-1")
+
+    file_item = message_to_item(
+        {"sender": {"email": "a@x.com"}, "tag": "file", "file": {"filename": "report.pdf"}}
+    )
+    assert (file_item.sender, file_item.text) == ("a@x.com", "[file] report.pdf")
+
+    forwarded_item = message_to_item(
+        {"sender": {"email": "a@x.com"}, "tag": "combined_forwarded_chat_history"}
+    )
+    assert (forwarded_item.sender, forwarded_item.text) == (
+        "a@x.com",
+        "[forwarded chat record]",
+    )
+
+    other_item = message_to_item({"sender": {}, "tag": "sticker"})
+    assert (other_item.sender, other_item.text) == ("unknown", "[sticker]")
+
+    # single-chat text uses "content" instead of group's "plain_text"
+    single_chat_item = message_to_item(
+        {"sender": {"email": "a@x.com"}, "tag": "text", "text": {"content": "hi"}}
+    )
+    assert single_chat_item.text == "hi"
+
+
+async def test_handle_event_forwarded_record_flattens_into_text(fake_seatalk: FakeSeaTalk) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(
+            {
+                "event_type": "message_from_bot_subscriber",
+                "timestamp": 1718000000,
+                "event": {
+                    "employee_code": "emp-1",
+                    "email": "yuxing.wu@shopee.com",
+                    "message": {
+                        "tag": "combined_forwarded_chat_history",
+                        "message_id": "pm-3",
+                        "thread_id": "",
+                        "combined_forwarded_chat_history": {
+                            "content": [
+                                {
+                                    "tag": "text",
+                                    "sender": {"email": "john.phuatd@shopee.com"},
+                                    "message_sent_time": 1718000001,
+                                    "text": {"content": "Do you see this issue?"},
+                                },
+                                {
+                                    "tag": "image",
+                                    "sender": {"email": "john.phuatd@shopee.com"},
+                                    "message_sent_time": 1718000002,
+                                    "image": {"content": "https://cdn.example.com/img.png"},
+                                },
+                                {
+                                    "tag": "text",
+                                    "sender": {"email": "yuxing.wu@shopee.com"},
+                                    "message_sent_time": 1718000003,
+                                    "text": {"content": "let me check"},
+                                },
+                            ]
+                        },
+                    },
+                },
+            }
+        )
+    finally:
+        await adapter.stop()
+    [msg] = recorder.messages
+    assert msg.text.startswith("[Forwarded chat record]")
+    assert "john.phuatd@shopee.com: Do you see this issue?" in msg.text
+    assert "[image] https://cdn.example.com/img.png" in msg.text
+    assert "yuxing.wu@shopee.com: let me check" in msg.text
+    assert msg.thread_id == ""
+
+
+# -- group / @mention inbound (Task 6) ----------------------------------------
+
+
+def _group_mention_envelope(
+    *, plain_text: str, username: str, thread_id: str = "", group_id: str = "gid-1"
+) -> dict[str, Any]:
+    return {
+        "event_type": "new_mentioned_message_received_from_group_chat",
+        "timestamp": 1718000000,
+        "event": {
+            "group_id": group_id,
+            "message": {
+                "message_id": "gm-1",
+                "thread_id": thread_id,
+                "sender": {
+                    "seatalk_id": "st-1",
+                    "employee_code": "emp-2",
+                    "email": "sender@shopee.com",
+                    "sender_type": 1,
+                },
+                "tag": "text",
+                "text": {
+                    "plain_text": plain_text,
+                    "mentioned_list": [{"username": username, "seatalk_id": "bot-1"}],
+                },
+            },
+        },
+    }
+
+
+async def test_handle_event_group_mention_in_main_chat(fake_seatalk: FakeSeaTalk) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(
+            _group_mention_envelope(
+                plain_text="@Yuxing's Work Assistant hi",
+                username="Yuxing's Work Assistant",
+            )
+        )
+    finally:
+        await adapter.stop()
+    [msg] = recorder.messages
+    assert msg.chat_kind == "group"
+    assert msg.chat_id == "gid-1"
+    assert msg.addressed is True
+    assert msg.text == "hi"
+    assert msg.thread_id == ""
+    assert msg.sender_id == "emp-2"
+    assert msg.sender_display == "sender@shopee.com"
+    assert msg.platform_message_id == "gm-1"
+
+
+async def test_handle_event_group_mention_in_thread_sets_thread_id(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(
+            _group_mention_envelope(
+                plain_text="@Yuxing's Work Assistant hi",
+                username="Yuxing's Work Assistant",
+                thread_id="t-9",
+            )
+        )
+    finally:
+        await adapter.stop()
+    [msg] = recorder.messages
+    assert msg.chat_kind == "group"
+    assert msg.addressed is True
+    assert msg.text == "hi"
+    assert msg.thread_id == "t-9"
+
+
+async def test_handle_event_group_forwarded_record_flattens_into_text(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """A group @mention whose message IS a forwarded record (tag ==
+    ``combined_forwarded_chat_history``) must be flattened the same way the
+    DM path flattens it — not dropped to empty text via ``plain_text``."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(
+            {
+                "event_type": "new_mentioned_message_received_from_group_chat",
+                "timestamp": 1718000000,
+                "event": {
+                    "group_id": "gid-1",
+                    "message": {
+                        "message_id": "gm-3",
+                        "thread_id": "",
+                        "sender": {"employee_code": "emp-2", "email": "sender@shopee.com"},
+                        "tag": "combined_forwarded_chat_history",
+                        "combined_forwarded_chat_history": {
+                            "content": [
+                                {
+                                    "tag": "text",
+                                    "sender": {"email": "john.phuatd@shopee.com"},
+                                    "text": {"content": "Do you see this issue?"},
+                                },
+                                {
+                                    "tag": "text",
+                                    "sender": {"email": "yuxing.wu@shopee.com"},
+                                    "text": {"content": "let me check"},
+                                },
+                            ]
+                        },
+                    },
+                },
+            }
+        )
+    finally:
+        await adapter.stop()
+    [msg] = recorder.messages
+    assert msg.text.startswith("[Forwarded chat record]")
+    assert "john.phuatd@shopee.com: Do you see this issue?" in msg.text
+    assert "yuxing.wu@shopee.com: let me check" in msg.text
+    assert msg.chat_kind == "group"
+    assert msg.addressed is True
+    assert msg.chat_id == "gid-1"
+
+
+async def test_handle_event_ignores_non_mention_thread_messages(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(
+            {
+                "event_type": "new_message_received_from_thread",
+                "timestamp": 1718000000,
+                "event": {
+                    "group_id": "gid-1",
+                    "message": {
+                        "message_id": "gm-2",
+                        "thread_id": "t-9",
+                        "sender": {"employee_code": "emp-3", "email": "other@shopee.com"},
+                        "tag": "text",
+                        "text": {"plain_text": "just chatting", "mentioned_list": []},
+                    },
+                },
+            }
+        )
+    finally:
+        await adapter.stop()
+    assert recorder.messages == []
+
+
+async def test_handle_event_ignores_bot_added_to_group_chat(fake_seatalk: FakeSeaTalk) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(
+            {
+                "event_type": "bot_added_to_group_chat",
+                "timestamp": 1718000000,
+                "event": {"group_id": "gid-1"},
+            }
+        )
+    finally:
+        await adapter.stop()
+    assert recorder.messages == []
+
+
+async def test_fetch_thread_degrades_to_empty_list_on_error(
+    fake_seatalk: FakeSeaTalk, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Any transport/parse/permission error must never break a group turn —
+    fetch_thread degrades to no fetched context."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+
+    async def _boom(*args: object, **kwargs: object) -> Any:
+        raise ChannelSendFailed("st", "group_chat/get_thread_by_thread_id: code=103 http=200")
+
+    monkeypatch.setattr(adapter, "_get", _boom)
+    try:
+        assert await adapter.fetch_thread("gid-1", "t1", limit=50) == []
+    finally:
+        await adapter.stop()

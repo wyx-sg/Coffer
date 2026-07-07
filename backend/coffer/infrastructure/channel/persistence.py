@@ -68,9 +68,12 @@ def _to_domain(row: ChannelPeerModel) -> ChannelPeer:
 class ChannelPeerRepo:
     """SQLAlchemy implementation of ``ChannelPeerRepoPort``.
 
-    A channel has at most one peer today (1:1 product decision); ``upsert``
-    therefore replaces any existing binding for the resource, which is also
-    exactly the re-pair behavior the spec requires.
+    A channel may have several peer rows — one per DM/group/thread it has
+    been paired to (``UniqueConstraint("resource_id", "chat_id")``).
+    ``upsert`` re-pairs a single ``(resource_id, chat_id)`` row without
+    disturbing any other chat paired to the same channel; ``get`` remains the
+    legacy single-peer accessor for callers that only ever address a
+    channel's DM peer.
     """
 
     def __init__(self, session_maker: async_sessionmaker) -> None:  # type: ignore[type-arg]
@@ -79,16 +82,66 @@ class ChannelPeerRepo:
     async def get(self, resource_id: int) -> ChannelPeer | None:
         async with self._sm() as session:
             row = (
+                (
+                    await session.execute(
+                        select(ChannelPeerModel).where(ChannelPeerModel.resource_id == resource_id)
+                    )
+                )
+                .scalars()
+                .first()
+            )
+            return _to_domain(row) if row is not None else None
+
+    async def get_by_chat(self, resource_id: int, chat_id: str) -> ChannelPeer | None:
+        async with self._sm() as session:
+            row = (
                 await session.execute(
-                    select(ChannelPeerModel).where(ChannelPeerModel.resource_id == resource_id)
+                    select(ChannelPeerModel).where(
+                        ChannelPeerModel.resource_id == resource_id,
+                        ChannelPeerModel.chat_id == chat_id,
+                    )
                 )
             ).scalar_one_or_none()
             return _to_domain(row) if row is not None else None
 
+    async def list_by_resource(self, resource_id: int) -> list[ChannelPeer]:
+        async with self._sm() as session:
+            rows = (
+                (
+                    await session.execute(
+                        select(ChannelPeerModel).where(ChannelPeerModel.resource_id == resource_id)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            return [_to_domain(row) for row in rows]
+
+    async def owner_sender_id(self, resource_id: int) -> str | None:
+        async with self._sm() as session:
+            row = (
+                (
+                    await session.execute(
+                        select(ChannelPeerModel)
+                        .where(
+                            ChannelPeerModel.resource_id == resource_id,
+                            ChannelPeerModel.sender_id.isnot(None),
+                        )
+                        .order_by(ChannelPeerModel.id)
+                    )
+                )
+                .scalars()
+                .first()
+            )
+            return row.sender_id if row is not None else None
+
     async def upsert(self, peer: ChannelPeer) -> None:
         async with self._sm() as session:
             await session.execute(
-                delete(ChannelPeerModel).where(ChannelPeerModel.resource_id == peer.resource_id)
+                delete(ChannelPeerModel).where(
+                    ChannelPeerModel.resource_id == peer.resource_id,
+                    ChannelPeerModel.chat_id == peer.chat_id,
+                )
             )
             session.add(
                 ChannelPeerModel(
@@ -103,11 +156,16 @@ class ChannelPeerRepo:
             )
             await session.commit()
 
-    async def set_active_conversation(self, resource_id: int, conversation_id: str | None) -> None:
+    async def set_active_conversation(
+        self, resource_id: int, chat_id: str, conversation_id: str | None
+    ) -> None:
         async with self._sm() as session:
             await session.execute(
                 update(ChannelPeerModel)
-                .where(ChannelPeerModel.resource_id == resource_id)
+                .where(
+                    ChannelPeerModel.resource_id == resource_id,
+                    ChannelPeerModel.chat_id == chat_id,
+                )
                 .values(active_conversation_id=conversation_id)
             )
             await session.commit()

@@ -49,7 +49,8 @@ def _callback_fits(value: str) -> bool:
 class SafeSend(Protocol):
     """Owner-gated send supplied by the processor: ``(binding, chat_id, text)``
     plus optional selection-card ``buttons`` (rendered only where the transport
-    ``supports_buttons``; ignored otherwise)."""
+    ``supports_buttons``; ignored otherwise) and the routing pair
+    ``chat_kind``/``thread_id`` (default to a DM reply when omitted)."""
 
     async def __call__(
         self,
@@ -58,6 +59,8 @@ class SafeSend(Protocol):
         text: str,
         *,
         buttons: Sequence[ChoiceButton] | None = None,
+        chat_kind: str = "direct",
+        thread_id: str = "",
     ) -> None: ...
 
 
@@ -86,16 +89,30 @@ class ChannelCommands:
         text: str,
         session: Any,
         send: SafeSend,
+        *,
+        chat_kind: str = "direct",
+        thread_id: str = "",
     ) -> None:
         command = text.split()[0].lower()
         if command in ("/help", "/start"):
-            await send(binding, peer.chat_id, HELP_TEXT)
+            await send(binding, peer.chat_id, HELP_TEXT, chat_kind=chat_kind, thread_id=thread_id)
         elif command == "/new":
-            await self._open_and_report(binding, peer, send, "🆕 Started a fresh conversation.")
+            await self._open_and_report(
+                binding,
+                peer,
+                send,
+                "🆕 Started a fresh conversation.",
+                chat_kind=chat_kind,
+                thread_id=thread_id,
+            )
         elif command == "/agent":
-            await self._cmd_agent(binding, peer, text, send)
+            await self._cmd_agent(
+                binding, peer, text, send, chat_kind=chat_kind, thread_id=thread_id
+            )
         elif command == "/model":
-            await self._cmd_model(binding, peer, text, send)
+            await self._cmd_model(
+                binding, peer, text, send, chat_kind=chat_kind, thread_id=thread_id
+            )
         elif command == "/stop":
             # The turn that is actually draining wins over the peer's bound
             # conversation: after ``/new`` rebinds the peer, a turn can still be
@@ -104,9 +121,17 @@ class ChannelCommands:
             target = session.running_conversation_id or peer.active_conversation_id
             if target is not None:
                 self._turns.interrupt_turn(target)
-                await send(binding, peer.chat_id, "⏹ Stopping…")
+                await send(
+                    binding, peer.chat_id, "⏹ Stopping…", chat_kind=chat_kind, thread_id=thread_id
+                )
             else:
-                await send(binding, peer.chat_id, "Nothing is running.")
+                await send(
+                    binding,
+                    peer.chat_id,
+                    "Nothing is running.",
+                    chat_kind=chat_kind,
+                    thread_id=thread_id,
+                )
         elif command == "/status":
             running = session.drain_task is not None and not session.drain_task.done()
             conv = peer.active_conversation_id or "none yet"
@@ -116,14 +141,29 @@ class ChannelCommands:
                 peer.chat_id,
                 f"Conversation: {conv}\nAgent: {agent}\n"
                 f"Turn running: {'yes' if running else 'no'}\nQueued: {len(session.queue)}",
+                chat_kind=chat_kind,
+                thread_id=thread_id,
             )
         else:
-            await send(binding, peer.chat_id, f"Unknown command {command}. /help")
+            await send(
+                binding,
+                peer.chat_id,
+                f"Unknown command {command}. /help",
+                chat_kind=chat_kind,
+                thread_id=thread_id,
+            )
 
     # -- structural switches (open a fresh conversation, sticky on the peer) ------
 
     async def _cmd_agent(
-        self, binding: ChannelBinding, peer: ChannelPeer, text: str, send: SafeSend
+        self,
+        binding: ChannelBinding,
+        peer: ChannelPeer,
+        text: str,
+        send: SafeSend,
+        *,
+        chat_kind: str = "direct",
+        thread_id: str = "",
     ) -> None:
         parts = text.split()
         keys = self._agents.agent_keys()
@@ -144,40 +184,77 @@ class ChannelCommands:
                         peer.chat_id,
                         f"Current agent: {current}\nTap to switch:",
                         buttons=buttons,
+                        chat_kind=chat_kind,
+                        thread_id=thread_id,
                     )
                     return
-            await send(binding, peer.chat_id, f"Agent: {current}\nAvailable: {', '.join(keys)}")
+            await send(
+                binding,
+                peer.chat_id,
+                f"Agent: {current}\nAvailable: {', '.join(keys)}",
+                chat_kind=chat_kind,
+                thread_id=thread_id,
+            )
             return
         key = parts[1]
         if key not in keys:
             await send(
-                binding, peer.chat_id, f"Unknown agent '{key}'. Available: {', '.join(keys)}"
+                binding,
+                peer.chat_id,
+                f"Unknown agent '{key}'. Available: {', '.join(keys)}",
+                chat_kind=chat_kind,
+                thread_id=thread_id,
             )
             return
-        await self.apply_agent(binding, peer, key, send)
+        await self.apply_agent(binding, peer, key, send, chat_kind=chat_kind, thread_id=thread_id)
 
     async def apply_agent(
-        self, binding: ChannelBinding, peer: ChannelPeer, key: str, send: SafeSend
+        self,
+        binding: ChannelBinding,
+        peer: ChannelPeer,
+        key: str,
+        send: SafeSend,
+        *,
+        chat_kind: str = "direct",
+        thread_id: str = "",
     ) -> None:
         """The structural switch to ``key`` (assumes ``key`` already validated):
         stick it on the peer and open a fresh conversation. Shared by the text
         ``/agent <key>`` path and a card tap."""
         await self._peers.set_preferences(binding.resource_id, preferred_agent=key)
         await self._open_and_report(
-            binding, replace(peer, preferred_agent=key), send, f"🔀 Switched to agent '{key}'."
+            binding,
+            replace(peer, preferred_agent=key),
+            send,
+            f"🔀 Switched to agent '{key}'.",
+            chat_kind=chat_kind,
+            thread_id=thread_id,
         )
 
     # -- parametric switch (/model: same conversation, next turn) -----------------
 
     async def _cmd_model(
-        self, binding: ChannelBinding, peer: ChannelPeer, text: str, send: SafeSend
+        self,
+        binding: ChannelBinding,
+        peer: ChannelPeer,
+        text: str,
+        send: SafeSend,
+        *,
+        chat_kind: str = "direct",
+        thread_id: str = "",
     ) -> None:
         try:
             conversation_id = await ensure_conversation(
                 self._conversations, self._peers, binding, peer
             )
         except CofferError as e:
-            await send(binding, peer.chat_id, explain_conversation_error(e))
+            await send(
+                binding,
+                peer.chat_id,
+                explain_conversation_error(e),
+                chat_kind=chat_kind,
+                thread_id=thread_id,
+            )
             return
         parts = text.split()
         if len(parts) < 2:
@@ -203,16 +280,31 @@ class ChannelCommands:
                         peer.chat_id,
                         f"Current model: {current}\nTap a quick-pick (or send /model <name>):",
                         buttons=buttons,
+                        chat_kind=chat_kind,
+                        thread_id=thread_id,
                     )
                     return
             await send(
-                binding, peer.chat_id, f"Model: {current}\n(passed through to the agent's CLI)"
+                binding,
+                peer.chat_id,
+                f"Model: {current}\n(passed through to the agent's CLI)",
+                chat_kind=chat_kind,
+                thread_id=thread_id,
             )
             return
-        await self.apply_model(binding, peer, parts[1], send)
+        await self.apply_model(
+            binding, peer, parts[1], send, chat_kind=chat_kind, thread_id=thread_id
+        )
 
     async def apply_model(
-        self, binding: ChannelBinding, peer: ChannelPeer, name: str, send: SafeSend
+        self,
+        binding: ChannelBinding,
+        peer: ChannelPeer,
+        name: str,
+        send: SafeSend,
+        *,
+        chat_kind: str = "direct",
+        thread_id: str = "",
     ) -> None:
         """The parametric switch: set the next-turn model on the peer's
         conversation. Raw passthrough — we do not own the CLI's model namespace,
@@ -223,11 +315,23 @@ class ChannelCommands:
                 self._conversations, self._peers, binding, peer
             )
         except CofferError as e:
-            await send(binding, peer.chat_id, explain_conversation_error(e))
+            await send(
+                binding,
+                peer.chat_id,
+                explain_conversation_error(e),
+                chat_kind=chat_kind,
+                thread_id=thread_id,
+            )
             return
         cfg = await self._conversations.get_agent_config(conversation_id)
         await self._conversations.set_agent_config(conversation_id, replace(cfg, model=name))
-        await send(binding, peer.chat_id, f"🧠 Model set to '{name}' for the next turn.")
+        await send(
+            binding,
+            peer.chat_id,
+            f"🧠 Model set to '{name}' for the next turn.",
+            chat_kind=chat_kind,
+            thread_id=thread_id,
+        )
 
     # -- card tap → the same switch (owner gate enforced by the processor) ---------
 
@@ -236,7 +340,15 @@ class ChannelCommands:
     ) -> None:
         """Route a selection-card tap (``data`` = the tapped ``ChoiceButton.value``)
         to the same switch the text command performs. The processor has already
-        owner-gated the tap."""
+        owner-gated the tap.
+
+        FOLLOW-UP: replies here always default to a DM send (``chat_kind`` and
+        ``thread_id`` are not threaded through) because ``InboundCallback``
+        does not carry them — a group button tap's reply is misrouted the same
+        way the text-command path was before this fix. Group cards are not yet
+        exercised end-to-end; fix by widening ``InboundCallback``/``on_callback``
+        to carry the tap's chat_kind/thread_id before enabling buttons in
+        groups."""
         kind, _, value = data.partition(":")
         if kind == "agent":
             if value not in self._agents.agent_keys():
@@ -247,11 +359,24 @@ class ChannelCommands:
             await self.apply_model(binding, peer, value, send)
 
     async def _open_and_report(
-        self, binding: ChannelBinding, peer: ChannelPeer, send: SafeSend, success: str
+        self,
+        binding: ChannelBinding,
+        peer: ChannelPeer,
+        send: SafeSend,
+        success: str,
+        *,
+        chat_kind: str = "direct",
+        thread_id: str = "",
     ) -> None:
         try:
             await open_conversation(self._conversations, self._peers, binding, peer)
         except CofferError as e:
-            await send(binding, peer.chat_id, explain_conversation_error(e))
+            await send(
+                binding,
+                peer.chat_id,
+                explain_conversation_error(e),
+                chat_kind=chat_kind,
+                thread_id=thread_id,
+            )
             return
-        await send(binding, peer.chat_id, success)
+        await send(binding, peer.chat_id, success, chat_kind=chat_kind, thread_id=thread_id)

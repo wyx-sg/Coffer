@@ -1,9 +1,8 @@
 """Telegram transport: long polling in, Bot API methods out.
 
-No SDK — the seven Bot API methods used here are plain POSTs. Long polling
-(`getUpdates`) needs no public ingress, which is what a local-first daemon
-wants; the update offset is committed only after a dispatch attempt, so a
-reconnect never re-delivers what the core already saw.
+No SDK — the seven Bot API methods used here are plain POSTs. Long polling (`getUpdates`) needs
+no public ingress, which is what a local-first daemon wants; the update offset is committed
+only after a dispatch attempt, so a reconnect never re-delivers what the core already saw.
 """
 
 from __future__ import annotations
@@ -11,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import os
 import pathlib
 import uuid
 from collections.abc import Sequence
@@ -30,60 +28,25 @@ from coffer.domain.channel.envelopes import (
     SentMessage,
 )
 from coffer.domain.channel.errors import ChannelSendFailed
+from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.infrastructure.channel.render import chunk_text, markdown_to_telegram_html
+from coffer.infrastructure.channel.telegram_media import (
+    COMMANDS,
+    default_media_dir,
+    inline_keyboard,
+    media_specs,
+)
+from coffer.infrastructure.channel.telegram_parse import (
+    addressed_and_text,
+    is_group,
+    prepend_context,
+)
 
 _logger = logging.getLogger(__name__)
 
 _POLL_TIMEOUT_SECONDS = 50
 _BACKOFF_LADDER = (1.0, 5.0, 30.0)
 _CHUNK_LIMIT = 4000
-
-
-def _default_media_dir() -> pathlib.Path:
-    """``~/.coffer/channel-media`` — where inbound photos/files/voice are saved.
-
-    ``HOME`` is honored (not ``Path.home()``) so tests redirect it to a tmp dir.
-    """
-    home = pathlib.Path(os.environ.get("HOME") or "~").expanduser()
-    return home / ".coffer" / "channel-media"
-
-
-def _media_specs(message: dict[str, Any]) -> list[tuple[str, str, str]]:
-    """Extract ``(file_id, mime, filename)`` for each attachment on a Telegram
-    message — largest photo size, plus any document/voice/audio/video. Unknown
-    or absent media yields nothing (a plain text message)."""
-    specs: list[tuple[str, str, str]] = []
-    photo = message.get("photo")
-    if isinstance(photo, list) and photo:
-        # PhotoSizes are ordered small→large; the last is the highest resolution.
-        largest = photo[-1]
-        if isinstance(largest, dict) and largest.get("file_id"):
-            specs.append((str(largest["file_id"]), "image/jpeg", "photo.jpg"))
-    for key, default_mime, default_name in (
-        ("document", "application/octet-stream", "file"),
-        ("voice", "audio/ogg", "voice.ogg"),
-        ("audio", "audio/mpeg", "audio"),
-        ("video", "video/mp4", "video.mp4"),
-    ):
-        item = message.get(key)
-        if isinstance(item, dict) and item.get("file_id"):
-            mime = str(item.get("mime_type") or default_mime)
-            filename = str(item.get("file_name") or default_name)
-            specs.append((str(item["file_id"]), mime, filename))
-    return specs
-
-
-_COMMANDS = [
-    {"command": "new", "description": "Start a fresh conversation"},
-    {"command": "stop", "description": "Interrupt the running turn"},
-    {"command": "status", "description": "Conversation and turn state"},
-    {"command": "help", "description": "List commands"},
-]
-
-
-def _inline_keyboard(buttons: Sequence[ChoiceButton]) -> dict[str, Any]:
-    """One button per row (selection menus stay readable on a phone)."""
-    return {"inline_keyboard": [[{"text": b.label, "callback_data": b.value}] for b in buttons]}
 
 
 class TelegramAdapter:
@@ -101,16 +64,18 @@ class TelegramAdapter:
     ) -> None:
         self._name = channel_name
         self._base = f"{base_url}/bot{bot_token}"
-        # File downloads use a different URL shape than the Bot API methods:
-        # {base}/file/bot{token}/{file_path}, not {base}/bot{token}/{method}.
+        # File downloads use {base}/file/bot{token}/{path}, not {base}/bot{token}/{method}.
         self._file_base = f"{base_url}/file/bot{bot_token}"
-        self._media_dir = media_dir or _default_media_dir()
+        self._media_dir = media_dir or default_media_dir()
         self._client = client or httpx.AsyncClient(
             timeout=httpx.Timeout(10.0, read=poll_timeout + 10.0)
         )
         self._poll_timeout = poll_timeout
         self._callbacks: AdapterCallbacks | None = None
         self._task: asyncio.Task[None] | None = None
+        # Populated from getMe() in start(); stays None if that call fails.
+        self._bot_id: int | None = None
+        self._bot_username: str | None = None
 
     @property
     def capabilities(self) -> ChannelCapabilities:
@@ -120,6 +85,7 @@ class TelegramAdapter:
             max_message_chars=_CHUNK_LIMIT,
             supports_buttons=True,
             supports_media=True,
+            supports_groups=True,
         )
 
     # -- lifecycle ---------------------------------------------------------
@@ -127,7 +93,12 @@ class TelegramAdapter:
     async def start(self, callbacks: AdapterCallbacks) -> None:
         self._callbacks = callbacks
         with contextlib.suppress(Exception):
-            await self._call("setMyCommands", commands=_COMMANDS)
+            await self._call("setMyCommands", commands=COMMANDS)
+        with contextlib.suppress(Exception):
+            me = await self._call("getMe")
+            if isinstance(me, dict):
+                self._bot_id = int(me["id"]) if "id" in me else None
+                self._bot_username = str(me["username"]) if me.get("username") else None
         self._task = asyncio.create_task(self._poll_loop(), name=f"telegram-poll:{self._name}")
 
     async def stop(self) -> None:
@@ -187,6 +158,15 @@ class TelegramAdapter:
             return
         message = update.get("message")
         if isinstance(message, dict):
+            group = is_group(message)
+            raw_text = str(message.get("text") or message.get("caption") or "")
+            addressed, raw = (True, raw_text)
+            if group:
+                addressed, raw = addressed_and_text(
+                    message, raw_text, bot_id=self._bot_id, bot_username=self._bot_username
+                )
+            text = prepend_context(message, raw)
+            thread_id = str(message.get("message_thread_id") or "")
             sender = message.get("from") or {}
             attachments = await self._download_attachments(message)
             await self._callbacks.on_message(
@@ -195,10 +175,13 @@ class TelegramAdapter:
                     chat_id=str(message.get("chat", {}).get("id", "")),
                     sender_display=str(sender.get("first_name") or sender.get("username") or ""),
                     # A media message carries its text in ``caption``, not ``text``.
-                    text=str(message.get("text") or message.get("caption") or ""),
+                    text=text,
                     platform_message_id=str(message.get("message_id", "")),
                     timestamp=datetime.fromtimestamp(int(message.get("date", 0)), tz=UTC),
                     sender_id=str(sender.get("id") or ""),
+                    chat_kind="group" if group else "direct",
+                    addressed=addressed,
+                    thread_id=thread_id,
                     attachments=attachments,
                 )
             )
@@ -212,7 +195,7 @@ class TelegramAdapter:
         a download that fails is skipped (logged), never wedging the message —
         the text/caption still drives a turn."""
         out: list[InboundAttachment] = []
-        for file_id, mime, filename in _media_specs(message):
+        for file_id, mime, filename in media_specs(message):
             try:
                 data = await self._download_file(file_id)
             except Exception:
@@ -277,14 +260,19 @@ class TelegramAdapter:
         markdown: str,
         *,
         buttons: Sequence[ChoiceButton] | None = None,
+        thread_id: str = "",
+        chat_kind: str = "direct",
     ) -> SentMessage:
+        # chat_kind is unused: a Telegram chat_id addresses a DM or a group
+        # identically, unlike SeaTalk which needs it to pick the endpoint.
+        del chat_kind
         chunks = list(chunk_text(markdown, self.capabilities.max_message_chars))
         last: SentMessage | None = None
         for i, chunk in enumerate(chunks):
             # The inline keyboard rides on the final chunk so it sits under the
             # whole (possibly chunked) message.
             kb = buttons if (buttons and i == len(chunks) - 1) else None
-            last = await self._send_chunk(chat_id, chunk, kb)
+            last = await self._send_chunk(chat_id, chunk, kb, thread_id=thread_id)
         return last if last is not None else SentMessage(message_id="")
 
     async def send_media(
@@ -331,10 +319,17 @@ class TelegramAdapter:
         return SentMessage(message_id=str(result.get("message_id", "")))
 
     async def _send_chunk(
-        self, chat_id: str, chunk: str, buttons: Sequence[ChoiceButton] | None = None
+        self,
+        chat_id: str,
+        chunk: str,
+        buttons: Sequence[ChoiceButton] | None = None,
+        *,
+        thread_id: str = "",
     ) -> SentMessage:
-        markup = _inline_keyboard(buttons) if buttons else None
-        extra = {"reply_markup": markup} if markup is not None else {}
+        markup = inline_keyboard(buttons) if buttons else None
+        extra: dict[str, Any] = {"reply_markup": markup} if markup is not None else {}
+        if thread_id:
+            extra["message_thread_id"] = int(thread_id)
         try:
             sent = await self._call(
                 "sendMessage",
@@ -344,9 +339,8 @@ class TelegramAdapter:
                 **extra,
             )
         except ChannelSendFailed as e:
-            # Retry as plain text ONLY when the platform explicitly rejected
-            # the formatted message (400 = can't parse entities). A transport
-            # error may mean the first send actually got through — resending
+            # Retry as plain text only when the platform rejected formatting (400 = bad
+            # entities). A transport error may mean the send got through already — retrying
             # would duplicate; a 429 needs backoff, not an instant resend.
             if not (e.api_rejected and e.status == 400):
                 raise
@@ -361,6 +355,15 @@ class TelegramAdapter:
 
     async def send_typing(self, chat_id: str) -> None:
         await self._call("sendChatAction", chat_id=chat_id, action="typing")
+
+    # -- context fetch (ContextFetchPort) -------------------------------------
+
+    async def fetch_thread(
+        self, chat_id: str, thread_id: str, *, limit: int = 50
+    ) -> list[ForwardedItem]:
+        # Bot API has no history-fetch method — a bot only ever sees updates
+        # pushed to it, never past thread history. Always empty.
+        return []
 
     # -- transport -------------------------------------------------------------
 

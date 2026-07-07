@@ -50,6 +50,8 @@ def test_channel_capabilities_carries_strategy_fields():
         "max_message_chars",
         "supports_buttons",
         "supports_media",
+        "supports_groups",
+        "supports_history_fetch",
     }
 
 

@@ -53,7 +53,7 @@ async def open_conversation(
         channel_name=binding.name,
         peer_chat_id=peer.chat_id,
     )
-    await peers.set_active_conversation(binding.resource_id, conv.id)
+    await peers.set_active_conversation(binding.resource_id, peer.chat_id, conv.id)
     return str(conv.id)
 
 
