@@ -135,7 +135,7 @@ class FakeSeaTalk:
         self._next_message_id = 0
         # -- thread fetch (Task 5) --
         self.thread_calls: list[dict[str, Any]] = []  # query params, one per /get_thread... GET
-        self.thread_response: dict[str, Any] = {"code": 0, "messages": []}
+        self.thread_response: dict[str, Any] = {"code": 0, "thread_messages": []}
         self.app = FastAPI()
         self.app.post("/auth/app_access_token")(self._token)
         self.app.post("/messaging/v2/single_chat")(self._single_chat)

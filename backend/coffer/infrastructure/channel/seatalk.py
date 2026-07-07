@@ -26,7 +26,7 @@ from coffer.domain.channel.envelopes import (
     SentMessage,
 )
 from coffer.domain.channel.errors import ChannelSendFailed
-from coffer.domain.channel.rich_content import ForwardedItem
+from coffer.domain.channel.rich_content import ForwardedItem, flatten_forwarded
 
 _logger = logging.getLogger(__name__)
 
@@ -158,6 +158,13 @@ class SeaTalkAdapter:
             text = ""
             if tag == "text":
                 text = str((message.get("text") or {}).get("content", ""))
+            elif tag == "combined_forwarded_chat_history":
+                content = (message.get("combined_forwarded_chat_history") or {}).get(
+                    "content"
+                ) or []
+                text = flatten_forwarded(
+                    [_message_to_item(e) for e in content if isinstance(e, dict)]
+                )
             await self._callbacks.on_message(
                 InboundMessage(
                     channel=self._name,
@@ -170,8 +177,47 @@ class SeaTalkAdapter:
                     ),
                     # SeaTalk DMs are 1:1, so the sender is the employee_code.
                     sender_id=str(event.get("employee_code", "")),
+                    thread_id=str(message.get("thread_id", "")),
                 )
             )
+        elif event_type == "new_mentioned_message_received_from_group_chat":
+            # SeaTalk only fires this event when the bot is @mentioned (it
+            # pre-filters group traffic) — always addressed by definition.
+            message = event.get("message") or {}
+            sender = message.get("sender") or {}
+            body = message.get("text") or {}
+            plain_text = str(body.get("plain_text", ""))
+            for mention in body.get("mentioned_list") or []:
+                if isinstance(mention, dict):
+                    username = str(mention.get("username", ""))
+                    if username:
+                        plain_text = plain_text.replace(f"@{username}", "")
+            await self._callbacks.on_message(
+                InboundMessage(
+                    channel=self._name,
+                    chat_id=str(event.get("group_id", "")),
+                    sender_display=str(sender.get("email", "") or sender.get("seatalk_id", "")),
+                    text=plain_text.strip(),
+                    platform_message_id=str(message.get("message_id", "")),
+                    timestamp=datetime.fromtimestamp(
+                        int(envelope.get("timestamp", 0) or 0), tz=UTC
+                    ),
+                    sender_id=str(sender.get("employee_code", "")),
+                    chat_kind="group",
+                    addressed=True,
+                    thread_id=str(message.get("thread_id", "")),
+                )
+            )
+        elif event_type in (
+            "new_message_received_from_thread",
+            "bot_added_to_group_chat",
+            "user_enter_chatroom_with_bot",
+        ):
+            # A thread @mention already arrives as
+            # new_mentioned_message_received_from_group_chat with thread_id
+            # set; non-@ thread chatter and group-membership events must never
+            # start a turn.
+            return
         elif event_type == "interactive_message_click" and self._callbacks.on_callback is not None:
             # A selection-card button tap; the custom ``value`` we set on the
             # button comes back here (research.md). DMs are 1:1 so the sender is
