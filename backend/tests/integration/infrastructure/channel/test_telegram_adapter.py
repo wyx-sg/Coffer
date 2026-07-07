@@ -219,6 +219,56 @@ async def test_outbound_methods_map_to_bot_api_calls(fake_telegram: FakeTelegram
     assert fake_telegram.calls_for("sendChatAction") == [{"chat_id": "555", "action": "typing"}]
 
 
+# -- group / thread send (Task 4) --------------------------------------------
+
+
+async def test_send_text_with_thread_id_includes_message_thread_id(
+    fake_telegram: FakeTelegram,
+) -> None:
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        await adapter.send_text("555", "hi", thread_id="9")
+    finally:
+        await adapter.stop()
+    [send] = fake_telegram.calls_for("sendMessage")
+    assert send["message_thread_id"] == 9
+
+
+async def test_send_text_without_thread_id_omits_message_thread_id(
+    fake_telegram: FakeTelegram,
+) -> None:
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        await adapter.send_text("555", "hi")
+    finally:
+        await adapter.stop()
+    [send] = fake_telegram.calls_for("sendMessage")
+    assert "message_thread_id" not in send
+
+
+async def test_send_text_chat_kind_group_is_ignored(fake_telegram: FakeTelegram) -> None:
+    # Telegram routes DMs and groups through the same chat_id; chat_kind is a
+    # no-op here (unlike SeaTalk, which needs it to pick the endpoint).
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        await adapter.send_text("555", "hi", chat_kind="group")
+    finally:
+        await adapter.stop()
+    [send] = fake_telegram.calls_for("sendMessage")
+    assert send["chat_id"] == "555"
+
+
+async def test_capabilities_declare_groups_but_not_history_fetch(
+    fake_telegram: FakeTelegram,
+) -> None:
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        assert adapter.capabilities.supports_groups is True
+        assert adapter.capabilities.supports_history_fetch is False
+    finally:
+        await adapter.stop()
+
+
 def _callback_update(update_id: int, *, data: str) -> dict:
     return {
         "update_id": update_id,

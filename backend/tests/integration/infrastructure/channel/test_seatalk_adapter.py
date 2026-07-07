@@ -189,6 +189,57 @@ async def test_send_text_with_buttons_emits_interactive_card(fake_seatalk: FakeS
     ]
 
 
+# -- group / thread send (Task 4) --------------------------------------------
+
+
+async def test_send_text_group_posts_group_chat_with_thread_id(fake_seatalk: FakeSeaTalk) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        sent = await adapter.send_text("gid-1", "hi", chat_kind="group", thread_id="t1")
+    finally:
+        await adapter.stop()
+    assert fake_seatalk.single_chat_calls == []  # group send never hits single_chat
+    [(body, _auth)] = fake_seatalk.group_chat_calls
+    assert body == {
+        "group_id": "gid-1",
+        "message": {"tag": "text", "text": {"format": 1, "content": "hi"}},
+        "thread_id": "t1",
+    }
+    assert sent.message_id == "m1"
+
+
+async def test_send_text_group_without_thread_id_omits_thread_field(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        await adapter.send_text("gid-1", "hi", chat_kind="group")
+    finally:
+        await adapter.stop()
+    [(body, _auth)] = fake_seatalk.group_chat_calls
+    assert "thread_id" not in body
+
+
+async def test_send_text_direct_still_uses_single_chat(fake_seatalk: FakeSeaTalk) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        await adapter.send_text("emp-1", "hi")
+    finally:
+        await adapter.stop()
+    assert fake_seatalk.group_chat_calls == []
+    [(body, _auth)] = fake_seatalk.single_chat_calls
+    assert body["employee_code"] == "emp-1"
+
+
+async def test_capabilities_declare_groups_and_history_fetch(fake_seatalk: FakeSeaTalk) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        assert adapter.capabilities.supports_groups is True
+        assert adapter.capabilities.supports_history_fetch is True
+    finally:
+        await adapter.stop()
+
+
 async def test_interactive_message_click_routes_to_on_callback(fake_seatalk: FakeSeaTalk) -> None:
     adapter = make_seatalk_adapter(fake_seatalk)
     recorder = RecordingCallbacks()

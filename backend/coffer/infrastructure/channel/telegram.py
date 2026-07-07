@@ -120,6 +120,7 @@ class TelegramAdapter:
             max_message_chars=_CHUNK_LIMIT,
             supports_buttons=True,
             supports_media=True,
+            supports_groups=True,
         )
 
     # -- lifecycle ---------------------------------------------------------
@@ -277,14 +278,19 @@ class TelegramAdapter:
         markdown: str,
         *,
         buttons: Sequence[ChoiceButton] | None = None,
+        thread_id: str = "",
+        chat_kind: str = "direct",
     ) -> SentMessage:
+        # chat_kind is unused: a Telegram chat_id addresses a DM or a group
+        # identically, unlike SeaTalk which needs it to pick the endpoint.
+        del chat_kind
         chunks = list(chunk_text(markdown, self.capabilities.max_message_chars))
         last: SentMessage | None = None
         for i, chunk in enumerate(chunks):
             # The inline keyboard rides on the final chunk so it sits under the
             # whole (possibly chunked) message.
             kb = buttons if (buttons and i == len(chunks) - 1) else None
-            last = await self._send_chunk(chat_id, chunk, kb)
+            last = await self._send_chunk(chat_id, chunk, kb, thread_id=thread_id)
         return last if last is not None else SentMessage(message_id="")
 
     async def send_media(
@@ -331,10 +337,17 @@ class TelegramAdapter:
         return SentMessage(message_id=str(result.get("message_id", "")))
 
     async def _send_chunk(
-        self, chat_id: str, chunk: str, buttons: Sequence[ChoiceButton] | None = None
+        self,
+        chat_id: str,
+        chunk: str,
+        buttons: Sequence[ChoiceButton] | None = None,
+        *,
+        thread_id: str = "",
     ) -> SentMessage:
         markup = _inline_keyboard(buttons) if buttons else None
-        extra = {"reply_markup": markup} if markup is not None else {}
+        extra: dict[str, Any] = {"reply_markup": markup} if markup is not None else {}
+        if thread_id:
+            extra["message_thread_id"] = int(thread_id)
         try:
             sent = await self._call(
                 "sendMessage",

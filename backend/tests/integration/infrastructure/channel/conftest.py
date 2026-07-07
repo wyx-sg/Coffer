@@ -128,13 +128,15 @@ class FakeSeaTalk:
     def __init__(self) -> None:
         self.token_calls = 0
         self.single_chat_calls: list[tuple[dict[str, Any], str]] = []  # (body, Authorization)
+        self.group_chat_calls: list[tuple[dict[str, Any], str]] = []  # (body, Authorization)
         self.typing_calls: list[dict[str, Any]] = []
-        self.scripted: list[tuple[int, dict[str, Any]]] = []  # popped per single_chat call
+        self.scripted: list[tuple[int, dict[str, Any]]] = []  # popped per single/group_chat call
         self.html_error_sends = 0  # answer single_chat with a non-JSON HTML body N times
         self._next_message_id = 0
         self.app = FastAPI()
         self.app.post("/auth/app_access_token")(self._token)
         self.app.post("/messaging/v2/single_chat")(self._single_chat)
+        self.app.post("/messaging/v2/group_chat")(self._group_chat)
         self.app.post("/messaging/v2/single_chat_typing")(self._typing)
 
     async def _token(self, request: Request) -> JSONResponse:
@@ -150,6 +152,20 @@ class FakeSeaTalk:
         if self.html_error_sends > 0:
             # A gateway returns a 502 HTML page, not the Open API JSON
             # envelope — response.json() would raise JSONDecodeError.
+            self.html_error_sends -= 1
+            return HTMLResponse(
+                status_code=502, content="<html><body>502 Bad Gateway</body></html>"
+            )
+        if self.scripted:
+            status, payload = self.scripted.pop(0)
+            return JSONResponse(status_code=status, content=payload)
+        self._next_message_id += 1
+        return JSONResponse(content={"code": 0, "message_id": f"m{self._next_message_id}"})
+
+    async def _group_chat(self, request: Request) -> JSONResponse:
+        body: dict[str, Any] = await request.json()
+        self.group_chat_calls.append((body, request.headers.get("Authorization", "")))
+        if self.html_error_sends > 0:
             self.html_error_sends -= 1
             return HTMLResponse(
                 status_code=502, content="<html><body>502 Bad Gateway</body></html>"

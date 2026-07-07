@@ -54,10 +54,19 @@ class ChannelAdapter(Protocol):
         markdown: str,
         *,
         buttons: Sequence[ChoiceButton] | None = None,
+        thread_id: str = "",
+        chat_kind: str = "direct",
     ) -> SentMessage:
         """Send markdown text. When ``buttons`` is given AND the transport
         ``supports_buttons``, render them as an interactive selection card;
-        otherwise the text is sent plain (buttons ignored)."""
+        otherwise the text is sent plain (buttons ignored).
+
+        ``chat_kind`` distinguishes a group ``chat_id`` from a direct one —
+        transports whose group/DM APIs differ (SeaTalk) route on it; a
+        transport with one unified send path (Telegram) ignores it.
+        ``thread_id``, when non-empty, threads the message where the
+        transport supports it; transports without thread support ignore it.
+        """
         ...
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None: ...

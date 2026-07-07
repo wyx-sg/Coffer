@@ -103,6 +103,8 @@ class SeaTalkAdapter:
             supports_typing=True,
             max_message_chars=_CHUNK_LIMIT,
             supports_buttons=True,
+            supports_groups=True,
+            supports_history_fetch=True,
         )
 
     # -- lifecycle ---------------------------------------------------------
@@ -166,21 +168,37 @@ class SeaTalkAdapter:
         markdown: str,
         *,
         buttons: Sequence[ChoiceButton] | None = None,
+        thread_id: str = "",
+        chat_kind: str = "direct",
     ) -> SentMessage:
         from coffer.infrastructure.channel.render import chunk_text
 
         if buttons:
             # Selection prompts are short — one interactive card, no chunking.
-            result = await self._send_single_chat(chat_id, _interactive_card(markdown, buttons))
+            result = await self._send(
+                chat_id, _interactive_card(markdown, buttons), thread_id, chat_kind
+            )
             return SentMessage(message_id=str(result.get("message_id", "")))
         last = ""
         for chunk in chunk_text(markdown, self.capabilities.max_message_chars):
             for piece in _split_to_byte_limit(chunk, _BYTE_LIMIT):
-                result = await self._send_single_chat(
-                    chat_id, {"tag": "text", "text": {"format": 1, "content": piece}}
+                result = await self._send(
+                    chat_id,
+                    {"tag": "text", "text": {"format": 1, "content": piece}},
+                    thread_id,
+                    chat_kind,
                 )
                 last = str(result.get("message_id", ""))
         return SentMessage(message_id=last)
+
+    async def _send(
+        self, chat_id: str, message: dict[str, Any], thread_id: str, chat_kind: str
+    ) -> Any:
+        """Route one already-built ``message`` payload to the group or
+        single-chat endpoint, sharing the chunk loop above across both."""
+        if chat_kind == "group":
+            return await self._send_group_chat(chat_id, message, thread_id)
+        return await self._send_single_chat(chat_id, message)
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None:
         raise ChannelSendFailed(self._name, "seatalk cannot edit messages")
@@ -212,6 +230,16 @@ class SeaTalkAdapter:
         return await self._post(
             "/messaging/v2/single_chat",
             {"employee_code": employee_code, "message": message},
+        )
+
+    async def _send_group_chat(self, group_id: str, message: dict[str, Any], thread_id: str) -> Any:
+        return await self._post(
+            "/messaging/v2/group_chat",
+            {
+                "group_id": group_id,
+                "message": message,
+                **({"thread_id": thread_id} if thread_id else {}),
+            },
         )
 
     async def _ensure_token(self) -> str:
