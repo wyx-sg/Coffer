@@ -12,6 +12,7 @@ import pathlib
 import pytest
 
 from coffer.domain.channel.errors import ChannelSendFailed
+from coffer.infrastructure.channel.telegram import TelegramAdapter
 
 from .conftest import (
     FakeSeaTalk,
@@ -219,6 +220,56 @@ async def test_outbound_methods_map_to_bot_api_calls(fake_telegram: FakeTelegram
     assert fake_telegram.calls_for("sendChatAction") == [{"chat_id": "555", "action": "typing"}]
 
 
+# -- group / thread send (Task 4) --------------------------------------------
+
+
+async def test_send_text_with_thread_id_includes_message_thread_id(
+    fake_telegram: FakeTelegram,
+) -> None:
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        await adapter.send_text("555", "hi", thread_id="9")
+    finally:
+        await adapter.stop()
+    [send] = fake_telegram.calls_for("sendMessage")
+    assert send["message_thread_id"] == 9
+
+
+async def test_send_text_without_thread_id_omits_message_thread_id(
+    fake_telegram: FakeTelegram,
+) -> None:
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        await adapter.send_text("555", "hi")
+    finally:
+        await adapter.stop()
+    [send] = fake_telegram.calls_for("sendMessage")
+    assert "message_thread_id" not in send
+
+
+async def test_send_text_chat_kind_group_is_ignored(fake_telegram: FakeTelegram) -> None:
+    # Telegram routes DMs and groups through the same chat_id; chat_kind is a
+    # no-op here (unlike SeaTalk, which needs it to pick the endpoint).
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        await adapter.send_text("555", "hi", chat_kind="group")
+    finally:
+        await adapter.stop()
+    [send] = fake_telegram.calls_for("sendMessage")
+    assert send["chat_id"] == "555"
+
+
+async def test_capabilities_declare_groups_but_not_history_fetch(
+    fake_telegram: FakeTelegram,
+) -> None:
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        assert adapter.capabilities.supports_groups is True
+        assert adapter.capabilities.supports_history_fetch is False
+    finally:
+        await adapter.stop()
+
+
 def _callback_update(update_id: int, *, data: str) -> dict:
     return {
         "update_id": update_id,
@@ -294,3 +345,174 @@ async def test_buttons_ride_only_the_final_chunk(fake_telegram: FakeTelegram) ->
     assert len(sends) >= 2
     assert "reply_markup" not in sends[0]  # the keyboard must not ride the first chunk
     assert "reply_markup" in sends[-1]  # only the last chunk carries it
+
+
+# -- context fetch (Task 5): Bot API has no history-fetch capability ----------
+
+
+async def test_fetch_thread_returns_empty(fake_telegram: FakeTelegram) -> None:
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        assert await adapter.fetch_thread("555", "t1", limit=50) == []
+    finally:
+        await adapter.stop()
+    assert fake_telegram.calls == []  # no platform call is even attempted
+
+
+# -- group / @mention / reply / forward / forum-topic (Task 8) ---------------
+
+_BOT_ID = 999
+_BOT_USERNAME = "mybot"
+
+
+async def _start_bot_adapter(fake: FakeTelegram, recorder: RecordingCallbacks) -> TelegramAdapter:
+    """Start a telegram adapter and pin its bot identity, as if getMe() had
+    resolved it — set right after start() so the fake's empty getMe response
+    doesn't clobber it, and before any await lets the poll task run."""
+    adapter = make_telegram_adapter(fake)
+    await adapter.start(recorder.as_callbacks())
+    adapter._bot_id = _BOT_ID
+    adapter._bot_username = _BOT_USERNAME
+    return adapter
+
+
+def _group_update(update_id: int, **overrides) -> dict:
+    message = {
+        "message_id": 3000 + update_id,
+        "date": 1718000000,
+        "chat": {"id": 777, "type": "group"},
+        "from": {"id": 4242, "first_name": "Yu", "username": "yu"},
+        "text": "hello",
+    }
+    message.update(overrides)
+    return {"update_id": update_id, "message": message}
+
+
+async def test_group_message_without_mention_is_not_addressed(fake_telegram: FakeTelegram) -> None:
+    recorder = RecordingCallbacks()
+    adapter = await _start_bot_adapter(fake_telegram, recorder)
+    await fake_telegram.update_batches.put([_group_update(30, text="just chatting")])
+    try:
+        await wait_until(lambda: len(recorder.messages) == 1)
+    finally:
+        await adapter.stop()
+    msg = recorder.messages[0]
+    assert msg.chat_kind == "group"
+    assert msg.addressed is False
+    assert msg.text == "just chatting"
+
+
+async def test_group_message_with_mention_entity_is_addressed_and_stripped(
+    fake_telegram: FakeTelegram,
+) -> None:
+    recorder = RecordingCallbacks()
+    adapter = await _start_bot_adapter(fake_telegram, recorder)
+    text = "@mybot run"
+    await fake_telegram.update_batches.put(
+        [
+            _group_update(
+                31,
+                text=text,
+                entities=[{"type": "mention", "offset": 0, "length": len("@mybot")}],
+            )
+        ]
+    )
+    try:
+        await wait_until(lambda: len(recorder.messages) == 1)
+    finally:
+        await adapter.stop()
+    msg = recorder.messages[0]
+    assert msg.chat_kind == "group"
+    assert msg.addressed is True
+    assert msg.text == "run"
+
+
+async def test_group_reply_to_bot_is_addressed(fake_telegram: FakeTelegram) -> None:
+    recorder = RecordingCallbacks()
+    adapter = await _start_bot_adapter(fake_telegram, recorder)
+    await fake_telegram.update_batches.put(
+        [
+            _group_update(
+                32,
+                text="yes please",
+                reply_to_message={
+                    "from": {"id": _BOT_ID, "is_bot": True, "username": _BOT_USERNAME},
+                    "text": "which agent?",
+                },
+            )
+        ]
+    )
+    try:
+        await wait_until(lambda: len(recorder.messages) == 1)
+    finally:
+        await adapter.stop()
+    msg = recorder.messages[0]
+    assert msg.addressed is True
+    # The quoted reply-to-bot context is folded into the text.
+    assert msg.text.splitlines()[0] == "> mybot: which agent?"
+    assert msg.text.splitlines()[-1] == "yes please"
+
+
+async def test_forum_topic_message_carries_thread_id(fake_telegram: FakeTelegram) -> None:
+    recorder = RecordingCallbacks()
+    adapter = await _start_bot_adapter(fake_telegram, recorder)
+    await fake_telegram.update_batches.put(
+        [_group_update(33, text="topic reply", message_thread_id=9)]
+    )
+    try:
+        await wait_until(lambda: len(recorder.messages) == 1)
+    finally:
+        await adapter.stop()
+    msg = recorder.messages[0]
+    assert msg.thread_id == "9"
+
+
+@pytest.mark.acceptance(spec="009-channels", scenario="a forwarded chat record reaches the agent")
+async def test_forwarded_message_text_starts_with_forwarded_marker(
+    fake_telegram: FakeTelegram,
+) -> None:
+    recorder = RecordingCallbacks()
+    adapter = await _start_bot_adapter(fake_telegram, recorder)
+    await fake_telegram.update_batches.put(
+        [
+            _group_update(
+                35,
+                text="original text",
+                forward_from={"first_name": "Alice"},
+            )
+        ]
+    )
+    try:
+        await wait_until(lambda: len(recorder.messages) == 1)
+    finally:
+        await adapter.stop()
+    msg = recorder.messages[0]
+    assert msg.text.startswith("[Forwarded chat record]")
+    assert "Alice: original text" in msg.text
+
+
+async def test_private_message_is_direct_and_always_addressed(fake_telegram: FakeTelegram) -> None:
+    recorder = RecordingCallbacks()
+    adapter = await _start_bot_adapter(fake_telegram, recorder)
+    await fake_telegram.update_batches.put(
+        [
+            {
+                "update_id": 36,
+                "message": {
+                    "message_id": 3036,
+                    "date": 1718000000,
+                    "chat": {"id": 555, "type": "private"},
+                    "from": {"id": 4242, "first_name": "Yu", "username": "yu"},
+                    "text": "hi there",
+                },
+            }
+        ]
+    )
+    try:
+        await wait_until(lambda: len(recorder.messages) == 1)
+    finally:
+        await adapter.stop()
+    msg = recorder.messages[0]
+    assert msg.chat_kind == "direct"
+    assert msg.addressed is True
+    assert msg.text == "hi there"

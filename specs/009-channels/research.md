@@ -91,6 +91,63 @@ official docs (the doc site requires a developer login).
   etc.) require organization admin approval; outbound IP allowlist is
   optional and should stay empty for machines with dynamic IPs.
 
+## Group chat, threads & rich content (2026-07-08)
+
+Verified live against a real SeaTalk app and a real Telegram bot while
+building group/@mention/thread/forward support (feature/channel-group-mention-rich).
+
+- **SeaTalk inbound tags/events (verified live):**
+  - DM `combined_forwarded_chat_history` = `{tag,
+    combined_forwarded_chat_history:{content:[{tag, sender:{email},
+    message_sent_time, text:{content}|image:{content:url}|file:{filename}}]}}`.
+  - DM quoted = `tag:"text"` + `quoted_message_id`.
+  - DM thread = `tag:"text"` + `thread_id`.
+  - Group events: `bot_added_to_group_chat` (`event.group.group_id` +
+    inviter); `new_mentioned_message_received_from_group_chat` (fires **only**
+    when the bot is @mentioned; `event.group_id` +
+    `message.{thread_id, sender, text:{plain_text, mentioned_list:[{username,
+    seatalk_id}]}}`); `new_message_received_from_thread` (non-@ thread
+    chatter — ignored, since the bot never acts without an @mention).
+  - **Group text lives at `text.plain_text`, not `text.content`** — the DM
+    and group event shapes diverge here and it is easy to read the wrong
+    field.
+  - An @mention of the bot *inside* a thread still arrives as
+    `new_mentioned_message_received_from_group_chat`, with `thread_id` set —
+    there is no separate "mentioned in thread" event type.
+
+- **SeaTalk Open API endpoints used:**
+  - Group send: `POST /messaging/v2/group_chat {group_id, message}` (add
+    `thread_id` to reply into a thread instead of group-main).
+  - Thread read: `GET /messaging/v2/group_chat/get_thread_by_thread_id
+    {group_id, thread_id, page_size}` → response `{code, next_cursor,
+    thread_messages:[…]}` — the list key is `thread_messages`, not `messages`
+    or `content`.
+  - `GET /messaging/v2/get_message_by_message_id` for resolving a single
+    referenced message (quotes).
+  - The group-chat **history** endpoint (fetching recent group-main
+    messages, as opposed to one thread) is deliberately unused — the
+    corresponding SeaTalk permission is not granted to Coffer's app, so
+    recent-group-main context is never read; the @mention message plus its
+    own thread (if any) is the whole context window.
+
+- **Two platform limits worth recording:**
+  - SeaTalk does not deliver emoji reactions or non-@ group-main messages to
+    a bot at all — there is no event for either, so "read recent group-main
+    history" is not just unimplemented, it is unbuildable without a
+    permission SeaTalk does not grant self-built apps at our scope.
+  - Telegram's Bot API cannot fetch chat history at all (no equivalent of
+    `get_thread_by_thread_id`), so Telegram group/thread context is never
+    read; the adapter still parses @mentions, replies, and forwards from the
+    inbound update itself and replies into the correct forum topic. Two
+    disclosed Telegram parsing caveats, both documented at the call site in
+    `telegram_parse.py`: mention entity offsets are matched against plain
+    Python code-point indices even though Telegram's own offsets are UTF-16
+    code units — an accepted simplification that only drifts when a
+    surrogate-pair character (e.g. an emoji outside the BMP) precedes the
+    mention in the same message; and only `entities` on a plain text message
+    is parsed for a mention — `caption_entities` on a captioned photo/file is
+    not yet parsed, so an @mention inside a media caption is not recognized.
+
 ## Decisions taken from research
 
 | Decision           | Choice                                                                  | Rationale                                                                                                                                 |

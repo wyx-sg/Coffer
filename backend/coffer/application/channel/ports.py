@@ -20,6 +20,7 @@ from coffer.domain.channel.envelopes import (
     InboundMessage,
     SentMessage,
 )
+from coffer.domain.channel.rich_content import ForwardedItem
 
 
 @dataclass(frozen=True)
@@ -54,10 +55,19 @@ class ChannelAdapter(Protocol):
         markdown: str,
         *,
         buttons: Sequence[ChoiceButton] | None = None,
+        thread_id: str = "",
+        chat_kind: str = "direct",
     ) -> SentMessage:
         """Send markdown text. When ``buttons`` is given AND the transport
         ``supports_buttons``, render them as an interactive selection card;
-        otherwise the text is sent plain (buttons ignored)."""
+        otherwise the text is sent plain (buttons ignored).
+
+        ``chat_kind`` distinguishes a group ``chat_id`` from a direct one —
+        transports whose group/DM APIs differ (SeaTalk) route on it; a
+        transport with one unified send path (Telegram) ignores it.
+        ``thread_id``, when non-empty, threads the message where the
+        transport supports it; transports without thread support ignore it.
+        """
         ...
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None: ...
@@ -116,10 +126,20 @@ class ChannelPeerRepoPort(Protocol):
 
     async def get(self, resource_id: int) -> ChannelPeer | None: ...
 
+    async def get_by_chat(self, resource_id: int, chat_id: str) -> ChannelPeer | None: ...
+
+    async def list_by_resource(self, resource_id: int) -> list[ChannelPeer]: ...
+
+    async def owner_sender_id(self, resource_id: int) -> str | None:
+        """The first non-null ``sender_id`` paired for this channel, across
+        all its peer rows (DM + any groups/threads). ``None`` when the
+        channel has no peer with a known sender identity."""
+        ...
+
     async def upsert(self, peer: ChannelPeer) -> None: ...
 
     async def set_active_conversation(
-        self, resource_id: int, conversation_id: str | None
+        self, resource_id: int, chat_id: str, conversation_id: str | None
     ) -> None: ...
 
     async def set_preferences(
@@ -148,6 +168,19 @@ class ModelSuggestionPort(Protocol):
     no active profile — the card then offers only the free-text path."""
 
     async def suggest(self, agent_key: str) -> list[str]: ...
+
+
+class ContextFetchPort(Protocol):
+    """Best-effort thread-context reader for a group @mention: when the
+    @mention landed inside a thread, the thread's own messages ground the
+    turn. Group-main @mentions fetch nothing (reading all group chatter is
+    undesirable — the group-chat-history permission is intentionally not
+    granted). Platforms without a history-fetch API (Telegram's Bot API)
+    satisfy this by always returning ``[]``."""
+
+    async def fetch_thread(
+        self, chat_id: str, thread_id: str, *, limit: int = 50
+    ) -> list[ForwardedItem]: ...
 
 
 @runtime_checkable

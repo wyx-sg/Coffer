@@ -348,6 +348,25 @@ status / notify`。
   （Apple Silicon Metal），其小模型首次使用时下载；源码运行则回退到 `mlx-whisper`
   （可选 `[voice-mlx]` extra）。见 ADR-039。未来音频原生 agent 的 adapter 直接转发音频而非
   转写。没有可用引擎时——或模型尚未下载时——语音作为音频文件交出而非丢失。
+- **FR-023**: 群聊是一等 peer。当已配对的 owner @mention bot（或消息以带地址的群
+  事件形式投递）时，bot 会在那里作答；该群成为一条额外的 `channel_peers` 行，键为
+  `(channel, 群聊 chat id)`，继承 owner 的 `sender_id`。无需 schema 迁移——该表的
+  `(resource_id, chat_id)` 唯一键本就允许一个 channel 有多个 peer。
+- **FR-024**: bot 只在一条带地址的消息（@mention 了 bot）上才在群里行动。未带地址
+  的群消息被忽略。一条来自非 owner 的带地址消息会收到一条简短的「未授权」拒绝回复，
+  且不启动任何 turn。
+- **FR-025**: 转发的聊天记录被展平成可读文本、折进 turn 让 agent 看到——SeaTalk 的
+  `combined_forwarded_chat_history` 与 Telegram 的 `forward_origin`。每条记录在
+  `[Forwarded chat record]` 标题下渲染为 `<sender>: <text | [image] url | [file] name>`。
+- **FR-026**: 线程 (thread) 被原地读取与回复。当 owner 在某个线程内 @mention bot 时，
+  bot 会读取该线程自身的消息作为上下文（SeaTalk 的 `get_thread_by_thread_id`）并回复
+  进该线程；一条在线程内发出的 DM 或群消息，回复也会进入该线程。刻意**不**读取
+  *最近的群主聊天*历史（SeaTalk 的群聊历史权限未获批；@mention 消息本身自成上下文）。
+  Telegram 完全无法拉取历史（Bot API 的限制），因此 Telegram 上不读取线程上下文——
+  bot 仅基于 @mention 消息本身作答，但仍会回复进该 forum topic。一条被引用/回复的消息
+  在平台内联该信息处贡献一段 `> sender: …` 上下文前缀。
+- **FR-027**: 每个 `(channel, chat, thread)` 都有自己的 turn 队列/会话，因此 DM turn、
+  群主聊天 turn 与线程 turn 彼此永不共享状态。
 
 ### Key Entities
 
@@ -355,8 +374,9 @@ status / notify`。
   agent + 配置。
 - **ChannelPeer** — channel 的已配对 owner：`(resource, chat_id)`、显示
   名、配对时间、指向活跃对话的指针、已配对发送者身份（`sender_id`），以及
-  粘性首选（所选 agent）。目前每个 channel 一个；以 chat 为键，
-  使群聊将来可以直接成为新的 peer 行而无需改 schema。
+  粘性首选（所选 agent）。每个 (channel, chat) 一行：已配对 owner 一行，
+  加上 owner 曾 @ 过 bot 的每个群聊/thread 各一行；`(resource_id, chat_id)`
+  唯一键已支持这一点，无需迁移。
 - **InboundMessage / InboundCallback / OutboundMessage** — 每个 adapter 生产与
   消费的规范化信封 (envelope)；内核永远看不到平台原始载荷。inbound 为 owner gate
   携带发送者身份（`sender_id`）。`InboundCallback` 是一次选择卡片按钮点选（携带一个
@@ -643,6 +663,38 @@ status / notify`。
 - **When** adapter 准备该 turn
 - **Then** 音频被转写成文字并折进 prompt，且音频不再作为文件发送（未来音频原生
   agent 则会直接转发它）
+
+### Scenario: an un-addressed group message is ignored
+
+- **Given** 一个已配对的 channel 和一个 bot 所在的群聊
+- **When** 一条群消息到达、没有 @mention bot
+- **Then** 不发送任何回复，也不为该群创建任何 turn 或 peer 行
+
+### Scenario: the owner @mentions the bot in a group main chat
+
+- **Given** 一个已配对的 channel 和一个没有活跃线程的群聊
+- **When** owner 在群的主聊天里 @mention bot
+- **Then** 一个 turn 运行，回复被投递到该群，且为该群聊创建一条 `channel_peers`
+  行、继承 owner 的 `sender_id`
+
+### Scenario: a non-owner @mention in a group is refused
+
+- **Given** 一个已知 owner 的已配对 channel
+- **When** owner 以外的人在群聊里 @mention bot
+- **Then** bot 回复该发送者未获授权，且不启动任何 turn
+
+### Scenario: the owner @mentions the bot inside a thread
+
+- **Given** 一个已配对的 channel 和一个带线程的群聊，运行在能拉取线程历史的传输上
+- **When** owner 在该线程内 @mention bot
+- **Then** 该线程自身的消息被读取并折进该 turn，回复也被路由回同一线程
+
+### Scenario: a forwarded chat record reaches the agent
+
+- **Given** 一个已配对的 channel
+- **When** owner 向 bot 转发一条聊天记录
+- **Then** 该 turn 的消息文本携带一个 `[Forwarded chat record]` 块，列出每条被
+  转发的记录
 
 ## Assumptions
 

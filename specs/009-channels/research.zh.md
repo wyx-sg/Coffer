@@ -83,6 +83,57 @@ NousResearch hermes-agent 文档与源码、SeaTalk 官方 `cs-bot` 仓库与开
 - **组织审批**：自建 app 的 scope（Send Message to Bot User 等）需要组织
   管理员审批；出站 IP allowlist 是可选项，动态 IP 的机器应保持留空。
 
+## 群聊、线程与富内容（2026-07-08）
+
+在构建群聊/@mention/线程/转发支持（feature/channel-group-mention-rich）时，对着一个
+真实的 SeaTalk app 和一个真实的 Telegram bot 现场核实过。
+
+- **SeaTalk 入站 tag/事件（现场核实）：**
+  - DM 的 `combined_forwarded_chat_history` = `{tag,
+    combined_forwarded_chat_history:{content:[{tag, sender:{email},
+    message_sent_time, text:{content}|image:{content:url}|file:{filename}}]}}`。
+  - DM 引用 (quoted) = `tag:"text"` + `quoted_message_id`。
+  - DM 线程 = `tag:"text"` + `thread_id`。
+  - 群事件：`bot_added_to_group_chat`（`event.group.group_id` + 邀请人）；
+    `new_mentioned_message_received_from_group_chat`（**只有** bot 被 @mention 时才
+    触发；`event.group_id` +
+    `message.{thread_id, sender, text:{plain_text, mentioned_list:[{username,
+    seatalk_id}]}}`）；`new_message_received_from_thread`（非 @ 的线程闲聊——被
+    忽略，因为 bot 从不在没有 @mention 的情况下行动）。
+  - **群聊文本落在 `text.plain_text`，而非 `text.content`**——DM 与群事件的形状在
+    这一点上分道扬镳，很容易读错字段。
+  - 在某个线程*内*对 bot 的 @mention，到达的仍是
+    `new_mentioned_message_received_from_group_chat`，只是带上了 `thread_id`——
+    并不存在一个单独的「线程内被 @」事件类型。
+
+- **用到的 SeaTalk Open API 端点：**
+  - 群发送：`POST /messaging/v2/group_chat {group_id, message}`（加上
+    `thread_id` 即可回复进某个线程而非群主聊天）。
+  - 线程读取：`GET /messaging/v2/group_chat/get_thread_by_thread_id
+    {group_id, thread_id, page_size}` → 响应 `{code, next_cursor,
+    thread_messages:[…]}`——列表键是 `thread_messages`，不是 `messages` 或
+    `content`。
+  - `GET /messaging/v2/get_message_by_message_id` 用于解析某条被引用的单条消息
+    （quote）。
+  - 群聊**历史**端点（拉取最近的群主聊天消息，区别于某一个线程）被刻意未使用——
+    对应的 SeaTalk 权限没有授予 Coffer 的 app，所以「最近的群主聊天」上下文从不
+    被读取；@mention 消息本身加上它自己的线程（如果有）就是整个上下文窗口。
+
+- **两条值得记录的平台限制：**
+  - SeaTalk 根本不会把 emoji 表情回应或非 @ 的群主聊天消息投递给 bot——两者都没有
+    对应的事件，所以「读取最近的群主聊天历史」不只是尚未实现，而是在 SeaTalk 没有
+    授予自建 app 相应权限的前提下根本无法实现。
+  - Telegram 的 Bot API 完全无法拉取聊天历史（没有类似
+    `get_thread_by_thread_id` 的等价物），所以 Telegram 的群聊/线程上下文从不被
+    读取；adapter 仍会从入站 update 本身解析 @mention、回复与转发，并回复进正确的
+    forum topic。两条已披露的 Telegram 解析注意事项，均在 `telegram_parse.py` 的
+    调用点处有记录：mention 实体的 offset 是对着纯 Python 的 code-point 索引匹配
+    的，尽管 Telegram 自己的 offset 是 UTF-16 code unit——这是一个被接受的简化，
+    只有当一个代理对 (surrogate-pair) 字符（例如某些 BMP 之外的 emoji）出现在
+    mention 之前时才会漂移；并且目前只解析纯文本消息上的 `entities` 来找 mention
+    —— 带 caption 的媒体（图片/文件）上的 `caption_entities` 尚未解析，因此媒体
+    caption 里的 @mention 不会被识别。
+
 ## 由调研得出的决策
 
 | 决策          | 选择                                                    | 理由                                                                                                     |

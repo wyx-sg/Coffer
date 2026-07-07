@@ -26,53 +26,22 @@ from coffer.domain.channel.envelopes import (
     SentMessage,
 )
 from coffer.domain.channel.errors import ChannelSendFailed
+from coffer.domain.channel.rich_content import ForwardedItem
+from coffer.infrastructure.channel.seatalk_parse import (
+    flatten_combined_forwarded,
+    interactive_card,
+    message_to_item,
+    split_to_byte_limit,
+    strip_group_mentions,
+)
 
 _logger = logging.getLogger(__name__)
 
 _CHUNK_LIMIT = 3500  # paragraph-chunking budget, in characters
 _BYTE_LIMIT = 3900  # SeaTalk caps content at 4096 BYTES; stay clear of it
 
-
-def _split_to_byte_limit(chunk: str, byte_limit: int) -> list[str]:
-    """Split a chunk further until each piece fits the UTF-8 byte cap.
-
-    chunk_text counts characters, but CJK text is 3 bytes per character in
-    UTF-8 — a 3500-character chunk can be ~10 KB. Halve at character
-    boundaries until every piece encodes under the limit.
-    """
-    if len(chunk.encode("utf-8")) <= byte_limit:
-        return [chunk]
-    mid = len(chunk) // 2
-    return _split_to_byte_limit(chunk[:mid], byte_limit) + _split_to_byte_limit(
-        chunk[mid:], byte_limit
-    )
-
-
 _TOKEN_SLACK_SECONDS = 60
 _RATE_BACKOFF = (1.0, 3.0, 9.0)
-
-
-def _interactive_card(text: str, buttons: Sequence[ChoiceButton]) -> dict[str, Any]:
-    """A SeaTalk ``interactive_message`` card: a markdown body + callback buttons
-    each carrying our custom ``value`` (research.md). A tap returns the value in
-    an ``interactive_message_click`` event.
-
-    research.md pins only ``tag="interactive_message"``, ``button_type="callback"``
-    and the custom ``value``; the ``elements``/``description`` body nesting and
-    the button ``text`` field are inferred (the live API docs are login-gated and
-    unreachable from this machine). If SeaTalk rejects the payload, adjust this
-    one helper — the rest of the card pipeline is shape-agnostic."""
-    return {
-        "tag": "interactive_message",
-        "interactive_message": {
-            "elements": [
-                {"element_type": "description", "description": {"format": 1, "text": text}},
-            ],
-            "buttons": [
-                {"button_type": "callback", "text": b.label, "value": b.value} for b in buttons
-            ],
-        },
-    }
 
 
 class SeaTalkAdapter:
@@ -103,6 +72,8 @@ class SeaTalkAdapter:
             supports_typing=True,
             max_message_chars=_CHUNK_LIMIT,
             supports_buttons=True,
+            supports_groups=True,
+            supports_history_fetch=True,
         )
 
     # -- lifecycle ---------------------------------------------------------
@@ -130,6 +101,8 @@ class SeaTalkAdapter:
             text = ""
             if tag == "text":
                 text = str((message.get("text") or {}).get("content", ""))
+            elif tag == "combined_forwarded_chat_history":
+                text = flatten_combined_forwarded(message)
             await self._callbacks.on_message(
                 InboundMessage(
                     channel=self._name,
@@ -142,8 +115,49 @@ class SeaTalkAdapter:
                     ),
                     # SeaTalk DMs are 1:1, so the sender is the employee_code.
                     sender_id=str(event.get("employee_code", "")),
+                    thread_id=str(message.get("thread_id", "")),
                 )
             )
+        elif event_type == "new_mentioned_message_received_from_group_chat":
+            # SeaTalk only fires this event when the bot is @mentioned (it
+            # pre-filters group traffic) — always addressed by definition.
+            message = event.get("message") or {}
+            sender = message.get("sender") or {}
+            tag = str(message.get("tag", ""))
+            if tag == "combined_forwarded_chat_history":
+                # Same flattening as the DM path (a bare plain_text lookup would drop it).
+                plain_text = flatten_combined_forwarded(message)
+            else:
+                body = message.get("text") or {}
+                plain_text = strip_group_mentions(
+                    str(body.get("plain_text", "")), body.get("mentioned_list")
+                )
+            await self._callbacks.on_message(
+                InboundMessage(
+                    channel=self._name,
+                    chat_id=str(event.get("group_id", "")),
+                    sender_display=str(sender.get("email", "") or sender.get("seatalk_id", "")),
+                    text=plain_text,
+                    platform_message_id=str(message.get("message_id", "")),
+                    timestamp=datetime.fromtimestamp(
+                        int(envelope.get("timestamp", 0) or 0), tz=UTC
+                    ),
+                    sender_id=str(sender.get("employee_code", "")),
+                    chat_kind="group",
+                    addressed=True,
+                    thread_id=str(message.get("thread_id", "")),
+                )
+            )
+        elif event_type in (
+            "new_message_received_from_thread",
+            "bot_added_to_group_chat",
+            "user_enter_chatroom_with_bot",
+        ):
+            # A thread @mention already arrives as
+            # new_mentioned_message_received_from_group_chat with thread_id
+            # set; non-@ thread chatter and group-membership events must never
+            # start a turn.
+            return
         elif event_type == "interactive_message_click" and self._callbacks.on_callback is not None:
             # A selection-card button tap; the custom ``value`` we set on the
             # button comes back here (research.md). DMs are 1:1 so the sender is
@@ -166,21 +180,37 @@ class SeaTalkAdapter:
         markdown: str,
         *,
         buttons: Sequence[ChoiceButton] | None = None,
+        thread_id: str = "",
+        chat_kind: str = "direct",
     ) -> SentMessage:
         from coffer.infrastructure.channel.render import chunk_text
 
         if buttons:
             # Selection prompts are short — one interactive card, no chunking.
-            result = await self._send_single_chat(chat_id, _interactive_card(markdown, buttons))
+            result = await self._send(
+                chat_id, interactive_card(markdown, buttons), thread_id, chat_kind
+            )
             return SentMessage(message_id=str(result.get("message_id", "")))
         last = ""
         for chunk in chunk_text(markdown, self.capabilities.max_message_chars):
-            for piece in _split_to_byte_limit(chunk, _BYTE_LIMIT):
-                result = await self._send_single_chat(
-                    chat_id, {"tag": "text", "text": {"format": 1, "content": piece}}
+            for piece in split_to_byte_limit(chunk, _BYTE_LIMIT):
+                result = await self._send(
+                    chat_id,
+                    {"tag": "text", "text": {"format": 1, "content": piece}},
+                    thread_id,
+                    chat_kind,
                 )
                 last = str(result.get("message_id", ""))
         return SentMessage(message_id=last)
+
+    async def _send(
+        self, chat_id: str, message: dict[str, Any], thread_id: str, chat_kind: str
+    ) -> Any:
+        """Route one already-built ``message`` payload to the group or
+        single-chat endpoint, sharing the chunk loop above across both."""
+        if chat_kind == "group":
+            return await self._send_group_chat(chat_id, message, thread_id)
+        return await self._send_single_chat(chat_id, message, thread_id)
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None:
         raise ChannelSendFailed(self._name, "seatalk cannot edit messages")
@@ -206,12 +236,51 @@ class SeaTalkAdapter:
         # False so the core never calls this. Present to satisfy the Protocol.
         raise ChannelSendFailed(self._name, "seatalk cannot send media yet")
 
+    # -- context fetch (ContextFetchPort) -------------------------------------
+
+    async def fetch_thread(
+        self, chat_id: str, thread_id: str, *, limit: int = 50
+    ) -> list[ForwardedItem]:
+        """The thread's own messages, when the @mention landed inside a
+        thread rather than the group main chat. Degrades to ``[]`` on ANY
+        error (a network hiccup, an unexpected payload, or a permission gap):
+        a transient failure must not break the turn, which still runs on the
+        @mention message alone. (Group-main @mentions fetch no history — that
+        permission is intentionally not granted.)"""
+        try:
+            payload = await self._get(
+                "/messaging/v2/group_chat/get_thread_by_thread_id",
+                {"group_id": chat_id, "thread_id": thread_id, "page_size": limit},
+            )
+        except Exception:
+            _logger.warning(
+                "seatalk.fetch_thread.failed", extra={"channel": self._name}, exc_info=True
+            )
+            return []
+        messages = payload.get("thread_messages") or [] if isinstance(payload, dict) else []
+        return [message_to_item(m) for m in messages if isinstance(m, dict)]
+
     # -- transport -------------------------------------------------------------
 
-    async def _send_single_chat(self, employee_code: str, message: dict[str, Any]) -> Any:
+    async def _send_single_chat(
+        self, employee_code: str, message: dict[str, Any], thread_id: str = ""
+    ) -> Any:
+        # FR-026: thread the reply by carrying thread_id on the message body.
+        if thread_id:
+            message = {**message, "thread_id": thread_id}
         return await self._post(
             "/messaging/v2/single_chat",
             {"employee_code": employee_code, "message": message},
+        )
+
+    async def _send_group_chat(self, group_id: str, message: dict[str, Any], thread_id: str) -> Any:
+        return await self._post(
+            "/messaging/v2/group_chat",
+            {
+                "group_id": group_id,
+                "message": message,
+                **({"thread_id": thread_id} if thread_id else {}),
+            },
         )
 
     async def _ensure_token(self) -> str:
@@ -262,6 +331,46 @@ class SeaTalkAdapter:
                 # A gateway returns an HTML error page, not the Open API JSON
                 # envelope — json() raises a JSONDecodeError (NOT an
                 # httpx.HTTPError), so surface it as the channel error contract.
+                raise ChannelSendFailed(
+                    self._name, f"{path}: non-JSON response ({response.status_code})"
+                ) from e
+            code = payload.get("code", -1) if isinstance(payload, dict) else -1
+            if response.status_code == 200 and code == 0:
+                return payload
+            if code == 100:  # expired token — refresh and retry once
+                self._token = None
+                if attempt < max(retries, 1):
+                    attempt += 1
+                    continue
+            rate_limited = response.status_code == 429 or code == 101
+            if rate_limited and attempt < retries:
+                delay = _RATE_BACKOFF[min(attempt, len(_RATE_BACKOFF) - 1)]
+                attempt += 1
+                _logger.warning(
+                    "seatalk.rate_limited", extra={"channel": self._name, "delay": delay}
+                )
+                await asyncio.sleep(delay)
+                continue
+            raise ChannelSendFailed(self._name, f"{path}: code={code} http={response.status_code}")
+
+    async def _get(self, path: str, params: dict[str, Any], *, retries: int = 3) -> Any:
+        """GET counterpart of :meth:`_post` — same token/refresh/rate-limit/
+        non-JSON handling, but for the read-only history/thread endpoints
+        which take query params, not a JSON body."""
+        attempt = 0
+        while True:
+            token = await self._ensure_token()
+            try:
+                response = await self._client.get(
+                    f"{self._base}{path}",
+                    params=params,
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            except httpx.HTTPError as e:
+                raise ChannelSendFailed(self._name, f"{path}: {type(e).__name__}") from e
+            try:
+                payload: Any = response.json()
+            except ValueError as e:
                 raise ChannelSendFailed(
                     self._name, f"{path}: non-JSON response ({response.status_code})"
                 ) from e

@@ -129,6 +129,11 @@ class TurnRenderer:
     conversation_id: str
     send: Callable[[str], Awaitable[None]]  # owner-bound safe send
     now: Callable[[], float] = time.monotonic  # injectable clock (turn duration)
+    # Where in the chat this turn's reply belongs: non-empty ``thread_id``
+    # threads the progress message alongside the eventual reply; ``chat_kind``
+    # tells a transport whose group/DM send paths differ which one to use.
+    thread_id: str = ""
+    chat_kind: str = "direct"
 
     async def consume(self, queue: asyncio.Queue[Any]) -> None:
         parts: list[str] = []
@@ -204,7 +209,9 @@ class TurnRenderer:
         now = time.monotonic()
         with contextlib.suppress(Exception):
             if progress.message is None:
-                progress.message = await self.adapter.send_text(self.chat_id, text)
+                progress.message = await self.adapter.send_text(
+                    self.chat_id, text, thread_id=self.thread_id, chat_kind=self.chat_kind
+                )
                 progress.last_edit = now
             elif now - progress.last_edit >= _EDIT_INTERVAL_SECONDS:
                 await self.adapter.edit_text(self.chat_id, progress.message.message_id, text)
