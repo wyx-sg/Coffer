@@ -19,7 +19,7 @@ from collections import deque
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from coffer.application.audit_service import AuditService
 from coffer.application.channel.commands import HELP_TEXT, ChannelCommands
@@ -33,11 +33,13 @@ from coffer.application.channel.ports import (
     ChannelBinding,
     ChannelPeer,
     ChannelPeerRepoPort,
+    ContextFetchPort,
     ModelSuggestionPort,
 )
 from coffer.application.channel.turn_render import TurnRenderer
 from coffer.domain.audit import AuditEventType
 from coffer.domain.channel.envelopes import ChoiceButton, InboundCallback, InboundMessage
+from coffer.domain.channel.rich_content import flatten_context
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.errors import TurnInProgress
@@ -186,18 +188,54 @@ class InboundProcessor:
         binding = self._bindings.get(msg.channel)
         if binding is None:
             return
-        peer = await self._peers.get(binding.resource_id)
-        if peer is None or peer.chat_id != msg.chat_id:
-            await self._maybe_pair(binding, msg)
-            return
-        if peer.sender_id is not None and msg.sender_id and peer.sender_id != msg.sender_id:
-            # Right chat (e.g. a paired group), wrong member — ignore silently.
-            # Never fall through to pairing: an intruder must not be able to
-            # re-pair the channel by sending a code into the owner's chat. A
-            # message with no sender id (the transport could not supply one)
-            # falls back to the chat-id match already passed, so a quirk in one
-            # update shape never locks the owner out of their own channel.
-            return
+        if msg.chat_kind == "group":
+            if not msg.addressed:
+                # Un-addressed group chatter (no @mention/reply-to-bot) is
+                # never a turn — a bot must not speak up uninvited in a group
+                # it merely sits in.
+                return
+            owner = await self._peers.owner_sender_id(binding.resource_id)
+            if owner is None:
+                # The channel has never been paired (no DM/group has a known
+                # owner sender id yet) — a group @mention cannot bootstrap
+                # pairing; only the paired DM/pairing-code flow can.
+                return
+            if msg.sender_id and msg.sender_id != owner:
+                await self._safe_send(
+                    binding,
+                    msg.chat_id,
+                    "🚫 Not authorized — only this channel's owner can use me here.",
+                    thread_id=msg.thread_id,
+                    chat_kind="group",
+                )
+                return
+            peer = await self._peers.get_by_chat(binding.resource_id, msg.chat_id)
+            if peer is None:
+                # First @mention from the owner in this group/thread — record
+                # a peer row for it so future turns (and /commands) resolve a
+                # conversation scoped to this chat, not the owner's DM.
+                peer = ChannelPeer(
+                    resource_id=binding.resource_id,
+                    chat_id=msg.chat_id,
+                    display_name=msg.sender_display,
+                    paired_at=datetime.now(tz=UTC),
+                    active_conversation_id=None,
+                    sender_id=owner,
+                )
+                await self._peers.upsert(peer)
+        else:
+            peer = await self._peers.get_by_chat(binding.resource_id, msg.chat_id)
+            if peer is None:
+                await self._maybe_pair(binding, msg)
+                return
+            if peer.sender_id is not None and msg.sender_id and peer.sender_id != msg.sender_id:
+                # Right chat (e.g. a paired group), wrong member — ignore silently.
+                # Never fall through to pairing: an intruder must not be able to
+                # re-pair the channel by sending a code into the owner's chat. A
+                # message with no sender id (the transport could not supply one)
+                # falls back to the chat-id match already passed, so a quirk in one
+                # update shape never locks the owner out of their own channel.
+                return
         text = msg.text.strip()
         attachments = tuple(
             Attachment(path=a.path, mime=a.mime, filename=a.filename) for a in msg.attachments
@@ -224,6 +262,20 @@ class InboundProcessor:
                 self._safe_send,
             )
             return
+        if (
+            msg.chat_kind == "group"
+            and msg.thread_id
+            and binding.adapter.capabilities.supports_history_fetch
+        ):
+            # Ground the turn in the thread's own conversation — group-main
+            # @mentions never fetch (reading all group chatter is undesirable;
+            # that permission is intentionally not granted), and platforms with
+            # no history-fetch API (Telegram) never reach here at all.
+            fetcher = cast(ContextFetchPort, binding.adapter)
+            items = await fetcher.fetch_thread(msg.chat_id, msg.thread_id)
+            ctx = flatten_context(items, title="Thread messages")
+            if ctx:
+                text = f"{ctx}\n\n{text}" if text else ctx
         session = self._session(msg.channel, peer.chat_id, msg.thread_id)
         if len(session.queue) >= _QUEUE_MAX:
             await self._safe_send(

@@ -47,6 +47,7 @@ from coffer.domain.channel.envelopes import (
     InboundMessage,
     SentMessage,
 )
+from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.domain.chat.events import TextDelta, TurnDone, TurnStarted
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.infrastructure.channel.persistence import ChannelPeerRepo
@@ -96,6 +97,7 @@ def inbound(
     sender_id: str = "",
     thread_id: str = "",
     chat_kind: str = "direct",
+    addressed: bool = True,
 ) -> InboundMessage:
     return InboundMessage(
         channel=channel,
@@ -107,6 +109,7 @@ def inbound(
         sender_id=sender_id,
         thread_id=thread_id,
         chat_kind=chat_kind,
+        addressed=addressed,
     )
 
 
@@ -144,6 +147,8 @@ class FakeChannelAdapter:
         max_message_chars: int = 4096,
         supports_buttons: bool = False,
         supports_media: bool = True,
+        supports_groups: bool = False,
+        supports_history_fetch: bool = False,
     ) -> None:
         self._caps = ChannelCapabilities(
             supports_edit=supports_edit,
@@ -151,6 +156,8 @@ class FakeChannelAdapter:
             max_message_chars=max_message_chars,
             supports_buttons=supports_buttons,
             supports_media=supports_media,
+            supports_groups=supports_groups,
+            supports_history_fetch=supports_history_fetch,
         )
         self.started = False
         self.stopped = False
@@ -167,6 +174,13 @@ class FakeChannelAdapter:
         self.typing: list[str] = []  # chat_ids
         # (chat_id, path, caption, as_photo) for each uploaded file.
         self.media: list[tuple[str, str, str | None, bool]] = []
+        # Scriptable ``fetch_thread`` result (Task 7b) — a test sets this to a
+        # list of ``ForwardedItem`` for its scenario; unset yields ``[]``.
+        self.thread_items: list[ForwardedItem] = []
+        # (chat_id, thread_id) for every ``fetch_thread`` call the core made,
+        # so a test can assert the fetch happened (or, on a non-fetching
+        # transport, that it never did).
+        self.fetch_thread_calls: list[tuple[str, str]] = []
         self._next_id = 0
 
     @property
@@ -223,6 +237,12 @@ class FakeChannelAdapter:
     ) -> SentMessage:
         self.media.append((chat_id, path, caption, as_photo))
         return SentMessage(message_id=self._new_id())
+
+    async def fetch_thread(
+        self, chat_id: str, thread_id: str, *, limit: int = 50
+    ) -> list[ForwardedItem]:
+        self.fetch_thread_calls.append((chat_id, thread_id))
+        return list(self.thread_items)
 
     async def tap(
         self, value: str, *, channel: str, chat_id: str = "owner", sender_id: str = ""
