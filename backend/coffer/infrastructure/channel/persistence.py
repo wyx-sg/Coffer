@@ -156,11 +156,16 @@ class ChannelPeerRepo:
             )
             await session.commit()
 
-    async def set_active_conversation(self, resource_id: int, conversation_id: str | None) -> None:
+    async def set_active_conversation(
+        self, resource_id: int, chat_id: str, conversation_id: str | None
+    ) -> None:
         async with self._sm() as session:
             await session.execute(
                 update(ChannelPeerModel)
-                .where(ChannelPeerModel.resource_id == resource_id)
+                .where(
+                    ChannelPeerModel.resource_id == resource_id,
+                    ChannelPeerModel.chat_id == chat_id,
+                )
                 .values(active_conversation_id=conversation_id)
             )
             await session.commit()

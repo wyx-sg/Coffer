@@ -50,9 +50,12 @@ _logger = logging.getLogger(__name__)
 
 _QUEUE_MAX = 10
 
-#: One queued inbound turn: the text to drive it, and any downloaded attachments
-#: to materialise for the agent (images inlined, files handed off by path).
-_QueuedInbound = tuple[str, tuple[Attachment, ...]]
+#: One queued inbound turn: the text to drive it, any downloaded attachments to
+#: materialise for the agent (images inlined, files handed off by path), the
+#: thread the message arrived in (empty for a threadless chat), and the chat
+#: kind ("direct" | "group") so the eventual reply is routed back to the same
+#: place the message came from.
+_QueuedInbound = tuple[str, tuple[Attachment, ...], str, str]
 
 
 def _attachment_note(attachments: Sequence[Attachment]) -> str:
@@ -133,7 +136,9 @@ class InboundProcessor:
         self._turns = turns
         self._audit = audit
         self._bindings: dict[str, ChannelBinding] = {}
-        self._sessions: dict[str, _Session] = {}
+        # Keyed by (channel, chat_id, thread_id): one peer's DM, one group's
+        # main chat, and each of that group's threads all drain independently.
+        self._sessions: dict[tuple[str, str, str], _Session] = {}
         self._commands = ChannelCommands(
             peers=peers,
             conversations=conversations,
@@ -149,25 +154,29 @@ class InboundProcessor:
 
     def unbind(self, name: str) -> None:
         self._bindings.pop(name, None)
-        session = self._sessions.pop(name, None)
-        if session is None:
-            return
-        if session.drain_task is not None:
-            session.drain_task.cancel()
-        # Cancelling the drain task only stops the renderer; the orchestrator
-        # turn keeps running and would deliver its reply to the web UI alone,
-        # leaving the bot silent. Interrupt the live turn so its partial reply
-        # is the contract — not a turn that completes undelivered.
-        if session.running_conversation_id is not None:
-            with contextlib.suppress(Exception):
-                self._turns.interrupt_turn(session.running_conversation_id)
-            session.running_conversation_id = None
+        # A channel can have many live sessions (its DM, each group, each
+        # thread within a group) — unbinding it must stop every one of them,
+        # not just a single legacy session.
+        keys = [key for key in self._sessions if key[0] == name]
+        for key in keys:
+            session = self._sessions.pop(key)
+            if session.drain_task is not None:
+                session.drain_task.cancel()
+            # Cancelling the drain task only stops the renderer; the
+            # orchestrator turn keeps running and would deliver its reply to
+            # the web UI alone, leaving the bot silent. Interrupt the live
+            # turn so its partial reply is the contract — not a turn that
+            # completes undelivered.
+            if session.running_conversation_id is not None:
+                with contextlib.suppress(Exception):
+                    self._turns.interrupt_turn(session.running_conversation_id)
+                session.running_conversation_id = None
 
     def binding(self, name: str) -> ChannelBinding | None:
         return self._bindings.get(name)
 
     def shutdown(self) -> None:
-        for name in list(self._sessions):
+        for name in list(self._bindings):
             self.unbind(name)
         self._bindings.clear()
 
@@ -197,25 +206,42 @@ class InboundProcessor:
             # An empty envelope with nothing downloadable (a sticker, a location,
             # a media type the transport does not extract).
             await self._safe_send(
-                binding, peer.chat_id, "⚠️ Unsupported message — send text, a photo, or a file."
+                binding,
+                peer.chat_id,
+                "⚠️ Unsupported message — send text, a photo, or a file.",
+                thread_id=msg.thread_id,
+                chat_kind=msg.chat_kind,
             )
             return
         # A slash command is text-only; a caption starting with "/" alongside an
         # attachment is a normal message, not a command.
         if text.startswith("/") and not attachments:
             await self._commands.handle(
-                binding, peer, text, self._session(binding.name), self._safe_send
+                binding,
+                peer,
+                text,
+                self._session(binding.name, peer.chat_id, msg.thread_id),
+                self._safe_send,
             )
             return
-        session = self._session(msg.channel)
+        session = self._session(msg.channel, peer.chat_id, msg.thread_id)
         if len(session.queue) >= _QUEUE_MAX:
-            await self._safe_send(binding, peer.chat_id, "⚠️ Busy — message dropped, try again.")
+            await self._safe_send(
+                binding,
+                peer.chat_id,
+                "⚠️ Busy — message dropped, try again.",
+                thread_id=msg.thread_id,
+                chat_kind=msg.chat_kind,
+            )
             return
         # A media message with no caption still needs non-blank text to persist.
-        session.queue.append((text or _attachment_note(attachments), attachments))
+        session.queue.append(
+            (text or _attachment_note(attachments), attachments, msg.thread_id, msg.chat_kind)
+        )
         if session.drain_task is None or session.drain_task.done():
             session.drain_task = asyncio.create_task(
-                self._drain(binding), name=f"channel-drain:{binding.name}"
+                self._drain(binding, peer.chat_id, msg.thread_id),
+                name=f"channel-drain:{binding.name}:{peer.chat_id}:{msg.thread_id}",
             )
 
     async def on_callback(self, cb: InboundCallback) -> None:
@@ -266,15 +292,22 @@ class InboundProcessor:
 
     # -- turn driving ----------------------------------------------------------
 
-    async def _drain(self, binding: ChannelBinding) -> None:
-        session = self._session(binding.name)
+    async def _drain(self, binding: ChannelBinding, chat_id: str, thread_id: str) -> None:
+        session = self._session(binding.name, chat_id, thread_id)
         while session.queue:
-            user_text, attachments = session.queue.popleft()
-            peer = await self._peers.get(binding.resource_id)
+            user_text, attachments, item_thread_id, chat_kind = session.queue.popleft()
+            peer = await self._peers.get_by_chat(binding.resource_id, chat_id)
             if peer is None:
                 break
             try:
-                await self._run_turn(binding, peer, user_text, attachments)
+                await self._run_turn(
+                    binding,
+                    peer,
+                    user_text,
+                    attachments,
+                    thread_id=item_thread_id,
+                    chat_kind=chat_kind,
+                )
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -286,6 +319,9 @@ class InboundProcessor:
         peer: ChannelPeer,
         text: str,
         attachments: Sequence[Attachment] = (),
+        *,
+        thread_id: str = "",
+        chat_kind: str = "direct",
     ) -> None:
         adapter = binding.adapter
         try:
@@ -295,7 +331,13 @@ class InboundProcessor:
         except CofferError as e:
             # e.g. the channel's default agent is unknown/misconfigured — the
             # owner must see it in the chat, not only in the daemon log.
-            await self._safe_send(binding, peer.chat_id, explain_conversation_error(e))
+            await self._safe_send(
+                binding,
+                peer.chat_id,
+                explain_conversation_error(e),
+                thread_id=thread_id,
+                chat_kind=chat_kind,
+            )
             return
         # A channel message driving a turn is first-class in the audit log:
         # who (the peer), through which channel, drives which agent.
@@ -320,16 +362,28 @@ class InboundProcessor:
             queue = await self._turns.start_turn(conversation_id, text, attachments=attachments)
         except TurnInProgress:
             await self._safe_send(
-                binding, peer.chat_id, "⚠️ A turn is already running for this conversation."
+                binding,
+                peer.chat_id,
+                "⚠️ A turn is already running for this conversation.",
+                thread_id=thread_id,
+                chat_kind=chat_kind,
             )
             return
         except CofferError as e:
-            await self._safe_send(binding, peer.chat_id, f"⚠️ {e} [{e.code}]")
+            await self._safe_send(
+                binding,
+                peer.chat_id,
+                f"⚠️ {e} [{e.code}]",
+                thread_id=thread_id,
+                chat_kind=chat_kind,
+            )
             return
-        session = self._session(binding.name)
+        session = self._session(binding.name, peer.chat_id, thread_id)
 
         async def _send(message: str) -> None:
-            await self._safe_send(binding, peer.chat_id, message)
+            await self._safe_send(
+                binding, peer.chat_id, message, thread_id=thread_id, chat_kind=chat_kind
+            )
 
         renderer = TurnRenderer(
             channel=binding.name,
@@ -337,6 +391,8 @@ class InboundProcessor:
             chat_id=peer.chat_id,
             conversation_id=conversation_id,
             send=_send,
+            thread_id=thread_id,
+            chat_kind=chat_kind,
         )
         # Track the live turn so /stop and unbind can target it even after /new
         # rebinds the peer to a fresh conversation mid-turn.
@@ -349,10 +405,11 @@ class InboundProcessor:
 
     # -- helpers ---------------------------------------------------------------
 
-    def _session(self, name: str) -> _Session:
-        if name not in self._sessions:
-            self._sessions[name] = _Session()
-        return self._sessions[name]
+    def _session(self, channel: str, chat_id: str, thread_id: str) -> _Session:
+        key = (channel, chat_id, thread_id)
+        if key not in self._sessions:
+            self._sessions[key] = _Session()
+        return self._sessions[key]
 
     async def _safe_send(
         self,
@@ -361,8 +418,12 @@ class InboundProcessor:
         text: str,
         *,
         buttons: Sequence[ChoiceButton] | None = None,
+        thread_id: str = "",
+        chat_kind: str = "direct",
     ) -> None:
         try:
-            await binding.adapter.send_text(chat_id, text, buttons=buttons)
+            await binding.adapter.send_text(
+                chat_id, text, buttons=buttons, thread_id=thread_id, chat_kind=chat_kind
+            )
         except Exception:
             _logger.exception("channel.send.failed", extra={"channel": binding.name})

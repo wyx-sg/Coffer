@@ -94,6 +94,8 @@ def inbound(
     *,
     sender_display: str = "Owner",
     sender_id: str = "",
+    thread_id: str = "",
+    chat_kind: str = "direct",
 ) -> InboundMessage:
     return InboundMessage(
         channel=channel,
@@ -103,6 +105,8 @@ def inbound(
         platform_message_id="pm-1",
         timestamp=datetime.now(tz=UTC),
         sender_id=sender_id,
+        thread_id=thread_id,
+        chat_kind=chat_kind,
     )
 
 
@@ -152,6 +156,10 @@ class FakeChannelAdapter:
         self.stopped = False
         self.callbacks: AdapterCallbacks | None = None
         self.sent: list[tuple[str, str]] = []  # (chat_id, text)
+        # (chat_id, text, thread_id, chat_kind) for every send_text call — the
+        # full routing detail, kept separate so every existing ``.sent``/
+        # ``.texts()`` assertion above stays a plain 2-tuple.
+        self.sent_routed: list[tuple[str, str, str, str]] = []
         # (chat_id, text, buttons) for sends that carried a selection card.
         self.cards: list[tuple[str, str, list[ChoiceButton]]] = []
         self.edits: list[tuple[str, str, str]] = []  # (chat_id, message_id, text)
@@ -187,8 +195,11 @@ class FakeChannelAdapter:
         markdown: str,
         *,
         buttons: Sequence[ChoiceButton] | None = None,
+        thread_id: str = "",
+        chat_kind: str = "direct",
     ) -> SentMessage:
         self.sent.append((chat_id, markdown))
+        self.sent_routed.append((chat_id, markdown, thread_id, chat_kind))
         if buttons:
             self.cards.append((chat_id, markdown, list(buttons)))
         return SentMessage(message_id=self._new_id())

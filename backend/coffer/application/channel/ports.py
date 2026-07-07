@@ -139,7 +139,7 @@ class ChannelPeerRepoPort(Protocol):
     async def upsert(self, peer: ChannelPeer) -> None: ...
 
     async def set_active_conversation(
-        self, resource_id: int, conversation_id: str | None
+        self, resource_id: int, chat_id: str, conversation_id: str | None
     ) -> None: ...
 
     async def set_preferences(

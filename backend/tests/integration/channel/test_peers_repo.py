@@ -70,12 +70,12 @@ async def test_set_active_conversation_updates_and_clears(env: ChannelEnv) -> No
     resource = await env.register_channel("tg")
     await env.peers.upsert(_peer(resource.id))
 
-    await env.peers.set_active_conversation(resource.id, "conv-9")
+    await env.peers.set_active_conversation(resource.id, "chat-1", "conv-9")
     peer = await env.peers.get(resource.id)
     assert peer is not None
     assert peer.active_conversation_id == "conv-9"
 
-    await env.peers.set_active_conversation(resource.id, None)
+    await env.peers.set_active_conversation(resource.id, "chat-1", None)
     peer = await env.peers.get(resource.id)
     assert peer is not None
     assert peer.active_conversation_id is None
@@ -116,7 +116,7 @@ async def test_legacy_peer_reads_new_fields_as_none(env: ChannelEnv) -> None:
 async def test_set_preferences_updates_and_preserves_active_conversation(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
     await env.peers.upsert(_peer(resource.id))
-    await env.peers.set_active_conversation(resource.id, "conv-7")
+    await env.peers.set_active_conversation(resource.id, "chat-1", "conv-7")
 
     await env.peers.set_preferences(resource.id, preferred_agent="claude_code")
     peer = await env.peers.get(resource.id)
