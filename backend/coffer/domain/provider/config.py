@@ -39,7 +39,8 @@ _CRED_REF_PATTERN = re.compile(r"^[A-Za-z0-9_.\-]+(/[A-Za-z0-9_.\-]+)*$")
 _CLAUDE_CODE = "claude_code"
 _CODEX = "codex"
 _OPENCODE = "opencode"
-_KNOWN_AGENTS: frozenset[str] = frozenset({_CLAUDE_CODE, _CODEX, _OPENCODE})
+_HERMES = "hermes"
+_KNOWN_AGENTS: frozenset[str] = frozenset({_CLAUDE_CODE, _CODEX, _OPENCODE, _HERMES})
 
 # Effective agent set when ``compatible_agents`` is unset, by the wire the
 # endpoint speaks. ``protocol`` no longer fixes the projection target (the user's
@@ -47,9 +48,9 @@ _KNOWN_AGENTS: frozenset[str] = frozenset({_CLAUDE_CODE, _CODEX, _OPENCODE})
 # form pre-fills. ollama is internal-only — no key, projects into no agent.
 _DEFAULT_COMPATIBLE: dict[str, list[str]] = {
     "anthropic": [_CLAUDE_CODE],
-    "openai": [_CODEX, _OPENCODE],
+    "openai": [_CODEX, _OPENCODE, _HERMES],
     "ollama": [],
-    "unknown": [_CLAUDE_CODE, _CODEX, _OPENCODE],
+    "unknown": [_CLAUDE_CODE, _CODEX, _OPENCODE, _HERMES],
 }
 
 

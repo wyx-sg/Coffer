@@ -21,9 +21,11 @@ from coffer.domain.provider.projection import (
     anthropic_api_key_helper,
     apply_anthropic_settings,
     apply_codex_provider,
+    apply_hermes_provider,
     apply_opencode_provider,
     remove_anthropic_settings,
     remove_codex_provider,
+    remove_hermes_provider,
     remove_opencode_provider,
     target_for_agent,
 )
@@ -112,6 +114,14 @@ class ProviderProjector:
                 base_url=cfg.base_url,
                 model=agent_cfg.model,
             )
+        elif agent_type is AgentType.HERMES:
+            # Hermes reads the key from COFFER_PROVIDER_KEY too (config.yaml
+            # providers.coffer.key_env), injected into the subprocess env.
+            new_text = apply_hermes_provider(
+                text,
+                base_url=cfg.base_url,
+                model=agent_cfg.model,
+            )
         else:
             new_text = apply_codex_provider(
                 text,
@@ -132,6 +142,8 @@ class ProviderProjector:
             new_text = remove_anthropic_settings(text)
         elif agent_type is AgentType.OPENCODE:
             new_text = remove_opencode_provider(text)
+        elif agent_type is AgentType.HERMES:
+            new_text = remove_hermes_provider(text)
         else:
             new_text = remove_codex_provider(text)
         self._config_store.write_text_atomic(spec.path, new_text)

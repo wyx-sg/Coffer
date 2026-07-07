@@ -254,3 +254,66 @@ def test_target_for_agent_opencode() -> None:
     assert t is not None
     assert t.config_key == "opencode"
     assert t.format.value == "json"
+
+
+# --- hermes (ADR-040) — YAML provider block in config.yaml ---------------------
+
+
+def test_hermes_provider_writes_model_and_provider_yaml() -> None:
+    import yaml
+
+    from coffer.domain.provider.projection import apply_hermes_provider
+
+    out = apply_hermes_provider("agent:\n  name: h\n", base_url="https://gw/v1", model="hermes-4")
+    d = yaml.safe_load(out)
+    assert d["agent"]["name"] == "h"  # unrelated key preserved
+    assert d["model"]["provider"] == "coffer"
+    assert d["model"]["base_url"] == "https://gw/v1"
+    assert d["model"]["default"] == "hermes-4"
+    # The raw key is never written — only a key_env reference.
+    assert d["providers"]["coffer"]["key_env"] == CODEX_ENV_KEY
+    assert d["providers"]["coffer"]["default_model"] == "hermes-4"
+
+
+def test_hermes_provider_unbound_omits_model_default() -> None:
+    import yaml
+
+    from coffer.domain.provider.projection import apply_hermes_provider
+
+    d = yaml.safe_load(apply_hermes_provider("", base_url="https://gw/v1", model=None))
+    assert "default" not in d["model"]
+    assert "default_model" not in d["providers"]["coffer"]
+
+
+def test_hermes_remove_reverts_only_coffer() -> None:
+    import yaml
+
+    from coffer.domain.provider.projection import apply_hermes_provider, remove_hermes_provider
+
+    out = apply_hermes_provider("keep: 1\n", base_url="https://gw/v1", model="hermes-4")
+    back = yaml.safe_load(remove_hermes_provider(out))
+    assert back["keep"] == 1
+    assert "coffer" not in back.get("providers", {})
+    assert back.get("model", {}).get("provider") != "coffer"
+
+
+def test_hermes_remove_keeps_user_provider() -> None:
+    import yaml
+
+    from coffer.domain.provider.projection import remove_hermes_provider
+
+    text = (
+        "model:\n  provider: mine\n"
+        "providers:\n  coffer:\n    base_url: x\n  mine:\n    base_url: y\n"
+    )
+    back = yaml.safe_load(remove_hermes_provider(text))
+    assert back["model"]["provider"] == "mine"  # user provider untouched
+    assert "coffer" not in back["providers"]
+    assert back["providers"]["mine"]["base_url"] == "y"
+
+
+def test_target_for_agent_hermes() -> None:
+    t = target_for_agent(AgentType.HERMES)
+    assert t is not None
+    assert t.config_key == "config"
+    assert t.format.value == "yaml"

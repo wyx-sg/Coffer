@@ -7,7 +7,7 @@
 **Status**: Accepted
 **Input**: 用户描述：「管理 Coffer 已知的本地安装 AI agent，让后续功能（skills、memory、knowledge base）能向它们投递资产。每个 agent 都是 kind-agnostic Resource 框架（由 spec 001-mcp-gateway 引入）下 kind 为 `agent` 的一种 Resource。v1 支持两种 agent 类型：Claude Code 与 OpenAI Codex——每种都同时涵盖其 CLI 与桌面/IDE 形态，因为它们共享同一份磁盘配置。除注册 agent 外，用户还能查看（只读）每个 agent 的已知配置文件并在外部编辑器中打开它们，并一键把 Coffer 自己的 MCP server 安装到某个 agent 上。」
 
-> **关于 agent 类型的说明。** 受支持的产品：**Claude Code**（`claude_code`，`~/.claude/`）、**OpenAI Codex**（`codex`，`~/.codex/`），以及——由下方多 agent 增补重新加回的——**opencode**（`opencode`，`~/.config/opencode/`），随后的 slice 还将加入 **hermes**（`~/.hermes/`）与 **cursor**（`~/.cursor/`）。每种都同时覆盖其 CLI _与_ app/IDE 形态，因为它们读取同一个共享配置目录。每类型的行为都集中在能力清单（`AGENT_DESCRIPTORS`）里——新增一个产品 = 一个枚举值 + 一条描述符记录（配置文件 allowlist、MCP 注入形态等）。独立的 **Claude Desktop** 聊天应用（拥有自己的 `~/Library/Application Support/Claude/` 配置）不在范围内。
+> **关于 agent 类型的说明。** 受支持的产品：**Claude Code**（`claude_code`，`~/.claude/`）、**OpenAI Codex**（`codex`，`~/.codex/`），以及——由下方多 agent 增补重新加回的——**opencode**（`opencode`，`~/.config/opencode/`）与 **hermes**（`hermes`，`~/.hermes/`），随后的 slice 还将加入 **cursor**（`~/.cursor/`）。每种都同时覆盖其 CLI _与_ app/IDE 形态，因为它们读取同一个共享配置目录。每类型的行为都集中在能力清单（`AGENT_DESCRIPTORS`）里——新增一个产品 = 一个枚举值 + 一条描述符记录（配置文件 allowlist、MCP 注入形态等）。独立的 **Claude Desktop** 聊天应用（拥有自己的 `~/Library/Application Support/Claude/` 配置）不在范围内。
 
 > **多 agent 重新加宽增补（[ADR-040](../../docs/decisions/ADR-040-re-widen-agent-registry.zh.md)）。** 早先的一次简化把 registry 收窄到两个产品，并删除了 `cursor` / `opencode` / `openclaw` / `hermes` 枚举值（数据迁移 `0031`）。本增补为另外三个**受管 coding CLI**——`opencode`、`hermes`、`cursor`——撤销该收窄，每个都作为一条 `AgentDescriptor` 记录交付，外加当其 wire 协议尚未被覆盖时的一个 chat-provider 适配器（spec 008）。清单还是它一贯的那个接缝；重新加宽是数据、而非新机制，除非某产品的原生格式不同于两个原始 agent 所用的 JSON/TOML。有两条约束被记录为**能力 gap** 而非 bug，并经清单呈现，使不受支持的操作被隐藏而非失败：(a) `opencode` 没有 shell 命令生命周期 hook——只有进程内 JS 插件回调——因此其 session-context 注入不同于 Claude Code/Codex；(b) `cursor` 锁死在 Cursor 自己的后端，不暴露自定义 LLM base URL，因此 provider/API-key 投影（spec 011）对它是 **N/A**。第四个被移除的类型 **openclaw** **不**作为受管叶子 agent 重新加回：它是一个自身编排 coding CLI 的对等网关，只能作为 OpenAI 兼容端点集成，留给独立的设计线（[ADR-040](../../docs/decisions/ADR-040-re-widen-agent-registry.zh.md) 记录了原因）。逐 agent 的 facet 支持在 Requirements（FR-003）下的 **Agent 能力矩阵**中列表化。
 
@@ -575,7 +575,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 - **FR-001**: 系统 MUST 将每个已知的本地 agent 注册为 kind 为 `agent` 的 Resource，按 spec 001-mcp-gateway 的 `<kind>:<name>` 约定，标识为 `agent:<name>`。
 - **FR-002**: 系统 MUST 用一个 kind 专属 schema 校验 agent 配置，字段包括 `type`（enum）与 `config_dir`（path，可选的绝对路径覆盖；省略时回退到该类型的标准位置——`claude_code` 用 `~/.claude`，`codex` 用 `~/.codex`）。skill 投递到 `<config_dir>/skills`。
-- **FR-003**: 系统 MUST 支持 `claude_code`、`codex` 与 `opencode` 这些 agent 类型，`hermes` 与 `cursor` 由多 agent 增补的后续 slice 加入；注册清单之外的任何类型（例如 `claude_desktop` 聊天应用、某个 Gemini CLI）以 `unprocessable_entity`（422）被拒绝。每类型的行为由能力清单（`AGENT_DESCRIPTORS`）定义，因此新增一个类型 = 一个枚举值 + 一条描述符记录（外加，当该产品的 wire 协议是新的时，一个 chat-provider 适配器）。每个受支持类型都同时覆盖该产品的 CLI 与 app/IDE 形态，二者共享同一个配置目录。某个产品若在上游不存在某个 facet 的能力，就在其描述符中把该 facet 声明为缺失，界面 MUST 隐藏对应操作而非让它失败（逐 facet 的支持见下方能力矩阵）。
+- **FR-003**: 系统 MUST 支持 `claude_code`、`codex`、`opencode` 与 `hermes` 这些 agent 类型，`cursor` 由多 agent 增补的后续 slice 加入；注册清单之外的任何类型（例如 `claude_desktop` 聊天应用、某个 Gemini CLI）以 `unprocessable_entity`（422）被拒绝。每类型的行为由能力清单（`AGENT_DESCRIPTORS`）定义，因此新增一个类型 = 一个枚举值 + 一条描述符记录（外加，当该产品的 wire 协议是新的时，一个 chat-provider 适配器）。每个受支持类型都同时覆盖该产品的 CLI 与 app/IDE 形态，二者共享同一个配置目录。某个产品若在上游不存在某个 facet 的能力，就在其描述符中把该 facet 声明为缺失，界面 MUST 隐藏对应操作而非让它失败（逐 facet 的支持见下方能力矩阵）。
 
 **Agent 能力矩阵（FR-003a）。** 逐 agent 的 facet 支持。「✓」= 与两个原始 agent 完全对齐；「N/A」= 该能力在上游不存在（有记录的 gap，作为缺失的描述符 facet 呈现，而非 bug）；形态不同时以注释说明。
 
@@ -584,7 +584,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 | `claude_code` | `~/.claude/` | Claude Agent SDK | ✓ `mcpServers` JSON | ✓ `settings.json`（Start+End） | ✓ `apiKeyHelper` | ✓ `autoMemoryEnabled` | 已交付 |
 | `codex` | `~/.codex/` | `codex app-server` | ✓ `[mcp_servers]` TOML | ✓ `hooks.json`（仅 Start） | ✓ `[model_providers]` env_key | ✓ `features.memories` | 已交付 |
 | `opencode` | `~/.config/opencode/` | `opencode run --format json`（JSONL） | ✓ `mcp` typed-local JSON | **N/A**——无 shell hook，仅进程内 JS 插件回调（session-context 注入为后续 plugin-drop slice） | ✓ `provider` 块，`apiKey:"{env:COFFER_PROVIDER_KEY}"` | **N/A**——无跨会话原生记忆 | 本 slice |
-| `hermes` | `~/.hermes/` | ACP / OpenAI 兼容 HTTP | ✓ `mcp_servers` YAML | ✓ `on_session_start`/`on_session_end`（config.yaml） | ✓ `model.base_url` | ✓ `memory_enabled:false` | slice 2 |
+| `hermes` | `~/.hermes/` | `hermes acp`（ACP JSON-RPC over stdio） | ✓ `mcp_servers` YAML | **deferred**——YAML `on_session_*` / `pre_llm_call` 是新机制（后续 slice） | ✓ `providers.coffer` + `key_env: COFFER_PROVIDER_KEY` | ✓ `memory.memory_enabled:false` | 本 slice |
 | `cursor` | `~/.cursor/` | `cursor-agent -p --output-format stream-json`（NDJSON） | ✓ `mcp.json` 中的 `mcpServers` | best-effort `hooks.json`（headless 覆盖未文档化） | **N/A**——锁死 Cursor 后端，无自定义 base URL | **N/A**——仅 IDE 开关，无 CLI | slice 3 |
 
 第四个被移除的类型 `openclaw` 是一个对等网关（自带 agent 运行时、多 agent 路由、原生记忆、MCP host）；它**不是**受管的叶子 agent，不在本矩阵之内（独立的设计线，[ADR-040](../../docs/decisions/ADR-040-re-widen-agent-registry.zh.md)）。

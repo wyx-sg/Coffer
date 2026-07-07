@@ -540,6 +540,7 @@
       "agentClaudeCode": "Claude Code",
       "agentCodex": "Codex",
       "agentOpencode": "opencode",
+      "agentHermes": "Hermes",
       "deleteTitle": "Delete connection",
       "deleteConfirm": "Delete connection \"{{name}}\"? Its stored credential is removed too.",
       "name": "Name",

@@ -160,6 +160,22 @@ def _opencode_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
     )
 
 
+def _hermes_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
+    # Hermes' config.yaml (YAML) holds `mcp_servers`, the `memory` toggles, and
+    # the model/provider block. AGENTS.md is its human-authored instructions file.
+    return (
+        ConfigFileSpec(
+            "config", "Config (config.yaml)", cfg / "config.yaml", ConfigFileFormat.YAML
+        ),
+        ConfigFileSpec(
+            "instructions",
+            "Global instructions (AGENTS.md)",
+            cfg / "AGENTS.md",
+            ConfigFileFormat.MARKDOWN,
+        ),
+    )
+
+
 # --- the manifest --------------------------------------------------------------
 
 AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
@@ -236,6 +252,23 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         #  * native memory   — opencode has no cross-session native memory, so it is
         #                      omitted from _NATIVE_MEMORY_DISABLE_TARGET below.
     ),
+    AgentType.HERMES: AgentDescriptor(
+        type=AgentType.HERMES,
+        display_name="Hermes",
+        config_subpath=".hermes",
+        config_files=_hermes_files,
+        mcp=McpInjectionSpec(
+            config_key="config",
+            container_key="mcp_servers",
+            format=ConfigFileFormat.YAML,
+            entry_style=McpEntryStyle.COMMAND_MAP,
+        ),
+        # Native memory IS present (the memory.memory_enabled toggle) — wired in
+        # _NATIVE_MEMORY_DISABLE_TARGET below. hooks=None for this slice: hermes'
+        # session hooks are a YAML on_session_* / pre_llm_call mechanism distinct
+        # from the JSON HookInjectionSpec model (a follow-up slice — ADR-040).
+        # plugins=None: hermes plugins are a different model, not managed here.
+    ),
 }
 
 
@@ -254,6 +287,8 @@ def descriptor_for(agent_type: AgentType) -> AgentDescriptor:
 _NATIVE_MEMORY_DISABLE_TARGET: dict[AgentType, tuple[str, ConfigFileFormat]] = {
     AgentType.CLAUDE_CODE: ("settings", ConfigFileFormat.JSON),
     AgentType.CODEX: ("config", ConfigFileFormat.TOML),
+    # Hermes → config.yaml (YAML) memory.memory_enabled / user_profile_enabled.
+    AgentType.HERMES: ("config", ConfigFileFormat.YAML),
 }
 
 
