@@ -19,6 +19,7 @@ def test_supported_types():
         "claude_code",
         "codex",
         "opencode",
+        "hermes",
     }
 
 

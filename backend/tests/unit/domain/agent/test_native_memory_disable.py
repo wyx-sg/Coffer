@@ -106,3 +106,45 @@ def test_codex_disable_is_idempotent() -> None:
 def test_codex_is_disabled_false_when_only_one_flag() -> None:
     seed = "[features]\nmemories = false\n"
     assert is_disabled(seed, fmt=_TOML, agent_type=AgentType.CODEX) is False
+
+
+# --- Hermes (YAML config.yaml, memory.memory_enabled/user_profile_enabled) -----
+
+_YAML = ConfigFileFormat.YAML
+
+
+def test_hermes_disable_sets_both_flags_and_preserves_others() -> None:
+    import yaml
+
+    seed = "memory:\n  memory_char_limit: 5000\n"
+    out = apply_disable(seed, fmt=_YAML, agent_type=AgentType.HERMES)
+    d = yaml.safe_load(out)
+    assert d["memory"]["memory_char_limit"] == 5000  # unrelated memory setting kept
+    assert d["memory"]["memory_enabled"] is False
+    assert d["memory"]["user_profile_enabled"] is False
+    assert is_disabled(out, fmt=_YAML, agent_type=AgentType.HERMES) is True
+
+
+def test_hermes_restore_removes_only_coffer_keys() -> None:
+    import yaml
+
+    disabled = apply_disable(
+        "memory:\n  memory_char_limit: 5000\n", fmt=_YAML, agent_type=AgentType.HERMES
+    )
+    restored = apply_restore(disabled, fmt=_YAML, agent_type=AgentType.HERMES)
+    d = yaml.safe_load(restored)
+    assert d["memory"]["memory_char_limit"] == 5000  # kept
+    assert "memory_enabled" not in d["memory"]
+    assert "user_profile_enabled" not in d["memory"]
+    assert is_disabled(restored, fmt=_YAML, agent_type=AgentType.HERMES) is False
+
+
+def test_hermes_disable_is_idempotent() -> None:
+    once = apply_disable("", fmt=_YAML, agent_type=AgentType.HERMES)
+    twice = apply_disable(once, fmt=_YAML, agent_type=AgentType.HERMES)
+    assert once == twice
+
+
+def test_hermes_is_disabled_false_when_only_one_flag() -> None:
+    seed = "memory:\n  memory_enabled: false\n"
+    assert is_disabled(seed, fmt=_YAML, agent_type=AgentType.HERMES) is False

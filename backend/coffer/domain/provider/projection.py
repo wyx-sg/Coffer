@@ -24,10 +24,12 @@ from __future__ import annotations
 import json
 from collections.abc import MutableMapping
 from dataclasses import dataclass
+from typing import Any
 
 import tomlkit
 
 from coffer.domain.agent.config_files import ConfigFileFormat
+from coffer.domain.agent.mcp_entries import _dump_yaml, _parse_yaml
 from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import Protocol
 
@@ -84,6 +86,8 @@ _AGENT_TARGETS: dict[AgentType, ProjectionTarget] = {
     AgentType.CODEX: ProjectionTarget(AgentType.CODEX, "config", ConfigFileFormat.TOML),
     # opencode projects an openai-compatible `provider` block into opencode.json.
     AgentType.OPENCODE: ProjectionTarget(AgentType.OPENCODE, "opencode", ConfigFileFormat.JSON),
+    # Hermes projects a `providers.coffer` entry + model block into config.yaml.
+    AgentType.HERMES: ProjectionTarget(AgentType.HERMES, "config", ConfigFileFormat.YAML),
 }
 
 
@@ -279,3 +283,74 @@ def remove_opencode_provider(text: str, *, provider_id: str = CODEX_PROVIDER_ID)
     if isinstance(model, str) and model.startswith(f"{provider_id}/"):
         data.pop("model", None)
     return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+
+
+#: Hermes reads a custom endpoint's key from a named env var (``key_env``) — the
+#: exact analogue of Codex's ``env_key`` — so Coffer reuses ``COFFER_PROVIDER_KEY``
+#: and the raw key is never written to disk.
+_HERMES_API_MODE = "chat_completions"
+
+
+def apply_hermes_provider(
+    text: str,
+    *,
+    base_url: str,
+    model: str | None,
+    provider_id: str = CODEX_PROVIDER_ID,
+    env_key: str = CODEX_ENV_KEY,
+) -> str:
+    """Return new ``config.yaml`` text with Coffer's provider selected for Hermes.
+
+    Merges into the user's existing YAML via ruamel (comments/order preserved).
+    Writes a named ``providers.<provider_id>`` entry (``base_url`` + ``key_env`` +
+    ``api_mode``) and points the top-level ``model`` block at it. The key is
+    referenced by env var (``key_env``), never written. When ``model`` is bound it
+    is set as the model default; an unbound agent omits the default so Hermes uses
+    the provider's own default model.
+    """
+    doc = _parse_yaml(text)
+    model_block = doc.get("model")
+    if not isinstance(model_block, MutableMapping):
+        model_block = {}
+        doc["model"] = model_block
+    model_block["provider"] = provider_id
+    model_block["base_url"] = base_url
+    model_block["api_mode"] = _HERMES_API_MODE
+    if model:
+        model_block["default"] = model
+    else:
+        model_block.pop("default", None)
+    providers = doc.get("providers")
+    if not isinstance(providers, MutableMapping):
+        providers = {}
+        doc["providers"] = providers
+    entry: dict[str, Any] = {
+        "base_url": base_url,
+        "api_mode": _HERMES_API_MODE,
+        "key_env": env_key,
+    }
+    if model:
+        entry["default_model"] = model
+    providers[provider_id] = entry
+    return _dump_yaml(doc)
+
+
+def remove_hermes_provider(text: str, *, provider_id: str = CODEX_PROVIDER_ID) -> str:
+    """Inverse of :func:`apply_hermes_provider` — drop Coffer's ``providers`` entry
+    and revert the ``model`` block ONLY when it currently points at Coffer (a
+    user-chosen provider is left untouched). Unrelated keys are preserved."""
+    if not text.strip():
+        return ""
+    doc = _parse_yaml(text)
+    providers = doc.get("providers")
+    if isinstance(providers, MutableMapping):
+        providers.pop(provider_id, None)
+        if not providers:
+            doc.pop("providers", None)
+    model_block = doc.get("model")
+    if isinstance(model_block, MutableMapping) and model_block.get("provider") == provider_id:
+        for key in ("provider", "base_url", "api_mode", "default"):
+            model_block.pop(key, None)
+        if not model_block:
+            doc.pop("model", None)
+    return _dump_yaml(doc)

@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
@@ -47,6 +47,7 @@ from coffer.infrastructure.chat.agentic_rag import DEFAULT_RECURSION_LIMIT, make
 from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
 from coffer.infrastructure.chat.gateway_tool_provider import GatewayToolProvider
+from coffer.infrastructure.chat.hermes_provider import HermesProvider
 from coffer.infrastructure.chat.opencode_provider import OpencodeProvider
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
@@ -326,38 +327,34 @@ def wire_chat(
     registry = AgentProviderRegistry()
     registry.register(ClaudeSdkProvider(conversations=conv_repo), display_name="Claude Code")
 
-    # Codex reads its API key from the COFFER_PROVIDER_KEY env var (config.toml's
-    # env_key). Resolve the key of the connection active FOR Codex per turn — keyed
-    # by agent, not wire, so an openai-compatible gateway the user routed to Codex
-    # is resolved correctly — and inject it into the codex subprocess env; with no
-    # active connection it stays None so codex inherits the daemon env and uses its
-    # own login (ADR-032 env_key seam).
-    async def _resolve_codex_key() -> str | None:
-        try:
-            key: str = await get_provider_service().resolve_active_key_for_agent(AgentType.CODEX)
-            return key
-        except (NoActiveProvider, CredentialMissing):
-            return None
+    # Codex / opencode / hermes each read Coffer's projected key from the
+    # COFFER_PROVIDER_KEY env var (config.toml env_key; opencode.json + config.yaml
+    # {env:...} references). Resolve the connection active FOR that agent per turn —
+    # keyed by agent, not wire, so an openai-compatible gateway routed to any of them
+    # resolves correctly — and inject it into the subprocess env; with no active
+    # connection it stays None so the agent uses its own login (ADR-032 env_key seam).
+    def _key_resolver(agent_type: AgentType) -> Callable[[], Awaitable[str | None]]:
+        async def _resolve() -> str | None:
+            try:
+                # Assign to a typed local so mypy narrows the service's Any return.
+                key: str = await get_provider_service().resolve_active_key_for_agent(agent_type)
+                return key
+            except (NoActiveProvider, CredentialMissing):
+                return None
+
+        return _resolve
 
     registry.register(
-        CodexAppServerProvider(conversations=conv_repo, resolve_key=_resolve_codex_key),
+        CodexAppServerProvider(conversations=conv_repo, resolve_key=_key_resolver(AgentType.CODEX)),
         display_name="Codex",
     )
-
-    # opencode reads Coffer's projected key from COFFER_PROVIDER_KEY too (its
-    # opencode.json provider block references {env:COFFER_PROVIDER_KEY}); resolve
-    # the connection active for opencode per turn and inject it, else None so
-    # opencode uses its own configured provider (ADR-032 / ADR-040).
-    async def _resolve_opencode_key() -> str | None:
-        try:
-            key: str = await get_provider_service().resolve_active_key_for_agent(AgentType.OPENCODE)
-            return key
-        except (NoActiveProvider, CredentialMissing):
-            return None
-
     registry.register(
-        OpencodeProvider(conversations=conv_repo, resolve_key=_resolve_opencode_key),
+        OpencodeProvider(conversations=conv_repo, resolve_key=_key_resolver(AgentType.OPENCODE)),
         display_name="opencode",
+    )
+    registry.register(
+        HermesProvider(conversations=conv_repo, resolve_key=_key_resolver(AgentType.HERMES)),
+        display_name="Hermes",
     )
 
     # 7. Application services + the agent-agnostic turn orchestrator.

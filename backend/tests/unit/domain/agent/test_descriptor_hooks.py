@@ -77,3 +77,34 @@ def test_opencode_has_no_hook_or_native_memory_facet() -> None:
     d = descriptor_for(AgentType.OPENCODE)
     assert d.hooks is None
     assert native_memory_disable_target(AgentType.OPENCODE) is None
+
+
+# --- hermes (ADR-040 slice 2) --------------------------------------------------
+
+
+def test_hermes_descriptor_identity_and_mcp() -> None:
+    from coffer.domain.agent.mcp_injection import McpEntryStyle
+
+    d = descriptor_for(AgentType.HERMES)
+    assert d.display_name == "Hermes"
+    assert d.config_subpath == ".hermes"
+    keys = {s.key for s in d.config_files(d.default_config_dir())}
+    assert {"config", "instructions"} <= keys
+    assert d.mcp is not None
+    assert d.mcp.config_key == "config"
+    assert d.mcp.container_key == "mcp_servers"
+    assert d.mcp.format is ConfigFileFormat.YAML
+    assert d.mcp.entry_style is McpEntryStyle.COMMAND_MAP
+
+
+def test_hermes_hooks_deferred_but_native_memory_present() -> None:
+    # hooks deferred this slice (YAML on_session_* / pre_llm_call is a new
+    # mechanism); native memory IS present (unlike opencode) and wired to YAML.
+    d = descriptor_for(AgentType.HERMES)
+    assert d.hooks is None
+    assert native_memory_disable_target(AgentType.HERMES) == ("config", ConfigFileFormat.YAML)
+
+
+def test_hermes_config_key_allowlisted_and_yaml() -> None:
+    spec = spec_for(AgentType.HERMES, "config")
+    assert spec.format is ConfigFileFormat.YAML

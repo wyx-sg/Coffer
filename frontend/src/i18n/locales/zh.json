@@ -540,6 +540,7 @@
       "agentClaudeCode": "Claude Code",
       "agentCodex": "Codex",
       "agentOpencode": "opencode",
+      "agentHermes": "Hermes",
       "deleteTitle": "删除连接",
       "deleteConfirm": "删除连接「{{name}}」？其保存的凭据也会一并删除。",
       "name": "名称",
