@@ -374,8 +374,9 @@ status / notify`。
   agent + 配置。
 - **ChannelPeer** — channel 的已配对 owner：`(resource, chat_id)`、显示
   名、配对时间、指向活跃对话的指针、已配对发送者身份（`sender_id`），以及
-  粘性首选（所选 agent）。目前每个 channel 一个；以 chat 为键，
-  使群聊将来可以直接成为新的 peer 行而无需改 schema。
+  粘性首选（所选 agent）。每个 (channel, chat) 一行：已配对 owner 一行，
+  加上 owner 曾 @ 过 bot 的每个群聊/thread 各一行；`(resource_id, chat_id)`
+  唯一键已支持这一点，无需迁移。
 - **InboundMessage / InboundCallback / OutboundMessage** — 每个 adapter 生产与
   消费的规范化信封 (envelope)；内核永远看不到平台原始载荷。inbound 为 owner gate
   携带发送者身份（`sender_id`）。`InboundCallback` 是一次选择卡片按钮点选（携带一个

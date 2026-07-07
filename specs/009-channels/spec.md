@@ -440,8 +440,9 @@ status / notify`.
 - **ChannelPeer** — the paired owner of a channel: `(resource, chat_id)`,
   display name, paired-at, pointer to the active conversation, the paired
   sender's identity (`sender_id`), and sticky preferences (chosen agent).
-  One per channel today; keyed by chat so group chats can become
-  peers later without a schema change.
+  One row per (channel, chat): the paired owner plus one row per
+  group/thread the owner has addressed the bot in; the `(resource_id, chat_id)`
+  unique key already allows this with no migration.
 - **InboundMessage / InboundCallback / OutboundMessage** — the normalized
   envelopes every adapter produces and consumes; the core never sees platform
   payloads. Inbound carries the sender's identity (`sender_id`) for the owner
