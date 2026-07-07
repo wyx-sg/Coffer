@@ -10,6 +10,8 @@ history — the thread's own messages are folded into the turn text.
 
 from __future__ import annotations
 
+import pytest
+
 from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.domain.chat.message import Role, TextBlock
 
@@ -20,6 +22,7 @@ def _text(message: object) -> str:  # type: ignore[no-untyped-def]
     return "".join(b.text for b in message.content if isinstance(b, TextBlock))  # type: ignore[attr-defined]
 
 
+@pytest.mark.acceptance(spec="009-channels", scenario="an un-addressed group message is ignored")
 async def test_unaddressed_group_message_is_ignored(env: ChannelEnv) -> None:
     """A group message with no @mention/reply-to-bot never drives a turn and
     never even creates a peer row for the group chat."""
@@ -41,6 +44,7 @@ async def test_unaddressed_group_message_is_ignored(env: ChannelEnv) -> None:
     assert await env.peers.get_by_chat(resource.id, "grp-1") is None
 
 
+@pytest.mark.acceptance(spec="009-channels", scenario="a non-owner @mention in a group is refused")
 async def test_non_owner_mention_in_a_group_is_refused(env: ChannelEnv) -> None:
     """An @mention from someone other than the channel's paired owner gets a
     refusal reply routed to the group chat/thread — no turn is driven."""
@@ -68,6 +72,9 @@ async def test_non_owner_mention_in_a_group_is_refused(env: ChannelEnv) -> None:
     assert await env.peers.get_by_chat(resource.id, "grp-1") is None
 
 
+@pytest.mark.acceptance(
+    spec="009-channels", scenario="the owner @mentions the bot in a group main chat"
+)
 async def test_owner_mention_in_group_main_drives_a_turn_and_creates_a_peer(
     env: ChannelEnv,
 ) -> None:
@@ -97,6 +104,7 @@ async def test_owner_mention_in_group_main_drives_a_turn_and_creates_a_peer(
     assert peer.sender_id == "owner-1"
 
 
+@pytest.mark.acceptance(spec="009-channels", scenario="the owner @mentions the bot inside a thread")
 async def test_owner_mention_in_a_thread_folds_fetched_history_into_the_turn(
     env: ChannelEnv,
 ) -> None:

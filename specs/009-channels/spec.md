@@ -405,6 +405,33 @@ status / notify`.
   extra). See ADR-039. A future audio-native agent's adapter forwards the audio
   instead of transcribing. When no engine is available — or the model has not been
   fetched yet — the voice is handed over as an audio file rather than lost.
+- **FR-023**: A group chat is a first-class peer. When the paired owner
+  @mentions the bot (or the message is delivered as an addressed group event)
+  the bot answers there; the group becomes an additional `channel_peers` row
+  keyed by `(channel, group chat id)`, inheriting the owner's `sender_id`. No
+  schema migration — the table's `(resource_id, chat_id)` unique key already
+  permits multiple peers per channel.
+- **FR-024**: The bot acts in a group ONLY on an addressed message (an
+  @mention of the bot). Un-addressed group messages are ignored. An addressed
+  message from a non-owner is refused with a short "not authorized" reply and
+  starts no turn.
+- **FR-025**: Forwarded chat records are flattened into readable text folded
+  into the turn so the agent sees them — SeaTalk
+  `combined_forwarded_chat_history` and Telegram `forward_origin`. Each entry
+  renders as `<sender>: <text | [image] url | [file] name>` under a
+  `[Forwarded chat record]` heading.
+- **FR-026**: Threads are read and replied-to in place. When the owner
+  @mentions the bot inside a thread, the bot reads that thread's messages for
+  context (SeaTalk `get_thread_by_thread_id`) and replies into the thread; a
+  DM or group message sent in a thread also replies into that thread. Reading
+  *recent group-main* history is intentionally NOT done (the SeaTalk
+  group-chat-history permission is not granted; the @mention message is
+  self-contained). Telegram cannot fetch any history (Bot API limitation), so
+  on Telegram thread context is not read — the bot answers on the @mention
+  message and still replies into the forum topic. A quoted/replied message
+  contributes a `> sender: …` context prefix where the platform inlines it.
+- **FR-027**: Each `(channel, chat, thread)` has its own turn queue/session,
+  so a DM turn, a group-main turn, and a thread turn never share state.
 
 ### Key Entities
 
@@ -714,6 +741,42 @@ status / notify`.
 - **When** the adapter prepares the turn
 - **Then** the audio is transcribed to text and folded into the prompt, and the
   audio is not also sent as a file (a future audio-native agent would forward it)
+
+### Scenario: an un-addressed group message is ignored
+
+- **Given** a paired channel and a group chat the bot is a member of
+- **When** a group message arrives with no @mention of the bot
+- **Then** no reply is sent and no turn or peer row is created for the group
+
+### Scenario: the owner @mentions the bot in a group main chat
+
+- **Given** a paired channel and a group chat with no active thread
+- **When** the owner @mentions the bot in the group's main chat
+- **Then** a turn runs and the reply is delivered to the group, and a
+  `channel_peers` row is created for the group chat inheriting the owner's
+  `sender_id`
+
+### Scenario: a non-owner @mention in a group is refused
+
+- **Given** a paired channel with a known owner
+- **When** someone other than the owner @mentions the bot in a group chat
+- **Then** the bot replies that the sender is not authorized and no turn is
+  started
+
+### Scenario: the owner @mentions the bot inside a thread
+
+- **Given** a paired channel and a group chat with a thread, on a transport
+  that can fetch thread history
+- **When** the owner @mentions the bot inside that thread
+- **Then** the thread's own messages are read and folded into the turn, and
+  the reply is routed back into the same thread
+
+### Scenario: a forwarded chat record reaches the agent
+
+- **Given** a paired channel
+- **When** the owner forwards a chat record to the bot
+- **Then** the turn's message text carries a `[Forwarded chat record]` block
+  listing each forwarded item
 
 ## Assumptions
 

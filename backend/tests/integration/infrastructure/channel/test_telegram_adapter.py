@@ -467,6 +467,7 @@ async def test_forum_topic_message_carries_thread_id(fake_telegram: FakeTelegram
     assert msg.thread_id == "9"
 
 
+@pytest.mark.acceptance(spec="009-channels", scenario="a forwarded chat record reaches the agent")
 async def test_forwarded_message_text_starts_with_forwarded_marker(
     fake_telegram: FakeTelegram,
 ) -> None:
