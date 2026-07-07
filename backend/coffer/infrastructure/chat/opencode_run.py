@@ -57,6 +57,14 @@ def build_run_argv(
     return argv
 
 
+#: StreamReader line-buffer limit for the subprocess pipes. opencode emits one
+#: JSON part per line, and a single ``tool`` part's ``state.output`` (a file read
+#: or verbose command output) routinely exceeds asyncio's 64 KiB default — which
+#: would raise ``ValueError`` mid-stream. 16 MiB covers realistic outputs; the
+#: adapter still degrades gracefully (skips the offending line) beyond it.
+STREAM_LIMIT = 16 * 1024 * 1024
+
+
 async def default_spawn(
     argv: Sequence[str], cwd: str, env: dict[str, str] | None
 ) -> OpencodeProcess:
@@ -67,6 +75,7 @@ async def default_spawn(
         env=env,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        limit=STREAM_LIMIT,
     )
 
 

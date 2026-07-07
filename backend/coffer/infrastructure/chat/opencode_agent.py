@@ -8,7 +8,10 @@ via :func:`map_opencode_event`, and synthesises the terminal ``TurnDone`` /
 ``TurnError`` on process exit. The upstream session id (for ``--session`` resume)
 is discovered from the stream and persisted via ``on_session``.
 
-Only stdlib ``asyncio`` + ``json`` are used — no third-party dependency.
+stderr is drained CONCURRENTLY (a background task, like the Codex app-server):
+opencode is verbose on stderr, and reading stdout while leaving stderr to fill
+its OS pipe would deadlock the subprocess (it blocks on ``write(stderr)`` and
+stops producing stdout). Only stdlib ``asyncio`` + ``json`` are used.
 """
 
 from __future__ import annotations
@@ -40,9 +43,11 @@ from coffer.infrastructure.chat.transcribe import (
 
 _logger = logging.getLogger(__name__)
 
-#: Cap the stderr tail folded into a ``TurnError`` so a noisy failure can't blow
-#: up the error message.
-_STDERR_TAIL = 2000
+#: Keep at most this many trailing stderr lines for a failure message (bounded
+#: memory — opencode's stderr can be large over a long turn).
+_STDERR_TAIL_LINES = 100
+#: Cap the folded stderr tail length in a ``TurnError`` message.
+_STDERR_TAIL_CHARS = 2000
 
 
 class OpencodeRunAdapter:
@@ -125,9 +130,21 @@ class OpencodeRunAdapter:
         yield TurnStarted()
 
         proc = await self._spawn(argv, self._cwd, self._env)
+        stderr_tail: list[bytes] = []
+        stderr_task: asyncio.Task[None] | None = None
+        if proc.stderr is not None:
+            stderr_task = asyncio.create_task(_drain_stderr(proc.stderr, stderr_tail))
         try:
             assert proc.stdout is not None
-            async for raw in proc.stdout:
+            while True:
+                try:
+                    raw = await proc.stdout.readline()
+                except (ValueError, asyncio.LimitOverrunError):
+                    # One JSON line exceeded the reader limit; readline() drops it
+                    # from the buffer, so skip it and keep reading the next line.
+                    continue
+                if not raw:
+                    break  # EOF
                 line = raw.decode("utf-8", "replace").strip()
                 if not line:
                     continue
@@ -148,30 +165,49 @@ class OpencodeRunAdapter:
                         stop_reason="end_turn",
                     )
                 else:
-                    detail = await _read_stderr_tail(proc)
+                    detail = _join_tail(stderr_tail)
                     yield TurnError(
                         code="opencode_run_failed",
-                        message=f"opencode run exited {code}: {detail}"[:_STDERR_TAIL],
+                        message=f"opencode run exited {code}: {detail}"[:_STDERR_TAIL_CHARS],
                     )
                 state.terminal_emitted = True
         except asyncio.CancelledError:
-            with contextlib.suppress(ProcessLookupError, Exception):
+            with contextlib.suppress(ProcessLookupError):
                 proc.kill()
+            with contextlib.suppress(Exception):
+                await proc.wait()  # reap so no zombie lingers
             # The session id arrives early in the stream, so an interrupted turn
             # stays resumable.
             await self._persist_session(state)
             raise
+        finally:
+            if stderr_task is not None:
+                stderr_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await stderr_task
 
 
-async def _read_stderr_tail(proc: asyncio.subprocess.Process) -> str:
-    """Best-effort tail of the process stderr for a failure message."""
-    if proc.stderr is None:
-        return ""
-    try:
-        data = await proc.stderr.read()
-    except Exception:
-        return ""
-    return data.decode("utf-8", "replace").strip()[-500:]
+async def _drain_stderr(stream: asyncio.StreamReader, sink: list[bytes]) -> None:
+    """Concurrently drain the subprocess stderr into a bounded tail buffer.
+
+    Keeps the stderr pipe empty so the subprocess never blocks on ``write`` (the
+    deadlock the Codex app-server also guards against). Retains only the last
+    ``_STDERR_TAIL_LINES`` lines for a possible failure message.
+    """
+    while True:
+        try:
+            chunk = await stream.readline()
+        except (ValueError, asyncio.LimitOverrunError):
+            continue  # an over-long stderr line; keep draining
+        if not chunk:
+            return  # EOF
+        sink.append(chunk)
+        if len(sink) > _STDERR_TAIL_LINES:
+            del sink[0]
+
+
+def _join_tail(sink: list[bytes]) -> str:
+    return b"".join(sink).decode("utf-8", "replace").strip()[-500:]
 
 
 __all__ = ["OpencodeRunAdapter"]

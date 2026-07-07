@@ -248,6 +248,13 @@ def apply_opencode_provider(
     if model:
         block["models"] = {model: {}}
         data["model"] = f"{provider_id}/{model}"
+    else:
+        # Unbound: clear a stale ``coffer/*`` selection so opencode falls back to
+        # its OWN default model (parity with ``apply_codex_provider``'s
+        # ``doc.pop("model")``); a user-chosen model is left untouched.
+        existing = data.get("model")
+        if isinstance(existing, str) and existing.startswith(f"{provider_id}/"):
+            data.pop("model", None)
     provider[provider_id] = block
     return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
 

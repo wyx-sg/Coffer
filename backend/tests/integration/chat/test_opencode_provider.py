@@ -41,18 +41,35 @@ from coffer.infrastructure.persistence.engine import (
 # ---------------------------------------------------------------------------
 
 
+#: A sentinel stdout line the fake turns into a ``ValueError`` to exercise the
+#: adapter's over-long-line skip path (StreamReader raises this beyond its limit).
+_RAISE = b"__RAISE__\n"
+
+
 class _FakeStream:
-    """An async-iterable stdout that also answers ``read()`` (used for stderr)."""
+    """A fake ``StreamReader``: ``readline()`` yields each line then ``b''`` at EOF.
+
+    A line equal to ``_RAISE`` raises ``ValueError`` (as StreamReader.readline
+    does for an over-limit line) so the adapter's skip-and-continue path is tested.
+    """
 
     def __init__(self, lines: list[bytes]) -> None:
-        self._lines = lines
+        self._lines = list(lines)
+        self._i = 0
 
-    async def __aiter__(self) -> Any:  # pragma: no cover - trivial
-        for line in self._lines:
-            yield line
+    async def readline(self) -> bytes:
+        if self._i >= len(self._lines):
+            return b""
+        line = self._lines[self._i]
+        self._i += 1
+        if line == _RAISE:
+            raise ValueError("Separator is not found, and chunk exceed the limit")
+        return line
 
     async def read(self) -> bytes:
-        return b"".join(self._lines)
+        rest = self._lines[self._i :]
+        self._i = len(self._lines)
+        return b"".join(rest)
 
 
 class _FakeProc:
@@ -262,6 +279,29 @@ async def test_nonzero_exit_yields_turn_error(tmp_path: Any) -> None:
 
     events = await asyncio.wait_for(_collect(adapter, _user_turn("hi", conv.id)), timeout=5)
     assert any(isinstance(e, TurnError) and e.code == "opencode_run_failed" for e in events)
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_over_long_stdout_line_is_skipped(tmp_path: Any) -> None:
+    # A line beyond the reader limit makes readline() raise ValueError; the adapter
+    # skips it and keeps processing the surrounding lines (no deadlock, no crash).
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv())
+    lines = [
+        '{"type":"text","id":"p1","text":"hi","sessionID":"ses_x"}\n',
+        "__RAISE__\n",
+        '{"type":"step-finish","reason":"stop","tokens":{"input":10,"output":1}}\n',
+    ]
+    spawn = _FakeSpawn(lines)
+    provider = OpencodeProvider(conversations=repo, spawn=spawn)
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+    adapter = await provider.build_adapter(conv.id)
+
+    events = await asyncio.wait_for(_collect(adapter, _user_turn("hey", conv.id)), timeout=5)
+    assert TextDelta(text="hi") in events
+    assert isinstance(events[-1], TurnDone)
 
     await engine.dispose()
 

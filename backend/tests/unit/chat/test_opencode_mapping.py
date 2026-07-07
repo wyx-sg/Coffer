@@ -132,6 +132,35 @@ def test_session_id_captured_from_raw_part() -> None:
     assert state.session_id == "ses_abc"
 
 
+def test_delta_envelope_is_emitted_incrementally_not_diffed() -> None:
+    state = OpencodeParseState()
+    # A `.delta` chunk carries incremental text appended verbatim — successive
+    # chunks must BOTH survive (diffing them would collapse the stream).
+    assert map_opencode_event(
+        {
+            "type": "message.part.delta",
+            "properties": {"part": {"type": "text", "id": "d", "text": "He"}},
+        },
+        state,
+    ) == [TextDelta(text="He")]
+    assert map_opencode_event(
+        {
+            "type": "message.part.delta",
+            "properties": {"part": {"type": "text", "id": "d", "text": "llo"}},
+        },
+        state,
+    ) == [TextDelta(text="llo")]
+
+
+def test_session_id_ignores_non_session_shaped_values() -> None:
+    state = OpencodeParseState()
+    # A messageID-shaped value must never be mistaken for the session id.
+    map_opencode_event({"type": "text", "id": "p", "text": "x", "sessionID": "msg_123"}, state)
+    assert state.session_id is None
+    map_opencode_event({"type": "text", "id": "p2", "text": "y", "sessionID": "ses_ok"}, state)
+    assert state.session_id == "ses_ok"
+
+
 def test_unknown_and_structural_parts_yield_nothing() -> None:
     state = OpencodeParseState()
     for part in (

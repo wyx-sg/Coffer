@@ -210,6 +210,20 @@ def test_opencode_provider_unbound_model_leaves_top_level_model() -> None:
     assert "provider" in d
 
 
+def test_opencode_provider_unbound_clears_stale_coffer_model() -> None:
+    from coffer.domain.provider.projection import apply_opencode_provider
+
+    # A previously-bound file carries model="coffer/gpt-5"; re-projecting unbound
+    # must clear it (parity with Codex) so opencode uses its own default rather
+    # than a stale coffer model whose models map is now empty.
+    text = json.dumps(
+        {"model": f"{CODEX_PROVIDER_ID}/gpt-5", "provider": {CODEX_PROVIDER_ID: {"npm": "x"}}}
+    )
+    out = apply_opencode_provider(text, base_url="https://gw/v1", model=None)
+    d = json.loads(out)
+    assert "model" not in d
+
+
 def test_opencode_remove_strips_block_and_coffer_model() -> None:
     from coffer.domain.provider.projection import apply_opencode_provider, remove_opencode_provider
 
