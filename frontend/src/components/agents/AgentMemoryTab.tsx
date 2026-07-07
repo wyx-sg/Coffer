@@ -28,12 +28,18 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
-import type { AgentOut, NativeMemoryStore } from "@/lib/api/agents";
+import type { AgentOut, AgentType, NativeMemoryStore } from "@/lib/api/agents";
 import {
   useAgentNativeMemory,
   useImportNativeMemoryBatch,
   usePatchAgent,
 } from "@/lib/hooks/useAgents";
+
+// Agents whose upstream lacks a facet — hide the control rather than let it 422
+// (ADR-040 capability matrix: surfaces hide the action, they do not fail it).
+// opencode has no cross-session native memory and no shell lifecycle hook.
+const AGENTS_WITHOUT_NATIVE_MEMORY: AgentType[] = ["opencode"];
+const AGENTS_WITHOUT_SESSION_HOOK: AgentType[] = ["opencode"];
 
 /** Toggle ROW (no Card — the parent's combined box provides it) that disables
  * the agent's OWN native memory (writes/restores the agent's config) so it uses
@@ -186,12 +192,16 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
             notInstalledHint={t("agents.memoryTab.notInstalled")}
           />
         </div>
-        <div className="p-4">
-          <DisableNativeMemoryRow agent={agent} />
-        </div>
-        <div className="p-4">
-          <AgentHookToggle name={agent.name} />
-        </div>
+        {!AGENTS_WITHOUT_NATIVE_MEMORY.includes(agent.type) && (
+          <div className="p-4">
+            <DisableNativeMemoryRow agent={agent} />
+          </div>
+        )}
+        {!AGENTS_WITHOUT_SESSION_HOOK.includes(agent.type) && (
+          <div className="p-4">
+            <AgentHookToggle name={agent.name} />
+          </div>
+        )}
       </Card>
 
       <Card className="space-y-3 p-4">

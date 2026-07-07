@@ -15,7 +15,7 @@ export type Protocol = "anthropic" | "openai" | "ollama" | "unknown";
 
 // The agent types a connection may project into. Decoupled from `protocol`: the
 // user routes any endpoint to any agent (e.g. an openai gateway → Claude Code).
-export type AgentType = "claude_code" | "codex";
+export type AgentType = "claude_code" | "codex" | "opencode";
 
 /**
  * Chat agent_key → the protocol it speaks (ADR-032 projection targets). Shared by
@@ -26,6 +26,7 @@ export type AgentType = "claude_code" | "codex";
 export const WIRE_BY_AGENT: Record<string, Protocol> = {
   claude_code: "anthropic",
   codex: "openai",
+  opencode: "openai",
 };
 
 /**
@@ -40,6 +41,7 @@ export const WIRE_BY_AGENT: Record<string, Protocol> = {
 export const BUILTIN_MODELS_BY_AGENT: Record<string, string[]> = {
   claude_code: ["opus", "sonnet", "haiku"],
   codex: ["gpt-5-codex", "gpt-5", "o3"],
+  opencode: ["gpt-5", "gpt-5-codex", "claude-sonnet-4-5"],
 };
 
 export interface Provider {

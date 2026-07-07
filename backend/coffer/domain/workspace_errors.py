@@ -134,6 +134,17 @@ class HookInstallUnsupported(CofferError):  # noqa: N818
         self.agent_type = agent_type
 
 
+class NativeMemoryDisableUnsupported(CofferError):  # noqa: N818
+    """The agent type has no native write-side memory to disable (e.g. opencode has
+    no cross-session native memory). Maps to 422 — the toggle is absent, not broken."""
+
+    code = "NATIVE_MEMORY_DISABLE_UNSUPPORTED"
+
+    def __init__(self, agent_type: str) -> None:
+        super().__init__(f"agent type {agent_type!r} has no native memory to disable")
+        self.agent_type = agent_type
+
+
 class ConfigFileStale(CofferError):  # noqa: N818
     """The file changed on disk since it was read; re-read and retry. Maps to 409."""
 

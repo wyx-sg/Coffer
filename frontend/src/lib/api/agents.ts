@@ -4,7 +4,7 @@ import { getCofferBaseUrl, getCofferToken } from "../auth";
 import { ApiError } from "./errors";
 
 // Keep AgentType in sync with the backend domain (`domain/agent/types.py`).
-export type AgentType = "claude_code" | "codex";
+export type AgentType = "claude_code" | "codex" | "opencode";
 
 export type ConfigFileFormat = "json" | "toml" | "markdown" | "text";
 

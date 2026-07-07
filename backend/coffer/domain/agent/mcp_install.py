@@ -43,6 +43,8 @@ from coffer.domain.agent.mcp_injection import McpEntryStyle, default_container_k
 
 def _entry_fields(shim_path: str, entry_style: McpEntryStyle) -> dict[str, Any]:
     """The key/value pairs of a single stdio ``coffer`` entry for the style."""
+    if entry_style is McpEntryStyle.TYPED_LOCAL_OBJECT:
+        return {"type": "local", "command": [shim_path], "enabled": True}
     if entry_style is McpEntryStyle.TYPED_COMMAND_ARRAY:
         return {"type": "local", "command": [shim_path]}
     return {"command": shim_path}

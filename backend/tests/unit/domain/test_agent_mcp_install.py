@@ -168,3 +168,46 @@ def test_json_install_preserves_non_ascii():
     out = apply_install(ConfigFileFormat.JSON, existing, SHIM)
     assert "/Users/张三/code" in out
     assert "\\u" not in out
+
+
+# --- opencode typed-local-object entry style (ADR-040) ---
+
+
+def test_json_typed_local_object_entry_install_detect_uninstall():
+    from coffer.domain.agent.mcp_injection import McpEntryStyle
+
+    out = apply_install(
+        ConfigFileFormat.JSON,
+        "",
+        SHIM,
+        container_key="mcp",
+        entry_style=McpEntryStyle.TYPED_LOCAL_OBJECT,
+    )
+    data = json.loads(out)
+    assert data["mcp"][COFFER_SERVER_KEY] == {
+        "type": "local",
+        "command": [SHIM],
+        "enabled": True,
+    }
+    # Detection / command extraction / uninstall are style-agnostic — they key off
+    # the container + coffer key and handle the command-array shape.
+    assert is_installed(ConfigFileFormat.JSON, out, container_key="mcp")
+    assert installed_command(ConfigFileFormat.JSON, out, container_key="mcp") == SHIM
+    back = apply_uninstall(ConfigFileFormat.JSON, out, container_key="mcp")
+    assert not is_installed(ConfigFileFormat.JSON, back, container_key="mcp")
+
+
+def test_json_typed_local_object_preserves_user_mcp_entries():
+    from coffer.domain.agent.mcp_injection import McpEntryStyle
+
+    existing = json.dumps({"mcp": {"other": {"type": "local", "command": ["y"]}}})
+    out = apply_install(
+        ConfigFileFormat.JSON,
+        existing,
+        SHIM,
+        container_key="mcp",
+        entry_style=McpEntryStyle.TYPED_LOCAL_OBJECT,
+    )
+    data = json.loads(out)
+    assert data["mcp"]["other"] == {"type": "local", "command": ["y"]}  # user entry kept
+    assert data["mcp"][COFFER_SERVER_KEY]["enabled"] is True

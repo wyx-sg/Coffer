@@ -31,6 +31,11 @@ class McpEntryStyle(StrEnum):
     #: transport ``type``. Recognized extension point reserved for a future agent
     #: type; no current agent type uses it.
     TYPED_COMMAND_ARRAY = "typed_command_array"
+    #: ``{"type": "local", "command": [<shim>, ...], "enabled": true}`` — opencode's
+    #: shape: a typed-command array that also carries an explicit ``enabled`` flag
+    #: (opencode's ``mcp`` block treats each server object as enabled only when the
+    #: flag is present-and-true, so Coffer writes it).
+    TYPED_LOCAL_OBJECT = "typed_local_object"
 
 
 #: Default top-level container key per format, reproducing the pre-orthogonal

@@ -142,6 +142,24 @@ def _codex_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
     )
 
 
+def _opencode_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
+    # opencode's global config (~/.config/opencode/opencode.json) holds both the
+    # `mcp` block (MCP injection) and the `provider` block (provider projection).
+    # AGENTS.md is opencode's human-authored instructions file. opencode has no
+    # hooks.json (its lifecycle hooks are in-process JS plugins — ADR-040).
+    return (
+        ConfigFileSpec(
+            "opencode", "Config (opencode.json)", cfg / "opencode.json", ConfigFileFormat.JSON
+        ),
+        ConfigFileSpec(
+            "instructions",
+            "Global instructions (AGENTS.md)",
+            cfg / "AGENTS.md",
+            ConfigFileFormat.MARKDOWN,
+        ),
+    )
+
+
 # --- the manifest --------------------------------------------------------------
 
 AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
@@ -197,6 +215,27 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             can_uninstall=True,
         ),
     ),
+    AgentType.OPENCODE: AgentDescriptor(
+        type=AgentType.OPENCODE,
+        display_name="opencode",
+        config_subpath=".config/opencode",
+        config_files=_opencode_files,
+        mcp=McpInjectionSpec(
+            config_key="opencode",
+            container_key="mcp",
+            format=ConfigFileFormat.JSON,
+            entry_style=McpEntryStyle.TYPED_LOCAL_OBJECT,
+        ),
+        # Capability gaps declared as absent facets (surfaces hide the action, they
+        # do not fail it) — see the Agent capability matrix in spec 004 / ADR-040:
+        #  * hooks=None      — opencode has no shell-command lifecycle hook, only
+        #                      in-process JS plugin callbacks; session-context
+        #                      injection is a follow-up plugin-drop slice.
+        #  * plugins=None    — opencode's plugins are JS modules, a different model
+        #                      from Claude/Codex; not managed by Coffer in this slice.
+        #  * native memory   — opencode has no cross-session native memory, so it is
+        #                      omitted from _NATIVE_MEMORY_DISABLE_TARGET below.
+    ),
 }
 
 
@@ -218,18 +257,12 @@ _NATIVE_MEMORY_DISABLE_TARGET: dict[AgentType, tuple[str, ConfigFileFormat]] = {
 }
 
 
-def native_memory_disable_target(agent_type: AgentType) -> tuple[str, ConfigFileFormat]:
-    """The ``(config_key, format)`` that holds the native-memory toggle.
-
-    Raises ``AssertionError`` for an agent type with no known target (defensive;
-    every current type is mapped).
-    """
-    try:
-        return _NATIVE_MEMORY_DISABLE_TARGET[agent_type]
-    except KeyError:  # pragma: no cover - every supported type is mapped
-        raise AssertionError(
-            f"no native-memory disable target for AgentType {agent_type!r}"
-        ) from None
+def native_memory_disable_target(agent_type: AgentType) -> tuple[str, ConfigFileFormat] | None:
+    """The ``(config_key, format)`` that holds the native-memory toggle, or ``None``
+    for an agent type with no native write-side memory to disable (e.g. opencode —
+    see the Agent capability matrix in spec 004 / ADR-040). Callers treat ``None``
+    as "this facet is absent" and reject/hide the toggle rather than failing."""
+    return _NATIVE_MEMORY_DISABLE_TARGET.get(agent_type)
 
 
 def is_agent_enabled(agent_type: AgentType) -> bool:

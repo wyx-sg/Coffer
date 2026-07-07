@@ -40,6 +40,7 @@ interface Props {
 const AGENT_LABEL_KEY: Record<AgentType, string> = {
   claude_code: "settings.connections.agentClaudeCode",
   codex: "settings.connections.agentCodex",
+  opencode: "settings.connections.agentOpencode",
 };
 
 export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate, onCancel }: Props) {

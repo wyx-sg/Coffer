@@ -47,3 +47,33 @@ def test_native_memory_disable_target_per_type() -> None:
     codex_key, codex_fmt = native_memory_disable_target(AgentType.CODEX)
     assert codex_key == "config"
     assert codex_fmt is ConfigFileFormat.TOML
+
+
+# --- opencode (ADR-040 re-widen) -----------------------------------------------
+
+
+def test_opencode_descriptor_identity_and_config_dir() -> None:
+    d = descriptor_for(AgentType.OPENCODE)
+    assert d.display_name == "opencode"
+    assert d.config_subpath == ".config/opencode"
+    keys = {s.key for s in d.config_files(d.default_config_dir())}
+    assert {"opencode", "instructions"} <= keys
+
+
+def test_opencode_mcp_spec_is_typed_local_object_in_mcp_container() -> None:
+    from coffer.domain.agent.mcp_injection import McpEntryStyle
+
+    d = descriptor_for(AgentType.OPENCODE)
+    assert d.mcp is not None
+    assert d.mcp.config_key == "opencode"
+    assert d.mcp.container_key == "mcp"
+    assert d.mcp.format is ConfigFileFormat.JSON
+    assert d.mcp.entry_style is McpEntryStyle.TYPED_LOCAL_OBJECT
+
+
+def test_opencode_has_no_hook_or_native_memory_facet() -> None:
+    # Capability gaps are absent facets, not errors (ADR-040): opencode has no
+    # shell-command lifecycle hook and no cross-session native memory.
+    d = descriptor_for(AgentType.OPENCODE)
+    assert d.hooks is None
+    assert native_memory_disable_target(AgentType.OPENCODE) is None
