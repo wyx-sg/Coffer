@@ -11,9 +11,10 @@ from collections.abc import Sequence
 from typing import Any
 
 from coffer.domain.channel.envelopes import ChoiceButton
-from coffer.domain.channel.rich_content import ForwardedItem
+from coffer.domain.channel.rich_content import ForwardedItem, flatten_forwarded
 
 __all__ = [
+    "flatten_combined_forwarded",
     "interactive_card",
     "message_to_item",
     "split_to_byte_limit",
@@ -59,6 +60,20 @@ def message_to_item(msg: dict[str, Any]) -> ForwardedItem:
         # A short stand-in — we do not recurse into the nested history here.
         text = "[forwarded chat record]"
     return ForwardedItem(sender=sender, text=text)
+
+
+def flatten_combined_forwarded(message: dict[str, Any]) -> str:
+    """Flatten a top-level ``combined_forwarded_chat_history`` message body
+    into the ``[Forwarded chat record]`` text block.
+
+    Shared by both inbound paths that can receive a forwarded record as the
+    whole message — the 1:1 DM (``message_from_bot_subscriber``) and the
+    group @mention (``new_mentioned_message_received_from_group_chat``)
+    events — so a forwarded record dropped into a group is not silently
+    lost the way an empty ``plain_text`` would make it.
+    """
+    content = (message.get("combined_forwarded_chat_history") or {}).get("content") or []
+    return flatten_forwarded([message_to_item(e) for e in content if isinstance(e, dict)])
 
 
 def strip_group_mentions(plain_text: str, mentioned_list: Sequence[Any] | None) -> str:

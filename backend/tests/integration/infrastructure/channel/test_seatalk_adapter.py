@@ -232,6 +232,34 @@ async def test_send_text_direct_still_uses_single_chat(fake_seatalk: FakeSeaTalk
     assert body["employee_code"] == "emp-1"
 
 
+async def test_send_text_direct_with_thread_id_threads_the_reply(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """FR-026: a DM reply sent inside a thread must carry thread_id on the
+    single_chat message body so SeaTalk threads it — documented wire
+    placement, not yet live-verified against the real platform."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        await adapter.send_text("emp-1", "hi", thread_id="t1")
+    finally:
+        await adapter.stop()
+    [(body, _auth)] = fake_seatalk.single_chat_calls
+    assert body["employee_code"] == "emp-1"
+    assert body["message"]["thread_id"] == "t1"
+
+
+async def test_send_text_direct_without_thread_id_omits_thread_field(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        await adapter.send_text("emp-1", "hi")
+    finally:
+        await adapter.stop()
+    [(body, _auth)] = fake_seatalk.single_chat_calls
+    assert "thread_id" not in body["message"]
+
+
 async def test_capabilities_declare_groups_and_history_fetch(fake_seatalk: FakeSeaTalk) -> None:
     adapter = make_seatalk_adapter(fake_seatalk)
     try:
@@ -455,6 +483,56 @@ async def test_handle_event_group_mention_in_thread_sets_thread_id(
     assert msg.addressed is True
     assert msg.text == "hi"
     assert msg.thread_id == "t-9"
+
+
+async def test_handle_event_group_forwarded_record_flattens_into_text(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """A group @mention whose message IS a forwarded record (tag ==
+    ``combined_forwarded_chat_history``) must be flattened the same way the
+    DM path flattens it — not dropped to empty text via ``plain_text``."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(
+            {
+                "event_type": "new_mentioned_message_received_from_group_chat",
+                "timestamp": 1718000000,
+                "event": {
+                    "group_id": "gid-1",
+                    "message": {
+                        "message_id": "gm-3",
+                        "thread_id": "",
+                        "sender": {"employee_code": "emp-2", "email": "sender@shopee.com"},
+                        "tag": "combined_forwarded_chat_history",
+                        "combined_forwarded_chat_history": {
+                            "content": [
+                                {
+                                    "tag": "text",
+                                    "sender": {"email": "john.phuatd@shopee.com"},
+                                    "text": {"content": "Do you see this issue?"},
+                                },
+                                {
+                                    "tag": "text",
+                                    "sender": {"email": "yuxing.wu@shopee.com"},
+                                    "text": {"content": "let me check"},
+                                },
+                            ]
+                        },
+                    },
+                },
+            }
+        )
+    finally:
+        await adapter.stop()
+    [msg] = recorder.messages
+    assert msg.text.startswith("[Forwarded chat record]")
+    assert "john.phuatd@shopee.com: Do you see this issue?" in msg.text
+    assert "yuxing.wu@shopee.com: let me check" in msg.text
+    assert msg.chat_kind == "group"
+    assert msg.addressed is True
+    assert msg.chat_id == "gid-1"
 
 
 async def test_handle_event_ignores_non_mention_thread_messages(

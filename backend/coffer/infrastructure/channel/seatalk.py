@@ -26,7 +26,10 @@ from coffer.domain.channel.envelopes import (
     SentMessage,
 )
 from coffer.domain.channel.errors import ChannelSendFailed
-from coffer.domain.channel.rich_content import ForwardedItem, flatten_forwarded
+from coffer.domain.channel.rich_content import ForwardedItem
+from coffer.infrastructure.channel.seatalk_parse import (
+    flatten_combined_forwarded as _flatten_combined_forwarded,
+)
 from coffer.infrastructure.channel.seatalk_parse import (
     interactive_card as _interactive_card,
 )
@@ -105,12 +108,7 @@ class SeaTalkAdapter:
             if tag == "text":
                 text = str((message.get("text") or {}).get("content", ""))
             elif tag == "combined_forwarded_chat_history":
-                content = (message.get("combined_forwarded_chat_history") or {}).get(
-                    "content"
-                ) or []
-                text = flatten_forwarded(
-                    [_message_to_item(e) for e in content if isinstance(e, dict)]
-                )
+                text = _flatten_combined_forwarded(message)
             await self._callbacks.on_message(
                 InboundMessage(
                     channel=self._name,
@@ -131,10 +129,15 @@ class SeaTalkAdapter:
             # pre-filters group traffic) — always addressed by definition.
             message = event.get("message") or {}
             sender = message.get("sender") or {}
-            body = message.get("text") or {}
-            plain_text = strip_group_mentions(
-                str(body.get("plain_text", "")), body.get("mentioned_list")
-            )
+            tag = str(message.get("tag", ""))
+            if tag == "combined_forwarded_chat_history":
+                # Same flattening as the DM path (a bare plain_text lookup would drop it).
+                plain_text = _flatten_combined_forwarded(message)
+            else:
+                body = message.get("text") or {}
+                plain_text = strip_group_mentions(
+                    str(body.get("plain_text", "")), body.get("mentioned_list")
+                )
             await self._callbacks.on_message(
                 InboundMessage(
                     channel=self._name,
@@ -213,7 +216,7 @@ class SeaTalkAdapter:
         single-chat endpoint, sharing the chunk loop above across both."""
         if chat_kind == "group":
             return await self._send_group_chat(chat_id, message, thread_id)
-        return await self._send_single_chat(chat_id, message)
+        return await self._send_single_chat(chat_id, message, thread_id)
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None:
         raise ChannelSendFailed(self._name, "seatalk cannot edit messages")
@@ -265,7 +268,12 @@ class SeaTalkAdapter:
 
     # -- transport -------------------------------------------------------------
 
-    async def _send_single_chat(self, employee_code: str, message: dict[str, Any]) -> Any:
+    async def _send_single_chat(
+        self, employee_code: str, message: dict[str, Any], thread_id: str = ""
+    ) -> Any:
+        # FR-026: thread the reply by carrying thread_id on the message body.
+        if thread_id:
+            message = {**message, "thread_id": thread_id}
         return await self._post(
             "/messaging/v2/single_chat",
             {"employee_code": employee_code, "message": message},
