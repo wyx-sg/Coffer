@@ -36,6 +36,9 @@ class InboundMessage:
     timestamp: datetime
     sender_id: str = ""  # stable per-sender id for the owner gate (Telegram
     # from.id, SeaTalk employee_code); "" when the transport has none
+    chat_kind: str = "direct"  # "direct" | "group"
+    addressed: bool = True  # DMs always; group only when @mentioned / reply-to-bot
+    thread_id: str = ""  # non-empty when the message is inside a thread/topic
     attachments: tuple[InboundAttachment, ...] = ()  # photos/files/voice, if any
 
 
@@ -48,6 +51,8 @@ class ChannelCapabilities:
     max_message_chars: int  # outbound chunk budget
     supports_buttons: bool = False  # interactive selection cards (ADR-014)
     supports_media: bool = False  # outbound file/photo upload (send_media)
+    supports_groups: bool = False  # group-chat send path exists
+    supports_history_fetch: bool = False  # can fetch recent/thread messages for context
 
 
 @dataclass(frozen=True)
