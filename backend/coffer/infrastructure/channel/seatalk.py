@@ -26,6 +26,7 @@ from coffer.domain.channel.envelopes import (
     SentMessage,
 )
 from coffer.domain.channel.errors import ChannelSendFailed
+from coffer.domain.channel.rich_content import ForwardedItem
 
 _logger = logging.getLogger(__name__)
 
@@ -46,6 +47,31 @@ def _split_to_byte_limit(chunk: str, byte_limit: int) -> list[str]:
     return _split_to_byte_limit(chunk[:mid], byte_limit) + _split_to_byte_limit(
         chunk[mid:], byte_limit
     )
+
+
+def _message_to_item(msg: dict[str, Any]) -> ForwardedItem:
+    """Map one SeaTalk history/thread message dict to a :class:`ForwardedItem`.
+
+    Reused by both ``fetch_recent``/``fetch_thread`` here and Task 6's
+    forwarded-record renderer — one mapping for every place SeaTalk hands us
+    a message dict to flatten into text.
+    """
+    sender = str((msg.get("sender") or {}).get("email") or "unknown")
+    tag = str(msg.get("tag", ""))
+    text = f"[{tag}]"
+    if tag == "text":
+        # Group history/thread messages use "plain_text"; single-chat
+        # messages (elsewhere in this adapter) use "content" — support both.
+        body = msg.get("text") or {}
+        text = str(body.get("plain_text") or body.get("content") or "")
+    elif tag == "image":
+        text = f"[image] {(msg.get('image') or {}).get('content', '')}"
+    elif tag == "file":
+        text = f"[file] {(msg.get('file') or {}).get('filename', '')}"
+    elif tag == "combined_forwarded_chat_history":
+        # A short stand-in — we do not recurse into the nested history here.
+        text = "[forwarded chat record]"
+    return ForwardedItem(sender=sender, text=text)
 
 
 _TOKEN_SLACK_SECONDS = 60
@@ -224,6 +250,47 @@ class SeaTalkAdapter:
         # False so the core never calls this. Present to satisfy the Protocol.
         raise ChannelSendFailed(self._name, "seatalk cannot send media yet")
 
+    # -- context fetch (ContextFetchPort) -------------------------------------
+
+    async def fetch_recent(self, chat_id: str, *, limit: int = 20) -> list[ForwardedItem]:
+        """Recent messages in the group's main chat, for grounding a bare
+        @mention. Degrades to ``[]`` on ANY error (e.g. the app lacking the
+        group-chat-history read permission — SeaTalk error code 103 — a
+        network hiccup, or an unexpected payload): a missing permission or
+        transient failure must not break the turn, which still runs on the
+        @mention message alone."""
+        try:
+            payload = await self._get(
+                "/messaging/v2/group_chat/history",
+                {"group_id": chat_id, "page_size": limit},
+            )
+        except Exception:
+            _logger.warning(
+                "seatalk.fetch_recent.failed", extra={"channel": self._name}, exc_info=True
+            )
+            return []
+        messages = payload.get("messages") or [] if isinstance(payload, dict) else []
+        return [_message_to_item(m) for m in messages if isinstance(m, dict)]
+
+    async def fetch_thread(
+        self, chat_id: str, thread_id: str, *, limit: int = 50
+    ) -> list[ForwardedItem]:
+        """The thread's own messages, when the @mention landed inside a
+        thread rather than the main chat. Same best-effort degradation as
+        ``fetch_recent`` — see its docstring."""
+        try:
+            payload = await self._get(
+                "/messaging/v2/group_chat/get_thread_by_thread_id",
+                {"group_id": chat_id, "thread_id": thread_id, "page_size": limit},
+            )
+        except Exception:
+            _logger.warning(
+                "seatalk.fetch_thread.failed", extra={"channel": self._name}, exc_info=True
+            )
+            return []
+        messages = payload.get("messages") or [] if isinstance(payload, dict) else []
+        return [_message_to_item(m) for m in messages if isinstance(m, dict)]
+
     # -- transport -------------------------------------------------------------
 
     async def _send_single_chat(self, employee_code: str, message: dict[str, Any]) -> Any:
@@ -290,6 +357,46 @@ class SeaTalkAdapter:
                 # A gateway returns an HTML error page, not the Open API JSON
                 # envelope — json() raises a JSONDecodeError (NOT an
                 # httpx.HTTPError), so surface it as the channel error contract.
+                raise ChannelSendFailed(
+                    self._name, f"{path}: non-JSON response ({response.status_code})"
+                ) from e
+            code = payload.get("code", -1) if isinstance(payload, dict) else -1
+            if response.status_code == 200 and code == 0:
+                return payload
+            if code == 100:  # expired token — refresh and retry once
+                self._token = None
+                if attempt < max(retries, 1):
+                    attempt += 1
+                    continue
+            rate_limited = response.status_code == 429 or code == 101
+            if rate_limited and attempt < retries:
+                delay = _RATE_BACKOFF[min(attempt, len(_RATE_BACKOFF) - 1)]
+                attempt += 1
+                _logger.warning(
+                    "seatalk.rate_limited", extra={"channel": self._name, "delay": delay}
+                )
+                await asyncio.sleep(delay)
+                continue
+            raise ChannelSendFailed(self._name, f"{path}: code={code} http={response.status_code}")
+
+    async def _get(self, path: str, params: dict[str, Any], *, retries: int = 3) -> Any:
+        """GET counterpart of :meth:`_post` — same token/refresh/rate-limit/
+        non-JSON handling, but for the read-only history/thread endpoints
+        which take query params, not a JSON body."""
+        attempt = 0
+        while True:
+            token = await self._ensure_token()
+            try:
+                response = await self._client.get(
+                    f"{self._base}{path}",
+                    params=params,
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            except httpx.HTTPError as e:
+                raise ChannelSendFailed(self._name, f"{path}: {type(e).__name__}") from e
+            try:
+                payload: Any = response.json()
+            except ValueError as e:
                 raise ChannelSendFailed(
                     self._name, f"{path}: non-JSON response ({response.status_code})"
                 ) from e

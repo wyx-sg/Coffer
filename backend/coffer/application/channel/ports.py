@@ -20,6 +20,7 @@ from coffer.domain.channel.envelopes import (
     InboundMessage,
     SentMessage,
 )
+from coffer.domain.channel.rich_content import ForwardedItem
 
 
 @dataclass(frozen=True)
@@ -167,6 +168,20 @@ class ModelSuggestionPort(Protocol):
     no active profile — the card then offers only the free-text path."""
 
     async def suggest(self, agent_key: str) -> list[str]: ...
+
+
+class ContextFetchPort(Protocol):
+    """Best-effort surrounding-context reader for a group @mention: the
+    recent messages in the main chat, or a thread's messages when the
+    @mention landed inside one. Platforms without a history-fetch API
+    (Telegram's Bot API) satisfy this by always returning ``[]`` — the turn
+    then just runs on the @mention message with no fetched context."""
+
+    async def fetch_recent(self, chat_id: str, *, limit: int = 20) -> list[ForwardedItem]: ...
+
+    async def fetch_thread(
+        self, chat_id: str, thread_id: str, *, limit: int = 50
+    ) -> list[ForwardedItem]: ...
 
 
 @runtime_checkable

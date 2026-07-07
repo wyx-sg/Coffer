@@ -8,6 +8,7 @@ normalization of subscriber messages and approval clicks.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 
@@ -266,3 +267,117 @@ async def test_interactive_message_click_routes_to_on_callback(fake_seatalk: Fak
         "agent:codex",
     )
     assert cb.platform_message_id == "card-9"
+
+
+# -- context fetch (Task 5) ---------------------------------------------------
+
+
+def _text_message(email: str, plain_text: str) -> dict:
+    return {"sender": {"email": email}, "tag": "text", "text": {"plain_text": plain_text}}
+
+
+async def test_fetch_recent_maps_history_page_to_forwarded_items(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    fake_seatalk.history_response = {
+        "code": 0,
+        "messages": [
+            _text_message("alice@example.com", "hello there"),
+            _text_message("bob@example.com", "hi back"),
+        ],
+    }
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        items = await adapter.fetch_recent("gid-1", limit=20)
+    finally:
+        await adapter.stop()
+    assert [(it.sender, it.text) for it in items] == [
+        ("alice@example.com", "hello there"),
+        ("bob@example.com", "hi back"),
+    ]
+    [params] = fake_seatalk.history_calls
+    assert params == {"group_id": "gid-1", "page_size": "20"}
+
+
+async def test_fetch_thread_maps_thread_page_to_forwarded_items(fake_seatalk: FakeSeaTalk) -> None:
+    fake_seatalk.thread_response = {
+        "code": 0,
+        "messages": [
+            _text_message("alice@example.com", "in the thread"),
+            _text_message("bob@example.com", "replying"),
+        ],
+    }
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        items = await adapter.fetch_thread("gid-1", "t1", limit=50)
+    finally:
+        await adapter.stop()
+    assert [(it.sender, it.text) for it in items] == [
+        ("alice@example.com", "in the thread"),
+        ("bob@example.com", "replying"),
+    ]
+    [params] = fake_seatalk.thread_calls
+    assert params == {"group_id": "gid-1", "thread_id": "t1", "page_size": "50"}
+
+
+async def test_fetch_recent_maps_non_text_tags() -> None:
+    from coffer.infrastructure.channel.seatalk import _message_to_item
+
+    image_item = _message_to_item(
+        {"sender": {"email": "a@x.com"}, "tag": "image", "image": {"content": "img-key-1"}}
+    )
+    assert (image_item.sender, image_item.text) == ("a@x.com", "[image] img-key-1")
+
+    file_item = _message_to_item(
+        {"sender": {"email": "a@x.com"}, "tag": "file", "file": {"filename": "report.pdf"}}
+    )
+    assert (file_item.sender, file_item.text) == ("a@x.com", "[file] report.pdf")
+
+    forwarded_item = _message_to_item(
+        {"sender": {"email": "a@x.com"}, "tag": "combined_forwarded_chat_history"}
+    )
+    assert (forwarded_item.sender, forwarded_item.text) == (
+        "a@x.com",
+        "[forwarded chat record]",
+    )
+
+    other_item = _message_to_item({"sender": {}, "tag": "sticker"})
+    assert (other_item.sender, other_item.text) == ("unknown", "[sticker]")
+
+    # single-chat text uses "content" instead of group's "plain_text"
+    single_chat_item = _message_to_item(
+        {"sender": {"email": "a@x.com"}, "tag": "text", "text": {"content": "hi"}}
+    )
+    assert single_chat_item.text == "hi"
+
+
+async def test_fetch_recent_degrades_to_empty_list_on_error(
+    fake_seatalk: FakeSeaTalk, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A permission-denied (or any transport/parse) error must never break a
+    group turn — fetch_recent/fetch_thread degrade to no fetched context."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+
+    async def _boom(*args: object, **kwargs: object) -> Any:
+        raise ChannelSendFailed("st", "group_chat/history: code=103 http=200")
+
+    monkeypatch.setattr(adapter, "_get", _boom)
+    try:
+        assert await adapter.fetch_recent("gid-1", limit=20) == []
+    finally:
+        await adapter.stop()
+
+
+async def test_fetch_thread_degrades_to_empty_list_on_error(
+    fake_seatalk: FakeSeaTalk, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+
+    async def _boom(*args: object, **kwargs: object) -> Any:
+        raise ChannelSendFailed("st", "group_chat/get_thread_by_thread_id: code=103 http=200")
+
+    monkeypatch.setattr(adapter, "_get", _boom)
+    try:
+        assert await adapter.fetch_thread("gid-1", "t1", limit=50) == []
+    finally:
+        await adapter.stop()

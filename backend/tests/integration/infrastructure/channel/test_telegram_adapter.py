@@ -344,3 +344,16 @@ async def test_buttons_ride_only_the_final_chunk(fake_telegram: FakeTelegram) ->
     assert len(sends) >= 2
     assert "reply_markup" not in sends[0]  # the keyboard must not ride the first chunk
     assert "reply_markup" in sends[-1]  # only the last chunk carries it
+
+
+# -- context fetch (Task 5): Bot API has no history-fetch capability ----------
+
+
+async def test_fetch_recent_and_fetch_thread_return_empty(fake_telegram: FakeTelegram) -> None:
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        assert await adapter.fetch_recent("555", limit=20) == []
+        assert await adapter.fetch_thread("555", "t1", limit=50) == []
+    finally:
+        await adapter.stop()
+    assert fake_telegram.calls == []  # no platform call is even attempted

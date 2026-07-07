@@ -30,6 +30,7 @@ from coffer.domain.channel.envelopes import (
     SentMessage,
 )
 from coffer.domain.channel.errors import ChannelSendFailed
+from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.infrastructure.channel.render import chunk_text, markdown_to_telegram_html
 
 _logger = logging.getLogger(__name__)
@@ -374,6 +375,19 @@ class TelegramAdapter:
 
     async def send_typing(self, chat_id: str) -> None:
         await self._call("sendChatAction", chat_id=chat_id, action="typing")
+
+    # -- context fetch (ContextFetchPort) -------------------------------------
+
+    async def fetch_recent(self, chat_id: str, *, limit: int = 20) -> list[ForwardedItem]:
+        # Bot API has no history-fetch method — a bot only ever sees updates
+        # pushed to it, never past chat history. Always empty.
+        return []
+
+    async def fetch_thread(
+        self, chat_id: str, thread_id: str, *, limit: int = 50
+    ) -> list[ForwardedItem]:
+        # Same limitation as fetch_recent — see its comment.
+        return []
 
     # -- transport -------------------------------------------------------------
 

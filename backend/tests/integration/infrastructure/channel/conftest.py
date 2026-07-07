@@ -133,11 +133,18 @@ class FakeSeaTalk:
         self.scripted: list[tuple[int, dict[str, Any]]] = []  # popped per single/group_chat call
         self.html_error_sends = 0  # answer single_chat with a non-JSON HTML body N times
         self._next_message_id = 0
+        # -- history/thread fetch (Task 5) --
+        self.history_calls: list[dict[str, Any]] = []  # query params, one per /history GET
+        self.thread_calls: list[dict[str, Any]] = []  # query params, one per /get_thread... GET
+        self.history_response: dict[str, Any] = {"code": 0, "messages": []}
+        self.thread_response: dict[str, Any] = {"code": 0, "messages": []}
         self.app = FastAPI()
         self.app.post("/auth/app_access_token")(self._token)
         self.app.post("/messaging/v2/single_chat")(self._single_chat)
         self.app.post("/messaging/v2/group_chat")(self._group_chat)
         self.app.post("/messaging/v2/single_chat_typing")(self._typing)
+        self.app.get("/messaging/v2/group_chat/history")(self._history)
+        self.app.get("/messaging/v2/group_chat/get_thread_by_thread_id")(self._thread)
 
     async def _token(self, request: Request) -> JSONResponse:
         await request.json()
@@ -179,6 +186,14 @@ class FakeSeaTalk:
     async def _typing(self, request: Request) -> JSONResponse:
         self.typing_calls.append(await request.json())
         return JSONResponse(content={"code": 0})
+
+    async def _history(self, request: Request) -> JSONResponse:
+        self.history_calls.append(dict(request.query_params))
+        return JSONResponse(content=self.history_response)
+
+    async def _thread(self, request: Request) -> JSONResponse:
+        self.thread_calls.append(dict(request.query_params))
+        return JSONResponse(content=self.thread_response)
 
 
 def make_telegram_adapter(fake: FakeTelegram, *, poll_timeout: int = 1) -> TelegramAdapter:
