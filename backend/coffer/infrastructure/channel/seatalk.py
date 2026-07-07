@@ -27,78 +27,24 @@ from coffer.domain.channel.envelopes import (
 )
 from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.domain.channel.rich_content import ForwardedItem, flatten_forwarded
+from coffer.infrastructure.channel.seatalk_parse import (
+    interactive_card as _interactive_card,
+)
+from coffer.infrastructure.channel.seatalk_parse import (
+    message_to_item as _message_to_item,
+)
+from coffer.infrastructure.channel.seatalk_parse import (
+    split_to_byte_limit as _split_to_byte_limit,
+)
+from coffer.infrastructure.channel.seatalk_parse import strip_group_mentions
 
 _logger = logging.getLogger(__name__)
 
 _CHUNK_LIMIT = 3500  # paragraph-chunking budget, in characters
 _BYTE_LIMIT = 3900  # SeaTalk caps content at 4096 BYTES; stay clear of it
 
-
-def _split_to_byte_limit(chunk: str, byte_limit: int) -> list[str]:
-    """Split a chunk further until each piece fits the UTF-8 byte cap.
-
-    chunk_text counts characters, but CJK text is 3 bytes per character in
-    UTF-8 — a 3500-character chunk can be ~10 KB. Halve at character
-    boundaries until every piece encodes under the limit.
-    """
-    if len(chunk.encode("utf-8")) <= byte_limit:
-        return [chunk]
-    mid = len(chunk) // 2
-    return _split_to_byte_limit(chunk[:mid], byte_limit) + _split_to_byte_limit(
-        chunk[mid:], byte_limit
-    )
-
-
-def _message_to_item(msg: dict[str, Any]) -> ForwardedItem:
-    """Map one SeaTalk thread message dict to a :class:`ForwardedItem`.
-
-    Used by ``fetch_thread`` here and Task 6's forwarded-record renderer —
-    one mapping for every place SeaTalk hands us a message dict to flatten
-    into text.
-    """
-    sender = str((msg.get("sender") or {}).get("email") or "unknown")
-    tag = str(msg.get("tag", ""))
-    text = f"[{tag}]"
-    if tag == "text":
-        # Group history/thread messages use "plain_text"; single-chat
-        # messages (elsewhere in this adapter) use "content" — support both.
-        body = msg.get("text") or {}
-        text = str(body.get("plain_text") or body.get("content") or "")
-    elif tag == "image":
-        text = f"[image] {(msg.get('image') or {}).get('content', '')}"
-    elif tag == "file":
-        text = f"[file] {(msg.get('file') or {}).get('filename', '')}"
-    elif tag == "combined_forwarded_chat_history":
-        # A short stand-in — we do not recurse into the nested history here.
-        text = "[forwarded chat record]"
-    return ForwardedItem(sender=sender, text=text)
-
-
 _TOKEN_SLACK_SECONDS = 60
 _RATE_BACKOFF = (1.0, 3.0, 9.0)
-
-
-def _interactive_card(text: str, buttons: Sequence[ChoiceButton]) -> dict[str, Any]:
-    """A SeaTalk ``interactive_message`` card: a markdown body + callback buttons
-    each carrying our custom ``value`` (research.md). A tap returns the value in
-    an ``interactive_message_click`` event.
-
-    research.md pins only ``tag="interactive_message"``, ``button_type="callback"``
-    and the custom ``value``; the ``elements``/``description`` body nesting and
-    the button ``text`` field are inferred (the live API docs are login-gated and
-    unreachable from this machine). If SeaTalk rejects the payload, adjust this
-    one helper — the rest of the card pipeline is shape-agnostic."""
-    return {
-        "tag": "interactive_message",
-        "interactive_message": {
-            "elements": [
-                {"element_type": "description", "description": {"format": 1, "text": text}},
-            ],
-            "buttons": [
-                {"button_type": "callback", "text": b.label, "value": b.value} for b in buttons
-            ],
-        },
-    }
 
 
 class SeaTalkAdapter:
@@ -186,18 +132,15 @@ class SeaTalkAdapter:
             message = event.get("message") or {}
             sender = message.get("sender") or {}
             body = message.get("text") or {}
-            plain_text = str(body.get("plain_text", ""))
-            for mention in body.get("mentioned_list") or []:
-                if isinstance(mention, dict):
-                    username = str(mention.get("username", ""))
-                    if username:
-                        plain_text = plain_text.replace(f"@{username}", "")
+            plain_text = strip_group_mentions(
+                str(body.get("plain_text", "")), body.get("mentioned_list")
+            )
             await self._callbacks.on_message(
                 InboundMessage(
                     channel=self._name,
                     chat_id=str(event.get("group_id", "")),
                     sender_display=str(sender.get("email", "") or sender.get("seatalk_id", "")),
-                    text=plain_text.strip(),
+                    text=plain_text,
                     platform_message_id=str(message.get("message_id", "")),
                     timestamp=datetime.fromtimestamp(
                         int(envelope.get("timestamp", 0) or 0), tz=UTC

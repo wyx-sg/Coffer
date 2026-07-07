@@ -1,13 +1,14 @@
 """The shared inbound pipeline: every channel's messages flow through here.
 
 owner gate → pairing claim → commands → queueing → conversation mapping →
-turn driving (rendering lives in ``turn_render``).
+turn driving (execution lives in ``turn_driver``, rendering in ``turn_render``).
 
 The chat platform is reached only through its public seams (conversation
 service + turn orchestrator), exactly like the web UI: agents cannot tell a
 channel turn from a UI turn, and a new agent provider is reachable from every
 channel with no code here changing. Slash-command handling lives in
-``commands`` and conversation creation in ``conversation_ops``.
+``commands``, conversation creation in ``conversation_ops``, and running a
+queued turn end-to-end in ``turn_driver``.
 """
 
 from __future__ import annotations
@@ -15,18 +16,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections import deque
 from collections.abc import Sequence
-from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Protocol, cast
+from typing import cast
 
 from coffer.application.audit_service import AuditService
 from coffer.application.channel.commands import HELP_TEXT, ChannelCommands
-from coffer.application.channel.conversation_ops import (
-    ensure_conversation,
-    explain_conversation_error,
-)
 from coffer.application.channel.pairing import PairingManager
 from coffer.application.channel.ports import (
     AgentCatalogPort,
@@ -36,28 +31,26 @@ from coffer.application.channel.ports import (
     ContextFetchPort,
     ModelSuggestionPort,
 )
-from coffer.application.channel.turn_render import TurnRenderer
+from coffer.application.channel.turn_driver import (
+    QUEUE_MAX as _QUEUE_MAX,
+)
+from coffer.application.channel.turn_driver import (
+    ConversationPort,
+    TurnDriver,
+    TurnPort,
+)
+from coffer.application.channel.turn_driver import (
+    Session as _Session,
+)
 from coffer.domain.audit import AuditEventType
 from coffer.domain.channel.envelopes import ChoiceButton, InboundCallback, InboundMessage
 from coffer.domain.channel.rich_content import flatten_context
-from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.attachment import Attachment
-from coffer.domain.chat.errors import TurnInProgress
-from coffer.domain.errors import CofferError
 from coffer.domain.resource import ResourceRef
 
 __all__ = ["ChannelBinding", "InboundProcessor"]
 
 _logger = logging.getLogger(__name__)
-
-_QUEUE_MAX = 10
-
-#: One queued inbound turn: the text to drive it, any downloaded attachments to
-#: materialise for the agent (images inlined, files handed off by path), the
-#: thread the message arrived in (empty for a threadless chat), and the chat
-#: kind ("direct" | "group") so the eventual reply is routed back to the same
-#: place the message came from.
-_QueuedInbound = tuple[str, tuple[Attachment, ...], str, str]
 
 
 def _attachment_note(attachments: Sequence[Attachment]) -> str:
@@ -67,55 +60,6 @@ def _attachment_note(attachments: Sequence[Attachment]) -> str:
     kind = "image" if all(a.is_image for a in attachments) else "file"
     plural = "s" if len(attachments) != 1 else ""
     return f"(sent {len(attachments)} {kind}{plural}: {names})"
-
-
-class ConversationPort(Protocol):
-    """The slice of the chat platform's conversation service we use."""
-
-    async def create_conversation(
-        self,
-        *,
-        agent_key: str,
-        agent_config: dict[str, Any] | None,
-        actor: str,
-        channel_name: str | None = None,
-        peer_chat_id: str | None = None,
-    ) -> Any: ...
-
-    async def get_conversation(self, conversation_id: str) -> Any: ...
-
-    async def set_conversation_model(
-        self, conversation_id: str, *, model_id: str | None
-    ) -> Any: ...
-
-    async def get_agent_config(self, conversation_id: str) -> AgentConfig: ...
-
-    async def set_agent_config(self, conversation_id: str, config: AgentConfig) -> None: ...
-
-
-class TurnPort(Protocol):
-    """The slice of the turn orchestrator we use."""
-
-    async def start_turn(
-        self,
-        conversation_id: str,
-        user_text: str,
-        *,
-        attachments: Sequence[Attachment] = (),
-    ) -> asyncio.Queue[Any]: ...
-
-    def interrupt_turn(self, conversation_id: str) -> None: ...
-
-
-@dataclass
-class _Session:
-    queue: deque[_QueuedInbound] = field(default_factory=lambda: deque(maxlen=_QUEUE_MAX))
-    drain_task: asyncio.Task[None] | None = None
-    # The conversation whose turn is draining right now (None between turns).
-    # Tracked separately from the peer's active conversation: ``/new`` rebinds
-    # the peer while a turn keeps draining on the old conversation, so ``/stop``
-    # and unbind must target the turn that is actually running.
-    running_conversation_id: str | None = None
 
 
 class InboundProcessor:
@@ -147,6 +91,14 @@ class InboundProcessor:
             turns=turns,
             agents=agents,
             model_suggestions=model_suggestions,
+        )
+        self._turn_driver = TurnDriver(
+            peers=peers,
+            conversations=conversations,
+            turns=turns,
+            audit=audit,
+            safe_send=self._safe_send,
+            session=self._session,
         )
 
     # -- runtime registry ------------------------------------------------
@@ -292,7 +244,7 @@ class InboundProcessor:
         )
         if session.drain_task is None or session.drain_task.done():
             session.drain_task = asyncio.create_task(
-                self._drain(binding, peer.chat_id, msg.thread_id),
+                self._turn_driver.drain(binding, peer.chat_id, msg.thread_id),
                 name=f"channel-drain:{binding.name}:{peer.chat_id}:{msg.thread_id}",
             )
 
@@ -341,119 +293,6 @@ class InboundProcessor:
             msg.chat_id,
             f"✅ Paired. This chat now controls Coffer channel '{binding.name}'.\n\n{HELP_TEXT}",
         )
-
-    # -- turn driving ----------------------------------------------------------
-
-    async def _drain(self, binding: ChannelBinding, chat_id: str, thread_id: str) -> None:
-        session = self._session(binding.name, chat_id, thread_id)
-        while session.queue:
-            user_text, attachments, item_thread_id, chat_kind = session.queue.popleft()
-            peer = await self._peers.get_by_chat(binding.resource_id, chat_id)
-            if peer is None:
-                break
-            try:
-                await self._run_turn(
-                    binding,
-                    peer,
-                    user_text,
-                    attachments,
-                    thread_id=item_thread_id,
-                    chat_kind=chat_kind,
-                )
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                _logger.exception("channel.turn.failed", extra={"channel": binding.name})
-
-    async def _run_turn(
-        self,
-        binding: ChannelBinding,
-        peer: ChannelPeer,
-        text: str,
-        attachments: Sequence[Attachment] = (),
-        *,
-        thread_id: str = "",
-        chat_kind: str = "direct",
-    ) -> None:
-        adapter = binding.adapter
-        try:
-            conversation_id = await ensure_conversation(
-                self._conversations, self._peers, binding, peer
-            )
-        except CofferError as e:
-            # e.g. the channel's default agent is unknown/misconfigured — the
-            # owner must see it in the chat, not only in the daemon log.
-            await self._safe_send(
-                binding,
-                peer.chat_id,
-                explain_conversation_error(e),
-                thread_id=thread_id,
-                chat_kind=chat_kind,
-            )
-            return
-        # A channel message driving a turn is first-class in the audit log:
-        # who (the peer), through which channel, drives which agent.
-        with contextlib.suppress(Exception):
-            conv = await self._conversations.get_conversation(conversation_id)
-            await self._audit.record(
-                AuditEventType.CHANNEL_TURN_STARTED.value,
-                ref=ResourceRef(kind="channel", name=binding.name),
-                actor=peer.display_name or "channel",
-                details={
-                    "channel": binding.name,
-                    "chat_id": peer.chat_id,
-                    "display_name": peer.display_name,
-                    "agent_key": conv.agent_key,
-                    "conversation_id": conversation_id,
-                },
-            )
-        if adapter.capabilities.supports_typing:
-            with contextlib.suppress(Exception):
-                await adapter.send_typing(peer.chat_id)
-        try:
-            queue = await self._turns.start_turn(conversation_id, text, attachments=attachments)
-        except TurnInProgress:
-            await self._safe_send(
-                binding,
-                peer.chat_id,
-                "⚠️ A turn is already running for this conversation.",
-                thread_id=thread_id,
-                chat_kind=chat_kind,
-            )
-            return
-        except CofferError as e:
-            await self._safe_send(
-                binding,
-                peer.chat_id,
-                f"⚠️ {e} [{e.code}]",
-                thread_id=thread_id,
-                chat_kind=chat_kind,
-            )
-            return
-        session = self._session(binding.name, peer.chat_id, thread_id)
-
-        async def _send(message: str) -> None:
-            await self._safe_send(
-                binding, peer.chat_id, message, thread_id=thread_id, chat_kind=chat_kind
-            )
-
-        renderer = TurnRenderer(
-            channel=binding.name,
-            adapter=adapter,
-            chat_id=peer.chat_id,
-            conversation_id=conversation_id,
-            send=_send,
-            thread_id=thread_id,
-            chat_kind=chat_kind,
-        )
-        # Track the live turn so /stop and unbind can target it even after /new
-        # rebinds the peer to a fresh conversation mid-turn.
-        session.running_conversation_id = conversation_id
-        try:
-            await renderer.consume(queue)
-        finally:
-            if session.running_conversation_id == conversation_id:
-                session.running_conversation_id = None
 
     # -- helpers ---------------------------------------------------------------
 
