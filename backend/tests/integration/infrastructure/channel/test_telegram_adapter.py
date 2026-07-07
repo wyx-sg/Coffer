@@ -349,10 +349,9 @@ async def test_buttons_ride_only_the_final_chunk(fake_telegram: FakeTelegram) ->
 # -- context fetch (Task 5): Bot API has no history-fetch capability ----------
 
 
-async def test_fetch_recent_and_fetch_thread_return_empty(fake_telegram: FakeTelegram) -> None:
+async def test_fetch_thread_returns_empty(fake_telegram: FakeTelegram) -> None:
     adapter = make_telegram_adapter(fake_telegram)
     try:
-        assert await adapter.fetch_recent("555", limit=20) == []
         assert await adapter.fetch_thread("555", "t1", limit=50) == []
     finally:
         await adapter.stop()

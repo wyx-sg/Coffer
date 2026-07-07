@@ -378,15 +378,11 @@ class TelegramAdapter:
 
     # -- context fetch (ContextFetchPort) -------------------------------------
 
-    async def fetch_recent(self, chat_id: str, *, limit: int = 20) -> list[ForwardedItem]:
-        # Bot API has no history-fetch method — a bot only ever sees updates
-        # pushed to it, never past chat history. Always empty.
-        return []
-
     async def fetch_thread(
         self, chat_id: str, thread_id: str, *, limit: int = 50
     ) -> list[ForwardedItem]:
-        # Same limitation as fetch_recent — see its comment.
+        # Bot API has no history-fetch method — a bot only ever sees updates
+        # pushed to it, never past thread history. Always empty.
         return []
 
     # -- transport -------------------------------------------------------------

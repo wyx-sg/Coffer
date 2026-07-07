@@ -276,29 +276,6 @@ def _text_message(email: str, plain_text: str) -> dict:
     return {"sender": {"email": email}, "tag": "text", "text": {"plain_text": plain_text}}
 
 
-async def test_fetch_recent_maps_history_page_to_forwarded_items(
-    fake_seatalk: FakeSeaTalk,
-) -> None:
-    fake_seatalk.history_response = {
-        "code": 0,
-        "messages": [
-            _text_message("alice@example.com", "hello there"),
-            _text_message("bob@example.com", "hi back"),
-        ],
-    }
-    adapter = make_seatalk_adapter(fake_seatalk)
-    try:
-        items = await adapter.fetch_recent("gid-1", limit=20)
-    finally:
-        await adapter.stop()
-    assert [(it.sender, it.text) for it in items] == [
-        ("alice@example.com", "hello there"),
-        ("bob@example.com", "hi back"),
-    ]
-    [params] = fake_seatalk.history_calls
-    assert params == {"group_id": "gid-1", "page_size": "20"}
-
-
 async def test_fetch_thread_maps_thread_page_to_forwarded_items(fake_seatalk: FakeSeaTalk) -> None:
     fake_seatalk.thread_response = {
         "code": 0,
@@ -320,7 +297,7 @@ async def test_fetch_thread_maps_thread_page_to_forwarded_items(fake_seatalk: Fa
     assert params == {"group_id": "gid-1", "thread_id": "t1", "page_size": "50"}
 
 
-async def test_fetch_recent_maps_non_text_tags() -> None:
+async def test_message_to_item_maps_non_text_tags() -> None:
     from coffer.infrastructure.channel.seatalk import _message_to_item
 
     image_item = _message_to_item(
@@ -351,26 +328,11 @@ async def test_fetch_recent_maps_non_text_tags() -> None:
     assert single_chat_item.text == "hi"
 
 
-async def test_fetch_recent_degrades_to_empty_list_on_error(
-    fake_seatalk: FakeSeaTalk, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A permission-denied (or any transport/parse) error must never break a
-    group turn — fetch_recent/fetch_thread degrade to no fetched context."""
-    adapter = make_seatalk_adapter(fake_seatalk)
-
-    async def _boom(*args: object, **kwargs: object) -> Any:
-        raise ChannelSendFailed("st", "group_chat/history: code=103 http=200")
-
-    monkeypatch.setattr(adapter, "_get", _boom)
-    try:
-        assert await adapter.fetch_recent("gid-1", limit=20) == []
-    finally:
-        await adapter.stop()
-
-
 async def test_fetch_thread_degrades_to_empty_list_on_error(
     fake_seatalk: FakeSeaTalk, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Any transport/parse/permission error must never break a group turn —
+    fetch_thread degrades to no fetched context."""
     adapter = make_seatalk_adapter(fake_seatalk)
 
     async def _boom(*args: object, **kwargs: object) -> Any:

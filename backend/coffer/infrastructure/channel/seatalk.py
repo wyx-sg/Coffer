@@ -50,11 +50,11 @@ def _split_to_byte_limit(chunk: str, byte_limit: int) -> list[str]:
 
 
 def _message_to_item(msg: dict[str, Any]) -> ForwardedItem:
-    """Map one SeaTalk history/thread message dict to a :class:`ForwardedItem`.
+    """Map one SeaTalk thread message dict to a :class:`ForwardedItem`.
 
-    Reused by both ``fetch_recent``/``fetch_thread`` here and Task 6's
-    forwarded-record renderer — one mapping for every place SeaTalk hands us
-    a message dict to flatten into text.
+    Used by ``fetch_thread`` here and Task 6's forwarded-record renderer —
+    one mapping for every place SeaTalk hands us a message dict to flatten
+    into text.
     """
     sender = str((msg.get("sender") or {}).get("email") or "unknown")
     tag = str(msg.get("tag", ""))
@@ -252,32 +252,15 @@ class SeaTalkAdapter:
 
     # -- context fetch (ContextFetchPort) -------------------------------------
 
-    async def fetch_recent(self, chat_id: str, *, limit: int = 20) -> list[ForwardedItem]:
-        """Recent messages in the group's main chat, for grounding a bare
-        @mention. Degrades to ``[]`` on ANY error (e.g. the app lacking the
-        group-chat-history read permission — SeaTalk error code 103 — a
-        network hiccup, or an unexpected payload): a missing permission or
-        transient failure must not break the turn, which still runs on the
-        @mention message alone."""
-        try:
-            payload = await self._get(
-                "/messaging/v2/group_chat/history",
-                {"group_id": chat_id, "page_size": limit},
-            )
-        except Exception:
-            _logger.warning(
-                "seatalk.fetch_recent.failed", extra={"channel": self._name}, exc_info=True
-            )
-            return []
-        messages = payload.get("messages") or [] if isinstance(payload, dict) else []
-        return [_message_to_item(m) for m in messages if isinstance(m, dict)]
-
     async def fetch_thread(
         self, chat_id: str, thread_id: str, *, limit: int = 50
     ) -> list[ForwardedItem]:
         """The thread's own messages, when the @mention landed inside a
-        thread rather than the main chat. Same best-effort degradation as
-        ``fetch_recent`` — see its docstring."""
+        thread rather than the group main chat. Degrades to ``[]`` on ANY
+        error (a network hiccup, an unexpected payload, or a permission gap):
+        a transient failure must not break the turn, which still runs on the
+        @mention message alone. (Group-main @mentions fetch no history — that
+        permission is intentionally not granted.)"""
         try:
             payload = await self._get(
                 "/messaging/v2/group_chat/get_thread_by_thread_id",

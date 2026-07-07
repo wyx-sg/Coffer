@@ -171,13 +171,12 @@ class ModelSuggestionPort(Protocol):
 
 
 class ContextFetchPort(Protocol):
-    """Best-effort surrounding-context reader for a group @mention: the
-    recent messages in the main chat, or a thread's messages when the
-    @mention landed inside one. Platforms without a history-fetch API
-    (Telegram's Bot API) satisfy this by always returning ``[]`` — the turn
-    then just runs on the @mention message with no fetched context."""
-
-    async def fetch_recent(self, chat_id: str, *, limit: int = 20) -> list[ForwardedItem]: ...
+    """Best-effort thread-context reader for a group @mention: when the
+    @mention landed inside a thread, the thread's own messages ground the
+    turn. Group-main @mentions fetch nothing (reading all group chatter is
+    undesirable — the group-chat-history permission is intentionally not
+    granted). Platforms without a history-fetch API (Telegram's Bot API)
+    satisfy this by always returning ``[]``."""
 
     async def fetch_thread(
         self, chat_id: str, thread_id: str, *, limit: int = 50
