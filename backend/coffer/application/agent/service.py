@@ -355,23 +355,16 @@ class AgentService:
     async def set_disable_native_memory(
         self, *, name: str, enabled: bool, actor: str = "api"
     ) -> Resource:
-        """Persist the ``disable_native_memory`` field AND apply/restore the
-        on-disk native-memory transform (Slice 6).
-
-        Enabling writes the agent's native write-side memory OFF in its config
-        file (Claude ``settings.json`` / Codex ``config.toml``); disabling
-        restores it. Both the persisted field and the on-disk transform move
-        together so they can never diverge. Idempotent.
+        """Persist ``disable_native_memory`` AND apply/restore the on-disk
+        native-memory transform in lockstep so they never diverge (Slice 6:
+        Claude ``settings.json`` / Codex ``config.toml``). Idempotent.
         """
         if self._config_file_store is None:  # pragma: no cover - composition wires it
             raise RuntimeError("AgentService has no config_file_store; cannot toggle native memory")
         existing = await self.get(name)
         cfg = AgentConfig.model_validate(existing.config)
-        # Resolve the config file holding the native-memory toggle for this type.
-        # A type with no native write-side memory (e.g. opencode) has no target —
-        # the toggle is absent, not broken (capability matrix, ADR-040).
         target = native_memory_disable_target(cfg.type)
-        if target is None:
+        if target is None:  # e.g. opencode: no native memory — absent, not broken (ADR-040)
             raise NativeMemoryDisableUnsupported(cfg.type.value)
         config_key, fmt = target
         spec = spec_for(cfg.type, config_key, cfg.resolved_config_dir())
