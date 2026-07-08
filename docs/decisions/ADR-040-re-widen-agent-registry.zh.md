@@ -27,7 +27,7 @@
 
 **能力 gap 建模为"缺席的 descriptor facet"，而非错误。** product 上游缺某个 facet 就不设它；服务优雅降级（例如对 opencode 请求关闭原生记忆返回 `NATIVE_MEMORY_DISABLE_UNSUPPORTED` / 422，界面隐藏该开关），逐 agent 的支持在 spec 004 的**能力矩阵**（FR-003a）里列出。具体：opencode 首个 slice 不带 session-hook 注入（其 plugin-drop 是记录在案的后续 slice）、也不带原生记忆关闭（它没有跨会话原生记忆）；cursor 不带 provider 投影（上游无自定义 base URL）。
 
-**openclaw 不作为受管叶子 agent 加回。** 它是对等控制面。唯一自洽的集成是把它的网关当作 OpenAI 兼容的模型端点（`openclaw gateway` + `POST /v1/chat/completions`，`model: "openclaw/<agentId>"`），这是 LLM-连接 的事、不是 agent 注册表的事。留给**独立设计轨道**；本 ADR 记录它为何不在注册表内。
+**openclaw 不作为受管叶子 agent 加回。** 它是对等控制面。唯一自洽的集成是把它的网关当作 OpenAI 兼容的模型端点（`openclaw gateway` + `POST /v1/chat/completions`，`model: "openclaw/<agentId>"`），这是 LLM-连接 的事、不是 agent 注册表的事。留给**独立设计轨道**——[`docs/research/openclaw-gateway-integration.zh.md`](../research/openclaw-gateway-integration.zh.md) 详述它将如何接入 LLM 连接注册表；本 ADR 记录它为何不在 agent 注册表内。
 
 无需新的数据库迁移——agent 的 `type` 没有 DB 层约束，重新加回枚举值即可恢复对这些类型的接受；`0031` 删除的行不予恢复（那些行本就不可用、其 config 无法重建，与 `0031` 给出的理由一致）。
 
