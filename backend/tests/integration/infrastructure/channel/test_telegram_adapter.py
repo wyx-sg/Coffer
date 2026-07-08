@@ -247,6 +247,37 @@ async def test_send_text_without_thread_id_omits_message_thread_id(
     assert "message_thread_id" not in send
 
 
+async def test_send_media_with_thread_id_includes_message_thread_id(
+    fake_telegram: FakeTelegram, tmp_path: pathlib.Path
+) -> None:
+    """FR-031: a file returned during a forum-topic turn is uploaded into that
+    topic — sendPhoto carries ``message_thread_id`` (mirroring send_text)."""
+    img = tmp_path / "chart.png"
+    img.write_bytes(b"PNG")
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        await adapter.send_media("555", str(img), as_photo=True, thread_id="9")
+    finally:
+        await adapter.stop()
+    [send] = fake_telegram.calls_for("sendPhoto")
+    assert send["chat_id"] == "555"
+    assert send["message_thread_id"] == "9"
+
+
+async def test_send_media_without_thread_id_omits_message_thread_id(
+    fake_telegram: FakeTelegram, tmp_path: pathlib.Path
+) -> None:
+    doc = tmp_path / "report.pdf"
+    doc.write_bytes(b"%PDF")
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        await adapter.send_media("555", str(doc), as_photo=False)
+    finally:
+        await adapter.stop()
+    [send] = fake_telegram.calls_for("sendDocument")
+    assert "message_thread_id" not in send
+
+
 async def test_send_text_chat_kind_group_is_ignored(fake_telegram: FakeTelegram) -> None:
     # Telegram routes DMs and groups through the same chat_id; chat_kind is a
     # no-op here (unlike SeaTalk, which needs it to pick the endpoint).

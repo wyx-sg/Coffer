@@ -178,6 +178,10 @@ class FakeChannelAdapter:
         self.typing: list[str] = []  # chat_ids
         # (chat_id, path, caption, as_photo) for each uploaded file.
         self.media: list[tuple[str, str, str | None, bool]] = []
+        # (chat_id, path, caption, as_photo, thread_id, chat_kind) — the full
+        # routing detail for each upload, kept separate so every existing
+        # ``.media`` assertion stays a plain 4-tuple (mirrors ``sent_routed``).
+        self.media_routed: list[tuple[str, str, str | None, bool, str, str]] = []
         # Scriptable ``fetch_thread`` result (Task 7b) — a test sets this to a
         # list of ``ForwardedItem`` for its scenario; unset yields ``[]``.
         self.thread_items: list[ForwardedItem] = []
@@ -241,8 +245,11 @@ class FakeChannelAdapter:
         *,
         caption: str | None = None,
         as_photo: bool = True,
+        thread_id: str = "",
+        chat_kind: str = "direct",
     ) -> SentMessage:
         self.media.append((chat_id, path, caption, as_photo))
+        self.media_routed.append((chat_id, path, caption, as_photo, thread_id, chat_kind))
         return SentMessage(message_id=self._new_id())
 
     async def fetch_thread(

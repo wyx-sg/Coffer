@@ -11,6 +11,7 @@ and hand them to the turn as attachments. Split out of ``seatalk.py`` (mirroring
 
 from __future__ import annotations
 
+import base64
 import logging
 import os
 import pathlib
@@ -23,13 +24,62 @@ import httpx
 from coffer.domain.channel.envelopes import InboundAttachment
 
 __all__ = [
+    "build_outbound_media_message",
     "collect_image_urls",
     "default_media_dir",
     "media_attachments",
+    "send_outbound_media",
     "thread_media_attachments",
 ]
 
 _logger = logging.getLogger(__name__)
+
+# Outbound: an image extension goes as a SeaTalk ``image`` message (inline
+# preview); anything else as a ``file`` message (mirrors the inbound suffix map).
+_OUTBOUND_IMAGE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp"})
+
+
+def build_outbound_media_message(path: str) -> dict[str, Any]:
+    """Build the SeaTalk outbound message body for a local file.
+
+    An image (by extension) becomes ``{tag: "image", image: {content: <b64>}}``;
+    any other file becomes ``{tag: "file", file: {filename, content: <b64>}}``.
+    ``content`` is base64 of the raw bytes — unlike an *inbound* image, whose
+    ``content`` is an auth-gated download URL. Pure (reads the file, no network)
+    so it stays out of the size-capped ``seatalk.py``."""
+    p = pathlib.Path(path)
+    content = base64.b64encode(p.read_bytes()).decode("ascii")
+    if p.suffix.lower() in _OUTBOUND_IMAGE_SUFFIXES:
+        return {"tag": "image", "image": {"content": content}}
+    return {"tag": "file", "file": {"filename": p.name, "content": content}}
+
+
+async def send_outbound_media(
+    send: Callable[[str, dict[str, Any], str, str], Awaitable[Any]],
+    chat_id: str,
+    path: str,
+    *,
+    caption: str | None,
+    thread_id: str,
+    chat_kind: str,
+) -> str:
+    """Upload one local file, then its caption, through ``send`` (the adapter's
+    ``_send(chat_id, message, thread_id, chat_kind)`` router — so both land in
+    the same chat_kind + thread the turn came from, FR-031). SeaTalk file
+    messages carry no caption field, so a non-empty caption follows as a short
+    threaded text message. Returns the last platform message id."""
+    result = await send(chat_id, build_outbound_media_message(path), thread_id, chat_kind)
+    last = str(result.get("message_id", ""))
+    if caption:
+        follow = await send(
+            chat_id,
+            {"tag": "text", "text": {"format": 1, "content": caption}},
+            thread_id,
+            chat_kind,
+        )
+        last = str(follow.get("message_id", "")) or last
+    return last
+
 
 # content-type → file suffix for the saved attachment (best-effort; SeaTalk
 # images are png/jpeg in practice).

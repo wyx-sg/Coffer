@@ -348,6 +348,87 @@ async def test_send_text_group_without_thread_id_omits_thread_field(
     assert "thread_id" not in body["message"]  # and not in the message body
 
 
+# -- outbound media (FR-031) --------------------------------------------------
+
+
+async def test_send_media_image_posts_group_image_with_thread_in_body(
+    fake_seatalk: FakeSeaTalk, tmp_path: Any
+) -> None:
+    """FR-031: a returned image during a group-thread turn is uploaded as a
+    SeaTalk ``image`` message (base64 content) to group_chat, with thread_id
+    INSIDE the message body so it lands in the originating thread."""
+    import base64
+
+    img = tmp_path / "chart.png"
+    img.write_bytes(b"\x89PNG\r\n\x1a\nDATA")
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        assert adapter.capabilities.supports_media is True
+        sent = await adapter.send_media(
+            "gid-1", str(img), as_photo=True, thread_id="t1", chat_kind="group"
+        )
+    finally:
+        await adapter.stop()
+    assert fake_seatalk.single_chat_calls == []  # group upload never hits single_chat
+    [(body, _auth)] = fake_seatalk.group_chat_calls
+    b64 = base64.b64encode(b"\x89PNG\r\n\x1a\nDATA").decode("ascii")
+    assert body == {
+        "group_id": "gid-1",
+        "message": {"tag": "image", "image": {"content": b64}, "thread_id": "t1"},
+    }
+    assert "thread_id" not in body  # never a top-level sibling
+    assert sent.message_id == "m1"
+
+
+async def test_send_media_non_image_posts_file_message(
+    fake_seatalk: FakeSeaTalk, tmp_path: Any
+) -> None:
+    """A non-image file is uploaded as a SeaTalk ``file`` message carrying the
+    filename and base64 content (as_photo is ignored — SeaTalk picks the tag)."""
+    import base64
+
+    doc = tmp_path / "report.pdf"
+    doc.write_bytes(b"%PDF-1.4 body")
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        await adapter.send_media("emp-1", str(doc), as_photo=True)
+    finally:
+        await adapter.stop()
+    assert fake_seatalk.group_chat_calls == []  # a direct upload uses single_chat
+    [(body, _auth)] = fake_seatalk.single_chat_calls
+    b64 = base64.b64encode(b"%PDF-1.4 body").decode("ascii")
+    assert body == {
+        "employee_code": "emp-1",
+        "message": {"tag": "file", "file": {"filename": "report.pdf", "content": b64}},
+    }
+    assert "thread_id" not in body["message"]  # no thread → no thread field
+
+
+async def test_send_media_caption_follows_as_threaded_text(
+    fake_seatalk: FakeSeaTalk, tmp_path: Any
+) -> None:
+    """A caption is sent as a following short text message, threaded the same
+    way (SeaTalk file/image messages carry no caption field)."""
+    img = tmp_path / "chart.png"
+    img.write_bytes(b"PNGDATA")
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        await adapter.send_media(
+            "gid-1", str(img), caption="here it is", thread_id="t1", chat_kind="group"
+        )
+    finally:
+        await adapter.stop()
+    bodies = [body for body, _ in fake_seatalk.group_chat_calls]
+    assert len(bodies) == 2  # file first, then the caption text
+    assert bodies[0]["message"]["tag"] == "image"
+    assert bodies[0]["message"]["thread_id"] == "t1"
+    assert bodies[1]["message"] == {
+        "tag": "text",
+        "text": {"format": 1, "content": "here it is"},
+        "thread_id": "t1",
+    }
+
+
 async def test_send_text_direct_still_uses_single_chat(fake_seatalk: FakeSeaTalk) -> None:
     adapter = make_seatalk_adapter(fake_seatalk)
     try:
