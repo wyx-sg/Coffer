@@ -168,7 +168,7 @@ building group/@mention/thread/forward support (feature/channel-group-mention-ri
 ## Channels as a management plane — build-vs-adopt & landscape (2026-07-08)
 
 Gathered while deciding whether to extend Coffer's own SeaTalk/Telegram adapters
-(FR-028…FR-042) or adopt an agent-native gateway wholesale.
+(FR-028…FR-041) or adopt an agent-native gateway wholesale.
 
 - **Build-vs-adopt decision.** Do NOT fork OpenClaw or Hermes channel code. Both
   are TypeScript/Node monorepos (MIT) whose channel layers are coupled to their
@@ -194,13 +194,19 @@ Gathered while deciding whether to extend Coffer's own SeaTalk/Telegram adapters
   IM channel at all. **SeaTalk is supported by none of them (no official
   competition for any agent).**
 
-- **Two-track channel-management-plane model.** (1) **Coffer-hosted channel** —
-  SeaTalk always, plus Telegram for the agents/uses the official bridges don't
-  cover — is the one-bot-controls-all-agents moat. (2) **Externally-hosted
-  channels** — agent-native gateways and official integrations — are managed,
-  provisioned, and surfaced by Coffer but not proxied through it, and are
-  single-agent. Coffer manages channels the same way it manages MCP servers,
-  memory, and skills.
+- **Single-track channel-management-plane model.** Coffer's channel plane
+  manages only what Coffer hosts — the **Coffer-hosted channel** (SeaTalk
+  always, plus Telegram for the agents/uses the official bridges don't cover),
+  the one-bot-controls-all-agents moat, managed the same way Coffer manages MCP
+  servers, memory, and skills. **Externally-hosted channels — agent-native
+  gateways (OpenClaw/Hermes standalone) and official integrations
+  (Claude/Codex/Cursor-in-Slack, Claude Code's official plugins) — are a
+  non-goal:** Coffer neither proxies nor manages them (stacking gateways
+  conflicts with their runtime; a token handed to an external process's config
+  defeats the vault; official cloud integrations have no local credential to
+  hold). Users set those up through the tool's own flow; Coffer's docs point the
+  way. (Earlier framing considered a second "manage external channels" track —
+  dropped as over-engineering / YAGNI.)
 
 - **North star.** One paired bot drives any managed agent, switchable per
   conversation and per thread (each thread is its own conversation, FR-032).
