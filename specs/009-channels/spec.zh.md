@@ -711,6 +711,20 @@ status / notify`。
 - **Then** 该线程的图片被下载并作为附件加入该 turn——以真实字节抵达视觉 agent，而
   不是一个失效的、需鉴权的文件链接
 
+### Scenario: each group thread is an independent conversation
+
+- **Given** 一个已配对的 channel 和一个群，其线程共享同一个 `chat_id`
+- **When** owner 在线程 A 驱动一个 turn，并在其结束前又在线程 B 驱动一个 turn
+- **Then** 这两个线程解析到两个不同的会话，两个 turn 并发运行，且都不会被以
+  "a turn is already running" 拒绝
+
+### Scenario: one bot runs different agents in different threads
+
+- **Given** 一个已配对的 channel 和一个群
+- **When** owner 把线程 A 切换到另一个 agent，而线程 B 保持 channel 默认
+- **Then** 线程 A 的会话驱动被切换后的 agent，线程 B 的会话驱动默认 agent——一个
+  bot 在不同线程运行不同 agent
+
 ## Channels as a management plane（北极星）
 
 channel 被管理的方式，与 Coffer 管理 MCP server、memory、skill 的方式一致：在一处

@@ -40,9 +40,7 @@ async def test_paired_message_runs_a_turn_and_delivers_the_reply(env: ChannelEnv
 
     conversations = await env.chat.list_conversations()
     assert len(conversations) == 1
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    assert peer.active_conversation_id == conversations[0].id
+    assert await env.active_conversation(resource) == conversations[0].id
 
     messages = await env.chat.list_messages(conversations[0].id)
     assert [(m.role, _text(m)) for m in messages] == [
@@ -150,9 +148,7 @@ async def test_dangling_active_conversation_is_recreated_on_next_message(
     # trailing fact summary is suppressed, so one text marks a finished turn.
     await env.processor.on_message(inbound("tg", "owner", "first"))
     await wait_until(lambda: len(adapter.texts()) >= 1)
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    old_conversation = peer.active_conversation_id
+    old_conversation = await env.active_conversation(resource)
     assert old_conversation is not None
 
     # The user deletes the conversation from the web UI.
@@ -161,9 +157,8 @@ async def test_dangling_active_conversation_is_recreated_on_next_message(
     await env.processor.on_message(inbound("tg", "owner", "second"))
     await wait_until(lambda: len(adapter.texts()) >= 2)
 
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    assert peer.active_conversation_id is not None
-    assert peer.active_conversation_id != old_conversation
-    messages = await env.chat.list_messages(peer.active_conversation_id)
+    fresh = await env.active_conversation(resource)
+    assert fresh is not None
+    assert fresh != old_conversation
+    messages = await env.chat.list_messages(fresh)
     assert _text(messages[0]) == "second"

@@ -28,6 +28,7 @@ from coffer.application.channel.ports import (
     ChannelBinding,
     ChannelPeer,
     ChannelPeerRepoPort,
+    ChannelThreadConversationRepoPort,
     ContextFetchPort,
     ModelSuggestionPort,
 )
@@ -69,6 +70,7 @@ class InboundProcessor:
         self,
         *,
         peers: ChannelPeerRepoPort,
+        threads: ChannelThreadConversationRepoPort,
         pairing: PairingManager,
         conversations: ConversationPort,
         turns: TurnPort,
@@ -77,6 +79,7 @@ class InboundProcessor:
         model_suggestions: ModelSuggestionPort,
     ) -> None:
         self._peers = peers
+        self._threads = threads
         self._pairing = pairing
         self._conversations = conversations
         self._turns = turns
@@ -86,7 +89,7 @@ class InboundProcessor:
         # main chat, and each of that group's threads all drain independently.
         self._sessions: dict[tuple[str, str, str], _Session] = {}
         self._commands = ChannelCommands(
-            peers=peers,
+            threads=threads,
             conversations=conversations,
             turns=turns,
             agents=agents,
@@ -94,6 +97,7 @@ class InboundProcessor:
         )
         self._turn_driver = TurnDriver(
             peers=peers,
+            threads=threads,
             conversations=conversations,
             turns=turns,
             audit=audit,

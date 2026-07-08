@@ -25,7 +25,12 @@ from coffer.application.channel.conversation_ops import (
     ensure_conversation,
     explain_conversation_error,
 )
-from coffer.application.channel.ports import ChannelBinding, ChannelPeer, ChannelPeerRepoPort
+from coffer.application.channel.ports import (
+    ChannelBinding,
+    ChannelPeer,
+    ChannelPeerRepoPort,
+    ChannelThreadConversationRepoPort,
+)
 from coffer.application.channel.turn_render import TurnRenderer
 from coffer.domain.audit import AuditEventType
 from coffer.domain.chat.agent_config import AgentConfig
@@ -113,6 +118,7 @@ class TurnDriver:
         self,
         *,
         peers: ChannelPeerRepoPort,
+        threads: ChannelThreadConversationRepoPort,
         conversations: ConversationPort,
         turns: TurnPort,
         audit: AuditService,
@@ -120,6 +126,7 @@ class TurnDriver:
         session: SessionAccessor,
     ) -> None:
         self._peers = peers
+        self._threads = threads
         self._conversations = conversations
         self._turns = turns
         self._audit = audit
@@ -160,7 +167,7 @@ class TurnDriver:
         adapter = binding.adapter
         try:
             conversation_id = await ensure_conversation(
-                self._conversations, self._peers, binding, peer
+                self._conversations, self._threads, binding, peer, thread_id
             )
         except CofferError as e:
             # e.g. the channel's default agent is unknown/misconfigured — the

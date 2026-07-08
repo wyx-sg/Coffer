@@ -46,10 +46,8 @@ async def test_agent_card_tap_switches_and_sticks(env: ChannelEnv) -> None:
     await env.processor.on_callback(tap_event("tg", "owner", "agent:codex"))
     await wait_until(lambda: True)
 
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    assert peer.preferred_agent == "codex"
-    conv = await env.chat.get_conversation(peer.active_conversation_id)
+    assert await env.thread_preferred_agent(resource) == "codex"
+    conv = await env.chat.get_conversation(await env.active_conversation(resource))
     assert conv.agent_key == "codex"
 
 
@@ -59,9 +57,7 @@ async def test_agent_card_tap_rejects_unknown_key(env: ChannelEnv) -> None:
     await env.processor.on_callback(tap_event("tg", "owner", "agent:ghost"))
 
     assert any("ghost" in t for t in adapter.texts())
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    assert peer.preferred_agent is None  # unchanged
+    assert await env.thread_preferred_agent(resource) is None  # unchanged
 
 
 # -- /model card ---------------------------------------------------------------
@@ -93,9 +89,7 @@ async def test_model_card_tap_sets_next_turn_model(env: ChannelEnv) -> None:
 
     await env.processor.on_callback(tap_event("tg", "owner", "model:claude-opus-4-8"))
 
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    cfg = await env.chat.get_agent_config(peer.active_conversation_id)
+    cfg = await env.chat.get_agent_config(await env.active_conversation(resource))
     assert cfg.model == "claude-opus-4-8"
 
 
@@ -110,9 +104,7 @@ async def test_non_owner_tap_is_ignored(env: ChannelEnv) -> None:
     # Right chat, wrong member — the tap must not flip the owner's agent.
     await env.processor.on_callback(tap_event("tg", "owner", "agent:codex", sender_id="intruder-9"))
 
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    assert peer.preferred_agent is None
+    assert await env.thread_preferred_agent(resource) is None
 
 
 async def test_tap_from_unbound_channel_is_ignored(env: ChannelEnv) -> None:

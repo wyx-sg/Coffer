@@ -24,7 +24,10 @@ from coffer.application.credentials.resolver import CredentialResolver
 from coffer.domain.channel.config import parse_channel_config
 from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.channel.listener_spawn import CallbackListenerController
-from coffer.infrastructure.channel.persistence import ChannelPeerRepo
+from coffer.infrastructure.channel.persistence import (
+    ChannelPeerRepo,
+    ChannelThreadConversationRepo,
+)
 from coffer.infrastructure.channel.seatalk import SeaTalkAdapter
 from coffer.infrastructure.channel.telegram import TelegramAdapter
 from coffer.infrastructure.channel.tunnel_spawn import TunnelController
@@ -78,9 +81,11 @@ def wire_channel_kind(
     credential_store: Any = None,
 ) -> ChannelRuntime:
     peers = ChannelPeerRepo(sm)
+    threads = ChannelThreadConversationRepo(sm)
     pairing = PairingManager()
     processor = InboundProcessor(
         peers=peers,
+        threads=threads,
         pairing=pairing,
         conversations=get_chat_service(),
         turns=get_turn_orchestrator(),
