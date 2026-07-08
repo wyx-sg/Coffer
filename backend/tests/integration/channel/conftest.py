@@ -117,9 +117,24 @@ def inbound(
     )
 
 
-def tap_event(channel: str, chat_id: str, data: str, *, sender_id: str = "") -> InboundCallback:
+def tap_event(
+    channel: str,
+    chat_id: str,
+    data: str,
+    *,
+    sender_id: str = "",
+    chat_kind: str = "direct",
+    thread_id: str = "",
+) -> InboundCallback:
     """A selection-card button tap, for driving ``processor.on_callback``."""
-    return InboundCallback(channel=channel, chat_id=chat_id, sender_id=sender_id, data=data)
+    return InboundCallback(
+        channel=channel,
+        chat_id=chat_id,
+        sender_id=sender_id,
+        data=data,
+        chat_kind=chat_kind,
+        thread_id=thread_id,
+    )
 
 
 # ---------------------------------------------------------------------------

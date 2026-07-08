@@ -283,12 +283,41 @@ class InboundProcessor:
         binding = self._bindings.get(cb.channel)
         if binding is None:
             return
-        peer = await self._peers.get(binding.resource_id)
-        if peer is None or peer.chat_id != cb.chat_id:
-            return
-        if peer.sender_id is not None and cb.sender_id and peer.sender_id != cb.sender_id:
-            return
-        await self._commands.dispatch_callback(binding, peer, cb.data, self._safe_send)
+        if cb.chat_kind == "group":
+            # A group card is shared, exactly like a group @mention: prove the
+            # tapper is the channel owner (never fall through on an empty
+            # sender_id) and route the refusal back into the group/thread, not a
+            # DM. A tap never bootstraps a group peer row — only the owner's
+            # first @mention does — so an unrecorded group is ignored silently.
+            owner = await self._peers.owner_sender_id(binding.resource_id)
+            if owner is None:
+                return
+            if not cb.sender_id or cb.sender_id != owner:
+                await self._safe_send(
+                    binding,
+                    cb.chat_id,
+                    "🚫 Not authorized — only this channel's owner can use me here.",
+                    thread_id=cb.thread_id,
+                    chat_kind="group",
+                )
+                return
+            peer = await self._peers.get_by_chat(binding.resource_id, cb.chat_id)
+            if peer is None:
+                return
+        else:
+            peer = await self._peers.get_by_chat(binding.resource_id, cb.chat_id)
+            if peer is None:
+                return
+            if peer.sender_id is not None and cb.sender_id and peer.sender_id != cb.sender_id:
+                return
+        await self._commands.dispatch_callback(
+            binding,
+            peer,
+            cb.data,
+            self._safe_send,
+            chat_kind=cb.chat_kind,
+            thread_id=cb.thread_id,
+        )
 
     # -- pairing -----------------------------------------------------------
 

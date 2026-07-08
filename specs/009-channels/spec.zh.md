@@ -602,6 +602,14 @@ status / notify`。
 - **When** 该 chat 里的另一个成员点选一个选择卡片按钮
 - **Then** 该点选被忽略，owner 的 agent/model 不变
 
+### Scenario: a group selection-card tap replies in the group/thread
+
+- **Given** 一个在支持按钮的传输上、带有群 peer、且注册了第二个 agent 的已配对
+  channel
+- **When** owner 在群的某个 thread 里点选 `/agent` 选择卡片按钮
+- **Then** 切换被应用到该群 thread，且"已切换"的确认消息被路由回该群/thread
+  （绝不发到 DM）；非 owner 的点选会收到一条被路由的"未授权"拒绝回复且不发生切换
+
 ### Scenario: a channel-driven turn is audited with channel, peer, and agent
 
 - **Given** 一个已配对 channel

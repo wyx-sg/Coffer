@@ -174,15 +174,25 @@ class SeaTalkAdapter:
             return
         elif event_type == "interactive_message_click" and self._callbacks.on_callback is not None:
             # A selection-card button tap; the custom ``value`` we set on the
-            # button comes back here (research.md). DMs are 1:1 so the sender is
-            # the employee_code — the core owner-gates on it.
+            # button comes back here (research.md). A group card tap arrives with
+            # a ``group_id`` (mirroring the group @mention event), a DM tap
+            # without one — derive the chat_kind from that so the core routes the
+            # reply back into the group/thread and owner-gates on the right peer
+            # (FR-034). DMs are 1:1 so the sender IS the employee_code; a group
+            # tap carries the tapper under ``sender`` (like the @mention event),
+            # falling back to a top-level employee_code.
+            group_id = str(event.get("group_id", ""))
+            sender = event.get("sender") or {}
+            sender_id = str(sender.get("employee_code", "") or event.get("employee_code", ""))
             await self._callbacks.on_callback(
                 InboundCallback(
                     channel=self._name,
-                    chat_id=str(event.get("employee_code", "")),
-                    sender_id=str(event.get("employee_code", "")),
+                    chat_id=group_id or str(event.get("employee_code", "")),
+                    sender_id=sender_id,
                     data=str(event.get("value", "")),
                     platform_message_id=str(event.get("message_id", "")),
+                    chat_kind="group" if group_id else "direct",
+                    thread_id=str(event.get("thread_id", "")),
                 )
             )
 

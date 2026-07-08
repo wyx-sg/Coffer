@@ -358,6 +358,46 @@ async def test_callback_query_routes_to_on_callback_and_acks(
     assert fake_telegram.calls_for("answerCallbackQuery")[0] == {"callback_query_id": "cbq-1"}
     # The poll must subscribe to callback_query, else Telegram never delivers taps.
     assert "callback_query" in fake_telegram.calls_for("getUpdates")[0]["allowed_updates"]
+    # A tap whose card sits in a private chat routes as a direct reply.
+    assert cb.chat_kind == "direct"
+    assert cb.thread_id == ""
+
+
+async def test_callback_query_from_supergroup_routes_as_group_callback(
+    fake_telegram: FakeTelegram,
+) -> None:
+    """FR-034: a card tapped in a supergroup forum topic yields a group callback
+    (chat_kind="group" + the topic's message_thread_id) so the switch reply
+    lands back in the group thread, not a DM."""
+    adapter = make_telegram_adapter(fake_telegram)
+    recorder = RecordingCallbacks()
+    await fake_telegram.update_batches.put(
+        [
+            {
+                "update_id": 21,
+                "callback_query": {
+                    "id": "cbq-2",
+                    "from": {"id": 4242, "first_name": "Yu"},
+                    "data": "agent:codex",
+                    "message": {
+                        "message_id": 88,
+                        "chat": {"id": 777, "type": "supergroup"},
+                        "message_thread_id": 9,
+                    },
+                },
+            }
+        ]
+    )
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await wait_until(lambda: len(recorder.callbacks) == 1)
+    finally:
+        await adapter.stop()
+
+    cb = recorder.callbacks[0]
+    assert (cb.chat_id, cb.data) == ("777", "agent:codex")
+    assert cb.chat_kind == "group"
+    assert cb.thread_id == "9"
 
 
 async def test_buttons_ride_only_the_final_chunk(fake_telegram: FakeTelegram) -> None:

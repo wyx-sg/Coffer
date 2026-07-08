@@ -503,6 +503,45 @@ async def test_interactive_message_click_routes_to_on_callback(fake_seatalk: Fak
         "agent:codex",
     )
     assert cb.platform_message_id == "card-9"
+    # A DM tap carries no group_id → routes as a direct reply, no thread.
+    assert cb.chat_kind == "direct"
+    assert cb.thread_id == ""
+
+
+async def test_interactive_message_click_in_group_routes_as_group_callback(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """FR-034: a card tapped in a GROUP arrives with a ``group_id`` (mirroring
+    the group @mention event) and the tapper under ``sender`` — the adapter
+    normalizes it to a group callback (chat_kind="group", chat_id=group_id,
+    thread_id set, sender_id = the tapper's employee_code) so the core
+    owner-gates and replies in the group thread, not a DM."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(
+            {
+                "event_type": "interactive_message_click",
+                "timestamp": 1718000000,
+                "event": {
+                    "group_id": "gid-1",
+                    "thread_id": "t-7",
+                    "sender": {"employee_code": "emp-2", "email": "sender@shopee.com"},
+                    "value": "agent:codex",
+                    "message_id": "card-9",
+                },
+            }
+        )
+    finally:
+        await adapter.stop()
+    [cb] = recorder.callbacks
+    assert cb.chat_kind == "group"
+    assert cb.chat_id == "gid-1"
+    assert cb.thread_id == "t-7"
+    assert cb.sender_id == "emp-2"
+    assert cb.data == "agent:codex"
+    assert cb.platform_message_id == "card-9"
 
 
 # -- context fetch (Task 5) ---------------------------------------------------
