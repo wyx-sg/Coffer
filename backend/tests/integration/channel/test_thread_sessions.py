@@ -60,21 +60,14 @@ async def test_same_chat_different_threads_get_separate_sessions(env: ChannelEnv
     assert {key[2] for key in keys} == {"t1", "t2"}
 
 
-async def test_ensure_conversation_sets_active_conversation_on_the_matching_chat_row(
+async def test_ensure_conversation_sets_active_conversation_on_the_matching_thread_row(
     env: ChannelEnv,
 ) -> None:
-    """``set_active_conversation`` is scoped to the peer's own chat row: with
-    multiple peers paired to the same channel resource (a DM plus a group),
-    opening a conversation for one must not disturb the other's."""
+    """``ensure_conversation`` binds the conversation to the per-thread row
+    keyed ``(resource_id, chat_id, thread_id)`` (FR-032): opening one thread's
+    conversation must not disturb another chat's/thread's."""
     resource = await env.register_channel("tg")
     env.bind(resource)
-    dm = ChannelPeer(
-        resource_id=resource.id,
-        chat_id="dm-1",
-        display_name="Owner",
-        paired_at=datetime.now(tz=UTC),
-        active_conversation_id=None,
-    )
     group = ChannelPeer(
         resource_id=resource.id,
         chat_id="group-1",
@@ -82,17 +75,15 @@ async def test_ensure_conversation_sets_active_conversation_on_the_matching_chat
         paired_at=datetime.now(tz=UTC),
         active_conversation_id=None,
     )
-    await env.peers.upsert(dm)
     await env.peers.upsert(group)
 
     binding = env.processor.binding("tg")
     assert binding is not None
-    conversation_id = await ensure_conversation(env.chat, env.peers, binding, group)
+    conversation_id = await ensure_conversation(env.chat, env.threads, binding, group, "")
 
-    updated_group = await env.peers.get_by_chat(resource.id, "group-1")
-    assert updated_group is not None
-    assert updated_group.active_conversation_id == conversation_id
+    bound = await env.threads.get(resource.id, "group-1", "")
+    assert bound is not None
+    assert bound.active_conversation_id == conversation_id
 
-    untouched_dm = await env.peers.get_by_chat(resource.id, "dm-1")
-    assert untouched_dm is not None
-    assert untouched_dm.active_conversation_id is None
+    # A different chat's DM thread has no binding conjured for it.
+    assert await env.threads.get(resource.id, "dm-1", "") is None

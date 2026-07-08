@@ -27,10 +27,8 @@ async def test_agent_switch_opens_new_conversation_and_sticks(env: ChannelEnv) -
     await env.processor.on_message(inbound("tg", "owner", "/agent codex"))
     await wait_until(lambda: any("codex" in t.lower() for t in adapter.texts()))
 
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    assert peer.preferred_agent == "codex"
-    conv = await env.chat.get_conversation(peer.active_conversation_id)
+    assert await env.thread_preferred_agent(resource) == "codex"
+    conv = await env.chat.get_conversation(await env.active_conversation(resource))
     assert conv.agent_key == "codex"
 
     # The next message is answered by the chosen agent.
@@ -47,9 +45,7 @@ async def test_agent_rejects_unknown_key(env: ChannelEnv) -> None:
     reply = adapter.texts()[-1]
     assert "nope" in reply
     assert "builtin" in reply  # lists valid keys
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    assert peer.preferred_agent is None  # unchanged
+    assert await env.thread_preferred_agent(resource) is None  # unchanged
 
 
 # -- /new + /status honor sticky choices ---------------------------------------
@@ -64,9 +60,7 @@ async def test_new_reuses_sticky_agent(env: ChannelEnv) -> None:
     await wait_until(lambda: adapter.texts())
     await env.processor.on_message(inbound("tg", "owner", "/new"))
 
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    conv = await env.chat.get_conversation(peer.active_conversation_id)
+    conv = await env.chat.get_conversation(await env.active_conversation(resource))
     assert conv.agent_key == "codex"  # /new kept the sticky agent
 
 
@@ -92,9 +86,7 @@ async def test_model_switch_for_bridged_agent_passes_through_to_agent_config(
     await env.processor.on_message(inbound("tg", "owner", "/model gpt-5-codex"))
     await wait_until(lambda: any("gpt-5-codex" in t for t in adapter.texts()))
 
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    cfg = await env.chat.get_agent_config(peer.active_conversation_id)
+    cfg = await env.chat.get_agent_config(await env.active_conversation(resource))
     assert cfg.model == "gpt-5-codex"  # bridged → raw passthrough
 
 

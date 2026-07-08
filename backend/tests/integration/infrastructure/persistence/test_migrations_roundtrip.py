@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0040"
+HEAD_REVISION = "0041"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -71,7 +71,10 @@ HEAD_REVISION = "0040"
 # 0038 ADDs the ``distilled_sessions`` table — the auto-distill catch-up sweep
 # idempotency ledger (007 FR-046) — present at head; its downgrade drops it.
 # 0039 ADDs the ``internal_engine_config`` singleton (spec 011 amendment) —
-# present at head; its downgrade drops it.
+# present at head; its downgrade drops it. 0041 ADDs
+# ``channel_thread_conversations`` (spec 009 FR-032: per-thread conversation
+# identity) and backfills each peer's DM row — present at head; its downgrade
+# drops it (asserted stepwise just below head).
 # The ``documents_fts_*`` shadow
 # tables FTS5 creates under the hood are excluded — the assertions speak to the
 # logical schema.
@@ -95,6 +98,7 @@ EXPECTED_TABLES = {
     "conversations",
     "chat_messages",
     "channel_peers",
+    "channel_thread_conversations",
     "sync_config",
     "sync_state",
 }
@@ -628,11 +632,15 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     cfg = _alembic_config()
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
+    # 0041 adds channel_thread_conversations (spec 009 FR-032); present at head,
+    # dropped by its downgrade just below head.
+    assert "channel_thread_conversations" in _user_tables(db_path)
     # 0039 adds internal_engine_config + 0038 adds the distilled_sessions ledger;
     # both present at head, both dropped by their downgrades on the way to 0037.
     assert "internal_engine_config" in _user_tables(db_path)
     assert "distilled_sessions" in _user_tables(db_path)
     command.downgrade(cfg, "0037")
+    assert "channel_thread_conversations" not in _user_tables(db_path)
     assert "internal_engine_config" not in _user_tables(db_path)
     assert "distilled_sessions" not in _user_tables(db_path)
     # 0024 drops memory_projection_bindings, so it is absent at head; its
@@ -687,6 +695,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         "memory_store_labels",
         "distilled_sessions",
         "internal_engine_config",
+        "channel_thread_conversations",
     }
 
     # 0025 -> 0024: 0025's downgrade drops documents.locked (column-only).
@@ -696,6 +705,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         "memory_store_labels",
         "distilled_sessions",
         "internal_engine_config",
+        "channel_thread_conversations",
     }
 
     # 0024 -> 0023: 0024's downgrade recreates memory_projection_bindings,
@@ -747,6 +757,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         "memory_store_labels",
         "distilled_sessions",
         "internal_engine_config",
+        "channel_thread_conversations",
     }
 
     # 0012 -> 0011: drops the chat tables (spec 008-agent-chat).
@@ -762,6 +773,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         "memory_store_labels",
         "distilled_sessions",
         "internal_engine_config",
+        "channel_thread_conversations",
     }
 
     # 0011 -> 0010: drops embedding_config (global embedding singleton).
@@ -808,6 +820,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         "skill_agent_bindings",
         "distilled_sessions",
         "internal_engine_config",
+        "channel_thread_conversations",
         "documents",
         "chunks",
         "documents_fts",

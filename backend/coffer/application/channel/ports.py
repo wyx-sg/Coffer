@@ -151,6 +151,54 @@ class ChannelPeerRepoPort(Protocol):
     ) -> None: ...
 
 
+@dataclass(frozen=True)
+class ChannelThreadConversation:
+    """The per-thread conversation binding (one row in
+    ``channel_thread_conversations``): conversation identity is keyed by
+    ``(resource_id, chat_id, thread_id)`` (FR-032), not by the peer alone.
+
+    ``thread_id=""`` is the DM (or a group's main chat); each thread in a group
+    is an independent row with its own active conversation and its own sticky
+    agent. Pairing/owner identity stays on ``ChannelPeer`` — this binding only
+    owns the conversation a turn drives and the agent it opens with."""
+
+    resource_id: int
+    chat_id: str
+    thread_id: str
+    active_conversation_id: str | None
+    # Sticky structural choice for THIS thread: which agent new conversations
+    # use. ``None`` means fall back to the channel default.
+    preferred_agent: str | None
+    updated_at: datetime
+
+
+class ChannelThreadConversationRepoPort(Protocol):
+    """Persistence for per-thread conversation bindings (FR-032).
+
+    The source of truth for driving a turn: which conversation a
+    ``(resource_id, chat_id, thread_id)`` resolves to, and the sticky agent it
+    opens with. Two threads of one group therefore never collide on a single
+    conversation (the "a turn is already running" error)."""
+
+    async def get(
+        self, resource_id: int, chat_id: str, thread_id: str
+    ) -> ChannelThreadConversation | None: ...
+
+    async def set_active_conversation(
+        self, resource_id: int, chat_id: str, thread_id: str, conversation_id: str | None
+    ) -> None:
+        """Upsert the thread's active conversation, leaving ``preferred_agent``
+        untouched (creating the row if this thread has none yet)."""
+        ...
+
+    async def set_preferred_agent(
+        self, resource_id: int, chat_id: str, thread_id: str, preferred_agent: str | None
+    ) -> None:
+        """Upsert the thread's sticky agent, leaving ``active_conversation_id``
+        untouched (creating the row if this thread has none yet)."""
+        ...
+
+
 class AgentCatalogPort(Protocol):
     """The slice of the agent registry the channel core needs to route by key:
     list the available agents and validate a chosen key. Satisfied structurally

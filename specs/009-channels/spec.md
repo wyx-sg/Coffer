@@ -813,6 +813,22 @@ status / notify`.
 - **Then** the thread's images are downloaded and attached to the turn — reaching
   the vision agent as real bytes, not a dead auth-gated file link
 
+### Scenario: each group thread is an independent conversation
+
+- **Given** a paired channel and a group whose threads share one `chat_id`
+- **When** the owner drives a turn in thread A and, before it finishes, a turn
+  in thread B
+- **Then** the two threads resolve to two different conversations, both turns
+  run concurrently, and neither is refused with "a turn is already running"
+
+### Scenario: one bot runs different agents in different threads
+
+- **Given** a paired channel and a group
+- **When** the owner switches thread A to a different agent and leaves thread B
+  on the channel default
+- **Then** thread A's conversation drives the switched agent and thread B's
+  drives the default — one bot running different agents per thread
+
 ## Channels as a management plane (north star)
 
 Channels are managed the way Coffer manages MCP servers, memory, and skills:

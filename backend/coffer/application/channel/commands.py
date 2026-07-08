@@ -21,7 +21,7 @@ from coffer.application.channel.ports import (
     AgentCatalogPort,
     ChannelBinding,
     ChannelPeer,
-    ChannelPeerRepoPort,
+    ChannelThreadConversationRepoPort,
     ModelSuggestionPort,
 )
 from coffer.domain.channel.envelopes import ChoiceButton
@@ -70,13 +70,13 @@ class ChannelCommands:
     def __init__(
         self,
         *,
-        peers: ChannelPeerRepoPort,
+        threads: ChannelThreadConversationRepoPort,
         conversations: Any,
         turns: Any,
         agents: AgentCatalogPort,
         model_suggestions: ModelSuggestionPort,
     ) -> None:
-        self._peers = peers
+        self._threads = threads
         self._conversations = conversations
         self._turns = turns
         self._agents = agents
@@ -114,11 +114,13 @@ class ChannelCommands:
                 binding, peer, text, send, chat_kind=chat_kind, thread_id=thread_id
             )
         elif command == "/stop":
-            # The turn that is actually draining wins over the peer's bound
-            # conversation: after ``/new`` rebinds the peer, a turn can still be
+            # The turn that is actually draining wins over the thread's bound
+            # conversation: after ``/new`` rebinds the thread, a turn can still be
             # running on the previous conversation. Stopping the bound (idle)
             # conversation would claim "Stopping…" while the real turn runs on.
-            target = session.running_conversation_id or peer.active_conversation_id
+            row = await self._threads.get(binding.resource_id, peer.chat_id, thread_id)
+            bound = row.active_conversation_id if row is not None else None
+            target = session.running_conversation_id or bound
             if target is not None:
                 self._turns.interrupt_turn(target)
                 await send(
@@ -134,8 +136,9 @@ class ChannelCommands:
                 )
         elif command == "/status":
             running = session.drain_task is not None and not session.drain_task.done()
-            conv = peer.active_conversation_id or "none yet"
-            agent = peer.preferred_agent or binding.default_agent
+            row = await self._threads.get(binding.resource_id, peer.chat_id, thread_id)
+            conv = (row.active_conversation_id if row is not None else None) or "none yet"
+            agent = (row.preferred_agent if row is not None else None) or binding.default_agent
             await send(
                 binding,
                 peer.chat_id,
@@ -168,7 +171,8 @@ class ChannelCommands:
         parts = text.split()
         keys = self._agents.agent_keys()
         if len(parts) < 2:
-            current = peer.preferred_agent or binding.default_agent
+            row = await self._threads.get(binding.resource_id, peer.chat_id, thread_id)
+            current = (row.preferred_agent if row is not None else None) or binding.default_agent
             if binding.adapter.capabilities.supports_buttons:
                 buttons = [
                     ChoiceButton(
@@ -219,12 +223,13 @@ class ChannelCommands:
         thread_id: str = "",
     ) -> None:
         """The structural switch to ``key`` (assumes ``key`` already validated):
-        stick it on the peer and open a fresh conversation. Shared by the text
-        ``/agent <key>`` path and a card tap."""
-        await self._peers.set_preferences(binding.resource_id, preferred_agent=key)
+        stick it on THIS thread and open a fresh conversation for it (FR-032/040
+        — a different thread of the same group can run a different agent). Shared
+        by the text ``/agent <key>`` path and a card tap."""
+        await self._threads.set_preferred_agent(binding.resource_id, peer.chat_id, thread_id, key)
         await self._open_and_report(
             binding,
-            replace(peer, preferred_agent=key),
+            peer,
             send,
             f"🔀 Switched to agent '{key}'.",
             chat_kind=chat_kind,
@@ -245,7 +250,7 @@ class ChannelCommands:
     ) -> None:
         try:
             conversation_id = await ensure_conversation(
-                self._conversations, self._peers, binding, peer
+                self._conversations, self._threads, binding, peer, thread_id
             )
         except CofferError as e:
             await send(
@@ -264,7 +269,10 @@ class ChannelCommands:
             cfg = await self._conversations.get_agent_config(conversation_id)
             current = cfg.model or "(CLI default)"
             if binding.adapter.capabilities.supports_buttons:
-                agent_key = peer.preferred_agent or binding.default_agent
+                row = await self._threads.get(binding.resource_id, peer.chat_id, thread_id)
+                agent_key = (
+                    row.preferred_agent if row is not None else None
+                ) or binding.default_agent
                 picks = await self._model_suggestions.suggest(agent_key)
                 buttons = [
                     ChoiceButton(
@@ -312,7 +320,7 @@ class ChannelCommands:
         text ``/model <name>`` path and a card tap."""
         try:
             conversation_id = await ensure_conversation(
-                self._conversations, self._peers, binding, peer
+                self._conversations, self._threads, binding, peer, thread_id
             )
         except CofferError as e:
             await send(
@@ -369,7 +377,7 @@ class ChannelCommands:
         thread_id: str = "",
     ) -> None:
         try:
-            await open_conversation(self._conversations, self._peers, binding, peer)
+            await open_conversation(self._conversations, self._threads, binding, peer, thread_id)
         except CofferError as e:
             await send(
                 binding,

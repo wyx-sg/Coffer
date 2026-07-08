@@ -16,7 +16,11 @@ from coffer.domain.chat.errors import ConversationNotFound
 from coffer.domain.errors import CofferError
 
 if TYPE_CHECKING:
-    from coffer.application.channel.ports import ChannelBinding, ChannelPeer, ChannelPeerRepoPort
+    from coffer.application.channel.ports import (
+        ChannelBinding,
+        ChannelPeer,
+        ChannelThreadConversationRepoPort,
+    )
 
 
 class _ConversationPort(Protocol):
@@ -35,16 +39,22 @@ class _ConversationPort(Protocol):
 
 async def open_conversation(
     conversations: _ConversationPort,
-    peers: ChannelPeerRepoPort,
+    threads: ChannelThreadConversationRepoPort,
     binding: ChannelBinding,
     peer: ChannelPeer,
+    thread_id: str = "",
 ) -> str:
-    """Create a conversation from the peer's sticky choices + channel defaults
-    (resolver) and make it the peer's active conversation."""
+    """Create a conversation from this thread's sticky choices + channel
+    defaults (resolver) and make it the thread's active conversation (FR-032).
+
+    Conversation identity is per ``(resource_id, chat_id, thread_id)`` — a DM
+    (``thread_id=""``) and each group thread open independently, so concurrent
+    turns in different threads never collide on one conversation."""
+    row = await threads.get(binding.resource_id, peer.chat_id, thread_id)
     spec = resolve_conversation_spec(
         default_agent=binding.default_agent,
         default_agent_config=binding.default_agent_config,
-        preferred_agent=peer.preferred_agent,
+        preferred_agent=row.preferred_agent if row is not None else None,
     )
     conv = await conversations.create_conversation(
         agent_key=spec.agent_key,
@@ -53,25 +63,27 @@ async def open_conversation(
         channel_name=binding.name,
         peer_chat_id=peer.chat_id,
     )
-    await peers.set_active_conversation(binding.resource_id, peer.chat_id, conv.id)
+    await threads.set_active_conversation(binding.resource_id, peer.chat_id, thread_id, conv.id)
     return str(conv.id)
 
 
 async def ensure_conversation(
     conversations: _ConversationPort,
-    peers: ChannelPeerRepoPort,
+    threads: ChannelThreadConversationRepoPort,
     binding: ChannelBinding,
     peer: ChannelPeer,
+    thread_id: str = "",
 ) -> str:
-    """Return the peer's active conversation, recreating it if it was deleted."""
-    if peer.active_conversation_id is not None:
+    """Return this thread's active conversation, recreating it if it was deleted."""
+    row = await threads.get(binding.resource_id, peer.chat_id, thread_id)
+    if row is not None and row.active_conversation_id is not None:
         try:
-            await conversations.get_conversation(peer.active_conversation_id)
+            await conversations.get_conversation(row.active_conversation_id)
         except ConversationNotFound:
             pass
         else:
-            return peer.active_conversation_id
-    return await open_conversation(conversations, peers, binding, peer)
+            return row.active_conversation_id
+    return await open_conversation(conversations, threads, binding, peer, thread_id)
 
 
 def explain_conversation_error(e: CofferError) -> str:

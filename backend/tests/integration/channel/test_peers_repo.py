@@ -193,6 +193,70 @@ async def test_owner_sender_id_none_for_unknown_resource(env: ChannelEnv) -> Non
 
 
 # ---------------------------------------------------------------------------
+# ChannelThreadConversationRepo (per-thread conversation identity, FR-032)
+# ---------------------------------------------------------------------------
+
+
+async def test_thread_repo_unknown_returns_none(env: ChannelEnv) -> None:
+    resource = await env.register_channel("tg")
+    assert await env.threads.get(resource.id, "grp-1", "th-1") is None
+
+
+async def test_thread_repo_set_active_conversation_upserts(env: ChannelEnv) -> None:
+    resource = await env.register_channel("tg")
+    await env.threads.set_active_conversation(resource.id, "grp-1", "th-1", "conv-1")
+    row = await env.threads.get(resource.id, "grp-1", "th-1")
+    assert row is not None
+    assert row.active_conversation_id == "conv-1"
+    assert row.preferred_agent is None
+    assert row.thread_id == "th-1"
+
+    # A second set updates the same row in place (not a duplicate).
+    await env.threads.set_active_conversation(resource.id, "grp-1", "th-1", "conv-2")
+    row = await env.threads.get(resource.id, "grp-1", "th-1")
+    assert row is not None
+    assert row.active_conversation_id == "conv-2"
+
+
+async def test_thread_repo_set_preferred_agent_preserves_conversation(env: ChannelEnv) -> None:
+    """Setting the sticky agent must not clobber the thread's active
+    conversation, and vice versa — each upsert touches one field."""
+    resource = await env.register_channel("tg")
+    await env.threads.set_active_conversation(resource.id, "grp-1", "th-1", "conv-1")
+    await env.threads.set_preferred_agent(resource.id, "grp-1", "th-1", "codex")
+
+    row = await env.threads.get(resource.id, "grp-1", "th-1")
+    assert row is not None
+    assert row.active_conversation_id == "conv-1"  # untouched by the agent set
+    assert row.preferred_agent == "codex"
+
+
+async def test_thread_repo_threads_are_independent(env: ChannelEnv) -> None:
+    """Same group (chat_id), two threads → two independent rows."""
+    resource = await env.register_channel("tg")
+    await env.threads.set_active_conversation(resource.id, "grp-1", "th-A", "conv-a")
+    await env.threads.set_active_conversation(resource.id, "grp-1", "th-B", "conv-b")
+
+    row_a = await env.threads.get(resource.id, "grp-1", "th-A")
+    row_b = await env.threads.get(resource.id, "grp-1", "th-B")
+    assert row_a is not None and row_a.active_conversation_id == "conv-a"
+    assert row_b is not None and row_b.active_conversation_id == "conv-b"
+
+
+async def test_thread_repo_dm_is_the_empty_thread(env: ChannelEnv) -> None:
+    """The DM (or a group's main chat) is ``thread_id=""`` — distinct from a
+    thread of the same chat."""
+    resource = await env.register_channel("tg")
+    await env.threads.set_active_conversation(resource.id, "owner", "", "conv-dm")
+    await env.threads.set_active_conversation(resource.id, "owner", "th-1", "conv-th")
+
+    dm = await env.threads.get(resource.id, "owner", "")
+    thread = await env.threads.get(resource.id, "owner", "th-1")
+    assert dm is not None and dm.active_conversation_id == "conv-dm"
+    assert thread is not None and thread.active_conversation_id == "conv-th"
+
+
+# ---------------------------------------------------------------------------
 # Migration 20260612_0015 (same alembic harness as the persistence tests)
 # ---------------------------------------------------------------------------
 
@@ -246,5 +310,73 @@ def test_migration_0015_creates_channel_peers(tmp_path, monkeypatch):  # type: i
             row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
         assert "channel_peers" not in tables
+    finally:
+        conn.close()
+
+
+def test_migration_0041_creates_thread_table_and_backfills_dm(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
+    """0041 (FR-032) creates ``channel_thread_conversations`` and backfills each
+    existing peer as its ``thread_id=""`` row, carrying the peer's active
+    conversation + sticky agent so no in-flight DM conversation is lost."""
+    db_path = tmp_path / "migrate_threads.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = AlembicConfig(str(_ALEMBIC_INI))
+
+    # Schema as of just before the new migration; seed a paired peer whose DM
+    # already has an active conversation and a sticky agent.
+    command.upgrade(cfg, "0040")
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute(
+            "INSERT INTO resources (kind, name, config_json, enabled, created_at, updated_at) "
+            "VALUES ('channel', 'tg', '{}', 1, '2026-07-08', '2026-07-08')"
+        )
+        conn.execute(
+            "INSERT INTO channel_peers "
+            "(resource_id, chat_id, display_name, paired_at, active_conversation_id, "
+            "sender_id, preferred_agent) "
+            "VALUES (1, 'owner', 'Owner', '2026-07-08T00:00:00+00:00', 'conv-dm', 'u-1', 'codex')"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    command.upgrade(cfg, "head")
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(channel_thread_conversations)")
+        }
+        assert columns == {
+            "id",
+            "resource_id",
+            "chat_id",
+            "thread_id",
+            "active_conversation_id",
+            "preferred_agent",
+            "updated_at",
+        }
+        rows = conn.execute(
+            "SELECT resource_id, chat_id, thread_id, active_conversation_id, preferred_agent "
+            "FROM channel_thread_conversations"
+        ).fetchall()
+        # The DM conversation is backfilled as the thread_id="" row.
+        assert rows == [(1, "owner", "", "conv-dm", "codex")]
+        indexes = {
+            row[1] for row in conn.execute("PRAGMA index_list(channel_thread_conversations)")
+        }
+        assert "idx_channel_thread_conv_resource" in indexes
+    finally:
+        conn.close()
+
+    # The downgrade drops the table (reversible chain).
+    command.downgrade(cfg, "0040")
+    conn = sqlite3.connect(str(db_path))
+    try:
+        tables = {
+            row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+        assert "channel_thread_conversations" not in tables
     finally:
         conn.close()

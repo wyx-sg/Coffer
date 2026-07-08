@@ -51,7 +51,10 @@ from coffer.domain.channel.envelopes import (
 from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.domain.chat.events import TextDelta, TurnDone, TurnStarted
 from coffer.domain.resource import Resource, ResourceRef
-from coffer.infrastructure.channel.persistence import ChannelPeerRepo
+from coffer.infrastructure.channel.persistence import (
+    ChannelPeerRepo,
+    ChannelThreadConversationRepo,
+)
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
@@ -342,6 +345,7 @@ class ChannelEnv:
     keyring: FakeKeyring
     resources: ResourceService
     peers: ChannelPeerRepo
+    threads: ChannelThreadConversationRepo
     pairing: PairingManager
     provider: ScriptedAgentProvider
     registry: AgentProviderRegistry
@@ -414,6 +418,21 @@ class ChannelEnv:
         await self.pair(resource, chat_id, sender_id=sender_id)
         return resource, adapter
 
+    async def active_conversation(
+        self, resource: Resource, chat_id: str = "owner", thread_id: str = ""
+    ) -> str | None:
+        """The conversation a turn drives for this ``(chat, thread)`` — the
+        per-thread binding (FR-032), which replaced ``peer.active_conversation_id``
+        as the source of truth."""
+        row = await self.threads.get(resource.id, chat_id, thread_id)
+        return row.active_conversation_id if row is not None else None
+
+    async def thread_preferred_agent(
+        self, resource: Resource, chat_id: str = "owner", thread_id: str = ""
+    ) -> str | None:
+        row = await self.threads.get(resource.id, chat_id, thread_id)
+        return row.preferred_agent if row is not None else None
+
     async def audit_entries(self, event_type: str, name: str | None = None) -> list[AuditEntry]:
         return await self.audit.query(kind="channel", name=name, event_type=event_type)
 
@@ -431,6 +450,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         kinds=kinds, repo=SqlAlchemyResourceRepo(sm), audit=audit, credentials=keyring
     )
     peers = ChannelPeerRepo(sm)
+    threads = ChannelThreadConversationRepo(sm)
     pairing = PairingManager()
 
     provider = ScriptedAgentProvider(default_reply_adapter())
@@ -446,6 +466,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
     model_suggestions = FakeModelSuggestions()
     processor = InboundProcessor(
         peers=peers,
+        threads=threads,
         pairing=pairing,
         conversations=chat,
         turns=orchestrator,
@@ -493,6 +514,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         keyring=keyring,
         resources=resources,
         peers=peers,
+        threads=threads,
         pairing=pairing,
         provider=provider,
         registry=registry,
