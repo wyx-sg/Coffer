@@ -280,13 +280,13 @@ class SeaTalkAdapter:
         )
 
     async def _send_group_chat(self, group_id: str, message: dict[str, Any], thread_id: str) -> Any:
+        # thread_id goes INSIDE the message body, like _send_single_chat: verified
+        # live that a top-level thread_id is ignored (reply falls to group main),
+        # while message.thread_id threads it and roots a new thread when none exists.
+        if thread_id:
+            message = {**message, "thread_id": thread_id}
         return await self._post(
-            "/messaging/v2/group_chat",
-            {
-                "group_id": group_id,
-                "message": message,
-                **({"thread_id": thread_id} if thread_id else {}),
-            },
+            "/messaging/v2/group_chat", {"group_id": group_id, "message": message}
         )
 
     async def _ensure_token(self) -> str:
