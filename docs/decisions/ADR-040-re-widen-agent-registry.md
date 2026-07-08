@@ -67,8 +67,10 @@ plugin-drop is a documented follow-up slice) and without native-memory disable
 The only coherent integration is to treat its gateway as an OpenAI-compatible
 model endpoint (`openclaw gateway` + `POST /v1/chat/completions`,
 `model: "openclaw/<agentId>"`), which is an LLM-connection concern, not an
-agent-registry one. It is left to a **separate design track**; this ADR records
-why it is out of the registry.
+agent-registry one. It is left to a **separate design track** —
+[`docs/research/openclaw-gateway-integration.md`](../research/openclaw-gateway-integration.md)
+details how it would plug into the LLM-connection registry; this ADR records why
+it is out of the agent registry.
 
 No new database migration is required — the agent `type` has no DB-level
 constraint, so re-adding the enum values restores acceptance of those types;
