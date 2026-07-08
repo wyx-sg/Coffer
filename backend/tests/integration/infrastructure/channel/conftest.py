@@ -73,7 +73,14 @@ class FakeTelegram:
         return Response(content=self.file_bytes, media_type="application/octet-stream")
 
     async def _handle(self, token: str, method: str, request: Request) -> JSONResponse:
-        params: dict[str, Any] = await request.json()
+        # sendPhoto/sendDocument upload multipart (data + files); everything
+        # else posts JSON. Parse whichever the request carries so the recorded
+        # ``params`` are the flat field dict either way.
+        if request.headers.get("content-type", "").startswith("multipart/form-data"):
+            form = await request.form()
+            params: dict[str, Any] = {k: v for k, v in form.items() if isinstance(v, str)}
+        else:
+            params = await request.json()
         self.calls.append((method, params))
         if method == "getUpdates":
             if self.fail_get_updates > 0:

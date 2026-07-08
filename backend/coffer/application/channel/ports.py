@@ -84,10 +84,16 @@ class ChannelAdapter(Protocol):
         *,
         caption: str | None = None,
         as_photo: bool = True,
+        thread_id: str = "",
+        chat_kind: str = "direct",
     ) -> SentMessage:
         """Upload a local file to the chat. ``as_photo`` sends it as an inline
         image; otherwise as a document. Only called when the transport declares
-        ``capabilities.supports_media`` — others may raise."""
+        ``capabilities.supports_media`` — others may raise.
+
+        ``thread_id``/``chat_kind`` route the upload the same way ``send_text``
+        does: a file returned during a group/thread turn lands in that same
+        chat_kind + thread, not the group main chat."""
         ...
 
 

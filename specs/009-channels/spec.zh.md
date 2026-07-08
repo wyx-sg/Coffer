@@ -725,6 +725,15 @@ status / notify`。
 - **Then** 线程 A 的会话驱动被切换后的 agent，线程 B 的会话驱动默认 agent——一个
   bot 在不同线程运行不同 agent
 
+### Scenario: SeaTalk outbound media is delivered into the originating thread
+
+- **Given** 一个已配对的 SeaTalk channel，以及一次群线程 turn，其回复中包含指向真实
+  文件的 `![caption](/absolute/path)`
+- **When** 该 turn 的回复被投递
+- **Then** SeaTalk 把文件上传（图片作为 `image` 消息，否则作为 `file` 消息）到同一个
+  群和同一个线程——而不是群主聊天——因为 `supports_media` 现已为真，且 `send_media`
+  依据该 turn 的 chat_kind 与 thread_id 路由；任何 caption 作为一条线程内文本消息随后发送
+
 ## Channels as a management plane（北极星）
 
 channel 被管理的方式，与 Coffer 管理 MCP server、memory、skill 的方式一致：在一处

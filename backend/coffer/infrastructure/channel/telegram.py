@@ -35,6 +35,7 @@ from coffer.infrastructure.channel.telegram_media import (
     default_media_dir,
     inline_keyboard,
     media_specs,
+    upload_media,
 )
 from coffer.infrastructure.channel.telegram_parse import (
     addressed_and_text,
@@ -282,41 +283,23 @@ class TelegramAdapter:
         *,
         caption: str | None = None,
         as_photo: bool = True,
+        thread_id: str = "",
+        chat_kind: str = "direct",
     ) -> SentMessage:
-        """Upload a local file via ``sendPhoto`` (inline image) or ``sendDocument``
-        (multipart, so the platform stores + serves the bytes)."""
-        method, field = ("sendPhoto", "photo") if as_photo else ("sendDocument", "document")
-        file = pathlib.Path(path)
-        data: dict[str, str] = {"chat_id": chat_id}
-        if caption:
-            data["caption"] = caption
-        try:
-            response = await self._client.post(
-                f"{self._base}/{method}",
-                data=data,
-                files={field: (file.name, file.read_bytes())},
-            )
-        except httpx.HTTPError as e:
-            raise ChannelSendFailed(self._name, type(e).__name__) from e
-        try:
-            payload = response.json()
-        except ValueError as e:
-            raise ChannelSendFailed(
-                self._name,
-                f"{method}: non-JSON response ({response.status_code})",
-                api_rejected=True,
-                status=response.status_code,
-            ) from e
-        if not isinstance(payload, dict) or not payload.get("ok", False):
-            description = payload.get("description", "") if isinstance(payload, dict) else ""
-            raise ChannelSendFailed(
-                self._name,
-                f"{method}: {description or response.status_code}",
-                api_rejected=True,
-                status=response.status_code,
-            )
-        result = payload.get("result") or {}
-        return SentMessage(message_id=str(result.get("message_id", "")))
+        """Upload a local file (see ``upload_media``). ``chat_kind`` is unused (a
+        Telegram chat_id addresses a DM or group alike); a non-empty
+        ``thread_id`` posts into that forum topic (FR-031)."""
+        del chat_kind
+        return await upload_media(
+            self._client,
+            self._base,
+            self._name,
+            chat_id,
+            path,
+            caption=caption,
+            as_photo=as_photo,
+            thread_id=thread_id,
+        )
 
     async def _send_chunk(
         self,

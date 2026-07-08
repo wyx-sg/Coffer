@@ -258,3 +258,43 @@ async def test_marker_path_with_spaces_is_delivered(tmp_path) -> None:  # type: 
     await _render(adapter, events)
 
     assert adapter.media == [("owner", str(img), "chart", True)]
+
+
+@pytest.mark.acceptance(
+    spec="009-channels",
+    scenario="SeaTalk outbound media is delivered into the originating thread",
+)
+async def test_media_returned_in_a_group_thread_is_uploaded_into_that_thread(
+    tmp_path,  # type: ignore[no-untyped-def]
+) -> None:
+    """FR-031: a file the agent returns during a group-thread turn is uploaded
+    back into that same chat_kind + thread — send_media is called with the
+    renderer's thread_id and chat_kind, so a generated chart lands in the
+    originating thread, not the group main chat."""
+    img = tmp_path / "chart.png"
+    img.write_bytes(b"PNG")
+    adapter = FakeChannelAdapter(supports_edit=False, supports_media=True, supports_groups=True)
+
+    async def send(text: str) -> None:
+        await adapter.send_text("gid-1", text, thread_id="t1", chat_kind="group")
+
+    renderer = TurnRenderer(
+        channel="st",
+        adapter=adapter,
+        chat_id="gid-1",
+        conversation_id="c1",
+        send=send,
+        now=_clock(0.0),
+        thread_id="t1",
+        chat_kind="group",
+    )
+    queue: asyncio.Queue[Any] = asyncio.Queue()
+    for event in [
+        TextDelta(text=f"![chart]({img})"),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]:
+        queue.put_nowait(event)
+    queue.put_nowait(None)
+    await renderer.consume(queue)
+
+    assert adapter.media_routed == [("gid-1", str(img), "chart", True, "t1", "group")]

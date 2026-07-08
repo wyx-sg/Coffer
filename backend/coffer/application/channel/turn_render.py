@@ -275,7 +275,12 @@ class TurnRenderer:
                     _is_image_path(path) and pathlib.Path(path).stat().st_size <= _PHOTO_MAX_BYTES
                 )
                 await self.adapter.send_media(
-                    self.chat_id, path, caption=caption or None, as_photo=as_photo
+                    self.chat_id,
+                    path,
+                    caption=caption or None,
+                    as_photo=as_photo,
+                    thread_id=self.thread_id,
+                    chat_kind=self.chat_kind,
                 )
             except Exception:
                 continue  # leave the marker in place so the intent is still visible

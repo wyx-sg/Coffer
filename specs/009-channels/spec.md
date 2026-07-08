@@ -829,6 +829,16 @@ status / notify`.
 - **Then** thread A's conversation drives the switched agent and thread B's
   drives the default — one bot running different agents per thread
 
+### Scenario: SeaTalk outbound media is delivered into the originating thread
+
+- **Given** a paired SeaTalk channel and a group-thread turn whose reply
+  contains `![caption](/absolute/path)` for a file that exists
+- **When** the turn's reply is delivered
+- **Then** SeaTalk uploads the file (an image as an `image` message, otherwise a
+  `file` message) into that same group and thread — not the group main chat —
+  because `supports_media` is now true and `send_media` routes on the turn's
+  chat_kind + thread_id; any caption follows as a threaded text message
+
 ## Channels as a management plane (north star)
 
 Channels are managed the way Coffer manages MCP servers, memory, and skills:

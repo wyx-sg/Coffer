@@ -1,6 +1,7 @@
 """Telegram media/attachment helpers and the bot command menu — split out of
-``telegram.py`` to keep that module under the file-size limit. Pure/no-I/O
-except ``default_media_dir``, which only reads an env var.
+``telegram.py`` to keep that module under the file-size limit. Mostly pure; the
+outbound ``upload_media`` and the env-reading ``default_media_dir`` are the only
+I/O.
 """
 
 from __future__ import annotations
@@ -10,9 +11,18 @@ import pathlib
 from collections.abc import Sequence
 from typing import Any
 
-from coffer.domain.channel.envelopes import ChoiceButton
+import httpx
 
-__all__ = ["COMMANDS", "default_media_dir", "inline_keyboard", "media_specs"]
+from coffer.domain.channel.envelopes import ChoiceButton, SentMessage
+from coffer.domain.channel.errors import ChannelSendFailed
+
+__all__ = [
+    "COMMANDS",
+    "default_media_dir",
+    "inline_keyboard",
+    "media_specs",
+    "upload_media",
+]
 
 COMMANDS = [
     {"command": "new", "description": "Start a fresh conversation"},
@@ -59,3 +69,52 @@ def media_specs(message: dict[str, Any]) -> list[tuple[str, str, str]]:
 def inline_keyboard(buttons: Sequence[ChoiceButton]) -> dict[str, Any]:
     """One button per row (selection menus stay readable on a phone)."""
     return {"inline_keyboard": [[{"text": b.label, "callback_data": b.value}] for b in buttons]}
+
+
+async def upload_media(
+    client: httpx.AsyncClient,
+    base: str,
+    name: str,
+    chat_id: str,
+    path: str,
+    *,
+    caption: str | None,
+    as_photo: bool,
+    thread_id: str,
+) -> SentMessage:
+    """Upload a local file via ``sendPhoto`` (inline image) or ``sendDocument``
+    (multipart, so the platform stores + serves the bytes). A non-empty
+    ``thread_id`` posts into that forum topic (FR-031), mirroring send_text.
+    Split out of ``telegram.py`` to keep it under the file-size limit."""
+    method, field = ("sendPhoto", "photo") if as_photo else ("sendDocument", "document")
+    file = pathlib.Path(path)
+    data: dict[str, str] = {"chat_id": chat_id}
+    if caption:
+        data["caption"] = caption
+    if thread_id:
+        data["message_thread_id"] = thread_id
+    try:
+        response = await client.post(
+            f"{base}/{method}", data=data, files={field: (file.name, file.read_bytes())}
+        )
+    except httpx.HTTPError as e:
+        raise ChannelSendFailed(name, type(e).__name__) from e
+    try:
+        payload = response.json()
+    except ValueError as e:
+        raise ChannelSendFailed(
+            name,
+            f"{method}: non-JSON response ({response.status_code})",
+            api_rejected=True,
+            status=response.status_code,
+        ) from e
+    if not isinstance(payload, dict) or not payload.get("ok", False):
+        description = payload.get("description", "") if isinstance(payload, dict) else ""
+        raise ChannelSendFailed(
+            name,
+            f"{method}: {description or response.status_code}",
+            api_rejected=True,
+            status=response.status_code,
+        )
+    result = payload.get("result") or {}
+    return SentMessage(message_id=str(result.get("message_id", "")))
