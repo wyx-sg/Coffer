@@ -7,6 +7,7 @@ normalization of subscriber messages and approval clicks.
 
 from __future__ import annotations
 
+import pathlib
 from datetime import UTC, datetime
 from typing import Any
 
@@ -165,6 +166,128 @@ async def test_handle_event_image_message_yields_empty_text(fake_seatalk: FakeSe
     [msg] = recorder.messages
     assert msg.text == ""  # non-text content degrades to an empty-text envelope
     assert msg.platform_message_id == "pm-2"
+    assert msg.attachments == ()  # no image.content URL → nothing to download
+
+
+def test_collect_image_urls_direct_and_nested_forwarded() -> None:
+    from coffer.infrastructure.channel.seatalk_media import collect_image_urls
+
+    direct = {"tag": "image", "image": {"content": "https://o.io/file/a"}}
+    assert collect_image_urls(direct) == ["https://o.io/file/a"]
+
+    # A forwarded record wraps the leaves a level deeper; images are collected
+    # recursively, text/other entries ignored.
+    forwarded = {
+        "tag": "combined_forwarded_chat_history",
+        "combined_forwarded_chat_history": {
+            "content": [
+                {
+                    "tag": "combined_forwarded_chat_history",
+                    "combined_forwarded_chat_history": {
+                        "content": [
+                            {"tag": "text", "text": {"content": "hi"}},
+                            {"tag": "image", "image": {"content": "https://o.io/file/b?seq=1"}},
+                            {"tag": "image", "image": {"content": "https://o.io/file/c?seq=2"}},
+                        ]
+                    },
+                }
+            ]
+        },
+    }
+    assert collect_image_urls(forwarded) == [
+        "https://o.io/file/b?seq=1",
+        "https://o.io/file/c?seq=2",
+    ]
+    assert collect_image_urls({"tag": "text", "text": {"content": "x"}}) == []
+
+
+async def test_handle_event_direct_image_downloads_attachment(
+    fake_seatalk: FakeSeaTalk, tmp_path: Any
+) -> None:
+    """A directly-sent image is fetched (authenticated) and attached so the
+    agent can actually see it — not left as an unopenable file link."""
+    adapter = make_seatalk_adapter(fake_seatalk, media_dir=tmp_path)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(
+            {
+                "event_type": "message_from_bot_subscriber",
+                "timestamp": 1718000000,
+                "event": {
+                    "employee_code": "emp-1",
+                    "message": {
+                        "tag": "image",
+                        "message_id": "pm-img",
+                        "thread_id": "",
+                        "image": {"content": "https://openapi.seatalk.io/messaging/v2/file/imgabc"},
+                    },
+                },
+            }
+        )
+    finally:
+        await adapter.stop()
+    [msg] = recorder.messages
+    assert fake_seatalk.file_downloads == ["imgabc"]
+    [att] = msg.attachments
+    assert att.mime == "image/png"
+    assert pathlib.Path(att.path).read_bytes() == fake_seatalk.file_bytes
+
+
+async def test_handle_event_forwarded_record_downloads_images(
+    fake_seatalk: FakeSeaTalk, tmp_path: Any
+) -> None:
+    """Images buried in a forwarded chat record are downloaded and attached
+    (the original chart-in-a-forwarded-record report), while the text still
+    flattens as before."""
+    adapter = make_seatalk_adapter(fake_seatalk, media_dir=tmp_path)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(
+            {
+                "event_type": "message_from_bot_subscriber",
+                "timestamp": 1718000000,
+                "event": {
+                    "employee_code": "emp-1",
+                    "message": {
+                        "tag": "combined_forwarded_chat_history",
+                        "message_id": "pm-f",
+                        "combined_forwarded_chat_history": {
+                            "content": [
+                                {
+                                    "tag": "combined_forwarded_chat_history",
+                                    "sender": {"email": "y@x.com"},
+                                    "combined_forwarded_chat_history": {
+                                        "content": [
+                                            {
+                                                "tag": "text",
+                                                "sender": {"email": "j@x.com"},
+                                                "text": {"content": "see chart:"},
+                                            },
+                                            {
+                                                "tag": "image",
+                                                "sender": {"email": "j@x.com"},
+                                                "image": {
+                                                    "content": "https://openapi.seatalk.io/messaging/v2/file/chart1?seq=2"
+                                                },
+                                            },
+                                        ]
+                                    },
+                                }
+                            ]
+                        },
+                    },
+                },
+            }
+        )
+    finally:
+        await adapter.stop()
+    [msg] = recorder.messages
+    assert "j@x.com: see chart:" in msg.text  # text still flattened
+    assert fake_seatalk.file_downloads == ["chart1"]  # ?seq=2 is a query param
+    [att] = msg.attachments
+    assert att.mime == "image/png"
 
 
 # -- interactive selection cards (P3) -----------------------------------------

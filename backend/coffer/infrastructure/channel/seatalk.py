@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import pathlib
 import time
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -27,6 +28,7 @@ from coffer.domain.channel.envelopes import (
 )
 from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.domain.channel.rich_content import ForwardedItem
+from coffer.infrastructure.channel.seatalk_media import default_media_dir, media_attachments
 from coffer.infrastructure.channel.seatalk_parse import (
     collect_forwarded_items,
     flatten_combined_forwarded,
@@ -55,12 +57,14 @@ class SeaTalkAdapter:
         *,
         client: httpx.AsyncClient | None = None,
         base_url: str = "https://openapi.seatalk.io",
+        media_dir: pathlib.Path | None = None,
     ) -> None:
         self._name = channel_name
         self._app_id = app_id
         self._app_secret = app_secret
         self._base = base_url
         self._client = client or httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=30.0))
+        self._media_dir = media_dir or default_media_dir()
         self._callbacks: AdapterCallbacks | None = None
         self._token: str | None = None
         self._token_expires_at = 0.0
@@ -116,6 +120,9 @@ class SeaTalkAdapter:
                     # SeaTalk DMs are 1:1, so the sender is the employee_code.
                     sender_id=str(event.get("employee_code", "")),
                     thread_id=str(message.get("thread_id", "")),
+                    attachments=await media_attachments(
+                        self._client, self._media_dir, self._ensure_token, message
+                    ),
                 )
             )
         elif event_type == "new_mentioned_message_received_from_group_chat":
@@ -151,6 +158,9 @@ class SeaTalkAdapter:
                     chat_kind="group",
                     addressed=True,
                     thread_id=reply_thread_id,
+                    attachments=await media_attachments(
+                        self._client, self._media_dir, self._ensure_token, message
+                    ),
                 )
             )
         elif event_type in (
@@ -320,55 +330,30 @@ class SeaTalkAdapter:
         return token
 
     async def _post(self, path: str, body: dict[str, Any], *, retries: int = 3) -> Any:
-        attempt = 0
-        while True:
-            token = await self._ensure_token()
-            try:
-                response = await self._client.post(
-                    f"{self._base}{path}",
-                    json=body,
-                    headers={"Authorization": f"Bearer {token}"},
-                )
-            except httpx.HTTPError as e:
-                raise ChannelSendFailed(self._name, f"{path}: {type(e).__name__}") from e
-            try:
-                payload: Any = response.json()
-            except ValueError as e:
-                # A gateway returns an HTML error page, not the Open API JSON
-                # envelope — json() raises a JSONDecodeError (NOT an
-                # httpx.HTTPError), so surface it as the channel error contract.
-                raise ChannelSendFailed(
-                    self._name, f"{path}: non-JSON response ({response.status_code})"
-                ) from e
-            code = payload.get("code", -1) if isinstance(payload, dict) else -1
-            if response.status_code == 200 and code == 0:
-                return payload
-            if code == 100:  # expired token — refresh and retry once
-                self._token = None
-                if attempt < max(retries, 1):
-                    attempt += 1
-                    continue
-            rate_limited = response.status_code == 429 or code == 101
-            if rate_limited and attempt < retries:
-                delay = _RATE_BACKOFF[min(attempt, len(_RATE_BACKOFF) - 1)]
-                attempt += 1
-                _logger.warning(
-                    "seatalk.rate_limited", extra={"channel": self._name, "delay": delay}
-                )
-                await asyncio.sleep(delay)
-                continue
-            raise ChannelSendFailed(self._name, f"{path}: code={code} http={response.status_code}")
+        return await self._request("POST", path, json=body, retries=retries)
 
     async def _get(self, path: str, params: dict[str, Any], *, retries: int = 3) -> Any:
-        """GET counterpart of :meth:`_post` — same token/refresh/rate-limit/
-        non-JSON handling, but for the read-only history/thread endpoints
-        which take query params, not a JSON body."""
+        return await self._request("GET", path, params=params, retries=retries)
+
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+        retries: int = 3,
+    ) -> Any:
+        """One authenticated call with the shared token-refresh / rate-limit /
+        non-JSON handling — POST carries a JSON body, GET query params."""
         attempt = 0
         while True:
             token = await self._ensure_token()
             try:
-                response = await self._client.get(
+                response = await self._client.request(
+                    method,
                     f"{self._base}{path}",
+                    json=json,
                     params=params,
                     headers={"Authorization": f"Bearer {token}"},
                 )
@@ -377,6 +362,9 @@ class SeaTalkAdapter:
             try:
                 payload: Any = response.json()
             except ValueError as e:
+                # A gateway HTML error page, not the Open API JSON envelope —
+                # json() raises JSONDecodeError (not httpx.HTTPError); surface it
+                # as the channel error contract.
                 raise ChannelSendFailed(
                     self._name, f"{path}: non-JSON response ({response.status_code})"
                 ) from e
