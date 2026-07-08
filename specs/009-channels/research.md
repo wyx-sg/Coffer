@@ -164,3 +164,43 @@ building group/@mention/thread/forward support (feature/channel-group-mention-ri
 | Progress UX        | one editable status message, throttled; ack first; final reply separate | both prior arts; degrades naturally on SeaTalk via capability flags                                                                       |
 | Mid-turn input     | bounded FIFO queue, control commands bypass                             | predictable; avoids Hermes' interrupt-by-default surprise                                                                                 |
 | Session scope      | one long-lived conversation per `(channel, chat)`, `/new` resets        | matches the 1:1 product decision; group chats become new rows later                                                                       |
+
+## Channels as a management plane — build-vs-adopt & landscape (2026-07-08)
+
+Gathered while deciding whether to extend Coffer's own SeaTalk/Telegram adapters
+(FR-028…FR-042) or adopt an agent-native gateway wholesale.
+
+- **Build-vs-adopt decision.** Do NOT fork OpenClaw or Hermes channel code. Both
+  are TypeScript/Node monorepos (MIT) whose channel layers are coupled to their
+  own agent/session/MCP/memory runtimes; extracting the transport and re-wiring it
+  to Coffer's Python agents — plus running a Node process and carrying fork
+  maintenance — costs more than incrementally improving Coffer's own SeaTalk /
+  Telegram adapters, especially since neither supports SeaTalk (Coffer's primary
+  channel) and Coffer already has Telegram. Decision: reference-and-port the good
+  patterns (album debouncing, edit-to-stream, ack reactions, event dedup) into
+  Coffer's own clean adapters, not the code.
+
+- **Official-channel landscape (2026-07).** Claude Code "Channels" are official
+  **local** plugins for Telegram/Discord/iMessage but are a **research preview**,
+  personal-only (no groups), require the session to stay open, and cannot
+  transcribe voice
+  ([code.claude.com/docs/en/channels](https://code.claude.com/docs/en/channels)).
+  Claude-in-Slack, Codex-in-Slack, and Cursor-in-Slack are official but
+  **Slack-only**, **cloud-hosted**, and single-agent
+  ([code.claude.com/docs/en/slack](https://code.claude.com/docs/en/slack),
+  [developers.openai.com/codex/integrations/slack](https://developers.openai.com/codex/integrations/slack),
+  [cursor.com/docs/integrations/slack](https://cursor.com/docs/integrations/slack)).
+  Codex/Gemini/OpenCode have **no** official Telegram; Gemini CLI has no official
+  IM channel at all. **SeaTalk is supported by none of them (no official
+  competition for any agent).**
+
+- **Two-track channel-management-plane model.** (1) **Coffer-hosted channel** —
+  SeaTalk always, plus Telegram for the agents/uses the official bridges don't
+  cover — is the one-bot-controls-all-agents moat. (2) **Externally-hosted
+  channels** — agent-native gateways and official integrations — are managed,
+  provisioned, and surfaced by Coffer but not proxied through it, and are
+  single-agent. Coffer manages channels the same way it manages MCP servers,
+  memory, and skills.
+
+- **North star.** One paired bot drives any managed agent, switchable per
+  conversation and per thread (each thread is its own conversation, FR-032).
