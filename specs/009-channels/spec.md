@@ -420,16 +420,21 @@ status / notify`.
   `combined_forwarded_chat_history` and Telegram `forward_origin`. Each entry
   renders as `<sender>: <text | [image] url | [file] name>` under a
   `[Forwarded chat record]` heading.
-- **FR-026**: Threads are read and replied-to in place. When the owner
-  @mentions the bot inside a thread, the bot reads that thread's messages for
-  context (SeaTalk `get_thread_by_thread_id`) and replies into the thread; a
-  DM or group message sent in a thread also replies into that thread. Reading
-  *recent group-main* history is intentionally NOT done (the SeaTalk
-  group-chat-history permission is not granted; the @mention message is
-  self-contained). Telegram cannot fetch any history (Bot API limitation), so
-  on Telegram thread context is not read — the bot answers on the @mention
-  message and still replies into the forum topic. A quoted/replied message
-  contributes a `> sender: …` context prefix where the platform inlines it.
+- **FR-026**: Threads are read and replied-to in place, and a group reply
+  always lands in a thread — never the group main chat. On SeaTalk a thread's
+  id equals its root message's id: an @mention inside a thread already carries
+  that id, so the bot reads that thread's messages for context (SeaTalk
+  `get_thread_by_thread_id`) and replies into it; an @mention in the group main
+  chat carries no thread id, so the bot roots a fresh thread at that @mention
+  (replying under the @mention's own message id) and, since the thread holds
+  only the @mention itself, reads no history. A DM or group message sent in a
+  thread also replies into that thread. Reading *recent group-main* history is
+  intentionally NOT done (the SeaTalk group-chat-history permission is not
+  granted; the @mention message is self-contained). Telegram cannot fetch any
+  history (Bot API limitation), so on Telegram thread context is not read — the
+  bot answers on the @mention message and still replies into the forum topic. A
+  quoted/replied message contributes a `> sender: …` context prefix where the
+  platform inlines it.
 - **FR-027**: Each `(channel, chat, thread)` has its own turn queue/session,
   so a DM turn, a group-main turn, and a thread turn never share state.
 
@@ -753,7 +758,8 @@ status / notify`.
 
 - **Given** a paired channel and a group chat with no active thread
 - **When** the owner @mentions the bot in the group's main chat
-- **Then** a turn runs and the reply is delivered to the group, and a
+- **Then** a turn runs and the reply is delivered into a fresh thread rooted at
+  that @mention (never the group main chat), no thread history is read, and a
   `channel_peers` row is created for the group chat inheriting the owner's
   `sender_id`
 

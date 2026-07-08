@@ -113,8 +113,11 @@ async def test_non_owner_mention_in_a_group_is_refused(env: ChannelEnv) -> None:
 async def test_owner_mention_in_group_main_drives_a_turn_and_creates_a_peer(
     env: ChannelEnv,
 ) -> None:
-    """The owner @mentioning the bot in a group's main chat (no thread) drives
-    a turn and, since no peer row existed yet for this chat, creates one."""
+    """The owner @mentioning the bot in a group's main chat drives a turn and,
+    since no peer row existed yet for this chat, creates one. The adapter roots
+    a fresh thread at the @mention (``thread_id`` == the @mention's
+    ``platform_message_id``), so the reply routes back into that thread, never
+    the group main chat."""
     resource, adapter = await env.paired_channel(sender_id="owner-1")
 
     await env.processor.on_message(
@@ -125,13 +128,14 @@ async def test_owner_mention_in_group_main_drives_a_turn_and_creates_a_peer(
             chat_kind="group",
             addressed=True,
             sender_id="owner-1",
+            thread_id="pm-1",  # what the adapter synthesises for a main-chat @mention
         )
     )
     await wait_until(lambda: "Hello world" in adapter.texts())
 
     match = next(r for r in adapter.sent_routed if r[1] == "Hello world")
     _chat_id, _reply_text, thread_id, chat_kind = match
-    assert thread_id == ""
+    assert thread_id == "pm-1"
     assert chat_kind == "group"
 
     peer = await env.peers.get_by_chat(resource.id, "grp-1")
@@ -183,6 +187,39 @@ async def test_owner_mention_in_a_thread_folds_fetched_history_into_the_turn(
     assert "Alice: what's the status?" in user_text
     assert "Bob: waiting on the deploy" in user_text
     assert user_text.endswith("@bot summarize this thread")
+
+
+async def test_group_main_mention_roots_a_thread_and_skips_self_fetch(
+    env: ChannelEnv,
+) -> None:
+    """A group-main @mention arrives already threaded under its own message —
+    the adapter roots a fresh thread there, so ``thread_id`` equals the
+    @mention's ``platform_message_id``. That thread holds only the @mention
+    itself, so no history is fetched (fetching would just echo the @mention
+    back into its own context); the turn runs on the @mention text alone and
+    the reply is routed into that thread, never the group main chat."""
+    resource = await env.register_channel("tg")
+    adapter = env.bind(resource, FakeChannelAdapter(supports_history_fetch=True))
+    await env.pair(resource, "owner", sender_id="owner-1")
+
+    await env.processor.on_message(
+        inbound(
+            "tg",
+            "grp-1",
+            "@bot hi",
+            chat_kind="group",
+            addressed=True,
+            sender_id="owner-1",
+            thread_id="pm-1",  # == the inbound helper's platform_message_id
+        )
+    )
+    await wait_until(lambda: "Hello world" in adapter.texts())
+
+    assert adapter.fetch_thread_calls == []  # nothing else in the thread yet
+    match = next(r for r in adapter.sent_routed if r[1] == "Hello world")
+    _chat_id, _reply_text, thread_id, chat_kind = match
+    assert thread_id == "pm-1"
+    assert chat_kind == "group"
 
 
 async def test_owner_mention_in_a_thread_skips_fetch_when_unsupported(env: ChannelEnv) -> None:

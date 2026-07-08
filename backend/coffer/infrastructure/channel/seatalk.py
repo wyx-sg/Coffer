@@ -132,20 +132,25 @@ class SeaTalkAdapter:
                 plain_text = strip_group_mentions(
                     str(body.get("plain_text", "")), body.get("mentioned_list")
                 )
+            message_id = str(message.get("message_id", ""))
+            # A group reply must land in a thread, never the main chat. A thread's
+            # id == its root message_id, so an in-thread @mention already carries it
+            # and a main-chat one ("") roots a fresh thread here — fall back to this id.
+            reply_thread_id = str(message.get("thread_id", "")) or message_id
             await self._callbacks.on_message(
                 InboundMessage(
                     channel=self._name,
                     chat_id=str(event.get("group_id", "")),
                     sender_display=str(sender.get("email", "") or sender.get("seatalk_id", "")),
                     text=plain_text,
-                    platform_message_id=str(message.get("message_id", "")),
+                    platform_message_id=message_id,
                     timestamp=datetime.fromtimestamp(
                         int(envelope.get("timestamp", 0) or 0), tz=UTC
                     ),
                     sender_id=str(sender.get("employee_code", "")),
                     chat_kind="group",
                     addressed=True,
-                    thread_id=str(message.get("thread_id", "")),
+                    thread_id=reply_thread_id,
                 )
             )
         elif event_type in (

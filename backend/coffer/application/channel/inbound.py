@@ -225,12 +225,16 @@ class InboundProcessor:
         if (
             msg.chat_kind == "group"
             and msg.thread_id
+            and msg.thread_id != msg.platform_message_id
             and binding.adapter.capabilities.supports_history_fetch
         ):
-            # Ground the turn in the thread's own conversation — group-main
-            # @mentions never fetch (reading all group chatter is undesirable;
-            # that permission is intentionally not granted), and platforms with
-            # no history-fetch API (Telegram) never reach here at all.
+            # Ground the turn in the thread's own conversation. A group-main
+            # @mention roots a fresh thread at itself (thread_id == this
+            # message's id) — nothing else is in it yet, so skip the fetch and
+            # avoid echoing the @mention back into its own context. Reading all
+            # group-main chatter is undesirable and that permission is not
+            # granted anyway; platforms with no history-fetch API (Telegram)
+            # never reach here at all.
             fetcher = cast(ContextFetchPort, binding.adapter)
             items = await fetcher.fetch_thread(msg.chat_id, msg.thread_id)
             ctx = flatten_context(items, title="Thread messages")
