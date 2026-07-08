@@ -38,8 +38,8 @@ import {
 // Agents whose upstream lacks a facet — hide the control rather than let it 422
 // (ADR-040 capability matrix: surfaces hide the action, they do not fail it).
 // opencode has no cross-session native memory and no shell lifecycle hook.
-const AGENTS_WITHOUT_NATIVE_MEMORY: AgentType[] = ["opencode"];
-const AGENTS_WITHOUT_SESSION_HOOK: AgentType[] = ["opencode", "hermes"];
+const AGENTS_WITHOUT_NATIVE_MEMORY: AgentType[] = ["opencode", "cursor"];
+const AGENTS_WITHOUT_SESSION_HOOK: AgentType[] = ["opencode", "hermes", "cursor"];
 
 /** Toggle ROW (no Card — the parent's combined box provides it) that disables
  * the agent's OWN native memory (writes/restores the agent's config) so it uses

@@ -23,6 +23,7 @@ class AgentType(StrEnum):
     CODEX = "codex"
     OPENCODE = "opencode"
     HERMES = "hermes"
+    CURSOR = "cursor"
 
     @property
     def display_name(self) -> str:

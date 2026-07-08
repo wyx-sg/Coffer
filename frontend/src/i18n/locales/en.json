@@ -541,6 +541,7 @@
       "agentCodex": "Codex",
       "agentOpencode": "opencode",
       "agentHermes": "Hermes",
+      "agentCursor": "Cursor",
       "deleteTitle": "Delete connection",
       "deleteConfirm": "Delete connection \"{{name}}\"? Its stored credential is removed too.",
       "name": "Name",

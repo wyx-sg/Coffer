@@ -23,6 +23,7 @@ const AGENT_LABEL_KEY: Record<AgentType, string> = {
   codex: "settings.connections.agentCodex",
   opencode: "settings.connections.agentOpencode",
   hermes: "settings.connections.agentHermes",
+  cursor: "settings.connections.agentCursor",
 };
 
 export function ConnectionCard({ provider: p, deletePending, onEdit, onDelete }: Props) {
