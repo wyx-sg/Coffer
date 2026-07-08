@@ -727,21 +727,20 @@ chat 里运行整个 agent 舰队。
   FR-032）可按线程切换，于是一个 bot 能在一个线程里跑 Claude Code、在另一个线程里跑
   Codex。这是 Coffer 的护城河：没有自己 channel 的 agent（Claude Code、Codex、Cursor、
   OpenCode）**只能**经此触达 IM；且 **SeaTalk 对每个 agent 都是 Coffer-hosted，因为
-  没有任何外部网关会说 SeaTalk。** 整个 spec 009——包括下方的增强（FR-028…FR-042）
+  没有任何外部网关会说 SeaTalk。** 整个 spec 009——包括下方的增强（FR-028…FR-041）
   ——描述的都是这条路径。保持其 agent 无关的那一处接缝：每条入站消息都变成文本加上
   磁盘上的 `Attachment(path, mime, filename)`，每个 agent adapter 按自己的方式物化附件
   （Claude 内联图片/PDF；Codex/Hermes/OpenCode 收到文件路径；音频在上游被转写）。
   channel 层从不按 agent 分支。
-- **Externally-hosted channel（受管、不代理）。** 一个 agent 原生网关（独立运行的
+- **Externally-hosted channel 是非目标（non-goal）。** 一个 agent 原生网关（独立运行的
   OpenClaw、Hermes）或一个官方厂商集成（Claude-in-Slack、Codex-in-Slack、
   Cursor-in-Slack、Claude Code 官方的 Telegram/Discord/iMessage 插件）拥有自己的传输、
-  只驱动它自己的 agent。Coffer **不**经这些转发消息——叠两个网关会与它们自己的运行时
-  冲突，而单 agent 的 channel 无法提供 one-bot-all-agents。Coffer 转而在同一平面里
-  **管理**它们：注册 channel、把凭据存进 vault、写入/拉起其配置、一键连接、并呈现
-  health/status——消息仍归 agent 自己。一个原生/官方 channel 不支持某平台（如 SeaTalk）
-  时，它就单纯不在那里运行；**Coffer 不会把它桥接到 SeaTalk 上。** 偏好官方 channel
-  是一个按需的选择：要统一的多 agent 控制就用 Coffer-hosted channel；要某个 agent 的
-  原生体验就用/管理一个 external channel。
+  只驱动它自己的 agent。Coffer 既不代理它们、也不代管它们：把 Coffer 的 channel 架在
+  前面会与它们自己的运行时冲突；把一个 token 存下来又写进外部进程自己的配置文件，等于
+  作废了 vault（密钥必须加密到用时才解密）；而官方云端集成根本没有本地凭据可托管。用户
+  想用其中之一时，就走那个工具自己的流程——Coffer 的文档给个指引，仅此而已。一个
+  原生/官方 channel 不支持某平台（如 SeaTalk）时就单纯不在那里运行；**Coffer 不会把它
+  桥接到 SeaTalk 上。** Coffer 的 channel 管理面只管理 Coffer 自己 host 的东西。
 
 因为对多数 agent 而言官方 Telegram/Slack 集成要么不存在（Codex/Gemini/OpenCode 没有
 官方 Telegram；SeaTalk 没有任何官方东西），要么是单 agent、且常常仅云端，所以
@@ -753,13 +752,10 @@ Coffer-hosted channel 与它们并不冗余——它是通往统一、本地、�
 - **FR-040**: 一个 bot 控制所有 agent。单个已配对的 Coffer-hosted bot 驱动任意受管
   agent，经 `/agent` 与选择卡片切换；agent 选择按会话生效，且因为每个线程都是自己的
   会话（FR-032），一个 bot 能在不同线程里并发运行不同 agent。
-- **FR-041**: channel 是一个统一的管理面。一个管理视图列出每个 channel——Coffer-hosted
-  与 externally-hosted——连同其 kind、status、已配对 owner 与 health，与 MCP-server /
-  memory / skill 的管理面一致。每个 channel 的凭据（bot token、app secret、网关 key）都
-  存在 Coffer vault 里。
-- **FR-042**: externally-hosted channel 是被注册与置备的，而非被代理。对一个 agent 原生
-  网关或官方厂商集成，Coffer 存储其凭据、写入/拉起其配置、提供一键连接、并报告其状态
-  ——但从不经它转发消息。移除它会清理其凭据与配置。
+- **FR-041**: Coffer-hosted channel 有一个统一的管理面。一个管理视图列出每个
+  Coffer-hosted channel——连同其 status、已配对 owner、agent 与 health，与 MCP-server /
+  memory / skill 的管理面一致；每个 channel 的凭据（bot token、app secret）都存在 Coffer
+  vault 里。externally-hosted channel 不在范围内（non-goal）。
 
 ### A. Media pipeline completeness
 

@@ -832,26 +832,25 @@ Two kinds of channel live under this plane:
   another. This is Coffer's moat: agents with no channel of their own (Claude
   Code, Codex, Cursor, OpenCode) reach IM *only* this way; and **SeaTalk is
   Coffer-hosted for every agent, because no external gateway speaks SeaTalk.**
-  All of spec 009 — including the enhancements below (FR-028…FR-042) — describes
+  All of spec 009 — including the enhancements below (FR-028…FR-041) — describes
   this path. The one seam that keeps it agent-agnostic: every inbound message
   becomes text plus on-disk `Attachment(path, mime, filename)`, and each agent
   adapter materializes attachments its own way (Claude inlines images/PDFs;
   Codex/Hermes/OpenCode receive file paths; audio is transcribed upstream). The
   channel layer never branches per agent.
-- **Externally-hosted channel (managed, not proxied).** An agent-native gateway
+- **Externally-hosted channels are a non-goal.** An agent-native gateway
   (OpenClaw, Hermes run standalone) or an official vendor integration
   (Claude-in-Slack, Codex-in-Slack, Cursor-in-Slack, Claude Code's official
   Telegram/Discord/iMessage plugin) owns its own transport and drives only its
-  own agent. Coffer does NOT relay messages through these — stacking two
-  gateways would collide with their own runtime, and a single-agent channel
-  cannot offer one-bot-all-agents. Instead Coffer **manages** them in the same
-  plane: register the channel, hold its credentials in the vault, write/launch
-  its config, one-click connect, and surface health/status — messages stay the
-  agent's own. A native/official channel that does not support a platform (e.g.
-  SeaTalk) simply does not run there; **Coffer does not bridge it onto SeaTalk.**
-  Preferring an official channel is a per-need choice: use the Coffer-hosted
-  channel for unified multi-agent control; use/manage an external channel for a
-  single agent's native experience.
+  own agent. Coffer neither proxies these nor manages them: stacking Coffer's
+  channel in front would collide with their own runtime; holding a token that is
+  then written into an external process's own config defeats the vault (secrets
+  must stay encrypted until point of use); and the official cloud integrations
+  have no local credential to hold at all. When a user wants one of these, they
+  set it up through that tool's own flow — Coffer's docs point the way, nothing
+  more. A native/official channel that does not support a platform (e.g. SeaTalk)
+  simply does not run there; **Coffer does not bridge it onto SeaTalk.** Coffer's
+  channel plane manages only what Coffer hosts.
 
 Because official Telegram/Slack integrations either don't exist for most agents
 (Codex/Gemini/OpenCode have no official Telegram; SeaTalk has no official
@@ -866,16 +865,11 @@ capabilities the official personal bridges lack.
   drives any managed agent, switchable via `/agent` and selection cards; agent
   choice is per conversation, and since each thread is its own conversation
   (FR-032) one bot can run different agents in different threads concurrently.
-- **FR-041**: Channels are a unified management surface. A management view lists
-  every channel — Coffer-hosted and externally-hosted — with its kind, status,
-  paired owner, and health, mirroring the MCP-server / memory / skill management
-  surfaces. Credentials for every channel (bot tokens, app secrets, gateway
-  keys) are held in the Coffer vault.
-- **FR-042**: Externally-hosted channels are registered and provisioned, not
-  proxied. For an agent-native gateway or an official vendor integration, Coffer
-  stores its credentials, writes/launches its config, offers one-click connect,
-  and reports its status — but never relays messages through it. Removing it
-  cleans up its credentials and config.
+- **FR-041**: Coffer-hosted channels have a unified management surface. A
+  management view lists every Coffer-hosted channel with its status, paired
+  owner, agent, and health, mirroring the MCP-server / memory / skill management
+  surfaces; each channel's credentials (bot tokens, app secrets) are held in the
+  Coffer vault. Externally-hosted channels are out of scope (a non-goal).
 
 ### A. Media pipeline completeness
 
