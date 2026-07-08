@@ -14,7 +14,7 @@ from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import UpstreamUnavailable
+from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.server_config import HttpTransport, MCPServerConfig, StdioTransport
 from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.mcp.http_client import HttpUpstreamConnection
@@ -35,15 +35,15 @@ from coffer.surfaces.http.dependencies import (
     get_preferences_repo,
     get_resource_service,
 )
+from coffer.surfaces.http.mcp.capability_views import (
+    cached_capability_list,
+    live_capability_list,
+)
 from coffer.surfaces.http.schemas import (
     CapabilityKeyBody,
     CapabilityListOut,
-    MCPPromptView,
-    MCPResourceView,
     McpServerStatusOut,
     McpTestResultOut,
-    MCPToolView,
-    _MCPPromptArgument,
 )
 
 router = APIRouter(
@@ -67,14 +67,23 @@ _CAPABILITY_LIST_TIMEOUT = 35.0
 async def list_capabilities(
     name: str,
     discovery: CapabilityDiscovery = Depends(get_capability_discovery),  # noqa: B008
+    prefs: MCPCapabilityPreferenceRepo = Depends(get_preferences_repo),  # noqa: B008
+    resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> CapabilityListOut:
     """Return the live (cache-aware) capability list for one MCP server.
 
     This is the management surface: it returns every discovered capability
     with its ``enabled`` flag (including disabled ones) so the UI can show and
     re-enable them. The three discovery calls run concurrently under a single
-    timeout budget (CODE-M2); a dead upstream surfaces ``UpstreamUnavailable``
-    (→ UPSTREAM_UNAVAILABLE) instead of hanging the detail page for minutes.
+    timeout budget (CODE-M2).
+
+    When the upstream can't be live-queried — a *disabled* server (the gateway
+    won't connect it) or an unreachable one — fall back to the persisted
+    enable/disable preferences so the detail page still lists the
+    previously-discovered capabilities (name + enabled flag) with
+    ``from_cache=True``, instead of a dead-end "couldn't load" error. Only when
+    nothing was ever discovered (no persisted rows) does the upstream failure
+    surface as ``UpstreamUnavailable`` (→ UPSTREAM_UNAVAILABLE).
     """
     tasks: list[asyncio.Task[Any]] = [
         asyncio.ensure_future(discovery.list_tools(name, include_disabled=True)),
@@ -86,61 +95,30 @@ async def list_capabilities(
             asyncio.gather(*tasks),
             timeout=_CAPABILITY_LIST_TIMEOUT,
         )
-    except TimeoutError as e:
-        raise UpstreamUnavailable(
-            f"{name!r} did not respond within {_CAPABILITY_LIST_TIMEOUT:.0f}s"
-        ) from e
+    except (TimeoutError, UpstreamUnavailable, UpstreamTimeout) as e:
+        # A disabled/unreachable/hung upstream. gather() propagates the first
+        # child failure WITHOUT cancelling the siblings (wait_for's timeout path
+        # does) — reap them so they don't grind the spawn retry ladder in the
+        # background, then serve the persisted preferences as a degraded view.
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        cached = await cached_capability_list(name, prefs, resource_service)
+        if cached is not None:
+            return cached
+        if isinstance(e, TimeoutError):
+            raise UpstreamUnavailable(
+                f"{name!r} did not respond within {_CAPABILITY_LIST_TIMEOUT:.0f}s"
+            ) from e
+        raise
     except BaseException:
-        # gather() propagates the first child failure WITHOUT cancelling the
-        # siblings — reap them so they don't grind the spawn retry ladder in
-        # the background. (wait_for's timeout path already cancels the gather.)
+        # Any other failure (e.g. ResourceNotFound for an unknown server → 404):
+        # reap siblings and let the global handler map it.
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
         raise
-    return CapabilityListOut(
-        server_name=name,
-        tools=[
-            MCPToolView(
-                prefixed_name=t.prefixed_name,
-                original_name=t.original_name,
-                description=t.description,
-                input_schema=t.input_schema,
-                enabled=t.enabled,
-            )
-            for t in tools
-        ],
-        resources=[
-            MCPResourceView(
-                prefixed_uri=r.prefixed_uri,
-                original_uri=r.original_uri,
-                name=r.name,
-                description=r.description,
-                mime_type=r.mime_type,
-                enabled=r.enabled,
-            )
-            for r in resources
-        ],
-        prompts=[
-            MCPPromptView(
-                prefixed_name=p.prefixed_name,
-                original_name=p.original_name,
-                description=p.description,
-                arguments=[
-                    _MCPPromptArgument(
-                        name=a.get("name", ""),
-                        description=a.get("description"),
-                        required=bool(a.get("required", False)),
-                    )
-                    for a in p.arguments
-                ],
-                enabled=p.enabled,
-            )
-            for p in prompts
-        ],
-        fetched_at=datetime.now(tz=UTC),
-        from_cache=False,
-    )
+    return live_capability_list(name, tools, resources, prompts)
 
 
 @router.get("/{name}/status", response_model=McpServerStatusOut)
