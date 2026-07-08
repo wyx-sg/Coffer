@@ -28,9 +28,9 @@ from coffer.domain.channel.envelopes import (
 from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.infrastructure.channel.seatalk_parse import (
+    collect_forwarded_items,
     flatten_combined_forwarded,
     interactive_card,
-    message_to_item,
     split_to_byte_limit,
     strip_group_mentions,
 )
@@ -263,7 +263,8 @@ class SeaTalkAdapter:
             )
             return []
         messages = payload.get("thread_messages") or [] if isinstance(payload, dict) else []
-        return [message_to_item(m) for m in messages if isinstance(m, dict)]
+        # Recurse: a forwarded record in the thread flattens to its leaves.
+        return collect_forwarded_items(messages)
 
     # -- transport -------------------------------------------------------------
 

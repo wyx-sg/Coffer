@@ -325,8 +325,54 @@ async def test_fetch_thread_maps_thread_page_to_forwarded_items(fake_seatalk: Fa
     assert params == {"group_id": "gid-1", "thread_id": "t1", "page_size": "50"}
 
 
+async def test_fetch_thread_recurses_forwarded_records_in_the_thread(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """A forwarded chat record sitting IN a thread must be flattened to its
+    leaf messages when the thread is read for context — not collapsed to the
+    ``[forwarded chat record]`` placeholder. This is the fetch_thread analogue
+    of the inbound nested-forward fix: reading a thread whose messages include
+    a forwarded record (the shape SeaTalk delivers, wrapped one level deeper)
+    must recurse the same way the DM/@mention path does."""
+    fake_seatalk.thread_response = {
+        "code": 0,
+        "thread_messages": [
+            _text_message("owner@example.com", "look at this"),
+            {
+                "tag": "combined_forwarded_chat_history",
+                "sender": {"email": "owner@example.com"},
+                "combined_forwarded_chat_history": {
+                    "content": [
+                        {
+                            "tag": "text",
+                            "sender": {"email": "john.phuatd@shopee.com"},
+                            "text": {"content": "Do you see this issue?"},
+                        },
+                        {
+                            "tag": "text",
+                            "sender": {"email": "yuxing.wu@shopee.com"},
+                            "text": {"content": "let me check"},
+                        },
+                    ]
+                },
+            },
+        ],
+    }
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        items = await adapter.fetch_thread("gid-1", "t1", limit=50)
+    finally:
+        await adapter.stop()
+    rendered = [(it.sender, it.text) for it in items]
+    assert ("owner@example.com", "look at this") in rendered
+    assert ("john.phuatd@shopee.com", "Do you see this issue?") in rendered
+    assert ("yuxing.wu@shopee.com", "let me check") in rendered
+    # The placeholder must never leak into the thread context.
+    assert all(it.text != "[forwarded chat record]" for it in items)
+
+
 async def testmessage_to_item_maps_non_text_tags() -> None:
-    from coffer.infrastructure.channel.seatalk import message_to_item
+    from coffer.infrastructure.channel.seatalk_parse import message_to_item
 
     image_item = message_to_item(
         {"sender": {"email": "a@x.com"}, "tag": "image", "image": {"content": "img-key-1"}}

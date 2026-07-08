@@ -14,6 +14,7 @@ from coffer.domain.channel.envelopes import ChoiceButton
 from coffer.domain.channel.rich_content import ForwardedItem, flatten_forwarded
 
 __all__ = [
+    "collect_forwarded_items",
     "flatten_combined_forwarded",
     "interactive_card",
     "message_to_item",
@@ -61,12 +62,12 @@ def message_to_item(msg: dict[str, Any]) -> ForwardedItem:
         text = f"[file] {(msg.get('file') or {}).get('filename', '')}"
     elif tag == "combined_forwarded_chat_history":
         # A short stand-in — recursion into the nested history is handled by
-        # ``_collect_forwarded_items`` before this fallback is ever reached.
+        # ``collect_forwarded_items`` before this fallback is ever reached.
         text = "[forwarded chat record]"
     return ForwardedItem(sender=sender, text=text)
 
 
-def _collect_forwarded_items(content: Sequence[Any]) -> list[ForwardedItem]:
+def collect_forwarded_items(content: Sequence[Any]) -> list[ForwardedItem]:
     """Flatten a forwarded-record ``content`` list to leaf items, recursing
     into every nested ``combined_forwarded_chat_history`` entry.
 
@@ -83,7 +84,7 @@ def _collect_forwarded_items(content: Sequence[Any]) -> list[ForwardedItem]:
             continue
         if str(entry.get("tag", "")) == "combined_forwarded_chat_history":
             nested = (entry.get("combined_forwarded_chat_history") or {}).get("content") or []
-            items.extend(_collect_forwarded_items(nested))
+            items.extend(collect_forwarded_items(nested))
         else:
             items.append(message_to_item(entry))
     return items
@@ -99,10 +100,10 @@ def flatten_combined_forwarded(message: dict[str, Any]) -> str:
     events — so a forwarded record dropped into a group is not silently
     lost the way an empty ``plain_text`` would make it. Recurses into the
     nested wrapping SeaTalk adds when a record is forwarded (see
-    :func:`_collect_forwarded_items`).
+    :func:`collect_forwarded_items`).
     """
     content = (message.get("combined_forwarded_chat_history") or {}).get("content") or []
-    return flatten_forwarded(_collect_forwarded_items(content))
+    return flatten_forwarded(collect_forwarded_items(content))
 
 
 def strip_group_mentions(plain_text: str, mentioned_list: Sequence[Any] | None) -> str:
