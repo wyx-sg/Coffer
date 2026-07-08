@@ -382,6 +382,106 @@ async def test_list_capabilities_times_out_on_hung_upstream(
 
 
 @pytest.mark.asyncio
+async def test_list_capabilities_falls_back_to_cached_prefs_when_upstream_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A disabled/unreachable server can't be live-queried, but its previously
+    discovered capabilities are persisted as enable/disable preferences. The
+    detail page must fall back to those (name + enabled) with from_cache=True
+    instead of a dead-end error — so the owner can still see and re-enable the
+    tools. (Reported: tools invisible while an MCP server is disabled.)
+    """
+    from coffer.domain.errors import UpstreamUnavailable
+
+    _with_in_memory(monkeypatch)
+    app, engine, _rsvc, _prefs, supervisor = await _build_app(
+        tmp_path, tools=["read_file", "write_file"]
+    )
+    transport = ASGITransport(app=app)
+    try:
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            headers={"X-Coffer-Token": "test-token"},
+        ) as client:
+            # A first live list populates the persisted preferences...
+            r = await client.get("/api/v1/resources/mcp_server/fs/capabilities")
+            assert r.status_code == 200, r.text
+            assert r.json()["from_cache"] is False
+            # ...disable one tool so we can prove the flag survives the fallback.
+            r = await client.post(
+                "/api/v1/resources/mcp_server/fs/capabilities/tool/write_file/disable"
+            )
+            assert r.status_code == 204, r.text
+
+            # Now the upstream can't be reached (server disabled / unreachable).
+            class _FailingDiscovery:
+                async def list_tools(self, name: str, include_disabled: bool = False) -> list:
+                    raise UpstreamUnavailable(f"{name!r} is unreachable")
+
+                async def list_resources(self, name: str, include_disabled: bool = False) -> list:
+                    raise UpstreamUnavailable(f"{name!r} is unreachable")
+
+                async def list_prompts(self, name: str, include_disabled: bool = False) -> list:
+                    raise UpstreamUnavailable(f"{name!r} is unreachable")
+
+            app.dependency_overrides[get_capability_discovery] = lambda: _FailingDiscovery()
+
+            r = await client.get("/api/v1/resources/mcp_server/fs/capabilities")
+            assert r.status_code == 200, r.text
+            body = r.json()
+            assert body["from_cache"] is True
+            tools_by_name = {t["prefixed_name"]: t for t in body["tools"]}
+            assert set(tools_by_name) == {"fs__read_file", "fs__write_file"}
+            assert tools_by_name["fs__read_file"]["enabled"] is True
+            assert tools_by_name["fs__write_file"]["enabled"] is False
+    finally:
+        await supervisor.dispose()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_list_capabilities_upstream_unavailable_without_cache_still_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With no persisted capabilities to fall back to (a server that never
+    discovered anything), an unreachable upstream must still surface the
+    failure rather than a misleadingly empty capability list.
+    """
+    from coffer.domain.errors import UpstreamUnavailable
+
+    _with_in_memory(monkeypatch)
+    app, engine, _rsvc, _prefs, supervisor = await _build_app(tmp_path, tools=["read_file"])
+    transport = ASGITransport(app=app)
+
+    class _FailingDiscovery:
+        async def list_tools(self, name: str, include_disabled: bool = False) -> list:
+            raise UpstreamUnavailable(f"{name!r} is unreachable")
+
+        async def list_resources(self, name: str, include_disabled: bool = False) -> list:
+            raise UpstreamUnavailable(f"{name!r} is unreachable")
+
+        async def list_prompts(self, name: str, include_disabled: bool = False) -> list:
+            raise UpstreamUnavailable(f"{name!r} is unreachable")
+
+    app.dependency_overrides[get_capability_discovery] = lambda: _FailingDiscovery()
+    try:
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            headers={"X-Coffer-Token": "test-token"},
+        ) as client:
+            # No prior successful list → no persisted rows → error surfaces.
+            r = await client.get("/api/v1/resources/mcp_server/fs/capabilities")
+            assert r.status_code == 503, r.text
+    finally:
+        await supervisor.dispose()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_list_capabilities_requires_auth(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
