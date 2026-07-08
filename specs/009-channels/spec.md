@@ -680,6 +680,15 @@ status / notify`.
 - **When** a different member of the chat taps a selection-card button
 - **Then** the tap is ignored and the owner's agent/model is unchanged
 
+### Scenario: a group selection-card tap replies in the group/thread
+
+- **Given** a paired channel with a group peer, on a button-capable transport,
+  with a second agent registered
+- **When** the owner taps an `/agent` selection-card button in a group thread
+- **Then** the switch is applied to that group thread and the "switched"
+  confirmation is routed back into the group/thread (never a DM); a non-owner's
+  tap is refused with a routed "not authorized" reply and no switch
+
 ### Scenario: a channel-driven turn is audited with channel, peer, and agent
 
 - **Given** a paired channel

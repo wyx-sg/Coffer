@@ -78,11 +78,14 @@ class InboundCallback:
     """
 
     channel: str  # channel resource name
-    chat_id: str  # return address (Telegram chat id / SeaTalk employee_code)
+    chat_id: str  # return address (Telegram chat id / SeaTalk group_id or employee_code)
     sender_id: str  # stable per-sender id for the owner gate ("" when none)
     data: str  # the tapped ChoiceButton.value
     callback_id: str = ""  # platform ack handle (Telegram callback_query.id); "" if none
     platform_message_id: str = ""  # the card message (for an optional in-place ack)
+    chat_kind: str = "direct"  # "direct" | "group" — mirrors InboundMessage so a
+    # group card tap owner-gates and replies in the group, not a DM (FR-034)
+    thread_id: str = ""  # non-empty when the card sits inside a thread/topic
 
 
 @dataclass(frozen=True)

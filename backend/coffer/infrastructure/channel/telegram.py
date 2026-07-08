@@ -236,6 +236,10 @@ class TelegramAdapter:
         sender = query.get("from") or {}
         card = query.get("message") or {}
         query_id = str(query.get("id") or "")
+        # A card tapped in a (super)group must reply back into that group/thread,
+        # not a DM — derive chat_kind/thread_id from the card's own message the
+        # same way an inbound group message does (FR-034).
+        group = is_group(card)
         if self._callbacks.on_callback is not None:
             await self._callbacks.on_callback(
                 InboundCallback(
@@ -245,6 +249,8 @@ class TelegramAdapter:
                     data=str(query.get("data") or ""),
                     callback_id=query_id,
                     platform_message_id=str(card.get("message_id", "")),
+                    chat_kind="group" if group else "direct",
+                    thread_id=str(card.get("message_thread_id") or ""),
                 )
             )
         # Dismiss the button's loading spinner (best-effort; the tap is already

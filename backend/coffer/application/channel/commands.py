@@ -344,27 +344,37 @@ class ChannelCommands:
     # -- card tap → the same switch (owner gate enforced by the processor) ---------
 
     async def dispatch_callback(
-        self, binding: ChannelBinding, peer: ChannelPeer, data: str, send: SafeSend
+        self,
+        binding: ChannelBinding,
+        peer: ChannelPeer,
+        data: str,
+        send: SafeSend,
+        *,
+        chat_kind: str = "direct",
+        thread_id: str = "",
     ) -> None:
         """Route a selection-card tap (``data`` = the tapped ``ChoiceButton.value``)
-        to the same switch the text command performs. The processor has already
-        owner-gated the tap.
-
-        FOLLOW-UP: replies here always default to a DM send (``chat_kind`` and
-        ``thread_id`` are not threaded through) because ``InboundCallback``
-        does not carry them — a group button tap's reply is misrouted the same
-        way the text-command path was before this fix. Group cards are not yet
-        exercised end-to-end; fix by widening ``InboundCallback``/``on_callback``
-        to carry the tap's chat_kind/thread_id before enabling buttons in
-        groups."""
+        to the same switch the text command performs (the processor owner-gated it).
+        ``chat_kind``/``thread_id`` route the confirmation back into a group tap's
+        own group/thread, not a DM (FR-034)."""
         kind, _, value = data.partition(":")
         if kind == "agent":
             if value not in self._agents.agent_keys():
-                await send(binding, peer.chat_id, f"Unknown agent '{value}'.")
+                await send(
+                    binding,
+                    peer.chat_id,
+                    f"Unknown agent '{value}'.",
+                    chat_kind=chat_kind,
+                    thread_id=thread_id,
+                )
                 return
-            await self.apply_agent(binding, peer, value, send)
+            await self.apply_agent(
+                binding, peer, value, send, chat_kind=chat_kind, thread_id=thread_id
+            )
         elif kind == "model" and value:
-            await self.apply_model(binding, peer, value, send)
+            await self.apply_model(
+                binding, peer, value, send, chat_kind=chat_kind, thread_id=thread_id
+            )
 
     async def _open_and_report(
         self,
