@@ -198,32 +198,14 @@ class InboundProcessor:
         attachments = tuple(
             Attachment(path=a.path, mime=a.mime, filename=a.filename) for a in msg.attachments
         )
-        if not text and not attachments:
-            # An empty envelope with nothing downloadable (a sticker, a location,
-            # a media type the transport does not extract).
-            await self._safe_send(
-                binding,
-                peer.chat_id,
-                "⚠️ Unsupported message — send text, a photo, or a file.",
-                thread_id=msg.thread_id,
-                chat_kind=msg.chat_kind,
-            )
-            return
         # A slash command is text-only; a caption starting with "/" alongside an
-        # attachment is a normal message, not a command.
-        if text.startswith("/") and not attachments:
-            await self._commands.handle(
-                binding,
-                peer,
-                text,
-                self._session(binding.name, peer.chat_id, msg.thread_id),
-                self._safe_send,
-                chat_kind=msg.chat_kind,
-                thread_id=msg.thread_id,
-            )
-            return
+        # attachment is a normal message, not a command. Decide on the message's
+        # OWN text/attachments, before any thread history is folded in (a
+        # command never fetches thread context).
+        is_command = text.startswith("/") and not attachments
         if (
-            msg.chat_kind == "group"
+            not is_command
+            and msg.chat_kind == "group"
             and msg.thread_id
             and msg.thread_id != msg.platform_message_id
             and binding.adapter.capabilities.supports_history_fetch
@@ -234,12 +216,41 @@ class InboundProcessor:
             # avoid echoing the @mention back into its own context. Reading all
             # group-main chatter is undesirable and that permission is not
             # granted anyway; platforms with no history-fetch API (Telegram)
-            # never reach here at all.
+            # never reach here at all. The thread's own images/files download
+            # alongside its text (FR-029) so a picture in the thread reaches the
+            # vision agent, not a dead file link.
             fetcher = cast(ContextFetchPort, binding.adapter)
-            items = await fetcher.fetch_thread(msg.chat_id, msg.thread_id)
+            items, thread_atts = await fetcher.fetch_thread(msg.chat_id, msg.thread_id)
             ctx = flatten_context(items, title="Thread messages")
             if ctx:
                 text = f"{ctx}\n\n{text}" if text else ctx
+            if thread_atts:
+                attachments = attachments + tuple(
+                    Attachment(path=a.path, mime=a.mime, filename=a.filename) for a in thread_atts
+                )
+        if not text and not attachments:
+            # An empty envelope with nothing downloadable (a sticker, a location,
+            # a media type the transport does not extract) — and no thread
+            # history/images to ground a turn on either.
+            await self._safe_send(
+                binding,
+                peer.chat_id,
+                "⚠️ Unsupported message — send text, a photo, or a file.",
+                thread_id=msg.thread_id,
+                chat_kind=msg.chat_kind,
+            )
+            return
+        if is_command:
+            await self._commands.handle(
+                binding,
+                peer,
+                text,
+                self._session(binding.name, peer.chat_id, msg.thread_id),
+                self._safe_send,
+                chat_kind=msg.chat_kind,
+                thread_id=msg.thread_id,
+            )
+            return
         session = self._session(msg.channel, peer.chat_id, msg.thread_id)
         if len(session.queue) >= _QUEUE_MAX:
             await self._safe_send(

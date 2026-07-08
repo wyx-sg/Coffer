@@ -805,6 +805,14 @@ status / notify`.
 - **Then** the turn's message text carries a `[Forwarded chat record]` block
   listing each forwarded item
 
+### Scenario: thread-history images reach a vision agent
+
+- **Given** a paired channel and a group thread whose own messages include an
+  image (a directly-sent one and one nested in a forwarded record)
+- **When** the owner @mentions the bot inside that thread
+- **Then** the thread's images are downloaded and attached to the turn — reaching
+  the vision agent as real bytes, not a dead auth-gated file link
+
 ## Channels as a management plane (north star)
 
 Channels are managed the way Coffer manages MCP servers, memory, and skills:

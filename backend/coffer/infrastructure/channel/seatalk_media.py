@@ -22,7 +22,12 @@ import httpx
 
 from coffer.domain.channel.envelopes import InboundAttachment
 
-__all__ = ["collect_image_urls", "default_media_dir", "media_attachments"]
+__all__ = [
+    "collect_image_urls",
+    "default_media_dir",
+    "media_attachments",
+    "thread_media_attachments",
+]
 
 _logger = logging.getLogger(__name__)
 
@@ -90,6 +95,42 @@ async def media_attachments(
     if not urls:
         return ()
     token = await ensure_token()
+    return await _download(client, media_dir, token, urls)
+
+
+async def thread_media_attachments(
+    client: httpx.AsyncClient,
+    media_dir: pathlib.Path,
+    ensure_token: Callable[[], Awaitable[str]],
+    messages: Sequence[dict[str, Any]],
+) -> tuple[InboundAttachment, ...]:
+    """Download every image carried by a thread's own messages (FR-029) so an
+    in-thread @mention grounds the turn on the real pictures, not the dead
+    auth-gated file links a text flatten would leave behind. Collects URLs
+    across ALL ``messages`` — recursing forwarded records within each via
+    :func:`collect_image_urls` — and fetches them with the same authenticated
+    download the direct-message path uses. Fetches the token only when there is
+    something to download; each failed download is skipped, never wedging the
+    turn."""
+    urls: list[str] = []
+    for message in messages:
+        if isinstance(message, dict):
+            urls.extend(collect_image_urls(message))
+    if not urls:
+        return ()
+    token = await ensure_token()
+    return await _download(client, media_dir, token, urls)
+
+
+async def _download(
+    client: httpx.AsyncClient,
+    media_dir: pathlib.Path,
+    token: str,
+    urls: Sequence[str],
+) -> tuple[InboundAttachment, ...]:
+    """Fetch each SeaTalk file ``url`` (authenticated) into ``media_dir`` as an
+    attachment. A single failed download is skipped (logged), never wedging the
+    caller — shared by the direct-message and thread-history paths."""
     media_dir.mkdir(parents=True, exist_ok=True)
     headers = {"Authorization": f"Bearer {token}"}
     out: list[InboundAttachment] = []

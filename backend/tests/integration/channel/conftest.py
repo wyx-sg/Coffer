@@ -43,6 +43,7 @@ from coffer.domain.audit import AuditEntry
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
     ChoiceButton,
+    InboundAttachment,
     InboundCallback,
     InboundMessage,
     SentMessage,
@@ -177,6 +178,9 @@ class FakeChannelAdapter:
         # Scriptable ``fetch_thread`` result (Task 7b) — a test sets this to a
         # list of ``ForwardedItem`` for its scenario; unset yields ``[]``.
         self.thread_items: list[ForwardedItem] = []
+        # Scriptable thread-history attachments (FR-029) — the images/files the
+        # thread's own messages carry, already downloaded; unset yields ``()``.
+        self.thread_attachments: tuple[InboundAttachment, ...] = ()
         # (chat_id, thread_id) for every ``fetch_thread`` call the core made,
         # so a test can assert the fetch happened (or, on a non-fetching
         # transport, that it never did).
@@ -240,9 +244,9 @@ class FakeChannelAdapter:
 
     async def fetch_thread(
         self, chat_id: str, thread_id: str, *, limit: int = 50
-    ) -> list[ForwardedItem]:
+    ) -> tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]:
         self.fetch_thread_calls.append((chat_id, thread_id))
-        return list(self.thread_items)
+        return list(self.thread_items), self.thread_attachments
 
     async def tap(
         self, value: str, *, channel: str, chat_id: str = "owner", sender_id: str = ""

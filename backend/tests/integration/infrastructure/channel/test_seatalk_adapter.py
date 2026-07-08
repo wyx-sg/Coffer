@@ -441,13 +441,14 @@ async def test_fetch_thread_maps_thread_page_to_forwarded_items(fake_seatalk: Fa
     }
     adapter = make_seatalk_adapter(fake_seatalk)
     try:
-        items = await adapter.fetch_thread("gid-1", "t1", limit=50)
+        items, atts = await adapter.fetch_thread("gid-1", "t1", limit=50)
     finally:
         await adapter.stop()
     assert [(it.sender, it.text) for it in items] == [
         ("alice@example.com", "in the thread"),
         ("bob@example.com", "replying"),
     ]
+    assert atts == ()  # a text-only thread downloads nothing
     [params] = fake_seatalk.thread_calls
     assert params == {"group_id": "gid-1", "thread_id": "t1", "page_size": "50"}
 
@@ -487,7 +488,7 @@ async def test_fetch_thread_recurses_forwarded_records_in_the_thread(
     }
     adapter = make_seatalk_adapter(fake_seatalk)
     try:
-        items = await adapter.fetch_thread("gid-1", "t1", limit=50)
+        items, _atts = await adapter.fetch_thread("gid-1", "t1", limit=50)
     finally:
         await adapter.stop()
     rendered = [(it.sender, it.text) for it in items]
@@ -496,6 +497,55 @@ async def test_fetch_thread_recurses_forwarded_records_in_the_thread(
     assert ("yuxing.wu@shopee.com", "let me check") in rendered
     # The placeholder must never leak into the thread context.
     assert all(it.text != "[forwarded chat record]" for it in items)
+
+
+@pytest.mark.acceptance(spec="009-channels", scenario="thread-history images reach a vision agent")
+async def test_fetch_thread_downloads_thread_images(
+    fake_seatalk: FakeSeaTalk, tmp_path: Any
+) -> None:
+    """FR-029: when the @mention lands inside a thread, the images the thread's
+    own messages carry — a directly-sent image AND one buried in a forwarded
+    record — are downloaded (authenticated) and returned as the second tuple
+    element, so a picture in the thread reaches the vision agent as real bytes
+    instead of a dead auth-gated file link."""
+    fake_seatalk.thread_response = {
+        "code": 0,
+        "thread_messages": [
+            _text_message("owner@example.com", "look at these"),
+            {
+                "tag": "image",
+                "sender": {"email": "owner@example.com"},
+                "image": {"content": "https://openapi.seatalk.io/messaging/v2/file/direct1"},
+            },
+            {
+                "tag": "combined_forwarded_chat_history",
+                "sender": {"email": "owner@example.com"},
+                "combined_forwarded_chat_history": {
+                    "content": [
+                        {
+                            "tag": "image",
+                            "sender": {"email": "j@x.com"},
+                            "image": {
+                                "content": "https://openapi.seatalk.io/messaging/v2/file/fwd1?seq=3"
+                            },
+                        },
+                    ]
+                },
+            },
+        ],
+    }
+    adapter = make_seatalk_adapter(fake_seatalk, media_dir=tmp_path)
+    try:
+        items, atts = await adapter.fetch_thread("gid-1", "t1", limit=50)
+    finally:
+        await adapter.stop()
+    # Text still flattens (the leaf image in the forwarded record contributes no text).
+    assert ("owner@example.com", "look at these") in [(it.sender, it.text) for it in items]
+    # Both images downloaded — the direct one and the one nested in the forward.
+    assert fake_seatalk.file_downloads == ["direct1", "fwd1"]  # ?seq=3 is a query param
+    assert len(atts) == 2
+    assert all(a.mime == "image/png" for a in atts)
+    assert all(pathlib.Path(a.path).read_bytes() == fake_seatalk.file_bytes for a in atts)
 
 
 async def testmessage_to_item_maps_non_text_tags() -> None:
@@ -843,6 +893,6 @@ async def test_fetch_thread_degrades_to_empty_list_on_error(
 
     monkeypatch.setattr(adapter, "_get", _boom)
     try:
-        assert await adapter.fetch_thread("gid-1", "t1", limit=50) == []
+        assert await adapter.fetch_thread("gid-1", "t1", limit=50) == ([], ())
     finally:
         await adapter.stop()

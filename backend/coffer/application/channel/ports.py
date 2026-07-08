@@ -16,6 +16,7 @@ from typing import Any, Protocol, runtime_checkable
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
     ChoiceButton,
+    InboundAttachment,
     InboundCallback,
     InboundMessage,
     SentMessage,
@@ -176,11 +177,17 @@ class ContextFetchPort(Protocol):
     turn. Group-main @mentions fetch nothing (reading all group chatter is
     undesirable — the group-chat-history permission is intentionally not
     granted). Platforms without a history-fetch API (Telegram's Bot API)
-    satisfy this by always returning ``[]``."""
+    satisfy this by always returning ``([], ())``."""
 
     async def fetch_thread(
         self, chat_id: str, thread_id: str, *, limit: int = 50
-    ) -> list[ForwardedItem]: ...
+    ) -> tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]:
+        """Return the thread's ``(text items, downloaded attachments)``: the
+        flattened text of each thread message plus the images/files those
+        messages carry, already fetched to local paths (FR-029) so an in-thread
+        @mention reaches the turn with the real pictures, not dead file links.
+        Degrades to ``([], ())`` on any error."""
+        ...
 
 
 @runtime_checkable

@@ -703,6 +703,14 @@ status / notify`。
 - **Then** 该 turn 的消息文本携带一个 `[Forwarded chat record]` 块，列出每条被
   转发的记录
 
+### Scenario: thread-history images reach a vision agent
+
+- **Given** 一个已配对的 channel 和一个群线程，其自身消息中包含图片（一张直接发送
+  的，以及一张嵌在转发记录里的）
+- **When** owner 在该线程内 @mention bot
+- **Then** 该线程的图片被下载并作为附件加入该 turn——以真实字节抵达视觉 agent，而
+  不是一个失效的、需鉴权的文件链接
+
 ## Channels as a management plane（北极星）
 
 channel 被管理的方式，与 Coffer 管理 MCP server、memory、skill 的方式一致：在一处

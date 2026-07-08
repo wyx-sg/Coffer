@@ -353,7 +353,7 @@ async def test_buttons_ride_only_the_final_chunk(fake_telegram: FakeTelegram) ->
 async def test_fetch_thread_returns_empty(fake_telegram: FakeTelegram) -> None:
     adapter = make_telegram_adapter(fake_telegram)
     try:
-        assert await adapter.fetch_thread("555", "t1", limit=50) == []
+        assert await adapter.fetch_thread("555", "t1", limit=50) == ([], ())
     finally:
         await adapter.stop()
     assert fake_telegram.calls == []  # no platform call is even attempted
