@@ -136,12 +136,19 @@ class FakeSeaTalk:
         # -- thread fetch (Task 5) --
         self.thread_calls: list[dict[str, Any]] = []  # query params, one per /get_thread... GET
         self.thread_response: dict[str, Any] = {"code": 0, "thread_messages": []}
+        self.file_downloads: list[str] = []  # file ids fetched, one per media GET
+        self.file_bytes = b"\x89PNG\r\n\x1a\nFAKE"  # served for any file download
         self.app = FastAPI()
         self.app.post("/auth/app_access_token")(self._token)
         self.app.post("/messaging/v2/single_chat")(self._single_chat)
         self.app.post("/messaging/v2/group_chat")(self._group_chat)
         self.app.post("/messaging/v2/single_chat_typing")(self._typing)
         self.app.get("/messaging/v2/group_chat/get_thread_by_thread_id")(self._thread)
+        self.app.get("/messaging/v2/file/{file_id}")(self._serve_file)
+
+    async def _serve_file(self, file_id: str) -> Response:
+        self.file_downloads.append(file_id)
+        return Response(content=self.file_bytes, media_type="image/png")
 
     async def _token(self, request: Request) -> JSONResponse:
         await request.json()
@@ -196,9 +203,11 @@ def make_telegram_adapter(fake: FakeTelegram, *, poll_timeout: int = 1) -> Teleg
     )
 
 
-def make_seatalk_adapter(fake: FakeSeaTalk) -> SeaTalkAdapter:
+def make_seatalk_adapter(fake: FakeSeaTalk, *, media_dir: Any = None) -> SeaTalkAdapter:
     client = httpx.AsyncClient(transport=httpx.ASGITransport(app=fake.app), base_url="http://fake")
-    return SeaTalkAdapter("st", "app-1", "app-secret", client=client, base_url="http://fake")
+    return SeaTalkAdapter(
+        "st", "app-1", "app-secret", client=client, base_url="http://fake", media_dir=media_dir
+    )
 
 
 @pytest.fixture

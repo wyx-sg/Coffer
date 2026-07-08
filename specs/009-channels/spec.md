@@ -419,7 +419,11 @@ status / notify`.
   into the turn so the agent sees them — SeaTalk
   `combined_forwarded_chat_history` and Telegram `forward_origin`. Each entry
   renders as `<sender>: <text | [image] url | [file] name>` under a
-  `[Forwarded chat record]` heading.
+  `[Forwarded chat record]` heading. Images carried by SeaTalk messages — a
+  directly-sent image, or any image nested (recursively) in a forwarded record
+  — are additionally downloaded with the app token (SeaTalk file links require
+  auth, so the URL alone is useless to the agent) and attached to the turn, so
+  a vision agent sees the actual picture, not just a link.
 - **FR-026**: Threads are read and replied-to in place, and a group reply
   always lands in a thread — never the group main chat. On SeaTalk a thread's
   id equals its root message's id: an @mention inside a thread already carries

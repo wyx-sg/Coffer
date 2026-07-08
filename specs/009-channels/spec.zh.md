@@ -358,6 +358,9 @@ status / notify`。
 - **FR-025**: 转发的聊天记录被展平成可读文本、折进 turn 让 agent 看到——SeaTalk 的
   `combined_forwarded_chat_history` 与 Telegram 的 `forward_origin`。每条记录在
   `[Forwarded chat record]` 标题下渲染为 `<sender>: <text | [image] url | [file] name>`。
+  SeaTalk 消息里的图片——直接发的图，或转发记录里（递归）嵌套的任意图片——还会用
+  app token 下载下来（SeaTalk 文件链接需鉴权，光有 URL 对 agent 没用）并作为附件挂到
+  turn，让多模态 agent 看到真实图片而不只是链接。
 - **FR-026**: 线程 (thread) 被原地读取与回复，且群里的回复**永远进线程**——绝不落到
   群主聊天区。在 SeaTalk 上，线程的 id 等于其根消息的 id：在线程内的 @mention 本就带着
   该 id，于是 bot 读取该线程自身的消息作为上下文（SeaTalk 的 `get_thread_by_thread_id`）
