@@ -360,10 +360,10 @@ class TelegramAdapter:
 
     async def fetch_thread(
         self, chat_id: str, thread_id: str, *, limit: int = 50
-    ) -> list[ForwardedItem]:
+    ) -> tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]:
         # Bot API has no history-fetch method — a bot only ever sees updates
         # pushed to it, never past thread history. Always empty.
-        return []
+        return [], ()
 
     # -- transport -------------------------------------------------------------
 

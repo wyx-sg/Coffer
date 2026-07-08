@@ -22,13 +22,18 @@ from coffer.application.channel.ports import AdapterCallbacks
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
     ChoiceButton,
+    InboundAttachment,
     InboundCallback,
     InboundMessage,
     SentMessage,
 )
 from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.domain.channel.rich_content import ForwardedItem
-from coffer.infrastructure.channel.seatalk_media import default_media_dir, media_attachments
+from coffer.infrastructure.channel.seatalk_media import (
+    default_media_dir,
+    media_attachments,
+    thread_media_attachments,
+)
 from coffer.infrastructure.channel.seatalk_parse import (
     collect_forwarded_items,
     flatten_combined_forwarded,
@@ -255,13 +260,14 @@ class SeaTalkAdapter:
 
     async def fetch_thread(
         self, chat_id: str, thread_id: str, *, limit: int = 50
-    ) -> list[ForwardedItem]:
-        """The thread's own messages, when the @mention landed inside a
-        thread rather than the group main chat. Degrades to ``[]`` on ANY
-        error (a network hiccup, an unexpected payload, or a permission gap):
-        a transient failure must not break the turn, which still runs on the
-        @mention message alone. (Group-main @mentions fetch no history — that
-        permission is intentionally not granted.)"""
+    ) -> tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]:
+        """The thread's own messages, when the @mention landed inside a thread:
+        their flattened text AND the images/files they carry, downloaded
+        (FR-029) so a picture in the thread reaches the vision agent instead of
+        a dead auth-gated file link. Degrades to ``([], ())`` on ANY error so a
+        transient failure never breaks the turn (which still runs on the
+        @mention alone). Group-main @mentions fetch no history — that permission
+        is intentionally not granted."""
         try:
             payload = await self._get(
                 "/messaging/v2/group_chat/get_thread_by_thread_id",
@@ -271,10 +277,16 @@ class SeaTalkAdapter:
             _logger.warning(
                 "seatalk.fetch_thread.failed", extra={"channel": self._name}, exc_info=True
             )
-            return []
+            return [], ()
         messages = payload.get("thread_messages") or [] if isinstance(payload, dict) else []
-        # Recurse: a forwarded record in the thread flattens to its leaves.
-        return collect_forwarded_items(messages)
+        # Recurse: a forwarded record in the thread flattens to its leaves for
+        # text, and its images/files download alongside the direct ones.
+        return (
+            collect_forwarded_items(messages),
+            await thread_media_attachments(
+                self._client, self._media_dir, self._ensure_token, messages
+            ),
+        )
 
     # -- transport -------------------------------------------------------------
 

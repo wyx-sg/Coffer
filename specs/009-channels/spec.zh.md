@@ -703,6 +703,114 @@ status / notify`。
 - **Then** 该 turn 的消息文本携带一个 `[Forwarded chat record]` 块，列出每条被
   转发的记录
 
+### Scenario: thread-history images reach a vision agent
+
+- **Given** 一个已配对的 channel 和一个群线程，其自身消息中包含图片（一张直接发送
+  的，以及一张嵌在转发记录里的）
+- **When** owner 在该线程内 @mention bot
+- **Then** 该线程的图片被下载并作为附件加入该 turn——以真实字节抵达视觉 agent，而
+  不是一个失效的、需鉴权的文件链接
+
+## Channels as a management plane（北极星）
+
+channel 被管理的方式，与 Coffer 管理 MCP server、memory、skill 的方式一致：在一处
+注册、配凭据、配置、并观测用户经聊天触达其 agent 的每一种方式。真正的差异化能力
+——任何 agent 原生或官方 channel 都无法提供——是**一个 bot 控制所有 agent**：单个
+已配对的 SeaTalk/Telegram bot 驱动*任意*受管 agent 并在它们之间切换，于是用户从一个
+chat 里运行整个 agent 舰队。
+
+这个平面下有两类 channel：
+
+- **Coffer-hosted channel（本 spec 的 adapter）。** Coffer 运行 SeaTalk / Telegram
+  adapter，规范化每条消息（媒体下载、转发展平、owner-gate、审计、vault），并为一个
+  turn 驱动**任意**受管 agent——可按会话切换，且（因为每个线程都是自己的会话，
+  FR-032）可按线程切换，于是一个 bot 能在一个线程里跑 Claude Code、在另一个线程里跑
+  Codex。这是 Coffer 的护城河：没有自己 channel 的 agent（Claude Code、Codex、Cursor、
+  OpenCode）**只能**经此触达 IM；且 **SeaTalk 对每个 agent 都是 Coffer-hosted，因为
+  没有任何外部网关会说 SeaTalk。** 整个 spec 009——包括下方的增强（FR-028…FR-042）
+  ——描述的都是这条路径。保持其 agent 无关的那一处接缝：每条入站消息都变成文本加上
+  磁盘上的 `Attachment(path, mime, filename)`，每个 agent adapter 按自己的方式物化附件
+  （Claude 内联图片/PDF；Codex/Hermes/OpenCode 收到文件路径；音频在上游被转写）。
+  channel 层从不按 agent 分支。
+- **Externally-hosted channel（受管、不代理）。** 一个 agent 原生网关（独立运行的
+  OpenClaw、Hermes）或一个官方厂商集成（Claude-in-Slack、Codex-in-Slack、
+  Cursor-in-Slack、Claude Code 官方的 Telegram/Discord/iMessage 插件）拥有自己的传输、
+  只驱动它自己的 agent。Coffer **不**经这些转发消息——叠两个网关会与它们自己的运行时
+  冲突，而单 agent 的 channel 无法提供 one-bot-all-agents。Coffer 转而在同一平面里
+  **管理**它们：注册 channel、把凭据存进 vault、写入/拉起其配置、一键连接、并呈现
+  health/status——消息仍归 agent 自己。一个原生/官方 channel 不支持某平台（如 SeaTalk）
+  时，它就单纯不在那里运行；**Coffer 不会把它桥接到 SeaTalk 上。** 偏好官方 channel
+  是一个按需的选择：要统一的多 agent 控制就用 Coffer-hosted channel；要某个 agent 的
+  原生体验就用/管理一个 external channel。
+
+因为对多数 agent 而言官方 Telegram/Slack 集成要么不存在（Codex/Gemini/OpenCode 没有
+官方 Telegram；SeaTalk 没有任何官方东西），要么是单 agent、且常常仅云端，所以
+Coffer-hosted channel 与它们并不冗余——它是通往统一、本地、多 agent 控制的唯一路径，
+而下方的增强正是官方个人桥所缺的 group/thread/voice/media 能力。
+
+### E. Unified channel management and one-bot-all-agents
+
+- **FR-040**: 一个 bot 控制所有 agent。单个已配对的 Coffer-hosted bot 驱动任意受管
+  agent，经 `/agent` 与选择卡片切换；agent 选择按会话生效，且因为每个线程都是自己的
+  会话（FR-032），一个 bot 能在不同线程里并发运行不同 agent。
+- **FR-041**: channel 是一个统一的管理面。一个管理视图列出每个 channel——Coffer-hosted
+  与 externally-hosted——连同其 kind、status、已配对 owner 与 health，与 MCP-server /
+  memory / skill 的管理面一致。每个 channel 的凭据（bot token、app secret、网关 key）都
+  存在 Coffer vault 里。
+- **FR-042**: externally-hosted channel 是被注册与置备的，而非被代理。对一个 agent 原生
+  网关或官方厂商集成，Coffer 存储其凭据、写入/拉起其配置、提供一键连接、并报告其状态
+  ——但从不经它转发消息。移除它会清理其凭据与配置。
+
+### A. Media pipeline completeness
+
+- **FR-028**: SeaTalk 入站媒体覆盖所有类型，而不只是图片。`handle_event` 用 app token
+  下载文件/文档、视频、语音/音频——每个都成为一个 `Attachment`——就像它已对图片所做的
+  那样。一个直接发的 PDF 或语音备忘录像照片一样驱动一个 turn；只有一条既无文本也无
+  可下载内容的消息才仍然得到「发文本、图片或文件」的回复。
+- **FR-029**: 线程历史里的媒体被下载，而非展平成一个失效链接。当 owner 在一个线程内
+  @mention bot 时，`fetch_thread` 下载该线程自身消息携带的图片/文件（递归其中嵌套的
+  转发记录）并挂到 turn，与既有的展平文本并列。（此前线程媒体只作为 agent 无法打开的、
+  需鉴权的 `[image] <url>` 出现。）
+- **FR-030**: PDF 与 office 文档以抽取文本触达每个 agent，而非作为视觉输入。一个文档
+  附件被文本抽取进一个上下文块，于是路径原生 agent（Codex/Hermes/OpenCode）与视觉
+  agent 都能看到其内容；图片对支持它的 agent 仍保持视觉内联。
+- **FR-031**: SeaTalk 出站媒体被投递且线程感知。`send_media` 接到 SeaTalk 的文件上传 API
+  （`supports_media` 为 true）；一个 agent 的 `![caption](/path)` 标记把文件发回该 turn
+  来源的**同一** chat **与**线程——一张生成的图表回到群线程，而非主聊天区（补上了此前
+  SeaTalk agent 根本无法回文件、以及出站媒体忽略线程的缺口）。
+
+### B. Conversation model
+
+- **FR-032**: 每个群线程是自己的会话。会话身份以 `(channel, chat_id, thread_id)` 为键，
+  而非只按 peer。一个 DM（`thread_id=""`）是一个会话；群里的每个线程都是独立的——各有
+  历史、各有 turn 锁。一个群里不同线程的并发 turn 不再冲突在单一会话上（那个「a turn is
+  already running」错误）。配对/owner 身份仍留在 peer 行上。
+- **FR-033**: 入站附件在后续 turn 上仍可见。持久化的用户消息记录一个附件*引用*（path、
+  mime、filename；bytes 留在媒体目录、绝不进 chat DB）；在任何后续 turn 上，被引用的附件
+  为 agent 重新物化，于是一句后续的「你还能看到那张图吗？」也能工作。媒体目录由一条保留
+  策略界定大小。
+
+### C. Group UX and gating
+
+- **FR-034**: 群里的选择卡片点选路由到该群/线程。`InboundCallback` 携带
+  `chat_kind`/`thread_id`，并由该群的 peer 做 owner-gate（`get_by_chat`，而非单 peer 的
+  `get`）；一次按钮点选的回复落到同一群/线程，而非 DM。
+- **FR-035**: 按群的入站门控可配置。一个 channel 可以设置 require-mention（群里默认开）、
+  一个 sender allowlist、以及 ignore-messages-that-@-someone-else——于是一个坐在繁忙群里的
+  bot 只在它应当作答时才作答。
+
+### D. Platform polish
+
+- **FR-036**: 收到与进度被确认。在平台支持 reaction 处，一个 ack reaction 立即标记收到；
+  turn 期间显示一个 typing/working 信号；完成时标记完成。全部尽力而为——一次失败的 ack
+  绝不打断 turn。
+- **FR-037**: 长回复按平台的最佳机制流式呈现。没有流式 API 的平台（Telegram、SeaTalk）
+  通过在节流下编辑一条占位消息、或向线程周期性发进度来流式呈现；最终文本按段落优先分块
+  到平台上限。
+- **FR-038**: Telegram album 是一个 turn。共享同一 `media_group_id` 的消息被去抖成携带
+  它们全部附件的单个 turn，而非每张图一个 turn。
+- **FR-039**: 入站事件被去重。一个被重投的平台事件（相同 message id）只被处理一次。
+
 ## Assumptions
 
 - 用户能创建 Telegram bot（BotFather）和 SeaTalk Open Platform app，并能

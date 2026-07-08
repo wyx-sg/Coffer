@@ -149,3 +149,15 @@ NousResearch hermes-agent 文档与源码、SeaTalk 官方 `cs-bot` 仓库与开
 | 进度体验      | 一条可编辑状态消息、节流；先确认；最终回复单独发        | 两个先例皆如此；在 SeaTalk 上经能力标志自然降级                                                          |
 | turn 中输入   | 有界 FIFO 队列，控制命令绕行                            | 可预期；避免 Hermes「默认打断」带来的意外                                                                |
 | 会话范围      | 每个 `(channel, chat)` 一段长生命周期对话，`/new` 重置  | 匹配 1:1 的产品决策；群聊将来作为新行加入                                                                |
+
+## Channel 作为管理面 —— 自建 vs 借用 & 现状（2026-07-08）
+
+在决定"扩展 Coffer 自己的 SeaTalk/Telegram 适配器（FR-028…FR-042）"还是"整体借用某个 agent 原生网关"时调研。
+
+- **自建 vs 借用的决定。** **不** fork OpenClaw 或 Hermes 的 channel 代码。两者都是 TypeScript/Node 单体仓库（MIT），其 channel 层与各自的 agent/session/MCP/memory 运行时耦合；把 transport 抽出来、重接到 Coffer 的 Python agent，再加上跑一个 Node 进程 + 背 fork 维护，成本高于增量改进 Coffer 自己的 SeaTalk/Telegram 适配器——尤其两者都不支持 SeaTalk（Coffer 的主渠道），而 Telegram Coffer 已经有了。决定：把好的模式（相册去抖、编辑式流式、ack reaction、事件去重）**参考并移植**进 Coffer 自己的干净适配器，而不是搬代码。
+
+- **官方 channel 现状（2026-07）。** Claude Code "Channels" 是官方**本地**插件（Telegram/Discord/iMessage），但属**研究预览**、仅个人（无群）、会话得一直开着、且听不懂语音（[code.claude.com/docs/en/channels](https://code.claude.com/docs/en/channels)）。Claude-in-Slack、Codex-in-Slack、Cursor-in-Slack 是官方但**仅 Slack**、**云端**、单 agent（[Claude Slack](https://code.claude.com/docs/en/slack)、[Codex Slack](https://developers.openai.com/codex/integrations/slack)、[Cursor Slack](https://cursor.com/docs/integrations/slack)）。Codex/Gemini/OpenCode **没有**官方 Telegram；Gemini CLI 完全没有官方 IM channel。**SeaTalk 谁都不支持（对任何 agent 都零官方竞争）。**
+
+- **两条 track 的 channel 管理面模型。** (1) **Coffer-hosted channel**——SeaTalk 永远,加上官方桥接覆盖不到的 agent/用例的 Telegram——是"一个 bot 控所有 agent"的护城河。(2) **Externally-hosted channel**——agent 原生网关与官方集成——由 Coffer 管理/托管凭据/露出状态,但不经 Coffer 转发,且是单 agent。Coffer 管理 channel 的方式,与管理 MCP server、memory、skill 一致。
+
+- **北极星。** 一个已配对的 bot 驱动任意 managed agent,可**按会话、按 thread** 切换(每个 thread 是独立会话,FR-032)。

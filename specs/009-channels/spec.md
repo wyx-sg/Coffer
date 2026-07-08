@@ -805,6 +805,144 @@ status / notify`.
 - **Then** the turn's message text carries a `[Forwarded chat record]` block
   listing each forwarded item
 
+### Scenario: thread-history images reach a vision agent
+
+- **Given** a paired channel and a group thread whose own messages include an
+  image (a directly-sent one and one nested in a forwarded record)
+- **When** the owner @mentions the bot inside that thread
+- **Then** the thread's images are downloaded and attached to the turn — reaching
+  the vision agent as real bytes, not a dead auth-gated file link
+
+## Channels as a management plane (north star)
+
+Channels are managed the way Coffer manages MCP servers, memory, and skills:
+one place to register, credential, configure, and observe every way a user
+reaches their agents over chat. The distinguishing capability — which no
+agent-native or official channel can offer — is **one bot controls all agents**:
+a single paired SeaTalk/Telegram bot drives *any* managed agent and switches
+between them, so a user runs their whole agent fleet from one chat.
+
+Two kinds of channel live under this plane:
+
+- **Coffer-hosted channel (this spec's adapters).** Coffer runs the SeaTalk /
+  Telegram adapter, normalizes each message (media download, forward flattening,
+  owner-gate, audit, vault), and drives **any** managed agent for one turn —
+  switchable per conversation, and (since each thread is its own conversation,
+  FR-032) per thread, so one bot can run Claude Code in one thread and Codex in
+  another. This is Coffer's moat: agents with no channel of their own (Claude
+  Code, Codex, Cursor, OpenCode) reach IM *only* this way; and **SeaTalk is
+  Coffer-hosted for every agent, because no external gateway speaks SeaTalk.**
+  All of spec 009 — including the enhancements below (FR-028…FR-042) — describes
+  this path. The one seam that keeps it agent-agnostic: every inbound message
+  becomes text plus on-disk `Attachment(path, mime, filename)`, and each agent
+  adapter materializes attachments its own way (Claude inlines images/PDFs;
+  Codex/Hermes/OpenCode receive file paths; audio is transcribed upstream). The
+  channel layer never branches per agent.
+- **Externally-hosted channel (managed, not proxied).** An agent-native gateway
+  (OpenClaw, Hermes run standalone) or an official vendor integration
+  (Claude-in-Slack, Codex-in-Slack, Cursor-in-Slack, Claude Code's official
+  Telegram/Discord/iMessage plugin) owns its own transport and drives only its
+  own agent. Coffer does NOT relay messages through these — stacking two
+  gateways would collide with their own runtime, and a single-agent channel
+  cannot offer one-bot-all-agents. Instead Coffer **manages** them in the same
+  plane: register the channel, hold its credentials in the vault, write/launch
+  its config, one-click connect, and surface health/status — messages stay the
+  agent's own. A native/official channel that does not support a platform (e.g.
+  SeaTalk) simply does not run there; **Coffer does not bridge it onto SeaTalk.**
+  Preferring an official channel is a per-need choice: use the Coffer-hosted
+  channel for unified multi-agent control; use/manage an external channel for a
+  single agent's native experience.
+
+Because official Telegram/Slack integrations either don't exist for most agents
+(Codex/Gemini/OpenCode have no official Telegram; SeaTalk has no official
+anything) or are single-agent and often cloud-only, the Coffer-hosted channel
+is not redundant with them — it is the only path to unified, local, multi-agent
+control, and the enhancements below are exactly the group/thread/voice/media
+capabilities the official personal bridges lack.
+
+### E. Unified channel management and one-bot-all-agents
+
+- **FR-040**: One bot controls all agents. A single paired Coffer-hosted bot
+  drives any managed agent, switchable via `/agent` and selection cards; agent
+  choice is per conversation, and since each thread is its own conversation
+  (FR-032) one bot can run different agents in different threads concurrently.
+- **FR-041**: Channels are a unified management surface. A management view lists
+  every channel — Coffer-hosted and externally-hosted — with its kind, status,
+  paired owner, and health, mirroring the MCP-server / memory / skill management
+  surfaces. Credentials for every channel (bot tokens, app secrets, gateway
+  keys) are held in the Coffer vault.
+- **FR-042**: Externally-hosted channels are registered and provisioned, not
+  proxied. For an agent-native gateway or an official vendor integration, Coffer
+  stores its credentials, writes/launches its config, offers one-click connect,
+  and reports its status — but never relays messages through it. Removing it
+  cleans up its credentials and config.
+
+### A. Media pipeline completeness
+
+- **FR-028**: SeaTalk inbound media covers all types, not just images.
+  `handle_event` downloads files/documents, video, and voice/audio with the app
+  token — each becoming an `Attachment` — as it already does for images. A
+  directly-sent PDF or voice memo drives a turn like a photo does; only a
+  message with nothing text-or-downloadable still gets the "send text, a photo,
+  or a file" reply.
+- **FR-029**: Thread-history media is downloaded, not flattened to a dead link.
+  When the owner @mentions the bot inside a thread, `fetch_thread` downloads the
+  images/files carried by the thread's own messages (recursing forwarded records
+  within them) and attaches them to the turn, alongside the existing flattened
+  text. (Previously thread media surfaced only as an auth-gated `[image] <url>`
+  the agent could not open.)
+- **FR-030**: PDFs and office documents reach every agent as extracted text, not
+  as a vision input. A document attachment is text-extracted into a context
+  block so path-native agents (Codex/Hermes/OpenCode) and vision agents alike
+  see its content; images stay vision-inlined for agents that support it.
+- **FR-031**: SeaTalk outbound media is delivered and thread-aware. `send_media`
+  is wired to SeaTalk's file-upload API (`supports_media` true); an agent
+  `![caption](/path)` marker sends the file back into the same chat **and
+  thread** the turn came from — a generated chart returns to the group thread,
+  not the main chat (closing the gap where SeaTalk agents could not return
+  files at all, and where outbound media ignored the thread).
+
+### B. Conversation model
+
+- **FR-032**: Each group thread is its own conversation. Conversation identity is
+  keyed by `(channel, chat_id, thread_id)`, not by the peer alone. A DM
+  (`thread_id=""`) is one conversation; each thread in a group is independent —
+  its own history and its own turn lock. Concurrent turns in different threads
+  of one group no longer collide on a single conversation (the "a turn is
+  already running" error). Pairing/owner identity stays on the peer row.
+- **FR-033**: Inbound attachments are visible on later turns. The persisted user
+  message records an attachment *reference* (path, mime, filename; the bytes
+  stay in the media dir, never the chat DB); on any later turn the referenced
+  attachments are re-materialized for the agent, so a follow-up "can you still
+  see that image?" works. The media dir is bounded by a retention policy.
+
+### C. Group UX and gating
+
+- **FR-034**: Group selection-card taps route to the group/thread.
+  `InboundCallback` carries `chat_kind`/`thread_id` and is owner-gated by the
+  group's peer (`get_by_chat`, not the single-peer `get`); a button tap's reply
+  lands in the same group/thread, not a DM.
+- **FR-035**: Per-group inbound gating is configurable. A channel may set
+  require-mention (default on for groups), a sender allowlist, and
+  ignore-messages-that-@-someone-else — so a bot sitting in a busy group answers
+  only when it should.
+
+### D. Platform polish
+
+- **FR-036**: Receipt and progress are acknowledged. Where the platform supports
+  reactions, an ack reaction marks receipt immediately; a typing/working signal
+  shows during the turn; completion is marked on finish. All best-effort — a
+  failed ack never breaks the turn.
+- **FR-037**: Long replies stream by the platform's best mechanism. Platforms
+  with no streaming API (Telegram, SeaTalk) stream by editing one placeholder
+  message under a throttle, or post periodic progress into the thread; final
+  text is paragraph-first chunked to the platform limit.
+- **FR-038**: Telegram albums are one turn. Messages sharing a `media_group_id`
+  are debounced into a single turn carrying all their attachments, not one turn
+  per photo.
+- **FR-039**: Inbound events are de-duplicated. A redelivered platform event
+  (same message id) is processed once.
+
 ## Assumptions
 
 - The user can create a Telegram bot (BotFather) and a SeaTalk Open Platform
