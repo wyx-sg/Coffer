@@ -42,7 +42,10 @@ def message_to_item(msg: dict[str, Any]) -> ForwardedItem:
 
     Used by ``fetch_thread`` and the group-forwarded-record renderer —
     one mapping for every place SeaTalk hands us a message dict to flatten
-    into text.
+    into text. A nested ``combined_forwarded_chat_history`` entry collapses
+    to the ``[forwarded chat record]`` stand-in here; callers that want the
+    nested leaves flattened use :func:`flatten_combined_forwarded`, which
+    recurses before falling back to this single-line mapping.
     """
     sender = str((msg.get("sender") or {}).get("email") or "unknown")
     tag = str(msg.get("tag", ""))
@@ -57,9 +60,33 @@ def message_to_item(msg: dict[str, Any]) -> ForwardedItem:
     elif tag == "file":
         text = f"[file] {(msg.get('file') or {}).get('filename', '')}"
     elif tag == "combined_forwarded_chat_history":
-        # A short stand-in — we do not recurse into the nested history here.
+        # A short stand-in — recursion into the nested history is handled by
+        # ``_collect_forwarded_items`` before this fallback is ever reached.
         text = "[forwarded chat record]"
     return ForwardedItem(sender=sender, text=text)
+
+
+def _collect_forwarded_items(content: Sequence[Any]) -> list[ForwardedItem]:
+    """Flatten a forwarded-record ``content`` list to leaf items, recursing
+    into every nested ``combined_forwarded_chat_history`` entry.
+
+    Forwarding a chat record wraps the real messages one level deeper: the
+    top-level ``content`` is a single entry whose ``tag`` is itself
+    ``combined_forwarded_chat_history`` and whose own nested content holds
+    the leaf text/image/file messages. Recursing yields those leaves with
+    their real per-message senders instead of the ``[forwarded chat record]``
+    placeholder the whole record would otherwise collapse to.
+    """
+    items: list[ForwardedItem] = []
+    for entry in content:
+        if not isinstance(entry, dict):
+            continue
+        if str(entry.get("tag", "")) == "combined_forwarded_chat_history":
+            nested = (entry.get("combined_forwarded_chat_history") or {}).get("content") or []
+            items.extend(_collect_forwarded_items(nested))
+        else:
+            items.append(message_to_item(entry))
+    return items
 
 
 def flatten_combined_forwarded(message: dict[str, Any]) -> str:
@@ -70,10 +97,12 @@ def flatten_combined_forwarded(message: dict[str, Any]) -> str:
     whole message — the 1:1 DM (``message_from_bot_subscriber``) and the
     group @mention (``new_mentioned_message_received_from_group_chat``)
     events — so a forwarded record dropped into a group is not silently
-    lost the way an empty ``plain_text`` would make it.
+    lost the way an empty ``plain_text`` would make it. Recurses into the
+    nested wrapping SeaTalk adds when a record is forwarded (see
+    :func:`_collect_forwarded_items`).
     """
     content = (message.get("combined_forwarded_chat_history") or {}).get("content") or []
-    return flatten_forwarded([message_to_item(e) for e in content if isinstance(e, dict)])
+    return flatten_forwarded(_collect_forwarded_items(content))
 
 
 def strip_group_mentions(plain_text: str, mentioned_list: Sequence[Any] | None) -> str:

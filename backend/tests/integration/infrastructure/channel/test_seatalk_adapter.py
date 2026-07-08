@@ -408,6 +408,80 @@ async def test_handle_event_forwarded_record_flattens_into_text(fake_seatalk: Fa
     assert msg.thread_id == ""
 
 
+async def test_handle_event_nested_forwarded_record_recurses(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """When a chat record is forwarded, SeaTalk wraps the real messages one
+    level deeper: the top-level ``content`` holds a single entry that is
+    itself ``tag == combined_forwarded_chat_history`` whose OWN
+    ``combined_forwarded_chat_history.content`` carries the leaf messages.
+    The flattener must recurse into that nesting instead of emitting the
+    ``[forwarded chat record]`` placeholder for the whole record (the shape
+    captured live in ~/.coffer daemon logs; the original bug report).
+    """
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(
+            {
+                "event_type": "message_from_bot_subscriber",
+                "timestamp": 1718000000,
+                "event": {
+                    "employee_code": "emp-1",
+                    "email": "yuxing.wu@shopee.com",
+                    "message": {
+                        "tag": "combined_forwarded_chat_history",
+                        "message_id": "pm-nested",
+                        "thread_id": "",
+                        "combined_forwarded_chat_history": {
+                            "content": [
+                                {
+                                    "tag": "combined_forwarded_chat_history",
+                                    "sender": {"email": "yuxing.wu@shopee.com"},
+                                    "message_sent_time": 1718000000,
+                                    "combined_forwarded_chat_history": {
+                                        "content": [
+                                            {
+                                                "tag": "text",
+                                                "sender": {"email": "john.phuatd@shopee.com"},
+                                                "message_sent_time": 1718000001,
+                                                "text": {"content": "Do you see this issue?"},
+                                            },
+                                            {
+                                                "tag": "image",
+                                                "sender": {"email": "john.phuatd@shopee.com"},
+                                                "message_sent_time": 1718000002,
+                                                "image": {
+                                                    "content": "https://cdn.example.com/i.png"
+                                                },
+                                            },
+                                            {
+                                                "tag": "text",
+                                                "sender": {"email": "yuxing.wu@shopee.com"},
+                                                "message_sent_time": 1718000003,
+                                                "text": {"content": "let me check"},
+                                            },
+                                        ]
+                                    },
+                                },
+                            ]
+                        },
+                    },
+                },
+            }
+        )
+    finally:
+        await adapter.stop()
+    [msg] = recorder.messages
+    assert msg.text.startswith("[Forwarded chat record]")
+    assert "john.phuatd@shopee.com: Do you see this issue?" in msg.text
+    assert "[image] https://cdn.example.com/i.png" in msg.text
+    assert "yuxing.wu@shopee.com: let me check" in msg.text
+    # The placeholder must NOT leak through — the whole point of recursing.
+    assert "[forwarded chat record]" not in msg.text
+
+
 # -- group / @mention inbound (Task 6) ----------------------------------------
 
 
