@@ -46,7 +46,8 @@ def build_run_argv(
     the trust boundary) and ``--trust`` trusts the headless workspace so a turn
     never blocks on a folder-trust prompt. ``--resume <chatId>`` continues the
     prior Cursor chat for multi-turn continuity. The prompt is the trailing
-    positional message.
+    positional message, guarded by a ``--`` option terminator so a message that
+    starts with ``-``/``--`` is never parsed as a flag.
 
     The model is intentionally NOT passed: Cursor is locked to its own backend and
     uses the account's default model, so Coffer binds cursor to no model and
@@ -55,7 +56,7 @@ def build_run_argv(
     argv = [binary, "-p", "--output-format", "stream-json", "--force", "--trust"]
     if resume_session:
         argv += ["--resume", resume_session]
-    argv.append(prompt)
+    argv += ["--", prompt]
     return argv
 
 

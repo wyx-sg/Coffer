@@ -205,7 +205,7 @@ def test_tolerant_of_garbage_and_unknown_types() -> None:
         {},
         {"type": "assistant"},
         {"type": "assistant", "message": "not-a-dict"},
-        {"type": "assistant", "message": {"content": "not-a-list"}},
+        {"type": "assistant", "message": {"content": 123}},  # non-str, non-list
         {"type": "tool_call"},
         {"type": "tool_call", "subtype": "started"},  # no call_id
         {"type": "tool_call", "subtype": "started", "call_id": 123},  # wrong type
@@ -214,3 +214,36 @@ def test_tolerant_of_garbage_and_unknown_types() -> None:
         {"no_type": True},
     ):
         assert map_cursor_event(obj, state) == []
+
+
+def test_assistant_string_content_is_emitted() -> None:
+    # Cursor mirrors the Anthropic Messages shape: content can be a bare STRING,
+    # not just a list of blocks — it must not be dropped (review finding).
+    state = CursorParseState()
+    events = map_cursor_event(
+        {"type": "assistant", "message": {"role": "assistant", "content": "hello world"}}, state
+    )
+    assert events == [TextDelta(text="hello world")]
+
+
+def test_result_subtype_error_without_boolean_flag_marks_error() -> None:
+    # A `result` need not carry a boolean is_error; a non-success subtype counts.
+    state = CursorParseState()
+    map_cursor_event({"type": "result", "subtype": "error"}, state)
+    assert state.is_error is True
+
+
+def test_tool_variant_ignores_sibling_metadata_keys() -> None:
+    # _derive_tool must find the real variant, not the first key (which may be a
+    # metadata sibling like `status`) — review finding.
+    state = CursorParseState()
+    events = map_cursor_event(
+        {
+            "type": "tool_call",
+            "subtype": "started",
+            "call_id": "c1",
+            "tool_call": {"status": "running", "readToolCall": {"path": "/x"}},
+        },
+        state,
+    )
+    assert events == [ToolCall(tool_use_id="c1", tool_name="read", tool_input={"path": "/x"})]

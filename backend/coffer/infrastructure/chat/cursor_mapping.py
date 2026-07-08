@@ -77,25 +77,27 @@ def _derive_tool(tool_call: Any) -> tuple[str, dict[str, Any]]:
     """
     if not isinstance(tool_call, dict):
         return ("", {})
+    # Look up the known variants explicitly rather than trusting the first key —
+    # the object may carry sibling metadata (``type``/``status``/``id``/…) that
+    # is not the tool variant.
+    func = tool_call.get("function")
+    if isinstance(func, dict):
+        name = func.get("name")
+        name = name if isinstance(name, str) else ""
+        args = func.get("arguments")
+        if isinstance(args, dict):
+            return (name, args)
+        if isinstance(args, str):
+            try:
+                parsed = json.loads(args)
+            except ValueError:
+                parsed = None
+            return (name, parsed if isinstance(parsed, dict) else {})
+        return (name, {})
+    # readToolCall / writeToolCall / … → the variant key ends with ``ToolCall``.
     for key, sub in tool_call.items():
-        if key == "function":
-            if not isinstance(sub, dict):
-                return ("", {})
-            name = sub.get("name")
-            name = name if isinstance(name, str) else ""
-            args = sub.get("arguments")
-            if isinstance(args, dict):
-                return (name, args)
-            if isinstance(args, str):
-                try:
-                    parsed = json.loads(args)
-                except ValueError:
-                    parsed = None
-                return (name, parsed if isinstance(parsed, dict) else {})
-            return (name, {})
-        # readToolCall / writeToolCall / … → strip the ``ToolCall`` suffix.
-        name = key[: -len(_TOOL_KEY_SUFFIX)] if key.endswith(_TOOL_KEY_SUFFIX) else key
-        return (name, sub if isinstance(sub, dict) else {})
+        if key.endswith(_TOOL_KEY_SUFFIX):
+            return (key[: -len(_TOOL_KEY_SUFFIX)], sub if isinstance(sub, dict) else {})
     return ("", {})
 
 
@@ -122,6 +124,10 @@ def _map_assistant(obj: dict[str, Any]) -> list[AgentEvent]:
     if not isinstance(message, dict):
         return []
     content = message.get("content")
+    # Cursor mirrors the Anthropic Messages shape, where ``content`` is legally a
+    # bare string OR a list of blocks — handle both, else the whole reply is lost.
+    if isinstance(content, str):
+        return [TextDelta(text=content)] if content else []
     if not isinstance(content, list):
         return []
     texts: list[str] = []
@@ -183,9 +189,12 @@ def map_cursor_event(obj: dict[str, Any], state: CursorParseState) -> list[Agent
     if t == "tool_call":
         return _map_tool_call(obj, state)
     if t == "result":
-        is_error = obj.get("is_error")
-        if isinstance(is_error, bool):
-            state.is_error = is_error
+        # Error if the boolean flag says so OR the subtype is a non-success value
+        # (a ``result`` need not carry a boolean ``is_error``).
+        subtype = obj.get("subtype")
+        state.is_error = bool(obj.get("is_error")) or (
+            isinstance(subtype, str) and subtype not in ("", "success")
+        )
         return []
     # system (session captured above) / user / anything else → nothing.
     return []
