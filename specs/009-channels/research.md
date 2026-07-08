@@ -116,8 +116,12 @@ building group/@mention/thread/forward support (feature/channel-group-mention-ri
     there is no separate "mentioned in thread" event type.
 
 - **SeaTalk Open API endpoints used:**
-  - Group send: `POST /messaging/v2/group_chat {group_id, message}` (add
-    `thread_id` to reply into a thread instead of group-main).
+  - Group send: `POST /messaging/v2/group_chat {group_id, message}`. To reply
+    into a thread, put `thread_id` **inside `message`** (`message.thread_id`),
+    NOT as a top-level sibling — verified live that a top-level `thread_id` is
+    silently ignored and the reply lands in the group main chat, whereas
+    `message.thread_id` threads it and roots a new thread at that id when none
+    exists yet (so a group-main @mention reply threads under the @mention).
   - Thread read: `GET /messaging/v2/group_chat/get_thread_by_thread_id
     {group_id, thread_id, page_size}` → response `{code, next_cursor,
     thread_messages:[…]}` — the list key is `thread_messages`, not `messages`

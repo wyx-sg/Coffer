@@ -107,8 +107,11 @@ NousResearch hermes-agent 文档与源码、SeaTalk 官方 `cs-bot` 仓库与开
     并不存在一个单独的「线程内被 @」事件类型。
 
 - **用到的 SeaTalk Open API 端点：**
-  - 群发送：`POST /messaging/v2/group_chat {group_id, message}`（加上
-    `thread_id` 即可回复进某个线程而非群主聊天）。
+  - 群发送：`POST /messaging/v2/group_chat {group_id, message}`。要回复进某个
+    线程，`thread_id` 要放在 **`message` 体内**（`message.thread_id`），**不是**放
+    在顶层——真机验证：顶层 `thread_id` 会被静默忽略、回复落到群主聊天区，而
+    `message.thread_id` 才会进线程，且目标线程不存在时会以该 id 为根**自动建线程**
+    （所以群主聊天区的 @mention 回复会挂在该 @mention 下成线程）。
   - 线程读取：`GET /messaging/v2/group_chat/get_thread_by_thread_id
     {group_id, thread_id, page_size}` → 响应 `{code, next_cursor,
     thread_messages:[…]}`——列表键是 `thread_messages`，不是 `messages` 或

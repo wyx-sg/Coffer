@@ -201,11 +201,14 @@ async def test_send_text_group_posts_group_chat_with_thread_id(fake_seatalk: Fak
         await adapter.stop()
     assert fake_seatalk.single_chat_calls == []  # group send never hits single_chat
     [(body, _auth)] = fake_seatalk.group_chat_calls
+    # thread_id lives INSIDE the message body, not as a top-level sibling —
+    # verified live that a top-level thread_id is ignored and the reply lands
+    # in the group main chat instead of the thread.
     assert body == {
         "group_id": "gid-1",
-        "message": {"tag": "text", "text": {"format": 1, "content": "hi"}},
-        "thread_id": "t1",
+        "message": {"tag": "text", "text": {"format": 1, "content": "hi"}, "thread_id": "t1"},
     }
+    assert "thread_id" not in body  # never a top-level sibling
     assert sent.message_id == "m1"
 
 
@@ -218,7 +221,8 @@ async def test_send_text_group_without_thread_id_omits_thread_field(
     finally:
         await adapter.stop()
     [(body, _auth)] = fake_seatalk.group_chat_calls
-    assert "thread_id" not in body
+    assert "thread_id" not in body  # not a top-level sibling
+    assert "thread_id" not in body["message"]  # and not in the message body
 
 
 async def test_send_text_direct_still_uses_single_chat(fake_seatalk: FakeSeaTalk) -> None:
