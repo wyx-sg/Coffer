@@ -530,7 +530,11 @@ async def test_handle_event_group_mention_in_main_chat(fake_seatalk: FakeSeaTalk
     assert msg.chat_id == "gid-1"
     assert msg.addressed is True
     assert msg.text == "hi"
-    assert msg.thread_id == ""
+    # A main-chat @mention (incoming thread_id == "") must reply INTO the thread
+    # SeaTalk roots at this @mention — never the group main chat. The thread's id
+    # equals the @mention's own message_id, so that is the reply thread_id.
+    assert msg.thread_id == "gm-1"
+    assert msg.thread_id == msg.platform_message_id
     assert msg.sender_id == "emp-2"
     assert msg.sender_display == "sender@shopee.com"
     assert msg.platform_message_id == "gm-1"

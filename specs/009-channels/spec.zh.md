@@ -358,13 +358,16 @@ status / notify`。
 - **FR-025**: 转发的聊天记录被展平成可读文本、折进 turn 让 agent 看到——SeaTalk 的
   `combined_forwarded_chat_history` 与 Telegram 的 `forward_origin`。每条记录在
   `[Forwarded chat record]` 标题下渲染为 `<sender>: <text | [image] url | [file] name>`。
-- **FR-026**: 线程 (thread) 被原地读取与回复。当 owner 在某个线程内 @mention bot 时，
-  bot 会读取该线程自身的消息作为上下文（SeaTalk 的 `get_thread_by_thread_id`）并回复
-  进该线程；一条在线程内发出的 DM 或群消息，回复也会进入该线程。刻意**不**读取
-  *最近的群主聊天*历史（SeaTalk 的群聊历史权限未获批；@mention 消息本身自成上下文）。
-  Telegram 完全无法拉取历史（Bot API 的限制），因此 Telegram 上不读取线程上下文——
-  bot 仅基于 @mention 消息本身作答，但仍会回复进该 forum topic。一条被引用/回复的消息
-  在平台内联该信息处贡献一段 `> sender: …` 上下文前缀。
+- **FR-026**: 线程 (thread) 被原地读取与回复，且群里的回复**永远进线程**——绝不落到
+  群主聊天区。在 SeaTalk 上，线程的 id 等于其根消息的 id：在线程内的 @mention 本就带着
+  该 id，于是 bot 读取该线程自身的消息作为上下文（SeaTalk 的 `get_thread_by_thread_id`）
+  并回复进该线程；在群主聊天区的 @mention 不带线程 id，于是 bot 以这条 @mention 为根
+  新建一个线程（回复挂在该 @mention 自身的 message id 下），而由于此时线程内只有这条
+  @mention，不读取任何历史。一条在线程内发出的 DM 或群消息，回复也会进入该线程。刻意
+  **不**读取*最近的群主聊天*历史（SeaTalk 的群聊历史权限未获批；@mention 消息本身自成
+  上下文）。Telegram 完全无法拉取历史（Bot API 的限制），因此 Telegram 上不读取线程
+  上下文——bot 仅基于 @mention 消息本身作答，但仍会回复进该 forum topic。一条被引用/
+  回复的消息在平台内联该信息处贡献一段 `> sender: …` 上下文前缀。
 - **FR-027**: 每个 `(channel, chat, thread)` 都有自己的 turn 队列/会话，因此 DM turn、
   群主聊天 turn 与线程 turn 彼此永不共享状态。
 
@@ -674,8 +677,9 @@ status / notify`。
 
 - **Given** 一个已配对的 channel 和一个没有活跃线程的群聊
 - **When** owner 在群的主聊天里 @mention bot
-- **Then** 一个 turn 运行，回复被投递到该群，且为该群聊创建一条 `channel_peers`
-  行、继承 owner 的 `sender_id`
+- **Then** 一个 turn 运行，回复被投递进以该 @mention 为根新建的线程（绝不落到群主
+  聊天区），不读取任何线程历史，且为该群聊创建一条 `channel_peers` 行、继承 owner 的
+  `sender_id`
 
 ### Scenario: a non-owner @mention in a group is refused
 
