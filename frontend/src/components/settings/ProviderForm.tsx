@@ -42,6 +42,7 @@ const AGENT_LABEL_KEY: Record<AgentType, string> = {
   codex: "settings.connections.agentCodex",
   opencode: "settings.connections.agentOpencode",
   hermes: "settings.connections.agentHermes",
+  cursor: "settings.connections.agentCursor",
 };
 
 export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate, onCancel }: Props) {

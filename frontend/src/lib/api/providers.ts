@@ -15,7 +15,7 @@ export type Protocol = "anthropic" | "openai" | "ollama" | "unknown";
 
 // The agent types a connection may project into. Decoupled from `protocol`: the
 // user routes any endpoint to any agent (e.g. an openai gateway → Claude Code).
-export type AgentType = "claude_code" | "codex" | "opencode" | "hermes";
+export type AgentType = "claude_code" | "codex" | "opencode" | "hermes" | "cursor";
 
 /**
  * Chat agent_key → the protocol it speaks (ADR-032 projection targets). Shared by

@@ -176,6 +176,24 @@ def _hermes_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
     )
 
 
+def _cursor_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
+    # Cursor's ~/.cursor/ holds cli-config.json (CLI settings) and, on demand,
+    # mcp.json (MCP servers, `mcpServers` map). AGENTS.md is the human-authored
+    # instructions file cursor-agent reads.
+    return (
+        ConfigFileSpec(
+            "config", "CLI config (cli-config.json)", cfg / "cli-config.json", ConfigFileFormat.JSON
+        ),
+        ConfigFileSpec("mcp", "MCP servers (mcp.json)", cfg / "mcp.json", ConfigFileFormat.JSON),
+        ConfigFileSpec(
+            "instructions",
+            "Global instructions (AGENTS.md)",
+            cfg / "AGENTS.md",
+            ConfigFileFormat.MARKDOWN,
+        ),
+    )
+
+
 # --- the manifest --------------------------------------------------------------
 
 AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
@@ -268,6 +286,31 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         # session hooks are a YAML on_session_* / pre_llm_call mechanism distinct
         # from the JSON HookInjectionSpec model (a follow-up slice — ADR-040).
         # plugins=None: hermes plugins are a different model, not managed here.
+    ),
+    AgentType.CURSOR: AgentDescriptor(
+        type=AgentType.CURSOR,
+        display_name="Cursor",
+        config_subpath=".cursor",
+        config_files=_cursor_files,
+        mcp=McpInjectionSpec(
+            config_key="mcp",
+            container_key="mcpServers",
+            format=ConfigFileFormat.JSON,
+            entry_style=McpEntryStyle.COMMAND_MAP,
+        ),
+        # Capability gaps (ADR-040 capability matrix) — all absent facets:
+        #  * hooks=None            — cursor-agent has a hooks.json, but headless
+        #                            firing of SessionStart/End is undocumented
+        #                            upstream, so it is deferred (a follow-up slice).
+        #  * native memory         — cursor "Memories" is an IDE-only toggle with no
+        #                            CLI, so it is omitted from
+        #                            _NATIVE_MEMORY_DISABLE_TARGET below.
+        #  * provider projection   — cursor is locked to Cursor's own backend with no
+        #                            custom LLM base URL, so it is NOT a projection
+        #                            target (absent from _AGENT_TARGETS and the
+        #                            connection-compatible defaults); cursor-agent
+        #                            uses its OWN auth (`cursor-agent login`), which
+        #                            Coffer does not inject.
     ),
 }
 

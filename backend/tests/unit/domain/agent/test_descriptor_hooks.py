@@ -108,3 +108,32 @@ def test_hermes_hooks_deferred_but_native_memory_present() -> None:
 def test_hermes_config_key_allowlisted_and_yaml() -> None:
     spec = spec_for(AgentType.HERMES, "config")
     assert spec.format is ConfigFileFormat.YAML
+
+
+# --- cursor (ADR-040 slice 3) --------------------------------------------------
+
+
+def test_cursor_descriptor_and_mcp() -> None:
+    from coffer.domain.agent.mcp_injection import McpEntryStyle
+
+    d = descriptor_for(AgentType.CURSOR)
+    assert d.display_name == "Cursor"
+    assert d.config_subpath == ".cursor"
+    keys = {s.key for s in d.config_files(d.default_config_dir())}
+    assert {"config", "mcp", "instructions"} <= keys
+    assert d.mcp is not None
+    assert d.mcp.config_key == "mcp"
+    assert d.mcp.container_key == "mcpServers"
+    assert d.mcp.format is ConfigFileFormat.JSON
+    assert d.mcp.entry_style is McpEntryStyle.COMMAND_MAP
+
+
+def test_cursor_facets_all_absent() -> None:
+    # cursor is locked to Cursor's backend: hooks deferred, no native memory, and
+    # NOT a provider-projection target (ADR-040 capability matrix).
+    from coffer.domain.provider.projection import target_for_agent
+
+    d = descriptor_for(AgentType.CURSOR)
+    assert d.hooks is None
+    assert native_memory_disable_target(AgentType.CURSOR) is None
+    assert target_for_agent(AgentType.CURSOR) is None

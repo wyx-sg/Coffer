@@ -46,6 +46,7 @@ from coffer.domain.provider.errors import NoActiveProvider
 from coffer.infrastructure.chat.agentic_rag import DEFAULT_RECURSION_LIMIT, make_ask_tool
 from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
+from coffer.infrastructure.chat.cursor_provider import CursorProvider
 from coffer.infrastructure.chat.gateway_tool_provider import GatewayToolProvider
 from coffer.infrastructure.chat.hermes_provider import HermesProvider
 from coffer.infrastructure.chat.opencode_provider import OpencodeProvider
@@ -356,6 +357,10 @@ def wire_chat(
         HermesProvider(conversations=conv_repo, resolve_key=_key_resolver(AgentType.HERMES)),
         display_name="Hermes",
     )
+    # Cursor is locked to Cursor's own backend and uses its OWN auth
+    # (`cursor-agent login` / CURSOR_API_KEY): Coffer projects no connection and
+    # injects no key, so there is NO resolve_key here (provider-projection-N/A).
+    registry.register(CursorProvider(conversations=conv_repo), display_name="Cursor")
 
     # 7. Application services + the agent-agnostic turn orchestrator.
     chat_svc = ChatService(

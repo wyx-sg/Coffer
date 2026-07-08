@@ -20,6 +20,7 @@ def test_supported_types():
         "codex",
         "opencode",
         "hermes",
+        "cursor",
     }
 
 
