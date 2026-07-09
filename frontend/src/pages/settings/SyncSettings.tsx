@@ -110,6 +110,13 @@ export function SyncSettings() {
                   {t("settings.sync.lockedHint", { refs: status.locked_refs.join(", ") })}
                 </p>
               )}
+              {status.quarantined_refs.length > 0 && (
+                <p className="mt-1 text-amber-600">
+                  {t("settings.sync.quarantinedHint", {
+                    refs: status.quarantined_refs.join(", "),
+                  })}
+                </p>
+              )}
               {status.last_error && <p className="mt-1 text-red-600">{status.last_error}</p>}
             </div>
           )}

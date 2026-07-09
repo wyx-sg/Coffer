@@ -23,6 +23,7 @@ export interface SyncStatus {
   last_error: string | null;
   conflict_paths: string[];
   locked_refs: string[];
+  quarantined_refs: string[];
 }
 
 export interface SyncMachine {

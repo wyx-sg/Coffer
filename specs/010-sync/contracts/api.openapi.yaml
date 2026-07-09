@@ -200,7 +200,7 @@ components:
         updated_at: { type: string }
     SyncStatusOut:
       type: object
-      required: [status, conflict_paths, locked_refs]
+      required: [status, conflict_paths, locked_refs, quarantined_refs]
       properties:
         status:
           type: string
@@ -213,6 +213,10 @@ components:
         locked_refs:
           type: array
           items: { type: string }
+        quarantined_refs:
+          type: array
+          items: { type: string }
+          description: "<kind>:<name> refs whose import failed on this machine; retried each run"
     SyncRunIn:
       type: object
       properties:

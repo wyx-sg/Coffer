@@ -50,6 +50,7 @@ function seed(statusValue: NonNullable<Status>["status"], over: Partial<NonNulla
       last_error: null,
       conflict_paths: [],
       locked_refs: [],
+      quarantined_refs: [],
       ...over,
     },
   } as unknown as ReturnType<typeof hooks.useSyncStatus>);

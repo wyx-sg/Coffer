@@ -27,7 +27,13 @@ from coffer.application.sync.ports import (
     WorkspacePort,
 )
 from coffer.domain.audit import AuditEventType
-from coffer.domain.sync.errors import MasterKeyFileInvalid, SyncInProgress, SyncNotConfigured
+from coffer.domain.sync.errors import (
+    MasterKeyFileInvalid,
+    SyncInProgress,
+    SyncNotConfigured,
+    SyncWorkspaceTooNew,
+)
+from coffer.domain.sync.manifest import SCHEMA_VERSION
 from coffer.domain.sync.models import (
     MACHINE_ENTRY_HEARTBEAT_SECONDS,
     MachineEntry,
@@ -107,20 +113,36 @@ class SyncService:
         if self._lock.locked():
             raise SyncInProgress()
         async with self._lock:
-            assert config.remote is not None
-            await asyncio.to_thread(self._git.ensure_repo, config.remote, config.branch)
-            await self._exporter.export()
-            identity = await self._refresh_machine_entry()
-            await asyncio.to_thread(
-                self._git.commit_all, f"coffer sync from {identity.display_name}"
-            )
-            if pull:
-                outcome = await asyncio.to_thread(self._git.pull, config.branch)
-                if outcome.is_conflict:
-                    return await self._record_conflict(list(outcome.conflicted_paths))
-            if push:
-                await asyncio.to_thread(self._git.push, config.branch)
-            return await self._finish_import()
+            try:
+                return await self._run_locked(config, pull=pull, push=push)
+            except Exception as e:
+                # A failed run must be visible: the auto-sync worker swallows
+                # exceptions, so without this the status would keep saying
+                # clean while (e.g.) a too-new workspace never syncs again.
+                await self._record_error(str(e))
+                raise
+
+    async def _run_locked(self, config: SyncConfig, *, pull: bool, push: bool) -> SyncState:
+        assert config.remote is not None
+        await asyncio.to_thread(self._git.ensure_repo, config.remote, config.branch)
+        # Gate BEFORE export: a newer-schema manifest merged by an earlier run
+        # must fail here, not be overwritten by this run's export (which would
+        # silently disarm the gate and downgrade the medium).
+        await asyncio.to_thread(self._check_workspace_version)
+        identity = await self._identity.get()
+        prior = await self._config.get_state()
+        await self._exporter.export(
+            quarantined=prior.quarantined_refs, machine_id=identity.machine_id
+        )
+        await self._refresh_machine_entry(identity)
+        await asyncio.to_thread(self._git.commit_all, f"coffer sync from {identity.display_name}")
+        if pull:
+            outcome = await asyncio.to_thread(self._git.pull, config.branch)
+            if outcome.is_conflict:
+                return await self._record_conflict(list(outcome.conflicted_paths))
+        if push:
+            await asyncio.to_thread(self._git.push, config.branch)
+        return await self._finish_import()
 
     async def resolve(self, strategy: str, paths: Sequence[str]) -> SyncState:
         config = await self._config.get_config()
@@ -195,11 +217,10 @@ class SyncService:
             last_sync_at=last_sync_at,
         )
 
-    async def _refresh_machine_entry(self) -> MachineIdentity:
+    async def _refresh_machine_entry(self, identity: MachineIdentity) -> None:
         """Rewrite this machine's registry entry only when the run has other
         changes, the name changed, or the entry is stale (the 24 h heartbeat) —
         an idle machine must not generate registry-only commit chains."""
-        identity = await self._identity.get()
 
         def _refresh() -> None:
             own = next(
@@ -221,7 +242,23 @@ class SyncService:
                 self._workspace.write_machine_entry(self._own_entry(identity, last_sync_at=now))
 
         await asyncio.to_thread(_refresh)
-        return identity
+
+    def _check_workspace_version(self) -> None:
+        manifest = self._workspace.read_manifest()
+        if manifest is not None and manifest.schema_version > SCHEMA_VERSION:
+            raise SyncWorkspaceTooNew(manifest.schema_version, SCHEMA_VERSION)
+
+    async def _record_error(self, message: str) -> None:
+        prior = await self._config.get_state()
+        await self._config.set_state(
+            SyncState(
+                status=SyncStatus.ERROR,
+                last_sync_at=prior.last_sync_at,
+                last_error=message,
+                locked_refs=prior.locked_refs,
+                quarantined_refs=prior.quarantined_refs,
+            )
+        )
 
     async def _record_conflict(self, paths: list[str]) -> SyncState:
         state = SyncState(
@@ -252,6 +289,7 @@ class SyncService:
             last_sync_at=datetime.now(tz=UTC),
             last_error=last_error,
             locked_refs=result.locked_refs,
+            quarantined_refs=sorted(set(result.quarantined_refs)),
         )
         saved = await self._config.set_state(state)
         await self._audit.record(
@@ -262,6 +300,7 @@ class SyncService:
                 "deleted": result.deleted,
                 "errors": len(result.errors),
                 "locked": len(result.locked_refs),
+                "quarantined": len(result.quarantined_refs),
             },
         )
         return saved

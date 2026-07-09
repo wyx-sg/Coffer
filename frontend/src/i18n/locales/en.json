@@ -528,7 +528,8 @@
       "machinesHint": "Every machine known to this vault. Each machine registers itself when it syncs.",
       "thisMachine": "This machine",
       "neverSynced": "Never synced",
-      "machineName": "Machine name"
+      "machineName": "Machine name",
+      "quarantinedHint": "Import failed here for (quarantined, retried every sync): {{refs}}"
     },
     "connections": {
       "title": "LLM Connections",

@@ -36,6 +36,11 @@ def _print_status(payload: dict[str, Any]) -> None:
     if payload.get("locked_refs"):
         _console.print(f"  locked credentials: {', '.join(payload['locked_refs'])}")
         _console.print("  (run 'coffer sync key import <path>' to unlock)")
+    if payload.get("quarantined_refs"):
+        _console.print(
+            f"  quarantined (import failed here): {', '.join(payload['quarantined_refs'])}"
+        )
+        _console.print("  (kept in the workspace and retried every run)")
     if payload.get("last_error"):
         _console.print(f"  [red]error:[/red] {payload['last_error']}")
 

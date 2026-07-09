@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import builtins
 import inspect
+import logging
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
@@ -26,6 +28,8 @@ from coffer.domain.errors import (
     UnknownKind,
 )
 from coffer.domain.resource import Kind, Resource, ResourceRef
+
+_logger = logging.getLogger(__name__)
 
 
 class _CredentialStorePort(Protocol):
@@ -75,6 +79,15 @@ class ResourceService:
         self._repo = repo
         self._audit = audit
         self._credentials = credentials
+        # Cross-cutting observers of completed deletions (e.g. the sync
+        # tombstone ledger, spec 010) — kind-agnostic, registered by the
+        # composition root, called AFTER the row is gone with the acting
+        # surface, so sync-applied deletions can be told apart from the user's.
+        self._delete_listeners: list[Callable[[ResourceRef, str], Any]] = []
+
+    def add_delete_listener(self, listener: Callable[[ResourceRef, str], Any]) -> None:
+        """Register a callback (sync or async) invoked after every deletion."""
+        self._delete_listeners.append(listener)
 
     def _probe_credentials(self, kind_def: Kind, config: dict[str, Any]) -> None:
         """Raise CredentialMissing if any cited credential_ref is absent from the credential store.
@@ -278,3 +291,12 @@ class ResourceService:
                 }
             },
         )
+        for listener in self._delete_listeners:
+            # A listener failure must not turn an already-completed deletion
+            # into a caller-facing error.
+            try:
+                result = listener(ref, actor)
+                if inspect.isawaitable(result):
+                    await result
+            except Exception:
+                _logger.exception("resource.delete_listener_failed", extra={"ref": str(ref)})
