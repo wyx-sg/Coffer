@@ -28,6 +28,7 @@ from coffer.domain.errors import AgentConfigRejected, ConversationNotFound
 from coffer.infrastructure.chat.cursor_agent import CursorRunAdapter
 from coffer.infrastructure.chat.cursor_run import CursorSpawner, default_spawn
 from coffer.infrastructure.chat.default_workspace import default_workspace_dir
+from coffer.infrastructure.chat.document_extract import default_document_extractor
 from coffer.infrastructure.chat.transcribe import default_transcriber
 
 
@@ -99,6 +100,9 @@ class CursorProvider:
             # cursor-agent cannot hear audio; a voice attachment is transcribed to
             # text by the best local engine available here (ADR-039).
             transcriber=default_transcriber(),
+            # cursor-agent is path-native and cannot parse a binary PDF; a document
+            # is text-extracted so it reaches the agent as text (FR-030).
+            document_extractor=default_document_extractor(),
         )
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:

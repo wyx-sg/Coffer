@@ -43,6 +43,11 @@ from coffer.domain.chat.events import (
 from coffer.domain.chat.message import Message
 from coffer.infrastructure.chat.adapter_support import SessionSink, last_user_text
 from coffer.infrastructure.chat.codex_jsonrpc import CodexRpcClient
+from coffer.infrastructure.chat.document_extract import (
+    DocumentExtractor,
+    extract_document_attachments,
+    prompt_with_document_text,
+)
 from coffer.infrastructure.chat.hermes_acp import AcpSessionFactory, HermesAcpSession
 from coffer.infrastructure.chat.hermes_mapping import HermesParseState, map_hermes_update
 from coffer.infrastructure.chat.transcribe import (
@@ -84,6 +89,7 @@ class HermesAcpAdapter:
         on_session: SessionSink,
         env: dict[str, str] | None = None,
         transcriber: Transcriber | None = None,
+        document_extractor: DocumentExtractor | None = None,
     ) -> None:
         self._cwd = cwd
         self._resume = resume_session
@@ -92,6 +98,7 @@ class HermesAcpAdapter:
         self._on_session = on_session
         self._env = env
         self._transcriber = transcriber
+        self._document_extractor = document_extractor
         model = extra.get("model")
         if isinstance(model, str) and model:
             #: Names the model the turn ran on; the orchestrator records it on the
@@ -175,11 +182,17 @@ class HermesAcpAdapter:
     async def _stream(
         self, history: Sequence[Message], attachments: Sequence[Attachment] = ()
     ) -> AsyncIterator[AgentEvent]:
-        # hermes cannot hear audio: transcribe voice to text; keep other files.
+        # hermes cannot hear audio: transcribe voice to text; extract documents to
+        # text (FR-030 — hermes is path-native and cannot parse a binary PDF); keep
+        # other files as path notes.
         attachments, transcripts = await transcribe_audio_attachments(
             attachments, self._transcriber
         )
+        attachments, extracts = await extract_document_attachments(
+            attachments, self._document_extractor
+        )
         prompt = prompt_with_transcripts(last_user_text(history), transcripts)
+        prompt = prompt_with_document_text(prompt, extracts)
         if attachments:
             # hermes is path-native (no inline media over ACP text prompts): hand
             # it the on-disk paths so it can open them with its own tools.

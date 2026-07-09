@@ -24,6 +24,7 @@ from coffer.infrastructure.chat.claude_sdk_agent import (
     default_session_factory,
 )
 from coffer.infrastructure.chat.default_workspace import default_workspace_dir
+from coffer.infrastructure.chat.document_extract import default_document_extractor
 from coffer.infrastructure.chat.transcribe import default_transcriber
 
 
@@ -99,6 +100,9 @@ class ClaudeSdkProvider:
             # Claude cannot hear audio; a voice attachment is transcribed to text
             # by the best local engine available here (ADR-039).
             transcriber=default_transcriber(),
+            # A document (PDF/office file) is text-extracted so it reaches the
+            # agent as text rather than a vision/binary block (FR-030).
+            document_extractor=default_document_extractor(),
         )
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:

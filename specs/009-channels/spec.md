@@ -775,6 +775,16 @@ status / notify`.
 - **Then** the audio is transcribed to text and folded into the prompt, and the
   audio is not also sent as a file (a future audio-native agent would forward it)
 
+### Scenario: a PDF reaches a path-native agent as extracted text
+
+- **Given** a turn carrying a PDF (or office document) attachment for a
+  path-native agent (Codex/Hermes/OpenCode/Cursor)
+- **When** the adapter prepares the turn
+- **Then** the document is text-extracted and folded into the prompt as a
+  labelled `[Document: <name>]` block, and the document is not also sent as a
+  binary path note; when no extraction engine is available the document degrades
+  to a file path rather than wedging the turn
+
 ### Scenario: an un-addressed group message is ignored
 
 - **Given** a paired channel and a group chat the bot is a member of

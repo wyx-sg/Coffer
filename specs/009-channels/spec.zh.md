@@ -689,6 +689,15 @@ status / notify`。
 - **Then** 音频被转写成文字并折进 prompt，且音频不再作为文件发送（未来音频原生
   agent 则会直接转发它）
 
+### Scenario: a PDF reaches a path-native agent as extracted text
+
+- **Given** 一个给路径原生 agent（Codex/Hermes/OpenCode/Cursor）的 turn 上带一个
+  PDF（或 office 文档）附件
+- **When** adapter 准备该 turn
+- **Then** 文档被抽取成文字并以带标签的 `[Document: <name>]` 块折进 prompt，且该
+  文档不再作为二进制路径提示发送；当没有可用的抽取引擎时，文档退化为文件路径而不
+  会卡住该 turn
+
 ### Scenario: an un-addressed group message is ignored
 
 - **Given** 一个已配对的 channel 和一个 bot 所在的群聊
