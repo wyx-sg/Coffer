@@ -7,12 +7,13 @@ concrete adapters.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Protocol
 
 from coffer.domain.sync.manifest import Manifest
-from coffer.domain.sync.models import MachineEntry, MachineIdentity
+from coffer.domain.sync.models import MachineEntry, MachineIdentity, Tombstone
 from coffer.domain.sync.serialization import ResourceDoc
 
 
@@ -64,10 +65,19 @@ class WorkspacePort(Protocol):
 
     def read_manifest(self) -> Manifest | None: ...
 
-    def write_resource_docs(self, docs: Sequence[Mapping[str, object]]) -> None:
-        """Replace ``resources/`` with one deterministic YAML file per doc."""
+    def write_resource_docs(
+        self, docs: Sequence[Mapping[str, object]], preserve: Collection[str] = ()
+    ) -> None:
+        """Replace ``resources/`` with one deterministic YAML file per doc,
+        preserving the current workspace docs of quarantined ``preserve`` refs."""
 
     def read_resource_docs(self) -> list[ResourceDoc]: ...
+
+    def write_tombstone(self, tombstone: Tombstone) -> None: ...
+
+    def remove_tombstone(self, kind: str, name: str) -> None: ...
+
+    def read_tombstones(self) -> list[Tombstone]: ...
 
     def write_credential_blobs(self, blobs: Mapping[str, bytes]) -> None:
         """Replace ``credentials/`` with one ``<ref>.enc`` per ciphertext blob."""
@@ -92,6 +102,18 @@ class MachineIdentityPort(Protocol):
     async def create(self, machine_id: str, display_name: str) -> MachineIdentity: ...
 
     async def set_display_name(self, display_name: str) -> MachineIdentity: ...
+
+
+class TombstoneLedgerPort(Protocol):
+    """This machine's pending deletion records (spec 010 tombstones)."""
+
+    async def record(self, kind: str, name: str) -> None: ...
+
+    async def list(self) -> list[Tombstone]: ...
+
+    async def remove(self, kind: str, name: str) -> None: ...
+
+    async def prune_older_than(self, cutoff: datetime) -> int: ...
 
 
 class CredentialSyncPort(Protocol):

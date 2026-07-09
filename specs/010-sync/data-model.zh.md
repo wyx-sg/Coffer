@@ -32,6 +32,7 @@
 | `last_error`      | String? | 最近一次错误信息（已脱敏，不含密钥）。                        |
 | `conflict_paths`  | JSON    | 当前处于冲突状态的、相对于 workspace 的路径列表。             |
 | `locked_refs`     | JSON    | 以密文形式存在、但在本机无法解密的凭据 ref。                  |
+| `quarantined_refs`| JSON    | 在本机导入失败的 `<kind>:<name>` ref；每次运行重试。          |
 | `updated_at`      | String  | ISO-8601。                                                      |
 
 两张表都位于 `infrastructure/sync/persistence.py`；迁移 `0017`。
@@ -51,6 +52,20 @@
 
 位于 `infrastructure/sync/persistence.py`；迁移 `0042`。
 
+### `sync_tombstones`（台账）
+
+本机配置资源删除的本地记录，等待导出为 workspace 墓碑文件。资源在本机重新
+注册、或超过 90 天 TTL 后，对应行被删除。
+
+| Field        | Type   | Notes                            |
+| ------------ | ------ | -------------------------------- |
+| `id`         | int    | 自增主键。                        |
+| `kind`       | String | 资源 kind。与 `name` 联合唯一。   |
+| `name`       | String | 资源名。                          |
+| `deleted_at` | String | 本地删除的 ISO-8601 时间。        |
+
+位于 `infrastructure/sync/persistence.py`；迁移 `0043`。
+
 ## 文件系统状态（同步 workspace）
 
 默认为 `~/.coffer/sync/`（测试时可通过 `$COFFER_SYNC_ROOT` 覆盖），这是一个
@@ -63,6 +78,7 @@ knowledge/                      mirror of ~/.coffer/knowledge
 memory/                         mirror of ~/.coffer/memory
 skills/                         mirror of ~/.coffer/skills
 resources/<kind>/<name>.yaml    one deterministic file per config resource
+tombstones/resources/<kind>/<name>.json   显式删除记录
 credentials/<ref>.enc           Fernet ciphertext, base64 text; never the key
 ```
 
@@ -104,8 +120,20 @@ config: { ... }     # the validated, json-mode config; keys sorted
 ```
 
 `created_at` / `updated_at` 以及本地 `id` 被**排除**（属于机器本地数据，会让
-diff 频繁变动）。导入时按 `<kind>:<name>` 对资源执行 upsert；workspace 中不存在
-但本地存在的资源会被删除（全量对账）。
+diff 频繁变动）。导入时按 `<kind>:<name>` 对资源执行 upsert。**仅**当墓碑文件
+存在时才删除本地资源——资源只是从 workspace 缺席永远不会导致删除（别处的导入
+失败绝不能伪装成删除）。当同一 ref 的资源文档与墓碑同时存在时（合并残留），
+资源文档胜出。
+
+### 墓碑（`tombstones/resources/<kind>/<name>.json`）
+
+| Field        | Type   | Notes                              |
+| ------------ | ------ | ---------------------------------- |
+| `deleted_at` | String | 删除的 ISO-8601 时间。              |
+| `by`         | String | 执行删除的机器的 `machine_id`。     |
+
+导出时由 `sync_tombstones` 台账写出；当资源重新存活时在导出中移除（重新注册
+胜出）；90 天后清理。
 
 ### 凭据 blob（`credentials/<ref>.enc`）
 

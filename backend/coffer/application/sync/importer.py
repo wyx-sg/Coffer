@@ -1,13 +1,15 @@
 """Apply merged workspace state back into the local vault (spec 010).
 
-Runs after a clean git merge: the workspace already holds the *union* of every
-machine's state (export writes local state before the merge, so local-only
-additions survive and deletions propagate through git). Import therefore
-reconciles the local vault to exactly match the workspace.
+Runs after a clean git merge: the workspace holds the union of every machine's
+state. Import reconciles the local vault to match it — upserting resources,
+applying explicit tombstones, and importing ciphertext. A resource merely
+absent from the workspace is NEVER deleted (a failed import elsewhere must not
+masquerade as a deletion); deletion happens only via tombstone.
 
 Per-resource failures (e.g. an agent whose config dir does not exist on this
-machine) are collected, not fatal — one unportable row must not block syncing
-everything else.
+machine) are QUARANTINED, not fatal and not dropped: the ref is reported in
+sync state, its workspace doc is preserved verbatim by the next export, and the
+import retries every run.
 """
 
 from __future__ import annotations
@@ -19,6 +21,9 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.sync.ports import CredentialSyncPort, WorkspacePort
 from coffer.domain.error_base import CofferError
 from coffer.domain.resource import ResourceRef
+from coffer.domain.sync.errors import SyncWorkspaceTooNew
+from coffer.domain.sync.manifest import SCHEMA_VERSION
+from coffer.domain.sync.models import Tombstone
 from coffer.domain.sync.serialization import ResourceDoc
 
 
@@ -28,6 +33,7 @@ class ImportResult:
     deleted: int = 0
     errors: list[str] = field(default_factory=list)
     locked_refs: list[str] = field(default_factory=list)
+    quarantined_refs: list[str] = field(default_factory=list)
 
 
 class SyncImporter:
@@ -45,27 +51,55 @@ class SyncImporter:
         self._actor = actor
 
     async def import_(self) -> ImportResult:
-        docs, blobs = await asyncio.to_thread(self._load)
+        docs, tombstones, blobs = await asyncio.to_thread(self._load)
         result = ImportResult()
         await self._import_credentials(blobs, result)
+        await self._apply_tombstones(tombstones, docs, result)
         await self._reconcile_resources(docs, result)
         result.locked_refs = await asyncio.to_thread(self._credentials.locked_refs)
         return result
 
-    def _load(self) -> tuple[list[ResourceDoc], dict[str, bytes]]:
+    def _load(self) -> tuple[list[ResourceDoc], list[Tombstone], dict[str, bytes]]:
+        manifest = self._workspace.read_manifest()
+        if manifest is not None and manifest.schema_version > SCHEMA_VERSION:
+            raise SyncWorkspaceTooNew(manifest.schema_version, SCHEMA_VERSION)
         self._workspace.mirror_trees_in()
-        return self._workspace.read_resource_docs(), self._workspace.read_credential_blobs()
+        return (
+            self._workspace.read_resource_docs(),
+            self._workspace.read_tombstones(),
+            self._workspace.read_credential_blobs(),
+        )
 
     async def _import_credentials(self, blobs: dict[str, bytes], result: ImportResult) -> None:
         for ref, blob in blobs.items():
             await asyncio.to_thread(self._credentials.write_ciphertext, ref, blob)
 
+    async def _apply_tombstones(
+        self, tombstones: list[Tombstone], docs: list[ResourceDoc], result: ImportResult
+    ) -> None:
+        """Delete local resources named by a tombstone.
+
+        When a resource doc and a tombstone coexist for the same ref (merge
+        artifact of a delete racing a re-create), the doc wins — the deleting
+        machine's next export clears the stale tombstone."""
+        alive = {(d.kind, d.name) for d in docs}
+        current = {(r.kind, r.name) for r in await self._resources.list()}
+        for tombstone in tombstones:
+            key = (tombstone.kind, tombstone.name)
+            if key in alive or key not in current:
+                continue
+            try:
+                await self._resources.delete(
+                    ResourceRef(tombstone.kind, tombstone.name), self._actor
+                )
+                result.deleted += 1
+            except CofferError as e:
+                result.errors.append(f"{tombstone.kind}:{tombstone.name} (delete): {e}")
+
     async def _reconcile_resources(self, docs: list[ResourceDoc], result: ImportResult) -> None:
         current = {(r.kind, r.name): r for r in await self._resources.list()}
-        wanted: set[tuple[str, str]] = set()
 
         for doc in docs:
-            wanted.add((doc.kind, doc.name))
             ref = ResourceRef(doc.kind, doc.name)
             try:
                 if (doc.kind, doc.name) in current:
@@ -89,14 +123,7 @@ class SyncImporter:
                     if not doc.enabled:
                         await self._resources.set_enabled(ref, False, self._actor)
                 result.applied += 1
-            except CofferError as e:
-                result.errors.append(f"{ref}: {e}")
-
-        # Deletions: a resource gone from the merged workspace was deleted upstream.
-        for (kind, name), _resource in current.items():
-            if (kind, name) not in wanted:
-                try:
-                    await self._resources.delete(ResourceRef(kind, name), self._actor)
-                    result.deleted += 1
-                except CofferError as e:
-                    result.errors.append(f"{kind}:{name} (delete): {e}")
+            except CofferError:
+                # Quarantined, not fatal: reported in sync state, preserved by
+                # the next export, retried on every run.
+                result.quarantined_refs.append(f"{doc.kind}:{doc.name}")

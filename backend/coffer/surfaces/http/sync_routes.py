@@ -63,6 +63,7 @@ class SyncStatusOut(BaseModel):
     last_error: str | None
     conflict_paths: list[str]
     locked_refs: list[str]
+    quarantined_refs: list[str]
 
 
 class SyncRunIn(BaseModel):
@@ -127,6 +128,7 @@ def _status_out(s: SyncState) -> SyncStatusOut:
         last_error=s.last_error,
         conflict_paths=s.conflict_paths,
         locked_refs=s.locked_refs,
+        quarantined_refs=s.quarantined_refs,
     )
 
 

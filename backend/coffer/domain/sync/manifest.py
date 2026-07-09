@@ -13,8 +13,11 @@ from dataclasses import dataclass
 
 from coffer.domain.sync.errors import SyncSerializationError
 
-#: Bumped only on an incompatible workspace-layout change.
-SCHEMA_VERSION = 1
+#: Bumped only on an incompatible workspace-layout change. 2 = tombstone-driven
+#: deletion. The too-new gate is enforced from version 2 onward — a v1 build
+#: predates the gate entirely, so a mixed v1/v2 fleet is unprotected and must
+#: upgrade together.
+SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True)

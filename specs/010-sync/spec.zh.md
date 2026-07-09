@@ -32,6 +32,7 @@
   memory/                    # mirror of ~/.coffer/memory
   skills/                    # mirror of ~/.coffer/skills（skill 主库）
   resources/<kind>/<name>.yaml   # one deterministic file per config resource
+  tombstones/resources/<kind>/<name>.json  # 显式删除记录（90 天 TTL）
   credentials/<ref>.enc          # Fernet ciphertext blob (never the master key)
   ```
 
@@ -39,6 +40,15 @@
 - **Import** —— 将 workspace 状态应用回本地 vault（文件回镜像 + 重建索引、资源调和进 SQLite、导入密文）。
 - **Sync run** —— export → `git pull`（merge）→ 合并干净时：`git push` + import。整个过程是一次 `coffer sync` 调用。
 - **Conflict** —— 一次 `git merge` 冲突。该次运行停在 `conflicted` 状态；在用户解决冲突前不会导入任何内容。两边都不会被丢弃。
+- **Tombstone（墓碑）** —— 配置资源删除的显式记录
+  （`tombstones/resources/<kind>/<name>.json`，携带删除时间与执行机器）。导入
+  **仅**在墓碑存在时删除本地资源——资源只是从 workspace 中缺席永远不会导致删除。
+  重新注册资源后，该机器的下一次导出会清除其墓碑。墓碑 90 天后过期。
+- **Quarantine（隔离）** —— 在本机导入失败的资源（例如其配置含有机器本地路径）。
+  其 workspace 文档被原样保留——既不会用失败的本地状态重新导出、也不会被丢弃——
+  每次运行重试导入，受影响的 ref 在同步状态中报告。一行在某台机器上无法导入的
+  资源 MUST NOT 导致它在任何机器上被删除。隔离期间以远端意图为准：对同一资源的
+  本地编辑不会被导出，墓碑也不会移除被保留的文档，直到隔离解除。
 - **Auto-sync** —— 一个可选开启的守护进程 worker，在文件/资源变更时（去抖）以及按固定间隔执行 sync run。默认关闭。
 
 ## Machine identity（机器身份）
@@ -138,6 +148,26 @@ git remote 的凭据（SSH key / token）属于用户自己的 git 配置；Coff
 - **Given** 机器 A 和 B 都启用了 auto-sync
 - **When** A 注册了一个新资源
 - **Then** A 在去抖窗口内推送该变更，B 在其下一次间隔拉取时导入它，两台机器都无需任何手动命令
+
+### Scenario: 删除以墓碑传播
+
+- **Given** 机器 A 和 B 共享一个已同步的 `mcp_server` 资源
+- **When** A 删除该资源，且两台机器各完成一次同步往返
+- **Then** 该资源在 B 上消失，workspace 中留下它的墓碑而非资源文档
+- **And** 若 B 之后重新注册同名资源，它在两台机器上重新出现，墓碑被清除
+
+### Scenario: 导入失败绝不导致资源在别处被删除
+
+- **Given** 机器 A 同步了一个在机器 B 上无法导入的资源（配置含机器本地路径）
+- **When** B 执行一次同步（该资源导入失败），随后两台机器再完成一次往返
+- **Then** 该资源在 A 上和 workspace 中仍然存在，B 在同步状态中将该 ref 报告为
+  已隔离，并在每次运行时重试导入
+
+### Scenario: 旧构建拒绝更新的 workspace
+
+- **Given** 同步 workspace 的 manifest 携带比当前构建更新的 schema 版本
+- **When** 一次同步运行到达导入步骤
+- **Then** 该次运行以 `SYNC_WORKSPACE_TOO_NEW` 失败，不导入任何内容
 
 ### Scenario: 机器在同步后可见
 

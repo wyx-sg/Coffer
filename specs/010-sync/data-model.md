@@ -33,6 +33,7 @@ Last-run status, also a singleton row.
 | `last_error`      | String? | Last error message (redacted, no secrets).                     |
 | `conflict_paths`  | JSON    | List of workspace-relative paths currently in conflict.        |
 | `locked_refs`     | JSON    | Credential refs present as ciphertext but undecryptable here.  |
+| `quarantined_refs`| JSON    | `<kind>:<name>` refs whose import failed here; retried each run. |
 | `updated_at`      | String  | ISO-8601.                                                      |
 
 Both tables live in `infrastructure/sync/persistence.py`; migration `0017`.
@@ -53,6 +54,21 @@ derived from it at export time).
 
 Lives in `infrastructure/sync/persistence.py`; migration `0042`.
 
+### `sync_tombstones` (ledger)
+
+Local record of this machine's config-resource deletions, pending export as
+workspace tombstone files. A row is dropped when the resource is re-registered
+locally or after the 90-day TTL.
+
+| Field        | Type   | Notes                                  |
+| ------------ | ------ | -------------------------------------- |
+| `id`         | int    | Autoincrement PK.                      |
+| `kind`       | String | Resource kind. Unique with `name`.     |
+| `name`       | String | Resource name.                         |
+| `deleted_at` | String | ISO-8601 of the local deletion.        |
+
+Lives in `infrastructure/sync/persistence.py`; migration `0043`.
+
 ## Filesystem state (the sync workspace)
 
 Default `~/.coffer/sync/` (overridable via `$COFFER_SYNC_ROOT` for tests), a git
@@ -65,6 +81,7 @@ knowledge/                      mirror of ~/.coffer/knowledge
 memory/                         mirror of ~/.coffer/memory
 skills/                         mirror of ~/.coffer/skills
 resources/<kind>/<name>.yaml    one deterministic file per config resource
+tombstones/resources/<kind>/<name>.json   explicit deletion record
 credentials/<ref>.enc           Fernet ciphertext, base64 text; never the key
 ```
 
@@ -78,6 +95,8 @@ Only the schema version — the manifest is byte-identical on every machine so i
 can never merge-conflict. Per-machine facts live in `machines/` instead.
 `schema_version` is checked on import; a workspace newer than the running build
 fails fast (`SYNC_WORKSPACE_TOO_NEW`), mirroring the DB `DB_SCHEMA_TOO_NEW` rule.
+Current version: **2** (tombstone-driven deletion — an older build would keep
+applying delete-by-absence, so all machines upgrade before the first v2 sync).
 
 ### Machine entry (`machines/<machine-id>.json`)
 
@@ -107,8 +126,21 @@ config: { ... }     # the validated, json-mode config; keys sorted
 ```
 
 `created_at` / `updated_at` / local `id` are **excluded** (machine-local, would
-churn diffs). On import the resource is upserted by `<kind>:<name>`; resources
-absent from the workspace but present locally are deleted (full reconcile).
+churn diffs). On import the resource is upserted by `<kind>:<name>`. A local
+resource is deleted **only** when its tombstone file is present — absence from
+the workspace alone never deletes (a failed import elsewhere must not
+masquerade as a deletion). When both a resource doc and a tombstone exist for
+the same ref (merge artifact), the resource doc wins.
+
+### Tombstone (`tombstones/resources/<kind>/<name>.json`)
+
+| Field        | Type   | Notes                                            |
+| ------------ | ------ | ------------------------------------------------ |
+| `deleted_at` | String | ISO-8601 of the deletion.                        |
+| `by`         | String | `machine_id` of the deleting machine.            |
+
+Written at export from the `sync_tombstones` ledger; removed at export when the
+resource exists live again (re-registration wins); pruned after 90 days.
 
 ### Credential blob (`credentials/<ref>.enc`)
 

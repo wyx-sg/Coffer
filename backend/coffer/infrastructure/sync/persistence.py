@@ -10,7 +10,16 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, CheckConstraint, Integer, String, Text, select
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    delete,
+    select,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
@@ -23,6 +32,7 @@ from coffer.domain.sync.models import (
     SyncConfig,
     SyncState,
     SyncStatus,
+    Tombstone,
 )
 from coffer.infrastructure.persistence.base import Base
 
@@ -50,7 +60,21 @@ class SyncStateModel(Base):
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     conflict_paths_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     locked_refs_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    quarantined_refs_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class SyncTombstoneModel(Base):
+    """This machine's pending deletion records (spec 010 tombstones)."""
+
+    __tablename__ = "sync_tombstones"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    deleted_at: Mapped[str] = mapped_column(String, nullable=False)
+
+    __table_args__ = (UniqueConstraint("kind", "name", name="uq_sync_tombstones_kind_name"),)
 
 
 class MachineIdentityModel(Base):
@@ -87,6 +111,7 @@ def _state_to_domain(row: SyncStateModel) -> SyncState:
         last_error=row.last_error,
         conflict_paths=list(json.loads(row.conflict_paths_json)),
         locked_refs=list(json.loads(row.locked_refs_json)),
+        quarantined_refs=list(json.loads(row.quarantined_refs_json)),
         updated_at=datetime.fromisoformat(row.updated_at),
     )
 
@@ -200,7 +225,60 @@ class SqlAlchemySyncStateRepo:
             row.last_error = state.last_error
             row.conflict_paths_json = json.dumps(state.conflict_paths)
             row.locked_refs_json = json.dumps(state.locked_refs)
+            row.quarantined_refs_json = json.dumps(state.quarantined_refs)
             row.updated_at = now
             await session.commit()
             await session.refresh(row)
             return _state_to_domain(row)
+
+
+class SqlAlchemyTombstoneLedgerRepo:
+    """Concrete repo for this machine's pending deletion records."""
+
+    def __init__(self, sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
+        self._sm = sm
+
+    async def record(self, kind: str, name: str) -> None:
+        """Upsert a deletion record (re-deleting refreshes the timestamp)."""
+        async with self._sm() as session:
+            now = datetime.now(tz=UTC).isoformat()
+            stmt = select(SyncTombstoneModel).where(
+                SyncTombstoneModel.kind == kind, SyncTombstoneModel.name == name
+            )
+            row = (await session.execute(stmt)).scalar_one_or_none()
+            if row is None:
+                session.add(SyncTombstoneModel(kind=kind, name=name, deleted_at=now))
+            else:
+                row.deleted_at = now
+            await session.commit()
+
+    async def list(self) -> list[Tombstone]:
+        async with self._sm() as session:
+            rows = (await session.execute(select(SyncTombstoneModel))).scalars().all()
+            return [
+                Tombstone(
+                    kind=r.kind,
+                    name=r.name,
+                    deleted_at=datetime.fromisoformat(r.deleted_at),
+                )
+                for r in rows
+            ]
+
+    async def remove(self, kind: str, name: str) -> None:
+        async with self._sm() as session:
+            await session.execute(
+                delete(SyncTombstoneModel).where(
+                    SyncTombstoneModel.kind == kind, SyncTombstoneModel.name == name
+                )
+            )
+            await session.commit()
+
+    async def prune_older_than(self, cutoff: datetime) -> int:
+        """Drop ledger rows whose deletion predates ``cutoff``; returns count."""
+        async with self._sm() as session:
+            rows = (await session.execute(select(SyncTombstoneModel))).scalars().all()
+            stale = [r for r in rows if datetime.fromisoformat(r.deleted_at) < cutoff]
+            for r in stale:
+                await session.delete(r)
+            await session.commit()
+            return len(stale)
