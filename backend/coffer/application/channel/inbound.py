@@ -274,8 +274,16 @@ class InboundProcessor:
             )
             return
         # A media message with no caption still needs non-blank text to persist.
+        # The inbound platform_message_id rides along so the turn can react on it
+        # (FR-036 receipt/completion ack) where the transport supports reactions.
         session.queue.append(
-            (text or _attachment_note(attachments), attachments, msg.thread_id, msg.chat_kind)
+            (
+                text or _attachment_note(attachments),
+                attachments,
+                msg.thread_id,
+                msg.chat_kind,
+                msg.platform_message_id,
+            )
         )
         if session.drain_task is None or session.drain_task.done():
             session.drain_task = asyncio.create_task(

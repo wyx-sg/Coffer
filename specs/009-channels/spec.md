@@ -1005,6 +1005,26 @@ status / notify`.
   running), the paired owner, and the routed agent — mirroring the MCP-server /
   memory / skill management surfaces
 
+### Scenario: receipt and completion are acked with reactions where supported
+
+- **Given** a paired channel on an adapter that supports reactions (Telegram)
+- **When** the owner sends a message that drives a clean turn
+- **Then** a 👀 reaction is set on the owner's own message immediately on receipt and
+  a ✅ reaction on completion, both targeting that inbound message id
+
+### Scenario: a transport without reaction support attempts no reaction
+
+- **Given** a paired channel on an adapter that does not support reactions (SeaTalk,
+  whose receipt-and-progress cue is the typing signal)
+- **When** the owner sends a message that drives a turn
+- **Then** no reaction is attempted, while the turn still runs and replies normally
+
+### Scenario: a failed reaction never breaks the turn
+
+- **Given** a paired channel on a reaction-supporting adapter whose set_reaction fails
+- **When** the owner sends a message that drives a turn
+- **Then** the reply is still delivered — the best-effort reaction is suppressed
+
 ## Channels as a management plane (north star)
 
 Channels are managed the way Coffer manages MCP servers, memory, and skills:
@@ -1124,10 +1144,13 @@ capabilities the official personal bridges lack.
 
 ### D. Platform polish
 
-- **FR-036**: Receipt and progress are acknowledged. Where the platform supports
-  reactions, an ack reaction marks receipt immediately; a typing/working signal
-  shows during the turn; completion is marked on finish. All best-effort — a
-  failed ack never breaks the turn.
+- **FR-036**: Receipt and progress are acknowledged, capability-gated (never by
+  transport type). On a `supports_reactions` transport (Telegram) an ack reaction
+  (👀) marks receipt on the owner's own message immediately, and a ✅ marks
+  completion on a clean finish (an errored/interrupted turn keeps just the receipt).
+  A transport without reactions (SeaTalk) uses its typing/working signal as the
+  receipt-and-progress cue instead. All best-effort — a failed ack never breaks the
+  turn.
 - **FR-037**: Long replies stream by the platform's best mechanism, chosen from
   the adapter's capabilities (never its type). A `supports_edit` platform
   (Telegram) streams the reply text into ONE throttled editable status message,

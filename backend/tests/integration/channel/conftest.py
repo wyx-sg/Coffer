@@ -103,13 +103,14 @@ def inbound(
     chat_kind: str = "direct",
     addressed: bool = True,
     mentions_others: bool = False,
+    platform_message_id: str = "pm-1",
 ) -> InboundMessage:
     return InboundMessage(
         channel=channel,
         chat_id=chat_id,
         sender_display=sender_display,
         text=text,
-        platform_message_id="pm-1",
+        platform_message_id=platform_message_id,
         timestamp=datetime.now(tz=UTC),
         sender_id=sender_id,
         thread_id=thread_id,
@@ -170,6 +171,8 @@ class FakeChannelAdapter:
         supports_media: bool = True,
         supports_groups: bool = False,
         supports_history_fetch: bool = False,
+        supports_reactions: bool = False,
+        set_reaction_fails: bool = False,
     ) -> None:
         self._caps = ChannelCapabilities(
             supports_edit=supports_edit,
@@ -179,7 +182,11 @@ class FakeChannelAdapter:
             supports_media=supports_media,
             supports_groups=supports_groups,
             supports_history_fetch=supports_history_fetch,
+            supports_reactions=supports_reactions,
         )
+        # When True, ``set_reaction`` raises — proves the best-effort suppression
+        # at the call sites (a failed ack must never break the turn) (FR-036).
+        self._set_reaction_fails = set_reaction_fails
         self.started = False
         self.stopped = False
         self.callbacks: AdapterCallbacks | None = None
@@ -193,6 +200,8 @@ class FakeChannelAdapter:
         self.edits: list[tuple[str, str, str]] = []  # (chat_id, message_id, text)
         self.deleted: list[tuple[str, str]] = []  # (chat_id, message_id)
         self.typing: list[str] = []  # chat_ids
+        # (chat_id, message_id, emoji) for every set_reaction call (FR-036).
+        self.reactions: list[tuple[str, str, str]] = []
         # (chat_id, path, caption, as_photo) for each uploaded file.
         self.media: list[tuple[str, str, str | None, bool]] = []
         # (chat_id, path, caption, as_photo, thread_id, chat_kind) — the full
@@ -254,6 +263,11 @@ class FakeChannelAdapter:
 
     async def send_typing(self, chat_id: str) -> None:
         self.typing.append(chat_id)
+
+    async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
+        self.reactions.append((chat_id, message_id, emoji))
+        if self._set_reaction_fails:
+            raise RuntimeError("set_reaction failed (scripted)")
 
     async def send_media(
         self,

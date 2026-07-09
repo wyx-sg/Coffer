@@ -47,10 +47,12 @@ QUEUE_MAX = 10
 
 #: One queued inbound turn: the text to drive it, any downloaded attachments to
 #: materialise for the agent (images inlined, files handed off by path), the
-#: thread the message arrived in (empty for a threadless chat), and the chat
+#: thread the message arrived in (empty for a threadless chat), the chat
 #: kind ("direct" | "group") so the eventual reply is routed back to the same
-#: place the message came from.
-_QueuedInbound = tuple[str, tuple[Attachment, ...], str, str]
+#: place the message came from, and the user's inbound platform_message_id — the
+#: message the receipt/completion reaction targets on a supports_reactions
+#: transport (FR-036); "" when the transport supplied none.
+_QueuedInbound = tuple[str, tuple[Attachment, ...], str, str, str]
 
 #: Sends one reply back through a channel binding, matching
 #: ``InboundProcessor._safe_send``'s signature (buttons omitted — turn
@@ -136,7 +138,7 @@ class TurnDriver:
     async def drain(self, binding: ChannelBinding, chat_id: str, thread_id: str) -> None:
         session = self._session(binding.name, chat_id, thread_id)
         while session.queue:
-            user_text, attachments, item_thread_id, chat_kind = session.queue.popleft()
+            user_text, attachments, item_thread_id, chat_kind, reply_to = session.queue.popleft()
             peer = await self._peers.get_by_chat(binding.resource_id, chat_id)
             if peer is None:
                 break
@@ -148,6 +150,7 @@ class TurnDriver:
                     attachments,
                     thread_id=item_thread_id,
                     chat_kind=chat_kind,
+                    reply_to_message_id=reply_to,
                 )
             except asyncio.CancelledError:
                 raise
@@ -163,6 +166,7 @@ class TurnDriver:
         *,
         thread_id: str = "",
         chat_kind: str = "direct",
+        reply_to_message_id: str = "",
     ) -> None:
         adapter = binding.adapter
         try:
@@ -199,6 +203,12 @@ class TurnDriver:
         if adapter.capabilities.supports_typing:
             with contextlib.suppress(Exception):
                 await adapter.send_typing(peer.chat_id)
+        # FR-036: an immediate receipt ack (👀) on the user's message where the
+        # transport supports reactions (Telegram); SeaTalk has none and leans on
+        # the typing signal above. Best-effort — a failed ack never breaks the turn.
+        if adapter.capabilities.supports_reactions and reply_to_message_id:
+            with contextlib.suppress(Exception):
+                await adapter.set_reaction(peer.chat_id, reply_to_message_id, "👀")
         try:
             queue = await self._turns.start_turn(conversation_id, text, attachments=attachments)
         except TurnInProgress:
@@ -238,8 +248,15 @@ class TurnDriver:
         # Track the live turn so /stop and unbind can target it even after /new
         # rebinds the peer to a fresh conversation mid-turn.
         session.running_conversation_id = conversation_id
+        clean = False
         try:
-            await renderer.consume(queue)
+            clean = await renderer.consume(queue)
         finally:
             if session.running_conversation_id == conversation_id:
                 session.running_conversation_id = None
+        # FR-036: mark completion (✅) on the user's message ONLY on a clean finish
+        # (an errored/interrupted turn keeps just the 👀 receipt), where the
+        # transport supports reactions. Best-effort — never fails a delivered reply.
+        if clean and adapter.capabilities.supports_reactions and reply_to_message_id:
+            with contextlib.suppress(Exception):
+                await adapter.set_reaction(peer.chat_id, reply_to_message_id, "✅")

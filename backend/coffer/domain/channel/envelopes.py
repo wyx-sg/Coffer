@@ -54,6 +54,9 @@ class ChannelCapabilities:
     supports_media: bool = False  # outbound file/photo upload (send_media)
     supports_groups: bool = False  # group-chat send path exists
     supports_history_fetch: bool = False  # can fetch recent/thread messages for context
+    supports_reactions: bool = False  # emoji reaction on a message (set_reaction),
+    # used for the FR-036 receipt (👀) + completion (✅) ack; transports without
+    # it fall back to the typing/working signal for the same receipt cue
 
 
 @dataclass(frozen=True)

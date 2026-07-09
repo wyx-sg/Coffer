@@ -1,8 +1,7 @@
 """Telegram transport: long polling in, Bot API methods out.
 
-No SDK — the seven Bot API methods used here are plain POSTs. Long polling (`getUpdates`) needs
-no public ingress, which is what a local-first daemon wants; the update offset is committed
-only after a dispatch attempt, so a reconnect never re-delivers what the core already saw.
+No SDK — the Bot API methods used here are plain POSTs. Long polling (`getUpdates`) needs no
+public ingress; the offset commits only after a dispatch attempt, so a reconnect never replays.
 """
 
 from __future__ import annotations
@@ -90,6 +89,7 @@ class TelegramAdapter:
             supports_buttons=True,
             supports_media=True,
             supports_groups=True,
+            supports_reactions=True,
         )
 
     # -- lifecycle ---------------------------------------------------------
@@ -155,16 +155,14 @@ class TelegramAdapter:
                     raise
                 except Exception:
                     _logger.exception("telegram.dispatch.failed", extra={"channel": self._name})
-                # Commit only after the dispatch attempt: a crash before this
-                # line re-delivers; a poison update does not wedge the loop.
+                # Commit only after dispatch: a crash re-delivers; no poison-update wedge.
                 offset = int(update["update_id"]) + 1
 
     async def _dispatch(self, update: dict[str, Any]) -> None:
         if self._callbacks is None:
             return
-        # FR-039: the poll offset normally prevents replays, but a reconnect
-        # race can re-deliver — drop an update_id (unique per update, covering
-        # both messages and callback_query taps) already processed.
+        # FR-039: the poll offset normally prevents replays, but a reconnect race
+        # can re-deliver — drop an already-seen update_id (covers messages + taps).
         update_id = str(update.get("update_id", ""))
         if update_id and not self._seen.add(update_id):
             return
@@ -173,9 +171,8 @@ class TelegramAdapter:
             attachments = await self._download_attachments(message)
             media_group_id = message.get("media_group_id")
             if media_group_id:
-                # FR-038: an album arrives as separate updates sharing a
-                # media_group_id — buffer them and flush ONE turn (composes with
-                # the FR-039 dedup above, which still runs per-update).
+                # FR-038: an album arrives as separate updates sharing a media_group_id
+                # — buffer them and flush ONE turn (FR-039 dedup still runs per-update).
                 self._albums.add(str(media_group_id), message, attachments)
                 return
             await self._callbacks.on_message(self._build_inbound(message, attachments))
@@ -249,9 +246,8 @@ class TelegramAdapter:
         sender = query.get("from") or {}
         card = query.get("message") or {}
         query_id = str(query.get("id") or "")
-        # A card tapped in a (super)group must reply back into that group/thread,
-        # not a DM — derive chat_kind/thread_id from the card's own message the
-        # same way an inbound group message does (FR-034).
+        # A card tapped in a (super)group replies back into that group/thread, not a
+        # DM — derive chat_kind/thread_id from the card's own message (FR-034).
         group = is_group(card)
         if self._callbacks.on_callback is not None:
             await self._callbacks.on_callback(
@@ -266,8 +262,7 @@ class TelegramAdapter:
                     thread_id=str(card.get("message_thread_id") or ""),
                 )
             )
-        # Dismiss the button's loading spinner (best-effort; the tap is already
-        # handled, so a failed ack must not surface as a turn error).
+        # Dismiss the button's loading spinner (best-effort; the tap is already handled).
         if query_id:
             with contextlib.suppress(Exception):
                 await self._call("answerCallbackQuery", callback_query_id=query_id)
@@ -283,8 +278,7 @@ class TelegramAdapter:
         thread_id: str = "",
         chat_kind: str = "direct",
     ) -> SentMessage:
-        # chat_kind is unused: a Telegram chat_id addresses a DM or a group
-        # identically, unlike SeaTalk which needs it to pick the endpoint.
+        # chat_kind is unused: a Telegram chat_id addresses a DM and a group alike.
         del chat_kind
         chunks = list(chunk_text(markdown, self.capabilities.max_message_chars))
         last: SentMessage | None = None
@@ -305,9 +299,8 @@ class TelegramAdapter:
         thread_id: str = "",
         chat_kind: str = "direct",
     ) -> SentMessage:
-        """Upload a local file (see ``upload_media``). ``chat_kind`` is unused (a
-        Telegram chat_id addresses a DM or group alike); a non-empty
-        ``thread_id`` posts into that forum topic (FR-031)."""
+        """Upload a local file (see ``upload_media``). ``chat_kind`` is unused (a DM
+        and group share one chat_id); a non-empty ``thread_id`` posts to that topic."""
         del chat_kind
         return await upload_media(
             self._client,
@@ -357,6 +350,14 @@ class TelegramAdapter:
 
     async def send_typing(self, chat_id: str) -> None:
         await self._call("sendChatAction", chat_id=chat_id, action="typing")
+
+    async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
+        # FR-036: react on the user's message (👀 receipt / ✅ completion, both in
+        # Telegram's fixed allowed set). An empty list would clear; we only set.
+        reaction = [{"type": "emoji", "emoji": emoji}]
+        await self._call(
+            "setMessageReaction", chat_id=chat_id, message_id=message_id, reaction=reaction
+        )
 
     # -- context fetch (ContextFetchPort) -------------------------------------
 

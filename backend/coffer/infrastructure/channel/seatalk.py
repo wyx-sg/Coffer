@@ -272,6 +272,12 @@ class SeaTalkAdapter:
     async def delete_message(self, chat_id: str, message_id: str) -> None:
         raise ChannelSendFailed(self._name, "seatalk cannot delete messages")
 
+    async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
+        # FR-036: SeaTalk has no outbound reaction API — capabilities report
+        # supports_reactions=False, so the core never calls this (it uses the
+        # typing signal for the same receipt cue); the Protocol still needs it.
+        raise ChannelSendFailed(self._name, "seatalk cannot set reactions")
+
     async def send_typing(self, chat_id: str) -> None:
         with contextlib.suppress(Exception):
             await self._post(
