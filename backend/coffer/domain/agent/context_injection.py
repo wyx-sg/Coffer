@@ -12,8 +12,9 @@ some other way. Three mechanisms exist in the wild:
 
 ``PLUGIN_DROP``
     The agent has no shell hook, only in-process JS/TS callbacks (opencode,
-    openclaw). Coffer drops a thin plugin file that spawns the same
-    ``coffer-hook`` binary.
+    openclaw). Coffer drops a thin plugin that spawns the same ``coffer-hook``
+    binary. The on-disk shape differs per :class:`PluginFlavor`: one flat file
+    (opencode) vs a package directory plus an explicit enable flag (openclaw).
 
 ``INSTRUCTIONS_BLOCK``
     The agent has no working hook at all (Hermes: its ``on_session_start`` /
@@ -46,8 +47,9 @@ class InjectionMode(StrEnum):
     #: The agent runs ``coffer-hook`` and reads its stdout (Claude Code, Codex,
     #: Cursor).
     SHELL_COMMAND = "shell_command"
-    #: Coffer drops an in-process plugin file that spawns ``coffer-hook``
-    #: (opencode — no shell hook; rendering in ``plugin_drop.py``).
+    #: Coffer drops an in-process plugin that spawns ``coffer-hook`` (opencode,
+    #: openclaw — no shell hook; rendering in ``plugin_drop.py`` /
+    #: ``plugin_drop_openclaw.py`` per :class:`PluginFlavor`).
     PLUGIN_DROP = "plugin_drop"
     #: Coffer renders the payload into a marker block in the instructions file
     #: (Hermes — no working upstream hook exists).
@@ -93,6 +95,28 @@ class HookFlavor(StrEnum):
     CURSOR = "cursor"
 
 
+class PluginFlavor(StrEnum):
+    """The on-disk shape of a ``PLUGIN_DROP`` agent's plugin — what Coffer must
+    write for the agent's runtime to load it.
+
+    ``OPENCODE``
+        One flat ``coffer-session-context.js`` file in the auto-loaded
+        ``plugin/`` directory. Loading is implicit (presence == loaded).
+
+    ``OPENCLAW``
+        A PACKAGE DIRECTORY ``extensions/coffer-session-context/`` holding
+        ``package.json`` + ``openclaw.plugin.json`` + ``index.js``
+        (``definePluginEntry`` + a ``before_prompt_build`` handler), AND —
+        non-bundled plugins are fail-closed — an explicit
+        ``plugins.entries.coffer-session-context.enabled: true`` flag in
+        ``openclaw.json`` (the spec's ``plugin_enable_config_key``). Rendering
+        + config transforms live in ``plugin_drop_openclaw.py``.
+    """
+
+    OPENCODE = "opencode"
+    OPENCLAW = "openclaw"
+
+
 #: Cursor's ``hooks.json`` carries a schema version at the top level. Coffer sets
 #: it when creating the file and never rewrites an existing value.
 CURSOR_SCHEMA_VERSION = 1
@@ -125,7 +149,10 @@ class ContextInjectionSpec:
     installs an entry for — Codex and Cursor have no usable session-end event,
     so they install ``SESSION_START`` only; an ``INSTRUCTIONS_BLOCK`` agent has
     no events at all (the block is not event-driven), so it declares ``()``.
-    ``flavor`` is meaningful for ``SHELL_COMMAND`` only.
+    ``flavor`` is meaningful for ``SHELL_COMMAND`` only; ``plugin_flavor``
+    (and, for a flavor whose plugins are fail-closed, ``plugin_enable_config_key``
+    — the allowlisted config file carrying the enable flag) for ``PLUGIN_DROP``
+    only.
     """
 
     mode: InjectionMode
@@ -134,3 +161,5 @@ class ContextInjectionSpec:
     events: tuple[HookEvent, ...] = ()
     flavor: HookFlavor = HookFlavor.CLAUDE
     container_key: str = HOOK_CONTAINER_KEY
+    plugin_flavor: PluginFlavor = PluginFlavor.OPENCODE
+    plugin_enable_config_key: str | None = None

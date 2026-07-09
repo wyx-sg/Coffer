@@ -479,3 +479,121 @@ async def test_block_mode_unsupported_without_a_payload_source(agent_bundle, tmp
     with pytest.raises(HookInstallUnsupported):
         await svc.install("hm", actor="ui")
     assert await svc.refresh_blocks_for_type(AgentType.HERMES) == 0
+
+
+# --- openclaw plugin package (ADR-044 PLUGIN_DROP, openclaw flavor) ---------------
+
+
+async def _register_openclaw(bundle, home: pathlib.Path):
+    (home / ".openclaw" / "skills").mkdir(parents=True, exist_ok=True)
+    await bundle.svc.register(agent_type=AgentType.OPENCLAW, name="ow", actor="cli")
+
+
+@pytest.mark.acceptance(
+    spec="004-agent-registry",
+    scenario="install Coffer's session-context plugin package into OpenClaw",
+)
+async def test_install_openclaw_drops_package_and_enables_entry(
+    agent_bundle, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_openclaw(agent_bundle, tmp_path)
+    package_dir = tmp_path / ".openclaw" / "extensions" / "coffer-session-context"
+    config = tmp_path / ".openclaw" / "openclaw.json"
+    config.write_text(json.dumps({"gateway": {"port": 18789}}), encoding="utf-8")
+
+    st = await agent_bundle.hook.install("ow", actor="ui")
+    assert st.installed is True
+    assert st.command == "/opt/coffer/coffer-hook --agent ow --dialect raw --event sessionStart"
+
+    # The three package files land under extensions/<id>/.
+    assert (package_dir / "package.json").exists()
+    assert (package_dir / "openclaw.plugin.json").exists()
+    entry = (package_dir / "index.js").read_text()
+    assert entry.startswith("// coffer:session-context")
+    assert 'const AGENT = "ow";' in entry
+    assert "before_prompt_build" in entry
+
+    # Non-bundled plugins are fail-closed — install also flips the enable flag,
+    # preserving the user's other config.
+    data = json.loads(config.read_text())
+    assert data["plugins"]["entries"]["coffer-session-context"] == {"enabled": True}
+    assert data["gateway"] == {"port": 18789}
+
+    rows = await agent_bundle.audit.query(
+        kind="agent", name="ow", event_type=AuditEventType.AGENT_HOOK_INSTALLED.value
+    )
+    assert len(rows) == 1
+    assert rows[0].details.get("path") == str(package_dir)
+
+    st = await agent_bundle.hook.status("ow")
+    assert st.installed is True
+    assert st.supported is True
+    assert st.command is not None
+
+    # Reinstall overwrites Coffer's own package in place — same three files.
+    await agent_bundle.hook.install("ow", actor="ui")
+    names = sorted(p.name for p in package_dir.iterdir() if not p.name.endswith(".bak"))
+    assert names == ["index.js", "openclaw.plugin.json", "package.json"]
+
+
+@pytest.mark.acceptance(
+    spec="004-agent-registry",
+    scenario="uninstalling the OpenClaw plugin package removes the extension and its enable flag",
+)
+async def test_uninstall_openclaw_removes_package_and_entry(agent_bundle, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_openclaw(agent_bundle, tmp_path)
+    extensions = tmp_path / ".openclaw" / "extensions"
+    extensions.mkdir(parents=True, exist_ok=True)
+    (extensions / "user-ext").mkdir()
+    (extensions / "user-ext" / "package.json").write_text("{}\n")
+    config = tmp_path / ".openclaw" / "openclaw.json"
+    config.write_text(
+        json.dumps({"plugins": {"entries": {"memory-core": {"enabled": False}}}}),
+        encoding="utf-8",
+    )
+
+    await agent_bundle.hook.install("ow", actor="ui")
+    st = await agent_bundle.hook.uninstall("ow", actor="ui")
+    assert st.installed is False
+    # The whole package dir is gone; the user's own extension is untouched.
+    assert not (extensions / "coffer-session-context").exists()
+    assert (extensions / "user-ext" / "package.json").exists()
+    # Coffer's entries key is gone; the user's other entry survives.
+    data = json.loads(config.read_text())
+    assert "coffer-session-context" not in data["plugins"]["entries"]
+    assert data["plugins"]["entries"]["memory-core"] == {"enabled": False}
+    assert (await agent_bundle.hook.status("ow")).installed is False
+
+    rows = await agent_bundle.audit.query(
+        kind="agent", name="ow", event_type=AuditEventType.AGENT_HOOK_UNINSTALLED.value
+    )
+    assert len(rows) == 1
+    # Uninstalling again is a no-op success that audits nothing further (and
+    # does not rewrite the config file).
+    before = config.read_text()
+    await agent_bundle.hook.uninstall("ow", actor="ui")
+    rows = await agent_bundle.audit.query(
+        kind="agent", name="ow", event_type=AuditEventType.AGENT_HOOK_UNINSTALLED.value
+    )
+    assert len(rows) == 1
+    assert config.read_text() == before
+
+
+async def test_openclaw_install_raises_when_hook_unresolvable(agent_bundle, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_openclaw(agent_bundle, tmp_path)
+
+    def _boom() -> str:
+        raise ShimNotFound()
+
+    svc = AgentHookService(
+        agent_service=agent_bundle.svc,
+        audit=agent_bundle.audit,
+        store=ConfigFileStore(),
+        hook_resolver=_boom,
+    )
+    with pytest.raises(ShimNotFound):
+        await svc.install("ow", actor="ui")
+    assert not (tmp_path / ".openclaw" / "extensions").exists()

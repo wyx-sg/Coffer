@@ -10,9 +10,10 @@ The write is driven by two orthogonal axes (see :mod:`mcp_injection`):
   (each preserving the user's other content: comments, ordering, unrelated
   keys).
 - **shape** — ``container_key`` (the top-level table: ``mcpServers`` /
-  ``mcp_servers``) and ``entry_style`` (how a single stdio entry is rendered:
-  a ``{"command": shim}`` command-map, or the typed-command-array shape
-  ``{"type": "local", "command": [shim]}``).
+  ``mcp_servers``; a dotted JSON key like openclaw's ``mcp.servers`` descends
+  one object per dot) and ``entry_style`` (how a single stdio entry is
+  rendered: a ``{"command": shim}`` command-map, or the typed-command-array
+  shape ``{"type": "local", "command": [shim]}``).
 
 Defaults reproduce the original behaviour — JSON ``mcpServers`` command-map
 (Claude Code), TOML ``mcp_servers`` command-map (Codex) — so existing callers
@@ -34,11 +35,28 @@ from coffer.domain.agent.config_files import ConfigFileFormat
 from coffer.domain.agent.mcp_entries import (
     COFFER_SERVER_KEY,
     _dump_yaml,
+    _json_container,
     _parse_json,
     _parse_toml,
     _parse_yaml,
 )
 from coffer.domain.agent.mcp_injection import McpEntryStyle, default_container_key
+
+
+def _json_container_create(data: dict[str, Any], dotted_key: str) -> dict[str, Any]:
+    """The JSON servers container for a possibly-dotted ``container_key``
+    (``mcp.servers`` — openclaw nests its map one level down), creating each
+    missing step. A hand-edit that left a non-object at any step is replaced
+    (mirrors the flat branch's ``isinstance(dict)`` guard). JSON only — the
+    TOML/YAML container keys in use carry no dots."""
+    node = data
+    for part in dotted_key.split("."):
+        child = node.get(part)
+        if not isinstance(child, dict):
+            child = {}
+            node[part] = child
+        node = child
+    return node
 
 
 def _entry_fields(shim_path: str, entry_style: McpEntryStyle) -> dict[str, Any]:
@@ -82,10 +100,7 @@ def apply_install(
 
     if fmt is ConfigFileFormat.JSON:
         data = _parse_json(text)
-        servers = data.get(ck)
-        if not isinstance(servers, dict):
-            servers = {}
-            data[ck] = servers
+        servers = _json_container_create(data, ck)
         servers[COFFER_SERVER_KEY] = dict(fields)
         # ensure_ascii=False: ~/.claude.json holds the user's whole machine
         # state (project paths, history) which may be non-ASCII; escaping it to
@@ -94,11 +109,11 @@ def apply_install(
 
     if fmt is ConfigFileFormat.YAML:
         ydata = _parse_yaml(text)
-        servers = ydata.get(ck)
-        if not isinstance(servers, MutableMapping):
-            servers = {}
-            ydata[ck] = servers
-        servers[COFFER_SERVER_KEY] = dict(fields)
+        yservers = ydata.get(ck)
+        if not isinstance(yservers, MutableMapping):
+            yservers = {}
+            ydata[ck] = yservers
+        yservers[COFFER_SERVER_KEY] = dict(fields)
         return _dump_yaml(ydata)
 
     if fmt is ConfigFileFormat.TOML:
@@ -123,8 +138,8 @@ def apply_uninstall(fmt: ConfigFileFormat, text: str, *, container_key: str | No
 
     if fmt is ConfigFileFormat.JSON:
         data = _parse_json(text)
-        servers = data.get(ck)
-        if isinstance(servers, dict):
+        servers = _json_container(data, ck)
+        if isinstance(servers, MutableMapping):
             servers.pop(COFFER_SERVER_KEY, None)
         return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
 
@@ -154,8 +169,8 @@ def is_installed(fmt: ConfigFileFormat, text: str, *, container_key: str | None 
         return False
     ck = container_key or default_container_key(fmt)
     if fmt is ConfigFileFormat.JSON:
-        servers = _parse_json(text).get(ck)
-        return isinstance(servers, dict) and COFFER_SERVER_KEY in servers
+        servers = _json_container(_parse_json(text), ck)
+        return isinstance(servers, MutableMapping) and COFFER_SERVER_KEY in servers
     if fmt is ConfigFileFormat.YAML:
         servers = _parse_yaml(text).get(ck)
         return isinstance(servers, MutableMapping) and COFFER_SERVER_KEY in servers
@@ -178,7 +193,7 @@ def installed_command(
     if not is_installed(fmt, text, container_key=ck):
         return None
     if fmt is ConfigFileFormat.JSON:
-        return _coffer_command(_parse_json(text)[ck][COFFER_SERVER_KEY])
+        return _coffer_command(_json_container(_parse_json(text), ck)[COFFER_SERVER_KEY])
     if fmt is ConfigFileFormat.YAML:
         return _coffer_command(_parse_yaml(text)[ck][COFFER_SERVER_KEY])
     return _coffer_command(_parse_toml(text)[ck][COFFER_SERVER_KEY])

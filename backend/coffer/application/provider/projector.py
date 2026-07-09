@@ -16,7 +16,7 @@ from typing import Protocol as _Protocol
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import spec_for
 from coffer.domain.agent.types import AgentType
-from coffer.domain.provider.config import ProviderConfig
+from coffer.domain.provider.config import Protocol, ProviderConfig
 from coffer.domain.provider.projection import (
     anthropic_api_key_helper,
     apply_anthropic_settings,
@@ -28,6 +28,12 @@ from coffer.domain.provider.projection import (
     remove_hermes_provider,
     remove_opencode_provider,
     target_for_agent,
+)
+from coffer.domain.provider.projection_openclaw import (
+    OPENCLAW_API_ANTHROPIC,
+    OPENCLAW_API_OPENAI,
+    apply_openclaw_provider,
+    remove_openclaw_provider,
 )
 from coffer.domain.resource import Resource
 
@@ -122,6 +128,20 @@ class ProviderProjector:
                 base_url=cfg.base_url,
                 model=agent_cfg.model,
             )
+        elif agent_type is AgentType.OPENCLAW:
+            # openclaw reads the key from COFFER_PROVIDER_KEY too (openclaw.json
+            # models.providers.coffer.apiKey = "${...}"). It speaks BOTH wires,
+            # so the provider block's `api` follows the connection's protocol.
+            new_text = apply_openclaw_provider(
+                text,
+                base_url=cfg.base_url,
+                model=agent_cfg.model,
+                api=(
+                    OPENCLAW_API_ANTHROPIC
+                    if cfg.protocol is Protocol.ANTHROPIC
+                    else OPENCLAW_API_OPENAI
+                ),
+            )
         else:
             new_text = apply_codex_provider(
                 text,
@@ -144,6 +164,8 @@ class ProviderProjector:
             new_text = remove_opencode_provider(text)
         elif agent_type is AgentType.HERMES:
             new_text = remove_hermes_provider(text)
+        elif agent_type is AgentType.OPENCLAW:
+            new_text = remove_openclaw_provider(text)
         else:
             new_text = remove_codex_provider(text)
         self._config_store.write_text_atomic(spec.path, new_text)

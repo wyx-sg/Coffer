@@ -63,6 +63,8 @@ class McpInjectionSpec:
 
     ``config_key`` names the allowlisted config file that holds the MCP servers
     (resolved against the agent's config dir by the application layer).
+    A JSON ``container_key`` may be a dotted PATH (``mcp.servers`` — openclaw
+    nests its servers map one level down); each dot descends one object.
     """
 
     config_key: str

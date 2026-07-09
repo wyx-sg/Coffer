@@ -27,6 +27,7 @@ from coffer.domain.agent.allowlists import (
     _cursor_files,
     _hermes_files,
     _home,
+    _openclaw_files,
     _opencode_files,
 )
 from coffer.domain.agent.config_files import ConfigFileFormat, ConfigFileSpec
@@ -35,6 +36,7 @@ from coffer.domain.agent.context_injection import (
     HookEvent,
     HookFlavor,
     InjectionMode,
+    PluginFlavor,
 )
 from coffer.domain.agent.mcp_injection import McpEntryStyle, McpInjectionSpec
 from coffer.domain.agent.plugin_capability import (
@@ -249,6 +251,47 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         #                            uses its OWN auth (`cursor-agent login`), which
         #                            Coffer does not inject.
     ),
+    AgentType.OPENCLAW: AgentDescriptor(
+        type=AgentType.OPENCLAW,
+        display_name="OpenClaw",
+        config_subpath=".openclaw",
+        config_files=_openclaw_files,
+        # openclaw.json keeps its servers map NESTED (`mcp.servers.<name>`,
+        # plain command-map entries — probe-verified on 2026.6.11 via
+        # `openclaw mcp status`); the dotted container key descends into it.
+        # CAUTION: openclaw REJECTS interpreter-startup env keys (NODE_OPTIONS,
+        # PYTHONPATH, …) inside a server's `env` at config load — Coffer's own
+        # entry carries no env, so this bites only hand-added entries.
+        mcp=McpInjectionSpec(
+            config_key="config",
+            container_key="mcp.servers",
+            format=ConfigFileFormat.JSON,
+            entry_style=McpEntryStyle.COMMAND_MAP,
+        ),
+        # No shell hook; openclaw's in-process plugin API is the injection point
+        # (ADR-044). Unlike opencode's flat auto-loaded file, openclaw wants a
+        # package DIRECTORY under `extensions/` AND an explicit
+        # `plugins.entries.<id>.enabled: true` in openclaw.json (non-bundled
+        # plugins are fail-closed) — the OPENCLAW PluginFlavor. `--local` runs
+        # preload the plugin registry per run, so Coffer-driven turns see the
+        # extension immediately; the long-running gateway needs a restart
+        # (documented caveat for channel-driven openclaw use). Dynamic like the
+        # shell hooks: no lifecycle events, no refresh machinery.
+        context_injection=ContextInjectionSpec(
+            mode=InjectionMode.PLUGIN_DROP,
+            config_key="extensions",
+            format=ConfigFileFormat.TEXT,
+            plugin_flavor=PluginFlavor.OPENCLAW,
+            plugin_enable_config_key="config",
+        ),
+        # Native memory IS disableable (`plugins.slots.memory: "none"`) — wired
+        # in _NATIVE_MEMORY_DISABLE_TARGET below. plugins=None: openclaw's
+        # extension registry is its own model, not managed by Coffer (the
+        # PLUGIN_DROP facet drops ONE Coffer-owned extension; it does not manage
+        # the agent's other plugins). Skills: ~/.openclaw/skills/<name>/SKILL.md,
+        # symlinked folders ARE discovered (probe-verified) — the FOLDER default
+        # works unchanged.
+    ),
 }
 
 
@@ -269,6 +312,8 @@ _NATIVE_MEMORY_DISABLE_TARGET: dict[AgentType, tuple[str, ConfigFileFormat]] = {
     AgentType.CODEX: ("config", ConfigFileFormat.TOML),
     # Hermes → config.yaml (YAML) memory.memory_enabled / user_profile_enabled.
     AgentType.HERMES: ("config", ConfigFileFormat.YAML),
+    # openclaw → openclaw.json (JSON) plugins.slots.memory = "none" (ADR-044).
+    AgentType.OPENCLAW: ("config", ConfigFileFormat.JSON),
 }
 
 

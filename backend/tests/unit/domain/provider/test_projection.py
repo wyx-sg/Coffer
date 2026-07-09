@@ -317,3 +317,120 @@ def test_target_for_agent_hermes() -> None:
     assert t is not None
     assert t.config_key == "config"
     assert t.format.value == "yaml"
+
+
+# --- openclaw (ADR-044) — models.providers block in openclaw.json --------------
+
+
+def test_openclaw_provider_writes_block_and_selects_primary() -> None:
+    from coffer.domain.provider.projection_openclaw import apply_openclaw_provider
+
+    seed = json.dumps(
+        {
+            "gateway": {"port": 18789},
+            "agents": {"defaults": {"model": {"fallbacks": ["openrouter/auto"]}}},
+        }
+    )
+    out = apply_openclaw_provider(seed, base_url="https://gw/v1", model="gpt-5")
+    d = json.loads(out)
+    assert d["gateway"] == {"port": 18789}  # unrelated key preserved
+    block = d["models"]["providers"][CODEX_PROVIDER_ID]
+    assert block["api"] == "openai-completions"
+    assert block["baseUrl"] == "https://gw/v1"
+    # The raw key is never written — only a ${...} env reference (a missing var
+    # is a startup WARNING for openclaw, probe-verified on 2026.6.11).
+    assert block["apiKey"] == f"${{{CODEX_ENV_KEY}}}"
+    # A custom provider MUST declare models, each with id AND name (probe:
+    # `openclaw config validate` rejects both omissions).
+    assert block["models"] == [{"id": "gpt-5", "name": "gpt-5"}]
+    model_block = d["agents"]["defaults"]["model"]
+    assert model_block["primary"] == f"{CODEX_PROVIDER_ID}/gpt-5"
+    assert model_block["fallbacks"] == ["openrouter/auto"]  # PRESERVED
+
+
+def test_openclaw_provider_anthropic_wire_uses_anthropic_api() -> None:
+    from coffer.domain.provider.projection_openclaw import (
+        OPENCLAW_API_ANTHROPIC,
+        apply_openclaw_provider,
+    )
+
+    out = apply_openclaw_provider(
+        "",
+        base_url="https://api.anthropic.com",
+        model="claude-sonnet-4-5",
+        api=OPENCLAW_API_ANTHROPIC,
+    )
+    d = json.loads(out)
+    assert d["models"]["providers"][CODEX_PROVIDER_ID]["api"] == "anthropic-messages"
+
+
+def test_openclaw_provider_unbound_projects_empty_models_and_leaves_primary() -> None:
+    from coffer.domain.provider.projection_openclaw import apply_openclaw_provider
+
+    seed = json.dumps({"agents": {"defaults": {"model": {"primary": "user/own"}}}})
+    out = apply_openclaw_provider(seed, base_url="https://gw/v1", model=None)
+    d = json.loads(out)
+    # models: [] is VALID for a custom provider (probe) — the block is inert
+    # until a model is bound.
+    assert d["models"]["providers"][CODEX_PROVIDER_ID]["models"] == []
+    assert d["agents"]["defaults"]["model"]["primary"] == "user/own"  # untouched
+
+
+def test_openclaw_provider_unbound_clears_stale_coffer_primary() -> None:
+    from coffer.domain.provider.projection_openclaw import apply_openclaw_provider
+
+    seed = json.dumps(
+        {"agents": {"defaults": {"model": {"primary": f"{CODEX_PROVIDER_ID}/gpt-5"}}}}
+    )
+    out = apply_openclaw_provider(seed, base_url="https://gw/v1", model=None)
+    d = json.loads(out)
+    # A stale coffer/* primary is cleared so openclaw runs on its own default.
+    assert "agents" not in d or "primary" not in (d["agents"].get("defaults", {}).get("model", {}))
+
+
+def test_openclaw_remove_reverts_only_coffer() -> None:
+    from coffer.domain.provider.projection_openclaw import (
+        apply_openclaw_provider,
+        remove_openclaw_provider,
+    )
+
+    seed = json.dumps(
+        {
+            "models": {"providers": {"deepseek": {"api": "openai-completions"}}},
+            "agents": {"defaults": {"model": {"fallbacks": ["openrouter/auto"]}}},
+        }
+    )
+    out = apply_openclaw_provider(seed, base_url="https://gw/v1", model="gpt-5")
+    back = json.loads(remove_openclaw_provider(out))
+    assert CODEX_PROVIDER_ID not in back["models"]["providers"]
+    assert back["models"]["providers"]["deepseek"] == {"api": "openai-completions"}
+    model_block = back["agents"]["defaults"]["model"]
+    assert "primary" not in model_block  # coffer/* primary cleared
+    assert model_block["fallbacks"] == ["openrouter/auto"]  # PRESERVED
+
+
+def test_openclaw_remove_keeps_user_primary_and_tidies_empty_containers() -> None:
+    from coffer.domain.provider.projection_openclaw import (
+        apply_openclaw_provider,
+        remove_openclaw_provider,
+    )
+
+    # A user-chosen primary (not coffer/*) is left alone.
+    seed = json.dumps({"agents": {"defaults": {"model": {"primary": "deepseek/v4"}}}})
+    out = apply_openclaw_provider(seed, base_url="https://gw/v1", model=None)
+    back = json.loads(remove_openclaw_provider(out))
+    assert back["agents"]["defaults"]["model"]["primary"] == "deepseek/v4"
+    assert "models" not in back  # the container Coffer created is tidied away
+
+    # Projecting into an empty file and removing leaves an empty document.
+    round_trip = remove_openclaw_provider(
+        apply_openclaw_provider("", base_url="https://gw/v1", model="m")
+    )
+    assert json.loads(round_trip) == {}
+
+
+def test_target_for_agent_openclaw() -> None:
+    t = target_for_agent(AgentType.OPENCLAW)
+    assert t is not None
+    assert t.config_key == "config"
+    assert t.format.value == "json"

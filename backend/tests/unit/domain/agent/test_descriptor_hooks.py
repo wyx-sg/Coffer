@@ -169,3 +169,67 @@ def test_cursor_provider_and_native_memory_facets_absent() -> None:
 
     assert native_memory_disable_target(AgentType.CURSOR) is None
     assert target_for_agent(AgentType.CURSOR) is None
+
+
+# --- openclaw (ADR-044) ----------------------------------------------------------
+
+
+def test_openclaw_descriptor_identity_and_allowlist() -> None:
+    d = descriptor_for(AgentType.OPENCLAW)
+    assert d.display_name == "OpenClaw"
+    assert d.config_subpath == ".openclaw"
+    keys = {s.key for s in d.config_files(d.default_config_dir())}
+    # Config + the workspace instruction files + the extensions directory that
+    # holds Coffer's dropped session-context package (FR-048).
+    assert {
+        "config",
+        "instructions",
+        "soul",
+        "identity",
+        "user",
+        "tools",
+        "memory",
+        "extensions",
+    } <= keys
+
+
+def test_openclaw_mcp_spec_uses_nested_container() -> None:
+    from coffer.domain.agent.mcp_injection import McpEntryStyle
+
+    # openclaw.json nests its servers map (`mcp.servers.<name>`, command-map
+    # entries — probe-verified via `openclaw mcp status`); the dotted container
+    # key descends into it.
+    d = descriptor_for(AgentType.OPENCLAW)
+    assert d.mcp is not None
+    assert d.mcp.config_key == "config"
+    assert d.mcp.container_key == "mcp.servers"
+    assert d.mcp.format is ConfigFileFormat.JSON
+    assert d.mcp.entry_style is McpEntryStyle.COMMAND_MAP
+
+
+def test_openclaw_injects_via_openclaw_flavored_plugin_drop() -> None:
+    from coffer.domain.agent.context_injection import PluginFlavor
+
+    # No shell hook — openclaw's in-process plugin API is the injection point.
+    # Its flavor is a package dir under `extensions/` PLUS the fail-closed
+    # `plugins.entries` enable flag in openclaw.json (ADR-044).
+    d = descriptor_for(AgentType.OPENCLAW)
+    inj = d.context_injection
+    assert inj is not None
+    assert inj.mode is InjectionMode.PLUGIN_DROP
+    assert inj.plugin_flavor is PluginFlavor.OPENCLAW
+    assert inj.config_key == "extensions"
+    assert inj.plugin_enable_config_key == "config"
+    assert inj.events == ()
+
+
+def test_openclaw_native_memory_and_projection_targets() -> None:
+    from coffer.domain.provider.projection import target_for_agent
+
+    # Native memory disable = plugins.slots.memory in openclaw.json; provider
+    # projection = models.providers.coffer in the same file (both ADR-044).
+    assert native_memory_disable_target(AgentType.OPENCLAW) == ("config", ConfigFileFormat.JSON)
+    target = target_for_agent(AgentType.OPENCLAW)
+    assert target is not None
+    assert target.config_key == "config"
+    assert target.format is ConfigFileFormat.JSON

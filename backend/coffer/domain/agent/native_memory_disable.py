@@ -11,6 +11,8 @@ Pure domain text transforms — no filesystem access. Three backends:
   ``memories.generate_memories = false`` (tomlkit preserves comments/ordering).
 - **Hermes** (YAML ``config.yaml``): ``memory.memory_enabled = false`` +
   ``memory.user_profile_enabled = false`` (ruamel preserves comments/ordering).
+- **openclaw** (JSON ``openclaw.json``): ``plugins.slots.memory = "none"``
+  (empties the memory plugin slot — probe-validated on 2026.6.11; ADR-044).
 
 ``apply_disable`` sets the flag(s); ``apply_restore`` removes the key(s) Coffer
 added; ``is_disabled`` reports whether the disable is in effect. All idempotent.
@@ -32,11 +34,14 @@ from coffer.domain.agent.types import AgentType
 _CLAUDE_KEY = "autoMemoryEnabled"
 #: Hermes YAML ``memory`` sub-keys Coffer flips off.
 _HERMES_MEMORY_KEYS = ("memory_enabled", "user_profile_enabled")
+#: openclaw ``plugins.slots.memory`` value that empties the memory slot.
+_OPENCLAW_SLOT_OFF = "none"
 
 
 def _is_json(fmt: ConfigFileFormat, agent_type: AgentType) -> bool:
-    """JSON (Claude Code) backend vs TOML (Codex) backend. YAML (Hermes) is
-    handled by its own branch before this is called."""
+    """JSON (Claude Code) backend vs TOML (Codex) backend. YAML (Hermes) and
+    the openclaw JSON slot are handled by their own branches before this is
+    called."""
     if agent_type is AgentType.CLAUDE_CODE:
         return True
     if agent_type is AgentType.CODEX:
@@ -59,8 +64,26 @@ def _yaml_memory_block(doc: MutableMapping[str, Any]) -> MutableMapping[str, Any
     return mem
 
 
+def _openclaw_slots(doc: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
+    """Return the ``plugins.slots`` mapping, creating steps if absent/non-mapping."""
+    plugins = doc.get("plugins")
+    if not isinstance(plugins, MutableMapping):
+        plugins = {}
+        doc["plugins"] = plugins
+    slots = plugins.get("slots")
+    if not isinstance(slots, MutableMapping):
+        slots = {}
+        plugins["slots"] = slots
+    return slots
+
+
 def apply_disable(content: str, *, fmt: ConfigFileFormat, agent_type: AgentType) -> str:
     """Return new config text with native write-side memory disabled."""
+    if agent_type is AgentType.OPENCLAW:
+        doc_json = _parse_json(content)
+        _openclaw_slots(doc_json)["memory"] = _OPENCLAW_SLOT_OFF
+        return _dump_json(doc_json)
+
     if fmt is ConfigFileFormat.YAML:
         doc = _parse_yaml(content)
         mem = _yaml_memory_block(doc)
@@ -89,6 +112,21 @@ def apply_restore(content: str, *, fmt: ConfigFileFormat, agent_type: AgentType)
     Only the key(s) Coffer added are removed; unrelated ``memory`` settings (e.g.
     ``memory_char_limit``) are left untouched.
     """
+    if agent_type is AgentType.OPENCLAW:
+        doc_json = _parse_json(content)
+        plugins = doc_json.get("plugins")
+        if isinstance(plugins, MutableMapping):
+            slots = plugins.get("slots")
+            if isinstance(slots, MutableMapping):
+                slots.pop("memory", None)
+                if not slots:  # drop a block we created that is now empty
+                    plugins.pop("slots", None)
+            # `plugins` also carries `entries` (the FR-048 extension flag), so it
+            # is only dropped when the slot removal left it fully empty.
+            if not plugins:
+                doc_json.pop("plugins", None)
+        return _dump_json(doc_json)
+
     if fmt is ConfigFileFormat.YAML:
         doc = _parse_yaml(content)
         mem = doc.get("memory")
@@ -119,6 +157,12 @@ def is_disabled(content: str, *, fmt: ConfigFileFormat, agent_type: AgentType) -
     """Whether native write-side memory is currently disabled in ``content``."""
     if not content.strip():
         return False
+    if agent_type is AgentType.OPENCLAW:
+        plugins = _parse_json(content).get("plugins")
+        if not isinstance(plugins, MutableMapping):
+            return False
+        slots = plugins.get("slots")
+        return isinstance(slots, MutableMapping) and slots.get("memory") == _OPENCLAW_SLOT_OFF
     if fmt is ConfigFileFormat.YAML:
         doc = _parse_yaml(content)
         mem = doc.get("memory")

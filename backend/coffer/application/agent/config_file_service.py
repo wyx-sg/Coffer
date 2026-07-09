@@ -85,6 +85,13 @@ class ConfigFileStorePort(Protocol):
         """
         ...
 
+    def remove_tree(self, path: pathlib.Path) -> bool:
+        """Remove a directory tree entirely (no backup — used only for content
+        Coffer itself rendered and can regenerate byte-identically, e.g. the
+        FR-048 openclaw extension package). ``False`` when already absent.
+        """
+        ...
+
     def fingerprint(self, text: str | None) -> str:
         """sha256 hex-digest of the content; ``""`` for a missing file (text=None)."""
         ...

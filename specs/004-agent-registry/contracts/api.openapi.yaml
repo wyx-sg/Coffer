@@ -939,10 +939,11 @@ components:
   schemas:
     AgentType:
       type: string
-      enum: [claude_code, codex]
+      enum: [claude_code, codex, opencode, hermes, cursor, openclaw]
       description: >
-        Supported agent product identifiers (v1). Each value covers both the
-        CLI and the app/IDE form of that product (shared config directory).
+        Supported agent product identifiers (the capability manifest). Each
+        value covers both the CLI and the app/IDE form of that product (shared
+        config directory).
 
     AgentCreate:
       type: object

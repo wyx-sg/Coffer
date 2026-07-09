@@ -24,6 +24,7 @@ class AgentType(StrEnum):
     OPENCODE = "opencode"
     HERMES = "hermes"
     CURSOR = "cursor"
+    OPENCLAW = "openclaw"
 
     @property
     def display_name(self) -> str:

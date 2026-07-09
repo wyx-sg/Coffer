@@ -6,7 +6,7 @@
 
 > **更正（2026-07-09，[ADR-042](../decisions/ADR-042-context-injection-mechanisms.zh.md)）。** 下表**五行里有三行是错的**。对着 openclaw 官方文档做第一性核查后发现：MCP server **可以**注入（`~/.openclaw/openclaw.json` 的 `mcp.servers`；写一条 `coffer` 条目是单向的、不成环——只有**同时**把 `openclaw mcp serve` 注册为 Coffer 的上游才会闭环）；原生记忆**可以**关闭（`plugins.slots.memory: "none"` 或 `plugins.entries.memory-core.enabled: false`）；skills **就是**drop-in——`~/.openclaw/skills/<name>/SKILL.md`，与 Claude Code 完全同形，Coffer 现有的 `FOLDER` 投递模式原样可用。provider 投影不仅支持，还原生支持从 `${ENV}` 读取 key。只有 **hooks** 那一行站得住：openclaw 的 hook 是跑在 Gateway 进程里的 TS/JS，没有 session-start 事件，且注入上下文必须走 typed plugin（`api.on(...)`）——也就是 Coffer 的 `PLUGIN_DROP` mode。
 >
-> **因此结论反转：openclaw 是一个可行的受管叶子 agent。** 它已被规划为受管 agent，待有真实安装可对照验证后落地（作者机器上未安装，而 Coffer 的 spec 规则要求真实端到端使用）。本文有两点判断是对的、且依然重要：openclaw 把 Claude Code / Codex / OpenCode 当子 worker 驱动，所以 Coffer 写进 `~/.claude/` 的内容会被 openclaw spawn 的 worker 继承；以及它的 headless CLI（`openclaw agent --message … --json --local`）返回单个 JSON blob、**没有流式**，因而它会是 Coffer 唯一不能流式的 chat provider。
+> **因此结论反转：openclaw 是一个可行的受管叶子 agent。** 它已作为受管 agent **交付**——[ADR-044](../decisions/ADR-044-openclaw-managed-agent.zh.md) 记录了交付的切片，每格能力都对着真实安装（openclaw 2026.6.11）探针验证。本文有两点判断是对的、且依然重要：openclaw 把 Claude Code / Codex / OpenCode 当子 worker 驱动，所以 Coffer 写进 `~/.claude/` 的内容会被 openclaw spawn 的 worker 继承；以及它的 headless CLI（`openclaw agent --message … --json --local`）返回单个 JSON blob、**没有流式**，因而它会是 Coffer 唯一不能流式的 chat provider。
 >
 > 下表请作为 ADR-040 当初所依据的推理之历史记录来读，而非当前事实。
 

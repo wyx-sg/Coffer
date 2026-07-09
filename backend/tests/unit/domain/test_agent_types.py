@@ -21,6 +21,7 @@ def test_supported_types():
         "opencode",
         "hermes",
         "cursor",
+        "openclaw",
     }
 
 

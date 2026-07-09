@@ -40,17 +40,20 @@ _CLAUDE_CODE = "claude_code"
 _CODEX = "codex"
 _OPENCODE = "opencode"
 _HERMES = "hermes"
-_KNOWN_AGENTS: frozenset[str] = frozenset({_CLAUDE_CODE, _CODEX, _OPENCODE, _HERMES})
+_OPENCLAW = "openclaw"
+_KNOWN_AGENTS: frozenset[str] = frozenset({_CLAUDE_CODE, _CODEX, _OPENCODE, _HERMES, _OPENCLAW})
 
 # Effective agent set when ``compatible_agents`` is unset, by the wire the
 # endpoint speaks. ``protocol`` no longer fixes the projection target (the user's
 # explicit ``compatible_agents`` does); these are only the defaults the create
 # form pre-fills. ollama is internal-only — no key, projects into no agent.
+# openclaw speaks BOTH wires (its provider `api` field takes openai-completions
+# AND anthropic-messages — probe-verified, ADR-044), so it defaults into both.
 _DEFAULT_COMPATIBLE: dict[str, list[str]] = {
-    "anthropic": [_CLAUDE_CODE],
-    "openai": [_CODEX, _OPENCODE, _HERMES],
+    "anthropic": [_CLAUDE_CODE, _OPENCLAW],
+    "openai": [_CODEX, _OPENCODE, _HERMES, _OPENCLAW],
     "ollama": [],
-    "unknown": [_CLAUDE_CODE, _CODEX, _OPENCODE, _HERMES],
+    "unknown": [_CLAUDE_CODE, _CODEX, _OPENCODE, _HERMES, _OPENCLAW],
 }
 
 

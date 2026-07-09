@@ -18,6 +18,7 @@ from coffer.domain.agent.config_files import (
     ConfigFileSpec,
 )
 from coffer.domain.agent.plugin_drop import PLUGIN_SUBDIR
+from coffer.domain.agent.plugin_drop_openclaw import OPENCLAW_EXTENSIONS_SUBDIR
 
 
 def _home() -> pathlib.Path:
@@ -117,6 +118,53 @@ def _hermes_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
             "Persona & global instructions (SOUL.md)",
             cfg / "SOUL.md",
             ConfigFileFormat.MARKDOWN,
+        ),
+    )
+
+
+def _openclaw_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
+    # openclaw's ~/.openclaw/openclaw.json (plain JSON) holds the `mcp.servers`
+    # block (MCP injection), the `models.providers` block (provider projection),
+    # and the `plugins.entries` / `plugins.slots` blocks (Coffer's dropped
+    # extension enable flag + native-memory disable). Its human-facing
+    # instruction files live in the agent WORKSPACE — `agents.defaults.workspace`,
+    # default `<cfg>/workspace` (live-verified on openclaw 2026.6.11); the paths
+    # below assume that default (a relocated workspace simply lists as absent).
+    # `extensions/` is where openclaw discovers local plugin PACKAGE DIRS —
+    # Coffer's session-context extension is dropped there (PLUGIN_DROP, FR-048);
+    # the directory viewer lists `.md` children only, so the package's JS/JSON
+    # files are managed exclusively through the install/uninstall operations.
+    ws = cfg / "workspace"
+    return (
+        ConfigFileSpec(
+            "config", "Config (openclaw.json)", cfg / "openclaw.json", ConfigFileFormat.JSON
+        ),
+        ConfigFileSpec(
+            "instructions",
+            "Workspace instructions (AGENTS.md)",
+            ws / "AGENTS.md",
+            ConfigFileFormat.MARKDOWN,
+        ),
+        ConfigFileSpec("soul", "Persona (SOUL.md)", ws / "SOUL.md", ConfigFileFormat.MARKDOWN),
+        ConfigFileSpec(
+            "identity", "Identity (IDENTITY.md)", ws / "IDENTITY.md", ConfigFileFormat.MARKDOWN
+        ),
+        ConfigFileSpec("user", "User profile (USER.md)", ws / "USER.md", ConfigFileFormat.MARKDOWN),
+        ConfigFileSpec(
+            "tools", "Tool notes (TOOLS.md)", ws / "TOOLS.md", ConfigFileFormat.MARKDOWN
+        ),
+        ConfigFileSpec(
+            "memory",
+            "Curated memory (MEMORY.md)",
+            ws / "MEMORY.md",
+            ConfigFileFormat.MARKDOWN,
+        ),
+        ConfigFileSpec(
+            "extensions",
+            "Extensions (extensions/)",
+            cfg / OPENCLAW_EXTENSIONS_SUBDIR,
+            ConfigFileFormat.TEXT,
+            kind=ConfigFileKind.DIRECTORY,
         ),
     )
 

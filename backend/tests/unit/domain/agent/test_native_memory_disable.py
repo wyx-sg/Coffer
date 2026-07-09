@@ -160,3 +160,50 @@ def test_hermes_restore_drops_a_memory_block_coffer_created() -> None:
     d = yaml.safe_load(restored)
     assert "memory" not in d
     assert d["model"]["provider"] == "x"  # unrelated content preserved
+
+
+# --- openclaw (JSON plugins.slots.memory, ADR-044) ------------------------------
+
+
+def test_openclaw_disable_empties_the_memory_slot() -> None:
+    out = apply_disable("", fmt=_JSON, agent_type=AgentType.OPENCLAW)
+    assert json.loads(out)["plugins"]["slots"]["memory"] == "none"
+    assert is_disabled(out, fmt=_JSON, agent_type=AgentType.OPENCLAW) is True
+
+
+def test_openclaw_disable_preserves_unrelated_keys_and_plugin_entries() -> None:
+    seed = json.dumps(
+        {
+            "gateway": {"port": 18789},
+            "plugins": {"entries": {"coffer-session-context": {"enabled": True}}},
+        }
+    )
+    data = json.loads(apply_disable(seed, fmt=_JSON, agent_type=AgentType.OPENCLAW))
+    assert data["gateway"] == {"port": 18789}
+    assert data["plugins"]["entries"]["coffer-session-context"] == {"enabled": True}
+    assert data["plugins"]["slots"] == {"memory": "none"}
+
+
+def test_openclaw_restore_removes_only_coffer_slot() -> None:
+    seed = json.dumps({"plugins": {"slots": {"memory": "none", "voice": "x"}}})
+    data = json.loads(apply_restore(seed, fmt=_JSON, agent_type=AgentType.OPENCLAW))
+    # An unrelated slot keeps the block alive; only the memory key goes.
+    assert data["plugins"]["slots"] == {"voice": "x"}
+
+
+def test_openclaw_restore_drops_containers_coffer_created() -> None:
+    disabled = apply_disable("", fmt=_JSON, agent_type=AgentType.OPENCLAW)
+    out = apply_restore(disabled, fmt=_JSON, agent_type=AgentType.OPENCLAW)
+    assert json.loads(out) == {}
+    assert is_disabled(out, fmt=_JSON, agent_type=AgentType.OPENCLAW) is False
+
+
+def test_openclaw_disable_is_idempotent() -> None:
+    once = apply_disable("", fmt=_JSON, agent_type=AgentType.OPENCLAW)
+    twice = apply_disable(once, fmt=_JSON, agent_type=AgentType.OPENCLAW)
+    assert json.loads(once) == json.loads(twice)
+
+
+def test_openclaw_is_disabled_false_for_other_slot_values() -> None:
+    seed = json.dumps({"plugins": {"slots": {"memory": "memory-core"}}})
+    assert is_disabled(seed, fmt=_JSON, agent_type=AgentType.OPENCLAW) is False
