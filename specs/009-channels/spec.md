@@ -741,6 +741,16 @@ status / notify`.
 - **Then** the largest photo size is downloaded to the media dir and carried on
   the inbound message as an attachment, and the caption becomes the message text
 
+### Scenario: a Telegram album is handled as one turn
+
+- **Given** a paired Telegram channel
+- **When** the owner sends a multi-photo album (delivered as separate messages
+  that share a `media_group_id`, the caption on the first item only)
+- **Then** the items are debounced and combined into a single inbound message
+  carrying all their attachments and the album's caption — one turn, not one per
+  photo — while a lone photo without a `media_group_id` still drives its turn
+  immediately
+
 ### Scenario: an inbound image reaches a vision agent as an inline block
 
 - **Given** a turn carrying an image attachment

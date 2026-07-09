@@ -658,6 +658,15 @@ status / notify`。
 - **Then** 最大尺寸的图片被下载到媒体目录、作为附件挂在入站消息上，caption
   成为消息文本
 
+### Scenario: a Telegram album is handled as one turn
+
+- **Given** 一个已配对的 Telegram channel
+- **When** owner 发送一个多图相册（作为共享同一 `media_group_id` 的多条独立消息投递，
+  caption 只在第一条上）
+- **Then** 这些条目被去抖并合并成一条入站消息，携带它们全部的附件与相册的 caption
+  —— 一个 turn，而非每张图一个 turn；而一张没有 `media_group_id` 的单图仍立即驱动其
+  turn
+
 ### Scenario: an inbound image reaches a vision agent as an inline block
 
 - **Given** 一个携带图片附件的 turn

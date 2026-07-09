@@ -8,11 +8,13 @@ what already arrived on the update itself.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
+from coffer.domain.channel.envelopes import InboundAttachment, InboundMessage
 from coffer.domain.channel.rich_content import ForwardedItem, flatten_forwarded, quote_prefix
 
-__all__ = ["addressed_and_text", "is_group", "prepend_context"]
+__all__ = ["addressed_and_text", "build_inbound_message", "is_group", "prepend_context"]
 
 
 def is_group(message: dict[str, Any]) -> bool:
@@ -137,3 +139,41 @@ def prepend_context(message: dict[str, Any], text: str) -> str:
             sender_name = str(sender.get("first_name") or sender.get("username") or "")
             body = f"{quote_prefix(sender_name, str(reply_text))}{body}"
     return body.strip()
+
+
+def build_inbound_message(
+    message: dict[str, Any],
+    attachments: tuple[InboundAttachment, ...],
+    *,
+    channel: str,
+    bot_id: int | None,
+    bot_username: str | None,
+) -> InboundMessage:
+    """Normalize a Telegram message dict into an ``InboundMessage``.
+
+    ``attachments`` are passed in already-downloaded (the caller owns the
+    network) so this stays pure — it lets an album flush reuse the exact same
+    text/addressing/routing derivation as a single message (FR-038)."""
+    group = is_group(message)
+    # A media message carries its text in ``caption``, not ``text``.
+    raw_text = str(message.get("text") or message.get("caption") or "")
+    addressed, raw = (True, raw_text)
+    if group:
+        addressed, raw = addressed_and_text(
+            message, raw_text, bot_id=bot_id, bot_username=bot_username
+        )
+    text = prepend_context(message, raw)
+    sender = message.get("from") or {}
+    return InboundMessage(
+        channel=channel,
+        chat_id=str(message.get("chat", {}).get("id", "")),
+        sender_display=str(sender.get("first_name") or sender.get("username") or ""),
+        text=text,
+        platform_message_id=str(message.get("message_id", "")),
+        timestamp=datetime.fromtimestamp(int(message.get("date", 0)), tz=UTC),
+        sender_id=str(sender.get("id") or ""),
+        chat_kind="group" if group else "direct",
+        addressed=addressed,
+        thread_id=str(message.get("message_thread_id") or ""),
+        attachments=attachments,
+    )
