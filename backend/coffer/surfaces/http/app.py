@@ -95,6 +95,7 @@ from coffer.surfaces.http.mcp.protocol_routes import (
     start_session_reaper,
 )
 from coffer.surfaces.http.memory.organize_state import get_organizer_service
+from coffer.surfaces.http.memory_wiring import run_memory_reindex_sweep, wire_memory_kind
 from coffer.surfaces.http.migrations_runner import run_migrations
 from coffer.surfaces.http.provider_wiring import wire_provider_kind
 from coffer.surfaces.http.routing import include_all_routers
@@ -104,7 +105,6 @@ from coffer.surfaces.http.wiring import (
     build_substrate,
     wire_chat,
     wire_kb_kind,
-    wire_memory_kind,
 )
 
 
@@ -248,9 +248,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.kinds, sm, credential_store, audit, embedding_config_svc
     )
 
-    # One-time heal of per-project memory stores fragmented across git worktrees
-    # by the old path-hash bug (best-effort; idempotent once collapsed).
+    # Boot memory heal (best-effort, idempotent): collapse worktree-fragmented
+    # stores, then reindex so distilled journal is searchable (FR-043).
     await run_store_consolidation(resources=resource_svc, sm=sm, substrate=substrate)
+    await run_memory_reindex_sweep(app, resource_svc, _resolve_embedding)  # type: ignore[arg-type]
 
     # CODE-020: start the batched invocation writer alongside the retention
     # worker. The repo's start() is a no-op if already started.
