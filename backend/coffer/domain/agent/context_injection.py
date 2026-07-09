@@ -23,11 +23,10 @@ some other way. Three mechanisms exist in the wild:
     (transforms in ``instructions_block.py``), refreshed before each
     Coffer-driven turn.
 
-``SHELL_COMMAND`` and ``INSTRUCTIONS_BLOCK`` are implemented; ``PLUGIN_DROP`` is
-a recognised extension point, mirroring how
-:class:`~coffer.domain.agent.skill_delivery.SkillDeliveryMode` reserves
-``RULES_MDC`` / ``EXTERNAL_DIR``. All three share one payload source: the
-daemon's ``GET /api/v1/agents/{agent}/session-context`` endpoint.
+All three modes are implemented (FR-043 / FR-047 / FR-048) and share one
+payload source: the daemon's ``GET /api/v1/agents/{agent}/session-context``
+endpoint. Only the last mile — who fetches it and in what envelope it reaches
+the model — varies.
 """
 
 from __future__ import annotations
@@ -47,8 +46,8 @@ class InjectionMode(StrEnum):
     #: The agent runs ``coffer-hook`` and reads its stdout (Claude Code, Codex,
     #: Cursor).
     SHELL_COMMAND = "shell_command"
-    #: Coffer drops an in-process plugin file that spawns ``coffer-hook``.
-    #: Recognized extension point; no agent type uses it yet.
+    #: Coffer drops an in-process plugin file that spawns ``coffer-hook``
+    #: (opencode — no shell hook; rendering in ``plugin_drop.py``).
     PLUGIN_DROP = "plugin_drop"
     #: Coffer renders the payload into a marker block in the instructions file
     #: (Hermes — no working upstream hook exists).

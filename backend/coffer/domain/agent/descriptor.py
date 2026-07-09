@@ -17,16 +17,19 @@ identity, the config-file allowlist, and MCP injection.
 
 from __future__ import annotations
 
-import os
 import pathlib
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from coffer.domain.agent.config_files import (
-    ConfigFileFormat,
-    ConfigFileKind,
-    ConfigFileSpec,
+from coffer.domain.agent.allowlists import (
+    _claude_code_files,
+    _codex_files,
+    _cursor_files,
+    _hermes_files,
+    _home,
+    _opencode_files,
 )
+from coffer.domain.agent.config_files import ConfigFileFormat, ConfigFileSpec
 from coffer.domain.agent.context_injection import (
     ContextInjectionSpec,
     HookEvent,
@@ -41,12 +44,6 @@ from coffer.domain.agent.plugin_capability import (
 )
 from coffer.domain.agent.skill_delivery import SkillDeliveryMode
 from coffer.domain.agent.types import AgentType
-
-
-def _home() -> pathlib.Path:
-    """Home dir, same source as ``agent.types`` / ``config_files`` so all three
-    stay consistent under a test-overridden ``$HOME``."""
-    return pathlib.Path(os.environ.get("HOME", os.path.expanduser("~")))
 
 
 @dataclass(frozen=True)
@@ -99,113 +96,6 @@ class AgentDescriptor:
         if self.mcp_source_keys:
             return self.mcp_source_keys
         return (self.mcp.config_key,) if self.mcp else ()
-
-
-# --- config-file allowlist builders (one per agent) ----------------------------
-
-
-def _claude_code_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
-    return (
-        ConfigFileSpec("settings", "User settings", cfg / "settings.json", ConfigFileFormat.JSON),
-        ConfigFileSpec(
-            "settings_local",
-            "Local settings override",
-            cfg / "settings.local.json",
-            ConfigFileFormat.JSON,
-        ),
-        # Claude Code's global state/config file always lives at the home root
-        # (``~/.claude.json``), regardless of where the config dir points — it
-        # also holds user-scope MCP servers.
-        ConfigFileSpec("global", "Global config", _home() / ".claude.json", ConfigFileFormat.JSON),
-        ConfigFileSpec(
-            "instructions",
-            "User instructions (CLAUDE.md)",
-            cfg / "CLAUDE.md",
-            ConfigFileFormat.MARKDOWN,
-        ),
-        ConfigFileSpec(
-            "subagents",
-            "Subagents (agents/)",
-            cfg / "agents",
-            ConfigFileFormat.MARKDOWN,
-            kind=ConfigFileKind.DIRECTORY,
-        ),
-    )
-
-
-def _codex_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
-    return (
-        ConfigFileSpec(
-            "config", "Config (config.toml)", cfg / "config.toml", ConfigFileFormat.TOML
-        ),
-        ConfigFileSpec(
-            "instructions",
-            "Global instructions (AGENTS.md)",
-            cfg / "AGENTS.md",
-            ConfigFileFormat.MARKDOWN,
-        ),
-        ConfigFileSpec("hooks", "Hooks (hooks.json)", cfg / "hooks.json", ConfigFileFormat.JSON),
-    )
-
-
-def _opencode_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
-    # opencode's global config (~/.config/opencode/opencode.json) holds both the
-    # `mcp` block (MCP injection) and the `provider` block (provider projection).
-    # AGENTS.md is opencode's human-authored instructions file. opencode has no
-    # hooks.json (its lifecycle hooks are in-process JS plugins — ADR-040).
-    return (
-        ConfigFileSpec(
-            "opencode", "Config (opencode.json)", cfg / "opencode.json", ConfigFileFormat.JSON
-        ),
-        ConfigFileSpec(
-            "instructions",
-            "Global instructions (AGENTS.md)",
-            cfg / "AGENTS.md",
-            ConfigFileFormat.MARKDOWN,
-        ),
-    )
-
-
-def _hermes_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
-    # Hermes' config.yaml (YAML) holds `mcp_servers`, the `memory` toggles, and
-    # the model/provider block. SOUL.md is the ONLY instruction file hermes
-    # reads from its home dir (`prompt_builder.load_soul_md`, identity slot #1,
-    # every platform incl. ACP) — AGENTS.md is resolved against the session
-    # *cwd* only (`build_context_files_prompt`: "AGENTS.md (cwd only)"), so a
-    # `~/.hermes/AGENTS.md` is dead weight and is not allowlisted. Both facts
-    # probe-verified against hermes v0.18.0 (marker in SOUL.md reaches the
-    # system prompt; marker in ~/.hermes/AGENTS.md does not).
-    return (
-        ConfigFileSpec(
-            "config", "Config (config.yaml)", cfg / "config.yaml", ConfigFileFormat.YAML
-        ),
-        ConfigFileSpec(
-            "soul",
-            "Persona & global instructions (SOUL.md)",
-            cfg / "SOUL.md",
-            ConfigFileFormat.MARKDOWN,
-        ),
-    )
-
-
-def _cursor_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
-    # Cursor's ~/.cursor/ holds cli-config.json (CLI settings) and, on demand,
-    # mcp.json (MCP servers, `mcpServers` map) and hooks.json (lifecycle hooks,
-    # its own flat-entry shape). AGENTS.md is the human-authored instructions
-    # file cursor-agent reads.
-    return (
-        ConfigFileSpec(
-            "config", "CLI config (cli-config.json)", cfg / "cli-config.json", ConfigFileFormat.JSON
-        ),
-        ConfigFileSpec("mcp", "MCP servers (mcp.json)", cfg / "mcp.json", ConfigFileFormat.JSON),
-        ConfigFileSpec("hooks", "Hooks (hooks.json)", cfg / "hooks.json", ConfigFileFormat.JSON),
-        ConfigFileSpec(
-            "instructions",
-            "Global instructions (AGENTS.md)",
-            cfg / "AGENTS.md",
-            ConfigFileFormat.MARKDOWN,
-        ),
-    )
 
 
 # --- the manifest --------------------------------------------------------------
@@ -278,13 +168,22 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             format=ConfigFileFormat.JSON,
             entry_style=McpEntryStyle.TYPED_LOCAL_OBJECT,
         ),
+        # opencode has no shell-command hook; its JS plugin API injects instead
+        # (`experimental.chat.system.transform` pushes onto the system prompt —
+        # probe-verified on 1.14.48). Coffer drops a plugin file into the
+        # auto-loaded `plugin/` dir that spawns coffer-hook (PLUGIN_DROP,
+        # ADR-042). Dynamic like the shell hooks: fetches the bundle live, so
+        # no pre-turn refresh exists for it. No lifecycle events; flavor unused.
+        context_injection=ContextInjectionSpec(
+            mode=InjectionMode.PLUGIN_DROP,
+            config_key="plugin",
+            format=ConfigFileFormat.TEXT,
+        ),
         # See the Agent capability matrix in spec 004 / ADR-042:
-        #  * context_injection=None — opencode has no shell-command hook. Its JS
-        #                      plugin API *can* inject (``chat.message`` appends to
-        #                      ``output.parts``), so this is an INJECTION_MODE.PLUGIN_DROP
-        #                      slice, not an upstream gap.
         #  * plugins=None    — opencode's plugins are JS modules, a different model
-        #                      from Claude/Codex; not managed by Coffer in this slice.
+        #                      from Claude/Codex; not managed by Coffer in this slice
+        #                      (the PLUGIN_DROP facet drops ONE Coffer-owned file;
+        #                      it does not manage the agent's other plugins).
         #  * native memory   — opencode has no cross-session native memory, so there
         #                      is nothing to disable (absent from
         #                      _NATIVE_MEMORY_DISABLE_TARGET below).

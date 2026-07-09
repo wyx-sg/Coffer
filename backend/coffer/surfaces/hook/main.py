@@ -1,9 +1,10 @@
 """``coffer-hook`` — the agent session-lifecycle → Coffer-daemon bridge.
 
-Spawned by the agent (Claude Code / Codex / Cursor) as a SessionStart /
-SessionEnd hook. Reads the hook JSON from stdin and the Coffer agent name from
-``--agent <name>`` (the hook payload does not carry Coffer's agent identity),
-then talks to the local daemon discovered via ``~/.coffer/daemon.json``:
+Spawned by the agent (Claude Code / Codex / Cursor as a hook; opencode via
+Coffer's dropped plugin) at SessionStart / SessionEnd. Reads the hook JSON from
+stdin and the Coffer agent name from ``--agent <name>`` (the hook payload does
+not carry Coffer's agent identity), then talks to the local daemon discovered
+via ``~/.coffer/daemon.json``:
 
 - **SessionStart** → ``GET /api/v1/agents/{agent}/session-context?cwd=<cwd>``;
   on 200 print the rules bundle in the dialect's envelope so the agent injects it.
@@ -12,7 +13,9 @@ then talks to the local daemon discovered via ``~/.coffer/daemon.json``:
 
 ``--dialect`` selects the stdout envelope (``claude`` — the default — prints
 ``hookSpecificOutput.additionalContext``; ``cursor`` prints a top-level
-``additional_context``). ``--event`` names the event when the agent's stdin
+``additional_context``; ``raw`` prints the bundle text with no envelope — the
+PLUGIN_DROP plugin file spawns this and pushes stdout onto the system prompt).
+``--event`` names the event when the agent's stdin
 payload does not: Cursor keys its hooks.json by event, so the event is baked into
 the installed command's args instead. When ``--event`` names a SessionStart the
 payload is never read at all — stdin has no timeout, and an agent that leaves it
@@ -53,6 +56,7 @@ _TIMEOUT = 5.0
 #: startup and must not drag in the domain package.
 _DIALECT_CLAUDE = "claude"
 _DIALECT_CURSOR = "cursor"
+_DIALECT_RAW = "raw"
 
 #: Event names as each dialect spells them, mapped to Coffer's canonical name.
 _EVENT_ALIASES = {
@@ -136,7 +140,12 @@ def _handle_session_start(agent: str, cwd: str | None, info: DaemonInfo, dialect
     context = json.loads(text).get("additional_context")
     if not context:
         return
-    sys.stdout.write(json.dumps(_envelope(dialect, context)))
+    if dialect == _DIALECT_RAW:
+        # No envelope: the consumer is Coffer's own dropped plugin, which pushes
+        # this text onto the system prompt verbatim.
+        sys.stdout.write(context)
+    else:
+        sys.stdout.write(json.dumps(_envelope(dialect, context)))
     sys.stdout.flush()
 
 

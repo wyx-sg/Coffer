@@ -62,7 +62,7 @@ def test_opencode_descriptor_identity_and_config_dir() -> None:
     assert d.display_name == "opencode"
     assert d.config_subpath == ".config/opencode"
     keys = {s.key for s in d.config_files(d.default_config_dir())}
-    assert {"opencode", "instructions"} <= keys
+    assert {"opencode", "instructions", "plugin"} <= keys
 
 
 def test_opencode_mcp_spec_is_typed_local_object_in_mcp_container() -> None:
@@ -76,11 +76,18 @@ def test_opencode_mcp_spec_is_typed_local_object_in_mcp_container() -> None:
     assert d.mcp.entry_style is McpEntryStyle.TYPED_LOCAL_OBJECT
 
 
-def test_opencode_has_no_shell_hook_or_native_memory_facet() -> None:
-    # Absent facets, not errors (ADR-042): opencode has no shell-command hook (its
-    # JS plugin API is a PLUGIN_DROP slice) and no cross-session native memory.
+def test_opencode_injects_via_plugin_drop() -> None:
+    # opencode has no shell-command hook: Coffer drops a JS plugin into the
+    # auto-loaded `plugin/` dir (PLUGIN_DROP, ADR-042) that spawns coffer-hook
+    # and pushes its stdout onto the system prompt. Dynamic — no events, no
+    # refresh machinery. Native memory stays absent (nothing to disable).
     d = descriptor_for(AgentType.OPENCODE)
-    assert d.context_injection is None
+    inj = d.context_injection
+    assert inj is not None
+    assert inj.mode is InjectionMode.PLUGIN_DROP
+    assert inj.config_key == "plugin"
+    assert inj.format is ConfigFileFormat.TEXT
+    assert inj.events == ()
     assert native_memory_disable_target(AgentType.OPENCODE) is None
 
 

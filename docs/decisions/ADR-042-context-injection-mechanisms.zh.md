@@ -51,7 +51,7 @@ product 都掉进了"缺席 facet"。这个抽象是按它的**实现**（hook�
 `GET /api/v1/agents/{agent}/session-context` 端点。只有最后一公里——谁去取、以
 什么信封交给模型——不同。这正是三种机制不会退化成三份平行实现的原因。
 
-**本 slice 只实现 `SHELL_COMMAND`。** `PLUGIN_DROP` 与 `INSTRUCTIONS_BLOCK` 是
+**本 slice 只实现 `SHELL_COMMAND`。**（*后续已实现：`INSTRUCTIONS_BLOCK`——FR-047、`PLUGIN_DROP`——FR-048。*） `PLUGIN_DROP` 与 `INSTRUCTIONS_BLOCK` 是
 已识别的扩展点，暂无 descriptor 使用——与 `SkillDeliveryMode` 早已预留
 `RULES_MDC` / `EXTERNAL_DIR` 完全同构。服务遇到未实现的 mode 时按缺席 facet 处理
 （`HookInstallUnsupported` → 422；`status` 报 `installed=False`）。
@@ -100,7 +100,9 @@ payload 字段，不如在安装时把事件烘进命令的参数里。由此得
 - **Cursor 的 `sessionStart` 在 headless 下是否触发，尚未实证。** 机制有文档，
   而 marker 探针测试被 `cursor-agent` 要求登录挡住了。间接证据很强（Cursor 文档称
   云端 agent "只运行基于命令的 hook"；Skynet 正是往同一个文件里装了 CLI 专用
-  hook）。这是本 ADR 中唯一一条依据文档而非真机探针的论断。
+  hook）。这是本 ADR 中唯一一条依据文档而非真机探针的论断。**更新（2026-07-10）：
+  已由登录后的真实探针确认**——装入 Coffer 的确切 `hooks.json` 形状后，
+  `cursor-agent -p` 执行了 hook 命令，且 `additional_context` 信封抵达模型。
 
 ## 备选方案
 
