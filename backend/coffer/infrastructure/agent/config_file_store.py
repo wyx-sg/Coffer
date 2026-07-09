@@ -103,6 +103,19 @@ class ConfigFileStore:
             return False
         return True
 
+    def remove_tree(self, path: pathlib.Path) -> bool:
+        """Remove a directory tree entirely. False when already absent.
+
+        No backup: used only for content Coffer itself rendered and can
+        regenerate byte-identically (the FR-048 openclaw extension package) —
+        a ``.bak`` package dir would still be discovered by openclaw's
+        extension scanner, so tidier to leave nothing behind.
+        """
+        if not path.is_dir():
+            return False
+        shutil.rmtree(path, ignore_errors=True)
+        return True
+
     def resolved_within(self, path: pathlib.Path, root: pathlib.Path) -> bool:
         """Whether ``path`` resolves (following symlinks) inside ``root``.
 

@@ -1,7 +1,7 @@
 """``coffer-hook`` — the agent session-lifecycle → Coffer-daemon bridge.
 
-Spawned by the agent (Claude Code / Codex / Cursor as a hook; opencode via
-Coffer's dropped plugin) at SessionStart / SessionEnd. Reads the hook JSON from
+Spawned by the agent (Claude Code / Codex / Cursor as a hook; opencode and
+openclaw via Coffer's dropped plugins) at SessionStart / SessionEnd. Reads the hook JSON from
 stdin and the Coffer agent name from ``--agent <name>`` (the hook payload does
 not carry Coffer's agent identity), then talks to the local daemon discovered
 via ``~/.coffer/daemon.json``:

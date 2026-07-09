@@ -20,6 +20,7 @@ from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
 from coffer.infrastructure.chat.cursor_provider import CursorProvider
 from coffer.infrastructure.chat.hermes_provider import HermesProvider
+from coffer.infrastructure.chat.openclaw_provider import OpenclawProvider
 from coffer.infrastructure.chat.opencode_provider import OpencodeProvider
 from coffer.surfaces.http.dependencies import get_provider_service
 
@@ -80,4 +81,11 @@ def build_agent_provider_registry(conv_repo: ConversationRepo) -> AgentProviderR
     # (`cursor-agent login` / CURSOR_API_KEY): Coffer projects no connection and
     # injects no key, so there is NO resolve_key here (provider-projection-N/A).
     registry.register(CursorProvider(conversations=conv_repo), display_name="Cursor")
+    # openclaw reads Coffer's projected key from COFFER_PROVIDER_KEY too
+    # (openclaw.json models.providers.coffer.apiKey = "${...}", ADR-043) — same
+    # per-turn env injection seam as Codex/opencode/hermes.
+    registry.register(
+        OpenclawProvider(conversations=conv_repo, resolve_key=_key_resolver(AgentType.OPENCLAW)),
+        display_name="OpenClaw",
+    )
     return registry

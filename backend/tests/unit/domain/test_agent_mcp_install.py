@@ -211,3 +211,56 @@ def test_json_typed_local_object_preserves_user_mcp_entries():
     data = json.loads(out)
     assert data["mcp"]["other"] == {"type": "local", "command": ["y"]}  # user entry kept
     assert data["mcp"][COFFER_SERVER_KEY]["enabled"] is True
+
+
+# --- nested JSON container (openclaw `mcp.servers`, ADR-043) --------------------
+
+
+def test_json_dotted_container_install_into_empty():
+    out = apply_install(ConfigFileFormat.JSON, "", SHIM, container_key="mcp.servers")
+    data = json.loads(out)
+    assert data["mcp"]["servers"][COFFER_SERVER_KEY] == {"command": SHIM}
+    assert is_installed(ConfigFileFormat.JSON, out, container_key="mcp.servers")
+    assert installed_command(ConfigFileFormat.JSON, out, container_key="mcp.servers") == SHIM
+
+
+def test_json_dotted_container_preserves_siblings_at_every_level():
+    existing = json.dumps(
+        {
+            "gateway": {"port": 18789},
+            "mcp": {"bridge": True, "servers": {"other": {"command": "y"}}},
+        }
+    )
+    out = apply_install(ConfigFileFormat.JSON, existing, SHIM, container_key="mcp.servers")
+    data = json.loads(out)
+    assert data["gateway"] == {"port": 18789}  # unrelated top-level key kept
+    assert data["mcp"]["bridge"] is True  # sibling inside the dotted path kept
+    assert data["mcp"]["servers"]["other"] == {"command": "y"}  # user server kept
+    assert data["mcp"]["servers"][COFFER_SERVER_KEY] == {"command": SHIM}
+
+
+def test_json_dotted_container_uninstall_removes_only_coffer():
+    existing = json.dumps({"mcp": {"servers": {"other": {"command": "y"}}}})
+    out = apply_install(ConfigFileFormat.JSON, existing, SHIM, container_key="mcp.servers")
+    back = apply_uninstall(ConfigFileFormat.JSON, out, container_key="mcp.servers")
+    data = json.loads(back)
+    assert data["mcp"]["servers"]["other"] == {"command": "y"}
+    assert COFFER_SERVER_KEY not in data["mcp"]["servers"]
+    assert not is_installed(ConfigFileFormat.JSON, back, container_key="mcp.servers")
+
+
+def test_json_dotted_container_status_false_when_path_absent_or_scalar():
+    assert not is_installed(ConfigFileFormat.JSON, "{}", container_key="mcp.servers")
+    # A hand-edit that left a scalar at a step never false-positives (or raises).
+    scalar = json.dumps({"mcp": "coffer"})
+    assert not is_installed(ConfigFileFormat.JSON, scalar, container_key="mcp.servers")
+    assert installed_command(ConfigFileFormat.JSON, scalar, container_key="mcp.servers") is None
+
+
+def test_json_dotted_container_install_replaces_scalar_step():
+    # Mirrors the flat branch's isinstance(dict) guard: a scalar at a step is
+    # replaced so the install always lands.
+    out = apply_install(
+        ConfigFileFormat.JSON, json.dumps({"mcp": 42}), SHIM, container_key="mcp.servers"
+    )
+    assert json.loads(out)["mcp"]["servers"][COFFER_SERVER_KEY] == {"command": SHIM}

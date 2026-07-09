@@ -542,6 +542,7 @@
       "agentOpencode": "opencode",
       "agentHermes": "Hermes",
       "agentCursor": "Cursor",
+      "agentOpenclaw": "OpenClaw",
       "agentCursorUnprojectable": "Cursor can't use a connection: cursor-agent is locked to Cursor's own backend and exposes no endpoint setting.",
       "deleteTitle": "Delete connection",
       "deleteConfirm": "Delete connection \"{{name}}\"? Its stored credential is removed too.",

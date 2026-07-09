@@ -157,3 +157,49 @@ def test_remove_entry_json_custom_container() -> None:
     out = me.remove_entry(ConfigFileFormat.JSON, text, "a", container_key="mcp")
     entries = me.parse_entries(ConfigFileFormat.JSON, out, source="config", container_key="mcp")
     assert {e.name for e in entries} == {"b"}
+
+
+# --- nested JSON container (openclaw `mcp.servers`, ADR-043) --------------------
+
+OPENCLAW_JSON = (
+    '{"gateway": {"port": 18789}, "mcp": {"servers": {'
+    '"coffer": {"command": "/bin/coffer-mcp-shim"}, '
+    '"files": {"command": "npx", "args": ["-y", "files-mcp"]}}}}'
+)
+
+
+def test_parse_entries_json_dotted_container():
+    entries = me.parse_entries(
+        ConfigFileFormat.JSON, OPENCLAW_JSON, source="config", container_key="mcp.servers"
+    )
+    by_name = {e.name: e for e in entries}
+    assert set(by_name) == {"coffer", "files"}
+    assert by_name["coffer"].is_coffer is True
+    assert by_name["files"].command == "npx"
+    assert by_name["files"].args == ("-y", "files-mcp")
+
+
+def test_parse_entries_json_dotted_container_absent_or_scalar_is_empty():
+    assert (
+        me.parse_entries(ConfigFileFormat.JSON, "{}", source="config", container_key="mcp.servers")
+        == []
+    )
+    scalar = '{"mcp": "coffer"}'
+    assert (
+        me.parse_entries(
+            ConfigFileFormat.JSON, scalar, source="config", container_key="mcp.servers"
+        )
+        == []
+    )
+
+
+def test_remove_entry_json_dotted_container():
+    out = me.remove_entry(
+        ConfigFileFormat.JSON, OPENCLAW_JSON, "files", container_key="mcp.servers"
+    )
+    entries = me.parse_entries(
+        ConfigFileFormat.JSON, out, source="config", container_key="mcp.servers"
+    )
+    assert [e.name for e in entries] == ["coffer"]
+    with pytest.raises(McpEntryNotFound):
+        me.remove_entry(ConfigFileFormat.JSON, out, "files", container_key="mcp.servers")

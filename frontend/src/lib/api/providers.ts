@@ -15,7 +15,7 @@ export type Protocol = "anthropic" | "openai" | "ollama" | "unknown";
 
 // The agent types a connection may project into. Decoupled from `protocol`: the
 // user routes any endpoint to any agent (e.g. an openai gateway → Claude Code).
-export type AgentType = "claude_code" | "codex" | "opencode" | "hermes" | "cursor";
+export type AgentType = "claude_code" | "codex" | "opencode" | "hermes" | "cursor" | "openclaw";
 
 /**
  * Chat agent_key → the protocol it speaks (ADR-032 projection targets). Shared by
@@ -28,6 +28,10 @@ export const WIRE_BY_AGENT: Record<string, Protocol> = {
   codex: "openai",
   opencode: "openai",
   hermes: "openai",
+  // openclaw consumes BOTH wires (the compatible-agents set does the real
+  // connection matching); "openai" here only selects the use-builtin lane,
+  // matching the projection's default openai-completions api (ADR-043).
+  openclaw: "openai",
 };
 
 /**
@@ -44,6 +48,10 @@ export const BUILTIN_MODELS_BY_AGENT: Record<string, string[]> = {
   codex: ["gpt-5-codex", "gpt-5", "o3"],
   opencode: ["gpt-5", "gpt-5-codex", "claude-sonnet-4-5"],
   hermes: ["hermes-4-405b", "hermes-4-70b", "hermes-3-70b"],
+  // openclaw is deliberately absent: its built-in models are whatever
+  // `provider/model` refs the user configured in their own openclaw.json —
+  // there is no curatable universal list (the picker still accepts the
+  // conversation's current value and any active connection's models).
 };
 
 export interface Provider {

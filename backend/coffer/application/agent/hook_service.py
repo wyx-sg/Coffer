@@ -19,8 +19,9 @@ via the pure ``domain/agent/instructions_block`` transforms; the block is
 static between refreshes, so :meth:`AgentHookService.refresh_blocks_for_type`
 re-renders it and is called (best-effort) before each Coffer-driven turn. For
 the plugin-drop mode (opencode — in-process JS callbacks only) install writes
-the ``domain/agent/plugin_drop`` file into the agent's auto-loaded plugin
-directory; the plugin spawns ``coffer-hook`` live, so it is dynamic like the
+the flavor's plugin file(s) — one flat file for opencode, a package directory
+plus an ``openclaw.json`` enable flag for openclaw (``plugin_drop_ops``); the
+plugin spawns ``coffer-hook`` live, so it is dynamic like the
 shell hooks and has no refresh machinery. An agent whose descriptor declares no
 injection — or a block-mode agent when no payload source is wired — raises
 :class:`HookInstallUnsupported` (→ 422) on install/uninstall; ``status``
@@ -32,13 +33,17 @@ to disable the control up front rather than letting a click 422.
 from __future__ import annotations
 
 import logging
-import pathlib
 import shlex
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Protocol
 
 from coffer.application.agent.config_file_service import ConfigFileStorePort
+from coffer.application.agent.plugin_drop_ops import (
+    install_plugin_files,
+    plugin_marker_path,
+    uninstall_plugin_files,
+)
 from coffer.application.audit_service import AuditService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import ConfigFileSpec, spec_for
@@ -56,7 +61,6 @@ from coffer.domain.agent.hook_install import (
     is_installed,
 )
 from coffer.domain.agent.instructions_block import apply_block, has_block, remove_block
-from coffer.domain.agent.plugin_drop import PLUGIN_FILENAME, render_plugin
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Resource, ResourceRef
@@ -151,9 +155,13 @@ class AgentHookService:
             return None
         return injection
 
-    def _plugin_path(self, spec: ConfigFileSpec) -> pathlib.Path:
-        """The dropped plugin file inside the agent's plugin DIRECTORY entry."""
-        return spec.path / PLUGIN_FILENAME
+    def _enable_spec(self, cfg: AgentConfig, inj: ContextInjectionSpec) -> ConfigFileSpec | None:
+        """The allowlisted config file carrying the plugin flavor's fail-closed
+        enable flag (openclaw's ``plugins.entries`` in ``openclaw.json``), or
+        ``None`` for a flavor without one (opencode auto-loads by presence)."""
+        if inj.plugin_enable_config_key is None:
+            return None
+        return spec_for(cfg.type, inj.plugin_enable_config_key, cfg.resolved_config_dir())
 
     def _plugin_command(self, name: str) -> str:
         """Display form of what the dropped plugin execs (argv, not shell).
@@ -185,8 +193,10 @@ class AgentHookService:
             return HookInstallStatus(installed=False, command=None, supported=False)
         spec = spec_for(cfg.type, injection.config_key, cfg.resolved_config_dir())
         if injection.mode is InjectionMode.PLUGIN_DROP:
-            # Presence of Coffer's named plugin file == installed.
-            installed = self._store.read_text(self._plugin_path(spec)) is not None
+            # Presence of Coffer's named plugin file (the package's entry module
+            # for the openclaw flavor) == installed.
+            marker = plugin_marker_path(spec, injection)
+            installed = self._store.read_text(marker) is not None
             command = self._plugin_command(name) if installed else None
             return HookInstallStatus(installed=installed, command=command)
         text = self._store.read_text(spec.path) or ""
@@ -203,9 +213,9 @@ class AgentHookService:
         return HookInstallStatus(installed=installed, command=command)
 
     async def install(self, name: str, *, actor: str = "api") -> HookInstallStatus:
-        spec, inj, _cfg = await self._hook_spec(name)
+        spec, inj, cfg = await self._hook_spec(name)
         if inj.mode is InjectionMode.PLUGIN_DROP:
-            return await self._install_plugin(name, spec, actor=actor)
+            return await self._install_plugin(name, spec, inj, cfg, actor=actor)
         if inj.mode is InjectionMode.INSTRUCTIONS_BLOCK:
             return await self._install_block(name, spec, actor=actor)
         hook = self._resolve_hook()  # raises ShimNotFound (→ 422) before any write
@@ -225,16 +235,19 @@ class AgentHookService:
         return HookInstallStatus(installed=True, command=command)
 
     async def uninstall(self, name: str, *, actor: str = "api") -> HookInstallStatus:
-        spec, inj, _cfg = await self._hook_spec(name)
+        spec, inj, cfg = await self._hook_spec(name)
         if inj.mode is InjectionMode.PLUGIN_DROP:
-            # No-op success when the dropped file is absent — don't audit.
-            if not self._store.delete_with_backup(self._plugin_path(spec)):
+            removed, path = uninstall_plugin_files(
+                self._store, spec, inj, enable_spec=self._enable_spec(cfg, inj)
+            )
+            # No-op success when nothing was installed — don't audit.
+            if not removed:
                 return HookInstallStatus(installed=False, command=None)
             await self._audit.record(
                 AuditEventType.AGENT_HOOK_UNINSTALLED.value,
                 ref=ResourceRef("agent", name),
                 actor=actor,
-                details={"path": str(self._plugin_path(spec))},
+                details={"path": str(path)},
             )
             return HookInstallStatus(installed=False, command=None)
         text = self._store.read_text(spec.path)
@@ -266,14 +279,27 @@ class AgentHookService:
         return HookInstallStatus(installed=False, command=None)
 
     async def _install_plugin(
-        self, name: str, spec: ConfigFileSpec, *, actor: str
+        self,
+        name: str,
+        spec: ConfigFileSpec,
+        inj: ContextInjectionSpec,
+        cfg: AgentConfig,
+        *,
+        actor: str,
     ) -> HookInstallStatus:
-        """Write Coffer's session-context plugin file into the agent's plugin
-        directory (idempotent: the file is Coffer's namespace, overwritten in
-        place; a prior version is kept as ``.bak``)."""
+        """Write Coffer's session-context plugin into the agent's plugin
+        directory (idempotent: Coffer's namespace — the flat file or the
+        openclaw package dir — is overwritten in place; the openclaw flavor
+        also flips its fail-closed ``plugins.entries`` enable flag)."""
         hook = self._resolve_hook()  # raises ShimNotFound (→ 422) before any write
-        path = self._plugin_path(spec)
-        self._store.write_text_atomic(path, render_plugin(hook_binary=hook, agent_name=name))
+        path = install_plugin_files(
+            self._store,
+            spec,
+            inj,
+            hook_binary=hook,
+            agent_name=name,
+            enable_spec=self._enable_spec(cfg, inj),
+        )
         command = self._plugin_command(name)
         await self._audit.record(
             AuditEventType.AGENT_HOOK_INSTALLED.value,

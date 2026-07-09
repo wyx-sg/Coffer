@@ -88,6 +88,9 @@ _AGENT_TARGETS: dict[AgentType, ProjectionTarget] = {
     AgentType.OPENCODE: ProjectionTarget(AgentType.OPENCODE, "opencode", ConfigFileFormat.JSON),
     # Hermes projects a `providers.coffer` entry + model block into config.yaml.
     AgentType.HERMES: ProjectionTarget(AgentType.HERMES, "config", ConfigFileFormat.YAML),
+    # openclaw projects a `models.providers.coffer` block into openclaw.json
+    # (transforms in projection_openclaw.py, split out for the size limit).
+    AgentType.OPENCLAW: ProjectionTarget(AgentType.OPENCLAW, "config", ConfigFileFormat.JSON),
 }
 
 

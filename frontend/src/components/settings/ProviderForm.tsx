@@ -48,6 +48,7 @@ const AGENT_LABEL_KEY: Record<AgentType, string> = {
   opencode: "settings.connections.agentOpencode",
   hermes: "settings.connections.agentHermes",
   cursor: "settings.connections.agentCursor",
+  openclaw: "settings.connections.agentOpenclaw",
 };
 
 export function ProviderForm({

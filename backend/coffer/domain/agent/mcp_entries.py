@@ -106,13 +106,27 @@ class McpEntry:
     matches_resource: str | None = None  # filled by the application layer
 
 
+def _json_container(data: MutableMapping[str, Any], dotted_key: str) -> Any:
+    """Resolve a JSON container key that may be a dotted PATH (``mcp.servers``
+    — openclaw nests its servers map one level down). Each dot descends one
+    object; a missing/non-mapping step resolves to ``None``. Single-segment
+    keys behave exactly like a plain ``get``. JSON only — the TOML/YAML
+    container keys in use carry no dots."""
+    node: Any = data
+    for part in dotted_key.split("."):
+        if not isinstance(node, MutableMapping):
+            return None
+        node = node.get(part)
+    return node
+
+
 def _servers_map(
     fmt: ConfigFileFormat, text: str, container_key: str | None = None
 ) -> MutableMapping[str, Any]:
     ck = container_key or default_container_key(fmt)
     try:
         if fmt is ConfigFileFormat.JSON:
-            servers = _parse_json(text).get(ck)
+            servers = _json_container(_parse_json(text), ck)
         elif fmt is ConfigFileFormat.YAML:
             servers = _parse_yaml(text).get(ck)
         else:  # TOML
@@ -146,7 +160,8 @@ def parse_entries(
 
     ``container_key`` selects the top-level table (default: the format's
     conventional key — ``mcpServers`` for JSON, ``mcp_servers`` for TOML/YAML;
-    agents with a non-default container pass it explicitly). Handles both the
+    agents with a non-default container pass it explicitly, and a dotted JSON
+    key like openclaw's ``mcp.servers`` descends one object per dot). Handles both the
     command-map and command-array entry shapes and both ``env``/``environment``
     key names. Returns an empty list for an empty or absent section; raises
     ``AgentConfigParseError`` on malformed input.
@@ -205,8 +220,8 @@ def remove_entry(
             data = _parse_json(text)
         except ConfigFileFormatInvalid as e:
             raise AgentConfigParseError("<config>", str(e)) from e
-        servers = data.get(ck)
-        if not isinstance(servers, dict) or name not in servers:
+        servers = _json_container(data, ck)
+        if not isinstance(servers, MutableMapping) or name not in servers:
             raise McpEntryNotFound(name)
         del servers[name]
         return json.dumps(data, indent=2, ensure_ascii=False) + "\n"

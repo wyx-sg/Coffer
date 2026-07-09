@@ -142,3 +142,43 @@ async def test_install_raises_when_shim_unresolvable(agent_bundle, tmp_path, mon
 async def _status(bundle, name):
     st = await bundle.mcp.status(name)
     return st.installed
+
+
+# --- openclaw nested container (ADR-043) -----------------------------------------
+
+
+async def _register_openclaw(bundle, home: pathlib.Path):
+    (home / ".openclaw" / "skills").mkdir(parents=True, exist_ok=True)
+    await bundle.svc.register(agent_type=AgentType.OPENCLAW, name="ow", actor="cli")
+
+
+@pytest.mark.acceptance(
+    spec="004-agent-registry", scenario="install Coffer's MCP into OpenClaw's nested servers map"
+)
+async def test_install_openclaw_writes_nested_mcp_servers(agent_bundle, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_openclaw(agent_bundle, tmp_path)
+    config = tmp_path / ".openclaw" / "openclaw.json"
+    config.write_text(
+        json.dumps({"gateway": {"port": 18789}, "mcp": {"servers": {"files": {"command": "npx"}}}}),
+        encoding="utf-8",
+    )
+
+    st = await agent_bundle.mcp.install("ow", actor="ui")
+    assert st.installed is True
+    assert st.command == SHIM
+
+    data = json.loads(config.read_text())
+    # The entry lands INSIDE the nested `mcp.servers` map, command-map shape.
+    assert data["mcp"]["servers"]["coffer"] == {"command": SHIM}
+    assert data["mcp"]["servers"]["files"] == {"command": "npx"}  # user server kept
+    assert data["gateway"] == {"port": 18789}  # unrelated key preserved
+    assert (tmp_path / ".openclaw" / "openclaw.json.bak").exists()
+
+    # Status reads through the nested path; uninstall removes only Coffer's.
+    assert (await agent_bundle.mcp.status("ow")).installed is True
+    await agent_bundle.mcp.uninstall("ow", actor="ui")
+    data = json.loads(config.read_text())
+    assert "coffer" not in data["mcp"]["servers"]
+    assert data["mcp"]["servers"]["files"] == {"command": "npx"}
+    assert (await agent_bundle.mcp.status("ow")).installed is False

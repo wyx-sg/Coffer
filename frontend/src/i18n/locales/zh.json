@@ -542,6 +542,7 @@
       "agentOpencode": "opencode",
       "agentHermes": "Hermes",
       "agentCursor": "Cursor",
+      "agentOpenclaw": "OpenClaw",
       "agentCursorUnprojectable": "Cursor 无法使用连接：cursor-agent 锁定 Cursor 官方后端，没有可配置的端点。",
       "deleteTitle": "删除连接",
       "deleteConfirm": "删除连接「{{name}}」？其保存的凭据也会一并删除。",
