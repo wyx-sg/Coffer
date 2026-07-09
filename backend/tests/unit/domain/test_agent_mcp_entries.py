@@ -159,7 +159,7 @@ def test_remove_entry_json_custom_container() -> None:
     assert {e.name for e in entries} == {"b"}
 
 
-# --- nested JSON container (openclaw `mcp.servers`, ADR-043) --------------------
+# --- nested JSON container (openclaw `mcp.servers`, ADR-044) --------------------
 
 OPENCLAW_JSON = (
     '{"gateway": {"port": 18789}, "mcp": {"servers": {'

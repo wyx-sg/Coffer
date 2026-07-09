@@ -1,7 +1,7 @@
 """OpenclawProvider integration tests (openclaw non-streaming JSON provider).
 
 Mirrors ``test_cursor_provider.py`` in mechanics but for openclaw's shape
-(ADR-043):
+(ADR-044):
 
 - ``init_conversation`` IGNORES the conversation cwd (openclaw has no cwd flag —
   turns run in its own agent workspace) and stores only the model override.
@@ -16,7 +16,7 @@ Mirrors ``test_cursor_provider.py`` in mechanics but for openclaw's shape
 - ``availability()`` reflects the injected ``which``.
 
 A live end-to-end turn against the real openclaw is exercised separately (the
-ADR-043 adapter smoke probe); these tests pin the subprocess/parse mechanics.
+ADR-044 adapter smoke probe); these tests pin the subprocess/parse mechanics.
 """
 
 from __future__ import annotations

@@ -162,7 +162,7 @@ def test_hermes_restore_drops_a_memory_block_coffer_created() -> None:
     assert d["model"]["provider"] == "x"  # unrelated content preserved
 
 
-# --- openclaw (JSON plugins.slots.memory, ADR-043) ------------------------------
+# --- openclaw (JSON plugins.slots.memory, ADR-044) ------------------------------
 
 
 def test_openclaw_disable_empties_the_memory_slot() -> None:

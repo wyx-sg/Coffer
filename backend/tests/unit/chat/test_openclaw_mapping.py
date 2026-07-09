@@ -1,4 +1,4 @@
-"""Unit tests for the openclaw result-blob mapping (non-streaming, ADR-043).
+"""Unit tests for the openclaw result-blob mapping (non-streaming, ADR-044).
 
 The fixture mirrors the REAL ``openclaw agent --json --local`` blob (captured
 live on openclaw 2026.6.11): ``payloads`` is top-level; the flattened

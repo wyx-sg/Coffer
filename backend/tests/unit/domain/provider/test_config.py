@@ -80,7 +80,7 @@ def test_compatible_agents_defaults_by_protocol() -> None:
     # Unset → effective set defaults from the wire the endpoint speaks.
     anthropic = ProviderConfig(protocol="anthropic", base_url="x", credential_ref="r")  # type: ignore[arg-type]
     assert anthropic.compatible_agents is None
-    # openclaw speaks BOTH wires (ADR-043), so it rides the anthropic default too.
+    # openclaw speaks BOTH wires (ADR-044), so it rides the anthropic default too.
     assert anthropic.resolved_compatible_agents() == [AgentType.CLAUDE_CODE, AgentType.OPENCLAW]
     openai = ProviderConfig(protocol="openai", base_url="x", credential_ref="r")  # type: ignore[arg-type]
     # openai-wire defaults to every openai-compatible agent.

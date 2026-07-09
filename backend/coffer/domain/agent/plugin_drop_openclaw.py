@@ -1,7 +1,7 @@
 """Render Coffer's session-context extension package for openclaw (FR-048).
 
 Pure domain transforms — no filesystem access — the openclaw ``PluginFlavor``
-of the ``PLUGIN_DROP`` injection mode (ADR-042 / ADR-043). openclaw discovers a
+of the ``PLUGIN_DROP`` injection mode (ADR-042 / ADR-044). openclaw discovers a
 local plugin as a PACKAGE DIRECTORY in ``~/.openclaw/extensions/<id>/`` holding
 (probe-verified on openclaw 2026.6.11):
 

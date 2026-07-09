@@ -112,7 +112,7 @@ async def test_idempotent_enable(agent_bundle, tmp_path, monkeypatch):
     assert data["autoMemoryEnabled"] is False
 
 
-# --- openclaw (JSON plugins.slots.memory, ADR-043) --------------------------------
+# --- openclaw (JSON plugins.slots.memory, ADR-044) --------------------------------
 
 
 async def _register_openclaw(bundle, home: pathlib.Path):

@@ -30,7 +30,7 @@ export const WIRE_BY_AGENT: Record<string, Protocol> = {
   hermes: "openai",
   // openclaw consumes BOTH wires (the compatible-agents set does the real
   // connection matching); "openai" here only selects the use-builtin lane,
-  // matching the projection's default openai-completions api (ADR-043).
+  // matching the projection's default openai-completions api (ADR-044).
   openclaw: "openai",
 };
 

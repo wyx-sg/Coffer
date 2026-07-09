@@ -48,7 +48,7 @@ _KNOWN_AGENTS: frozenset[str] = frozenset({_CLAUDE_CODE, _CODEX, _OPENCODE, _HER
 # explicit ``compatible_agents`` does); these are only the defaults the create
 # form pre-fills. ollama is internal-only — no key, projects into no agent.
 # openclaw speaks BOTH wires (its provider `api` field takes openai-completions
-# AND anthropic-messages — probe-verified, ADR-043), so it defaults into both.
+# AND anthropic-messages — probe-verified, ADR-044), so it defaults into both.
 _DEFAULT_COMPATIBLE: dict[str, list[str]] = {
     "anthropic": [_CLAUDE_CODE, _OPENCLAW],
     "openai": [_CODEX, _OPENCODE, _HERMES, _OPENCLAW],

@@ -1,4 +1,4 @@
-"""openclaw provider-projection transforms (spec 011 / ADR-043).
+"""openclaw provider-projection transforms (spec 011 / ADR-044).
 
 Pure text transforms over ``~/.openclaw/openclaw.json`` (plain JSON), split out
 of ``projection.py`` for the file-size limit. Coffer projects a connection as a

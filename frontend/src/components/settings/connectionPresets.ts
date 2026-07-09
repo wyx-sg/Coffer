@@ -48,7 +48,7 @@ export const PRESETS: Preset[] = [
 // (`_DEFAULT_COMPATIBLE`). The form pre-fills the checkboxes from this; ollama is
 // internal-only (projects into no agent). openclaw speaks BOTH wires (its
 // provider `api` field takes openai-completions AND anthropic-messages,
-// ADR-043), so it defaults into both.
+// ADR-044), so it defaults into both.
 export function defaultCompatibleAgents(protocol: Protocol | ""): AgentType[] {
   switch (protocol) {
     case "anthropic":

@@ -213,7 +213,7 @@ def test_json_typed_local_object_preserves_user_mcp_entries():
     assert data["mcp"][COFFER_SERVER_KEY]["enabled"] is True
 
 
-# --- nested JSON container (openclaw `mcp.servers`, ADR-043) --------------------
+# --- nested JSON container (openclaw `mcp.servers`, ADR-044) --------------------
 
 
 def test_json_dotted_container_install_into_empty():

@@ -171,7 +171,7 @@ def test_cursor_provider_and_native_memory_facets_absent() -> None:
     assert target_for_agent(AgentType.CURSOR) is None
 
 
-# --- openclaw (ADR-043) ----------------------------------------------------------
+# --- openclaw (ADR-044) ----------------------------------------------------------
 
 
 def test_openclaw_descriptor_identity_and_allowlist() -> None:
@@ -212,7 +212,7 @@ def test_openclaw_injects_via_openclaw_flavored_plugin_drop() -> None:
 
     # No shell hook — openclaw's in-process plugin API is the injection point.
     # Its flavor is a package dir under `extensions/` PLUS the fail-closed
-    # `plugins.entries` enable flag in openclaw.json (ADR-043).
+    # `plugins.entries` enable flag in openclaw.json (ADR-044).
     d = descriptor_for(AgentType.OPENCLAW)
     inj = d.context_injection
     assert inj is not None
@@ -227,7 +227,7 @@ def test_openclaw_native_memory_and_projection_targets() -> None:
     from coffer.domain.provider.projection import target_for_agent
 
     # Native memory disable = plugins.slots.memory in openclaw.json; provider
-    # projection = models.providers.coffer in the same file (both ADR-043).
+    # projection = models.providers.coffer in the same file (both ADR-044).
     assert native_memory_disable_target(AgentType.OPENCLAW) == ("config", ConfigFileFormat.JSON)
     target = target_for_agent(AgentType.OPENCLAW)
     assert target is not None

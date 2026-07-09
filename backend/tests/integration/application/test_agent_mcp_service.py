@@ -144,7 +144,7 @@ async def _status(bundle, name):
     return st.installed
 
 
-# --- openclaw nested container (ADR-043) -----------------------------------------
+# --- openclaw nested container (ADR-044) -----------------------------------------
 
 
 async def _register_openclaw(bundle, home: pathlib.Path):

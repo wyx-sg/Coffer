@@ -269,7 +269,7 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             entry_style=McpEntryStyle.COMMAND_MAP,
         ),
         # No shell hook; openclaw's in-process plugin API is the injection point
-        # (ADR-043). Unlike opencode's flat auto-loaded file, openclaw wants a
+        # (ADR-044). Unlike opencode's flat auto-loaded file, openclaw wants a
         # package DIRECTORY under `extensions/` AND an explicit
         # `plugins.entries.<id>.enabled: true` in openclaw.json (non-bundled
         # plugins are fail-closed) — the OPENCLAW PluginFlavor. `--local` runs
@@ -312,7 +312,7 @@ _NATIVE_MEMORY_DISABLE_TARGET: dict[AgentType, tuple[str, ConfigFileFormat]] = {
     AgentType.CODEX: ("config", ConfigFileFormat.TOML),
     # Hermes → config.yaml (YAML) memory.memory_enabled / user_profile_enabled.
     AgentType.HERMES: ("config", ConfigFileFormat.YAML),
-    # openclaw → openclaw.json (JSON) plugins.slots.memory = "none" (ADR-043).
+    # openclaw → openclaw.json (JSON) plugins.slots.memory = "none" (ADR-044).
     AgentType.OPENCLAW: ("config", ConfigFileFormat.JSON),
 }
 

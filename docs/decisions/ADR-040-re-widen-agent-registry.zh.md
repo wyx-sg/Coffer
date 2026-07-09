@@ -2,7 +2,7 @@
 
 > English: [ADR-040-re-widen-agent-registry.md](ADR-040-re-widen-agent-registry.md)
 
-**状态**：Accepted——其中关于 openclaw 的结论已被 [ADR-043](ADR-043-openclaw-managed-agent.zh.md) **推翻**（openclaw 是第六个受管 agent；ADR-042 的复查发现本 ADR 五格 openclaw 能力表错了三格）
+**状态**：Accepted——其中关于 openclaw 的结论已被 [ADR-044](ADR-044-openclaw-managed-agent.zh.md) **推翻**（openclaw 是第六个受管 agent；ADR-042 的复查发现本 ADR 五格 openclaw 能力表错了三格）
 **日期**：2026-07-08
 **决策者**：Yuxing Wu
 **相关**：spec `004-agent-registry`（FR-003 + FR-003a 能力矩阵）；spec `008-agent-chat`（FR-005a agent providers）；spec `011-provider-switching`（原生配置投影）；反转数据迁移 `0031_drop_removed_agent_types`；基于 [ADR-032](ADR-032-provider-switching.md)（`env_key` 投影缝）与 [ADR-037](ADR-037-rules-runtime-injection.md)（SessionStart 注入）

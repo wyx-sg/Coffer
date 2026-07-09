@@ -1,7 +1,7 @@
 """``openclaw agent``-backed provider — ``AgentProvider`` wrapping the adapter.
 
 Mirrors :class:`OpencodeProvider` in shape, with two openclaw-specific
-differences (ADR-043):
+differences (ADR-044):
 
 - **No cwd semantics.** openclaw is a personal-assistant gateway, not a
   repo-scoped coding CLI: ``openclaw agent`` has no cwd flag and every turn

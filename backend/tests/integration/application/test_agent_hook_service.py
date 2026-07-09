@@ -481,7 +481,7 @@ async def test_block_mode_unsupported_without_a_payload_source(agent_bundle, tmp
     assert await svc.refresh_blocks_for_type(AgentType.HERMES) == 0
 
 
-# --- openclaw plugin package (ADR-043 PLUGIN_DROP, openclaw flavor) ---------------
+# --- openclaw plugin package (ADR-044 PLUGIN_DROP, openclaw flavor) ---------------
 
 
 async def _register_openclaw(bundle, home: pathlib.Path):

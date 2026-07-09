@@ -2,7 +2,7 @@
 
 > 中文版: [ADR-040-re-widen-agent-registry.zh.md](ADR-040-re-widen-agent-registry.zh.md)
 
-**Status**: Accepted — the openclaw verdict is REVERSED by [ADR-043](ADR-043-openclaw-managed-agent.md) (openclaw IS the sixth managed agent; ADR-042's re-check found three of this ADR's five openclaw capability cells wrong)
+**Status**: Accepted — the openclaw verdict is REVERSED by [ADR-044](ADR-044-openclaw-managed-agent.md) (openclaw IS the sixth managed agent; ADR-042's re-check found three of this ADR's five openclaw capability cells wrong)
 **Date**: 2026-07-08
 **Deciders**: Yuxing Wu
 **Related**: spec `004-agent-registry` (FR-003 + the FR-003a capability matrix); spec `008-agent-chat` (FR-005a agent providers); spec `011-provider-switching` (native-config projection); reverses the data migration `0031_drop_removed_agent_types`; builds on [ADR-032](ADR-032-provider-switching.md) (the `env_key` projection seam) and [ADR-037](ADR-037-rules-runtime-injection.md) (SessionStart injection)

@@ -12,7 +12,7 @@ Pure domain text transforms — no filesystem access. Three backends:
 - **Hermes** (YAML ``config.yaml``): ``memory.memory_enabled = false`` +
   ``memory.user_profile_enabled = false`` (ruamel preserves comments/ordering).
 - **openclaw** (JSON ``openclaw.json``): ``plugins.slots.memory = "none"``
-  (empties the memory plugin slot — probe-validated on 2026.6.11; ADR-043).
+  (empties the memory plugin slot — probe-validated on 2026.6.11; ADR-044).
 
 ``apply_disable`` sets the flag(s); ``apply_restore`` removes the key(s) Coffer
 added; ``is_disabled`` reports whether the disable is in effect. All idempotent.

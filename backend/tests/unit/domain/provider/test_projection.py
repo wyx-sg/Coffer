@@ -319,7 +319,7 @@ def test_target_for_agent_hermes() -> None:
     assert t.format.value == "yaml"
 
 
-# --- openclaw (ADR-043) — models.providers block in openclaw.json --------------
+# --- openclaw (ADR-044) — models.providers block in openclaw.json --------------
 
 
 def test_openclaw_provider_writes_block_and_selects_primary() -> None:

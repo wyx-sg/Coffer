@@ -1,6 +1,6 @@
-# ADR-043: OpenClaw is the sixth managed leaf agent
+# ADR-044: OpenClaw is the sixth managed leaf agent
 
-> 中文版: [ADR-043-openclaw-managed-agent.zh.md](ADR-043-openclaw-managed-agent.zh.md)
+> 中文版: [ADR-044-openclaw-managed-agent.zh.md](ADR-044-openclaw-managed-agent.zh.md)
 
 **Status**: Accepted
 **Date**: 2026-07-10

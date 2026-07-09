@@ -1,4 +1,4 @@
-"""Unit tests for the openclaw PLUGIN_DROP extension package (ADR-043 / FR-048).
+"""Unit tests for the openclaw PLUGIN_DROP extension package (ADR-044 / FR-048).
 
 The extension is a package DIRECTORY (package.json + openclaw.plugin.json +
 index.js) rendered from embedded JSON string literals, plus the fail-closed

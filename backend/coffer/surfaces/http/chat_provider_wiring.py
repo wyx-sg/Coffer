@@ -82,7 +82,7 @@ def build_agent_provider_registry(conv_repo: ConversationRepo) -> AgentProviderR
     # injects no key, so there is NO resolve_key here (provider-projection-N/A).
     registry.register(CursorProvider(conversations=conv_repo), display_name="Cursor")
     # openclaw reads Coffer's projected key from COFFER_PROVIDER_KEY too
-    # (openclaw.json models.providers.coffer.apiKey = "${...}", ADR-043) — same
+    # (openclaw.json models.providers.coffer.apiKey = "${...}", ADR-044) — same
     # per-turn env injection seam as Codex/opencode/hermes.
     registry.register(
         OpenclawProvider(conversations=conv_repo, resolve_key=_key_resolver(AgentType.OPENCLAW)),

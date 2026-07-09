@@ -1,6 +1,6 @@
-# ADR-043：OpenClaw 是第六个受管叶子 agent
+# ADR-044：OpenClaw 是第六个受管叶子 agent
 
-> English: [ADR-043-openclaw-managed-agent.md](ADR-043-openclaw-managed-agent.md)
+> English: [ADR-044-openclaw-managed-agent.md](ADR-044-openclaw-managed-agent.md)
 
 **状态**：已接受
 **日期**：2026-07-10
