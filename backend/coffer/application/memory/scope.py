@@ -35,8 +35,8 @@ ProjectUlidFn = Callable[[str], str]
 StoreDirFn = Callable[[str], "Path"]
 #: Records ``store_name -> project_root`` at provisioning time (finding #10).
 RecordRootFn = Callable[[str, str], Awaitable[None]]
-#: One-time migration of a legacy (path-derived) store to the portable id.
-MigrateStoreFn = Callable[[str, str], Awaitable[None]]
+#: One-time adoption of a legacy (path-derived) store under the portable id.
+MigrateStoreFn = Callable[[str, str, str], Awaitable[None]]
 
 
 def project_store_name(project_id: str) -> str:
@@ -124,26 +124,22 @@ class ScopeResolver:
         )
 
     async def _maybe_migrate_legacy(self, root: str, project_id: str) -> None:
-        """Adopt a pre-portable-identity store: same repo, old path-derived id.
-
-        Runs at most once per project (afterwards the new store exists and the
-        check short-circuits). Spec 010 / ADR-043: the portable id makes the
-        same repository resolve to the same store on every machine."""
+        """Adopt a surviving pre-portable-identity store: same repo, old
+        path-derived id. The portable store already existing is NOT a reason
+        to skip — on a second synced machine the portable store arrives via
+        sync while that machine's own legacy store (different path, different
+        id) still holds its facts; adoption merges them in additively
+        (spec 007 FR-004a / ADR-043)."""
         if self._legacy_project_ulid is None or self._migrate_store is None:
             return
         legacy_id = self._legacy_project_ulid(root)
         if legacy_id == project_id:
             return
         try:
-            await self._resources.get(ResourceRef(KIND_MEMORY, project_store_name(project_id)))
-            return  # already provisioned/migrated
-        except ResourceNotFound:
-            pass
-        try:
             await self._resources.get(ResourceRef(KIND_MEMORY, project_store_name(legacy_id)))
         except ResourceNotFound:
-            return  # nothing to migrate
-        await self._migrate_store(legacy_id, project_id)
+            return  # nothing to adopt
+        await self._migrate_store(legacy_id, project_id, root)
 
     async def _ensure_store(self, store_name: str) -> None:
         ref = ResourceRef(kind=KIND_MEMORY, name=store_name)

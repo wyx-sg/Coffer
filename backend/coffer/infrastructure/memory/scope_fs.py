@@ -212,8 +212,12 @@ def normalize_remote_url(url: str) -> str:
 
 
 def project_identity(root: str | Path) -> str:
-    """Machine-portable project id: remote-URL hash, path-hash fallback."""
+    """Machine-portable project id: remote-URL hash, path-hash fallback.
+
+    Path-shaped remotes (``/srv/git/x``, ``file://...``, ``../sibling``) are
+    machine-local — two different repos on two machines could share such an
+    origin string — so they fall back to the path hash like no-remote repos."""
     url = origin_remote_url(root)
-    if url:
+    if url and not url.startswith(("/", ".", "file://")):
         return _crockford26(f"remote:{normalize_remote_url(url)}")
     return project_ulid(root)

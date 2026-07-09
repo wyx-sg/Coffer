@@ -207,7 +207,7 @@ UI 里也不可见。把每个 lane 以贴合其形状的方式呈现，让整�
 
 ## Acceptance Scenarios
 
-### Scenario: project memory follows the repository across checkout paths（项目记忆跨检出路径跟随仓库）
+### Scenario: project memory follows the repository across checkout paths
 
 - **Given** 同一仓库（相同 `origin` remote）检出在不同路径——例如两台用户名不同的已同步机器
 - **When** 每个检出解析其项目记忆库
