@@ -25,6 +25,7 @@ from coffer.application.memory.builtin_tools import register_memory_builtin_tool
 from coffer.application.memory.handoff import HandoffService
 from coffer.application.memory.journal import JournalService
 from coffer.application.memory.kind import make_memory_kind
+from coffer.application.memory.migration import make_store_migrator
 from coffer.application.memory.scope import GLOBAL_STORE_NAME, ScopeResolver
 from coffer.application.memory.service import MemoryService
 from coffer.application.memory.stores import build_store_ref_for
@@ -33,7 +34,12 @@ from coffer.domain.knowledge.document import KIND_MEMORY, WORKSPACE_GLOBAL_PROJE
 from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.knowledge.repository import DocumentRepo
 from coffer.infrastructure.memory.project_root_repo import ProjectRootRepo
-from coffer.infrastructure.memory.scope_fs import git_branch, git_root, project_ulid
+from coffer.infrastructure.memory.scope_fs import (
+    git_branch,
+    git_root,
+    project_identity,
+    project_ulid,
+)
 from coffer.infrastructure.memory.store_label_repo import StoreLabelRepo
 from coffer.surfaces.http.dependencies import set_memory_service
 from coffer.surfaces.http.memory.dependencies import (
@@ -68,12 +74,19 @@ def wire_memory_kind(
     project_roots = ProjectRootRepo(sm)  # type: ignore[arg-type]
     set_project_root_repo(project_roots)
     set_store_label_repo(StoreLabelRepo(sm))  # type: ignore[arg-type]
+    label_repo = StoreLabelRepo(sm)  # type: ignore[arg-type]
+    migrate_store = make_store_migrator(
+        resource_svc, project_roots, label_repo, paths.memory_store_dir
+    )
+
     scope = ScopeResolver(
         resources=resource_svc,
         git_root=git_root,
-        project_ulid=project_ulid,
+        project_ulid=project_identity,
         store_dir=paths.memory_store_dir,
         record_project_root=project_roots.set,
+        legacy_project_ulid=project_ulid,
+        migrate_store=migrate_store,
     )
     memory_service = MemoryService(
         resource_service=resource_svc,

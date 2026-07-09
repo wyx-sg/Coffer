@@ -278,6 +278,15 @@ scenarios above pin the read endpoints the lane views consume.)
 
 Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="007-memory", scenario="…")`.
 
+### Scenario: project memory follows the repository across checkout paths
+
+- **Given** the same repository (same `origin` remote) checked out at different
+  paths — e.g. on two synced machines with different usernames
+- **When** each checkout resolves its per-project memory store
+- **Then** both resolve to the same store (same project ULID)
+- **And** a store provisioned under the legacy path-derived id is adopted under
+  the portable id on first resolve, keeping its facts, root mapping, and label
+
 ### Scenario: agent remembers a project fact
 
 - **Given** an MCP client running inside a git project,
@@ -630,6 +639,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **FR-002**: System MUST support two memory scopes: **global** (one store keyed by `project_id = WORKSPACE_GLOBAL_PROJECT_ID`, the existing sentinel `00000000000000000000000000`) and **per-project** (one store per project, keyed by the project's ULID), stored under `~/.coffer/memory/global/knowledge/` and `~/.coffer/memory/projects/<project-ulid>/knowledge/` respectively.
 - **FR-003**: `coffer__remember` (and a user add) MUST append a memory item to the per-scope inbox (`knowledge/inbox/`) with no LLM at write time; organization into topic documents is performed asynchronously by the consolidation organizer (a later memory PR) and never blocks the write or `recall`.
 - **FR-004**: System MUST resolve the per-project store from the agent's reported launch cwd at session handshake: the daemon computes the git-root and resolves — lazily provisioning if absent — the store for that project's ULID.
+- **FR-004a** (spec 010 / ADR-043 amendment): the project ULID MUST be **machine-portable** — derived from the normalized `origin` remote URL when the repo has one (ssh/https/scp-like forms of the same repository normalize identically), falling back to the absolute-git-root-path hash for repos without a remote. The same repository therefore resolves to the same memory store on every synced machine, whatever its checkout path. A store provisioned under the legacy path-derived id is adopted **once** on first resolve: its files move to the portable id's dir, the resource is re-registered under the new name, and the root mapping and display label carry over (the old resource is deleted, which also propagates the rename through sync tombstones).
 
 **Fact lifecycle**
 

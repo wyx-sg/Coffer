@@ -35,6 +35,8 @@ ProjectUlidFn = Callable[[str], str]
 StoreDirFn = Callable[[str], "Path"]
 #: Records ``store_name -> project_root`` at provisioning time (finding #10).
 RecordRootFn = Callable[[str, str], Awaitable[None]]
+#: One-time migration of a legacy (path-derived) store to the portable id.
+MigrateStoreFn = Callable[[str, str], Awaitable[None]]
 
 
 def project_store_name(project_id: str) -> str:
@@ -66,11 +68,15 @@ class ScopeResolver:
         project_ulid: ProjectUlidFn,
         store_dir: StoreDirFn,
         record_project_root: RecordRootFn | None = None,
+        legacy_project_ulid: ProjectUlidFn | None = None,
+        migrate_store: MigrateStoreFn | None = None,
     ) -> None:
         self._resources = resources
         self._git_root = git_root
         self._project_ulid = project_ulid
         self._store_dir = store_dir
+        self._legacy_project_ulid = legacy_project_ulid
+        self._migrate_store = migrate_store
         # Optional persistence hook: when a project store is provisioned, record
         # its originating git-root so the surface can echo it back (finding #10).
         self._record_project_root = record_project_root
@@ -107,6 +113,7 @@ class ScopeResolver:
             raise ScopeUnresolved(cwd)
         project_id = self._project_ulid(str(root))
         store_name = project_store_name(project_id)
+        await self._maybe_migrate_legacy(str(root), project_id)
         await self._ensure_store(store_name)
         if self._record_project_root is not None:
             await self._record_project_root(store_name, str(root))
@@ -115,6 +122,28 @@ class ScopeResolver:
             project_id=project_id,
             store_dir=self._store_dir(project_id),
         )
+
+    async def _maybe_migrate_legacy(self, root: str, project_id: str) -> None:
+        """Adopt a pre-portable-identity store: same repo, old path-derived id.
+
+        Runs at most once per project (afterwards the new store exists and the
+        check short-circuits). Spec 010 / ADR-043: the portable id makes the
+        same repository resolve to the same store on every machine."""
+        if self._legacy_project_ulid is None or self._migrate_store is None:
+            return
+        legacy_id = self._legacy_project_ulid(root)
+        if legacy_id == project_id:
+            return
+        try:
+            await self._resources.get(ResourceRef(KIND_MEMORY, project_store_name(project_id)))
+            return  # already provisioned/migrated
+        except ResourceNotFound:
+            pass
+        try:
+            await self._resources.get(ResourceRef(KIND_MEMORY, project_store_name(legacy_id)))
+        except ResourceNotFound:
+            return  # nothing to migrate
+        await self._migrate_store(legacy_id, project_id)
 
     async def _ensure_store(self, store_name: str) -> None:
         ref = ResourceRef(kind=KIND_MEMORY, name=store_name)
