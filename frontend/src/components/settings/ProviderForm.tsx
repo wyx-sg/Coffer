@@ -24,7 +24,12 @@ import {
   type ProviderCreate,
   type ProviderPatch,
 } from "@/lib/api/providers";
-import { PRESETS, SELECTABLE_AGENTS, defaultCompatibleAgents } from "./connectionPresets";
+import {
+  PRESETS,
+  SELECTABLE_AGENTS,
+  UNPROJECTABLE_AGENTS,
+  defaultCompatibleAgents,
+} from "./connectionPresets";
 
 interface Props {
   /** Present → edit an existing connection (name + protocol locked, secret optional). */
@@ -45,7 +50,14 @@ const AGENT_LABEL_KEY: Record<AgentType, string> = {
   cursor: "settings.connections.agentCursor",
 };
 
-export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate, onCancel }: Props) {
+export function ProviderForm({
+  initial,
+  submitError,
+  pending,
+  onSubmit,
+  onUpdate,
+  onCancel,
+}: Props) {
   const { t } = useTranslation();
   const isEdit = initial != null;
   const [name, setName] = useState(initial?.name ?? "");
@@ -185,10 +197,23 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
                 {t(AGENT_LABEL_KEY[a])}
               </label>
             ))}
+            {/* Agents that can never consume a connection stay visible with the
+                reason, instead of silently missing from the list (ADR-042). */}
+            {UNPROJECTABLE_AGENTS.map(({ type }) => (
+              <label key={type} className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <input type="checkbox" checked={false} disabled />
+                {t(AGENT_LABEL_KEY[type])}
+              </label>
+            ))}
           </div>
           <p className="text-xs text-muted-foreground">
             {t("settings.connections.compatibleAgentsHint")}
           </p>
+          {UNPROJECTABLE_AGENTS.map(({ type, reasonKey }) => (
+            <p key={type} className="text-xs text-muted-foreground">
+              {t(reasonKey)}
+            </p>
+          ))}
         </div>
       )}
 

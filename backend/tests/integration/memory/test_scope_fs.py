@@ -66,11 +66,78 @@ def test_git_root_walks_up_to_dot_git(tmp_path: pathlib.Path) -> None:
     assert git_root(str(nested)) == repo.resolve()
 
 
-def test_git_root_handles_worktree_file_marker(tmp_path: pathlib.Path) -> None:
+def test_git_root_keeps_identity_for_unresolvable_gitfile(tmp_path: pathlib.Path) -> None:
+    """A ``.git`` FILE whose gitdir has no ``commondir`` (a submodule, or a
+    dangling pointer) is NOT a linked worktree — keep the dir's own identity."""
     repo = tmp_path / "wt"
     repo.mkdir()
-    (repo / ".git").write_text("gitdir: /elsewhere")  # worktree uses a file
+    (repo / ".git").write_text("gitdir: /elsewhere")  # no commondir at target
     assert git_root(str(repo)) == repo.resolve()
+
+
+def test_git_root_keeps_identity_for_submodule(tmp_path: pathlib.Path) -> None:
+    """A submodule's ``.git`` FILE points at ``<super>/.git/modules/<name>``,
+    a full gitdir with NO ``commondir`` file — a submodule is its own project
+    and must keep its own identity, not collapse into the superproject."""
+    mod = tmp_path / "mod"
+    mod.mkdir()
+    gitdir = tmp_path / "super" / ".git" / "modules" / "mod"
+    gitdir.mkdir(parents=True)
+    (mod / ".git").write_text(f"gitdir: {gitdir}\n", encoding="utf-8")
+    assert git_root(str(mod)) == mod.resolve()
+
+
+def _seed_repo(repo: pathlib.Path, branch: str = "main") -> None:
+    repo.mkdir(parents=True)
+    _git(["init", "-q", "-b", branch], repo)
+    _git(["config", "user.email", "test@coffer.local"], repo)
+    _git(["config", "user.name", "Coffer Test"], repo)
+    (repo / "README.md").write_text("seed\n", encoding="utf-8")
+    _git(["add", "README.md"], repo)
+    _git(["commit", "-q", "-m", "seed"], repo)
+
+
+def test_git_root_collapses_linked_worktree_to_main_repo(tmp_path: pathlib.Path) -> None:
+    """The core fix: a linked worktree resolves to the MAIN repo toplevel, so the
+    same repo checked out in different worktrees is ONE project, not several."""
+    repo = tmp_path / "repo"
+    _seed_repo(repo)
+    wt = tmp_path / "wt-feature"
+    _git(["worktree", "add", "-q", "-b", "feature", str(wt)], repo)
+    assert (wt / ".git").is_file()
+    # git_root of the worktree collapses to the main repo toplevel...
+    assert git_root(str(wt)) == repo.resolve()
+    # ...including from a nested subdirectory of the worktree
+    sub = wt / "src" / "pkg"
+    sub.mkdir(parents=True)
+    assert git_root(str(sub)) == repo.resolve()
+    # ...so the worktree and the main checkout share ONE project identity
+    assert project_ulid(git_root(str(wt))) == project_ulid(git_root(str(repo)))
+
+
+def test_two_worktrees_share_one_project_identity(tmp_path: pathlib.Path) -> None:
+    repo = tmp_path / "repo"
+    _seed_repo(repo)
+    wt_a = tmp_path / "wt-a"
+    wt_b = tmp_path / "wt-b"
+    _git(["worktree", "add", "-q", "-b", "a", str(wt_a)], repo)
+    _git(["worktree", "add", "-q", "-b", "b", str(wt_b)], repo)
+    assert git_root(str(wt_a)) == repo.resolve()
+    assert git_root(str(wt_b)) == repo.resolve()
+    assert project_ulid(git_root(str(wt_a))) == project_ulid(git_root(str(wt_b)))
+
+
+def test_git_branch_stays_per_worktree_after_collapse(tmp_path: pathlib.Path) -> None:
+    """Regression guard: collapsing git_root identity must NOT change branch
+    resolution — handoffs are keyed per branch, so each worktree keeps its own
+    branch even though they share a project store."""
+    repo = tmp_path / "repo"
+    _seed_repo(repo)
+    wt = tmp_path / "wt-feature"
+    _git(["worktree", "add", "-q", "-b", "feature", str(wt)], repo)
+    assert git_root(str(wt)) == repo.resolve()  # identity collapsed
+    assert git_branch(str(wt)) == "feature"  # but branch is the worktree's own
+    assert git_branch(str(repo)) == "main"
 
 
 def test_git_root_none_outside_repo(tmp_path: pathlib.Path) -> None:

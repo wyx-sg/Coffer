@@ -154,6 +154,8 @@ CREATE TABLE memory_store_labels (
 
 The `label` takes precedence over the `project_root`-derived basename when rendering a store's readable identity; clearing the label deletes its row, reverting to the FR-017a derivation / fallback. Neither table touches the store's name (`project-<ULID>`) or `project_id`.
 
+**One store per repo, across git worktrees.** The project ULID is `sha256(git-root path)`. A linked git worktree has its own `.git` *file*, so `git_root` (`infrastructure/memory/scope_fs.py`) follows that pointer's `gitdir`/`commondir` to the **main** repo toplevel — every worktree of a repo (and the main checkout) resolves to one ULID, hence one store. Branch resolution (`git_branch`) stays per-worktree, since handoffs are branch-keyed. Stores fragmented by the earlier path-hash-per-worktree behaviour are healed at daemon startup by a one-time, idempotent, additive consolidation (`application/memory/consolidate.py`): it re-resolves each `project_root`, and any store whose name is no longer the canonical `project-<ULID>` for its root has its lane files merged (journal deduped by timestamp, other collisions kept as `--from-<ulid>` siblings) into the canonical store and is then retired (resource + `documents` + label + root rows).
+
 ## On-disk canonical layout (source of truth)
 
 ```

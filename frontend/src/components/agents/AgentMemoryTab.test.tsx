@@ -176,6 +176,22 @@ describe("AgentMemoryTab", () => {
     );
   });
 
+  test("the session-hook row renders for every agent type (self-gates on `supported`)", () => {
+    // The tab used to hide the hook row behind a hard-coded type list, which went
+    // stale when Cursor gained SHELL_COMMAND injection (ADR-042). The row is now
+    // always present; AgentHookToggle itself disables the switch with a reason
+    // when the backend reports supported:false.
+    stubMcp(true);
+    stubNative([]);
+    for (const type of ["cursor", "hermes", "opencode"] as const) {
+      const { unmount } = render(<AgentMemoryTab agent={{ ...AGENT, name: type, type }} />, {
+        wrapper: wrap,
+      });
+      expect(screen.getByRole("switch", { name: /session-start rules/i })).toBeInTheDocument();
+      unmount();
+    }
+  });
+
   test("disable-native-memory toggle shows as on when the agent has it disabled", () => {
     stubMcp(true);
     stubNative([COFFER_STORE]);

@@ -80,7 +80,7 @@ class AgentDescriptor:
     #: How Coffer manages this agent's plugins (``None`` = no plugin concept).
     plugins: PluginCapability | None = None
     #: Whether this agent is surfaced in discovery — the only UI entry point that
-    #: enumerates agents. Both Claude Code and Codex are exposed. The flag gates
+    #: enumerates agents. Every manifest type is exposed. The flag gates
     #: discovery/visibility only, never registration — the backend accepts a
     #: direct registration of any manifest type regardless of this flag.
     enabled: bool = True

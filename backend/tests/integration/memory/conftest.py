@@ -103,6 +103,8 @@ class MemHarness:
     audit: AuditService
     scope: ScopeResolver
     project_cwd: str  # a cwd the fake git-root resolves as a project
+    sm: Callable  # session maker (for building extra repos in tests)
+    reconciler: MemoryReconciler
     vec_stores: dict[tuple[str, str], FakeVecIndex] | None = None
 
 
@@ -177,6 +179,8 @@ async def mem(tmp_path: pathlib.Path, monkeypatch):
             audit=audit,
             scope=scope,
             project_cwd=str(project_root / "src"),
+            sm=sm,
+            reconciler=reconciler,
             vec_stores=vec_stores,
         )
     finally:
