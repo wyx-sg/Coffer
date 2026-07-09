@@ -749,6 +749,15 @@ status / notify`。
 - **Then** 该重投被丢弃，turn 恰好只运行一次——没有重复回复或重复工作——而一条真正
   的新事件仍然驱动其自身的 turn
 
+### Scenario: an inbound SeaTalk file drives a turn
+
+- **Given** 一个已配对的 SeaTalk channel
+- **When** owner 直接发送一个文件（一条 `file` 消息，其 `file.content` 是一个鉴权
+  文件 URL，`file.filename` 是原始文件名）
+- **Then** 用 app token 下载字节，并作为附件挂在入站消息上，保留其真实文件名和一个
+  非图片 mime，因此该文件像照片一样驱动一次 turn，而不是命中"发送文本、图片或文件"
+  的回复
+
 ## Channels as a management plane（北极星）
 
 channel 被管理的方式，与 Coffer 管理 MCP server、memory、skill 的方式一致：在一处
