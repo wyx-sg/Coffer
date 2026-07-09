@@ -542,6 +542,7 @@
       "agentOpencode": "opencode",
       "agentHermes": "Hermes",
       "agentCursor": "Cursor",
+      "agentCursorUnprojectable": "Cursor can't use a connection: cursor-agent is locked to Cursor's own backend and exposes no endpoint setting.",
       "deleteTitle": "Delete connection",
       "deleteConfirm": "Delete connection \"{{name}}\"? Its stored credential is removed too.",
       "name": "Name",
@@ -880,7 +881,7 @@
     "hook": {
       "title": "Session-start rules",
       "help": "When on, injects the Coffer rules bundle via a SessionStart hook each time the agent starts a session.",
-      "unsupported": "This agent type doesn't support a session-start hook."
+      "unsupported": "Coffer can't inject session context into this agent type yet."
     },
     "welcome": {
       "title": "Manage your local AI agents",

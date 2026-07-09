@@ -542,6 +542,7 @@
       "agentOpencode": "opencode",
       "agentHermes": "Hermes",
       "agentCursor": "Cursor",
+      "agentCursorUnprojectable": "Cursor 无法使用连接：cursor-agent 锁定 Cursor 官方后端，没有可配置的端点。",
       "deleteTitle": "删除连接",
       "deleteConfirm": "删除连接「{{name}}」？其保存的凭据也会一并删除。",
       "name": "名称",
@@ -880,7 +881,7 @@
     "hook": {
       "title": "会话启动规则",
       "help": "开启后，每次该 Agent 启动会话时通过 SessionStart 钩子注入 Coffer 规则集。",
-      "unsupported": "该 Agent 类型不支持会话启动钩子。"
+      "unsupported": "Coffer 尚未支持向该 Agent 类型注入会话上下文。"
     },
     "welcome": {
       "title": "管理你的本地 AI Agent",
