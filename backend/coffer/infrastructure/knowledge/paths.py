@@ -250,9 +250,11 @@ def rule_file_path(store_dir: pathlib.Path, slug: str) -> pathlib.Path:
 
 
 def journal_dir(store_dir: pathlib.Path) -> pathlib.Path:
-    """The store-root ``journal/`` dir — episodic events fed by distillation. At
-    the store ROOT (outside ``knowledge/``) so it is excluded from recall like
-    ``handoff/``/``rules/``; it DOES sync (source-of-truth history)."""
+    """The store-root ``journal/`` dir — episodic events fed by distillation.
+    Unlike ``handoff/``/``rules/``, the journal DOES participate in recall
+    (FR-043): the reconciler indexes each ``journal/<period>.md`` into a
+    ``documents`` row and the grep guard preserves journal hits. It also syncs
+    (source-of-truth history)."""
     candidate = (store_dir / "journal").resolve()
     if not candidate.is_relative_to(store_dir.resolve()):
         raise ValueError("journal dir escapes the store dir")

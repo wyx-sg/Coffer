@@ -60,6 +60,68 @@ async def test_journal_recall_reflects_a_later_append(mem) -> None:
     assert any("gadgets" in h.text for h in hits), [h.text for h in hits]
 
 
+async def test_reconcile_on_append_indexes_immediately(mem) -> None:
+    """With a reconciler wired, an appended journal entry lands in the index
+    right away — recall-able WITHOUT a prior recall triggering reconcile. This
+    closes the write-only-to-disk gap that left distilled journal unsearchable
+    when agents never recalled the store."""
+    j = JournalService(
+        scope=mem.scope,
+        store_dir=paths.memory_store_dir,
+        audit=mem.audit,
+        now=lambda: datetime(2026, 6, 21, 9, tzinfo=UTC),
+        reconciler=mem.reconciler,
+        embedding=mem.embedding_resolver,
+    )
+    await j.append(cwd=mem.project_cwd, body="provisioned the redis cache", actor="agent")
+    resolved = await mem.service.resolve_scope(scope=MemoryScope.PROJECT, cwd=mem.project_cwd)
+    store = store_name_for(resolved)
+    # No recall has run — the journal doc exists purely from reconcile-on-append.
+    doc = await mem.documents.get_document("memory", store, "journal-2026-06-21")
+    assert doc is not None
+    hits, _fb = await mem.service.recall(cwd=mem.project_cwd, query="redis cache", top_k=5)
+    assert any("redis cache" in h.text for h in hits)
+
+
+async def test_append_without_reconciler_defers_to_recall(mem) -> None:
+    """Back-compat: with no reconciler wired, append only writes the file; the
+    journal doc appears on the next recall (reconcile-on-read), as before."""
+    j = JournalService(
+        scope=mem.scope,
+        store_dir=paths.memory_store_dir,
+        audit=mem.audit,
+        now=lambda: datetime(2026, 6, 21, 9, tzinfo=UTC),
+    )
+    await j.append(cwd=mem.project_cwd, body="a deferred note", actor="agent")
+    resolved = await mem.service.resolve_scope(scope=MemoryScope.PROJECT, cwd=mem.project_cwd)
+    store = store_name_for(resolved)
+    assert await mem.documents.get_document("memory", store, "journal-2026-06-21") is None
+    await mem.service.recall(cwd=mem.project_cwd, query="note", top_k=5)  # reconciles-on-read
+    assert await mem.documents.get_document("memory", store, "journal-2026-06-21") is not None
+
+
+async def test_reindex_sweep_indexes_journal_backlog(mem) -> None:
+    """The startup sweep indexes journal written to disk but never reconciled —
+    the live-vault backlog (a store whose journal grew while it wasn't recalled).
+    """
+    from coffer.surfaces.http.memory_wiring import reindex_all_memory_stores
+
+    # Append with NO reconciler wired → write-only-to-disk, as distillation was
+    # before reconcile-on-append.
+    j = _journal(mem, now=lambda: datetime(2026, 6, 21, 9, tzinfo=UTC))
+    await j.append(cwd=mem.project_cwd, body="unindexed backlog entry", actor="agent")
+    resolved = await mem.service.resolve_scope(scope=MemoryScope.PROJECT, cwd=mem.project_cwd)
+    store = store_name_for(resolved)
+    assert await mem.documents.get_document("memory", store, "journal-2026-06-21") is None
+
+    await reindex_all_memory_stores(
+        resources=mem.resources,
+        reconciler=mem.reconciler,
+        embedding_resolver=mem.embedding_resolver,
+    )
+    assert await mem.documents.get_document("memory", store, "journal-2026-06-21") is not None
+
+
 async def test_journal_and_knowledge_lanes_are_distinguishable(mem) -> None:
     j = _journal(mem, now=lambda: datetime(2026, 6, 21, 9, tzinfo=UTC))
     await j.append(cwd=mem.project_cwd, body="episodic: shipped the search feature", actor="agent")
