@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Switch } from "@/components/ui/switch";
 import { ChannelCallbackCard } from "@/kinds/channel/ChannelCallbackCard";
+import { ChannelMachineCard } from "@/kinds/channel/ChannelMachineCard";
 import {
   ChannelPairingCard,
   ChannelStatusCard,
