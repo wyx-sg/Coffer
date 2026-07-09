@@ -26,7 +26,8 @@ class SkillDeliveryMode(StrEnum):
     """
 
     #: Symlink (copy-fallback) the master skill folder into the agent's skill
-    #: directory at ``<skill_dir>/<skill_name>`` — used by Claude Code and Codex.
+    #: directory at ``<skill_dir>/<skill_name>`` — used by every supported agent
+    #: type.
     FOLDER = "folder"
     #: Skills projected as ``.mdc`` rule files. Recognized extension point for a
     #: future agent type; no current agent type uses it.

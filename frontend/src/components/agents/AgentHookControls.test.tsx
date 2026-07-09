@@ -77,7 +77,10 @@ describe("AgentHookToggle", () => {
     render(<AgentHookToggle name="cur" />);
     const sw = screen.getByRole("switch", { name: /session-start rules/i });
     expect(sw).toBeDisabled();
-    expect(screen.getByText(/doesn't support a session-start hook/i)).toBeInTheDocument();
+    // The reason frames the gap as Coffer's ("yet"), not the product's — for
+    // opencode the mechanism exists upstream and Coffer hasn't implemented it
+    // (spec 004 Key Entities: surfaces MUST say so).
+    expect(screen.getByText(/can't inject session context .* yet/i)).toBeInTheDocument();
     fireEvent.click(sw);
     expect(mutate).not.toHaveBeenCalled();
   });

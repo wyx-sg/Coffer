@@ -881,7 +881,7 @@
     "hook": {
       "title": "Session-start rules",
       "help": "When on, injects the Coffer rules bundle via a SessionStart hook each time the agent starts a session.",
-      "unsupported": "This agent type doesn't support a session-start hook."
+      "unsupported": "Coffer can't inject session context into this agent type yet."
     },
     "welcome": {
       "title": "Manage your local AI agents",
