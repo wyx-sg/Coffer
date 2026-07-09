@@ -107,6 +107,25 @@ def test_default_agent_override_kept():
     assert cfg.default_agent_config == {"model": "opus"}
 
 
+def test_group_gating_flags_default_on_both_channel_types():
+    """FR-035: require_mention defaults on (group @mention required), and
+    ignore_other_mentions defaults off (opt-in), on both channel types."""
+    tg = parse_channel_config(TELEGRAM_CONFIG)
+    assert tg.require_mention is True
+    assert tg.ignore_other_mentions is False
+    st = parse_channel_config(SEATALK_CONFIG)
+    assert st.require_mention is True
+    assert st.ignore_other_mentions is False
+
+
+def test_group_gating_flags_are_configurable():
+    cfg = parse_channel_config(
+        {**TELEGRAM_CONFIG, "require_mention": False, "ignore_other_mentions": True}
+    )
+    assert cfg.require_mention is False
+    assert cfg.ignore_other_mentions is True
+
+
 def test_raw_telegram_token_in_bot_token_ref_rejected():
     raw_token = "123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     with pytest.raises(ValidationError, match="looks like a raw secret"):
@@ -172,6 +191,8 @@ def test_root_model_round_trips_flat_dict():
         "bot_token_ref": "channel/tg/bot-token",
         "default_agent": "claude_code",
         "default_agent_config": None,
+        "require_mention": True,
+        "ignore_other_mentions": False,
     }
 
 
@@ -184,6 +205,8 @@ def test_root_model_round_trips_seatalk_dict():
         "default_agent_config": None,
         "public_base_url": None,
         "tunnel_token_ref": None,
+        "require_mention": True,
+        "ignore_other_mentions": False,
     }
 
 

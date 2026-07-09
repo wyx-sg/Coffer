@@ -3,6 +3,7 @@ detection, @mention/reply addressing, and forwarded/quoted-reply framing."""
 
 from coffer.infrastructure.channel.telegram_parse import (
     addressed_and_text,
+    build_inbound_message,
     is_group,
     prepend_context,
 )
@@ -210,3 +211,48 @@ def test_prepend_context_combines_forward_and_reply():
     assert lines[0] == "> Sam: original message"
     assert lines[1] == "[Forwarded chat record]"
     assert "Bob: hi" in out
+
+
+# -- build_inbound_message: mentions_others (FR-035) -------------------------
+
+
+def _build(message):
+    return build_inbound_message(
+        message, (), channel="tg", bot_id=BOT_ID, bot_username=BOT_USERNAME
+    )
+
+
+def test_mentions_others_false_when_only_bot_is_mentioned():
+    message = _message(
+        text="@mybot run",
+        entities=[{"type": "mention", "offset": 0, "length": len("@mybot")}],
+    )
+    assert _build(message).mentions_others is False
+
+
+def test_mentions_others_true_when_another_user_is_mentioned():
+    message = _message(
+        text="@someoneelse hey @mybot run",
+        entities=[
+            {"type": "mention", "offset": 0, "length": len("@someoneelse")},
+            {"type": "mention", "offset": 17, "length": len("@mybot")},
+        ],
+    )
+    assert _build(message).mentions_others is True
+
+
+def test_mentions_others_true_for_a_text_mention_of_a_different_user():
+    message = _message(
+        text="hey Sam run",
+        entities=[{"type": "text_mention", "offset": 4, "length": 3, "user": {"id": 1}}],
+    )
+    assert _build(message).mentions_others is True
+
+
+def test_mentions_others_false_in_a_dm():
+    message = _message(
+        chat={"id": 555, "type": "private"},
+        text="@someoneelse hi",
+        entities=[{"type": "mention", "offset": 0, "length": len("@someoneelse")}],
+    )
+    assert _build(message).mentions_others is False

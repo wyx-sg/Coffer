@@ -145,10 +145,18 @@ class InboundProcessor:
         if binding is None:
             return
         if msg.chat_kind == "group":
-            if not msg.addressed:
+            if binding.require_mention and not msg.addressed:
                 # Un-addressed group chatter (no @mention/reply-to-bot) is
                 # never a turn — a bot must not speak up uninvited in a group
-                # it merely sits in.
+                # it merely sits in. With ``require_mention`` off the channel
+                # lets un-addressed group messages through this gate (still
+                # owner-gated by the sender_id checks below).
+                return
+            if binding.ignore_other_mentions and msg.mentions_others:
+                # FR-035: a group message that @mentions another user is aimed
+                # at a human — drop it silently (no reply), before the owner
+                # gate, so a bot in a busy group never butts in regardless of
+                # who sent it.
                 return
             owner = await self._peers.owner_sender_id(binding.resource_id)
             if owner is None:

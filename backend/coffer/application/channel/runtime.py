@@ -201,6 +201,8 @@ class ChannelRuntime:
                 default_agent=parsed.default_agent,
                 default_agent_config=parsed.default_agent_config,
                 adapter=adapter,
+                require_mention=parsed.require_mention,
+                ignore_other_mentions=parsed.ignore_other_mentions,
             )
         )
         self._running[name] = _Running(adapter=adapter, config_hash=self._hash(config))

@@ -17,10 +17,31 @@ __all__ = [
     "collect_forwarded_items",
     "flatten_combined_forwarded",
     "interactive_card",
+    "mentions_others",
     "message_to_item",
     "split_to_byte_limit",
     "strip_group_mentions",
 ]
+
+
+def mentions_others(mentioned_list: Sequence[Any] | None) -> bool:
+    """Whether a group message @mentions a user OTHER than the bot (FR-035).
+
+    ``new_mentioned_message_received_from_group_chat`` only fires when the bot
+    IS mentioned, so the bot already occupies one slot in ``mentioned_list``;
+    more than one distinct username therefore means a non-bot user was also
+    @mentioned.
+    """
+    return (
+        len(
+            {
+                m["username"]
+                for m in mentioned_list or []
+                if isinstance(m, dict) and m.get("username")
+            }
+        )
+        > 1
+    )
 
 
 def split_to_byte_limit(chunk: str, byte_limit: int) -> list[str]:
