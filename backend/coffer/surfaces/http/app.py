@@ -70,6 +70,7 @@ from coffer.surfaces.http.auto_distill_wiring import (
 )
 from coffer.surfaces.http.backup_wiring import start_backup_worker, stop_backup_worker
 from coffer.surfaces.http.channel_wiring import wire_channel_kind
+from coffer.surfaces.http.consolidate_wiring import run_store_consolidation
 from coffer.surfaces.http.credential_composition import (
     init_credential_store,
     make_credential_resolver,
@@ -246,6 +247,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     await run_legacy_keychain_migration(
         app.state.kinds, sm, credential_store, audit, embedding_config_svc
     )
+
+    # One-time heal of per-project memory stores fragmented across git worktrees
+    # by the old path-hash bug (best-effort; idempotent once collapsed).
+    await run_store_consolidation(resources=resource_svc, sm=sm, substrate=substrate)
 
     # CODE-020: start the batched invocation writer alongside the retention
     # worker. The repo's start() is a no-op if already started.
