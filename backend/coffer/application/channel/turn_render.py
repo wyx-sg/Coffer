@@ -166,10 +166,13 @@ class TurnRenderer:
     # FR-037: typing-heartbeat cadence (injectable so a test can drive it fast).
     heartbeat_seconds: float = _TYPING_HEARTBEAT_SECONDS
 
-    async def consume(self, queue: asyncio.Queue[Any]) -> None:
+    async def consume(self, queue: asyncio.Queue[Any]) -> bool:
+        """Render the turn; return ``True`` on a clean success (no error, a
+        normal ``end_turn``), which the driver uses to gate the FR-036 ✅
+        completion reaction. An errored/interrupted turn returns ``False``."""
         heartbeat = self._start_typing_heartbeat()
         try:
-            await self._consume(queue)
+            return await self._consume(queue)
         finally:
             # Reliably reap the heartbeat so it never outlives the turn.
             if heartbeat is not None:
@@ -177,7 +180,7 @@ class TurnRenderer:
                 with contextlib.suppress(asyncio.CancelledError, Exception):
                     await heartbeat
 
-    async def _consume(self, queue: asyncio.Queue[Any]) -> None:
+    async def _consume(self, queue: asyncio.Queue[Any]) -> bool:
         parts: list[str] = []
         progress = _Progress()
         stop_reason = "end_turn"
@@ -224,10 +227,12 @@ class TurnRenderer:
         # facts are just noise. Only a turn that did not end normally (failed,
         # interrupted, or hit the tool-iteration limit) sends a summary, which
         # carries its error / stop / limit signal.
-        if not (error is None and stop_reason == "end_turn"):
+        clean = error is None and stop_reason == "end_turn"
+        if not clean:
             await self.send(
                 self._summary(error, stop_reason, len(tool_ids), self.now() - started, tokens)
             )
+        return clean
 
     @staticmethod
     def _summary(

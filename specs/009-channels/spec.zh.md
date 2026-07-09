@@ -879,6 +879,26 @@ status / notify`。
 - **Then** 它报告该 channel 的启用状态、实时健康（适配器运行中）、已配对的
   owner 以及路由到的 agent——与 MCP-server / memory / skill 的管理面保持一致
 
+### Scenario: receipt and completion are acked with reactions where supported
+
+- **Given** 一个已配对渠道，其 adapter 支持 reaction（Telegram）
+- **When** owner 发来一条消息并驱动了一个干净完成的 turn
+- **Then** 在收到时立即在 owner 自己的消息上设置 👀 reaction，完成时设置 ✅ reaction，二者
+  都指向该入站消息 id
+
+### Scenario: a transport without reaction support attempts no reaction
+
+- **Given** 一个已配对渠道，其 adapter 不支持 reaction（SeaTalk，其收到与进度提示是 typing
+  信号）
+- **When** owner 发来一条消息并驱动一个 turn
+- **Then** 不尝试任何 reaction，而 turn 仍正常运行并回复
+
+### Scenario: a failed reaction never breaks the turn
+
+- **Given** 一个支持 reaction 的 adapter，其 set_reaction 会失败
+- **When** owner 发来一条消息并驱动一个 turn
+- **Then** 回复仍被送达——尽力而为的 reaction 被吞掉
+
 ## Channels as a management plane（北极星）
 
 channel 被管理的方式，与 Coffer 管理 MCP server、memory、skill 的方式一致：在一处
@@ -970,9 +990,11 @@ Coffer-hosted channel 与它们并不冗余——它是通往统一、本地、�
 
 ### D. Platform polish
 
-- **FR-036**: 收到与进度被确认。在平台支持 reaction 处，一个 ack reaction 立即标记收到；
-  turn 期间显示一个 typing/working 信号；完成时标记完成。全部尽力而为——一次失败的 ack
-  绝不打断 turn。
+- **FR-036**: 收到与进度被确认，按能力（而非按 transport 类型）门控。在支持 reaction 的
+  transport（Telegram）上，一个 ack reaction（👀）立即在用户自己的消息上标记收到，一个 ✅
+  在干净完成时标记完成（出错/被打断的 turn 只保留收到标记）。不支持 reaction 的 transport
+  （SeaTalk）改用它的 typing/working 信号作为收到与进度的提示。全部尽力而为——一次失败的
+  ack 绝不打断 turn。
 - **FR-037**: 长回复按平台的最佳机制流式呈现，该机制由 adapter 的能力（而非其类型）
   决定。可编辑（`supports_edit`）的平台（Telegram）把回复文本流式写入**同一条**节流
   的可编辑状态消息，仅在一个 turn 运行到足够长时才打开它——要么是工具活动打开它（先显示
