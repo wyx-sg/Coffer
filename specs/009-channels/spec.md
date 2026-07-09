@@ -499,7 +499,9 @@ nowhere until the user picks a machine in the channel detail page. The creating
 surface defaults `runs_on` to the creating machine. Rebinding is a normal
 config edit that propagates through sync; pairing state syncs with the vault
 (spec 010 state area `channel-peers`), so a rebound channel needs no
-re-pairing.
+re-pairing. During the propagation window (one sync round trip) both machines
+may briefly poll the platform at once — self-healing seconds-long overlap,
+accepted for a single-user tool.
 
 ## Acceptance Scenarios
 

@@ -95,3 +95,68 @@ async def test_pairing_identity_round_trips(tmp_path, remote) -> None:  # type: 
     peer_a = await peers_a.get_by_chat(chan.id, "12345")
     assert peer_a is not None
     assert peer_a.active_conversation_id == "conv-local-a"
+
+
+async def test_quarantined_channel_never_erases_peer_docs(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """A machine that can't import a channel must not delete its pairing docs
+    from the medium (review #285 blocker: quarantine x replace-area export)."""
+    from pydantic import field_validator
+
+    class _Picky(BaseModel):
+        channel_type: str = "telegram"
+        bot_token_ref: str = ""
+        runs_on: str | None = None
+
+        @field_validator("bot_token_ref")
+        @classmethod
+        def _reject(cls, v: str) -> str:
+            if v == "poison":
+                raise ValueError("machine B cannot import this")
+            return v
+
+    picky = {"channel": Kind(name="channel", display_name="Channel", config_schema=_Picky)}
+
+    a = await _make_machine(
+        "A",
+        tmp_path / "A",
+        remote,
+        create_key=True,
+        kinds=_kinds(),
+        state_providers_factory=_providers,
+    )
+    chan = await a.resources.register(
+        "channel", "tg", {"channel_type": "telegram", "bot_token_ref": "poison"}, "test"
+    )
+    peers_a = ChannelPeerRepo(a.sm)
+    await peers_a.upsert(
+        ChannelPeer(
+            resource_id=chan.id,
+            chat_id="12345",
+            display_name="Owner",
+            paired_at=datetime(2026, 7, 1, tzinfo=UTC),
+            active_conversation_id=None,
+            sender_id=None,
+            preferred_agent=None,
+        )
+    )
+    await a.service.run()
+
+    b = await _make_machine(
+        "B",
+        tmp_path / "B",
+        remote,
+        create_key=True,
+        kinds=picky,
+        state_providers_factory=_providers,
+    )
+    state_b = await b.service.run()
+    assert state_b.quarantined_refs == ["channel:tg"]
+    doc = "state/channel-peers/tg/12345.yaml"
+    assert doc in b.workspace.list_files()  # preserved, not erased
+
+    # A full extra cycle stays stable: no add/remove ping-pong in the medium.
+    await b.service.run()
+    await a.service.run()
+    assert doc in a.workspace.list_files()
+    assert doc in b.workspace.list_files()
+    assert (await peers_a.get_by_chat(chan.id, "12345")) is not None

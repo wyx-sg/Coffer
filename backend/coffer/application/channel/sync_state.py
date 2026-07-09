@@ -33,9 +33,14 @@ class ChannelPeerSyncState:
         self._resources = resources
         self._peers = peers
 
-    async def export_docs(self) -> list[tuple[str, dict[str, object]]]:
+    async def export_docs(self) -> tuple[list[tuple[str, dict[str, object]]], list[str]]:
         docs: list[tuple[str, dict[str, object]]] = []
+        owned: list[str] = []
         for resource in await self._resources.list(kind="channel"):
+            # We vouch only for channels we hold locally: their docs are
+            # replaced (so unpairing propagates); docs of quarantined /
+            # not-yet-imported channels stay untouched.
+            owned.append(f"{resource.name}/")
             for peer in await self._peers.list_by_resource(resource.id):
                 docs.append(
                     (
@@ -50,7 +55,7 @@ class ChannelPeerSyncState:
                         },
                     )
                 )
-        return docs
+        return docs, owned
 
     async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[str]:
         errors: list[str] = []

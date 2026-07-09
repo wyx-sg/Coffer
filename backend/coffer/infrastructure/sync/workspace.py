@@ -282,10 +282,25 @@ class Workspace:
 
     # --- shared-state areas ---------------------------------------------------
 
-    def write_state_docs(self, area: str, docs: Sequence[tuple[str, Mapping[str, object]]]) -> None:
+    def write_state_docs(
+        self,
+        area: str,
+        docs: Sequence[tuple[str, Mapping[str, object]]],
+        owned_prefixes: Collection[str] = (),
+    ) -> None:
+        """Prefix-scoped reconcile, never a blanket replace: docs outside
+        ``owned_prefixes`` belong to entities this machine does not know
+        locally (quarantined / not yet imported) and must survive its export —
+        a blanket rmtree would erase the fleet's state and ping-pong forever
+        against the machines that keep re-publishing it."""
         target = self._root / _STATE / area
+        wanted = {rel for rel, _doc in docs}
         if target.exists():
-            shutil.rmtree(target)
+            for path in sorted(target.rglob("*.yaml")):
+                rel = path.relative_to(target).with_suffix("").as_posix()
+                owned = any(rel.startswith(prefix) for prefix in owned_prefixes)
+                if owned and rel not in wanted:
+                    path.unlink(missing_ok=True)
         for rel, doc in docs:
             path = target / f"{rel}.yaml"
             path.parent.mkdir(parents=True, exist_ok=True)

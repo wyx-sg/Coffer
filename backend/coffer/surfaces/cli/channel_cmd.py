@@ -64,6 +64,11 @@ def register(
     agent_config: str | None = typer.Option(
         None, "--agent-config", help="Default agent config as JSON"
     ),
+    runs_on: str | None = typer.Option(
+        None,
+        "--runs-on",
+        help="machine_id whose runtime starts this channel (default: this machine)",
+    ),
 ) -> None:
     """Register a channel (secrets must already be in the keychain)."""
     verbose = (ctx.obj or {}).get("verbose", False)
@@ -100,6 +105,25 @@ def register(
         raise typer.Exit(int(ExitCode.INVALID_INPUT))
     c, _info = _cli_client.client_or_exit()
     with c:
+        # Affinity (spec 010): the creating surface binds the creating machine
+        # so the adapter actually starts; an unbound channel runs nowhere.
+        bound = runs_on
+        if bound is None:
+            # Best-effort: bind the creating machine so the adapter starts.
+            machines = c.get("/sync/machines")
+            if machines.status_code == 200:
+                bound = next(
+                    (m["machine_id"] for m in machines.json()["machines"] if m["is_local"]),
+                    None,
+                )
+        if bound is not None:
+            config["runs_on"] = bound
+        else:
+            typer.echo(
+                "note: no machine identity available — channel left unbound "
+                "(it runs nowhere until you set --runs-on or bind it in the UI)",
+                err=True,
+            )
         r = c.post("/resources", json={"kind": "channel", "name": name, "config": config})
         _cli_client.check(r, verbose=verbose)
     typer.echo(f"registered: channel:{name}")

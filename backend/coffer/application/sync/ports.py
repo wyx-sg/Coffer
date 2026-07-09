@@ -85,8 +85,14 @@ class WorkspacePort(Protocol):
 
     def read_tombstones(self) -> list[Tombstone]: ...
 
-    def write_state_docs(self, area: str, docs: Sequence[tuple[str, Mapping[str, object]]]) -> None:
-        """Replace ``state/<area>/`` with one deterministic YAML per doc."""
+    def write_state_docs(
+        self,
+        area: str,
+        docs: Sequence[tuple[str, Mapping[str, object]]],
+        owned_prefixes: Collection[str] = (),
+    ) -> None:
+        """Reconcile ``state/<area>/``: replace docs under ``owned_prefixes``,
+        write ``docs``, preserve everything else verbatim."""
 
     def read_state_docs(self, area: str) -> list[tuple[str, dict[str, object]]]: ...
 
@@ -141,8 +147,12 @@ class SyncedStatePort(Protocol):
         """Directory name under ``state/`` (kebab-case)."""
         ...
 
-    async def export_docs(self) -> list[tuple[str, dict[str, object]]]:
-        """(relative doc path without extension, payload) for local state."""
+    async def export_docs(self) -> tuple[list[tuple[str, dict[str, object]]], list[str]]:
+        """Local state as (relative doc path without extension, payload) pairs,
+        plus the path PREFIXES this machine can vouch for. Export replaces only
+        docs under owned prefixes — docs for entities this machine does not
+        know locally (quarantined / not yet imported) are preserved verbatim,
+        so an incomplete machine can never erase the fleet's state."""
         ...
 
     async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[str]:

@@ -226,7 +226,7 @@ export function AddChannelDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t("common.cancel")}
             </Button>
-            <Button type="submit" disabled={create.isPending}>
+            <Button type="submit" disabled={create.isPending || machines === undefined}>
               {create.isPending ? t("common.saving") : t("channels.add")}
             </Button>
           </div>

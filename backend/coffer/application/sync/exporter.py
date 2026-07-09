@@ -63,7 +63,10 @@ class SyncExporter:
         ]
         live = {(r.kind, r.name): _aware(r.created_at) for r in resources}
         pending = await self._reconcile_ledger(live, set(quarantined))
-        state_docs = [(p.area, await p.export_docs()) for p in self._state_providers]
+        state_docs = []
+        for provider in self._state_providers:
+            area_docs, owned = await provider.export_docs()
+            state_docs.append((provider.area, area_docs, owned))
         # All filesystem + raw-sqlite IO runs off the event loop.
         await asyncio.to_thread(
             self._dump, docs, live, pending, set(quarantined), machine_id, state_docs
@@ -98,11 +101,11 @@ class SyncExporter:
         pending: list[Tombstone],
         quarantined: set[str],
         machine_id: str | None,
-        state_docs: list[tuple[str, list[tuple[str, dict[str, object]]]]],
+        state_docs: list[tuple[str, list[tuple[str, dict[str, object]]], list[str]]],
     ) -> None:
         withheld = self._sync_tombstone_files(live, pending, machine_id)
-        for area, docs_for_area in state_docs:
-            self._workspace.write_state_docs(area, docs_for_area)
+        for area, docs_for_area, owned in state_docs:
+            self._workspace.write_state_docs(area, docs_for_area, owned_prefixes=owned)
         kept_docs = [d for d in docs if (str(d["kind"]), str(d["name"])) not in withheld]
         self._workspace.write_resource_docs(kept_docs, preserve=quarantined)
         self._workspace.mirror_trees_out()
