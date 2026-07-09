@@ -15,10 +15,11 @@ import retries every run.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from coffer.application.resource_service import ResourceService
-from coffer.application.sync.ports import CredentialSyncPort, WorkspacePort
+from coffer.application.sync.ports import CredentialSyncPort, SyncedStatePort, WorkspacePort
 from coffer.domain.error_base import CofferError
 from coffer.domain.resource import ResourceRef
 from coffer.domain.sync.errors import SyncWorkspaceTooNew
@@ -44,11 +45,13 @@ class SyncImporter:
         workspace: WorkspacePort,
         *,
         actor: str = "sync",
+        state_providers: Sequence[SyncedStatePort] = (),
     ) -> None:
         self._resources = resources
         self._credentials = credentials
         self._workspace = workspace
         self._actor = actor
+        self._state_providers = list(state_providers)
 
     async def import_(self) -> ImportResult:
         docs, tombstones, blobs = await asyncio.to_thread(self._load)
@@ -56,8 +59,15 @@ class SyncImporter:
         await self._import_credentials(blobs, result)
         await self._apply_tombstones(tombstones, docs, result)
         await self._reconcile_resources(docs, result)
+        await self._import_state(result)
         result.locked_refs = await asyncio.to_thread(self._credentials.locked_refs)
         return result
+
+    async def _import_state(self, result: ImportResult) -> None:
+        # After resources, so a doc referencing a just-imported channel binds.
+        for provider in self._state_providers:
+            docs = await asyncio.to_thread(self._workspace.read_state_docs, provider.area)
+            result.errors.extend(await provider.import_docs(docs))
 
     def _load(self) -> tuple[list[ResourceDoc], list[Tombstone], dict[str, bytes]]:
         manifest = self._workspace.read_manifest()

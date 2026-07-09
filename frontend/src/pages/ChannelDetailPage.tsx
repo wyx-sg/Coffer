@@ -138,6 +138,7 @@ export function ChannelDetailPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <ChannelStatusCard status={status} />
+        <ChannelMachineCard name={name} config={resource.config} />
         <ChannelPairingCard
           code={pairing.data}
           isPending={pairing.isPending}
@@ -145,9 +146,7 @@ export function ChannelDetailPage() {
         />
       </div>
 
-      {status?.callback ? (
-        <ChannelCallbackCard name={name} callback={status.callback} />
-      ) : null}
+      {status?.callback ? <ChannelCallbackCard name={name} callback={status.callback} /> : null}
 
       <ChannelTestMessageCard
         hasPeer={status?.peer != null}

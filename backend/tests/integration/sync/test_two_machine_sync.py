@@ -11,6 +11,7 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
 import pytest_asyncio
@@ -80,6 +81,7 @@ class Machine:
     master_key: MasterKeyManager
     db_path: Path
     knowledge: Path
+    sm: Any = None
 
     def cred_store(self) -> EncryptedCredentialStore:
         key = self.master_key.export_key()
@@ -94,6 +96,7 @@ async def _make_machine(
     *,
     create_key: bool,
     kinds: dict[str, Kind] | None = None,
+    state_providers_factory: Any = None,
 ) -> Machine:
     root.mkdir(parents=True, exist_ok=True)
     db_path = root / "coffer.db"
@@ -128,8 +131,9 @@ async def _make_machine(
     resources.add_delete_listener(
         lambda ref, actor: None if actor == "sync" else ledger.record(ref.kind, ref.name)
     )
-    exporter = SyncExporter(resources, cred_sync, workspace, ledger)
-    importer = SyncImporter(resources, cred_sync, workspace)
+    providers = state_providers_factory(resources, sm) if state_providers_factory else ()
+    exporter = SyncExporter(resources, cred_sync, workspace, ledger, state_providers=providers)
+    importer = SyncImporter(resources, cred_sync, workspace, state_providers=providers)
     identity = MachineIdentityService(
         SqlAlchemyMachineIdentityRepo(sm),
         audit,
@@ -158,6 +162,7 @@ async def _make_machine(
         master_key=master_key,
         db_path=db_path,
         knowledge=knowledge,
+        sm=sm,
     )
 
 

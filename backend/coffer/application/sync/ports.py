@@ -85,6 +85,11 @@ class WorkspacePort(Protocol):
 
     def read_tombstones(self) -> list[Tombstone]: ...
 
+    def write_state_docs(self, area: str, docs: Sequence[tuple[str, Mapping[str, object]]]) -> None:
+        """Replace ``state/<area>/`` with one deterministic YAML per doc."""
+
+    def read_state_docs(self, area: str) -> list[tuple[str, dict[str, object]]]: ...
+
     def write_credential_blobs(self, blobs: Mapping[str, bytes]) -> None:
         """Replace ``credentials/`` with one ``<ref>.enc`` per ciphertext blob."""
 
@@ -120,6 +125,29 @@ class TombstoneLedgerPort(Protocol):
     async def remove(self, kind: str, name: str) -> None: ...
 
     async def prune_older_than(self, cutoff: datetime) -> int: ...
+
+
+class SyncedStatePort(Protocol):
+    """A module-owned shared-state area synced under ``state/<area>/``.
+
+    Modules (channel pairing, MCP preferences, ...) implement this and the
+    composition root registers the providers with the sync engine — sync never
+    imports kind modules (cross-kind fence). Docs are deterministic payloads;
+    export replaces the whole area (git's 3-way merge reconciles machines),
+    import upserts into local state."""
+
+    @property
+    def area(self) -> str:
+        """Directory name under ``state/`` (kebab-case)."""
+        ...
+
+    async def export_docs(self) -> list[tuple[str, dict[str, object]]]:
+        """(relative doc path without extension, payload) for local state."""
+        ...
+
+    async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[str]:
+        """Apply merged docs to local state; returns per-doc error strings."""
+        ...
 
 
 class CredentialSyncPort(Protocol):

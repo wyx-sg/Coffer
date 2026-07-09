@@ -30,6 +30,7 @@ _RESOURCES = "resources"
 _CREDENTIALS = "credentials"
 _MACHINES = "machines"
 _TOMBSTONES = "tombstones"
+_STATE = "state"
 
 #: Files that are *derived* from the source-of-truth files and must NOT be
 #: synced — they would differ per machine and cause spurious same-path
@@ -277,6 +278,36 @@ class Workspace:
                 )
             except (json.JSONDecodeError, OSError, KeyError, ValueError):
                 continue
+        return out
+
+    # --- shared-state areas ---------------------------------------------------
+
+    def write_state_docs(self, area: str, docs: Sequence[tuple[str, Mapping[str, object]]]) -> None:
+        target = self._root / _STATE / area
+        if target.exists():
+            shutil.rmtree(target)
+        for rel, doc in docs:
+            path = target / f"{rel}.yaml"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                yaml.safe_dump(dict(doc), sort_keys=True, allow_unicode=True),
+                encoding="utf-8",
+            )
+
+    def read_state_docs(self, area: str) -> list[tuple[str, dict[str, object]]]:
+        """All parseable docs in an area; corrupt files are skipped (state is
+        re-exported by its owner on its next run)."""
+        target = self._root / _STATE / area
+        if not target.exists():
+            return []
+        out: list[tuple[str, dict[str, object]]] = []
+        for path in sorted(target.rglob("*.yaml")):
+            try:
+                data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            except (yaml.YAMLError, OSError):
+                continue
+            if isinstance(data, dict):
+                out.append((path.relative_to(target).with_suffix("").as_posix(), data))
         return out
 
     # --- credential blobs --------------------------------------------------

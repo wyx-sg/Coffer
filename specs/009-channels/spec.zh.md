@@ -416,6 +416,14 @@ status / notify`。
   peer、agent 在审计日志里查到；干净成功在任何 channel 上都不发完成摘要，而异常
   结束（失败、中断、达工具上限）的 turn 会发一条报告结果的摘要。
 
+## 机器亲和（spec 010 修订）
+
+渠道的平台身份（被轮询的 bot、webhook 端点）只容许一个消费者，而渠道定义会同步到
+每台机器（spec 010）。因此配置携带 `runs_on: <machine_id>`：只有该机器的 runtime
+启动适配器。`null`（如升级前创建的渠道）在任何机器上都不运行，直到用户在渠道详情
+页选定机器。创建渠道的 surface 默认绑定创建它的机器。改绑是普通的配置编辑，经同步
+传播；配对状态随 vault 同步（spec 010 状态区 `channel-peers`），改绑后无需重新配对。
+
 ## Acceptance Scenarios
 
 ### Scenario: register a telegram channel

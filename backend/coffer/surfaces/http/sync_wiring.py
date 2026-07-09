@@ -12,6 +12,7 @@ import asyncio
 import contextlib
 import pathlib
 import platform
+from collections.abc import Sequence
 
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -23,6 +24,7 @@ from coffer.application.sync.config_service import SyncConfigService
 from coffer.application.sync.exporter import SyncExporter
 from coffer.application.sync.identity import MachineIdentityService
 from coffer.application.sync.importer import SyncImporter
+from coffer.application.sync.ports import SyncedStatePort
 from coffer.application.sync.service import SyncService
 from coffer.application.sync.worker import SyncWorker
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
@@ -47,6 +49,7 @@ def wire_sync(
     sm: async_sessionmaker,  # type: ignore[type-arg]
     db_path: pathlib.Path,
     master_key: MasterKeyManager,
+    state_providers: Sequence[SyncedStatePort] = (),
 ) -> SyncWorker:
     root = sync_root()
     cred_sync = CredentialSyncAdapter(db_path, master_key)
@@ -71,8 +74,10 @@ def wire_sync(
     service = SyncService(
         config=config_svc,
         git=git,
-        exporter=SyncExporter(resource_svc, cred_sync, workspace, ledger),
-        importer=SyncImporter(resource_svc, cred_sync, workspace),
+        exporter=SyncExporter(
+            resource_svc, cred_sync, workspace, ledger, state_providers=state_providers
+        ),
+        importer=SyncImporter(resource_svc, cred_sync, workspace, state_providers=state_providers),
         credentials=cred_sync,
         master_key=master_key,
         audit=audit,
@@ -98,7 +103,8 @@ def start_sync(
     master_key: MasterKeyManager,
 ) -> None:
     """Wire sync and start its (initially inert) auto-sync worker + watcher."""
-    worker = wire_sync(resource_svc, audit, sm, db_path, master_key)
+    providers = tuple(getattr(app.state, "sync_state_providers", ()) or ())
+    worker = wire_sync(resource_svc, audit, sm, db_path, master_key, state_providers=providers)
     app.state.sync_worker = worker
     app.state.sync_worker_task = asyncio.create_task(worker.run())
     stop_event = asyncio.Event()

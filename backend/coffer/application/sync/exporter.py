@@ -11,11 +11,16 @@ never resurrect a deletion on the other machines.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from datetime import UTC, datetime, timedelta
 
 from coffer.application.resource_service import ResourceService
-from coffer.application.sync.ports import CredentialSyncPort, TombstoneLedgerPort, WorkspacePort
+from coffer.application.sync.ports import (
+    CredentialSyncPort,
+    SyncedStatePort,
+    TombstoneLedgerPort,
+    WorkspacePort,
+)
 from coffer.domain.sync.manifest import SCHEMA_VERSION, Manifest
 from coffer.domain.sync.models import TOMBSTONE_TTL_SECONDS, Tombstone
 from coffer.domain.sync.serialization import resource_to_doc
@@ -34,11 +39,13 @@ class SyncExporter:
         credentials: CredentialSyncPort,
         workspace: WorkspacePort,
         ledger: TombstoneLedgerPort | None = None,
+        state_providers: Sequence[SyncedStatePort] = (),
     ) -> None:
         self._resources = resources
         self._credentials = credentials
         self._workspace = workspace
         self._ledger = ledger
+        self._state_providers = list(state_providers)
 
     async def export(
         self, *, quarantined: Collection[str] = (), machine_id: str | None = None
@@ -56,8 +63,11 @@ class SyncExporter:
         ]
         live = {(r.kind, r.name): _aware(r.created_at) for r in resources}
         pending = await self._reconcile_ledger(live, set(quarantined))
+        state_docs = [(p.area, await p.export_docs()) for p in self._state_providers]
         # All filesystem + raw-sqlite IO runs off the event loop.
-        await asyncio.to_thread(self._dump, docs, live, pending, set(quarantined), machine_id)
+        await asyncio.to_thread(
+            self._dump, docs, live, pending, set(quarantined), machine_id, state_docs
+        )
 
     async def _reconcile_ledger(
         self, live: dict[tuple[str, str], datetime], quarantined: set[str]
@@ -88,8 +98,11 @@ class SyncExporter:
         pending: list[Tombstone],
         quarantined: set[str],
         machine_id: str | None,
+        state_docs: list[tuple[str, list[tuple[str, dict[str, object]]]]],
     ) -> None:
         withheld = self._sync_tombstone_files(live, pending, machine_id)
+        for area, docs_for_area in state_docs:
+            self._workspace.write_state_docs(area, docs_for_area)
         kept_docs = [d for d in docs if (str(d["kind"]), str(d["name"])) not in withheld]
         self._workspace.write_resource_docs(kept_docs, preserve=quarantined)
         self._workspace.mirror_trees_out()

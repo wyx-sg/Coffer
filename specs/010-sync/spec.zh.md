@@ -33,6 +33,7 @@
   skills/                    # mirror of ~/.coffer/skills（skill 主库）
   resources/<kind>/<name>.yaml   # one deterministic file per config resource
   tombstones/resources/<kind>/<name>.json  # 显式删除记录（90 天 TTL）
+  state/<area>/...yaml       # 模块自有的共享状态（如 channel-peers）
   credentials/<ref>.enc          # Fernet ciphertext blob (never the master key)
   ```
 
@@ -176,6 +177,14 @@ git remote 的凭据（SSH key / token）属于用户自己的 git 配置；Coff
 - **Given** 同步 workspace 的 manifest 携带比当前构建更新的 schema 版本
 - **When** 一次同步运行到达导入步骤
 - **Then** 该次运行以 `SYNC_WORKSPACE_TOO_NEW` 失败，不导入任何内容
+
+### Scenario: 渠道配对状态随 vault 同步
+
+- **Given** 机器 A 有一个已配对 owner 的渠道
+- **When** 机器 B 对着同一个 remote 同步
+- **Then** B 同时持有该渠道及其配对身份（chat id、sender id、首选 agent）——把渠道
+  改绑到 B 无需重新配对
+- **And** 每台机器本地的会话指针永不传播
 
 ### Scenario: 机器在同步后可见
 

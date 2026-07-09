@@ -57,6 +57,7 @@ class ChannelRuntime:
         tunnel: TunnelControllerPort | None = None,
         materialize: Callable[[dict[str, str]], Awaitable[dict[str, str]]] | None = None,
         interval_seconds: float = _DEFAULT_INTERVAL_SECONDS,
+        machine_id: Callable[[], Awaitable[str]] | None = None,
     ) -> None:
         self._resources = resources
         self._factory = adapter_factory
@@ -66,6 +67,10 @@ class ChannelRuntime:
         self._tunnel = tunnel
         self._materialize = materialize
         self._interval = interval_seconds
+        # Runtime affinity (ADR-043): when a machine-id provider is wired, only
+        # channels bound to THIS machine start (None in tests = no filtering).
+        self._machine_id_provider = machine_id
+        self._machine_id_cache: str | None = None
         self._running: dict[str, _Running] = {}
         self._failed_at: dict[str, float] = {}
         self._listener_refs: dict[str, str] | None = None
@@ -160,7 +165,25 @@ class ChannelRuntime:
 
     async def _enabled_channels(self) -> dict[str, tuple[int, dict[str, object]]]:
         rows = await self._resources.list(kind="channel")
-        return {r.name: (r.id, dict(r.config)) for r in rows if r.enabled}
+        local = await self._local_machine_id()
+        desired: dict[str, tuple[int, dict[str, object]]] = {}
+        for r in rows:
+            if not r.enabled:
+                continue
+            # A synced channel runs on exactly ONE machine (spec 010 runs_on):
+            # two runtimes polling the same bot identity fight over the
+            # platform. Unbound (None) starts nowhere until the user picks.
+            if local is not None and r.config.get("runs_on") != local:
+                continue
+            desired[r.name] = (r.id, dict(r.config))
+        return desired
+
+    async def _local_machine_id(self) -> str | None:
+        if self._machine_id_provider is None:
+            return None
+        if self._machine_id_cache is None:
+            self._machine_id_cache = await self._machine_id_provider()
+        return self._machine_id_cache
 
     def _may_retry(self, name: str) -> bool:
         failed = self._failed_at.get(name)

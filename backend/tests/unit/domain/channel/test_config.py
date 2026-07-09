@@ -191,6 +191,7 @@ def test_root_model_round_trips_flat_dict():
         "bot_token_ref": "channel/tg/bot-token",
         "default_agent": "claude_code",
         "default_agent_config": None,
+        "runs_on": None,
         "require_mention": True,
         "ignore_other_mentions": False,
     }
@@ -203,6 +204,7 @@ def test_root_model_round_trips_seatalk_dict():
         **SEATALK_CONFIG,
         "default_agent": "claude_code",
         "default_agent_config": None,
+        "runs_on": None,
         "public_base_url": None,
         "tunnel_token_ref": None,
         "require_mention": True,
