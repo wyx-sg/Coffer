@@ -867,7 +867,8 @@
         "instructions": "Instructions auto-loaded into every session in this directory.",
         "subagents": "Custom subagent definitions, one Markdown file per subagent.",
         "config": "Codex CLI configuration: model, providers, and tool settings.",
-        "hooks": "Lifecycle hooks that run commands around Codex events."
+        "hooks": "Lifecycle hooks that run commands around Codex events.",
+        "soul": "Hermes persona & global instructions (SOUL.md) — the one file Hermes injects into every session; Coffer's session-context block lives here."
       }
     },
     "mcp": {

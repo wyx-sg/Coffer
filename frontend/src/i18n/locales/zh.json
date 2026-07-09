@@ -867,7 +867,8 @@
         "instructions": "在该目录下每个会话都会自动加载的指令。",
         "subagents": "自定义子智能体定义，每个子智能体一个 Markdown 文件。",
         "config": "Codex CLI 配置：模型、供应商与工具设置。",
-        "hooks": "围绕 Codex 事件运行命令的生命周期钩子。"
+        "hooks": "围绕 Codex 事件运行命令的生命周期钩子。",
+        "soul": "Hermes 的 persona 与全局指令（SOUL.md）——Hermes 每个会话唯一注入的文件；Coffer 的会话上下文块就放在这里。"
       }
     },
     "mcp": {

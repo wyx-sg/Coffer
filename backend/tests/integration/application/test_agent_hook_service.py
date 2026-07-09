@@ -362,3 +362,47 @@ async def test_refresh_skips_agents_without_an_installed_block(agent_bundle, tmp
     await _register_hermes(agent_bundle, tmp_path)  # registered but not installed
     assert await agent_bundle.hook.refresh_blocks_for_type(AgentType.HERMES) == 0
     assert not (tmp_path / ".hermes" / "SOUL.md").exists()
+
+
+async def test_install_creates_soul_md_when_absent(agent_bundle, tmp_path, monkeypatch):
+    # A fresh hermes has no SOUL.md yet — install creates the file holding just
+    # the block (no .bak: there was no prior version to keep).
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_hermes(agent_bundle, tmp_path)
+    st = await agent_bundle.hook.install("hm", actor="ui")
+    assert st.installed is True
+    soul_md = tmp_path / ".hermes" / "SOUL.md"
+    assert soul_md.exists()
+    assert "RULES BUNDLE" in soul_md.read_text()
+
+
+async def test_refresh_with_unchanged_payload_writes_nothing(agent_bundle, tmp_path, monkeypatch):
+    # The `new_text != text` guard: an unchanged bundle must not churn the
+    # file's mtime / .bak every turn.
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_hermes(agent_bundle, tmp_path)
+    soul_md = tmp_path / ".hermes" / "SOUL.md"
+    await agent_bundle.hook.install("hm", actor="ui")
+    before = soul_md.stat().st_mtime_ns
+    assert await agent_bundle.hook.refresh_blocks_for_type(AgentType.HERMES) == 1
+    assert soul_md.stat().st_mtime_ns == before
+
+
+async def test_block_mode_unsupported_without_a_payload_source(agent_bundle, tmp_path, monkeypatch):
+    # A service wired without `session_context` cannot render the block: the
+    # facet degrades to unsupported (status false, install 422), matching how
+    # PLUGIN_DROP is treated — never a control that fails on click.
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_hermes(agent_bundle, tmp_path)
+    svc = AgentHookService(
+        agent_service=agent_bundle.svc,
+        audit=agent_bundle.audit,
+        store=ConfigFileStore(),
+        hook_resolver=lambda: "/opt/coffer/coffer-hook",
+    )
+    st = await svc.status("hm")
+    assert st.installed is False
+    assert st.supported is False
+    with pytest.raises(HookInstallUnsupported):
+        await svc.install("hm", actor="ui")
+    assert await svc.refresh_blocks_for_type(AgentType.HERMES) == 0

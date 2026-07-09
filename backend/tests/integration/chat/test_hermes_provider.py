@@ -372,7 +372,7 @@ async def test_init_conversation_stores_cwd_and_model(tmp_path: Any) -> None:
 @pytest.mark.asyncio
 async def test_build_adapter_refreshes_context_block_first(tmp_path: Any) -> None:
     # hermes has no working hook (ADR-042 INSTRUCTIONS_BLOCK): the session-
-    # context block in AGENTS.md is refreshed at the one moment Coffer controls —
+    # context block in SOUL.md is refreshed at the one moment Coffer controls —
     # adapter construction, i.e. once per turn.
     repo, engine = await _repo(tmp_path)
     conv = await repo.create(_conv())

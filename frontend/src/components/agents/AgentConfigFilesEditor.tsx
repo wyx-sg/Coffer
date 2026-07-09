@@ -32,6 +32,7 @@ const DESCRIBED_KEYS = new Set([
   "subagents",
   "config",
   "hooks",
+  "soul",
 ]);
 
 export function AgentConfigFilesEditor({ name }: { name: string }) {

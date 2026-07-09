@@ -29,17 +29,31 @@ _BLOCK_NOTE = "<!-- Managed by Coffer; refreshed automatically. Do not edit. -->
 
 def _find_block(content: str) -> tuple[int, int] | None:
     """The ``(start, end)`` span of Coffer's block including both marker lines,
-    or ``None`` when no balanced block exists."""
-    start = content.find(BLOCK_START)
-    if start == -1:
-        return None
-    end = content.find(BLOCK_END, start + len(BLOCK_START))
-    if end == -1:
-        return None
-    return start, end + len(BLOCK_END)
+    or ``None`` when no balanced block exists.
+
+    Pairs each END fence with the CLOSEST preceding START (first such pair
+    wins). Naively spanning first-START → first-END would, in a file holding an
+    orphaned START fence followed by user text and then the real block, swallow
+    everything between the orphan and the real block — and the next refresh or
+    uninstall would eat that user text. The closest-preceding pairing can never
+    span more than one balanced fence pair.
+    """
+    end = -1
+    while True:
+        end = content.find(BLOCK_END, end + 1)
+        if end == -1:
+            return None
+        start = content.rfind(BLOCK_START, 0, end)
+        if start != -1:
+            return start, end + len(BLOCK_END)
 
 
 def _render(payload: str) -> str:
+    # Neutralize fence markers inside the payload: the FR-044 bundle carries
+    # user-authored rule text, and a literal fence in it would otherwise end the
+    # block early — leaking the payload tail outside the managed span, where
+    # uninstall/refresh could never reclaim it.
+    payload = payload.replace(BLOCK_START, "").replace(BLOCK_END, "")
     return f"{BLOCK_START}\n{_BLOCK_NOTE}\n\n{payload.strip()}\n{BLOCK_END}"
 
 
@@ -63,9 +77,12 @@ def apply_block(content: str, *, payload: str) -> str:
 def remove_block(content: str) -> str:
     """Return new instructions text with ONLY Coffer's block removed.
 
-    A true inverse of :func:`apply_block`: the separating blank line the append
-    added is dropped with the block, and a file whose only content was the block
-    becomes empty. User content is byte-identical either side of the block.
+    The inverse of :func:`apply_block` up to trailing-newline normalization
+    (install rstrips the document's tail before appending, so a file that ended
+    without a newline comes back with exactly one): the separating blank line
+    the append added is dropped with the block, and a file whose only content
+    was the block becomes empty. User content is otherwise byte-identical
+    either side of the block.
     """
     span = _find_block(content)
     if span is None:

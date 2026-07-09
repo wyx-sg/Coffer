@@ -81,3 +81,44 @@ def test_payload_is_stripped_inside_the_block() -> None:
     out = apply_block("", payload="\n\nRULES\n\n")
     inner = out[out.index(BLOCK_START) : out.index(BLOCK_END)]
     assert "\n\n\n" not in inner
+
+
+def test_orphan_start_before_real_block_never_swallows_user_text() -> None:
+    # Review-hardening regression: an orphaned START fence, then user text,
+    # then the real block. Naive first-START→first-END spanning would treat
+    # [orphan .. real END] as Coffer's block and the NEXT refresh/uninstall
+    # would eat the user text in between.
+    damaged = USER_DOC + "\n" + BLOCK_START + "\nIMPORTANT USER RULE\n"
+    installed = apply_block(damaged, payload="V1")
+    assert "IMPORTANT USER RULE" in installed
+
+    refreshed = apply_block(installed, payload="V2")
+    assert "IMPORTANT USER RULE" in refreshed
+    assert "V1" not in refreshed
+    assert "V2" in refreshed
+
+    removed = remove_block(refreshed)
+    assert "IMPORTANT USER RULE" in removed
+    assert "V2" not in removed
+
+
+def test_orphan_end_fence_is_skipped_when_pairing() -> None:
+    # An orphaned END before the real block must not derail detection: pairing
+    # walks to the first END with a preceding START — the real pair.
+    damaged = BLOCK_END + "\n" + USER_DOC
+    installed = apply_block(damaged, payload="RULES")
+    assert has_block(installed)
+    removed = remove_block(installed)
+    assert "RULES" not in removed
+    assert "Always answer in French." in removed
+
+
+def test_payload_containing_fence_markers_cannot_break_out() -> None:
+    # Review-hardening regression: the payload is user-authored rule text; a
+    # literal fence inside it must not end the block early and leak a tail
+    # that uninstall can never reclaim.
+    evil = f"rules head\n{BLOCK_END}\nleaked tail\n{BLOCK_START}\nmore"
+    out = apply_block(USER_DOC, payload=evil)
+    assert out.count(BLOCK_END) == 1
+    assert out.count(BLOCK_START) == 1
+    assert remove_block(out) == USER_DOC  # nothing leaks outside the block

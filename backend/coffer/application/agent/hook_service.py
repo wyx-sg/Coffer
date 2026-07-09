@@ -268,6 +268,10 @@ class AgentHookService:
         except Exception:
             log.exception("instructions-block refresh: could not list agents")
             return 0
+        # One payload for the whole sweep: the bundle is global-scoped, so every
+        # agent of the type gets the identical text (and one daemon-internal
+        # assemble instead of N).
+        payload: str | None = None
         for resource in resources:
             try:
                 cfg = AgentConfig.model_validate(resource.config)
@@ -280,7 +284,8 @@ class AgentHookService:
                 text = self._store.read_text(spec.path) or ""
                 if not has_block(text):
                     continue  # not installed for this agent — nothing to refresh
-                payload = await self._session_context()
+                if payload is None:
+                    payload = await self._session_context()
                 new_text = apply_block(text, payload=payload)
                 if new_text != text:
                     self._store.write_text_atomic(spec.path, new_text)

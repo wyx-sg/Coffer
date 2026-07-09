@@ -583,7 +583,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 - **Given** 一个已注册的 `hermes` agent，Coffer 的上下文块已装入同时载有用户内容的 `SOUL.md`，
 - **When** 用户卸载该注入，
-- **Then** 仅移除 Coffer 的块（连同安装时添加的分隔空行）——文档回到安装前的字节——卸载审计 `agent_hook_uninstalled`；再次卸载是 no-op 成功，不写入也不审计。
+- **Then** 仅移除 Coffer 的块（连同安装时添加的分隔空行）——文档回到安装前的内容（尾部换行归一化除外：安装会先 rstrip 尾部再追加）——卸载审计 `agent_hook_uninstalled`；再次卸载是 no-op 成功，不写入也不审计。
 
 ### Scenario: a Coffer-driven turn refreshes the Hermes context block
 
@@ -677,7 +677,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - **FR-044**（Slice 6）：在 SessionStart 时，已安装的 hook MUST 能拉取一份**规则 bundle** 作为附加上下文注入：系统从会话的 `cwd` 解析召回作用域（若是 git 项目则有 project，再加 global），按顺序拼接各 store 的规则（先 project 后 global），并**始终**附加两条内置种子规则——一条*恢复*规则（引导 agent 在用户要求继续此前工作时调用 `coffer__resume()`），一条*软引导*规则（优先 `coffer__remember` / `coffer__recall` 而非 agent 自身的原生记忆）。bundle 仅运行时存在（不写入 agent 的任何文件），上限 ≤10000 字符；当任何地方都没有用户规则时仍返回种子规则。通过 `GET /agents/{name}/session-context?cwd=` 暴露。
 - **FR-045**（Slice 6）：在 SessionEnd 时（仅 Claude Code——Codex 没有会话结束事件，降级到 FR-046 的补扫），已安装的 hook MUST 能触发对**单个会话**的固化（写入 journal 通道），复用 FR-046 的幂等账本，使某会话绝不会被补扫重复固化。该操作幂等且始终成功（2xx）：无内部引擎、未知会话、已固化或非 git 项目的会话都是被容忍的 no-op。通过 `POST /agents/{name}/sessions/{session_id}/end` 暴露。
 - **FR-046**（Slice 6）：用户 MUST 能通过 agent 上的 `disable_native_memory`（默认 false）选择**禁用 agent 的原生写侧记忆**。切换它会同步驱动持久化字段与磁盘变换——Claude Code 在 `settings.json` 置 `autoMemoryEnabled=false`；Codex 在 `config.toml` 置 `features.memories=false` + `memories.generate_memories=false`——使 Coffer 成为唯一的共享记忆 store。切回 false 会恢复 agent 的原生记忆（移除 Coffer 添加的键）。它不会阻止 agent 读取其指令文件（CLAUDE.md / AGENTS.md）。两种切换都审计（`agent_native_memory_disabled` / `agent_native_memory_restored`）。
-- **FR-047**：对 manifest 声明 `INSTRUCTIONS_BLOCK` 注入的 agent（`hermes`——上游没有可用 hook，[ADR-042](../../docs/decisions/ADR-042-context-injection-mechanisms.zh.md)），FR-043 的 install/uninstall/status 操作 MUST 作用于 manifest `config_key` 所指指令文件里的一个 **marker 围栏块**，而非 hooks 条目。该文件 MUST 是 agent 在会话启动时真实全局注入的那个——hermes 为 `soul` key（`~/.hermes/SOUL.md`，包括 ACP 在内所有平台的身份槽 #1）；其 `AGENTS.md` 只按会话 cwd 解析，不是合法目标（探针实证，v0.18.0）。安装把 FR-044 载荷（按**全局作用域**取——块不分项目）渲染进 `<!-- coffer:session-context:start -->` / `<!-- coffer:session-context:end -->` 围栏之间：原位替换 Coffer 已有的块，否则追加在用户内容之后；围栏之外的用户内容绝不触碰，写入走原子 store（`.bak`）。卸载仅移除配平的块，是安装的真逆运算；不配平的围栏（用户损坏）视为*不是 Coffer 的*——绝不猜测其范围——因此安装会追加一个新的配平块，卸载不触碰任何内容。`status` 报块的存在性，`command=null`。因为块在两次写入之间是**静态的**，System MUST 在每个 Coffer 驱动的该类型 chat 回合前重渲染它（尽力而为，绝不阻塞或使回合失败，无审计事件）；未装块的 agent 被跳过。install/uninstall 动作审计与 FR-043 相同的 `agent_hook_installed` / `agent_hook_uninstalled` 事件。
+- **FR-047**：对 manifest 声明 `INSTRUCTIONS_BLOCK` 注入的 agent（`hermes`——上游没有可用 hook，[ADR-042](../../docs/decisions/ADR-042-context-injection-mechanisms.zh.md)），FR-043 的 install/uninstall/status 操作 MUST 作用于 manifest `config_key` 所指指令文件里的一个 **marker 围栏块**，而非 hooks 条目。该文件 MUST 是 agent 在会话启动时真实全局注入的那个——hermes 为 `soul` key（`~/.hermes/SOUL.md`，包括 ACP 在内所有平台的身份槽 #1）；其 `AGENTS.md` 只按会话 cwd 解析，不是合法目标（探针实证，v0.18.0）。安装把 FR-044 载荷（按**全局作用域**取——块不分项目）渲染进 `<!-- coffer:session-context:start -->` / `<!-- coffer:session-context:end -->` 围栏之间：原位替换 Coffer 已有的块，否则追加在用户内容之后；围栏之外的用户内容绝不触碰，写入走原子 store（`.bak`）。卸载仅移除配平的块，在尾部换行归一化的意义下是安装的逆运算；围栏配对 MUST 把每个结束围栏绑定到最近的前置起始围栏（跨度因此绝不可能吞掉孤儿围栏与真实块之间的用户文本）；不配平的围栏（用户损坏）视为*不是 Coffer 的*——因此安装会追加一个新的配平块，卸载不触碰任何内容；载荷内出现的围栏标记 MUST 在渲染前被中和，使载荷无法越出块外。`status` 报块的存在性，`command=null`。因为块在两次写入之间是**静态的**，System MUST 在每个 Coffer 驱动的该类型 chat 回合前重渲染它（尽力而为，绝不阻塞或使回合失败，无审计事件）；未装块的 agent 被跳过。install/uninstall 动作审计与 FR-043 相同的 `agent_hook_installed` / `agent_hook_uninstalled` 事件。
 
 **界面**
 
