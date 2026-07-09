@@ -78,6 +78,7 @@ working tree whose `origin` is the user's remote.
 ```
 manifest.json
 machines/<machine-id>.json      per-machine registry entry (owner-written only)
+machines/<machine-id>/overrides/<kind>/<name>.yaml   per-machine merge patch
 knowledge/                      mirror of ~/.coffer/knowledge
 memory/                         mirror of ~/.coffer/memory
 skills/                         mirror of ~/.coffer/skills
@@ -97,8 +98,9 @@ Only the schema version — the manifest is byte-identical on every machine so i
 can never merge-conflict. Per-machine facts live in `machines/` instead.
 `schema_version` is checked on import; a workspace newer than the running build
 fails fast (`SYNC_WORKSPACE_TOO_NEW`), mirroring the DB `DB_SCHEMA_TOO_NEW` rule.
-Current version: **2** (tombstone-driven deletion — an older build would keep
-applying delete-by-absence, so all machines upgrade before the first v2 sync).
+Current version: **3** (2 = tombstone-driven deletion; 3 = `${HOME}`-normalized
+paths — an older importer would install the literal token into configs). All
+machines upgrade before the first sync at a new version.
 
 ### Machine entry (`machines/<machine-id>.json`)
 
@@ -128,7 +130,9 @@ config: { ... }     # the validated, json-mode config; keys sorted
 ```
 
 `created_at` / `updated_at` / local `id` are **excluded** (machine-local, would
-churn diffs). On import the resource is upserted by `<kind>:<name>`. A local
+churn diffs). String values under the exporting machine's home are normalized
+to `${HOME}/...` (expanded on import), and keys covered by this machine's
+merge patch are stripped back to the last shared values. On import the resource is upserted by `<kind>:<name>`. A local
 resource is deleted **only** when its tombstone file is present — absence from
 the workspace alone never deletes (a failed import elsewhere must not
 masquerade as a deletion). When both a resource doc and a tombstone exist for

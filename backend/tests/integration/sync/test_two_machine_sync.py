@@ -97,6 +97,7 @@ async def _make_machine(
     create_key: bool,
     kinds: dict[str, Kind] | None = None,
     state_providers_factory: Any = None,
+    home: str | None = None,
 ) -> Machine:
     root.mkdir(parents=True, exist_ok=True)
     db_path = root / "coffer.db"
@@ -132,8 +133,10 @@ async def _make_machine(
         lambda ref, actor: None if actor == "sync" else ledger.record(ref.kind, ref.name)
     )
     providers = state_providers_factory(resources, sm) if state_providers_factory else ()
-    exporter = SyncExporter(resources, cred_sync, workspace, ledger, state_providers=providers)
-    importer = SyncImporter(resources, cred_sync, workspace, state_providers=providers)
+    exporter = SyncExporter(
+        resources, cred_sync, workspace, ledger, state_providers=providers, home=home
+    )
+    importer = SyncImporter(resources, cred_sync, workspace, state_providers=providers, home=home)
     identity = MachineIdentityService(
         SqlAlchemyMachineIdentityRepo(sm),
         audit,
@@ -151,6 +154,8 @@ async def _make_machine(
         identity=identity,
         workspace=workspace,
         coffer_version="0.0.0-test",
+        home=home,
+        resources=resources,
     )
     return Machine(
         name=name,
@@ -782,3 +787,113 @@ async def test_import_preserves_local_derived_indexes(tmp_path, remote) -> None:
     await a.service.run()
     assert (a.knowledge / "note.md").stat().st_ino == ino_before
     assert (a.knowledge / "INDEX.md").exists()
+
+
+@pytest.mark.acceptance(spec="010-sync", scenario="config paths follow each machine's home")
+async def test_home_paths_follow_the_machine(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True, home="/Users/alice")
+    await a.resources.register("mcp_server", "claude", {"value": "/Users/alice/.claude"}, "test")
+    await a.service.run()
+    # The medium speaks ${HOME}, never a literal home.
+    doc = (a.root / "ws" / "resources" / "mcp_server" / "claude.yaml").read_text()
+    assert "${HOME}/.claude" in doc
+    assert "/Users/alice" not in doc
+
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True, home="/home/bob")
+    await b.service.run()
+    got = await b.resources.get(ResourceRef("mcp_server", "claude"))
+    assert got.config == {"value": "/home/bob/.claude"}
+
+
+@pytest.mark.acceptance(
+    spec="010-sync", scenario="a per-machine override survives sync round trips"
+)
+async def test_override_round_trip_never_leaks(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.resources.register("mcp_server", "tool", {"value": "/usr/local/bin/x"}, "test")
+    await a.service.run()
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()
+
+    # B overrides the path for its own hardware; applies on its next run.
+    await b.service.set_override(
+        "mcp_server", "tool", {"value": "/opt/homebrew/bin/x"}, actor="test"
+    )
+    await b.service.run()
+    assert (await b.resources.get(ResourceRef("mcp_server", "tool"))).config == {
+        "value": "/opt/homebrew/bin/x"
+    }
+
+    # The specialization never leaks into the medium or onto A.
+    await a.service.run()
+    assert (await a.resources.get(ResourceRef("mcp_server", "tool"))).config == {
+        "value": "/usr/local/bin/x"
+    }
+    await b.service.run()
+    await a.service.run()
+    assert (await a.resources.get(ResourceRef("mcp_server", "tool"))).config == {
+        "value": "/usr/local/bin/x"
+    }
+
+    # A shared edit to a NON-overridden field still reaches B (patch reapplies).
+    await a.resources.update_config(
+        ResourceRef("mcp_server", "tool"), {"value": "/usr/local/bin/x2"}, "test"
+    )
+    await a.service.run()
+    await b.service.run()
+    assert (await b.resources.get(ResourceRef("mcp_server", "tool"))).config == {
+        "value": "/opt/homebrew/bin/x"  # override still wins on B
+    }
+
+    # Unset: B converges back to the shared value on its next run.
+    await b.service.unset_override("mcp_server", "tool", actor="test")
+    await b.service.run()
+    assert (await b.resources.get(ResourceRef("mcp_server", "tool"))).config == {
+        "value": "/usr/local/bin/x2"
+    }
+
+
+async def test_dict_valued_override_round_trips(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """A nested/dict patch (and a type-changing one) must revert cleanly on
+    export — never publish a corrupted {} (review #286 finding 2)."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.resources.register("mcp_server", "tool", {"value": "shared"}, "test")
+    await a.service.run()
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()
+
+    # Type-changing patch: scalar shared value overridden by a dict.
+    await b.service.set_override("mcp_server", "tool", {"value": {"cmd": "/opt/x"}}, actor="test")
+    await b.service.run()
+    await a.service.run()
+    assert (await a.resources.get(ResourceRef("mcp_server", "tool"))).config == {
+        "value": "shared"  # never {} and never the dict
+    }
+    doc = (a.root / "ws" / "resources" / "mcp_server" / "tool.yaml").read_text()
+    assert "shared" in doc and "/opt/x" not in doc
+
+
+async def test_override_before_first_export_keeps_the_baseline(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """An override set before the resource ever reached the medium must not
+    withhold the key from the shared doc (review #286 finding 3)."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.resources.register("mcp_server", "fresh", {"value": "/usr/local/bin/x"}, "test")
+    await a.service.set_override(
+        "mcp_server", "fresh", {"value": "/opt/homebrew/bin/x"}, actor="test"
+    )
+    await a.service.run()
+
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()
+    got = await b.resources.get(ResourceRef("mcp_server", "fresh"))
+    assert got.config == {"value": "/usr/local/bin/x"}  # baseline, not missing
+
+
+async def test_override_ref_segments_validated(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    from coffer.domain.errors import ConfigValidationError
+
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    with pytest.raises(ConfigValidationError):
+        await a.service.set_override("..", "x", {"a": 1}, actor="test")
+    with pytest.raises(ConfigValidationError):
+        await a.service.set_override("mcp_server", "a/b", {"a": 1}, actor="test")

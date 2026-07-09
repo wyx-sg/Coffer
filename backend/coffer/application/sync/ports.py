@@ -85,6 +85,15 @@ class WorkspacePort(Protocol):
 
     def read_tombstones(self) -> list[Tombstone]: ...
 
+    def write_override(
+        self, machine_id: str, kind: str, name: str, patch: Mapping[str, object]
+    ) -> None:
+        """Write this machine's merge patch for one resource."""
+
+    def remove_override(self, machine_id: str, kind: str, name: str) -> None: ...
+
+    def read_overrides(self, machine_id: str) -> dict[tuple[str, str], dict[str, object]]: ...
+
     def write_state_docs(
         self,
         area: str,

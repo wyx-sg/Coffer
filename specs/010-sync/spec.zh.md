@@ -74,6 +74,22 @@ workspace 的 `machines/` 区为每台机器保存一个 JSON 注册项：显示
 [ADR-043](../../docs/decisions/ADR-043-sync-machine-identity-near-real-time.md)）。
 它**不是**记录级版本方案。
 
+## 路径可移植
+
+用户的机器有不同的用户名/home 布局，配置里的绝对路径原样同步会失效。两个机制按序
+在导入时应用（共享文档 → `${HOME}` 展开 → 每机覆盖）：
+
+- **`${HOME}` 正规化**（零配置）：导出时把配置中位于本机 home 下的字符串值改写为
+  `${HOME}/...`；导入时展开为本机 home。介质中永不出现字面 home 路径。已含字面
+  token 的值按原样导出——且与所有 token 一样，导入时在每台机器上展开为本机
+  home（token 实际上在任何地方都是活跃的）。
+- **每机覆盖**：每资源一个 RFC 7386 JSON Merge Patch，位于
+  `machines/<machine-id>/overrides/<kind>/<name>.yaml`（每台机器只写自己的目录——
+  无冲突），用于真正逐机不同的值（如 Intel 与 ARM 的 homebrew 路径）。补丁在每次
+  导入时应用、在每次导出时**剥离**（被覆盖的键回退为最近的共享值），机器的特化
+  永不泄漏进介质；撤销覆盖会立即在本地恢复共享值。表面：
+  `coffer sync override list|set|unset` 与 `/api/v1/sync/overrides`。
+
 ## Configuration
 
 一行持久化的 sync 配置：
@@ -93,8 +109,8 @@ git remote 的凭据（SSH key / token）属于用户自己的 git 配置；Coff
 
 ## Surfaces
 
-- **CLI** —— `coffer sync` 命令组：`init`、`status`、`run`（默认）、`push`、`pull`、`resolve`、`config`、`machines`（列出；`--rename` 重命名本机）、`key export`、`key import`。
-- **REST** —— `/api/v1/sync/*`：获取/设置配置、获取状态、触发一次运行、解决冲突、列出机器 / 重命名本机、导出/导入主密钥。
+- **CLI** —— `coffer sync` 命令组：`init`、`status`、`run`（默认）、`push`、`pull`、`resolve`、`config`、`machines`（列出；`--rename` 重命名本机）、`override list|set|unset`、`key export`、`key import`。
+- **REST** —— `/api/v1/sync/*`：获取/设置配置、获取状态、触发一次运行、解决冲突、列出机器 / 重命名本机、管理每机覆盖、导出/导入主密钥。
 - **Desktop UI** —— 一个 Sync 设置面板：配置 remote、切换 auto-sync、查看状态（clean / syncing / conflicted / error、上次同步时间）、触发一次运行、解决冲突，以及一张机器卡片，列出 vault 已知的每台机器（显示名、平台、上次同步、「本机」徽标、重命名）。
 
 ## Credential bootstrap
@@ -185,6 +201,20 @@ git remote 的凭据（SSH key / token）属于用户自己的 git 配置；Coff
 - **Then** B 同时持有该渠道及其配对身份（chat id、sender id、首选 agent）——把渠道
   改绑到 B 无需重新配对
 - **And** 每台机器本地的会话指针永不传播
+
+### Scenario: 配置路径跟随各机器的 home
+
+- **Given** 机器 A（home `/Users/alice`）同步了一个配置指向其 home 内路径的资源
+- **When** 机器 B（home `/home/bob`）导入它
+- **Then** 路径落到 B 的 home 之下，且同步介质中保存的是 `${HOME}/...`，
+  绝无字面 home 路径
+
+### Scenario: 每机覆盖在同步往返中保持
+
+- **Given** 一个已同步的资源和机器 B 上的一个每机覆盖
+- **When** 两台机器完成同步往返，包括对未被覆盖字段的一次共享编辑
+- **Then** B 保持其覆盖值，A 与介质从未见到它们，共享编辑仍到达 B
+- **And** 撤销覆盖后，B 的下一次运行恢复共享值
 
 ### Scenario: 机器在同步后可见
 

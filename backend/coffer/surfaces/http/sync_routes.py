@@ -8,6 +8,8 @@ out-of-band.
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field, field_validator
 
@@ -99,6 +101,20 @@ class MachineOut(BaseModel):
 
 class MachinesOut(BaseModel):
     machines: list[MachineOut]
+
+
+class OverrideIn(BaseModel):
+    patch: dict[str, Any]
+
+
+class OverrideOut(BaseModel):
+    kind: str
+    name: str
+    patch: dict[str, Any]
+
+
+class OverridesOut(BaseModel):
+    overrides: list[OverrideOut]
 
 
 class MachineRenameIn(BaseModel):
@@ -208,6 +224,26 @@ async def rename_machine(body: MachineRenameIn, actor: str = Depends(get_actor))
         last_sync_at=own.last_sync_at.isoformat() if own.last_sync_at else None,
         is_local=True,
     )
+
+
+@router.get("/overrides", response_model=OverridesOut)
+async def list_overrides() -> OverridesOut:
+    rows = await get_sync_service().list_overrides()
+    return OverridesOut(overrides=[OverrideOut(kind=k, name=n, patch=p) for k, n, p in rows])
+
+
+@router.put("/overrides/{kind}/{name}", response_model=OverridesOut)
+async def set_override(
+    kind: str, name: str, body: OverrideIn, actor: str = Depends(get_actor)
+) -> OverridesOut:
+    await get_sync_service().set_override(kind, name, body.patch, actor=actor)
+    return await list_overrides()
+
+
+@router.delete("/overrides/{kind}/{name}", response_model=OverridesOut)
+async def unset_override(kind: str, name: str, actor: str = Depends(get_actor)) -> OverridesOut:
+    await get_sync_service().unset_override(kind, name, actor=actor)
+    return await list_overrides()
 
 
 @router.post("/key/export", response_model=KeyOpOut)

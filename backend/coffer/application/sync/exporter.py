@@ -23,6 +23,7 @@ from coffer.application.sync.ports import (
 )
 from coffer.domain.sync.manifest import SCHEMA_VERSION, Manifest
 from coffer.domain.sync.models import TOMBSTONE_TTL_SECONDS, Tombstone
+from coffer.domain.sync.portability import normalize_home, strip_overridden
 from coffer.domain.sync.serialization import resource_to_doc
 
 
@@ -40,27 +41,56 @@ class SyncExporter:
         workspace: WorkspacePort,
         ledger: TombstoneLedgerPort | None = None,
         state_providers: Sequence[SyncedStatePort] = (),
+        *,
+        home: str | None,
     ) -> None:
         self._resources = resources
         self._credentials = credentials
         self._workspace = workspace
         self._ledger = ledger
         self._state_providers = list(state_providers)
+        self._home = home
 
     async def export(
         self, *, quarantined: Collection[str] = (), machine_id: str | None = None
     ) -> None:
         resources = await self._resources.list()
-        docs = [
-            resource_to_doc(
-                kind=r.kind,
-                name=r.name,
-                description=r.description,
-                enabled=r.enabled,
-                config=r.config,
+        overrides = (
+            await asyncio.to_thread(self._workspace.read_overrides, machine_id)
+            if machine_id
+            else {}
+        )
+        shared_before = (
+            {
+                (d.kind, d.name): d.config
+                for d in await asyncio.to_thread(self._workspace.read_resource_docs)
+            }
+            if overrides
+            else {}
+        )
+        docs = []
+        for r in resources:
+            config = dict(r.config)
+            # Portability first: the medium speaks ${HOME}, never a literal home.
+            if self._home:
+                config = normalize_home(config, self._home)
+            patch = overrides.get((r.kind, r.name))
+            shared_doc = shared_before.get((r.kind, r.name))
+            if patch and shared_doc is not None:
+                # A machine's local specialization must not leak into the
+                # medium: overridden keys revert to the last shared values.
+                # No shared doc yet (override set before the first export):
+                # skip stripping — the normalized live values ARE the baseline.
+                config = strip_overridden(config, patch, shared_doc)
+            docs.append(
+                resource_to_doc(
+                    kind=r.kind,
+                    name=r.name,
+                    description=r.description,
+                    enabled=r.enabled,
+                    config=config,
+                )
             )
-            for r in resources
-        ]
         live = {(r.kind, r.name): _aware(r.created_at) for r in resources}
         pending = await self._reconcile_ledger(live, set(quarantined))
         state_docs = []

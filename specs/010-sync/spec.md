@@ -103,6 +103,28 @@ affinity, per-machine config overrides, tombstone provenance — see
 [ADR-043](../../docs/decisions/ADR-043-sync-machine-identity-near-real-time.md)).
 It is **not** a per-record versioning scheme.
 
+## Path portability
+
+The user's machines have different usernames/home layouts, so absolute paths
+inside configs would break when synced verbatim. Two mechanisms, applied in
+order at import (shared doc → `${HOME}` expansion → machine override):
+
+- **`${HOME}` normalization** (zero-config): export rewrites every config
+  string value under the exporting machine's home to `${HOME}/...`; import
+  expands the token to the importing machine's home. The medium never holds a
+  literal home path. A value already containing the literal token is exported
+  as-is — and, like every token, expands to the local home at import on every
+  machine (the token is effectively active everywhere).
+- **Per-machine overrides**: an RFC 7386 JSON Merge Patch per resource under
+  `machines/<machine-id>/overrides/<kind>/<name>.yaml` (each machine writes
+  only its own dir — conflict-free), for values that genuinely differ per
+  machine (e.g. an Intel-vs-ARM homebrew path). The patch applies at every
+  import and is **stripped at every export** (overridden keys revert to the
+  last shared values), so a machine's specialization never leaks into the
+  medium; unsetting an override immediately restores the shared values
+  locally. Surfaces: `coffer sync override list|set|unset` and
+  `/api/v1/sync/overrides`.
+
 ## Configuration
 
 A single persisted sync config row:
@@ -128,10 +150,10 @@ setup, exactly as a developer's normal `git push` does.
 
 - **CLI** — `coffer sync` command group: `init`, `status`, `run` (the default),
   `push`, `pull`, `resolve`, `config`, `machines` (list; `--rename` for this
-  machine), `key export`, `key import`.
+  machine), `override list|set|unset`, `key export`, `key import`.
 - **REST** — `/api/v1/sync/*`: get/put config, get status, trigger a run,
-  resolve conflicts, list machines / rename this machine, export/import the
-  master key.
+  resolve conflicts, list machines / rename this machine, manage per-machine
+  overrides, export/import the master key.
 - **Desktop UI** — a Sync settings panel: configure remote, toggle auto-sync,
   see status (clean / syncing / conflicted / error, last-sync time), trigger a
   run, resolve conflicts, and a machines card listing every machine known to
@@ -246,6 +268,23 @@ resources that reference it cannot spawn, and status reports
 - **Then** B holds the channel AND its pairing identity (chat id, sender id,
   preferred agent) — rebinding the channel to B needs no re-pairing
 - **And** each machine's local conversation pointer never travels
+
+### Scenario: config paths follow each machine's home
+
+- **Given** machine A (home `/Users/alice`) syncs a resource whose config
+  points inside its home
+- **When** machine B (home `/home/bob`) imports it
+- **Then** the path lands under B's home, and the sync medium holds
+  `${HOME}/...`, never a literal home path
+
+### Scenario: a per-machine override survives sync round trips
+
+- **Given** a synced resource and a per-machine override on machine B
+- **When** the machines complete sync round trips, including a shared edit to
+  a non-overridden field
+- **Then** B keeps its overridden values, A and the medium never see them,
+  the shared edit still reaches B
+- **And** unsetting the override restores the shared values on B's next run
 
 ### Scenario: machines are visible after they sync
 

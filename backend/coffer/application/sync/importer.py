@@ -25,6 +25,7 @@ from coffer.domain.resource import ResourceRef
 from coffer.domain.sync.errors import SyncWorkspaceTooNew
 from coffer.domain.sync.manifest import SCHEMA_VERSION
 from coffer.domain.sync.models import Tombstone
+from coffer.domain.sync.portability import apply_merge_patch, expand_home
 from coffer.domain.sync.serialization import ResourceDoc
 
 
@@ -46,15 +47,23 @@ class SyncImporter:
         *,
         actor: str = "sync",
         state_providers: Sequence[SyncedStatePort] = (),
+        home: str | None,
     ) -> None:
         self._resources = resources
         self._credentials = credentials
         self._workspace = workspace
         self._actor = actor
         self._state_providers = list(state_providers)
+        self._home = home
 
-    async def import_(self) -> ImportResult:
+    async def import_(self, machine_id: str | None = None) -> ImportResult:
         docs, tombstones, blobs = await asyncio.to_thread(self._load)
+        overrides = (
+            await asyncio.to_thread(self._workspace.read_overrides, machine_id)
+            if machine_id
+            else {}
+        )
+        docs = [self._localize(doc, overrides) for doc in docs]
         result = ImportResult()
         await self._import_credentials(blobs, result)
         await self._apply_tombstones(tombstones, docs, result)
@@ -68,6 +77,24 @@ class SyncImporter:
         for provider in self._state_providers:
             docs = await asyncio.to_thread(self._workspace.read_state_docs, provider.area)
             result.errors.extend(await provider.import_docs(docs))
+
+    def _localize(
+        self, doc: ResourceDoc, overrides: dict[tuple[str, str], dict[str, object]]
+    ) -> ResourceDoc:
+        """Shared doc -> this machine's view: expand ${HOME}, apply own patch."""
+        config = dict(doc.config)
+        if self._home:
+            config = expand_home(config, self._home)
+        patch = overrides.get((doc.kind, doc.name))
+        if patch:
+            config = apply_merge_patch(config, patch)
+        return ResourceDoc(
+            kind=doc.kind,
+            name=doc.name,
+            description=doc.description,
+            enabled=doc.enabled,
+            config=config,
+        )
 
     def _load(self) -> tuple[list[ResourceDoc], list[Tombstone], dict[str, bytes]]:
         manifest = self._workspace.read_manifest()
