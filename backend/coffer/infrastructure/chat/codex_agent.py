@@ -40,6 +40,11 @@ from coffer.infrastructure.chat.codex_mapping import (
     CodexParseState,
     map_codex_notification,
 )
+from coffer.infrastructure.chat.document_extract import (
+    DocumentExtractor,
+    extract_document_attachments,
+    prompt_with_document_text,
+)
 from coffer.infrastructure.chat.transcribe import (
     Transcriber,
     prompt_with_transcripts,
@@ -74,6 +79,7 @@ class CodexAppServerAdapter:
         on_session: SessionSink,
         env: dict[str, str] | None = None,
         transcriber: Transcriber | None = None,
+        document_extractor: DocumentExtractor | None = None,
     ) -> None:
         self._cwd = cwd
         self._resume = resume_session
@@ -82,6 +88,7 @@ class CodexAppServerAdapter:
         self._on_session = on_session
         self._env = env
         self._transcriber = transcriber
+        self._document_extractor = document_extractor
 
     async def run_turn(
         self,
@@ -156,11 +163,17 @@ class CodexAppServerAdapter:
     async def _stream(
         self, history: Sequence[Message], attachments: Sequence[Attachment] = ()
     ) -> AsyncIterator[AgentEvent]:
-        # Codex cannot hear audio: transcribe voice to text; keep other files.
+        # Codex cannot hear audio: transcribe voice to text; extract documents to
+        # text (FR-030 — Codex is path-native and cannot parse a binary PDF); keep
+        # other files as path notes.
         attachments, transcripts = await transcribe_audio_attachments(
             attachments, self._transcriber
         )
+        attachments, extracts = await extract_document_attachments(
+            attachments, self._document_extractor
+        )
         prompt = prompt_with_transcripts(last_user_text(history), transcripts)
+        prompt = prompt_with_document_text(prompt, extracts)
         if attachments:
             # Codex is path-native (no inline image blocks over its app-server
             # RPC): hand it the on-disk paths so it can open them with its tools.

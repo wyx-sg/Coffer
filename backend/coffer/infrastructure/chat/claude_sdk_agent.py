@@ -37,6 +37,11 @@ from coffer.domain.chat.events import (
 from coffer.domain.chat.message import Message
 from coffer.infrastructure.chat.adapter_support import ParseState, SessionSink, last_user_text
 from coffer.infrastructure.chat.claude_sdk_mapping import map_sdk_message
+from coffer.infrastructure.chat.document_extract import (
+    DocumentExtractor,
+    extract_document_attachments,
+    prompt_with_document_text,
+)
 from coffer.infrastructure.chat.transcribe import (
     Transcriber,
     prompt_with_transcripts,
@@ -117,9 +122,10 @@ _INLINE_IMAGE_MIMES = frozenset({"image/jpeg", "image/png", "image/gif", "image/
 def _attachment_block(att: Attachment) -> dict[str, Any]:
     """Materialise one attachment into a stream-json content block.
 
-    Supported images and PDFs become native base64 ``image`` / ``document`` blocks
-    Claude sees directly; the base64 lives only in this outbound request, never the
-    DB. Anything else (audio, csv, zip, an odd image format, …) becomes a text
+    A supported image becomes a native base64 ``image`` block Claude sees directly;
+    the base64 lives only in this outbound request, never the DB. Documents are
+    text-extracted upstream (FR-030) and never reach here, so anything else (audio,
+    a document whose extraction failed, an odd image format, …) becomes a text
     pointer to the on-disk path so the agent can open it with its own tools. An
     unreadable file degrades to a text note rather than failing the turn.
     """
@@ -132,12 +138,6 @@ def _attachment_block(att: Attachment) -> dict[str, Any]:
         return {
             "type": "image",
             "source": {"type": "base64", "media_type": att.mime, "data": encoded},
-        }
-    if att.is_pdf:
-        encoded = base64.standard_b64encode(data).decode()
-        return {
-            "type": "document",
-            "source": {"type": "base64", "media_type": "application/pdf", "data": encoded},
         }
     return {
         "type": "text",
@@ -182,6 +182,7 @@ class ClaudeSdkAgentAdapter:
         env: dict[str, str] | None = None,
         system_context: str | None = None,
         transcriber: Transcriber | None = None,
+        document_extractor: DocumentExtractor | None = None,
     ) -> None:
         self._cwd = cwd
         self._resume = resume_session
@@ -191,6 +192,7 @@ class ClaudeSdkAgentAdapter:
         self._env = env
         self._system_context = system_context
         self._transcriber = transcriber
+        self._document_extractor = document_extractor
 
     async def run_turn(
         self,
@@ -275,11 +277,17 @@ class ClaudeSdkAgentAdapter:
         self, history: Sequence[Message], attachments: Sequence[Attachment] = ()
     ) -> AsyncIterator[AgentEvent]:
         # Claude cannot hear audio: transcribe any voice attachment to text and
-        # fold it into the prompt; the rest are materialised as content blocks.
+        # fold it into the prompt. A document (PDF/office file) is text-extracted
+        # and folded in too (FR-030) so it goes as text, not a vision/binary block;
+        # the rest are materialised as content blocks.
         attachments, transcripts = await transcribe_audio_attachments(
             attachments, self._transcriber
         )
+        attachments, extracts = await extract_document_attachments(
+            attachments, self._document_extractor
+        )
         prompt = prompt_with_transcripts(last_user_text(history), transcripts)
+        prompt = prompt_with_document_text(prompt, extracts)
         content = self._build_content(prompt, attachments)
         if not content:
             yield TurnError(code="empty_prompt", message="no user message to send")

@@ -39,6 +39,11 @@ from coffer.infrastructure.chat.cursor_run import (
     build_run_argv,
     default_spawn,
 )
+from coffer.infrastructure.chat.document_extract import (
+    DocumentExtractor,
+    extract_document_attachments,
+    prompt_with_document_text,
+)
 from coffer.infrastructure.chat.transcribe import (
     Transcriber,
     prompt_with_transcripts,
@@ -71,6 +76,7 @@ class CursorRunAdapter:
         spawn: CursorSpawner | None = None,
         binary: str = "cursor-agent",
         transcriber: Transcriber | None = None,
+        document_extractor: DocumentExtractor | None = None,
     ) -> None:
         self._cwd = cwd
         self._resume = resume_session
@@ -82,6 +88,7 @@ class CursorRunAdapter:
         self._spawn: CursorSpawner = spawn or default_spawn
         self._binary = binary
         self._transcriber = transcriber
+        self._document_extractor = document_extractor
 
     async def run_turn(
         self,
@@ -113,12 +120,17 @@ class CursorRunAdapter:
     async def _stream(
         self, history: Sequence[Message], attachments: Sequence[Attachment] = ()
     ) -> AsyncIterator[AgentEvent]:
-        # cursor-agent's print mode takes a text prompt: transcribe voice to text
-        # and hand other files as on-disk paths (path-native, like opencode).
+        # cursor-agent's print mode takes a text prompt: transcribe voice to text,
+        # extract documents to text (FR-030 — path-native, cannot parse a binary
+        # PDF), and hand other files as on-disk paths (like opencode).
         attachments, transcripts = await transcribe_audio_attachments(
             attachments, self._transcriber
         )
+        attachments, extracts = await extract_document_attachments(
+            attachments, self._document_extractor
+        )
         prompt = prompt_with_transcripts(last_user_text(history), transcripts)
+        prompt = prompt_with_document_text(prompt, extracts)
         if attachments:
             notes = "\n".join(
                 f"[The user attached a file '{a.filename}', saved at {a.path}.]"

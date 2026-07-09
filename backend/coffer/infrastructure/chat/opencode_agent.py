@@ -26,6 +26,11 @@ from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import AgentEvent, TurnDone, TurnError, TurnStarted
 from coffer.domain.chat.message import Message
 from coffer.infrastructure.chat.adapter_support import SessionSink, last_user_text
+from coffer.infrastructure.chat.document_extract import (
+    DocumentExtractor,
+    extract_document_attachments,
+    prompt_with_document_text,
+)
 from coffer.infrastructure.chat.opencode_mapping import (
     OpencodeParseState,
     map_opencode_event,
@@ -68,6 +73,7 @@ class OpencodeRunAdapter:
         binary: str = "opencode",
         model: str | None = None,
         transcriber: Transcriber | None = None,
+        document_extractor: DocumentExtractor | None = None,
     ) -> None:
         self._cwd = cwd
         self._resume = resume_session
@@ -76,6 +82,7 @@ class OpencodeRunAdapter:
         self._spawn: OpencodeSpawner = spawn or default_spawn
         self._binary = binary
         self._transcriber = transcriber
+        self._document_extractor = document_extractor
         #: Optional (read by the orchestrator to stamp the assistant message).
         self.model_id: str | None = model
 
@@ -109,12 +116,17 @@ class OpencodeRunAdapter:
     async def _stream(
         self, history: Sequence[Message], attachments: Sequence[Attachment] = ()
     ) -> AsyncIterator[AgentEvent]:
-        # opencode's run mode takes a text message: transcribe voice to text and
-        # hand other files as on-disk paths (path-native, like Codex).
+        # opencode's run mode takes a text message: transcribe voice to text,
+        # extract documents to text (FR-030 — path-native, cannot parse a binary
+        # PDF), and hand other files as on-disk paths (like Codex).
         attachments, transcripts = await transcribe_audio_attachments(
             attachments, self._transcriber
         )
+        attachments, extracts = await extract_document_attachments(
+            attachments, self._document_extractor
+        )
         prompt = prompt_with_transcripts(last_user_text(history), transcripts)
+        prompt = prompt_with_document_text(prompt, extracts)
         if attachments:
             notes = "\n".join(
                 f"[The user attached a file '{a.filename}', saved at {a.path}.]"
