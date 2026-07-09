@@ -280,6 +280,40 @@ class Workspace:
                 continue
         return out
 
+    # --- per-machine overrides -------------------------------------------------
+
+    def _overrides_dir(self, machine_id: str) -> pathlib.Path:
+        return self._root / _MACHINES / machine_id / "overrides"
+
+    def write_override(
+        self, machine_id: str, kind: str, name: str, patch: Mapping[str, object]
+    ) -> None:
+        path = self._overrides_dir(machine_id) / kind / f"{name}.yaml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            yaml.safe_dump(dict(patch), sort_keys=True, allow_unicode=True),
+            encoding="utf-8",
+        )
+
+    def remove_override(self, machine_id: str, kind: str, name: str) -> None:
+        (self._overrides_dir(machine_id) / kind / f"{name}.yaml").unlink(missing_ok=True)
+
+    def read_overrides(self, machine_id: str) -> dict[tuple[str, str], dict[str, object]]:
+        """This machine's own merge patches, keyed by (kind, name). Corrupt
+        files are skipped (the owner rewrites them via the override surface)."""
+        base = self._overrides_dir(machine_id)
+        if not base.exists():
+            return {}
+        out: dict[tuple[str, str], dict[str, object]] = {}
+        for path in sorted(base.glob("*/*.yaml")):
+            try:
+                data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            except (yaml.YAMLError, OSError):
+                continue
+            if isinstance(data, dict):
+                out[(path.parent.name, path.stem)] = data
+        return out
+
     # --- shared-state areas ---------------------------------------------------
 
     def write_state_docs(

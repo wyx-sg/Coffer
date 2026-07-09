@@ -10,10 +10,12 @@ out-of-band, never through the sync medium).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import platform as _platform
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from coffer.application.audit_service import AuditService
 from coffer.application.sync.config_service import SyncConfigService
@@ -27,6 +29,8 @@ from coffer.application.sync.ports import (
     WorkspacePort,
 )
 from coffer.domain.audit import AuditEventType
+from coffer.domain.error_base import CofferError
+from coffer.domain.resource import ResourceRef
 from coffer.domain.sync.errors import (
     MasterKeyFileInvalid,
     SyncInProgress,
@@ -43,6 +47,7 @@ from coffer.domain.sync.models import (
     SyncState,
     SyncStatus,
 )
+from coffer.domain.sync.portability import expand_home
 
 _TERMINAL = {SyncStatus.CONFLICTED, SyncStatus.ERROR}
 
@@ -61,6 +66,8 @@ class SyncService:
         identity: MachineIdentityService,
         workspace: WorkspacePort,
         coffer_version: str | None = None,
+        home: str | None = None,
+        resources: Any = None,
     ) -> None:
         self._config = config
         self._git = git
@@ -72,6 +79,8 @@ class SyncService:
         self._identity = identity
         self._workspace = workspace
         self._coffer_version = coffer_version
+        self._home = home
+        self._resources = resources
         self._lock = asyncio.Lock()
 
     @property
@@ -157,7 +166,7 @@ class SyncService:
                 return await self._record_conflict(list(outcome.conflicted_paths))
         if push:
             await asyncio.to_thread(self._git.push, config.branch)
-        return await self._finish_import()
+        return await self._finish_import(identity.machine_id)
 
     async def resolve(self, strategy: str, paths: Sequence[str]) -> SyncState:
         config = await self._config.get_config()
@@ -170,7 +179,8 @@ class SyncService:
                 return await self._record_conflict(remaining)
             await asyncio.to_thread(self._git.push, config.branch)
             await self._audit.record(AuditEventType.SYNC_RESOLVED.value, actor="sync")
-            return await self._finish_import()
+            identity = await self._identity.get()
+            return await self._finish_import(identity.machine_id)
 
     async def export_key(self, path: str) -> str:
         key = self._master_key.export_key()
@@ -213,6 +223,49 @@ class SyncService:
         if not seen_local:
             result.append(self._own_entry(identity, last_sync_at=None))
         return identity, result
+
+    async def list_overrides(self) -> list[tuple[str, str, dict[str, object]]]:
+        """This machine's per-resource merge patches as (kind, name, patch)."""
+        identity = await self._identity.get()
+        overrides = await asyncio.to_thread(self._workspace.read_overrides, identity.machine_id)
+        return sorted((k, n, patch) for (k, n), patch in overrides.items())
+
+    async def set_override(
+        self, kind: str, name: str, patch: dict[str, object], *, actor: str
+    ) -> None:
+        """Store a per-machine merge patch; applied at every import, stripped
+        from every export. Takes effect locally on the next sync run."""
+        identity = await self._identity.get()
+        await asyncio.to_thread(
+            self._workspace.write_override, identity.machine_id, kind, name, patch
+        )
+        await self._audit.record(
+            AuditEventType.SYNC_OVERRIDE_SET.value,
+            actor=actor,
+            details={"resource": f"{kind}:{name}", "keys": sorted(patch)},
+        )
+
+    async def unset_override(self, kind: str, name: str, *, actor: str) -> None:
+        identity = await self._identity.get()
+        await asyncio.to_thread(self._workspace.remove_override, identity.machine_id, kind, name)
+        # Restore the local resource to the shared view NOW: export runs before
+        # import, so a live row still carrying the patched values would leak
+        # this machine's specialization into the medium on the next run.
+        shared = {
+            (d.kind, d.name): d for d in await asyncio.to_thread(self._workspace.read_resource_docs)
+        }
+        doc = shared.get((kind, name))
+        if doc is not None and self._resources is not None:
+            config = expand_home(doc.config, self._home) if self._home else dict(doc.config)
+            with contextlib.suppress(CofferError):  # resource may not exist locally yet
+                await self._resources.update_config(
+                    ResourceRef(kind, name), config, actor, allow_lifecycle_kind=True
+                )
+        await self._audit.record(
+            AuditEventType.SYNC_OVERRIDE_UNSET.value,
+            actor=actor,
+            details={"resource": f"{kind}:{name}"},
+        )
 
     async def rename_machine(self, display_name: str, *, actor: str) -> MachineIdentity:
         """Rename this machine; the change reaches other machines on the next run."""
@@ -288,8 +341,8 @@ class SyncService:
         )
         return saved
 
-    async def _finish_import(self) -> SyncState:
-        result = await self._importer.import_()
+    async def _finish_import(self, machine_id: str | None = None) -> SyncState:
+        result = await self._importer.import_(machine_id)
         if result.errors:
             status = SyncStatus.ERROR
             last_error = "; ".join(result.errors[:5])

@@ -269,3 +269,22 @@ async def test_put_config_round_trips_poll_and_rejects_low(client) -> None:  # t
     )
     assert r.status_code == 422
     assert r.json()["error"]["code"] == "CONFIG_INVALID"
+
+
+async def test_override_crud_round_trips(client) -> None:  # type: ignore[no-untyped-def]
+    r = await client.get("/api/v1/sync/overrides")
+    assert r.status_code == 200
+    assert r.json() == {"overrides": []}
+
+    r = await client.put(
+        "/api/v1/sync/overrides/mcp_server/tool",
+        json={"patch": {"value": "/opt/homebrew/bin/x"}},
+    )
+    assert r.status_code == 200
+    assert r.json()["overrides"] == [
+        {"kind": "mcp_server", "name": "tool", "patch": {"value": "/opt/homebrew/bin/x"}}
+    ]
+
+    r = await client.delete("/api/v1/sync/overrides/mcp_server/tool")
+    assert r.status_code == 200
+    assert r.json() == {"overrides": []}

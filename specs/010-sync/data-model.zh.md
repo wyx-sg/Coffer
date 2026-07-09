@@ -75,6 +75,7 @@ git 工作树，其 `origin` 指向用户的远端。
 ```
 manifest.json
 machines/<machine-id>.json      每机注册项（只由其所属机器写入）
+machines/<machine-id>/overrides/<kind>/<name>.yaml   每机 merge patch
 knowledge/                      mirror of ~/.coffer/knowledge
 memory/                         mirror of ~/.coffer/memory
 skills/                         mirror of ~/.coffer/skills

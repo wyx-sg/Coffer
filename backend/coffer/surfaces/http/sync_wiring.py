@@ -84,6 +84,8 @@ def wire_sync(
         identity=identity,
         workspace=workspace,
         coffer_version=_coffer_version,
+        home=str(pathlib.Path.home()),
+        resources=resource_svc,
     )
     set_sync_service(service)
     worker = SyncWorker(service, config_svc, git)

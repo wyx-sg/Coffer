@@ -17,6 +17,8 @@ app = typer.Typer(
 )
 key_app = typer.Typer(help="Out-of-band master-key transfer for new machines")
 app.add_typer(key_app, name="key")
+override_app = typer.Typer(help="Per-machine config overrides (applied locally, never synced out)")
+app.add_typer(override_app, name="override")
 _console = Console()
 
 
@@ -232,3 +234,56 @@ def key_import(
         r = c.post("/sync/key/import", json={"path": path})
         _cli_client.check(r, verbose=verbose)
     _print_status(r.json())
+
+
+@override_app.command("list")
+def override_list(ctx: typer.Context) -> None:
+    """Show this machine's per-resource config overrides."""
+    verbose = _verbose(ctx)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get("/sync/overrides")
+        _cli_client.check(r, verbose=verbose)
+    typer.echo(_json.dumps(r.json()["overrides"], indent=2, ensure_ascii=False))
+
+
+@override_app.command("set")
+def override_set(
+    ctx: typer.Context,
+    ref: str = typer.Argument(..., help="Resource as <kind>:<name>"),
+    patch: str = typer.Argument(..., help='JSON merge patch, e.g. \'{"config_dir": "/opt/x"}\''),
+) -> None:
+    """Set a per-machine merge patch; applies on the next sync run."""
+    verbose = _verbose(ctx)
+    kind, _, name = ref.partition(":")
+    if not kind or not name:
+        typer.echo("ref must be <kind>:<name>", err=True)
+        raise typer.Exit(2)
+    try:
+        parsed = _json.loads(patch)
+    except _json.JSONDecodeError:
+        typer.echo("patch must be valid JSON", err=True)
+        raise typer.Exit(2) from None
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.put(f"/sync/overrides/{kind}/{name}", json={"patch": parsed})
+        _cli_client.check(r, verbose=verbose)
+    typer.echo(f"override set for {kind}:{name} (applies on the next sync run)")
+
+
+@override_app.command("unset")
+def override_unset(
+    ctx: typer.Context,
+    ref: str = typer.Argument(..., help="Resource as <kind>:<name>"),
+) -> None:
+    """Remove this machine's merge patch for a resource."""
+    verbose = _verbose(ctx)
+    kind, _, name = ref.partition(":")
+    if not kind or not name:
+        typer.echo("ref must be <kind>:<name>", err=True)
+        raise typer.Exit(2)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.delete(f"/sync/overrides/{kind}/{name}")
+        _cli_client.check(r, verbose=verbose)
+    typer.echo(f"override removed for {kind}:{name}")

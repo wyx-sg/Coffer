@@ -127,6 +127,51 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationError'
 
+  /api/v1/sync/overrides:
+    get:
+      summary: This machine's per-resource config overrides
+      operationId: listSyncOverrides
+      tags: [sync]
+      responses:
+        '200':
+          description: Overrides for this machine
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OverridesOut' }
+
+  /api/v1/sync/overrides/{kind}/{name}:
+    put:
+      summary: Set a per-machine merge patch for a resource
+      operationId: setSyncOverride
+      tags: [sync]
+      parameters:
+        - { name: kind, in: path, required: true, schema: { type: string } }
+        - { name: name, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OverrideIn' }
+      responses:
+        '200':
+          description: Updated override list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OverridesOut' }
+    delete:
+      summary: Remove this machine's merge patch for a resource
+      operationId: unsetSyncOverride
+      tags: [sync]
+      parameters:
+        - { name: kind, in: path, required: true, schema: { type: string } }
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Updated override list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OverridesOut' }
+
   /api/v1/sync/key/export:
     post:
       summary: Export this machine's master key to a local file (out-of-band transfer)
@@ -258,6 +303,28 @@ components:
       required: [display_name]
       properties:
         display_name: { type: string, minLength: 1, maxLength: 100 }
+    OverrideIn:
+      type: object
+      required: [patch]
+      properties:
+        patch:
+          type: object
+          additionalProperties: true
+          description: "RFC 7386 JSON Merge Patch applied over the imported config on this machine only"
+    OverrideOut:
+      type: object
+      required: [kind, name, patch]
+      properties:
+        kind: { type: string }
+        name: { type: string }
+        patch: { type: object, additionalProperties: true }
+    OverridesOut:
+      type: object
+      required: [overrides]
+      properties:
+        overrides:
+          type: array
+          items: { $ref: '#/components/schemas/OverrideOut' }
     KeyExportIn:
       type: object
       required: [path]
