@@ -857,7 +857,7 @@
       "deleteChildConfirm": "Delete {{relpath}}? The file is removed from disk.",
       "staleBanner": "File changed on disk — reload",
       "reload": "Reload",
-      "memoryBlockNotice": "This file contains a Coffer memory-projection block managed by the memory feature",
+      "memoryBlockNotice": "This file contains a legacy Coffer memory block (the native-projection feature was removed) — it is no longer used and is safe to delete.",
       "directoryHint": "This is a directory — select a file inside it, or create a new one.",
       "emptyDir": "No files yet.",
       "desc": {
