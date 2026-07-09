@@ -7,7 +7,6 @@
   [007-memory](../../specs/007-memory/spec.md) 与 [009-channels](../../specs/009-channels/spec.md)）
 - **修订：** [ADR-016](./ADR-016-multi-machine-sync.md)（保留 git 介质与
   export→merge→import 引擎；替换仅按间隔的自动同步与「缺席即删除」的导入规则）
-- **设计细节：** [2026-07-10 设计文档](../superpowers/specs/2026-07-10-sync-v2-machine-identity-design.md)
 
 ## 背景
 

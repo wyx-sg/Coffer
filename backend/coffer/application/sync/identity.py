@@ -40,6 +40,9 @@ class MachineIdentityService:
 
     async def rename(self, display_name: str, *, actor: str) -> MachineIdentity:
         """Change the display name; the machine id itself is immutable."""
+        display_name = display_name.strip()
+        if not display_name:
+            raise ValueError("display_name must not be blank")
         await self.get()  # ensure the row exists before renaming
         renamed = await self._repo.set_display_name(display_name)
         await self._audit.record(

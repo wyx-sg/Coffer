@@ -8,7 +8,6 @@
 - **Amends:** [ADR-016](./ADR-016-multi-machine-sync.md) (keeps the git medium
   and the export→merge→import engine; replaces the interval-only auto-sync and
   the delete-by-absence import rule)
-- **Design detail:** [2026-07-10 design doc](../superpowers/specs/2026-07-10-sync-v2-machine-identity-design.md)
 
 ## Context
 

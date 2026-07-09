@@ -9,7 +9,7 @@ out-of-band.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from coffer.application.sync.service import SyncService
 from coffer.domain.sync.models import (
@@ -99,6 +99,14 @@ class MachinesOut(BaseModel):
 
 class MachineRenameIn(BaseModel):
     display_name: str = Field(min_length=1, max_length=100)
+
+    @field_validator("display_name")
+    @classmethod
+    def _strip_and_require_visible(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("display_name must not be blank")
+        return stripped
 
 
 def _config_out(c: SyncConfig) -> SyncConfigOut:

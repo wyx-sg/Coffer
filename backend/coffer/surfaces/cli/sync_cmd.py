@@ -7,6 +7,7 @@ from typing import Any
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 
 from coffer.surfaces.cli import _client as _cli_client
 
@@ -167,7 +168,8 @@ def machines(
         marker = " [dim](this machine)[/dim]" if m["is_local"] else ""
         last = m.get("last_sync_at") or "never"
         plat = m.get("platform") or "?"
-        _console.print(f"- [bold]{m['display_name']}[/bold]{marker}  {plat}  last sync: {last}")
+        name = escape(m["display_name"])
+        _console.print(f"- [bold]{name}[/bold]{marker}  {plat}  last sync: {last}")
 
 
 @app.command()

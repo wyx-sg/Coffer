@@ -207,8 +207,15 @@ async def test_rename_machine_round_trips(client) -> None:  # type: ignore[no-un
 
 
 async def test_rename_machine_rejects_blank(client) -> None:  # type: ignore[no-untyped-def]
-    r = await client.put("/api/v1/sync/machine", json={"display_name": ""})
-    assert r.status_code == 422
+    for blank in ("", "   "):
+        r = await client.put("/api/v1/sync/machine", json={"display_name": blank})
+        assert r.status_code == 422
+
+
+async def test_rename_machine_trims_whitespace(client) -> None:  # type: ignore[no-untyped-def]
+    r = await client.put("/api/v1/sync/machine", json={"display_name": "  studio  "})
+    assert r.status_code == 200
+    assert r.json()["display_name"] == "studio"
 
 
 async def test_machine_entry_recorded_after_run(client) -> None:  # type: ignore[no-untyped-def]

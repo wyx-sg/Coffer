@@ -105,15 +105,27 @@ class Workspace:
     # --- machine registry ----------------------------------------------------
 
     def write_machine_entry(self, entry: MachineEntry) -> None:
-        """Write this machine's own registry entry (never another machine's)."""
+        """Write this machine's own registry entry (never another machine's).
+
+        Write-to-temp + atomic rename, so a crash mid-write can never leave a
+        truncated entry behind (a reader may run concurrently)."""
         target = self._root / _MACHINES
         target.mkdir(parents=True, exist_ok=True)
-        (target / f"{entry.machine_id}.json").write_text(
+        final = target / f"{entry.machine_id}.json"
+        tmp = target / f".{entry.machine_id}.json.tmp"
+        tmp.write_text(
             json.dumps(entry.to_dict(), sort_keys=True, indent=2) + "\n",
             encoding="utf-8",
         )
+        tmp.replace(final)
 
     def read_machine_entries(self) -> list[MachineEntry]:
+        """All parseable machine registry entries.
+
+        The registry is informational, so one corrupt entry (hand-edited repo,
+        interrupted writer on an old build) must never halt syncing the vault:
+        invalid files are skipped, and a machine whose own entry is unreadable
+        simply rewrites it on its next run."""
         target = self._root / _MACHINES
         if not target.exists():
             return []
@@ -121,11 +133,11 @@ class Workspace:
         for path in sorted(target.glob("*.json")):
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
-            except json.JSONDecodeError as e:
-                raise SyncSerializationError(f"{path.name} is not valid JSON: {e}") from e
-            if not isinstance(data, dict) or "machine_id" not in data:
-                raise SyncSerializationError(f"{path.name} is not a machine entry")
-            entries.append(MachineEntry.from_dict(data))
+                if not isinstance(data, dict) or "machine_id" not in data:
+                    continue
+                entries.append(MachineEntry.from_dict(data))
+            except (json.JSONDecodeError, OSError, KeyError, ValueError):
+                continue
         return entries
 
     # --- resource docs -----------------------------------------------------

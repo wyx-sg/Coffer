@@ -87,6 +87,8 @@ function useInvalidate() {
   return () => {
     void qc.invalidateQueries({ queryKey: ["sync-config"] });
     void qc.invalidateQueries({ queryKey: ["sync-status"] });
+    // A run rewrites this machine's registry entry (last-sync time).
+    void qc.invalidateQueries({ queryKey: ["sync-machines"] });
   };
 }
 
