@@ -1,15 +1,20 @@
 """``coffer-hook`` — the agent session-lifecycle → Coffer-daemon bridge.
 
-Spawned by the agent (Claude Code / Codex) as a SessionStart / SessionEnd hook.
-Reads the hook JSON from stdin and the Coffer agent name from ``--agent <name>``
-(the hook payload does not carry Coffer's agent identity), then talks to the
-local daemon discovered via ``~/.coffer/daemon.json``:
+Spawned by the agent (Claude Code / Codex / Cursor) as a SessionStart /
+SessionEnd hook. Reads the hook JSON from stdin and the Coffer agent name from
+``--agent <name>`` (the hook payload does not carry Coffer's agent identity),
+then talks to the local daemon discovered via ``~/.coffer/daemon.json``:
 
 - **SessionStart** → ``GET /api/v1/agents/{agent}/session-context?cwd=<cwd>``;
-  on 200 print ``{"hookSpecificOutput": {"hookEventName": "SessionStart",
-  "additionalContext": <text>}}`` so the agent injects the rules bundle.
+  on 200 print the rules bundle in the dialect's envelope so the agent injects it.
 - **SessionEnd** → ``POST /api/v1/agents/{agent}/sessions/{session_id}/end``
   with ``{"cwd": cwd}``; the body is ignored.
+
+``--dialect`` selects the stdout envelope (``claude`` — the default — prints
+``hookSpecificOutput.additionalContext``; ``cursor`` prints a top-level
+``additional_context``). ``--event`` names the event when the agent's stdin
+payload does not: Cursor keys its hooks.json by event, so the event is baked into
+the installed command's args instead.
 
 THE CONTRACT IS FAILURE-IS-SILENT: any error (no daemon.json, connection
 refused, timeout, non-200, malformed JSON) prints nothing and exits 0. A broken
@@ -35,6 +40,23 @@ from coffer.infrastructure.daemon.pid_lock import read as _read_daemon_file
 
 #: Short timeout — the hook runs on the critical path of agent startup.
 _TIMEOUT = 5.0
+
+#: Dialect values, mirroring ``domain.agent.context_injection.HookFlavor``. Kept
+#: as plain literals so this entrypoint stays import-light: it runs on every agent
+#: startup and must not drag in the domain package.
+_DIALECT_CLAUDE = "claude"
+_DIALECT_CURSOR = "cursor"
+
+#: Event names as each dialect spells them, mapped to Coffer's canonical name.
+_EVENT_ALIASES = {
+    "sessionstart": "SessionStart",
+    "sessionend": "SessionEnd",
+}
+
+
+def _canonical_event(raw: str) -> str:
+    """Coffer's canonical event name for a dialect's spelling (``sessionStart``)."""
+    return _EVENT_ALIASES.get(raw.casefold(), raw)
 
 
 def _daemon_json_path() -> Path:
@@ -76,7 +98,23 @@ def _http(
         return e.code, ""
 
 
-def _handle_session_start(agent: str, cwd: str, info: DaemonInfo) -> None:
+def _envelope(dialect: str, context: str) -> dict[str, Any]:
+    """Wrap the rules bundle in the shape this agent's hook contract expects.
+
+    Cursor's ``sessionStart`` hook reads a top-level ``additional_context``;
+    Claude Code and Codex read ``hookSpecificOutput.additionalContext``.
+    """
+    if dialect == _DIALECT_CURSOR:
+        return {"additional_context": context}
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": "SessionStart",
+            "additionalContext": context,
+        }
+    }
+
+
+def _handle_session_start(agent: str, cwd: str, info: DaemonInfo, dialect: str) -> None:
     query = urllib.parse.urlencode({"cwd": cwd})
     url = f"http://127.0.0.1:{info.port}/api/v1/agents/{agent}/session-context?{query}"
     status, text = _http("GET", url, token=info.token, timeout=_TIMEOUT)
@@ -85,13 +123,7 @@ def _handle_session_start(agent: str, cwd: str, info: DaemonInfo) -> None:
     context = json.loads(text).get("additional_context")
     if not context:
         return
-    out = {
-        "hookSpecificOutput": {
-            "hookEventName": "SessionStart",
-            "additionalContext": context,
-        }
-    }
-    sys.stdout.write(json.dumps(out))
+    sys.stdout.write(json.dumps(_envelope(dialect, context)))
     sys.stdout.flush()
 
 
@@ -102,14 +134,42 @@ def _handle_session_end(agent: str, cwd: str, session_id: str, info: DaemonInfo)
     _http("POST", url, token=info.token, body={"cwd": cwd}, timeout=_TIMEOUT)
 
 
+def _read_payload() -> dict[str, Any]:
+    """The hook's stdin JSON, or ``{}`` when absent or unparseable.
+
+    A missing payload is not fatal: ``--event`` can name the event and ``cwd``
+    falls back to the process's own. Only Claude/Codex depend on stdin, and they
+    always send it — Cursor's payload schema is not contractual for us.
+    """
+    try:
+        raw = sys.stdin.read()
+    except OSError:
+        return {}
+    if not raw.strip():
+        return {}
+    try:
+        payload = json.loads(raw)
+    except ValueError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
 def _dispatch() -> None:
     parser = argparse.ArgumentParser(prog="coffer-hook")
     parser.add_argument("--agent", required=True)
+    parser.add_argument("--dialect", default=_DIALECT_CLAUDE)
+    parser.add_argument("--event", default=None)
     args, _unknown = parser.parse_known_args()
 
-    payload = json.loads(sys.stdin.read())
-    event = payload.get("hook_event_name")
-    cwd = payload.get("cwd") or ""
+    payload = _read_payload()
+    # --event wins: Cursor keys hooks.json by event and does not guarantee an
+    # event field on stdin. Claude/Codex omit --event and name it on stdin.
+    raw_event = args.event or payload.get("hook_event_name") or ""
+    event = _canonical_event(raw_event)
+    # Cursor's payload does not carry `cwd`; the hook runs in the session's
+    # working directory, so the process cwd is the right fallback. Memory and
+    # rules are scoped by it, so an empty value would silently mis-scope them.
+    cwd = payload.get("cwd") or os.getcwd()
     session_id = payload.get("session_id") or ""
 
     info = _read_daemon_info()
@@ -117,7 +177,7 @@ def _dispatch() -> None:
         return
 
     if event == "SessionStart":
-        _handle_session_start(args.agent, cwd, info)
+        _handle_session_start(args.agent, cwd, info, args.dialect)
     elif event == "SessionEnd":
         _handle_session_end(args.agent, cwd, session_id, info)
     # Any other event → nothing to do.
