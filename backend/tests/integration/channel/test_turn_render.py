@@ -16,7 +16,21 @@ import pytest
 from coffer.application.channel.turn_render import TurnRenderer
 from coffer.domain.chat.events import TextDelta, ToolCall, ToolResult, TurnDone, TurnError
 
-from .conftest import FakeChannelAdapter
+from .conftest import FakeChannelAdapter, wait_until
+
+
+def _ticking(step: float = 2.0, start: float = 0.0) -> Callable[[], float]:
+    """A monotonic clock that advances ``step`` on every call. With ``step`` above
+    ``_EDIT_INTERVAL_SECONDS`` (1.5) each consecutive status render passes the edit
+    throttle, so streaming edits are deterministic in a test."""
+    box = [start]
+
+    def now() -> float:
+        value = box[0]
+        box[0] += step
+        return value
+
+    return now
 
 
 def _clock(*values: float) -> Callable[[], float]:
@@ -332,3 +346,198 @@ async def test_media_returned_in_a_group_thread_is_uploaded_into_that_thread(
     await renderer.consume(queue)
 
     assert adapter.media_routed == [("gid-1", str(img), "chart", True, "t1", "group")]
+
+
+# ---------------------------------------------------------------------------
+# FR-037: streaming the reply into one editable status message (supports_edit)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="009-channels",
+    scenario="reply text streams into the editable status message as it arrives",
+)
+async def test_reply_text_streams_into_the_status_message() -> None:
+    adapter = FakeChannelAdapter(supports_edit=True)
+    events = [
+        ToolCall(tool_use_id="t1", tool_name="search", tool_input={"q": "cats"}),
+        TextDelta(text="I found "),
+        TextDelta(text="three "),
+        TextDelta(text="cats."),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]
+
+    # A ticking clock (step > the 1.5s throttle) makes each render pass the throttle.
+    await _render(adapter, events, now=_ticking())
+
+    # Before any text, the status message shows the tool-progress line…
+    assert adapter.sent[0] == ("owner", "⏳ search · cats")
+    # …then the SAME single message is edited with the growing reply text (plain,
+    # not HTML), so the user watches the answer materialize.
+    assert ("owner", "m1", "I found") in adapter.edits
+    assert adapter.edits[-1] == ("owner", "m1", "I found three cats.")
+    # Finish still deletes the status message and sends the final reply once.
+    assert adapter.deleted == [("owner", "m1")]
+    assert adapter.sent[-1] == ("owner", "I found three cats.")
+
+
+@pytest.mark.acceptance(
+    spec="009-channels",
+    scenario="the streamed reply preview is clipped to the platform limit",
+)
+async def test_streamed_preview_is_clipped_to_the_platform_limit() -> None:
+    # A tiny per-message limit forces clipping of the interim preview.
+    adapter = FakeChannelAdapter(supports_edit=True, max_message_chars=10)
+    body = "0123456789ABCDEFGHIJ"  # 20 chars, twice the limit
+    events = [
+        # A tool call opens the status message the reply text then streams into.
+        ToolCall(tool_use_id="t1", tool_name="search", tool_input={"q": "cats"}),
+        TextDelta(text="start"),
+        TextDelta(text=body),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]
+
+    await _render(adapter, events, now=_ticking())
+
+    # Every interim text edit fits the platform limit and, when clipped, keeps the
+    # TAIL behind a leading ellipsis so the newest text shows.
+    assert adapter.edits, "expected at least one interim status edit"
+    for _chat, _mid, text in adapter.edits:
+        assert len(text) <= 10
+    clipped = adapter.edits[-1][2]
+    assert clipped == "…BCDEFGHIJ"  # ellipsis + the final 9 chars of the accumulated text
+    # The final reply (sent via _finish) is the FULL text, not the clipped preview.
+    assert adapter.sent[-1] == ("owner", "start" + body)
+
+
+@pytest.mark.acceptance(
+    spec="009-channels",
+    scenario="a slow text-only reply streams into a status message",
+)
+async def test_slow_text_only_reply_opens_and_streams_a_status_message() -> None:
+    # No tool call — a pure explanatory reply. The status message is opened only
+    # because the reply runs PAST the throttle interval (the ticking clock, step
+    # 2.0 > 1.5s, makes it "slow"), then the growing text streams into it.
+    adapter = FakeChannelAdapter(supports_edit=True)
+    events = [
+        TextDelta(text="First, "),
+        TextDelta(text="second, "),
+        TextDelta(text="third."),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]
+
+    await _render(adapter, events, now=_ticking())
+
+    # The status message is opened with the streaming reply text (no tool line)…
+    assert adapter.sent[0] == ("owner", "First,")
+    # …then edited in place as the answer grows…
+    assert adapter.edits[-1] == ("owner", "m1", "First, second, third.")
+    # …and on finish it is deleted and the final reply is sent once.
+    assert adapter.deleted == [("owner", "m1")]
+    assert adapter.sent[-1] == ("owner", "First, second, third.")
+
+
+@pytest.mark.acceptance(
+    spec="009-channels",
+    scenario="a fast text-only reply opens no status message",
+)
+async def test_fast_text_only_reply_opens_no_status_message() -> None:
+    # A quick reply whose deltas all land within the throttle window (the default
+    # constant clock never advances past 0) opens NO placeholder — no
+    # create → delete → resend flicker; texts() is exactly the one final reply.
+    adapter = FakeChannelAdapter(supports_edit=True)
+    events = [
+        TextDelta(text="hi "),
+        TextDelta(text="there"),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]
+
+    await _render(adapter, events)  # default now=_clock(0.0): elapsed stays 0 < 1.5
+
+    assert adapter.sent == [("owner", "hi there")]
+    assert adapter.edits == []
+    assert adapter.deleted == []
+
+
+# ---------------------------------------------------------------------------
+# FR-037: typing heartbeat on a supports_typing-only transport (SeaTalk)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="009-channels",
+    scenario="a supports_typing-only DM keeps the typing indicator alive during a long turn",
+)
+async def test_typing_heartbeat_re_sends_on_a_supports_typing_only_dm() -> None:
+    # SeaTalk-shaped: can type, cannot edit; a DM.
+    adapter = FakeChannelAdapter(supports_edit=False, supports_typing=True)
+    queue: asyncio.Queue[Any] = asyncio.Queue()
+
+    async def send(text: str) -> None:
+        await adapter.send_text("owner", text)
+
+    renderer = TurnRenderer(
+        channel="st",
+        adapter=adapter,
+        chat_id="owner",
+        conversation_id="c1",
+        send=send,
+        now=_clock(0.0),
+        chat_kind="direct",
+        heartbeat_seconds=0.01,  # drive the heartbeat fast
+    )
+    task = asyncio.create_task(renderer.consume(queue))
+    # The turn is "long": events have not arrived yet, so the heartbeat ticks.
+    await wait_until(
+        lambda: len(adapter.typing) > 1,
+        message="expected the typing heartbeat to re-send more than once",
+    )
+    # Now finish the turn — the heartbeat must be cancelled in the finally.
+    queue.put_nowait(TextDelta(text="done"))
+    queue.put_nowait(TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"))
+    queue.put_nowait(None)
+    await task
+
+    assert len(adapter.typing) > 1  # the indicator was re-sent periodically
+    assert adapter.sent[-1] == ("owner", "done")  # and the final reply still lands
+
+
+@pytest.mark.acceptance(
+    spec="009-channels",
+    scenario="a supports_typing-only group turn posts no interim status message",
+)
+async def test_no_interim_signal_on_a_supports_typing_only_group_turn() -> None:
+    # SeaTalk in a group: no edit, no delete, and single_chat_typing is DM-only —
+    # so a group/thread turn gets NO interim signal, only the final chunked reply.
+    adapter = FakeChannelAdapter(supports_edit=False, supports_typing=True, supports_groups=True)
+    queue: asyncio.Queue[Any] = asyncio.Queue()
+
+    async def send(text: str) -> None:
+        await adapter.send_text("gid-1", text, thread_id="t1", chat_kind="group")
+
+    renderer = TurnRenderer(
+        channel="st",
+        adapter=adapter,
+        chat_id="gid-1",
+        conversation_id="c1",
+        send=send,
+        now=_clock(0.0),
+        thread_id="t1",
+        chat_kind="group",
+        heartbeat_seconds=0.01,
+    )
+    for event in [
+        ToolCall(tool_use_id="t1", tool_name="search", tool_input={"q": "cats"}),
+        TextDelta(text="found 3 cats"),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]:
+        queue.put_nowait(event)
+    queue.put_nowait(None)
+    await renderer.consume(queue)
+
+    # No heartbeat (group), no editable status message, no edits/deletes — just
+    # the single final reply into the originating group/thread.
+    assert adapter.typing == []
+    assert adapter.edits == []
+    assert adapter.deleted == []
+    assert adapter.sent == [("gid-1", "found 3 cats")]

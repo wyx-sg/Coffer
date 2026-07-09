@@ -720,6 +720,55 @@ status / notify`.
 - **Then** the progress status line names the tool and a short descriptor drawn
   from its input (e.g. the Bash description, the file basename for Read)
 
+### Scenario: reply text streams into the editable status message as it arrives
+
+- **Given** a paired channel on an adapter that can edit messages
+- **When** the agent's reply text arrives in deltas during a turn
+- **Then** the single status message shows tool-progress lines first, then is
+  edited in place with the accumulating reply text (plain, not HTML) so the user
+  watches the answer materialize; on finish the status message is deleted and the
+  final reply is sent once (HTML-rendered and paragraph-chunked)
+
+### Scenario: the streamed reply preview is clipped to the platform limit
+
+- **Given** a paired channel on an adapter that can edit messages
+- **When** the accumulating reply text grows past the platform's per-message limit
+- **Then** each interim edit is clipped to that limit (keeping the most recent
+  text behind a leading ellipsis) so the edit never fails, while the final reply
+  carries the full text
+
+### Scenario: a slow text-only reply streams into a status message
+
+- **Given** a paired channel on an adapter that can edit messages
+- **When** a text-only turn (no tool calls) keeps producing reply text past the
+  throttle interval
+- **Then** a status message is opened with the streaming reply text and edited in
+  place as the answer grows, then deleted on finish while the final reply is sent
+  once
+
+### Scenario: a fast text-only reply opens no status message
+
+- **Given** a paired channel on an adapter that can edit messages
+- **When** a text-only turn completes within the throttle interval
+- **Then** no status message is opened (no create → delete → resend flicker) — only
+  the single final reply is sent
+
+### Scenario: a supports_typing-only DM keeps the typing indicator alive during a long turn
+
+- **Given** a paired channel on an adapter that can show typing but cannot edit
+  (SeaTalk), in a direct chat
+- **When** a long turn runs
+- **Then** the typing indicator is re-sent periodically for the turn's duration
+  (an ephemeral action, no chat clutter), and is stopped when the turn ends
+
+### Scenario: a supports_typing-only group turn posts no interim status message
+
+- **Given** a paired channel on an adapter that can show typing but cannot edit
+  or delete (SeaTalk), in a group/thread
+- **When** a turn runs
+- **Then** no interim signal is posted (no typing heartbeat, no editable status
+  message) — only the final chunked reply lands in the originating group/thread
+
 ### Scenario: a group member who is not the paired sender is ignored
 
 - **Given** a peer paired with a stored sender identity
@@ -1034,10 +1083,24 @@ capabilities the official personal bridges lack.
   reactions, an ack reaction marks receipt immediately; a typing/working signal
   shows during the turn; completion is marked on finish. All best-effort — a
   failed ack never breaks the turn.
-- **FR-037**: Long replies stream by the platform's best mechanism. Platforms
-  with no streaming API (Telegram, SeaTalk) stream by editing one placeholder
-  message under a throttle, or post periodic progress into the thread; final
-  text is paragraph-first chunked to the platform limit.
+- **FR-037**: Long replies stream by the platform's best mechanism, chosen from
+  the adapter's capabilities (never its type). A `supports_edit` platform
+  (Telegram) streams the reply text into ONE throttled editable status message,
+  opened once a turn runs long enough to warrant it — either tool activity opens
+  it (tool-progress lines show first, then the reply text takes over the same
+  message as it arrives) or, on a text-only turn, the reply itself opens it once
+  it has run past the throttle interval. A reply that finishes within that
+  interval opens no status message at all (no create → delete → resend flicker) —
+  its final send is enough. Interim edits are PLAIN and clipped to the
+  per-message limit, so a long or partial-markdown preview never breaks the
+  platform parser or exceeds the cap; on finish that message is deleted and the
+  final reply is sent HTML-rendered and paragraph-chunked to the platform limit. A
+  `supports_typing`-only platform (SeaTalk) cannot stream, so on a DM it keeps a
+  periodic typing heartbeat alive during the turn (an ephemeral action, zero
+  chat clutter) and sends the final chunked reply; a SeaTalk group/thread turn
+  gets no interim signal at all (it can neither edit, delete, nor group-type) —
+  the final chunked reply is the completion signal. All best-effort — a failed
+  edit or heartbeat never breaks the turn.
 - **FR-038**: Telegram albums are one turn. Messages sharing a `media_group_id`
   are debounced into a single turn carrying all their attachments, not one turn
   per photo.

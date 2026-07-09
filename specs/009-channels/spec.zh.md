@@ -638,6 +638,49 @@ status / notify`。
 - **Then** 进度状态行给出工具名和从其输入取的简短描述（如 Bash 的 description、
   Read 的文件名）
 
+### Scenario: reply text streams into the editable status message as it arrives
+
+- **Given** 一个在可编辑消息的 adapter 上的已配对 channel
+- **When** agent 的回复文本在一个 turn 中以增量到达
+- **Then** 那条唯一的状态消息先显示工具进度行，随后就地被编辑为不断累积的回复文本
+  （纯文本，非 HTML），让用户看着答案逐渐成形；结束时删除该状态消息并只发一次最终
+  回复（HTML 渲染并按段落分块）
+
+### Scenario: the streamed reply preview is clipped to the platform limit
+
+- **Given** 一个在可编辑消息的 adapter 上的已配对 channel
+- **When** 累积的回复文本增长超过平台的单条消息上限
+- **Then** 每次中途编辑都被裁剪到该上限（保留最近文本，前面加省略号），使编辑不会
+  失败，而最终回复携带完整文本
+
+### Scenario: a slow text-only reply streams into a status message
+
+- **Given** 一个在可编辑消息的 adapter 上的已配对 channel
+- **When** 一个纯文本 turn（没有工具调用）持续产出回复文本、超过节流间隔
+- **Then** 打开一条状态消息装载流式回复文本，并随答案增长就地编辑，结束时删除该消息
+  且只发一次最终回复
+
+### Scenario: a fast text-only reply opens no status message
+
+- **Given** 一个在可编辑消息的 adapter 上的已配对 channel
+- **When** 一个纯文本 turn 在节流间隔内就完成
+- **Then** 不打开任何状态消息（没有 create→delete→resend 抖动）——只发那一条最终回复
+
+### Scenario: a supports_typing-only DM keeps the typing indicator alive during a long turn
+
+- **Given** 一个在能显示打字但不能编辑（SeaTalk）的 adapter 上、私聊中的已配对 channel
+- **When** 一个长 turn 运行
+- **Then** 打字提示在该 turn 期间被周期性重发（一个短暂动作，无聊天噪声），并在 turn
+  结束时停止
+
+### Scenario: a supports_typing-only group turn posts no interim status message
+
+- **Given** 一个在能显示打字但不能编辑或删除（SeaTalk）的 adapter 上、群组/线程中的
+  已配对 channel
+- **When** 一个 turn 运行
+- **Then** 不发任何中途信号（没有打字心跳，也没有可编辑状态消息）——只有最终分块回复
+  落在发起的群组/线程里
+
 ### Scenario: a group member who is not the paired sender is ignored
 
 - **Given** 一个带已存发送者身份的已配对 peer
@@ -893,9 +936,18 @@ Coffer-hosted channel 与它们并不冗余——它是通往统一、本地、�
 - **FR-036**: 收到与进度被确认。在平台支持 reaction 处，一个 ack reaction 立即标记收到；
   turn 期间显示一个 typing/working 信号；完成时标记完成。全部尽力而为——一次失败的 ack
   绝不打断 turn。
-- **FR-037**: 长回复按平台的最佳机制流式呈现。没有流式 API 的平台（Telegram、SeaTalk）
-  通过在节流下编辑一条占位消息、或向线程周期性发进度来流式呈现；最终文本按段落优先分块
-  到平台上限。
+- **FR-037**: 长回复按平台的最佳机制流式呈现，该机制由 adapter 的能力（而非其类型）
+  决定。可编辑（`supports_edit`）的平台（Telegram）把回复文本流式写入**同一条**节流
+  的可编辑状态消息，仅在一个 turn 运行到足够长时才打开它——要么是工具活动打开它（先显示
+  工具进度行，随后回复文本到达时接管同一条消息），要么在纯文本 turn 中由回复本身在跑过
+  节流间隔后打开它。一个在该间隔内就结束的回复根本不打开状态消息（没有 create→delete→
+  resend 抖动）——它的最终发送就够了。中途编辑是**纯文本**并裁剪到单条上限，因此过长或
+  半成品 markdown 的预览既不会撑破平台解析器也不会超上限；结束时删除该消息，最终回复以
+  HTML 渲染并按段落分块到平台上限发送。仅
+  支持打字提示（`supports_typing`）的平台（SeaTalk）无法流式，因此在私聊中于 turn 期间
+  维持周期性打字心跳（一个短暂动作，零聊天噪声）并发送最终分块回复；SeaTalk 群组/线程
+  的 turn 完全没有中途信号（它既不能编辑、删除也没有群组打字接口）——最终分块回复就是
+  完成信号。全部尽力而为——一次失败的编辑或心跳绝不打断 turn。
 - **FR-038**: Telegram album 是一个 turn。共享同一 `media_group_id` 的消息被去抖成携带
   它们全部附件的单个 turn，而非每张图一个 turn。
 - **FR-039**: 入站事件被去重。一个被重投的平台事件（相同 message id）只被处理一次。
