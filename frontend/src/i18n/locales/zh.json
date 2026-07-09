@@ -523,7 +523,12 @@
         "error": "错误",
         "credentials_locked": "凭证已锁定"
       },
-      "keyExported": "key 已写入 {{path}}"
+      "keyExported": "key 已写入 {{path}}",
+      "machines": "机器",
+      "machinesHint": "这个 vault 已知的所有机器。每台机器在同步时登记自己。",
+      "thisMachine": "本机",
+      "neverSynced": "从未同步",
+      "machineName": "机器名称"
     },
     "connections": {
       "title": "LLM 连接",

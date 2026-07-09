@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from coffer.domain.sync.manifest import Manifest
+from coffer.domain.sync.models import MachineEntry, MachineIdentity
 from coffer.domain.sync.serialization import ResourceDoc
 
 
@@ -38,6 +39,9 @@ class GitPort(Protocol):
 
     def commit_all(self, message: str) -> bool:
         """Stage everything and commit; return False if there was nothing to do."""
+
+    def has_changes(self) -> bool:
+        """Whether the working tree differs from HEAD (uncommitted changes)."""
 
     def pull(self, branch: str) -> PullOutcome: ...
 
@@ -72,6 +76,22 @@ class WorkspacePort(Protocol):
 
     def list_files(self) -> list[str]:
         """All tracked workspace-relative paths (for the 'no key in medium' check)."""
+
+    def write_machine_entry(self, entry: MachineEntry) -> None:
+        """Write this machine's own ``machines/<id>.json`` registry entry."""
+
+    def read_machine_entries(self) -> list[MachineEntry]:
+        """All machine registry entries present in the workspace."""
+
+
+class MachineIdentityPort(Protocol):
+    """Persistence of this machine's stable identity singleton (ADR-043)."""
+
+    async def get(self) -> MachineIdentity | None: ...
+
+    async def create(self, machine_id: str, display_name: str) -> MachineIdentity: ...
+
+    async def set_display_name(self, display_name: str) -> MachineIdentity: ...
 
 
 class CredentialSyncPort(Protocol):

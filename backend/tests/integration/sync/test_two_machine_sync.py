@@ -20,6 +20,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.config_service import SyncConfigService
 from coffer.application.sync.exporter import SyncExporter
+from coffer.application.sync.identity import MachineIdentityService
 from coffer.application.sync.importer import SyncImporter
 from coffer.application.sync.service import SyncService
 from coffer.application.sync.worker import SyncWorker
@@ -39,6 +40,7 @@ from coffer.infrastructure.persistence.repos import (
 from coffer.infrastructure.sync.credentials import CredentialSyncAdapter
 from coffer.infrastructure.sync.git_repo import GitRepo
 from coffer.infrastructure.sync.persistence import (
+    SqlAlchemyMachineIdentityRepo,
     SqlAlchemySyncConfigRepo,
     SqlAlchemySyncStateRepo,
 )
@@ -114,6 +116,12 @@ async def _make_machine(name: str, root: Path, remote: Path, *, create_key: bool
     )
     exporter = SyncExporter(resources, cred_sync, workspace)
     importer = SyncImporter(resources, cred_sync, workspace)
+    identity = MachineIdentityService(
+        SqlAlchemyMachineIdentityRepo(sm),
+        audit,
+        new_id=lambda: f"01MACHINE{name * 17}"[:26].upper(),
+        default_name=lambda: name,
+    )
     service = SyncService(
         config=config_svc,
         git=git,
@@ -122,7 +130,9 @@ async def _make_machine(name: str, root: Path, remote: Path, *, create_key: bool
         credentials=cred_sync,
         master_key=master_key,
         audit=audit,
-        machine_id=name,
+        identity=identity,
+        workspace=workspace,
+        coffer_version="0.0.0-test",
     )
     return Machine(
         name=name,
@@ -250,3 +260,90 @@ async def test_only_shared_state_in_medium(tmp_path, remote) -> None:  # type: i
     assert not any(f.endswith(".db") for f in files)
     assert not any("daemon.json" in f for f in files)
     assert not any(f.startswith("logs/") for f in files)
+
+
+@pytest.mark.acceptance(spec="010-sync", scenario="machines are visible after they sync")
+async def test_machines_visible_after_sync(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.service.run()
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()
+
+    # B sees both machines, with itself marked local.
+    identity_b, machines_b = await b.service.list_machines()
+    assert {m.display_name for m in machines_b} == {"A", "B"}
+    assert sum(1 for m in machines_b if m.machine_id == identity_b.machine_id) == 1
+
+    # A pulls B's entry; every entry carries platform + last-sync time.
+    await a.service.run()
+    _identity_a, machines_a = await a.service.list_machines()
+    assert {m.display_name for m in machines_a} == {"A", "B"}
+    for m in machines_a:
+        assert m.platform
+        assert m.last_sync_at is not None
+
+    # Renaming A propagates to B after the next round trip.
+    await a.service.rename_machine("studio", actor="test")
+    await a.service.run()
+    await b.service.run()
+    _identity_b2, machines_b2 = await b.service.list_machines()
+    assert {m.display_name for m in machines_b2} == {"studio", "B"}
+
+
+async def test_idle_run_does_not_rechurn_machine_entry(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """A no-change run must not rewrite the fresh machine entry (no commit chains)."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.service.run()
+    entry_file = a.root / "ws" / "machines"
+    first = next(entry_file.glob("*.json")).read_text(encoding="utf-8")
+
+    await a.service.run()  # nothing changed since the last run
+    second = next(entry_file.glob("*.json")).read_text(encoding="utf-8")
+    assert second == first
+
+
+async def test_stale_machine_entry_refreshed_by_heartbeat(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """An entry >24h old is rewritten even when the run has no other changes."""
+    from datetime import UTC, datetime, timedelta
+
+    from coffer.domain.sync.models import MachineEntry
+
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.service.run()
+
+    identity, entries = await a.service.list_machines()
+    own = next(e for e in entries if e.machine_id == identity.machine_id)
+    stale_ts = datetime.now(tz=UTC) - timedelta(hours=25)
+    a.workspace.write_machine_entry(
+        MachineEntry(
+            machine_id=own.machine_id,
+            display_name=own.display_name,
+            platform=own.platform,
+            os_version=own.os_version,
+            coffer_version=own.coffer_version,
+            last_sync_at=stale_ts,
+        )
+    )
+    # Commit the staled entry so the tree is clean — isolating the heartbeat
+    # branch from the has_changes() branch.
+    GitRepo(a.root / "ws").commit_all("stale the entry")
+
+    await a.service.run()
+    _identity, refreshed = await a.service.list_machines()
+    own_after = next(e for e in refreshed if e.machine_id == identity.machine_id)
+    assert own_after.last_sync_at is not None
+    assert own_after.last_sync_at > stale_ts + timedelta(hours=1)
+
+
+async def test_corrupt_machine_entry_never_blocks_sync(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """A truncated/hand-mangled machines/*.json is skipped, not fatal."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.service.run()
+
+    machines_dir = a.root / "ws" / "machines"
+    (machines_dir / "01CORRUPTED0000000000000AA.json").write_text("{ trunca", encoding="utf-8")
+
+    state = await a.service.run()  # must not raise; the bad entry is ignored
+    assert state.status is SyncStatus.CLEAN
+    _identity, entries = await a.service.list_machines()
+    assert {e.display_name for e in entries} == {"A"}

@@ -69,6 +69,16 @@ coffer sync config --auto on --interval 300
 With auto-sync, the daemon pushes your changes (debounced) and pulls others on
 the interval — no manual command.
 
+## Seeing your machines
+
+```bash
+coffer sync machines                    # every machine attached to the vault
+coffer sync machines --rename studio    # rename this machine
+```
+
+Each machine registers itself (name, platform, last sync) when it syncs; the
+list also appears in the desktop Sync panel.
+
 ## Resolving a conflict
 
 If you edited the same resource/file on two machines before syncing, a run stops

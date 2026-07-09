@@ -20,12 +20,14 @@ import yaml
 
 from coffer.domain.sync.errors import SyncSerializationError
 from coffer.domain.sync.manifest import Manifest
+from coffer.domain.sync.models import MachineEntry
 from coffer.domain.sync.serialization import ResourceDoc, parse_resource_doc
 from coffer.infrastructure.sync.paths import mirrored_trees as _default_mirrored_trees
 
 _MANIFEST = "manifest.json"
 _RESOURCES = "resources"
 _CREDENTIALS = "credentials"
+_MACHINES = "machines"
 
 #: Files that are *derived* from the source-of-truth files and must NOT be
 #: synced — they would differ per machine and cause spurious same-path
@@ -99,6 +101,44 @@ class Workspace:
         except json.JSONDecodeError as e:
             raise SyncSerializationError(f"manifest is not valid JSON: {e}") from e
         return Manifest.from_dict(data)
+
+    # --- machine registry ----------------------------------------------------
+
+    def write_machine_entry(self, entry: MachineEntry) -> None:
+        """Write this machine's own registry entry (never another machine's).
+
+        Write-to-temp + atomic rename, so a crash mid-write can never leave a
+        truncated entry behind (a reader may run concurrently)."""
+        target = self._root / _MACHINES
+        target.mkdir(parents=True, exist_ok=True)
+        final = target / f"{entry.machine_id}.json"
+        tmp = target / f".{entry.machine_id}.json.tmp"
+        tmp.write_text(
+            json.dumps(entry.to_dict(), sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        tmp.replace(final)
+
+    def read_machine_entries(self) -> list[MachineEntry]:
+        """All parseable machine registry entries.
+
+        The registry is informational, so one corrupt entry (hand-edited repo,
+        interrupted writer on an old build) must never halt syncing the vault:
+        invalid files are skipped, and a machine whose own entry is unreadable
+        simply rewrites it on its next run."""
+        target = self._root / _MACHINES
+        if not target.exists():
+            return []
+        entries: list[MachineEntry] = []
+        for path in sorted(target.glob("*.json")):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if not isinstance(data, dict) or "machine_id" not in data:
+                    continue
+                entries.append(MachineEntry.from_dict(data))
+            except (json.JSONDecodeError, OSError, KeyError, ValueError):
+                continue
+        return entries
 
     # --- resource docs -----------------------------------------------------
 
