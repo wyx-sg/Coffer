@@ -17,6 +17,7 @@ from typing import Any
 import httpx
 
 from coffer.application.channel.ports import AdapterCallbacks
+from coffer.domain.channel.dedup import SeenIds
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
     ChoiceButton,
@@ -48,6 +49,21 @@ _CHUNK_LIMIT = 3500  # paragraph-chunking budget, in characters
 _BYTE_LIMIT = 3900  # SeaTalk caps content at 4096 BYTES; stay clear of it
 
 
+def _dedup_key(envelope: dict[str, Any], event: dict[str, Any]) -> str:
+    """The event's unique id for FR-039 de-dup: the top-level ``event_id``,
+    falling back to the message id (on ``message`` for delivered messages, at
+    the event level for an interactive_message_click)."""
+    event_id = str(envelope.get("event_id") or "")
+    if event_id:
+        return event_id
+    message = event.get("message")
+    if isinstance(message, dict):
+        message_id = str(message.get("message_id") or "")
+        if message_id:
+            return message_id
+    return str(event.get("message_id") or "")
+
+
 class SeaTalkAdapter:
     """One SeaTalk app/bot ↔ one channel resource."""
 
@@ -65,6 +81,7 @@ class SeaTalkAdapter:
         self._client = client or httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=30.0))
         self._media_dir = media_dir or default_media_dir()
         self._callbacks: AdapterCallbacks | None = None
+        self._seen = SeenIds()  # FR-039: drop redelivered events
         self._transport = SeaTalkTransport(channel_name, app_id, app_secret, base_url, self._client)
 
     @property
@@ -97,6 +114,13 @@ class SeaTalkAdapter:
         event_type = str(envelope.get("event_type", ""))
         event = envelope.get("event")
         if not isinstance(event, dict):
+            return
+        # FR-039: SeaTalk retries a slow callback and a network hiccup can
+        # double-deliver — drop an event whose id (or message id) we already
+        # processed so a redelivery never drives the same turn twice. The
+        # verification handshake never reaches here (the listener answers it).
+        dedup_key = _dedup_key(envelope, event)
+        if dedup_key and not self._seen.add(dedup_key):
             return
         if event_type == "message_from_bot_subscriber":
             message = event.get("message") or {}

@@ -115,6 +115,26 @@ async def test_poll_loop_dispatches_and_commits_offset_after_dispatch(
     assert msg.timestamp.year == 2024  # epoch 1718000000 normalized to aware UTC
 
 
+async def test_redelivered_update_id_is_processed_once(fake_telegram: FakeTelegram) -> None:
+    """FR-039: the poll offset normally prevents replays, but a reconnect race
+    can re-deliver an update. The same update_id delivered twice must drive the
+    turn once — a redelivered message never doubles the reply."""
+    adapter = make_telegram_adapter(fake_telegram)
+    recorder = RecordingCallbacks()
+    # Two batches carrying the SAME update_id (a redelivery), then a distinct
+    # one so the test can wait for a stable end state.
+    await fake_telegram.update_batches.put([_message_update(50, text="once")])
+    await fake_telegram.update_batches.put([_message_update(50, text="once")])
+    await fake_telegram.update_batches.put([_message_update(51, text="next")])
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await wait_until(lambda: [m.text for m in recorder.messages] == ["once", "next"])
+    finally:
+        await adapter.stop()
+    # The duplicate 50 was dropped: exactly one "once", never two.
+    assert [m.text for m in recorder.messages] == ["once", "next"]
+
+
 async def test_poll_error_backs_off_then_recovers(fake_telegram: FakeTelegram) -> None:
     fake_telegram.fail_get_updates = 1  # one 500 → one 1s backoff step, then recovery
     adapter = make_telegram_adapter(fake_telegram)
