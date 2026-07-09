@@ -582,16 +582,20 @@ paths:
     post:
       tags: [agents]
       operationId: installAgentHook
-      summary: Install Coffer's SessionStart/SessionEnd hooks into this agent
+      summary: Install Coffer's session-context injection into this agent
       description: |
-        Writes a `coffer-hook` command entry (absolute path + `--agent <name>`
-        args) under the agent's hooks file (Claude `settings.json`; Codex
-        `hooks.json`), atomically and with a `.bak` backup. Claude Code installs
-        SessionStart + SessionEnd; Codex installs SessionStart only (it has no
-        session-end event). Idempotent — re-installing replaces Coffer's entry in
-        place and leaves user-authored hooks untouched. Returns 422 if the
+        Installs the injection mechanism the agent's manifest declares
+        (ADR-042). SHELL_COMMAND (Claude Code `settings.json` Start+End; Codex
+        and Cursor `hooks.json` Start only): writes a `coffer-hook` command
+        entry (absolute path + `--agent <name>` args, plus `--dialect/--event`
+        for the cursor flavor). INSTRUCTIONS_BLOCK (Hermes, FR-047): renders
+        the session-context payload into a marker block in `SOUL.md`.
+        PLUGIN_DROP (opencode, FR-048): drops `coffer-session-context.js` into
+        the auto-loaded `plugin/` directory. All writes are atomic with a
+        `.bak` backup, idempotent (Coffer's own entry/block/file is replaced in
+        place), and never touch user-authored content. Returns 422 if the
         coffer-hook binary cannot be resolved, or if the agent type declares no
-        hook support (`HOOK_INSTALL_UNSUPPORTED`).
+        context injection (`HOOK_INSTALL_UNSUPPORTED`).
       responses:
         "200":
           description: Installed (or already installed)
@@ -605,7 +609,7 @@ paths:
       tags: [agents]
       operationId: uninstallAgentHook
       summary: Remove Coffer's lifecycle hooks from this agent
-      description: Removes only Coffer's entries. No-op success when not installed.
+      description: Removes only Coffer's entries/block/file. No-op success when not installed.
       responses:
         "200":
           description: Uninstalled (or was not installed)

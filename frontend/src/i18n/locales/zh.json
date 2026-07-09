@@ -881,7 +881,7 @@
     },
     "hook": {
       "title": "会话启动规则",
-      "help": "开启后，Coffer 在会话启动时向该 Agent 注入规则集——通过 SessionStart 钩子，或对无钩子的 Agent 通过指令文件里的托管块。",
+      "help": "开启后，Coffer 在会话启动时向该 Agent 注入规则集——按该 Agent 支持的方式：SessionStart 钩子、投放的插件，或指令文件里的托管块。",
       "unsupported": "Coffer 尚未支持向该 Agent 类型注入会话上下文。"
     },
     "welcome": {

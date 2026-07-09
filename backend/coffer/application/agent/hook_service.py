@@ -156,7 +156,10 @@ class AgentHookService:
         return spec.path / PLUGIN_FILENAME
 
     def _plugin_command(self, name: str) -> str:
-        """Display form of what the dropped plugin execs (argv, not shell)."""
+        """Display form of what the dropped plugin execs (argv, not shell).
+
+        Mirrors the argv baked into ``plugin_drop._TEMPLATE``; the unit tests on
+        both pin the pair together so they cannot drift silently."""
         hook = self._resolve_hook()
         return f"{hook} --agent {name} --dialect raw --event sessionStart"
 

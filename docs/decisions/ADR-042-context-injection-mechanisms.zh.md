@@ -51,7 +51,7 @@ product 都掉进了"缺席 facet"。这个抽象是按它的**实现**（hook�
 `GET /api/v1/agents/{agent}/session-context` 端点。只有最后一公里——谁去取、以
 什么信封交给模型——不同。这正是三种机制不会退化成三份平行实现的原因。
 
-**本 slice 只实现 `SHELL_COMMAND`。** `PLUGIN_DROP` 与 `INSTRUCTIONS_BLOCK` 是
+**本 slice 只实现 `SHELL_COMMAND`。**（*后续已实现：`INSTRUCTIONS_BLOCK`——FR-047、`PLUGIN_DROP`——FR-048。*） `PLUGIN_DROP` 与 `INSTRUCTIONS_BLOCK` 是
 已识别的扩展点，暂无 descriptor 使用——与 `SkillDeliveryMode` 早已预留
 `RULES_MDC` / `EXTERNAL_DIR` 完全同构。服务遇到未实现的 mode 时按缺席 facet 处理
 （`HookInstallUnsupported` → 422；`status` 报 `installed=False`）。

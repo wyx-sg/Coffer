@@ -17,6 +17,7 @@ from coffer.domain.agent.config_files import (
     ConfigFileKind,
     ConfigFileSpec,
 )
+from coffer.domain.agent.plugin_drop import PLUGIN_SUBDIR
 
 
 def _home() -> pathlib.Path:
@@ -91,7 +92,7 @@ def _opencode_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
         ConfigFileSpec(
             "plugin",
             "Plugins (plugin/)",
-            cfg / "plugin",
+            cfg / PLUGIN_SUBDIR,
             ConfigFileFormat.TEXT,
             kind=ConfigFileKind.DIRECTORY,
         ),

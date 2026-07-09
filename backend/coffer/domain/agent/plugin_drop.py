@@ -41,11 +41,22 @@ import {{ spawn }} from "node:child_process";
 
 const HOOK = {hook};
 const AGENT = {agent};
-const TIMEOUT_MS = 5000;
+// Covers coffer-hook's own 5s HTTP timeout PLUS PyInstaller onefile startup
+// (bootloader + extraction can add seconds on a cold run).
+const TIMEOUT_MS = 10000;
 const cache = new Map();
 
 function fetchContext() {{
   return new Promise((resolve) => {{
+    let done = false;
+    const settle = (value) => {{
+      if (!done) {{ done = true; resolve(value); }}
+    }};
+    // Hard settle guard: 'close' waits on the stdout pipe, which a killed
+    // child's grandchild can hold open past the spawn timeout. Failure must
+    // stay silent AND bounded.
+    const guard = setTimeout(() => settle(""), TIMEOUT_MS + 1000);
+    if (guard.unref) guard.unref();
     let out = "";
     let child;
     try {{
@@ -54,12 +65,15 @@ function fetchContext() {{
         timeout: TIMEOUT_MS,
       }});
     }} catch {{
-      resolve("");
+      settle("");
       return;
     }}
+    // Decode as a stream: per-chunk implicit decode would tear a multi-byte
+    // UTF-8 char that straddles a chunk boundary into U+FFFD.
+    child.stdout.setEncoding("utf8");
     child.stdout.on("data", (d) => {{ out += d; }});
-    child.on("error", () => resolve(""));
-    child.on("close", (code) => resolve(code === 0 ? out.trim() : ""));
+    child.on("error", () => settle(""));
+    child.on("close", (code) => settle(code === 0 ? out.trim() : ""));
   }});
 }}
 
@@ -71,7 +85,9 @@ export const CofferSessionContext = async () => ({{
       let ctx = cache.get(key);
       if (ctx === undefined) {{
         ctx = await fetchContext();
-        cache.set(key, ctx);
+        // Cache only success: a transient daemon blip must not pin an empty
+        // context for the whole session — retry on the next call instead.
+        if (ctx) cache.set(key, ctx);
       }}
       if (ctx) output.system.push(ctx);
     }} catch {{}}

@@ -881,7 +881,7 @@
     },
     "hook": {
       "title": "Session-start rules",
-      "help": "When on, Coffer feeds its rules bundle to the agent at session start — via a SessionStart hook, or a managed block in the instructions file for agents without one.",
+      "help": "When on, Coffer feeds its rules bundle to the agent at session start — via a SessionStart hook, a dropped plugin, or a managed block in the instructions file, whichever the agent supports.",
       "unsupported": "Coffer can't inject session context into this agent type yet."
     },
     "welcome": {

@@ -59,7 +59,7 @@ memory in front of the model).
 who fetches it and in what envelope it reaches the model — varies. This is what
 keeps the mechanisms from becoming three parallel implementations.
 
-**`SHELL_COMMAND` alone is implemented in this slice.** `PLUGIN_DROP` and
+**`SHELL_COMMAND` alone is implemented in this slice.** *(Since implemented: `INSTRUCTIONS_BLOCK` — FR-047, `PLUGIN_DROP` — FR-048.)* `PLUGIN_DROP` and
 `INSTRUCTIONS_BLOCK` are recognized extension points with no descriptor using
 them yet — exactly as `SkillDeliveryMode` already reserves `RULES_MDC` and
 `EXTERNAL_DIR`. A service that meets an unimplemented mode treats it as an absent
