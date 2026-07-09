@@ -162,6 +162,12 @@ Current areas:
 - `mcp-preferences/<server>.yaml` — the DISABLED capabilities per server
   (enabled is the default; seen-timestamps stay machine-local). Import
   reconciles servers present locally to match; owned prefixes = local servers.
+  Conflict semantics are doc-granular: if both machines disabled different
+  capabilities on the same server before their first common sync, the merge
+  conflicts and the resolved side wins wholesale — the losing machine's local
+  disables are re-enabled by its next import. Embedding may stay degraded on a
+  machine until its master key is bootstrapped (locked credential refs import
+  fine; vector indexing simply stays inactive).
 - `settings/embedding.yaml` + `settings/internal-engine.yaml` — the two
   engine singletons. A machine owns (and publishes) a singleton only once it
   has persisted it locally, so a fresh machine's defaults never same-path

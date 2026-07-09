@@ -332,7 +332,13 @@ class Workspace:
         if target.exists():
             for path in sorted(target.rglob("*.yaml")):
                 rel = path.relative_to(target).with_suffix("").as_posix()
-                owned = any(rel.startswith(prefix) for prefix in owned_prefixes)
+                # Boundary-aware: prefix "jira" owns "jira" and "jira/...",
+                # never the sibling "jira-internal" (a bare startswith would
+                # cross-delete docs of servers this machine does not hold).
+                owned = any(
+                    rel == prefix.rstrip("/") or rel.startswith(prefix.rstrip("/") + "/")
+                    for prefix in owned_prefixes
+                )
                 if owned and rel not in wanted:
                     path.unlink(missing_ok=True)
         for rel, doc in docs:

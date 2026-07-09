@@ -19,6 +19,7 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyEmbeddingConfigRepo,
     SqlAlchemyInternalEngineConfigRepo,
 )
+from coffer.infrastructure.sync.git_repo import GitRepo
 
 from .test_two_machine_sync import _make_machine
 
@@ -84,3 +85,25 @@ async def test_mcp_preferences_and_engine_settings_round_trip(tmp_path, remote) 
     await a.service.run()
     rows_a = await prefs_a.list_for(server.id)
     assert all(p.enabled for p in rows_a)
+
+
+async def test_owned_prefix_never_crosses_sibling_names(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """Owning server "jira" must not delete "jira-internal"'s doc when that
+    sibling is not held locally (review #288 finding 1)."""
+    a = await _make_machine(
+        "A", tmp_path / "A", remote, create_key=True, state_providers_factory=_providers
+    )
+    await a.resources.register("mcp_server", "jira", {"value": "x"}, "test")
+    await a.service.run()
+
+    # A foreign machine's doc for a sibling server A does not hold.
+    sibling = a.root / "ws" / "state" / "mcp-preferences" / "jira-internal.yaml"
+    sibling.parent.mkdir(parents=True, exist_ok=True)
+    sibling.write_text(
+        "disabled:\n- key: risky\n  type: tool\nserver: jira-internal\n", encoding="utf-8"
+    )
+    GitRepo(a.root / "ws").commit_all("foreign sibling doc")
+
+    await a.service.run()
+    files = a.workspace.list_files()
+    assert "state/mcp-preferences/jira-internal.yaml" in files  # preserved
