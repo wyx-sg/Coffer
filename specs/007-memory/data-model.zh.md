@@ -154,6 +154,8 @@ CREATE TABLE memory_store_labels (
 
 渲染 store 的可读身份时，`label` 优先于由 `project_root` 推导的 basename；清除 label 即删除其行，退回 FR-017a 的推导 / 回退名。两张表都不改变 store 名（`project-<ULID>`）或 `project_id`。
 
+**一个仓库一个 store，跨 git worktree。** 项目 ULID = `sha256(git-root 路径)`。linked worktree 有自己的 `.git` *文件*，故 `git_root`（`infrastructure/memory/scope_fs.py`）会沿该指针的 `gitdir`/`commondir` 回溯到**主**仓库 toplevel —— 一个仓库的所有 worktree（含主 checkout）解析为同一个 ULID，即同一个 store。分支解析（`git_branch`）仍按 worktree 各自计算（handoff 按分支 key）。此前"每个 worktree 各自哈希"造成的碎裂 store，在 daemon 启动时由一次性、幂等、只增不删的合并（`application/memory/consolidate.py`）修复：重解析每个 `project_root`，凡 store 名不再等于其根规范 `project-<ULID>` 者，其 lane 文件并入规范 store（journal 按时间戳去重，其余同名冲突保留为 `--from-<ulid>` 兄弟文件）后退休（resource + `documents` + label + root 行）。
+
 ## 落盘规范布局（真相源）
 
 ```
