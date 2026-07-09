@@ -286,6 +286,15 @@ resources that reference it cannot spawn, and status reports
   the shared edit still reaches B
 - **And** unsetting the override restores the shared values on B's next run
 
+### Scenario: shared preferences and engine settings sync
+
+- **Given** machine A disabled an MCP tool and picked an internal-engine model
+- **When** machine B syncs against the same remote
+- **Then** the tool is disabled and the model matches on B — and re-enabling
+  the tool on B propagates back to A
+- **And** a fresh machine's defaults never overwrite the fleet's settings (it
+  publishes a singleton only after persisting it locally)
+
 ### Scenario: machines are visible after they sync
 
 - **Given** machines A and B have each completed a sync run against the same
