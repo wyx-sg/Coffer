@@ -35,6 +35,7 @@ from coffer.domain.sync.errors import (
 )
 from coffer.domain.sync.manifest import SCHEMA_VERSION
 from coffer.domain.sync.models import (
+    DEFAULT_POLL_REMOTE_SECONDS,
     MACHINE_ENTRY_HEARTBEAT_SECONDS,
     MachineEntry,
     MachineIdentity,
@@ -73,6 +74,12 @@ class SyncService:
         self._coffer_version = coffer_version
         self._lock = asyncio.Lock()
 
+    @property
+    def is_running(self) -> bool:
+        """Whether a sync run currently holds the lock (any surface, not just
+        the worker) — import-time mutations must not re-trigger auto-sync."""
+        return self._lock.locked()
+
     async def get_config(self) -> SyncConfig:
         return await self._config.get_config()
 
@@ -85,6 +92,7 @@ class SyncService:
         interval_seconds: int,
         branch: str,
         actor: str,
+        poll_remote_seconds: int = DEFAULT_POLL_REMOTE_SECONDS,
     ) -> SyncConfig:
         return await self._config.update_config(
             remote=remote,
@@ -93,6 +101,7 @@ class SyncService:
             interval_seconds=interval_seconds,
             branch=branch,
             actor=actor,
+            poll_remote_seconds=poll_remote_seconds,
         )
 
     async def status(self) -> SyncState:
@@ -125,6 +134,12 @@ class SyncService:
     async def _run_locked(self, config: SyncConfig, *, pull: bool, push: bool) -> SyncState:
         assert config.remote is not None
         await asyncio.to_thread(self._git.ensure_repo, config.remote, config.branch)
+        # A run must never blow through an unresolved merge: exporting over
+        # conflicted files and committing would silently resolve local-wins,
+        # destroying the other machine's edit. Resolve first.
+        existing_conflicts = await asyncio.to_thread(self._git.conflicted_paths)
+        if existing_conflicts:
+            return await self._record_conflict(existing_conflicts)
         # Gate BEFORE export: a newer-schema manifest merged by an earlier run
         # must fail here, not be overwritten by this run's export (which would
         # silently disarm the gate and downgrade the medium).

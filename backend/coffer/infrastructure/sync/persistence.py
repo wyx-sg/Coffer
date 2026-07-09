@@ -27,6 +27,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from coffer.domain.sync.models import (
     DEFAULT_BRANCH,
     DEFAULT_INTERVAL_SECONDS,
+    DEFAULT_POLL_REMOTE_SECONDS,
     SINGLETON_ID,
     MachineIdentity,
     SyncConfig,
@@ -46,6 +47,9 @@ class SyncConfigModel(Base):
     auto: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     interval_seconds: Mapped[int] = mapped_column(
         Integer, nullable=False, default=DEFAULT_INTERVAL_SECONDS
+    )
+    poll_remote_seconds: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=DEFAULT_POLL_REMOTE_SECONDS
     )
     branch: Mapped[str] = mapped_column(String, nullable=False, default=DEFAULT_BRANCH)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
@@ -99,6 +103,7 @@ def _config_to_domain(row: SyncConfigModel) -> SyncConfig:
         enabled=bool(row.enabled),
         auto=bool(row.auto),
         interval_seconds=row.interval_seconds,
+        poll_remote_seconds=row.poll_remote_seconds,
         branch=row.branch,
         updated_at=datetime.fromisoformat(row.updated_at),
     )
@@ -136,6 +141,7 @@ class SqlAlchemySyncConfigRepo:
         auto: bool,
         interval_seconds: int,
         branch: str,
+        poll_remote_seconds: int = DEFAULT_POLL_REMOTE_SECONDS,
     ) -> SyncConfig:
         async with self._sm() as session:
             stmt = select(SyncConfigModel).where(SyncConfigModel.id == SINGLETON_ID)
@@ -148,6 +154,7 @@ class SqlAlchemySyncConfigRepo:
             row.enabled = enabled
             row.auto = auto
             row.interval_seconds = interval_seconds
+            row.poll_remote_seconds = poll_remote_seconds
             row.branch = branch
             row.updated_at = now
             await session.commit()

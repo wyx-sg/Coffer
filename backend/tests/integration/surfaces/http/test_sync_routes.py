@@ -239,3 +239,33 @@ async def test_machine_entry_recorded_after_run(client) -> None:  # type: ignore
     assert len(machines) == 1
     assert machines[0]["last_sync_at"] is not None
     assert machines[0]["platform"]
+
+
+async def test_put_config_round_trips_poll_and_rejects_low(client) -> None:  # type: ignore[no-untyped-def]
+    r = await client.put(
+        "/api/v1/sync/config",
+        json={
+            "remote": "x",
+            "enabled": False,
+            "auto": False,
+            "interval_seconds": 60,
+            "poll_remote_seconds": 10,
+            "branch": "main",
+        },
+    )
+    assert r.status_code == 200
+    assert r.json()["poll_remote_seconds"] == 10
+
+    r = await client.put(
+        "/api/v1/sync/config",
+        json={
+            "remote": "x",
+            "enabled": False,
+            "auto": False,
+            "interval_seconds": 60,
+            "poll_remote_seconds": 2,
+            "branch": "main",
+        },
+    )
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "CONFIG_INVALID"

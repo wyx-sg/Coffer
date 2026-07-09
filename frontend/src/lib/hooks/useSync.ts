@@ -13,6 +13,7 @@ export interface SyncConfig {
   enabled: boolean;
   auto: boolean;
   interval_seconds: number;
+  poll_remote_seconds: number;
   branch: string;
   updated_at?: string;
 }

@@ -49,7 +49,13 @@
   每次运行重试导入，受影响的 ref 在同步状态中报告。一行在某台机器上无法导入的
   资源 MUST NOT 导致它在任何机器上被删除。隔离期间以远端意图为准：对同一资源的
   本地编辑不会被导出，墓碑也不会移除被保留的文档，直到隔离解除。
-- **Auto-sync** —— 一个可选开启的守护进程 worker，在文件/资源变更时（去抖）以及按固定间隔执行 sync run。默认关闭。
+- **Auto-sync** —— 可选开启的守护进程 worker，提供近实时收敛。推送侧：资源变更与
+  文件树变化（`watchfiles` 监听 knowledge/memory/skills 三棵树——agent 可能经
+  symlink 绕过 daemon 直写 memory）触发去抖运行（静默期 5 秒，首次变更后封顶 30
+  秒）。拉取侧：每 `poll_remote_seconds` 秒一次轻量 `git ls-remote` HEAD 探测，仅在
+  远端真的移动时才执行完整运行。固定间隔轮询保留为兜底（它也兜住运行进行中发生的
+  变更——运行期间触发被抑制，导入自身的写入不会再次触发）。默认关闭。两台机器都
+  开启时的预期收敛：约 15–30 秒。
 
 ## Machine identity（机器身份）
 
@@ -74,7 +80,9 @@ workspace 的 `machines/` 区为每台机器保存一个 JSON 注册项：显示
 - `remote` —— git remote URL（启用同步所必需）。
 - `enabled` —— 同步的总开关。
 - `auto` —— 守护进程 auto-sync worker 是否运行。
-- `interval_seconds` —— auto 拉/推间隔（默认 300）。
+- `interval_seconds` —— auto-sync 的兜底轮询间隔（默认 300）。
+- `poll_remote_seconds` —— auto-sync 用 `git ls-remote` 探测远端 HEAD 的频率
+  （默认 15，最小 5）。一次廉价的网络往返；只有 HEAD 移动时才执行完整运行。
 - `branch` —— 用于同步的 git 分支（默认 `main`）。它是 Coffer 自身同步仓库里的
   内部 ref 名，并非用户的项目分支；两台机器用同一默认值，因此**不在设置 UI 中暴露**。
   它仍保留在 config/API 中，并可通过 CLI（`coffer sync --branch`）调整，以应对极少数

@@ -71,8 +71,16 @@ the sync medium.
   While quarantined, the remote intent outweighs local state: local edits to
   the same resource are not exported, and a tombstone does not remove the
   preserved doc until the quarantine resolves.
-- **Auto-sync** — an opt-in daemon worker that runs sync runs on file/resource
-  change (debounced) and on a fixed interval. Off by default.
+- **Auto-sync** — an opt-in daemon worker giving near-real-time convergence.
+  Push side: resource mutations and file-tree changes (a `watchfiles` watcher
+  over the knowledge/memory/skills trees — agents can write memory through
+  symlinks, bypassing the daemon) trigger a debounced run (quiet period 5 s,
+  cap 30 s after the first change). Pull side: a lightweight
+  `git ls-remote` head probe every `poll_remote_seconds` triggers a run only
+  when the remote actually moved. A fixed-interval sweep remains as the
+  fallback (it also catches changes made while a run was in flight — triggers
+  are suppressed during a run so the import's own writes cannot re-fire it).
+  Off by default. Expected convergence with both machines on: ~15–30 s.
 
 ## Machine identity
 
@@ -101,7 +109,10 @@ A single persisted sync config row:
 - `remote` — git remote URL (required to enable).
 - `enabled` — master on/off for sync.
 - `auto` — whether the daemon auto-sync worker runs.
-- `interval_seconds` — auto pull/push interval (default 300).
+- `interval_seconds` — fallback sweep interval for auto-sync (default 300).
+- `poll_remote_seconds` — how often auto-sync probes the remote head with
+  `git ls-remote` (default 15, min 5). One cheap network round trip; a full
+  run happens only when the head moved.
 - `branch` — git branch to sync on (default `main`). This is an internal ref
   name in Coffer's own sync vault repo, not the user's project branch; both
   machines use the same default, so it is **not exposed in the settings UI**.

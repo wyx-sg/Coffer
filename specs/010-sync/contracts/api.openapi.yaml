@@ -187,15 +187,17 @@ components:
         enabled: { type: boolean }
         auto: { type: boolean }
         interval_seconds: { type: integer, minimum: 30 }
+        poll_remote_seconds: { type: integer, minimum: 5, description: "Auto-sync remote-head probe cadence" }
         branch: { type: string }
     SyncConfigOut:
       type: object
-      required: [enabled, auto, interval_seconds, branch]
+      required: [enabled, auto, interval_seconds, poll_remote_seconds, branch]
       properties:
         remote: { type: string, nullable: true }
         enabled: { type: boolean }
         auto: { type: boolean }
         interval_seconds: { type: integer }
+        poll_remote_seconds: { type: integer }
         branch: { type: string }
         updated_at: { type: string }
     SyncStatusOut:

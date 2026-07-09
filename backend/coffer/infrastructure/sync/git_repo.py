@@ -10,6 +10,7 @@ whose global git config has no ``user.name``/``user.email``.
 
 from __future__ import annotations
 
+import os
 import pathlib
 import subprocess
 from collections.abc import Sequence
@@ -70,6 +71,37 @@ class GitRepo:
 
     def has_changes(self) -> bool:
         return bool(self._run("status", "--porcelain").stdout.strip())
+
+    def head(self) -> str | None:
+        """The workspace's current commit sha, or None before the first commit."""
+        if not (self._ws / ".git").exists():
+            return None
+        proc = self._run("rev-parse", "--verify", "--quiet", "HEAD", check=False)
+        sha = proc.stdout.strip()
+        return sha or None
+
+    def remote_head(self, remote: str, branch: str) -> str | None:
+        """The remote branch head via ``git ls-remote`` — one cheap network
+        round trip, no fetch, no working-tree requirement. None when the
+        remote is unreachable or the branch does not exist yet."""
+        self._ws.mkdir(parents=True, exist_ok=True)
+        try:
+            proc = subprocess.run(
+                ["git", "ls-remote", remote, f"refs/heads/{branch}"],
+                cwd=self._ws,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=30,
+                stdin=subprocess.DEVNULL,
+                env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+            )
+        except subprocess.TimeoutExpired:
+            return None
+        if proc.returncode != 0:
+            return None
+        first = proc.stdout.split()
+        return first[0] if first else None
 
     def pull(self, branch: str) -> PullOutcome:
         # Fetch; a brand-new remote has no branch yet, which is not an error.

@@ -15,7 +15,9 @@ from coffer.domain.errors import ConfigValidationError
 from coffer.domain.sync.models import (
     DEFAULT_BRANCH,
     DEFAULT_INTERVAL_SECONDS,
+    DEFAULT_POLL_REMOTE_SECONDS,
     MIN_INTERVAL_SECONDS,
+    MIN_POLL_REMOTE_SECONDS,
     SyncConfig,
     SyncState,
     SyncStatus,
@@ -32,6 +34,7 @@ class SyncConfigRepo(Protocol):
         auto: bool,
         interval_seconds: int,
         branch: str,
+        poll_remote_seconds: int = DEFAULT_POLL_REMOTE_SECONDS,
     ) -> SyncConfig: ...
 
 
@@ -48,6 +51,7 @@ def _default_config() -> SyncConfig:
         interval_seconds=DEFAULT_INTERVAL_SECONDS,
         branch=DEFAULT_BRANCH,
         updated_at=datetime.now(tz=UTC),
+        poll_remote_seconds=DEFAULT_POLL_REMOTE_SECONDS,
     )
 
 
@@ -73,10 +77,16 @@ class SyncConfigService:
         interval_seconds: int,
         branch: str,
         actor: str,
+        poll_remote_seconds: int = DEFAULT_POLL_REMOTE_SECONDS,
     ) -> SyncConfig:
         if interval_seconds < MIN_INTERVAL_SECONDS:
             raise ConfigValidationError(
                 f"interval_seconds must be >= {MIN_INTERVAL_SECONDS}, got {interval_seconds}"
+            )
+        if poll_remote_seconds < MIN_POLL_REMOTE_SECONDS:
+            raise ConfigValidationError(
+                f"poll_remote_seconds must be >= {MIN_POLL_REMOTE_SECONDS}, "
+                f"got {poll_remote_seconds}"
             )
         if enabled and not remote:
             raise ConfigValidationError("a remote is required to enable sync")
@@ -88,6 +98,7 @@ class SyncConfigService:
             auto=auto,
             interval_seconds=interval_seconds,
             branch=branch,
+            poll_remote_seconds=poll_remote_seconds,
         )
         await self._audit.record(
             AuditEventType.SYNC_CONFIG_UPDATED.value,
@@ -97,6 +108,7 @@ class SyncConfigService:
                 "enabled": saved.enabled,
                 "auto": saved.auto,
                 "interval_seconds": saved.interval_seconds,
+                "poll_remote_seconds": saved.poll_remote_seconds,
                 "branch": saved.branch,
             },
         )

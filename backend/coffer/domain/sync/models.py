@@ -15,6 +15,12 @@ DEFAULT_INTERVAL_SECONDS = 300
 #: Minimum auto-sync interval; below this the worker would thrash the remote.
 MIN_INTERVAL_SECONDS = 30
 
+#: Default cadence of the auto-sync ``git ls-remote`` head probe (seconds).
+DEFAULT_POLL_REMOTE_SECONDS = 15
+
+#: Minimum head-probe cadence; below this the probe itself becomes the load.
+MIN_POLL_REMOTE_SECONDS = 5
+
 #: Default git branch synced on.
 DEFAULT_BRANCH = "main"
 
@@ -40,6 +46,7 @@ class SyncConfig:
     interval_seconds: int
     branch: str
     updated_at: datetime
+    poll_remote_seconds: int = DEFAULT_POLL_REMOTE_SECONDS
 
     def is_operational(self) -> bool:
         """Whether a sync run can actually run (a remote is set and enabled)."""
