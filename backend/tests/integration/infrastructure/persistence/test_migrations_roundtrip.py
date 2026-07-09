@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0044"
+HEAD_REVISION = "0045"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -80,7 +80,9 @@ HEAD_REVISION = "0044"
 # ``sync_state.quarantined_refs_json`` column (tombstone-driven deletion +
 # import quarantine) — present at head; its downgrade drops both. 0044 ADDs the
 # ``sync_config.poll_remote_seconds`` column (near-real-time remote-head probe)
-# — column-only, table set unchanged; its downgrade drops the column.
+# — column-only, table set unchanged; its downgrade drops the column. 0045
+# ADDs ``sync_state.failed_state_json`` (state-doc import failures preserved
+# across exports) — column-only; its downgrade drops the column.
 # The ``documents_fts_*`` shadow
 # tables FTS5 creates under the hood are excluded — the assertions speak to the
 # logical schema.
@@ -659,11 +661,13 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
             return {r[1] for r in conn.execute("PRAGMA table_info(sync_config)")}
 
     assert "quarantined_refs_json" in _sync_state_columns()
+    assert "failed_state_json" in _sync_state_columns()
     assert "poll_remote_seconds" in _sync_config_columns()
     command.downgrade(cfg, "0037")
     assert "machine_identity" not in _user_tables(db_path)
     assert "sync_tombstones" not in _user_tables(db_path)
     assert "quarantined_refs_json" not in _sync_state_columns()
+    assert "failed_state_json" not in _sync_state_columns()
     assert "poll_remote_seconds" not in _sync_config_columns()
     assert "channel_thread_conversations" not in _user_tables(db_path)
     assert "internal_engine_config" not in _user_tables(db_path)

@@ -36,6 +36,7 @@ class ImportResult:
     errors: list[str] = field(default_factory=list)
     locked_refs: list[str] = field(default_factory=list)
     quarantined_refs: list[str] = field(default_factory=list)
+    failed_state_paths: list[str] = field(default_factory=list)
 
 
 class SyncImporter:
@@ -76,7 +77,9 @@ class SyncImporter:
         # After resources, so a doc referencing a just-imported channel binds.
         for provider in self._state_providers:
             docs = await asyncio.to_thread(self._workspace.read_state_docs, provider.area)
-            result.errors.extend(await provider.import_docs(docs))
+            for path, message in await provider.import_docs(docs):
+                result.errors.append(f"{provider.area}/{path}: {message}")
+                result.failed_state_paths.append(f"{provider.area}/{path}")
 
     def _localize(
         self, doc: ResourceDoc, overrides: dict[tuple[str, str], dict[str, object]]

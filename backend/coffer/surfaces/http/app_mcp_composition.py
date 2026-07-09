@@ -30,6 +30,7 @@ from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.kind import make_mcp_kind
 from coffer.application.mcp.supervisor import SubprocessSupervisor
+from coffer.application.mcp.sync_state import McpPreferenceSyncState
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.infrastructure.channel.media_retention import default_media_sweep
@@ -69,6 +70,11 @@ def wire_mcp_kind(
     """
     # 1. Build the MCP-side repos
     prefs_repo = MCPCapabilityPreferenceRepo(sm)  # type: ignore[arg-type]
+    providers = getattr(app.state, "sync_state_providers", None)
+    if providers is None:
+        providers = []
+        app.state.sync_state_providers = providers
+    providers.append(McpPreferenceSyncState(resource_svc, prefs_repo))
     inv_repo = MCPInvocationRepo(sm)  # type: ignore[arg-type]
     health_repo = MCPServerHealthRepo(sm)  # type: ignore[arg-type]
 

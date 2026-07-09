@@ -63,6 +63,7 @@ class SyncState:
     conflict_paths: list[str] = field(default_factory=list)
     locked_refs: list[str] = field(default_factory=list)
     quarantined_refs: list[str] = field(default_factory=list)
+    failed_state_paths: list[str] = field(default_factory=list)
     updated_at: datetime | None = None
 
 

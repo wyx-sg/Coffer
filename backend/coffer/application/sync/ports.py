@@ -99,9 +99,12 @@ class WorkspacePort(Protocol):
         area: str,
         docs: Sequence[tuple[str, Mapping[str, object]]],
         owned_prefixes: Collection[str] = (),
+        preserve: Collection[str] = (),
     ) -> None:
         """Reconcile ``state/<area>/``: replace docs under ``owned_prefixes``,
-        write ``docs``, preserve everything else verbatim."""
+        write ``docs``, preserve everything else verbatim — including owned
+        paths listed in ``preserve`` (their import failed here; replacing them
+        with local values would revert the fleet)."""
 
     def read_state_docs(self, area: str) -> list[tuple[str, dict[str, object]]]: ...
 
@@ -164,8 +167,10 @@ class SyncedStatePort(Protocol):
         so an incomplete machine can never erase the fleet's state."""
         ...
 
-    async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[str]:
-        """Apply merged docs to local state; returns per-doc error strings."""
+    async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[tuple[str, str]]:
+        """Apply merged docs to local state; returns (doc path, error) pairs.
+        A failed doc's path is preserved verbatim by the next export so the
+        retry sees the foreign value instead of this machine's stale one."""
         ...
 
 

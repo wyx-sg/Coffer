@@ -142,9 +142,23 @@ diff 频繁变动）。导入时按 `<kind>:<name>` 对资源执行 upsert。**�
 
 随 vault 同步的模块自有共享状态。各模块实现 `SyncedStatePort`（确定性 YAML 文档的
 导出/导入），由组合根注册提供者——sync 永不导入 kind 模块。当前区域：
-`channel-peers/<channel>/<chat>.yaml`（配对身份：chat_id、sender_id、显示名、
-首选 agent、paired_at；机器本地的 `active_conversation_id` 永不传播）。导入执行
-upsert；引用本地不存在渠道的文档被跳过并在下轮重试。
+
+- `channel-peers/<channel>/<chat>.yaml` —— 配对身份（chat_id、sender_id、显示名、
+  首选 agent、paired_at；机器本地的 `active_conversation_id` 永不传播）。导入执行
+  upsert；引用本地不存在渠道的文档被跳过并在下轮重试。
+- `mcp-preferences/<server>.yaml` —— 每服务器被**禁用**的能力（启用为默认；
+  seen 时间戳保持本机）。导入将本地存在的服务器收敛到文档内容；认领前缀 = 本地服务器。
+  冲突语义按文档粒度：若两台机器在首次共同同步前对同一服务器禁用了不同能力，
+  合并将冲突、被解决的一方整体获胜——落败机器的本地禁用会在其下一次导入被重新
+  启用。凭证 ref 尚未解锁的机器上 embedding 会保持降级（锁定 ref 可正常导入；
+  向量索引只是不激活）。
+- `settings/embedding.yaml` + `settings/internal-engine.yaml` —— 两个引擎单例。
+  机器只有在本地持久化过该单例后才认领（并发布）它，全新机器的默认值不会在首次
+  合并时与舰队值同路径冲突。
+
+skill 投递绑定（`skill_agent_bindings`）**按决定保持本机**：投递是有副作用的文件
+操作且没有行级 reconcile 循环——同步这些行会虚报投递状态。请在每台机器上经现有
+skill 表面自行采用。
 
 ### 凭据 blob（`credentials/<ref>.enc`）
 

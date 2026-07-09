@@ -153,10 +153,30 @@ resource exists live again (re-registration wins); pruned after 90 days.
 Module-owned shared state synced alongside the vault. Each module implements
 `SyncedStatePort` (export/import of deterministic YAML docs) and the
 composition root registers the providers — sync never imports kind modules.
-Current areas: `channel-peers/<channel>/<chat>.yaml` (pairing identity:
-chat_id, sender_id, display name, preferred agent, paired_at; the machine-local
-`active_conversation_id` never travels). Import upserts; docs referencing a
-channel not present locally are skipped and retried next run.
+Current areas:
+
+- `channel-peers/<channel>/<chat>.yaml` — pairing identity (chat_id, sender_id,
+  display name, preferred agent, paired_at; the machine-local
+  `active_conversation_id` never travels). Import upserts; docs referencing a
+  channel not present locally are skipped and retried next run.
+- `mcp-preferences/<server>.yaml` — the DISABLED capabilities per server
+  (enabled is the default; seen-timestamps stay machine-local). Import
+  reconciles servers present locally to match; owned prefixes = local servers.
+  Conflict semantics are doc-granular: if both machines disabled different
+  capabilities on the same server before their first common sync, the merge
+  conflicts and the resolved side wins wholesale — the losing machine's local
+  disables are re-enabled by its next import. Embedding may stay degraded on a
+  machine until its master key is bootstrapped (locked credential refs import
+  fine; vector indexing simply stays inactive).
+- `settings/embedding.yaml` + `settings/internal-engine.yaml` — the two
+  engine singletons. A machine owns (and publishes) a singleton only once it
+  has persisted it locally, so a fresh machine's defaults never same-path
+  conflict with the fleet's values on its first merge.
+
+Skill delivery bindings (`skill_agent_bindings`) stay machine-local by
+decision: delivery is a side-effectful file operation with no row-level
+reconcile loop — syncing the rows would misreport delivery state. Adopt skills
+per machine via the existing skill surfaces.
 
 ### Credential blob (`credentials/<ref>.enc`)
 

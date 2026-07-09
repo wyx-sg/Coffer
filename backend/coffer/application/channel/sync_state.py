@@ -57,8 +57,8 @@ class ChannelPeerSyncState:
                 )
         return docs, owned
 
-    async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[str]:
-        errors: list[str] = []
+    async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[tuple[str, str]]:
+        errors: list[tuple[str, str]] = []
         by_name = {r.name: r.id for r in await self._resources.list(kind="channel")}
         for path, doc in docs:
             try:
@@ -95,5 +95,5 @@ class ChannelPeerSyncState:
                     )
                 )
             except Exception as e:
-                errors.append(f"channel-peers/{path}: {e}")
+                errors.append((path, str(e)))
         return errors

@@ -65,6 +65,7 @@ class SyncStateModel(Base):
     conflict_paths_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     locked_refs_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     quarantined_refs_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    failed_state_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
 
 
@@ -117,6 +118,7 @@ def _state_to_domain(row: SyncStateModel) -> SyncState:
         conflict_paths=list(json.loads(row.conflict_paths_json)),
         locked_refs=list(json.loads(row.locked_refs_json)),
         quarantined_refs=list(json.loads(row.quarantined_refs_json)),
+        failed_state_paths=list(json.loads(row.failed_state_json)),
         updated_at=datetime.fromisoformat(row.updated_at),
     )
 
@@ -233,6 +235,7 @@ class SqlAlchemySyncStateRepo:
             row.conflict_paths_json = json.dumps(state.conflict_paths)
             row.locked_refs_json = json.dumps(state.locked_refs)
             row.quarantined_refs_json = json.dumps(state.quarantined_refs)
+            row.failed_state_json = json.dumps(state.failed_state_paths)
             row.updated_at = now
             await session.commit()
             await session.refresh(row)
