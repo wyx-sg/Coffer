@@ -528,7 +528,6 @@
       "machinesHint": "这个 vault 已知的所有机器。每台机器在同步时登记自己。",
       "thisMachine": "本机",
       "neverSynced": "从未同步",
-      "renameMachine": "重命名本机",
       "machineName": "机器名称"
     },
     "connections": {

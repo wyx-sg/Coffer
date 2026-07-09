@@ -528,7 +528,6 @@
       "machinesHint": "Every machine known to this vault. Each machine registers itself when it syncs.",
       "thisMachine": "This machine",
       "neverSynced": "Never synced",
-      "renameMachine": "Rename this machine",
       "machineName": "Machine name"
     },
     "connections": {

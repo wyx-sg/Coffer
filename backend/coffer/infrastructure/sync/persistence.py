@@ -11,6 +11,7 @@ import json
 from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, CheckConstraint, Integer, String, Text, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -144,18 +145,25 @@ class SqlAlchemyMachineIdentityRepo:
             return MachineIdentity(machine_id=row.machine_id, display_name=row.display_name)
 
     async def create(self, machine_id: str, display_name: str) -> MachineIdentity:
-        async with self._sm() as session:
-            now = datetime.now(tz=UTC).isoformat()
-            row = MachineIdentityModel(
-                id=SINGLETON_ID,
-                machine_id=machine_id,
-                display_name=display_name,
-                created_at=now,
-                updated_at=now,
-            )
-            session.add(row)
-            await session.commit()
-            return MachineIdentity(machine_id=machine_id, display_name=display_name)
+        try:
+            async with self._sm() as session:
+                now = datetime.now(tz=UTC).isoformat()
+                row = MachineIdentityModel(
+                    id=SINGLETON_ID,
+                    machine_id=machine_id,
+                    display_name=display_name,
+                    created_at=now,
+                    updated_at=now,
+                )
+                session.add(row)
+                await session.commit()
+                return MachineIdentity(machine_id=machine_id, display_name=display_name)
+        except IntegrityError:
+            # Two overlapping first-use calls both saw no row; the loser keeps
+            # the winner's identity — the machine id must never fork.
+            existing = await self.get()
+            assert existing is not None
+            return existing
 
     async def set_display_name(self, display_name: str) -> MachineIdentity:
         async with self._sm() as session:
