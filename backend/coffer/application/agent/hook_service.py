@@ -15,8 +15,9 @@ stdin payload is not guaranteed to name the event; its hooks.json keys it).
 This service handles ``InjectionMode.SHELL_COMMAND`` only. An agent whose
 descriptor declares no injection — or declares one of the not-yet-implemented
 modes — raises :class:`HookInstallUnsupported` (→ 422) on install/uninstall;
-``status`` reports ``installed=False`` for it (a not-installable agent is simply
-not installed, never an error to inspect).
+``status`` reports ``installed=False, supported=False`` for it (a not-installable
+agent is simply not installed, never an error to inspect). Surfaces read
+``supported`` to disable the control up front rather than letting a click 422.
 """
 
 from __future__ import annotations
@@ -52,6 +53,12 @@ from coffer.domain.workspace_errors import HookInstallUnsupported
 class HookInstallStatus:
     installed: bool
     command: str | None
+    #: Whether this agent can have Coffer's hook installed at all. False when its
+    #: descriptor declares no context injection, or declares a mode this service
+    #: does not implement. ``status`` reports it instead of erroring, so a surface
+    #: can render a disabled control with a reason rather than one that 422s on
+    #: click.
+    supported: bool = True
 
 
 class _AgentLookup(Protocol):
@@ -137,7 +144,7 @@ class AgentHookService:
         cfg = AgentConfig.model_validate(resource.config)
         injection = self._injection(cfg)
         if injection is None:
-            return HookInstallStatus(installed=False, command=None)
+            return HookInstallStatus(installed=False, command=None, supported=False)
         spec = spec_for(cfg.type, injection.config_key, cfg.resolved_config_dir())
         text = self._store.read_text(spec.path) or ""
         installed = is_installed(

@@ -248,6 +248,18 @@ async def test_opencode_hook_install_unsupported(agent_bundle, tmp_path, monkeyp
     (tmp_path / ".config" / "opencode" / "skills").mkdir(parents=True, exist_ok=True)
     await agent_bundle.svc.register(agent_type=AgentType.OPENCODE, name="oc", actor="cli")
 
-    assert (await agent_bundle.hook.status("oc")).installed is False
+    st = await agent_bundle.hook.status("oc")
+    assert st.installed is False
+    # Surfaces read `supported` to disable the control up front — status never
+    # raises, so a surface waiting for a 422 would render a control that 422s.
+    assert st.supported is False
     with pytest.raises(HookInstallUnsupported):
         await agent_bundle.hook.install("oc", actor="ui")
+
+
+async def test_supported_true_for_agents_with_shell_injection(agent_bundle, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_claude(agent_bundle, tmp_path)
+    await _register_cursor(agent_bundle, tmp_path)
+    assert (await agent_bundle.hook.status("cc")).supported is True
+    assert (await agent_bundle.hook.status("cur")).supported is True
