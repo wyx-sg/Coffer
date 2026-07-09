@@ -13,7 +13,6 @@ import logging
 import pathlib
 import uuid
 from collections.abc import Sequence
-from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -31,6 +30,7 @@ from coffer.domain.channel.envelopes import (
 from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.infrastructure.channel.render import chunk_text, markdown_to_telegram_html
+from coffer.infrastructure.channel.telegram_album import AlbumBuffer
 from coffer.infrastructure.channel.telegram_media import (
     COMMANDS,
     default_media_dir,
@@ -38,17 +38,16 @@ from coffer.infrastructure.channel.telegram_media import (
     media_specs,
     upload_media,
 )
-from coffer.infrastructure.channel.telegram_parse import (
-    addressed_and_text,
-    is_group,
-    prepend_context,
-)
+from coffer.infrastructure.channel.telegram_parse import build_inbound_message, is_group
 
 _logger = logging.getLogger(__name__)
 
 _POLL_TIMEOUT_SECONDS = 50
 _BACKOFF_LADDER = (1.0, 5.0, 30.0)
 _CHUNK_LIMIT = 4000
+# FR-038: how long to wait for more album items sharing a media_group_id before
+# flushing them as one turn. Small — the items arrive back-to-back.
+_ALBUM_DEBOUNCE_SECONDS = 1.0
 
 
 class TelegramAdapter:
@@ -75,6 +74,8 @@ class TelegramAdapter:
         self._poll_timeout = poll_timeout
         self._callbacks: AdapterCallbacks | None = None
         self._seen = SeenIds()  # FR-039: drop a redelivered update
+        # FR-038: debounce album items sharing a media_group_id into one turn.
+        self._albums = AlbumBuffer(_ALBUM_DEBOUNCE_SECONDS, self._flush_album)
         self._task: asyncio.Task[None] | None = None
         # Populated from getMe() in start(); stays None if that call fails.
         self._bot_id: int | None = None
@@ -105,6 +106,8 @@ class TelegramAdapter:
         self._task = asyncio.create_task(self._poll_loop(), name=f"telegram-poll:{self._name}")
 
     async def stop(self) -> None:
+        # FR-038: drop pending album timers/flush tasks so none leak past stop.
+        self._albums.cancel_all()
         if self._task is not None:
             self._task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -167,37 +170,39 @@ class TelegramAdapter:
             return
         message = update.get("message")
         if isinstance(message, dict):
-            group = is_group(message)
-            raw_text = str(message.get("text") or message.get("caption") or "")
-            addressed, raw = (True, raw_text)
-            if group:
-                addressed, raw = addressed_and_text(
-                    message, raw_text, bot_id=self._bot_id, bot_username=self._bot_username
-                )
-            text = prepend_context(message, raw)
-            thread_id = str(message.get("message_thread_id") or "")
-            sender = message.get("from") or {}
             attachments = await self._download_attachments(message)
-            await self._callbacks.on_message(
-                InboundMessage(
-                    channel=self._name,
-                    chat_id=str(message.get("chat", {}).get("id", "")),
-                    sender_display=str(sender.get("first_name") or sender.get("username") or ""),
-                    # A media message carries its text in ``caption``, not ``text``.
-                    text=text,
-                    platform_message_id=str(message.get("message_id", "")),
-                    timestamp=datetime.fromtimestamp(int(message.get("date", 0)), tz=UTC),
-                    sender_id=str(sender.get("id") or ""),
-                    chat_kind="group" if group else "direct",
-                    addressed=addressed,
-                    thread_id=thread_id,
-                    attachments=attachments,
-                )
-            )
+            media_group_id = message.get("media_group_id")
+            if media_group_id:
+                # FR-038: an album arrives as separate updates sharing a
+                # media_group_id — buffer them and flush ONE turn (composes with
+                # the FR-039 dedup above, which still runs per-update).
+                self._albums.add(str(media_group_id), message, attachments)
+                return
+            await self._callbacks.on_message(self._build_inbound(message, attachments))
             return
         query = update.get("callback_query")
         if isinstance(query, dict):
             await self._dispatch_callback(query)
+
+    def _build_inbound(
+        self, message: dict[str, Any], attachments: tuple[InboundAttachment, ...]
+    ) -> InboundMessage:
+        return build_inbound_message(
+            message,
+            attachments,
+            channel=self._name,
+            bot_id=self._bot_id,
+            bot_username=self._bot_username,
+        )
+
+    async def _flush_album(
+        self, message: dict[str, Any], attachments: tuple[InboundAttachment, ...]
+    ) -> None:
+        """FR-038: emit ONE InboundMessage for a debounced album — all its
+        attachments and the caption from whichever item carried it."""
+        if self._callbacks is None:
+            return
+        await self._callbacks.on_message(self._build_inbound(message, attachments))
 
     async def _download_attachments(self, message: dict[str, Any]) -> tuple[InboundAttachment, ...]:
         """Download each attachment on ``message`` to the media dir. Best-effort:

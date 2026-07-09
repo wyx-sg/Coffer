@@ -7,6 +7,7 @@ method mapping for edit/delete/typing/approval prompts.
 
 from __future__ import annotations
 
+import asyncio
 import pathlib
 
 import pytest
@@ -80,6 +81,108 @@ async def test_photo_message_is_downloaded_as_an_attachment(
     assert pathlib.Path(att.path).read_bytes() == fake_telegram.file_bytes
     # getFile was called for the LARGEST photo size, not the thumbnail.
     assert [c.get("file_id") for c in fake_telegram.calls_for("getFile")] == ["big"]
+
+
+def _album_update(update_id: int, *, media_group_id: str, caption: str | None = None) -> dict:
+    """One item of a Telegram album — a photo message carrying a shared
+    ``media_group_id`` (the caption rides only the first item)."""
+    update = _photo_update(update_id, caption=caption)
+    update["message"]["media_group_id"] = media_group_id
+    # A distinct file per item so the flushed turn's attachments are traceable.
+    update["message"]["photo"] = [{"file_id": f"a{update_id}", "file_size": 9999}]
+    return update
+
+
+@pytest.mark.acceptance(
+    spec="009-channels",
+    scenario="a Telegram album is handled as one turn",
+)
+async def test_album_debounces_to_one_turn_with_all_attachments(
+    fake_telegram: FakeTelegram, tmp_path, monkeypatch
+) -> None:
+    """FR-038: three photos sharing one media_group_id (caption on the first)
+    debounce into EXACTLY ONE turn carrying all three attachments + the caption,
+    not one turn per photo."""
+    monkeypatch.setenv("HOME", str(tmp_path))  # media dir resolves under tmp
+    # Small debounce so the test is fast (read at adapter construction below).
+    monkeypatch.setattr("coffer.infrastructure.channel.telegram._ALBUM_DEBOUNCE_SECONDS", 0.2)
+    adapter = make_telegram_adapter(fake_telegram)
+    recorder = RecordingCallbacks()
+    await fake_telegram.update_batches.put(
+        [
+            _album_update(60, media_group_id="mg-1", caption="three shots"),
+            _album_update(61, media_group_id="mg-1"),
+            _album_update(62, media_group_id="mg-1"),
+        ]
+    )
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await wait_until(lambda: len(recorder.messages) == 1)
+        # No SECOND turn ever materializes after the flush.
+        await asyncio.sleep(0.4)
+        assert len(recorder.messages) == 1
+    finally:
+        await adapter.stop()
+
+    msg = recorder.messages[0]
+    assert msg.text == "three shots"  # caption from the first item drives the turn
+    assert len(msg.attachments) == 3  # all three album photos on one message
+    assert all(att.mime == "image/jpeg" for att in msg.attachments)
+    # getFile was called once per album item's largest photo.
+    assert sorted(c.get("file_id") for c in fake_telegram.calls_for("getFile")) == [
+        "a60",
+        "a61",
+        "a62",
+    ]
+
+
+async def test_single_photo_without_media_group_id_dispatches_immediately(
+    fake_telegram: FakeTelegram, tmp_path, monkeypatch
+) -> None:
+    """FR-038: a lone photo (no media_group_id) is NOT debounced — it drives a
+    turn immediately, exactly as before."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    adapter = make_telegram_adapter(fake_telegram)
+    recorder = RecordingCallbacks()
+    await fake_telegram.update_batches.put([_photo_update(63, caption="just one")])
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await wait_until(lambda: len(recorder.messages) == 1)
+    finally:
+        await adapter.stop()
+    msg = recorder.messages[0]
+    assert msg.text == "just one"
+    assert len(msg.attachments) == 1
+
+
+async def test_two_interleaved_media_groups_flush_as_two_turns(
+    fake_telegram: FakeTelegram, tmp_path, monkeypatch
+) -> None:
+    """FR-038: two different albums interleaved keep separate buffers — each
+    flushes its own turn with only its own attachments."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr("coffer.infrastructure.channel.telegram._ALBUM_DEBOUNCE_SECONDS", 0.2)
+    adapter = make_telegram_adapter(fake_telegram)
+    recorder = RecordingCallbacks()
+    await fake_telegram.update_batches.put(
+        [
+            _album_update(70, media_group_id="mg-a", caption="album A"),
+            _album_update(71, media_group_id="mg-b", caption="album B"),
+            _album_update(72, media_group_id="mg-a"),
+            _album_update(73, media_group_id="mg-b"),
+        ]
+    )
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await wait_until(lambda: len(recorder.messages) == 2)
+        await asyncio.sleep(0.4)
+        assert len(recorder.messages) == 2  # no extra turns
+    finally:
+        await adapter.stop()
+    by_caption = {m.text: m for m in recorder.messages}
+    assert set(by_caption) == {"album A", "album B"}
+    assert len(by_caption["album A"].attachments) == 2
+    assert len(by_caption["album B"].attachments) == 2
 
 
 async def test_poll_loop_dispatches_and_commits_offset_after_dispatch(
