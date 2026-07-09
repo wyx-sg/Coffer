@@ -528,7 +528,8 @@
       "machinesHint": "这个 vault 已知的所有机器。每台机器在同步时登记自己。",
       "thisMachine": "本机",
       "neverSynced": "从未同步",
-      "machineName": "机器名称"
+      "machineName": "机器名称",
+      "quarantinedHint": "以下资源在本机导入失败（已隔离，每次同步会重试）：{{refs}}"
     },
     "connections": {
       "title": "LLM 连接",

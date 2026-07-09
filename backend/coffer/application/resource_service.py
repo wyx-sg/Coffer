@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import builtins
 import inspect
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
@@ -75,6 +76,14 @@ class ResourceService:
         self._repo = repo
         self._audit = audit
         self._credentials = credentials
+        # Cross-cutting observers of completed deletions (e.g. the sync
+        # tombstone ledger, spec 010) — kind-agnostic, registered by the
+        # composition root, called AFTER the row is gone.
+        self._delete_listeners: list[Callable[[ResourceRef], Any]] = []
+
+    def add_delete_listener(self, listener: Callable[[ResourceRef], Any]) -> None:
+        """Register a callback (sync or async) invoked after every deletion."""
+        self._delete_listeners.append(listener)
 
     def _probe_credentials(self, kind_def: Kind, config: dict[str, Any]) -> None:
         """Raise CredentialMissing if any cited credential_ref is absent from the credential store.
@@ -278,3 +287,7 @@ class ResourceService:
                 }
             },
         )
+        for listener in self._delete_listeners:
+            result = listener(ref)
+            if inspect.isawaitable(result):
+                await result

@@ -43,6 +43,7 @@ from coffer.infrastructure.sync.persistence import (
     SqlAlchemyMachineIdentityRepo,
     SqlAlchemySyncConfigRepo,
     SqlAlchemySyncStateRepo,
+    SqlAlchemyTombstoneLedgerRepo,
 )
 from coffer.infrastructure.sync.workspace import Workspace
 
@@ -86,7 +87,14 @@ class Machine:
         return EncryptedCredentialStore(self.db_path, key)
 
 
-async def _make_machine(name: str, root: Path, remote: Path, *, create_key: bool) -> Machine:
+async def _make_machine(
+    name: str,
+    root: Path,
+    remote: Path,
+    *,
+    create_key: bool,
+    kinds: dict[str, Kind] | None = None,
+) -> Machine:
     root.mkdir(parents=True, exist_ok=True)
     db_path = root / "coffer.db"
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{db_path}")
@@ -94,7 +102,9 @@ async def _make_machine(name: str, root: Path, remote: Path, *, create_key: bool
         await conn.run_sync(Base.metadata.create_all)
     sm = session_maker(engine)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
-    resources = ResourceService(kinds=_kinds(), repo=SqlAlchemyResourceRepo(sm), audit=audit)
+    resources = ResourceService(
+        kinds=kinds or _kinds(), repo=SqlAlchemyResourceRepo(sm), audit=audit
+    )
 
     master_key = MasterKeyManager(root / "master.key", _NoKeyring())
     if create_key:
@@ -114,7 +124,9 @@ async def _make_machine(name: str, root: Path, remote: Path, *, create_key: bool
         branch="main",
         actor="test",
     )
-    exporter = SyncExporter(resources, cred_sync, workspace)
+    ledger = SqlAlchemyTombstoneLedgerRepo(sm)
+    resources.add_delete_listener(lambda ref: ledger.record(ref.kind, ref.name))
+    exporter = SyncExporter(resources, cred_sync, workspace, ledger)
     importer = SyncImporter(resources, cred_sync, workspace)
     identity = MachineIdentityService(
         SqlAlchemyMachineIdentityRepo(sm),
@@ -347,3 +359,98 @@ async def test_corrupt_machine_entry_never_blocks_sync(tmp_path, remote) -> None
     assert state.status is SyncStatus.CLEAN
     _identity, entries = await a.service.list_machines()
     assert {e.display_name for e in entries} == {"A"}
+
+
+@pytest.mark.acceptance(spec="010-sync", scenario="deletions propagate as tombstones")
+async def test_deletion_propagates_as_tombstone(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.resources.register("mcp_server", "shared", {"value": "x"}, "test")
+    await a.service.run()
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()
+    assert (await b.resources.get(ResourceRef("mcp_server", "shared"))).config == {"value": "x"}
+
+    # A deletes; the deletion reaches B as an explicit tombstone.
+    await a.resources.delete(ResourceRef("mcp_server", "shared"), "test")
+    await a.service.run()
+    await b.service.run()
+    assert not [r for r in await b.resources.list() if r.name == "shared"]
+    assert any(t.kind == "mcp_server" and t.name == "shared" for t in b.workspace.read_tombstones())
+    assert not any(f == "resources/mcp_server/shared.yaml" for f in b.workspace.list_files())
+
+    # B re-registers: the resource resurrects everywhere, the tombstone clears.
+    await b.resources.register("mcp_server", "shared", {"value": "again"}, "test")
+    await b.service.run()
+    await a.service.run()
+    assert (await a.resources.get(ResourceRef("mcp_server", "shared"))).config == {"value": "again"}
+    assert not a.workspace.read_tombstones()
+
+
+@pytest.mark.acceptance(
+    spec="010-sync", scenario="a failed import never deletes the resource elsewhere"
+)
+async def test_failed_import_quarantines_instead_of_deleting(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    from pydantic import field_validator
+
+    class _PickyConfig(BaseModel):
+        value: str = ""
+
+        @field_validator("value")
+        @classmethod
+        def _reject_only_a(cls, v: str) -> str:
+            if v == "only-a":
+                raise ValueError("this machine cannot hold 'only-a'")
+            return v
+
+    picky = {"mcp_server": Kind(name="mcp_server", display_name="MCP", config_schema=_PickyConfig)}
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.resources.register("mcp_server", "portable", {"value": "only-a"}, "test")
+    await a.service.run()
+
+    # B cannot import that config — quarantined, not fatal, and status stays clean.
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True, kinds=picky)
+    state_b = await b.service.run()
+    assert state_b.status is SyncStatus.CLEAN
+    assert state_b.quarantined_refs == ["mcp_server:portable"]
+    assert not [r for r in await b.resources.list() if r.name == "portable"]
+
+    # Another full round trip: B's export preserves the doc; A keeps the resource.
+    await b.service.run()
+    await a.service.run()
+    assert (await a.resources.get(ResourceRef("mcp_server", "portable"))).config == {
+        "value": "only-a"
+    }
+    assert any(f == "resources/mcp_server/portable.yaml" for f in b.workspace.list_files())
+
+
+@pytest.mark.acceptance(spec="010-sync", scenario="an older build refuses a newer workspace")
+async def test_older_build_refuses_newer_workspace(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    import json as _json
+
+    from coffer.domain.sync.errors import SyncWorkspaceTooNew
+
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.resources.register("mcp_server", "baseline", {"value": "1"}, "test")
+    await a.service.run()
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()  # shared history + baseline resource on B
+
+    # A future build pushes a newer workspace layout plus a resource doc only
+    # that layout understands.
+    ws = a.root / "ws"
+    repo = GitRepo(ws)
+    repo.pull("main")  # catch up with B's push before rewriting history forward
+    (ws / "manifest.json").write_text(_json.dumps({"schema_version": 99}) + "\n", encoding="utf-8")
+    (ws / "resources" / "mcp_server" / "newer.yaml").write_text(
+        "config: {value: '2'}\ndescription: null\nenabled: true\nkind: mcp_server\nname: newer\n",
+        encoding="utf-8",
+    )
+    repo.commit_all("future layout")
+    repo.push("main")
+
+    with pytest.raises(SyncWorkspaceTooNew):
+        await b.service.run()
+    # Nothing from the newer workspace was imported; the baseline is untouched.
+    names = {r.name for r in await b.resources.list()}
+    assert "newer" not in names
+    assert "baseline" in names

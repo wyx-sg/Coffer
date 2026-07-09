@@ -109,8 +109,12 @@ class SyncService:
         async with self._lock:
             assert config.remote is not None
             await asyncio.to_thread(self._git.ensure_repo, config.remote, config.branch)
-            await self._exporter.export()
-            identity = await self._refresh_machine_entry()
+            identity = await self._identity.get()
+            prior = await self._config.get_state()
+            await self._exporter.export(
+                quarantined=prior.quarantined_refs, machine_id=identity.machine_id
+            )
+            await self._refresh_machine_entry(identity)
             await asyncio.to_thread(
                 self._git.commit_all, f"coffer sync from {identity.display_name}"
             )
@@ -195,11 +199,10 @@ class SyncService:
             last_sync_at=last_sync_at,
         )
 
-    async def _refresh_machine_entry(self) -> MachineIdentity:
+    async def _refresh_machine_entry(self, identity: MachineIdentity) -> None:
         """Rewrite this machine's registry entry only when the run has other
         changes, the name changed, or the entry is stale (the 24 h heartbeat) —
         an idle machine must not generate registry-only commit chains."""
-        identity = await self._identity.get()
 
         def _refresh() -> None:
             own = next(
@@ -221,7 +224,6 @@ class SyncService:
                 self._workspace.write_machine_entry(self._own_entry(identity, last_sync_at=now))
 
         await asyncio.to_thread(_refresh)
-        return identity
 
     async def _record_conflict(self, paths: list[str]) -> SyncState:
         state = SyncState(
@@ -252,6 +254,7 @@ class SyncService:
             last_sync_at=datetime.now(tz=UTC),
             last_error=last_error,
             locked_refs=result.locked_refs,
+            quarantined_refs=sorted(set(result.quarantined_refs)),
         )
         saved = await self._config.set_state(state)
         await self._audit.record(
@@ -262,6 +265,7 @@ class SyncService:
                 "deleted": result.deleted,
                 "errors": len(result.errors),
                 "locked": len(result.locked_refs),
+                "quarantined": len(result.quarantined_refs),
             },
         )
         return saved

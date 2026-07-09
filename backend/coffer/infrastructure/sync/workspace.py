@@ -14,13 +14,14 @@ from __future__ import annotations
 import json
 import pathlib
 import shutil
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
+from datetime import datetime
 
 import yaml
 
 from coffer.domain.sync.errors import SyncSerializationError
 from coffer.domain.sync.manifest import Manifest
-from coffer.domain.sync.models import MachineEntry
+from coffer.domain.sync.models import MachineEntry, Tombstone
 from coffer.domain.sync.serialization import ResourceDoc, parse_resource_doc
 from coffer.infrastructure.sync.paths import mirrored_trees as _default_mirrored_trees
 
@@ -28,6 +29,7 @@ _MANIFEST = "manifest.json"
 _RESOURCES = "resources"
 _CREDENTIALS = "credentials"
 _MACHINES = "machines"
+_TOMBSTONES = "tombstones"
 
 #: Files that are *derived* from the source-of-truth files and must NOT be
 #: synced — they would differ per machine and cause spurious same-path
@@ -142,19 +144,41 @@ class Workspace:
 
     # --- resource docs -----------------------------------------------------
 
-    def write_resource_docs(self, docs: Sequence[Mapping[str, object]]) -> None:
+    def write_resource_docs(
+        self,
+        docs: Sequence[Mapping[str, object]],
+        preserve: Collection[str] = (),
+    ) -> None:
+        """Replace ``resources/`` with one YAML per doc.
+
+        ``preserve`` names quarantined ``<kind>:<name>`` refs whose CURRENT
+        workspace doc must survive verbatim — their import failed here, so the
+        local vault holds nothing (or a stale row) and must never overwrite or
+        drop the remote intent (spec 010 quarantine)."""
         target = self._root / _RESOURCES
+        preserved: dict[tuple[str, str], str] = {}
+        for ref in preserve:
+            kind, _, name = ref.partition(":")
+            path = target / kind / f"{name}.yaml"
+            if path.exists():
+                preserved[(kind, name)] = path.read_text(encoding="utf-8")
         if target.exists():
             shutil.rmtree(target)
         for doc in docs:
             kind = str(doc["kind"])
             name = str(doc["name"])
+            if (kind, name) in preserved:
+                continue
             kind_dir = target / kind
             kind_dir.mkdir(parents=True, exist_ok=True)
             (kind_dir / f"{name}.yaml").write_text(
                 yaml.safe_dump(dict(doc), sort_keys=True, allow_unicode=True),
                 encoding="utf-8",
             )
+        for (kind, name), text in preserved.items():
+            path = target / kind / f"{name}.yaml"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
 
     def read_resource_docs(self) -> list[ResourceDoc]:
         target = self._root / _RESOURCES
@@ -170,6 +194,48 @@ class Workspace:
                 raise SyncSerializationError(f"{path.name} is not a mapping")
             docs.append(parse_resource_doc(raw))
         return docs
+
+    # --- tombstones ----------------------------------------------------------
+
+    def write_tombstone(self, tombstone: Tombstone) -> None:
+        path = self._root / _TOMBSTONES / _RESOURCES / tombstone.kind / f"{tombstone.name}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.parent / f".{tombstone.name}.json.tmp"
+        tmp.write_text(
+            json.dumps(tombstone.to_dict(), sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        tmp.replace(path)
+
+    def remove_tombstone(self, kind: str, name: str) -> None:
+        path = self._root / _TOMBSTONES / _RESOURCES / kind / f"{name}.json"
+        path.unlink(missing_ok=True)
+
+    def read_tombstones(self) -> list[Tombstone]:
+        """All parseable tombstones. A corrupt file is skipped — the resource
+        then survives (the safe direction) and the deleting machine's next
+        export rewrites the tombstone."""
+        base = self._root / _TOMBSTONES / _RESOURCES
+        if not base.exists():
+            return []
+        out: list[Tombstone] = []
+        for path in sorted(base.glob("*/*.json")):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if not isinstance(data, dict):
+                    continue
+                raw_by = data.get("by")
+                out.append(
+                    Tombstone(
+                        kind=path.parent.name,
+                        name=path.stem,
+                        deleted_at=datetime.fromisoformat(str(data["deleted_at"])),
+                        by=str(raw_by) if raw_by else None,
+                    )
+                )
+            except (json.JSONDecodeError, OSError, KeyError, ValueError):
+                continue
+        return out
 
     # --- credential blobs --------------------------------------------------
 

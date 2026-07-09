@@ -45,6 +45,7 @@ the sync medium.
   memory/                    # mirror of ~/.coffer/memory
   skills/                    # mirror of ~/.coffer/skills (master skill store)
   resources/<kind>/<name>.yaml   # one deterministic file per config resource
+  tombstones/resources/<kind>/<name>.json  # explicit deletion record (90-day TTL)
   credentials/<ref>.enc          # Fernet ciphertext blob (never the master key)
   ```
 
@@ -56,6 +57,17 @@ the sync medium.
   import. The whole thing is one `coffer sync` invocation.
 - **Conflict** — a `git merge` conflict. The run stops in a `conflicted` state;
   nothing is imported until the user resolves it. Neither side is discarded.
+- **Tombstone** — the explicit record of a config-resource deletion
+  (`tombstones/resources/<kind>/<name>.json`, carrying when and by which
+  machine). Import deletes a local resource **only** when its tombstone is
+  present — a resource merely absent from the workspace is never deleted.
+  Re-registering a resource clears its tombstone on the machine's next export.
+  Tombstones expire after 90 days.
+- **Quarantine** — a resource whose import failed on this machine (e.g. a
+  machine-local path in its config). Its workspace doc is preserved verbatim —
+  never re-exported from the failed local state and never dropped — the import
+  retries every run, and the affected refs are reported in sync status. A row
+  that cannot be imported on one machine MUST NOT cause its deletion anywhere.
 - **Auto-sync** — an opt-in daemon worker that runs sync runs on file/resource
   change (debounced) and on a fixed interval. Off by default.
 
@@ -186,6 +198,31 @@ resources that reference it cannot spawn, and status reports
 - **When** A registers a new resource
 - **Then** A pushes the change within the debounce window and B imports it on its
   next interval pull, with no manual command on either machine
+
+### Scenario: deletions propagate as tombstones
+
+- **Given** machines A and B share a synced `mcp_server` resource
+- **When** A deletes the resource and both machines complete a sync round trip
+- **Then** the resource is gone on B, and the workspace holds its tombstone
+  instead of the resource doc
+- **And** if B later re-registers the same resource, it reappears on both
+  machines and the tombstone is cleared
+
+### Scenario: a failed import never deletes the resource elsewhere
+
+- **Given** machine A syncs a resource whose config cannot be imported on
+  machine B (a machine-local path)
+- **When** B runs a sync (the import fails for that resource) and both machines
+  complete another round trip
+- **Then** the resource still exists on A and in the workspace, B reports the
+  ref as quarantined in sync status, and B retries the import on every run
+
+### Scenario: an older build refuses a newer workspace
+
+- **Given** the sync workspace manifest carries a schema version newer than the
+  running build supports
+- **When** a sync run reaches its import step
+- **Then** the run fails with `SYNC_WORKSPACE_TOO_NEW` and imports nothing
 
 ### Scenario: machines are visible after they sync
 

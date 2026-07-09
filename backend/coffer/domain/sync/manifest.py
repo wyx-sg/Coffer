@@ -13,8 +13,10 @@ from dataclasses import dataclass
 
 from coffer.domain.sync.errors import SyncSerializationError
 
-#: Bumped only on an incompatible workspace-layout change.
-SCHEMA_VERSION = 1
+#: Bumped only on an incompatible workspace-layout change. 2 = tombstone-driven
+#: deletion (an older build would keep applying delete-by-absence, so it must
+#: refuse a v2 workspace rather than mis-reconcile it).
+SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True)

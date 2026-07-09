@@ -34,6 +34,7 @@ from coffer.infrastructure.sync.persistence import (
     SqlAlchemyMachineIdentityRepo,
     SqlAlchemySyncConfigRepo,
     SqlAlchemySyncStateRepo,
+    SqlAlchemyTombstoneLedgerRepo,
 )
 from coffer.infrastructure.sync.workspace import Workspace
 from coffer.surfaces.http.sync_routes import set_sync_service
@@ -57,10 +58,14 @@ def wire_sync(
         new_id=new_ulid,
         default_name=lambda: platform.node() or "coffer",
     )
+    ledger = SqlAlchemyTombstoneLedgerRepo(sm)
+    # Every local deletion lands in the tombstone ledger so it propagates as an
+    # explicit workspace tombstone (spec 010: absence alone never deletes).
+    resource_svc.add_delete_listener(lambda ref: ledger.record(ref.kind, ref.name))
     service = SyncService(
         config=config_svc,
         git=git,
-        exporter=SyncExporter(resource_svc, cred_sync, workspace),
+        exporter=SyncExporter(resource_svc, cred_sync, workspace, ledger),
         importer=SyncImporter(resource_svc, cred_sync, workspace),
         credentials=cred_sync,
         master_key=master_key,

@@ -55,7 +55,28 @@ class SyncState:
     last_error: str | None
     conflict_paths: list[str] = field(default_factory=list)
     locked_refs: list[str] = field(default_factory=list)
+    quarantined_refs: list[str] = field(default_factory=list)
     updated_at: datetime | None = None
+
+
+#: How long an exported tombstone (and its ledger row) lives before pruning.
+TOMBSTONE_TTL_SECONDS = 90 * 24 * 3600
+
+
+@dataclass(frozen=True)
+class Tombstone:
+    """The explicit record of a config-resource deletion (spec 010).
+
+    Import deletes a local resource only when its tombstone is present;
+    absence from the workspace alone never deletes."""
+
+    kind: str
+    name: str
+    deleted_at: datetime
+    by: str | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        return {"deleted_at": self.deleted_at.isoformat(), "by": self.by}
 
 
 #: How stale this machine's registry entry may get before a run rewrites it
