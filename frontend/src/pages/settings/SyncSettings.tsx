@@ -7,7 +7,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { StatusBadge, type StatusTone } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,15 +18,7 @@ import { useRunSync, useSyncConfig, useSyncStatus, useUpdateSyncConfig } from "@
 import { SyncConflictPanel } from "./SyncConflictPanel";
 import { SyncMachinesCard } from "./SyncMachinesCard";
 import { SyncMasterKeyCard } from "./SyncMasterKeyCard";
-
-const SYNC_TONE: Record<string, StatusTone> = {
-  clean: "success",
-  conflicted: "warning",
-  credentials_locked: "warning",
-  error: "danger",
-  syncing: "info",
-  unconfigured: "neutral",
-};
+import { SyncStatusLine } from "./SyncStatusLine";
 
 export function SyncSettings() {
   const { t } = useTranslation();
@@ -37,6 +28,7 @@ export function SyncSettings() {
   const run = useRunSync();
   const [remote, setRemote] = useState("");
   const [branch, setBranch] = useState("main");
+  const [pollRemote, setPollRemote] = useState(15);
   const [enabled, setEnabled] = useState(false);
   const [auto, setAuto] = useState(false);
   const [interval, setIntervalSeconds] = useState(300);
@@ -45,6 +37,7 @@ export function SyncSettings() {
     if (!config) return;
     setRemote(config.remote ?? "");
     setBranch(config.branch);
+    setPollRemote(config.poll_remote_seconds);
     setEnabled(config.enabled);
     setAuto(config.auto);
     setIntervalSeconds(config.interval_seconds);
@@ -69,6 +62,7 @@ export function SyncSettings() {
       enabled,
       auto,
       interval_seconds: interval,
+      poll_remote_seconds: pollRemote,
       ...override,
     });
 
@@ -79,8 +73,6 @@ export function SyncSettings() {
     if (interval !== config?.interval_seconds) persist({ interval_seconds: interval });
   };
 
-  const syncTone: StatusTone = status ? (SYNC_TONE[status.status] ?? "neutral") : "neutral";
-
   return (
     <div className="space-y-6">
       <Card>
@@ -90,36 +82,7 @@ export function SyncSettings() {
         <CardContent className="space-y-4">
           <p className="text-sm text-foreground/70">{t("settings.sync.description")}</p>
 
-          {status && (
-            <div className="rounded-md border p-3 text-sm">
-              <span className="text-foreground/60">{t("settings.sync.status")}: </span>
-              <span role="status">
-                <StatusBadge
-                  tone={syncTone}
-                  label={t(`settings.sync.statuses.${status.status}`)}
-                  pulse={status.status === "syncing"}
-                />
-              </span>
-              {status.last_sync_at && (
-                <span className="ml-2 text-foreground/50">
-                  {t("settings.sync.lastSync")}: {new Date(status.last_sync_at).toLocaleString()}
-                </span>
-              )}
-              {status.locked_refs.length > 0 && (
-                <p className="mt-1 text-amber-600">
-                  {t("settings.sync.lockedHint", { refs: status.locked_refs.join(", ") })}
-                </p>
-              )}
-              {status.quarantined_refs.length > 0 && (
-                <p className="mt-1 text-amber-600">
-                  {t("settings.sync.quarantinedHint", {
-                    refs: status.quarantined_refs.join(", "),
-                  })}
-                </p>
-              )}
-              {status.last_error && <p className="mt-1 text-red-600">{status.last_error}</p>}
-            </div>
-          )}
+          {status && <SyncStatusLine status={status} />}
 
           <div className="space-y-2">
             <Label htmlFor="sync-remote">{t("settings.sync.remote")}</Label>

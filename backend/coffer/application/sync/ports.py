@@ -44,6 +44,12 @@ class GitPort(Protocol):
     def has_changes(self) -> bool:
         """Whether the working tree differs from HEAD (uncommitted changes)."""
 
+    def head(self) -> str | None:
+        """The workspace's current commit sha, or None before the first commit."""
+
+    def remote_head(self, remote: str, branch: str) -> str | None:
+        """The remote branch head sha (one ``ls-remote`` round trip), or None."""
+
     def pull(self, branch: str) -> PullOutcome: ...
 
     def push(self, branch: str) -> None: ...

@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0043"
+HEAD_REVISION = "0044"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -78,7 +78,9 @@ HEAD_REVISION = "0043"
 # ``machine_identity`` singleton (spec 010 amendment, ADR-043) — present at
 # head; its downgrade drops it. 0043 ADDs the ``sync_tombstones`` ledger and the
 # ``sync_state.quarantined_refs_json`` column (tombstone-driven deletion +
-# import quarantine) — present at head; its downgrade drops both.
+# import quarantine) — present at head; its downgrade drops both. 0044 ADDs the
+# ``sync_config.poll_remote_seconds`` column (near-real-time remote-head probe)
+# — column-only, table set unchanged; its downgrade drops the column.
 # The ``documents_fts_*`` shadow
 # tables FTS5 creates under the hood are excluded — the assertions speak to the
 # logical schema.
@@ -652,11 +654,17 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         with sqlite3.connect(db_path) as conn:
             return {r[1] for r in conn.execute("PRAGMA table_info(sync_state)")}
 
+    def _sync_config_columns() -> set[str]:
+        with sqlite3.connect(db_path) as conn:
+            return {r[1] for r in conn.execute("PRAGMA table_info(sync_config)")}
+
     assert "quarantined_refs_json" in _sync_state_columns()
+    assert "poll_remote_seconds" in _sync_config_columns()
     command.downgrade(cfg, "0037")
     assert "machine_identity" not in _user_tables(db_path)
     assert "sync_tombstones" not in _user_tables(db_path)
     assert "quarantined_refs_json" not in _sync_state_columns()
+    assert "poll_remote_seconds" not in _sync_config_columns()
     assert "channel_thread_conversations" not in _user_tables(db_path)
     assert "internal_engine_config" not in _user_tables(db_path)
     assert "distilled_sessions" not in _user_tables(db_path)

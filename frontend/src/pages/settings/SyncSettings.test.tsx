@@ -40,6 +40,7 @@ function seed(statusValue: NonNullable<Status>["status"], over: Partial<NonNulla
       enabled: true,
       auto: false,
       interval_seconds: 300,
+      poll_remote_seconds: 15,
     },
     isPending: false,
   } as unknown as ReturnType<typeof hooks.useSyncConfig>);

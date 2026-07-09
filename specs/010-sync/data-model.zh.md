@@ -14,7 +14,8 @@
 | `remote`           | String? | Git 远端 URL；配置前为 null。                       |
 | `enabled`          | bool    | 同步的总开关。默认 `false`。                        |
 | `auto`             | bool    | 守护进程是否运行自动同步 worker。默认 `false`。     |
-| `interval_seconds` | int     | 自动 pull/push 间隔。默认 `300`。                   |
+| `interval_seconds` | int     | auto-sync 兜底轮询间隔。默认 `300`。                |
+| `poll_remote_seconds` | int  | auto-sync 远端 HEAD 探测频率。默认 `15`，最小 `5`。 |
 | `branch`           | String  | 同步所在的 Git 分支。默认 `main`。                  |
 | `updated_at`       | String  | ISO-8601。                                          |
 

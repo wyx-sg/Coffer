@@ -15,6 +15,7 @@ from coffer.application.sync.service import SyncService
 from coffer.domain.sync.models import (
     DEFAULT_BRANCH,
     DEFAULT_INTERVAL_SECONDS,
+    DEFAULT_POLL_REMOTE_SECONDS,
     SyncConfig,
     SyncState,
 )
@@ -45,6 +46,7 @@ class SyncConfigIn(BaseModel):
     enabled: bool = False
     auto: bool = False
     interval_seconds: int = DEFAULT_INTERVAL_SECONDS
+    poll_remote_seconds: int = DEFAULT_POLL_REMOTE_SECONDS
     branch: str = DEFAULT_BRANCH
 
 
@@ -53,6 +55,7 @@ class SyncConfigOut(BaseModel):
     enabled: bool
     auto: bool
     interval_seconds: int
+    poll_remote_seconds: int
     branch: str
     updated_at: str
 
@@ -116,6 +119,7 @@ def _config_out(c: SyncConfig) -> SyncConfigOut:
         enabled=c.enabled,
         auto=c.auto,
         interval_seconds=c.interval_seconds,
+        poll_remote_seconds=c.poll_remote_seconds,
         branch=c.branch,
         updated_at=c.updated_at.isoformat(),
     )
@@ -149,6 +153,7 @@ async def put_config(body: SyncConfigIn, actor: str = Depends(get_actor)) -> Syn
         interval_seconds=body.interval_seconds,
         branch=body.branch,
         actor=actor,
+        poll_remote_seconds=body.poll_remote_seconds,
     )
     return _config_out(saved)
 

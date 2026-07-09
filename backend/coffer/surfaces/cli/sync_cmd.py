@@ -122,6 +122,9 @@ def config(
     ctx: typer.Context,
     auto: str | None = typer.Option(None, "--auto", help="on | off — enable auto-sync"),
     interval: int | None = typer.Option(None, "--interval", help="Auto-sync interval (seconds)"),
+    poll: int | None = typer.Option(
+        None, "--poll", help="Remote-head probe cadence for auto-sync (seconds)"
+    ),
     remote: str | None = typer.Option(None, "--remote", help="Change the git remote"),
     branch: str | None = typer.Option(None, "--branch", help="Change the branch"),
     enable: bool = typer.Option(False, "--enable", help="Enable sync"),
@@ -134,11 +137,13 @@ def config(
         current = c.get("/sync/config")
         _cli_client.check(current, verbose=verbose)
         cfg = current.json()
-        if any(v is not None for v in (auto, interval, remote, branch)) or enable or disable:
+        if any(v is not None for v in (auto, interval, poll, remote, branch)) or enable or disable:
             if auto is not None:
                 cfg["auto"] = auto.lower() in ("on", "true", "yes", "1")
             if interval is not None:
                 cfg["interval_seconds"] = interval
+            if poll is not None:
+                cfg["poll_remote_seconds"] = poll
             if remote is not None:
                 cfg["remote"] = remote
             if branch is not None:

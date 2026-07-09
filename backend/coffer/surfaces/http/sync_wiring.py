@@ -29,13 +29,14 @@ from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.infrastructure.knowledge.ids import new_ulid
 from coffer.infrastructure.sync.credentials import CredentialSyncAdapter
 from coffer.infrastructure.sync.git_repo import GitRepo
-from coffer.infrastructure.sync.paths import sync_root
+from coffer.infrastructure.sync.paths import mirrored_trees, sync_root
 from coffer.infrastructure.sync.persistence import (
     SqlAlchemyMachineIdentityRepo,
     SqlAlchemySyncConfigRepo,
     SqlAlchemySyncStateRepo,
     SqlAlchemyTombstoneLedgerRepo,
 )
+from coffer.infrastructure.sync.watcher import watch_trees
 from coffer.infrastructure.sync.workspace import Workspace
 from coffer.surfaces.http.sync_routes import set_sync_service
 
@@ -80,7 +81,12 @@ def wire_sync(
         coffer_version=_coffer_version,
     )
     set_sync_service(service)
-    return SyncWorker(service, config_svc)
+    worker = SyncWorker(service, config_svc, git)
+    # Near-real-time push side (ADR-043): daemon-mediated resource mutations
+    # feed the debouncer directly; the file-tree watcher (started in
+    # start_sync) catches symlink writes that bypass the daemon.
+    resource_svc.add_change_listener(worker.notify_change)
+    return worker
 
 
 def start_sync(
@@ -91,18 +97,28 @@ def start_sync(
     db_path: pathlib.Path,
     master_key: MasterKeyManager,
 ) -> None:
-    """Wire sync and start its (initially inert) auto-sync worker task."""
+    """Wire sync and start its (initially inert) auto-sync worker + watcher."""
     worker = wire_sync(resource_svc, audit, sm, db_path, master_key)
     app.state.sync_worker = worker
     app.state.sync_worker_task = asyncio.create_task(worker.run())
+    stop_event = asyncio.Event()
+    app.state.sync_watcher_stop = stop_event
+    roots = [root for _subdir, root in mirrored_trees()]
+    app.state.sync_watcher_task = asyncio.create_task(
+        watch_trees(roots, worker.notify_change, stop_event)
+    )
 
 
 async def stop_sync(app: FastAPI) -> None:
     worker = getattr(app.state, "sync_worker", None)
-    task = getattr(app.state, "sync_worker_task", None)
+    watcher_stop = getattr(app.state, "sync_watcher_stop", None)
     if worker is not None:
         worker.stop()
-    if task is not None:
-        task.cancel()
-        with contextlib.suppress(BaseException):
-            await asyncio.wait_for(task, timeout=2.0)
+    if watcher_stop is not None:
+        watcher_stop.set()
+    for attr in ("sync_worker_task", "sync_watcher_task"):
+        task = getattr(app.state, attr, None)
+        if task is not None:
+            task.cancel()
+            with contextlib.suppress(BaseException):
+                await asyncio.wait_for(task, timeout=2.0)

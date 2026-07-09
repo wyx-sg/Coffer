@@ -681,3 +681,48 @@ async def test_tombstone_delete_failure_reports_error(tmp_path, remote) -> None:
     state_b = await b.service.run()
     assert state_b.status is SyncStatus.ERROR
     assert "sticky" in (state_b.last_error or "")
+
+
+async def test_near_real_time_change_and_probe_convergence(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """Push side: a local change schedules a debounced run. Pull side: the
+    remote-head probe detects the other machine's push — no interval wait."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    for m in (a, b):
+        await m.config_svc.update_config(
+            remote=str(remote),
+            enabled=True,
+            auto=True,
+            interval_seconds=3600,  # fallback effectively off after startup
+            branch="main",
+            actor="test",
+            poll_remote_seconds=5,
+        )
+
+    class _Clock:
+        now = 1000.0
+
+        def __call__(self) -> float:
+            return self.now
+
+    clock_a, clock_b = _Clock(), _Clock()
+    worker_a = SyncWorker(
+        a.service, a.config_svc, GitRepo(a.root / "ws"), debounce_seconds=1.0, clock=clock_a
+    )
+    worker_b = SyncWorker(
+        b.service, b.config_svc, GitRepo(b.root / "ws"), debounce_seconds=1.0, clock=clock_b
+    )
+    await worker_a._maybe_sync()  # startup sweeps
+    await worker_b._maybe_sync()
+
+    # A registers a resource; the change listener path is the worker's notify.
+    await a.resources.register("mcp_server", "instant", {"value": "nrt"}, "test")
+    worker_a.notify_change()
+    clock_a.now += 2  # past the 1s debounce
+    await worker_a._maybe_sync()
+
+    # B's probe sees the moved head and converges without any interval wait.
+    clock_b.now += 6  # past poll_remote_seconds
+    await worker_b._maybe_sync()
+    got = await b.resources.get(ResourceRef("mcp_server", "instant"))
+    assert got.config == {"value": "nrt"}

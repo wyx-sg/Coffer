@@ -14,7 +14,8 @@ Mirrors the `embedding_config` singleton pattern (one row, fixed id).
 | `remote`           | String? | Git remote URL; null until configured.             |
 | `enabled`          | bool    | Master on/off for sync. Default `false`.           |
 | `auto`             | bool    | Whether the daemon auto-sync worker runs. Default `false`. |
-| `interval_seconds` | int     | Auto pull/push interval. Default `300`.            |
+| `interval_seconds` | int     | Auto-sync fallback sweep interval. Default `300`.  |
+| `poll_remote_seconds` | int  | Auto-sync remote-head probe cadence. Default `15`, min `5`. |
 | `branch`           | String  | Git branch to sync on. Default `main`.             |
 | `updated_at`       | String  | ISO-8601.                                          |
 
