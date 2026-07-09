@@ -172,7 +172,7 @@ async def test_quoted_command_when_binary_has_spaces(agent_bundle, tmp_path, mon
     assert (await svc.status("cc")).installed is True
 
 
-# --- cursor flavor (ADR-041) ---------------------------------------------------
+# --- cursor flavor (ADR-042) ---------------------------------------------------
 
 
 async def _register_cursor(bundle, home: pathlib.Path):

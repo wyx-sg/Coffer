@@ -272,7 +272,7 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             format=ConfigFileFormat.JSON,
             entry_style=McpEntryStyle.TYPED_LOCAL_OBJECT,
         ),
-        # See the Agent capability matrix in spec 004 / ADR-041:
+        # See the Agent capability matrix in spec 004 / ADR-042:
         #  * context_injection=None — opencode has no shell-command hook. Its JS
         #                      plugin API *can* inject (``chat.message`` appends to
         #                      ``output.parts``), so this is an INJECTION_MODE.PLUGIN_DROP
@@ -300,7 +300,7 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         # documented but NEVER INVOKED upstream (NousResearch/hermes-agent#2817,
         # closed as not planned) — only the tool hooks fire. There is no hook to
         # install; INJECTION_MODE.INSTRUCTIONS_BLOCK is the intended fallback
-        # (a follow-up slice — ADR-041).
+        # (a follow-up slice — ADR-042).
         # plugins=None: hermes plugins are a different model, not managed here.
     ),
     AgentType.CURSOR: AgentDescriptor(
@@ -326,7 +326,7 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             events=(HookEvent.SESSION_START,),
             flavor=HookFlavor.CURSOR,
         ),
-        # Absent facets (ADR-041 capability matrix):
+        # Absent facets (ADR-042 capability matrix):
         #  * native memory         — cursor "Memories" is an IDE-only toggle with no
         #                            CLI, so it is omitted from
         #                            _NATIVE_MEMORY_DISABLE_TARGET below.

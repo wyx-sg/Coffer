@@ -1,4 +1,4 @@
-"""Descriptor context-injection + native-memory facets (ADR-041).
+"""Descriptor context-injection + native-memory facets (ADR-042).
 
 Claude Code installs SessionStart + SessionEnd into ``settings`` (JSON); Codex
 and Cursor install SessionStart only — neither has a usable session-end event.
@@ -77,7 +77,7 @@ def test_opencode_mcp_spec_is_typed_local_object_in_mcp_container() -> None:
 
 
 def test_opencode_has_no_shell_hook_or_native_memory_facet() -> None:
-    # Absent facets, not errors (ADR-041): opencode has no shell-command hook (its
+    # Absent facets, not errors (ADR-042): opencode has no shell-command hook (its
     # JS plugin API is a PLUGIN_DROP slice) and no cross-session native memory.
     d = descriptor_for(AgentType.OPENCODE)
     assert d.context_injection is None
@@ -136,7 +136,7 @@ def test_cursor_descriptor_and_mcp() -> None:
 
 def test_cursor_injection_spec_uses_cursor_flavor() -> None:
     # cursor's hooks.json documents `sessionStart` with an `additional_context`
-    # output — a real injection point, in its own flavor (ADR-041).
+    # output — a real injection point, in its own flavor (ADR-042).
     d = descriptor_for(AgentType.CURSOR)
     assert d.context_injection is not None
     assert d.context_injection.mode is InjectionMode.SHELL_COMMAND
@@ -147,7 +147,7 @@ def test_cursor_injection_spec_uses_cursor_flavor() -> None:
 
 def test_cursor_provider_and_native_memory_facets_absent() -> None:
     # cursor-agent is locked to Cursor's own backend (no custom base URL) and its
-    # Memories toggle is IDE-only — both remain absent facets (ADR-041 matrix).
+    # Memories toggle is IDE-only — both remain absent facets (ADR-042 matrix).
     from coffer.domain.provider.projection import target_for_agent
 
     assert native_memory_disable_target(AgentType.CURSOR) is None
