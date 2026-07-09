@@ -856,6 +856,16 @@ status / notify`.
 - **Then** the redelivery is dropped and the turn runs exactly once — no double
   reply or duplicate work — while a genuinely new event still drives its own turn
 
+### Scenario: an inbound SeaTalk file drives a turn
+
+- **Given** a paired SeaTalk channel
+- **When** the owner sends a file directly (a `file` message whose
+  `file.content` is an auth-gated file URL and `file.filename` the original name)
+- **Then** the bytes are downloaded with the app token and carried on the inbound
+  message as an attachment keeping its real filename and a non-image mime, so the
+  file drives a turn like a photo does instead of hitting the "send text, a
+  photo, or a file" reply
+
 ## Channels as a management plane (north star)
 
 Channels are managed the way Coffer manages MCP servers, memory, and skills:

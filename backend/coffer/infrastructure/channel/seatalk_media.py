@@ -1,11 +1,13 @@
-"""SeaTalk inbound media: find the downloadable image URLs on a message
-(a directly-sent image, or every image nested in a forwarded chat record) and
-fetch them, authenticated, into local attachments the agent can actually see.
+"""SeaTalk inbound media: find every downloadable file URL on a message
+(a directly-sent image/file, or any media nested in a forwarded chat record) and
+fetch it, authenticated, into a local attachment the agent can actually see.
 
-SeaTalk delivers images as authenticated file links
+SeaTalk delivers media as authenticated file links
 (``https://openapi.seatalk.io/messaging/v2/file/<id>[?seq=N]``) — the agent
 can't open them, so the transport must download the bytes with the app token
-and hand them to the turn as attachments. Split out of ``seatalk.py`` (mirroring
+and hand them to the turn as attachments. Images, files/documents, and (best
+effort) voice/video all take this path (FR-028), so a directly-sent PDF or voice
+memo drives a turn like a photo does. Split out of ``seatalk.py`` (mirroring
 ``telegram_media.py``) to keep that module under the file-size limit.
 """
 
@@ -13,10 +15,12 @@ from __future__ import annotations
 
 import base64
 import logging
+import mimetypes
 import os
 import pathlib
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -24,8 +28,10 @@ import httpx
 from coffer.domain.channel.envelopes import InboundAttachment
 
 __all__ = [
+    "MediaRef",
     "build_outbound_media_message",
     "collect_image_urls",
+    "collect_media",
     "default_media_dir",
     "media_attachments",
     "send_outbound_media",
@@ -98,38 +104,113 @@ def default_media_dir() -> pathlib.Path:
     return home / ".coffer" / "channel-media"
 
 
-def collect_image_urls(message: dict[str, Any]) -> list[str]:
-    """Every downloadable SeaTalk image URL reachable from one message.
+@dataclass(frozen=True)
+class MediaRef:
+    """One downloadable SeaTalk media item: its auth-gated file URL plus the
+    filename and (best-effort) mime to save it under, so the agent sees a real
+    name/type instead of a uuid. ``mime`` may be ``None`` (resolve it from the
+    download's content-type). ``kind`` distinguishes an image (vision-inlined)
+    from a file/generic attachment and lets :func:`collect_image_urls` filter."""
 
-    A directly-sent image carries ``message.image.content``; a forwarded chat
-    record nests image messages (possibly several levels deep) — recurse the
-    same way the text flattener does so a chart buried in a forwarded thread is
-    still fetched.
+    url: str
+    filename: str
+    mime: str | None = None
+    kind: str = "media"  # "image" | "file" | "media" (generic best-effort)
+
+
+def collect_media(message: dict[str, Any]) -> list[MediaRef]:
+    """Every downloadable SeaTalk media item reachable from one message (FR-028).
+
+    A directly-sent image carries ``message.image.content``; a file/document
+    carries ``message.file.content`` + ``message.file.filename``; any other tag
+    whose sub-dict holds a file-URL ``content`` (voice/video/audio, best effort)
+    is picked up generically. A forwarded chat record nests media messages
+    (possibly several levels deep) — recurse the same way the text flattener does
+    so a file buried in a forwarded record is still fetched.
     """
     tag = str(message.get("tag", ""))
-    if tag == "image":
-        url = (message.get("image") or {}).get("content")
-        return [url] if isinstance(url, str) and url else []
     if tag == "combined_forwarded_chat_history":
         content = (message.get("combined_forwarded_chat_history") or {}).get("content") or []
-        return _urls_from_content(content)
-    return []
+        return _media_from_content(content)
+    ref = _media_ref(message, tag)
+    return [ref] if ref is not None else []
 
 
-def _urls_from_content(content: Sequence[Any]) -> list[str]:
-    urls: list[str] = []
+def collect_image_urls(message: dict[str, Any]) -> list[str]:
+    """Every downloadable SeaTalk *image* URL reachable from one message.
+
+    Retained for its callers/tests; a thin image-only view over
+    :func:`collect_media` so the recursion lives in one place."""
+    return [ref.url for ref in collect_media(message) if ref.kind == "image"]
+
+
+def _media_ref(entry: dict[str, Any], tag: str) -> MediaRef | None:
+    """One :class:`MediaRef` for a single (non-forwarded) message, or ``None``
+    when it carries nothing downloadable."""
+    if tag == "image":
+        url = (entry.get("image") or {}).get("content")
+        if isinstance(url, str) and url:
+            return MediaRef(url=url, filename="photo", mime=None, kind="image")
+        return None
+    if tag == "file":
+        body = entry.get("file") or {}
+        url = body.get("content")
+        if isinstance(url, str) and url:
+            name = str(body.get("filename") or "file")
+            return MediaRef(url=url, filename=name, mime=_mime_from_name(name), kind="file")
+        return None
+    # Generic best-effort (voice/video/audio, unverified shapes): any other tag
+    # whose sub-dict holds a file-URL ``content``.
+    body = entry.get(tag)
+    if isinstance(body, dict):
+        url = body.get("content")
+        if isinstance(url, str) and _is_file_url(url):
+            name = str(body.get("filename") or tag)
+            return MediaRef(url=url, filename=name, mime=None, kind="media")
+    return None
+
+
+def _media_from_content(content: Sequence[Any]) -> list[MediaRef]:
+    refs: list[MediaRef] = []
     for entry in content:
         if not isinstance(entry, dict):
             continue
         tag = str(entry.get("tag", ""))
-        if tag == "image":
-            url = (entry.get("image") or {}).get("content")
-            if isinstance(url, str) and url:
-                urls.append(url)
-        elif tag == "combined_forwarded_chat_history":
+        if tag == "combined_forwarded_chat_history":
             nested = (entry.get("combined_forwarded_chat_history") or {}).get("content") or []
-            urls.extend(_urls_from_content(nested))
-    return urls
+            refs.extend(_media_from_content(nested))
+        else:
+            ref = _media_ref(entry, tag)
+            if ref is not None:
+                refs.append(ref)
+    return refs
+
+
+def _is_file_url(url: str) -> bool:
+    """A SeaTalk auth-gated file link (``.../messaging/v2/file/<id>``). Kept
+    lenient (``/file/`` present) so a forwarded record's media still matches."""
+    return url.startswith("http") and "/file/" in url
+
+
+def _mime_from_name(name: str) -> str:
+    """A non-``None`` mime guessed from a filename's extension — falling back to
+    ``application/octet-stream`` so a downloaded *file* never inherits the
+    download's (image) content-type and is misread as a picture."""
+    return mimetypes.guess_type(name)[0] or "application/octet-stream"
+
+
+def _extension_for_mime(mime: str) -> str:
+    return _SUFFIX_BY_MIME.get(mime) or mimetypes.guess_extension(mime) or ""
+
+
+def _safe_filename(name: str, mime: str) -> str:
+    """A path-separator-free attachment name, with an extension appended (from
+    the mime) when the original has none — so an image saved as ``photo`` still
+    reads as ``photo.png`` while ``create_acc.sh`` is preserved verbatim."""
+    base = pathlib.PureWindowsPath(pathlib.PurePosixPath(name).name).name or "file"
+    if not pathlib.Path(base).suffix:
+        base = f"{base}{_extension_for_mime(mime)}"
+    return base
 
 
 async def media_attachments(
@@ -138,14 +219,15 @@ async def media_attachments(
     ensure_token: Callable[[], Awaitable[str]],
     message: dict[str, Any],
 ) -> tuple[InboundAttachment, ...]:
-    """Download every image on ``message`` (direct or forwarded) as an
-    attachment. Fetches the app token only when there is something to download;
-    a single failed download is skipped (logged), never wedging the message."""
-    urls = collect_image_urls(message)
-    if not urls:
+    """Download every media item on ``message`` (image/file/generic, direct or
+    forwarded) as an attachment (FR-028). Fetches the app token only when there
+    is something to download; a single failed download is skipped (logged),
+    never wedging the message."""
+    refs = collect_media(message)
+    if not refs:
         return ()
     token = await ensure_token()
-    return await _download(client, media_dir, token, urls)
+    return await _download(client, media_dir, token, refs)
 
 
 async def thread_media_attachments(
@@ -154,45 +236,51 @@ async def thread_media_attachments(
     ensure_token: Callable[[], Awaitable[str]],
     messages: Sequence[dict[str, Any]],
 ) -> tuple[InboundAttachment, ...]:
-    """Download every image carried by a thread's own messages (FR-029) so an
-    in-thread @mention grounds the turn on the real pictures, not the dead
-    auth-gated file links a text flatten would leave behind. Collects URLs
+    """Download every media item carried by a thread's own messages (FR-029) so
+    an in-thread @mention grounds the turn on the real pictures/files, not the
+    dead auth-gated links a text flatten would leave behind. Collects refs
     across ALL ``messages`` — recursing forwarded records within each via
-    :func:`collect_image_urls` — and fetches them with the same authenticated
+    :func:`collect_media` — and fetches them with the same authenticated
     download the direct-message path uses. Fetches the token only when there is
     something to download; each failed download is skipped, never wedging the
     turn."""
-    urls: list[str] = []
+    refs: list[MediaRef] = []
     for message in messages:
         if isinstance(message, dict):
-            urls.extend(collect_image_urls(message))
-    if not urls:
+            refs.extend(collect_media(message))
+    if not refs:
         return ()
     token = await ensure_token()
-    return await _download(client, media_dir, token, urls)
+    return await _download(client, media_dir, token, refs)
 
 
 async def _download(
     client: httpx.AsyncClient,
     media_dir: pathlib.Path,
     token: str,
-    urls: Sequence[str],
+    refs: Sequence[MediaRef],
 ) -> tuple[InboundAttachment, ...]:
-    """Fetch each SeaTalk file ``url`` (authenticated) into ``media_dir`` as an
-    attachment. A single failed download is skipped (logged), never wedging the
-    caller — shared by the direct-message and thread-history paths."""
+    """Fetch each :class:`MediaRef` (authenticated) into ``media_dir`` as an
+    attachment. The saved file keeps the ref's real (sanitised) filename so the
+    agent sees ``create_acc.sh``, not a uuid; the on-disk name is uuid-unique.
+    The mime is the ref's own if set, else the download's content-type, else a
+    guess from the filename, else ``application/octet-stream``. A single failed
+    download is skipped (logged), never wedging the caller — shared by the
+    direct-message and thread-history paths."""
     media_dir.mkdir(parents=True, exist_ok=True)
     headers = {"Authorization": f"Bearer {token}"}
     out: list[InboundAttachment] = []
-    for url in urls:
+    for ref in refs:
         try:
-            response = await client.get(url, headers=headers, follow_redirects=True)
+            response = await client.get(ref.url, headers=headers, follow_redirects=True)
             response.raise_for_status()
         except Exception:
             _logger.warning("seatalk.media.download_failed", exc_info=True)
             continue
-        mime = (response.headers.get("content-type") or "image/jpeg").split(";")[0].strip()
-        name = f"{uuid.uuid4().hex}{_SUFFIX_BY_MIME.get(mime, '.jpg')}"
-        (media_dir / name).write_bytes(response.content)
-        out.append(InboundAttachment(path=str(media_dir / name), mime=mime, filename=name))
+        content_type = (response.headers.get("content-type") or "").split(";")[0].strip()
+        mime = ref.mime or content_type or _mime_from_name(ref.filename)
+        filename = _safe_filename(ref.filename, mime)
+        disk_name = f"{uuid.uuid4().hex}{pathlib.Path(filename).suffix}"
+        (media_dir / disk_name).write_bytes(response.content)
+        out.append(InboundAttachment(path=str(media_dir / disk_name), mime=mime, filename=filename))
     return tuple(out)

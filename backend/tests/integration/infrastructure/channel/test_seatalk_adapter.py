@@ -201,6 +201,74 @@ def test_collect_image_urls_direct_and_nested_forwarded() -> None:
     assert collect_image_urls({"tag": "text", "text": {"content": "x"}}) == []
 
 
+def test_collect_media_covers_image_file_generic_and_forwarded() -> None:
+    """FR-028: the media collector returns a downloadable ref for an image, a
+    directly-sent file (with its filename + a non-image mime), and — best
+    effort — any other tag whose sub-dict carries a file-URL content
+    (voice/video), recursing forwarded records. A plain text message yields
+    nothing."""
+    from coffer.infrastructure.channel.seatalk_media import collect_media
+
+    image = collect_media({"tag": "image", "image": {"content": "https://o.io/file/a"}})
+    assert [(r.url, r.kind) for r in image] == [("https://o.io/file/a", "image")]
+
+    # A directly-sent file: the captured live shape (message.file.content is the
+    # auth-gated URL, message.file.filename the original name).
+    file_refs = collect_media(
+        {
+            "tag": "file",
+            "message_id": "m",
+            "file": {"content": "https://o.io/file/b", "filename": "create_acc.sh"},
+        }
+    )
+    [file_ref] = file_refs
+    assert (file_ref.url, file_ref.filename, file_ref.kind) == (
+        "https://o.io/file/b",
+        "create_acc.sh",
+        "file",
+    )
+    assert file_ref.mime is not None and not file_ref.mime.startswith("image/")
+
+    # Generic best-effort: an unverified video tag whose sub-dict has a file URL.
+    video = collect_media(
+        {"tag": "video", "video": {"content": "https://o.io/file/v", "filename": "clip.mp4"}}
+    )
+    assert [(r.url, r.filename, r.kind) for r in video] == [
+        ("https://o.io/file/v", "clip.mp4", "media")
+    ]
+
+    # A file buried in a forwarded record is collected recursively.
+    forwarded = collect_media(
+        {
+            "tag": "combined_forwarded_chat_history",
+            "combined_forwarded_chat_history": {
+                "content": [
+                    {
+                        "tag": "combined_forwarded_chat_history",
+                        "combined_forwarded_chat_history": {
+                            "content": [
+                                {"tag": "text", "text": {"content": "see file"}},
+                                {
+                                    "tag": "file",
+                                    "file": {
+                                        "content": "https://o.io/file/f",
+                                        "filename": "notes.txt",
+                                    },
+                                },
+                            ]
+                        },
+                    }
+                ]
+            },
+        }
+    )
+    assert [(r.url, r.filename, r.kind) for r in forwarded] == [
+        ("https://o.io/file/f", "notes.txt", "file")
+    ]
+
+    assert collect_media({"tag": "text", "text": {"content": "x"}}) == []
+
+
 async def test_handle_event_direct_image_downloads_attachment(
     fake_seatalk: FakeSeaTalk, tmp_path: Any
 ) -> None:
@@ -288,6 +356,53 @@ async def test_handle_event_forwarded_record_downloads_images(
     assert fake_seatalk.file_downloads == ["chart1"]  # ?seq=2 is a query param
     [att] = msg.attachments
     assert att.mime == "image/png"
+
+
+@pytest.mark.acceptance(spec="009-channels", scenario="an inbound SeaTalk file drives a turn")
+async def test_handle_event_direct_file_downloads_attachment(
+    fake_seatalk: FakeSeaTalk, tmp_path: Any
+) -> None:
+    """FR-028: a directly-sent file (not an image) is fetched (authenticated) and
+    attached with its real filename + a non-image mime, so it drives a turn like
+    a photo does instead of hitting the "unsupported message" branch. Uses the
+    live-captured shape: ``message.file.content`` is the auth-gated URL and
+    ``message.file.filename`` the original name."""
+    adapter = make_seatalk_adapter(fake_seatalk, media_dir=tmp_path)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(
+            {
+                "event_type": "message_from_bot_subscriber",
+                "timestamp": 1718000000,
+                "event": {
+                    "employee_code": "emp-1",
+                    "message": {
+                        "tag": "file",
+                        "message_id": "pm-file",
+                        "thread_id": "",
+                        "file": {
+                            "content": "https://openapi.seatalk.io/messaging/v2/file/fileabc",
+                            "filename": "create_acc.sh",
+                        },
+                    },
+                },
+            }
+        )
+    finally:
+        await adapter.stop()
+    [msg] = recorder.messages
+    assert fake_seatalk.file_downloads == ["fileabc"]
+    [att] = msg.attachments
+    # The real filename is preserved (not a uuid) so the agent sees create_acc.sh.
+    assert att.filename == "create_acc.sh"
+    assert pathlib.Path(att.path).read_bytes() == fake_seatalk.file_bytes
+    # A non-image mime (from the .sh extension) — never the download's image/png
+    # content-type — so the file is not misread as a picture.
+    assert not att.mime.startswith("image/")
+    # It drives a turn: an attachment is present, so the inbound pipeline's
+    # "empty envelope → Unsupported" guard (text-or-attachment) does not fire.
+    assert msg.attachments != ()
 
 
 # -- interactive selection cards (P3) -----------------------------------------
