@@ -38,6 +38,7 @@ from coffer.infrastructure.memory.files import (
 )
 from coffer.infrastructure.memory.journal_files import (
     JournalFileScan,
+    journal_doc_id,
     scan_journal_dir,
 )
 
@@ -295,6 +296,50 @@ class MemoryReconciler:
                 store=store,
                 content_sha256=outcome.content_sha256,
                 path=str(fact_file.path),
+                embed_pending=outcome.embed_pending,
+            )
+            await self._documents.upsert_document(doc)
+
+    async def index_journal_period(
+        self, *, store: StoreRef, period: str, embedding: EmbeddingConfig | None
+    ) -> None:
+        """Index/refresh a single ``journal/<period>.md`` file (the append path
+        calls this so a distilled episodic entry is recall-able immediately, not
+        only after the next lazy reconcile-on-read — FR-043). Idempotent: an
+        unchanged period file is a no-op; an entry-less/empty file indexes
+        nothing."""
+        async with self._locks.lock(KIND_MEMORY, store.resource_name):
+            store_dir = Path(store.docs_dir)
+            scans = await asyncio.to_thread(scan_journal_dir, store_dir)
+            js = scans.get(journal_doc_id(period))
+            if js is None:
+                return
+            existing = await self._documents.get_document(
+                KIND_MEMORY, store.resource_name, js.doc_id
+            )
+            if (
+                existing is not None
+                and existing.content_sha256 == js.content_sha256
+                and not existing.embed_pending
+            ):
+                return
+            index = self._retrieval.index_for(
+                store, dimensions=embedding.dimensions if embedding else None
+            )
+            outcome = await self._reindexer.reindex(
+                index=index,
+                markdown=js.body,
+                previous_sha=existing.content_sha256 if existing else None,
+                embedding=embedding,
+                doc_id=js.doc_id,
+                chunker=_chunk_fact,
+                title=js.title,
+                previous_embed_pending=(existing.embed_pending if existing else False),
+            )
+            doc = journal_to_document(
+                js,
+                store=store,
+                content_sha256=outcome.content_sha256,
                 embed_pending=outcome.embed_pending,
             )
             await self._documents.upsert_document(doc)

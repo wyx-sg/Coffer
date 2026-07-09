@@ -15,7 +15,6 @@ import asyncio
 import logging
 import os
 from collections.abc import Callable
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
 from coffer.application.builtin_tools import BuiltinToolRegistry
@@ -30,13 +29,6 @@ from coffer.application.knowledge.retrieval import (
 from coffer.application.knowledge_base.builtin_tools import register_kb_builtin_tools
 from coffer.application.knowledge_base.kind import make_kb_kind
 from coffer.application.knowledge_base.service import KnowledgeBaseService
-from coffer.application.memory.builtin_tools import register_memory_builtin_tools
-from coffer.application.memory.handoff import HandoffService
-from coffer.application.memory.journal import JournalService
-from coffer.application.memory.kind import make_memory_kind
-from coffer.application.memory.scope import ScopeResolver
-from coffer.application.memory.service import MemoryService
-from coffer.application.memory.sync import MemoryReconciler
 from coffer.application.providers.ports import ModelIntrospectionService
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.knowledge.embedder import EmbeddingConfig
@@ -51,9 +43,6 @@ from coffer.infrastructure.knowledge.grep import RipgrepGrep
 from coffer.infrastructure.knowledge.repository import DocumentRepo
 from coffer.infrastructure.knowledge.sqlite_index import SqliteKnowledgeIndex
 from coffer.infrastructure.knowledge.vec_index import VecIndex
-from coffer.infrastructure.memory.project_root_repo import ProjectRootRepo
-from coffer.infrastructure.memory.scope_fs import git_branch, git_root, project_ulid
-from coffer.infrastructure.memory.store_label_repo import StoreLabelRepo
 from coffer.infrastructure.providers.provider_introspector import ProviderIntrospector
 from coffer.surfaces.http.chat.dependencies import set_introspection_service
 from coffer.surfaces.http.chat_provider_wiring import build_agent_provider_registry
@@ -62,13 +51,7 @@ from coffer.surfaces.http.dependencies import (
     set_agent_registry,
     set_chat_service,
     set_kb_service,
-    set_memory_service,
     set_turn_orchestrator,
-)
-from coffer.surfaces.http.memory.dependencies import (
-    set_journal_service,
-    set_project_root_repo,
-    set_store_label_repo,
 )
 
 if TYPE_CHECKING:
@@ -182,60 +165,6 @@ def wire_kb_kind(
     set_kb_service(kb_service)
     register_kb_builtin_tools(builtin_tools, resources=resource_svc, kb_service=kb_service)
     return kb_service
-
-
-def wire_memory_kind(
-    app: FastAPI,
-    resource_svc: ResourceService,
-    audit: AuditService,
-    sm: object,
-    builtin_tools: BuiltinToolRegistry,
-    substrate: tuple[DocumentRepo, KnowledgeRetrieval, Reindexer] | None = None,
-    embedding_resolver: EmbeddingResolver = no_embedding,
-) -> MemoryService:
-    """Wire the ``memory`` kind (spec 007) into the app."""
-    documents, retrieval, reindexer = substrate or build_substrate(sm)  # type: ignore[arg-type]
-    reconciler = MemoryReconciler(documents=documents, retrieval=retrieval, reindexer=reindexer)
-    project_roots = ProjectRootRepo(sm)  # type: ignore[arg-type]
-    set_project_root_repo(project_roots)
-    set_store_label_repo(StoreLabelRepo(sm))  # type: ignore[arg-type]
-    scope = ScopeResolver(
-        resources=resource_svc,
-        git_root=git_root,
-        project_ulid=project_ulid,
-        store_dir=paths.memory_store_dir,
-        record_project_root=project_roots.set,
-    )
-    memory_service = MemoryService(
-        resource_service=resource_svc,
-        documents=documents,
-        scope_resolver=scope,
-        reconciler=reconciler,
-        retrieval=retrieval,
-        audit=audit,
-        store_dir=paths.memory_store_dir,
-        embedding_resolver=embedding_resolver,
-    )
-    handoff_service = HandoffService(
-        scope=scope,
-        git_branch=git_branch,
-        store_dir=paths.memory_store_dir,
-        audit=audit,
-        now=lambda: datetime.now(tz=UTC),
-    )
-    journal_service = JournalService(
-        scope=scope,
-        store_dir=paths.memory_store_dir,
-        audit=audit,
-        now=lambda: datetime.now(tz=UTC),
-    )
-    set_journal_service(journal_service)
-    app.state.kinds["memory"] = make_memory_kind(memory_service)
-    set_memory_service(memory_service)
-    register_memory_builtin_tools(
-        builtin_tools, memory_service=memory_service, handoff_service=handoff_service
-    )
-    return memory_service
 
 
 def _agent_recursion_limit() -> int:

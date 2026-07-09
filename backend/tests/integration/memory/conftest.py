@@ -105,6 +105,7 @@ class MemHarness:
     project_cwd: str  # a cwd the fake git-root resolves as a project
     sm: Callable  # session maker (for building extra repos in tests)
     reconciler: MemoryReconciler
+    embedding_resolver: Callable  # () -> Awaitable[EmbeddingConfig | None]
     vec_stores: dict[tuple[str, str], FakeVecIndex] | None = None
 
 
@@ -181,6 +182,7 @@ async def mem(tmp_path: pathlib.Path, monkeypatch):
             project_cwd=str(project_root / "src"),
             sm=sm,
             reconciler=reconciler,
+            embedding_resolver=_resolver,
             vec_stores=vec_stores,
         )
     finally:
