@@ -14,8 +14,9 @@ from dataclasses import dataclass
 from coffer.domain.sync.errors import SyncSerializationError
 
 #: Bumped only on an incompatible workspace-layout change. 2 = tombstone-driven
-#: deletion (an older build would keep applying delete-by-absence, so it must
-#: refuse a v2 workspace rather than mis-reconcile it).
+#: deletion. The too-new gate is enforced from version 2 onward — a v1 build
+#: predates the gate entirely, so a mixed v1/v2 fleet is unprotected and must
+#: upgrade together.
 SCHEMA_VERSION = 2
 
 

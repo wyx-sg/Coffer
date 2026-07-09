@@ -61,7 +61,12 @@ def wire_sync(
     ledger = SqlAlchemyTombstoneLedgerRepo(sm)
     # Every local deletion lands in the tombstone ledger so it propagates as an
     # explicit workspace tombstone (spec 010: absence alone never deletes).
-    resource_svc.add_delete_listener(lambda ref: ledger.record(ref.kind, ref.name))
+    # Only the user's own deletions enter the ledger: sync-applied deletions
+    # already came FROM the medium, and re-exporting them would cascade-rewrite
+    # tombstone provenance across machines.
+    resource_svc.add_delete_listener(
+        lambda ref, actor: None if actor == "sync" else ledger.record(ref.kind, ref.name)
+    )
     service = SyncService(
         config=config_svc,
         git=git,

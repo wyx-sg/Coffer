@@ -68,6 +68,9 @@ the sync medium.
   never re-exported from the failed local state and never dropped — the import
   retries every run, and the affected refs are reported in sync status. A row
   that cannot be imported on one machine MUST NOT cause its deletion anywhere.
+  While quarantined, the remote intent outweighs local state: local edits to
+  the same resource are not exported, and a tombstone does not remove the
+  preserved doc until the quarantine resolves.
 - **Auto-sync** — an opt-in daemon worker that runs sync runs on file/resource
   change (debounced) and on a fixed interval. Off by default.
 

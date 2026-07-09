@@ -125,7 +125,9 @@ async def _make_machine(
         actor="test",
     )
     ledger = SqlAlchemyTombstoneLedgerRepo(sm)
-    resources.add_delete_listener(lambda ref: ledger.record(ref.kind, ref.name))
+    resources.add_delete_listener(
+        lambda ref, actor: None if actor == "sync" else ledger.record(ref.kind, ref.name)
+    )
     exporter = SyncExporter(resources, cred_sync, workspace, ledger)
     importer = SyncImporter(resources, cred_sync, workspace)
     identity = MachineIdentityService(
@@ -454,3 +456,228 @@ async def test_older_build_refuses_newer_workspace(tmp_path, remote) -> None:  #
     names = {r.name for r in await b.resources.list()}
     assert "newer" not in names
     assert "baseline" in names
+
+
+async def test_interrupted_run_does_not_resurrect_deletion(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """A run that merged a tombstone but died before import (push race / crash)
+    must not resurrect the deletion on its next run (review #281 blocker 2)."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.resources.register("mcp_server", "shared", {"value": "x"}, "test")
+    await a.service.run()
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()
+
+    await a.resources.delete(ResourceRef("mcp_server", "shared"), "test")
+    await a.service.run()
+
+    # Simulate B's interrupted run: the pull merged A's tombstone into B's
+    # workspace, but the import never ran — locally the resource is still live.
+    GitRepo(b.root / "ws").pull("main")
+    assert any(t.name == "shared" for t in b.workspace.read_tombstones())
+    assert [r for r in await b.resources.list() if r.name == "shared"]
+
+    # B's next full run must apply the deletion, not undo it.
+    await b.service.run()
+    assert not [r for r in await b.resources.list() if r.name == "shared"]
+    await a.service.run()
+    assert not [r for r in await a.resources.list() if r.name == "shared"]
+
+
+async def test_tombstone_provenance_stable_across_importers(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """Machines that merely import a deletion never rewrite its tombstone."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.resources.register("mcp_server", "shared", {"value": "x"}, "test")
+    await a.service.run()
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()
+
+    await a.resources.delete(ResourceRef("mcp_server", "shared"), "test")
+    await a.service.run()
+    original = next(t for t in a.workspace.read_tombstones() if t.name == "shared")
+
+    await b.service.run()  # applies the deletion on B
+    await b.service.run()  # B's follow-up export must not touch the tombstone
+    await a.service.run()
+    final = next(t for t in a.workspace.read_tombstones() if t.name == "shared")
+    assert final.deleted_at == original.deleted_at
+    assert final.by == original.by
+
+
+async def test_quarantined_ref_never_gets_a_tombstone(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """A stale deletion ledger row must not fight a quarantined doc with
+    add/remove tombstone ping-pong (review #281 finding 3)."""
+    from pydantic import field_validator
+
+    class _PickyConfig(BaseModel):
+        value: str = ""
+
+        @field_validator("value")
+        @classmethod
+        def _reject_only_b(cls, v: str) -> str:
+            if v == "only-b":
+                raise ValueError("machine A cannot hold 'only-b'")
+            return v
+
+    picky = {"mcp_server": Kind(name="mcp_server", display_name="MCP", config_schema=_PickyConfig)}
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True, kinds=picky)
+    await a.resources.register("mcp_server", "contested", {"value": "ok"}, "test")
+    await a.service.run()
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()
+
+    # A deletes; B applies the deletion, then re-creates a config A rejects.
+    await a.resources.delete(ResourceRef("mcp_server", "contested"), "test")
+    await a.service.run()
+    await b.service.run()
+    await b.resources.register("mcp_server", "contested", {"value": "only-b"}, "test")
+    await b.service.run()
+
+    # A quarantines the new doc; its stale ledger row must not emit a tombstone.
+    state_a = await a.service.run()
+    assert state_a.quarantined_refs == ["mcp_server:contested"]
+    files = a.workspace.list_files()
+    assert "resources/mcp_server/contested.yaml" in files
+    assert not any(f.startswith("tombstones/") and "contested" in f for f in files)
+
+    # And the workspace stays stable on B's next round trip (no ping-pong).
+    await b.service.run()
+    assert (await b.resources.get(ResourceRef("mcp_server", "contested"))).config == {
+        "value": "only-b"
+    }
+
+
+async def test_too_new_gate_holds_on_second_run(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """The schema gate must not disarm itself: run 2 fails like run 1, the
+    remote manifest keeps its newer version, and status shows the error
+    (review #281 blocker 1)."""
+    import json as _json
+
+    from coffer.domain.sync.errors import SyncWorkspaceTooNew
+
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.service.run()
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()
+
+    ws = a.root / "ws"
+    repo = GitRepo(ws)
+    repo.pull("main")
+    (ws / "manifest.json").write_text(_json.dumps({"schema_version": 99}) + "\n", encoding="utf-8")
+    repo.commit_all("future layout")
+    repo.push("main")
+
+    with pytest.raises(SyncWorkspaceTooNew):
+        await b.service.run()  # run 1: pull merges v99, import gate fires
+    with pytest.raises(SyncWorkspaceTooNew):
+        await b.service.run()  # run 2: early gate fires BEFORE export
+    # The workspace manifest was not downgraded back to 2.
+    data = _json.loads((b.root / "ws" / "manifest.json").read_text(encoding="utf-8"))
+    assert data["schema_version"] == 99
+    # The failure is visible in sync state, not silently clean.
+    state = await b.service.status()
+    assert state.status is SyncStatus.ERROR
+    assert "newer" in (state.last_error or "")
+
+
+async def test_resolve_theirs_accepts_a_deletion(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """delete/modify conflict: resolving --theirs toward the deleting side
+    removes the file instead of erroring (review #281 finding 4)."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.resources.register("mcp_server", "contested", {"value": "base"}, "test")
+    await a.service.run()
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()
+
+    # A deletes and pushes; B edits the same resource -> delete/modify conflict.
+    await a.resources.delete(ResourceRef("mcp_server", "contested"), "test")
+    await a.service.run()
+    await b.resources.update_config(
+        ResourceRef("mcp_server", "contested"), {"value": "edited"}, "test"
+    )
+    state = await b.service.run()
+    assert state.status is SyncStatus.CONFLICTED
+
+    resolved = await b.service.resolve("theirs", [])
+    assert resolved.status is not SyncStatus.CONFLICTED
+    assert not [r for r in await b.resources.list() if r.name == "contested"]
+
+
+async def test_expired_tombstone_pruned_from_workspace(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    from datetime import UTC, datetime, timedelta
+
+    from coffer.domain.sync.models import TOMBSTONE_TTL_SECONDS, Tombstone
+
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.service.run()
+    a.workspace.write_tombstone(
+        Tombstone(
+            kind="mcp_server",
+            name="ancient",
+            deleted_at=datetime.now(tz=UTC) - timedelta(seconds=TOMBSTONE_TTL_SECONDS + 3600),
+            by="someone",
+        )
+    )
+    await a.service.run()
+    assert not any(t.name == "ancient" for t in a.workspace.read_tombstones())
+
+
+async def test_update_failure_quarantines_and_keeps_local_row(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """An UPDATE that fails locally quarantines the ref, keeps the old local
+    row, and never re-exports the stale local state over the remote intent."""
+    from pydantic import field_validator
+
+    class _PickyConfig(BaseModel):
+        value: str = ""
+
+        @field_validator("value")
+        @classmethod
+        def _reject_v2(cls, v: str) -> str:
+            if v == "v2":
+                raise ValueError("machine B cannot hold 'v2'")
+            return v
+
+    picky = {"mcp_server": Kind(name="mcp_server", display_name="MCP", config_schema=_PickyConfig)}
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.resources.register("mcp_server", "shared", {"value": "v1"}, "test")
+    await a.service.run()
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True, kinds=picky)
+    await b.service.run()
+
+    await a.resources.update_config(ResourceRef("mcp_server", "shared"), {"value": "v2"}, "test")
+    await a.service.run()
+    state_b = await b.service.run()
+    assert state_b.quarantined_refs == ["mcp_server:shared"]
+    # B keeps its old importable row; the workspace keeps A's new intent.
+    assert (await b.resources.get(ResourceRef("mcp_server", "shared"))).config == {"value": "v1"}
+    await b.service.run()
+    await a.service.run()
+    assert (await a.resources.get(ResourceRef("mcp_server", "shared"))).config == {"value": "v2"}
+
+
+async def test_tombstone_delete_failure_reports_error(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """A kind on_delete hook that refuses the deletion surfaces as an ERROR run
+    instead of silently keeping the resource."""
+    from coffer.domain.errors import ConfigValidationError
+
+    def _refuse(ref) -> None:  # type: ignore[no-untyped-def]
+        raise ConfigValidationError("cannot tear down on this machine")
+
+    stubborn = {
+        "mcp_server": Kind(
+            name="mcp_server",
+            display_name="MCP",
+            config_schema=_FakeConfig,
+            on_delete=_refuse,
+        )
+    }
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.resources.register("mcp_server", "sticky", {"value": "x"}, "test")
+    await a.service.run()
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True, kinds=stubborn)
+    await b.service.run()
+
+    await a.resources.delete(ResourceRef("mcp_server", "sticky"), "test")
+    await a.service.run()
+    state_b = await b.service.run()
+    assert state_b.status is SyncStatus.ERROR
+    assert "sticky" in (state_b.last_error or "")

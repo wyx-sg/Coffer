@@ -1,4 +1,12 @@
-"""Export local vault state into the sync workspace (spec 010)."""
+"""Export local vault state into the sync workspace (spec 010).
+
+Tombstone reconciliation is timestamp-based: a live resource supersedes a
+tombstone only when it was (re-)created AFTER the deletion. A live row that
+PREDATES a workspace tombstone means the deletion was merged but not yet
+applied locally (e.g. a run interrupted between pull and import) — its doc is
+withheld from the export and the tombstone kept, so an interrupted run can
+never resurrect a deletion on the other machines.
+"""
 
 from __future__ import annotations
 
@@ -8,9 +16,13 @@ from datetime import UTC, datetime, timedelta
 
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.ports import CredentialSyncPort, TombstoneLedgerPort, WorkspacePort
-from coffer.domain.sync.manifest import Manifest
+from coffer.domain.sync.manifest import SCHEMA_VERSION, Manifest
 from coffer.domain.sync.models import TOMBSTONE_TTL_SECONDS, Tombstone
 from coffer.domain.sync.serialization import resource_to_doc
+
+
+def _aware(ts: datetime) -> datetime:
+    return ts if ts.tzinfo is not None else ts.replace(tzinfo=UTC)
 
 
 class SyncExporter:
@@ -42,21 +54,28 @@ class SyncExporter:
             )
             for r in resources
         ]
-        live = {(r.kind, r.name) for r in resources}
-        pending = await self._reconcile_ledger(live)
+        live = {(r.kind, r.name): _aware(r.created_at) for r in resources}
+        pending = await self._reconcile_ledger(live, set(quarantined))
         # All filesystem + raw-sqlite IO runs off the event loop.
         await asyncio.to_thread(self._dump, docs, live, pending, set(quarantined), machine_id)
 
-    async def _reconcile_ledger(self, live: set[tuple[str, str]]) -> list[Tombstone]:
-        """Ledger rows for re-registered or expired resources are dropped; the
-        rest become workspace tombstones."""
+    async def _reconcile_ledger(
+        self, live: dict[tuple[str, str], datetime], quarantined: set[str]
+    ) -> list[Tombstone]:
+        """The ledger holds this machine's own deletions. Rows superseded by a
+        later re-creation, by a quarantined workspace doc (the remote re-created
+        something we can't even import), or by the TTL are dropped; the rest
+        become workspace tombstones."""
         if self._ledger is None:
             return []
         cutoff = datetime.now(tz=UTC) - timedelta(seconds=TOMBSTONE_TTL_SECONDS)
         await self._ledger.prune_older_than(cutoff)
         pending: list[Tombstone] = []
         for tombstone in await self._ledger.list():
-            if (tombstone.kind, tombstone.name) in live:
+            key = (tombstone.kind, tombstone.name)
+            created = live.get(key)
+            recreated = created is not None and created > _aware(tombstone.deleted_at)
+            if recreated or f"{tombstone.kind}:{tombstone.name}" in quarantined:
                 await self._ledger.remove(tombstone.kind, tombstone.name)
             else:
                 pending.append(tombstone)
@@ -65,13 +84,14 @@ class SyncExporter:
     def _dump(
         self,
         docs: list[dict[str, object]],
-        live: set[tuple[str, str]],
+        live: dict[tuple[str, str], datetime],
         pending: list[Tombstone],
         quarantined: set[str],
         machine_id: str | None,
     ) -> None:
-        self._workspace.write_resource_docs(docs, preserve=quarantined)
-        self._sync_tombstone_files(live, pending, machine_id)
+        withheld = self._sync_tombstone_files(live, pending, machine_id)
+        kept_docs = [d for d in docs if (str(d["kind"]), str(d["name"])) not in withheld]
+        self._workspace.write_resource_docs(kept_docs, preserve=quarantined)
         self._workspace.mirror_trees_out()
         blobs: dict[str, bytes] = {}
         for ref in self._credentials.list_refs():
@@ -79,34 +99,45 @@ class SyncExporter:
             if blob is not None:
                 blobs[ref] = blob
         self._workspace.write_credential_blobs(blobs)
+        self._write_manifest_guarded()
+
+    def _write_manifest_guarded(self) -> None:
+        """Never downgrade a manifest written by a newer build — overwriting it
+        would silently disarm the ``SYNC_WORKSPACE_TOO_NEW`` gate on the next
+        run and push the downgraded manifest back to every machine."""
+        existing = self._workspace.read_manifest()
+        if existing is not None and existing.schema_version > SCHEMA_VERSION:
+            return
         self._workspace.write_manifest(Manifest())
 
     def _sync_tombstone_files(
         self,
-        live: set[tuple[str, str]],
+        live: dict[tuple[str, str], datetime],
         pending: list[Tombstone],
         machine_id: str | None,
-    ) -> None:
-        """Reconcile ``tombstones/`` with reality.
-
-        A tombstone present at export time was applied locally in an earlier
-        import — so a live resource with the same ref means the user re-created
-        it afterwards and the tombstone must go (re-registration wins). Expired
-        tombstones are pruned the same way. Fresh local deletions are written
-        with this machine as provenance."""
-        cutoff = datetime.now(tz=UTC) - timedelta(seconds=TOMBSTONE_TTL_SECONDS)
+    ) -> set[tuple[str, str]]:
+        """Reconcile ``tombstones/`` with reality; returns the refs whose live
+        rows are STALER than their tombstone (deletion merged but not yet
+        applied locally) — their docs must be withheld from this export."""
+        now = datetime.now(tz=UTC)
+        cutoff = now - timedelta(seconds=TOMBSTONE_TTL_SECONDS)
         kept: set[tuple[str, str]] = set()
+        withheld: set[tuple[str, str]] = set()
         for existing in self._workspace.read_tombstones():
-            ts = existing.deleted_at
-            if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=UTC)
-            if (existing.kind, existing.name) in live or ts < cutoff:
+            key = (existing.kind, existing.name)
+            deleted_at = _aware(existing.deleted_at)
+            created = live.get(key)
+            if created is not None and created > deleted_at:
+                # Genuinely re-created after the deletion: resurrection wins.
+                self._workspace.remove_tombstone(existing.kind, existing.name)
+            elif deleted_at < cutoff:
                 self._workspace.remove_tombstone(existing.kind, existing.name)
             else:
-                kept.add((existing.kind, existing.name))
+                kept.add(key)
+                if created is not None:
+                    withheld.add(key)
         for tombstone in pending:
-            # An existing tombstone wins: import-applied deletions also land in
-            # the local ledger, and rewriting the file here would churn its
+            # An existing tombstone wins: rewriting it here would churn its
             # provenance/timestamp on every machine that imports the delete.
             if (tombstone.kind, tombstone.name) in kept:
                 continue
@@ -118,3 +149,4 @@ class SyncExporter:
                     by=machine_id,
                 )
             )
+        return withheld

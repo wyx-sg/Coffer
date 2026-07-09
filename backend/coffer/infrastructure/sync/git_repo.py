@@ -103,8 +103,14 @@ class GitRepo:
         targets = list(paths) if paths else self.conflicted_paths()
         if strategy in ("ours", "theirs"):
             for path in targets:
-                self._run("checkout", f"--{strategy}", "--", path)
-                self._run("add", "--", path)
+                proc = self._run("checkout", f"--{strategy}", "--", path, check=False)
+                if proc.returncode != 0:
+                    # Delete/modify conflict where the chosen side deleted the
+                    # path (e.g. accepting a tombstoned deletion): checkout has
+                    # no version to restore — accepting means removing it.
+                    self._run("rm", "--force", "--", path)
+                else:
+                    self._run("add", "--", path)
         elif strategy == "resolved":
             for path in targets:
                 self._run("add", "--", path)
