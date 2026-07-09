@@ -94,7 +94,10 @@ def test_hermes_descriptor_identity_and_mcp() -> None:
     assert d.display_name == "Hermes"
     assert d.config_subpath == ".hermes"
     keys = {s.key for s in d.config_files(d.default_config_dir())}
-    assert {"config", "instructions"} <= keys
+    # `soul`, not `instructions`: SOUL.md is the only file hermes reads from
+    # its home dir; ~/.hermes/AGENTS.md is never read (cwd only) — probe-verified.
+    assert {"config", "soul"} <= keys
+    assert "instructions" not in keys
     assert d.mcp is not None
     assert d.mcp.config_key == "config"
     assert d.mcp.container_key == "mcp_servers"
@@ -102,12 +105,19 @@ def test_hermes_descriptor_identity_and_mcp() -> None:
     assert d.mcp.entry_style is McpEntryStyle.COMMAND_MAP
 
 
-def test_hermes_hooks_absent_but_native_memory_present() -> None:
+def test_hermes_injects_via_instructions_block() -> None:
     # hermes' session hooks are documented but never invoked upstream
-    # (hermes-agent#2817, won't fix) — INSTRUCTIONS_BLOCK is the fallback slice.
+    # (hermes-agent#2817, won't fix) — so context reaches it as a marker block
+    # Coffer renders into SOUL.md, the one file hermes injects globally
+    # (INSTRUCTIONS_BLOCK, ADR-042): no lifecycle events, markdown format.
     # Native memory IS present (unlike opencode) and wired to YAML.
     d = descriptor_for(AgentType.HERMES)
-    assert d.context_injection is None
+    inj = d.context_injection
+    assert inj is not None
+    assert inj.mode is InjectionMode.INSTRUCTIONS_BLOCK
+    assert inj.config_key == "soul"
+    assert inj.format is ConfigFileFormat.MARKDOWN
+    assert inj.events == ()
     assert native_memory_disable_target(AgentType.HERMES) == ("config", ConfigFileFormat.YAML)
 
 

@@ -14,6 +14,7 @@ injected into the subprocess env per turn. The
 
 from __future__ import annotations
 
+import logging
 import os
 import pathlib
 import shutil
@@ -31,6 +32,8 @@ from coffer.infrastructure.chat.document_extract import default_document_extract
 from coffer.infrastructure.chat.hermes_acp import AcpSessionFactory, default_hermes_acp_session
 from coffer.infrastructure.chat.hermes_agent import HermesAcpAdapter
 from coffer.infrastructure.chat.transcribe import default_transcriber
+
+log = logging.getLogger(__name__)
 
 #: Resolve the active connection's decrypted API key, or ``None`` when no Coffer
 #: connection is active for hermes (it then runs on its own configured provider).
@@ -54,6 +57,7 @@ class HermesProvider:
         session_factory: AcpSessionFactory | None = None,
         which: Any = shutil.which,
         resolve_key: KeyResolver | None = None,
+        refresh_context: Callable[[], Awaitable[object]] | None = None,
     ) -> None:
         self._conversations = conversations
         self._session_factory: AcpSessionFactory = session_factory or default_hermes_acp_session
@@ -62,6 +66,11 @@ class HermesProvider:
         # (ADR-032 env_key seam). ``None`` → no injection, hermes inherits the
         # daemon env and uses its own configured provider/login.
         self._resolve_key = resolve_key
+        # Re-renders Coffer's INSTRUCTIONS_BLOCK in ~/.hermes/SOUL.md before
+        # each turn (ADR-042: hermes has no working hook, so the static block is
+        # refreshed at the one moment Coffer controls). Best-effort — a refresh
+        # failure never blocks the turn.
+        self._refresh_context = refresh_context
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
@@ -89,6 +98,14 @@ class HermesProvider:
                 reason="invalid_cwd",
                 message="conversation has no working directory configured",
             )
+
+        # Freshen the session-context block hermes reads at session start
+        # (ADR-042 INSTRUCTIONS_BLOCK). Never let a refresh failure block the turn.
+        if self._refresh_context is not None:
+            try:
+                await self._refresh_context()
+            except Exception:
+                log.exception("hermes session-context block refresh failed; turn continues")
 
         async def _save_session(session_id: str) -> None:
             latest = await self._conversations.get_agent_config(conversation_id)

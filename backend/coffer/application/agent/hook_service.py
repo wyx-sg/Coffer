@@ -12,18 +12,26 @@ agent's session-context / session-end endpoints. For a non-Claude flavor it also
 bakes in ``--dialect`` (which stdout envelope to print) and ``--event`` (Cursor's
 stdin payload is not guaranteed to name the event; its hooks.json keys it).
 
-This service handles ``InjectionMode.SHELL_COMMAND`` only. An agent whose
-descriptor declares no injection — or declares one of the not-yet-implemented
-modes — raises :class:`HookInstallUnsupported` (→ 422) on install/uninstall;
-``status`` reports ``installed=False, supported=False`` for it (a not-installable
-agent is simply not installed, never an error to inspect). Surfaces read
-``supported`` to disable the control up front rather than letting a click 422.
+This service handles ``InjectionMode.SHELL_COMMAND`` and
+``InjectionMode.INSTRUCTIONS_BLOCK``. For the block mode (Hermes — no working
+upstream hook, ADR-042) install renders the FR-044 session-context payload into
+a marker block in the agent's instructions file via the pure
+``domain/agent/instructions_block`` transforms; the block is static between
+refreshes, so :meth:`AgentHookService.refresh_blocks_for_type` re-renders it and
+is called (best-effort) before each Coffer-driven turn. An agent whose
+descriptor declares no injection — or declares the not-yet-implemented
+``PLUGIN_DROP`` mode — raises :class:`HookInstallUnsupported` (→ 422) on
+install/uninstall; ``status`` reports ``installed=False, supported=False`` for
+it (a not-installable agent is simply not installed, never an error to
+inspect). Surfaces read ``supported`` to disable the control up front rather
+than letting a click 422.
 """
 
 from __future__ import annotations
 
+import logging
 import shlex
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -44,9 +52,13 @@ from coffer.domain.agent.hook_install import (
     apply_uninstall,
     is_installed,
 )
+from coffer.domain.agent.instructions_block import apply_block, has_block, remove_block
+from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.workspace_errors import HookInstallUnsupported
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -63,6 +75,8 @@ class HookInstallStatus:
 
 class _AgentLookup(Protocol):
     async def get(self, name: str) -> Resource: ...
+
+    async def list(self) -> list[Resource]: ...
 
 
 def _hook_command(
@@ -111,17 +125,26 @@ class AgentHookService:
         # never imports the infrastructure ``default_hook_resolver`` directly —
         # that would break the application↛infrastructure import contract.
         hook_resolver: Callable[[], str],
+        # Assembles the FR-044 session-context payload at global scope; the
+        # INSTRUCTIONS_BLOCK mode renders it into the instructions file. Lazy
+        # (the memory service is wired after this one). ``None`` → the block
+        # mode is unsupported (tests that only exercise shell hooks omit it).
+        session_context: Callable[[], Awaitable[str]] | None = None,
     ) -> None:
         self._agents = agent_service
         self._audit = audit
         self._store = store
         self._resolve_hook = hook_resolver
+        self._session_context = session_context
 
     def _injection(self, cfg: AgentConfig) -> ContextInjectionSpec | None:
-        """The agent's shell-command injection spec, or ``None`` when it has no
-        injection point or uses a mode this service does not implement."""
+        """The agent's injection spec, or ``None`` when it has no injection
+        point or uses a mode this service does not implement (``PLUGIN_DROP``;
+        ``INSTRUCTIONS_BLOCK`` without a wired payload source)."""
         injection = descriptor_for(cfg.type).context_injection
-        if injection is None or injection.mode is not InjectionMode.SHELL_COMMAND:
+        if injection is None or injection.mode is InjectionMode.PLUGIN_DROP:
+            return None
+        if injection.mode is InjectionMode.INSTRUCTIONS_BLOCK and self._session_context is None:
             return None
         return injection
 
@@ -147,6 +170,9 @@ class AgentHookService:
             return HookInstallStatus(installed=False, command=None, supported=False)
         spec = spec_for(cfg.type, injection.config_key, cfg.resolved_config_dir())
         text = self._store.read_text(spec.path) or ""
+        if injection.mode is InjectionMode.INSTRUCTIONS_BLOCK:
+            # The block carries the payload itself; there is no command to report.
+            return HookInstallStatus(installed=has_block(text), command=None)
         installed = is_installed(
             text, events=injection.events, fmt=spec.format, flavor=injection.flavor
         )
@@ -158,6 +184,8 @@ class AgentHookService:
 
     async def install(self, name: str, *, actor: str = "api") -> HookInstallStatus:
         spec, inj, _cfg = await self._hook_spec(name)
+        if inj.mode is InjectionMode.INSTRUCTIONS_BLOCK:
+            return await self._install_block(name, spec, actor=actor)
         hook = self._resolve_hook()  # raises ShimNotFound (→ 422) before any write
         commands = _commands(hook, name, inj)
         text = self._store.read_text(spec.path) or ""
@@ -177,6 +205,18 @@ class AgentHookService:
     async def uninstall(self, name: str, *, actor: str = "api") -> HookInstallStatus:
         spec, inj, _cfg = await self._hook_spec(name)
         text = self._store.read_text(spec.path)
+        if inj.mode is InjectionMode.INSTRUCTIONS_BLOCK:
+            # No-op success when not installed — don't write or audit.
+            if text is None or not has_block(text):
+                return HookInstallStatus(installed=False, command=None)
+            self._store.write_text_atomic(spec.path, remove_block(text))
+            await self._audit.record(
+                AuditEventType.AGENT_HOOK_UNINSTALLED.value,
+                ref=ResourceRef("agent", name),
+                actor=actor,
+                details={"path": str(spec.path)},
+            )
+            return HookInstallStatus(installed=False, command=None)
         # No-op success when not installed — don't write or audit.
         if text is None or not is_installed(
             text, events=inj.events, fmt=spec.format, flavor=inj.flavor
@@ -191,3 +231,65 @@ class AgentHookService:
             details={"path": str(spec.path)},
         )
         return HookInstallStatus(installed=False, command=None)
+
+    async def _install_block(
+        self, name: str, spec: ConfigFileSpec, *, actor: str
+    ) -> HookInstallStatus:
+        """Render the session-context block into the instructions file (install
+        and refresh share this write; only install audits)."""
+        assert self._session_context is not None  # _injection() gated on it
+        payload = await self._session_context()
+        text = self._store.read_text(spec.path) or ""
+        new_text = apply_block(text, payload=payload)
+        if new_text != text:
+            self._store.write_text_atomic(spec.path, new_text)
+        await self._audit.record(
+            AuditEventType.AGENT_HOOK_INSTALLED.value,
+            ref=ResourceRef("agent", name),
+            actor=actor,
+            details={"path": str(spec.path)},
+        )
+        return HookInstallStatus(installed=True, command=None)
+
+    async def refresh_blocks_for_type(self, agent_type: AgentType) -> int:
+        """Re-render the session-context block for every registered agent of
+        ``agent_type`` that has one installed; returns how many were refreshed.
+
+        The block mode is static between writes, so this runs (best-effort)
+        before each Coffer-driven turn for the type. Never raises: a failure to
+        refresh one agent is logged and must not block the turn. Routine
+        refreshes do not audit — only install/uninstall are user actions.
+        """
+        if self._session_context is None:
+            return 0
+        refreshed = 0
+        try:
+            resources = await self._agents.list()
+        except Exception:
+            log.exception("instructions-block refresh: could not list agents")
+            return 0
+        # One payload for the whole sweep: the bundle is global-scoped, so every
+        # agent of the type gets the identical text (and one daemon-internal
+        # assemble instead of N).
+        payload: str | None = None
+        for resource in resources:
+            try:
+                cfg = AgentConfig.model_validate(resource.config)
+                if cfg.type is not agent_type:
+                    continue
+                inj = self._injection(cfg)
+                if inj is None or inj.mode is not InjectionMode.INSTRUCTIONS_BLOCK:
+                    continue
+                spec = spec_for(cfg.type, inj.config_key, cfg.resolved_config_dir())
+                text = self._store.read_text(spec.path) or ""
+                if not has_block(text):
+                    continue  # not installed for this agent — nothing to refresh
+                if payload is None:
+                    payload = await self._session_context()
+                new_text = apply_block(text, payload=payload)
+                if new_text != text:
+                    self._store.write_text_atomic(spec.path, new_text)
+                refreshed += 1
+            except Exception:
+                log.exception("instructions-block refresh failed for agent %r", resource.ref.name)
+        return refreshed

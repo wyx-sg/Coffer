@@ -58,7 +58,11 @@ def hook_install(
         r = c.post(f"/agents/{name}/hook-install")
         _not_found_exit(r)
         _cli_client.check(r, verbose=verbose)
-    typer.echo(f"installed Coffer hooks into agent:{name} ({r.json().get('command')})")
+    # A shell-command install reports the installed command; a block-mode
+    # install (INSTRUCTIONS_BLOCK) has none — the block itself is the payload.
+    command = r.json().get("command")
+    suffix = f" ({command})" if command else " (session-context block)"
+    typer.echo(f"installed Coffer hooks into agent:{name}{suffix}")
 
 
 @hook_app.command("uninstall")

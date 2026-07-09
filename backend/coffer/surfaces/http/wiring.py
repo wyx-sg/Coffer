@@ -14,11 +14,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
 from coffer.application.builtin_tools import BuiltinToolRegistry
-from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.application.knowledge.reindex import Reindexer
@@ -31,17 +30,10 @@ from coffer.application.knowledge_base.builtin_tools import register_kb_builtin_
 from coffer.application.knowledge_base.kind import make_kb_kind
 from coffer.application.knowledge_base.service import KnowledgeBaseService
 from coffer.application.providers.ports import ModelIntrospectionService
-from coffer.domain.agent.types import AgentType
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.knowledge.embedder import EmbeddingConfig
-from coffer.domain.provider.errors import NoActiveProvider
 from coffer.infrastructure.chat.agentic_rag import DEFAULT_RECURSION_LIMIT, make_ask_tool
-from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
-from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
-from coffer.infrastructure.chat.cursor_provider import CursorProvider
 from coffer.infrastructure.chat.gateway_tool_provider import GatewayToolProvider
-from coffer.infrastructure.chat.hermes_provider import HermesProvider
-from coffer.infrastructure.chat.opencode_provider import OpencodeProvider
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.knowledge import paths
@@ -53,6 +45,7 @@ from coffer.infrastructure.knowledge.sqlite_index import SqliteKnowledgeIndex
 from coffer.infrastructure.knowledge.vec_index import VecIndex
 from coffer.infrastructure.providers.provider_introspector import ProviderIntrospector
 from coffer.surfaces.http.chat.dependencies import set_introspection_service
+from coffer.surfaces.http.chat_provider_wiring import build_agent_provider_registry
 from coffer.surfaces.http.dependencies import (
     get_provider_service,
     set_agent_registry,
@@ -250,46 +243,9 @@ def wire_chat(
         )
     )
 
-    # 6. The agent-provider registry — the platform seam. Chat lists only
-    #    Coffer-managed agents; a further agent is one more register() call here,
-    #    with no change to the chat surface, persistence, or the wire contract.
-    #    They surface in the picker only when their binary is on PATH (availability()).
-    registry = AgentProviderRegistry()
-    registry.register(ClaudeSdkProvider(conversations=conv_repo), display_name="Claude Code")
-
-    # Codex / opencode / hermes each read Coffer's projected key from the
-    # COFFER_PROVIDER_KEY env var (config.toml env_key; opencode.json + config.yaml
-    # {env:...} references). Resolve the connection active FOR that agent per turn —
-    # keyed by agent, not wire, so an openai-compatible gateway routed to any of them
-    # resolves correctly — and inject it into the subprocess env; with no active
-    # connection it stays None so the agent uses its own login (ADR-032 env_key seam).
-    def _key_resolver(agent_type: AgentType) -> Callable[[], Awaitable[str | None]]:
-        async def _resolve() -> str | None:
-            try:
-                # Assign to a typed local so mypy narrows the service's Any return.
-                key: str = await get_provider_service().resolve_active_key_for_agent(agent_type)
-                return key
-            except (NoActiveProvider, CredentialMissing):
-                return None
-
-        return _resolve
-
-    registry.register(
-        CodexAppServerProvider(conversations=conv_repo, resolve_key=_key_resolver(AgentType.CODEX)),
-        display_name="Codex",
-    )
-    registry.register(
-        OpencodeProvider(conversations=conv_repo, resolve_key=_key_resolver(AgentType.OPENCODE)),
-        display_name="opencode",
-    )
-    registry.register(
-        HermesProvider(conversations=conv_repo, resolve_key=_key_resolver(AgentType.HERMES)),
-        display_name="Hermes",
-    )
-    # Cursor is locked to Cursor's own backend and uses its OWN auth
-    # (`cursor-agent login` / CURSOR_API_KEY): Coffer projects no connection and
-    # injects no key, so there is NO resolve_key here (provider-projection-N/A).
-    registry.register(CursorProvider(conversations=conv_repo), display_name="Cursor")
+    # 6. The agent-provider registry — the platform seam (chat_provider_wiring:
+    #    adding an agent is one more register() call there).
+    registry = build_agent_provider_registry(conv_repo)
 
     # 7. Application services + the agent-agnostic turn orchestrator.
     chat_svc = ChatService(

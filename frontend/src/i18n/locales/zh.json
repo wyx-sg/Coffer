@@ -867,7 +867,8 @@
         "instructions": "在该目录下每个会话都会自动加载的指令。",
         "subagents": "自定义子智能体定义，每个子智能体一个 Markdown 文件。",
         "config": "Codex CLI 配置：模型、供应商与工具设置。",
-        "hooks": "围绕 Codex 事件运行命令的生命周期钩子。"
+        "hooks": "围绕 Codex 事件运行命令的生命周期钩子。",
+        "soul": "Hermes 的 persona 与全局指令（SOUL.md）——Hermes 每个会话唯一注入的文件；Coffer 的会话上下文块就放在这里。"
       }
     },
     "mcp": {
@@ -880,7 +881,7 @@
     },
     "hook": {
       "title": "会话启动规则",
-      "help": "开启后，每次该 Agent 启动会话时通过 SessionStart 钩子注入 Coffer 规则集。",
+      "help": "开启后，Coffer 在会话启动时向该 Agent 注入规则集——通过 SessionStart 钩子，或对无钩子的 Agent 通过指令文件里的托管块。",
       "unsupported": "Coffer 尚未支持向该 Agent 类型注入会话上下文。"
     },
     "welcome": {

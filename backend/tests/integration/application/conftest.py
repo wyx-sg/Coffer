@@ -71,11 +71,18 @@ async def agent_bundle(tmp_path: pathlib.Path):
         store=store,
         shim_resolver=lambda: "/opt/coffer/coffer-mcp-shim",
     )
+
+    async def _session_context() -> str:
+        # The FR-044 payload the INSTRUCTIONS_BLOCK mode renders; a static stub
+        # stands in for MemoryService.assemble_session_context(cwd=None).
+        return "RULES BUNDLE"
+
     hook = AgentHookService(
         agent_service=svc,
         audit=audit,
         store=store,
         hook_resolver=lambda: "/opt/coffer/coffer-hook",
+        session_context=_session_context,
     )
     try:
         yield AgentTestBundle(

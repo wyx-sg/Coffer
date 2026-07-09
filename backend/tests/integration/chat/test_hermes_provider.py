@@ -370,6 +370,44 @@ async def test_init_conversation_stores_cwd_and_model(tmp_path: Any) -> None:
 
 
 @pytest.mark.asyncio
+async def test_build_adapter_refreshes_context_block_first(tmp_path: Any) -> None:
+    # hermes has no working hook (ADR-042 INSTRUCTIONS_BLOCK): the session-
+    # context block in SOUL.md is refreshed at the one moment Coffer controls —
+    # adapter construction, i.e. once per turn.
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv())
+    factory, _server = _make_factory(session_id="ses-r", updates=[_text_update("hi")])
+    calls: list[int] = []
+
+    async def _refresh() -> int:
+        calls.append(1)
+        return 1
+
+    provider = HermesProvider(conversations=repo, session_factory=factory, refresh_context=_refresh)
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+    await provider.build_adapter(conv.id)
+    assert calls == [1]
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_build_adapter_survives_refresh_failure(tmp_path: Any) -> None:
+    # A refresh failure must never block the turn (failure-is-silent contract).
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv())
+    factory, _server = _make_factory(session_id="ses-f", updates=[_text_update("hi")])
+
+    async def _boom() -> int:
+        raise RuntimeError("daemon hiccup")
+
+    provider = HermesProvider(conversations=repo, session_factory=factory, refresh_context=_boom)
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+    adapter = await provider.build_adapter(conv.id)
+    assert isinstance(adapter, HermesAcpAdapter)
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_turn_yields_text_and_terminal_from_prompt_response(tmp_path: Any) -> None:
     repo, engine = await _repo(tmp_path)
     conv = await repo.create(_conv())
