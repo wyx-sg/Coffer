@@ -32,6 +32,7 @@ from coffer.domain.agent.plugin_drop_openclaw import (
     has_entry,
     render_openclaw_extension,
 )
+from coffer.domain.errors import ConfigFileFormatInvalid
 
 
 def plugin_marker_path(spec: ConfigFileSpec, inj: ContextInjectionSpec) -> pathlib.Path:
@@ -62,13 +63,17 @@ def install_plugin_files(
     """
     if inj.plugin_flavor is PluginFlavor.OPENCLAW:
         package_dir = spec.path / OPENCLAW_PLUGIN_ID
+        # Parse BEFORE any write (the MCP transforms' discipline): a malformed
+        # openclaw.json must fail the request while the disk is still untouched
+        # — package files without the fail-closed entries flag would read as
+        # installed=true yet never load.
+        assert enable_spec is not None  # descriptor declares plugin_enable_config_key
+        text = store.read_text(enable_spec.path) or ""
+        new_text = apply_entry_enable(text)  # raises on malformed config, pre-write
         files = render_openclaw_extension(hook_binary=hook_binary, agent_name=agent_name)
         for filename, content in files.items():
             store.write_text_atomic(package_dir / filename, content)
         # Fail-closed: without the entries flag openclaw ignores the package.
-        assert enable_spec is not None  # descriptor declares plugin_enable_config_key
-        text = store.read_text(enable_spec.path) or ""
-        new_text = apply_entry_enable(text)
         if new_text != text:
             store.write_text_atomic(enable_spec.path, new_text)
         return package_dir
@@ -93,15 +98,27 @@ def uninstall_plugin_files(
     """
     if inj.plugin_flavor is PluginFlavor.OPENCLAW:
         package_dir = spec.path / OPENCLAW_PLUGIN_ID
-        removed = store.remove_tree(package_dir)
+        # Read/parse the config BEFORE removing the package: has_entry raising
+        # after remove_tree would error the request despite an effective
+        # removal, losing the audit row. An unparseable config is treated as
+        # "no Coffer flag in it" (FR-043's not-ours rule) — the package removal
+        # still proceeds and audits.
+        flag_new_text: str | None = None
         if enable_spec is not None:
             text = store.read_text(enable_spec.path)
             # Semantic no-op guard: only rewrite the config when Coffer's
             # entries key is actually present — a file that merely serializes
             # differently must not be reformatted (or audited) by a no-op.
-            if text is not None and has_entry(text):
-                store.write_text_atomic(enable_spec.path, apply_entry_remove(text))
-                removed = True
+            try:
+                if text is not None and has_entry(text):
+                    flag_new_text = apply_entry_remove(text)
+            except ConfigFileFormatInvalid:
+                flag_new_text = None
+        removed = store.remove_tree(package_dir)
+        if flag_new_text is not None:
+            assert enable_spec is not None
+            store.write_text_atomic(enable_spec.path, flag_new_text)
+            removed = True
         return removed, package_dir
     path = spec.path / PLUGIN_FILENAME
     return store.delete_with_backup(path), path

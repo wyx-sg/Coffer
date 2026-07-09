@@ -18,6 +18,7 @@ from coffer.domain.agent.config_files import (
     ConfigFileSpec,
 )
 from coffer.domain.agent.plugin_drop import PLUGIN_SUBDIR
+from coffer.domain.agent.plugin_drop_openclaw import OPENCLAW_EXTENSIONS_SUBDIR
 
 
 def _home() -> pathlib.Path:
@@ -161,7 +162,7 @@ def _openclaw_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
         ConfigFileSpec(
             "extensions",
             "Extensions (extensions/)",
-            cfg / "extensions",
+            cfg / OPENCLAW_EXTENSIONS_SUBDIR,
             ConfigFileFormat.TEXT,
             kind=ConfigFileKind.DIRECTORY,
         ),

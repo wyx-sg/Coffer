@@ -107,11 +107,15 @@ export default definePluginEntry({{
   id: {plugin_id},
   name: "Coffer session context",
   register(api) {{
-    api.on("before_prompt_build", async (event) => {{
+    // The event arg is {{prompt, messages}} only; session identity rides on the
+    // SECOND handler arg (ctx.sessionKey / ctx.sessionId — openclaw 2026.6.11
+    // hook-types). Keying the cache off it means a long-running gateway
+    // re-fetches per session instead of pinning one bundle process-wide.
+    api.on("before_prompt_build", async (_event, hookCtx) => {{
       // FAILURE-IS-SILENT: a broken daemon must never break the user's agent.
       try {{
         const key =
-          (event && (event.sessionId || event.sessionID || event.sessionKey)) || "global";
+          (hookCtx && (hookCtx.sessionKey || hookCtx.sessionId)) || "global";
         let ctx = cache.get(key);
         if (ctx === undefined) {{
           ctx = await fetchContext();

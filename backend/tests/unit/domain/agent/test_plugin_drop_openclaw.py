@@ -47,6 +47,12 @@ def test_render_entry_embeds_hook_and_agent_as_json_literals() -> None:
     # written to, so coffer-hook must not read it).
     assert '"--dialect", "raw"' in entry
     assert '"--event", "sessionStart"' in entry
+    # Review-hardening regression: before_prompt_build's EVENT arg is
+    # {prompt, messages} only — session identity rides on the second (ctx)
+    # arg. Keying the cache off the event pinned one bundle process-wide in a
+    # long-running gateway.
+    assert "async (_event, hookCtx)" in entry
+    assert "hookCtx.sessionKey || hookCtx.sessionId" in entry
     # openclaw's prompt-injection hook + its return contract.
     assert 'api.on("before_prompt_build"' in entry
     assert "appendSystemContext" in entry

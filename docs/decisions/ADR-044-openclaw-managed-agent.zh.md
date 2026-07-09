@@ -28,7 +28,7 @@
 | 会话上下文注入（FR-043/044/048） | `PLUGIN_DROP`，**openclaw 风味**：package 目录 `extensions/coffer-session-context/`（带 `openclaw.extensions` 的 `package.json`、`{id, configSchema}` 的 `openclaw.plugin.json`、导出 `definePluginEntry` 的 `index.js`）**加** `plugins.entries.<id>.enabled: true`——非内置插件 **fail-closed**。Hook：`api.on("before_prompt_build", h)`；handler 返回 `{appendSystemContext}`。插件在进程内全权限运行 → 能 spawn `coffer-hook`。 | `openclaw config validate` 接受 package + 开关组合；实时插件注入回合（见「影响」） |
 | Provider 投影（spec 011） | `models.providers.coffer = {api, baseUrl, apiKey, models}`；`apiKey` 支持 `${UPPERCASE_VAR}`；模型引用 `provider/model`；活动模型经 `agents.defaults.model.primary`（保留用户 `fallbacks`）。自定义 provider 的 `models` **必填**、每项需同时有 `id` 与 `name`；`models: []` 合法（未绑定 agent 的投影）。openclaw 同时支持 `openai-completions` 与 `anthropic-messages` 两种 `api`。 | 各形状均经 `openclaw config validate` 探针，2026-07-10 |
 | 缺 key 的降级 | `apiKey: "${COFFER_PROVIDER_KEY}"` 背后的 env var 缺失只是启动 **WARNING**（"Missing env var … feature using this value will be unavailable"）、exit 0、其他 provider 不受影响——**推翻文档「配置加载即抛错」的说法**，也正是 codex 式投影可行的原因：磁盘上持久化引用、每个 Coffer 驱动的回合注入 key，用户自己运行的 openclaw 没有该变量时优雅降级。 | 探针 2026-07-10 |
-| 原生记忆禁用（FR-046） | `plugins.slots.memory: "none"` 清空 memory 插件槽；恢复 = 移除该键。 | `openclaw config validate` 接受 |
+| 原生记忆禁用（FR-046） | `plugins.slots.memory: "none"` 清空 memory 插件槽；恢复 = 移除该键，落回 openclaw 的**默认**插件——用户选定的非默认 id 不做快照（FR-046 已记录此注意事项）。 | `openclaw config validate` 接受 |
 | Skills（spec 005） | `~/.openclaw/skills/<name>/SKILL.md`；**符号链接**的 skill 目录会被发现——Coffer 现有 `FOLDER` 投递不变即可用。 | 实时发现探针 |
 | 检测 | 默认标记 `~/.openclaw`（存在 `OPENCLAW_STATE_DIR` 等 env 覆盖，与其他 agent 的非默认目录同样对待：不解析）。 | 安装布局 |
 
