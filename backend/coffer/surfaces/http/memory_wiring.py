@@ -22,6 +22,7 @@ from coffer.application.knowledge.retrieval import (
     no_embedding,
 )
 from coffer.application.memory.builtin_tools import register_memory_builtin_tools
+from coffer.application.memory.consolidate import StoreConsolidator
 from coffer.application.memory.handoff import HandoffService
 from coffer.application.memory.journal import JournalService
 from coffer.application.memory.kind import make_memory_kind
@@ -33,7 +34,12 @@ from coffer.domain.knowledge.document import KIND_MEMORY, WORKSPACE_GLOBAL_PROJE
 from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.knowledge.repository import DocumentRepo
 from coffer.infrastructure.memory.project_root_repo import ProjectRootRepo
-from coffer.infrastructure.memory.scope_fs import git_branch, git_root, project_ulid
+from coffer.infrastructure.memory.scope_fs import (
+    git_branch,
+    git_root,
+    project_identity,
+    project_ulid,
+)
 from coffer.infrastructure.memory.store_label_repo import StoreLabelRepo
 from coffer.surfaces.http.dependencies import set_memory_service
 from coffer.surfaces.http.memory.dependencies import (
@@ -67,13 +73,31 @@ def wire_memory_kind(
     app.state.memory_reconciler = reconciler  # reused by the startup reindex sweep
     project_roots = ProjectRootRepo(sm)  # type: ignore[arg-type]
     set_project_root_repo(project_roots)
-    set_store_label_repo(StoreLabelRepo(sm))  # type: ignore[arg-type]
+    label_repo = StoreLabelRepo(sm)  # type: ignore[arg-type]
+    set_store_label_repo(label_repo)
+    adopter = StoreConsolidator(
+        resources=resource_svc,
+        reconciler=reconciler,
+        roots=project_roots,
+        labels=label_repo,
+        store_dir=paths.memory_store_dir,
+        git_root=git_root,
+        project_ulid=project_identity,
+    )
+
+    async def migrate_store(legacy_id: str, new_id: str, root: str) -> None:
+        from coffer.application.memory.scope import project_store_name
+
+        await adopter.adopt(project_store_name(legacy_id), project_store_name(new_id), root)
+
     scope = ScopeResolver(
         resources=resource_svc,
         git_root=git_root,
-        project_ulid=project_ulid,
+        project_ulid=project_identity,
         store_dir=paths.memory_store_dir,
         record_project_root=project_roots.set,
+        legacy_project_ulid=project_ulid,
+        migrate_store=migrate_store,
     )
     memory_service = MemoryService(
         resource_service=resource_svc,

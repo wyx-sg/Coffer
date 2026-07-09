@@ -207,6 +207,13 @@ UI 里也不可见。把每个 lane 以贴合其形状的方式呈现，让整�
 
 ## Acceptance Scenarios
 
+### Scenario: project memory follows the repository across checkout paths
+
+- **Given** 同一仓库（相同 `origin` remote）检出在不同路径——例如两台用户名不同的已同步机器
+- **When** 每个检出解析其项目记忆库
+- **Then** 两者解析到同一个库（相同项目 ULID）
+- **And** 旧的路径派生库在首次解析时被收编到可移植 id 之下，事实、根映射与标签保留
+
 每条场景至少对应一个被 `@pytest.mark.acceptance(spec="007-memory", scenario="…")` 打了标记的测试。
 
 ### Scenario: agent remembers a project fact
@@ -486,6 +493,7 @@ UI 里也不可见。把每个 lane 以贴合其形状的方式呈现，让整�
 - **FR-002**：系统 MUST 支持两种记忆作用域：**global**（一个由 `project_id = WORKSPACE_GLOBAL_PROJECT_ID`（既有 sentinel `00000000000000000000000000`）标识的 store）与 **per-project**（每项目一个、由项目 ULID 标识的 store），分别存于 `~/.coffer/memory/global/knowledge/` 与 `~/.coffer/memory/projects/<project-ulid>/knowledge/`。
 - **FR-003**：`coffer__remember`（与用户添加）MUST 把一条记忆条目追加进每作用域的 inbox（`knowledge/inbox/`），写入时不调 LLM；整理进主题文档由整合 organizer 异步完成（后续 memory PR），绝不阻塞写入或 `recall`。
 - **FR-004**：系统 MUST 从 agent 在会话握手时上报的启动 cwd 解析 per-project store：daemon 计算 git-root，并解析（缺失则惰性置备）该项目 ULID 对应的 store。
+- **FR-004a**（spec 010 / ADR-043 修订）：项目 ULID MUST **跨机器可移植**——仓库有 `origin` remote 时由其正规化 URL 派生（同一仓库的 ssh/https/scp 形式归一化一致），无 remote 时回退为 git-root 绝对路径哈希。因此同一仓库在每台已同步机器上解析到同一个记忆库，无论检出路径。旧的路径派生库在首次解析时**一次性**收编：文件移入可移植 id 的目录、资源以新名重新注册、根映射与显示标签随迁（旧资源被删除，改名经同步墓碑传播）。
 
 **事实生命周期**
 

@@ -16,6 +16,7 @@ never deleted, so real memory can never be lost, only gained.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import logging
 from collections.abc import Callable
@@ -30,7 +31,7 @@ from coffer.application.memory.scope import (
 from coffer.application.memory.stores import build_store_ref_for
 from coffer.application.memory.sync import MemoryReconciler
 from coffer.application.resource_service import ResourceService
-from coffer.domain.errors import ResourceNotFound
+from coffer.domain.errors import ResourceAlreadyExists, ResourceNotFound
 from coffer.domain.memory.config import MemoryStoreConfig
 from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.knowledge.fs import atomic_write_text
@@ -137,6 +138,8 @@ class StoreConsolidator:
         self._store_dir = store_dir
         self._git_root = git_root
         self._project_ulid = project_ulid
+        # Serializes resolve-time adoptions (every remember/recall resolves).
+        self._adopt_lock = asyncio.Lock()
 
     async def run(self) -> ConsolidationReport:
         report = ConsolidationReport()
@@ -167,6 +170,13 @@ class StoreConsolidator:
             )
         return report
 
+    async def adopt(self, stale: str, canonical: str, root: str) -> None:
+        """Resolve-time adoption of a store under its portable name (spec 007
+        FR-004a): identical semantics to the boot pass — additive merge, never
+        a destructive move, retire only after the merge landed."""
+        async with self._adopt_lock:
+            await self._merge_and_retire(stale, canonical, root, ConsolidationReport())
+
     async def _merge_and_retire(
         self, stale: str, canonical: str, root: str, report: ConsolidationReport
     ) -> None:
@@ -191,12 +201,13 @@ class StoreConsolidator:
             return
         except ResourceNotFound:
             pass
-        await self._resources.register(
-            kind=KIND_MEMORY,
-            name=store_name,
-            config=MemoryStoreConfig().model_dump(mode="json"),
-            actor="system",
-        )
+        with contextlib.suppress(ResourceAlreadyExists):  # concurrent adopters race
+            await self._resources.register(
+                kind=KIND_MEMORY,
+                name=store_name,
+                config=MemoryStoreConfig().model_dump(mode="json"),
+                actor="system",
+            )
 
     async def _move_label(self, stale: str, canonical: str) -> None:
         label = await self._labels.get(stale)
