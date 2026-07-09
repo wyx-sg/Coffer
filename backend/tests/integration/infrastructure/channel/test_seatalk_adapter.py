@@ -544,6 +544,90 @@ async def test_interactive_message_click_in_group_routes_as_group_callback(
     assert cb.platform_message_id == "card-9"
 
 
+# -- inbound de-duplication (FR-039) ------------------------------------------
+
+
+def _subscriber_text_envelope(*, event_id: str, message_id: str, text: str) -> dict[str, Any]:
+    return {
+        "event_id": event_id,
+        "event_type": "message_from_bot_subscriber",
+        "timestamp": 1718000000,
+        "event": {
+            "employee_code": "emp-1",
+            "email": "yu@example.com",
+            "message": {"tag": "text", "message_id": message_id, "text": {"content": text}},
+        },
+    }
+
+
+@pytest.mark.acceptance(spec="009-channels", scenario="a redelivered event is processed once")
+async def test_handle_event_dedups_redelivered_event_id(fake_seatalk: FakeSeaTalk) -> None:
+    """FR-039: SeaTalk retries a slow callback, so the SAME event_id can arrive
+    twice — the second delivery must be dropped, driving the turn once. Two
+    DIFFERENT event_ids remain two turns."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        env = _subscriber_text_envelope(event_id="ev-1", message_id="pm-1", text="hi bot")
+        await adapter.handle_event(env)
+        await adapter.handle_event(dict(env))  # a byte-for-byte redelivery
+        assert len(recorder.messages) == 1  # processed exactly once
+        # A genuinely different event still drives its own turn.
+        await adapter.handle_event(
+            _subscriber_text_envelope(event_id="ev-2", message_id="pm-2", text="again")
+        )
+    finally:
+        await adapter.stop()
+    assert [m.text for m in recorder.messages] == ["hi bot", "again"]
+
+
+async def test_handle_event_dedups_by_message_id_when_event_id_absent(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """When an envelope carries no top-level event_id, de-dup falls back to the
+    message id so a redelivery is still dropped."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        env = {
+            "event_type": "message_from_bot_subscriber",
+            "timestamp": 1718000000,
+            "event": {
+                "employee_code": "emp-1",
+                "message": {"tag": "text", "message_id": "pm-9", "text": {"content": "hi"}},
+            },
+        }
+        await adapter.handle_event(env)
+        await adapter.handle_event(dict(env))
+    finally:
+        await adapter.stop()
+    assert len(recorder.messages) == 1
+
+
+async def test_handle_event_dedups_redelivered_interactive_click(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """A redelivered card tap (same event_id) fires on_callback once, not twice
+    — a double reply / double agent switch would otherwise result."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    click = {
+        "event_id": "ev-click",
+        "event_type": "interactive_message_click",
+        "timestamp": 1718000000,
+        "event": {"employee_code": "emp-1", "value": "agent:codex", "message_id": "card-9"},
+    }
+    try:
+        await adapter.handle_event(click)
+        await adapter.handle_event(dict(click))
+    finally:
+        await adapter.stop()
+    assert len(recorder.callbacks) == 1
+
+
 # -- context fetch (Task 5) ---------------------------------------------------
 
 

@@ -848,6 +848,14 @@ status / notify`.
   because `supports_media` is now true and `send_media` routes on the turn's
   chat_kind + thread_id; any caption follows as a threaded text message
 
+### Scenario: a redelivered event is processed once
+
+- **Given** a paired channel that has already handled an inbound event
+- **When** the platform redelivers that same event (same id) after a slow ack or
+  a network hiccup
+- **Then** the redelivery is dropped and the turn runs exactly once — no double
+  reply or duplicate work — while a genuinely new event still drives its own turn
+
 ## Channels as a management plane (north star)
 
 Channels are managed the way Coffer manages MCP servers, memory, and skills:

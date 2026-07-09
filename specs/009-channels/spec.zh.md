@@ -742,6 +742,13 @@ status / notify`。
   群和同一个线程——而不是群主聊天——因为 `supports_media` 现已为真，且 `send_media`
   依据该 turn 的 chat_kind 与 thread_id 路由；任何 caption 作为一条线程内文本消息随后发送
 
+### Scenario: a redelivered event is processed once
+
+- **Given** 一个已配对的 channel，且它已处理过某条入站事件
+- **When** 平台在一次缓慢的 ack 或网络抖动后重投同一条事件（相同 id）
+- **Then** 该重投被丢弃，turn 恰好只运行一次——没有重复回复或重复工作——而一条真正
+  的新事件仍然驱动其自身的 turn
+
 ## Channels as a management plane（北极星）
 
 channel 被管理的方式，与 Coffer 管理 MCP server、memory、skill 的方式一致：在一处

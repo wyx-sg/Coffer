@@ -19,6 +19,7 @@ from typing import Any
 import httpx
 
 from coffer.application.channel.ports import AdapterCallbacks
+from coffer.domain.channel.dedup import SeenIds
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
     ChoiceButton,
@@ -73,6 +74,7 @@ class TelegramAdapter:
         )
         self._poll_timeout = poll_timeout
         self._callbacks: AdapterCallbacks | None = None
+        self._seen = SeenIds()  # FR-039: drop a redelivered update
         self._task: asyncio.Task[None] | None = None
         # Populated from getMe() in start(); stays None if that call fails.
         self._bot_id: int | None = None
@@ -156,6 +158,12 @@ class TelegramAdapter:
 
     async def _dispatch(self, update: dict[str, Any]) -> None:
         if self._callbacks is None:
+            return
+        # FR-039: the poll offset normally prevents replays, but a reconnect
+        # race can re-deliver — drop an update_id (unique per update, covering
+        # both messages and callback_query taps) already processed.
+        update_id = str(update.get("update_id", ""))
+        if update_id and not self._seen.add(update_id):
             return
         message = update.get("message")
         if isinstance(message, dict):
