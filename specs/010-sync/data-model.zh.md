@@ -80,6 +80,7 @@ memory/                         mirror of ~/.coffer/memory
 skills/                         mirror of ~/.coffer/skills
 resources/<kind>/<name>.yaml    one deterministic file per config resource
 tombstones/resources/<kind>/<name>.json   显式删除记录
+state/<area>/...yaml            模块自有的共享状态文档
 credentials/<ref>.enc           Fernet ciphertext, base64 text; never the key
 ```
 
@@ -135,6 +136,14 @@ diff 频繁变动）。导入时按 `<kind>:<name>` 对资源执行 upsert。**�
 
 导出时由 `sync_tombstones` 台账写出；当资源重新存活时在导出中移除（重新注册
 胜出）；90 天后清理。
+
+### 状态区（`state/<area>/...yaml`）
+
+随 vault 同步的模块自有共享状态。各模块实现 `SyncedStatePort`（确定性 YAML 文档的
+导出/导入），由组合根注册提供者——sync 永不导入 kind 模块。当前区域：
+`channel-peers/<channel>/<chat>.yaml`（配对身份：chat_id、sender_id、显示名、
+首选 agent、paired_at；机器本地的 `active_conversation_id` 永不传播）。导入执行
+upsert；引用本地不存在渠道的文档被跳过并在下轮重试。
 
 ### 凭据 blob（`credentials/<ref>.enc`）
 

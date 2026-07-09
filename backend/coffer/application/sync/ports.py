@@ -85,6 +85,17 @@ class WorkspacePort(Protocol):
 
     def read_tombstones(self) -> list[Tombstone]: ...
 
+    def write_state_docs(
+        self,
+        area: str,
+        docs: Sequence[tuple[str, Mapping[str, object]]],
+        owned_prefixes: Collection[str] = (),
+    ) -> None:
+        """Reconcile ``state/<area>/``: replace docs under ``owned_prefixes``,
+        write ``docs``, preserve everything else verbatim."""
+
+    def read_state_docs(self, area: str) -> list[tuple[str, dict[str, object]]]: ...
+
     def write_credential_blobs(self, blobs: Mapping[str, bytes]) -> None:
         """Replace ``credentials/`` with one ``<ref>.enc`` per ciphertext blob."""
 
@@ -120,6 +131,33 @@ class TombstoneLedgerPort(Protocol):
     async def remove(self, kind: str, name: str) -> None: ...
 
     async def prune_older_than(self, cutoff: datetime) -> int: ...
+
+
+class SyncedStatePort(Protocol):
+    """A module-owned shared-state area synced under ``state/<area>/``.
+
+    Modules (channel pairing, MCP preferences, ...) implement this and the
+    composition root registers the providers with the sync engine — sync never
+    imports kind modules (cross-kind fence). Docs are deterministic payloads;
+    export replaces the whole area (git's 3-way merge reconciles machines),
+    import upserts into local state."""
+
+    @property
+    def area(self) -> str:
+        """Directory name under ``state/`` (kebab-case)."""
+        ...
+
+    async def export_docs(self) -> tuple[list[tuple[str, dict[str, object]]], list[str]]:
+        """Local state as (relative doc path without extension, payload) pairs,
+        plus the path PREFIXES this machine can vouch for. Export replaces only
+        docs under owned prefixes — docs for entities this machine does not
+        know locally (quarantined / not yet imported) are preserved verbatim,
+        so an incomplete machine can never erase the fleet's state."""
+        ...
+
+    async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[str]:
+        """Apply merged docs to local state; returns per-doc error strings."""
+        ...
 
 
 class CredentialSyncPort(Protocol):

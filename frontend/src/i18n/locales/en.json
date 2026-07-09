@@ -1467,6 +1467,14 @@
       "hint": "Point a tunnel (cloudflared, ngrok) at the local listener address. The reachability test verifies the path and handshake; whether the signing secret matches SeaTalk's is confirmed only on a real event."
     },
     "deleteTitle": "Delete channel",
-    "deleteConfirm": "Delete channel “{{name}}”? Its adapter stops and the pairing is removed."
+    "deleteConfirm": "Delete channel “{{name}}”? Its adapter stops and the pairing is removed.",
+    "machine": {
+      "title": "Machine",
+      "runsOn": "Runs on",
+      "unbound": "Not bound — this channel currently runs nowhere",
+      "thisMachine": "This machine",
+      "runHere": "Run on this machine",
+      "hint": "A synced channel runs on exactly one machine so two machines never fight over the same bot. Rebinding propagates on the next sync; the other machine stops automatically."
+    }
   }
 }

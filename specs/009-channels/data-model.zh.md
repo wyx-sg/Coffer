@@ -11,7 +11,9 @@ channel 是既有 `resources` 表中的行（kind = `channel`）。`config_json`
 ChannelConfig (discriminator: channel_type)
 ├── common (两种类型共有, _CommonChannelFields)
 │   ├── default_agent: str = "claude_code"  # chat provider key；必须是已注册的 agent
-│   └── default_agent_config: dict | None
+│   ├── default_agent_config: dict | None
+│   └── runs_on: str | None                # 运行该适配器的机器 machine_id
+│                                          #（spec 010 亲和）；None = 不在任何机器上运行
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"
 │   └── bot_token_ref: str            # credential-store ref, probed at register
@@ -19,7 +21,9 @@ ChannelConfig (discriminator: channel_type)
     ├── channel_type: "seatalk"
     ├── app_id: str
     ├── app_secret_ref: str            # credential-store ref
-    └── signing_secret_ref: str        # credential-store ref
+    ├── signing_secret_ref: str
+    ├── public_base_url: str | None    # 隧道公网基址（https://host）
+    └── tunnel_token_ref: str | None   # cloudflared token ref（托管隧道）        # credential-store ref
 ```
 
 校验规则：

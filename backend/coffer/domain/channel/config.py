@@ -57,6 +57,11 @@ class _CommonChannelFields(BaseModel):
     # it also mentions the bot, so the bot never butts into human-aimed traffic.
     require_mention: bool = True
     ignore_other_mentions: bool = False
+    # Runtime affinity (spec 010 / ADR-043): the machine_id of the ONE machine
+    # whose runtime starts this channel's adapter — a bot identity polled (or a
+    # webhook received) from two synced machines at once would fight over the
+    # platform. None = not started anywhere until the user picks a machine.
+    runs_on: str | None = Field(default=None, max_length=64)
 
 
 class TelegramChannelConfig(_CommonChannelFields):

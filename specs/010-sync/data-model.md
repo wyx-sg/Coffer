@@ -83,6 +83,7 @@ memory/                         mirror of ~/.coffer/memory
 skills/                         mirror of ~/.coffer/skills
 resources/<kind>/<name>.yaml    one deterministic file per config resource
 tombstones/resources/<kind>/<name>.json   explicit deletion record
+state/<area>/...yaml            module-owned shared state docs
 credentials/<ref>.enc           Fernet ciphertext, base64 text; never the key
 ```
 
@@ -142,6 +143,16 @@ the same ref (merge artifact), the resource doc wins.
 
 Written at export from the `sync_tombstones` ledger; removed at export when the
 resource exists live again (re-registration wins); pruned after 90 days.
+
+### State areas (`state/<area>/...yaml`)
+
+Module-owned shared state synced alongside the vault. Each module implements
+`SyncedStatePort` (export/import of deterministic YAML docs) and the
+composition root registers the providers — sync never imports kind modules.
+Current areas: `channel-peers/<channel>/<chat>.yaml` (pairing identity:
+chat_id, sender_id, display name, preferred agent, paired_at; the machine-local
+`active_conversation_id` never travels). Import upserts; docs referencing a
+channel not present locally are skipped and retried next run.
 
 ### Credential blob (`credentials/<ref>.enc`)
 

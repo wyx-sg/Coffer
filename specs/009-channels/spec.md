@@ -489,7 +489,30 @@ status / notify`.
   sends no completion summary on any channel, while a turn that ends abnormally
   (failed, interrupted, tool-limit) sends one reporting the outcome.
 
+## Machine affinity (spec 010 amendment)
+
+A channel's platform identity (a polled bot, a webhook endpoint) tolerates only
+ONE consumer, but channel definitions sync to every machine (spec 010). The
+config therefore carries `runs_on: <machine_id>`: only that machine's runtime
+starts the adapter. `null` (e.g. a pre-affinity channel after upgrade) starts
+nowhere until the user picks a machine in the channel detail page. The creating
+surface defaults `runs_on` to the creating machine. Rebinding is a normal
+config edit that propagates through sync; pairing state syncs with the vault
+(spec 010 state area `channel-peers`), so a rebound channel needs no
+re-pairing. During the propagation window (one sync round trip) both machines
+may briefly poll the platform at once — self-healing seconds-long overlap,
+accepted for a single-user tool.
+
 ## Acceptance Scenarios
+
+### Scenario: a channel runs on exactly one machine
+
+- **Given** channels bound to this machine, to another machine, and to no
+  machine
+- **When** the runtime reconciles
+- **Then** only the channel bound to this machine starts its adapter
+- **And** rebinding a channel away from this machine stops it on the next
+  reconcile
 
 ### Scenario: register a telegram channel
 

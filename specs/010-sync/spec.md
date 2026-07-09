@@ -46,6 +46,7 @@ the sync medium.
   skills/                    # mirror of ~/.coffer/skills (master skill store)
   resources/<kind>/<name>.yaml   # one deterministic file per config resource
   tombstones/resources/<kind>/<name>.json  # explicit deletion record (90-day TTL)
+  state/<area>/...yaml       # module-owned shared state (e.g. channel-peers)
   credentials/<ref>.enc          # Fernet ciphertext blob (never the master key)
   ```
 
@@ -237,6 +238,14 @@ resources that reference it cannot spawn, and status reports
   running build supports
 - **When** a sync run reaches its import step
 - **Then** the run fails with `SYNC_WORKSPACE_TOO_NEW` and imports nothing
+
+### Scenario: channel pairing state syncs with the vault
+
+- **Given** machine A has a channel with a paired owner
+- **When** machine B syncs against the same remote
+- **Then** B holds the channel AND its pairing identity (chat id, sender id,
+  preferred agent) — rebinding the channel to B needs no re-pairing
+- **And** each machine's local conversation pointer never travels
 
 ### Scenario: machines are visible after they sync
 

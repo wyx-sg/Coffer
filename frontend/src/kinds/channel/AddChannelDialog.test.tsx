@@ -14,6 +14,23 @@ import { acceptance } from "@/test/acceptance";
 import { mockApiClient, type ApiClientMock } from "@/test/mockApiClient";
 
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/hooks/useSync", () => ({
+  useSyncMachines: vi.fn(() => ({
+    data: {
+      machines: [
+        {
+          machine_id: "M-LOCAL",
+          display_name: "studio",
+          platform: "darwin",
+          os_version: null,
+          coffer_version: null,
+          last_sync_at: null,
+          is_local: true,
+        },
+      ],
+    },
+  })),
+}));
 
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
@@ -70,6 +87,7 @@ acceptance("009-channels", "register a telegram channel", async () => {
           channel_type: "telegram",
           bot_token_ref: "channel/tg/bot-token",
           default_agent: "claude_code",
+          runs_on: "M-LOCAL",
         },
       },
     },
@@ -104,7 +122,11 @@ describe("AddChannelDialog", () => {
     submit();
 
     await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(3));
-    expect(api.POST.mock.calls.map((c) => c[0])).toEqual(["/credentials", "/credentials", "/resources"]);
+    expect(api.POST.mock.calls.map((c) => c[0])).toEqual([
+      "/credentials",
+      "/credentials",
+      "/resources",
+    ]);
     expect(api.POST.mock.calls[2][1]).toEqual({
       body: {
         kind: "channel",
@@ -115,6 +137,7 @@ describe("AddChannelDialog", () => {
           app_secret_ref: "channel/st/app-secret",
           signing_secret_ref: "channel/st/signing-secret",
           default_agent: "claude_code",
+          runs_on: "M-LOCAL",
         },
       },
     });
