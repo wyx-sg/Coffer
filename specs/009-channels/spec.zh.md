@@ -337,11 +337,13 @@ status / notify`。
   原生 agent（Codex）与任何非视觉文件收到磁盘路径去打开。这保持历史精简、适配任意
   文件类型、并可推广到未来模态（新类型是新 mime，不是新 schema）。见
   [ADR-038](../../docs/decisions/ADR-038-channel-media.zh.md)。
-- **FR-021**: agent 通过显式选择把文件发回给用户：回复里一行
-  `![caption](/absolute/path)`（由 FR-019 的 system 注记告知）。在声明了
-  `supports_media` 的传输上，channel 上传该文件（图片扩展名作为内联照片、否则作为
-  文档）并从投递文本里移除该行；正文里顺口提到的路径不是此语法、绝不上传，而文件
-  缺失、相对路径或过大的标记则作为文本保留。这让出站发文件是刻意的、而非猜测。
+- **FR-021**: agent 通过显式选择把文件发回给用户：回复里单独一行的行锚定 sentinel
+  `MEDIA:/absolute/path`（可选 `MEDIA:/absolute/path | caption`），由 FR-019 的 system
+  注记告知。在声明了 `supports_media` 的传输上，channel 上传该文件（图片扩展名作为内联
+  照片、否则作为文档）并从投递文本里移除该行；普通正文——包括仅用于引用文件的合法
+  markdown 图片 `![alt](path)`——不是此语法、绝不上传，而文件缺失、相对路径或过大的
+  sentinel 则作为文本保留。这个无歧义的 sentinel 让出站发文件是刻意的、而非猜测，且绝不
+  与普通 markdown 冲突。
 - **FR-022**: 入站语音消息以转写文本驱动一个 turn。内置 agent（Claude Code、Codex）
   无法听音频，所以 adapter 把音频**本地**转写成文字并折进 turn 的 prompt。转写是一个
   按 agent 的接缝（ADR-038）：冻结的桌面 App 用随包、torch-free 的 `whisper.cpp` 引擎
@@ -665,11 +667,11 @@ status / notify`。
 
 ### Scenario: the agent sends a file to the user via a reply marker
 
-- **Given** 一个支持媒体的 channel，且 agent 回复中含 `![caption](/absolute/path)`
-  指向一个存在的文件
+- **Given** 一个支持媒体的 channel，且 agent 回复中含一行 `MEDIA:/absolute/path`
+  sentinel（可选 `| caption`）指向一个存在的文件
 - **When** 投递该 turn 的回复
-- **Then** 文件被上传（图片作为照片、否则作为文档）、标记从文本中移除；正文里
-  顺口提到的路径不会被上传
+- **Then** 文件被上传（图片作为照片、否则作为文档）、该 sentinel 行从文本中移除；
+  普通正文——包括 markdown 图片 `![alt](path)`——不是此语法、不会被上传
 
 ### Scenario: an inbound voice message is transcribed for a text-only agent
 
@@ -736,7 +738,7 @@ status / notify`。
 ### Scenario: SeaTalk outbound media is delivered into the originating thread
 
 - **Given** 一个已配对的 SeaTalk channel，以及一次群线程 turn，其回复中包含指向真实
-  文件的 `![caption](/absolute/path)`
+  文件的一行 `MEDIA:/absolute/path` sentinel
 - **When** 该 turn 的回复被投递
 - **Then** SeaTalk 把文件上传（图片作为 `image` 消息，否则作为 `file` 消息）到同一个
   群和同一个线程——而不是群主聊天——因为 `supports_media` 现已为真，且 `send_media`
@@ -818,7 +820,7 @@ Coffer-hosted channel 与它们并不冗余——它是通往统一、本地、�
   附件被文本抽取进一个上下文块，于是路径原生 agent（Codex/Hermes/OpenCode）与视觉
   agent 都能看到其内容；图片对支持它的 agent 仍保持视觉内联。
 - **FR-031**: SeaTalk 出站媒体被投递且线程感知。`send_media` 接到 SeaTalk 的文件上传 API
-  （`supports_media` 为 true）；一个 agent 的 `![caption](/path)` 标记把文件发回该 turn
+  （`supports_media` 为 true）；一个 agent 的 `MEDIA:/path` sentinel 把文件发回该 turn
   来源的**同一** chat **与**线程——一张生成的图表回到群线程，而非主聊天区（补上了此前
   SeaTalk agent 根本无法回文件、以及出站媒体忽略线程的缺口）。
 

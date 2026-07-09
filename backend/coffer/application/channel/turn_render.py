@@ -87,9 +87,15 @@ def _progress_line(mark: str, tool_name: str, descriptor: str) -> str:
     return f"{mark} {tool_name} · {descriptor}" if descriptor else f"{mark} {tool_name}"
 
 
-#: The agent's opt-in to send a file: a markdown image ``![caption](/abs/path)``.
-#: The path group allows spaces (absolute macOS paths routinely contain them).
-_MEDIA_MARKER = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
+#: The agent's opt-in to send a file: a line-anchored ``MEDIA:/abs/path``
+#: sentinel (Hermes-style), with an optional ``| caption`` after a pipe. Unlike
+#: markdown image syntax, this never collides with ordinary prose or a legitimate
+#: markdown image the agent wrote only to *reference* a file. The path group
+#: allows spaces (absolute macOS paths routinely contain them).
+_MEDIA_MARKER = re.compile(
+    r"^[ \t]*MEDIA:[ \t]*(?P<path>[^|\n]*?)[ \t]*(?:\|[ \t]*(?P<caption>[^\n]*?))?[ \t]*$",
+    re.MULTILINE,
+)
 _MEDIA_MAX_BYTES = 50 * 1024 * 1024  # Telegram sendDocument caps at 50 MB
 _PHOTO_MAX_BYTES = 10 * 1024 * 1024  # sendPhoto caps at 10 MB — larger images go as documents
 _IMAGE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp"})
@@ -247,20 +253,24 @@ class TurnRenderer:
         await self.send(text)
 
     async def _deliver_media(self, text: str) -> tuple[str, int]:
-        """Handle each explicit ``![caption](/abs/path)`` marker whose file exists.
-        The agent opts in by writing the marker (told the convention in its channel
-        system prompt); a bare path in prose is not this syntax and never fires.
+        """Handle each explicit ``MEDIA:/abs/path`` sentinel line whose file exists.
+        The agent opts in by putting a line ``MEDIA:/absolute/path`` (optionally
+        ``MEDIA:/absolute/path | caption``) in its reply, told the convention in its
+        channel system prompt. Ordinary prose — including a legitimate markdown
+        image ``![alt](path)`` the agent wrote only to reference a file — never fires.
 
-        On a media-capable channel the file is uploaded and the marker stripped; on
-        a channel without file support the marker is replaced with a plain note so
-        the user never sees a raw local path for a file that was never delivered."""
+        On a media-capable channel the file is uploaded and the sentinel line
+        stripped; on a channel without file support the line is replaced with a plain
+        note so the user never sees a raw local path for a file that was never
+        delivered."""
         supports = self.adapter.capabilities.supports_media
         sent = 0
         out = text
         for match in _MEDIA_MARKER.finditer(text):
-            caption, path = match.group(1).strip(), match.group(2).strip()
+            path = (match.group("path") or "").strip()
+            caption = (match.group("caption") or "").strip()
             if not _deliverable(path):
-                continue  # not a real absolute file — leave the text untouched
+                continue  # not a real absolute file — leave the line untouched
             if not supports:
                 label = caption or pathlib.Path(path).name
                 out = out.replace(
@@ -283,7 +293,7 @@ class TurnRenderer:
                     chat_kind=self.chat_kind,
                 )
             except Exception:
-                continue  # leave the marker in place so the intent is still visible
+                continue  # leave the line in place so the intent is still visible
             sent += 1
             out = out.replace(match.group(0), "", 1).strip()
         return out, sent

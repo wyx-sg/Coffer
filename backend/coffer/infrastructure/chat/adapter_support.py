@@ -61,10 +61,12 @@ def channel_system_context(channel_name: str) -> str:
         "confirmation dialogs on the user's computer, and they may be away from "
         "it — if something needs a click or an OS permission, say so and do what "
         "you can instead of waiting on it. To send the user a file or image, put "
-        "a line `![caption](/absolute/path)` in your reply — the channel delivers "
-        "that file (or notes it if the channel can't) and removes the line from "
-        "your reply; a bare path in prose is not sent, so use this syntax only for "
-        "files you actually want to deliver."
+        "it on its own line as `MEDIA:/absolute/path` (optionally "
+        "`MEDIA:/absolute/path | a caption`). The file must exist on this machine; "
+        "the channel uploads it — an image by extension is sent as a photo, "
+        "otherwise as a document — and removes the line from your reply. Ordinary "
+        "prose and markdown image links are never sent, so use this sentinel only "
+        "for files you actually want to deliver."
     )
 
 
