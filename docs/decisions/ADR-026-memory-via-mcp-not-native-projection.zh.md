@@ -28,7 +28,7 @@
 - **移除：** `AgentMemoryAdapter` 协议 + `ProjectionEngine` + 各 per-agent 适配器（SYMLINK/RENDER/NONE）、投射 FS 适配器、`memory_projection_bindings` 表（由 migration `0023` drop）、投射 REST 端点（`/memory_stores/{name}/projections…`）、原生记忆发现/接管路由、`coffer memory bind/unbind/projections` CLI 命令、以及 `memory_projected` 审计事件。Coffer 不再关闭任何 agent 的原生记忆。
 - **保留（不变）：** 文件即真相的 per-fact markdown + 重新生成的 `MEMORY.md`（[ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md)）；两层作用域（global + per-project，从 MCP shim 的 cwd → git-root 解析）；共享检索引擎（grep / FTS5 关键词 / sqlite-vec 向量）+ 惰性 reindex-on-read；transcript 蒸馏（ADR-020）；以及经 UI/CLI 的完整人工策展。
 - **可读性（FR-017a）：** 因为 Coffer 拥有自己的格式，per-project store 以从 `project_root` 推导的可读身份（目录 basename + 路径）呈现，而非 `project-<ULID>` 名。
-- **环境式加载（延后的后续项）：** 一个 session 启动 hook 可以把当前项目 + 高优先级全局记忆的**索引**注入 agent 上下文（stdout/上下文注入，绝不写文件），正文经 `recall` 按需取。在它落地前，MCP recall 是访问路径。这是有意安排的后续一片，不属于本次改动。
+- **环境式加载（~~延后的后续项~~ —— 已交付，spec 007 FR-055）：** session 启动 hook 现在会把项目记忆摘要（近期 journal + knowledge 索引）注入 agent 上下文（经 `session-context` 端点的上下文注入，绝不写文件），使 agent 一开工就带上记忆、无需主动调 `recall`；正文仍经 `recall` 按需取。经 per-agent SessionStart hook（ADR-042 `ContextInjectionSpec`）投递给凡装了该 hook 的 agent（Claude Code、Codex、Cursor）。它不碰原生文件即恢复了投射层原本提供的环境式自动加载。
 
 ## Consequences
 
