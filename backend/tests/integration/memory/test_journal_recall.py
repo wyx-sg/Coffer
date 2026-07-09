@@ -122,6 +122,39 @@ async def test_reindex_sweep_indexes_journal_backlog(mem) -> None:
     assert await mem.documents.get_document("memory", store, "journal-2026-06-21") is not None
 
 
+async def test_memory_digest_surfaces_facts_and_journal(mem) -> None:
+    """The SessionStart digest (FR-055) surfaces the project's recent journal +
+    knowledge index so an agent starts with memory without calling recall."""
+    from coffer.application.memory.session_context import assemble_memory_digest
+
+    j = _journal(mem, now=lambda: datetime(2026, 6, 21, 9, tzinfo=UTC))
+    await j.append(cwd=mem.project_cwd, body="rolled back the payments migration", actor="agent")
+    await mem.service.add_fact(
+        scope=MemoryScope.PROJECT,
+        cwd=mem.project_cwd,
+        title="Auth",
+        description="how login works",
+        body="the login flow uses the shared session service",
+        actor="agent",
+    )
+    digest = await assemble_memory_digest(
+        cwd=mem.project_cwd, memory=mem.service, journal=j, max_chars=10_000
+    )
+    assert "## Project memory (via Coffer)" in digest
+    assert "payments migration" in digest  # recent journal line
+    assert "- Auth" in digest  # knowledge title index (title only)
+
+
+async def test_memory_digest_empty_outside_project(mem) -> None:
+    from coffer.application.memory.session_context import assemble_memory_digest
+
+    j = _journal(mem, now=lambda: datetime(2026, 6, 21, 9, tzinfo=UTC))
+    digest = await assemble_memory_digest(
+        cwd="/not/a/project", memory=mem.service, journal=j, max_chars=10_000
+    )
+    assert digest == ""
+
+
 async def test_journal_and_knowledge_lanes_are_distinguishable(mem) -> None:
     j = _journal(mem, now=lambda: datetime(2026, 6, 21, 9, tzinfo=UTC))
     await j.append(cwd=mem.project_cwd, body="episodic: shipped the search feature", actor="agent")
