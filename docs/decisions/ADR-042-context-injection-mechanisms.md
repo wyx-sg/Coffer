@@ -120,7 +120,10 @@ rather than silently omitting the control.
   requiring authentication. Strong indirect evidence exists (Cursor's docs state
   cloud agents "run only command-based hooks"; Skynet installs CLI-targeting
   hooks into the same file). This is the one claim in this ADR resting on docs
-  rather than a live probe.
+  rather than a live probe. **Update (2026-07-10): confirmed by an authenticated
+  live probe** — with Coffer's exact `hooks.json` shape installed,
+  `cursor-agent -p` executed the hook command and the `additional_context`
+  envelope reached the model.
 
 ## Alternatives considered
 

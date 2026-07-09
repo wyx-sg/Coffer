@@ -211,6 +211,44 @@ def test_cursor_dialect_prints_top_level_additional_context(monkeypatch, capsys)
     assert json.loads(out) == {"additional_context": "RULES BUNDLE TEXT"}
 
 
+# --- raw dialect (ADR-042 PLUGIN_DROP) ------------------------------------------
+
+
+def test_raw_dialect_prints_bare_bundle_text(monkeypatch, capsys):
+    # The dropped opencode plugin spawns this and pushes stdout onto the system
+    # prompt verbatim — no JSON envelope, and stdin is never read (the plugin
+    # spawns with stdio "ignore"; --event names the SessionStart).
+    def fake_http(method, url, *, token, body=None, timeout):
+        return 200, json.dumps({"additional_context": "RULES BUNDLE TEXT"})
+
+    code, out = _run(
+        monkeypatch,
+        capsys,
+        stdin="",  # never read on the --event sessionStart path
+        argv=["--agent", "oc", "--dialect", "raw", "--event", "sessionStart"],
+        daemon=_daemon_info(),
+        request_fn=fake_http,
+    )
+    assert code == 0
+    assert out == "RULES BUNDLE TEXT"
+
+
+def test_raw_dialect_prints_nothing_on_empty_bundle(monkeypatch, capsys):
+    def fake_http(method, url, *, token, body=None, timeout):
+        return 200, json.dumps({"additional_context": ""})
+
+    code, out = _run(
+        monkeypatch,
+        capsys,
+        stdin="",
+        argv=["--agent", "oc", "--dialect", "raw", "--event", "sessionStart"],
+        daemon=_daemon_info(),
+        request_fn=fake_http,
+    )
+    assert code == 0
+    assert out.strip() == ""
+
+
 def test_event_flag_wins_over_absent_stdin_event(monkeypatch, capsys):
     """Cursor's payload names no event; --event carries it and the hook still fires."""
     calls = []

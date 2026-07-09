@@ -100,7 +100,9 @@ payload 字段，不如在安装时把事件烘进命令的参数里。由此得
 - **Cursor 的 `sessionStart` 在 headless 下是否触发，尚未实证。** 机制有文档，
   而 marker 探针测试被 `cursor-agent` 要求登录挡住了。间接证据很强（Cursor 文档称
   云端 agent "只运行基于命令的 hook"；Skynet 正是往同一个文件里装了 CLI 专用
-  hook）。这是本 ADR 中唯一一条依据文档而非真机探针的论断。
+  hook）。这是本 ADR 中唯一一条依据文档而非真机探针的论断。**更新（2026-07-10）：
+  已由登录后的真实探针确认**——装入 Coffer 的确切 `hooks.json` 形状后，
+  `cursor-agent -p` 执行了 hook 命令，且 `additional_context` 信封抵达模型。
 
 ## 备选方案
 

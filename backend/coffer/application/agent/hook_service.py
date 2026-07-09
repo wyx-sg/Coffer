@@ -12,24 +12,27 @@ agent's session-context / session-end endpoints. For a non-Claude flavor it also
 bakes in ``--dialect`` (which stdout envelope to print) and ``--event`` (Cursor's
 stdin payload is not guaranteed to name the event; its hooks.json keys it).
 
-This service handles ``InjectionMode.SHELL_COMMAND`` and
-``InjectionMode.INSTRUCTIONS_BLOCK``. For the block mode (Hermes — no working
-upstream hook, ADR-042) install renders the FR-044 session-context payload into
-a marker block in the agent's instructions file via the pure
-``domain/agent/instructions_block`` transforms; the block is static between
-refreshes, so :meth:`AgentHookService.refresh_blocks_for_type` re-renders it and
-is called (best-effort) before each Coffer-driven turn. An agent whose
-descriptor declares no injection — or declares the not-yet-implemented
-``PLUGIN_DROP`` mode — raises :class:`HookInstallUnsupported` (→ 422) on
-install/uninstall; ``status`` reports ``installed=False, supported=False`` for
-it (a not-installable agent is simply not installed, never an error to
-inspect). Surfaces read ``supported`` to disable the control up front rather
-than letting a click 422.
+This service handles all three ``InjectionMode`` values. For the block mode
+(Hermes — no working upstream hook, ADR-042) install renders the FR-044
+session-context payload into a marker block in the agent's instructions file
+via the pure ``domain/agent/instructions_block`` transforms; the block is
+static between refreshes, so :meth:`AgentHookService.refresh_blocks_for_type`
+re-renders it and is called (best-effort) before each Coffer-driven turn. For
+the plugin-drop mode (opencode — in-process JS callbacks only) install writes
+the ``domain/agent/plugin_drop`` file into the agent's auto-loaded plugin
+directory; the plugin spawns ``coffer-hook`` live, so it is dynamic like the
+shell hooks and has no refresh machinery. An agent whose descriptor declares no
+injection — or a block-mode agent when no payload source is wired — raises
+:class:`HookInstallUnsupported` (→ 422) on install/uninstall; ``status``
+reports ``installed=False, supported=False`` for it (a not-installable agent is
+simply not installed, never an error to inspect). Surfaces read ``supported``
+to disable the control up front rather than letting a click 422.
 """
 
 from __future__ import annotations
 
 import logging
+import pathlib
 import shlex
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -53,6 +56,7 @@ from coffer.domain.agent.hook_install import (
     is_installed,
 )
 from coffer.domain.agent.instructions_block import apply_block, has_block, remove_block
+from coffer.domain.agent.plugin_drop import PLUGIN_FILENAME, render_plugin
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Resource, ResourceRef
@@ -139,14 +143,22 @@ class AgentHookService:
 
     def _injection(self, cfg: AgentConfig) -> ContextInjectionSpec | None:
         """The agent's injection spec, or ``None`` when it has no injection
-        point or uses a mode this service does not implement (``PLUGIN_DROP``;
-        ``INSTRUCTIONS_BLOCK`` without a wired payload source)."""
+        point (or ``INSTRUCTIONS_BLOCK`` without a wired payload source)."""
         injection = descriptor_for(cfg.type).context_injection
-        if injection is None or injection.mode is InjectionMode.PLUGIN_DROP:
+        if injection is None:
             return None
         if injection.mode is InjectionMode.INSTRUCTIONS_BLOCK and self._session_context is None:
             return None
         return injection
+
+    def _plugin_path(self, spec: ConfigFileSpec) -> pathlib.Path:
+        """The dropped plugin file inside the agent's plugin DIRECTORY entry."""
+        return spec.path / PLUGIN_FILENAME
+
+    def _plugin_command(self, name: str) -> str:
+        """Display form of what the dropped plugin execs (argv, not shell)."""
+        hook = self._resolve_hook()
+        return f"{hook} --agent {name} --dialect raw --event sessionStart"
 
     async def _hook_spec(
         self, name: str
@@ -169,6 +181,11 @@ class AgentHookService:
         if injection is None:
             return HookInstallStatus(installed=False, command=None, supported=False)
         spec = spec_for(cfg.type, injection.config_key, cfg.resolved_config_dir())
+        if injection.mode is InjectionMode.PLUGIN_DROP:
+            # Presence of Coffer's named plugin file == installed.
+            installed = self._store.read_text(self._plugin_path(spec)) is not None
+            command = self._plugin_command(name) if installed else None
+            return HookInstallStatus(installed=installed, command=command)
         text = self._store.read_text(spec.path) or ""
         if injection.mode is InjectionMode.INSTRUCTIONS_BLOCK:
             # The block carries the payload itself; there is no command to report.
@@ -184,6 +201,8 @@ class AgentHookService:
 
     async def install(self, name: str, *, actor: str = "api") -> HookInstallStatus:
         spec, inj, _cfg = await self._hook_spec(name)
+        if inj.mode is InjectionMode.PLUGIN_DROP:
+            return await self._install_plugin(name, spec, actor=actor)
         if inj.mode is InjectionMode.INSTRUCTIONS_BLOCK:
             return await self._install_block(name, spec, actor=actor)
         hook = self._resolve_hook()  # raises ShimNotFound (→ 422) before any write
@@ -204,6 +223,17 @@ class AgentHookService:
 
     async def uninstall(self, name: str, *, actor: str = "api") -> HookInstallStatus:
         spec, inj, _cfg = await self._hook_spec(name)
+        if inj.mode is InjectionMode.PLUGIN_DROP:
+            # No-op success when the dropped file is absent — don't audit.
+            if not self._store.delete_with_backup(self._plugin_path(spec)):
+                return HookInstallStatus(installed=False, command=None)
+            await self._audit.record(
+                AuditEventType.AGENT_HOOK_UNINSTALLED.value,
+                ref=ResourceRef("agent", name),
+                actor=actor,
+                details={"path": str(self._plugin_path(spec))},
+            )
+            return HookInstallStatus(installed=False, command=None)
         text = self._store.read_text(spec.path)
         if inj.mode is InjectionMode.INSTRUCTIONS_BLOCK:
             # No-op success when not installed — don't write or audit.
@@ -231,6 +261,24 @@ class AgentHookService:
             details={"path": str(spec.path)},
         )
         return HookInstallStatus(installed=False, command=None)
+
+    async def _install_plugin(
+        self, name: str, spec: ConfigFileSpec, *, actor: str
+    ) -> HookInstallStatus:
+        """Write Coffer's session-context plugin file into the agent's plugin
+        directory (idempotent: the file is Coffer's namespace, overwritten in
+        place; a prior version is kept as ``.bak``)."""
+        hook = self._resolve_hook()  # raises ShimNotFound (→ 422) before any write
+        path = self._plugin_path(spec)
+        self._store.write_text_atomic(path, render_plugin(hook_binary=hook, agent_name=name))
+        command = self._plugin_command(name)
+        await self._audit.record(
+            AuditEventType.AGENT_HOOK_INSTALLED.value,
+            ref=ResourceRef("agent", name),
+            actor=actor,
+            details={"command": command, "path": str(path)},
+        )
+        return HookInstallStatus(installed=True, command=command)
 
     async def _install_block(
         self, name: str, spec: ConfigFileSpec, *, actor: str

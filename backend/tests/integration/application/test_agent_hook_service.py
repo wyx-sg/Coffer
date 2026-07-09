@@ -241,28 +241,101 @@ async def test_cursor_install_idempotent_then_uninstall_restores(
     assert (await agent_bundle.hook.status("cur")).installed is False
 
 
-async def test_opencode_hook_install_unsupported(agent_bundle, tmp_path, monkeypatch):
-    # opencode declares no context_injection: status is "not installed", never an
-    # error; install rejects with 422 rather than writing anything.
-    monkeypatch.setenv("HOME", str(tmp_path))
-    (tmp_path / ".config" / "opencode" / "skills").mkdir(parents=True, exist_ok=True)
-    await agent_bundle.svc.register(agent_type=AgentType.OPENCODE, name="oc", actor="cli")
-
-    st = await agent_bundle.hook.status("oc")
-    assert st.installed is False
-    # Surfaces read `supported` to disable the control up front — status never
-    # raises, so a surface waiting for a 422 would render a control that 422s.
-    assert st.supported is False
-    with pytest.raises(HookInstallUnsupported):
-        await agent_bundle.hook.install("oc", actor="ui")
-
-
 async def test_supported_true_for_agents_with_shell_injection(agent_bundle, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     await _register_claude(agent_bundle, tmp_path)
     await _register_cursor(agent_bundle, tmp_path)
     assert (await agent_bundle.hook.status("cc")).supported is True
     assert (await agent_bundle.hook.status("cur")).supported is True
+
+
+# --- opencode plugin drop (ADR-042 PLUGIN_DROP) ---------------------------------
+
+
+async def _register_opencode(bundle, home: pathlib.Path):
+    (home / ".config" / "opencode" / "skills").mkdir(parents=True, exist_ok=True)
+    await bundle.svc.register(agent_type=AgentType.OPENCODE, name="oc", actor="cli")
+
+
+@pytest.mark.acceptance(
+    spec="004-agent-registry", scenario="install Coffer's session-context plugin into opencode"
+)
+async def test_install_opencode_drops_plugin_file(agent_bundle, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_opencode(agent_bundle, tmp_path)
+    plugin_file = tmp_path / ".config" / "opencode" / "plugin" / "coffer-session-context.js"
+
+    st = await agent_bundle.hook.install("oc", actor="ui")
+    assert st.installed is True
+    assert st.command == "/opt/coffer/coffer-hook --agent oc --dialect raw --event sessionStart"
+
+    text = plugin_file.read_text()
+    assert text.startswith("// coffer:session-context")
+    assert '"--dialect", "raw"' in text
+    assert 'const AGENT = "oc";' in text
+
+    rows = await agent_bundle.audit.query(
+        kind="agent", name="oc", event_type=AuditEventType.AGENT_HOOK_INSTALLED.value
+    )
+    assert len(rows) == 1
+    assert rows[0].details.get("path") == str(plugin_file)
+
+    st = await agent_bundle.hook.status("oc")
+    assert st.installed is True
+    assert st.supported is True
+    assert st.command is not None
+
+    # Reinstall overwrites Coffer's own file in place — still exactly one file.
+    await agent_bundle.hook.install("oc", actor="ui")
+    siblings = list(plugin_file.parent.glob("*.js"))
+    assert siblings == [plugin_file]
+
+
+@pytest.mark.acceptance(
+    spec="004-agent-registry",
+    scenario="uninstalling the opencode plugin removes only Coffer's file",
+)
+async def test_uninstall_opencode_removes_only_coffer_plugin(agent_bundle, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_opencode(agent_bundle, tmp_path)
+    plugin_dir = tmp_path / ".config" / "opencode" / "plugin"
+    plugin_dir.mkdir(parents=True, exist_ok=True)
+    (plugin_dir / "user-plugin.js").write_text("export const Mine = async () => ({});\n")
+
+    await agent_bundle.hook.install("oc", actor="ui")
+    st = await agent_bundle.hook.uninstall("oc", actor="ui")
+    assert st.installed is False
+    assert not (plugin_dir / "coffer-session-context.js").exists()
+    assert (plugin_dir / "user-plugin.js").exists()  # never touched
+
+    rows = await agent_bundle.audit.query(
+        kind="agent", name="oc", event_type=AuditEventType.AGENT_HOOK_UNINSTALLED.value
+    )
+    assert len(rows) == 1
+    # Uninstalling again is a no-op success that audits nothing further.
+    await agent_bundle.hook.uninstall("oc", actor="ui")
+    rows = await agent_bundle.audit.query(
+        kind="agent", name="oc", event_type=AuditEventType.AGENT_HOOK_UNINSTALLED.value
+    )
+    assert len(rows) == 1
+
+
+async def test_opencode_install_raises_when_hook_unresolvable(agent_bundle, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_opencode(agent_bundle, tmp_path)
+
+    def _boom() -> str:
+        raise ShimNotFound()
+
+    svc = AgentHookService(
+        agent_service=agent_bundle.svc,
+        audit=agent_bundle.audit,
+        store=ConfigFileStore(),
+        hook_resolver=_boom,
+    )
+    with pytest.raises(ShimNotFound):
+        await svc.install("oc", actor="ui")
+    assert not (tmp_path / ".config" / "opencode" / "plugin").exists()
 
 
 # --- hermes instructions block (ADR-042 INSTRUCTIONS_BLOCK) ---------------------

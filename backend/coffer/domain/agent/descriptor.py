@@ -150,9 +150,13 @@ def _codex_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
 
 def _opencode_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
     # opencode's global config (~/.config/opencode/opencode.json) holds both the
-    # `mcp` block (MCP injection) and the `provider` block (provider projection).
-    # AGENTS.md is opencode's human-authored instructions file. opencode has no
-    # hooks.json (its lifecycle hooks are in-process JS plugins — ADR-040).
+    # `mcp` block (MCP injection) and the `provider` block (provider projection);
+    # opencode loads and MERGES config.json / opencode.json / opencode.jsonc, so
+    # Coffer's writes to opencode.json coexist with a user-authored .jsonc
+    # (probe-verified, 1.14.48). AGENTS.md is opencode's human-authored
+    # instructions file. opencode has no hooks.json — its lifecycle hooks are
+    # in-process JS plugins auto-loaded from `plugin/`, which is where Coffer
+    # drops its session-context plugin (PLUGIN_DROP, ADR-042).
     return (
         ConfigFileSpec(
             "opencode", "Config (opencode.json)", cfg / "opencode.json", ConfigFileFormat.JSON
@@ -162,6 +166,13 @@ def _opencode_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
             "Global instructions (AGENTS.md)",
             cfg / "AGENTS.md",
             ConfigFileFormat.MARKDOWN,
+        ),
+        ConfigFileSpec(
+            "plugin",
+            "Plugins (plugin/)",
+            cfg / "plugin",
+            ConfigFileFormat.TEXT,
+            kind=ConfigFileKind.DIRECTORY,
         ),
     )
 
@@ -278,13 +289,22 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             format=ConfigFileFormat.JSON,
             entry_style=McpEntryStyle.TYPED_LOCAL_OBJECT,
         ),
+        # opencode has no shell-command hook; its JS plugin API injects instead
+        # (`experimental.chat.system.transform` pushes onto the system prompt —
+        # probe-verified on 1.14.48). Coffer drops a plugin file into the
+        # auto-loaded `plugin/` dir that spawns coffer-hook (PLUGIN_DROP,
+        # ADR-042). Dynamic like the shell hooks: fetches the bundle live, so
+        # no pre-turn refresh exists for it. No lifecycle events; flavor unused.
+        context_injection=ContextInjectionSpec(
+            mode=InjectionMode.PLUGIN_DROP,
+            config_key="plugin",
+            format=ConfigFileFormat.TEXT,
+        ),
         # See the Agent capability matrix in spec 004 / ADR-042:
-        #  * context_injection=None — opencode has no shell-command hook. Its JS
-        #                      plugin API *can* inject (``chat.message`` appends to
-        #                      ``output.parts``), so this is an INJECTION_MODE.PLUGIN_DROP
-        #                      slice, not an upstream gap.
         #  * plugins=None    — opencode's plugins are JS modules, a different model
-        #                      from Claude/Codex; not managed by Coffer in this slice.
+        #                      from Claude/Codex; not managed by Coffer in this slice
+        #                      (the PLUGIN_DROP facet drops ONE Coffer-owned file;
+        #                      it does not manage the agent's other plugins).
         #  * native memory   — opencode has no cross-session native memory, so there
         #                      is nothing to disable (absent from
         #                      _NATIVE_MEMORY_DISABLE_TARGET below).
