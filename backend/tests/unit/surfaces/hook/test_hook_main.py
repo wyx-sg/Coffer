@@ -288,3 +288,96 @@ def test_default_dialect_is_claude_envelope(monkeypatch, capsys):
     )
     assert code == 0
     assert json.loads(out)["hookSpecificOutput"]["additionalContext"] == "CTX"
+
+
+# --- review hardening (ADR-041 follow-up) --------------------------------------
+
+
+def test_named_session_start_never_reads_stdin(monkeypatch, capsys):
+    """stdin.read() blocks until EOF and no timeout bounds it. When --event already
+    names a SessionStart, the payload is unnecessary — reading it would let an agent
+    that leaves stdin open stall its own startup."""
+
+    class Exploding(io.StringIO):
+        def read(self, *a):  # pragma: no cover - must never be called
+            raise AssertionError("stdin was read on the --event SessionStart path")
+
+    def fake_http(method, url, *, token, body=None, timeout):
+        return 200, json.dumps({"additional_context": "CTX"})
+
+    monkeypatch.setattr("sys.stdin", Exploding())
+    monkeypatch.setattr(
+        hook_main.sys,
+        "argv",
+        ["coffer-hook", "--agent", "cur", "--dialect", "cursor", "--event", "sessionStart"],
+    )
+    monkeypatch.setattr(hook_main, "_read_daemon_info", lambda: _daemon_info())
+    monkeypatch.setattr(hook_main, "_http", fake_http)
+    with pytest.raises(SystemExit):
+        hook_main.run()
+    assert json.loads(capsys.readouterr().out) == {"additional_context": "CTX"}
+
+
+def test_claude_path_still_reads_stdin(monkeypatch, capsys):
+    """Claude/Codex name the event on stdin, so the payload must still be read."""
+
+    def fake_http(method, url, *, token, body=None, timeout):
+        return 200, json.dumps({"additional_context": "CTX"})
+
+    code, out = _run(
+        monkeypatch,
+        capsys,
+        stdin=json.dumps({"hook_event_name": "SessionStart", "cwd": "/proj"}),
+        argv=["--agent", "cc"],
+        daemon=_daemon_info(),
+        request_fn=fake_http,
+    )
+    assert code == 0
+    assert json.loads(out)["hookSpecificOutput"]["additionalContext"] == "CTX"
+
+
+def test_cwd_omitted_when_unreadable_so_daemon_scopes_globally(monkeypatch, capsys):
+    """An empty cwd would resolve against the DAEMON's own working directory, which
+    may sit in an unrelated repo. Unknown cwd must be absent, not empty."""
+    captured = {}
+
+    def fake_http(method, url, *, token, body=None, timeout):
+        captured["url"] = url
+        return 200, json.dumps({"additional_context": "CTX"})
+
+    monkeypatch.setattr(hook_main, "_process_cwd", lambda: None)
+    code, out = _run(
+        monkeypatch,
+        capsys,
+        stdin=json.dumps({"hook_event_name": "SessionStart"}),
+        argv=["--agent", "cc"],
+        daemon=_daemon_info(),
+        request_fn=fake_http,
+    )
+    assert code == 0
+    assert "cwd=" not in captured["url"]
+    # The bundle still arrives — global scope, not a silent no-op.
+    assert json.loads(out)["hookSpecificOutput"]["additionalContext"] == "CTX"
+
+
+def test_deleted_cwd_does_not_kill_the_injection(monkeypatch, capsys, tmp_path):
+    """os.getcwd() raises when the process's directory was removed. Under the
+    failure-is-silent wrapper that would swallow the whole injection."""
+
+    def boom():
+        raise FileNotFoundError(2, "No such file or directory")
+
+    def fake_http(method, url, *, token, body=None, timeout):
+        return 200, json.dumps({"additional_context": "CTX"})
+
+    monkeypatch.setattr(hook_main.os, "getcwd", boom)
+    code, out = _run(
+        monkeypatch,
+        capsys,
+        stdin=json.dumps({}),
+        argv=["--agent", "cur", "--dialect", "cursor", "--event", "sessionStart"],
+        daemon=_daemon_info(),
+        request_fn=fake_http,
+    )
+    assert code == 0
+    assert json.loads(out) == {"additional_context": "CTX"}

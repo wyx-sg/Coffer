@@ -213,3 +213,54 @@ def test_cursor_uninstall_drops_empty_hooks_object() -> None:
         _install_cursor(), events=_CURSOR_EVENTS, fmt=_FMT, flavor=HookFlavor.CURSOR
     )
     assert "hooks" not in json.loads(out)
+
+
+# --- review hardening (ADR-041 follow-up) --------------------------------------
+
+
+def test_malformed_user_command_does_not_raise() -> None:
+    """A user hook with an unbalanced quote must not crash install/status.
+
+    This runs in the daemon, outside coffer-hook's failure-is-silent wrapper — a
+    raise here 500s the API for a file that merely contains someone else's quoting.
+    """
+    seeded = {"version": 1, "hooks": {"sessionStart": [{"command": 'echo "unclosed'}]}}
+    text = json.dumps(seeded)
+
+    assert is_installed(text, events=_CURSOR_EVENTS, fmt=_FMT, flavor=HookFlavor.CURSOR) is False
+    out = _install_cursor(text)
+    # The malformed user entry survives untouched next to ours.
+    entries = json.loads(out)["hooks"]["sessionStart"]
+    assert {"command": 'echo "unclosed'} in entries
+    assert {"command": _CURSOR_CMD} in entries
+
+    restored = apply_uninstall(out, events=_CURSOR_EVENTS, fmt=_FMT, flavor=HookFlavor.CURSOR)
+    assert json.loads(restored)["hooks"]["sessionStart"] == [{"command": 'echo "unclosed'}]
+
+
+def test_malformed_command_in_claude_matcher_group_does_not_raise() -> None:
+    seeded = {"hooks": {"SessionStart": [{"matcher": "startup", "hooks": [{"command": "'oops"}]}]}}
+    assert is_installed(json.dumps(seeded), events=_EVENTS, fmt=_FMT) is False
+
+
+def test_uninstall_removes_version_coffer_added_to_an_empty_file() -> None:
+    # install into a file with no `version` writes one; uninstall must undo it,
+    # or uninstall does not undo install.
+    out = apply_uninstall(
+        _install_cursor(""), events=_CURSOR_EVENTS, fmt=_FMT, flavor=HookFlavor.CURSOR
+    )
+    assert json.loads(out) == {}
+
+
+def test_uninstall_keeps_version_when_other_content_remains() -> None:
+    seeded = {"version": 3, "hooks": {"beforeSubmitPrompt": [{"command": "/x/other.sh"}]}}
+    out = apply_uninstall(
+        _install_cursor(json.dumps(seeded)),
+        events=_CURSOR_EVENTS,
+        fmt=_FMT,
+        flavor=HookFlavor.CURSOR,
+    )
+    data = json.loads(out)
+    # `version` describes the file, and the file still has the user's content.
+    assert data["version"] == 3
+    assert data["hooks"]["beforeSubmitPrompt"] == [{"command": "/x/other.sh"}]

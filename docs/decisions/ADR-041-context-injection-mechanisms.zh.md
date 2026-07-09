@@ -64,9 +64,17 @@ Cursor 是顶层 `additional_context`。
 
 **Cursor 安装的命令带 `--dialect` 和 `--event`。** Cursor 的 `hooks.json` 按事件
 分键，但它并不契约性地在 hook 的 stdin 里给出事件名。与其依赖一个未经证实的
-payload 字段，不如在安装时把事件烘进命令的参数里。于是 `coffer-hook` 容忍 stdin
-缺失或不可解析，并回退到进程 cwd —— **一次静默失效的注入，比一次大声地 mis-scope
-更糟。**
+payload 字段，不如在安装时把事件烘进命令的参数里。由此得出两条：
+
+- **当 `--event` 已给出 SessionStart 时，`coffer-hook` 根本不读 stdin。**
+  `sys.stdin.read()` 会阻塞到 EOF，且没有任何东西约束它（5s 超时只管 HTTP）。
+  一个把 stdin 留着不关的 agent 会因此卡在自己的启动路径上——而这正是
+  failure-is-silent 契约要防的事。只有真的需要 payload 时才去读。
+- **cwd 未知时是「省略」，绝不发空串。** daemon 按 `cwd` 最近的 git root 来划定
+  记忆与规则的 scope；空串会解析到 **daemon 自己**的工作目录——那是个长驻进程，
+  可能正待在一个毫不相干的仓库里。只有「不带 cwd 参数」才真正意味着全局 scope。
+  hook 进程继承 agent 的工作目录，所以 payload 缺省时它就是正确来源；若它读不到
+  （目录已被删除），则丢掉该参数，bundle 仍会送达、按全局 scope。
 
 **Cursor 的 provider 投影仍是缺席 facet，但要显式说明、而非静默隐藏。** 界面上写明
 原因（cursor-agent 锁死 Cursor 后端），而不是把控件悄悄拿掉。
@@ -80,6 +88,12 @@ payload 字段，不如在安装时把事件烘进命令的参数里。于是 `c
   `INSTRUCTIONS_BLOCK`。
 - `hook_install` 的变换接受 `commands: Mapping[HookEvent, str]` 而非单条命令，
   因为 Cursor 需要每个事件一条不同的命令。
+- Coffer 识别自有条目时会用 `shlex.split` 解析用户自建的命令，而引号不配对会抛异常。
+  一条 Coffer 解析不了的命令按定义就不是 Coffer 的（它写入的每一段都做了引号转义），
+  所以解析失败读作「不是我们的」，而不是让 daemon 500。
+- 卸载是安装的真逆运算：Coffer 写进一个原本没有 `version` 的 Cursor `hooks.json`
+  的顶层 `version`，在文档中再无其他内容时会被一并移除；与其他内容并存的 `version`
+  属于该文件，予以保留。
 - Cursor 的 config 文件白名单新增 `hooks` 键（`~/.cursor/hooks.json`）。
 - **每一处能力缺口从此必须带证据。** 一格写 "N/A"，就得引用使其成立的上游文档、
   参数或 issue；ADR-040 的四格里有三格没有，而这三格全错了。

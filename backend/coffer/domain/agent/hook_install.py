@@ -10,9 +10,11 @@ Two on-disk shapes exist, discriminated by :class:`HookFlavor` (see
 holds matcher *groups* (Claude Code, Codex) or flat *command* entries (Cursor),
 and in how the event is spelled.
 
-Coffer recognises *its own* entry by the command basename ``coffer-hook`` (the
-installed command is an absolute path plus ``--agent <name>`` args). User-authored
-hook entries for the same event are never touched.
+Coffer recognises *its own* entry by the command basename ``coffer-hook`` — the
+installed command is an absolute path plus ``--agent <name>``, and for a non-Claude
+flavor also ``--dialect <flavor> --event <key>``. Only ``argv[0]``'s basename is
+matched, so the args may grow without breaking recognition. User-authored hook
+entries for the same event are never touched.
 """
 
 from __future__ import annotations
@@ -45,10 +47,21 @@ _MATCHERS: dict[HookEvent, str] = {
 
 
 def _is_coffer_command(cmd: str | None) -> bool:
-    """Whether ``cmd`` invokes Coffer's own hook binary."""
+    """Whether ``cmd`` invokes Coffer's own hook binary.
+
+    ``cmd`` may be user-authored and arbitrarily malformed — an unbalanced quote
+    makes ``shlex.split`` raise. Such a command is by definition not ours (Coffer
+    shell-quotes every part of the command it installs), so a parse failure is a
+    ``False``, never a crash: this runs in the daemon, outside ``coffer-hook``'s
+    failure-is-silent wrapper, and a raise here would 500 install/uninstall/status
+    for an agent whose hooks file merely contains someone else's odd quoting.
+    """
     if cmd is None:
         return False
-    parts = shlex.split(cmd)
+    try:
+        parts = shlex.split(cmd)
+    except ValueError:
+        return False
     argv0 = parts[0] if parts else cmd
     return os.path.basename(argv0) == COFFER_HOOK_BASENAME
 
@@ -145,8 +158,13 @@ def apply_uninstall(
     """Return new hooks text with ONLY Coffer's entries removed.
 
     User-authored hooks and unrelated keys are left intact. Now-empty event
-    arrays and an empty top-level ``hooks`` object are dropped cleanly. Cursor's
-    top-level ``version`` is left alone — it describes the file, not our entry.
+    arrays and an empty top-level ``hooks`` object are dropped cleanly.
+
+    Cursor's top-level ``version`` describes the file, not our entry, so it
+    survives alongside any other content. But when removing our hooks empties the
+    document down to ``version`` alone, that ``version`` is one ``apply_install``
+    wrote into a file that had none — leaving it behind would mean uninstall does
+    not undo install. So an otherwise-empty document is emptied completely.
     """
     assert fmt is ConfigFileFormat.JSON, f"hook uninstall unsupported for format {fmt!r}"
     data = _parse_json(content)
@@ -167,6 +185,10 @@ def apply_uninstall(
 
     if not hooks:
         del data[HOOK_CONTAINER_KEY]
+
+    # Only our own `version` can be all that remains — see the docstring.
+    if flavor is HookFlavor.CURSOR and set(data) == {"version"}:
+        del data["version"]
 
     return _dump(data)
 

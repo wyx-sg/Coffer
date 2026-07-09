@@ -75,9 +75,20 @@ Claude, a top-level `additional_context` for Cursor.
 **Cursor's installed command carries `--dialect` and `--event`.** Cursor keys
 `hooks.json` by event but does not contractually name the event on the hook's
 stdin. Rather than depend on an unverified payload field, the event is baked into
-the command's args at install time. `coffer-hook` therefore tolerates an absent
-or unparseable stdin, falling back to the process cwd — an injection that
-silently no-ops is worse than one that mis-scopes loudly.
+the command's args at install time. Two consequences follow:
+
+- **When `--event` names a SessionStart, `coffer-hook` never reads stdin.**
+  `sys.stdin.read()` blocks until EOF and nothing bounds it (the 5s timeout covers
+  only HTTP), so an agent that spawns the hook with stdin left open would stall on
+  its own startup — precisely what the failure-is-silent contract exists to
+  prevent. The payload is only read when it is actually needed.
+- **`cwd` is omitted, never sent empty, when unknown.** The daemon scopes memory
+  and rules by the nearest git root of `cwd`; an empty string resolves against the
+  *daemon's* own working directory, a long-lived process that may sit in an
+  unrelated repo. Absent `cwd` is the only value that means global scope. The hook
+  process inherits the agent's working directory, so that is the correct source
+  when the payload omits it; if it cannot be read (a deleted directory), the
+  parameter is dropped and the bundle still arrives, globally scoped.
 
 **Cursor's provider projection stays an absent facet, but is surfaced, not
 hidden.** The UI states the reason (cursor-agent is locked to Cursor's backend)
@@ -92,6 +103,14 @@ rather than silently omitting the control.
   opencode and openclaw via `PLUGIN_DROP`, hermes via `INSTRUCTIONS_BLOCK`.
 - `hook_install`'s transforms take a `commands: Mapping[HookEvent, str]` rather
   than one command, because Cursor needs a distinct command per event.
+- Coffer's entry-recognition parses user-authored commands with `shlex.split`,
+  which raises on unbalanced quotes. A command Coffer cannot parse is by
+  definition not Coffer's (it quotes everything it writes), so a parse failure
+  reads as "not ours" rather than 500-ing the daemon.
+- Uninstall is a true inverse of install: the top-level `version` Coffer writes
+  into a Cursor `hooks.json` that had none is removed again when nothing else
+  remains in the document. A `version` beside other content is the file's, and
+  survives.
 - Cursor's config-file allowlist gains a `hooks` key (`~/.cursor/hooks.json`).
 - Every capability gap now carries evidence. A cell reading "N/A" must cite the
   upstream doc, flag, or issue that makes it so; three of ADR-040's four did not,
