@@ -178,21 +178,55 @@ async def test_progress_line_uses_the_file_basename_for_a_read() -> None:
     spec="009-channels",
     scenario="the agent sends a file to the user via a reply marker",
 )
-async def test_reply_file_marker_uploads_and_is_stripped(tmp_path) -> None:  # type: ignore[no-untyped-def]
+async def test_reply_file_sentinel_uploads_and_is_stripped(tmp_path) -> None:  # type: ignore[no-untyped-def]
     img = tmp_path / "invite.png"
     img.write_bytes(b"PNG-bytes")
     adapter = FakeChannelAdapter(supports_edit=False)
     events = [
-        TextDelta(text=f"here you go\n\n![the invitation]({img})"),
+        # A MEDIA: sentinel line with an optional `| caption`.
+        TextDelta(text=f"here you go\n\nMEDIA:{img} | the invitation"),
         TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
     ]
 
     await _render(adapter, events)
 
-    # The file was uploaded as a photo with the marker's caption…
+    # The file was uploaded as a photo with the sentinel's caption…
     assert adapter.media == [("owner", str(img), "the invitation", True)]
-    # …and the marker was removed from the delivered text.
+    # …and the sentinel line was removed from the delivered text.
     assert adapter.sent[0] == ("owner", "here you go")
+
+
+async def test_reply_file_sentinel_without_caption_uses_filename(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    # No `| caption`: the caption defaults to None (adapters fall back to the name).
+    img = tmp_path / "invite.png"
+    img.write_bytes(b"PNG-bytes")
+    adapter = FakeChannelAdapter(supports_edit=False)
+    events = [
+        TextDelta(text=f"here you go\n\nMEDIA:{img}"),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]
+
+    await _render(adapter, events)
+
+    assert adapter.media == [("owner", str(img), None, True)]
+    assert adapter.sent[0] == ("owner", "here you go")
+
+
+async def test_markdown_image_is_not_uploaded(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    # The whole point of the sentinel: a legitimate markdown image the agent wrote
+    # to *reference* a real local file must NOT be uploaded — it stays as text.
+    img = tmp_path / "diagram.png"
+    img.write_bytes(b"PNG")
+    adapter = FakeChannelAdapter(supports_edit=False)
+    events = [
+        TextDelta(text=f"see the diagram ![diagram]({img}) above"),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]
+
+    await _render(adapter, events)
+
+    assert adapter.media == []
+    assert adapter.sent[0] == ("owner", f"see the diagram ![diagram]({img}) above")
 
 
 async def test_bare_path_in_prose_is_not_uploaded(tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -200,7 +234,7 @@ async def test_bare_path_in_prose_is_not_uploaded(tmp_path) -> None:  # type: ig
     data.write_text("{}")
     adapter = FakeChannelAdapter(supports_edit=False)
     events = [
-        # A plain mention, not the ![](…) syntax — must not upload.
+        # A plain mention, not the MEDIA: sentinel — must not upload.
         TextDelta(text=f"I edited {data} for you."),
         TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
     ]
@@ -211,27 +245,27 @@ async def test_bare_path_in_prose_is_not_uploaded(tmp_path) -> None:  # type: ig
     assert adapter.sent[0] == ("owner", f"I edited {data} for you.")
 
 
-async def test_marker_for_a_missing_file_is_left_as_text() -> None:
+async def test_sentinel_for_a_missing_file_is_left_as_text() -> None:
     adapter = FakeChannelAdapter(supports_edit=False)
     events = [
-        TextDelta(text="![x](/no/such/file.png)"),
+        TextDelta(text="MEDIA:/no/such/file.png"),
         TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
     ]
 
     await _render(adapter, events)
 
     assert adapter.media == []
-    assert adapter.sent[0] == ("owner", "![x](/no/such/file.png)")
+    assert adapter.sent[0] == ("owner", "MEDIA:/no/such/file.png")
 
 
-async def test_marker_on_a_non_media_channel_is_replaced_with_a_note(tmp_path) -> None:  # type: ignore[no-untyped-def]
+async def test_sentinel_on_a_non_media_channel_is_replaced_with_a_note(tmp_path) -> None:  # type: ignore[no-untyped-def]
     # A channel with no file support must not leak the raw local path — the
-    # marker is replaced with a plain note instead of being uploaded or left.
+    # sentinel is replaced with a plain note instead of being uploaded or left.
     img = tmp_path / "chart.png"
     img.write_bytes(b"PNG")
     adapter = FakeChannelAdapter(supports_edit=False, supports_media=False)
     events = [
-        TextDelta(text=f"here it is\n\n![the chart]({img})"),
+        TextDelta(text=f"here it is\n\nMEDIA:{img} | the chart"),
         TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
     ]
 
@@ -243,15 +277,15 @@ async def test_marker_on_a_non_media_channel_is_replaced_with_a_note(tmp_path) -
     assert "the chart" in body and "no file support" in body
 
 
-async def test_marker_path_with_spaces_is_delivered(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    # Absolute macOS paths routinely contain spaces — the marker must still fire.
+async def test_sentinel_path_with_spaces_is_delivered(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    # Absolute macOS paths routinely contain spaces — the sentinel must still fire.
     d = tmp_path / "My Files"
     d.mkdir()
     img = d / "chart.png"
     img.write_bytes(b"PNG")
     adapter = FakeChannelAdapter(supports_edit=False)
     events = [
-        TextDelta(text=f"![chart]({img})"),
+        TextDelta(text=f"MEDIA:{img} | chart"),
         TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
     ]
 
@@ -290,7 +324,7 @@ async def test_media_returned_in_a_group_thread_is_uploaded_into_that_thread(
     )
     queue: asyncio.Queue[Any] = asyncio.Queue()
     for event in [
-        TextDelta(text=f"![chart]({img})"),
+        TextDelta(text=f"MEDIA:{img} | chart"),
         TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
     ]:
         queue.put_nowait(event)

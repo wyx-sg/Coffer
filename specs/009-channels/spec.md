@@ -390,12 +390,15 @@ status / notify`.
   to future modalities (a new type is a new mime, not a new schema). See
   [ADR-038](../../docs/decisions/ADR-038-channel-media.md).
 - **FR-021**: The agent sends a file back to the user by an explicit opt-in: a
-  reply line `![caption](/absolute/path)` (told to it by FR-019's system note). On
-  a transport that declares `supports_media`, the channel uploads that file (an
-  image extension as an inline photo, otherwise a document) and strips the line
-  from the delivered text; a bare path mentioned in prose is not this syntax and
-  is never uploaded, and a marker whose file is missing, relative, or oversized is
-  left as text. This keeps outbound file delivery deliberate, not guessed.
+  line-anchored sentinel `MEDIA:/absolute/path` (optionally `MEDIA:/absolute/path |
+  caption`), told to it by FR-019's system note. On a transport that declares
+  `supports_media`, the channel uploads that file (an image extension as an inline
+  photo, otherwise a document) and strips the line from the delivered text; ordinary
+  prose — including a legitimate markdown image `![alt](path)` written only to
+  reference a file — is not this syntax and is never uploaded, and a sentinel whose
+  file is missing, relative, or oversized is left as text. The unambiguous sentinel
+  keeps outbound file delivery deliberate, not guessed, and never collides with
+  normal markdown.
 - **FR-022**: An inbound voice message drives a turn as a transcript. The built-in
   agents (Claude Code, Codex) cannot hear audio, so the adapter transcribes the
   audio to text **locally** and folds it into the turn's prompt. Transcription is a
@@ -748,11 +751,12 @@ status / notify`.
 
 ### Scenario: the agent sends a file to the user via a reply marker
 
-- **Given** a media-capable channel and an agent reply containing
-  `![caption](/absolute/path)` for a file that exists
+- **Given** a media-capable channel and an agent reply containing a
+  `MEDIA:/absolute/path` sentinel line (optionally `| caption`) for a file that exists
 - **When** the turn's reply is delivered
 - **Then** the file is uploaded (an image as a photo, otherwise a document) and the
-  marker is removed from the text; a bare path mentioned in prose is not uploaded
+  sentinel line is removed from the text; ordinary prose — including a markdown
+  image `![alt](path)` — is not this syntax and is not uploaded
 
 ### Scenario: an inbound voice message is transcribed for a text-only agent
 
@@ -841,7 +845,7 @@ status / notify`.
 ### Scenario: SeaTalk outbound media is delivered into the originating thread
 
 - **Given** a paired SeaTalk channel and a group-thread turn whose reply
-  contains `![caption](/absolute/path)` for a file that exists
+  contains a `MEDIA:/absolute/path` sentinel line for a file that exists
 - **When** the turn's reply is delivered
 - **Then** SeaTalk uploads the file (an image as an `image` message, otherwise a
   `file` message) into that same group and thread — not the group main chat —
@@ -944,7 +948,7 @@ capabilities the official personal bridges lack.
   see its content; images stay vision-inlined for agents that support it.
 - **FR-031**: SeaTalk outbound media is delivered and thread-aware. `send_media`
   is wired to SeaTalk's file-upload API (`supports_media` true); an agent
-  `![caption](/path)` marker sends the file back into the same chat **and
+  `MEDIA:/path` sentinel sends the file back into the same chat **and
   thread** the turn came from — a generated chart returns to the group thread,
   not the main chat (closing the gap where SeaTalk agents could not return
   files at all, and where outbound media ignored the thread).
