@@ -1,4 +1,4 @@
-"""Unit tests for the hook-install pure text transforms (ADR-041).
+"""Unit tests for the hook-install pure text transforms (ADR-042).
 
 ``apply_install`` / ``apply_uninstall`` / ``is_installed`` edit the agent's hooks
 JSON in one of two flavors: matcher groups with PascalCase event keys (Claude
@@ -141,7 +141,7 @@ def test_install_single_event_only_codex() -> None:
     assert set(hooks) == {"SessionStart"}
 
 
-# --- cursor flavor (ADR-041) ---------------------------------------------------
+# --- cursor flavor (ADR-042) ---------------------------------------------------
 
 _CURSOR_CMD = "/opt/coffer/bin/coffer-hook --agent my-cursor --dialect cursor --event sessionStart"
 _CURSOR_EVENTS = (HookEvent.SESSION_START,)
@@ -215,7 +215,7 @@ def test_cursor_uninstall_drops_empty_hooks_object() -> None:
     assert "hooks" not in json.loads(out)
 
 
-# --- review hardening (ADR-041 follow-up) --------------------------------------
+# --- review hardening (ADR-042 follow-up) --------------------------------------
 
 
 def test_malformed_user_command_does_not_raise() -> None:

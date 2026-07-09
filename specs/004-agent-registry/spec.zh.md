@@ -583,7 +583,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - **FR-002**: 系统 MUST 用一个 kind 专属 schema 校验 agent 配置，字段包括 `type`（enum）与 `config_dir`（path，可选的绝对路径覆盖；省略时回退到该类型的标准位置——`claude_code` 用 `~/.claude`，`codex` 用 `~/.codex`）。skill 投递到 `<config_dir>/skills`。
 - **FR-003**: 系统 MUST 支持 `claude_code`、`codex`、`opencode`、`hermes` 与 `cursor` 这些 agent 类型；注册清单之外的任何类型（例如 `claude_desktop` 聊天应用、某个 Gemini CLI）以 `unprocessable_entity`（422）被拒绝。每类型的行为由能力清单（`AGENT_DESCRIPTORS`）定义，因此新增一个类型 = 一个枚举值 + 一条描述符记录（外加，当该产品的 wire 协议是新的时，一个 chat-provider 适配器）。每个受支持类型都同时覆盖该产品的 CLI 与 app/IDE 形态，二者共享同一个配置目录。某个产品若在上游不存在某个 facet 的能力，就在其描述符中把该 facet 声明为缺失，界面 MUST 隐藏对应操作而非让它失败（逐 facet 的支持见下方能力矩阵）。
 
-**Agent 能力矩阵（FR-003a）。** 逐 agent 的 facet 支持。「✓」= 与两个原始 agent 完全对齐；「N/A」= 该能力在上游不存在——**每一处 N/A MUST 引用使其成立的上游文档、参数或 issue**（[ADR-041](../../docs/decisions/ADR-041-context-injection-mechanisms.zh.md)：ADR-040 那四格未引证的 N/A 里有三格是错的）。标注「slice」表示这是 Coffer 尚未实现的机制——那是 Coffer 的缺口，不是产品的。
+**Agent 能力矩阵（FR-003a）。** 逐 agent 的 facet 支持。「✓」= 与两个原始 agent 完全对齐；「N/A」= 该能力在上游不存在——**每一处 N/A MUST 引用使其成立的上游文档、参数或 issue**（[ADR-042](../../docs/decisions/ADR-042-context-injection-mechanisms.zh.md)：ADR-040 那四格未引证的 N/A 里有三格是错的）。标注「slice」表示这是 Coffer 尚未实现的机制——那是 Coffer 的缺口，不是产品的。
 
 **会话上下文注入**这一列给出该 agent 在 manifest 中声明的 `InjectionMode`。上游存在三种机制，三者投递同一份载荷（`GET /agents/{name}/session-context`）：`SHELL_COMMAND`（agent 执行 `coffer-hook`）、`PLUGIN_DROP`（Coffer 落一个 JS/TS 插件去 spawn 它）、`INSTRUCTIONS_BLOCK`（Coffer 把它渲染进 instructions 文件的 marker 块）。
 
@@ -595,7 +595,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 | `hermes` | `~/.hermes/` | `hermes acp`（ACP JSON-RPC over stdio） | ✓ `mcp_servers` YAML | `INSTRUCTIONS_BLOCK` **slice**——`on_session_start` / `pre_llm_call` 文档里有但上游**从不调用**（[hermes-agent#2817](https://github.com/NousResearch/hermes-agent/issues/2817)，closed as not planned）；只有 tool hook 触发 | ✓ `providers.coffer` + `key_env: COFFER_PROVIDER_KEY` | ✓ `memory.memory_enabled:false` | 本 slice |
 | `cursor` | `~/.cursor/` | `cursor-agent -p --output-format stream-json`（NDJSON） | ✓ `mcp.json` 中的 `mcpServers` | ✓ `SHELL_COMMAND`——`hooks.json` 的 `sessionStart`（自有 flavor：扁平条目、camelCase 键、顶层 `version`），输出字段 `additional_context` | **N/A**——`cursor-agent --help`（v2026.02.27）无任何 base-URL 参数，`cli-config.json` 无 endpoint 键；自定义 base URL 是 IDE-only。用它自己的 `cursor-agent login` auth | **N/A**——Memories 是 IDE-only 的 Settings→Rules 开关，无 CLI 参数或配置键 | 本 slice |
 
-**Cursor 的 `sessionStart` 在 headless 下是否触发，有文档但未实证**——marker 探针被 `cursor-agent` 要求登录挡住了。见 ADR-041 的「影响」。
+**Cursor 的 `sessionStart` 在 headless 下是否触发，有文档但未实证**——marker 探针被 `cursor-agent` 要求登录挡住了。见 ADR-042 的「影响」。
 
 第四个被移除的类型 `openclaw` 是一个对等网关（自带 agent 运行时、多 agent 路由、原生记忆、MCP host）；它**不是**受管的叶子 agent，不在本矩阵之内（独立的设计线，[ADR-040](../../docs/decisions/ADR-040-re-widen-agent-registry.zh.md)）。
 
@@ -685,7 +685,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 - **Agent**：一个 kind 为 `agent` 的 Resource。代表一份本地安装的 AI agent。Config: `type`（受支持的 enum）、`config_dir`（可选的绝对路径覆盖；默认回退到该类型的标准位置）。skill 投递到 `<config_dir>/skills`。标识为 `agent:<name>`。
 - **Agent Type**：一个 enum 值，标识一个已知 agent 产品（`claude_code`、`codex`、`opencode`、`hermes`、`cursor`）。每个值映射到**能力清单**（`AGENT_DESCRIPTORS`）中的一条记录，携带其默认 `config_dir`、显示名、用于发现的安装标记、精选的**配置文件 allowlist**、**MCP 注入形态**，以及可选的 上下文注入 / provider 投影 / 原生记忆 facet——某产品在上游缺失的 facet 留空（FR-003a 下的能力矩阵），界面隐藏对应操作。当某个 facet 缺席是因为 **Coffer** 尚未实现该产品的机制（而非产品本身没有），界面 MUST 如实说明，而不是把它呈现为上游限制。
-- **Context Injection Spec**：描述 Coffer 的会话上下文（规则 + 记忆）如何抵达某个 agent 模型的 manifest facet。携带一个 `InjectionMode`（`SHELL_COMMAND` / `PLUGIN_DROP` / `INSTRUCTIONS_BLOCK`）、它写入的 allowlist 配置 `key` + `format`、它安装的生命周期 `events`，以及一个 `HookFlavor`（同时决定磁盘条目形状与 `coffer-hook` 打印的 stdout 信封）。目前只实现 `SHELL_COMMAND`；另两种 mode 是已识别的扩展点，与 `SkillDeliveryMode` 的预留值同构。见 [ADR-041](../../docs/decisions/ADR-041-context-injection-mechanisms.zh.md)。
+- **Context Injection Spec**：描述 Coffer 的会话上下文（规则 + 记忆）如何抵达某个 agent 模型的 manifest facet。携带一个 `InjectionMode`（`SHELL_COMMAND` / `PLUGIN_DROP` / `INSTRUCTIONS_BLOCK`）、它写入的 allowlist 配置 `key` + `format`、它安装的生命周期 `events`，以及一个 `HookFlavor`（同时决定磁盘条目形状与 `coffer-hook` 打印的 stdout 信封）。目前只实现 `SHELL_COMMAND`；另两种 mode 是已识别的扩展点，与 `SkillDeliveryMode` 的预留值同构。见 [ADR-042](../../docs/decisions/ADR-042-context-injection-mechanisms.zh.md)。
 - **Agent Candidate（候选项）**：一个被发现的、已安装但尚未注册的 agent——`type`、`display_name`、`config_dir`（该类型的默认配置目录）、`default_skill_dir` 与 `suggested_name`。在扫描时派生，从不存储；用户确认某个候选项即可注册它。
 - **Config File（配置文件）**：属于某个 agent 类型、在 allowlist 内的精选文件，以稳定的 `key` 标识。携带显示名、解析后的绝对路径、其所在文件夹的绝对路径（`folder_path`）、`format`（`json` / `toml` / `markdown` / `text`），以及（存在时）大小与修改时间。在 UI 中只读呈现（查看其内容、在外部编辑器中打开该文件 / 其文件夹）；按 key 读取并程序化写入（REST/CLI），绝不按任意路径。不持久化到 SQLite——磁盘上的文件即为事实来源。
 - **Coffer MCP Install Status（安装状态）**：某个 agent 的派生（非存储）状态：其 MCP 配置文件中是否存在 `coffer` MCP-server 条目。

@@ -191,7 +191,7 @@ def test_session_start_empty_context_prints_nothing(monkeypatch, capsys):
     assert out.strip() == ""
 
 
-# --- cursor dialect (ADR-041) --------------------------------------------------
+# --- cursor dialect (ADR-042) --------------------------------------------------
 
 
 def test_cursor_dialect_prints_top_level_additional_context(monkeypatch, capsys):
@@ -290,7 +290,7 @@ def test_default_dialect_is_claude_envelope(monkeypatch, capsys):
     assert json.loads(out)["hookSpecificOutput"]["additionalContext"] == "CTX"
 
 
-# --- review hardening (ADR-041 follow-up) --------------------------------------
+# --- review hardening (ADR-042 follow-up) --------------------------------------
 
 
 def test_named_session_start_never_reads_stdin(monkeypatch, capsys):

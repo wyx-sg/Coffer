@@ -1,6 +1,6 @@
-# ADR-041: Context injection is a facet with three mechanisms, not one
+# ADR-042: Context injection is a facet with three mechanisms, not one
 
-> 中文: [ADR-041-context-injection-mechanisms.zh.md](ADR-041-context-injection-mechanisms.zh.md)
+> 中文: [ADR-042-context-injection-mechanisms.zh.md](ADR-042-context-injection-mechanisms.zh.md)
 
 **Status**: Accepted
 **Date**: 2026-07-09

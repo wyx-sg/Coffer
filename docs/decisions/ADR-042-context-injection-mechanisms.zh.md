@@ -1,6 +1,6 @@
-# ADR-041：上下文注入是一个 facet、三种机制，而非一种
+# ADR-042：上下文注入是一个 facet、三种机制，而非一种
 
-> English: [ADR-041-context-injection-mechanisms.md](ADR-041-context-injection-mechanisms.md)
+> English: [ADR-042-context-injection-mechanisms.md](ADR-042-context-injection-mechanisms.md)
 
 **状态**：Accepted
 **日期**：2026-07-09

@@ -1,4 +1,4 @@
-"""Unit tests for the context-injection descriptor facet (ADR-041).
+"""Unit tests for the context-injection descriptor facet (ADR-042).
 
 ``ContextInjectionSpec`` is the per-agent record of how Coffer's session context
 (rules + memory) reaches the agent's model. Pure value-level logic.
