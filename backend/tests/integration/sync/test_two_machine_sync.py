@@ -716,6 +716,7 @@ async def test_near_real_time_change_and_probe_convergence(tmp_path, remote) -> 
     await worker_b._maybe_sync()
 
     # A registers a resource; the change listener path is the worker's notify.
+    clock_a.now += 3  # leave the startup run's suppression grace window
     await a.resources.register("mcp_server", "instant", {"value": "nrt"}, "test")
     worker_a.notify_change()
     clock_a.now += 2  # past the 1s debounce
@@ -726,3 +727,53 @@ async def test_near_real_time_change_and_probe_convergence(tmp_path, remote) -> 
     await worker_b._maybe_sync()
     got = await b.resources.get(ResourceRef("mcp_server", "instant"))
     assert got.config == {"value": "nrt"}
+
+
+async def test_rerun_does_not_blow_through_conflict(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """Running sync again while conflicted must stay conflicted — never
+    export over the unmerged files and silently resolve local-wins
+    (review #283 blocker 2, service-level guard)."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.resources.register("mcp_server", "contested", {"value": "base"}, "test")
+    await a.service.run()
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()
+
+    await a.resources.update_config(ResourceRef("mcp_server", "contested"), {"value": "A2"}, "test")
+    await a.service.run()
+    await b.resources.update_config(ResourceRef("mcp_server", "contested"), {"value": "B2"}, "test")
+    state = await b.service.run()
+    assert state.status is SyncStatus.CONFLICTED
+
+    # A second (auto or manual) run must not auto-resolve the conflict.
+    state = await b.service.run()
+    assert state.status is SyncStatus.CONFLICTED
+    # A's copy is untouched by B's rerun.
+    await a.service.run()
+    assert (await a.resources.get(ResourceRef("mcp_server", "contested"))).config == {"value": "A2"}
+
+    # Resolution still works normally afterwards.
+    resolved = await b.service.resolve("theirs", [])
+    assert resolved.status is not SyncStatus.CONFLICTED
+    assert (await b.resources.get(ResourceRef("mcp_server", "contested"))).config == {"value": "A2"}
+
+
+async def test_import_preserves_local_derived_indexes(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """The workspace→live mirror is diff-aware: it must not delete the
+    machine-local derived indexes nor rewrite unchanged files
+    (review #283 blocker 1, root cause)."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    a.knowledge.mkdir(parents=True, exist_ok=True)
+    (a.knowledge / "note.md").write_text("v1\n", encoding="utf-8")
+    (a.knowledge / "INDEX.md").write_text("machine-local index\n", encoding="utf-8")
+    await a.service.run()
+
+    # The derived index survives the import and the note is intact.
+    assert (a.knowledge / "INDEX.md").read_text() == "machine-local index\n"
+    assert (a.knowledge / "note.md").read_text() == "v1\n"
+
+    # A no-change run must not rewrite the unchanged live file (same inode).
+    ino_before = (a.knowledge / "note.md").stat().st_ino
+    await a.service.run()
+    assert (a.knowledge / "note.md").stat().st_ino == ino_before
+    assert (a.knowledge / "INDEX.md").exists()

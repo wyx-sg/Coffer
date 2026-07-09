@@ -57,6 +57,46 @@ def _replace_tree(
         dst.mkdir(parents=True, exist_ok=True)
 
 
+def _tree_files(root: pathlib.Path, exclude: frozenset[str]) -> dict[pathlib.Path, pathlib.Path]:
+    """rel-path -> absolute path for every file under ``root``, skipping any
+    path with an excluded basename component."""
+    if not root.exists():
+        return {}
+    out: dict[pathlib.Path, pathlib.Path] = {}
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(root)
+        if any(part in exclude for part in rel.parts):
+            continue
+        out[rel] = path
+    return out
+
+
+def _mirror_tree(
+    src: pathlib.Path, dst: pathlib.Path, exclude: frozenset[str] = frozenset()
+) -> None:
+    """Converge ``dst`` on ``src`` by copying only changed files and deleting
+    only files gone from ``src`` — never a blanket rmtree.
+
+    Used for the workspace→live direction: the live trees are watched by the
+    auto-sync watcher (a full rewrite would storm it with spurious events) and
+    hold machine-local derived files (``exclude``) that a rewrite would delete.
+    """
+    dst.mkdir(parents=True, exist_ok=True)
+    src_files = _tree_files(src, exclude)
+    dst_files = _tree_files(dst, exclude)
+    for rel, src_path in src_files.items():
+        target = dst_files.get(rel)
+        if target is not None and target.read_bytes() == src_path.read_bytes():
+            continue
+        out = dst / rel
+        out.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src_path, out)
+    for rel in dst_files.keys() - src_files.keys():
+        (dst / rel).unlink(missing_ok=True)
+
+
 class Workspace:
     """Implements ``application.sync.ports.WorkspacePort`` structurally."""
 
@@ -80,10 +120,12 @@ class Workspace:
             _replace_tree(live_root, self._root / subdir, exclude=DERIVED_INDEX_NAMES)
 
     def mirror_trees_in(self) -> None:
+        # Diff-aware on the live side: a no-change import must neither storm
+        # the file watcher nor delete the machine-local derived indexes.
         for subdir, live_root in self._trees:
             ws_tree = self._root / subdir
             if ws_tree.exists():
-                _replace_tree(ws_tree, live_root, exclude=DERIVED_INDEX_NAMES)
+                _mirror_tree(ws_tree, live_root, exclude=DERIVED_INDEX_NAMES)
 
     # --- manifest ----------------------------------------------------------
 

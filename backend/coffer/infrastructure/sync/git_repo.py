@@ -10,6 +10,7 @@ whose global git config has no ``user.name``/``user.email``.
 
 from __future__ import annotations
 
+import os
 import pathlib
 import subprocess
 from collections.abc import Sequence
@@ -83,12 +84,20 @@ class GitRepo:
         """The remote branch head via ``git ls-remote`` — one cheap network
         round trip, no fetch, no working-tree requirement. None when the
         remote is unreachable or the branch does not exist yet."""
-        proc = subprocess.run(
-            ["git", "ls-remote", remote, f"refs/heads/{branch}"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        self._ws.mkdir(parents=True, exist_ok=True)
+        try:
+            proc = subprocess.run(
+                ["git", "ls-remote", remote, f"refs/heads/{branch}"],
+                cwd=self._ws,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=30,
+                stdin=subprocess.DEVNULL,
+                env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+            )
+        except subprocess.TimeoutExpired:
+            return None
         if proc.returncode != 0:
             return None
         first = proc.stdout.split()

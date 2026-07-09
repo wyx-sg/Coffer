@@ -134,6 +134,12 @@ class SyncService:
     async def _run_locked(self, config: SyncConfig, *, pull: bool, push: bool) -> SyncState:
         assert config.remote is not None
         await asyncio.to_thread(self._git.ensure_repo, config.remote, config.branch)
+        # A run must never blow through an unresolved merge: exporting over
+        # conflicted files and committing would silently resolve local-wins,
+        # destroying the other machine's edit. Resolve first.
+        existing_conflicts = await asyncio.to_thread(self._git.conflicted_paths)
+        if existing_conflicts:
+            return await self._record_conflict(existing_conflicts)
         # Gate BEFORE export: a newer-schema manifest merged by an earlier run
         # must fail here, not be overwritten by this run's export (which would
         # silently disarm the gate and downgrade the medium).

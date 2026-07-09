@@ -9,17 +9,23 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from coffer.application.sync.worker import SyncWorker
-from coffer.domain.sync.models import SyncConfig
+from coffer.application.sync.worker import SUPPRESS_GRACE_SECONDS, SyncWorker
+from coffer.domain.sync.errors import SyncInProgress
+from coffer.domain.sync.models import SyncConfig, SyncState, SyncStatus
 
 
 class _FakeService:
     def __init__(self) -> None:
         self.runs = 0
         self.is_running = False
+        self.outcome_status = SyncStatus.CLEAN
+        self.raise_in_progress = False
 
-    async def run(self) -> None:
+    async def run(self) -> SyncState:
+        if self.raise_in_progress:
+            raise SyncInProgress()
         self.runs += 1
+        return SyncState(status=self.outcome_status, last_sync_at=None, last_error=None)
 
 
 class _FakeConfigService:
@@ -34,8 +40,13 @@ class _FakeConfigService:
             poll_remote_seconds=poll,
         )
 
+        self.state = SyncState(status=SyncStatus.CLEAN, last_sync_at=None, last_error=None)
+
     async def get_config(self) -> SyncConfig:
         return self.config
+
+    async def get_state(self) -> SyncState:
+        return self.state
 
 
 class _FakeGit:
@@ -166,3 +177,67 @@ async def test_probe_respects_cadence() -> None:
     clock.now += 4
     await worker._maybe_sync()
     assert service.runs == 2
+
+
+async def test_grace_window_drops_post_run_watcher_echo() -> None:
+    """The watcher delivers the run's own write batch AFTER lock release; the
+    grace window must swallow it (review #283 blocker 1)."""
+    service, config, git, clock = _FakeService(), _FakeConfigService(), _FakeGit(), _Clock()
+    worker = _worker(service, config, git, clock)
+    await worker._maybe_sync()  # startup run; grace starts now
+    worker.notify_change()  # the echo, inside the grace window
+    clock.now += 60
+    await worker._maybe_sync()
+    assert service.runs == 1  # echo dropped: no follow-up run
+    clock.now += SUPPRESS_GRACE_SECONDS
+    worker.notify_change()  # a genuine change after the grace window
+    clock.now += 6
+    await worker._maybe_sync()
+    assert service.runs == 2
+
+
+async def test_conflicted_state_pauses_auto_runs() -> None:
+    """Auto-sync must not blow through a conflict — a rerun would silently
+    resolve it local-wins (review #283 blocker 2)."""
+    service, config, git, clock = _FakeService(), _FakeConfigService(), _FakeGit(), _Clock()
+    config.state = SyncState(status=SyncStatus.CONFLICTED, last_sync_at=None, last_error=None)
+    worker = _worker(service, config, git, clock)
+    worker.notify_change()
+    git.remote_sha = "sha-moved"
+    clock.now += 120
+    await worker._maybe_sync()
+    assert service.runs == 0  # neither change, probe, nor sweep runs
+    config.state = SyncState(status=SyncStatus.CLEAN, last_sync_at=None, last_error=None)
+    await worker._maybe_sync()
+    assert service.runs == 1  # resumes once resolved
+
+
+async def test_conflicted_outcome_does_not_memoize_head() -> None:
+    """A conflicted run stopped before pushing; memoizing its local head would
+    make the probe rerun straight back into the conflict."""
+    service, config, git, clock = _FakeService(), _FakeConfigService(), _FakeGit(), _Clock()
+    worker = _worker(service, config, git, clock)
+    await worker._maybe_sync()  # clean startup run memoizes sha-0
+    service.outcome_status = SyncStatus.CONFLICTED
+    git.local_sha = "sha-local-dirty"
+    worker.notify_change()
+    clock.now += 6 + SUPPRESS_GRACE_SECONDS
+    await worker._maybe_sync()  # conflicted run
+    assert worker._last_seen_head == "sha-0"  # unchanged, not the dirty local
+
+
+async def test_sync_in_progress_requeues_the_change() -> None:
+    """A change racing a manual run must not wait for the 300s sweep."""
+    service, config, git, clock = _FakeService(), _FakeConfigService(), _FakeGit(), _Clock()
+    worker = _worker(service, config, git, clock)
+    await worker._maybe_sync()  # startup
+    clock.now += SUPPRESS_GRACE_SECONDS + 1  # leave the startup grace window
+    service.raise_in_progress = True
+    worker.notify_change()
+    clock.now += 6
+    await worker._maybe_sync()  # manual run holds the lock: requeued
+    assert service.runs == 1
+    service.raise_in_progress = False
+    clock.now += 6 + SUPPRESS_GRACE_SECONDS
+    await worker._maybe_sync()
+    assert service.runs == 2  # the queued change fires once the lock frees

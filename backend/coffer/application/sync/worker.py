@@ -30,7 +30,7 @@ from coffer.application.sync.config_service import SyncConfigService
 from coffer.application.sync.ports import GitPort
 from coffer.application.sync.service import SyncService
 from coffer.domain.sync.errors import SyncInProgress
-from coffer.domain.sync.models import SyncConfig
+from coffer.domain.sync.models import SyncConfig, SyncStatus
 
 _log = structlog.get_logger(__name__)
 
@@ -42,6 +42,12 @@ DEBOUNCE_SECONDS = 5.0
 
 #: A steady stream of changes still syncs at most this long after the first.
 DEBOUNCE_CAP_SECONDS = 30.0
+
+#: How long after a run notifications stay suppressed: the file watcher
+#: delivers its batch ~0.1s AFTER the import's tree writes, i.e. after the
+#: service lock is already released — without this grace the run's own writes
+#: would schedule the next run forever.
+SUPPRESS_GRACE_SECONDS = 2.0
 
 
 class SyncWorker:
@@ -67,6 +73,7 @@ class SyncWorker:
         self._first_change: float | None = None
         self._last_change: float | None = None
         self._suppress = False
+        self._suppress_until: float = 0.0
         self._last_run: float | None = None
         self._last_remote_poll: float | None = None
         self._last_seen_head: str | None = None
@@ -84,6 +91,10 @@ class SyncWorker:
         if self._suppress or self._service.is_running:
             return
         now = self._clock()
+        if now < self._suppress_until:
+            # Grace window: the watcher delivers the run's own write batch
+            # ~0.1s after lock release; without this it re-fires forever.
+            return
         if self._first_change is None:
             self._first_change = now
         self._last_change = now
@@ -99,9 +110,17 @@ class SyncWorker:
     # --- internals -----------------------------------------------------------
 
     async def _maybe_sync(self) -> None:
+        pending: tuple[float | None, float | None] = (None, None)
         try:
             config = await self._config.get_config()
             if not (config.auto and config.is_operational()):
+                self._first_change = self._last_change = None
+                return
+            state = await self._config.get_state()
+            if state.status is SyncStatus.CONFLICTED:
+                # Auto-runs must never blow through a conflict: a rerun's
+                # export + commit would silently resolve it local-wins,
+                # destroying the other machine's edit. Wait for the user.
                 self._first_change = self._last_change = None
                 return
             now = self._clock()
@@ -112,18 +131,25 @@ class SyncWorker:
                 due = True  # fallback sweep
             if not due:
                 return
+            pending = (self._first_change, self._last_change)
             self._first_change = self._last_change = None
             self._last_run = now
             self._suppress = True
             try:
-                await self._service.run()
+                outcome = await self._service.run()
             finally:
                 self._suppress = False
+                self._suppress_until = self._clock() + SUPPRESS_GRACE_SECONDS
             # Our own push moved the remote head; remember it so the next
-            # probe doesn't schedule a pointless run.
-            if self._git is not None:
+            # probe doesn't schedule a pointless run. A conflicted run stopped
+            # BEFORE pushing — memoizing its local head would make the probe
+            # 'discover' the remote and immediately rerun into the conflict.
+            if self._git is not None and outcome.status is not SyncStatus.CONFLICTED:
                 self._last_seen_head = await asyncio.to_thread(self._git.head)
         except SyncInProgress:
+            # A manual run holds the lock; our change signal may predate its
+            # snapshot — keep it queued instead of waiting for the sweep.
+            self._first_change, self._last_change = pending
             return
         except Exception as e:  # never let the loop die
             _log.warning("auto_sync_failed", error=str(e))
