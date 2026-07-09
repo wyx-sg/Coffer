@@ -857,7 +857,7 @@
       "deleteChildConfirm": "删除 {{relpath}}？文件将从磁盘移除。",
       "staleBanner": "文件已被外部修改，请重新加载",
       "reload": "重新加载",
-      "memoryBlockNotice": "此文件包含 Coffer 记忆投影区块，该区块由记忆功能管理",
+      "memoryBlockNotice": "此文件包含旧版 Coffer 记忆区块（原生投影功能已移除）——已不再使用，可安全删除。",
       "directoryHint": "这是一个目录——请选择其中的文件，或新建一个。",
       "emptyDir": "暂无文件。",
       "desc": {
