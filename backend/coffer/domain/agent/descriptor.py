@@ -27,7 +27,12 @@ from coffer.domain.agent.config_files import (
     ConfigFileKind,
     ConfigFileSpec,
 )
-from coffer.domain.agent.hook_injection import HookEvent, HookInjectionSpec
+from coffer.domain.agent.context_injection import (
+    ContextInjectionSpec,
+    HookEvent,
+    HookFlavor,
+    InjectionMode,
+)
 from coffer.domain.agent.mcp_injection import McpEntryStyle, McpInjectionSpec
 from coffer.domain.agent.plugin_capability import (
     PluginCapability,
@@ -58,10 +63,11 @@ class AgentDescriptor:
     config_files: Callable[[pathlib.Path], tuple[ConfigFileSpec, ...]]
     #: How Coffer installs its own ``coffer`` MCP entry (None = MCP not managed).
     mcp: McpInjectionSpec | None = None
-    #: How Coffer installs its ``coffer-hook`` lifecycle hooks (None = hooks not
-    #: managed). Claude Code installs SessionStart + SessionEnd; Codex installs
-    #: SessionStart only (it has no session-end event).
-    hooks: HookInjectionSpec | None = None
+    #: How Coffer injects its session context — rules + memory — into this agent
+    #: (None = the agent offers no usable injection point). Claude Code installs
+    #: SessionStart + SessionEnd shell hooks; Codex and Cursor install
+    #: SessionStart only (neither has a usable session-end event).
+    context_injection: ContextInjectionSpec | None = None
     #: Allowlist keys of files scanned when listing the agent's *own* MCP
     #: entries (FR-025). Defaults to the MCP injection file when unset.
     mcp_source_keys: tuple[str, ...] = ()
@@ -178,13 +184,15 @@ def _hermes_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
 
 def _cursor_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
     # Cursor's ~/.cursor/ holds cli-config.json (CLI settings) and, on demand,
-    # mcp.json (MCP servers, `mcpServers` map). AGENTS.md is the human-authored
-    # instructions file cursor-agent reads.
+    # mcp.json (MCP servers, `mcpServers` map) and hooks.json (lifecycle hooks,
+    # its own flat-entry shape). AGENTS.md is the human-authored instructions
+    # file cursor-agent reads.
     return (
         ConfigFileSpec(
             "config", "CLI config (cli-config.json)", cfg / "cli-config.json", ConfigFileFormat.JSON
         ),
         ConfigFileSpec("mcp", "MCP servers (mcp.json)", cfg / "mcp.json", ConfigFileFormat.JSON),
+        ConfigFileSpec("hooks", "Hooks (hooks.json)", cfg / "hooks.json", ConfigFileFormat.JSON),
         ConfigFileSpec(
             "instructions",
             "Global instructions (AGENTS.md)",
@@ -209,10 +217,12 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             entry_style=McpEntryStyle.COMMAND_MAP,
         ),
         mcp_source_keys=("global", "settings"),
-        hooks=HookInjectionSpec(
+        context_injection=ContextInjectionSpec(
+            mode=InjectionMode.SHELL_COMMAND,
             config_key="settings",
             format=ConfigFileFormat.JSON,
             events=(HookEvent.SESSION_START, HookEvent.SESSION_END),
+            flavor=HookFlavor.CLAUDE,
         ),
         plugins=PluginCapability(
             model=PluginModel.CLAUDE,
@@ -237,10 +247,12 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             entry_style=McpEntryStyle.COMMAND_MAP,
         ),
         mcp_source_keys=("config",),
-        hooks=HookInjectionSpec(
+        context_injection=ContextInjectionSpec(
+            mode=InjectionMode.SHELL_COMMAND,
             config_key="hooks",
             format=ConfigFileFormat.JSON,
             events=(HookEvent.SESSION_START,),
+            flavor=HookFlavor.CLAUDE,
         ),
         plugins=PluginCapability(
             model=PluginModel.CODEX,
@@ -260,15 +272,16 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             format=ConfigFileFormat.JSON,
             entry_style=McpEntryStyle.TYPED_LOCAL_OBJECT,
         ),
-        # Capability gaps declared as absent facets (surfaces hide the action, they
-        # do not fail it) — see the Agent capability matrix in spec 004 / ADR-040:
-        #  * hooks=None      — opencode has no shell-command lifecycle hook, only
-        #                      in-process JS plugin callbacks; session-context
-        #                      injection is a follow-up plugin-drop slice.
+        # See the Agent capability matrix in spec 004 / ADR-041:
+        #  * context_injection=None — opencode has no shell-command hook. Its JS
+        #                      plugin API *can* inject (``chat.message`` appends to
+        #                      ``output.parts``), so this is an INJECTION_MODE.PLUGIN_DROP
+        #                      slice, not an upstream gap.
         #  * plugins=None    — opencode's plugins are JS modules, a different model
         #                      from Claude/Codex; not managed by Coffer in this slice.
-        #  * native memory   — opencode has no cross-session native memory, so it is
-        #                      omitted from _NATIVE_MEMORY_DISABLE_TARGET below.
+        #  * native memory   — opencode has no cross-session native memory, so there
+        #                      is nothing to disable (absent from
+        #                      _NATIVE_MEMORY_DISABLE_TARGET below).
     ),
     AgentType.HERMES: AgentDescriptor(
         type=AgentType.HERMES,
@@ -282,9 +295,12 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             entry_style=McpEntryStyle.COMMAND_MAP,
         ),
         # Native memory IS present (the memory.memory_enabled toggle) — wired in
-        # _NATIVE_MEMORY_DISABLE_TARGET below. hooks=None for this slice: hermes'
-        # session hooks are a YAML on_session_* / pre_llm_call mechanism distinct
-        # from the JSON HookInjectionSpec model (a follow-up slice — ADR-040).
+        # _NATIVE_MEMORY_DISABLE_TARGET below.
+        # context_injection=None: hermes' on_session_start / pre_llm_call hooks are
+        # documented but NEVER INVOKED upstream (NousResearch/hermes-agent#2817,
+        # closed as not planned) — only the tool hooks fire. There is no hook to
+        # install; INJECTION_MODE.INSTRUCTIONS_BLOCK is the intended fallback
+        # (a follow-up slice — ADR-041).
         # plugins=None: hermes plugins are a different model, not managed here.
     ),
     AgentType.CURSOR: AgentDescriptor(
@@ -298,10 +314,19 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             format=ConfigFileFormat.JSON,
             entry_style=McpEntryStyle.COMMAND_MAP,
         ),
-        # Capability gaps (ADR-040 capability matrix) — all absent facets:
-        #  * hooks=None            — cursor-agent has a hooks.json, but headless
-        #                            firing of SessionStart/End is undocumented
-        #                            upstream, so it is deferred (a follow-up slice).
+        # Cursor's hooks.json documents a `sessionStart` hook whose output carries
+        # an `additional_context` field — exactly Coffer's injection point. Its
+        # shape differs from Claude/Codex (flat command entries, camelCase event
+        # keys, top-level `version`), which HookFlavor.CURSOR carries. Cursor has no
+        # usable session-end event for Coffer's purposes, so SESSION_START only.
+        context_injection=ContextInjectionSpec(
+            mode=InjectionMode.SHELL_COMMAND,
+            config_key="hooks",
+            format=ConfigFileFormat.JSON,
+            events=(HookEvent.SESSION_START,),
+            flavor=HookFlavor.CURSOR,
+        ),
+        # Absent facets (ADR-041 capability matrix):
         #  * native memory         — cursor "Memories" is an IDE-only toggle with no
         #                            CLI, so it is omitted from
         #                            _NATIVE_MEMORY_DISABLE_TARGET below.

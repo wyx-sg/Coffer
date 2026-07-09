@@ -4,6 +4,12 @@
 >
 > **Status: design-only, not implemented.** [ADR-040](../decisions/ADR-040-re-widen-agent-registry.md) re-added `opencode` / `hermes` / `cursor` as managed leaf agents but deliberately left **openclaw** out of the agent registry. This note is the "separate design track" ADR-040 promised: how Coffer *would* integrate openclaw when there is a real need, and why it is not an `AgentType`.
 
+> **Correction (2026-07-09, [ADR-041](../decisions/ADR-041-context-injection-mechanisms.md)).** The capability table below is **wrong on three of five rows**. A first-principles re-check against openclaw's docs found: MCP servers ARE injectable (`mcp.servers` in `~/.openclaw/openclaw.json`; writing one `coffer` entry is one-directional and creates no cycle — only *also* registering `openclaw mcp serve` as a Coffer upstream would close the loop); native memory IS disableable (`plugins.slots.memory: "none"` or `plugins.entries.memory-core.enabled: false`); and skills ARE drop-in — `~/.openclaw/skills/<name>/SKILL.md`, the same shape Claude Code uses, so Coffer's existing `FOLDER` delivery works unchanged. Provider projection is supported *and* reads keys from `${ENV}`. Only the **hooks** row holds: openclaw's hooks are in-process TS/JS running inside the Gateway, with no session-start event, and context injection requires a typed plugin (`api.on(...)`) — i.e. Coffer's `PLUGIN_DROP` mode.
+>
+> **The conclusion is therefore reversed: openclaw IS a viable managed leaf agent.** It is planned as one, pending a real install to verify against (it is not installed on the author's machine, and Coffer's spec rule requires real end-to-end use). Two things this document got right and that still matter: openclaw drives Claude Code / Codex / OpenCode as sub-workers, so Coffer's writes to `~/.claude/` are inherited by openclaw-spawned workers; and its headless CLI (`openclaw agent --message … --json --local`) returns one JSON blob with **no streaming**, so it would be Coffer's only non-streaming chat provider.
+>
+> Read the table below as a historical record of the reasoning ADR-040 relied on, not as current fact.
+
 ## What OpenClaw is
 
 OpenClaw (`openclaw/openclaw`, docs.openclaw.ai) is a self-hosted, multi-channel **personal-agent gateway** — not a coding CLI. It is a peer of Coffer, not a leaf under it. It ships its own:

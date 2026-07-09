@@ -17,6 +17,7 @@ from coffer.application.agent.hook_service import AgentHookService
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ShimNotFound
+from coffer.domain.workspace_errors import HookInstallUnsupported
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 
 pytestmark = pytest.mark.asyncio
@@ -169,3 +170,96 @@ async def test_quoted_command_when_binary_has_spaces(agent_bundle, tmp_path, mon
     st = await svc.install("cc", actor="ui")
     assert "'/Apps/My App/coffer-hook'" in st.command
     assert (await svc.status("cc")).installed is True
+
+
+# --- cursor flavor (ADR-041) ---------------------------------------------------
+
+
+async def _register_cursor(bundle, home: pathlib.Path):
+    (home / ".cursor" / "skills").mkdir(parents=True, exist_ok=True)
+    await bundle.svc.register(agent_type=AgentType.CURSOR, name="cur", actor="cli")
+
+
+@pytest.mark.acceptance(
+    spec="004-agent-registry", scenario="install Coffer's session hook into Cursor"
+)
+async def test_install_cursor_writes_flat_entry_with_dialect_and_event(
+    agent_bundle, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_cursor(agent_bundle, tmp_path)
+    hooks_file = tmp_path / ".cursor" / "hooks.json"
+
+    st = await agent_bundle.hook.install("cur", actor="ui")
+    assert st.installed is True
+    # Cursor's stdin payload does not name the event, so it is baked into argv
+    # alongside the dialect that selects the stdout envelope.
+    assert st.command == f"{HOOK} --agent cur --dialect cursor --event sessionStart"
+
+    data = json.loads(hooks_file.read_text())
+    assert data["version"] == 1
+    # Flat command entry, camelCase key — Cursor's shape, not Claude's.
+    assert data["hooks"] == {"sessionStart": [{"command": st.command}]}
+
+
+async def test_install_cursor_preserves_foreign_hooks(agent_bundle, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_cursor(agent_bundle, tmp_path)
+    hooks_file = tmp_path / ".cursor" / "hooks.json"
+    hooks_file.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "hooks": {"beforeSubmitPrompt": [{"command": "/opt/other/hook.sh"}]},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    await agent_bundle.hook.install("cur", actor="ui")
+    data = json.loads(hooks_file.read_text())
+    # A third party's hook for an unrelated event is untouched.
+    assert data["hooks"]["beforeSubmitPrompt"] == [{"command": "/opt/other/hook.sh"}]
+    assert "sessionStart" in data["hooks"]
+
+
+async def test_cursor_install_idempotent_then_uninstall_restores(
+    agent_bundle, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_cursor(agent_bundle, tmp_path)
+    hooks_file = tmp_path / ".cursor" / "hooks.json"
+
+    await agent_bundle.hook.install("cur", actor="ui")
+    await agent_bundle.hook.install("cur", actor="ui")
+    entries = json.loads(hooks_file.read_text())["hooks"]["sessionStart"]
+    assert len(entries) == 1
+
+    st = await agent_bundle.hook.uninstall("cur", actor="ui")
+    assert st.installed is False
+    assert "hooks" not in json.loads(hooks_file.read_text())
+    assert (await agent_bundle.hook.status("cur")).installed is False
+
+
+async def test_opencode_hook_install_unsupported(agent_bundle, tmp_path, monkeypatch):
+    # opencode declares no context_injection: status is "not installed", never an
+    # error; install rejects with 422 rather than writing anything.
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".config" / "opencode" / "skills").mkdir(parents=True, exist_ok=True)
+    await agent_bundle.svc.register(agent_type=AgentType.OPENCODE, name="oc", actor="cli")
+
+    st = await agent_bundle.hook.status("oc")
+    assert st.installed is False
+    # Surfaces read `supported` to disable the control up front — status never
+    # raises, so a surface waiting for a 422 would render a control that 422s.
+    assert st.supported is False
+    with pytest.raises(HookInstallUnsupported):
+        await agent_bundle.hook.install("oc", actor="ui")
+
+
+async def test_supported_true_for_agents_with_shell_injection(agent_bundle, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_claude(agent_bundle, tmp_path)
+    await _register_cursor(agent_bundle, tmp_path)
+    assert (await agent_bundle.hook.status("cc")).supported is True
+    assert (await agent_bundle.hook.status("cur")).supported is True

@@ -1,7 +1,9 @@
 // frontend/src/components/agents/AgentHookControls.test.tsx — slice 6.
 // The session-start hook toggle: switching on installs (POST) / off uninstalls
-// (DELETE) with pending + inline error, plus the 422 HOOK_INSTALL_UNSUPPORTED
-// state where the agent type has no hook support (disabled switch + note).
+// (DELETE) with pending + inline error, plus the unsupported state where the
+// agent type has no hook support (disabled switch + note). Unsupported is
+// signalled by `status.supported === false` — status succeeds, it does not 422;
+// the legacy 422 path is kept as a fallback for an older daemon.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ApiError } from "@/lib/api/errors";
@@ -18,12 +20,16 @@ const installMock = vi.mocked(useAgentHookInstall);
 function stub(
   installed: boolean,
   mutate = vi.fn(),
-  opts: { mutateError?: unknown; statusError?: unknown } = {},
+  opts: { mutateError?: unknown; statusError?: unknown; supported?: boolean } = {},
 ) {
   statusMock.mockReturnValue({
     data: opts.statusError
       ? undefined
-      : { installed, command: installed ? "/opt/coffer-hook-shim" : null },
+      : {
+          installed,
+          command: installed ? "/opt/coffer-hook-shim" : null,
+          supported: opts.supported ?? true,
+        },
     isPending: false,
     error: opts.statusError ?? null,
   } as unknown as ReturnType<typeof useAgentHookStatus>);
@@ -74,5 +80,32 @@ describe("AgentHookToggle", () => {
     expect(screen.getByText(/doesn't support a session-start hook/i)).toBeInTheDocument();
     fireEvent.click(sw);
     expect(mutate).not.toHaveBeenCalled();
+  });
+});
+
+describe("unsupported agent types", () => {
+  test("a successful status with supported:false disables the switch", () => {
+    const mutate = vi.fn();
+    stub(false, mutate, { supported: false });
+    render(<AgentHookToggle name="oc" />);
+    const sw = screen.getByRole("switch");
+    expect(sw).toBeDisabled();
+    // The control must never fire a mutation that would 422.
+    fireEvent.click(sw);
+    expect(mutate).not.toHaveBeenCalled();
+  });
+
+  test("supported:true renders an enabled switch", () => {
+    stub(false, vi.fn(), { supported: true });
+    render(<AgentHookToggle name="cur" />);
+    expect(screen.getByRole("switch")).toBeEnabled();
+  });
+
+  test("legacy 422 status error still disables the switch", () => {
+    stub(false, vi.fn(), {
+      statusError: new ApiError("HOOK_INSTALL_UNSUPPORTED", "not supported"),
+    });
+    render(<AgentHookToggle name="oc" />);
+    expect(screen.getByRole("switch")).toBeDisabled();
   });
 });

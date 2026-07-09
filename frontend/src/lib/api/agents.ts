@@ -49,6 +49,8 @@ export interface McpInstallStatus {
 export interface HookInstallStatus {
   installed: boolean;
   command: string | null;
+  /** False when the agent's manifest declares no context injection. */
+  supported?: boolean;
 }
 
 /** One of the agent's OWN native per-project memory stores (read-only scan). */
