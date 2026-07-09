@@ -15,6 +15,7 @@ from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.message import (
+    AttachmentBlock,
     ContentBlock,
     Message,
     TextBlock,
@@ -92,6 +93,9 @@ def _block_out(block: ContentBlock) -> ContentBlockOut:
             output=block.output,
             error=block.error,
         )
+    if isinstance(block, AttachmentBlock):
+        # Reference only — filename/mime for the chip; never the local path.
+        return ContentBlockOut(type="attachment", filename=block.filename, mime=block.mime)
     # Unreachable given the ContentBlock union, but keeps mypy happy.
     raise TypeError(f"unhandled ContentBlock type: {type(block)!r}")  # pragma: no cover
 

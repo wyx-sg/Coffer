@@ -966,6 +966,36 @@ status / notify`.
   file drives a turn like a photo does instead of hitting the "send text, a
   photo, or a file" reply
 
+### Scenario: an inbound attachment is persisted as a reference on the user message
+
+- **Given** a paired channel driving a turn with an image attachment
+- **When** the turn starts
+- **Then** the persisted user message carries an `AttachmentBlock` reference
+  (path, mime, filename — never the bytes) after its text, so the attachment
+  survives in history
+
+### Scenario: a later turn re-materialises the attachment from history
+
+- **Given** a persisted user message that carries an attachment reference
+- **When** the turn task runs (including after a daemon restart, when nothing is
+  threaded down)
+- **Then** the adapter receives an `Attachment` with the reference's path/mime,
+  re-materialised from the last user message in history — the single source of
+  truth
+
+### Scenario: the message API exposes an attachment block without leaking the path
+
+- **Given** a user message with an attachment reference
+- **When** the client reads the conversation's messages
+- **Then** the content block has `type=attachment` with `filename` and `mime`,
+  and no `path` field is present on the wire
+
+### Scenario: the media dir prune deletes stale files and keeps fresh ones
+
+- **Given** the channel-media dir with one file older than 30 days and one recent
+- **When** the retention sweep runs
+- **Then** the stale file is deleted and the recent one is kept
+
 ## Channels as a management plane (north star)
 
 Channels are managed the way Coffer manages MCP servers, memory, and skills:
@@ -1058,10 +1088,16 @@ capabilities the official personal bridges lack.
   of one group no longer collide on a single conversation (the "a turn is
   already running" error). Pairing/owner identity stays on the peer row.
 - **FR-033**: Inbound attachments are visible on later turns. The persisted user
-  message records an attachment *reference* (path, mime, filename; the bytes
-  stay in the media dir, never the chat DB); on any later turn the referenced
-  attachments are re-materialized for the agent, so a follow-up "can you still
-  see that image?" works. The media dir is bounded by a retention policy.
+  message records an attachment *reference* as an `AttachmentBlock` (path, mime,
+  filename; the bytes stay in the media dir, never the chat DB) — the single
+  source of truth. The turn task re-materializes the current turn's attachments
+  by reading them back from the last user message in history (not a threaded
+  param), so materialization survives a daemon restart and stays consistent with
+  what the web shows; scope is within the conversation (no cross-session /
+  agent-switch full-history replay). The web Chat page renders the reference as a
+  compact `📎 filename · mime` chip; the local path is never emitted to the wire.
+  The media dir is bounded by a 30-day mtime retention prune on the retention
+  cadence (bytes are re-downloadable; no size cap). See ADR-041.
 
 ### C. Group UX and gating
 

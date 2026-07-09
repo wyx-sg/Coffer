@@ -31,6 +31,8 @@ from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.kind import make_mcp_kind
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
+from coffer.application.retention_service import RetentionService
+from coffer.infrastructure.channel.media_retention import default_media_sweep
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
@@ -182,6 +184,21 @@ def build_prunable_registry() -> PrunableRegistry:
         )
     )
     return registry
+
+
+def build_retention_service(sm: Any, *, audit: AuditService) -> RetentionService:
+    """Compose the ``RetentionService`` (registry + repo + audit) and bind the
+    channel-media dir sweep (FR-033) at composition root, so the application
+    layer never imports the infrastructure prune. The caller runs
+    ``initialize_defaults`` and drives the worker cadence."""
+    from coffer.infrastructure.persistence.repos import SqlAlchemyRetentionRepo
+
+    return RetentionService(
+        registry=build_prunable_registry(),
+        repo=SqlAlchemyRetentionRepo(sm),
+        audit=audit,
+        media_sweep=default_media_sweep,
+    )
 
 
 def reaper_kwargs_from_env() -> dict[str, float]:

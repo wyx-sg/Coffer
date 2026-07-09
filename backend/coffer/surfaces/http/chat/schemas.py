@@ -39,15 +39,19 @@ class ErrorOut(BaseModel):
 
 
 class ContentBlockOut(BaseModel):
-    """Wire representation of a ContentBlock (text | tool_use | tool_result)."""
+    """Wire representation of a ContentBlock (text | tool_use | tool_result |
+    attachment). ``filename``/``mime`` describe an ``attachment`` reference; the
+    local ``path`` is deliberately NOT surfaced (leak/security — FR-033)."""
 
-    type: Literal["text", "tool_use", "tool_result"]
+    type: Literal["text", "tool_use", "tool_result", "attachment"]
     text: str | None = None
     tool_use_id: str | None = None
     tool_name: str | None = None
     tool_input: dict[str, Any] | None = None
     output: dict[str, Any] | None = None
     error: str | None = None
+    filename: str | None = None
+    mime: str | None = None
 
 
 # ---------------------------------------------------------------------------

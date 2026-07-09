@@ -2,10 +2,11 @@
 
 > 中文版: [ADR-038-channel-media.zh.md](ADR-038-channel-media.zh.md)
 
-**Status**: Accepted
+**Status**: Accepted (the v1 "defer a persisted attachment block" decision is
+superseded by [ADR-041](ADR-041-persisted-attachment-reference.md) — FR-033)
 **Date**: 2026-07-04
 **Deciders**: Yuxing Wu
-**Related**: spec `009-channels` (FR-020); builds on [ADR-014](ADR-014-channel-adapter-framework.md) (channel adapter framework)
+**Related**: spec `009-channels` (FR-020); builds on [ADR-014](ADR-014-channel-adapter-framework.md) (channel adapter framework); superseded in part by [ADR-041](ADR-041-persisted-attachment-reference.md)
 
 ## Context
 
