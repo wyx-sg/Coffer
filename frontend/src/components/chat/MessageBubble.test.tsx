@@ -15,6 +15,17 @@ const makeAssistant = (overrides: Partial<Message>): Message => ({
   ...overrides,
 });
 
+const makeUser = (overrides: Partial<Message>): Message => ({
+  id: "u-1",
+  conversation_id: "c-1",
+  seq: 0,
+  role: "user",
+  content: [{ type: "text", text: "hi" }],
+  status: "complete",
+  created_at: "2026-01-01T00:00:00Z",
+  ...overrides,
+});
+
 describe("MessageBubble", () => {
   test("shows a notice for a failed assistant message", () => {
     render(<MessageBubble message={makeAssistant({ status: "failed" })} />);
@@ -47,5 +58,22 @@ describe("MessageBubble", () => {
     // a blank bubble.
     render(<MessageBubble message={makeAssistant({ status: "streaming", content: [] })} />);
     expect(screen.getByText(/thinking/i)).toBeInTheDocument();
+  });
+
+  test("renders an attachment chip for a user message with an attachment block", () => {
+    // FR-033: a channel-media attachment reference shows as a compact chip on
+    // the user bubble (filename · mime), never a path.
+    render(
+      <MessageBubble
+        message={makeUser({
+          content: [
+            { type: "text", text: "look" },
+            { type: "attachment", filename: "photo.jpg", mime: "image/jpeg" },
+          ],
+        })}
+      />,
+    );
+    expect(screen.getByText("photo.jpg")).toBeInTheDocument();
+    expect(screen.getByText(/image\/jpeg/)).toBeInTheDocument();
   });
 });

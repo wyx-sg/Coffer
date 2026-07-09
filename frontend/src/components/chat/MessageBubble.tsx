@@ -27,6 +27,10 @@ function extractText(blocks: ContentBlock[]): string {
     .join("");
 }
 
+function attachmentBlocks(blocks: ContentBlock[]): ContentBlock[] {
+  return blocks.filter((b) => b.type === "attachment");
+}
+
 export function MessageBubble({ message, live }: Props) {
   const { t } = useTranslation();
   const isUser = message ? message.role === "user" : false;
@@ -34,11 +38,25 @@ export function MessageBubble({ message, live }: Props) {
 
   if (isUser && message) {
     const text = extractText(message.content);
+    const attachments = attachmentBlocks(message.content);
     return (
-      <div className="flex justify-end">
-        <div className="max-w-[75%] whitespace-pre-wrap break-words rounded-2xl rounded-tr-sm bg-primary/10 px-4 py-2.5 text-sm text-foreground">
-          {text}
-        </div>
+      <div className="flex flex-col items-end gap-1">
+        {text && (
+          <div className="max-w-[75%] whitespace-pre-wrap break-words rounded-2xl rounded-tr-sm bg-primary/10 px-4 py-2.5 text-sm text-foreground">
+            {text}
+          </div>
+        )}
+        {attachments.map((a, i) => (
+          <div
+            key={`${a.filename ?? "file"}-${i}`}
+            className="flex max-w-[75%] items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground"
+            title={a.mime ?? undefined}
+          >
+            <span aria-hidden="true">📎</span>
+            <span className="truncate">{a.filename ?? "attachment"}</span>
+            {a.mime && <span className="opacity-70">· {a.mime}</span>}
+          </div>
+        ))}
       </div>
     );
   }

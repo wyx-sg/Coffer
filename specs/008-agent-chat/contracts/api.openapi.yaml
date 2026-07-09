@@ -551,13 +551,17 @@ components:
       type: object
       required: [type]
       properties:
-        type: { type: string, enum: [text, tool_use, tool_result] }
+        type: { type: string, enum: [text, tool_use, tool_result, attachment] }
         text: { type: string, nullable: true }
         tool_use_id: { type: string, nullable: true }
         tool_name: { type: string, nullable: true }
         tool_input: { type: object, additionalProperties: true, nullable: true }
         output: { type: object, additionalProperties: true, nullable: true }
         error: { type: string, nullable: true }
+        # An `attachment` block references channel media by filename/mime only;
+        # the local path is never emitted to the wire (FR-033).
+        filename: { type: string, nullable: true }
+        mime: { type: string, nullable: true }
 
     MessageOut:
       type: object

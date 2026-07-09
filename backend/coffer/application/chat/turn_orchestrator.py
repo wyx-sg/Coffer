@@ -47,7 +47,7 @@ from coffer.application.chat.turn_state import active_turns as active_turns
 from coffer.application.chat.turn_state import clear_active_turns as clear_active_turns
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import AgentEvent, QueueChanged, TurnError
-from coffer.domain.chat.message import Role, TextBlock
+from coffer.domain.chat.message import AttachmentBlock, Role, TextBlock
 from coffer.domain.errors import TurnInProgress
 
 log = logging.getLogger(__name__)
@@ -254,8 +254,11 @@ class TurnOrchestrator:
         """Reserve the slot, build the adapter, persist the user message, spawn the
         turn task. Callers guarantee no turn is currently active.
 
-        ``attachments`` reach the adapter for this turn only (materialised into the
-        agent request); the persisted user message keeps just ``user_text``."""
+        ``attachments`` (channel media) are persisted INTO the user message as
+        ``AttachmentBlock`` references (path/mime/filename, no bytes) after the
+        text — the single source of truth. The turn task re-materialises them for
+        the adapter by reading them back from history (FR-033), so they survive a
+        daemon restart and are not threaded down as a separate param."""
         bus = self._bus_for(conversation_id)
         active = _ActiveTurn(bus=bus, primary_queue=primary_queue)
         # Reserve synchronously — no ``await`` before this insert.
@@ -268,7 +271,13 @@ class TurnOrchestrator:
             await self._chat.append_message(
                 conversation_id,
                 role=Role.USER,
-                content=[TextBlock(text=user_text)],
+                content=[
+                    TextBlock(text=user_text),
+                    *(
+                        AttachmentBlock(path=a.path, mime=a.mime, filename=a.filename)
+                        for a in attachments
+                    ),
+                ],
                 status="complete",
             )
         except BaseException:
@@ -286,7 +295,6 @@ class TurnOrchestrator:
                 adapter=adapter,
                 chat=self._chat,
                 audit=self._audit,
-                attachments=attachments,
             ),
             name=f"turn:{conversation_id}",
         )

@@ -845,6 +845,32 @@ status / notify`。
   非图片 mime，因此该文件像照片一样驱动一次 turn，而不是命中"发送文本、图片或文件"
   的回复
 
+### Scenario: an inbound attachment is persisted as a reference on the user message
+
+- **Given** 一个已配对的 channel，用一张图片附件驱动一次 turn
+- **When** 该 turn 开始
+- **Then** 持久化的用户消息在其文本之后携带一个 `AttachmentBlock` 引用（path、mime、
+  filename——绝不含 bytes），因此该附件留存在历史里
+
+### Scenario: a later turn re-materialises the attachment from history
+
+- **Given** 一条携带附件引用的持久化用户消息
+- **When** turn 任务运行（包括守护进程重启后、没有任何参数被向下线程传递时）
+- **Then** adapter 收到一个带该引用 path/mime 的 `Attachment`，从历史里最后一条用户
+  消息重新物化——单一事实来源
+
+### Scenario: the message API exposes an attachment block without leaking the path
+
+- **Given** 一条带附件引用的用户消息
+- **When** 客户端读取该会话的消息
+- **Then** 内容块为 `type=attachment`，带 `filename` 与 `mime`，线上不出现 `path` 字段
+
+### Scenario: the media dir prune deletes stale files and keeps fresh ones
+
+- **Given** 媒体目录里有一个超过 30 天的文件和一个较新的文件
+- **When** 保留清扫运行
+- **Then** 陈旧文件被删除，较新的文件被保留
+
 ## Channels as a management plane（北极星）
 
 channel 被管理的方式，与 Coffer 管理 MCP server、memory、skill 的方式一致：在一处
@@ -915,10 +941,13 @@ Coffer-hosted channel 与它们并不冗余——它是通往统一、本地、�
   而非只按 peer。一个 DM（`thread_id=""`）是一个会话；群里的每个线程都是独立的——各有
   历史、各有 turn 锁。一个群里不同线程的并发 turn 不再冲突在单一会话上（那个「a turn is
   already running」错误）。配对/owner 身份仍留在 peer 行上。
-- **FR-033**: 入站附件在后续 turn 上仍可见。持久化的用户消息记录一个附件*引用*（path、
-  mime、filename；bytes 留在媒体目录、绝不进 chat DB）；在任何后续 turn 上，被引用的附件
-  为 agent 重新物化，于是一句后续的「你还能看到那张图吗？」也能工作。媒体目录由一条保留
-  策略界定大小。
+- **FR-033**: 入站附件在后续 turn 上仍可见。持久化的用户消息把附件*引用*记为一个
+  `AttachmentBlock`（path、mime、filename；bytes 留在媒体目录、绝不进 chat DB）——单一
+  事实来源。turn 任务通过从历史里最后一条用户消息读回引用来为当前 turn 重新物化附件（而
+  非向下线程传递一个参数），因此物化能在守护进程重启后存活、并与网页所见保持一致；作用域
+  限于会话内（无跨会话／切换 agent 的全历史重放）。网页 Chat 页把该引用渲染为一个紧凑的
+  `📎 filename · mime` 芯片；本地 path 绝不发到线上。媒体目录由保留节奏上的 30 天 mtime
+  清扫界定大小（bytes 可重新下载；无大小上限）。见 ADR-041。
 
 ### C. Group UX and gating
 

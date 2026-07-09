@@ -2,10 +2,11 @@
 
 > English: [ADR-038-channel-media.md](ADR-038-channel-media.md)
 
-**状态**：Accepted
+**状态**：Accepted（其中 v1「推迟持久化附件块」的决定被
+[ADR-041](ADR-041-persisted-attachment-reference.zh.md) 取代——FR-033）
 **日期**：2026-07-04
 **决策者**：Yuxing Wu
-**相关**：spec `009-channels`（FR-020）；构建于 [ADR-014](ADR-014-channel-adapter-framework.zh.md)（channel adapter 框架）
+**相关**：spec `009-channels`（FR-020）；构建于 [ADR-014](ADR-014-channel-adapter-framework.zh.md)（channel adapter 框架）；部分被 [ADR-041](ADR-041-persisted-attachment-reference.zh.md) 取代
 
 ## 背景
 

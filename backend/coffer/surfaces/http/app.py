@@ -36,7 +36,6 @@ from coffer.application.channel.kind import make_channel_kind
 from coffer.application.embedding_config_service import EmbeddingConfigService
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.resource_service import ResourceService
-from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Kind
@@ -52,14 +51,13 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyEmbeddingConfigRepo,
     SqlAlchemyInternalEngineConfigRepo,
     SqlAlchemyResourceRepo,
-    SqlAlchemyRetentionRepo,
 )
 from coffer.surfaces.http import cors, daemon_routes
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_skill_wiring import wire_agent_and_skill_kinds
 from coffer.surfaces.http.app_embedding_composition import build_embedding_resolvers
 from coffer.surfaces.http.app_mcp_composition import (
-    build_prunable_registry,
+    build_retention_service,
     reaper_kwargs_from_env,
     wire_mcp_kind,
 )
@@ -153,12 +151,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         # credential must fail registration with a named ref, no partial state).
         credentials=credential_store,
     )
-    registry = build_prunable_registry()
-    retention_svc = RetentionService(
-        registry=registry,
-        repo=SqlAlchemyRetentionRepo(sm),
-        audit=audit,
-    )
+    retention_svc = build_retention_service(sm, audit=audit)
     await retention_svc.initialize_defaults()
     embedding_config_svc = EmbeddingConfigService(
         repo=SqlAlchemyEmbeddingConfigRepo(sm),

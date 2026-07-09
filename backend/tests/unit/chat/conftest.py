@@ -203,11 +203,13 @@ class FakeAgentAdapter:
         self._events = events
         self.model_id = model_id
         self.recorded_histories: list[list[Message]] = []
+        self.recorded_attachments: list[list[Any]] = []
 
     async def run_turn(
-        self, *, history: Sequence[Message], **_: object
+        self, *, history: Sequence[Message], attachments: Sequence[Any] = (), **_: object
     ) -> AsyncIterator[AgentEvent]:
         self.recorded_histories.append(list(history))
+        self.recorded_attachments.append(list(attachments))
         return self._yield_events()
 
     async def _yield_events(self) -> AsyncIterator[AgentEvent]:
