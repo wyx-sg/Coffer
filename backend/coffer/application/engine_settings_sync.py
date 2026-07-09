@@ -70,8 +70,8 @@ class EngineSettingsSyncState:
             docs.append(("internal-engine", {"model": internal.model}))
         return docs, owned
 
-    async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[str]:
-        errors: list[str] = []
+    async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[tuple[str, str]]:
+        errors: list[tuple[str, str]] = []
         for path, doc in docs:
             try:
                 if path == "embedding":
@@ -83,7 +83,7 @@ class EngineSettingsSyncState:
                     if model != current.model:
                         await self._internal.update(model=model, actor="sync")
             except Exception as e:
-                errors.append(f"settings/{path}: {e}")
+                errors.append((path, str(e)))
         return errors
 
     async def _import_embedding(self, doc: dict[str, Any]) -> None:

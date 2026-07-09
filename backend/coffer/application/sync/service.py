@@ -167,7 +167,9 @@ class SyncService:
         identity = await self._identity.get()
         prior = await self._config.get_state()
         await self._exporter.export(
-            quarantined=prior.quarantined_refs, machine_id=identity.machine_id
+            quarantined=prior.quarantined_refs,
+            machine_id=identity.machine_id,
+            failed_state=prior.failed_state_paths,
         )
         await self._refresh_machine_entry(identity)
         await asyncio.to_thread(self._git.commit_all, f"coffer sync from {identity.display_name}")
@@ -346,6 +348,7 @@ class SyncService:
                 last_error=message,
                 locked_refs=prior.locked_refs,
                 quarantined_refs=prior.quarantined_refs,
+                failed_state_paths=prior.failed_state_paths,
             )
         )
 
@@ -379,6 +382,7 @@ class SyncService:
             last_error=last_error,
             locked_refs=result.locked_refs,
             quarantined_refs=sorted(set(result.quarantined_refs)),
+            failed_state_paths=sorted(set(result.failed_state_paths)),
         )
         saved = await self._config.set_state(state)
         await self._audit.record(

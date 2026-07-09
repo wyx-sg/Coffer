@@ -13,6 +13,7 @@ from coffer.application.embedding_config_service import EmbeddingConfigService
 from coffer.application.engine_settings_sync import EngineSettingsSyncState
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.mcp.sync_state import McpPreferenceSyncState
+from coffer.domain.sync.models import SyncStatus
 from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceRepo
 from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
@@ -107,3 +108,107 @@ async def test_owned_prefix_never_crosses_sibling_names(tmp_path, remote) -> Non
     await a.service.run()
     files = a.workspace.list_files()
     assert "state/mcp-preferences/jira-internal.yaml" in files  # preserved
+
+
+class _FlakyOnce:
+    """Wrap a provider so its first import raises (transient failure)."""
+
+    def __init__(self, inner) -> None:  # type: ignore[no-untyped-def]
+        self._inner = inner
+        self.area = inner.area
+        self._failed = False
+
+    async def export_docs(self):  # type: ignore[no-untyped-def]
+        return await self._inner.export_docs()
+
+    async def import_docs(self, docs):  # type: ignore[no-untyped-def]
+        if not self._failed and docs:
+            self._failed = True
+            return [(path, "transient import failure") for path, _doc in docs]
+        return await self._inner.import_docs(docs)
+
+
+async def test_failed_state_import_never_reverts_the_fleet(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """A state doc whose import failed is preserved by the next export instead
+    of being owned-replaced with this machine's stale value (review #288
+    finding 2): the retry sees the foreign value and eventually converges."""
+
+    def flaky_providers(resources, sm):  # type: ignore[no-untyped-def]
+        providers = _providers(resources, sm)
+        return [providers[0], _FlakyOnce(providers[1])]  # engine settings flaky
+
+    a = await _make_machine(
+        "A", tmp_path / "A", remote, create_key=True, state_providers_factory=_providers
+    )
+    internal_a = InternalEngineConfigService(
+        repo=SqlAlchemyInternalEngineConfigRepo(a.sm),
+        audit=AuditService(SqlAlchemyAuditRepo(a.sm)),
+    )
+    await internal_a.update(model="v1", actor="test")
+    await a.service.run()
+
+    # B's first import of the settings doc fails transiently.
+    b = await _make_machine(
+        "B", tmp_path / "B", remote, create_key=True, state_providers_factory=flaky_providers
+    )
+    state_b = await b.service.run()
+    assert state_b.status is SyncStatus.ERROR
+    assert "settings/internal-engine" in state_b.failed_state_paths
+
+    # B's NEXT run must not clobber the doc with its local default (None) —
+    # it retries the preserved foreign doc and converges.
+    state_b = await b.service.run()
+    internal_b = InternalEngineConfigService(
+        repo=SqlAlchemyInternalEngineConfigRepo(b.sm),
+        audit=AuditService(SqlAlchemyAuditRepo(b.sm)),
+    )
+    assert (await internal_b.get()).model == "v1"
+    assert state_b.failed_state_paths == []
+
+    # And A never sees a revert.
+    await a.service.run()
+    assert (await internal_a.get()).model == "v1"
+
+
+async def test_embedding_settings_round_trip(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """The embedding doc's full field set travels (review #288 finding 3)."""
+    a = await _make_machine(
+        "A", tmp_path / "A", remote, create_key=True, state_providers_factory=_providers
+    )
+    embedding_a = EmbeddingConfigService(
+        repo=SqlAlchemyEmbeddingConfigRepo(a.sm),
+        audit=AuditService(SqlAlchemyAuditRepo(a.sm)),
+        credentials=None,
+    )
+    await embedding_a.update(
+        enabled=True,
+        provider="openai",
+        model="text-embedding-3-small",
+        base_url="https://api.example.com/v1",
+        credential_ref="embedding/key",
+        secret_value=None,
+        dimensions=512,
+        default_chunk_size=800,
+        default_chunk_overlap=80,
+        actor="test",
+    )
+    await a.service.run()
+
+    b = await _make_machine(
+        "B", tmp_path / "B", remote, create_key=True, state_providers_factory=_providers
+    )
+    await b.service.run()
+    embedding_b = EmbeddingConfigService(
+        repo=SqlAlchemyEmbeddingConfigRepo(b.sm),
+        audit=AuditService(SqlAlchemyAuditRepo(b.sm)),
+        credentials=None,
+    )
+    got = await embedding_b.get()
+    assert (got.enabled, got.provider, got.model, got.base_url, got.credential_ref) == (
+        True,
+        "openai",
+        "text-embedding-3-small",
+        "https://api.example.com/v1",
+        "embedding/key",
+    )
+    assert (got.dimensions, got.default_chunk_size, got.default_chunk_overlap) == (512, 800, 80)

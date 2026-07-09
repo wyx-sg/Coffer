@@ -73,8 +73,8 @@ class McpPreferenceSyncState:
                 )
         return docs, owned
 
-    async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[str]:
-        errors: list[str] = []
+    async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[tuple[str, str]]:
+        errors: list[tuple[str, str]] = []
         by_name = {r.name: r.id for r in await self._resources.list(kind="mcp_server")}
         wanted_by_server: dict[str, set[tuple[str, str]]] = {}
         for _path, doc in docs:
@@ -108,5 +108,5 @@ class McpPreferenceSyncState:
                     elif existing.enabled:
                         await self._prefs.set_enabled(resource_id, typed, cap_key, False)
             except Exception as e:
-                errors.append(f"mcp-preferences/{server}: {e}")
+                errors.append((server, str(e)))
         return errors

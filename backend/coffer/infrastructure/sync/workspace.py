@@ -24,6 +24,7 @@ from coffer.domain.sync.manifest import Manifest
 from coffer.domain.sync.models import MachineEntry, Tombstone
 from coffer.domain.sync.serialization import ResourceDoc, parse_resource_doc
 from coffer.infrastructure.sync.paths import mirrored_trees as _default_mirrored_trees
+from coffer.infrastructure.sync.tree_mirror import _mirror_tree, _replace_tree
 
 _MANIFEST = "manifest.json"
 _RESOURCES = "resources"
@@ -42,60 +43,6 @@ _STATE = "state"
 #: changelog) are likewise derived/machine-local — the topic docs themselves DO
 #: sync as the source of truth.
 DERIVED_INDEX_NAMES = frozenset({"MEMORY.md", "INDEX.md", "consolidation-log.md"})
-
-
-def _replace_tree(
-    src: pathlib.Path, dst: pathlib.Path, exclude: frozenset[str] = frozenset()
-) -> None:
-    """Make ``dst`` a copy of ``src`` (empty when ``src`` is absent), skipping
-    any basename in ``exclude``."""
-    if dst.exists():
-        shutil.rmtree(dst)
-    if src.exists():
-        ignore = shutil.ignore_patterns(*exclude) if exclude else None
-        shutil.copytree(src, dst, ignore=ignore)
-    else:
-        dst.mkdir(parents=True, exist_ok=True)
-
-
-def _tree_files(root: pathlib.Path, exclude: frozenset[str]) -> dict[pathlib.Path, pathlib.Path]:
-    """rel-path -> absolute path for every file under ``root``, skipping any
-    path with an excluded basename component."""
-    if not root.exists():
-        return {}
-    out: dict[pathlib.Path, pathlib.Path] = {}
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        rel = path.relative_to(root)
-        if any(part in exclude for part in rel.parts):
-            continue
-        out[rel] = path
-    return out
-
-
-def _mirror_tree(
-    src: pathlib.Path, dst: pathlib.Path, exclude: frozenset[str] = frozenset()
-) -> None:
-    """Converge ``dst`` on ``src`` by copying only changed files and deleting
-    only files gone from ``src`` — never a blanket rmtree.
-
-    Used for the workspace→live direction: the live trees are watched by the
-    auto-sync watcher (a full rewrite would storm it with spurious events) and
-    hold machine-local derived files (``exclude``) that a rewrite would delete.
-    """
-    dst.mkdir(parents=True, exist_ok=True)
-    src_files = _tree_files(src, exclude)
-    dst_files = _tree_files(dst, exclude)
-    for rel, src_path in src_files.items():
-        target = dst_files.get(rel)
-        if target is not None and target.read_bytes() == src_path.read_bytes():
-            continue
-        out = dst / rel
-        out.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(src_path, out)
-    for rel in dst_files.keys() - src_files.keys():
-        (dst / rel).unlink(missing_ok=True)
 
 
 class Workspace:
@@ -321,6 +268,7 @@ class Workspace:
         area: str,
         docs: Sequence[tuple[str, Mapping[str, object]]],
         owned_prefixes: Collection[str] = (),
+        preserve: Collection[str] = (),
     ) -> None:
         """Prefix-scoped reconcile, never a blanket replace: docs outside
         ``owned_prefixes`` belong to entities this machine does not know
@@ -328,7 +276,8 @@ class Workspace:
         a blanket rmtree would erase the fleet's state and ping-pong forever
         against the machines that keep re-publishing it."""
         target = self._root / _STATE / area
-        wanted = {rel for rel, _doc in docs}
+        kept = set(preserve)
+        wanted = {rel for rel, _doc in docs if rel not in kept}
         if target.exists():
             for path in sorted(target.rglob("*.yaml")):
                 rel = path.relative_to(target).with_suffix("").as_posix()
@@ -339,9 +288,11 @@ class Workspace:
                     rel == prefix.rstrip("/") or rel.startswith(prefix.rstrip("/") + "/")
                     for prefix in owned_prefixes
                 )
-                if owned and rel not in wanted:
+                if owned and rel not in wanted and rel not in kept:
                     path.unlink(missing_ok=True)
         for rel, doc in docs:
+            if rel in kept:
+                continue  # import failed here: the foreign doc must survive
             path = target / f"{rel}.yaml"
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(
