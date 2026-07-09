@@ -353,8 +353,23 @@ def wire_chat(
         OpencodeProvider(conversations=conv_repo, resolve_key=_key_resolver(AgentType.OPENCODE)),
         display_name="opencode",
     )
+
+    # hermes has no working upstream hook, so its session context lives in a
+    # static SOUL.md block (ADR-042 INSTRUCTIONS_BLOCK) that this closure
+    # re-renders before each Coffer-driven turn. Lazy getter: the hook service
+    # is wired by agent_skill_wiring, after this module.
+    async def _refresh_hermes_blocks() -> int:
+        from coffer.surfaces.http.dependencies import get_agent_hook_service
+
+        count: int = await get_agent_hook_service().refresh_blocks_for_type(AgentType.HERMES)
+        return count
+
     registry.register(
-        HermesProvider(conversations=conv_repo, resolve_key=_key_resolver(AgentType.HERMES)),
+        HermesProvider(
+            conversations=conv_repo,
+            resolve_key=_key_resolver(AgentType.HERMES),
+            refresh_context=_refresh_hermes_blocks,
+        ),
         display_name="Hermes",
     )
     # Cursor is locked to Cursor's own backend and uses its OWN auth

@@ -263,3 +263,102 @@ async def test_supported_true_for_agents_with_shell_injection(agent_bundle, tmp_
     await _register_cursor(agent_bundle, tmp_path)
     assert (await agent_bundle.hook.status("cc")).supported is True
     assert (await agent_bundle.hook.status("cur")).supported is True
+
+
+# --- hermes instructions block (ADR-042 INSTRUCTIONS_BLOCK) ---------------------
+
+
+async def _register_hermes(bundle, home: pathlib.Path):
+    (home / ".hermes" / "skills").mkdir(parents=True, exist_ok=True)
+    await bundle.svc.register(agent_type=AgentType.HERMES, name="hm", actor="cli")
+
+
+@pytest.mark.acceptance(
+    spec="004-agent-registry", scenario="install Coffer's session-context block into Hermes"
+)
+async def test_install_hermes_renders_block_into_soul_md(agent_bundle, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_hermes(agent_bundle, tmp_path)
+    soul_md = tmp_path / ".hermes" / "SOUL.md"
+    soul_md.write_text("# My hermes persona\n", encoding="utf-8")
+
+    st = await agent_bundle.hook.install("hm", actor="ui")
+    assert st.installed is True
+    assert st.command is None  # a block carries the payload itself, no command
+
+    text = soul_md.read_text()
+    assert text.startswith("# My hermes persona")  # user content preserved
+    assert "coffer:session-context:start" in text
+    assert "RULES BUNDLE" in text  # the FR-044 payload, rendered at install time
+    assert (tmp_path / ".hermes" / "SOUL.md.bak").exists()
+
+    rows = await agent_bundle.audit.query(
+        kind="agent", name="hm", event_type=AuditEventType.AGENT_HOOK_INSTALLED.value
+    )
+    assert len(rows) == 1
+    assert (await agent_bundle.hook.status("hm")).installed is True
+    assert (await agent_bundle.hook.status("hm")).supported is True
+
+
+@pytest.mark.acceptance(
+    spec="004-agent-registry", scenario="uninstalling the Hermes context block is a true inverse"
+)
+async def test_uninstall_hermes_block_restores_user_document(agent_bundle, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_hermes(agent_bundle, tmp_path)
+    soul_md = tmp_path / ".hermes" / "SOUL.md"
+    original = "# My hermes persona\n\nAnswer in French.\n"
+    soul_md.write_text(original, encoding="utf-8")
+
+    await agent_bundle.hook.install("hm", actor="ui")
+    st = await agent_bundle.hook.uninstall("hm", actor="ui")
+    assert st.installed is False
+    assert soul_md.read_text() == original
+
+    rows = await agent_bundle.audit.query(
+        kind="agent", name="hm", event_type=AuditEventType.AGENT_HOOK_UNINSTALLED.value
+    )
+    assert len(rows) == 1
+    # Uninstalling again is a no-op success that writes and audits nothing.
+    await agent_bundle.hook.uninstall("hm", actor="ui")
+    rows = await agent_bundle.audit.query(
+        kind="agent", name="hm", event_type=AuditEventType.AGENT_HOOK_UNINSTALLED.value
+    )
+    assert len(rows) == 1
+
+
+@pytest.mark.acceptance(
+    spec="004-agent-registry", scenario="a Coffer-driven turn refreshes the Hermes context block"
+)
+async def test_refresh_blocks_rerenders_installed_hermes_agents(
+    agent_bundle, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_hermes(agent_bundle, tmp_path)
+    soul_md = tmp_path / ".hermes" / "SOUL.md"
+    await agent_bundle.hook.install("hm", actor="ui")
+
+    # The payload changes between turns (new rules/memory); the pre-turn refresh
+    # re-renders the block in place without a new audit event.
+    agent_bundle.hook._session_context = _fresh_payload
+    refreshed = await agent_bundle.hook.refresh_blocks_for_type(AgentType.HERMES)
+    assert refreshed == 1
+    text = soul_md.read_text()
+    assert "FRESH BUNDLE" in text
+    assert "RULES BUNDLE" not in text
+    assert text.count("coffer:session-context:start") == 1
+    rows = await agent_bundle.audit.query(
+        kind="agent", name="hm", event_type=AuditEventType.AGENT_HOOK_INSTALLED.value
+    )
+    assert len(rows) == 1  # refresh does not audit
+
+
+async def _fresh_payload() -> str:
+    return "FRESH BUNDLE"
+
+
+async def test_refresh_skips_agents_without_an_installed_block(agent_bundle, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_hermes(agent_bundle, tmp_path)  # registered but not installed
+    assert await agent_bundle.hook.refresh_blocks_for_type(AgentType.HERMES) == 0
+    assert not (tmp_path / ".hermes" / "SOUL.md").exists()

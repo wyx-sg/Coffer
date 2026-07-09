@@ -168,15 +168,21 @@ def _opencode_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
 
 def _hermes_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
     # Hermes' config.yaml (YAML) holds `mcp_servers`, the `memory` toggles, and
-    # the model/provider block. AGENTS.md is its human-authored instructions file.
+    # the model/provider block. SOUL.md is the ONLY instruction file hermes
+    # reads from its home dir (`prompt_builder.load_soul_md`, identity slot #1,
+    # every platform incl. ACP) — AGENTS.md is resolved against the session
+    # *cwd* only (`build_context_files_prompt`: "AGENTS.md (cwd only)"), so a
+    # `~/.hermes/AGENTS.md` is dead weight and is not allowlisted. Both facts
+    # probe-verified against hermes v0.18.0 (marker in SOUL.md reaches the
+    # system prompt; marker in ~/.hermes/AGENTS.md does not).
     return (
         ConfigFileSpec(
             "config", "Config (config.yaml)", cfg / "config.yaml", ConfigFileFormat.YAML
         ),
         ConfigFileSpec(
-            "instructions",
-            "Global instructions (AGENTS.md)",
-            cfg / "AGENTS.md",
+            "soul",
+            "Persona & global instructions (SOUL.md)",
+            cfg / "SOUL.md",
             ConfigFileFormat.MARKDOWN,
         ),
     )
@@ -296,11 +302,18 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         ),
         # Native memory IS present (the memory.memory_enabled toggle) — wired in
         # _NATIVE_MEMORY_DISABLE_TARGET below.
-        # context_injection=None: hermes' on_session_start / pre_llm_call hooks are
-        # documented but NEVER INVOKED upstream (NousResearch/hermes-agent#2817,
-        # closed as not planned) — only the tool hooks fire. There is no hook to
-        # install; INJECTION_MODE.INSTRUCTIONS_BLOCK is the intended fallback
-        # (a follow-up slice — ADR-042).
+        # hermes' on_session_start / pre_llm_call hooks are documented but NEVER
+        # INVOKED upstream (NousResearch/hermes-agent#2817, closed as not
+        # planned) — only the tool hooks fire. So context reaches hermes as a
+        # marker block Coffer renders into SOUL.md (INSTRUCTIONS_BLOCK,
+        # ADR-042) — the one file hermes injects globally (see _hermes_files):
+        # static between refreshes, re-rendered before each Coffer-driven turn.
+        # No lifecycle events; flavor is unused.
+        context_injection=ContextInjectionSpec(
+            mode=InjectionMode.INSTRUCTIONS_BLOCK,
+            config_key="soul",
+            format=ConfigFileFormat.MARKDOWN,
+        ),
         # plugins=None: hermes plugins are a different model, not managed here.
     ),
     AgentType.CURSOR: AgentDescriptor(

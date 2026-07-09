@@ -19,12 +19,15 @@ some other way. Three mechanisms exist in the wild:
     The agent has no working hook at all (Hermes: its ``on_session_start`` /
     ``pre_llm_call`` hooks are documented but never invoked upstream — see
     NousResearch/hermes-agent#2817, closed as not planned). Coffer renders the
-    same payload into a marker block in the agent's instructions file.
+    same payload into a marker block in the agent's instructions file
+    (transforms in ``instructions_block.py``), refreshed before each
+    Coffer-driven turn.
 
-Only ``SHELL_COMMAND`` is implemented today; the other two are recognised
-extension points, mirroring how :class:`~coffer.domain.agent.skill_delivery.SkillDeliveryMode`
-reserves ``RULES_MDC`` / ``EXTERNAL_DIR``. All three share one payload source:
-the daemon's ``GET /api/v1/agents/{agent}/session-context`` endpoint.
+``SHELL_COMMAND`` and ``INSTRUCTIONS_BLOCK`` are implemented; ``PLUGIN_DROP`` is
+a recognised extension point, mirroring how
+:class:`~coffer.domain.agent.skill_delivery.SkillDeliveryMode` reserves
+``RULES_MDC`` / ``EXTERNAL_DIR``. All three share one payload source: the
+daemon's ``GET /api/v1/agents/{agent}/session-context`` endpoint.
 """
 
 from __future__ import annotations
@@ -47,8 +50,8 @@ class InjectionMode(StrEnum):
     #: Coffer drops an in-process plugin file that spawns ``coffer-hook``.
     #: Recognized extension point; no agent type uses it yet.
     PLUGIN_DROP = "plugin_drop"
-    #: Coffer renders the payload into a marker block in the instructions file.
-    #: Recognized extension point; no agent type uses it yet.
+    #: Coffer renders the payload into a marker block in the instructions file
+    #: (Hermes — no working upstream hook exists).
     INSTRUCTIONS_BLOCK = "instructions_block"
 
 
@@ -116,16 +119,19 @@ def event_key(flavor: HookFlavor, event: HookEvent) -> str:
 class ContextInjectionSpec:
     """Where and how Coffer injects session context for one agent.
 
-    ``config_key`` names the allowlisted config file that holds the hooks
-    (resolved against the agent's config dir by the application layer).
-    ``events`` is the set of lifecycle events Coffer installs an entry for —
-    Codex and Cursor have no usable session-end event, so they install
-    ``SESSION_START`` only.
+    ``config_key`` names the allowlisted config file the mode writes into
+    (resolved against the agent's config dir by the application layer) — the
+    hooks file for ``SHELL_COMMAND``, the instructions file for
+    ``INSTRUCTIONS_BLOCK``. ``events`` is the set of lifecycle events Coffer
+    installs an entry for — Codex and Cursor have no usable session-end event,
+    so they install ``SESSION_START`` only; an ``INSTRUCTIONS_BLOCK`` agent has
+    no events at all (the block is not event-driven), so it declares ``()``.
+    ``flavor`` is meaningful for ``SHELL_COMMAND`` only.
     """
 
     mode: InjectionMode
     config_key: str
     format: ConfigFileFormat
-    events: tuple[HookEvent, ...]
+    events: tuple[HookEvent, ...] = ()
     flavor: HookFlavor = HookFlavor.CLAUDE
     container_key: str = HOOK_CONTAINER_KEY

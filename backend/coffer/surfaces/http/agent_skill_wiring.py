@@ -144,6 +144,16 @@ def wire_agent_and_skill_kinds(
         agent_service=agent_svc, audit=audit, store=config_file_store
     )
     agent_mcp_svc = AgentMcpService(agent_service=agent_svc, audit=audit, store=config_file_store)
+
+    # The INSTRUCTIONS_BLOCK payload (ADR-042): the FR-044 rules bundle at
+    # global scope. Resolved lazily via the dependencies getter because the
+    # memory service is wired after this module runs.
+    async def _session_context_payload() -> str:
+        from coffer.surfaces.http.dependencies import get_memory_service
+
+        payload: str = await get_memory_service().assemble_session_context(cwd=None)
+        return payload
+
     # Coffer's lifecycle-hook install (Slice 6 SessionStart/SessionEnd).
     # The hook-binary resolver lives in infrastructure; only this composition
     # root (which may import infra) injects it, keeping the application service
@@ -153,6 +163,7 @@ def wire_agent_and_skill_kinds(
         audit=audit,
         store=config_file_store,
         hook_resolver=default_hook_resolver,
+        session_context=_session_context_payload,
     )
 
     # Read-only listing of an agent's OWN native per-project memory stores
