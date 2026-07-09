@@ -20,12 +20,14 @@ import yaml
 
 from coffer.domain.sync.errors import SyncSerializationError
 from coffer.domain.sync.manifest import Manifest
+from coffer.domain.sync.models import MachineEntry
 from coffer.domain.sync.serialization import ResourceDoc, parse_resource_doc
 from coffer.infrastructure.sync.paths import mirrored_trees as _default_mirrored_trees
 
 _MANIFEST = "manifest.json"
 _RESOURCES = "resources"
 _CREDENTIALS = "credentials"
+_MACHINES = "machines"
 
 #: Files that are *derived* from the source-of-truth files and must NOT be
 #: synced — they would differ per machine and cause spurious same-path
@@ -99,6 +101,32 @@ class Workspace:
         except json.JSONDecodeError as e:
             raise SyncSerializationError(f"manifest is not valid JSON: {e}") from e
         return Manifest.from_dict(data)
+
+    # --- machine registry ----------------------------------------------------
+
+    def write_machine_entry(self, entry: MachineEntry) -> None:
+        """Write this machine's own registry entry (never another machine's)."""
+        target = self._root / _MACHINES
+        target.mkdir(parents=True, exist_ok=True)
+        (target / f"{entry.machine_id}.json").write_text(
+            json.dumps(entry.to_dict(), sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+    def read_machine_entries(self) -> list[MachineEntry]:
+        target = self._root / _MACHINES
+        if not target.exists():
+            return []
+        entries: list[MachineEntry] = []
+        for path in sorted(target.glob("*.json")):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as e:
+                raise SyncSerializationError(f"{path.name} is not valid JSON: {e}") from e
+            if not isinstance(data, dict) or "machine_id" not in data:
+                raise SyncSerializationError(f"{path.name} is not a machine entry")
+            entries.append(MachineEntry.from_dict(data))
+        return entries
 
     # --- resource docs -----------------------------------------------------
 

@@ -36,6 +36,21 @@
 
 两张表都位于 `infrastructure/sync/persistence.py`；迁移 `0017`。
 
+### `machine_identity`（单行）
+
+本机的稳定身份（ADR-043）。它是*关于*这台机器的本机状态——永不作为 vault 数据
+导出（workspace 的 `machines/` 注册项在导出时由它派生）。
+
+| Field          | Type   | Notes                                       |
+| -------------- | ------ | ------------------------------------------- |
+| `id`           | int    | `1`（CHECK 约束的单例）。                    |
+| `machine_id`   | String | 守护进程首次启动时铸造的 ULID；永不改变。    |
+| `display_name` | String | 默认取主机名；用户可编辑。                   |
+| `created_at`   | String | ISO-8601。                                   |
+| `updated_at`   | String | ISO-8601。                                   |
+
+位于 `infrastructure/sync/persistence.py`；迁移 `0042`。
+
 ## 文件系统状态（同步 workspace）
 
 默认为 `~/.coffer/sync/`（测试时可通过 `$COFFER_SYNC_ROOT` 覆盖），这是一个
@@ -43,8 +58,10 @@ git 工作树，其 `origin` 指向用户的远端。
 
 ```
 manifest.json
+machines/<machine-id>.json      每机注册项（只由其所属机器写入）
 knowledge/                      mirror of ~/.coffer/knowledge
 memory/                         mirror of ~/.coffer/memory
+skills/                         mirror of ~/.coffer/skills
 resources/<kind>/<name>.yaml    one deterministic file per config resource
 credentials/<ref>.enc           Fernet ciphertext, base64 text; never the key
 ```
@@ -54,12 +71,25 @@ credentials/<ref>.enc           Fernet ciphertext, base64 text; never the key
 | Field             | Type   | Notes                                            |
 | ----------------- | ------ | ------------------------------------------------ |
 | `schema_version`  | int    | 当 workspace 布局发生不兼容变更时递增。           |
-| `machine_id`      | String | 写入该 commit 的机器的稳定 id。                   |
-| `coffer_version`  | String | 生产者版本，用于诊断。                            |
-| `kinds`           | list   | 此 workspace 中包含的配置 kind。                  |
 
-`schema_version` 会在导入时校验；若 workspace 比正在运行的构建版本更新，则会
-快速失败（`SYNC_WORKSPACE_TOO_NEW`），与数据库的 `DB_SCHEMA_TOO_NEW` 规则相对应。
+只有 schema 版本——manifest 在每台机器上字节一致，因此永远不会发生合并冲突。
+每机信息改放在 `machines/` 区。`schema_version` 会在导入时校验；若 workspace 比
+正在运行的构建版本更新，则会快速失败（`SYNC_WORKSPACE_TOO_NEW`），与数据库的
+`DB_SCHEMA_TOO_NEW` 规则相对应。
+
+### 机器注册项（`machines/<machine-id>.json`）
+
+| Field            | Type    | Notes                                        |
+| ---------------- | ------- | -------------------------------------------- |
+| `machine_id`     | String  | 所属机器的 ULID（= 文件名）。                 |
+| `display_name`   | String  | 默认主机名；用户可编辑。                      |
+| `platform`       | String  | 如 `darwin` / `linux`。                       |
+| `os_version`     | String  | 人类可读的操作系统版本。                      |
+| `coffer_version` | String  | 生产者版本，用于诊断。                        |
+| `last_sync_at`   | String  | 该机器最近一次完成导出的 ISO-8601 时间。      |
+
+每台机器**只写自己的**注册项；仅当本次运行的提交本就非空、或注册项已超过 24 小时
+（心跳）时才重写，因此空闲机器不会产生纯注册项的提交链。
 
 ### 资源序列化（`resources/<kind>/<name>.yaml`）
 

@@ -39,9 +39,11 @@ the sync medium.
   `~/.coffer/sync/`), kept separate from the live runtime directory. Its layout:
 
   ```
-  manifest.json              # schema version + machine id + last-sync metadata
+  manifest.json              # workspace schema version (byte-identical everywhere)
+  machines/<machine-id>.json # per-machine registry entry (each machine writes only its own)
   knowledge/                 # mirror of ~/.coffer/knowledge
   memory/                    # mirror of ~/.coffer/memory
+  skills/                    # mirror of ~/.coffer/skills (master skill store)
   resources/<kind>/<name>.yaml   # one deterministic file per config resource
   credentials/<ref>.enc          # Fernet ciphertext blob (never the master key)
   ```
@@ -56,6 +58,26 @@ the sync medium.
   nothing is imported until the user resolves it. Neither side is discarded.
 - **Auto-sync** — an opt-in daemon worker that runs sync runs on file/resource
   change (debounced) and on a fixed interval. Off by default.
+
+## Machine identity
+
+Each installation mints a stable **machine id** (a ULID) the first time the
+daemon starts, persisted machine-locally (a DB singleton — it is state *about*
+this machine, never synced as vault data). A human-friendly **display name**
+defaults to the hostname and is editable.
+
+The workspace `machines/` area holds one JSON entry per machine: display name,
+platform, OS version, Coffer version, and last-sync time. **Each machine writes
+only its own entry**, so the area is conflict-free by construction. Entry-churn
+control: a machine rewrites its entry only when the run's commit is otherwise
+non-empty, or when the entry is older than 24 h (a heartbeat) — an idle machine
+MUST NOT generate an endless chain of registry-only commits.
+
+Machine identity exists so the user can see every machine attached to a vault
+(this section), and to anchor the follow-up amendments (per-resource runtime
+affinity, per-machine config overrides, tombstone provenance — see
+[ADR-043](../../docs/decisions/ADR-043-sync-machine-identity-near-real-time.md)).
+It is **not** a per-record versioning scheme.
 
 ## Configuration
 
@@ -78,12 +100,15 @@ setup, exactly as a developer's normal `git push` does.
 ## Surfaces
 
 - **CLI** — `coffer sync` command group: `init`, `status`, `run` (the default),
-  `push`, `pull`, `resolve`, `config`, `key export`, `key import`.
+  `push`, `pull`, `resolve`, `config`, `machines` (list; `--rename` for this
+  machine), `key export`, `key import`.
 - **REST** — `/api/v1/sync/*`: get/put config, get status, trigger a run,
-  resolve conflicts, export/import the master key.
+  resolve conflicts, list machines / rename this machine, export/import the
+  master key.
 - **Desktop UI** — a Sync settings panel: configure remote, toggle auto-sync,
   see status (clean / syncing / conflicted / error, last-sync time), trigger a
-  run, and resolve conflicts.
+  run, resolve conflicts, and a machines card listing every machine known to
+  the vault (display name, platform, last sync, "this machine" badge, rename).
 
 ## Credential bootstrap
 
@@ -161,6 +186,16 @@ resources that reference it cannot spawn, and status reports
 - **When** A registers a new resource
 - **Then** A pushes the change within the debounce window and B imports it on its
   next interval pull, with no manual command on either machine
+
+### Scenario: machines are visible after they sync
+
+- **Given** machines A and B have each completed a sync run against the same
+  remote
+- **When** the user lists machines on A (settings panel or `coffer sync
+  machines`)
+- **Then** both machines appear with display name, platform, and last-sync
+  time, and A is marked as this machine
+- **And** renaming A propagates to B's machine list after the next round trip
 
 ## Out of scope references
 

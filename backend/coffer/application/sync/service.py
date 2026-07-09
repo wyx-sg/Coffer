@@ -10,6 +10,7 @@ out-of-band, never through the sync medium).
 from __future__ import annotations
 
 import asyncio
+import platform as _platform
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,11 +18,24 @@ from pathlib import Path
 from coffer.application.audit_service import AuditService
 from coffer.application.sync.config_service import SyncConfigService
 from coffer.application.sync.exporter import SyncExporter
+from coffer.application.sync.identity import MachineIdentityService
 from coffer.application.sync.importer import SyncImporter
-from coffer.application.sync.ports import CredentialSyncPort, GitPort, MasterKeyPort
+from coffer.application.sync.ports import (
+    CredentialSyncPort,
+    GitPort,
+    MasterKeyPort,
+    WorkspacePort,
+)
 from coffer.domain.audit import AuditEventType
 from coffer.domain.sync.errors import MasterKeyFileInvalid, SyncInProgress, SyncNotConfigured
-from coffer.domain.sync.models import SyncConfig, SyncState, SyncStatus
+from coffer.domain.sync.models import (
+    MACHINE_ENTRY_HEARTBEAT_SECONDS,
+    MachineEntry,
+    MachineIdentity,
+    SyncConfig,
+    SyncState,
+    SyncStatus,
+)
 
 _TERMINAL = {SyncStatus.CONFLICTED, SyncStatus.ERROR}
 
@@ -37,7 +51,9 @@ class SyncService:
         credentials: CredentialSyncPort,
         master_key: MasterKeyPort,
         audit: AuditService,
-        machine_id: str,
+        identity: MachineIdentityService,
+        workspace: WorkspacePort,
+        coffer_version: str | None = None,
     ) -> None:
         self._config = config
         self._git = git
@@ -46,7 +62,9 @@ class SyncService:
         self._credentials = credentials
         self._master_key = master_key
         self._audit = audit
-        self._machine_id = machine_id
+        self._identity = identity
+        self._workspace = workspace
+        self._coffer_version = coffer_version
         self._lock = asyncio.Lock()
 
     async def get_config(self) -> SyncConfig:
@@ -92,7 +110,10 @@ class SyncService:
             assert config.remote is not None
             await asyncio.to_thread(self._git.ensure_repo, config.remote, config.branch)
             await self._exporter.export()
-            await asyncio.to_thread(self._git.commit_all, f"coffer sync from {self._machine_id}")
+            identity = await self._refresh_machine_entry()
+            await asyncio.to_thread(
+                self._git.commit_all, f"coffer sync from {identity.display_name}"
+            )
             if pull:
                 outcome = await asyncio.to_thread(self._git.pull, config.branch)
                 if outcome.is_conflict:
@@ -136,7 +157,71 @@ class SyncService:
         await self._audit.record(AuditEventType.MASTER_KEY_IMPORTED.value, actor="sync")
         return await self.status()
 
+    async def list_machines(self) -> tuple[MachineIdentity, list[MachineEntry]]:
+        """Every machine known to the vault, plus which one is this machine.
+
+        The local machine always appears (synthesized before its first sync),
+        and its entry always carries the live display name — the workspace copy
+        may lag a rename until the next run."""
+        identity = await self._identity.get()
+        entries = await asyncio.to_thread(self._workspace.read_machine_entries)
+        result: list[MachineEntry] = []
+        seen_local = False
+        for entry in entries:
+            if entry.machine_id == identity.machine_id:
+                seen_local = True
+                result.append(self._own_entry(identity, last_sync_at=entry.last_sync_at))
+            else:
+                result.append(entry)
+        if not seen_local:
+            result.append(self._own_entry(identity, last_sync_at=None))
+        return identity, result
+
+    async def rename_machine(self, display_name: str, *, actor: str) -> MachineIdentity:
+        """Rename this machine; the change reaches other machines on the next run."""
+        return await self._identity.rename(display_name, actor=actor)
+
     # --- internals ---------------------------------------------------------
+
+    def _own_entry(
+        self, identity: MachineIdentity, *, last_sync_at: datetime | None
+    ) -> MachineEntry:
+        return MachineEntry(
+            machine_id=identity.machine_id,
+            display_name=identity.display_name,
+            platform=_platform.system().lower(),
+            os_version=_platform.release(),
+            coffer_version=self._coffer_version,
+            last_sync_at=last_sync_at,
+        )
+
+    async def _refresh_machine_entry(self) -> MachineIdentity:
+        """Rewrite this machine's registry entry only when the run has other
+        changes, the name changed, or the entry is stale (the 24 h heartbeat) —
+        an idle machine must not generate registry-only commit chains."""
+        identity = await self._identity.get()
+
+        def _refresh() -> None:
+            own = next(
+                (
+                    e
+                    for e in self._workspace.read_machine_entries()
+                    if e.machine_id == identity.machine_id
+                ),
+                None,
+            )
+            now = datetime.now(tz=UTC)
+            stale = own is None or own.display_name != identity.display_name
+            if not stale and own is not None:
+                ts = own.last_sync_at
+                if ts is not None and ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=UTC)
+                stale = ts is None or (now - ts).total_seconds() > MACHINE_ENTRY_HEARTBEAT_SECONDS
+            if stale or self._git.has_changes():
+                self._workspace.write_machine_entry(self._own_entry(identity, last_sync_at=now))
+
+        await asyncio.to_thread(_refresh)
+        return identity
 
     async def _record_conflict(self, paths: list[str]) -> SyncState:
         state = SyncState(

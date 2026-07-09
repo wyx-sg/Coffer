@@ -523,7 +523,13 @@
         "error": "Error",
         "credentials_locked": "Credentials locked"
       },
-      "keyExported": "Key written to {{path}}"
+      "keyExported": "Key written to {{path}}",
+      "machines": "Machines",
+      "machinesHint": "Every machine known to this vault. Each machine registers itself when it syncs.",
+      "thisMachine": "This machine",
+      "neverSynced": "Never synced",
+      "renameMachine": "Rename this machine",
+      "machineName": "Machine name"
     },
     "connections": {
       "title": "LLM Connections",

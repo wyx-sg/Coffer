@@ -26,9 +26,11 @@
   `~/.coffer/sync/`），与实时运行时目录保持分离。其布局：
 
   ```
-  manifest.json              # schema version + machine id + last-sync metadata
+  manifest.json              # workspace schema 版本（在所有机器上字节一致）
+  machines/<machine-id>.json # 每机注册项（每台机器只写自己的那个文件）
   knowledge/                 # mirror of ~/.coffer/knowledge
   memory/                    # mirror of ~/.coffer/memory
+  skills/                    # mirror of ~/.coffer/skills（skill 主库）
   resources/<kind>/<name>.yaml   # one deterministic file per config resource
   credentials/<ref>.enc          # Fernet ciphertext blob (never the master key)
   ```
@@ -38,6 +40,22 @@
 - **Sync run** —— export → `git pull`（merge）→ 合并干净时：`git push` + import。整个过程是一次 `coffer sync` 调用。
 - **Conflict** —— 一次 `git merge` 冲突。该次运行停在 `conflicted` 状态；在用户解决冲突前不会导入任何内容。两边都不会被丢弃。
 - **Auto-sync** —— 一个可选开启的守护进程 worker，在文件/资源变更时（去抖）以及按固定间隔执行 sync run。默认关闭。
+
+## Machine identity（机器身份）
+
+每个安装实例在守护进程首次启动时铸造一个稳定的**机器 id**（ULID），持久化在本机
+（一个 DB 单例——它是*关于*这台机器的状态，永不作为 vault 数据同步）。人类友好的
+**显示名**默认取主机名，可编辑。
+
+workspace 的 `machines/` 区为每台机器保存一个 JSON 注册项：显示名、平台、操作系统
+版本、Coffer 版本、上次同步时间。**每台机器只写自己的注册项**，因此该区在构造上就
+不会冲突。写入抖动控制：仅当本次运行的提交本就非空、或注册项已超过 24 小时（心跳）
+时才重写自己的注册项——空闲机器 MUST NOT 产生无休止的纯注册项提交链。
+
+机器身份的存在是为了让用户看到 vault 关联的每台机器（本节），并为后续修订提供锚点
+（按资源的运行时亲和、每机配置覆盖、墓碑溯源——见
+[ADR-043](../../docs/decisions/ADR-043-sync-machine-identity-near-real-time.md)）。
+它**不是**记录级版本方案。
 
 ## Configuration
 
@@ -56,9 +74,9 @@ git remote 的凭据（SSH key / token）属于用户自己的 git 配置；Coff
 
 ## Surfaces
 
-- **CLI** —— `coffer sync` 命令组：`init`、`status`、`run`（默认）、`push`、`pull`、`resolve`、`config`、`key export`、`key import`。
-- **REST** —— `/api/v1/sync/*`：获取/设置配置、获取状态、触发一次运行、解决冲突、导出/导入主密钥。
-- **Desktop UI** —— 一个 Sync 设置面板：配置 remote、切换 auto-sync、查看状态（clean / syncing / conflicted / error、上次同步时间）、触发一次运行、解决冲突。
+- **CLI** —— `coffer sync` 命令组：`init`、`status`、`run`（默认）、`push`、`pull`、`resolve`、`config`、`machines`（列出；`--rename` 重命名本机）、`key export`、`key import`。
+- **REST** —— `/api/v1/sync/*`：获取/设置配置、获取状态、触发一次运行、解决冲突、列出机器 / 重命名本机、导出/导入主密钥。
+- **Desktop UI** —— 一个 Sync 设置面板：配置 remote、切换 auto-sync、查看状态（clean / syncing / conflicted / error、上次同步时间）、触发一次运行、解决冲突，以及一张机器卡片，列出 vault 已知的每台机器（显示名、平台、上次同步、「本机」徽标、重命名）。
 
 ## Credential bootstrap
 
@@ -120,6 +138,13 @@ git remote 的凭据（SSH key / token）属于用户自己的 git 配置；Coff
 - **Given** 机器 A 和 B 都启用了 auto-sync
 - **When** A 注册了一个新资源
 - **Then** A 在去抖窗口内推送该变更，B 在其下一次间隔拉取时导入它，两台机器都无需任何手动命令
+
+### Scenario: 机器在同步后可见
+
+- **Given** 机器 A 和 B 都已对着同一个 remote 完成过一次 sync run
+- **When** 用户在 A 上列出机器（设置面板或 `coffer sync machines`）
+- **Then** 两台机器都出现，带显示名、平台和上次同步时间，且 A 被标记为本机
+- **And** 重命名 A 后，经过下一个往返，B 的机器列表随之更新
 
 ## Out of scope references
 

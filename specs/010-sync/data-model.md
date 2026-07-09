@@ -37,6 +37,22 @@ Last-run status, also a singleton row.
 
 Both tables live in `infrastructure/sync/persistence.py`; migration `0017`.
 
+### `machine_identity` (single row)
+
+This machine's stable identity (ADR-043). Machine-local state *about* the
+machine — never exported as vault data (the workspace `machines/` entry is
+derived from it at export time).
+
+| Field          | Type   | Notes                                             |
+| -------------- | ------ | ------------------------------------------------- |
+| `id`           | int    | `1` (CHECK-constrained singleton).                |
+| `machine_id`   | String | ULID minted on first daemon start; never changes. |
+| `display_name` | String | Defaults to the hostname; user-editable.          |
+| `created_at`   | String | ISO-8601.                                         |
+| `updated_at`   | String | ISO-8601.                                         |
+
+Lives in `infrastructure/sync/persistence.py`; migration `0042`.
+
 ## Filesystem state (the sync workspace)
 
 Default `~/.coffer/sync/` (overridable via `$COFFER_SYNC_ROOT` for tests), a git
@@ -44,8 +60,10 @@ working tree whose `origin` is the user's remote.
 
 ```
 manifest.json
+machines/<machine-id>.json      per-machine registry entry (owner-written only)
 knowledge/                      mirror of ~/.coffer/knowledge
 memory/                         mirror of ~/.coffer/memory
+skills/                         mirror of ~/.coffer/skills
 resources/<kind>/<name>.yaml    one deterministic file per config resource
 credentials/<ref>.enc           Fernet ciphertext, base64 text; never the key
 ```
@@ -55,12 +73,26 @@ credentials/<ref>.enc           Fernet ciphertext, base64 text; never the key
 | Field             | Type   | Notes                                            |
 | ----------------- | ------ | ------------------------------------------------ |
 | `schema_version`  | int    | Bumped on incompatible workspace layout changes. |
-| `machine_id`      | String | Stable id of the machine that wrote the commit.  |
-| `coffer_version`  | String | Producer version, for diagnostics.               |
-| `kinds`           | list   | Config kinds included in this workspace.         |
 
+Only the schema version — the manifest is byte-identical on every machine so it
+can never merge-conflict. Per-machine facts live in `machines/` instead.
 `schema_version` is checked on import; a workspace newer than the running build
 fails fast (`SYNC_WORKSPACE_TOO_NEW`), mirroring the DB `DB_SCHEMA_TOO_NEW` rule.
+
+### Machine entry (`machines/<machine-id>.json`)
+
+| Field            | Type    | Notes                                             |
+| ---------------- | ------- | ------------------------------------------------- |
+| `machine_id`     | String  | The owning machine's ULID (= the filename).       |
+| `display_name`   | String  | Hostname by default; user-editable.               |
+| `platform`       | String  | e.g. `darwin` / `linux`.                          |
+| `os_version`     | String  | Human-readable OS release.                        |
+| `coffer_version` | String  | Producer version, for diagnostics.                |
+| `last_sync_at`   | String  | ISO-8601 of the machine's last completed export.  |
+
+Each machine writes **only its own** entry; rewrite happens only when the run's
+commit is otherwise non-empty or the entry is >24 h old (heartbeat), so idle
+machines don't generate registry-only commit chains.
 
 ### Resource serialization (`resources/<kind>/<name>.yaml`)
 

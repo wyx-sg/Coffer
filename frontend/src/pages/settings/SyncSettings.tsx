@@ -14,14 +14,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
-import {
-  useRunSync,
-  useSyncConfig,
-  useSyncStatus,
-  useUpdateSyncConfig,
-} from "@/lib/hooks/useSync";
+import { useRunSync, useSyncConfig, useSyncStatus, useUpdateSyncConfig } from "@/lib/hooks/useSync";
 
 import { SyncConflictPanel } from "./SyncConflictPanel";
+import { SyncMachinesCard } from "./SyncMachinesCard";
 import { SyncMasterKeyCard } from "./SyncMasterKeyCard";
 
 const SYNC_TONE: Record<string, StatusTone> = {
@@ -177,9 +173,7 @@ export function SyncSettings() {
           {update.error && (
             <p className="text-sm text-red-600">{translateApiError(t, update.error)}</p>
           )}
-          {run.error && (
-            <p className="text-sm text-red-600">{translateApiError(t, run.error)}</p>
-          )}
+          {run.error && <p className="text-sm text-red-600">{translateApiError(t, run.error)}</p>}
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => run.mutate()} disabled={run.isPending}>
               {t("settings.sync.syncNow")}
@@ -189,6 +183,8 @@ export function SyncSettings() {
       </Card>
 
       <SyncConflictPanel />
+
+      <SyncMachinesCard />
 
       <SyncMasterKeyCard />
     </div>

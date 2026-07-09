@@ -148,6 +148,29 @@ def config(
 
 
 @app.command()
+def machines(
+    ctx: typer.Context,
+    rename: str | None = typer.Option(
+        None, "--rename", help="Rename this machine (display name only)"
+    ),
+) -> None:
+    """List every machine known to this vault; --rename renames this one."""
+    verbose = _verbose(ctx)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        if rename is not None:
+            put = c.put("/sync/machine", json={"display_name": rename})
+            _cli_client.check(put, verbose=verbose)
+        r = c.get("/sync/machines")
+        _cli_client.check(r, verbose=verbose)
+    for m in r.json()["machines"]:
+        marker = " [dim](this machine)[/dim]" if m["is_local"] else ""
+        last = m.get("last_sync_at") or "never"
+        plat = m.get("platform") or "?"
+        _console.print(f"- [bold]{m['display_name']}[/bold]{marker}  {plat}  last sync: {last}")
+
+
+@app.command()
 def resolve(
     ctx: typer.Context,
     ours: bool = typer.Option(False, "--ours", help="Keep this machine's version"),

@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, Integer, String, Text, select
+from sqlalchemy import Boolean, CheckConstraint, Integer, String, Text, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -18,6 +18,7 @@ from coffer.domain.sync.models import (
     DEFAULT_BRANCH,
     DEFAULT_INTERVAL_SECONDS,
     SINGLETON_ID,
+    MachineIdentity,
     SyncConfig,
     SyncState,
     SyncStatus,
@@ -49,6 +50,22 @@ class SyncStateModel(Base):
     conflict_paths_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     locked_refs_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class MachineIdentityModel(Base):
+    """This machine's stable identity (one row, ``id`` = 1; ADR-043).
+
+    Machine-local state *about* the machine — never exported as vault data."""
+
+    __tablename__ = "machine_identity"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    machine_id: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    display_name: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+    __table_args__ = (CheckConstraint("id = 1", name="ck_machine_identity_singleton"),)
 
 
 def _config_to_domain(row: SyncConfigModel) -> SyncConfig:
@@ -110,6 +127,44 @@ class SqlAlchemySyncConfigRepo:
             await session.commit()
             await session.refresh(row)
             return _config_to_domain(row)
+
+
+class SqlAlchemyMachineIdentityRepo:
+    """Concrete repo for the singleton ``machine_identity`` row."""
+
+    def __init__(self, sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
+        self._sm = sm
+
+    async def get(self) -> MachineIdentity | None:
+        async with self._sm() as session:
+            stmt = select(MachineIdentityModel).where(MachineIdentityModel.id == SINGLETON_ID)
+            row = (await session.execute(stmt)).scalar_one_or_none()
+            if row is None:
+                return None
+            return MachineIdentity(machine_id=row.machine_id, display_name=row.display_name)
+
+    async def create(self, machine_id: str, display_name: str) -> MachineIdentity:
+        async with self._sm() as session:
+            now = datetime.now(tz=UTC).isoformat()
+            row = MachineIdentityModel(
+                id=SINGLETON_ID,
+                machine_id=machine_id,
+                display_name=display_name,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(row)
+            await session.commit()
+            return MachineIdentity(machine_id=machine_id, display_name=display_name)
+
+    async def set_display_name(self, display_name: str) -> MachineIdentity:
+        async with self._sm() as session:
+            stmt = select(MachineIdentityModel).where(MachineIdentityModel.id == SINGLETON_ID)
+            row = (await session.execute(stmt)).scalar_one()
+            row.display_name = display_name
+            row.updated_at = datetime.now(tz=UTC).isoformat()
+            await session.commit()
+            return MachineIdentity(machine_id=row.machine_id, display_name=row.display_name)
 
 
 class SqlAlchemySyncStateRepo:
