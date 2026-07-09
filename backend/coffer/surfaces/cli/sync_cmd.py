@@ -17,7 +17,7 @@ app = typer.Typer(
 )
 key_app = typer.Typer(help="Out-of-band master-key transfer for new machines")
 app.add_typer(key_app, name="key")
-override_app = typer.Typer(help="Per-machine config overrides (applied locally, never synced out)")
+override_app = typer.Typer(help="Per-machine config overrides (applied on this machine only)")
 app.add_typer(override_app, name="override")
 _console = Console()
 

@@ -74,10 +74,10 @@ async def test_provider_round_trips_through_sync(tmp_path):
 
     res_a, cred_a = await _vault(tmp_path / "A")
     await res_a.register("provider", "acme", config, "test")
-    await SyncExporter(res_a, cred_a, Workspace(ws, trees=[])).export()
+    await SyncExporter(res_a, cred_a, Workspace(ws, trees=[]), home=None).export()
 
     res_b, cred_b = await _vault(tmp_path / "B")
-    await SyncImporter(res_b, cred_b, Workspace(ws, trees=[])).import_()
+    await SyncImporter(res_b, cred_b, Workspace(ws, trees=[]), home=None).import_()
 
     got = await res_b.get(ResourceRef("provider", "acme"))
     assert got.config == config

@@ -87,8 +87,8 @@ async def client(tmp_path):  # type: ignore[no-untyped-def]
     service = SyncService(
         config=config_svc,
         git=git,
-        exporter=SyncExporter(resources, cred_sync, workspace),
-        importer=SyncImporter(resources, cred_sync, workspace),
+        exporter=SyncExporter(resources, cred_sync, workspace, home=None),
+        importer=SyncImporter(resources, cred_sync, workspace, home=None),
         credentials=cred_sync,
         master_key=master_key,
         audit=audit,

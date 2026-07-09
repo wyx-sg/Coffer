@@ -41,7 +41,8 @@ class SyncExporter:
         workspace: WorkspacePort,
         ledger: TombstoneLedgerPort | None = None,
         state_providers: Sequence[SyncedStatePort] = (),
-        home: str | None = None,
+        *,
+        home: str | None,
     ) -> None:
         self._resources = resources
         self._credentials = credentials
@@ -74,10 +75,13 @@ class SyncExporter:
             if self._home:
                 config = normalize_home(config, self._home)
             patch = overrides.get((r.kind, r.name))
-            if patch:
+            shared_doc = shared_before.get((r.kind, r.name))
+            if patch and shared_doc is not None:
                 # A machine's local specialization must not leak into the
                 # medium: overridden keys revert to the last shared values.
-                config = strip_overridden(config, patch, shared_before.get((r.kind, r.name), {}))
+                # No shared doc yet (override set before the first export):
+                # skip stripping — the normalized live values ARE the baseline.
+                config = strip_overridden(config, patch, shared_doc)
             docs.append(
                 resource_to_doc(
                     kind=r.kind,

@@ -113,7 +113,8 @@ order at import (shared doc → `${HOME}` expansion → machine override):
   string value under the exporting machine's home to `${HOME}/...`; import
   expands the token to the importing machine's home. The medium never holds a
   literal home path. A value already containing the literal token is exported
-  as-is (documented edge).
+  as-is — and, like every token, expands to the local home at import on every
+  machine (the token is effectively active everywhere).
 - **Per-machine overrides**: an RFC 7386 JSON Merge Patch per resource under
   `machines/<machine-id>/overrides/<kind>/<name>.yaml` (each machine writes
   only its own dir — conflict-free), for values that genuinely differ per
@@ -151,8 +152,8 @@ setup, exactly as a developer's normal `git push` does.
   `push`, `pull`, `resolve`, `config`, `machines` (list; `--rename` for this
   machine), `override list|set|unset`, `key export`, `key import`.
 - **REST** — `/api/v1/sync/*`: get/put config, get status, trigger a run,
-  resolve conflicts, list machines / rename this machine, export/import the
-  master key.
+  resolve conflicts, list machines / rename this machine, manage per-machine
+  overrides, export/import the master key.
 - **Desktop UI** — a Sync settings panel: configure remote, toggle auto-sync,
   see status (clean / syncing / conflicted / error, last-sync time), trigger a
   run, resolve conflicts, and a machines card listing every machine known to

@@ -75,9 +75,20 @@ def wire_sync(
         config=config_svc,
         git=git,
         exporter=SyncExporter(
-            resource_svc, cred_sync, workspace, ledger, state_providers=state_providers
+            resource_svc,
+            cred_sync,
+            workspace,
+            ledger,
+            state_providers=state_providers,
+            home=str(pathlib.Path.home()),
         ),
-        importer=SyncImporter(resource_svc, cred_sync, workspace, state_providers=state_providers),
+        importer=SyncImporter(
+            resource_svc,
+            cred_sync,
+            workspace,
+            state_providers=state_providers,
+            home=str(pathlib.Path.home()),
+        ),
         credentials=cred_sync,
         master_key=master_key,
         audit=audit,

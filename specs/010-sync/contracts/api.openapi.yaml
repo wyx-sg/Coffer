@@ -158,6 +158,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OverridesOut' }
+        '422':
+          $ref: '#/components/responses/ValidationError'
     delete:
       summary: Remove this machine's merge patch for a resource
       operationId: unsetSyncOverride

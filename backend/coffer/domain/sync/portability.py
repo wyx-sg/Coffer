@@ -98,14 +98,18 @@ def strip_overridden(
     specialization must not leak into the medium and overwrite the fleet."""
     out: dict[str, Any] = dict(live)
     for key, value in patch.items():
-        if isinstance(value, Mapping) and isinstance(out.get(key), Mapping):
-            out[key] = strip_overridden(
-                out[key],
-                value,
-                shared.get(key, {}) if isinstance(shared.get(key), Mapping) else {},
-            )
+        shared_value = shared.get(key)
+        if (
+            isinstance(value, Mapping)
+            and isinstance(out.get(key), Mapping)
+            and isinstance(shared_value, Mapping)
+        ):
+            # Recurse only when the shared baseline is a mapping too — a
+            # type-changing patch must revert to the shared value wholesale,
+            # never export a corrupted {}.
+            out[key] = strip_overridden(out[key], value, shared_value)
         elif key in shared:
-            out[key] = shared[key]
+            out[key] = shared_value
         else:
             out.pop(key, None)
     return out

@@ -98,8 +98,9 @@ Only the schema version — the manifest is byte-identical on every machine so i
 can never merge-conflict. Per-machine facts live in `machines/` instead.
 `schema_version` is checked on import; a workspace newer than the running build
 fails fast (`SYNC_WORKSPACE_TOO_NEW`), mirroring the DB `DB_SCHEMA_TOO_NEW` rule.
-Current version: **2** (tombstone-driven deletion — an older build would keep
-applying delete-by-absence, so all machines upgrade before the first v2 sync).
+Current version: **3** (2 = tombstone-driven deletion; 3 = `${HOME}`-normalized
+paths — an older importer would install the literal token into configs). All
+machines upgrade before the first sync at a new version.
 
 ### Machine entry (`machines/<machine-id>.json`)
 

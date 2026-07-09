@@ -12,12 +12,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import platform as _platform
+import re
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 from coffer.application.audit_service import AuditService
+from coffer.application.resource_service import ResourceService
 from coffer.application.sync.config_service import SyncConfigService
 from coffer.application.sync.exporter import SyncExporter
 from coffer.application.sync.identity import MachineIdentityService
@@ -30,6 +31,7 @@ from coffer.application.sync.ports import (
 )
 from coffer.domain.audit import AuditEventType
 from coffer.domain.error_base import CofferError
+from coffer.domain.errors import ConfigValidationError
 from coffer.domain.resource import ResourceRef
 from coffer.domain.sync.errors import (
     MasterKeyFileInvalid,
@@ -51,6 +53,15 @@ from coffer.domain.sync.portability import expand_home
 
 _TERMINAL = {SyncStatus.CONFLICTED, SyncStatus.ERROR}
 
+_REF_SEGMENT = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def _validate_override_ref(kind: str, name: str) -> None:
+    """Path params become workspace file paths — confine them to one segment."""
+    for segment in (kind, name):
+        if not _REF_SEGMENT.match(segment) or segment in {".", ".."}:
+            raise ConfigValidationError(f"invalid resource ref segment: {segment!r}")
+
 
 class SyncService:
     def __init__(
@@ -67,7 +78,7 @@ class SyncService:
         workspace: WorkspacePort,
         coffer_version: str | None = None,
         home: str | None = None,
-        resources: Any = None,
+        resources: ResourceService | None = None,
     ) -> None:
         self._config = config
         self._git = git
@@ -235,10 +246,12 @@ class SyncService:
     ) -> None:
         """Store a per-machine merge patch; applied at every import, stripped
         from every export. Takes effect locally on the next sync run."""
+        _validate_override_ref(kind, name)
         identity = await self._identity.get()
-        await asyncio.to_thread(
-            self._workspace.write_override, identity.machine_id, kind, name, patch
-        )
+        async with self._lock:  # never interleave with a run's import phase
+            await asyncio.to_thread(
+                self._workspace.write_override, identity.machine_id, kind, name, patch
+            )
         await self._audit.record(
             AuditEventType.SYNC_OVERRIDE_SET.value,
             actor=actor,
@@ -246,21 +259,29 @@ class SyncService:
         )
 
     async def unset_override(self, kind: str, name: str, *, actor: str) -> None:
+        _validate_override_ref(kind, name)
         identity = await self._identity.get()
-        await asyncio.to_thread(self._workspace.remove_override, identity.machine_id, kind, name)
-        # Restore the local resource to the shared view NOW: export runs before
-        # import, so a live row still carrying the patched values would leak
-        # this machine's specialization into the medium on the next run.
-        shared = {
-            (d.kind, d.name): d for d in await asyncio.to_thread(self._workspace.read_resource_docs)
-        }
-        doc = shared.get((kind, name))
-        if doc is not None and self._resources is not None:
-            config = expand_home(doc.config, self._home) if self._home else dict(doc.config)
-            with contextlib.suppress(CofferError):  # resource may not exist locally yet
-                await self._resources.update_config(
-                    ResourceRef(kind, name), config, actor, allow_lifecycle_kind=True
-                )
+        # Under the run lock: interleaving with an in-flight import would let
+        # the import re-apply the just-deleted patch onto the live row, and
+        # the next export would publish the specialization as shared state.
+        async with self._lock:
+            await asyncio.to_thread(
+                self._workspace.remove_override, identity.machine_id, kind, name
+            )
+            # Restore the local resource to the shared view NOW: export runs
+            # before import, so a live row still carrying the patched values
+            # would leak this machine's specialization on the next run.
+            shared = {
+                (d.kind, d.name): d
+                for d in await asyncio.to_thread(self._workspace.read_resource_docs)
+            }
+            doc = shared.get((kind, name))
+            if doc is not None and self._resources is not None:
+                config = expand_home(doc.config, self._home) if self._home else dict(doc.config)
+                with contextlib.suppress(CofferError):  # may not exist locally yet
+                    await self._resources.update_config(
+                        ResourceRef(kind, name), config, actor, allow_lifecycle_kind=True
+                    )
         await self._audit.record(
             AuditEventType.SYNC_OVERRIDE_UNSET.value,
             actor=actor,

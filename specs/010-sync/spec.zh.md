@@ -81,7 +81,8 @@ workspace 的 `machines/` 区为每台机器保存一个 JSON 注册项：显示
 
 - **`${HOME}` 正规化**（零配置）：导出时把配置中位于本机 home 下的字符串值改写为
   `${HOME}/...`；导入时展开为本机 home。介质中永不出现字面 home 路径。已含字面
-  token 的值按原样导出（已记录的边界情形）。
+  token 的值按原样导出——且与所有 token 一样，导入时在每台机器上展开为本机
+  home（token 实际上在任何地方都是活跃的）。
 - **每机覆盖**：每资源一个 RFC 7386 JSON Merge Patch，位于
   `machines/<machine-id>/overrides/<kind>/<name>.yaml`（每台机器只写自己的目录——
   无冲突），用于真正逐机不同的值（如 Intel 与 ARM 的 homebrew 路径）。补丁在每次
@@ -109,7 +110,7 @@ git remote 的凭据（SSH key / token）属于用户自己的 git 配置；Coff
 ## Surfaces
 
 - **CLI** —— `coffer sync` 命令组：`init`、`status`、`run`（默认）、`push`、`pull`、`resolve`、`config`、`machines`（列出；`--rename` 重命名本机）、`override list|set|unset`、`key export`、`key import`。
-- **REST** —— `/api/v1/sync/*`：获取/设置配置、获取状态、触发一次运行、解决冲突、列出机器 / 重命名本机、导出/导入主密钥。
+- **REST** —— `/api/v1/sync/*`：获取/设置配置、获取状态、触发一次运行、解决冲突、列出机器 / 重命名本机、管理每机覆盖、导出/导入主密钥。
 - **Desktop UI** —— 一个 Sync 设置面板：配置 remote、切换 auto-sync、查看状态（clean / syncing / conflicted / error、上次同步时间）、触发一次运行、解决冲突，以及一张机器卡片，列出 vault 已知的每台机器（显示名、平台、上次同步、「本机」徽标、重命名）。
 
 ## Credential bootstrap

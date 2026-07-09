@@ -47,7 +47,7 @@ class SyncImporter:
         *,
         actor: str = "sync",
         state_providers: Sequence[SyncedStatePort] = (),
-        home: str | None = None,
+        home: str | None,
     ) -> None:
         self._resources = resources
         self._credentials = credentials
