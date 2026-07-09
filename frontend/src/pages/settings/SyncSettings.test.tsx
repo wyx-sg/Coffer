@@ -14,6 +14,8 @@ vi.mock("@/lib/hooks/useSync", () => ({
   useResolveSync: vi.fn(),
   useImportMasterKey: vi.fn(),
   useExportMasterKey: vi.fn(),
+  useSyncMachines: vi.fn(),
+  useRenameMachine: vi.fn(),
 }));
 const hooks = await import("@/lib/hooks/useSync");
 
@@ -72,6 +74,14 @@ function seed(statusValue: NonNullable<Status>["status"], over: Partial<NonNulla
     mutate: vi.fn(),
     isPending: false,
   } as unknown as ReturnType<typeof hooks.useExportMasterKey>);
+  vi.mocked(hooks.useSyncMachines).mockReturnValue({
+    data: { machines: [] },
+  } as unknown as ReturnType<typeof hooks.useSyncMachines>);
+  vi.mocked(hooks.useRenameMachine).mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+    error: null,
+  } as unknown as ReturnType<typeof hooks.useRenameMachine>);
 }
 
 describe("SyncSettings", () => {

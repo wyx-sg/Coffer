@@ -16,18 +16,22 @@ import platform
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from coffer import __version__ as _coffer_version
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.config_service import SyncConfigService
 from coffer.application.sync.exporter import SyncExporter
+from coffer.application.sync.identity import MachineIdentityService
 from coffer.application.sync.importer import SyncImporter
 from coffer.application.sync.service import SyncService
 from coffer.application.sync.worker import SyncWorker
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
+from coffer.infrastructure.knowledge.ids import new_ulid
 from coffer.infrastructure.sync.credentials import CredentialSyncAdapter
 from coffer.infrastructure.sync.git_repo import GitRepo
 from coffer.infrastructure.sync.paths import sync_root
 from coffer.infrastructure.sync.persistence import (
+    SqlAlchemyMachineIdentityRepo,
     SqlAlchemySyncConfigRepo,
     SqlAlchemySyncStateRepo,
 )
@@ -47,6 +51,12 @@ def wire_sync(
     workspace = Workspace(root)
     git = GitRepo(root)
     config_svc = SyncConfigService(SqlAlchemySyncConfigRepo(sm), SqlAlchemySyncStateRepo(sm), audit)
+    identity = MachineIdentityService(
+        SqlAlchemyMachineIdentityRepo(sm),
+        audit,
+        new_id=new_ulid,
+        default_name=lambda: platform.node() or "coffer",
+    )
     service = SyncService(
         config=config_svc,
         git=git,
@@ -55,7 +65,9 @@ def wire_sync(
         credentials=cred_sync,
         master_key=master_key,
         audit=audit,
-        machine_id=platform.node() or "coffer",
+        identity=identity,
+        workspace=workspace,
+        coffer_version=_coffer_version,
     )
     set_sync_service(service)
     return SyncWorker(service, config_svc)

@@ -92,6 +92,7 @@ class AuditEventType(StrEnum):
     SYNC_RESOLVED = "sync_resolved"
     MASTER_KEY_EXPORTED = "master_key_exported"
     MASTER_KEY_IMPORTED = "master_key_imported"
+    SYNC_MACHINE_RENAMED = "sync_machine_renamed"
     # spec 011-provider-switching
     PROVIDER_SWITCHED = "provider_switched"
     PROVIDER_INTERNAL_DEFAULT_SET = "provider_internal_default_set"

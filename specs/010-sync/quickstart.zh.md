@@ -69,6 +69,16 @@ coffer sync config --auto on --interval 300
 开启自动同步后，守护进程会（去抖后）推送你的改动，并按设定的间隔拉取
 其他机器的改动——无需手动执行命令。
 
+## 查看你的机器
+
+```bash
+coffer sync machines                    # 该 vault 关联的所有机器
+coffer sync machines --rename studio    # 重命名本机
+```
+
+每台机器在同步时登记自己（名称、平台、上次同步时间）；这份列表同样出现在
+桌面端的同步面板中。
+
 ## 解决冲突
 
 如果你在同步之前在两台机器上编辑了同一个资源/文件，同步运行会停在

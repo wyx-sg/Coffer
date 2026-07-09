@@ -68,6 +68,9 @@ class GitRepo:
         self._run("commit", "-m", message)
         return True
 
+    def has_changes(self) -> bool:
+        return bool(self._run("status", "--porcelain").stdout.strip())
+
     def pull(self, branch: str) -> PullOutcome:
         # Fetch; a brand-new remote has no branch yet, which is not an error.
         fetch = self._run("fetch", "origin", branch, check=False)

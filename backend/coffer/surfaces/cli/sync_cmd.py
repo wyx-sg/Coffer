@@ -7,6 +7,7 @@ from typing import Any
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 
 from coffer.surfaces.cli import _client as _cli_client
 
@@ -145,6 +146,30 @@ def config(
             _cli_client.check(r, verbose=verbose)
             cfg = r.json()
     typer.echo(_json.dumps(cfg, indent=2))
+
+
+@app.command()
+def machines(
+    ctx: typer.Context,
+    rename: str | None = typer.Option(
+        None, "--rename", help="Rename this machine (display name only)"
+    ),
+) -> None:
+    """List every machine known to this vault; --rename renames this one."""
+    verbose = _verbose(ctx)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        if rename is not None:
+            put = c.put("/sync/machine", json={"display_name": rename})
+            _cli_client.check(put, verbose=verbose)
+        r = c.get("/sync/machines")
+        _cli_client.check(r, verbose=verbose)
+    for m in r.json()["machines"]:
+        marker = " [dim](this machine)[/dim]" if m["is_local"] else ""
+        last = m.get("last_sync_at") or "never"
+        plat = m.get("platform") or "?"
+        name = escape(m["display_name"])
+        _console.print(f"- [bold]{name}[/bold]{marker}  {plat}  last sync: {last}")
 
 
 @app.command()

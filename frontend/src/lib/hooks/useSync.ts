@@ -25,6 +25,16 @@ export interface SyncStatus {
   locked_refs: string[];
 }
 
+export interface SyncMachine {
+  machine_id: string;
+  display_name: string;
+  platform: string | null;
+  os_version: string | null;
+  coffer_version: string | null;
+  last_sync_at: string | null;
+  is_local: boolean;
+}
+
 function headers(extra: HeadersInit = {}): HeadersInit {
   return { "X-Coffer-Token": getCofferToken() ?? "", "X-Coffer-Actor": "ui", ...extra };
 }
@@ -77,6 +87,8 @@ function useInvalidate() {
   return () => {
     void qc.invalidateQueries({ queryKey: ["sync-config"] });
     void qc.invalidateQueries({ queryKey: ["sync-status"] });
+    // A run rewrites this machine's registry entry (last-sync time).
+    void qc.invalidateQueries({ queryKey: ["sync-machines"] });
   };
 }
 
@@ -110,6 +122,31 @@ export function useResolveSync() {
     mutationFn: (args: { strategy: "ours" | "theirs" | "resolved"; paths: string[] }) =>
       postJson<SyncStatus>("/sync/resolve", args),
     onSuccess: invalidate,
+  });
+}
+
+export function useSyncMachines() {
+  return useQuery({
+    queryKey: ["sync-machines"],
+    queryFn: () => getJson<{ machines: SyncMachine[] }>("/sync/machines"),
+  });
+}
+
+export function useRenameMachine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (display_name: string) => {
+      const r = await fetch(`${getCofferBaseUrl()}/sync/machine`, {
+        method: "PUT",
+        headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify({ display_name }),
+      });
+      await checkOk(r);
+      return (await r.json()) as SyncMachine;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["sync-machines"] });
+    },
   });
 }
 

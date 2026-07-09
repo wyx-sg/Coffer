@@ -96,6 +96,37 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /api/v1/sync/machines:
+    get:
+      summary: List every machine known to this vault (workspace registry + this machine)
+      operationId: listSyncMachines
+      tags: [sync]
+      responses:
+        '200':
+          description: Machines attached to the vault
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncMachinesOut' }
+
+  /api/v1/sync/machine:
+    put:
+      summary: Rename this machine (display name only; the machine id is immutable)
+      operationId: renameSyncMachine
+      tags: [sync]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MachineRenameIn' }
+      responses:
+        '200':
+          description: Updated local machine entry
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncMachineOut' }
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
   /api/v1/sync/key/export:
     post:
       summary: Export this machine's master key to a local file (out-of-band transfer)
@@ -198,6 +229,29 @@ components:
           type: array
           items: { type: string }
           description: "Paths to resolve; empty means all conflicting paths"
+    SyncMachineOut:
+      type: object
+      required: [machine_id, display_name, is_local]
+      properties:
+        machine_id: { type: string, description: "Stable ULID minted at first daemon start" }
+        display_name: { type: string }
+        platform: { type: string, nullable: true }
+        os_version: { type: string, nullable: true }
+        coffer_version: { type: string, nullable: true }
+        last_sync_at: { type: string, nullable: true }
+        is_local: { type: boolean, description: "True for the machine serving this request" }
+    SyncMachinesOut:
+      type: object
+      required: [machines]
+      properties:
+        machines:
+          type: array
+          items: { $ref: '#/components/schemas/SyncMachineOut' }
+    MachineRenameIn:
+      type: object
+      required: [display_name]
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 100 }
     KeyExportIn:
       type: object
       required: [path]

@@ -9,7 +9,7 @@ out-of-band.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from coffer.application.sync.service import SyncService
 from coffer.domain.sync.models import (
@@ -83,6 +83,32 @@ class KeyOpOut(BaseModel):
     path: str
 
 
+class MachineOut(BaseModel):
+    machine_id: str
+    display_name: str
+    platform: str | None
+    os_version: str | None
+    coffer_version: str | None
+    last_sync_at: str | None
+    is_local: bool
+
+
+class MachinesOut(BaseModel):
+    machines: list[MachineOut]
+
+
+class MachineRenameIn(BaseModel):
+    display_name: str = Field(min_length=1, max_length=100)
+
+    @field_validator("display_name")
+    @classmethod
+    def _strip_and_require_visible(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("display_name must not be blank")
+        return stripped
+
+
 def _config_out(c: SyncConfig) -> SyncConfigOut:
     return SyncConfigOut(
         remote=c.remote,
@@ -139,6 +165,42 @@ async def run_sync(body: SyncRunIn | None = None) -> SyncStatusOut:
 @router.post("/resolve", response_model=SyncStatusOut)
 async def resolve_sync(body: SyncResolveIn) -> SyncStatusOut:
     return _status_out(await get_sync_service().resolve(body.strategy, body.paths))
+
+
+@router.get("/machines", response_model=MachinesOut)
+async def list_machines() -> MachinesOut:
+    identity, entries = await get_sync_service().list_machines()
+    return MachinesOut(
+        machines=[
+            MachineOut(
+                machine_id=e.machine_id,
+                display_name=e.display_name,
+                platform=e.platform,
+                os_version=e.os_version,
+                coffer_version=e.coffer_version,
+                last_sync_at=e.last_sync_at.isoformat() if e.last_sync_at else None,
+                is_local=e.machine_id == identity.machine_id,
+            )
+            for e in entries
+        ]
+    )
+
+
+@router.put("/machine", response_model=MachineOut)
+async def rename_machine(body: MachineRenameIn, actor: str = Depends(get_actor)) -> MachineOut:
+    service = get_sync_service()
+    await service.rename_machine(body.display_name, actor=actor)
+    identity, entries = await service.list_machines()
+    own = next(e for e in entries if e.machine_id == identity.machine_id)
+    return MachineOut(
+        machine_id=own.machine_id,
+        display_name=own.display_name,
+        platform=own.platform,
+        os_version=own.os_version,
+        coffer_version=own.coffer_version,
+        last_sync_at=own.last_sync_at.isoformat() if own.last_sync_at else None,
+        is_local=True,
+    )
 
 
 @router.post("/key/export", response_model=KeyOpOut)

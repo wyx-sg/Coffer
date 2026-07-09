@@ -128,3 +128,40 @@ def test_workspace_namespaced_credential_blobs_round_trip(tmp_path) -> None:  # 
     ws = Workspace(tmp_path / "ws")
     ws.write_credential_blobs(refs)
     assert ws.read_credential_blobs() == refs
+
+
+def test_machine_entry_round_trip(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    from datetime import UTC, datetime
+
+    from coffer.domain.sync.models import MachineEntry
+
+    ws = Workspace(tmp_path / "ws", trees=[])
+    entry = MachineEntry(
+        machine_id="01AAAAAAAAAAAAAAAAAAAAAAAA",
+        display_name="studio",
+        platform="darwin",
+        os_version="25.5.0",
+        coffer_version="0.1.1",
+        last_sync_at=datetime(2026, 7, 10, 12, 0, tzinfo=UTC),
+    )
+    ws.write_machine_entry(entry)
+    # Writing one machine's entry never touches another's.
+    other = MachineEntry(machine_id="01BBBBBBBBBBBBBBBBBBBBBBBB", display_name="laptop")
+    ws.write_machine_entry(other)
+
+    entries = {e.machine_id: e for e in ws.read_machine_entries()}
+    assert entries[entry.machine_id] == entry
+    assert entries[other.machine_id].display_name == "laptop"
+    assert entries[other.machine_id].last_sync_at is None
+
+
+def test_git_has_changes(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    remote = _bare_remote(tmp_path)
+    ws = tmp_path / "a"
+    repo = GitRepo(ws)
+    repo.ensure_repo(str(remote), "main")
+    assert repo.has_changes() is False
+    _seed_file(repo, ws, "x.txt", "1\n")
+    assert repo.has_changes() is True
+    repo.commit_all("c")
+    assert repo.has_changes() is False
