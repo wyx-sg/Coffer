@@ -38,6 +38,7 @@ class InboundMessage:
     # from.id, SeaTalk employee_code); "" when the transport has none
     chat_kind: str = "direct"  # "direct" | "group"
     addressed: bool = True  # DMs always; group only when @mentioned / reply-to-bot
+    mentions_others: bool = False  # group message @-mentions a non-bot user (FR-035)
     thread_id: str = ""  # non-empty when the message is inside a thread/topic
     attachments: tuple[InboundAttachment, ...] = ()  # photos/files/voice, if any
 

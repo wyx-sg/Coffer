@@ -38,6 +38,7 @@ from coffer.infrastructure.channel.seatalk_parse import (
     collect_forwarded_items,
     flatten_combined_forwarded,
     interactive_card,
+    mentions_others,
     split_to_byte_limit,
     strip_group_mentions,
 )
@@ -180,6 +181,11 @@ class SeaTalkAdapter:
                     sender_id=str(sender.get("employee_code", "")),
                     chat_kind="group",
                     addressed=True,
+                    # FR-035: >1 distinct @mentioned username ⇒ a non-bot user
+                    # was mentioned alongside the bot (empty for a forwarded record).
+                    mentions_others=mentions_others(
+                        (message.get("text") or {}).get("mentioned_list")
+                    ),
                     thread_id=reply_thread_id,
                     attachments=await media_attachments(
                         self._client, self._media_dir, self._ensure_token, message

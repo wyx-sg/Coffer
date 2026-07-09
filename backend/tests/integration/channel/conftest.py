@@ -102,6 +102,7 @@ def inbound(
     thread_id: str = "",
     chat_kind: str = "direct",
     addressed: bool = True,
+    mentions_others: bool = False,
 ) -> InboundMessage:
     return InboundMessage(
         channel=channel,
@@ -114,6 +115,7 @@ def inbound(
         thread_id=thread_id,
         chat_kind=chat_kind,
         addressed=addressed,
+        mentions_others=mentions_others,
     )
 
 
@@ -418,6 +420,8 @@ class ChannelEnv:
         *,
         default_agent: str = "builtin",
         default_agent_config: dict[str, Any] | None = None,
+        require_mention: bool = True,
+        ignore_other_mentions: bool = False,
     ) -> FakeChannelAdapter:
         adapter = adapter or FakeChannelAdapter()
         self.processor.bind(
@@ -428,6 +432,8 @@ class ChannelEnv:
                 default_agent=default_agent,
                 default_agent_config=default_agent_config,
                 adapter=adapter,
+                require_mention=require_mention,
+                ignore_other_mentions=ignore_other_mentions,
             )
         )
         return adapter

@@ -108,6 +108,9 @@ class ChannelBinding:
     default_agent: str
     default_agent_config: dict[str, Any] | None
     adapter: ChannelAdapter
+    # Group inbound gating (FR-035), sourced from the channel config.
+    require_mention: bool = True
+    ignore_other_mentions: bool = False
 
 
 @dataclass(frozen=True)

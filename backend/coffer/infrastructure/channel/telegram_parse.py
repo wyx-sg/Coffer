@@ -65,6 +65,31 @@ def _mention_span(
     return None
 
 
+def _mentions_other(
+    message: dict[str, Any], text: str, *, bot_id: int | None, bot_username: str | None
+) -> bool:
+    """Whether any @mention/text_mention entity names a user OTHER than the bot
+    (FR-035): a ``mention`` entity whose token isn't ``@<bot_username>``, or a
+    ``text_mention`` whose ``user.id`` isn't ``bot_id``."""
+    entities = message.get("entities") or []
+    for ent in entities:
+        if not isinstance(ent, dict):
+            continue
+        etype = ent.get("type")
+        if etype == "text_mention":
+            user = ent.get("user")
+            if not (isinstance(user, dict) and bot_id is not None and user.get("id") == bot_id):
+                return True
+        elif etype == "mention":
+            offset, length = ent.get("offset"), ent.get("length")
+            if not isinstance(offset, int) or not isinstance(length, int):
+                continue
+            token = text[offset : offset + length]
+            if not (bot_username and token.casefold() == f"@{bot_username}".casefold()):
+                return True
+    return False
+
+
 def addressed_and_text(
     message: dict[str, Any],
     text: str,
@@ -158,8 +183,12 @@ def build_inbound_message(
     # A media message carries its text in ``caption``, not ``text``.
     raw_text = str(message.get("text") or message.get("caption") or "")
     addressed, raw = (True, raw_text)
+    mentions_other = False
     if group:
         addressed, raw = addressed_and_text(
+            message, raw_text, bot_id=bot_id, bot_username=bot_username
+        )
+        mentions_other = _mentions_other(
             message, raw_text, bot_id=bot_id, bot_username=bot_username
         )
     text = prepend_context(message, raw)
@@ -174,6 +203,7 @@ def build_inbound_message(
         sender_id=str(sender.get("id") or ""),
         chat_kind="group" if group else "direct",
         addressed=addressed,
+        mentions_others=mentions_other,
         thread_id=str(message.get("message_thread_id") or ""),
         attachments=attachments,
     )

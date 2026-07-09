@@ -51,6 +51,12 @@ class _CommonChannelFields(BaseModel):
     # value reaches turn time and fails with UNKNOWN_AGENT.
     default_agent: str = "claude_code"
     default_agent_config: dict[str, Any] | None = None
+    # Group inbound gating (FR-035). ``require_mention`` (default on) keeps the
+    # bot silent in a group until @mentioned / replied-to; ``ignore_other_mentions``
+    # (opt-in) drops a group message that @mentions any non-bot user, even when
+    # it also mentions the bot, so the bot never butts into human-aimed traffic.
+    require_mention: bool = True
+    ignore_other_mentions: bool = False
 
 
 class TelegramChannelConfig(_CommonChannelFields):

@@ -718,6 +718,30 @@ status / notify`。
 - **When** owner 以外的人在群聊里 @mention bot
 - **Then** bot 回复该发送者未获授权，且不启动任何 turn
 
+### Scenario: require_mention on drops an un-addressed group message
+
+- **Given** 一个 `require_mention` 打开（默认）的已配对 channel
+- **When** 一条未指向 bot（无 @mention/回复 bot）的群消息到达，即便来自 owner
+- **Then** 它在 mention 闸处被丢弃——无回复、无 turn、也不建 peer 行
+
+### Scenario: require_mention off admits an un-addressed owner group message
+
+- **Given** 一个 `require_mention` 关闭的已配对 channel
+- **When** 一条未指向 bot 的群消息来自 owner
+- **Then** 它通过 mention 闸并驱动一个 turn（仍受 owner 门控：非 owner 会被闸下方的发送者校验拒绝）
+
+### Scenario: ignore_other_mentions drops a message that also @mentions a human
+
+- **Given** 一个 `ignore_other_mentions` 打开的已配对 channel
+- **When** 一条群消息 @ 了 bot，但同时也 @ 了另一个用户
+- **Then** 它被静默丢弃——无回复、无 turn——于是 bot 不会插进面向人的对话
+
+### Scenario: ignore_other_mentions off still answers when @mentioned alongside a human
+
+- **Given** 一个 `ignore_other_mentions` 关闭（默认）的已配对 channel
+- **When** 一条群消息在 @ bot 的同时也 @ 了另一个用户
+- **Then** turn 仍然运行——额外的人类 @mention 不会抑制它
+
 ### Scenario: the owner @mentions the bot inside a thread
 
 - **Given** 一个已配对的 channel 和一个带线程的群聊，运行在能拉取线程历史的传输上
@@ -858,9 +882,11 @@ Coffer-hosted channel 与它们并不冗余——它是通往统一、本地、�
 - **FR-034**: 群里的选择卡片点选路由到该群/线程。`InboundCallback` 携带
   `chat_kind`/`thread_id`，并由该群的 peer 做 owner-gate（`get_by_chat`，而非单 peer 的
   `get`）；一次按钮点选的回复落到同一群/线程，而非 DM。
-- **FR-035**: 按群的入站门控可配置。一个 channel 可以设置 require-mention（群里默认开）、
-  一个 sender allowlist、以及 ignore-messages-that-@-someone-else——于是一个坐在繁忙群里的
-  bot 只在它应当作答时才作答。
+- **FR-035**: 按群的入站门控可配置。一个 channel 可以设置 require-mention（群里默认开——
+  bot 只在被 @mention 或被回复时才作答），以及 ignore-messages-that-@-someone-else（选择性开启——
+  一条 @ 了任何非 bot 用户的群消息被静默丢弃，即便它同时也 @ 了 bot）——于是一个坐在繁忙群里的
+  bot 只在它应当作答时才作答。两者都是普通的配置布尔值；无论如何 channel 始终由 owner 门控，
+  所以这管的是「何时作答」，而非「谁能驱动 turn」。
 
 ### D. Platform polish
 

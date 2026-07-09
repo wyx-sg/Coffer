@@ -815,6 +815,33 @@ status / notify`.
 - **Then** the bot refuses it exactly like a non-owner sender — no turn is
   started and no peer row is created
 
+### Scenario: require_mention on drops an un-addressed group message
+
+- **Given** a paired channel with `require_mention` on (the default)
+- **When** an un-addressed group message arrives (no @mention/reply-to-bot),
+  even from the owner
+- **Then** it is dropped at the mention gate — no reply, no turn, and no peer row
+
+### Scenario: require_mention off admits an un-addressed owner group message
+
+- **Given** a paired channel with `require_mention` off
+- **When** an un-addressed group message arrives from the owner
+- **Then** it passes the mention gate and drives a turn (still owner-gated: a
+  non-owner would be refused by the sender checks below the gate)
+
+### Scenario: ignore_other_mentions drops a message that also @mentions a human
+
+- **Given** a paired channel with `ignore_other_mentions` on
+- **When** a group message @mentions the bot but also @mentions another user
+- **Then** it is dropped silently — no reply and no turn — so the bot does not
+  butt into human-aimed traffic
+
+### Scenario: ignore_other_mentions off still answers when @mentioned alongside a human
+
+- **Given** a paired channel with `ignore_other_mentions` off (the default)
+- **When** a group message @mentions the bot alongside another user
+- **Then** the turn still runs — the extra human @mention does not suppress it
+
 ### Scenario: a group slash-command reply routes to the group/thread
 
 - **Given** a paired channel and a group chat/thread the owner has messaged in
@@ -994,9 +1021,12 @@ capabilities the official personal bridges lack.
   group's peer (`get_by_chat`, not the single-peer `get`); a button tap's reply
   lands in the same group/thread, not a DM.
 - **FR-035**: Per-group inbound gating is configurable. A channel may set
-  require-mention (default on for groups), a sender allowlist, and
-  ignore-messages-that-@-someone-else — so a bot sitting in a busy group answers
-  only when it should.
+  require-mention (default on for groups — the bot answers only when @mentioned
+  or replied-to) and ignore-messages-that-@-someone-else (opt-in — a group
+  message that @mentions any non-bot user is dropped silently, even when it also
+  mentions the bot) — so a bot sitting in a busy group answers only when it
+  should. Both are plain config bools; the channel stays owner-gated regardless,
+  so this is about *when* to answer, not *who* may drive turns.
 
 ### D. Platform polish
 
