@@ -996,6 +996,15 @@ status / notify`.
 - **When** the retention sweep runs
 - **Then** the stale file is deleted and the recent one is kept
 
+### Scenario: the management surface lists each Coffer-hosted channel with status, owner, agent, and health
+
+- **Given** a registered and running Coffer-hosted channel with a paired owner
+  and a routed agent
+- **When** the management surface reads the channel
+- **Then** it reports the channel's enabled status, its live health (adapter
+  running), the paired owner, and the routed agent — mirroring the MCP-server /
+  memory / skill management surfaces
+
 ## Channels as a management plane (north star)
 
 Channels are managed the way Coffer manages MCP servers, memory, and skills:

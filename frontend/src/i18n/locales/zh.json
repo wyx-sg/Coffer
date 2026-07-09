@@ -1364,6 +1364,7 @@
       "name": "名称",
       "type": "类型",
       "agent": "默认 agent",
+      "health": "健康",
       "state": "状态",
       "paired": "配对"
     },
