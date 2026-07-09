@@ -35,6 +35,10 @@ from coffer.domain.chat.events import (
 _EDIT_INTERVAL_SECONDS = 1.5
 _PROGRESS_MAX_LINES = 8
 _DESC_MAX_CHARS = 48
+#: FR-037: cadence for re-sending the typing indicator on a supports_typing-only
+#: transport (SeaTalk). Its typing signal expires within seconds, so a long turn
+#: needs a periodic re-send to keep the "working…" hint alive.
+_TYPING_HEARTBEAT_SECONDS = 8.0
 
 
 def _clip(text: str, limit: int = _DESC_MAX_CHARS) -> str:
@@ -87,6 +91,17 @@ def _progress_line(mark: str, tool_name: str, descriptor: str) -> str:
     return f"{mark} {tool_name} · {descriptor}" if descriptor else f"{mark} {tool_name}"
 
 
+def _clip_stream_preview(text: str, limit: int) -> str:
+    """FR-037: clip the accumulating reply to the platform's per-message limit for
+    an interim streaming edit — editing with the full text could exceed the cap and
+    make the edit fail. Keep the TAIL (the most recent words) behind a leading
+    ellipsis, so the user watches the answer's latest text grow."""
+    if len(text) <= limit:
+        return text
+    marker = "…"
+    return marker + text[-(limit - len(marker)) :]
+
+
 #: The agent's opt-in to send a file: a line-anchored ``MEDIA:/abs/path``
 #: sentinel (Hermes-style), with an optional ``| caption`` after a pipe. Unlike
 #: markdown image syntax, this never collides with ordinary prose or a legitimate
@@ -123,6 +138,14 @@ class _Progress:
     desc: dict[str, str] = field(default_factory=dict)  # tool_use_id -> descriptor
     message: SentMessage | None = None
     last_edit: float = 0.0
+    # FR-037: once reply text starts streaming it takes over the single status
+    # message from the tool-progress lines, and a late tool event must not
+    # overwrite it back to tool lines.
+    text_started: bool = False
+    # FR-037: the turn's start time (renderer clock), so a text-only turn can gate
+    # opening its streaming status message on ELAPSED TIME — a fast reply opens
+    # none (no flicker), a slow/long one does.
+    started: float = 0.0
 
 
 @dataclass
@@ -140,13 +163,27 @@ class TurnRenderer:
     # tells a transport whose group/DM send paths differ which one to use.
     thread_id: str = ""
     chat_kind: str = "direct"
+    # FR-037: typing-heartbeat cadence (injectable so a test can drive it fast).
+    heartbeat_seconds: float = _TYPING_HEARTBEAT_SECONDS
 
     async def consume(self, queue: asyncio.Queue[Any]) -> None:
+        heartbeat = self._start_typing_heartbeat()
+        try:
+            await self._consume(queue)
+        finally:
+            # Reliably reap the heartbeat so it never outlives the turn.
+            if heartbeat is not None:
+                heartbeat.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await heartbeat
+
+    async def _consume(self, queue: asyncio.Queue[Any]) -> None:
         parts: list[str] = []
         progress = _Progress()
         stop_reason = "end_turn"
         error: TurnError | None = None
         started = self.now()
+        progress.started = started
         tool_ids: set[str] = set()
         tokens: int | None = None
         while True:
@@ -155,6 +192,10 @@ class TurnRenderer:
                 break
             if isinstance(event, TextDelta):
                 parts.append(event.text)
+                # FR-037: reply text takes over the single editable status
+                # message (a turn runs tools first, then writes its answer).
+                progress.text_started = True
+                await self._stream_text(progress, parts)
             elif isinstance(event, ToolCall):
                 tool_ids.add(event.tool_use_id)
                 descriptor = _describe_tool(event.tool_name, event.tool_input)
@@ -208,11 +249,61 @@ class TurnRenderer:
             return f"⚠️ tool-limit · {detail}"
         return f"✅ done · {detail}"
 
+    def _start_typing_heartbeat(self) -> asyncio.Task[None] | None:
+        # FR-037: a supports_typing-but-not-edit transport (SeaTalk) cannot stream
+        # — its only non-cluttering keep-alive is the typing indicator (an
+        # ephemeral action, zero chat clutter), which expires within seconds, so
+        # re-send it on a heartbeat while the turn runs. DM ONLY:
+        # single_chat_typing targets a DM and there is no group typing endpoint,
+        # so a group/thread turn gets NO interim signal (SeaTalk can neither edit
+        # nor delete nor group-type) — the final chunked reply is its completion
+        # signal.
+        caps = self.adapter.capabilities
+        if caps.supports_typing and not caps.supports_edit and self.chat_kind == "direct":
+            return asyncio.create_task(self._typing_heartbeat())
+        return None
+
+    async def _typing_heartbeat(self) -> None:
+        while True:
+            await asyncio.sleep(self.heartbeat_seconds)
+            # Best-effort: a failed heartbeat must never break the turn.
+            with contextlib.suppress(Exception):
+                await self.adapter.send_typing(self.chat_id)
+
     async def _update_progress(self, progress: _Progress) -> None:
-        if not self.adapter.capabilities.supports_edit:
+        # Once reply text is streaming it owns the status message (FR-037) — a
+        # late tool event must not overwrite it back to tool lines.
+        if progress.text_started:
             return
         text = "\n".join(list(progress.lines.values())[-_PROGRESS_MAX_LINES:])
-        now = time.monotonic()
+        await self._render_status(progress, text)
+
+    async def _stream_text(self, progress: _Progress, parts: list[str]) -> None:
+        # FR-037: stream the accumulating reply text into the single editable
+        # status message (throttled), clipped to the platform limit so a long
+        # preview never exceeds the per-message cap and fails the edit. When tool
+        # progress already opened the message, morph it into the reply text; on a
+        # text-only turn, open the message only once the reply has run past the
+        # throttle interval — a fast reply opens NONE (no create → delete → resend
+        # flicker; its final send is enough), a slow/long one streams. Interim
+        # text is PLAIN (the transport edit is plain, deliberately — partial
+        # markdown mid-stream would break the platform's HTML parser); _finish
+        # still sends the HTML-rendered, paragraph-chunked, MEDIA-aware final reply.
+        if progress.message is None and self.now() - progress.started < _EDIT_INTERVAL_SECONDS:
+            return
+        text = "".join(parts).strip()
+        if not text:
+            return
+        preview = _clip_stream_preview(text, self.adapter.capabilities.max_message_chars)
+        await self._render_status(progress, preview)
+
+    async def _render_status(self, progress: _Progress, text: str) -> None:
+        # The one throttled send/edit path both the tool-progress updater and the
+        # text-streamer funnel through, so a turn keeps exactly ONE editable
+        # status message. Only supports_edit transports get a status message.
+        if not self.adapter.capabilities.supports_edit:
+            return
+        now = self.now()
         with contextlib.suppress(Exception):
             if progress.message is None:
                 progress.message = await self.adapter.send_text(
