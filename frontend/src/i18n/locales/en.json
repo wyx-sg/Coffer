@@ -1364,6 +1364,7 @@
       "name": "Name",
       "type": "Type",
       "agent": "Default agent",
+      "health": "Health",
       "state": "State",
       "paired": "Paired"
     },

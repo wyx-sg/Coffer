@@ -871,6 +871,14 @@ status / notify`。
 - **When** 保留清扫运行
 - **Then** 陈旧文件被删除，较新的文件被保留
 
+### Scenario: the management surface lists each Coffer-hosted channel with status, owner, agent, and health
+
+- **Given** 一个已注册且运行中的 Coffer-hosted channel，带有一个已配对的 owner
+  和一个路由到的 agent
+- **When** 管理面读取该 channel
+- **Then** 它报告该 channel 的启用状态、实时健康（适配器运行中）、已配对的
+  owner 以及路由到的 agent——与 MCP-server / memory / skill 的管理面保持一致
+
 ## Channels as a management plane（北极星）
 
 channel 被管理的方式，与 Coffer 管理 MCP server、memory、skill 的方式一致：在一处
