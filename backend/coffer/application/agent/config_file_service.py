@@ -45,8 +45,9 @@ from coffer.domain.errors import ConfigFileNotAllowed
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.workspace_errors import ConfigFileStale
 
-# Prefix of the managed memory-projection block marker (spec 007 owns the full
-# format); the editor only needs to KNOW the block is present, never parse it.
+# Prefix of a LEGACY memory-projection block marker. Native projection was
+# removed (ADR-026) so Coffer no longer writes this block; the flag only lets
+# the editor annotate a leftover block as safe-to-delete, never parses it.
 MEMORY_BLOCK_MARKER = "<!-- coffer:memory"
 
 
