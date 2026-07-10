@@ -1526,6 +1526,17 @@
     "thisMachine": "This machine",
     "viewSlice": "View machine",
     "loadFailed": "Failed to load machines.",
-    "empty": "No machines yet. Once you configure sync and run it, machines will appear here."
+    "empty": "No machines yet. Once you configure sync and run it, machines will appear here.",
+    "slice": {
+      "back": "Back to machines",
+      "agents": "Agents",
+      "mcpServers": "MCP servers",
+      "skills": "Skills",
+      "channels": "Channels",
+      "active": "Active",
+      "inactive": "Inactive",
+      "empty": "Nothing here yet.",
+      "intentOnly": "This is a remote machine — activation shown here is intent only, computed from the synced registry and scope, not confirmed against the machine itself."
+    }
   }
 }

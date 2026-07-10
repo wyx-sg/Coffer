@@ -12,6 +12,7 @@ import { KnowledgeBaseDetailPage } from "./kinds/knowledge_base/KnowledgeBaseDet
 import { MemoryPage } from "./pages/MemoryPage";
 import { MemoryStoreDetailPage } from "./kinds/memory/MemoryStoreDetailPage";
 import { MachinesPage } from "./pages/MachinesPage";
+import { MachineDetailPage } from "./pages/MachineDetailPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
 import { ResourceDetailPage } from "./pages/ResourceDetailPage";
 import { AuditLogPage } from "./pages/audit/AuditLogPage";
@@ -48,6 +49,7 @@ export const router = createBrowserRouter([
       { path: "memory", element: <MemoryPage /> },
       { path: "memory/:name", element: <MemoryStoreDetailPage /> },
       { path: "machines", element: <MachinesPage /> },
+      { path: "machines/:id", element: <MachineDetailPage /> },
       { path: "audit", element: <AuditLogPage /> },
       // Legacy route — this surface briefly lived at /observability. Keep the
       // URL working so old bookmarks resolve.

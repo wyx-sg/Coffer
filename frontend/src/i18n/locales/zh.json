@@ -1526,6 +1526,17 @@
     "thisMachine": "本机",
     "viewSlice": "查看机器",
     "loadFailed": "加载机器列表失败。",
-    "empty": "还没有机器。配置并运行同步后，机器会出现在这里。"
+    "empty": "还没有机器。配置并运行同步后，机器会出现在这里。",
+    "slice": {
+      "back": "返回机器列表",
+      "agents": "Agent",
+      "mcpServers": "MCP 服务器",
+      "skills": "技能",
+      "channels": "频道",
+      "active": "已启用",
+      "inactive": "未启用",
+      "empty": "暂无内容。",
+      "intentOnly": "这是一台远程机器 —— 启用状态根据已同步的注册表与作用域计算得出，未向该机器本身核实。"
+    }
   }
 }
