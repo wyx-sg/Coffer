@@ -55,6 +55,30 @@ def _default_config() -> SyncConfig:
     )
 
 
+def validate_config_fields(
+    *,
+    remote: str | None,
+    enabled: bool,
+    interval_seconds: int,
+    poll_remote_seconds: int,
+    branch: str,
+) -> None:
+    """Field-level validation, shared with ``SyncService`` so cheap checks run
+    BEFORE the save-time remote reachability probe (a network round trip)."""
+    if interval_seconds < MIN_INTERVAL_SECONDS:
+        raise ConfigValidationError(
+            f"interval_seconds must be >= {MIN_INTERVAL_SECONDS}, got {interval_seconds}"
+        )
+    if poll_remote_seconds < MIN_POLL_REMOTE_SECONDS:
+        raise ConfigValidationError(
+            f"poll_remote_seconds must be >= {MIN_POLL_REMOTE_SECONDS}, got {poll_remote_seconds}"
+        )
+    if enabled and not remote:
+        raise ConfigValidationError("a remote is required to enable sync")
+    if not branch:
+        raise ConfigValidationError("branch must not be empty")
+
+
 class SyncConfigService:
     """Reads/writes the singleton sync config and state rows."""
 
@@ -79,19 +103,13 @@ class SyncConfigService:
         actor: str,
         poll_remote_seconds: int = DEFAULT_POLL_REMOTE_SECONDS,
     ) -> SyncConfig:
-        if interval_seconds < MIN_INTERVAL_SECONDS:
-            raise ConfigValidationError(
-                f"interval_seconds must be >= {MIN_INTERVAL_SECONDS}, got {interval_seconds}"
-            )
-        if poll_remote_seconds < MIN_POLL_REMOTE_SECONDS:
-            raise ConfigValidationError(
-                f"poll_remote_seconds must be >= {MIN_POLL_REMOTE_SECONDS}, "
-                f"got {poll_remote_seconds}"
-            )
-        if enabled and not remote:
-            raise ConfigValidationError("a remote is required to enable sync")
-        if not branch:
-            raise ConfigValidationError("branch must not be empty")
+        validate_config_fields(
+            remote=remote,
+            enabled=enabled,
+            interval_seconds=interval_seconds,
+            poll_remote_seconds=poll_remote_seconds,
+            branch=branch,
+        )
         saved = await self._config.set(
             remote=remote or None,
             enabled=enabled,

@@ -43,7 +43,13 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/SyncConfigOut' }
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: >-
+            Invalid fields, or the new remote failed the save-time headless
+            reachability probe (`SYNC_REMOTE_UNREACHABLE`; `details.hint` is
+            `auth` / `not_found` / `network` for actionable UI guidance).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /api/v1/sync/status:
     get:
@@ -174,6 +180,20 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/OverridesOut' }
 
+  /api/v1/sync/key/fingerprint:
+    get:
+      summary: Short SHA-256 fingerprint of the master key (never the key itself)
+      operationId: getKeyFingerprint
+      tags: [sync]
+      responses:
+        '200':
+          description: >-
+            Whether a key exists here and its fingerprint — matching
+            fingerprints on two machines mean they hold the same key.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KeyFingerprintOut' }
+
   /api/v1/sync/key/export:
     post:
       summary: Export this machine's master key to a local file (out-of-band transfer)
@@ -256,6 +276,11 @@ components:
           enum: [unconfigured, clean, syncing, conflicted, error, credentials_locked]
         last_sync_at: { type: string, nullable: true }
         last_error: { type: string, nullable: true }
+        error_hint:
+          type: string
+          nullable: true
+          enum: [auth, not_found, network, null]
+          description: "Actionable classification of last_error for UI guidance"
         conflict_paths:
           type: array
           items: { type: string }
@@ -271,6 +296,15 @@ components:
       properties:
         push: { type: boolean, description: "Push after a clean merge (default true)" }
         pull: { type: boolean, description: "Pull before pushing (default true)" }
+    KeyFingerprintOut:
+      type: object
+      required: [present, fingerprint]
+      properties:
+        present: { type: boolean }
+        fingerprint:
+          type: string
+          nullable: true
+          description: "First 12 hex chars of SHA-256(master key); null when absent"
     SyncResolveIn:
       type: object
       required: [strategy]

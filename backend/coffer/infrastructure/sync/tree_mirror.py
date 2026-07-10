@@ -42,14 +42,20 @@ def _tree_files(root: pathlib.Path, exclude: frozenset[str]) -> dict[pathlib.Pat
 
 
 def _mirror_tree(
-    src: pathlib.Path, dst: pathlib.Path, exclude: frozenset[str] = frozenset()
+    src: pathlib.Path,
+    dst: pathlib.Path,
+    exclude: frozenset[str] = frozenset(),
+    *,
+    delete_missing: bool = True,
 ) -> None:
     """Converge ``dst`` on ``src`` by copying only changed files and deleting
     only files gone from ``src`` — never a blanket rmtree.
 
-    Used for the workspace→live direction: the live trees are watched by the
-    auto-sync watcher (a full rewrite would storm it with spurious events) and
-    hold machine-local derived files (``exclude``) that a rewrite would delete.
+    Used in both directions: workspace→live (the live trees are watched by the
+    auto-sync watcher and hold machine-local derived files a rewrite would
+    delete) and live→workspace (where ``delete_missing=False`` keeps
+    remote-authored files this machine has not imported yet — exporting their
+    absence would delete them from every other machine).
     """
     dst.mkdir(parents=True, exist_ok=True)
     src_files = _tree_files(src, exclude)
@@ -61,5 +67,7 @@ def _mirror_tree(
         out = dst / rel
         out.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src_path, out)
+    if not delete_missing:
+        return
     for rel in dst_files.keys() - src_files.keys():
         (dst / rel).unlink(missing_ok=True)

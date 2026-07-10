@@ -15,7 +15,6 @@ import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
 import { useRunSync, useSyncConfig, useSyncStatus, useUpdateSyncConfig } from "@/lib/hooks/useSync";
 
-import { SyncConflictPanel } from "./SyncConflictPanel";
 import { SyncMachinesCard } from "./SyncMachinesCard";
 import { SyncMasterKeyCard } from "./SyncMasterKeyCard";
 import { SyncStatusLine } from "./SyncStatusLine";
@@ -151,8 +150,6 @@ export function SyncSettings() {
           </div>
         </CardContent>
       </Card>
-
-      <SyncConflictPanel />
 
       <SyncMachinesCard />
 

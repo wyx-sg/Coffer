@@ -79,13 +79,16 @@ coffer sync machines --rename studio    # rename this machine
 Each machine registers itself (name, platform, last sync) when it syncs; the
 list also appears in the desktop Sync panel.
 
-## Resolving a conflict
+## Conflicts resolve themselves
 
-If you edited the same resource/file on two machines before syncing, a run stops
-in `conflicted` state and imports nothing:
+If you edited the same resource/file on two machines before syncing, the run
+auto-resolves each conflicted path to the newer edit and completes — no manual
+step. In the rare case the engine cannot settle a path, the run parks in
+`conflicted` and the UI points you at your own repository (e.g. GitHub); the
+CLI escape hatch still works:
 
 ```bash
-coffer sync status        # -> conflicted, lists the paths
+coffer sync status        # -> conflicted, lists the paths (rare)
 coffer sync resolve --theirs resources/mcp_server/confluence.yaml   # or --ours, or edit then --resolved
 coffer sync               # completes
 ```
@@ -93,5 +96,6 @@ coffer sync               # completes
 ## REST / Desktop
 
 Everything above is also available over `/api/v1/sync/*` and in the desktop
-**Sync** settings panel (configure remote, toggle auto-sync, see status,
-trigger a run, resolve conflicts).
+**Sync** settings panel (configure remote — validated on save, toggle
+auto-sync, see status with actionable error hints, trigger a run, compare
+master-key fingerprints across machines).

@@ -11,9 +11,9 @@ vi.mock("@/lib/hooks/useSync", () => ({
   useSyncStatus: vi.fn(),
   useUpdateSyncConfig: vi.fn(),
   useRunSync: vi.fn(),
-  useResolveSync: vi.fn(),
   useImportMasterKey: vi.fn(),
   useExportMasterKey: vi.fn(),
+  useKeyFingerprint: vi.fn(),
   useSyncMachines: vi.fn(),
   useRenameMachine: vi.fn(),
 }));
@@ -26,7 +26,6 @@ function wrap({ children }: PropsWithChildren) {
 
 const update = vi.fn();
 const run = vi.fn();
-const resolve = vi.fn();
 
 afterEach(() => vi.clearAllMocks());
 
@@ -49,6 +48,7 @@ function seed(statusValue: NonNullable<Status>["status"], over: Partial<NonNulla
       status: statusValue,
       last_sync_at: null,
       last_error: null,
+      error_hint: null,
       conflict_paths: [],
       locked_refs: [],
       quarantined_refs: [],
@@ -64,10 +64,6 @@ function seed(statusValue: NonNullable<Status>["status"], over: Partial<NonNulla
     mutate: run,
     isPending: false,
   } as unknown as ReturnType<typeof hooks.useRunSync>);
-  vi.mocked(hooks.useResolveSync).mockReturnValue({
-    mutate: resolve,
-    isPending: false,
-  } as unknown as ReturnType<typeof hooks.useResolveSync>);
   vi.mocked(hooks.useImportMasterKey).mockReturnValue({
     mutate: vi.fn(),
     isPending: false,
@@ -76,6 +72,9 @@ function seed(statusValue: NonNullable<Status>["status"], over: Partial<NonNulla
     mutate: vi.fn(),
     isPending: false,
   } as unknown as ReturnType<typeof hooks.useExportMasterKey>);
+  vi.mocked(hooks.useKeyFingerprint).mockReturnValue({
+    data: { present: true, fingerprint: "abc123def456" },
+  } as unknown as ReturnType<typeof hooks.useKeyFingerprint>);
   vi.mocked(hooks.useSyncMachines).mockReturnValue({
     data: { machines: [] },
   } as unknown as ReturnType<typeof hooks.useSyncMachines>);
@@ -129,11 +128,31 @@ describe("SyncSettings", () => {
     expect(screen.getByText("boom")).toBeInTheDocument();
   });
 
-  test("conflict panel offers ours/theirs resolution", () => {
+  test("an auth failure renders configuration guidance, not just raw stderr", () => {
+    seed("error", {
+      last_error: "git fetch failed: fatal: could not read Username",
+      error_hint: "auth",
+    });
+    render(<SyncSettings />, { wrapper: wrap });
+    // Raw error stays for diagnosis; the actionable hint is what the user acts on.
+    expect(screen.getByText(/could not read username/i)).toBeInTheDocument();
+    expect(screen.getByText(/ssh/i)).toBeInTheDocument();
+  });
+
+  test("conflicts auto-resolve: no resolution panel; a parked conflict points at the repo", () => {
     seed("conflicted", { conflict_paths: ["resources/mcp_server/x.yaml"] });
     render(<SyncSettings />, { wrapper: wrap });
-    expect(screen.getByText("resources/mcp_server/x.yaml")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /keep the remote version/i }));
-    expect(resolve).toHaveBeenCalledWith({ strategy: "theirs", paths: [] });
+    // The ours/theirs panel is gone (auto-resolve owns conflicts now).
+    expect(
+      screen.queryByRole("button", { name: /keep the remote version/i }),
+    ).not.toBeInTheDocument();
+    // Fallback guidance: resolve in your own git repo.
+    expect(screen.getByText(/could not settle this conflict automatically/i)).toBeInTheDocument();
+  });
+
+  test("the master-key card shows the key fingerprint", () => {
+    seed("clean");
+    render(<SyncSettings />, { wrapper: wrap });
+    expect(screen.getByTestId("key-fingerprint")).toHaveTextContent("abc123def456");
   });
 });

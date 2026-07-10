@@ -220,8 +220,10 @@ async def test_round_trip_and_credential_bootstrap(tmp_path, remote) -> None:  #
     assert b.cred_store().get("cred-x") == "super-secret"
 
 
-@pytest.mark.acceptance(spec="010-sync", scenario="conflicting edits stop the run for resolution")
-async def test_conflict_then_resolve(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+@pytest.mark.acceptance(
+    spec="010-sync", scenario="conflicting edits auto-resolve to the newer edit"
+)
+async def test_conflict_auto_resolves_newest_wins(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
     a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
     await a.resources.register("mcp_server", "confluence", {"value": "base"}, "test")
     await a.service.run()
@@ -229,19 +231,22 @@ async def test_conflict_then_resolve(tmp_path, remote) -> None:  # type: ignore[
     b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
     await b.service.run()
 
-    # Both edit the same resource; A pushes first.
+    # Both edit the same resource; A pushes first, B's edit is the newer one.
     await a.resources.update_config(ResourceRef("mcp_server", "confluence"), {"value": "A2"}, "t")
     await a.service.run()
     await b.resources.update_config(ResourceRef("mcp_server", "confluence"), {"value": "B2"}, "t")
-    conflicted = await b.service.run()
+    state = await b.service.run()
 
-    assert conflicted.status is SyncStatus.CONFLICTED
-    assert any("confluence" in p for p in conflicted.conflict_paths)
-
-    resolved = await b.service.resolve("theirs", [])
-    assert resolved.status is SyncStatus.CLEAN
+    # No user-facing conflict: the run auto-resolves (newest commit per path
+    # wins; a tie keeps ours = the machine running the merge) and completes.
+    assert state.status is not SyncStatus.CONFLICTED
     got = await b.resources.get(ResourceRef("mcp_server", "confluence"))
-    assert got.config == {"value": "A2"}
+    assert got.config == {"value": "B2"}
+
+    # A converges on the same winner on its next run.
+    await a.service.run()
+    got_a = await a.resources.get(ResourceRef("mcp_server", "confluence"))
+    assert got_a.config == {"value": "B2"}
 
 
 @pytest.mark.acceptance(spec="010-sync", scenario="auto-sync converges after a change")
@@ -589,9 +594,11 @@ async def test_too_new_gate_holds_on_second_run(tmp_path, remote) -> None:  # ty
     assert "newer" in (state.last_error or "")
 
 
-async def test_resolve_theirs_accepts_a_deletion(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
-    """delete/modify conflict: resolving --theirs toward the deleting side
-    removes the file instead of erroring (review #281 finding 4)."""
+async def test_auto_resolve_handles_delete_modify(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """delete/modify conflict auto-resolves without user action, and the
+    tombstone machinery still decides the outcome: an edit that PREDATES the
+    deletion never resurrects the resource (review #281 finding 4 semantics,
+    carried into auto-resolve)."""
     a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
     await a.resources.register("mcp_server", "contested", {"value": "base"}, "test")
     await a.service.run()
@@ -605,10 +612,12 @@ async def test_resolve_theirs_accepts_a_deletion(tmp_path, remote) -> None:  # t
         ResourceRef("mcp_server", "contested"), {"value": "edited"}, "test"
     )
     state = await b.service.run()
-    assert state.status is SyncStatus.CONFLICTED
+    assert state.status is not SyncStatus.CONFLICTED
 
-    resolved = await b.service.resolve("theirs", [])
-    assert resolved.status is not SyncStatus.CONFLICTED
+    # B's edit predates A's tombstone, so the deletion wins as the runs
+    # settle: B withholds the stale doc from export and applies the
+    # tombstone on import.
+    await b.service.run()
     assert not [r for r in await b.resources.list() if r.name == "contested"]
 
 
@@ -739,10 +748,11 @@ async def test_near_real_time_change_and_probe_convergence(tmp_path, remote) -> 
     assert got.config == {"value": "nrt"}
 
 
-async def test_rerun_does_not_blow_through_conflict(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
-    """Running sync again while conflicted must stay conflicted — never
-    export over the unmerged files and silently resolve local-wins
-    (review #283 blocker 2, service-level guard)."""
+async def test_rerun_settles_a_preexisting_merge_deterministically(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """A run entered with an unresolved merge on disk (e.g. a crashed prior
+    run) must NOT export over the conflicted files (review #283 blocker 2);
+    it auto-resolves them by the same newest-wins policy FIRST, then proceeds
+    — both machines converge on the same winner."""
     a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
     await a.resources.register("mcp_server", "contested", {"value": "base"}, "test")
     await a.service.run()
@@ -752,20 +762,25 @@ async def test_rerun_does_not_blow_through_conflict(tmp_path, remote) -> None:  
     await a.resources.update_config(ResourceRef("mcp_server", "contested"), {"value": "A2"}, "test")
     await a.service.run()
     await b.resources.update_config(ResourceRef("mcp_server", "contested"), {"value": "B2"}, "test")
-    state = await b.service.run()
-    assert state.status is SyncStatus.CONFLICTED
+    # Simulate a run that merged into conflict and died before resolving:
+    # produce the conflicted working tree directly via git on B's workspace.
+    b_git = GitRepo(b.root / "ws")
+    (b.root / "ws" / "resources" / "mcp_server" / "contested.yaml").write_text(
+        "config:\n  value: B2\ndescription: null\nenabled: true\n"
+        "kind: mcp_server\nname: contested\n",
+        encoding="utf-8",
+    )
+    b_git.commit_all("b edit")
+    outcome = b_git.pull("main")
+    assert outcome.is_conflict
 
-    # A second (auto or manual) run must not auto-resolve the conflict.
+    # The next run settles the leftover merge (newest edit wins: B2) instead
+    # of parking in conflicted or exporting over the unmerged files.
     state = await b.service.run()
-    assert state.status is SyncStatus.CONFLICTED
-    # A's copy is untouched by B's rerun.
+    assert state.status is not SyncStatus.CONFLICTED
+    assert (await b.resources.get(ResourceRef("mcp_server", "contested"))).config == {"value": "B2"}
     await a.service.run()
-    assert (await a.resources.get(ResourceRef("mcp_server", "contested"))).config == {"value": "A2"}
-
-    # Resolution still works normally afterwards.
-    resolved = await b.service.resolve("theirs", [])
-    assert resolved.status is not SyncStatus.CONFLICTED
-    assert (await b.resources.get(ResourceRef("mcp_server", "contested"))).config == {"value": "A2"}
+    assert (await a.resources.get(ResourceRef("mcp_server", "contested"))).config == {"value": "B2"}
 
 
 async def test_import_preserves_local_derived_indexes(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
@@ -897,3 +912,30 @@ async def test_override_ref_segments_validated(tmp_path, remote) -> None:  # typ
         await a.service.set_override("..", "x", {"a": 1}, actor="test")
     with pytest.raises(ConfigValidationError):
         await a.service.set_override("mcp_server", "a/b", {"a": 1}, actor="test")
+
+
+@pytest.mark.acceptance(
+    spec="010-sync", scenario="a first sync against a populated remote merges, never deletes"
+)
+async def test_first_export_preserves_unimported_foreign_content(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """The 2026-07-10 incident guard: content that arrived in the workspace
+    but was never imported here (resource docs, tree files, credential
+    ciphertext) survives an export that runs before any completed import."""
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    ws = b.root / "ws"
+    (ws / "resources" / "mcp_server").mkdir(parents=True)
+    (ws / "resources" / "mcp_server" / "foreign.yaml").write_text(
+        "config:\n  value: theirs\ndescription: null\nenabled: true\n"
+        "kind: mcp_server\nname: foreign\n",
+        encoding="utf-8",
+    )
+    (ws / "knowledge").mkdir(parents=True, exist_ok=True)
+    (ws / "knowledge" / "foreign-note.md").write_text("from A\n", encoding="utf-8")
+    (ws / "credentials").mkdir(parents=True)
+    (ws / "credentials" / "foreign-ref.enc").write_text("Zm9v\n", encoding="utf-8")
+
+    await b.service.run(pull=False, push=False)
+
+    assert (ws / "resources" / "mcp_server" / "foreign.yaml").exists()
+    assert (ws / "knowledge" / "foreign-note.md").read_text() == "from A\n"
+    assert (ws / "credentials" / "foreign-ref.enc").exists()

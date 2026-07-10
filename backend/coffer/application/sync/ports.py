@@ -50,6 +50,13 @@ class GitPort(Protocol):
     def remote_head(self, remote: str, branch: str) -> str | None:
         """The remote branch head sha (one ``ls-remote`` round trip), or None."""
 
+    def check_remote(self, remote: str, branch: str) -> None:
+        """Reachability probe; raises ``GitOperationFailed`` (raw stderr) on
+        auth/host/repo failures. A missing branch on a reachable repo is fine."""
+
+    def last_commit_ts(self, rev: str, path: str) -> int | None:
+        """Unix ts of the last commit touching ``path`` on ``rev``, or None."""
+
     def pull(self, branch: str) -> PullOutcome: ...
 
     def push(self, branch: str) -> None: ...
@@ -61,8 +68,12 @@ class GitPort(Protocol):
 class WorkspacePort(Protocol):
     """Filesystem IO over the sync workspace (mirrors, manifest, docs, blobs)."""
 
-    def mirror_trees_out(self) -> None:
-        """Copy the live knowledge/memory trees into the workspace."""
+    def mirror_trees_out(self, *, delete_missing: bool = True) -> None:
+        """Converge the workspace trees on the live knowledge/memory trees.
+
+        ``delete_missing=False`` copies adds/changes only — used until a run
+        has completed an import, so files that arrived from the remote but
+        were never imported locally are not exported away as deletions."""
 
     def mirror_trees_in(self) -> None:
         """Copy the workspace knowledge/memory trees back into the live vault."""
@@ -108,8 +119,14 @@ class WorkspacePort(Protocol):
 
     def read_state_docs(self, area: str) -> list[tuple[str, dict[str, object]]]: ...
 
-    def write_credential_blobs(self, blobs: Mapping[str, bytes]) -> None:
-        """Replace ``credentials/`` with one ``<ref>.enc`` per ciphertext blob."""
+    def write_credential_blobs(
+        self, blobs: Mapping[str, bytes], *, delete_missing: bool = True
+    ) -> None:
+        """Write one ``<ref>.enc`` per ciphertext blob. Existing blobs for refs
+        this machine does not hold are removed only with ``delete_missing``
+        (same not-yet-imported guard as the trees). A ref whose path collides
+        case-insensitively with a differently-cased existing blob replaces it —
+        two case variants in one git index break checkouts on macOS."""
 
     def read_credential_blobs(self) -> dict[str, bytes]: ...
 

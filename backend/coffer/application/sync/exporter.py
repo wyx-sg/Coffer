@@ -57,6 +57,7 @@ class SyncExporter:
         quarantined: Collection[str] = (),
         machine_id: str | None = None,
         failed_state: Collection[str] = (),
+        allow_deletions: bool = True,
     ) -> None:
         resources = await self._resources.list()
         overrides = (
@@ -64,14 +65,8 @@ class SyncExporter:
             if machine_id
             else {}
         )
-        shared_before = (
-            {
-                (d.kind, d.name): d.config
-                for d in await asyncio.to_thread(self._workspace.read_resource_docs)
-            }
-            if overrides
-            else {}
-        )
+        workspace_docs = await asyncio.to_thread(self._workspace.read_resource_docs)
+        shared_before = {(d.kind, d.name): d.config for d in workspace_docs} if overrides else {}
         docs = []
         for r in resources:
             config = dict(r.config)
@@ -97,6 +92,17 @@ class SyncExporter:
             )
         live = {(r.kind, r.name): _aware(r.created_at) for r in resources}
         pending = await self._reconcile_ledger(live, set(quarantined))
+        # Workspace docs with no local row are PENDING IMPORT, not deleted:
+        # they arrived from the remote and this machine has not (successfully)
+        # ingested them yet. Deleting a doc from the medium requires a
+        # tombstone — the ledger's (this machine's own deletions) or a
+        # workspace tombstone file — never mere local absence (spec 010).
+        ledger_refs = {(t.kind, t.name) for t in pending}
+        foreign = {
+            f"{d.kind}:{d.name}"
+            for d in workspace_docs
+            if (d.kind, d.name) not in live and (d.kind, d.name) not in ledger_refs
+        }
         state_docs = []
         for provider in self._state_providers:
             area_docs, owned = await provider.export_docs()
@@ -107,10 +113,11 @@ class SyncExporter:
             docs,
             live,
             pending,
-            set(quarantined),
+            set(quarantined) | foreign,
             machine_id,
             state_docs,
             set(failed_state),
+            allow_deletions,
         )
 
     async def _reconcile_ledger(
@@ -140,10 +147,11 @@ class SyncExporter:
         docs: list[dict[str, object]],
         live: dict[tuple[str, str], datetime],
         pending: list[Tombstone],
-        quarantined: set[str],
+        preserve_refs: set[str],
         machine_id: str | None,
         state_docs: list[tuple[str, list[tuple[str, dict[str, object]]], list[str]]],
         failed_state: set[str],
+        allow_deletions: bool,
     ) -> None:
         withheld = self._sync_tombstone_files(live, pending, machine_id)
         for area, docs_for_area, owned in state_docs:
@@ -152,14 +160,18 @@ class SyncExporter:
                 area, docs_for_area, owned_prefixes=owned, preserve=preserve
             )
         kept_docs = [d for d in docs if (str(d["kind"]), str(d["name"])) not in withheld]
-        self._workspace.write_resource_docs(kept_docs, preserve=quarantined)
-        self._workspace.mirror_trees_out()
+        self._workspace.write_resource_docs(kept_docs, preserve=preserve_refs)
+        # Tree and credential deletions propagate only after this machine has
+        # completed an import — before that, local absence just means
+        # "not ingested yet", and exporting it would delete the other
+        # machines' content (the 2026-07-10 first-sync incident).
+        self._workspace.mirror_trees_out(delete_missing=allow_deletions)
         blobs: dict[str, bytes] = {}
         for ref in self._credentials.list_refs():
             blob = self._credentials.read_ciphertext(ref)
             if blob is not None:
                 blobs[ref] = blob
-        self._workspace.write_credential_blobs(blobs)
+        self._workspace.write_credential_blobs(blobs, delete_missing=allow_deletions)
         self._write_manifest_guarded()
 
     def _write_manifest_guarded(self) -> None:

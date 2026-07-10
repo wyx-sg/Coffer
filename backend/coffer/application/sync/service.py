@@ -1,17 +1,18 @@
 """Sync orchestration service (spec 010).
 
 One ``run()`` is: ensure repo -> export local state -> commit -> pull/merge ->
-(if clean) push -> import the merged result. A merge conflict stops the run with
-status ``conflicted`` and imports nothing. Credentials that can't be decrypted on
-this machine surface as ``credentials_locked`` (the master key is bootstrapped
-out-of-band, never through the sync medium).
+(if clean) push -> import the merged result. Merge conflicts auto-resolve
+newest-wins (``auto_resolve``); only an unsettleable path parks the run in
+``conflicted``. Credentials that can't be decrypted on this machine surface as
+``credentials_locked`` (the master key is bootstrapped out-of-band, never
+through the sync medium).
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
-import platform as _platform
+import hashlib
 import re
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -19,10 +20,12 @@ from pathlib import Path
 
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
-from coffer.application.sync.config_service import SyncConfigService
+from coffer.application.sync.auto_resolve import auto_resolve
+from coffer.application.sync.config_service import SyncConfigService, validate_config_fields
 from coffer.application.sync.exporter import SyncExporter
 from coffer.application.sync.identity import MachineIdentityService
 from coffer.application.sync.importer import SyncImporter
+from coffer.application.sync.machines import MachineDirectory
 from coffer.application.sync.ports import (
     CredentialSyncPort,
     GitPort,
@@ -34,15 +37,17 @@ from coffer.domain.error_base import CofferError
 from coffer.domain.errors import ConfigValidationError
 from coffer.domain.resource import ResourceRef
 from coffer.domain.sync.errors import (
+    GitOperationFailed,
     MasterKeyFileInvalid,
     SyncInProgress,
     SyncNotConfigured,
+    SyncRemoteUnreachable,
     SyncWorkspaceTooNew,
+    classify_git_error,
 )
 from coffer.domain.sync.manifest import SCHEMA_VERSION
 from coffer.domain.sync.models import (
     DEFAULT_POLL_REMOTE_SECONDS,
-    MACHINE_ENTRY_HEARTBEAT_SECONDS,
     MachineEntry,
     MachineIdentity,
     SyncConfig,
@@ -89,7 +94,7 @@ class SyncService:
         self._audit = audit
         self._identity = identity
         self._workspace = workspace
-        self._coffer_version = coffer_version
+        self._machines = MachineDirectory(identity, workspace, coffer_version)
         self._home = home
         self._resources = resources
         self._lock = asyncio.Lock()
@@ -114,6 +119,25 @@ class SyncService:
         actor: str,
         poll_remote_seconds: int = DEFAULT_POLL_REMOTE_SECONDS,
     ) -> SyncConfig:
+        # Field validation first (cheap, and its errors must win), THEN the
+        # save-time reachability probe — a bad URL or missing headless
+        # credentials must fail the save with an actionable error, not
+        # surface later out of a background run. Probed only for an ENABLED
+        # config whose remote changed (or on the enabling transition): a
+        # disabled config may hold any draft string offline.
+        validate_config_fields(
+            remote=remote,
+            enabled=enabled,
+            interval_seconds=interval_seconds,
+            poll_remote_seconds=poll_remote_seconds,
+            branch=branch,
+        )
+        current = await self._config.get_config()
+        if remote and enabled and (remote != current.remote or not current.enabled):
+            try:
+                await asyncio.to_thread(self._git.check_remote, remote, branch)
+            except GitOperationFailed as e:
+                raise SyncRemoteUnreachable(remote, classify_git_error(e.detail), e.detail) from e
         return await self._config.update_config(
             remote=remote,
             enabled=enabled,
@@ -156,10 +180,12 @@ class SyncService:
         await asyncio.to_thread(self._git.ensure_repo, config.remote, config.branch)
         # A run must never blow through an unresolved merge: exporting over
         # conflicted files and committing would silently resolve local-wins,
-        # destroying the other machine's edit. Resolve first.
+        # destroying the other machine's edit. Auto-resolve first.
         existing_conflicts = await asyncio.to_thread(self._git.conflicted_paths)
         if existing_conflicts:
-            return await self._record_conflict(existing_conflicts)
+            remaining = await auto_resolve(self._git, self._audit, existing_conflicts)
+            if remaining:
+                return await self._record_conflict(remaining)
         # Gate BEFORE export: a newer-schema manifest merged by an earlier run
         # must fail here, not be overwritten by this run's export (which would
         # silently disarm the gate and downgrade the medium).
@@ -170,16 +196,32 @@ class SyncService:
             quarantined=prior.quarantined_refs,
             machine_id=identity.machine_id,
             failed_state=prior.failed_state_paths,
+            # Deletions (trees, credentials, and local resource absence) only
+            # propagate once a run has completed an import on this machine —
+            # before that, "absent locally" just means "not ingested yet".
+            allow_deletions=self._has_imported(prior),
         )
         await self._refresh_machine_entry(identity)
         await asyncio.to_thread(self._git.commit_all, f"coffer sync from {identity.display_name}")
         if pull:
             outcome = await asyncio.to_thread(self._git.pull, config.branch)
             if outcome.is_conflict:
-                return await self._record_conflict(list(outcome.conflicted_paths))
+                remaining = await auto_resolve(
+                    self._git, self._audit, list(outcome.conflicted_paths)
+                )
+                if remaining:
+                    return await self._record_conflict(remaining)
         if push:
             await asyncio.to_thread(self._git.push, config.branch)
         return await self._finish_import(identity.machine_id)
+
+    @staticmethod
+    def _has_imported(prior: SyncState) -> bool:
+        """Whether a sync run has ever completed its import phase here."""
+        return prior.last_sync_at is not None and prior.status in (
+            SyncStatus.CLEAN,
+            SyncStatus.CREDENTIALS_LOCKED,
+        )
 
     async def resolve(self, strategy: str, paths: Sequence[str]) -> SyncState:
         config = await self._config.get_config()
@@ -194,6 +236,15 @@ class SyncService:
             await self._audit.record(AuditEventType.SYNC_RESOLVED.value, actor="sync")
             identity = await self._identity.get()
             return await self._finish_import(identity.machine_id)
+
+    def key_fingerprint(self) -> str | None:
+        """A short SHA-256 fingerprint of the master key (never the key): two
+        machines showing the same fingerprint hold the same key. None when no
+        key exists on this machine yet."""
+        key = self._master_key.export_key()
+        if key is None:
+            return None
+        return hashlib.sha256(key).hexdigest()[:12]
 
     async def export_key(self, path: str) -> str:
         key = self._master_key.export_key()
@@ -218,24 +269,8 @@ class SyncService:
         return await self.status()
 
     async def list_machines(self) -> tuple[MachineIdentity, list[MachineEntry]]:
-        """Every machine known to the vault, plus which one is this machine.
-
-        The local machine always appears (synthesized before its first sync),
-        and its entry always carries the live display name — the workspace copy
-        may lag a rename until the next run."""
-        identity = await self._identity.get()
-        entries = await asyncio.to_thread(self._workspace.read_machine_entries)
-        result: list[MachineEntry] = []
-        seen_local = False
-        for entry in entries:
-            if entry.machine_id == identity.machine_id:
-                seen_local = True
-                result.append(self._own_entry(identity, last_sync_at=entry.last_sync_at))
-            else:
-                result.append(entry)
-        if not seen_local:
-            result.append(self._own_entry(identity, last_sync_at=None))
-        return identity, result
+        """Every machine known to the vault, plus which one is this machine."""
+        return await self._machines.list()
 
     async def list_overrides(self) -> list[tuple[str, str, dict[str, object]]]:
         """This machine's per-resource merge patches as (kind, name, patch)."""
@@ -296,43 +331,8 @@ class SyncService:
 
     # --- internals ---------------------------------------------------------
 
-    def _own_entry(
-        self, identity: MachineIdentity, *, last_sync_at: datetime | None
-    ) -> MachineEntry:
-        return MachineEntry(
-            machine_id=identity.machine_id,
-            display_name=identity.display_name,
-            platform=_platform.system().lower(),
-            os_version=_platform.release(),
-            coffer_version=self._coffer_version,
-            last_sync_at=last_sync_at,
-        )
-
     async def _refresh_machine_entry(self, identity: MachineIdentity) -> None:
-        """Rewrite this machine's registry entry only when the run has other
-        changes, the name changed, or the entry is stale (the 24 h heartbeat) —
-        an idle machine must not generate registry-only commit chains."""
-
-        def _refresh() -> None:
-            own = next(
-                (
-                    e
-                    for e in self._workspace.read_machine_entries()
-                    if e.machine_id == identity.machine_id
-                ),
-                None,
-            )
-            now = datetime.now(tz=UTC)
-            stale = own is None or own.display_name != identity.display_name
-            if not stale and own is not None:
-                ts = own.last_sync_at
-                if ts is not None and ts.tzinfo is None:
-                    ts = ts.replace(tzinfo=UTC)
-                stale = ts is None or (now - ts).total_seconds() > MACHINE_ENTRY_HEARTBEAT_SECONDS
-            if stale or self._git.has_changes():
-                self._workspace.write_machine_entry(self._own_entry(identity, last_sync_at=now))
-
-        await asyncio.to_thread(_refresh)
+        await self._machines.refresh_entry(identity, self._git)
 
     def _check_workspace_version(self) -> None:
         manifest = self._workspace.read_manifest()

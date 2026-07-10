@@ -288,3 +288,58 @@ async def test_override_crud_round_trips(client) -> None:  # type: ignore[no-unt
     r = await client.delete("/api/v1/sync/overrides/mcp_server/tool")
     assert r.status_code == 200
     assert r.json() == {"overrides": []}
+
+
+async def test_key_fingerprint_endpoint(client) -> None:  # type: ignore[no-untyped-def]
+    """The fingerprint (never the key) lets the user compare machines."""
+    r = await client.get("/api/v1/sync/key/fingerprint")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["present"] is True
+    assert isinstance(body["fingerprint"], str) and len(body["fingerprint"]) == 12
+
+
+async def test_put_config_probes_new_remote_when_enabled(client) -> None:  # type: ignore[no-untyped-def]
+    """Enabling sync against an unreachable remote fails the save in place
+    with an actionable hint instead of surfacing later from a background run."""
+    r = await client.put(
+        "/api/v1/sync/config",
+        json={
+            "remote": str(client.tmp_path / "definitely-missing.git"),
+            "enabled": True,
+            "auto": False,
+            "interval_seconds": 300,
+            "branch": "main",
+        },
+    )
+    assert r.status_code == 422
+    body = r.json()["error"]
+    assert body["code"] == "SYNC_REMOTE_UNREACHABLE"
+    assert body["details"]["hint"] == "not_found"
+
+
+async def test_status_classifies_auth_errors(client) -> None:  # type: ignore[no-untyped-def]
+    """A recorded auth failure carries the actionable error_hint."""
+    from coffer.surfaces.http.sync_routes import get_sync_service
+
+    # Status passes through the stored state only once sync is configured.
+    bare = client.tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(bare)], check=True, capture_output=True)
+    ok = await client.put(
+        "/api/v1/sync/config",
+        json={
+            "remote": str(bare),
+            "enabled": True,
+            "auto": False,
+            "interval_seconds": 300,
+            "branch": "main",
+        },
+    )
+    assert ok.status_code == 200
+    svc = get_sync_service()
+    await svc._record_error(
+        "git fetch failed: fatal: could not read Username for 'https://github.com'"
+    )
+    r = await client.get("/api/v1/sync/status")
+    assert r.status_code == 200
+    assert r.json()["error_hint"] == "auth"

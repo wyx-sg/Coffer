@@ -103,6 +103,38 @@ class GitRepo:
         first = proc.stdout.split()
         return first[0] if first else None
 
+    def check_remote(self, remote: str, branch: str) -> None:
+        """Reachability probe for a remote URL (save-time validation).
+
+        Runs ``git ls-remote`` headless (no terminal prompt) and raises
+        ``GitOperationFailed`` with the raw stderr on any transport failure —
+        auth, unknown host, missing repository. A reachable repository whose
+        branch does not exist yet is fine (a fresh vault remote).
+        """
+        self._ws.mkdir(parents=True, exist_ok=True)
+        try:
+            proc = subprocess.run(
+                ["git", "ls-remote", remote, f"refs/heads/{branch}"],
+                cwd=self._ws,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=20,
+                stdin=subprocess.DEVNULL,
+                env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+            )
+        except subprocess.TimeoutExpired as e:
+            raise GitOperationFailed("ls-remote", f"timed out probing {remote}") from e
+        if proc.returncode != 0:
+            raise GitOperationFailed("ls-remote", proc.stderr.strip())
+
+    def last_commit_ts(self, rev: str, path: str) -> int | None:
+        """Unix timestamp of the last commit touching ``path`` on ``rev``;
+        None when no commit on that side ever touched it."""
+        proc = self._run("log", "-1", "--format=%ct", rev, "--", path, check=False)
+        out = proc.stdout.strip()
+        return int(out) if out.isdigit() else None
+
     def pull(self, branch: str) -> PullOutcome:
         # Fetch; a brand-new remote has no branch yet, which is not an error.
         fetch = self._run("fetch", "origin", branch, check=False)

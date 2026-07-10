@@ -64,6 +64,59 @@ class GitOperationFailed(CofferError):  # noqa: N818
         self.detail = detail
 
 
+class SyncRemoteUnreachable(CofferError):  # noqa: N818
+    """The configured remote failed a reachability probe at save time. Maps to
+    422 so the user fixes the URL/credentials in place instead of discovering
+    the failure in a background run."""
+
+    code = "SYNC_REMOTE_UNREACHABLE"
+
+    def __init__(self, remote: str, hint: str | None, detail: str) -> None:
+        super().__init__(f"remote unreachable: {detail}")
+        self.remote = remote
+        self.hint = hint
+        self.detail = detail
+
+
+# Signatures of headless git-auth failures → an actionable hint code the UI
+# translates into guidance (use an SSH URL / run `gh auth setup-git`). The raw
+# stderr stays in the message for diagnosis; the hint drives the friendly line.
+_AUTH_SIGNATURES = (
+    "could not read username",
+    "could not read password",
+    "terminal prompts disabled",
+    "authentication failed",
+    "permission denied (publickey",
+    "device not configured",
+)
+_NOT_FOUND_SIGNATURES = ("repository not found", "does not appear to be a git repository")
+_NETWORK_SIGNATURES = (
+    "could not resolve host",
+    "connection refused",
+    "connection timed out",
+    "operation timed out",
+    "network is unreachable",
+)
+
+
+def classify_git_error(text: str | None) -> str | None:
+    """Map raw git stderr to a hint code: ``auth`` / ``not_found`` / ``network``.
+
+    None when the text carries no recognizable transport signature (parse
+    errors, conflicts, and engine errors are not transport problems).
+    """
+    if not text:
+        return None
+    lowered = text.lower()
+    if any(sig in lowered for sig in _AUTH_SIGNATURES):
+        return "auth"
+    if any(sig in lowered for sig in _NOT_FOUND_SIGNATURES):
+        return "not_found"
+    if any(sig in lowered for sig in _NETWORK_SIGNATURES):
+        return "network"
+    return None
+
+
 class MasterKeyFileInvalid(CofferError):  # noqa: N818
     """A master-key file to import is missing or not a valid Fernet key. Maps to 422."""
 
