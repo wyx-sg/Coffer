@@ -52,6 +52,7 @@ from coffer.surfaces.http.dependencies import (
     set_capability_discovery,
     set_health_repo,
     set_invocation_repo,
+    set_local_machine_id_provider,
     set_mcp_session_factory,
     set_preferences_repo,
     set_supervisor,
@@ -106,7 +107,11 @@ def wire_mcp_kind(
         return (await identity.get()).machine_id
 
     # 4. Build the process-wide supervisor + discovery for REST routes
-    #    (management routes: capabilities, refresh, test — not per-session protocol routing)
+    #    (management routes: capabilities listing + refresh, via
+    #    CapabilityDiscovery's self-heal path — not per-session protocol
+    #    routing). The "test" route does NOT go through this supervisor: it
+    #    builds its own transient upstream connection directly, so it gates
+    #    on scope itself via the machine-id provider wired below (5b).
     process_supervisor = SubprocessSupervisor(
         resource_service=resource_svc,
         credential_resolver=CredentialResolver(credential_store),
@@ -163,6 +168,10 @@ def wire_mcp_kind(
     set_invocation_repo(inv_repo)
     set_health_repo(health_repo)
     set_mcp_session_factory(mcp_session_factory)
+    # 5b. Expose the same machine id resolved above to REST routes that need
+    # to gate on scope without going through a supervisor (e.g. the mcp_server
+    # "test" route — see comment at 4 above).
+    set_local_machine_id_provider(_local_machine_id)
 
     return process_supervisor, session_supervisors
 
