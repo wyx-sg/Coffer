@@ -94,6 +94,16 @@ the command's args at install time. Two consequences follow:
 hidden.** The UI states the reason (cursor-agent is locked to Cursor's backend)
 rather than silently omitting the control.
 
+> **Presentation amended 2026-07-10.** "Surfaced, not hidden" holds on the
+> agent's OWN detail page: every absent facet (connections, plugins,
+> transcripts) renders one uniform, neutral "not supported" state — never a
+> functional-looking empty table or a raw error. Cross-resource pickers (the
+> connection form's compatible-agents checkboxes) now OMIT never-capable
+> agents instead of listing them disabled: enumerating other products'
+> limitations on an unrelated resource's form was noise, and the reason
+> already lives where the user looks at that agent. The matrix is
+> machine-readable as `AgentOut.capabilities` (spec 004 FR-003a).
+
 ## Consequences
 
 - Cursor gains session-context injection — rules and memory reach `cursor-agent`

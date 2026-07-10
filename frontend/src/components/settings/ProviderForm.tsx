@@ -24,12 +24,7 @@ import {
   type ProviderCreate,
   type ProviderPatch,
 } from "@/lib/api/providers";
-import {
-  PRESETS,
-  SELECTABLE_AGENTS,
-  UNPROJECTABLE_AGENTS,
-  defaultCompatibleAgents,
-} from "./connectionPresets";
+import { PRESETS, SELECTABLE_AGENTS, defaultCompatibleAgents } from "./connectionPresets";
 
 interface Props {
   /** Present → edit an existing connection (name + protocol locked, secret optional). */
@@ -188,6 +183,9 @@ export function ProviderForm({
         <div className="space-y-1.5">
           <Label>{t("settings.connections.compatibleAgents")}</Label>
           <div className="flex flex-wrap gap-3">
+            {/* Never-projectable agents (cursor) are omitted outright — the
+                "not supported" reason lives on the agent's own detail page
+                (ADR-042 presentation amendment 2026-07-10). */}
             {SELECTABLE_AGENTS.map((a) => (
               <label key={a} className="flex items-center gap-1.5 text-sm">
                 <input
@@ -198,23 +196,10 @@ export function ProviderForm({
                 {t(AGENT_LABEL_KEY[a])}
               </label>
             ))}
-            {/* Agents that can never consume a connection stay visible with the
-                reason, instead of silently missing from the list (ADR-042). */}
-            {UNPROJECTABLE_AGENTS.map(({ type }) => (
-              <label key={type} className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <input type="checkbox" checked={false} disabled />
-                {t(AGENT_LABEL_KEY[type])}
-              </label>
-            ))}
           </div>
           <p className="text-xs text-muted-foreground">
             {t("settings.connections.compatibleAgentsHint")}
           </p>
-          {UNPROJECTABLE_AGENTS.map(({ type, reasonKey }) => (
-            <p key={type} className="text-xs text-muted-foreground">
-              {t(reasonKey)}
-            </p>
-          ))}
         </div>
       )}
 

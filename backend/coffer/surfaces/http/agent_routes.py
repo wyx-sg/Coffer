@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from coffer.application.agent.auto_detect import AutoDetectService
 from coffer.application.agent.service import AgentService
+from coffer.domain.agent.capabilities import capabilities_for
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
 from coffer.domain.resource import Resource
@@ -56,6 +57,16 @@ class AgentPatch(BaseModel):
     wire_api: str | None = None
 
 
+class AgentCapabilitiesOut(BaseModel):
+    """FR-003a capability-matrix slice: which optional facets this agent's type
+    supports. Surfaces render a uniform "not supported" state for a false flag
+    instead of an empty table or a raw error."""
+
+    plugins: bool
+    transcripts: bool
+    connections: bool
+
+
 class AgentOut(BaseModel):
     name: str
     type: AgentType
@@ -74,6 +85,8 @@ class AgentOut(BaseModel):
     model: str | None
     fast_model: str | None
     wire_api: str | None
+    # FR-003a: per-type facet support, derived from the capability manifest.
+    capabilities: AgentCapabilitiesOut
     created_at: datetime
     updated_at: datetime
 
@@ -98,9 +111,15 @@ class AgentCandidatesOut(BaseModel):
 
 def _to_out(r: Resource) -> AgentOut:
     cfg = AgentConfig.model_validate(r.config)
+    caps = capabilities_for(cfg.type)
     return AgentOut(
         name=r.name,
         type=cfg.type,
+        capabilities=AgentCapabilitiesOut(
+            plugins=caps.plugins,
+            transcripts=caps.transcripts,
+            connections=caps.connections,
+        ),
         config_dir=str(cfg.resolved_config_dir()),
         description=r.description,
         follow_all_skills=cfg.follow_all_skills,

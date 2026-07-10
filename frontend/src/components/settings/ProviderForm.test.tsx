@@ -1,8 +1,9 @@
 // frontend/src/components/settings/ProviderForm.test.tsx
 // The compatible-agents picker: selectable agents toggle in and out of the
-// submitted body, and an unprojectable agent (cursor — no endpoint setting
-// upstream) is surfaced as a disabled checkbox with the reason, never silently
-// omitted and never submitted (ADR-042).
+// submitted body, and a never-projectable agent (cursor — no endpoint setting
+// upstream) is omitted from the list outright and never submitted; its "not
+// supported" reason lives on the agent's own detail page (ADR-042 presentation
+// amendment 2026-07-10, FR-003a).
 import { describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
@@ -14,12 +15,10 @@ function renderForm(onSubmit = vi.fn()) {
 }
 
 describe("ProviderForm compatible agents", () => {
-  test("cursor renders as a disabled checkbox with the reason text", () => {
+  test("cursor does not appear in the picker at all", () => {
     renderForm();
-    const cursorBox = screen.getByRole("checkbox", { name: /cursor/i });
-    expect(cursorBox).toBeDisabled();
-    expect(cursorBox).not.toBeChecked();
-    expect(screen.getByText(/locked to cursor's own backend/i)).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /cursor/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/locked to cursor's own backend/i)).not.toBeInTheDocument();
   });
 
   test("submitting never includes an unprojectable agent", async () => {

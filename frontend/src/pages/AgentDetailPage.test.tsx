@@ -130,4 +130,44 @@ describe("AgentDetailPage", () => {
     renderAt();
     expect(screen.getByText(/failed to load agents/i)).toBeInTheDocument();
   });
+
+  test("unsupported plugins/transcripts facets render the uniform note, not the tables", () => {
+    // FR-003a: a type whose capability flag is false gets the neutral "not
+    // supported" card in place of the tab's normal content — no empty
+    // DataTable, no raw API error line.
+    useAgentMock.mockReturnValue({
+      data: {
+        ...AGENT,
+        type: "cursor" as const,
+        capabilities: { plugins: false, transcripts: false, connections: false },
+      },
+      isPending: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof hooks.useAgent>);
+
+    renderAt();
+
+    const pluginsTab = screen.getByRole("tab", { name: /^plugins$/i });
+    fireEvent.mouseDown(pluginsTab);
+    fireEvent.click(pluginsTab);
+    expect(screen.getByText(/does not support plugin management/i)).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/search plugins/i)).not.toBeInTheDocument();
+
+    const conversationsTab = screen.getByRole("tab", { name: /conversations/i });
+    fireEvent.mouseDown(conversationsTab);
+    fireEvent.click(conversationsTab);
+    expect(screen.getByText(/does not support reading conversation/i)).toBeInTheDocument();
+  });
+
+  test("supported facets still render their tables (capabilities absent = full support)", () => {
+    mockAgentLoaded();
+
+    renderAt();
+
+    const pluginsTab = screen.getByRole("tab", { name: /^plugins$/i });
+    fireEvent.mouseDown(pluginsTab);
+    fireEvent.click(pluginsTab);
+    expect(screen.queryByText(/does not support plugin management/i)).not.toBeInTheDocument();
+  });
 });

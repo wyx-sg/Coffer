@@ -1010,6 +1010,7 @@ components:
           model,
           fast_model,
           wire_api,
+          capabilities,
           created_at,
           updated_at,
         ]
@@ -1035,8 +1036,22 @@ components:
         model: { type: string, nullable: true, description: "Per-agent model binding (null = unbound, falls back to the active connection during rollout)." }
         fast_model: { type: string, nullable: true }
         wire_api: { type: string, nullable: true }
+        capabilities: { $ref: "#/components/schemas/AgentCapabilities" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+
+    AgentCapabilities:
+      type: object
+      required: [plugins, transcripts, connections]
+      description: >-
+        FR-003a capability-matrix slice: which optional facets the agent's
+        type supports. A false flag means the facet does not exist upstream;
+        surfaces render a uniform "not supported" state instead of an empty
+        table or a raw error, and cross-resource pickers omit the agent.
+      properties:
+        plugins: { type: boolean }
+        transcripts: { type: boolean }
+        connections: { type: boolean }
 
     AgentCandidate:
       type: object

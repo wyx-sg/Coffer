@@ -96,6 +96,9 @@ export interface AgentOut {
   updated_at: string;
   follow_all_skills?: boolean;
   skill_exclusions?: string[];
+  /** FR-003a per-type facet support (see lib/api/agentCapabilities.ts).
+   * Optional until every fixture carries it; missing = full support. */
+  capabilities?: import("@/lib/api/agentCapabilities").AgentCapabilities;
   /** When true, the agent's own native memory is disabled (via its config) so it
    * uses Coffer as the shared memory store. Hand-added until openapi codegen. */
   disable_native_memory?: boolean;
