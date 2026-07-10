@@ -18,6 +18,7 @@ from coffer.surfaces.cli import (
     provider_cmd,
     resource_cmd,
     retention_cmd,
+    scope_cmd,
     skill_cmd,
     sync_cmd,
     transcript_cmd,
@@ -44,6 +45,7 @@ def root(
 
 app.add_typer(daemon_cmd.app, name="daemon")
 app.add_typer(resource_cmd.app, name="resource")
+app.add_typer(scope_cmd.app, name="scope")
 app.add_typer(audit_cmd.app, name="audit")
 app.add_typer(retention_cmd.app, name="retention")
 app.add_typer(mcp_cmd.app, name="mcp")
@@ -61,6 +63,13 @@ app.add_typer(transcript_cmd.app, name="transcript")
 # operate on the on-disk vault offline, independent of the daemon lifecycle.
 app.command("backup")(backup_cmd.backup)
 app.command("restore")(backup_cmd.restore)
+
+# Machines fleet view is a top-level verb too (Task 15): the frontend
+# Machines nav item isn't really "sync configuration", so it gets its own
+# top-level command — same implementation as `coffer sync machines`
+# (imported, not duplicated) so the two stay identical by construction,
+# --rename included.
+app.command("machines")(sync_cmd.machines)
 
 
 def run() -> None:

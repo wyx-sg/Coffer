@@ -15,7 +15,7 @@ from datetime import datetime as dt
 
 import pytest
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from starlette.testclient import TestClient
 
 from coffer.application.audit_service import AuditService
@@ -57,6 +57,13 @@ class _FakeConfig(BaseModel):
     bar: str = "default"
 
 
+class _FakeScopedConfig(BaseModel):
+    """Lenient config for the scope-capable test kinds (test_scope_cmd.py) —
+    no required fields, so tests can register with ``config={}``."""
+
+    model_config = ConfigDict(extra="allow")
+
+
 _TOKEN = "test-token"
 _PORT = 8000
 
@@ -70,7 +77,26 @@ def _build_app(tmp_path) -> tuple[FastAPI, object]:  # type: ignore[type-ignore]
     loop.run_until_complete(_create_tables(engine))
 
     sm = session_maker(engine)
-    kinds = {"fake_kind": Kind(name="fake_kind", display_name="Fake", config_schema=_FakeConfig)}
+    kinds = {
+        "fake_kind": Kind(name="fake_kind", display_name="Fake", config_schema=_FakeConfig),
+        # Scope-capable test doubles for test_scope_cmd.py (ADR-045, Task 15):
+        # one dual-axis kind (mirrors mcp_server/skill) and one machine-only
+        # kind (mirrors agent/channel) — declared here (rather than a
+        # one-off fixture) so `coffer scope ...` tests reuse the same
+        # in_proc_daemon wiring as every other CLI test module.
+        "fake_scoped": Kind(
+            name="fake_scoped",
+            display_name="Fake Scoped",
+            config_schema=_FakeScopedConfig,
+            scope_axes=("machine", "agent"),
+        ),
+        "fake_machine_only": Kind(
+            name="fake_machine_only",
+            display_name="Fake Machine-Only",
+            config_schema=_FakeScopedConfig,
+            scope_axes=("machine",),
+        ),
+    }
     resource_repo = SqlAlchemyResourceRepo(sm)
     audit_repo = SqlAlchemyAuditRepo(sm)
     audit_svc = AuditService(audit_repo)
