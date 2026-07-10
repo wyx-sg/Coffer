@@ -19,6 +19,7 @@ class AuditEventType(StrEnum):
     CAPABILITY_FIRST_SEEN = "capability_first_seen"
     CAPABILITY_ENABLED = "capability_enabled"
     CAPABILITY_DISABLED = "capability_disabled"
+    MCP_RUNNER_INSTALLED = "mcp_runner_installed"
     DAEMON_STARTED = "daemon_started"
     DAEMON_STOPPED = "daemon_stopped"
     TOKEN_ROTATED = "token_rotated"

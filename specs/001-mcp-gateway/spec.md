@@ -317,6 +317,12 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** the daemon starts,
 - **Then** it picks the next free port in the supported range, writes the chosen port to `~/.coffer/daemon.json`, and every Coffer surface (shim, CLI) connects to that port without manual configuration.
 
+### Scenario: a missing stdio launcher is surfaced and installable
+
+- **Given** a stdio server (e.g. synced from another machine) whose launcher command does not resolve on this machine,
+- **When** the server's status is read,
+- **Then** it reports `missing <runner>` instead of a bare failing state, and — when the runner is an allowlisted self-fetching launcher — a one-click install runs the fixed runner→Homebrew mapping and is audited (FR-019).
+
 ## Requirements
 
 ### Functional Requirements
@@ -359,6 +365,10 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 **Distribution**
 
 - **FR-018**: Installing from source (`pip install ./backend`) MUST place the `coffer` CLI and the `coffer-mcp-shim` stdio entry point on the user's `PATH` as console scripts, so the daemon and shim are usable with no separate deployment step.
+
+**Missing launcher (amendment 2026-07-10, multi-machine)**
+
+- **FR-019**: A stdio server whose launcher command does not resolve on this machine (a synced server referencing e.g. `uvx` where `uv` is not installed) MUST be surfaced as such — `missing <runner>` in the server status — instead of a bare "failing" with no cause. When the runner is one of the allowlisted self-fetching launchers (`uvx`/`uv`, `npx`/`node`, `bunx`/`bun`), the UI MUST offer a one-click install that runs the FIXED runner→Homebrew mapping (never an arbitrary command from server config; the launcher fetches the actual MCP package itself on first run), audited as `mcp_runner_installed`. Any other missing command is reported with no install affordance.
 
 ### Key Entities
 

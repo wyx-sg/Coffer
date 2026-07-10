@@ -12,11 +12,15 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 from coffer.application.audit_service import AuditService
 from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
+from coffer.application.mcp.runner_install import (
+    missing_runner,
+    runner_installable,
+)
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.server_config import HttpTransport, MCPServerConfig, StdioTransport
-from coffer.domain.resource import ResourceRef
+from coffer.domain.resource import Resource, ResourceRef
 from coffer.infrastructure.mcp.http_client import HttpUpstreamConnection
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
@@ -130,14 +134,22 @@ async def get_server_status(
     health_repo: MCPServerHealthRepo = Depends(get_health_repo),  # noqa: B008
 ) -> McpServerStatusOut:
     """Per-server status from persisted state — health record (from /test),
-    discovered capabilities, or last invocation. Cheap (DB only); never spawns."""
+    discovered capabilities, or last invocation. Cheap (DB only + one PATH
+    lookup); never spawns."""
+    resource = await resource_service.get(ResourceRef("mcp_server", name))
+    # A stdio launcher that does not resolve on THIS machine (synced server,
+    # runner not installed here) — surfaced with a one-click install.
+    runner = _missing_runner_of(resource)
+    installable = runner is not None and runner_installable(runner)
+
     # T7: prefer the persisted health state written by POST /test
     health = await health_repo.get(name)
     if health is not None:
         health_status, _ = health
-        return McpServerStatusOut(status=health_status)
+        return McpServerStatusOut(
+            status=health_status, missing_runner=runner, runner_installable=installable
+        )
 
-    resource = await resource_service.get(ResourceRef("mcp_server", name))
     caps = await prefs.list_for(resource.id)
     recent = await invocations.query(resource_name=name, limit=1)
     last = recent[0] if recent else None
@@ -148,7 +160,17 @@ async def get_server_status(
         state = "healthy"
     else:
         state = "unknown"
-    return McpServerStatusOut(status=state)
+    return McpServerStatusOut(status=state, missing_runner=runner, runner_installable=installable)
+
+
+def _missing_runner_of(resource: Resource) -> str | None:
+    try:
+        config = MCPServerConfig.model_validate(resource.config)
+    except Exception:
+        return None
+    if config.transport.type != "stdio":
+        return None
+    return missing_runner(config.transport.command)
 
 
 async def _toggle_capability(

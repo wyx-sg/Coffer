@@ -256,6 +256,18 @@ class McpServerStatusOut(BaseModel):
     """Cheap per-server status, derived from persisted state (no spawn)."""
 
     status: Literal["healthy", "failing", "unknown"]
+    # A stdio server whose launcher command does not resolve on THIS machine
+    # (a synced server referencing e.g. uvx on a machine without uv). The UI
+    # renders "missing <runner>" with a one-click install when installable.
+    missing_runner: str | None = None
+    runner_installable: bool = False
+
+
+class McpRunnerInstallOut(BaseModel):
+    """Result of installing a stdio server's missing launcher."""
+
+    runner: str
+    formula: str
 
 
 # --- Settings ---

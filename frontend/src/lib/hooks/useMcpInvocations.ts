@@ -1,5 +1,5 @@
 // frontend/src/lib/hooks/useMcpInvocations.ts
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/client";
 import { ApiError, throwApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
@@ -33,6 +33,44 @@ export function useMcpServerStatus(serverName: string) {
       });
       if (error || !data) return null;
       return data.status === "unknown" ? null : data.status;
+    },
+  });
+}
+
+/** The stdio launcher missing on THIS machine (synced server, runner not
+ * installed here), if any — rendered as "missing <runner>" + one-click
+ * install when the runner has an allowlisted formula. */
+export function useMcpServerRunner(serverName: string) {
+  return useQuery({
+    queryKey: ["mcp", "runner", serverName],
+    queryFn: async () => {
+      const client = getApiClient();
+      const { data, error } = await client.GET("/resources/mcp_server/{name}/status", {
+        params: { path: { name: serverName } },
+      });
+      if (error || !data) return null;
+      return {
+        missingRunner: data.missing_runner ?? null,
+        installable: data.runner_installable ?? false,
+      };
+    },
+  });
+}
+
+export function useInstallMcpRunner() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (serverName: string) => {
+      const client = getApiClient();
+      const { data, error } = await client.POST("/resources/mcp_server/{name}/install-runner", {
+        params: { path: { name: serverName } },
+      });
+      if (error) throwApiError(error, "MCP_RUNNER_INSTALL_FAILED", "runner install failed");
+      return data;
+    },
+    onSuccess: (_data, serverName) => {
+      void qc.invalidateQueries({ queryKey: ["mcp", "runner", serverName] });
+      void qc.invalidateQueries({ queryKey: ["mcp", "status", serverName] });
     },
   });
 }

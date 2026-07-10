@@ -343,6 +343,34 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /resources/mcp_server/{name}/install-runner:
+    post:
+      tags: [mcp]
+      operationId: installMcpRunner
+      summary: Install the stdio server's missing launcher (allowlisted formulas only).
+      description: >-
+        Installs the missing launcher command via a FIXED runner→Homebrew
+        mapping (uvx/uv, npx/node, bunx/bun) — never an arbitrary command
+        from config; the launcher itself fetches the actual MCP package on
+        first run. 422 (MCP_RUNNER_INSTALL_UNSUPPORTED) when nothing is
+        missing or the runner has no unambiguous install;
+        MCP_RUNNER_INSTALL_FAILED carries the package manager's stderr tail.
+        Audited as mcp_runner_installed.
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Installed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpRunnerInstallOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
   /audit:
     get:
       tags: [audit]
@@ -925,6 +953,24 @@ components:
         status:
           type: string
           enum: [healthy, failing, unknown]
+        missing_runner:
+          type: string
+          nullable: true
+          description: >-
+            The stdio launcher's basename when it does not resolve on THIS
+            machine (a synced server referencing e.g. uvx where uv is not
+            installed). The UI renders "missing <runner>" with a one-click
+            install when runner_installable.
+        runner_installable:
+          type: boolean
+          description: Whether the missing runner has an allowlisted install.
+
+    McpRunnerInstallOut:
+      type: object
+      required: [runner, formula]
+      properties:
+        runner: { type: string }
+        formula: { type: string, description: "The Homebrew formula installed" }
 
     AuditEntryOut:
       type: object

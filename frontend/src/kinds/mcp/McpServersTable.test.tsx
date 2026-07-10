@@ -34,6 +34,8 @@ const useDeleteResourceMock = vi.mocked(useDeleteResource);
 
 vi.mock("@/lib/hooks/useMcpInvocations", () => ({
   useMcpServerStatus: vi.fn(() => ({ data: "healthy" })),
+  useMcpServerRunner: vi.fn(() => ({ data: { missingRunner: null, installable: false } })),
+  useInstallMcpRunner: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 
 function wrap(ui: React.ReactNode) {
