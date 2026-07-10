@@ -29,6 +29,7 @@ from coffer.application.sync.ports import (
 from coffer.domain.error_base import CofferError
 from coffer.domain.resource import ResourceRef
 from coffer.domain.sync.errors import SyncWorkspaceTooNew
+from coffer.domain.sync.fernet_time import is_staler
 from coffer.domain.sync.manifest import SCHEMA_VERSION
 from coffer.domain.sync.models import Tombstone
 from coffer.domain.sync.portability import apply_merge_patch, expand_home
@@ -134,6 +135,12 @@ class SyncImporter:
 
     async def _import_credentials(self, blobs: dict[str, bytes], result: ImportResult) -> None:
         for ref, blob in blobs.items():
+            existing = await asyncio.to_thread(self._credentials.read_ciphertext, ref)
+            if existing is not None and is_staler(blob, existing):
+                # Workspace holds an older encryption of this ref (e.g. pushed
+                # by a machine without freshness guards) — keep the local one;
+                # the next export heals the medium.
+                continue
             await asyncio.to_thread(self._credentials.write_ciphertext, ref, blob)
 
     async def _apply_tombstones(

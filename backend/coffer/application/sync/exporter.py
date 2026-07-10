@@ -21,6 +21,7 @@ from coffer.application.sync.ports import (
     TombstoneLedgerPort,
     WorkspacePort,
 )
+from coffer.domain.sync.fernet_time import is_staler
 from coffer.domain.sync.manifest import SCHEMA_VERSION, Manifest
 from coffer.domain.sync.models import TOMBSTONE_TTL_SECONDS, Tombstone
 from coffer.domain.sync.portability import normalize_home, strip_overridden
@@ -171,6 +172,13 @@ class SyncExporter:
             blob = self._credentials.read_ciphertext(ref)
             if blob is not None:
                 blobs[ref] = blob
+        # A run that pulled but died before importing leaves the workspace
+        # fresher than the DB; keep the fresher encryption so this export
+        # cannot re-clobber it (the import below the same run adopts it).
+        for ref, ws_blob in self._workspace.read_credential_blobs().items():
+            local = blobs.get(ref)
+            if local is not None and is_staler(local, ws_blob):
+                blobs[ref] = ws_blob
         self._workspace.write_credential_blobs(blobs, delete_missing=allow_deletions)
         self._write_manifest_guarded()
 

@@ -57,6 +57,10 @@ class GitPort(Protocol):
     def last_commit_ts(self, rev: str, path: str) -> int | None:
         """Unix ts of the last commit touching ``path`` on ``rev``, or None."""
 
+    def read_blob(self, rev: str, path: str) -> bytes | None:
+        """Raw bytes of ``path`` at ``rev`` (e.g. HEAD / MERGE_HEAD), or None
+        when the path does not exist on that side."""
+
     def pull(self, branch: str) -> PullOutcome: ...
 
     def push(self, branch: str) -> None: ...
