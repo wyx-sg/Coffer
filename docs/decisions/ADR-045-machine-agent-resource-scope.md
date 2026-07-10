@@ -62,6 +62,11 @@ its own enforcement point.
    - Machine-only kinds accept only `"*"` as entry value.
    - Unknown machine ULIDs / agent names in entries are legal and simply
      never match.
+   - Matrices referencing an agent are additionally intersected with that
+     agent's own machine axis when computing activation slices (the
+     Machines view); the gateway itself trusts the local shim's identity
+     and does not re-check the agent's machine axis, since a local shim
+     can only run where the agent is installed.
 
 2. **Sync-but-inactive.** A scoped resource still syncs to and is visible on
    every machine; out of scope it is simply not activated (not spawned, not

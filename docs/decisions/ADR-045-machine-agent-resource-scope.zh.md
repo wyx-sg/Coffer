@@ -45,19 +45,23 @@ ADR-043 明确把 "per-resource runtime affinity" 预留为挂在机器身份上
    scope == {"<ulid>": ["claude-code"], "*": "*"}   # dict[str, list[str] | "*"]
    ```
 
-   - Entry lookup for machine M: exact-ULID key wins over `"*"` key; no key
-     → inactive on M.
-   - `machine_in_scope(scope, m)` → entry exists and value is `"*"` or a
-     non-empty list.
-   - `agent_in_scope(scope, m, agent)` → entry value is `"*"`, or `agent`
-     (a name string) is in the list. `agent=None` (unidentified session)
-     matches ONLY `"*"` values. `scope=None` → always True.
-   - Kind axes: `mcp_server` (machine, agent) · `skill` (machine, agent) ·
-     `agent` (machine) · `channel` (machine) · `knowledge_base`, `memory` —
-     none (non-null scope rejected).
-   - Machine-only kinds accept only `"*"` as entry value.
-   - Unknown machine ULIDs / agent names in entries are legal and simply
-     never match.
+   - 机器 M 的条目查找：精确的 ULID 键优先于 `"*"` 键；没有匹配的键
+     则在 M 上不激活。
+   - `machine_in_scope(scope, m)` → 条目存在，且值为 `"*"` 或非空
+     列表。
+   - `agent_in_scope(scope, m, agent)` → 条目值为 `"*"`，或 `agent`
+     （名字字符串）在列表中。`agent=None`（无身份会话）只匹配
+     `"*"` 值。`scope=None` → 始终为 True。
+   - 各 kind 的轴：`mcp_server`（机器、agent）· `skill`（机器、agent）·
+     `agent`（机器）· `channel`（机器）· `knowledge_base`、`memory`——
+     无此轴（非空 scope 会被拒绝）。
+   - 仅机器轴的 kind，条目值只能是 `"*"`。
+   - 条目中出现未知的机器 ULID / agent 名称是合法的，只是永远
+     不会匹配。
+   - 矩阵中引用到的 agent，在计算激活切片（Machines 视图）时还会与该
+     agent 自身的机器轴取交集；gateway 本身信任本机 shim 上报的身份，
+     不会重新校验该 agent 的机器轴，因为本机 shim 只能运行在该 agent
+     已安装的机器上。
 
 2. **同步但不激活。** 被限定作用域的资源仍然同步到并可见于每台机器；
    作用域外只是不激活（不 spawn、不暴露、不投递）。注册表保持单一事实
