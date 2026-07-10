@@ -25,7 +25,7 @@ from coffer.application.agent.service import AgentService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import spec_for
 from coffer.domain.agent.descriptor import native_memory_disable_target
-from coffer.domain.agent.native_memory_disable import apply_disable, apply_restore
+from coffer.domain.agent.native_memory_disable import apply_disable, apply_restore, is_disabled
 from coffer.domain.errors import ConfigValidationError
 
 
@@ -63,7 +63,7 @@ class AgentSideEffectsReconcile:
         self,
         agents: AgentService,
         config_file_store: _ConfigFileStore,
-        on_skill_policy_changed: Callable[[str], Awaitable[None]] | None = None,
+        on_skill_policy_changed: Callable[[str], Awaitable[list[str]]] | None = None,
     ) -> None:
         self._agents = agents
         self._store = config_file_store
@@ -77,6 +77,11 @@ class AgentSideEffectsReconcile:
             except Exception as e:
                 errors.append(f"{row.name}: {e}")
                 continue
+            # A stale row whose config dir vanished must not be resurrected by
+            # a reconcile write (mkdir -p) — report and leave it alone.
+            if not cfg.resolved_config_dir().is_dir():
+                errors.append(f"{row.name}: config dir missing on this machine; skipped")
+                continue
             try:
                 await asyncio.to_thread(self._apply_native_memory, cfg)
             except Exception as e:
@@ -84,8 +89,9 @@ class AgentSideEffectsReconcile:
             if self._on_skill_policy_changed is not None:
                 try:
                     # Re-run delivery reconciliation for the row's follow
-                    # policy (per-skill failures are tolerated inside).
-                    await self._on_skill_policy_changed(row.name)
+                    # policy; per-skill failures come back as strings.
+                    for failure in await self._on_skill_policy_changed(row.name):
+                        errors.append(f"{row.name} (skill delivery): {failure}")
                 except Exception as e:
                     errors.append(f"{row.name} (skill delivery): {e}")
         return errors
@@ -99,10 +105,15 @@ class AgentSideEffectsReconcile:
             return  # the type has no native memory to disable — nothing to converge
         config_key, fmt = target
         spec = spec_for(cfg.type, config_key, cfg.resolved_config_dir())
-        text = self._store.read_text(spec.path) or ""
+        text = self._store.read_text(spec.path)
+        # Converge on SEMANTICS, not bytes: an already-correct file is never
+        # rewritten (no reformat of user formatting, no `{}` file creation,
+        # no churn on every import). is_disabled("") is False, so a missing
+        # file with the flag off is already converged.
+        if is_disabled(text or "", fmt=fmt, agent_type=cfg.type) == cfg.disable_native_memory:
+            return
         if cfg.disable_native_memory:
-            new_text = apply_disable(text, fmt=fmt, agent_type=cfg.type)
+            new_text = apply_disable(text or "", fmt=fmt, agent_type=cfg.type)
         else:
-            new_text = apply_restore(text, fmt=fmt, agent_type=cfg.type)
-        if new_text != text:
-            self._store.write_text_atomic(spec.path, new_text)
+            new_text = apply_restore(text or "", fmt=fmt, agent_type=cfg.type)
+        self._store.write_text_atomic(spec.path, new_text)

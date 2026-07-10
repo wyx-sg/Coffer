@@ -218,11 +218,17 @@ def wire_agent_and_skill_kinds(
     if hooks is None:
         hooks = []
         app.state.sync_post_import_hooks = hooks
+
+    # actor="sync": delivery failures surface in the run's errors (retried on
+    # every import) instead of growing the audit log unboundedly.
+    async def _sync_skill_reconcile(agent_name: str) -> list[str]:
+        return await skill_svc.apply_follow_for_agent(agent_name, actor="sync")
+
     hooks.append(
         AgentSideEffectsReconcile(
             agent_svc,
             config_file_store,
-            on_skill_policy_changed=_agent_on_skill_policy_changed,
+            on_skill_policy_changed=_sync_skill_reconcile,
         )
     )
 

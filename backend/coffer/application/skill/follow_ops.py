@@ -40,30 +40,37 @@ async def audit_autobind_skipped(
         )
 
 
-async def apply_follow_for_agent(*, service: SkillService, agent_name: str, actor: str) -> None:
+async def apply_follow_for_agent(
+    *, service: SkillService, agent_name: str, actor: str
+) -> list[str]:
     """Reconcile an agent's deliveries with its follow policy (FR-025).
 
-    Invoked when the agent's policy changes (flag flip / exclusion edit) and
-    after registration (new agents default to follow-all). While following,
-    the effective set is the entire master store minus the exclusion list:
+    Invoked when the agent's policy changes (flag flip / exclusion edit),
+    after registration (new agents default to follow-all), and by the sync
+    post-import hook (spec 010 import reconciliation). While following, the
+    effective set is the entire master store minus the exclusion list:
     wanted-but-unbound skills are delivered, bound-but-excluded skills are
     removed. NOT following → return untouched (disabling the flag preserves
     the currently delivered set as explicit per-skill bindings). Skills bound
     but missing from master are untouched here — master removal cascades via
     the skill kind's on_delete hook.
+
+    Returns the per-skill delivery failures as human-readable strings so the
+    sync hook can surface them in the run's errors; front-door callers ignore
+    the return (the failures are audited there).
     """
     try:
         agent = await service._rs.get(ResourceRef("agent", agent_name))
     except CofferError:
-        return
+        return []
     # Non-folder agents (rules_mdc — recognized extension point) can't receive
     # folder deliveries; skip reconciliation so registration / policy-change
     # flows don't crash. FOLDER and EXTERNAL_DIR agents follow the master library.
     if not delivers_skill_folders(service, agent):
-        return
+        return []
     follow, exclusions = service._resolve_agent_skill_policy(agent)
     if not follow:
-        return
+        return []
     excluded = set(exclusions)
     skills = await service.list_skills()
     names_by_id = {s.id: s.name for s in skills}
@@ -73,6 +80,7 @@ async def apply_follow_for_agent(*, service: SkillService, agent_name: str, acto
         for b in await service._bindings.list_for_agent(agent.id)
         if b.enabled and (name := names_by_id.get(b.skill_resource_id)) is not None
     }
+    failures: list[str] = []
     for name in sorted(wanted - bound):
         try:
             await service.enable_for(
@@ -84,8 +92,18 @@ async def apply_follow_for_agent(*, service: SkillService, agent_name: str, acto
             logger.warning(
                 "follow delivery of skill %r to agent %r skipped: %s", name, agent_name, e
             )
-            await audit_autobind_skipped(
-                service=service, skill_name=name, agent_name=agent_name, reason=str(e), actor=actor
-            )
+            failures.append(f"skill {name!r}: {e}")
+            # The sync hook re-runs this on EVERY import; a standing failure
+            # would grow the audit log unboundedly. Sync failures surface in
+            # the run's errors instead; front-door attempts stay audited.
+            if actor != "sync":
+                await audit_autobind_skipped(
+                    service=service,
+                    skill_name=name,
+                    agent_name=agent_name,
+                    reason=str(e),
+                    actor=actor,
+                )
     for name in sorted(bound & excluded):
         await service.disable_for(skill_name=name, agent_name=agent_name, actor=actor)
+    return failures

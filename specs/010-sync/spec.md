@@ -69,7 +69,11 @@ the sync medium.
   upserting a doc (an agent whose `config_dir` does not exist/write here —
   the agent is not installed on this machine) — a gate failure quarantines
   the doc exactly like any other import failure, so it retries every run and
-  clears by itself once the agent is installed locally.
+  clears by itself once the agent is installed locally. The gate covers
+  registrations AND updates: a gate-rejected update quarantines the newer
+  doc while the existing local row keeps operating from its last good
+  config; hooks skip rows whose machine-local preconditions no longer hold
+  (a vanished config dir is reported, never recreated).
 - **Sync run** — export → `git pull` (merge) → on clean merge: `git push` +
   import. The whole thing is one `coffer sync` invocation.
 - **Conflict** — a `git merge` conflict. The engine resolves it AUTOMATICALLY

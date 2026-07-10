@@ -176,15 +176,16 @@ class SkillService:
             return (True, [])
         return self._agent_skill_policy_resolver(agent)
 
-    async def apply_follow_for_agent(self, agent_name: str, *, actor: str = "system") -> None:
+    async def apply_follow_for_agent(self, agent_name: str, *, actor: str = "system") -> list[str]:
         """Reconcile an agent's deliveries with its follow policy.
 
         Wired as the agent kind's on-skill-policy-changed hook (and invoked
-        after registration). See ``follow_ops`` for semantics.
+        after registration and by the sync post-import hook). Returns per-skill
+        delivery failures; see ``follow_ops`` for semantics.
         """
         from coffer.application.skill.follow_ops import apply_follow_for_agent
 
-        await apply_follow_for_agent(service=self, agent_name=agent_name, actor=actor)
+        return await apply_follow_for_agent(service=self, agent_name=agent_name, actor=actor)
 
     async def verify(self) -> DriftReport:
         from coffer.application.skill.verify_ops import verify_drift

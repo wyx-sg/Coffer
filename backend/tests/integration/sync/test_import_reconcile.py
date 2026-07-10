@@ -140,3 +140,23 @@ async def test_hooks_run_after_rows_and_report_errors(tmp_path) -> None:  # type
     result = await importer.import_()
     assert ok_hook.calls == 2
     assert result.errors == ["reconcile[mcp_server]: side-effect failed"]
+
+
+class _RaisingHook:
+    kind = "mcp_server"
+
+    async def reconcile(self) -> list[str]:
+        raise RuntimeError("hook blew up")
+
+
+async def test_raising_hook_does_not_void_the_import(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A hook that RAISES (not just returns errors) must not discard the
+    import result — rows already applied (review #291 finding 3)."""
+    resources, _ws, importer = await _make(tmp_path, hooks=(_RaisingHook(),))
+    _write_doc(tmp_path / "ws", "svc", "v1")
+
+    result = await importer.import_()
+
+    assert result.applied == 1
+    assert {r.name for r in await resources.list()} == {"svc"}
+    assert result.errors == ["reconcile[mcp_server]: hook blew up"]

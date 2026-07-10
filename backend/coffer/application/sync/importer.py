@@ -82,9 +82,15 @@ class SyncImporter:
         await self._import_state(result)
         # Rows are converged; re-apply each kind's machine-local side-effects
         # (projections, native-config transforms, deliveries) from current
-        # state. Failures surface in the run and retry on the next import.
+        # state. Failures surface in the run and retry on the next import —
+        # including a hook that RAISES: the rows already applied, so the
+        # import result must survive it.
         for hook in self._hooks:
-            for message in await hook.reconcile():
+            try:
+                messages = await hook.reconcile()
+            except Exception as e:
+                messages = [str(e)]
+            for message in messages:
                 result.errors.append(f"reconcile[{hook.kind}]: {message}")
         result.locked_refs = await asyncio.to_thread(self._credentials.locked_refs)
         return result
