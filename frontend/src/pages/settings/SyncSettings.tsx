@@ -12,12 +12,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { translateApiError } from "@/lib/api/errors";
+import { ApiError, translateApiError } from "@/lib/api/errors";
 import { useRunSync, useSyncConfig, useSyncStatus, useUpdateSyncConfig } from "@/lib/hooks/useSync";
 
 import { SyncMachinesCard } from "./SyncMachinesCard";
 import { SyncMasterKeyCard } from "./SyncMasterKeyCard";
 import { SyncStatusLine } from "./SyncStatusLine";
+
+/** The actionable hint of a rejected remote save (SYNC_REMOTE_UNREACHABLE). */
+function saveHint(error: unknown): string | null {
+  if (!(error instanceof ApiError) || error.code !== "SYNC_REMOTE_UNREACHABLE") return null;
+  const hint = (error.details as { hint?: string } | undefined)?.hint;
+  return hint ?? null;
+}
 
 export function SyncSettings() {
   const { t } = useTranslation();
@@ -141,6 +148,13 @@ export function SyncSettings() {
           </div>
           {update.error && (
             <p className="text-sm text-red-600">{translateApiError(t, update.error)}</p>
+          )}
+          {/* A rejected remote save carries an actionable hint
+              (auth/not_found/network) — render the guidance, not just stderr. */}
+          {saveHint(update.error) && (
+            <p className="text-sm text-foreground/70">
+              {t(`settings.sync.errorHints.${saveHint(update.error)}`)}
+            </p>
           )}
           {run.error && <p className="text-sm text-red-600">{translateApiError(t, run.error)}</p>}
           <div className="flex gap-2">

@@ -6,6 +6,7 @@ remote auth is the user's ambient git configuration.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Protocol
 
@@ -77,6 +78,16 @@ def validate_config_fields(
         raise ConfigValidationError("a remote is required to enable sync")
     if not branch:
         raise ConfigValidationError("branch must not be empty")
+
+
+_REF_SEGMENT = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def validate_override_ref(kind: str, name: str) -> None:
+    """Path params become workspace file paths — confine them to one segment."""
+    for segment in (kind, name):
+        if not _REF_SEGMENT.match(segment) or segment in {".", ".."}:
+            raise ConfigValidationError(f"invalid resource ref segment: {segment!r}")
 
 
 class SyncConfigService:

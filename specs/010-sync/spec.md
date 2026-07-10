@@ -57,15 +57,21 @@ the sync medium.
 - **Sync run** — export → `git pull` (merge) → on clean merge: `git push` +
   import. The whole thing is one `coffer sync` invocation.
 - **Conflict** — a `git merge` conflict. The engine resolves it AUTOMATICALLY
-  with a deterministic newest-wins policy (amendment 2026-07-10): per
-  conflicted path, the side whose last commit touching it is newer wins —
-  machine-independent, so every machine picks the same winner; a timestamp tie
-  keeps the merging machine's side; `manifest.json` always resolves to the
-  local side (the schema gate has already run). Only when the engine cannot
-  settle a path does the run park in `conflicted` — the UI then points the
-  user at their own repository (e.g. GitHub) instead of offering an in-app
-  merge surface; `coffer sync resolve` remains as the CLI escape hatch. The
-  losing side's content is never lost — it stays in the vault repo's history.
+  with a deterministic policy (amendment 2026-07-10): per conflicted path,
+  the side whose last vault-repo commit touching it is newer wins. Commit
+  time is when a change was CAPTURED BY A SYNC RUN, not when the user made
+  the edit — so this is precisely "the most recently synced edit wins"; with
+  near-real-time auto-sync on every machine the two coincide, but a machine
+  syncing after a long offline gap can carry an older edit to victory. The
+  policy is machine-independent (every machine picks the same winner); a
+  timestamp tie keeps the merging machine's side; `manifest.json` always
+  resolves to the local side (it is byte-identical across same-version
+  machines, and the schema gate runs before export). Only when the engine
+  cannot settle a path does the run park in `conflicted` — the UI then points
+  the user at their own repository (e.g. GitHub) instead of offering an
+  in-app merge surface; `coffer sync resolve` remains as the CLI escape
+  hatch. The losing side's content is never lost — it stays in the vault
+  repo's history.
 - **Tombstone** — the explicit record of a config-resource deletion
   (`tombstones/resources/<kind>/<name>.json`, carrying when and by which
   machine). Import deletes a local resource **only** when its tombstone is
@@ -233,14 +239,15 @@ resources that reference it cannot spawn, and status reports
 - **Then** no file contains the master key; `credentials/` holds only Fernet
   ciphertext
 
-### Scenario: conflicting edits auto-resolve to the newer edit
+### Scenario: conflicting edits auto-resolve to the most recently synced edit
 
 - **Given** machines A and B both edited the same resource/file since their last
   common sync, and A has already pushed
 - **When** machine B runs `coffer sync`
-- **Then** the run auto-resolves each conflicted path to the side whose last
-  commit is newer (a tie keeps B's side), completes without user action, and
-  both machines converge on the same winner on their next runs
+- **Then** the run auto-resolves each conflicted path to the side whose vault
+  commit is newer — the most recently synced edit (a tie keeps B's side) —
+  completes without user action, and both machines converge on the same
+  winner on their next runs
 - **And** if the engine cannot settle a path, the run parks in `conflicted`
   and the surfaces direct the user to resolve in their own repository
   (`coffer sync resolve` stays available as the CLI escape hatch)

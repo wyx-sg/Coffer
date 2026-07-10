@@ -51,11 +51,14 @@ function headers(extra: HeadersInit = {}): HeadersInit {
 async function checkOk(r: Response): Promise<Response> {
   if (!r.ok) {
     const data = (await r.json().catch(() => null)) as {
-      error?: { code?: string; message?: string };
+      error?: { code?: string; message?: string; details?: unknown };
     } | null;
+    // details carries the actionable hint of SYNC_REMOTE_UNREACHABLE
+    // (auth/not_found/network) — the save-failure UI renders guidance from it.
     throw new ApiError(
       data?.error?.code ?? "INTERNAL_ERROR",
       data?.error?.message ?? `request failed: ${r.status}`,
+      data?.error?.details,
     );
   }
   return r;

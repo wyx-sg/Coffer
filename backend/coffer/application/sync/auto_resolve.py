@@ -1,12 +1,15 @@
 """Deterministic conflict auto-resolution (spec 010 amendment 2026-07-10).
 
-Newest-wins per conflicted path: the side whose last commit touching the path
-is newer wins — machine-independent, so every machine picks the same winner; a
-timestamp tie keeps the merging machine's side. ``manifest.json`` always
-resolves ours (the schema gate has already run, so ours is the highest schema
-this vault may carry). Anything the policy cannot settle is left for the
-user's own git tooling (the UI points at the remote repo) or
-``coffer sync resolve``.
+Per conflicted path, the side whose last VAULT-REPO commit touching it is
+newer wins. Commit time is when a change was captured by a sync run (a run
+commits its export just before pulling), not when the user edited — so the
+policy is precisely "the most recently synced edit wins"; with near-real-time
+auto-sync on every machine the two coincide. Machine-independent, so every
+machine picks the same winner; a timestamp tie keeps the merging machine's
+side. ``manifest.json`` always resolves ours (byte-identical across
+same-version machines; the schema gate runs before export). Anything the
+policy cannot settle is left for the user's own git tooling (the UI points at
+the remote repo) or ``coffer sync resolve``.
 """
 
 from __future__ import annotations

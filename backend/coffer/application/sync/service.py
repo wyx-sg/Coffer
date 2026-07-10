@@ -13,7 +13,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
-import re
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,7 +20,11 @@ from pathlib import Path
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.auto_resolve import auto_resolve
-from coffer.application.sync.config_service import SyncConfigService, validate_config_fields
+from coffer.application.sync.config_service import (
+    SyncConfigService,
+    validate_config_fields,
+    validate_override_ref,
+)
 from coffer.application.sync.exporter import SyncExporter
 from coffer.application.sync.identity import MachineIdentityService
 from coffer.application.sync.importer import SyncImporter
@@ -34,7 +37,6 @@ from coffer.application.sync.ports import (
 )
 from coffer.domain.audit import AuditEventType
 from coffer.domain.error_base import CofferError
-from coffer.domain.errors import ConfigValidationError
 from coffer.domain.resource import ResourceRef
 from coffer.domain.sync.errors import (
     GitOperationFailed,
@@ -57,15 +59,6 @@ from coffer.domain.sync.models import (
 from coffer.domain.sync.portability import expand_home
 
 _TERMINAL = {SyncStatus.CONFLICTED, SyncStatus.ERROR}
-
-_REF_SEGMENT = re.compile(r"^[A-Za-z0-9._-]+$")
-
-
-def _validate_override_ref(kind: str, name: str) -> None:
-    """Path params become workspace file paths — confine them to one segment."""
-    for segment in (kind, name):
-        if not _REF_SEGMENT.match(segment) or segment in {".", ".."}:
-            raise ConfigValidationError(f"invalid resource ref segment: {segment!r}")
 
 
 class SyncService:
@@ -217,11 +210,14 @@ class SyncService:
 
     @staticmethod
     def _has_imported(prior: SyncState) -> bool:
-        """Whether a sync run has ever completed its import phase here."""
-        return prior.last_sync_at is not None and prior.status in (
-            SyncStatus.CLEAN,
-            SyncStatus.CREDENTIALS_LOCKED,
-        )
+        """Whether a run has ever completed its import phase here.
+
+        ``last_sync_at`` is set only by a completed import and survives a
+        later ``_record_error`` — a transient failure must not suspend
+        deletion propagation (withheld deletions get mirrored back into the
+        live vault by the same run's import, undoing the user's delete). A
+        parked conflict nulls it: conservative until the next clean run."""
+        return prior.last_sync_at is not None
 
     async def resolve(self, strategy: str, paths: Sequence[str]) -> SyncState:
         config = await self._config.get_config()
@@ -283,7 +279,7 @@ class SyncService:
     ) -> None:
         """Store a per-machine merge patch; applied at every import, stripped
         from every export. Takes effect locally on the next sync run."""
-        _validate_override_ref(kind, name)
+        validate_override_ref(kind, name)
         identity = await self._identity.get()
         async with self._lock:  # never interleave with a run's import phase
             await asyncio.to_thread(
@@ -296,7 +292,7 @@ class SyncService:
         )
 
     async def unset_override(self, kind: str, name: str, *, actor: str) -> None:
-        _validate_override_ref(kind, name)
+        validate_override_ref(kind, name)
         identity = await self._identity.get()
         # Under the run lock: interleaving with an in-flight import would let
         # the import re-apply the just-deleted patch onto the live row, and

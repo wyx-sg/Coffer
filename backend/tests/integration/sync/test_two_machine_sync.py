@@ -221,7 +221,7 @@ async def test_round_trip_and_credential_bootstrap(tmp_path, remote) -> None:  #
 
 
 @pytest.mark.acceptance(
-    spec="010-sync", scenario="conflicting edits auto-resolve to the newer edit"
+    spec="010-sync", scenario="conflicting edits auto-resolve to the most recently synced edit"
 )
 async def test_conflict_auto_resolves_newest_wins(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
     a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
@@ -939,3 +939,46 @@ async def test_first_export_preserves_unimported_foreign_content(tmp_path, remot
     assert (ws / "resources" / "mcp_server" / "foreign.yaml").exists()
     assert (ws / "knowledge" / "foreign-note.md").read_text() == "from A\n"
     assert (ws / "credentials" / "foreign-ref.enc").exists()
+
+
+async def test_auto_resolve_handles_non_ascii_paths(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """A conflicted Chinese-named file auto-resolves instead of crashing on a
+    C-quoted path (core.quotepath) — review #290 finding 1."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    a.knowledge.mkdir(parents=True, exist_ok=True)
+    (a.knowledge / "记忆笔记.md").write_text("base\n", encoding="utf-8")
+    await a.service.run()
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()
+
+    (a.knowledge / "记忆笔记.md").write_text("from A\n", encoding="utf-8")
+    await a.service.run()
+    (b.knowledge / "记忆笔记.md").write_text("from B\n", encoding="utf-8")
+    state = await b.service.run()
+
+    assert state.status is not SyncStatus.CONFLICTED
+    assert state.status is not SyncStatus.ERROR
+    assert (b.knowledge / "记忆笔记.md").read_text() == "from B\n"
+    await a.service.run()
+    assert (a.knowledge / "记忆笔记.md").read_text() == "from B\n"
+
+
+async def test_deletions_still_propagate_after_a_transient_error(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """A machine that HAS imported keeps propagating deletions even when its
+    previous run failed — a network flake must not resurrect the user's
+    deletion via the next import (review #290 finding 2)."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    a.knowledge.mkdir(parents=True, exist_ok=True)
+    (a.knowledge / "note.md").write_text("v1\n", encoding="utf-8")
+    await a.service.run()  # clean run: imported at least once
+
+    # A transient failure is recorded (last_sync_at survives, status=ERROR).
+    await a.service._record_error("fetch flake")
+
+    # The user deletes a live file; the next run must still export the
+    # deletion, not silently restore the file from the workspace.
+    (a.knowledge / "note.md").unlink()
+    state = await a.service.run()
+    assert state.status is SyncStatus.CLEAN
+    assert not (a.knowledge / "note.md").exists()
+    assert not (a.root / "ws" / "knowledge" / "note.md").exists()

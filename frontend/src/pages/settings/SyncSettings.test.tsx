@@ -117,6 +117,20 @@ describe("SyncSettings", () => {
     expect(run).toHaveBeenCalled();
   });
 
+  test("a rejected remote save renders the actionable hint, not just stderr", async () => {
+    seed("clean");
+    const { ApiError } = await import("@/lib/api/errors");
+    vi.mocked(hooks.useUpdateSyncConfig).mockReturnValue({
+      mutate: update,
+      isPending: false,
+      error: new ApiError("SYNC_REMOTE_UNREACHABLE", "remote unreachable: fatal: …", {
+        hint: "auth",
+      }),
+    } as unknown as ReturnType<typeof hooks.useUpdateSyncConfig>);
+    render(<SyncSettings />, { wrapper: wrap });
+    expect(screen.getByText(/ssh/i)).toBeInTheDocument();
+  });
+
   test("a failed sync run surfaces its error", () => {
     seed("clean");
     vi.mocked(hooks.useRunSync).mockReturnValue({

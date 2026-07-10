@@ -82,8 +82,10 @@ list also appears in the desktop Sync panel.
 ## Conflicts resolve themselves
 
 If you edited the same resource/file on two machines before syncing, the run
-auto-resolves each conflicted path to the newer edit and completes — no manual
-step. In the rare case the engine cannot settle a path, the run parks in
+auto-resolves each conflicted path to the most recently synced edit and
+completes — no manual step. (With auto-sync on both machines, "most recently
+synced" and "newer" coincide.) In the rare case the engine cannot settle a
+path, the run parks in
 `conflicted` and the UI points you at your own repository (e.g. GitHub); the
 CLI escape hatch still works:
 

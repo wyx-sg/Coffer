@@ -1,28 +1,15 @@
 """Tree mirroring for the sync workspace (spec 010).
 
-``_replace_tree`` (blanket copy, workspace side) and ``_mirror_tree``
-(diff-aware converge, live side — the live trees are watched by auto-sync
-and hold machine-local derived files a rewrite would destroy).
+``_mirror_tree`` converges a destination tree on a source tree diff-aware in
+both directions: workspace→live (the live trees are watched by auto-sync and
+hold machine-local derived files a rewrite would destroy) and live→workspace
+(where ``delete_missing=False`` protects not-yet-imported remote files).
 """
 
 from __future__ import annotations
 
 import pathlib
 import shutil
-
-
-def _replace_tree(
-    src: pathlib.Path, dst: pathlib.Path, exclude: frozenset[str] = frozenset()
-) -> None:
-    """Make ``dst`` a copy of ``src`` (empty when ``src`` is absent), skipping
-    any basename in ``exclude``."""
-    if dst.exists():
-        shutil.rmtree(dst)
-    if src.exists():
-        ignore = shutil.ignore_patterns(*exclude) if exclude else None
-        shutil.copytree(src, dst, ignore=ignore)
-    else:
-        dst.mkdir(parents=True, exist_ok=True)
 
 
 def _tree_files(root: pathlib.Path, exclude: frozenset[str]) -> dict[pathlib.Path, pathlib.Path]:

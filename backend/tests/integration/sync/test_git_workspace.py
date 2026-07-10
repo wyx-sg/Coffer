@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import subprocess
 
-import pytest
-
 from coffer.domain.sync.manifest import Manifest
 from coffer.infrastructure.sync.git_repo import GitRepo
 from coffer.infrastructure.sync.workspace import Workspace
@@ -49,9 +47,9 @@ def test_commit_all_noop_when_clean(tmp_path) -> None:  # type: ignore[no-untype
     assert repo.commit_all("c2") is False  # nothing changed
 
 
-@pytest.mark.acceptance(
-    spec="010-sync", scenario="conflicting edits auto-resolve to the newer edit"
-)
+# No acceptance marker: this exercises the git-plumbing conflict/resolve
+# primitives only; the auto-resolve scenario is covered at the service level
+# (test_two_machine_sync.test_conflict_auto_resolves_newest_wins).
 def test_conflicting_edits_detected_then_resolved(tmp_path) -> None:  # type: ignore[no-untyped-def]
     remote = _bare_remote(tmp_path)
 

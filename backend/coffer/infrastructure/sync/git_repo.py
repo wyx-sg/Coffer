@@ -47,6 +47,11 @@ class GitRepo:
             self._run("symbolic-ref", "HEAD", f"refs/heads/{branch}")
         self._run("config", "user.name", _COMMIT_NAME)
         self._run("config", "user.email", _COMMIT_EMAIL)
+        # Non-ASCII paths (Chinese filenames) must come back verbatim from
+        # `git diff --name-only`, never C-quoted — a quoted path round-trips
+        # into checkout/rm as a literal `"\350..."` string and fails, which
+        # would crash auto-resolve on every conflict touching such a file.
+        self._run("config", "core.quotepath", "false")
         # Idempotently point origin at the configured remote.
         existing = self._run("remote", check=False)
         if "origin" in existing.stdout.split():
