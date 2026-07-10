@@ -36,6 +36,7 @@ from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_
 from coffer.surfaces.http.mcp.invocation_routes import router as mcp_invocation_router
 from coffer.surfaces.http.mcp.protocol_routes import router as mcp_protocol_router
 from coffer.surfaces.http.mcp.runner_routes import router as mcp_runner_router
+from coffer.surfaces.http.mcp.server_test_routes import router as mcp_server_test_router
 from coffer.surfaces.http.memory import router as memory_router
 from coffer.surfaces.http.provider_routes import router as provider_router
 from coffer.surfaces.http.resource_routes import router as resource_router
@@ -74,6 +75,7 @@ def include_all_routers(app: FastAPI) -> None:
         # MCP
         mcp_protocol_router,
         mcp_capability_router,
+        mcp_server_test_router,
         mcp_runner_router,
         mcp_invocation_router,
         memory_router,  # spec 007

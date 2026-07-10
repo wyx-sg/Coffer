@@ -48,6 +48,7 @@ from coffer.surfaces.http.dependencies import (
     get_resource_service,
 )
 from coffer.surfaces.http.mcp.capability_routes import router as capability_router
+from coffer.surfaces.http.mcp.server_test_routes import router as server_test_router
 from tests.fixtures.keyring import install_in_memory_keyring
 
 _FAKE = Path(__file__).resolve().parents[4] / "fixtures" / "fake_mcp_server.py"
@@ -150,6 +151,7 @@ async def _build_app(
     app = FastAPI()
     err_handlers.register(app)
     app.include_router(capability_router)
+    app.include_router(server_test_router)
     health_repo = MCPServerHealthRepo(sm)
 
     app.dependency_overrides[get_resource_service] = lambda: rsvc
@@ -735,6 +737,7 @@ async def test_test_endpoint_unreachable_server_returns_ok_false(
     app = FastAPI()
     err_handlers.register(app)
     app.include_router(capability_router)
+    app.include_router(server_test_router)
     app.dependency_overrides[get_resource_service] = lambda: rsvc
     app.dependency_overrides[get_audit_service] = lambda: audit
     app.dependency_overrides[get_capability_discovery] = lambda: discovery
@@ -897,7 +900,8 @@ async def test_test_endpoint_records_orphan_pid_under_server_name(
 
     captured: list[str] = []
 
-    # Must patch where the name is looked up (capability_routes local binding),
+    # Must patch where the name is looked up (server_test_routes local
+    # binding, since the /test route lives there — Task 20 size-gate split),
     # not where it is defined. We wrap the real class to intercept __init__.
     from coffer.infrastructure.mcp.subprocess import StdioUpstreamConnection as _RealConn
 
@@ -920,7 +924,7 @@ async def test_test_endpoint_records_orphan_pid_under_server_name(
             )
 
     with mock.patch(
-        "coffer.surfaces.http.mcp.capability_routes.StdioUpstreamConnection",
+        "coffer.surfaces.http.mcp.server_test_routes.StdioUpstreamConnection",
         _CapturingConn,
     ):
         try:
@@ -1186,6 +1190,7 @@ async def test_test_endpoint_http_transport(
         app = FastAPI()
         err_handlers.register(app)
         app.include_router(capability_router)
+        app.include_router(server_test_router)
         app.dependency_overrides[get_resource_service] = lambda: rsvc
         app.dependency_overrides[get_audit_service] = lambda: audit
         app.dependency_overrides[get_capability_discovery] = lambda: discovery

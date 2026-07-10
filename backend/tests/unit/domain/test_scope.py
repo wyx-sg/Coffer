@@ -1,4 +1,5 @@
 import pytest
+
 from coffer.domain.scope import (
     ScopeValidationError,
     agent_in_scope,

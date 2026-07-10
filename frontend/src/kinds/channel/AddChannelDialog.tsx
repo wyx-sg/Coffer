@@ -19,12 +19,11 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
-import { useSyncMachines } from "@/lib/hooks/useSync";
-import { useUpdateChannelScope } from "@/lib/hooks/useChannels";
 import { translateApiError } from "@/lib/api/errors";
 import type { ChannelType } from "@/lib/api/channels";
 import { createChannel } from "./registerChannel";
 import { addChannelFormSchema, planChannel, type ChannelPlan } from "./schema";
+import { useCreateTimeMachineBind } from "./useCreateTimeMachineBind";
 
 export function AddChannelDialog({
   open,
@@ -37,7 +36,6 @@ export function AddChannelDialog({
   const { toast } = useToast();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { data: machines } = useSyncMachines();
   const [channelType, setChannelType] = useState<ChannelType>("telegram");
   const [name, setName] = useState("");
   const [botToken, setBotToken] = useState("");
@@ -51,11 +49,7 @@ export function AddChannelDialog({
   // `name` itself isn't disabled while the mutation is in flight, so it
   // could drift before onSuccess fires.
   const [pendingName, setPendingName] = useState("");
-  // Create-time auto-bind (spec 010 affinity, ADR-045): the creating machine
-  // claims the new channel so its adapter starts right away. Routed through
-  // the scope API (not config.runs_on, now inert) — same PUT
-  // .../scope call ChannelMachineCard's "run here" button makes.
-  const bindScope = useUpdateChannelScope(pendingName);
+  const { machines, bindToLocalMachine } = useCreateTimeMachineBind(pendingName);
 
   const reset = () => {
     setChannelType("telegram");
@@ -74,15 +68,7 @@ export function AddChannelDialog({
     onSuccess: (createdName) => {
       void qc.invalidateQueries({ queryKey: ["resources"] });
       toast.success(t("channels.dialog.created", { name: createdName }));
-      // Auto-bind to the creating machine so the adapter starts right away
-      // (spec 010 affinity). Best-effort: a failure here surfaces its own
-      // toast (useUpdateChannelScope's onError) but must not undo the
-      // already-created channel — the user can still bind it manually from
-      // the channel's detail page.
-      const localMachine = machines?.machines.find((m) => m.is_local)?.machine_id;
-      if (localMachine) {
-        bindScope.mutate({ [localMachine]: "*" });
-      }
+      bindToLocalMachine();
       reset();
       onOpenChange(false);
       navigate(`/channels/${createdName}`);

@@ -4,6 +4,11 @@ The service is constructed with a dict of registered kinds; it never
 imports any kind-specific module. Each mutation is audited via
 AuditService. `delete` calls the kind's optional `on_delete` hook
 BEFORE persistence; a hook that raises aborts the deletion.
+
+Two mutation paths delegate to sibling ops modules to keep this file under
+the 400-LOC ceiling (mirroring `skill/service.py` + its `*_ops.py` satellites):
+`update_scope`'s body lives in `resource_scope_ops`, and `delete`'s
+credential-release step lives in `resource_delete_ops`.
 """
 
 from __future__ import annotations
@@ -26,11 +31,9 @@ from coffer.domain.errors import (
     CredentialMissing,
     GenericCreateNotAllowed,
     ResourceNotFound,
-    ScopeInvalidError,
     UnknownKind,
 )
 from coffer.domain.resource import Kind, Resource, ResourceRef
-from coffer.domain.scope import ScopeValidationError, validate_scope
 
 _logger = logging.getLogger(__name__)
 
@@ -330,43 +333,18 @@ class ResourceService:
     ) -> Resource:
         """Set (or clear) a resource's machine x agent activation scope (ADR-045).
 
-        Framework-level: unlike ``update_config``/``delete``, this is NOT gated
-        on ``allow_lifecycle_kind`` — scope is orthogonal to a kind's creation
-        invariants, so it applies uniformly to lifecycle kinds (skill, agent,
-        channel) too. ``scope`` is validated against the kind's declared
-        ``scope_axes`` (empty means the kind does not support scope at all).
+        Delegates to ``resource_scope_ops`` to keep this module under the
+        file-size limit; see that module for the full behavior.
         """
-        kind_def = self._require_kind(ref.kind)
-        try:
-            validate_scope(scope, axes=kind_def.scope_axes)
-        except ScopeValidationError as e:
-            raise ScopeInvalidError(str(e)) from e
-        # Confirms existence up front (raises ResourceNotFound) — mirrors
-        # update_config's before-read.
-        await self.get(ref)
-        updated = await self._repo.update_scope(ref, scope)
-        if updated is None:
-            raise ResourceNotFound(ref.kind, ref.name)
-        await self._audit.record(
-            AuditEventType.RESOURCE_SCOPE_UPDATED.value,
-            ref=ref,
-            actor=actor,
-            # Scope carries only machine ids / agent names — no secrets — so it
-            # is audited verbatim (no redactor needed, unlike config).
-            details={"scope": scope},
-        )
-        # Kind-level reconciliation (Task 11 Fix 2): runs AFTER persistence +
-        # audit, unlike ``on_update_config`` — by the time this fires the new
-        # scope is already the row's scope, so a hook re-reading the resource
-        # (e.g. skill delivery reconciliation) sees the edit that triggered it.
-        if kind_def.on_scope_changed is not None:
-            hook_result = kind_def.on_scope_changed(ref)
-            if inspect.isawaitable(hook_result):
-                await hook_result
-        self._notify_change()
-        return updated
+        from coffer.application.resource_scope_ops import update_scope as _update_scope
+
+        return await _update_scope(self, ref, scope, actor=actor)
 
     async def delete(self, ref: ResourceRef, actor: str) -> None:
+        # Credential release (on successful delete) delegates to
+        # resource_delete_ops to keep this module under the file-size limit.
+        from coffer.application.resource_delete_ops import release_orphaned_credentials
+
         kind_def = self._require_kind(ref.kind)
         snapshot = await self.get(ref)  # raises ResourceNotFound if missing
         if kind_def.on_delete is not None:
@@ -380,7 +358,7 @@ class ResourceService:
             if inspect.isawaitable(result):
                 await result
         await self._repo.delete(ref)
-        released = await self._release_orphaned_credentials(kind_def, snapshot.config, actor)
+        released = await release_orphaned_credentials(self, kind_def, snapshot.config, actor)
         await self._audit.record(
             AuditEventType.RESOURCE_DELETED.value,
             ref=ref,
@@ -410,33 +388,3 @@ class ResourceService:
                 except Exception:
                     _logger.exception("resource.delete_listener_failed", extra={"ref": str(notice)})
         self._notify_change()
-
-    async def _release_orphaned_credentials(
-        self, kind_def: Kind, config: dict[str, Any], actor: str
-    ) -> builtins.list[str]:
-        """Drop the deleted resource's credentials that nothing cites anymore.
-
-        Runs after the row is removed, so the deleted resource no longer counts
-        as a citation of its own refs. A failure must not turn the completed
-        deletion into a caller-facing error — the credential then merely
-        lingers, which was the status quo.
-        """
-        if self._credentials is None:
-            return []
-        released: builtins.list[str] = []
-        for cred_ref in dict.fromkeys(_extract_credential_refs(kind_def, config).values()):
-            try:
-                if not self._credentials.exists(cred_ref):
-                    continue
-                if await self.find_credential_citations(cred_ref):
-                    continue
-                self._credentials.delete(cred_ref)
-                await self._audit.record(
-                    AuditEventType.CREDENTIAL_DELETED.value,
-                    actor=actor,
-                    details={"ref": cred_ref},
-                )
-                released.append(cred_ref)
-            except Exception:
-                _logger.exception("resource.credential_release_failed", extra={"ref": cred_ref})
-        return released
