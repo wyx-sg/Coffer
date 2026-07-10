@@ -1,4 +1,4 @@
-"""Framework-level machine × agent activation scope (ADR-045)."""
+"""Framework-level machine x agent activation scope (ADR-045)."""
 
 from __future__ import annotations
 
