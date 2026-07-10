@@ -227,6 +227,9 @@ class CredentialSyncPort(Protocol):
 
     def write_ciphertext(self, ref: str, blob: bytes) -> None: ...
 
+    def delete_ciphertext(self, ref: str) -> None:
+        """Remove the row for ``ref`` (idempotent; applying a credential tombstone)."""
+
     def locked_refs(self) -> list[str]:
         """Refs whose ciphertext cannot be decrypted on this machine (no/other key)."""
 

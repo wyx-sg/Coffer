@@ -9,7 +9,7 @@ from coffer.domain.channel.config import ChannelConfigModel
 from coffer.domain.errors import ConfigValidationError
 from coffer.domain.resource import Kind, ResourceRef
 
-_REF_FIELDS = ("bot_token_ref", "app_secret_ref", "signing_secret_ref")
+_REF_FIELDS = ("bot_token_ref", "app_secret_ref", "signing_secret_ref", "tunnel_token_ref")
 
 
 def _channel_credential_ref_extractor(config: dict[str, Any]) -> dict[str, str]:

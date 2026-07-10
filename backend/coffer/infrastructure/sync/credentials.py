@@ -54,6 +54,10 @@ class CredentialSyncAdapter:
                 (ref, blob, now, now),
             )
 
+    def delete_ciphertext(self, ref: str) -> None:
+        with closing(self._connect()) as conn, conn:
+            conn.execute("DELETE FROM credentials WHERE ref = ?", (ref,))
+
     def locked_refs(self) -> list[str]:
         refs = self.list_refs()
         if not refs:
