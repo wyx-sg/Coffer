@@ -18,5 +18,10 @@ def sessions_dir(agent_type_value: str, config_dir: Path) -> Path:
         raise UnsupportedAgentTypeError(agent_type_value) from exc
 
 
+def supports_transcripts(agent_type_value: str) -> bool:
+    """Whether the agent type has a known on-disk transcript layout."""
+    return agent_type_value in _SESSIONS_SUBDIR
+
+
 def is_transcript_file(path: Path) -> bool:
     return path.suffix == ".jsonl"

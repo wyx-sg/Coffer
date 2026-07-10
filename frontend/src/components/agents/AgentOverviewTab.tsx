@@ -19,11 +19,41 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { AgentOut } from "@/lib/api/agents";
+import { facetSupported } from "@/lib/api/agentCapabilities";
 import { BUILTIN, useAgentConnectionDraft } from "@/lib/hooks/useAgentConnectionDraft";
 
 export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
   const c = useAgentConnectionDraft(agent);
+
+  // FR-003a: a type without provider projection gets the uniform "not
+  // supported" note instead of a functional-looking picker that can never
+  // offer a compatible connection.
+  if (!facetSupported(agent, "connections")) {
+    return (
+      <Card>
+        <CardContent className="space-y-6 py-6">
+          <dl className="grid grid-cols-[10rem_1fr] gap-y-3 text-sm">
+            <dt className="text-muted-foreground">{t("agents.type")}</dt>
+            <dd>{agent.type}</dd>
+            <dt className="text-muted-foreground">{t("agents.configDir")}</dt>
+            <dd className="font-mono text-xs">{agent.config_dir}</dd>
+          </dl>
+          <div className="space-y-1 border-t border-border pt-4">
+            <h3 className="text-sm font-medium">{t("agents.connection.title")}</h3>
+            <p className="text-sm text-muted-foreground">
+              {t("agents.facetUnsupported.connections")}
+            </p>
+            {agent.type === "cursor" && (
+              <p className="text-xs text-muted-foreground">
+                {t("agents.facetUnsupported.cursorConnectionsReason")}
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>

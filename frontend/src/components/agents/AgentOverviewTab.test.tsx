@@ -167,7 +167,9 @@ describe("AgentOverviewTab", () => {
   });
 
   test("confirm stays disabled until the connection test passes", () => {
-    useProvidersMock.mockReturnValue({ data: [makeConn({ name: "official", is_active: true }), agnes()] });
+    useProvidersMock.mockReturnValue({
+      data: [makeConn({ name: "official", is_active: true }), agnes()],
+    });
     useListMock.mockReturnValue({
       mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: string[] }) => void }) =>
         opts?.onSuccess?.({ models: ["agnes-2.0"] }),
@@ -182,7 +184,9 @@ describe("AgentOverviewTab", () => {
   });
 
   test("a failed test keeps confirm disabled and shows the error message", () => {
-    useProvidersMock.mockReturnValue({ data: [makeConn({ name: "official", is_active: true }), agnes()] });
+    useProvidersMock.mockReturnValue({
+      data: [makeConn({ name: "official", is_active: true }), agnes()],
+    });
     useListMock.mockReturnValue({
       mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: string[] }) => void }) =>
         opts?.onSuccess?.({ models: ["agnes-2.0"] }),
@@ -202,7 +206,9 @@ describe("AgentOverviewTab", () => {
   });
 
   test("test then confirm binds both model slots and activates the connection", () => {
-    useProvidersMock.mockReturnValue({ data: [makeConn({ name: "official", is_active: true }), agnes()] });
+    useProvidersMock.mockReturnValue({
+      data: [makeConn({ name: "official", is_active: true }), agnes()],
+    });
     useListMock.mockReturnValue({
       mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: string[] }) => void }) =>
         opts?.onSuccess?.({ models: ["agnes-2.0", "agnes-1.5-flash"] }),
@@ -287,5 +293,23 @@ describe("AgentOverviewTab", () => {
     // defaults to the built-in login (spec: built-in is the baseline).
     const combobox = screen.getByRole("combobox", { name: /connection/i });
     expect(combobox).toHaveTextContent(/built-in/i);
+  });
+
+  test("a type without connection support shows the uniform note, no picker", () => {
+    // FR-003a / ADR-042 presentation amendment: cursor renders the neutral
+    // "not supported" note with its reason instead of a functional-looking
+    // picker that can never offer a compatible connection.
+    const cursor: AgentOut = {
+      ...agent,
+      name: "cursor",
+      type: "cursor",
+      config_dir: "/home/me/.cursor",
+      capabilities: { plugins: false, transcripts: false, connections: false },
+    };
+    render(<AgentOverviewTab agent={cursor} />);
+    expect(screen.getByText(/does not support llm connections/i)).toBeInTheDocument();
+    expect(screen.getByText(/locked to cursor's own backend/i)).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /connection/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /confirm/i })).not.toBeInTheDocument();
   });
 });
