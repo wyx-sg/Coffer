@@ -69,8 +69,18 @@ describe("ScopeCard", () => {
     expect(screen.queryByText("studio")).not.toBeInTheDocument();
   });
 
-  test("switching Everywhere -> Custom PUTs {}", () => {
+  test("switching Everywhere -> Custom pre-seeds known machines", () => {
     seed({ scope: null, axes: ["machine", "agent"] });
+    render(<ScopeCard kind="mcp_server" name="fs" />);
+    fireEvent.click(screen.getByRole("button", { name: /custom/i }));
+    expect(mutate).toHaveBeenCalledWith({
+      "M-LOCAL": "*",
+      "M-OTHER": "*",
+    });
+  });
+
+  test("switching Everywhere -> Custom with no machines PUTs {}", () => {
+    seed({ scope: null, axes: ["machine"], machines: [] });
     render(<ScopeCard kind="mcp_server" name="fs" />);
     fireEvent.click(screen.getByRole("button", { name: /custom/i }));
     expect(mutate).toHaveBeenCalledWith({});
@@ -201,5 +211,18 @@ describe("ScopeCard", () => {
     seed({ scope: { "M-LOCAL": "*" }, axes: ["machine"] });
     render(<ScopeCard kind="agent" name="cur" />);
     expect(screen.queryByText(/not active on this machine/i)).not.toBeInTheDocument();
+  });
+
+  test("toggling a row on preserves unknown machines in scope", () => {
+    seed({
+      scope: { "M-LOCAL": "*", "M-GHOST": "*" },
+      axes: ["machine"],
+      machines: [LOCAL],
+    });
+    render(<ScopeCard kind="agent" name="cur" />);
+    const row = within(screen.getByTestId("scope-row-M-LOCAL"));
+    // First turn M-LOCAL off, then back on to verify M-GHOST is preserved
+    fireEvent.click(row.getByRole("switch"));
+    expect(mutate).toHaveBeenCalledWith({ "M-GHOST": "*" });
   });
 });

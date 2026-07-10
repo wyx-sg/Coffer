@@ -110,7 +110,13 @@ export function ScopeCard({ kind, name }: { kind: string; name: string }) {
             size="sm"
             variant={isCustom ? "secondary" : "ghost"}
             disabled={update.isPending || isCustom}
-            onClick={() => update.mutate({})}
+            onClick={() =>
+              update.mutate(
+                machines.length === 0
+                  ? {}
+                  : Object.fromEntries(machines.map((m) => [m.machine_id, WILDCARD])),
+              )
+            }
           >
             {t("scope.custom")}
           </Button>
