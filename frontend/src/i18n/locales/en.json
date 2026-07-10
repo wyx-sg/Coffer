@@ -74,6 +74,7 @@
     "expand": "Expand sidebar",
     "agents": "Agents",
     "channels": "Channels",
+    "machines": "Machines",
     "audit": "Audit log",
     "chat": "Chat"
   },
@@ -1513,5 +1514,18 @@
       "runHere": "Run on this machine",
       "hint": "A synced channel runs on exactly one machine so two machines never fight over the same bot. Rebinding propagates on the next sync; the other machine stops automatically."
     }
+  },
+  "machines": {
+    "title": "Machines",
+    "subtitle": "Every machine synced into this vault, and what's active on each.",
+    "status": "Sync status",
+    "runNow": "Sync now",
+    "configureLink": "Configure sync",
+    "lastSync": "Last sync",
+    "neverSynced": "Never synced",
+    "thisMachine": "This machine",
+    "viewSlice": "View machine",
+    "loadFailed": "Failed to load machines.",
+    "empty": "No machines yet. Once you configure sync and run it, machines will appear here."
   }
 }

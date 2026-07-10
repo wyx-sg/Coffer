@@ -74,6 +74,7 @@
     "expand": "展开侧边栏",
     "agents": "Agent",
     "channels": "渠道",
+    "machines": "机器",
     "audit": "审计日志",
     "chat": "聊天"
   },
@@ -1513,5 +1514,18 @@
       "runHere": "改到本机运行",
       "hint": "同步的渠道只在一台机器上运行，避免两台机器争抢同一个 bot。改绑后经下一次同步传播，原机器会自动停止。"
     }
+  },
+  "machines": {
+    "title": "机器",
+    "subtitle": "这个 vault 已同步的所有机器，以及各自启用了什么。",
+    "status": "同步状态",
+    "runNow": "立即同步",
+    "configureLink": "配置同步",
+    "lastSync": "上次同步",
+    "neverSynced": "从未同步",
+    "thisMachine": "本机",
+    "viewSlice": "查看机器",
+    "loadFailed": "加载机器列表失败。",
+    "empty": "还没有机器。配置并运行同步后，机器会出现在这里。"
   }
 }
