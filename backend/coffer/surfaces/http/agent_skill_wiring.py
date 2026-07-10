@@ -20,6 +20,7 @@ from coffer.application.agent.mcp_service import AgentMcpService
 from coffer.application.agent.native_memory_service import AgentNativeMemoryService
 from coffer.application.agent.plugin_service import AgentPluginService
 from coffer.application.agent.service import AgentService
+from coffer.application.agent.sync_reconcile import AgentImportGate, AgentSideEffectsReconcile
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.resource_service import ResourceService
@@ -203,6 +204,33 @@ def wire_agent_and_skill_kinds(
 
     app.state.kinds["agent"] = agent_kind
     app.state.kinds["skill"] = skill_kind
+
+    # Import reconciliation (spec 010): an agent doc only imports where the
+    # agent is installed (gate → quarantine otherwise), and imported rows
+    # re-apply their on-disk side-effects (native-memory transform, skill
+    # delivery) after every sync import. start_sync reads these registries.
+    gates = getattr(app.state, "sync_import_gates", None)
+    if gates is None:
+        gates = []
+        app.state.sync_import_gates = gates
+    gates.append(AgentImportGate())
+    hooks = getattr(app.state, "sync_post_import_hooks", None)
+    if hooks is None:
+        hooks = []
+        app.state.sync_post_import_hooks = hooks
+
+    # actor="sync": delivery failures surface in the run's errors (retried on
+    # every import) instead of growing the audit log unboundedly.
+    async def _sync_skill_reconcile(agent_name: str) -> list[str]:
+        return await skill_svc.apply_follow_for_agent(agent_name, actor="sync")
+
+    hooks.append(
+        AgentSideEffectsReconcile(
+            agent_svc,
+            config_file_store,
+            on_skill_policy_changed=_sync_skill_reconcile,
+        )
+    )
 
     set_agent_service(agent_svc)
     set_auto_detect_service(auto_detect_svc)

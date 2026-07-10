@@ -12,7 +12,9 @@ from fastapi import FastAPI
 
 from coffer.application.audit_service import AuditService
 from coffer.application.provider.kind import make_provider_kind
+from coffer.application.provider.projector import ProviderProjector
 from coffer.application.provider.service import ProviderService
+from coffer.application.provider.sync_reconcile import ProviderProjectionReconcile
 from coffer.application.resource_service import ResourceService
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.surfaces.http.dependencies import (
@@ -45,4 +47,19 @@ def wire_provider_kind(
         resolve_internal_model=_resolve_internal_model,
     )
     set_provider_service(provider_svc)
+    # Import reconciliation (spec 010): after every sync import, re-derive the
+    # desired projection from the converged provider rows and apply it to the
+    # agents registered on THIS machine — a switch made elsewhere takes real
+    # effect here. A second stateless projector over the same store suffices.
+    hooks = getattr(app.state, "sync_post_import_hooks", None)
+    if hooks is None:
+        hooks = []
+        app.state.sync_post_import_hooks = hooks
+    hooks.append(
+        ProviderProjectionReconcile(
+            providers=provider_svc,
+            agents=get_agent_service(),
+            projector=ProviderProjector(ConfigFileStore()),
+        )
+    )
     return provider_svc
