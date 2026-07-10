@@ -121,6 +121,48 @@ These cases are tracked by integration tests, not by the acceptance audit, excep
 - **Daemon crash**: running shim sessions return a clean error to their MCP clients rather than hanging; a supervising surface can detect the crash and restart the daemon.
 - **Concurrent clients**: Multiple MCP clients (e.g., Claude Code + Codex at the same time) connect simultaneously without one disturbing the other; each gets an independent upstream subprocess set.
 
+## Gateway exposure scope (Amendment 2026-07-10 — machine × agent scope, [ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md))
+
+An `mcp_server` resource carries a framework-level `scope` (machine × agent
+axes, per [ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md))
+that the gateway consults at its own existing choke points — no new central
+gate:
+
+- **Machine axis.** A server out of scope for the LOCAL machine
+  (`machine_in_scope(scope, this_machine)` is false) is never spawned by the
+  supervisor, and its tools/resources/prompts are absent from
+  `_enabled_mcp_servers` and every list response on this machine — the same
+  silent-skip behavior as a disabled server, never an error.
+- **Agent axis — per-session identity.** The gateway filters a scoped-in
+  server's capabilities per SESSION, not per machine: an in-scope server
+  whose agent axis excludes the connecting session's identity is hidden from
+  that session's `tools/list` / `resources/list` / `prompts/list`, and any
+  call against it is rejected — exactly as if the server did not exist for
+  that session — even while it IS visible to a differently-identified
+  session on the same machine.
+- **Shim identity handshake.** The Coffer-MCP install (spec 004 FR-019)
+  writes `coffer-mcp-shim --agent <name>` into the agent's config, so every
+  managed agent's shim reports its own registered agent name at MCP
+  handshake via `params._meta["coffer/agent"]`, alongside the existing cwd
+  `_meta` injection (`coffer/cwd`). A session's reported identity is carried
+  for the life of that connection and used for every subsequent list/call.
+- **Unidentified sessions.** A session with no reported identity (a
+  hand-configured shim invocation, or any client that omits the `--agent`
+  flag) is treated as `agent=None`: it sees, and may call, only servers
+  whose agent-axis entry for this machine is exactly `"*"` — never a
+  named-agent-only entry, even one matching an agent that happens to be
+  running unidentified.
+- **Trust boundary.** Identity is SELF-REPORTED by the shim process at
+  handshake, not cryptographically verified — acceptable under the
+  single-user, loopback-only posture (FR-012). Any local process able to
+  open the loopback MCP connection and set `_meta` could claim any agent
+  name; this is documented explicitly rather than implying a stronger
+  isolation boundary than exists.
+
+A `channel` / `agent` / `skill` resource's scope is enforced at ITS OWN
+kind's seam (specs 009 / 004 / 005 respectively), never at the gateway;
+`knowledge_base` and `memory` never carry a non-null scope at all.
+
 ## Acceptance Scenarios
 
 Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is referenced by at least one test marked `@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="…")` (Python) or `acceptance("001-mcp-gateway", "…", …)` (TypeScript). Coverage is audited by `make verify-acceptance`.
@@ -323,6 +365,12 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** the server's status is read,
 - **Then** it reports `missing <runner>` instead of a bare failing state, and — when the runner is an allowlisted self-fetching launcher — a one-click install runs the fixed runner→Homebrew mapping and is audited (FR-019).
 
+### Scenario: an out-of-scope server is invisible to a session and never spawned
+
+- **Given** an `mcp_server` resource whose `scope` has no entry for this machine (it is scoped to a different machine only),
+- **When** the daemon starts on this machine and a shim session lists tools,
+- **Then** the server is never spawned by the supervisor, its tools are absent from the session's `tools/list`, and a call attempt against its namespaced tool name is rejected exactly as if the server were never registered.
+
 ## Requirements
 
 ### Functional Requirements
@@ -369,6 +417,11 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 **Missing launcher (amendment 2026-07-10, multi-machine)**
 
 - **FR-019**: A stdio server whose launcher command does not resolve on this machine (a synced server referencing e.g. `uvx` where `uv` is not installed) MUST be surfaced as such — `missing <runner>` in the server status — instead of a bare "failing" with no cause. When the runner is one of the allowlisted self-fetching launchers (`uvx`/`uv`, `npx`/`node`, `bunx`/`bun`), the UI MUST offer a one-click install that runs the FIXED runner→Homebrew mapping (never an arbitrary command from server config; the launcher fetches the actual MCP package itself on first run), audited as `mcp_runner_installed`. Any other missing command is reported with no install affordance.
+
+**Scope enforcement (Amendment 2026-07-10 — machine × agent scope, [ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md))**
+
+- **FR-020**: System MUST filter `mcp_server` exposure by its framework-level `scope` at the gateway's existing choke points: the machine axis gates spawn and local listing (`_enabled_mcp_servers` plus the supervisor spawn gate); the agent axis gates per-session `tools/list` / `resources/list` / `prompts/list` and call routing by the session's self-reported identity. An out-of-scope server is never spawned and is indistinguishable from an unregistered one on this machine; an in-scope server hidden from a session by the agent axis is indistinguishable from a disabled capability to that session.
+- **FR-021**: System MUST accept a self-reported agent identity at MCP handshake (`params._meta["coffer/agent"]`, alongside the existing `coffer/cwd` key), written into a managed agent's shim invocation as `coffer-mcp-shim --agent <name>` by the Coffer-MCP install (spec 004 FR-019). A session with no reported identity MUST be treated as `agent=None`, matching only servers whose agent-axis entry for this machine is `"*"`. Identity is self-reported, not cryptographically verified — a documented trust boundary, acceptable under the loopback-only, single-user posture (FR-012).
 
 ### Key Entities
 

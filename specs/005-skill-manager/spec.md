@@ -170,6 +170,40 @@ Per-skill bindings are precise but chatty: every new skill must be enabled agent
 - **Per-agent delivery target**: Both current agent types (Claude Code, Codex) use the `folder` delivery mode and deliver to `<config_dir>/skills/<name>`. Each agent's mode and subpath come from the capability manifest, so adding a future agent's delivery target is data, not a new branch.
 - **Non-folder delivery modes (reserved extension points)**: `rules_mdc` and `external_dir` are recognized `SkillDeliveryMode` values with no current agent type assigned. Enabling a skill for a hypothetical agent using one of these modes is refused with HTTP 422 before any filesystem write; the follow / relink reconcilers skip such agents so registration and policy changes still succeed.
 
+## Skill delivery scope (Amendment 2026-07-10 — machine × agent scope, [ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md))
+
+A `skill` resource carries a framework-level `scope` (machine × agent axes,
+per [ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md)).
+Scope is a resource-side GRANT ("this skill may run here"); the existing
+per-agent **follow policy** (FR-025) is agent-side INTENT ("deliver skills
+to me"). Delivery is the INTERSECTION of both, minus manual exclusions:
+
+- **Per-skill bindings** (User Story 3 / FR-009) deliver a skill to an agent
+  only when the agent is ALSO within the skill's scope for the local machine
+  (`machine_in_scope` for this machine AND `agent_in_scope` for the
+  binding's agent). A binding request for an agent/machine combination the
+  skill's scope excludes is rejected the same way an invalid delivery target
+  is rejected today.
+- **Follow-all delivery** (FR-025) computes a following agent's effective
+  set as the master store minus exclusions, further filtered to skills whose
+  scope includes both the local machine and that agent — an out-of-scope
+  skill is never auto-delivered to a following agent, exclusion list or not.
+- **Scope is a hard grant — it overrides manual bindings.** Editing a
+  skill's scope to exclude a machine or agent it was PREVIOUSLY delivered to
+  reclaims that delivery on the next reconcile: the symlink is removed and
+  the binding is marked disabled/removed, exactly like a
+  follow-policy-driven removal (FR-010), even for a binding that was created
+  manually (not through follow). A skill re-entering scope does not
+  auto-redeliver on its own — a following agent picks it back up on the next
+  follow reconcile; an explicit per-skill binding must be re-enabled by the
+  user.
+- Machine-local reconcile — the sync engine's per-import reconcile hook
+  (spec 010) — is the enforcement seam: after every import (a scope edit
+  propagating from another machine, a new/removed skill, or a follow-policy
+  change), each affected agent's delivered set is recomputed as
+  `scope ∩ follow-or-binding`, and any now-out-of-scope delivered copy is
+  reclaimed.
+
 ## Acceptance Scenarios
 
 Per `agents/sdd.md`, every scenario in this section is referenced by at least one test marked `@pytest.mark.acceptance(spec="005-skill-manager", scenario="…")` (Python) or `acceptance("005-skill-manager", "…", …)` (TypeScript).
@@ -348,6 +382,12 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **When** the user disables the follow switch,
 - **Then** every currently delivered skill remains as an explicit per-skill binding with its link intact, and subsequent master-store additions are no longer auto-delivered.
 
+### Scenario: delivery is the intersection of scope and follow policy; an out-of-scope copy is reclaimed
+
+- **Given** an agent following the master library with a skill currently delivered to it, and that skill's scope currently includes this machine and this agent,
+- **When** the user edits the skill's scope to exclude this agent (or this machine) and the next reconcile runs,
+- **Then** the delivered symlink is removed and the binding is reclaimed even though the agent still follows the master library and never excluded the skill itself — delivery equals scope ∩ follow policy, and scope's exclusion wins.
+
 ### Scenario: opt-in repair re-delivers repairable drift from master
 
 - **Given** an agent skill directory where one enabled binding has a missing Coffer link, another has a tampered Coffer link (a stale link pointing elsewhere), a third binding's path is occupied by a foreign regular directory the user owns, and a fourth binding's master folder no longer exists,
@@ -380,6 +420,7 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **FR-010**: Disabling a binding MUST remove the target link without touching the master folder.
 - **FR-011**: Enabling MUST refuse to overwrite an existing non-Coffer target without `--force`; `--force` backs up the existing target before creating the link.
 - **FR-012**: When symlinks/directory junctions are unavailable (e.g., FAT32, network share), System MAY fall back to copy mode for that target; the binding records `link_mode=copy_fallback` (audited as `mode: copy_fallback` on the enable event) and the UI MUST surface the degradation (the agent Skills tab shows a "Copied" warning chip on such bindings).
+- **FR-012a** (Amendment 2026-07-10 — machine × agent scope, [ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md)): Skill delivery to an agent MUST additionally require the skill to be in scope for the local machine AND that agent (`scope(M, agent)`), whether delivery is a per-skill binding (FR-009) or follow-all (FR-025). A reconcile that finds a delivered binding now out of scope MUST reclaim it (remove the link, disable/remove the binding) exactly as FR-010 reclaims a disabled binding — scope is a hard grant that overrides a previously-manual binding.
 
 **Drift**
 
@@ -417,7 +458,7 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 
 ### Key Entities
 
-- **Skill**: A Resource of kind `skill`, identified by `skill:<name>` (name from SKILL.md frontmatter). Holds source provenance, content hash, and metadata; the content folder lives on disk at `~/.coffer/skills/<name>/`.
+- **Skill**: A Resource of kind `skill`, identified by `skill:<name>` (name from SKILL.md frontmatter). Holds source provenance, content hash, and metadata; the content folder lives on disk at `~/.coffer/skills/<name>/`. Carries a framework-level `scope` (machine × agent axes) whose intersection with the per-agent follow policy determines delivery (Amendment 2026-07-10 — machine × agent scope, ADR-045; see "Skill delivery scope").
 - **Skill Source**: A record capturing where the skill came from. For local imports, it includes the original path for informational purposes only.
 - **Skill–Agent Binding**: A row joining one skill Resource and one agent Resource (kind `agent`, per spec 004), with an `enabled` flag and last-link-path metadata. Symlink existence on disk is the live representation; binding state is the persistent representation.
 - **Drift Report**: An ephemeral structure produced by `verify` listing each binding whose on-disk target disagrees with the binding state, categorized by drift type with a suggested remedy.
