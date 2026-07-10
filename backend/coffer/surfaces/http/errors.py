@@ -27,6 +27,7 @@ _STATUS: dict[str, int] = {
     "GENERIC_CREATE_NOT_ALLOWED": 409,
     "UNKNOWN_KIND": 400,
     "CONFIG_INVALID": 422,
+    "SCOPE_INVALID": 422,  # ADR-045 machine x agent activation scope
     "CREDENTIAL_MISSING": 400,
     "CREDENTIAL_IN_USE": 409,
     "CREDENTIAL_LOCKED": 503,

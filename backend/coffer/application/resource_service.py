@@ -26,6 +26,7 @@ from coffer.domain.errors import (
     CredentialMissing,
     GenericCreateNotAllowed,
     ResourceNotFound,
+    ScopeInvalidError,
     UnknownKind,
 )
 from coffer.domain.resource import Kind, Resource, ResourceRef
@@ -144,6 +145,15 @@ class ResourceService:
         if kind not in self._kinds:
             raise UnknownKind(kind)
         return self._kinds[kind]
+
+    def scope_axes(self, kind: str) -> tuple[str, ...]:
+        """Return the kind's declared machine x agent scope axes (ADR-045).
+
+        Public accessor (unlike ``_require_kind``) so the REST GET
+        .../scope route can report which axes a client may set, without
+        reaching into the private kinds registry.
+        """
+        return self._require_kind(kind).scope_axes
 
     def _validate_config(self, kind_def: Kind, config: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -324,7 +334,7 @@ class ResourceService:
         try:
             validate_scope(scope, axes=kind_def.scope_axes)
         except ScopeValidationError as e:
-            raise ConfigValidationError(str(e)) from e
+            raise ScopeInvalidError(str(e)) from e
         # Confirms existence up front (raises ResourceNotFound) — mirrors
         # update_config's before-read.
         await self.get(ref)

@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import ConfigValidationError, ResourceNotFound
+from coffer.domain.errors import ResourceNotFound, ScopeInvalidError
 from coffer.domain.resource import Kind, ResourceRef
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
@@ -94,7 +94,7 @@ async def test_update_scope_round_trips_matrix_through_real_repo(tmp_path):
 async def test_update_scope_on_axisless_kind_raises(tmp_path):
     svc, _, engine = await _service(tmp_path)
     await svc.register(kind="axisless_kind", name="t", config={"foo": 1}, actor="cli")
-    with pytest.raises(ConfigValidationError):
+    with pytest.raises(ScopeInvalidError):
         await svc.update_scope(ResourceRef("axisless_kind", "t"), {"machine-1": "*"}, actor="cli")
     # Rejected before any write — scope stays None.
     fetched = await svc.get(ResourceRef("axisless_kind", "t"))

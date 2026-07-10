@@ -49,6 +49,20 @@ class ConfigValidationError(CofferError):
     code = "CONFIG_INVALID"
 
 
+class ScopeInvalidError(CofferError):
+    """A machine x agent activation-scope payload failed validation (ADR-045):
+    either the kind doesn't declare any ``scope_axes`` (doesn't support scope
+    at all) or the payload's shape/axes don't match what it does declare.
+
+    Deliberately its own class rather than reusing ConfigValidationError so
+    surfaces can map it to a dedicated envelope code (SCOPE_INVALID) the
+    frontend keys off — still a CofferError subclass so the sync importer's
+    broad ``except CofferError`` quarantine handling keeps covering it.
+    """
+
+    code = "SCOPE_INVALID"
+
+
 # credential-store error family: re-exported from coffer.domain.credential_errors
 # (split for the file-size limit) so the coffer.domain.errors.X import paths keep working.
 from coffer.domain.credential_errors import (  # noqa: E402, I001
