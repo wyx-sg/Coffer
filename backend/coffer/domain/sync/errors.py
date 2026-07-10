@@ -136,3 +136,14 @@ class SyncSerializationError(CofferError):
     def __init__(self, detail: str) -> None:
         super().__init__(f"invalid sync document: {detail}")
         self.detail = detail
+
+
+class MachineNotFound(CofferError):  # noqa: N818
+    """A machine id was not found in the synced machines registry. Maps to
+    404 (Machines fleet view, ADR-045 amendment)."""
+
+    code = "MACHINE_NOT_FOUND"
+
+    def __init__(self, machine_id: str) -> None:
+        super().__init__(f"machine not found: {machine_id}")
+        self.machine_id = machine_id

@@ -31,6 +31,7 @@ from coffer.surfaces.http.embedding_routes import router as embedding_router
 from coffer.surfaces.http.fs_routes import router as fs_router
 from coffer.surfaces.http.internal_engine_routes import router as internal_engine_router
 from coffer.surfaces.http.knowledge_base import router as kb_router
+from coffer.surfaces.http.machines_routes import router as machines_router
 from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_router
 from coffer.surfaces.http.mcp.invocation_routes import router as mcp_invocation_router
 from coffer.surfaces.http.mcp.protocol_routes import router as mcp_protocol_router
@@ -56,6 +57,7 @@ def include_all_routers(app: FastAPI) -> None:
         credential_router,
         settings_router,
         sync_router,  # spec 010
+        machines_router,  # spec 010 amendment — Machines fleet view (ADR-045)
         embedding_router,
         internal_engine_router,  # spec 011
         # agent + skill (specs 004/005)

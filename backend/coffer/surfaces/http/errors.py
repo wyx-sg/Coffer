@@ -112,6 +112,8 @@ _STATUS: dict[str, int] = {
     "SYNC_SERIALIZATION_INVALID": 422,
     "SYNC_REMOTE_UNREACHABLE": 422,
     "MASTER_KEY_FILE_INVALID": 422,
+    # machines fleet view (spec 010 amendment, ADR-045)
+    "MACHINE_NOT_FOUND": 404,
     # provider switching (spec 011)
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": 422,
     "NO_ACTIVE_PROVIDER": 404,
