@@ -135,6 +135,9 @@ async def _setup(
     return session, resource_svc, prefs_repo, inv_repo, engine
 
 
+@pytest.mark.acceptance(
+    spec="010-sync", scenario="a scoped resource stays dormant outside its scope"
+)
 @pytest.mark.asyncio
 async def test_tools_list_excludes_server_scoped_to_other_machine_and_spawn_refuses(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -142,7 +145,20 @@ async def test_tools_list_excludes_server_scoped_to_other_machine_and_spawn_refu
     """A server scoped to a machine other than this session's local machine
     must vanish from tools/list, and the supervisor must refuse to spawn it
     outright — while an unscoped server on the same session is unaffected
-    (ADR-045 machine axis, Task 8)."""
+    (ADR-045 machine axis, Task 8).
+
+    Also stands in for 010-sync's "a scoped resource stays dormant outside
+    its scope": the resource row here plays the part of a doc already
+    imported/synced onto this machine (010-sync's own integration suite
+    covers the actual sync round trip — e.g.
+    ``test_scope_rides_sync_and_converges`` — that a scope value travels and
+    converges unchanged). What only the gateway can witness is what happens
+    to that synced-but-out-of-scope doc at activation time: it stays present
+    and visible (never deleted, never hidden from the resource API) while
+    never spawned/listed here, and the very same doc activates normally the
+    moment the local machine identity matches its scope — exactly the
+    machine x agent axis this test's supervisor/session pair exercises.
+    """
     _with_in_memory(monkeypatch)
 
     async def _local_machine_id() -> str:
@@ -168,6 +184,30 @@ async def test_tools_list_excludes_server_scoped_to_other_machine_and_spawn_refu
         # Unscoped server is unaffected by the machine filter.
         conn = await session._supervisor.get_or_spawn("fs")
         assert conn is not None
+
+        # The out-of-scope doc is present/visible on this machine (as it
+        # would be post-import) even though nothing here activates it.
+        visible = await rsvc.get(ResourceRef("mcp_server", "gh"))
+        assert visible is not None
+        assert visible.scope == {"other-machine": "*"}
+
+        # And the exact same doc activates normally read from the machine
+        # its scope actually names — a second supervisor over the SAME
+        # resource service, differing only in local machine identity.
+        async def _other_machine_id() -> str:
+            return "other-machine"
+
+        other_supervisor = SubprocessSupervisor(
+            resource_service=rsvc,
+            credential_resolver=CredentialResolver(KeyringAdapter()),
+            upstream_factory=build_upstream,
+            machine_id=_other_machine_id,
+        )
+        try:
+            other_conn = await other_supervisor.get_or_spawn("gh")
+            assert other_conn is not None
+        finally:
+            await other_supervisor.dispose()
     finally:
         await session.dispose()
         await _safe_dispose(engine)
@@ -284,7 +324,8 @@ async def _tools_list_names_for_agent(
 
 
 @pytest.mark.acceptance(
-    spec="001-mcp-gateway", scenario="agent axis gates tools/list by session identity"
+    spec="001-mcp-gateway",
+    scenario="an out-of-scope server is invisible to a session and never spawned",
 )
 @pytest.mark.asyncio
 async def test_tools_list_agent_scoped_server_visible_only_to_matching_agent(
@@ -347,7 +388,8 @@ async def test_tools_list_wildcard_agent_scope_visible_to_all_sessions(
 
 
 @pytest.mark.acceptance(
-    spec="001-mcp-gateway", scenario="agent axis gates call routing, not just listing"
+    spec="001-mcp-gateway",
+    scenario="an out-of-scope server is invisible to a session and never spawned",
 )
 @pytest.mark.asyncio
 async def test_tools_call_refused_for_server_excluded_by_agent_axis(
@@ -425,7 +467,7 @@ async def test_tools_call_allowed_for_server_included_by_agent_axis(
 
 @pytest.mark.acceptance(
     spec="001-mcp-gateway",
-    scenario="machine axis call denials stay in the unavailable bucket, not ToolDisabled",
+    scenario="an out-of-scope server is invisible to a session and never spawned",
 )
 @pytest.mark.asyncio
 async def test_tools_call_for_machine_excluded_server_raises_upstream_unavailable(

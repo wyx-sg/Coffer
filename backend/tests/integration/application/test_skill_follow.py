@@ -417,6 +417,12 @@ async def test_scoped_out_skill_not_delivered_under_follow(tmp_path):
     await engine.dispose()
 
 
+@pytest.mark.acceptance(
+    spec="005-skill-manager",
+    scenario=(
+        "delivery is the intersection of scope and follow policy; an out-of-scope copy is reclaimed"
+    ),
+)
 @pytest.mark.asyncio
 async def test_previously_delivered_copy_reclaimed_once_scope_excludes_it(tmp_path):
     """Scope is a hard grant: once a bound skill falls out of scope, the next

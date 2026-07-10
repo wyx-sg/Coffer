@@ -455,7 +455,7 @@ async def test_failed_import_quarantines_instead_of_deleting(tmp_path, remote) -
     assert any(f == "resources/mcp_server/portable.yaml" for f in b.workspace.list_files())
 
 
-@pytest.mark.acceptance(spec="010-sync", scenario="machine x agent activation scope rides sync")
+@pytest.mark.acceptance(spec="010-sync", scenario="scope edits propagate like any resource edit")
 async def test_scope_rides_sync_and_converges(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
     """Scope (ADR-045) travels through the sync medium like any other curated
     field: a changed scope on an existing row converges, and a resource
@@ -501,9 +501,7 @@ async def test_scope_rides_sync_and_converges(tmp_path, remote) -> None:  # type
     assert got3.scope is None
 
 
-@pytest.mark.acceptance(
-    spec="010-sync", scenario="an older build refuses a workspace one schema ahead"
-)
+@pytest.mark.acceptance(spec="010-sync", scenario="an older build refuses a newer workspace")
 async def test_manifest_gate_rejects_next_schema_version(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
     """The too-new gate must hold at the very next version boundary, not just
     for a wildly future one — meaningful after the v4 bump (Task 6)."""
