@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0045"
+HEAD_REVISION = "0047"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -82,7 +82,12 @@ HEAD_REVISION = "0045"
 # ``sync_config.poll_remote_seconds`` column (near-real-time remote-head probe)
 # — column-only, table set unchanged; its downgrade drops the column. 0045
 # ADDs ``sync_state.failed_state_json`` (state-doc import failures preserved
-# across exports) — column-only; its downgrade drops the column.
+# across exports) — column-only; its downgrade drops the column. 0046 ADDs
+# ``resources.scope_json`` (framework-level machine x agent activation scope,
+# ADR-045) — column-only, table set unchanged; its downgrade drops the column.
+# 0047 is DATA-only: it backfills ``scope_json`` for every ``kind='channel'``
+# row from its stored ``config_json.runs_on`` (ADR-045 amendment, spec 009 —
+# runs_on migrates to framework scope) — no DDL, table/column set unchanged.
 # The ``documents_fts_*`` shadow
 # tables FTS5 creates under the hood are excluded — the assertions speak to the
 # logical schema.
@@ -631,6 +636,77 @@ def test_0040_slims_connection_to_protocol(tmp_path, monkeypatch):
     assert "protocol" not in down
     assert "model" in down
     assert "wire_api" in down
+
+
+def test_0047_migrates_channel_runs_on_to_scope(tmp_path, monkeypatch):
+    """0047 is a data migration (ADR-045 amendment, spec 009): every
+    ``kind='channel'`` row's ``scope_json`` is backfilled from its stored
+    ``config_json.runs_on`` — bound (``"<id>"``) becomes ``{"<id>": "*"}``,
+    unbound (``null``) becomes ``{}`` (NOT NULL — a channel's ADR-043 "runs
+    nowhere until picked" default, the opposite of NULL's framework meaning of
+    "everywhere"). Only rows where ``scope_json IS NULL`` are touched, so an
+    already-scoped row survives untouched and a re-run is a no-op."""
+    db_path = tmp_path / "channel_scope.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    command.upgrade(cfg, "0046")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "INSERT INTO resources (kind, name, config_json, enabled, created_at, updated_at) "
+            "VALUES ('channel', 'bound', ?, 1, '2026-01-01', '2026-01-01')",
+            (json.dumps({"channel_type": "telegram", "bot_token_ref": "r1", "runs_on": "M-A"}),),
+        )
+        conn.execute(
+            "INSERT INTO resources (kind, name, config_json, enabled, created_at, updated_at) "
+            "VALUES ('channel', 'unbound', ?, 1, '2026-01-01', '2026-01-01')",
+            (json.dumps({"channel_type": "telegram", "bot_token_ref": "r2", "runs_on": None}),),
+        )
+        # Already-scoped row (e.g. set via the REST scope endpoint before this
+        # migration ran) must survive untouched — the ``scope_json IS NULL`` guard.
+        conn.execute(
+            "INSERT INTO resources "
+            "(kind, name, config_json, scope_json, enabled, created_at, updated_at) "
+            "VALUES ('channel', 'already-scoped', ?, ?, 1, '2026-01-01', '2026-01-01')",
+            (
+                json.dumps({"channel_type": "telegram", "bot_token_ref": "r3", "runs_on": "M-A"}),
+                json.dumps({"M-OTHER": "*"}),
+            ),
+        )
+        conn.commit()
+
+    command.upgrade(cfg, "0047")
+    assert _alembic_version(db_path) == "0047"
+
+    def _scopes() -> dict[str, dict | None]:
+        with sqlite3.connect(db_path) as conn:
+            return {
+                name: (json.loads(raw) if raw is not None else None)
+                for name, raw in conn.execute(
+                    "SELECT name, scope_json FROM resources WHERE kind = 'channel'"
+                ).fetchall()
+            }
+
+    scopes = _scopes()
+    assert scopes["bound"] == {"M-A": "*"}
+    assert scopes["unbound"] == {}  # NOT null — dormant, not "everywhere"
+    assert scopes["already-scoped"] == {"M-OTHER": "*"}  # untouched (IS NULL guard)
+
+    # Re-running the upgrade (idempotent: nothing left with scope_json IS NULL).
+    command.stamp(cfg, "0046")
+    command.upgrade(cfg, "0047")
+    assert _scopes() == scopes
+
+    # Downgrade nulls scope_json back out for channels only; config_json.runs_on
+    # (never touched by the upgrade either) survives throughout.
+    command.downgrade(cfg, "0046")
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT name, scope_json, config_json FROM resources WHERE kind = 'channel'"
+        ).fetchall()
+    by_name = {name: (scope_json, config_json) for name, scope_json, config_json in rows}
+    assert all(scope_json is None for scope_json, _cfg in by_name.values())
+    assert json.loads(by_name["bound"][1])["runs_on"] == "M-A"
 
 
 def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkeypatch):

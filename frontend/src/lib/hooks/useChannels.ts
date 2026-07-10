@@ -5,6 +5,10 @@
 // — the kind-agnostic useEnableResource / useDisableResource / useDeleteResource
 // mutations (useResourceMutations.ts) invalidate it for free. The
 // channel-specific operations (status, pairing) live under a "channels" key.
+// Scope (ADR-045) rides the framework-level useResourceScope /
+// useUpdateResourceScope (useScope.ts, Task 16) instead — useChannelScope /
+// useUpdateChannelScope are thin kind-bound wrappers kept for call-site
+// ergonomics (ChannelMachineCard, AddChannelDialog).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
@@ -13,6 +17,7 @@ import { getChannelStatus, issuePairingCode, notifyChannel } from "@/lib/api/cha
 import { applyChannelEdit } from "@/kinds/channel/editChannel";
 import type { ChannelPlan } from "@/kinds/channel/schema";
 import { useResources } from "@/lib/hooks/useResources";
+import { useResourceScope, useUpdateResourceScope } from "@/lib/hooks/useScope";
 import { useToast } from "@/components/ui/toast";
 
 export const CHANNEL_KIND = "channel";
@@ -76,6 +81,23 @@ export function useUpdateChannel() {
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });
+}
+
+/**
+ * A channel's machine-activation scope (ADR-045) — which single machine (if
+ * any) the channel's runtime is bound to. Supersedes `config.runs_on`; the
+ * ChannelMachineCard reads this instead of the resource's config. Channels
+ * only ever use the "machine" axis, with values always `"*"` (see
+ * `ChannelScopeValue` in `lib/api/channels.ts`) — a `Scope` value from the
+ * generic hook is a superset that's always structurally compatible.
+ */
+export function useChannelScope(name: string) {
+  return useResourceScope(CHANNEL_KIND, name);
+}
+
+/** Bind the channel to exactly one machine (or `{}` to unbind/dormant). */
+export function useUpdateChannelScope(name: string) {
+  return useUpdateResourceScope(CHANNEL_KIND, name);
 }
 
 /** Push a test message to the channel's paired peer (notify capability). */

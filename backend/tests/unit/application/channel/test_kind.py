@@ -135,3 +135,45 @@ def test_update_skips_when_no_agent_keys_injected():
 
 def test_update_skips_when_registry_empty():
     _update_validate({"channel_type": "telegram", "default_agent": "builtin"}, agent_keys=list)
+
+
+# -- scope shape validation (ADR-045 review Fix 1) ---------------------------
+# A channel's platform identity tolerates only ONE machine consumer (ADR-043);
+# `validate_scope_shape` rejects a scope map that would start its adapter on
+# more than one machine, whether via two exact-ULID entries or the wildcard
+# "*" key. Exercised directly against the Kind's callable — resource_scope_ops
+# wraps a raised ValueError into ScopeInvalidError (covered end to end by the
+# contract/CLI/integration tests).
+
+
+def _shape_validator():
+    validator = make_channel_kind().validate_scope_shape
+    assert validator is not None
+    return validator
+
+
+def test_scope_shape_accepts_none():
+    _shape_validator()(None)
+
+
+def test_scope_shape_accepts_empty_dict():
+    _shape_validator()({})
+
+
+def test_scope_shape_accepts_single_machine_entry():
+    _shape_validator()({"01ARZ3NDEKTSV4RRFFQ69G5FAV": "*"})
+
+
+def test_scope_shape_rejects_two_machine_entries():
+    with pytest.raises(ValueError, match="at most one machine"):
+        _shape_validator()({"machine-1": "*", "machine-2": "*"})
+
+
+def test_scope_shape_rejects_wildcard_key():
+    with pytest.raises(ValueError, match="at most one machine"):
+        _shape_validator()({"*": "*"})
+
+
+def test_scope_shape_rejects_wildcard_key_even_alone():
+    with pytest.raises(ValueError, match="at most one machine"):
+        _shape_validator()({"*": "*", "machine-1": "*"})

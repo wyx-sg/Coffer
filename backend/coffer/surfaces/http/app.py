@@ -173,7 +173,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Provider switching (spec 011) — AFTER the agent kind: it projects the
     # active profile into each agent's native config (see provider_wiring).
-    wire_provider_kind(app, resource_svc, audit, credential_store)
+    wire_provider_kind(app, resource_svc, audit, credential_store, sm)
 
     # Wire up knowledge_base kind (spec 006). Registers the KB built-in tools
     # into `builtin_tools`. One substrate per process: KB + memory share the

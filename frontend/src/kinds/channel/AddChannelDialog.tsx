@@ -19,11 +19,11 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
-import { useSyncMachines } from "@/lib/hooks/useSync";
 import { translateApiError } from "@/lib/api/errors";
 import type { ChannelType } from "@/lib/api/channels";
 import { createChannel } from "./registerChannel";
 import { addChannelFormSchema, planChannel, type ChannelPlan } from "./schema";
+import { useCreateTimeMachineBind } from "./useCreateTimeMachineBind";
 
 export function AddChannelDialog({
   open,
@@ -36,7 +36,6 @@ export function AddChannelDialog({
   const { toast } = useToast();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { data: machines } = useSyncMachines();
   const [channelType, setChannelType] = useState<ChannelType>("telegram");
   const [name, setName] = useState("");
   const [botToken, setBotToken] = useState("");
@@ -46,6 +45,11 @@ export function AddChannelDialog({
   const [publicBaseUrl, setPublicBaseUrl] = useState("");
   const [tunnelToken, setTunnelToken] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  // The name frozen at submit time, for the post-create scope bind below:
+  // `name` itself isn't disabled while the mutation is in flight, so it
+  // could drift before onSuccess fires.
+  const [pendingName, setPendingName] = useState("");
+  const { machines, bindToLocalMachine } = useCreateTimeMachineBind(pendingName);
 
   const reset = () => {
     setChannelType("telegram");
@@ -64,6 +68,7 @@ export function AddChannelDialog({
     onSuccess: (createdName) => {
       void qc.invalidateQueries({ queryKey: ["resources"] });
       toast.success(t("channels.dialog.created", { name: createdName }));
+      bindToLocalMachine();
       reset();
       onOpenChange(false);
       navigate(`/channels/${createdName}`);
@@ -94,8 +99,8 @@ export function AddChannelDialog({
       setFormError(`${issue.path.join(".")}: ${issue.message}`);
       return;
     }
-    const localMachine = machines?.machines.find((m) => m.is_local)?.machine_id ?? null;
-    create.mutate(planChannel(parsed.data, localMachine));
+    setPendingName(parsed.data.name);
+    create.mutate(planChannel(parsed.data));
   };
 
   return (

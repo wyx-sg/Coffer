@@ -1,9 +1,11 @@
-"""Runtime affinity: a channel runs only on its bound machine (spec 010).
+"""Runtime affinity: a channel runs only on its bound machine (ADR-045
+framework scope, amending spec 010's runs_on / ADR-043).
 
 The conftest runtime has no machine-id provider (tests predate affinity and
 keep the unfiltered behavior); these tests build a runtime WITH a provider —
 the production wiring — and drive `reconcile_once` against channels bound to
-this machine, another machine, and nowhere.
+this machine, another machine, and nowhere (via the resource's `scope`, not
+the now-inert `config.runs_on`).
 """
 
 from __future__ import annotations
@@ -41,24 +43,12 @@ def _affinity_runtime(env: ChannelEnv) -> tuple[ChannelRuntime, list[FakeChannel
 
 @pytest.mark.acceptance(spec="009-channels", scenario="a channel runs on exactly one machine")
 async def test_only_the_bound_machine_starts_the_adapter(env: ChannelEnv) -> None:
-    await env.register_channel(
-        "mine",
-        ref="channel/mine/bot-token",
-        config={
-            "channel_type": "telegram",
-            "bot_token_ref": "channel/mine/bot-token",
-            "runs_on": LOCAL,
-        },
-    )
-    await env.register_channel(
-        "elsewhere",
-        ref="channel/elsewhere/bot-token",
-        config={
-            "channel_type": "telegram",
-            "bot_token_ref": "channel/elsewhere/bot-token",
-            "runs_on": OTHER,
-        },
-    )
+    mine = await env.register_channel("mine", ref="channel/mine/bot-token")
+    await env.resources.update_scope(mine.ref, {LOCAL: "*"}, actor="test")
+    elsewhere = await env.register_channel("elsewhere", ref="channel/elsewhere/bot-token")
+    await env.resources.update_scope(elsewhere.ref, {OTHER: "*"}, actor="test")
+    # A freshly registered channel defaults to the dormant scope ({}, ADR-045
+    # amendment) — no explicit update_scope call needed to prove "unbound".
     await env.register_channel("unbound", ref="channel/unbound/bot-token")
 
     runtime, created = _affinity_runtime(env)
@@ -70,26 +60,14 @@ async def test_only_the_bound_machine_starts_the_adapter(env: ChannelEnv) -> Non
 
 
 async def test_rebind_moves_the_adapter(env: ChannelEnv) -> None:
-    resource = await env.register_channel(
-        "movable",
-        ref="channel/movable/bot-token",
-        config={
-            "channel_type": "telegram",
-            "bot_token_ref": "channel/movable/bot-token",
-            "runs_on": LOCAL,
-        },
-    )
+    resource = await env.register_channel("movable", ref="channel/movable/bot-token")
+    await env.resources.update_scope(resource.ref, {LOCAL: "*"}, actor="test")
     runtime, _created = _affinity_runtime(env)
     await runtime.reconcile_once()
     assert runtime.is_running("movable") is True
 
     # Rebind to the other machine (as a sync import would): this runtime stops.
-    await env.resources.update_config(
-        resource.ref,
-        {**resource.config, "runs_on": OTHER},
-        "test",
-        allow_lifecycle_kind=True,
-    )
+    await env.resources.update_scope(resource.ref, {OTHER: "*"}, actor="test")
     await runtime.reconcile_once()
     assert runtime.is_running("movable") is False
 

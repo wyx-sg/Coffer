@@ -137,6 +137,57 @@ affinity, per-machine config overrides, tombstone provenance — see
 [ADR-043](../../docs/decisions/ADR-043-sync-machine-identity-near-real-time.md)).
 It is **not** a per-record versioning scheme.
 
+**Scope** (Amendment 2026-07-10 — machine × agent scope,
+[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md))
+generalizes machine identity into a framework-owned, per-resource activation
+matrix: an optional `scope` field lives on every resource (not inside kind
+config), keyed by machine ULID (or `"*"` for every machine) with values of
+`"*"` (every agent) or a list of agent names.
+
+```
+scope == None                                    # active on every machine, for every agent (default)
+scope == {}                                      # active nowhere (dormant)
+scope == {"<ulid>": ["claude-code"], "*": "*"}   # one machine: Claude Code only; every other machine: every agent
+```
+
+| Rule | Behavior |
+| --- | --- |
+| Entry lookup for machine M | exact-ULID key wins over the `"*"` key; no key present for M → inactive on M |
+| `machine_in_scope(scope, m)` | an entry exists for `m` and its value is `"*"` or a non-empty list |
+| `agent_in_scope(scope, m, agent)` | the entry's value is `"*"`, or `agent` is in the list; `agent=None` (an unidentified session) matches ONLY `"*"` values |
+| `scope == None` | always active — every machine, every agent |
+| Unknown machine ULIDs or agent names in an entry | legal, and simply never match (the other machine may not have synced yet; the agent may be registered later) |
+
+Each kind declares which axes its resources use and enforces scope at its OWN
+existing choke point — no new central gate:
+
+| Kind | Axes | Enforcement seam |
+| --- | --- | --- |
+| `mcp_server` | machine × agent | the gateway (spec 001) |
+| `skill` | machine × agent | delivery ∩ follow policy (spec 005) |
+| `agent` | machine only | projection / reconcile / shim install (spec 004) |
+| `channel` | machine only | the channel runtime (spec 009); supersedes `runs_on` |
+| `knowledge_base`, `memory` | none | a non-null `scope` is rejected at validation |
+
+A machine-only kind's scope entries accept only `"*"` as their value (an
+agent-name list is rejected). A matrix that names an agent is additionally
+intersected with that AGENT's own machine axis when computing an activation
+slice for the Machines fleet view (below) — the gateway itself trusts the
+local shim's self-reported identity and does not re-check the agent's machine
+axis, since a local shim can only run where the agent is actually installed.
+
+**Sync-but-inactive.** `scope` rides the resource doc through the existing
+export → merge → import pipeline, auto-conflict resolution, tombstones, and
+quarantine, completely unmodified: a scoped resource still syncs to and is
+visible on every machine; out of scope it is simply not activated (not
+spawned, not exposed, not delivered), and the registry stays the single
+source of truth — scope is editable from any machine, exactly like editing
+any other resource field. Adding `scope` to resource docs bumps the workspace
+manifest `SCHEMA_VERSION` from 3 to 4, so a not-yet-upgraded build fails
+closed with the existing `SYNC_WORKSPACE_TOO_NEW` gate (see "an older build
+refuses a newer workspace" below) instead of silently dropping or misreading
+the field.
+
 ## Path portability
 
 The user's machines have different usernames/home layouts, so absolute paths
@@ -191,11 +242,21 @@ credential helper answers without a terminal.
 ## Surfaces
 
 - **CLI** — `coffer sync` command group: `init`, `status`, `run` (the default),
-  `push`, `pull`, `resolve`, `config`, `machines` (list; `--rename` for this
-  machine), `override list|set|unset`, `key export`, `key import`.
+  `push`, `pull`, `resolve`, `config`, `override list|set|unset`, `key export`,
+  `key import`. `machines` (list; `--rename` for this machine) is promoted to
+  a top-level `coffer machines` command (Amendment 2026-07-10 — machine ×
+  agent scope, [ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md));
+  `coffer sync machines` remains as a backward-compatible alias. A new
+  top-level `coffer scope show|set|clear <kind>:<name>` reads/edits any
+  resource's scope (see "Machines fleet view" below).
 - **REST** — `/api/v1/sync/*`: get/put config, get status, trigger a run,
   resolve conflicts, list machines / rename this machine, manage per-machine
-  overrides, export/import the master key.
+  overrides, export/import the master key. `scope` is validated per kind
+  axes wherever a resource is created or updated (the framework-level
+  resource CRUD payload); `GET /api/v1/machines` and
+  `GET /api/v1/machines/{id}/slice` (Amendment 2026-07-10 — machine × agent
+  scope, ADR-045) serve the fleet list and a machine's activation slice —
+  see "Machines fleet view" below.
 - **Desktop UI** — a Sync settings panel: configure remote (validated on
   save), toggle auto-sync, see status (clean / syncing / conflicted / error,
   last-sync time, actionable error hints), trigger a run, and a machines card
@@ -204,7 +265,34 @@ credential helper answers without a terminal.
   surface (amendment 2026-07-10): conflicts auto-resolve; the rare parked
   conflict directs the user to their own repository. The master-key card
   shows the key's SHA-256 fingerprint (never the key) so the user can confirm
-  two machines hold the same key after an export/import.
+  two machines hold the same key after an export/import. The full fleet
+  view — sync-status strip, one card per machine, and each machine's
+  activation slice — moved to a new top-level Machines nav item (Amendment
+  2026-07-10 — machine × agent scope, ADR-045); this panel's machines card
+  stays as a lighter summary linking there (see "Machines fleet view" below).
+
+## Machines fleet view (Amendment 2026-07-10 — machine × agent scope, [ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md))
+
+A top-level `Machines` nav item (`/machines`) — separate from Settings →
+Sync — lists every machine registered in the vault: a sync-status strip
+(state, last-sync time, a manual run trigger, and a link back to Settings →
+Sync) above one card per machine (display name, platform, last sync, "this
+machine" badge). Selecting a machine opens its **activation slice** — agents
+present, MCP servers active, skills delivered per agent, channels bound —
+computed LOCALLY from the synced registry plus each resource's scope, so any
+machine can render any OTHER machine's slice without contacting it. Every
+machine's slice is intent only — registry plus scope math, no local
+FS/process checks (what its scope says should be active there); a remote
+machine's slice additionally carries an intent-only hint. Sync configuration
+itself (remote, auto-sync, master key) is NOT part of this view — it stays in
+Settings → Sync; this view is about activation, not transport.
+
+- **REST**: `GET /api/v1/machines` (the fleet list) and
+  `GET /api/v1/machines/{id}/slice` (that machine's activation slice).
+- **CLI**: a top-level `coffer machines` (promoted out of the `coffer sync`
+  group; `coffer sync machines` remains as a backward-compatible alias) and
+  `coffer scope show|set|clear <kind>:<name>` to read or edit any resource's
+  scope.
 
 ## Credential bootstrap
 
@@ -415,6 +503,41 @@ resources that reference it cannot spawn, and status reports
 - **Then** the credential row is released on every machine, its blob leaves the
   medium, and a later re-created credential (fresher encryption) supersedes
   the tombstone instead of being deleted
+
+### Scenario: a scoped resource stays dormant outside its scope
+
+- **Given** an `mcp_server` resource whose `scope` names machine A only
+  (`{"<A-id>": "*"}`), synced to both machine A and machine B
+- **When** machine B reconciles after import
+- **Then** the resource's doc is present on B (visible, synced) but B's
+  gateway never spawns its upstream and never lists its tools, while machine
+  A activates it normally
+- **And** the Machines fleet view shows the resource as inactive on B
+
+### Scenario: scope edits propagate like any resource edit
+
+- **Given** a resource currently scoped to machine A only
+- **When** the user edits its `scope` on machine A to include machine B, and
+  both machines complete a sync round trip
+- **Then** B activates the resource on its next reconcile — through the same
+  export → merge → import → reconcile-hook pipeline as any other resource
+  edit, with no new sync machinery
+- **And** a stale build whose manifest schema version predates the `scope`
+  field refuses the import with `SYNC_WORKSPACE_TOO_NEW` rather than
+  silently dropping the field
+
+### Scenario: the fleet view renders any machine's activation slice
+
+- **Given** machines A and B have each completed a sync run against the same
+  remote, and their resources carry a mix of scopes
+- **When** the user opens the Machines fleet view on machine A and selects
+  machine B's card
+- **Then** the detail view renders B's activation slice (agents present, MCP
+  servers active, skills delivered per agent, channels bound) computed
+  locally from the synced registry plus scope, without machine A contacting B
+- **And** because B is remote from A's viewpoint, the rendering carries an
+  intent-only hint; viewed on B itself (its own, local slice) the hint does
+  not appear
 
 ## Out of scope references
 

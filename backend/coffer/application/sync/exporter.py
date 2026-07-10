@@ -89,6 +89,11 @@ class SyncExporter:
                     description=r.description,
                     enabled=r.enabled,
                     config=config,
+                    # Scope carries machine ULIDs / agent names, never paths —
+                    # it rides verbatim, exempt from ${HOME} normalization and
+                    # per-machine override stripping (both operate on config
+                    # only, above).
+                    scope=r.scope,
                 )
             )
         live = {(r.kind, r.name): _aware(r.created_at) for r in resources}

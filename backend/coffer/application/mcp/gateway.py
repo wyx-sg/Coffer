@@ -11,7 +11,9 @@ Invocation handlers (tools/call, resources/read, prompts/get) live in
 Server-initiated request plumbing (T-061 sampling, T-062 roots) lives in
 `gateway_server_requests` for the same reason. The pure envelope-parsing
 helpers (launch-cwd extraction, upstream-notification method/params parsing)
-live in `gateway_parsing`.
+live in `gateway_parsing`. The ADR-045 machine/agent scope-filtering helpers
+(local machine id resolution + the enabled-server filter) live in
+`gateway_scope`.
 
 For the spec's "upstream tool list changes mid-session" scenario, the
 session subscribes to each upstream's notification stream (via
@@ -51,14 +53,18 @@ from coffer.application.mcp.gateway_handlers import (
     handle_tools_call,
 )
 from coffer.application.mcp.gateway_parsing import (
+    _extract_agent,
     _extract_cwd,
     _extract_method,
     _extract_params,
 )
+from coffer.application.mcp.gateway_scope import (
+    enabled_mcp_servers,
+    resolve_local_machine_id,
+)
 from coffer.application.mcp.gateway_server_requests import (
     ServerRequestRegistry,
-    build_list_roots_callback,
-    build_sampling_callback,
+    build_session_callbacks,
 )
 from coffer.application.mcp.gateway_tool_search import TOOL_SEARCH_NAME
 from coffer.application.mcp.ports import (
@@ -103,6 +109,7 @@ class MCPGatewaySession:
         on_dispose: Callable[[], None] | None = None,
         builtin_tools: BuiltinToolRegistry | None = None,
         embedder_provider: Callable[[], Awaitable[Any | None]] | None = None,
+        machine_id: Callable[[], Awaitable[str | None]] | None = None,
     ) -> None:
         self.id = session_id or str(uuid.uuid4())
         self._resources = resource_service
@@ -112,6 +119,18 @@ class MCPGatewaySession:
         self._invocations = invocations
         self._downstream_sink = downstream_sink
         self._clock = clock or (lambda: datetime.now(tz=UTC))
+        # ADR-045 machine axis (Task 8): optional provider resolving this
+        # machine's sync identity, resolved once and cached per session
+        # (mirroring ChannelRuntime — channel/runtime.py:181-186). None (the
+        # default) means no provider is wired — legacy behavior, no filtering.
+        self._machine_id = machine_id
+        self._machine_id_value: str | None = None
+        # ADR-045 agent axis (Task 9): the session's bound agent identity, set
+        # from the shim's self-reported ``--agent`` name on the ``initialize``
+        # handshake (params._meta["coffer/agent"], see handle_initialize).
+        # None when the shim was launched without one (pre-Task-9 install, or
+        # an unnamed launch) — the agent-axis filter is then a no-op.
+        self._session_agent: str | None = None
         # CODE-035: called once when the session is disposed so the composition
         # root can drop this session's entry from its supervisor registry
         # (otherwise disposed-but-registered supervisors accumulate for the
@@ -137,17 +156,14 @@ class MCPGatewaySession:
         # Server-initiated request bookkeeping (T-061 sampling, T-062 roots).
         self._server_request_registry = ServerRequestRegistry()
         # Pre-build SDK callbacks so we can register them on connection objects.
-        self._sampling_callback = build_sampling_callback(
+        callbacks = build_session_callbacks(
             self._server_request_registry,
             lambda: self._downstream_sink,
             lambda: self._client_capabilities,
             self.id,
         )
-        self._list_roots_callback = build_list_roots_callback(
-            self._server_request_registry,
-            lambda: self._downstream_sink,
-            self.id,
-        )
+        self._sampling_callback = callbacks.sampling
+        self._list_roots_callback = callbacks.list_roots
 
     def set_downstream_sink(self, sink: NotificationSink) -> None:
         """Called by the session runner once the downstream wire is open."""
@@ -164,6 +180,9 @@ class MCPGatewaySession:
         # requests appropriately (T-061: sampling capability check).
         self._client_capabilities = params.get("capabilities", {}) or {}
         self._session_cwd = _extract_cwd(params)
+        # ADR-045 agent axis (Task 9): the shim's self-reported `--agent`
+        # identity, when it stamped one (params._meta["coffer/agent"]).
+        self._session_agent = _extract_agent(params)
         self._initialized = True
         return {
             "protocolVersion": "2025-06-18",
@@ -201,11 +220,15 @@ class MCPGatewaySession:
         """
         return self._server_request_registry.handle_response(envelope)
 
+    async def _local_machine_id(self) -> str | None:
+        self._machine_id_value = await resolve_local_machine_id(
+            self._machine_id, self._machine_id_value
+        )
+        return self._machine_id_value
+
     async def _enabled_mcp_servers(self) -> list[str]:
-        # Push the enabled=true filter to SQL so we don't materialise rows
-        # we'll throw away (CODE-021).
-        resources = await self._resources.list(kind="mcp_server", enabled=True)
-        return [r.name for r in resources]
+        local = await self._local_machine_id()
+        return await enabled_mcp_servers(self._resources, local, self._session_agent)
 
     async def _ensure_subscribed(self, server_name: str) -> None:
         """Attach notification + server-request handlers to the upstream connection lazily."""
@@ -285,23 +308,20 @@ class MCPGatewaySession:
                 session_id=self.id,
                 clock=self._clock,
             )
-        return await handle_tools_call(
-            params,
-            resources=self._resources,
-            supervisor=self._supervisor,
-            prefs=self._prefs,
-            invocations=self._invocations,
-            session_id=self.id,
-            clock=self._clock,
-            ensure_subscribed=self._ensure_subscribed,
-            on_evict=self._on_upstream_evicted,
-        )
+        return await self._dispatch_handler(handle_tools_call, params)
 
     def _inject_session_cwd(self, prefixed_name: str, params: dict[str, Any]) -> dict[str, Any]:
         return inject_session_cwd(self._builtin, prefixed_name, params, self._session_cwd)
 
-    async def _handle_resources_read(self, params: dict[str, Any]) -> Any:
-        return await handle_resources_read(
+    async def _dispatch_handler(
+        self,
+        handler: Callable[..., Awaitable[Any]],
+        params: dict[str, Any],
+    ) -> Any:
+        """Shared call shape for the three per-item invocation handlers
+        (tools/call fallback, resources/read, prompts/get) — each of
+        gateway_handlers' handle_* functions takes the same context kwargs."""
+        return await handler(
             params,
             resources=self._resources,
             supervisor=self._supervisor,
@@ -311,20 +331,15 @@ class MCPGatewaySession:
             clock=self._clock,
             ensure_subscribed=self._ensure_subscribed,
             on_evict=self._on_upstream_evicted,
+            local_machine_id=await self._local_machine_id(),
+            session_agent=self._session_agent,
         )
 
+    async def _handle_resources_read(self, params: dict[str, Any]) -> Any:
+        return await self._dispatch_handler(handle_resources_read, params)
+
     async def _handle_prompts_get(self, params: dict[str, Any]) -> Any:
-        return await handle_prompts_get(
-            params,
-            resources=self._resources,
-            supervisor=self._supervisor,
-            prefs=self._prefs,
-            invocations=self._invocations,
-            session_id=self.id,
-            clock=self._clock,
-            ensure_subscribed=self._ensure_subscribed,
-            on_evict=self._on_upstream_evicted,
-        )
+        return await self._dispatch_handler(handle_prompts_get, params)
 
     # --- Upstream → downstream notification forwarding ---
 

@@ -74,6 +74,7 @@
     "expand": "Expand sidebar",
     "agents": "Agents",
     "channels": "Channels",
+    "machines": "Machines",
     "audit": "Audit log",
     "chat": "Chat"
   },
@@ -259,6 +260,7 @@
       "resource_enabled": "Enabled {{resource}}",
       "resource_disabled": "Disabled {{resource}}",
       "resource_deleted": "Removed {{resource}}",
+      "resource_scope_updated": "Updated scope for {{resource}}",
       "capability_first_seen": "Discovered {{capType}} {{key}} on {{resource}}",
       "capability_enabled": "Enabled {{capType}} {{key}} on {{resource}}",
       "capability_disabled": "Disabled {{capType}} {{key}} on {{resource}}",
@@ -608,6 +610,7 @@
     "RESOURCE_ALREADY_EXISTS": "A resource with that name already exists",
     "UNKNOWN_KIND": "Unknown resource kind",
     "CONFIG_INVALID": "Configuration is invalid",
+    "SCOPE_INVALID": "That scope isn't valid for this resource kind",
     "CONFIG_FILE_FORMAT_INVALID": "The content isn't valid for this file's format. The file was left unchanged.",
     "TOOL_DISABLED": "This capability is disabled",
     "CREDENTIAL_MISSING": "Required credential is missing from the credential store",
@@ -630,6 +633,7 @@
     "CHANNEL_NOT_RUNNING": "The channel adapter is not running",
     "CHANNEL_SEND_FAILED": "Delivery to the IM platform failed",
     "GENERIC_CREATE_NOT_ALLOWED": "This kind can't be created directly",
+    "MACHINE_NOT_FOUND": "Machine not found",
     "MASTER_KEY_MISSING": "The master key is missing — Coffer can't decrypt stored secrets",
     "DB_SCHEMA_TOO_NEW": "This database was written by a newer version of Coffer. Upgrade to open it.",
     "PRIVILEGED_PATH": "That path is privileged and can't be used here",
@@ -649,6 +653,7 @@
     "UNMANAGED_SKILL_NOT_FOUND": "Unmanaged skill not found",
     "UNMANAGED_SKILL_INVALID": "That skill folder isn't a valid skill",
     "SKILL_INVALID": "The skill is invalid",
+    "SKILL_OUT_OF_SCOPE": "This skill isn't in scope for this agent on this machine",
     "TARGET_CONFLICT": "A skill already exists at the target location",
     "KB_NOT_FOUND": "Knowledge base not found",
     "DOCUMENT_NOT_FOUND": "Document not found",
@@ -1509,6 +1514,43 @@
       "thisMachine": "This machine",
       "runHere": "Run on this machine",
       "hint": "A synced channel runs on exactly one machine so two machines never fight over the same bot. Rebinding propagates on the next sync; the other machine stops automatically."
+    }
+  },
+  "scope": {
+    "title": "Activation scope",
+    "subtitle": "Where this is active — everywhere, or only on chosen machines (and, for MCP servers and skills, only for chosen agents).",
+    "everywhere": "Everywhere",
+    "custom": "Custom",
+    "dormant": "Custom with no machines turned on — dormant. Nothing is active anywhere until you turn on at least one machine below.",
+    "allAgents": "All agents",
+    "noAgents": "No agents registered yet.",
+    "noMachines": "No machines synced yet.",
+    "notActiveHere": "Not active on this machine.",
+    "unknownMachine": "Unknown to this vault's machine registry",
+    "rowToggle": "Active on {{machine}}"
+  },
+  "machines": {
+    "title": "Machines",
+    "subtitle": "Every machine synced into this vault, and what's active on each.",
+    "status": "Sync status",
+    "runNow": "Sync now",
+    "configureLink": "Configure sync",
+    "lastSync": "Last sync",
+    "neverSynced": "Never synced",
+    "thisMachine": "This machine",
+    "viewSlice": "View machine",
+    "loadFailed": "Failed to load machines.",
+    "empty": "No machines yet. Once you configure sync and run it, machines will appear here.",
+    "slice": {
+      "back": "Back to machines",
+      "agents": "Agents",
+      "mcpServers": "MCP servers",
+      "skills": "Skills",
+      "channels": "Channels",
+      "active": "Active",
+      "inactive": "Inactive",
+      "empty": "Nothing here yet.",
+      "intentOnly": "This is a remote machine — activation shown here is intent only, computed from the synced registry and scope, not confirmed against the machine itself."
     }
   }
 }

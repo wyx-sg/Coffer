@@ -22,8 +22,9 @@ from coffer.application.skill.lifecycle_ops import infer_link_mode
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import TargetConflict
 from coffer.domain.resource import ResourceRef
+from coffer.domain.scope import agent_in_scope, machine_in_scope
 from coffer.domain.skill.binding import BindingState
-from coffer.domain.workspace_errors import SkillDeliveryUnsupported
+from coffer.domain.workspace_errors import SkillDeliveryUnsupported, SkillOutOfScope
 
 if TYPE_CHECKING:
     from coffer.application.skill.service import SkillService
@@ -48,6 +49,14 @@ async def enable_skill_for_agent(
     if not delivers_skill_folders(service, agent):
         agent_type = str(agent.config.get("type", "")) if isinstance(agent.config, dict) else ""
         raise SkillDeliveryUnsupported(agent_type, mode)
+    # ADR-045 hard grant (Task 11): scope overrides manual bindings — a
+    # (machine, agent) pair outside the skill's scope can never be bound, even
+    # with force=True. No provider wired → no filtering (legacy contract).
+    local = await service._local_machine_id()
+    if local is not None and not (
+        machine_in_scope(skill.scope, local) and agent_in_scope(skill.scope, local, agent_name)
+    ):
+        raise SkillOutOfScope(skill_name, agent_name)
     # For EXTERNAL_DIR agents the resolver returns the Coffer-owned external dir
     # (not the agent's own skills dir); the link mechanics below are identical.
     target_dir = service._resolve_agent_skill_dir(agent)

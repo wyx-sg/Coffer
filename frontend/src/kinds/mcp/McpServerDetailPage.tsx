@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft } from "lucide-react";
+import { ScopeCard } from "@/components/ScopeCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useResource } from "@/lib/hooks/useResources";
@@ -157,6 +158,8 @@ export function McpServerDetailPage() {
           })}
         </div>
       ) : null}
+
+      <ScopeCard kind="mcp_server" name={name} />
 
       <McpServerDetailTabs
         serverName={name}

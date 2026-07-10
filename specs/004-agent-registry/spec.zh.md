@@ -249,6 +249,30 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - **指令文件包含 spec 007 的记忆投影受管块**：只读查看器标注该区块由记忆功能管理；任何编辑都发生在用户的外部编辑器中。
 - **`~/.codex/auth.json` 及其他凭据/状态文件**：永不进入任何 allowlist 或列表；插件与 MCP 解析也绝不读取它们。
 
+## Agent machine scope（2026-07-10 修订 —— machine × agent scope，[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.zh.md)）
+
+`agent` resource 携带一个仅限 **machine** 轴的框架级 `scope`（一个 `agent` 的
+scope 条目只接受 `"*"` 作为其 value，schema 强制——agent 名列表会被拒绝，因为
+agent resource 本身正是其他 kind 的 agent 轴所指向的对象，而不是某个 scope 的
+指向目标）。`scope == None`（默认）意味着这个 agent 在每台机器上都被预期存
+在；`scope == {"<ulid>": "*"}`（或 `{"*": "*"}`）把它限定到指名的机器。
+
+- **不在 scope 内的机器跳过副作用，但不跳过同步。** agent 的资源文档仍然同步
+  到、并在每台机器上可见（spec 010 既有的导入流水线不变）。在 agent scope**之
+  外**的机器上，导入会 upsert 这条 registry 行，但不执行原本会跟着发生的任何
+  机器本地副作用：不做 Coffer-MCP 投影、不跑导入后调和钩子（spec 010 的
+  「Import reconciliation」）、不做 shim 安装/刷新、不做 session-context 钩子
+  安装。这个 agent 只是静静地躺在那台机器的 registry 里——在 Machines fleet
+  view（spec 010）中显示为「这里不存在」，绝不会是被隔离或出错的行。
+- **导入门降级为「在 scope 内」的兜底。** spec 010 的导入门（`config_dir` 存
+  在性检查，本机没有对应目录时会把 agent 文档隔离）现在**仅**对在该 agent
+  scope**之内**的机器运行（或当 scope 为默认的 `None`——「每台机器」——时也运
+  行）。不在该 agent scope 内的机器根本不会走到这道门——它 `config_dir` 缺失
+  是预期之内，而不是隔离条件。这正好补上了 ADR-045 Context 一节指出的缺口：
+  一旦某个 agent 的 scope 排除了某台机器，它在那台机器上就不再产生永久的隔离
+  噪音；这道门仍然是安全网，用于 scope 说某台机器**应该**有这个 agent、但它
+  的目录还没就位（尚未安装，而非不在 scope 内）的情形。
+
 ## Acceptance Scenarios
 
 按 `agents/sdd.md` 与 `agents/testing.md` 的约定，本节中每一个 scenario 都至少被一个带 `@pytest.mark.acceptance(spec="004-agent-registry", scenario="…")`（Python）或 `acceptance("004-agent-registry", "…", …)`（TypeScript）标记的测试引用。
@@ -356,6 +380,12 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - **Given** daemon 正在运行，
 - **When** 用户尝试注册受支持集合之外的类型（例如 `claude_desktop`、`gemini_cli` 或一个垃圾值），
 - **Then** 注册以 `unprocessable_entity`（422）被拒绝，并指明受支持类型，且不留下任何持久化数据。
+
+### Scenario: an agent scoped to machine A causes no quarantine noise on machine B
+
+- **Given** 机器 A 注册了一个 `scope` 仅设为机器 A 的 agent，而机器 B 上该 agent 的 `config_dir` 不存在，
+- **When** B 的 sync run 导入这个 agent 资源，
+- **Then** 这条 agent 行在 B 上被 upsert，且不评估 spec 010 的导入门；B 的同步状态不为它报告任何隔离；B 不为这个 agent 执行任何投影 / 调和 / shim 安装——而 A 继续正常运行它。
 
 ### Scenario: list an agent's config files
 
@@ -660,6 +690,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - **FR-006**: 用户 MUST 能注册、列出、查看、更新（config_dir、description）与移除 agent。agent **没有启用/禁用的概念**——已注册的 agent 就是存在的，agent 层面不存在启用/禁用状态。注册时 agent 名称是可选的——省略时系统 MUST 派生一个稳定的按类型默认名（下划线变连字符，如 `claude_code` → `claude-code`）。
 - **FR-007**: 注册时系统 MUST 自动创建 `<config_dir>/skills` 子目录，再验证解析后的 `config_dir` 存在、是目录、可写且不是特权系统路径，方可接受该值。skill 投递到 `<config_dir>/skills`。
 - **FR-008**: 系统 MUST 拒绝任何会造成重复 `agent:<name>` 的注册，并 MUST 拒绝为同一个配置目录注册多于一个 agent。`config_dir` 由 agent 类型派生，因此每个受支持类型——也即每个磁盘上的配置目录——至多只能注册一次；第二次尝试以 `conflict`（409）拒绝且不持久化任何内容。
+- **FR-008a**（2026-07-10 修订 —— machine × agent scope，[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.zh.md)）：agent 资源的 `scope` MUST 只接受 machine 轴——每个条目的 value MUST 为 `"*"`；一个指名了具体 agent 的 scope 条目 MUST 在校验阶段被拒绝（422）。在一个 agent scope 之外的机器上，系统 MUST NOT 为该 agent 运行导入后调和钩子、Coffer-MCP 投影，或 shim/session-context 安装，且 spec 010 的导入门 MUST NOT 对该 agent 在那台机器上被评估——文档仍然 upsert 进 registry。在一个 agent scope 之内的机器上（包括默认的 `scope=None`），导入门仍是 `config_dir` 缺失时的兜底安全网。
 
 **配置文件**
 
@@ -672,7 +703,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 **Coffer MCP 安装**
 
-- **FR-019**: 用户 MUST 能一键把 Coffer 自己的 MCP server 安装到某个 agent。安装把一个 `coffer` stdio MCP-server 条目写进 agent 的 MCP 配置，按该 agent 清单中 `McpInjectionSpec` 声明的形态——`claude_code` 写 `~/.claude.json` 的 `mcpServers`；`codex` 写 `~/.codex/config.toml` 的 `[mcp_servers.coffer]`。`command` 设为 `coffer-mcp-shim` 二进制的绝对路径（先在 `PATH` 中解析，再查找当前解释器的脚本目录——这样即使守护进程的 `PATH` 不含 venv，也能找到装在 venv 里的 shim——最后回退到打包的二进制；环境变量 `COFFER_MCP_SHIM_PATH` 优先于以上全部）。若无法解析 shim，安装被拒绝且不写入任何内容。
+- **FR-019**: 用户 MUST 能一键把 Coffer 自己的 MCP server 安装到某个 agent。安装把一个 `coffer` stdio MCP-server 条目写进 agent 的 MCP 配置，按该 agent 清单中 `McpInjectionSpec` 声明的形态——`claude_code` 写 `~/.claude.json` 的 `mcpServers`；`codex` 写 `~/.codex/config.toml` 的 `[mcp_servers.coffer]`。`command` 设为 `coffer-mcp-shim` 二进制的绝对路径（先在 `PATH` 中解析，再查找当前解释器的脚本目录——这样即使守护进程的 `PATH` 不含 venv，也能找到装在 venv 里的 shim——最后回退到打包的二进制；环境变量 `COFFER_MCP_SHIM_PATH` 优先于以上全部）。安装还会把 `--agent <name>`（该 agent 的注册名）作为 shim 调用的参数写入——写在条目形态对应的参数位置（command-map 条目写 `args`，typed-array 条目追加到 `command` 数组）——使 gateway 能把会话归属到该 agent，用于 agent 轴的 scope 把关（2026-07-10 修订，[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.zh.md)；与 FR-043 的 hook 安装模式一致）。若无法解析 shim，安装被拒绝且不写入任何内容。
 - **FR-020**: 安装 MUST 幂等——重复安装就地更新已有的 `coffer` 条目，绝不产生重复。系统 MUST 暴露一个状态操作，报告该 agent 当前是否已安装 Coffer 的 MCP。
 - **FR-021**: 用户 MUST 能卸载 Coffer 的 MCP，从 agent 的 MCP 配置中移除 `coffer` 条目。未安装时卸载为空操作（no-op）成功。
 - **FR-022**: 安装与卸载 MUST 复用 FR-017 的原子写入 + `.bak` 机制，并写一条 audit 条目（`agent_mcp_installed` / `agent_mcp_uninstalled`）。
@@ -736,7 +767,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 ### Key Entities
 
-- **Agent**：一个 kind 为 `agent` 的 Resource。代表一份本地安装的 AI agent。Config: `type`（受支持的 enum）、`config_dir`（可选的绝对路径覆盖；默认回退到该类型的标准位置）。skill 投递到 `<config_dir>/skills`。标识为 `agent:<name>`。
+- **Agent**：一个 kind 为 `agent` 的 Resource。代表一份本地安装的 AI agent。Config: `type`（受支持的 enum）、`config_dir`（可选的绝对路径覆盖；默认回退到该类型的标准位置）。skill 投递到 `<config_dir>/skills`。标识为 `agent:<name>`。携带一个仅限 machine 轴（条目 value 只能为 `"*"`）的框架级 `scope`，限定这个 agent 被预期存在于哪些机器上（2026-07-10 修订 —— machine × agent scope，ADR-045；见「Agent machine scope」）。
 - **Agent Type**：一个 enum 值，标识一个已知 agent 产品（`claude_code`、`codex`、`opencode`、`hermes`、`cursor`、`openclaw`）。每个值映射到**能力清单**（`AGENT_DESCRIPTORS`）中的一条记录，携带其默认 `config_dir`、显示名、用于发现的安装标记、精选的**配置文件 allowlist**、**MCP 注入形态**，以及可选的 上下文注入 / provider 投影 / 原生记忆 facet——某产品在上游缺失的 facet 留空（FR-003a 下的能力矩阵），界面隐藏对应操作。当某个 facet 缺席是因为 **Coffer** 尚未实现该产品的机制（而非产品本身没有），界面 MUST 如实说明，而不是把它呈现为上游限制。
 - **Context Injection Spec**：描述 Coffer 的会话上下文（规则 + 记忆）如何抵达某个 agent 模型的 manifest facet。携带一个 `InjectionMode`（`SHELL_COMMAND` / `PLUGIN_DROP` / `INSTRUCTIONS_BLOCK`）、它写入的 allowlist 配置 `key` + `format`、它安装的生命周期 `events`（`INSTRUCTIONS_BLOCK` 为空——块不是事件驱动的），一个 `HookFlavor`（同时决定磁盘条目形状与 `coffer-hook` 打印的 stdout 信封；仅对 `SHELL_COMMAND` 有意义），以及——仅对 `PLUGIN_DROP`——一个 `PluginFlavor`（决定插件的磁盘形状：`opencode` 为单个自动加载的扁平文件；`openclaw` 为 package 目录外加 `plugin_enable_config_key` 指名文件里的 fail-closed 启用开关）。三种 mode 均已实现：`SHELL_COMMAND`（FR-043）、`INSTRUCTIONS_BLOCK`（FR-047）、`PLUGIN_DROP`（FR-048）。见 [ADR-042](../../docs/decisions/ADR-042-context-injection-mechanisms.zh.md)。
 - **Agent Candidate（候选项）**：一个被发现的、已安装但尚未注册的 agent——`type`、`display_name`、`config_dir`（该类型的默认配置目录）、`default_skill_dir` 与 `suggested_name`。在扫描时派生，从不存储；用户确认某个候选项即可注册它。

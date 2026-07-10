@@ -6,14 +6,14 @@ Operating manual for AI agents (Claude Code, Codex, Cursor, future ones) enterin
 
 ## 1. At a Glance
 
-| Property            | Value                                                                         |
-| ------------------- | ----------------------------------------------------------------------------- |
-| **Project**         | Coffer — local-first AI agent vault. Single-user. OSS-bound.                  |
-| **Methodology**     | Spec-Driven Development (SDD) with Speckit.                                   |
-| **Languages**       | Python 3.12+ (backend); TypeScript / React (frontend).                        |
-| **Source of truth** | `.specify/memory/constitution.md` (principles); `specs/` (product contracts). |
-| **Default branch**  | `main`.                                                                       |
-| **License**         | MIT.                                                                          |
+| Property            | Value                                                                                              |
+| ------------------- | -------------------------------------------------------------------------------------------------- |
+| **Project**         | Coffer — local-first AI agent vault. Single-user, one vault across the user's machines. OSS-bound. |
+| **Methodology**     | Spec-Driven Development (SDD) with Speckit.                                                        |
+| **Languages**       | Python 3.12+ (backend); TypeScript / React (frontend).                                             |
+| **Source of truth** | `.specify/memory/constitution.md` (principles); `specs/` (product contracts).                      |
+| **Default branch**  | `main`.                                                                                            |
+| **License**         | MIT.                                                                                               |
 
 ## 2. Files to Read at Session Start
 

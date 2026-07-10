@@ -14,6 +14,7 @@ Exit codes:
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import contextlib
 import json as _json
@@ -28,7 +29,7 @@ import httpx
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.surfaces.shim.bootstrap import (
     _ensure_daemon,
-    _inject_cwd,
+    _inject_meta,
     _setup_shim_log,
     _wait_for_daemon,
 )
@@ -47,10 +48,24 @@ _RECOVER_TIMEOUT = 5  # seconds
 _STDIN_READ_LIMIT = 64 * 1024 * 1024  # 64 MiB
 
 
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    """Parse the shim's own CLI args (Task 9: self-reported agent identity).
+
+    The shim is spawned by an MCP client's server-launch config, which may
+    already pass other flags we don't know about — ``parse_known_args`` and
+    discarding the rest keeps the shim maximally compatible rather than
+    crashing on an unrecognized flag.
+    """
+    parser = argparse.ArgumentParser(prog="coffer-mcp-shim", add_help=False)
+    parser.add_argument("--agent", default=None)
+    namespace, _unknown = parser.parse_known_args(argv)
+    return namespace
+
+
 class _Bridge:
     """One run of the bridge — stdin → POST, SSE → stdout."""
 
-    def __init__(self, info: DaemonInfo) -> None:
+    def __init__(self, info: DaemonInfo, *, agent: str | None = None) -> None:
         self._base = f"http://127.0.0.1:{info.port}"
         self._headers = {"X-Coffer-Token": info.token}
         self._session_id: str | None = None
@@ -59,6 +74,11 @@ class _Bridge:
         # daemon has no knowledge of the old MCP session).
         self._init_envelope: dict[str, Any] | None = None
         self._stop = asyncio.Event()
+        # Task 9: the shim's self-reported agent identity (from `--agent
+        # <name>`, written into installed MCP-server entries by
+        # AgentMcpService.install). None for an unnamed launch — the
+        # `coffer/agent` meta key is simply omitted in that case.
+        self._agent = agent
 
     def stop(self) -> None:
         self._stop.set()
@@ -114,12 +134,13 @@ class _Bridge:
             except _json.JSONDecodeError as e:
                 _logger.warning("shim.bad_json_from_stdin", extra={"error": str(e)})
                 continue
-            # FR-004: report the agent's launch cwd at session handshake so the
-            # daemon can resolve the per-project memory store. We tuck it into
-            # the ``initialize`` params under ``_meta`` (an MCP-reserved extension
-            # key) so it rides the handshake; the gateway threads it into tools.
+            # FR-004 / spec 001 FR-021 (amended): report the agent's launch cwd
+            # AND, when known, its self-reported `--agent` identity at session
+            # handshake. Both ride ``initialize`` params under ``_meta`` (an
+            # MCP-reserved extension key); the gateway threads cwd into tools
+            # and captures the agent identity onto the session.
             if envelope.get("method") == "initialize":
-                _inject_cwd(envelope)
+                _inject_meta(envelope, self._agent)
                 # Cache it so a daemon restart can be recovered transparently by
                 # replaying the handshake against the new daemon (see _recover).
                 self._init_envelope = dict(envelope)
@@ -339,12 +360,13 @@ class _Bridge:
             return False
 
 
-async def _async_main() -> int:
+async def _async_main(argv: list[str] | None = None) -> int:
+    args = _parse_args(sys.argv[1:] if argv is None else argv)
     _setup_shim_log()
     _logger.info("shim.start pid=%s", os.getpid())
     info = await _ensure_daemon()
     _logger.info("shim.daemon port=%s", info.port)
-    bridge = _Bridge(info)
+    bridge = _Bridge(info, agent=args.agent)
 
     loop = asyncio.get_event_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):

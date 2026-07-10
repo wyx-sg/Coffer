@@ -4,9 +4,13 @@ import { fireEvent, render, screen } from "@testing-library/react";
 
 import { ChannelMachineCard } from "./ChannelMachineCard";
 import type { SyncMachine } from "@/lib/hooks/useSync";
+import type { ChannelScope } from "@/lib/api/channels";
 
 vi.mock("@/lib/hooks/useSync", () => ({ useSyncMachines: vi.fn() }));
-vi.mock("@/lib/hooks/useChannels", () => ({ useUpdateChannel: vi.fn() }));
+vi.mock("@/lib/hooks/useChannels", () => ({
+  useChannelScope: vi.fn(),
+  useUpdateChannelScope: vi.fn(),
+}));
 const sync = await import("@/lib/hooks/useSync");
 const channels = await import("@/lib/hooks/useChannels");
 
@@ -28,40 +32,45 @@ const OTHER: SyncMachine = {
 
 const mutate = vi.fn();
 
-function seed(machines: SyncMachine[]) {
+function seed(machines: SyncMachine[], scope: ChannelScope["scope"]) {
   vi.mocked(sync.useSyncMachines).mockReturnValue({
     data: { machines },
   } as unknown as ReturnType<typeof sync.useSyncMachines>);
-  vi.mocked(channels.useUpdateChannel).mockReturnValue({
+  vi.mocked(channels.useChannelScope).mockReturnValue({
+    data: { scope, axes: ["machine"] },
+  } as unknown as ReturnType<typeof channels.useChannelScope>);
+  vi.mocked(channels.useUpdateChannelScope).mockReturnValue({
     mutate,
     isPending: false,
-  } as unknown as ReturnType<typeof channels.useUpdateChannel>);
+  } as unknown as ReturnType<typeof channels.useUpdateChannelScope>);
 }
 
 describe("ChannelMachineCard", () => {
-  test("unbound channel warns and offers to run here", () => {
-    seed([LOCAL, OTHER]);
-    render(<ChannelMachineCard name="tg" config={{ channel_type: "telegram" }} />);
+  test("unbound channel (dormant scope) warns and offers to run here", () => {
+    seed([LOCAL, OTHER], {});
+    render(<ChannelMachineCard name="tg" />);
     expect(screen.getByText(/not bound/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /run on this machine/i }));
-    expect(mutate).toHaveBeenCalledWith({
-      name: "tg",
-      config: { channel_type: "telegram", runs_on: "M-LOCAL" },
-      secrets: [],
-    });
+    expect(mutate).toHaveBeenCalledWith({ "M-LOCAL": "*" });
   });
 
   test("bound to this machine shows the badge and no rebind button", () => {
-    seed([LOCAL, OTHER]);
-    render(<ChannelMachineCard name="tg" config={{ runs_on: "M-LOCAL" }} />);
+    seed([LOCAL, OTHER], { "M-LOCAL": "*" });
+    render(<ChannelMachineCard name="tg" />);
     expect(screen.getByText(/this machine/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /run on this machine/i })).not.toBeInTheDocument();
   });
 
   test("bound elsewhere shows that machine's name and can rebind", () => {
-    seed([LOCAL, OTHER]);
-    render(<ChannelMachineCard name="tg" config={{ runs_on: "M-OTHER" }} />);
+    seed([LOCAL, OTHER], { "M-OTHER": "*" });
+    render(<ChannelMachineCard name="tg" />);
     expect(screen.getByText("laptop")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /run on this machine/i })).toBeInTheDocument();
+  });
+
+  test("null scope (unscoped, no axes response yet) treated as not-bound", () => {
+    seed([LOCAL, OTHER], null);
+    render(<ChannelMachineCard name="tg" />);
+    expect(screen.getByText(/not bound/i)).toBeInTheDocument();
   });
 });

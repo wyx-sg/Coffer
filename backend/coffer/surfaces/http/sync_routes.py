@@ -19,6 +19,8 @@ from coffer.domain.sync.models import (
     DEFAULT_BRANCH,
     DEFAULT_INTERVAL_SECONDS,
     DEFAULT_POLL_REMOTE_SECONDS,
+    MachineEntry,
+    MachineIdentity,
     SyncConfig,
     SyncState,
 )
@@ -157,6 +159,25 @@ def _status_out(s: SyncState) -> SyncStatusOut:
     )
 
 
+def machine_out(entry: MachineEntry, identity: MachineIdentity) -> MachineOut:
+    return MachineOut(
+        machine_id=entry.machine_id,
+        display_name=entry.display_name,
+        platform=entry.platform,
+        os_version=entry.os_version,
+        coffer_version=entry.coffer_version,
+        last_sync_at=entry.last_sync_at.isoformat() if entry.last_sync_at else None,
+        is_local=entry.machine_id == identity.machine_id,
+    )
+
+
+def machines_out(identity: MachineIdentity, entries: list[MachineEntry]) -> MachinesOut:
+    """Shared wire-shape builder — used by both ``GET /sync/machines`` (this
+    module) and ``GET /api/v1/machines`` (``machines_routes``), so the two
+    endpoints' responses stay byte-identical by construction."""
+    return MachinesOut(machines=[machine_out(e, identity) for e in entries])
+
+
 # --- routes ----------------------------------------------------------------
 
 
@@ -198,20 +219,7 @@ async def resolve_sync(body: SyncResolveIn) -> SyncStatusOut:
 @router.get("/machines", response_model=MachinesOut)
 async def list_machines() -> MachinesOut:
     identity, entries = await get_sync_service().list_machines()
-    return MachinesOut(
-        machines=[
-            MachineOut(
-                machine_id=e.machine_id,
-                display_name=e.display_name,
-                platform=e.platform,
-                os_version=e.os_version,
-                coffer_version=e.coffer_version,
-                last_sync_at=e.last_sync_at.isoformat() if e.last_sync_at else None,
-                is_local=e.machine_id == identity.machine_id,
-            )
-            for e in entries
-        ]
-    )
+    return machines_out(identity, entries)
 
 
 @router.put("/machine", response_model=MachineOut)
@@ -220,15 +228,7 @@ async def rename_machine(body: MachineRenameIn, actor: str = Depends(get_actor))
     await service.rename_machine(body.display_name, actor=actor)
     identity, entries = await service.list_machines()
     own = next(e for e in entries if e.machine_id == identity.machine_id)
-    return MachineOut(
-        machine_id=own.machine_id,
-        display_name=own.display_name,
-        platform=own.platform,
-        os_version=own.os_version,
-        coffer_version=own.coffer_version,
-        last_sync_at=own.last_sync_at.isoformat() if own.last_sync_at else None,
-        is_local=True,
-    )
+    return machine_out(own, identity)
 
 
 @router.get("/overrides", response_model=OverridesOut)

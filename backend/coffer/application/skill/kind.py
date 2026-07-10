@@ -17,9 +17,14 @@ from coffer.domain.resource import Kind, ResourceRef
 from coffer.domain.skill.config import SkillConfig
 
 AsyncOnDelete = Callable[[ResourceRef], Awaitable[None]]
+# Sync or async — ResourceService awaits the result if it's an Awaitable.
+OnScopeChangedHook = Callable[[ResourceRef], Awaitable[None] | None]
 
 
-def make_skill_kind(cleanup_bindings_for_skill: AsyncOnDelete) -> Kind:
+def make_skill_kind(
+    cleanup_bindings_for_skill: AsyncOnDelete,
+    on_scope_changed: OnScopeChangedHook | None = None,
+) -> Kind:
     async def _on_delete(ref: ResourceRef) -> None:
         # Awaited by ResourceService.delete BEFORE the row is removed, so
         # ``cleanup_bindings_for_skill`` can still resolve the resource
@@ -36,4 +41,10 @@ def make_skill_kind(cleanup_bindings_for_skill: AsyncOnDelete) -> Kind:
         # ~/.coffer/skills/. Only SkillService (which creates that folder) may
         # register it; the generic POST /resources path is rejected (CODE-REG).
         generic_create_allowed=False,
+        scope_axes=("machine", "agent"),
+        # ADR-045 / Task 11 Fix 2: a skill's scope edit re-runs delivery
+        # reconciliation for every agent (the composition root supplies the
+        # callback — reruns the same reconciliation the sync post-import hook
+        # uses, ``apply_follow_for_agent``, per registered agent).
+        on_scope_changed=on_scope_changed,
     )

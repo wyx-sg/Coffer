@@ -13,10 +13,11 @@
 
 ### I. Local-First (NON-NEGOTIABLE)
 
-All user data lives on the user's machine. Cloud services are LLM and tool
-providers only — they never become the system of record for any vault state.
-The HTTP API binds to `127.0.0.1`. Replicating user-state to a vendor-
-controlled cloud requires a constitutional amendment.
+All user data lives on the user's machines — one vault, every machine
+holding the full state. Cloud services are LLM and tool providers only —
+they never become the system of record for any vault state. The HTTP API
+binds to `127.0.0.1`. Replicating user-state to a vendor-controlled cloud
+requires a constitutional amendment.
 
 **Exception — user-controlled sync medium.** Synchronising vault state to a
 **user-owned, user-controlled medium** (e.g. the user's own git repository) is
@@ -107,7 +108,7 @@ Architectural Constraints, or to a Quality Gate requires:
 constitutional principles or constraints it affects, and explain why the
 change respects (or formally amends) them.
 
-**Version**: 0.3.0
+**Version**: 0.3.1
 
 > **0.3.0 amendment (spec 010-sync).** Added the *user-controlled sync medium*
 > exception to Principle I, authorising multi-machine sync over a user-owned
@@ -121,3 +122,15 @@ change respects (or formally amends) them.
 > Alternatives considered: peer-to-peer (Syncthing-style) and user-owned object
 > storage — rejected in favour of git for built-in history, diff, and merge.
 > Decision recorded by the project owner.
+
+> **0.3.1 amendment (editorial).** Reworded Principle I's opening line to
+> match the multi-machine reality the 0.3.0 exception already authorised.
+> Motivation: ADR-045 (machine × agent resource scope) extends multi-machine
+> sync further into the framework, underscoring that "local" has matured from
+> a single machine into the user's fleet — one vault, every machine holding
+> the full state — and the principle's opening sentence had not caught up.
+> Current wording: "All user data lives on the user's machine." Proposed
+> wording: "All user data lives on the user's machines — one vault, every
+> machine holding the full state." Downstream impact: none — editorial;
+> Principle I's rule and the 0.3.0 exception's three conditions are
+> unchanged. Decision recorded by the project owner.

@@ -493,15 +493,34 @@ status / notify`.
 
 A channel's platform identity (a polled bot, a webhook endpoint) tolerates only
 ONE consumer, but channel definitions sync to every machine (spec 010). The
-config therefore carries `runs_on: <machine_id>`: only that machine's runtime
-starts the adapter. `null` (e.g. a pre-affinity channel after upgrade) starts
-nowhere until the user picks a machine in the channel detail page. The creating
-surface defaults `runs_on` to the creating machine. Rebinding is a normal
-config edit that propagates through sync; pairing state syncs with the vault
-(spec 010 state area `channel-peers`), so a rebound channel needs no
-re-pairing. During the propagation window (one sync round trip) both machines
-may briefly poll the platform at once — self-healing seconds-long overlap,
-accepted for a single-user tool.
+channel runtime consults the framework-level `scope` field (machine axis
+only — a channel's `scope` entries accept only `"*"` as their value) to
+decide whether to start the adapter locally: `scope` carries exactly one
+exact-ULID machine entry (or none = dormant); the `"*"` key is rejected for
+channels (`Kind.validate_scope_shape`, ADR-045 review Fix 1) — it would match
+every machine at once, the double-adapter fight ADR-043 exists to prevent, by
+a different route. Only the machine present as that single entry starts the
+adapter. `scope == {}` (dormant everywhere — the equivalent of the
+pre-amendment `runs_on: null`) starts nowhere until the user picks a machine
+in the channel detail page. The creating surface defaults scope to
+`{"<creating-machine-id>": "*"}`. Rebinding is a normal config edit (an
+ordinary `scope` write) that propagates through sync; pairing state syncs
+with the vault (spec 010 state area `channel-peers`), so a rebound channel
+needs no re-pairing. During the propagation window (one sync round trip)
+both machines may briefly poll the platform at once — self-healing
+seconds-long overlap, accepted for a single-user tool.
+
+**`runs_on` → `scope` migration** (Amendment 2026-07-10 — machine × agent
+scope, [ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md)).
+The single-machine `runs_on: <machine_id>` field described above is
+**superseded** by the framework's machine axis: a data migration converts
+every existing channel's `runs_on: <machine_id>` to
+`scope: {"<machine_id>": "*"}`, and `runs_on: null` to `scope: {}`, on
+upgrade. `runs_on` is **not removed** from the schema or the API — old
+payloads and synced docs from not-yet-upgraded machines must still validate —
+but it becomes **inert**: the channel runtime reads `scope` only, and
+`runs_on` is documented as deprecated in place (a frozen pre-migration value;
+stale after any rebind; not consulted).
 
 ## Acceptance Scenarios
 

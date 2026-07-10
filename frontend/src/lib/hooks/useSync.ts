@@ -101,6 +101,8 @@ function useInvalidate() {
     void qc.invalidateQueries({ queryKey: ["sync-status"] });
     // A run rewrites this machine's registry entry (last-sync time).
     void qc.invalidateQueries({ queryKey: ["sync-machines"] });
+    // The Machines fleet view reads the same registry under its own key.
+    void qc.invalidateQueries({ queryKey: ["machines"] });
     // A key import changes the fingerprint the user compares across machines.
     void qc.invalidateQueries({ queryKey: ["sync-key-fingerprint"] });
   };
@@ -158,6 +160,8 @@ export function useRenameMachine() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["sync-machines"] });
+      // The Machines fleet view reads the same registry under its own key.
+      void qc.invalidateQueries({ queryKey: ["machines"] });
     },
   });
 }

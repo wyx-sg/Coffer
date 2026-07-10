@@ -67,11 +67,13 @@ export function channelSecretRef(
  * Turn validated form values into the resource config plus the credential-store
  * writes. Pure (no network) — the config is fully built before any side
  * effect runs, mirroring AddMcpServerDialog's planServer.
+ *
+ * Runtime affinity (ADR-045) is NOT part of the config anymore — `runs_on`
+ * is inert (superseded by the resource's `scope`, see coffer.domain.channel.
+ * config). The create-time auto-bind-to-this-machine now happens as a
+ * separate PUT .../scope call after registration — see AddChannelDialog.
  */
-export function planChannel(values: AddChannelFormValues, runsOn?: string | null): ChannelPlan {
-  // Runtime affinity (spec 010): a channel runs on exactly one machine; the
-  // creating machine claims it by default so the adapter starts right away.
-  const affinity = runsOn ? { runs_on: runsOn } : {};
+export function planChannel(values: AddChannelFormValues): ChannelPlan {
   if (values.channel_type === "telegram") {
     const ref = channelSecretRef(values.name, "bot-token");
     return {
@@ -80,7 +82,6 @@ export function planChannel(values: AddChannelFormValues, runsOn?: string | null
         channel_type: "telegram" satisfies ChannelType,
         bot_token_ref: ref,
         default_agent: DEFAULT_AGENT,
-        ...affinity,
       },
       secrets: [{ ref, value: values.bot_token }],
     };
@@ -97,7 +98,6 @@ export function planChannel(values: AddChannelFormValues, runsOn?: string | null
       app_secret_ref: appSecretRef,
       signing_secret_ref: signingSecretRef,
       default_agent: DEFAULT_AGENT,
-      ...affinity,
       ...(values.public_base_url?.trim() ? { public_base_url: values.public_base_url.trim() } : {}),
       ...(tunnelToken ? { tunnel_token_ref: tunnelTokenRef } : {}),
     },
@@ -121,8 +121,6 @@ export interface ChannelEditValues {
   bot_token?: string;
   /** SeaTalk app id (mutable config — not a secret). */
   app_id?: string;
-  /** Rebind the runtime to a machine id (null unbinds); undefined = keep. */
-  runs_on?: string | null;
   /** New SeaTalk app secret; blank leaves the stored credential untouched. */
   app_secret?: string;
   /** New SeaTalk signing secret; blank leaves the stored credential untouched. */
@@ -157,11 +155,6 @@ export function planChannelEdit(input: ChannelEditInput): ChannelPlan {
     ...config,
     default_agent: values.default_agent,
   };
-
-  if (values.runs_on !== undefined) {
-    // Rebind: move the runtime to another machine (spec 010 affinity).
-    nextConfig.runs_on = values.runs_on;
-  }
 
   if (config.channel_type === "telegram") {
     const ref = config.bot_token_ref;

@@ -74,6 +74,7 @@
     "expand": "展开侧边栏",
     "agents": "Agent",
     "channels": "渠道",
+    "machines": "机器",
     "audit": "审计日志",
     "chat": "聊天"
   },
@@ -259,6 +260,7 @@
       "resource_enabled": "启用了 {{resource}}",
       "resource_disabled": "停用了 {{resource}}",
       "resource_deleted": "删除了 {{resource}}",
+      "resource_scope_updated": "更新了 {{resource}} 的范围",
       "capability_first_seen": "发现了{{capType}} {{key}}（{{resource}}）",
       "capability_enabled": "启用了{{capType}} {{key}}（{{resource}}）",
       "capability_disabled": "停用了{{capType}} {{key}}（{{resource}}）",
@@ -608,6 +610,7 @@
     "RESOURCE_ALREADY_EXISTS": "同名资源已存在",
     "UNKNOWN_KIND": "未知资源类型",
     "CONFIG_INVALID": "配置无效",
+    "SCOPE_INVALID": "该资源类型不支持此范围设置",
     "CONFIG_FILE_FORMAT_INVALID": "内容不符合该文件的格式，文件未做更改。",
     "TOOL_DISABLED": "该功能已被禁用",
     "CREDENTIAL_MISSING": "所需凭证在凭证存储中不存在",
@@ -630,6 +633,7 @@
     "CHANNEL_NOT_RUNNING": "渠道适配器未在运行",
     "CHANNEL_SEND_FAILED": "向 IM 平台发送失败",
     "GENERIC_CREATE_NOT_ALLOWED": "该类型不支持直接创建",
+    "MACHINE_NOT_FOUND": "未找到该机器",
     "MASTER_KEY_MISSING": "主密钥缺失，Coffer 无法解密已存储的密钥",
     "DB_SCHEMA_TOO_NEW": "该数据库由更新版本的 Coffer 写入，请升级后再打开。",
     "PRIVILEGED_PATH": "该路径受保护，无法在此使用",
@@ -649,6 +653,7 @@
     "UNMANAGED_SKILL_NOT_FOUND": "未找到该未纳管技能",
     "UNMANAGED_SKILL_INVALID": "该技能目录不是有效的技能",
     "SKILL_INVALID": "该技能无效",
+    "SKILL_OUT_OF_SCOPE": "该技能在此机器上不在此 agent 的作用范围内",
     "TARGET_CONFLICT": "目标位置已存在一个技能",
     "KB_NOT_FOUND": "未找到知识库",
     "DOCUMENT_NOT_FOUND": "未找到文档",
@@ -1509,6 +1514,43 @@
       "thisMachine": "本机",
       "runHere": "改到本机运行",
       "hint": "同步的渠道只在一台机器上运行，避免两台机器争抢同一个 bot。改绑后经下一次同步传播，原机器会自动停止。"
+    }
+  },
+  "scope": {
+    "title": "启用范围",
+    "subtitle": "这项资源在哪里启用——所有机器，或只在选定的机器上（对 MCP 服务器和技能，还可以进一步限定到选定的 agent）。",
+    "everywhere": "所有机器",
+    "custom": "自定义",
+    "dormant": "已选择自定义，但没有开启任何机器——处于休眠状态。至少开启下面一台机器前，它不会在任何地方启用。",
+    "allAgents": "所有 agent",
+    "noAgents": "还没有注册任何 agent。",
+    "noMachines": "还没有同步任何机器。",
+    "notActiveHere": "在本机未启用。",
+    "unknownMachine": "不在本 vault 的机器注册表中",
+    "rowToggle": "在 {{machine}} 上启用"
+  },
+  "machines": {
+    "title": "机器",
+    "subtitle": "这个 vault 已同步的所有机器，以及各自启用了什么。",
+    "status": "同步状态",
+    "runNow": "立即同步",
+    "configureLink": "配置同步",
+    "lastSync": "上次同步",
+    "neverSynced": "从未同步",
+    "thisMachine": "本机",
+    "viewSlice": "查看机器",
+    "loadFailed": "加载机器列表失败。",
+    "empty": "还没有机器。配置并运行同步后，机器会出现在这里。",
+    "slice": {
+      "back": "返回机器列表",
+      "agents": "Agent",
+      "mcpServers": "MCP 服务器",
+      "skills": "技能",
+      "channels": "频道",
+      "active": "已启用",
+      "inactive": "未启用",
+      "empty": "暂无内容。",
+      "intentOnly": "这是一台远程机器 —— 启用状态根据已同步的注册表与作用域计算得出，未向该机器本身核实。"
     }
   }
 }

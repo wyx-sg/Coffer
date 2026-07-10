@@ -247,6 +247,38 @@ Some agent configuration is a directory of prose files, not a single file — Cl
 - **Instructions file contains the spec-007 memory-projection managed block**: The read-only viewer annotates that the block is owned by the memory feature; any editing happens in the user's external editor.
 - **`~/.codex/auth.json` and other credential/state files**: Never enter any allowlist or listing; plugin and MCP parsing never reads them.
 
+## Agent machine scope (Amendment 2026-07-10 — machine × agent scope, [ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md))
+
+An `agent` resource carries a framework-level `scope` restricted to the
+MACHINE axis only (an `agent`'s scope entries accept only `"*"` as their
+value, schema-enforced — an agent-name list is rejected, since an agent
+resource IS the thing other kinds' agent axes reference, not itself a
+target of one). `scope == None` (the default) means the agent is expected on
+every machine; `scope == {"<ulid>": "*"}` (or `{"*": "*"}`) restricts it to
+named machines.
+
+- **Out-of-scope machines skip side-effects, not sync.** The agent's
+  resource doc still syncs to and is visible on every machine (unchanged
+  from spec 010's existing import pipeline). On a machine OUTSIDE the
+  agent's scope, import upserts the registry row but performs none of the
+  machine-local side-effects that would otherwise follow: no Coffer-MCP
+  projection, no post-import reconcile hook run (spec 010's "Import
+  reconciliation"), no shim install/refresh, no session-context hook
+  install. The agent simply sits inert in the registry on that machine —
+  visible in the Machines fleet view (spec 010) as "not present here," never
+  as a quarantined or errored row.
+- **Import gate demoted to an in-scope fallback.** Spec 010's import gate
+  (the `config_dir`-existence check that quarantines an agent doc when its
+  directory is missing locally) now runs ONLY for a machine that IS in the
+  agent's scope (or when scope is `None`, the default "every machine"). A
+  machine outside the agent's scope never reaches the gate at all — its
+  missing `config_dir` is expected, not a quarantine condition. This closes
+  the ADR-045 Context gap: an agent not installed on a machine no longer
+  produces permanent quarantine noise once its scope excludes that machine;
+  the gate remains the safety net for the case where scope says a machine
+  SHOULD have the agent but its directory isn't there yet (not-yet-installed,
+  not out-of-scope).
+
 ## Acceptance Scenarios
 
 Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is referenced by at least one test marked `@pytest.mark.acceptance(spec="004-agent-registry", scenario="…")` (Python) or `acceptance("004-agent-registry", "…", …)` (TypeScript).
@@ -354,6 +386,12 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **Given** the daemon is running,
 - **When** the user attempts to register an agent of a type outside the supported set (e.g. `claude_desktop`, `gemini_cli`, or a garbage value),
 - **Then** registration is rejected with `unprocessable_entity` (422) naming the supported types, and nothing is persisted.
+
+### Scenario: an agent scoped to machine A causes no quarantine noise on machine B
+
+- **Given** machine A registers an agent whose `scope` is set to machine A only, and machine B has no directory at that agent's `config_dir`,
+- **When** B's sync run imports the agent resource,
+- **Then** the agent row upserts on B without evaluating spec 010's import gate, B's sync status reports no quarantine for it, and B performs no projection / reconcile / shim install for that agent — while A continues operating it normally.
 
 ### Scenario: list an agent's config files
 
@@ -658,6 +696,7 @@ The **session context injection** column names the `InjectionMode` the agent's m
 - **FR-006**: Users MUST be able to register, list, view, update (config_dir, description), and remove agents. Agents have **no enable/disable concept** — a registered agent is simply present; there is no enabled/disabled state on the agent surface. The agent name is optional at registration — when omitted, System MUST derive a stable per-type default (underscores become hyphens, e.g. `claude_code` → `claude-code`).
 - **FR-007**: At registration System MUST auto-create the `<config_dir>/skills` subdirectory, then validate that the resolved `config_dir` exists, is a directory, is writable, and is not a privileged system path before accepting the value. Skills are delivered to `<config_dir>/skills`.
 - **FR-008**: System MUST reject registration that would create a duplicate `agent:<name>`, and MUST reject registering more than one agent for the same config directory. `config_dir` is derived from the agent type, so each supported type — and thus each on-disk config directory — may be registered at most once; a second attempt is rejected with `conflict` (409) and nothing is persisted.
+- **FR-008a** (Amendment 2026-07-10 — machine × agent scope, [ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md)): An agent resource's `scope` MUST accept only the machine axis — each entry's value MUST be `"*"`; a scope entry naming specific agents MUST be rejected at validation (422). On a machine outside an agent's scope, System MUST NOT run that agent's post-import reconcile hook, Coffer-MCP projection, or shim/session-context install, and spec 010's import gate MUST NOT be evaluated for that agent on that machine — the doc still upserts into the registry. On a machine WITHIN an agent's scope (including the default `scope=None`), the import gate remains the fallback safety net for a missing `config_dir`.
 
 **Config files**
 
@@ -670,7 +709,7 @@ The **session context injection** column names the `InjectionMode` the agent's m
 
 **Coffer MCP install**
 
-- **FR-019**: Users MUST be able to install Coffer's own MCP server into an agent in one action. The install writes a `coffer` stdio MCP-server entry into the agent's MCP config, using the shape declared by that agent's manifest `McpInjectionSpec` — `mcpServers.coffer` in `~/.claude.json` (`claude_code`); `[mcp_servers.coffer]` in `~/.codex/config.toml` (`codex`). `command` is the absolute path of the `coffer-mcp-shim` binary (resolved on `PATH`, then the running interpreter's scripts directory — so a venv-installed shim is found even when the daemon's `PATH` lacks the venv — then the bundled binary; a `COFFER_MCP_SHIM_PATH` environment override takes precedence over all). If the shim cannot be resolved, install is rejected and nothing is written.
+- **FR-019**: Users MUST be able to install Coffer's own MCP server into an agent in one action. The install writes a `coffer` stdio MCP-server entry into the agent's MCP config, using the shape declared by that agent's manifest `McpInjectionSpec` — `mcpServers.coffer` in `~/.claude.json` (`claude_code`); `[mcp_servers.coffer]` in `~/.codex/config.toml` (`codex`). `command` is the absolute path of the `coffer-mcp-shim` binary (resolved on `PATH`, then the running interpreter's scripts directory — so a venv-installed shim is found even when the daemon's `PATH` lacks the venv — then the bundled binary; a `COFFER_MCP_SHIM_PATH` environment override takes precedence over all). The install additionally writes `--agent <name>` (the agent's registry name) as an argument of the shim invocation — in the entry shape's argument slot (`args` for command-map entries, appended to the `command` array for typed-array entries) — so the gateway can attribute the session to this agent for agent-axis scope enforcement (Amendment 2026-07-10, [ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md); same pattern as FR-043's hook install). If the shim cannot be resolved, install is rejected and nothing is written.
 - **FR-020**: Install MUST be idempotent — re-installing updates the existing `coffer` entry in place and never creates a duplicate. System MUST expose a status operation reporting whether Coffer's MCP is currently installed for the agent.
 - **FR-021**: Users MUST be able to uninstall Coffer's MCP, removing the `coffer` entry from the agent's MCP config. Uninstalling when not installed is a no-op success.
 - **FR-022**: Install and uninstall MUST reuse the atomic-write + `.bak` machinery from FR-017 and record an audit entry (`agent_mcp_installed` / `agent_mcp_uninstalled`).
@@ -734,7 +773,7 @@ These two requirements extend the registry to the coding agent's OWN native per-
 
 ### Key Entities
 
-- **Agent**: A Resource of kind `agent`. Represents one locally-installed AI agent. Config: `type` (supported enum), `config_dir` (optional absolute-path override; defaults to the type's standard location). Skills are delivered to `<config_dir>/skills`. Identified by `agent:<name>`.
+- **Agent**: A Resource of kind `agent`. Represents one locally-installed AI agent. Config: `type` (supported enum), `config_dir` (optional absolute-path override; defaults to the type's standard location). Skills are delivered to `<config_dir>/skills`. Identified by `agent:<name>`. Carries a framework-level `scope` restricted to the machine axis (`"*"`-only entry values) restricting which machines the agent is expected to exist on (Amendment 2026-07-10 — machine × agent scope, ADR-045; see "Agent machine scope").
 - **Agent Type**: An enum value identifying a known agent product (`claude_code`, `codex`, `opencode`, `hermes`, `cursor`, `openclaw`). Each value maps to a record in the **capability manifest** (`AGENT_DESCRIPTORS`) carrying its default `config_dir`, display name, install-marker (for discovery), curated **config-file allowlist**, **MCP injection shape**, and the optional context-injection / provider-projection / native-memory facets — a facet a product lacks upstream is left unset (the capability matrix under FR-003a), and surfaces hide the corresponding action. Where a facet is absent because *Coffer* has not implemented the product's mechanism (rather than the product lacking one), surfaces MUST say so rather than presenting it as an upstream limitation.
 - **Context Injection Spec**: The manifest facet describing how Coffer's session context (rules + memory) reaches one agent's model. Carries an `InjectionMode` (`SHELL_COMMAND` / `PLUGIN_DROP` / `INSTRUCTIONS_BLOCK`), the allowlisted config `key` + `format` it writes, the lifecycle `events` it installs (empty for `INSTRUCTIONS_BLOCK` — a block is not event-driven), a `HookFlavor` selecting both the on-disk entry shape and the stdout envelope `coffer-hook` prints (meaningful for `SHELL_COMMAND` only), and — for `PLUGIN_DROP` only — a `PluginFlavor` selecting the plugin's on-disk shape (`opencode`: one flat auto-loaded file; `openclaw`: a package directory plus the fail-closed enable flag in the file `plugin_enable_config_key` names). All three modes are implemented: `SHELL_COMMAND` (FR-043), `INSTRUCTIONS_BLOCK` (FR-047), `PLUGIN_DROP` (FR-048). See [ADR-042](../../docs/decisions/ADR-042-context-injection-mechanisms.md).
 - **Agent Candidate**: A discovered installed-but-unregistered agent — `type`, `display_name`, `config_dir` (the type's default config directory), `default_skill_dir`, and `suggested_name`. Derived at scan time, never stored; the user confirms a candidate to register it.

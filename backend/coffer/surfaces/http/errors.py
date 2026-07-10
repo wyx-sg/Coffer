@@ -27,6 +27,7 @@ _STATUS: dict[str, int] = {
     "GENERIC_CREATE_NOT_ALLOWED": 409,
     "UNKNOWN_KIND": 400,
     "CONFIG_INVALID": 422,
+    "SCOPE_INVALID": 422,  # ADR-045 machine x agent activation scope
     "CREDENTIAL_MISSING": 400,
     "CREDENTIAL_IN_USE": 409,
     "CREDENTIAL_LOCKED": 503,
@@ -72,6 +73,7 @@ _STATUS: dict[str, int] = {
     "NATIVE_MEMORY_DISABLE_UNSUPPORTED": 422,
     "UNMANAGED_SKILL_INVALID": 422,
     "SKILL_DELIVERY_UNSUPPORTED": 422,
+    "SKILL_OUT_OF_SCOPE": 422,  # ADR-045 machine x agent activation scope
     # knowledge_base kind (spec 006)
     "KB_NOT_FOUND": 404,
     "DOCUMENT_NOT_FOUND": 404,
@@ -110,6 +112,8 @@ _STATUS: dict[str, int] = {
     "SYNC_SERIALIZATION_INVALID": 422,
     "SYNC_REMOTE_UNREACHABLE": 422,
     "MASTER_KEY_FILE_INVALID": 422,
+    # machines fleet view (spec 010 amendment, ADR-045)
+    "MACHINE_NOT_FOUND": 404,
     # provider switching (spec 011)
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": 422,
     "NO_ACTIVE_PROVIDER": 404,

@@ -43,10 +43,12 @@ from coffer.surfaces.http.dependencies import (
     get_credential_store,
     get_health_repo,
     get_invocation_repo,
+    get_local_machine_id_provider,
     get_preferences_repo,
     get_resource_service,
 )
 from coffer.surfaces.http.mcp.capability_routes import router as capability_router
+from coffer.surfaces.http.mcp.server_test_routes import router as server_test_router
 from tests.fixtures.keyring import install_in_memory_keyring
 
 _FAKE = Path(__file__).resolve().parents[4] / "fixtures" / "fake_mcp_server.py"
@@ -113,6 +115,10 @@ async def _build_app(
                 name="mcp_server",
                 display_name="MCP Server",
                 config_schema=MCPServerConfig,
+                # ADR-045 machine x agent scope axes — lets tests exercise
+                # ResourceService.update_scope (e.g. the /test route's FR-020
+                # machine-scope gate) without a separate app builder.
+                scope_axes=("machine", "agent"),
             )
         },
         repo=SqlAlchemyResourceRepo(sm),
@@ -145,6 +151,7 @@ async def _build_app(
     app = FastAPI()
     err_handlers.register(app)
     app.include_router(capability_router)
+    app.include_router(server_test_router)
     health_repo = MCPServerHealthRepo(sm)
 
     app.dependency_overrides[get_resource_service] = lambda: rsvc
@@ -730,6 +737,7 @@ async def test_test_endpoint_unreachable_server_returns_ok_false(
     app = FastAPI()
     err_handlers.register(app)
     app.include_router(capability_router)
+    app.include_router(server_test_router)
     app.dependency_overrides[get_resource_service] = lambda: rsvc
     app.dependency_overrides[get_audit_service] = lambda: audit
     app.dependency_overrides[get_capability_discovery] = lambda: discovery
@@ -892,7 +900,8 @@ async def test_test_endpoint_records_orphan_pid_under_server_name(
 
     captured: list[str] = []
 
-    # Must patch where the name is looked up (capability_routes local binding),
+    # Must patch where the name is looked up (server_test_routes local
+    # binding, since the /test route lives there — Task 20 size-gate split),
     # not where it is defined. We wrap the real class to intercept __init__.
     from coffer.infrastructure.mcp.subprocess import StdioUpstreamConnection as _RealConn
 
@@ -915,7 +924,7 @@ async def test_test_endpoint_records_orphan_pid_under_server_name(
             )
 
     with mock.patch(
-        "coffer.surfaces.http.mcp.capability_routes.StdioUpstreamConnection",
+        "coffer.surfaces.http.mcp.server_test_routes.StdioUpstreamConnection",
         _CapturingConn,
     ):
         try:
@@ -973,6 +982,89 @@ async def test_test_endpoint_persists_health_and_status_reflects_it(
             assert r1.json()["status"] == "healthy", (
                 f"Expected 'healthy' after successful /test, got: {r1.json()}"
             )
+    finally:
+        await supervisor.dispose()
+        await engine.dispose()
+
+
+# ---------------------------------------------------------------------------
+# ADR-045 machine scope gate on /test (FR-020, Task 8 review finding 2)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_test_endpoint_refuses_server_scoped_to_other_machine(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """POST /{name}/test must never spawn a server whose scope excludes this
+    daemon's machine (FR-020: "An out-of-scope server is never spawned and is
+    indistinguishable from an unregistered one on this machine"). This route
+    builds its own transient upstream connection directly instead of going
+    through SubprocessSupervisor, so it needs its own scope check."""
+    _with_in_memory(monkeypatch)
+    app, engine, rsvc, _prefs, supervisor = await _build_app(tmp_path)
+
+    async def _local_machine_id() -> str:
+        return "this-machine"
+
+    app.dependency_overrides[get_local_machine_id_provider] = lambda: _local_machine_id
+
+    await rsvc.update_scope(ResourceRef("mcp_server", "fs"), {"other-machine": "*"}, actor="test")
+
+    transport = ASGITransport(app=app)
+    try:
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            headers={"X-Coffer-Token": "test-token"},
+        ) as client:
+            r = await client.post("/api/v1/resources/mcp_server/fs/test")
+            assert r.status_code == 200, r.text
+            body = r.json()
+            assert body["ok"] is False
+            assert body["error_message"] is not None
+            assert "not in scope" in body["error_message"]
+
+            # No spawn attempt happened at all — status stays 'unknown', not
+            # 'failing' (which would mean we actually tried and failed).
+            r_status = await client.get("/api/v1/resources/mcp_server/fs/status")
+            assert r_status.status_code == 200, r_status.text
+            assert r_status.json()["status"] == "unknown", (
+                f"Expected 'unknown' (never spawned), got: {r_status.json()}"
+            )
+    finally:
+        await supervisor.dispose()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_test_endpoint_unscoped_server_still_works_with_machine_provider_wired(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A machine-id provider being wired must not affect an unscoped server —
+    only servers with an explicit scope that excludes this machine are gated."""
+    _with_in_memory(monkeypatch)
+    app, engine, _rsvc, _prefs, supervisor = await _build_app(tmp_path)
+
+    async def _local_machine_id() -> str:
+        return "this-machine"
+
+    app.dependency_overrides[get_local_machine_id_provider] = lambda: _local_machine_id
+
+    transport = ASGITransport(app=app)
+    try:
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            headers={"X-Coffer-Token": "test-token"},
+        ) as client:
+            r = await client.post("/api/v1/resources/mcp_server/fs/test")
+            assert r.status_code == 200, r.text
+            body = r.json()
+            assert body["ok"] is True
+            assert body["error_message"] is None
     finally:
         await supervisor.dispose()
         await engine.dispose()
@@ -1098,6 +1190,7 @@ async def test_test_endpoint_http_transport(
         app = FastAPI()
         err_handlers.register(app)
         app.include_router(capability_router)
+        app.include_router(server_test_router)
         app.dependency_overrides[get_resource_service] = lambda: rsvc
         app.dependency_overrides[get_audit_service] = lambda: audit
         app.dependency_overrides[get_capability_discovery] = lambda: discovery

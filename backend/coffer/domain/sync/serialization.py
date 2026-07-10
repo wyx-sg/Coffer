@@ -20,7 +20,7 @@ from typing import Any
 from coffer.domain.sync.errors import SyncSerializationError
 
 #: Fields that are part of the document, in canonical order.
-_DOC_FIELDS = ("kind", "name", "description", "enabled", "config")
+_DOC_FIELDS = ("kind", "name", "description", "enabled", "config", "scope")
 
 
 @dataclass(frozen=True)
@@ -32,6 +32,21 @@ class ResourceDoc:
     description: str | None
     enabled: bool
     config: dict[str, Any]
+    # Framework-level machine x agent activation scope (ADR-045). Rides the
+    # doc verbatim — it holds machine ULIDs / agent names, never paths, so it
+    # is exempt from ${HOME} normalization and per-machine override stripping.
+    scope: dict[str, Any] | None
+    # Whether the "scope" key was present in the source document at all.
+    # v4+ writers always emit it (see resource_to_doc), so this is True for
+    # every doc this process writes. A pre-v4 peer's doc lacks the key
+    # entirely — that is a DIFFERENT thing from an explicit `scope: null`
+    # (an active opinion that the resource is unscoped/dormant): the v3 doc
+    # simply has no opinion on scope at all. Importer reconciliation must
+    # treat "absent" as "leave local scope alone" and "explicit null" as "set
+    # it to None" — conflating the two would let an old peer's doc silently
+    # flip a locally-scoped channel to active-everywhere on import,
+    # reintroducing the double-adapter race ADR-043 exists to prevent.
+    scope_present: bool = True
 
 
 def resource_to_doc(
@@ -41,11 +56,14 @@ def resource_to_doc(
     description: str | None,
     enabled: bool,
     config: Mapping[str, Any],
+    scope: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     """Project a resource into its canonical sync-document dict.
 
     ``id``/``created_at``/``updated_at`` are intentionally absent — they are
-    machine-local and would churn the diff on every machine.
+    machine-local and would churn the diff on every machine. ``scope`` is
+    always emitted (even ``None``) so files stay byte-deterministic, matching
+    ``description``'s always-present-may-be-null style.
     """
     return {
         "kind": kind,
@@ -53,6 +71,7 @@ def resource_to_doc(
         "description": description,
         "enabled": enabled,
         "config": dict(config),
+        "scope": dict(scope) if scope is not None else None,
     }
 
 
@@ -66,6 +85,13 @@ def parse_resource_doc(data: Mapping[str, Any]) -> ResourceDoc:
     description = data.get("description")
     enabled = data["enabled"]
     config = data["config"]
+    # Absent key (a v3 workspace doc, pre-Task-6) tolerates to None — never a
+    # hard failure, so old-schema docs still import cleanly. `scope_present`
+    # distinguishes that "no opinion" case from an explicit `scope: null`
+    # (see ResourceDoc.scope_present docstring above) — the importer relies
+    # on this to decide whether to touch local scope at all.
+    scope_present = "scope" in data
+    scope = data.get("scope")
     if not isinstance(kind, str) or not kind:
         raise SyncSerializationError("'kind' must be a non-empty string")
     if not isinstance(name, str) or not name:
@@ -76,6 +102,8 @@ def parse_resource_doc(data: Mapping[str, Any]) -> ResourceDoc:
         raise SyncSerializationError("'enabled' must be a boolean")
     if not isinstance(config, Mapping):
         raise SyncSerializationError("'config' must be a mapping")
+    if scope is not None and not isinstance(scope, Mapping):
+        raise SyncSerializationError("'scope' must be a mapping or null")
     extra = [k for k in data if k not in _DOC_FIELDS]
     if extra:
         raise SyncSerializationError(f"unexpected field(s): {', '.join(sorted(extra))}")
@@ -85,4 +113,6 @@ def parse_resource_doc(data: Mapping[str, Any]) -> ResourceDoc:
         description=description,
         enabled=enabled,
         config=dict(config),
+        scope=dict(scope) if scope is not None else None,
+        scope_present=scope_present,
     )

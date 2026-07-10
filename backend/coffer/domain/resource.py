@@ -63,6 +63,11 @@ class Resource:
     enabled: bool
     created_at: datetime
     updated_at: datetime
+    # Framework-level machine x agent activation scope (ADR-045). None means
+    # unscoped (visible everywhere) — the pre-scope default, so every existing
+    # constructor keeps working unchanged. Interpreted via coffer.domain.scope;
+    # only kinds whose Kind.scope_axes is non-empty may set it (validate_scope).
+    scope: dict[str, Any] | None = None
 
     @property
     def ref(self) -> ResourceRef:
@@ -126,3 +131,52 @@ class Kind:
         ]
         | None
     ) = None
+    # Machine x agent activation-scope axes this kind supports (ADR-045), used
+    # by ResourceService.update_scope to validate a scope payload via
+    # coffer.domain.scope.validate_scope. Empty (the default) means the kind
+    # does not support scope at all — any non-null update_scope call for it is
+    # rejected. ``("machine",)`` allows only per-machine on/off; ``("machine",
+    # "agent")`` additionally allows narrowing to specific agents per machine.
+    scope_axes: tuple[str, ...] = ()
+    # Optional kind-level shape constraint on a scope payload, layered on TOP
+    # of the axis-generic ``validate_scope`` (ADR-045 review Fix 1). Given the
+    # already axis-validated scope dict (or ``None``); raises ``ValueError`` to
+    # reject a shape the generic axes check can't express. ``scope_axes`` alone
+    # says WHICH axes and value shapes are legal, not how many entries a kind
+    # can tolerate — e.g. a channel's platform identity (a polled bot, a
+    # webhook endpoint) tolerates only ONE machine consumer (ADR-043); two
+    # exact-ULID entries, or the ``"*"`` wildcard key, would each start its
+    # adapter on more than one machine at once and refight the platform. Kinds
+    # that are legitimately multi-machine despite ``("machine",)`` being their
+    # only axis (e.g. agent) leave this ``None`` (the default): no extra shape
+    # constraint beyond the generic axis check.
+    validate_scope_shape: Callable[[dict[str, Any] | None], None] | None = None
+    # Optional post-write hook for ``ResourceService.update_scope`` (ADR-045,
+    # Task 11 Fix 2). Receives the ref whose scope just changed; invoked AFTER
+    # persistence + audit (unlike ``on_update_config``, which runs BEFORE —
+    # scope reconciliation needs to read the already-persisted scope), so it
+    # cannot reject the edit, only react to it. Sync or async; the service
+    # awaits an Awaitable. Kind-level side effect that keeps delivery/reclaim
+    # in step with a LOCAL scope edit — the sync import path already re-runs
+    # this reconciliation via its own post-import hooks; this is the front-door
+    # equivalent so a user editing scope in the UI/CLI sees it applied
+    # immediately instead of waiting on an unrelated trigger.
+    on_scope_changed: (
+        Callable[
+            [ResourceRef],
+            Awaitable[None] | None,
+        ]
+        | None
+    ) = None
+    # Optional kind-supplied scope a freshly REGISTERED resource of this kind
+    # starts with (ADR-045 amendment, spec 009 runs_on -> scope migration).
+    # ``None`` (the default for every other kind) means the pre-scope default:
+    # unscoped / active everywhere, unchanged. A kind whose OWN prior
+    # kind-specific field defaulted to "off" (e.g. channel's ``runs_on: null``
+    # meant "runs nowhere until the user picks a machine") sets this to ``{}``
+    # so a newly registered resource keeps that off-by-default safety instead
+    # of silently becoming scope=None (active everywhere) now that scope
+    # supersedes the old field. Must already satisfy the kind's own
+    # ``scope_axes`` — not re-validated at registration (developer-controlled,
+    # not user input).
+    default_scope: dict[str, Any] | None = None

@@ -42,6 +42,25 @@ def _validate_default_agent(config: dict[str, Any], agent_keys: Callable[[], lis
         )
 
 
+def _validate_channel_scope_shape(scope: dict[str, Any] | None) -> None:
+    """Reject a scope shape that would start a channel's adapter on more than
+    one machine at once (ADR-045 review Fix 1, ADR-043).
+
+    A channel's platform identity (a polled bot, a webhook endpoint) tolerates
+    only ONE consumer. The generic axis-level ``validate_scope`` (called
+    first) already confirms every value is a bare ``"*"`` (machine-only axis);
+    it has no way to say "at most one entry", so this kind-level hook rejects
+    a scope map carrying more than one machine entry, or the wildcard ``"*"``
+    key (which would match every machine at once — the same double-adapter
+    footgun by a different route). ``None`` and ``{}`` (dormant) and a single
+    exact-ULID entry all pass through unchanged.
+    """
+    if not scope:
+        return
+    if "*" in scope or len(scope) > 1:
+        raise ValueError("a channel runs on at most one machine; clear the current entry first")
+
+
 def _make_validator(
     agent_keys: Callable[[], list[str]] | None,
 ) -> Callable[[dict[str, Any]], None]:
@@ -105,4 +124,13 @@ def make_channel_kind(
         credential_ref_extractor=_channel_credential_ref_extractor,
         validate_config=_make_validator(agent_keys),
         on_update_config=_make_update_validator(agent_keys),
+        scope_axes=("machine",),
+        validate_scope_shape=_validate_channel_scope_shape,
+        # ADR-045 amendment: a channel runs on exactly one machine, and the
+        # historical ``runs_on: null`` default was "runs nowhere until picked"
+        # (ADR-043) — the OPPOSITE of what scope=None (unscoped) now means at
+        # the framework level. Default a freshly registered channel to the
+        # empty (dormant) scope so it keeps that off-by-default safety instead
+        # of silently starting on every machine.
+        default_scope={},
     )

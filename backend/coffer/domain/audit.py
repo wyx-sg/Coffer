@@ -16,6 +16,8 @@ class AuditEventType(StrEnum):
     RESOURCE_ENABLED = "resource_enabled"
     RESOURCE_DISABLED = "resource_disabled"
     RESOURCE_DELETED = "resource_deleted"
+    # ADR-045: framework-level machine x agent activation scope
+    RESOURCE_SCOPE_UPDATED = "resource_scope_updated"
     CAPABILITY_FIRST_SEEN = "capability_first_seen"
     CAPABILITY_ENABLED = "capability_enabled"
     CAPABILITY_DISABLED = "capability_disabled"

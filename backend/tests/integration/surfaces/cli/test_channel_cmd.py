@@ -224,6 +224,87 @@ def test_register_and_list_channels(channel_daemon: _Daemon) -> None:
     assert "seatalk" in table.output
 
 
+def test_register_with_runs_on_binds_scope(channel_daemon: _Daemon) -> None:
+    """`--runs-on` now binds via the resource's framework scope (ADR-045
+    amendment), not the deprecated/inert `config.runs_on` — the CLI's
+    creating-machine-binds-by-default behavior (spec 010) still works."""
+    r = runner.invoke(
+        app,
+        [
+            "channel",
+            "register",
+            "tg",
+            "--type",
+            "telegram",
+            "--bot-token-ref",
+            _TG_REF,
+            "--runs-on",
+            "M-1",
+        ],
+    )
+    assert r.exit_code == 0, r.output
+    resource = channel_daemon.run(
+        channel_daemon.resources.get(ResourceRef(kind="channel", name="tg"))
+    )
+    assert resource.scope == {"M-1": "*"}
+    # The deprecated/inert config field is never written by the CLI anymore
+    # (Pydantic still emits the key with its default None — see config.py).
+    assert resource.config["runs_on"] is None
+
+
+def test_register_without_runs_on_or_sync_stays_dormant(channel_daemon: _Daemon) -> None:
+    """No `--runs-on` and no `/sync/machines` route (this fixture doesn't
+    mount it) — the CLI prints the unbound note and the channel keeps the
+    kind's default dormant scope (`{}`, ADR-045 amendment)."""
+    r = _register_tg()
+    assert r.exit_code == 0, r.output
+    assert "no machine identity available" in r.output
+    resource = channel_daemon.run(
+        channel_daemon.resources.get(ResourceRef(kind="channel", name="tg"))
+    )
+    assert resource.scope == {}
+
+
+def test_scope_set_second_machine_on_bound_channel_returns_clean_422(
+    channel_daemon: _Daemon,
+) -> None:
+    """`coffer scope set channel:<name> --machine <second-id>` merges a
+    SECOND machine entry into the channel's scope (`scope set` is
+    read-modify-write) — the channel Kind's `validate_scope_shape`
+    (ADR-045 review Fix 1) rejects it: a channel's platform identity
+    tolerates only one machine consumer (ADR-043). The CLI must surface a
+    non-zero exit and a readable message, not a traceback."""
+    r = runner.invoke(
+        app,
+        [
+            "channel",
+            "register",
+            "tg",
+            "--type",
+            "telegram",
+            "--bot-token-ref",
+            _TG_REF,
+            "--runs-on",
+            "M-1",
+        ],
+    )
+    assert r.exit_code == 0, r.output
+    resource = channel_daemon.run(
+        channel_daemon.resources.get(ResourceRef(kind="channel", name="tg"))
+    )
+    assert resource.scope == {"M-1": "*"}
+
+    result = runner.invoke(app, ["scope", "set", "channel:tg", "--machine", "M-2"])
+
+    assert result.exit_code != 0
+    assert "at most one machine" in result.output
+    # Rejected before any write — scope is unchanged.
+    resource = channel_daemon.run(
+        channel_daemon.resources.get(ResourceRef(kind="channel", name="tg"))
+    )
+    assert resource.scope == {"M-1": "*"}
+
+
 def test_register_telegram_without_token_ref_exits_6(channel_daemon: _Daemon) -> None:
     r = runner.invoke(app, ["channel", "register", "tg", "--type", "telegram"])
     assert r.exit_code == 6

@@ -122,6 +122,10 @@ class SyncImporter:
             description=doc.description,
             enabled=doc.enabled,
             config=config,
+            # Scope holds machine ULIDs / agent names, never paths — threaded
+            # through verbatim, no ${HOME} expansion or override patch.
+            scope=doc.scope,
+            scope_present=doc.scope_present,
         )
 
     def _load(self) -> tuple[list[ResourceDoc], list[Tombstone], dict[str, bytes]]:
@@ -203,8 +207,9 @@ class SyncImporter:
                 # other import failure and self-heals on a later run.
                 gate = self._gates.get(doc.kind)
                 if gate is not None:
-                    await gate.validate(doc.config)
-                if (doc.kind, doc.name) in current:
+                    await gate.validate(doc.config, scope=doc.scope)
+                existing = current.get((doc.kind, doc.name))
+                if existing is not None:
                     await self._resources.update_config(
                         ref,
                         doc.config,
@@ -213,8 +218,9 @@ class SyncImporter:
                         allow_lifecycle_kind=True,
                     )
                     await self._resources.set_enabled(ref, doc.enabled, self._actor)
+                    row_scope = existing.scope
                 else:
-                    await self._resources.register(
+                    created = await self._resources.register(
                         doc.kind,
                         doc.name,
                         doc.config,
@@ -224,6 +230,21 @@ class SyncImporter:
                     )
                     if not doc.enabled:
                         await self._resources.set_enabled(ref, False, self._actor)
+                    # register() applies the kind's own registration default
+                    # (e.g. channel's dormant `{}`, not None) — read it back
+                    # off the created row rather than assuming None, or a
+                    # scope-silent doc (see below) would wrongly appear to
+                    # "mismatch" a kind default it was never meant to touch.
+                    row_scope = created.scope
+                # A pre-v4 doc (scope key absent entirely) carries no opinion
+                # on scope at all — never reconcile, so a locally-scoped
+                # channel stays exactly as it is. This is different from an
+                # explicit `scope: null`, which IS an opinion (unscoped) and
+                # does win. Compare against the row's ACTUAL current scope
+                # (existing row, or the just-registered row's kind-default) —
+                # never a hardcoded None — and only write on a real mismatch.
+                if doc.scope_present and doc.scope != row_scope:
+                    await self._resources.update_scope(ref, doc.scope, actor=self._actor)
                 result.applied += 1
             except CofferError:
                 # Quarantined, not fatal: reported in sync state, preserved by

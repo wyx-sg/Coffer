@@ -14,6 +14,7 @@ is de-projected (a no-op when Coffer never touched that config).
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import Protocol
 
 from coffer.application.provider.projector import ProviderProjector
@@ -21,6 +22,7 @@ from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.resource import Resource
+from coffer.domain.scope import machine_in_scope
 
 
 class _Lister(Protocol):
@@ -32,18 +34,41 @@ class ProviderProjectionReconcile:
 
     kind = "provider"
 
-    def __init__(self, providers: _Lister, agents: _Lister, projector: ProviderProjector) -> None:
+    def __init__(
+        self,
+        providers: _Lister,
+        agents: _Lister,
+        projector: ProviderProjector,
+        machine_id: Callable[[], Awaitable[str | None]] | None = None,
+    ) -> None:
         self._providers = providers
         self._agents = agents
         self._projector = projector
+        # ADR-045 machine axis (spec 004 amendment, Task 12): mirrors
+        # AgentImportGate / AgentSideEffectsReconcile — None (unwired) means
+        # "no filtering", the legacy single-machine contract.
+        self._machine_id_provider = machine_id
+        self._machine_id_cache: str | None = None
+
+    async def _local_machine_id(self) -> str | None:
+        if self._machine_id_provider is None:
+            return None
+        if self._machine_id_cache is None:
+            self._machine_id_cache = await self._machine_id_provider()
+        return self._machine_id_cache
 
     async def reconcile(self) -> list[str]:
         errors: list[str] = []
+        local = await self._local_machine_id()
         # Guard every agent row: a schema-drifted row must not kill the pass,
         # and a stale row whose config dir vanished must not be resurrected by
         # a projection write (mkdir -p) — report and leave it alone.
         agents: list[Resource] = []
         for row in await self._agents.list():
+            if local is not None and not machine_in_scope(row.scope, local):
+                # Out-of-scope agent: silently excluded from projection here —
+                # not an error, not reported, same as AgentSideEffectsReconcile.
+                continue
             try:
                 cfg_dir = AgentConfig.model_validate(row.config).resolved_config_dir()
             except Exception as e:

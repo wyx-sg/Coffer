@@ -7,8 +7,10 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 
+import { ScopeCard } from "@/components/ScopeCard";
 import { AgentConfigFilesEditor } from "@/components/agents/AgentConfigFilesEditor";
 import { AgentConversationsTab } from "@/components/agents/AgentConversationsTab";
+import { AgentDeleteDialog } from "@/components/agents/AgentDeleteDialog";
 import { AgentEditForm } from "@/components/agents/AgentEditForm";
 import { AgentFacetUnsupported } from "@/components/agents/AgentFacetUnsupported";
 import { AgentMcpButton } from "@/components/agents/AgentMcpControls";
@@ -20,25 +22,16 @@ import { AgentSkillsTab } from "@/components/agents/AgentSkillsTab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { facetSupported } from "@/lib/api/agentCapabilities";
 import { translateApiError } from "@/lib/api/errors";
-import { useAgent, useRemoveAgent } from "@/lib/hooks/useAgents";
+import { useAgent } from "@/lib/hooks/useAgents";
 
 export function AgentDetailPage() {
   const { t } = useTranslation();
   const { name = "" } = useParams<{ name: string }>();
   const navigate = useNavigate();
   const { data: agent, isPending, error, refetch } = useAgent(name);
-  const remove = useRemoveAgent();
   const [editing, setEditing] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -119,6 +112,8 @@ export function AgentDetailPage() {
         />
       ) : null}
 
+      <ScopeCard kind="agent" name={agent.name} />
+
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">{t("agents.workspace.overview")}</TabsTrigger>
@@ -167,33 +162,12 @@ export function AgentDetailPage() {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("agents.removeConfirm", { name })}</DialogTitle>
-            <DialogDescription>{t("agents.removeConfirmBody")}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeleteOpen(false)}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={remove.isPending}
-              onClick={() =>
-                remove.mutate(name, {
-                  onSuccess: () => {
-                    setDeleteOpen(false);
-                    navigate("/agents");
-                  },
-                })
-              }
-            >
-              {remove.isPending ? t("common.deleting") : t("common.delete")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AgentDeleteDialog
+        name={name}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onDeleted={() => navigate("/agents")}
+      />
     </div>
   );
 }

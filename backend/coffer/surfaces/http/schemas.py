@@ -33,6 +33,10 @@ class ResourceOut(BaseModel):
     name: str
     description: str | None = None
     config: dict[str, Any]
+    # Framework-level machine x agent activation scope (ADR-045). None =
+    # unscoped (visible everywhere); only kinds with a non-empty
+    # Kind.scope_axes may set it. See GET/PUT .../scope below.
+    scope: dict[str, Any] | None = None
     enabled: bool
     created_at: datetime
     updated_at: datetime
@@ -52,6 +56,20 @@ class ResourceUpdate(BaseModel):
 
 class ResourceListOut(BaseModel):
     resources: list[ResourceOut]
+
+
+class ResourceScopeOut(BaseModel):
+    """GET .../scope response: the current scope plus which axes this kind
+    supports (empty axes means the kind doesn't support scope at all)."""
+
+    scope: dict[str, Any] | None = None
+    axes: list[str] = Field(default_factory=list, examples=[["machine", "agent"]])
+
+
+class ResourceScopeUpdate(BaseModel):
+    """PUT .../scope request body. ``scope: null`` clears back to unscoped."""
+
+    scope: dict[str, Any] | None = None
 
 
 # --- Audit ---

@@ -75,6 +75,52 @@ workspace 的 `machines/` 区为每台机器保存一个 JSON 注册项：显示
 [ADR-043](../../docs/decisions/ADR-043-sync-machine-identity-near-real-time.md)）。
 它**不是**记录级版本方案。
 
+**Scope（作用域）**（2026-07-10 修订 —— machine × agent scope，
+[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md)）把机器
+身份泛化成一个框架级的、按资源的激活矩阵：每个资源（不在 kind 配置内部）都拥有
+一个可选的 `scope` 字段，以机器 ULID（或代表所有机器的 `"*"`）为 key，value 为
+`"*"`（所有 agent）或一份 agent 名列表。
+
+```
+scope == None                                    # 所有机器、所有 agent 都激活（默认）
+scope == {}                                      # 任何机器都不激活（休眠）
+scope == {"<ulid>": ["claude-code"], "*": "*"}   # 某台机器：仅 Claude Code；其余每台机器：所有 agent
+```
+
+| 规则 | 行为 |
+| --- | --- |
+| 机器 M 的条目查找 | 精确的 ULID key 优先于 `"*"` key；没有 M 对应的 key → 在 M 上不激活 |
+| `machine_in_scope(scope, m)` | 存在 `m` 的条目，且其 value 为 `"*"` 或非空列表 |
+| `agent_in_scope(scope, m, agent)` | 该条目的 value 为 `"*"`，或 `agent` 在列表中；`agent=None`（未识别的会话）**仅**匹配 `"*"` 的 value |
+| `scope == None` | 永远激活——所有机器、所有 agent |
+| 条目中未知的机器 ULID 或 agent 名 | 合法，只是永不匹配（可能是另一台机器尚未同步，或该 agent 稍后才注册） |
+
+每个 kind 自行声明使用哪些轴，并在**自己既有的**把关点执行 scope——不引入新的
+中央关卡：
+
+| Kind | 轴 | 把关点 |
+| --- | --- | --- |
+| `mcp_server` | machine × agent | 网关（spec 001） |
+| `skill` | machine × agent | 投递 ∩ follow policy（spec 005） |
+| `agent` | 仅 machine | 投影 / 调和 / shim 安装（spec 004） |
+| `channel` | 仅 machine | 渠道 runtime（spec 009）；取代 `runs_on` |
+| `knowledge_base`、`memory` | 无 | 非空 `scope` 在校验阶段被拒绝 |
+
+仅 machine 轴的 kind，其 scope 条目的 value 只接受 `"*"`（agent 名列表会被拒
+绝）。在计算下文 Machines fleet view 的激活切片时，任何指名了 agent 的矩阵还会
+与该 **agent 自己的** machine 轴取交集——网关本身信任本机 shim 自行上报的身
+份，不会反过来校验该 agent 的 machine 轴，因为本机 shim 只能运行在该 agent 实
+际已安装的机器上。
+
+**同步但不激活。** `scope` 随资源文档搭乘既有的 export → merge → import 流水
+线、自动冲突解决、墓碑与隔离机制，完全不做改动：一个被 scope 限定的资源仍然同
+步到每台机器并在每台机器上可见；在 scope 之外时，它只是不被激活（不拉起、不暴
+露、不投递），注册表仍是唯一真相源——scope 可以在任意机器上编辑，与编辑任何其
+他资源字段完全一样。给资源文档加入 `scope` 会把 workspace manifest 的
+`SCHEMA_VERSION` 从 3 提升到 4，因此尚未升级的构建会被既有的
+`SYNC_WORKSPACE_TOO_NEW` 门拦下（见下文「旧构建拒绝更新的 workspace」），而不
+是悄悄丢弃或误读这个字段。
+
 ## 路径可移植
 
 用户的机器有不同的用户名/home 布局，配置里的绝对路径原样同步会失效。两个机制按序
@@ -110,9 +156,39 @@ git remote 的凭据（SSH key / token）属于用户自己的 git 配置；Coff
 
 ## Surfaces
 
-- **CLI** —— `coffer sync` 命令组：`init`、`status`、`run`（默认）、`push`、`pull`、`resolve`、`config`、`machines`（列出；`--rename` 重命名本机）、`override list|set|unset`、`key export`、`key import`。
-- **REST** —— `/api/v1/sync/*`：获取/设置配置、获取状态、触发一次运行、解决冲突、列出机器 / 重命名本机、管理每机覆盖、导出/导入主密钥。
-- **Desktop UI** —— 一个 Sync 设置面板：配置 remote（保存即校验）、切换 auto-sync、查看状态（clean / syncing / conflicted / error、上次同步时间、可行动的错误指引）、触发一次运行，以及一张机器卡片，列出 vault 已知的每台机器（显示名、平台、上次同步、「本机」徽标、重命名）。应用内**没有**冲突解决界面（2026-07-10 修订）：冲突自动解决；罕见的滞留冲突指引用户到自己的仓库处理。Master key 卡片显示 key 的 SHA-256 指纹（绝不显示 key 本身），便于导出/导入后确认两台机器持有同一把 key。
+- **CLI** —— `coffer sync` 命令组：`init`、`status`、`run`（默认）、`push`、`pull`、`resolve`、`config`、`override list|set|unset`、`key export`、`key import`。`machines`（列出；`--rename` 重命名本机）被提升为顶层的
+  `coffer machines` 命令（2026-07-10 修订 —— machine × agent scope，
+  [ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md)）；
+  `coffer sync machines` 作为向后兼容的别名保留。新增的顶层
+  `coffer scope show|set|clear <kind>:<name>` 用于读取/编辑任意资源的 scope
+  （见下文「Machines fleet view」）。
+- **REST** —— `/api/v1/sync/*`：获取/设置配置、获取状态、触发一次运行、解决冲突、列出机器 / 重命名本机、管理每机覆盖、导出/导入主密钥。`scope` 在任意资源的创建或更新处
+  （框架级 resource CRUD 载荷）按 kind 的轴声明被校验；`GET /api/v1/machines`
+  与 `GET /api/v1/machines/{id}/slice`（2026-07-10 修订 —— machine × agent
+  scope，ADR-045）分别提供机群列表与某台机器的激活切片——见下文
+  「Machines fleet view」。
+- **Desktop UI** —— 一个 Sync 设置面板：配置 remote（保存即校验）、切换 auto-sync、查看状态（clean / syncing / conflicted / error、上次同步时间、可行动的错误指引）、触发一次运行，以及一张机器卡片，列出 vault 已知的每台机器（显示名、平台、上次同步、「本机」徽标、重命名）。应用内**没有**冲突解决界面（2026-07-10 修订）：冲突自动解决；罕见的滞留冲突指引用户到自己的仓库处理。Master key 卡片显示 key 的 SHA-256 指纹（绝不显示 key 本身），便于导出/导入后确认两台机器持有同一把 key。完整的机群视图——同步状态条、每台机器一张卡片，以及每台机器的激活切片——移到了新的顶层 Machines
+  导航项（2026-07-10 修订 —— machine × agent scope，ADR-045）；这个面板里的机
+  器卡片保留为一份更轻量的摘要，并链接到那里（见下文「Machines fleet view」）。
+
+## Machines fleet view（2026-07-10 修订 —— machine × agent scope，[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md)）
+
+一个顶层的 `Machines` 导航项（`/machines`）——与 Settings → Sync 分开——列出 vault
+中注册的每台机器：一条同步状态条（状态、上次同步时间、手动触发一次运行的按钮、
+回到 Settings → Sync 的链接）之上是每台机器一张卡片（显示名、平台、上次同步、
+「本机」徽标）。选中某台机器会打开它的**激活切片**——在场的 agent、激活的 MCP
+服务器、每个 agent 收到的 skill 投递、绑定的 channel——完全**在本地**根据已同步
+的 registry 加上每个资源的 scope 计算得出，因此任意一台机器都能渲染**任意另一
+台**机器的切片而无需联系它。每台机器的切片都只是意图——registry 加 scope 运算，
+没有本地文件系统/进程检查（即它的 scope 说那台机器上应当激活什么）；远端机器的
+切片会额外带一条「仅意图」提示。同步配置本身（remote、auto-sync、master key）
+**不**属于这个视图——它仍留在 Settings → Sync；这个视图关心的是激活，不是传输。
+
+- **REST**：`GET /api/v1/machines`（机群列表）与
+  `GET /api/v1/machines/{id}/slice`（该机器的激活切片）。
+- **CLI**：顶层的 `coffer machines`（从 `coffer sync` 命令组中提升出来；
+  `coffer sync machines` 作为向后兼容别名保留），以及用于读取/编辑任意资源
+  scope 的 `coffer scope show|set|clear <kind>:<name>`。
 
 ## Credential bootstrap
 
@@ -248,6 +324,36 @@ git remote 的凭据（SSH key / token）属于用户自己的 git 配置；Coff
 - **When** 用户在 A 上列出机器（设置面板或 `coffer sync machines`）
 - **Then** 两台机器都出现，带显示名、平台和上次同步时间，且 A 被标记为本机
 - **And** 重命名 A 后，经过下一个往返，B 的机器列表随之更新
+
+### Scenario: 被 scope 限定的资源在其 scope 之外保持休眠
+
+- **Given** 一个 `mcp_server` 资源的 `scope` 仅指名机器 A（`{"<A-id>": "*"}`），
+  且已同步到机器 A 与机器 B
+- **When** 机器 B 在导入之后执行调和
+- **Then** 该资源的文档在 B 上存在（可见、已同步），但 B 的网关从不拉起它的
+  upstream，也不会列出它的工具，而机器 A 正常激活它
+- **And** Machines fleet view 会把该资源在 B 上显示为未激活
+
+### Scenario: scope 编辑像任何资源编辑一样传播
+
+- **Given** 一个当前仅 scope 到机器 A 的资源
+- **When** 用户在机器 A 上把它的 `scope` 编辑为包含机器 B，且两台机器完成一次
+  同步往返
+- **Then** B 在其下一次调和时激活该资源——经由与任何其他资源编辑相同的
+  export → merge → import → 调和钩子 流水线，不引入任何新的同步机制
+- **And** 一个 manifest schema 版本早于 `scope` 字段的过时构建会以
+  `SYNC_WORKSPACE_TOO_NEW` 拒绝这次导入，而不是悄悄丢弃这个字段
+
+### Scenario: fleet view 能渲染任意机器的激活切片
+
+- **Given** 机器 A 和 B 都已对着同一个 remote 完成过一次 sync run，且它们的资源
+  带有不同的 scope 组合
+- **When** 用户在机器 A 上打开 Machines fleet view 并选中机器 B 的卡片
+- **Then** 详情视图渲染出 B 的激活切片（在场的 agent、激活的 MCP 服务器、每个
+  agent 收到的 skill 投递、绑定的 channel），完全在本地根据已同步的 registry
+  加上 scope 计算得出，机器 A 无需联系 B
+- **And** 因为从 A 的视角看 B 是远端机器，这次渲染带有一条「仅意图」提示；在 B
+  自己上面查看（它自己本机的切片）则不出现这条提示
 
 ## Out of scope references
 

@@ -189,3 +189,19 @@ class SkillDeliveryUnsupported(CofferError):  # noqa: N818
         )
         self.agent_type = agent_type
         self.mode = mode
+
+
+class SkillOutOfScope(CofferError):  # noqa: N818
+    """The (machine, agent) pair is outside the skill's ADR-045 activation
+    scope. Scope is a hard grant that overrides manual bindings, so a manual
+    ``enable_for`` attempt is refused outright rather than silently narrowed.
+    Maps to 422."""
+
+    code = "SKILL_OUT_OF_SCOPE"
+
+    def __init__(self, skill_name: str, agent_name: str) -> None:
+        super().__init__(
+            f"skill {skill_name!r} is out of scope for agent {agent_name!r} on this machine"
+        )
+        self.skill_name = skill_name
+        self.agent_name = agent_name

@@ -9,6 +9,7 @@ subpackages — they cannot import each other (Contract 5).
 from __future__ import annotations
 
 import pathlib
+import platform
 from typing import TYPE_CHECKING, Any
 
 from coffer.application.agent.auto_detect import AutoDetectService
@@ -27,6 +28,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.skill.builtin_tools import register_skill_builtin_tools
 from coffer.application.skill.kind import make_skill_kind
 from coffer.application.skill.service import SkillService
+from coffer.application.sync.identity import MachineIdentityService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.descriptor import descriptor_for
 from coffer.domain.agent.scan import scan_locations
@@ -36,10 +38,12 @@ from coffer.infrastructure.agent.hook_resolver import default_hook_resolver
 from coffer.infrastructure.agent.native_memory_store import FileNativeMemoryScanner
 from coffer.infrastructure.agent.plugin_bundle import FsPluginDetailReader
 from coffer.infrastructure.agent.plugin_cli import ClaudePluginCli
+from coffer.infrastructure.knowledge.ids import new_ulid
 from coffer.infrastructure.skill.master_store import MasterStore
 from coffer.infrastructure.skill.persistence import SkillBindingRepo
 from coffer.infrastructure.skill.sync_engine import SyncEngine
 from coffer.infrastructure.skill.workspace_scan import WorkspaceScan
+from coffer.infrastructure.sync.persistence import SqlAlchemyMachineIdentityRepo
 from coffer.surfaces.http.dependencies import (
     set_agent_config_file_service,
     set_agent_hook_service,
@@ -100,6 +104,19 @@ def wire_agent_and_skill_kinds(
         # composition root may read the agent's capability descriptor.
         return descriptor_for(AgentConfig.model_validate(r.config).type).skill_delivery_mode.value
 
+    # ADR-045 machine axis (Task 11): this daemon's stable sync identity,
+    # built exactly as channel_wiring.py does, so skill delivery/reclaim
+    # gates on the same machine id as every other scope-aware subsystem.
+    identity = MachineIdentityService(
+        SqlAlchemyMachineIdentityRepo(sm),  # type: ignore[arg-type]
+        audit,
+        new_id=new_ulid,
+        default_name=lambda: platform.node() or "coffer",
+    )
+
+    async def _local_machine_id() -> str:
+        return (await identity.get()).machine_id
+
     skill_svc = SkillService(
         resource_service=resource_svc,
         audit=audit,
@@ -111,6 +128,7 @@ def wire_agent_and_skill_kinds(
         agent_scan_locations_resolver=_agent_scan_locations,
         agent_skill_policy_resolver=_agent_skill_policy,
         agent_skill_delivery_resolver=_agent_skill_delivery,
+        machine_id=_local_machine_id,
     )
 
     # Agent kind (spec 004-agent-registry). Detection is discovery-only (no
@@ -127,6 +145,28 @@ def wire_agent_and_skill_kinds(
     # update (flag flip / exclusion edit).
     async def _agent_on_skill_policy_changed(agent_name: str) -> None:
         await skill_svc.apply_follow_for_agent(agent_name, actor="system")
+
+    # actor="sync": delivery failures surface in the run's errors (retried on
+    # every import) instead of growing the audit log unboundedly. Reused below
+    # both by the sync post-import hook AND the skill kind's on_scope_changed
+    # hook (Task 11 Fix 2) — same reconciliation, two different triggers.
+    async def _sync_skill_reconcile(agent_name: str) -> list[str]:
+        return await skill_svc.apply_follow_for_agent(agent_name, actor="sync")
+
+    # `on_scope_changed` for the AGENT kind (ADR-045 / Task 11 Fix 2): a scope
+    # edit on the agent itself re-runs its own follow reconciliation, exactly
+    # like a skill-policy change — an agent scoped out reclaims every
+    # delivered skill immediately; scoped back in, it's redelivered.
+    async def _agent_on_scope_changed(ref: ResourceRef) -> None:
+        await _agent_on_skill_policy_changed(ref.name)
+
+    # `on_scope_changed` for the SKILL kind (ADR-045 / Task 11 Fix 2): a
+    # skill's scope edit can gain or lose any agent, so every registered
+    # agent's delivery is re-reconciled — the same per-agent reconciliation
+    # the sync post-import hook uses (``_sync_skill_reconcile`` above).
+    async def _skill_on_scope_changed(ref: ResourceRef) -> None:
+        for row in await resource_svc.list(kind="agent"):
+            await _sync_skill_reconcile(row.name)
 
     # Config-file view/edit + one-click Coffer-MCP install (spec 004 v2). The
     # AgentService needs it too (Slice 6 disable_native_memory writes the on-disk
@@ -199,8 +239,12 @@ def wire_agent_and_skill_kinds(
         # implementation would race the row delete and find nothing to clean.
         await skill_svc.cleanup_bindings_for_agent(ref)
 
-    agent_kind = make_agent_kind(on_delete=_agent_on_delete)
-    skill_kind = make_skill_kind(skill_svc.cleanup_bindings_for_skill)
+    agent_kind = make_agent_kind(
+        on_delete=_agent_on_delete, on_scope_changed=_agent_on_scope_changed
+    )
+    skill_kind = make_skill_kind(
+        skill_svc.cleanup_bindings_for_skill, on_scope_changed=_skill_on_scope_changed
+    )
 
     app.state.kinds["agent"] = agent_kind
     app.state.kinds["skill"] = skill_kind
@@ -209,26 +253,26 @@ def wire_agent_and_skill_kinds(
     # agent is installed (gate → quarantine otherwise), and imported rows
     # re-apply their on-disk side-effects (native-memory transform, skill
     # delivery) after every sync import. start_sync reads these registries.
+    # ADR-045 machine axis (spec 004 amendment, Task 12): both are wired with
+    # the same `_local_machine_id` as skill_svc above, so an agent doc scoped
+    # to a DIFFERENT machine is recognized as dormant here — no quarantine
+    # noise, no side-effects — instead of the legacy single-machine contract.
     gates = getattr(app.state, "sync_import_gates", None)
     if gates is None:
         gates = []
         app.state.sync_import_gates = gates
-    gates.append(AgentImportGate())
+    gates.append(AgentImportGate(machine_id=_local_machine_id))
     hooks = getattr(app.state, "sync_post_import_hooks", None)
     if hooks is None:
         hooks = []
         app.state.sync_post_import_hooks = hooks
-
-    # actor="sync": delivery failures surface in the run's errors (retried on
-    # every import) instead of growing the audit log unboundedly.
-    async def _sync_skill_reconcile(agent_name: str) -> list[str]:
-        return await skill_svc.apply_follow_for_agent(agent_name, actor="sync")
 
     hooks.append(
         AgentSideEffectsReconcile(
             agent_svc,
             config_file_store,
             on_skill_policy_changed=_sync_skill_reconcile,
+            machine_id=_local_machine_id,
         )
     )
 

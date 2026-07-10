@@ -6,14 +6,14 @@ Coffer 项目的 AI 代理操作手册（Claude Code、Codex、Cursor 及未来�
 
 ## 1. 一览
 
-| 属性         | 值                                                                |
-| ------------ | ----------------------------------------------------------------- |
-| **项目**     | Coffer —— 本地优先的 AI agent 保险箱。单用户。坚定开源。          |
-| **方法论**   | 基于 Speckit 的规格驱动开发（SDD, Spec-Driven Development）。     |
-| **语言栈**   | Python 3.12+（后端）；TypeScript / React（前端）。               |
+| 属性       | 值                                                     |
+| -------- | ----------------------------------------------------- |
+| **项目**   | Coffer —— 本地优先的 AI agent 保险箱。单用户，一个仓库覆盖用户的所有机器。坚定开源。  |
+| **方法论**  | 基于 Speckit 的规格驱动开发（SDD, Spec-Driven Development）。     |
+| **语言栈**  | Python 3.12+（后端）；TypeScript / React（前端）。              |
 | **真理来源** | `.specify/memory/constitution.md`（原则）；`specs/`（产品契约）。 |
-| **默认分支** | `main`。                                                          |
-| **许可证**   | MIT。                                                             |
+| **默认分支** | `main`。                                               |
+| **许可证**  | MIT。                                                  |
 
 ## 2. 会话开始时阅读的文件
 

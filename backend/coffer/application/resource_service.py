@@ -4,6 +4,11 @@ The service is constructed with a dict of registered kinds; it never
 imports any kind-specific module. Each mutation is audited via
 AuditService. `delete` calls the kind's optional `on_delete` hook
 BEFORE persistence; a hook that raises aborts the deletion.
+
+Two mutation paths delegate to sibling ops modules to keep this file under
+the 400-LOC ceiling (mirroring `skill/service.py` + its `*_ops.py` satellites):
+`update_scope`'s body lives in `resource_scope_ops`, and `delete`'s
+credential-release step lives in `resource_delete_ops`.
 """
 
 from __future__ import annotations
@@ -144,6 +149,15 @@ class ResourceService:
             raise UnknownKind(kind)
         return self._kinds[kind]
 
+    def scope_axes(self, kind: str) -> tuple[str, ...]:
+        """Return the kind's declared machine x agent scope axes (ADR-045).
+
+        Public accessor (unlike ``_require_kind``) so the REST GET
+        .../scope route can report which axes a client may set, without
+        reaching into the private kinds registry.
+        """
+        return self._require_kind(kind).scope_axes
+
     def _validate_config(self, kind_def: Kind, config: dict[str, Any]) -> dict[str, Any]:
         try:
             validated = kind_def.config_schema.model_validate(config)
@@ -205,6 +219,12 @@ class ResourceService:
                 enabled=True,
                 created_at=now,
                 updated_at=now,
+                # Kind-supplied registration default (ADR-045 amendment); None
+                # for every kind that doesn't set one (unscoped, unchanged).
+                # Copied (not the kind's own dict) so no two registrations —
+                # or a caller mutating a returned Resource's .scope in place —
+                # ever alias the same shared-mutable default.
+                scope=dict(kind_def.default_scope) if kind_def.default_scope is not None else None,
             )
         )
         await self._audit.record(
@@ -304,7 +324,27 @@ class ResourceService:
         self._notify_change()
         return updated
 
+    async def update_scope(
+        self,
+        ref: ResourceRef,
+        scope: dict[str, Any] | None,
+        *,
+        actor: str,
+    ) -> Resource:
+        """Set (or clear) a resource's machine x agent activation scope (ADR-045).
+
+        Delegates to ``resource_scope_ops`` to keep this module under the
+        file-size limit; see that module for the full behavior.
+        """
+        from coffer.application.resource_scope_ops import update_scope as _update_scope
+
+        return await _update_scope(self, ref, scope, actor=actor)
+
     async def delete(self, ref: ResourceRef, actor: str) -> None:
+        # Credential release (on successful delete) delegates to
+        # resource_delete_ops to keep this module under the file-size limit.
+        from coffer.application.resource_delete_ops import release_orphaned_credentials
+
         kind_def = self._require_kind(ref.kind)
         snapshot = await self.get(ref)  # raises ResourceNotFound if missing
         if kind_def.on_delete is not None:
@@ -318,7 +358,7 @@ class ResourceService:
             if inspect.isawaitable(result):
                 await result
         await self._repo.delete(ref)
-        released = await self._release_orphaned_credentials(kind_def, snapshot.config, actor)
+        released = await release_orphaned_credentials(self, kind_def, snapshot.config, actor)
         await self._audit.record(
             AuditEventType.RESOURCE_DELETED.value,
             ref=ref,
@@ -348,33 +388,3 @@ class ResourceService:
                 except Exception:
                     _logger.exception("resource.delete_listener_failed", extra={"ref": str(notice)})
         self._notify_change()
-
-    async def _release_orphaned_credentials(
-        self, kind_def: Kind, config: dict[str, Any], actor: str
-    ) -> builtins.list[str]:
-        """Drop the deleted resource's credentials that nothing cites anymore.
-
-        Runs after the row is removed, so the deleted resource no longer counts
-        as a citation of its own refs. A failure must not turn the completed
-        deletion into a caller-facing error — the credential then merely
-        lingers, which was the status quo.
-        """
-        if self._credentials is None:
-            return []
-        released: builtins.list[str] = []
-        for cred_ref in dict.fromkeys(_extract_credential_refs(kind_def, config).values()):
-            try:
-                if not self._credentials.exists(cred_ref):
-                    continue
-                if await self.find_credential_citations(cred_ref):
-                    continue
-                self._credentials.delete(cred_ref)
-                await self._audit.record(
-                    AuditEventType.CREDENTIAL_DELETED.value,
-                    actor=actor,
-                    details={"ref": cred_ref},
-                )
-                released.append(cred_ref)
-            except Exception:
-                _logger.exception("resource.credential_release_failed", extra={"ref": cred_ref})
-        return released

@@ -1,16 +1,17 @@
-"""MCP-specific capability list/enable/disable/refresh/test routes."""
+"""MCP-specific capability list/enable/disable/refresh routes.
+
+The transient upstream health-check route (POST /{name}/test) lives in
+``server_test_routes`` to keep this module under the file-size limit.
+"""
 
 from __future__ import annotations
 
 import asyncio
-import time
-from datetime import UTC, datetime
 from typing import Any, Literal
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.runner_install import (
     missing_runner,
@@ -19,21 +20,18 @@ from coffer.application.mcp.runner_install import (
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
-from coffer.domain.mcp.server_config import HttpTransport, MCPServerConfig, StdioTransport
+from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Resource, ResourceRef
-from coffer.infrastructure.mcp.http_client import HttpUpstreamConnection
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
     MCPInvocationRepo,
     MCPServerHealthRepo,
 )
-from coffer.infrastructure.mcp.subprocess import StdioUpstreamConnection
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import (
     get_actor,
     get_audit_service,
     get_capability_discovery,
-    get_credential_store,
     get_health_repo,
     get_invocation_repo,
     get_preferences_repo,
@@ -47,7 +45,6 @@ from coffer.surfaces.http.schemas import (
     CapabilityKeyBody,
     CapabilityListOut,
     McpServerStatusOut,
-    McpTestResultOut,
 )
 
 router = APIRouter(
@@ -331,70 +328,3 @@ async def refresh_capabilities(
     await resource_service.get(ResourceRef("mcp_server", name))
     discovery.invalidate(name)
     return await list_capabilities(name, discovery)
-
-
-@router.post("/{name}/test", response_model=McpTestResultOut)
-async def test_mcp_server(
-    name: str,
-    resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
-    health_repo: MCPServerHealthRepo = Depends(get_health_repo),  # noqa: B008
-    credential_store: Any = Depends(get_credential_store),  # noqa: B008
-) -> McpTestResultOut:
-    """Open a transient upstream session, run MCP initialize, return health info.
-    Persists the result to mcp_server_health so GET /status reflects it."""
-    resource = await resource_service.get(ResourceRef("mcp_server", name))
-    config = MCPServerConfig.model_validate(resource.config)
-
-    resolver = CredentialResolver(credential_store)
-
-    start = time.monotonic()
-    try:
-        if isinstance(config.transport, StdioTransport):
-            # CODE-034: offload the blocking credential-store read off the event loop.
-            overlay = await asyncio.to_thread(
-                resolver.materialize, config.transport.credential_refs
-            )
-            conn: StdioUpstreamConnection | HttpUpstreamConnection = StdioUpstreamConnection(
-                transport=config.transport,
-                env_overlay=overlay,
-                spawn_timeout_seconds=config.spawn_timeout_seconds,
-                request_timeout_seconds=config.request_timeout_seconds,
-                server_name=name,
-            )
-        elif isinstance(config.transport, HttpTransport):
-            overlay = await asyncio.to_thread(
-                resolver.materialize, config.transport.credential_refs
-            )
-            conn = HttpUpstreamConnection(
-                transport=config.transport,
-                header_overlay=overlay,
-                spawn_timeout_seconds=config.spawn_timeout_seconds,
-                request_timeout_seconds=config.request_timeout_seconds,
-            )
-        else:
-            return McpTestResultOut(
-                ok=False,
-                latency_ms=0,
-                error_message=f"unsupported transport: {type(config.transport).__name__}",
-            )
-        try:
-            caps = await conn.spawn_and_initialize()
-            latency_ms = int((time.monotonic() - start) * 1000)
-            await health_repo.upsert(name, "healthy", datetime.now(tz=UTC))
-            return McpTestResultOut(
-                ok=True,
-                latency_ms=latency_ms,
-                protocol_version="2025-06-18",
-                server_capabilities=caps,
-                error_message=None,
-            )
-        finally:
-            await conn.close()
-    except Exception as e:  # incl. UpstreamUnavailable / UpstreamTimeout
-        latency_ms = int((time.monotonic() - start) * 1000)
-        await health_repo.upsert(name, "failing", datetime.now(tz=UTC))
-        return McpTestResultOut(
-            ok=False,
-            latency_ms=latency_ms,
-            error_message=str(e),
-        )
