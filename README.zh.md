@@ -12,7 +12,7 @@
   <img alt="平台" src="https://img.shields.io/badge/%E5%B9%B3%E5%8F%B0-macOS-555">
 </p>
 
-> 本地优先 (local-first) 的 AI agent 保险库。一个地方统一管理你的 AI agent 所触及的一切。
+> 本地优先 (local-first) 的 AI agent 保险库，一个仓库覆盖你的所有机器。一个地方统一管理你的 AI agent 所触及的一切。
 
 Coffer 是一个守护进程 (daemon) + CLI + 桌面应用，它为你机器上的每个 AI agent 提供一个安全、共享的统一接口。所有状态都保存在你自己的机器上 —— 没有云账号，没有厂商锁定。Coffer 管理的每一类东西都是一种 **resource kind**：
 
