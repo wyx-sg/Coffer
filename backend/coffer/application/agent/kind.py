@@ -34,4 +34,5 @@ def make_agent_kind(on_delete: OnDeleteHook | None = None) -> Kind:
         # dir by AgentService; the generic POST /resources path must not create
         # an undetected, folder-less agent (CODE-REG).
         generic_create_allowed=False,
+        scope_axes=("machine",),
     )

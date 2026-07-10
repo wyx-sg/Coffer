@@ -105,4 +105,5 @@ def make_channel_kind(
         credential_ref_extractor=_channel_credential_ref_extractor,
         validate_config=_make_validator(agent_keys),
         on_update_config=_make_update_validator(agent_keys),
+        scope_axes=("machine",),
     )

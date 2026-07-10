@@ -29,6 +29,7 @@ from coffer.domain.errors import (
     UnknownKind,
 )
 from coffer.domain.resource import Kind, Resource, ResourceRef
+from coffer.domain.scope import ScopeValidationError, validate_scope
 
 _logger = logging.getLogger(__name__)
 
@@ -301,6 +302,43 @@ class ResourceService:
         updated = await self._repo.set_enabled(ref, enabled)
         event = AuditEventType.RESOURCE_ENABLED if enabled else AuditEventType.RESOURCE_DISABLED
         await self._audit.record(event.value, ref=ref, actor=actor)
+        self._notify_change()
+        return updated
+
+    async def update_scope(
+        self,
+        ref: ResourceRef,
+        scope: dict[str, Any] | None,
+        *,
+        actor: str,
+    ) -> Resource:
+        """Set (or clear) a resource's machine x agent activation scope (ADR-045).
+
+        Framework-level: unlike ``update_config``/``delete``, this is NOT gated
+        on ``allow_lifecycle_kind`` — scope is orthogonal to a kind's creation
+        invariants, so it applies uniformly to lifecycle kinds (skill, agent,
+        channel) too. ``scope`` is validated against the kind's declared
+        ``scope_axes`` (empty means the kind does not support scope at all).
+        """
+        kind_def = self._require_kind(ref.kind)
+        try:
+            validate_scope(scope, axes=kind_def.scope_axes)
+        except ScopeValidationError as e:
+            raise ConfigValidationError(str(e)) from e
+        # Confirms existence up front (raises ResourceNotFound) — mirrors
+        # update_config's before-read.
+        await self.get(ref)
+        updated = await self._repo.update_scope(ref, scope)
+        if updated is None:
+            raise ResourceNotFound(ref.kind, ref.name)
+        await self._audit.record(
+            AuditEventType.RESOURCE_SCOPE_UPDATED.value,
+            ref=ref,
+            actor=actor,
+            # Scope carries only machine ids / agent names — no secrets — so it
+            # is audited verbatim (no redactor needed, unlike config).
+            details={"scope": scope},
+        )
         self._notify_change()
         return updated
 

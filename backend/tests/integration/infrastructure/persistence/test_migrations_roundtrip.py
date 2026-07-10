@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0045"
+HEAD_REVISION = "0046"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -82,7 +82,9 @@ HEAD_REVISION = "0045"
 # ``sync_config.poll_remote_seconds`` column (near-real-time remote-head probe)
 # — column-only, table set unchanged; its downgrade drops the column. 0045
 # ADDs ``sync_state.failed_state_json`` (state-doc import failures preserved
-# across exports) — column-only; its downgrade drops the column.
+# across exports) — column-only; its downgrade drops the column. 0046 ADDs
+# ``resources.scope_json`` (framework-level machine x agent activation scope,
+# ADR-045) — column-only, table set unchanged; its downgrade drops the column.
 # The ``documents_fts_*`` shadow
 # tables FTS5 creates under the hood are excluded — the assertions speak to the
 # logical schema.

@@ -36,4 +36,5 @@ def make_skill_kind(cleanup_bindings_for_skill: AsyncOnDelete) -> Kind:
         # ~/.coffer/skills/. Only SkillService (which creates that folder) may
         # register it; the generic POST /resources path is rejected (CODE-REG).
         generic_create_allowed=False,
+        scope_axes=("machine", "agent"),
     )

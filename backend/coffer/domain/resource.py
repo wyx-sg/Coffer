@@ -63,6 +63,11 @@ class Resource:
     enabled: bool
     created_at: datetime
     updated_at: datetime
+    # Framework-level machine x agent activation scope (ADR-045). None means
+    # unscoped (visible everywhere) — the pre-scope default, so every existing
+    # constructor keeps working unchanged. Interpreted via coffer.domain.scope;
+    # only kinds whose Kind.scope_axes is non-empty may set it (validate_scope).
+    scope: dict[str, Any] | None = None
 
     @property
     def ref(self) -> ResourceRef:
@@ -126,3 +131,10 @@ class Kind:
         ]
         | None
     ) = None
+    # Machine x agent activation-scope axes this kind supports (ADR-045), used
+    # by ResourceService.update_scope to validate a scope payload via
+    # coffer.domain.scope.validate_scope. Empty (the default) means the kind
+    # does not support scope at all — any non-null update_scope call for it is
+    # rejected. ``("machine",)`` allows only per-machine on/off; ``("machine",
+    # "agent")`` additionally allows narrowing to specific agents per machine.
+    scope_axes: tuple[str, ...] = ()
