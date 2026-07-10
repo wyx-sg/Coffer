@@ -19,7 +19,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from coffer.application.resource_service import ResourceService
-from coffer.application.sync.ports import CredentialSyncPort, SyncedStatePort, WorkspacePort
+from coffer.application.sync.ports import (
+    CredentialSyncPort,
+    ImportGate,
+    PostImportHook,
+    SyncedStatePort,
+    WorkspacePort,
+)
 from coffer.domain.error_base import CofferError
 from coffer.domain.resource import ResourceRef
 from coffer.domain.sync.errors import SyncWorkspaceTooNew
@@ -48,6 +54,8 @@ class SyncImporter:
         *,
         actor: str = "sync",
         state_providers: Sequence[SyncedStatePort] = (),
+        import_gates: Sequence[ImportGate] = (),
+        post_import_hooks: Sequence[PostImportHook] = (),
         home: str | None,
     ) -> None:
         self._resources = resources
@@ -55,6 +63,8 @@ class SyncImporter:
         self._workspace = workspace
         self._actor = actor
         self._state_providers = list(state_providers)
+        self._gates = {gate.kind: gate for gate in import_gates}
+        self._hooks = list(post_import_hooks)
         self._home = home
 
     async def import_(self, machine_id: str | None = None) -> ImportResult:
@@ -70,6 +80,12 @@ class SyncImporter:
         await self._apply_tombstones(tombstones, docs, result)
         await self._reconcile_resources(docs, result)
         await self._import_state(result)
+        # Rows are converged; re-apply each kind's machine-local side-effects
+        # (projections, native-config transforms, deliveries) from current
+        # state. Failures surface in the run and retry on the next import.
+        for hook in self._hooks:
+            for message in await hook.reconcile():
+                result.errors.append(f"reconcile[{hook.kind}]: {message}")
         result.locked_refs = await asyncio.to_thread(self._credentials.locked_refs)
         return result
 
@@ -142,6 +158,12 @@ class SyncImporter:
         for doc in docs:
             ref = ResourceRef(doc.kind, doc.name)
             try:
+                # Import gate: machine-local preconditions (an agent's config
+                # dir must exist HERE). A gate failure quarantines like any
+                # other import failure and self-heals on a later run.
+                gate = self._gates.get(doc.kind)
+                if gate is not None:
+                    await gate.validate(doc.config)
                 if (doc.kind, doc.name) in current:
                     await self._resources.update_config(
                         ref,

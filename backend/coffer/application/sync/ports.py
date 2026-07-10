@@ -65,6 +65,29 @@ class GitPort(Protocol):
         """Resolve conflicts with 'ours'/'theirs'/'resolved' then stage them."""
 
 
+class ImportGate(Protocol):
+    """Per-kind validation the importing machine runs BEFORE upserting a doc
+    (spec 010 import reconciliation). Raise ``CofferError`` to quarantine the
+    doc — it retries every run and clears once this machine satisfies it
+    (e.g. the agent's config dir exists here)."""
+
+    kind: str
+
+    async def validate(self, config: Mapping[str, object]) -> None: ...
+
+
+class PostImportHook(Protocol):
+    """Per-kind side-effect reconciliation run AFTER every import (spec 010
+    import reconciliation). Re-applies machine-local side-effects (native
+    config projections, on-disk transforms, deliveries) idempotently from the
+    converged rows — current state, not deltas — and returns error strings;
+    failures are reported in the run and retried on the next import."""
+
+    kind: str
+
+    async def reconcile(self) -> list[str]: ...
+
+
 class WorkspacePort(Protocol):
     """Filesystem IO over the sync workspace (mirrors, manifest, docs, blobs)."""
 

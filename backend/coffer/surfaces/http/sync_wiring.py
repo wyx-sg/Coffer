@@ -24,7 +24,7 @@ from coffer.application.sync.config_service import SyncConfigService
 from coffer.application.sync.exporter import SyncExporter
 from coffer.application.sync.identity import MachineIdentityService
 from coffer.application.sync.importer import SyncImporter
-from coffer.application.sync.ports import SyncedStatePort
+from coffer.application.sync.ports import ImportGate, PostImportHook, SyncedStatePort
 from coffer.application.sync.service import SyncService
 from coffer.application.sync.worker import SyncWorker
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
@@ -50,6 +50,8 @@ def wire_sync(
     db_path: pathlib.Path,
     master_key: MasterKeyManager,
     state_providers: Sequence[SyncedStatePort] = (),
+    import_gates: Sequence[ImportGate] = (),
+    post_import_hooks: Sequence[PostImportHook] = (),
 ) -> SyncWorker:
     root = sync_root()
     cred_sync = CredentialSyncAdapter(db_path, master_key)
@@ -87,6 +89,8 @@ def wire_sync(
             cred_sync,
             workspace,
             state_providers=state_providers,
+            import_gates=import_gates,
+            post_import_hooks=post_import_hooks,
             home=str(pathlib.Path.home()),
         ),
         credentials=cred_sync,
@@ -117,7 +121,20 @@ def start_sync(
 ) -> None:
     """Wire sync and start its (initially inert) auto-sync worker + watcher."""
     providers = tuple(getattr(app.state, "sync_state_providers", ()) or ())
-    worker = wire_sync(resource_svc, audit, sm, db_path, master_key, state_providers=providers)
+    # Import reconciliation (spec 010): kind modules registered their gates and
+    # post-import hooks on app.state during composition, before sync wires up.
+    gates = tuple(getattr(app.state, "sync_import_gates", ()) or ())
+    hooks = tuple(getattr(app.state, "sync_post_import_hooks", ()) or ())
+    worker = wire_sync(
+        resource_svc,
+        audit,
+        sm,
+        db_path,
+        master_key,
+        state_providers=providers,
+        import_gates=gates,
+        post_import_hooks=hooks,
+    )
     app.state.sync_worker = worker
     app.state.sync_worker_task = asyncio.create_task(worker.run())
     stop_event = asyncio.Event()

@@ -54,6 +54,22 @@ the sync medium.
   resources serialized, ciphertext dumped).
 - **Import** — apply workspace state back into the local vault (files mirrored
   back + reindex, resources reconciled into SQLite, ciphertext imported).
+- **Import reconciliation** (amendment 2026-07-10) — reconciling registry ROWS
+  is not enough: some resource config drives machine-local side-effects that
+  each kind's own service performs on its front door (provider activation
+  projects into the agent's native config file; an agent's
+  `disable_native_memory` rewrites its settings; `follow_all_skills` drives
+  skill delivery). After every import, each kind that declares a
+  **post-import reconcile hook** re-applies those side-effects idempotently
+  from the now-converged rows, so a change made on machine A takes real
+  effect on machine B — the registry and the disk never disagree. Hook
+  failures are recorded in the run's errors and retried on every subsequent
+  import (the hooks reconcile current state, not deltas). Kinds also MAY
+  declare an **import gate**: validation the importing machine runs before
+  upserting a doc (an agent whose `config_dir` does not exist/write here —
+  the agent is not installed on this machine) — a gate failure quarantines
+  the doc exactly like any other import failure, so it retries every run and
+  clears by itself once the agent is installed locally.
 - **Sync run** — export → `git pull` (merge) → on clean merge: `git push` +
   import. The whole thing is one `coffer sync` invocation.
 - **Conflict** — a `git merge` conflict. The engine resolves it AUTOMATICALLY
@@ -294,6 +310,25 @@ resources that reference it cannot spawn, and status reports
   complete another round trip
 - **Then** the resource still exists on A and in the workspace, B reports the
   ref as quarantined in sync status, and B retries the import on every run
+
+### Scenario: imported config re-applies its side-effects on this machine
+
+- **Given** a kind with a post-import reconcile hook (e.g. provider
+  activation, an agent's native-memory flag) whose resource changed on
+  machine A
+- **When** machine B's sync run imports the change
+- **Then** B's hook re-applies the machine-local side-effect from the
+  converged row (the projection/native-config write happens on B too), and a
+  hook failure is reported in the run's errors and retried on the next import
+
+### Scenario: an agent not installed on this machine quarantines at import
+
+- **Given** machine A registers an agent whose `config_dir` does not exist on
+  machine B
+- **When** B's sync run imports the agent resource
+- **Then** the import gate rejects it on B — the doc quarantines (visible in
+  sync status), the agent row is NOT created pointing at a dead directory,
+  and the import succeeds by itself on a later run once the directory exists
 
 ### Scenario: an older build refuses a newer workspace
 
