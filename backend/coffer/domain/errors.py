@@ -249,6 +249,14 @@ class MemoryStoreNotFound(CofferError):  # noqa: N818
         self.store_name = store_name
 
 
+class MemoryStoreMergeInvalid(CofferError):  # noqa: N818
+    code = "MEMORY_STORE_MERGE_INVALID"
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"invalid memory store merge: {reason}")
+        self.reason = reason
+
+
 class MemoryNotFound(CofferError):  # noqa: N818
     code = "MEMORY_NOT_FOUND"
 

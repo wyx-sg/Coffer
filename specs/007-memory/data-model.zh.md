@@ -20,6 +20,7 @@ Pydantic v2 `BaseModel`。当 `kind == "memory"` 时存于 `Resource.config`。�
 | `embedding_credential_ref` | `str \| None`                              | embedding API key 的 keychain ref（绝不明文）。                                |
 | `embedding_dimensions`     | `int`                                      | 默认 `768`；范围 `1–8192`。决定该 store 的 `vec_chunks` 表宽；随线上契约传输。 |
 | `max_fact_chars`           | `int`                                      | 默认 `8192`；范围 `64–32768`。可变。                                           |
+| `merged_identities`        | `list[str]`                                | 已合并**进**本库的项目 ULID（FR-058，修订 2026-07-10）。系统管理（用户从不设置）；resolve 算出的身份在此列表中、且其自身库已不存在时，落到本库。随资源同步。默认 `[]`。 |
 
 embedding 模型 **可变** —— 改它会重嵌整个 store（文件是真相）。没有不可变锁。
 

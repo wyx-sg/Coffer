@@ -1161,6 +1161,27 @@
       "placeholder": "e.g. My research notes",
       "clear": "Clear name"
     },
+    "merge": {
+      "action": "Find duplicates (AI)",
+      "title": "Merge duplicate memory stores",
+      "description": "Coffer's internal engine judges whether two project stores describe the same project. Merging is additive — journal entries dedupe, colliding files keep both copies, and nothing is ever lost.",
+      "scanning": "Scanning stores…",
+      "noCandidates": "No merge candidates found.",
+      "noModelHint": "No internal engine is configured, so only provable duplicates (matching git remotes) are shown. Configure one under Settings → LLM connections to judge the rest.",
+      "judgedByRemote": "Proved by matching origin remote",
+      "judgedByEngine": "Judged by the internal engine",
+      "factCount": "{{count}} facts",
+      "swap": "Swap direction",
+      "merge": "Merge",
+      "merging": "Merging…",
+      "truncated": "Too many pairs for one scan — merge some and re-run.",
+      "confidence": {
+        "certain": "certain",
+        "high": "high",
+        "medium": "medium",
+        "low": "low"
+      }
+    },
     "modes": {
       "grep": "Grep",
       "keyword": "Keyword",

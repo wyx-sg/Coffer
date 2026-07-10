@@ -59,6 +59,18 @@ coffer memory clear project-01J… --yes
 
 `--json` 在每个读命令上都可用。`--mode` 是 `grep` | `keyword` | `vector`（默认 `keyword`）。`grep` recall 是真实服务的 —— ripgrep 扫事实文件，无索引、无分词器，所以在 FTS5 失效的地方（如 CJK）也能用。未配置 embedding provider 时 `vector` 回退到 `keyword`（带标注）。
 
+### 合并重复的项目库（AI 辅助）
+
+多机同步可能给**同一个**项目留下两个 `project-<ulid>` 库（没有 origin remote、可携带身份之前铸的库、remote 改名）。先扫描，再合并确认的一对——增量式、任何内容都不会丢，被合并掉的身份此后仍会解析到幸存库（FR-056–059）：
+
+```bash
+coffer memory merge-scan                  # 确定性 + 内部引擎两层提议
+coffer memory merge project-01H… project-01J…          # source → target
+coffer memory merge project-01H… project-01J… --no-organize   # 跳过合并后的 reorg
+```
+
+桌面端对应 **记忆 → 查找重复库（AI）**。未配置内部引擎（设置 → LLM 连接）时，扫描仍会报告能靠 git remote 一致证明的库对。
+
 ## Desktop
 
 1. 侧栏 → **Memory**。页面以表格列出所有记忆 store（global store 加每项目一个 —— 自动置备，所以没有「New store」操作）。

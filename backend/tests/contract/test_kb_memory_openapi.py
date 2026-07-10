@@ -21,6 +21,7 @@ import pytest
 import yaml
 
 from coffer.surfaces.http.knowledge_base import schemas as kb_schemas
+from coffer.surfaces.http.memory import merge_routes
 from coffer.surfaces.http.memory import schemas as mem_schemas
 
 _SPECS = Path(__file__).resolve().parents[3] / "specs"
@@ -76,6 +77,11 @@ _MEM_MODELS: dict[str, type | None] = {
     "HandoffSceneOut": mem_schemas.HandoffSceneOut,
     "HandoffOut": mem_schemas.HandoffOut,
     "ConsolidationLogOut": mem_schemas.ConsolidationLogOut,
+    "StoreEvidence": merge_routes.StoreEvidenceOut,
+    "MergeProposal": merge_routes.MergeProposalOut,
+    "MergeScanResponse": merge_routes.MergeScanOut,
+    "MergeRequest": merge_routes.MergeIn,
+    "MergeResponse": merge_routes.MergeOut,
     "RetrievalMode": None,
     "Scope": None,
     "ErrorEnvelope": None,

@@ -20,6 +20,7 @@ Pydantic v2 `BaseModel`. Held inside `Resource.config` when `kind == "memory"`. 
 | `embedding_credential_ref` | `str \| None`                              | Keychain ref for the embedding API key (never plaintext).                                          |
 | `embedding_dimensions`     | `int`                                      | Default `768`; range `1–8192`. Drives the per-store `vec_chunks` table width; carried on the wire. |
 | `max_fact_chars`           | `int`                                      | Default `8192`; range `64–32768`. Mutable.                                                         |
+| `merged_identities`        | `list[str]`                                | Project ULIDs merged INTO this store (FR-058, amendment 2026-07-10). System-managed (never user-set); a resolve whose identity is listed here — and whose own store is gone — lands on this store. Syncs with the resource. Default `[]`. |
 
 The embedding model is **mutable** — changing it re-embeds the store (files are truth). No immutability lock.
 

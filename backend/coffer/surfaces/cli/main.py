@@ -14,6 +14,7 @@ from coffer.surfaces.cli import (
     knowledge_base_cmd,
     knowledge_base_source_cmd,  # noqa: F401 — registers `kb check-sources`/`update-source` onto kb app
     memory_cmd,
+    memory_merge_cmd,  # noqa: F401 — registers `memory merge-scan`/`merge` onto memory app
     provider_cmd,
     resource_cmd,
     retention_cmd,

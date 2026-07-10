@@ -22,6 +22,8 @@ import type {
   JournalOut,
   HandoffOut,
   ConsolidationLogOut,
+  MergeScanOut,
+  MergeOut,
 } from "./types";
 
 // Re-export the wire types + scope helpers so existing `import { … } from
@@ -215,4 +217,31 @@ export async function recall(
   });
   await checkOk(r);
   return (await r.json()) as RecallResponse;
+}
+
+// --- AI-assisted store merge (spec 007 amendment 2026-07-10) ----------------
+
+/** Scan every pair of project stores for same-project duplicates (read-only). */
+export async function mergeScanMemoryStores(): Promise<MergeScanOut> {
+  const r = await fetch(`${getCofferBaseUrl()}/memory_stores/merge_scan`, {
+    method: "POST",
+    headers: headers(),
+  });
+  await checkOk(r);
+  return (await r.json()) as MergeScanOut;
+}
+
+/** Merge `source` into `target` (additive; the source store is retired). */
+export async function mergeMemoryStores(
+  source: string,
+  target: string,
+  opts: { organize?: boolean } = {},
+): Promise<MergeOut> {
+  const r = await fetch(`${getCofferBaseUrl()}/memory_stores/merge`, {
+    method: "POST",
+    headers: { ...headers(), "Content-Type": "application/json" },
+    body: JSON.stringify({ source, target, organize: opts.organize ?? true }),
+  });
+  await checkOk(r);
+  return (await r.json()) as MergeOut;
 }

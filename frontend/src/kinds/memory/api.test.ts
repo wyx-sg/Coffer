@@ -23,6 +23,8 @@ import {
   getMemoryStoreMetrics,
   listFacts,
   listMemoryStores,
+  mergeMemoryStores,
+  mergeScanMemoryStores,
   recall,
 } from "./api";
 
@@ -356,5 +358,52 @@ describe("getMemoryConsolidationLog", () => {
       okJson({ text: null, path: "/p/log.md", folder_path: "/p" }),
     );
     expect((await getMemoryConsolidationLog("prefs")).text).toBeNull();
+  });
+});
+
+describe("mergeScanMemoryStores", () => {
+  test("POSTs /memory_stores/merge_scan and returns the proposals", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      okJson({ engine: "no_model", truncated: false, proposals: [] }),
+    );
+    const out = await mergeScanMemoryStores();
+    expect(out.engine).toBe("no_model");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/memory_stores/merge_scan`);
+    expect(init?.method).toBe("POST");
+  });
+});
+
+describe("mergeMemoryStores", () => {
+  test("POSTs source/target and defaults organize to true", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      okJson({
+        target: "project-a",
+        merged_files: 2,
+        label_moved: true,
+        root_moved: false,
+        aliases: ["b"],
+        reorg_status: "no_model",
+      }),
+    );
+    const out = await mergeMemoryStores("project-b", "project-a");
+    expect(out.aliases).toEqual(["b"]);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/memory_stores/merge`);
+    expect(JSON.parse(String(init?.body))).toEqual({
+      source: "project-b",
+      target: "project-a",
+      organize: true,
+    });
+  });
+
+  test("surfaces the typed error envelope on a 400", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      notOkJson(400, { error: { code: "MEMORY_STORE_MERGE_INVALID", message: "same store" } }),
+    );
+    await expect(mergeMemoryStores("project-a", "project-a")).rejects.toMatchObject({
+      code: "MEMORY_STORE_MERGE_INVALID",
+    });
+    expect(ApiError).toBeDefined();
   });
 });

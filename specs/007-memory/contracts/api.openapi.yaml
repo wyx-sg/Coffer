@@ -351,6 +351,64 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
+  /api/v1/memory_stores/merge_scan:
+    post:
+      summary: >
+        Scan every pair of per-project stores for same-project duplicates
+        (FR-056): pairs provably equal by normalized origin remote are proposed
+        deterministically; the rest are judged by Coffer's internal engine.
+        Read-only — the scan never mutates a store.
+      operationId: memoryStoreMergeScan
+      tags: [organize]
+      responses:
+        "200":
+          description: >
+            OK. `engine="no_model"` (no internal engine configured) still
+            carries the deterministic proposals and is not an error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MergeScanResponse"
+
+  /api/v1/memory_stores/merge:
+    post:
+      summary: >
+        Merge one per-project store into another (FR-057): additive lane-file
+        merge (journal deduped by timestamp, collisions keep both copies),
+        label/root carry-over, no-resurrection identity alias (FR-058),
+        force-reconcile, source retirement, audit. Optionally runs the FR-033
+        reorg pass on the target afterwards (FR-059).
+      operationId: memoryStoreMerge
+      tags: [organize]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MergeRequest"
+      responses:
+        "200":
+          description: Merged. Reports what moved and the post-merge organize outcome.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MergeResponse"
+        "400":
+          description: >
+            Invalid pair — identical names, the global store, or a name that is
+            not a legal project-store name (`MEMORY_STORE_MERGE_INVALID`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: >
+            Source or target store not found (`MEMORY_STORE_NOT_FOUND`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
   /api/v1/memory_stores/{name}/rules:
     parameters:
       - $ref: "#/components/parameters/StoreName"
@@ -784,6 +842,121 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/RecallHit"
+
+    StoreEvidence:
+      type: object
+      required: [store, facts]
+      properties:
+        store:
+          type: string
+          description: Store name (`project-<ULID>`).
+        label:
+          type: string
+          nullable: true
+          description: Display label (FR-017c), when set.
+        root:
+          type: string
+          nullable: true
+          description: Recorded project root path, when known.
+        remote:
+          type: string
+          nullable: true
+          description: >
+            Normalized origin remote URL when the root is locally readable
+            (FR-004a normalization); null otherwise.
+        facts:
+          type: integer
+          description: Fact count in the knowledge lane.
+
+    MergeProposal:
+      type: object
+      required: [source, target, confidence, judged_by, reason, source_evidence, target_evidence]
+      properties:
+        source:
+          type: string
+          description: Suggested store to merge away.
+        target:
+          type: string
+          description: Suggested surviving store (direction heuristic FR-056).
+        confidence:
+          type: string
+          enum: [certain, high, medium, low]
+        judged_by:
+          type: string
+          enum: [remote, engine]
+          description: >
+            `remote` = deterministic same-remote proof; `engine` = internal
+            engine verdict.
+        reason:
+          type: string
+          description: Human-readable justification.
+        source_evidence:
+          $ref: "#/components/schemas/StoreEvidence"
+        target_evidence:
+          $ref: "#/components/schemas/StoreEvidence"
+
+    MergeScanResponse:
+      type: object
+      required: [engine, truncated, proposals]
+      properties:
+        engine:
+          type: string
+          enum: [ok, no_model]
+          description: >
+            `no_model` = no internal engine configured — deterministic
+            proposals only (clean degradation, not an error).
+        truncated:
+          type: boolean
+          description: True when the engine tier hit its per-scan pair cap.
+        proposals:
+          type: array
+          items:
+            $ref: "#/components/schemas/MergeProposal"
+
+    MergeRequest:
+      type: object
+      required: [source, target]
+      properties:
+        source:
+          type: string
+          description: Per-project store merged away (retired on success).
+        target:
+          type: string
+          description: Per-project store that survives and absorbs the source.
+        organize:
+          type: boolean
+          default: true
+          description: Run the FR-033 reorg pass on the target after the merge.
+
+    MergeResponse:
+      type: object
+      required: [target, merged_files, label_moved, root_moved, aliases, reorg_status]
+      properties:
+        target:
+          type: string
+          description: The surviving store.
+        merged_files:
+          type: integer
+          description: Lane files merged/created under the target.
+        label_moved:
+          type: boolean
+          description: Whether the source's display label moved to the target.
+        root_moved:
+          type: boolean
+          description: Whether the source's project-root mapping moved to the target.
+        aliases:
+          type: array
+          items:
+            type: string
+          description: >
+            The target's `merged_identities` after the merge (FR-058) — the
+            source's ULID plus any aliases carried over transitively.
+        reorg_status:
+          type: string
+          description: >
+            Outcome of the post-merge FR-033 reorg pass — `reorganized`,
+            `no_model`, `empty`, `skipped` (organize=false), or `error: …`.
+            Never fails the merge itself (FR-059).
 
     OrganizeResponse:
       type: object

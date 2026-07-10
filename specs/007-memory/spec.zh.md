@@ -481,6 +481,30 @@ UI 里也不可见。把每个 lane 以贴合其形状的方式呈现，让整�
   Codex `features.memories=false` + `memories.generate_memories=false`），而把它设回 `false`
   （或卸载）会恢复先前设置；为 `false` 期间 Coffer 绝不碰 agent 的原生记忆（ADR-026）。
 
+### Scenario: merge scan proposes same-project stores
+
+- **Given** 两对描述同一项目的项目库——一对可证明（两库 root 本机可读且规范化到同一 origin remote），一对仅是貌似（标签/路径/内容吻合但无法证明共同 remote），
+- **When** 用户在配置了内部引擎的情况下运行合并扫描，
+- **Then** 可证明的一对以 `confidence="certain"`、`judged_by="remote"` 提议且不咨询引擎；貌似的一对携带引擎裁决（`judged_by="engine"`、置信度与理由）提议；每条提议按方向启发式给出建议的幸存库——且扫描不改变任何状态。
+
+### Scenario: merge scan degrades cleanly without an internal engine
+
+- **Given** 项目库中含一对可证明同项目的库，且未配置内部引擎，
+- **When** 用户运行合并扫描，
+- **Then** 响应报告 `engine="no_model"` 且仍携带确定性（`judged_by="remote"`）提议；引擎层的组合直接缺席——不报错。
+
+### Scenario: merging two stores consolidates additively and retires the source
+
+- **Given** 两个各自持有事实的项目库（至少一个重叠的 journal 周期与一个同名的非 journal 文件），
+- **When** 用户把 source 合入 target，
+- **Then** source 的每个 lane 文件落到 target 下（journal 条目按时间戳去重、同名文件两份都保留），source 的标签与 root 映射移交给缺失它们的 target，target 的 recall 返回合并后的事实，source 库（资源、索引行、磁盘目录）被裁撤，并记录一条 `memory_stores_merged` 审计。
+
+### Scenario: a merged identity resolves to the surviving store
+
+- **Given** `project-X` 已合入 `project-Y`（`X` 列在 `Y` 的 `merged_identities` 里），
+- **When** agent 在算出的项目身份为 `X` 的 checkout 里 remember 一条事实，
+- **Then** 事实写进 `project-Y`，且不会重新供给新的 `project-X` 库。
+
 > **Deferred to future test work**（测试随 e2e 基础设施落地；`make verify-acceptance` 不对它们做门禁）：桌面记忆列表按作用域展示、桌面只读事实视图的打开/显示能力、`coffer memory …` CLI 端到端配带 daemon、per-store 度量（HTTP 路由）。
 
 ## Requirements
@@ -570,6 +594,13 @@ UI 里也不可见。把每个 lane 以贴合其形状的方式呈现，让整�
 - **FR-053**：memory store 详情页 MUST 把 store 呈现为**四个 lane 区块**（Knowledge / Rules / Journal / Handoff）外加一个**整合 changelog** 视图，替换扁平事实列表。每个 lane 都有形状贴合的视图：**knowledge** = 事实/主题列表 + 内容；**rules** = 单一文档；**journal** = 时间排序条目（最新优先）；**handoff** = 按分支列表。所有视图都**只读**，都经**统一文件预览**渲染（无手写 `<pre>`），并为底层 lane 文件提供**在外部编辑器中打开 / 在文件管理器中显示 / 复制路径**（files-as-truth，FR-017/FR-021）。recall 仍只在 **Knowledge** lane 上操作（rules/journal/handoff/changelog 视图是只读投影，不是 recall 面）。
 - **FR-054**：系统 MUST 为 UI 所需的 lane 暴露读端点：`GET /api/v1/memory_stores/{name}/journal`（时间排序的 journal 文件，最新分片优先）、`GET /api/v1/memory_stores/{name}/handoff`（按分支的 handoff 现场，每个携带其 `branch` 与 `updated_at`）、`GET /api/v1/memory_stores/{name}/consolidation-log`（organizer 的固化 changelog；不存在时为 `null`）。它们**只读**、**按 store 名寻址**（而非 cwd），且对空 store MUST 返回 **HTTP 200 加空列表 / `null`**（绝非 404）。（Rules lane 已有其读面 `GET /api/v1/memory_stores/{name}/rules`，FR-036。）
 - **FR-055**：SessionStart 上下文（FR-049）MUST 额外注入一段**环境化的项目记忆索引**——即 ADR-026 推迟的"ambient loading"切片——使 agent 一开工就知道该项目记得些什么，无需主动调 `recall`。`GET /api/v1/agents/{name}/session-context` 的响应在 rules bundle 之后追加一段 **"## Project memory (via Coffer)"**，由 cwd 所属项目 store 构成：一份**仅标题的 knowledge 索引**（"Known topics"——每条 fact 的短标题，不含正文或描述）+ **少量最新 journal 行**（"Recent activity"——最新情景条目，每条一行）。它刻意是**索引而非记忆本体**——一个定位指针，告诉 agent"有什么"、需要正文时调 `recall <query>`，从而让注入很轻。该索引**只读且 best-effort**——cwd 不在 git 项目、store 为空、或任何读取错误都产出**无内容**（绝不报错；hook 绝不能阻塞 agent）——且**受预算约束**：合并后的 bundle 保持在 hook 的 ≤10k 字符契约内，索引取 rules bundle 之后的剩余额度，因此内建种子规则（FR-050）永不被截断。投递复用既有的 per-agent SessionStart hook（ADR-042 `ContextInjectionSpec`），该 hook **per-agent 显式安装、默认不装**，因此它本身就是"Coffer 是否注入"的开关：凡装了该 hook 的 agent（Claude Code、Codex、Cursor）都会收到索引；仅注入、绝不写原生文件。
+
+**库的归并 — AI 辅助（修订 2026-07-10）**
+
+- **FR-056**：系统 MUST 提供显式的**合并扫描**——`POST /api/v1/memory_stores/merge_scan` 与 `coffer memory merge-scan`——检查项目库两两组合并返回合并提议。两库的本机可读 root 规范化到**同一非空 origin remote**（FR-004a 规范化）时确定性直接提议（`confidence="certain"`、`judged_by="remote"`），不动用 LLM；其余组合由**内部引擎**（FR-033 的 internal-default 连接）逐对做一次单发补全裁决，返回严格 JSON `{same_project, confidence, reason}`——响应格式不合法则跳过该对，绝不报错。未配置内部引擎时扫描返回 `engine="no_model"`，只携带确定性提议。引擎层有界（每次扫描最多裁决 50 对，触顶置 `truncated=true`；每库证据采样有上限）。每条提议携带建议的合并方向：root 本机可解析者幸存，其次事实数多者，再次名字字典序小者。扫描绝不改变任何状态。
+- **FR-057**：系统 MUST 提供显式的**合并执行**——`POST /api/v1/memory_stores/merge` 传 `{source, target}` 与 `coffer memory merge <source> <target>`——用既有增量机制（`merge_store_dir`）归并两个项目库：journal 条目按时间戳去重做内容合并，派生文件跳过，其余同名冲突两份都保留（加后缀）——记忆只增不失。source 的显示标签与 `project_root` 映射在 target 缺失时移交。target 强制 reconcile，source 库裁撤（资源删除级联文档/索引/目录），并记录一条 `memory_stores_merged` 审计（只含名称与计数）。`source` 与 `target` MUST 为互异、存在的项目库——全局库永不可合并；违规返回 4xx 且无副作用。合并执行与 resolve 时收养走同一把锁串行；事实写入不持有这把锁，因此合并在裁撤 source 前再扫一遍 source（文件合并按内容幂等），把合并期间 remember 进来的内容带走。
+- **FR-058**：合并 MUST 留下**防复活别名**：幸存库 config 新增 `merged_identities`（系统管理的项目 ULID 列表，默认空），存放 source 的 ULID 及 source 自己的别名（链式合并可传递）。`ScopeResolver` MUST **仅在算出的身份没有对应库时**查询别名，并改道到持有该别名的幸存库，而不是重新供给一个空的重复库。每个别名只有一个在世持有者（新持有者记录别名时从其它库剥除），且启动合并器 MUST 同样尊重别名——被合并掉的规范身份改道到持有者而不是被重新供给，启动/收养合并把被裁撤库的别名一并记到规范库上。别名住在库的 `config_json` 里，随资源同步（spec 010），改道在每台机器上都成立。
+- **FR-059**：合并执行 MUST 接受 `organize`（默认 `true`）：合并成功后，若配置了内部引擎，对 target 库运行 FR-033 reorg pass，结果以 `reorg_status` 写进合并响应（`"reorganized"`、`"no_model"`、`"empty"`、`organize=false` 时为 `"skipped"`，或 `"error: …"`）。整理步骤失败或不可用绝不使合并本身失败。
 
 **底座隔离**
 

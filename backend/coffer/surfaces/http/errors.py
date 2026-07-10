@@ -81,6 +81,7 @@ _STATUS: dict[str, int] = {
     "GREP_PATTERN_INVALID": 400,
     # memory kind (spec 007)
     "MEMORY_STORE_NOT_FOUND": 404,
+    "MEMORY_STORE_MERGE_INVALID": 400,
     "MEMORY_NOT_FOUND": 404,
     "MEMORY_REJECTED": 422,  # empty / too-long fact rejected at the boundary
     "SCOPE_UNRESOLVED": 400,

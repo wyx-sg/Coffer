@@ -228,3 +228,6 @@ export interface ConsolidationLogOut {
   path: string;
   folder_path: string;
 }
+
+// AI-assisted store merge wire types live in ./merge-types (250-line limit).
+export * from "./merge-types";

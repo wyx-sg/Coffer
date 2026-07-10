@@ -627,6 +627,49 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
   uninstalling) restores the prior setting; while it is `false` Coffer never
   touches the agent's native memory (ADR-026).
 
+### Scenario: merge scan proposes same-project stores
+
+- **Given** two per-project stores that describe the same project — one pair
+  provably (both roots locally readable and normalizing to the same origin
+  remote) and one pair only plausibly (labels/paths/content align but no
+  common remote is provable),
+- **When** the user runs the merge scan with an internal engine configured,
+- **Then** the provable pair is proposed with `confidence="certain"` and
+  `judged_by="remote"` without consulting the engine, the plausible pair is
+  proposed with the engine's verdict (`judged_by="engine"`, a confidence and
+  a reason), and each proposal suggests the surviving store per the direction
+  heuristic — and nothing is mutated by the scan.
+
+### Scenario: merge scan degrades cleanly without an internal engine
+
+- **Given** per-project stores including a provably-same pair, and no
+  internal engine configured,
+- **When** the user runs the merge scan,
+- **Then** the response reports `engine="no_model"` and still carries the
+  deterministic (`judged_by="remote"`) proposals; engine-tier pairs are
+  simply absent — no error.
+
+### Scenario: merging two stores consolidates additively and retires the source
+
+- **Given** two per-project stores each holding facts (with at least one
+  overlapping journal period and one colliding non-journal filename),
+- **When** the user merges the source into the target,
+- **Then** every source lane file lands under the target (journal entries
+  deduped by timestamp, the filename collision keeping both copies), the
+  source's label and root mapping move to a target that lacked its own, the
+  target's recall returns the merged facts, the source store (resource,
+  index rows, on-disk dir) is retired, and a `memory_stores_merged` audit
+  entry is recorded.
+
+### Scenario: a merged identity resolves to the surviving store
+
+- **Given** store `project-X` was merged into `project-Y` (so `X` is listed
+  in `Y`'s `merged_identities`),
+- **When** an agent remembers a fact from a checkout whose computed project
+  identity is `X`,
+- **Then** the fact is written to `project-Y` and no new `project-X` store is
+  provisioned.
+
 > **Deferred to future test work** (tests land with the e2e infrastructure; `make verify-acceptance` does not gate on them): desktop memory list view per scope, the desktop read-only fact viewer's open-in-editor / reveal affordances, CLI `coffer memory …` end-to-end with a running daemon, per-store metrics (HTTP route).
 
 ## Requirements
@@ -716,6 +759,13 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **FR-053**: The memory store detail page MUST present the store as **four lane sections** (Knowledge / Rules / Journal / Handoff) plus a **consolidation-changelog** view, replacing the flat fact list. Each lane gets a shape-fit view: **knowledge** = the fact/topic list + content; **rules** = a single document; **journal** = time-ordered entries (newest first); **handoff** = a per-branch list. All views are **read-only**, render via the **unified file preview** (no hand-styled `<pre>`), and offer **open in external editor / reveal in file manager / copy path** for the underlying lane files (files-as-truth, FR-017/FR-021). Recall continues to operate over the **Knowledge** lane only (the rules/journal/handoff/changelog views are read projections, not recall surfaces).
 - **FR-054**: The system MUST expose read endpoints for the lanes the UI needs: `GET /api/v1/memory_stores/{name}/journal` (the time-ordered journal files, newest period first), `GET /api/v1/memory_stores/{name}/handoff` (the handoff scenes per branch, each carrying its `branch` and `updated_at`), and `GET /api/v1/memory_stores/{name}/consolidation-log` (the organizer's 固化 changelog; `null` when absent). These are **read-only**, **addressed by store name** (not cwd), and MUST return **HTTP 200 with empty lists / `null`** for an empty store (never a 404). (The Rules lane already has its read surface, `GET /api/v1/memory_stores/{name}/rules`, FR-036.)
 - **FR-055**: The SessionStart context (FR-049) MUST additionally inject an **ambient project-memory index** — the "ambient loading" slice ADR-026 deferred — so an agent starts knowing what the project remembers without having to call `recall`. The `GET /api/v1/agents/{name}/session-context` response appends, after the rules bundle, a **"## Project memory (via Coffer)"** section built from the cwd's project store: a **title-only knowledge index** ("Known topics" — each fact's short title, no bodies or descriptions) and a **few recent journal lines** ("Recent activity" — the newest episodic entries, one line each). It is deliberately an **index, not the memory itself** — an orientation pointer that tells the agent what exists and to call `recall <query>` for any bodies it needs, keeping the injection light. The index is **read-only and best-effort** — a cwd outside a git project, an empty store, or any read error yields **nothing** (never an error; the hook must never block the agent) — and is **budget-bounded**: the combined bundle stays within the hook's ≤10k-char contract, the index taking whatever remains after the rules bundle so the seeded built-in rules (FR-050) are never truncated. Delivery rides the existing per-agent SessionStart hook (ADR-042 `ContextInjectionSpec`), which is **opt-in per agent** (installed explicitly, not by default), so it is already the gate for whether Coffer injects: every agent whose hook is installed (Claude Code, Codex, Cursor) receives the index; injection-only, never a native-file write.
+
+**Store consolidation — AI-assisted (amendment 2026-07-10)**
+
+- **FR-056**: The system MUST provide an explicit **merge scan** — `POST /api/v1/memory_stores/merge_scan` and `coffer memory merge-scan` — that examines every pair of per-project stores and returns merge proposals. A pair whose locally-readable roots normalize to the **same non-empty origin remote** (FR-004a normalization) is proposed deterministically (`confidence="certain"`, `judged_by="remote"`) with no LLM involved; every other pair is judged by the **internal engine** (the FR-033 internal-default connection) via one one-shot completion returning a strict JSON verdict `{same_project, confidence, reason}` — a malformed response skips the pair, never errors. With no internal engine configured the scan returns `engine="no_model"` and the deterministic proposals only. The engine tier is bounded (at most 50 judged pairs per scan, `truncated=true` when capped; per-store evidence samples are size-capped). Each proposal carries a suggested merge direction: the store with a locally-resolvable root survives, then the higher fact count, then the lexically smaller name. Scanning never mutates anything.
+- **FR-057**: The system MUST provide an explicit **merge execution** — `POST /api/v1/memory_stores/merge` with `{source, target}` and `coffer memory merge <source> <target>` — that consolidates two per-project stores with the existing additive machinery (`merge_store_dir`): journal entries content-merged and deduped by timestamp, derived files skipped, any other collision keeping both copies (suffixed) — memory is gained, never lost. The source's display label and `project_root` mapping move to the target when the target lacks its own. The target is force-reconciled, the source store is retired (resource delete cascading documents/index/dir), and one `memory_stores_merged` audit entry (names + counts only) is recorded. `source` and `target` MUST be distinct, existing, per-project stores — the global store is never mergeable; violations are 4xx with no side effects. Merge execution serializes with resolve-time adoption on the same lock; fact writes do not hold that lock, so the merge re-sweeps the source immediately before retirement (the file merge is content-idempotent) to carry over anything remembered mid-merge.
+- **FR-058**: A merge MUST leave a **no-resurrection alias**: the surviving store's config gains `merged_identities` (a system-managed list of project ULIDs, default empty) holding the source's ULID plus the source's own aliases (transitive across chained merges). `ScopeResolver` MUST consult the aliases **only when the computed identity's store does not exist** and resolve to the aliased survivor instead of re-provisioning an empty duplicate. Exactly one live store holds a given alias (recording aliases on a new holder strips them from every other store), and the boot consolidation pass MUST honor the aliases the same way — a merged-away canonical identity redirects to its holder rather than being re-provisioned, and boot/adoption merges carry the retired store's aliases onto the canonical store. Because the alias lives in the store's `config_json`, it syncs with the resource (spec 010) so the redirect holds on every machine.
+- **FR-059**: Merge execution MUST accept `organize` (default `true`): after a successful merge, when the internal engine is configured, the FR-033 reorg pass runs on the target store and its outcome is reported as `reorg_status` in the merge response (`"reorganized"`, `"no_model"`, `"empty"`, `"skipped"` when `organize=false`, or `"error: …"`). A failed or unavailable organize step never fails the merge itself.
 
 **Substrate isolation**
 
