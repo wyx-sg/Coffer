@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import builtins
 import inspect
-from dataclasses import dataclass, field
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol
 

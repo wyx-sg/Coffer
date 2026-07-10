@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import base64
 
-from coffer.domain.sync.fernet_time import fernet_created_at
 from cryptography.fernet import Fernet
+
+from coffer.domain.sync.fernet_time import fernet_created_at
 
 
 def test_extracts_embedded_encryption_time() -> None:

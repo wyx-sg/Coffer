@@ -1042,7 +1042,9 @@ async def test_conflicting_credential_edits_fresher_ciphertext_wins(tmp_path, re
     assert _adapter(a).read_ciphertext(_REF) == fresh
 
 
-@pytest.mark.acceptance(spec="010-sync", scenario="interrupted run cannot re-export stale ciphertext")
+@pytest.mark.acceptance(
+    spec="010-sync", scenario="interrupted run cannot re-export stale ciphertext"
+)
 async def test_export_after_interrupted_run_keeps_fresher_workspace_blob(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
     """A run that pulled a fresher blob but crashed before importing it leaves
     workspace newer than the DB; the next export must not clobber the
@@ -1061,8 +1063,18 @@ async def test_export_after_interrupted_run_keeps_fresher_workspace_blob(tmp_pat
 
     # Simulate B's crash between pull and import: workspace has the fresher
     # blob, the DB still has the stale one.
-    subprocess.run(["git", "fetch", "origin", "main"], cwd=b.root / "ws", check=True, capture_output=True)
-    subprocess.run(["git", "merge", "--no-edit", "FETCH_HEAD"], cwd=b.root / "ws", check=True, capture_output=True)
+    subprocess.run(
+        ["git", "fetch", "origin", "main"],
+        cwd=b.root / "ws",
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "merge", "--no-edit", "FETCH_HEAD"],
+        cwd=b.root / "ws",
+        check=True,
+        capture_output=True,
+    )
     assert _adapter(b).read_ciphertext(_REF) == stale
 
     await b.service.run()
@@ -1072,8 +1084,12 @@ async def test_export_after_interrupted_run_keeps_fresher_workspace_blob(tmp_pat
     assert _adapter(a).read_ciphertext(_REF) == fresh
 
 
-@pytest.mark.acceptance(spec="010-sync", scenario="stale blob from an unguarded machine is not imported")
-async def test_import_keeps_local_credential_when_remote_holds_staler_blob(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+@pytest.mark.acceptance(
+    spec="010-sync", scenario="stale blob from an unguarded machine is not imported"
+)
+async def test_import_keeps_local_credential_when_remote_holds_staler_blob(  # type: ignore[no-untyped-def]
+    tmp_path, remote
+) -> None:
     """A machine running an older build can still push a stale blob without
     conflict; importing it must not roll the local DB back."""
     a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
@@ -1089,8 +1105,18 @@ async def test_import_keeps_local_credential_when_remote_holds_staler_blob(tmp_p
     stale = _blob(b, b"stale-token", 1_000)
     blob_path = b.root / "ws" / "credentials" / f"{_REF}.enc"
     blob_path.write_bytes(stale)
-    subprocess.run(["git", "commit", "-am", "legacy push"], cwd=b.root / "ws", check=True, capture_output=True)
-    subprocess.run(["git", "push", "origin", "HEAD:main"], cwd=b.root / "ws", check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-am", "legacy push"],
+        cwd=b.root / "ws",
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "push", "origin", "HEAD:main"],
+        cwd=b.root / "ws",
+        check=True,
+        capture_output=True,
+    )
 
     await a.service.run()  # pulls the stale blob cleanly (fast-forward)
     assert _adapter(a).read_ciphertext(_REF) == fresh
@@ -1101,7 +1127,9 @@ async def test_import_keeps_local_credential_when_remote_holds_staler_blob(tmp_p
     assert ws_blob == fresh
 
 
-@pytest.mark.acceptance(spec="010-sync", scenario="deleting a resource releases its credential everywhere")
+@pytest.mark.acceptance(
+    spec="010-sync", scenario="deleting a resource releases its credential everywhere"
+)
 async def test_delete_releases_credential_on_every_machine(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
     """A deleted channel's credential must not linger as an orphan row on any
     machine — orphans re-export forever and eventually clobber a re-created
