@@ -172,6 +172,11 @@ Current areas:
   engine singletons. A machine owns (and publishes) a singleton only once it
   has persisted it locally, so a fresh machine's defaults never same-path
   conflict with the fleet's values on its first merge.
+- `memory-labels/<store>.yaml` — the user-set display label of a memory
+  store (spec 007 FR-017c), so a `project-<ULID>` store reads by its name on
+  every machine instead of "unnamed store". Additive semantics: setting or
+  renaming propagates (a machine owns the stores it has labelled); clearing
+  a label stays machine-local.
 
 Skill delivery bindings (`skill_agent_bindings`) stay machine-local by
 decision: delivery is a side-effectful file operation with no row-level

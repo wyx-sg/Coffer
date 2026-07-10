@@ -155,6 +155,9 @@ diff 频繁变动）。导入时按 `<kind>:<name>` 对资源执行 upsert。**�
 - `settings/embedding.yaml` + `settings/internal-engine.yaml` —— 两个引擎单例。
   机器只有在本地持久化过该单例后才认领（并发布）它，全新机器的默认值不会在首次
   合并时与舰队值同路径冲突。
+- `memory-labels/<store>.yaml` —— 记忆库的用户显示标签（spec 007 FR-017c），让
+  `project-<ULID>` 库在每台机器上都以其名字显示，而不是「未命名记忆库」。加性
+  语义：设置或改名会传播（机器认领它标注过的库）；清除标签保持本机。
 
 skill 投递绑定（`skill_agent_bindings`）**按决定保持本机**：投递是有副作用的文件
 操作且没有行级 reconcile 循环——同步这些行会虚报投递状态。请在每台机器上经现有

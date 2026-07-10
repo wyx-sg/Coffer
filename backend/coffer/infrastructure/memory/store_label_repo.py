@@ -66,6 +66,12 @@ class StoreLabelRepo:
             label: str | None = (await session.execute(stmt)).scalar_one_or_none()
             return label
 
+    async def list_all(self) -> dict[str, str]:
+        """Every ``store_name -> label`` mapping (the sync export surface)."""
+        async with self._sm() as session:
+            rows = (await session.execute(select(MemoryStoreLabelModel))).scalars().all()
+            return {row.store_name: row.label for row in rows}
+
     async def get_many(self, store_names: list[str]) -> dict[str, str]:
         """Batch lookup so the list endpoint stays one query, not N."""
         if not store_names:
