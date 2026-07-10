@@ -385,6 +385,37 @@ resources that reference it cannot spawn, and status reports
   time, and A is marked as this machine
 - **And** renaming A propagates to B's machine list after the next round trip
 
+### Scenario: stale credential never wins a conflict
+
+- **Given** machines A and B hold different ciphertext for the same credential
+  ref, and B's blob embeds an older Fernet encryption time
+- **When** B syncs last and the `.enc` path conflicts
+- **Then** auto-resolve picks the fresher encryption regardless of which vault
+  commit is newer, and every machine converges on it
+
+### Scenario: interrupted run cannot re-export stale ciphertext
+
+- **Given** a machine whose previous run pulled a fresher credential blob but
+  crashed before importing it (workspace newer than DB)
+- **When** its next run exports
+- **Then** the fresher workspace blob is kept, and the run's import adopts it
+  into the local vault
+
+### Scenario: stale blob from an unguarded machine is not imported
+
+- **Given** the remote holds an older encryption of a credential this machine
+  already stores in a fresher form (e.g. pushed by an older build)
+- **When** the machine pulls and imports it cleanly
+- **Then** the local credential is kept and the next export heals the vault
+
+### Scenario: deleting a resource releases its credential everywhere
+
+- **Given** a resource whose credential ref no other resource cites
+- **When** the resource is deleted on one machine and the deletion syncs
+- **Then** the credential row is released on every machine, its blob leaves the
+  medium, and a later re-created credential (fresher encryption) supersedes
+  the tombstone instead of being deleted
+
 ## Out of scope references
 
 This spec covers the sync engine and its surfaces. Knowledge/memory file

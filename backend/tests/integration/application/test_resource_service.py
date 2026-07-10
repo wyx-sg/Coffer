@@ -456,3 +456,92 @@ async def test_kb_and_memory_credential_extractors_probe_missing_refs(tmp_path):
         assert unchanged.config["embedding"]["credential_ref"] == "openai-key"
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_delete_releases_credentials_only_it_cited(tmp_path):
+    """Deleting a resource drops the credentials nothing else cites; a ref
+    still cited by another resource survives (2026-07-10 orphan incident)."""
+
+    class _SecretConfig(BaseModel):
+        secret_ref: str
+
+    class _FakeStore:
+        def __init__(self, present: set[str]) -> None:
+            self.store = dict.fromkeys(present, "value")
+
+        def get(self, ref: str) -> str | None:
+            return self.store.get(ref)
+
+        def exists(self, ref: str) -> bool:
+            return ref in self.store
+
+        def delete(self, ref: str) -> None:
+            self.store.pop(ref, None)
+
+    kinds = {
+        "vault": Kind(
+            name="vault",
+            display_name="Vault",
+            config_schema=_SecretConfig,
+            credential_ref_extractor=lambda cfg: {"secret": cfg["secret_ref"]},
+        ),
+    }
+    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    sm = session_maker(engine)
+    audit = AuditService(SqlAlchemyAuditRepo(sm))
+    store = _FakeStore(present={"only-mine", "shared"})
+    svc = ResourceService(
+        kinds=kinds, repo=SqlAlchemyResourceRepo(sm), audit=audit, credentials=store
+    )
+    try:
+        await svc.register("vault", "a", {"secret_ref": "only-mine"}, "t")
+        await svc.register("vault", "b", {"secret_ref": "shared"}, "t")
+        await svc.register("vault", "c", {"secret_ref": "shared"}, "t")
+
+        await svc.delete(ResourceRef("vault", "a"), "t")
+        assert not store.exists("only-mine")  # released with its only citer
+
+        await svc.delete(ResourceRef("vault", "b"), "t")
+        assert store.exists("shared")  # still cited by c
+
+        await svc.delete(ResourceRef("vault", "c"), "t")
+        assert not store.exists("shared")  # last citation gone
+
+        entries = await audit.query(event_type=AuditEventType.CREDENTIAL_DELETED.value)
+        assert {e.details["ref"] for e in entries} == {"only-mine", "shared"}
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_delete_without_credential_store_is_unaffected(tmp_path):
+    class _SecretConfig(BaseModel):
+        secret_ref: str
+
+    kinds = {
+        "vault": Kind(
+            name="vault",
+            display_name="Vault",
+            config_schema=_SecretConfig,
+            credential_ref_extractor=lambda cfg: {"secret": cfg["secret_ref"]},
+        ),
+    }
+    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    sm = session_maker(engine)
+    svc = ResourceService(
+        kinds=kinds,
+        repo=SqlAlchemyResourceRepo(sm),
+        audit=AuditService(SqlAlchemyAuditRepo(sm)),
+    )
+    try:
+        await svc.register("vault", "a", {"secret_ref": "unprobed"}, "t")
+        await svc.delete(ResourceRef("vault", "a"), "t")  # must not raise
+        with pytest.raises(ResourceNotFound):
+            await svc.get(ResourceRef("vault", "a"))
+    finally:
+        await engine.dispose()
