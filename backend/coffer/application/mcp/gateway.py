@@ -51,6 +51,7 @@ from coffer.application.mcp.gateway_handlers import (
     handle_tools_call,
 )
 from coffer.application.mcp.gateway_parsing import (
+    _extract_agent,
     _extract_cwd,
     _extract_method,
     _extract_params,
@@ -120,10 +121,11 @@ class MCPGatewaySession:
         # default) means no provider is wired — legacy behavior, no filtering.
         self._machine_id = machine_id
         self._machine_id_value: str | None = None
-        # ADR-045 agent axis (Task 9): the session's bound agent identity.
-        # Declared here (always None) so `_enabled_mcp_servers`'s agent-axis
-        # filter compiles ahead of Task 9, which will set this from the real
-        # session identity; until then only the machine axis is live.
+        # ADR-045 agent axis (Task 9): the session's bound agent identity, set
+        # from the shim's self-reported ``--agent`` name on the ``initialize``
+        # handshake (params._meta["coffer/agent"], see handle_initialize).
+        # None when the shim was launched without one (pre-Task-9 install, or
+        # an unnamed launch) — the agent-axis filter is then a no-op.
         self._session_agent: str | None = None
         # CODE-035: called once when the session is disposed so the composition
         # root can drop this session's entry from its supervisor registry
@@ -177,6 +179,9 @@ class MCPGatewaySession:
         # requests appropriately (T-061: sampling capability check).
         self._client_capabilities = params.get("capabilities", {}) or {}
         self._session_cwd = _extract_cwd(params)
+        # ADR-045 agent axis (Task 9): the shim's self-reported `--agent`
+        # identity, when it stamped one (params._meta["coffer/agent"]).
+        self._session_agent = _extract_agent(params)
         self._initialized = True
         return {
             "protocolVersion": "2025-06-18",

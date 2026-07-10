@@ -31,11 +31,17 @@ _DAEMON_BOOT_TIMEOUT = 10  # seconds
 
 #: MCP-reserved extension key the daemon reads the launch cwd from.
 _CWD_META_KEY = "coffer/cwd"
+#: MCP-reserved extension key the daemon reads the shim's self-reported
+#: ``--agent`` identity from (spec 001 FR-021, amended).
+_AGENT_META_KEY = "coffer/agent"
 
 
-def _inject_cwd(envelope: dict[str, Any]) -> None:
-    """Stamp the shim's launch cwd into an ``initialize`` envelope's
-    ``params._meta`` so the daemon can resolve the per-project memory scope."""
+def _inject_meta(envelope: dict[str, Any], agent: str | None = None) -> None:
+    """Stamp the shim's launch cwd — and, when known, its ``--agent`` identity
+    — into an ``initialize`` envelope's ``params._meta`` so the daemon can
+    resolve the per-project memory scope and the agent axis of resource
+    scoping. The agent key is omitted entirely when no name was given (an
+    unnamed shim launch, or a client that hasn't been re-installed yet)."""
     params = envelope.get("params")
     if not isinstance(params, dict):
         params = {}
@@ -46,6 +52,14 @@ def _inject_cwd(envelope: dict[str, Any]) -> None:
         params["_meta"] = meta
     with contextlib.suppress(OSError):
         meta[_CWD_META_KEY] = os.getcwd()
+    if agent:
+        meta[_AGENT_META_KEY] = agent
+
+
+def _inject_cwd(envelope: dict[str, Any]) -> None:
+    """Back-compat alias for :func:`_inject_meta` — stamps only the launch
+    cwd. Kept for any call site that only cares about cwd propagation."""
+    _inject_meta(envelope)
 
 
 def _setup_shim_log() -> None:

@@ -53,7 +53,9 @@ async def test_install_claude_writes_entry_with_backup_and_audit(
     assert st.installed is True
     assert st.command == SHIM
     data = json.loads(claude_json.read_text())
-    assert data["mcpServers"]["coffer"] == {"command": SHIM}
+    # Spec 004 FR-019 (amended): install threads the agent's own name through
+    # as `--agent <name>` so the shim self-reports its identity at handshake.
+    assert data["mcpServers"]["coffer"] == {"command": SHIM, "args": ["--agent", "cc"]}
     # Untouched neighbouring state preserved; prior file backed up.
     assert data["oauthAccount"] == {"id": "x"}
     assert (tmp_path / ".claude.json.bak").exists()
@@ -88,7 +90,33 @@ async def test_install_idempotent(agent_bundle, tmp_path, monkeypatch):
     await agent_bundle.mcp.install("cc", actor="ui")
     data = json.loads((tmp_path / ".claude.json").read_text())
     assert list(data["mcpServers"]).count("coffer") == 1
+    assert data["mcpServers"]["coffer"]["args"] == ["--agent", "cc"]
     assert (await agent_bundle.mcp.status("cc")).installed is True
+
+
+async def test_reinstall_upgrades_preexisting_entry_without_args(
+    agent_bundle, tmp_path, monkeypatch
+):
+    """Agents registered before this change wrote a coffer entry with no
+    `--agent` flag at all. `status` must still report them installed, and
+    re-install (the migration path — there is no auto-migration) rewrites
+    the entry with the flag, in place."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_claude(agent_bundle, tmp_path)
+    claude_json = tmp_path / ".claude.json"
+    claude_json.write_text(
+        json.dumps({"mcpServers": {"coffer": {"command": SHIM}}}), encoding="utf-8"
+    )
+
+    pre = await agent_bundle.mcp.status("cc")
+    assert pre.installed is True
+    assert pre.command == SHIM
+
+    st = await agent_bundle.mcp.install("cc", actor="ui")
+    assert st.installed is True
+    data = json.loads(claude_json.read_text())
+    assert list(data["mcpServers"]).count("coffer") == 1
+    assert data["mcpServers"]["coffer"] == {"command": SHIM, "args": ["--agent", "cc"]}
 
 
 @pytest.mark.acceptance(spec="004-agent-registry", scenario="uninstall Coffer's MCP from an agent")
@@ -169,8 +197,9 @@ async def test_install_openclaw_writes_nested_mcp_servers(agent_bundle, tmp_path
     assert st.command == SHIM
 
     data = json.loads(config.read_text())
-    # The entry lands INSIDE the nested `mcp.servers` map, command-map shape.
-    assert data["mcp"]["servers"]["coffer"] == {"command": SHIM}
+    # The entry lands INSIDE the nested `mcp.servers` map, command-map shape,
+    # carrying the installing agent's own name (spec 004 FR-019 amended).
+    assert data["mcp"]["servers"]["coffer"] == {"command": SHIM, "args": ["--agent", "ow"]}
     assert data["mcp"]["servers"]["files"] == {"command": "npx"}  # user server kept
     assert data["gateway"] == {"port": 18789}  # unrelated key preserved
     assert (tmp_path / ".openclaw" / "openclaw.json.bak").exists()

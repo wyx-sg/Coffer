@@ -220,6 +220,43 @@ async def test_initialize_returns_capabilities(
         await _safe_dispose(engine)
 
 
+@pytest.mark.asyncio
+async def test_initialize_captures_agent_identity_from_meta(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Spec 001 FR-021 (amended): the shim self-reports its bound agent's name
+    at the handshake via ``params._meta["coffer/agent"]``, alongside the
+    existing ``coffer/cwd`` key; the gateway captures it onto the session."""
+    _with_in_memory(monkeypatch)
+    session, _rsvc, _prefs, _inv, engine = await _setup(tmp_path, {})
+    try:
+        await session.handle_initialize(
+            {
+                "protocolVersion": "2025-06-18",
+                "_meta": {"coffer/cwd": "/work/repo", "coffer/agent": "claude_code"},
+            }
+        )
+        assert session._session_agent == "claude_code"
+        assert session._session_cwd == "/work/repo"
+    finally:
+        await session.dispose()
+        await _safe_dispose(engine)
+
+
+@pytest.mark.asyncio
+async def test_initialize_without_agent_meta_leaves_session_agent_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _with_in_memory(monkeypatch)
+    session, _rsvc, _prefs, _inv, engine = await _setup(tmp_path, {})
+    try:
+        await session.handle_initialize({"protocolVersion": "2025-06-18"})
+        assert session._session_agent is None
+    finally:
+        await session.dispose()
+        await _safe_dispose(engine)
+
+
 @pytest.mark.acceptance(
     spec="001-mcp-gateway", scenario="aggregate tools across servers in one client"
 )

@@ -41,6 +41,24 @@ async def test_initialize_without_meta_leaves_cwd_none():
     assert session._session_cwd is None
 
 
+@pytest.mark.asyncio
+async def test_initialize_captures_agent_from_meta():
+    """Spec 001 FR-021 (amended): the shim's self-reported agent identity rides
+    the same ``_meta`` extension bag as the launch cwd."""
+    session = _session_with(BuiltinToolRegistry())
+    await session.handle_initialize(
+        {"protocolVersion": "x", "_meta": {"coffer/agent": "claude_code"}}
+    )
+    assert session._session_agent == "claude_code"
+
+
+@pytest.mark.asyncio
+async def test_initialize_without_agent_meta_leaves_session_agent_none():
+    session = _session_with(BuiltinToolRegistry())
+    await session.handle_initialize({"protocolVersion": "x", "_meta": {"coffer/cwd": "/p"}})
+    assert session._session_agent is None
+
+
 def _registry_with_cwd_tool() -> tuple[BuiltinToolRegistry, list[dict]]:
     seen: list[dict] = []
 

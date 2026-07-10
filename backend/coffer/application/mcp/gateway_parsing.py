@@ -12,6 +12,9 @@ from typing import Any
 
 #: The extension key the shim stamps the launch cwd into (initialize handshake).
 _CWD_META_KEY = "coffer/cwd"
+#: The extension key the shim stamps its self-reported ``--agent`` identity
+#: into (spec 001 FR-021, amended).
+_AGENT_META_KEY = "coffer/agent"
 
 
 def _extract_cwd(params: dict[str, Any]) -> str | None:
@@ -22,6 +25,18 @@ def _extract_cwd(params: dict[str, Any]) -> str | None:
         cwd = meta.get(_CWD_META_KEY)
         if isinstance(cwd, str) and cwd:
             return cwd
+    return None
+
+
+def _extract_agent(params: dict[str, Any]) -> str | None:
+    """Pull the shim's self-reported agent identity from an ``initialize``
+    envelope's ``params._meta["coffer/agent"]`` (set by the shim when it was
+    launched with ``--agent <name>``). Absent → None."""
+    meta = params.get("_meta")
+    if isinstance(meta, dict):
+        agent = meta.get(_AGENT_META_KEY)
+        if isinstance(agent, str) and agent:
+            return agent
     return None
 
 
