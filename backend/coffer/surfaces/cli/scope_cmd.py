@@ -138,7 +138,14 @@ def clear(
         else:
             get_r = c.get(f"/resources/{kind}/{name}/scope")
             _cli_client.check(get_r, verbose=verbose)
-            scope = dict(get_r.json()["scope"] or {})
+            current_scope = get_r.json()["scope"]
+            if current_scope is None:
+                typer.echo(
+                    f"{kind}:{name} is already active everywhere; nothing to clear for machine "
+                    f"'{machine}'"
+                )
+                return
+            scope = dict(current_scope)
             scope.pop(machine, None)
             if not scope:
                 typer.echo(

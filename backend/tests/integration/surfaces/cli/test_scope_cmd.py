@@ -211,6 +211,17 @@ def test_scope_clear_all_restores_active_everywhere(in_proc_daemon):
     assert "everywhere" in lowered or "every machine" in lowered
 
 
+def test_scope_clear_machine_on_null_scope_is_noop(in_proc_daemon):
+    """Clearing a machine from a null scope (active everywhere) is a no-op."""
+    _register("fake_scoped", "w1")
+    # scope stays null (active everywhere)
+    result = _runner.invoke(cli_app, ["scope", "clear", "fake_scoped:w1", "--machine", "m1"])
+    assert result.exit_code == 0, result.output
+    assert "already active everywhere" in result.output.lower()
+    # Verify scope is still null
+    assert _get_scope("fake_scoped", "w1")["scope"] is None
+
+
 def test_scope_clear_bad_ref_exit_2(in_proc_daemon):
     result = _runner.invoke(cli_app, ["scope", "clear", "noref"])
     assert result.exit_code == 2
