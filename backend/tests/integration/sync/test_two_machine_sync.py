@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 import pytest_asyncio
+from cryptography.fernet import Fernet
 from pydantic import BaseModel
 
 from coffer.application.audit_service import AuditService
@@ -95,6 +96,7 @@ async def _make_machine(
     remote: Path,
     *,
     create_key: bool,
+    key_bytes: bytes | None = None,
     kinds: dict[str, Kind] | None = None,
     state_providers_factory: Any = None,
     home: str | None = None,
@@ -106,13 +108,19 @@ async def _make_machine(
         await conn.run_sync(Base.metadata.create_all)
     sm = session_maker(engine)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
-    resources = ResourceService(
-        kinds=kinds or _kinds(), repo=SqlAlchemyResourceRepo(sm), audit=audit
-    )
 
     master_key = MasterKeyManager(root / "master.key", _NoKeyring())
-    if create_key:
+    if key_bytes is not None:
+        master_key.install_key(key_bytes)
+    elif create_key:
         master_key.resolve(allow_create=True)
+    key = master_key.export_key()
+    resources = ResourceService(
+        kinds=kinds or _kinds(),
+        repo=SqlAlchemyResourceRepo(sm),
+        audit=audit,
+        credentials=EncryptedCredentialStore(db_path, key) if key is not None else None,
+    )
     cred_sync = CredentialSyncAdapter(db_path, master_key)
 
     knowledge = root / "live-knowledge"
@@ -982,3 +990,191 @@ async def test_deletions_still_propagate_after_a_transient_error(tmp_path, remot
     assert state.status is SyncStatus.CLEAN
     assert not (a.knowledge / "note.md").exists()
     assert not (a.root / "ws" / "knowledge" / "note.md").exists()
+
+
+# ---------------------------------------------------------------------------
+# Credential freshness guards (2026-07-10 stale-clobber incident).
+# A Fernet blob's embedded encryption time orders ciphertext without any key;
+# an older encryption must never replace a newer one — not via merge conflict,
+# not via export after an interrupted run, not via import from a machine that
+# still holds the stale copy.
+# ---------------------------------------------------------------------------
+
+_REF = "channel/Telegram/bot-token"
+
+
+def _blob(machine: Machine, value: bytes, ts: int) -> bytes:
+    key = machine.master_key.export_key()
+    assert key is not None
+    return Fernet(key).encrypt_at_time(value, ts)
+
+
+def _adapter(machine: Machine) -> CredentialSyncAdapter:
+    return CredentialSyncAdapter(machine.db_path, machine.master_key)
+
+
+@pytest.mark.acceptance(spec="010-sync", scenario="stale credential never wins a conflict")
+async def test_conflicting_credential_edits_fresher_ciphertext_wins(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """Both machines rewrite the same ref from a shared base; the machine whose
+    ciphertext is OLDER commits last. Newest-commit-wins used to hand the merge
+    to the stale blob (the 2026-07-10 incident); the Fernet timestamp must win
+    instead."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+
+    _adapter(a).write_ciphertext(_REF, _blob(a, b"base", 1_500))
+    await a.service.run()
+    await b.service.run()  # B ingests the base blob
+
+    fresh = _blob(a, b"fresh-token", 2_000)
+    _adapter(a).write_ciphertext(_REF, fresh)
+    await a.service.run()  # remote now holds the fresher blob
+
+    # B rewrites the same ref with an OLDER encryption and syncs after A:
+    # its commit is newer, its content is staler.
+    _adapter(b).write_ciphertext(_REF, _blob(b, b"stale-token", 1_000))
+    state = await b.service.run()
+
+    assert state.status is not SyncStatus.CONFLICTED
+    assert _adapter(b).read_ciphertext(_REF) == fresh
+
+    await a.service.run()
+    assert _adapter(a).read_ciphertext(_REF) == fresh
+
+
+@pytest.mark.acceptance(
+    spec="010-sync", scenario="interrupted run cannot re-export stale ciphertext"
+)
+async def test_export_after_interrupted_run_keeps_fresher_workspace_blob(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """A run that pulled a fresher blob but crashed before importing it leaves
+    workspace newer than the DB; the next export must not clobber the
+    workspace copy with the stale DB blob."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+
+    stale = _blob(a, b"stale-token", 1_000)
+    _adapter(a).write_ciphertext(_REF, stale)
+    await a.service.run()
+    await b.service.run()  # B: DB and workspace both hold the stale blob
+
+    fresh = _blob(a, b"fresh-token", 2_000)
+    _adapter(a).write_ciphertext(_REF, fresh)
+    await a.service.run()  # remote now fresher
+
+    # Simulate B's crash between pull and import: workspace has the fresher
+    # blob, the DB still has the stale one.
+    subprocess.run(
+        ["git", "fetch", "origin", "main"],
+        cwd=b.root / "ws",
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "merge", "--no-edit", "FETCH_HEAD"],
+        cwd=b.root / "ws",
+        check=True,
+        capture_output=True,
+    )
+    assert _adapter(b).read_ciphertext(_REF) == stale
+
+    await b.service.run()
+    assert _adapter(b).read_ciphertext(_REF) == fresh
+
+    await a.service.run()
+    assert _adapter(a).read_ciphertext(_REF) == fresh
+
+
+@pytest.mark.acceptance(
+    spec="010-sync", scenario="stale blob from an unguarded machine is not imported"
+)
+async def test_import_keeps_local_credential_when_remote_holds_staler_blob(  # type: ignore[no-untyped-def]
+    tmp_path, remote
+) -> None:
+    """A machine running an older build can still push a stale blob without
+    conflict; importing it must not roll the local DB back."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+
+    fresh = _blob(a, b"fresh-token", 2_000)
+    _adapter(a).write_ciphertext(_REF, fresh)
+    await a.service.run()
+    await b.service.run()
+
+    # Legacy machine: rewrite the blob file in B's workspace clone by hand and
+    # push, bypassing every engine-side guard.
+    stale = _blob(b, b"stale-token", 1_000)
+    blob_path = b.root / "ws" / "credentials" / f"{_REF}.enc"
+    blob_path.write_bytes(stale)
+    subprocess.run(
+        ["git", "commit", "-am", "legacy push"],
+        cwd=b.root / "ws",
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "push", "origin", "HEAD:main"],
+        cwd=b.root / "ws",
+        check=True,
+        capture_output=True,
+    )
+
+    await a.service.run()  # pulls the stale blob cleanly (fast-forward)
+    assert _adapter(a).read_ciphertext(_REF) == fresh
+
+    # A's next run heals the vault back to the fresher blob.
+    await a.service.run()
+    ws_blob = (a.root / "ws" / "credentials" / f"{_REF}.enc").read_bytes()
+    assert ws_blob == fresh
+
+
+@pytest.mark.acceptance(
+    spec="010-sync", scenario="deleting a resource releases its credential everywhere"
+)
+async def test_delete_releases_credential_on_every_machine(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """A deleted channel's credential must not linger as an orphan row on any
+    machine — orphans re-export forever and eventually clobber a re-created
+    ref (the 2026-07-10 incident)."""
+
+    class _TokenConfig(BaseModel):
+        token_ref: str = ""
+
+    def _secret_kinds() -> dict[str, Kind]:
+        return {
+            "mcp_server": Kind(
+                name="mcp_server",
+                display_name="MCP",
+                config_schema=_TokenConfig,
+                credential_ref_extractor=lambda cfg: (
+                    {"token": cfg["token_ref"]} if cfg.get("token_ref") else {}
+                ),
+            )
+        }
+
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True, kinds=_secret_kinds())
+    key = a.master_key.export_key()
+    assert key is not None
+    b = await _make_machine(
+        "B", tmp_path / "B", remote, create_key=False, key_bytes=bytes(key), kinds=_secret_kinds()
+    )
+
+    a.cred_store().set(_REF, "token-value")
+    await a.resources.register("mcp_server", "chan", {"token_ref": _REF}, "test")
+    await a.service.run()
+    await b.service.run()
+    assert _adapter(b).read_ciphertext(_REF) is not None  # blob + resource reached B
+
+    await a.resources.delete(ResourceRef("mcp_server", "chan"), "user")
+    assert not a.cred_store().exists(_REF)  # released with its only citer
+
+    await a.service.run()  # exports the tombstones, prunes the blob
+    await b.service.run()  # applies them: resource AND credential row go
+    assert _adapter(b).read_ciphertext(_REF) is None
+
+    # No resurrection on later rounds (B's pre-pull export must not re-seed
+    # the blob into the medium, and A must not re-import it).
+    await a.service.run()
+    await b.service.run()
+    await a.service.run()
+    assert _adapter(a).read_ciphertext(_REF) is None
+    assert _adapter(b).read_ciphertext(_REF) is None
+    assert not (a.root / "ws" / "credentials" / f"{_REF}.enc").exists()

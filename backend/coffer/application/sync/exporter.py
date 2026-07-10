@@ -21,6 +21,7 @@ from coffer.application.sync.ports import (
     TombstoneLedgerPort,
     WorkspacePort,
 )
+from coffer.domain.sync.fernet_time import fernet_created_at, is_staler
 from coffer.domain.sync.manifest import SCHEMA_VERSION, Manifest
 from coffer.domain.sync.models import TOMBSTONE_TTL_SECONDS, Tombstone
 from coffer.domain.sync.portability import normalize_home, strip_overridden
@@ -91,6 +92,14 @@ class SyncExporter:
                 )
             )
         live = {(r.kind, r.name): _aware(r.created_at) for r in resources}
+        # Credential liveness for tombstone reconciliation: a blob whose
+        # embedded encryption time postdates the tombstone was re-created and
+        # supersedes the deletion (same resurrection rule as resources).
+        for cred_ref in await asyncio.to_thread(self._credentials.list_refs):
+            blob = await asyncio.to_thread(self._credentials.read_ciphertext, cred_ref)
+            ts = fernet_created_at(blob) if blob is not None else None
+            if ts is not None:
+                live[("credential", cred_ref)] = datetime.fromtimestamp(ts, tz=UTC)
         pending = await self._reconcile_ledger(live, set(quarantined))
         # Workspace docs with no local row are PENDING IMPORT, not deleted:
         # they arrived from the remote and this machine has not (successfully)
@@ -168,9 +177,20 @@ class SyncExporter:
         self._workspace.mirror_trees_out(delete_missing=allow_deletions)
         blobs: dict[str, bytes] = {}
         for ref in self._credentials.list_refs():
+            if ("credential", ref) in withheld:
+                # Deletion merged but not yet applied locally: exporting the
+                # row now would race the tombstone back out of the medium.
+                continue
             blob = self._credentials.read_ciphertext(ref)
             if blob is not None:
                 blobs[ref] = blob
+        # A run that pulled but died before importing leaves the workspace
+        # fresher than the DB; keep the fresher encryption so this export
+        # cannot re-clobber it (the import below the same run adopts it).
+        for ref, ws_blob in self._workspace.read_credential_blobs().items():
+            local = blobs.get(ref)
+            if local is not None and is_staler(local, ws_blob):
+                blobs[ref] = ws_blob
         self._workspace.write_credential_blobs(blobs, delete_missing=allow_deletions)
         self._write_manifest_guarded()
 

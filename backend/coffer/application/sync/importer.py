@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.ports import (
@@ -29,6 +30,7 @@ from coffer.application.sync.ports import (
 from coffer.domain.error_base import CofferError
 from coffer.domain.resource import ResourceRef
 from coffer.domain.sync.errors import SyncWorkspaceTooNew
+from coffer.domain.sync.fernet_time import fernet_created_at, is_staler
 from coffer.domain.sync.manifest import SCHEMA_VERSION
 from coffer.domain.sync.models import Tombstone
 from coffer.domain.sync.portability import apply_merge_patch, expand_home
@@ -76,7 +78,8 @@ class SyncImporter:
         )
         docs = [self._localize(doc, overrides) for doc in docs]
         result = ImportResult()
-        await self._import_credentials(blobs, result)
+        tombstoned = {t.name: _aware(t.deleted_at) for t in tombstones if t.kind == "credential"}
+        await self._import_credentials(blobs, tombstoned, result)
         await self._apply_tombstones(tombstones, docs, result)
         await self._reconcile_resources(docs, result)
         await self._import_state(result)
@@ -132,9 +135,37 @@ class SyncImporter:
             self._workspace.read_credential_blobs(),
         )
 
-    async def _import_credentials(self, blobs: dict[str, bytes], result: ImportResult) -> None:
+    async def _import_credentials(
+        self, blobs: dict[str, bytes], tombstoned: dict[str, datetime], result: ImportResult
+    ) -> None:
         for ref, blob in blobs.items():
+            deleted_at = tombstoned.get(ref)
+            if deleted_at is not None and not _encrypted_after(blob, deleted_at):
+                # Tombstoned and not re-created since: a stray blob file (e.g.
+                # resurrected by a merge the deleting machine hasn't pruned
+                # yet) must not re-enter the vault.
+                continue
+            existing = await asyncio.to_thread(self._credentials.read_ciphertext, ref)
+            if existing is not None and is_staler(blob, existing):
+                # Workspace holds an older encryption of this ref (e.g. pushed
+                # by a machine without freshness guards) — keep the local one;
+                # the next export heals the medium.
+                continue
             await asyncio.to_thread(self._credentials.write_ciphertext, ref, blob)
+
+    async def _apply_credential_tombstone(self, tombstone: Tombstone, result: ImportResult) -> None:
+        """Delete the local credential row named by a tombstone.
+
+        A blob whose embedded encryption time postdates the tombstone was
+        re-created after the deletion — resurrection wins, mirroring the
+        doc-beats-tombstone rule for resources."""
+        blob = await asyncio.to_thread(self._credentials.read_ciphertext, tombstone.name)
+        if blob is None:
+            return
+        if _encrypted_after(blob, _aware(tombstone.deleted_at)):
+            return
+        await asyncio.to_thread(self._credentials.delete_ciphertext, tombstone.name)
+        result.deleted += 1
 
     async def _apply_tombstones(
         self, tombstones: list[Tombstone], docs: list[ResourceDoc], result: ImportResult
@@ -147,6 +178,9 @@ class SyncImporter:
         alive = {(d.kind, d.name) for d in docs}
         current = {(r.kind, r.name) for r in await self._resources.list()}
         for tombstone in tombstones:
+            if tombstone.kind == "credential":
+                await self._apply_credential_tombstone(tombstone, result)
+                continue
             key = (tombstone.kind, tombstone.name)
             if key in alive or key not in current:
                 continue
@@ -195,3 +229,12 @@ class SyncImporter:
                 # Quarantined, not fatal: reported in sync state, preserved by
                 # the next export, retried on every run.
                 result.quarantined_refs.append(f"{doc.kind}:{doc.name}")
+
+
+def _aware(dt: datetime) -> datetime:
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+
+
+def _encrypted_after(blob: bytes, moment: datetime) -> bool:
+    ts = fernet_created_at(blob)
+    return ts is not None and datetime.fromtimestamp(ts, tz=UTC) > moment

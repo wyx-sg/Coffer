@@ -133,6 +133,16 @@ class GitRepo:
         if proc.returncode != 0:
             raise GitOperationFailed("ls-remote", proc.stderr.strip())
 
+    def read_blob(self, rev: str, path: str) -> bytes | None:
+        # Bytes, not text: credential blobs must round-trip unmodified.
+        proc = subprocess.run(
+            ["git", "show", f"{rev}:{path}"],
+            cwd=self._ws,
+            capture_output=True,
+            check=False,
+        )
+        return proc.stdout if proc.returncode == 0 else None
+
     def last_commit_ts(self, rev: str, path: str) -> int | None:
         """Unix timestamp of the last commit touching ``path`` on ``rev``;
         None when no commit on that side ever touched it."""
