@@ -105,6 +105,7 @@ _STATUS: dict[str, int] = {
     "SYNC_WORKSPACE_TOO_NEW": 409,
     "SYNC_GIT_FAILED": 502,
     "SYNC_SERIALIZATION_INVALID": 422,
+    "SYNC_REMOTE_UNREACHABLE": 422,
     "MASTER_KEY_FILE_INVALID": 422,
     # provider switching (spec 011)
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": 422,
@@ -160,9 +161,17 @@ def _status_for(exc: errors.CofferError) -> int:
 
 
 def _details_for(exc: errors.CofferError) -> dict[str, Any]:
-    """Surface the machine-readable `reason` of a rejection error, if any."""
+    """Surface the machine-readable `reason`/`hint` of an error, if any."""
+    out: dict[str, Any] = {}
     reason = getattr(exc, "reason", None)
-    return {"reason": reason} if reason else {}
+    if reason:
+        out["reason"] = reason
+    # SyncRemoteUnreachable carries a hint code (auth/not_found/network) the
+    # UI translates into configuration guidance.
+    hint = getattr(exc, "hint", None)
+    if hint:
+        out["hint"] = hint
+    return out
 
 
 def register(app: FastAPI) -> None:

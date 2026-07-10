@@ -56,8 +56,22 @@ the sync medium.
   back + reindex, resources reconciled into SQLite, ciphertext imported).
 - **Sync run** — export → `git pull` (merge) → on clean merge: `git push` +
   import. The whole thing is one `coffer sync` invocation.
-- **Conflict** — a `git merge` conflict. The run stops in a `conflicted` state;
-  nothing is imported until the user resolves it. Neither side is discarded.
+- **Conflict** — a `git merge` conflict. The engine resolves it AUTOMATICALLY
+  with a deterministic policy (amendment 2026-07-10): per conflicted path,
+  the side whose last vault-repo commit touching it is newer wins. Commit
+  time is when a change was CAPTURED BY A SYNC RUN, not when the user made
+  the edit — so this is precisely "the most recently synced edit wins"; with
+  near-real-time auto-sync on every machine the two coincide, but a machine
+  syncing after a long offline gap can carry an older edit to victory. The
+  policy is machine-independent (every machine picks the same winner); a
+  timestamp tie keeps the merging machine's side; `manifest.json` always
+  resolves to the local side (it is byte-identical across same-version
+  machines, and the schema gate runs before export). Only when the engine
+  cannot settle a path does the run park in `conflicted` — the UI then points
+  the user at their own repository (e.g. GitHub) instead of offering an
+  in-app merge surface; `coffer sync resolve` remains as the CLI escape
+  hatch. The losing side's content is never lost — it stays in the vault
+  repo's history.
 - **Tombstone** — the explicit record of a config-resource deletion
   (`tombstones/resources/<kind>/<name>.json`, carrying when and by which
   machine). Import deletes a local resource **only** when its tombstone is
@@ -144,7 +158,15 @@ A single persisted sync config row:
 
 Credentials for the git remote (SSH key / token) are the user's own git
 configuration; Coffer invokes git and relies on the ambient git credential
-setup, exactly as a developer's normal `git push` does.
+setup, exactly as a developer's normal `git push` does. Coffer stores no git
+credential and offers no credential-management UI; instead (amendment
+2026-07-10): saving a NEW remote (or enabling sync) probes it with one
+headless `git ls-remote` and rejects the save with `SYNC_REMOTE_UNREACHABLE`
+carrying a hint (`auth` / `not_found` / `network`), and the status endpoint
+classifies `last_error` the same way (`error_hint`) so surfaces render
+configuration guidance (use an SSH URL / run `gh auth setup-git`) instead of
+raw git stderr. The daemon runs headless: an HTTPS remote works only when a
+credential helper answers without a terminal.
 
 ## Surfaces
 
@@ -154,10 +176,15 @@ setup, exactly as a developer's normal `git push` does.
 - **REST** — `/api/v1/sync/*`: get/put config, get status, trigger a run,
   resolve conflicts, list machines / rename this machine, manage per-machine
   overrides, export/import the master key.
-- **Desktop UI** — a Sync settings panel: configure remote, toggle auto-sync,
-  see status (clean / syncing / conflicted / error, last-sync time), trigger a
-  run, resolve conflicts, and a machines card listing every machine known to
-  the vault (display name, platform, last sync, "this machine" badge, rename).
+- **Desktop UI** — a Sync settings panel: configure remote (validated on
+  save), toggle auto-sync, see status (clean / syncing / conflicted / error,
+  last-sync time, actionable error hints), trigger a run, and a machines card
+  listing every machine known to the vault (display name, platform, last
+  sync, "this machine" badge, rename). There is NO in-app conflict-resolution
+  surface (amendment 2026-07-10): conflicts auto-resolve; the rare parked
+  conflict directs the user to their own repository. The master-key card
+  shows the key's SHA-256 fingerprint (never the key) so the user can confirm
+  two machines hold the same key after an export/import.
 
 ## Credential bootstrap
 
@@ -212,15 +239,29 @@ resources that reference it cannot spawn, and status reports
 - **Then** no file contains the master key; `credentials/` holds only Fernet
   ciphertext
 
-### Scenario: conflicting edits stop the run for resolution
+### Scenario: conflicting edits auto-resolve to the most recently synced edit
 
 - **Given** machines A and B both edited the same resource/file since their last
   common sync, and A has already pushed
 - **When** machine B runs `coffer sync`
-- **Then** the run stops in `conflicted` state, imports nothing, and lists the
-  conflicting paths
-- **And** `coffer sync resolve` (taking ours/theirs/path) clears the conflict and
-  a subsequent run completes
+- **Then** the run auto-resolves each conflicted path to the side whose vault
+  commit is newer — the most recently synced edit (a tie keeps B's side) —
+  completes without user action, and both machines converge on the same
+  winner on their next runs
+- **And** if the engine cannot settle a path, the run parks in `conflicted`
+  and the surfaces direct the user to resolve in their own repository
+  (`coffer sync resolve` stays available as the CLI escape hatch)
+
+### Scenario: a first sync against a populated remote merges, never deletes
+
+- **Given** a machine whose vault is empty (or partially filled) and a remote
+  already carrying another machine's resources, trees, and credentials
+- **When** the machine's first sync runs (its export necessarily happens
+  before it has ever imported)
+- **Then** the export MUST NOT delete anything from the workspace it has not
+  ingested: resource docs without a local row are withheld from deletion
+  unless tombstoned, and tree/credential deletions do not propagate until a
+  run has completed an import on this machine
 
 ### Scenario: only shared state syncs
 

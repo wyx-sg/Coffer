@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import subprocess
 
-import pytest
-
 from coffer.domain.sync.manifest import Manifest
 from coffer.infrastructure.sync.git_repo import GitRepo
 from coffer.infrastructure.sync.workspace import Workspace
@@ -49,7 +47,9 @@ def test_commit_all_noop_when_clean(tmp_path) -> None:  # type: ignore[no-untype
     assert repo.commit_all("c2") is False  # nothing changed
 
 
-@pytest.mark.acceptance(spec="010-sync", scenario="conflicting edits stop the run for resolution")
+# No acceptance marker: this exercises the git-plumbing conflict/resolve
+# primitives only; the auto-resolve scenario is covered at the service level
+# (test_two_machine_sync.test_conflict_auto_resolves_newest_wins).
 def test_conflicting_edits_detected_then_resolved(tmp_path) -> None:  # type: ignore[no-untyped-def]
     remote = _bare_remote(tmp_path)
 
@@ -165,3 +165,44 @@ def test_git_has_changes(tmp_path) -> None:  # type: ignore[no-untyped-def]
     assert repo.has_changes() is True
     repo.commit_all("c")
     assert repo.has_changes() is False
+
+
+def test_credential_case_alias_converges_to_local_casing(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A ref differing from an existing blob only by case must replace it —
+    two case variants in one git index break every checkout on macOS (the
+    2026-07-10 pre-v3 `telegram/` vs `Telegram/` incident)."""
+    ws = Workspace(tmp_path / "ws")
+    ws.write_credential_blobs({"channel/telegram/bot-token": b"old"})
+    ws.write_credential_blobs({"channel/Telegram/bot-token": b"new"}, delete_missing=False)
+    blobs = ws.read_credential_blobs()
+    assert blobs == {"channel/Telegram/bot-token": b"new"}
+
+
+def test_credential_blobs_preserved_until_first_import(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Foreign ciphertext (arrived via pull, not yet imported) survives an
+    export with delete_missing=False and is removed once deletions are allowed."""
+    ws = Workspace(tmp_path / "ws")
+    ws.write_credential_blobs({"foreign-ref": b"theirs"})
+    ws.write_credential_blobs({"local-ref": b"ours"}, delete_missing=False)
+    assert set(ws.read_credential_blobs()) == {"foreign-ref", "local-ref"}
+    ws.write_credential_blobs({"local-ref": b"ours"}, delete_missing=True)
+    assert set(ws.read_credential_blobs()) == {"local-ref"}
+
+
+def test_mirror_out_without_deletions_keeps_foreign_tree_files(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """delete_missing=False mirror-out copies local adds/changes but never
+    deletes workspace files absent locally (the first-sync merge guard)."""
+    live = tmp_path / "live-knowledge"
+    live.mkdir(parents=True)
+    (live / "mine.md").write_text("mine\n", encoding="utf-8")
+    ws = Workspace(tmp_path / "ws", trees=[("knowledge", live)])
+    ws_tree = tmp_path / "ws" / "knowledge"
+    ws_tree.mkdir(parents=True)
+    (ws_tree / "foreign.md").write_text("theirs\n", encoding="utf-8")
+
+    ws.mirror_trees_out(delete_missing=False)
+    assert (ws_tree / "mine.md").read_text() == "mine\n"
+    assert (ws_tree / "foreign.md").read_text() == "theirs\n"
+
+    ws.mirror_trees_out(delete_missing=True)
+    assert not (ws_tree / "foreign.md").exists()

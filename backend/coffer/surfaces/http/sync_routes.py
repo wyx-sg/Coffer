@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field, field_validator
 
 from coffer.application.sync.service import SyncService
+from coffer.domain.sync.errors import classify_git_error
 from coffer.domain.sync.models import (
     DEFAULT_BRANCH,
     DEFAULT_INTERVAL_SECONDS,
@@ -66,6 +67,9 @@ class SyncStatusOut(BaseModel):
     status: str
     last_sync_at: str | None
     last_error: str | None
+    # Actionable classification of last_error (auth/not_found/network) — the
+    # UI renders configuration guidance from it instead of raw git stderr.
+    error_hint: str | None
     conflict_paths: list[str]
     locked_refs: list[str]
     quarantined_refs: list[str]
@@ -146,6 +150,7 @@ def _status_out(s: SyncState) -> SyncStatusOut:
         status=s.status.value,
         last_sync_at=s.last_sync_at.isoformat() if s.last_sync_at else None,
         last_error=s.last_error,
+        error_hint=classify_git_error(s.last_error),
         conflict_paths=s.conflict_paths,
         locked_refs=s.locked_refs,
         quarantined_refs=s.quarantined_refs,
@@ -244,6 +249,19 @@ async def set_override(
 async def unset_override(kind: str, name: str, actor: str = Depends(get_actor)) -> OverridesOut:
     await get_sync_service().unset_override(kind, name, actor=actor)
     return await list_overrides()
+
+
+class KeyFingerprintOut(BaseModel):
+    present: bool
+    # Short SHA-256 fingerprint of the master key (never the key itself);
+    # matching fingerprints on two machines = the same key.
+    fingerprint: str | None
+
+
+@router.get("/key/fingerprint", response_model=KeyFingerprintOut)
+async def key_fingerprint() -> KeyFingerprintOut:
+    fp = get_sync_service().key_fingerprint()
+    return KeyFingerprintOut(present=fp is not None, fingerprint=fp)
 
 
 @router.post("/key/export", response_model=KeyOpOut)

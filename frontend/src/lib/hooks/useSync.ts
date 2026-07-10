@@ -22,9 +22,16 @@ export interface SyncStatus {
   status: "unconfigured" | "clean" | "syncing" | "conflicted" | "error" | "credentials_locked";
   last_sync_at: string | null;
   last_error: string | null;
+  /** Actionable classification of last_error: auth | not_found | network. */
+  error_hint: string | null;
   conflict_paths: string[];
   locked_refs: string[];
   quarantined_refs: string[];
+}
+
+export interface KeyFingerprint {
+  present: boolean;
+  fingerprint: string | null;
 }
 
 export interface SyncMachine {
@@ -44,11 +51,14 @@ function headers(extra: HeadersInit = {}): HeadersInit {
 async function checkOk(r: Response): Promise<Response> {
   if (!r.ok) {
     const data = (await r.json().catch(() => null)) as {
-      error?: { code?: string; message?: string };
+      error?: { code?: string; message?: string; details?: unknown };
     } | null;
+    // details carries the actionable hint of SYNC_REMOTE_UNREACHABLE
+    // (auth/not_found/network) — the save-failure UI renders guidance from it.
     throw new ApiError(
       data?.error?.code ?? "INTERNAL_ERROR",
       data?.error?.message ?? `request failed: ${r.status}`,
+      data?.error?.details,
     );
   }
   return r;
@@ -91,6 +101,8 @@ function useInvalidate() {
     void qc.invalidateQueries({ queryKey: ["sync-status"] });
     // A run rewrites this machine's registry entry (last-sync time).
     void qc.invalidateQueries({ queryKey: ["sync-machines"] });
+    // A key import changes the fingerprint the user compares across machines.
+    void qc.invalidateQueries({ queryKey: ["sync-key-fingerprint"] });
   };
 }
 
@@ -118,12 +130,10 @@ export function useRunSync() {
   });
 }
 
-export function useResolveSync() {
-  const invalidate = useInvalidate();
-  return useMutation({
-    mutationFn: (args: { strategy: "ours" | "theirs" | "resolved"; paths: string[] }) =>
-      postJson<SyncStatus>("/sync/resolve", args),
-    onSuccess: invalidate,
+export function useKeyFingerprint() {
+  return useQuery({
+    queryKey: ["sync-key-fingerprint"],
+    queryFn: () => getJson<KeyFingerprint>("/sync/key/fingerprint"),
   });
 }
 

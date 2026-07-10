@@ -24,7 +24,7 @@ from coffer.domain.sync.manifest import Manifest
 from coffer.domain.sync.models import MachineEntry, Tombstone
 from coffer.domain.sync.serialization import ResourceDoc, parse_resource_doc
 from coffer.infrastructure.sync.paths import mirrored_trees as _default_mirrored_trees
-from coffer.infrastructure.sync.tree_mirror import _mirror_tree, _replace_tree
+from coffer.infrastructure.sync.tree_mirror import _mirror_tree
 
 _MANIFEST = "manifest.json"
 _RESOURCES = "resources"
@@ -61,11 +61,18 @@ class Workspace:
 
     # --- live trees <-> workspace -----------------------------------------
 
-    def mirror_trees_out(self) -> None:
+    def mirror_trees_out(self, *, delete_missing: bool = True) -> None:
         self._root.mkdir(parents=True, exist_ok=True)
         for subdir, live_root in self._trees:
             # Derived indexes never enter the workspace, so they never conflict.
-            _replace_tree(live_root, self._root / subdir, exclude=DERIVED_INDEX_NAMES)
+            # Diff-aware on the workspace side too: with delete_missing=False
+            # (no import completed yet) remote-authored files survive the export.
+            _mirror_tree(
+                live_root,
+                self._root / subdir,
+                exclude=DERIVED_INDEX_NAMES,
+                delete_missing=delete_missing,
+            )
 
     def mirror_trees_in(self) -> None:
         # Diff-aware on the live side: a no-change import must neither storm
@@ -318,17 +325,46 @@ class Workspace:
 
     # --- credential blobs --------------------------------------------------
 
-    def write_credential_blobs(self, blobs: Mapping[str, bytes]) -> None:
+    def write_credential_blobs(
+        self, blobs: Mapping[str, bytes], *, delete_missing: bool = True
+    ) -> None:
         target = self._root / _CREDENTIALS
-        if target.exists():
-            shutil.rmtree(target)
         target.mkdir(parents=True, exist_ok=True)
+        existing = {
+            path.relative_to(target).with_suffix("").as_posix(): path
+            for path in sorted(target.rglob("*.enc"))
+        }
+        # Case-fold map so a ref that differs from an existing blob only by
+        # case replaces it instead of creating a second variant — two case
+        # aliases in one git index break every checkout on a case-insensitive
+        # filesystem (macOS). Local refs win; pre-v3 exports lowercased ref
+        # segments, so the alias disappears once every machine is upgraded.
+        by_folded = {ref.casefold(): ref for ref in existing}
         for ref, blob in blobs.items():
+            twin = by_folded.get(ref.casefold())
+            if twin is not None and twin != ref:
+                stale = existing.pop(twin)
+                stale.unlink(missing_ok=True)
+                # Directories alias by case too: prune now-empty parents so
+                # mkdir below recreates the path with THIS ref's casing.
+                parent = stale.parent
+                while parent != target and not any(parent.iterdir()):
+                    parent.rmdir()
+                    parent = parent.parent
+                by_folded[ref.casefold()] = ref
             # Refs are namespaced with slashes (e.g. ``channel/seatalk/app-secret``),
             # so the ``.enc`` file lives in a nested dir that must exist first.
             dest = target / f"{ref}.enc"
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(blob)
+        if not delete_missing:
+            return
+        # Blobs for refs this machine no longer holds — only once an import
+        # has run (the exporter's guard), so foreign ciphertext is never
+        # deleted before it was ever ingested here.
+        for ref, path in existing.items():
+            if ref not in blobs:
+                path.unlink(missing_ok=True)
 
     def read_credential_blobs(self) -> dict[str, bytes]:
         target = self._root / _CREDENTIALS

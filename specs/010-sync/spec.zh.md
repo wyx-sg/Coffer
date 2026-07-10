@@ -40,7 +40,7 @@
 - **Export** —— 将本地 vault 状态写入 workspace（镜像文件、序列化资源、导出密文）。
 - **Import** —— 将 workspace 状态应用回本地 vault（文件回镜像 + 重建索引、资源调和进 SQLite、导入密文）。
 - **Sync run** —— export → `git pull`（merge）→ 合并干净时：`git push` + import。整个过程是一次 `coffer sync` 调用。
-- **Conflict** —— 一次 `git merge` 冲突。该次运行停在 `conflicted` 状态；在用户解决冲突前不会导入任何内容。两边都不会被丢弃。
+- **Conflict** —— 一次 `git merge` 冲突。引擎以确定性策略**自动解决**（2026-07-10 修订）：逐冲突路径，最后触及该路径的 vault 仓库提交较新的一侧获胜。提交时间是变更**被某次同步运行捕获**的时间，不是用户实际编辑的时间——因此语义准确说是「最近同步的编辑获胜」；两台机器都开着近实时自动同步时两者一致，但一台长期离线后回归的机器会把它较旧的编辑作为新提交同步而胜出。策略与机器无关（每台机器选出同一个赢家）；时间戳相同时保留执行合并那台机器的一侧；`manifest.json` 永远取本机一侧（同版本机器间它字节相同，且 schema 门先于导出运行）。只有引擎无法处理的路径才会让运行停在 `conflicted`——此时 UI 指引用户到自己的仓库（如 GitHub）解决，应用内不提供合并界面；`coffer sync resolve` 保留为 CLI 兜底。落败一侧的内容不会丢失——它留在 vault 仓库的历史里。
 - **Tombstone（墓碑）** —— 配置资源删除的显式记录
   （`tombstones/resources/<kind>/<name>.json`，携带删除时间与执行机器）。导入
   **仅**在墓碑存在时删除本地资源——资源只是从 workspace 中缺席永远不会导致删除。
@@ -105,13 +105,13 @@ workspace 的 `machines/` 区为每台机器保存一个 JSON 注册项：显示
   它仍保留在 config/API 中，并可通过 CLI（`coffer sync --branch`）调整，以应对极少数
   在同一 remote 上按分支区分的场景。
 
-git remote 的凭据（SSH key / token）属于用户自己的 git 配置；Coffer 调用 git 并依赖环境中既有的 git credential 设置，与开发者平常 `git push` 的方式完全一致。
+git remote 的凭据（SSH key / token）属于用户自己的 git 配置；Coffer 调用 git 并依赖环境中既有的 git credential 设置，与开发者平常 `git push` 的方式完全一致。Coffer 不存储任何 git 凭据、不提供凭据管理 UI；取而代之（2026-07-10 修订）：保存**新的** remote（或启用同步）时用一次无终端的 `git ls-remote` 探测，失败则拒绝保存并返回 `SYNC_REMOTE_UNREACHABLE` 及提示码（`auth` / `not_found` / `network`）；status 端点用同一分类器给 `last_error` 打 `error_hint`，界面据此渲染配置指引（改用 SSH 地址 / 运行 `gh auth setup-git`），而不是原始 git stderr。daemon 无终端运行：HTTPS remote 只有在 credential helper 能无终端应答时才可用。
 
 ## Surfaces
 
 - **CLI** —— `coffer sync` 命令组：`init`、`status`、`run`（默认）、`push`、`pull`、`resolve`、`config`、`machines`（列出；`--rename` 重命名本机）、`override list|set|unset`、`key export`、`key import`。
 - **REST** —— `/api/v1/sync/*`：获取/设置配置、获取状态、触发一次运行、解决冲突、列出机器 / 重命名本机、管理每机覆盖、导出/导入主密钥。
-- **Desktop UI** —— 一个 Sync 设置面板：配置 remote、切换 auto-sync、查看状态（clean / syncing / conflicted / error、上次同步时间）、触发一次运行、解决冲突，以及一张机器卡片，列出 vault 已知的每台机器（显示名、平台、上次同步、「本机」徽标、重命名）。
+- **Desktop UI** —— 一个 Sync 设置面板：配置 remote（保存即校验）、切换 auto-sync、查看状态（clean / syncing / conflicted / error、上次同步时间、可行动的错误指引）、触发一次运行，以及一张机器卡片，列出 vault 已知的每台机器（显示名、平台、上次同步、「本机」徽标、重命名）。应用内**没有**冲突解决界面（2026-07-10 修订）：冲突自动解决；罕见的滞留冲突指引用户到自己的仓库处理。Master key 卡片显示 key 的 SHA-256 指纹（绝不显示 key 本身），便于导出/导入后确认两台机器持有同一把 key。
 
 ## Credential bootstrap
 
@@ -155,12 +155,18 @@ git remote 的凭据（SSH key / token）属于用户自己的 git 配置；Coff
 - **When** 检查 sync workspace 的内容
 - **Then** 没有任何文件包含主密钥；`credentials/` 中只存放 Fernet 密文
 
-### Scenario: 冲突的编辑会停下运行以待解决
+### Scenario: 冲突的编辑自动解决为最近同步的一侧
 
 - **Given** 机器 A 和 B 自上次共同同步以来都编辑了同一个资源/文件，且 A 已经推送
 - **When** 机器 B 运行 `coffer sync`
-- **Then** 该次运行停在 `conflicted` 状态，不导入任何内容，并列出发生冲突的路径
-- **And** `coffer sync resolve`（取 ours/theirs/path）清除冲突，随后的一次运行得以完成
+- **Then** 该次运行把每个冲突路径自动解决为 vault 提交较新的一侧——即最近同步的编辑（相同则保留 B 侧），无需用户操作即完成，且两台机器在各自的下一次运行后收敛到同一个赢家
+- **And** 引擎无法处理的路径让运行停在 `conflicted`，界面指引用户到自己的仓库解决（`coffer sync resolve` 保留为 CLI 兜底）
+
+### Scenario: 对已有内容远端的首次同步只合并、绝不删除
+
+- **Given** 一台 vault 为空（或部分填充）的机器，而远端已携带另一台机器的资源、文件树与凭据
+- **When** 这台机器的首次同步运行（其导出必然发生在它完成过任何导入之前）
+- **Then** 导出 MUST NOT 删除任何它尚未摄入的工作区内容：没有本地行的资源文档除非有墓碑否则不被删除；文件树与凭据的删除在本机完成过一次导入之前不向外传播
 
 ### Scenario: 只有共享状态会被同步
 

@@ -90,6 +90,7 @@ class AuditEventType(StrEnum):
     SYNC_COMPLETED = "sync_completed"
     SYNC_CONFLICTED = "sync_conflicted"
     SYNC_RESOLVED = "sync_resolved"
+    SYNC_AUTO_RESOLVED = "sync_auto_resolved"
     MASTER_KEY_EXPORTED = "master_key_exported"
     MASTER_KEY_IMPORTED = "master_key_imported"
     SYNC_MACHINE_RENAMED = "sync_machine_renamed"

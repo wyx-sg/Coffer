@@ -79,13 +79,16 @@ coffer sync machines --rename studio    # 重命名本机
 每台机器在同步时登记自己（名称、平台、上次同步时间）；这份列表同样出现在
 桌面端的同步面板中。
 
-## 解决冲突
+## 冲突自动解决
 
-如果你在同步之前在两台机器上编辑了同一个资源/文件，同步运行会停在
-`conflicted` 状态，并且不会导入任何内容：
+如果你在同步之前在两台机器上编辑了同一个资源/文件，同步运行会把每个冲突
+路径自动解决为**最近同步**的那次编辑并直接完成——无需手动操作（两边都开着
+自动同步时，「最近同步」与「较新」一致）。极少数引擎无法
+处理的路径会让运行停在 `conflicted`，界面会指引你到自己的仓库（如
+GitHub）解决；CLI 兜底仍然可用：
 
 ```bash
-coffer sync status        # -> conflicted，列出相关路径
+coffer sync status        # -> conflicted，列出相关路径（罕见）
 coffer sync resolve --theirs resources/mcp_server/confluence.yaml   # 或 --ours，或编辑后用 --resolved
 coffer sync               # 完成
 ```
@@ -93,5 +96,5 @@ coffer sync               # 完成
 ## REST / 桌面端
 
 以上所有功能同样可通过 `/api/v1/sync/*` 使用，也可在桌面端的
-**Sync** 设置面板中操作（配置远程仓库、开关自动同步、查看状态、
-触发一次同步运行、解决冲突）。
+**Sync** 设置面板中操作（配置远程仓库——保存即校验、开关自动同步、
+查看带行动指引的状态、触发一次同步运行、跨机器比对 master key 指纹）。
