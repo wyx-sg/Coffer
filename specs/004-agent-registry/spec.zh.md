@@ -703,7 +703,7 @@ agent resource 本身正是其他 kind 的 agent 轴所指向的对象，而不�
 
 **Coffer MCP 安装**
 
-- **FR-019**: 用户 MUST 能一键把 Coffer 自己的 MCP server 安装到某个 agent。安装把一个 `coffer` stdio MCP-server 条目写进 agent 的 MCP 配置，按该 agent 清单中 `McpInjectionSpec` 声明的形态——`claude_code` 写 `~/.claude.json` 的 `mcpServers`；`codex` 写 `~/.codex/config.toml` 的 `[mcp_servers.coffer]`。`command` 设为 `coffer-mcp-shim` 二进制的绝对路径（先在 `PATH` 中解析，再查找当前解释器的脚本目录——这样即使守护进程的 `PATH` 不含 venv，也能找到装在 venv 里的 shim——最后回退到打包的二进制；环境变量 `COFFER_MCP_SHIM_PATH` 优先于以上全部）。若无法解析 shim，安装被拒绝且不写入任何内容。
+- **FR-019**: 用户 MUST 能一键把 Coffer 自己的 MCP server 安装到某个 agent。安装把一个 `coffer` stdio MCP-server 条目写进 agent 的 MCP 配置，按该 agent 清单中 `McpInjectionSpec` 声明的形态——`claude_code` 写 `~/.claude.json` 的 `mcpServers`；`codex` 写 `~/.codex/config.toml` 的 `[mcp_servers.coffer]`。`command` 设为 `coffer-mcp-shim` 二进制的绝对路径（先在 `PATH` 中解析，再查找当前解释器的脚本目录——这样即使守护进程的 `PATH` 不含 venv，也能找到装在 venv 里的 shim——最后回退到打包的二进制；环境变量 `COFFER_MCP_SHIM_PATH` 优先于以上全部）。安装还会把 `--agent <name>`（该 agent 的注册名）作为 shim 调用的参数写入——写在条目形态对应的参数位置（command-map 条目写 `args`，typed-array 条目追加到 `command` 数组）——使 gateway 能把会话归属到该 agent，用于 agent 轴的 scope 把关（2026-07-10 修订，[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.zh.md)；与 FR-043 的 hook 安装模式一致）。若无法解析 shim，安装被拒绝且不写入任何内容。
 - **FR-020**: 安装 MUST 幂等——重复安装就地更新已有的 `coffer` 条目，绝不产生重复。系统 MUST 暴露一个状态操作，报告该 agent 当前是否已安装 Coffer 的 MCP。
 - **FR-021**: 用户 MUST 能卸载 Coffer 的 MCP，从 agent 的 MCP 配置中移除 `coffer` 条目。未安装时卸载为空操作（no-op）成功。
 - **FR-022**: 安装与卸载 MUST 复用 FR-017 的原子写入 + `.bak` 机制，并写一条 audit 条目（`agent_mcp_installed` / `agent_mcp_uninstalled`）。
