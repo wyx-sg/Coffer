@@ -87,9 +87,7 @@ def install_runner(runner: str) -> str:
             stdin=subprocess.DEVNULL,
         )
     except subprocess.TimeoutExpired as e:
-        raise RunnerInstallFailed(
-            runner, f"timed out after {_INSTALL_TIMEOUT_SECONDS}s"
-        ) from e
+        raise RunnerInstallFailed(runner, f"timed out after {_INSTALL_TIMEOUT_SECONDS}s") from e
     if proc.returncode != 0:
         raise RunnerInstallFailed(runner, proc.stderr.strip()[-500:])
     return formula
