@@ -12,7 +12,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.importer import SyncImporter
 from coffer.domain.errors import ConfigValidationError
-from coffer.domain.resource import Kind
+from coffer.domain.resource import Kind, ResourceRef
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
@@ -29,6 +29,24 @@ from coffer.infrastructure.sync.workspace import Workspace
 
 class _Cfg(BaseModel):
     value: str = ""
+
+
+def _default_kinds() -> dict[str, Kind]:
+    return {"mcp_server": Kind(name="mcp_server", display_name="X", config_schema=_Cfg)}
+
+
+def _channel_kinds() -> dict[str, Kind]:
+    """A channel-like kind whose registration default is `{}` (dormant), not
+    `None` — the shape that exposed the importer's hardcoded-None bug (Fix 1)."""
+    return {
+        "channel": Kind(
+            name="channel",
+            display_name="Channel",
+            config_schema=_Cfg,
+            scope_axes=("machine",),
+            default_scope={},
+        )
+    }
 
 
 class _NoKeyring:
@@ -63,7 +81,7 @@ class _RecordingHook:
         return ["side-effect failed"] if self._fail else []
 
 
-async def _make(tmp_path: Path, *, gates=(), hooks=()):  # type: ignore[no-untyped-def]
+async def _make(tmp_path: Path, *, gates=(), hooks=(), kinds=None):  # type: ignore[no-untyped-def]
     db_path = tmp_path / "c.db"
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{db_path}")
     async with engine.begin() as conn:
@@ -71,7 +89,7 @@ async def _make(tmp_path: Path, *, gates=(), hooks=()):  # type: ignore[no-untyp
     sm = session_maker(engine)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     resources = ResourceService(
-        kinds={"mcp_server": Kind(name="mcp_server", display_name="X", config_schema=_Cfg)},
+        kinds=kinds if kinds is not None else _default_kinds(),
         repo=SqlAlchemyResourceRepo(sm),
         audit=audit,
     )
@@ -97,6 +115,40 @@ def _write_doc(ws_root: Path, name: str, value: str) -> None:
         f"kind: mcp_server\nname: {name}\n",
         encoding="utf-8",
     )
+
+
+_NO_SCOPE_KEY = object()  # sentinel: omit the "scope" key entirely (pre-v4 doc)
+
+
+def _write_channel_doc(
+    ws_root: Path,
+    name: str,
+    *,
+    scope: object = _NO_SCOPE_KEY,
+    value: str = "v1",
+) -> None:
+    """Hand-craft a `resources/channel/<name>.yaml` doc, with fine control over
+    whether the "scope" key is present at all (simulating a pre-v4 peer's doc,
+    which lacks the key entirely) vs. present-and-null vs. present-and-set."""
+    target = ws_root / "resources" / "channel"
+    target.mkdir(parents=True, exist_ok=True)
+    lines = [
+        "config:",
+        f"  value: {value}",
+        "description: null",
+        "enabled: true",
+        "kind: channel",
+        f"name: {name}",
+    ]
+    if scope is not _NO_SCOPE_KEY:
+        if scope is None:
+            lines.append("scope: null")
+        else:
+            assert isinstance(scope, dict)
+            lines.append("scope:")
+            for k, v in scope.items():
+                lines.append(f"  {k}: '{v}'")
+    (target / f"{name}.yaml").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 @pytest.mark.acceptance(
@@ -160,3 +212,70 @@ async def test_raising_hook_does_not_void_the_import(tmp_path) -> None:  # type:
     assert result.applied == 1
     assert {r.name for r in await resources.list()} == {"svc"}
     assert result.errors == ["reconcile[mcp_server]: hook blew up"]
+
+
+# ---------------------------------------------------------------------------
+# Scope reconciliation (Task 13 review Fix 1): a channel's Kind.default_scope
+# is `{}` (dormant), not None — the importer must never hardcode None as "the
+# fresh-register scope", and must tell an absent "scope" key (pre-v4 peer, no
+# opinion) apart from an explicit `scope: null` (an opinion: unscoped).
+# ---------------------------------------------------------------------------
+
+
+async def test_doc_without_scope_key_leaves_local_scope_untouched(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A pre-v4 doc (no "scope" key at all) imported over a locally-scoped
+    channel must NOT reset it — the doc has no opinion on scope. Resetting it
+    to None would flip the channel to active-everywhere, reintroducing the
+    double-adapter race ADR-043 exists to prevent."""
+    resources, _ws, importer = await _make(tmp_path, kinds=_channel_kinds())
+    await resources.register("channel", "tg", {"value": "v1"}, "test", allow_lifecycle_kind=True)
+    await resources.update_scope(ResourceRef("channel", "tg"), {"M-1": "*"}, actor="test")
+
+    _write_channel_doc(tmp_path / "ws", "tg", scope=_NO_SCOPE_KEY)
+    await importer.import_()
+
+    got = await resources.get(ResourceRef("channel", "tg"))
+    assert got.scope == {"M-1": "*"}
+
+
+async def test_doc_with_explicit_null_scope_overrides_local_scope(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """An explicit `scope: null` IS an opinion (unscoped) — unlike the
+    missing-key case above, it must win over the local value."""
+    resources, _ws, importer = await _make(tmp_path, kinds=_channel_kinds())
+    await resources.register("channel", "tg", {"value": "v1"}, "test", allow_lifecycle_kind=True)
+    await resources.update_scope(ResourceRef("channel", "tg"), {"M-1": "*"}, actor="test")
+
+    _write_channel_doc(tmp_path / "ws", "tg", scope=None)
+    await importer.import_()
+
+    got = await resources.get(ResourceRef("channel", "tg"))
+    assert got.scope is None
+
+
+async def test_fresh_register_applies_doc_scope_over_kind_default(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A resource that does not exist locally yet (register path) whose doc
+    carries an explicit scope must end up with THAT scope, not the kind's
+    registration default (`{}` for channel) — the importer must compare
+    against the just-created row's actual scope, never a hardcoded None."""
+    resources, _ws, importer = await _make(tmp_path, kinds=_channel_kinds())
+    _write_channel_doc(tmp_path / "ws", "fresh", scope={"M-1": "*"})
+
+    result = await importer.import_()
+
+    assert result.quarantined_refs == []
+    got = await resources.get(ResourceRef("channel", "fresh"))
+    assert got.scope == {"M-1": "*"}
+
+
+async def test_fresh_register_explicit_null_overrides_kind_dormant_default(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A fresh register whose doc has an explicit `scope: null` ends up
+    unscoped (None) — the exporting machine had an explicit opinion that
+    overrides the kind's own dormant registration default."""
+    resources, _ws, importer = await _make(tmp_path, kinds=_channel_kinds())
+    _write_channel_doc(tmp_path / "ws", "fresh", scope=None)
+
+    result = await importer.import_()
+
+    assert result.quarantined_refs == []
+    got = await resources.get(ResourceRef("channel", "fresh"))
+    assert got.scope is None

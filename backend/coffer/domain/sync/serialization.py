@@ -36,6 +36,17 @@ class ResourceDoc:
     # doc verbatim — it holds machine ULIDs / agent names, never paths, so it
     # is exempt from ${HOME} normalization and per-machine override stripping.
     scope: dict[str, Any] | None
+    # Whether the "scope" key was present in the source document at all.
+    # v4+ writers always emit it (see resource_to_doc), so this is True for
+    # every doc this process writes. A pre-v4 peer's doc lacks the key
+    # entirely — that is a DIFFERENT thing from an explicit `scope: null`
+    # (an active opinion that the resource is unscoped/dormant): the v3 doc
+    # simply has no opinion on scope at all. Importer reconciliation must
+    # treat "absent" as "leave local scope alone" and "explicit null" as "set
+    # it to None" — conflating the two would let an old peer's doc silently
+    # flip a locally-scoped channel to active-everywhere on import,
+    # reintroducing the double-adapter race ADR-043 exists to prevent.
+    scope_present: bool = True
 
 
 def resource_to_doc(
@@ -75,7 +86,11 @@ def parse_resource_doc(data: Mapping[str, Any]) -> ResourceDoc:
     enabled = data["enabled"]
     config = data["config"]
     # Absent key (a v3 workspace doc, pre-Task-6) tolerates to None — never a
-    # hard failure, so old-schema docs still import cleanly.
+    # hard failure, so old-schema docs still import cleanly. `scope_present`
+    # distinguishes that "no opinion" case from an explicit `scope: null`
+    # (see ResourceDoc.scope_present docstring above) — the importer relies
+    # on this to decide whether to touch local scope at all.
+    scope_present = "scope" in data
     scope = data.get("scope")
     if not isinstance(kind, str) or not kind:
         raise SyncSerializationError("'kind' must be a non-empty string")
@@ -99,4 +114,5 @@ def parse_resource_doc(data: Mapping[str, Any]) -> ResourceDoc:
         enabled=enabled,
         config=dict(config),
         scope=dict(scope) if scope is not None else None,
+        scope_present=scope_present,
     )

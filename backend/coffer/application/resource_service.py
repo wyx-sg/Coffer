@@ -218,7 +218,10 @@ class ResourceService:
                 updated_at=now,
                 # Kind-supplied registration default (ADR-045 amendment); None
                 # for every kind that doesn't set one (unscoped, unchanged).
-                scope=kind_def.default_scope,
+                # Copied (not the kind's own dict) so no two registrations —
+                # or a caller mutating a returned Resource's .scope in place —
+                # ever alias the same shared-mutable default.
+                scope=dict(kind_def.default_scope) if kind_def.default_scope is not None else None,
             )
         )
         await self._audit.record(

@@ -59,7 +59,10 @@ def test_round_trip_preserves_scope() -> None:
 
 def test_parse_tolerates_missing_scope_key() -> None:
     # Backward tolerance: a v3 workspace doc has no "scope" key at all — it
-    # must still parse cleanly, with scope defaulting to None.
+    # must still parse cleanly, with scope defaulting to None AND
+    # scope_present False (distinct from an explicit `scope: null`, which
+    # is also None but scope_present True — the importer relies on telling
+    # these apart).
     parsed = parse_resource_doc(
         {
             "kind": "mcp_server",
@@ -70,6 +73,33 @@ def test_parse_tolerates_missing_scope_key() -> None:
         }
     )
     assert parsed.scope is None
+    assert parsed.scope_present is False
+
+
+def test_parse_marks_scope_present_for_explicit_null() -> None:
+    # An explicit `scope: null` is an OPINION (unscoped) — unlike the
+    # missing-key case above, scope_present must be True here.
+    parsed = parse_resource_doc(
+        {
+            "kind": "channel",
+            "name": "x",
+            "description": None,
+            "enabled": True,
+            "config": {},
+            "scope": None,
+        }
+    )
+    assert parsed.scope is None
+    assert parsed.scope_present is True
+
+
+def test_resource_to_doc_output_always_parses_scope_present() -> None:
+    # v4+ writers always emit the "scope" key (resource_to_doc's contract),
+    # so anything round-tripped through it must parse as scope_present=True.
+    doc = resource_to_doc(
+        kind="channel", name="tg", description=None, enabled=True, config={}, scope=None
+    )
+    assert parse_resource_doc(doc).scope_present is True
 
 
 def test_config_is_copied_not_aliased() -> None:
