@@ -5,31 +5,25 @@
 // — the kind-agnostic useEnableResource / useDisableResource / useDeleteResource
 // mutations (useResourceMutations.ts) invalidate it for free. The
 // channel-specific operations (status, pairing) live under a "channels" key.
+// Scope (ADR-045) rides the framework-level useResourceScope /
+// useUpdateResourceScope (useScope.ts, Task 16) instead — useChannelScope /
+// useUpdateChannelScope are thin kind-bound wrappers kept for call-site
+// ergonomics (ChannelMachineCard, AddChannelDialog).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
-import {
-  getChannelScope,
-  getChannelStatus,
-  issuePairingCode,
-  notifyChannel,
-  updateChannelScope,
-  type ChannelScopeValue,
-} from "@/lib/api/channels";
+import { getChannelStatus, issuePairingCode, notifyChannel } from "@/lib/api/channels";
 import { applyChannelEdit } from "@/kinds/channel/editChannel";
 import type { ChannelPlan } from "@/kinds/channel/schema";
 import { useResources } from "@/lib/hooks/useResources";
+import { useResourceScope, useUpdateResourceScope } from "@/lib/hooks/useScope";
 import { useToast } from "@/components/ui/toast";
 
 export const CHANNEL_KIND = "channel";
 
 export function channelStatusKey(name: string) {
   return ["channels", name, "status"] as const;
-}
-
-export function channelScopeKey(name: string) {
-  return ["channels", name, "scope"] as const;
 }
 
 /** List channel resources (name, config, enabled) via the generic resources API. */
@@ -92,28 +86,18 @@ export function useUpdateChannel() {
 /**
  * A channel's machine-activation scope (ADR-045) — which single machine (if
  * any) the channel's runtime is bound to. Supersedes `config.runs_on`; the
- * ChannelMachineCard reads this instead of the resource's config.
+ * ChannelMachineCard reads this instead of the resource's config. Channels
+ * only ever use the "machine" axis, with values always `"*"` (see
+ * `ChannelScopeValue` in `lib/api/channels.ts`) — a `Scope` value from the
+ * generic hook is a superset that's always structurally compatible.
  */
 export function useChannelScope(name: string) {
-  return useQuery({
-    queryKey: channelScopeKey(name),
-    queryFn: () => getChannelScope(name),
-    enabled: name.length > 0,
-  });
+  return useResourceScope(CHANNEL_KIND, name);
 }
 
 /** Bind the channel to exactly one machine (or `{}` to unbind/dormant). */
 export function useUpdateChannelScope(name: string) {
-  const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: (scope: ChannelScopeValue) => updateChannelScope(name, scope),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: channelScopeKey(name) });
-    },
-    onError: (error) => toast.error(translateApiError(t, error)),
-  });
+  return useUpdateResourceScope(CHANNEL_KIND, name);
 }
 
 /** Push a test message to the channel's paired peer (notify capability). */
