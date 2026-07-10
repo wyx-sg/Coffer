@@ -77,14 +77,19 @@ def install_runner(runner: str) -> str:
     if entry is None or shutil.which("brew") is None:
         raise RunnerInstallUnsupported(runner)
     _display, formula = entry
-    proc = subprocess.run(
-        ["brew", "install", formula],
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=_INSTALL_TIMEOUT_SECONDS,
-        stdin=subprocess.DEVNULL,
-    )
+    try:
+        proc = subprocess.run(
+            ["brew", "install", formula],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=_INSTALL_TIMEOUT_SECONDS,
+            stdin=subprocess.DEVNULL,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise RunnerInstallFailed(
+            runner, f"timed out after {_INSTALL_TIMEOUT_SECONDS}s"
+        ) from e
     if proc.returncode != 0:
         raise RunnerInstallFailed(runner, proc.stderr.strip()[-500:])
     return formula

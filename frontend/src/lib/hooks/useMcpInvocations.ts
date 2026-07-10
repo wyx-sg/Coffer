@@ -1,7 +1,9 @@
 // frontend/src/lib/hooks/useMcpInvocations.ts
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { getApiClient } from "@/lib/api/client";
-import { ApiError, throwApiError } from "@/lib/api/errors";
+import { ApiError, throwApiError, translateApiError } from "@/lib/api/errors";
+import { useToast } from "@/components/ui/toast";
 import type { components } from "@/lib/api/types";
 
 type InvocationListOut = components["schemas"]["InvocationListOut"];
@@ -59,6 +61,8 @@ export function useMcpServerRunner(serverName: string) {
 
 export function useInstallMcpRunner() {
   const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
   return useMutation({
     mutationFn: async (serverName: string) => {
       const client = getApiClient();
@@ -72,6 +76,9 @@ export function useInstallMcpRunner() {
       void qc.invalidateQueries({ queryKey: ["mcp", "runner", serverName] });
       void qc.invalidateQueries({ queryKey: ["mcp", "status", serverName] });
     },
+    // A failed brew run carries its stderr tail in the error message — it
+    // must reach the user, not vanish into a button flip (review #294).
+    onError: (error) => toast.error(translateApiError(t, error)),
   });
 }
 

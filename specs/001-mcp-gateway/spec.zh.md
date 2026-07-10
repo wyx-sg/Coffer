@@ -323,7 +323,7 @@ coffer__search_tools(query: string [required], top_k?: int = 5, max 20)
 
 - **Given** 一个 stdio server（例如从另一台机器同步而来），其启动器命令在本机无法解析,
 - **When** 读取该 server 的状态,
-- **Then** 它报告「本机未安装 <runner>」而不是一个没有原因的异常状态；当该 runner 属于允许清单中的自拉取启动器时，一键安装执行固定的 runner→Homebrew 映射并记录审计（FR-019）。
+- **Then** 它报告「本机未安装 `<runner>`」而不是一个没有原因的异常状态；当该 runner 属于允许清单中的自拉取启动器时，一键安装执行固定的 runner→Homebrew 映射并记录审计（FR-019）。
 
 ## Requirements
 
@@ -370,7 +370,9 @@ coffer__search_tools(query: string [required], top_k?: int = 5, max 20)
 
 **缺失启动器（2026-07-10 修订，多机）**
 
-- **FR-019**: 一个 stdio server 的启动器命令在本机无法解析时（同步来的 server 引用了 `uvx` 而本机没装 `uv`），MUST 在 server 状态中明确显示「本机未安装 <runner>」，而不是一个没有原因的「异常」。当该 runner 属于允许清单中的自拉取启动器（`uvx`/`uv`、`npx`/`node`、`bunx`/`bun`）时，UI MUST 提供一键安装，执行**固定的** runner→Homebrew 映射（绝不执行来自 server 配置的任意命令；实际的 MCP 包由启动器首次运行时自行拉取），审计为 `mcp_runner_installed`。其他缺失命令只报告、不提供安装按钮。
+- **FR-019**: 一个 stdio server 的启动器命令在本机无法解析时（同步来的 server 引用了 `uvx` 而本机没装 `uv`），MUST 在 server 状态中明确显示「本机未安装 `<runner>`」，而不是一个没有原因的「异常」。当该 runner 属于允许清单中的自拉取启动器（`uvx`/`uv`、`npx`/`node`、`bunx`/`bun`）时，UI MUST 提供一键安装，执行**固定的** runner→Homebrew 映射（绝不执行来自 server 配置的任意命令；实际的 MCP 包由启动器首次运行时自行拉取），审计为 `mcp_runner_installed`。其他缺失命令只报告、不提供安装按钮。
+
+### Key Entities
 
 - **Resource**: coffer 内由用户管理的实体，按 `(kind, name)` 标识。本 spec 注册一个 kind: `mcp_server`。每个 resource 携带 kind 特定的配置、enabled 标记、描述以及时间戳。框架本身是 kind-agnostic 的，后续 spec 可在不重新建模的前提下加入新 kind。
 - **MCP Server** (kind 为 `mcp_server` 的 resource): 一台上游 MCP 服务器的配置——传输方式（stdio 命令行 或 HTTP URL）、凭据引用，以及每服务器的策略 (auto-enable, timeouts)。

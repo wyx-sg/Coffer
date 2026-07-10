@@ -139,7 +139,7 @@ async def get_server_status(
     resource = await resource_service.get(ResourceRef("mcp_server", name))
     # A stdio launcher that does not resolve on THIS machine (synced server,
     # runner not installed here) — surfaced with a one-click install.
-    runner = _missing_runner_of(resource)
+    runner = await asyncio.to_thread(_missing_runner_of, resource)
     installable = runner is not None and runner_installable(runner)
 
     # T7: prefer the persisted health state written by POST /test
