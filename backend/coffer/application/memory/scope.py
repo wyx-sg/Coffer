@@ -37,6 +37,8 @@ StoreDirFn = Callable[[str], "Path"]
 RecordRootFn = Callable[[str, str], Awaitable[None]]
 #: One-time adoption of a legacy (path-derived) store under the portable id.
 MigrateStoreFn = Callable[[str, str, str], Awaitable[None]]
+#: FR-058: the surviving store name for a merged-away project identity (or None).
+AliasTargetFn = Callable[[str], Awaitable["str | None"]]
 
 
 def project_store_name(project_id: str) -> str:
@@ -70,6 +72,7 @@ class ScopeResolver:
         record_project_root: RecordRootFn | None = None,
         legacy_project_ulid: ProjectUlidFn | None = None,
         migrate_store: MigrateStoreFn | None = None,
+        merged_alias_target: AliasTargetFn | None = None,
     ) -> None:
         self._resources = resources
         self._git_root = git_root
@@ -77,6 +80,7 @@ class ScopeResolver:
         self._store_dir = store_dir
         self._legacy_project_ulid = legacy_project_ulid
         self._migrate_store = migrate_store
+        self._merged_alias_target = merged_alias_target
         # Optional persistence hook: when a project store is provisioned, record
         # its originating git-root so the surface can echo it back (finding #10).
         self._record_project_root = record_project_root
@@ -112,6 +116,7 @@ class ScopeResolver:
         if root is None:
             raise ScopeUnresolved(cwd)
         project_id = self._project_ulid(str(root))
+        project_id = await self._maybe_redirect_merged(project_id)
         store_name = project_store_name(project_id)
         await self._maybe_migrate_legacy(str(root), project_id)
         await self._ensure_store(store_name)
@@ -122,6 +127,24 @@ class ScopeResolver:
             project_id=project_id,
             store_dir=self._store_dir(project_id),
         )
+
+    async def _maybe_redirect_merged(self, project_id: str) -> str:
+        """FR-058: a merged-away identity resolves to its surviving store.
+
+        Consulted only on a MISS — when the computed identity's own store
+        still exists the hot path is untouched. Returns the (possibly
+        redirected) project id."""
+        if self._merged_alias_target is None:
+            return project_id
+        try:
+            await self._resources.get(ResourceRef(KIND_MEMORY, project_store_name(project_id)))
+            return project_id  # the store exists — no redirect
+        except ResourceNotFound:
+            pass
+        target = await self._merged_alias_target(project_id)
+        if target is None or not is_valid_store_name(target) or target == GLOBAL_STORE_NAME:
+            return project_id
+        return target[len("project-") :]
 
     async def _maybe_migrate_legacy(self, root: str, project_id: str) -> None:
         """Adopt a surviving pre-portable-identity store: same repo, old

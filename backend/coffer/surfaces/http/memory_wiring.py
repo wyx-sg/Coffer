@@ -22,7 +22,7 @@ from coffer.application.knowledge.retrieval import (
     no_embedding,
 )
 from coffer.application.memory.builtin_tools import register_memory_builtin_tools
-from coffer.application.memory.consolidate import StoreConsolidator
+from coffer.application.memory.consolidate import StoreConsolidator, find_alias_holder
 from coffer.application.memory.handoff import HandoffService
 from coffer.application.memory.journal import JournalService
 from coffer.application.memory.kind import make_memory_kind
@@ -48,6 +48,7 @@ from coffer.surfaces.http.memory.dependencies import (
     set_project_root_repo,
     set_store_label_repo,
 )
+from coffer.surfaces.http.memory.merge_state import set_store_consolidator
 from coffer.surfaces.http.wiring import build_substrate
 
 if TYPE_CHECKING:
@@ -86,10 +87,18 @@ def wire_memory_kind(
         project_ulid=project_identity,
     )
 
+    # Shared with the explicit AI-assisted merge (FR-057) so merge + adoption
+    # serialize on the same lock; wire_merge picks it up at its own root.
+    set_store_consolidator(adopter)
+
     async def migrate_store(legacy_id: str, new_id: str, root: str) -> None:
         from coffer.application.memory.scope import project_store_name
 
         await adopter.adopt(project_store_name(legacy_id), project_store_name(new_id), root)
+
+    async def merged_alias_target(project_id: str) -> str | None:
+        """FR-058: the store whose ``merged_identities`` lists this identity."""
+        return await find_alias_holder(resource_svc, project_id)
 
     scope = ScopeResolver(
         resources=resource_svc,
@@ -99,6 +108,7 @@ def wire_memory_kind(
         record_project_root=project_roots.set,
         legacy_project_ulid=project_ulid,
         migrate_store=migrate_store,
+        merged_alias_target=merged_alias_target,
     )
     memory_service = MemoryService(
         resource_service=resource_svc,

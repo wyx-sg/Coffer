@@ -1161,6 +1161,27 @@
       "placeholder": "例如：我的研究笔记",
       "clear": "清除名字"
     },
+    "merge": {
+      "action": "查找重复库（AI）",
+      "title": "合并重复的记忆库",
+      "description": "Coffer 的内部引擎会判断两个项目库是否描述同一个项目。合并是增量式的——journal 条目自动去重，同名文件两份都保留，任何内容都不会丢失。",
+      "scanning": "正在扫描记忆库…",
+      "noCandidates": "未发现可合并的库。",
+      "noModelHint": "未配置内部引擎，因此只显示可证明的重复（git remote 一致）。到 设置 → LLM 连接 配置后即可判断其余组合。",
+      "judgedByRemote": "由 origin remote 一致证明",
+      "judgedByEngine": "由内部引擎判断",
+      "factCount": "{{count}} 条事实",
+      "swap": "交换方向",
+      "merge": "合并",
+      "merging": "合并中…",
+      "truncated": "一次扫描的组合太多——先合并一部分再重新扫描。",
+      "confidence": {
+        "certain": "确定",
+        "high": "高",
+        "medium": "中",
+        "low": "低"
+      }
+    },
     "modes": {
       "grep": "Grep",
       "keyword": "关键词",
