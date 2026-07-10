@@ -138,3 +138,20 @@ class Kind:
     # rejected. ``("machine",)`` allows only per-machine on/off; ``("machine",
     # "agent")`` additionally allows narrowing to specific agents per machine.
     scope_axes: tuple[str, ...] = ()
+    # Optional post-write hook for ``ResourceService.update_scope`` (ADR-045,
+    # Task 11 Fix 2). Receives the ref whose scope just changed; invoked AFTER
+    # persistence + audit (unlike ``on_update_config``, which runs BEFORE —
+    # scope reconciliation needs to read the already-persisted scope), so it
+    # cannot reject the edit, only react to it. Sync or async; the service
+    # awaits an Awaitable. Kind-level side effect that keeps delivery/reclaim
+    # in step with a LOCAL scope edit — the sync import path already re-runs
+    # this reconciliation via its own post-import hooks; this is the front-door
+    # equivalent so a user editing scope in the UI/CLI sees it applied
+    # immediately instead of waiting on an unrelated trigger.
+    on_scope_changed: (
+        Callable[
+            [ResourceRef],
+            Awaitable[None] | None,
+        ]
+        | None
+    ) = None

@@ -651,6 +651,7 @@
     "UNMANAGED_SKILL_NOT_FOUND": "Unmanaged skill not found",
     "UNMANAGED_SKILL_INVALID": "That skill folder isn't a valid skill",
     "SKILL_INVALID": "The skill is invalid",
+    "SKILL_OUT_OF_SCOPE": "This skill isn't in scope for this agent on this machine",
     "TARGET_CONFLICT": "A skill already exists at the target location",
     "KB_NOT_FOUND": "Knowledge base not found",
     "DOCUMENT_NOT_FOUND": "Document not found",

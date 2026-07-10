@@ -349,6 +349,14 @@ class ResourceService:
             # is audited verbatim (no redactor needed, unlike config).
             details={"scope": scope},
         )
+        # Kind-level reconciliation (Task 11 Fix 2): runs AFTER persistence +
+        # audit, unlike ``on_update_config`` — by the time this fires the new
+        # scope is already the row's scope, so a hook re-reading the resource
+        # (e.g. skill delivery reconciliation) sees the edit that triggered it.
+        if kind_def.on_scope_changed is not None:
+            hook_result = kind_def.on_scope_changed(ref)
+            if inspect.isawaitable(hook_result):
+                await hook_result
         self._notify_change()
         return updated
 

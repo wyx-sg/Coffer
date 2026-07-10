@@ -22,6 +22,7 @@ from coffer.application.skill.delivery_ops import (
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import CofferError, ResourceAlreadyExists
 from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.scope import agent_in_scope, machine_in_scope
 from coffer.domain.skill.binding import LinkMode
 from coffer.domain.skill.config import SkillConfig
 from coffer.domain.skill.source import LocalImportSource
@@ -213,6 +214,17 @@ async def relink_agent_skills(*, service: SkillService, agent_name: str, actor: 
     repointing the binding row. Without this, changing an agent's config_dir
     orphaned the old links and left the new dir empty while verify reported
     no drift.
+
+    ADR-045 hard grant (Task 11): a config_dir change must not resurrect a
+    link that scope no longer grants. If the agent itself is out of scope on
+    this machine, the whole run is a no-op — mirrors
+    ``apply_follow_for_agent``'s early-out (its config dir may not even exist
+    here). Per binding, a skill that has fallen out of (machine, agent) scope
+    has its old link torn down like any other, but the new-location link is
+    NOT recreated — the binding row is left untouched (not deleted); reclaim
+    (disabling the row) is ``apply_follow_for_agent``'s job, not this hook's.
+    No machine-id provider wired → no scope filtering at all (legacy
+    relink-everything contract, same as the rest of the skill module).
     """
     try:
         agent = await service._rs.get(ResourceRef("agent", agent_name))
@@ -223,6 +235,10 @@ async def relink_agent_skills(*, service: SkillService, agent_name: str, actor: 
     # reconciliation. FOLDER and EXTERNAL_DIR agents relink via their resolved
     # target dir.
     if not delivers_skill_folders(service, agent):
+        return
+    local = await service._local_machine_id()
+    if local is not None and not machine_in_scope(agent.scope, local):
+        # The agent itself isn't in scope on this machine — touch nothing.
         return
     new_skill_dir = service._resolve_agent_skill_dir(agent)
     skills_by_id = {s.id: s for s in await service._rs.list(kind="skill")}
@@ -238,6 +254,13 @@ async def relink_agent_skills(*, service: SkillService, agent_name: str, actor: 
             with contextlib.suppress(OSError):
                 service._sync.remove_directory_link(old_path, link_mode=b.link_mode)
         if not b.enabled:
+            continue
+        if local is not None and not (
+            machine_in_scope(skill.scope, local) and agent_in_scope(skill.scope, local, agent_name)
+        ):
+            # Out of scope at the new location — do not resurrect the link.
+            # The row keeps its (now stale) enabled/last_link_path until a
+            # follow run reclaims it; we only refuse to recreate here.
             continue
         master = service._store.paths_for(skill.name).folder
         try:

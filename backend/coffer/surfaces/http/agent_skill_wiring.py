@@ -146,6 +146,28 @@ def wire_agent_and_skill_kinds(
     async def _agent_on_skill_policy_changed(agent_name: str) -> None:
         await skill_svc.apply_follow_for_agent(agent_name, actor="system")
 
+    # actor="sync": delivery failures surface in the run's errors (retried on
+    # every import) instead of growing the audit log unboundedly. Reused below
+    # both by the sync post-import hook AND the skill kind's on_scope_changed
+    # hook (Task 11 Fix 2) — same reconciliation, two different triggers.
+    async def _sync_skill_reconcile(agent_name: str) -> list[str]:
+        return await skill_svc.apply_follow_for_agent(agent_name, actor="sync")
+
+    # `on_scope_changed` for the AGENT kind (ADR-045 / Task 11 Fix 2): a scope
+    # edit on the agent itself re-runs its own follow reconciliation, exactly
+    # like a skill-policy change — an agent scoped out reclaims every
+    # delivered skill immediately; scoped back in, it's redelivered.
+    async def _agent_on_scope_changed(ref: ResourceRef) -> None:
+        await _agent_on_skill_policy_changed(ref.name)
+
+    # `on_scope_changed` for the SKILL kind (ADR-045 / Task 11 Fix 2): a
+    # skill's scope edit can gain or lose any agent, so every registered
+    # agent's delivery is re-reconciled — the same per-agent reconciliation
+    # the sync post-import hook uses (``_sync_skill_reconcile`` above).
+    async def _skill_on_scope_changed(ref: ResourceRef) -> None:
+        for row in await resource_svc.list(kind="agent"):
+            await _sync_skill_reconcile(row.name)
+
     # Config-file view/edit + one-click Coffer-MCP install (spec 004 v2). The
     # AgentService needs it too (Slice 6 disable_native_memory writes the on-disk
     # transform alongside the persisted field).
@@ -217,8 +239,12 @@ def wire_agent_and_skill_kinds(
         # implementation would race the row delete and find nothing to clean.
         await skill_svc.cleanup_bindings_for_agent(ref)
 
-    agent_kind = make_agent_kind(on_delete=_agent_on_delete)
-    skill_kind = make_skill_kind(skill_svc.cleanup_bindings_for_skill)
+    agent_kind = make_agent_kind(
+        on_delete=_agent_on_delete, on_scope_changed=_agent_on_scope_changed
+    )
+    skill_kind = make_skill_kind(
+        skill_svc.cleanup_bindings_for_skill, on_scope_changed=_skill_on_scope_changed
+    )
 
     app.state.kinds["agent"] = agent_kind
     app.state.kinds["skill"] = skill_kind
@@ -236,11 +262,6 @@ def wire_agent_and_skill_kinds(
     if hooks is None:
         hooks = []
         app.state.sync_post_import_hooks = hooks
-
-    # actor="sync": delivery failures surface in the run's errors (retried on
-    # every import) instead of growing the audit log unboundedly.
-    async def _sync_skill_reconcile(agent_name: str) -> list[str]:
-        return await skill_svc.apply_follow_for_agent(agent_name, actor="sync")
 
     hooks.append(
         AgentSideEffectsReconcile(

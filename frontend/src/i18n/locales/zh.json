@@ -651,6 +651,7 @@
     "UNMANAGED_SKILL_NOT_FOUND": "未找到该未纳管技能",
     "UNMANAGED_SKILL_INVALID": "该技能目录不是有效的技能",
     "SKILL_INVALID": "该技能无效",
+    "SKILL_OUT_OF_SCOPE": "该技能在此机器上不在此 agent 的作用范围内",
     "TARGET_CONFLICT": "目标位置已存在一个技能",
     "KB_NOT_FOUND": "未找到知识库",
     "DOCUMENT_NOT_FOUND": "未找到文档",
