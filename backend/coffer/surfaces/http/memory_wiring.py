@@ -26,6 +26,7 @@ from coffer.application.memory.consolidate import StoreConsolidator
 from coffer.application.memory.handoff import HandoffService
 from coffer.application.memory.journal import JournalService
 from coffer.application.memory.kind import make_memory_kind
+from coffer.application.memory.labels_sync import MemoryLabelsSyncState
 from coffer.application.memory.scope import GLOBAL_STORE_NAME, ScopeResolver
 from coffer.application.memory.service import MemoryService
 from coffer.application.memory.stores import build_store_ref_for
@@ -129,6 +130,13 @@ def wire_memory_kind(
     set_journal_service(journal_service)
     app.state.kinds["memory"] = make_memory_kind(memory_service)
     set_memory_service(memory_service)
+    # Store labels sync as a state area (spec 010 x FR-017c): a labelled
+    # project store reads by its name on every machine, not "unnamed store".
+    providers = getattr(app.state, "sync_state_providers", None)
+    if providers is None:
+        providers = []
+        app.state.sync_state_providers = providers
+    providers.append(MemoryLabelsSyncState(label_repo))
     register_memory_builtin_tools(
         builtin_tools, memory_service=memory_service, handoff_service=handoff_service
     )
