@@ -16,7 +16,13 @@ from coffer.domain.resource import Resource
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 
 
-def _resource(kind: str, name: str, config: dict) -> Resource:  # type: ignore[type-arg]
+def _resource(
+    kind: str,
+    name: str,
+    config: dict,
+    *,
+    scope: dict | None = None,  # type: ignore[type-arg]
+) -> Resource:
     now = datetime.now(tz=UTC)
     return Resource(
         id=1,
@@ -27,7 +33,17 @@ def _resource(kind: str, name: str, config: dict) -> Resource:  # type: ignore[t
         config=config,
         created_at=now,
         updated_at=now,
+        scope=scope,
     )
+
+
+def _fixed_machine_id(value: str):  # type: ignore[no-untyped-def]
+    """A stub ADR-045 machine-id provider resolving to a constant id."""
+
+    async def _get() -> str:
+        return value
+
+    return _get
 
 
 class _Rows:
@@ -182,3 +198,106 @@ async def test_provider_hook_double_active_is_deterministic(tmp_path) -> None:  
         assert any("multiple active connections" in e for e in errors)
         helper = json.loads(settings.read_text())["apiKeyHelper"]
         assert "acme" in helper and "zeta" not in helper
+
+
+@pytest.mark.acceptance(
+    spec="004-agent-registry",
+    scenario="an agent scoped to machine A causes no quarantine noise on machine B",
+)
+async def test_agent_gate_skips_out_of_scope_machine_no_quarantine(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Spec 004 amendment: an agent doc scoped to another machine imports
+    WITHOUT quarantine even though its config dir does not exist HERE — the
+    row upserts dormant instead of raising."""
+    gate = AgentImportGate(machine_id=_fixed_machine_id("machine-A"))
+    missing = tmp_path / "missing"
+    await gate.validate(
+        {"type": "claude_code", "config_dir": str(missing)},
+        scope={"machine-B": "*"},
+    )
+    assert not missing.exists()
+
+
+async def test_agent_gate_in_scope_missing_dir_still_quarantines(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Fallback preserved: the dir check still applies to an IN-scope agent
+    (explicit scope naming this machine, or unscoped/None)."""
+    from coffer.domain.error_base import CofferError
+
+    gate = AgentImportGate(machine_id=_fixed_machine_id("machine-A"))
+    missing = tmp_path / "missing"
+    with pytest.raises(CofferError):
+        await gate.validate(
+            {"type": "claude_code", "config_dir": str(missing)},
+            scope={"machine-A": "*"},
+        )
+    with pytest.raises(CofferError):
+        # Unscoped (no `scope` kwarg at all, default None) is in scope everywhere.
+        await gate.validate({"type": "claude_code", "config_dir": str(missing)})
+
+
+async def test_agent_side_effects_reconcile_skips_out_of_scope_agent(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """An agent scoped to another machine is skipped silently — no error, no
+    native-memory disk write, and no skill-delivery reconciliation call (Task
+    11's apply_follow_for_agent already no-ops for it too; this reconcile-level
+    skip additionally avoids the native-memory write it doesn't cover)."""
+    agent = _resource(
+        "agent",
+        "remote-claude",
+        {
+            "type": "claude_code",
+            "config_dir": str(tmp_path / "missing"),
+            "disable_native_memory": True,
+        },
+        scope={"machine-B": "*"},
+    )
+    policy_calls: list[str] = []
+
+    async def _on_skill_policy_changed(name: str) -> list[str]:
+        policy_calls.append(name)
+        return []
+
+    hook = AgentSideEffectsReconcile(
+        _Rows([agent]),  # type: ignore[arg-type]
+        ConfigFileStore(),
+        on_skill_policy_changed=_on_skill_policy_changed,
+        machine_id=_fixed_machine_id("machine-A"),
+    )
+    errors = await hook.reconcile()
+    assert errors == []
+    assert policy_calls == []
+    assert not (tmp_path / "missing").exists()
+
+
+async def test_provider_projection_reconcile_skips_out_of_scope_agent(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """ProviderProjectionReconcile excludes an out-of-scope agent from its
+    agents list — it never receives the projection write, even though an
+    in-scope agent of the same type does."""
+    in_scope_dir = tmp_path / "in_scope" / ".claude"
+    out_scope_dir = tmp_path / "out_scope" / ".claude"
+    (in_scope_dir / "skills").mkdir(parents=True)
+    (out_scope_dir / "skills").mkdir(parents=True)
+    in_scope_agent = _resource(
+        "agent",
+        "claude-in",
+        {"type": "claude_code", "config_dir": str(in_scope_dir)},
+        scope={"machine-A": "*"},
+    )
+    out_scope_agent = _resource(
+        "agent",
+        "claude-out",
+        {"type": "claude_code", "config_dir": str(out_scope_dir)},
+        scope={"machine-B": "*"},
+    )
+    projector = ProviderProjector(ConfigFileStore())
+    hook = ProviderProjectionReconcile(
+        providers=_Rows([_provider("acme", is_active=True)]),
+        agents=_Rows([in_scope_agent, out_scope_agent]),
+        projector=projector,
+        machine_id=_fixed_machine_id("machine-A"),
+    )
+
+    assert await hook.reconcile() == []
+
+    in_settings = in_scope_dir / "settings.json"
+    out_settings = out_scope_dir / "settings.json"
+    assert "apiKeyHelper" in json.loads(in_settings.read_text())
+    assert not out_settings.exists()

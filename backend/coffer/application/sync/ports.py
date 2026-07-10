@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Protocol
+from typing import Any, Protocol
 
 from coffer.domain.sync.manifest import Manifest
 from coffer.domain.sync.models import MachineEntry, MachineIdentity, Tombstone
@@ -73,11 +73,19 @@ class ImportGate(Protocol):
     """Per-kind validation the importing machine runs BEFORE upserting a doc
     (spec 010 import reconciliation). Raise ``CofferError`` to quarantine the
     doc — it retries every run and clears once this machine satisfies it
-    (e.g. the agent's config dir exists here)."""
+    (e.g. the agent's config dir exists here).
+
+    ``scope`` is the doc's ADR-045 machine x agent activation scope (spec 004
+    amendment): a gate that is scope-aware can pass a doc scoped to another
+    machine through untouched (row upserts dormant) instead of quarantining
+    on a machine-local precondition that is meaningless there. Optional
+    keyword so existing gates that ignore scope keep working unchanged."""
 
     kind: str
 
-    async def validate(self, config: Mapping[str, object]) -> None: ...
+    async def validate(
+        self, config: Mapping[str, object], *, scope: dict[str, Any] | None = None
+    ) -> None: ...
 
 
 class PostImportHook(Protocol):

@@ -45,7 +45,7 @@ class _NoKeyring:
 class _RejectMarkedGate:
     kind = "mcp_server"
 
-    async def validate(self, config: Mapping[str, object]) -> None:
+    async def validate(self, config: Mapping[str, object], *, scope: dict | None = None) -> None:
         if config.get("value") == "not-installable-here":
             raise ConfigValidationError("machine-local precondition failed")
 

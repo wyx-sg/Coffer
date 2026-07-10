@@ -253,11 +253,15 @@ def wire_agent_and_skill_kinds(
     # agent is installed (gate → quarantine otherwise), and imported rows
     # re-apply their on-disk side-effects (native-memory transform, skill
     # delivery) after every sync import. start_sync reads these registries.
+    # ADR-045 machine axis (spec 004 amendment, Task 12): both are wired with
+    # the same `_local_machine_id` as skill_svc above, so an agent doc scoped
+    # to a DIFFERENT machine is recognized as dormant here — no quarantine
+    # noise, no side-effects — instead of the legacy single-machine contract.
     gates = getattr(app.state, "sync_import_gates", None)
     if gates is None:
         gates = []
         app.state.sync_import_gates = gates
-    gates.append(AgentImportGate())
+    gates.append(AgentImportGate(machine_id=_local_machine_id))
     hooks = getattr(app.state, "sync_post_import_hooks", None)
     if hooks is None:
         hooks = []
@@ -268,6 +272,7 @@ def wire_agent_and_skill_kinds(
             agent_svc,
             config_file_store,
             on_skill_policy_changed=_sync_skill_reconcile,
+            machine_id=_local_machine_id,
         )
     )
 

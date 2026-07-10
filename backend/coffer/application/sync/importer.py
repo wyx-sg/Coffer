@@ -206,7 +206,7 @@ class SyncImporter:
                 # other import failure and self-heals on a later run.
                 gate = self._gates.get(doc.kind)
                 if gate is not None:
-                    await gate.validate(doc.config)
+                    await gate.validate(doc.config, scope=doc.scope)
                 existing = current.get((doc.kind, doc.name))
                 if existing is not None:
                     await self._resources.update_config(
