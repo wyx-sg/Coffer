@@ -69,6 +69,7 @@ from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
 from coffer.domain.errors import UpstreamUnavailable
 from coffer.domain.mcp.namespace import prefix_resource_uri
+from coffer.domain.scope import agent_in_scope, machine_in_scope
 
 _logger = logging.getLogger(__name__)
 
@@ -103,6 +104,7 @@ class MCPGatewaySession:
         on_dispose: Callable[[], None] | None = None,
         builtin_tools: BuiltinToolRegistry | None = None,
         embedder_provider: Callable[[], Awaitable[Any | None]] | None = None,
+        machine_id: Callable[[], Awaitable[str | None]] | None = None,
     ) -> None:
         self.id = session_id or str(uuid.uuid4())
         self._resources = resource_service
@@ -112,6 +114,17 @@ class MCPGatewaySession:
         self._invocations = invocations
         self._downstream_sink = downstream_sink
         self._clock = clock or (lambda: datetime.now(tz=UTC))
+        # ADR-045 machine axis (Task 8): optional provider resolving this
+        # machine's sync identity, resolved once and cached per session
+        # (mirroring ChannelRuntime — channel/runtime.py:181-186). None (the
+        # default) means no provider is wired — legacy behavior, no filtering.
+        self._machine_id = machine_id
+        self._machine_id_value: str | None = None
+        # ADR-045 agent axis (Task 9): the session's bound agent identity.
+        # Declared here (always None) so `_enabled_mcp_servers`'s agent-axis
+        # filter compiles ahead of Task 9, which will set this from the real
+        # session identity; until then only the machine axis is live.
+        self._session_agent: str | None = None
         # CODE-035: called once when the session is disposed so the composition
         # root can drop this session's entry from its supervisor registry
         # (otherwise disposed-but-registered supervisors accumulate for the
@@ -201,11 +214,26 @@ class MCPGatewaySession:
         """
         return self._server_request_registry.handle_response(envelope)
 
+    async def _local_machine_id(self) -> str | None:
+        if self._machine_id is None:
+            return None
+        if self._machine_id_value is None:
+            self._machine_id_value = await self._machine_id()
+        return self._machine_id_value
+
     async def _enabled_mcp_servers(self) -> list[str]:
         # Push the enabled=true filter to SQL so we don't materialise rows
         # we'll throw away (CODE-021).
+        local = await self._local_machine_id()
         resources = await self._resources.list(kind="mcp_server", enabled=True)
-        return [r.name for r in resources]
+        enabled_names: list[str] = []
+        for r in resources:
+            if local is not None and not machine_in_scope(r.scope, local):
+                continue
+            if local is not None and not agent_in_scope(r.scope, local, self._session_agent):
+                continue
+            enabled_names.append(r.name)
+        return enabled_names
 
     async def _ensure_subscribed(self, server_name: str) -> None:
         """Attach notification + server-request handlers to the upstream connection lazily."""

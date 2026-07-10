@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,7 +17,7 @@ from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
-from coffer.domain.errors import ResourceNotFound, ToolDisabled
+from coffer.domain.errors import ResourceNotFound, ToolDisabled, UpstreamUnavailable
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind, ResourceRef
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
@@ -76,6 +77,7 @@ async def _setup(
     server_configs: dict[str, dict],  # type: ignore[type-arg]
     *,
     supervisor_retry_delays: tuple[float, ...] | None = None,
+    machine_id: Callable[[], Awaitable[str | None]] | None = None,
 ) -> tuple[
     MCPGatewaySession,
     ResourceService,
@@ -94,6 +96,9 @@ async def _setup(
                 name="mcp_server",
                 display_name="MCP Server",
                 config_schema=MCPServerConfig,
+                # ADR-045: machine x agent scope axes — Task 8 exercises the
+                # machine axis via ResourceService.update_scope.
+                scope_axes=("machine", "agent"),
             )
         },
         repo=SqlAlchemyResourceRepo(sm),
@@ -105,6 +110,7 @@ async def _setup(
     sup_kwargs: dict = {
         "resource_service": resource_svc,
         "credential_resolver": CredentialResolver(KeyringAdapter()),
+        "machine_id": machine_id,
     }
     if supervisor_retry_delays is not None:
         sup_kwargs["retry_delays"] = supervisor_retry_delays
@@ -124,8 +130,76 @@ async def _setup(
         discovery=discovery,
         preferences=prefs_repo,
         invocations=inv_repo,
+        machine_id=machine_id,
     )
     return session, resource_svc, prefs_repo, inv_repo, engine
+
+
+@pytest.mark.asyncio
+async def test_tools_list_excludes_server_scoped_to_other_machine_and_spawn_refuses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A server scoped to a machine other than this session's local machine
+    must vanish from tools/list, and the supervisor must refuse to spawn it
+    outright — while an unscoped server on the same session is unaffected
+    (ADR-045 machine axis, Task 8)."""
+    _with_in_memory(monkeypatch)
+
+    async def _local_machine_id() -> str:
+        return "this-machine"
+
+    session, rsvc, _prefs, _inv, engine = await _setup(
+        tmp_path,
+        {
+            "fs": _stdio_config(tools=["read_file"]),
+            "gh": _stdio_config(tools=["create_issue"]),
+        },
+        machine_id=_local_machine_id,
+    )
+    try:
+        await rsvc.update_scope(
+            ResourceRef("mcp_server", "gh"), {"other-machine": "*"}, actor="test"
+        )
+        result = await session.handle_request("tools/list")
+        names = {t["name"] for t in result["tools"] if not t["name"].startswith("coffer__")}
+        assert names == {"fs__read_file"}
+        with pytest.raises(UpstreamUnavailable):
+            await session._supervisor.get_or_spawn("gh")
+        # Unscoped server is unaffected by the machine filter.
+        conn = await session._supervisor.get_or_spawn("fs")
+        assert conn is not None
+    finally:
+        await session.dispose()
+        await _safe_dispose(engine)
+
+
+@pytest.mark.asyncio
+async def test_no_machine_provider_wired_is_legacy_behavior(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With no machine-id provider wired (legacy/single-machine daemons), scope
+    must not filter anything — mirrors ChannelRuntime's `local is None` guard,
+    for both the session-level list AND the supervisor-level spawn gate."""
+    _with_in_memory(monkeypatch)
+    session, rsvc, _prefs, _inv, engine = await _setup(
+        tmp_path,
+        {
+            "fs": _stdio_config(tools=["read_file"]),
+            "gh": _stdio_config(tools=["create_issue"]),
+        },
+    )
+    try:
+        await rsvc.update_scope(
+            ResourceRef("mcp_server", "gh"), {"other-machine": "*"}, actor="test"
+        )
+        result = await session.handle_request("tools/list")
+        names = {t["name"] for t in result["tools"] if not t["name"].startswith("coffer__")}
+        assert names == {"fs__read_file", "gh__create_issue"}
+        conn = await session._supervisor.get_or_spawn("gh")
+        assert conn is not None
+    finally:
+        await session.dispose()
+        await _safe_dispose(engine)
 
 
 @pytest.mark.asyncio
