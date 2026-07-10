@@ -328,6 +328,8 @@ class MCPGatewaySession:
             clock=self._clock,
             ensure_subscribed=self._ensure_subscribed,
             on_evict=self._on_upstream_evicted,
+            local_machine_id=await self._local_machine_id(),
+            session_agent=self._session_agent,
         )
 
     def _inject_session_cwd(self, prefixed_name: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -344,6 +346,8 @@ class MCPGatewaySession:
             clock=self._clock,
             ensure_subscribed=self._ensure_subscribed,
             on_evict=self._on_upstream_evicted,
+            local_machine_id=await self._local_machine_id(),
+            session_agent=self._session_agent,
         )
 
     async def _handle_prompts_get(self, params: dict[str, Any]) -> Any:
@@ -357,6 +361,8 @@ class MCPGatewaySession:
             clock=self._clock,
             ensure_subscribed=self._ensure_subscribed,
             on_evict=self._on_upstream_evicted,
+            local_machine_id=await self._local_machine_id(),
+            session_agent=self._session_agent,
         )
 
     # --- Upstream → downstream notification forwarding ---

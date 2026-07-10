@@ -35,6 +35,7 @@ from coffer.domain.mcp.namespace import (
     parse_prefixed_uri,
 )
 from coffer.domain.resource import ResourceRef
+from coffer.domain.scope import agent_in_scope
 
 if TYPE_CHECKING:
     from coffer.application.mcp.supervisor import SubprocessSupervisor
@@ -163,6 +164,8 @@ async def _invoke(
     clock: Callable[[], datetime],
     ensure_subscribed: Callable[[str], Any],
     on_evict: Callable[[str], None] | None = None,
+    local_machine_id: str | None = None,
+    session_agent: str | None = None,
 ) -> Any:
     prefixed = params.get(spec.param_key, "")
     try:
@@ -171,6 +174,38 @@ async def _invoke(
         raise ToolDisabled(f"unrecognised {spec.label}: {prefixed!r}") from e
 
     resource = await resources.get(ResourceRef("mcp_server", server_name))
+
+    # ADR-045 agent axis (Task 10, FR-020): tools/list already hides a
+    # server whose agent-axis entry excludes this session's identity
+    # (gateway._enabled_mcp_servers), but that is only a listing-side
+    # filter — nothing on the call-routing path re-checked it, so a caller
+    # that already knows (or guesses) a hidden server's namespaced tool
+    # name could invoke it directly. The supervisor's spawn gate only
+    # knows the machine axis (it has no session context), so this check
+    # lives here, at the session's invocation seam, where both the local
+    # machine id and `_session_agent` are known. Mirrors the
+    # `local is not None` legacy-behavior guard used for listing: no
+    # machine-id provider wired means no filtering at all (can't resolve
+    # which scope entry applies without a machine id).
+    if local_machine_id is not None and not agent_in_scope(
+        resource.scope, local_machine_id, session_agent
+    ):
+        await record_invocation(
+            invocations,
+            session_id=session_id,
+            clock=clock,
+            resource_name=server_name,
+            capability_type=spec.capability_type,
+            capability_key=original,
+            duration_ms=0,
+            status="denied",
+            error_message=None,
+        )
+        # Same "indistinguishable from a disabled capability" shape FR-020
+        # specifies for an in-scope-but-hidden server: ToolDisabled, not
+        # UpstreamUnavailable (that stays reserved for the machine axis).
+        raise ToolDisabled(f"{server_name!r} is not in scope for this agent")
+
     try:
         await check_capability_enabled(prefs, resource.id, spec.capability_type, original)
     except ToolDisabled:

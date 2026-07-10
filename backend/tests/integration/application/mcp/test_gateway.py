@@ -257,6 +257,172 @@ async def test_initialize_without_agent_meta_leaves_session_agent_none(
         await _safe_dispose(engine)
 
 
+async def _tools_list_names_for_agent(
+    tmp_path: Path,
+    subdir: str,
+    configs: dict,  # type: ignore[type-arg]
+    scope: dict,  # type: ignore[type-arg]
+    agent: str | None,
+    *,
+    machine_id: Callable[[], Awaitable[str | None]],
+) -> set[str]:
+    """Spin up one isolated session (own tmp_path/engine), scope `gh`,
+    initialize with (or without) an agent identity, and return the
+    non-builtin tool names visible in tools/list."""
+    path = tmp_path / subdir
+    path.mkdir()
+    session, rsvc, _prefs, _inv, engine = await _setup(path, configs, machine_id=machine_id)
+    try:
+        await rsvc.update_scope(ResourceRef("mcp_server", "gh"), scope, actor="test")
+        meta: dict = {"coffer/agent": agent} if agent is not None else {}
+        await session.handle_initialize({"protocolVersion": "2025-06-18", "_meta": meta})
+        result = await session.handle_request("tools/list")
+        return {t["name"] for t in result["tools"] if not t["name"].startswith("coffer__")}
+    finally:
+        await session.dispose()
+        await _safe_dispose(engine)
+
+
+@pytest.mark.acceptance(
+    spec="001-mcp-gateway", scenario="agent axis gates tools/list by session identity"
+)
+@pytest.mark.asyncio
+async def test_tools_list_agent_scoped_server_visible_only_to_matching_agent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-045 agent axis (Task 10, FR-020/021): a server scoped to
+    ``{"*": ["claude-code"]}`` is visible in tools/list to a session that
+    initialized with agent ``claude-code``; invisible to a session that
+    initialized with agent ``codex``; and invisible to an unidentified
+    session (no ``coffer/agent`` key in the initialize ``_meta``) — an
+    unidentified session matches only a ``"*"``-valued scope entry."""
+    _with_in_memory(monkeypatch)
+
+    async def _local_machine_id() -> str:
+        return "this-machine"
+
+    configs = {
+        "fs": _stdio_config(tools=["read_file"]),
+        "gh": _stdio_config(tools=["create_issue"]),
+    }
+    scope = {"*": ["claude-code"]}
+
+    assert await _tools_list_names_for_agent(
+        tmp_path, "a", configs, scope, "claude-code", machine_id=_local_machine_id
+    ) == {"fs__read_file", "gh__create_issue"}
+    assert await _tools_list_names_for_agent(
+        tmp_path, "b", configs, scope, "codex", machine_id=_local_machine_id
+    ) == {"fs__read_file"}
+    assert await _tools_list_names_for_agent(
+        tmp_path, "c", configs, scope, None, machine_id=_local_machine_id
+    ) == {"fs__read_file"}
+
+
+@pytest.mark.asyncio
+async def test_tools_list_wildcard_agent_scope_visible_to_all_sessions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A server scoped ``{"*": "*"}`` is visible to every session regardless
+    of reported agent identity — including an unidentified session."""
+    _with_in_memory(monkeypatch)
+
+    async def _local_machine_id() -> str:
+        return "this-machine"
+
+    configs = {
+        "fs": _stdio_config(tools=["read_file"]),
+        "gh": _stdio_config(tools=["create_issue"]),
+    }
+    scope = {"*": "*"}
+
+    assert await _tools_list_names_for_agent(
+        tmp_path, "a", configs, scope, "claude-code", machine_id=_local_machine_id
+    ) == {"fs__read_file", "gh__create_issue"}
+    assert await _tools_list_names_for_agent(
+        tmp_path, "b", configs, scope, "codex", machine_id=_local_machine_id
+    ) == {"fs__read_file", "gh__create_issue"}
+    assert await _tools_list_names_for_agent(
+        tmp_path, "c", configs, scope, None, machine_id=_local_machine_id
+    ) == {"fs__read_file", "gh__create_issue"}
+
+
+@pytest.mark.acceptance(
+    spec="001-mcp-gateway", scenario="agent axis gates call routing, not just listing"
+)
+@pytest.mark.asyncio
+async def test_tools_call_refused_for_server_excluded_by_agent_axis(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """FR-020: 'the agent axis gates per-session tools/list ... and call
+    routing by the session's self-reported identity.' A session identified
+    as an excluded agent must not be able to invoke a namespaced tool on a
+    server that tools/list hides from it, even by calling tools/call
+    directly with the server's still-guessable prefixed tool name — the
+    supervisor's spawn gate only knows the machine axis, so this must be
+    gated on the session's invocation path where `_session_agent` lives."""
+    _with_in_memory(monkeypatch)
+
+    async def _local_machine_id() -> str:
+        return "this-machine"
+
+    session, rsvc, _prefs, inv_repo, engine = await _setup(
+        tmp_path,
+        {"gh": _stdio_config(tools=["create_issue"])},
+        machine_id=_local_machine_id,
+    )
+    try:
+        await rsvc.update_scope(
+            ResourceRef("mcp_server", "gh"), {"*": ["claude-code"]}, actor="test"
+        )
+        await session.handle_initialize(
+            {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent": "codex"}}
+        )
+        with pytest.raises(ToolDisabled):
+            await session.handle_request(
+                "tools/call",
+                {"name": "gh__create_issue", "arguments": {"title": "x"}},
+            )
+        invocations = await inv_repo.query(resource_name="gh", status="denied")
+        assert len(invocations) == 1
+    finally:
+        await session.dispose()
+        await _safe_dispose(engine)
+
+
+@pytest.mark.asyncio
+async def test_tools_call_allowed_for_server_included_by_agent_axis(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sibling of the refusal test: the matching agent's call still succeeds
+    routinely — the new agent-axis gate must not be overly restrictive."""
+    _with_in_memory(monkeypatch)
+
+    async def _local_machine_id() -> str:
+        return "this-machine"
+
+    session, rsvc, _prefs, _inv, engine = await _setup(
+        tmp_path,
+        {"gh": _stdio_config(tools=["create_issue"])},
+        machine_id=_local_machine_id,
+    )
+    try:
+        await rsvc.update_scope(
+            ResourceRef("mcp_server", "gh"), {"*": ["claude-code"]}, actor="test"
+        )
+        await session.handle_initialize(
+            {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent": "claude-code"}}
+        )
+        result = await session.handle_request(
+            "tools/call",
+            {"name": "gh__create_issue", "arguments": {"title": "x"}},
+        )
+        assert isinstance(result, dict)
+        assert "content" in result
+    finally:
+        await session.dispose()
+        await _safe_dispose(engine)
+
+
 @pytest.mark.acceptance(
     spec="001-mcp-gateway", scenario="aggregate tools across servers in one client"
 )
