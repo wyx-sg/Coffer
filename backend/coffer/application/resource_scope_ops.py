@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ResourceNotFound, ScopeInvalidError
 from coffer.domain.resource import Resource, ResourceRef
-from coffer.domain.scope import ScopeValidationError, validate_scope
+from coffer.domain.scope import validate_scope
 
 if TYPE_CHECKING:
     from coffer.application.resource_service import ResourceService
@@ -39,7 +39,14 @@ async def update_scope(
     kind_def = service._require_kind(ref.kind)
     try:
         validate_scope(scope, axes=kind_def.scope_axes)
-    except ScopeValidationError as e:
+        # Kind-level shape hook (ADR-045 review Fix 1), run right after the
+        # axis-generic check on the SAME already-validated payload — e.g.
+        # channel rejects a shape (>1 entry, or the "*" key) the generic axes
+        # check can't express. ``ScopeValidationError`` (raised above) is
+        # itself a ``ValueError`` subclass, so one except clause covers both.
+        if kind_def.validate_scope_shape is not None:
+            kind_def.validate_scope_shape(scope)
+    except ValueError as e:
         raise ScopeInvalidError(str(e)) from e
     # Confirms existence up front (raises ResourceNotFound) — mirrors
     # update_config's before-read.

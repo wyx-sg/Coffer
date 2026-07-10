@@ -16,6 +16,7 @@ from httpx import ASGITransport, AsyncClient
 
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.audit_service import AuditService
+from coffer.application.channel.kind import make_channel_kind
 from coffer.application.mcp.kind import make_mcp_kind
 from coffer.application.memory.kind import make_memory_kind
 from coffer.application.resource_service import ResourceService
@@ -35,12 +36,14 @@ from coffer.surfaces.http.resource_routes import router as resource_router
 
 
 async def _client(tmp_path):
-    """Wire a real app with the production mcp_server/memory/agent Kinds.
+    """Wire a real app with the production mcp_server/memory/agent/channel Kinds.
 
     mcp_server and memory are the two ends of the scope_axes spectrum
     (("machine", "agent") vs () — no scope support); agent is a lifecycle
     kind (generic_create_allowed=False) used to prove update_scope is NOT
-    gated on that flag.
+    gated on that flag. channel is machine-only like agent but additionally
+    wires ``validate_scope_shape`` (ADR-045 review Fix 1) — at most one
+    machine entry, no ``"*"`` key.
     """
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
@@ -51,6 +54,7 @@ async def _client(tmp_path):
         "mcp_server": make_mcp_kind({}),
         "memory": make_memory_kind(None),  # type: ignore[arg-type]
         "agent": make_agent_kind(None),
+        "channel": make_channel_kind(),
     }
     repo = SqlAlchemyResourceRepo(sm)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
@@ -167,4 +171,90 @@ async def test_put_scope_works_for_lifecycle_kind_agent(tmp_path):
         )
         assert r.status_code == 200, r.text
         assert r.json()["scope"] == {"machine-1": "*"}
+    await engine.dispose()
+
+
+# -- channel scope-shape constraint (ADR-045 review Fix 1) -------------------
+# A channel's platform identity tolerates only ONE machine consumer (ADR-043)
+# — two exact-ULID entries, or the "*" key, would each start its adapter on
+# more than one machine. Generic scope_axes=("machine",) can't express "at
+# most one", hence Kind.validate_scope_shape (invoked right after the
+# axis-generic check, same 422 SCOPE_INVALID envelope).
+
+
+async def _register_channel(svc, name: str = "tg") -> None:
+    await svc.register(
+        kind="channel",
+        name=name,
+        config={"channel_type": "telegram", "bot_token_ref": "channel/tg/bot"},
+        actor="cli",
+    )
+
+
+@pytest.mark.asyncio
+async def test_put_channel_scope_two_entries_returns_422_scope_invalid(tmp_path):
+    c, engine, svc = await _client(tmp_path)
+    async with c:
+        await _register_channel(svc)
+        r = await c.put(
+            "/api/v1/resources/channel/tg/scope",
+            json={"scope": {"machine-1": "*", "machine-2": "*"}},
+        )
+        assert r.status_code == 422, r.text
+        assert r.json()["error"]["code"] == "SCOPE_INVALID"
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_put_channel_scope_wildcard_key_returns_422_scope_invalid(tmp_path):
+    c, engine, svc = await _client(tmp_path)
+    async with c:
+        await _register_channel(svc)
+        r = await c.put(
+            "/api/v1/resources/channel/tg/scope",
+            json={"scope": {"*": "*"}},
+        )
+        assert r.status_code == 422, r.text
+        assert r.json()["error"]["code"] == "SCOPE_INVALID"
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_put_channel_scope_single_entry_ok(tmp_path):
+    c, engine, svc = await _client(tmp_path)
+    async with c:
+        await _register_channel(svc)
+        r = await c.put(
+            "/api/v1/resources/channel/tg/scope",
+            json={"scope": {"machine-1": "*"}},
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["scope"] == {"machine-1": "*"}
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_put_channel_scope_empty_dict_ok(tmp_path):
+    c, engine, svc = await _client(tmp_path)
+    async with c:
+        await _register_channel(svc)
+        r = await c.put("/api/v1/resources/channel/tg/scope", json={"scope": {}})
+        assert r.status_code == 200, r.text
+        assert r.json()["scope"] == {}
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_put_channel_scope_null_ok(tmp_path):
+    c, engine, svc = await _client(tmp_path)
+    async with c:
+        await _register_channel(svc)
+        r = await c.put(
+            "/api/v1/resources/channel/tg/scope",
+            json={"scope": {"machine-1": "*"}},
+        )
+        assert r.status_code == 200, r.text
+        r2 = await c.put("/api/v1/resources/channel/tg/scope", json={"scope": None})
+        assert r2.status_code == 200, r2.text
+        assert r2.json()["scope"] is None
     await engine.dispose()

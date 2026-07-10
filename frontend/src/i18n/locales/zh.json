@@ -633,6 +633,7 @@
     "CHANNEL_NOT_RUNNING": "渠道适配器未在运行",
     "CHANNEL_SEND_FAILED": "向 IM 平台发送失败",
     "GENERIC_CREATE_NOT_ALLOWED": "该类型不支持直接创建",
+    "MACHINE_NOT_FOUND": "未找到该机器",
     "MASTER_KEY_MISSING": "主密钥缺失，Coffer 无法解密已存储的密钥",
     "DB_SCHEMA_TOO_NEW": "该数据库由更新版本的 Coffer 写入，请升级后再打开。",
     "PRIVILEGED_PATH": "该路径受保护，无法在此使用",

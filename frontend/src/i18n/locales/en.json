@@ -633,6 +633,7 @@
     "CHANNEL_NOT_RUNNING": "The channel adapter is not running",
     "CHANNEL_SEND_FAILED": "Delivery to the IM platform failed",
     "GENERIC_CREATE_NOT_ALLOWED": "This kind can't be created directly",
+    "MACHINE_NOT_FOUND": "Machine not found",
     "MASTER_KEY_MISSING": "The master key is missing — Coffer can't decrypt stored secrets",
     "DB_SCHEMA_TOO_NEW": "This database was written by a newer version of Coffer. Upgrade to open it.",
     "PRIVILEGED_PATH": "That path is privileged and can't be used here",

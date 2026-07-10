@@ -9,6 +9,7 @@ import pytest
 from pydantic import BaseModel
 
 from coffer.application.audit_service import AuditService
+from coffer.application.channel.kind import make_channel_kind
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.importer import SyncImporter
 from coffer.domain.errors import ConfigValidationError
@@ -37,7 +38,15 @@ def _default_kinds() -> dict[str, Kind]:
 
 def _channel_kinds() -> dict[str, Kind]:
     """A channel-like kind whose registration default is `{}` (dormant), not
-    `None` — the shape that exposed the importer's hardcoded-None bug (Fix 1)."""
+    `None` — the shape that exposed the importer's hardcoded-None bug (Fix 1).
+
+    Reuses the REAL `make_channel_kind().validate_scope_shape` (ADR-045
+    review Fix 1) — not a re-implementation — so a doc carrying an invalid
+    multi-machine channel scope quarantines here exactly as it would through
+    production wiring, while still using the lightweight `_Cfg` schema (not
+    `ChannelConfigModel`) so the hand-crafted YAML docs in this module don't
+    need real channel_type/credential-ref fields.
+    """
     return {
         "channel": Kind(
             name="channel",
@@ -45,6 +54,7 @@ def _channel_kinds() -> dict[str, Kind]:
             config_schema=_Cfg,
             scope_axes=("machine",),
             default_scope={},
+            validate_scope_shape=make_channel_kind().validate_scope_shape,
         )
     }
 
@@ -147,7 +157,10 @@ def _write_channel_doc(
             assert isinstance(scope, dict)
             lines.append("scope:")
             for k, v in scope.items():
-                lines.append(f"  {k}: '{v}'")
+                # Key quoted too: an unquoted `*` is a YAML alias indicator,
+                # not a literal string, and would fail to parse as a scope
+                # wildcard key (ADR-045 review Fix 1 tests below).
+                lines.append(f"  '{k}': '{v}'")
     (target / f"{name}.yaml").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -279,3 +292,40 @@ async def test_fresh_register_explicit_null_overrides_kind_dormant_default(tmp_p
     assert result.quarantined_refs == []
     got = await resources.get(ResourceRef("channel", "fresh"))
     assert got.scope is None
+
+
+async def test_multi_entry_channel_scope_doc_quarantines(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A synced doc carrying a channel scope with two machine entries fails
+    `Kind.validate_scope_shape` (ADR-045 review Fix 1: a channel's platform
+    identity tolerates only ONE machine consumer, ADR-043) — `update_scope`
+    raises `ScopeInvalidError`, a `CofferError` subclass, so the importer's
+    broad `except CofferError` quarantines the whole doc exactly like any
+    other gate failure. No importer change was needed for this — the generic
+    quarantine path already covers it.
+
+    For a FRESH register the row itself still gets created (the kind's own
+    dormant `{}` default needs no shape validation) — only the doc's invalid
+    scope write fails — so the row exists but stuck at that dormant default,
+    never the requested (invalid) scope; the doc keeps retrying every run
+    until it's fixed, same as any other quarantine."""
+    resources, _ws, importer = await _make(tmp_path, kinds=_channel_kinds())
+    _write_channel_doc(tmp_path / "ws", "fresh", scope={"M-1": "*", "M-2": "*"})
+
+    result = await importer.import_()
+
+    assert result.quarantined_refs == ["channel:fresh"]
+    got = await resources.get(ResourceRef("channel", "fresh"))
+    assert got.scope == {}
+
+
+async def test_wildcard_key_channel_scope_doc_quarantines(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Same as above, via the `"*"` wildcard key instead of a second entry —
+    both shapes would start the adapter on every machine at once."""
+    resources, _ws, importer = await _make(tmp_path, kinds=_channel_kinds())
+    _write_channel_doc(tmp_path / "ws", "fresh", scope={"*": "*"})
+
+    result = await importer.import_()
+
+    assert result.quarantined_refs == ["channel:fresh"]
+    got = await resources.get(ResourceRef("channel", "fresh"))
+    assert got.scope == {}

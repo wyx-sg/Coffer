@@ -138,6 +138,19 @@ class Kind:
     # rejected. ``("machine",)`` allows only per-machine on/off; ``("machine",
     # "agent")`` additionally allows narrowing to specific agents per machine.
     scope_axes: tuple[str, ...] = ()
+    # Optional kind-level shape constraint on a scope payload, layered on TOP
+    # of the axis-generic ``validate_scope`` (ADR-045 review Fix 1). Given the
+    # already axis-validated scope dict (or ``None``); raises ``ValueError`` to
+    # reject a shape the generic axes check can't express. ``scope_axes`` alone
+    # says WHICH axes and value shapes are legal, not how many entries a kind
+    # can tolerate — e.g. a channel's platform identity (a polled bot, a
+    # webhook endpoint) tolerates only ONE machine consumer (ADR-043); two
+    # exact-ULID entries, or the ``"*"`` wildcard key, would each start its
+    # adapter on more than one machine at once and refight the platform. Kinds
+    # that are legitimately multi-machine despite ``("machine",)`` being their
+    # only axis (e.g. agent) leave this ``None`` (the default): no extra shape
+    # constraint beyond the generic axis check.
+    validate_scope_shape: Callable[[dict[str, Any] | None], None] | None = None
     # Optional post-write hook for ``ResourceService.update_scope`` (ADR-045,
     # Task 11 Fix 2). Receives the ref whose scope just changed; invoked AFTER
     # persistence + audit (unlike ``on_update_config``, which runs BEFORE —

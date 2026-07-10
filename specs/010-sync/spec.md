@@ -280,12 +280,12 @@ Sync) above one card per machine (display name, platform, last sync, "this
 machine" badge). Selecting a machine opens its **activation slice** — agents
 present, MCP servers active, skills delivered per agent, channels bound —
 computed LOCALLY from the synced registry plus each resource's scope, so any
-machine can render any OTHER machine's slice without contacting it. The local
-machine's own slice additionally shows actuals (quarantines, install state);
-a remote machine's slice shows intent only (what its scope says should be
-active there). Sync configuration itself (remote, auto-sync, master key) is
-NOT part of this view — it stays in Settings → Sync; this view is about
-activation, not transport.
+machine can render any OTHER machine's slice without contacting it. Every
+machine's slice is intent only — registry plus scope math, no local
+FS/process checks (what its scope says should be active there); a remote
+machine's slice additionally carries an intent-only hint. Sync configuration
+itself (remote, auto-sync, master key) is NOT part of this view — it stays in
+Settings → Sync; this view is about activation, not transport.
 
 - **REST**: `GET /api/v1/machines` (the fleet list) and
   `GET /api/v1/machines/{id}/slice` (that machine's activation slice).
@@ -535,8 +535,9 @@ resources that reference it cannot spawn, and status reports
 - **Then** the detail view renders B's activation slice (agents present, MCP
   servers active, skills delivered per agent, channels bound) computed
   locally from the synced registry plus scope, without machine A contacting B
-- **And** B's own slice, viewed on B, additionally reports actuals
-  (quarantines, install state) that A's rendering of B's slice does not have
+- **And** because B is remote from A's viewpoint, the rendering carries an
+  intent-only hint; viewed on B itself (its own, local slice) the hint does
+  not appear
 
 ## Out of scope references
 

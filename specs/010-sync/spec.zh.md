@@ -179,10 +179,10 @@ git remote 的凭据（SSH key / token）属于用户自己的 git 配置；Coff
 「本机」徽标）。选中某台机器会打开它的**激活切片**——在场的 agent、激活的 MCP
 服务器、每个 agent 收到的 skill 投递、绑定的 channel——完全**在本地**根据已同步
 的 registry 加上每个资源的 scope 计算得出，因此任意一台机器都能渲染**任意另一
-台**机器的切片而无需联系它。本机自己的切片会额外显示实况（隔离、安装状态）；
-远端机器的切片只显示意图（它的 scope 说那台机器上应当激活什么）。同步配置本身
-（remote、auto-sync、master key）**不**属于这个视图——它仍留在 Settings →
-Sync；这个视图关心的是激活，不是传输。
+台**机器的切片而无需联系它。每台机器的切片都只是意图——registry 加 scope 运算，
+没有本地文件系统/进程检查（即它的 scope 说那台机器上应当激活什么）；远端机器的
+切片会额外带一条「仅意图」提示。同步配置本身（remote、auto-sync、master key）
+**不**属于这个视图——它仍留在 Settings → Sync；这个视图关心的是激活，不是传输。
 
 - **REST**：`GET /api/v1/machines`（机群列表）与
   `GET /api/v1/machines/{id}/slice`（该机器的激活切片）。
@@ -352,8 +352,8 @@ Sync；这个视图关心的是激活，不是传输。
 - **Then** 详情视图渲染出 B 的激活切片（在场的 agent、激活的 MCP 服务器、每个
   agent 收到的 skill 投递、绑定的 channel），完全在本地根据已同步的 registry
   加上 scope 计算得出，机器 A 无需联系 B
-- **And** B 自己在 B 上查看的切片，会额外报告 A 渲染 B 的切片时没有的实况
-  （隔离、安装状态）
+- **And** 因为从 A 的视角看 B 是远端机器，这次渲染带有一条「仅意图」提示；在 B
+  自己上面查看（它自己本机的切片）则不出现这条提示
 
 ## Out of scope references
 
