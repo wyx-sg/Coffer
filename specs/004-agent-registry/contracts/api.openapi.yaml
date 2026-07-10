@@ -1044,10 +1044,11 @@ components:
       type: object
       required: [plugins, transcripts, connections]
       description: >-
-        FR-003a capability-matrix slice: which optional facets the agent's
-        type supports. A false flag means the facet does not exist upstream;
-        surfaces render a uniform "not supported" state instead of an empty
-        table or a raw error, and cross-resource pickers omit the agent.
+        FR-003a capability-matrix slice: which optional facets Coffer manages
+        for the agent's type. A false flag means the facet is absent upstream
+        OR not (yet) managed by Coffer for this type; surfaces render a
+        uniform "not supported" state instead of an empty table or a raw
+        error, and cross-resource pickers omit the agent.
       properties:
         plugins: { type: boolean }
         transcripts: { type: boolean }

@@ -710,8 +710,8 @@
     "type": "Type",
     "configDir": "Config directory",
     "facetUnsupported": {
-      "plugins": "This agent type does not support plugin management.",
-      "transcripts": "This agent type does not support reading conversation transcripts.",
+      "plugins": "Coffer does not manage plugins for this agent type.",
+      "transcripts": "Coffer cannot read this agent type's conversation transcripts.",
       "connections": "This agent type does not support LLM connections.",
       "cursorConnectionsReason": "cursor-agent is locked to Cursor's own backend and exposes no endpoint setting; it authenticates with its own cursor-agent login."
     },

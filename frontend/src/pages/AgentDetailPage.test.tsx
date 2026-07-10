@@ -151,13 +151,13 @@ describe("AgentDetailPage", () => {
     const pluginsTab = screen.getByRole("tab", { name: /^plugins$/i });
     fireEvent.mouseDown(pluginsTab);
     fireEvent.click(pluginsTab);
-    expect(screen.getByText(/does not support plugin management/i)).toBeInTheDocument();
+    expect(screen.getByText(/does not manage plugins/i)).toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/search plugins/i)).not.toBeInTheDocument();
 
     const conversationsTab = screen.getByRole("tab", { name: /conversations/i });
     fireEvent.mouseDown(conversationsTab);
     fireEvent.click(conversationsTab);
-    expect(screen.getByText(/does not support reading conversation/i)).toBeInTheDocument();
+    expect(screen.getByText(/cannot read this agent type/i)).toBeInTheDocument();
   });
 
   test("supported facets still render their tables (capabilities absent = full support)", () => {
@@ -168,6 +168,6 @@ describe("AgentDetailPage", () => {
     const pluginsTab = screen.getByRole("tab", { name: /^plugins$/i });
     fireEvent.mouseDown(pluginsTab);
     fireEvent.click(pluginsTab);
-    expect(screen.queryByText(/does not support plugin management/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/does not manage plugins/i)).not.toBeInTheDocument();
   });
 });

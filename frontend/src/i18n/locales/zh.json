@@ -710,8 +710,8 @@
     "type": "类型",
     "configDir": "配置目录",
     "facetUnsupported": {
-      "plugins": "此 agent 类型不支持插件管理。",
-      "transcripts": "此 agent 类型不支持读取对话记录。",
+      "plugins": "Coffer 不管理此 agent 类型的插件。",
+      "transcripts": "Coffer 无法读取此 agent 类型的对话记录。",
       "connections": "此 agent 类型不支持 LLM 连接。",
       "cursorConnectionsReason": "cursor-agent 锁定 Cursor 官方后端，没有可配置的端点；它使用自己的 cursor-agent login 认证。"
     },
