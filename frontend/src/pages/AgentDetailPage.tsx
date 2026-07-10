@@ -7,6 +7,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 
+import { ScopeCard } from "@/components/ScopeCard";
 import { AgentConfigFilesEditor } from "@/components/agents/AgentConfigFilesEditor";
 import { AgentConversationsTab } from "@/components/agents/AgentConversationsTab";
 import { AgentEditForm } from "@/components/agents/AgentEditForm";
@@ -118,6 +119,8 @@ export function AgentDetailPage() {
           }}
         />
       ) : null}
+
+      <ScopeCard kind="agent" name={agent.name} />
 
       <Tabs defaultValue="overview">
         <TabsList>

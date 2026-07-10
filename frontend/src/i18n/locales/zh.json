@@ -1515,6 +1515,19 @@
       "hint": "同步的渠道只在一台机器上运行，避免两台机器争抢同一个 bot。改绑后经下一次同步传播，原机器会自动停止。"
     }
   },
+  "scope": {
+    "title": "启用范围",
+    "subtitle": "这项资源在哪里启用——所有机器，或只在选定的机器上（对 MCP 服务器和技能，还可以进一步限定到选定的 agent）。",
+    "everywhere": "所有机器",
+    "custom": "自定义",
+    "dormant": "已选择自定义，但没有开启任何机器——处于休眠状态。至少开启下面一台机器前，它不会在任何地方启用。",
+    "allAgents": "所有 agent",
+    "noAgents": "还没有注册任何 agent。",
+    "noMachines": "还没有同步任何机器。",
+    "notActiveHere": "在本机未启用。",
+    "unknownMachine": "不在本 vault 的机器注册表中",
+    "rowToggle": "在 {{machine}} 上启用"
+  },
   "machines": {
     "title": "机器",
     "subtitle": "这个 vault 已同步的所有机器，以及各自启用了什么。",

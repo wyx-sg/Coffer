@@ -1515,6 +1515,19 @@
       "hint": "A synced channel runs on exactly one machine so two machines never fight over the same bot. Rebinding propagates on the next sync; the other machine stops automatically."
     }
   },
+  "scope": {
+    "title": "Activation scope",
+    "subtitle": "Where this is active — everywhere, or only on chosen machines (and, for MCP servers and skills, only for chosen agents).",
+    "everywhere": "Everywhere",
+    "custom": "Custom",
+    "dormant": "Custom with no machines turned on — dormant. Nothing is active anywhere until you turn on at least one machine below.",
+    "allAgents": "All agents",
+    "noAgents": "No agents registered yet.",
+    "noMachines": "No machines synced yet.",
+    "notActiveHere": "Not active on this machine.",
+    "unknownMachine": "Unknown to this vault's machine registry",
+    "rowToggle": "Active on {{machine}}"
+  },
   "machines": {
     "title": "Machines",
     "subtitle": "Every machine synced into this vault, and what's active on each.",
