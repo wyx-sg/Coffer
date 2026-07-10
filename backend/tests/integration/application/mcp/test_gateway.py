@@ -424,6 +424,55 @@ async def test_tools_call_allowed_for_server_included_by_agent_axis(
 
 
 @pytest.mark.acceptance(
+    spec="001-mcp-gateway",
+    scenario="machine axis call denials stay in the unavailable bucket, not ToolDisabled",
+)
+@pytest.mark.asyncio
+async def test_tools_call_for_machine_excluded_server_raises_upstream_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """FR-020: the machine axis is 'indistinguishable from an unregistered
+    [server]' (the generic UpstreamUnavailable bucket the supervisor's own
+    spawn gate raises) — never the dedicated ToolDisabled (-32000) bucket
+    reserved for the agent axis. A server scoped to another machine, invoked
+    via the SESSION's tools/call path (not the supervisor directly), must
+    surface UpstreamUnavailable. Pins a regression where the session-level
+    scope gate called only `agent_in_scope`, which also returns False when
+    the machine axis alone excludes the server, misclassifying the failure
+    as ToolDisabled."""
+    _with_in_memory(monkeypatch)
+
+    async def _local_machine_id() -> str:
+        return "this-machine"
+
+    session, rsvc, _prefs, inv_repo, engine = await _setup(
+        tmp_path,
+        {"gh": _stdio_config(tools=["create_issue"])},
+        machine_id=_local_machine_id,
+    )
+    try:
+        await rsvc.update_scope(
+            ResourceRef("mcp_server", "gh"), {"other-machine": "*"}, actor="test"
+        )
+        await session.handle_initialize(
+            {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent": "claude-code"}}
+        )
+        with pytest.raises(UpstreamUnavailable):
+            await session.handle_request(
+                "tools/call",
+                {"name": "gh__create_issue", "arguments": {"title": "x"}},
+            )
+        # Matches today's supervisor-failure behavior: get_or_spawn raises
+        # before the invocation-recording try/finally in _invoke runs, so no
+        # row is written — the machine axis must not change that.
+        invocations = await inv_repo.query(resource_name="gh")
+        assert invocations == []
+    finally:
+        await session.dispose()
+        await _safe_dispose(engine)
+
+
+@pytest.mark.acceptance(
     spec="001-mcp-gateway", scenario="aggregate tools across servers in one client"
 )
 @pytest.mark.asyncio

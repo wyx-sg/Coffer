@@ -35,7 +35,7 @@ from coffer.domain.mcp.namespace import (
     parse_prefixed_uri,
 )
 from coffer.domain.resource import ResourceRef
-from coffer.domain.scope import agent_in_scope
+from coffer.domain.scope import agent_in_scope, machine_in_scope
 
 if TYPE_CHECKING:
     from coffer.application.mcp.supervisor import SubprocessSupervisor
@@ -187,8 +187,19 @@ async def _invoke(
     # `local is not None` legacy-behavior guard used for listing: no
     # machine-id provider wired means no filtering at all (can't resolve
     # which scope entry applies without a machine id).
-    if local_machine_id is not None and not agent_in_scope(
-        resource.scope, local_machine_id, session_agent
+    #
+    # FR-020 draws a hard line between the two axes: the machine axis must
+    # stay "indistinguishable from an unregistered [server]" (the generic
+    # UpstreamUnavailable bucket the supervisor's own spawn gate below
+    # already raises), while only the agent axis gets the dedicated
+    # ToolDisabled bucket. So this gate only fires — and only records a
+    # `denied` row — once the machine axis is confirmed in-scope; a
+    # machine-axis exclusion falls through here untouched and lets
+    # `supervisor.get_or_spawn` raise UpstreamUnavailable for it below.
+    if (
+        local_machine_id is not None
+        and machine_in_scope(resource.scope, local_machine_id)
+        and not agent_in_scope(resource.scope, local_machine_id, session_agent)
     ):
         await record_invocation(
             invocations,
