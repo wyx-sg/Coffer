@@ -73,6 +73,7 @@ _STATUS: dict[str, int] = {
     "NATIVE_MEMORY_DISABLE_UNSUPPORTED": 422,
     "UNMANAGED_SKILL_INVALID": 422,
     "SKILL_DELIVERY_UNSUPPORTED": 422,
+    "SKILL_OUT_OF_SCOPE": 422,  # ADR-045 machine x agent activation scope
     # knowledge_base kind (spec 006)
     "KB_NOT_FOUND": 404,
     "DOCUMENT_NOT_FOUND": 404,

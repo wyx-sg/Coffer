@@ -11,7 +11,7 @@ import contextlib
 import logging
 import pathlib
 import shutil
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 from coffer.application.audit_service import AuditService
@@ -91,6 +91,7 @@ class SkillService:
         external_dir_registrar: ExternalDirRegistrarPort | None = None,
         agent_external_registration_resolver: AgentExternalRegistrationResolver | None = None,
         rmtree: Callable[[pathlib.Path], None] = shutil.rmtree,
+        machine_id: Callable[[], Awaitable[str | None]] | None = None,
     ) -> None:
         self._rs = resource_service
         self._audit = audit
@@ -114,6 +115,19 @@ class SkillService:
         self._external_dir_registrar = external_dir_registrar
         self._agent_external_registration_resolver = agent_external_registration_resolver
         self._rmtree = rmtree
+        # ADR-045 machine axis (Task 11): this daemon's local machine id, so
+        # follow reconciliation and manual binds can gate on skill/agent scope.
+        # None (unwired) means "no filtering" — the legacy single-machine
+        # contract, mirroring ChannelRuntime (application/channel/runtime.py).
+        self._machine_id_provider = machine_id
+        self._machine_id_cache: str | None = None
+
+    async def _local_machine_id(self) -> str | None:
+        if self._machine_id_provider is None:
+            return None
+        if self._machine_id_cache is None:
+            self._machine_id_cache = await self._machine_id_provider()
+        return self._machine_id_cache
 
     # ---------- imports ----------
 

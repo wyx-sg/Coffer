@@ -9,6 +9,7 @@ subpackages — they cannot import each other (Contract 5).
 from __future__ import annotations
 
 import pathlib
+import platform
 from typing import TYPE_CHECKING, Any
 
 from coffer.application.agent.auto_detect import AutoDetectService
@@ -27,6 +28,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.skill.builtin_tools import register_skill_builtin_tools
 from coffer.application.skill.kind import make_skill_kind
 from coffer.application.skill.service import SkillService
+from coffer.application.sync.identity import MachineIdentityService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.descriptor import descriptor_for
 from coffer.domain.agent.scan import scan_locations
@@ -36,10 +38,12 @@ from coffer.infrastructure.agent.hook_resolver import default_hook_resolver
 from coffer.infrastructure.agent.native_memory_store import FileNativeMemoryScanner
 from coffer.infrastructure.agent.plugin_bundle import FsPluginDetailReader
 from coffer.infrastructure.agent.plugin_cli import ClaudePluginCli
+from coffer.infrastructure.knowledge.ids import new_ulid
 from coffer.infrastructure.skill.master_store import MasterStore
 from coffer.infrastructure.skill.persistence import SkillBindingRepo
 from coffer.infrastructure.skill.sync_engine import SyncEngine
 from coffer.infrastructure.skill.workspace_scan import WorkspaceScan
+from coffer.infrastructure.sync.persistence import SqlAlchemyMachineIdentityRepo
 from coffer.surfaces.http.dependencies import (
     set_agent_config_file_service,
     set_agent_hook_service,
@@ -100,6 +104,19 @@ def wire_agent_and_skill_kinds(
         # composition root may read the agent's capability descriptor.
         return descriptor_for(AgentConfig.model_validate(r.config).type).skill_delivery_mode.value
 
+    # ADR-045 machine axis (Task 11): this daemon's stable sync identity,
+    # built exactly as channel_wiring.py does, so skill delivery/reclaim
+    # gates on the same machine id as every other scope-aware subsystem.
+    identity = MachineIdentityService(
+        SqlAlchemyMachineIdentityRepo(sm),  # type: ignore[arg-type]
+        audit,
+        new_id=new_ulid,
+        default_name=lambda: platform.node() or "coffer",
+    )
+
+    async def _local_machine_id() -> str:
+        return (await identity.get()).machine_id
+
     skill_svc = SkillService(
         resource_service=resource_svc,
         audit=audit,
@@ -111,6 +128,7 @@ def wire_agent_and_skill_kinds(
         agent_scan_locations_resolver=_agent_scan_locations,
         agent_skill_policy_resolver=_agent_skill_policy,
         agent_skill_delivery_resolver=_agent_skill_delivery,
+        machine_id=_local_machine_id,
     )
 
     # Agent kind (spec 004-agent-registry). Detection is discovery-only (no
