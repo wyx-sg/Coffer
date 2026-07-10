@@ -20,7 +20,7 @@ from typing import Any
 from coffer.domain.sync.errors import SyncSerializationError
 
 #: Fields that are part of the document, in canonical order.
-_DOC_FIELDS = ("kind", "name", "description", "enabled", "config")
+_DOC_FIELDS = ("kind", "name", "description", "enabled", "config", "scope")
 
 
 @dataclass(frozen=True)
@@ -32,6 +32,10 @@ class ResourceDoc:
     description: str | None
     enabled: bool
     config: dict[str, Any]
+    # Framework-level machine x agent activation scope (ADR-045). Rides the
+    # doc verbatim — it holds machine ULIDs / agent names, never paths, so it
+    # is exempt from ${HOME} normalization and per-machine override stripping.
+    scope: dict[str, Any] | None
 
 
 def resource_to_doc(
@@ -41,11 +45,14 @@ def resource_to_doc(
     description: str | None,
     enabled: bool,
     config: Mapping[str, Any],
+    scope: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     """Project a resource into its canonical sync-document dict.
 
     ``id``/``created_at``/``updated_at`` are intentionally absent — they are
-    machine-local and would churn the diff on every machine.
+    machine-local and would churn the diff on every machine. ``scope`` is
+    always emitted (even ``None``) so files stay byte-deterministic, matching
+    ``description``'s always-present-may-be-null style.
     """
     return {
         "kind": kind,
@@ -53,6 +60,7 @@ def resource_to_doc(
         "description": description,
         "enabled": enabled,
         "config": dict(config),
+        "scope": dict(scope) if scope is not None else None,
     }
 
 
@@ -66,6 +74,9 @@ def parse_resource_doc(data: Mapping[str, Any]) -> ResourceDoc:
     description = data.get("description")
     enabled = data["enabled"]
     config = data["config"]
+    # Absent key (a v3 workspace doc, pre-Task-6) tolerates to None — never a
+    # hard failure, so old-schema docs still import cleanly.
+    scope = data.get("scope")
     if not isinstance(kind, str) or not kind:
         raise SyncSerializationError("'kind' must be a non-empty string")
     if not isinstance(name, str) or not name:
@@ -76,6 +87,8 @@ def parse_resource_doc(data: Mapping[str, Any]) -> ResourceDoc:
         raise SyncSerializationError("'enabled' must be a boolean")
     if not isinstance(config, Mapping):
         raise SyncSerializationError("'config' must be a mapping")
+    if scope is not None and not isinstance(scope, Mapping):
+        raise SyncSerializationError("'scope' must be a mapping or null")
     extra = [k for k in data if k not in _DOC_FIELDS]
     if extra:
         raise SyncSerializationError(f"unexpected field(s): {', '.join(sorted(extra))}")
@@ -85,4 +98,5 @@ def parse_resource_doc(data: Mapping[str, Any]) -> ResourceDoc:
         description=description,
         enabled=enabled,
         config=dict(config),
+        scope=dict(scope) if scope is not None else None,
     )

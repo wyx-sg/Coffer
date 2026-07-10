@@ -122,6 +122,9 @@ class SyncImporter:
             description=doc.description,
             enabled=doc.enabled,
             config=config,
+            # Scope holds machine ULIDs / agent names, never paths — threaded
+            # through verbatim, no ${HOME} expansion or override patch.
+            scope=doc.scope,
         )
 
     def _load(self) -> tuple[list[ResourceDoc], list[Tombstone], dict[str, bytes]]:
@@ -204,7 +207,8 @@ class SyncImporter:
                 gate = self._gates.get(doc.kind)
                 if gate is not None:
                     await gate.validate(doc.config)
-                if (doc.kind, doc.name) in current:
+                existing = current.get((doc.kind, doc.name))
+                if existing is not None:
                     await self._resources.update_config(
                         ref,
                         doc.config,
@@ -224,6 +228,11 @@ class SyncImporter:
                     )
                     if not doc.enabled:
                         await self._resources.set_enabled(ref, False, self._actor)
+                # A freshly registered resource starts unscoped (None) — apply
+                # scope here too, not just on the update path.
+                current_scope = existing.scope if existing is not None else None
+                if doc.scope != current_scope:
+                    await self._resources.update_scope(ref, doc.scope, actor=self._actor)
                 result.applied += 1
             except CofferError:
                 # Quarantined, not fatal: reported in sync state, preserved by

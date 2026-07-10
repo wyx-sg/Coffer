@@ -55,7 +55,14 @@ class _FakeConfig(BaseModel):
 
 
 def _kinds() -> dict[str, Kind]:
-    return {"mcp_server": Kind(name="mcp_server", display_name="MCP", config_schema=_FakeConfig)}
+    return {
+        "mcp_server": Kind(
+            name="mcp_server",
+            display_name="MCP",
+            config_schema=_FakeConfig,
+            scope_axes=("machine", "agent"),
+        )
+    }
 
 
 class _NoKeyring:
@@ -446,6 +453,84 @@ async def test_failed_import_quarantines_instead_of_deleting(tmp_path, remote) -
         "value": "only-a"
     }
     assert any(f == "resources/mcp_server/portable.yaml" for f in b.workspace.list_files())
+
+
+@pytest.mark.acceptance(spec="010-sync", scenario="machine x agent activation scope rides sync")
+async def test_scope_rides_sync_and_converges(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """Scope (ADR-045) travels through the sync medium like any other curated
+    field: a changed scope on an existing row converges, and a resource
+    registered WITH a scope already set converges its scope on first import
+    too (Task 6)."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.resources.register("mcp_server", "confluence", {"value": "A"}, "test")
+    await a.resources.update_scope(
+        ResourceRef("mcp_server", "confluence"), {"machine-1": ["agent-a"]}, actor="test"
+    )
+    await a.service.run()
+
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()
+    got = await b.resources.get(ResourceRef("mcp_server", "confluence"))
+    assert got.scope == {"machine-1": ["agent-a"]}
+
+    # A changes scope on the existing row; B's next import converges onto it.
+    await a.resources.update_scope(
+        ResourceRef("mcp_server", "confluence"), {"machine-2": "*"}, actor="test"
+    )
+    await a.service.run()
+    await b.service.run()
+    got2 = await b.resources.get(ResourceRef("mcp_server", "confluence"))
+    assert got2.scope == {"machine-2": "*"}
+
+    # A registers a brand-new resource and scopes it before B has ever seen
+    # it: the first import that creates the row on B must also apply scope.
+    await a.resources.register("mcp_server", "fresh", {"value": "new"}, "test")
+    await a.resources.update_scope(
+        ResourceRef("mcp_server", "fresh"), {"machine-3": "*"}, actor="test"
+    )
+    await a.service.run()
+    await b.service.run()
+    fresh = await b.resources.get(ResourceRef("mcp_server", "fresh"))
+    assert fresh.scope == {"machine-3": "*"}
+
+    # Clearing scope back to unscoped converges too.
+    await a.resources.update_scope(ResourceRef("mcp_server", "confluence"), None, actor="test")
+    await a.service.run()
+    await b.service.run()
+    got3 = await b.resources.get(ResourceRef("mcp_server", "confluence"))
+    assert got3.scope is None
+
+
+@pytest.mark.acceptance(
+    spec="010-sync", scenario="an older build refuses a workspace one schema ahead"
+)
+async def test_manifest_gate_rejects_next_schema_version(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """The too-new gate must hold at the very next version boundary, not just
+    for a wildly future one — meaningful after the v4 bump (Task 6)."""
+    import json as _json
+
+    from coffer.domain.sync.errors import SyncWorkspaceTooNew
+    from coffer.domain.sync.manifest import SCHEMA_VERSION
+
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.resources.register("mcp_server", "baseline", {"value": "1"}, "test")
+    await a.service.run()
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()
+
+    ws = a.root / "ws"
+    repo = GitRepo(ws)
+    repo.pull("main")
+    (ws / "manifest.json").write_text(
+        _json.dumps({"schema_version": SCHEMA_VERSION + 1}) + "\n", encoding="utf-8"
+    )
+    repo.commit_all("next layout")
+    repo.push("main")
+
+    with pytest.raises(SyncWorkspaceTooNew):
+        await b.service.run()
+    names = {r.name for r in await b.resources.list()}
+    assert "baseline" in names
 
 
 @pytest.mark.acceptance(spec="010-sync", scenario="an older build refuses a newer workspace")
