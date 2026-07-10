@@ -63,11 +63,26 @@ export interface NotifyOut {
   sent: boolean;
 }
 
+/**
+ * Machine x agent activation scope (ADR-045). Channels only ever use the
+ * "machine" axis: a value is always "*" (bound to that one machine) — there
+ * is no per-agent narrowing for channels, unlike mcp_server/skill/agent.
+ * `{}` = dormant (runs nowhere); `{<machineId>: "*"}` = bound to that machine.
+ * Supersedes `config.runs_on` (spec 009 amendment / ADR-045) — see
+ * ChannelMachineCard.
+ */
+export type ChannelScopeValue = Record<string, "*">;
+
+export interface ChannelScope {
+  scope: ChannelScopeValue | null;
+  axes: string[];
+}
+
 // ---------------------------------------------------------------------------
 // Internal fetch helper
 // ---------------------------------------------------------------------------
 
-async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+async function call<T>(method: "GET" | "POST" | "PUT", path: string, body?: unknown): Promise<T> {
   const r = await fetch(`${getCofferBaseUrl()}${path}`, {
     method,
     headers: {
@@ -110,4 +125,27 @@ export function notifyChannel(name: string, text: string): Promise<NotifyOut> {
 /** Probe the channel's public callback URL end to end (SeaTalk only). */
 export function testChannelCallback(name: string): Promise<CallbackTestResult> {
   return call<CallbackTestResult>("POST", `/channels/${encodeURIComponent(name)}/callback-test`);
+}
+
+// ---------------------------------------------------------------------------
+// Scope (ADR-045) — rides the generic /resources/{kind}/{name}/scope routes
+// (Task 7), not /channels/*; kept here (rather than a generic reusable hook)
+// until a framework-wide useResourceScope lands and can absorb this.
+// ---------------------------------------------------------------------------
+
+/** Current machine-activation scope for a channel + which axes it supports. */
+export function getChannelScope(name: string): Promise<ChannelScope> {
+  return call<ChannelScope>("GET", `/resources/channel/${encodeURIComponent(name)}/scope`);
+}
+
+/** Set (or clear, with `{}`) which single machine the channel runs on. */
+export function updateChannelScope(
+  name: string,
+  scope: ChannelScopeValue,
+): Promise<{ scope: ChannelScopeValue | null }> {
+  return call<{ scope: ChannelScopeValue | null }>(
+    "PUT",
+    `/resources/channel/${encodeURIComponent(name)}/scope`,
+    { scope },
+  );
 }

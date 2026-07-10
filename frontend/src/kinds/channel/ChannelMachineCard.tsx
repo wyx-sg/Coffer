@@ -1,32 +1,33 @@
 // frontend/src/kinds/channel/ChannelMachineCard.tsx
 //
-// Runtime affinity (spec 010 / ADR-043): a synced channel runs on exactly ONE
-// machine. This card shows which machine that is — or that the channel is
-// unbound and running nowhere — and offers a one-click rebind to this machine
-// (the change reaches the other machine on the next sync round trip).
+// Runtime affinity (ADR-045 framework scope, amending spec 010 / ADR-043): a
+// synced channel runs on exactly ONE machine. This card shows which machine
+// that is — or that the channel is unbound (dormant scope, `{}`) and running
+// nowhere — and offers a one-click rebind to this machine via the scope
+// endpoints (the change reaches the other machine on the next sync round
+// trip). Reads/writes the resource's `scope` (Task 7's
+// GET/PUT /resources/channel/{name}/scope), NOT `config.runs_on`, which is
+// deprecated/inert — see coffer.domain.channel.config.
 import { Laptop } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useUpdateChannel } from "@/lib/hooks/useChannels";
+import { useChannelScope, useUpdateChannelScope } from "@/lib/hooks/useChannels";
 import { useSyncMachines } from "@/lib/hooks/useSync";
 
 import { StatusRow } from "./ChannelDetailCards";
 
-export function ChannelMachineCard({
-  name,
-  config,
-}: {
-  name: string;
-  config: Record<string, unknown>;
-}) {
+export function ChannelMachineCard({ name }: { name: string }) {
   const { t } = useTranslation();
-  const { data } = useSyncMachines();
-  const update = useUpdateChannel();
-  const machines = data?.machines ?? [];
-  const runsOn = typeof config.runs_on === "string" && config.runs_on ? config.runs_on : null;
+  const { data: machinesData } = useSyncMachines();
+  const { data: scopeData } = useChannelScope(name);
+  const update = useUpdateChannelScope(name);
+  const machines = machinesData?.machines ?? [];
+  // Channels use only the "machine" axis: at most one key, always "*" — the
+  // single bound machine id, or none (dormant, `{}`).
+  const runsOn = scopeData?.scope ? (Object.keys(scopeData.scope)[0] ?? null) : null;
   const bound = machines.find((m) => m.machine_id === runsOn);
   const local = machines.find((m) => m.is_local);
   const runsHere = runsOn !== null && bound?.is_local === true;
@@ -56,13 +57,7 @@ export function ChannelMachineCard({
             size="sm"
             variant="secondary"
             disabled={update.isPending}
-            onClick={() =>
-              update.mutate({
-                name,
-                config: { ...config, runs_on: local.machine_id },
-                secrets: [],
-              })
-            }
+            onClick={() => update.mutate({ [local.machine_id]: "*" })}
           >
             {t("channels.machine.runHere")}
           </Button>

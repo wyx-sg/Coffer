@@ -105,8 +105,11 @@ def register(
         raise typer.Exit(int(ExitCode.INVALID_INPUT))
     c, _info = _cli_client.client_or_exit()
     with c:
-        # Affinity (spec 010): the creating surface binds the creating machine
-        # so the adapter actually starts; an unbound channel runs nowhere.
+        # Affinity (ADR-045 framework scope, amending spec 010 / ADR-043): the
+        # creating surface binds the creating machine so the adapter actually
+        # starts; an unbound channel runs nowhere. Bound via the resource's
+        # `scope` (not `config["runs_on"]`, which is deprecated/inert — see
+        # coffer.domain.channel.config) so it takes effect at runtime.
         bound = runs_on
         if bound is None:
             # Best-effort: bind the creating machine so the adapter starts.
@@ -116,16 +119,17 @@ def register(
                     (m["machine_id"] for m in machines.json()["machines"] if m["is_local"]),
                     None,
                 )
+        r = c.post("/resources", json={"kind": "channel", "name": name, "config": config})
+        _cli_client.check(r, verbose=verbose)
         if bound is not None:
-            config["runs_on"] = bound
+            scope_r = c.put(f"/resources/channel/{name}/scope", json={"scope": {bound: "*"}})
+            _cli_client.check(scope_r, verbose=verbose)
         else:
             typer.echo(
                 "note: no machine identity available — channel left unbound "
                 "(it runs nowhere until you set --runs-on or bind it in the UI)",
                 err=True,
             )
-        r = c.post("/resources", json={"kind": "channel", "name": name, "config": config})
-        _cli_client.check(r, verbose=verbose)
     typer.echo(f"registered: channel:{name}")
 
 

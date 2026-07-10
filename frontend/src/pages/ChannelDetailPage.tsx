@@ -139,7 +139,7 @@ export function ChannelDetailPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <ChannelStatusCard status={status} />
-        <ChannelMachineCard name={name} config={resource.config} />
+        <ChannelMachineCard name={name} />
         <ChannelPairingCard
           code={pairing.data}
           isPending={pairing.isPending}

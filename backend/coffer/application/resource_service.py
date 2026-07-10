@@ -216,6 +216,9 @@ class ResourceService:
                 enabled=True,
                 created_at=now,
                 updated_at=now,
+                # Kind-supplied registration default (ADR-045 amendment); None
+                # for every kind that doesn't set one (unscoped, unchanged).
+                scope=kind_def.default_scope,
             )
         )
         await self._audit.record(

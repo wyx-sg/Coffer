@@ -19,6 +19,8 @@ vi.mock("@/lib/hooks/useChannels", () => ({
   useIssuePairingCode: vi.fn(),
   useUpdateChannel: vi.fn(),
   useNotifyChannel: vi.fn(),
+  useChannelScope: vi.fn(() => ({ data: { scope: {}, axes: ["machine"] } })),
+  useUpdateChannelScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 vi.mock("@/lib/hooks/useChatAgents", () => ({ useChatAgents: vi.fn(() => ({ data: [] })) }));
 vi.mock("@/lib/hooks/useSync", () => ({

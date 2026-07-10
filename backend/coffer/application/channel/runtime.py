@@ -27,6 +27,7 @@ from coffer.application.channel.ports import (
     TunnelControllerPort,
 )
 from coffer.domain.channel.config import parse_channel_config
+from coffer.domain.scope import machine_in_scope
 
 if TYPE_CHECKING:
     from coffer.application.resource_service import ResourceService
@@ -170,10 +171,13 @@ class ChannelRuntime:
         for r in rows:
             if not r.enabled:
                 continue
-            # A synced channel runs on exactly ONE machine (spec 010 runs_on):
-            # two runtimes polling the same bot identity fight over the
-            # platform. Unbound (None) starts nowhere until the user picks.
-            if local is not None and r.config.get("runs_on") != local:
+            # A synced channel runs on exactly ONE machine (ADR-045 framework
+            # scope, amending spec 010's runs_on / ADR-043): two runtimes
+            # polling the same bot identity fight over the platform. Dormant
+            # scope ({}) or scope naming a different machine keeps it stopped
+            # here; `local is None` (no machine-id provider wired — the
+            # single-machine/test default) is the legacy no-filter contract.
+            if local is not None and not machine_in_scope(r.scope, local):
                 continue
             desired[r.name] = (r.id, dict(r.config))
         return desired

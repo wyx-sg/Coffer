@@ -9,7 +9,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
-import { getChannelStatus, issuePairingCode, notifyChannel } from "@/lib/api/channels";
+import {
+  getChannelScope,
+  getChannelStatus,
+  issuePairingCode,
+  notifyChannel,
+  updateChannelScope,
+  type ChannelScopeValue,
+} from "@/lib/api/channels";
 import { applyChannelEdit } from "@/kinds/channel/editChannel";
 import type { ChannelPlan } from "@/kinds/channel/schema";
 import { useResources } from "@/lib/hooks/useResources";
@@ -19,6 +26,10 @@ export const CHANNEL_KIND = "channel";
 
 export function channelStatusKey(name: string) {
   return ["channels", name, "status"] as const;
+}
+
+export function channelScopeKey(name: string) {
+  return ["channels", name, "scope"] as const;
 }
 
 /** List channel resources (name, config, enabled) via the generic resources API. */
@@ -73,6 +84,33 @@ export function useUpdateChannel() {
       void qc.invalidateQueries({ queryKey: ["resources"] });
       void qc.invalidateQueries({ queryKey: channelStatusKey(name) });
       toast.success(t("channels.edit.saved", { name }));
+    },
+    onError: (error) => toast.error(translateApiError(t, error)),
+  });
+}
+
+/**
+ * A channel's machine-activation scope (ADR-045) — which single machine (if
+ * any) the channel's runtime is bound to. Supersedes `config.runs_on`; the
+ * ChannelMachineCard reads this instead of the resource's config.
+ */
+export function useChannelScope(name: string) {
+  return useQuery({
+    queryKey: channelScopeKey(name),
+    queryFn: () => getChannelScope(name),
+    enabled: name.length > 0,
+  });
+}
+
+/** Bind the channel to exactly one machine (or `{}` to unbind/dormant). */
+export function useUpdateChannelScope(name: string) {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: (scope: ChannelScopeValue) => updateChannelScope(name, scope),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: channelScopeKey(name) });
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });

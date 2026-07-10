@@ -106,4 +106,11 @@ def make_channel_kind(
         validate_config=_make_validator(agent_keys),
         on_update_config=_make_update_validator(agent_keys),
         scope_axes=("machine",),
+        # ADR-045 amendment: a channel runs on exactly one machine, and the
+        # historical ``runs_on: null`` default was "runs nowhere until picked"
+        # (ADR-043) — the OPPOSITE of what scope=None (unscoped) now means at
+        # the framework level. Default a freshly registered channel to the
+        # empty (dormant) scope so it keeps that off-by-default safety instead
+        # of silently starting on every machine.
+        default_scope={},
     )

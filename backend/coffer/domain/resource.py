@@ -155,3 +155,15 @@ class Kind:
         ]
         | None
     ) = None
+    # Optional kind-supplied scope a freshly REGISTERED resource of this kind
+    # starts with (ADR-045 amendment, spec 009 runs_on -> scope migration).
+    # ``None`` (the default for every other kind) means the pre-scope default:
+    # unscoped / active everywhere, unchanged. A kind whose OWN prior
+    # kind-specific field defaulted to "off" (e.g. channel's ``runs_on: null``
+    # meant "runs nowhere until the user picks a machine") sets this to ``{}``
+    # so a newly registered resource keeps that off-by-default safety instead
+    # of silently becoming scope=None (active everywhere) now that scope
+    # supersedes the old field. Must already satisfy the kind's own
+    # ``scope_axes`` — not re-validated at registration (developer-controlled,
+    # not user input).
+    default_scope: dict[str, Any] | None = None
