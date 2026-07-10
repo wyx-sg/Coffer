@@ -206,3 +206,25 @@ def test_mirror_out_without_deletions_keeps_foreign_tree_files(tmp_path) -> None
 
     ws.mirror_trees_out(delete_missing=True)
     assert not (ws_tree / "foreign.md").exists()
+
+
+def test_tombstone_round_trips_slashed_credential_refs(tmp_path):
+    """Credential tombstones use the ref as the name; refs contain slashes
+    (channel/Telegram/bot-token), so the file nests below the kind dir and
+    must still round-trip through write/read/remove."""
+    from datetime import UTC, datetime
+
+    from coffer.domain.sync.models import Tombstone
+
+    ws = Workspace(tmp_path / "ws")
+    ts = Tombstone(
+        kind="credential",
+        name="channel/Telegram/bot-token",
+        deleted_at=datetime(2026, 7, 10, tzinfo=UTC),
+        by="M1",
+    )
+    ws.write_tombstone(ts)
+    got = ws.read_tombstones()
+    assert [(t.kind, t.name) for t in got] == [("credential", "channel/Telegram/bot-token")]
+    ws.remove_tombstone("credential", "channel/Telegram/bot-token")
+    assert ws.read_tombstones() == []

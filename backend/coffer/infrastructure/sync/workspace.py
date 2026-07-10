@@ -195,9 +195,11 @@ class Workspace:
     # --- tombstones ----------------------------------------------------------
 
     def write_tombstone(self, tombstone: Tombstone) -> None:
+        # Credential tombstones use the ref as the name; refs contain slashes,
+        # so the file may nest deeper than kind/name.json.
         path = self._root / _TOMBSTONES / _RESOURCES / tombstone.kind / f"{tombstone.name}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.parent / f".{tombstone.name}.json.tmp"
+        tmp = path.parent / f".{path.name}.tmp"
         tmp.write_text(
             json.dumps(tombstone.to_dict(), sort_keys=True, indent=2) + "\n",
             encoding="utf-8",
@@ -216,7 +218,10 @@ class Workspace:
         if not base.exists():
             return []
         out: list[Tombstone] = []
-        for path in sorted(base.glob("*/*.json")):
+        for path in sorted(base.rglob("*.json")):
+            rel = path.relative_to(base)
+            if len(rel.parts) < 2:
+                continue
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
                 if not isinstance(data, dict):
@@ -224,8 +229,8 @@ class Workspace:
                 raw_by = data.get("by")
                 out.append(
                     Tombstone(
-                        kind=path.parent.name,
-                        name=path.stem,
+                        kind=rel.parts[0],
+                        name="/".join(rel.parts[1:])[: -len(".json")],
                         deleted_at=datetime.fromisoformat(str(data["deleted_at"])),
                         by=str(raw_by) if raw_by else None,
                     )
