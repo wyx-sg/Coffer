@@ -319,6 +319,12 @@ coffer__search_tools(query: string [required], top_k?: int = 5, max 20)
 - **When** daemon 启动,
 - **Then** 它在支持的端口范围内选择下一个空闲端口，把所选端口写入 `~/.coffer/daemon.json`，并使每个 Coffer 入口（shim、CLI）都无需手动配置就连上该端口。
 
+### Scenario: a missing stdio launcher is surfaced and installable
+
+- **Given** 一个 stdio server（例如从另一台机器同步而来），其启动器命令在本机无法解析,
+- **When** 读取该 server 的状态,
+- **Then** 它报告「本机未安装 `<runner>`」而不是一个没有原因的异常状态；当该 runner 属于允许清单中的自拉取启动器时，一键安装执行固定的 runner→Homebrew 映射并记录审计（FR-019）。
+
 ## Requirements
 
 ### Functional Requirements
@@ -361,6 +367,10 @@ coffer__search_tools(query: string [required], top_k?: int = 5, max 20)
 **Distribution**
 
 - **FR-018**: 从源码安装（`pip install ./backend`）MUST 把 `coffer` CLI 与 `coffer-mcp-shim` stdio 入口作为 console script 装到用户的 `PATH` 上，使 daemon 与 shim 无需额外部署步骤即可使用。
+
+**缺失启动器（2026-07-10 修订，多机）**
+
+- **FR-019**: 一个 stdio server 的启动器命令在本机无法解析时（同步来的 server 引用了 `uvx` 而本机没装 `uv`），MUST 在 server 状态中明确显示「本机未安装 `<runner>`」，而不是一个没有原因的「异常」。当该 runner 属于允许清单中的自拉取启动器（`uvx`/`uv`、`npx`/`node`、`bunx`/`bun`）时，UI MUST 提供一键安装，执行**固定的** runner→Homebrew 映射（绝不执行来自 server 配置的任意命令；实际的 MCP 包由启动器首次运行时自行拉取），审计为 `mcp_runner_installed`。其他缺失命令只报告、不提供安装按钮。
 
 ### Key Entities
 

@@ -116,6 +116,9 @@
     }
   },
   "mcp": {
+    "missingRunner": "{{runner}} is not installed on this machine",
+    "installRunner": "Install",
+    "installingRunner": "Installing…",
     "table": {
       "transport": "Transport",
       "health": "Health",

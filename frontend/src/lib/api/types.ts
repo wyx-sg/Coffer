@@ -218,6 +218,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/resources/mcp_server/{name}/install-runner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install the stdio server's missing launcher (allowlisted formulas only).
+         * @description Installs the missing launcher command via a FIXED runner→Homebrew mapping (uvx/uv, npx/node, bunx/bun) — never an arbitrary command from config; the launcher itself fetches the actual MCP package on first run. 422 (MCP_RUNNER_INSTALL_UNSUPPORTED) when nothing is missing or the runner has no unambiguous install; MCP_RUNNER_INSTALL_FAILED carries the package manager's stderr tail. Audited as mcp_runner_installed.
+         */
+        post: operations["installMcpRunner"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/audit": {
         parameters: {
             query?: never;
@@ -614,6 +634,15 @@ export interface components {
         McpServerStatusOut: {
             /** @enum {string} */
             status: "healthy" | "failing" | "unknown";
+            /** @description The stdio launcher's basename when it does not resolve on THIS machine (a synced server referencing e.g. uvx where uv is not installed). The UI renders "missing <runner>" with a one-click install when runner_installable. */
+            missing_runner?: string | null;
+            /** @description Whether the missing runner has an allowlisted install. */
+            runner_installable?: boolean;
+        };
+        McpRunnerInstallOut: {
+            runner: string;
+            /** @description The Homebrew formula installed */
+            formula: string;
         };
         AuditEntryOut: {
             id: number;
@@ -1108,6 +1137,31 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    installMcpRunner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Installed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpRunnerInstallOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     listAuditEntries: {

@@ -1158,3 +1158,78 @@ async def test_refresh_unknown_server_returns_404(
     finally:
         await supervisor.dispose()
         await engine.dispose()
+
+
+# ---------------------------------------------------------------------------
+# FR-019 (amendment 2026-07-10) — missing stdio launcher surfaced + installable
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="001-mcp-gateway", scenario="a missing stdio launcher is surfaced and installable"
+)
+async def test_status_reports_missing_runner(client_and_ctx, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """A stdio server whose launcher does not resolve on this machine reports
+    `missing_runner` (+ installable when allowlisted) instead of a bare
+    failing state with no cause."""
+    client, _engine, rsvc, _prefs, _sup = client_and_ctx
+
+    # The fixture server's command (python) resolves: no missing runner.
+    r = await client.get("/api/v1/resources/mcp_server/fs/status")
+    assert r.json()["missing_runner"] is None
+
+    # A server referencing an allowlisted launcher that is absent here.
+    from coffer.application.mcp import runner_install
+
+    monkeypatch.setattr(runner_install.shutil, "which", lambda _c: None)
+    await rsvc.register(
+        kind="mcp_server",
+        name="synced",
+        config={"transport": {"type": "stdio", "command": "uvx", "args": ["mcp-atlassian"]}},
+        actor="test",
+    )
+    r = await client.get("/api/v1/resources/mcp_server/synced/status")
+    body = r.json()
+    assert body["missing_runner"] == "uvx"
+    assert body["runner_installable"] is True
+
+
+async def test_install_runner_endpoint(client_and_ctx, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """POST /install-runner runs the allowlisted formula and audits; a server
+    whose command resolves is rejected with the unsupported code."""
+    client, _engine, rsvc, _prefs, _sup = client_and_ctx
+    from coffer.application.mcp import runner_install
+    from coffer.surfaces.http.mcp.runner_routes import router as runner_router
+
+    # Mount the runner router onto the fixture app (it shares dependencies).
+    client._transport.app.include_router(runner_router)  # type: ignore[union-attr]
+
+    await rsvc.register(
+        kind="mcp_server",
+        name="synced",
+        config={"transport": {"type": "stdio", "command": "npx", "args": ["-y", "some-mcp"]}},
+        actor="test",
+    )
+
+    calls: list[list[str]] = []
+
+    class _Proc:
+        returncode = 0
+        stderr = ""
+
+    monkeypatch.setattr(
+        runner_install.shutil, "which", lambda c: "/usr/bin/brew" if c == "brew" else None
+    )
+    monkeypatch.setattr(
+        runner_install.subprocess, "run", lambda argv, **k: (calls.append(list(argv)), _Proc())[1]
+    )
+    r = await client.post("/api/v1/resources/mcp_server/synced/install-runner")
+    assert r.status_code == 200, r.text
+    assert r.json() == {"runner": "npx", "formula": "node"}
+    assert calls == [["brew", "install", "node"]]
+
+    # The fixture server's command resolves -> 422 unsupported.
+    monkeypatch.setattr(runner_install.shutil, "which", lambda _c: "/usr/bin/python3")
+    r = await client.post("/api/v1/resources/mcp_server/fs/install-runner")
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "MCP_RUNNER_INSTALL_UNSUPPORTED"
