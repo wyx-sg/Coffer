@@ -15,7 +15,7 @@ registers against the shared ``Base.metadata`` so Alembic discovers it via the
 
 from __future__ import annotations
 
-from sqlalchemy import String, delete, select
+from sqlalchemy import String, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
@@ -51,12 +51,14 @@ class StoreLabelRepo:
             await session.commit()
 
     async def clear(self, store_name: str) -> None:
-        """Drop a store's label (revert to the derived / fallback name)."""
-        async with self._sm() as session:
-            await session.execute(
-                delete(MemoryStoreLabelModel).where(MemoryStoreLabelModel.store_name == store_name)
-            )
-            await session.commit()
+        """Clear a store's label (revert to the derived / fallback name).
+
+        Persists an EMPTY-STRING marker row instead of deleting: sync needs to
+        distinguish "cleared here" from "never labelled" so a clear propagates
+        instead of resurrecting from the fleet's stale doc (spec 010
+        ``memory-labels``). The read surfaces (`get`/`get_many`) hide the
+        marker, so every display path still sees "no label"."""
+        await self.set(store_name, "")
 
     async def get(self, store_name: str) -> str | None:
         async with self._sm() as session:
@@ -64,10 +66,11 @@ class StoreLabelRepo:
                 MemoryStoreLabelModel.store_name == store_name
             )
             label: str | None = (await session.execute(stmt)).scalar_one_or_none()
-            return label
+            return label or None  # the empty-string clear marker reads as absent
 
     async def list_all(self) -> dict[str, str]:
-        """Every ``store_name -> label`` mapping (the sync export surface)."""
+        """Every ``store_name -> label`` row INCLUDING empty-string clear
+        markers — the sync export surface (markers propagate the clear)."""
         async with self._sm() as session:
             rows = (await session.execute(select(MemoryStoreLabelModel))).scalars().all()
             return {row.store_name: row.label for row in rows}
@@ -80,4 +83,5 @@ class StoreLabelRepo:
             stmt = select(MemoryStoreLabelModel.store_name, MemoryStoreLabelModel.label).where(
                 MemoryStoreLabelModel.store_name.in_(store_names)
             )
-            return {row[0]: row[1] for row in (await session.execute(stmt)).all()}
+            rows = (await session.execute(stmt)).all()
+            return {row[0]: row[1] for row in rows if row[1]}  # markers read as absent

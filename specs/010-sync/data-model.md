@@ -174,9 +174,10 @@ Current areas:
   conflict with the fleet's values on its first merge.
 - `memory-labels/<store>.yaml` — the user-set display label of a memory
   store (spec 007 FR-017c), so a `project-<ULID>` store reads by its name on
-  every machine instead of "unnamed store". Additive semantics: setting or
-  renaming propagates (a machine owns the stores it has labelled); clearing
-  a label stays machine-local.
+  every machine instead of "unnamed store". Set, rename, and clear all
+  propagate: a clear travels as an empty-label marker doc (`{label: ""}`) —
+  mere doc absence could never distinguish "cleared" from "not yet synced",
+  and would resurrect the label from the stale workspace doc.
 
 Skill delivery bindings (`skill_agent_bindings`) stay machine-local by
 decision: delivery is a side-effectful file operation with no row-level
