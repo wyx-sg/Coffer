@@ -549,7 +549,6 @@
       "agentHermes": "Hermes",
       "agentCursor": "Cursor",
       "agentOpenclaw": "OpenClaw",
-      "agentCursorUnprojectable": "Cursor 无法使用连接：cursor-agent 锁定 Cursor 官方后端，没有可配置的端点。",
       "deleteTitle": "删除连接",
       "deleteConfirm": "删除连接「{{name}}」？其保存的凭据也会一并删除。",
       "name": "名称",
@@ -710,6 +709,12 @@
     "name": "名称",
     "type": "类型",
     "configDir": "配置目录",
+    "facetUnsupported": {
+      "plugins": "Coffer 不管理此 agent 类型的插件。",
+      "transcripts": "Coffer 无法读取此 agent 类型的对话记录。",
+      "connections": "此 agent 类型不支持 LLM 连接。",
+      "cursorConnectionsReason": "cursor-agent 锁定 Cursor 官方后端，没有可配置的端点；它使用自己的 cursor-agent login 认证。"
+    },
     "connection": {
       "title": "LLM 连接",
       "label": "连接",

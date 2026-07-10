@@ -63,19 +63,14 @@ export function defaultCompatibleAgents(protocol: Protocol | ""): AgentType[] {
   }
 }
 
-// The agents a user can tick a connection as compatible with.
+// The agents a user can tick a connection as compatible with. Never-projectable
+// agents (cursor — locked to Cursor's own backend, no endpoint setting) are
+// omitted outright; their "not supported" reason renders on the agent's own
+// detail page (ADR-042 presentation amendment 2026-07-10, FR-003a).
 export const SELECTABLE_AGENTS: AgentType[] = [
   "claude_code",
   "codex",
   "opencode",
   "hermes",
   "openclaw",
-];
-
-// Agents that can never consume a connection, with the i18n key stating why —
-// shown as a disabled checkbox + reason rather than silently omitted (ADR-042:
-// an absent facet is surfaced, not hidden). cursor-agent exposes no base-URL
-// flag or endpoint config key; it is locked to Cursor's own backend.
-export const UNPROJECTABLE_AGENTS: { type: AgentType; reasonKey: string }[] = [
-  { type: "cursor", reasonKey: "settings.connections.agentCursorUnprojectable" },
 ];

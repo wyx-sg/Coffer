@@ -10,6 +10,7 @@ import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import { AgentConfigFilesEditor } from "@/components/agents/AgentConfigFilesEditor";
 import { AgentConversationsTab } from "@/components/agents/AgentConversationsTab";
 import { AgentEditForm } from "@/components/agents/AgentEditForm";
+import { AgentFacetUnsupported } from "@/components/agents/AgentFacetUnsupported";
 import { AgentMcpButton } from "@/components/agents/AgentMcpControls";
 import { AgentMcpServersTab } from "@/components/agents/AgentMcpServersTab";
 import { AgentMemoryTab } from "@/components/agents/AgentMemoryTab";
@@ -28,6 +29,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { facetSupported } from "@/lib/api/agentCapabilities";
 import { translateApiError } from "@/lib/api/errors";
 import { useAgent, useRemoveAgent } from "@/lib/hooks/useAgents";
 
@@ -141,7 +143,11 @@ export function AgentDetailPage() {
         </TabsContent>
 
         <TabsContent value="plugins" className="pt-6">
-          <AgentPluginsTab agent={agent} />
+          {facetSupported(agent, "plugins") ? (
+            <AgentPluginsTab agent={agent} />
+          ) : (
+            <AgentFacetUnsupported message={t("agents.facetUnsupported.plugins")} />
+          )}
         </TabsContent>
 
         <TabsContent value="memory" className="pt-6">
@@ -149,7 +155,11 @@ export function AgentDetailPage() {
         </TabsContent>
 
         <TabsContent value="conversations" className="pt-6">
-          <AgentConversationsTab name={name} />
+          {facetSupported(agent, "transcripts") ? (
+            <AgentConversationsTab name={name} />
+          ) : (
+            <AgentFacetUnsupported message={t("agents.facetUnsupported.transcripts")} />
+          )}
         </TabsContent>
 
         <TabsContent value="config" className="pt-6">

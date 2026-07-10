@@ -633,6 +633,8 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 **Agent 能力矩阵（FR-003a）。** 逐 agent 的 facet 支持。「✓」= 与两个原始 agent 完全对齐；「N/A」= 该能力在上游不存在——**每一处 N/A MUST 引用使其成立的上游文档、参数或 issue**（[ADR-042](../../docs/decisions/ADR-042-context-injection-mechanisms.zh.md)：ADR-040 那四格未引证的 N/A 里有三格是错的）。标注「slice」表示这是 Coffer 尚未实现的机制——那是 Coffer 的缺口，不是产品的。
 
+矩阵是机器可读的：`AgentOut.capabilities` 报告 UI 消费的逐类型 facet 布尔值（`plugins`、`transcripts`、`connections`），每个都派生自该 facet 自己的事实来源（清单里的 `plugins` 记录、对话记录布局映射、provider 投影目标——绝不硬编码类型列表）。facet 标志为 false 的界面用一个统一、中性的「不支持」状态取代其正常内容（不出现空表格、不出现原始报错）；跨资源选择器（连接表单的兼容 Agent 勾选框）则完全省略不具备能力的 agent——逐 agent 的原因写在该 agent 自己的详情页上，而不是别的资源的表单里（修订 ADR-042 的呈现规则，2026-07-10）。
+
 **会话上下文注入**这一列给出该 agent 在 manifest 中声明的 `InjectionMode`。上游存在三种机制，三者投递同一份载荷（`GET /agents/{name}/session-context`）：`SHELL_COMMAND`（agent 执行 `coffer-hook`）、`PLUGIN_DROP`（Coffer 落一个 JS/TS 插件去 spawn 它）、`INSTRUCTIONS_BLOCK`（Coffer 把它渲染进 instructions 文件的 marker 块）。
 
 | Agent | 配置目录 | chat provider（spec 008） | Coffer-MCP 注入（FR-019） | 会话上下文注入（FR-043/044） | provider 投影（spec 011） | 原生记忆禁用（FR-046） | 交付 |
