@@ -80,12 +80,12 @@ voice-mlx = [
     "mlx-whisper>=0.4",
 ]
 dev = [
-    "pytest>=9.0.3",
+    "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-timeout>=2.4",
     "httpx>=0.28.1",
-    "ruff>=0.15.16",
-    "mypy>=2.1.0",
+    "ruff>=0.16.0",
+    "mypy>=2.3.0",
     "types-psutil>=5.9",
     "types-PyYAML>=6.0",
     # import-linter + grimp: most platforms get the latest (grimp 3.x is a
@@ -98,7 +98,7 @@ dev = [
     "import-linter>=1.10,<1.11; python_version == '3.14' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "grimp<4; python_version == '3.14' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "import-linter>=2.0; python_version != '3.14' or sys_platform != 'darwin' or platform_machine != 'x86_64'",
-    "pre-commit>=4.6.0",
+    "pre-commit>=4.6.1",
     "pytest-cov>=7.1.0",
     "pyinstaller>=6.0",
 ]
