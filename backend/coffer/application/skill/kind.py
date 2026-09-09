@@ -41,7 +41,8 @@ def make_skill_kind(
         # ~/.coffer/skills/. Only SkillService (which creates that folder) may
         # register it; the generic POST /resources path is rejected (CODE-REG).
         generic_create_allowed=False,
-        scope_axes=("machine", "agent"),
+        # ADR-045: delivery is scope ∩ the per-agent follow policy.
+        supports_scope=True,
         # ADR-045 / Task 11 Fix 2: a skill's scope edit re-runs delivery
         # reconciliation for every agent (the composition root supplies the
         # callback — reruns the same reconciliation the sync post-import hook

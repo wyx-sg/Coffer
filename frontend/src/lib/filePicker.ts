@@ -53,6 +53,29 @@ export async function pickOpenFile(start?: string | null): Promise<PickOutcome> 
   }
 }
 
+/**
+ * Pick a directory. Used by the vault export/import buttons, which name a
+ * bundle directory rather than a file. Same `unavailable` semantics as
+ * `pickOpenFile`: the caller reveals a typed-path fallback.
+ */
+export async function pickDirectory(start?: string | null): Promise<PickOutcome> {
+  if (isTauri()) {
+    try {
+      const dialog = await import("@tauri-apps/plugin-dialog");
+      const picked = await dialog.open({ directory: true, defaultPath: start ?? undefined });
+      return { path: typeof picked === "string" ? picked : null, unavailable: false };
+    } catch {
+      return { path: null, unavailable: true };
+    }
+  }
+  try {
+    const res = await fsApi.pickFolder(start ?? undefined);
+    return { path: res.path, unavailable: !res.available };
+  } catch {
+    return { path: null, unavailable: true };
+  }
+}
+
 /** Pick a destination to save a file to, pre-filled with `suggestedName`. */
 export async function pickSaveFile(
   suggestedName: string,

@@ -152,38 +152,39 @@ Coffer 自己的 `coffer__*` 工具——包括 `search_tools`——恒定列出
 - **Daemon crash**: 正在运行的 shim 会话会给它们的 MCP 客户端返回干净的错误而不是挂起；监管者 (supervisor) 可以检测崩溃并重启 daemon。
 - **Concurrent clients**: 多个 MCP 客户端（例如 Claude Code 和 Codex 同时）可同时连接而互不干扰；每个客户端都拿到独立的上游子进程集合。
 
-## Gateway exposure scope（2026-07-10 修订 —— machine × agent scope，[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.zh.md)）
+## Gateway exposure scope（[ADR-045](../../docs/decisions/ADR-045-per-agent-resource-scope.zh.md)）
 
-`mcp_server` resource 携带一个框架级的 `scope`（machine × agent 两个轴，见
-[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.zh.md)），
-网关在自己既有的把关点消费它——不引入新的中央关卡：
+`mcp_server` resource 携带一个框架级的 `scope`——一个 agent 名列表，或
+`None` 表示「对每个 agent 生效」——网关在自己既有的把关点（按会话的能力
+列举）消费它。不引入新的中央关卡：scope 只决定**谁**能看见一台服务器，从不
+决定它**在哪里**、**是否**运行。
 
-- **Machine 轴。** 对本机不在 scope 内的服务器
-  (`machine_in_scope(scope, this_machine)` 为 false)，supervisor 永不拉起它，
-  它的 tools/resources/prompts 也不会出现在 `_enabled_mcp_servers` 以及本机
-  的任何 list 响应中——与被禁用的服务器一样静默跳过，绝不报错。
-- **Agent 轴 —— 按会话身份。** 网关按**会话**而非按机器过滤一台已在 scope 内
-  服务器的能力：一台在本机 scope 内、但其 agent 轴排除了当前连接会话身份的
-  服务器，会从该会话的 `tools/list` / `resources/list` / `prompts/list`
-  中隐藏，对它的任何调用都会被拒绝——就如同该服务器对这个会话根本不存在一
-  样——即便它对同一台机器上另一个不同身份的会话是可见的。
+- **按会话身份。** 网关按**会话**过滤一台服务器的能力：scope 排除了当前连接
+  会话身份的服务器，会从该会话的 `tools/list` / `resources/list` /
+  `prompts/list` 中隐藏，对它的任何调用都会被拒绝——就如同该服务器对这个
+  会话根本不存在一样——即便它同时对另一个不同身份的会话是可见的。
 - **Shim 身份握手。** Coffer-MCP 安装（spec 004 FR-019）会把
   `coffer-mcp-shim --agent <name>` 写入该 agent 的配置，因此每个受管 agent
   的 shim 都会在 MCP 握手时通过 `params._meta["coffer/agent"]` 上报自己已注
   册的 agent 名，与既有的 cwd `_meta` 注入（`coffer/cwd`）并列。会话上报的
   身份在该连接的整个生命周期内保持，并用于其后每一次 list/call。
 - **未识别的会话。** 没有上报身份的会话（手动配置的 shim 调用，或任何省略了
-  `--agent` 参数的客户端）被当作 `agent=None`：它只能看见、也只能调用本机
-  agent 轴条目恰好为 `"*"` 的服务器——绝不包括仅命名了某个具体 agent 的条
-  目，即便碰巧有一个未识别的会话正是那个 agent 在跑。
+  `--agent` 参数的客户端）被当作 `agent=None`：它只能看见、也只能调用完全
+  不带 scope 的服务器——绝不包括任何带 scope 的服务器，即便碰巧有一个未识别
+  的会话正是它所命名的那个 agent 在跑。因此未识别的会话看到的严格更少，绝不
+  更多。
+- **scope 不是拉起的关卡。** supervisor 没有会话上下文，因此从不查阅 scope：
+  一台带 scope 的服务器与任何其他已启用服务器一样被拉起，把关发生在知道「是
+  谁在问」的那个位置。管理面同理——`POST /{name}/test` 与其余管理路由是对资
+  源的管理操作，而不是 agent 会话，不受 scope 把关。
 - **信任边界。** 身份由 shim 进程在握手时**自行上报**，不做加密验证——在
   单用户、仅本机 loopback 的姿态下（FR-012）可以接受。任何能打开 loopback
   MCP 连接并设置 `_meta` 的本地进程都能冒充任意 agent 名；这一点被明确写
   出，而不是暗示比实际更强的隔离边界。
 
-`channel` / `agent` / `skill` resource 的 scope 在**各自 kind 自己的**把关
-点生效（分别对应 spec 009 / 004 / 005），绝不在网关这里；`knowledge_base`
-与 `memory` 永不携带非空 scope。
+`skill` 的 scope 在它自己 kind 的把关点生效（spec 005 的投递）；`agent`、
+`channel`、`knowledge_base` 与 `memory` 这几个 kind 完全不声明 scope，非
+null 值在校验阶段被拒绝（422）。
 
 ## Acceptance Scenarios
 
@@ -383,15 +384,15 @@ Coffer 自己的 `coffer__*` 工具——包括 `search_tools`——恒定列出
 
 ### Scenario: a missing stdio launcher is surfaced and installable
 
-- **Given** 一个 stdio server（例如从另一台机器同步而来），其启动器命令在本机无法解析,
+- **Given** 一个 stdio server（例如从另一台机器导入而来），其启动器命令在本机无法解析,
 - **When** 读取该 server 的状态,
 - **Then** 它报告「本机未安装 `<runner>`」而不是一个没有原因的异常状态；当该 runner 属于允许清单中的自拉取启动器时，一键安装执行固定的 runner→Homebrew 映射并记录审计（FR-019）。
 
-### Scenario: an out-of-scope server is invisible to a session and never spawned
+### Scenario: an out-of-scope server is invisible to a session
 
-- **Given** 一个 `mcp_server` resource 的 `scope` 没有本机的条目（它只被 scope 到另一台机器）,
-- **When** daemon 在本机启动，且一个 shim 会话列出工具,
-- **Then** supervisor 从不拉起该服务器，它的工具不出现在该会话的 `tools/list` 中，且对其带命名空间工具名的调用尝试被拒绝，就如同该服务器从未注册过一样。
+- **Given** 一个 `mcp_server` resource 的 `scope` 只命名了某一个 agent,
+- **When** 一个上报了不同 agent 身份（或完全没有上报身份）的 shim 会话列出工具,
+- **Then** 该服务器的工具不出现在这个会话的 `tools/list` 中，且对其带命名空间工具名的调用尝试被拒绝，就如同该服务器从未注册过一样——而上报了被命名 agent 的会话则能看见并调用它。
 
 ## Requirements
 
@@ -436,14 +437,14 @@ Coffer 自己的 `coffer__*` 工具——包括 `search_tools`——恒定列出
 
 - **FR-018**: 从源码安装（`pip install ./backend`）MUST 把 `coffer` CLI 与 `coffer-mcp-shim` stdio 入口作为 console script 装到用户的 `PATH` 上，使 daemon 与 shim 无需额外部署步骤即可使用。
 
-**缺失启动器（2026-07-10 修订，多机）**
+**缺失启动器**
 
-- **FR-019**: 一个 stdio server 的启动器命令在本机无法解析时（同步来的 server 引用了 `uvx` 而本机没装 `uv`），MUST 在 server 状态中明确显示「本机未安装 `<runner>`」，而不是一个没有原因的「异常」。当该 runner 属于允许清单中的自拉取启动器（`uvx`/`uv`、`npx`/`node`、`bunx`/`bun`）时，UI MUST 提供一键安装，执行**固定的** runner→Homebrew 映射（绝不执行来自 server 配置的任意命令；实际的 MCP 包由启动器首次运行时自行拉取），审计为 `mcp_runner_installed`。其他缺失命令只报告、不提供安装按钮。
+- **FR-019**: 一个 stdio server 的启动器命令在本机无法解析时（导入来的 server 引用了 `uvx` 而本机没装 `uv`），MUST 在 server 状态中明确显示「本机未安装 `<runner>`」，而不是一个没有原因的「异常」。当该 runner 属于允许清单中的自拉取启动器（`uvx`/`uv`、`npx`/`node`、`bunx`/`bun`）时，UI MUST 提供一键安装，执行**固定的** runner→Homebrew 映射（绝不执行来自 server 配置的任意命令；实际的 MCP 包由启动器首次运行时自行拉取），审计为 `mcp_runner_installed`。其他缺失命令只报告、不提供安装按钮。
 
-**Scope enforcement（2026-07-10 修订 —— machine × agent scope，[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.zh.md)）**
+**Scope enforcement（[ADR-045](../../docs/decisions/ADR-045-per-agent-resource-scope.zh.md)）**
 
-- **FR-020**: System MUST 在网关既有的把关点按 `mcp_server` 的框架级 `scope` 过滤其暴露：machine 轴把关拉起与本机 listing（`_enabled_mcp_servers` 加 supervisor 的 spawn gate）；agent 轴按会话的自报身份把关每会话的 `tools/list` / `resources/list` / `prompts/list` 与调用路由。一台不在 scope 内的服务器从不被拉起，在本机上与一台从未注册过的服务器无法区分；一台因 agent 轴对某会话被隐藏的在 scope 内服务器，对该会话而言与一个被禁用的能力无法区分。
-- **FR-021**: System MUST 在 MCP 握手时接受自报的 agent 身份（`params._meta["coffer/agent"]`，与既有的 `coffer/cwd` key 并列），该身份由 Coffer-MCP 安装（spec 004 FR-019）以 `coffer-mcp-shim --agent <name>` 的形式写入受管 agent 的调用。没有上报身份的会话 MUST 被当作 `agent=None`，只能匹配本机 agent 轴条目为 `"*"` 的服务器。身份是自报的，不做加密验证——这是一条被明确记录的信任边界，在仅本机 loopback、单用户的姿态下（FR-012）可以接受。
+- **FR-020**: System MUST 在网关按会话的把关点，依据 `mcp_server` 的框架级 `scope`（一个 agent 名列表）过滤其暴露：会话自报的身份把关该会话的 `tools/list` / `resources/list` / `prompts/list` 与调用路由。一台因 scope 对某会话被隐藏的服务器，对该会话而言与一个被禁用的能力无法区分。scope MUST NOT 把关拉起：supervisor 没有会话身份可供判断，因此带 scope 的服务器与任何其他已启用服务器一样被拉起。管理路由（含 `POST /{name}/test`）是对资源的管理操作而非 agent 会话，MUST NOT 受 scope 把关。
+- **FR-021**: System MUST 在 MCP 握手时接受自报的 agent 身份（`params._meta["coffer/agent"]`，与既有的 `coffer/cwd` key 并列），该身份由 Coffer-MCP 安装（spec 004 FR-019）以 `coffer-mcp-shim --agent <name>` 的形式写入受管 agent 的调用。没有上报身份的会话 MUST 被当作 `agent=None`，只能匹配完全不带 scope 的服务器。身份是自报的，不做加密验证——这是一条被明确记录的信任边界，在仅本机 loopback、单用户的姿态下（FR-012）可以接受。
 
 ### Key Entities
 

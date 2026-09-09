@@ -30,9 +30,10 @@ coffer 中每一个由用户管理的实体都是一个**资源 (Resource)**，�
 - 审计 (audit)：每一次生命周期变更连同 actor 一起入账
 - 模式校验 (schema validation)：每个 kind 一份 Pydantic schema，分发逻辑
   与 kind 无关
-- 作用域 (scope)：可选的机器 × agent 激活矩阵，由框架统一拥有；每个 kind
-  自行声明其适用的轴；同步但不激活 (sync-but-inactive) 语义 ——
-  [ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md)
+- 作用域 (scope)：可选的按 agent 激活列表，由框架统一拥有；每个 kind 自行
+  声明是否支持 scope，并各自拥有自己的执行点；已注册但不激活
+  (registered-but-inactive) 语义 ——
+  [ADR-045](../../docs/decisions/ADR-045-per-agent-resource-scope.md)
 
 它**不**统一调用语义 (invocation semantics)。每个 kind 自行定义其能力
 (capability) 的使用方式；框架只描述一个 kind 如何被注册、如何被自描述、
@@ -128,13 +129,6 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
 | Stdio shim (`coffer-mcp-shim`) | 每个 MCP 客户端会话一份 | `stdin/stdout ↔ daemon HTTP/SSE` 转发器；检测 daemon，否则拉起。                                                      |
 | Callback listener              | daemon 拉起的子进程     | 只服务带签名的 channel webhook (`POST /seatalk/{channel}`)；loopback 端口，公网侧由用户自行运行的隧道承接 (spec 009)。 |
 
-桌面/Web UI 还提供一个顶层的 **Machines**（机群）视图 —— 一条同步状态条
-加每台已注册机器一张卡片，点开单台机器的详情会渲染该机器的激活切片（在场
-的 agent、激活的 MCP 服务器、已投递的 skill、已绑定的 channel），全部根据
-同步后的注册表与资源 `scope`
-（[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md)）
-计算得出。不引入新 surface —— 仍由既有 REST API 提供数据，客户端本地渲染。
-
 ## 进程 (Processes)
 
 - **`coffer-daemon`** — 长生命周期的 FastAPI 服务，监听
@@ -177,4 +171,4 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
 | 日志        | `structlog` 以 JSON-per-line 写入 `~/.coffer/logs/`                                          | 通过 contextvar 实现按请求级别的 trace ID。                                                                                                                                                                                                                                                                                                                                                                                         |
 | Converter   | `MarkdownConverter` 端口 + 逐格式 adapter，落在 `infrastructure/`                            | 唯一 import converter 库的地方（文本/源码走 passthrough、csv 走专用转换器、其余走 MarkItDown；新引擎可按格式插拔）。any-format → markdown。                                                                                                                                                                                                                                                                                         |
 | Memory 投影 | `AgentMemoryAdapter`，落在 **agent 层**（随 agent driver）                                   | 把那个唯一的规范 memory store 投影进原生位置（`SYMLINK` / `RENDER` / `NONE`）；由它持有 L1 文件改动，使 memory 与 agent 无关（[ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)）。                                                                                                                                                                                                                             |
-| 同步        | `application/sync/` + `infrastructure/sync/` + `sync_config`/`sync_state` 表 + daemon worker | 通过用户自有 git 仓库做多机同步（spec 010，[ADR-016](../../docs/decisions/ADR-016-multi-machine-sync.md)）。一次 run 把仓库状态导出到独立工作树（`~/.coffer/sync/`）、git 合并、再导入：知识/记忆/技能文件镜像，配置资源经 `ResourceService` reconcile，凭证**只以密文**传输（master key 带外引导）。属横切，不是 kind。可选的自动同步 worker 仿照 retention worker。资源的 `scope`（ADR-045）搭乘同一份资源文档，原样经过 export/merge/import —— 不引入任何新的同步机制。                                                               |
+| 导出 / 导入 | `application/sync/` + `infrastructure/sync/` + CLI 与 HTTP 表面 | 一次性地把仓库**导出到一个目录**、并把这样一个目录**导入回来**（spec 010，[ADR-016](../../docs/decisions/ADR-016-vault-export-import.md)）。没有 git、没有远程、没有工作区、没有后台 worker、没有墓碑，也没有自己的表。导出会镜像知识/记忆/技能文件树、把每个配置资源序列化成一个**确定性** YAML、导出各模块自有的共享状态，并在被明确要求时**仅以密文**携带凭据（主密钥带外引导）。导入按资源 bundle-wins、从不删除、逐资源报告失败，并运行每个 kind 的导入后钩子。基于 `$HOME` 的相对路径归一化让一个 bundle 可在机器之间搬运。属横切，不是 kind。资源的 `scope`——一个 agent 名字列表（[ADR-045](../../docs/decisions/ADR-045-per-agent-resource-scope.md)）——作为普通字段搭乘资源文档穿过导出与导入。 |

@@ -86,5 +86,7 @@ def make_mcp_kind(supervisor_for: dict[str, SubprocessSupervisor]) -> Kind:
         validate_name=_validate_mcp_name,
         audit_redactor=_mcp_audit_redactor,
         credential_ref_extractor=_mcp_credential_ref_extractor,
-        scope_axes=("machine", "agent"),
+        # ADR-045: the gateway filters a scoped server's tools by the
+        # session's self-reported agent identity.
+        supports_scope=True,
     )

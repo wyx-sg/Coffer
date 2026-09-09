@@ -11,9 +11,8 @@ Invocation handlers (tools/call, resources/read, prompts/get) live in
 Server-initiated request plumbing (T-061 sampling, T-062 roots) lives in
 `gateway_server_requests` for the same reason. The pure envelope-parsing
 helpers (launch-cwd extraction, upstream-notification method/params parsing)
-live in `gateway_parsing`. The ADR-045 machine/agent scope-filtering helpers
-(local machine id resolution + the enabled-server filter) live in
-`gateway_scope`.
+live in `gateway_parsing`. The ADR-045 per-agent scope filter for the
+enabled-server list lives in `gateway_scope`.
 
 For the spec's "upstream tool list changes mid-session" scenario, the
 session subscribes to each upstream's notification stream (via
@@ -59,10 +58,7 @@ from coffer.application.mcp.gateway_parsing import (
     _extract_cwd,
 )
 from coffer.application.mcp.gateway_recovery import DegradedTracker
-from coffer.application.mcp.gateway_scope import (
-    enabled_mcp_servers,
-    resolve_local_machine_id,
-)
+from coffer.application.mcp.gateway_scope import enabled_mcp_servers
 from coffer.application.mcp.gateway_server_requests import (
     ServerRequestRegistry,
     build_session_callbacks,
@@ -103,7 +99,6 @@ class MCPGatewaySession:
         on_dispose: Callable[[], None] | None = None,
         builtin_tools: BuiltinToolRegistry | None = None,
         embedder_provider: Callable[[], Awaitable[Any | None]] | None = None,
-        machine_id: Callable[[], Awaitable[str | None]] | None = None,
         tiering: TieringConfig | None = None,
     ) -> None:
         self.id = session_id or str(uuid.uuid4())
@@ -114,17 +109,11 @@ class MCPGatewaySession:
         self._invocations = invocations
         self._downstream_sink = downstream_sink
         self._clock = clock or (lambda: datetime.now(tz=UTC))
-        # ADR-045 machine axis (Task 8): optional provider resolving this
-        # machine's sync identity, resolved once and cached per session
-        # (mirroring ChannelRuntime — channel/runtime.py:181-186). None (the
-        # default) means no provider is wired — legacy behavior, no filtering.
-        self._machine_id = machine_id
-        self._machine_id_value: str | None = None
-        # ADR-045 agent axis (Task 9): the session's bound agent identity, set
+        # ADR-045: the session's bound agent identity, set
         # from the shim's self-reported ``--agent`` name on the ``initialize``
         # handshake (params._meta["coffer/agent"], see handle_initialize).
         # None when the shim was launched without one (pre-Task-9 install, or
-        # an unnamed launch) — the agent-axis filter is then a no-op.
+        # an unnamed launch) — such a session then sees only unscoped servers.
         self._session_agent: str | None = None
         # CODE-035: called once when the session is disposed so the composition
         # root can drop this session's entry from its supervisor registry
@@ -222,15 +211,8 @@ class MCPGatewaySession:
         """
         return self._server_request_registry.handle_response(envelope)
 
-    async def _local_machine_id(self) -> str | None:
-        self._machine_id_value = await resolve_local_machine_id(
-            self._machine_id, self._machine_id_value
-        )
-        return self._machine_id_value
-
     async def _enabled_mcp_servers(self) -> list[str]:
-        local = await self._local_machine_id()
-        return await enabled_mcp_servers(self._resources, local, self._session_agent)
+        return await enabled_mcp_servers(self._resources, self._session_agent)
 
     async def _ensure_subscribed(self, server_name: str) -> None:
         """Attach notification + server-request handlers to the upstream connection lazily."""
@@ -353,7 +335,6 @@ class MCPGatewaySession:
             clock=self._clock,
             ensure_subscribed=self._ensure_subscribed,
             on_evict=self._on_upstream_evicted,
-            local_machine_id=await self._local_machine_id(),
             session_agent=self._session_agent,
         )
 

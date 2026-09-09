@@ -35,7 +35,7 @@ from coffer.domain.mcp.namespace import (
     parse_prefixed_uri,
 )
 from coffer.domain.resource import ResourceRef
-from coffer.domain.scope import agent_in_scope, machine_in_scope
+from coffer.domain.scope import agent_in_scope
 
 if TYPE_CHECKING:
     from coffer.application.mcp.supervisor import SubprocessSupervisor
@@ -164,7 +164,6 @@ async def _invoke(
     clock: Callable[[], datetime],
     ensure_subscribed: Callable[[str], Any],
     on_evict: Callable[[str], None] | None = None,
-    local_machine_id: str | None = None,
     session_agent: str | None = None,
 ) -> Any:
     prefixed = params.get(spec.param_key, "")
@@ -175,32 +174,14 @@ async def _invoke(
 
     resource = await resources.get(ResourceRef("mcp_server", server_name))
 
-    # ADR-045 agent axis (Task 10, FR-020): tools/list already hides a
-    # server whose agent-axis entry excludes this session's identity
-    # (gateway._enabled_mcp_servers), but that is only a listing-side
-    # filter — nothing on the call-routing path re-checked it, so a caller
-    # that already knows (or guesses) a hidden server's namespaced tool
-    # name could invoke it directly. The supervisor's spawn gate only
-    # knows the machine axis (it has no session context), so this check
-    # lives here, at the session's invocation seam, where both the local
-    # machine id and `_session_agent` are known. Mirrors the
-    # `local is not None` legacy-behavior guard used for listing: no
-    # machine-id provider wired means no filtering at all (can't resolve
-    # which scope entry applies without a machine id).
-    #
-    # FR-020 draws a hard line between the two axes: the machine axis must
-    # stay "indistinguishable from an unregistered [server]" (the generic
-    # UpstreamUnavailable bucket the supervisor's own spawn gate below
-    # already raises), while only the agent axis gets the dedicated
-    # ToolDisabled bucket. So this gate only fires — and only records a
-    # `denied` row — once the machine axis is confirmed in-scope; a
-    # machine-axis exclusion falls through here untouched and lets
-    # `supervisor.get_or_spawn` raise UpstreamUnavailable for it below.
-    if (
-        local_machine_id is not None
-        and machine_in_scope(resource.scope, local_machine_id)
-        and not agent_in_scope(resource.scope, local_machine_id, session_agent)
-    ):
+    # ADR-045 (FR-020): tools/list already hides a server whose scope
+    # excludes this session's agent identity (gateway._enabled_mcp_servers),
+    # but that is only a listing-side filter — nothing on the call-routing
+    # path re-checked it, so a caller that already knows (or guesses) a
+    # hidden server's namespaced tool name could invoke it directly. The
+    # supervisor's spawn gate has no session context, so this check lives
+    # here, at the session's invocation seam, where `_session_agent` is known.
+    if not agent_in_scope(resource.scope, session_agent):
         await record_invocation(
             invocations,
             session_id=session_id,
@@ -213,8 +194,8 @@ async def _invoke(
             error_message=None,
         )
         # Same "indistinguishable from a disabled capability" shape FR-020
-        # specifies for an in-scope-but-hidden server: ToolDisabled, not
-        # UpstreamUnavailable (that stays reserved for the machine axis).
+        # specifies for a hidden server: ToolDisabled, not UpstreamUnavailable
+        # (that stays reserved for an upstream that genuinely won't start).
         raise ToolDisabled(f"{server_name!r} is not in scope for this agent")
 
     try:

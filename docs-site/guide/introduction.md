@@ -22,10 +22,10 @@ Coffer is the single source of truth instead. Register a tool, deliver a skill, 
 | [Chat](/guide/chat)                      | Talk to Coffer's built-in agent, or drive Claude Code / Codex.                                           |
 | [Channels](/guide/channels)              | Reach your agents from Telegram or SeaTalk.                                                              |
 
-Plus two cross-cutting capabilities: an [encrypted credential store](/guide/credentials) and [multi-machine sync](/guide/sync).
+Plus two cross-cutting capabilities: an [encrypted credential store](/guide/credentials) and [vault export and import](/guide/sync).
 
 ### Local-first by design
 
-All user state stays on your machine. Cloud services are LLM and tool providers only — they never become the system of record for any vault state. The HTTP API binds to `127.0.0.1`. Your configuration, credentials, and audit history are yours alone; secrets are encrypted at rest and travel only as ciphertext, only when you choose to sync.
+All user state stays on your machine. Cloud services are LLM and tool providers only — they never become the system of record for any vault state. The HTTP API binds to `127.0.0.1`. Your configuration, credentials, and audit history are yours alone; secrets are encrypted at rest and travel only as ciphertext, only when you explicitly export them.
 
 [Get started →](/guide/getting-started)

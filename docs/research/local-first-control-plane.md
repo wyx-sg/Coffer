@@ -178,7 +178,7 @@ Primary (project repos/docs):
   recommendations) called Coffer's gateway injection all-or-nothing — every
   gateway-installed agent saw the full set of enabled servers, with no
   subset/profile mechanism. That limitation is now **closed**: per-agent MCP
-  server scoping shipped in **PR #108 / ADR-026** (2026-06-18). Each agent
+  server scoping shipped in **PR #108 / ADR-045** (2026-06-18). Each agent
   carries a scope **mode** — `auto` (default; every enabled server, new servers
   auto-included) or `selected` (an explicit server allowlist). The installed
   `coffer` entry stamps the agent's identity via `--agent <name>` (forwarded as
@@ -188,7 +188,7 @@ Primary (project repos/docs):
   `resources/read` / `prompts/get` call path — so an out-of-scope tool cannot be
   listed, ranked, or called. The "all-or-nothing" gap is resolved; the
   competitive gap noted in §3.2 / §4.3 (mcpm profiles, ToolHive vMCP virtual
-  servers) is now matched. `repo:docs/decisions/ADR-026-per-agent-mcp-scoping.md`
+  servers) is now matched. `repo:docs/decisions/ADR-045-per-agent-resource-scope.md`
   · `repo:backend/coffer/application/agent/scope_service.py` ·
   `repo:backend/coffer/application/mcp/gateway.py`
   (`_effective_mcp_servers` / `authorize_server`). _Unchanged:_ the sandboxing

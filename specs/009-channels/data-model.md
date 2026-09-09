@@ -12,9 +12,7 @@ Channels are rows in the existing `resources` table (kind = `channel`).
 ChannelConfig (discriminator: channel_type)
 ├── common (both types, _CommonChannelFields)
 │   ├── default_agent: str = "claude_code"  # chat provider key; must name a registered agent
-│   ├── default_agent_config: dict | None
-│   └── runs_on: str | None                # machine_id whose runtime starts the adapter
-│                                          # (spec 010 affinity); None = runs nowhere
+│   └── default_agent_config: dict | None
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"
 │   └── bot_token_ref: str            # credential-store ref, probed at register
