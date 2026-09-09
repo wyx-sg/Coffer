@@ -1,9 +1,9 @@
-"""Composition-root helper that wires the memory consolidation organizer.
+"""Composition-root helper that wires the knowledge consolidation organizer.
 
 The langchain one-shot completion adapter (``LangchainLlmCompletion``) and a
 ``ProviderService`` wrapper are injected here, at a surfaces composition root
-(cross-kind imports allowed). The organizer's ``application/memory`` code
-reaches the LLM only through the memory-local ``LlmCompletionPort`` (Contract 9
+(cross-kind imports allowed). The organizer's ``application/knowledge`` code
+reaches the LLM only through the kind-local ``LlmCompletionPort`` (Contract 9
 keeps langchain in ``infrastructure.chat``).
 """
 
@@ -12,13 +12,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from coffer.application.memory.organizer import OrganizerService
-from coffer.application.memory.organizer_deps import collaborators_from_service
-from coffer.application.memory.service import MemoryService
+from coffer.application.knowledge.organizer import OrganizerService
+from coffer.application.knowledge.organizer_deps import collaborators_from_service
+from coffer.application.knowledge.service import KnowledgeService
 from coffer.application.provider.service import ProviderService
 from coffer.domain.provider.config import ResolvedConnection
 from coffer.infrastructure.chat.llm_completion import LangchainLlmCompletion
-from coffer.surfaces.http.memory.organize_state import set_organizer_service
+from coffer.surfaces.http.knowledge.organize_state import set_organizer_service
 
 
 class _ModelSelector:
@@ -33,18 +33,18 @@ class _ModelSelector:
 
 
 def wire_organize(
-    memory_service: MemoryService,
+    knowledge_service: KnowledgeService,
     provider_svc: ProviderService,
     credential_resolver: Callable[[str], str],
 ) -> OrganizerService:
-    """Construct and register the memory OrganizerService.
+    """Construct and register the knowledge OrganizerService.
 
-    Must be called AFTER ``wire_memory_kind`` (needs a live ``MemoryService``)
+    Must be called AFTER ``wire_knowledge_kind`` (needs a live ``KnowledgeService``)
     and ``wire_provider_kind`` (needs a live ``ProviderService``). Exposes the
     service via ``set_organizer_service`` so the ``organize`` route reaches it
     through ``get_organizer_service``.
     """
-    deps = collaborators_from_service(memory_service)
+    deps = collaborators_from_service(knowledge_service)
     svc = OrganizerService(
         resolve_store=deps.resolve_store,
         get_config=deps.get_config,

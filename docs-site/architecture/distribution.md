@@ -51,7 +51,7 @@ Alongside these, the release archive carries the **runtime helper binaries** the
 
 Alembic migration files ship as data files inside the daemon binary via PyInstaller's `datas` mechanism. On first launch, the daemon runs `alembic upgrade head` against a fresh database before accepting connections — the end-user gets correct schema creation with no separate step.
 
-The daemon binary also bundles the heavier knowledge/memory/chat dependencies (specs 006/007/008): `sqlite_vec` for the vector index, `markitdown` for document conversion, `openai` for embeddings, and the `langchain*` / `langgraph` chat-agent stack. These are imported lazily inside functions, so PyInstaller's static analysis cannot trace them — `coffer-daemon.spec` declares them explicitly as hidden imports so the frozen daemon can convert documents, embed, run vector retrieval, and drive the built-in chat agent.
+The daemon binary also bundles the heavier knowledge and chat dependencies (specs 007/008): `sqlite_vec` for the vector index, `markitdown` for document conversion, `openai` for embeddings, and the `langchain*` / `langgraph` chat-agent stack. These are imported lazily inside functions, so PyInstaller's static analysis cannot trace them — `coffer-daemon.spec` declares them explicitly as hidden imports so the frozen daemon can convert documents, embed, run vector retrieval, and drive the built-in chat agent.
 
 The built web UI (spec 002) also ships as data files inside the daemon binary, which is what lets the frozen daemon serve the UI from its own origin.
 

@@ -2,6 +2,16 @@
 
 > 中文版: [research.zh.md](./research.zh.md)
 
+> **Historical — 2026-09-10.** Spec 006 (Knowledge Base) and spec 007 (Memory)
+> merged into one **Knowledge Layer** on this date. [`spec.md`](./spec.md) is the
+> authority for the merged model — one `knowledge` kind, three scopes, one
+> storage root `~/.coffer/knowledge/<scope>/`, eight `coffer__*` tools. This
+> document records the design as it stood before that merge; where it says
+> "memory face", "`memory` kind", `~/.coffer/memory/`, `/api/v1/memory_stores`
+> or `coffer memory …`, read the merged equivalents in `spec.md`. The folder
+> name `specs/007-memory/` is likewise historical: it is the spec id every
+> inbound link and the acceptance audit key on.
+
 ## 1. Why drop mem0 (and the per-agent silo model)
 
 **Question**: Should memory keep using mem0 (LLM-at-write fact extraction + vector store)?
@@ -92,7 +102,7 @@ Invocations are recorded in `mcp_invocations` the same way KB and upstream tools
 - Multi-machine sync (constitutional).
 - Filesystem watcher on by default.
 - Memory categories beyond a free-form `metadata.type`.
-- Defining file-write atomicity here: memory's source-of-truth files (facts, topic docs, `INDEX.md`, handoffs) are written via the shared `infrastructure.knowledge.fs.atomic_write_*` helper (same-dir temp → fsync → `os.replace`), decided once in KB19 (see `specs/006-knowledge-base/research.md` §13).
+- Defining file-write atomicity here: memory's source-of-truth files (facts, topic docs, `INDEX.md`, handoffs) are written via the shared `infrastructure.knowledge.fs.atomic_write_*` helper (same-dir temp → fsync → `os.replace`), decided once in KB19 (that research lived in the now-deleted `specs/006-knowledge-base/`; the helper itself is the record).
 
 ## 11. Open items to verify in implementation
 

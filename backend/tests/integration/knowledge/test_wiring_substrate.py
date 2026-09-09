@@ -13,7 +13,7 @@ import sqlite3
 import pytest
 
 from coffer.domain.knowledge.document import (
-    KIND_KNOWLEDGE_BASE,
+    KIND_KNOWLEDGE,
     WORKSPACE_GLOBAL_PROJECT_ID,
 )
 from coffer.domain.knowledge.retrieval import StoreRef
@@ -31,7 +31,7 @@ def _sqlite_vec_available() -> bool:
 
 def _store(tmp_path) -> StoreRef:  # type: ignore[no-untyped-def]
     return StoreRef(
-        kind=KIND_KNOWLEDGE_BASE,
+        kind=KIND_KNOWLEDGE,
         resource_name="kb1",
         project_id=WORKSPACE_GLOBAL_PROJECT_ID,
         docs_dir=str(tmp_path),
@@ -51,7 +51,7 @@ async def test_delete_chunks_without_dimensions_reaches_vec_rows(substrate, tmp_
     maintenance_index = retrieval.index_for(store, dimensions=None)
     await maintenance_index.delete_chunks("d1")
 
-    probe = VecIndex(str(substrate.db_path), 3, kind=KIND_KNOWLEDGE_BASE, resource_name="kb1")
+    probe = VecIndex(str(substrate.db_path), 3, kind=KIND_KNOWLEDGE, resource_name="kb1")
     assert await probe.knn([1.0, 0.0, 0.0], 5) == []
 
 
@@ -66,7 +66,7 @@ async def test_drop_store_without_dimensions_drops_vec_table(substrate, tmp_path
 
     await retrieval.drop_store(store, dimensions=None)
 
-    table = _store_table_name(KIND_KNOWLEDGE_BASE, "kb1")
+    table = _store_table_name(KIND_KNOWLEDGE, "kb1")
     conn = sqlite3.connect(str(substrate.db_path))
     try:
         row = conn.execute(

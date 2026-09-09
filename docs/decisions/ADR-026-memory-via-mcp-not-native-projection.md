@@ -121,3 +121,18 @@ touching any file.
 that loads only when the model remembers to call `recall` is underused.
 Runtime injection via a session hook is the planned, non-intrusive remedy — so
 MCP-only is the floor we ship now, with injection as the funded follow-up.
+
+## Revision history
+
+- **2026-06-18** — Initial decision: the native-projection layer is removed;
+  Coffer manages memory in its own format and reaches every agent through the
+  MCP gateway.
+- **2026-09-10** — Vocabulary only. `memory` and `knowledge_base` merged into a
+  single `knowledge` kind (see
+  [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md)'s revision history), so
+  the tool names in the Decision above are historical: the surface is now
+  `coffer__search`, `coffer__grep`, `coffer__read`, `coffer__list`,
+  `coffer__write` and `coffer__delete`, over `~/.coffer/knowledge/<scope>/`
+  rather than a memory store, and the two-layer scope became `global` /
+  `project-<ULID>` / a deliberately created collection. **The decision itself is
+  unchanged**: Coffer still never operates on an agent's native memory files.

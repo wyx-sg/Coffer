@@ -52,7 +52,7 @@ API key 以密文形式存储在 Coffer 的加密凭据存储中，connection �
 
 > What do my memory notes say about OAuth?
 
-agent 会调用匹配的工具（`coffer__recall`、`coffer__search_knowledge`、
+agent 会调用匹配的工具（`coffer__search`、`coffer__read`、
 `coffer__load_skill`，或你的任意 MCP server 工具）。每次调用都会在对话线程中
 以一张内联卡片出现，你可以展开它查看输入与结果。
 

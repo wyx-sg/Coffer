@@ -1,0 +1,84 @@
+"""Integration acceptance tests for GET /api/v1/knowledge/{scope}/rules."""
+
+from __future__ import annotations
+
+import pytest
+from starlette.testclient import TestClient
+
+from coffer.infrastructure.knowledge.paths import rules_path
+from coffer.infrastructure.knowledge_scope.rules_files import append_rule
+from coffer.surfaces.http.app import create_app
+from coffer.surfaces.http.auth import set_active_token
+
+_TOKEN = "rules-route-token"
+_HEADERS = {"X-Coffer-Token": _TOKEN}
+
+
+def _app(tmp_path, monkeypatch, port_start: int):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
+    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
+    monkeypatch.setenv("COFFER_PORT_RANGE_START", str(port_start))
+    monkeypatch.setenv("COFFER_PORT_RANGE_END", str(port_start + 9))
+    return create_app()
+
+
+@pytest.mark.acceptance(
+    spec="007-memory",
+    scenario="the rules read surface returns the stored rules",
+)
+def test_rules_read_surface_returns_stored_rules(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59900)
+    store_dir = tmp_path / "knowledge" / "global"
+    with TestClient(app) as c:
+        set_active_token(_TOKEN)
+        # Provision the global store first
+        r = c.get("/api/v1/knowledge", headers=_HEADERS)
+        assert r.status_code == 200, r.text
+
+        # Seed the rules file directly
+        store_dir.mkdir(parents=True, exist_ok=True)
+        rule_text = "Always run make verify before pushing."
+        append_rule(rules_path(store_dir), rule_text)
+
+        # GET /rules should return the text
+        r = c.get("/api/v1/knowledge/global/rules", headers=_HEADERS)
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert "text" in data
+        assert rule_text in data["text"]
+
+
+def test_rules_read_surface_concatenates_category_files(tmp_path, monkeypatch):
+    # After the autonomous split, rules live in per-topic files; the read surface
+    # (and thus session-start injection) must return ALL of them.
+    from coffer.infrastructure.knowledge.paths import rule_file_path
+    from coffer.infrastructure.knowledge_scope.rules_files import write_rules_file
+
+    app = _app(tmp_path, monkeypatch, 59920)
+    store_dir = tmp_path / "knowledge" / "global"
+    with TestClient(app) as c:
+        set_active_token(_TOKEN)
+        c.get("/api/v1/knowledge", headers=_HEADERS)
+        store_dir.mkdir(parents=True, exist_ok=True)
+        write_rules_file(rule_file_path(store_dir, "git"), ["commit small and often"])
+        write_rules_file(rule_file_path(store_dir, "testing"), ["write the test first"])
+
+        r = c.get("/api/v1/knowledge/global/rules", headers=_HEADERS)
+        assert r.status_code == 200, r.text
+        text = r.json()["text"]
+        assert "commit small and often" in text
+        assert "write the test first" in text
+
+
+def test_rules_returns_null_when_no_rules(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59910)
+    with TestClient(app) as c:
+        set_active_token(_TOKEN)
+        # Provision the global store
+        c.get("/api/v1/knowledge", headers=_HEADERS)
+
+        r = c.get("/api/v1/knowledge/global/rules", headers=_HEADERS)
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["text"] is None

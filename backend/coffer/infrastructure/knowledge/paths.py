@@ -1,9 +1,18 @@
-"""On-disk layout for the shared knowledge substrate.
+"""On-disk layout for the knowledge substrate.
 
-Sole owner of path construction for both the KB face
-(``~/.coffer/knowledge/<kb>/{docs,raw}/``) and the memory face
-(``~/.coffer/memory/{global,projects/<ulid>}/``), with ``$COFFER_*_ROOT``
-overrides for tests and path-traversal guards on every name.
+Sole owner of path construction. One layout, one root:
+``~/.coffer/knowledge/<scope>/`` — where ``<scope>`` is the resource name
+(``global``, ``project-<ULID>``, or a named collection). Inside a scope dir:
+
+- ``knowledge/``   topic docs + ``knowledge/inbox/`` (freshly written entries)
+- ``rules/``       behavioural rules
+- ``handoff/``     per-branch working state
+- ``superseded/``  retired topic docs
+- ``inbox/``       ingested documents (the normalized Markdown)
+- ``.raw/``        the ingested originals (hidden, so grep skips them)
+
+``$COFFER_KNOWLEDGE_ROOT`` overrides the root for tests. Every name that
+becomes a path segment goes through a traversal guard.
 """
 
 from __future__ import annotations
@@ -11,8 +20,6 @@ from __future__ import annotations
 import os
 import pathlib
 import re
-
-from coffer.domain.knowledge.document import WORKSPACE_GLOBAL_PROJECT_ID
 
 # Names that would resolve to a parent dir or the root itself are unsafe for
 # rmtree / write targets. Surfaces already constrain resource names; this is
@@ -47,7 +54,24 @@ def _safe_segment(value: str, label: str) -> str:
     return value
 
 
-# --- knowledge base layout --------------------------------------------------
+def _child(parent: pathlib.Path, name: str, label: str) -> pathlib.Path:
+    """A fixed-name subdirectory of a scope dir, traversal-checked."""
+    candidate = (parent / name).resolve()
+    if not candidate.is_relative_to(parent.resolve()):
+        raise ValueError(f"{label} dir escapes the scope dir")
+    return parent / name
+
+
+def _leaf(parent: pathlib.Path, slug: str, label: str) -> pathlib.Path:
+    """``<parent>/<slug>.md``, with ``slug`` guarded as one safe segment."""
+    _safe_segment(slug, label)
+    candidate = (parent / f"{slug}.md").resolve()
+    if not candidate.is_relative_to(parent.resolve()):
+        raise ValueError(f"{label} {slug!r} escapes {parent}")
+    return parent / f"{slug}.md"
+
+
+# --- the one root + the scope dir -------------------------------------------
 
 
 def knowledge_root() -> pathlib.Path:
@@ -58,32 +82,38 @@ def knowledge_root() -> pathlib.Path:
     return _expand_home() / ".coffer" / "knowledge"
 
 
-def kb_dir(name: str) -> pathlib.Path:
-    return _guard(knowledge_root(), name, "knowledge base")
+def scope_dir(scope_name: str) -> pathlib.Path:
+    """``~/.coffer/knowledge/<scope>/`` for a scope's resource name."""
+    return _guard(knowledge_root(), scope_name, "knowledge scope")
 
 
-def docs_dir(name: str) -> pathlib.Path:
-    return kb_dir(name) / "docs"
+# --- the ingestion lane -----------------------------------------------------
 
 
-def raw_dir(name: str) -> pathlib.Path:
-    return kb_dir(name) / "raw"
+def docs_dir(scope_name: str) -> pathlib.Path:
+    """``<scope>/inbox/`` — the normalized Markdown of ingested documents."""
+    return scope_dir(scope_name) / "inbox"
 
 
-def doc_path(name: str, doc_id: str) -> pathlib.Path:
-    """Path of the normalized markdown ``docs/<doc-id>.md``."""
-    _safe_segment(doc_id, "doc id")
-    d = docs_dir(name)
-    candidate = (d / f"{doc_id}.md").resolve()
-    if not candidate.is_relative_to(d.resolve()):
-        raise ValueError(f"doc id {doc_id!r} escapes the docs dir")
-    return d / f"{doc_id}.md"
+def raw_dir(scope_name: str) -> pathlib.Path:
+    """``<scope>/.raw/`` — the ingested originals, kept for re-conversion.
+
+    Dot-prefixed deliberately: grep runs over the whole scope dir, and ripgrep
+    skips hidden entries, so an original never shows up as a second hit
+    alongside the Markdown that was converted from it.
+    """
+    return scope_dir(scope_name) / ".raw"
 
 
-def raw_path(name: str, doc_id: str, ext: str) -> pathlib.Path:
+def doc_path(scope_name: str, doc_id: str) -> pathlib.Path:
+    """Path of the normalized markdown ``inbox/<doc-id>.md``."""
+    return _leaf(docs_dir(scope_name), doc_id, "doc id")
+
+
+def raw_path(scope_name: str, doc_id: str, ext: str) -> pathlib.Path:
     """Path of the original upload ``raw/<doc-id>.<ext>``."""
     _safe_segment(doc_id, "doc id")
-    d = raw_dir(name)
+    d = raw_dir(scope_name)
     bare_ext = ext.lstrip(".")
     if bare_ext:
         # A slashed/traversing ext (from an upload filename) would otherwise nest
@@ -96,40 +126,7 @@ def raw_path(name: str, doc_id: str, ext: str) -> pathlib.Path:
     return d / f"{doc_id}{clean_ext}"
 
 
-# --- memory layout ----------------------------------------------------------
-
-
-def memory_root() -> pathlib.Path:
-    """``~/.coffer/memory/`` (override via ``$COFFER_MEMORY_ROOT``)."""
-    override = os.environ.get("COFFER_MEMORY_ROOT")
-    if override:
-        return pathlib.Path(override).expanduser()
-    return _expand_home() / ".coffer" / "memory"
-
-
-def memory_global_dir() -> pathlib.Path:
-    """The global scope store dir (sentinel project id)."""
-    return memory_root() / "global"
-
-
-def memory_projects_dir() -> pathlib.Path:
-    return memory_root() / "projects"
-
-
-def memory_project_dir(project_id: str) -> pathlib.Path:
-    """Per-project store dir ``projects/<project-ulid>/``."""
-    return _guard(memory_projects_dir(), project_id, "project")
-
-
-def memory_store_dir(project_id: str) -> pathlib.Path:
-    """Resolve a memory store dir from its ``project_id`` (sentinel ⇒ global)."""
-    if project_id == WORKSPACE_GLOBAL_PROJECT_ID:
-        return memory_global_dir()
-    return memory_project_dir(project_id)
-
-
-def memory_index_path() -> str:
-    return "MEMORY.md"
+# --- the entry lanes --------------------------------------------------------
 
 
 def fact_path(store_dir: pathlib.Path, slug: str) -> pathlib.Path:

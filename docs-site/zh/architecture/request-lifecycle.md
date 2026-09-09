@@ -1,7 +1,7 @@
 # 请求全链路
 
 ::: tip 核心模型
-Coffer 如今承载**多条**请求全链路，而不止一条。最初——也仍是最核心的——路径是 **MCP `tools/call`** 全链路：MCP 客户端 → 守护进程 → 上游服务器，入口处 shim 将 stdio 转换为 HTTP/SSE，分发处命名空间解析器将 `filesystem__read_file` 拆分为服务器 `filesystem` 和工具 `read_file`。与之并行的还有 **agent 对话回合**全链路、**channel 入站**全链路和**知识/记忆检索**全链路。本页先完整讲解 MCP 路径，再勾勒其余三条。
+Coffer 如今承载**多条**请求全链路，而不止一条。最初——也仍是最核心的——路径是 **MCP `tools/call`** 全链路：MCP 客户端 → 守护进程 → 上游服务器，入口处 shim 将 stdio 转换为 HTTP/SSE，分发处命名空间解析器将 `filesystem__read_file` 拆分为服务器 `filesystem` 和工具 `read_file`。与之并行的还有 **agent 对话回合**全链路、**channel 入站**全链路和**知识检索**全链路。本页先完整讲解 MCP 路径，再勾勒其余三条。
 :::
 
 ## MCP 工具调用全链路
@@ -211,15 +211,16 @@ MCP 客户端（Claude Code、Codex）期望通过 stdio 与 MCP 服务器通信
 
 进度由 agent 的能力渲染，而非适配器类型：Telegram 通过编辑同一条消息流式呈现进度，SeaTalk 降级为 ack-then-final。
 
-## 知识/记忆检索全链路
+## 知识检索全链路
 
-检索请求（KB 搜索，以及 `recall` / `remember` 记忆工具）遵循一条锚定于 [ADR-012](/zh/reference/adr/ADR-012-files-as-truth-sqlite-retrieval) 的全链路：**markdown 文件是事实来源**，`coffer.db` 只保存派生索引。
+检索请求——`coffer__search`、`coffer__grep`，以及 REST 的 `search` / `recall` / `grep` 路由——遵循一条锚定于 [ADR-012](/zh/reference/adr/ADR-012-files-as-truth-sqlite-retrieval) 的全链路：**markdown 文件是事实来源**，`coffer.db` 只保存派生索引。
 
 - **`grep`** —— 对原始文件做 ripgrep（零索引、与语言无关）。
 - **keyword** —— SQLite **FTS5** 的 `MATCH … ORDER BY bm25()`。
-- **vector** —— **sqlite-vec** 对 chunk 嵌入做 KNN（可选启用；嵌入来自用户可配置的 OpenAI 兼容端点）。
+- **vector** —— **sqlite-vec** 对 chunk 嵌入做 KNN（按作用域可选启用；嵌入来自 Settings 中整个安装配置一次的 OpenAI 兼容端点）。
+- **hybrid** —— 在 keyword + vector 之上做 RRF 融合。
 
-KB 搜索融合已启用的引擎并返回排序后的 chunk；`recall` 从记忆存储读取，`remember` 写入一个事实文件，随后从文件重新生成派生的 FTS5/vec 索引。由于文件即事实，索引随时可重建，用户也可用普通工具 diff/grep/编辑内容。
+引擎根据作用域的配置在这些模式中自行选择——调用方从不指定模式（[ADR-034](/zh/reference/adr/ADR-034-retrieval-mode-is-internal)）——并且一次检索同时覆盖作用域的两条车道:agent 写下的条目与你摄取的文档。一次写入（`coffer__write` 或一次摄取）先落成一个 markdown 文件，随后从文件重新生成派生的 FTS5/vec 索引。由于文件即事实，索引随时可重建，用户也可用普通工具 diff/grep/编辑内容。
 
 ---
 

@@ -1,5 +1,15 @@
 # Amendment 2026-06-22 — recursive rules split
 
+> **Historical — 2026-09-10.** Spec 006 (Knowledge Base) and spec 007 (Memory)
+> merged into one **Knowledge Layer** on this date. [`spec.md`](./spec.md) is the
+> authority for the merged model — one `knowledge` kind, three scopes, one
+> storage root `~/.coffer/knowledge/<scope>/`, eight `coffer__*` tools. This
+> document records the design as it stood before that merge; where it says
+> "memory face", "`memory` kind", `~/.coffer/memory/`, `/api/v1/memory_stores`
+> or `coffer memory …`, read the merged equivalents in `spec.md`. The folder
+> name `specs/007-memory/` is likewise historical: it is the spec id every
+> inbound link and the acceptance audit key on.
+
 Status: **proposed** (design under review)
 Amends: [spec 007 — Memory](./spec.md) · no new spec number (like the transcript-distillation extension)
 Scope axis unchanged: the lanes (`knowledge` / `rules` / `handoff`) and files-as-truth (ADR-012/013) stay exactly as they are. This amendment only changes **how the rules lane partitions its files** and adds a **one-time stale-store cleanup**.

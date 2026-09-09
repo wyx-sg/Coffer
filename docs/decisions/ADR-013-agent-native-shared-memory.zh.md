@@ -1,146 +1,135 @@
-# ADR-013：agent 原生的共享 memory 投影
+# ADR-013：跨 agent 共享的单一知识 store
 
 > English: [ADR-013-agent-native-shared-memory.md](./ADR-013-agent-native-shared-memory.md)
 
-**Status**: 已被 [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md) 取代（2026-06-18）—— 原生投射已移除，记忆现在只经 MCP 网关访问。以下设计保留作历史。
-**Date**: 2026-06-09
+**Status**: 部分被 [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md) 取代（2026-06-18）—— 下文决策中「原生投影」那一半已移除；Coffer 绝不写 agent 自己的原生记忆文件。「共享单一 store」那一半依然成立，也正是本 ADR 现在所记录的内容。2026-09-10 以知识层词汇重新表述（见修订历史）。
+**Date**: 2026-06-09（2026-09-10 修订；见修订历史）
 **Deciders**: Yuxing Wu
-**Related**: spec `007-memory`、[ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md)、[ADR-007](ADR-007-everything-is-a-resource-kind.md)、[ADR-009](ADR-009-cross-platform-skill-delivery.md)
+**Related**: spec `007-memory`（知识层 spec）、[ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md)、[ADR-007](ADR-007-everything-is-a-resource-kind.md)、[ADR-009](ADR-009-cross-platform-skill-delivery.md)、[ADR-026](ADR-026-memory-via-mcp-not-native-projection.md)、[ADR-035](ADR-035-adopt-native-memory.md)、[ADR-037](ADR-037-rules-runtime-injection.md)
 
 ## Context
 
-第一版 `memory` 设计（ADR-011）把每个 memory store 当成一个通过 MCP 查询的私有
-孤岛。但现实中，开发者会在同一个项目上跑不止一个编码 agent（Claude Code、Codex
-…）。每个 agent 各有自己的原生 memory 位置 —— Claude Code 的 auto-memory 目录、
-Codex 的 `memories` 等等。于是同一条项目事实（「我们用 squash-merge」「API base
-URL 是 X」）被每个 agent 各写一份，并**分叉**：每份副本被独立编辑，agent 们对这个
-项目各执一词。
+第一版记忆设计（ADR-011）把每个 store 当成一个通过 MCP 查询的私有孤岛。但现实中，
+开发者会在同一个项目上跑不止一个编码 agent（Claude Code、Codex …）。每个 agent
+各有自己的原生记忆位置 —— Claude Code 的 auto-memory 目录、Codex 的 `memories`
+等等。于是同一条项目事实（「我们用 squash-merge」「API base URL 是 X」）被每个
+agent 各写一份，并**分叉**：每份副本被独立编辑，agent 们对这个项目各执一词。
 
 修复方案受两股力量塑形：
 
 1. **关于项目的事实是关于项目的，而非关于 agent 的。** 它应当只存在一份，并对在
    该项目上工作的每个 agent 都可见。
-2. **agent 是「环境式」地加载原生 memory，而「有意地」查询 MCP memory。** 原生
-   文件（Claude 的 memory 目录、`CLAUDE.md`、`AGENTS.md`）在会话开始时被自动读入
-   上下文；MCP 工具只在 agent 主动选择调用 `recall` 时才被查询。丢掉原生加载会让
-   memory 严格劣于 agent 已经免费拥有的能力。
+2. **agent 是「环境式」地加载原生文件，而「有意地」调用 MCP 工具。** 原生文件
+   （agent 的记忆目录、`CLAUDE.md`、`AGENTS.md`）在会话开始时被自动读入上下文；
+   MCP 工具只在 agent 主动选择调用时才被查询。我们造的东西必须回应这个落差，
+   否则一个共享 store 会严格劣于每个 agent 已经免费拥有的能力。
 
-本决策建立在 [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md) 之上：现在已有
-一个单一、规范、逐条 markdown、文件即事实的 memory store。待解的问题是：这一个
-store 如何在不重新引入分叉副本的前提下触达多个 agent。
+本决策建立在 [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md) 之上：底下已
+有一个单一、规范、markdown 文件即事实的基底。待解的问题是：这一个 store 如何在不
+重新引入分叉副本的前提下触达多个 agent。
 
 ## Decision
 
-**保留一个规范的、逐条 markdown 的 memory store，并通过一套混合机制跨 agent
-共享：对每个 agent 都提供 MCP 读写，再叠加逐 agent 的原生投影 —— 由一个
-`AgentMemoryAdapter` 负责，其 `projection_mode` 取值 `SYMLINK | RENDER | NONE`。
-当某个 agent 被投影时，关闭该 agent 自己的原生 memory，使规范 store 成为唯一写
-入者，副本无法分叉。memory 作用域分两层：global（跨项目）+ per-project。**
+**Coffer 持有一个共享 store，每个 agent 都通过 Coffer 自己的工具读写它。一条事实
+只写一次，写进 Coffer 的 `knowledge` 层，并对该 scope 下的每个 agent 可见。Coffer
+不保留任何逐 agent 的副本；自 [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md)
+起，也不写入任何 agent 的原生记忆文件。**
 
-具体形态：
+今天的具体形态：
 
-- **规范格式。** 逐条 `.md` 文件，YAML frontmatter（`name`、`description`、
-  `metadata.type`、`origin_session_id`）+ markdown 正文，外加一份重新生成的
-  `MEMORY.md` 索引。这就是 Claude Code 的 auto-memory 格式，*正是为了*让 Claude
-  投影能是一个原生目录 symlink（无渲染、无有损往返）才把它选作规范格式。
-- **两层作用域。** global 事实存在 `WORKSPACE_GLOBAL_PROJECT_ID` 哨兵 store 里
-  （即既有哨兵 `00000000000000000000000000` —— 不新造）；per-project 事实存在
-  `projects/<project-ulid>/`。`remember(scope=project)` 经 MCP shim 上报的
-  cwd → git-root 解析到对应项目 store；`recall` 默认查两层。
-- **投影矩阵。**
+- **一个资源 kind：`knowledge`。** 一个存储根 `~/.coffer/knowledge/<scope>/`，
+  lane 为 `knowledge/`（agent 写下的条目）、`inbox/`（导入的文档）、`rules/`、
+  `handoff/`、`superseded/`，外加一个隐藏的 `.raw/` 存放导入文档的原件。文件即
+  事实；SQLite 是其上一份可重建的索引（ADR-012）。
+- **三种 scope，由资源名读出。** `global`（跨项目）与 `project-<ULID>`（由 cwd 的
+  git 根解析）在首次使用时自动开通；其余任何名字都是用户有意创建的集合，绝不自动
+  开通 —— 因为从一个拼写错误里悄悄造出一个 scope，会比报错更糟。这就是原决策里的
+  两层作用域，再加上第三层：为不属于前两者的语料而设、需显式创建。
+- **规范格式。** 一条 entry 是 `<scope>/knowledge/` 下带 YAML frontmatter
+  （`name`、`description`、`metadata.type`、`origin_session_id`）+ markdown 正文的
+  `.md` 文件。一份导入文档是 `<scope>/inbox/` 下归一化后的 markdown，其原件保留在
+  `<scope>/.raw/`，以便日后重新转换。两条 lane 索引进同一套 `documents` /
+  `chunks` / FTS5 / sqlite-vec 基底，检索横跨两者。
+- **一套工具界面，对每个 agent 都相同。** 八个 MCP 工具 —— `coffer__search`、
+  `coffer__grep`、`coffer__read`、`coffer__list`、`coffer__write`、
+  `coffer__delete`、`coffer__set_handoff`、`coffer__resume`。每个都带可选的
+  `scope`，默认取由 shim 上报的 cwd 解析出的项目 scope，回退到 `global`。调用方
+  再也不必在能搜之前先判定一条事实属于哪个 store。**新加一个 agent，知识层零代码**
+  —— 这些工具本就与 agent 无关。
+- **不碰 agent 文件也能做环境式交付。** Context 里点出的那个落差（原生免费加载、
+  MCP 不会）由 [ADR-037](ADR-037-rules-runtime-injection.md) 补上：`rules` lane
+  在 SessionStart 注入会话，handoff 经 `coffer__resume` 按需拉取。注入是运行时
+  状态，因此既达到环境式效果，又不写任何归 agent 所有的文件。
+- **只导入，不投影。** 若某个 agent 已经积累了自己的原生记忆，Coffer 读取它，并让
+  用户把它一次性接管**进**共享 store（[ADR-035](ADR-035-adopt-native-memory.md)）。
+  这条流向是单向、向内的；没有任何东西回流到 agent 的文件里。
 
-  |            | Claude Code                                                                                                   | Codex                                                                         |
-  | ---------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-  | **项目层** | `SYMLINK` 规范目录 → `~/.claude/projects/<slug>/memory/`（原生、双向，auto-memory 保持 ON —— 它*就是*规范源） | 把一个 marker 围栏块 `RENDER` 进 `<project>/AGENTS.md`；禁用 Codex `memories` |
-  | **全局层** | 把块 `RENDER` 进 `~/.claude/CLAUDE.md`                                                                        | 把块 `RENDER` 进 `~/.codex/AGENTS.md`                                         |
-
-- **托管块（managed block）** 用于 `RENDER` 模式（幂等，memory 变更时重新渲染）：
-
-  ```
-  <!-- coffer:memory:start (managed, do not edit) -->
-  … rendered facts …
-  <!-- coffer:memory:end -->
-  ```
-
-- **`AgentMemoryAdapter`** 随 agent driver 落地（即那个已经持有 L1 配置文件 ——
-  `CLAUDE.md` / `AGENTS.md` / rules —— 的 agent 层），而**不**随 memory kind：
-
-  ```
-  memory_location(project) -> path | None
-  projection_mode          -> SYMLINK | RENDER | NONE
-  disable_native_memory(agent_config)   # 仅当原生 memory 会成为另一份副本时
-  render(facts) -> bytes                # RENDER 模式
-  ```
-
-  投影引擎按 `projection_mode` 分发；adapter 执行全部文件改动。memory 基底只提供
-  规范文件 + 渲染好的 markdown，从而保持它与 agent 无关、L1/L2 边界干净（memory
-  从不撰写配置；是 agent 自己的 adapter 注入托管块）。**加一个新 agent = 一个
-  adapter，不动内核**（[ADR-009](ADR-009-cross-platform-skill-delivery.md) 的
-  逐 agent 投递形态在此重现）。
-
-- **投影时禁用原生 memory。** 凡是 `RENDER` 的 agent 自带可写原生 memory
-  （Codex `memories`），就把它关掉，使唯一写入者是规范 store。`SYMLINK` 的 agent
-  保持原生 memory ON，因为被 symlink 的目录*就是*规范 store（同 inode → 不分叉）。
-- **惰性建立。** 在会话开始时按上报的 cwd 建立。若某个 agent 的原生 memory 目录
-  里已有真实文件，**先合并进规范 store，再**替换为 symlink —— 绝不静默覆盖。
+**本 ADR 最初选定的机制并非如此，且已被移除。** 它把规范 store *向外*投影到每个
+agent 的原生位置 —— 每个 agent 一个 `AgentMemoryAdapter`，`projection_mode` 取值
+`SYMLINK | RENDER | NONE`，把规范目录 symlink 到 Claude Code 的 auto-memory 路径，
+把一个 marker 围栏的托管块 render 进 Codex 配置文件，并**关闭每个 agent 自己的原生
+记忆**，使规范 store 保持为唯一写入者。
+[ADR-026](ADR-026-memory-via-mcp-not-native-projection.md) 于 2026-06-18 整体撤回
+了它：写入并关闭别的工具的配置是侵入性的；逐 agent 适配器得追踪上游一直在变的
+格式；而当初为之付费的那份环境式加载收益，改用注入同样能拿到。存活下来、也是本
+ADR 今天被读的理由，是「共享单一 store」这个决策本身。
 
 ## Consequences
 
 **正面**
 
-- **一条事实，每个 agent，无分叉。** 一条项目事实只写一次，被 Claude（活的
-  symlink）、Codex（重新渲染的块）以及任何未来 agent 读取。双份/三份副本的分叉
-  问题被结构性消除。
-- **保住环境式原生加载。** agent 仍在会话开始时从原生位置读入 memory；MCP
-  `recall` 是叠加而非唯一路径。memory 严格优于逐 agent 原生 memory，不是平替。
-- **干净分层。** memory（L2）从不撰写配置（L1）；是 agent 的 adapter —— 它本就持
-  有该 agent 的 L1 文件 —— 这一个组件去碰它们。加一个 agent 不动 memory kind。
-- **廉价的新鲜度。** symlink 是活的（同 inode）；托管块在 memory 变更时幂等重渲；
-  `recall` 对小小的事实目录做惰性 reindex-on-read，因此 Claude 的 symlink 编辑
-  对所有 agent 立即可见，无需文件系统 watcher。
+- **一条事实，每个 agent，无分叉。** 一条事实只写一次，该 scope 下每个 agent 读
+  的是同一个文件。双份/三份副本的分叉问题被结构性消除 —— 而且是靠「只有一份」，
+  而不是靠「让好几份保持同步」。
+- **知识层没有逐 agent 代码。** 因为工具界面与 agent 无关、Coffer 也从不碰 agent
+  自己的文件，接入一个新 agent 在知识层的成本为零 —— 与原机制所需的逐 agent
+  适配器形成对照。
+- **干净分层。** 知识（L2）从不撰写 agent 的配置（L1）。原决策靠一个 adapter 维持
+  的边界，现在靠「干脆不越界」维持。
+- **调用方不必分类。** 只有一个 kind、一套工具，agent 不再需要先判断某样东西是
+  「记忆」还是「知识」才能存下或找到它。
 
 **负面**
 
-- **逐 agent adapter 的维护成本。** 每个 agent 的原生 memory 形态、用于禁用它的
-  配置开关、文件位置都得追踪，且上游可能变。靠「一个 agent 一个 adapter」的隔离
-  来缓解。
-- **`RENDER` 是单向的。** 对 `RENDER` 的 agent，编辑只从规范 → 原生单向流动；
-  agent 不能靠改它的 `AGENTS.md` 块来编辑 memory（下次渲染会覆盖）。这些 agent
-  改为通过 MCP 写。这是为避免有损往返而有意做的取舍（见 Alternatives）。
-- **禁用原生 memory 是侵入性的。** Coffer 会改动一个 agent 自己的配置去关掉它的
-  原生 memory。这必须显式、可逆、绝不静默 —— 且在这么做之前必须先把任何既有原生
-  事实迁移进规范 store。
-- **symlink 可移植性。** 目录 symlink 与
-  [ADR-009](ADR-009-cross-platform-skill-delivery.md) 的 skill 投递有相同的跨平台
-  注意点（Windows junction / copy-fallback 的考量），须遵循同一策略。
+- **取回是有意的，不是自动的。** agent 只有在调用 `coffer__search`（或 rules lane
+  被注入）时才看得见一条事实。只有 rules 与 handoff 两条路径是环境式的；普通
+  entry 不会被推进上下文。这是「不写 agent 文件」的代价，我们接受。
+- **既有原生记忆需用户显式接管。** 已经躺在 agent 自己 store 里的事实不会自行迁移；
+  ADR-035 的导入是一个用户动作。
+- **Coffer 的工具是唯一写入路径。** 不会讲 MCP 的 agent 无法向共享 store 贡献内容。
 
 ## Alternatives Considered
 
-**仅 MCP（无原生投影），即 ADR-011 的做法。** 可行且最简：一个规范 store，每个
-agent 都通过 `recall`/`remember` 读写。作为*唯一*机制被否，因为它丢掉了环境式
-原生加载 —— agent 只有在记得调工具时才看得见 memory，而原生文件在会话开始时免费
-加载进上下文。我们把 MCP 留作通用底座，并在其上叠加投影。
+**每个 agent 一个孤岛，即 ADR-011 的做法。** 被否：它正是本 ADR 要消除的分叉。
 
-**逐 agent 渲染进各自的原生 memory 格式，双向。** 把规范 store 投影*进*每个 agent
-的私有 memory 格式，并在编辑时*反向*解析回来，使每个 agent 都原生地编辑 memory、
-变更双向流动。被否：把一个私有、还在演进的 agent memory 格式无损往返是业内未解
-难题，且天生有损。我们绕开它 —— 格式已匹配处用 symlink（Claude）、别处用单向托管
-块、写入走 MCP —— 而不去造一个脆弱的双向翻译器。
+**逐 agent 的原生投影（本 ADR 最初的机制）。** 格式已匹配处用 symlink、不匹配处用
+托管块，并关闭 agent 自己的原生记忆使副本无法分叉。被 ADR-026 取代：那样 Coffer
+就在改动并关闭另一个工具的配置，且每个受支持的 agent 都欠一个手工维护、追着上游
+格式跑的适配器。
 
-**把 memory 折进 agent-workspace 配置（让 memory 直接写 `CLAUDE.md`）。** 因分层
-理由被否：它会塌掉 L1（配置）/ L2（知识）边界。memory 保持与 agent 无关；只有
-agent 自己的 adapter 注入一个 marker 围栏块，它可逆且界限分明。
+**渲染进各 agent 自己的记忆格式，双向。** 把规范 store 投影*进*每个 agent 的私有
+格式，并在编辑时*反向*解析回来，使每个 agent 都原生地编辑、变更双向流动。被否：
+把一个私有、还在演进的 agent 记忆格式无损往返是业内未解难题，且天生有损。
 
-## 先例与新颖性
+**把知识折进 agent-workspace 配置（让它直接写 `CLAUDE.md`）。** 因分层理由被否：
+它会塌掉 L1（配置）/ L2（知识）边界。知识保持与 agent 无关。
 
-把托管块注入 agent 配置文件是已有先例：**Next.js** 会把一个
-`<!-- BEGIN:nextjs-agent-rules -->` 块写进 `AGENTS.md`，**claude-mem** 会把一个
-`<claude-mem-context>` 块注入 `CLAUDE.md`。Coffer 在 `RENDER` 模式中复用这个已被
-验证的模式。
+**两个 kind、一套基底 —— 一副 `memory` 面孔加一副 `knowledge_base` 面孔。** 这正是
+该 store 实际被建成的样子，并已于 2026-09-10 合并掉（见
+[ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md) 的修订历史）。基底从一开始
+就是共享的，分成两份的只有门面，而它逼着调用方去猜一条事实属于哪副面孔。事后被否：
+跨 agent 共享一个 store 才是要点，在同一个 store 上再糊一副面孔，只是多一样要保持
+同步的东西，却没有收益。
 
-**新颖**的是「把累积的 memory 多 agent 原生投影」。我们调研过的每个规范 memory
-系统（mem0/OpenMemory、Letta、Zep、Cognee、MCP memory server、MemPalace）都以
-MCP 为中心；唯二做原生文件投影的（claude-mem、agentmemory）都只针对 Claude、单
-目标。Coffer 把一个规范 store 扇出到*多个* agent 的原生位置（格式匹配处 symlink、
-不匹配处托管块、处处 MCP）—— 截至 2026 年中，这在开源界尚无人认领。新机制的风险
-靠 adapter 隔离来缓解，也靠 MCP 始终作为通用兜底（若某 agent 的投影尚未实现）。
+## 修订历史
+
+- **2026-06-09** —— 初版决定：一个规范的、逐条 markdown 的记忆 store，跨 agent
+  共享方式为「MCP 读写 + 逐 agent 原生投影（`SYMLINK | RENDER | NONE`）」的混合
+  机制，并关闭每个被投影 agent 自己的原生记忆。作用域为两层：global + per-project。
+- **2026-06-18** —— [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md)
+  移除了投影那一半：Coffer 绝不写入或关闭 agent 的原生记忆文件。共享 store 那一半
+  不受影响。
+- **2026-09-10** —— 为知识层合并重新表述。本 ADR 跨 agent 共享的那个 store，现在
+  就是单一的 `knowledge` kind（`memory` 与 `knowledge_base` 已合并）；store 名变成
+  三种 scope；十二个 `coffer__*` 记忆/KB 工具变成八个。决策本身 —— 一个共享 store，
+  而非每个 agent 一个 —— 未变；变的只是它被写下时所用的词汇。

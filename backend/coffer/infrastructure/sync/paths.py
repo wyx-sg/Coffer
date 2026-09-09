@@ -1,6 +1,6 @@
 """Export/import path resolution (spec 010).
 
-An export mirrors the file-backed trees (knowledge, memory, skills). Their
+An export mirrors the file-backed trees (knowledge, skills). Their
 roots are resolved here — not imported from the kind modules — so the sync
 slice stays decoupled from every kind (cross-kind import fence) while
 honouring the same ``$COFFER_*_ROOT`` overrides the kinds use.
@@ -28,11 +28,6 @@ def knowledge_root() -> pathlib.Path:
     return _rooted("COFFER_KNOWLEDGE_ROOT", "knowledge")
 
 
-def memory_root() -> pathlib.Path:
-    """``~/.coffer/memory/`` (override ``$COFFER_MEMORY_ROOT``)."""
-    return _rooted("COFFER_MEMORY_ROOT", "memory")
-
-
 def skills_root() -> pathlib.Path:
     """``~/.coffer/skills/`` — the canonical skill master store."""
     return _rooted("COFFER_SKILLS_ROOT", "skills")
@@ -42,6 +37,5 @@ def skills_root() -> pathlib.Path:
 def mirrored_trees() -> list[tuple[str, pathlib.Path]]:
     return [
         ("knowledge", knowledge_root()),
-        ("memory", memory_root()),
         ("skills", skills_root()),
     ]

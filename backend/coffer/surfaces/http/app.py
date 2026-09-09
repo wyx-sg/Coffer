@@ -83,12 +83,15 @@ from coffer.surfaces.http.dependencies import (
     set_resource_service,
     set_retention_service,
 )
+from coffer.surfaces.http.knowledge.organize_state import get_organizer_service
+from coffer.surfaces.http.knowledge_wiring import (
+    run_knowledge_reindex_sweep,
+    wire_knowledge_kind,
+)
 from coffer.surfaces.http.mcp.protocol_routes import (
     shutdown_all_sessions,
     start_session_reaper,
 )
-from coffer.surfaces.http.memory.organize_state import get_organizer_service
-from coffer.surfaces.http.memory_wiring import run_memory_reindex_sweep, wire_memory_kind
 from coffer.surfaces.http.merge_wiring import wire_merge
 from coffer.surfaces.http.migrations_runner import run_migrations
 from coffer.surfaces.http.native_memory_import_wiring import wire_native_memory_import
@@ -102,11 +105,7 @@ from coffer.surfaces.http.reorg_wiring import wire_reorg
 from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.session_end_wiring import start_auto_organize, stop_auto_organize
 from coffer.surfaces.http.sync_wiring import start_sync
-from coffer.surfaces.http.wiring import (
-    build_substrate,
-    wire_chat,
-    wire_kb_kind,
-)
+from coffer.surfaces.http.wiring import build_substrate, wire_chat
 
 
 def _db_url() -> str:
@@ -173,7 +172,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     set_internal_engine_config_service(internal_engine_config_svc)
 
     # Build the shared built-in tool registry; each kind contributes its tools.
-    # Created before kind wiring so skill/KB/memory can all register into it.
+    # Created before kind wiring so skill + knowledge can register into it.
     builtin_tools = BuiltinToolRegistry()
 
     # Agent + skill kinds (004/005), lockstep: on_delete cascade + skill tools → gateway.
@@ -183,29 +182,20 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # active profile into each agent's native config (see provider_wiring).
     wire_provider_kind(app, resource_svc, audit, credential_store, sm)
 
-    # Wire up knowledge_base kind (spec 006). Registers the KB built-in tools
-    # into `builtin_tools`. One substrate per process: KB + memory share the
-    # DocumentRepo, retrieval facade and reindexer (per KnowledgeRetrieval).
+    # One substrate per process: the DocumentRepo, retrieval facade and
+    # reindexer are shared by everything that indexes markdown.
     substrate = build_substrate(sm, credential_store)
 
-    # Embedding is global: KB + memory resolve the current config at index/recall
-    # time so a Settings change applies without a daemon restart. The tool-search
-    # embedder (ADR-024) reuses the KB embedder, cached per config.
+    # Embedding is global: the knowledge kind resolves the current config at
+    # index/recall time so a Settings change applies without a daemon restart.
+    # The tool-search embedder (ADR-024) reuses it, cached per config.
     _resolve_embedding, _tool_search_embedder = build_embedding_resolvers(
         embedding_config_svc, credential_store
     )
 
-    kb_service = wire_kb_kind(
-        app,
-        resource_svc,
-        audit,
-        sm,
-        builtin_tools,
-        substrate=substrate,
-        embedding_resolver=_resolve_embedding,  # type: ignore[arg-type]
-    )
-    # Wire up Memory plumbing (spec 007). Registers the memory built-in tools.
-    memory_service = wire_memory_kind(
+    # The one knowledge kind: entries + documents over three scopes. Registers
+    # the eight built-in knowledge tools into `builtin_tools`.
+    knowledge_service = wire_knowledge_kind(
         app,
         resource_svc,
         audit,
@@ -223,24 +213,24 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Wire the chat feature (spec 008). Must come AFTER all other wiring so the
     # coffer-builtin-agent gateway session sees the fully-populated
-    # BuiltinToolRegistry (KB + memory + skill + MCP tools). The session factory
+    # BuiltinToolRegistry (knowledge + skill + MCP tools). The session factory
     # is the one wire_mcp_kind registered via set_mcp_session_factory.
     chat_gateway_session = wire_chat(audit, sm, get_mcp_session_factory(), credential_store)
     # The chat session's supervisor stays in session_supervisors so on_delete evicts
     # its upstreams; shutdown disposes it first (on_dispose deregisters; idempotent).
     app.state.mcp_session_supervisors = session_supervisors
 
-    # Internal-LLM memory consumers (spec 007): the consolidation organizer
+    # Internal-LLM knowledge consumers: the consolidation organizer
     # (FR-027..031), the agentic reorg (FR-033/034), the AI-assisted same-project
     # store merge (FR-056-059, AFTER reorg so its post-merge pass can reach it),
     # and native-memory adoption (spec 004 FR-041, AFTER organize so the import
     # sink can reach the organizer). One place, so the composition root keeps a
     # single internal-LLM call site.
     _credential_resolver = make_credential_resolver(credential_store)
-    wire_organize(memory_service, get_provider_service(), _credential_resolver)
-    wire_reorg(memory_service, get_provider_service(), _credential_resolver)
-    wire_merge(memory_service, get_provider_service(), _credential_resolver)
-    wire_native_memory_import(memory_service, get_agent_service())
+    wire_organize(knowledge_service, get_provider_service(), _credential_resolver)
+    wire_reorg(knowledge_service, get_provider_service(), _credential_resolver)
+    wire_merge(knowledge_service, get_provider_service(), _credential_resolver)
+    wire_native_memory_import(knowledge_service, get_agent_service())
 
     # Wire the channel kind (spec 009) AFTER wire_chat: the inbound processor
     # drives turns through the chat service handles wire_chat published.
@@ -252,14 +242,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.kinds, sm, credential_store, audit, embedding_config_svc
     )
 
-    # Boot memory heal (best-effort, idempotent): collapse worktree-fragmented
-    # stores, then reindex so memory is searchable (FR-043).
     # Boot projection heal: the agents' native config files are not Coffer's to
     # own, so re-derive the projection the registry implies (best-effort).
     await run_provider_projection_sweep(app)
 
+    # Boot knowledge heal (best-effort, idempotent): collapse worktree-fragmented
+    # scopes, then reindex so what was written is searchable (FR-043).
     await run_store_consolidation(resources=resource_svc, sm=sm, substrate=substrate)
-    await run_memory_reindex_sweep(app, resource_svc, _resolve_embedding)  # type: ignore[arg-type]
+    await run_knowledge_reindex_sweep(app, resource_svc, _resolve_embedding)  # type: ignore[arg-type]
 
     # CODE-020: start the batched invocation writer alongside the retention
     # worker. The repo's start() is a no-op if already started.
@@ -287,10 +277,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.retention_worker_task = worker_task
 
     # Auto session-end organize → 固化 pipeline (007 FR-035): default-ON.
-    start_auto_organize(app, memory_service, get_organizer_service())
-    await start_async_batches(  # KB re-embed, native import — off the request path
+    start_auto_organize(app, knowledge_service, get_organizer_service())
+    await start_async_batches(  # document re-embed, native import — off the request path
         app,
-        kb_service=kb_service,
+        knowledge_service=knowledge_service,
         import_service=get_agent_memory_import_service(),
     )
 
@@ -363,7 +353,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Close per-/mcp/-session state in the protocol routes
         with contextlib.suppress(Exception):
             await shutdown_all_sessions()
-        # KB / Memory services hold no long-lived handles (the substrate is
+        # The knowledge service holds no long-lived handles (the substrate is
         # session-maker-bound + lazy), so only the shared engine needs disposal.
         await engine.dispose()
         set_active_token(None)

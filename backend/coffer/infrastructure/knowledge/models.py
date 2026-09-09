@@ -28,7 +28,7 @@ from coffer.infrastructure.persistence.base import Base
 class DocumentModel(Base):
     """One Markdown file = one row. Composite PK ``(kind, resource_name, id)``
     keeps the unified table unambiguous across faces/resources (ids are now
-    globally-unique ULIDs — ADR-028 — so a bare id would already be unique)."""
+    globally-unique ULIDs — spec 007 FR-062 — so a bare id would already be unique)."""
 
     __tablename__ = "documents"
 
@@ -37,6 +37,13 @@ class DocumentModel(Base):
     resource_name: Mapped[str] = mapped_column(String, nullable=False)
     project_id: Mapped[str] = mapped_column(String, nullable=False)
     path: Mapped[str] = mapped_column(String, nullable=False)
+    #: Which of a scope's two writers owns this row — the entry reconciler
+    #: (``knowledge``) or the ingest scan (``inbox``). Stored rather than
+    #: derived: entries sit at ``<scope>/knowledge/inbox/`` and ingested
+    #: documents at ``<scope>/inbox/``, so matching on the path catches both.
+    lane: Mapped[str] = mapped_column(
+        String, nullable=False, default="inbox", server_default="inbox"
+    )
     title: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     metadata_json: Mapped[str] = mapped_column("metadata", Text, nullable=False, default="{}")
@@ -54,6 +61,7 @@ class DocumentModel(Base):
     __table_args__ = (
         PrimaryKeyConstraint("kind", "resource_name", "id", name="pk_documents"),
         Index("idx_documents_kind_res_time", "kind", "resource_name", "updated_at"),
+        Index("idx_documents_kind_res_lane", "kind", "resource_name", "lane"),
         Index("idx_documents_project", "project_id"),
     )
 

@@ -2,6 +2,16 @@
 
 > 中文版: [data-model.zh.md](./data-model.zh.md)
 
+> **Historical — 2026-09-10.** Spec 006 (Knowledge Base) and spec 007 (Memory)
+> merged into one **Knowledge Layer** on this date. [`spec.md`](./spec.md) is the
+> authority for the merged model — one `knowledge` kind, three scopes, one
+> storage root `~/.coffer/knowledge/<scope>/`, eight `coffer__*` tools. This
+> document records the design as it stood before that merge; where it says
+> "memory face", "`memory` kind", `~/.coffer/memory/`, `/api/v1/memory_stores`
+> or `coffer memory …`, read the merged equivalents in `spec.md`. The folder
+> name `specs/007-memory/` is likewise historical: it is the spec id every
+> inbound link and the acceptance audit key on.
+
 Entities, ports, the unified SQLite schema (shared with the knowledge base), and the on-disk canonical layout for the memory face.
 
 ## Domain entities (`backend/coffer/domain/memory/`)
@@ -93,8 +103,8 @@ The schema below is the **same unified schema** created by the KB redesign migra
 -- Shared across KB (kind='knowledge_base') and memory (kind='memory').
 CREATE TABLE documents (
     id             TEXT NOT NULL,               -- ULID (KB + memory), minted at first write
-    kind           TEXT NOT NULL,               -- 'knowledge_base' | 'memory'
-    resource_name  TEXT NOT NULL,               -- store name (memory: scope store)
+    kind           TEXT NOT NULL,               -- 'knowledge' (one kind since 2026-09-10)
+    resource_name  TEXT NOT NULL,               -- scope name: 'global' | 'project-<ULID>' | a named collection
     project_id     TEXT NOT NULL,               -- WORKSPACE_GLOBAL sentinel | project ULID
     path           TEXT NOT NULL,               -- canonical .md path on disk = truth
     title          TEXT NOT NULL,               -- memory: frontmatter `title`
@@ -102,7 +112,7 @@ CREATE TABLE documents (
     metadata       TEXT NOT NULL DEFAULT '{}',   -- JSON; memory: {actor, origin_session_id}
     content_sha256 TEXT NOT NULL,               -- for lazy-reindex delta detection
     source_mode    TEXT NOT NULL DEFAULT 'native', -- memory: 'native'
-    locked         BOOLEAN NOT NULL DEFAULT 0,  -- KB co-management lock (ADR-028); memory ignores it
+    lane           TEXT NOT NULL DEFAULT 'inbox', -- 'knowledge' (a written entry) | 'inbox' (an ingested document); migration 0052
     created_at     TIMESTAMP NOT NULL,
     updated_at     TIMESTAMP NOT NULL,
     PRIMARY KEY (kind, resource_name, id)        -- composite (memory ULIDs are globally unique too)

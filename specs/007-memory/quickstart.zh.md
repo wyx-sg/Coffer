@@ -2,6 +2,15 @@
 
 > English: [quickstart.md](./quickstart.md)
 
+> **历史文档 —— 2026-09-10。** spec 006（Knowledge Base）与 spec 007（Memory）
+> 于当日合并为统一的 **Knowledge Layer（知识层）**。合并后的模型以
+> [`spec.md`](./spec.md) 为准 —— 一个 `knowledge` kind、三种 scope、单一存储根
+> `~/.coffer/knowledge/<scope>/`、八个 `coffer__*` 工具。本文档记录的是合并之前
+> 的设计；凡出现「memory 面」「`memory` kind」`~/.coffer/memory/`
+> `/api/v1/memory_stores` 或 `coffer memory …` 之处，请以 `spec.md` 中合并后的
+> 对应物为准。目录名 `specs/007-memory/` 同样是历史遗留：它是所有入链与验收审计
+> 所依赖的 spec id。
+
 memory 是 Coffer 统一知识底座的 **memory 面**。事实是 markdown 文件（真相源），跨所有 agent 共享 —— **只经 MCP 读写**（Coffer 保留自己的规范化格式，不触碰各 agent 的原生记忆文件）。写入时不调 LLM；agent 直接写一条干净的事实。
 
 ## 通过 MCP 客户端（主要 surface）

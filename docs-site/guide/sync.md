@@ -12,7 +12,7 @@ coffer sync export ~/coffer-bundle --with-credentials    # + Fernet ciphertext b
 The result is a plain directory of text you can read before you carry it:
 
 ```
-manifest.json  knowledge/  memory/  skills/  resources/  state/  [credentials/]
+manifest.json  knowledge/  skills/  resources/  state/  [credentials/]
 ```
 
 One deterministic YAML per config resource means two exports of an unchanged vault are byte-identical — so `diff -r` between two bundles shows exactly what differs between two machines.
@@ -31,14 +31,14 @@ scp -r ~/coffer-bundle you@machine-b:~/coffer-bundle
 coffer sync import ~/coffer-bundle
 ```
 
-The import mirrors the knowledge, memory and skill trees back, rebuilds the SQLite index from them, registers every config resource, and runs each kind's post-import step — so an imported agent has its shim installed and an imported skill has its symlink. It reports counts per area plus any resource that could not be applied here (for example an agent whose `config_dir` does not exist on this machine); those are reported with their reason, not fatal.
+The import mirrors the knowledge and skill trees back, rebuilds the SQLite index from them, registers every config resource, and runs each kind's post-import step — so an imported agent has its shim installed and an imported skill has its symlink. It reports counts per area plus any resource that could not be applied here (for example an agent whose `config_dir` does not exist on this machine); those are reported with their reason, not fatal.
 
 - **The bundle wins.** Anything the bundle contains replaces the local version — you chose the direction when you ran the command.
 - **Import never deletes.** A resource this machine has that the bundle does not is left alone. A bundle is one machine's snapshot, not a statement about what should exist everywhere.
 
 ## What travels
 
-**In the bundle:** knowledge-base and memory Markdown, the master skill store, your config resources (MCP servers, agents, skills, channels), module-owned shared state (channel pairings, memory-store labels, engine settings), and — only with `--with-credentials` — credentials **as Fernet ciphertext only**.
+**In the bundle:** the knowledge Markdown trees (entries and ingested documents alike), the master skill store, your config resources (MCP servers, agents, skills, channels), module-owned shared state (channel pairings, knowledge-scope labels, engine settings), and — only with `--with-credentials` — credentials **as Fernet ciphertext only**.
 
 **Machine-local (never exported):** logs, the rebuildable `coffer.db` index, `daemon.json`, PID files, port allocations, chat history, and the audit log.
 

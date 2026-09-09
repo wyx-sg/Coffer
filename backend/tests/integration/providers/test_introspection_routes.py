@@ -83,7 +83,7 @@ async def test_test_connection_ok_and_fail(client) -> None:  # type: ignore[no-u
     assert bad.status_code == 200 and bad.json()["ok"] is False
 
 
-@pytest.mark.acceptance(spec="006-knowledge-base", scenario="test an embedding model")
+@pytest.mark.acceptance(spec="007-memory", scenario="test an embedding model")
 async def test_embedding_test_reports_dimension(client) -> None:  # type: ignore[no-untyped-def]
     r = await client.post(
         "/api/v1/embedding/test",

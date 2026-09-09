@@ -30,9 +30,9 @@ Each agent exposes a curated set of config files, addressed by a short **key**:
 | `claude_code` | `settings`       | `~/.claude/settings.json`                            |
 | `claude_code` | `settings_local` | `~/.claude/settings.local.json`                      |
 | `claude_code` | `global`         | `~/.claude.json` (also holds user-scope MCP servers) |
-| `claude_code` | `memory`         | `~/.claude/CLAUDE.md`                                |
+| `claude_code` | `instructions`   | `~/.claude/CLAUDE.md`                                |
 | `codex`       | `config`         | `~/.codex/config.toml`                               |
-| `codex`       | `memory`         | `~/.codex/AGENTS.md`                                 |
+| `codex`       | `instructions`   | `~/.codex/AGENTS.md`                                 |
 
 List the keys for an agent, print one, or edit one:
 

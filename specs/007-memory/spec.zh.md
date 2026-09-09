@@ -1,557 +1,783 @@
-# 功能规范：Memory（跨 agent 共享记忆）
+# 功能规范：Knowledge Layer（知识层）
 
 > English: [spec.md](./spec.md)
 
 **Feature Branch**: `feature/kb-memory-redesign`
-**Created**: 2026-05-22
-**Status**: Accepted (redesign — in development)
-**Input**: Coffer memory feature 的重设计 —— 与 knowledge base（spec 006）共用同一套统一底座（unified substrate）的 **memory 面**。memory 不再是「写入时调 LLM 的 mem0 向量库」；它变成 **跨 agent 的单一真相源**（没有各 agent 间互相漂移的副本）。规范化存储 = 每条记忆一个 markdown 文件，放在每个作用域的 `knowledge/` lane 下（新记住的条目落在 `knowledge/inbox/`），位于 `~/.coffer/memory/`，带两层作用域（global + per-project），并 **不再生成任何派生索引文件**（此前的 `MEMORY.md` 投影已移除 —— 检索里没人读它）。agent **只通过 Coffer 的 MCP 网关读写记忆**（`coffer__recall`/`remember`/`list_memory`）；编辑与删除是用户面（REST/CLI/外部编辑器），不是 MCP 工具。Coffer 保留自己的规范化格式，不触碰各 agent 的原生记忆文件（原生投影已移除 —— 见 ADR-026）。用户在 Coffer UI 里做完整 CRUD。检索复用与 knowledge base 相同的引擎（grep / keyword FTS5+BM25 / vector sqlite-vec）。完整设计依据见 [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md)。
+**Created**: 2026-05-22（当时名为 *Memory*）· **与 spec 006（Knowledge Base）合并**：2026-09-10
+**Status**: Accepted —— 已交付
+**目录名说明**：本规范位于 `specs/007-memory/`，这是**历史遗留**。目录名就是 spec id：所有入链以及 `scripts/audit_acceptance.py`（按目录名匹配验收标记）都依赖它，因此功能改名时刻意没有改目录。请把 `007-memory` 读作「Knowledge Layer 规范」。
+
+**Input**: Coffer 只存一样东西 —— **知识（knowledge）** —— 并把它提供给用户运行的每一个 agent。知识有两个来路：agent **写入**（一条事实、一个决定、一项值得跨会话存活的偏好），或人 **摄取**（任意格式的文件，转换为 Markdown）。它以每条一个 Markdown 文件的形式存放在磁盘上，是**唯一真相源**；SQLite（`documents`、`chunks`、FTS5、sqlite-vec）只是可重建的派生索引（[ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md)）。一个资源 kind `knowledge`，三种 scope（`global`、`project-<ULID>`、用户命名的集合），每个 scope 一套固定的 lane，一套检索引擎且其模式对外不可见（[ADR-034](../../docs/decisions/ADR-034-retrieval-mode-is-internal.md)），以及八个 `coffer__*` MCP 工具。Coffer 保留自己的规范化格式，绝不写入 agent 的原生记忆文件 —— 规则只通过**注入**到达会话（[ADR-026](../../docs/decisions/ADR-026-memory-via-mcp-not-native-projection.md)）。
+
+## 为什么它是一层（2026-09-10 的合并）
+
+这份规范曾经是两份中的一份。spec 006 拥有 `knowledge_base` kind（上传文件 → Markdown → 搜索），spec 007 拥有 `memory` kind（agent 记住事实 → 召回）。它们被描述为**同一基底的两张面**，而这在代码里是字面为真的：`documents`、`chunks`、FTS5 索引与 sqlite-vec 索引从一开始就是共享的（006 FR-009），`infrastructure/knowledge/paths.py` 也早就同时拥有两套磁盘布局。分裂只存在于门面（facade）。
+
+它没有挣回自己的成本：
+
+- **知识库是个空壳。** 它创建于 2026-06-22，两个半月后仍然是零文档。`documents` 表里全部 78 行都是 `kind='memory'`。它的 embedding 配置从未被设置过。
+- **memory 早就有一个 `knowledge/` lane。** `organize` 流程存在的意义正是把零散笔记整理成该 lane 下的主题文档。知识在 memory *内部*早已是一等公民。
+- **工具面逼调用方猜。** agent 必须先判断「这是 memory 还是 knowledge？」才能在 `coffer__recall` 与 `coffer__search_knowledge` 之间做选择 —— 而这个区分对调用方毫无意义，基底本身也并不遵守它。
+- **检索工具的错误率就是症状。** `coffer__grep_knowledge` 12 次调用失败 9 次（ripgrep 指向一个不存在的目录），`coffer__read_document` 3 次全败，`coffer__search_knowledge` 12 次失败 3 次 —— 而 `coffer__list_knowledge_bases` 4 次全成。搜索一个空知识库会失败，列举它不会。
+
+于是两个 kind 变成一个 kind，十二个工具变成八个，两套 REST/CLI/UI 面各自合成一套。从 006 存活下来的，是真正关于*摄取文件*的一切：任意格式转换、chunking、源文件跟踪、重建索引。从 007 存活下来的，是关于*agent 写入与接续工作*的一切：条目（entries）、organizer、rules、handoff、scope 合并。
+
+**既有数据被清空**（迁移 `0051`），理由值得直说而不是埋起来。`memory:global` 与 `knowledge_base:global` 同时存在，而 `resources` 以 `(kind, name)` 为键 —— 两者都转换必然撞键，任何自动改名都是在猜用户指的是哪一个。而所有 `documents` 行索引的都是 **journal lane**，它已随上一次改动（连同 transcript distillation）被移除；索引指向的文件不复存在。重新积累靠显式的 `coffer__write` 与文件摄取，而这正是「文件即真相」本就假定的：索引是派生物，永远不是系统记录。
 
 ## 用户场景与测试
 
-### User Story 1 —— 一份记忆，所有 agent 共享（优先级 P1）
+### User Story 1 —— 一层知识，所有 agent 共享（优先级 P1）
 
-开发者上午用 Claude Code、下午用 Codex 在同一个项目上工作。用 Claude Code 时 agent 学到「这个 repo 通过 `make release` 发版，绝不直接 `git push --tags`」，并通过 Coffer 的 `coffer__remember` 工具记下来。下午 Codex —— 另一个 agent —— 召回了同一条事实，因为两个 agent 读写的是 **同一个共享 store**。没有任何副本漂移。
+开发者上午用 Claude Code、下午用 Codex 在同一个项目上工作。用 Claude Code 时 agent 学到「这个 repo 通过 `make release` 发版，绝不直接 `git push --tags`」，用 `coffer__write` 记下来。下午 Codex —— 另一个 agent —— 用 `coffer__search` 找到同一条事实，因为两个 agent 读写的是**同一个共享 scope**。没有任何副本漂移。
 
-**为什么是这个优先级**：这是本次重设计的核心。各 agent 之间互相漂移的私有 silo 正是要解决的问题；没有单一真相源就没有这条 feature。
+**为什么是这个优先级**：这是核心。各 agent 之间互相漂移的私有 silo 正是要解决的问题；没有单一真相源就没有这条 feature。
 
-**独立可测**：从全新安装开始，在一个 git 项目里跑 MCP 客户端，调 `coffer__remember` 写一条项目事实，再用第二个 MCP 客户端（不同 agent 身份）在同一项目里调 `coffer__recall`，看到该事实被召回。确认该事实作为一个每条记忆的 markdown 文件出现在项目 store 的 `knowledge/inbox/` lane 下。
+**独立可测**：从全新安装开始，在一个 git 项目里跑 MCP 客户端，调 `coffer__write` 写一条项目事实，再用第二个 MCP 客户端（不同 agent 身份）在同一项目里调 `coffer__search`，看到该事实被返回。确认它作为一个 Markdown 文件出现在项目 scope 的 `knowledge/inbox/` lane 下。
 
 **代表性场景**：
 
 - agent 记住一条项目事实
 - agent 召回一条项目事实
-- recall 跨 project 与 global 两个作用域
-- 记住的条目存入 knowledge lane
-- 内置记忆工具出现在客户端工具列表
-- embedding 未配置时 vector recall 回退
+- 检索跨 project 与 global 两个 scope
+- 写入的条目存入 knowledge lane
+- 内置知识工具出现在客户端工具列表
+- embedding 未配置时向量检索回退
 
 ---
 
-### User Story 2 —— 全局与每项目记忆（优先级 P1）
+### User Story 2 —— 三种 scope：global、project 与命名集合（优先级 P1）
 
-有些事实是关于开发者本人、到处都成立的（「偏好 tabs 而非 spaces」）；有些只关乎某个 repo（「这个服务的 API base path 是 `/api/v2`」）。开发者希望全局事实在每个项目都可用、项目事实只限本项目，而 `recall` 默认两者都返回。
+有些知识到处都适用（「偏好 tab 而非空格」）；有些只属于一个 repo（「这个服务的 API base path 是 `/api/v2`」）；还有些属于开发者刻意创建的集合（`design-notes`，装着一次设计评审的 PDF 与 ADR）。三者是同一种东西，有同样的 lane、同样的检索 —— 只有**名字**区分它们是哪一种。
 
-**为什么是这个优先级**：把个人偏好和项目专属事实混在一起会污染 recall，还会把 repo 细节泄露到别的项目。两层作用域是这个共享 store 可信的前提。
+`global` 与 `project-<ULID>` 在首次使用时**自动创建**，因为想写点东西的 agent 不该先申请许可。命名集合**不会**：它存在是因为有人决定它该存在，从一个拼错的名字里悄悄变出一个来，比报错更糟。
 
-**独立可测**：用 `scope=global` 记一条、用 `scope=project` 记一条。从另一个项目 recall 只返回全局那条；在原项目 recall 两条都返回。
+**为什么是这个优先级**：把个人偏好与项目事实混在一起会污染检索、并让 repo 细节跨项目泄漏；而把一份刻意整理的语料塞进「memory」里则让它无从可见。scope 这条轴是共享层可信的前提。
+
+**独立可测**：在 git 项目里写一条 `scope=global` 和一条不带 scope 的条目。从另一个项目检索只返回 global 那条；从原项目检索两条都返回。显式创建命名集合 `design-notes` 并摄取一个文件；再去检索一个不存在的名字，观察到报错而不是新建出一个空 scope。
 
 **代表性场景**：
 
-- 在 global 作用域 remember
+- 在 global scope 写入
 - agent 记住一条项目事实
-- project 作用域由 agent 的工作目录解析得到
-- recall 跨 project 与 global 两个作用域
+- project scope 从 agent 的工作目录解析
+- 检索跨 project 与 global 两个 scope
+- 创建一个知识库
+- 项目知识跨检出路径跟随仓库
 
 ---
 
-### User Story 4 —— 用户在 Coffer 里维护记忆（优先级 P2）
+### User Story 3 —— 用任意格式的文件构建一个 scope（优先级 P1）
 
-开发者要看见并纠正 agent 记下的东西：在一个 **只读** 视图里按作用域浏览事实，然后 **在自己的外部编辑器里**（或经 API/CLI）改一条漂移的、手动加一条、删掉一条错的。Coffer UI 从不在应用内编辑事实内容；相反，每条事实及其所在文件夹都提供「在外部编辑器中打开」「在文件管理器中显示」（由本地 daemon 执行），任何带外的纠正都会被既有的 lazy reindex-on-read 拾取（FR-010）。
+开发者手上有设计笔记、ADR、内部 wiki、论文 PDF、一份表格和几个 HTML 页面。他们不管格式，全部丢进一个 scope。Coffer 把每个转换成干净的 Markdown 放进该 scope 的 `inbox/` lane，把原件留在隐藏的 `.raw/` lane 作为出处，并索引结果 —— 让 agent 通过返回其自身写入条目的同一个 `coffer__search` 检索到它们。
 
-**为什么是这个优先级**：没有人工维护的记忆让人不放心；agent 偶尔会记错。能维护，这条 feature 才足够安全到可以一直开着 —— 而把编辑路由到用户自己的编辑器，使 markdown 文件保持唯一真相源，无需再维护第二个编辑界面。
+**为什么是这个优先级**：摄取是这一层所存内容的一半。没有它，Coffer 只有 agent 碰巧打进去的知识。
 
-**独立可测**：agent 写了若干事实后，打开记忆视图（只读），确认事实内容能渲染但在应用内不可编辑。在外部编辑器里（或用 `coffer memory edit`/PATCH）打开一条事实、在 Coffer 之外纠正其文本，观察下一次 `recall` 返回纠正后的版本（lazy reindex-on-read）。经 CLI/API 加一条事实（actor=user），再删另一条，观察它从磁盘和 recall 中消失。
+**独立可测**：创建 scope `design-notes`，摄取一个 `.md`、一个 `.pdf`、一个 `.docx` 和一个 `.csv`；观察每个都成为 `~/.coffer/knowledge/design-notes/inbox/` 下的 Markdown 文件、原件在 `.raw/` 下，并在 `documents` 中有一行 `lane='inbox'`。
 
-**代表性场景**：
-
-- 用户添加一条事实
-- 用户带外纠正一条事实
-- 用户删除一条事实
-- 只读视图提供打开/显示的能力
+**代表性场景**：任意格式摄取转 markdown；列出知识库中的文档；按标题过滤文档；删除单个文档；删除知识库同时清理文件与索引；重新上传更新后的文件就地更新文档；重新上传完全相同的文件是 no-op。
 
 ---
 
-### User Story 5 —— 查看、命名并重置记忆（优先级 P3）
+### User Story 4 —— 一个检索面覆盖两个 lane（优先级 P1）
 
-开发者想知道每个作用域累积了多少记忆，想在 store 的来源文件夹未知时给它起个可读的名字，并能在不删除 store 的前提下清空某个作用域。
+同一个 scope 在底层有几种查法：`grep`（对 Markdown 文件做精确/正则匹配，零索引）、`keyword`（SQLite FTS5 + BM25，trigram 分词器，所以 CJK 与标识符都能命中）、`vector`（sqlite-vec 配合已配置的 embedding provider）、`hybrid`（keyword + vector 的倒数排名融合）。这些是**内部引擎细节**（[ADR-034](../../docs/decisions/ADR-034-retrieval-mode-is-internal.md)）：外部调用方不选模式 —— 一次搜索自动解析该 scope 的默认策略（启用 vector 则 `hybrid`，否则 `keyword`）。未配置 embedding provider 时 vector/hybrid 在内部回退到 keyword —— 从不阻塞，也不逐次查询打标（降级只报一次，通过 `documents_degraded`）。
 
-**为什么是这个优先级**：卫生级别；不挡核心流程。
+关键在于**检索横跨两个 lane**。对一个 scope 的搜索会同时返回 agent 写入的条目*和*人摄取的文档，一起排名。统一搜索正是合并两个 kind 的目的；按 lane 分开搜只会把分裂原样下沉一层。
 
-**独立可测**：查看 per-store 度量（事实条数、磁盘字节）。重命名一个文件夹未知的 store，确认所选名字出现在列表里并在重载后仍在。清空 project 作用域；确认所有事实都没了但 store 保留下来、随时可装新事实。
+**为什么是这个优先级**：检索就是产品。内部模式覆盖了从离线零配置到语义搜索的全谱，而外部面始终是「一次查询 → 一个答案」。
 
-**代表性场景**：
+**独立可测**：在同时含一条写入条目与一个摄取文档的 scope 上跑一次 `coffer__search`，观察两个 lane 的命中。在没有 embedding 配置的情况下跑 grep。配置 embedding provider、给 scope 启用 `vector` 后再搜；移除配置再搜，结果仍返回且无报错。
 
-- 清空一个记忆作用域
-- 用户重命名一个记忆 store
-
-（per-store 度量的 HTTP 路由由独立可测覆盖，但其专属 acceptance 测试延后 —— 见场景后的说明。）
+**代表性场景**：关键词搜索返回排名段落；关键词搜索命中 CJK（中文）内容；grep 返回文件/行匹配；向量搜索返回排名段落；embedding 未配置时 vector 回退 keyword；hybrid 通过 RRF 融合 keyword 与 vector；主题文档以段落粒度被召回。
 
 ---
 
-### User Story 7 —— 跨 agent、跨机器接续同一份工作（优先级 P2）
+### User Story 5 —— agent 通过 MCP 网关既读又写（优先级 P1）
 
-开发者用 Claude Code 工作到一半暂停 —— 停在某个已知步骤、有明确的下一步、有打开中的文件
-—— 之后从另一个 agent（Codex）或第二台机器接续。暂停前 agent 调 `coffer__set_handoff`，
-传入当前的工作状态（「现场」）：正在做什么、下一步是什么、哪些文件在手、还有哪些未决问题。
-Coffer 按 **(项目 × git 分支)** 给这份现场记账，并写成项目记忆 store 下的一个文件，于是它随
-既有 git 同步镜像一起流转。恢复工作时，agent 调 `coffer__resume`，返回当前分支保存的现场
-（带上它可能有多旧的标注）—— 或在全新分支上告知没有任何现场。
+开发者的编码 agent 连上 Coffer 的 MCP 端点，拿到**八个**内置工具：`coffer__search`、`coffer__grep`、`coffer__read`、`coffer__list`、`coffer__write`、`coffer__delete`、`coffer__set_handoff`、`coffer__resume`。前六个都接受可选的 `scope`，默认取 cwd 所在项目的 scope，在项目之外回退到 `global`。`coffer__write` 从 `text` 归档一条条目，给了 `filename` 就存一份 Markdown 文档，给了 `id` 就就地重写两者之一 —— 调用方永远不需要知道东西住在哪个 lane。每次 agent 写入都以 agent 为 actor 记入审计（F01），并走与 REST 面相同的服务路径。
 
-**为何此优先级**：连续性是本次重设计的北极星，但它建立在共享记忆内核（Story 1–2）之上：handoff
-是一条附加的工作记忆 lane，而非 recall 的前置条件。按分支记账意味着并行分支 / worktree 各自保有
-独立现场、互不覆盖；不存在全局 handoff（全局的「当前任务」没有意义），因此不在任何 git 项目里的
-cwd 没有可恢复的现场。
+**为什么是这个优先级**：agent 侧检索让这一层在编码时有用；agent 侧写入让它成为活的存储而非静态库。八个读起来像动词的工具，正是消除「这是 memory 还是 knowledge？」这一猜测的手段。
 
-**独立测试**：从 git 项目内、分支 `work` 上的某 MCP 客户端调 `coffer__set_handoff` 传入一段
-正文，再从第二个客户端（不同 agent 身份）在同一项目 + 分支调 `coffer__resume`，观察返回相同的
-正文、分支与一条新鲜度标注。在没有先前 handoff 的全新分支上，`coffer__resume` 报告
-`found=false`。
+**独立可测**：在一个有内容的 scope 上，MCP 客户端恰好看到这八个工具；带 `text` 调 `coffer__write` 创建出可搜索的条目，带 `filename` 调它创建出可搜索的文档，`coffer__read` 按 id 都能读回。
 
-**覆盖场景**：
-
-- agent saves and resumes a working-state handoff
-- resume reports no handoff for a fresh branch
+**代表性场景**：内置 KB 工具出现在客户端工具列表；内置知识工具出现在客户端工具列表；agent 搜索知识库；agent grep 知识库；agent 读取文档；agent 经 MCP 添加文档；agent 经 MCP 编辑文档；agent 经 MCP 删除文档。
 
 ---
 
-### User Story 8 —— 规则在每次会话开始时环境式到达（优先级 P2）
+### User Story 6 —— 用户维护积累下来的内容（优先级 P2）
 
-开发者在 Coffer 里积累了行为规则（全局「push 前总是先跑 verify 步骤」、项目「这个 repo 通过
-`make release` 发版」），希望它们在**每次会话开始时自动**出现在 agent 面前 —— 上午的 Claude
-Code、下午的 Codex 都一样 —— 无需 agent 记得去调 `recall`，且 **Coffer 绝不写入 agent 自己的
-记忆或指令文件**（ADR-026）。会话开始时，Coffer 安装的 **SessionStart hook** 向 Coffer 索取一个
-规则 bundle（始终开启的全局规则，加上 cwd 解析到 git 项目时的当前项目规则），并把它作为**纯上下文**
-注入会话。bundle 还携带两条 Coffer 播种的内置规则：调 `coffer__resume()` 接续此前工作，以及
-优先用 `coffer__remember`/`coffer__recall` 而非 agent 的原生记忆。想要彻底隔离的开发者可以
-选择启用 `disable_native_memory`，它把 agent 自己的原生记忆关掉（卸载时恢复）。
+开发者想看见并纠正积累下来的东西：在**只读**查看器里逐 lane 浏览一个 scope，在**自己的外部编辑器**里（或经 API/CLI）修正一条漂移的条目或一处转换瑕疵，手工添加一条，删掉错的那条。Coffer UI 从不在应用内编辑内容；每个文件及其所在文件夹提供「在外部编辑器中打开」与「在文件管理器中显示」，由本机 daemon 执行（[ADR-033](../../docs/decisions/ADR-033-daemon-proxies-os-file-actions.md)）。任何带外修改都由读时惰性重建索引（FR-010）拾起。一旦文档被手工编辑过（`source_mode = edited`），从原件重新转换即被阻止，编辑永不被覆盖。
 
-**为何此优先级**：agent 从不读规则，规则就毫无用处。环境式 session-start 注入是（ADR-026 预期的
-路径）让 Coffer 的过程性记忆不靠 `recall` 纪律、不碰原生文件就在场的非侵入方式。它是 P2（非 P1），
-因为它建立在 rules lane（FR-036）与共享记忆内核（Story 1–2）之上：注入交付的是已存在的规则，且
-无 hook 或注入失败时绝不阻塞 agent。
+**为什么是这个优先级**：没有人工维护的知识层让人不安 —— agent 有时会记错，转换器有时会把表格搞乱。把编辑路由到用户自己的编辑器，让 Markdown 文件保持唯一真相源，也不用再维护第二个编辑面。
 
-**独立测试**：注册一个 Claude Code agent，安装其 hook，写一条全局规则与一条项目规则，然后在该
-git 项目里开一个会话，观察注入的 `additionalContext` 含这两条规则加上两条播种的内置规则 ——
-且未写入 `~/.claude/CLAUDE.md` 或 agent 的原生记忆。对 Codex（`~/.codex/hooks.json`）重复；
-确认同一 bundle 在 SessionStart 到达。停掉 daemon 再开会话：
-hook 什么都不打印并退出 0，agent 正常启动。打开 `disable_native_memory` 确认 agent 的原生记忆
-开关被写成关闭；关掉它（或卸载）确认该设置被恢复。
+**独立可测**：在 agent 写过条目、文件被摄取之后打开 Knowledge 页（只读），确认内容可渲染但不能在应用内编辑。在 Coffer 之外改一个文件，观察下一次搜索返回修正后的版本。经 CLI/API 添加一条、删掉另一条，观察它从磁盘与搜索中消失。
 
-**覆盖场景**：
-
-- rules bundle is injected at session start as context only
-- the bundle carries the two seeded built-in rules
-- a failed or hook-less injection never blocks the agent
-- disable_native_memory turns native memory off and restores it
+**代表性场景**：用户添加一条事实；用户带外修正一条事实；用户删除一条事实；只读查看器提供打开/显示入口；编辑文档并重建索引；外部编辑经读时重建索引被拾起；编辑后禁止重新转换；修改 chunk 参数触发重建索引；修改 embedding 模型触发重新嵌入；check sources 检出变更/未变/缺失的原件；update from source 就地刷新变更文档；update from source 拒绝已编辑文档；auto_update_sources 在检查时刷新变更源。
 
 ---
 
-### User Story 9 —— 逐 lane 读完整个 store（优先级 P2）
+### User Story 7 —— 查看、命名、重置与合并 scope（优先级 P3）
 
-开发者在 Coffer 里打开一个 memory store，想看见 store 里**持有的全部内容**，而不只是
-扁平的事实列表：语义 **Knowledge** 事实、过程性的 **Rules** 文档、按分支的 **Handoff** 现场，
-以及 organizer 的**整合 changelog**。memory
-store 详情页把 store 呈现为三个 lane 区块（Knowledge / Rules / Handoff）外加一个
-整合 changelog 视图。每个 lane 都有一个形状贴合的视图：Knowledge 保留事实/主题列表 + 内容
-（且仍是 recall 操作的对象），Rules 是单一文档，Handoff
-是按分支列表。每个视图都**只读**，都经**统一文件预览**渲染（无手写 `<pre>`），都为底层 lane
-文件提供**在外部编辑器中打开 / 在文件管理器中显示 / 复制路径** —— files-as-truth（FR-017、
-FR-021），于是开发者在自己的编辑器里纠正内容，变更经 lazy reindex-on-read（FR-010）被拾取。
+开发者想知道每个 scope 积累了多少，想给来源文件夹未知的 scope 一个可读名字，想在不删除 scope 的前提下清空它，并且 —— 当同一个仓库意外产生了两个 project scope 时 —— 想在不丢东西的前提下合并它们。
 
-**为何此优先级**：扁平事实列表隐藏了三个 lane 中的两个 —— rules 在 recall 之外、handoff 现场
-是工作状态 —— 因此 store 的过程性与连续性记忆即便都在磁盘上，在
-UI 里也不可见。把每个 lane 以贴合其形状的方式呈现，让整个 store 可读。它是 P2（非 P1），因为它是
-对 lane 的只读投影，而这些 lane 已由共享记忆内核（Story 1–2）、handoff
-（Story 7）以及 rules/organizer lane 写入 —— 它只增加可见性，绝不新增写入路径。
+**为什么是这个优先级**：卫生问题；不阻塞主流程。
 
-**独立可测**：给一个项目 store 填入一条事实、一条 rule、一个 handoff 现场，
-并跑一次写出整合 changelog 的 organizer。打开 store 详情页，确认四个视图：Knowledge lane 显示
-该事实，Rules 显示 rules 文档，Handoff 列出该分支现场，changelog
-视图显示整合日志 —— 每个都只读、每个都经统一文件预览渲染、每个都为其 lane 文件提供打开/显示/复制
-路径。确认 recall 仍只在 Knowledge lane 上操作。
+**独立可测**：查看每个 scope 的指标（条目数、文档数、chunk 数、磁盘字节）。给来源文件夹未知的 scope 重命名，确认所选名字出现在列表中并在刷新后仍在。清空一个 project scope；确认条目全部消失但 scope 仍在。跨 project scope 跑一次合并扫描并合并一对提议。
 
-**覆盖场景**（lane 视图所消费的读端点）：
+**代表性场景**：清空一个知识 scope；用户重命名一个 scope；KB 指标报告计数与磁盘占用；降级的嵌入暴露 documents_degraded 并在不重新 chunk 的前提下重试；测试一个 embedding 模型；合并扫描提议同项目 scope；无内部引擎时合并扫描优雅降级；合并两个 scope 为累加式并退役来源；被合并的身份解析到存活 scope。
 
-- handoff scenes are listed per branch for a store
-- the consolidation changelog is readable for a store
+---
 
-（lane 页面的渲染本身由前端测试验证；与其它 UI 视图项一样，其端到端验收延后到 e2e。上面两条
-场景钉住 lane 视图所消费的读端点。）
+### User Story 8 —— 跨 agent、跨机器接续同一份工作（优先级 P2）
+
+开发者用 Claude Code 在任务中途暂停 —— 停在某个明确步骤上，带着具体的下一步与在改的文件 —— 之后从另一个 agent（Codex）或第二台机器上接续。暂停前 agent 调 `coffer__set_handoff` 保存当前「现场」：在做什么、下一步是什么、哪些文件开着、有哪些悬而未决的问题。Coffer 按 **(项目 × git 分支)** 为该现场建键，写入项目 scope 的 `handoff/` lane。恢复工作时 `coffer__resume` 返回当前分支保存的现场（并标注可能有多陈旧）—— 或在新分支上报告没有。
+
+**为什么是这个优先级**：连续性是北极星，但它建立在共享核心（Story 1–2）之上：handoff 是一条附加的工作 lane，不是检索的前置。按分支建键意味着并行分支与 worktree 各自保有独立现场、互不覆盖；不存在全局 handoff（全局的「当前任务」没有意义），所以 git 项目之外的 cwd 没有可恢复的东西。
+
+**独立可测**：在 git 项目分支 `work` 内从 MCP 客户端调 `coffer__set_handoff` 写入一段正文，再从第二个客户端（不同 agent 身份）在同一项目 + 分支调 `coffer__resume`，看到同样的正文连同分支与新鲜度标注。在新分支上 `coffer__resume` 报告 `found=false`。
+
+**代表性场景**：agent 保存并恢复工作现场；新分支上 resume 报告无现场。
+
+---
+
+### User Story 9 —— 规则在每次会话开始时环境式到达（优先级 P2）
+
+开发者积累了行为规则（全局「推送前先跑 verify」、项目「这个 repo 通过 `make release` 发版」），希望它们在**每次会话开始时自动**摆在 agent 面前 —— 上午的 Claude Code 与下午的 Codex 都是 —— 而不需要 agent 记得去搜索，也**不需要 Coffer 写入 agent 自己的记忆或指令文件**（[ADR-026](../../docs/decisions/ADR-026-memory-via-mcp-not-native-projection.md)）。由 Coffer 安装的 **SessionStart hook** 向 Coffer 索取规则包（始终生效的全局规则，加上 cwd 解析到 git 项目时的当前项目规则），并**仅以上下文形式**注入。规则包还携带两条 Coffer 内置种子规则 —— 调 `coffer__resume()` 接续既有工作，以及优先用 Coffer 的共享知识而非 agent 原生记忆 —— 外加一份该项目 scope 的仅标题环境索引。想要彻底分离的开发者可以选择开启 `disable_native_memory`。
+
+**为什么是这个优先级**：agent 从不读的规则毫无用处。会话开始时的环境式注入，是在不触碰原生文件、不依赖搜索自觉的前提下让流程性知识在场的非侵入方式。它是 P2 因为它建立在 rules lane（FR-036）与共享核心之上：注入投递的是已经存在的规则，而缺失或失败的注入从不阻塞 agent。
+
+**独立可测**：注册一个 Claude Code agent，安装其 hook，写入一条全局规则与一条项目规则，然后在该 git 项目内开一个会话，观察注入的 `additionalContext` 同时包含两者与两条种子规则 —— 且没有写入 `~/.claude/CLAUDE.md`。对 Codex 重复一次。停掉 daemon 再开会话：hook 什么也不打印并以 0 退出。
+
+**代表性场景**：规则包在会话开始时仅作为上下文注入；规则包携带两条内置种子规则；注入失败或缺失从不阻塞 agent；disable_native_memory 关闭原生记忆并可恢复；organizer 把规则形态的笔记路由进 rules lane；rules 读取面返回已存规则。
+
+---
+
+### User Story 10 —— 逐 lane 读完整个 scope（优先级 P2）
+
+开发者在 Coffer 里打开一个 scope，想看见**它所持有的一切**，而不是一张扁平列表：agent 写入的 **Entries**、有人摄取的 **Documents**、流程性的 **Rules**、按分支的 **Handoff** 现场，以及 organizer 的 **Changelog**。Knowledge 详情页恰好呈现这五个 tab。每个都有贴合形态的视图：Entries 与 Documents 是树 + 内容，Rules 是单一文档，Handoff 是按分支列表，Changelog 是只追加日志。所有视图**只读**、经统一文件预览渲染，并对底层文件提供「在外部编辑器中打开 / 在文件管理器中显示 / 复制路径」。
+
+Entries 与 Documents 是两个 tab、两套计数，恰恰因为它们来路不同、维护动作不同 —— 但这个 tab 划分是*呈现*层面的，不是存储或检索层面的。`coffer__search` 仍然横跨两者。
+
+**为什么是这个优先级**：扁平列表会藏起一个 scope 的大部分内容 —— rules 在检索之外，handoff 是工作状态 —— 于是流程性与连续性知识明明都在磁盘上却在 UI 里不可见。它是 P2 因为它只是对其他 story 已填充的 lane 的只读投影；它增加可见性，从不新增写入路径。
+
+**独立可测**：给一个 project scope 填入一条条目、一个摄取文档、一条规则、一个 handoff 现场，并跑一次写出 changelog 的 organizer。打开详情页，确认五个 tab，每个只读、每个经统一文件预览渲染、每个提供打开 / 显示 / 复制路径。
+
+**代表性场景**：按分支列出 handoff 现场；整理变更日志可读；organizer 把 inbox 排空成主题文档；整理时把笔记并入既有主题而不覆盖它；未配置内部模型时 organize 是 no-op；reorg 合并重复主题文档；reorg 从不销毁内容 —— 被取代的主题仍可恢复；未配置内部模型时 reorg 是 no-op；scope 空闲后自动整理。
 
 ---
 
 ### Edge Cases
 
-- **vector 不可用但 embedding 未配置**：当 store 解析出的策略需要向量但未配置 embedding provider 时，`recall` 在内部回退到 keyword 并返回结果；它从不阻塞。回退**不**作为查询期响应标志暴露。默认检索是 keyword+grep（零配置、离线）。
-- **直接在磁盘上编辑事实文件**：下一次 `recall` 会惰性扫描这个小事实目录、找出增量并重建索引，因此带外编辑会被拾取，无需 watcher。
-- **空事实文本**：在 API 边界被拒；不写任何内容。
-- **事实文本过长**：在 API 边界按 `max_fact_chars`（默认 8192）约束；写入前即被拒。
-- **project 作用域无法解析**：若 agent 的工作目录不在某个 git 项目里，`scope=project` 被拒并给出清晰错误；`scope=global` 仍然可用。
-- **在全新分支上 resume**：当前（项目 × 分支）没有保存过 handoff 时，`coffer__resume` 返回 `found=false` 而非报错；不编造任何内容。
-- **不在 git 项目里的 handoff**：不在某个 git 项目里的 cwd 没有 project 作用域、也没有分支，故 `coffer__resume` 返回 `found=false`，`coffer__set_handoff` 被拒（不存在全局 handoff）。
-- **daemon 关停时的注入**：当 SessionStart hook 无法触达 daemon（未运行、超时或任意错误）时，它什么都不打印并退出 0 —— 会话不带注入 bundle 启动，绝不被阻塞。
-- **不在 git 项目里的注入**：bundle 仍携带全局规则与两条播种的内置规则；不含项目规则（没有 project 作用域可解析）。
-- **关闭 / 卸载 disable-native-memory**：把 `disable_native_memory` 关掉（或卸载）会把 agent 的原生记忆设置恢复到先前状态；默认（关闭）完全不碰原生记忆（ADR-026）。
+- **不存在的 scope 名**：`global` 与格式正确的 `project-<26 位 ULID>` 惰性创建。其他任何名字都是**命名集合**，**不**自动创建 —— 未知名字返回 404，因此拼写错误不会悄悄造出一个此后每次读都失败的空 scope。
+- **向量不可用、embedding 未配置**：搜索在内部回退到 keyword 并返回结果；从不阻塞，也不设置逐次查询的标志。默认（`keyword` + `grep`）零配置且可离线。
+- **不支持的格式**：没有转换器的文件以 `IngestRejected("unsupported_type")` 拒绝；不落任何持久化。
+- **转换器库缺失**：某格式的转换引擎未安装时，该格式的摄取返回 `EngineUnavailable` 并指名缺失依赖；daemon 保持运行，其他格式仍可摄取。
+- **转换结果为空**：转换后为空/仅空白的文件以 `IngestRejected("empty")` 拒绝。转换后为空的 **PDF** 以更具体的 `IngestRejected("scanned_pdf")` 拒绝（同为 415），使 UI 能给出「看起来是扫描件/纯图像 —— 请先 OCR」这样可操作的提示。
+- **文件过大**：超过 `max_document_bytes`（默认 25 MB）的文件在 API 边界即被拒绝，不进入任何转换。
+- **重新上传，字节完全相同**：幂等 no-op —— 返回既有文档，不重写、不重复审计。
+- **重新上传，同名但内容变化**：**就地更新同一个文档**（复用 ULID，`inbox/` 与 `.raw/` 覆盖且只保留最新原件，`source_mode` 重置为 `converted`）—— 但只有带 `replace=true` 才行；否则以 `duplicate` 拒绝，让覆盖始终是显式的。
+- **编辑后重新转换**：对 `source_mode == edited` 的文档重新转换会被拒绝；带 `replace=true` 重新上传变更后的源会就地更新并把它重置为 `converted`。
+- **直接改磁盘**：下一次读会按内容哈希惰性扫描差异并重建索引，因此带外编辑无需 watcher 也能被拾起。对未变内容重建索引是 no-op。
+- **条目正文为空或过长**：在 API 边界拒绝（`max_entry_chars`，默认 8192，硬上限 32768）；不落任何持久化。
+- **在新分支上 resume**：`coffer__resume` 返回 `found=false` 而不是报错；不编造任何内容。
+- **git 项目之外的 handoff**：没有 project scope 也没有分支，因此 `coffer__resume` 返回 `found=false`，`coffer__set_handoff` 被拒绝（不存在全局 handoff）。
+- **daemon 未运行时的注入**：SessionStart hook 什么也不打印并以 0 退出 —— 会话无规则包启动，永不被阻塞。
+- **注入时 cwd 在 git 项目之外**：规则包仍携带全局规则与两条内置种子规则；没有项目规则可包含。
+- **关闭 disable_native_memory / 卸载**：恢复 agent 先前的原生记忆设置；默认（关）从不触碰原生记忆（ADR-026）。
+- **grep 与摄取原件**：`.raw/` 以点号开头，ripgrep 会跳过它。否则每个摄取文档都会产生两条 grep 命中 —— Markdown 与它转换自的原件。
+- **被跟踪的源文件移动或删除**：`check-sources` 报告 `missing`，从不崩溃。`source_path` 是本机局部的，因此在另一台机器上得到 `missing` 是预期且良性的。
+- **并发搜索**：对同一 scope 的多次搜索独立运行；没有按 scope 的锁拖慢读延迟。
 
 ## Acceptance Scenarios
 
+每条场景至少对应一个打了 `@pytest.mark.acceptance(spec="007-memory", scenario="…")`（Python）或 `acceptance("007-memory", "…")`（TypeScript）标记的测试。部分标题沿用合并前两份规范的措辞 —— 「fact」「memory store」「knowledge base」—— 因为标题文本本身就是 `scripts/audit_acceptance.py` 匹配的标记键。请把它们读作历史标签；正文描述的是今天的行为。
+
 ### Scenario: project memory follows the repository across checkout paths
 
-- **Given** 同一仓库（相同 `origin` remote）检出在不同路径——例如两台用户名不同的已同步机器
-- **When** 每个检出解析其项目记忆库
-- **Then** 两者解析到同一个库（相同项目 ULID）
-- **And** 旧的路径派生库在首次解析时被收编到可移植 id 之下，事实、根映射与标签保留
-
-每条场景至少对应一个被 `@pytest.mark.acceptance(spec="007-memory", scenario="…")` 打了标记的测试。
+- **Given** 同一仓库（相同 `origin` remote）检出在不同路径 —— 例如两台用户名不同的已同步机器
+- **When** 每个检出解析其项目知识 scope
+- **Then** 两者解析到同一个 scope（相同项目 ULID）
+- **And** 旧的路径派生 scope 在首次解析时被收编到可移植 id 之下，条目、根映射与标签保留
 
 ### Scenario: agent remembers a project fact
 
 - **Given** 一个跑在 git 项目内的 MCP 客户端，
-- **When** 它用一条事实加 `scope=project` 调 `coffer__remember`，
-- **Then** 在项目记忆目录的 `knowledge/inbox/` 子目录下写出一个每条记忆的 markdown 文件（YAML frontmatter `title`/`description`/`metadata.actor`/`origin_session_id` + 正文），将该文件索引进 `documents`，并写入一条审计。
+- **When** 它以 `text` 调 `coffer__write` 且不带 `scope`，
+- **Then** 一个每条一文件的 Markdown（YAML frontmatter `title`/`description`/`metadata.actor`/`origin_session_id` + 正文）被写入项目 scope 的 `knowledge/inbox/` lane，该文件以 `lane='knowledge'` 索引进 `documents`，并记录一条审计。
 
 ### Scenario: agent recalls a project fact
 
-- **Given** 一个有事实的项目记忆 store，
-- **When** 某 MCP 客户端用一条 query 调 `coffer__recall`，
-- **Then** 返回排序后的事实，每条带 id、text、score、source、time，且在搜索前已惰性扫描事实目录、拾取任何带外增量。
+- **Given** 一个含条目的 project scope，
+- **When** MCP 客户端带查询调 `coffer__search`，
+- **Then** 在惰性重建索引扫描拾起带外差异之后，返回带 id、正文、分数、来源与时间的排名命中。
 
 ### Scenario: recall spans project and global scope
 
-- **Given** global 与 project 两个作用域都存在事实，
-- **When** 某 MCP 客户端不带 scope 调 `coffer__recall`，
-- **Then** 结果同时取自项目 store 与 global（sentinel）store。
+- **Given** global 与 project 两个 scope 都有知识，
+- **When** MCP 客户端不带 scope 调 `coffer__search`，
+- **Then** 结果同时来自 project scope 与 global scope。
 
 ### Scenario: remembered items are stored in the knowledge lane
 
 - **Given** 一个跑在 git 项目内的 MCP 客户端，
-- **When** 它用一条事实调 `coffer__remember`，
-- **Then** 该条目作为一个 markdown 文件写入项目 store 的 `knowledge/inbox/` 子目录（从不落在 store 根目录、也不生成任何 `MEMORY.md`），被索引进 `documents`，且随后的 `coffer__recall` 能返回它。
+- **When** 它以 `text` 调 `coffer__write`，
+- **Then** 该条目作为 Markdown 文件写入项目 scope 的 `knowledge/inbox/` lane（绝不在 scope 根目录），以 `knowledge` lane 索引进 `documents`，随后 `coffer__search` 能返回它。
 
 ### Scenario: remember at global scope
 
 - **Given** 一个 MCP 客户端，
-- **When** 它用 `scope=global` 调 `coffer__remember`，
-- **Then** 该事实写入由 `project_id = WORKSPACE_GLOBAL_PROJECT_ID` 标识的 global store，且从任何项目 recall 都能返回它。
+- **When** 它带 `scope=global` 调 `coffer__write`，
+- **Then** 条目写入 `global` scope（键为 `project_id = WORKSPACE_GLOBAL_PROJECT_ID`），从任何项目检索都能返回它。
 
 ### Scenario: project scope resolves from the agent's working directory
 
 - **Given** coffer-mcp-shim 在会话握手时上报其启动 cwd，
-- **When** daemon 解析项目记忆 store，
-- **Then** 它计算该 cwd 的 git-root，并解析（缺失则惰性置备）由该项目 ULID 标识的 per-project store。
+- **When** daemon 解析项目知识 scope，
+- **Then** 它计算该 cwd 的 git-root，并解析（不存在则惰性创建）该项目的 `project-<ULID>` scope。
 
 ### Scenario: out-of-band fact-file edits are visible on recall
 
-- **Given** 一个有事实的项目记忆 store，
-- **When** 直接在磁盘上带外编辑某个事实文件（保留 frontmatter），
-- **Then** 下一次 `coffer__recall` 返回编辑后的内容（惰性 reindex-on-read），且没有任何文件系统 watcher 在跑。
+- **Given** 一个含条目的 project scope，
+- **When** 某条目文件在磁盘上被带外编辑（frontmatter 保留），
+- **Then** 下一次 `coffer__search` 返回编辑后的内容（读时惰性重建索引），且没有任何文件系统 watcher 在跑。
 
 ### Scenario: user adds a fact
 
-- **Given** 一个记忆 store，
-- **When** 用户经 Coffer UI 或 CLI 添加一条事实，
-- **Then** 在 store 的 `knowledge/inbox/` 子目录下写出 `metadata.actor = "user"` 的规范化 markdown，索引该文档，并写入一条审计。
+- **Given** 一个知识 scope，
+- **When** 用户经 Coffer UI 或 CLI 添加一条条目，
+- **Then** 规范化 Markdown 以 `metadata.actor = "user"` 写入该 scope 的 `knowledge/inbox/` lane，该行以 `knowledge` lane 索引，并记录一条审计。
 
 ### Scenario: user corrects a fact out-of-band
 
-- **Given** 一条事实已存在，
-- **When** 用户在应用内只读视图之外纠正其文本 —— 经 REST/CLI 写入面（`PATCH …/facts/{id}` / `coffer memory edit`），或在外部编辑器里直接编辑规范化 markdown，
-- **Then** 规范化 markdown 被重写、文档被重建索引（REST/CLI 路径立即重建；直接改文件则在下一次 `recall` 经 lazy reindex-on-read 重建），且 recall 反映新文本。
+- **Given** 存在一条条目，
+- **When** 用户在应用内查看器之外修正其正文 —— 经 REST/CLI 写入面（`PATCH /api/v1/knowledge/{scope}/entries/{id}` / `coffer knowledge edit-entry`），或直接在外部编辑器里改规范化 Markdown，
+- **Then** 规范化 Markdown 被重写，该行被重建索引（REST/CLI 路径立即生效；直接改文件则在下一次读时经惰性重建索引生效），搜索反映新正文。
 
 ### Scenario: user deletes a fact
 
-- **Given** 一条事实已存在，
+- **Given** 存在一条条目，
 - **When** 用户删除它，
-- **Then** markdown 文件与其索引行被移除，且 recall 不再返回它。
+- **Then** Markdown 文件与其索引行被移除，搜索不再返回它。
 
 ### Scenario: read-only viewer offers open/reveal affordances
 
-- **Given** 在 Coffer UI 中查看一条事实，
-- **When** 用户检视该事实（及其所在文件夹），
-- **Then** 内容只读渲染（应用内不编辑事实内容），读响应携带该事实的绝对 `.md` 磁盘路径及其所在文件夹的绝对路径，且 UI 经环回 daemon（spec 004 FR-039）为文件与文件夹提供「在外部编辑器中打开」+「在文件管理器中显示」——没有 copy-path 回退;打开哪个编辑器由全局首选编辑器偏好决定（见 002-ui-shell）。
+- **Given** 在 Knowledge 页查看某一项，
+- **When** 用户查看该项（及其所在文件夹），
+- **Then** 内容只读渲染（不在应用内编辑内容），读响应暴露该项的绝对 `.md` 路径与其所在文件夹的绝对路径，UI 对文件与文件夹都提供「在外部编辑器中打开」+「在文件管理器中显示」，经 loopback daemon 执行（spec 004 FR-039）—— 没有复制路径兜底；打开哪个编辑器由全局首选编辑器偏好决定（见 002-ui-shell）。
 
 ### Scenario: clear a memory scope
 
-- **Given** 一个有事实的记忆 store，
-- **When** 用户清空该作用域，
-- **Then** `knowledge/` 下的每条记忆条目被移除、其索引行被丢弃，但 store 这个 Resource 保留。
+- **Given** 一个含条目的知识 scope，
+- **When** 用户清空它，
+- **Then** `knowledge/` lane 下的每一项被移除、索引行被丢弃，但 scope 这个 Resource 被保留。
 
 ### Scenario: user renames a memory store
 
-- **Given** 一个记忆 store（例如来源文件夹从未被记录、否则会显示为 `project-<ULID>` 的那种），
-- **When** 用户通过 `PATCH /memory_stores/{name}/label` 设置显示标签，
-- **Then** 标签被去除首尾空白、原样回显，并在 store 读取 + 列表中作为可读名呈现；空 / 纯空白标签会清除它（退回 FR-017a 推导）；重命名一个不存在的 store 返回 404，而非自动创建。
+- **Given** 一个知识 scope（例如来源文件夹从未被记录、否则只会显示为 `project-<ULID>` 的那种），
+- **When** 用户经 `PATCH /api/v1/knowledge/{scope}/label` 设置显示标签，
+- **Then** 标签被 trim、回显，并在 scope 读取与列表中作为可读名字呈现；空白标签清除它（回退到 FR-017a 的派生）；给不存在的 scope 打标签是 404，而不是自动创建。
 
 ### Scenario: built-in memory tools appear in client tool list
 
-- **Given** 一个 MCP 客户端接入 coffer 网关，
-- **When** 客户端列出 tools，
-- **Then** `coffer__recall`、`coffer__remember`、`coffer__list_memory`、`coffer__set_handoff`、`coffer__resume` 与其它内置工具及上游工具一起出现。
+- **Given** 一个 MCP 客户端连上 Coffer 网关，
+- **When** 客户端列举工具，
+- **Then** `coffer__search`、`coffer__write`、`coffer__list`、`coffer__set_handoff`、`coffer__resume` 与其他内置及上游工具一同出现。
 
 ### Scenario: vector recall falls back when embedding is unconfigured
 
-- **Given** 一个未配置 embedding provider 的记忆 store，
-- **When** 引擎解析为向量策略但无可用 embedder，
-- **Then** 调用改跑 keyword 检索并返回结果、不报错；降级**不**作为查询期响应标志暴露（内部 keyword 回退，与 KB 面一致）。
+- **Given** 一个知识 scope，且全局未配置 embedding provider，
+- **When** 引擎解析到向量策略但没有可用 embedder，
+- **Then** 该调用改跑 keyword 搜索并返回结果、不报错；降级**不**以逐次查询的响应标志形式暴露。
 
 ### Scenario: agent saves and resumes a working-state handoff
 
-- **Given** 一个在 git 项目内、某分支上运行的 MCP 客户端，
-- **When** 它调 `coffer__set_handoff` 传入正文，之后（可能换成另一个 agent）调 `coffer__resume`，
-- **Then** `set_handoff` 在项目 store 的 `handoff/` 子目录下写出一个按 `(项目 × 分支)` 命名的 markdown 文件（frontmatter `branch`/`updated_at` + 自由正文）—— 覆盖该分支此前的现场，并记一条 `handoff_set` 审计；`resume` 返回 `found=true`，带上保存的 branch、body、`updated_at` 与一条新鲜度 `note`；该 handoff 绝不会被 `coffer__recall` 返回。
+- **Given** 一个跑在 git 项目某分支内的 MCP 客户端，
+- **When** 它带正文调 `coffer__set_handoff`，之后（可能作为另一个 agent）调 `coffer__resume`，
+- **Then** `set_handoff` 在项目 scope 的 `handoff/` lane 下写入一个按 `(项目 × 分支)` 的 Markdown 文件（frontmatter `branch`/`updated_at` + 自由正文）—— 覆盖该分支此前的现场并记录一条 `handoff_set` 审计 —— 而 `resume` 返回 `found=true` 及保存的分支、正文、`updated_at` 与新鲜度 `note`；handoff 从不被 `coffer__search` 返回。
 
 ### Scenario: resume reports no handoff for a fresh branch
 
-- **Given** 一个在 git 项目内、某分支上没有保存过 handoff 的 MCP 客户端（或一个不在任何 git 项目里的 cwd），
+- **Given** 一个 MCP 客户端处在没有保存现场的分支上（或 cwd 在任何 git 项目之外），
 - **When** 它调 `coffer__resume`，
-- **Then** 调用返回 `found=false`（绝不报错、也不编造任何内容）。
+- **Then** 调用返回 `found=false`（从不报错、不编造）。
 
 ### Scenario: the organizer drains the inbox into a topic document
 
-- **Given** 一个 memory store，其 `knowledge/inbox/` 中有两条新记住的条目，且已配置内部模型，
-- **When** 调用 `POST /api/v1/memory_stores/{name}/organize`（或 `coffer memory organize <name>`），
-- **Then** 内部 LLM organizer 排空 inbox（不再有条目），至少存在一个持有合并后内容的 `knowledge/<topic>.md` 主题文档，`knowledge/INDEX.md` 列出了该主题，记下一条 `memory_organized` 审计，且随后的 `recall` 返回主题文档（而非现在已空的 inbox）的内容。
+- **Given** 一个知识 scope 的 `knowledge/inbox/` 里有两条新写入的条目，且已配置内部模型，
+- **When** 调用 `POST /api/v1/knowledge/{scope}/organize`（或 `coffer knowledge organize <scope>`），
+- **Then** 内部 LLM organizer 排空 inbox（无剩余项），至少存在一个持有合并内容的 `knowledge/<topic>.md` 主题文档，`knowledge/INDEX.md` 列出该主题，记录一条 `memory_organized` 审计，随后的搜索返回主题文档（而非已空的 inbox）中的内容。
 
 ### Scenario: organizing merges a note into an existing topic without clobbering it
 
-- **Given** 一个 memory store，已存在一个含内容 X 的人工编辑过的主题文档，且其 `knowledge/inbox/` 中有一条相关的新条目，
-- **When** 调用 `organize`，organizer 把新条目合并进该主题，
-- **Then** 该主题文档仍含原始内容 X，并并入了新整合的信息，inbox 条目已被移除，整合 changelog（`consolidation-log.md`）记下了这次合并 —— organizer 绝不从零重生、绝不覆盖人工编辑。
+- **Given** 一个知识 scope 已有一份含内容 X 的手工编辑主题文档，且 `knowledge/inbox/` 里有一条新的相关条目，
+- **When** 调用 `organize` 且 organizer 把新条目并入该主题，
+- **Then** 主题文档中原有内容 X 与新整合的信息并存，inbox 条目已被移除，整理变更日志（`consolidation-log.md`）记录了这次合并 —— organizer 从不从零重生成，也从不覆盖人的编辑。
 
 ### Scenario: organize is a no-op when no internal model is configured
 
-- **Given** 一个 memory store，其 `knowledge/inbox/` 中有条目但未配置内部模型，
+- **Given** 一个 `knowledge/inbox/` 有条目但未配置内部模型的知识 scope，
 - **When** 调用 `organize`，
-- **Then** 调用返回 `status="no_model"`，inbox 原封不动，不写出任何主题文档，也不报错。
+- **Then** 返回 `status="no_model"`，inbox 原封不动，不写任何主题文档，不抛错。
 
 ### Scenario: a topic document recalls at passage granularity
 
-- **Given** 一个已整理的 memory store，其 `knowledge/` lane 中有一份含两个不同标题
-  小节（各描述不同主题）的主题文档，并已建立 recall 索引，
-- **When** 用只出现在第二个小节中的词去查询 `coffer__recall`，
-- **Then** 返回命中的文本是该小节的**段落（passage）**——而非整篇文档——因此第一个
-  小节的特征措辞不会出现在命中中，证明主题文档是**按段落分块**的（标题与块结构感知），
-  而不是每文件一块。
+- **Given** 一个已整理的知识 scope，其 `knowledge/` lane 持有一份含两个不同标题小节、各讲不同主题的主题文档，且已建索引，
+- **When** 用只出现在第二小节的词去 `coffer__search`，
+- **Then** 返回命中的正文是该小节的**段落** —— 而非整篇文档 —— 因此第一小节的特征措辞不出现在命中里，证明主题文档是**按段落**（感知标题与块结构）分块，而非一文件一块。
 
 ### Scenario: the reorg pass consolidates duplicate topic documents
 
-- **Given** 一个 memory store，含两份重叠的主题文档（同一主题、其中一份带额外细节），
-  且已配置内部模型，
-- **When** `POST /api/v1/memory_stores/{name}/reorg`（或 `coffer memory reorg <name>`）
-  运行，内部 agentic 循环读取两份文档、把合并后的内容写入其中一份、并 supersede
-  那份现已冗余的另一份，
-- **Then** 单一主题文档持有合并后的内容，冗余文档不再出现在 `recall` 或 `INDEX.md` 中，
-  随后的 `recall` 返回合并后的内容，并记下一条 `memory_reorganized` 审计。
+- **Given** 一个知识 scope 有两份重叠的主题文档（同一主题，其一含额外细节），且已配置内部模型，
+- **When** `POST /api/v1/knowledge/{scope}/reorg`（或 `coffer knowledge reorg <scope>`）运行，内部 agentic 循环读取两份文档、把合并内容写入其一并取代另一份，
+- **Then** 单一主题文档持有合并后的内容，冗余文档不再出现在搜索或 `INDEX.md` 中，随后的搜索返回合并内容，并记录一条 `memory_reorganized` 审计。
 
 ### Scenario: reorg never destroys content — a superseded topic stays recoverable
 
-- **Given** 一个 memory store，含一份持有内容 X 的主题文档（可能是人类编辑），
-- **When** reorg 循环覆盖或 supersede 该文档，
-- **Then** 先前内容 X 先被归档到 store 根的 `superseded/` tombstone（因而**可恢复**、
-  绝不硬删除），该 tombstone **排除在 recall 之外**（在 `knowledge/` lane 之外），且整合
-  changelog 记录该 supersession —— 循环是增量编辑，绝非从零重生。
+- **Given** 一个知识 scope 有一份持有内容 X 的主题文档（可能是人的编辑），
+- **When** reorg 循环覆盖或取代该文档，
+- **Then** 先前内容 X 先被归档到该 scope 的 `superseded/` 墓碑（因此**可恢复**，绝不硬删），墓碑**不参与检索**（它在 `knowledge/` lane 之外），整理变更日志记录这次取代 —— 该循环是增量编辑，绝非从零重生成。
 
 ### Scenario: reorg is a no-op when no internal model is configured
 
-- **Given** 一个 memory store，有主题文档但未配置内部模型，
+- **Given** 一个有主题文档但未配置内部模型的知识 scope，
 - **When** 调用 `reorg`，
-- **Then** 调用返回 `status="no_model"`，不写出/不 supersede/不归档任何主题文档，也不报错。
+- **Then** 返回 `status="no_model"`，不写、不取代、不归档任何主题文档，不抛错。
 
 ### Scenario: memory is auto-organized after the store goes idle
 
-- **Given** 已启用可选的 auto-organize 触发器、已配置内部模型，且有一条新记住的条目
-  进入某 store 的 `knowledge/inbox/`，
-- **When** 该 store 静默（无更多 memory 写入）达到保守的去抖延迟，
-- **Then** organizer **在后台自动**运行 —— 无显式 `organize` 调用 —— 把 inbox 排空进
-  主题文档；且该后台 pass 绝不阻塞：若在其触发前取消挂起的触发器（例如 daemon 关停时），
-  只是把未处理的 inbox 原样留给之后的 pass。
+- **Given** 自动整理触发已启用、已配置内部模型，且有一条条目刚写入某 scope 的 `knowledge/inbox/`，
+- **When** 该 scope 空闲（不再有知识写入）达到保守的防抖延迟，
+- **Then** organizer **在后台自动运行** —— 无需显式的 `organize` 调用 —— 把 inbox 排空成主题文档；且后台流程从不阻塞：在触发前取消它（例如 daemon 关停时）只是把 inbox 原样留给下一次流程。
 
 ### Scenario: the organizer routes a rule-shaped note into the rules lane
 
-- **Given** 一个 memory store，已配置内部模型，且有两条新记住的 inbox 条目 —— 一条是
-  行为规则（“推送前总是先跑 verify 步骤”），一条是普通事实，
-- **When** `organize` 运行，organizer 把第一条分类为 rule、第二条分类为普通 knowledge，
-- **Then** 该 rule 被追加到 store 的过程性 `rules/rules.md` lane（而非写入 `knowledge/<topic>.md`），
-  普通事实成为一个主题文档，两条 inbox 条目都被排空，且 `recall` **不**呈现该 rule（`rules/`
-  lane 在 `knowledge/` recall glob 之外，与 `handoff/`、`superseded/` 一样）。
+- **Given** 一个已配置内部模型的知识 scope，inbox 里有两条新写入的条目 —— 一条是行为规则（「推送前先跑 verify」），一条是普通事实，
+- **When** `organize` 运行且 organizer 把第一条归类为规则、第二条归类为普通知识，
+- **Then** 该规则被追加到该 scope 的流程性 `rules/rules.md` lane（而非写入 `knowledge/<topic>.md`），普通事实成为主题文档，两条 inbox 条目都被排空，且搜索**不**返回该规则（`rules/` lane 在检索 glob 之外，与 `handoff/`、`superseded/` 一样）。
 
 ### Scenario: the rules read surface returns the stored rules
 
-- **Given** 一个 memory store，其 `rules/rules.md` 持有一条或多条 rule，
-- **When** 调用 `GET /api/v1/memory_stores/{name}/rules`（或 `coffer memory rules <name>`），
-- **Then** 响应原样返回 rules 文本（供之后 session-start 注入读取的那个面），且无 rule 的
-  store 返回空/`null` 正文而非报错。
+- **Given** 一个 `rules/rules.md` 中含一条或多条规则的知识 scope，
+- **When** 调用 `GET /api/v1/knowledge/{scope}/rules`（或 `coffer knowledge rules <scope>`），
+- **Then** 响应原样返回规则文本（会话开始注入所读取的那个面），而没有规则的 scope 返回空/`null` 正文而不是报错。
 
 ### Scenario: handoff scenes are listed per branch for a store
 
-- **Given** 一个 memory store，其 `handoff/` lane 持有一个或多个按分支的现场文件，
-- **When** 调用 `GET /api/v1/memory_stores/{name}/handoff`（按 store 名寻址，而非 cwd），
-- **Then** 响应**按分支**列出现场，每个携带其 `branch`、`text`、`updated_at`、磁盘绝对
-  `path` 及 `folder_path`；无 handoff 现场的 store 返回**空列表加 HTTP 200**（绝非 404）。
+- **Given** 一个 `handoff/` lane 中含一个或多个按分支现场文件的知识 scope，
+- **When** 调用 `GET /api/v1/knowledge/{scope}/handoff`（按 scope 名寻址，而非 cwd），
+- **Then** 响应**按分支**列出现场，各自带 `branch`、`text`、`updated_at`、绝对磁盘 `path` 与 `folder_path`；没有现场的 scope 返回 **HTTP 200 空列表**（绝不是 404）。
 
 ### Scenario: the consolidation changelog is readable for a store
 
-- **Given** 一个 memory store，其 organizer 已在 store 根目录写出 `consolidation-log.md`，
-- **When** 调用 `GET /api/v1/memory_stores/{name}/consolidation-log`（按 store 名寻址，而非 cwd），
-- **Then** 响应返回 changelog 的 `text` 及其磁盘绝对 `path` 与 `folder_path`；无 changelog 的
-  store 返回 `text = null` 加 HTTP 200（绝非 404）。
+- **Given** 一个 organizer 已在 scope 根写出 `consolidation-log.md` 的知识 scope，
+- **When** 调用 `GET /api/v1/knowledge/{scope}/consolidation-log`（按 scope 名寻址，而非 cwd），
+- **Then** 响应返回变更日志 `text` 及其绝对磁盘 `path` 与 `folder_path`；没有日志的 scope 返回 `text = null` 与 HTTP 200（绝不是 404）。
 
 ### Scenario: rules bundle is injected at session start as context only
 
-- **Given** 一个受管 agent（Claude Code 或 Codex）已安装 Coffer SessionStart hook，
-  且 cwd 所在 git 项目里有一条全局规则与一条项目规则，
-- **When** 会话开始、hook 调 `GET /api/v1/agents/{name}/session-context?cwd=<cwd>`，
-- **Then** daemon 返回 `additional_context`，先项目规则后全局规则，hook 把它作为 SessionStart
-  的 `additionalContext` 注入（纯上下文），且**不**写入 agent 的原生记忆或指令文件（ADR-026）。
-  当 cwd 不在 git 项目里时，bundle 只携带全局规则（无项目规则）。
+- **Given** 一个已安装 Coffer SessionStart hook 的受管 agent（Claude Code 或 Codex），一条全局规则，以及 cwd 所在 git 项目的一条项目规则，
+- **When** 会话开始，hook 调用 `GET /api/v1/agents/{name}/session-context?cwd=<cwd>`，
+- **Then** daemon 返回 `additional_context`，其中先是项目规则、后是全局规则；hook 把它作为 SessionStart 的 `additionalContext` 输出（仅上下文），且**没有**写入 agent 的原生记忆或指令文件（ADR-026）。当 cwd 不在 git 项目内时，规则包只携带全局规则。
 
 ### Scenario: the bundle carries the two seeded built-in rules
 
-- **Given** session-context 端点组装一个 bundle（即便 store 没有任何 rule），
-- **When** bundle 被返回，
-- **Then** 它始终包含两条 Coffer 播种的内置规则 —— 调 `coffer__resume()` 接续此前工作，以及
-  优先用 `coffer__remember`/`coffer__recall` 而非 agent 的原生记忆 —— 且 handoff 正文本身
-  **不**被注入（经 `coffer__resume` 按需拉取）。
+- **Given** session-context 端点组装规则包（即使该 scope 没有规则），
+- **When** 规则包返回，
+- **Then** 它始终包含两条 Coffer 内置种子规则 —— 调 `coffer__resume()` 接续既有工作，以及优先使用 Coffer 的共享知识工具而非 agent 原生记忆 —— 且 handoff 正文本身**不**被注入（它由 `coffer__resume` 按需拉取）。
 
 ### Scenario: a failed or hook-less injection never blocks the agent
 
-- **Given** SessionStart hook 已安装但 daemon 不可达（未运行、超时或任意错误），
+- **Given** SessionStart hook 已安装但 daemon 不可达（未运行、超时或任何错误），
 - **When** 会话开始，
-- **Then** hook 什么都不打印并退出 0，会话不带注入 bundle 启动，agent 绝不被阻塞；未安装 hook
-  的 agent 直接没有注入。
+- **Then** hook 什么也不打印并以 0 退出，会话在无注入规则包的情况下启动，agent 从不被阻塞；未安装 hook 的 agent 则根本没有注入。
 
 ### Scenario: disable_native_memory turns native memory off and restores it
 
-- **Given** 一个受管 agent `disable_native_memory=false`（默认），
-- **When** 用户设 `disable_native_memory=true`，
-- **Then** Coffer 写入 agent 的原生记忆关闭开关（Claude Code `autoMemoryEnabled=false`；
-  Codex `features.memories=false` + `memories.generate_memories=false`），而把它设回 `false`
-  （或卸载）会恢复先前设置；为 `false` 期间 Coffer 绝不碰 agent 的原生记忆（ADR-026）。
+- **Given** 一个 `disable_native_memory=false`（默认）的受管 agent，
+- **When** 用户把它设为 `true`，
+- **Then** Coffer 写入该 agent 的原生记忆开关（Claude Code `autoMemoryEnabled=false`；Codex `features.memories=false` + `memories.generate_memories=false`），而设回 `false`（或卸载）会恢复先前设置；只要它是 `false`，Coffer 就从不触碰 agent 的原生记忆（ADR-026）。
 
 ### Scenario: merge scan proposes same-project stores
 
-- **Given** 两对描述同一项目的项目库——一对可证明（两库 root 本机可读且规范化到同一 origin remote），一对仅是貌似（标签/路径/内容吻合但无法证明共同 remote），
-- **When** 用户在配置了内部引擎的情况下运行合并扫描，
-- **Then** 可证明的一对以 `confidence="certain"`、`judged_by="remote"` 提议且不咨询引擎；貌似的一对携带引擎裁决（`judged_by="engine"`、置信度与理由）提议；每条提议按方向启发式给出建议的幸存库——且扫描不改变任何状态。
+- **Given** 两对描述同一项目的 project scope —— 一对可证（双方根目录本地可读且归一化到同一 origin remote），一对只是看起来像（标签/路径/内容吻合但无法证明共用 remote），
+- **When** 用户在已配置内部引擎的情况下运行合并扫描，
+- **Then** 可证的那对以 `confidence="certain"`、`judged_by="remote"` 提议且不咨询引擎，似是而非的那对带引擎裁决提议（`judged_by="engine"`、一个 confidence 与一段理由），每条提议按方向启发式给出存活 scope —— 而扫描不改动任何东西。
 
 ### Scenario: merge scan degrades cleanly without an internal engine
 
-- **Given** 项目库中含一对可证明同项目的库，且未配置内部引擎，
+- **Given** 一批 project scope（含一对可证相同的），且未配置内部引擎，
 - **When** 用户运行合并扫描，
-- **Then** 响应报告 `engine="no_model"` 且仍携带确定性（`judged_by="remote"`）提议；引擎层的组合直接缺席——不报错。
+- **Then** 响应报告 `engine="no_model"` 并仍携带确定性（`judged_by="remote"`）提议；引擎档次的配对直接缺席 —— 不报错。
 
 ### Scenario: merging two stores consolidates additively and retires the source
 
-- **Given** 两个各自持有事实的项目库（至少一个同名的 lane 文件），
-- **When** 用户把 source 合入 target，
-- **Then** source 的每个 lane 文件落到 target 下（同名文件两份都保留），source 的标签与 root 映射移交给缺失它们的 target，target 的 recall 返回合并后的事实，source 库（资源、索引行、磁盘目录）被裁撤，并记录一条 `memory_stores_merged` 审计。
+- **Given** 两个各持条目的 project scope（至少有一个同名 lane 文件冲突），
+- **When** 用户把 source 合并进 target，
+- **Then** 每个 source lane 文件都落到 target 下（同名冲突保留两份），source 的标签与根映射移交给尚无自己标签的 target，target 的检索返回合并后的条目，source scope（资源、索引行、磁盘目录）被退役，并记录一条 `memory_stores_merged` 审计。
 
 ### Scenario: a merged identity resolves to the surviving store
 
-- **Given** `project-X` 已合入 `project-Y`（`X` 列在 `Y` 的 `merged_identities` 里），
-- **When** agent 在算出的项目身份为 `X` 的 checkout 里 remember 一条事实，
-- **Then** 事实写进 `project-Y`，且不会重新供给新的 `project-X` 库。
+- **Given** scope `project-X` 已被合并进 `project-Y`（因此 `X` 列在 `Y` 的 `merged_identities` 中），
+- **When** agent 从计算身份为 `X` 的检出写入一条条目，
+- **Then** 该条目写入 `project-Y`，且不会新建 `project-X` scope。
 
-> **Deferred to future test work**（测试随 e2e 基础设施落地；`make verify-acceptance` 不对它们做门禁）：记忆列表按作用域展示、只读事实视图的打开/显示能力、`coffer memory …` CLI 端到端配带 daemon、per-store 度量（HTTP 路由）。
+### Scenario: create a knowledge base
+
+- **Given** daemon 正在运行且不存在任何命名集合，
+- **When** 用户以唯一名字与一份检索配置创建一个 scope，
+- **Then** 该 scope 作为 `knowledge` 资源持久化，`~/.coffer/knowledge/<name>/` 及其 lane 被创建，列举 scope 时可见。命名集合是**显式**创建的 —— 不同于 `global` 与 `project-<ULID>`，它绝不会因一次读而自动创建。
+
+### Scenario: ingest converts any format to markdown
+
+- **Given** 存在一个知识 scope，
+- **When** 用户上传一个非 Markdown 文件（如 `.pdf`、`.docx`、`.csv`、`.html`），
+- **Then** Coffer 把它转换为 `inbox/<doc-id>.md`（带 YAML frontmatter），把原件保留在 `.raw/<doc-id>.<ext>`，插入一行 `documents`（`kind="knowledge"`、`lane="inbox"`、`source_mode="converted"`），把它切块进 FTS5，并记录审计 `KB_DOCUMENT_INGESTED`。
+
+### Scenario: list documents in a knowledge base
+
+- **Given** 已摄取若干文档，
+- **When** 用户列举文档，
+- **Then** 每个摄取文档一行，带稳定 doc id、标题、原始文件名与时间戳，分页返回 —— 且**只有**文档：该列举是按 lane 限定的，因此 agent 写入同一 scope 的条目不会混进来。
+
+### Scenario: filter documents by title
+
+- **Given** 一个含多个文档的 scope，
+- **When** 用户带标题查询 `q` 列举文档，
+- **Then** 只返回标题包含 `q`（不区分大小写）的文档，`total` 反映过滤后的数量，结果仍按 `limit`/`offset` 分页。
+
+### Scenario: keyword search returns ranked passages
+
+- **Given** 文档已建索引，
+- **When** 用户搜索（不带模式；Coffer 使用该 scope 解析出的默认策略），
+- **Then** 收到按 `bm25()` 排名的段落，各自带来源 doc id、标题、片段与分数 —— 来自**两个** lane，因为对一个 scope 的搜索同时覆盖写入的与摄取的内容。
+
+### Scenario: keyword search matches CJK (Chinese) content
+
+- **Given** 一个知识 scope 中有一份 Markdown 正文为中文（无词边界空格）的文档，
+- **When** 用户用 CJK 查询做关键词搜索，
+- **Then** 多字查询（如 `向量检索`）经 FTS5 trigram 索引命中，短于 3 字的查询（如 `向量`）经子串兜底命中 —— 都不会像旧的 `unicode61` 分词器那样返回空。
+
+### Scenario: grep returns file/line matches
+
+- **Given** 文档在磁盘上，
+- **When** 用户用某个模式 grep 该 scope，
+- **Then** Coffer 对 scope 目录跑 ripgrep（受 max-matches 与超时约束），返回 `{path, line_number, line}` 命中，不涉及索引。隐藏的 `.raw/` lane 被跳过，因此一个摄取文档只产生其 Markdown 的一条命中而非两条。
+
+### Scenario: vector search returns ranked passages
+
+- **Given** 全局已配置 embedding provider，且该 scope 列出了向量检索模式、其文档已嵌入，
+- **When** 引擎跑向量搜索（启用向量的 scope 的解析默认），
+- **Then** Coffer 嵌入查询、跑 sqlite-vec KNN，返回带相似度分数的 top-k 段落。
+
+### Scenario: vector falls back to keyword when embedding unconfigured
+
+- **Given** 全局未配置 embedding provider，
+- **When** 引擎解析到向量策略但没有可用 embedder，
+- **Then** Coffer 改跑 keyword 搜索并返回结果、不报错；降级不以逐次查询标志暴露（它经 `documents_degraded` 报告）。
+
+### Scenario: hybrid search fuses keyword and vector via RRF
+
+- **Given** 一个启用向量且文档已嵌入的 scope，
+- **When** 引擎为该启用向量的 scope 融合 keyword+vector（其解析默认），
+- **Then** Coffer 同时跑 keyword 与 vector 搜索并以倒数排名融合（`K = 60`，按 `(document_id, position)` 去重），使同时被两个列表排名的段落胜过单列表命中，并返回融合后的 top-k。
+
+### Scenario: edit a document and reindex
+
+- **Given** 存在一份已转换的文档，
+- **When** 用户经编辑 API 替换其 Markdown 正文，
+- **Then** `source_mode` 变为 `edited`，单一重建索引例程删除旧的 chunks/FTS5/vec 行并重新切块（启用向量则重新嵌入），随后的搜索反映该编辑。
+
+### Scenario: external edit picked up by reindex-on-read
+
+- **Given** 一份 Markdown 文件在用户外部编辑器里被带外编辑（没有 API 调用）的文档，
+- **When** 用户下一次读取或搜索该文档，
+- **Then** 读时惰性重建索引扫描检出漂移的 `content_sha256`，经单一幂等例程重建索引，读/搜索反映该编辑 —— 且没有任何文件系统 watcher 在跑。
+
+### Scenario: re-conversion blocked once edited
+
+- **Given** 一份 `source_mode == edited` 的文档，
+- **When** 用户请求从原件重新转换，
+- **Then** Coffer 以明确错误拒绝；重新上传一个新的源文件会把 `source_mode` 重置为 `converted`。
+
+### Scenario: changing chunk params re-indexes
+
+- **Given** 一个已建索引的 scope，
+- **When** 用户修改 `chunk_size` 或 `chunk_overlap`，
+- **Then** Coffer 重新切块并重建该 scope 的索引（启用向量则重新嵌入）—— chunk 参数可变，不被锁定。
+
+### Scenario: changing embedding model re-embeds
+
+- **Given** 一个列出了向量检索模式的 scope，且全局已设置 embedding 模型，
+- **When** 用户更换 embedding 模型，
+- **Then** Coffer 把语料重新嵌入 sqlite-vec —— embedding 模型可变，不被锁定。该模型位于全局配置而非 scope 上，因此一次更改会让每个要求向量的 scope 重新嵌入；UI 会在应用前确认。
+
+### Scenario: delete a single document
+
+- **Given** 一个 scope 有文档，
+- **When** 用户按 id 删除其中一个，
+- **Then** `inbox/<doc-id>.md` 与 `.raw/<doc-id>.<ext>` 文件被移除，其 chunks/FTS5/vec 行被删除，`documents` 行被移除，记录审计 `KB_DOCUMENT_DELETED`，搜索不再返回它。
+
+### Scenario: delete a knowledge base cleans up files and index
+
+- **Given** 一个 scope 有内容与索引，
+- **When** 用户经通用资源删除（`DELETE /api/v1/resources/knowledge/{name}`）删除该 scope，
+- **Then** 它的所有 `documents`/`chunks`/FTS5/vec 行被移除，`~/.coffer/knowledge/<name>/` 被移除，Resource 行被删除。刻意**没有** `DELETE /api/v1/knowledge/{scope}`：scope 生命周期与 kind 无关，属于 Resource 框架。
+
+### Scenario: built-in KB tools appear in client tool list
+
+- **Given** 一个 MCP 客户端连上 Coffer 网关，
+- **When** 它列举工具，
+- **Then** 八个知识工具都在 —— `coffer__search`、`coffer__grep`、`coffer__read`、`coffer__list`、`coffer__write`、`coffer__delete`、`coffer__set_handoff`、`coffer__resume` —— 不再有「文档 vs 记忆」两套家族，且前六个都接受可选的 `scope`。
+
+### Scenario: agent searches a knowledge base
+
+- **Given** 一个已建索引的 scope，
+- **When** 客户端调 `coffer__search(query, scope?, top_k?)`，
+- **Then** Coffer 返回为 LLM 消费而结构化的排名段落（段落 + 来源 id + 分数），横跨两个 lane。
+
+### Scenario: agent greps a knowledge base
+
+- **Given** 一个磁盘上有文件的 scope，
+- **When** 客户端调 `coffer__grep(pattern, scope?)`，
+- **Then** Coffer 返回文件/行匹配。
+
+### Scenario: agent reads a document
+
+- **Given** scope 中存在某一项，
+- **When** 客户端调 `coffer__read(id, scope?)`，
+- **Then** Coffer 返回该项的 Markdown 正文与 frontmatter —— 自动解析条目 id 或文档 id —— 或在 id 未知时给出明确错误。
+
+### Scenario: agent adds a document via MCP
+
+- **Given** 存在一个知识 scope，
+- **When** 客户端以 Markdown 内容调 `coffer__write(text, filename, scope?)`，
+- **Then** Coffer 像处理人工上传一样摄取它（`inbox` lane 下一个新的 ULID id 文档，写入 `inbox/` 与 `.raw/`，建索引），以 agent 为 actor 记录审计 `KB_DOCUMENT_INGESTED`，该文档可被搜索。
+
+### Scenario: agent edits a document via MCP
+
+- **Given** 存在一份已转换的文档，
+- **When** 客户端调 `coffer__write(text, id, scope?)` 指向该文档，
+- **Then** 正文被替换，`source_mode` 变为 `edited`，该 scope 被重建索引，以 agent 为 actor 记录审计 `KB_DOCUMENT_UPDATED`。
+
+### Scenario: agent deletes a document via MCP
+
+- **Given** scope 中存在一份文档，
+- **When** 客户端调 `coffer__delete(id, scope?)`，
+- **Then** 该文档的文件与索引行被移除，以 agent 为 actor 记录审计 `KB_DOCUMENT_DELETED`，搜索不再返回它。
+
+### Scenario: re-upload of an updated file updates the document in place
+
+- **Given** 一份从 `report.md` 摄取的文档，
+- **When** 用户带 `replace=true` 重新上传变更后的 `report.md`，
+- **Then** **同一个** doc id 被就地更新（`.raw/` 与 Markdown 被覆盖、只保留最新原件、`source_mode` 重置为 `converted`），不产生第二个文档，并记录审计 `KB_DOCUMENT_UPDATED`。
+
+### Scenario: re-upload of an identical file is a no-op
+
+- **Given** 一份从 `report.md` 摄取的文档，
+- **When** 用户重新上传字节完全相同的 `report.md`，
+- **Then** 这是幂等 no-op：返回既有文档，不产生第二个文档，不记录 `KB_DOCUMENT_UPDATED` 审计。
+
+### Scenario: KB metrics report counts and disk usage
+
+- **Given** 一个 scope 持有条目与文档，
+- **When** 用户打开其详情视图（UI 或 `coffer knowledge describe`），
+- **Then** 他们看到按 lane 限定的 `entry_count` 与 `document_count`、chunk 数、已建索引的检索模式、向量嵌入待重试的文档数（`documents_degraded`），以及 `~/.coffer/knowledge/<scope>/` 的磁盘字节数。两个计数分开是因为两个 lane 来路不同；chunk 数横跨两者，因为检索横跨两者。
+
+### Scenario: degraded embed surfaces documents_degraded and retries without re-chunking
+
+- **Given** 一个启用向量的 scope，其 embedding provider 在文档摄取时不可用，
+- **When** 该文档仅以关键词建索引，之后用户在 provider 仍宕机时读取该 scope（列举 / 搜索 / 指标），再在其恢复后读一次，
+- **Then** 该文档带着真实的 `content_sha256` 与一个持久化的 `embed_pending` 标志，降级读时 `documents_degraded` 报 `1`，下一次协调**只**重试嵌入（不重新切块 / 不重写 FTS —— chunk 行不变），成功后清除 `embed_pending`，`documents_degraded` 回到 `0`。
+
+### Scenario: check sources detects changed, unchanged, and missing originals
+
+- **Given** 若干从外部文件摄取的文档（其绝对 `source_path` 记录在 metadata 中），
+- **When** 用户在其中一个原件被磁盘上编辑、一个未动、一个被删除之后运行 `check-sources`，
+- **Then** 报告分别把它们归类为 `changed`、`unchanged`、`missing`（通过对每个外部文件重新哈希并与存储的 `source_sha256` 比对），且检测本身不重建索引、不记审计。
+
+### Scenario: update from source refreshes a changed document in place
+
+- **Given** 一份已转换文档，其外部 `source_path` 原件在磁盘上已变更，
+- **When** 用户对该文档运行 `update-source`，
+- **Then** Coffer 从被跟踪文件就地重新摄取它（同一 ULID id，`source_mode` 保持 `converted`），新内容可搜索、旧内容消失，并审计 `KB_DOCUMENT_UPDATED`。
+
+### Scenario: update from source refuses an edited document
+
+- **Given** 一份 `source_mode == edited` 的文档，
+- **When** 用户对它运行 `update-source`，
+- **Then** Coffer 以「禁止重新转换」错误拒绝（手工编辑绝不被覆盖），且 `check-sources` 把该文档报告为 `edited` 而非覆盖它。
+
+### Scenario: auto_update_sources refreshes changed sources on check
+
+- **Given** 一个启用 `auto_update_sources` 的 scope，且某文档的外部原件已变更，
+- **When** 用户运行 `check-sources`，
+- **Then** 变更文档被就地自动刷新（报告 `updated`）并审计 `KB_DOCUMENT_UPDATED`，而手工编辑过的变更文档会被跳过（报告 `edited`）。
+
+### Scenario: test an embedding model
+
+- **Given** 一个 embedding provider、模型 id，以及（必要时）凭据引用，
+- **When** 用户测试该 embedding 模型，
+- **Then** Coffer 请求一次嵌入并报告成功及返回的向量维度，或给出人类可读的失败信息，且不持久化任何东西。
+
+> **推迟到后续测试工作**（随 e2e 基础设施落地；`make verify-acceptance` 不对其设卡）：按 scope 的 Knowledge 列表视图、只读查看器的「在外部编辑器中打开 / 显示」端到端验证、带运行中 daemon 的 `coffer knowledge …` 端到端、以及经 HTTP 路由的按 scope 指标。
 
 ## Requirements
 
 ### Functional Requirements
 
-**存储与作用域**
+> **编号说明。** `FR-001`–`FR-059` 保留它们还叫 *Memory* 规范时的编号 —— 代码注释、其他规范与 ADR 都在引用它们，重新编号带来的破坏大于整洁。从 spec 006（Knowledge Base）折叠进来的需求另起一段编号 `FR-060`–`FR-075`，每条标注它来自 006 的哪个编号。序列中的空缺是被更早改动退役的需求（主要是 transcript distillation 与 `journal` lane）。
 
-- **FR-001**：系统 MUST 把每条记忆条目存为一个每条记忆的 markdown 文件（YAML frontmatter `title`/`description`/`metadata.actor`/`origin_session_id` + 正文），位于每个作用域的 **`knowledge/` lane** 下 —— 新记住的条目落在 `knowledge/inbox/`，经整理的主题文档（`knowledge/<topic>.md`）加一个 `INDEX.md` 由整合 organizer 维护（后续 memory PR）。markdown 文件是 **唯一真相源**；SQLite 是可重建的索引。**不生成任何 `MEMORY.md` 索引**（此前的派生索引是无用的投影产物，检索里没人读它）。
-- **FR-002**：系统 MUST 支持两种记忆作用域：**global**（一个由 `project_id = WORKSPACE_GLOBAL_PROJECT_ID`（既有 sentinel `00000000000000000000000000`）标识的 store）与 **per-project**（每项目一个、由项目 ULID 标识的 store），分别存于 `~/.coffer/memory/global/knowledge/` 与 `~/.coffer/memory/projects/<project-ulid>/knowledge/`。
-- **FR-003**：`coffer__remember`（与用户添加）MUST 把一条记忆条目追加进每作用域的 inbox（`knowledge/inbox/`），写入时不调 LLM；整理进主题文档由整合 organizer 异步完成（后续 memory PR），绝不阻塞写入或 `recall`。
-- **FR-004**：系统 MUST 从 agent 在会话握手时上报的启动 cwd 解析 per-project store：daemon 计算 git-root，并解析（缺失则惰性置备）该项目 ULID 对应的 store。
-- **FR-004a**（spec 010 / ADR-043 修订）：项目 ULID MUST **跨机器可移植**——仓库有 `origin` remote 时由其正规化 URL 派生（同一仓库的 ssh/https/scp 形式归一化一致），无 remote 时回退为 git-root 绝对路径哈希。因此同一仓库在每台已同步机器上解析到同一个记忆库，无论检出路径。旧的路径派生库在首次解析时**一次性**收编：文件移入可移植 id 的目录、资源以新名重新注册、根映射与显示标签随迁（旧资源被删除，改名经同步墓碑传播）。
+**存储与 scope**
 
-**事实生命周期**
+- **FR-001**：系统必须把每条写入项存为一个 Markdown 文件（YAML frontmatter `title`/`description`/`metadata.actor`/`origin_session_id` + 正文），位于该 scope 的 **`knowledge/` lane** 下 —— 新写入项在 `knowledge/inbox/`，整理后的主题文档在 `knowledge/<topic>.md`，外加由 organizer 维护的 `INDEX.md`。这些 Markdown 文件是**唯一真相源**；SQLite 是可重建的索引。检索不读取任何派生索引文件。
+- **FR-002**：系统必须支持**一个资源 kind `knowledge`**，含**三种 scope**，仅由资源名区分：`global`、`project-<ULID>`，以及其他任意名字（**命名集合**）。`global` 与 `project-<ULID>` 必须在首次使用时自动创建；命名集合必须**不**自动创建 —— 未知名字返回 404，使拼写错误无法变出一个空 scope。scope 种类是从名字*派生*的（`domain/knowledge/scope.scope_kind_of`），从不存储，因此两者永不矛盾。
+- **FR-002a**：系统必须把每个 scope 存在唯一的根 `~/.coffer/knowledge/<scope>/` 下，采用固定 lane 布局：`knowledge/`（写入的条目与主题文档，新条目在 `knowledge/inbox/`）、`inbox/`（摄取文档的归一化 Markdown）、`rules/`、`handoff/`、`superseded/`、`.raw/`（摄取原件）。`.raw/` 必须以点号开头：grep 跑遍整个 scope 目录而 ripgrep 会跳过隐藏项，因此摄取原件永远不会作为第二条命中与它转换出的 Markdown 一同出现。路径构造必须只存在于一个模块（`infrastructure/knowledge/paths.py`），且每个成为路径片段的名字都必须过穿越防护。
+- **FR-003**：`coffer__write`（以及用户添加）必须把条目追加到该 scope 的 `knowledge/inbox/`，写入时不调 LLM；整理成主题文档是异步的（FR-027），从不阻塞写入或检索。
+- **FR-004**：系统必须在会话握手时从 agent 上报的启动 cwd 解析 per-project scope：daemon 计算 git-root，并解析（不存在则惰性创建）该项目 ULID 对应的 scope。
+- **FR-004a**（spec 010 / ADR-043 修订）：项目 ULID 必须**跨机器可移植** —— 仓库有 `origin` remote 时由其归一化 URL 派生（同一仓库的 ssh/https/scp 形式归一化结果一致），没有 remote 时回退到绝对 git-root 路径哈希。因此同一仓库在每台已同步机器上都解析到同一个 scope，无论检出路径为何。以旧的路径派生 id 创建的 scope 在首次解析时被**一次性**收编到可移植 id：文件迁移到新 id 的目录，资源以新名字重新注册，根映射与显示标签一并带过去。
 
-- **FR-005**：agent 与用户 MUST 能直接写入一条事实（写入时不调 LLM）。事实文本 MUST 至少 1 个字符、至多 `max_fact_chars`（默认 8192）；空或超长在 API 边界被拒，不持久化任何内容。
-- **FR-006**：用户与 agent MUST 能列出事实（按作用域）、按 id 取单条、改一条事实的文本、删除单条事实、清空某作用域全部事实。事实**编辑/删除**经 REST/CLI 写入面（`PATCH/DELETE …/facts/{id}` / `coffer memory edit/delete`）与外部编辑器 files-as-truth —— Coffer UI 只读渲染事实内容、不在应用内编辑它；MCP 的 `update_memory`/`forget` 工具已**移除**（agent 的写入面是 `remember` + 内部 organizer）。清空保留 store 这个 Resource。
-- **FR-007**：每条事实带 `metadata.actor`（`agent` | `user`），由写入者设定。**没有自由格式的 `type` 字段** —— `Lane` 是唯一的分类轴（FR-048），由内部路由（organizer）决定，绝不由写入者提供。
+**条目生命周期**
+
+- **FR-005**：agent 与用户必须能够直接写入条目（写入时不调 LLM）。条目正文至少 1 字符、至多 `max_entry_chars`（每 scope 默认 8192，硬上限 32768）；空或超长在 API 边界拒绝且不落任何持久化。每 scope 的默认值约束普通 agent 写入；对用户自有笔记的可信批量导入可放宽到上限，使长笔记永不被静默截断。
+- **FR-006**：用户与 agent 必须能够按 scope 列举条目、按 id 获取一条、编辑其正文、删除一条，以及清空一个 scope。清空保留 scope 这个 Resource。Coffer UI 只读渲染条目内容、不在应用内编辑；人通过 REST/CLI 写入面或自己的外部编辑器维护。
+- **FR-007**：每条条目携带 `metadata.actor`（`agent` | `user`），由写入方设置。**没有自由形式的 `type` 字段** —— `Lane` 是唯一分类轴（FR-048），由内部路由（organizer）决定，绝不由写入方提供。
 
 **检索**
 
-- **FR-008**：recall MUST 使用与 knowledge base 共享的统一检索引擎：`grep`（ripgrep 扫该 store 的事实文件；对 FTS5 无法分词的内容必不可少，如 CJK）、`keyword`（FTS5 BM25，默认）、`vector`（sqlite-vec 配可配置的 embedding provider）。这些引擎模式是**内部细节** —— recall **不**接受外部 `mode`；引擎自动解析该 store 的默认策略。当解析出的策略需要向量但未配置 embedding provider 时，recall MUST 在内部回退到 `keyword` —— 绝不阻塞，且回退**不**作为查询期响应标志暴露（`fallback` 字段已从 recall 响应移除）。
-- **FR-009**：`coffer__recall` MUST 默认跨 project 与 global 两个 store（显式给出 `scope` 时收窄到单个 store：`project` = 仅项目 store，`global` = 仅 global store）；跨 store 的结果用倒数排名融合（reciprocal rank fusion）合并（逐 store 的分数跨模式/跨 store 不可比；每条命中保留其逐 store 分数，只有合并后的顺序来自融合）。结果带 id、text、score、source、time —— `time` 是事实的 `updated_at`，`source` 是 `<scope>:<fact file path>`。默认 `top_k` 为 5；调用方 MAY 指定 1–20。
-- **FR-010**：memory MUST 用 **lazy reindex-on-read**：`recall` 先按内容哈希扫描事实目录的增量（新增/变更/删除文件）并对账索引，再搜索，使带外编辑 —— 人类在自己外部编辑器里做的纠正，或任何直接在磁盘上的编辑 —— 即时可见，无需文件系统 watcher。这正是让外部纠正得以显现的机制，于是 UI 可以保持为只读视图（FR-017），而维护在用户的编辑器里完成。
+- **FR-008**：检索必须在整个 scope 上使用同一套引擎：`grep`（对 scope 文件跑 ripgrep；对 FTS5 无法分词的内容如 CJK 至关重要）、`keyword`（FTS5 BM25 + trigram 分词器，默认）、`vector`（sqlite-vec 配合全局 embedding provider）、`hybrid`（keyword + vector 的倒数排名融合）。这些模式是**内部细节**（[ADR-034](../../docs/decisions/ADR-034-retrieval-mode-is-internal.md)）—— 任何外部面都不接受 `mode`；引擎自动解析该 scope 的默认策略（scope 列出 vector 则 `hybrid`，否则 `keyword`）。当解析出的策略需要向量但没有可用 embedder 时，检索必须在内部回退到 `keyword` —— 从不阻塞，也从不暴露逐次查询的 `fallback` 标志。
+- **FR-008a**：检索必须横跨一个 scope 的**两个 lane**。一次搜索同时返回 agent 写入的条目与人摄取的文档，一起排名。按 lane 限定的读（文档列举、`entry_count`/`document_count`）只服务于呈现与维护；它们不得分割检索。统一搜索正是两个 kind 合并的理由，把它在下一层重新拆开会让这次改动落空。
+- **FR-009**：`coffer__search` 默认必须横跨当前项目 scope 与 `global`（显式 `scope` 收窄到其一）。跨 scope 结果以倒数排名融合合并 —— 各 scope 的分数不可比，因此每条命中保留自己的分数，只有合并后的顺序来自融合。结果携带 id、正文、分数、来源与时间。`top_k` 默认 5，调用方可指定 1–20。
+- **FR-010**：这一层必须使用**读时惰性重建索引**：读或搜索先按内容哈希扫描差异（新增/变更/删除的文件）并在服务前协调索引，因此带外编辑 —— 人在自己编辑器里的修正，或任何直接的磁盘编辑 —— 无需文件系统 watcher 也立即可见。正是它让 UI 得以保持只读查看器（FR-017），而维护发生在用户自己的编辑器里。
 
-**通过 MCP 集成 agent**
+**经 MCP 的 agent 集成**
 
-- **FR-015**：Coffer 的 MCP 网关 MUST 暴露内置工具 `coffer__recall(query, scope?, top_k?)`（无 `mode` 参数 —— 检索模式是内部的）、`coffer__remember(text, scope?)`（无 `type` 参数 —— 已按 FR-048 废弃）、`coffer__list_memory(scope?)`、`coffer__set_handoff(body)`、`coffer__resume()`，挂在保留前缀 `coffer__` 下。`remember` 默认 `scope=project`；`recall` 默认两个作用域。没有 MCP `update_memory`/`forget` 工具 —— 事实编辑/删除是用户面（REST/CLI/外部编辑器），见 FR-006。
-- **FR-016**：这些内置 memory 工具调用 MUST 共用既有调用日志面（`mcp_invocations` 一行：工具名 + who/when/duration/outcome，不记参数也不记返回内容）。
+- **FR-015**：Coffer 的 MCP 网关必须在保留前缀 `coffer__` 下暴露**八个**内置知识工具：
+  - `coffer__search(query, scope?, top_k?)` —— 横跨两个 lane 的排名片段（取代 `coffer__recall` 与 `coffer__search_knowledge`）
+  - `coffer__grep(pattern, scope?, max_matches?)` —— 字面/正则的文件+行匹配（取代 `coffer__grep_knowledge`）
+  - `coffer__read(id, scope?)` —— 完整读取一项，条目或文档自动解析（取代 `coffer__read_document`）
+  - `coffer__list(scope?, all?, limit?)` —— 一个 scope 的内容，或全部 scope 的目录（取代 `coffer__list_memory` 与 `coffer__list_knowledge_bases`）
+  - `coffer__write(text, title?, description?, filename?, id?, scope?)` —— 从 `text` 归档条目，给 `filename` 则存文档，给 `id` 则就地重写两者之一（取代 `coffer__remember`、`coffer__add_document` 与 `coffer__edit_document`）
+  - `coffer__delete(id, scope?)` —— 删除一条条目或一份文档（取代 `coffer__delete_document`）
+  - `coffer__set_handoff(body)` 与 `coffer__resume()` —— 不变
+  前六个都必须接受可选的 `scope`，默认取 cwd 所在项目的 scope，在项目之外回退到 `global`。没有任何工具接受检索 `mode`。调用方必须永远不需要先把一样东西归类为「memory」还是「knowledge」才能选工具 —— 那正是十二工具面所强加、而八个动词所消除的猜测。
+- **FR-016**：内置工具调用必须共用既有的调用日志面（一行 `mcp_invocations`：工具名 + 谁/何时/耗时/结果，不含参数或返回内容）。写工具在文档层面的效果另以 agent 为 actor 记入 F01 审计。
 
-**工作状态 handoff（连续性）**
+**工作现场 handoff（连续性）**
 
-- **FR-023**：系统 MUST 提供一条按 **(项目 store × git 分支)** 记账的**工作状态 handoff** lane：每分支一个文件，位于 `~/.coffer/memory/projects/<project-ulid>/handoff/<branch-slug>.md`，含 YAML frontmatter（`branch`、`updated_at`）加自由 markdown 正文。分支从 agent 上报的 cwd（其 repo 的当前分支）解析。handoff **仅限项目级** —— 不存在全局 handoff。
-- **FR-024**：`coffer__set_handoff(body)` MUST **覆盖**当前分支的 handoff 文件（不累积；每分支一份现场），更新 `updated_at`，并记一条 `handoff_set` 审计。handoff 正文以磁盘文件为准（随 git 同步镜像流转，与其它 memory 文件一致），且 MUST NOT 被 `coffer__recall` 返回（它在 `handoff/` 子目录里，在 recall 的 glob 之外）。
-- **FR-025**：`coffer__resume()` MUST 返回当前分支保存的 handoff —— `found=true`，带 `branch`、`body`、`updated_at` 与一条标注现场可能已过期的新鲜度 `note` —— 或当该分支没有 handoff（全新分支）或 cwd 不在 git 项目里时返回 `found=false`。它 MUST 在缺失 handoff 时绝不报错，且 MUST NOT 编造内容。
-- **FR-026**：当 agent 的 cwd 解析不到 git 项目（无 project 作用域、无分支）时，`coffer__set_handoff` MUST 被拒（没有可写的 store，也没有全局 handoff），`coffer__resume` MUST 返回 `found=false`。
+- **FR-023**：系统必须提供按 **(项目 scope × git 分支)** 建键的**工作现场 handoff** lane：每分支一个文件，位于 `~/.coffer/knowledge/project-<ULID>/handoff/<branch-slug>.md`，含 YAML frontmatter（`branch`、`updated_at`）加自由 Markdown 正文。分支从 agent 上报的 cwd 解析。handoff **仅限项目级** —— 不存在全局 handoff。
+- **FR-024**：`coffer__set_handoff(body)` 必须**覆盖**当前分支的 handoff 文件（每分支一个现场）、设置 `updated_at`，并记录一条 `handoff_set` 审计。正文以文件即真相的方式存在磁盘上，且必须**不**被 `coffer__search` 返回（它在检索 glob 之外）。
+- **FR-025**：`coffer__resume()` 必须返回当前分支保存的 handoff —— `found=true` 连同 `branch`、`body`、`updated_at` 与标注现场可能已陈旧的新鲜度 `note` —— 或在该分支没有 handoff、或 cwd 不在 git 项目内时返回 `found=false`。它必须永不因缺失 handoff 而报错，也必须不编造内容。
+- **FR-026**：当 agent 的 cwd 不解析到 git 项目时，`coffer__set_handoff` 必须被拒绝，`coffer__resume` 必须返回 `found=false`。
 
-**整合 —— 内部 organizer**
+**整理 —— 内部 organizer**
 
-- **FR-027**：系统 MUST 提供一个**内部 memory organizer**，它**仅在显式触发时**（`POST /api/v1/memory_stores/{name}/organize` 与 `coffer memory organize <name>`；本 PR 不做任何自动/后台触发）运行，使用 Coffer 的**内部 LLM connection**（被标记为内部默认的 connection；在 Settings → LLM Connections 配置，spec 011）通过**每条目一次 one-shot completion**，把 store 的 `knowledge/inbox/` 中新记住的条目排空、整合进一小组连贯的**主题文档**（`knowledge/<topic-slug>.md`，YAML frontmatter `title`/`description`/`updated_at` + markdown 正文）—— 绝不是面向 agent 的工具。organizer MUST 顺序处理各条目，且单个条目的 LLM/解析失败 MUST NOT 中止整轮（其余条目仍照常整理）。
-- **FR-028**：对每个 inbox 条目，organizer MUST (a) 经共享检索引擎取回至多 top-K（K=3）最相关的**既有主题文档**（此步不用 LLM）作为合并候选，(b) 发起**一次 LLM 调用**，要么把该条目 MERGE 进最契合的候选 —— **保留全部既有内容与人工编辑**、整合新信息、去除完全重复 —— 要么在没有契合者时 CREATE 一个新主题，(c) 把返回的完整文档正文写入 `knowledge/<topic-slug>.md`。organizer MUST 是**对既有文档的增量 MERGE，绝不从零重生**：把完整既有主题内容交给 LLM 去合并，使人工纠正得以存续。organizer MUST NOT 硬删除既有主题文档（只创建或用合并后内容覆盖；git 历史即审计轨迹）。
-- **FR-029**：inbox 条目 MUST **仅在**其内容成功写入主题文档**之后**才被删除。畸形或不可解析的 LLM 响应（缺失/空的必填键、不安全的 `topic_slug`、或非 JSON）MUST 导致该条目被**跳过** —— 留在 inbox，不写出也不损坏任何主题文档 —— 并继续整轮；结果中报告被跳过的条目数。对空 inbox 调 `organize` 是 no-op（`status="empty"`）；当未配置内部 connection 时，`organize` 是干净的 no-op（`status="no_model"`，inbox 原封不动、不写任何内容）而非报错。
-- **FR-030**：排空后，organizer MUST 从所有主题文档的 frontmatter 重新生成 store 的 `knowledge/INDEX.md` 审阅目录（`- [<title>](<slug>.md) — <description>`），对账索引（丢弃被删的 inbox 行、(重)索引新/更新的主题文档，使 `recall` 返回主题文档的内容而非被排空的 inbox），并记一条 `memory_organized` 审计（仅 store + 计数 —— 无条目内容）。`recall` MUST 呈现已整理的主题文档内容，且 MUST NOT 呈现 `INDEX.md`。
-- **FR-031**：organizer MUST 在 store 根目录维护一份**非阻塞的整合 changelog**（`<store>/consolidation-log.md`，只追加、人类可读：每条合并/创建的主题一行，带时间戳与来源 inbox 条目）。该 changelog 可审计、绝不是闸门，且**排除在 recall 之外**（它在 `knowledge/` lane 之外）与**排除在同步镜像之外**（机器本地，与 `INDEX.md` 一样；主题文档本身作为真相源 DO 同步）。
-- **FR-032**：memory 对账器 MUST 用检索基座共享的 markdown 分块器（`infrastructure/knowledge/chunking.chunk_markdown` —— 按标题小节切分、保持 fenced code/表格原子、把结构块打包进固定窗口）把事实文件正文切成**段落粒度、结构感知的分块**，并使用**固定的 memory 分块 size/overlap 参数**（不是 `MemoryStoreConfig` 的 per-store 字段），从而让一份多小节的已整理主题文档在 `recall` 时呈现**最相关的段落**，而非把整篇正文作为单一分块。短的单段落事实（如 inbox 条目）仍只切成一块 —— 因此这只改变大/已整理主题文档的**粒度**，绝不改变 `recall` *包含/排除什么*：`INDEX.md`、inbox 与主题文档之分、以及 `handoff/` 的 recall 隔离（FR-024/030/031）和遗留根目录事实的废弃（FR-019）全部不变。
-- **FR-033**：系统 MUST 提供一个**内部 agentic 重组 pass**，仅在**显式触发**时运行（`POST /api/v1/memory_stores/{name}/reorg` 与 `coffer memory reorg <name>`；本 PR 无自动/后台触发），由 Coffer **内部 LLM connection**（被标记为内部默认的 connection；在 Settings → LLM Connections 配置，spec 011）驱动一个有界的 **langgraph `create_react_agent` 循环**，在 store 既有的主题文档上保持其连贯 —— 合并重复/重叠的文档、拆分过长的文档。循环获得一个小而固定的工具面：**list** 主题、**read** 主题、**write**（创建/覆盖）主题、**supersede**（退役）主题,且**绝非 agent 可见工具**（它是内部的，与 organizer 一样）。langchain/langgraph 代码 MUST 限制在 `infrastructure.chat`（importlinter Contract 9）；`application/memory` 只通过注入的 memory-local 端口触达它。未配置内部 connection 时该 pass 是干净的 no-op（`status="no_model"`，不写/不 supersede/不归档）而非报错；**没有主题文档**的 store 同样 no-op（`status="empty"`）。循环结束后该 pass MUST 重新生成 `INDEX.md`、对账索引（使 `recall` 反映整合后的文档）、并记一条 `memory_reorganized` 审计（仅 store + 计数 —— 无文档内容）。
-- **FR-034**：reorg pass MUST **非破坏且增量 —— MUST NOT 硬删除或从零重生主题文档**。任何移除或替换既有主题文档内容的变更，MUST 先把当前版本**归档**到 store 根的 `superseded/` tombstone（`<store>/superseded/<slug>-<timestamp>.md`）：覆盖既有主题的 `write` 在写新内容前先归档旧版本，`supersede` 把文档**移动**到那里（绝不 unlink 入虚空）。`superseded/` tombstone **排除在 recall 之外**（在 `knowledge/` lane 之外，与 `handoff/`、`consolidation-log.md` 一样），且作为可恢复的真相源历史 **DO 同步**（不同于机器本地的 `INDEX.md`/changelog）。主题文档写入保持**原子**，每次 write/supersede 追加到 `consolidation-log.md` changelog。这就是数据不丢保证：没有任何字节在未被可恢复归档前离开 `knowledge/` lane，因此人类编辑永不会被不可恢复地覆盖。
-- **FR-035**：系统 MUST 提供一个**自动 session-end organize 触发器**，在某 memory store 静默时**自动、在后台**触发 `organize` pass（FR-027）—— 在没有 per-agent 断连信号的情况下近似“session end”。它由 memory 写入通知钩子驱动：每次 memory 写入都会（重新）武装一个**去抖（debounced）**定时器；当配置的静默延迟在无更多写入下走完，organizer 作为后台任务对发生变化的 store 运行。该触发器 MUST **保守且非阻塞**：(a) 它**默认开启** —— 写入→organize 整合流水线自动运行（无手动原则，§4.4），由环境**关闭**开关控制；手动 `coffer memory organize` 仍是特例覆盖；(b) 后台 pass MUST 绝不阻塞或破坏 daemon 关停 —— 关停时任何挂起的定时器被**取消**（未触发的 inbox 原样留给之后的静默 pass 或显式触发；不丢任何东西，因为 `recall` 本就覆盖 inbox 且 `organize` 幂等）；(c) 后台 pass 的失败 MUST 被吞掉并记录日志，绝不上抛给写入方或中断 daemon；(d) 未配置内部 connection 时该 pass 是干净 no-op（FR-027）。它**不引入新的 REST/CLI 面**（是对既有 organizer 的内部触发），并复用 `memory_organized` 审计。langchain/langgraph 限制（Contract 9）不变：触发器位于 `application`/`surfaces`，只通过已接线的 organizer 触达 LLM。
-- **FR-036**：系统 MUST 提供一个**过程性 `rules` lane** —— 每个 memory store（全局 + 每项目）一份 `rules/rules.md`，持有“要这样做 / 别那样做”的行为规则。**amendment 2026-06-22（自主拆分）：** 内容少时维持单一 `rules/rules.md`；任一 `rules/*.md` 超过 **100 条**后，organizer 的 reorg/organize pass 经一次 one-shot LLM 按主题分类，把它重分布到 per-topic `rules/<slug>.md`（递归 —— 超阈值的类别再拆成更细的 slug）。新规则仍追加到 `rules/rules.md`；读取面拼接**全部 `rules/*.md`**。rules lane 是**由 organizer 分类写入的，绝非 agent 显式参数**：在 `organize`（FR-027/028）期间，organizer 每条目的单次 LLM 调用 MAY 额外把某 inbox 条目分类为 **rule**；rule 条目被**追加**到 `rules/rules.md`（仅在追加成功后才排空该 inbox 条目），而不是合并进 `knowledge/<topic>.md` 主题文档，且 `organize` 的结果/审计报告一个 `rules_appended` 计数。`rules/` lane 位于 store 根目录（`knowledge/` 的同级，与 `handoff/`、`superseded/` 一样），因而**自动排除在 `recall` 之外**（recall glob 与对账器只下探 `knowledge/`；grep 守卫只保留 `knowledge/` 命中）—— rules 由**环境式 session-start 注入**交付，而非 `recall`。该 lane 是**真相源、DO 同步**（与 `handoff/`/主题文档一样；它不是派生/机器本地文件）。系统 MUST 把存储的 rules 只读暴露给注入面：`GET /api/v1/memory_stores/{name}/rules` 与 `coffer memory rules <name>` 返回 rules 文本（无 rule 时返回空/`null` 正文，绝不报错）。把这些 rules 作为上下文注入到每个受管 agent 的 **session-start 注入**（ADR-026：只注入、绝不原生写文件）在 FR-049–FR-052（slice 6）规范 —— 本 rules-lane PR 落地 lane、分类与供注入消费的读取面。
+- **FR-027**：系统必须提供一个**内部 organizer**，用 Coffer 的**内部 LLM 连接**（标记为 internal-default 的连接；Settings → LLM Connections，spec 011）以**每条一次性补全**的方式，把一个 scope 的 `knowledge/inbox/` 排空成少量连贯的**主题文档**（`knowledge/<topic-slug>.md`）—— 它绝非面向 agent 的工具。触发方式为显式调用（`POST /api/v1/knowledge/{scope}/organize`、`coffer knowledge organize <scope>`）与空闲自动触发（FR-035）。条目顺序处理，单条的 LLM/解析失败必须不中断整轮。
+- **FR-028**：对每条 inbox 条目，organizer 必须（a）经共享检索引擎取回至多 top-K（K=3）最相关的**既有主题文档**（此步不调 LLM）作为合并候选，（b）做**一次 LLM 调用**，或把该条目合并进最合适的候选 —— **保留全部既有内容与人的编辑**、整合新信息、去掉完全重复 —— 或在没有合适候选时创建新主题，（c）把返回的完整文档正文写入 `knowledge/<topic-slug>.md`。它必须是**增量合并，绝非从零重生成**，且必须不硬删既有主题文档。
+- **FR-029**：inbox 条目必须**只在**其内容成功写入主题文档**之后**才被删除。畸形或无法解析的 LLM 响应必须导致该条目被**跳过** —— 留在 inbox，不写出也不写坏任何主题文档 —— 且整轮继续；结果报告跳过数。对空 inbox 调 `organize` 是 no-op（`status="empty"`）；未配置内部连接时是干净的 no-op（`status="no_model"`）而非错误。
+- **FR-030**：排空之后，organizer 必须由所有主题文档的 frontmatter 重新生成该 scope 的 `knowledge/INDEX.md` 目录、协调索引（丢掉被排空的 inbox 行、（重新）索引新建/更新的主题文档），并记录一条 `memory_organized` 审计（仅 scope + 计数，不含条目内容）。检索必须返回整理后的主题文档内容，且必须不返回 `INDEX.md`。
+- **FR-031**：organizer 必须在 scope 根维护一份**非阻塞的整理变更日志**（`consolidation-log.md`，只追加、人类可读：每条合并/新建的主题一行，带时间戳与来源 inbox 条目）。它可供审计、从不设卡，且**不参与检索**（在 `knowledge/` lane 之外）与同步镜像（本机局部，与 `INDEX.md` 一样；主题文档本身作为真相源**参与**同步）。
+- **FR-032**：协调器必须用共享 Markdown 分块器（`infrastructure/knowledge/chunking.chunk_markdown` —— 按标题小节切分、保持围栏代码/表格原子、把结构块打包到固定窗口）把文件正文切成**段落粒度、感知结构的块**，使多小节主题文档返回**最相关的段落**而非整篇正文。短的单段条目仍切成一块：这只改变**粒度**，绝不改变检索*包含或排除什么*。
+- **FR-033**：系统必须提供一个**内部 agentic 重整流程**（`POST /api/v1/knowledge/{scope}/reorg`、`coffer knowledge reorg <scope>`；仅显式触发），由内部 LLM 连接驱动一个有界的 **langgraph `create_react_agent` 循环**处理该 scope 的主题文档 —— 合并重复、拆分过长。其固定工具面是对主题文档的 **list / read / write / supersede**，且**绝不面向 agent**。langchain/langgraph 代码必须限制在 `infrastructure.chat`（importlinter Contract 9）；`application/knowledge` 只经注入的端口触达它。未配置内部连接时是干净的 no-op（`status="no_model"`）；没有主题文档的 scope 同样是 no-op（`status="empty"`）。流程结束后重新生成 `INDEX.md`、协调索引，并记录一条 `memory_reorganized` 审计。
+- **FR-034**：reorg 流程必须**非破坏且增量**。任何移除或替换既有主题文档内容的变更，都必须先把当前版本**归档**到 scope 根的 `superseded/` 墓碑（`superseded/<slug>-<timestamp>.md`）：覆盖式 `write` 先归档旧版，`supersede` 则把文档**移动**过去。墓碑**不参与检索**，但作为可恢复历史**参与同步**。主题文档写入必须保持**原子**，且每次 write/supersede 都追加进 `consolidation-log.md`。这是数据不丢失的保证：没有任何字节能在未被可恢复归档的情况下离开 `knowledge/` lane。
+- **FR-035**：系统必须提供一个**空闲自动整理触发**，在 scope 空闲时于后台自动执行 `organize`（FR-027）—— 在没有 per-agent 断连信号的情况下近似「会话结束」。每次知识写入都（重新）武装一个**防抖**定时器；空闲延迟内不再有写入后，organizer 作为后台任务对变更的 scope 运行。它必须**保守且非阻塞**：（a）**默认开启**，由环境变量提供关闭开关；（b）它必须永不阻塞或破坏 daemon 关停 —— 待触发的定时器被取消，未触发的 inbox 原样留下（不丢东西：检索本就覆盖 inbox，且 `organize` 幂等）；（c）后台流程失败必须被抑制并记日志；（d）未配置内部连接时是干净的 no-op。它不引入**任何新的 REST/CLI 面**，并复用 `memory_organized` 审计。
+- **FR-036**：系统必须提供**流程性 `rules` lane** —— 每个 scope 一份 `rules/rules.md` —— 存放「要这样 / 不要那样」的行为规则。文件较小时该 lane 保持单文件；一旦任一 `rules/*.md` 超过 **100 条规则**，organizer 通过一次性 LLM 调用按主题分类并把它们重分布到按类别的 `rules/<slug>.md`（可递归应用）。新规则继续追加到 `rules/rules.md`；读取面串联**全部 `rules/*.md`**。该 lane 由 **organizer 的分类写入，绝不由 agent 显式指定**：`organize` 期间每条条目的那次 LLM 调用可以额外把某条 inbox 条目分类为**规则**，该条目被**追加**到 `rules/rules.md`（追加成功后才排空 inbox 条目）而不是并入主题文档，结果/审计报告 `rules_appended` 计数。`rules/` lane 位于 scope 根，因此天然**不参与检索** —— 规则**由会话开始的环境式注入投递，而不是由搜索**。该 lane 是真相源且参与同步。系统必须只读暴露已存规则：`GET /api/v1/knowledge/{scope}/rules` 与 `coffer knowledge rules <scope>` 返回规则文本（没有规则时为空/`null`，绝不报错）。
 
-**Lane 分类轴**
+**Lane 分类法**
 
-- **FR-048:** 自由格式的事实 `type` 字段被**废弃** —— `Lane`（`knowledge` / `rules` / `handoff`）是**唯一的分类轴**。系统 MUST NOT 在 `MemoryFact` 上、在事实文件 frontmatter（`metadata.type`）里、在 `documents.metadata` JSON 里、在 `coffer__remember` 工具 schema 里、或在 REST/CLI 事实写入面（`FactCreate`/`FactUpdate`/`FactOut`、`coffer memory add --type`）携带 `type` 字段。事实的 lane 由**内部路由**（organizer）决定，绝不由写入者提供。既有磁盘记忆为**丢弃重建**（Coffer 未发布）：**没有 Alembic 迁移** —— `type` 存在 `metadata` JSON 里而非列里,旧事实文件里残留的 `metadata.type` 键解析时被直接忽略、并在下一次 reindex-on-read 时丢弃;全新安装(或清空 `~/.coffer/memory/`)即从无 type 开始。
+- **FR-048**：自由形式的 `type` 字段**已退役** —— `Lane`（`knowledge` / `rules` / `handoff`）是写入项的**唯一分类轴**。系统必须不在条目实体、文件 frontmatter（`metadata.type`）、`documents.metadata` JSON、`coffer__write` 工具 schema，或 REST/CLI 写入面中携带 `type` 字段。一项的 lane 由**内部路由**（organizer）决定，绝不由写入方提供。
 
-**规则运行时注入与原生记忆（session hooks）**
+**规则运行时注入与原生记忆（会话 hook）**
 
-- **FR-049：** 系统 MUST 通过一个 **SessionStart hook** 把 rules lane（FR-036）交付到每个受管 agent，该 hook 注入一个**只作为上下文的规则 bundle —— 绝不原生写文件**（ADR-026）。Coffer 把 hook 安装进 agent 自己的 hooks 配置（**Claude Code** → `~/.claude/settings.json` 顶层 `hooks`；**Codex** → `~/.codex/hooks.json` 顶层 `hooks` —— 同一套 JSON schema），只识别自己的条目（`coffer-hook` 命令 basename）、不动用户 hook；安装/卸载幂等且原子（`.bak` 备份），并审计 `AGENT_HOOK_INSTALLED`/`AGENT_HOOK_UNINSTALLED`。在 SessionStart 时 hook 回调 Coffer —— 携 daemon token 调 `GET /api/v1/agents/{name}/session-context?cwd=<cwd>` —— daemon 返回 bundle = **全局规则（始终）** 加上 **当前项目规则（cwd 解析到 git 项目时）**，先项目后全局。hook 把 bundle 作为 SessionStart 的 `additionalContext` 输出并退出 0。hook MUST **绝不阻塞 agent**：未安装 hook、或 daemon 不可达/超时/报错时，**不注入**且 hook 仍退出 0。hook 在 **resume/clear/compact** 时重跑（matcher 覆盖 `startup|resume|clear|compact`）。
-- **FR-050：** 注入的 bundle（FR-049）MUST 额外携带**两条 Coffer 播种的内置规则**，即便 store 的 `rules/rules.md` 为空也在场：(a) 当用户想接续此前工作（「continue」「where were we」「resume」）时，调 `coffer__resume()` 拉取本项目 + 分支保存的工作状态 handoff；(b) 一条**软引导**，优先用 `coffer__remember`（记录持久事实）与 `coffer__recall`（取回它们）而非 agent 自己的原生记忆，因为 Coffer 是用户各 agent 间的共享 store。**handoff 正文本身不被注入** —— 它经 `coffer__resume`（FR-025）**按需拉取**，于是 bundle 保持精简、陈旧现场绝不被硬塞进上下文。
-- **FR-052：** 系统 MUST 提供一个**可选的 per-agent `disable_native_memory` 配置（默认 `false`）**。**关闭**（默认）时 Coffer **绝不碰 agent 的原生记忆**（ADR-026）。用户**打开**它时，Coffer 写入 agent 配置以关闭其原生记忆 —— **Claude Code** `autoMemoryEnabled=false`（`~/.claude/settings.json`）；**Codex** `features.memories=false` + `memories.generate_memories=false`（`~/.codex/config.toml`）—— 原子写入（`.bak` 备份）并审计该关闭；**再次关掉它、或卸载**会**恢复** agent 先前的原生记忆设置（审计）。这是一个**洁净选项**（避免第二份发散的记忆副本），**不是规则 bundle 的必要条件**：无论该开关如何，规则 bundle 照样注入。
+- **FR-049**：系统必须通过 **SessionStart hook** 把 rules lane（FR-036）投递给每个受管 agent，**仅以上下文注入 —— 绝不写原生文件**（[ADR-026](../../docs/decisions/ADR-026-memory-via-mcp-not-native-projection.md)）。Coffer 把 hook 安装进 agent 自己的 hooks 配置（**Claude Code** → `~/.claude/settings.json` 顶层 `hooks`；**Codex** → `~/.codex/hooks.json` —— 同一 JSON schema），只认自己的条目、不动用户的 hook；安装/卸载幂等且原子（`.bak` 备份），并审计 `AGENT_HOOK_INSTALLED`/`AGENT_HOOK_UNINSTALLED`。SessionStart 时 hook 带 daemon token 调用 `GET /api/v1/agents/{name}/session-context?cwd=<cwd>`，daemon 返回**全局规则（始终）**加**当前项目规则（cwd 解析到 git 项目时）**，项目规则在前。hook 把它作为 `additionalContext` 输出并以 0 退出。它必须**永不阻塞 agent**：未安装 hook、daemon 不可达/超时/报错时都没有注入，hook 仍以 0 退出。hook 在 **resume/clear/compact** 时重跑。
+- **FR-050**：注入的规则包必须额外携带**两条 Coffer 内置种子规则**，即使 `rules/rules.md` 为空也在：（a）用户想接续既有工作时，调 `coffer__resume()` 拉取本项目 + 分支保存的 handoff；（b）**柔性引导**优先使用 Coffer 的共享知识工具（`coffer__write` / `coffer__search`）而非 agent 自己的原生记忆，因为 Coffer 是用户所有 agent 之间的共享存储。**handoff 正文本身不被注入** —— 它由 `coffer__resume`（FR-025）按需拉取，使规则包保持精简，也不会把陈旧现场硬塞进上下文。
+- **FR-052**：系统必须提供**可选的 per-agent `disable_native_memory` 配置（默认 `false`）**。**关**时 Coffer **从不触碰** agent 的原生记忆（ADR-026）。**开**时 Coffer 写入 agent 配置以关闭其原生记忆 —— Claude Code `autoMemoryEnabled=false`；Codex `features.memories=false` + `memories.generate_memories=false` —— 原子写入（`.bak` 备份）并审计；再**关回**（或卸载）会**恢复**先前设置。这是**整洁性选项**，不是规则包的前提。
 
-**Surfaces**
+**各类面（Surfaces）**
 
-- **FR-017**：用户 MUST 能通过编程写入面完成完整记忆 CRUD —— (a) `/api/v1/memory_stores/` 下的 REST API 与 (b) `coffer memory …` 子命令。（这些 REST 写入端点也是 agent 经 MCP 网关写入事实的途径。）用户写入设 `metadata.actor = "user"`，把规范化 markdown 写入 store 的 `knowledge/inbox/` 子目录、重建索引并审计。Web UI 以 **只读** 方式呈现事实（不在应用内编辑事实内容）；人类维护时在自己的外部编辑器里编辑规范化 markdown（经 lazy reindex-on-read（FR-010）拾取），或经 REST/CLI 写入面。只读视图 MUST 以舒适的阅读 **最大宽度**（居中）呈现事实内容；详情页的事实**列表** MUST 是单一**可滚动**列表,**不含应用内分页器**（UI 一次按最大 `limit` 取一页;事实 **API** 仍按 `limit`/`offset` 分页）。这些 surface 上的 store 名会被校验：只有 `global` 或 `project-<26 字符 ULID>` 合法 —— 形状合法的名字会惰性 provision 其 store；其余返回 404（`MEMORY_STORE_NOT_FOUND`）。
-- **FR-017a**：各 surface MUST 用**从 `project_root` 推导的可读身份**来呈现 per-project store —— 以根目录的 basename 作为主标签、绝对根路径作为次要细节 —— 而**不**只显示不可读的 `project-<ULID>` store 名（项目 ULID 是根路径的单向摘要，人无法辨认）。当根路径未知（store 在记录根路径之前就被 provision）时退回显示 store 名；global store 无需推导（其名 `global` 本就可读）。底层 store 名仍是 `project-<ULID>`（FR-017）—— 这是**展示**层的事。由前端测试验证；端到端验收与其它 UI 视图项一样延后到 e2e。
-- **FR-017c**：用户 MUST 能为任意 memory store 设置一个**显示标签**——一个用户自选、在所有 surface 中优先于 FR-017a 的 `project_root` 推导的名字。它为来源文件夹从未被记录的 store（FR-017a 否则会退回不可读的 `project-<ULID>` 名）提供可读身份。设置空 / 纯空白标签会清除它，退回 FR-017a 的推导或回退名。该标签是**展示元数据**：不改变 store 名（FR-017）或 `project_id`，通过 `PATCH /memory_stores/{name}/label` 设置。由 HTTP 验收测试验证；重命名视图与其它 UI 视图项一样延后到 e2e。标签作为 `memory-labels` 状态区跨机器同步（spec 010，2026-07-10 修订）：设置、改名与清除全部传播（清除以空标签标记传播，因而不会从陈旧文档复活）——从另一台机器同步来的库以其标签显示，而不是「未命名记忆库」。
-- **FR-021**：只读事实视图 MUST 为「事实文件」与「其所在文件夹」两者各提供以下能力：(a) **在外部编辑器中打开**、(b) **在文件管理器 / Finder 中显示**。两者都经环回 daemon 的文件系统动作端点（spec 004 FR-039）执行真实的 OS 动作——因为 daemon 就在用户自己的机器上（ADR-033）。没有 copy-path 回退。打开哪个编辑器由全局首选编辑器偏好决定（在 002-ui-shell 规范，本处不再重复规范）。读响应 MUST 携带这些能力所作用的绝对路径（见 FR-022）。
-- **FR-022**：读响应 MUST 携带磁盘真相：事实读端点（`GET …/facts`、`GET …/facts/{id}`）MUST 包含每个事实文件的绝对 `.md` 路径及其所在文件夹的绝对路径，store 读端点（`GET …/{name}`）MUST 包含 store 的绝对磁盘目录。它们驱动 FR-021 的打开/显示能力，并让人类能定位规范化文件以带外纠正。
+- **FR-017**：用户必须能够通过（a）**`/api/v1/knowledge`** 下的 REST API（scope 作为路径片段，`entries` / `documents` 为子资源）与（b）**`coffer knowledge`** CLI 组（一个 31 条子命令的组，取代原先的 `coffer memory` 与 `coffer kb`）完成完整的知识 CRUD。用户写入设置 `metadata.actor = "user"`、写出规范化 Markdown、重建索引并审计。Web UI **只读**呈现内容；人在自己的外部编辑器里维护（由读时惰性重建索引拾起，FR-010）或经 REST/CLI 维护。只读查看器必须以舒适的阅读**最大宽度**（居中）渲染内容，详情页列表必须是单一**可滚动**列表、无 UI 内分页器（UI 以最大 `limit` 取一页；API 仍按 `limit`/`offset` 分页）。这些面上的 scope 名按 FR-002 校验：格式正确的 `global` 或 `project-<26 位 ULID>` 惰性创建；其他名字必须已存在，否则请求返回 404。
+- **FR-017a**：各类面必须以从 `project_root` **派生的人类可读身份**呈现 per-project scope —— 根目录 basename 作为主标签、绝对根路径作为次要细节 —— 而不是只给不透明的 `project-<ULID>` 名字。根未知时回退到 scope 名；`global` 与命名集合本就可读。这是**显示**层面的关注点，底层名字仍是 `project-<ULID>`。
+- **FR-017c**：用户必须能给任意 scope 设置**显示标签**，优先于 FR-017a 的派生。设置空白标签即清除。标签是显示元数据：不改变 scope 名或 `project_id`，经 `PATCH /api/v1/knowledge/{scope}/label` 设置。标签存放在本机局部的 `knowledge_scope_labels` 表中（迁移 0051 从 `memory_store_labels` 改名，其键列 `store_name` → `scope_name`）。
+- **FR-017d**：`PATCH /api/v1/knowledge/{scope}` 必须把提交的字段**合并**进该 scope 现有配置（`exclude_unset`），而非替换。只发送 `chunk_size` 的调用方不该静默地重置 `retrieval_modes`。（这推翻了 spec 006 早先「后端是替换而非深合并」的立场 —— 合并后的实现并不那样做。）
+- **FR-017e**：**不得**存在 `DELETE /api/v1/knowledge/{scope}`。删除 scope 走与 kind 无关的 Resource 框架（`DELETE /api/v1/resources/knowledge/{name}`），由它级联删除文档、chunk、索引行与磁盘目录。scope 生命周期是 Resource 的关注点；knowledge 路由只拥有知识特有的部分。
+- **FR-021**：只读查看器必须对文件及其所在文件夹都提供（a）**在外部编辑器中打开**与（b）**在文件管理器中显示**，经 loopback daemon 的文件系统动作端点执行（spec 004 FR-039）—— daemon 就在用户自己的机器上（[ADR-033](../../docs/decisions/ADR-033-daemon-proxies-os-file-actions.md)）。没有复制路径兜底。打开哪个编辑器由全局首选编辑器偏好决定（002-ui-shell）。
+- **FR-022**：读响应必须暴露磁盘真相：条目与文档的读端点必须包含各自文件的绝对 `.md` 路径与所在文件夹的绝对路径，scope 读端点必须包含该 scope 的绝对磁盘目录。
+- **FR-053**：Knowledge 详情页必须把一个 scope 呈现为**五个 tab** —— **Entries**、**Documents**、**Rules**、**Handoff**、**Changelog**。每个都有贴合形态的视图：Entries 与 Documents 是树 + 内容，Rules 是单一文档，Handoff 是按分支列表，Changelog 是只追加日志。所有视图**只读**、经**统一文件预览**渲染（不用手写 `<pre>`），并对底层文件提供**在外部编辑器中打开 / 在文件管理器中显示 / 复制路径**。Entries/Documents 的划分是呈现层面的（FR-008a）：检索仍横跨两者。
+- **FR-053a**：Web UI 必须把这一层路由在 **`/knowledge`** 与 **`/knowledge/:scope`**，且必须以重定向保持合并前的 URL 可用：`/memory` 与 `/knowledge-bases` → `/knowledge`；`/memory/:name` 与 `/knowledge-bases/:name` → 对应的 `/knowledge/:scope`。书签早于这次合并，弄坏它们是无谓的代价。
+- **FR-054**：系统必须为 UI 所需的 lane 暴露读端点：`GET /api/v1/knowledge/{scope}/handoff`（按分支的现场，各带 `branch` 与 `updated_at`）与 `GET /api/v1/knowledge/{scope}/consolidation-log`（不存在时为 `null`）。它们**只读**、**按 scope 名寻址**（而非 cwd），且对空 scope 必须返回 **HTTP 200 加空列表 / `null`**，绝不是 404。（Rules 已有 `GET /api/v1/knowledge/{scope}/rules`，FR-036。）
+- **FR-055**：SessionStart 上下文（FR-049）必须额外注入一份**环境式项目知识索引**，使 agent 一开始就知道该项目里有什么、而不必先搜索。session-context 响应在规则包之后追加一节 **"## Project memory (via Coffer)"**，由 cwd 所在项目 scope 构建：一份**仅标题的索引**（"Known topics" —— 每项的短标题，不含正文或描述）。它刻意是**索引而非知识本身** —— 一个定位指针，告诉 agent 存在什么、需要正文就去搜索。它**只读且尽力而为** —— cwd 在 git 项目之外、scope 为空或任何读错误都产出空（绝不报错）—— 并且**受预算约束**：合并后的包保持在 hook 的 ≤10k 字符契约内，索引占用规则包之后的剩余空间，使种子规则（FR-050）永不被截断。投递搭载既有的 per-agent SessionStart hook（`ContextInjectionSpec`，spec 004 FR-043），该 hook 按 agent 选择性安装。
 
-- **FR-053**：memory store 详情页 MUST 把 store 呈现为**三个 lane 区块**（Knowledge / Rules / Handoff）外加一个**整合 changelog** 视图，替换扁平事实列表。每个 lane 都有形状贴合的视图：**knowledge** = 事实/主题列表 + 内容；**rules** = 单一文档；**handoff** = 按分支列表。所有视图都**只读**，都经**统一文件预览**渲染（无手写 `<pre>`），并为底层 lane 文件提供**在外部编辑器中打开 / 在文件管理器中显示 / 复制路径**（files-as-truth，FR-017/FR-021）。recall 仍只在 **Knowledge** lane 上操作（rules/handoff/changelog 视图是只读投影，不是 recall 面）。
-- **FR-054**：系统 MUST 为 UI 所需的 lane 暴露读端点：`GET /api/v1/memory_stores/{name}/handoff`（按分支的 handoff 现场，每个携带其 `branch` 与 `updated_at`）、`GET /api/v1/memory_stores/{name}/consolidation-log`（organizer 的整合 changelog；不存在时为 `null`）。它们**只读**、**按 store 名寻址**（而非 cwd），且对空 store MUST 返回 **HTTP 200 加空列表 / `null`**（绝非 404）。（Rules lane 已有其读面 `GET /api/v1/memory_stores/{name}/rules`，FR-036。）
-- **FR-055**：SessionStart 上下文（FR-049）MUST 额外注入一段**环境化的项目记忆索引**——即 ADR-026 推迟的"ambient loading"切片——使 agent 一开工就知道该项目记得些什么，无需主动调 `recall`。`GET /api/v1/agents/{name}/session-context` 的响应在 rules bundle 之后追加一段 **"## Project memory (via Coffer)"**，由 cwd 所属项目 store 构成：一份**仅标题的 knowledge 索引**（"Known topics"——每条 fact 的短标题，不含正文或描述）。它刻意是**索引而非记忆本体**——一个定位指针，告诉 agent"有什么"、需要正文时调 `recall <query>`，从而让注入很轻。该索引**只读且 best-effort**——cwd 不在 git 项目、store 为空、或任何读取错误都产出**无内容**（绝不报错；hook 绝不能阻塞 agent）——且**受预算约束**：合并后的 bundle 保持在 hook 的 ≤10k 字符契约内，索引取 rules bundle 之后的剩余额度，因此内建种子规则（FR-050）永不被截断。投递复用既有的 per-agent SessionStart hook（`ContextInjectionSpec`，spec 004 FR-043），该 hook **per-agent 显式安装、默认不装**，因此它本身就是"Coffer 是否注入"的开关：凡装了该 hook 的 agent（Claude Code、Codex）都会收到索引；仅注入、绝不写原生文件。
+**Scope 合并 —— AI 辅助**
 
-**库的归并 — AI 辅助（修订 2026-07-10）**
+- **FR-056**：系统必须提供显式的**合并扫描** —— `POST /api/v1/knowledge/merge_scan` 与 `coffer knowledge merge-scan` —— 检查每一对 per-project scope 并返回合并提议。若一对 scope 的本地可读根归一化到**同一个非空 origin remote**（FR-004a 归一化），则确定性地提议（`confidence="certain"`、`judged_by="remote"`），不涉及 LLM；其余每一对由**内部引擎**经一次性补全裁决，返回严格 JSON `{same_project, confidence, reason}` —— 畸形响应跳过该对，绝不报错。未配置内部引擎时扫描返回 `engine="no_model"` 并只给确定性提议。引擎档次有界（每次扫描至多裁决 50 对，达上限时 `truncated=true`；证据样本有大小上限）。每条提议给出建议方向：根在本地可解析的 scope 存活，其次条目数更多者，再次名字字典序更小者。扫描从不改动任何东西。
+- **FR-057**：系统必须提供显式的**合并执行** —— `POST /api/v1/knowledge/merge`（带 `{source, target}`）与 `coffer knowledge merge <source> <target>` —— 以累加方式合并两个 per-project scope：跳过派生文件，任何冲突保留两份（加后缀）—— 知识只增不减。source 的显示标签与 `project_root` 映射在 target 尚无自己的时移交过去。target 被强制协调，source scope 被退役（资源删除级联文档/索引/目录），并记录一条 `memory_stores_merged` 审计（仅名字与计数）。`source` 与 `target` 必须是互不相同、已存在的 **per-project** scope —— `global` 与命名集合永不可合并；违反者返回 4xx 且无副作用。合并执行与解析期收编共用同一把锁串行化；写入不持有该锁，因此合并在退役前会对 source 再扫一遍（文件合并对内容幂等）。
+- **FR-058**：合并必须留下**不复活别名**：存活 scope 的配置获得 `merged_identities`（系统管理的项目 ULID 列表，默认空），持有 source 的 ULID 以及 source 自己的别名（跨链式合并可传递）。scope 解析器**仅在**计算出的身份对应的 scope 不存在时才查阅别名，并解析到持有别名的存活者，而不是重新创建一个空的重复 scope。任一别名恰好由一个存活 scope 持有，启动时的合并流程也必须同样尊重别名。由于别名位于 `config_json`，它随资源同步，因此该重定向在每台机器上都成立。
+- **FR-059**：合并执行必须接受 `organize`（默认 `true`）：合并成功后，若已配置内部引擎，则对 target 运行 FR-033 的 reorg 流程，并把结果作为 `reorg_status` 返回（`"reorganized"`、`"no_model"`、`"empty"`、`"skipped"` 或 `"error: …"`）。整理步骤失败或不可用绝不导致合并本身失败。
 
-- **FR-056**：系统 MUST 提供显式的**合并扫描**——`POST /api/v1/memory_stores/merge_scan` 与 `coffer memory merge-scan`——检查项目库两两组合并返回合并提议。两库的本机可读 root 规范化到**同一非空 origin remote**（FR-004a 规范化）时确定性直接提议（`confidence="certain"`、`judged_by="remote"`），不动用 LLM；其余组合由**内部引擎**（FR-033 的 internal-default 连接）逐对做一次单发补全裁决，返回严格 JSON `{same_project, confidence, reason}`——响应格式不合法则跳过该对，绝不报错。未配置内部引擎时扫描返回 `engine="no_model"`，只携带确定性提议。引擎层有界（每次扫描最多裁决 50 对，触顶置 `truncated=true`；每库证据采样有上限）。每条提议携带建议的合并方向：root 本机可解析者幸存，其次事实数多者，再次名字字典序小者。扫描绝不改变任何状态。
-- **FR-057**：系统 MUST 提供显式的**合并执行**——`POST /api/v1/memory_stores/merge` 传 `{source, target}` 与 `coffer memory merge <source> <target>`——用既有增量机制（`merge_store_dir`）归并两个项目库：派生文件跳过，同名冲突两份都保留（加后缀）——记忆只增不失。source 的显示标签与 `project_root` 映射在 target 缺失时移交。target 强制 reconcile，source 库裁撤（资源删除级联文档/索引/目录），并记录一条 `memory_stores_merged` 审计（只含名称与计数）。`source` 与 `target` MUST 为互异、存在的项目库——全局库永不可合并；违规返回 4xx 且无副作用。合并执行与 resolve 时收养走同一把锁串行；事实写入不持有这把锁，因此合并在裁撤 source 前再扫一遍 source（文件合并按内容幂等），把合并期间 remember 进来的内容带走。
-- **FR-058**：合并 MUST 留下**防复活别名**：幸存库 config 新增 `merged_identities`（系统管理的项目 ULID 列表，默认空），存放 source 的 ULID 及 source 自己的别名（链式合并可传递）。`ScopeResolver` MUST **仅在算出的身份没有对应库时**查询别名，并改道到持有该别名的幸存库，而不是重新供给一个空的重复库。每个别名只有一个在世持有者（新持有者记录别名时从其它库剥除），且启动合并器 MUST 同样尊重别名——被合并掉的规范身份改道到持有者而不是被重新供给，启动/收养合并把被裁撤库的别名一并记到规范库上。别名住在库的 `config_json` 里，随资源同步（spec 010），改道在每台机器上都成立。
-- **FR-059**：合并执行 MUST 接受 `organize`（默认 `true`）：合并成功后，若配置了内部引擎，对 target 库运行 FR-033 reorg pass，结果以 `reorg_status` 写进合并响应（`"reorganized"`、`"no_model"`、`"empty"`、`organize=false` 时为 `"skipped"`，或 `"error: …"`）。整理步骤失败或不可用绝不使合并本身失败。
+**摄取与转换** *（从 spec 006 折叠而来）*
 
-**底座隔离**
+- **FR-060** *(原 006 FR-004/FR-005)*：用户与 agent 必须能够添加任意受支持格式的文件；系统必须检测格式、经可插拔的 `MarkdownConverter` 端口转成 Markdown、清洗输出、加上 YAML frontmatter、写入 `inbox/` 与 `.raw/`，并建索引。转换必须经限制在 `infrastructure/` 内的按格式转换器注册表分发：Markdown/文本/源码文件原样通过，`csv` 有专用转换器，其余一切（pdf / docx / pptx / xlsx / xls / html / epub / …）走默认的 MarkItDown 引擎（`markitdown[docx,pdf,pptx,xls,xlsx]`）。MarkItDown 没有转换器的格式（旧式二进制 `.doc`/`.ppt`、`.rtf`、`.odt`）以 `unsupported_type` 拒绝，且不对外宣称支持。为某格式换更高保真的引擎是在注册表里加一个转换器，而非改动基底。
+- **FR-061** *(原 006 FR-006)*：系统必须拒绝超过 `max_document_bytes`（默认 25 MB，可按 scope 配置）的文件、不支持类型的文件，以及转换后 Markdown 为空的文件 —— 转换后为空的 PDF 特别以 `scanned_pdf` 拒绝，使 UI 能给出可操作的提示。
+- **FR-062** *(原 006 FR-007)*：每个摄取文档必须由首次摄取时铸造的**稳定 ULID** 标识（不是内容哈希）。系统必须计算原件的 `source_sha256`（作为出处保存在 `metadata` 中），并在 scope 内按 `original_filename` 把重新上传匹配到既有文档：**字节完全相同**的重新上传是幂等 no-op；**内容变化**的同名重新上传仅在 `replace=true` 时**就地更新同一文档**（复用 id），否则以 `duplicate` 拒绝；**新文件名**是新文档。同一文件摄取到两个 scope 会得到两个独立文档 —— 文档不跨 scope 去重。
+- **FR-063** *(原 006 FR-010a)*：文档列举必须支持可选的**不区分大小写标题过滤 `q`**，在分页**之前**于服务端应用；`total` 反映过滤后的数量。
+- **FR-064** *(原 006 FR-011/FR-011b)*：关键词索引必须使用 FTS5 **trigram** 分词器，使 CJK 与子串查询能命中 —— `unicode61` 不切分 CJK 文本，因此像 `向量检索` 这样的查询会返回空；没有任何 ≥ 3 字符 token 的查询回退到有界的子串（LIKE）扫描而非返回空。grep 响应携带 `truncated` 标志，在存在超过 `max_matches` 的匹配、或服务端超时截断扫描时为真（超时的 grep 返回零命中且 `truncated=true`，并杀掉 `rg` 进程）。`hybrid` 必须同时跑 keyword 与 vector 搜索并以**倒数排名融合**合并：每个段落的融合分为 `Σ 1/(K + rank)`，`K = 60`、`rank` 为其在该列表中的 0 起始位置；段落按 chunk 身份 `(document_id, position)` 去重，因此同时出现在两个列表的段落累加两份贡献并胜过单列表命中。
+- **FR-065** *(原 006 FR-014)*：chunk 参数必须可按 scope 修改；修改会重新切块并重建索引。embedding 模型在全局层面可修改；修改会让每个列出向量模式的 scope 重新嵌入。这些字段没有不可变锁。
+- **FR-066** *(原 006 FR-015/FR-016)*：每个摄取文档必须携带 `source_mode`：`converted`（Markdown 由原件派生，可重新转换）或 `edited`（禁止重新转换）。所有写入路径 —— 重新上传、编辑 API、agent `coffer__write`、外部编辑、重建索引扫描 —— 必须汇入**同一个幂等重建索引例程**，在磁盘 `content_sha256` 漂移时于读取路径上惰性触发：未变则 no-op；已变则删除旧的 chunks/FTS5/vec 行、重新切块、（启用向量时）重新嵌入、更新 `documents` 行并审计 `KB_DOCUMENT_UPDATED`。文档由人与 agent 共管：双方都可添加、编辑与删除，且每次 agent 写入都以 agent 为 actor 记入审计。
+- **FR-067** *(原 006 FR-021)*：**基于路径**的摄取（CLI，以及 Web UI 的原生文件选择器）必须把外部原件的**绝对路径**记入文档自由形式的 `metadata` 的 `source_path` —— 无需 schema 迁移，它搭在既有 JSON 上。字节上传与 agent 的 `coffer__write` 必须**不**设置或推断 `source_path`（不可信面绝不能填入任意服务端路径）。`source_path` 是本机局部的。
+- **FR-068** *(原 006 FR-022)*：`check-sources` 必须对每个被路径跟踪的文档重新做 sha256 —— 分块流式读取，使多 GB 原件永不整体读进内存 —— 并与存储的 `source_sha256` 比对，归类为 `unchanged`、`changed` 或 `missing`。检测**仅按需**（没有文件系统 watcher）；纯检测不改动、不审计。
+- **FR-069** *(原 006 FR-023)*：`update-source` 必须从文档的 `source_path` 就地重新摄取 —— 复用 `replace=true` 的重新摄取路径，因此稳定 ULID 得以保留，该 scope 被重新切块与重建索引（经 `KB_DOCUMENT_UPDATED` 审计）。`source_mode == edited` 的文档必须被拒绝，使手工编辑永不被覆盖；源文件消失或未被跟踪则经 `IngestRejected` 报告。
+- **FR-070** *(原 006 FR-024)*：按 scope 的 `auto_update_sources` 开关（默认 **false**）决定 `check-sources` 行为：为 false 时检测只归类；为 true 时每个 `source_mode != edited` 的 `changed` 文档被就地自动刷新（报告 `updated`），而手工编辑过的 `changed` 文档被跳过（报告 `edited`）。切换该开关必须不触发重新切块或重新嵌入 —— 它不是触发重建索引的字段。
+- **FR-071** *(原 006 FR-025)*：当嵌入因 embedding provider 不可用（`EngineUnavailable`）而降级时，文档必须仅以关键词建索引，其重试状态必须记录在专用的持久化 `embed_pending` 标志上 —— 与 `content_sha256` 解耦，后者必须始终是真实的正文哈希。scope 必须在指标中以 `documents_degraded` 暴露此类文档的数量，且该计数由持久化标志计算，因此它反映**任何**一次读取中观察到的降级。下一次协调对正文未变的待重试文档必须**只**重试嵌入 —— 在内存中重新切块、只 upsert 向量，成功后清除 `embed_pending`。
 
-- **FR-018**：检索/索引引擎（FTS5、sqlite-vec、embedding provider、converter）MUST 关在 infrastructure 内。Domain 与 application 层 MUST NOT 直接 import 索引/引擎类型；交互一律经共享检索端口。mem0、chroma、LlamaIndex MUST NOT 在任何地方被 import。
+**合并后的模型本身** *（2026-09-10 合并带来的新增）*
 
-**迁移**
+- **FR-072**：一个资源 kind `knowledge` 必须在每一个面上取代原先的 `memory` 与 `knowledge_base`：Resource 框架、REST、CLI、Web UI 以及 MCP 工具列表。任何面都不得重新引入「这是哪个 kind？」的问题。
+- **FR-073**：`documents` 表必须携带一个存储的 **lane 判别列** `documents.lane`（`knowledge` 表示写入方归档的条目，`inbox` 表示摄取的文档），并在 `(kind, resource_name, lane)` 上建索引。它必须**存储而非从路径派生**，因为路径确实重叠：条目位于 `<scope>/knowledge/inbox/<id>.md`，摄取文档位于 `<scope>/inbox/<id>.md`，而存储根本身就是 `~/.coffer/knowledge/`，没有任何路径谓词能分开它们 —— 而以 scope 目录为锚会把 knowledge 的 lane 布局推进服务所有 kind 的通用仓储层。`entry_count` 与 `document_count` 必须按 lane 限定；检索必须不受此限（FR-008a）。lane 是内部存储关注点，**不**出现在协议上：调用方所用的端点本就隐含了它，把它放进文档载荷只会诱使客户端拿它做过滤。
+- **FR-074**：按 scope 的配置（`KnowledgeConfig`）必须是原先两份配置真正用到的字段的并集 —— `retrieval_modes`、`default_mode`、`max_entry_chars`、`chunk_size`、`chunk_overlap`、`max_document_bytes`、`auto_update_sources`、`merged_identities` —— 且必须**完全不含 embedding 字段**。原先两份配置都有（memory 上是扁平的 `embedding_*`，知识库上是嵌套的 `embedding` 块），而到合并之时**两者都已无人读取**：embedding 经全局配置解析，scope 仅通过列出检索模式来选择加入向量搜索。死字段是被删除，而不是被搬过来。启用 `vector` 必须同时启用 `hybrid` 并使其成为默认，除非调用方显式选了别的。
+- **FR-075**：迁移 `0051` 必须把两个 kind 合并为 `knowledge`、**清空**派生索引而不是转换它，并重命名两张本机局部的旁表（`memory_store_project_roots` → `knowledge_scope_project_roots`，`memory_store_labels` → `knowledge_scope_labels`，键列 `store_name` → `scope_name`）。迁移 `0052` 必须新增 `documents.lane` 及其索引，并按条目 lane 特有的 `knowledge/inbox/` 嵌套回填（匹配裸的 `knowledge/` 片段是错的 —— 存储根本身就包含它）。清空而非转换是必需而不只是省事：`memory:global` 与 `knowledge_base:global` 同时存在而 `resources` 以 `(kind, name)` 为键，两者都转换必然撞键、任何自动改名都是在猜；而所有 `documents` 行索引的都是上一次修订移除的 journal lane，索引指向的文件不复存在。两个迁移都必须做好防护，使缺少其中任何一项的数据库仍能升级。
 
-- **FR-019**：本分支未发布；lane 布局**没有新的 schema 迁移**（`documents`/`chunks` schema 不变 —— 只是磁盘上 lane 的位置变了）。单个迁移 MUST 删除 `memory_records` 并创建全新统一 schema。预发布构建遗留在磁盘上的旧引擎目录（chroma/LlamaIndex）原地废弃 —— 没有任何代码再读它们 —— 而非删除；旧的 mem0/chroma 文本不迁移。pre-lane 构建遗留在 store 根目录的旧每条记忆文件同样**原地废弃**（不读、不删）：lazy reindex-on-read 对账 `knowledge/` lane，于是旧根目录事实的陈旧索引行会在下一次 `recall` 时被对账清除，直到这些条目被重新记住或被 organizer 播种。磁盘上既有的 `MEMORY.md` 文件原地留存，不被读取。
+**基底隔离与迁移**
+
+- **FR-018**：检索/索引引擎（FTS5、sqlite-vec、embedding provider、转换器）必须限制在 infrastructure。domain 与 application 层必须不直接 import 索引/引擎类型；交互经共享检索端口。mem0、chroma 与 LlamaIndex 必须在任何地方都不被 import。
+- **FR-019**：预发布版本遗留的磁盘引擎目录（chroma/LlamaIndex）就地废弃 —— 无人读取 —— 而不是删除。lane 化之前遗留在 scope 根的每条一文件同样就地废弃：读时惰性重建索引会协调 `knowledge/` lane，因此陈旧索引行会在下一次读时被协调掉。
 
 ### Key Entities
 
-- **Memory Store**（kind 为 `memory` 的 resource）：每个作用域一个 store —— global store（sentinel ULID）或 per-project store（项目 ULID）。config 持有启用的检索模式、embedding 配置与 `max_fact_chars`。
-- **Memory Fact**（一个 markdown 文件 = 一行 `documents`）：`id`、`name`、`description`、正文、`metadata`（`actor`、`origin_session_id`）、`path`（绝对 `.md` 路径）、`content_sha256`、`created_at`、`updated_at`。markdown 文件是真相源。读响应还额外携带所在文件夹的绝对路径，供 UI 打开/显示/复制。
-- **Memory Hit**（recall 结果，不持久化）：`id`、`text`/passage、`score`、`source`、`time`。
+- **Knowledge Scope**（kind 为 `knowledge` 的资源）：`global`、`project-<ULID>` 或一个命名集合之一 —— 种类由名字派生。配置 = `retrieval_modes`、`default_mode`、`max_entry_chars`、`chunk_size`、`chunk_overlap`、`max_document_bytes`、`auto_update_sources`、`merged_identities`。没有 embedding 字段。
+- **Document**（一个 Markdown 文件 = 一行 `documents`，`kind="knowledge"`）：id（稳定 ULID）、scope 资源名、`lane`（`knowledge` | `inbox`）、磁盘路径、标题、描述、`content_sha256`（始终是真实正文哈希）、`embed_pending`（索引派生的重试标志，非文件真相）、`source_mode`、`project_id`、按写入方的 `metadata`（摄取：`original_filename`、`original_format`、`source_sha256`、`converted_at`、`conversion_engine`、可选的 `source_path`；条目：`actor`、`origin_session_id`）、时间戳。
+- **Chunk**（一行 `chunks`）：文档内的位置。块文本只存在 FTS5 索引里一份，不复制进基表；它始终可从 Markdown 文件重建。
+- **Passage**（检索结果，不持久化）：段落文本、来源 id、标题、分数、位置。
+- **Grep hit**（检索结果，不持久化）：路径、行号、行内容。
+- **Handoff 现场**（每个 `(项目 scope × 分支)` 一个文件）：分支、正文、`updated_at`。
 
 ## Success Criteria
 
 ### Measurable Outcomes
 
-- **SC-001**：某 agent 经 `coffer__remember` 写入的事实，能在同一项目、同一会话内被另一个 agent 经 `coffer__recall` 召回，且没有任何 per-agent 副本漂移。
-- **SC-003**：某作用域 200 条事实下，典型 keyword query 的 recall wall-clock 延迟 ≤ 300 ms（开发者笔记本）。
-- **SC-004**：默认检索零配置离线可用（keyword + grep）；vector recall 为可选项，未配置时降级到 keyword（带标注），绝不报错。
-- **SC-006**：每条 Acceptance Scenario 至少有一个 `acceptance(spec="007-memory", scenario="…")` 标记的测试覆盖。
-- **SC-007**：底座隔离由 importlinter 强制：`coffer.application.*` 与 `coffer.domain.*` 下任何模块都不 import 索引引擎，且 `mem0`/`chroma`/`llama_index` 任何地方都不被 import。
-- **SC-008**：`make verify` 本地与 CI 都过。
+- **SC-001**：一个 agent 经 `coffer__write` 写入的条目，能在同一项目、同一会话内被另一个 agent 经 `coffer__search` 找到，且没有任何 per-agent 副本漂移。
+- **SC-002**：对同时含一条写入条目与一个摄取文档的 scope 做一次 `coffer__search`，返回两者的命中 —— 无需 lane 参数、无需第二次调用。
+- **SC-003**：一个 scope 含 200 项时，典型关键词查询的搜索延迟在开发者笔记本上 ≤ 300 ms；50 文档（≤ 50 MB）的 scope 上，REST 面的关键词搜索 ≤ 200 ms、grep ≤ 500 ms。
+- **SC-004**：默认检索零配置可离线工作（keyword + grep）；向量是可选加入的，未配置时降级为 keyword —— 从不报错。
+- **SC-005**：`coffer knowledge reindex <scope>` 能纯粹从 Markdown 文件重建全部 SQLite 索引状态（删掉行、重建、搜索返回相同结果）。
+- **SC-006**：每条 Acceptance Scenario 至少被一个标记 `acceptance(spec="007-memory", scenario="…")` 的测试覆盖；`make verify-acceptance` 报告零未覆盖场景、零孤立标记。
+- **SC-007**：基底隔离由 importlinter 强制：`coffer.application.*` 与 `coffer.domain.*` 下没有模块 import 索引引擎、`markitdown`、`sqlite_vec` 或 embedding provider SDK，且 `mem0`/`chroma`/`llama_index` 在任何地方都不被 import。
+- **SC-008**：删除一个 scope 会移除其 100% 的磁盘占用与 100% 的 SQLite 行。
+- **SC-009**：MCP 客户端恰好看到八个知识工具，且没有一个要求调用方在选择之前先把一项归类为「memory」或「knowledge」。
+- **SC-010**：`make verify` 在本地与 CI 均通过。
 
 ## Assumptions
 
-- 用户在自己的机器上跑 Coffer；记忆数据留在本地。为可选的 vector recall 调用已配置的云端 embedding provider 是允许的（local-first ≠ 不调远程 API）。
-- 规范化格式是每条记忆一个 markdown 文件（YAML frontmatter + 正文），位于每个作用域的 `knowledge/` lane 下；没有派生的 `MEMORY.md` 索引。
-- coffer-mcp-shim 在会话握手时把其启动 cwd 传给 daemon（在支持的 agent 上实现期验证）。
-- knowledge base（spec 006）与 memory 共用一套统一底座（`documents` 表按 `kind` + JSON `metadata` 区分）；二者是两个面，不是重复代码。
+- 用户在自己的机器上运行 Coffer；知识数据留在本地。为可选的向量检索调用已配置的云端 embedding provider 是允许的（local-first ≠ 不发远程 API 调用）。
+- 规范化格式是位于 `~/.coffer/knowledge/<scope>/` 下的每项一个 Markdown 文件（YAML frontmatter + 正文）；不存在供检索读取的派生索引文件。
+- coffer-mcp-shim 在受支持的 agent 上于会话握手时把启动 cwd 传给 daemon。
+- keyword + grep 零配置且可离线；向量检索会触达已配置的 embedding provider，它**可以**是第三方 API。
+- 受支持平台（macOS arm64、Linux）上有 `ripgrep`；sqlite-vec 能作为 SQLite 扩展加载。
 - 单用户并发量很小。
+
+## Notes for reviewers
+
+- **这份规范是 006 与 007 的合并。** `specs/006-knowledge-base/` 在其存活内容落到这里后即被删除。它的验收场景标题被原样搬过来，使既有测试标记继续匹配；只有 `spec=` 参数从 `"006-knowledge-base"` 改成 `"007-memory"`。
+- **目录名是历史遗留。** `specs/007-memory/` 是 `scripts/audit_acceptance.py` 所依赖、且所有入链所使用的 spec id。改名会同时弄坏两者且毫无收益。
+- **检索模式保持内部**（[ADR-034](../../docs/decisions/ADR-034-retrieval-mode-is-internal.md)）。这里的任何内容都不重开该议题。
+- **ADR-028（文档共管）与 ADR-030（逐项目 KB scope + 软删除）已删除**，被本规范吸收：共管就是这一个 knowledge kind 的工作方式，逐项目 scope 如今就是 scope 模型本身。文档的可恢复软删除仍未构建 —— 删除是带 F01 审计痕迹的硬删除；`superseded/` 墓碑（FR-034）只覆盖 organizer 自己的重写。
+- **embedding 默认值**：向量可选加入；零配置默认是 `keyword` + `grep`（离线、语言无关）。双语语料推荐本地 `bge-m3` 或云端 provider。
+- **推迟**：检索上的重排 / HyDE / 多查询 / LLM 综述；文档的可恢复软删除；应用内 Markdown 编辑器（查看器保持只读 + 外部编辑器入口）；默认开启的图片 OCR；默认开启的文件系统 watcher。

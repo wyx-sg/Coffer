@@ -51,7 +51,7 @@ PyInstaller 将 Python 解释器、所有依赖以及应用程序代码打包成
 
 Alembic 迁移文件通过 PyInstaller 的 `datas` 机制，以数据文件的形式随 daemon 二进制一起发布。首次启动时，daemon 会在接受连接之前对一个全新的数据库执行 `alembic upgrade head`——最终用户无需额外步骤即可得到正确的 schema。
 
-daemon 二进制还打包了更重的知识/记忆/对话依赖（spec 006/007/008）：用于向量索引的 `sqlite_vec`、用于文档转换的 `markitdown`、用于 embedding 的 `openai`，以及 `langchain*` / `langgraph` 对话 agent 栈。它们在函数内部惰性导入，PyInstaller 的静态分析无法追踪——因此 `coffer-daemon.spec` 把它们显式声明为 hidden imports，让 frozen 的 daemon 能够转换文档、做 embedding、执行向量检索并驱动内置对话 agent。
+daemon 二进制还打包了更重的知识与对话依赖（spec 007/008）：用于向量索引的 `sqlite_vec`、用于文档转换的 `markitdown`、用于 embedding 的 `openai`，以及 `langchain*` / `langgraph` 对话 agent 栈。它们在函数内部惰性导入，PyInstaller 的静态分析无法追踪——因此 `coffer-daemon.spec` 把它们显式声明为 hidden imports，让 frozen 的 daemon 能够转换文档、做 embedding、执行向量检索并驱动内置对话 agent。
 
 构建好的 Web UI（spec 002）同样以数据文件的形式随 daemon 二进制发布，这正是 frozen 的 daemon 能从自己的 origin 提供 UI 的原因。
 

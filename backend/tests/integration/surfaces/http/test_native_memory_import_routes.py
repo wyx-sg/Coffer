@@ -106,8 +106,8 @@ def test_import_native_memory_into_project(tmp_path, monkeypatch):
         # No internal model configured → organizer no-ops, organized stays True.
         assert body["organized"] is True
 
-        # The facts are now present in the project store.
-        lst = c.get(f"/api/v1/memory_stores/{body['store']}/facts")
+        # The imported facts are now entries in the project scope.
+        lst = c.get(f"/api/v1/knowledge/{body['store']}/entries")
         assert lst.status_code == 200, lst.text
         assert lst.json()["total"] == 2
 

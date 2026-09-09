@@ -10,7 +10,7 @@ no background replication. Background and alternatives in
 ## Why
 
 A developer sets up a new laptop, or wants their desktop to start from what
-their laptop already knows. Today each machine is an island: knowledge, memory,
+their laptop already knows. Today each machine is an island: knowledge,
 registered resources, and credentials have to be rebuilt by hand.
 
 This feature writes the vault to a directory the user picks, and reads one
@@ -21,13 +21,14 @@ local-first principle.
 
 ## What exports
 
-- **Knowledge base + memory** — the markdown files under `~/.coffer/knowledge/`
-  and `~/.coffer/memory/` (files are already the source of truth).
+- **Knowledge** — the markdown files under `~/.coffer/knowledge/<scope>/` (files
+  are already the source of truth). Since the 2026-09-10 knowledge-layer merge
+  there is one root; `~/.coffer/memory/` no longer exists.
 - **Skills** — the master skill store under `~/.coffer/skills/`.
 - **Config resources** — `mcp_server`, `agent`, `skill`, `channel` definitions
   (system of record is SQLite; serialized to text for transport).
 - **Shared state** — module-owned areas that are part of the vault rather than
-  of one machine (e.g. channel peer pairings, memory store labels).
+  of one machine (e.g. channel peer pairings, knowledge scope labels).
 - **Credentials** — Fernet **ciphertext only**, and only when explicitly
   requested.
 
@@ -44,7 +45,6 @@ is **never** written into an export.
   ```
   manifest.json                  # bundle schema version + creation time
   knowledge/                     # mirror of ~/.coffer/knowledge
-  memory/                        # mirror of ~/.coffer/memory
   skills/                        # mirror of ~/.coffer/skills (master skill store)
   resources/<kind>/<name>.yaml   # one deterministic file per config resource
   state/<area>/...yaml           # module-owned shared state
@@ -131,7 +131,7 @@ and the bundle path.
 
 ### Scenario: export a vault to a directory
 
-- **Given** a vault with knowledge, memory, skills, and registered resources,
+- **Given** a vault with knowledge, skills, and registered resources,
 - **When** the user runs `coffer sync export <dir>`,
 - **Then** the directory holds `manifest.json`, the mirrored file trees, one
   deterministic YAML per config resource, and **no** `credentials/` directory,
@@ -149,7 +149,7 @@ and the bundle path.
 - **Given** a bundle exported from another machine and a vault with no
   resources,
 - **When** the user runs `coffer sync import <dir>`,
-- **Then** the knowledge, memory and skill trees are mirrored in, the SQLite
+- **Then** the knowledge and skill trees are mirrored in, the SQLite
   index is rebuilt from them, every config resource is registered, and each
   kind's post-import hook has run so the resources are usable without further
   action.

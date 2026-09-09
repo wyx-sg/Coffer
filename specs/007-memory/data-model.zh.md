@@ -2,6 +2,15 @@
 
 > English: [data-model.md](./data-model.md)
 
+> **历史文档 —— 2026-09-10。** spec 006（Knowledge Base）与 spec 007（Memory）
+> 于当日合并为统一的 **Knowledge Layer（知识层）**。合并后的模型以
+> [`spec.md`](./spec.md) 为准 —— 一个 `knowledge` kind、三种 scope、单一存储根
+> `~/.coffer/knowledge/<scope>/`、八个 `coffer__*` 工具。本文档记录的是合并之前
+> 的设计；凡出现「memory 面」「`memory` kind」`~/.coffer/memory/`
+> `/api/v1/memory_stores` 或 `coffer memory …` 之处，请以 `spec.md` 中合并后的
+> 对应物为准。目录名 `specs/007-memory/` 同样是历史遗留：它是所有入链与验收审计
+> 所依赖的 spec id。
+
 memory 面的实体、端口、统一 SQLite schema（与 knowledge base 共享）以及落盘规范化布局。
 
 ## Domain 实体 (`backend/coffer/domain/memory/`)
@@ -93,8 +102,8 @@ agent 只通过 MCP 网关工具（`coffer__recall`/`remember`/`list_memory`）�
 -- Shared across KB (kind='knowledge_base') and memory (kind='memory').
 CREATE TABLE documents (
     id             TEXT NOT NULL,               -- ULID (KB + memory), minted at first write
-    kind           TEXT NOT NULL,               -- 'knowledge_base' | 'memory'
-    resource_name  TEXT NOT NULL,               -- store name (memory: scope store)
+    kind           TEXT NOT NULL,               -- 'knowledge'（2026-09-10 起只有一个 kind）
+    resource_name  TEXT NOT NULL,               -- scope 名：'global' | 'project-<ULID>' | 用户命名的集合
     project_id     TEXT NOT NULL,               -- WORKSPACE_GLOBAL sentinel | project ULID
     path           TEXT NOT NULL,               -- canonical .md path on disk = truth
     title          TEXT NOT NULL,               -- memory: frontmatter `title`
@@ -102,7 +111,7 @@ CREATE TABLE documents (
     metadata       TEXT NOT NULL DEFAULT '{}',   -- JSON; memory: {actor, origin_session_id}
     content_sha256 TEXT NOT NULL,               -- for lazy-reindex delta detection
     source_mode    TEXT NOT NULL DEFAULT 'native', -- memory: 'native'
-    locked         BOOLEAN NOT NULL DEFAULT 0,  -- KB co-management lock (ADR-028); memory ignores it
+    lane           TEXT NOT NULL DEFAULT 'inbox', -- 'knowledge'（写入的条目）| 'inbox'（摄取的文档）；迁移 0052
     created_at     TIMESTAMP NOT NULL,
     updated_at     TIMESTAMP NOT NULL,
     PRIMARY KEY (kind, resource_name, id)        -- composite (memory ULIDs are globally unique too)

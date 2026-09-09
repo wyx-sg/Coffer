@@ -16,6 +16,7 @@ AGENTS
 RESOURCES
   MCP servers      manage your registered servers
   Skills           manage the skills Coffer can deliver to agents
+  Knowledge        one page per knowledge scope: entries, documents, rules, handoff
 SYSTEM
   Observability    audit and invocation log
   Settings
@@ -148,6 +149,27 @@ On the skill detail page, switch between tabs:
 
 - **Overview** — metadata: source, version hash, master path, and timestamps.
 - **Files** — a read-only file tree and content viewer of the skill's master folder.
+
+### Knowledge
+
+Open **Knowledge** to see your knowledge scopes: `global`, one per project, and any
+collection you created. Each row shows entry and document counts, disk usage, and which
+retrieval modes are indexed. **Add collection** creates a named one (a vector-retrieval
+checkbox is the only knowledge-specific option — the embedding model itself is configured
+once under **Settings → Embedding**, not per scope).
+
+Clicking a scope opens `/knowledge/:scope` with five tabs:
+
+- **Entries** — what agents (and you) wrote down. Add, edit, and delete entries here.
+- **Documents** — files ingested and converted to Markdown. Drag files in, read one,
+  re-run conversion, or delete. Documents that track an external original show whether
+  that original has changed on disk.
+- **Rules** — the scope's behavioural rules, injected into agents at session start.
+- **Handoff** — the saved working state, one entry per git branch.
+- **Changelog** — the append-only record of what consolidation did and when.
+
+The older `/memory`, `/memory/:name`, `/knowledge-bases`, and `/knowledge-bases/:name` URLs
+redirect here.
 
 ### Observability
 

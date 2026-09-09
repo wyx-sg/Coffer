@@ -66,8 +66,7 @@
     },
     "mcpServers": "MCP 服务器",
     "skills": "Skill",
-    "knowledgeBases": "知识库",
-    "memory": "记忆",
+    "knowledge": "知识",
     "settings": "设置",
     "language": "语言",
     "collapse": "折叠侧边栏",
@@ -776,7 +775,7 @@
       "empty": "还没有记忆库。",
       "accessViaGateway": "该 agent 通过 MCP 网关访问 Coffer 记忆；请在记忆页面管理记忆库。",
       "notInstalled": "该 agent 尚未安装 Coffer MCP —— 安装后才能通过网关访问 Coffer 记忆。",
-      "openMemoryPage": "打开记忆页面",
+      "openMemoryPage": "打开知识页面",
       "nativeHint": "该 agent 自己的原生记忆库（不经 Coffer 管理），只读。",
       "nativeEmpty": "该 agent 没有原生记忆库。",
       "searchPlaceholder": "搜索项目或路径…",
@@ -985,134 +984,32 @@
       }
     }
   },
-  "knowledgeBases": {
-    "title": "知识库",
-    "subtitle": "本地文档集合，你的 agent 可通过 MCP 网关检索。",
-    "add": "新建知识库",
-    "empty": "还没有知识库。先创建一个，再上传文档供 agent 检索。",
-    "loadFailed": "加载知识库失败",
-    "searchPlaceholder": "搜索知识库…",
-    "noMatches": "没有匹配的知识库。",
-    "modes": {
-      "grep": "Grep",
-      "keyword": "关键词",
-      "vector": "向量"
-    },
-    "sourceMode": {
-      "converted": "已转换",
-      "edited": "已编辑"
-    },
-    "cols": {
-      "name": "名称",
-      "mode": "检索",
-      "description": "描述",
-      "docs": "文档数"
-    },
-    "dialog": {
-      "title": "新建知识库",
-      "name": "名称",
-      "description": "描述（可选）",
-      "vector": "向量检索"
-    },
-    "detail": {
-      "embedStatus": {
-        "statusDone": "已嵌入",
-        "statusEmbedding": "嵌入中",
-        "statusQueued": "排队中",
-        "statusRunning": "嵌入中",
-        "statusError": "嵌入失败"
-      },
-      "reindex": "重建索引",
-      "search": "检索",
-      "mode": "模式",
-      "searchPlaceholder": "在此知识库中检索…",
-      "fallback": "未配置 embedding——已回退到 {{mode}}。",
-      "noMatches": "没有匹配。",
-      "grep": "Grep",
-      "grepPlaceholder": "在 Markdown 文件上做精确/正则匹配的模式…",
-      "truncated": "结果已截断（达到最大匹配数或超时）。",
-      "documents": "文档",
-      "upload": "上传",
-      "replaceExisting": "重新上传并替换",
-      "reconvert": "重新转换",
-      "settings": "设置",
-      "checkSources": "检查源文件",
-      "deleteConfirm": "删除文档 {{title}}？此操作不可撤销。",
-      "empty": "还没有文档。上传任意格式的文件以填充该知识库。",
-      "back": "返回知识库",
-      "docBadge": "{{count}} 个文档",
-      "chunkBadge": "{{count}} 个分块",
-      "degradedBadge": "{{count}} 个文档的向量待嵌入（嵌入服务暂不可用，已按关键词索引）",
-      "selectDocument": "在左侧选择一个文档以预览或编辑。",
-      "sourceCheck": {
-        "title": "源文件",
-        "description": "从磁盘文件摄入的文档，将与其原始源文件进行比对。",
-        "empty": "没有文档跟踪外部源文件。网页上传不会被跟踪——只有从路径摄入的文档（通过 CLI 或桌面应用）才有可供重新检查的源文件。",
-        "update": "从源文件更新",
-        "updated": "文档已从源文件更新。",
-        "missingNote": "在该路径未找到源文件。",
-        "editedNote": "该文档已在本地编辑，为避免覆盖你的改动，已禁止从源文件更新。",
-        "status": {
-          "unchanged": "已是最新",
-          "changed": "源文件已变更",
-          "missing": "源文件缺失",
-          "edited": "已本地编辑",
-          "updated": "已自动更新"
-        }
-      }
-    },
-    "settings": {
-      "title": "知识库设置",
-      "description": "更新该知识库的分块与 embedding 配置。修改分块后请重建索引，以应用到已有文档。",
-      "chunkSize": "分块大小",
-      "chunkOverlap": "分块重叠",
-      "vectorHint": "为该知识库启用基于含义的向量检索（关键词与 grep 始终开启）。向量模型在「设置 → 向量模型」中统一配置。",
-      "autoUpdateSources": "源文件变更时自动更新",
-      "autoUpdateSourcesHint": "当文档的外部源文件发生变更时，在下次检查源文件时自动重新摄入（本地编辑过的文档始终会被跳过）。"
-    },
-    "welcome": {
-      "title": "管理你的知识库",
-      "body": "收集本地文档，让你的编码 agent 通过 MCP 网关检索——关键词与 grep 开箱即用，向量检索一键开启。",
-      "featureKeyword": {
-        "title": "默认关键词 + grep",
-        "body": "即时检索已摄入的文件——无需 embedding 模型，也不下载。"
-      },
-      "featureSemantic": {
-        "title": "需要时再用向量",
-        "body": "通过可配置的 embedding 提供方启用基于含义的向量检索。"
-      },
-      "featureAgent": {
-        "title": "可被 agent 访问",
-        "body": "agent 通过 Coffer 内置的 MCP 工具检索并获取文档。"
-      }
-    },
-    "deleteConfirm": "删除知识库「{{name}}」？其文档与索引都会被移除，此操作不可撤销。"
-  },
-  "memory": {
-    "title": "记忆",
-    "subtitle": "你的 agent 可通过 MCP 网关读写的本地记忆库。记忆库会自动创建。",
-    "empty": "还没有记忆库——随着 agent 工作会自动出现。",
-    "loadFailed": "加载记忆库失败",
-    "searchPlaceholder": "搜索记忆库…",
-    "noMatches": "没有匹配的记忆库。",
-    "unnamedStore": "未命名记忆库",
+  "knowledge": {
+    "title": "知识",
+    "subtitle": "按作用域组织的本地知识库——既包含 agent 写下的内容，也包含你摄入的文档，均可通过 MCP 网关检索。全局与每个项目的作用域会自动创建。",
+    "add": "新建集合",
+    "empty": "还没有知识作用域。可以先创建一个集合，或等待全局与项目作用域随 agent 工作自动出现。",
+    "loadFailed": "加载知识作用域失败",
+    "searchPlaceholder": "搜索知识作用域…",
+    "noMatches": "没有匹配的知识作用域。",
+    "unnamedScope": "未命名作用域",
     "rename": {
-      "title": "重命名记忆库",
-      "description": "给这个记忆库起一个可读的显示名。这只是一个标签——不会改变记忆库的 id，也不影响 agent 的读写位置。",
+      "title": "重命名知识作用域",
+      "description": "给这个作用域起一个可读的显示名。这只是一个标签——不会改变它的 id，也不影响 agent 的读写位置。",
       "label": "显示名",
       "placeholder": "例如：我的研究笔记",
       "clear": "清除名字"
     },
     "merge": {
-      "action": "查找重复库（AI）",
-      "title": "合并重复的记忆库",
-      "description": "Coffer 的内部引擎会判断两个项目库是否描述同一个项目。合并是增量式的——同名文件两份都保留，任何内容都不会丢失。",
-      "scanning": "正在扫描记忆库…",
-      "noCandidates": "未发现可合并的库。",
+      "action": "查找重复（AI）",
+      "title": "合并重复的项目作用域",
+      "description": "Coffer 的内部引擎会判断两个项目作用域是否描述同一个项目。合并是增量式的——同名文件两份都保留，任何内容都不会丢失。",
+      "scanning": "正在扫描作用域…",
+      "noCandidates": "未发现可合并的作用域。",
       "noModelHint": "未配置内部引擎，因此只显示可证明的重复（git remote 一致）。到 设置 → LLM 连接 配置后即可判断其余组合。",
       "judgedByRemote": "由 origin remote 一致证明",
       "judgedByEngine": "由内部引擎判断",
-      "factCount": "{{count}} 条事实",
+      "entryCount": "{{count}} 条条目",
       "swap": "交换方向",
       "merge": "合并",
       "merging": "合并中…",
@@ -1127,62 +1024,116 @@
     "modes": {
       "grep": "Grep",
       "keyword": "关键词",
-      "vector": "向量"
+      "vector": "向量",
+      "hybrid": "混合"
+    },
+    "sourceMode": {
+      "converted": "已转换",
+      "edited": "已编辑"
     },
     "cols": {
       "name": "名称",
-      "scope": "范围",
-      "description": "描述",
-      "facts": "事实数"
+      "scope": "作用域",
+      "entries": "条目数",
+      "documents": "文档数",
+      "description": "描述"
     },
     "scope": {
       "global": "全局",
       "project": "项目",
+      "named": "集合",
       "unknown": "未知"
     },
+    "dialog": {
+      "title": "新建知识集合",
+      "description": "由你自己整理的集合。全局与项目作用域会自动出现——它们无需手动创建。",
+      "name": "名称",
+      "nameHint": "仅限字母、数字、短横线和下划线。「global」以及以「project-」开头的名字保留给自动创建的作用域。",
+      "descriptionField": "描述（可选）",
+      "vector": "向量检索"
+    },
     "detail": {
-      "metrics": "{{facts}} 条事实 · {{bytes}}",
-      "recall": "回忆",
-      "mode": "模式",
-      "recallPlaceholder": "从该记忆库回忆事实…",
-      "fallback": "未配置 embedding——已回退到关键词。",
-      "noMatches": "没有匹配。",
-      "addFact": "添加事实",
-      "factName": "名称（可选）",
-      "factNamePlaceholder": "留空则从正文派生",
-      "factType": "类型（可选）",
-      "factDescription": "描述（可选）",
-      "factBody": "事实",
-      "factBodyPlaceholder": "用 Markdown 写下这条事实…",
-      "facts": "事实",
-      "clearAll": "清空全部",
-      "clearTitle": "清空全部事实？",
-      "clearConfirm": "清空 {{store}} 中的全部事实？此操作不可撤销。",
-      "deleteTitle": "删除事实？",
-      "deleteConfirm": "删除事实 {{name}}？此操作不可撤销。",
-      "editAria": "编辑事实 {{name}}",
-      "loadFailed": "加载该记忆库失败。",
-      "empty": "还没有事实。",
-      "back": "返回记忆库",
-      "factBadge": "{{count}} 条事实",
-      "selectFact": "在左侧选择一条记忆以预览或编辑。",
-      "untitled": "（无标题）",
+      "back": "返回知识",
       "tabs": {
-        "knowledge": "知识",
+        "entries": "条目",
+        "documents": "文档",
         "rules": "规则",
         "handoff": "交接",
         "changelog": "变更记录"
+      },
+      "entries": "条目",
+      "emptyEntries": "还没有条目。",
+      "selectEntry": "在左侧选择一条条目以预览。",
+      "untitled": "（无标题）",
+      "documents": "文档",
+      "emptyDocuments": "还没有文档。上传任意格式的文件以填充该作用域。",
+      "selectDocument": "在左侧选择一个文档以预览。",
+      "recall": "回忆",
+      "recallPlaceholder": "从该作用域回忆条目…",
+      "search": "检索",
+      "searchPlaceholder": "在该作用域的文档中检索…",
+      "noMatches": "没有匹配。",
+      "entryBadge": "{{count}} 条条目",
+      "docBadge": "{{count}} 个文档",
+      "chunkBadge": "{{count}} 个分块",
+      "degradedBadge": "{{count}} 个文档的向量待嵌入（嵌入服务暂不可用，已按关键词索引）",
+      "clearAll": "清空全部条目",
+      "clearTitle": "清空全部条目？",
+      "clearConfirm": "清空 {{scope}} 中的全部条目？已摄入的文档不受影响。此操作不可撤销。",
+      "deleteEntryTitle": "删除条目？",
+      "deleteEntryConfirm": "删除条目 {{name}}？此操作不可撤销。",
+      "deleteTitle": "删除文件？",
+      "deleteConfirm": "删除 {{name}}？此操作不可撤销。",
+      "deleteDocConfirm": "删除文档 {{title}}？此操作不可撤销。",
+      "reindex": "重建索引",
+      "settings": "设置",
+      "checkSources": "检查源文件",
+      "upload": "上传",
+      "replaceExisting": "重新上传并替换",
+      "reconvert": "重新转换",
+      "embedStatus": {
+        "statusDone": "已嵌入",
+        "statusEmbedding": "嵌入中",
+        "statusQueued": "排队中",
+        "statusRunning": "嵌入中",
+        "statusError": "嵌入失败"
+      },
+      "sourceCheck": {
+        "title": "源文件",
+        "description": "从磁盘文件摄入的文档，将与其原始源文件进行比对。",
+        "empty": "没有文档跟踪外部源文件。网页上传不会被跟踪——只有从路径摄入的文档（通过 CLI）才有可供重新检查的源文件。",
+        "update": "从源文件更新",
+        "updated": "文档已从源文件更新。",
+        "missingNote": "在该路径未找到源文件。",
+        "editedNote": "该文档已在本地编辑，为避免覆盖你的改动，已禁止从源文件更新。",
+        "status": {
+          "unchanged": "已是最新",
+          "changed": "源文件已变更",
+          "missing": "源文件缺失",
+          "edited": "已本地编辑",
+          "updated": "已自动更新"
+        }
       }
+    },
+    "settings": {
+      "title": "知识作用域设置",
+      "description": "更新该作用域的分块与检索配置。修改分块后请重建索引，以应用到已有文档。",
+      "chunkSize": "分块大小",
+      "chunkOverlap": "分块重叠",
+      "vectorHint": "为该作用域启用基于含义的向量检索（关键词与 grep 始终开启）。向量模型在「设置 → 向量模型」中统一配置。",
+      "autoUpdateSources": "源文件变更时自动更新",
+      "autoUpdateSourcesHint": "当文档的外部源文件发生变更时，在下次检查源文件时自动重新摄入（本地编辑过的文档始终会被跳过）。"
     },
     "lanes": {
       "rules": "规则",
       "handoff": "分支",
       "changelog": "变更记录",
       "intro": {
-        "knowledge": "Agent 用 `remember` 写下的事实性知识，每条一个文件；可在编辑器中订正或删除。",
+        "entries": "Agent 写下的内容，每条一个文件；可在编辑器中订正或删除。",
+        "documents": "你摄入的文件，已在磁盘上转换为 Markdown。可在页头上传任意格式。",
         "rules": "影响 Agent 行为的长期规则，会在会话开始时注入。",
         "handoff": "按分支保存的现场交接笔记，方便换机器或换会话继续。",
-        "changelog": "记忆整理与编辑的历史记录。"
+        "changelog": "知识整理与编辑的历史记录。"
       }
     },
     "rules": {
@@ -1195,26 +1146,26 @@
       "updatedAt": "更新于 {{time}}"
     },
     "changelog": {
-      "empty": "还没有变更记录——它会记录每一次记忆整合。",
+      "empty": "还没有变更记录——它会记录每一次知识整合。",
       "select": "在左侧选择变更记录以阅读。"
     },
     "welcome": {
-      "title": "你的共享 agent 记忆",
-      "body": "一个全局库加每个项目一个库，跨所有 agent 共享——事实直接写入（无需 LLM），并通过 Coffer 内置的 MCP 工具回忆。所有数据都留在你的机器上。",
-      "featureRecall": {
-        "title": "记住事实",
-        "body": "agent 跨会话存储并回忆短事实。"
+      "title": "把 agent 知道的一切放在一处",
+      "body": "一个全局作用域、每个项目一个，外加你自建的集合——既保存 agent 写下的条目，也保存你摄入的文档。关键词与 grep 开箱即用，向量检索一键开启，所有数据都留在你的机器上。",
+      "featureEntries": {
+        "title": "Agent 写下的",
+        "body": "agent 通过 Coffer 内置的 MCP 工具跨会话记录并回忆所学。"
+      },
+      "featureDocuments": {
+        "title": "你摄入的",
+        "body": "上传任意格式的文件，Coffer 会转换为 Markdown 并建立检索索引。"
       },
       "featureLocal": {
         "title": "本地优先",
-        "body": "事实是机器上的纯 Markdown 文件；索引从中重建。"
-      },
-      "featureAgent": {
-        "title": "可被 agent 访问",
-        "body": "通过 Coffer 内置的 MCP 工具增改、回忆并整理事实。"
+        "body": "所有内容都是机器上的纯 Markdown 文件；索引可从中重建。"
       }
     },
-    "deleteStoreConfirm": "删除记忆库「{{name}}」？其中的事实都会被移除，此操作不可撤销。"
+    "deleteScopeConfirm": "删除知识作用域「{{name}}」？其中的条目、文档与索引都会被移除，此操作不可撤销。"
   },
   "chat": {
     "title": "对话",

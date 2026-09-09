@@ -23,7 +23,6 @@
 ```
 manifest.json                  bundle schema version + creation time
 knowledge/                     mirror of ~/.coffer/knowledge
-memory/                        mirror of ~/.coffer/memory
 skills/                        mirror of ~/.coffer/skills (master skill store)
 resources/<kind>/<name>.yaml   one deterministic file per config resource
 state/<area>/...yaml           module-owned shared state docs

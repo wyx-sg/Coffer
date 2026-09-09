@@ -3,10 +3,10 @@
 > 中文版: [ADR-012-files-as-truth-sqlite-retrieval.zh.md](./ADR-012-files-as-truth-sqlite-retrieval.zh.md)
 
 **Status**: Accepted
-**Date**: 2026-06-09
+**Date**: 2026-06-09 (revised 2026-09-10; see Revision history)
 **Deciders**: Yuxing Wu
 **Supersedes**: ADR-010 (LlamaIndex RAG engine) and ADR-011 (mem0 memory engine) — both since removed as dead docs
-**Related**: spec `006-knowledge-base`, spec `007-memory`, [ADR-002](ADR-002-code-layout-layer-first.md), [ADR-007](ADR-007-everything-is-a-resource-kind.md), [ADR-013](ADR-013-agent-native-shared-memory.md)
+**Related**: spec `007-memory` (the Knowledge Layer spec), [ADR-002](ADR-002-code-layout-layer-first.md), [ADR-007](ADR-007-everything-is-a-resource-kind.md), [ADR-013](ADR-013-agent-native-shared-memory.md)
 
 ## Context
 
@@ -63,9 +63,9 @@ Concrete shape:
   - `vector` — sqlite-vec KNN over chunk embeddings.
   - `hybrid` — reciprocal rank fusion of `keyword`+`vector` (`K = 60`, deduped
     by `(document_id, position)`), so exact/CJK/identifier hits and paraphrase
-    hits reinforce each other. **Delivered** in spec 006 (FR-011b): enabling
-    `vector` auto-enables `hybrid` and makes it the KB's default mode. Default
-    retrieval is `keyword`+`grep` (zero config, offline). Vector is opt-in; if
+    hits reinforce each other. **Delivered**: enabling `vector` auto-enables
+    `hybrid` and makes it the default mode. Default retrieval is
+    `keyword`+`grep` (zero config, offline). Vector is opt-in; if
     vector or hybrid is requested but embeddings are unconfigured, retrieval
     falls back to keyword and flags it — it never blocks.
 - **Configurable, OpenAI-compatible embeddings** (DevPilot-style: one
@@ -173,3 +173,58 @@ clean. Swapping the converter, the embedding provider, or even the vector
 extension is a one-adapter change. Crucially, because **files are the source of
 truth**, the deepest possible lock-in — a proprietary index format you cannot
 leave — is gone: any engine can be rebuilt from the markdown.
+
+## Revision history
+
+- **2026-06-09** — Initial decision: markdown files are the sole source of
+  truth; SQLite FTS5 + sqlite-vec hold a fully rebuildable index; embeddings
+  come from a configurable OpenAI-compatible provider; ingestion goes through a
+  pluggable `MarkdownConverter` port. One substrate wearing **two faces** — a
+  `knowledge_base` kind and a `memory` kind.
+- **2026-09-10** — **The two faces became one.** `memory` and `knowledge_base`
+  merged into a single resource kind, `knowledge`. Nothing in the substrate
+  moved, because there was never anything to move: `documents`, `chunks`,
+  `documents_fts` and `vec_chunks` were shared from the day this ADR landed, and
+  `infrastructure/knowledge/paths.py` already owned both on-disk layouts. Only
+  the facade was two — two sets of MCP tools, two REST routers, two CLI groups,
+  two pages — and it made the caller guess which face a fact belonged to before
+  it could search for it. The merge is therefore not a change of position but
+  the position being followed through. What it revises above:
+  - **Storage root and lanes.** One root, `~/.coffer/knowledge/<scope>/`, with
+    lanes `knowledge/` (entries an agent wrote), `inbox/` (ingested documents),
+    `rules/`, `handoff/`, `superseded/`, and a hidden `.raw/` holding ingested
+    originals. So the `docs/<doc-id>.md` + `raw/<doc-id>.<ext>` pair named in
+    the Decision above is now `<scope>/inbox/<doc-id>.md` +
+    `<scope>/.raw/<doc-id>.<ext>`, and the per-fact memory markdown is an entry
+    under `<scope>/knowledge/`. Provenance retention and re-convertibility are
+    unchanged; `.raw/` is hidden only so that ripgrep stops returning two hits
+    per ingested document — the converted Markdown and the original it came
+    from.
+  - **Scope replaces store name.** Scope is read from the resource name:
+    `global` and `project-<ULID>` (resolved from the cwd's git root) both
+    auto-provision on first use; any other name is a collection the user
+    created deliberately and never auto-provisions, because silently minting a
+    scope from a typo is worse than an error.
+  - **A stored lane discriminator.** `documents.lane` (`knowledge` | `inbox`,
+    migration `0052`) records which writer owns a row, because the two lanes'
+    paths genuinely overlap under one root. Counts are lane-scoped; **retrieval
+    deliberately spans both lanes** — one index, one query — which is the whole
+    point of the merge.
+  - **Per-corpus embedding config is gone.** The per-scope `KnowledgeConfig`
+    carries no embedding fields at all; by the time of the merge neither old
+    config's fields were read. Embedding resolves through the
+    installation-wide config, and a scope opts into vector search purely by
+    listing the retrieval mode. The mutability argument above is unaffected —
+    files are still truth, so re-embedding is still a re-derivation.
+- **2026-09-10, on clearing the index.** Migration `0051` merged the two kinds
+  and **cleared the derived index**. That is this ADR's own position in action,
+  not an exception to it. `memory:global` and `knowledge_base:global` both
+  existed and `resources` is keyed by `(kind, name)`, so converting both would
+  have collided on `knowledge:global`, and any automatic rename would have been
+  a guess. It cost little: every `documents` row was `kind='memory'` — a
+  memory-side index over the journal lane that a previous change removed — so
+  the index already pointed at files that no longer exist, and the
+  knowledge-base face had never held a single document. **Files are truth,
+  SQLite is a rebuildable index**: clearing an index that files can rebuild
+  loses nothing authoritative, because the index was never the system of
+  record. Re-accumulation is by explicit `coffer__write` and file ingestion.

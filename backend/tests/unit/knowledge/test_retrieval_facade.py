@@ -9,6 +9,7 @@ import pytest
 
 from coffer.application.knowledge.retrieval import KnowledgeRetrieval
 from coffer.domain.errors import EngineUnavailable
+from coffer.domain.knowledge.document import KIND_KNOWLEDGE
 from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.domain.knowledge.retrieval import Passage, StoreRef
 
@@ -52,7 +53,7 @@ class FakeEmbedder:
 
 
 def _store() -> StoreRef:
-    return StoreRef(kind="knowledge_base", resource_name="kb1", project_id="0" * 26, docs_dir="/x")
+    return StoreRef(kind=KIND_KNOWLEDGE, resource_name="kb1", project_id="0" * 26, docs_dir="/x")
 
 
 def _passage(doc_id: str, *, position: int = 0) -> Passage:

@@ -33,4 +33,4 @@ coffer skill verify                                  # report drift; non-zero ex
 
 The **Skills** page lists your master library; import via a file picker or a Git URL, and open a skill to see its metadata and a read-only file tree. Per-agent delivery lives on each agent's **Skills** tab — toggle a skill on or off for that agent. See [Agents](/guide/agents).
 
-[Knowledge bases →](/guide/knowledge-base)
+[Knowledge →](/guide/knowledge)

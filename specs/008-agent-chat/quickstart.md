@@ -57,7 +57,7 @@ Ask it something that needs your vault, for example:
 
 > What do my memory notes say about OAuth?
 
-The agent calls the matching tool (`coffer__recall`, `coffer__search_knowledge`,
+The agent calls the matching tool (`coffer__search`, `coffer__read`,
 `coffer__load_skill`, or any of your MCP server tools). Each call shows up in the
 thread as an inline card you can expand to see the inputs and result.
 

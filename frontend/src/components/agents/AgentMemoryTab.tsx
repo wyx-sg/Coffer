@@ -182,7 +182,7 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
             title={t("agents.cofferManaged")}
             hint={t("agents.memoryTab.accessViaGateway")}
             buttonLabel={t("agents.memoryTab.openMemoryPage")}
-            onOpen={() => navigate("/memory")}
+            onOpen={() => navigate("/knowledge")}
             notInstalledHint={t("agents.memoryTab.notInstalled")}
           />
         </div>

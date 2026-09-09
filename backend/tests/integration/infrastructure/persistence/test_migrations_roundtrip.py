@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0051"
+HEAD_REVISION = "0053"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -103,7 +103,11 @@ HEAD_REVISION = "0051"
 # them on the way down (mirroring 0030's treatment of the MCP scope tables), so
 # they reappear once we step below 0049. The ``documents_fts_*`` shadow
 # tables FTS5 creates under the hood are excluded — the assertions speak to the
-# logical schema.
+# logical schema. 0052 merges the ``memory`` and ``knowledge_base`` kinds into
+# one ``knowledge`` kind and RENAMEs the two machine-local side tables to
+# ``knowledge_scope_project_roots`` / ``knowledge_scope_labels`` — same tables,
+# new names at head; its downgrade renames them back, which is why the stepwise
+# assertions below still speak of the ``memory_store_*`` names.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",
@@ -117,14 +121,22 @@ EXPECTED_TABLES = {
     "documents",
     "chunks",
     "documents_fts",
-    "memory_store_project_roots",
-    "memory_store_labels",
+    "knowledge_scope_project_roots",
+    "knowledge_scope_labels",
     "embedding_config",
     "conversations",
     "chat_messages",
     "channel_peers",
     "channel_thread_conversations",
 }
+
+# Below revision 0052 the two side tables still carry their pre-merge names
+# (0052 renames them on the way up and back on the way down), so every stepwise
+# assertion under 0052 compares against this set instead.
+PRE_MERGE_TABLES = (
+    EXPECTED_TABLES - {"knowledge_scope_project_roots", "knowledge_scope_labels"}
+) | {"memory_store_project_roots", "memory_store_labels"}
+
 
 # The four sync-only tables 0049 DROPs (continuous multi-machine sync withdrawn,
 # ADR-016). Absent at head; recreated empty by 0049's downgrade so the older
@@ -818,7 +830,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     # distilled_sessions was dropped at 0038's downgrade (the first step), so it
     # is absent from here down.
     assert _user_tables(db_path) == (
-        EXPECTED_TABLES | scope_tables | {"chat_models", "sync_config", "sync_state"}
+        PRE_MERGE_TABLES | scope_tables | {"chat_models", "sync_config", "sync_state"}
     ) - {
         "memory_store_labels",
         "distilled_sessions",
@@ -830,7 +842,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     command.downgrade(cfg, "0024")
     assert "locked" not in _documents_columns()
     assert _user_tables(db_path) == (
-        EXPECTED_TABLES | scope_tables | {"chat_models", "sync_config", "sync_state"}
+        PRE_MERGE_TABLES | scope_tables | {"chat_models", "sync_config", "sync_state"}
     ) - {
         "memory_store_labels",
         "distilled_sessions",
@@ -878,7 +890,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     # chat_models is still present (0036's downgrade recreated it; 0012's
     # downgrade drops it on the next step to 0011).
     assert _user_tables(db_path) == (
-        EXPECTED_TABLES | {"memory_projection_bindings", "chat_models"}
+        PRE_MERGE_TABLES | {"memory_projection_bindings", "chat_models"}
     ) - {
         "credentials",
         "channel_peers",
@@ -890,7 +902,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
 
     # 0012 -> 0011: drops the chat tables (spec 008-agent-chat).
     command.downgrade(cfg, "0011")
-    assert _user_tables(db_path) == (EXPECTED_TABLES | {"memory_projection_bindings"}) - {
+    assert _user_tables(db_path) == (PRE_MERGE_TABLES | {"memory_projection_bindings"}) - {
         "credentials",
         "channel_peers",
         "conversations",
@@ -932,7 +944,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
 
     # 0004 -> 0003: index-only revision, table set otherwise unchanged.
     command.downgrade(cfg, "0003")
-    assert _user_tables(db_path) == EXPECTED_TABLES - {
+    assert _user_tables(db_path) == PRE_MERGE_TABLES - {
         "credentials",
         "channel_peers",
         "embedding_config",
@@ -1212,7 +1224,11 @@ def test_migration_0017_rekeys_chunk_ids_per_store(tmp_path, monkeypatch):
     finally:
         conn.close()
 
-    command.upgrade(cfg, "head")
+    # Stop at 0051, not head: 0052 (the memory/knowledge_base kind merge) clears
+    # the derived index outright, so running past it would leave nothing to
+    # assert about the rekey. Every revision from 0017 to 0051 still runs, which
+    # is what proves the rekey idempotent under repeated passes.
+    command.upgrade(cfg, "0051")
 
     def _scope(store: str) -> str:
         # Mirrors store_scope in coffer/infrastructure/knowledge/sqlite_index.py.
@@ -1231,7 +1247,7 @@ def test_migration_0017_rekeys_chunk_ids_per_store(tmp_path, monkeypatch):
 
     # Idempotent: re-running 0017 (stamp back + upgrade) must not re-prefix.
     command.stamp(cfg, "0016")
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, "0050")
     conn = sqlite3.connect(str(db_path))
     try:
         assert {r[0] for r in conn.execute("SELECT id FROM chunks")} == expected

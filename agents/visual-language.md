@@ -1,7 +1,7 @@
 # Coffer UI Visual Language
 
 > Companion reference for agents touching `frontend/`. The authoritative
-> tokens live in [`frontend/tailwind.config.js`](../../frontend/tailwind.config.js);
+> tokens live in [`frontend/tailwind.config.js`](../frontend/tailwind.config.js);
 > this file documents the conventions.
 
 ## Source of truth

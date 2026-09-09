@@ -59,7 +59,7 @@ MCP scoping 此前作为某个 kind 自己的特性被尝试过一次，并在 2
    | --- | --- | --- |
    | `mcp_server` | agent | 网关按会话身份过滤该 server 的工具。 |
    | `skill` | agent | 分发时用 scope 与既有的按 agent follow 策略取交集；已分发但不在 scope 内的副本会被回收。 |
-   | `agent`、`channel`、`knowledge_base`、`memory` | 无 | 非 null 的 scope 在校验阶段被拒绝。 |
+   | `agent`、`channel`、`knowledge` | 无 | 非 null 的 scope 在校验阶段被拒绝。 |
 
 4. **shim 自报的 `--agent` 身份。** shim 安装时把
    `coffer-mcp-shim --agent <name>` 写入 agent 的配置；shim 在握手时连同既有的
@@ -73,8 +73,10 @@ MCP scoping 此前作为某个 kind 自己的特性被尝试过一次，并在 2
    交集——既在 scope 内*又*被 follow，再减去手动排除项。scope 是硬性授予，
    压过手动绑定：不在 scope 内的 skill 即便此前是手工分发的也会被回收。
 
-6. **知识与记忆永不 scope。** `knowledge_base` 与 `memory` 不声明 scope，并拒绝
-   非 null 值——它们永远对所有 agent 共享。聊天历史、审计日志、运行时状态与仅本机
+6. **知识永不 scope。** `knowledge` kind 不声明 scope，并拒绝非 null 值——它永远
+   对所有 agent 共享。（它自己的 `global` / `project-<ULID>` / 具名集合这条轴是
+   知识层对*内容*的 scope，与本框架字段无关；后者管的是*哪个 agent 能看见某个
+   资源*。）聊天历史、审计日志、运行时状态与仅本机
    的设置保持机器本地（此处是重申边界，不是新决策）。
 
 ## 已考虑的备选方案

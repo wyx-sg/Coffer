@@ -51,3 +51,15 @@
 **只把记忆索引 render 进原生文件（只托管块、不 symlink、不关原生记忆）。** 一种更软的投射。否决：仍写入用户配置文件（业界避开的动作）、仍需 per-agent 适配器，而 session 启动上下文注入不碰任何文件就能达到同样的环境式效果。
 
 **纯 MCP、完全没有环境式机制。** 可行且最简单，但只在模型「想起来调 recall」时才加载的记忆会被低用。经 session hook 的运行时注入是计划中的、不侵入的补救 —— 所以纯 MCP 是我们现在交付的底座，注入作为已立项的后续。
+
+## 修订历史
+
+- **2026-06-18** —— 初版决定：移除原生投射层；Coffer 用自己的格式管理记忆，并经
+  MCP 网关触达每个 agent。
+- **2026-09-10** —— 仅词汇变更。`memory` 与 `knowledge_base` 合并为单一的
+  `knowledge` kind（见 [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md) 的
+  修订历史），故上文 Decision 里的工具名是历史称谓：现在的界面是
+  `coffer__search`、`coffer__grep`、`coffer__read`、`coffer__list`、
+  `coffer__write` 与 `coffer__delete`，作用在 `~/.coffer/knowledge/<scope>/` 而非
+  某个 memory store 之上；两层作用域也变成 `global` / `project-<ULID>` / 用户有意
+  创建的集合。**决策本身未变**：Coffer 仍然绝不操作 agent 的原生记忆文件。

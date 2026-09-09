@@ -16,7 +16,7 @@ from coffer.domain.errors import ResourceNotFound
 # caller.  The TYPE_CHECKING guard is the surgical fix.
 #
 # DO NOT "simplify" this to a runtime import to match the pattern in
-# application/memory/builtin_tools.py — that module's MemoryService does NOT have
+# application/memory/builtin_tools.py — that module's KnowledgeService does NOT have
 # the same infrastructure coupling and is safe to import at runtime.
 if TYPE_CHECKING:
     from coffer.application.resource_service import ResourceService

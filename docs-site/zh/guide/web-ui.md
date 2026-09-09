@@ -14,6 +14,7 @@ AGENTS
 RESOURCES
   MCP servers      管理已注册的服务器
   Skills           管理 Coffer 可交付给 agent 的技能
+  Knowledge        每个知识作用域一个页面:条目、文档、规则、现场
 SYSTEM
   Observability    审计日志与调用日志
   Settings
@@ -136,6 +137,24 @@ agent 头部的 **Install Coffer MCP** 开关会将 Coffer 自身的 `coffer` MC
 
 - **Overview** —— 元数据：来源、版本哈希、master 路径以及时间戳。
 - **Files** —— 该技能 master 文件夹的只读文件树与内容查看器。
+
+### Knowledge
+
+打开 **Knowledge** 查看你的知识作用域:`global`、每个项目一个,以及任何你创建的集合。
+每一行展示条目数、文档数、磁盘占用,以及已建索引的检索模式。**Add collection** 创建一个具名集合
+(向量检索的勾选框是唯一与知识相关的选项 —— embedding 模型本身在 **Settings → Embedding**
+中整个安装配置一次,而非按作用域配置)。
+
+点击某个作用域,会打开 `/knowledge/:scope`,包含五个标签页:
+
+- **Entries** —— agent(和你)写下的内容。可在此新增、编辑与删除条目。
+- **Documents** —— 被摄取并转换为 Markdown 的文件。可拖入文件、阅读、重新转换或删除。
+  追踪了外部原件的文档会显示该原件在磁盘上是否已变化。
+- **Rules** —— 该作用域的行为规则,会在会话开始时注入 agent。
+- **Handoff** —— 已保存的工作现场,每个 git 分支一条。
+- **Changelog** —— 只追加的记录:整合做了什么、什么时候做的。
+
+旧的 `/memory`、`/memory/:name`、`/knowledge-bases` 和 `/knowledge-bases/:name` URL 会重定向到此处。
 
 ### Observability
 

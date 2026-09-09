@@ -2,6 +2,15 @@
 
 > English: [amendment-2026-07-10-ai-store-merge.md](./amendment-2026-07-10-ai-store-merge.md)
 
+> **历史文档 —— 2026-09-10。** spec 006（Knowledge Base）与 spec 007（Memory）
+> 于当日合并为统一的 **Knowledge Layer（知识层）**。合并后的模型以
+> [`spec.md`](./spec.md) 为准 —— 一个 `knowledge` kind、三种 scope、单一存储根
+> `~/.coffer/knowledge/<scope>/`、八个 `coffer__*` 工具。本文档记录的是合并之前
+> 的设计；凡出现「memory 面」「`memory` kind」`~/.coffer/memory/`
+> `/api/v1/memory_stores` 或 `coffer memory …` 之处，请以 `spec.md` 中合并后的
+> 对应物为准。目录名 `specs/007-memory/` 同样是历史遗留：它是所有入链与验收审计
+> 所依赖的 spec id。
+
 状态：**已接受**（随本修订的 PR 一并实现）
 修订对象：[spec 007 — Memory](./spec.md) · 不占用新 spec 编号（与转录蒸馏扩展一致）
 新增：`spec.md` 的 **FR-056 – FR-059**、四个验收场景、两个 REST 端点、两个 CLI 子命令、一个记忆库列表 UI 操作。
