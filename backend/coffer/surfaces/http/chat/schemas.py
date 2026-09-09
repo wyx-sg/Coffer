@@ -155,6 +155,22 @@ class ChatAgentListOut(BaseModel):
     agents: list[ChatAgentOut]
 
 
+class AgentModelOut(BaseModel):
+    """One model a managed agent can be put on. ``source`` distinguishes a
+    curated alias from one discovered in the agent's own config."""
+
+    id: str
+    label: str = ""
+    description: str = ""
+    source: str  # "alias" | "discovered"
+
+
+class AgentModelsOut(BaseModel):
+    """The model catalogue for one agent, curated entries first."""
+
+    models: list[AgentModelOut]
+
+
 # ---------------------------------------------------------------------------
 # Message
 # ---------------------------------------------------------------------------

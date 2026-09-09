@@ -16,6 +16,7 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
+from coffer.application.agent.model_catalogue import AgentModelCatalogueService
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
@@ -31,6 +32,7 @@ from coffer.application.knowledge_base.service import KnowledgeBaseService
 from coffer.application.providers.ports import ModelIntrospectionService
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.knowledge.embedder import EmbeddingConfig
+from coffer.infrastructure.agent.model_discovery import NativeConfigModelDiscovery
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.knowledge import paths
@@ -41,9 +43,13 @@ from coffer.infrastructure.knowledge.repository import DocumentRepo
 from coffer.infrastructure.knowledge.sqlite_index import SqliteKnowledgeIndex
 from coffer.infrastructure.knowledge.vec_index import VecIndex
 from coffer.infrastructure.providers.provider_introspector import ProviderIntrospector
-from coffer.surfaces.http.chat.dependencies import set_introspection_service
+from coffer.surfaces.http.chat.dependencies import (
+    set_agent_model_catalogue,
+    set_introspection_service,
+)
 from coffer.surfaces.http.chat_provider_wiring import build_agent_provider_registry
 from coffer.surfaces.http.dependencies import (
+    get_agent_service,
     set_agent_registry,
     set_chat_service,
     set_kb_service,
@@ -234,10 +240,20 @@ def wire_chat(
     #    service resolves credential refs to keys server-side.
     introspection_svc = ModelIntrospectionService(ProviderIntrospector(), _credential_resolver)
 
-    # 8. Register dependency providers.
+    # 8. The model catalogue — one list of models per managed agent (curated
+    #    aliases + whatever the agent's own config advertises) shared by the web
+    #    picker, the channel /model card, and the note each turn tells the agent
+    #    about the model it is on. Needs the agent registry (spec 004), which
+    #    wire_agent_and_skill_kinds published before this call.
+    model_catalogue = AgentModelCatalogueService(
+        agents=get_agent_service(), discovery=NativeConfigModelDiscovery()
+    )
+
+    # 9. Register dependency providers.
     set_chat_service(chat_svc)
     set_introspection_service(introspection_svc)
     set_turn_orchestrator(orchestrator)
     set_agent_registry(registry)
+    set_agent_model_catalogue(model_catalogue)
 
     return agent_session

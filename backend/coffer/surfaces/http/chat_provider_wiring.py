@@ -18,6 +18,7 @@ from coffer.domain.errors import CredentialMissing
 from coffer.domain.provider.errors import NoActiveProvider
 from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
+from coffer.surfaces.http.chat.dependencies import get_agent_model_catalogue
 from coffer.surfaces.http.dependencies import get_provider_service
 
 if TYPE_CHECKING:
@@ -27,7 +28,19 @@ if TYPE_CHECKING:
 def build_agent_provider_registry(conv_repo: ConversationRepo) -> AgentProviderRegistry:
     """Construct and populate the chat agent-provider registry."""
     registry = AgentProviderRegistry()
-    registry.register(ClaudeSdkProvider(conversations=conv_repo), display_name="Claude Code")
+
+    # Tell Claude Code, on every turn, which model Coffer put it on and what
+    # else it could be switched to — it cannot see either, and left to itself it
+    # names a model at random. Resolved per turn (lazily, via the DI getter)
+    # because the catalogue service is published later in the same lifespan.
+    async def _list_models(agent_key: str) -> list[str]:
+        ids: list[str] = await get_agent_model_catalogue().suggest(agent_key)
+        return ids
+
+    registry.register(
+        ClaudeSdkProvider(conversations=conv_repo, list_models=_list_models),
+        display_name="Claude Code",
+    )
 
     # Codex reads Coffer's projected key from the COFFER_PROVIDER_KEY env var
     # (config.toml env_key). Resolve the connection active FOR that agent per turn —

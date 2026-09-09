@@ -4,7 +4,10 @@
 // stages a choice, must «测试连接», then «确认切换» to apply it (spec 011 amendment
 // 2026-06-23c). The draft → test → confirm state machine lives in
 // useAgentConnectionDraft; this file is presentation only. Claude Code exposes two
-// model slots (primary + fast); Codex one.
+// model slots (primary + fast); Codex one. Those slots belong to a connection: on
+// the built-in login nothing reads `agent.model`, so the panel shows the agent's
+// own model catalogue read-only instead of offering controls that write a field
+// nobody reads.
 import { useTranslation } from "react-i18next";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 
@@ -60,50 +63,82 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
               </Select>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="agent-model">{t("agents.connection.model")}</Label>
-              <Select
-                value={c.draftModel}
-                onValueChange={c.pickModel}
-                onOpenChange={(open) => open && c.introspect()}
-                disabled={c.modelsDisabled}
-              >
-                <SelectTrigger id="agent-model" className="text-sm">
-                  <SelectValue placeholder={t("agents.connection.none")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {c.models.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Claude Code's small/fast slot (ANTHROPIC_SMALL_FAST_MODEL); Codex
-                has no second slot. */}
-            {c.wire === "anthropic" && (
-              <div className="space-y-1.5">
-                <Label htmlFor="agent-fast-model">{t("agents.connection.fastModel")}</Label>
-                <Select
-                  value={c.draftFast}
-                  onValueChange={c.pickFast}
-                  onOpenChange={(open) => open && c.introspect()}
-                  disabled={c.modelsDisabled}
-                >
-                  <SelectTrigger id="agent-fast-model" className="text-sm">
-                    <SelectValue placeholder={t("agents.connection.none")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {c.models.map((m) => (
-                      <SelectItem key={m} value={m}>
-                        {m}
-                      </SelectItem>
+            {/* Built-in login: no binding to make here. Show what the agent can
+                run on, and say where the choice actually happens. */}
+            {c.draftIsBuiltin ? (
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label>{t("agents.connection.builtinModelsTitle")}</Label>
+                {c.builtinModels.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    {t("agents.connection.builtinModelsEmpty")}
+                  </p>
+                ) : (
+                  <ul className="flex flex-wrap gap-1.5">
+                    {c.builtinModels.map((m) => (
+                      <li
+                        key={m.id}
+                        className="rounded-sm border border-border px-1.5 py-0.5 text-xs"
+                      >
+                        <span className="font-mono">{m.id}</span>
+                        {m.label && m.label !== m.id && (
+                          <span className="ml-1.5 text-muted-foreground">{m.label}</span>
+                        )}
+                      </li>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </ul>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {t("agents.connection.builtinModelsHint")}
+                </p>
               </div>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="agent-model">{t("agents.connection.model")}</Label>
+                  <Select
+                    value={c.draftModel}
+                    onValueChange={c.pickModel}
+                    onOpenChange={(open) => open && c.introspect()}
+                    disabled={c.busy}
+                  >
+                    <SelectTrigger id="agent-model" className="text-sm">
+                      <SelectValue placeholder={t("agents.connection.none")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {c.models.map((m) => (
+                        <SelectItem key={m} value={m}>
+                          {m}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Claude Code's small/fast slot (ANTHROPIC_SMALL_FAST_MODEL); Codex
+                    has no second slot. */}
+                {c.wire === "anthropic" && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="agent-fast-model">{t("agents.connection.fastModel")}</Label>
+                    <Select
+                      value={c.draftFast}
+                      onValueChange={c.pickFast}
+                      onOpenChange={(open) => open && c.introspect()}
+                      disabled={c.busy}
+                    >
+                      <SelectTrigger id="agent-fast-model" className="text-sm">
+                        <SelectValue placeholder={t("agents.connection.none")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {c.models.map((m) => (
+                          <SelectItem key={m} value={m}>
+                            {m}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </>
             )}
           </div>
 

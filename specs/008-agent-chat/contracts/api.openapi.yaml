@@ -28,6 +28,36 @@ paths:
               schema:
                 $ref: '#/components/schemas/ChatAgentListOut'
 
+  /api/v1/chat/agents/{agent_key}/models:
+    parameters:
+      - $ref: '#/components/parameters/AgentKey'
+    get:
+      summary: The model catalogue for one agent
+      operationId: listAgentModels
+      description: >
+        The models the named agent can be put on, in a meaningful order
+        (curated aliases first). Each entry is `source: alias` — a curated CLI
+        alias that always resolves to the newest model in its tier (Claude Code
+        `opus` / `sonnet` / `haiku` / `fable` / `opusplan` / `default`) — or
+        `source: discovered`, read out of the agent's OWN native config (Claude
+        Code's `additionalModelOptionsCache` in `~/.claude.json`, the models
+        named in Codex's `config.toml`). `id` is passed verbatim to the agent's
+        CLI. This endpoint is the single source of truth for the catalogue: the
+        chat model picker, the Agent page's model slots, and the channel
+        `/model` card all read it. It describes the AGENT's own models and is
+        independent of any connection overriding it — a connection's models
+        come from `POST /api/v1/models/list-models`.
+      tags: [chat]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentModelsOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /api/v1/chat/conversations:
     get:
       summary: List conversations, newest first
@@ -406,6 +436,12 @@ components:
       name: id
       required: true
       schema: { type: string }
+    AgentKey:
+      in: path
+      name: agent_key
+      required: true
+      schema: { type: string }
+      description: The registered chat agent's key (e.g. `claude_code`, `codex`).
 
   responses:
     BadRequest:
@@ -438,6 +474,38 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ChatAgentOut'
+
+    AgentModelOut:
+      type: object
+      required: [id, source]
+      properties:
+        id:
+          type: string
+          description: The model id passed verbatim to the agent's CLI.
+          example: sonnet
+        label:
+          type: string
+          description: Short display name for the picker.
+          example: Sonnet
+        description:
+          type: string
+          description: One line saying what the id resolves to, shown under the label.
+        source:
+          type: string
+          enum: [alias, discovered]
+          description: >
+            `alias` — a curated CLI alias resolving to the newest model in its
+            tier; `discovered` — read out of the agent's own native config.
+
+    AgentModelsOut:
+      type: object
+      required: [models]
+      properties:
+        models:
+          type: array
+          description: The agent's models, aliases first; the order is meaningful.
+          items:
+            $ref: '#/components/schemas/AgentModelOut'
 
     ConversationCreate:
       type: object

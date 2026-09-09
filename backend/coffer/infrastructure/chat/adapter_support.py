@@ -70,4 +70,36 @@ def channel_system_context(channel_name: str) -> str:
     )
 
 
-__all__ = ["ParseState", "SessionSink", "channel_system_context", "last_user_text"]
+def model_system_context(current: str | None, available: Sequence[str]) -> str:
+    """A system-prompt append telling the agent which model Coffer put it on.
+
+    The agent cannot see Coffer's choice — asked in a real channel session it
+    confidently named the wrong model. This note is authoritative, so it says so.
+    It rides on every turn, hence the tight wording.
+    """
+    ids = ", ".join(available) if available else "none listed"
+    if current:
+        opening = (
+            f"Coffer is running this session on the model `{current}` — trust this "
+            "note over your own guess about which model you are."
+        )
+    else:
+        opening = (
+            "Coffer set no model override for this session, so you are running on "
+            "your CLI's own default model. Trust this note over your own guess: do "
+            "not name a specific model or version, say the default is in use."
+        )
+    return (
+        f"{opening} Models available here: {ids}. The user switches with "
+        "`/model <id>` in a chat channel, or Coffer's model picker in the web UI — "
+        "point them there instead of changing models yourself."
+    )
+
+
+__all__ = [
+    "ParseState",
+    "SessionSink",
+    "channel_system_context",
+    "last_user_text",
+    "model_system_context",
+]

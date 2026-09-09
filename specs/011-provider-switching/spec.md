@@ -287,6 +287,64 @@ change also made an unverified endpoint the live config with one click.
 gated behind an explicit test + confirm, and the binding is never left empty.
 **Still NOT in scope:** proxy / hot-switch / protocol conversion.
 
+## Amendment 2026-09-09 — The agent's model catalogue comes from the backend
+
+> Status: Draft. **Supersedes D4's "curated BUILT-IN list" and its either/or
+> option rule.** Recorded after a live session offered a Claude Code
+> conversation only `agnes-*` model ids. Cross-ref
+> [ADR-032](../../docs/decisions/ADR-032-provider-switching.md).
+
+**The defect.** D4's "curated BUILT-IN list" existed only as a hardcoded
+constant — `["opus", "sonnet", "haiku"]` — duplicated in
+`frontend/src/lib/api/providers.ts` and
+`backend/coffer/surfaces/http/channel_wiring.py`. Two copies, no owner, and
+stale: Claude Code's `--model` also accepts `fable`, `opusplan` and `default`,
+so `fable` was simply unreachable from Coffer — the picker is a fixed dropdown
+with no free-text (D4), so an id absent from the constant could not be typed
+in either. D4's options rule made it worse by being either/or: when a
+connection overrode the agent, the picker showed ONLY that connection's
+introspected models and HID the agent's own. Observed live: an `is_active`
+openai connection routed to `claude_code` while `~/.claude/settings.json`
+carried no Coffer projection at all — the agent was in fact running on its
+built-in login — yet the chat offered only `agnes-*` ids, none of which the
+agent could use.
+
+- **H1 — The catalogue is a backend surface, per agent.**
+  `GET /api/v1/chat/agents/{agent_key}/models` returns the models one agent can
+  be put on: curated CLI **aliases** (each resolving to the newest model in its
+  tier — Claude Code `opus` / `sonnet` / `haiku` / `fable` / `opusplan` /
+  `default`) merged with models **discovered** from the agent's own native
+  config (Claude Code publishes `additionalModelOptionsCache` in
+  `~/.claude.json`; Codex's `config.toml` names its configured models). Each
+  entry carries `id` (passed verbatim to the CLI), `label`, `description` and
+  `source ∈ {alias, discovered}`. An unknown `agent_key` is a 404. Contract:
+  [`specs/008-agent-chat/contracts/api.openapi.yaml`](../008-agent-chat/contracts/api.openapi.yaml).
+- **H2 — Single source of truth.** The frontend constant is deleted; the
+  channel `/model` card reads the same catalogue. The list is owned in one
+  place, so a newly released tier reaches every surface without a frontend
+  release.
+- **H3 — Options are a UNION, not an either/or.** The chat picker's options are
+  the agent's catalogue (H1) ∪ the active connection's introspected models
+  (`POST /models/list-models`) ∪ the conversation's current value. D4's ban on
+  free-text stands — the picker remains a fixed dropdown, and the current value
+  is always selectable. A connection therefore adds ids to the picker instead of
+  hiding the agent's own.
+- **H4 — The Agent page's model slots stay read-only on the built-in login.**
+  Those slots bind a CONNECTION's model (E3/E4): `agent.model` is read only when
+  Coffer projects a connection. They now render the catalogue plus a hint that
+  the built-in login's model is chosen per conversation, so the read-only state
+  is explained rather than looking broken.
+- **H5 — Coffer tells the agent which model it is on.** The system-prompt append
+  Coffer adds on every turn now states which model Coffer put the agent on — or
+  that Coffer set no override — and which ids are available. The motivating
+  incident: asked in a real channel session, the agent confidently named a model
+  it was not running on, because nothing in its context said otherwise.
+
+**Supersedes:** D4's curated built-in list (now the backend catalogue) and its
+either/or option rule (now the union in H3). D4's fixed-dropdown / no-free-text
+rule is unchanged. **Still NOT in scope:** proxy / hot-switch / protocol
+conversion.
+
 ## Scope
 
 ### In scope
@@ -762,10 +820,12 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
 
 - **Given** a conversation bound to an agent that has no overriding connection,
 - **When** the model picker is opened,
-- **Then** it offers a fixed dropdown of the agent's built-in models (no
-  free-text "Custom…" entry); and when a connection overrides the agent the
-  dropdown instead lists that connection's introspected models, never reading
-  the connection's stored `model` field (TypeScript acceptance test).
+- **Then** it offers a fixed dropdown of the agent's model catalogue
+  (`GET /api/v1/chat/agents/{agent_key}/models`) with no free-text "Custom…"
+  entry; and when a connection overrides the agent the dropdown offers that
+  connection's introspected models IN ADDITION to the catalogue and the current
+  value, never reading the connection's stored `model` field (TypeScript
+  acceptance test; union per the 2026-09-09 amendment).
 
 ## Requirements
 
