@@ -93,7 +93,10 @@ from coffer.surfaces.http.merge_wiring import wire_merge
 from coffer.surfaces.http.migrations_runner import run_migrations
 from coffer.surfaces.http.native_memory_import_wiring import wire_native_memory_import
 from coffer.surfaces.http.organize_wiring import wire_organize
-from coffer.surfaces.http.provider_wiring import wire_provider_kind
+from coffer.surfaces.http.provider_wiring import (
+    run_provider_projection_sweep,
+    wire_provider_kind,
+)
 from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
 from coffer.surfaces.http.reorg_wiring import wire_reorg
 from coffer.surfaces.http.routing import include_all_routers
@@ -251,6 +254,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Boot memory heal (best-effort, idempotent): collapse worktree-fragmented
     # stores, then reindex so memory is searchable (FR-043).
+    # Boot projection heal: the agents' native config files are not Coffer's to
+    # own, so re-derive the projection the registry implies (best-effort).
+    await run_provider_projection_sweep(app)
+
     await run_store_consolidation(resources=resource_svc, sm=sm, substrate=substrate)
     await run_memory_reindex_sweep(app, resource_svc, _resolve_embedding)  # type: ignore[arg-type]
 

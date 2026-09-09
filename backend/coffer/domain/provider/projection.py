@@ -92,6 +92,17 @@ def target_for(wire: Protocol) -> ProjectionTarget | None:
     return _TARGETS.get(wire)
 
 
+def wire_for_agent(agent_type: AgentType) -> Protocol | None:
+    """The wire whose ``deactivate`` covers ``agent_type`` — the inverse of the
+    wire→agent correspondence ``_TARGETS`` encodes. ``None`` for a type no wire
+    maps onto, so callers stay total.
+    """
+    for wire, target in _TARGETS.items():
+        if target.agent_type is agent_type:
+            return wire
+    return None
+
+
 def target_for_agent(agent_type: AgentType) -> ProjectionTarget | None:
     """The native-config target for an agent TYPE (the file + format its writer
     touches). Every SUPPORTED agent type is a projection target, so this returns
