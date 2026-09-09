@@ -13,7 +13,7 @@ which covers the CLI + shim path.
   (`pnpm install` or `npm install` inside `frontend/`).
 - An MCP server you can register. The walk-through uses the public
   `@modelcontextprotocol/server-filesystem` (needs `npx`).
-- An MCP client (Claude Code / Claude Desktop / Cursor) if you want to
+- An MCP client (Claude Code / Claude Desktop / any stdio MCP client) if you want to
   watch invocations land in the UI. The Add-MCP-server flow itself does
   not require a client.
 

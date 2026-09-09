@@ -215,29 +215,20 @@ Per-agent symlink targets land at:
 
 ### Per-agent delivery targets
 
-Each agent declares _how_ and _where_ Coffer delivers a skill via the capability
-manifest (`domain/agent/descriptor.py`): a `skill_delivery_mode`
-(`SkillDeliveryMode` — `folder` / `rules_mdc` / `external_dir`) plus, for the
-folder model, a `skill_subpath` under the agent's config dir. The skill service
-reads the mode through a composition-root resolver that returns a plain string
-(Contract 5: the service never imports the descriptor).
+Skill delivery has exactly one model: Coffer symlinks (copy fallback) the master
+skill folder into the agent's skills directory. Each agent declares _where_ that
+directory is via the capability manifest (`domain/agent/descriptor.py`) — a
+`skill_subpath` under the agent's config dir. The skill service resolves the
+target dir through a composition-root resolver (Contract 5: the service never
+imports the descriptor).
 
-| Agent       | Delivery mode  | Folder target                | Status                              |
-| ----------- | -------------- | ---------------------------- | ----------------------------------- |
-| Claude Code | `folder`       | `<config_dir>/skills/<name>` | Delivered                           |
-| Codex       | `folder`       | `<config_dir>/skills/<name>` | Delivered                           |
-| `rules_mdc` | —              | —                            | Reserved extension point (no current agent type) |
-| `external_dir` | —           | —                            | Reserved extension point (no current agent type) |
+| Agent       | Folder target                | Status    |
+| ----------- | ---------------------------- | --------- |
+| Claude Code | `<config_dir>/skills/<name>` | Delivered |
+| Codex       | `<config_dir>/skills/<name>` | Delivered |
 
-Folder delivery symlinks (copy-fallback) the master folder into the target, so
-the agent reads the canonical `SKILL.md` at `<config_dir>/skills/<name>/SKILL.md`.
-
-**`external_dir` and `rules_mdc` — reserved extension points.** These are
-recognized `SkillDeliveryMode` values kept as intentional extension points; no
-current agent type uses them. Enabling a skill for a hypothetical agent with
-either mode raises `SkillDeliveryUnsupported` (HTTP 422) before any filesystem
-write; the follow / relink reconcilers skip such agents so registration,
-config-dir-change, and policy-change flows never fail.
+The link points at the master folder, so the agent reads the canonical
+`SKILL.md` at `<config_dir>/skills/<name>/SKILL.md`.
 
 ## Application service contracts (`backend/coffer/application/skill/`)
 

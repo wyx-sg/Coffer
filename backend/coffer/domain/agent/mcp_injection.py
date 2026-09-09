@@ -31,10 +31,10 @@ class McpEntryStyle(StrEnum):
     #: transport ``type``. Recognized extension point reserved for a future agent
     #: type; no current agent type uses it.
     TYPED_COMMAND_ARRAY = "typed_command_array"
-    #: ``{"type": "local", "command": [<shim>, ...], "enabled": true}`` — opencode's
-    #: shape: a typed-command array that also carries an explicit ``enabled`` flag
-    #: (opencode's ``mcp`` block treats each server object as enabled only when the
-    #: flag is present-and-true, so Coffer writes it).
+    #: ``{"type": "local", "command": [<shim>, ...], "enabled": true}`` — a
+    #: typed-command array that also carries an explicit ``enabled`` flag, for an
+    #: ``mcp`` block that treats a server object as enabled only when the flag is
+    #: present-and-true. Reserved extension point; no current agent type uses it.
     TYPED_LOCAL_OBJECT = "typed_local_object"
 
 
@@ -63,8 +63,8 @@ class McpInjectionSpec:
 
     ``config_key`` names the allowlisted config file that holds the MCP servers
     (resolved against the agent's config dir by the application layer).
-    A JSON ``container_key`` may be a dotted PATH (``mcp.servers`` — openclaw
-    nests its servers map one level down); each dot descends one object.
+    A JSON ``container_key`` may be a dotted PATH (``mcp.servers``, for an agent
+    that nests its servers map one level down); each dot descends one object.
     """
 
     config_key: str

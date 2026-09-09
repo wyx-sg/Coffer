@@ -21,7 +21,7 @@ Coffer 今天**只发布 macOS（Apple Silicon）**。Releases 页面提供两�
 ## 前置条件
 
 - 一台 macOS 12+、Apple Silicon（M 系列）的 Mac。不需要 Python。
-- 一个 MCP 客户端（Claude Code、Claude Desktop、Cursor，或任意支持
+- 一个 MCP 客户端（Claude Code、Claude Desktop，或任意支持
   stdio MCP 服务器的客户端）。
 
 ## 1. 下载安装包
@@ -78,7 +78,7 @@ shasum -a 256 -c SHA256SUMS --ignore-missing
 在你的 MCP 客户端配置中把 Coffer shim 加为一个服务器。下面的片段可以
 逐字复制 —— 它们自动发现 daemon，无需逐机器参数化：
 
-**Claude Code / Claude Desktop / Cursor**（`.mcp.json` 或厂商特有配置）：
+**Claude Code / Claude Desktop / 其他 stdio MCP 客户端**（`.mcp.json` 或厂商特有配置）：
 
 ```json
 {
