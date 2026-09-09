@@ -2,8 +2,9 @@
 
 > English: [frontend.md](./frontend.md)
 
-Coffer 的前端是桌面应用的 Web 界面（`frontend/`）：生产环境跑在 Tauri 壳里，
-开发环境跑在 Vite dev server（`make dev`）。本文件是这层界面的工程规范——与
+Coffer 的前端是 daemon 托管的 Web UI（`frontend/`）：生产环境构建为静态资源，
+由 daemon 在其自身的 loopback origin 上托管；开发环境跑在 Vite dev server
+（`make dev`）上，并需开启 `COFFER_DEV_CORS`。本文件是这层界面的工程规范——与
 [`stack.md`](./stack.md)（后端）、
 [`visual-language.md`](./visual-language.md)（视觉设计）并列。
 动 `frontend/src` 之前先读它。

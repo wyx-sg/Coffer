@@ -2,15 +2,20 @@
 
 本页面是 Coffer 的权威安装指南 —— 安装脚本和发布说明均链接至此。请根据你的使用场景选择合适的方式：
 
-| 方式                            | 适用场景                                          |
-| ------------------------------- | ------------------------------------------------- |
-| [一行命令安装](#一行命令安装)   | 服务器、headless 环境、希望最快完成安装的终端用户 |
-| [桌面应用](#桌面应用)           | 工作站日常使用；包含 GUI 和 Web UI                |
-| [从源码安装](#从源码安装开发者) | Coffer 的贡献者与开发者                           |
+| 方式                              | 适用场景                                      |
+| --------------------------------- | --------------------------------------------- |
+| [一行命令安装](#一行命令安装)     | 工作站、服务器、headless 环境上最快的安装方式 |
+| [手动下载压缩包](#手动下载压缩包) | 离线机器、需要固定版本，或想自己校验签名      |
+| [从源码安装](#从源码安装开发者)   | Coffer 的贡献者与开发者                       |
+
+::: tip 只有一个下载，界面就在里面
+Coffer 只发布**单个工件**：`coffer-cli-<triple>.tar.gz`。没有单独的桌面应用 —— 守护进程自己
+提供 Web UI，用 `coffer open` 打开即可。
+:::
 
 ::: tip 守护进程自动启动 —— 你不需要手动运行它
 安装完成后，只需把 MCP 客户端指向 `coffer-mcp-shim` 并连接即可。守护进程在首次需要时会自动启动。
-这是 [ADR-006（探测或拉起）](/zh/architecture/distribution#adr-006) 的核心设计。全新安装后，
+这是 [ADR-006（探测或拉起）](/zh/architecture/processes#detect-or-spawn-adr-006) 的核心设计。全新安装后，
 你永远不会看到「守护进程未运行」的错误。
 :::
 
@@ -18,20 +23,26 @@
 
 ## 一行命令安装
 
-最快捷的安装方式。一条命令即可将三个二进制文件下载并解压到 `~/.coffer/bin`：
+最快捷的安装方式。一条命令即可下载发布压缩包，并把其中的二进制文件解压到 `~/.coffer/bin`：
 
-- **`coffer`** —— 管理 CLI（`coffer mcp add`、`coffer mcp list` 等）
-- **`coffer-daemon`** —— 长生命周期的后台进程，负责聚合上游 MCP 服务器
+- **`coffer`** —— 管理 CLI（`coffer mcp add`、`coffer mcp list`、`coffer open` 等）
+- **`coffer-daemon`** —— 长生命周期的后台进程，负责聚合上游 MCP 服务器并提供 Web UI
 - **`coffer-mcp-shim`** —— MCP 客户端（Claude Code、Codex 等）与 daemon 通信的 stdio 桥接程序
 
-### macOS / Linux
+以及守护进程自己会拉起的运行时辅助二进制文件（用于 SeaTalk 渠道的 `coffer-callback`、
+用于本地语音转文字的 `whisper-cli`）。
+
+### macOS（Apple Silicon）
 
 ```sh
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
 ```
 
+Coffer 只提供 macOS（Apple Silicon）构建。在 Linux 或 Intel macOS 上，安装脚本会给出友好提示，
+并引导你使用[从源码安装](#从源码安装开发者)。
+
 脚本会自动将 `~/.coffer/bin` 添加到 `PATH`（修改 shell profile）。打开新终端后，
-三个二进制文件均可直接使用。
+这些二进制文件均可直接使用。
 
 ### 环境变量覆盖
 
@@ -43,14 +54,11 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 
 ### 验证下载
 
-每次发布都会附带 `SHA256SUMS` 文件。安装脚本会自动校验；若需手动核查：
+每次发布都会附带**一份聚合的 `SHA256SUMS`**，覆盖该次发布的全部工件。安装脚本会自动校验；
+若需手动核查：
 
 ```sh
-# macOS
 shasum -a 256 -c SHA256SUMS
-
-# Linux
-sha256sum -c SHA256SUMS
 ```
 
 ### 安装后：接入 MCP 客户端
@@ -74,6 +82,15 @@ coffer mcp list
 
 上述任一命令均会在守护进程未运行时自动启动它。
 
+### 打开 Web UI
+
+```sh
+coffer open
+```
+
+它会在守护进程自己的地址上打开浏览器，并通过一个一次性、短时效的 code 把 token 交给页面。
+详见 [Web UI 指南](/zh/guide/web-ui)。
+
 ### 下一步
 
 - [快速上手](/zh/guide/getting-started) —— 注册第一个 MCP 服务器并验证安装
@@ -81,66 +98,43 @@ coffer mcp list
 
 ---
 
-## 桌面应用
+## 手动下载压缩包
 
-桌面应用将一切 —— 守护进程、shim、Web UI —— 打包进单个安装包。无需 Python。推荐在工作站上使用。
+前往 [GitHub Releases 页面](https://github.com/wyx-sg/Coffer/releases/latest)，选择适合你平台的压缩包：
 
-### 下载
+| 平台                          | 文件                         |
+| ----------------------------- | ---------------------------- |
+| macOS Apple silicon（M 系列） | `coffer-cli-<triple>.tar.gz` |
 
-前往 [GitHub Releases 页面](https://github.com/wyx-sg/Coffer/releases/latest)，选择适合你平台的文件：
+Coffer 只提供 macOS（Apple Silicon）构建。在 Linux 或 Intel macOS 上，请使用[从源码安装](#从源码安装开发者)。
 
-| 平台                          | 文件                              |
-| ----------------------------- | --------------------------------- |
-| macOS Apple silicon（M 系列） | `Coffer_<version>_aarch64.dmg`    |
-| Linux x64（AppImage，推荐）   | `Coffer_<version>_amd64.AppImage` |
-| Linux x64（deb）              | `coffer_<version>_amd64.deb`      |
-
-每份文件都有一个 `.sha256` 邻居文件，运行前请先校验：
+先用该次发布的聚合 `SHA256SUMS` 校验下载，再解压：
 
 ```sh
-# macOS / Linux
-shasum -a 256 -c SHA256SUMS   # Linux 上改用 sha256sum -c SHA256SUMS
+shasum -a 256 -c SHA256SUMS
+tar -xzf coffer-cli-<triple>.tar.gz -C ~/.coffer/bin
 ```
 
-### 安装
+把 `~/.coffer/bin` 加入 `PATH`，MCP 客户端才能找到 `coffer-mcp-shim`。
 
-- **macOS**：打开 DMG，把 **Coffer.app** 拖进 `/Applications`。
-- **Linux（AppImage）**：`chmod +x Coffer_<version>_amd64.AppImage`，然后运行。
-- **Linux（deb）**：`sudo apt install ./coffer_<version>_amd64.deb`。
+### macOS Gatekeeper（未签名 —— 签名待完成）
 
-### macOS Gatekeeper（未签名 —— 公证待完成）
-
-DMG 以未签名形式发布，首次打开时 macOS 可能提示 Coffer「已损坏」（并非真的损坏，只是未签名）。
-对于「已损坏」提示，右键「打开」无效；请改为清除隔离标志：
+这些二进制文件未签名，macOS 会在首次运行时隔离它们。代码签名与公证需要付费的 Apple Developer ID，
+目前尚未申请。请对解压出来的二进制文件清除隔离属性：
 
 ```sh
-xattr -dr com.apple.quarantine /Applications/Coffer.app
+xattr -d com.apple.quarantine ~/.coffer/bin/coffer ~/.coffer/bin/coffer-daemon ~/.coffer/bin/coffer-mcp-shim
 ```
-
-如果仍无法打开，重新进行 ad-hoc 签名：
-
-```sh
-codesign --force --deep --sign - /Applications/Coffer.app
-```
-
-或右键应用选择**打开**进行一次性绕行。
 
 ### 安装后
 
-首次启动时，桌面应用会：
-
-1. 在空闲端口（默认 8000）启动守护进程，并写出 `~/.coffer/daemon.json`。
-2. 将 `coffer-mcp-shim` 与 `coffer-daemon` 部署到 `~/.coffer/bin/`，使 MCP 客户端能找到
-   shim —— 即使应用没在运行，shim 也能自动拉起 daemon。
-3. 在主窗口中打开 Web UI。
-
-接入 MCP 客户端：
+守护进程首次以 frozen 构建方式启动时，会把同级的二进制文件部署进 `~/.coffer/bin/`（幂等 ——
+未变化的文件不会被动），让 MCP 客户端能找到 shim，也让 shim 能自动拉起守护进程。然后：
 
 ```sh
 claude mcp add coffer coffer-mcp-shim
+coffer open
 ```
-
-完整的桌面应用指南（托盘菜单等）请参阅[桌面应用 →](/zh/guide/desktop)。
 
 ---
 

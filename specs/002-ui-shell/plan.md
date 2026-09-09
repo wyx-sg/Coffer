@@ -87,7 +87,6 @@ frontend/src/
 │   ├── components/                        # kindRegistry.ts + shared ResourceListView
 │   ├── auth.ts                            # daemon-token loader (reads ~/.coffer/daemon.json via dev plugin)
 │   ├── preferences.ts                     # default page-size preference (General settings)
-│   ├── tauri.ts                           # isTauri() guard for desktop-only surfaces
 │   └── queryClient.ts / statusColors.ts / timeRange.ts / utils.ts
 ├── components/                            # shared shell + table primitives
 │   ├── Layout.tsx                         # AppShell + collapsible sidebar (localStorage "coffer.nav.collapsed")
@@ -168,7 +167,7 @@ unreachable.
 
 Welcome view on `/mcp-servers` when no resources are registered (and the
 Agents welcome on `/agents`, the index landing), the "Daemon not running"
-view with a Reload recovery affordance (Restart in the desktop app), the
+view with a Reload recovery affordance, the
 cold-start authenticated render via the dev token plugin.
 
 **Done when:** US1's three representative scenarios pass.

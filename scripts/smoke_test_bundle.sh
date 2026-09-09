@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
-# smoke_test_bundle.sh — Verify the embedded binaries in a built Coffer bundle.
+# smoke_test_bundle.sh — Verify the binaries in a built Coffer CLI archive.
 #
 # Usage:
-#   ./scripts/smoke_test_bundle.sh <path-to-bundle-root>
+#   ./scripts/smoke_test_bundle.sh <path-to-binaries-dir>
 #
-# Accepted bundle layouts:
-#   macOS .app dir:  ./Coffer.app
-#   Linux unpacked:  ./coffer-desktop_<version>_amd64/  (from deb/AppImage mount)
-#   Windows install: C:\Program Files\Coffer\  (run under Git Bash or WSL)
+# Point it at a directory holding the plain-named binaries: the `dist/`
+# directory build_binaries.sh writes, or a directory extracted from a
+# released coffer-cli-<triple>.tar.gz.
 #
 # What it does:
 #   1. Locate coffer-mcp-shim AND coffer-daemon inside the bundle.
@@ -25,10 +24,7 @@
 # than relying on that fallback.
 #
 # An explicit daemon path may be passed as the second argument; otherwise it
-# is probed next to the shim using the same per-platform layout list.
-#
-# The test does NOT start the full Tauri GUI — it exercises the sidecar binaries
-# directly.
+# is probed next to the shim.
 
 set -euo pipefail
 
@@ -36,46 +32,30 @@ set -euo pipefail
 # Args
 # ---------------------------------------------------------------------------
 
-BUNDLE="${1:?usage: $0 <bundle-path> [daemon-path]}"
+BUNDLE="${1:?usage: $0 <binaries-dir> [daemon-path]}"
 DAEMON_ARG="${2:-}"
 
-if [ ! -d "$BUNDLE" ] && [ ! -f "$BUNDLE" ]; then
-    echo "error: bundle path does not exist: $BUNDLE" >&2
+if [ ! -d "$BUNDLE" ]; then
+    echo "error: binaries directory does not exist: $BUNDLE" >&2
     exit 1
 fi
 
 # ---------------------------------------------------------------------------
-# Locate a bundled sidecar binary by name. Probes the same per-platform
-# layouts for both coffer-mcp-shim and coffer-daemon.
-#
-# The candidate directory set MUST stay aligned with the canonical sidecar
-# layout in desktop/src/shim.rs::resolve_sidecar — that Rust function is the
-# source of truth for where Tauri 2 stages externalBin per platform:
-#   * macOS:  Coffer.app/Contents/MacOS/<binary> (sibling of the main exe)
-#   * the resource/bundle dir itself
-#   * its parent (covers older layouts and Linux/Windows AppImage/MSI)
-# On Windows-style names we also try the `.exe` variant in each directory,
-# mirroring resolve_sidecar. Keep both lists in sync when either changes.
+# Locate a binary by name in the archive directory. The CLI archive ships every
+# binary co-located under its plain name (no triple suffix) — that co-location
+# is what the frozen detect-or-spawn logic relies on at runtime (ADR-006), so
+# probing a single directory is exactly the layout under test. The `.exe`
+# variant is tried too for Windows-style extractions.
 # ---------------------------------------------------------------------------
 
 locate_binary() {
     local name="$1"
-    local dir
     local candidate
-    # Probe directories, in priority order, matching resolve_sidecar's set.
-    # The trailing usr/lib/coffer entry is a Linux deb/AppImage path kept for
-    # extracted-archive layouts.
-    for dir in \
-        "$BUNDLE/Contents/MacOS" \
-        "$BUNDLE" \
-        "$BUNDLE/.." \
-        "$BUNDLE/usr/lib/coffer"; do
-        for candidate in "$dir/$name" "$dir/$name.exe"; do
-            if [ -f "$candidate" ]; then
-                printf '%s\n' "$candidate"
-                return 0
-            fi
-        done
+    for candidate in "$BUNDLE/$name" "$BUNDLE/$name.exe"; do
+        if [ -f "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
     done
     return 1
 }

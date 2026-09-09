@@ -220,8 +220,8 @@ skill 目录，字符串）与 `suggested_name`（即该类型的 `default_name(
 | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `browse(path=None) -> FsBrowseResult` | 解析 `path`（默认主目录）；返回其解析后路径、其父目录（文件系统根处为 `None`）与其直接子目录。不可读或不存在的路径 → 报错，绝不返回部分列表。 |
 
-桌面应用使用 OS 原生目录对话框；Web 通过 `GET /api/v1/fs/browse` 使用这个
-daemon 支撑的浏览器，由前端组件 `FolderPicker.tsx` 呈现。
+Web UI 通过 daemon 打开宿主的原生目录对话框，并回退到 `GET /api/v1/fs/browse`
+这个 daemon 支撑的浏览器，由前端组件 `FolderPicker.tsx` 呈现。
 
 ### `AgentConfigFileService` (`application/agent/config_file_service.py`)
 

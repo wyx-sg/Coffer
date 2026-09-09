@@ -83,7 +83,7 @@ the master.
   single port; the `SyncEngine` adapter encapsulates all platform-specific
   behaviour.
 - Degraded bindings are observable: `link_mode = copy_fallback` shows up
-  in `SkillBindingOut`, in the desktop UI, and in audit events. The user
+  in `SkillBindingOut`, in the web UI, and in audit events. The user
   knows their FAT32 share is not getting live updates.
 - The copy fallback keeps Coffer usable on filesystems where neither
   symlinks nor junctions work, instead of failing outright (which would
@@ -133,10 +133,11 @@ Rejected.
   inside a skill folder, ballooning binding state and breaking on adds /
   removes within an updated skill.
 
-**libgit2 / Tauri filesystem APIs for cross-platform link creation.**
-Considered, deferred.
+**A native filesystem helper (e.g. `libgit2`) for cross-platform link
+creation.** Considered, deferred.
 
-- Adding `libgit2` or a Rust shim would buy uniform error reporting but
+- Link creation stays in the daemon's own filesystem code. Adding
+  `libgit2` or a native shim would buy uniform error reporting but
   pulls a native dependency into the backend that the rest of Coffer
   does not need. `os.symlink` + `cmd /c mklink /J` is a well-trodden
   pairing and keeps the dependency footprint minimal.

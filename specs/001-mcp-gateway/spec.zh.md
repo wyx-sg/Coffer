@@ -138,6 +138,26 @@ Coffer 自己的 `coffer__*` 工具——包括 `search_tools`——恒定列出
 
 ---
 
+### User Story 6 — Install and open Coffer without a source checkout (Priority: P3)
+
+不是从 Git clone 工作的用户，下载一个归档、解压、启动 daemon，再运行 `coffer open`，就落在浏览器里的 Coffer UI 上——已经完成鉴权，不用粘贴任何 token，也不用再装一个需要持续跟进升级的应用。
+
+**Why this priority**: P3 —— 分发是把一个本地开发产物变成同事或开源贡献者不用 clone 仓库就能试用的东西的那道关口。它完全不改变网关本身的工作方式。
+
+**Independent Test**: 在一台没有 Python、也没有 Coffer checkout 的干净机器上，下载 `coffer-cli-<triple>.tar.gz`，用 `SHA256SUMS` 校验、解压，运行 `coffer daemon start`，再运行 `coffer open` —— 浏览器落在已鉴权的 Coffer UI 上，且新开一个 shell 也能解析到 `coffer-mcp-shim`。
+
+**Covering scenarios**:
+
+- release tag produces the CLI archive and SHA256SUMS
+- coffer open lands an authenticated browser session
+- a frozen daemon deploys its sibling binaries on start
+
+#### 为什么 Coffer 不再发布桌面外壳
+
+Coffer 的 UI 曾经被包在一个 Tauri 桌面外壳里：它监管 daemon、常驻系统托盘、每次启动部署 shim。它已于 2026-09-09 退役，而做这个判断的依据是**每一次更新的运维成本**，不是代码行数。每一次桌面端更新都意味着一次重新构建**外加**一次重新安装，而构建出的制品还会不断偏离源码——有两次记录在案：一次在 `git fetch` 之前做的构建产出了跑着旧代码的应用；另一次是一个单独钉住的构建目录，导致 UI 缺陷报告必须先对着 `main` 复验才能采信。由 daemon 提供的 Web UI 两种失效模式都没有：重启 daemon、强制刷新浏览器，你就在当前代码上。外壳真正承重的两件事都活了下来——部署同目录二进制这件事搬进了 daemon 自己的冻结启动路径（FR-026），而它本来大概就该归 daemon 管，因为运行期正是 daemon 在拉起它们；发布形态则收敛为单一 CLI 层级（FR-022），那本来也用不上外壳。
+
+---
+
 ### Edge Cases
 
 下列情况由集成测试覆盖，不参与 acceptance 审计；除非被「提升」到下文的 `## Acceptance Scenarios`（目前已提升的：tool-name collision、daemon port conflict）。
@@ -148,7 +168,7 @@ Coffer 自己的 `coffer__*` 工具——包括 `search_tools`——恒定列出
 - **Duplicate registration**: 同一 kind 下注册重名的服务器会被拒绝并给出明确错误；不可能产生部分写入。
 - **Tool-name collision across servers**: 通过 `<server>__<tool>` 命名空间阻止；客户端永远看不到冲突。
 - **Tools-only upstream**: 只实现 `tools`、对 `resources/list` 或 `prompts/list` 返回 JSON-RPC `-32601`（METHOD_NOT_FOUND）的上游，被视为没有 resources / 没有 prompts。单服务器能力视图与聚合列表会返回该服务器的 tools，并将 resources/prompts 置为空集（HTTP 200），而不是报错——因此对于仅支持 tools 的服务器，管理端 / Web-UI 的能力视图依然可用。
-- **Daemon port conflict**: daemon 默认端口被占用时，会在一小段范围内挑选下一个空闲端口，把所选端口写入它的 discovery 文件；shim、桌面端、CLI 都会读这个文件。
+- **Daemon port conflict**: daemon 默认端口被占用时，会在一小段范围内挑选下一个空闲端口，把所选端口写入它的 discovery 文件；shim、CLI 都会读这个文件。
 - **Daemon crash**: 正在运行的 shim 会话会给它们的 MCP 客户端返回干净的错误而不是挂起；监管者 (supervisor) 可以检测崩溃并重启 daemon。
 - **Concurrent clients**: 多个 MCP 客户端（例如 Claude Code 和 Codex 同时）可同时连接而互不干扰；每个客户端都拿到独立的上游子进程集合。
 
@@ -382,6 +402,27 @@ null 值在校验阶段被拒绝（422）。
 - **When** 一个上报了不同 agent 身份（或完全没有上报身份）的 shim 会话列出工具,
 - **Then** 该服务器的工具不出现在这个会话的 `tools/list` 中，且对其带命名空间工具名的调用尝试被拒绝，就如同该服务器从未注册过一样——而上报了被命名 agent 的会话则能看见并调用它。
 
+### Scenario: release tag produces the CLI archive and SHA256SUMS
+
+- **Given** 推送了一个匹配 `v*` 的 release tag,
+- **When** `.github/workflows/release.yml` 执行完毕,
+- **Then** 该 release 只包含一个下载层级 —— 面向 macOS arm64 的 `coffer-cli-<triple>.tar.gz`，内含 `coffer`、`coffer-daemon`、`coffer-mcp-shim` 以及运行期辅助二进制 —— 不含任何桌面安装包,
+- **And** 该 release 包含单一一份聚合的 `SHA256SUMS`，覆盖每一个制品。
+
+### Scenario: coffer open lands an authenticated browser session
+
+- **Given** daemon 正在运行，且 `~/.coffer/daemon.json` 记录了它的端口,
+- **When** 用户运行 `coffer open`,
+- **Then** CLI 通过一个需鉴权的端点铸造一个一次性、短时效的 code，并在 daemon 自己的 origin 上打开浏览器，把该 code 放在 URL 的 **fragment** 里,
+- **And** 页面用该 code 换取 API token，把 token 存进 `localStorage`，并以已鉴权状态渲染 UI —— API token 从不出现在任何 URL 中，且同一个 code 的第二次兑换会被拒绝。
+
+### Scenario: a frozen daemon deploys its sibling binaries on start
+
+- **Given** 一个从解压后的 release 归档启动的冻结态 `coffer-daemon`，其同目录下放着 `coffer-mcp-shim`、`coffer-callback` 与 `whisper-cli`,
+- **When** daemon 启动,
+- **Then** 每个同目录二进制都出现在 `~/.coffer/bin/` 下且具备可执行位，复制过程经由同目录临时文件加 rename 原子完成,
+- **And** 在没有任何变化的情况下再启动一次不会动这些文件，而版本变化则会替换它们 —— 由字节大小、mtime 与版本哨兵三个信号共同判定是否过期。
+
 ## Requirements
 
 ### Functional Requirements
@@ -424,6 +465,11 @@ null 值在校验阶段被拒绝（422）。
 **Distribution**
 
 - **FR-018**: 从源码安装（`pip install ./backend`）MUST 把 `coffer` CLI 与 `coffer-mcp-shim` stdio 入口作为 console script 装到用户的 `PATH` 上，使 daemon 与 shim 无需额外部署步骤即可使用。
+- **FR-022**: 发布流水线 MUST 为每个 `v*` tag 产出**仅 macOS arm64** 的单一下载层级：一份 `coffer-cli-<triple>.tar.gz` 归档，内含 `coffer`（管理 CLI）、`coffer-daemon`、`coffer-mcp-shim`，以及 daemon 在运行期拉起的辅助二进制（`coffer-callback`、`whisper-cli`）。这些二进制 MUST 在归档内保持同目录共处，使冻结态的 detect-or-spawn 解析（[ADR-006](../../docs/decisions/ADR-006-daemon-detect-or-spawn.zh.md)）能在 `coffer` 旁边找到 `coffer-daemon`。macOS x64（Intel）、Linux 与 Windows 刻意不构建 —— 这几条腿从未端到端验证过。这份归档独自承载「无需系统 Python」的承诺（SC-011）；不存在第二个桌面层级。其背后的打包决策见 [ADR-008](../../docs/decisions/ADR-008-distribution-pyinstaller.zh.md)。
+- **FR-023**: 发布流水线 MUST 产出单一一份聚合的 `SHA256SUMS`（在 CI 中生成，并在 release job 中跨 matrix leg 拼接），覆盖每一个制品，使下载者无需只凭 GitHub Release 页面就能校验完整性。
+- **FR-024**: daemon MUST 自己以静态文件的形式，在它自己的 loopback origin 上提供构建好的 Web UI，使 UI 与管理 API 同源 (same-origin)。因此跨域访问 MUST 默认关闭；Vite dev server 的 origin 仅在既有的 `COFFER_DEV_CORS` opt-in 之下仍可访问。
+- **FR-025**: `coffer open` MUST 读取 `~/.coffer/daemon.json`，通过一个需鉴权的管理端点铸造一个**一次性、短时效**的鉴权 code（有效期约一分钟），并在 daemon 自己的 origin 上打开用户浏览器，把该 code 放在 URL 的 **fragment** 里。页面 MUST 用该 code 换取 API token，并把 token 保存在 `localStorage` 中。API token MUST NOT 在任何环节出现在 URL 里 —— URL 会落进浏览器历史，而那与 FR-012 / FR-013 的「仅 loopback + token」姿态相抵触。code 则可以出现在那里，因为它是一次性的，等到有人回头翻历史时它早已过期。
+- **FR-026**: 当 daemon 检测到自己以冻结构建运行时，它 MUST 在启动时把同目录的二进制 —— `coffer-mcp-shim`、`coffer-callback`、`whisper-cli` —— 幂等地部署到 `~/.coffer/bin/`。复制 MUST 是原子的（同目录临时文件、先设可执行位、再 rename 覆盖目标），使崩溃或正在并发执行的二进制永远不会观察到被截断的文件；是否过期 MUST 由三个信号判定 —— 字节大小、源比目标更新的 mtime、以及一个版本哨兵 —— 使同样大小的跨版本升级也能被检出。源码安装 MUST NOT 做这件事：`pip install` 已经把 console script 装到 `PATH` 上了（FR-018）。这件事归 daemon 所有，因为运行期正是它在拉起 `coffer-callback` 与 `whisper-cli`。
 
 **缺失启动器**
 
@@ -457,6 +503,7 @@ null 值在校验阶段被拒绝（422）。
 - **SC-008**: `make verify`（lint + unit + integration + contract + acceptance audit）在本地与 CI 上均通过；`make verify-all`（增加 e2e）在 macOS 本地与 Linux CI 上均通过。
 - **SC-009**: 从源码安装（`pip install ./backend`，需 Python 3.12+）后，`coffer` 与 `coffer-mcp-shim` 均在用户的 `PATH` 上可用，且 daemon 在 `pip install` 之外无任何手工步骤即可到达 "ready" 状态。
 - **SC-010**: 任何上游服务器凭据值都不应出现在任何数据库表、日志文件、audit 条目或 invocation 记录里——以一次代表性会话之后对这些产物的自动扫描验证。
+- **SC-011**: 在一台没有系统 Python 的机器上，解压 `coffer-cli-<triple>.tar.gz` 并运行 `coffer daemon start` 即可到达 `status: ready`，`coffer open` 则在浏览器中渲染出已鉴权的 UI —— 没有运行时要装，也没有第二个应用要跟进升级。
 
 ## Assumptions
 

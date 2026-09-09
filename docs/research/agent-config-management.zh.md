@@ -55,7 +55,7 @@ ai-agent-config），在纯规则工具（airul、vibe-rules）和 AGENTS.md 标
 | 安全编辑（备份/并发）     | ❌                 | ❌       | ❌               | ❌                 | ❌           | **✅ 原子 + .bak + fingerprint 409** |
 | 密钥处理                  | ❌                 | ❌       | ❌               | ❌                 | ❌           | **✅ 加密库 + 引用**                 |
 | 新增 agent = 数据 vs 代码 | 代码（TS handler） | 代码     | 代码             | 代码               | n/a          | **✅ manifest 数据记录**             |
-| 接口                      | CLI                | CLI      | CLI              | CLI                | 文件         | **CLI + REST + 桌面 GUI**            |
+| 接口                      | CLI                | CLI      | CLI              | CLI                | 文件         | **CLI + REST + Web UI**              |
 | 按项目作用域              | ✅                 | ✅       | ✅               | ✅                 | ✅           | **❌ 仅用户全局 config_dir**         |
 | 当前覆盖 agent 数         | 28+                | 12+      | 19+              | 数个               | 28+          | **2 个启用（4 个接好但隐藏）**       |
 
@@ -70,7 +70,7 @@ ai-agent-config），在纯规则工具（airul、vibe-rules）和 AGENTS.md 标
    Coffer 读时派生 agent 实际 MCP 条目/插件/目录，*本身*就是持续的漂移感知。
 3. **安全编辑独一无二。** 原子写 + `.bak` + 内容 fingerprint 乐观并发（陈旧写 409）无对应物
    ——竞品直接覆盖文件，无备份无并发保护。
-4. **密钥 + GUI + manifest 入驻。** Coffer 有加密凭证库（竞品不处理密钥）、桌面应用
+4. **密钥 + GUI + manifest 入驻。** Coffer 有加密凭证库（竞品不处理密钥）、Web UI
    （它们仅 CLI），且通过单条 capability-manifest 记录而非 Ruler 式 per-agent handler
    代码来接入新 agent。
 

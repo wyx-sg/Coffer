@@ -161,7 +161,7 @@ test("specFolderLabel: two-word non-acronym", () => {
 
 test("specFolderLabel: three-word with acronym", () => {
   assert.equal(
-    specFolderLabel("003-mcp-gateway-desktop"),
-    "003 · MCP Gateway Desktop",
+    specFolderLabel("008-agent-chat-history"),
+    "008 · Agent Chat History",
   );
 });

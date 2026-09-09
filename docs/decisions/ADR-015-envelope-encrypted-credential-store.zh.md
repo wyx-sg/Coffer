@@ -3,7 +3,7 @@
 **状态**：Accepted
 **日期**：2026-06-12
 **决策者**：Yuxing Wu
-**相关**：`.specify/memory/constitution.md`（凭据不变量——已修订至 v0.2.0）、spec `001-mcp-gateway`（data-model：`credentials` 表、审计事件）、[ADR-008](ADR-008-distribution-pyinstaller-tauri-sidecar.md)（未签名的 macOS 分发）
+**相关**：`.specify/memory/constitution.md`（凭据不变量——已修订至 v0.2.0）、spec `001-mcp-gateway`（data-model：`credentials` 表、审计事件）、[ADR-008](ADR-008-distribution-pyinstaller.md)（未签名的 macOS 分发）
 
 ## 背景
 
@@ -13,7 +13,7 @@ Credential Manager、Linux Secret Service），daemon 是唯一的钥匙串所�
 
 在 macOS 上，这一方案在日常使用中崩溃了。钥匙串把每个条目的访问控制列表（ACL）
 绑定到创建它的二进制的 **cdhash**。Coffer 的 daemon 以**未签名**方式分发
-（[ADR-008](ADR-008-distribution-pyinstaller-tauri-sidecar.md) 推迟了需要付费 Apple
+（[ADR-008](ADR-008-distribution-pyinstaller.md) 推迟了需要付费 Apple
 Developer 账户的 Apple 公证）。每次重新构建 daemon 都会产生新的 cdhash，于是
 macOS 把新二进制视为不同的应用，并**重新弹窗请求钥匙串访问——每个密钥一次，每次
 重新构建都如此**。对于迭代 Coffer 的开发者，甚至只是收到一个更新版本的用户，这就

@@ -2,7 +2,8 @@
 # Usage: pyinstaller backend/coffer-callback.spec
 #
 # Output: dist/coffer-callback (single-file executable)
-# Tauri sidecar consumes this via desktop/binaries/coffer-callback-<triple>.
+# Shipped in coffer-cli-<triple>.tar.gz; a frozen daemon deploys it into
+# ~/.coffer/bin/ at startup (spec 001 FR-026) because it spawns it at runtime.
 #
 # The callback listener is the SeaTalk webhook-ingress child the daemon spawns
 # (channel/listener_spawn.py resolves it as a sibling of the frozen daemon).

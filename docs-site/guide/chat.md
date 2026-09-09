@@ -21,7 +21,7 @@ coffer chat -c <conversation-id>                                   # resume a co
 ```
 
 - `coffer model add --name … --provider <anthropic|openai|ollama> --model … [--default]` registers a model; `coffer model list` / `edit` / `rm` manage them.
-- CLI conversations are the same conversations the desktop and web apps show — they persist in SQLite and survive a restart.
+- CLI conversations are the same conversations the web UI shows — they persist in SQLite and survive a restart.
 
 ::: tip Chatting with Claude Code / Codex
 Choosing a CLI agent and its working directory happens in the app's **New conversation** dialog, not on the CLI — `coffer chat` always uses the built-in agent.

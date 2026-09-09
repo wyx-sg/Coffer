@@ -41,7 +41,7 @@ Spec `005-skill-manager` 在 `~/.coffer/skills/<name>/` 维护一份规范主副
 
 - 只有一份 master，"哪里改都同步"是产品核心承诺，本方案完整保留。
 - application 层无需 OS 分支：`SkillService` 调用单一端口，`SyncEngine` adapter 封装所有平台差异。
-- Degraded binding 可观测：`link_mode = copy_fallback` 出现在 `SkillBindingOut`、桌面 UI 与审计事件中，用户能看见 FAT32 共享并未实时同步。
+- Degraded binding 可观测：`link_mode = copy_fallback` 出现在 `SkillBindingOut`、Web UI 与审计事件中，用户能看见 FAT32 共享并未实时同步。
 - Copy fallback 让 Coffer 在 symlink/junction 都不支持的文件系统上仍可使用，而不是直接报错让用户在 v1 没有任何出路。
 
 **负面**
@@ -68,7 +68,7 @@ Spec `005-skill-manager` 在 `~/.coffer/skills/<name>/` 维护一份规范主副
 - 我们要支持的文件系统（NTFS、APFS、ext4）都不支持目录级 hard link。
 - 改为文件级 hard link 会让每个 skill 文件夹内每个文件都进入 binding 的簿记，更新里增删一个文件就要全量重做。
 
-**用 libgit2 / Tauri 文件系统 API 做跨平台链接创建。** 评估过，暂缓。
+**引入原生文件系统辅助库（例如 `libgit2`）做跨平台链接创建。** 评估过，暂缓。
 
-- 引入 `libgit2` 或 Rust shim 能换来统一的错误模型，但代价是后端为此只为这一件事拉入一个 native 依赖。`os.symlink` + `cmd /c mklink /J` 是一条走得很顺的老路径，依赖足迹也最小。
+- 链接创建仍然留在 daemon 自己的文件系统代码里。引入 `libgit2` 或原生 shim 能换来统一的错误模型，但代价是后端为此只为这一件事拉入一个 native 依赖。`os.symlink` + `cmd /c mklink /J` 是一条走得很顺的老路径，依赖足迹也最小。
 - 如果未来 Windows junction 的边缘情况积压到需要更丰满的文件系统辅助，我们再回头考虑。

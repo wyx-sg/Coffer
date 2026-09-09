@@ -83,14 +83,14 @@ owns its lifecycle.
   unusual — users on Windows in particular may see a brief command window.
   Mitigated by detaching with `subprocess.CREATE_NO_WINDOW` on Windows and
   `os.setsid()` on POSIX.
-- Because the daemon outlives the app, a freshly-installed app version can
-  reuse an **older** detached daemon that's still listening — a silent version
-  skew. Mitigated by **detection, not auto-update**: the daemon reports its
-  package version (`coffer.__version__`) on `GET /api/v1/daemon/status`, and
-  the desktop app compares it against the version this build expects (the Tauri
-  `daemon_version_matches` command, sourced from `CARGO_PKG_VERSION`). On
-  mismatch the existing daemon-offline banner shows a "daemon out of date —
-  restart it" affordance reusing the manual restart path; Coffer never
+- Because the daemon outlives its callers, a freshly-installed Coffer version
+  can reuse an **older** detached daemon that's still listening — a silent
+  version skew. Mitigated by **detection, not auto-update**: the daemon reports
+  its package version (`coffer.__version__`) on `GET /api/v1/daemon/status`, and
+  the CLI compares it against its own `coffer.__version__`. On mismatch
+  `coffer daemon status` says the daemon is out of date and points at
+  `coffer daemon restart`, and the daemon-served web UI's daemon-offline banner
+  shows the same "daemon out of date — restart it" affordance; Coffer never
   auto-kills the running daemon.
 
 **Operational follow-on**
@@ -175,9 +175,10 @@ file with everything in it is simpler than splitting state.
   binary is used regardless of whether Coffer was installed from a prebuilt
   release archive or from a source checkout.
 - **2026-06-13** — Version-skew detection: the daemon now reports its package
-  version on `GET /api/v1/daemon/status`, and the desktop app surfaces a manual
-  "daemon out of date — restart it" banner when a reused detached daemon's
-  version differs from the app build's expected version. Detection + manual
+  version on `GET /api/v1/daemon/status`, and the CLI (`coffer daemon status`)
+  and the daemon-served web UI surface a manual "daemon out of date — restart
+  it" affordance (`coffer daemon restart`) when a reused detached daemon's
+  version differs from the caller's expected version. Detection + manual
   restart only; no auto-update, no auto-kill.
 - **2026-06-13** — Spawn-race hardening (the `flock` this ADR always
   documented, now actually implemented). The freshly-spawned daemon's
@@ -190,8 +191,8 @@ file with everything in it is simpler than splitting state.
   `coffer daemon start` now keys off `live_daemon()` (a real status probe) so a
   stale `daemon.json` triggers a respawn instead of a false "already running";
   `coffer daemon stop` cmdline-verifies the recorded PID is a Coffer daemon
-  before sending `SIGTERM` (a recycled PID is no longer signalled). The desktop
-  app's detect-or-spawn liveness check switched from a bare TCP connect to an
+  before sending `SIGTERM` (a recycled PID is no longer signalled). The
+  detect-or-spawn liveness check switched from a bare TCP connect to an
   HTTP `GET /api/v1/daemon/status` 200 probe, so a port-squatter on a crashed
   daemon's recorded port no longer false-positives as a live daemon.
 - **2026-06-22** — Shim restart-recovery. A long-lived `coffer-mcp-shim`

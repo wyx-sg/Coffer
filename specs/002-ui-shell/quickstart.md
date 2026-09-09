@@ -51,8 +51,8 @@ The first time you visit, the index (`/`) redirects to `/agents` and you see:
   on **MCP servers** (`/mcp-servers`).
 
 If the daemon is not running (you skipped `make dev` or it crashed), you
-see a "Daemon not running" view instead, with a Reload recovery control
-(the desktop app offers Restart). Once the daemon is reachable again the
+see a "Daemon not running" view instead, with a Reload recovery control.
+Once the daemon is reachable again the
 view recovers on the very next render — no manual reload needed (see the
 `daemon-offline banner` acceptance scenario).
 

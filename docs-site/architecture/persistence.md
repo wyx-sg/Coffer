@@ -150,7 +150,7 @@ The full set of files Coffer writes:
 | `~/.coffer/knowledge/`     | Knowledge-base documents as markdown — source of truth indexed by SQLite |
 | `~/.coffer/memory/`        | Memory facts as markdown — source of truth indexed by SQLite |
 | `~/.coffer/logs/`          | Structured JSON log files from `structlog`             |
-| `~/.coffer/bin/`           | `coffer-mcp-shim` + `coffer-daemon` binaries deployed by the desktop app |
+| `~/.coffer/bin/`           | `coffer-mcp-shim`, `coffer-daemon` and the runtime helper binaries, deployed by the daemon on a frozen start |
 | `~/.coffer/upstream-pids/` | Per-upstream subprocess PID files for session tracking |
 
 Keeping everything under one parent directory makes backup simple, migration unambiguous, and clean-uninstall complete. The daemon's detect-or-spawn protocol (ADR-006) also benefits: every process that needs to find the daemon reads `~/.coffer/daemon.json` — there is no registry, no environment variable, and no platform-specific service directory to probe.

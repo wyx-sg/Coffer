@@ -273,7 +273,7 @@ describe("MemoryStoreDetailPage", () => {
 
   // Spec 007 scenario: the human-facing memory viewer is read-only and routes
   // edits to the user's own editor — it surfaces open/reveal affordances
-  // (daemon-backed on web, Tauri on desktop) instead of an in-app editor.
+  // (daemon-backed) instead of an in-app editor.
   acceptance("007-memory", "read-only viewer offers open/reveal affordances", async () => {
     stubLists();
     renderPage();

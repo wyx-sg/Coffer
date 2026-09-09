@@ -1,8 +1,8 @@
 // frontend/src/pages/settings/SyncMasterKeyCard.tsx
 //
 // Out-of-band master-key transfer (spec 010). Click → native dialog picks the
-// path (save dialog for export, open dialog for import), the same on desktop
-// (Tauri) and web (daemon picker, spec 004 FR-042 / ADR-036). A typed path
+// path (save dialog for export, open dialog for import) via the daemon picker
+// (spec 004 FR-042 / ADR-036). A typed path
 // field appears only as a fallback on hosts with no native dialog tool. The key
 // is never written into an export bundle — a machine holding ciphertext but not
 // the key reports credentials_locked, so the key comes across separately.

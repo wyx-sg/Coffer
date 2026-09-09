@@ -2,7 +2,8 @@
 # Usage: pyinstaller backend/coffer-mcp-shim.spec
 #
 # Output: dist/coffer-mcp-shim (single-file executable)
-# Tauri sidecar consumes this via desktop/binaries/coffer-mcp-shim-<triple>.
+# Shipped in coffer-cli-<triple>.tar.gz; a frozen daemon deploys it into
+# ~/.coffer/bin/ at startup (spec 001 FR-026) so MCP clients can launch it.
 
 # -*- mode: python ; coding: utf-8 -*-
 

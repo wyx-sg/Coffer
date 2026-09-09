@@ -2,7 +2,8 @@
 # Usage: pyinstaller backend/coffer-hook.spec
 #
 # Output: dist/coffer-hook (single-file executable)
-# Tauri sidecar consumes this via desktop/binaries/coffer-hook-<triple>.
+# Shipped in coffer-cli-<triple>.tar.gz; a frozen daemon deploys it into
+# ~/.coffer/bin/ at startup (spec 001 FR-026).
 #
 # The SessionStart hook is a tiny CLI (argparse + urllib, talks to the daemon
 # over HTTP) — it needs the coffer package but none of the heavy daemon deps,

@@ -2,7 +2,7 @@
 
 > 中文版: [quickstart.zh.md](./quickstart.zh.md)
 
-Once the redesigned 006-knowledge-base ships, here is how a developer uses it end-to-end. Three flows: CLI, desktop, and through an MCP client.
+Once the redesigned 006-knowledge-base ships, here is how a developer uses it end-to-end. Three flows: CLI, the web UI, and through an MCP client.
 
 ## CLI
 
@@ -82,9 +82,9 @@ coffer kb search design-notes "service backoff strategy" --mode vector
 
 If you request `--mode vector` on a KB with no embedding configured, the search falls back to keyword and the response is flagged `fallback="keyword"` — it never errors.
 
-## Desktop
+## Web UI
 
-1. Launch Coffer.
+1. Open Coffer's web UI (`coffer open`).
 2. Sidebar → **Resources** → **Add** → pick **Knowledge Base**.
 3. Fill the form: name, description, enabled retrieval modes (keyword + grep by default), chunk params, and — only if you enable vector — an embedding provider/model and credential. Submit.
 4. Click into the KB. Drag files of any format into the upload area; each becomes Markdown.

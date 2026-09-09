@@ -489,6 +489,6 @@ Handoff）外加一个整合 changelog 视图（FR-053）。Knowledge 复用既�
 
 ## 线上契约（REST）
 
-位于 `contracts/api.openapi.yaml`。路由在 `/api/v1/memory_stores` 下（list/get/metrics；事实的 add/list/get/edit/delete/clear；recall；FR-054 的 slice-7 journal/handoff/consolidation-log lane 读取）。写入端点（add/edit/delete/clear）保留 —— 它们是 agent（经 MCP）与 CLI 写入事实的途径；桌面/web UI 是只读视图。读 DTO 携带磁盘真相：`FactOut` 带事实的绝对 `.md` `path` 及其所在文件夹的 `folder_path`，`MemoryStoreOut` 带 store 的绝对 `store_dir`，使只读视图能提供「在外部编辑器打开 / 显示」。kind 无关的 `/api/v1/resources/...` 对 memory store 继续可用。全应用统一错误包络：`{ "error": { "code", "message", "details" } }`。
+位于 `contracts/api.openapi.yaml`。路由在 `/api/v1/memory_stores` 下（list/get/metrics；事实的 add/list/get/edit/delete/clear；recall；FR-054 的 slice-7 journal/handoff/consolidation-log lane 读取）。写入端点（add/edit/delete/clear）保留 —— 它们是 agent（经 MCP）与 CLI 写入事实的途径；Web UI 是只读视图。读 DTO 携带磁盘真相：`FactOut` 带事实的绝对 `.md` `path` 及其所在文件夹的 `folder_path`，`MemoryStoreOut` 带 store 的绝对 `store_dir`，使只读视图能提供「在外部编辑器打开 / 显示」。kind 无关的 `/api/v1/resources/...` 对 memory store 继续可用。全应用统一错误包络：`{ "error": { "code", "message", "details" } }`。
 
 slice-6 的 agent 作用域端点（`GET …/session-context`、`POST …/sessions/{session_id}/end`）与其它 `/api/v1/agents/{name}/…` 路由一起位于 `contracts/transcripts.openapi.yaml`；hook-install 三件套与 `disable_native_memory` agent 字段位于 `004-agent-registry/contracts/api.openapi.yaml`（见上文「规则运行时注入」）。

@@ -1,4 +1,4 @@
-"""/api/v1/daemon/* routes — status, shutdown, rotate-token."""
+"""/api/v1/daemon/* routes — status, shutdown, rotate-token, web hand-off."""
 
 from __future__ import annotations
 
@@ -17,13 +17,17 @@ import coffer
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
-from coffer.surfaces.http.auth import require_token, set_active_token
+from coffer.surfaces.http.auth import get_active_token, require_token, set_active_token
 from coffer.surfaces.http.dependencies import get_actor, get_audit_service
 from coffer.surfaces.http.schemas import (
     DaemonStatusOut,
     TokenRotationOut,
     UpstreamSummary,
+    WebCodeOut,
+    WebSessionIn,
+    WebSessionOut,
 )
+from coffer.surfaces.http.web_session import CODE_TTL_SECONDS, issue_code, redeem_code
 
 # Avoid importing kind-specific modules at module level (Contract 6).
 # We access the health repo through the same module-level variable pattern
@@ -230,3 +234,36 @@ async def rotate_token(
 async def shutdown_daemon() -> Response:
     _schedule_shutdown()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/web-code",
+    response_model=WebCodeOut,
+    dependencies=[Depends(require_token)],
+)
+async def mint_web_code() -> WebCodeOut:
+    """Mint a single-use code for handing a browser an authenticated session.
+
+    Called by ``coffer open``, which already holds the token. The code goes
+    into the launched URL's fragment; the page trades it for the token at
+    ``/daemon/web-session``. See ``web_session`` for why the token itself is
+    never what travels in the URL.
+    """
+    return WebCodeOut(code=issue_code(), expires_in_seconds=int(CODE_TTL_SECONDS))
+
+
+@router.post("/web-session", response_model=WebSessionOut)
+async def redeem_web_code(body: WebSessionIn) -> WebSessionOut:
+    """Trade a single-use code for the API token.
+
+    Deliberately unauthenticated — a browser that has just been handed a code
+    has no token yet; obtaining one is the entire point. The code is the
+    credential here, and it is single-use, minute-lived, and only mintable by
+    a caller that already proved it holds the token.
+    """
+    if not redeem_code(body.code):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="bad or expired code")
+    token = get_active_token()
+    if token is None:
+        raise HTTPException(status_code=503, detail="daemon not ready")
+    return WebSessionOut(token=token)

@@ -1,7 +1,7 @@
 # Surfaces
 
 ::: tip Mental model
-Every surface in Coffer is an entry point into the same underlying daemon. The daemon owns all state; surfaces are read-only or read-write windows into that state. Add an MCP server via the CLI, and the Web UI shows it immediately — because both are calling the same daemon. Disconnect from the desktop app, and the daemon keeps running, so your MCP clients keep working.
+Every surface in Coffer is an entry point into the same underlying daemon. The daemon owns all state; surfaces are read-only or read-write windows into that state. Add an MCP server via the CLI, and the Web UI shows it immediately — because both are calling the same daemon. Close the browser tab, and the daemon keeps running, so your MCP clients keep working.
 :::
 
 ## What surfaces share
@@ -36,7 +36,7 @@ The surfaces are described below using a consistent template: **What it is · Wh
 | `/fs`                             | Filesystem browse helper for config pickers.                      |
 | `/audit`, `/retention`, `/daemon` | Audit log, retention policies, daemon token operations.           |
 
-The REST API is the canonical interface — the CLI, Web UI, and Desktop all call it.
+The REST API is the canonical interface — the CLI and the Web UI both call it.
 
 **Which process.** The daemon (`coffer-daemon`). The REST API is embedded in the FastAPI application and is inseparable from the daemon process.
 
@@ -114,31 +114,15 @@ Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `co
 
 **What it is.** The browser-based management interface, specified in [spec 002](/reference/specs/002-ui-shell/spec). The Web UI provides a visual equivalent of every CLI management operation: registering MCP servers via JSON import, browsing server health and capability lists, toggling tools/resources/prompts on/off, viewing the audit log and invocation history, and configuring retention policies. The information architecture reflects the resource-kind model: the sidebar shows `Resources` (the shipped kinds — MCP servers, Agents, Skills, Knowledge Bases, Memory, Channels), `Chat` for talking to agents directly, and `System` (Observability, and Settings with its Security and Models sub-sections). No "coming soon" placeholders appear — a kind only appears once it works.
 
-**Which process.** A browser process. In production, the built frontend is embedded by the Tauri desktop shell (`frontendDist` in `tauri.conf.json`); the browser process is logically separate from the daemon. In development, a Vite dev server runs at `http://localhost:5173`. All data is fetched from the daemon's REST API.
+**Which process.** A browser process, served by the daemon. In production the daemon serves the built frontend itself, as static files at its own loopback origin (**FR-024**) — so the page and the API are same-origin. In development, a Vite dev server runs at `http://localhost:5173` and reaches the daemon across origins behind the `COFFER_DEV_CORS` opt-in. All data is fetched from the daemon's REST API.
 
-**Transport.** Browser HTTP/REST to `http://127.0.0.1:<port>/api/v1/`. The bearer token is provided to the browser context at startup (read from `~/.coffer/daemon.json` by the desktop shell or a local helper).
+**Transport.** Browser HTTP/REST to `http://127.0.0.1:<port>/api/v1/`, from a page loaded at `http://127.0.0.1:<port>/`.
+
+**How the token reaches the page.** `coffer open` (**FR-025**) reads the port and token from `~/.coffer/daemon.json`, calls an authenticated endpoint to mint a single-use, short-lived code, and opens the browser at the daemon's origin with that code in the URL **fragment**. The page exchanges the code for the API token and keeps the token in `localStorage`. The token itself never appears in a URL, so it never lands in browser history.
 
 **Lifecycle.** The Web UI session is the lifetime of the browser tab. Closing the tab does not affect the daemon. The UI includes a daemon-offline banner that detects when the daemon is unreachable and displays the `coffer daemon start` command as a copyable affordance; the banner disappears automatically when the daemon comes back online.
 
-**Security boundary.** `X-Coffer-Token` on every REST API call. CORS is configured to allow requests from the local Web UI origin only. Because the daemon binds to loopback and the token is never transmitted to a remote origin, the trust model is equivalent to the CLI: local user account only.
-
----
-
-## Desktop App
-
-**What it is.** The Tauri 2 desktop application, specified in [spec 003](/reference/specs/003-mcp-gateway-desktop/spec). The desktop app wraps the same Web UI from spec 002 inside a native application window, adds daemon supervision and a system tray icon. It is the zero-friction entry point for daily-driver desktop use: install it, and Coffer is always running in the background without any manual `coffer daemon start` step.
-
-**Which process.** A native desktop process (Tauri 2, Rust + WebView). It embeds the Web UI as a WebView; desktop-specific affordances (tray menu items) activate behind an `isTauri()` guard in the frontend code.
-
-**Transport.** Internally: the WebView talks to `127.0.0.1:<port>/api/v1/` for REST and `/mcp` for MCP (same as the browser-based Web UI). The Rust shell also communicates with the daemon's REST API for supervision tasks (health checks, restart).
-
-**Lifecycle.** The desktop app applies the detect-or-spawn pattern: on launch, it reads `daemon.json`; if the daemon is already running, it connects; if not, it spawns `coffer-daemon` as a detached process (`setsid` on POSIX) and waits for `daemon.json` to appear. Closing the main window hides it to the system tray — the daemon keeps running. Selecting "Quit" from the tray exits the desktop process. The daemon's fate on desktop-app quit depends on whether any other entry points (shim, CLI) are still using it; a detached daemon survives the desktop app.
-
-The desktop app also idempotently deploys the bundled `coffer-mcp-shim` and `coffer-daemon` binaries to a stable user-writable PATH directory (`~/.coffer/bin/` on macOS and Linux) on every launch, using a size/mtime/version-sentinel staleness check to detect upgrades. This ensures that `coffer-mcp-shim` is always on PATH after the first desktop launch — with a sibling `coffer-daemon` for its detect-or-spawn to find — without requiring the user to manually edit their shell profile.
-
-**Security boundary.** Same as the Web UI: `X-Coffer-Token` on every API call, loopback-only daemon, local user account trust boundary. The desktop app bundles `coffer-daemon` and `coffer-mcp-shim` as PyInstaller sidecars — no system Python dependency at runtime.
-
-**Distribution tiers.** The desktop app is the CLI+desktop tier of the release. A separate CLI-only tier (`coffer-cli-<triple>.tar.gz`) packages just the binaries without the Tauri wrapper, for headless or server installs.
+**Security boundary.** `X-Coffer-Token` on every REST API call. CORS is same-origin by default; the Vite dev origins are added only under `COFFER_DEV_CORS`. Because the daemon binds to loopback and the token is never transmitted to a remote origin, the trust model is equivalent to the CLI: local user account only.
 
 ---
 
@@ -151,9 +135,8 @@ The desktop app also idempotently deploys the bundled `coffer-mcp-shim` and `cof
 | CLI (`coffer`) | Short-lived child | Loopback HTTP              | User / shell        | Per-command         |
 | Stdio shim     | Per-session       | HTTP/SSE                   | MCP client          | MCP client session  |
 | Callback listener | Daemon-spawned child | Loopback HTTP (forwards to daemon) | Daemon (on SeaTalk enable) | While a SeaTalk channel is enabled |
-| Web UI         | Browser tab       | Loopback HTTP (REST)       | User / browser      | Browser tab session |
-| Desktop app    | Native process    | Loopback HTTP (REST + MCP) | User                | Until tray quit     |
+| Web UI         | Browser tab       | Loopback HTTP (REST)       | `coffer open` / browser | Browser tab session |
 
 ---
 
-**See also:** [Architecture reference](/reference/project/architecture), [Spec 002: UI Shell](/reference/specs/002-ui-shell/spec), [Spec 003: Desktop](/reference/specs/003-mcp-gateway-desktop/spec)
+**See also:** [Architecture reference](/reference/project/architecture), [Spec 002: UI Shell](/reference/specs/002-ui-shell/spec), [Distribution](/architecture/distribution)

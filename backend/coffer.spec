@@ -2,7 +2,8 @@
 # Usage: pyinstaller backend/coffer.spec
 #
 # Output: dist/coffer (single-file executable)
-# Tauri sidecar consumes this via desktop/binaries/coffer-<triple>.
+# Packaged into coffer-cli-<triple>.tar.gz beside the daemon and shim; the
+# frozen detect-or-spawn resolution needs them co-located (ADR-006).
 #
 # The CLI is a thin HTTP client — it does NOT embed FastAPI / uvicorn /
 # SQLAlchemy / Alembic.  Those live only in the daemon binary.

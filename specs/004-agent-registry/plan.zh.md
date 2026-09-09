@@ -16,7 +16,7 @@
 1. **配置文件只读查看 + 在外部打开** —— 每个 agent 类型暴露一份精选的自有配置文件 allowlist（Claude Code：`settings.json`、`settings.local.json`、`~/.claude.json`、`CLAUDE.md`；Codex：`config.toml`、`AGENTS.md`）。UI 以只读方式渲染它们，并为每个文件及其所在文件夹提供「在外部编辑器中打开 / 在文件管理器中显示」（`path`/`folder_path` 这一对）。程序化保存（REST/CLI）按格式校验、原子写入并保留 `.bak`。同一套原子写入 + `.bak` 机制也支撑 Coffer-MCP 的安装/卸载。
 2. **一键安装 Coffer-MCP** —— 把一个 `coffer` stdio MCP-server 条目（指向 `coffer-mcp-shim`）写入/移除到 agent 的 MCP 配置，带状态查询与幂等性。
 
-该 kind 暴露一个 `on_delete` 钩子，由 the 005-skill-manager spec 接入用于 skill binding 的级联清理。同时交付 REST 路由、CLI 子命令与桌面 Agents 页面。
+该 kind 暴露一个 `on_delete` 钩子，由 the 005-skill-manager spec 接入用于 skill binding 的级联清理。同时交付 REST 路由、CLI 子命令与 Web Agents 页面。
 
 本 spec 是 spec 001 中引入的 kind-agnostic Resource 框架的第二个消费者，用以验证该框架的可复用性。
 
@@ -97,7 +97,7 @@ backend/coffer/surfaces/cli/agent_cmd.py             # coffer agent {add, list, 
 frontend/src/pages/AgentsPage.tsx                 # 现有列表页
 frontend/src/components/agents/
   AgentAddForm.tsx / AgentEditForm.tsx / AgentTable.tsx   # 现有
-  FolderPicker.tsx         # config-dir 文件夹选择器（桌面用 OS 原生对话框；Web 用 GET /fs/browse 文件夹浏览器）
+  FolderPicker.tsx         # config-dir 文件夹选择器（daemon 原生对话框；回退到 GET /fs/browse 文件夹浏览器）
   AgentConfigPanel.tsx     # 单 agent 的配置文件列表 + 只读查看器（文件列表 + 只读内容视图，带格式标签，并为文件及其文件夹提供 在外部编辑器中打开 / 显示）
   AgentMcpInstall.tsx      # 一键安装/卸载开关 + 状态徽标
 frontend/src/lib/api/agents.ts                     # 扩展配置文件 + MCP 安装调用
@@ -118,7 +118,7 @@ agent 详情页（`/agents/:name`）是一个简单的 **Overview + Config files
 - 备选方案：把 agent 合入 the 005-skill-manager spec → 重新评估后否决（按 spec 体量切分更清晰；一份 PR 同时交付两者）。
 - 发现（discovery）启发式：已知标记目录（即该类型的 `default_config_dir`）存在即把该类型作为候选项呈现。后续 spec 可能加入「PATH 上有命令」类型的检测。
 
-> 基础 registry（类型/config/service/发现（discovery），REST/CLI/桌面 CRUD）已在本分支
+> 基础 registry（类型/config/service/发现（discovery），REST/CLI/Web UI CRUD）已在本分支
 > 交付。以下阶段覆盖 v2 增量：收窄到两个类型、配置文件查看 + 编辑、一键安装
 > Coffer-MCP。
 
@@ -144,7 +144,7 @@ agent 详情页（`/agents/:name`）是一个简单的 **Overview + Config files
 
 - `AgentConfigPanel` —— 列出配置文件、在只读内容视图里打开某个文件（带格式标签），并为该文件及其所在文件夹提供「在外部编辑器中打开 / 在文件管理器中显示」。`AgentMcpInstall` —— 状态徽标 + 安装/卸载开关。
 - agent 详情页是一个简单的 Overview + Config files 详情页。
-- `FolderPicker` —— 无需输入路径即可选择自定义 `config_dir`：打包桌面应用用 OS 原生目录对话框，Web 用 daemon 支撑的 `GET /fs/browse` 文件夹浏览器。add/edit 表单把 agent 名称设为可选（省略时由服务端按类型派生默认名）。
+- `FolderPicker` —— 无需输入路径即可选择自定义 `config_dir`：通过 daemon 打开宿主的原生目录对话框，回退到 daemon 支撑的 `GET /fs/browse` 文件夹浏览器。add/edit 表单把 agent 名称设为可选（省略时由服务端按类型派生默认名）。
 - 用 TanStack Query + openapi-fetch 接 hooks；英文 + 简体中文 i18n 字符串（`agents.config.*`、`agents.mcp.*`）。
 - e2e（`e2e/web/specs/shell_agents.spec.ts`）：只读查看一个配置文件（及其 打开/显示 操作）；安装 Coffer MCP 并观察状态翻转。
 
@@ -155,7 +155,7 @@ agent 详情页（`/agents/:name`）是一个简单的 **Overview + Config files
 
 ## 风险 / 未知
 
-- **GUI / venv 的 PATH** —— 桌面或 venv 启动的 daemon 不继承 shell `PATH`（且其 `sys.executable` 可能是指向基础解释器的符号链接），因此裸 `coffer-mcp-shim` 命令可能解析不到。缓解：安装时解析为绝对路径（`shutil.which` → 解释器的 `sysconfig` 脚本目录 → 打包的 `dist/` 回退），全部落空则显式失败。
+- **GUI / venv 的 PATH** —— GUI 或 venv 启动的 daemon 不继承 shell `PATH`（且其 `sys.executable` 可能是指向基础解释器的符号链接），因此裸 `coffer-mcp-shim` 命令可能解析不到。缓解：安装时解析为绝对路径（`shutil.which` → 解释器的 `sysconfig` 脚本目录 → 打包的 `dist/` 回退），全部落空则显式失败。
 - **`~/.claude.json` 重序列化** —— 安装 MCP 条目会用 stdlib `json`（`indent=2`）重序列化整个 JSON 文件，产生较大 diff。可接受且可经 `.bak` 恢复；已记录。
 - **TOML 格式** —— Codex `config.toml` 的编辑用 `tomlkit` 以保留用户的注释/排版，而非整体重序列化。
 

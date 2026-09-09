@@ -239,9 +239,9 @@ directory's immediate subdirectories — never file contents.
 | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `browse(path=None) -> FsBrowseResult` | Resolve `path` (default home); return its resolved path, its parent (or `None` at the filesystem root), and its immediate subdirectories. Unreadable or non-existent path → error, never a partial listing. |
 
-The desktop app uses the OS-native directory dialog; the web uses this
-daemon-backed browser via `GET /api/v1/fs/browse`, surfaced in the
-`FolderPicker.tsx` frontend component.
+The web UI opens the host's native directory dialog through the daemon and
+falls back to this daemon-backed browser via `GET /api/v1/fs/browse`, surfaced
+in the `FolderPicker.tsx` frontend component.
 
 ### `AgentConfigFileService` (`application/agent/config_file_service.py`)
 

@@ -64,7 +64,7 @@ GitHub API 核对。
 - **plugged.in**（VeriTeknik/pluggedin-app）—— ~96，西方，web。**理念最像的对手**
   （"给编码 agent 的 AI-CMS"）：跨 Claude/Cursor 的 MCP + RAG + 记忆 + AES-256-GCM
   逐 profile 凭据 + 活动历史 + 多 hub 同步 + 多模型。**值得研究。** Coffer 的楔子：
-  skill 管理、规则统一、IM 渠道，以及真正的本地优先桌面（它是 web 应用）。
+  skill 管理、规则统一、IM 渠道，以及真正的本地优先运行（它是托管 web 应用）。
 - **Obot**（obot-platform）—— ~837，西方。最广的**服务端**平台（网关 + 注册表 +
   RAG + 项目记忆 + OAuth + 审计 + 模型管理）——但是 K8s/企业向，不是本地优先的个人
   保险库。
@@ -86,7 +86,7 @@ GitHub API 核对。
    （claude-mem、Basic Memory、Mem0）和服务端平台（Obot、plugged.in）沾边。"文件为
    真相 + 可重建索引"的知识库装在本地优先保险库里，无在位者。
 2. **默认免费的审计 / 治理。** 只有企业/web 平台（plugged.in、Obot、ToolHive、
-   ContextForge）带审计；没有一个是本地优先桌面工具。
+   ContextForge）带审计；没有一个是本地优先工具。
 3. **加密凭据作为一等功能。** 几乎所有人都把密钥甩给 1Password / Doppler / Infisical。
    一等的"只存密文"只出现在 plugged.in / Obot / ToolHive——同样，没有一个本地优先。
 4. **IM 渠道 × 本地优先保险库。** 只有 open-cowork（飞书/Slack）和 Klavis（dev-infra）

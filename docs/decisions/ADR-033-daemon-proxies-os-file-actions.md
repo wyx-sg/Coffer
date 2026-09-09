@@ -1,4 +1,4 @@
-# ADR-033 — Local Daemon Proxies OS File Actions (Web Matches Desktop)
+# ADR-033 — Local Daemon Proxies OS File Actions
 
 > 中文版: [ADR-033-daemon-proxies-os-file-actions.zh.md](./ADR-033-daemon-proxies-os-file-actions.zh.md)
 
@@ -18,37 +18,40 @@ file manager**, **copy absolute path**.
 Two distinct filesystem operations live behind these surfaces:
 
 - **Picking** an input path — the agent `config_dir` (FR-023/FR-024) and the
-  "添加 Skill" import path. Desktop uses the OS-native directory dialog; the web uses
-  the daemon-backed folder browser (`GET /api/v1/fs/browse`). Both yield an absolute
-  path.
-- **Acting** on an existing path — open-in-editor / reveal-in-file-manager. The
-  packaged desktop app (Tauri) performs the real OS action via `tauri-plugin-opener`;
-  the **web** surface was specced to **fall back to copy-path**.
+  "添加 Skill" import path. The UI picks it through the daemon-backed folder browser
+  (`GET /api/v1/fs/browse`), which yields an absolute path.
+- **Acting** on an existing path — open-in-editor / reveal-in-file-manager. This was
+  specced to **fall back to copy-path**, on the premise that a browser-hosted UI
+  cannot reach the OS at all.
 
-The web fallback rests on a premise stated in 006 FR-020 — *"the daemon cannot act on
+That fallback rests on a premise stated in 006 FR-020 — *"the daemon cannot act on
 the user's machine"* — and in `FileActions.tsx` — *"a browser cannot touch the
 filesystem."* The browser half is true; the daemon half is **false for Coffer's
 architecture**. The Coffer daemon is **loopback-only** (`127.0.0.1`) + token-guarded
 (FR-024), so the web client is **always co-located with the daemon on the user's own
 machine**. A local daemon process can open files and reveal them in the OS file
 manager (`open` / `open -R` on macOS, `xdg-open` on Linux, `explorer /select` on
-Windows) just as the desktop app can. The browser limitation only binds operations the
-browser performs *directly*; Coffer always routes through a local daemon with full OS
-reach.
+Windows) exactly as any native process on that machine can. The browser limitation only
+binds operations the browser performs *directly*; Coffer always routes through a local
+daemon with full OS reach.
 
 Two concrete gaps follow:
 
-1. On the web, the four read-only viewers (agent config files, skill files, memory
-   facts, KB documents) show only "copy path" where the desktop shows real
-   open/reveal — an avoidable downgrade, given the daemon is local.
+1. The four read-only viewers (agent config files, skill files, memory facts, KB
+   documents) show only "copy path" instead of real open/reveal — an avoidable
+   downgrade, given the daemon is local.
 2. The "添加 Skill" dialog never received the folder picker that the agent
    `config_dir` dialog has (FR-023/FR-024); it still requires the user to type the
    absolute path.
 
 ## Decision
 
-**Route OS file actions through the local daemon so the web surface behaves like the
-desktop app.**
+**Route OS file actions through the local daemon, so the browser-hosted UI performs
+real OS actions.**
+
+> **2026-09-09:** this ADR originally described a second, native branch for
+> open/reveal (`tauri-plugin-opener` inside the packaged desktop shell). That shell was
+> removed and the daemon endpoints below are now the single mechanism.
 
 ### 1. Daemon FS-action endpoints (FR-039)
 
@@ -64,42 +67,38 @@ Both validate that `path` is **absolute and exists** before acting, and shell ou
 an **argument vector** (never a shell string — no interpolation). An unopenable /
 missing path returns an error, never a partial action.
 
-### 2. FileActions performs real open/reveal on both surfaces (FR-038, parallel FRs)
+### 2. FileActions performs real open/reveal (FR-038, parallel FRs)
 
 The shared bar exposes one `useFsActions()` hook with `open(path, with)` /
-`reveal(path)`:
-
-- **Desktop** — `tauri-plugin-opener` (unchanged); on failure it falls back to the
-  daemon endpoints.
-- **Web** — the new daemon endpoints.
+`reveal(path)`, both backed by the daemon endpoints above.
 
 The preferred-editor value (a frontend `localStorage` setting,
-`coffer.preferredEditor`) is passed in the request `with` field, so both surfaces open
-in the same editor. The web surface now shows **exactly the desktop button set** —
-open-file-in-editor, reveal-file-in-file-manager, open-folder-in-editor.
+`coffer.preferredEditor`) is passed in the request `with` field. The bar shows the full
+button set — open-file-in-editor, reveal-file-in-file-manager, open-folder-in-editor.
 
-**copy-path is removed.** It existed only as the web's fallback when open/reveal could
-not run; now that open/reveal run everywhere it serves no purpose, and a personal,
+**copy-path is removed.** It existed only as the fallback for when open/reveal could
+not run; now that open/reveal always run it serves no purpose, and a personal,
 local-first tool keeps the surface minimal. The `copyPath` / `copyFolderPath` actions
 and their i18n strings are deleted, not demoted.
 
 ### 3. "添加 Skill" gets the folder picker (FR-030)
 
-The skill import dialog reuses the existing `FolderPicker` (native OS dialog on
-desktop, daemon folder browser on web — FR-023/FR-024). The folder is **picked**, not
-typed; the resolved absolute path feeds the unchanged `POST /skills/import`.
+The skill import dialog reuses the existing `FolderPicker` (the daemon-backed folder
+browser — FR-023/FR-024). The folder is **picked**, not typed; the resolved absolute
+path feeds the unchanged `POST /skills/import`.
 
-### 4. Picking keeps its dual path — deliberately
+### 4. Picking stays out of scope here — since retired
 
-Unifying open/reveal but **not** the picker is intentional. The OS-native directory
-dialog is a strictly better experience than the in-app daemon folder browser, and it
-already ships on desktop (Agent config-dir). Only the web side uses the daemon browser.
-We do not collapse the picker onto the daemon.
+This ADR unified open/reveal but not *picking*: at the time an OS-native directory
+dialog was available only inside the packaged native shell, so the browser UI kept the
+in-app daemon folder browser. That reasoning no longer holds — the daemon itself opens
+the host's native dialogs ([ADR-036](./ADR-036-daemon-native-file-and-save-dialogs.md),
+which supersedes this section) — and the native shell it referred to is gone.
 
 ## Consequences
 
-- Web now matches desktop for open/reveal across all four read-only viewer surfaces;
-  consumers of `FileActions` are unchanged (they already pass `filePath` / `folderPath`).
+- Real open/reveal now runs across all four read-only viewer surfaces; consumers of
+  `FileActions` are unchanged (they already pass `filePath` / `folderPath`).
 - The false "daemon cannot act on the user's machine" premise is removed from the
   touched FRs; the rationale becomes "the loopback daemon is on the user's machine, so
   it acts on the user's behalf".

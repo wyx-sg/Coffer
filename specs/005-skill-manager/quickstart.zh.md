@@ -6,7 +6,7 @@
 
 ## 前置条件
 
-- Coffer 的 daemon 正在运行（启动桌面 App 或运行 `coffer daemon`）。
+- Coffer 的 daemon 正在运行（运行 `coffer daemon`，或用 `coffer open` 启动它并打开 Web UI）。
 - 至少有一个 agent 已注册（自动检测或 `coffer agent add` —— 参考 spec 004 的 quickstart）。
 ## 导入已有的 skill 文件夹
 
@@ -61,7 +61,7 @@ coffer agent follow codex --on --exclude my-skill --exclude another-skill
 ```
 
 关闭 follow 会把当前已投递的 skill 保留为显式的逐 skill binding，所以什么都
-不会消失——你只是切换到手工 `enable`/`disable` 管理。桌面应用中 agent 的
+不会消失——你只是切换到手工 `enable`/`disable` 管理。Web UI 中 agent 的
 Skills 标签页上有同一个开关。
 
 ## Adopt Coffer 尚未管理的 skill
@@ -105,7 +105,7 @@ coffer skill verify
 
 ## 浏览 skill 文件（只读）
 
-桌面应用把 skill 的 master 文件夹以文件树展示，并在只读查看器中查看单个文件。要修改文件，经查看器的「在外部编辑器中打开」/「在文件管理器中显示」操作，在自己的外部编辑器或文件管理器中打开该文件（或其所在文件夹）。同样的读取数据也可通过 REST API 获取，且每个条目都带磁盘绝对路径。
+Web UI 把 skill 的 master 文件夹以文件树展示，并在只读查看器中查看单个文件。要修改文件，经查看器的「在外部编辑器中打开」/「在文件管理器中显示」操作，在自己的外部编辑器或文件管理器中打开该文件（或其所在文件夹）。同样的读取数据也可通过 REST API 获取，且每个条目都带磁盘绝对路径。
 
 以递归树列出 master 文件夹：
 

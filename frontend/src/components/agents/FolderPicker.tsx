@@ -1,8 +1,8 @@
 // frontend/src/components/agents/FolderPicker.tsx — spec 004 v2, FR-023.
-// Hybrid skill-directory picker. In the packaged desktop app it uses the
-// OS-native directory dialog; on the web it falls back to a daemon-backed
-// folder browser (a browser can't read absolute paths, but the loopback
-// daemon can). Both hand back a real absolute path.
+// Skill-directory picker. The browser can't read absolute paths, so Browse asks
+// the loopback daemon to open the host's OS-native directory dialog, and falls
+// back to a daemon-backed in-app folder browser when this host has no native
+// dialog tool. Either way it hands back a real absolute path.
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
@@ -19,21 +19,6 @@ import {
 } from "@/components/ui/dialog";
 import { translateApiError } from "@/lib/api/errors";
 import { fsApi } from "@/lib/api/fs";
-import { isTauri } from "@/lib/tauri";
-
-/**
- * Open the Tauri OS-native directory dialog. Uses a static import specifier so
- * Vite bundles/code-splits the plugin and it resolves in the packaged app — a
- * `@vite-ignore`d variable specifier leaves a bare import the WebView can't
- * resolve at runtime, which then silently falls back to the web browser. The
- * package is a frontend dependency; `isTauri()` guards invocation on web. This
- * mirrors the working pattern in SyncMasterKeyCard.
- */
-async function pickNative(defaultPath?: string): Promise<string | null> {
-  const { open } = await import("@tauri-apps/plugin-dialog");
-  const picked = await open({ directory: true, defaultPath });
-  return typeof picked === "string" ? picked : null;
-}
 
 export function FolderPicker({
   value,
@@ -46,26 +31,16 @@ export function FolderPicker({
   const [browserOpen, setBrowserOpen] = useState(false);
 
   const onBrowse = async () => {
-    if (isTauri()) {
-      try {
-        const picked = await pickNative(value ?? undefined);
-        if (picked) onChange(picked);
-        return;
-      } catch {
-        // Native plugin unavailable — fall back to the daemon folder browser.
+    // Ask the daemon to open the OS-native dialog. Fall back to the in-app
+    // browser only when this host has no native dialog tool.
+    try {
+      const res = await fsApi.pickFolder(value ?? undefined);
+      if (res.available) {
+        if (res.path) onChange(res.path);
+        return; // native dialog handled it (picked or cancelled)
       }
-    } else {
-      // Web: ask the daemon to open the OS-native dialog. Fall back to the
-      // in-app browser only when this host has no native dialog tool.
-      try {
-        const res = await fsApi.pickFolder(value ?? undefined);
-        if (res.available) {
-          if (res.path) onChange(res.path);
-          return; // native dialog handled it (picked or cancelled)
-        }
-      } catch {
-        // Daemon picker errored — fall back to the in-app browser.
-      }
+    } catch {
+      // Daemon picker errored — fall back to the in-app browser.
     }
     setBrowserOpen(true);
   };

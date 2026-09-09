@@ -47,7 +47,7 @@
 
 ### User Story 4 —— 用户在 Coffer 里维护记忆（优先级 P2）
 
-开发者要看见并纠正 agent 记下的东西：在一个 **只读** 视图里按作用域浏览事实，然后 **在自己的外部编辑器里**（或经 API/CLI）改一条漂移的、手动加一条、删掉一条错的。Coffer UI 从不在应用内编辑事实内容；相反，每条事实及其所在文件夹都提供「在外部编辑器中打开」「在文件管理器中显示」（Web 上经 daemon,桌面上为原生），任何带外的纠正都会被既有的 lazy reindex-on-read 拾取（FR-010）。
+开发者要看见并纠正 agent 记下的东西：在一个 **只读** 视图里按作用域浏览事实，然后 **在自己的外部编辑器里**（或经 API/CLI）改一条漂移的、手动加一条、删掉一条错的。Coffer UI 从不在应用内编辑事实内容；相反，每条事实及其所在文件夹都提供「在外部编辑器中打开」「在文件管理器中显示」（由本地 daemon 执行），任何带外的纠正都会被既有的 lazy reindex-on-read 拾取（FR-010）。
 
 **为什么是这个优先级**：没有人工维护的记忆让人不放心；agent 偶尔会记错。能维护，这条 feature 才足够安全到可以一直开着 —— 而把编辑路由到用户自己的编辑器，使 markdown 文件保持唯一真相源，无需再维护第二个编辑界面。
 
@@ -186,7 +186,7 @@ UI 里也不可见。把每个 lane 以贴合其形状的方式呈现，让整�
 - handoff scenes are listed per branch for a store
 - the consolidation changelog is readable for a store
 
-（四-lane 页面的渲染本身由前端测试验证；与其它桌面视图项一样，其桌面验收延后到 e2e。上面三条
+（四-lane 页面的渲染本身由前端测试验证；与其它 UI 视图项一样，其端到端验收延后到 e2e。上面三条
 场景钉住 lane 视图所消费的读端点。）
 
 ---
@@ -280,7 +280,7 @@ UI 里也不可见。把每个 lane 以贴合其形状的方式呈现，让整�
 
 - **Given** 在 Coffer UI 中查看一条事实，
 - **When** 用户检视该事实（及其所在文件夹），
-- **Then** 内容只读渲染（应用内不编辑事实内容），读响应携带该事实的绝对 `.md` 磁盘路径及其所在文件夹的绝对路径，且 UI 在**两个**界面上都为文件与文件夹提供「在外部编辑器中打开」+「在文件管理器中显示」——桌面（Tauri）经 OS opener,web 经环回 daemon（spec 004 FR-039）——没有 copy-path 回退;打开哪个编辑器由全局首选编辑器偏好决定（见 002-ui-shell）。
+- **Then** 内容只读渲染（应用内不编辑事实内容），读响应携带该事实的绝对 `.md` 磁盘路径及其所在文件夹的绝对路径，且 UI 经环回 daemon（spec 004 FR-039）为文件与文件夹提供「在外部编辑器中打开」+「在文件管理器中显示」——没有 copy-path 回退;打开哪个编辑器由全局首选编辑器偏好决定（见 002-ui-shell）。
 
 ### Scenario: clear a memory scope
 
@@ -505,7 +505,7 @@ UI 里也不可见。把每个 lane 以贴合其形状的方式呈现，让整�
 - **When** agent 在算出的项目身份为 `X` 的 checkout 里 remember 一条事实，
 - **Then** 事实写进 `project-Y`，且不会重新供给新的 `project-X` 库。
 
-> **Deferred to future test work**（测试随 e2e 基础设施落地；`make verify-acceptance` 不对它们做门禁）：桌面记忆列表按作用域展示、桌面只读事实视图的打开/显示能力、`coffer memory …` CLI 端到端配带 daemon、per-store 度量（HTTP 路由）。
+> **Deferred to future test work**（测试随 e2e 基础设施落地；`make verify-acceptance` 不对它们做门禁）：记忆列表按作用域展示、只读事实视图的打开/显示能力、`coffer memory …` CLI 端到端配带 daemon、per-store 度量（HTTP 路由）。
 
 ## Requirements
 
@@ -580,15 +580,15 @@ UI 里也不可见。把每个 lane 以贴合其形状的方式呈现，让整�
 **Transcript history（对话历史）**
 
 - **FR-037**：对话记录读取器 MUST 解析每种受支持 agent 的*真实*磁盘会话格式。**Codex** rollout 文件（`~/.codex/sessions/**/*.jsonl`）把每个事件包在 `payload` 信封里：工作目录与会话 id 来自 `session_meta.payload.cwd`/`payload.id`，对话轮次是 `response_item` 事件且其 `payload.type == "message"`（role + 带类型的 `*_text` 内容块）。读取器 MUST 仅按这些 `response_item` 消息计数轮次 —— 并行的 `event_msg` 的 `user_message`/`agent_message` UI 事件 MUST NOT 被重复计数 —— 并 MUST 保持防御性（跳过无法识别/非 JSON 的行，绝不因单行坏数据抛错）。**Claude Code** 的扁平顶层格式不变。（本切片之前，Codex 解析器读取真实格式从不携带的顶层字段，导致每个 Codex 会话都列为 0 条消息、无项目。）
-- **FR-038**：每条对话会话摘要 MUST 携带可读的**标题**、**最后活动时间**（`last_activity_at`）以及会话文件的绝对**源路径**。标题在存在时取 agent 自己的会话标题（Claude Code 的 `ai-title`，最新者胜），否则取第一条*真实*用户消息 —— 跳过非对话性前导（环境/指令块、shell 命令回显、斜杠命令）—— 截断为单行；当无法派生时 MAY 为 null。`started_at` 是第一个事件时间戳，`last_activity_at` 是最后一个。源路径经共享 `FileActions` 组件驱动只读的“在文件管理器中显示”操作（桌面端 reveal / web 端复制路径），与 memory 事实的 FR-021/FR-022 一致 —— 不引入新的后端 open/reveal 端点。
+- **FR-038**：每条对话会话摘要 MUST 携带可读的**标题**、**最后活动时间**（`last_activity_at`）以及会话文件的绝对**源路径**。标题在存在时取 agent 自己的会话标题（Claude Code 的 `ai-title`，最新者胜），否则取第一条*真实*用户消息 —— 跳过非对话性前导（环境/指令块、shell 命令回显、斜杠命令）—— 截断为单行；当无法派生时 MAY 为 null。`started_at` 是第一个事件时间戳，`last_activity_at` 是最后一个。源路径经共享 `FileActions` 组件驱动只读的“在文件管理器中显示”操作（由 daemon 执行 reveal），与 memory 事实的 FR-021/FR-022 一致 —— 不引入新的后端 open/reveal 端点。
 - **FR-039**：对话列表面（`GET /api/v1/agents/{name}/transcripts`）MUST 暴露该 agent 的**全部**会话（而非仅最近窗口），支持服务端**搜索**（对标题或项目路径匹配的查询）、**筛选**（按精确项目路径、按 `started_at` 时间范围）与**排序**（按 `started_at`、`last_activity_at` 或 `message_count`，升序或降序），以 `limit`/`offset` 分页并返回匹配 `total`。读取器 MUST 用进程内、按 mtime 键控的缓存支撑它，使含数千会话的 agent 的重复列表保持响应 —— 仅在某会话文件 mtime 变化时才重新解析它。
 
 **Surfaces**
 
-- **FR-017**：用户 MUST 能通过编程写入面完成完整记忆 CRUD —— (a) `/api/v1/memory_stores/` 下的 REST API 与 (b) `coffer memory …` 子命令。（这些 REST 写入端点也是 agent 经 MCP 网关写入事实的途径。）用户写入设 `metadata.actor = "user"`，把规范化 markdown 写入 store 的 `knowledge/inbox/` 子目录、重建索引并审计。桌面/web UI 以 **只读** 方式呈现事实（不在应用内编辑事实内容）；人类维护时在自己的外部编辑器里编辑规范化 markdown（经 lazy reindex-on-read（FR-010）拾取），或经 REST/CLI 写入面。只读视图 MUST 以舒适的阅读 **最大宽度**（居中）呈现事实内容；详情页的事实**列表** MUST 是单一**可滚动**列表,**不含应用内分页器**（UI 一次按最大 `limit` 取一页;事实 **API** 仍按 `limit`/`offset` 分页）。这些 surface 上的 store 名会被校验：只有 `global` 或 `project-<26 字符 ULID>` 合法 —— 形状合法的名字会惰性 provision 其 store；其余返回 404（`MEMORY_STORE_NOT_FOUND`）。
-- **FR-017a**：各 surface MUST 用**从 `project_root` 推导的可读身份**来呈现 per-project store —— 以根目录的 basename 作为主标签、绝对根路径作为次要细节 —— 而**不**只显示不可读的 `project-<ULID>` store 名（项目 ULID 是根路径的单向摘要，人无法辨认）。当根路径未知（store 在记录根路径之前就被 provision）时退回显示 store 名；global store 无需推导（其名 `global` 本就可读）。底层 store 名仍是 `project-<ULID>`（FR-017）—— 这是**展示**层的事。由前端测试验证；桌面验收与其它桌面视图项一样延后到 e2e。
-- **FR-017c**：用户 MUST 能为任意 memory store 设置一个**显示标签**——一个用户自选、在所有 surface 中优先于 FR-017a 的 `project_root` 推导的名字。它为来源文件夹从未被记录的 store（FR-017a 否则会退回不可读的 `project-<ULID>` 名）提供可读身份。设置空 / 纯空白标签会清除它，退回 FR-017a 的推导或回退名。该标签是**展示元数据**：不改变 store 名（FR-017）或 `project_id`，通过 `PATCH /memory_stores/{name}/label` 设置。由 HTTP 验收测试验证；桌面重命名视图与其它桌面视图项一样延后到 e2e。标签作为 `memory-labels` 状态区跨机器同步（spec 010，2026-07-10 修订）：设置、改名与清除全部传播（清除以空标签标记传播，因而不会从陈旧文档复活）——从另一台机器同步来的库以其标签显示，而不是「未命名记忆库」。
-- **FR-021**：只读事实视图 MUST 为「事实文件」与「其所在文件夹」两者各提供以下能力：(a) **在外部编辑器中打开**、(b) **在文件管理器 / Finder 中显示**。两者在**两个**界面上都执行真实的 OS 动作:桌面（Tauri）端经 OS opener,web 端经环回 daemon 的文件系统动作端点（spec 004 FR-039）——因为 daemon 就在用户自己的机器上（ADR-033）。没有 copy-path 回退。打开哪个编辑器由全局首选编辑器偏好决定（在 002-ui-shell 规范，本处不再重复规范）。读响应 MUST 携带这些能力所作用的绝对路径（见 FR-022）。
+- **FR-017**：用户 MUST 能通过编程写入面完成完整记忆 CRUD —— (a) `/api/v1/memory_stores/` 下的 REST API 与 (b) `coffer memory …` 子命令。（这些 REST 写入端点也是 agent 经 MCP 网关写入事实的途径。）用户写入设 `metadata.actor = "user"`，把规范化 markdown 写入 store 的 `knowledge/inbox/` 子目录、重建索引并审计。Web UI 以 **只读** 方式呈现事实（不在应用内编辑事实内容）；人类维护时在自己的外部编辑器里编辑规范化 markdown（经 lazy reindex-on-read（FR-010）拾取），或经 REST/CLI 写入面。只读视图 MUST 以舒适的阅读 **最大宽度**（居中）呈现事实内容；详情页的事实**列表** MUST 是单一**可滚动**列表,**不含应用内分页器**（UI 一次按最大 `limit` 取一页;事实 **API** 仍按 `limit`/`offset` 分页）。这些 surface 上的 store 名会被校验：只有 `global` 或 `project-<26 字符 ULID>` 合法 —— 形状合法的名字会惰性 provision 其 store；其余返回 404（`MEMORY_STORE_NOT_FOUND`）。
+- **FR-017a**：各 surface MUST 用**从 `project_root` 推导的可读身份**来呈现 per-project store —— 以根目录的 basename 作为主标签、绝对根路径作为次要细节 —— 而**不**只显示不可读的 `project-<ULID>` store 名（项目 ULID 是根路径的单向摘要，人无法辨认）。当根路径未知（store 在记录根路径之前就被 provision）时退回显示 store 名；global store 无需推导（其名 `global` 本就可读）。底层 store 名仍是 `project-<ULID>`（FR-017）—— 这是**展示**层的事。由前端测试验证；端到端验收与其它 UI 视图项一样延后到 e2e。
+- **FR-017c**：用户 MUST 能为任意 memory store 设置一个**显示标签**——一个用户自选、在所有 surface 中优先于 FR-017a 的 `project_root` 推导的名字。它为来源文件夹从未被记录的 store（FR-017a 否则会退回不可读的 `project-<ULID>` 名）提供可读身份。设置空 / 纯空白标签会清除它，退回 FR-017a 的推导或回退名。该标签是**展示元数据**：不改变 store 名（FR-017）或 `project_id`，通过 `PATCH /memory_stores/{name}/label` 设置。由 HTTP 验收测试验证；重命名视图与其它 UI 视图项一样延后到 e2e。标签作为 `memory-labels` 状态区跨机器同步（spec 010，2026-07-10 修订）：设置、改名与清除全部传播（清除以空标签标记传播，因而不会从陈旧文档复活）——从另一台机器同步来的库以其标签显示，而不是「未命名记忆库」。
+- **FR-021**：只读事实视图 MUST 为「事实文件」与「其所在文件夹」两者各提供以下能力：(a) **在外部编辑器中打开**、(b) **在文件管理器 / Finder 中显示**。两者都经环回 daemon 的文件系统动作端点（spec 004 FR-039）执行真实的 OS 动作——因为 daemon 就在用户自己的机器上（ADR-033）。没有 copy-path 回退。打开哪个编辑器由全局首选编辑器偏好决定（在 002-ui-shell 规范，本处不再重复规范）。读响应 MUST 携带这些能力所作用的绝对路径（见 FR-022）。
 - **FR-022**：读响应 MUST 携带磁盘真相：事实读端点（`GET …/facts`、`GET …/facts/{id}`）MUST 包含每个事实文件的绝对 `.md` 路径及其所在文件夹的绝对路径，store 读端点（`GET …/{name}`）MUST 包含 store 的绝对磁盘目录。它们驱动 FR-021 的打开/显示能力，并让人类能定位规范化文件以带外纠正。
 
 - **FR-053**：memory store 详情页 MUST 把 store 呈现为**四个 lane 区块**（Knowledge / Rules / Journal / Handoff）外加一个**整合 changelog** 视图，替换扁平事实列表。每个 lane 都有形状贴合的视图：**knowledge** = 事实/主题列表 + 内容；**rules** = 单一文档；**journal** = 时间排序条目（最新优先）；**handoff** = 按分支列表。所有视图都**只读**，都经**统一文件预览**渲染（无手写 `<pre>`），并为底层 lane 文件提供**在外部编辑器中打开 / 在文件管理器中显示 / 复制路径**（files-as-truth，FR-017/FR-021）。recall 仍只在 **Knowledge** lane 上操作（rules/journal/handoff/changelog 视图是只读投影，不是 recall 面）。

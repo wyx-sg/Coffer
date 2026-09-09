@@ -19,11 +19,11 @@ features:
   - title: 技能 · 知识 · 记忆
     details: 维护一份主技能库并投递给每个 agent;整理可被 agent 检索的知识库;让所有 agent 共享同一份记忆。
   - title: 与任意 agent 对话
-    details: 在 Web 或桌面应用里,与 Coffer 内置 agent 对话 —— 或驱动 Claude Code、Codex —— 流式输出。
+    details: 在 Web UI 里,与 Coffer 内置 agent 对话 —— 或驱动 Claude Code、Codex —— 流式输出。
   - title: 随处触达你的 agent
     details: 配对一个 Telegram 或 SeaTalk 渠道,在手机上与 agent 对话。换新机器?把整个保险库导出到一个目录,搬过去再导入即可。
-  - title: CLI · Web · 桌面端
-    details: 用终端、本地 Web UI 或桌面应用驱动整个保险库。agent 自动发现守护进程,无需配置端口或 token。
+  - title: CLI · Web UI
+    details: 用终端,或用守护进程自己提供的本地 Web UI 驱动整个保险库 —— 一句 `coffer open` 就能进去。agent 自动发现守护进程,无需配置端口或 token。
 ---
 
 ## 工作原理
@@ -31,7 +31,7 @@ features:
 ```mermaid
 flowchart LR
   subgraph You["你"]
-    UI["CLI · Web · 桌面端"]
+    UI["CLI · Web UI"]
     IM["Telegram · SeaTalk"]
   end
   A["AI agents<br/>Claude Code · Codex"] -->|MCP| D

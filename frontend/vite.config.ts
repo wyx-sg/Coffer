@@ -5,23 +5,13 @@ import path from "node:path";
 import { defineConfig, type PluginOption } from "vite";
 import react from "@vitejs/plugin-react";
 
-// Vite + Tauri 2 conventions:
-//   - clearScreen: false        keep Tauri's terminal output visible
-//   - server.strictPort: true   Tauri expects a known port
-//   - envPrefix: ["VITE_", "TAURI_ENV_*"]  let Tauri inject build-time env
-//
-// `TAURI_DEV_HOST` is set by `tauri dev` when running on a remote host
-// (mobile dev). Falls back to localhost for browser-only dev.
-const host = process.env.TAURI_DEV_HOST;
-
 /**
  * Dev-only plugin that reads ~/.coffer/daemon.json on each request and
  * injects the active token + base URL into index.html, so that opening
- * `npm run dev` in a real browser (no Tauri) is immediately authenticated.
+ * `npm run dev` in a real browser is immediately authenticated.
  *
  * Without this, the FE would get null from getCofferToken() in browser
- * dev mode (Tauri injects __COFFER_TOKEN__ in the desktop shell, but the
- * browser path has no equivalent), and every API call would 401.
+ * dev mode, and every API call would 401.
  *
  * Skipped entirely when VITE_COFFER_BASE_URL is set in env — that's the
  * signal that a managed test runner (Playwright e2e) owns the base URL
@@ -29,7 +19,7 @@ const host = process.env.TAURI_DEV_HOST;
  * happily read a stale user-home daemon.json from a previous local dev
  * session and pollute the e2e environment with the wrong port.
  *
- * Only runs under `vite dev` — the production / Tauri build never touches
+ * Only runs under `vite dev` — the production build never touches
  * the user's daemon.json. Safe because Vite's dev server already binds
  * loopback by default and only serves to the local host.
  */
@@ -119,23 +109,10 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  envPrefix: ["VITE_", "TAURI_ENV_*"],
+  envPrefix: ["VITE_"],
   server: {
     port: 5173,
     strictPort: true,
-    host: host || false,
-    hmr: host
-      ? {
-          protocol: "ws",
-          host,
-          port: 5174,
-        }
-      : undefined,
-    watch: {
-      // Ignore the Tauri Rust source tree so vite HMR doesn't thrash on
-      // cargo writes to target/.
-      ignored: ["**/desktop/**"],
-    },
   },
   test: {
     environment: "jsdom",

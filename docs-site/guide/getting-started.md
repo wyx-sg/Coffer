@@ -1,7 +1,7 @@
 # Getting Started
 
-> **This page covers the from-source / developer path.** For a prebuilt one-line install or
-> the Desktop app, see [Download & install](/guide/install).
+> **This page covers the from-source / developer path.** For the prebuilt one-line install or
+> the release archive, see [Download & install](/guide/install).
 
 Install Coffer from source and connect your first MCP client. Once the daemon is running, every
 MCP client on your machine can connect through the shim without any additional configuration.

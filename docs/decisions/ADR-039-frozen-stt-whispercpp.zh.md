@@ -17,7 +17,7 @@ Codex）转写成文字。源码运行的引擎是 `mlx-whisper`（可选 `[voic
 `import mlx_whisper` 会把 `torch` + `mlx` + `numba` + `llvmlite` + `scipy` 拖进**每一个**
 `coffer-*` 二进制(每个 `collect_submodules("coffer")` 都拉进整个包)。二进制从 ~94 MB
 膨胀到 ~260 MB,而且 `torch` 在 PyInstaller 下很脆。现有的绕法是在打包前卸载
-`mlx-whisper`——于是在冻结的桌面 App 里惰性 import 失败,语音悄悄降级为"把音频文件交给
+`mlx-whisper`——于是在冻结的 App 里惰性 import 失败,语音悄悄降级为"把音频文件交给
 agent"而非转写。**已发布的 App 无法转写语音。**
 
 我们要让冻结 App **本地**转写入站语音(Coffer 是 local-first)、**torch-free**、在 Apple
@@ -33,11 +33,15 @@ Silicon 上有 **Metal 加速**,同时保持二进制精简。
    `networkx`、`mpmath`)。于是 `[voice]` extra 可以留在 build venv 里而二进制仍保持 ~95 MB
    且 torch-free。
 
-2. **STT 作为 sidecar 二进制**,照 `coffer-callback`(ADR/PR #240)的模式:`whisper.cpp` 的
+2. **STT 作为兄弟二进制**,照 `coffer-callback`(ADR/PR #240)的模式:`whisper.cpp` 的
    `whisper-cli`(Apple Silicon Metal,无 Python/torch)从**固定 tag**(`v1.9.1`)在
-   `build_binaries.sh` 里编出,经 Tauri `externalBin` 打包,由 `shim.rs` 与其它 sidecar 一起
-   部署到 `~/.coffer/bin`。daemon 冻结时把它解析为自身可执行文件的 sibling,源码运行时走
-   `PATH`。
+   `build_binaries.sh` 里编出,与其它冻结二进制一同发布。冻结启动时由 **daemon** 把它与
+   兄弟二进制一起部署到 `~/.coffer/bin/`(spec 001 FR-026)—— 原子的「临时复制再改名」,
+   并以 3 信号新鲜度检查(字节大小、mtime、版本哨兵)把关。daemon 冻结时把它解析为自身
+   可执行文件的 sibling,源码运行时走 `PATH`。
+
+   > **2026-09-09:** 这一部署步骤原属 Tauri 桌面外壳(`shim.rs`、`externalBin`);该外壳
+   > 移除后,它转由 daemon 承担。
 
 3. **`WhisperCppTranscriber` 实现接缝。** 它用 `soundfile`(libsndfile 能读 OGG/Opus——
    Telegram 语音格式——以及 wav/flac/mp3)**在进程内**解码,用 `soxr` 重采样到 16 kHz 单
@@ -46,8 +50,8 @@ Silicon 上有 **Metal 加速**,同时保持二进制精简。
    让 adapter 回退为交出文件——接缝永不抛错。
 
 4. **模型首次使用时下载。** `ggml-base-q5_1` 多语言模型(~57 MB)首次使用时下载一次到
-   `~/.coffer/models/`(whisper.cpp 的 `models/` 惯例),不随包,以保持 DMG 精简。首条语音
-   离线时降级为文件交付,直到模型缓存好。
+   `~/.coffer/models/`(whisper.cpp 的 `models/` 惯例),不随包,以保持发布的二进制精简。
+   首条语音离线时降级为文件交付,直到模型缓存好。
 
 5. **择优选择。** `default_transcriber()` 挑引擎:`whisper.cpp`(冻结,或源码且 `PATH` 上有
    `whisper-cli`)→ `mlx-whisper`(源码运行 fallback)→ `None`。接缝不变,所以 FR-022 验收
@@ -65,15 +69,15 @@ Silicon 上有 **Metal 加速**,同时保持二进制精简。
 - **随包 `ffmpeg` 做解码** —— 通用(m4a/amr/…),但多一个重二进制。`soundfile`/libsndfile
   已能解 OGG/Opus 语音场景(在 macOS arm64 上实测)以及进程内的 wav/flac/mp3。选了精简的
   进程内路径;冷门格式降级为文件交付。
-- **模型随包内置** —— 离线优先但 DMG +57 MB。为精简 DMG 否决;改为首次使用时下载到
+- **模型随包内置** —— 离线优先但发布体积 +57 MB。为保持精简否决;改为首次使用时下载到
   `~/.coffer/models/`。
 
 ## 后果
 
-- 冻结的桌面 App **本地、torch-free、Metal 加速地**转写入站语音;即使 build 时装了
+- 冻结的 App **本地、torch-free、Metal 加速地**转写入站语音;即使 build 时装了
   `[voice]`,所有 `coffer-*` 二进制仍保持 ~95 MB。
 - `make bundle-binaries` 现在需要 **`cmake` + 联网 + 一次性 C++ 构建** whisper.cpp(固定、
-  缓存在 `build/` 下)。CI `desktop-build` 与本地桌面构建都要有 `cmake`(`brew install cmake`);
+  缓存在 `build/` 下)。CI 与本地冻结构建都要有 `cmake`(`brew install cmake`);
   缺失时脚本明确报错。
 - `[voice]` extra 现在就是 torch-free 的解码栈(`soundfile` + `soxr`),装进冻结 build venv
   并打进 daemon(体积小)。`mlx-whisper` 移到单独的 `[voice-mlx]` extra(仅源码运行

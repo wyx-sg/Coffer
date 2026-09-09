@@ -71,7 +71,6 @@ Guide              (authored, bilingual)
   · Register an MCP server
   · Connect a client (Claude Code / Codex)
   · Web UI
-  · Desktop app
   · Concepts (resource kind · gateway · shim · local-first)
 
 Architecture       (authored deep-dive, bilingual, Mermaid; ordered by
@@ -81,21 +80,21 @@ Architecture       (authored deep-dive, bilingual, Mermaid; ordered by
   · Daemon & processes (detect-or-spawn + startup sequence diagram)
   · Resource framework (everything is a kind + lifecycle state diagram)
   · Layering & boundaries (import rules + importlinter)
-  · Surfaces (REST · MCP · CLI · shim · Web · Desktop — uniform template)
+  · Surfaces (REST · MCP · CLI · shim · callback · Web — uniform template)
   · Request lifecycle (end-to-end tool call + sequence diagram + error path)
   · Persistence (SQLite + table map + migrations)
   · Security (invariants: loopback · encrypted-credential-store · namespacing)
   · Audit & accountability (audit log · invocation log · retention)
   · Observability (structured logging · trace correlation · error model)
-  · Distribution (PyInstaller + Tauri sidecar)
+  · Distribution (PyInstaller — single CLI archive; daemon-served web UI)
 
 Reference          (synced from the repo at build time — see §4; an authored
                     landing page + an auto-generated grouped, collapsible
                     sidebar — see §6)
   · Specs: every folder under specs/ — currently 001 MCP Gateway · 002 UI
-           Shell · 003 Desktop (whichever of spec / plan / data-model /
-           quickstart / research each folder has); future specs appear
-           automatically as they merge to main
+           Shell (whichever of spec / plan / data-model / quickstart /
+           research each folder has); future specs appear automatically as
+           they merge to main
   · ADRs: every ADR under docs/decisions/ (currently ADR-001 … ADR-008) + index
   · Project memory: Constitution · Roadmap · Architecture (canonical)
   · Engineering conventions (agents/*)
@@ -122,7 +121,7 @@ pages we hand-maintain in both languages.
 The full specs, ADRs, project-memory docs, and engineering conventions are
 **already canonical Markdown in the repo, and already bilingual** via the
 existing `.zh.md` convention (verified: `.specify/memory/*`, all ADRs,
-`agents/*`, and `specs/001–003` ship `.zh.md` siblings).
+`agents/*`, and the spec folders ship `.zh.md` siblings).
 
 A build-time sync script copies them into the site so there is **one source of
 truth and zero drift** (honoring the constitution's Spec-as-Truth principle):

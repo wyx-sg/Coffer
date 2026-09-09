@@ -56,7 +56,7 @@ Frozen dataclass; one per Markdown file, **discriminated by `kind`**. KB and mem
 | `metadata`                  | `dict`        | Per-face JSON; KB keys below.                                                                                                                                     |
 | `created_at` / `updated_at` | `datetime`    | UTC.                                                                                                                                                              |
 
-KB `metadata` keys: `original_filename` (the re-upload match key), `original_format`, `source_sha256` (provenance), `converted_at`, `conversion_engine`, and the optional `source_path` (the external original's absolute path, set only by path-based ingests — CLI / desktop picker — so its on-disk drift can later be detected by `check_sources`; machine-local, never set by web byte-upload or agent `add_document`).
+KB `metadata` keys: `original_filename` (the re-upload match key), `original_format`, `source_sha256` (provenance), `converted_at`, `conversion_engine`, and the optional `source_path` (the external original's absolute path, set only by path-based ingests — CLI / native file picker — so its on-disk drift can later be detected by `check_sources`; machine-local, never set by web byte-upload or agent `add_document`).
 
 ### `Passage`, `GrepHit`, `SearchResult` (`domain/knowledge/retrieval.py`)
 

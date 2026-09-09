@@ -294,7 +294,7 @@ Commentary:
   update_available and not pinned`. It is surfaced across all three surfaces:
   `POST /skills/{name}/check-update` · `/pin` · `/unpin` (HTTP), the
   `coffer skill check-update`/`pin`/`unpin` CLI plus an `update:` row in
-  `skill show`, and an update row on the desktop skill detail. Local-imported
+  `skill show`, and an update row on the web UI skill detail. Local-imported
   skills cannot be checked (`UpdateNotSupported` — re-import to refresh), and
   `plan.md`'s deferral now scopes only to commit-level pinning / multi-version
   coexistence, not update detection. [`repo:backend/coffer/application/skill/update_ops.py`,

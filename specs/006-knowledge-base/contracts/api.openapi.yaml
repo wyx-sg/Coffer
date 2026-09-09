@@ -115,7 +115,7 @@ paths:
                   nullable: true
                   description: >
                     Absolute path of the external original, supplied only by trusted clients
-                    (CLI / desktop picker) so source-update detection can later re-hash it.
+                    (CLI / native file picker) so source-update detection can later re-hash it.
                     The web surface forwards what the client sends and never auto-derives a
                     server path; an untrusted upload leaves this unset.
       responses:

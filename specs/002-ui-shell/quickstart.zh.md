@@ -32,7 +32,7 @@ make dev
 - 重设计后的侧栏——基于角色的分组：**Agents**（`/agents`——你使用的 agent）、**Resources**（**MCP servers**，位于 `/mcp-servers`）、**System**（**Audit log** 位于 `/audit`、**Settings**）。当前路由高亮。点击收起手柄在完整与图标态之间切换；选择跨刷新持久化。（`/resources` 仍可用——它是指向 `/mcp-servers` 的 legacy 重定向。）
 - Agents 欢迎卡片，介绍 Coffer 是什么，并给出一个主行动：**Add agent**。对应的 **Add MCP server** 欢迎卡片在 **MCP servers**（`/mcp-servers`），一步可达。
 
-如果 daemon 没在跑（你跳过了 `make dev`，或它崩了），你会看到一个 "Daemon not running" 视图，带一个「重新加载」恢复操作（桌面应用提供「重启」）。把 daemon 拉起来，视图会在下一次渲染就自动恢复——不需要手动刷页（见 `daemon-offline banner` acceptance scenario）。
+如果 daemon 没在跑（你跳过了 `make dev`，或它崩了），你会看到一个 "Daemon not running" 视图，带一个「重新加载」恢复操作。把 daemon 拉起来，视图会在下一次渲染就自动恢复——不需要手动刷页（见 `daemon-offline banner` acceptance scenario）。
 
 侧栏底部的语言切换器可在 English 与 中文 之间切换。切换在下一次渲染内生效，并以 `coffer.language` 为 key 存进 `localStorage`。
 

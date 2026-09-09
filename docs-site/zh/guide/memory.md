@@ -36,6 +36,6 @@ coffer memory unbind <store> claude-code
 - **Claude Code** —— 项目记忆目录被符号链接进 `~/.claude/projects/<slug>/memory/`,自动生成的 `MEMORY.md` 索引遵循 Claude Code 自身的记忆格式。
 - **Codex** —— 事实渲染进 `AGENTS.md` 中一个受管区块;Codex 的原生记忆被禁用,因此绝不会出现第二份副本。
 
-agent 同样获得 MCP 工具:`coffer__remember`、`coffer__recall`、`coffer__update_memory`、`coffer__forget` 和 `coffer__list_memory`。一个桌面 UI 让你按作用域浏览与整理事实。
+agent 同样获得 MCP 工具:`coffer__remember`、`coffer__recall`、`coffer__update_memory`、`coffer__forget` 和 `coffer__list_memory`。Web UI 让你按作用域浏览与整理事实。
 
 [渠道 →](/zh/guide/channels)

@@ -21,7 +21,7 @@ coffer chat -c <conversation-id>                      # 恢复一个对话
 ```
 
 - `coffer model add --name … --provider <anthropic|openai|ollama> --model … [--default]` 注册一个模型;`coffer model list` / `edit` / `rm` 管理它们。
-- CLI 对话与桌面、Web 应用展示的是同一批对话 —— 它们保存在 SQLite 中,重启后依然存在。
+- CLI 对话与 Web UI 展示的是同一批对话 —— 它们保存在 SQLite 中,重启后依然存在。
 
 ::: tip 与 Claude Code / Codex 对话
 选择 CLI agent 及其工作目录是在应用的**新建对话**对话框里完成的,而非命令行 —— `coffer chat` 始终使用内置 agent。

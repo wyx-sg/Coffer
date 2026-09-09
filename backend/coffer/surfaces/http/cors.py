@@ -1,10 +1,17 @@
-"""CORS allowlist for browser-origin requests (Tauri + Vite dev).
+"""CORS allowlist for browser-origin requests.
 
-Origins:
-- Production builds only allow ``tauri://localhost`` and ``http://tauri.localhost``.
-- Set ``COFFER_DEV_CORS=1`` to additionally allow ``http://localhost:5173``
-  and ``http://127.0.0.1:5173`` for the Vite dev server.
-- Or override the entire list with ``COFFER_CORS_ORIGINS`` (comma-separated).
+The daemon serves the web UI at its own origin now (spec 001 FR-024), so the
+production path is **same-origin** and needs no CORS at all — the browser does
+not preflight a request to the page's own origin. That makes the empty
+allowlist the correct default, and a narrower one than the desktop shell's
+``tauri://localhost``.
+
+What remains is development, where Vite serves the UI on :5173 while the API
+stays on the daemon's port:
+
+- ``COFFER_DEV_CORS=1`` allows ``http://localhost:5173`` and
+  ``http://127.0.0.1:5173``.
+- ``COFFER_CORS_ORIGINS`` (comma-separated) overrides the list entirely.
 
 ``allow_credentials`` stays False — cookies are never used; auth is the
 ``X-Coffer-Token`` header alone.
@@ -17,14 +24,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Production-safe defaults: the Tauri shim runs the UI under a dedicated
-# scheme, and we never need to accept random localhost ports.
-_PROD_ORIGINS: tuple[str, ...] = (
-    "tauri://localhost",
-    "http://tauri.localhost",
-)
-
-_DEV_EXTRA_ORIGINS: tuple[str, ...] = (
+_DEV_ORIGINS: tuple[str, ...] = (
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 )
@@ -35,12 +35,12 @@ def _resolve_origins() -> list[str]:
     if explicit:
         return [o.strip() for o in explicit.split(",") if o.strip()]
     if os.environ.get("COFFER_DEV_CORS") == "1":
-        return list(_PROD_ORIGINS + _DEV_EXTRA_ORIGINS)
-    return list(_PROD_ORIGINS)
+        return list(_DEV_ORIGINS)
+    return []
 
 
-# Back-compat export for any code/test that imports the constant directly.
-ALLOWED_ORIGINS: tuple[str, ...] = _PROD_ORIGINS + _DEV_EXTRA_ORIGINS
+# Back-compat export for any code/test importing the constant directly.
+ALLOWED_ORIGINS: tuple[str, ...] = _DEV_ORIGINS
 
 
 def install(app: FastAPI) -> None:

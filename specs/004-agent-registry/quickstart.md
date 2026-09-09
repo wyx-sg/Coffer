@@ -53,10 +53,10 @@ reported with the specific reason. The supported types are `claude_code` and
 The name is optional — omit `--name` and Coffer derives a stable per-type
 default (underscores become hyphens, e.g. `claude_code` → `claude-code`).
 `--config-dir` is optional too — omit it and Coffer uses the type's standard
-location (`~/.claude` for Claude Code, `~/.codex` for Codex). In the desktop
-app, the add/edit form offers a **folder picker** for choosing a custom config
-directory instead of typing the path: the OS-native directory dialog in the
-packaged app, and a daemon-backed folder browser on the web.
+location (`~/.claude` for Claude Code, `~/.codex` for Codex). In the web UI,
+the add/edit form offers a **folder picker** for choosing a custom config
+directory instead of typing the path: the host's native directory dialog opened
+through the daemon, falling back to a daemon-backed folder browser.
 
 ## Update an agent
 
@@ -84,7 +84,7 @@ coffer agent detect
 ```
 
 This lists the candidates read-only; it registers nothing. Add one with
-`coffer agent add <type> ...` (or confirm it from the desktop Agents page).
+`coffer agent add <type> ...` (or confirm it from the web Agents page).
 
 ## View an agent's config files
 
@@ -128,7 +128,7 @@ On save, Coffer validates the content against the file's format (malformed
 atomically, and keeps a `.bak` of the prior version so a bad edit is
 recoverable. If the file changed on disk since you read it, the save is
 rejected and the editor offers a reload instead of silently overwriting. The
-desktop Config-files tab shows each file **read-only** and offers
+Config-files tab shows each file **read-only** and offers
 open-in-external-editor / reveal-in-file-manager for the file and
 its containing folder, so you edit in your own editor (Coffer uses your
 "preferred external editor" preference from Settings); the `coffer agent config
@@ -222,7 +222,7 @@ coffer agent mcp uninstall claude-code   # removes it
 (`~/.claude.json` for Claude Code, `~/.codex/config.toml` for Codex) pointing
 at the absolute path of `coffer-mcp-shim`. It is idempotent, backs up the
 prior config to `.bak`, and is also available as a one-click button on the
-desktop Agents page. Restart your agent afterward to pick up Coffer's tools.
+web Agents page. Restart your agent afterward to pick up Coffer's tools.
 
 ## What happens behind the scenes
 

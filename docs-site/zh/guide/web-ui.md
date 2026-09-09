@@ -19,8 +19,30 @@ SYSTEM
   Settings
 ```
 
-对于最终用户，Web UI **内嵌在[桌面应用](/zh/guide/desktop)中**发布，无需单独安装或
-启动服务器。对于从 checkout 工作的开发者，它以 Vite 开发服务器方式运行（见下文）。
+**守护进程自己提供 Web UI**，在它自己的 loopback origin 上以静态文件的形式发布，
+因此页面与 REST API 同源。没有额外要装的东西，也没有第二个服务器要起：守护进程在跑，
+UI 就在。
+
+## 打开 Web UI
+
+```bash
+coffer open
+```
+
+`coffer open` 从 `~/.coffer/daemon.json` 读取守护进程的地址与 token，向守护进程申请一个
+**一次性、短时效的 code**，然后在守护进程自己的地址上打开浏览器，并把该 code 放在 URL
+的 fragment 里。页面用该 code 换取 API token 并保存在 `localStorage` 中，之后直接访问
+`http://127.0.0.1:<port>/` 即可使用。
+
+token 本身绝不会被放进 URL —— 那会把它写进浏览器历史记录。而交换用的 code 是一次性的，
+约一分钟即过期，因此留在历史记录里是无害的。
+
+如果守护进程没在运行，先启动它：
+
+```bash
+coffer daemon start
+coffer open
+```
 
 ## 在开发模式中打开 Web UI
 
@@ -41,8 +63,8 @@ make dev
 Vite 在确认守护进程可达（最长等待 30 秒）之后才会启动。用任意现代浏览器打开
 `http://localhost:5173/`。
 
-> **最终用户：** Web UI 已打包进桌面应用。安装方法请参阅
-> [桌面应用指南](/zh/guide/desktop)。
+> 开发服务器与守护进程不同源，因此需要跨源开关：`make dev` 已经为你设置了
+> `COFFER_DEV_CORS=1`。日常使用走 `coffer open`，那是同源的，不需要任何开关。
 
 ## 你可以做什么
 
@@ -135,4 +157,4 @@ agent 头部的 **Install Coffer MCP** 开关会将 Coffer 自身的 `coffer` MC
 ## 下一步
 
 - [注册 MCP server →](/zh/guide/register-server)
-- [桌面应用 →](/zh/guide/desktop)
+- [下载与安装 →](/zh/guide/install)

@@ -526,7 +526,7 @@ and `internal_default`.
   set-internal-default / delete, PLUS the Embedding card. The page shows ONLY
   connection (provider + model) info — no agent names, no presets, no modality
   split. Editing a connection is available via the CLI (`coffer provider edit`)
-  and the PATCH API, not the desktop page.
+  and the PATCH API, not the web page.
 - Per-agent connection + model selection lives on the **agent detail page
   (Overview tab)**, filtered to that agent's wire, reusing the activate API. The
   LLM Connections page does not bind agents.
@@ -850,9 +850,9 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
 **Surfaces**
 
 - **FR-017**: Create, switch, and delete operations MUST be available via (a) the
-  REST API, (b) `coffer provider ...` CLI with `--json`, and (c) the desktop
+  REST API, (b) `coffer provider ...` CLI with `--json`, and (c) the web
   Providers page. Editing a profile (PATCH) is available via the REST API and
-  the CLI (`coffer provider edit`) only; the desktop page does NOT require an
+  the CLI (`coffer provider edit`) only; the web page does NOT require an
   inline edit affordance.
 - **FR-018**: The CLI `key` subcommand MUST support `--wire <wire_format>` to
   resolve by the active profile for that wire. Resolution by positional `<name>`

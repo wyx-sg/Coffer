@@ -94,13 +94,26 @@ daemon 启动时通过 `secrets.token_urlsafe(32)` 生成一个 256 位 URL 安�
 
 token 可通过 `POST /api/v1/daemon/rotate-token` 进行轮换。轮换后，旧 token 立即失效，新 token 写入 `daemon.json`。轮换事件以 `token_rotated` 记录在审计日志中。
 
-客户端（CLI、shim、桌面 shell）都会在首次鉴权调用前从 `daemon.json` 读取 token。由于 `daemon.json` 的权限为 `0600`，只有进程所有者才能读取它——这构成了针对远程进程威胁的完整访问控制机制。
+客户端（CLI、shim）都会在首次鉴权调用前从 `daemon.json` 读取 token。由于 `daemon.json` 的权限为 `0600`，只有进程所有者才能读取它——这构成了针对远程进程威胁的完整访问控制机制。
 
 ## CORS 配置
 
 daemon 配置 CORS 以拒绝浏览器上下文中的跨域请求。由于 HTTP API 绑定到 loopback，主要风险是在同一台机器上打开的恶意网页通过浏览器的 `fetch()` API 向 `http://127.0.0.1:<port>/api/v1/…` 发起请求。CORS header 阻断了这种攻击：只有与配置允许列表匹配的来源才被允许携带凭据或读取响应体。
 
-生产环境中，允许的来源是 Tauri 桌面 shell 的 `tauri://localhost` 和 `http://tauri.localhost`。仅当 `COFFER_DEV_CORS=1` 时才会添加 Vite 开发服务器来源（`http://localhost:5173` 和 `http://127.0.0.1:5173`）。整个列表可通过 `COFFER_CORS_ORIGINS` 覆盖。凭据始终不被允许（`allow_credentials=False`）——鉴权仅依赖 `X-Coffer-Token` header。不在允许列表中的来源在浏览器层面就会收到 CORS 拒绝，甚至在 token 检测运行之前——对浏览器端攻击向量的纵深防御。
+生产环境中，daemon 自己提供构建好的 Web UI，因此 UI 与 API 同源，CORS **默认即为同源**：允许列表为空，不放行任何跨源浏览器上下文。仅当 `COFFER_DEV_CORS=1` 时才会添加 Vite 开发服务器来源（`http://localhost:5173` 和 `http://127.0.0.1:5173`），这是一个面向前端开发的显式开关。整个列表可通过 `COFFER_CORS_ORIGINS` 覆盖。凭据始终不被允许（`allow_credentials=False`）——鉴权仅依赖 `X-Coffer-Token` header。不在允许列表中的来源在浏览器层面就会收到 CORS 拒绝，甚至在 token 检测运行之前——对浏览器端攻击向量的纵深防御。
+
+## token 如何进入浏览器
+
+Web UI 是一个浏览器页面，因此它需要拿到 CLI 与 shim 直接从 `daemon.json` 读取的那个 API token。把 token 放进 query string 是最省事的做法，而这恰恰是 Coffer **不**做的：query string 和路径会进入浏览器历史记录、会话恢复存储，以及任何跨设备同步历史的机制——那会瓦解 FR-012 / FR-013 的 loopback + token 安全姿态。
+
+取而代之，`coffer open` 执行一次 code 交换（**FR-025**）：
+
+1. `coffer open` 从 `~/.coffer/daemon.json`（权限 `0600`）读取端口与 token。
+2. 调用一个需要鉴权的端点，签发一个**一次性、短时效的 code** —— 有效期约一分钟。
+3. 在 daemon 自己的 origin 上打开浏览器，并把该 code 放在 URL 的 **fragment** 里；浏览器不会把 fragment 发给服务端，它也是 URL 中最不容易被留存的部分。
+4. 页面把 code 回传，换得 API token 并存入 `localStorage`；该 code 在首次使用后即作废。
+
+于是 token 从不出现在 URL 中。code 会出现，但它是一次性的，且在任何人翻看那条历史记录之前早已过期，因此它留在那里是无害的。
 
 ## 出站 HTTP：真实路径与计划中的加固
 

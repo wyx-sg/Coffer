@@ -5,7 +5,7 @@
 // times — with a search box, page-based (server) pagination, bulk select, and
 // per-row "distill to memory" + a "⋯" menu of file actions. We mock the hook
 // module (per agents/frontend.md §8) and FileActions (covered by its own test)
-// so the component renders deterministically without network, toast, or Tauri.
+// so the component renders deterministically without network or toast.
 
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -34,7 +34,7 @@ vi.mock("@/lib/hooks/useAgentChatHistory", () => ({
   })),
 }));
 
-// The row's file actions pull in Tauri + toast + preferences; they have their
+// The row's file actions pull in toast + preferences; they have their
 // own test. Here we stub the useFileActionItems hook the row uses so the source
 // path can be asserted as wired through without driving the real fs actions.
 const fileItems = [{ key: "open", label: "Open in editor", onClick: vi.fn() }];

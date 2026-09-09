@@ -19,8 +19,7 @@ flowchart TD
     subgraph coffer["Coffer (local, 127.0.0.1)"]
         CLI["coffer CLI\n(short-lived)"]
         SHIM["coffer-mcp-shim\n(per-client session)"]
-        WEBUI["Web UI\n(browser)"]
-        DESKTOP["Desktop app\n(Tauri 2 / Rust + WebView)"]
+        WEBUI["Web UI\n(browser, served by the daemon)"]
         DAEMON["coffer-daemon\nFastAPI · auto-port\n/api/v1  /mcp\n6 kinds + chat/channels/export"]
         CB["coffer callback listener\n(daemon-spawned child)\nPOST /seatalk/{channel}"]
         DB[("SQLite\n~/.coffer/coffer.db")]
@@ -40,7 +39,7 @@ flowchart TD
     SHIM -->|"HTTP/SSE\nX-Coffer-Token"| DAEMON
     CLI -->|"loopback HTTP\nX-Coffer-Token"| DAEMON
     WEBUI -->|"REST /api/v1\nX-Coffer-Token"| DAEMON
-    DESKTOP -->|"REST /api/v1\nX-Coffer-Token"| DAEMON
+    DAEMON -->|"serves built UI\nsame-origin static files"| WEBUI
     DAEMON --- DB
     DAEMON --- MK
     DAEMON --- FILES
@@ -62,8 +61,7 @@ flowchart TD
 | `coffer` callback listener     | Daemon-spawned child process                     | Serves only signed channel webhooks (`POST /seatalk/{channel}`) on a loopback port behind a user-run tunnel; verifies the SeaTalk signature and forwards events to the daemon. Runs while a SeaTalk channel is enabled (ADR-014).                                                                                     |
 | `coffer-mcp-shim`              | Short-lived process (one per MCP client session) | Bridges MCP client stdio ↔ daemon HTTP/SSE. Detects a running daemon or spawns one.                                                                                                                                                                                                                                   |
 | `coffer` CLI                   | Short-lived child process                        | User-facing management commands. Calls the daemon over loopback HTTP.                                                                                                                                                                                                                                                 |
-| Web UI                         | Browser process                                  | Management interface. In development, served by the Vite dev server at `http://localhost:5173`; in production, embedded by the Tauri desktop shell. Calls REST API.                                                                                                                                                   |
-| Desktop app                    | Native process (Tauri 2, Rust + WebView)         | Embeds the Web UI in a native desktop window. Communicates with the daemon via REST.                                                                                                                                                                                                                                  |
+| Web UI                         | Browser process                                  | Management interface. In production the daemon serves the built UI itself, as static files at its own loopback origin — same-origin with the REST API; `coffer open` launches the browser and hands the page a token via a single-use code. In development, the Vite dev server at `http://localhost:5173` serves it instead.                                                                                                                                                   |
 | REST API (`/api/v1`)           | HTTP surface on daemon                           | Management plane: CRUD for resources, audit log, settings. Token + CORS authenticated.                                                                                                                                                                                                                                |
 | MCP endpoint (`/mcp`)          | HTTP/SSE surface on daemon                       | MCP JSON-RPC endpoint. This is what the shim connects to. Forwards namespaced tool calls to upstream subprocesses.                                                                                                                                                                                                    |
 | SQLite (`~/.coffer/coffer.db`) | Persistent store                                 | Control-plane state: resource registrations, capability preferences, audit log, retention policies, and secrets as Fernet ciphertext in the `credentials` table. WAL mode, single writer.                                                                                                                             |
@@ -103,7 +101,7 @@ The pages that follow each explore one slice of the system in depth:
 | [Daemon & processes](/architecture/processes)          | Process model, detect-or-spawn, upstream subprocess lifecycle             |
 | [Resource framework](/architecture/resource-framework) | The kind-agnostic abstraction that unifies identity, lifecycle, and audit |
 | [Layering & boundaries](/architecture/layering)        | Import rules, layer responsibilities, enforcement                         |
-| [Surfaces](/architecture/surfaces)                     | REST API, MCP endpoint, CLI, Web UI, Desktop                              |
+| [Surfaces](/architecture/surfaces)                     | REST API, MCP endpoint, CLI, stdio shim, Web UI                           |
 | [Request lifecycle](/architecture/request-lifecycle)   | End-to-end trace of a tool call from client to upstream                   |
 | [Persistence](/architecture/persistence)               | SQLite schema, WAL, Alembic, JSON field handling                          |
 | [Security](/architecture/security)                     | Token auth, encrypted credential store, SSRF guard, loopback enforcement  |

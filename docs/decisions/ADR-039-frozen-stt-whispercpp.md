@@ -19,7 +19,7 @@ That lazy import defeats the frozen build. PyInstaller scans function bodies, so
 `llvmlite` + `scipy` into **every** `coffer-*` binary (each `collect_submodules("coffer")`
 pulls the whole package). The binaries balloon from ~94 MB to ~260 MB, and `torch`
 is fragile under PyInstaller. The standing workaround uninstalls `mlx-whisper` before
-bundling — so in the frozen desktop app the lazy import fails and voice silently
+bundling — so in the frozen app the lazy import fails and voice silently
 degrades to "hand the agent the audio file" instead of a transcript. **The shipped
 app cannot transcribe voice.**
 
@@ -37,11 +37,16 @@ construction; `mlx-whisper` stays the source-run fallback.**
    `scipy`, `sympy`, `networkx`, `mpmath`). The `[voice]` extra may now stay installed
    in the build venv and the binaries remain ~95 MB and torch-free.
 
-2. **STT as a sidecar binary**, mirroring `coffer-callback` (ADR/​PR #240): `whisper.cpp`'s
+2. **STT as a sibling binary**, mirroring `coffer-callback` (ADR/​PR #240): `whisper.cpp`'s
    `whisper-cli` (Apple-Silicon Metal, no Python/torch) is built from a **pinned tag**
-   (`v1.9.1`) in `build_binaries.sh`, packaged via Tauri `externalBin`, and deployed to
-   `~/.coffer/bin` by `shim.rs` alongside the other sidecars. The daemon resolves it as
-   a sibling of its own executable when frozen, or on `PATH` when run from source.
+   (`v1.9.1`) in `build_binaries.sh` and shipped alongside the other frozen binaries.
+   On a frozen start the **daemon** deploys it into `~/.coffer/bin/` together with its
+   siblings (spec 001 FR-026) — an atomic temp-copy-then-rename, guarded by a 3-signal
+   staleness check (byte size, mtime, version sentinel). The daemon resolves it as a
+   sibling of its own executable when frozen, or on `PATH` when run from source.
+
+   > **2026-09-09:** this deployment step used to belong to the Tauri desktop shell
+   > (`shim.rs`, `externalBin`); it moved to the daemon when that shell was removed.
 
 3. **`WhisperCppTranscriber` implements the seam.** It decodes the audio **in-process**
    with `soundfile` (libsndfile handles OGG/Opus — the Telegram voice format — plus
@@ -52,8 +57,8 @@ construction; `mlx-whisper` stays the source-run fallback.**
 
 4. **Model downloaded on first use.** The `ggml-base-q5_1` multilingual model (~57 MB)
    is fetched once to `~/.coffer/models/` (whisper.cpp's `models/` convention), not
-   bundled, to keep the DMG lean. Offline on the first voice message degrades to file
-   handoff until the model is cached.
+   bundled, to keep the shipped binaries lean. Offline on the first voice message
+   degrades to file handoff until the model is cached.
 
 5. **Best-available selection.** `default_transcriber()` picks the engine: `whisper.cpp`
    (frozen, or source with a `whisper-cli` on `PATH`) → `mlx-whisper` (source-run
@@ -76,17 +81,16 @@ construction; `mlx-whisper` stays the source-run fallback.**
   `soundfile`/libsndfile already decodes the OGG/Opus voice case (verified on
   macOS arm64) plus wav/flac/mp3 in-process. Chosen the lean in-process path; exotic
   formats degrade to file handoff.
-- **Ship the model in the bundle** — offline-first but +57 MB DMG. Rejected for a lean
-  DMG; download-on-first-use to `~/.coffer/models/` instead.
+- **Ship the model in the bundle** — offline-first but +57 MB shipped. Rejected for a
+  lean bundle; download-on-first-use to `~/.coffer/models/` instead.
 
 ## Consequences
 
-- The frozen desktop app transcribes inbound voice **locally, torch-free, Metal-accelerated**;
+- The frozen app transcribes inbound voice **locally, torch-free, Metal-accelerated**;
   all `coffer-*` binaries stay ~95 MB even with `[voice]` installed at build time.
 - `make bundle-binaries` now needs **`cmake` + network + a one-time C++ build** of
-  `whisper.cpp` (pinned, cached under `build/`). CI `desktop-build` and local desktop
-  builds must have `cmake` (`brew install cmake`); the script errors clearly when it is
-  absent.
+  `whisper.cpp` (pinned, cached under `build/`). CI and local frozen builds must have
+  `cmake` (`brew install cmake`); the script errors clearly when it is absent.
 - The `[voice]` extra is now the torch-free decode stack (`soundfile` + `soxr`),
   installed into the frozen build venv and bundled into the daemon (small).
   `mlx-whisper` moves to a separate `[voice-mlx]` extra (source-run fallback only) and

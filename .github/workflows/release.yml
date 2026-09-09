@@ -55,21 +55,6 @@ jobs:
           cache-dependency-path: |
             frontend/package-lock.json
 
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-        with:
-          targets: ${{ matrix.triple }}
-
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            ~/.cargo/bin
-            desktop/target
-          key: ${{ runner.os }}-${{ matrix.triple }}-cargo-${{ hashFiles('desktop/Cargo.toml', 'desktop/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.triple }}-cargo-
-
       - name: install backend (frozen; includes pyinstaller via dev extras)
         shell: bash
         # UV_PROJECT_ENVIRONMENT pins the venv to the repo-root .venv that
@@ -91,14 +76,14 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      # Only run codegen here. The frontend production build is performed once
-      # by Tauri's beforeBuildCommand (see desktop/tauri.conf.json) during
-      # `cargo tauri build`; a second explicit `npm run build` would be wasted
-      # work. e2e deps are not used by this job and are intentionally not
-      # installed.
-      - name: codegen frontend
+      # Codegen, then the production build of the web UI the daemon serves
+      # over loopback. e2e deps are not used by this job and are intentionally
+      # not installed.
+      - name: build frontend
         working-directory: frontend
-        run: npm run codegen
+        run: |
+          npm run codegen
+          npm run build
 
       # build_binaries.sh builds the whisper-cli STT sidecar from source with
       # cmake (ADR-039). macOS runners ship cmake, but guard explicitly so a
@@ -111,134 +96,51 @@ jobs:
         shell: bash
         run: bash scripts/build_binaries.sh
 
-      - name: install Tauri CLI
-        # Pin to an exact 2.x release. Bump deliberately in a follow-up PR.
-        # Idempotent across warm caches: the cache above restores ~/.cargo/bin,
-        # so cargo-tauri may already be present from a prior run — a plain
-        # `cargo install` then aborts with "binary `cargo-tauri` already exists
-        # in destination". Skip when the pinned version is already installed;
-        # otherwise (re)install with --force.
-        shell: bash
-        run: |
-          if cargo tauri --version 2>/dev/null | grep -q "2.11.2"; then
-            echo "cargo-tauri 2.11.2 already present (cache hit) — skipping install"
-          else
-            cargo install --locked --force tauri-cli --version "=2.11.2"
-          fi
-
-      # macOS code-signing + notarization is intentionally NOT wired here.
-      # When the Apple Developer ID is provisioned, set the certificate
-      # + identity repo secrets and add a dedicated workflow (e.g.
-      # release-macos-signed.yml) gated on the secret being non-empty.
-      # We deliberately do NOT reference those secrets from this file:
-      # a disabled step that names them still surfaces in repo-secret
-      # audits and security tooling. See
-      # docs/distribution/macos-notarization.md for the full setup guide.
-      # Until then, macOS artifacts are renamed `-unsigned` in the
-      # collect step above so downloaders are not misled.
-
-      - name: cargo tauri build
-        working-directory: desktop
-        run: cargo tauri build --target ${{ matrix.triple }}
-
       # Acceptance scenario: "post-build smoke test boots shim and gets a
-      # JSON-RPC reply". Run the smoke test against the freshly staged sidecar
-      # binaries (the same binaries Tauri just bundled). The script starts the
-      # bundled coffer-daemon, runs the shim, and asserts a JSON-RPC round-trip.
+      # JSON-RPC reply". build_binaries.sh stages every binary into dist/ under
+      # its plain name, which is exactly the layout the CLI archive ships, so
+      # the script can probe dist/ directly. It starts the built coffer-daemon,
+      # runs the shim against it, and asserts a JSON-RPC round-trip.
       - name: post-build smoke test
         shell: bash
-        run: |
-          set -euo pipefail
-          # build_binaries.sh stages the sidecars with triple suffixes
-          # (coffer-daemon-<triple>); the smoke script probes the un-suffixed
-          # basenames, so copy them into a temp dir under those names first.
-          smokedir="$(mktemp -d)"
-          cp "desktop/binaries/coffer-daemon-${{ matrix.triple }}" \
-             "$smokedir/coffer-daemon"
-          cp "desktop/binaries/coffer-mcp-shim-${{ matrix.triple }}" \
-             "$smokedir/coffer-mcp-shim"
-          cp "desktop/binaries/coffer-${{ matrix.triple }}" \
-             "$smokedir/coffer"
-          bash scripts/smoke_test_bundle.sh "$smokedir"
+        run: bash scripts/smoke_test_bundle.sh dist
 
-      # NOTE: cp failures here are signal, not noise — if the bundle dir is
-      # missing or empty we want the workflow to red, not silently upload a
-      # tarball with one DMG missing. `shopt -s nullglob` lets the glob
-      # expand to nothing without error, but if the glob DOES match anything
-      # we let cp's exit status propagate.
-      - name: collect artifacts (macOS)
-        if: startsWith(matrix.os, 'macos')
-        shell: bash
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          mkdir -p artifacts
-          dmgs=(desktop/target/${{ matrix.triple }}/release/bundle/dmg/*.dmg)
-          apps=(desktop/target/${{ matrix.triple }}/release/bundle/macos/Coffer.app)
-          if (( ${#dmgs[@]} )); then cp -R "${dmgs[@]}" artifacts/; fi
-          if (( ${#apps[@]} )); then cp -R "${apps[@]}" artifacts/; fi
-          # macOS bundle is unsigned until APPLE_* secrets are wired (see
-          # CODE24-020). The .app is a DIRECTORY — zip it into a single file so
-          # it can be checksummed (sha256sum/shasum on a directory exits
-          # non-zero under `set -euo pipefail` and would fail the whole job)
-          # and rename to make the unsigned status visible in download UIs.
-          for app in artifacts/Coffer.app; do
-            [ -d "$app" ] || continue
-            ditto -c -k --sequesterRsrc --keepParent \
-              "$app" "artifacts/Coffer-unsigned-${{ matrix.triple }}.app.zip"
-            rm -rf "$app"
-          done
-          for dmg in artifacts/*.dmg; do
-            [ -f "$dmg" ] || continue
-            base="$(basename "$dmg" .dmg)"
-            case "$base" in
-              *-unsigned) ;;  # already tagged
-              *) mv "$dmg" "artifacts/${base}-unsigned.dmg" ;;
-            esac
-          done
-
-      # CLI-only download tier: package the three CLI binaries (coffer,
-      # coffer-daemon, coffer-mcp-shim) into one tar.gz for macOS. The archive
-      # contains
-      # PLAIN binary names (no triple suffix) so that both the one-line
-      # installer and manual extraction yield co-located plain-named binaries,
-      # which is required by the frozen detect-or-spawn logic (ADR-006):
-      # `coffer` looks for `coffer-daemon` next to itself at runtime.
-      - name: package CLI-only archive
+      # The single download tier: every binary build_binaries.sh produced,
+      # packaged into one tar.gz. The archive contains PLAIN binary names (no
+      # triple suffix) so both the one-line installer and manual extraction
+      # yield co-located plain-named binaries, which the frozen detect-or-spawn
+      # logic requires (ADR-006): `coffer` looks for `coffer-daemon` next to
+      # itself at runtime, and the daemon deploys `coffer-hook`,
+      # `coffer-callback` and `whisper-cli` from its own directory into
+      # ~/.coffer/bin/ at startup.
+      - name: package CLI archive
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p artifacts
           triple="${{ matrix.triple }}"
-          # Source paths: triple-suffixed names produced by build_binaries.sh
-          src_daemon="desktop/binaries/coffer-daemon-${triple}"
-          src_shim="desktop/binaries/coffer-mcp-shim-${triple}"
-          src_cli="desktop/binaries/coffer-${triple}"
-          if [ ! -f "$src_daemon" ] || \
-             [ ! -f "$src_shim" ] || \
-             [ ! -f "$src_cli" ]; then
-            echo "error: CLI sidecars missing in desktop/binaries/" >&2
-            ls -la desktop/binaries/ >&2 || true
-            exit 1
-          fi
-          # Stage under plain names into a temp dir so the archive contents
-          # are clean (no triple suffix). All three must be co-located so
-          # detect-or-spawn can find coffer-daemon next to coffer at runtime.
-          stagedir="$(mktemp -d)"
-          cp "$src_daemon" "$stagedir/coffer-daemon"
-          cp "$src_shim"   "$stagedir/coffer-mcp-shim"
-          cp "$src_cli"    "$stagedir/coffer"
+          binaries=(
+            coffer
+            coffer-daemon
+            coffer-mcp-shim
+            coffer-hook
+            coffer-callback
+            whisper-cli
+          )
+          for b in "${binaries[@]}"; do
+            if [ ! -f "dist/$b" ]; then
+              echo "error: dist/$b missing — build_binaries.sh did not produce it" >&2
+              ls -la dist/ >&2 || true
+              exit 1
+            fi
+          done
           archive="coffer-cli-${triple}.tar.gz"
-          tar -czf "artifacts/$archive" -C "$stagedir" \
-              "coffer" "coffer-daemon" "coffer-mcp-shim"
-          rm -rf "$stagedir"
-          echo "packaged CLI tier: artifacts/$archive"
+          tar -czf "artifacts/$archive" -C dist "${binaries[@]}"
+          echo "packaged: artifacts/$archive"
 
-      # Generate SHA-256 checksums so downloaders can verify bundle integrity
+      # Generate SHA-256 checksums so downloaders can verify archive integrity
       # without trusting the GitHub Release UI alone. Cross-platform shim:
-      # sha256sum on Linux, shasum -a 256 on macOS. We hash FILES
-      # only (the macOS .app is already zipped above) — hashing a directory
-      # exits non-zero under `set -euo pipefail` and would fail the job.
+      # sha256sum on Linux, shasum -a 256 on macOS.
       - name: compute SHA256SUMS
         shell: bash
         run: |
@@ -267,10 +169,10 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # Publish a GitHub Release with every platform's artifacts attached, so users
-  # can download both tiers (desktop installers + coffer-cli archives) from the
-  # Releases page. Runs once, only on a tag push, after all `bundle` matrix legs
-  # succeed. Uses the preinstalled gh CLI — no third-party actions to pin.
+  # Publish a GitHub Release with every platform's archive attached, so users
+  # can download coffer-cli from the Releases page. Runs once, only on a tag
+  # push, after all `bundle` matrix legs succeed. Uses the preinstalled gh CLI
+  # — no third-party actions to pin.
   release:
     needs: bundle
     if: startsWith(github.ref, 'refs/tags/')
@@ -292,7 +194,7 @@ jobs:
           # Each matrix leg shipped its own SHA256SUMS; concatenate them into one
           # (a flat copy would otherwise collide on the shared filename).
           find dist-artifacts -name SHA256SUMS -print0 | sort -z | xargs -0 cat > release/SHA256SUMS
-          # Copy every other artifact (desktop installers + coffer-cli archives) flat.
+          # Copy every coffer-cli archive flat.
           find dist-artifacts -type f ! -name SHA256SUMS -exec cp {} release/ \;
           echo "release assets:"
           ls -la release/
@@ -301,25 +203,20 @@ jobs:
         shell: bash
         run: |
           cat > release-notes.md <<'NOTES'
-          Coffer ships in two download tiers, built from the same binaries:
+          Download `coffer-cli-<platform>.tar.gz` and extract it. It contains
+          `coffer` (management CLI), `coffer-daemon`, `coffer-mcp-shim`,
+          `coffer-hook`, `coffer-callback` and `whisper-cli`. Keep the binaries
+          co-located: `coffer` finds `coffer-daemon` next to itself, and the
+          daemon deploys the helper binaries into `~/.coffer/bin/` on startup.
 
-          ### Desktop app (most users)
-
-          Download the macOS `.dmg` (Apple Silicon). The daemon, shim, and web
-          UI are bundled; install and launch. (Coffer ships macOS only.)
-
-          ### CLI-only (headless / servers)
-
-          Download `coffer-cli-<platform>.tar.gz`; it contains `coffer`
-          (management CLI), `coffer-daemon`, and `coffer-mcp-shim`.
-          Run the daemon and point your MCP clients at the shim.
+          Start the daemon and open the web UI it serves on loopback; point
+          your MCP clients at the shim.
 
           Verify downloads against `SHA256SUMS`.
 
-          > **macOS builds are unsigned** (notarisation pending) — macOS may say the app is
-          > "damaged" on first open (right-click → Open won't help). Clear the quarantine flag:
-          > `xattr -dr com.apple.quarantine /Applications/Coffer.app`
-          > (if it still won't open: `codesign --force --deep --sign - /Applications/Coffer.app`)
+          > **macOS builds are unsigned** (notarisation pending) — macOS blocks
+          > downloaded binaries until the quarantine flag is cleared:
+          > `xattr -dr com.apple.quarantine <extracted-directory>`
 
           Full install & usage guide: https://wyx-sg.github.io/Coffer/guide/install
           NOTES

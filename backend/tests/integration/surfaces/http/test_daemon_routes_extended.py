@@ -15,6 +15,7 @@ from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import create_async_engine_with_pragmas, session_maker
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.http import errors as err_handlers
+from coffer.surfaces.http import web_session
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.daemon_routes import router as daemon_router
 from coffer.surfaces.http.dependencies import get_audit_service
@@ -70,7 +71,8 @@ async def _client(tmp_path: Path, *, port: int = 8000):
 
 @pytest.mark.asyncio
 async def test_status_remains_unauthenticated(tmp_path):
-    """The /status endpoint must NOT require the token (Tauri readiness probe)."""
+    """The /status endpoint must NOT require the token — the CLI and the shim
+    probe it for readiness before any token has been read from daemon.json."""
     c, _ = await _client(tmp_path)
     async with c:
         r = await c.get("/api/v1/daemon/status", headers={})
@@ -242,3 +244,65 @@ async def test_rotate_token_records_token_rotated_audit(tmp_path):
     finally:
         await engine.dispose()
         set_active_token(None)
+
+
+# ---------------------------------------------------------------------------
+# Browser hand-off: one-time code → token (spec 001 FR-025)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_web_code_requires_the_token(tmp_path):
+    """Minting a code is an authenticated operation.
+
+    The code is a bearer credential for the token itself, so an unauthenticated
+    caller able to mint one would defeat the whole exchange.
+    """
+    c, _home = await _client(tmp_path)
+    try:
+        async with c:
+            r = await c.post("/api/v1/daemon/web-code", headers={"X-Coffer-Token": "wrong"})
+            assert r.status_code == 401
+    finally:
+        set_active_token(None)
+        web_session.reset()
+
+
+@pytest.mark.acceptance(
+    spec="001-mcp-gateway",
+    scenario="coffer open lands an authenticated browser session",
+)
+@pytest.mark.asyncio
+async def test_web_code_redeems_once_for_the_token(tmp_path):
+    """A minted code buys the token exactly once."""
+    c, _home = await _client(tmp_path)
+    try:
+        async with c:
+            minted = await c.post("/api/v1/daemon/web-code")
+            assert minted.status_code == 200
+            code = minted.json()["code"]
+            assert minted.json()["expires_in_seconds"] > 0
+
+            # Redeeming needs no token — the browser has none yet.
+            first = await c.post("/api/v1/daemon/web-session", json={"code": code}, headers={})
+            assert first.status_code == 200
+            assert first.json()["token"] == "initial-token"
+
+            # ...and the code is spent.
+            second = await c.post("/api/v1/daemon/web-session", json={"code": code})
+            assert second.status_code == 401
+    finally:
+        set_active_token(None)
+        web_session.reset()
+
+
+@pytest.mark.asyncio
+async def test_web_session_rejects_an_unknown_code(tmp_path):
+    c, _home = await _client(tmp_path)
+    try:
+        async with c:
+            r = await c.post("/api/v1/daemon/web-session", json={"code": "not-a-real-code"})
+            assert r.status_code == 401
+    finally:
+        set_active_token(None)
+        web_session.reset()

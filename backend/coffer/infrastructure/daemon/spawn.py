@@ -21,10 +21,11 @@ import shutil
 import sys
 from pathlib import Path
 
-#: Where the macOS desktop bundle stages its `coffer-daemon` sidecar
-#: (Tauri `externalBin` → `Coffer.app/Contents/MacOS/`). The install location
-#: is stable: the DMG instructs users to drag the app into /Applications.
-#: Module-level so tests can monkeypatch it.
+#: Where the retired macOS desktop bundle staged its `coffer-daemon`. Coffer
+#: no longer ships that bundle, but a machine that installed one still has it
+#: at this stable path, so the probe is kept as an upgrade courtesy: it costs
+#: one `exists()` and saves a user with an old /Applications/Coffer.app from a
+#: shim that cannot find a daemon. Module-level so tests can monkeypatch it.
 _MACOS_APP_BUNDLE_DAEMON = Path("/Applications/Coffer.app/Contents/MacOS/coffer-daemon")
 
 
@@ -42,17 +43,15 @@ def daemon_spawn_command() -> list[str]:
            co-locates all three binaries in ``~/.coffer/bin``;
         2. ``coffer-daemon`` on ``PATH`` (``shutil.which``) — covers separate
            installs and any layout where the bin dir is exported;
-        3. macOS only: the daemon staged inside the installed desktop bundle
-           (``/Applications/Coffer.app/Contents/MacOS/coffer-daemon``) —
-           covers a shim deployed by an older desktop build that did not yet
-           co-locate the daemon in ``~/.coffer/bin`` (e.g. after a reboot
-           with the app not running).
+        3. macOS only: the daemon staged inside a previously-installed
+           desktop bundle
+           (``/Applications/Coffer.app/Contents/MacOS/coffer-daemon``) — a
+           leftover from the retired desktop app, kept so a machine that
+           still has one is not stranded.
 
       The first candidate that exists wins. If none exists, the sibling
       path is returned as a best effort so the caller surfaces a single,
-      clear "failed to spawn daemon" error pointing at the log. (In the
-      desktop app the Tauri shell is the daemon's lifecycle manager and spawns
-      it from the bundle, so the shim's auto-spawn is only the fallback path.)
+      clear "failed to spawn daemon" error pointing at the log.
     """
     if getattr(sys, "frozen", False):
         # PyInstaller sets sys.frozen = True and sys.executable to the

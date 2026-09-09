@@ -388,8 +388,7 @@
       "preferredEditor": "首选编辑器",
       "preferredEditorHelp": "Coffer 打开受管文件所用的编辑器。可选一个检测到的编辑器，或直接填入应用名 / 启动命令；留空则用系统默认。",
       "preferredEditorSystemDefault": "系统默认",
-      "preferredEditorChoose": "选择编辑器",
-      "preferredEditorBrowse": "浏览…"
+      "preferredEditorChoose": "选择编辑器"
     },
     "retention": {
       "title": "数据保留",
@@ -565,11 +564,6 @@
       "body": "Coffer 守护进程停止响应。能力列表、工具调用和注册操作将一直失败，直到它重新启动。",
       "notReadyTitle": "守护进程未启动",
       "notReadyBody": "Coffer 的后台服务暂时还连不上。它通常会自动启动——请点「重试」；若问题仍未解决，请重启 Coffer。",
-      "outOfDateTitle": "守护进程版本过旧",
-      "outOfDateBody": "当前应用复用了上一个版本残留的旧后台服务。请重启守护进程，使应用与守护进程运行同一版本。",
-      "restart": "重启守护进程",
-      "restarting": "重启中…",
-      "reconnectFailed": "守护进程已重启，但应用未能重新连接：{{message}}。请退出并重新打开 Coffer。",
       "retry": "重试",
       "retrying": "重试中…",
       "webRestartHint": "浏览器无法重启它——请在终端运行："

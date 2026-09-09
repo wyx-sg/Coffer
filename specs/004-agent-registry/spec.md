@@ -31,11 +31,11 @@ When a developer opens the Agents page (or runs `coffer agent detect`), Coffer s
 
 ### User Story 2 — Manually register an agent with a custom path (Priority: P1)
 
-Some users install agents in non-default locations or have multiple installs (work vs personal). They need to add an agent by type, optionally overriding the config directory. The name is optional — when omitted Coffer derives a stable per-type default. When choosing a custom path, the desktop app offers a folder picker (the OS-native dialog in the packaged app; a daemon-backed folder browser on the web) so the user picks a real directory instead of typing it.
+Some users install agents in non-default locations or have multiple installs (work vs personal). They need to add an agent by type, optionally overriding the config directory. The name is optional — when omitted Coffer derives a stable per-type default. When choosing a custom path, the web UI offers a folder picker — the host's native directory dialog, opened through the local daemon — so the user picks a real directory instead of typing it.
 
 **Why this priority**: Discovery covers the common case; manual register covers the long tail. Without it the registry is incomplete.
 
-**Independent Test**: From the command line, register a `codex` agent named `codex-work` with `--config-dir /custom/path`; list agents; observe the manually-registered entry. From the desktop form, add an agent with no name and observe it registered under the per-type default name.
+**Independent Test**: From the command line, register a `codex` agent named `codex-work` with `--config-dir /custom/path`; list agents; observe the manually-registered entry. From the web UI form, add an agent with no name and observe it registered under the per-type default name.
 
 **Covering scenarios**:
 
@@ -62,20 +62,20 @@ The user's installed agents change over time. They need to update the config_dir
 
 ---
 
-### User Story 4 — Manage agents through the desktop app (Priority: P2)
+### User Story 4 — Manage agents through the web UI (Priority: P2)
 
-The user opens Coffer's desktop app, sees an "Agents" page listing every registered agent with type, name, and config_dir, and can add or edit from a form.
+The user opens Coffer's web UI, sees an "Agents" page listing every registered agent with type, name, and config_dir, and can add or edit from a form.
 
 **Why this priority**: Non-CLI users need a visual surface to make sense of the registry.
 
-**Independent Test**: Open desktop app → Agents → add Codex with default path → observe in list → click into it → change config_dir → save → list updates.
+**Independent Test**: Open the web UI → Agents → add Codex with default path → observe in list → click into it → change config_dir → save → list updates.
 
 **Covering scenarios**:
 
 - agents page lists all registered agents
-- add an agent through the desktop form
-- edit an agent through the desktop form
-- remove an agent through the desktop confirmation
+- add an agent through the web UI form
+- edit an agent through the web UI form
+- remove an agent through the web UI confirmation
 
 ---
 
@@ -323,11 +323,11 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 ### Scenario: desktop app agents page
 
-- **Given** Coffer's desktop app is launched and one or more agents are registered,
+- **Given** Coffer's web UI is open and one or more agents are registered,
 - **When** the user opens the Agents page,
 - **Then** every registered agent appears with type, name, and `config_dir`.
 
-> Story 4 add/edit/remove flows from the desktop form are exercised at the e2e tier; see `e2e/web/specs/shell_agents.spec.ts` for the bundled acceptance coverage.
+> Story 4 add/edit/remove flows from the web UI form are exercised at the e2e tier; see `e2e/web/specs/shell_agents.spec.ts` for the bundled acceptance coverage.
 
 ### Scenario: CLI surface mirrors REST operations
 
@@ -647,18 +647,18 @@ These two requirements extend the registry to the coding agent's OWN native per-
 
 **Surfaces**
 
-- **FR-009**: Every management operation — register/list/view/update/remove, config-file list/read/write (including directory children), Coffer-MCP install/uninstall/status, MCP entry list/remove/toggle/adopt, plugin list/toggle/uninstall, native-memory scan/import (FR-040/FR-041) — MUST be available through (a) the REST API and (b) the `coffer agent ...` CLI. The native-memory commands are `coffer agent native-memory <name>` (read, `--json`) and `coffer agent import-native-memory <name> <memory_dir>` (adopt; `--project-path` selects the cwd for Codex's shared global store). The desktop Agents page MUST expose all of these EXCEPT config-file content writes (single files and directory children): in the UI, config files and directory children are **read-only** with open-in-external-editor / reveal-in-file-manager affordances (FR-038), while the REST API and CLI keep the programmatic write/create/delete path. The agent Memory tab shows the Coffer-managed memory link plus this native table **read-only** (open / reveal per FR-038), with an import button that adopts a store (FR-041).
+- **FR-009**: Every management operation — register/list/view/update/remove, config-file list/read/write (including directory children), Coffer-MCP install/uninstall/status, MCP entry list/remove/toggle/adopt, plugin list/toggle/uninstall, native-memory scan/import (FR-040/FR-041) — MUST be available through (a) the REST API and (b) the `coffer agent ...` CLI. The native-memory commands are `coffer agent native-memory <name>` (read, `--json`) and `coffer agent import-native-memory <name> <memory_dir>` (adopt; `--project-path` selects the cwd for Codex's shared global store). The Agents page in the web UI MUST expose all of these EXCEPT config-file content writes (single files and directory children): in the UI, config files and directory children are **read-only** with open-in-external-editor / reveal-in-file-manager affordances (FR-038), while the REST API and CLI keep the programmatic write/create/delete path. The agent Memory tab shows the Coffer-managed memory link plus this native table **read-only** (open / reveal per FR-038), with an import button that adopts a store (FR-041).
 - **FR-010**: The CLI MUST support `--json` for machine-readable output on every read operation.
-- **FR-038**: For each config file (and each directory-entry child) the UI MUST offer **open-in-external-editor** and **reveal-in-file-manager** actions on the file, using the `path` from FR-014/FR-015. Open and reveal perform the real OS action on **both** surfaces: the packaged desktop app (Tauri) uses the OS opener directly; the web uses the daemon filesystem-action endpoints (FR-039), since the loopback daemon is always on the user's own machine (ADR-033). There is no copy-path fallback. The editor used for open-in-external-editor references the user's "preferred external editor" preference defined by spec 002-ui-shell (not re-specified here).
+- **FR-038**: For each config file (and each directory-entry child) the UI MUST offer **open-in-external-editor** and **reveal-in-file-manager** actions on the file, using the `path` from FR-014/FR-015. Open and reveal perform the real OS action through the daemon filesystem-action endpoints (FR-039), since the loopback daemon is always on the user's own machine (ADR-033). There is no copy-path fallback. The editor used for open-in-external-editor references the user's "preferred external editor" preference defined by spec 002-ui-shell (not re-specified here).
 
 **Observability**
 
 - **FR-011**: System MUST record an audit entry for every lifecycle event: agent created, updated, removed; config file written/deleted (`agent_config_file_written` / `agent_config_file_deleted`); Coffer MCP installed/uninstalled; MCP entry removed/adopted (`agent_mcp_entry_removed` / `agent_mcp_entry_adopted`); plugin toggled/uninstalled (`agent_plugin_toggled` / `agent_plugin_uninstalled`). (Agents have no enable/disable concept; discovery and all workspace listings — including the native-memory scan, FR-040 — are read-only and emit no audit event. The native-memory import, FR-041, adds no NEW 004 audit event: each imported fact audits through spec 007's existing memory write events.)
-- **FR-012**: System MUST expose a read-only discovery operation listing installed-but-unregistered agents as candidates, available from the REST API (`GET /api/v1/agents/candidates`), the `coffer agent detect` CLI, and the desktop Agents page.
+- **FR-012**: System MUST expose a read-only discovery operation listing installed-but-unregistered agents as candidates, available from the REST API (`GET /api/v1/agents/candidates`), the `coffer agent detect` CLI, and the Agents page in the web UI.
 
 **Config-directory picker**
 
-- **FR-023**: When choosing a custom `config_dir`, the desktop app MUST offer a folder picker rather than requiring the user to type a path. In the packaged desktop app it MUST use the OS-native directory dialog; on the web it MUST use the daemon native directory dialog (FR-042), falling back to the daemon-backed folder browser (FR-024) only when the host has no native dialog tool. Both yield an absolute path that is then validated per FR-007 before registration.
+- **FR-023**: When choosing a custom `config_dir`, the web UI MUST offer a folder picker rather than requiring the user to type a path. It MUST use the daemon native directory dialog (FR-042), falling back to the daemon-backed folder browser (FR-024) only when the host has no native dialog tool. Both yield an absolute path that is then validated per FR-007 before registration.
 - **FR-024**: System MUST expose a read-only filesystem-browse operation (`GET /api/v1/fs/browse`) that, given a directory path (defaulting to the user's home), returns that path, its parent, and its immediate subdirectories. It MUST NOT return file contents and MUST be guarded by the same loopback + token auth as all other daemon routes.
 - **FR-042**: System MUST expose native OS picker dialogs through the loopback daemon (ADR-036) so the web surface opens the host's real dialog instead of requiring a typed path: `POST /api/v1/fs/pick-folder` (choose a directory), `POST /api/v1/fs/pick-file` (choose an existing file to open), and `POST /api/v1/fs/save-file` (choose a destination, with an optional `suggested_name`). Each opens the host's native dialog (macOS `osascript`; Linux `zenity`/`kdialog`), invoked with a fixed argument vector (no shell interpolation), and returns `{ available, path }`: `available=false` when the host has no native dialog tool, `available=true` with `path=null` on cancel, otherwise the chosen absolute path. When `available=false` the caller degrades — folder picking to the in-app browser (FR-024), file picking and saving to a typed path. All three create nothing and are guarded by the same loopback + token auth as every daemon route.
 
@@ -688,7 +688,7 @@ These two requirements extend the registry to the coding agent's OWN native per-
 - **SC-003**: Every Acceptance Scenario in this spec is covered by at least one test marked `acceptance(spec="004-agent-registry", scenario="…")`, and `make verify-acceptance` reports zero uncovered scenarios.
 - **SC-004**: The full `make verify` suite passes locally and in CI; `make verify-all` (adding e2e) passes on macOS and Linux.
 - **SC-005**: No `config_dir` value ever permits writing outside the directory itself (path-traversal check); validated by a dedicated security test.
-- **SC-006**: A user can open an agent's `settings.json` (Claude Code) or `config.toml` (Codex) read-only in Coffer and, from the desktop app, open it in their external editor; the programmatic save (REST/CLI) still validates the content (a malformed save is rejected with the file left unchanged) and keeps a `.bak` of the prior version on a successful save.
+- **SC-006**: A user can open an agent's `settings.json` (Claude Code) or `config.toml` (Codex) read-only in Coffer and, from the web UI, open it in their external editor; the programmatic save (REST/CLI) still validates the content (a malformed save is rejected with the file left unchanged) and keeps a `.bak` of the prior version on a successful save.
 - **SC-007**: A user can install Coffer's MCP into a freshly-registered agent in one click and, after restarting that agent, the agent lists Coffer's aggregated tools; re-installing never duplicates the entry, and uninstall removes it.
 - **SC-008**: The MCP tab lists exactly the entries present in the agent's real config files, and adopting a direct entry completes the full round trip — resource registered, gateway serving it, direct entry gone — in one user action plus at most one confirmation.
 - **SC-009**: Plugin toggles change only the documented config surface: a test asserts the agents' internal state files are byte-identical before and after every toggle.
@@ -704,5 +704,5 @@ These two requirements extend the registry to the coding agent's OWN native per-
 - Workspace facets follow the ingest → hub → deliver principle: shareable content found in an agent's workspace is adoptable into Coffer's hub (MCP gateway here; the master skill store via spec 005's companion amendment) rather than managed as per-agent one-offs. Cross-machine sharing of the hub itself is a future spec (and constitutional amendment); these facets are designed so their state serializes to declarative manifests when that lands.
 - Agents store their skill libraries on the local filesystem under `<config_dir>/skills`. Web-only agents (e.g., claude.ai) are out of scope for v1 and require a future spec to add API-based sync.
 - The kind-agnostic Resource framework, audit log, and `<kind>:<name>` identity scheme defined by spec 001-mcp-gateway are in place.
-- The application shell from spec 002-ui-shell — sidebar IA, layout, routing skeleton, and design system — is in place. The desktop Agents page renders within that shell at `/agents` as a **dedicated top-level nav entry** (a sibling of the Resources and System groups, **not** nested under Resources — agents are consumers of vault assets, not assets themselves). Agent resources do not appear in the kind-agnostic resources/MCP browser, which lists only kinds that register a resource-card UI.
+- The application shell from spec 002-ui-shell — sidebar IA, layout, routing skeleton, and design system — is in place. The Agents page renders within that shell at `/agents` as a **dedicated top-level nav entry** (a sibling of the Resources and System groups, **not** nested under Resources — agents are consumers of vault assets, not assets themselves). Agent resources do not appear in the kind-agnostic resources/MCP browser, which lists only kinds that register a resource-card UI.
 - Skill bindings (i.e., the relationship between an agent and a particular skill) are introduced and managed by spec 005-skill-manager; spec 004 does not define skill operations beyond exposing an `on_delete` hook for cascade cleanup.

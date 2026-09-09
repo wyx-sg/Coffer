@@ -63,14 +63,17 @@ def test_atomic_write_0600_never_world_readable(tmp_path: Path) -> None:
 
 
 def test_cors_origins_prod_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Production allows no cross-origin caller at all.
+
+    The daemon serves the UI itself, so the only browser that talks to the API
+    is same-origin and never preflights. An empty allowlist is therefore the
+    correct default — any entry here would be a hole nothing needs.
+    """
     monkeypatch.delenv("COFFER_CORS_ORIGINS", raising=False)
     monkeypatch.delenv("COFFER_DEV_CORS", raising=False)
     from coffer.surfaces.http.cors import _resolve_origins
 
-    origins = _resolve_origins()
-    assert "tauri://localhost" in origins
-    # Dev origins must NOT be present without the dev flag.
-    assert "http://localhost:5173" not in origins
+    assert _resolve_origins() == []
 
 
 def test_cors_origins_dev_flag_includes_vite(monkeypatch: pytest.MonkeyPatch) -> None:

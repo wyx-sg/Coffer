@@ -2,7 +2,7 @@
 
 Coffer is a local-first **AI agent vault** — one secure, shared interface for every AI agent on your machine.
 
-Coffer is a daemon + CLI + desktop app. It started as a unified **MCP gateway** — aggregating upstream MCP servers and re-exposing them to MCP clients (Claude Code, Codex) through one namespaced surface — and grew into a vault that also manages your **skills**, **knowledge bases**, shared **memory**, registered **agents**, and **chat**, reachable over **channels** and kept consistent across machines by **sync**. Configure once; every agent sees the same vault. All state lives on your machine — no cloud accounts, no vendor lock-in.
+Coffer is a daemon + CLI + a web UI the daemon serves itself. It started as a unified **MCP gateway** — aggregating upstream MCP servers and re-exposing them to MCP clients (Claude Code, Codex) through one namespaced surface — and grew into a vault that also manages your **skills**, **knowledge bases**, shared **memory**, registered **agents**, and **chat**, reachable over **channels** and kept consistent across machines by **sync**. Configure once; every agent sees the same vault. All state lives on your machine — no cloud accounts, no vendor lock-in.
 
 ## Why Coffer?
 

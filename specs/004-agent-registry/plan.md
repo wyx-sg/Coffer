@@ -14,7 +14,7 @@ On top of the registry, the feature adds two capabilities:
 1. **Config-file read-only view + open externally** — each agent type exposes a curated allowlist of its own config files (Claude Code: `settings.json`, `settings.local.json`, `~/.claude.json`, `CLAUDE.md`; Codex: `config.toml`, `AGENTS.md`). The UI renders them read-only and offers open-in-external-editor / reveal-in-file-manager for each file and its containing folder (the `path`/`folder_path` pair). Programmatic save (REST/CLI) validates per format, writes atomically, and keeps a `.bak`. The same atomic-write + `.bak` machinery also backs the Coffer-MCP install/uninstall.
 2. **One-click Coffer-MCP install** — write/remove a `coffer` stdio MCP-server entry (pointing at `coffer-mcp-shim`) into the agent's MCP config, with status/idempotency.
 
-The kind exposes an `on_delete` hook that the 005-skill-manager spec wires for skill-binding cleanup. Ships with REST routes, CLI subcommands, and a desktop Agents page.
+The kind exposes an `on_delete` hook that the 005-skill-manager spec wires for skill-binding cleanup. Ships with REST routes, CLI subcommands, and a web Agents page.
 
 This spec lays the second consumer of the kind-agnostic Resource framework introduced in spec 001, validating the framework's portability.
 
@@ -95,7 +95,7 @@ backend/coffer/surfaces/cli/agent_cmd.py             # coffer agent {add, list, 
 frontend/src/pages/AgentsPage.tsx                 # existing list page
 frontend/src/components/agents/
   AgentAddForm.tsx / AgentEditForm.tsx / AgentTable.tsx   # existing
-  FolderPicker.tsx         # config-dir folder picker (OS-native dialog on desktop; GET /fs/browse folder browser on web)
+  FolderPicker.tsx         # config-dir folder picker (daemon native dialog; GET /fs/browse folder browser fallback)
   AgentConfigPanel.tsx     # per-agent config-file list + read-only viewer (file list + read-only content view with format label and open-in-external-editor / reveal for the file and its folder)
   AgentMcpInstall.tsx      # one-click install/uninstall toggle + status badge
 frontend/src/lib/api/agents.ts                     # extend with config-file + mcp-install calls
@@ -117,7 +117,7 @@ affordances for each file and its containing folder.
 - Alternative: bundle agent into 005 spec → rejected after re-evaluation (split for spec-size clarity; one PR delivers both).
 - Discovery heuristic: presence of a known marker directory (the type's `default_config_dir`) surfaces that type as a candidate. Future spec may add command-on-PATH detection.
 
-> The base registry (types/config/service/discovery, REST/CLI/desktop CRUD)
+> The base registry (types/config/service/discovery, REST/CLI/web-UI CRUD)
 > already shipped on this branch. The phases below cover the v2 increment:
 > narrow to two types, config-file view + edit, and one-click Coffer-MCP install.
 
@@ -143,7 +143,7 @@ affordances for each file and its containing folder.
 
 - `AgentConfigPanel` — list config files and open one in a read-only content view (with a format label) plus open-in-external-editor / reveal-in-file-manager for the file and its containing folder. `AgentMcpInstall` — status badge + install/uninstall toggle.
 - The agent detail page is a simple Overview + Config files detail page.
-- `FolderPicker` — pick a custom `config_dir` without typing a path: the OS-native directory dialog in the packaged desktop app, the daemon-backed `GET /fs/browse` folder browser on the web. The add/edit forms make the agent name optional (server derives the per-type default when omitted).
+- `FolderPicker` — pick a custom `config_dir` without typing a path: the host's native directory dialog opened through the daemon, with the daemon-backed `GET /fs/browse` folder browser as the fallback. The add/edit forms make the agent name optional (server derives the per-type default when omitted).
 - Hooks via TanStack Query + openapi-fetch; i18n strings in English + Simplified Chinese (`agents.config.*`, `agents.mcp.*`).
 - e2e (`e2e/web/specs/shell_agents.spec.ts`): view a config file read-only (and its open/reveal affordances); install Coffer MCP and observe the status flip.
 
@@ -154,7 +154,7 @@ affordances for each file and its containing folder.
 
 ## Risks / unknowns
 
-- **GUI / venv PATH** — a desktop- or venv-launched daemon does not inherit the shell `PATH` (and its `sys.executable` may be a symlink to the base interpreter), so a bare `coffer-mcp-shim` command may not resolve. Mitigation: resolve to an absolute path at install time (`shutil.which` → the interpreter's `sysconfig` scripts dir → bundled `dist/` fallback), fail loudly if none exist.
+- **GUI / venv PATH** — a GUI- or venv-launched daemon does not inherit the shell `PATH` (and its `sys.executable` may be a symlink to the base interpreter), so a bare `coffer-mcp-shim` command may not resolve. Mitigation: resolve to an absolute path at install time (`shutil.which` → the interpreter's `sysconfig` scripts dir → bundled `dist/` fallback), fail loudly if none exist.
 - **`~/.claude.json` reserialization** — installing the MCP entry reserializes the whole JSON file (stdlib `json`, `indent=2`), producing a large diff. Acceptable and recoverable via `.bak`; documented.
 - **TOML formatting** — Codex `config.toml` edits use `tomlkit` to preserve the user's comments/layout rather than reserializing.
 

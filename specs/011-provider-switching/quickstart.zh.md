@@ -6,7 +6,7 @@
 
 ## 前提条件
 
-- Coffer daemon 正在运行（启动桌面应用或执行 `coffer daemon`）。
+- Coffer daemon 正在运行（执行 `coffer daemon`，或用 `coffer open` 启动它并打开 Web UI）。
 - 至少已注册一个 agent（自动检测或通过 `coffer agent add`——参见 spec 004 快速上手）。
 
 ## 添加 provider profile
@@ -131,9 +131,9 @@ coffer provider remove my-anthropic
 
 若无其他 profile 共用该 credential ref，vault 条目也会被删除。
 
-## 桌面应用
+## Web UI
 
-打开 Coffer → 侧边栏 **Providers**。Providers 页显示所有 profile 的表格，列：name、wire format、base URL、model、active。
+打开 Coffer 的 Web UI → 侧边栏 **Providers**。Providers 页显示所有 profile 的表格，列：name、wire format、base URL、model、active。
 
 行操作：
 - **Switch**——激活该 profile（等同于 `coffer provider switch`）
@@ -141,7 +141,7 @@ coffer provider remove my-anthropic
 
 **Add** 按钮打开新建 profile 表单。原始 key 只在该表单对话框中接受，并立即存入 vault。
 
-如需编辑 profile（修改模型、base URL 或轮换 key），请使用 CLI（`coffer provider edit`）或 PATCH API。桌面页不提供内联编辑功能。
+如需编辑 profile（修改模型、base URL 或轮换 key），请使用 CLI（`coffer provider edit`）或 PATCH API。Web 页不提供内联编辑功能。
 
 ## 磁盘布局一览
 
@@ -174,4 +174,4 @@ coffer provider remove my-anthropic
 
 **"切换后 settings.json 中出现意外键"**——Coffer 只合并定义的托管键，从不删除其他键。如发现意外变更，请对比 `~/.claude/settings.json.bak`（最后一次切换前的备份）。
 
-**激活 profile 报告 `skipped: ["codex"]`**——Coffer 中尚未注册 Codex agent。通过 `coffer agent add`（参见 spec 004）或桌面 Agents 页注册，profile 仍会标记为活跃。
+**激活 profile 报告 `skipped: ["codex"]`**——Coffer 中尚未注册 Codex agent。通过 `coffer agent add`（参见 spec 004）或 Web Agents 页注册，profile 仍会标记为活跃。

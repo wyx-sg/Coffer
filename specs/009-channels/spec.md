@@ -402,8 +402,9 @@ status / notify`.
 - **FR-022**: An inbound voice message drives a turn as a transcript. The built-in
   agents (Claude Code, Codex) cannot hear audio, so the adapter transcribes the
   audio to text **locally** and folds it into the turn's prompt. Transcription is a
-  per-agent seam (ADR-038): the frozen desktop app uses a bundled, torch-free
-  `whisper.cpp` engine (Apple-Silicon Metal) whose small model is downloaded on
+  per-agent seam (ADR-038): the frozen build uses a bundled, torch-free
+  `whisper.cpp` engine (Apple-Silicon Metal) — the `whisper-cli` binary the frozen
+  daemon deploys into `~/.coffer/bin/` — whose small model is downloaded on
   first use; a source run falls back to `mlx-whisper` (the optional `[voice-mlx]`
   extra). See ADR-039. A future audio-native agent's adapter forwards the audio
   instead of transcribing. When no engine is available — or the model has not been

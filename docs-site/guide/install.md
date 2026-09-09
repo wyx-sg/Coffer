@@ -3,16 +3,21 @@
 This page is the authoritative install guide for Coffer — it is what the installer scripts and
 release notes link to. Choose the path that fits your use case:
 
-| Path                                          | Best for                                                           |
-| --------------------------------------------- | ------------------------------------------------------------------ |
-| [One-line CLI install](#one-line-cli-install) | Servers, headless boxes, terminal users who want the fastest setup |
-| [Desktop app](#desktop-app)                   | Daily-driver use on a workstation; includes a GUI and Web UI       |
-| [From source](#from-source-developers)        | Contributors and developers working on Coffer itself               |
+| Path                                             | Best for                                                        |
+| ------------------------------------------------ | --------------------------------------------------------------- |
+| [One-line CLI install](#one-line-cli-install)    | The fastest setup on a workstation, a server or a headless box  |
+| [Manual archive download](#manual-archive-download) | Air-gapped machines, pinned versions, or checking signatures yourself |
+| [From source](#from-source-developers)           | Contributors and developers working on Coffer itself            |
+
+::: tip There is one download, and it includes the UI
+Coffer ships a **single release artifact**: `coffer-cli-<triple>.tar.gz`. There is no separate
+desktop application — the daemon serves the web UI itself, and you open it with `coffer open`.
+:::
 
 ::: tip Daemon auto-starts — you never run it manually
 Once Coffer is installed, just point your MCP client at `coffer-mcp-shim` and connect. The
 daemon starts itself the first time it is needed. This is the core design of
-[ADR-006 (detect-or-spawn)](/architecture/distribution#adr-006). You will never see a
+[ADR-006 (detect-or-spawn)](/architecture/processes#detect-or-spawn-adr-006). You will never see a
 "daemon not running" error from a fresh install.
 :::
 
@@ -20,12 +25,16 @@ daemon starts itself the first time it is needed. This is the core design of
 
 ## One-line CLI install
 
-The quickest path to a working Coffer. A single command downloads and unpacks three binaries
-into `~/.coffer/bin`:
+The quickest path to a working Coffer. A single command downloads the release archive and
+unpacks its binaries into `~/.coffer/bin`:
 
-- **`coffer`** — management CLI (`coffer mcp add`, `coffer mcp list`, …)
+- **`coffer`** — management CLI (`coffer mcp add`, `coffer mcp list`, `coffer open`, …)
 - **`coffer-daemon`** — the long-lived background process that aggregates upstream MCP servers
+  and serves the web UI
 - **`coffer-mcp-shim`** — the stdio bridge that MCP clients (Claude Code, Codex, …) talk to
+
+plus the runtime helper binaries the daemon spawns for itself (`coffer-callback` for SeaTalk
+channels, `whisper-cli` for local speech-to-text).
 
 ### macOS (Apple Silicon)
 
@@ -50,8 +59,8 @@ terminal — all three binaries are available.
 
 ### Verify the download
 
-Every release publishes a `SHA256SUMS` file. The installer verifies the download automatically.
-To check manually:
+Every release publishes **one aggregated `SHA256SUMS`** covering every artifact in that
+release. The installer verifies the download automatically. To check manually:
 
 ```sh
 shasum -a 256 -c SHA256SUMS
@@ -78,6 +87,15 @@ coffer mcp list
 
 Either command auto-starts the daemon if it is not already running.
 
+### Open the web UI
+
+```sh
+coffer open
+```
+
+This starts your browser at the daemon's own address and hands the page a token via a
+single-use, short-lived code. See the [Web UI guide](/guide/web-ui).
+
 ### Next steps
 
 - [Getting Started](/guide/getting-started) — register your first MCP server and verify the setup
@@ -85,66 +103,47 @@ Either command auto-starts the daemon if it is not already running.
 
 ---
 
-## Desktop app
-
-The Desktop app bundles everything — daemon, shim, Web UI — in a single installer. No Python
-required. Recommended for workstation use.
-
-### Download
+## Manual archive download
 
 Go to the [GitHub Releases page](https://github.com/wyx-sg/Coffer/releases/latest) and pick
-the file for your platform:
+the archive for your platform:
 
-| Platform                        | File                                    |
-| ------------------------------- | --------------------------------------- |
-| macOS Apple silicon (M-series)  | `Coffer_<version>_aarch64-unsigned.dmg` |
+| Platform                       | File                                |
+| ------------------------------ | ----------------------------------- |
+| macOS Apple silicon (M-series) | `coffer-cli-<triple>.tar.gz`        |
 
-Coffer ships macOS (Apple Silicon) builds only. The `-unsigned` suffix marks
-the DMG as not yet notarised (see [macOS Gatekeeper](#macos-gatekeeper-unsigned-notarisation-pending)).
-Verify the download against the release's `SHA256SUMS` file before running:
+Coffer ships macOS (Apple Silicon) builds only. On Linux or Intel macOS, use the
+[from-source install](#from-source-developers).
+
+Verify the download against the release's aggregated `SHA256SUMS`, then extract it:
 
 ```sh
 shasum -a 256 -c SHA256SUMS
+tar -xzf coffer-cli-<triple>.tar.gz -C ~/.coffer/bin
 ```
 
-### Install
+Add `~/.coffer/bin` to your `PATH` so MCP clients can find `coffer-mcp-shim`.
 
-- **macOS**: Open the DMG, drag **Coffer.app** to `/Applications`.
+### macOS Gatekeeper (unsigned — signing pending)
 
-### macOS Gatekeeper (unsigned — notarisation pending)
-
-The DMG ships unsigned, so on first open macOS may say Coffer is "damaged" (it isn't — it's
-just unsigned). For the "damaged" message, right-click → Open does **not** help; clear the
-quarantine flag instead:
+The binaries are unsigned, so macOS quarantines them on first run. Code signing and
+notarisation need a paid Apple Developer ID, which has not been provisioned yet. Clear the
+quarantine attribute on the extracted binaries:
 
 ```sh
-xattr -dr com.apple.quarantine /Applications/Coffer.app
+xattr -d com.apple.quarantine ~/.coffer/bin/coffer ~/.coffer/bin/coffer-daemon ~/.coffer/bin/coffer-mcp-shim
 ```
-
-If it still won't open, re-apply an ad-hoc signature:
-
-```sh
-codesign --force --deep --sign - /Applications/Coffer.app
-```
-
-Or right-click the app and pick **Open** for a one-time bypass.
 
 ### After install
 
-On first launch, the Desktop app:
-
-1. Starts the daemon on a free port (default 8000) and writes `~/.coffer/daemon.json`.
-2. Deploys `coffer-mcp-shim` and `coffer-daemon` to `~/.coffer/bin/` so MCP clients can
-   find the shim — and the shim can auto-spawn the daemon even when the app isn't running.
-3. Opens the Web UI in the main window.
-
-Connect your MCP client:
+The first time the daemon starts from a frozen build, it deploys its sibling binaries into
+`~/.coffer/bin/` (idempotently — unchanged binaries are left alone), so MCP clients can find
+the shim and the shim can auto-spawn the daemon. Then:
 
 ```sh
 claude mcp add coffer coffer-mcp-shim
+coffer open
 ```
-
-See [Desktop app →](/guide/desktop) for the full Desktop guide (tray menu, etc.).
 
 ---
 

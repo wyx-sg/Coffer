@@ -19,11 +19,11 @@ features:
   - title: Skills · Knowledge · Memory
     details: Keep one master skill library and deliver it into each agent; curate knowledge bases your agents can search; share one memory across every agent.
   - title: Chat with any agent
-    details: Talk to Coffer's built-in agent — or drive Claude Code and Codex — from a streamed chat, in the web or desktop app.
+    details: Talk to Coffer's built-in agent — or drive Claude Code and Codex — from a streamed chat in the web UI.
   - title: Reach agents anywhere
     details: Pair a Telegram or SeaTalk channel and chat with your agents from your phone. Moving to a new machine? Export the whole vault to a directory and import it there.
-  - title: CLI · Web · Desktop
-    details: Drive the whole vault from a terminal, a local web UI, or the desktop app. Agents auto-discover the daemon — no port or token wiring.
+  - title: CLI · Web UI
+    details: Drive the whole vault from a terminal, or from a local web UI the daemon serves itself — `coffer open` and you are in. Agents auto-discover the daemon — no port or token wiring.
 ---
 
 ## How it works
@@ -31,7 +31,7 @@ features:
 ```mermaid
 flowchart LR
   subgraph You["You"]
-    UI["CLI · Web · Desktop"]
+    UI["CLI · Web UI"]
     IM["Telegram · SeaTalk"]
   end
   A["AI agents<br/>Claude Code · Codex"] -->|MCP| D

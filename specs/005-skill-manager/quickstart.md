@@ -5,7 +5,8 @@ them to one or more registered AI agents (spec 004).
 
 ## Prerequisites
 
-- Coffer's daemon is running (start the desktop app or `coffer daemon`).
+- Coffer's daemon is running (`coffer daemon`, or `coffer open` which starts it
+  and opens the web UI).
 - At least one agent is registered (auto-detected or via `coffer agent add` —
   see spec 004 quickstart).
 ## Import an existing skill folder
@@ -72,7 +73,7 @@ coffer agent follow codex --on --exclude my-skill --exclude another-skill
 Turning follow off preserves the currently delivered skills as explicit
 per-skill bindings, so nothing disappears — you just switch to manual
 `enable`/`disable` curation. The same switch lives on the agent's Skills tab
-in the desktop app.
+in the web UI.
 
 ## Adopt skills Coffer doesn't manage yet
 
@@ -119,7 +120,7 @@ The report categorizes drift and suggests a remedy per entry. Coffer does
 
 ## Browse a skill's files (read-only)
 
-The desktop app shows a skill's master folder as a file tree and lets you read
+The web UI shows a skill's master folder as a file tree and lets you read
 individual files in a read-only viewer. To change a file, open it (or its
 containing folder) in your own external editor or file manager via the viewer's
 open / reveal affordances. The same read data is available over the
