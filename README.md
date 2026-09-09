@@ -14,7 +14,7 @@
 
 > Local-first AI agent vault, one vault across your machines. One place to manage everything your AI agents touch.
 
-Coffer is a daemon + CLI + desktop app that gives every AI agent on your machine one safe, shared surface. All state lives on your machine — no cloud accounts, no vendor lock-in. Everything Coffer manages is a **resource kind**:
+Coffer is a daemon + CLI + web UI that gives every AI agent on your machine one safe, shared surface. All state lives on your machine — no cloud accounts, no vendor lock-in. Everything Coffer manages is a **resource kind**:
 
 - **MCP servers** — aggregate upstream MCP servers and re-expose them to MCP clients (Claude Code, Codex) through a unified, namespaced surface. Configure once; every client sees the same tools.
 - **Agents** — detect and register your local AI coding agents, edit their config files in-app, and one-click install Coffer's own MCP server into any of them.
@@ -25,15 +25,15 @@ Coffer is a daemon + CLI + desktop app that gives every AI agent on your machine
 
 Run Coffer on more than one machine? **Multi-machine sync** keeps one vault consistent across them through a git repository you own — knowledge, memory, resources, and ciphertext-only credentials travel; the encryption key never leaves your machines.
 
-A built-in **chat** platform and Web/desktop UI tie them together: talk to a Coffer agent, browse and curate every kind, and watch invocations live.
+A built-in **chat** platform and a web UI — served by the daemon itself at its own loopback origin — tie them together: talk to a Coffer agent, browse and curate every kind, and watch invocations live.
 
 📖 **Documentation site:** https://wyx-sg.github.io/Coffer/
 
 ## Download & install
 
 > **No tagged release yet.** The prebuilt binaries, the one-line installer, and
-> the desktop DMG below ship with Coffer's first tagged release and are not yet
-> published — those links will 404 until then. For now, **[install from
+> the release archive below ship with Coffer's first tagged release and are not
+> yet published — those links will 404 until then. For now, **[install from
 > source](#install-from-source-developers)** (below) is the working path.
 
 ### One-line CLI install (macOS) — _from the first release_
@@ -42,26 +42,40 @@ A built-in **chat** platform and Web/desktop UI tie them together: talk to a Cof
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
 ```
 
-Installs three binaries — `coffer` (management CLI), `coffer-daemon`, `coffer-mcp-shim` — to
-`~/.coffer/bin`. **The daemon auto-starts on first use — no manual start step.** Environment
-overrides: `COFFER_INSTALL_DIR`, `COFFER_VERSION`, `COFFER_NO_MODIFY_PATH`.
+Installs `coffer` (management CLI), `coffer-daemon`, `coffer-mcp-shim` and the runtime helper
+binaries to `~/.coffer/bin`, and puts that directory on your `PATH`. **The daemon auto-starts on
+first use — no manual start step.** Environment overrides: `COFFER_INSTALL_DIR`,
+`COFFER_VERSION`, `COFFER_NO_MODIFY_PATH`.
 
-### Desktop app (most users) — _from the first release_
+### Manual download — _from the first release_
 
-Download the installer from [Releases](https://github.com/wyx-sg/Coffer/releases/latest):
+Each `v*` tag publishes a single archive from
+[Releases](https://github.com/wyx-sg/Coffer/releases/latest):
 
-| Platform            | File                                    |
-| ------------------- | --------------------------------------- |
-| macOS Apple silicon | `Coffer_<version>_aarch64-unsigned.dmg` |
+| Platform            | File                          |
+| ------------------- | ----------------------------- |
+| macOS Apple silicon | `coffer-cli-<triple>.tar.gz`  |
 
-Coffer currently ships macOS (Apple Silicon) only. The `-unsigned` suffix marks
-the DMG as not yet notarised (see below). Verify the download against the
-release's `SHA256SUMS` file.
+Coffer currently ships macOS (Apple Silicon) only. The archive contains `coffer`,
+`coffer-daemon`, `coffer-mcp-shim` and the runtime helper binaries. Verify the download against
+the release's aggregated `SHA256SUMS` file, which covers every published artifact.
 
-> **macOS (unsigned):** the build ships unsigned (notarisation pending), so macOS may say
-> Coffer is "damaged" on first open (it isn't — right-click → Open won't help here). Clear the
-> quarantine flag: `xattr -dr com.apple.quarantine /Applications/Coffer.app` — and if it still
-> won't open, re-apply an ad-hoc signature: `codesign --force --deep --sign - /Applications/Coffer.app`
+```sh
+mkdir -p ~/.coffer/bin
+tar -xzf coffer-cli-<triple>.tar.gz -C ~/.coffer/bin
+export PATH="$HOME/.coffer/bin:$PATH"   # add this to your shell profile
+coffer daemon start
+coffer open                             # opens an authenticated browser session
+```
+
+`coffer open` reads `~/.coffer/daemon.json` and opens your browser at the daemon's loopback
+origin, where the daemon serves the web UI itself. The frozen daemon deploys its sibling
+binaries into `~/.coffer/bin` on first start, so MCP clients can resolve `coffer-mcp-shim` from
+`PATH`.
+
+> **macOS (unsigned):** the binaries ship unsigned (codesigning and notarisation are pending), so
+> Gatekeeper quarantines them on download and macOS may refuse to run them. Clear the quarantine
+> flag on the extracted binaries: `xattr -dr com.apple.quarantine ~/.coffer/bin`
 
 ### From source (developers)
 
@@ -106,7 +120,7 @@ An **agent** is a registered local AI coding agent (supported types: `claude_cod
 Coffer can auto-detect installed agents (it lists candidates and asks you to confirm — nothing is
 registered automatically), edit each agent's curated config files in-app (format-validated,
 atomic write with a `.bak` backup, plus an in-editor find/replace that scrolls to the match), and
-one-click install or uninstall Coffer's own MCP server into an agent. The desktop/web UI has an
+one-click install or uninstall Coffer's own MCP server into an agent. The web UI has an
 **Agents** page (list + detail), a detect dialog, the config-file editor, and an MCP-install toggle.
 
 ```bash

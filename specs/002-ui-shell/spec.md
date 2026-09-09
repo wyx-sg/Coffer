@@ -138,7 +138,7 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 
 - **Given** `~/.coffer/daemon.json` does not exist (daemon is not running)
 - **When** the user navigates to `http://localhost:5173/`
-- **Then** the page shows a "Daemon not running" view with one obvious recovery affordance (a Reload control on the web; the desktop app offers Restart)
+- **Then** the page shows a "Daemon not running" view with one obvious recovery affordance (a Reload control)
 - **And** the sidebar is still visible so the user can orient themselves
 - **And** no view shows the literal text "unexpected error" or `INTERNAL_ERROR`
 
@@ -245,7 +245,7 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - **Given** the user navigates to `/settings`
 - **When** the page resolves
 - **Then** it lands on the General tab
-- **And** the settings sidebar shows General, Data, and About (plus App in the desktop build), with the current route highlighted
+- **And** the settings sidebar shows General, Data, and About, with the current route highlighted
 - **And** clicking a tab swaps the right pane content without a full page reload
 
 ### Scenario: settings drops the confusing controls
@@ -280,7 +280,7 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 
 - **Given** the daemon is not running (no reachable `127.0.0.1:<port>` from `~/.coffer/daemon.json`, or the file is absent)
 - **When** the user has the app open and any authenticated request to the daemon fails to connect
-- **Then** a daemon-offline banner renders at the top of the workspace with a clear recovery affordance — a Restart control in the desktop app, a Reload control on the web
+- **Then** a daemon-offline banner renders at the top of the workspace with a clear recovery affordance — a Reload control
 - **And** the banner disappears automatically once the daemon becomes reachable again, without a manual page reload
 
 ### Scenario: JSON import shows readable error for malformed JSON

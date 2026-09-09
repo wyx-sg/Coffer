@@ -1,6 +1,6 @@
 // frontend/src/components/agents/FolderPicker.test.tsx
 //
-// In the browser (jsdom — not Tauri), Browse first asks the daemon to open the
+// Browse first asks the daemon to open the
 // OS-native dialog (fsApi.pickFolder); only when no native dialog tool is
 // available does it fall back to the in-app daemon-backed folder browser
 // (fsApi.browse). We mock both.

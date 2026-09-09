@@ -9,7 +9,7 @@
 
 ## 摘要
 
-向 Coffer 加入 `skill` 这一 Resource kind：一份按 agentskills.io 标准管理的 skill 文件夹清单，规范副本放在 `~/.coffer/skills/<name>/`，通过目录 symlink（POSIX）或 junction（Windows）投递到已注册的 agent（spec 004）。v1 的源仅支持本地路径导入。每对 (skill × agent) binding 提供细粒度选择。`verify` 操作检测磁盘 drift。一并交付 REST 路由、CLI 子命令与桌面 Skills 页。
+向 Coffer 加入 `skill` 这一 Resource kind：一份按 agentskills.io 标准管理的 skill 文件夹清单，规范副本放在 `~/.coffer/skills/<name>/`，通过目录 symlink（POSIX）或 junction（Windows）投递到已注册的 agent（spec 004）。v1 的源仅支持本地路径导入。每对 (skill × agent) binding 提供细粒度选择。`verify` 操作检测磁盘 drift。一并交付 REST 路由、CLI 子命令与 Web Skills 页。
 
 ## 技术上下文
 

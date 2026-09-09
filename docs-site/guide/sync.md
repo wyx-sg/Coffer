@@ -58,6 +58,6 @@ Until the key is present, imported credentials stay **locked** (reported as `cre
 
 There is no background convergence and nothing watches for drift. If the two machines diverge, re-export and re-import in the direction you want — that manual step is the deliberate trade for dropping the machinery continuous sync needed.
 
-A desktop **Sync** settings panel does both operations without the terminal (each button opens a native directory picker), and the same operations are available over REST at `/api/v1/sync/*`.
+A **Sync** settings panel in the web UI does both operations without the terminal (each button opens a directory picker backed by the daemon's `/api/v1/fs` browse helper), and the same operations are available over REST at `/api/v1/sync/*`.
 
 [Credentials →](/guide/credentials)

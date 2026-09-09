@@ -37,10 +37,7 @@ const guideEn = [
   },
   {
     text: 'Apps',
-    items: [
-      { text: 'Web UI', link: '/guide/web-ui' },
-      { text: 'Desktop app', link: '/guide/desktop' },
-    ],
+    items: [{ text: 'Web UI', link: '/guide/web-ui' }],
   },
 ]
 
@@ -102,10 +99,7 @@ const guideZh = [
   },
   {
     text: '应用',
-    items: [
-      { text: 'Web UI', link: '/zh/guide/web-ui' },
-      { text: '桌面应用', link: '/zh/guide/desktop' },
-    ],
+    items: [{ text: 'Web UI', link: '/zh/guide/web-ui' }],
   },
 ]
 

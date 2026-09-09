@@ -1,12 +1,10 @@
 // frontend/src/lib/filePicker.ts — native open-file / save-file dialogs
-// (spec 004 FR-042, ADR-036). Mirrors FolderPicker's hybrid strategy: the
-// packaged desktop app uses the Tauri OS-native dialog; the web asks the
+// (spec 004 FR-042, ADR-036). Mirrors FolderPicker's strategy: the web asks the
 // loopback daemon to open the host's native dialog. `unavailable` is true only
 // when the host has no native dialog tool (or the call errors), so the caller
 // can reveal a typed-path fallback — there is no in-app file browser the way
 // there is for folders.
 import { fsApi } from "./api/fs";
-import { isTauri } from "./tauri";
 
 export interface PickOutcome {
   /** The chosen absolute path, or null when the user cancelled. */
@@ -15,36 +13,8 @@ export interface PickOutcome {
   unavailable: boolean;
 }
 
-/**
- * Open the Tauri OS-native dialog. A static import specifier lets Vite bundle
- * the plugin so it resolves in the packaged app (see FolderPicker for the
- * rationale); `isTauri()` guards invocation on the web.
- */
-async function tauriDialog(
-  kind: "open" | "save",
-  options: { defaultPath?: string },
-): Promise<string | null> {
-  const dialog = await import("@tauri-apps/plugin-dialog");
-  if (kind === "open") {
-    const picked = await dialog.open({ multiple: false, directory: false, ...options });
-    return typeof picked === "string" ? picked : null;
-  }
-  const picked = await dialog.save(options);
-  return typeof picked === "string" ? picked : null;
-}
-
 /** Pick an existing file to open. */
 export async function pickOpenFile(start?: string | null): Promise<PickOutcome> {
-  if (isTauri()) {
-    try {
-      return {
-        path: await tauriDialog("open", { defaultPath: start ?? undefined }),
-        unavailable: false,
-      };
-    } catch {
-      return { path: null, unavailable: true };
-    }
-  }
   try {
     const res = await fsApi.pickFile(start ?? undefined);
     return { path: res.path, unavailable: !res.available };
@@ -59,15 +29,6 @@ export async function pickOpenFile(start?: string | null): Promise<PickOutcome> 
  * `pickOpenFile`: the caller reveals a typed-path fallback.
  */
 export async function pickDirectory(start?: string | null): Promise<PickOutcome> {
-  if (isTauri()) {
-    try {
-      const dialog = await import("@tauri-apps/plugin-dialog");
-      const picked = await dialog.open({ directory: true, defaultPath: start ?? undefined });
-      return { path: typeof picked === "string" ? picked : null, unavailable: false };
-    } catch {
-      return { path: null, unavailable: true };
-    }
-  }
   try {
     const res = await fsApi.pickFolder(start ?? undefined);
     return { path: res.path, unavailable: !res.available };
@@ -81,14 +42,6 @@ export async function pickSaveFile(
   suggestedName: string,
   start?: string | null,
 ): Promise<PickOutcome> {
-  if (isTauri()) {
-    const defaultPath = start ? `${start.replace(/\/$/, "")}/${suggestedName}` : suggestedName;
-    try {
-      return { path: await tauriDialog("save", { defaultPath }), unavailable: false };
-    } catch {
-      return { path: null, unavailable: true };
-    }
-  }
   try {
     const res = await fsApi.saveFile(suggestedName, start ?? undefined);
     return { path: res.path, unavailable: !res.available };

@@ -1,4 +1,4 @@
-"""Static checks on PyInstaller specs + Tauri sidecar wiring.
+"""Static checks on the PyInstaller specs and the release packaging.
 
 Does NOT actually build binaries — that's done by `make bundle-binaries`
 and (in CI) the cross-platform GitHub Actions matrix. These tests just
@@ -9,7 +9,6 @@ broken wiring is caught early.
 from __future__ import annotations
 
 import ast
-import json
 import os
 import re
 import subprocess
@@ -152,26 +151,13 @@ def test_pyinstaller_spec_present_and_valid(spec_name: str, expected_target_modu
     )
 
 
-def test_tauri_externalbin_lists_both_binaries() -> None:
-    # Tauri 2.x flat layout — assert directly. If the schema changes a major
-    # version, let KeyError fail loudly so we update tests + config together.
-    tauri_conf = json.loads((_REPO / "desktop" / "tauri.conf.json").read_text())
-    external_bins = tauri_conf["bundle"]["externalBin"]
-    paths = {Path(p).name for p in external_bins}
-    # Every daemon-resolved sibling must be bundled — a missing entry ships an
-    # app where that capability silently can't spawn its child (coffer-callback
-    # was absent, so SeaTalk webhook ingress failed with a frozen-build error).
-    for expected in ("coffer-daemon", "coffer-mcp-shim", "coffer-hook", "coffer-callback"):
-        assert expected in paths, f"tauri.conf.json bundle.externalBin must list {expected}"
-
-
 def test_build_script_present_and_executable() -> None:
     script = _REPO / "scripts" / "build_binaries.sh"
     assert script.exists(), "scripts/build_binaries.sh missing"
     # Must be readable
     contents = script.read_text()
     assert "pyinstaller" in contents.lower()
-    assert "desktop/binaries" in contents
+    assert "dist/" in contents
 
 
 @pytest.mark.skipif(
@@ -196,40 +182,8 @@ def test_pyinstaller_in_dev_deps() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Cross-correlation: PyInstaller `name=` ↔ Tauri externalBin basenames
+# Release packaging
 # ---------------------------------------------------------------------------
-
-
-def test_pyinstaller_exe_names_match_tauri_externalbin() -> None:
-    """The `name=` of each EXE() in the .spec files must equal the basename
-    of an externalBin entry in tauri.conf.json. If either side drifts (e.g.
-    rename the daemon binary in the spec but forget to update tauri.conf),
-    the Tauri build links the wrong sidecar — caught here at the static
-    config layer instead of at install time on the user's machine."""
-    spec_names: set[str] = set()
-    for spec_name in (
-        "coffer-daemon.spec",
-        "coffer-mcp-shim.spec",
-        "coffer-hook.spec",
-        "coffer-callback.spec",
-    ):
-        tree = _parse_spec(_REPO / "backend" / spec_name)
-        for exe in _find_calls(tree, "EXE"):
-            name_kw = _get_kw(exe, "name")
-            assert isinstance(name_kw, ast.Constant) and isinstance(name_kw.value, str), (
-                f"{spec_name}: EXE(name=...) must be a string literal"
-            )
-            spec_names.add(name_kw.value)
-
-    tauri_conf = json.loads((_REPO / "desktop" / "tauri.conf.json").read_text())
-    external_basenames = {Path(p).name for p in tauri_conf["bundle"]["externalBin"]}
-
-    missing = spec_names - external_basenames
-    assert not missing, (
-        f"PyInstaller EXE name(s) {missing} not present in tauri.conf.json bundle.externalBin "
-        f"(externalBin basenames: {external_basenames}). "
-        "Rename one side without the other → Tauri bundles a non-existent sidecar."
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -358,8 +312,8 @@ def test_shim_spec_includes_anyio_backend_hidden_import() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="003-mcp-gateway-desktop",
-    scenario="release tag produces both the CLI-only archive and the desktop installer",
+    spec="001-mcp-gateway",
+    scenario="release tag produces the CLI archive and SHA256SUMS",
 )
 def test_release_workflow_produces_platform_artifact_matrix() -> None:
     """The release workflow must define a matrix that produces the supported
@@ -397,21 +351,27 @@ def _release_yml_text() -> str:
     return (_REPO / ".github" / "workflows" / "release.yml").read_text()
 
 
-def test_release_workflow_packages_cli_only_archive() -> None:
-    """The release workflow must produce a CLI-only download tier: an archive
-    bundling just the coffer-daemon + coffer-mcp-shim sidecars, named
-    coffer-cli-<triple>.tar.gz (macOS only). This is the standalone alternative
-    to the desktop installers."""
+def test_release_workflow_packages_the_single_cli_archive() -> None:
+    """The release produces exactly one download tier: coffer-cli-<triple>.tar.gz.
+
+    Every binary the daemon resolves at runtime must be inside it. The daemon
+    deploys `coffer-mcp-shim`, `coffer-callback` and `whisper-cli` out of its
+    own directory (spec 001 FR-026) and finds `coffer-daemon` as a sibling
+    (ADR-006), so an archive missing any of them ships a build whose helper
+    processes cannot start.
+    """
     text = _release_yml_text()
-    assert "coffer-cli-" in text, (
-        "release.yml must package a CLI-only archive named coffer-cli-<triple>.*"
-    )
     assert (
         "coffer-cli-${triple}.tar.gz" in text or "coffer-cli-${{ matrix.triple }}.tar.gz" in text
-    ), "release.yml must produce a coffer-cli tar.gz on macOS"
-    # Both sidecars must go into the CLI archive.
-    assert "coffer-daemon-${triple}" in text, "CLI archive must include coffer-daemon"
-    assert "coffer-mcp-shim-${triple}" in text, "CLI archive must include coffer-mcp-shim"
+    ), "release.yml must produce a coffer-cli-<triple>.tar.gz"
+    for binary in (
+        "coffer-daemon",
+        "coffer-mcp-shim",
+        "coffer-hook",
+        "coffer-callback",
+        "whisper-cli",
+    ):
+        assert binary in text, f"CLI archive must include {binary}"
 
 
 def test_release_workflow_checksums_cover_cli_archive() -> None:
@@ -463,11 +423,20 @@ def test_release_workflow_does_not_reference_apple_secrets() -> None:
     assert "secrets.APPLE_ID" not in text, "release.yml must not reference secrets.APPLE_ID"
 
 
-def test_release_workflow_marks_macos_artifacts_unsigned() -> None:
-    """Until Apple signing is wired, macOS artifacts must carry a -unsigned
-    marker so downloaders are not misled into thinking they're notarized."""
+def test_release_workflow_tells_downloaders_the_build_is_unsigned() -> None:
+    """Until Apple signing is wired, the release must say so.
+
+    The `-unsigned` filename suffix went with the .dmg and .app.zip the
+    desktop shell produced; a tar.gz of CLI binaries never carried it. The
+    obligation it encoded — do not let a downloader assume this is notarised —
+    now rides in the release notes, together with the quarantine command they
+    will otherwise have to search for.
+    """
     text = _release_yml_text()
-    assert "-unsigned" in text, "release.yml must mark macOS artifacts with a -unsigned suffix"
+    assert "unsigned" in text.lower(), "release notes must state that macOS builds are unsigned"
+    assert "com.apple.quarantine" in text, (
+        "release notes must tell macOS users how to clear the quarantine flag"
+    )
 
 
 def test_release_workflow_runs_smoke_test() -> None:
@@ -512,8 +481,8 @@ def test_release_workflow_smoke_test_runs_on_all_legs() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="003-mcp-gateway-desktop",
-    scenario="post-build smoke test boots shim and gets JSON-RPC reply",
+    spec="001-mcp-gateway",
+    scenario="release tag produces the CLI archive and SHA256SUMS",
 )
 def test_smoke_test_bundle_script_present_and_invokes_shim() -> None:
     """scripts/smoke_test_bundle.sh runs against a freshly built bundle and

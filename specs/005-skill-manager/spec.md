@@ -62,18 +62,18 @@ Files in agents' `config_dir/skills` folders can be tampered with (deleted, repl
 
 ---
 
-### User Story 6 — Manage skills through the desktop app (Priority: P2)
+### User Story 6 — Manage skills through the web UI (Priority: P2)
 
-The user opens Coffer, sees the Skills page rendered as a data table (search, filter, pagination, row multi-select for bulk actions), can import via file picker and browse the list. The Skills page manages the skill resource itself, not its per-agent bindings: clicking a skill opens a detail view with an Overview metadata tab and a Files tab (file tree + a read-only file viewer that renders Markdown and shows other text files raw). The viewer does not edit content; to change a file the user opens it (or its containing folder) in their own external editor or file manager — every file and folder offers "open in external editor" and "reveal in file manager" affordances (daemon-backed on the web, native on the desktop). Per-agent enable/disable lives on the agent detail page — the agent's "Skills" tab lists the skills bound to that agent with per-binding toggles.
+The user opens Coffer, sees the Skills page rendered as a data table (search, filter, pagination, row multi-select for bulk actions), can import via file picker and browse the list. The Skills page manages the skill resource itself, not its per-agent bindings: clicking a skill opens a detail view with an Overview metadata tab and a Files tab (file tree + a read-only file viewer that renders Markdown and shows other text files raw). The viewer does not edit content; to change a file the user opens it (or its containing folder) in their own external editor or file manager — every file and folder offers "open in external editor" and "reveal in file manager" affordances, performed by the local daemon. Per-agent enable/disable lives on the agent detail page — the agent's "Skills" tab lists the skills bound to that agent with per-binding toggles.
 
 **Why this priority**: Non-CLI users need a visual surface for daily management.
 
-**Independent Test**: Open desktop app → Skills → import a folder via picker → see it listed in the table → open the agent detail page → its Skills tab → toggle the skill enabled for that agent → confirm the symlink exists on disk.
+**Independent Test**: Open the web UI → Skills → import a folder via picker → see it listed in the table → open the agent detail page → its Skills tab → toggle the skill enabled for that agent → confirm the symlink exists on disk.
 
 **Covering scenarios**:
 
-- import a skill via desktop file picker
-- toggle per-agent enable via desktop toggle
+- import a skill via the web UI file picker
+- toggle per-agent enable via the web UI toggle
 - surface drift count via a UI notification
 
 ---
@@ -285,7 +285,7 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 ### Scenario: desktop and CLI cover every operation
 
 - **Given** the daemon is running,
-- **When** the user performs each operation via desktop and via `coffer skill ...`,
+- **When** the user performs each operation via the web UI and via `coffer skill ...`,
 - **Then** the same effect is achieved in either surface and CLI provides `--json` for read operations.
 
 ### Scenario: audit skill lifecycle
@@ -433,7 +433,7 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 **Follow the master library (workspace amendment)**
 
 - **FR-025**: Each agent MUST carry a follow-master-library flag and a per-agent skill exclusion list (stored on the agent resource's config, spec 004). While following, the agent's effective skill set is the entire master store minus its exclusions; the sync engine MUST reconcile deliveries when the flag changes, when a skill is registered or removed, and when the exclusion list changes. Conflicts at target paths follow FR-011 (report, never overwrite). Disabling the flag MUST preserve the currently delivered skills as explicit per-skill bindings. The flag defaults to enabled for newly registered agents, matching the pre-amendment auto-bind behavior.
-- **FR-026**: Unmanaged-skill and follow operations MUST be available through the REST API, the `coffer agent skill …` / `coffer skill …` CLI (with `--json` on reads), and the agent's Skills tab in the desktop app.
+- **FR-026**: Unmanaged-skill and follow operations MUST be available through the REST API, the `coffer agent skill …` / `coffer skill …` CLI (with `--json` on reads), and the agent's Skills tab in the web UI.
 
 **Lifecycle**
 
@@ -442,11 +442,11 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 
 **Surfaces**
 
-- **FR-019**: Every management operation MUST be available through (a) the REST API, (b) the `coffer skill ...` CLI with `--json`, and (c) the desktop Skills page.
+- **FR-019**: Every management operation MUST be available through (a) the REST API, (b) the `coffer skill ...` CLI with `--json`, and (c) the Skills page in the web UI.
 - **FR-021**: System MUST expose a **read-only** view of a skill's master folder: a recursive file tree (name, folder-relative path, absolute on-disk path, type, size, children) and the contents of an individual file (with its absolute on-disk path and containing folder's absolute path). Markdown files render as formatted Markdown; other text files show raw. The in-app UI viewer is read-only and never edits file content. Reads MUST be contained to the master folder — any path that resolves outside it (`..` traversal, absolute path, or escaping symlink) MUST be rejected. File reads MUST be size-capped (truncating with a `truncated` flag) and MUST flag non-UTF-8 / NUL-containing files as binary with empty content. No symlink-following out of the folder.
-- **FR-027**: The in-app file viewer MUST offer, at both file and containing-folder granularity, affordances to (a) open the target in the user's preferred external editor (the global preference is specced in 002-ui-shell; default = the OS default application) and (b) reveal the target in the OS file manager (Finder / Explorer). Open and reveal perform the real OS action on **both** surfaces — desktop (Tauri) via the OS opener, web via the daemon filesystem-action endpoints (spec 004 FR-039), since the loopback daemon is on the user's own machine (ADR-033). There is no copy-path fallback. These affordances replace in-app content editing: the user edits in their own external editor.
+- **FR-027**: The in-app file viewer MUST offer, at both file and containing-folder granularity, affordances to (a) open the target in the user's preferred external editor (the global preference is specced in 002-ui-shell; default = the OS default application) and (b) reveal the target in the OS file manager (Finder / Explorer). Open and reveal perform the real OS action through the daemon filesystem-action endpoints (spec 004 FR-039), since the loopback daemon is on the user's own machine (ADR-033). There is no copy-path fallback. These affordances replace in-app content editing: the user edits in their own external editor.
 - **FR-028**: System MUST provide a **programmatic** (REST/CLI) write that overwrites an **existing text file** in the master folder, under the same containment guard and size cap as FR-021; it MUST refuse to create new files/directories here, to write outside the folder, or to overwrite a binary file with text. The write MUST be atomic with no symlink-following out of the folder. This write surface is for programmatic clients only; the in-app UI does not use it to edit content (see FR-027).
-- **FR-030**: The desktop "Add skill" import dialog MUST offer a folder picker (reusing the shared component from spec 004 FR-023/FR-024 — the OS-native directory dialog in the packaged app, the daemon-backed folder browser on the web) so the user picks the skill folder instead of typing its absolute path. The picked absolute path feeds the existing import operation (FR-005); typing a path by hand stays supported.
+- **FR-030**: The "Add skill" import dialog MUST offer a folder picker (reusing the shared component from spec 004 FR-023/FR-024 — the host's native directory dialog opened through the daemon, falling back to the daemon-backed folder browser) so the user picks the skill folder instead of typing its absolute path. The picked absolute path feeds the existing import operation (FR-005); typing a path by hand stays supported.
 
 **Observability**
 
@@ -479,7 +479,7 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 
 - Spec 004-agent-registry has shipped (PR #25); the agent kind, its CRUD, audit, and `on_delete` hook are available.
 - The kind-agnostic Resource framework, audit log, and `<kind>:<name>` identity scheme defined by spec 001-mcp-gateway are in place.
-- The application shell from spec 002-ui-shell — sidebar IA, layout, routing skeleton, and design system — is in place; the desktop Skills page is a feature surface that renders within that shell and fills the `/skills` nav slot 002-ui-shell reserved as a placeholder.
+- The application shell from spec 002-ui-shell — sidebar IA, layout, routing skeleton, and design system — is in place; the Skills page is a feature surface that renders within that shell and fills the `/skills` nav slot 002-ui-shell reserved as a placeholder.
 - Skills follow the open AgentSkills standard (`SKILL.md` with `name`/`description` frontmatter at minimum) as published at agentskills.io, validated against the standard's exact constraints (`name` ≤64 chars, `description` ≤1024 chars) with the optional `license` and experimental `allowed-tools` fields recognized; non-conforming folders are out of scope.
 - Local-imported skills are point-in-time copies; the source path is recorded for traceability, not for sync.
 - Windows users have directory-junction support on their filesystem; FAT32 and network shares fall back to copy mode.

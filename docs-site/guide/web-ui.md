@@ -21,9 +21,31 @@ SYSTEM
   Settings
 ```
 
-For end users, the Web UI ships **embedded inside the [Desktop app](/guide/desktop)** — no
-separate install or server to run. For developers working from a checkout, it runs as a Vite
-dev server (see below).
+The **daemon serves the Web UI itself**, as static files at its own loopback origin, so the
+page and the REST API are same-origin. There is nothing extra to install and no second
+server to run: if the daemon is up, the UI is up.
+
+## Opening the Web UI
+
+```bash
+coffer open
+```
+
+`coffer open` reads the daemon's address and token from `~/.coffer/daemon.json`, asks the
+daemon for a **single-use, short-lived code**, and opens your browser at the daemon's own
+address with that code in the URL fragment. The page trades the code for the API token and
+keeps the token in `localStorage`, so subsequent visits to `http://127.0.0.1:<port>/` just
+work.
+
+The token itself is never put in a URL — that would write it into your browser history. The
+exchange code is single-use and expires in about a minute, so it is harmless there.
+
+If the daemon is not running, start it first:
+
+```bash
+coffer daemon start
+coffer open
+```
 
 ## Opening the Web UI in development
 
@@ -44,8 +66,9 @@ make dev
 Vite only starts once the daemon is confirmed reachable (up to 30 seconds). Open
 `http://localhost:5173/` in any modern browser.
 
-> **End users:** the Web UI is bundled inside the Desktop app. See the
-> [Desktop app guide](/guide/desktop) for installation instructions.
+> The dev server is a different origin from the daemon, so it needs the cross-origin
+> opt-in: `make dev` sets `COFFER_DEV_CORS=1` for you. Everyday use goes through
+> `coffer open`, which is same-origin and needs no opt-in.
 
 ## What you can do
 
@@ -147,4 +170,4 @@ The change takes effect immediately and persists in `localStorage` under `coffer
 ## Next steps
 
 - [Register an MCP server →](/guide/register-server)
-- [Desktop app →](/guide/desktop)
+- [Download & install →](/guide/install)

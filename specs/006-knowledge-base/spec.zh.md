@@ -47,7 +47,7 @@
 
 ### User Story 4 —— 策展语料：编辑、重建索引、重新 embedding（优先级 P2）
 
-用户在自己的外部编辑器中打开文档的 Markdown（或通过编辑 API）修掉一处转换瑕疵，改动随后被拾取。他以同名重新上传某文件的更新版本，Coffer 就地更新**同一文档**（稳定 ULID id——不产生重复）。他改动 chunk 参数或 embedding 模型，Coffer 重新索引 / 重新 embedding 整个语料。全局唯一的 embedding 模型在「设置 → 向量模型」中通过添加 / 编辑弹窗配置（只能有一个模型，弹窗内含拉取模型与测试连接）；由于更换模型会重新 embedding 所有库，UI 会先弹确认，而启用开关则放在分块默认值旁边。Coffer UI 以**只读**方式渲染 Markdown——它从不提供应用内文本编辑器——而是提供在外部编辑器中打开文档（或其所在文件夹）、在文件管理器 / 访达中显示等操作（Web 上经 daemon,桌面上为原生）。一旦某文档被编辑（`source_mode = edited`），就**禁止**从原始 raw 重新转换，以免覆盖编辑。
+用户在自己的外部编辑器中打开文档的 Markdown（或通过编辑 API）修掉一处转换瑕疵，改动随后被拾取。他以同名重新上传某文件的更新版本，Coffer 就地更新**同一文档**（稳定 ULID id——不产生重复）。他改动 chunk 参数或 embedding 模型，Coffer 重新索引 / 重新 embedding 整个语料。全局唯一的 embedding 模型在「设置 → 向量模型」中通过添加 / 编辑弹窗配置（只能有一个模型，弹窗内含拉取模型与测试连接）；由于更换模型会重新 embedding 所有库，UI 会先弹确认，而启用开关则放在分块默认值旁边。Coffer UI 以**只读**方式渲染 Markdown——它从不提供应用内文本编辑器——而是提供在外部编辑器中打开文档（或其所在文件夹）、在文件管理器 / 访达中显示等操作（由本地 daemon 执行）。一旦某文档被编辑（`source_mode = edited`），就**禁止**从原始 raw 重新转换，以免覆盖编辑。
 
 **为什么是这个优先级**：KB 是随时间策展的；一次性 ingest 不够。但它不是展示核心价值所必需。
 
@@ -57,9 +57,9 @@
 
 ---
 
-### User Story 5 —— 在桌面与 CLI 管理，并观测（优先级 P2）
+### User Story 5 —— 在 Web UI 与 CLI 管理，并观测（优先级 P2）
 
-用户在桌面 UI 的 `Resources` 下、以及通过 `coffer kb …` 子命令管理 KB，并查看每个 KB 的指标（文档数、chunk 数、磁盘占用、已建索引的模式，以及因 embedding 服务暂不可用而向量嵌入待重试的文档数）。
+用户在 Web UI 的 `Resources` 下、以及通过 `coffer kb …` 子命令管理 KB，并查看每个 KB 的指标（文档数、chunk 数、磁盘占用、已建索引的模式，以及因 embedding 服务暂不可用而向量嵌入待重试的文档数）。
 
 **为什么是这个优先级**：非 CLI 用户和脚本化都需要它；但不阻塞核心流。
 
@@ -286,7 +286,7 @@
 - **Then** Coffer requests one embedding and reports success with the returned
   vector dimension, or a humanized failure message, without persisting anything.
 
-> **延后到未来的测试工作**（frontend Playwright + 全 CLI e2e）：通过桌面 app 创建 / 上传 / 检索 / 删除 KB；CLI 覆盖每一个桌面操作；CLI 检索 / grep 返回机器可读 JSON。此处列出仅为完整性；`make verify-acceptance` 不对其门禁。
+> **延后到未来的测试工作**（frontend Playwright + 全 CLI e2e）：通过 Web UI 创建 / 上传 / 检索 / 删除 KB；CLI 覆盖每一个 Web UI 操作；CLI 检索 / grep 返回机器可读 JSON。此处列出仅为完整性；`make verify-acceptance` 不对其门禁。
 
 ## Requirements
 
@@ -336,12 +336,12 @@
 
 **Surfaces**
 
-- **FR-019**: Users MUST be able to perform every KB operation through (a) a REST API under `/api/v1/knowledge_bases/`, (b) `coffer kb …` subcommands, and (c) a desktop UI under the existing `Resources` navigation.
-- **FR-020**: The UI document viewer MUST render the Markdown **read-only** — it MUST NOT offer an in-app text editor for document content (humans edit via the external editor or the edit API; agents via MCP). Instead, at both file and containing-folder granularity, the viewer MUST offer affordances to **open in external editor** and **reveal in file manager / Finder**. Open/reveal perform the real OS action on **both** surfaces (honouring the global preferred-editor preference specced in `002-ui-shell`): desktop (Tauri) via the OS opener, the web client via the loopback daemon's filesystem-action endpoints (spec 004 FR-039) — the daemon is always on the user's own machine, so it acts on the user's behalf (ADR-033). There is no copy-path fallback. To support these affordances, read API responses (FR/§Wire) MUST surface the document's absolute on-disk path and its containing folder's absolute path. The viewer MUST render the Markdown body at a comfortable reading **max-width** (centered) so long lines do not stretch edge-to-edge on wide screens. The detail-page document **list** MUST be a single **scrollable** list (the UI fetches one page at the max `limit`) with **no in-UI page-based pager** — the documents **API** stays paginated by `limit`/`offset` (FR-010a) for programmatic/external callers.
+- **FR-019**: Users MUST be able to perform every KB operation through (a) a REST API under `/api/v1/knowledge_bases/`, (b) `coffer kb …` subcommands, and (c) a web UI under the existing `Resources` navigation.
+- **FR-020**: The UI document viewer MUST render the Markdown **read-only** — it MUST NOT offer an in-app text editor for document content (humans edit via the external editor or the edit API; agents via MCP). Instead, at both file and containing-folder granularity, the viewer MUST offer affordances to **open in external editor** and **reveal in file manager / Finder**. Open/reveal perform the real OS action (honouring the global preferred-editor preference specced in `002-ui-shell`) through the loopback daemon's filesystem-action endpoints (spec 004 FR-039) — the daemon is always on the user's own machine, so it acts on the user's behalf (ADR-033). There is no copy-path fallback. To support these affordances, read API responses (FR/§Wire) MUST surface the document's absolute on-disk path and its containing folder's absolute path. The viewer MUST render the Markdown body at a comfortable reading **max-width** (centered) so long lines do not stretch edge-to-edge on wide screens. The detail-page document **list** MUST be a single **scrollable** list (the UI fetches one page at the max `limit`) with **no in-UI page-based pager** — the documents **API** stays paginated by `limit`/`offset` (FR-010a) for programmatic/external callers.
 
 **Source-file tracking（源文件跟踪）**
 
-- **FR-021**: A **path-based** ingest (the `coffer kb ingest` CLI, and a future desktop file picker) MUST record the external original's **absolute path** in the document's free-form `metadata` as `source_path` — there is no schema/DB migration; it rides in the existing JSON `metadata`. A web byte-upload and the agent `add_document` MCP tool MUST NOT set or infer `source_path` (an untrusted surface must never populate an arbitrary server path). `source_path` is machine-local: it is meaningful only on the machine that ingested the file.
+- **FR-021**: A **path-based** ingest (the `coffer kb ingest` CLI, and a future native file picker in the web UI) MUST record the external original's **absolute path** in the document's free-form `metadata` as `source_path` — there is no schema/DB migration; it rides in the existing JSON `metadata`. A web byte-upload and the agent `add_document` MCP tool MUST NOT set or infer `source_path` (an untrusted surface must never populate an arbitrary server path). `source_path` is machine-local: it is meaningful only on the machine that ingested the file.
 - **FR-022**: `check_sources` MUST classify each path-tracked document (those with a `source_path`) by re-hashing the external file with sha256 — streamed in chunks so a multi-GB original is never read fully into memory — and comparing to the stored `source_sha256`: `unchanged` (digests match), `changed` (they differ), or `missing` (the file is gone). Detection is **on-demand only** (no filesystem watcher), and detect-only changes nothing and audits nothing.
 - **FR-023**: `update_from_source` MUST re-ingest a document from its `source_path` in place — reading the tracked file's bytes and replaying the existing `replace=true` re-ingest path, so the document's stable ULID id is preserved and the corpus is re-chunked/re-indexed (audited via the existing `KB_DOCUMENT_UPDATED`). A document whose `source_mode == edited` MUST be refused (the existing `ReconversionBlocked` error) so hand edits are never clobbered; a vanished or untracked source is reported via the existing `IngestRejected`.
 - **FR-024**: A per-KB `auto_update_sources` flag (default **false**) governs `check_sources`: when false, detection only classifies; when true, each `changed` document whose `source_mode != edited` is auto-refreshed in place via `update_from_source` (reported `updated`), while a `changed` hand-edited document is skipped (reported `edited`). Toggling `auto_update_sources` MUST NOT re-chunk or re-embed the corpus (it is not a reindex-triggering field).

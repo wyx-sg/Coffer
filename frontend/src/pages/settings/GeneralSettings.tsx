@@ -20,15 +20,7 @@ import {
   useSetDefaultPageSize,
   useSetPreferredEditor,
 } from "@/lib/preferences";
-import { isTauri } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
-
-/** Pick an application bundle on the desktop (macOS apps are .app directories). */
-async function pickEditorApp(): Promise<string | null> {
-  const { open } = await import("@tauri-apps/plugin-dialog");
-  const picked = await open({ directory: true, defaultPath: "/Applications" });
-  return typeof picked === "string" ? picked : null;
-}
 
 /**
  * General display preferences (client-side, persisted in localStorage): the
@@ -37,8 +29,8 @@ async function pickEditorApp(): Promise<string | null> {
  *
  * The editor control is an edit-in-place combobox: the text field is always
  * editable (type any app name / launch command directly), and the chevron opens
- * a picker of editors the daemon detected as installed — plus "system default"
- * and a native Browse… on the desktop. An empty value means the OS default.
+ * a picker of editors the daemon detected as installed — plus "system default".
+ * An empty value means the OS default.
  * Only the chosen value is stored — never sent to the daemon except transiently
  * as the target when opening a file.
  */
@@ -59,12 +51,6 @@ export function GeneralSettings() {
   const pick = (value: string) => {
     commitEditor(value);
     setPickerOpen(false);
-  };
-
-  const browse = async () => {
-    setPickerOpen(false);
-    const picked = await pickEditorApp();
-    if (picked) commitEditor(picked);
   };
 
   // System default + detected editors. A custom editor is typed straight into
@@ -142,16 +128,6 @@ export function GeneralSettings() {
                     <span className="truncate">{opt.label}</span>
                   </button>
                 ))}
-                {isTauri() ? (
-                  <button
-                    type="button"
-                    onClick={() => void browse()}
-                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
-                  >
-                    <span className="size-4 shrink-0" />
-                    <span className="truncate">{t("settings.general.preferredEditorBrowse")}</span>
-                  </button>
-                ) : null}
               </PopoverContent>
             </Popover>
           </div>

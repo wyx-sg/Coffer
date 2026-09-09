@@ -1,6 +1,6 @@
 // frontend/src/lib/filePicker.test.ts
 //
-// In the browser (jsdom — not Tauri) the file pickers delegate to the daemon
+// The file pickers delegate to the daemon
 // (fsApi.pickFile / saveFile) and translate `available` into `unavailable` so a
 // no-native-dialog host can fall back to a typed path. We mock fsApi.
 

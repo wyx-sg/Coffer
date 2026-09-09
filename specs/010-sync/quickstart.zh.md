@@ -95,8 +95,8 @@ coffer sync import ~/coffer-bundle
 diff -r ~/bundle-from-a ~/bundle-from-b
 ```
 
-## REST / 桌面端
+## REST / Web UI
 
-这两个操作同样可以通过 `/api/v1/sync/*` 以及桌面端的 **Sync** 设置面板使用——一个导出
+这两个操作同样可以通过 `/api/v1/sync/*` 以及 Web UI 的 **Sync** 设置面板使用——一个导出
 按钮和一个导入按钮，各自打开原生目录选择器，外加用于比对指纹、执行带外密钥传递的主密钥
 卡片。

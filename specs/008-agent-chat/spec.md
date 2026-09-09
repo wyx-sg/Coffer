@@ -88,9 +88,9 @@ reorganization) rather than presented to the user as a chat persona.
 [ADR-031](../../docs/decisions/ADR-031-chat-single-owner-live-mirror.md) commits
 the surface to one irreplaceable job and **narrows** ADR-021 job 2 from _observe_
 to _observe + interrupt + inject_. Because Coffer channels are **owner-paired**,
-the "IM peer" is the **same owner** on their phone — so Chat is the **desktop
+the "IM peer" is the **same owner** on their phone — so Chat is the **browser
 surface of the same conversations the owner also drives from IM**: one owner, one
-conversation timeline, two screens, one underlying agent session. From the desktop
+conversation timeline, two screens, one underlying agent session. From the browser
 the owner can **observe** any conversation live (including a turn kicked off from
 the phone, token by token), **interrupt** a running turn, and **inject/continue**
 by typing freely — messages **queue**, never block. There is no multi-human model.
@@ -677,8 +677,8 @@ referenced by at least one test marked
   message is **not** committed to the message sequence until its turn starts; it
   is surfaced as a removable pending item the owner may drop before it runs. The
   pending queue is in-memory; it auto-advances after *any* turn on the
-  conversation ends (including an IM-driven one), so a desktop message queued
-  behind a phone-started turn still runs when that turn completes. (A message
+  conversation ends (including an IM-driven one), so a message typed in the web UI and
+  queued behind a phone-started turn still runs when that turn completes. (A message
   arriving *from* an IM channel while a turn is in flight is held by the channel's
   own inbound buffering, Spec 009, rather than this queue; v1 does not merge the
   two into one physical FIFO.) A daemon restart drops not-yet-committed pending
@@ -693,7 +693,7 @@ referenced by at least one test marked
 - **FR-019a**: System MUST expose a per-conversation **live event subscription**
   at `GET /conversations/{id}/events` (SSE) that any number of clients may attach
   to. On attach, if a turn is in flight it MUST replay the current turn's events
-  (so a late subscriber — e.g. the desktop opened mid-turn, or watching a
+  (so a late subscriber — e.g. the web UI opened mid-turn, or watching a
   phone-started turn — catches up), then stream live; when no turn is in flight it
   MUST hold the connection open and deliver the next turn's events whenever one
   starts, from any surface.
@@ -747,7 +747,7 @@ referenced by at least one test marked
 
 **Surfaces**
 
-- **FR-027**: System MUST provide a Chat page in the desktop app: a collapsible
+- **FR-027**: System MUST provide a Chat page in the web UI: a collapsible
   conversation-history list, a new-conversation dialog with an agent picker and a
   per-agent configuration area, a message thread with streamed text (driven by the
   FR-019a live subscription, not by polling), inline expandable tool-call cards, a

@@ -255,7 +255,7 @@ Typer（或 Click）子命令组 `provider`，包含：
 **构建内容：**
 - `providers.ts`：手写 `ProviderOut`、`ProviderCreateRequest` 等类型；`listProviders()`、`createProvider()`、`updateProvider()`、`deleteProvider()`、`activateProvider()` fetch 封装。
 - `useProviders.ts`：封装上述接口的 React Query hooks；可被 `vi.mock`。
-- `ProvidersPage.tsx`：DataTable，列：name / wire_format / base_url / model / active；行操作：Switch、Delete；顶部操作：Add（create）。桌面页不含内联编辑——编辑通过 CLI/API 实现。
+- `ProvidersPage.tsx`：DataTable，列：name / wire_format / base_url / model / active；行操作：Switch、Delete；顶部操作：Add（create）。Web 页不含内联编辑——编辑通过 CLI/API 实现。
 - `ProviderForm.tsx`：仅用于创建的受控表单。
 - 测试：`vi.mock` hooks；断言表格渲染 profile 并调用 activate mutation。
 

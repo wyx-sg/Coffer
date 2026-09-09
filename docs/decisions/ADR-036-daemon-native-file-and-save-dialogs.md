@@ -9,34 +9,38 @@
   router and gains the file/save picker FRs; [010-sync](../../specs/010-sync/spec.md)
   consumes them for out-of-band master-key transfer. No new spec number; the
   `spec.md` files are updated before implementation.
-- **Supersedes:** the "Picking keeps its dual path — deliberately / we do not
-  collapse the picker onto the daemon" stance in [ADR-033](./ADR-033-daemon-proxies-os-file-actions.md)
-  §4. That stance was already overtaken by the `POST /fs/pick-folder` daemon
+- **Supersedes:** the "we do not collapse the picker onto the daemon" stance in
+  [ADR-033](./ADR-033-daemon-proxies-os-file-actions.md) §4. That stance was already overtaken by the `POST /fs/pick-folder` daemon
   endpoint shipped after ADR-033; this ADR makes the new direction explicit and
   extends it from folders to files.
 
 ## Context
 
 ADR-033 routed OS file *actions* (open / reveal) through the loopback daemon so
-the web surface matches the desktop app, but §4 deliberately kept *picking* on a
-dual path: the OS-native directory dialog on desktop, the in-app daemon folder
-browser on the web. A later change (`POST /fs/pick-folder`, `FsPickService`)
-already broke that stance for folders — on the web the daemon now opens the host's
-**native** directory dialog (`osascript` on macOS, `zenity`/`kdialog` on Linux)
-and only falls back to the in-app browser when no native dialog tool exists.
+the browser-hosted UI performs real OS actions, but §4 deliberately kept *picking*
+off the daemon: the UI used the in-app daemon folder browser, because an OS-native
+directory dialog was then reachable only from a packaged native shell. A later
+change (`POST /fs/pick-folder`, `FsPickService`) already broke that stance for
+folders — the daemon now opens the host's **native** directory dialog (`osascript`
+on macOS, `zenity`/`kdialog` on Linux) and only falls back to the in-app browser
+when no native dialog tool exists.
 
 One gap remains: there is **no native FILE-open or SAVE dialog**, only
-folder-open. Every place that needs a *file* path therefore either hand-rolls a
-desktop-only Tauri dialog or forces the user to type an absolute path into a text
-field. The most visible offender is the out-of-band master-key card (spec 010):
-on the web it shows a raw `/path/to/coffer-master.key` input and the import/export
-buttons act on whatever the user typed. Typing absolute paths is exactly the
-friction the folder picker was introduced to remove.
+folder-open. Every place that needs a *file* path therefore forces the user to
+type an absolute path into a text field. The most visible offender is the
+out-of-band master-key card (spec 010): it shows a raw
+`/path/to/coffer-master.key` input and the import/export buttons act on whatever
+the user typed. Typing absolute paths is exactly the friction the folder picker
+was introduced to remove.
 
 ## Decision
 
 **Extend the daemon picker from folders to files: add native open-file and
 save-file dialogs, reached the same way as the folder picker.**
+
+> **2026-09-09:** the alternative branch this ADR once described — Tauri
+> `open`/`save` dialogs inside the packaged desktop shell — went away with that
+> shell. The daemon endpoints are the single mechanism.
 
 ### 1. Two new daemon endpoints (spec 004)
 
@@ -66,33 +70,32 @@ dir and suggested name are escaped into the AppleScript string literals.
 ### 2. A shared front-end file-picker helper
 
 `lib/filePicker.ts` exposes `pickOpenFile(start?)` and
-`pickSaveFile(suggestedName, start?)`, each returning `{ path, unavailable }`.
-Desktop uses the Tauri `open`/`save` dialog; the web uses the new daemon
-endpoints; `unavailable` is true only when the daemon reports no native tool (or
-the call errors), so the caller can reveal a typed-path fallback.
+`pickSaveFile(suggestedName, start?)`, each returning `{ path, unavailable }`,
+both backed by the new daemon endpoints. `unavailable` is true only when the
+daemon reports no native tool (or the call errors), so the caller can reveal a
+typed-path fallback.
 
 ### 3. Picking is fully native-first; typing is a last resort
 
-The web master-key card no longer shows a path field by default. Import opens the
+The master-key card no longer shows a path field by default. Import opens the
 native open-file dialog; export opens the native save-file dialog. The typed
 `keyPath` field appears **only** after a pick reports `unavailable` — on macOS it
 never appears. The three existing folder-paired text inputs (skill import, agent
 `config_dir` ×2) drop their co-located raw text box for a read-only display of the
-picked path plus the `FolderPicker` button (whose own web fallback is the in-app
+picked path plus the `FolderPicker` button (whose own fallback is the in-app
 browser, never typing).
 
 ## Consequences
 
-- The web surface picks files the same way it already picks folders; the desktop
-  Tauri path is unchanged. Manual path typing survives only as a degraded
-  fallback on hosts with no native dialog.
+- The UI picks files the same way it already picks folders. Manual path typing
+  survives only as a degraded fallback on hosts with no native dialog.
 - New OS-surface on the daemon is small and bounded: the dialogs only *return* a
   path the user selected — they create and open nothing. Same trust level as the
   existing `pick-folder` / `browse` routes (loopback + token + argument-vector
   shell-out).
 - ADR-033 §4's "dual path, deliberately" is retired. The picker is now
-  daemon-native on the web for both folders and files; the in-app folder browser
-  remains only as the no-native-tool fallback for folders.
+  daemon-native for both folders and files; the in-app folder browser remains only
+  as the no-native-tool fallback for folders.
 - macOS and Linux (with `zenity`/`kdialog`) get real dialogs everywhere; Windows
   and lean Linux hosts degrade to a typed path — the same degradation the folder
   picker already documents.

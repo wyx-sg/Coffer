@@ -72,12 +72,12 @@ daemon 必须**比任一单一入口活得更久**：用户期望某个 MCP 客�
 - 由子入口（shim）自动拉起一个长生存周期进程并不常见 —— 尤其在 Windows
   上用户可能短暂看到命令窗口。缓解方式：Windows 上以
   `subprocess.CREATE_NO_WINDOW` 分离；POSIX 上使用 `os.setsid()`。
-- 由于 daemon 的生存周期长于 app，刚安装的新版 app 可能复用一个仍在监听的
-  **旧** daemon —— 形成静默的版本偏差。缓解方式是**检测而非自动更新**：daemon 在
-  `GET /api/v1/daemon/status` 上上报其包版本（`coffer.__version__`），桌面 app
-  将其与本次构建期望的版本（Tauri `daemon_version_matches` 命令，取自
-  `CARGO_PKG_VERSION`）比对。不一致时，沿用现有的 daemon 离线横幅展示一个
-  「daemon 版本过旧 —— 请重启」的入口，复用手动重启路径；Coffer 绝不自动杀掉
+- 由于 daemon 的生存周期长于其调用方，刚安装的新版 Coffer 可能复用一个仍在监听
+  的**旧** daemon —— 形成静默的版本偏差。缓解方式是**检测而非自动更新**：daemon 在
+  `GET /api/v1/daemon/status` 上上报其包版本（`coffer.__version__`），CLI 将其与
+  自身的 `coffer.__version__` 比对。不一致时，`coffer daemon status` 提示 daemon
+  版本过旧并指向 `coffer daemon restart`；daemon 托管的 Web UI 也在现有的 daemon
+  离线横幅上展示同一个「daemon 版本过旧 —— 请重启」入口；Coffer 绝不自动杀掉
   正在运行的 daemon。
 
 **运维后续**
@@ -141,8 +141,9 @@ daemon 必须**比任一单一入口活得更久**：用户期望某个 MCP 客�
   `coffer-daemon` 二进制，而不是退回到 `python -m coffer_daemon`。这确保了无论
   Coffer 是从预构建的发布归档还是从源码检出安装的，都能使用正确的二进制。
 - **2026-06-13** —— 版本偏差检测：daemon 现在会在 `GET /api/v1/daemon/status`
-  上上报其包版本；当被复用的旧 detached daemon 的版本与 app 构建期望的版本不一致
-  时，桌面 app 会展示一个手动的「daemon 版本过旧 —— 请重启」横幅。仅检测 + 手动
+  上上报其包版本；当被复用的旧 detached daemon 的版本与调用方期望的版本不一致
+  时，CLI（`coffer daemon status`）与 daemon 托管的 Web UI 会给出一个手动的
+  「daemon 版本过旧 —— 请重启」入口（`coffer daemon restart`）。仅检测 + 手动
   重启；不自动更新，也不自动杀进程。
 - **2026-06-13** —— spawn 竞态加固（本 ADR 一直在文档里写的那把 `flock`，现在真正
   落地了）。刚拉起的 daemon 的「探测 + 绑定 + 写入」现在在
@@ -153,8 +154,8 @@ daemon 必须**比任一单一入口活得更久**：用户期望某个 MCP 客�
   因此孤儿退出时不会删掉存活 daemon 的发现文件。`coffer daemon start` 现在以
   `live_daemon()`（真实状态探测）为准，因此陈旧的 `daemon.json` 会触发重新拉起，
   而不是误报「已在运行」；`coffer daemon stop` 在发送 `SIGTERM` 前会校验所记录的
-  PID 的命令行确实是一个 Coffer daemon（被回收的 PID 不再被误杀）。桌面 app 的
-  detect-or-spawn 存活性检查从裸 TCP 连接改为 HTTP `GET /api/v1/daemon/status`
+  PID 的命令行确实是一个 Coffer daemon（被回收的 PID 不再被误杀）。
+  detect-or-spawn 的存活性检查从裸 TCP 连接改为 HTTP `GET /api/v1/daemon/status`
   的 200 探测，因此占用了崩溃 daemon 所记录端口的「占座进程」不再被误判为存活
   daemon。
 - **2026-06-22** —— shim 重启自愈。长驻的 `coffer-mcp-shim` 只在**启动时**解析

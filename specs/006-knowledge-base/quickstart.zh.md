@@ -2,7 +2,7 @@
 
 > English: [quickstart.md](./quickstart.md)
 
-重新设计的 006-knowledge-base 上线后，开发者如何端到端地用它。三条流程：CLI、桌面、以及通过 MCP 客户端。
+重新设计的 006-knowledge-base 上线后，开发者如何端到端地用它。三条流程：CLI、Web UI、以及通过 MCP 客户端。
 
 ## CLI
 
@@ -82,9 +82,9 @@ coffer kb search design-notes "service backoff strategy" --mode vector
 
 如果你在未配置 embedding 的 KB 上请求 `--mode vector`，检索会回退到 keyword，响应被标注 `fallback="keyword"` —— 绝不报错。
 
-## 桌面
+## Web UI
 
-1. 启动 Coffer。
+1. 打开 Coffer 的 Web UI（`coffer open`）。
 2. 侧栏 → **Resources** → **Add** → 选 **Knowledge Base**。
 3. 填表单：name、description、启用的检索模式（默认 keyword + grep）、chunk 参数，以及 —— 仅当你启用 vector —— 一个 embedding provider/model 与凭据。提交。
 4. 点进 KB。把任意格式的文件拖入上传区；每个都变成 Markdown。

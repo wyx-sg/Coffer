@@ -119,7 +119,7 @@ Concrete shape:
   accept this: the surface is small, the concepts are ours, and there is no
   framework churn to track.
 - **sqlite-vec is a native extension.** It must load on macOS arm64 and Linux
-  in the PyInstaller bundle ([ADR-008](ADR-008-distribution-pyinstaller-tauri-sidecar.md));
+  in the PyInstaller bundle ([ADR-008](ADR-008-distribution-pyinstaller.md));
   packaging/loading is an open verification item.
 - **Converter quality is now our problem.** MarkItDown's PDF/Docx fidelity, OCR,
   and the MarkItDown-vs-Docling choice are ours to validate per format. The

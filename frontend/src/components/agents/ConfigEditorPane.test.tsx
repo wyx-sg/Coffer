@@ -2,8 +2,7 @@
 // The right-hand pane is READ-ONLY: it previews the file's content (no
 // editable textarea, no Save, no find/replace), shows the path plus an
 // optional one-line description, and renders the FileActions bar so the user
-// can open the file in their own editor (daemon-backed open/reveal on the web,
-// Tauri on the desktop).
+// can open the file in their own editor (daemon-backed open/reveal).
 import { describe, expect, test } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ConfigEditorPane, type ConfigEditorPaneProps } from "./ConfigEditorPane";

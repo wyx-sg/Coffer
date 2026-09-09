@@ -499,7 +499,7 @@ components:
           nullable: true
           description: >
             The IM channel this conversation is also driven from (ADR-031); null
-            for a desktop-only conversation. Present iff channel_name is set.
+            for a web-only conversation. Present iff channel_name is set.
           allOf:
             - $ref: '#/components/schemas/ChannelBindingOut'
 

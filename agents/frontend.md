@@ -2,9 +2,10 @@
 
 > 中文版: [frontend.zh.md](./frontend.zh.md)
 
-Coffer's frontend is the desktop app's web surface (`frontend/`), rendered in
-the Tauri shell in production and the Vite dev server (`make dev`) in
-development. This file is the engineering convention for that surface — the
+Coffer's frontend is the daemon-served web UI (`frontend/`): built to static
+assets that the daemon serves at its own loopback origin in production, and
+run from the Vite dev server (`make dev`) in development with `COFFER_DEV_CORS`
+opted in. This file is the engineering convention for that surface — the
 counterpart to [`stack.md`](./stack.md) (backend) and
 [`visual-language.md`](./visual-language.md) (visual design).
 Read it before touching `frontend/src`.

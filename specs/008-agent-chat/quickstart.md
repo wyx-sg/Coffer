@@ -80,7 +80,7 @@ coffer chat -m "say hello"        # one turn, prints the reply
 coffer chat                       # interactive multi-turn session
 ```
 
-CLI conversations are the same conversations the desktop app shows.
+CLI conversations are the same conversations the web UI shows.
 
 ## Conversation retention (and an upgrade note)
 

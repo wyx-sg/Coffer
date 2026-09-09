@@ -64,18 +64,18 @@ agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换�
 
 ---
 
-### User Story 6 —— 在桌面 App 中管理 skill（优先级 P2）
+### User Story 6 —— 在 Web UI 中管理 skill（优先级 P2）
 
-用户打开 Coffer，看到以数据表呈现的 Skills 页（搜索、筛选、分页、行多选以执行批量操作），可以通过文件选择器导入并浏览列表。Skills 页只管理 skill 资源本身，不管理它的按 agent binding：点击某个 skill 打开详情视图，其中有一个 Overview 元信息 tab 与一个 Files tab（文件树 + 一个只读文件查看器：渲染 Markdown，其他文本文件以原文显示）。该查看器不编辑内容；要修改文件，用户在自己的外部编辑器或文件管理器中打开该文件（或其所在文件夹）——每个文件与文件夹都提供「在外部编辑器中打开」「在文件管理器中显示」操作（Web 上经 daemon,桌面上为原生）。按 agent 的启用/禁用在 agent 详情页上进行——该 agent 的「Skills」tab 列出绑定到该 agent 的 skill，并带每条 binding 的开关。
+用户打开 Coffer，看到以数据表呈现的 Skills 页（搜索、筛选、分页、行多选以执行批量操作），可以通过文件选择器导入并浏览列表。Skills 页只管理 skill 资源本身，不管理它的按 agent binding：点击某个 skill 打开详情视图，其中有一个 Overview 元信息 tab 与一个 Files tab（文件树 + 一个只读文件查看器：渲染 Markdown，其他文本文件以原文显示）。该查看器不编辑内容；要修改文件，用户在自己的外部编辑器或文件管理器中打开该文件（或其所在文件夹）——每个文件与文件夹都提供「在外部编辑器中打开」「在文件管理器中显示」操作（由本地 daemon 执行）。按 agent 的启用/禁用在 agent 详情页上进行——该 agent 的「Skills」tab 列出绑定到该 agent 的 skill，并带每条 binding 的开关。
 
 **为什么是这个优先级**：非 CLI 用户需要一个可视化日常管理面板。
 
-**独立可测**：打开桌面 App → Skills → 用文件选择器导入一个文件夹 → 在表格中看到它 → 打开 agent 详情页 → 它的 Skills tab → 把该 skill 对该 agent 切到 enabled → 验证 symlink 已落盘。
+**独立可测**：打开 Web UI → Skills → 用文件选择器导入一个文件夹 → 在表格中看到它 → 打开 agent 详情页 → 它的 Skills tab → 把该 skill 对该 agent 切到 enabled → 验证 symlink 已落盘。
 
 **代表性场景**：
 
-- 通过桌面文件选择器导入 skill
-- 通过桌面切换控件按 agent 启停
+- 通过 Web UI 文件选择器导入 skill
+- 通过 Web UI 切换控件按 agent 启停
 - 通过 UI 通知呈现 drift 数
 
 ---
@@ -282,7 +282,7 @@ skill 投递给我」）。投递是二者的**交集**，再减去手动排除�
 ### Scenario: 桌面与 CLI 覆盖每一项操作
 
 - **Given** daemon 在运行，
-- **When** 用户在桌面与 `coffer skill ...` 中分别执行每一项操作，
+- **When** 用户在 Web UI 与 `coffer skill ...` 中分别执行每一项操作，
 - **Then** 两个 surface 产生相同效果，且 CLI 的读类操作均支持 `--json`。
 
 ### Scenario: 审计 skill 全生命周期
@@ -430,7 +430,7 @@ skill 投递给我」）。投递是二者的**交集**，再减去手动排除�
 **跟随主库（工作区增补）**
 
 - **FR-025**：每个 agent 必须携带一个跟随主库标志与一份按 agent 的 skill 排除列表（存于 agent 资源的 config，spec 004）。跟随期间，agent 的有效 skill 集合是整个主库减去其排除项；同步引擎必须在标志变化、skill 注册或移除、以及排除列表变化时执行对账投递。目标路径冲突遵循 FR-011（报告、绝不覆盖）。关闭标志必须把当前已投递的 skill 保留为显式逐 skill binding。该标志对新注册的 agent 默认开启，与增补前的自动绑定行为一致。
-- **FR-026**：非托管 skill 与跟随操作必须可通过 REST API、`coffer agent skill …` / `coffer skill …` CLI（读取支持 `--json`）、以及桌面应用中该 agent 的 Skills tab 完成。
+- **FR-026**：非托管 skill 与跟随操作必须可通过 REST API、`coffer agent skill …` / `coffer skill …` CLI（读取支持 `--json`）、以及 Web UI 中该 agent 的 Skills tab 完成。
 
 **生命周期**
 
@@ -439,11 +439,11 @@ skill 投递给我」）。投递是二者的**交集**，再减去手动排除�
 
 **Surface**
 
-- **FR-019**：每一项管理操作必须可通过（a）REST API、（b）`coffer skill ...` CLI（含 `--json`）、（c）桌面 Skills 页 三种 surface 完成。
+- **FR-019**：每一项管理操作必须可通过（a）REST API、（b）`coffer skill ...` CLI（含 `--json`）、（c）Web UI 的 Skills 页 三种 surface 完成。
 - **FR-021**：系统必须提供 skill master 文件夹的**只读**视图：一棵递归文件树（name、相对路径、磁盘绝对路径、type、size、children）以及单个文件的内容（含其磁盘绝对路径与所在文件夹的绝对路径）。Markdown 文件渲染为格式化 Markdown，其他文本文件以原文显示。应用内 UI 查看器为只读，从不编辑文件内容。读取必须限制在 master 文件夹内——任何解析后位于其外的路径（`..` 穿越、绝对路径或越界 symlink）必须被拒绝。文件读取必须做大小上限（超限时截断并带 `truncated` 标记），并把非 UTF-8 / 含 NUL 字节的文件标记为 binary 且内容为空。不跟随越界 symlink。
-- **FR-027**：应用内文件查看器必须在文件与所在文件夹两种粒度上提供以下操作：（a）在用户首选的外部编辑器中打开目标（该全局首选项在 002-ui-shell 中定义；默认为操作系统默认应用），（b）在操作系统文件管理器（Finder / 资源管理器）中显示目标。打开与显示在**两个**界面上都执行真正的操作系统动作——桌面端（Tauri）经 OS opener,Web 经 daemon 的文件系统动作端点（spec 004 FR-039）,因为环回 daemon 就在用户自己的机器上（ADR-033）。没有 copy-path 回退。这些操作取代了应用内的内容编辑：用户在自己的外部编辑器中编辑。
+- **FR-027**：应用内文件查看器必须在文件与所在文件夹两种粒度上提供以下操作：（a）在用户首选的外部编辑器中打开目标（该全局首选项在 002-ui-shell 中定义；默认为操作系统默认应用），（b）在操作系统文件管理器（Finder / 资源管理器）中显示目标。打开与显示通过 daemon 的文件系统动作端点（spec 004 FR-039）执行真正的操作系统动作,因为环回 daemon 就在用户自己的机器上（ADR-033）。没有 copy-path 回退。这些操作取代了应用内的内容编辑：用户在自己的外部编辑器中编辑。
 - **FR-028**：系统必须提供**编程式**（REST/CLI）写入，在与 FR-021 相同的限制与大小上限下**覆盖 master 文件夹中已存在的文本文件**；必须拒绝在此创建新文件/目录、写到文件夹之外、或用文本覆盖二进制文件。写入必须是原子的，且不跟随越界 symlink。该写入 surface 仅供编程客户端使用；应用内 UI 不用它编辑内容（见 FR-027）。
-- **FR-030**：桌面端「添加 skill」导入对话框必须提供一个文件夹选择器（复用 spec 004 FR-023/FR-024 的共享组件——打包应用中为 OS 原生目录对话框,Web 上为 daemon 支撑的文件夹浏览器）,让用户选取 skill 文件夹而非手敲其绝对路径。选取的绝对路径喂给既有的导入操作（FR-005）;手动输入路径仍受支持。
+- **FR-030**：「添加 skill」导入对话框必须提供一个文件夹选择器（复用 spec 004 FR-023/FR-024 的共享组件——通过 daemon 打开宿主的原生目录对话框,回退到 daemon 支撑的文件夹浏览器）,让用户选取 skill 文件夹而非手敲其绝对路径。选取的绝对路径喂给既有的导入操作（FR-005）;手动输入路径仍受支持。
 
 **可观测**
 
@@ -476,7 +476,7 @@ skill 投递给我」）。投递是二者的**交集**，再减去手动排除�
 
 - spec 004-agent-registry 已上线（PR #25）；agent kind 及其 CRUD、审计、`on_delete` 钩子均已可用。
 - spec 001-mcp-gateway 引入的 kind-agnostic Resource 框架、审计日志与 `<kind>:<name>` 标识方案已就位。
-- spec 002-ui-shell 的应用外壳——侧栏 IA、布局、路由骨架、设计系统——已就位；桌面 Skills 页是渲染在该外壳之上的功能 surface，填上 002-ui-shell 预留的 `/skills` 导航位。
+- spec 002-ui-shell 的应用外壳——侧栏 IA、布局、路由骨架、设计系统——已就位；Skills 页是渲染在该外壳之上的功能 surface，填上 002-ui-shell 预留的 `/skills` 导航位。
 - skill 遵循开放 AgentSkills 标准（SKILL.md 至少含 `name`/`description` frontmatter，见 agentskills.io），并按标准的精确约束校验（`name` ≤64 字符、`description` ≤1024 字符），同时识别可选的 `license` 与实验性 `allowed-tools` 字段；不符合规范的文件夹不在本规范处理之列。
 - 本地导入的 skill 是时间点拷贝；原路径仅用于追溯，不用于同步。
 - Windows 用户的文件系统支持目录 junction；FAT32 与网络共享降级为 copy 模式。

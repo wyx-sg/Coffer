@@ -73,7 +73,7 @@ coffer chat -m "say hello"        # 单回合，打印回复
 coffer chat                       # 交互式多回合会话
 ```
 
-CLI 对话与桌面应用展示的是同一批对话。
+CLI 对话与 Web UI 展示的是同一批对话。
 
 ## 对话保留（含一条升级说明）
 

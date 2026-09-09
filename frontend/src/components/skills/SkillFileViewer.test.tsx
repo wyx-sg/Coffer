@@ -1,7 +1,7 @@
 // frontend/src/components/skills/SkillFileViewer.test.tsx
 // The skill file viewer renders Markdown nicely and shows other text raw,
 // READ-ONLY: there is no Edit/Save flow. Instead it offers a FileActions bar
-// (open in editor / reveal in file manager — daemon-backed on web, Tauri on desktop).
+// (open in editor / reveal in file manager — daemon-backed).
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { SkillFileViewer } from "./SkillFileViewer";

@@ -346,8 +346,9 @@ status / notify`。
   与普通 markdown 冲突。
 - **FR-022**: 入站语音消息以转写文本驱动一个 turn。内置 agent（Claude Code、Codex）
   无法听音频，所以 adapter 把音频**本地**转写成文字并折进 turn 的 prompt。转写是一个
-  按 agent 的接缝（ADR-038）：冻结的桌面 App 用随包、torch-free 的 `whisper.cpp` 引擎
-  （Apple Silicon Metal），其小模型首次使用时下载；源码运行则回退到 `mlx-whisper`
+  按 agent 的接缝（ADR-038）：冻结构建用随包、torch-free 的 `whisper.cpp` 引擎
+  （Apple Silicon Metal）——即冻结 daemon 部署到 `~/.coffer/bin/` 的 `whisper-cli`
+  二进制——其小模型首次使用时下载；源码运行则回退到 `mlx-whisper`
   （可选 `[voice-mlx]` extra）。见 ADR-039。未来音频原生 agent 的 adapter 直接转发音频而非
   转写。没有可用引擎时——或模型尚未下载时——语音作为音频文件交出而非丢失。
 - **FR-023**: 群聊是一等 peer。当已配对的 owner @mention bot（或消息以带地址的群

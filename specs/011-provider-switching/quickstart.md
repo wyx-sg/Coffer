@@ -5,7 +5,8 @@ agent's native config atomically.
 
 ## Prerequisites
 
-- Coffer's daemon is running (start the desktop app or `coffer daemon`).
+- Coffer's daemon is running (`coffer daemon`, or `coffer open` which starts it
+  and opens the web UI).
 - At least one agent is registered (auto-detected or via `coffer agent add` —
   see spec 004 quickstart).
 
@@ -142,9 +143,9 @@ coffer provider remove my-anthropic
 
 If no other profile shares the credential ref, the vault entry is deleted.
 
-## Desktop app
+## Web UI
 
-Open Coffer → **Providers** in the sidebar. The Providers page shows a table
+Open Coffer's web UI → **Providers** in the sidebar. The Providers page shows a table
 of all profiles with columns: name, wire format, base URL, model, active.
 
 Row actions:
@@ -200,4 +201,4 @@ compare.
 
 **Activating a profile reports `skipped: ["codex"]`** — no Codex agent is
 registered in Coffer yet. Register one with `coffer agent add` (see spec 004)
-or the desktop Agents page. The profile is still marked active.
+or the web Agents page. The profile is still marked active.

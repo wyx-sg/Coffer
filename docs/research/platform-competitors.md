@@ -76,7 +76,8 @@ them, cc-switch, already has.
   thesis-analog** ("an AI-CMS for coding agents"): MCP across Claude/Cursor +
   RAG + memory + AES-256-GCM per-profile credentials + activity history +
   multi-hub sync + multi-model. **Study it.** Coffer's wedge: skills-manager,
-  rules-unify, IM channels, and true local-first desktop (it is a web app).
+  rules-unify, IM channels, and true local-first operation (it is a hosted web
+  app).
 - **Obot** (obot-platform) — ~837, Western. Broadest _server_ platform
   (gateway + registry + RAG + project memory + OAuth + audit + model mgmt) — but
   K8s/enterprise, not a local-first personal vault.
@@ -102,7 +103,7 @@ and they are exactly Coffer's bet:
    index KB inside a local-first vault has no incumbent.
 2. **Audit / governance, free and by default.** Only enterprise/web platforms
    (plugged.in, Obot, ToolHive, ContextForge) carry an audit trail; none is a
-   local-first desktop tool.
+   local-first tool.
 3. **Encrypted credentials as a first-class feature.** Almost everyone delegates
    secrets to 1Password / Doppler / Infisical. First-class ciphertext-only
    storage appears only in plugged.in / Obot / ToolHive — again, none local-first.

@@ -233,7 +233,7 @@ Anthropic 对技能捆绑的代码**不提供任何内建沙箱或签名**；安
   `SkillOut` 暴露解析后的 `update_pending = update_available 且 not pinned`。
   三类界面均有呈现：`POST /skills/{name}/check-update` · `/pin` · `/unpin`（HTTP）、
   `coffer skill check-update`/`pin`/`unpin` CLI 以及 `skill show` 中的 `update:` 行、
-  桌面端技能详情中的更新行。本地导入的技能无法检查（`UpdateNotSupported`——重新导入
+  Web UI 技能详情中的更新行。本地导入的技能无法检查（`UpdateNotSupported`——重新导入
   以刷新）；`plan.md` 的延后项现在只覆盖提交级锁定 / 多版本共存，而非更新检测。
   [`repo:backend/coffer/application/skill/update_ops.py`、
   `repo:backend/coffer/domain/skill/config.py`、

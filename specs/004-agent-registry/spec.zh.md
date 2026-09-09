@@ -33,11 +33,11 @@
 
 ### User Story 2 —— 用自定义路径手工注册一个 agent（优先级 P1）
 
-部分用户把 agent 装在非默认位置，或者同时有多个安装（工作、个人）。他们需要按类型添加一个 agent，并可选地覆盖配置目录。名称是可选的——省略时 Coffer 会派生一个稳定的按类型默认名。选择自定义路径时，桌面应用提供一个文件夹选择器（打包应用用 OS 原生对话框；Web 用 daemon 支撑的文件夹浏览器），使用户挑选一个真实目录，而不是手动输入。
+部分用户把 agent 装在非默认位置，或者同时有多个安装（工作、个人）。他们需要按类型添加一个 agent，并可选地覆盖配置目录。名称是可选的——省略时 Coffer 会派生一个稳定的按类型默认名。选择自定义路径时，Web UI 提供一个文件夹选择器——通过本地 daemon 打开宿主的原生目录对话框——使用户挑选一个真实目录，而不是手动输入。
 
 **为什么是这个优先级**：发现覆盖常见情况，手工注册覆盖长尾。没有它，registry 就不完整。
 
-**独立可测**：从命令行用 `--config-dir /custom/path` 注册一个名为 `codex-work` 的 `codex` agent；列出 agent，观察该手工注册条目。从桌面表单添加一个不带名称的 agent，观察它以按类型默认名注册。
+**独立可测**：从命令行用 `--config-dir /custom/path` 注册一个名为 `codex-work` 的 `codex` agent；列出 agent，观察该手工注册条目。从 Web UI 表单添加一个不带名称的 agent，观察它以按类型默认名注册。
 
 **代表性场景**：
 
@@ -64,20 +64,20 @@
 
 ---
 
-### User Story 4 —— 在桌面应用中管理 agent（优先级 P2）
+### User Story 4 —— 在 Web UI 中管理 agent（优先级 P2）
 
-用户打开 Coffer 桌面应用，看到一个「Agents」页面，列出每个已注册 agent 的类型、名称与 config_dir，并能在表单里添加或编辑。
+用户打开 Coffer Web UI，看到一个「Agents」页面，列出每个已注册 agent 的类型、名称与 config_dir，并能在表单里添加或编辑。
 
 **为什么是这个优先级**：非 CLI 用户需要一个可视化界面来理解 registry。
 
-**独立可测**：打开桌面应用 → Agents → 用默认路径添加 Codex → 在列表里观察 → 点进去 → 修改 config_dir → 保存 → 列表更新。
+**独立可测**：打开 Web UI → Agents → 用默认路径添加 Codex → 在列表里观察 → 点进去 → 修改 config_dir → 保存 → 列表更新。
 
 **代表性场景**：
 
 - agents 页面列出所有已注册 agent
-- 通过桌面表单添加一个 agent
-- 通过桌面表单编辑一个 agent
-- 通过桌面确认对话框移除一个 agent
+- 通过 Web UI 表单添加一个 agent
+- 通过 Web UI 表单编辑一个 agent
+- 通过 Web UI 确认对话框移除一个 agent
 
 ---
 
@@ -325,11 +325,11 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 ### Scenario: desktop app agents page
 
-- **Given** Coffer 桌面应用已启动，且至少有一个已注册 agent，
+- **Given** Coffer Web UI 已打开，且至少有一个已注册 agent，
 - **When** 用户打开 Agents 页面，
 - **Then** 每个已注册 agent 都带有类型、名称与 `config_dir` 出现在列表中。
 
-> Story 4 的桌面表单 add/edit/remove 流程在 e2e 层覆盖；打包的 acceptance 标记见 `e2e/web/specs/shell_agents.spec.ts`。
+> Story 4 的 Web UI 表单 add/edit/remove 流程在 e2e 层覆盖；打包的 acceptance 标记见 `e2e/web/specs/shell_agents.spec.ts`。
 
 ### Scenario: CLI surface mirrors REST operations
 
@@ -649,18 +649,18 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 **界面**
 
-- **FR-009**: 每一个管理操作——注册/列出/查看/更新/移除、配置文件列出/读取/写入（含目录子文件）、Coffer-MCP 安装/卸载/状态、MCP 条目列出/移除/切换/收编、插件列出/切换/卸载、原生记忆扫描/导入（FR-040/FR-041）——MUST 同时通过 (a) REST API 与 (b) `coffer agent ...` CLI 提供。原生记忆命令为 `coffer agent native-memory <name>`（读取，`--json`）与 `coffer agent import-native-memory <name> <memory_dir>`（收编；`--project-path` 为 Codex 共享全局 store 选择 cwd）。桌面 Agents 页面 MUST 暴露以上全部，**除配置文件内容写入之外**（单文件与目录子文件）：在 UI 中，配置文件与目录子文件是**只读**的，带「在外部编辑器中打开 / 在文件管理器中显示」操作（FR-038），而 REST API 与 CLI 保留程序化的写入/创建/删除路径。agent 的 Memory tab 展示 Coffer 受管记忆链接，外加这张原生表格（**只读**，按 FR-038 提供打开 / 显示），并带一个收编某个 store 的导入按钮（FR-041）。
+- **FR-009**: 每一个管理操作——注册/列出/查看/更新/移除、配置文件列出/读取/写入（含目录子文件）、Coffer-MCP 安装/卸载/状态、MCP 条目列出/移除/切换/收编、插件列出/切换/卸载、原生记忆扫描/导入（FR-040/FR-041）——MUST 同时通过 (a) REST API 与 (b) `coffer agent ...` CLI 提供。原生记忆命令为 `coffer agent native-memory <name>`（读取，`--json`）与 `coffer agent import-native-memory <name> <memory_dir>`（收编；`--project-path` 为 Codex 共享全局 store 选择 cwd）。Web UI 的 Agents 页面 MUST 暴露以上全部，**除配置文件内容写入之外**（单文件与目录子文件）：在 UI 中，配置文件与目录子文件是**只读**的，带「在外部编辑器中打开 / 在文件管理器中显示」操作（FR-038），而 REST API 与 CLI 保留程序化的写入/创建/删除路径。agent 的 Memory tab 展示 Coffer 受管记忆链接，外加这张原生表格（**只读**，按 FR-038 提供打开 / 显示），并带一个收编某个 store 的导入按钮（FR-041）。
 - **FR-010**: CLI MUST 在每个读取类操作上支持 `--json` 以提供机器可读输出。
-- **FR-038**: 对每个配置文件（及每个目录条目子文件），UI MUST 提供针对该文件的**在外部编辑器中打开**与**在文件管理器中显示**操作，使用 FR-014/FR-015 的 `path`。打开与显示在**两个**界面上都执行真实的 OS 动作：打包桌面应用（Tauri）直接用 OS opener;Web 用 daemon 的文件系统动作端点（FR-039）——因为环回 daemon 始终在用户自己的机器上（ADR-033）。没有 copy-path 回退。用于「在外部编辑器中打开」的编辑器引用 spec 002-ui-shell 定义的用户「首选外部编辑器」偏好（此处不再重新规定）。
+- **FR-038**: 对每个配置文件（及每个目录条目子文件），UI MUST 提供针对该文件的**在外部编辑器中打开**与**在文件管理器中显示**操作，使用 FR-014/FR-015 的 `path`。打开与显示通过 daemon 的文件系统动作端点（FR-039）执行真实的 OS 动作——因为环回 daemon 始终在用户自己的机器上（ADR-033）。没有 copy-path 回退。用于「在外部编辑器中打开」的编辑器引用 spec 002-ui-shell 定义的用户「首选外部编辑器」偏好（此处不再重新规定）。
 
 **可观测性**
 
 - **FR-011**: 系统 MUST 为每一个生命周期事件写入一条 audit 条目：agent 创建、更新、移除；配置文件写入/删除（`agent_config_file_written` / `agent_config_file_deleted`）；Coffer MCP 安装/卸载；MCP 条目移除/收编（`agent_mcp_entry_removed` / `agent_mcp_entry_adopted`）；插件切换/卸载（`agent_plugin_toggled` / `agent_plugin_uninstalled`）。（agent 没有启用/禁用的概念；发现与全部工作区列表——含原生记忆扫描 FR-040——都是只读的，均不发出任何 audit 事件。原生记忆导入 FR-041 不新增任何 004 audit 事件：每条导入的事实经 spec 007 既有的 memory 写入事件审计。）
-- **FR-012**: 系统 MUST 暴露一个只读的发现操作，把已安装但未注册的 agent 列为候选项，可通过 REST API（`GET /api/v1/agents/candidates`）、`coffer agent detect` CLI 与桌面 Agents 页面访问。
+- **FR-012**: 系统 MUST 暴露一个只读的发现操作，把已安装但未注册的 agent 列为候选项，可通过 REST API（`GET /api/v1/agents/candidates`）、`coffer agent detect` CLI 与 Web UI 的 Agents 页面访问。
 
 **配置目录选择器**
 
-- **FR-023**: 选择自定义 `config_dir` 时，桌面应用 MUST 提供一个文件夹选择器，而非要求用户手动输入路径。在打包桌面应用中，它 MUST 使用 OS 原生目录对话框；在 Web 上，它 MUST 使用 daemon 原生目录对话框（FR-042），仅当宿主没有原生对话框工具时才退回 daemon 支撑的文件夹浏览器（FR-024）。两者都产出一个绝对路径，随后在注册前按 FR-007 校验。
+- **FR-023**: 选择自定义 `config_dir` 时，Web UI MUST 提供一个文件夹选择器，而非要求用户手动输入路径。它 MUST 使用 daemon 原生目录对话框（FR-042），仅当宿主没有原生对话框工具时才退回 daemon 支撑的文件夹浏览器（FR-024）。两者都产出一个绝对路径，随后在注册前按 FR-007 校验。
 - **FR-024**: 系统 MUST 暴露一个只读的文件系统浏览操作（`GET /api/v1/fs/browse`），给定一个目录路径（默认用户主目录），返回该路径、其父目录与其直接子目录。它 MUST NOT 返回文件内容，且 MUST 与所有其它 daemon 路由一样受同样的 loopback + token 鉴权保护。
 - **FR-042**: 系统 MUST 通过环回 daemon 暴露原生 OS 选择器对话框（ADR-036），让 Web 界面打开宿主的真实对话框，而非要求手输路径：`POST /api/v1/fs/pick-folder`（选目录）、`POST /api/v1/fs/pick-file`（选一个已存在的文件来打开）、`POST /api/v1/fs/save-file`（选目标位置，可带 `suggested_name`）。每个都打开宿主原生对话框（macOS 用 `osascript`；Linux 用 `zenity`/`kdialog`），以固定参数向量调用（无 shell 插值），返回 `{ available, path }`：宿主无原生对话框工具时 `available=false`；用户取消时 `available=true` 且 `path=null`；否则为所选绝对路径。当 `available=false` 时调用方降级——文件夹选择退回应用内浏览器（FR-024），选文件与存文件退回手输路径。三者都不创建任何东西，且与每条 daemon 路由一样受同样的 loopback + token 鉴权保护。
 
@@ -690,7 +690,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - **SC-003**：本 spec 中每一个 Acceptance Scenario 至少被一个带 `acceptance(spec="004-agent-registry", scenario="…")` 标记的测试覆盖；`make verify-acceptance` 报告零未覆盖 scenario。
 - **SC-004**：完整 `make verify` 套件在本地与 CI 中通过；`make verify-all`（额外包含 e2e）在 macOS 与 Linux 上通过。
 - **SC-005**：任何 `config_dir` 值都不允许写到该目录之外（path-traversal 检查），由一个专门的安全测试验证。
-- **SC-006**：用户能在 Coffer 中只读打开 agent 的 `settings.json`（Claude Code）或 `config.toml`（Codex），并从桌面应用在其外部编辑器中打开它；程序化保存（REST/CLI）仍会校验内容（畸形的保存会被拒绝且文件保持不变），并在成功保存时保留上一版本的 `.bak`。
+- **SC-006**：用户能在 Coffer 中只读打开 agent 的 `settings.json`（Claude Code）或 `config.toml`（Codex），并从 Web UI 在其外部编辑器中打开它；程序化保存（REST/CLI）仍会校验内容（畸形的保存会被拒绝且文件保持不变），并在成功保存时保留上一版本的 `.bak`。
 - **SC-007**：用户能一键把 Coffer 的 MCP 安装到一个新注册的 agent，重启该 agent 后它能列出 Coffer 聚合的工具；重复安装绝不产生重复条目，卸载将其移除。
 - **SC-008**：MCP tab 恰好列出 agent 真实配置文件中存在的条目；收编一条直连条目即完成完整回路——资源已注册、网关在服务它、直连条目已消失——只需一次用户操作加至多一次确认。
 - **SC-009**：插件开关只改动文档化配置面：测试断言每次切换前后 agent 的内部状态文件逐字节一致。
@@ -706,5 +706,5 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - 工作区 facet 遵循收编 → 主库 → 投递原则：在 agent 工作区发现的可共享内容收编进 Coffer 的中枢（此处是 MCP 网关；skill 主库经由 spec 005 的配套增补），而非作为各 agent 的一次性配置来管理。中枢本身的跨机器共享属于未来 spec（需修宪）；这些 facet 的设计保证其状态在那一天到来时可直接序列化为声明式清单。
 - agent 把自己的 skill 库存放在本地文件系统的 `<config_dir>/skills` 之下。仅 Web 形态的 agent（例如 claude.ai）超出 v1 范围，需要后续 spec 通过 API 同步加入。
 - 由 spec 001-mcp-gateway 定义的 kind-agnostic Resource 框架、audit 日志与 `<kind>:<name>` 标识方案已就绪。
-- 来自 spec 002-ui-shell 的应用外壳——侧栏 IA、布局、路由骨架与设计系统——已就绪。桌面 Agents 页面渲染在该外壳内的 `/agents`，作为一个**独立的顶级导航项**（与 Resources、System 分组平级，**不**嵌套在 Resources 之下——agent 是 vault 资产的消费者，而非资产本身）。agent 资源不出现在 kind-agnostic 的资源/MCP 浏览页中，该页只列出注册了资源卡片 UI 的 kind。
+- 来自 spec 002-ui-shell 的应用外壳——侧栏 IA、布局、路由骨架与设计系统——已就绪。Agents 页面渲染在该外壳内的 `/agents`，作为一个**独立的顶级导航项**（与 Resources、System 分组平级，**不**嵌套在 Resources 之下——agent 是 vault 资产的消费者，而非资产本身）。agent 资源不出现在 kind-agnostic 的资源/MCP 浏览页中，该页只列出注册了资源卡片 UI 的 kind。
 - Skill bindings（agent 与某个 skill 之间的关系）由 spec 005-skill-manager 引入和管理；spec 004 不定义 skill 操作，只暴露一个用于级联清理的 `on_delete` 钩子。

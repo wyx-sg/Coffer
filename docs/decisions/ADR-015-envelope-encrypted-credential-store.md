@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-06-12
 **Deciders**: Yuxing Wu
-**Related**: `.specify/memory/constitution.md` (Credentials invariant — amended to v0.2.0), spec `001-mcp-gateway` (data-model: `credentials` table, audit events), [ADR-008](ADR-008-distribution-pyinstaller-tauri-sidecar.md) (unsigned macOS distribution)
+**Related**: `.specify/memory/constitution.md` (Credentials invariant — amended to v0.2.0), spec `001-mcp-gateway` (data-model: `credentials` table, audit events), [ADR-008](ADR-008-distribution-pyinstaller.md) (unsigned macOS distribution)
 
 ## Context
 
@@ -13,7 +13,7 @@ daemon as the sole keychain owner and `keyring` confined to one adapter.
 
 On macOS this broke down in daily use. The keychain pins each entry's access
 control list to the **cdhash** of the binary that created it. Coffer's daemon
-is distributed **unsigned** ([ADR-008](ADR-008-distribution-pyinstaller-tauri-sidecar.md)
+is distributed **unsigned** ([ADR-008](ADR-008-distribution-pyinstaller.md)
 defers Apple notarisation, which needs a paid Apple Developer account). Every
 rebuild of the daemon produces a new cdhash, so macOS treats the new binary as
 a different application and **re-prompts for keychain access — once per secret,

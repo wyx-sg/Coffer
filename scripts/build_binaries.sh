@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Build coffer-daemon + coffer-mcp-shim with PyInstaller and stage them
-# into desktop/binaries/ with target-triple suffixes for Tauri's sidecar.
+# Build every Coffer binary (coffer, coffer-daemon, coffer-mcp-shim,
+# coffer-hook, coffer-callback) with PyInstaller into dist/, plus the
+# whisper-cli STT sidecar built from source. The release workflow packages
+# all of dist/ into coffer-cli-<triple>.tar.gz; the daemon deploys the
+# helper binaries sitting next to it into ~/.coffer/bin/ at startup.
 #
 # Usage: ./scripts/build_binaries.sh
 # Requires: pyinstaller in .venv (pip install -e ./backend[dev])
@@ -38,7 +41,8 @@ if ! "$PY" -m PyInstaller --version >/dev/null 2>&1; then
 fi
 PYINSTALLER=("$PY" -m PyInstaller)
 
-# Detect target triple. Tauri sidecar uses the rustc target-triple format.
+# Detect target triple. Release archives are named with the rustc
+# target-triple format (coffer-cli-<triple>.tar.gz).
 OS=$(uname -s)
 ARCH=$(uname -m)
 # Windows arch: msys/mingw uname -m returns x86_64 or aarch64; pick the
@@ -83,8 +87,6 @@ echo ">>> Building coffer-callback for $TRIPLE"
 ( cd "$REPO_ROOT/backend" && "${PYINSTALLER[@]}" --clean --noconfirm \
     --distpath "$DIST_DIR" --workpath "$BUILD_DIR" coffer-callback.spec )
 
-mkdir -p desktop/binaries
-
 # Pick the right binary extension. Keep this set in sync with the Windows
 # patterns in the triple-detection case statement above.
 EXT=""
@@ -92,19 +94,14 @@ if [[ "$OS" == MINGW* || "$OS" == MSYS* || "$OS" == CYGWIN* ]]; then
     EXT=".exe"
 fi
 
-cp "dist/coffer-daemon${EXT}" "desktop/binaries/coffer-daemon-${TRIPLE}${EXT}"
-cp "dist/coffer-mcp-shim${EXT}" "desktop/binaries/coffer-mcp-shim-${TRIPLE}${EXT}"
-cp "dist/coffer${EXT}" "desktop/binaries/coffer-${TRIPLE}${EXT}"
-cp "dist/coffer-hook${EXT}" "desktop/binaries/coffer-hook-${TRIPLE}${EXT}"
-cp "dist/coffer-callback${EXT}" "desktop/binaries/coffer-callback-${TRIPLE}${EXT}"
-chmod +x "desktop/binaries/coffer-daemon-${TRIPLE}${EXT}" \
-         "desktop/binaries/coffer-mcp-shim-${TRIPLE}${EXT}" \
-         "desktop/binaries/coffer-${TRIPLE}${EXT}" \
-         "desktop/binaries/coffer-hook-${TRIPLE}${EXT}" \
-         "desktop/binaries/coffer-callback-${TRIPLE}${EXT}"
+chmod +x "$DIST_DIR/coffer${EXT}" \
+         "$DIST_DIR/coffer-daemon${EXT}" \
+         "$DIST_DIR/coffer-mcp-shim${EXT}" \
+         "$DIST_DIR/coffer-hook${EXT}" \
+         "$DIST_DIR/coffer-callback${EXT}"
 
 # ---------------------------------------------------------------------------
-# whisper-cli — torch-free local STT engine for the frozen app (ADR-039).
+# whisper-cli — torch-free local STT engine for the frozen daemon (ADR-039).
 # A self-contained `whisper-cli` (static libs; on Apple Silicon Metal is
 # default-on and its shader is EMBEDDED so only Command Line Tools are needed —
 # no full Xcode). The pinned source is cached under build/whisper.cpp so a
@@ -153,9 +150,9 @@ if [ ! -x "$WHISPER_CLI" ]; then
     echo "error: whisper-cli was not produced at $WHISPER_CLI" >&2
     exit 1
 fi
-cp "$WHISPER_CLI" "desktop/binaries/whisper-cli-${TRIPLE}${EXT}"
-chmod +x "desktop/binaries/whisper-cli-${TRIPLE}${EXT}"
+cp "$WHISPER_CLI" "$DIST_DIR/whisper-cli${EXT}"
+chmod +x "$DIST_DIR/whisper-cli${EXT}"
 
 echo ""
-echo ">>> Built:"
-ls -la "desktop/binaries/"
+echo ">>> Built (target triple: $TRIPLE):"
+ls -la "$DIST_DIR"

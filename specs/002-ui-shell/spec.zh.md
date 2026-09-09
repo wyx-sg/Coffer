@@ -133,7 +133,7 @@
 
 - **Given** `~/.coffer/daemon.json` 不存在 (daemon 没在跑)
 - **When** 用户访问 `http://localhost:5173/`
-- **Then** 页面显示一个 "Daemon not running" 视图，给出一个清晰的恢复操作（Web 上是「重新加载」按钮；桌面应用提供「重启」）
+- **Then** 页面显示一个 "Daemon not running" 视图，给出一个清晰的恢复操作（「重新加载」按钮）
 - **And** 侧栏仍然可见，让用户能定位自己
 - **And** 任何视图都不会出现字面 "unexpected error" 或 `INTERNAL_ERROR`
 
@@ -240,7 +240,7 @@
 - **Given** 用户访问 `/settings`
 - **When** 页面解析
 - **Then** 它落在 General tab
-- **And** settings 侧栏显示 General、Data 与 About（桌面构建还多一个 App），当前路由高亮
+- **And** settings 侧栏显示 General、Data 与 About，当前路由高亮
 - **And** 点 tab 切换右侧面板内容，不整页刷新
 
 ### Scenario: settings drops the confusing controls
@@ -275,7 +275,7 @@
 
 - **Given** daemon 没在跑（`~/.coffer/daemon.json` 上的 `127.0.0.1:<port>` 不可达，或该文件不存在）
 - **When** 用户保持 app 打开，且任意一次到 daemon 的鉴权请求连不上
-- **Then** 工作区顶部渲染出 daemon-offline banner，带一个清晰的恢复操作——桌面应用是「重启」按钮，Web 是「重新加载」按钮
+- **Then** 工作区顶部渲染出 daemon-offline banner，带一个清晰的恢复操作——「重新加载」按钮
 - **And** daemon 重新可达后 banner 自动消失，不需要手动刷页
 
 ### Scenario: JSON import shows readable error for malformed JSON

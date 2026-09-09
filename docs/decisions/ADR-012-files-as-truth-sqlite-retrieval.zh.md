@@ -102,7 +102,7 @@ markdown 文件成为唯一事实源，所有派生的索引/元数据经由 SQL
   LlamaIndex/mem0 替我们省掉的那约 200–300 LOC。我们接受这点：面很小、概念是
   我们自己的，且没有框架变更要追。
 - **sqlite-vec 是原生扩展。** 它必须在 PyInstaller 包里于 macOS arm64 与 Linux
-  上正常加载（[ADR-008](ADR-008-distribution-pyinstaller-tauri-sidecar.md)）；
+  上正常加载（[ADR-008](ADR-008-distribution-pyinstaller.md)）；
   打包/加载是一个待验证项。
 - **converter 质量现在归我们管。** MarkItDown 的 PDF/Docx 保真度、OCR，以及
   MarkItDown-vs-Docling 的取舍都得我们逐格式验证。保留 `raw/` + 可重新转换是其

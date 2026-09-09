@@ -1,8 +1,9 @@
 // frontend/src/kinds/knowledge_base/api.test.ts
 //
-// Exercises the redesigned KB fetch helpers. The auth helper pulls the token
-// from window.__COFFER_TOKEN__ / localStorage; we stub the global fetch so each
-// test can verify the URL + method + headers + body produced by the helper.
+// Exercises the redesigned KB fetch helpers. The auth helper reads the token
+// from the dev-injected window globals, else localStorage; these tests seed the
+// globals and stub the global fetch so each test can verify the URL + method +
+// headers + body produced by the helper.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { ApiError } from "@/lib/api/errors";

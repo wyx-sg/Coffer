@@ -1,7 +1,7 @@
 # 接口面（Surfaces）
 
 ::: tip 核心模型
-Coffer 的每个接口面都是通向同一底层守护进程的入口点。守护进程持有全部状态；接口面是读取或修改该状态的只读或可读写窗口。通过 CLI 添加一个 MCP 服务器，Web UI 会立即显示它——因为两者都在调用同一个守护进程。断开桌面应用连接，守护进程仍在运行，所以你的 MCP 客户端依然正常工作。
+Coffer 的每个接口面都是通向同一底层守护进程的入口点。守护进程持有全部状态；接口面是读取或修改该状态的只读或可读写窗口。通过 CLI 添加一个 MCP 服务器，Web UI 会立即显示它——因为两者都在调用同一个守护进程。关闭浏览器标签页，守护进程仍在运行，所以你的 MCP 客户端依然正常工作。
 :::
 
 ## 所有接口面共享的内容
@@ -36,7 +36,7 @@ Coffer 的每个接口面都是通向同一底层守护进程的入口点。守�
 | `/fs`                             | 用于配置选择器的文件系统浏览辅助。                                |
 | `/audit`、`/retention`、`/daemon` | 审计日志、保留策略、守护进程 token 操作。                         |
 
-REST API 是规范接口——CLI、Web UI 和桌面应用都调用它。
+REST API 是规范接口——CLI 和 Web UI 都调用它。
 
 **所在进程。** 守护进程（`coffer-daemon`）。REST API 嵌入在 FastAPI 应用中，与守护进程不可分割。
 
@@ -114,31 +114,15 @@ REST API 是规范接口——CLI、Web UI 和桌面应用都调用它。
 
 **它是什么。** 基于浏览器的管理界面，由[规约 002](/zh/reference/specs/002-ui-shell/spec) 规定。Web UI 提供与每个 CLI 管理操作等价的可视化操作：通过 JSON 导入注册 MCP 服务器、浏览服务器健康状态和能力列表、开/关工具/资源/提示、查看审计日志和调用历史，以及配置保留策略。信息架构反映了资源 kind 模型：侧边栏显示 `Resources`（已上线的 kind——MCP 服务器、Agents、Skills、Knowledge Bases、Memory、Channels）、用于直接与 agent 对话的 `Chat`，以及 `System`（可观测性，及带 Security 和 Models 子区的设置）。不显示任何「即将推出」的占位符——一个 kind 只有真正可用后才会出现。
 
-**所在进程。** 浏览器进程。在生产环境中，构建好的前端由 Tauri 桌面 shell 内嵌（`tauri.conf.json` 中的 `frontendDist`）；浏览器进程与守护进程在逻辑上是分离的。在开发模式下，Vite 开发服务器运行在 `http://localhost:5173`。所有数据都从守护进程的 REST API 获取。
+**所在进程。** 浏览器进程，由守护进程提供页面。在生产环境中，守护进程在自己的 loopback origin 上以静态文件的形式提供构建好的前端（**FR-024**）——因此页面与 API 同源。在开发模式下，Vite 开发服务器运行在 `http://localhost:5173`，跨源访问守护进程需要打开 `COFFER_DEV_CORS` 开关。所有数据都从守护进程的 REST API 获取。
 
-**传输方式。** 浏览器 HTTP/REST 到 `http://127.0.0.1:<port>/api/v1/`。Bearer token 在启动时提供给浏览器上下文（由桌面 shell 或本地助手从 `~/.coffer/daemon.json` 读取）。
+**传输方式。** 页面从 `http://127.0.0.1:<port>/` 加载，再以浏览器 HTTP/REST 调用 `http://127.0.0.1:<port>/api/v1/`。
+
+**token 如何到达页面。** `coffer open`（**FR-025**）从 `~/.coffer/daemon.json` 读取端口与 token，调用一个需要鉴权的端点签发一个一次性、短时效的 code，然后在守护进程的 origin 上打开浏览器，并把该 code 放在 URL 的 **fragment** 里。页面用该 code 换取 API token，并把 token 保存在 `localStorage` 中。token 本身绝不出现在 URL 里，因此也绝不会进入浏览器历史记录。
 
 **生命周期。** Web UI 会话是浏览器标签页的生命周期。关闭标签页不会影响守护进程。UI 包含一个守护进程离线横幅，用于检测守护进程何时不可访问，并将 `coffer daemon start` 命令显示为可复制的操作建议；当守护进程重新上线时，横幅自动消失。
 
-**安全边界。** 每个 REST API 调用都携带 `X-Coffer-Token`。CORS 配置为仅允许来自本地 Web UI 来源的请求。由于守护进程绑定到 loopback 且 token 从不传输到远程来源，信任模型与 CLI 相同：仅限本地用户账号。
-
----
-
-## 桌面应用
-
-**它是什么。** Tauri 2 桌面应用，由[规约 003](/zh/reference/specs/003-mcp-gateway-desktop/spec) 规定。桌面应用将规约 002 的同一 Web UI 包装在原生应用窗口中，添加了守护进程监督和系统托盘图标。对于日常桌面使用来说，它是零摩擦的入口点：安装它，Coffer 就始终在后台运行，无需任何手动 `coffer daemon start` 步骤。
-
-**所在进程。** 原生桌面进程（Tauri 2，Rust + WebView）。它将 Web UI 嵌入为 WebView；桌面特定的功能（托盘菜单项）在前端代码中的 `isTauri()` 守卫后面激活。
-
-**传输方式。** 内部：WebView 通过 `127.0.0.1:<port>/api/v1/` 使用 REST，通过 `/mcp` 使用 MCP（与基于浏览器的 Web UI 相同）。Rust shell 也通过守护进程的 REST API 进行监督任务（健康检查、重启）。
-
-**生命周期。** 桌面应用应用 detect-or-spawn 模式：启动时读取 `daemon.json`；如果守护进程已在运行，则连接；如果没有，则将 `coffer-daemon` 作为分离进程启动（POSIX 上的 `setsid`）并等待 `daemon.json` 出现。关闭主窗口会将其隐藏到系统托盘——守护进程保持运行。从托盘选择「退出」退出桌面进程。守护进程在桌面应用退出时的命运取决于是否还有其他入口点（shim、CLI）仍在使用它；分离的守护进程在桌面应用退出后继续存活。
-
-桌面应用还在每次启动时将捆绑的 `coffer-mcp-shim` 与 `coffer-daemon` 二进制文件幂等地部署到稳定的用户可写 PATH 目录（macOS 和 Linux 上的 `~/.coffer/bin/`），使用大小/mtime/版本哨兵的过期检查来检测升级。这确保了在第一次桌面启动后 `coffer-mcp-shim` 始终在 PATH 上——其 detect-or-spawn 也能找到同目录的 `coffer-daemon`——而无需用户手动编辑 shell 配置文件。
-
-**安全边界。** 与 Web UI 相同：每个 API 调用携带 `X-Coffer-Token`，仅限 loopback 的守护进程，本地用户账号信任边界。桌面应用将 `coffer-daemon` 和 `coffer-mcp-shim` 捆绑为 PyInstaller sidecar——运行时不依赖系统 Python。
-
-**分发层级。** 桌面应用是发布版本的 CLI+桌面层级。一个单独的仅 CLI 层级（`coffer-cli-<triple>.tar.gz`）将这些二进制文件打包在没有 Tauri 包装器的情况下，用于无头或服务器安装。
+**安全边界。** 每个 REST API 调用都携带 `X-Coffer-Token`。CORS 默认即为同源；仅在 `COFFER_DEV_CORS` 打开时才加入 Vite 开发服务器来源。由于守护进程绑定到 loopback 且 token 从不传输到远程来源，信任模型与 CLI 相同：仅限本地用户账号。
 
 ---
 
@@ -151,9 +135,8 @@ REST API 是规范接口——CLI、Web UI 和桌面应用都调用它。
 | CLI（`coffer`） | 短生命周期子进程 | Loopback HTTP               | 用户 / shell            | 每条命令         |
 | Stdio shim      | 每会话一个       | HTTP/SSE                    | MCP 客户端              | MCP 客户端会话   |
 | 回调监听器      | 守护进程启动的子进程 | Loopback HTTP（转发给守护进程） | 守护进程（SeaTalk 启用时） | 有 SeaTalk 通道启用期间 |
-| Web UI          | 浏览器标签页     | Loopback HTTP（REST）       | 用户 / 浏览器           | 浏览器标签页会话 |
-| 桌面应用        | 原生进程         | Loopback HTTP（REST + MCP） | 用户                    | 直到从托盘退出   |
+| Web UI          | 浏览器标签页     | Loopback HTTP（REST）       | `coffer open` / 浏览器  | 浏览器标签页会话 |
 
 ---
 
-**参见：** [架构参考](/zh/reference/project/architecture)，[规约 002：UI Shell](/zh/reference/specs/002-ui-shell/spec)，[规约 003：Desktop](/zh/reference/specs/003-mcp-gateway-desktop/spec)
+**参见：** [架构参考](/zh/reference/project/architecture)，[规约 002：UI Shell](/zh/reference/specs/002-ui-shell/spec)，[分发](/zh/architecture/distribution)

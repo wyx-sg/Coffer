@@ -11,8 +11,11 @@
 | ------------------------- | ----------------------------- | -------------------------------------------------------- |
 | 001 — MCP Gateway         | 已采纳 — 代码已随 PR #14 合并 | [spec](/zh/reference/specs/001-mcp-gateway/spec)         |
 | 002 — UI Shell 与视觉语言 | 已采纳 — 代码已随 PR #23 合并 | [spec](/zh/reference/specs/002-ui-shell/spec)            |
-| 003 — MCP Gateway Desktop | 已采纳 — 代码评审中 (PR #28)  | [spec](/zh/reference/specs/003-mcp-gateway-desktop/spec) |
 | 004 — Agent Registry      | 已采纳 — 开发中               | [spec](/zh/reference/specs/004-agent-registry/spec)      |
+
+规范 003（MCP Gateway Desktop）已**退役**：Tauri 桌面外壳被移除，值得保留的需求被吸收进规范 001，
+成为 FR-022 – FR-026（单层级发布压缩包、聚合 `SHA256SUMS`、守护进程提供 Web UI、`coffer open`，
+以及 frozen 启动时的二进制部署）。参见[分发](/zh/architecture/distribution)。
 
 每个规范目录下还包含补充文档 — 计划、数据模型、快速上手、研究等 —
 视规范情况而定；这些内容在侧边栏对应规范条目下可见。

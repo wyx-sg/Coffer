@@ -103,9 +103,9 @@ byte-identical, so you can diff them to see what actually differs:
 diff -r ~/bundle-from-a ~/bundle-from-b
 ```
 
-## REST / Desktop
+## REST / Web UI
 
-Both operations are also available over `/api/v1/sync/*` and in the desktop
+Both operations are also available over `/api/v1/sync/*` and in the web UI's
 **Sync** settings panel — an export button and an import button, each opening a
 native directory picker, plus the master-key card for comparing fingerprints and
 running the out-of-band key transfer.

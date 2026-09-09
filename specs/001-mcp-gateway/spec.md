@@ -142,6 +142,26 @@ come from the server that never connected.
 
 ---
 
+### User Story 6 — Install and open Coffer without a source checkout (Priority: P3)
+
+A user who is not working from a Git clone downloads one archive, extracts it, starts the daemon, and runs `coffer open` to land in Coffer's UI in their browser — already authenticated, with no token to paste and no second application to install and keep up to date.
+
+**Why this priority**: P3 — distribution is the gate that turns a local-dev product into something a teammate or an open-source contributor can try without cloning the repo. It changes nothing about how the gateway itself works.
+
+**Independent Test**: On a clean machine with no Python and no Coffer checkout, download `coffer-cli-<triple>.tar.gz`, verify it against `SHA256SUMS`, extract it, run `coffer daemon start`, then `coffer open` — the browser lands on Coffer's UI already authenticated, and `coffer-mcp-shim` resolves from a fresh shell.
+
+**Covering scenarios**:
+
+- release tag produces the CLI archive and SHA256SUMS
+- coffer open lands an authenticated browser session
+- a frozen daemon deploys its sibling binaries on start
+
+#### Why Coffer ships no desktop shell
+
+Coffer's UI used to be wrapped in a Tauri desktop shell that supervised the daemon, sat in the system tray, and deployed the shim on every launch. It was retired on 2026-09-09, and the judgement was about **the operating cost of every update**, not about lines of code. Every desktop update meant a rebuild _plus_ a reinstall, and the built artifact kept drifting from source — twice on record: a build made before fetching produced an app running stale code, and a separately pinned build directory meant UI bug reports had to be re-verified against `main` before they could be trusted. The daemon-served web UI has neither failure mode: restart the daemon, hard-refresh the browser, and you are on the current code. Its two load-bearing jobs survive the shell — deploying the sibling binaries moved into the daemon's own frozen-start path (FR-026), where it arguably always belonged since the daemon is the process that spawns them, and the release pipeline collapsed to the single CLI tier (FR-022) that the shell was never needed for.
+
+---
+
 ### Edge Cases
 
 These cases are tracked by integration tests, not by the acceptance audit, except where promoted to `## Acceptance Scenarios` below (currently: tool-name collision, daemon port conflict).
@@ -152,7 +172,7 @@ These cases are tracked by integration tests, not by the acceptance audit, excep
 - **Duplicate registration**: Registering a server with an existing name in the same kind is rejected with a clear error; partial-write is impossible.
 - **Tool-name collision across servers**: Prevented by the `<server>__<tool>` namespace; never visible to clients.
 - **Tools-only upstream**: An upstream that implements only `tools` and replies with JSON-RPC `-32601` (METHOD_NOT_FOUND) for `resources/list` or `prompts/list` is treated as having no resources / no prompts. The per-server capability view and the aggregate lists return that server's tools with an empty resources/prompts set (HTTP 200), not an error — so the management / Web-UI capability view works for tools-only servers.
-- **Daemon port conflict**: The daemon's default port is taken — it picks the next free one in a small range and writes the chosen port to its discovery file; clients (shim, desktop, CLI) all read that file.
+- **Daemon port conflict**: The daemon's default port is taken — it picks the next free one in a small range and writes the chosen port to its discovery file; clients (shim, CLI) all read that file.
 - **Daemon crash**: running shim sessions return a clean error to their MCP clients rather than hanging; a supervising surface can detect the crash and restart the daemon.
 - **Concurrent clients**: Multiple MCP clients (e.g., Claude Code + Codex at the same time) connect simultaneously without one disturbing the other; each gets an independent upstream subprocess set.
 
@@ -395,6 +415,27 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** a shim session reporting a different agent identity (or no identity at all) lists tools,
 - **Then** the server's tools are absent from that session's `tools/list`, and a call attempt against its namespaced tool name is rejected exactly as if the server were never registered — while a session reporting the named agent sees and may call it.
 
+### Scenario: release tag produces the CLI archive and SHA256SUMS
+
+- **Given** a release tag matching `v*` is pushed,
+- **When** `.github/workflows/release.yml` finishes,
+- **Then** the release contains exactly one download tier — `coffer-cli-<triple>.tar.gz` for macOS arm64, holding `coffer`, `coffer-daemon`, `coffer-mcp-shim` and the runtime helper binaries — and no desktop bundle,
+- **And** the release contains a single aggregated `SHA256SUMS` file covering every artifact.
+
+### Scenario: coffer open lands an authenticated browser session
+
+- **Given** the daemon is running and `~/.coffer/daemon.json` records its port,
+- **When** the user runs `coffer open`,
+- **Then** the CLI mints a single-use, short-lived code through an authenticated endpoint and opens the browser at the daemon's own origin with that code in the URL fragment,
+- **And** the page exchanges the code for the API token, keeps the token in `localStorage`, and renders the UI authenticated — the API token never appearing in any URL, and a second exchange of the same code being rejected.
+
+### Scenario: a frozen daemon deploys its sibling binaries on start
+
+- **Given** a frozen `coffer-daemon` started from an extracted release archive, with `coffer-mcp-shim`, `coffer-callback` and `whisper-cli` beside it,
+- **When** the daemon starts,
+- **Then** each sibling binary is present and executable under `~/.coffer/bin/`, having been copied atomically through a temp sibling and a rename,
+- **And** a second start with nothing changed leaves those files untouched, while a version change replaces them — as decided by the byte-size, mtime and version-sentinel staleness check.
+
 ## Requirements
 
 ### Functional Requirements
@@ -437,6 +478,11 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 **Distribution**
 
 - **FR-018**: Installing from source (`pip install ./backend`) MUST place the `coffer` CLI and the `coffer-mcp-shim` stdio entry point on the user's `PATH` as console scripts, so the daemon and shim are usable with no separate deployment step.
+- **FR-022**: The release pipeline MUST produce, per `v*` tag, a single download tier for **macOS arm64 only**: a `coffer-cli-<triple>.tar.gz` archive containing `coffer` (the management CLI), `coffer-daemon`, `coffer-mcp-shim`, and the runtime helper binaries the daemon spawns (`coffer-callback`, `whisper-cli`). The binaries MUST stay co-located inside the archive so the frozen detect-or-spawn resolution ([ADR-006](../../docs/decisions/ADR-006-daemon-detect-or-spawn.md)) finds `coffer-daemon` next to `coffer`. macOS x64 (Intel), Linux and Windows are deliberately not built — those legs were never validated end to end. This archive carries the "no system Python required" promise on its own (SC-011); there is no second, desktop tier. The packaging decision behind it is [ADR-008](../../docs/decisions/ADR-008-distribution-pyinstaller.md).
+- **FR-023**: The release pipeline MUST produce one aggregated `SHA256SUMS` file — generated in CI and concatenated across matrix legs in the release job — covering every artifact, so downloaders can verify integrity without trusting the GitHub Release UI alone.
+- **FR-024**: The daemon MUST serve the built web UI itself, as static files, at its own loopback origin, so the UI is same-origin with the management API. Cross-origin access MUST therefore be off by default; the Vite dev-server origins stay reachable only behind the existing `COFFER_DEV_CORS` opt-in.
+- **FR-025**: `coffer open` MUST read `~/.coffer/daemon.json`, mint a **single-use, short-lived** authentication code (roughly a minute of validity) through an authenticated management endpoint, and open the user's browser at the daemon's own origin with that code in the URL **fragment**. The page MUST exchange the code for the API token and hold the token in `localStorage`. The API token MUST NOT appear in a URL at any point — a URL lands in browser history, which would contradict the loopback-plus-token posture of FR-012 / FR-013. The code may appear there, because it is single-use and already expired by the time anyone reads that history back.
+- **FR-026**: When the daemon detects that it is running as a frozen build, it MUST idempotently deploy its sibling binaries — `coffer-mcp-shim`, `coffer-callback`, `whisper-cli` — into `~/.coffer/bin/` at startup. The copy MUST be atomic (temp sibling in the same directory, executable bit set, then rename over the target) so that a crash or a concurrently executing binary never observes a truncated file, and staleness MUST be decided by three signals — byte size, source-newer-than-target mtime, and a version sentinel — so that a same-size cross-version upgrade is still detected. A source install MUST NOT do any of this: `pip install` already puts the console scripts on `PATH` (FR-018). The daemon owns the deployment because it is the process that spawns `coffer-callback` and `whisper-cli` at runtime.
 
 **Missing launcher**
 
@@ -470,6 +516,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **SC-008**: The full `make verify` suite (lint + unit + integration + contract + acceptance audit) passes locally and in CI; `make verify-all` (adding e2e) passes locally on macOS and in CI on Linux.
 - **SC-009**: After installing from source (`pip install ./backend`, requiring Python 3.12+), `coffer` and `coffer-mcp-shim` are both available on the user's `PATH`, and the daemon reaches the "ready" state with no manual steps beyond `pip install`.
 - **SC-010**: No upstream-server credential value ever appears in any database table, log file, audit entry, or invocation record — verified by an automated scan of those artifacts after a representative session.
+- **SC-011**: On a machine with no system Python, extracting `coffer-cli-<triple>.tar.gz` and running `coffer daemon start` reaches `status: ready`, and `coffer open` renders the UI authenticated in the browser — with no runtime to install and no second application to keep up to date.
 
 ## Assumptions
 

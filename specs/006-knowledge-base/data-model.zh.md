@@ -56,7 +56,7 @@ frozen dataclass；一个 Markdown 文件一条，**按 `kind` 区分**。KB 与
 | `metadata`                  | `dict`        | 按面区分的 JSON；KB 的 key 见下。                                                                                        |
 | `created_at` / `updated_at` | `datetime`    | UTC。                                                                                                                    |
 
-KB 的 `metadata` key：`original_filename`（重新上传的匹配键）、`original_format`、`source_sha256`（出处）、`converted_at`、`conversion_engine`，以及可选的 `source_path`（外部原件的绝对路径，仅由基于路径的 ingest——CLI / 桌面选择器——写入，供 `check_sources` 之后检测其磁盘漂移；机器本地，web 字节上传与 agent `add_document` 绝不写入）。
+KB 的 `metadata` key：`original_filename`（重新上传的匹配键）、`original_format`、`source_sha256`（出处）、`converted_at`、`conversion_engine`，以及可选的 `source_path`（外部原件的绝对路径，仅由基于路径的 ingest——CLI / 原生文件选择器——写入，供 `check_sources` 之后检测其磁盘漂移；机器本地，web 字节上传与 agent `add_document` 绝不写入）。
 
 ### `Passage`、`GrepHit`、`SearchResult` (`domain/knowledge/retrieval.py`)
 

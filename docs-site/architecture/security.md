@@ -94,13 +94,26 @@ Every route under `/api/v1/*` — including the MCP protocol endpoint at `/mcp` 
 
 The token can be rotated via `POST /api/v1/daemon/rotate-token`. After rotation, the old token is immediately rejected and the new token is written to `daemon.json`. The rotation event is recorded in the audit log as `token_rotated`.
 
-Clients (CLI, shim, desktop shell) all read the token from `daemon.json` before their first authenticated call. Because `daemon.json` is `0600`, only the process owner can read it — which is the entire access-control story for remote-process defence.
+Clients (CLI, shim) all read the token from `daemon.json` before their first authenticated call. Because `daemon.json` is `0600`, only the process owner can read it — which is the entire access-control story for remote-process defence.
 
 ## CORS configuration
 
 The daemon configures CORS to reject cross-origin requests from browser contexts. Because the HTTP API binds to loopback, the main risk is a malicious web page (open in a browser on the same machine) making requests to `http://127.0.0.1:<port>/api/v1/…` using the browser's `fetch()` API. CORS headers block this: only origins that match the configured allowlist are permitted to include credentials or read response bodies.
 
-In production, the allowed origins are the Tauri desktop shell's `tauri://localhost` and `http://tauri.localhost`. The Vite dev-server origins (`http://localhost:5173` and `http://127.0.0.1:5173`) are added only when `COFFER_DEV_CORS=1`. The entire list can be overridden via `COFFER_CORS_ORIGINS`. Credentials are never allowed (`allow_credentials=False`) — auth is the `X-Coffer-Token` header alone. Origins not in the allowlist receive a CORS rejection from the browser before the token check even runs — defence in depth against the browser-based attack vector.
+In production the daemon serves the built web UI itself, so the UI and the API share one origin and CORS is **same-origin by default**: the allowlist is empty and no cross-origin browser context is permitted. The Vite dev-server origins (`http://localhost:5173` and `http://127.0.0.1:5173`) are added only when `COFFER_DEV_CORS=1`, which is a frontend-development opt-in. The entire list can be overridden via `COFFER_CORS_ORIGINS`. Credentials are never allowed (`allow_credentials=False`) — auth is the `X-Coffer-Token` header alone. Origins not in the allowlist receive a CORS rejection from the browser before the token check even runs — defence in depth against the browser-based attack vector.
+
+## Getting the token into the browser
+
+The web UI is a browser page, so it needs the API token that the CLI and shim read straight out of `daemon.json`. Handing it over in a query string would be the obvious shortcut and is exactly what Coffer does **not** do: query strings and paths land in browser history, in the session-restore store, and in anything that syncs history across devices — which would undo the loopback-plus-token posture of FR-012 / FR-013.
+
+Instead, `coffer open` performs a code exchange (**FR-025**):
+
+1. `coffer open` reads the port and token from `~/.coffer/daemon.json` (mode `0600`).
+2. It calls an authenticated endpoint to mint a **single-use, short-lived code** — valid for about a minute.
+3. It opens the browser at the daemon's own origin with that code in the URL **fragment**, which browsers do not send to the server and which is the least persistent part of a URL.
+4. The page posts the code back, receives the API token, and stores it in `localStorage`; the code is burned on first use.
+
+The token therefore never appears in a URL. The code does, but it is single-use and already expired long before anyone reads that history entry, so its presence there is inert.
 
 ## Outbound HTTP: real paths and planned hardening
 

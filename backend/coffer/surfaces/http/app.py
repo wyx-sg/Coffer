@@ -31,6 +31,7 @@ from fastapi import FastAPI
 
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.audit_service import AuditService
+from coffer.application.binary_deploy import deploy_frozen_sidecars
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.resource_service import ResourceService
@@ -48,7 +49,7 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyResourceRepo,
 )
-from coffer.surfaces.http import cors, daemon_routes
+from coffer.surfaces.http import cors, daemon_routes, webui
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_skill_wiring import wire_agent_and_skill_kinds
 from coffer.surfaces.http.app_embedding_composition import (
@@ -268,6 +269,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         except (ValueError, KeyError, OSError):
             pass
 
+    # Frozen builds only; no-op from source (FR-026, see binary_deploy).
+    await asyncio.to_thread(deploy_frozen_sidecars)
+
     worker = RetentionWorker(retention_svc)
     worker_task = asyncio.create_task(worker.run())
     app.state.retention_worker = worker
@@ -390,4 +394,7 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     cors.install(app)
     err_handlers.register(app)
     include_all_routers(app)
+    # LAST: the SPA mount claims "/", so every API route must already be
+    # registered or it would swallow them.
+    webui.install(app)
     return app

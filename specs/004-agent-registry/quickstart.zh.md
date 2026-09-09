@@ -50,8 +50,8 @@ Coffer 会自动创建 `<config-dir>/skills` 子目录（skill 投递到这里�
 名称是可选的——省略 `--name`，Coffer 会按类型派生一个稳定的默认名（下划线变
 连字符，如 `claude_code` → `claude-code`）。`--config-dir` 同样可选——省略它，
 Coffer 会使用该类型的标准位置（Claude Code 用 `~/.claude`，Codex 用 `~/.codex`）。
-在桌面应用中，add/edit 表单提供一个**文件夹选择器**来选择自定义配置目录，而无需
-手动输入路径：打包应用用 OS 原生目录对话框，Web 用 daemon 支撑的文件夹浏览器。
+在 Web UI 中，add/edit 表单提供一个**文件夹选择器**来选择自定义配置目录，而无需
+手动输入路径：通过 daemon 打开宿主的原生目录对话框，回退到 daemon 支撑的文件夹浏览器。
 
 ## 更新一个 agent
 
@@ -78,7 +78,7 @@ coffer agent detect
 ```
 
 它只读地列出候选项，不注册任何内容。用 `coffer agent add <type> ...` 添加某个
-候选项（或在桌面 Agents 页面确认它）。
+候选项（或在 Web Agents 页面确认它）。
 
 ## 查看一个 agent 的配置文件
 
@@ -118,8 +118,8 @@ coffer agent config edit claude-code settings --from-file ./new-settings.json
 
 保存时，Coffer 会按文件格式校验内容（畸形的 `json`/`toml` 会被拒绝、磁盘文件保持
 不变），原子写入，并保留上一版本的 `.bak`，使错误的编辑可恢复。如果文件在你读取
-之后已在磁盘上被改动，保存会被拒绝，编辑器会提供重新加载，而不是悄悄覆盖。桌面端
-的配置文件标签页以**只读**方式显示每个文件，并为文件及其所在文件夹提供
+之后已在磁盘上被改动，保存会被拒绝，编辑器会提供重新加载，而不是悄悄覆盖。
+配置文件标签页以**只读**方式显示每个文件，并为文件及其所在文件夹提供
 「在外部编辑器中打开 / 在文件管理器中显示」，让你在自己的编辑器里编辑
 （Coffer 使用你在 Settings 中的「首选外部编辑器」偏好）；上面的 `coffer agent
 config edit` CLI 是程序化的编辑路径。
@@ -204,7 +204,7 @@ coffer agent mcp uninstall claude-code   # 移除它
 
 `install` 把一个 `coffer` 条目写进 agent 的 MCP 配置（Claude Code 写
 `~/.claude.json`，Codex 写 `~/.codex/config.toml`），指向 `coffer-mcp-shim`
-的绝对路径。它是幂等的、会把先前配置备份到 `.bak`，并且在桌面 Agents 页面
+的绝对路径。它是幂等的、会把先前配置备份到 `.bak`，并且在 Web Agents 页面
 上也以一键按钮形式提供。安装后请重启你的 agent 以加载 Coffer 的工具。
 
 ## 背后发生了什么

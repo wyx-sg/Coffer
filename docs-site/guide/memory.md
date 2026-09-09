@@ -36,6 +36,6 @@ coffer memory unbind <store> claude-code
 - **Claude Code** — the project memory directory is symlinked into `~/.claude/projects/<slug>/memory/`, and the auto-generated `MEMORY.md` index follows Claude Code's own memory format.
 - **Codex** — facts render into a managed block in `AGENTS.md`; Codex's native memory is disabled so there is never a second copy.
 
-Agents also get MCP tools: `coffer__remember`, `coffer__recall`, `coffer__update_memory`, `coffer__forget`, and `coffer__list_memory`. A desktop UI lets you browse and curate facts per scope.
+Agents also get MCP tools: `coffer__remember`, `coffer__recall`, `coffer__update_memory`, `coffer__forget`, and `coffer__list_memory`. The web UI lets you browse and curate facts per scope.
 
 [Channels →](/guide/channels)

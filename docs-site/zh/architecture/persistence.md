@@ -150,7 +150,7 @@ Coffer 写入的完整文件集合：
 | `~/.coffer/knowledge/`     | 以 markdown 形式存放的知识库文档——由 SQLite 索引的事实源 |
 | `~/.coffer/memory/`        | 以 markdown 形式存放的记忆 fact——由 SQLite 索引的事实源 |
 | `~/.coffer/logs/`          | `structlog` 输出的结构化 JSON 日志文件           |
-| `~/.coffer/bin/`           | 由桌面应用部署的 `coffer-mcp-shim` 与 `coffer-daemon` 二进制文件 |
+| `~/.coffer/bin/`           | 由守护进程在 frozen 启动时部署的 `coffer-mcp-shim`、`coffer-daemon` 及运行时辅助二进制文件 |
 | `~/.coffer/upstream-pids/` | 用于会话追踪的每个上游子进程的 PID 文件          |
 
 将所有文件统一置于一个父目录下，使备份变得简单，迁移路径清晰，彻底卸载也能做到完整。daemon 的检测-或-拉起协议（ADR-006）也因此受益：每一个需要查找 daemon 的进程都读取 `~/.coffer/daemon.json`——没有注册表，没有环境变量，也不需要探测任何平台特定的服务目录。

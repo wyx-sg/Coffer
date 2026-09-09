@@ -14,6 +14,7 @@ from coffer.surfaces.cli import (
     knowledge_base_source_cmd,  # noqa: F401 — registers `kb check-sources`/`update-source` onto kb app
     memory_cmd,
     memory_merge_cmd,  # noqa: F401 — registers `memory merge-scan`/`merge` onto memory app
+    open_cmd,
     provider_cmd,
     resource_cmd,
     retention_cmd,
@@ -43,6 +44,7 @@ def root(
 
 
 app.add_typer(daemon_cmd.app, name="daemon")
+app.add_typer(open_cmd.app, name="open")
 app.add_typer(resource_cmd.app, name="resource")
 app.add_typer(scope_cmd.app, name="scope")
 app.add_typer(audit_cmd.app, name="audit")

@@ -14,7 +14,7 @@
 
 > 本地优先 (local-first) 的 AI agent 保险库，一个仓库覆盖你的所有机器。一个地方统一管理你的 AI agent 所触及的一切。
 
-Coffer 是一个守护进程 (daemon) + CLI + 桌面应用，它为你机器上的每个 AI agent 提供一个安全、共享的统一接口。所有状态都保存在你自己的机器上 —— 没有云账号，没有厂商锁定。Coffer 管理的每一类东西都是一种 **resource kind**：
+Coffer 是一个守护进程 (daemon) + CLI + Web UI，它为你机器上的每个 AI agent 提供一个安全、共享的统一接口。所有状态都保存在你自己的机器上 —— 没有云账号，没有厂商锁定。Coffer 管理的每一类东西都是一种 **resource kind**：
 
 - **MCP 服务器** —— 把上游 (upstream) MCP 服务器聚合起来，再通过一个统一、带命名空间的接口重新暴露给各类 MCP 客户端（Claude Code、Codex）。配置一次，所有客户端看到的工具完全一致。
 - **Agents** —— 检测并注册你本地的 AI 编码 agent、在应用内编辑它们的配置文件，并一键把 Coffer 自己的 MCP 服务器安装到任意 agent 中。
@@ -25,13 +25,13 @@ Coffer 是一个守护进程 (daemon) + CLI + 桌面应用，它为你机器上�
 
 在多台机器上用 Coffer？**多机同步**通过一个你自己掌控的 git 仓库让一个仓库在多机间保持一致 —— 知识、记忆、资源，以及仅密文的凭证都会同步；加密密钥绝不离开你的机器。
 
-内置的 **chat** 平台与 Web/桌面 UI 把它们串起来：与 Coffer agent 对话、浏览并管理每一种 kind，并实时观察 invocation。
+内置的 **chat** 平台与 Web UI（由 daemon 自己在其 loopback origin 上托管）把它们串起来：与 Coffer agent 对话、浏览并管理每一种 kind，并实时观察 invocation。
 
 📖 **文档站点：** https://wyx-sg.github.io/Coffer/
 
 ## 下载与安装
 
-> **尚无打 tag 的 release。** 下面的预构建二进制、一行安装脚本和桌面 DMG 会随 Coffer
+> **尚无打 tag 的 release。** 下面的预构建二进制、一行安装脚本和发布归档会随 Coffer
 > 的首个 tagged release 一起发布，目前尚未提供 —— 在那之前这些链接会 404。现在请先
 > **[从源码安装](#从源码安装开发者)**（见下文），这是当前可用的安装方式。
 
@@ -41,25 +41,38 @@ Coffer 是一个守护进程 (daemon) + CLI + 桌面应用，它为你机器上�
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
 ```
 
-安装三个二进制文件 —— `coffer`（管理 CLI）、`coffer-daemon`、`coffer-mcp-shim` —— 到
-`~/.coffer/bin`。**守护进程首次使用时自动启动，无需手动执行启动命令。** 环境变量覆盖：
-`COFFER_INSTALL_DIR`、`COFFER_VERSION`、`COFFER_NO_MODIFY_PATH`。
+把 `coffer`（管理 CLI）、`coffer-daemon`、`coffer-mcp-shim` 以及运行期辅助二进制安装到
+`~/.coffer/bin`，并把该目录加入你的 `PATH`。**守护进程首次使用时自动启动，无需手动执行启动
+命令。** 环境变量覆盖：`COFFER_INSTALL_DIR`、`COFFER_VERSION`、`COFFER_NO_MODIFY_PATH`。
 
-### 桌面应用（大多数用户）—— _随首个 release 提供_
+### 手动下载 —— _随首个 release 提供_
 
-从 [Releases](https://github.com/wyx-sg/Coffer/releases/latest) 下载安装包：
+每个 `v*` tag 只发布一份归档，从
+[Releases](https://github.com/wyx-sg/Coffer/releases/latest) 下载：
 
-| 平台                | 文件                                    |
-| ------------------- | --------------------------------------- |
-| macOS Apple silicon | `Coffer_<version>_aarch64-unsigned.dmg` |
+| 平台                | 文件                          |
+| ------------------- | ----------------------------- |
+| macOS Apple silicon | `coffer-cli-<triple>.tar.gz`  |
 
-Coffer 目前只发布 macOS（Apple Silicon）版本。`-unsigned` 后缀表示该 DMG
-尚未公证（见下文）。请用 release 的 `SHA256SUMS` 文件校验下载。
+Coffer 目前只发布 macOS（Apple Silicon）版本。归档内含 `coffer`、`coffer-daemon`、
+`coffer-mcp-shim` 以及运行期辅助二进制。请用 release 的聚合 `SHA256SUMS` 文件校验下载 ——
+它覆盖了全部发布制品。
 
-> **macOS（未签名）：** 构建未签名（公证待完成），首次打开时 macOS 可能提示 Coffer「已损坏」
-> （并非真的损坏——此时右键「打开」无效）。清除隔离标记：
-> `xattr -dr com.apple.quarantine /Applications/Coffer.app` —— 如果仍无法打开，重新进行 ad-hoc
-> 签名：`codesign --force --deep --sign - /Applications/Coffer.app`
+```sh
+mkdir -p ~/.coffer/bin
+tar -xzf coffer-cli-<triple>.tar.gz -C ~/.coffer/bin
+export PATH="$HOME/.coffer/bin:$PATH"   # 建议写进 shell 配置文件
+coffer daemon start
+coffer open                             # 打开一个已认证的浏览器会话
+```
+
+`coffer open` 读取 `~/.coffer/daemon.json`，并在 daemon 的 loopback origin 上打开浏览器 ——
+Web UI 正是由 daemon 自己托管的。冻结态 daemon 会在首次启动时把同目录的辅助二进制部署到
+`~/.coffer/bin`，因此 MCP 客户端可以直接从 `PATH` 解析到 `coffer-mcp-shim`。
+
+> **macOS（未签名）：** 这些二进制未签名（代码签名与公证待完成），下载后会被 Gatekeeper
+> 隔离，macOS 可能拒绝运行。对解压出来的二进制清除隔离标记：
+> `xattr -dr com.apple.quarantine ~/.coffer/bin`
 
 ### 从源码安装（开发者）
 
@@ -103,7 +116,7 @@ coffer mcp tool list filesystem   # → read_file, write_file, list_directory, �
 Coffer 可以自动检测已安装的 agent（它会列出候选项并请你确认 —— 不会自动注册任何东西）、
 在应用内编辑每个 agent 精选 (curated) 的配置文件（带格式校验、原子写入并生成 `.bak` 备份，
 以及一个会滚动到匹配处的编辑器内查找/替换），并一键把 Coffer 自己的 MCP 服务器安装到 agent 或从中卸载。
-桌面/Web UI 提供一个 **Agents** 页面（列表 + 详情）、一个检测对话框、配置文件编辑器，以及 MCP 安装开关。
+Web UI 提供一个 **Agents** 页面（列表 + 详情）、一个检测对话框、配置文件编辑器，以及 MCP 安装开关。
 
 ```bash
 coffer agent detect               # 发现已安装的 agent（注册前需确认）

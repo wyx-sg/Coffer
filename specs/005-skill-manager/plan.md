@@ -7,7 +7,7 @@
 
 ## Summary
 
-Add the `skill` Resource kind to Coffer: a managed inventory of agentskills.io-standard skill folders, stored canonically under `~/.coffer/skills/<name>/` and delivered to registered agents (spec 004) via directory symlinks (POSIX) or junctions (Windows). Sources in v1 are local-path imports only. Per-skill × per-agent bindings allow fine curation. A `verify` operation detects on-disk drift. Ships with REST routes, CLI subcommands, and a desktop Skills page.
+Add the `skill` Resource kind to Coffer: a managed inventory of agentskills.io-standard skill folders, stored canonically under `~/.coffer/skills/<name>/` and delivered to registered agents (spec 004) via directory symlinks (POSIX) or junctions (Windows). Sources in v1 are local-path imports only. Per-skill × per-agent bindings allow fine curation. A `verify` operation detects on-disk drift. Ships with REST routes, CLI subcommands, and a web Skills page.
 
 ## Technical Context
 

@@ -297,7 +297,7 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 ## 前端（最简）
 
 - `frontend/src/lib/api/providers.ts`——手写客户端 + TS 类型（`types.ts` codegen 只覆盖 001 gateway spec；此处不期望生成类型）。
-- 统一的 **Settings → LLM Connections** 页（路由 `/settings/llm-connections`）即 connection 库：一个 `DataTable`（复用共享组件；参见 SkillsPage / MCP 页），列 name / wire_format / base_url / model / active / internal，顶部操作 create，行操作 switch / set-internal-default / delete，外加 Embedding 卡片。该页只显示 connection（provider + model）信息——无 agent 名称、无 presets、无 modality 拆分。编辑 connection 通过 CLI（`coffer provider edit`）和 PATCH API 实现，桌面页不需要内联编辑功能。
+- 统一的 **Settings → LLM Connections** 页（路由 `/settings/llm-connections`）即 connection 库：一个 `DataTable`（复用共享组件；参见 SkillsPage / MCP 页），列 name / wire_format / base_url / model / active / internal，顶部操作 create，行操作 switch / set-internal-default / delete，外加 Embedding 卡片。该页只显示 connection（provider + model）信息——无 agent 名称、无 presets、无 modality 拆分。编辑 connection 通过 CLI（`coffer provider edit`）和 PATCH API 实现，Web 页不需要内联编辑功能。
 - 逐 agent 的 connection + model 选择位于 **agent detail 页（Overview tab）**，按该 agent 的 wire 过滤，复用 activate API。LLM Connections 页不绑定 agent。
 - 旧的 `/settings/models` 和 `/settings/providers` 路由重定向到 `/settings/llm-connections`。
 - 新 hook 的测试需添加 `vi.mock`。
@@ -521,7 +521,7 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 
 **界面**
 
-- **FR-017**：创建、切换和删除操作必须可通过（a）REST API、（b）`coffer provider ...` CLI（含 `--json`）、（c）桌面 Providers 页面访问。编辑 profile（PATCH）仅通过 REST API 和 CLI（`coffer provider edit`）提供；桌面页不需要内联编辑功能。
+- **FR-017**：创建、切换和删除操作必须可通过（a）REST API、（b）`coffer provider ...` CLI（含 `--json`）、（c）Web Providers 页面访问。编辑 profile（PATCH）仅通过 REST API 和 CLI（`coffer provider edit`）提供；Web 页不需要内联编辑功能。
 - **FR-018**：CLI `key` 子命令必须支持 `--wire <wire_format>`（按该 wire 的活跃 profile 解析）。不支持位置参数 `<name>` 解析；仅接受 `--wire` 形式。
 
 **内部引擎 connection**

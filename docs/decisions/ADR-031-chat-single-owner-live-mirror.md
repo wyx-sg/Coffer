@@ -38,13 +38,13 @@ message-visibility rules.
 
 ## Decision
 
-**Chat is the desktop surface of the same conversations the owner also drives
+**Chat is the web surface of the same conversations the owner also drives
 from their phone (IM).** One owner, one conversation timeline, two screens.
 Behind a conversation is one real agent session (one `--resume` session, one
-working directory), so a turn started on the phone and a turn continued on the
-desktop hit the **same** session.
+working directory), so a turn started on the phone and a turn continued in the
+web UI hit the **same** session.
 
-From the desktop the owner can **observe** any conversation live (including turns
+From the web UI the owner can **observe** any conversation live (including turns
 kicked off from the phone, token by token), **interrupt** a running turn, and
 **inject / continue** by typing freely — messages queue, never block.
 
@@ -93,12 +93,12 @@ only the response to over-sending changes (queue, not reject).
   remain; the owner removes them, clears them, or resumes.
 - **Cross-surface advance.** The pending queue is the web composer's; it
   auto-advances after *any* turn on the conversation ends — including an
-  IM-driven one — so a desktop message queued behind a phone-started turn still
+  IM-driven one — so a web message queued behind a phone-started turn still
   runs when that turn completes. A message arriving *from* IM while a turn is in
   flight is held by the channel's own inbound buffering (Spec 009), not this
   queue; v1 does not merge the two into a single physical FIFO (the channel
   adapter keeps its per-peer buffer), so the cross-surface guarantee is
-  "a desktop send is never rejected and runs in order", not "IM and web share one
+  "a web send is never rejected and runs in order", not "IM and web share one
   queue object".
 - **Queue state rides the bus.** A `QueueChanged` event broadcasts the ordered
   pending items so every subscriber — a second tab, the phone — renders the same
@@ -114,7 +114,7 @@ one subscribe stream — no `origin`-based branching. But `channel_name` /
 `peer_chat_id` are the **return address** for pushing the agent's output back to
 the IM app and cannot be deleted. So: drop `origin` and `peer_display_name`; keep
 `channel_name` / `peer_chat_id` as an optional `channel_binding` (a conversation
-"has a binding" iff `channel_name` is set); the desktop shows a small "also on
+"has a binding" iff `channel_name` is set); the web UI shows a small "also on
 Telegram/SeaTalk" indicator when one exists.
 
 ### 4. Cleanup the dead positionings left behind
@@ -139,9 +139,9 @@ the working `claude_code` / `codex` adapters):
 
 ### Invariants
 
-- **Same seams, no parallel path.** The desktop drives turns only through the
+- **Same seams, no parallel path.** The web UI drives turns only through the
   existing `ConversationPort` / `TurnPort` / orchestrator; an agent cannot tell a
-  desktop turn from a phone turn. The subscribe stream is read-only observation +
+  web turn from a phone turn. The subscribe stream is read-only observation +
   the existing interrupt; it introduces no privileged turn path.
 - **`_ACTIVE_TURNS` stays process-global.** Single user, single daemon; horizontal
   scaling is YAGNI. The broadcaster and the pending queue live in the same process.
@@ -154,9 +154,9 @@ the working `claude_code` / `codex` adapters):
 
 ### A — Keep observe-only; do not add interrupt/inject
 
-**Rejected.** The owner explicitly wants to grab the wheel from the desktop
+**Rejected.** The owner explicitly wants to grab the wheel from the web UI
 (stop a runaway turn, keep typing). Observe-only leaves the phone-started
-conversation un-steerable from the desk — the one thing the desktop seat is for.
+conversation un-steerable from the browser — the one thing the web seat is for.
 
 ### B — Live bus only; skip the cleanup and the origin collapse
 

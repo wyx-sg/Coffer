@@ -72,7 +72,6 @@ frontend/src/
 │   ├── components/                        # kindRegistry.ts + 共享 ResourceListView
 │   ├── auth.ts                            # daemon token 加载（由 dev 插件读 ~/.coffer/daemon.json）
 │   ├── preferences.ts                     # 默认每页条数偏好 (General 设置)
-│   ├── tauri.ts                           # isTauri() 守卫，用于桌面专属界面
 │   └── queryClient.ts / statusColors.ts / timeRange.ts / utils.ts
 ├── components/                            # 共享 shell + 表格基础件
 │   ├── Layout.tsx                         # AppShell + 可折叠侧栏 (localStorage "coffer.nav.collapsed")
@@ -132,7 +131,7 @@ Tailwind 配置 (`frontend/tailwind.config.js`)、shadcn primitives、`AppShell`
 
 ### Phase 2 — US1：首次访问流
 
-`/mcp-servers` 在没有资源时的欢迎视图（以及 index 落地的 `/agents` Agents 欢迎视图）、带「重新加载」恢复操作（桌面应用为「重启」）的"Daemon not running"视图，以及通过 dev token 插件实现的冷启动自动鉴权渲染。
+`/mcp-servers` 在没有资源时的欢迎视图（以及 index 落地的 `/agents` Agents 欢迎视图）、带「重新加载」恢复操作的"Daemon not running"视图，以及通过 dev token 插件实现的冷启动自动鉴权渲染。
 
 **Done when:** US1 的三个 representative scenarios 通过。
 

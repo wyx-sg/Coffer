@@ -69,7 +69,7 @@ vibe-rules) and from the AGENTS.md standard.
 | Safe edit (backup / concurrency) | ❌                     | ❌       | ❌              | ❌                 | ❌           | **✅ atomic + .bak + fingerprint 409** |
 | Secrets handling                 | ❌                     | ❌       | ❌              | ❌                 | ❌           | **✅ encrypted store + refs**          |
 | New agent = data vs code         | code (TS handler)      | code     | code            | code               | n/a          | **✅ manifest data record**            |
-| Interface                        | CLI                    | CLI      | CLI             | CLI                | file         | **CLI + REST + desktop GUI**           |
+| Interface                        | CLI                    | CLI      | CLI             | CLI                | file         | **CLI + REST + web UI**                |
 | Per-project scope                | ✅                     | ✅       | ✅              | ✅                 | ✅           | **❌ user-global config_dir only**     |
 | Agents covered today             | 28+                    | 12+      | 19+             | several            | 28+          | **2 enabled (4 wired, hidden)**        |
 
@@ -89,7 +89,7 @@ vibe-rules) and from the AGENTS.md standard.
    optimistic concurrency (409 on stale write) has no equivalent — the
    competitors overwrite files with no backup or concurrency guard.
 4. **Secrets + GUI + manifest onboarding.** Coffer has an encrypted credential
-   store (competitors handle no secrets), a desktop app (they are CLI-only), and
+   store (competitors handle no secrets), a web UI (they are CLI-only), and
    onboards a new agent via a single capability-manifest record rather than
    Ruler-style per-agent handler code.
 

@@ -5,10 +5,9 @@ FRONTEND := frontend
 
 .PHONY: help install install-e2e-browsers hooks \
 	verify verify-all \
-	verify-unit verify-integration verify-contract verify-e2e verify-acceptance verify-desktop verify-benchmark \
+	verify-unit verify-integration verify-contract verify-e2e verify-acceptance verify-benchmark \
 	coverage lock \
 	eval eval-routing eval-curate \
-	desktop-dev desktop-build \
 	bundle-binaries \
 	frontend-codegen \
 	lint format dev clean
@@ -27,7 +26,6 @@ help:
 	@echo "  make verify-e2e            e2e tier only (currently: Playwright web only)"
 	@echo "  make verify-acceptance     audit spec.md scenarios vs test markers"
 	@echo "  make verify-benchmark      SC-003 gateway-overhead benchmark (COFFER_RUN_BENCHMARKS=1)"
-	@echo "  make verify-desktop        cargo test --lib for the Tauri crate (skipped if rust missing)"
 	@echo "  make lint                  ruff + mypy + eslint + tsc + import-linter + file/response_model checks"
 	@echo "  make format                ruff format + prettier"
 	@echo "  make coverage              pytest --cov + vitest --coverage (no threshold gates yet)"
@@ -35,10 +33,6 @@ help:
 	@echo "  make eval-routing          + tool-routing suite (needs a local LLM, e.g. ollama)"
 	@echo "  make eval-curate           curate captured traces into golden cases (ARGS=--dry-run)"
 	@echo "  make lock                  refresh backend/uv.lock from pyproject.toml (the install lockfile)"
-	@echo ""
-	@echo "  Desktop (Tauri; needs Rust toolchain, see CONTRIBUTING.md):"
-	@echo "  make desktop-dev           run frontend + backend + Tauri window in dev mode"
-	@echo "  make desktop-build         build the desktop bundle (release)"
 	@echo ""
 	@echo "  Dev:"
 	@echo "  make dev                   run backend (:8000) + frontend (:5173) in parallel"
@@ -90,24 +84,6 @@ verify-all: verify verify-e2e
 
 verify-acceptance:
 	$(PY) scripts/audit_acceptance.py
-
-# Run the Rust unit tests in the Tauri crate (desktop/src/lib.rs). We don't
-# require cargo locally — contributors without the Rust toolchain still need
-# `make verify` to succeed for backend/frontend changes — so this step
-# skips gracefully when cargo is absent. CI installs rust unconditionally
-# (see .github/workflows/verify.yml :: desktop-build) and runs `cargo test
-# --lib` directly there, so coverage is enforced at the PR layer.
-verify-desktop:
-	@if ! command -v cargo >/dev/null 2>&1; then \
-		echo "verify-desktop: cargo not found — skipping (install via https://rustup.rs to enable)"; \
-		exit 0; \
-	fi; \
-	if [ "$$(uname -s)" = "Linux" ] && command -v pkg-config >/dev/null 2>&1 && ! pkg-config --exists gdk-3.0 2>/dev/null; then \
-		echo "verify-desktop: gdk-3.0 not installed — skipping (apt install libgtk-3-dev to enable)"; \
-		exit 0; \
-	fi; \
-	echo "verify-desktop: cargo test --lib (desktop crate)"; \
-	cd desktop && cargo test --lib
 
 lint:
 	$(PY) scripts/check_file_sizes.py
@@ -264,36 +240,6 @@ dev:
 	(cd $(FRONTEND) && npm run dev) & \
 	wait
 
-# Tauri desktop shell. Requires Rust toolchain (rustup) and the frontend
-# npm deps installed via `make install`. Tauri itself spawns the Vite dev
-# server via `beforeDevCommand` in desktop/tauri.conf.json.
-#
-# We run @tauri-apps/cli from inside desktop/ rather than via an npm script
-# in frontend/: Tauri CLI 2.x discovers the project by walking subdirs for
-# tauri.conf.json, so cwd must be the crate dir. The CLI binary itself is
-# installed under frontend/node_modules/ as a frontend dev-dep, and we
-# invoke it through the relative path `../frontend/node_modules/.bin/tauri`
-# from desktop/.
-
-desktop-dev:
-	@command -v cargo >/dev/null 2>&1 || { \
-		echo "desktop-dev: Rust toolchain missing. Install via https://rustup.rs."; \
-		exit 1; \
-	}
-	cd desktop && ../$(FRONTEND)/node_modules/.bin/tauri dev
-
-# Clean any leftover bundle/ from a prior aborted build before running
-# `tauri build`. Tauri's bundle_dmg.sh leaves rw.<pid>.*.dmg intermediates
-# on failure, which then break the next DMG creation. The bundle dir is
-# fully regenerated each run, so deleting it is safe.
-desktop-build:
-	@command -v cargo >/dev/null 2>&1 || { \
-		echo "desktop-build: Rust toolchain missing. Install via https://rustup.rs."; \
-		exit 1; \
-	}
-	rm -rf desktop/target/release/bundle
-	cd desktop && ../$(FRONTEND)/node_modules/.bin/tauri build
-
 frontend-codegen:
 	@if [ -d $(FRONTEND) ]; then \
 		cd $(FRONTEND) && npm run codegen; \
@@ -307,5 +253,4 @@ clean:
 	rm -rf .venv \
 		$(FRONTEND)/node_modules $(FRONTEND)/dist \
 		$(BACKEND)/.pytest_cache $(BACKEND)/.mypy_cache $(BACKEND)/.ruff_cache \
-		.mypy_cache .ruff_cache .pytest_cache \
-		desktop/target desktop/gen
+		.mypy_cache .ruff_cache .pytest_cache

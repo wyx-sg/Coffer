@@ -19,8 +19,7 @@ flowchart TD
     subgraph coffer["Coffer（本地，127.0.0.1）"]
         CLI["coffer CLI\n（短生命周期）"]
         SHIM["coffer-mcp-shim\n（每客户端会话一份）"]
-        WEBUI["Web UI\n（浏览器）"]
-        DESKTOP["Desktop 应用\n（Tauri 2 / Rust + WebView）"]
+        WEBUI["Web UI\n（浏览器，由守护进程提供）"]
         DAEMON["coffer-daemon\nFastAPI · 自动端口\n/api/v1  /mcp\n6 种 kind + 聊天/渠道/导出"]
         CB["coffer 回调监听\n（守护进程拉起的子进程）\nPOST /seatalk/{channel}"]
         DB[("SQLite\n~/.coffer/coffer.db")]
@@ -40,7 +39,7 @@ flowchart TD
     SHIM -->|"HTTP/SSE\nX-Coffer-Token"| DAEMON
     CLI -->|"loopback HTTP\nX-Coffer-Token"| DAEMON
     WEBUI -->|"REST /api/v1\nX-Coffer-Token"| DAEMON
-    DESKTOP -->|"REST /api/v1\nX-Coffer-Token"| DAEMON
+    DAEMON -->|"提供构建好的 UI\n同源静态文件"| WEBUI
     DAEMON --- DB
     DAEMON --- MK
     DAEMON --- FILES
@@ -62,8 +61,7 @@ flowchart TD
 | `coffer` 回调监听               | 守护进程拉起的子进程                      | 仅服务经过签名校验的渠道 webhook（`POST /seatalk/{channel}`），监听一个位于用户自运行隧道之后的 loopback 端口；校验 SeaTalk 签名并将事件转发给守护进程。当某个 SeaTalk 渠道启用时运行（ADR-014）。                                                           |
 | `coffer-mcp-shim`               | 短生命周期进程（每个 MCP 客户端会话一份） | 桥接 MCP 客户端 stdio ↔ 守护进程 HTTP/SSE。检测已运行的守护进程，或在需要时拉起一个。                                                                                                                                                                        |
 | `coffer` CLI                    | 短生命周期子进程                          | 面向用户的管理命令。通过 loopback HTTP 调用守护进程。                                                                                                                                                                                                        |
-| Web UI                          | 浏览器进程                                | 管理界面。开发时由 `http://localhost:5173` 的 Vite 开发服务器提供；生产时由 Tauri 桌面 shell 内嵌。调用 REST API。                                                                                                                                           |
-| Desktop 应用                    | 原生进程（Tauri 2，Rust + WebView）       | 将 Web UI 内嵌在原生桌面窗口中。通过 REST 与守护进程通信。                                                                                                                                                                                                   |
+| Web UI                          | 浏览器进程                                | 管理界面。生产时由守护进程在自己的 loopback origin 上以静态文件形式提供构建好的 UI —— 与 REST API 同源；`coffer open` 拉起浏览器，并通过一次性 code 把 token 交给页面。开发时改由 `http://localhost:5173` 的 Vite 开发服务器提供。                                                                                                                                           |
 | REST API（`/api/v1`）           | 守护进程上的 HTTP 接口面                  | 管理面：资源 CRUD、审计日志、设置。Token + CORS 鉴权。                                                                                                                                                                                                       |
 | MCP 端点（`/mcp`）              | 守护进程上的 HTTP/SSE 接口面              | MCP JSON-RPC 端点。shim 连接此处。将命名空间化的工具调用转发给上游子进程。                                                                                                                                                                                   |
 | SQLite（`~/.coffer/coffer.db`） | 持久化存储                                | 控制面状态：资源注册、能力偏好、审计日志、保留策略，以及 `credentials` 表中以 Fernet 密文形式存储的密钥。WAL 模式，单写入者。                                                                                                                                |
@@ -103,7 +101,7 @@ flowchart TD
 | [守护进程与进程模型](/zh/architecture/processes)     | 进程模型、detect-or-spawn、上游子进程生命周期      |
 | [Resource 框架](/zh/architecture/resource-framework) | 统一身份、生命周期与审计的与 kind 无关的抽象       |
 | [分层与边界](/zh/architecture/layering)              | import 规则、各层职责、强制执行                    |
-| [Surfaces](/zh/architecture/surfaces)                | REST API、MCP 端点、CLI、Web UI、Desktop           |
+| [Surfaces](/zh/architecture/surfaces)                | REST API、MCP 端点、CLI、stdio shim、Web UI        |
 | [请求全链路](/zh/architecture/request-lifecycle)     | 工具调用从客户端到上游的端到端追踪                 |
 | [持久化](/zh/architecture/persistence)               | SQLite schema、WAL、Alembic、JSON 字段处理         |
 | [安全](/zh/architecture/security)                    | Token 鉴权、加密凭据存储、SSRF 防护、loopback 强制 |

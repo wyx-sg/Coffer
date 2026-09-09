@@ -2,7 +2,8 @@
 # Usage: pyinstaller backend/coffer-daemon.spec
 #
 # Output: dist/coffer-daemon (single-file executable)
-# Tauri sidecar consumes this via desktop/binaries/coffer-daemon-<triple>.
+# Ships the built web UI (frontend/dist) as `webui/` — the daemon serves it
+# itself now that the desktop shell is gone (spec 001 FR-024).
 
 # -*- mode: python ; coding: utf-8 -*-
 
@@ -74,6 +75,18 @@ datas = (
     # (VecIndex.available() swallows the load failure).
     + collect_data_files("sqlite_vec")
 )
+
+# The built web UI. The daemon serves this at its own loopback origin, so a
+# frozen build must carry it. Built by `npm run build` before PyInstaller runs
+# (see .github/workflows/release.yml); when it is absent — a backend-only local
+# build — the daemon simply serves the API and `webui.resolve_webui_dir()`
+# returns None, so the build still succeeds rather than failing on a missing
+# directory PyInstaller would otherwise reject.
+import os as _os
+
+_webui_dist = _os.path.join(_os.path.dirname(_os.path.abspath(SPEC)), "..", "frontend", "dist")
+if _os.path.isfile(_os.path.join(_webui_dist, "index.html")):
+    datas = datas + [(_webui_dist, "webui")]
 
 a = Analysis(
     ["coffer/infrastructure/daemon/entry.py"],
