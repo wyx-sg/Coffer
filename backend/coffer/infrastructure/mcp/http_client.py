@@ -6,16 +6,18 @@ official mcp SDK's `streamable_http_client` against a remote HTTP MCP
 endpoint.
 
 Headers (including materialised credentials) are injected via an
-httpx.AsyncClient that we create and manage here; this is the SDK-blessed
-approach as of mcp >=1.8 (the legacy `streamablehttp_client` helper that
-accepted headers directly is deprecated in that version).
+httpx2.AsyncClient that we create and manage here; this is the SDK-blessed
+approach — the legacy `streamablehttp_client` helper that accepted headers
+directly was removed in mcp 2.0. httpx2 (not httpx) is the client library the
+mcp SDK builds on as of 2.0, so the timeout and exception types here come from
+it.
 
 IMPORTANT: asyncio.wait_for must NOT wrap any code that runs inside anyio
 task groups.  The mcp SDK's streamable_http_client (and therefore
 ClientSession.initialize) runs entirely inside an anyio task group; wrapping
 those calls with asyncio.wait_for causes anyio to raise a RuntimeError when
 the coroutine is cancelled from outside its owning task group.  Instead we
-configure httpx.Timeout for spawn-phase timeouts and let anyio propagate
+configure httpx2.Timeout for spawn-phase timeouts and let anyio propagate
 genuine transport errors up to us as exceptions.
 
 The 'spawn' word is preserved for symmetry with stdio even though no
@@ -29,7 +31,7 @@ from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack, suppress
 from typing import Any
 
-import httpx
+import httpx2
 from mcp import ClientSession
 from mcp.client.session import ListRootsFnT, SamplingFnT
 from mcp.client.streamable_http import streamable_http_client
@@ -88,9 +90,9 @@ class HttpUpstreamConnection:
 
         Returns the server's capabilities as a plain dict.
         Headers from the transport config and the credential overlay are
-        merged and injected into every request via the httpx.AsyncClient.
+        merged and injected into every request via the httpx2.AsyncClient.
 
-        Timeout enforcement: httpx.Timeout(spawn_timeout_seconds) covers the
+        Timeout enforcement: httpx2.Timeout(spawn_timeout_seconds) covers the
         underlying HTTP connect + read for the initialize RPC.  We do not use
         asyncio.wait_for around anyio-managed contexts — that would violate
         anyio's cancel-scope-per-task invariant and raise RuntimeError.
@@ -98,17 +100,17 @@ class HttpUpstreamConnection:
         # Combine static headers from config with materialised credentials.
         merged_headers: dict[str, str] = {**self._transport.headers, **self._header_overlay}
 
-        # httpx.Timeout: connect + individual requests use spawn_timeout_seconds.
+        # httpx2.Timeout: connect + individual requests use spawn_timeout_seconds.
         # read=300 is a generous SSE-stream read window for post-init use.
         http_client = create_mcp_http_client(
             headers=merged_headers or None,
-            timeout=httpx.Timeout(float(self._spawn_timeout), read=300.0),
+            timeout=httpx2.Timeout(float(self._spawn_timeout), read=300.0),
         )
 
         self._exit_stack = AsyncExitStack()
         try:
             # Enter the anyio-managed transport — no asyncio.wait_for here.
-            read, write, _get_session_id = await self._exit_stack.enter_async_context(
+            read, write = await self._exit_stack.enter_async_context(
                 streamable_http_client(
                     str(self._transport.url),
                     http_client=http_client,
@@ -124,11 +126,11 @@ class HttpUpstreamConnection:
                 )
             )
             # session.initialize() sends the initialize request over HTTP; the
-            # httpx timeout (spawn_timeout_seconds) bounds how long this takes.
+            # httpx2 timeout (spawn_timeout_seconds) bounds how long this takes.
             # We do NOT wrap this in asyncio.wait_for — doing so would cancel
             # from outside anyio's task group and trigger its RuntimeError.
             init_result = await session.initialize()
-        except httpx.TimeoutException as exc:
+        except httpx2.TimeoutException as exc:
             await self._cleanup()
             raise UpstreamTimeout(f"upstream init exceeded {self._spawn_timeout}s") from exc
         except asyncio.CancelledError as exc:
@@ -136,7 +138,7 @@ class HttpUpstreamConnection:
             # background task group) as a CancelledError to the awaiting
             # coroutine.  Wrap it so callers get a domain error.
             await self._cleanup()
-            # CODE-039: httpx/transport exceptions can embed the request URL
+            # CODE-039: httpx2/transport exceptions can embed the request URL
             # (which may carry a query-string secret) or reflected headers.
             # Surface only the exception type; chain the original via ``from``.
             raise UpstreamUnavailable(f"upstream init cancelled: {type(exc).__name__}") from exc
@@ -146,7 +148,7 @@ class HttpUpstreamConnection:
 
         self._session = session
         try:
-            capabilities: dict[str, Any] = init_result.capabilities.model_dump()
+            capabilities: dict[str, Any] = init_result.capabilities.model_dump(by_alias=True)
         except AttributeError:
             capabilities = {}
         return capabilities
@@ -160,7 +162,7 @@ class HttpUpstreamConnection:
         """Forward a single MCP request, with timeout.  Returns the SDK result object."""
         if self._session is None:
             raise UpstreamUnavailable("upstream not initialized")
-        # The httpx client was created with a read timeout of 300 s; for
+        # The httpx2 client was created with a read timeout of 300 s; for
         # per-request control we rely on the caller to set request_timeout_seconds
         # appropriately. Despite the module-header rule, asyncio.wait_for is
         # safe at THIS call site (CODE-L1): we await session.send_request from
