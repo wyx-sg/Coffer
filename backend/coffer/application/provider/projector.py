@@ -109,7 +109,12 @@ class ProviderProjector:
                 wire_api=agent_cfg.wire_api or "responses",
                 display_name=f"Coffer ({name})",
             )
-        self._config_store.write_text_atomic(spec.path, new_text)
+        # An unchanged projection is not rewritten. The boot sweep re-derives
+        # this on every start, and touching an agent's config file when nothing
+        # differs would churn its mtime — and hide, in any file audit, the one
+        # case that matters: a projection that had actually gone missing.
+        if new_text != text:
+            self._config_store.write_text_atomic(spec.path, new_text)
 
     def _deproject(self, agent: Resource, config_key: str, agent_type: AgentType) -> None:
         agent_cfg = AgentConfig.model_validate(agent.config)
@@ -121,7 +126,8 @@ class ProviderProjector:
             new_text = remove_anthropic_settings(text)
         else:
             new_text = remove_codex_provider(text)
-        self._config_store.write_text_atomic(spec.path, new_text)
+        if new_text != text:
+            self._config_store.write_text_atomic(spec.path, new_text)
 
 
 __all__ = ["ProviderProjector"]

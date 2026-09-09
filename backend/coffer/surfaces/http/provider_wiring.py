@@ -8,9 +8,12 @@ service to know which agents to project into.
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import FastAPI
 
 from coffer.application.audit_service import AuditService
+from coffer.application.provider.boot_reconcile import ProviderProjectionBootHeal
 from coffer.application.provider.kind import make_provider_kind
 from coffer.application.provider.projector import ProviderProjector
 from coffer.application.provider.service import ProviderService
@@ -22,6 +25,8 @@ from coffer.surfaces.http.dependencies import (
     get_internal_engine_config_service,
     set_provider_service,
 )
+
+_log = logging.getLogger(__name__)
 
 
 async def _resolve_internal_model() -> str | None:
@@ -64,4 +69,32 @@ def wire_provider_kind(
             projector=ProviderProjector(ConfigFileStore()),
         )
     )
+    # Boot heal (see run_provider_projection_sweep) — a DIFFERENT direction from
+    # the import hook above: it corrects Coffer's own flag, never the agent's
+    # config, because a leftover flag carries no warrant to re-route an agent.
+    app.state.provider_projection_heal = ProviderProjectionBootHeal(
+        providers=provider_svc,
+        agents=get_agent_service(),
+        config_store=ConfigFileStore(),
+        deactivate=provider_svc.deactivate,
+    )
     return provider_svc
+
+
+async def run_provider_projection_sweep(app: FastAPI) -> None:
+    """Boot hook: stop trusting an ``is_active`` flag the agent's config denies.
+
+    See ``application/provider/boot_reconcile`` for what drifts and why this
+    heals in one direction only. Best-effort: whatever it finds is logged, and
+    nothing here is allowed to fail boot.
+    """
+    heal = getattr(app.state, "provider_projection_heal", None)
+    if heal is None:
+        return
+    try:
+        notes = await heal.heal()
+    except Exception:
+        _log.exception("provider_projection_sweep.failed")
+        return
+    for note in notes:
+        _log.warning("provider_projection_sweep %s", note)

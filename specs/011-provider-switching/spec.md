@@ -352,6 +352,25 @@ agent could use.
   there is nowhere to put the note without polluting the conversation's first
   user message. Codex gets the accurate catalogue (H1) but not the note.
 
+- **H6 — A connection is only active if the agent's config says so.** `is_active`
+  is a row in Coffer's database; what it MEANS is a few keys in a file Coffer
+  does not own, which the agent's own CLI, other tooling, the user, and a
+  restore from backup all rewrite. Nothing put Coffer's keys back and nothing
+  noticed they had gone. At boot Coffer now checks, for each agent type with an
+  active compatible connection, whether that agent's native config actually
+  carries the projection; when it does not, the flag is CLEARED — the agent is
+  on its built-in login and every surface now says so. It heals in one direction
+  only: it never writes the projection back, because a flag left from an earlier
+  session is no warrant to re-route a user's agent through a gateway they are
+  not currently using (the sync post-import hook still projects, since an import
+  carries the user's explicit switch). The reverse drift — Coffer's keys present
+  while the registry says inactive — is reported, not silently removed.
+  Revision 0051 also strips the retired agent types (`cursor` / `opencode` /
+  `openclaw` / `hermes`) from connections' `compatible_agents`: revision 0048
+  deleted those agents' own rows but left their names inside connections, which
+  `ProviderConfig` rejects — so on a real install the first validation after the
+  upgrade raised and a working connection became unreadable.
+
 **Supersedes:** D4's curated built-in list (now the backend catalogue) and its
 either/or option rule (now the union in H3). D4's fixed-dropdown / no-free-text
 rule is unchanged. **Still NOT in scope:** proxy / hot-switch / protocol
