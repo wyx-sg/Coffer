@@ -15,7 +15,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Switch } from "@/components/ui/switch";
 import { ChannelCallbackCard } from "@/kinds/channel/ChannelCallbackCard";
-import { ChannelMachineCard } from "@/kinds/channel/ChannelMachineCard";
 import {
   ChannelPairingCard,
   ChannelStatusCard,
@@ -139,7 +138,6 @@ export function ChannelDetailPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <ChannelStatusCard status={status} />
-        <ChannelMachineCard name={name} />
         <ChannelPairingCard
           code={pairing.data}
           isPending={pairing.isPending}

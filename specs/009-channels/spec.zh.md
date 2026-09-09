@@ -416,39 +416,25 @@ status / notify`。
   peer、agent 在审计日志里查到；干净成功在任何 channel 上都不发完成摘要，而异常
   结束（失败、中断、达工具上限）的 turn 会发一条报告结果的摘要。
 
-## 机器亲和（spec 010 修订）
+## 渠道在哪里运行
 
-渠道的平台身份（被轮询的 bot、webhook 端点）只容许一个消费者，而渠道定义会同步到
-每台机器（spec 010）。渠道 runtime 通过框架级的 `scope` 字段（仅 machine 轴——
-渠道的 `scope` 条目只接受 `"*"` 作为其 value）决定是否在本机启动适配器：`scope`
-最多携带一条条目——恰好一个精确 ULID 的机器 key（或没有 = 休眠）；`"*"` 这个
-key 对渠道会被拒绝（`Kind.validate_scope_shape`，ADR-045 复审 Fix 1）——它会一次
-匹配所有机器，等于换一条路径重现 ADR-043 要防止的双适配器互斗。只有作为那唯一
-条目出现的机器才会启动适配器。`scope == {}`（在任何地方都休眠——等价于修订前
-的 `runs_on: null`）在任何机器上都不运行，直到用户在渠道详情页选定机器。创建渠
-道的 surface 默认把 scope 设为 `{"<creating-machine-id>": "*"}`。改绑是普通的配置
-编辑（一次普通的 `scope` 写入），经同步传播；配对状态随 vault 同步（spec 010 状
-态区 `channel-peers`），改绑后无需重新配对。传播窗口内（一个同步往返）两台机器
-可能短暂同时轮询平台——数秒级、可自愈的重叠，对单用户工具可接受。
+渠道的平台身份（被轮询的 bot、webhook 端点）只容许一个消费者。Coffer 每台机器
+只有一个仓库，且从不复制一个正在运行的仓库
+（[ADR-016](../../docs/decisions/ADR-016-vault-export-import.zh.md)），因此没有
+任何需要仲裁的东西：**启用的渠道就在本机运行它的适配器**——即持有它的守护进程
+所在的那台机器——被禁用的渠道则在任何地方都不运行。不存在机器绑定，没有亲和性
+字段，也没有 per-machine override。
 
-**`runs_on` → `scope` 迁移**（2026-07-10 修订 —— machine × agent scope，
-[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.zh.md)）。上文
-描述的单机 `runs_on: <machine_id>` 字段被框架的 machine 轴**取代**：一次数据迁
-移会在升级时把每个既有渠道的 `runs_on: <machine_id>` 转换为
-`scope: {"<machine_id>": "*"}`，把 `runs_on: null` 转换为 `scope: {}`。
-`runs_on` **不会**从 schema 或 API 中移除——尚未升级的机器传来的旧 payload 与
-同步文档仍须能通过校验——但它会变得**惰性**：渠道 runtime 只读取 `scope`，
-`runs_on` 被就地文档化为已弃用（一个冻结在迁移前的值；任何一次改绑之后就会过
-期；不会被读取参考）。
+`channel` kind 不声明 `scope`
+（[ADR-045](../../docs/decisions/ADR-045-per-agent-resource-scope.zh.md)）：非
+null 值在校验阶段被拒绝（422）。是否启动适配器，唯一的控制手段就是启用与否。
+
+如果用户把一个 bundle 带到第二台机器（spec 010），该渠道在那里也会被注册——配对
+状态随 bundle 的 `channel-peers` 状态区一同带过去，因此无需重新配对——而在两边
+同时启用，就会让两个适配器指向同一个 bot 身份。那是用户的一次刻意操作，而不是
+Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制能自行造成这种局面。
 
 ## Acceptance Scenarios
-
-### Scenario: a channel runs on exactly one machine
-
-- **Given** 分别绑定到本机、另一台机器、未绑定的三个渠道
-- **When** runtime 执行 reconcile
-- **Then** 只有绑定到本机的渠道启动适配器
-- **And** 把渠道改绑离开本机后，下一次 reconcile 将其停止
 
 ### Scenario: register a telegram channel
 

@@ -1,9 +1,9 @@
-"""Tree mirroring for the sync workspace (spec 010).
+"""Tree mirroring for export bundles (spec 010).
 
 ``_mirror_tree`` converges a destination tree on a source tree diff-aware in
-both directions: workspace→live (the live trees are watched by auto-sync and
-hold machine-local derived files a rewrite would destroy) and live→workspace
-(where ``delete_missing=False`` protects not-yet-imported remote files).
+both directions: live→bundle on export (deleting what the vault no longer
+holds, so a re-export is a faithful snapshot) and bundle→live on import with
+``delete_missing=False``, because import never deletes.
 """
 
 from __future__ import annotations
@@ -38,11 +38,10 @@ def _mirror_tree(
     """Converge ``dst`` on ``src`` by copying only changed files and deleting
     only files gone from ``src`` — never a blanket rmtree.
 
-    Used in both directions: workspace→live (the live trees are watched by the
-    auto-sync watcher and hold machine-local derived files a rewrite would
-    delete) and live→workspace (where ``delete_missing=False`` keeps
-    remote-authored files this machine has not imported yet — exporting their
-    absence would delete them from every other machine).
+    Used in both directions: live→bundle on export (``delete_missing=True``,
+    so a bundle rewritten in place stops carrying what the vault deleted) and
+    bundle→live on import (``delete_missing=False``: a bundle is a snapshot of
+    one machine, never an assertion about what should exist here).
     """
     dst.mkdir(parents=True, exist_ok=True)
     src_files = _tree_files(src, exclude)

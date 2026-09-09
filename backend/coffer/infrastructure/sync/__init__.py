@@ -1,1 +1,2 @@
-"""Sync infrastructure (spec 010): persistence, git transport, workspace IO."""
+"""Export/import infrastructure (spec 010): bundle directory IO, tree
+mirroring, path resolution, and ciphertext-only credential access."""

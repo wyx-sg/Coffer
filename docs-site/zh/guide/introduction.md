@@ -22,10 +22,10 @@ Coffer 转而成为唯一事实来源。在 Coffer 里**只配置一次** ——
 | [对话](/zh/guide/chat)                  | 与 Coffer 内置 agent 对话,或驱动 Claude Code / Codex。                           |
 | [渠道](/zh/guide/channels)              | 从 Telegram 或 SeaTalk 触达你的 agent。                                          |
 
-外加两项横切能力:[加密凭证库](/zh/guide/credentials)和[多机同步](/zh/guide/sync)。
+外加两项横切能力:[加密凭证库](/zh/guide/credentials)和[保险库导出与导入](/zh/guide/sync)。
 
 ### 本地优先的设计
 
-所有用户状态都驻留在你的机器上。云服务仅作为 LLM 与工具的提供方 —— 它们绝不充当任何仓库状态的事实记录方。HTTP API 仅绑定到 `127.0.0.1`。你的配置、凭证和审计历史只属于你自己;密钥在静态时加密,仅在你选择同步时以密文形式传输。
+所有用户状态都驻留在你的机器上。云服务仅作为 LLM 与工具的提供方 —— 它们绝不充当任何仓库状态的事实记录方。HTTP API 仅绑定到 `127.0.0.1`。你的配置、凭证和审计历史只属于你自己;密钥在静态时加密,仅在你明确选择导出时以密文形式随行。
 
 [开始使用 →](/zh/guide/getting-started)

@@ -2,8 +2,18 @@
 
 > 中文版: [research.zh.md](./research.zh.md)
 
+> **Historical record.** This file captures the research that led to
+> **continuous multi-machine sync over a user-owned git repository**. That
+> approach has since been withdrawn: spec 010 now ships a one-shot vault
+> **export/import** to a directory, with no remote, no workspace, and no
+> background worker ([ADR-016](../../docs/decisions/ADR-016-vault-export-import.md),
+> constitution 0.4.0). The notes below are kept as the record of the options
+> that were weighed — they do not describe the current shape. Path portability,
+> ciphertext-only credentials with an out-of-band key, and the determinism
+> requirement are the parts that survived.
+
 Decision rationale lives in
-[ADR-016](../../docs/decisions/ADR-016-multi-machine-sync.md) and the
+[ADR-016](../../docs/decisions/ADR-016-vault-export-import.md) and the
 constitution 0.3.0 amendment. This file records the background and the options
 weighed.
 

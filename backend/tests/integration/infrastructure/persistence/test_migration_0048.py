@@ -24,6 +24,7 @@ import sqlite3
 from alembic import command
 
 from tests.integration.infrastructure.persistence.test_migrations_roundtrip import (
+    HEAD_REVISION,
     _alembic_config,
     _alembic_version,
 )
@@ -111,7 +112,7 @@ def test_0048_is_a_no_op_on_a_database_without_removed_rows(tmp_path, monkeypatc
 
     # A fresh install upgraded straight to head has no removed-type rows at all.
     command.upgrade(cfg, "head")
-    assert _alembic_version(db_path) == "0048"
+    assert _alembic_version(db_path) == HEAD_REVISION
     assert _agent_names(db_path) == set()
 
     # Re-running the whole chain (down to before 0048 and back up) stays a no-op
@@ -121,5 +122,5 @@ def test_0048_is_a_no_op_on_a_database_without_removed_rows(tmp_path, monkeypatc
         conn.commit()
     command.downgrade(cfg, "0047")
     command.upgrade(cfg, "head")
-    assert _alembic_version(db_path) == "0048"
+    assert _alembic_version(db_path) == HEAD_REVISION
     assert _agent_names(db_path) == {"a-claude"}

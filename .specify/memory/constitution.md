@@ -13,31 +13,15 @@
 
 ### I. Local-First (NON-NEGOTIABLE)
 
-All user data lives on the user's machines — one vault, every machine
-holding the full state. Cloud services are LLM and tool providers only —
-they never become the system of record for any vault state. The HTTP API
-binds to `127.0.0.1`. Replicating user-state to a vendor-controlled cloud
-requires a constitutional amendment.
+All user data lives on the user's machine. Cloud services are LLM and tool
+providers only — they never become the system of record for any vault state.
+The HTTP API binds to `127.0.0.1`. Replicating user-state to a
+vendor-controlled cloud requires a constitutional amendment.
 
-**Exception — user-controlled sync medium.** Synchronising vault state to a
-**user-owned, user-controlled medium** (e.g. the user's own git repository) is
-permitted, provided **all** of the following hold:
-
-1. **No new system of record.** Every participating machine holds the full
-   vault state; the medium serves only as transport and history. It never
-   becomes the sole or authoritative system of record — wipe the medium and
-   each machine still has its complete vault.
-2. **Ciphertext-only secrets.** Any credential material that leaves a machine
-   does so only as Fernet ciphertext. The encryption master key **never** leaves
-   the machine through the sync medium; it is bootstrapped onto each machine
-   out-of-band.
-3. **User opt-in and ownership.** Sync is off by default and points at a remote
-   the user supplies and controls. Coffer ships no hosted/vendor sync endpoint;
-   doing so would still require a further amendment.
-
-This exception does not weaken the prohibition on vendor-controlled clouds as a
-system of record; it authorises only user-owned transport that satisfies the
-three conditions above.
+Coffer can **export** the vault to a directory the user chooses and **import**
+one back, so a user can move their vault between their own machines. That is
+ordinary local file output under the user's control: it creates no second
+system of record, and nothing is replicated to a vendor-controlled service.
 
 ### II. Spec-as-Truth (Spec-Driven Development)
 
@@ -75,7 +59,10 @@ plan.
   beside the DB by default, the OS keychain via `keyring` when opted in.
   `keyring` import stays confined to that module. All other code uses
   credential refs. No secret plaintext reaches the database, logs, audit, or
-  any structured event.
+  any structured event. Credential material leaves the machine only as Fernet
+  ciphertext and only when the user asks for it explicitly; the master key is
+  never written into an export and is bootstrapped onto another machine
+  out-of-band.
 - **Network defaults.** Loopback-only. Outbound HTTP, when introduced, goes
   through a SSRF-guarded client. Public-reachable surfaces, when introduced,
   run as a separate process limited to signed callback paths.
@@ -108,7 +95,26 @@ Architectural Constraints, or to a Quality Gate requires:
 constitutional principles or constraints it affects, and explain why the
 change respects (or formally amends) them.
 
-**Version**: 0.3.1
+**Version**: 0.4.0
+
+> **0.4.0 amendment (spec 010-sync scope reduction).** Removed the
+> *user-controlled sync medium* exception from Principle I and reverted the
+> 0.3.1 wording of its opening line. Motivation: continuous multi-machine sync
+> over a git remote carried the machinery its guarantees required — machine
+> identity, tombstones with TTL, conflict arbitration, quarantine-and-retry, a
+> git workspace and a background worker — and that cost was not repaid by the
+> way the vault is actually moved between machines. Current behaviour: vault
+> state syncs continuously to a user-owned git repository under the three
+> conditions of the 0.3.0 exception. Proposed behaviour: Coffer exports the
+> vault to a user-chosen directory and imports one back; no transport medium,
+> no remote, no background replication, and therefore no exception to
+> Principle I to maintain. Downstream impact: spec 010 narrows to export and
+> import; the machine registry, the fleet view and the framework's machine
+> scope axis go with it; the ciphertext-only rule the exception carried moves
+> into the Credentials constraint, where it applies to every export rather
+> than only to sync. Alternatives considered: keeping continuous sync behind a
+> feature flag — rejected, because an unused code path still has to be
+> maintained and tested. Decision recorded by the project owner.
 
 > **0.3.0 amendment (spec 010-sync).** Added the *user-controlled sync medium*
 > exception to Principle I, authorising multi-machine sync over a user-owned
@@ -125,7 +131,7 @@ change respects (or formally amends) them.
 
 > **0.3.1 amendment (editorial).** Reworded Principle I's opening line to
 > match the multi-machine reality the 0.3.0 exception already authorised.
-> Motivation: ADR-045 (machine × agent resource scope) extends multi-machine
+> Motivation: ADR-045 (then machine × agent resource scope) extends multi-machine
 > sync further into the framework, underscoring that "local" has matured from
 > a single machine into the user's fleet — one vault, every machine holding
 > the full state — and the principle's opening sentence had not caught up.

@@ -32,7 +32,7 @@ The surfaces are described below using a consistent template: **What it is · Wh
 | `/channels`                       | Channel bindings (Telegram, SeaTalk), pairing.                    |
 | `/chat`, `/models`                | Chat conversations/turns and the model catalog.                   |
 | `/credentials`, `/settings`       | Encrypted credential store; settings incl. `/settings/credentials` (master-key storage) and `/embedding` config. |
-| `/sync`                           | Multi-machine sync runs and config.                               |
+| `/sync`                           | Vault export / import runs and the master-key transfer.           |
 | `/fs`                             | Filesystem browse helper for config pickers.                      |
 | `/audit`, `/retention`, `/daemon` | Audit log, retention policies, daemon token/backup operations.    |
 

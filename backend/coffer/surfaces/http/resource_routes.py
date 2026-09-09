@@ -142,8 +142,7 @@ async def get_resource_scope(
     svc: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> ResourceScopeOut:
     r = await svc.get(ResourceRef(kind, name))
-    axes = svc.scope_axes(r.kind)
-    return ResourceScopeOut(scope=r.scope, axes=list(axes))
+    return ResourceScopeOut(scope=r.scope, supports_scope=svc.supports_scope(r.kind))
 
 
 @router.put("/{kind}/{name}/scope", response_model=ResourceOut)

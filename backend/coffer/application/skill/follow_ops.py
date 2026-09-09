@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import CofferError
 from coffer.domain.resource import ResourceRef
-from coffer.domain.scope import agent_in_scope, machine_in_scope
+from coffer.domain.scope import agent_in_scope
 
 if TYPE_CHECKING:
     from coffer.application.skill.service import SkillService
@@ -51,7 +51,7 @@ async def apply_follow_for_agent(
     after registration (new agents default to follow-all), and by the sync
     post-import hook (spec 010 import reconciliation). While following, the
     effective set is the master store minus the exclusion list AND minus any
-    skill whose scope excludes this (machine, agent) pair: wanted-but-unbound
+    skill whose scope excludes this agent: wanted-but-unbound
     skills are delivered, bound-but-excluded skills are removed. NOT
     following → no delivery (disabling the flag preserves the currently
     delivered set as explicit per-skill bindings) — but see below, reclaim
@@ -60,10 +60,8 @@ async def apply_follow_for_agent(
 
     Scope is a hard grant that overrides manual bindings: a previously
     delivered copy is ALWAYS reclaimed the instant its skill falls out of
-    scope, regardless of the follow flag. If the AGENT's own resource scope
-    excludes this machine, the whole run is a no-op — its config dir may not
-    even exist here. No machine-id provider wired → no scope filtering at all
-    (legacy contract, same as ChannelRuntime / the MCP gateway).
+    scope, regardless of the follow flag. The `agent` kind carries no scope
+    of its own (ADR-045) — only the skill's scope gates delivery.
 
     Returns the per-skill delivery failures as human-readable strings so the
     sync hook can surface them in the run's errors; front-door callers ignore
@@ -73,12 +71,6 @@ async def apply_follow_for_agent(
         agent = await service._rs.get(ResourceRef("agent", agent_name))
     except CofferError:
         return []
-    local = await service._local_machine_id()
-    if local is not None and not machine_in_scope(agent.scope, local):
-        # The agent itself isn't in scope on this machine — its config dir
-        # may not even exist here. Touch nothing: no delivery, no reclaim.
-        return []
-
     follow, exclusions = service._resolve_agent_skill_policy(agent)
     skills = await service.list_skills()
     names_by_id = {s.id: s.name for s in skills}
@@ -92,14 +84,7 @@ async def apply_follow_for_agent(
     excluded_reclaimed: set[str] = set()
     if follow:
         excluded = set(exclusions)
-        if local is not None:
-            wanted = {
-                s.name
-                for s in skills
-                if machine_in_scope(s.scope, local) and agent_in_scope(s.scope, local, agent_name)
-            } - excluded
-        else:
-            wanted = {s.name for s in skills} - excluded
+        wanted = {s.name for s in skills if agent_in_scope(s.scope, agent_name)} - excluded
         for name in sorted(wanted - bound):
             try:
                 await service.enable_for(
@@ -129,13 +114,8 @@ async def apply_follow_for_agent(
 
     # ALWAYS reclaim a bound skill the instant it falls out of scope — scope is
     # a hard grant overriding manual bindings, independent of the follow flag.
-    if local is not None:
-        out_of_scope = {
-            s.name
-            for s in skills
-            if not (machine_in_scope(s.scope, local) and agent_in_scope(s.scope, local, agent_name))
-        }
-        for name in sorted((bound & out_of_scope) - excluded_reclaimed):
-            await service.disable_for(skill_name=name, agent_name=agent_name, actor=actor)
+    out_of_scope = {s.name for s in skills if not agent_in_scope(s.scope, agent_name)}
+    for name in sorted((bound & out_of_scope) - excluded_reclaimed):
+        await service.disable_for(skill_name=name, agent_name=agent_name, actor=actor)
 
     return failures

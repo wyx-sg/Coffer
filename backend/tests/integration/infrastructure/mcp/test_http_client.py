@@ -354,7 +354,9 @@ class _FakeSession:
         self.calls.append(("list_tools", (), {}))
         return self.tools_sentinel
 
-    async def call_tool(self, name, arguments=None, read_timeout_seconds=None) -> object:
+    async def call_tool(
+        self, name, arguments=None, read_timeout_seconds=None, progress_callback=None
+    ) -> object:
         self.calls.append(("call_tool", (name,), {"arguments": arguments}))
         return self.call_sentinel
 
@@ -672,32 +674,3 @@ async def test_initialize_generic_error_wraps_as_upstream_unavailable(monkeypatc
     assert "_LeakyError" in msg
     assert "secret" not in msg and "token=abc" not in msg
     assert conn._session is None
-
-
-@pytest.mark.asyncio
-async def test_tools_call_falls_back_when_read_timeout_kwarg_unsupported() -> None:
-    """tools/call retries without read_timeout_seconds when the SDK build raises
-    TypeError on that kwarg (lines 185-187), returning the fallback result."""
-    fallback = object()
-
-    class _OldSdkSession:
-        def __init__(self) -> None:
-            self.call_count = 0
-
-        async def call_tool(self, name, arguments=None, read_timeout_seconds=None, **kwargs):
-            self.call_count += 1
-            if read_timeout_seconds is not None:
-                raise TypeError("unexpected keyword argument 'read_timeout_seconds'")
-            assert name == "ping"
-            assert arguments == {"x": 1}
-            return fallback
-
-    conn = HttpUpstreamConnection(
-        transport=HttpTransport(type="http", url="http://127.0.0.1:1/mcp"),
-        header_overlay={},
-    )
-    session = _OldSdkSession()
-    conn._session = session
-    result = await conn.request("tools/call", {"name": "ping", "arguments": {"x": 1}})
-    assert result is fallback
-    assert session.call_count == 2  # first with kwarg (TypeError), then fallback

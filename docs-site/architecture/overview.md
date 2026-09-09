@@ -21,12 +21,11 @@ flowchart TD
         SHIM["coffer-mcp-shim\n(per-client session)"]
         WEBUI["Web UI\n(browser)"]
         DESKTOP["Desktop app\n(Tauri 2 / Rust + WebView)"]
-        DAEMON["coffer-daemon\nFastAPI · auto-port\n/api/v1  /mcp\n6 kinds + chat/channels/sync"]
+        DAEMON["coffer-daemon\nFastAPI · auto-port\n/api/v1  /mcp\n6 kinds + chat/channels/export"]
         CB["coffer callback listener\n(daemon-spawned child)\nPOST /seatalk/{channel}"]
         DB[("SQLite\n~/.coffer/coffer.db")]
         MK[("master.key 0600\nor OS Keychain (opt-in)")]
         FILES[("Files-as-truth\n~/.coffer/{knowledge,memory,skills}")]
-        SYNC[("Sync workspace\n~/.coffer/sync (git)")]
     end
 
     subgraph upstream["Upstream MCP Servers"]
@@ -45,7 +44,7 @@ flowchart TD
     DAEMON --- DB
     DAEMON --- MK
     DAEMON --- FILES
-    DAEMON --- SYNC
+    DAEMON -->|"export / import\n(a directory you pick)"| BUNDLE[("Export bundle")]
     DAEMON -->|"spawns (SeaTalk channel enabled)"| CB
     CB -->|"forwards signed events\nloopback"| DAEMON
     DAEMON -->|"stdio subprocess\nper session"| S1
@@ -57,9 +56,9 @@ flowchart TD
 
 | Component                      | Type                                             | Role                                                                                                                                                                                                                                                                                                                  |
 | ------------------------------ | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `coffer-daemon`                | Long-lived process                               | FastAPI service on `127.0.0.1:<auto-port>`. Owns all state across the six resource kinds and the cross-cutting features (chat, channels, sync). Single SQLite writer.                                                                                                                                                 |
+| `coffer-daemon`                | Long-lived process                               | FastAPI service on `127.0.0.1:<auto-port>`. Owns all state across the six resource kinds and the cross-cutting features (chat, channels, export/import). Single SQLite writer.                                                                                                                                                 |
 | Resource kinds                 | Daemon-hosted abstraction                        | Six kinds over one kind-agnostic Resource framework: `mcp_server` (gateway upstreams), `agent` (registered coding agents), `skill` (master skill bundles delivered into agents), `knowledge_base` and `memory` (two faces of the files-as-truth + SQLite-retrieval substrate), `channel` (Telegram/SeaTalk bindings). |
-| Chat / channels / sync         | Cross-cutting daemon features                    | In-process LangGraph chat agent plus Claude Code/Codex CLI agents (spec 008); messaging channels relaying chat from IM apps (ADR-014); opt-in multi-machine sync over a user-owned git repo (ADR-016). Not kinds — they span the kinds.                                                                               |
+| Chat / channels / export-import | Cross-cutting daemon features                   | In-process LangGraph chat agent plus Claude Code/Codex CLI agents (spec 008); messaging channels relaying chat from IM apps (ADR-014); one-shot vault export to a directory and import of one back (ADR-016). Not kinds — they span the kinds.                                                                               |
 | `coffer` callback listener     | Daemon-spawned child process                     | Serves only signed channel webhooks (`POST /seatalk/{channel}`) on a loopback port behind a user-run tunnel; verifies the SeaTalk signature and forwards events to the daemon. Runs while a SeaTalk channel is enabled (ADR-014).                                                                                     |
 | `coffer-mcp-shim`              | Short-lived process (one per MCP client session) | Bridges MCP client stdio ↔ daemon HTTP/SSE. Detects a running daemon or spawns one.                                                                                                                                                                                                                                   |
 | `coffer` CLI                   | Short-lived child process                        | User-facing management commands. Calls the daemon over loopback HTTP.                                                                                                                                                                                                                                                 |
@@ -87,7 +86,6 @@ Every persistent artifact lives in one directory:
 ├── knowledge/           # knowledge_base files-as-truth (docs/ + raw/ per KB)
 ├── memory/              # memory files-as-truth (global/ + projects/<ulid>/)
 ├── skills/              # canonical master skill store
-├── sync/                # git working tree for multi-machine sync (opt-in)
 ├── backups/             # default destination for vault backups
 ├── bin/                 # co-located coffer binaries (daemon/shim/CLI)
 ├── logs/

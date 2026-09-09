@@ -15,6 +15,7 @@ from coffer.domain.embedding_config import SINGLETON_ID, GlobalEmbeddingConfig
 from coffer.domain.errors import ResourceAlreadyExists, ResourceNotFound
 from coffer.domain.internal_engine_config import GlobalInternalEngineConfig
 from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.scope import Scope
 from coffer.infrastructure.persistence.models import (
     AuditLogModel,
     EmbeddingConfigModel,
@@ -131,7 +132,7 @@ class SqlAlchemyResourceRepo:
     async def update_scope(
         self,
         ref: ResourceRef,
-        scope: dict[str, Any] | None,
+        scope: Scope | None,
     ) -> Resource | None:
         async with self._sm() as session:
             stmt = select(ResourceModel).where(

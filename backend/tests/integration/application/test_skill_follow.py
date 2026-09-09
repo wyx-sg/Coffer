@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import pathlib
 import textwrap
-from collections.abc import Awaitable, Callable
 
 import pytest
 
@@ -23,6 +22,7 @@ from coffer.application.skill.service import SkillService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
+from coffer.domain.errors import ScopeInvalidError
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.workspace_errors import SkillOutOfScope
 from coffer.infrastructure.persistence.base import Base
@@ -57,11 +57,7 @@ def _write_skill_folder(folder: pathlib.Path, *, name: str) -> pathlib.Path:
     return folder
 
 
-async def _setup(
-    tmp_path: pathlib.Path,
-    *,
-    machine_id: Callable[[], Awaitable[str | None]] | None = None,
-):
+async def _setup(tmp_path: pathlib.Path):
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -87,7 +83,6 @@ async def _setup(
         sync_engine=SyncEngine(),
         agent_skill_dir_resolver=_agent_skill_dir,
         agent_skill_policy_resolver=_agent_skill_policy,
-        machine_id=machine_id,
     )
 
     async def _on_skill_policy_changed(agent_name: str) -> None:
@@ -322,18 +317,13 @@ async def test_config_dir_move_preserves_follow_policy(tmp_path):
     await engine.dispose()
 
 
-async def _setup_with_scope_reconcile(
-    tmp_path: pathlib.Path,
-    *,
-    machine_id: Callable[[], Awaitable[str | None]] | None = None,
-):
-    """Same wiring as ``_setup``, plus the ``on_scope_changed`` kind hooks the
-    composition root wires in ``agent_skill_wiring.py`` (Task 11 Fix 2): a
-    skill's scope edit re-reconciles every registered agent's follow delivery;
-    an agent's scope edit re-reconciles that agent's own follow delivery.
-    Kept separate from ``_setup`` so the many existing tests above (and the
-    Fix 1 relink test) keep exercising a scope edit that does NOT itself
-    trigger reconciliation."""
+async def _setup_with_scope_reconcile(tmp_path: pathlib.Path):
+    """Same wiring as ``_setup``, plus the skill kind's ``on_scope_changed``
+    hook the composition root wires in ``agent_skill_wiring.py``: a skill's
+    scope edit re-reconciles every registered agent's follow delivery. Kept
+    separate from ``_setup`` so the many existing tests above (and the relink
+    test) keep exercising a scope edit that does NOT itself trigger
+    reconciliation."""
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -359,14 +349,10 @@ async def _setup_with_scope_reconcile(
         sync_engine=SyncEngine(),
         agent_skill_dir_resolver=_agent_skill_dir,
         agent_skill_policy_resolver=_agent_skill_policy,
-        machine_id=machine_id,
     )
 
     async def _on_skill_policy_changed(agent_name: str) -> None:
         await skill_svc.apply_follow_for_agent(agent_name, actor="system")
-
-    async def _agent_on_scope_changed(ref: ResourceRef) -> None:
-        await _on_skill_policy_changed(ref.name)
 
     async def _skill_on_scope_changed(ref: ResourceRef) -> None:
         for row in await rs.list(kind="agent"):
@@ -382,38 +368,58 @@ async def _setup_with_scope_reconcile(
     async def _agent_on_delete(ref):
         await skill_svc.cleanup_bindings_for_agent(ref)
 
-    placeholder_kinds["agent"] = make_agent_kind(
-        on_delete=_agent_on_delete, on_scope_changed=_agent_on_scope_changed
-    )
+    placeholder_kinds["agent"] = make_agent_kind(on_delete=_agent_on_delete)
     placeholder_kinds["skill"] = make_skill_kind(
         skill_svc.cleanup_bindings_for_skill, on_scope_changed=_skill_on_scope_changed
     )
     return skill_svc, agent_svc, audit, engine
 
 
-# ----- ADR-045 scope intersection + reclaim (Task 11) -----
-
-
-async def _local_machine_id() -> str:
-    return "this-machine"
+# ----- ADR-045 scope intersection + reclaim -----
 
 
 @pytest.mark.asyncio
 async def test_scoped_out_skill_not_delivered_under_follow(tmp_path):
-    """A skill scoped to a different machine is excluded from `wanted` and
-    never delivered, even though the agent is following (delivery = scope ∩
-    follow policy)."""
-    skill_svc, agent_svc, _audit, engine = await _setup(tmp_path, machine_id=_local_machine_id)
+    """A skill scoped to another agent is excluded from `wanted` and never
+    delivered, even though this agent is following (delivery = scope ∩ follow
+    policy)."""
+    skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
     # Import before any agent exists — nothing to auto-bind yet.
     await _import_skill(skill_svc, tmp_path, "elsewhere")
-    await skill_svc._rs.update_scope(
-        ResourceRef("skill", "elsewhere"), {"other-machine": "*"}, actor="test"
-    )
+    await skill_svc._rs.update_scope(ResourceRef("skill", "elsewhere"), ["other"], actor="test")
 
     # Registration triggers apply_follow_for_agent (follow_all_skills=True default).
     agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
     assert not (skill_dir / "elsewhere").exists()
     assert await _enabled_bound_names(skill_svc, agent) == set()
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_dormant_skill_not_delivered_to_any_agent(tmp_path):
+    """``scope == []`` is dormant — no agent is in scope, so nothing is
+    delivered even under follow-all."""
+    skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
+    await _import_skill(skill_svc, tmp_path, "dormant")
+    await skill_svc._rs.update_scope(ResourceRef("skill", "dormant"), [], actor="test")
+
+    agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
+    assert not (skill_dir / "dormant").exists()
+    assert await _enabled_bound_names(skill_svc, agent) == set()
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_skill_scoped_to_this_agent_is_delivered(tmp_path):
+    """The converse of the exclusion tests: a skill naming this agent is
+    delivered under follow — the gate must not be overly restrictive."""
+    skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
+    await _import_skill(skill_svc, tmp_path, "mine")
+    await skill_svc._rs.update_scope(ResourceRef("skill", "mine"), ["a1"], actor="test")
+
+    agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
+    assert (skill_dir / "mine").is_symlink()
+    assert await _enabled_bound_names(skill_svc, agent) == {"mine"}
     await engine.dispose()
 
 
@@ -428,15 +434,13 @@ async def test_previously_delivered_copy_reclaimed_once_scope_excludes_it(tmp_pa
     """Scope is a hard grant: once a bound skill falls out of scope, the next
     follow run reclaims the delivered copy — even though nothing about the
     follow policy itself changed."""
-    skill_svc, agent_svc, _audit, engine = await _setup(tmp_path, machine_id=_local_machine_id)
+    skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
     agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
     await _import_skill(skill_svc, tmp_path, "shared")
     assert (skill_dir / "shared").is_symlink()
     assert await _enabled_bound_names(skill_svc, agent) == {"shared"}
 
-    await skill_svc._rs.update_scope(
-        ResourceRef("skill", "shared"), {"other-machine": "*"}, actor="test"
-    )
+    await skill_svc._rs.update_scope(ResourceRef("skill", "shared"), ["other"], actor="test")
     await skill_svc.apply_follow_for_agent("a1", actor="system")
 
     assert not (skill_dir / "shared").exists()
@@ -447,12 +451,10 @@ async def test_previously_delivered_copy_reclaimed_once_scope_excludes_it(tmp_pa
 @pytest.mark.asyncio
 async def test_manual_enable_refused_out_of_scope(tmp_path):
     """A manual `enable_for` call must not be able to override an
-    out-of-scope (machine, agent) pair — scope is a hard grant."""
-    skill_svc, agent_svc, _audit, engine = await _setup(tmp_path, machine_id=_local_machine_id)
+    out-of-scope agent — scope is a hard grant."""
+    skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
     await _import_skill(skill_svc, tmp_path, "denied")
-    await skill_svc._rs.update_scope(
-        ResourceRef("skill", "denied"), {"other-machine": "*"}, actor="test"
-    )
+    await skill_svc._rs.update_scope(ResourceRef("skill", "denied"), ["other"], actor="test")
     await _register_agent(agent_svc, tmp_path, name="a1")
 
     with pytest.raises(SkillOutOfScope):
@@ -461,52 +463,14 @@ async def test_manual_enable_refused_out_of_scope(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_agent_scoped_away_from_local_machine_is_a_noop(tmp_path):
-    """When the agent's own resource scope excludes this machine, a follow
-    run must touch nothing — neither deliver new skills nor reclaim
-    out-of-scope bound ones (its config dir may not even exist here)."""
-    skill_svc, agent_svc, _audit, engine = await _setup(tmp_path, machine_id=_local_machine_id)
-    agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
-    await _import_skill(skill_svc, tmp_path, "bound-skill")
-    assert (skill_dir / "bound-skill").is_symlink()
-
-    # Stop following so the next import isn't auto-delivered.
-    await agent_svc.update_skill_policy(name="a1", follow_all_skills=False, actor="cli")
-    await _import_skill(skill_svc, tmp_path, "new-skill")
-    assert not (skill_dir / "new-skill").exists()
-
-    # bound-skill would normally be reclaimed once it falls out of scope...
-    await skill_svc._rs.update_scope(
-        ResourceRef("skill", "bound-skill"), {"other-machine": "*"}, actor="test"
-    )
-    # ...but the agent itself is scoped away from this machine first.
-    await skill_svc._rs.update_scope(
-        ResourceRef("agent", "a1"), {"other-machine": "*"}, actor="test"
-    )
-
-    # Flipping follow back on would normally deliver new-skill and reclaim
-    # bound-skill — but the agent-scope guard makes the whole run a no-op.
-    await agent_svc.update_skill_policy(name="a1", follow_all_skills=True, actor="cli")
-
-    assert (skill_dir / "bound-skill").is_symlink()
-    assert not (skill_dir / "new-skill").exists()
-    assert await _enabled_bound_names(skill_svc, agent) == {"bound-skill"}
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_no_machine_id_provider_is_legacy_no_scope_filtering(tmp_path):
-    """No provider wired → SkillService never resolves a local machine id, so
-    every scope check in apply_follow_for_agent / enable_for is skipped
-    entirely (legacy single-machine contract, mirrors ChannelRuntime)."""
+async def test_unscoped_skill_is_never_filtered(tmp_path):
+    """``scope is None`` is the pre-scope default: every agent is in scope,
+    for both follow delivery and manual binds."""
     skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
     await _import_skill(skill_svc, tmp_path, "anywhere")
-    await skill_svc._rs.update_scope(
-        ResourceRef("skill", "anywhere"), {"some-other-machine": "*"}, actor="test"
-    )
+    assert (await skill_svc._rs.get(ResourceRef("skill", "anywhere"))).scope is None
 
     agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
-    # Delivered despite a scope that would exclude any real machine id.
     assert (skill_dir / "anywhere").is_symlink()
     assert await _enabled_bound_names(skill_svc, agent) == {"anywhere"}
 
@@ -519,23 +483,21 @@ async def test_no_machine_id_provider_is_legacy_no_scope_filtering(tmp_path):
 
 @pytest.mark.asyncio
 async def test_config_dir_change_does_not_resurrect_out_of_scope_link(tmp_path):
-    """Regression (Task 11 Fix 1): relink_agent_skills must not recreate a
-    binding's link at the new config_dir once its skill has fallen out of
-    (machine, agent) scope. Before the fix, a config_dir change blindly
-    re-created every enabled binding's link — resurrecting a link the scope
-    hard grant had already excluded."""
-    skill_svc, agent_svc, _audit, engine = await _setup(tmp_path, machine_id=_local_machine_id)
+    """Regression: relink_agent_skills must not recreate a binding's link at
+    the new config_dir once its skill has fallen out of this agent's scope.
+    Before the fix, a config_dir change blindly re-created every enabled
+    binding's link — resurrecting a link the scope hard grant had already
+    excluded."""
+    skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
     _agent, old_skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
     await _import_skill(skill_svc, tmp_path, "shared")
     old_link = old_skill_dir / "shared"
     assert old_link.is_symlink()
 
-    # Scope the skill away from this machine WITHOUT running a follow
+    # Scope the skill away from this agent WITHOUT running a follow
     # reconciliation — isolates the config-dir-change relink path from
-    # apply_follow_for_agent's own reclaim (Task 11 Fix 2 territory).
-    await skill_svc._rs.update_scope(
-        ResourceRef("skill", "shared"), {"other-machine": "*"}, actor="test"
-    )
+    # apply_follow_for_agent's own reclaim.
+    await skill_svc._rs.update_scope(ResourceRef("skill", "shared"), ["other"], actor="test")
 
     new_config_dir = tmp_path / "moved-cfg"
     new_config_dir.mkdir()
@@ -551,19 +513,15 @@ async def test_config_dir_change_does_not_resurrect_out_of_scope_link(tmp_path):
     await engine.dispose()
 
 
-# ----- ADR-045 scope-edit reconciliation hook (Task 11 Fix 2) -----
+# ----- ADR-045 scope-edit reconciliation hook -----
 
 
 @pytest.mark.asyncio
 async def test_update_scope_on_skill_immediately_reclaims_delivered_copy(tmp_path):
-    """Regression (Task 11 Fix 2): editing a skill's scope through
-    ResourceService.update_scope must immediately reclaim a previously
-    delivered copy — no unrelated trigger (another import, a policy flip)
-    required. Before the fix, update_scope had no kind-level side-effect on
-    the LOCAL path (only the sync post-import path re-ran reconciliation)."""
-    skill_svc, agent_svc, _audit, engine = await _setup_with_scope_reconcile(
-        tmp_path, machine_id=_local_machine_id
-    )
+    """Editing a skill's scope through ResourceService.update_scope must
+    immediately reclaim a previously delivered copy — no unrelated trigger
+    (another import, a policy flip) required."""
+    skill_svc, agent_svc, _audit, engine = await _setup_with_scope_reconcile(tmp_path)
     agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
     await _import_skill(skill_svc, tmp_path, "shared")
     assert (skill_dir / "shared").is_symlink()
@@ -571,9 +529,7 @@ async def test_update_scope_on_skill_immediately_reclaims_delivered_copy(tmp_pat
 
     # No manual apply_follow_for_agent call — the scope edit alone must
     # trigger the reclaim via the skill kind's on_scope_changed hook.
-    await skill_svc._rs.update_scope(
-        ResourceRef("skill", "shared"), {"other-machine": "*"}, actor="cli"
-    )
+    await skill_svc._rs.update_scope(ResourceRef("skill", "shared"), ["other"], actor="cli")
 
     assert not (skill_dir / "shared").exists()
     assert await _enabled_bound_names(skill_svc, agent) == set()
@@ -585,19 +541,15 @@ async def test_update_scope_on_skill_immediately_delivers_newly_in_scope(tmp_pat
     """The converse of reclaim: scoping a previously out-of-scope skill IN
     immediately delivers it to a following agent — again with no unrelated
     trigger."""
-    skill_svc, agent_svc, _audit, engine = await _setup_with_scope_reconcile(
-        tmp_path, machine_id=_local_machine_id
-    )
+    skill_svc, agent_svc, _audit, engine = await _setup_with_scope_reconcile(tmp_path)
     await _import_skill(skill_svc, tmp_path, "elsewhere")
-    await skill_svc._rs.update_scope(
-        ResourceRef("skill", "elsewhere"), {"other-machine": "*"}, actor="cli"
-    )
+    await skill_svc._rs.update_scope(ResourceRef("skill", "elsewhere"), ["other"], actor="cli")
     agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
     assert not (skill_dir / "elsewhere").exists()
 
-    # No manual apply_follow_for_agent call — scoping the skill back onto
-    # this machine alone must deliver it.
-    await skill_svc._rs.update_scope(ResourceRef("skill", "elsewhere"), None, actor="cli")
+    # No manual apply_follow_for_agent call — scoping the skill back in
+    # alone must deliver it.
+    await skill_svc._rs.update_scope(ResourceRef("skill", "elsewhere"), ["a1"], actor="cli")
 
     assert (skill_dir / "elsewhere").is_symlink()
     assert await _enabled_bound_names(skill_svc, agent) == {"elsewhere"}
@@ -605,46 +557,11 @@ async def test_update_scope_on_skill_immediately_delivers_newly_in_scope(tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_update_scope_on_agent_immediately_reruns_its_follow(tmp_path):
-    """Regression (Task 11 Fix 2): editing an AGENT's scope must immediately
-    re-run that agent's own follow reconciliation — scoping it away from this
-    machine defers reconciliation for that agent (mirrors
-    ``apply_follow_for_agent``'s documented no-op-while-scoped-out contract —
-    see ``test_agent_scoped_away_from_local_machine_is_a_noop`` above);
-    scoping it back in immediately re-applies whatever became stale while it
-    was out, with no unrelated trigger (no manual
-    ``apply_follow_for_agent``/``update_skill_policy`` call)."""
-    skill_svc, agent_svc, _audit, engine = await _setup_with_scope_reconcile(
-        tmp_path, machine_id=_local_machine_id
-    )
-    agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
-    await _import_skill(skill_svc, tmp_path, "bound-skill")
-    assert (skill_dir / "bound-skill").is_symlink()
-
-    # Scope the agent itself away from this machine — per contract this run
-    # is a no-op (its config dir may not even exist here), so the link stays.
-    await skill_svc._rs.update_scope(
-        ResourceRef("agent", "a1"), {"other-machine": "*"}, actor="cli"
-    )
-    assert (skill_dir / "bound-skill").is_symlink(), "no-op while agent is scoped out"
-
-    # While the agent-scope hook is a no-op, scope the SKILL away too. The
-    # skill kind's own on_scope_changed hook re-runs every agent's follow,
-    # but a1 is currently scoped out so it still no-ops — the stale link
-    # survives (same setup as test_agent_scoped_away_from_local_machine_is_a_noop,
-    # reached here via update_scope hooks instead of manual calls).
-    await skill_svc._rs.update_scope(
-        ResourceRef("skill", "bound-skill"), {"other-machine": "*"}, actor="cli"
-    )
-    assert (skill_dir / "bound-skill").is_symlink(), (
-        "still a no-op — the agent remains out of scope"
-    )
-
-    # Bring the agent back into scope. No manual apply_follow_for_agent call —
-    # the agent-scope edit alone must re-run its follow, discover the bound
-    # skill is now out of (its own) scope, and reclaim it immediately.
-    await skill_svc._rs.update_scope(ResourceRef("agent", "a1"), None, actor="cli")
-
-    assert not (skill_dir / "bound-skill").exists()
-    assert await _enabled_bound_names(skill_svc, agent) == set()
+async def test_update_scope_on_agent_kind_is_rejected(tmp_path):
+    """The `agent` kind declares no scope (ADR-045) — scope names the agents a
+    resource is active for, so an agent scoping itself is meaningless."""
+    skill_svc, agent_svc, _audit, engine = await _setup_with_scope_reconcile(tmp_path)
+    await _register_agent(agent_svc, tmp_path, name="a1")
+    with pytest.raises(ScopeInvalidError):
+        await skill_svc._rs.update_scope(ResourceRef("agent", "a1"), ["a1"], actor="cli")
     await engine.dispose()

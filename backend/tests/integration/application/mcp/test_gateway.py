@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,7 +16,7 @@ from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
-from coffer.domain.errors import ResourceNotFound, ToolDisabled, UpstreamUnavailable
+from coffer.domain.errors import ResourceNotFound, ToolDisabled
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind, ResourceRef
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
@@ -77,7 +76,6 @@ async def _setup(
     server_configs: dict[str, dict],  # type: ignore[type-arg]
     *,
     supervisor_retry_delays: tuple[float, ...] | None = None,
-    machine_id: Callable[[], Awaitable[str | None]] | None = None,
 ) -> tuple[
     MCPGatewaySession,
     ResourceService,
@@ -96,9 +94,9 @@ async def _setup(
                 name="mcp_server",
                 display_name="MCP Server",
                 config_schema=MCPServerConfig,
-                # ADR-045: machine x agent scope axes — Task 8 exercises the
-                # machine axis via ResourceService.update_scope.
-                scope_axes=("machine", "agent"),
+                # ADR-045: the gateway filters a scoped server's tools by the
+                # session's self-reported agent identity.
+                supports_scope=True,
             )
         },
         repo=SqlAlchemyResourceRepo(sm),
@@ -110,7 +108,6 @@ async def _setup(
     sup_kwargs: dict = {
         "resource_service": resource_svc,
         "credential_resolver": CredentialResolver(KeyringAdapter()),
-        "machine_id": machine_id,
     }
     if supervisor_retry_delays is not None:
         sup_kwargs["retry_delays"] = supervisor_retry_delays
@@ -130,113 +127,43 @@ async def _setup(
         discovery=discovery,
         preferences=prefs_repo,
         invocations=inv_repo,
-        machine_id=machine_id,
     )
     return session, resource_svc, prefs_repo, inv_repo, engine
 
 
-@pytest.mark.acceptance(
-    spec="010-sync", scenario="a scoped resource stays dormant outside its scope"
-)
 @pytest.mark.asyncio
-async def test_tools_list_excludes_server_scoped_to_other_machine_and_spawn_refuses(
+async def test_tools_list_excludes_dormant_server_and_unscoped_is_unaffected(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A server scoped to a machine other than this session's local machine
-    must vanish from tools/list, and the supervisor must refuse to spawn it
-    outright — while an unscoped server on the same session is unaffected
-    (ADR-045 machine axis, Task 8).
-
-    Also stands in for 010-sync's "a scoped resource stays dormant outside
-    its scope": the resource row here plays the part of a doc already
-    imported/synced onto this machine (010-sync's own integration suite
-    covers the actual sync round trip — e.g.
-    ``test_scope_rides_sync_and_converges`` — that a scope value travels and
-    converges unchanged). What only the gateway can witness is what happens
-    to that synced-but-out-of-scope doc at activation time: it stays present
-    and visible (never deleted, never hidden from the resource API) while
-    never spawned/listed here, and the very same doc activates normally the
-    moment the local machine identity matches its scope — exactly the
-    machine x agent axis this test's supervisor/session pair exercises.
+    """A dormant server (``scope == []`` — active for no agent) vanishes from
+    tools/list while an unscoped server on the same session is unaffected
+    (ADR-045). The row itself stays present and visible in the registry: out
+    of scope means not activated, never deleted and never hidden from the
+    resource API.
     """
     _with_in_memory(monkeypatch)
-
-    async def _local_machine_id() -> str:
-        return "this-machine"
-
     session, rsvc, _prefs, _inv, engine = await _setup(
         tmp_path,
         {
             "fs": _stdio_config(tools=["read_file"]),
             "gh": _stdio_config(tools=["create_issue"]),
         },
-        machine_id=_local_machine_id,
     )
     try:
-        await rsvc.update_scope(
-            ResourceRef("mcp_server", "gh"), {"other-machine": "*"}, actor="test"
+        await rsvc.update_scope(ResourceRef("mcp_server", "gh"), [], actor="test")
+        await session.handle_initialize(
+            {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent": "claude-code"}}
         )
         result = await session.handle_request("tools/list")
         names = {t["name"] for t in result["tools"] if not t["name"].startswith("coffer__")}
         assert names == {"fs__read_file"}
-        with pytest.raises(UpstreamUnavailable):
-            await session._supervisor.get_or_spawn("gh")
-        # Unscoped server is unaffected by the machine filter.
+        # Unscoped server is unaffected and still spawns.
         conn = await session._supervisor.get_or_spawn("fs")
         assert conn is not None
-
-        # The out-of-scope doc is present/visible on this machine (as it
-        # would be post-import) even though nothing here activates it.
+        # The dormant doc is present/visible even though nothing activates it.
         visible = await rsvc.get(ResourceRef("mcp_server", "gh"))
         assert visible is not None
-        assert visible.scope == {"other-machine": "*"}
-
-        # And the exact same doc activates normally read from the machine
-        # its scope actually names — a second supervisor over the SAME
-        # resource service, differing only in local machine identity.
-        async def _other_machine_id() -> str:
-            return "other-machine"
-
-        other_supervisor = SubprocessSupervisor(
-            resource_service=rsvc,
-            credential_resolver=CredentialResolver(KeyringAdapter()),
-            upstream_factory=build_upstream,
-            machine_id=_other_machine_id,
-        )
-        try:
-            other_conn = await other_supervisor.get_or_spawn("gh")
-            assert other_conn is not None
-        finally:
-            await other_supervisor.dispose()
-    finally:
-        await session.dispose()
-        await _safe_dispose(engine)
-
-
-@pytest.mark.asyncio
-async def test_no_machine_provider_wired_is_legacy_behavior(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """With no machine-id provider wired (legacy/single-machine daemons), scope
-    must not filter anything — mirrors ChannelRuntime's `local is None` guard,
-    for both the session-level list AND the supervisor-level spawn gate."""
-    _with_in_memory(monkeypatch)
-    session, rsvc, _prefs, _inv, engine = await _setup(
-        tmp_path,
-        {
-            "fs": _stdio_config(tools=["read_file"]),
-            "gh": _stdio_config(tools=["create_issue"]),
-        },
-    )
-    try:
-        await rsvc.update_scope(
-            ResourceRef("mcp_server", "gh"), {"other-machine": "*"}, actor="test"
-        )
-        result = await session.handle_request("tools/list")
-        names = {t["name"] for t in result["tools"] if not t["name"].startswith("coffer__")}
-        assert names == {"fs__read_file", "gh__create_issue"}
-        conn = await session._supervisor.get_or_spawn("gh")
-        assert conn is not None
+        assert visible.scope == []
     finally:
         await session.dispose()
         await _safe_dispose(engine)
@@ -301,17 +228,15 @@ async def _tools_list_names_for_agent(
     tmp_path: Path,
     subdir: str,
     configs: dict,  # type: ignore[type-arg]
-    scope: dict,  # type: ignore[type-arg]
+    scope: list[str] | None,
     agent: str | None,
-    *,
-    machine_id: Callable[[], Awaitable[str | None]],
 ) -> set[str]:
     """Spin up one isolated session (own tmp_path/engine), scope `gh`,
     initialize with (or without) an agent identity, and return the
     non-builtin tool names visible in tools/list."""
     path = tmp_path / subdir
     path.mkdir()
-    session, rsvc, _prefs, _inv, engine = await _setup(path, configs, machine_id=machine_id)
+    session, rsvc, _prefs, _inv, engine = await _setup(path, configs)
     try:
         await rsvc.update_scope(ResourceRef("mcp_server", "gh"), scope, actor="test")
         meta: dict = {"coffer/agent": agent} if agent is not None else {}
@@ -325,71 +250,60 @@ async def _tools_list_names_for_agent(
 
 @pytest.mark.acceptance(
     spec="001-mcp-gateway",
-    scenario="an out-of-scope server is invisible to a session and never spawned",
+    scenario="an out-of-scope server is invisible to a session",
 )
 @pytest.mark.asyncio
 async def test_tools_list_agent_scoped_server_visible_only_to_matching_agent(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """ADR-045 agent axis (Task 10, FR-020/021): a server scoped to
-    ``{"*": ["claude-code"]}`` is visible in tools/list to a session that
-    initialized with agent ``claude-code``; invisible to a session that
-    initialized with agent ``codex``; and invisible to an unidentified
-    session (no ``coffer/agent`` key in the initialize ``_meta``) — an
-    unidentified session matches only a ``"*"``-valued scope entry."""
+    """ADR-045 (FR-020/021): a server scoped to ``["claude-code"]`` is visible
+    in tools/list to a session that initialized with agent ``claude-code``;
+    invisible to a session that initialized with agent ``codex``; and
+    invisible to an unidentified session (no ``coffer/agent`` key in the
+    initialize ``_meta``) — an unidentified session matches only an unscoped
+    resource."""
     _with_in_memory(monkeypatch)
-
-    async def _local_machine_id() -> str:
-        return "this-machine"
 
     configs = {
         "fs": _stdio_config(tools=["read_file"]),
         "gh": _stdio_config(tools=["create_issue"]),
     }
-    scope = {"*": ["claude-code"]}
+    scope = ["claude-code"]
 
-    assert await _tools_list_names_for_agent(
-        tmp_path, "a", configs, scope, "claude-code", machine_id=_local_machine_id
-    ) == {"fs__read_file", "gh__create_issue"}
-    assert await _tools_list_names_for_agent(
-        tmp_path, "b", configs, scope, "codex", machine_id=_local_machine_id
-    ) == {"fs__read_file"}
-    assert await _tools_list_names_for_agent(
-        tmp_path, "c", configs, scope, None, machine_id=_local_machine_id
-    ) == {"fs__read_file"}
+    assert await _tools_list_names_for_agent(tmp_path, "a", configs, scope, "claude-code") == {
+        "fs__read_file",
+        "gh__create_issue",
+    }
+    assert await _tools_list_names_for_agent(tmp_path, "b", configs, scope, "codex") == {
+        "fs__read_file"
+    }
+    assert await _tools_list_names_for_agent(tmp_path, "c", configs, scope, None) == {
+        "fs__read_file"
+    }
 
 
 @pytest.mark.asyncio
-async def test_tools_list_wildcard_agent_scope_visible_to_all_sessions(
+async def test_tools_list_unscoped_server_visible_to_all_sessions(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A server scoped ``{"*": "*"}`` is visible to every session regardless
-    of reported agent identity — including an unidentified session."""
+    """An unscoped server (``scope is None``) is visible to every session
+    regardless of reported agent identity — including an unidentified one."""
     _with_in_memory(monkeypatch)
-
-    async def _local_machine_id() -> str:
-        return "this-machine"
 
     configs = {
         "fs": _stdio_config(tools=["read_file"]),
         "gh": _stdio_config(tools=["create_issue"]),
     }
-    scope = {"*": "*"}
+    both = {"fs__read_file", "gh__create_issue"}
 
-    assert await _tools_list_names_for_agent(
-        tmp_path, "a", configs, scope, "claude-code", machine_id=_local_machine_id
-    ) == {"fs__read_file", "gh__create_issue"}
-    assert await _tools_list_names_for_agent(
-        tmp_path, "b", configs, scope, "codex", machine_id=_local_machine_id
-    ) == {"fs__read_file", "gh__create_issue"}
-    assert await _tools_list_names_for_agent(
-        tmp_path, "c", configs, scope, None, machine_id=_local_machine_id
-    ) == {"fs__read_file", "gh__create_issue"}
+    assert await _tools_list_names_for_agent(tmp_path, "a", configs, None, "claude-code") == both
+    assert await _tools_list_names_for_agent(tmp_path, "b", configs, None, "codex") == both
+    assert await _tools_list_names_for_agent(tmp_path, "c", configs, None, None) == both
 
 
 @pytest.mark.acceptance(
     spec="001-mcp-gateway",
-    scenario="an out-of-scope server is invisible to a session and never spawned",
+    scenario="an out-of-scope server is invisible to a session",
 )
 @pytest.mark.asyncio
 async def test_tools_call_refused_for_server_excluded_by_agent_axis(
@@ -400,22 +314,16 @@ async def test_tools_call_refused_for_server_excluded_by_agent_axis(
     as an excluded agent must not be able to invoke a namespaced tool on a
     server that tools/list hides from it, even by calling tools/call
     directly with the server's still-guessable prefixed tool name — the
-    supervisor's spawn gate only knows the machine axis, so this must be
-    gated on the session's invocation path where `_session_agent` lives."""
+    supervisor has no session context, so this must be gated on the session's
+    invocation path where `_session_agent` lives."""
     _with_in_memory(monkeypatch)
-
-    async def _local_machine_id() -> str:
-        return "this-machine"
 
     session, rsvc, _prefs, inv_repo, engine = await _setup(
         tmp_path,
         {"gh": _stdio_config(tools=["create_issue"])},
-        machine_id=_local_machine_id,
     )
     try:
-        await rsvc.update_scope(
-            ResourceRef("mcp_server", "gh"), {"*": ["claude-code"]}, actor="test"
-        )
+        await rsvc.update_scope(ResourceRef("mcp_server", "gh"), ["claude-code"], actor="test")
         await session.handle_initialize(
             {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent": "codex"}}
         )
@@ -436,21 +344,15 @@ async def test_tools_call_allowed_for_server_included_by_agent_axis(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Sibling of the refusal test: the matching agent's call still succeeds
-    routinely — the new agent-axis gate must not be overly restrictive."""
+    routinely — the scope gate must not be overly restrictive."""
     _with_in_memory(monkeypatch)
-
-    async def _local_machine_id() -> str:
-        return "this-machine"
 
     session, rsvc, _prefs, _inv, engine = await _setup(
         tmp_path,
         {"gh": _stdio_config(tools=["create_issue"])},
-        machine_id=_local_machine_id,
     )
     try:
-        await rsvc.update_scope(
-            ResourceRef("mcp_server", "gh"), {"*": ["claude-code"]}, actor="test"
-        )
+        await rsvc.update_scope(ResourceRef("mcp_server", "gh"), ["claude-code"], actor="test")
         await session.handle_initialize(
             {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent": "claude-code"}}
         )
@@ -465,50 +367,31 @@ async def test_tools_call_allowed_for_server_included_by_agent_axis(
         await _safe_dispose(engine)
 
 
-@pytest.mark.acceptance(
-    spec="001-mcp-gateway",
-    scenario="an out-of-scope server is invisible to a session and never spawned",
-)
 @pytest.mark.asyncio
-async def test_tools_call_for_machine_excluded_server_raises_upstream_unavailable(
+async def test_tools_call_refused_for_dormant_server(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """FR-020: the machine axis is 'indistinguishable from an unregistered
-    [server]' (the generic UpstreamUnavailable bucket the supervisor's own
-    spawn gate raises) — never the dedicated ToolDisabled (-32000) bucket
-    reserved for the agent axis. A server scoped to another machine, invoked
-    via the SESSION's tools/call path (not the supervisor directly), must
-    surface UpstreamUnavailable. Pins a regression where the session-level
-    scope gate called only `agent_in_scope`, which also returns False when
-    the machine axis alone excludes the server, misclassifying the failure
-    as ToolDisabled."""
+    """A dormant server (``scope == []``) is out of scope for every session,
+    identified or not: tools/call is refused with ToolDisabled and a `denied`
+    invocation row, never spawned."""
     _with_in_memory(monkeypatch)
-
-    async def _local_machine_id() -> str:
-        return "this-machine"
 
     session, rsvc, _prefs, inv_repo, engine = await _setup(
         tmp_path,
         {"gh": _stdio_config(tools=["create_issue"])},
-        machine_id=_local_machine_id,
     )
     try:
-        await rsvc.update_scope(
-            ResourceRef("mcp_server", "gh"), {"other-machine": "*"}, actor="test"
-        )
+        await rsvc.update_scope(ResourceRef("mcp_server", "gh"), [], actor="test")
         await session.handle_initialize(
             {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent": "claude-code"}}
         )
-        with pytest.raises(UpstreamUnavailable):
+        with pytest.raises(ToolDisabled):
             await session.handle_request(
                 "tools/call",
                 {"name": "gh__create_issue", "arguments": {"title": "x"}},
             )
-        # Matches today's supervisor-failure behavior: get_or_spawn raises
-        # before the invocation-recording try/finally in _invoke runs, so no
-        # row is written — the machine axis must not change that.
-        invocations = await inv_repo.query(resource_name="gh")
-        assert invocations == []
+        invocations = await inv_repo.query(resource_name="gh", status="denied")
+        assert len(invocations) == 1
     finally:
         await session.dispose()
         await _safe_dispose(engine)
