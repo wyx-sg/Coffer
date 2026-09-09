@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
 import { AddMcpServerDialog } from "@/kinds/mcp/AddMcpServerDialog";
 import { McpServersTable } from "@/kinds/mcp/McpServersTable";
+import { ToolTieringNotice } from "@/kinds/mcp/ToolTieringNotice";
 import { WelcomePanel } from "./resources/WelcomePanel";
 import { useResources } from "@/lib/hooks/useResources";
 import { translateApiError } from "@/lib/api/errors";
@@ -56,7 +57,10 @@ export function ResourcesPage() {
           </CardContent>
         </Card>
       ) : hasResources ? (
-        <McpServersTable resources={visible} />
+        <>
+          <ToolTieringNotice />
+          <McpServersTable resources={visible} />
+        </>
       ) : null}
     </div>
   );

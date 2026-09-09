@@ -129,6 +129,9 @@ class TelegramAdapter:
                 if offset is not None:
                     params["offset"] = offset
                 updates = await self._call("getUpdates", **params)
+                if not isinstance(updates, list):
+                    # A failure too: the old no-delay retry here spun the event loop.
+                    raise ChannelSendFailed(self._name, "getUpdates: non-list result")
                 failures = 0
             except asyncio.CancelledError:
                 raise
@@ -139,9 +142,6 @@ class TelegramAdapter:
                     "telegram.poll.retry", extra={"channel": self._name, "delay": delay}
                 )
                 await asyncio.sleep(delay)
-                continue
-            if not isinstance(updates, list):
-                _logger.warning("telegram.poll.bad_payload", extra={"channel": self._name})
                 continue
             for update in updates:
                 if not isinstance(update, dict) or "update_id" not in update:

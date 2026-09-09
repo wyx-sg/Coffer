@@ -9,7 +9,7 @@
 
 ## Context
 
-Spec `005-skill-manager` 在 `~/.coffer/skills/<name>/` 维护一份规范主副本，并要求每个已注册的 agent 在它"自身的"skill 目录下能看到这些被管理的 skill —— 也就是 `~/.claude/skills/<name>/`、`~/.cursor/skills/<name>/` 等等。这份主副本必须是**唯一可编辑的事实来源**（FR-003），同时每个 agent 仍按其既有约定从自己的路径下读取。
+Spec `005-skill-manager` 在 `~/.coffer/skills/<name>/` 维护一份规范主副本，并要求每个已注册的 agent 在它"自身的"skill 目录下能看到这些被管理的 skill —— 也就是 `~/.claude/skills/<name>/`、`~/.codex/skills/<name>/` 等等。这份主副本必须是**唯一可编辑的事实来源**（FR-003），同时每个 agent 仍按其既有约定从自己的路径下读取。
 
 显而易见的投递机制有三种：
 
@@ -17,7 +17,7 @@ Spec `005-skill-manager` 在 `~/.coffer/skills/<name>/` 维护一份规范主副
 2. **配置指针**：告诉每个 agent "你的 skill 目录现在指向 `~/.coffer/skills/`"。
 3. **目录链接**：在 agent 路径上放一个目录 symlink（POSIX）/ junction（Windows），指回 master。
 
-复制会立刻造成 drift：用户在某个 agent 的 skill 目录里改一笔，并不会传播；每次更新要触动 N 个 agent；`verify` 会从结构性检查降级为内容 diff。配置指针方案被拒绝，因为我们要支持的多数 agent（Claude Code、Cursor、Claude Desktop）把 skill 目录写死，即便允许覆盖，配置也存放在我们无法稳妥触碰的 client-private 配置里。
+复制会立刻造成 drift：用户在某个 agent 的 skill 目录里改一笔，并不会传播；每次更新要触动 N 个 agent；`verify` 会从结构性检查降级为内容 diff。配置指针方案被拒绝，因为我们要支持的多数 agent（Claude Code、Codex、Claude Desktop）把 skill 目录写死，即便允许覆盖，配置也存放在我们无法稳妥触碰的 client-private 配置里。
 
 目录链接在我们要发布的所有平台上都可用，**除了**不支持链接的文件系统。剩下的决策点是：**每个 OS 用哪种链接，以及两种都不可用时怎么办** —— Windows 上的 FAT32 分区、部分 Windows 网络共享、以及一些老旧的 NAS 目标，可能同时拒绝 `os.symlink`（WinError 1314：无权创建符号链接）与 `mklink /J`（目标文件系统不允许 junction）。
 

@@ -1,25 +1,20 @@
 """``coffer-hook`` — the agent session-lifecycle → Coffer-daemon bridge.
 
-Spawned by the agent (Claude Code / Codex / Cursor as a hook; opencode and
-openclaw via Coffer's dropped plugins) at SessionStart / SessionEnd. Reads the hook JSON from
-stdin and the Coffer agent name from ``--agent <name>`` (the hook payload does
-not carry Coffer's agent identity), then talks to the local daemon discovered
-via ``~/.coffer/daemon.json``:
+Spawned by the agent (Claude Code / Codex) at SessionStart / SessionEnd. Reads
+the hook JSON from stdin and the Coffer agent name from ``--agent <name>`` (the
+hook payload does not carry Coffer's agent identity), then talks to the local
+daemon discovered via ``~/.coffer/daemon.json``:
 
 - **SessionStart** → ``GET /api/v1/agents/{agent}/session-context?cwd=<cwd>``;
-  on 200 print the rules bundle in the dialect's envelope so the agent injects it.
+  on 200 print the rules bundle in the ``hookSpecificOutput.additionalContext``
+  envelope so the agent injects it.
 - **SessionEnd** → ``POST /api/v1/agents/{agent}/sessions/{session_id}/end``
   with ``{"cwd": cwd}``; the body is ignored.
 
-``--dialect`` selects the stdout envelope (``claude`` — the default — prints
-``hookSpecificOutput.additionalContext``; ``cursor`` prints a top-level
-``additional_context``; ``raw`` prints the bundle text with no envelope — the
-PLUGIN_DROP plugin file spawns this and pushes stdout onto the system prompt).
-``--event`` names the event when the agent's stdin
-payload does not: Cursor keys its hooks.json by event, so the event is baked into
-the installed command's args instead. When ``--event`` names a SessionStart the
-payload is never read at all — stdin has no timeout, and an agent that leaves it
-open would otherwise stall on this hook.
+``--event`` is a fallback naming the event when the agent's stdin payload does
+not. When it names a SessionStart the payload is never read at all — stdin has
+no timeout, and an agent that leaves it open would otherwise stall on this
+hook.
 
 ``cwd`` scopes the rules/memory bundle. It comes from the payload, else from the
 hook's own working directory (inherited from the agent). When neither is
@@ -51,14 +46,9 @@ from coffer.infrastructure.daemon.pid_lock import read as _read_daemon_file
 #: Short timeout — the hook runs on the critical path of agent startup.
 _TIMEOUT = 5.0
 
-#: Dialect values, mirroring ``domain.agent.context_injection.HookFlavor``. Kept
-#: as plain literals so this entrypoint stays import-light: it runs on every agent
-#: startup and must not drag in the domain package.
-_DIALECT_CLAUDE = "claude"
-_DIALECT_CURSOR = "cursor"
-_DIALECT_RAW = "raw"
-
-#: Event names as each dialect spells them, mapped to Coffer's canonical name.
+#: Event names, case-folded, mapped to Coffer's canonical spelling. Kept as plain
+#: literals so this entrypoint stays import-light: it runs on every agent startup
+#: and must not drag in the domain package.
 _EVENT_ALIASES = {
     "sessionstart": "SessionStart",
     "sessionend": "SessionEnd",
@@ -66,7 +56,7 @@ _EVENT_ALIASES = {
 
 
 def _canonical_event(raw: str) -> str:
-    """Coffer's canonical event name for a dialect's spelling (``sessionStart``)."""
+    """Coffer's canonical event name for whatever spelling arrived."""
     return _EVENT_ALIASES.get(raw.casefold(), raw)
 
 
@@ -109,14 +99,11 @@ def _http(
         return e.code, ""
 
 
-def _envelope(dialect: str, context: str) -> dict[str, Any]:
-    """Wrap the rules bundle in the shape this agent's hook contract expects.
+def _envelope(context: str) -> dict[str, Any]:
+    """Wrap the rules bundle in the shape the agent's hook contract expects.
 
-    Cursor's ``sessionStart`` hook reads a top-level ``additional_context``;
-    Claude Code and Codex read ``hookSpecificOutput.additionalContext``.
+    Both supported products read ``hookSpecificOutput.additionalContext``.
     """
-    if dialect == _DIALECT_CURSOR:
-        return {"additional_context": context}
     return {
         "hookSpecificOutput": {
             "hookEventName": "SessionStart",
@@ -125,7 +112,7 @@ def _envelope(dialect: str, context: str) -> dict[str, Any]:
     }
 
 
-def _handle_session_start(agent: str, cwd: str | None, info: DaemonInfo, dialect: str) -> None:
+def _handle_session_start(agent: str, cwd: str | None, info: DaemonInfo) -> None:
     # OMIT `cwd` rather than sending an empty one when it is unknown. The daemon
     # scopes memory by the nearest git root of `cwd`, and an empty string resolves
     # to the DAEMON's own working directory — a long-lived process that may sit in
@@ -140,12 +127,7 @@ def _handle_session_start(agent: str, cwd: str | None, info: DaemonInfo, dialect
     context = json.loads(text).get("additional_context")
     if not context:
         return
-    if dialect == _DIALECT_RAW:
-        # No envelope: the consumer is Coffer's own dropped plugin, which pushes
-        # this text onto the system prompt verbatim.
-        sys.stdout.write(context)
-    else:
-        sys.stdout.write(json.dumps(_envelope(dialect, context)))
+    sys.stdout.write(json.dumps(_envelope(context)))
     sys.stdout.flush()
 
 
@@ -162,8 +144,8 @@ def _read_payload() -> dict[str, Any]:
     Callers MUST NOT invoke this when the payload is not needed: ``sys.stdin.read()``
     blocks until EOF, and the 5s timeout bounds only HTTP. An agent that spawns the
     hook with stdin left open would stall its own startup — the one thing this
-    entrypoint promises never to do. Claude/Codex always send and close a payload;
-    Cursor's is not contractual, so the Cursor path never reads it.
+    entrypoint promises never to do. Both supported products always send and close
+    a payload, but ``--event SessionStart`` short-circuits it regardless.
     """
     try:
         raw = sys.stdin.read()
@@ -191,23 +173,22 @@ def _process_cwd() -> str | None:
 def _dispatch() -> None:
     parser = argparse.ArgumentParser(prog="coffer-hook")
     parser.add_argument("--agent", required=True)
-    parser.add_argument("--dialect", default=_DIALECT_CLAUDE)
     parser.add_argument("--event", default=None)
     args, _unknown = parser.parse_known_args()
 
     # A SessionStart named by --event needs nothing from stdin, so don't read it:
     # a stdin left open by the agent would block until EOF and stall its startup.
-    # Every other path (Claude/Codex, or any SessionEnd needing `session_id`)
-    # reads the payload, which those agents always send and close.
+    # Every other path (the installed no-`--event` command, or any SessionEnd
+    # needing `session_id`) reads the payload, which both agents send and close.
     known_start = _canonical_event(args.event) == "SessionStart" if args.event else False
     payload = {} if known_start else _read_payload()
 
-    # --event wins: Cursor keys hooks.json by event and does not guarantee an
-    # event field on stdin. Claude/Codex omit --event and name it on stdin.
+    # --event wins when given; the installed command omits it and the agents
+    # name the event on stdin.
     event = _canonical_event(args.event or payload.get("hook_event_name") or "")
     # The hook inherits the agent's working directory, so the process cwd is the
-    # session's project when the payload omits it (Cursor). `None` means unknown —
-    # never "", which the daemon would resolve against its OWN cwd.
+    # session's project when the payload omits it. `None` means unknown — never
+    # "", which the daemon would resolve against its OWN cwd.
     cwd = payload.get("cwd") or _process_cwd()
     session_id = payload.get("session_id") or ""
 
@@ -216,7 +197,7 @@ def _dispatch() -> None:
         return
 
     if event == "SessionStart":
-        _handle_session_start(args.agent, cwd, info, args.dialect)
+        _handle_session_start(args.agent, cwd, info)
     elif event == "SessionEnd":
         _handle_session_end(args.agent, cwd or "", session_id, info)
     # Any other event → nothing to do.

@@ -46,31 +46,20 @@ export const PRESETS: Preset[] = [
 
 // The agents a connection projects into BY DEFAULT, mirroring the backend
 // (`_DEFAULT_COMPATIBLE`). The form pre-fills the checkboxes from this; ollama is
-// internal-only (projects into no agent). openclaw speaks BOTH wires (its
-// provider `api` field takes openai-completions AND anthropic-messages,
-// ADR-044), so it defaults into both.
+// internal-only (projects into no agent).
 export function defaultCompatibleAgents(protocol: Protocol | ""): AgentType[] {
   switch (protocol) {
     case "anthropic":
-      return ["claude_code", "openclaw"];
+      return ["claude_code"];
     case "openai":
-      return ["codex", "opencode", "hermes", "openclaw"];
+      return ["codex"];
     case "unknown":
     case "": // custom, before a wire is picked
-      return ["claude_code", "codex", "opencode", "hermes", "openclaw"];
+      return ["claude_code", "codex"];
     default: // ollama
       return [];
   }
 }
 
-// The agents a user can tick a connection as compatible with. Never-projectable
-// agents (cursor — locked to Cursor's own backend, no endpoint setting) are
-// omitted outright; their "not supported" reason renders on the agent's own
-// detail page (ADR-042 presentation amendment 2026-07-10, FR-003a).
-export const SELECTABLE_AGENTS: AgentType[] = [
-  "claude_code",
-  "codex",
-  "opencode",
-  "hermes",
-  "openclaw",
-];
+// The agents a user can tick a connection as compatible with.
+export const SELECTABLE_AGENTS: AgentType[] = ["claude_code", "codex"];

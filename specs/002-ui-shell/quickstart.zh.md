@@ -8,7 +8,7 @@
 
 - 一份可工作的 Coffer dev checkout。backend 依赖装好 (`backend/` 内 `uv sync`)，frontend 依赖装好 (`frontend/` 内 `pnpm install` 或 `npm install`)。
 - 一台可注册的 MCP 服务器。走查用 `@modelcontextprotocol/server-filesystem`（需要 `npx`）。
-- 一个 MCP 客户端 (Claude Code / Claude Desktop / Cursor)——如果想在 UI 里看到 invocation 落库。Add-MCP-server 流程本身不依赖客户端。
+- 一个 MCP 客户端 (Claude Code / Claude Desktop / 任意 stdio MCP 客户端)——如果想在 UI 里看到 invocation 落库。Add-MCP-server 流程本身不依赖客户端。
 
 ## 1. 启动 dev 栈
 

@@ -107,8 +107,8 @@ class ConfigFileStore:
         """Remove a directory tree entirely. False when already absent.
 
         No backup: used only for content Coffer itself rendered and can
-        regenerate byte-identically (the FR-048 openclaw extension package) —
-        a ``.bak`` package dir would still be discovered by openclaw's
+        regenerate byte-identically (a Coffer-owned package directory) —
+        a ``.bak`` package dir would still be discovered by the agent's
         extension scanner, so tidier to leave nothing behind.
         """
         if not path.is_dir():

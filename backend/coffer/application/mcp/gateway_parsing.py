@@ -69,7 +69,7 @@ def _extract_params(notification: Any) -> dict[str, Any] | None:
     if p is None:
         return None
     if hasattr(p, "model_dump"):
-        result: dict[str, Any] = p.model_dump(exclude_none=True)
+        result: dict[str, Any] = p.model_dump(exclude_none=True, by_alias=True)
         return result
     if isinstance(p, dict):
         return p
