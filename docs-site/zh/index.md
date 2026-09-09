@@ -21,7 +21,7 @@ features:
   - title: 与任意 agent 对话
     details: 在 Web 或桌面应用里,与 Coffer 内置 agent 对话 —— 或驱动 Claude Code、Codex —— 流式输出。
   - title: 随处触达你的 agent
-    details: 配对一个 Telegram 或 SeaTalk 渠道,在手机上与 agent 对话。多机同步通过你自己拥有的 git 仓库,让每台机器保持一致。
+    details: 配对一个 Telegram 或 SeaTalk 渠道,在手机上与 agent 对话。换新机器?把整个保险库导出到一个目录,搬过去再导入即可。
   - title: CLI · Web · 桌面端
     details: 用终端、本地 Web UI 或桌面应用驱动整个保险库。agent 自动发现守护进程,无需配置端口或 token。
 ---
@@ -40,10 +40,10 @@ flowchart LR
   D["coffer-daemon<br/>保险库:MCP 网关 · 技能 · 知识 · 记忆 · agents · 对话"]
   D -->|带命名空间的工具| U["上游 MCP 服务器"]
   D -->|对话| L["LLM 提供方"]
-  D -->|同步| G["你自己的 git 远端"]
+  D -->|导出 / 导入| G["你自己搬运的目录"]
 ```
 
-Coffer 是一个常驻的本地守护进程,持有你的保险库。MCP 网关只是其中一部分:每个 AI agent 通过一个自动发现的端点接入,看到同一批工具、技能、知识与记忆 —— 同时密钥保持加密,除非你把它同步到自己拥有的 git 远端,否则一切都不离开你的机器。
+Coffer 是一个常驻的本地守护进程,持有你的保险库。MCP 网关只是其中一部分:每个 AI agent 通过一个自动发现的端点接入,看到同一批工具、技能、知识与记忆 —— 同时密钥保持加密,一切都不离开你的机器。搬到你自己的另一台机器上是一个明确的动作:把保险库导出到一个目录,搬过去,再导入。
 
 ## 快速上手
 

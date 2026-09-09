@@ -39,11 +39,12 @@ CLI（`coffer …`）是一个短生命周期的子进程。用户用它执行�
 
 ## 受监管的后台 worker
 
-除上述子进程外，守护进程还运行若干进程内后台 worker——它们是受监管的 asyncio 任务，而非独立进程——在无需任何用户操作的情况下让 vault 状态持续收敛：
+除上述子进程外，守护进程还运行两个进程内后台 worker——它们是受监管的 asyncio 任务，而非独立进程——在无需任何用户操作的情况下让 vault 状态持续收敛：
 
 - **保留 worker。** 按配置的保留策略修剪日志型表（审计日志、调用日志）。
 - **通道适配器协调器**（[ADR-014](/zh/reference/adr/ADR-014-channel-adapter-framework)）。每个 tick 它都会把已启用的通道资源与运行中的适配器做 diff，并启动/停止/重启以保持一致——并随 SeaTalk 通道集合启动或停止回调监听器。REST/CLI/UI 永不直接启动或停止适配器；协调器持有全部运行时状态转换，从而让状态保持真实。
-- **Sync worker**（[ADR-016](/zh/reference/adr/ADR-016-multi-machine-sync)），**opt-in 且默认关闭。** 它以保留 worker 为蓝本，为希望免手动多机收敛的用户增加去抖的「变更即推送」加间隔拉取。`coffer sync` 仍是显式、可预期的默认方式。
+
+仓库的导出与导入（[ADR-016](/zh/reference/adr/ADR-016-vault-export-import)）刻意**不在**其列：它们只在用户主动发起时、就在发起它们的那次请求里运行，没有 worker，也没有后台复制。
 
 ## Detect-or-spawn（ADR-006）
 

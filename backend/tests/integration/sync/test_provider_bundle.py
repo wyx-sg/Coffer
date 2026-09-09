@@ -1,8 +1,8 @@
-"""Provider profiles round-trip through sync export/import (spec 011).
+"""Provider profiles round-trip through an export bundle (spec 011).
 
-A ``provider`` resource rides the generic ResourceDoc machinery, so it converges
-with no sync-engine changes. This exercises export → import across two vaults
-sharing one workspace directory (no git layer needed for the round-trip proof).
+A ``provider`` resource rides the generic ResourceDoc machinery, so it carries
+across machines with no export/import changes of its own. Two vaults exchange
+one bundle directory on disk.
 """
 
 from __future__ import annotations
@@ -24,8 +24,8 @@ from coffer.infrastructure.persistence.engine import (
     session_maker,
 )
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
+from coffer.infrastructure.sync.bundle import Bundle
 from coffer.infrastructure.sync.credentials import CredentialSyncAdapter
-from coffer.infrastructure.sync.workspace import Workspace
 
 
 class _NoKeyring:
@@ -61,8 +61,8 @@ async def _vault(root: pathlib.Path) -> tuple[ResourceService, CredentialSyncAda
     spec="011-provider-switching",
     scenario="a provider profile round-trips through sync export and import",
 )
-async def test_provider_round_trips_through_sync(tmp_path):
-    ws = tmp_path / "ws"
+async def test_provider_round_trips_through_a_bundle(tmp_path):  # type: ignore[no-untyped-def]
+    out = tmp_path / "bundle"
     config = {
         "protocol": "openai",
         "base_url": "https://gw/v1",
@@ -74,10 +74,10 @@ async def test_provider_round_trips_through_sync(tmp_path):
 
     res_a, cred_a = await _vault(tmp_path / "A")
     await res_a.register("provider", "acme", config, "test")
-    await SyncExporter(res_a, cred_a, Workspace(ws, trees=[]), home=None).export()
+    await SyncExporter(res_a, cred_a, home=None).export(Bundle(out, trees=[]))
 
     res_b, cred_b = await _vault(tmp_path / "B")
-    await SyncImporter(res_b, cred_b, Workspace(ws, trees=[]), home=None).import_()
+    await SyncImporter(res_b, cred_b, home=None).import_(Bundle(out, trees=[]))
 
     got = await res_b.get(ResourceRef("provider", "acme"))
     assert got.config == config

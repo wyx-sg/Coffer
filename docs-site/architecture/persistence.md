@@ -57,7 +57,7 @@ Schema evolution is managed by Alembic, configured in `backend/alembic.ini` with
 | `0002`   | `20260521_0002_mcp_tables.py`        | `mcp_capability_preferences`, `mcp_invocations` |
 | `0003`   | `20260522_0003_mcp_server_health.py` | `mcp_server_health`                             |
 
-Later revisions add the skill, knowledge, memory, embedding-config, chat, channel, credentials, and sync tables (plus index and data-fix revisions), ending at `0020`. On first daemon startup, `alembic upgrade head` runs before the HTTP server accepts connections. Because Alembic migrations are bundled as data files inside the PyInstaller daemon binary, end-user installs also get correct schema creation on first launch — no separate migration step.
+Later revisions add the skill, knowledge, memory, embedding-config, chat, channel and credentials tables (plus index and data-fix revisions); a later revision drops the sync tables again when continuous sync is withdrawn ([ADR-016](/reference/adr/ADR-016-vault-export-import)). On first daemon startup, `alembic upgrade head` runs before the HTTP server accepts connections. Because Alembic migrations are bundled as data files inside the PyInstaller daemon binary, end-user installs also get correct schema creation on first launch — no separate migration step.
 
 ## Table map
 
@@ -122,12 +122,7 @@ The tables that exist after applying all revisions, grouped by domain:
 | ---------------------- | ------------------------------------------------------------ |
 | `skill_agent_bindings` | Records which skills are bound to which agent workspaces.     |
 
-**Sync:**
-
-| Table         | Purpose                                                                |
-| ------------- | --------------------------------------------------------------------- |
-| `sync_config` | The user's multi-machine sync configuration (remote, branch, toggles). |
-| `sync_state`  | Last-sync bookkeeping (commit refs, conflict state).                   |
+**Export / import:** no tables. Export and import are one-shot operations over the live vault; there is no configuration to persist, no last-run state, no machine registry and no tombstone ledger ([ADR-016](/reference/adr/ADR-016-vault-export-import)).
 
 ## Files as truth, SQLite as a rebuildable index (ADR-012)
 
@@ -154,7 +149,6 @@ The full set of files Coffer writes:
 | `~/.coffer/master.key`     | Credential-store master key (file-default; opt-in keychain). See [Security](/architecture/security). |
 | `~/.coffer/knowledge/`     | Knowledge-base documents as markdown — source of truth indexed by SQLite |
 | `~/.coffer/memory/`        | Memory facts as markdown — source of truth indexed by SQLite |
-| `~/.coffer/sync/`          | Git working tree mirroring the file-backed trees for multi-machine sync |
 | `~/.coffer/logs/`          | Structured JSON log files from `structlog`             |
 | `~/.coffer/bin/`           | `coffer-mcp-shim` + `coffer-daemon` binaries deployed by the desktop app |
 | `~/.coffer/backups/`       | Point-in-time SQLite backup copies                     |

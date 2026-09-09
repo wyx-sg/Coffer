@@ -4,7 +4,7 @@
 
 - **状态：** 已接受
 - **Spec:** [007-memory](../../specs/007-memory/spec.md)（扩展 —— 不分配新 spec 编号）
-- **关联：** [ADR-012](./ADR-012-files-as-truth-sqlite-retrieval.md)（files-as-truth + SQLite 检索）、[ADR-013](./ADR-013-agent-native-shared-memory.md)（agent 原生共享 memory）、[ADR-016](./ADR-016-multi-machine-sync.md)（多机同步）、Spec 004（agent 注册表 —— 只读工作区不变量）
+- **关联：** [ADR-012](./ADR-012-files-as-truth-sqlite-retrieval.md)（files-as-truth + SQLite 检索）、[ADR-013](./ADR-013-agent-native-shared-memory.md)（agent 原生共享 memory）、[ADR-016](./ADR-016-vault-export-import.md)（多机同步）、Spec 004（agent 注册表 —— 只读工作区不变量）
 
 ## 背景
 

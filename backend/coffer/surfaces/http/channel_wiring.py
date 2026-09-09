@@ -8,7 +8,6 @@ controller, and the reconciling runtime. Must run AFTER ``wire_chat``.
 from __future__ import annotations
 
 import asyncio
-import platform
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -33,8 +32,6 @@ from coffer.infrastructure.channel.seatalk import SeaTalkAdapter
 from coffer.infrastructure.channel.telegram import TelegramAdapter
 from coffer.infrastructure.channel.tunnel_spawn import TunnelController
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
-from coffer.infrastructure.knowledge.ids import new_ulid
-from coffer.infrastructure.sync.persistence import SqlAlchemyMachineIdentityRepo
 from coffer.surfaces.http import daemon_routes
 from coffer.surfaces.http.auth import get_active_token
 from coffer.surfaces.http.channel_routes import set_channel_service
@@ -49,7 +46,6 @@ if TYPE_CHECKING:
 
 from coffer.application.channel.sync_state import ChannelPeerSyncState
 from coffer.application.resource_service import ResourceService
-from coffer.application.sync.identity import MachineIdentityService
 
 
 def _daemon_info() -> tuple[str, str]:
@@ -117,16 +113,6 @@ def wire_channel_kind(
         return SeaTalkAdapter(name, parsed.app_id, secret)
 
     listener = CallbackListenerController(daemon_info=_daemon_info)
-    identity = MachineIdentityService(
-        SqlAlchemyMachineIdentityRepo(sm),
-        audit,
-        new_id=new_ulid,
-        default_name=lambda: platform.node() or "coffer",
-    )
-
-    async def _local_machine_id() -> str:
-        return (await identity.get()).machine_id
-
     runtime = ChannelRuntime(
         resources=resource_svc,
         adapter_factory=adapter_factory,
@@ -135,7 +121,6 @@ def wire_channel_kind(
         listener=listener,
         tunnel=TunnelController(),
         materialize=materialize,
-        machine_id=_local_machine_id,
     )
 
     async def on_delete(ref: ResourceRef) -> None:

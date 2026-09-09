@@ -4,7 +4,7 @@
 
 - **Status:** Accepted
 - **Spec:** [007-memory](../../specs/007-memory/spec.md) (extension — no new spec number)
-- **Related:** [ADR-012](./ADR-012-files-as-truth-sqlite-retrieval.md) (files-as-truth + SQLite retrieval), [ADR-013](./ADR-013-agent-native-shared-memory.md) (agent-native shared memory), [ADR-016](./ADR-016-multi-machine-sync.md) (multi-machine sync), Spec 004 (agent registry — read-only workspace invariant)
+- **Related:** [ADR-012](./ADR-012-files-as-truth-sqlite-retrieval.md) (files-as-truth + SQLite retrieval), [ADR-013](./ADR-013-agent-native-shared-memory.md) (agent-native shared memory), [ADR-016](./ADR-016-vault-export-import.md) (multi-machine sync), Spec 004 (agent registry — read-only workspace invariant)
 
 ## Context
 

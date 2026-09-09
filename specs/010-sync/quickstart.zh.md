@@ -2,30 +2,46 @@
 
 > English: [quickstart.md](./quickstart.md)
 
-通过你自己拥有的 git 仓库，让一个 Coffer vault 在多台机器之间保持同步。
-主密钥永远不会经由 git 传输；你需要在每台新机器上以带外（out-of-band）方式
-亲手导入一次。
+把一个 Coffer 仓库搬到你自己的另一台机器上：在机器 A 上导出到一个目录，把那个目录搬
+过去，在机器 B 上导入。主密钥永不随目录同行——你只需带外把它带过去一次。
 
-## 1. 创建一个你自己拥有的远程仓库
-
-新建一个空的私有仓库（GitHub、GitLab 或自托管均可），例如
-`git@github.com:you/coffer-vault.git`。Coffer 使用你平常的 git 凭据
-（SSH key 或 token）——也就是 `git push` 已经在用的那一套。
-
-## 2. 在机器 A 上初始化 sync
+## 1. 在机器 A 上导出仓库
 
 ```bash
-coffer sync init git@github.com:you/coffer-vault.git
+coffer sync export ~/coffer-bundle
 ```
 
-这会创建 sync 工作区（`~/.coffer/sync/`）、记录远程仓库，并执行
-第一次同步。检查一下：
+命令会写出一个普通目录，并报告都放进去了什么：各状态区的计数（知识、记忆、技能、资源、
+状态）以及 bundle 路径。
+
+```
+manifest.json  knowledge/  memory/  skills/  resources/  state/
+```
+
+里面全是文本，因此你能确切读到自己即将带走的是什么——
+`resources/mcp_server/confluence.yaml` 就是每个资源一个可读文件。
+
+如果还要把凭据一起带上，请显式要求：
 
 ```bash
-coffer sync status        # -> clean，最近一次同步 <time>
+coffer sync export ~/coffer-bundle --with-credentials
 ```
 
-## 3. 把主密钥带到机器 B（带外传输）
+这会加上 `credentials/<ref>.enc`——**只有** Fernet 密文。主密钥永不写入 bundle。不带这个
+参数时，没有任何凭据材料会离开这台机器；这是默认行为，因为一个导出目录很容易被随手落在
+什么地方。
+
+## 2. 把目录搬到机器 B
+
+用什么方式都行——Coffer 不负责搬运：
+
+```bash
+scp -r ~/coffer-bundle you@machine-b:~/coffer-bundle
+```
+
+U 盘或者你自己的 git 仓库同样可以。
+
+## 3. 把主密钥带过去（仅当你导出了凭据时）
 
 在机器 A 上：
 
@@ -33,68 +49,54 @@ coffer sync status        # -> clean，最近一次同步 <time>
 coffer sync key export ~/coffer-master.key
 ```
 
-通过你信任的渠道（U 盘、密码管理器、安全拷贝）把该文件转移到机器 B——
-**不要**经由 sync 仓库传输。在机器 B 上：
+通过你信任的渠道把这个文件移到机器 B（密码管理器、安全拷贝、U 盘）——**不要**放在
+bundle 里面。在机器 B 上：
 
 ```bash
 coffer sync key import ~/coffer-master.key
 ```
 
-## 4. 在机器 B 上拉取 vault
+> 跳过这一步导入照样成功，但导入进来的凭据会保持**锁定**：它们被报为
+> `credentials_locked`，依赖它们的资源在你导入密钥之前不会启动。
+
+## 4. 在机器 B 上导入
 
 ```bash
-coffer sync init git@github.com:you/coffer-vault.git
-coffer sync status        # -> clean；由于密钥已就位，凭据可以解密
+coffer sync import ~/coffer-bundle
 ```
 
-机器 B 现在拥有与机器 A 相同的知识库、记忆、已注册资源以及
-凭据。
+机器 B 现在拥有同样的知识、记忆、技能、已注册资源与共享状态。每个 kind 的导入后步骤都
+已经跑过，所以导入进来的 agent 已经装好了它的 shim、导入进来的 skill 绑定已经有了符号
+链接——这些资源和你手工注册出来的一样可用。
 
-> 如果你跳过第 3 步，sync 仍然可以工作，但凭据会保持**锁定**状态：
-> `coffer sync status` 会把它们列在 `credentials_locked` 下，需要这些凭据的
-> 资源在你导入密钥之前不会启动。
+命令会打印一份摘要：各状态区的计数，以及任何无法在本机应用的资源（例如某个 agent 的
+`config_dir` 在这台机器上并不存在）连同它的 ref 与原因。这些只是被报告，并不致命——
+其余的一切照常导入了。
 
-## 5. 日常使用
+## 导入会动什么、不会动什么
 
-```bash
-coffer sync               # export -> pull -> (if clean) push -> import
-```
+- **bundle 说了算。** bundle 中包含的任何东西都会替换掉本地版本。你在敲下命令时就选定了
+  方向，因此没有什么需要仲裁。
+- **导入从不删除。** 机器 B 有、而 bundle 里没有的资源保持原样不动。一个 bundle 是某一台
+  机器的快照，而不是对"哪些东西应当到处都存在"的断言。
+- **仅本机的东西不随行。** 日志、`coffer.db`、`daemon.json`、聊天历史与审计日志都留在
+  原处；机器 B 上的 SQLite 索引由导入进来的文件重建。
 
-每次切换机器时运行它。或者开启免手动模式：
+## 让两台机器保持一致
 
-```bash
-coffer sync config --auto on --interval 300
-```
+不存在后台收敛。如果两台机器发生了分叉，就按你想要的方向重新导出、重新导入一次——这个
+手工步骤正是 [ADR-016](../../docs/decisions/ADR-016-vault-export-import.md) 有意接受的
+取舍。
 
-开启自动同步后，守护进程会（去抖后）推送你的改动，并按设定的间隔拉取
-其他机器的改动——无需手动执行命令。
-
-## 查看你的机器
-
-```bash
-coffer sync machines                    # 该 vault 关联的所有机器
-coffer sync machines --rename studio    # 重命名本机
-```
-
-每台机器在同步时登记自己（名称、平台、上次同步时间）；这份列表同样出现在
-桌面端的同步面板中。
-
-## 冲突自动解决
-
-如果你在同步之前在两台机器上编辑了同一个资源/文件，同步运行会把每个冲突
-路径自动解决为**最近同步**的那次编辑并直接完成——无需手动操作（两边都开着
-自动同步时，「最近同步」与「较新」一致）。极少数引擎无法
-处理的路径会让运行停在 `conflicted`，界面会指引你到自己的仓库（如
-GitHub）解决；CLI 兜底仍然可用：
+由于导出是确定性的，两个未发生变化的仓库导出的 bundle 字节一致，因此你可以 diff 它们来
+看出到底哪里不同：
 
 ```bash
-coffer sync status        # -> conflicted，列出相关路径（罕见）
-coffer sync resolve --theirs resources/mcp_server/confluence.yaml   # 或 --ours，或编辑后用 --resolved
-coffer sync               # 完成
+diff -r ~/bundle-from-a ~/bundle-from-b
 ```
 
 ## REST / 桌面端
 
-以上所有功能同样可通过 `/api/v1/sync/*` 使用，也可在桌面端的
-**Sync** 设置面板中操作（配置远程仓库——保存即校验、开关自动同步、
-查看带行动指引的状态、触发一次同步运行、跨机器比对 master key 指纹）。
+这两个操作同样可以通过 `/api/v1/sync/*` 以及桌面端的 **Sync** 设置面板使用——一个导出
+按钮和一个导入按钮，各自打开原生目录选择器，外加用于比对指纹、执行带外密钥传递的主密钥
+卡片。

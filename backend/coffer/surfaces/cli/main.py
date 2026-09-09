@@ -64,13 +64,6 @@ app.add_typer(transcript_cmd.app, name="transcript")
 app.command("backup")(backup_cmd.backup)
 app.command("restore")(backup_cmd.restore)
 
-# Machines fleet view is a top-level verb too (Task 15): the frontend
-# Machines nav item isn't really "sync configuration", so it gets its own
-# top-level command — same implementation as `coffer sync machines`
-# (imported, not duplicated) so the two stay identical by construction,
-# --rename included.
-app.command("machines")(sync_cmd.machines)
-
 
 def run() -> None:
     """Entry point for the `coffer` script in pyproject.toml."""

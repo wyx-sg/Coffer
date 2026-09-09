@@ -89,16 +89,9 @@ class AuditEventType(StrEnum):
     # spec 009-channels — entrypoint differentiation (ADR-023)
     CHANNEL_TURN_STARTED = "channel_turn_started"
     # spec 010-sync
-    SYNC_CONFIG_UPDATED = "sync_config_updated"
     SYNC_COMPLETED = "sync_completed"
-    SYNC_CONFLICTED = "sync_conflicted"
-    SYNC_RESOLVED = "sync_resolved"
-    SYNC_AUTO_RESOLVED = "sync_auto_resolved"
     MASTER_KEY_EXPORTED = "master_key_exported"
     MASTER_KEY_IMPORTED = "master_key_imported"
-    SYNC_MACHINE_RENAMED = "sync_machine_renamed"
-    SYNC_OVERRIDE_SET = "sync_override_set"
-    SYNC_OVERRIDE_UNSET = "sync_override_unset"
     # spec 011-provider-switching
     PROVIDER_SWITCHED = "provider_switched"
     PROVIDER_INTERNAL_DEFAULT_SET = "provider_internal_default_set"

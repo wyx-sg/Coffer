@@ -4,7 +4,8 @@
 // path (save dialog for export, open dialog for import), the same on desktop
 // (Tauri) and web (daemon picker, spec 004 FR-042 / ADR-036). A typed path
 // field appears only as a fallback on hosts with no native dialog tool. The key
-// never travels through the sync repo.
+// is never written into an export bundle — a machine holding ciphertext but not
+// the key reports credentials_locked, so the key comes across separately.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
