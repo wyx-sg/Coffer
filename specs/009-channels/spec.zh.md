@@ -416,7 +416,39 @@ status / notify`。
   peer、agent 在审计日志里查到；干净成功在任何 channel 上都不发完成摘要，而异常
   结束（失败、中断、达工具上限）的 turn 会发一条报告结果的摘要。
 
+## 机器亲和（spec 010 修订）
+
+渠道的平台身份（被轮询的 bot、webhook 端点）只容许一个消费者，而渠道定义会同步到
+每台机器（spec 010）。渠道 runtime 通过框架级的 `scope` 字段（仅 machine 轴——
+渠道的 `scope` 条目只接受 `"*"` 作为其 value）决定是否在本机启动适配器：`scope`
+最多携带一条条目——恰好一个精确 ULID 的机器 key（或没有 = 休眠）；`"*"` 这个
+key 对渠道会被拒绝（`Kind.validate_scope_shape`，ADR-045 复审 Fix 1）——它会一次
+匹配所有机器，等于换一条路径重现 ADR-043 要防止的双适配器互斗。只有作为那唯一
+条目出现的机器才会启动适配器。`scope == {}`（在任何地方都休眠——等价于修订前
+的 `runs_on: null`）在任何机器上都不运行，直到用户在渠道详情页选定机器。创建渠
+道的 surface 默认把 scope 设为 `{"<creating-machine-id>": "*"}`。改绑是普通的配置
+编辑（一次普通的 `scope` 写入），经同步传播；配对状态随 vault 同步（spec 010 状
+态区 `channel-peers`），改绑后无需重新配对。传播窗口内（一个同步往返）两台机器
+可能短暂同时轮询平台——数秒级、可自愈的重叠，对单用户工具可接受。
+
+**`runs_on` → `scope` 迁移**（2026-07-10 修订 —— machine × agent scope，
+[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.zh.md)）。上文
+描述的单机 `runs_on: <machine_id>` 字段被框架的 machine 轴**取代**：一次数据迁
+移会在升级时把每个既有渠道的 `runs_on: <machine_id>` 转换为
+`scope: {"<machine_id>": "*"}`，把 `runs_on: null` 转换为 `scope: {}`。
+`runs_on` **不会**从 schema 或 API 中移除——尚未升级的机器传来的旧 payload 与
+同步文档仍须能通过校验——但它会变得**惰性**：渠道 runtime 只读取 `scope`，
+`runs_on` 被就地文档化为已弃用（一个冻结在迁移前的值；任何一次改绑之后就会过
+期；不会被读取参考）。
+
 ## Acceptance Scenarios
+
+### Scenario: a channel runs on exactly one machine
+
+- **Given** 分别绑定到本机、另一台机器、未绑定的三个渠道
+- **When** runtime 执行 reconcile
+- **Then** 只有绑定到本机的渠道启动适配器
+- **And** 把渠道改绑离开本机后，下一次 reconcile 将其停止
 
 ### Scenario: register a telegram channel
 
@@ -734,7 +766,7 @@ status / notify`。
 
 ### Scenario: a PDF reaches a path-native agent as extracted text
 
-- **Given** 一个给路径原生 agent（Codex/Hermes/OpenCode/Cursor）的 turn 上带一个
+- **Given** 一个给路径原生 agent（Codex）的 turn 上带一个
   PDF（或 office 文档）附件
 - **When** adapter 准备该 turn
 - **Then** 文档被抽取成文字并以带标签的 `[Document: <name>]` 块折进 prompt，且该
@@ -899,6 +931,31 @@ status / notify`。
 - **When** owner 发来一条消息并驱动一个 turn
 - **Then** 回复仍被送达——尽力而为的 reaction 被吞掉
 
+### Scenario: a group turn names the group it came from
+
+- **Given** 一个已配对的 channel，其 owner 在某个群的线程里 @ 了 bot
+- **When** 该 turn 被驱动
+- **Then** turn 文本以一个 `[Message origin]` 块开头，写明平台、会话 kind 与标题、
+  chat id、thread id 和发送者
+
+### Scenario: a DM turn names its own chat
+
+- **Given** 一个已配对的 channel 与来自其 owner 的私聊消息
+- **When** 该 turn 被驱动
+- **Then** origin 块以 id 指明平台与该私聊会话，并省略私聊无意义的 thread 行
+
+### Scenario: every turn carries its origin
+
+- **Given** 一个已跑过一个 turn 的已配对 channel
+- **When** owner 发出第二条消息
+- **Then** 该 turn 的文本同样以自己的 origin 块开头——来源不是只出现在首个 turn 的头部
+
+### Scenario: a slash command keeps its leading slash
+
+- **Given** 一个已配对的 channel
+- **When** owner 发送 `/help`
+- **Then** 它仍按命令处理（不会被前置 origin 块，也不会创建会话）
+
 ## Channels as a management plane（北极星）
 
 channel 被管理的方式，与 Coffer 管理 MCP server、memory、skill 的方式一致：在一处
@@ -913,12 +970,12 @@ chat 里运行整个 agent 舰队。
   adapter，规范化每条消息（媒体下载、转发展平、owner-gate、审计、vault），并为一个
   turn 驱动**任意**受管 agent——可按会话切换，且（因为每个线程都是自己的会话，
   FR-032）可按线程切换，于是一个 bot 能在一个线程里跑 Claude Code、在另一个线程里跑
-  Codex。这是 Coffer 的护城河：没有自己 channel 的 agent（Claude Code、Codex、Cursor、
-  OpenCode）**只能**经此触达 IM；且 **SeaTalk 对每个 agent 都是 Coffer-hosted，因为
-  没有任何外部网关会说 SeaTalk。** 整个 spec 009——包括下方的增强（FR-028…FR-041）
+  Codex。这是 Coffer 的护城河：没有自己 channel 的 agent（Claude Code、Codex）**只能**
+  经此触达 IM；且 **SeaTalk 对每个 agent 都是 Coffer-hosted，因为
+  没有任何外部网关会说 SeaTalk。** 整个 spec 009——包括下方的增强（FR-028…FR-042）
   ——描述的都是这条路径。保持其 agent 无关的那一处接缝：每条入站消息都变成文本加上
   磁盘上的 `Attachment(path, mime, filename)`，每个 agent adapter 按自己的方式物化附件
-  （Claude 内联图片/PDF；Codex/Hermes/OpenCode 收到文件路径；音频在上游被转写）。
+  （Claude 内联图片/PDF；Codex 收到文件路径；音频在上游被转写）。
   channel 层从不按 agent 分支。
 - **Externally-hosted channel 是非目标（non-goal）。** 一个 agent 原生网关（独立运行的
   OpenClaw、Hermes）或一个官方厂商集成（Claude-in-Slack、Codex-in-Slack、
@@ -956,7 +1013,7 @@ Coffer-hosted channel 与它们并不冗余——它是通往统一、本地、�
   转发记录）并挂到 turn，与既有的展平文本并列。（此前线程媒体只作为 agent 无法打开的、
   需鉴权的 `[image] <url>` 出现。）
 - **FR-030**: PDF 与 office 文档以抽取文本触达每个 agent，而非作为视觉输入。一个文档
-  附件被文本抽取进一个上下文块，于是路径原生 agent（Codex/Hermes/OpenCode）与视觉
+  附件被文本抽取进一个上下文块，于是路径原生 agent（Codex）与视觉
   agent 都能看到其内容；图片对支持它的 agent 仍保持视觉内联。
 - **FR-031**: SeaTalk 出站媒体被投递且线程感知。`send_media` 接到 SeaTalk 的文件上传 API
   （`supports_media` 为 true）；一个 agent 的 `MEDIA:/path` sentinel 把文件发回该 turn
@@ -976,6 +1033,18 @@ Coffer-hosted channel 与它们并不冗余——它是通往统一、本地、�
   限于会话内（无跨会话／切换 agent 的全历史重放）。网页 Chat 页把该引用渲染为一个紧凑的
   `📎 filename · mime` 芯片；本地 path 绝不发到线上。媒体目录由保留节奏上的 30 天 mtime
   清扫界定大小（bytes 可重新下载；无大小上限）。见 ADR-041。
+- **FR-042**: 每个 turn 都带上自己的来源。turn 文本以一个 `[Message origin]` 块开头，
+  写明平台、会话（kind、平台白送时的会话标题，以及始终存在的 chat id）、线程和发送者
+  （显示名**以及**稳定的平台 id——SeaTalk `employee_code`、Telegram `from.id`；平台工具调用要的是它，
+  而在群里它无处可寻，因为 `chat_id` 是群的）——
+  于是被问到「这是哪个群」的 agent 直接从收到的 turn 作答，而不是列出 bot 所在群再去推断；
+  平台工具调用（发群消息、查群信息）也有了明确的 chat id 可用。该块在命令识别之后（加了前缀的
+  `/help` 会不再是命令）、空信封检查之后折入，并像线程上下文（FR-029）一样持久化在用户消息
+  上——单一事实来源（FR-033）仍是一个字符串。它出现在**每一个** turn 上，而不只是会话的第一个：
+  `/agent` 可以在会话中途切换 agent（FR-040），resume 的 session 否则会丢掉它。标题与发送者
+  名字可由群成员设置，因此两者在进入 prompt 前都被压成一行并截断——改名无法伪造出额外的
+  origin 行。平台白送会话标题时就带上（Telegram `chat.title`）；不给时（SeaTalk 群事件只带
+  `group_id`）就只用 id 指名该会话，agent 可以通过平台自己的工具把 id 解析成名字。
 
 ### C. Group UX and gating
 

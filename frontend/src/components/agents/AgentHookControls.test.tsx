@@ -77,8 +77,8 @@ describe("AgentHookToggle", () => {
     render(<AgentHookToggle name="cur" />);
     const sw = screen.getByRole("switch", { name: /session-start rules/i });
     expect(sw).toBeDisabled();
-    // The reason frames the gap as Coffer's ("yet"), not the product's — for
-    // opencode the mechanism exists upstream and Coffer hasn't implemented it
+    // The reason frames the gap as Coffer's ("yet"), not the product's — the
+    // mechanism may exist upstream while Coffer hasn't implemented it
     // (spec 004 Key Entities: surfaces MUST say so).
     expect(screen.getByText(/can't inject session context .* yet/i)).toBeInTheDocument();
     fireEvent.click(sw);

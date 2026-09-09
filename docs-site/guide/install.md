@@ -25,7 +25,7 @@ into `~/.coffer/bin`:
 
 - **`coffer`** — management CLI (`coffer mcp add`, `coffer mcp list`, …)
 - **`coffer-daemon`** — the long-lived background process that aggregates upstream MCP servers
-- **`coffer-mcp-shim`** — the stdio bridge that MCP clients (Claude Code, Cursor, …) talk to
+- **`coffer-mcp-shim`** — the stdio bridge that MCP clients (Claude Code, Codex, …) talk to
 
 ### macOS (Apple Silicon)
 

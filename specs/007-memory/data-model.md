@@ -20,6 +20,7 @@ Pydantic v2 `BaseModel`. Held inside `Resource.config` when `kind == "memory"`. 
 | `embedding_credential_ref` | `str \| None`                              | Keychain ref for the embedding API key (never plaintext).                                          |
 | `embedding_dimensions`     | `int`                                      | Default `768`; range `1–8192`. Drives the per-store `vec_chunks` table width; carried on the wire. |
 | `max_fact_chars`           | `int`                                      | Default `8192`; range `64–32768`. Mutable.                                                         |
+| `merged_identities`        | `list[str]`                                | Project ULIDs merged INTO this store (FR-058, amendment 2026-07-10). System-managed (never user-set); a resolve whose identity is listed here — and whose own store is gone — lands on this store. Syncs with the resource. Default `[]`. |
 
 The embedding model is **mutable** — changing it re-embeds the store (files are truth). No immutability lock.
 
@@ -407,14 +408,14 @@ release checks and can leave the repo in a half-tagged state.
 
 The raw transcript is **never persisted** and never reaches the fact body. Before the LLM call:
 
-- All `tool_use` / `tool_result` blocks (Claude/Codex) and non-`text` parts — tool, reasoning, file, step (OpenCode) — are dropped.
+- All `tool_use` / `tool_result` blocks (Claude/Codex) are dropped.
 - File-content passages and command output embedded in assistant turns are dropped.
 - Common secret patterns (API keys, tokens, PEM blocks) are redacted by a regex scrubber.
 - Long blobs are truncated.
 
 Only scrubbed natural-language text (user + assistant prose) is sent to the LLM. Only the distilled insight text is written to the fact store. Neither the raw transcript nor the scrubbed intermediate text is stored anywhere in `~/.coffer/`.
 
-Coffer reads `~/.claude/projects/`, `~/.codex/sessions/`, and OpenCode's storage tree (`~/.local/share/opencode/storage/`) but **never writes to them** in this flow — Spec 004's read-only invariant is fully preserved. Readers for Cursor / OpenClaw / Hermes transcripts are deferred (see spec.md, US "distill transcript to memory"): their stores are ephemeral, undocumented, or carry no working directory to scope facts by.
+Coffer reads `~/.claude/projects/` and `~/.codex/sessions/` but **never writes to them** in this flow — Spec 004's read-only invariant is fully preserved.
 
 ### Audit
 

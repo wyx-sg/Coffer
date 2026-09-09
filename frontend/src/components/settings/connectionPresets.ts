@@ -46,36 +46,20 @@ export const PRESETS: Preset[] = [
 
 // The agents a connection projects into BY DEFAULT, mirroring the backend
 // (`_DEFAULT_COMPATIBLE`). The form pre-fills the checkboxes from this; ollama is
-// internal-only (projects into no agent). openclaw speaks BOTH wires (its
-// provider `api` field takes openai-completions AND anthropic-messages,
-// ADR-044), so it defaults into both.
+// internal-only (projects into no agent).
 export function defaultCompatibleAgents(protocol: Protocol | ""): AgentType[] {
   switch (protocol) {
     case "anthropic":
-      return ["claude_code", "openclaw"];
+      return ["claude_code"];
     case "openai":
-      return ["codex", "opencode", "hermes", "openclaw"];
+      return ["codex"];
     case "unknown":
     case "": // custom, before a wire is picked
-      return ["claude_code", "codex", "opencode", "hermes", "openclaw"];
+      return ["claude_code", "codex"];
     default: // ollama
       return [];
   }
 }
 
 // The agents a user can tick a connection as compatible with.
-export const SELECTABLE_AGENTS: AgentType[] = [
-  "claude_code",
-  "codex",
-  "opencode",
-  "hermes",
-  "openclaw",
-];
-
-// Agents that can never consume a connection, with the i18n key stating why —
-// shown as a disabled checkbox + reason rather than silently omitted (ADR-042:
-// an absent facet is surfaced, not hidden). cursor-agent exposes no base-URL
-// flag or endpoint config key; it is locked to Cursor's own backend.
-export const UNPROJECTABLE_AGENTS: { type: AgentType; reasonKey: string }[] = [
-  { type: "cursor", reasonKey: "settings.connections.agentCursorUnprojectable" },
-];
+export const SELECTABLE_AGENTS: AgentType[] = ["claude_code", "codex"];

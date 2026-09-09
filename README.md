@@ -12,7 +12,7 @@
   <img alt="Platforms" src="https://img.shields.io/badge/platform-macOS-555">
 </p>
 
-> Local-first AI agent vault. One place to manage everything your AI agents touch.
+> Local-first AI agent vault, one vault across your machines. One place to manage everything your AI agents touch.
 
 Coffer is a daemon + CLI + desktop app that gives every AI agent on your machine one safe, shared surface. All state lives on your machine — no cloud accounts, no vendor lock-in. Everything Coffer manages is a **resource kind**:
 

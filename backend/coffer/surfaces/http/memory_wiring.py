@@ -22,9 +22,11 @@ from coffer.application.knowledge.retrieval import (
     no_embedding,
 )
 from coffer.application.memory.builtin_tools import register_memory_builtin_tools
+from coffer.application.memory.consolidate import StoreConsolidator, find_alias_holder
 from coffer.application.memory.handoff import HandoffService
 from coffer.application.memory.journal import JournalService
 from coffer.application.memory.kind import make_memory_kind
+from coffer.application.memory.labels_sync import MemoryLabelsSyncState
 from coffer.application.memory.scope import GLOBAL_STORE_NAME, ScopeResolver
 from coffer.application.memory.service import MemoryService
 from coffer.application.memory.stores import build_store_ref_for
@@ -33,7 +35,12 @@ from coffer.domain.knowledge.document import KIND_MEMORY, WORKSPACE_GLOBAL_PROJE
 from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.knowledge.repository import DocumentRepo
 from coffer.infrastructure.memory.project_root_repo import ProjectRootRepo
-from coffer.infrastructure.memory.scope_fs import git_branch, git_root, project_ulid
+from coffer.infrastructure.memory.scope_fs import (
+    git_branch,
+    git_root,
+    project_identity,
+    project_ulid,
+)
 from coffer.infrastructure.memory.store_label_repo import StoreLabelRepo
 from coffer.surfaces.http.dependencies import set_memory_service
 from coffer.surfaces.http.memory.dependencies import (
@@ -41,6 +48,7 @@ from coffer.surfaces.http.memory.dependencies import (
     set_project_root_repo,
     set_store_label_repo,
 )
+from coffer.surfaces.http.memory.merge_state import set_store_consolidator
 from coffer.surfaces.http.wiring import build_substrate
 
 if TYPE_CHECKING:
@@ -67,13 +75,40 @@ def wire_memory_kind(
     app.state.memory_reconciler = reconciler  # reused by the startup reindex sweep
     project_roots = ProjectRootRepo(sm)  # type: ignore[arg-type]
     set_project_root_repo(project_roots)
-    set_store_label_repo(StoreLabelRepo(sm))  # type: ignore[arg-type]
+    label_repo = StoreLabelRepo(sm)  # type: ignore[arg-type]
+    set_store_label_repo(label_repo)
+    adopter = StoreConsolidator(
+        resources=resource_svc,
+        reconciler=reconciler,
+        roots=project_roots,
+        labels=label_repo,
+        store_dir=paths.memory_store_dir,
+        git_root=git_root,
+        project_ulid=project_identity,
+    )
+
+    # Shared with the explicit AI-assisted merge (FR-057) so merge + adoption
+    # serialize on the same lock; wire_merge picks it up at its own root.
+    set_store_consolidator(adopter)
+
+    async def migrate_store(legacy_id: str, new_id: str, root: str) -> None:
+        from coffer.application.memory.scope import project_store_name
+
+        await adopter.adopt(project_store_name(legacy_id), project_store_name(new_id), root)
+
+    async def merged_alias_target(project_id: str) -> str | None:
+        """FR-058: the store whose ``merged_identities`` lists this identity."""
+        return await find_alias_holder(resource_svc, project_id)
+
     scope = ScopeResolver(
         resources=resource_svc,
         git_root=git_root,
-        project_ulid=project_ulid,
+        project_ulid=project_identity,
         store_dir=paths.memory_store_dir,
         record_project_root=project_roots.set,
+        legacy_project_ulid=project_ulid,
+        migrate_store=migrate_store,
+        merged_alias_target=merged_alias_target,
     )
     memory_service = MemoryService(
         resource_service=resource_svc,
@@ -105,6 +140,13 @@ def wire_memory_kind(
     set_journal_service(journal_service)
     app.state.kinds["memory"] = make_memory_kind(memory_service)
     set_memory_service(memory_service)
+    # Store labels sync as a state area (spec 010 x FR-017c): a labelled
+    # project store reads by its name on every machine, not "unnamed store".
+    providers = getattr(app.state, "sync_state_providers", None)
+    if providers is None:
+        providers = []
+        app.state.sync_state_providers = providers
+    providers.append(MemoryLabelsSyncState(label_repo))
     register_memory_builtin_tools(
         builtin_tools, memory_service=memory_service, handoff_service=handoff_service
     )

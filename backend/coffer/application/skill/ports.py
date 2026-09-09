@@ -17,7 +17,6 @@ import pathlib
 from typing import Any, Protocol
 
 from coffer.domain.skill.binding import BindingState, LinkMode
-from coffer.domain.skill.external_dir import ExternalDirRegistration
 from coffer.domain.skill.scan import ScanEntry
 
 
@@ -102,16 +101,3 @@ class SyncEnginePort(Protocol):
         expected_master: pathlib.Path,
         link_mode: LinkMode | None,
     ) -> Any: ...
-
-
-class ExternalDirRegistrarPort(Protocol):
-    """Register / deregister a Coffer-owned external skill directory in an
-    agent's own config file (spec 005, EXTERNAL_DIR delivery).
-
-    Both operations are idempotent; ``deregister`` is a no-op when the entry,
-    container path, or file is absent.
-    """
-
-    def register(self, reg: ExternalDirRegistration) -> None: ...
-
-    def deregister(self, reg: ExternalDirRegistration) -> None: ...

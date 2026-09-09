@@ -11,13 +11,20 @@ never resurrect a deletion on the other machines.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from datetime import UTC, datetime, timedelta
 
 from coffer.application.resource_service import ResourceService
-from coffer.application.sync.ports import CredentialSyncPort, TombstoneLedgerPort, WorkspacePort
+from coffer.application.sync.ports import (
+    CredentialSyncPort,
+    SyncedStatePort,
+    TombstoneLedgerPort,
+    WorkspacePort,
+)
+from coffer.domain.sync.fernet_time import fernet_created_at, is_staler
 from coffer.domain.sync.manifest import SCHEMA_VERSION, Manifest
 from coffer.domain.sync.models import TOMBSTONE_TTL_SECONDS, Tombstone
+from coffer.domain.sync.portability import normalize_home, strip_overridden
 from coffer.domain.sync.serialization import resource_to_doc
 
 
@@ -34,30 +41,98 @@ class SyncExporter:
         credentials: CredentialSyncPort,
         workspace: WorkspacePort,
         ledger: TombstoneLedgerPort | None = None,
+        state_providers: Sequence[SyncedStatePort] = (),
+        *,
+        home: str | None,
     ) -> None:
         self._resources = resources
         self._credentials = credentials
         self._workspace = workspace
         self._ledger = ledger
+        self._state_providers = list(state_providers)
+        self._home = home
 
     async def export(
-        self, *, quarantined: Collection[str] = (), machine_id: str | None = None
+        self,
+        *,
+        quarantined: Collection[str] = (),
+        machine_id: str | None = None,
+        failed_state: Collection[str] = (),
+        allow_deletions: bool = True,
     ) -> None:
         resources = await self._resources.list()
-        docs = [
-            resource_to_doc(
-                kind=r.kind,
-                name=r.name,
-                description=r.description,
-                enabled=r.enabled,
-                config=r.config,
+        overrides = (
+            await asyncio.to_thread(self._workspace.read_overrides, machine_id)
+            if machine_id
+            else {}
+        )
+        workspace_docs = await asyncio.to_thread(self._workspace.read_resource_docs)
+        shared_before = {(d.kind, d.name): d.config for d in workspace_docs} if overrides else {}
+        docs = []
+        for r in resources:
+            config = dict(r.config)
+            # Portability first: the medium speaks ${HOME}, never a literal home.
+            if self._home:
+                config = normalize_home(config, self._home)
+            patch = overrides.get((r.kind, r.name))
+            shared_doc = shared_before.get((r.kind, r.name))
+            if patch and shared_doc is not None:
+                # A machine's local specialization must not leak into the
+                # medium: overridden keys revert to the last shared values.
+                # No shared doc yet (override set before the first export):
+                # skip stripping — the normalized live values ARE the baseline.
+                config = strip_overridden(config, patch, shared_doc)
+            docs.append(
+                resource_to_doc(
+                    kind=r.kind,
+                    name=r.name,
+                    description=r.description,
+                    enabled=r.enabled,
+                    config=config,
+                    # Scope carries machine ULIDs / agent names, never paths —
+                    # it rides verbatim, exempt from ${HOME} normalization and
+                    # per-machine override stripping (both operate on config
+                    # only, above).
+                    scope=r.scope,
+                )
             )
-            for r in resources
-        ]
         live = {(r.kind, r.name): _aware(r.created_at) for r in resources}
+        # Credential liveness for tombstone reconciliation: a blob whose
+        # embedded encryption time postdates the tombstone was re-created and
+        # supersedes the deletion (same resurrection rule as resources).
+        for cred_ref in await asyncio.to_thread(self._credentials.list_refs):
+            blob = await asyncio.to_thread(self._credentials.read_ciphertext, cred_ref)
+            ts = fernet_created_at(blob) if blob is not None else None
+            if ts is not None:
+                live[("credential", cred_ref)] = datetime.fromtimestamp(ts, tz=UTC)
         pending = await self._reconcile_ledger(live, set(quarantined))
+        # Workspace docs with no local row are PENDING IMPORT, not deleted:
+        # they arrived from the remote and this machine has not (successfully)
+        # ingested them yet. Deleting a doc from the medium requires a
+        # tombstone — the ledger's (this machine's own deletions) or a
+        # workspace tombstone file — never mere local absence (spec 010).
+        ledger_refs = {(t.kind, t.name) for t in pending}
+        foreign = {
+            f"{d.kind}:{d.name}"
+            for d in workspace_docs
+            if (d.kind, d.name) not in live and (d.kind, d.name) not in ledger_refs
+        }
+        state_docs = []
+        for provider in self._state_providers:
+            area_docs, owned = await provider.export_docs()
+            state_docs.append((provider.area, area_docs, owned))
         # All filesystem + raw-sqlite IO runs off the event loop.
-        await asyncio.to_thread(self._dump, docs, live, pending, set(quarantined), machine_id)
+        await asyncio.to_thread(
+            self._dump,
+            docs,
+            live,
+            pending,
+            set(quarantined) | foreign,
+            machine_id,
+            state_docs,
+            set(failed_state),
+            allow_deletions,
+        )
 
     async def _reconcile_ledger(
         self, live: dict[tuple[str, str], datetime], quarantined: set[str]
@@ -86,19 +161,42 @@ class SyncExporter:
         docs: list[dict[str, object]],
         live: dict[tuple[str, str], datetime],
         pending: list[Tombstone],
-        quarantined: set[str],
+        preserve_refs: set[str],
         machine_id: str | None,
+        state_docs: list[tuple[str, list[tuple[str, dict[str, object]]], list[str]]],
+        failed_state: set[str],
+        allow_deletions: bool,
     ) -> None:
         withheld = self._sync_tombstone_files(live, pending, machine_id)
+        for area, docs_for_area, owned in state_docs:
+            preserve = {p[len(area) + 1 :] for p in failed_state if p.startswith(area + "/")}
+            self._workspace.write_state_docs(
+                area, docs_for_area, owned_prefixes=owned, preserve=preserve
+            )
         kept_docs = [d for d in docs if (str(d["kind"]), str(d["name"])) not in withheld]
-        self._workspace.write_resource_docs(kept_docs, preserve=quarantined)
-        self._workspace.mirror_trees_out()
+        self._workspace.write_resource_docs(kept_docs, preserve=preserve_refs)
+        # Tree and credential deletions propagate only after this machine has
+        # completed an import — before that, local absence just means
+        # "not ingested yet", and exporting it would delete the other
+        # machines' content (the 2026-07-10 first-sync incident).
+        self._workspace.mirror_trees_out(delete_missing=allow_deletions)
         blobs: dict[str, bytes] = {}
         for ref in self._credentials.list_refs():
+            if ("credential", ref) in withheld:
+                # Deletion merged but not yet applied locally: exporting the
+                # row now would race the tombstone back out of the medium.
+                continue
             blob = self._credentials.read_ciphertext(ref)
             if blob is not None:
                 blobs[ref] = blob
-        self._workspace.write_credential_blobs(blobs)
+        # A run that pulled but died before importing leaves the workspace
+        # fresher than the DB; keep the fresher encryption so this export
+        # cannot re-clobber it (the import below the same run adopts it).
+        for ref, ws_blob in self._workspace.read_credential_blobs().items():
+            local = blobs.get(ref)
+            if local is not None and is_staler(local, ws_blob):
+                blobs[ref] = ws_blob
+        self._workspace.write_credential_blobs(blobs, delete_missing=allow_deletions)
         self._write_manifest_guarded()
 
     def _write_manifest_guarded(self) -> None:

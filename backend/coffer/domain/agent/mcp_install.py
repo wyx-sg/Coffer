@@ -10,7 +10,7 @@ The write is driven by two orthogonal axes (see :mod:`mcp_injection`):
   (each preserving the user's other content: comments, ordering, unrelated
   keys).
 - **shape** — ``container_key`` (the top-level table: ``mcpServers`` /
-  ``mcp_servers``; a dotted JSON key like openclaw's ``mcp.servers`` descends
+  ``mcp_servers``; a dotted JSON key like ``mcp.servers`` descends
   one object per dot) and ``entry_style`` (how a single stdio entry is
   rendered: a ``{"command": shim}`` command-map, or the typed-command-array
   shape ``{"type": "local", "command": [shim]}``).
@@ -45,7 +45,7 @@ from coffer.domain.agent.mcp_injection import McpEntryStyle, default_container_k
 
 def _json_container_create(data: dict[str, Any], dotted_key: str) -> dict[str, Any]:
     """The JSON servers container for a possibly-dotted ``container_key``
-    (``mcp.servers`` — openclaw nests its map one level down), creating each
+    (``mcp.servers`` — an agent may nest its map one level down), creating each
     missing step. A hand-edit that left a non-object at any step is replaced
     (mirrors the flat branch's ``isinstance(dict)`` guard). JSON only — the
     TOML/YAML container keys in use carry no dots."""
@@ -59,13 +59,30 @@ def _json_container_create(data: dict[str, Any], dotted_key: str) -> dict[str, A
     return node
 
 
-def _entry_fields(shim_path: str, entry_style: McpEntryStyle) -> dict[str, Any]:
-    """The key/value pairs of a single stdio ``coffer`` entry for the style."""
+def _entry_fields(
+    shim_path: str, entry_style: McpEntryStyle, agent_name: str | None = None
+) -> dict[str, Any]:
+    """The key/value pairs of a single stdio ``coffer`` entry for the style.
+
+    ``agent_name``, when given, threads the installing agent's own name
+    through as ``--agent <name>`` (spec 004 FR-019, amended) so the shim can
+    self-report its identity at the MCP handshake. The command-map style
+    carries it as a separate ``args`` list (mirroring how Claude Code / Codex
+    already render stdio server args); the typed-array styles have no
+    ``args`` key in their shape, so the flag is appended directly onto the
+    ``command`` array instead. ``agent_name=None`` (the default) reproduces
+    the pre-Task-9 shape exactly, for any caller that doesn't know the name.
+    """
     if entry_style is McpEntryStyle.TYPED_LOCAL_OBJECT:
-        return {"type": "local", "command": [shim_path], "enabled": True}
+        command = [shim_path, "--agent", agent_name] if agent_name else [shim_path]
+        return {"type": "local", "command": command, "enabled": True}
     if entry_style is McpEntryStyle.TYPED_COMMAND_ARRAY:
-        return {"type": "local", "command": [shim_path]}
-    return {"command": shim_path}
+        command = [shim_path, "--agent", agent_name] if agent_name else [shim_path]
+        return {"type": "local", "command": command}
+    fields: dict[str, Any] = {"command": shim_path}
+    if agent_name:
+        fields["args"] = ["--agent", agent_name]
+    return fields
 
 
 def _coffer_command(entry: Any) -> str | None:
@@ -89,14 +106,18 @@ def apply_install(
     *,
     container_key: str | None = None,
     entry_style: McpEntryStyle = McpEntryStyle.COMMAND_MAP,
+    agent_name: str | None = None,
 ) -> str:
     """Return new config text with the ``coffer`` stdio entry inserted/updated.
 
     Idempotent: an existing ``coffer`` entry is replaced in place, never
-    duplicated.
+    duplicated — including entries written before ``agent_name`` support was
+    added (agents installed pre-Task-9 have no ``--agent`` flag at all;
+    re-installing rewrites them with it, in place — there is no separate
+    auto-migration path).
     """
     ck = container_key or default_container_key(fmt)
-    fields = _entry_fields(shim_path, entry_style)
+    fields = _entry_fields(shim_path, entry_style, agent_name)
 
     if fmt is ConfigFileFormat.JSON:
         data = _parse_json(text)

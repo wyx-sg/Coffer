@@ -11,9 +11,11 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
 import pytest_asyncio
+from cryptography.fernet import Fernet
 from pydantic import BaseModel
 
 from coffer.application.audit_service import AuditService
@@ -53,7 +55,14 @@ class _FakeConfig(BaseModel):
 
 
 def _kinds() -> dict[str, Kind]:
-    return {"mcp_server": Kind(name="mcp_server", display_name="MCP", config_schema=_FakeConfig)}
+    return {
+        "mcp_server": Kind(
+            name="mcp_server",
+            display_name="MCP",
+            config_schema=_FakeConfig,
+            scope_axes=("machine", "agent"),
+        )
+    }
 
 
 class _NoKeyring:
@@ -80,6 +89,7 @@ class Machine:
     master_key: MasterKeyManager
     db_path: Path
     knowledge: Path
+    sm: Any = None
 
     def cred_store(self) -> EncryptedCredentialStore:
         key = self.master_key.export_key()
@@ -93,7 +103,10 @@ async def _make_machine(
     remote: Path,
     *,
     create_key: bool,
+    key_bytes: bytes | None = None,
     kinds: dict[str, Kind] | None = None,
+    state_providers_factory: Any = None,
+    home: str | None = None,
 ) -> Machine:
     root.mkdir(parents=True, exist_ok=True)
     db_path = root / "coffer.db"
@@ -102,13 +115,19 @@ async def _make_machine(
         await conn.run_sync(Base.metadata.create_all)
     sm = session_maker(engine)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
-    resources = ResourceService(
-        kinds=kinds or _kinds(), repo=SqlAlchemyResourceRepo(sm), audit=audit
-    )
 
     master_key = MasterKeyManager(root / "master.key", _NoKeyring())
-    if create_key:
+    if key_bytes is not None:
+        master_key.install_key(key_bytes)
+    elif create_key:
         master_key.resolve(allow_create=True)
+    key = master_key.export_key()
+    resources = ResourceService(
+        kinds=kinds or _kinds(),
+        repo=SqlAlchemyResourceRepo(sm),
+        audit=audit,
+        credentials=EncryptedCredentialStore(db_path, key) if key is not None else None,
+    )
     cred_sync = CredentialSyncAdapter(db_path, master_key)
 
     knowledge = root / "live-knowledge"
@@ -128,8 +147,11 @@ async def _make_machine(
     resources.add_delete_listener(
         lambda ref, actor: None if actor == "sync" else ledger.record(ref.kind, ref.name)
     )
-    exporter = SyncExporter(resources, cred_sync, workspace, ledger)
-    importer = SyncImporter(resources, cred_sync, workspace)
+    providers = state_providers_factory(resources, sm) if state_providers_factory else ()
+    exporter = SyncExporter(
+        resources, cred_sync, workspace, ledger, state_providers=providers, home=home
+    )
+    importer = SyncImporter(resources, cred_sync, workspace, state_providers=providers, home=home)
     identity = MachineIdentityService(
         SqlAlchemyMachineIdentityRepo(sm),
         audit,
@@ -147,6 +169,8 @@ async def _make_machine(
         identity=identity,
         workspace=workspace,
         coffer_version="0.0.0-test",
+        home=home,
+        resources=resources,
     )
     return Machine(
         name=name,
@@ -158,6 +182,7 @@ async def _make_machine(
         master_key=master_key,
         db_path=db_path,
         knowledge=knowledge,
+        sm=sm,
     )
 
 
@@ -210,8 +235,10 @@ async def test_round_trip_and_credential_bootstrap(tmp_path, remote) -> None:  #
     assert b.cred_store().get("cred-x") == "super-secret"
 
 
-@pytest.mark.acceptance(spec="010-sync", scenario="conflicting edits stop the run for resolution")
-async def test_conflict_then_resolve(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+@pytest.mark.acceptance(
+    spec="010-sync", scenario="conflicting edits auto-resolve to the most recently synced edit"
+)
+async def test_conflict_auto_resolves_newest_wins(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
     a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
     await a.resources.register("mcp_server", "confluence", {"value": "base"}, "test")
     await a.service.run()
@@ -219,19 +246,22 @@ async def test_conflict_then_resolve(tmp_path, remote) -> None:  # type: ignore[
     b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
     await b.service.run()
 
-    # Both edit the same resource; A pushes first.
+    # Both edit the same resource; A pushes first, B's edit is the newer one.
     await a.resources.update_config(ResourceRef("mcp_server", "confluence"), {"value": "A2"}, "t")
     await a.service.run()
     await b.resources.update_config(ResourceRef("mcp_server", "confluence"), {"value": "B2"}, "t")
-    conflicted = await b.service.run()
+    state = await b.service.run()
 
-    assert conflicted.status is SyncStatus.CONFLICTED
-    assert any("confluence" in p for p in conflicted.conflict_paths)
-
-    resolved = await b.service.resolve("theirs", [])
-    assert resolved.status is SyncStatus.CLEAN
+    # No user-facing conflict: the run auto-resolves (newest commit per path
+    # wins; a tie keeps ours = the machine running the merge) and completes.
+    assert state.status is not SyncStatus.CONFLICTED
     got = await b.resources.get(ResourceRef("mcp_server", "confluence"))
-    assert got.config == {"value": "A2"}
+    assert got.config == {"value": "B2"}
+
+    # A converges on the same winner on its next run.
+    await a.service.run()
+    got_a = await a.resources.get(ResourceRef("mcp_server", "confluence"))
+    assert got_a.config == {"value": "B2"}
 
 
 @pytest.mark.acceptance(spec="010-sync", scenario="auto-sync converges after a change")
@@ -425,6 +455,82 @@ async def test_failed_import_quarantines_instead_of_deleting(tmp_path, remote) -
     assert any(f == "resources/mcp_server/portable.yaml" for f in b.workspace.list_files())
 
 
+@pytest.mark.acceptance(spec="010-sync", scenario="scope edits propagate like any resource edit")
+async def test_scope_rides_sync_and_converges(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """Scope (ADR-045) travels through the sync medium like any other curated
+    field: a changed scope on an existing row converges, and a resource
+    registered WITH a scope already set converges its scope on first import
+    too (Task 6)."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.resources.register("mcp_server", "confluence", {"value": "A"}, "test")
+    await a.resources.update_scope(
+        ResourceRef("mcp_server", "confluence"), {"machine-1": ["agent-a"]}, actor="test"
+    )
+    await a.service.run()
+
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()
+    got = await b.resources.get(ResourceRef("mcp_server", "confluence"))
+    assert got.scope == {"machine-1": ["agent-a"]}
+
+    # A changes scope on the existing row; B's next import converges onto it.
+    await a.resources.update_scope(
+        ResourceRef("mcp_server", "confluence"), {"machine-2": "*"}, actor="test"
+    )
+    await a.service.run()
+    await b.service.run()
+    got2 = await b.resources.get(ResourceRef("mcp_server", "confluence"))
+    assert got2.scope == {"machine-2": "*"}
+
+    # A registers a brand-new resource and scopes it before B has ever seen
+    # it: the first import that creates the row on B must also apply scope.
+    await a.resources.register("mcp_server", "fresh", {"value": "new"}, "test")
+    await a.resources.update_scope(
+        ResourceRef("mcp_server", "fresh"), {"machine-3": "*"}, actor="test"
+    )
+    await a.service.run()
+    await b.service.run()
+    fresh = await b.resources.get(ResourceRef("mcp_server", "fresh"))
+    assert fresh.scope == {"machine-3": "*"}
+
+    # Clearing scope back to unscoped converges too.
+    await a.resources.update_scope(ResourceRef("mcp_server", "confluence"), None, actor="test")
+    await a.service.run()
+    await b.service.run()
+    got3 = await b.resources.get(ResourceRef("mcp_server", "confluence"))
+    assert got3.scope is None
+
+
+@pytest.mark.acceptance(spec="010-sync", scenario="an older build refuses a newer workspace")
+async def test_manifest_gate_rejects_next_schema_version(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """The too-new gate must hold at the very next version boundary, not just
+    for a wildly future one — meaningful after the v4 bump (Task 6)."""
+    import json as _json
+
+    from coffer.domain.sync.errors import SyncWorkspaceTooNew
+    from coffer.domain.sync.manifest import SCHEMA_VERSION
+
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.resources.register("mcp_server", "baseline", {"value": "1"}, "test")
+    await a.service.run()
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()
+
+    ws = a.root / "ws"
+    repo = GitRepo(ws)
+    repo.pull("main")
+    (ws / "manifest.json").write_text(
+        _json.dumps({"schema_version": SCHEMA_VERSION + 1}) + "\n", encoding="utf-8"
+    )
+    repo.commit_all("next layout")
+    repo.push("main")
+
+    with pytest.raises(SyncWorkspaceTooNew):
+        await b.service.run()
+    names = {r.name for r in await b.resources.list()}
+    assert "baseline" in names
+
+
 @pytest.mark.acceptance(spec="010-sync", scenario="an older build refuses a newer workspace")
 async def test_older_build_refuses_newer_workspace(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
     import json as _json
@@ -579,9 +685,11 @@ async def test_too_new_gate_holds_on_second_run(tmp_path, remote) -> None:  # ty
     assert "newer" in (state.last_error or "")
 
 
-async def test_resolve_theirs_accepts_a_deletion(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
-    """delete/modify conflict: resolving --theirs toward the deleting side
-    removes the file instead of erroring (review #281 finding 4)."""
+async def test_auto_resolve_handles_delete_modify(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """delete/modify conflict auto-resolves without user action, and the
+    tombstone machinery still decides the outcome: an edit that PREDATES the
+    deletion never resurrects the resource (review #281 finding 4 semantics,
+    carried into auto-resolve)."""
     a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
     await a.resources.register("mcp_server", "contested", {"value": "base"}, "test")
     await a.service.run()
@@ -595,10 +703,12 @@ async def test_resolve_theirs_accepts_a_deletion(tmp_path, remote) -> None:  # t
         ResourceRef("mcp_server", "contested"), {"value": "edited"}, "test"
     )
     state = await b.service.run()
-    assert state.status is SyncStatus.CONFLICTED
+    assert state.status is not SyncStatus.CONFLICTED
 
-    resolved = await b.service.resolve("theirs", [])
-    assert resolved.status is not SyncStatus.CONFLICTED
+    # B's edit predates A's tombstone, so the deletion wins as the runs
+    # settle: B withholds the stale doc from export and applies the
+    # tombstone on import.
+    await b.service.run()
     assert not [r for r in await b.resources.list() if r.name == "contested"]
 
 
@@ -729,10 +839,11 @@ async def test_near_real_time_change_and_probe_convergence(tmp_path, remote) -> 
     assert got.config == {"value": "nrt"}
 
 
-async def test_rerun_does_not_blow_through_conflict(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
-    """Running sync again while conflicted must stay conflicted — never
-    export over the unmerged files and silently resolve local-wins
-    (review #283 blocker 2, service-level guard)."""
+async def test_rerun_settles_a_preexisting_merge_deterministically(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """A run entered with an unresolved merge on disk (e.g. a crashed prior
+    run) must NOT export over the conflicted files (review #283 blocker 2);
+    it auto-resolves them by the same newest-wins policy FIRST, then proceeds
+    — both machines converge on the same winner."""
     a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
     await a.resources.register("mcp_server", "contested", {"value": "base"}, "test")
     await a.service.run()
@@ -742,20 +853,25 @@ async def test_rerun_does_not_blow_through_conflict(tmp_path, remote) -> None:  
     await a.resources.update_config(ResourceRef("mcp_server", "contested"), {"value": "A2"}, "test")
     await a.service.run()
     await b.resources.update_config(ResourceRef("mcp_server", "contested"), {"value": "B2"}, "test")
-    state = await b.service.run()
-    assert state.status is SyncStatus.CONFLICTED
+    # Simulate a run that merged into conflict and died before resolving:
+    # produce the conflicted working tree directly via git on B's workspace.
+    b_git = GitRepo(b.root / "ws")
+    (b.root / "ws" / "resources" / "mcp_server" / "contested.yaml").write_text(
+        "config:\n  value: B2\ndescription: null\nenabled: true\n"
+        "kind: mcp_server\nname: contested\n",
+        encoding="utf-8",
+    )
+    b_git.commit_all("b edit")
+    outcome = b_git.pull("main")
+    assert outcome.is_conflict
 
-    # A second (auto or manual) run must not auto-resolve the conflict.
+    # The next run settles the leftover merge (newest edit wins: B2) instead
+    # of parking in conflicted or exporting over the unmerged files.
     state = await b.service.run()
-    assert state.status is SyncStatus.CONFLICTED
-    # A's copy is untouched by B's rerun.
+    assert state.status is not SyncStatus.CONFLICTED
+    assert (await b.resources.get(ResourceRef("mcp_server", "contested"))).config == {"value": "B2"}
     await a.service.run()
-    assert (await a.resources.get(ResourceRef("mcp_server", "contested"))).config == {"value": "A2"}
-
-    # Resolution still works normally afterwards.
-    resolved = await b.service.resolve("theirs", [])
-    assert resolved.status is not SyncStatus.CONFLICTED
-    assert (await b.resources.get(ResourceRef("mcp_server", "contested"))).config == {"value": "A2"}
+    assert (await a.resources.get(ResourceRef("mcp_server", "contested"))).config == {"value": "B2"}
 
 
 async def test_import_preserves_local_derived_indexes(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
@@ -777,3 +893,371 @@ async def test_import_preserves_local_derived_indexes(tmp_path, remote) -> None:
     await a.service.run()
     assert (a.knowledge / "note.md").stat().st_ino == ino_before
     assert (a.knowledge / "INDEX.md").exists()
+
+
+@pytest.mark.acceptance(spec="010-sync", scenario="config paths follow each machine's home")
+async def test_home_paths_follow_the_machine(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True, home="/Users/alice")
+    await a.resources.register("mcp_server", "claude", {"value": "/Users/alice/.claude"}, "test")
+    await a.service.run()
+    # The medium speaks ${HOME}, never a literal home.
+    doc = (a.root / "ws" / "resources" / "mcp_server" / "claude.yaml").read_text()
+    assert "${HOME}/.claude" in doc
+    assert "/Users/alice" not in doc
+
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True, home="/home/bob")
+    await b.service.run()
+    got = await b.resources.get(ResourceRef("mcp_server", "claude"))
+    assert got.config == {"value": "/home/bob/.claude"}
+
+
+@pytest.mark.acceptance(
+    spec="010-sync", scenario="a per-machine override survives sync round trips"
+)
+async def test_override_round_trip_never_leaks(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.resources.register("mcp_server", "tool", {"value": "/usr/local/bin/x"}, "test")
+    await a.service.run()
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()
+
+    # B overrides the path for its own hardware; applies on its next run.
+    await b.service.set_override(
+        "mcp_server", "tool", {"value": "/opt/homebrew/bin/x"}, actor="test"
+    )
+    await b.service.run()
+    assert (await b.resources.get(ResourceRef("mcp_server", "tool"))).config == {
+        "value": "/opt/homebrew/bin/x"
+    }
+
+    # The specialization never leaks into the medium or onto A.
+    await a.service.run()
+    assert (await a.resources.get(ResourceRef("mcp_server", "tool"))).config == {
+        "value": "/usr/local/bin/x"
+    }
+    await b.service.run()
+    await a.service.run()
+    assert (await a.resources.get(ResourceRef("mcp_server", "tool"))).config == {
+        "value": "/usr/local/bin/x"
+    }
+
+    # A shared edit to a NON-overridden field still reaches B (patch reapplies).
+    await a.resources.update_config(
+        ResourceRef("mcp_server", "tool"), {"value": "/usr/local/bin/x2"}, "test"
+    )
+    await a.service.run()
+    await b.service.run()
+    assert (await b.resources.get(ResourceRef("mcp_server", "tool"))).config == {
+        "value": "/opt/homebrew/bin/x"  # override still wins on B
+    }
+
+    # Unset: B converges back to the shared value on its next run.
+    await b.service.unset_override("mcp_server", "tool", actor="test")
+    await b.service.run()
+    assert (await b.resources.get(ResourceRef("mcp_server", "tool"))).config == {
+        "value": "/usr/local/bin/x2"
+    }
+
+
+async def test_dict_valued_override_round_trips(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """A nested/dict patch (and a type-changing one) must revert cleanly on
+    export — never publish a corrupted {} (review #286 finding 2)."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.resources.register("mcp_server", "tool", {"value": "shared"}, "test")
+    await a.service.run()
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()
+
+    # Type-changing patch: scalar shared value overridden by a dict.
+    await b.service.set_override("mcp_server", "tool", {"value": {"cmd": "/opt/x"}}, actor="test")
+    await b.service.run()
+    await a.service.run()
+    assert (await a.resources.get(ResourceRef("mcp_server", "tool"))).config == {
+        "value": "shared"  # never {} and never the dict
+    }
+    doc = (a.root / "ws" / "resources" / "mcp_server" / "tool.yaml").read_text()
+    assert "shared" in doc and "/opt/x" not in doc
+
+
+async def test_override_before_first_export_keeps_the_baseline(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """An override set before the resource ever reached the medium must not
+    withhold the key from the shared doc (review #286 finding 3)."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    await a.resources.register("mcp_server", "fresh", {"value": "/usr/local/bin/x"}, "test")
+    await a.service.set_override(
+        "mcp_server", "fresh", {"value": "/opt/homebrew/bin/x"}, actor="test"
+    )
+    await a.service.run()
+
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()
+    got = await b.resources.get(ResourceRef("mcp_server", "fresh"))
+    assert got.config == {"value": "/usr/local/bin/x"}  # baseline, not missing
+
+
+async def test_override_ref_segments_validated(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    from coffer.domain.errors import ConfigValidationError
+
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    with pytest.raises(ConfigValidationError):
+        await a.service.set_override("..", "x", {"a": 1}, actor="test")
+    with pytest.raises(ConfigValidationError):
+        await a.service.set_override("mcp_server", "a/b", {"a": 1}, actor="test")
+
+
+@pytest.mark.acceptance(
+    spec="010-sync", scenario="a first sync against a populated remote merges, never deletes"
+)
+async def test_first_export_preserves_unimported_foreign_content(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """The 2026-07-10 incident guard: content that arrived in the workspace
+    but was never imported here (resource docs, tree files, credential
+    ciphertext) survives an export that runs before any completed import."""
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    ws = b.root / "ws"
+    (ws / "resources" / "mcp_server").mkdir(parents=True)
+    (ws / "resources" / "mcp_server" / "foreign.yaml").write_text(
+        "config:\n  value: theirs\ndescription: null\nenabled: true\n"
+        "kind: mcp_server\nname: foreign\n",
+        encoding="utf-8",
+    )
+    (ws / "knowledge").mkdir(parents=True, exist_ok=True)
+    (ws / "knowledge" / "foreign-note.md").write_text("from A\n", encoding="utf-8")
+    (ws / "credentials").mkdir(parents=True)
+    (ws / "credentials" / "foreign-ref.enc").write_text("Zm9v\n", encoding="utf-8")
+
+    await b.service.run(pull=False, push=False)
+
+    assert (ws / "resources" / "mcp_server" / "foreign.yaml").exists()
+    assert (ws / "knowledge" / "foreign-note.md").read_text() == "from A\n"
+    assert (ws / "credentials" / "foreign-ref.enc").exists()
+
+
+async def test_auto_resolve_handles_non_ascii_paths(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """A conflicted Chinese-named file auto-resolves instead of crashing on a
+    C-quoted path (core.quotepath) — review #290 finding 1."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    a.knowledge.mkdir(parents=True, exist_ok=True)
+    (a.knowledge / "记忆笔记.md").write_text("base\n", encoding="utf-8")
+    await a.service.run()
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    await b.service.run()
+
+    (a.knowledge / "记忆笔记.md").write_text("from A\n", encoding="utf-8")
+    await a.service.run()
+    (b.knowledge / "记忆笔记.md").write_text("from B\n", encoding="utf-8")
+    state = await b.service.run()
+
+    assert state.status is not SyncStatus.CONFLICTED
+    assert state.status is not SyncStatus.ERROR
+    assert (b.knowledge / "记忆笔记.md").read_text() == "from B\n"
+    await a.service.run()
+    assert (a.knowledge / "记忆笔记.md").read_text() == "from B\n"
+
+
+async def test_deletions_still_propagate_after_a_transient_error(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """A machine that HAS imported keeps propagating deletions even when its
+    previous run failed — a network flake must not resurrect the user's
+    deletion via the next import (review #290 finding 2)."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    a.knowledge.mkdir(parents=True, exist_ok=True)
+    (a.knowledge / "note.md").write_text("v1\n", encoding="utf-8")
+    await a.service.run()  # clean run: imported at least once
+
+    # A transient failure is recorded (last_sync_at survives, status=ERROR).
+    await a.service._record_error("fetch flake")
+
+    # The user deletes a live file; the next run must still export the
+    # deletion, not silently restore the file from the workspace.
+    (a.knowledge / "note.md").unlink()
+    state = await a.service.run()
+    assert state.status is SyncStatus.CLEAN
+    assert not (a.knowledge / "note.md").exists()
+    assert not (a.root / "ws" / "knowledge" / "note.md").exists()
+
+
+# ---------------------------------------------------------------------------
+# Credential freshness guards (2026-07-10 stale-clobber incident).
+# A Fernet blob's embedded encryption time orders ciphertext without any key;
+# an older encryption must never replace a newer one — not via merge conflict,
+# not via export after an interrupted run, not via import from a machine that
+# still holds the stale copy.
+# ---------------------------------------------------------------------------
+
+_REF = "channel/Telegram/bot-token"
+
+
+def _blob(machine: Machine, value: bytes, ts: int) -> bytes:
+    key = machine.master_key.export_key()
+    assert key is not None
+    return Fernet(key).encrypt_at_time(value, ts)
+
+
+def _adapter(machine: Machine) -> CredentialSyncAdapter:
+    return CredentialSyncAdapter(machine.db_path, machine.master_key)
+
+
+@pytest.mark.acceptance(spec="010-sync", scenario="stale credential never wins a conflict")
+async def test_conflicting_credential_edits_fresher_ciphertext_wins(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """Both machines rewrite the same ref from a shared base; the machine whose
+    ciphertext is OLDER commits last. Newest-commit-wins used to hand the merge
+    to the stale blob (the 2026-07-10 incident); the Fernet timestamp must win
+    instead."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+
+    _adapter(a).write_ciphertext(_REF, _blob(a, b"base", 1_500))
+    await a.service.run()
+    await b.service.run()  # B ingests the base blob
+
+    fresh = _blob(a, b"fresh-token", 2_000)
+    _adapter(a).write_ciphertext(_REF, fresh)
+    await a.service.run()  # remote now holds the fresher blob
+
+    # B rewrites the same ref with an OLDER encryption and syncs after A:
+    # its commit is newer, its content is staler.
+    _adapter(b).write_ciphertext(_REF, _blob(b, b"stale-token", 1_000))
+    state = await b.service.run()
+
+    assert state.status is not SyncStatus.CONFLICTED
+    assert _adapter(b).read_ciphertext(_REF) == fresh
+
+    await a.service.run()
+    assert _adapter(a).read_ciphertext(_REF) == fresh
+
+
+@pytest.mark.acceptance(
+    spec="010-sync", scenario="interrupted run cannot re-export stale ciphertext"
+)
+async def test_export_after_interrupted_run_keeps_fresher_workspace_blob(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """A run that pulled a fresher blob but crashed before importing it leaves
+    workspace newer than the DB; the next export must not clobber the
+    workspace copy with the stale DB blob."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+
+    stale = _blob(a, b"stale-token", 1_000)
+    _adapter(a).write_ciphertext(_REF, stale)
+    await a.service.run()
+    await b.service.run()  # B: DB and workspace both hold the stale blob
+
+    fresh = _blob(a, b"fresh-token", 2_000)
+    _adapter(a).write_ciphertext(_REF, fresh)
+    await a.service.run()  # remote now fresher
+
+    # Simulate B's crash between pull and import: workspace has the fresher
+    # blob, the DB still has the stale one.
+    subprocess.run(
+        ["git", "fetch", "origin", "main"],
+        cwd=b.root / "ws",
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "merge", "--no-edit", "FETCH_HEAD"],
+        cwd=b.root / "ws",
+        check=True,
+        capture_output=True,
+    )
+    assert _adapter(b).read_ciphertext(_REF) == stale
+
+    await b.service.run()
+    assert _adapter(b).read_ciphertext(_REF) == fresh
+
+    await a.service.run()
+    assert _adapter(a).read_ciphertext(_REF) == fresh
+
+
+@pytest.mark.acceptance(
+    spec="010-sync", scenario="stale blob from an unguarded machine is not imported"
+)
+async def test_import_keeps_local_credential_when_remote_holds_staler_blob(  # type: ignore[no-untyped-def]
+    tmp_path, remote
+) -> None:
+    """A machine running an older build can still push a stale blob without
+    conflict; importing it must not roll the local DB back."""
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+
+    fresh = _blob(a, b"fresh-token", 2_000)
+    _adapter(a).write_ciphertext(_REF, fresh)
+    await a.service.run()
+    await b.service.run()
+
+    # Legacy machine: rewrite the blob file in B's workspace clone by hand and
+    # push, bypassing every engine-side guard.
+    stale = _blob(b, b"stale-token", 1_000)
+    blob_path = b.root / "ws" / "credentials" / f"{_REF}.enc"
+    blob_path.write_bytes(stale)
+    subprocess.run(
+        ["git", "commit", "-am", "legacy push"],
+        cwd=b.root / "ws",
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "push", "origin", "HEAD:main"],
+        cwd=b.root / "ws",
+        check=True,
+        capture_output=True,
+    )
+
+    await a.service.run()  # pulls the stale blob cleanly (fast-forward)
+    assert _adapter(a).read_ciphertext(_REF) == fresh
+
+    # A's next run heals the vault back to the fresher blob.
+    await a.service.run()
+    ws_blob = (a.root / "ws" / "credentials" / f"{_REF}.enc").read_bytes()
+    assert ws_blob == fresh
+
+
+@pytest.mark.acceptance(
+    spec="010-sync", scenario="deleting a resource releases its credential everywhere"
+)
+async def test_delete_releases_credential_on_every_machine(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    """A deleted channel's credential must not linger as an orphan row on any
+    machine — orphans re-export forever and eventually clobber a re-created
+    ref (the 2026-07-10 incident)."""
+
+    class _TokenConfig(BaseModel):
+        token_ref: str = ""
+
+    def _secret_kinds() -> dict[str, Kind]:
+        return {
+            "mcp_server": Kind(
+                name="mcp_server",
+                display_name="MCP",
+                config_schema=_TokenConfig,
+                credential_ref_extractor=lambda cfg: (
+                    {"token": cfg["token_ref"]} if cfg.get("token_ref") else {}
+                ),
+            )
+        }
+
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True, kinds=_secret_kinds())
+    key = a.master_key.export_key()
+    assert key is not None
+    b = await _make_machine(
+        "B", tmp_path / "B", remote, create_key=False, key_bytes=bytes(key), kinds=_secret_kinds()
+    )
+
+    a.cred_store().set(_REF, "token-value")
+    await a.resources.register("mcp_server", "chan", {"token_ref": _REF}, "test")
+    await a.service.run()
+    await b.service.run()
+    assert _adapter(b).read_ciphertext(_REF) is not None  # blob + resource reached B
+
+    await a.resources.delete(ResourceRef("mcp_server", "chan"), "user")
+    assert not a.cred_store().exists(_REF)  # released with its only citer
+
+    await a.service.run()  # exports the tombstones, prunes the blob
+    await b.service.run()  # applies them: resource AND credential row go
+    assert _adapter(b).read_ciphertext(_REF) is None
+
+    # No resurrection on later rounds (B's pre-pull export must not re-seed
+    # the blob into the medium, and A must not re-import it).
+    await a.service.run()
+    await b.service.run()
+    await a.service.run()
+    assert _adapter(a).read_ciphertext(_REF) is None
+    assert _adapter(b).read_ciphertext(_REF) is None
+    assert not (a.root / "ws" / "credentials" / f"{_REF}.enc").exists()

@@ -12,6 +12,8 @@ from coffer.surfaces.http.schemas import (
     ResourceCreate,
     ResourceListOut,
     ResourceOut,
+    ResourceScopeOut,
+    ResourceScopeUpdate,
     ResourceUpdate,
 )
 
@@ -29,6 +31,7 @@ def _to_out(r: Resource) -> ResourceOut:
         name=r.name,
         description=r.description,
         config=r.config,
+        scope=r.scope,
         enabled=r.enabled,
         created_at=r.created_at,
         updated_at=r.updated_at,
@@ -129,4 +132,30 @@ async def disable_resource(
     actor: str = Depends(_actor),
 ) -> ResourceOut:
     r = await svc.set_enabled(ResourceRef(kind, name), enabled=False, actor=actor)
+    return _to_out(r)
+
+
+@router.get("/{kind}/{name}/scope", response_model=ResourceScopeOut)
+async def get_resource_scope(
+    kind: str,
+    name: str,
+    svc: ResourceService = Depends(get_resource_service),  # noqa: B008
+) -> ResourceScopeOut:
+    r = await svc.get(ResourceRef(kind, name))
+    axes = svc.scope_axes(r.kind)
+    return ResourceScopeOut(scope=r.scope, axes=list(axes))
+
+
+@router.put("/{kind}/{name}/scope", response_model=ResourceOut)
+async def update_resource_scope(
+    kind: str,
+    name: str,
+    body: ResourceScopeUpdate,
+    svc: ResourceService = Depends(get_resource_service),  # noqa: B008
+    actor: str = Depends(_actor),
+) -> ResourceOut:
+    # Deliberately NOT gated on allow_lifecycle_kind — scope is a
+    # framework-level concern orthogonal to a kind's creation invariants
+    # (ResourceService.update_scope, ADR-045).
+    r = await svc.update_scope(ResourceRef(kind, name), body.scope, actor=actor)
     return _to_out(r)

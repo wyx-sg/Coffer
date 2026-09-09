@@ -12,6 +12,7 @@ import asyncio
 import contextlib
 import pathlib
 import platform
+from collections.abc import Sequence
 
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -23,6 +24,7 @@ from coffer.application.sync.config_service import SyncConfigService
 from coffer.application.sync.exporter import SyncExporter
 from coffer.application.sync.identity import MachineIdentityService
 from coffer.application.sync.importer import SyncImporter
+from coffer.application.sync.ports import ImportGate, PostImportHook, SyncedStatePort
 from coffer.application.sync.service import SyncService
 from coffer.application.sync.worker import SyncWorker
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
@@ -47,6 +49,9 @@ def wire_sync(
     sm: async_sessionmaker,  # type: ignore[type-arg]
     db_path: pathlib.Path,
     master_key: MasterKeyManager,
+    state_providers: Sequence[SyncedStatePort] = (),
+    import_gates: Sequence[ImportGate] = (),
+    post_import_hooks: Sequence[PostImportHook] = (),
 ) -> SyncWorker:
     root = sync_root()
     cred_sync = CredentialSyncAdapter(db_path, master_key)
@@ -71,14 +76,31 @@ def wire_sync(
     service = SyncService(
         config=config_svc,
         git=git,
-        exporter=SyncExporter(resource_svc, cred_sync, workspace, ledger),
-        importer=SyncImporter(resource_svc, cred_sync, workspace),
+        exporter=SyncExporter(
+            resource_svc,
+            cred_sync,
+            workspace,
+            ledger,
+            state_providers=state_providers,
+            home=str(pathlib.Path.home()),
+        ),
+        importer=SyncImporter(
+            resource_svc,
+            cred_sync,
+            workspace,
+            state_providers=state_providers,
+            import_gates=import_gates,
+            post_import_hooks=post_import_hooks,
+            home=str(pathlib.Path.home()),
+        ),
         credentials=cred_sync,
         master_key=master_key,
         audit=audit,
         identity=identity,
         workspace=workspace,
         coffer_version=_coffer_version,
+        home=str(pathlib.Path.home()),
+        resources=resource_svc,
     )
     set_sync_service(service)
     worker = SyncWorker(service, config_svc, git)
@@ -98,7 +120,21 @@ def start_sync(
     master_key: MasterKeyManager,
 ) -> None:
     """Wire sync and start its (initially inert) auto-sync worker + watcher."""
-    worker = wire_sync(resource_svc, audit, sm, db_path, master_key)
+    providers = tuple(getattr(app.state, "sync_state_providers", ()) or ())
+    # Import reconciliation (spec 010): kind modules registered their gates and
+    # post-import hooks on app.state during composition, before sync wires up.
+    gates = tuple(getattr(app.state, "sync_import_gates", ()) or ())
+    hooks = tuple(getattr(app.state, "sync_post_import_hooks", ()) or ())
+    worker = wire_sync(
+        resource_svc,
+        audit,
+        sm,
+        db_path,
+        master_key,
+        state_providers=providers,
+        import_gates=gates,
+        post_import_hooks=hooks,
+    )
     app.state.sync_worker = worker
     app.state.sync_worker_task = asyncio.create_task(worker.run())
     stop_event = asyncio.Event()

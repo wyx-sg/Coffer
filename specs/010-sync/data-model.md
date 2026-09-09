@@ -78,11 +78,13 @@ working tree whose `origin` is the user's remote.
 ```
 manifest.json
 machines/<machine-id>.json      per-machine registry entry (owner-written only)
+machines/<machine-id>/overrides/<kind>/<name>.yaml   per-machine merge patch
 knowledge/                      mirror of ~/.coffer/knowledge
 memory/                         mirror of ~/.coffer/memory
 skills/                         mirror of ~/.coffer/skills
 resources/<kind>/<name>.yaml    one deterministic file per config resource
 tombstones/resources/<kind>/<name>.json   explicit deletion record
+state/<area>/...yaml            module-owned shared state docs
 credentials/<ref>.enc           Fernet ciphertext, base64 text; never the key
 ```
 
@@ -96,8 +98,9 @@ Only the schema version — the manifest is byte-identical on every machine so i
 can never merge-conflict. Per-machine facts live in `machines/` instead.
 `schema_version` is checked on import; a workspace newer than the running build
 fails fast (`SYNC_WORKSPACE_TOO_NEW`), mirroring the DB `DB_SCHEMA_TOO_NEW` rule.
-Current version: **2** (tombstone-driven deletion — an older build would keep
-applying delete-by-absence, so all machines upgrade before the first v2 sync).
+Current version: **3** (2 = tombstone-driven deletion; 3 = `${HOME}`-normalized
+paths — an older importer would install the literal token into configs). All
+machines upgrade before the first sync at a new version.
 
 ### Machine entry (`machines/<machine-id>.json`)
 
@@ -127,7 +130,9 @@ config: { ... }     # the validated, json-mode config; keys sorted
 ```
 
 `created_at` / `updated_at` / local `id` are **excluded** (machine-local, would
-churn diffs). On import the resource is upserted by `<kind>:<name>`. A local
+churn diffs). String values under the exporting machine's home are normalized
+to `${HOME}/...` (expanded on import), and keys covered by this machine's
+merge patch are stripped back to the last shared values. On import the resource is upserted by `<kind>:<name>`. A local
 resource is deleted **only** when its tombstone file is present — absence from
 the workspace alone never deletes (a failed import elsewhere must not
 masquerade as a deletion). When both a resource doc and a tombstone exist for
@@ -142,6 +147,42 @@ the same ref (merge artifact), the resource doc wins.
 
 Written at export from the `sync_tombstones` ledger; removed at export when the
 resource exists live again (re-registration wins); pruned after 90 days.
+
+### State areas (`state/<area>/...yaml`)
+
+Module-owned shared state synced alongside the vault. Each module implements
+`SyncedStatePort` (export/import of deterministic YAML docs) and the
+composition root registers the providers — sync never imports kind modules.
+Current areas:
+
+- `channel-peers/<channel>/<chat>.yaml` — pairing identity (chat_id, sender_id,
+  display name, preferred agent, paired_at; the machine-local
+  `active_conversation_id` never travels). Import upserts; docs referencing a
+  channel not present locally are skipped and retried next run.
+- `mcp-preferences/<server>.yaml` — the DISABLED capabilities per server
+  (enabled is the default; seen-timestamps stay machine-local). Import
+  reconciles servers present locally to match; owned prefixes = local servers.
+  Conflict semantics are doc-granular: if both machines disabled different
+  capabilities on the same server before their first common sync, the merge
+  conflicts and the resolved side wins wholesale — the losing machine's local
+  disables are re-enabled by its next import. Embedding may stay degraded on a
+  machine until its master key is bootstrapped (locked credential refs import
+  fine; vector indexing simply stays inactive).
+- `settings/embedding.yaml` + `settings/internal-engine.yaml` — the two
+  engine singletons. A machine owns (and publishes) a singleton only once it
+  has persisted it locally, so a fresh machine's defaults never same-path
+  conflict with the fleet's values on its first merge.
+- `memory-labels/<store>.yaml` — the user-set display label of a memory
+  store (spec 007 FR-017c), so a `project-<ULID>` store reads by its name on
+  every machine instead of "unnamed store". Set, rename, and clear all
+  propagate: a clear travels as an empty-label marker doc (`{label: ""}`) —
+  mere doc absence could never distinguish "cleared" from "not yet synced",
+  and would resurrect the label from the stale workspace doc.
+
+Skill delivery bindings (`skill_agent_bindings`) stay machine-local by
+decision: delivery is a side-effectful file operation with no row-level
+reconcile loop — syncing the rows would misreport delivery state. Adopt skills
+per machine via the existing skill surfaces.
 
 ### Credential blob (`credentials/<ref>.enc`)
 

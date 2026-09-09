@@ -27,6 +27,9 @@ Every user-managed entity in coffer is a **Resource** identified by
 - Lifecycle (register / update / enable / disable / delete)
 - Audit (every lifecycle change recorded with actor)
 - Schema validation (per-kind Pydantic schema, kind-agnostic dispatch)
+- Scope (optional machine × agent activation matrix, framework-owned; each
+  kind declares its axes; sync-but-inactive semantics —
+  [ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md))
 
 It does **not** unify invocation semantics. Each kind defines how its
 capabilities are used; the framework only describes how a kind is registered,
@@ -126,6 +129,14 @@ importing kind modules (Contract 6).
 | Stdio shim (`coffer-mcp-shim`) | per MCP-client session | `stdin/stdout ↔ daemon HTTP/SSE` forwarder; detect-or-spawn daemon.                                         |
 | Callback listener              | daemon-spawned child   | Signed channel webhooks only (`POST /seatalk/{channel}`); loopback port behind a user-run tunnel (spec 009). |
 
+The desktop/web UI also renders a top-level **Machines** fleet view — a
+sync-status strip plus one card per registered machine, with a per-machine
+detail rendering that machine's activation slice (agents present, MCP
+servers active, skills delivered, channels bound), computed from the synced
+registry and resource `scope`
+([ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md)).
+No new surface — served by the existing REST API and rendered client-side.
+
 ## Processes
 
 - **`coffer-daemon`** — long-lived FastAPI service on `127.0.0.1:<auto-port>`.
@@ -169,4 +180,4 @@ token, mode `0600`). See [ADR-006](../../docs/decisions/ADR-006-daemon-detect-or
 | Logging           | `structlog` JSON-per-line to `~/.coffer/logs/`                                                   | Per-request trace IDs via contextvar.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | Converters        | `MarkdownConverter` port + per-format adapters in `infrastructure/`                              | Only place importing converter libs (passthrough for text/code, csv converter, MarkItDown for the rest; new engines pluggable per format). any-format → markdown.                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Memory projection | `AgentMemoryAdapter` in the **agent layer** (with the agent driver)                              | Projects the one canonical memory store into native locations (`SYMLINK` / `RENDER` / `NONE`); owns the L1 file mutations so memory stays agent-agnostic ([ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)).                                                                                                                                                                                                                                                                                                                                  |
-| Sync              | `application/sync/` + `infrastructure/sync/` + `sync_config`/`sync_state` tables + daemon worker | Multi-machine sync over a user-owned git repo (spec 010, [ADR-016](../../docs/decisions/ADR-016-multi-machine-sync.md)). A run exports vault state to a separate workspace (`~/.coffer/sync/`), git-merges, then imports: knowledge/memory/skills files mirror, config resources reconcile via `ResourceService`, credentials travel as **ciphertext only** (master key bootstrapped out-of-band). Cross-cutting, not a kind. Opt-in auto-sync worker mirrors the retention worker.                                                                                |
+| Sync              | `application/sync/` + `infrastructure/sync/` + `sync_config`/`sync_state` tables + daemon worker | Multi-machine sync over a user-owned git repo (spec 010, [ADR-016](../../docs/decisions/ADR-016-multi-machine-sync.md)). A run exports vault state to a separate workspace (`~/.coffer/sync/`), git-merges, then imports: knowledge/memory/skills files mirror, config resources reconcile via `ResourceService`, credentials travel as **ciphertext only** (master key bootstrapped out-of-band). Cross-cutting, not a kind. Opt-in auto-sync worker mirrors the retention worker. Resource `scope` (ADR-045) rides the same resource docs through export/merge/import unmodified — no new sync machinery.                                                                                |

@@ -28,19 +28,12 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
-import type { AgentOut, AgentType, NativeMemoryStore } from "@/lib/api/agents";
+import type { AgentOut, NativeMemoryStore } from "@/lib/api/agents";
 import {
   useAgentNativeMemory,
   useImportNativeMemoryBatch,
   usePatchAgent,
 } from "@/lib/hooks/useAgents";
-
-// Agents whose upstream lacks native cross-session memory (ADR-042 capability
-// matrix: opencode has none; cursor's Memories toggle is IDE-only) — hide the
-// toggle rather than let the PATCH 422. The session-hook row has no such list:
-// AgentHookToggle reads the backend's `supported` flag itself and renders a
-// disabled switch with the reason (ADR-042: surfaced, not hidden).
-const AGENTS_WITHOUT_NATIVE_MEMORY: AgentType[] = ["opencode", "cursor"];
 
 /** Toggle ROW (no Card — the parent's combined box provides it) that disables
  * the agent's OWN native memory (writes/restores the agent's config) so it uses
@@ -193,11 +186,9 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
             notInstalledHint={t("agents.memoryTab.notInstalled")}
           />
         </div>
-        {!AGENTS_WITHOUT_NATIVE_MEMORY.includes(agent.type) && (
-          <div className="p-4">
-            <DisableNativeMemoryRow agent={agent} />
-          </div>
-        )}
+        <div className="p-4">
+          <DisableNativeMemoryRow agent={agent} />
+        </div>
         <div className="p-4">
           <AgentHookToggle name={agent.name} />
         </div>

@@ -32,7 +32,12 @@ from pathlib import Path
 
 import httpx
 
-from coffer.infrastructure.daemon.pid_lock import DaemonInfo, read, write
+from coffer.infrastructure.daemon.pid_lock import (
+    DaemonInfo,
+    pid_is_coffer_daemon,
+    read,
+    write,
+)
 from coffer.infrastructure.daemon.port_alloc import bind_free_socket
 
 _DAEMON_JSON_VERSION = 1
@@ -47,7 +52,17 @@ def _noop_release() -> None:
 
 
 # How long to wait when probing whether an existing daemon is reachable.
-_LIVENESS_PROBE_TIMEOUT: float = 2.0
+#
+# This must outlast the SLOWEST ``/daemon/status`` a serving daemon can produce,
+# not the typical one. A daemon that has released the spawn lock is still
+# finishing its own warm-up (migrations, MCP upstream startup) and has been
+# measured taking ~9s to answer; at the old 2s the probe timed out, the spawn
+# concluded "nobody is live", and it bound a SECOND port beside a perfectly
+# healthy daemon — the failure that filled 8000-8009 one restart at a time. A
+# generous timeout costs nothing in the common failure case: a stale daemon.json
+# points at a port nobody is listening on, which refuses the connection at once
+# rather than timing out.
+_LIVENESS_PROBE_TIMEOUT: float = 15.0
 
 
 def _coffer_dir() -> Path:
@@ -153,6 +168,41 @@ def live_daemon() -> DaemonInfo | None:
     except httpx.HTTPError:
         return None  # not reachable / not speaking HTTP → no live daemon
     return info if resp.status_code == 200 else None
+
+
+def superseded_by() -> DaemonInfo | None:
+    """The OTHER live daemon that now owns ``daemon.json``, or ``None``.
+
+    :func:`live_daemon` guards the spawn from one side, but it only ever probes
+    the single port recorded in daemon.json — it cannot see a daemon alive on a
+    different port. Whenever that probe fails while a daemon is in fact running
+    (daemon.json deleted, or a serving-but-busy daemon that missed the probe
+    timeout), the spawn binds the next free port and the older daemon runs on
+    forever holding its own. Repeat and the whole 8000-8009 range is consumed,
+    after which no daemon can start at all.
+
+    This is the other side of that guard: a daemon calls it periodically and
+    stands down once it can see that it has been superseded. The conditions are
+    deliberately narrow — it fires ONLY when daemon.json exists, names a pid
+    that is not ours, and that pid is a live Coffer daemon:
+
+    * an absent daemon.json must never evict anyone (otherwise deleting the file
+      would take the one healthy daemon down with it);
+    * a malformed one is no evidence of anything;
+    * a recorded pid that is dead, recycled, or not a Coffer daemon means we are
+      still the only daemon alive — the next spawn will replace us in an orderly
+      way.
+
+    So a group of daemons converges on exactly the one daemon.json names, and a
+    lone daemon whose discovery file is missing or stale keeps serving.
+    """
+    try:
+        info = read(_daemon_json_path())
+    except (FileNotFoundError, ValueError, KeyError, OSError):
+        return None
+    if info.pid == os.getpid():
+        return None
+    return info if pid_is_coffer_daemon(info.pid) else None
 
 
 def _port_range() -> tuple[int, int]:

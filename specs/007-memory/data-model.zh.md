@@ -20,6 +20,7 @@ Pydantic v2 `BaseModel`。当 `kind == "memory"` 时存于 `Resource.config`。�
 | `embedding_credential_ref` | `str \| None`                              | embedding API key 的 keychain ref（绝不明文）。                                |
 | `embedding_dimensions`     | `int`                                      | 默认 `768`；范围 `1–8192`。决定该 store 的 `vec_chunks` 表宽；随线上契约传输。 |
 | `max_fact_chars`           | `int`                                      | 默认 `8192`；范围 `64–32768`。可变。                                           |
+| `merged_identities`        | `list[str]`                                | 已合并**进**本库的项目 ULID（FR-058，修订 2026-07-10）。系统管理（用户从不设置）；resolve 算出的身份在此列表中、且其自身库已不存在时，落到本库。随资源同步。默认 `[]`。 |
 
 embedding 模型 **可变** —— 改它会重嵌整个 store（文件是真相）。没有不可变锁。
 
@@ -389,14 +390,14 @@ release checks and can leave the repo in a half-tagged state.
 
 原始记录**绝不落盘**，也不会出现在事实正文里。LLM 调用前：
 
-- 所有 `tool_use` / `tool_result` 块（Claude/Codex）以及非 `text` 的 part —— tool、reasoning、file、step（OpenCode）—— 被丢弃。
+- 所有 `tool_use` / `tool_result` 块（Claude/Codex）被丢弃。
 - assistant 回复中嵌入的文件内容片段与命令输出被丢弃。
 - 常见 secret 模式（API key、token、PEM block）经正则抹除器删除。
 - 长片段被截断。
 
 只有抹除后的自然语言文本（用户 + 助手的散文部分）发送给 LLM。只有提炼出的洞察文本写入事实 store。原始记录与抹除中间体均不存储于 `~/.coffer/` 的任何位置。
 
-Coffer 读取 `~/.claude/projects/`、`~/.codex/sessions/` 以及 OpenCode 的存储树（`~/.local/share/opencode/storage/`），但在此流程中**绝不写入它们** —— Spec 004 的只读不变量得到完整保留。Cursor / OpenClaw / Hermes 的记录读取器被推迟（见 spec.md 的 US「distill transcript to memory」）：它们的存储要么临时、要么无文档、要么不带工作目录无法按项目归类。
+Coffer 读取 `~/.claude/projects/` 与 `~/.codex/sessions/`，但在此流程中**绝不写入它们** —— Spec 004 的只读不变量得到完整保留。
 
 ### 审计
 

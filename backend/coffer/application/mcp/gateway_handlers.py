@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 import mcp.types as mcp_types
-from mcp import McpError
+from mcp import MCPError
 
 from coffer.application.mcp.ports import (
     MCPCapabilityPreferenceRepoPort,
@@ -35,6 +35,7 @@ from coffer.domain.mcp.namespace import (
     parse_prefixed_uri,
 )
 from coffer.domain.resource import ResourceRef
+from coffer.domain.scope import agent_in_scope, machine_in_scope
 
 if TYPE_CHECKING:
     from coffer.application.mcp.supervisor import SubprocessSupervisor
@@ -67,19 +68,19 @@ def _is_transport_failure(e: BaseException) -> bool:
     """True when an upstream request failure should self-heal by evicting the
     connection (transport/process death), False when the upstream answered.
 
-    A well-formed ``McpError`` is a protocol-level JSON-RPC error: the request
+    A well-formed ``MCPError`` is a protocol-level JSON-RPC error: the request
     reached the upstream, the tool ran, and it returned an error result. The
     connection is healthy — evicting it would kill+respawn a perfectly good
     server on every tool that returns an error.
 
-    The one exception is the SDK's ``CONNECTION_CLOSED`` (-32000) McpError: the
+    The one exception is the SDK's ``CONNECTION_CLOSED`` (-32000) MCPError: the
     SDK raises that when the transport itself died mid-request (a crashed
-    subprocess, a dropped pipe), so despite being an McpError it IS a transport
-    failure and must self-heal. Everything that is not an McpError (a raw pipe
+    subprocess, a dropped pipe), so despite being an MCPError it IS a transport
+    failure and must self-heal. Everything that is not an MCPError (a raw pipe
     error, a dead-process exception) is likewise a transport failure.
     """
-    if isinstance(e, McpError):
-        return e.error.code == mcp_types.CONNECTION_CLOSED
+    if isinstance(e, MCPError):
+        return e.code == mcp_types.CONNECTION_CLOSED
     return True
 
 
@@ -163,6 +164,8 @@ async def _invoke(
     clock: Callable[[], datetime],
     ensure_subscribed: Callable[[str], Any],
     on_evict: Callable[[str], None] | None = None,
+    local_machine_id: str | None = None,
+    session_agent: str | None = None,
 ) -> Any:
     prefixed = params.get(spec.param_key, "")
     try:
@@ -171,6 +174,49 @@ async def _invoke(
         raise ToolDisabled(f"unrecognised {spec.label}: {prefixed!r}") from e
 
     resource = await resources.get(ResourceRef("mcp_server", server_name))
+
+    # ADR-045 agent axis (Task 10, FR-020): tools/list already hides a
+    # server whose agent-axis entry excludes this session's identity
+    # (gateway._enabled_mcp_servers), but that is only a listing-side
+    # filter — nothing on the call-routing path re-checked it, so a caller
+    # that already knows (or guesses) a hidden server's namespaced tool
+    # name could invoke it directly. The supervisor's spawn gate only
+    # knows the machine axis (it has no session context), so this check
+    # lives here, at the session's invocation seam, where both the local
+    # machine id and `_session_agent` are known. Mirrors the
+    # `local is not None` legacy-behavior guard used for listing: no
+    # machine-id provider wired means no filtering at all (can't resolve
+    # which scope entry applies without a machine id).
+    #
+    # FR-020 draws a hard line between the two axes: the machine axis must
+    # stay "indistinguishable from an unregistered [server]" (the generic
+    # UpstreamUnavailable bucket the supervisor's own spawn gate below
+    # already raises), while only the agent axis gets the dedicated
+    # ToolDisabled bucket. So this gate only fires — and only records a
+    # `denied` row — once the machine axis is confirmed in-scope; a
+    # machine-axis exclusion falls through here untouched and lets
+    # `supervisor.get_or_spawn` raise UpstreamUnavailable for it below.
+    if (
+        local_machine_id is not None
+        and machine_in_scope(resource.scope, local_machine_id)
+        and not agent_in_scope(resource.scope, local_machine_id, session_agent)
+    ):
+        await record_invocation(
+            invocations,
+            session_id=session_id,
+            clock=clock,
+            resource_name=server_name,
+            capability_type=spec.capability_type,
+            capability_key=original,
+            duration_ms=0,
+            status="denied",
+            error_message=None,
+        )
+        # Same "indistinguishable from a disabled capability" shape FR-020
+        # specifies for an in-scope-but-hidden server: ToolDisabled, not
+        # UpstreamUnavailable (that stays reserved for the machine axis).
+        raise ToolDisabled(f"{server_name!r} is not in scope for this agent")
+
     try:
         await check_capability_enabled(prefs, resource.id, spec.capability_type, original)
     except ToolDisabled:
@@ -212,7 +258,7 @@ async def _invoke(
     except Exception as e:
         status = "error"
         error_msg = _safe_error_summary(e)
-        # Only self-heal on a transport/process failure. A well-formed McpError
+        # Only self-heal on a transport/process failure. A well-formed MCPError
         # means the tool ran and returned an error result over a healthy
         # connection — evicting it would needlessly kill+respawn a good server.
         if _is_transport_failure(e):
@@ -268,7 +314,9 @@ def _coerce_result(sdk_result: Any, method: str) -> dict[str, Any]:
     which used to be byte-identical except for that message.
     """
     if hasattr(sdk_result, "model_dump"):
-        dumped: dict[str, Any] = sdk_result.model_dump(exclude_none=True, mode="json")
+        dumped: dict[str, Any] = sdk_result.model_dump(
+            exclude_none=True, mode="json", by_alias=True
+        )
         return dumped
     if isinstance(sdk_result, dict):
         return sdk_result

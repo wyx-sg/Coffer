@@ -1,7 +1,7 @@
 """Persistence for a memory store's originating project root (spec 007).
 
 A per-project memory store is keyed by a deterministic ULID derived from its
-git-root (``infrastructure/memory/scope_fs.project_ulid``). That mapping is
+git-root (``infrastructure/memory/scope_fs.project_identity``). That mapping is
 one-way: the ULID does not recover the absolute path. This table records the
 ``store_name -> project_root`` mapping captured at provisioning time so the
 REST surface can echo the human-readable project root back to the UI

@@ -177,6 +177,24 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /mcp/tiering:
+    get:
+      tags: [mcp]
+      operationId: getToolTiering
+      summary: How much of the aggregated tool catalogue agents currently see (ADR-046)
+      description: >
+        Global across every enabled server, because the listing budget is
+        shared: a server whose tools all fit locally can still be crowded out.
+        Computed from the last-discovered catalogue, so it never cold-spawns an
+        upstream to answer a management question.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ToolTieringOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /resources/mcp_server/{name}/capabilities:
     parameters:
       - in: path
@@ -342,6 +360,34 @@ paths:
               schema: { $ref: "#/components/schemas/McpServerStatusOut" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /resources/mcp_server/{name}/install-runner:
+    post:
+      tags: [mcp]
+      operationId: installMcpRunner
+      summary: Install the stdio server's missing launcher (allowlisted formulas only).
+      description: >-
+        Installs the missing launcher command via a FIXED runner→Homebrew
+        mapping (uvx/uv, npx/node, bunx/bun) — never an arbitrary command
+        from config; the launcher itself fetches the actual MCP package on
+        first run. 422 (MCP_RUNNER_INSTALL_UNSUPPORTED) when nothing is
+        missing or the runner has no unambiguous install;
+        MCP_RUNNER_INSTALL_FAILED carries the package manager's stderr tail.
+        Audited as mcp_runner_installed.
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Installed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpRunnerInstallOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /audit:
     get:
@@ -855,6 +901,28 @@ components:
               required: { type: boolean }
         enabled: { type: boolean }
 
+    ToolTieringServerOut:
+      type: object
+      required: [server, total, listed]
+      properties:
+        server: { type: string }
+        total: { type: integer }
+        listed: { type: integer }
+
+    ToolTieringOut:
+      type: object
+      required: [enabled, budget, window_days, total, listed, hidden, servers]
+      properties:
+        enabled: { type: boolean }
+        budget: { type: integer, example: 50 }
+        window_days: { type: integer, example: 90 }
+        total: { type: integer }
+        listed: { type: integer }
+        hidden: { type: integer }
+        servers:
+          type: array
+          items: { $ref: "#/components/schemas/ToolTieringServerOut" }
+
     CapabilityListOut:
       type: object
       required: [server_name, tools, resources, prompts, fetched_at]
@@ -925,6 +993,24 @@ components:
         status:
           type: string
           enum: [healthy, failing, unknown]
+        missing_runner:
+          type: string
+          nullable: true
+          description: >-
+            The stdio launcher's basename when it does not resolve on THIS
+            machine (a synced server referencing e.g. uvx where uv is not
+            installed). The UI renders "missing <runner>" with a one-click
+            install when runner_installable.
+        runner_installable:
+          type: boolean
+          description: Whether the missing runner has an allowlisted install.
+
+    McpRunnerInstallOut:
+      type: object
+      required: [runner, formula]
+      properties:
+        runner: { type: string }
+        formula: { type: string, description: "The Homebrew formula installed" }
 
     AuditEntryOut:
       type: object

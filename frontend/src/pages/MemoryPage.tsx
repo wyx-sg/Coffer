@@ -7,10 +7,14 @@
 // `/resources` list: only the former carries the typed `scope`/`project_id`
 // the table's scope column needs (the generic row has neither, so every store
 // would mislabel as "Unknown").
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { BrainCircuit } from "lucide-react";
+import { BrainCircuit, GitMerge } from "lucide-react";
 
+import { MemoryMergeDialog } from "@/kinds/memory/MemoryMergeDialog";
 import { MemoryWelcomePanel } from "@/components/memory/MemoryWelcomePanel";
+import { Button } from "@/components/ui/button";
+import { deriveScope } from "@/kinds/memory/api";
 import { MemoryStoresTable } from "@/components/memory/MemoryStoresTable";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,10 +29,28 @@ export function MemoryPage() {
   const { data, isPending, error } = useMemoryStores();
   const items = data ?? [];
   const hasItems = items.length > 0;
+  const [mergeOpen, setMergeOpen] = useState(false);
+  // The AI merge scan compares per-project stores pairwise; with fewer than
+  // two of them there is nothing to scan, so the action stays hidden.
+  const projectStores = items.filter((s) => deriveScope(s) === "project").length;
 
   return (
     <div className="space-y-6">
-      <PageHeader icon={BrainCircuit} title={t("memory.title")} subtitle={t("memory.subtitle")} />
+      <PageHeader
+        icon={BrainCircuit}
+        title={t("memory.title")}
+        subtitle={t("memory.subtitle")}
+        actions={
+          projectStores >= 2 ? (
+            <Button variant="outline" onClick={() => setMergeOpen(true)}>
+              <GitMerge className="mr-2 size-4" />
+              {t("memory.merge.action")}
+            </Button>
+          ) : undefined
+        }
+      />
+
+      <MemoryMergeDialog open={mergeOpen} onOpenChange={setMergeOpen} />
 
       {isPending ? (
         <Card>

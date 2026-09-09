@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from fastapi import Header, HTTPException, status
@@ -231,6 +231,33 @@ def get_health_repo() -> Any:
     if _health_repo is None:
         raise RuntimeError("health repo not initialised")
     return _health_repo
+
+
+# ADR-045 machine axis (Task 8): this daemon's local machine id, so REST
+# routes that build an upstream connection directly (bypassing the process
+# supervisor — e.g. the mcp_server "test" route) can still gate on scope.
+# Unlike the providers above, an unset provider is NOT an error: it means
+# "no MachineIdentityService wired", the same legacy no-filtering state the
+# supervisor/gateway treat a None ``machine_id`` callable as, so this getter
+# never raises and instead falls back to a callable that always resolves to
+# None.
+_local_machine_id_provider: Callable[[], Awaitable[str | None]] | None = None
+
+
+async def _no_local_machine_id() -> str | None:
+    return None
+
+
+def set_local_machine_id_provider(provider: Callable[[], Awaitable[str | None]]) -> None:
+    """Called by the composition root once on startup."""
+    global _local_machine_id_provider
+    _local_machine_id_provider = provider
+
+
+def get_local_machine_id_provider() -> Callable[[], Awaitable[str | None]]:
+    """FastAPI Depends() target — a zero-arg async callable resolving this
+    daemon's ADR-045 machine id (or None when no provider is wired)."""
+    return _local_machine_id_provider or _no_local_machine_id
 
 
 # Credential-store DI singletons re-exported from credential_composition (split

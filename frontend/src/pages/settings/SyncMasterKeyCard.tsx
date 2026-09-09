@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { pickOpenFile, pickSaveFile } from "@/lib/filePicker";
-import { useExportMasterKey, useImportMasterKey } from "@/lib/hooks/useSync";
+import { useExportMasterKey, useImportMasterKey, useKeyFingerprint } from "@/lib/hooks/useSync";
 
 const DEFAULT_KEY_NAME = "coffer-master.key";
 
@@ -24,6 +24,7 @@ export function SyncMasterKeyCard() {
   const [keyPath, setKeyPath] = useState("");
   const importKey = useImportMasterKey();
   const exportKey = useExportMasterKey();
+  const fingerprint = useKeyFingerprint();
 
   const onExport = async () => {
     if (manual) {
@@ -58,6 +59,17 @@ export function SyncMasterKeyCard() {
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-foreground/70">{t("settings.sync.masterKeyHint")}</p>
+        {/* The key's SHA-256 fingerprint (never the key): compare it across
+            machines after an export/import to confirm they hold the SAME key. */}
+        {fingerprint.data?.present && (
+          <p className="text-sm" data-testid="key-fingerprint">
+            <span className="text-foreground/60">{t("settings.sync.keyFingerprint")}: </span>
+            <code className="font-mono">{fingerprint.data.fingerprint}</code>
+            <span className="ml-2 text-xs text-foreground/50">
+              {t("settings.sync.keyFingerprintHint")}
+            </span>
+          </p>
+        )}
         {manual && (
           <div className="space-y-2">
             <Label htmlFor="sync-key-path">{t("settings.sync.keyPath")}</Label>

@@ -92,3 +92,20 @@ def test_config_toggle_auto(sync_cli_daemon):  # type: ignore[no-untyped-def]
     assert result.exit_code == 0, result.output
     assert '"auto": true' in result.output
     assert '"interval_seconds": 120' in result.output
+
+
+def test_machines_top_level_matches_sync_machines(sync_cli_daemon):  # type: ignore[no-untyped-def]
+    """`coffer machines` is the same implementation as `coffer sync machines`
+    (Task 15) — byte-identical output, not just an equivalent re-implementation."""
+    top_level = _runner.invoke(cli_app, ["machines"])
+    assert top_level.exit_code == 0, top_level.output
+    nested = _runner.invoke(cli_app, ["sync", "machines"])
+    assert nested.exit_code == 0, nested.output
+    assert top_level.output == nested.output
+
+
+def test_machines_top_level_rename_still_works(sync_cli_daemon):  # type: ignore[no-untyped-def]
+    """--rename keeps working identically through the top-level alias."""
+    result = _runner.invoke(cli_app, ["machines", "--rename", "renamed-box"])
+    assert result.exit_code == 0, result.output
+    assert "renamed-box" in result.output

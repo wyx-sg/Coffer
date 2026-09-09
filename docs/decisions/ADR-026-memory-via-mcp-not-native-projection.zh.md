@@ -9,7 +9,7 @@
 
 ## Context
 
-[ADR-013](ADR-013-agent-native-shared-memory.md) 让 Coffer 的那一份 canonical 记忆库通过**原生投射**触达多个 agent：把 canonical 的 per-project 记忆目录 symlink 进 Claude Code 的 auto-memory 位置，把 marker 围栏的托管块 render 进 Codex / OpenCode / OpenClaw / Hermes 的配置文件，并**关掉每个 agent 自带的原生记忆**以防出现发散的第二份副本。MCP `recall`/`remember` 是通用底座，投射是让记忆在 session 启动时「环境式」加载的额外一层。
+[ADR-013](ADR-013-agent-native-shared-memory.md) 让 Coffer 的那一份 canonical 记忆库通过**原生投射**触达多个 agent：把 canonical 的 per-project 记忆目录 symlink 进 Claude Code 的 auto-memory 位置，把 marker 围栏的托管块 render 进 Codex 的配置文件，并**关掉每个 agent 自带的原生记忆**以防出现发散的第二份副本。MCP `recall`/`remember` 是通用底座，投射是让记忆在 session 启动时「环境式」加载的额外一层。
 
 一轮竞品调研（`docs/research/memory-systems-landscape.zh.md`）把这个选择放进业界做法里，并亮出一面**黄旗**：受访的每一个共享记忆系统（mem0、Letta、Zep/Graphiti、官方 MCP memory server、claude-mem、agentmemory）**都不写入另一个 agent 的原生记忆文件**。它们用一个在运行时触达的中心库 —— 经 MCP/API 查询，或经 session hook 注入上下文。Letta 自家的 Claude Code 集成（`claude-subconscious`）**刻意从不写 `CLAUDE.md`**，甚至清掉遗留块。多目标原生 fan-out 是 Coffer 真正新颖的贡献 —— 但也正是业界其余玩家考虑过、然后**避开**的那条路。
 
@@ -28,7 +28,7 @@
 - **移除：** `AgentMemoryAdapter` 协议 + `ProjectionEngine` + 各 per-agent 适配器（SYMLINK/RENDER/NONE）、投射 FS 适配器、`memory_projection_bindings` 表（由 migration `0023` drop）、投射 REST 端点（`/memory_stores/{name}/projections…`）、原生记忆发现/接管路由、`coffer memory bind/unbind/projections` CLI 命令、以及 `memory_projected` 审计事件。Coffer 不再关闭任何 agent 的原生记忆。
 - **保留（不变）：** 文件即真相的 per-fact markdown + 重新生成的 `MEMORY.md`（[ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md)）；两层作用域（global + per-project，从 MCP shim 的 cwd → git-root 解析）；共享检索引擎（grep / FTS5 关键词 / sqlite-vec 向量）+ 惰性 reindex-on-read；transcript 蒸馏（ADR-020）；以及经 UI/CLI 的完整人工策展。
 - **可读性（FR-017a）：** 因为 Coffer 拥有自己的格式，per-project store 以从 `project_root` 推导的可读身份（目录 basename + 路径）呈现，而非 `project-<ULID>` 名。
-- **环境式加载（~~延后的后续项~~ —— 已交付，spec 007 FR-055）：** session 启动 hook 现在会把项目记忆摘要（近期 journal + knowledge 索引）注入 agent 上下文（经 `session-context` 端点的上下文注入，绝不写文件），使 agent 一开工就带上记忆、无需主动调 `recall`；正文仍经 `recall` 按需取。经 per-agent SessionStart hook（ADR-042 `ContextInjectionSpec`）投递给凡装了该 hook 的 agent（Claude Code、Codex、Cursor）。它不碰原生文件即恢复了投射层原本提供的环境式自动加载。
+- **环境式加载（~~延后的后续项~~ —— 已交付，spec 007 FR-055）：** session 启动 hook 现在会把项目记忆摘要（近期 journal + knowledge 索引）注入 agent 上下文（经 `session-context` 端点的上下文注入，绝不写文件），使 agent 一开工就带上记忆、无需主动调 `recall`；正文仍经 `recall` 按需取。经 per-agent SessionStart hook（`ContextInjectionSpec`，spec 004 FR-043）投递给凡装了该 hook 的 agent（Claude Code、Codex）。它不碰原生文件即恢复了投射层原本提供的环境式自动加载。
 
 ## Consequences
 

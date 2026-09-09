@@ -21,8 +21,7 @@ JSON-RPC。
 1. **它与 owner 配对冗余。** 一个 channel 只听命于唯一已配对的 owner，非
    owner 消息被忽略；web 控制台也是本人。agent 执行的每一条指令都是 owner
    刚刚下达的。逐工具弹窗只是在重复确认 owner 已经授权的事——是摩擦，不是
-   安全。这正是从聊天面驱动的同类 agent（Claude Code、Codex、OpenClaw、
-   Hermes）不对单个工具调用设防的原因：人已经在回路里了。
+   安全。这正是从聊天面驱动的同类 agent（Claude Code、Codex）不对单个工具调用设防的原因：人已经在回路里了。
 
 2. **该中继从未端到端跑通过。** claude SDK 的 `can_use_tool` 路径在运行时报
    `Stream closed`（控制流在 Coffer 的运行方式下没建立起来）；只有白名单内

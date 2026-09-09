@@ -15,6 +15,37 @@ from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.infrastructure.knowledge.embeddings import make_embedder
 
 
+def build_config_services(app: Any, sm: Any, audit: Any, credential_store: Any) -> tuple[Any, Any]:
+    """Build the two engine-config singletons and register their synced state
+    area (spec 010 slice 7) before start_sync snapshots the provider list."""
+    from coffer.application.engine_settings_sync import EngineSettingsSyncState
+    from coffer.application.internal_engine_config_service import InternalEngineConfigService
+    from coffer.infrastructure.persistence.repos import (
+        SqlAlchemyEmbeddingConfigRepo,
+        SqlAlchemyInternalEngineConfigRepo,
+    )
+
+    embedding_repo = SqlAlchemyEmbeddingConfigRepo(sm)
+    embedding_svc = EmbeddingConfigService(
+        repo=embedding_repo, audit=audit, credentials=credential_store
+    )
+    internal_repo = SqlAlchemyInternalEngineConfigRepo(sm)
+    internal_svc = InternalEngineConfigService(repo=internal_repo, audit=audit)
+    providers = getattr(app.state, "sync_state_providers", None)
+    if providers is None:
+        providers = []
+        app.state.sync_state_providers = providers
+    providers.append(
+        EngineSettingsSyncState(
+            embedding_svc,
+            internal_svc,
+            embedding_repo=embedding_repo,
+            internal_repo=internal_repo,
+        )
+    )
+    return embedding_svc, internal_svc
+
+
 def build_embedding_resolvers(
     embedding_config_svc: EmbeddingConfigService,
     credential_store: Any,

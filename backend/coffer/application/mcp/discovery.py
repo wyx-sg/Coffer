@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 import mcp.types as mcp_types
-from mcp import McpError
+from mcp import MCPError
 
 from coffer.application.audit_service import AuditService
 from coffer.application.mcp.ports import MCPCapabilityPreferenceRepoPort
@@ -40,7 +40,7 @@ def _is_method_not_found(exc: Exception) -> bool:
     """True for the JSON-RPC -32601 reply a capability-less upstream sends for
     an unsupported ``*/list`` (e.g. a tools-only server answering prompts/list).
     That is a legitimate 'no such capability', not a broken connection."""
-    return isinstance(exc, McpError) and exc.error.code == mcp_types.METHOD_NOT_FOUND
+    return isinstance(exc, MCPError) and exc.code == mcp_types.METHOD_NOT_FOUND
 
 
 @dataclass
@@ -155,7 +155,7 @@ class CapabilityDiscovery:
                     MCPTool(
                         name=t.name,
                         description=getattr(t, "description", None),
-                        input_schema=getattr(t, "inputSchema", None) or {},
+                        input_schema=getattr(t, "input_schema", None) or {},
                     )
                     for t in getattr(result, "tools", [])
                 ]
@@ -185,13 +185,13 @@ class CapabilityDiscovery:
             if cache.resources is None or not self._is_fresh(cache.resources_fetched_at):
                 try:
                     result = await self._request_self_heal(server_name, "resources/list", {})
-                except McpError as exc:
+                except MCPError as exc:
                     # An upstream that implements only tools replies with JSON-RPC
                     # -32601 (METHOD_NOT_FOUND) for resources/list. Treat that as
                     # "this upstream has no resources" — cache an empty list and
-                    # return [], without affecting tools. Any other McpError (and
+                    # return [], without affecting tools. Any other MCPError (and
                     # real UpstreamUnavailable/UpstreamTimeout) propagates.
-                    if exc.error.code != mcp_types.METHOD_NOT_FOUND:
+                    if exc.code != mcp_types.METHOD_NOT_FOUND:
                         raise
                     cache.resources = []
                     cache.resources_fetched_at = self._clock()
@@ -201,7 +201,7 @@ class CapabilityDiscovery:
                         uri=str(getattr(r, "uri", "")),
                         name=getattr(r, "name", None),
                         description=getattr(r, "description", None),
-                        mime_type=getattr(r, "mimeType", None),
+                        mime_type=getattr(r, "mime_type", None),
                     )
                     for r in getattr(result, "resources", [])
                 ]
@@ -234,13 +234,13 @@ class CapabilityDiscovery:
             if cache.prompts is None or not self._is_fresh(cache.prompts_fetched_at):
                 try:
                     result = await self._request_self_heal(server_name, "prompts/list", {})
-                except McpError as exc:
+                except MCPError as exc:
                     # A tools-only upstream replies with JSON-RPC -32601
                     # (METHOD_NOT_FOUND) for prompts/list. Treat that as "this
                     # upstream has no prompts" — cache an empty list and return
-                    # [], without affecting tools. Any other McpError (and real
+                    # [], without affecting tools. Any other MCPError (and real
                     # UpstreamUnavailable/UpstreamTimeout) propagates.
-                    if exc.error.code != mcp_types.METHOD_NOT_FOUND:
+                    if exc.code != mcp_types.METHOD_NOT_FOUND:
                         raise
                     cache.prompts = []
                     cache.prompts_fetched_at = self._clock()
@@ -272,7 +272,7 @@ class CapabilityDiscovery:
                 prefixed_name=prefix_prompt(server_name, p.name),
                 original_name=p.name,
                 description=p.description,
-                arguments=[a.model_dump() for a in p.arguments],
+                arguments=[a.model_dump(by_alias=True) for a in p.arguments],
                 enabled=prefs.get(p.name, True),
             )
             for p in cache.prompts

@@ -9,7 +9,6 @@ CODE-L2). One table here keeps the transports in lockstep.
 
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import Any
 
 from coffer.domain.errors import UpstreamUnavailable
@@ -34,7 +33,7 @@ async def dispatch_method(
             return await session.call_tool(
                 params["name"],
                 arguments=params.get("arguments"),
-                read_timeout_seconds=timedelta(seconds=request_timeout_seconds),
+                read_timeout_seconds=request_timeout_seconds,
                 progress_callback=progress_callback,
             )
         except TypeError as e:

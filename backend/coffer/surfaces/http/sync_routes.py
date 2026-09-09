@@ -8,14 +8,19 @@ out-of-band.
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field, field_validator
 
 from coffer.application.sync.service import SyncService
+from coffer.domain.sync.errors import classify_git_error
 from coffer.domain.sync.models import (
     DEFAULT_BRANCH,
     DEFAULT_INTERVAL_SECONDS,
     DEFAULT_POLL_REMOTE_SECONDS,
+    MachineEntry,
+    MachineIdentity,
     SyncConfig,
     SyncState,
 )
@@ -64,6 +69,9 @@ class SyncStatusOut(BaseModel):
     status: str
     last_sync_at: str | None
     last_error: str | None
+    # Actionable classification of last_error (auth/not_found/network) — the
+    # UI renders configuration guidance from it instead of raw git stderr.
+    error_hint: str | None
     conflict_paths: list[str]
     locked_refs: list[str]
     quarantined_refs: list[str]
@@ -101,6 +109,20 @@ class MachinesOut(BaseModel):
     machines: list[MachineOut]
 
 
+class OverrideIn(BaseModel):
+    patch: dict[str, Any]
+
+
+class OverrideOut(BaseModel):
+    kind: str
+    name: str
+    patch: dict[str, Any]
+
+
+class OverridesOut(BaseModel):
+    overrides: list[OverrideOut]
+
+
 class MachineRenameIn(BaseModel):
     display_name: str = Field(min_length=1, max_length=100)
 
@@ -130,10 +152,30 @@ def _status_out(s: SyncState) -> SyncStatusOut:
         status=s.status.value,
         last_sync_at=s.last_sync_at.isoformat() if s.last_sync_at else None,
         last_error=s.last_error,
+        error_hint=classify_git_error(s.last_error),
         conflict_paths=s.conflict_paths,
         locked_refs=s.locked_refs,
         quarantined_refs=s.quarantined_refs,
     )
+
+
+def machine_out(entry: MachineEntry, identity: MachineIdentity) -> MachineOut:
+    return MachineOut(
+        machine_id=entry.machine_id,
+        display_name=entry.display_name,
+        platform=entry.platform,
+        os_version=entry.os_version,
+        coffer_version=entry.coffer_version,
+        last_sync_at=entry.last_sync_at.isoformat() if entry.last_sync_at else None,
+        is_local=entry.machine_id == identity.machine_id,
+    )
+
+
+def machines_out(identity: MachineIdentity, entries: list[MachineEntry]) -> MachinesOut:
+    """Shared wire-shape builder — used by both ``GET /sync/machines`` (this
+    module) and ``GET /api/v1/machines`` (``machines_routes``), so the two
+    endpoints' responses stay byte-identical by construction."""
+    return MachinesOut(machines=[machine_out(e, identity) for e in entries])
 
 
 # --- routes ----------------------------------------------------------------
@@ -177,20 +219,7 @@ async def resolve_sync(body: SyncResolveIn) -> SyncStatusOut:
 @router.get("/machines", response_model=MachinesOut)
 async def list_machines() -> MachinesOut:
     identity, entries = await get_sync_service().list_machines()
-    return MachinesOut(
-        machines=[
-            MachineOut(
-                machine_id=e.machine_id,
-                display_name=e.display_name,
-                platform=e.platform,
-                os_version=e.os_version,
-                coffer_version=e.coffer_version,
-                last_sync_at=e.last_sync_at.isoformat() if e.last_sync_at else None,
-                is_local=e.machine_id == identity.machine_id,
-            )
-            for e in entries
-        ]
-    )
+    return machines_out(identity, entries)
 
 
 @router.put("/machine", response_model=MachineOut)
@@ -199,15 +228,40 @@ async def rename_machine(body: MachineRenameIn, actor: str = Depends(get_actor))
     await service.rename_machine(body.display_name, actor=actor)
     identity, entries = await service.list_machines()
     own = next(e for e in entries if e.machine_id == identity.machine_id)
-    return MachineOut(
-        machine_id=own.machine_id,
-        display_name=own.display_name,
-        platform=own.platform,
-        os_version=own.os_version,
-        coffer_version=own.coffer_version,
-        last_sync_at=own.last_sync_at.isoformat() if own.last_sync_at else None,
-        is_local=True,
-    )
+    return machine_out(own, identity)
+
+
+@router.get("/overrides", response_model=OverridesOut)
+async def list_overrides() -> OverridesOut:
+    rows = await get_sync_service().list_overrides()
+    return OverridesOut(overrides=[OverrideOut(kind=k, name=n, patch=p) for k, n, p in rows])
+
+
+@router.put("/overrides/{kind}/{name}", response_model=OverridesOut)
+async def set_override(
+    kind: str, name: str, body: OverrideIn, actor: str = Depends(get_actor)
+) -> OverridesOut:
+    await get_sync_service().set_override(kind, name, body.patch, actor=actor)
+    return await list_overrides()
+
+
+@router.delete("/overrides/{kind}/{name}", response_model=OverridesOut)
+async def unset_override(kind: str, name: str, actor: str = Depends(get_actor)) -> OverridesOut:
+    await get_sync_service().unset_override(kind, name, actor=actor)
+    return await list_overrides()
+
+
+class KeyFingerprintOut(BaseModel):
+    present: bool
+    # Short SHA-256 fingerprint of the master key (never the key itself);
+    # matching fingerprints on two machines = the same key.
+    fingerprint: str | None
+
+
+@router.get("/key/fingerprint", response_model=KeyFingerprintOut)
+async def key_fingerprint() -> KeyFingerprintOut:
+    fp = get_sync_service().key_fingerprint()
+    return KeyFingerprintOut(present=fp is not None, fingerprint=fp)
 
 
 @router.post("/key/export", response_model=KeyOpOut)

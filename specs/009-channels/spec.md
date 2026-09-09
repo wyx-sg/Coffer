@@ -489,7 +489,49 @@ status / notify`.
   sends no completion summary on any channel, while a turn that ends abnormally
   (failed, interrupted, tool-limit) sends one reporting the outcome.
 
+## Machine affinity (spec 010 amendment)
+
+A channel's platform identity (a polled bot, a webhook endpoint) tolerates only
+ONE consumer, but channel definitions sync to every machine (spec 010). The
+channel runtime consults the framework-level `scope` field (machine axis
+only — a channel's `scope` entries accept only `"*"` as their value) to
+decide whether to start the adapter locally: `scope` carries exactly one
+exact-ULID machine entry (or none = dormant); the `"*"` key is rejected for
+channels (`Kind.validate_scope_shape`, ADR-045 review Fix 1) — it would match
+every machine at once, the double-adapter fight ADR-043 exists to prevent, by
+a different route. Only the machine present as that single entry starts the
+adapter. `scope == {}` (dormant everywhere — the equivalent of the
+pre-amendment `runs_on: null`) starts nowhere until the user picks a machine
+in the channel detail page. The creating surface defaults scope to
+`{"<creating-machine-id>": "*"}`. Rebinding is a normal config edit (an
+ordinary `scope` write) that propagates through sync; pairing state syncs
+with the vault (spec 010 state area `channel-peers`), so a rebound channel
+needs no re-pairing. During the propagation window (one sync round trip)
+both machines may briefly poll the platform at once — self-healing
+seconds-long overlap, accepted for a single-user tool.
+
+**`runs_on` → `scope` migration** (Amendment 2026-07-10 — machine × agent
+scope, [ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md)).
+The single-machine `runs_on: <machine_id>` field described above is
+**superseded** by the framework's machine axis: a data migration converts
+every existing channel's `runs_on: <machine_id>` to
+`scope: {"<machine_id>": "*"}`, and `runs_on: null` to `scope: {}`, on
+upgrade. `runs_on` is **not removed** from the schema or the API — old
+payloads and synced docs from not-yet-upgraded machines must still validate —
+but it becomes **inert**: the channel runtime reads `scope` only, and
+`runs_on` is documented as deprecated in place (a frozen pre-migration value;
+stale after any rebind; not consulted).
+
 ## Acceptance Scenarios
+
+### Scenario: a channel runs on exactly one machine
+
+- **Given** channels bound to this machine, to another machine, and to no
+  machine
+- **When** the runtime reconciles
+- **Then** only the channel bound to this machine starts its adapter
+- **And** rebinding a channel away from this machine stops it on the next
+  reconcile
 
 ### Scenario: register a telegram channel
 
@@ -827,7 +869,7 @@ status / notify`.
 ### Scenario: a PDF reaches a path-native agent as extracted text
 
 - **Given** a turn carrying a PDF (or office document) attachment for a
-  path-native agent (Codex/Hermes/OpenCode/Cursor)
+  path-native agent (Codex)
 - **When** the adapter prepares the turn
 - **Then** the document is text-extracted and folded into the prompt as a
   labelled `[Document: <name>]` block, and the document is not also sent as a
@@ -1025,6 +1067,34 @@ status / notify`.
 - **When** the owner sends a message that drives a turn
 - **Then** the reply is still delivered — the best-effort reaction is suppressed
 
+### Scenario: a group turn names the group it came from
+
+- **Given** a paired channel whose owner @mentions the bot in a group thread
+- **When** the turn is driven
+- **Then** the turn text opens with a `[Message origin]` block naming the platform,
+  the chat kind and title, the chat id, the thread id, and the sender
+
+### Scenario: a DM turn names its own chat
+
+- **Given** a paired channel and a DM from its owner
+- **When** the turn is driven
+- **Then** the origin block names the platform and the direct chat by id, omitting
+  the thread line a DM has no value for
+
+### Scenario: every turn carries its origin
+
+- **Given** a paired channel that has already run one turn
+- **When** the owner sends a second message
+- **Then** that turn's text opens with its own origin block too — the provenance is
+  not a first-turn-only header
+
+### Scenario: a slash command keeps its leading slash
+
+- **Given** a paired channel
+- **When** the owner sends `/help`
+- **Then** it is handled as a command (no origin block is prefixed, no conversation
+  is created)
+
 ## Channels as a management plane (north star)
 
 Channels are managed the way Coffer manages MCP servers, memory, and skills:
@@ -1042,13 +1112,13 @@ Two kinds of channel live under this plane:
   switchable per conversation, and (since each thread is its own conversation,
   FR-032) per thread, so one bot can run Claude Code in one thread and Codex in
   another. This is Coffer's moat: agents with no channel of their own (Claude
-  Code, Codex, Cursor, OpenCode) reach IM *only* this way; and **SeaTalk is
+  Code, Codex) reach IM *only* this way; and **SeaTalk is
   Coffer-hosted for every agent, because no external gateway speaks SeaTalk.**
-  All of spec 009 — including the enhancements below (FR-028…FR-041) — describes
+  All of spec 009 — including the enhancements below (FR-028…FR-042) — describes
   this path. The one seam that keeps it agent-agnostic: every inbound message
   becomes text plus on-disk `Attachment(path, mime, filename)`, and each agent
   adapter materializes attachments its own way (Claude inlines images/PDFs;
-  Codex/Hermes/OpenCode receive file paths; audio is transcribed upstream). The
+  Codex receives file paths; audio is transcribed upstream). The
   channel layer never branches per agent.
 - **Externally-hosted channels are a non-goal.** An agent-native gateway
   (OpenClaw, Hermes run standalone) or an official vendor integration
@@ -1099,7 +1169,7 @@ capabilities the official personal bridges lack.
   the agent could not open.)
 - **FR-030**: PDFs and office documents reach every agent as extracted text, not
   as a vision input. A document attachment is text-extracted into a context
-  block so path-native agents (Codex/Hermes/OpenCode) and vision agents alike
+  block so path-native agents (Codex) and vision agents alike
   see its content; images stay vision-inlined for agents that support it.
 - **FR-031**: SeaTalk outbound media is delivered and thread-aware. `send_media`
   is wired to SeaTalk's file-upload API (`supports_media` true); an agent
@@ -1127,6 +1197,26 @@ capabilities the official personal bridges lack.
   compact `📎 filename · mime` chip; the local path is never emitted to the wire.
   The media dir is bounded by a 30-day mtime retention prune on the retention
   cadence (bytes are re-downloadable; no size cap). See ADR-041.
+- **FR-042**: Every turn carries its own origin. The turn text opens with a
+  `[Message origin]` block naming the platform, the chat (kind, the chat title
+  where the platform supplies one, and always the chat id), the thread, and the
+  sender (display name **and** the stable platform id — SeaTalk `employee_code`,
+  Telegram `from.id` — which a platform tool call takes and which, in a group,
+  appears nowhere else because `chat_id` is the group's) — so an agent asked "which group is this?" answers from the turn it was
+  given instead of listing the bot's groups and inferring, and a platform tool
+  call (send-to-group, fetch-group-info) has a chat id to aim at. The block is
+  folded in after command detection (a prefixed `/help` would stop being a
+  command) and after the empty-envelope check, and is persisted on the user
+  message exactly like thread context (FR-029) — the single source of truth
+  (FR-033) stays one string. It rides on **every** turn, not just a
+  conversation's first: `/agent` can swap the agent mid-conversation (FR-040)
+  and a resumed session would otherwise lose it. Title and sender name are
+  chat-member-settable, so both are collapsed to one clipped line before they
+  reach the prompt — a rename cannot forge extra origin lines. Where a platform
+  hands the chat title over for free it is included (Telegram `chat.title`);
+  where it does not (SeaTalk group events carry only `group_id`) the chat is
+  named by id alone, which an agent can resolve to a name through the platform's
+  own tools.
 
 ### C. Group UX and gating
 

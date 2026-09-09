@@ -36,6 +36,11 @@ class MemoryStoreConfig(BaseModel):
     embedding_credential_ref: str | None = None
     embedding_dimensions: int = Field(default=DEFAULT_EMBEDDING_DIMENSIONS, ge=1, le=8192)
     max_fact_chars: int = Field(default=DEFAULT_MAX_FACT_CHARS, ge=64, le=MAX_FACT_CHARS)
+    # FR-058: project ULIDs merged INTO this store (system-managed, never set by
+    # the user). A resolve whose computed identity is listed here — and whose own
+    # store no longer exists — lands on this store instead of re-provisioning an
+    # empty duplicate. Lives in config_json so it syncs with the resource.
+    merged_identities: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _check(self) -> MemoryStoreConfig:

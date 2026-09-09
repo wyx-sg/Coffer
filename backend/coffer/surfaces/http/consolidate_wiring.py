@@ -14,7 +14,7 @@ from coffer.application.memory.consolidate import ConsolidationReport, StoreCons
 from coffer.application.memory.sync import MemoryReconciler
 from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.memory.project_root_repo import ProjectRootRepo
-from coffer.infrastructure.memory.scope_fs import git_root, project_ulid
+from coffer.infrastructure.memory.scope_fs import git_root, project_identity
 from coffer.infrastructure.memory.store_label_repo import StoreLabelRepo
 
 if TYPE_CHECKING:
@@ -43,7 +43,7 @@ async def run_store_consolidation(
         labels=StoreLabelRepo(sm),  # type: ignore[arg-type]
         store_dir=paths.memory_store_dir,
         git_root=git_root,
-        project_ulid=project_ulid,
+        project_ulid=project_identity,
     )
     try:
         return await consolidator.run()

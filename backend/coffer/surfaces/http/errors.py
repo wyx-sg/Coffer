@@ -27,6 +27,7 @@ _STATUS: dict[str, int] = {
     "GENERIC_CREATE_NOT_ALLOWED": 409,
     "UNKNOWN_KIND": 400,
     "CONFIG_INVALID": 422,
+    "SCOPE_INVALID": 422,  # ADR-045 machine x agent activation scope
     "CREDENTIAL_MISSING": 400,
     "CREDENTIAL_IN_USE": 409,
     "CREDENTIAL_LOCKED": 503,
@@ -58,6 +59,8 @@ _STATUS: dict[str, int] = {
     "UNMANAGED_SKILL_NOT_FOUND": 404,
     "CONFIG_FILE_STALE": 409,
     "MCP_ENTRY_TOGGLE_UNSUPPORTED": 422,
+    "MCP_RUNNER_INSTALL_UNSUPPORTED": 422,
+    "MCP_RUNNER_INSTALL_FAILED": 422,
     "MCP_ENTRY_PROTECTED": 422,
     "MCP_ENTRY_SOURCE_AMBIGUOUS": 422,
     "ADOPT_SECRET_UNRESOLVED": 422,
@@ -69,7 +72,7 @@ _STATUS: dict[str, int] = {
     "HOOK_INSTALL_UNSUPPORTED": 422,
     "NATIVE_MEMORY_DISABLE_UNSUPPORTED": 422,
     "UNMANAGED_SKILL_INVALID": 422,
-    "SKILL_DELIVERY_UNSUPPORTED": 422,
+    "SKILL_OUT_OF_SCOPE": 422,  # ADR-045 machine x agent activation scope
     # knowledge_base kind (spec 006)
     "KB_NOT_FOUND": 404,
     "DOCUMENT_NOT_FOUND": 404,
@@ -79,6 +82,7 @@ _STATUS: dict[str, int] = {
     "GREP_PATTERN_INVALID": 400,
     # memory kind (spec 007)
     "MEMORY_STORE_NOT_FOUND": 404,
+    "MEMORY_STORE_MERGE_INVALID": 400,
     "MEMORY_NOT_FOUND": 404,
     "MEMORY_REJECTED": 422,  # empty / too-long fact rejected at the boundary
     "SCOPE_UNRESOLVED": 400,
@@ -105,7 +109,10 @@ _STATUS: dict[str, int] = {
     "SYNC_WORKSPACE_TOO_NEW": 409,
     "SYNC_GIT_FAILED": 502,
     "SYNC_SERIALIZATION_INVALID": 422,
+    "SYNC_REMOTE_UNREACHABLE": 422,
     "MASTER_KEY_FILE_INVALID": 422,
+    # machines fleet view (spec 010 amendment, ADR-045)
+    "MACHINE_NOT_FOUND": 404,
     # provider switching (spec 011)
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": 422,
     "NO_ACTIVE_PROVIDER": 404,
@@ -160,9 +167,17 @@ def _status_for(exc: errors.CofferError) -> int:
 
 
 def _details_for(exc: errors.CofferError) -> dict[str, Any]:
-    """Surface the machine-readable `reason` of a rejection error, if any."""
+    """Surface the machine-readable `reason`/`hint` of an error, if any."""
+    out: dict[str, Any] = {}
     reason = getattr(exc, "reason", None)
-    return {"reason": reason} if reason else {}
+    if reason:
+        out["reason"] = reason
+    # SyncRemoteUnreachable carries a hint code (auth/not_found/network) the
+    # UI translates into configuration guidance.
+    hint = getattr(exc, "hint", None)
+    if hint:
+        out["hint"] = hint
+    return out
 
 
 def register(app: FastAPI) -> None:

@@ -46,6 +46,18 @@ export function SyncStatusLine({ status }: { status: SyncStatus }) {
         </p>
       )}
       {status.last_error && <p className="mt-1 text-red-600">{status.last_error}</p>}
+      {/* Actionable guidance beats raw git stderr: auth/not_found/network map
+          to configuration hints; conflicts auto-resolve, so a parked
+          conflicted status means the engine could not settle it — point the
+          user at their own repo. */}
+      {status.error_hint && (
+        <p className="mt-1 text-foreground/70">
+          {t(`settings.sync.errorHints.${status.error_hint}`)}
+        </p>
+      )}
+      {status.status === "conflicted" && (
+        <p className="mt-1 text-foreground/70">{t("settings.sync.conflictGuidance")}</p>
+      )}
     </div>
   );
 }

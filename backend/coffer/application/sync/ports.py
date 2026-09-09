@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Protocol
+from typing import Any, Protocol
 
 from coffer.domain.sync.manifest import Manifest
 from coffer.domain.sync.models import MachineEntry, MachineIdentity, Tombstone
@@ -50,6 +50,17 @@ class GitPort(Protocol):
     def remote_head(self, remote: str, branch: str) -> str | None:
         """The remote branch head sha (one ``ls-remote`` round trip), or None."""
 
+    def check_remote(self, remote: str, branch: str) -> None:
+        """Reachability probe; raises ``GitOperationFailed`` (raw stderr) on
+        auth/host/repo failures. A missing branch on a reachable repo is fine."""
+
+    def last_commit_ts(self, rev: str, path: str) -> int | None:
+        """Unix ts of the last commit touching ``path`` on ``rev``, or None."""
+
+    def read_blob(self, rev: str, path: str) -> bytes | None:
+        """Raw bytes of ``path`` at ``rev`` (e.g. HEAD / MERGE_HEAD), or None
+        when the path does not exist on that side."""
+
     def pull(self, branch: str) -> PullOutcome: ...
 
     def push(self, branch: str) -> None: ...
@@ -58,11 +69,46 @@ class GitPort(Protocol):
         """Resolve conflicts with 'ours'/'theirs'/'resolved' then stage them."""
 
 
+class ImportGate(Protocol):
+    """Per-kind validation the importing machine runs BEFORE upserting a doc
+    (spec 010 import reconciliation). Raise ``CofferError`` to quarantine the
+    doc — it retries every run and clears once this machine satisfies it
+    (e.g. the agent's config dir exists here).
+
+    ``scope`` is the doc's ADR-045 machine x agent activation scope (spec 004
+    amendment): a gate that is scope-aware can pass a doc scoped to another
+    machine through untouched (row upserts dormant) instead of quarantining
+    on a machine-local precondition that is meaningless there. Optional
+    keyword so existing gates that ignore scope keep working unchanged."""
+
+    kind: str
+
+    async def validate(
+        self, config: Mapping[str, object], *, scope: dict[str, Any] | None = None
+    ) -> None: ...
+
+
+class PostImportHook(Protocol):
+    """Per-kind side-effect reconciliation run AFTER every import (spec 010
+    import reconciliation). Re-applies machine-local side-effects (native
+    config projections, on-disk transforms, deliveries) idempotently from the
+    converged rows — current state, not deltas — and returns error strings;
+    failures are reported in the run and retried on the next import."""
+
+    kind: str
+
+    async def reconcile(self) -> list[str]: ...
+
+
 class WorkspacePort(Protocol):
     """Filesystem IO over the sync workspace (mirrors, manifest, docs, blobs)."""
 
-    def mirror_trees_out(self) -> None:
-        """Copy the live knowledge/memory trees into the workspace."""
+    def mirror_trees_out(self, *, delete_missing: bool = True) -> None:
+        """Converge the workspace trees on the live knowledge/memory trees.
+
+        ``delete_missing=False`` copies adds/changes only — used until a run
+        has completed an import, so files that arrived from the remote but
+        were never imported locally are not exported away as deletions."""
 
     def mirror_trees_in(self) -> None:
         """Copy the workspace knowledge/memory trees back into the live vault."""
@@ -85,8 +131,37 @@ class WorkspacePort(Protocol):
 
     def read_tombstones(self) -> list[Tombstone]: ...
 
-    def write_credential_blobs(self, blobs: Mapping[str, bytes]) -> None:
-        """Replace ``credentials/`` with one ``<ref>.enc`` per ciphertext blob."""
+    def write_override(
+        self, machine_id: str, kind: str, name: str, patch: Mapping[str, object]
+    ) -> None:
+        """Write this machine's merge patch for one resource."""
+
+    def remove_override(self, machine_id: str, kind: str, name: str) -> None: ...
+
+    def read_overrides(self, machine_id: str) -> dict[tuple[str, str], dict[str, object]]: ...
+
+    def write_state_docs(
+        self,
+        area: str,
+        docs: Sequence[tuple[str, Mapping[str, object]]],
+        owned_prefixes: Collection[str] = (),
+        preserve: Collection[str] = (),
+    ) -> None:
+        """Reconcile ``state/<area>/``: replace docs under ``owned_prefixes``,
+        write ``docs``, preserve everything else verbatim — including owned
+        paths listed in ``preserve`` (their import failed here; replacing them
+        with local values would revert the fleet)."""
+
+    def read_state_docs(self, area: str) -> list[tuple[str, dict[str, object]]]: ...
+
+    def write_credential_blobs(
+        self, blobs: Mapping[str, bytes], *, delete_missing: bool = True
+    ) -> None:
+        """Write one ``<ref>.enc`` per ciphertext blob. Existing blobs for refs
+        this machine does not hold are removed only with ``delete_missing``
+        (same not-yet-imported guard as the trees). A ref whose path collides
+        case-insensitively with a differently-cased existing blob replaces it —
+        two case variants in one git index break checkouts on macOS."""
 
     def read_credential_blobs(self) -> dict[str, bytes]: ...
 
@@ -122,6 +197,35 @@ class TombstoneLedgerPort(Protocol):
     async def prune_older_than(self, cutoff: datetime) -> int: ...
 
 
+class SyncedStatePort(Protocol):
+    """A module-owned shared-state area synced under ``state/<area>/``.
+
+    Modules (channel pairing, MCP preferences, ...) implement this and the
+    composition root registers the providers with the sync engine — sync never
+    imports kind modules (cross-kind fence). Docs are deterministic payloads;
+    export replaces the whole area (git's 3-way merge reconciles machines),
+    import upserts into local state."""
+
+    @property
+    def area(self) -> str:
+        """Directory name under ``state/`` (kebab-case)."""
+        ...
+
+    async def export_docs(self) -> tuple[list[tuple[str, dict[str, object]]], list[str]]:
+        """Local state as (relative doc path without extension, payload) pairs,
+        plus the path PREFIXES this machine can vouch for. Export replaces only
+        docs under owned prefixes — docs for entities this machine does not
+        know locally (quarantined / not yet imported) are preserved verbatim,
+        so an incomplete machine can never erase the fleet's state."""
+        ...
+
+    async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[tuple[str, str]]:
+        """Apply merged docs to local state; returns (doc path, error) pairs.
+        A failed doc's path is preserved verbatim by the next export so the
+        retry sees the foreign value instead of this machine's stale one."""
+        ...
+
+
 class CredentialSyncPort(Protocol):
     """Ciphertext-only credential IO + locked-ref detection (never the key)."""
 
@@ -130,6 +234,9 @@ class CredentialSyncPort(Protocol):
     def read_ciphertext(self, ref: str) -> bytes | None: ...
 
     def write_ciphertext(self, ref: str, blob: bytes) -> None: ...
+
+    def delete_ciphertext(self, ref: str) -> None:
+        """Remove the row for ``ref`` (idempotent; applying a credential tombstone)."""
 
     def locked_refs(self) -> list[str]:
         """Refs whose ciphertext cannot be decrypted on this machine (no/other key)."""

@@ -33,8 +33,6 @@ from coffer.application.agent.kind import make_agent_kind
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.kind import make_channel_kind
-from coffer.application.embedding_config_service import EmbeddingConfigService
-from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.audit import AuditEventType
@@ -48,14 +46,15 @@ from coffer.infrastructure.persistence.engine import (
 )
 from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
-    SqlAlchemyEmbeddingConfigRepo,
-    SqlAlchemyInternalEngineConfigRepo,
     SqlAlchemyResourceRepo,
 )
 from coffer.surfaces.http import cors, daemon_routes
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_skill_wiring import wire_agent_and_skill_kinds
-from coffer.surfaces.http.app_embedding_composition import build_embedding_resolvers
+from coffer.surfaces.http.app_embedding_composition import (
+    build_config_services,
+    build_embedding_resolvers,
+)
 from coffer.surfaces.http.app_mcp_composition import (
     build_retention_service,
     reaper_kwargs_from_env,
@@ -98,6 +97,7 @@ from coffer.surfaces.http.memory.organize_state import get_organizer_service
 from coffer.surfaces.http.memory_wiring import run_memory_reindex_sweep, wire_memory_kind
 from coffer.surfaces.http.migrations_runner import run_migrations
 from coffer.surfaces.http.provider_wiring import wire_provider_kind
+from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
 from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.session_end_wiring import start_auto_organize, stop_auto_organize
 from coffer.surfaces.http.sync_wiring import start_sync, stop_sync
@@ -127,6 +127,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Run migrations BEFORE building services so they have a schema to talk to.
     await asyncio.get_running_loop().run_in_executor(None, run_migrations, _db_url())
 
+    # 0048 dropped the removed-type agent rows; name what they left on disk.
+    try:  # Courtesy notice only: never fatal.
+        report_removed_agent_leftovers()
+    except Exception:
+        _logger.exception("removed_agent_type.leftover_scan_failed")
+
     # Startup process hygiene (ADR-006), BEFORE new upstreams: reap leaked MCP
     # upstreams AND stale sibling daemons. Best-effort; never blocks startup.
     try:
@@ -154,14 +160,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     retention_svc = build_retention_service(sm, audit=audit)
     await retention_svc.initialize_defaults()
-    embedding_config_svc = EmbeddingConfigService(
-        repo=SqlAlchemyEmbeddingConfigRepo(sm),
-        audit=audit,
-        credentials=credential_store,
-    )
-    internal_engine_config_svc = InternalEngineConfigService(
-        repo=SqlAlchemyInternalEngineConfigRepo(sm),
-        audit=audit,
+    # Also registers the engine-settings synced state area (spec 010 slice 7).
+    embedding_config_svc, internal_engine_config_svc = build_config_services(
+        app, sm, audit, credential_store
     )
 
     set_resource_service(resource_svc)
@@ -179,7 +180,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Provider switching (spec 011) — AFTER the agent kind: it projects the
     # active profile into each agent's native config (see provider_wiring).
-    wire_provider_kind(app, resource_svc, audit, credential_store)
+    wire_provider_kind(app, resource_svc, audit, credential_store, sm)
 
     # Wire up knowledge_base kind (spec 006). Registers the KB built-in tools
     # into `builtin_tools`. One substrate per process: KB + memory share the
