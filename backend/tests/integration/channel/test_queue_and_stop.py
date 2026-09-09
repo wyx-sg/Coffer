@@ -15,7 +15,7 @@ from coffer.application.chat.turn_orchestrator import active_turns
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
 from coffer.domain.chat.message import Message, Role, TextBlock
 
-from .conftest import ChannelEnv, inbound, wait_until
+from .conftest import ChannelEnv, inbound, turn_body, wait_until
 
 
 class GatedAdapter:
@@ -32,7 +32,7 @@ class GatedAdapter:
         self, *, history: Sequence[Message], **_: object
     ) -> AsyncIterator[AgentEvent]:
         last = history[-1]
-        text = "".join(b.text for b in last.content if isinstance(b, TextBlock))
+        text = turn_body("".join(b.text for b in last.content if isinstance(b, TextBlock)))
 
         async def gen() -> AsyncIterator[AgentEvent]:
             self.runs.append(text)
@@ -164,7 +164,7 @@ async def test_messages_sent_mid_turn_run_as_consecutive_turns_in_order(env: Cha
     assert conversation_id is not None
     messages = await env.chat.list_messages(conversation_id)
     user_texts = [
-        "".join(b.text for b in m.content if isinstance(b, TextBlock))
+        turn_body("".join(b.text for b in m.content if isinstance(b, TextBlock)))
         for m in messages
         if m.role == Role.USER
     ]

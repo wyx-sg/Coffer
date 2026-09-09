@@ -37,6 +37,10 @@ class InboundMessage:
     sender_id: str = ""  # stable per-sender id for the owner gate (Telegram
     # from.id, SeaTalk employee_code); "" when the transport has none
     chat_kind: str = "direct"  # "direct" | "group"
+    chat_title: str = ""  # group/channel display name where the platform supplies
+    # one for free (Telegram ``chat.title``); "" when it does not (SeaTalk's group
+    # events carry only ``group_id``) — the origin block then names the chat by id
+    # alone (FR-042)
     addressed: bool = True  # DMs always; group only when @mentioned / reply-to-bot
     mentions_others: bool = False  # group message @-mentions a non-bot user (FR-035)
     thread_id: str = ""  # non-empty when the message is inside a thread/topic
