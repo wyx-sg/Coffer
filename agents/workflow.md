@@ -176,3 +176,22 @@ If a merged commit on `main` has a defect:
 3. Run through normal review.
 
 NEVER force-push to `main` to "undo" a merge.
+
+## Dependency Updates
+
+Coffer runs **Dependabot security updates only**. There is no
+`.github/dependabot.yml`, so no routine version-bump PRs are opened.
+
+Why: the repository requires branches to be up to date before merging and does
+not allow auto-merge, so every bot PR costs a manual branch update, a full CI
+round, and a merge — and merging any one of them invalidates the rest, forcing
+them through strictly serially. For a single-maintainer, local-first tool, that
+recurring cost is not repaid by patch and minor bumps. Major upgrades that
+actually matter (the mcp 2.x SDK, for instance) are done by hand against the
+changelog anyway.
+
+Security updates are unaffected: they are a separate repository setting
+(Settings → Code security), not driven by the deleted config file, so a real
+advisory still opens a PR.
+
+Bumping a dependency by hand is an ordinary `chore(deps)` PR.
