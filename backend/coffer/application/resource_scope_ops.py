@@ -64,5 +64,4 @@ async def update_scope(
         hook_result = kind_def.on_scope_changed(ref)
         if inspect.isawaitable(hook_result):
             await hook_result
-    service._notify_change()
     return updated

@@ -16,7 +16,6 @@ from __future__ import annotations
 import builtins
 import inspect
 import logging
-from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
@@ -90,19 +89,6 @@ class ResourceService:
         self._repo = repo
         self._audit = audit
         self._credentials = credentials
-        self._change_listeners: list[Callable[[], Any]] = []
-
-    def add_change_listener(self, listener: Callable[[], Any]) -> None:
-        """Register a fire-and-forget callback invoked after every mutation
-        (register / update / enable / delete)."""
-        self._change_listeners.append(listener)
-
-    def _notify_change(self) -> None:
-        for listener in self._change_listeners:
-            try:
-                listener()
-            except Exception:
-                _logger.exception("resource.change_listener_failed")
 
     def _probe_credentials(self, kind_def: Kind, config: dict[str, Any]) -> None:
         """Raise CredentialMissing if any cited credential_ref is absent from the credential store.
@@ -203,7 +189,6 @@ class ResourceService:
             actor=actor,
             details={"config": _audit_safe_config(kind_def, validated)},
         )
-        self._notify_change()
         return created
 
     async def list(
@@ -281,7 +266,6 @@ class ResourceService:
                 "after": _audit_safe_config(kind_def, validated),
             },
         )
-        self._notify_change()
         return updated
 
     async def set_enabled(self, ref: ResourceRef, enabled: bool, actor: str) -> Resource:
@@ -291,7 +275,6 @@ class ResourceService:
         updated = await self._repo.set_enabled(ref, enabled)
         event = AuditEventType.RESOURCE_ENABLED if enabled else AuditEventType.RESOURCE_DISABLED
         await self._audit.record(event.value, ref=ref, actor=actor)
-        self._notify_change()
         return updated
 
     async def update_scope(
@@ -342,4 +325,3 @@ class ResourceService:
                 }
             },
         )
-        self._notify_change()

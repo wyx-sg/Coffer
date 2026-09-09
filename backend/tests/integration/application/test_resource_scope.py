@@ -126,17 +126,6 @@ async def test_update_scope_records_audit_event(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_update_scope_fires_change_listener(tmp_path):
-    svc, _, engine = await _service(tmp_path)
-    await svc.register(kind="scoped_kind", name="t", config={"foo": 1}, actor="cli")
-    calls: list[int] = []
-    svc.add_change_listener(lambda: calls.append(1))
-    await svc.update_scope(ResourceRef("scoped_kind", "t"), ["agent-a"], actor="cli")
-    assert calls == [1]
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
 async def test_update_scope_unknown_ref_raises(tmp_path):
     svc, _, engine = await _service(tmp_path)
     with pytest.raises(ResourceNotFound):
