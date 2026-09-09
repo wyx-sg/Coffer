@@ -29,13 +29,12 @@ dependencies = [
     "typer>=0.12",
     "rich>=13.7",
     "structlog>=26.1.0",
-    # Upper-bounded: mcp 2.0 is a major API break (``McpError`` renamed to
-    # ``MCPError``, among others) that Coffer's gateway is not ported to.
-    # Without the bound, any unpinned install — a fresh `pip install -e
-    # backend[dev]`, the verify workflow, the latest-deps canary — resolves
-    # to 2.x and fails at import. Lift it in a dedicated port, not by
-    # accident.
-    "mcp>=1.0,<2",
+    "mcp>=2.2",
+    # mcp 2.0 builds on httpx2 (httpx's 2.x line, published under a new
+    # distribution name). `infrastructure/mcp/http_client` hands the SDK a
+    # timeout and catches its transport errors, so it imports httpx2 directly
+    # rather than relying on it arriving transitively.
+    "httpx2>=2.7",
     "psutil>=5.9",
     "tomlkit>=0.13",
     "pyyaml>=6.0",

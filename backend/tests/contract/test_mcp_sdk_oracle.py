@@ -4,7 +4,7 @@ the wire format is spec-compliant.
 
 The test boots an in-process daemon on a random loopback port via a
 background thread running uvicorn (same runtime as production), then uses
-the mcp SDK's streamablehttp_client + ClientSession to exercise:
+the mcp SDK's streamable_http_client + ClientSession to exercise:
 
     initialize → tools/list → tools/call
 
@@ -24,7 +24,7 @@ import httpx
 import pytest
 import uvicorn
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
 
 from tests.fixtures.keyring import install_in_memory_keyring
 from tests.fixtures.net import free_port
@@ -155,17 +155,16 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
     headers = {"X-Coffer-Token": token}
 
     async with (
-        streamablehttp_client(mcp_url, headers=headers) as (
+        streamable_http_client(mcp_url, http_client=create_mcp_http_client(headers=headers)) as (
             read,
             write,
-            _session_id_getter,
         ),
         ClientSession(read, write) as session,
     ):
         # 1. Initialize — SDK validates InitializeResult shape
         init = await session.initialize()
-        assert init.serverInfo.name == "coffer", (
-            f"expected serverInfo.name='coffer', got {init.serverInfo.name!r}"
+        assert init.server_info.name == "coffer", (
+            f"expected server_info.name='coffer', got {init.server_info.name!r}"
         )
 
         # 2. tools/list — SDK validates ListToolsResult.
@@ -223,11 +222,11 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
             "coffer__remember",
             arguments={"text": "oracle smoke fact about axolotls", "scope": "global"},
         )
-        assert not remember_result.isError, remember_result.content
+        assert not remember_result.is_error, remember_result.content
         recall_result = await session.call_tool(
             "coffer__recall",
             arguments={"query": "axolotls", "scope": "global"},
         )
-        assert not recall_result.isError, recall_result.content
+        assert not recall_result.is_error, recall_result.content
         recall_text = "".join(getattr(item, "text", "") for item in recall_result.content or [])
         assert "axolotls" in recall_text, f"recall did not return the fact: {recall_text!r}"

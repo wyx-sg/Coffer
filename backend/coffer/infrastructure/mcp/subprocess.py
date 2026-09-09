@@ -177,7 +177,7 @@ class StdioUpstreamConnection:
         self._session = session
 
         try:
-            capabilities: dict[str, Any] = init_result.capabilities.model_dump()
+            capabilities: dict[str, Any] = init_result.capabilities.model_dump(by_alias=True)
         except AttributeError:
             capabilities = {}
         return capabilities
