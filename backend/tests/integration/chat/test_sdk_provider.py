@@ -49,10 +49,10 @@ class _FakeSdkSession:
     def __init__(self, options: ClaudeAgentOptions, messages: list[Any]) -> None:
         self.options = options
         self._messages = messages
-        self.connected_prompt: str | None = None
+        self.connected_prompt: str | list[dict[str, Any]] | None = None
         self.disconnected = False
 
-    async def connect(self, prompt: str) -> None:
+    async def connect(self, prompt: str | list[dict[str, Any]]) -> None:
         self.connected_prompt = prompt
 
     async def receive_messages(self) -> AsyncIterator[Any]:
@@ -106,7 +106,7 @@ async def _repo(tmp_path) -> tuple[ConversationRepo, Any]:  # type: ignore[no-un
     return ConversationRepo(session_maker(engine)), engine
 
 
-def _conv(agent_key: str = "claude_code") -> Conversation:
+def _conv(agent_key: str = "claude_code", *, channel_name: str | None = None) -> Conversation:
     now = datetime.now(tz=UTC)
     return Conversation(
         id=uuid.uuid4().hex,
@@ -115,6 +115,7 @@ def _conv(agent_key: str = "claude_code") -> Conversation:
         model_id=None,
         created_at=now,
         updated_at=now,
+        channel_name=channel_name,
     )
 
 
@@ -262,6 +263,49 @@ async def test_build_adapter_resumes_stored_session(tmp_path) -> None:  # type: 
     await _collect(adapter2, _user_turn("hi again", conv.id))
     assert len(captured2) == 1
     assert captured2[0].resume == "sess-sdk"
+
+    await engine.dispose()
+
+
+@pytest.mark.acceptance(
+    spec="009-channels",
+    scenario="the channel-driven agent is told it is on a chat channel",
+)
+@pytest.mark.asyncio
+async def test_channel_conversation_appends_system_context(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A channel-originated conversation makes build_adapter inject a system-prompt
+    note (channel name + mobile/no-dialogs guidance) onto Claude Code's preset."""
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv(channel_name="Telegram"))
+    factory, captured = _make_factory(_simple_messages())
+    provider = ClaudeSdkProvider(conversations=repo, session_factory=factory)
+
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+    adapter = await provider.build_adapter(conv.id)
+    await _collect(adapter, _user_turn("hi", conv.id))
+
+    system_prompt = captured[0].system_prompt
+    assert isinstance(system_prompt, dict)
+    assert system_prompt["type"] == "preset"
+    assert system_prompt["preset"] == "claude_code"
+    assert "Telegram" in system_prompt["append"]
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_web_conversation_has_no_system_context(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A non-channel (web UI) conversation leaves the system prompt untouched."""
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv())  # no channel_name
+    factory, captured = _make_factory(_simple_messages())
+    provider = ClaudeSdkProvider(conversations=repo, session_factory=factory)
+
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+    adapter = await provider.build_adapter(conv.id)
+    await _collect(adapter, _user_turn("hi", conv.id))
+
+    assert captured[0].system_prompt is None
 
     await engine.dispose()
 

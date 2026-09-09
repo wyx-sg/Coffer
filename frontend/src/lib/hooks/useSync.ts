@@ -13,6 +13,7 @@ export interface SyncConfig {
   enabled: boolean;
   auto: boolean;
   interval_seconds: number;
+  poll_remote_seconds: number;
   branch: string;
   updated_at?: string;
 }
@@ -21,8 +22,26 @@ export interface SyncStatus {
   status: "unconfigured" | "clean" | "syncing" | "conflicted" | "error" | "credentials_locked";
   last_sync_at: string | null;
   last_error: string | null;
+  /** Actionable classification of last_error: auth | not_found | network. */
+  error_hint: string | null;
   conflict_paths: string[];
   locked_refs: string[];
+  quarantined_refs: string[];
+}
+
+export interface KeyFingerprint {
+  present: boolean;
+  fingerprint: string | null;
+}
+
+export interface SyncMachine {
+  machine_id: string;
+  display_name: string;
+  platform: string | null;
+  os_version: string | null;
+  coffer_version: string | null;
+  last_sync_at: string | null;
+  is_local: boolean;
 }
 
 function headers(extra: HeadersInit = {}): HeadersInit {
@@ -32,11 +51,14 @@ function headers(extra: HeadersInit = {}): HeadersInit {
 async function checkOk(r: Response): Promise<Response> {
   if (!r.ok) {
     const data = (await r.json().catch(() => null)) as {
-      error?: { code?: string; message?: string };
+      error?: { code?: string; message?: string; details?: unknown };
     } | null;
+    // details carries the actionable hint of SYNC_REMOTE_UNREACHABLE
+    // (auth/not_found/network) — the save-failure UI renders guidance from it.
     throw new ApiError(
       data?.error?.code ?? "INTERNAL_ERROR",
       data?.error?.message ?? `request failed: ${r.status}`,
+      data?.error?.details,
     );
   }
   return r;
@@ -77,6 +99,12 @@ function useInvalidate() {
   return () => {
     void qc.invalidateQueries({ queryKey: ["sync-config"] });
     void qc.invalidateQueries({ queryKey: ["sync-status"] });
+    // A run rewrites this machine's registry entry (last-sync time).
+    void qc.invalidateQueries({ queryKey: ["sync-machines"] });
+    // The Machines fleet view reads the same registry under its own key.
+    void qc.invalidateQueries({ queryKey: ["machines"] });
+    // A key import changes the fingerprint the user compares across machines.
+    void qc.invalidateQueries({ queryKey: ["sync-key-fingerprint"] });
   };
 }
 
@@ -104,12 +132,37 @@ export function useRunSync() {
   });
 }
 
-export function useResolveSync() {
-  const invalidate = useInvalidate();
+export function useKeyFingerprint() {
+  return useQuery({
+    queryKey: ["sync-key-fingerprint"],
+    queryFn: () => getJson<KeyFingerprint>("/sync/key/fingerprint"),
+  });
+}
+
+export function useSyncMachines() {
+  return useQuery({
+    queryKey: ["sync-machines"],
+    queryFn: () => getJson<{ machines: SyncMachine[] }>("/sync/machines"),
+  });
+}
+
+export function useRenameMachine() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { strategy: "ours" | "theirs" | "resolved"; paths: string[] }) =>
-      postJson<SyncStatus>("/sync/resolve", args),
-    onSuccess: invalidate,
+    mutationFn: async (display_name: string) => {
+      const r = await fetch(`${getCofferBaseUrl()}/sync/machine`, {
+        method: "PUT",
+        headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify({ display_name }),
+      });
+      await checkOk(r);
+      return (await r.json()) as SyncMachine;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["sync-machines"] });
+      // The Machines fleet view reads the same registry under its own key.
+      void qc.invalidateQueries({ queryKey: ["machines"] });
+    },
   });
 }
 

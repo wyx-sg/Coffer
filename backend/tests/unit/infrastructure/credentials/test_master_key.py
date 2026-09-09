@@ -112,3 +112,40 @@ def test_relocate_to_file_raises_when_keychain_empty(key_path: pathlib.Path) -> 
     kr.store.clear()  # simulate keychain loss
     with pytest.raises(MasterKeyMissing):
         mgr.relocate("file")
+
+
+def test_install_key_backs_up_existing_different_key(key_path: pathlib.Path) -> None:
+    mgr = MasterKeyManager(key_path=key_path, keyring=FakeKeyring())
+    old = mgr.resolve(allow_create=True)
+    new = Fernet.generate_key()
+    mgr.install_key(new)
+    assert key_path.read_bytes().strip() == new
+    backups = list(key_path.parent.glob("master.key.bak-*"))
+    assert len(backups) == 1
+    assert backups[0].read_bytes().strip() == old
+    assert stat.S_IMODE(backups[0].stat().st_mode) == 0o600
+
+
+def test_install_key_same_key_writes_no_backup(key_path: pathlib.Path) -> None:
+    mgr = MasterKeyManager(key_path=key_path, keyring=FakeKeyring())
+    old = mgr.resolve(allow_create=True)
+    mgr.install_key(bytes(old))
+    assert key_path.read_bytes().strip() == old
+    assert list(key_path.parent.glob("master.key.bak-*")) == []
+
+
+def test_install_key_without_existing_key_writes_no_backup(key_path: pathlib.Path) -> None:
+    mgr = MasterKeyManager(key_path=key_path, keyring=FakeKeyring())
+    new = Fernet.generate_key()
+    mgr.install_key(new)
+    assert key_path.read_bytes().strip() == new
+    assert list(key_path.parent.glob("master.key.bak-*")) == []
+
+
+def test_install_key_rejects_malformed_key_before_touching_file(key_path: pathlib.Path) -> None:
+    mgr = MasterKeyManager(key_path=key_path, keyring=FakeKeyring())
+    old = mgr.resolve(allow_create=True)
+    with pytest.raises(ValueError):
+        mgr.install_key(b"not-a-fernet-key")
+    assert key_path.read_bytes().strip() == old
+    assert list(key_path.parent.glob("master.key.bak-*")) == []

@@ -108,3 +108,8 @@ class MCPInvocationRepoPort(Protocol):
         since: datetime | None = None,
         limit: int = 50,
     ) -> list[MCPInvocation]: ...
+    async def usage_counts(
+        self,
+        *,
+        since: datetime,
+    ) -> dict[tuple[str, str], int]: ...

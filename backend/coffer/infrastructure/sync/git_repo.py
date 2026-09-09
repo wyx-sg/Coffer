@@ -10,6 +10,7 @@ whose global git config has no ``user.name``/``user.email``.
 
 from __future__ import annotations
 
+import os
 import pathlib
 import subprocess
 from collections.abc import Sequence
@@ -46,6 +47,11 @@ class GitRepo:
             self._run("symbolic-ref", "HEAD", f"refs/heads/{branch}")
         self._run("config", "user.name", _COMMIT_NAME)
         self._run("config", "user.email", _COMMIT_EMAIL)
+        # Non-ASCII paths (Chinese filenames) must come back verbatim from
+        # `git diff --name-only`, never C-quoted — a quoted path round-trips
+        # into checkout/rm as a literal `"\350..."` string and fails, which
+        # would crash auto-resolve on every conflict touching such a file.
+        self._run("config", "core.quotepath", "false")
         # Idempotently point origin at the configured remote.
         existing = self._run("remote", check=False)
         if "origin" in existing.stdout.split():
@@ -67,6 +73,82 @@ class GitRepo:
             return False
         self._run("commit", "-m", message)
         return True
+
+    def has_changes(self) -> bool:
+        return bool(self._run("status", "--porcelain").stdout.strip())
+
+    def head(self) -> str | None:
+        """The workspace's current commit sha, or None before the first commit."""
+        if not (self._ws / ".git").exists():
+            return None
+        proc = self._run("rev-parse", "--verify", "--quiet", "HEAD", check=False)
+        sha = proc.stdout.strip()
+        return sha or None
+
+    def remote_head(self, remote: str, branch: str) -> str | None:
+        """The remote branch head via ``git ls-remote`` — one cheap network
+        round trip, no fetch, no working-tree requirement. None when the
+        remote is unreachable or the branch does not exist yet."""
+        self._ws.mkdir(parents=True, exist_ok=True)
+        try:
+            proc = subprocess.run(
+                ["git", "ls-remote", remote, f"refs/heads/{branch}"],
+                cwd=self._ws,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=30,
+                stdin=subprocess.DEVNULL,
+                env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+            )
+        except subprocess.TimeoutExpired:
+            return None
+        if proc.returncode != 0:
+            return None
+        first = proc.stdout.split()
+        return first[0] if first else None
+
+    def check_remote(self, remote: str, branch: str) -> None:
+        """Reachability probe for a remote URL (save-time validation).
+
+        Runs ``git ls-remote`` headless (no terminal prompt) and raises
+        ``GitOperationFailed`` with the raw stderr on any transport failure —
+        auth, unknown host, missing repository. A reachable repository whose
+        branch does not exist yet is fine (a fresh vault remote).
+        """
+        self._ws.mkdir(parents=True, exist_ok=True)
+        try:
+            proc = subprocess.run(
+                ["git", "ls-remote", remote, f"refs/heads/{branch}"],
+                cwd=self._ws,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=20,
+                stdin=subprocess.DEVNULL,
+                env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+            )
+        except subprocess.TimeoutExpired as e:
+            raise GitOperationFailed("ls-remote", f"timed out probing {remote}") from e
+        if proc.returncode != 0:
+            raise GitOperationFailed("ls-remote", proc.stderr.strip())
+
+    def read_blob(self, rev: str, path: str) -> bytes | None:
+        # Bytes, not text: credential blobs must round-trip unmodified.
+        proc = subprocess.run(
+            ["git", "show", f"{rev}:{path}"],
+            cwd=self._ws,
+            capture_output=True,
+            check=False,
+        )
+        return proc.stdout if proc.returncode == 0 else None
+
+    def last_commit_ts(self, rev: str, path: str) -> int | None:
+        """Unix timestamp of the last commit touching ``path`` on ``rev``;
+        None when no commit on that side ever touched it."""
+        proc = self._run("log", "-1", "--format=%ct", rev, "--", path, check=False)
+        out = proc.stdout.strip()
+        return int(out) if out.isdigit() else None
 
     def pull(self, branch: str) -> PullOutcome:
         # Fetch; a brand-new remote has no branch yet, which is not an error.
@@ -100,8 +182,14 @@ class GitRepo:
         targets = list(paths) if paths else self.conflicted_paths()
         if strategy in ("ours", "theirs"):
             for path in targets:
-                self._run("checkout", f"--{strategy}", "--", path)
-                self._run("add", "--", path)
+                proc = self._run("checkout", f"--{strategy}", "--", path, check=False)
+                if proc.returncode != 0:
+                    # Delete/modify conflict where the chosen side deleted the
+                    # path (e.g. accepting a tombstoned deletion): checkout has
+                    # no version to restore — accepting means removing it.
+                    self._run("rm", "--force", "--", path)
+                else:
+                    self._run("add", "--", path)
         elif strategy == "resolved":
             for path in targets:
                 self._run("add", "--", path)

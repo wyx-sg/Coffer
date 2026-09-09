@@ -7,6 +7,8 @@ import { AgentDetailPage } from "./AgentDetailPage";
 
 vi.mock("@/lib/hooks/useAgents", () => ({
   useAgent: vi.fn(),
+  // ScopeCard (Task 19) also imports the plural list hook from this module.
+  useAgents: vi.fn(() => ({ data: [] })),
   usePatchAgent: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useRemoveAgent: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   // Stubs for the (lazily-mounted) Config files + MCP surfaces.
@@ -26,6 +28,16 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   useTogglePlugin: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useUninstallPlugin: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
+// ScopeCard (Task 19) pulls its scope/machines data through hand-written
+// fetch hooks — stub them so the card renders without a real daemon.
+vi.mock("@/lib/hooks/useScope", () => ({
+  useResourceScope: vi.fn(() => ({ data: { scope: null, axes: ["machine"] } })),
+  useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+}));
+vi.mock("@/lib/hooks/useMachines", () => ({
+  useMachines: vi.fn(() => ({ data: { machines: [] } })),
+}));
+
 const hooks = await import("@/lib/hooks/useAgents");
 const useAgentMock = vi.mocked(hooks.useAgent);
 
@@ -92,6 +104,12 @@ describe("AgentDetailPage", () => {
     expect(screen.queryByText(/skill directory/i)).not.toBeInTheDocument();
   });
 
+  test("mounts the ScopeCard (Task 19) for the agent", () => {
+    mockAgentLoaded();
+    renderAt();
+    expect(screen.getByTestId("scope-card")).toBeInTheDocument();
+  });
+
   test("clicking Edit opens the edit form in a modal dialog", () => {
     mockAgentLoaded();
 
@@ -129,5 +147,16 @@ describe("AgentDetailPage", () => {
 
     renderAt();
     expect(screen.getByText(/failed to load agents/i)).toBeInTheDocument();
+  });
+
+  test("the plugins tab renders its table, not a not-supported note", () => {
+    mockAgentLoaded();
+
+    renderAt();
+
+    const pluginsTab = screen.getByRole("tab", { name: /^plugins$/i });
+    fireEvent.mouseDown(pluginsTab);
+    fireEvent.click(pluginsTab);
+    expect(screen.queryByText(/does not manage plugins/i)).not.toBeInTheDocument();
   });
 });

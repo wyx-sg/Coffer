@@ -33,6 +33,10 @@ class ResourceOut(BaseModel):
     name: str
     description: str | None = None
     config: dict[str, Any]
+    # Framework-level machine x agent activation scope (ADR-045). None =
+    # unscoped (visible everywhere); only kinds with a non-empty
+    # Kind.scope_axes may set it. See GET/PUT .../scope below.
+    scope: dict[str, Any] | None = None
     enabled: bool
     created_at: datetime
     updated_at: datetime
@@ -52,6 +56,20 @@ class ResourceUpdate(BaseModel):
 
 class ResourceListOut(BaseModel):
     resources: list[ResourceOut]
+
+
+class ResourceScopeOut(BaseModel):
+    """GET .../scope response: the current scope plus which axes this kind
+    supports (empty axes means the kind doesn't support scope at all)."""
+
+    scope: dict[str, Any] | None = None
+    axes: list[str] = Field(default_factory=list, examples=[["machine", "agent"]])
+
+
+class ResourceScopeUpdate(BaseModel):
+    """PUT .../scope request body. ``scope: null`` clears back to unscoped."""
+
+    scope: dict[str, Any] | None = None
 
 
 # --- Audit ---
@@ -142,6 +160,24 @@ class MCPToolView(BaseModel):
     description: str | None = None
     input_schema: dict[str, Any] = Field(default_factory=dict)
     enabled: bool
+
+
+class ToolTieringServerOut(BaseModel):
+    server: str
+    total: int
+    listed: int
+
+
+class ToolTieringOut(BaseModel):
+    """ADR-046: how much of the aggregated catalogue agents currently see."""
+
+    enabled: bool
+    budget: int
+    window_days: int
+    total: int
+    listed: int
+    hidden: int
+    servers: list[ToolTieringServerOut] = Field(default_factory=list)
 
 
 class MCPResourceView(BaseModel):
@@ -256,6 +292,18 @@ class McpServerStatusOut(BaseModel):
     """Cheap per-server status, derived from persisted state (no spawn)."""
 
     status: Literal["healthy", "failing", "unknown"]
+    # A stdio server whose launcher command does not resolve on THIS machine
+    # (a synced server referencing e.g. uvx on a machine without uv). The UI
+    # renders "missing <runner>" with a one-click install when installable.
+    missing_runner: str | None = None
+    runner_installable: bool = False
+
+
+class McpRunnerInstallOut(BaseModel):
+    """Result of installing a stdio server's missing launcher."""
+
+    runner: str
+    formula: str
 
 
 # --- Settings ---

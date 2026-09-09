@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+from datetime import UTC, datetime
 from typing import Literal, Protocol
 
 from cryptography.fernet import Fernet
@@ -88,9 +89,25 @@ class MasterKeyManager:
         keychain can ``relocate("keychain")`` afterwards. Validates the bytes are
         a usable Fernet key so a corrupt import fails loudly instead of locking
         every credential on next decrypt.
+
+        When a *different* key is already installed, the old key is first copied
+        to a timestamped ``master.key.bak-*`` sibling: the file being replaced
+        may be the only copy of the key that decrypts existing ciphertext, so
+        overwriting it in place would orphan those credentials permanently.
         """
-        Fernet(key.strip())  # raises ValueError on a malformed key
-        self._write_file(key.strip())
+        key = key.strip()
+        Fernet(key)  # raises ValueError on a malformed key
+        existing = self._key_path.read_bytes().strip() if self._key_path.exists() else b""
+        if existing == key:
+            self._location = "file"
+            return
+        if existing:
+            stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
+            backup = self._key_path.with_name(f"{self._key_path.name}.bak-{stamp}")
+            fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "wb") as f:
+                f.write(existing)
+        self._write_file(key)
         self._location = "file"
 
     def relocate(self, to: StorageLocation) -> None:

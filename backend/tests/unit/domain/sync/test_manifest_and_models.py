@@ -32,6 +32,12 @@ def test_manifest_from_dict_rejects_malformed() -> None:
         Manifest.from_dict({"schema_version": "not-an-int"})
 
 
+def test_schema_version_is_4_for_scoped_resource_docs() -> None:
+    # Bumped for Task 6 (scope rides resource docs) — an older build must
+    # refuse a workspace whose resource docs carry a scope key.
+    assert SCHEMA_VERSION == 4
+
+
 def test_sync_config_is_operational() -> None:
     now = datetime.now(tz=UTC)
     assert not SyncConfig(None, True, False, 300, "main", now).is_operational()

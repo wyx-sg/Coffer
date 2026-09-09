@@ -10,9 +10,10 @@ The write is driven by two orthogonal axes (see :mod:`mcp_injection`):
   (each preserving the user's other content: comments, ordering, unrelated
   keys).
 - **shape** — ``container_key`` (the top-level table: ``mcpServers`` /
-  ``mcp_servers``) and ``entry_style`` (how a single stdio entry is rendered:
-  a ``{"command": shim}`` command-map, or the typed-command-array shape
-  ``{"type": "local", "command": [shim]}``).
+  ``mcp_servers``; a dotted JSON key like ``mcp.servers`` descends
+  one object per dot) and ``entry_style`` (how a single stdio entry is
+  rendered: a ``{"command": shim}`` command-map, or the typed-command-array
+  shape ``{"type": "local", "command": [shim]}``).
 
 Defaults reproduce the original behaviour — JSON ``mcpServers`` command-map
 (Claude Code), TOML ``mcp_servers`` command-map (Codex) — so existing callers
@@ -34,6 +35,7 @@ from coffer.domain.agent.config_files import ConfigFileFormat
 from coffer.domain.agent.mcp_entries import (
     COFFER_SERVER_KEY,
     _dump_yaml,
+    _json_container,
     _parse_json,
     _parse_toml,
     _parse_yaml,
@@ -41,11 +43,46 @@ from coffer.domain.agent.mcp_entries import (
 from coffer.domain.agent.mcp_injection import McpEntryStyle, default_container_key
 
 
-def _entry_fields(shim_path: str, entry_style: McpEntryStyle) -> dict[str, Any]:
-    """The key/value pairs of a single stdio ``coffer`` entry for the style."""
+def _json_container_create(data: dict[str, Any], dotted_key: str) -> dict[str, Any]:
+    """The JSON servers container for a possibly-dotted ``container_key``
+    (``mcp.servers`` — an agent may nest its map one level down), creating each
+    missing step. A hand-edit that left a non-object at any step is replaced
+    (mirrors the flat branch's ``isinstance(dict)`` guard). JSON only — the
+    TOML/YAML container keys in use carry no dots."""
+    node = data
+    for part in dotted_key.split("."):
+        child = node.get(part)
+        if not isinstance(child, dict):
+            child = {}
+            node[part] = child
+        node = child
+    return node
+
+
+def _entry_fields(
+    shim_path: str, entry_style: McpEntryStyle, agent_name: str | None = None
+) -> dict[str, Any]:
+    """The key/value pairs of a single stdio ``coffer`` entry for the style.
+
+    ``agent_name``, when given, threads the installing agent's own name
+    through as ``--agent <name>`` (spec 004 FR-019, amended) so the shim can
+    self-report its identity at the MCP handshake. The command-map style
+    carries it as a separate ``args`` list (mirroring how Claude Code / Codex
+    already render stdio server args); the typed-array styles have no
+    ``args`` key in their shape, so the flag is appended directly onto the
+    ``command`` array instead. ``agent_name=None`` (the default) reproduces
+    the pre-Task-9 shape exactly, for any caller that doesn't know the name.
+    """
+    if entry_style is McpEntryStyle.TYPED_LOCAL_OBJECT:
+        command = [shim_path, "--agent", agent_name] if agent_name else [shim_path]
+        return {"type": "local", "command": command, "enabled": True}
     if entry_style is McpEntryStyle.TYPED_COMMAND_ARRAY:
-        return {"type": "local", "command": [shim_path]}
-    return {"command": shim_path}
+        command = [shim_path, "--agent", agent_name] if agent_name else [shim_path]
+        return {"type": "local", "command": command}
+    fields: dict[str, Any] = {"command": shim_path}
+    if agent_name:
+        fields["args"] = ["--agent", agent_name]
+    return fields
 
 
 def _coffer_command(entry: Any) -> str | None:
@@ -69,21 +106,22 @@ def apply_install(
     *,
     container_key: str | None = None,
     entry_style: McpEntryStyle = McpEntryStyle.COMMAND_MAP,
+    agent_name: str | None = None,
 ) -> str:
     """Return new config text with the ``coffer`` stdio entry inserted/updated.
 
     Idempotent: an existing ``coffer`` entry is replaced in place, never
-    duplicated.
+    duplicated — including entries written before ``agent_name`` support was
+    added (agents installed pre-Task-9 have no ``--agent`` flag at all;
+    re-installing rewrites them with it, in place — there is no separate
+    auto-migration path).
     """
     ck = container_key or default_container_key(fmt)
-    fields = _entry_fields(shim_path, entry_style)
+    fields = _entry_fields(shim_path, entry_style, agent_name)
 
     if fmt is ConfigFileFormat.JSON:
         data = _parse_json(text)
-        servers = data.get(ck)
-        if not isinstance(servers, dict):
-            servers = {}
-            data[ck] = servers
+        servers = _json_container_create(data, ck)
         servers[COFFER_SERVER_KEY] = dict(fields)
         # ensure_ascii=False: ~/.claude.json holds the user's whole machine
         # state (project paths, history) which may be non-ASCII; escaping it to
@@ -92,11 +130,11 @@ def apply_install(
 
     if fmt is ConfigFileFormat.YAML:
         ydata = _parse_yaml(text)
-        servers = ydata.get(ck)
-        if not isinstance(servers, MutableMapping):
-            servers = {}
-            ydata[ck] = servers
-        servers[COFFER_SERVER_KEY] = dict(fields)
+        yservers = ydata.get(ck)
+        if not isinstance(yservers, MutableMapping):
+            yservers = {}
+            ydata[ck] = yservers
+        yservers[COFFER_SERVER_KEY] = dict(fields)
         return _dump_yaml(ydata)
 
     if fmt is ConfigFileFormat.TOML:
@@ -121,8 +159,8 @@ def apply_uninstall(fmt: ConfigFileFormat, text: str, *, container_key: str | No
 
     if fmt is ConfigFileFormat.JSON:
         data = _parse_json(text)
-        servers = data.get(ck)
-        if isinstance(servers, dict):
+        servers = _json_container(data, ck)
+        if isinstance(servers, MutableMapping):
             servers.pop(COFFER_SERVER_KEY, None)
         return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
 
@@ -152,8 +190,8 @@ def is_installed(fmt: ConfigFileFormat, text: str, *, container_key: str | None 
         return False
     ck = container_key or default_container_key(fmt)
     if fmt is ConfigFileFormat.JSON:
-        servers = _parse_json(text).get(ck)
-        return isinstance(servers, dict) and COFFER_SERVER_KEY in servers
+        servers = _json_container(_parse_json(text), ck)
+        return isinstance(servers, MutableMapping) and COFFER_SERVER_KEY in servers
     if fmt is ConfigFileFormat.YAML:
         servers = _parse_yaml(text).get(ck)
         return isinstance(servers, MutableMapping) and COFFER_SERVER_KEY in servers
@@ -176,7 +214,7 @@ def installed_command(
     if not is_installed(fmt, text, container_key=ck):
         return None
     if fmt is ConfigFileFormat.JSON:
-        return _coffer_command(_parse_json(text)[ck][COFFER_SERVER_KEY])
+        return _coffer_command(_json_container(_parse_json(text), ck)[COFFER_SERVER_KEY])
     if fmt is ConfigFileFormat.YAML:
         return _coffer_command(_parse_yaml(text)[ck][COFFER_SERVER_KEY])
     return _coffer_command(_parse_toml(text)[ck][COFFER_SERVER_KEY])

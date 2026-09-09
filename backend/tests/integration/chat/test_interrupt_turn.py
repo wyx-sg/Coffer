@@ -26,7 +26,7 @@ class _BlockingAdapter:
 
     model_id = None
 
-    async def run_turn(self, *, history: Any) -> AsyncIterator[AgentEvent]:
+    async def run_turn(self, *, history: Any, **_: object) -> AsyncIterator[AgentEvent]:
         async def gen() -> AsyncIterator[AgentEvent]:
             yield TurnStarted()
             yield TextDelta(text="partial answer")

@@ -1,14 +1,18 @@
 // frontend/src/kinds/channel/ChannelsTable.tsx
 // The channels list rendered via the shared DataTable (mirrors
 // KnowledgeBasesTable): rows navigate to the channel detail page; columns show
-// the platform type, default agent, enabled state, and a live paired
-// indicator fed by each row's /channels/{name}/status query.
+// the platform type, default agent, enabled state, live runtime health, and a
+// live paired indicator — the last two fed by each row's /channels/{name}/status
+// query. The health cell mirrors the MCP-server surface's ServerHealthCell /
+// HealthBadge, sharing the statusColors vocabulary so the two never drift.
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { DataTable, type Column } from "@/components/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { useChannelStatus } from "@/lib/hooks/useChannels";
+import { healthStatusClass } from "@/lib/statusColors";
+import { cn } from "@/lib/utils";
 import type { ResourceOut } from "@/lib/components/kindRegistry";
 
 function channelTypeOf(row: ResourceOut): string {
@@ -19,6 +23,29 @@ function channelTypeOf(row: ResourceOut): string {
 function defaultAgentOf(row: ResourceOut): string {
   const agent = (row.config as { default_agent?: unknown } | undefined)?.default_agent;
   return typeof agent === "string" ? agent : "builtin";
+}
+
+/**
+ * Live runtime health cell — the adapter `running` state from the same cached
+ * /channels/{name}/status query the PairedCell uses. Mirrors the MCP-server
+ * surface's ServerHealthCell/HealthBadge: an outline Badge tinted from the
+ * shared statusColors vocabulary (running -> healthy/green, stopped -> unknown/
+ * muted), so the two management surfaces read the same way.
+ */
+function HealthCell({ name }: { name: string }) {
+  const { t } = useTranslation();
+  const { data: status } = useChannelStatus(name);
+  if (!status) return <span className="text-muted-foreground">—</span>;
+  const state = status.running ? "healthy" : "unknown";
+  return (
+    <Badge
+      variant="outline"
+      className={cn("whitespace-nowrap", healthStatusClass(state))}
+      data-testid="channel-health-badge"
+    >
+      {status.running ? t("channels.status.running") : t("channels.status.stopped")}
+    </Badge>
+  );
 }
 
 /** Live "Paired · <name>" / "Not paired" cell — one status query per row. */
@@ -58,6 +85,12 @@ export function ChannelsTable({ items }: { items: ResourceOut[] }) {
       key: "agent",
       header: t("channels.cols.agent"),
       cell: (r) => <span className="text-muted-foreground">{defaultAgentOf(r)}</span>,
+    },
+    {
+      key: "health",
+      header: t("channels.cols.health"),
+      className: "whitespace-nowrap",
+      cell: (r) => <HealthCell name={r.name} />,
     },
     {
       key: "state",

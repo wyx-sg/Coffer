@@ -19,8 +19,13 @@ vi.mock("@/lib/hooks/useChannels", () => ({
   useIssuePairingCode: vi.fn(),
   useUpdateChannel: vi.fn(),
   useNotifyChannel: vi.fn(),
+  useChannelScope: vi.fn(() => ({ data: { scope: {}, axes: ["machine"] } })),
+  useUpdateChannelScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 vi.mock("@/lib/hooks/useChatAgents", () => ({ useChatAgents: vi.fn(() => ({ data: [] })) }));
+vi.mock("@/lib/hooks/useSync", () => ({
+  useSyncMachines: vi.fn(() => ({ data: { machines: [] } })),
+}));
 vi.mock("@/lib/hooks/useResourceMutations", () => ({
   useEnableResource: vi.fn(),
   useDisableResource: vi.fn(),
@@ -118,9 +123,7 @@ beforeEach(() => {
     reset: vi.fn(),
     isPending: false,
   } as unknown as ReturnType<typeof useUpdateChannel>);
-  useNotifyChannelMock.mockReturnValue(
-    notify as unknown as ReturnType<typeof useNotifyChannel>,
-  );
+  useNotifyChannelMock.mockReturnValue(notify as unknown as ReturnType<typeof useNotifyChannel>);
 });
 
 // The UI half of the status scenario: the page queries /channels/{name}/status

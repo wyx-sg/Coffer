@@ -74,6 +74,7 @@
     "expand": "展开侧边栏",
     "agents": "Agent",
     "channels": "渠道",
+    "machines": "机器",
     "audit": "审计日志",
     "chat": "聊天"
   },
@@ -116,6 +117,9 @@
     }
   },
   "mcp": {
+    "missingRunner": "本机未安装 {{runner}}",
+    "installRunner": "安装",
+    "installingRunner": "安装中…",
     "table": {
       "transport": "传输方式",
       "health": "健康",
@@ -232,6 +236,10 @@
       "credentialNew": "密钥值",
       "credentialHint": "凭证值会加密存入 Coffer 本地数据库；移除凭证会删除对应的存储条目。",
       "errRenameNeedsValue": "重命名「{{name}}」需要重新输入密钥值。"
+    },
+    "tiering": {
+      "summary": "agent 当前可见 {{listed}}/{{total}} 个工具，另有 {{hidden}} 个仅可经 coffer__search_tools 触达。",
+      "hint": "它们仍可按名调用。设 COFFER_TOOL_TIERING=off 可列出全部工具。"
     }
   },
   "audit": {
@@ -256,6 +264,7 @@
       "resource_enabled": "启用了 {{resource}}",
       "resource_disabled": "停用了 {{resource}}",
       "resource_deleted": "删除了 {{resource}}",
+      "resource_scope_updated": "更新了 {{resource}} 的范围",
       "capability_first_seen": "发现了{{capType}} {{key}}（{{resource}}）",
       "capability_enabled": "启用了{{capType}} {{key}}（{{resource}}）",
       "capability_disabled": "停用了{{capType}} {{key}}（{{resource}}）",
@@ -505,12 +514,17 @@
       "syncNow": "立即同步",
       "status": "状态",
       "lastSync": "上次同步",
-      "conflicts": "待解决的冲突",
-      "resolveOurs": "保留本机版本",
-      "resolveTheirs": "保留远端版本",
+      "conflictGuidance": "Coffer 无法自动解决此冲突。请到你自己的仓库（如 GitHub）手动解决后再同步。",
+      "errorHints": {
+        "auth": "Git 需要无终端环境可用的凭据。建议改用 SSH 地址（git@github.com:you/repo.git），或运行一次 `gh auth setup-git` 后重试。",
+        "not_found": "找不到该仓库——请检查 remote 地址以及仓库是否存在。",
+        "network": "无法连接远端主机——请检查网络与 remote 地址。"
+      },
       "lockedHint": "凭证已存在但被锁定：{{refs}}——导入 master key 后解锁。",
       "masterKey": "Master key（带外）",
       "masterKeyHint": "把本机的 key 导出到文件，通过你信任的通道带到另一台机器再导入。切勿放进同步仓库。",
+      "keyFingerprint": "Key 指纹",
+      "keyFingerprintHint": "两台机器指纹一致即为同一把 key。",
       "keyPath": "本地 key 文件路径",
       "keyPathManualHint": "本机没有原生文件对话框——请手动输入路径，然后再次点击。",
       "exportKey": "导出 key",
@@ -523,7 +537,13 @@
         "error": "错误",
         "credentials_locked": "凭证已锁定"
       },
-      "keyExported": "key 已写入 {{path}}"
+      "keyExported": "key 已写入 {{path}}",
+      "machines": "机器",
+      "machinesHint": "这个 vault 已知的所有机器。每台机器在同步时登记自己。",
+      "thisMachine": "本机",
+      "neverSynced": "从未同步",
+      "machineName": "机器名称",
+      "quarantinedHint": "以下资源在本机导入失败（已隔离，每次同步会重试）：{{refs}}"
     },
     "connections": {
       "title": "LLM 连接",
@@ -590,6 +610,7 @@
     "RESOURCE_ALREADY_EXISTS": "同名资源已存在",
     "UNKNOWN_KIND": "未知资源类型",
     "CONFIG_INVALID": "配置无效",
+    "SCOPE_INVALID": "该资源类型不支持此范围设置",
     "CONFIG_FILE_FORMAT_INVALID": "内容不符合该文件的格式，文件未做更改。",
     "TOOL_DISABLED": "该功能已被禁用",
     "CREDENTIAL_MISSING": "所需凭证在凭证存储中不存在",
@@ -612,6 +633,7 @@
     "CHANNEL_NOT_RUNNING": "渠道适配器未在运行",
     "CHANNEL_SEND_FAILED": "向 IM 平台发送失败",
     "GENERIC_CREATE_NOT_ALLOWED": "该类型不支持直接创建",
+    "MACHINE_NOT_FOUND": "未找到该机器",
     "MASTER_KEY_MISSING": "主密钥缺失，Coffer 无法解密已存储的密钥",
     "DB_SCHEMA_TOO_NEW": "该数据库由更新版本的 Coffer 写入，请升级后再打开。",
     "PRIVILEGED_PATH": "该路径受保护，无法在此使用",
@@ -631,6 +653,7 @@
     "UNMANAGED_SKILL_NOT_FOUND": "未找到该未纳管技能",
     "UNMANAGED_SKILL_INVALID": "该技能目录不是有效的技能",
     "SKILL_INVALID": "该技能无效",
+    "SKILL_OUT_OF_SCOPE": "该技能在此机器上不在此 agent 的作用范围内",
     "TARGET_CONFLICT": "目标位置已存在一个技能",
     "KB_NOT_FOUND": "未找到知识库",
     "DOCUMENT_NOT_FOUND": "未找到文档",
@@ -853,7 +876,7 @@
       "deleteChildConfirm": "删除 {{relpath}}？文件将从磁盘移除。",
       "staleBanner": "文件已被外部修改，请重新加载",
       "reload": "重新加载",
-      "memoryBlockNotice": "此文件包含 Coffer 记忆投影区块，该区块由记忆功能管理",
+      "memoryBlockNotice": "此文件包含旧版 Coffer 记忆区块（原生投影功能已移除）——已不再使用，可安全删除。",
       "directoryHint": "这是一个目录——请选择其中的文件，或新建一个。",
       "emptyDir": "暂无文件。",
       "desc": {
@@ -876,8 +899,8 @@
     },
     "hook": {
       "title": "会话启动规则",
-      "help": "开启后，每次该 Agent 启动会话时通过 SessionStart 钩子注入 Coffer 规则集。",
-      "unsupported": "该 Agent 类型不支持会话启动钩子。"
+      "help": "开启后，Coffer 在会话启动时向该 Agent 注入规则集——按该 Agent 支持的方式：SessionStart 钩子、投放的插件，或指令文件里的托管块。",
+      "unsupported": "Coffer 尚未支持向该 Agent 类型注入会话上下文。"
     },
     "welcome": {
       "title": "管理你的本地 AI Agent",
@@ -1136,6 +1159,27 @@
       "placeholder": "例如：我的研究笔记",
       "clear": "清除名字"
     },
+    "merge": {
+      "action": "查找重复库（AI）",
+      "title": "合并重复的记忆库",
+      "description": "Coffer 的内部引擎会判断两个项目库是否描述同一个项目。合并是增量式的——journal 条目自动去重，同名文件两份都保留，任何内容都不会丢失。",
+      "scanning": "正在扫描记忆库…",
+      "noCandidates": "未发现可合并的库。",
+      "noModelHint": "未配置内部引擎，因此只显示可证明的重复（git remote 一致）。到 设置 → LLM 连接 配置后即可判断其余组合。",
+      "judgedByRemote": "由 origin remote 一致证明",
+      "judgedByEngine": "由内部引擎判断",
+      "factCount": "{{count}} 条事实",
+      "swap": "交换方向",
+      "merge": "合并",
+      "merging": "合并中…",
+      "truncated": "一次扫描的组合太多——先合并一部分再重新扫描。",
+      "confidence": {
+        "certain": "确定",
+        "high": "高",
+        "medium": "中",
+        "low": "低"
+      }
+    },
     "modes": {
       "grep": "Grep",
       "keyword": "关键词",
@@ -1361,6 +1405,7 @@
       "name": "名称",
       "type": "类型",
       "agent": "默认 agent",
+      "health": "健康",
       "state": "状态",
       "paired": "配对"
     },
@@ -1454,6 +1499,51 @@
       "hint": "用隧道工具（cloudflared、ngrok）指向本地监听地址。可达性测试仅验证链路与握手，签名密钥是否与 SeaTalk 一致需真实事件才能确认。"
     },
     "deleteTitle": "删除渠道",
-    "deleteConfirm": "确定删除渠道“{{name}}”？其适配器将停止，配对关系也会被移除。"
+    "deleteConfirm": "确定删除渠道“{{name}}”？其适配器将停止，配对关系也会被移除。",
+    "machine": {
+      "title": "运行机器",
+      "runsOn": "运行于",
+      "unbound": "未绑定机器——渠道当前不在任何机器上运行",
+      "thisMachine": "本机",
+      "runHere": "改到本机运行",
+      "hint": "同步的渠道只在一台机器上运行，避免两台机器争抢同一个 bot。改绑后经下一次同步传播，原机器会自动停止。"
+    }
+  },
+  "scope": {
+    "title": "启用范围",
+    "subtitle": "这项资源在哪里启用——所有机器，或只在选定的机器上（对 MCP 服务器和技能，还可以进一步限定到选定的 agent）。",
+    "everywhere": "所有机器",
+    "custom": "自定义",
+    "dormant": "已选择自定义，但没有开启任何机器——处于休眠状态。至少开启下面一台机器前，它不会在任何地方启用。",
+    "allAgents": "所有 agent",
+    "noAgents": "还没有注册任何 agent。",
+    "noMachines": "还没有同步任何机器。",
+    "notActiveHere": "在本机未启用。",
+    "unknownMachine": "不在本 vault 的机器注册表中",
+    "rowToggle": "在 {{machine}} 上启用"
+  },
+  "machines": {
+    "title": "机器",
+    "subtitle": "这个 vault 已同步的所有机器，以及各自启用了什么。",
+    "status": "同步状态",
+    "runNow": "立即同步",
+    "configureLink": "配置同步",
+    "lastSync": "上次同步",
+    "neverSynced": "从未同步",
+    "thisMachine": "本机",
+    "viewSlice": "查看机器",
+    "loadFailed": "加载机器列表失败。",
+    "empty": "还没有机器。配置并运行同步后，机器会出现在这里。",
+    "slice": {
+      "back": "返回机器列表",
+      "agents": "Agent",
+      "mcpServers": "MCP 服务器",
+      "skills": "技能",
+      "channels": "频道",
+      "active": "已启用",
+      "inactive": "未启用",
+      "empty": "暂无内容。",
+      "intentOnly": "这是一台远程机器 —— 启用状态根据已同步的注册表与作用域计算得出，未向该机器本身核实。"
+    }
   }
 }

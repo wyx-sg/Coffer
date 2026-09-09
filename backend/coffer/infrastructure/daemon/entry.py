@@ -17,6 +17,7 @@ satisfy the "Infrastructure does not import surfaces" contract.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import signal
 import socket
@@ -34,6 +35,45 @@ _logger = logging.getLogger(__name__)
 # imperceptible, large enough not to busy-spin.
 _STARTED_POLL_INTERVAL = 0.02
 
+# How often a serving daemon re-reads daemon.json to see whether another daemon
+# has taken it over (ADR-006 amendment). Long enough to be free, short enough
+# that an orphan cannot linger through a work session holding its port.
+_ORPHAN_CHECK_INTERVAL = 30.0
+
+# Ceiling for the RLIMIT_NOFILE soft limit we raise at startup. Comfortably
+# above what a healthy daemon needs (sqlite + uvicorn socket + channel
+# listeners + ~2 pipe fds per live stdio upstream) so transient spikes never
+# reach it, without asking for an unbounded fd table.
+_FD_SOFT_LIMIT_TARGET = 8192
+
+
+def _raise_fd_soft_limit() -> None:
+    """Raise this daemon's RLIMIT_NOFILE soft limit toward its hard limit.
+
+    Launched from a macOS GUI app via launchd, the daemon inherits a soft
+    file-descriptor limit of ~256. That ceiling is reachable in normal use, and
+    any fd leak (see mcp/subprocess.py ``_cleanup``) turns it into a hard crash
+    where every subprocess spawn and socket accept fails with
+    ``OSError: [Errno 24] Too many open files`` — surfaced to the UI as the
+    opaque "upstream init failed: OSError". Lift the soft limit to the hard
+    limit (capped at ``_FD_SOFT_LIMIT_TARGET``) so the daemon has real headroom.
+    POSIX-only and best-effort: never let an rlimit hiccup stop the daemon from
+    booting.
+    """
+    try:
+        import resource
+    except ImportError:  # non-POSIX platform — no RLIMIT_NOFILE to raise
+        return
+    try:
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        cap = _FD_SOFT_LIMIT_TARGET
+        target = cap if hard == resource.RLIM_INFINITY else min(hard, cap)
+        if soft != resource.RLIM_INFINITY and soft < target:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (target, hard))
+            _logger.info("raised RLIMIT_NOFILE soft limit %s -> %s", soft, target)
+    except (ValueError, OSError) as exc:  # pragma: no cover - platform dependent
+        _logger.warning("could not raise RLIMIT_NOFILE soft limit: %r", exc)
+
 
 def _install_signal_handlers() -> None:
     def _term(_sig: int, _frame: object) -> None:
@@ -42,6 +82,44 @@ def _install_signal_handlers() -> None:
 
     signal.signal(signal.SIGTERM, _term)
     signal.signal(signal.SIGINT, _term)
+
+
+async def _evict_when_superseded(
+    server: uvicorn.Server, *, interval: float = _ORPHAN_CHECK_INTERVAL
+) -> None:
+    """Stand down once ``daemon.json`` names a different, live Coffer daemon.
+
+    ADR-006's spawn guard only ever probes the one port daemon.json records, so
+    a spawn that cannot see us (the file was lost, or we were too busy to answer
+    the liveness probe) binds a second port and leaves us running. Nothing ever
+    reclaimed that port: ``orphan_sweep.reap_stale_daemons`` no-ops outside
+    frozen builds, so a run-from-source setup accumulated one orphan per restart
+    until 8000-8009 were full and no daemon could start at all.
+
+    Watching from this side needs no cross-process authority: we only ever stop
+    OURSELVES, and only on positive evidence that someone else is now the
+    daemon. :func:`bootstrap.superseded_by` is deliberately narrow about what
+    counts, so an absent or stale daemon.json leaves a lone daemon serving.
+
+    The check is best-effort — an unreadable file or a psutil hiccup must not
+    take a healthy daemon down, so it is logged and retried, never acted on.
+    """
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            superseded = bootstrap.superseded_by()
+        except Exception:
+            _logger.warning("daemon supersession check failed; still serving", exc_info=True)
+            continue
+        if superseded is None:
+            continue
+        _logger.warning(
+            "daemon superseded by pid=%s on port=%s; shutting down to free this port",
+            superseded.pid,
+            superseded.port,
+        )
+        server.should_exit = True
+        return
 
 
 def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
@@ -74,7 +152,15 @@ def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
                 await asyncio.sleep(_STARTED_POLL_INTERVAL)
         finally:
             on_started()
-        await serve_task
+        # Only now that the spawn lock is freed can another daemon take
+        # daemon.json from us, so the watcher starts here rather than at boot.
+        evictor = asyncio.create_task(_evict_when_superseded(server), name="daemon-orphan-evictor")
+        try:
+            await serve_task
+        finally:
+            evictor.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await evictor
 
     asyncio.run(_runner())
 
@@ -84,6 +170,7 @@ def main() -> None:
     # (vec_available) and asserted by the bundle smoke test against the running
     # frozen binary — not via an argv probe here, so this module never imports
     # the knowledge engine (engine-confinement contract).
+    _raise_fd_soft_limit()
     _install_signal_handlers()
     # ADR-006: probe + bind happen under one flock (acquire_or_existing). If a
     # daemon is already reachable, sock is None and we exit cleanly so the

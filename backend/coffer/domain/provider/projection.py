@@ -5,13 +5,14 @@ file, calls one of these to produce new text, and writes it back through the
 atomic store (``ConfigFileStore.write_text_atomic`` → atomic + ``.bak``). This
 mirrors ``domain/agent/mcp_install.py``'s ``apply_install``.
 
-Two wire formats project into an agent's native config (``ollama`` projects into
-none — it is internal-only, used by Coffer's own engine):
+Coffer supports exactly two agent types, and BOTH are projection targets — one
+transform pair (apply/remove) per agent (``ollama`` is the only wire that
+projects into none: it is internal-only, used by Coffer's own engine):
 
-- ``anthropic`` → Claude Code ``~/.claude/settings.json`` (JSON): top-level
-  ``apiKeyHelper`` (the key is fetched on demand, never written) plus
-  ``env.ANTHROPIC_BASE_URL`` / ``ANTHROPIC_MODEL`` / ``ANTHROPIC_SMALL_FAST_MODEL``.
-- ``openai`` → Codex ``~/.codex/config.toml`` (TOML): top-level ``model`` +
+- Claude Code → ``~/.claude/settings.json`` (JSON): top-level ``apiKeyHelper``
+  (the key is fetched on demand, never written) plus ``env.ANTHROPIC_BASE_URL`` /
+  ``ANTHROPIC_MODEL`` / ``ANTHROPIC_SMALL_FAST_MODEL``.
+- Codex → ``~/.codex/config.toml`` (TOML): top-level ``model`` +
   ``model_provider`` plus a ``[model_providers.coffer]`` table whose ``env_key``
   names the env var Codex reads the key from (also never written here).
 
@@ -93,7 +94,9 @@ def target_for(wire: Protocol) -> ProjectionTarget | None:
 
 def target_for_agent(agent_type: AgentType) -> ProjectionTarget | None:
     """The native-config target for an agent TYPE (the file + format its writer
-    touches), or ``None`` for an agent Coffer cannot project into."""
+    touches). Every SUPPORTED agent type is a projection target, so this returns
+    a target for every member of ``AgentType``; the optional return is kept only
+    so callers stay total against a hand-built/unknown value."""
     return _AGENT_TARGETS.get(agent_type)
 
 

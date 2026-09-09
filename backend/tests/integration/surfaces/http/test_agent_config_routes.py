@@ -295,7 +295,12 @@ def test_mcp_install_lifecycle(tmp_path, monkeypatch):
         assert r.json()["installed"] is True
         assert r.json()["command"] == str(shim)
         data = json.loads((tmp_path / ".claude.json").read_text())
-        assert data["mcpServers"]["coffer"] == {"command": str(shim)}
+        # Spec 004 FR-019 (amended): install writes `--agent <name>` so the
+        # shim self-reports its identity at the MCP handshake.
+        assert data["mcpServers"]["coffer"] == {
+            "command": str(shim),
+            "args": ["--agent", "cc"],
+        }
 
         r = c.get("/api/v1/agents/cc/mcp-install")
         assert r.json()["installed"] is True

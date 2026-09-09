@@ -85,6 +85,10 @@ class McpInstallStatusOut(BaseModel):
 class HookInstallStatusOut(BaseModel):
     installed: bool
     command: str | None
+    # False when the agent's manifest declares no context injection (or a mode not
+    # yet implemented) — surfaces render a disabled control with a reason instead
+    # of one that 422s on click.
+    supported: bool = True
 
 
 def _info_out(i: ConfigFileInfo) -> ConfigFileInfoOut:
@@ -127,7 +131,7 @@ def _status_out(s: McpInstallStatus) -> McpInstallStatusOut:
 
 
 def _hook_status_out(s: HookInstallStatus) -> HookInstallStatusOut:
-    return HookInstallStatusOut(installed=s.installed, command=s.command)
+    return HookInstallStatusOut(installed=s.installed, command=s.command, supported=s.supported)
 
 
 @router.get("/{name}/config-files", response_model=ConfigFileListOut)

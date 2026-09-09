@@ -12,6 +12,8 @@ This module contains:
 - _PendingRegistry  — manages the asyncio.Future dict and id counter
 - build_sampling_callback  — factory for an SDK-compatible SamplingFnT
 - build_list_roots_callback — factory for an SDK-compatible ListRootsFnT
+- build_session_callbacks — bundles the two factories above so the session's
+  __init__ wires both in one call
 - handle_response_from_downstream — shared matching logic
 """
 
@@ -20,10 +22,10 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, NamedTuple
 
 import mcp.types as mcp_types
-from mcp.shared.context import RequestContext
+from mcp.client.session import ClientRequestContext
 
 from coffer.domain.errors import UpstreamUnavailable
 
@@ -127,7 +129,7 @@ def build_sampling_callback(
     """Build an async callable that the mcp SDK will invoke for sampling/createMessage."""
 
     async def _sampling_callback(
-        context: RequestContext,  # type: ignore[type-arg]
+        context: ClientRequestContext,
         params: mcp_types.CreateMessageRequestParams,
     ) -> (
         mcp_types.CreateMessageResult | mcp_types.CreateMessageResultWithTools | mcp_types.ErrorData
@@ -142,7 +144,7 @@ def build_sampling_callback(
                 message="downstream client does not support sampling",
             )
         raw_params: dict[str, Any] = (
-            params.model_dump(exclude_none=True, mode="json")
+            params.model_dump(exclude_none=True, mode="json", by_alias=True)
             if hasattr(params, "model_dump")
             else (params if isinstance(params, dict) else {})
         )
@@ -171,7 +173,7 @@ def build_list_roots_callback(
     """Build an async callable that the mcp SDK will invoke for roots/list."""
 
     async def _list_roots_callback(
-        context: RequestContext,  # type: ignore[type-arg]
+        context: ClientRequestContext,
     ) -> mcp_types.ListRootsResult | mcp_types.ErrorData:
         _logger.debug("mcp.gateway.roots.forward", extra={"session": session_id})
         try:
@@ -188,3 +190,25 @@ def build_list_roots_callback(
         return mcp_types.ListRootsResult(roots=[])
 
     return _list_roots_callback
+
+
+class SessionCallbacks(NamedTuple):
+    """The pair of SDK-compatible callbacks a session registers on each
+    upstream connection (T-061 sampling + T-062 roots)."""
+
+    sampling: Any
+    list_roots: Any
+
+
+def build_session_callbacks(
+    registry: ServerRequestRegistry,
+    get_sink: Callable[[], DownstreamSink | None],
+    get_capabilities: Callable[[], dict[str, Any]],
+    session_id: str,
+) -> SessionCallbacks:
+    """Bundle both callback factories so a session's __init__ wires them in
+    one call instead of repeating the registry/sink/session_id args twice."""
+    return SessionCallbacks(
+        sampling=build_sampling_callback(registry, get_sink, get_capabilities, session_id),
+        list_roots=build_list_roots_callback(registry, get_sink, session_id),
+    )

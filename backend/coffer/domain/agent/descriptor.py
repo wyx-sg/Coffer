@@ -17,31 +17,20 @@ identity, the config-file allowlist, and MCP injection.
 
 from __future__ import annotations
 
-import os
 import pathlib
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from coffer.domain.agent.config_files import (
-    ConfigFileFormat,
-    ConfigFileKind,
-    ConfigFileSpec,
-)
-from coffer.domain.agent.hook_injection import HookEvent, HookInjectionSpec
+from coffer.domain.agent.allowlists import _claude_code_files, _codex_files, _home
+from coffer.domain.agent.config_files import ConfigFileFormat, ConfigFileSpec
+from coffer.domain.agent.context_injection import ContextInjectionSpec, HookEvent
 from coffer.domain.agent.mcp_injection import McpEntryStyle, McpInjectionSpec
 from coffer.domain.agent.plugin_capability import (
     PluginCapability,
     PluginModel,
     UninstallStrategy,
 )
-from coffer.domain.agent.skill_delivery import SkillDeliveryMode
 from coffer.domain.agent.types import AgentType
-
-
-def _home() -> pathlib.Path:
-    """Home dir, same source as ``agent.types`` / ``config_files`` so all three
-    stay consistent under a test-overridden ``$HOME``."""
-    return pathlib.Path(os.environ.get("HOME", os.path.expanduser("~")))
 
 
 @dataclass(frozen=True)
@@ -58,23 +47,22 @@ class AgentDescriptor:
     config_files: Callable[[pathlib.Path], tuple[ConfigFileSpec, ...]]
     #: How Coffer installs its own ``coffer`` MCP entry (None = MCP not managed).
     mcp: McpInjectionSpec | None = None
-    #: How Coffer installs its ``coffer-hook`` lifecycle hooks (None = hooks not
-    #: managed). Claude Code installs SessionStart + SessionEnd; Codex installs
-    #: SessionStart only (it has no session-end event).
-    hooks: HookInjectionSpec | None = None
+    #: How Coffer injects its session context — rules + memory — into this agent
+    #: (None = the agent offers no usable injection point). Claude Code installs
+    #: SessionStart + SessionEnd shell hooks; Codex installs SessionStart only
+    #: (it has no usable session-end event).
+    context_injection: ContextInjectionSpec | None = None
     #: Allowlist keys of files scanned when listing the agent's *own* MCP
     #: entries (FR-025). Defaults to the MCP injection file when unset.
     mcp_source_keys: tuple[str, ...] = ()
     #: Subpath of the skills-delivery directory under the config dir
-    #: (``skills``). Used by the ``FOLDER`` delivery mode.
+    #: (``skills``). Coffer delivers a managed skill by symlinking (copy
+    #: fallback) the master folder into it.
     skill_subpath: str = "skills"
-    #: How Coffer hands a managed skill to this agent. ``FOLDER`` symlinks the
-    #: master folder into ``skill_subpath``.
-    skill_delivery_mode: SkillDeliveryMode = SkillDeliveryMode.FOLDER
     #: How Coffer manages this agent's plugins (``None`` = no plugin concept).
     plugins: PluginCapability | None = None
     #: Whether this agent is surfaced in discovery — the only UI entry point that
-    #: enumerates agents. Both Claude Code and Codex are exposed. The flag gates
+    #: enumerates agents. Every manifest type is exposed. The flag gates
     #: discovery/visibility only, never registration — the backend accepts a
     #: direct registration of any manifest type regardless of this flag.
     enabled: bool = True
@@ -95,53 +83,6 @@ class AgentDescriptor:
         return (self.mcp.config_key,) if self.mcp else ()
 
 
-# --- config-file allowlist builders (one per agent) ----------------------------
-
-
-def _claude_code_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
-    return (
-        ConfigFileSpec("settings", "User settings", cfg / "settings.json", ConfigFileFormat.JSON),
-        ConfigFileSpec(
-            "settings_local",
-            "Local settings override",
-            cfg / "settings.local.json",
-            ConfigFileFormat.JSON,
-        ),
-        # Claude Code's global state/config file always lives at the home root
-        # (``~/.claude.json``), regardless of where the config dir points — it
-        # also holds user-scope MCP servers.
-        ConfigFileSpec("global", "Global config", _home() / ".claude.json", ConfigFileFormat.JSON),
-        ConfigFileSpec(
-            "instructions",
-            "User instructions (CLAUDE.md)",
-            cfg / "CLAUDE.md",
-            ConfigFileFormat.MARKDOWN,
-        ),
-        ConfigFileSpec(
-            "subagents",
-            "Subagents (agents/)",
-            cfg / "agents",
-            ConfigFileFormat.MARKDOWN,
-            kind=ConfigFileKind.DIRECTORY,
-        ),
-    )
-
-
-def _codex_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
-    return (
-        ConfigFileSpec(
-            "config", "Config (config.toml)", cfg / "config.toml", ConfigFileFormat.TOML
-        ),
-        ConfigFileSpec(
-            "instructions",
-            "Global instructions (AGENTS.md)",
-            cfg / "AGENTS.md",
-            ConfigFileFormat.MARKDOWN,
-        ),
-        ConfigFileSpec("hooks", "Hooks (hooks.json)", cfg / "hooks.json", ConfigFileFormat.JSON),
-    )
-
-
 # --- the manifest --------------------------------------------------------------
 
 AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
@@ -157,7 +98,7 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             entry_style=McpEntryStyle.COMMAND_MAP,
         ),
         mcp_source_keys=("global", "settings"),
-        hooks=HookInjectionSpec(
+        context_injection=ContextInjectionSpec(
             config_key="settings",
             format=ConfigFileFormat.JSON,
             events=(HookEvent.SESSION_START, HookEvent.SESSION_END),
@@ -185,7 +126,7 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             entry_style=McpEntryStyle.COMMAND_MAP,
         ),
         mcp_source_keys=("config",),
-        hooks=HookInjectionSpec(
+        context_injection=ContextInjectionSpec(
             config_key="hooks",
             format=ConfigFileFormat.JSON,
             events=(HookEvent.SESSION_START,),
@@ -218,18 +159,12 @@ _NATIVE_MEMORY_DISABLE_TARGET: dict[AgentType, tuple[str, ConfigFileFormat]] = {
 }
 
 
-def native_memory_disable_target(agent_type: AgentType) -> tuple[str, ConfigFileFormat]:
-    """The ``(config_key, format)`` that holds the native-memory toggle.
-
-    Raises ``AssertionError`` for an agent type with no known target (defensive;
-    every current type is mapped).
-    """
-    try:
-        return _NATIVE_MEMORY_DISABLE_TARGET[agent_type]
-    except KeyError:  # pragma: no cover - every supported type is mapped
-        raise AssertionError(
-            f"no native-memory disable target for AgentType {agent_type!r}"
-        ) from None
+def native_memory_disable_target(agent_type: AgentType) -> tuple[str, ConfigFileFormat] | None:
+    """The ``(config_key, format)`` that holds the native-memory toggle, or ``None``
+    for an agent type with no native write-side memory to disable. Both supported
+    types have one (FR-003a); callers still treat ``None`` as "this facet is
+    absent" and reject/hide the toggle rather than failing."""
+    return _NATIVE_MEMORY_DISABLE_TARGET.get(agent_type)
 
 
 def is_agent_enabled(agent_type: AgentType) -> bool:

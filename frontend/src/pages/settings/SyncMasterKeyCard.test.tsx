@@ -17,10 +17,13 @@ const pickSaveFileMock = vi.mocked(pickSaveFile);
 vi.mock("@/lib/hooks/useSync", () => ({
   useExportMasterKey: vi.fn(),
   useImportMasterKey: vi.fn(),
+  useKeyFingerprint: vi.fn(),
 }));
-const { useExportMasterKey, useImportMasterKey } = await import("@/lib/hooks/useSync");
+const { useExportMasterKey, useImportMasterKey, useKeyFingerprint } =
+  await import("@/lib/hooks/useSync");
 const useExportMock = vi.mocked(useExportMasterKey);
 const useImportMock = vi.mocked(useImportMasterKey);
+const useFingerprintMock = vi.mocked(useKeyFingerprint);
 
 const exportMutate = vi.fn();
 const importMutate = vi.fn();
@@ -35,6 +38,9 @@ function stub() {
     mutate: importMutate,
     isPending: false,
   } as unknown as ReturnType<typeof useImportMasterKey>);
+  useFingerprintMock.mockReturnValue({
+    data: { present: true, fingerprint: "abc123def456" },
+  } as unknown as ReturnType<typeof useKeyFingerprint>);
 }
 
 afterEach(() => vi.clearAllMocks());

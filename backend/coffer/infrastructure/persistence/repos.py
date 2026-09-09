@@ -39,6 +39,7 @@ def _to_domain(row: ResourceModel) -> Resource:
         enabled=row.enabled,
         created_at=row.created_at,
         updated_at=row.updated_at,
+        scope=json.loads(row.scope_json) if row.scope_json else None,
     )
 
 
@@ -81,6 +82,7 @@ class SqlAlchemyResourceRepo:
                 enabled=resource.enabled,
                 created_at=resource.created_at,
                 updated_at=resource.updated_at,
+                scope_json=json.dumps(resource.scope) if resource.scope is not None else None,
             )
             session.add(row)
             try:
@@ -121,6 +123,25 @@ class SqlAlchemyResourceRepo:
             if row is None:
                 raise ResourceNotFound(ref.kind, ref.name)
             row.enabled = enabled
+            row.updated_at = datetime.now(tz=UTC)
+            await session.commit()
+            await session.refresh(row)
+            return _to_domain(row)
+
+    async def update_scope(
+        self,
+        ref: ResourceRef,
+        scope: dict[str, Any] | None,
+    ) -> Resource | None:
+        async with self._sm() as session:
+            stmt = select(ResourceModel).where(
+                ResourceModel.kind == ref.kind,
+                ResourceModel.name == ref.name,
+            )
+            row = (await session.execute(stmt)).scalar_one_or_none()
+            if row is None:
+                return None
+            row.scope_json = json.dumps(scope) if scope is not None else None
             row.updated_at = datetime.now(tz=UTC)
             await session.commit()
             await session.refresh(row)

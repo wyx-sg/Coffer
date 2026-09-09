@@ -21,12 +21,18 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from coffer.application.distill.session_end import SessionEndDistiller, SessionEndOutcome
+from coffer.application.memory.session_context import assemble_memory_digest
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import (
     get_agent_service,
     get_memory_service,
     get_session_end_distiller,
 )
+from coffer.surfaces.http.memory.dependencies import get_journal_service
+
+#: SessionStart bundles are capped by the external hook contract (≤10k chars);
+#: the memory digest takes whatever budget the rules bundle leaves.
+_MAX_CONTEXT_CHARS = 10_000
 
 router = APIRouter(
     prefix="/api/v1/agents",
@@ -53,11 +59,19 @@ async def session_context(
     cwd: str | None = None,
     agents: Any = Depends(get_agent_service),  # noqa: B008
     memory: Any = Depends(get_memory_service),  # noqa: B008
+    journal: Any = Depends(get_journal_service),  # noqa: B008
 ) -> SessionContextOut:
     # Raises ResourceNotFound (→ 404) when the agent doesn't exist; the hook
     # swallows non-200s and injects nothing, so a 404 never blocks the agent.
     await agents.get(name)
-    bundle = await memory.assemble_session_context(cwd=cwd)
+    rules = await memory.assemble_session_context(cwd=cwd)
+    # Ambient memory injection (FR-055): surface the project's recent journal +
+    # knowledge index so the agent starts with memory without having to call
+    # recall. Takes whatever char budget the rules bundle leaves.
+    digest = await assemble_memory_digest(
+        cwd=cwd, memory=memory, journal=journal, max_chars=_MAX_CONTEXT_CHARS - len(rules) - 2
+    )
+    bundle = f"{rules}\n\n{digest}" if digest else rules
     return SessionContextOut(additional_context=bundle)
 
 

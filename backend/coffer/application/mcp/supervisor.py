@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -29,6 +29,7 @@ from coffer.domain.mcp.server_config import (
     StdioTransport,
 )
 from coffer.domain.resource import ResourceRef
+from coffer.domain.scope import machine_in_scope
 
 # A factory the composition root injects to build connections without
 # pulling the infrastructure adapters into the application layer (CODE-005).
@@ -87,6 +88,7 @@ class SubprocessSupervisor:
         retry_delays: tuple[float, ...] = _RETRY_DELAYS_SECONDS,
         cooldown_seconds: int = _COOLDOWN_SECONDS,
         clock: Any = None,  # callable returning datetime; None → datetime.now(UTC)
+        machine_id: Callable[[], Awaitable[str | None]] | None = None,
     ) -> None:
         self._resources = resource_service
         self._credentials = credential_resolver
@@ -100,9 +102,22 @@ class SubprocessSupervisor:
         self._cooldown_seconds = cooldown_seconds
         self._entries: dict[str, _UpstreamEntry] = {}
         self._clock = clock or (lambda: datetime.now(tz=UTC))
+        # ADR-045 machine axis (Task 8): optional provider resolving this
+        # machine's sync identity. None (the default) means no provider is
+        # wired — legacy behavior, no filtering, mirroring ChannelRuntime's
+        # `local is None` guard (see channel/runtime.py:181-186).
+        self._machine_id_provider = machine_id
+        self._machine_id_cache: str | None = None
 
     def _now(self) -> datetime:
         return self._clock()
+
+    async def _local_machine_id(self) -> str | None:
+        if self._machine_id_provider is None:
+            return None
+        if self._machine_id_cache is None:
+            self._machine_id_cache = await self._machine_id_provider()
+        return self._machine_id_cache
 
     def health(self, server_name: str) -> UpstreamHealth:
         entry = self._entries.get(server_name)
@@ -157,6 +172,16 @@ class SubprocessSupervisor:
             if not resource.enabled:
                 entry.state = UpstreamHealth.UNHEALTHY
                 raise UpstreamUnavailable(f"{server_name!r} is disabled")
+
+            # ADR-045 machine axis (Task 8): a wired provider means this daemon
+            # knows its own sync identity — refuse to spawn a server that isn't
+            # scoped to run on THIS machine. No provider wired (local is None)
+            # means legacy behavior: no filtering at all.
+            local = await self._local_machine_id()
+            if local is not None and not machine_in_scope(resource.scope, local):
+                entry.state = UpstreamHealth.UNHEALTHY
+                raise UpstreamUnavailable(f"{server_name!r} is not in scope on this machine")
+
             config = MCPServerConfig.model_validate(resource.config)
 
             # Attempt with retry. Catch only the transient failure modes a

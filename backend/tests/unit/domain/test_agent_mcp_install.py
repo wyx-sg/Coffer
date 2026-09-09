@@ -161,6 +161,164 @@ def test_toml_uninstall_noop_for_scalar_mcp_servers():
     assert tomlkit.parse(out)["mcp_servers"] == "coffer-ish"
 
 
+# --- self-reported agent identity (spec 004 FR-019 amended, Task 9) -------------
+
+
+def test_entry_fields_command_map_with_agent_name():
+    from coffer.domain.agent.mcp_injection import McpEntryStyle
+    from coffer.domain.agent.mcp_install import _entry_fields
+
+    assert _entry_fields(SHIM, McpEntryStyle.COMMAND_MAP, "my_agent") == {
+        "command": SHIM,
+        "args": ["--agent", "my_agent"],
+    }
+
+
+def test_entry_fields_command_map_without_agent_name():
+    from coffer.domain.agent.mcp_injection import McpEntryStyle
+    from coffer.domain.agent.mcp_install import _entry_fields
+
+    assert _entry_fields(SHIM, McpEntryStyle.COMMAND_MAP, None) == {"command": SHIM}
+    # agent_name defaults to None when omitted entirely.
+    assert _entry_fields(SHIM, McpEntryStyle.COMMAND_MAP) == {"command": SHIM}
+
+
+def test_entry_fields_typed_local_object_with_agent_name():
+    from coffer.domain.agent.mcp_injection import McpEntryStyle
+    from coffer.domain.agent.mcp_install import _entry_fields
+
+    assert _entry_fields(SHIM, McpEntryStyle.TYPED_LOCAL_OBJECT, "my_agent") == {
+        "type": "local",
+        "command": [SHIM, "--agent", "my_agent"],
+        "enabled": True,
+    }
+
+
+def test_entry_fields_typed_command_array_with_agent_name():
+    from coffer.domain.agent.mcp_injection import McpEntryStyle
+    from coffer.domain.agent.mcp_install import _entry_fields
+
+    assert _entry_fields(SHIM, McpEntryStyle.TYPED_COMMAND_ARRAY, "my_agent") == {
+        "type": "local",
+        "command": [SHIM, "--agent", "my_agent"],
+    }
+
+
+def test_json_command_map_entry_with_agent_name_carries_args():
+    out = apply_install(ConfigFileFormat.JSON, "", SHIM, agent_name="my_agent")
+    data = json.loads(out)
+    assert data["mcpServers"][COFFER_SERVER_KEY] == {
+        "command": SHIM,
+        "args": ["--agent", "my_agent"],
+    }
+    assert is_installed(ConfigFileFormat.JSON, out)
+    assert installed_command(ConfigFileFormat.JSON, out) == SHIM
+
+
+def test_json_command_map_entry_without_agent_name_has_no_args_key():
+    """Backward compatible default: no agent_name ⇒ the pre-Task-9 shape,
+    unaffected by the new parameter."""
+    out = apply_install(ConfigFileFormat.JSON, "", SHIM)
+    data = json.loads(out)
+    assert data["mcpServers"][COFFER_SERVER_KEY] == {"command": SHIM}
+    assert "args" not in data["mcpServers"][COFFER_SERVER_KEY]
+
+
+def test_toml_command_map_entry_with_agent_name_carries_args():
+    out = apply_install(ConfigFileFormat.TOML, "", SHIM, agent_name="codex")
+    doc = tomlkit.parse(out)
+    entry = doc["mcp_servers"][COFFER_SERVER_KEY]
+    assert entry["command"] == SHIM
+    assert list(entry["args"]) == ["--agent", "codex"]
+    assert is_installed(ConfigFileFormat.TOML, out)
+    assert installed_command(ConfigFileFormat.TOML, out) == SHIM
+
+
+def test_json_typed_local_object_entry_with_agent_name_appends_to_command_array():
+    """Typed-array styles have no ``args`` key — the agent flag is appended
+    directly onto the ``command`` array (spec 004 FR-019 amended)."""
+    from coffer.domain.agent.mcp_injection import McpEntryStyle
+
+    out = apply_install(
+        ConfigFileFormat.JSON,
+        "",
+        SHIM,
+        container_key="mcp",
+        entry_style=McpEntryStyle.TYPED_LOCAL_OBJECT,
+        agent_name="typed_agent",
+    )
+    data = json.loads(out)
+    assert data["mcp"][COFFER_SERVER_KEY] == {
+        "type": "local",
+        "command": [SHIM, "--agent", "typed_agent"],
+        "enabled": True,
+    }
+    assert is_installed(ConfigFileFormat.JSON, out, container_key="mcp")
+    assert installed_command(ConfigFileFormat.JSON, out, container_key="mcp") == SHIM
+
+
+def test_typed_command_array_entry_with_agent_name_appends_to_command_array():
+    from coffer.domain.agent.mcp_injection import McpEntryStyle
+
+    out = apply_install(
+        ConfigFileFormat.JSON,
+        "",
+        SHIM,
+        container_key="mcp",
+        entry_style=McpEntryStyle.TYPED_COMMAND_ARRAY,
+        agent_name="my_agent",
+    )
+    data = json.loads(out)
+    assert data["mcp"][COFFER_SERVER_KEY] == {
+        "type": "local",
+        "command": [SHIM, "--agent", "my_agent"],
+    }
+    assert is_installed(ConfigFileFormat.JSON, out, container_key="mcp")
+    assert installed_command(ConfigFileFormat.JSON, out, container_key="mcp") == SHIM
+
+
+def test_json_install_with_agent_name_is_idempotent_on_reinstall():
+    """Re-install (the migration path for pre-Task-9 entries, see module
+    docstring) replaces the entry in place — never duplicates it."""
+    once = apply_install(ConfigFileFormat.JSON, "", SHIM, agent_name="my_agent")
+    twice = apply_install(ConfigFileFormat.JSON, once, SHIM, agent_name="my_agent")
+    data = json.loads(twice)
+    assert list(data["mcpServers"]).count(COFFER_SERVER_KEY) == 1
+    assert data["mcpServers"][COFFER_SERVER_KEY]["args"] == ["--agent", "my_agent"]
+
+
+def test_json_preexisting_entry_without_args_is_detected_as_installed():
+    """Regression: agents installed BEFORE this change wrote entries with no
+    ``args`` key at all. is_installed/installed_command must still report
+    them as installed (they key on COFFER_SERVER_KEY, not on ``args``) —
+    re-install (not auto-migration) is the upgrade path to add the flag."""
+    pre_existing = json.dumps({"mcpServers": {COFFER_SERVER_KEY: {"command": SHIM}}})
+    assert is_installed(ConfigFileFormat.JSON, pre_existing)
+    assert installed_command(ConfigFileFormat.JSON, pre_existing) == SHIM
+
+    # Re-install (the migration path) rewrites it with the agent flag, in place.
+    upgraded = apply_install(ConfigFileFormat.JSON, pre_existing, SHIM, agent_name="my_agent")
+    data = json.loads(upgraded)
+    assert list(data["mcpServers"]).count(COFFER_SERVER_KEY) == 1
+    assert data["mcpServers"][COFFER_SERVER_KEY] == {
+        "command": SHIM,
+        "args": ["--agent", "my_agent"],
+    }
+
+
+def test_json_entry_with_args_is_detected_as_installed_and_uninstall_removes_it():
+    """Regression: an entry that already carries ``args`` (post-Task-9 shape)
+    is still detected as installed, and uninstall still removes exactly it —
+    `_coffer_command`/`is_installed` key on `COFFER_SERVER_KEY`, unaffected by
+    the presence of an `args` list."""
+    installed = apply_install(ConfigFileFormat.JSON, "", SHIM, agent_name="my_agent")
+    assert is_installed(ConfigFileFormat.JSON, installed)
+    assert installed_command(ConfigFileFormat.JSON, installed) == SHIM
+
+    back = apply_uninstall(ConfigFileFormat.JSON, installed)
+    assert not is_installed(ConfigFileFormat.JSON, back)
+
+
 def test_json_install_preserves_non_ascii():
     """ensure_ascii=False keeps unicode in ~/.claude.json intact rather than
     rewriting it to \\uXXXX escapes."""
@@ -168,3 +326,99 @@ def test_json_install_preserves_non_ascii():
     out = apply_install(ConfigFileFormat.JSON, existing, SHIM)
     assert "/Users/张三/code" in out
     assert "\\u" not in out
+
+
+# --- typed-local-object entry style ---
+
+
+def test_json_typed_local_object_entry_install_detect_uninstall():
+    from coffer.domain.agent.mcp_injection import McpEntryStyle
+
+    out = apply_install(
+        ConfigFileFormat.JSON,
+        "",
+        SHIM,
+        container_key="mcp",
+        entry_style=McpEntryStyle.TYPED_LOCAL_OBJECT,
+    )
+    data = json.loads(out)
+    assert data["mcp"][COFFER_SERVER_KEY] == {
+        "type": "local",
+        "command": [SHIM],
+        "enabled": True,
+    }
+    # Detection / command extraction / uninstall are style-agnostic — they key off
+    # the container + coffer key and handle the command-array shape.
+    assert is_installed(ConfigFileFormat.JSON, out, container_key="mcp")
+    assert installed_command(ConfigFileFormat.JSON, out, container_key="mcp") == SHIM
+    back = apply_uninstall(ConfigFileFormat.JSON, out, container_key="mcp")
+    assert not is_installed(ConfigFileFormat.JSON, back, container_key="mcp")
+
+
+def test_json_typed_local_object_preserves_user_mcp_entries():
+    from coffer.domain.agent.mcp_injection import McpEntryStyle
+
+    existing = json.dumps({"mcp": {"other": {"type": "local", "command": ["y"]}}})
+    out = apply_install(
+        ConfigFileFormat.JSON,
+        existing,
+        SHIM,
+        container_key="mcp",
+        entry_style=McpEntryStyle.TYPED_LOCAL_OBJECT,
+    )
+    data = json.loads(out)
+    assert data["mcp"]["other"] == {"type": "local", "command": ["y"]}  # user entry kept
+    assert data["mcp"][COFFER_SERVER_KEY]["enabled"] is True
+
+
+# --- nested JSON container (a dotted `mcp.servers` container key) --------------------
+
+
+def test_json_dotted_container_install_into_empty():
+    out = apply_install(ConfigFileFormat.JSON, "", SHIM, container_key="mcp.servers")
+    data = json.loads(out)
+    assert data["mcp"]["servers"][COFFER_SERVER_KEY] == {"command": SHIM}
+    assert is_installed(ConfigFileFormat.JSON, out, container_key="mcp.servers")
+    assert installed_command(ConfigFileFormat.JSON, out, container_key="mcp.servers") == SHIM
+
+
+def test_json_dotted_container_preserves_siblings_at_every_level():
+    existing = json.dumps(
+        {
+            "gateway": {"port": 18789},
+            "mcp": {"bridge": True, "servers": {"other": {"command": "y"}}},
+        }
+    )
+    out = apply_install(ConfigFileFormat.JSON, existing, SHIM, container_key="mcp.servers")
+    data = json.loads(out)
+    assert data["gateway"] == {"port": 18789}  # unrelated top-level key kept
+    assert data["mcp"]["bridge"] is True  # sibling inside the dotted path kept
+    assert data["mcp"]["servers"]["other"] == {"command": "y"}  # user server kept
+    assert data["mcp"]["servers"][COFFER_SERVER_KEY] == {"command": SHIM}
+
+
+def test_json_dotted_container_uninstall_removes_only_coffer():
+    existing = json.dumps({"mcp": {"servers": {"other": {"command": "y"}}}})
+    out = apply_install(ConfigFileFormat.JSON, existing, SHIM, container_key="mcp.servers")
+    back = apply_uninstall(ConfigFileFormat.JSON, out, container_key="mcp.servers")
+    data = json.loads(back)
+    assert data["mcp"]["servers"]["other"] == {"command": "y"}
+    assert COFFER_SERVER_KEY not in data["mcp"]["servers"]
+    assert not is_installed(ConfigFileFormat.JSON, back, container_key="mcp.servers")
+
+
+def test_json_dotted_container_status_false_when_path_absent_or_scalar():
+    assert not is_installed(ConfigFileFormat.JSON, "{}", container_key="mcp.servers")
+    # A hand-edit that left a scalar at a step never false-positives (or raises).
+    scalar = json.dumps({"mcp": "coffer"})
+    assert not is_installed(ConfigFileFormat.JSON, scalar, container_key="mcp.servers")
+    assert installed_command(ConfigFileFormat.JSON, scalar, container_key="mcp.servers") is None
+
+
+def test_json_dotted_container_install_replaces_scalar_step():
+    # Mirrors the flat branch's isinstance(dict) guard: a scalar at a step is
+    # replaced so the install always lands.
+    out = apply_install(
+        ConfigFileFormat.JSON, json.dumps({"mcp": 42}), SHIM, container_key="mcp.servers"
+    )
+    assert json.loads(out)["mcp"]["servers"][COFFER_SERVER_KEY] == {"command": SHIM}

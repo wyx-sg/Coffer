@@ -121,3 +121,44 @@ async def test_config_round_trip_through_json(tmp_path):
     assert found is not None
     assert found.config == nested
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_create_defaults_scope_to_none(tmp_path):
+    repo, engine = await _repo(tmp_path)
+    created = await repo.create(_make_resource())
+    assert created.scope is None
+    found = await repo.find(ResourceRef("fake_kind", "t"))
+    assert found is not None
+    assert found.scope is None
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_scope_json_round_trip(tmp_path):
+    repo, engine = await _repo(tmp_path)
+    await repo.create(_make_resource())
+    scope = {"machine-1": ["agent-a"], "machine-2": "*"}
+    updated = await repo.update_scope(ResourceRef("fake_kind", "t"), scope)
+    assert updated is not None
+    assert updated.scope == scope
+
+    found = await repo.find(ResourceRef("fake_kind", "t"))
+    assert found is not None
+    assert found.scope == scope
+
+    cleared = await repo.update_scope(ResourceRef("fake_kind", "t"), None)
+    assert cleared is not None
+    assert cleared.scope is None
+    found_cleared = await repo.find(ResourceRef("fake_kind", "t"))
+    assert found_cleared is not None
+    assert found_cleared.scope is None
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_update_scope_missing_ref_returns_none(tmp_path):
+    repo, engine = await _repo(tmp_path)
+    result = await repo.update_scope(ResourceRef("fake_kind", "nope"), {"machine-1": "*"})
+    assert result is None
+    await engine.dispose()

@@ -20,6 +20,7 @@ Pydantic v2 `BaseModel`。当 `kind == "memory"` 时存于 `Resource.config`。�
 | `embedding_credential_ref` | `str \| None`                              | embedding API key 的 keychain ref（绝不明文）。                                |
 | `embedding_dimensions`     | `int`                                      | 默认 `768`；范围 `1–8192`。决定该 store 的 `vec_chunks` 表宽；随线上契约传输。 |
 | `max_fact_chars`           | `int`                                      | 默认 `8192`；范围 `64–32768`。可变。                                           |
+| `merged_identities`        | `list[str]`                                | 已合并**进**本库的项目 ULID（FR-058，修订 2026-07-10）。系统管理（用户从不设置）；resolve 算出的身份在此列表中、且其自身库已不存在时，落到本库。随资源同步。默认 `[]`。 |
 
 embedding 模型 **可变** —— 改它会重嵌整个 store（文件是真相）。没有不可变锁。
 
@@ -154,6 +155,8 @@ CREATE TABLE memory_store_labels (
 
 渲染 store 的可读身份时，`label` 优先于由 `project_root` 推导的 basename；清除 label 即删除其行，退回 FR-017a 的推导 / 回退名。两张表都不改变 store 名（`project-<ULID>`）或 `project_id`。
 
+**一个仓库一个 store，跨 git worktree。** 项目 ULID = `sha256(git-root 路径)`。linked worktree 有自己的 `.git` *文件*，故 `git_root`（`infrastructure/memory/scope_fs.py`）会沿该指针的 `gitdir`/`commondir` 回溯到**主**仓库 toplevel —— 一个仓库的所有 worktree（含主 checkout）解析为同一个 ULID，即同一个 store。分支解析（`git_branch`）仍按 worktree 各自计算（handoff 按分支 key）。此前"每个 worktree 各自哈希"造成的碎裂 store，在 daemon 启动时由一次性、幂等、只增不删的合并（`application/memory/consolidate.py`）修复：重解析每个 `project_root`，凡 store 名不再等于其根规范 `project-<ULID>` 者，其 lane 文件并入规范 store（journal 按时间戳去重，其余同名冲突保留为 `--from-<ulid>` 兄弟文件）后退休（resource + `documents` + label + root 行）。
+
 ## 落盘规范布局（真相源）
 
 ```
@@ -178,7 +181,7 @@ CREATE TABLE memory_store_labels (
         └── journal/<YYYY-MM-DD>.md       # 情景，追加式，每天一个文件（当天无条目则不建文件）；索引进 recall（FR-043）
 ```
 
-**没有 `MEMORY.md`** —— 此前的派生投影已移除。`recall` glob `knowledge/**/*.md`（排除 `INDEX.md`），所以 organizer 写入主题文档后会被透明拾取，手写的主题文档也会被立即发现。`INDEX.md` 与 store 根目录的 `consolidation-log.md` 是**派生/机器本地**的：排除在 recall 与同步镜像之外（每台机器从已同步的主题文档重新生成 `INDEX.md`；日志按机器各自维护）。主题文档本身是真相源，DO 同步。store 根的 **`superseded/`** tombstone 保存 reorg pass（FR-033/034）退役的旧版本：与 `handoff/` 一样在 `knowledge/` lane 之外，故**排除在 recall 之外**；但与派生文件不同，它**DO 同步** —— 它是可恢复的真相源历史，而非重新生成的派生物。store 根的 **`rules/`** 是**过程性 lane**（FR-036）：organizer 把规则形态的 inbox 条目分类追加进 `rules/rules.md`（追加，而非主题合并）；任一 `rules/*.md` 超过阈值后，reorg pass 按主题（one-shot LLM）把它拆分为 per-topic `rules/<slug>.md`（amendment 2026-06-22），读取面拼接全部 `rules/*.md`。它在 `knowledge/` lane 之外，故**排除在 recall 之外**（rules 由 session-start 注入交付 —— 那是之后的切片 —— 而非 `recall`），且作为真相源**DO 同步**（与 `handoff/` 一样）。它经 `GET /memory_stores/{name}/rules` / `coffer memory rules` 只读暴露。store 根的 **`journal/`** 是**情景 lane**(FR-040):与 `rules/`/`handoff/`/`superseded/` 不同,它**参与 recall** —— reconciler 把每个 `journal/<YYYY-MM-DD>.md`(每天一个文件;当天无条目则不建文件)索引为一个记忆文档(像主题文档一样分块),grep 守卫保留 `journal/` 命中,使情景事件可被检索(FR-043)。它仍作为真相源历史 **DO 同步**,且**不**计入 store 的 `fact_count`(该计数只统计 `knowledge/` lane)。
+**没有 `MEMORY.md`** —— 此前的派生投影已移除。`recall` glob `knowledge/**/*.md`（排除 `INDEX.md`），所以 organizer 写入主题文档后会被透明拾取，手写的主题文档也会被立即发现。`INDEX.md` 与 store 根目录的 `consolidation-log.md` 是**派生/机器本地**的：排除在 recall 与同步镜像之外（每台机器从已同步的主题文档重新生成 `INDEX.md`；日志按机器各自维护）。主题文档本身是真相源，DO 同步。store 根的 **`superseded/`** tombstone 保存 reorg pass（FR-033/034）退役的旧版本：与 `handoff/` 一样在 `knowledge/` lane 之外，故**排除在 recall 之外**；但与派生文件不同，它**DO 同步** —— 它是可恢复的真相源历史，而非重新生成的派生物。store 根的 **`rules/`** 是**过程性 lane**（FR-036）：organizer 把规则形态的 inbox 条目分类追加进 `rules/rules.md`（追加，而非主题合并）；任一 `rules/*.md` 超过阈值后，reorg pass 按主题（one-shot LLM）把它拆分为 per-topic `rules/<slug>.md`（amendment 2026-06-22），读取面拼接全部 `rules/*.md`。它在 `knowledge/` lane 之外，故**排除在 recall 之外**（rules 由 session-start 注入交付 —— 那是之后的切片 —— 而非 `recall`），且作为真相源**DO 同步**（与 `handoff/` 一样）。它经 `GET /memory_stores/{name}/rules` / `coffer memory rules` 只读暴露。store 根的 **`journal/`** 是**情景 lane**(FR-040):与 `rules/`/`handoff/`/`superseded/` 不同,它**参与 recall** —— reconciler 把每个 `journal/<YYYY-MM-DD>.md`(每天一个文件;当天无条目则不建文件)索引为一个记忆文档(像主题文档一样分块),grep 守卫保留 `journal/` 命中,使情景事件可被检索(FR-043)。索引是**即时的**:`JournalService.append` 写完立即索引该 period 文件(reconcile-on-append),蒸馏出的条目无需等懒式 reconcile-on-read 即可被 recall;启动时的 reindex sweep(`run_memory_reindex_sweep`)会把此前"写入磁盘却因 store 未被 recall 而未索引"的 journal 补索引。它仍作为真相源历史 **DO 同步**,且**不**计入 store 的 `fact_count`(该计数只统计 `knowledge/` lane)。
 
 **organizer**（`application/memory/organizer.py`，内部 LLM，仅显式 `organize` 触发）通过每条目一次 one-shot completion 把 `inbox/` 排空进主题文档：取回至多 3 个候选主题文档（不用 LLM）→ 一次 LLM 合并/创建调用 → 写 `knowledge/<slug>.md` → 删除 inbox 条目（仅在写入成功之后）→ 追加一行 changelog。畸形的 LLM 响应会跳过该条目（留在 inbox，绝不损坏文档）。主题文档 `.md` 的 frontmatter 是 `{title, description, updated_at}` + 正文。langchain 的 LLM 调用留在 `infrastructure/chat`（Contract 9）；`application/memory` 经一个 memory 本地的 `LlmCompletionPort` 触达它（克隆 distill 切片；Contract 5e 禁止 import `application.distill`）。
 
@@ -387,14 +390,14 @@ release checks and can leave the repo in a half-tagged state.
 
 原始记录**绝不落盘**，也不会出现在事实正文里。LLM 调用前：
 
-- 所有 `tool_use` / `tool_result` 块（Claude/Codex）以及非 `text` 的 part —— tool、reasoning、file、step（OpenCode）—— 被丢弃。
+- 所有 `tool_use` / `tool_result` 块（Claude/Codex）被丢弃。
 - assistant 回复中嵌入的文件内容片段与命令输出被丢弃。
 - 常见 secret 模式（API key、token、PEM block）经正则抹除器删除。
 - 长片段被截断。
 
 只有抹除后的自然语言文本（用户 + 助手的散文部分）发送给 LLM。只有提炼出的洞察文本写入事实 store。原始记录与抹除中间体均不存储于 `~/.coffer/` 的任何位置。
 
-Coffer 读取 `~/.claude/projects/`、`~/.codex/sessions/` 以及 OpenCode 的存储树（`~/.local/share/opencode/storage/`），但在此流程中**绝不写入它们** —— Spec 004 的只读不变量得到完整保留。Cursor / OpenClaw / Hermes 的记录读取器被推迟（见 spec.md 的 US「distill transcript to memory」）：它们的存储要么临时、要么无文档、要么不带工作目录无法按项目归类。
+Coffer 读取 `~/.claude/projects/` 与 `~/.codex/sessions/`，但在此流程中**绝不写入它们** —— Spec 004 的只读不变量得到完整保留。
 
 ### 审计
 

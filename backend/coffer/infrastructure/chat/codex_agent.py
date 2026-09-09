@@ -22,6 +22,7 @@ import logging
 from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
+from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
     AgentEvent,
     TurnDone,
@@ -38,6 +39,16 @@ from coffer.infrastructure.chat.codex_jsonrpc import CodexRpcClient
 from coffer.infrastructure.chat.codex_mapping import (
     CodexParseState,
     map_codex_notification,
+)
+from coffer.infrastructure.chat.document_extract import (
+    DocumentExtractor,
+    extract_document_attachments,
+    prompt_with_document_text,
+)
+from coffer.infrastructure.chat.transcribe import (
+    Transcriber,
+    prompt_with_transcripts,
+    transcribe_audio_attachments,
 )
 
 _logger = logging.getLogger(__name__)
@@ -67,6 +78,8 @@ class CodexAppServerAdapter:
         session_factory: AppServerSessionFactory,
         on_session: SessionSink,
         env: dict[str, str] | None = None,
+        transcriber: Transcriber | None = None,
+        document_extractor: DocumentExtractor | None = None,
     ) -> None:
         self._cwd = cwd
         self._resume = resume_session
@@ -74,16 +87,19 @@ class CodexAppServerAdapter:
         self._session_factory = session_factory
         self._on_session = on_session
         self._env = env
+        self._transcriber = transcriber
+        self._document_extractor = document_extractor
 
     async def run_turn(
         self,
         *,
         history: Sequence[Message],
+        attachments: Sequence[Attachment] = (),
     ) -> AsyncIterator[AgentEvent]:
         # Match the platform's ``async def -> AsyncIterator`` seam: delegate to
         # ``_stream`` so the coroutine machinery runs at yield points rather than
         # at the ``await run_turn(...)`` call site (the SDK adapter does the same).
-        return self._stream(history)
+        return self._stream(history, attachments)
 
     async def _persist_session(self, state: CodexParseState) -> None:
         """Write a newly-discovered thread id back for the next ``resume``.
@@ -144,8 +160,28 @@ class CodexAppServerAdapter:
         )
         return (turn.get("turn") or {}).get("id") or ""
 
-    async def _stream(self, history: Sequence[Message]) -> AsyncIterator[AgentEvent]:
-        prompt = last_user_text(history)
+    async def _stream(
+        self, history: Sequence[Message], attachments: Sequence[Attachment] = ()
+    ) -> AsyncIterator[AgentEvent]:
+        # Codex cannot hear audio: transcribe voice to text; extract documents to
+        # text (FR-030 — Codex is path-native and cannot parse a binary PDF); keep
+        # other files as path notes.
+        attachments, transcripts = await transcribe_audio_attachments(
+            attachments, self._transcriber
+        )
+        attachments, extracts = await extract_document_attachments(
+            attachments, self._document_extractor
+        )
+        prompt = prompt_with_transcripts(last_user_text(history), transcripts)
+        prompt = prompt_with_document_text(prompt, extracts)
+        if attachments:
+            # Codex is path-native (no inline image blocks over its app-server
+            # RPC): hand it the on-disk paths so it can open them with its tools.
+            notes = "\n".join(
+                f"[The user attached a file '{a.filename}', saved at {a.path}.]"
+                for a in attachments
+            )
+            prompt = f"{prompt}\n\n{notes}".strip() if prompt else notes
         if not prompt:
             yield TurnError(code="empty_prompt", message="no user message to send")
             return

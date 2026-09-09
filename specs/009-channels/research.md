@@ -91,6 +91,67 @@ official docs (the doc site requires a developer login).
   etc.) require organization admin approval; outbound IP allowlist is
   optional and should stay empty for machines with dynamic IPs.
 
+## Group chat, threads & rich content (2026-07-08)
+
+Verified live against a real SeaTalk app and a real Telegram bot while
+building group/@mention/thread/forward support (feature/channel-group-mention-rich).
+
+- **SeaTalk inbound tags/events (verified live):**
+  - DM `combined_forwarded_chat_history` = `{tag,
+    combined_forwarded_chat_history:{content:[{tag, sender:{email},
+    message_sent_time, text:{content}|image:{content:url}|file:{filename}}]}}`.
+  - DM quoted = `tag:"text"` + `quoted_message_id`.
+  - DM thread = `tag:"text"` + `thread_id`.
+  - Group events: `bot_added_to_group_chat` (`event.group.group_id` +
+    inviter); `new_mentioned_message_received_from_group_chat` (fires **only**
+    when the bot is @mentioned; `event.group_id` +
+    `message.{thread_id, sender, text:{plain_text, mentioned_list:[{username,
+    seatalk_id}]}}`); `new_message_received_from_thread` (non-@ thread
+    chatter — ignored, since the bot never acts without an @mention).
+  - **Group text lives at `text.plain_text`, not `text.content`** — the DM
+    and group event shapes diverge here and it is easy to read the wrong
+    field.
+  - An @mention of the bot *inside* a thread still arrives as
+    `new_mentioned_message_received_from_group_chat`, with `thread_id` set —
+    there is no separate "mentioned in thread" event type.
+
+- **SeaTalk Open API endpoints used:**
+  - Group send: `POST /messaging/v2/group_chat {group_id, message}`. To reply
+    into a thread, put `thread_id` **inside `message`** (`message.thread_id`),
+    NOT as a top-level sibling — verified live that a top-level `thread_id` is
+    silently ignored and the reply lands in the group main chat, whereas
+    `message.thread_id` threads it and roots a new thread at that id when none
+    exists yet (so a group-main @mention reply threads under the @mention).
+  - Thread read: `GET /messaging/v2/group_chat/get_thread_by_thread_id
+    {group_id, thread_id, page_size}` → response `{code, next_cursor,
+    thread_messages:[…]}` — the list key is `thread_messages`, not `messages`
+    or `content`.
+  - `GET /messaging/v2/get_message_by_message_id` for resolving a single
+    referenced message (quotes).
+  - The group-chat **history** endpoint (fetching recent group-main
+    messages, as opposed to one thread) is deliberately unused — the
+    corresponding SeaTalk permission is not granted to Coffer's app, so
+    recent-group-main context is never read; the @mention message plus its
+    own thread (if any) is the whole context window.
+
+- **Two platform limits worth recording:**
+  - SeaTalk does not deliver emoji reactions or non-@ group-main messages to
+    a bot at all — there is no event for either, so "read recent group-main
+    history" is not just unimplemented, it is unbuildable without a
+    permission SeaTalk does not grant self-built apps at our scope.
+  - Telegram's Bot API cannot fetch chat history at all (no equivalent of
+    `get_thread_by_thread_id`), so Telegram group/thread context is never
+    read; the adapter still parses @mentions, replies, and forwards from the
+    inbound update itself and replies into the correct forum topic. Two
+    disclosed Telegram parsing caveats, both documented at the call site in
+    `telegram_parse.py`: mention entity offsets are matched against plain
+    Python code-point indices even though Telegram's own offsets are UTF-16
+    code units — an accepted simplification that only drifts when a
+    surrogate-pair character (e.g. an emoji outside the BMP) precedes the
+    mention in the same message; and only `entities` on a plain text message
+    is parsed for a mention — `caption_entities` on a captioned photo/file is
+    not yet parsed, so an @mention inside a media caption is not recognized.
+
 ## Decisions taken from research
 
 | Decision           | Choice                                                                  | Rationale                                                                                                                                 |
@@ -103,3 +164,49 @@ official docs (the doc site requires a developer login).
 | Progress UX        | one editable status message, throttled; ack first; final reply separate | both prior arts; degrades naturally on SeaTalk via capability flags                                                                       |
 | Mid-turn input     | bounded FIFO queue, control commands bypass                             | predictable; avoids Hermes' interrupt-by-default surprise                                                                                 |
 | Session scope      | one long-lived conversation per `(channel, chat)`, `/new` resets        | matches the 1:1 product decision; group chats become new rows later                                                                       |
+
+## Channels as a management plane — build-vs-adopt & landscape (2026-07-08)
+
+Gathered while deciding whether to extend Coffer's own SeaTalk/Telegram adapters
+(FR-028…FR-041) or adopt an agent-native gateway wholesale.
+
+- **Build-vs-adopt decision.** Do NOT fork OpenClaw or Hermes channel code. Both
+  are TypeScript/Node monorepos (MIT) whose channel layers are coupled to their
+  own agent/session/MCP/memory runtimes; extracting the transport and re-wiring it
+  to Coffer's Python agents — plus running a Node process and carrying fork
+  maintenance — costs more than incrementally improving Coffer's own SeaTalk /
+  Telegram adapters, especially since neither supports SeaTalk (Coffer's primary
+  channel) and Coffer already has Telegram. Decision: reference-and-port the good
+  patterns (album debouncing, edit-to-stream, ack reactions, event dedup) into
+  Coffer's own clean adapters, not the code.
+
+- **Official-channel landscape (2026-07).** Claude Code "Channels" are official
+  **local** plugins for Telegram/Discord/iMessage but are a **research preview**,
+  personal-only (no groups), require the session to stay open, and cannot
+  transcribe voice
+  ([code.claude.com/docs/en/channels](https://code.claude.com/docs/en/channels)).
+  Claude-in-Slack, Codex-in-Slack, and Cursor-in-Slack are official but
+  **Slack-only**, **cloud-hosted**, and single-agent
+  ([code.claude.com/docs/en/slack](https://code.claude.com/docs/en/slack),
+  [developers.openai.com/codex/integrations/slack](https://developers.openai.com/codex/integrations/slack),
+  [cursor.com/docs/integrations/slack](https://cursor.com/docs/integrations/slack)).
+  Codex/Gemini/OpenCode have **no** official Telegram; Gemini CLI has no official
+  IM channel at all. **SeaTalk is supported by none of them (no official
+  competition for any agent).**
+
+- **Single-track channel-management-plane model.** Coffer's channel plane
+  manages only what Coffer hosts — the **Coffer-hosted channel** (SeaTalk
+  always, plus Telegram for the agents/uses the official bridges don't cover),
+  the one-bot-controls-all-agents moat, managed the same way Coffer manages MCP
+  servers, memory, and skills. **Externally-hosted channels — agent-native
+  gateways (OpenClaw/Hermes standalone) and official integrations
+  (Claude/Codex/Cursor-in-Slack, Claude Code's official plugins) — are a
+  non-goal:** Coffer neither proxies nor manages them (stacking gateways
+  conflicts with their runtime; a token handed to an external process's config
+  defeats the vault; official cloud integrations have no local credential to
+  hold). Users set those up through the tool's own flow; Coffer's docs point the
+  way. (Earlier framing considered a second "manage external channels" track —
+  dropped as over-engineering / YAGNI.)
+
+- **North star.** One paired bot drives any managed agent, switchable per
+  conversation and per thread (each thread is its own conversation, FR-032).

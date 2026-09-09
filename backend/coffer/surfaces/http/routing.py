@@ -31,9 +31,13 @@ from coffer.surfaces.http.embedding_routes import router as embedding_router
 from coffer.surfaces.http.fs_routes import router as fs_router
 from coffer.surfaces.http.internal_engine_routes import router as internal_engine_router
 from coffer.surfaces.http.knowledge_base import router as kb_router
+from coffer.surfaces.http.machines_routes import router as machines_router
 from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_router
 from coffer.surfaces.http.mcp.invocation_routes import router as mcp_invocation_router
 from coffer.surfaces.http.mcp.protocol_routes import router as mcp_protocol_router
+from coffer.surfaces.http.mcp.runner_routes import router as mcp_runner_router
+from coffer.surfaces.http.mcp.server_test_routes import router as mcp_server_test_router
+from coffer.surfaces.http.mcp.tiering_routes import router as mcp_tiering_router
 from coffer.surfaces.http.memory import router as memory_router
 from coffer.surfaces.http.provider_routes import router as provider_router
 from coffer.surfaces.http.resource_routes import router as resource_router
@@ -55,6 +59,7 @@ def include_all_routers(app: FastAPI) -> None:
         credential_router,
         settings_router,
         sync_router,  # spec 010
+        machines_router,  # spec 010 amendment — Machines fleet view (ADR-045)
         embedding_router,
         internal_engine_router,  # spec 011
         # agent + skill (specs 004/005)
@@ -71,7 +76,10 @@ def include_all_routers(app: FastAPI) -> None:
         # MCP
         mcp_protocol_router,
         mcp_capability_router,
+        mcp_server_test_router,
+        mcp_runner_router,
         mcp_invocation_router,
+        mcp_tiering_router,
         memory_router,  # spec 007
         distill_router,  # spec 007 extension — transcript distillation
         # chat (008)

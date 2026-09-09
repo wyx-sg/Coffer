@@ -37,6 +37,9 @@ class ResourceModel(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    # Framework-level machine x agent activation scope (ADR-045); NULL means
+    # unscoped. Added by migration 0046.
+    scope_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("kind", "name", name="uq_resources_kind_name"),

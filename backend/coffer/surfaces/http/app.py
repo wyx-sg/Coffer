@@ -33,14 +33,11 @@ from coffer.application.agent.kind import make_agent_kind
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.kind import make_channel_kind
-from coffer.application.embedding_config_service import EmbeddingConfigService
-from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.resource_service import ResourceService
-from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Kind
-from coffer.infrastructure.daemon.orphan_sweep import sweep_orphans
+from coffer.infrastructure.daemon.orphan_sweep import startup_sweep
 from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
 from coffer.infrastructure.logging.setup import configure_logging
 from coffer.infrastructure.persistence.engine import (
@@ -49,17 +46,17 @@ from coffer.infrastructure.persistence.engine import (
 )
 from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
-    SqlAlchemyEmbeddingConfigRepo,
-    SqlAlchemyInternalEngineConfigRepo,
     SqlAlchemyResourceRepo,
-    SqlAlchemyRetentionRepo,
 )
 from coffer.surfaces.http import cors, daemon_routes
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_skill_wiring import wire_agent_and_skill_kinds
-from coffer.surfaces.http.app_embedding_composition import build_embedding_resolvers
+from coffer.surfaces.http.app_embedding_composition import (
+    build_config_services,
+    build_embedding_resolvers,
+)
 from coffer.surfaces.http.app_mcp_composition import (
-    build_prunable_registry,
+    build_retention_service,
     reaper_kwargs_from_env,
     wire_mcp_kind,
 )
@@ -72,6 +69,7 @@ from coffer.surfaces.http.auto_distill_wiring import (
 )
 from coffer.surfaces.http.backup_wiring import start_backup_worker, stop_backup_worker
 from coffer.surfaces.http.channel_wiring import wire_channel_kind
+from coffer.surfaces.http.consolidate_wiring import run_store_consolidation
 from coffer.surfaces.http.credential_composition import (
     init_credential_store,
     make_credential_resolver,
@@ -96,8 +94,10 @@ from coffer.surfaces.http.mcp.protocol_routes import (
     start_session_reaper,
 )
 from coffer.surfaces.http.memory.organize_state import get_organizer_service
+from coffer.surfaces.http.memory_wiring import run_memory_reindex_sweep, wire_memory_kind
 from coffer.surfaces.http.migrations_runner import run_migrations
 from coffer.surfaces.http.provider_wiring import wire_provider_kind
+from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
 from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.session_end_wiring import start_auto_organize, stop_auto_organize
 from coffer.surfaces.http.sync_wiring import start_sync, stop_sync
@@ -105,7 +105,6 @@ from coffer.surfaces.http.wiring import (
     build_substrate,
     wire_chat,
     wire_kb_kind,
-    wire_memory_kind,
 )
 
 
@@ -128,14 +127,20 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Run migrations BEFORE building services so they have a schema to talk to.
     await asyncio.get_running_loop().run_in_executor(None, run_migrations, _db_url())
 
-    # Sweep orphans from a previous (potentially crashed) daemon run BEFORE
-    # starting any new upstreams. Best-effort; failures don't block startup.
-    try:
-        killed = await asyncio.get_running_loop().run_in_executor(None, sweep_orphans)
-        if killed:
-            _logger.info("orphan_sweep.completed", extra={"killed": killed})
+    # 0048 dropped the removed-type agent rows; name what they left on disk.
+    try:  # Courtesy notice only: never fatal.
+        report_removed_agent_leftovers()
     except Exception:
-        _logger.exception("orphan_sweep.failed")
+        _logger.exception("removed_agent_type.leftover_scan_failed")
+
+    # Startup process hygiene (ADR-006), BEFORE new upstreams: reap leaked MCP
+    # upstreams AND stale sibling daemons. Best-effort; never blocks startup.
+    try:
+        orphans, stale = await asyncio.get_running_loop().run_in_executor(None, startup_sweep)
+        if orphans or stale:
+            _logger.info("startup_sweep.completed", extra={"upstreams": orphans, "daemons": stale})
+    except Exception:
+        _logger.exception("startup_sweep.failed")
 
     engine = create_async_engine_with_pragmas(_db_url())
     sm = session_maker(engine)
@@ -153,21 +158,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         # credential must fail registration with a named ref, no partial state).
         credentials=credential_store,
     )
-    registry = build_prunable_registry()
-    retention_svc = RetentionService(
-        registry=registry,
-        repo=SqlAlchemyRetentionRepo(sm),
-        audit=audit,
-    )
+    retention_svc = build_retention_service(sm, audit=audit)
     await retention_svc.initialize_defaults()
-    embedding_config_svc = EmbeddingConfigService(
-        repo=SqlAlchemyEmbeddingConfigRepo(sm),
-        audit=audit,
-        credentials=credential_store,
-    )
-    internal_engine_config_svc = InternalEngineConfigService(
-        repo=SqlAlchemyInternalEngineConfigRepo(sm),
-        audit=audit,
+    # Also registers the engine-settings synced state area (spec 010 slice 7).
+    embedding_config_svc, internal_engine_config_svc = build_config_services(
+        app, sm, audit, credential_store
     )
 
     set_resource_service(resource_svc)
@@ -185,7 +180,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Provider switching (spec 011) — AFTER the agent kind: it projects the
     # active profile into each agent's native config (see provider_wiring).
-    wire_provider_kind(app, resource_svc, audit, credential_store)
+    wire_provider_kind(app, resource_svc, audit, credential_store, sm)
 
     # Wire up knowledge_base kind (spec 006). Registers the KB built-in tools
     # into `builtin_tools`. One substrate per process: KB + memory share the
@@ -253,6 +248,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     await run_legacy_keychain_migration(
         app.state.kinds, sm, credential_store, audit, embedding_config_svc
     )
+
+    # Boot memory heal (best-effort, idempotent): collapse worktree-fragmented
+    # stores, then reindex so distilled journal is searchable (FR-043).
+    await run_store_consolidation(resources=resource_svc, sm=sm, substrate=substrate)
+    await run_memory_reindex_sweep(app, resource_svc, _resolve_embedding)  # type: ignore[arg-type]
 
     # CODE-020: start the batched invocation writer alongside the retention
     # worker. The repo's start() is a no-op if already started.

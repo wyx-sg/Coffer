@@ -59,6 +59,23 @@ coffer memory clear project-01J… --yes
 
 `--json` works on every read command. `--mode` is `grep` | `keyword` | `vector` (default `keyword`). `grep` recall is real — ripgrep over the fact files, no index, no tokenizer, so it works where FTS5 cannot (e.g. CJK). `vector` falls back to `keyword` (flagged) if no embedding provider is configured.
 
+### Merging duplicate project stores (AI-assisted)
+
+Multi-machine sync can leave two `project-<ulid>` stores for the SAME project
+(no origin remote, a pre-portable-identity store, a renamed remote). Scan for
+them, then merge the confirmed pair — additive, nothing is ever lost, and the
+merged-away identity keeps resolving to the survivor (FR-056–059):
+
+```bash
+coffer memory merge-scan                  # deterministic + internal-engine proposals
+coffer memory merge project-01H… project-01J…          # source → target
+coffer memory merge project-01H… project-01J… --no-organize   # skip the post-merge reorg
+```
+
+The desktop equivalent is **Memory → Find duplicates (AI)**. Without an
+internal engine (Settings → LLM connections) the scan still reports pairs it
+can prove by matching git remotes.
+
 ## Desktop
 
 1. Sidebar → **Memory**. The page shows a table of all memory stores (the global store plus one per project — auto-provisioned, so there is no "New store" action).

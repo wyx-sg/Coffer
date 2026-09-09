@@ -11,8 +11,22 @@ from datetime import datetime
 
 
 @dataclass(frozen=True)
+class InboundAttachment:
+    """A file (photo/document/voice) the transport downloaded for an inbound message.
+
+    The bytes are already saved to a local path; the core converts this to a
+    chat-domain ``Attachment`` when driving the turn. Modality-neutral so a new
+    media type is a new ``mime``, not a new envelope.
+    """
+
+    path: str  # absolute local path the transport downloaded the bytes to
+    mime: str  # e.g. "image/jpeg", "application/pdf", "audio/ogg"
+    filename: str  # best-effort original / synthesized name
+
+
+@dataclass(frozen=True)
 class InboundMessage:
-    """A text message arriving from an IM chat."""
+    """A message arriving from an IM chat — text and/or downloaded attachments."""
 
     channel: str  # channel resource name
     chat_id: str  # Telegram chat id / SeaTalk employee_code
@@ -22,6 +36,15 @@ class InboundMessage:
     timestamp: datetime
     sender_id: str = ""  # stable per-sender id for the owner gate (Telegram
     # from.id, SeaTalk employee_code); "" when the transport has none
+    chat_kind: str = "direct"  # "direct" | "group"
+    chat_title: str = ""  # group/channel display name where the platform supplies
+    # one for free (Telegram ``chat.title``); "" when it does not (SeaTalk's group
+    # events carry only ``group_id``) — the origin block then names the chat by id
+    # alone (FR-042)
+    addressed: bool = True  # DMs always; group only when @mentioned / reply-to-bot
+    mentions_others: bool = False  # group message @-mentions a non-bot user (FR-035)
+    thread_id: str = ""  # non-empty when the message is inside a thread/topic
+    attachments: tuple[InboundAttachment, ...] = ()  # photos/files/voice, if any
 
 
 @dataclass(frozen=True)
@@ -32,6 +55,12 @@ class ChannelCapabilities:
     supports_typing: bool  # typing indicator ack
     max_message_chars: int  # outbound chunk budget
     supports_buttons: bool = False  # interactive selection cards (ADR-014)
+    supports_media: bool = False  # outbound file/photo upload (send_media)
+    supports_groups: bool = False  # group-chat send path exists
+    supports_history_fetch: bool = False  # can fetch recent/thread messages for context
+    supports_reactions: bool = False  # emoji reaction on a message (set_reaction),
+    # used for the FR-036 receipt (👀) + completion (✅) ack; transports without
+    # it fall back to the typing/working signal for the same receipt cue
 
 
 @dataclass(frozen=True)
@@ -57,11 +86,14 @@ class InboundCallback:
     """
 
     channel: str  # channel resource name
-    chat_id: str  # return address (Telegram chat id / SeaTalk employee_code)
+    chat_id: str  # return address (Telegram chat id / SeaTalk group_id or employee_code)
     sender_id: str  # stable per-sender id for the owner gate ("" when none)
     data: str  # the tapped ChoiceButton.value
     callback_id: str = ""  # platform ack handle (Telegram callback_query.id); "" if none
     platform_message_id: str = ""  # the card message (for an optional in-place ack)
+    chat_kind: str = "direct"  # "direct" | "group" — mirrors InboundMessage so a
+    # group card tap owner-gates and replies in the group, not a DM (FR-034)
+    thread_id: str = ""  # non-empty when the card sits inside a thread/topic
 
 
 @dataclass(frozen=True)

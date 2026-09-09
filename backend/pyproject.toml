@@ -18,6 +18,7 @@ dependencies = [
     # release is verified.
     "fastapi>=0.136.3,<0.137",
     "uvicorn[standard]>=0.49.0",
+    "watchfiles>=1.0,<2.0",
     "pydantic>=2.13.4",
     "sqlalchemy[asyncio]>=2.0,<3.0",
     "aiosqlite>=0.20",
@@ -28,7 +29,12 @@ dependencies = [
     "typer>=0.12",
     "rich>=13.7",
     "structlog>=26.1.0",
-    "mcp>=1.0",
+    "mcp>=2.2",
+    # mcp 2.0 builds on httpx2 (httpx's 2.x line, published under a new
+    # distribution name). `infrastructure/mcp/http_client` hands the SDK a
+    # timeout and catches its transport errors, so it imports httpx2 directly
+    # rather than relying on it arriving transitively.
+    "httpx2>=2.7",
     "psutil>=5.9",
     "tomlkit>=0.13",
     "pyyaml>=6.0",
@@ -62,6 +68,21 @@ dependencies = [
 # works via any OpenAI-compatible provider without this extra.
 local-embeddings = [
     "fastembed>=0.3",
+]
+# Local speech-to-text for inbound channel voice messages. The frozen desktop
+# app transcribes with a bundled torch-free `whisper-cli` (Metal) and decodes
+# audio in-process with soundfile + soxr — this `voice` extra IS the decode
+# stack, small and torch-free, so it is installed into the frozen build venv and
+# bundled. See spec 009 FR-022 / ADR-039 (builds on ADR-038).
+voice = [
+    "soundfile>=0.12",
+    "soxr>=0.5",
+]
+# Optional source-run STT fallback engine. `mlx-whisper` drags torch/mlx, so it
+# is EXCLUDED from the frozen build (which uses whisper-cli); install it only for
+# a `make dev` source run that wants the mlx engine instead of a local whisper-cli.
+voice-mlx = [
+    "mlx-whisper>=0.4",
 ]
 dev = [
     "pytest>=9.0.3",
@@ -117,7 +138,15 @@ pretty = true
 # present on CI (→ import-untyped) but may be absent in a lean dev/verify env
 # (→ import-not-found); ignoring missing imports keeps mypy stable across both.
 [[tool.mypy.overrides]]
-module = ["sqlite_vec.*", "markitdown.*", "fastembed.*", "ruamel.*"]
+module = [
+    "sqlite_vec.*",
+    "markitdown.*",
+    "fastembed.*",
+    "ruamel.*",
+    "mlx_whisper.*",
+    "soundfile.*",
+    "soxr.*",
+]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

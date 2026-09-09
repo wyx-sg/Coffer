@@ -84,7 +84,7 @@ Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `co
 
 ## Stdio Shim (`coffer-mcp-shim`)
 
-**What it is.** The bridge between MCP clients (Claude Code, Codex, Cursor, and any other tool that supports stdio MCP servers) and the daemon's MCP endpoint. MCP clients are configured with `"command": "coffer-mcp-shim"` instead of a specific upstream server. The shim translates between the client's stdin/stdout interface and the daemon's HTTP/SSE MCP endpoint, making the daemon look like a regular stdio MCP server from the client's perspective.
+**What it is.** The bridge between MCP clients (Claude Code, Codex, and any other tool that supports stdio MCP servers) and the daemon's MCP endpoint. MCP clients are configured with `"command": "coffer-mcp-shim"` instead of a specific upstream server. The shim translates between the client's stdin/stdout interface and the daemon's HTTP/SSE MCP endpoint, making the daemon look like a regular stdio MCP server from the client's perspective.
 
 **Which process.** One shim process per connected MCP client session. A new shim process is spawned by each MCP client on client startup. Three MCP clients running simultaneously means three shim processes, each maintaining its own HTTP/SSE connection to the daemon, each resulting in its own independent `MCPGatewaySession` with its own upstream subprocess set.
 

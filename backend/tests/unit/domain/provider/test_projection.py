@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import tomllib
 
+import pytest
+
 from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import Protocol
 from coffer.domain.provider.projection import (
@@ -181,3 +183,15 @@ def test_per_connection_api_key_helper_is_written_and_removed() -> None:
     assert "apiKeyHelper" not in json.loads(remove_anthropic_settings(out))
     legacy = '{"apiKeyHelper": "coffer provider key --wire anthropic"}'
     assert "apiKeyHelper" not in json.loads(remove_anthropic_settings(legacy))
+
+
+# --- supported-agent invariant -------------------------------------------------
+
+
+# Coffer supports exactly the agent types it can project a provider into: every
+# member of ``AgentType`` MUST have a native-config projection target. This locks
+# the invariant so a newly added agent type cannot silently ship without a
+# projection writer (and so a removed one cannot leave a dangling target).
+@pytest.mark.parametrize("agent_type", list(AgentType))
+def test_every_supported_agent_is_a_projection_target(agent_type: AgentType) -> None:
+    assert target_for_agent(agent_type) is not None

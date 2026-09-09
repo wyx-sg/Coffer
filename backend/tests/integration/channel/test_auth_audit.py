@@ -66,6 +66,4 @@ async def test_channel_turn_started_is_audited(env: ChannelEnv) -> None:
     assert entry.details["channel"] == "tg"
     assert entry.details["chat_id"] == "owner"
     assert entry.details["agent_key"] == "builtin"
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    assert entry.details["conversation_id"] == peer.active_conversation_id
+    assert entry.details["conversation_id"] == await env.active_conversation(resource)

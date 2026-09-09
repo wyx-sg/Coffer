@@ -11,7 +11,7 @@
 
 Coffer 有多个入口都需要一个正在运行的 daemon：
 
-- `coffer-mcp-shim` —— 每次 MCP 客户端 (Claude Code、Cursor) 启动时由其拉起。
+- `coffer-mcp-shim` —— 每次 MCP 客户端 (Claude Code、Codex) 启动时由其拉起。
 - `coffer …` CLI —— 由用户临时调用。
 
 daemon 必须**比任一单一入口活得更久**：用户期望某个 MCP 客户端的 shim 不会因为
@@ -87,6 +87,15 @@ daemon 必须**比任一单一入口活得更久**：用户期望某个 MCP 客�
   拆除后仍存活，会被 SIGTERM/SIGKILL。这是防止泄漏在长生命周期 daemon 上累积的
   首要保障。启动时对 `~/.coffer/upstream-pids/` 的扫描仅作为兜底，处理 daemon
   *崩溃*（无优雅关闭）后残留的 PID。
+- **同类残留 daemon** 在新 daemon 抢到绑定时被回收。一个常驻 daemon 若不再应答
+  `GET /api/v1/daemon/status`（卡死、崩溃中、或 spawn 竞争的失败者），既不会被
+  `release()`（只守护 `daemon.json`）终止，也不在上游扫描范围内，于是被顶替的旧
+  daemon 会跨 App 启动不断累积。当新 daemon 进入 serving——即 `live_daemon()` 判定
+  无人存活、我们绑定了端口之后——它会回收其它运行同一可执行文件的进程
+  （`orphan_sweep.reap_stale_daemons`，排除自身、其 PyInstaller bootloader 父进程及
+  所有祖先）。**仅限冻结构建**：源码运行的可执行文件是 Python 解释器，绝不能匹配。
+  这与上面的版本偏移情形不同——*仍在应答*的旧版 daemon 留给用户手动重启，而
+  *不再应答*的被顶替 daemon 则自动清理。
 
 ## 备选方案
 
@@ -102,6 +111,25 @@ daemon 必须**比任一单一入口活得更久**：用户期望某个 MCP 客�
 将所有信息放进一个文件比把状态拆分到多处更简洁。
 
 ## 修订历史
+
+- **2026-09-09** —— 孤儿自我退出。spawn 保护是单向的：它只探 `daemon.json` 记录的那**一个**
+  端口，因此看不到活在其他端口上的 daemon。只要这次探活在确实有 daemon 在跑时失败——
+  `daemon.json` 丢了，或者一个已经在服务、但仍在完成预热的 daemon 没能在 2 秒探活超时内
+  应答 `/daemon/status`（实测约 9 秒）——spawn 就会绑下一个空闲端口，并把老 daemon 永远留在
+  那里占着它自己的端口。而且没有任何机制回收它：`reap_stale_daemons` 在非 frozen 构建下直接
+  no-op（按 `python3` 的 basename 匹配会误伤无关解释器），所以源码运行的环境每重启一次就多
+  一个孤儿。线上实际观察到：十个 daemon 占满 8000–8009、每一个都还在正常服务，此后
+  `bind_free_socket` 根本起不了新 daemon。
+
+  修复放在另一侧——那里不需要任何跨进程权限。正在服务的 daemon 现在每 30 秒重读一次
+  `daemon.json`，若它指向**另一个活着的** Coffer daemon，就关闭自己
+  （`bootstrap.superseded_by` → `entry._evict_when_superseded`）。触发条件刻意收得很窄：
+  文件不存在时绝不驱逐任何人（删掉 `daemon.json` 不该把健康的 daemon 一起带走），文件损坏
+  不构成证据，记录的 pid 已死或不是 Coffer daemon 则说明我们仍是唯一活着的那个。于是一组
+  daemon 会收敛到 `daemon.json` 指名的那一个，而发现文件缺失或过期的独苗 daemon 继续服务。
+  探活超时同时由 2 秒放宽到 15 秒，让"在服务但正忙"的 daemon 不再被读成不存在；过期的
+  `daemon.json` 在这里不付出代价，因为死端口会立刻拒绝连接。`daemon stop` 与新的驱逐器共用的
+  pid 检查从 CLI 移到了 `pid_lock.pid_is_coffer_daemon`（infrastructure 不能 import surfaces）。
 
 - **2026-05-20** —— 初版决定：detect-or-spawn 模式，daemon 作为独立进程；shim
   和 CLI 共用同一个辅助函数；daemon 启动时写出 `~/.coffer/daemon.json`。
