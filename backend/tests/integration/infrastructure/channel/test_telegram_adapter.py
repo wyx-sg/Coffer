@@ -7,9 +7,13 @@ method mapping for edit/delete/typing/approval prompts.
 
 from __future__ import annotations
 
+import asyncio
+import pathlib
+
 import pytest
 
 from coffer.domain.channel.errors import ChannelSendFailed
+from coffer.infrastructure.channel.telegram import TelegramAdapter
 
 from .conftest import (
     FakeSeaTalk,
@@ -32,6 +36,153 @@ def _message_update(update_id: int, *, text: str) -> dict:
             "text": text,
         },
     }
+
+
+def _photo_update(update_id: int, *, caption: str | None = None) -> dict:
+    return {
+        "update_id": update_id,
+        "message": {
+            "message_id": 2000 + update_id,
+            "date": 1718000000,
+            "chat": {"id": 555},
+            "from": {"id": 4242, "first_name": "Yu", "username": "yu"},
+            # PhotoSizes are ordered small→large; the largest must be chosen.
+            "photo": [
+                {"file_id": "small", "file_size": 100},
+                {"file_id": "big", "file_size": 9999},
+            ],
+            "caption": caption,
+        },
+    }
+
+
+@pytest.mark.acceptance(
+    spec="009-channels",
+    scenario="an inbound photo is downloaded and drives a turn",
+)
+async def test_photo_message_is_downloaded_as_an_attachment(
+    fake_telegram: FakeTelegram, tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))  # media dir resolves under tmp
+    adapter = make_telegram_adapter(fake_telegram)
+    recorder = RecordingCallbacks()
+    await fake_telegram.update_batches.put([_photo_update(20, caption="what is this?")])
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await wait_until(lambda: len(recorder.messages) == 1)
+    finally:
+        await adapter.stop()
+
+    msg = recorder.messages[0]
+    assert msg.text == "what is this?"  # a media caption becomes the message text
+    assert len(msg.attachments) == 1
+    att = msg.attachments[0]
+    assert att.mime == "image/jpeg"
+    assert pathlib.Path(att.path).read_bytes() == fake_telegram.file_bytes
+    # getFile was called for the LARGEST photo size, not the thumbnail.
+    assert [c.get("file_id") for c in fake_telegram.calls_for("getFile")] == ["big"]
+
+
+def _album_update(update_id: int, *, media_group_id: str, caption: str | None = None) -> dict:
+    """One item of a Telegram album — a photo message carrying a shared
+    ``media_group_id`` (the caption rides only the first item)."""
+    update = _photo_update(update_id, caption=caption)
+    update["message"]["media_group_id"] = media_group_id
+    # A distinct file per item so the flushed turn's attachments are traceable.
+    update["message"]["photo"] = [{"file_id": f"a{update_id}", "file_size": 9999}]
+    return update
+
+
+@pytest.mark.acceptance(
+    spec="009-channels",
+    scenario="a Telegram album is handled as one turn",
+)
+async def test_album_debounces_to_one_turn_with_all_attachments(
+    fake_telegram: FakeTelegram, tmp_path, monkeypatch
+) -> None:
+    """FR-038: three photos sharing one media_group_id (caption on the first)
+    debounce into EXACTLY ONE turn carrying all three attachments + the caption,
+    not one turn per photo."""
+    monkeypatch.setenv("HOME", str(tmp_path))  # media dir resolves under tmp
+    # Small debounce so the test is fast (read at adapter construction below).
+    monkeypatch.setattr("coffer.infrastructure.channel.telegram._ALBUM_DEBOUNCE_SECONDS", 0.2)
+    adapter = make_telegram_adapter(fake_telegram)
+    recorder = RecordingCallbacks()
+    await fake_telegram.update_batches.put(
+        [
+            _album_update(60, media_group_id="mg-1", caption="three shots"),
+            _album_update(61, media_group_id="mg-1"),
+            _album_update(62, media_group_id="mg-1"),
+        ]
+    )
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await wait_until(lambda: len(recorder.messages) == 1)
+        # No SECOND turn ever materializes after the flush.
+        await asyncio.sleep(0.4)
+        assert len(recorder.messages) == 1
+    finally:
+        await adapter.stop()
+
+    msg = recorder.messages[0]
+    assert msg.text == "three shots"  # caption from the first item drives the turn
+    assert len(msg.attachments) == 3  # all three album photos on one message
+    assert all(att.mime == "image/jpeg" for att in msg.attachments)
+    # getFile was called once per album item's largest photo.
+    assert sorted(c.get("file_id") for c in fake_telegram.calls_for("getFile")) == [
+        "a60",
+        "a61",
+        "a62",
+    ]
+
+
+async def test_single_photo_without_media_group_id_dispatches_immediately(
+    fake_telegram: FakeTelegram, tmp_path, monkeypatch
+) -> None:
+    """FR-038: a lone photo (no media_group_id) is NOT debounced — it drives a
+    turn immediately, exactly as before."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    adapter = make_telegram_adapter(fake_telegram)
+    recorder = RecordingCallbacks()
+    await fake_telegram.update_batches.put([_photo_update(63, caption="just one")])
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await wait_until(lambda: len(recorder.messages) == 1)
+    finally:
+        await adapter.stop()
+    msg = recorder.messages[0]
+    assert msg.text == "just one"
+    assert len(msg.attachments) == 1
+
+
+async def test_two_interleaved_media_groups_flush_as_two_turns(
+    fake_telegram: FakeTelegram, tmp_path, monkeypatch
+) -> None:
+    """FR-038: two different albums interleaved keep separate buffers — each
+    flushes its own turn with only its own attachments."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr("coffer.infrastructure.channel.telegram._ALBUM_DEBOUNCE_SECONDS", 0.2)
+    adapter = make_telegram_adapter(fake_telegram)
+    recorder = RecordingCallbacks()
+    await fake_telegram.update_batches.put(
+        [
+            _album_update(70, media_group_id="mg-a", caption="album A"),
+            _album_update(71, media_group_id="mg-b", caption="album B"),
+            _album_update(72, media_group_id="mg-a"),
+            _album_update(73, media_group_id="mg-b"),
+        ]
+    )
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await wait_until(lambda: len(recorder.messages) == 2)
+        await asyncio.sleep(0.4)
+        assert len(recorder.messages) == 2  # no extra turns
+    finally:
+        await adapter.stop()
+    by_caption = {m.text: m for m in recorder.messages}
+    assert set(by_caption) == {"album A", "album B"}
+    assert len(by_caption["album A"].attachments) == 2
+    assert len(by_caption["album B"].attachments) == 2
 
 
 async def test_poll_loop_dispatches_and_commits_offset_after_dispatch(
@@ -65,6 +216,26 @@ async def test_poll_loop_dispatches_and_commits_offset_after_dispatch(
     assert msg.sender_id == "4242"  # from.id, for the owner gate
     assert msg.platform_message_id == "1010"
     assert msg.timestamp.year == 2024  # epoch 1718000000 normalized to aware UTC
+
+
+async def test_redelivered_update_id_is_processed_once(fake_telegram: FakeTelegram) -> None:
+    """FR-039: the poll offset normally prevents replays, but a reconnect race
+    can re-deliver an update. The same update_id delivered twice must drive the
+    turn once — a redelivered message never doubles the reply."""
+    adapter = make_telegram_adapter(fake_telegram)
+    recorder = RecordingCallbacks()
+    # Two batches carrying the SAME update_id (a redelivery), then a distinct
+    # one so the test can wait for a stable end state.
+    await fake_telegram.update_batches.put([_message_update(50, text="once")])
+    await fake_telegram.update_batches.put([_message_update(50, text="once")])
+    await fake_telegram.update_batches.put([_message_update(51, text="next")])
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await wait_until(lambda: [m.text for m in recorder.messages] == ["once", "next"])
+    finally:
+        await adapter.stop()
+    # The duplicate 50 was dropped: exactly one "once", never two.
+    assert [m.text for m in recorder.messages] == ["once", "next"]
 
 
 async def test_poll_error_backs_off_then_recovers(fake_telegram: FakeTelegram) -> None:
@@ -172,6 +343,87 @@ async def test_outbound_methods_map_to_bot_api_calls(fake_telegram: FakeTelegram
     assert fake_telegram.calls_for("sendChatAction") == [{"chat_id": "555", "action": "typing"}]
 
 
+# -- group / thread send (Task 4) --------------------------------------------
+
+
+async def test_send_text_with_thread_id_includes_message_thread_id(
+    fake_telegram: FakeTelegram,
+) -> None:
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        await adapter.send_text("555", "hi", thread_id="9")
+    finally:
+        await adapter.stop()
+    [send] = fake_telegram.calls_for("sendMessage")
+    assert send["message_thread_id"] == 9
+
+
+async def test_send_text_without_thread_id_omits_message_thread_id(
+    fake_telegram: FakeTelegram,
+) -> None:
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        await adapter.send_text("555", "hi")
+    finally:
+        await adapter.stop()
+    [send] = fake_telegram.calls_for("sendMessage")
+    assert "message_thread_id" not in send
+
+
+async def test_send_media_with_thread_id_includes_message_thread_id(
+    fake_telegram: FakeTelegram, tmp_path: pathlib.Path
+) -> None:
+    """FR-031: a file returned during a forum-topic turn is uploaded into that
+    topic — sendPhoto carries ``message_thread_id`` (mirroring send_text)."""
+    img = tmp_path / "chart.png"
+    img.write_bytes(b"PNG")
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        await adapter.send_media("555", str(img), as_photo=True, thread_id="9")
+    finally:
+        await adapter.stop()
+    [send] = fake_telegram.calls_for("sendPhoto")
+    assert send["chat_id"] == "555"
+    assert send["message_thread_id"] == "9"
+
+
+async def test_send_media_without_thread_id_omits_message_thread_id(
+    fake_telegram: FakeTelegram, tmp_path: pathlib.Path
+) -> None:
+    doc = tmp_path / "report.pdf"
+    doc.write_bytes(b"%PDF")
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        await adapter.send_media("555", str(doc), as_photo=False)
+    finally:
+        await adapter.stop()
+    [send] = fake_telegram.calls_for("sendDocument")
+    assert "message_thread_id" not in send
+
+
+async def test_send_text_chat_kind_group_is_ignored(fake_telegram: FakeTelegram) -> None:
+    # Telegram routes DMs and groups through the same chat_id; chat_kind is a
+    # no-op here (unlike SeaTalk, which needs it to pick the endpoint).
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        await adapter.send_text("555", "hi", chat_kind="group")
+    finally:
+        await adapter.stop()
+    [send] = fake_telegram.calls_for("sendMessage")
+    assert send["chat_id"] == "555"
+
+
+async def test_capabilities_declare_groups_but_not_history_fetch(
+    fake_telegram: FakeTelegram,
+) -> None:
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        assert adapter.capabilities.supports_groups is True
+        assert adapter.capabilities.supports_history_fetch is False
+    finally:
+        await adapter.stop()
+
+
 def _callback_update(update_id: int, *, data: str) -> dict:
     return {
         "update_id": update_id,
@@ -229,6 +481,46 @@ async def test_callback_query_routes_to_on_callback_and_acks(
     assert fake_telegram.calls_for("answerCallbackQuery")[0] == {"callback_query_id": "cbq-1"}
     # The poll must subscribe to callback_query, else Telegram never delivers taps.
     assert "callback_query" in fake_telegram.calls_for("getUpdates")[0]["allowed_updates"]
+    # A tap whose card sits in a private chat routes as a direct reply.
+    assert cb.chat_kind == "direct"
+    assert cb.thread_id == ""
+
+
+async def test_callback_query_from_supergroup_routes_as_group_callback(
+    fake_telegram: FakeTelegram,
+) -> None:
+    """FR-034: a card tapped in a supergroup forum topic yields a group callback
+    (chat_kind="group" + the topic's message_thread_id) so the switch reply
+    lands back in the group thread, not a DM."""
+    adapter = make_telegram_adapter(fake_telegram)
+    recorder = RecordingCallbacks()
+    await fake_telegram.update_batches.put(
+        [
+            {
+                "update_id": 21,
+                "callback_query": {
+                    "id": "cbq-2",
+                    "from": {"id": 4242, "first_name": "Yu"},
+                    "data": "agent:codex",
+                    "message": {
+                        "message_id": 88,
+                        "chat": {"id": 777, "type": "supergroup"},
+                        "message_thread_id": 9,
+                    },
+                },
+            }
+        ]
+    )
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await wait_until(lambda: len(recorder.callbacks) == 1)
+    finally:
+        await adapter.stop()
+
+    cb = recorder.callbacks[0]
+    assert (cb.chat_id, cb.data) == ("777", "agent:codex")
+    assert cb.chat_kind == "group"
+    assert cb.thread_id == "9"
 
 
 async def test_buttons_ride_only_the_final_chunk(fake_telegram: FakeTelegram) -> None:
@@ -247,3 +539,195 @@ async def test_buttons_ride_only_the_final_chunk(fake_telegram: FakeTelegram) ->
     assert len(sends) >= 2
     assert "reply_markup" not in sends[0]  # the keyboard must not ride the first chunk
     assert "reply_markup" in sends[-1]  # only the last chunk carries it
+
+
+# -- context fetch (Task 5): Bot API has no history-fetch capability ----------
+
+
+async def test_fetch_thread_returns_empty(fake_telegram: FakeTelegram) -> None:
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        assert await adapter.fetch_thread("555", "t1", limit=50) == ([], ())
+    finally:
+        await adapter.stop()
+    assert fake_telegram.calls == []  # no platform call is even attempted
+
+
+# -- group / @mention / reply / forward / forum-topic (Task 8) ---------------
+
+_BOT_ID = 999
+_BOT_USERNAME = "mybot"
+
+
+async def _start_bot_adapter(fake: FakeTelegram, recorder: RecordingCallbacks) -> TelegramAdapter:
+    """Start a telegram adapter and pin its bot identity, as if getMe() had
+    resolved it — set right after start() so the fake's empty getMe response
+    doesn't clobber it, and before any await lets the poll task run."""
+    adapter = make_telegram_adapter(fake)
+    await adapter.start(recorder.as_callbacks())
+    adapter._bot_id = _BOT_ID
+    adapter._bot_username = _BOT_USERNAME
+    return adapter
+
+
+def _group_update(update_id: int, **overrides) -> dict:
+    message = {
+        "message_id": 3000 + update_id,
+        "date": 1718000000,
+        "chat": {"id": 777, "type": "group"},
+        "from": {"id": 4242, "first_name": "Yu", "username": "yu"},
+        "text": "hello",
+    }
+    message.update(overrides)
+    return {"update_id": update_id, "message": message}
+
+
+async def test_group_message_without_mention_is_not_addressed(fake_telegram: FakeTelegram) -> None:
+    recorder = RecordingCallbacks()
+    adapter = await _start_bot_adapter(fake_telegram, recorder)
+    await fake_telegram.update_batches.put([_group_update(30, text="just chatting")])
+    try:
+        await wait_until(lambda: len(recorder.messages) == 1)
+    finally:
+        await adapter.stop()
+    msg = recorder.messages[0]
+    assert msg.chat_kind == "group"
+    assert msg.addressed is False
+    assert msg.text == "just chatting"
+
+
+async def test_group_message_with_mention_entity_is_addressed_and_stripped(
+    fake_telegram: FakeTelegram,
+) -> None:
+    recorder = RecordingCallbacks()
+    adapter = await _start_bot_adapter(fake_telegram, recorder)
+    text = "@mybot run"
+    await fake_telegram.update_batches.put(
+        [
+            _group_update(
+                31,
+                text=text,
+                entities=[{"type": "mention", "offset": 0, "length": len("@mybot")}],
+            )
+        ]
+    )
+    try:
+        await wait_until(lambda: len(recorder.messages) == 1)
+    finally:
+        await adapter.stop()
+    msg = recorder.messages[0]
+    assert msg.chat_kind == "group"
+    assert msg.addressed is True
+    assert msg.text == "run"
+
+
+async def test_group_reply_to_bot_is_addressed(fake_telegram: FakeTelegram) -> None:
+    recorder = RecordingCallbacks()
+    adapter = await _start_bot_adapter(fake_telegram, recorder)
+    await fake_telegram.update_batches.put(
+        [
+            _group_update(
+                32,
+                text="yes please",
+                reply_to_message={
+                    "from": {"id": _BOT_ID, "is_bot": True, "username": _BOT_USERNAME},
+                    "text": "which agent?",
+                },
+            )
+        ]
+    )
+    try:
+        await wait_until(lambda: len(recorder.messages) == 1)
+    finally:
+        await adapter.stop()
+    msg = recorder.messages[0]
+    assert msg.addressed is True
+    # The quoted reply-to-bot context is folded into the text.
+    assert msg.text.splitlines()[0] == "> mybot: which agent?"
+    assert msg.text.splitlines()[-1] == "yes please"
+
+
+async def test_forum_topic_message_carries_thread_id(fake_telegram: FakeTelegram) -> None:
+    recorder = RecordingCallbacks()
+    adapter = await _start_bot_adapter(fake_telegram, recorder)
+    await fake_telegram.update_batches.put(
+        [_group_update(33, text="topic reply", message_thread_id=9)]
+    )
+    try:
+        await wait_until(lambda: len(recorder.messages) == 1)
+    finally:
+        await adapter.stop()
+    msg = recorder.messages[0]
+    assert msg.thread_id == "9"
+
+
+@pytest.mark.acceptance(spec="009-channels", scenario="a forwarded chat record reaches the agent")
+async def test_forwarded_message_text_starts_with_forwarded_marker(
+    fake_telegram: FakeTelegram,
+) -> None:
+    recorder = RecordingCallbacks()
+    adapter = await _start_bot_adapter(fake_telegram, recorder)
+    await fake_telegram.update_batches.put(
+        [
+            _group_update(
+                35,
+                text="original text",
+                forward_from={"first_name": "Alice"},
+            )
+        ]
+    )
+    try:
+        await wait_until(lambda: len(recorder.messages) == 1)
+    finally:
+        await adapter.stop()
+    msg = recorder.messages[0]
+    assert msg.text.startswith("[Forwarded chat record]")
+    assert "Alice: original text" in msg.text
+
+
+async def test_private_message_is_direct_and_always_addressed(fake_telegram: FakeTelegram) -> None:
+    recorder = RecordingCallbacks()
+    adapter = await _start_bot_adapter(fake_telegram, recorder)
+    await fake_telegram.update_batches.put(
+        [
+            {
+                "update_id": 36,
+                "message": {
+                    "message_id": 3036,
+                    "date": 1718000000,
+                    "chat": {"id": 555, "type": "private"},
+                    "from": {"id": 4242, "first_name": "Yu", "username": "yu"},
+                    "text": "hi there",
+                },
+            }
+        ]
+    )
+    try:
+        await wait_until(lambda: len(recorder.messages) == 1)
+    finally:
+        await adapter.stop()
+    msg = recorder.messages[0]
+    assert msg.chat_kind == "direct"
+    assert msg.addressed is True
+    assert msg.text == "hi there"
+
+
+async def test_a_non_list_getupdates_result_backs_off_instead_of_spinning(
+    fake_telegram: FakeTelegram,
+) -> None:
+    """Regression: the ``ok: true`` / non-list-result branch used to ``continue``
+    with no delay, so a payload the Bot API kept returning span the poll task —
+    and with it the daemon's whole event loop — at 100% CPU. It now backs off on
+    the same ladder a raised failure uses."""
+    fake_telegram.bad_payload_get_updates = True
+    adapter = make_telegram_adapter(fake_telegram)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await asyncio.sleep(0.5)
+    finally:
+        await adapter.stop()
+
+    # The first ladder rung is 1s, so half a second of polling is one call —
+    # a couple more would still prove the point; hundreds would be the old spin.
+    assert len(fake_telegram.calls_for("getUpdates")) <= 3

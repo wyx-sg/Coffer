@@ -43,13 +43,18 @@ from coffer.domain.audit import AuditEntry
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
     ChoiceButton,
+    InboundAttachment,
     InboundCallback,
     InboundMessage,
     SentMessage,
 )
+from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.domain.chat.events import TextDelta, TurnDone, TurnStarted
 from coffer.domain.resource import Resource, ResourceRef
-from coffer.infrastructure.channel.persistence import ChannelPeerRepo
+from coffer.infrastructure.channel.persistence import (
+    ChannelPeerRepo,
+    ChannelThreadConversationRepo,
+)
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
@@ -94,21 +99,63 @@ def inbound(
     *,
     sender_display: str = "Owner",
     sender_id: str = "",
+    thread_id: str = "",
+    chat_kind: str = "direct",
+    chat_title: str = "",
+    addressed: bool = True,
+    mentions_others: bool = False,
+    platform_message_id: str = "pm-1",
 ) -> InboundMessage:
     return InboundMessage(
         channel=channel,
         chat_id=chat_id,
         sender_display=sender_display,
         text=text,
-        platform_message_id="pm-1",
+        platform_message_id=platform_message_id,
         timestamp=datetime.now(tz=UTC),
         sender_id=sender_id,
+        thread_id=thread_id,
+        chat_kind=chat_kind,
+        chat_title=chat_title,
+        addressed=addressed,
+        mentions_others=mentions_others,
     )
 
 
-def tap_event(channel: str, chat_id: str, data: str, *, sender_id: str = "") -> InboundCallback:
+ORIGIN_HEADER = "[Message origin]"
+
+
+def turn_body(text: str) -> str:
+    """The user's own text from a turn prompt, with the FR-042 origin block
+    stripped.
+
+    Every turn now opens with a provenance block; tests about queueing,
+    ordering, threading and history assert on what the user actually typed, not
+    on that header (``test_message_origin.py`` owns the header itself).
+    """
+    if not text.startswith(ORIGIN_HEADER):
+        return text
+    return text.split("\n\n", 1)[1]
+
+
+def tap_event(
+    channel: str,
+    chat_id: str,
+    data: str,
+    *,
+    sender_id: str = "",
+    chat_kind: str = "direct",
+    thread_id: str = "",
+) -> InboundCallback:
     """A selection-card button tap, for driving ``processor.on_callback``."""
-    return InboundCallback(channel=channel, chat_id=chat_id, sender_id=sender_id, data=data)
+    return InboundCallback(
+        channel=channel,
+        chat_id=chat_id,
+        sender_id=sender_id,
+        data=data,
+        chat_kind=chat_kind,
+        thread_id=thread_id,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -139,22 +186,56 @@ class FakeChannelAdapter:
         supports_typing: bool = True,
         max_message_chars: int = 4096,
         supports_buttons: bool = False,
+        supports_media: bool = True,
+        supports_groups: bool = False,
+        supports_history_fetch: bool = False,
+        supports_reactions: bool = False,
+        set_reaction_fails: bool = False,
     ) -> None:
         self._caps = ChannelCapabilities(
             supports_edit=supports_edit,
             supports_typing=supports_typing,
             max_message_chars=max_message_chars,
             supports_buttons=supports_buttons,
+            supports_media=supports_media,
+            supports_groups=supports_groups,
+            supports_history_fetch=supports_history_fetch,
+            supports_reactions=supports_reactions,
         )
+        # When True, ``set_reaction`` raises — proves the best-effort suppression
+        # at the call sites (a failed ack must never break the turn) (FR-036).
+        self._set_reaction_fails = set_reaction_fails
         self.started = False
         self.stopped = False
         self.callbacks: AdapterCallbacks | None = None
         self.sent: list[tuple[str, str]] = []  # (chat_id, text)
+        # (chat_id, text, thread_id, chat_kind) for every send_text call — the
+        # full routing detail, kept separate so every existing ``.sent``/
+        # ``.texts()`` assertion above stays a plain 2-tuple.
+        self.sent_routed: list[tuple[str, str, str, str]] = []
         # (chat_id, text, buttons) for sends that carried a selection card.
         self.cards: list[tuple[str, str, list[ChoiceButton]]] = []
         self.edits: list[tuple[str, str, str]] = []  # (chat_id, message_id, text)
         self.deleted: list[tuple[str, str]] = []  # (chat_id, message_id)
         self.typing: list[str] = []  # chat_ids
+        # (chat_id, message_id, emoji) for every set_reaction call (FR-036).
+        self.reactions: list[tuple[str, str, str]] = []
+        # (chat_id, path, caption, as_photo) for each uploaded file.
+        self.media: list[tuple[str, str, str | None, bool]] = []
+        # (chat_id, path, caption, as_photo, thread_id, chat_kind) — the full
+        # routing detail for each upload, kept separate so every existing
+        # ``.media`` assertion stays a plain 4-tuple (mirrors ``sent_routed``).
+        self.media_routed: list[tuple[str, str, str | None, bool, str, str]] = []
+        # Scriptable ``fetch_thread`` result (Task 7b) — a test sets this to a
+        # list of ``ForwardedItem`` for its scenario; unset yields ``[]``.
+        self.thread_items: list[ForwardedItem] = []
+        # Scriptable thread-history attachments (FR-029) — the images/files the
+        # thread's own messages carry, already downloaded; unset yields ``()``.
+        self.thread_attachments: tuple[InboundAttachment, ...] = ()
+        # (chat_id, thread_id) for every ``fetch_thread`` call the core made,
+        # so a test can assert the fetch happened (or, on a non-fetching
+        # transport, that it never did).
+        self.fetch_thread_calls: list[tuple[str, str]] = []
         self._next_id = 0
 
     @property
@@ -183,8 +264,11 @@ class FakeChannelAdapter:
         markdown: str,
         *,
         buttons: Sequence[ChoiceButton] | None = None,
+        thread_id: str = "",
+        chat_kind: str = "direct",
     ) -> SentMessage:
         self.sent.append((chat_id, markdown))
+        self.sent_routed.append((chat_id, markdown, thread_id, chat_kind))
         if buttons:
             self.cards.append((chat_id, markdown, list(buttons)))
         return SentMessage(message_id=self._new_id())
@@ -197,6 +281,31 @@ class FakeChannelAdapter:
 
     async def send_typing(self, chat_id: str) -> None:
         self.typing.append(chat_id)
+
+    async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
+        self.reactions.append((chat_id, message_id, emoji))
+        if self._set_reaction_fails:
+            raise RuntimeError("set_reaction failed (scripted)")
+
+    async def send_media(
+        self,
+        chat_id: str,
+        path: str,
+        *,
+        caption: str | None = None,
+        as_photo: bool = True,
+        thread_id: str = "",
+        chat_kind: str = "direct",
+    ) -> SentMessage:
+        self.media.append((chat_id, path, caption, as_photo))
+        self.media_routed.append((chat_id, path, caption, as_photo, thread_id, chat_kind))
+        return SentMessage(message_id=self._new_id())
+
+    async def fetch_thread(
+        self, chat_id: str, thread_id: str, *, limit: int = 50
+    ) -> tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]:
+        self.fetch_thread_calls.append((chat_id, thread_id))
+        return list(self.thread_items), self.thread_attachments
 
     async def tap(
         self, value: str, *, channel: str, chat_id: str = "owner", sender_id: str = ""
@@ -292,6 +401,7 @@ class ChannelEnv:
     keyring: FakeKeyring
     resources: ResourceService
     peers: ChannelPeerRepo
+    threads: ChannelThreadConversationRepo
     pairing: PairingManager
     provider: ScriptedAgentProvider
     registry: AgentProviderRegistry
@@ -342,6 +452,8 @@ class ChannelEnv:
         *,
         default_agent: str = "builtin",
         default_agent_config: dict[str, Any] | None = None,
+        require_mention: bool = True,
+        ignore_other_mentions: bool = False,
     ) -> FakeChannelAdapter:
         adapter = adapter or FakeChannelAdapter()
         self.processor.bind(
@@ -352,6 +464,8 @@ class ChannelEnv:
                 default_agent=default_agent,
                 default_agent_config=default_agent_config,
                 adapter=adapter,
+                require_mention=require_mention,
+                ignore_other_mentions=ignore_other_mentions,
             )
         )
         return adapter
@@ -363,6 +477,21 @@ class ChannelEnv:
         adapter = self.bind(resource)
         await self.pair(resource, chat_id, sender_id=sender_id)
         return resource, adapter
+
+    async def active_conversation(
+        self, resource: Resource, chat_id: str = "owner", thread_id: str = ""
+    ) -> str | None:
+        """The conversation a turn drives for this ``(chat, thread)`` — the
+        per-thread binding (FR-032), which replaced ``peer.active_conversation_id``
+        as the source of truth."""
+        row = await self.threads.get(resource.id, chat_id, thread_id)
+        return row.active_conversation_id if row is not None else None
+
+    async def thread_preferred_agent(
+        self, resource: Resource, chat_id: str = "owner", thread_id: str = ""
+    ) -> str | None:
+        row = await self.threads.get(resource.id, chat_id, thread_id)
+        return row.preferred_agent if row is not None else None
 
     async def audit_entries(self, event_type: str, name: str | None = None) -> list[AuditEntry]:
         return await self.audit.query(kind="channel", name=name, event_type=event_type)
@@ -381,6 +510,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         kinds=kinds, repo=SqlAlchemyResourceRepo(sm), audit=audit, credentials=keyring
     )
     peers = ChannelPeerRepo(sm)
+    threads = ChannelThreadConversationRepo(sm)
     pairing = PairingManager()
 
     provider = ScriptedAgentProvider(default_reply_adapter())
@@ -396,6 +526,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
     model_suggestions = FakeModelSuggestions()
     processor = InboundProcessor(
         peers=peers,
+        threads=threads,
         pairing=pairing,
         conversations=chat,
         turns=orchestrator,
@@ -443,6 +574,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         keyring=keyring,
         resources=resources,
         peers=peers,
+        threads=threads,
         pairing=pairing,
         provider=provider,
         registry=registry,

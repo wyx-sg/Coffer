@@ -213,20 +213,21 @@ opus` 改 model。切换 agent 会开一个 pin 到新选择的新会话（agent
 
 因为入口可远程触达，channel 消息驱动的每个 turn
 都连同 channel、peer、agent 记入审计日志——回答「谁经哪个 channel 驱动了哪个
-agent」。又因为某些平台不能编辑消息、长桥接 turn 运行期间什么都不
-显示，每个 turn 都以一条推到 chat 的紧凑摘要收尾：done + 工具数、耗时、token，
-或错误，或停止。
+agent」。当一个 turn 异常结束时，会推一条紧凑摘要到 chat：失败、停止、或达到
+工具迭代上限，带工具数、耗时、token。干净成功在任何 channel 上都不发摘要——回复
+本身就是信号，那条 fact 行只会是噪音。
 
 **为何此优先级**：入口管理者的两个无人认领的差异化点是一等 auth/审计与可靠的
 完成信号；二者必须在每个 channel 上为真，包括沉默的那些。
 
 **Independent Test**：从已配对 channel 驱动一个 turn，观察一条带 channel、peer、
-agent 的 turn-started 审计记录；在不能编辑消息的 channel 上观察 turn 后的完成摘要消息。
+agent 的 turn-started 审计记录；观察干净成功不发完成摘要、而失败的 turn 会发。
 
 **Covering scenarios**:
 
 - a channel-driven turn is audited with channel, peer, and agent
-- a completion summary is sent after every turn
+- a clean success sends no completion summary
+- a turn that does not end normally sends a completion summary
 - a group member who is not the paired sender is ignored
 
 ---
@@ -245,8 +246,9 @@ agent 的 turn-started 审计记录；在不能编辑消息的 channel 上观察
 - Telegram long polling 失去连接 → adapter 指数退避后恢复；重连后没有任何
   入站消息被重复处理（update offset 只在分发完成后提交）。
 - SeaTalk 发送端被限流（HTTP 429）→ 出站发送退避并重试。
-- 非文本的入站内容（图片、文件、语音）→ channel 回复说明本版本只支持
-  文本。
+- 入站图片和文件 → 下载并交给 agent 处理本回合（图片为视觉 agent 内联、任何
+  agent 都能拿到文件路径）。一条没有可下载内容的空消息（贴纸、位置）→ channel
+  回复说明需要文本、图片或文件。
 
 ## Requirements
 
@@ -268,7 +270,9 @@ agent 的 turn-started 审计记录；在不能编辑消息的 channel 上观察
   service、turn orchestrator。
 - **FR-005**: 回复按 channel 能力渲染：Telegram 把 markdown 转成 Telegram
   HTML（带纯文本回退），按段落边界以 4000 字符分块，并把工具进度以节流
-  方式流式写入一条可编辑的状态消息；SeaTalk 发送 markdown，按 4096 字节
+  方式流式写入一条可编辑的状态消息，每行从调用的输入描述它在做什么
+  （如 `⏳ Bash · list the desktop`、`✅ Read · wedding.json`）；SeaTalk 发送
+  markdown，按 4096 字节
   分块，用 typing indicator 表示进行中。能力由 adapter 声明，内核不做
   特判。
 - **FR-006**: `/new`、`/stop`、`/status`、`/help` 命令在任何已配对的聊天里
@@ -302,10 +306,10 @@ status / notify`。
   `sender_id` 时）发送者匹配时才被接受。本要求之前配对的 peer（无已存
   `sender_id`）退化为 chat-id-only 闸。在 FR-012 之外审计一个 channel 驱动事件：
   一条 inbound 消息驱动的 turn（channel、peer、agent、conversation）。
-- **FR-015**: 每个 turn 后，channel 发一条紧凑的完成摘要作为新消息，与消息
-  编辑能力无关：成功时报告 done 标记 + 工具数、耗时、token 用量；失败的 turn
-  报告错误；被中断的 turn 报告停止。在不能编辑消息、且长桥接 turn 运行期间什么
-  都不显示的平台上，这就是 turn 结束信号。
+- **FR-015**: 一个**异常结束**的 turn 之后，channel 发一条紧凑的完成摘要作为新
+  消息：失败报告错误、中断报告停止、达到工具迭代上限报告上限，每条都带工具数、
+  耗时、token 用量。干净成功在**任何** channel 上都**不**发摘要——回复本身就是完成
+  信号，那条 fact 行只会是噪音（无论传输能否编辑消息，都如此）。
 - **FR-017**: owner 从 chat 切换 model。`/model` 无参时报告当前 model；
   `/model <name>` 对 builtin agent 把名字对 model registry 解析并设会话的 model
   覆盖，对桥接 agent 则存原始上游 model 串透传给 CLI。model 切换在同会话下条 turn
@@ -321,6 +325,56 @@ status / notify`。
   文本命令相同的切换。点选从不配对；不支持的传输静默保持文本路径。这兑现了
   [ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.zh.md) 的
   `ChannelCapabilities` 已预想的交互按钮能力（「show buttons?」）。
+- **FR-019**: 一个 channel 发起的 turn 会告诉 agent 它是被桥接到聊天 channel、
+  而非终端：agent 收到一条简短的 system-prompt 注记，携带 channel 名与移动聊天
+  指引——回复要简短，且它无法点击用户电脑上的权限/确认弹窗（用户可能不在电脑旁）。
+  这避免了终端尺寸的长回复和在无法点击的弹窗上无声干等。网页 UI 的 turn 不受
+  影响——注记只搭乘 `channel_name` 已设置的会话。
+- **FR-020**: 入站图片和文件驱动一个 turn。传输层把每个附件下载到 Coffer 管理的
+  媒体目录；bytes 绝不进 chat DB（持久化的用户消息保留 caption，没有则一条简短
+  注记）。本回合每个附件交给 agent adapter，由它按自己的原生形态物化——视觉 agent
+  （Claude Code）把图片内联为它直接看到的 base64 内容块、PDF 为 document 块；路径
+  原生 agent（Codex）与任何非视觉文件收到磁盘路径去打开。这保持历史精简、适配任意
+  文件类型、并可推广到未来模态（新类型是新 mime，不是新 schema）。见
+  [ADR-038](../../docs/decisions/ADR-038-channel-media.zh.md)。
+- **FR-021**: agent 通过显式选择把文件发回给用户：回复里单独一行的行锚定 sentinel
+  `MEDIA:/absolute/path`（可选 `MEDIA:/absolute/path | caption`），由 FR-019 的 system
+  注记告知。在声明了 `supports_media` 的传输上，channel 上传该文件（图片扩展名作为内联
+  照片、否则作为文档）并从投递文本里移除该行；普通正文——包括仅用于引用文件的合法
+  markdown 图片 `![alt](path)`——不是此语法、绝不上传，而文件缺失、相对路径或过大的
+  sentinel 则作为文本保留。这个无歧义的 sentinel 让出站发文件是刻意的、而非猜测，且绝不
+  与普通 markdown 冲突。
+- **FR-022**: 入站语音消息以转写文本驱动一个 turn。内置 agent（Claude Code、Codex）
+  无法听音频，所以 adapter 把音频**本地**转写成文字并折进 turn 的 prompt。转写是一个
+  按 agent 的接缝（ADR-038）：冻结的桌面 App 用随包、torch-free 的 `whisper.cpp` 引擎
+  （Apple Silicon Metal），其小模型首次使用时下载；源码运行则回退到 `mlx-whisper`
+  （可选 `[voice-mlx]` extra）。见 ADR-039。未来音频原生 agent 的 adapter 直接转发音频而非
+  转写。没有可用引擎时——或模型尚未下载时——语音作为音频文件交出而非丢失。
+- **FR-023**: 群聊是一等 peer。当已配对的 owner @mention bot（或消息以带地址的群
+  事件形式投递）时，bot 会在那里作答；该群成为一条额外的 `channel_peers` 行，键为
+  `(channel, 群聊 chat id)`，继承 owner 的 `sender_id`。无需 schema 迁移——该表的
+  `(resource_id, chat_id)` 唯一键本就允许一个 channel 有多个 peer。
+- **FR-024**: bot 只在一条带地址的消息（@mention 了 bot）上才在群里行动。未带地址
+  的群消息被忽略。一条来自非 owner 的带地址消息会收到一条简短的「未授权」拒绝回复，
+  且不启动任何 turn。
+- **FR-025**: 转发的聊天记录被展平成可读文本、折进 turn 让 agent 看到——SeaTalk 的
+  `combined_forwarded_chat_history` 与 Telegram 的 `forward_origin`。每条记录在
+  `[Forwarded chat record]` 标题下渲染为 `<sender>: <text | [image] url | [file] name>`。
+  SeaTalk 消息里的图片——直接发的图，或转发记录里（递归）嵌套的任意图片——还会用
+  app token 下载下来（SeaTalk 文件链接需鉴权，光有 URL 对 agent 没用）并作为附件挂到
+  turn，让多模态 agent 看到真实图片而不只是链接。
+- **FR-026**: 线程 (thread) 被原地读取与回复，且群里的回复**永远进线程**——绝不落到
+  群主聊天区。在 SeaTalk 上，线程的 id 等于其根消息的 id：在线程内的 @mention 本就带着
+  该 id，于是 bot 读取该线程自身的消息作为上下文（SeaTalk 的 `get_thread_by_thread_id`）
+  并回复进该线程；在群主聊天区的 @mention 不带线程 id，于是 bot 以这条 @mention 为根
+  新建一个线程（回复挂在该 @mention 自身的 message id 下），而由于此时线程内只有这条
+  @mention，不读取任何历史。一条在线程内发出的 DM 或群消息，回复也会进入该线程。刻意
+  **不**读取*最近的群主聊天*历史（SeaTalk 的群聊历史权限未获批；@mention 消息本身自成
+  上下文）。Telegram 完全无法拉取历史（Bot API 的限制），因此 Telegram 上不读取线程
+  上下文——bot 仅基于 @mention 消息本身作答，但仍会回复进该 forum topic。一条被引用/
+  回复的消息在平台内联该信息处贡献一段 `> sender: …` 上下文前缀。
+- **FR-027**: 每个 `(channel, chat, thread)` 都有自己的 turn 队列/会话，因此 DM turn、
+  群主聊天 turn 与线程 turn 彼此永不共享状态。
 
 ### Key Entities
 
@@ -328,8 +382,9 @@ status / notify`。
   agent + 配置。
 - **ChannelPeer** — channel 的已配对 owner：`(resource, chat_id)`、显示
   名、配对时间、指向活跃对话的指针、已配对发送者身份（`sender_id`），以及
-  粘性首选（所选 agent）。目前每个 channel 一个；以 chat 为键，
-  使群聊将来可以直接成为新的 peer 行而无需改 schema。
+  粘性首选（所选 agent）。每个 (channel, chat) 一行：已配对 owner 一行，
+  加上 owner 曾 @ 过 bot 的每个群聊/thread 各一行；`(resource_id, chat_id)`
+  唯一键已支持这一点，无需迁移。
 - **InboundMessage / InboundCallback / OutboundMessage** — 每个 adapter 生产与
   消费的规范化信封 (envelope)；内核永远看不到平台原始载荷。inbound 为 owner gate
   携带发送者身份（`sender_id`）。`InboundCallback` 是一次选择卡片按钮点选（携带一个
@@ -358,10 +413,42 @@ status / notify`。
 - **SC-006**: 从一个已配对 chat，owner 能触达每个已注册 agent、用一个所选
   model（通过在测试里驱动两个脚本化 provider 来演示）。
 - **SC-007**: 每个 channel 驱动的 turn 都能按 channel、
-  peer、agent 在审计日志里查到；且每个 turn——包括在不能编辑消息的 channel 上
-  ——都以一条 chat 里的完成摘要收尾（用不能编辑的假 adapter 来演示）。
+  peer、agent 在审计日志里查到；干净成功在任何 channel 上都不发完成摘要，而异常
+  结束（失败、中断、达工具上限）的 turn 会发一条报告结果的摘要。
+
+## 机器亲和（spec 010 修订）
+
+渠道的平台身份（被轮询的 bot、webhook 端点）只容许一个消费者，而渠道定义会同步到
+每台机器（spec 010）。渠道 runtime 通过框架级的 `scope` 字段（仅 machine 轴——
+渠道的 `scope` 条目只接受 `"*"` 作为其 value）决定是否在本机启动适配器：`scope`
+最多携带一条条目——恰好一个精确 ULID 的机器 key（或没有 = 休眠）；`"*"` 这个
+key 对渠道会被拒绝（`Kind.validate_scope_shape`，ADR-045 复审 Fix 1）——它会一次
+匹配所有机器，等于换一条路径重现 ADR-043 要防止的双适配器互斗。只有作为那唯一
+条目出现的机器才会启动适配器。`scope == {}`（在任何地方都休眠——等价于修订前
+的 `runs_on: null`）在任何机器上都不运行，直到用户在渠道详情页选定机器。创建渠
+道的 surface 默认把 scope 设为 `{"<creating-machine-id>": "*"}`。改绑是普通的配置
+编辑（一次普通的 `scope` 写入），经同步传播；配对状态随 vault 同步（spec 010 状
+态区 `channel-peers`），改绑后无需重新配对。传播窗口内（一个同步往返）两台机器
+可能短暂同时轮询平台——数秒级、可自愈的重叠，对单用户工具可接受。
+
+**`runs_on` → `scope` 迁移**（2026-07-10 修订 —— machine × agent scope，
+[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.zh.md)）。上文
+描述的单机 `runs_on: <machine_id>` 字段被框架的 machine 轴**取代**：一次数据迁
+移会在升级时把每个既有渠道的 `runs_on: <machine_id>` 转换为
+`scope: {"<machine_id>": "*"}`，把 `runs_on: null` 转换为 `scope: {}`。
+`runs_on` **不会**从 schema 或 API 中移除——尚未升级的机器传来的旧 payload 与
+同步文档仍须能通过校验——但它会变得**惰性**：渠道 runtime 只读取 `scope`，
+`runs_on` 被就地文档化为已弃用（一个冻结在迁移前的值；任何一次改绑之后就会过
+期；不会被读取参考）。
 
 ## Acceptance Scenarios
+
+### Scenario: a channel runs on exactly one machine
+
+- **Given** 分别绑定到本机、另一台机器、未绑定的三个渠道
+- **When** runtime 执行 reconcile
+- **Then** 只有绑定到本机的渠道启动适配器
+- **And** 把渠道改绑离开本机后，下一次 reconcile 将其停止
 
 ### Scenario: register a telegram channel
 
@@ -549,23 +636,449 @@ status / notify`。
 - **When** 该 chat 里的另一个成员点选一个选择卡片按钮
 - **Then** 该点选被忽略，owner 的 agent/model 不变
 
+### Scenario: a group selection-card tap replies in the group/thread
+
+- **Given** 一个在支持按钮的传输上、带有群 peer、且注册了第二个 agent 的已配对
+  channel
+- **When** owner 在群的某个 thread 里点选 `/agent` 选择卡片按钮
+- **Then** 切换被应用到该群 thread，且"已切换"的确认消息被路由回该群/thread
+  （绝不发到 DM）；非 owner 的点选会收到一条被路由的"未授权"拒绝回复且不发生切换
+
 ### Scenario: a channel-driven turn is audited with channel, peer, and agent
 
 - **Given** 一个已配对 channel
 - **When** peer 发一条驱动 turn 的消息
 - **Then** 一条审计记录写下 channel、peer、agent 与 conversation
 
-### Scenario: a completion summary is sent after every turn
+### Scenario: a turn that does not end normally sends a completion summary
 
-- **Given** 一个在不能编辑消息的 adapter 上的已配对 channel
-- **When** 一个 turn 完成
-- **Then** 一条紧凑完成摘要被发到 chat 报告结果，且失败的 turn 报告错误
+- **Given** 一个已配对 channel
+- **When** 一个 turn 失败、被中断、或达到工具迭代上限
+- **Then** 一条紧凑完成摘要被发到 chat 报告结果（错误/停止/上限），带工具数、
+  耗时、token
+
+### Scenario: a clean success sends no completion summary
+
+- **Given** 一个已配对 channel（无论传输能否编辑消息）
+- **When** 一个 turn 成功完成
+- **Then** 不发任何完成摘要——回复本身就是 turn 结束信号
+
+### Scenario: channel progress lines describe each tool call from its input
+
+- **Given** 一个在可编辑消息的 adapter 上的已配对 channel
+- **When** agent 在一个 turn 中调用一个工具
+- **Then** 进度状态行给出工具名和从其输入取的简短描述（如 Bash 的 description、
+  Read 的文件名）
+
+### Scenario: reply text streams into the editable status message as it arrives
+
+- **Given** 一个在可编辑消息的 adapter 上的已配对 channel
+- **When** agent 的回复文本在一个 turn 中以增量到达
+- **Then** 那条唯一的状态消息先显示工具进度行，随后就地被编辑为不断累积的回复文本
+  （纯文本，非 HTML），让用户看着答案逐渐成形；结束时删除该状态消息并只发一次最终
+  回复（HTML 渲染并按段落分块）
+
+### Scenario: the streamed reply preview is clipped to the platform limit
+
+- **Given** 一个在可编辑消息的 adapter 上的已配对 channel
+- **When** 累积的回复文本增长超过平台的单条消息上限
+- **Then** 每次中途编辑都被裁剪到该上限（保留最近文本，前面加省略号），使编辑不会
+  失败，而最终回复携带完整文本
+
+### Scenario: a slow text-only reply streams into a status message
+
+- **Given** 一个在可编辑消息的 adapter 上的已配对 channel
+- **When** 一个纯文本 turn（没有工具调用）持续产出回复文本、超过节流间隔
+- **Then** 打开一条状态消息装载流式回复文本，并随答案增长就地编辑，结束时删除该消息
+  且只发一次最终回复
+
+### Scenario: a fast text-only reply opens no status message
+
+- **Given** 一个在可编辑消息的 adapter 上的已配对 channel
+- **When** 一个纯文本 turn 在节流间隔内就完成
+- **Then** 不打开任何状态消息（没有 create→delete→resend 抖动）——只发那一条最终回复
+
+### Scenario: a supports_typing-only DM keeps the typing indicator alive during a long turn
+
+- **Given** 一个在能显示打字但不能编辑（SeaTalk）的 adapter 上、私聊中的已配对 channel
+- **When** 一个长 turn 运行
+- **Then** 打字提示在该 turn 期间被周期性重发（一个短暂动作，无聊天噪声），并在 turn
+  结束时停止
+
+### Scenario: a supports_typing-only group turn posts no interim status message
+
+- **Given** 一个在能显示打字但不能编辑或删除（SeaTalk）的 adapter 上、群组/线程中的
+  已配对 channel
+- **When** 一个 turn 运行
+- **Then** 不发任何中途信号（没有打字心跳，也没有可编辑状态消息）——只有最终分块回复
+  落在发起的群组/线程里
 
 ### Scenario: a group member who is not the paired sender is ignored
 
 - **Given** 一个带已存发送者身份的已配对 peer
 - **When** 一条消息以相同 chat id 但不同 sender id 到达
 - **Then** 不发回复，也不启动 turn
+
+### Scenario: the channel-driven agent is told it is on a chat channel
+
+- **Given** 一个 channel 发起的会话
+- **When** 从 channel 驱动一个 turn
+- **Then** agent 收到一条 system-prompt 注记，说明 channel 名、要求回复简短、
+  并告知它无法点击用户的系统弹窗；而网页 UI 会话不会收到这条注记
+
+### Scenario: an inbound photo is downloaded and drives a turn
+
+- **Given** 一个已配对的 Telegram channel
+- **When** owner 发送一张图片（可带 caption）
+- **Then** 最大尺寸的图片被下载到媒体目录、作为附件挂在入站消息上，caption
+  成为消息文本
+
+### Scenario: a Telegram album is handled as one turn
+
+- **Given** 一个已配对的 Telegram channel
+- **When** owner 发送一个多图相册（作为共享同一 `media_group_id` 的多条独立消息投递，
+  caption 只在第一条上）
+- **Then** 这些条目被去抖并合并成一条入站消息，携带它们全部的附件与相册的 caption
+  —— 一个 turn，而非每张图一个 turn；而一张没有 `media_group_id` 的单图仍立即驱动其
+  turn
+
+### Scenario: an inbound image reaches a vision agent as an inline block
+
+- **Given** 一个携带图片附件的 turn
+- **When** Claude adapter 构建该 turn 的内容
+- **Then** 图片是一个 base64 `image` 内容块（非视觉文件则变成路径指针），因此
+  bytes 仅在本回合内联发送、绝不存进 chat 数据库
+
+### Scenario: the agent sends a file to the user via a reply marker
+
+- **Given** 一个支持媒体的 channel，且 agent 回复中含一行 `MEDIA:/absolute/path`
+  sentinel（可选 `| caption`）指向一个存在的文件
+- **When** 投递该 turn 的回复
+- **Then** 文件被上传（图片作为照片、否则作为文档）、该 sentinel 行从文本中移除；
+  普通正文——包括 markdown 图片 `![alt](path)`——不是此语法、不会被上传
+
+### Scenario: an inbound voice message is transcribed for a text-only agent
+
+- **Given** 一个给无法听音频的 agent 的 turn 上带一个语音附件
+- **When** adapter 准备该 turn
+- **Then** 音频被转写成文字并折进 prompt，且音频不再作为文件发送（未来音频原生
+  agent 则会直接转发它）
+
+### Scenario: a PDF reaches a path-native agent as extracted text
+
+- **Given** 一个给路径原生 agent（Codex）的 turn 上带一个
+  PDF（或 office 文档）附件
+- **When** adapter 准备该 turn
+- **Then** 文档被抽取成文字并以带标签的 `[Document: <name>]` 块折进 prompt，且该
+  文档不再作为二进制路径提示发送；当没有可用的抽取引擎时，文档退化为文件路径而不
+  会卡住该 turn
+
+### Scenario: an un-addressed group message is ignored
+
+- **Given** 一个已配对的 channel 和一个 bot 所在的群聊
+- **When** 一条群消息到达、没有 @mention bot
+- **Then** 不发送任何回复，也不为该群创建任何 turn 或 peer 行
+
+### Scenario: the owner @mentions the bot in a group main chat
+
+- **Given** 一个已配对的 channel 和一个没有活跃线程的群聊
+- **When** owner 在群的主聊天里 @mention bot
+- **Then** 一个 turn 运行，回复被投递进以该 @mention 为根新建的线程（绝不落到群主
+  聊天区），不读取任何线程历史，且为该群聊创建一条 `channel_peers` 行、继承 owner 的
+  `sender_id`
+
+### Scenario: a non-owner @mention in a group is refused
+
+- **Given** 一个已知 owner 的已配对 channel
+- **When** owner 以外的人在群聊里 @mention bot
+- **Then** bot 回复该发送者未获授权，且不启动任何 turn
+
+### Scenario: require_mention on drops an un-addressed group message
+
+- **Given** 一个 `require_mention` 打开（默认）的已配对 channel
+- **When** 一条未指向 bot（无 @mention/回复 bot）的群消息到达，即便来自 owner
+- **Then** 它在 mention 闸处被丢弃——无回复、无 turn、也不建 peer 行
+
+### Scenario: require_mention off admits an un-addressed owner group message
+
+- **Given** 一个 `require_mention` 关闭的已配对 channel
+- **When** 一条未指向 bot 的群消息来自 owner
+- **Then** 它通过 mention 闸并驱动一个 turn（仍受 owner 门控：非 owner 会被闸下方的发送者校验拒绝）
+
+### Scenario: ignore_other_mentions drops a message that also @mentions a human
+
+- **Given** 一个 `ignore_other_mentions` 打开的已配对 channel
+- **When** 一条群消息 @ 了 bot，但同时也 @ 了另一个用户
+- **Then** 它被静默丢弃——无回复、无 turn——于是 bot 不会插进面向人的对话
+
+### Scenario: ignore_other_mentions off still answers when @mentioned alongside a human
+
+- **Given** 一个 `ignore_other_mentions` 关闭（默认）的已配对 channel
+- **When** 一条群消息在 @ bot 的同时也 @ 了另一个用户
+- **Then** turn 仍然运行——额外的人类 @mention 不会抑制它
+
+### Scenario: the owner @mentions the bot inside a thread
+
+- **Given** 一个已配对的 channel 和一个带线程的群聊，运行在能拉取线程历史的传输上
+- **When** owner 在该线程内 @mention bot
+- **Then** 该线程自身的消息被读取并折进该 turn，回复也被路由回同一线程
+
+### Scenario: a forwarded chat record reaches the agent
+
+- **Given** 一个已配对的 channel
+- **When** owner 向 bot 转发一条聊天记录
+- **Then** 该 turn 的消息文本携带一个 `[Forwarded chat record]` 块，列出每条被
+  转发的记录
+
+### Scenario: thread-history images reach a vision agent
+
+- **Given** 一个已配对的 channel 和一个群线程，其自身消息中包含图片（一张直接发送
+  的，以及一张嵌在转发记录里的）
+- **When** owner 在该线程内 @mention bot
+- **Then** 该线程的图片被下载并作为附件加入该 turn——以真实字节抵达视觉 agent，而
+  不是一个失效的、需鉴权的文件链接
+
+### Scenario: each group thread is an independent conversation
+
+- **Given** 一个已配对的 channel 和一个群，其线程共享同一个 `chat_id`
+- **When** owner 在线程 A 驱动一个 turn，并在其结束前又在线程 B 驱动一个 turn
+- **Then** 这两个线程解析到两个不同的会话，两个 turn 并发运行，且都不会被以
+  "a turn is already running" 拒绝
+
+### Scenario: one bot runs different agents in different threads
+
+- **Given** 一个已配对的 channel 和一个群
+- **When** owner 把线程 A 切换到另一个 agent，而线程 B 保持 channel 默认
+- **Then** 线程 A 的会话驱动被切换后的 agent，线程 B 的会话驱动默认 agent——一个
+  bot 在不同线程运行不同 agent
+
+### Scenario: SeaTalk outbound media is delivered into the originating thread
+
+- **Given** 一个已配对的 SeaTalk channel，以及一次群线程 turn，其回复中包含指向真实
+  文件的一行 `MEDIA:/absolute/path` sentinel
+- **When** 该 turn 的回复被投递
+- **Then** SeaTalk 把文件上传（图片作为 `image` 消息，否则作为 `file` 消息）到同一个
+  群和同一个线程——而不是群主聊天——因为 `supports_media` 现已为真，且 `send_media`
+  依据该 turn 的 chat_kind 与 thread_id 路由；任何 caption 作为一条线程内文本消息随后发送
+
+### Scenario: a redelivered event is processed once
+
+- **Given** 一个已配对的 channel，且它已处理过某条入站事件
+- **When** 平台在一次缓慢的 ack 或网络抖动后重投同一条事件（相同 id）
+- **Then** 该重投被丢弃，turn 恰好只运行一次——没有重复回复或重复工作——而一条真正
+  的新事件仍然驱动其自身的 turn
+
+### Scenario: an inbound SeaTalk file drives a turn
+
+- **Given** 一个已配对的 SeaTalk channel
+- **When** owner 直接发送一个文件（一条 `file` 消息，其 `file.content` 是一个鉴权
+  文件 URL，`file.filename` 是原始文件名）
+- **Then** 用 app token 下载字节，并作为附件挂在入站消息上，保留其真实文件名和一个
+  非图片 mime，因此该文件像照片一样驱动一次 turn，而不是命中"发送文本、图片或文件"
+  的回复
+
+### Scenario: an inbound attachment is persisted as a reference on the user message
+
+- **Given** 一个已配对的 channel，用一张图片附件驱动一次 turn
+- **When** 该 turn 开始
+- **Then** 持久化的用户消息在其文本之后携带一个 `AttachmentBlock` 引用（path、mime、
+  filename——绝不含 bytes），因此该附件留存在历史里
+
+### Scenario: a later turn re-materialises the attachment from history
+
+- **Given** 一条携带附件引用的持久化用户消息
+- **When** turn 任务运行（包括守护进程重启后、没有任何参数被向下线程传递时）
+- **Then** adapter 收到一个带该引用 path/mime 的 `Attachment`，从历史里最后一条用户
+  消息重新物化——单一事实来源
+
+### Scenario: the message API exposes an attachment block without leaking the path
+
+- **Given** 一条带附件引用的用户消息
+- **When** 客户端读取该会话的消息
+- **Then** 内容块为 `type=attachment`，带 `filename` 与 `mime`，线上不出现 `path` 字段
+
+### Scenario: the media dir prune deletes stale files and keeps fresh ones
+
+- **Given** 媒体目录里有一个超过 30 天的文件和一个较新的文件
+- **When** 保留清扫运行
+- **Then** 陈旧文件被删除，较新的文件被保留
+
+### Scenario: the management surface lists each Coffer-hosted channel with status, owner, agent, and health
+
+- **Given** 一个已注册且运行中的 Coffer-hosted channel，带有一个已配对的 owner
+  和一个路由到的 agent
+- **When** 管理面读取该 channel
+- **Then** 它报告该 channel 的启用状态、实时健康（适配器运行中）、已配对的
+  owner 以及路由到的 agent——与 MCP-server / memory / skill 的管理面保持一致
+
+### Scenario: receipt and completion are acked with reactions where supported
+
+- **Given** 一个已配对渠道，其 adapter 支持 reaction（Telegram）
+- **When** owner 发来一条消息并驱动了一个干净完成的 turn
+- **Then** 在收到时立即在 owner 自己的消息上设置 👀 reaction，完成时设置 ✅ reaction，二者
+  都指向该入站消息 id
+
+### Scenario: a transport without reaction support attempts no reaction
+
+- **Given** 一个已配对渠道，其 adapter 不支持 reaction（SeaTalk，其收到与进度提示是 typing
+  信号）
+- **When** owner 发来一条消息并驱动一个 turn
+- **Then** 不尝试任何 reaction，而 turn 仍正常运行并回复
+
+### Scenario: a failed reaction never breaks the turn
+
+- **Given** 一个支持 reaction 的 adapter，其 set_reaction 会失败
+- **When** owner 发来一条消息并驱动一个 turn
+- **Then** 回复仍被送达——尽力而为的 reaction 被吞掉
+
+### Scenario: a group turn names the group it came from
+
+- **Given** 一个已配对的 channel，其 owner 在某个群的线程里 @ 了 bot
+- **When** 该 turn 被驱动
+- **Then** turn 文本以一个 `[Message origin]` 块开头，写明平台、会话 kind 与标题、
+  chat id、thread id 和发送者
+
+### Scenario: a DM turn names its own chat
+
+- **Given** 一个已配对的 channel 与来自其 owner 的私聊消息
+- **When** 该 turn 被驱动
+- **Then** origin 块以 id 指明平台与该私聊会话，并省略私聊无意义的 thread 行
+
+### Scenario: every turn carries its origin
+
+- **Given** 一个已跑过一个 turn 的已配对 channel
+- **When** owner 发出第二条消息
+- **Then** 该 turn 的文本同样以自己的 origin 块开头——来源不是只出现在首个 turn 的头部
+
+### Scenario: a slash command keeps its leading slash
+
+- **Given** 一个已配对的 channel
+- **When** owner 发送 `/help`
+- **Then** 它仍按命令处理（不会被前置 origin 块，也不会创建会话）
+
+## Channels as a management plane（北极星）
+
+channel 被管理的方式，与 Coffer 管理 MCP server、memory、skill 的方式一致：在一处
+注册、配凭据、配置、并观测用户经聊天触达其 agent 的每一种方式。真正的差异化能力
+——任何 agent 原生或官方 channel 都无法提供——是**一个 bot 控制所有 agent**：单个
+已配对的 SeaTalk/Telegram bot 驱动*任意*受管 agent 并在它们之间切换，于是用户从一个
+chat 里运行整个 agent 舰队。
+
+这个平面下有两类 channel：
+
+- **Coffer-hosted channel（本 spec 的 adapter）。** Coffer 运行 SeaTalk / Telegram
+  adapter，规范化每条消息（媒体下载、转发展平、owner-gate、审计、vault），并为一个
+  turn 驱动**任意**受管 agent——可按会话切换，且（因为每个线程都是自己的会话，
+  FR-032）可按线程切换，于是一个 bot 能在一个线程里跑 Claude Code、在另一个线程里跑
+  Codex。这是 Coffer 的护城河：没有自己 channel 的 agent（Claude Code、Codex）**只能**
+  经此触达 IM；且 **SeaTalk 对每个 agent 都是 Coffer-hosted，因为
+  没有任何外部网关会说 SeaTalk。** 整个 spec 009——包括下方的增强（FR-028…FR-042）
+  ——描述的都是这条路径。保持其 agent 无关的那一处接缝：每条入站消息都变成文本加上
+  磁盘上的 `Attachment(path, mime, filename)`，每个 agent adapter 按自己的方式物化附件
+  （Claude 内联图片/PDF；Codex 收到文件路径；音频在上游被转写）。
+  channel 层从不按 agent 分支。
+- **Externally-hosted channel 是非目标（non-goal）。** 一个 agent 原生网关（独立运行的
+  OpenClaw、Hermes）或一个官方厂商集成（Claude-in-Slack、Codex-in-Slack、
+  Cursor-in-Slack、Claude Code 官方的 Telegram/Discord/iMessage 插件）拥有自己的传输、
+  只驱动它自己的 agent。Coffer 既不代理它们、也不代管它们：把 Coffer 的 channel 架在
+  前面会与它们自己的运行时冲突；把一个 token 存下来又写进外部进程自己的配置文件，等于
+  作废了 vault（密钥必须加密到用时才解密）；而官方云端集成根本没有本地凭据可托管。用户
+  想用其中之一时，就走那个工具自己的流程——Coffer 的文档给个指引，仅此而已。一个
+  原生/官方 channel 不支持某平台（如 SeaTalk）时就单纯不在那里运行；**Coffer 不会把它
+  桥接到 SeaTalk 上。** Coffer 的 channel 管理面只管理 Coffer 自己 host 的东西。
+
+因为对多数 agent 而言官方 Telegram/Slack 集成要么不存在（Codex/Gemini/OpenCode 没有
+官方 Telegram；SeaTalk 没有任何官方东西），要么是单 agent、且常常仅云端，所以
+Coffer-hosted channel 与它们并不冗余——它是通往统一、本地、多 agent 控制的唯一路径，
+而下方的增强正是官方个人桥所缺的 group/thread/voice/media 能力。
+
+### E. Unified channel management and one-bot-all-agents
+
+- **FR-040**: 一个 bot 控制所有 agent。单个已配对的 Coffer-hosted bot 驱动任意受管
+  agent，经 `/agent` 与选择卡片切换；agent 选择按会话生效，且因为每个线程都是自己的
+  会话（FR-032），一个 bot 能在不同线程里并发运行不同 agent。
+- **FR-041**: Coffer-hosted channel 有一个统一的管理面。一个管理视图列出每个
+  Coffer-hosted channel——连同其 status、已配对 owner、agent 与 health，与 MCP-server /
+  memory / skill 的管理面一致；每个 channel 的凭据（bot token、app secret）都存在 Coffer
+  vault 里。externally-hosted channel 不在范围内（non-goal）。
+
+### A. Media pipeline completeness
+
+- **FR-028**: SeaTalk 入站媒体覆盖所有类型，而不只是图片。`handle_event` 用 app token
+  下载文件/文档、视频、语音/音频——每个都成为一个 `Attachment`——就像它已对图片所做的
+  那样。一个直接发的 PDF 或语音备忘录像照片一样驱动一个 turn；只有一条既无文本也无
+  可下载内容的消息才仍然得到「发文本、图片或文件」的回复。
+- **FR-029**: 线程历史里的媒体被下载，而非展平成一个失效链接。当 owner 在一个线程内
+  @mention bot 时，`fetch_thread` 下载该线程自身消息携带的图片/文件（递归其中嵌套的
+  转发记录）并挂到 turn，与既有的展平文本并列。（此前线程媒体只作为 agent 无法打开的、
+  需鉴权的 `[image] <url>` 出现。）
+- **FR-030**: PDF 与 office 文档以抽取文本触达每个 agent，而非作为视觉输入。一个文档
+  附件被文本抽取进一个上下文块，于是路径原生 agent（Codex）与视觉
+  agent 都能看到其内容；图片对支持它的 agent 仍保持视觉内联。
+- **FR-031**: SeaTalk 出站媒体被投递且线程感知。`send_media` 接到 SeaTalk 的文件上传 API
+  （`supports_media` 为 true）；一个 agent 的 `MEDIA:/path` sentinel 把文件发回该 turn
+  来源的**同一** chat **与**线程——一张生成的图表回到群线程，而非主聊天区（补上了此前
+  SeaTalk agent 根本无法回文件、以及出站媒体忽略线程的缺口）。
+
+### B. Conversation model
+
+- **FR-032**: 每个群线程是自己的会话。会话身份以 `(channel, chat_id, thread_id)` 为键，
+  而非只按 peer。一个 DM（`thread_id=""`）是一个会话；群里的每个线程都是独立的——各有
+  历史、各有 turn 锁。一个群里不同线程的并发 turn 不再冲突在单一会话上（那个「a turn is
+  already running」错误）。配对/owner 身份仍留在 peer 行上。
+- **FR-033**: 入站附件在后续 turn 上仍可见。持久化的用户消息把附件*引用*记为一个
+  `AttachmentBlock`（path、mime、filename；bytes 留在媒体目录、绝不进 chat DB）——单一
+  事实来源。turn 任务通过从历史里最后一条用户消息读回引用来为当前 turn 重新物化附件（而
+  非向下线程传递一个参数），因此物化能在守护进程重启后存活、并与网页所见保持一致；作用域
+  限于会话内（无跨会话／切换 agent 的全历史重放）。网页 Chat 页把该引用渲染为一个紧凑的
+  `📎 filename · mime` 芯片；本地 path 绝不发到线上。媒体目录由保留节奏上的 30 天 mtime
+  清扫界定大小（bytes 可重新下载；无大小上限）。见 ADR-041。
+- **FR-042**: 每个 turn 都带上自己的来源。turn 文本以一个 `[Message origin]` 块开头，
+  写明平台、会话（kind、平台白送时的会话标题，以及始终存在的 chat id）、线程和发送者
+  （显示名**以及**稳定的平台 id——SeaTalk `employee_code`、Telegram `from.id`；平台工具调用要的是它，
+  而在群里它无处可寻，因为 `chat_id` 是群的）——
+  于是被问到「这是哪个群」的 agent 直接从收到的 turn 作答，而不是列出 bot 所在群再去推断；
+  平台工具调用（发群消息、查群信息）也有了明确的 chat id 可用。该块在命令识别之后（加了前缀的
+  `/help` 会不再是命令）、空信封检查之后折入，并像线程上下文（FR-029）一样持久化在用户消息
+  上——单一事实来源（FR-033）仍是一个字符串。它出现在**每一个** turn 上，而不只是会话的第一个：
+  `/agent` 可以在会话中途切换 agent（FR-040），resume 的 session 否则会丢掉它。标题与发送者
+  名字可由群成员设置，因此两者在进入 prompt 前都被压成一行并截断——改名无法伪造出额外的
+  origin 行。平台白送会话标题时就带上（Telegram `chat.title`）；不给时（SeaTalk 群事件只带
+  `group_id`）就只用 id 指名该会话，agent 可以通过平台自己的工具把 id 解析成名字。
+
+### C. Group UX and gating
+
+- **FR-034**: 群里的选择卡片点选路由到该群/线程。`InboundCallback` 携带
+  `chat_kind`/`thread_id`，并由该群的 peer 做 owner-gate（`get_by_chat`，而非单 peer 的
+  `get`）；一次按钮点选的回复落到同一群/线程，而非 DM。
+- **FR-035**: 按群的入站门控可配置。一个 channel 可以设置 require-mention（群里默认开——
+  bot 只在被 @mention 或被回复时才作答），以及 ignore-messages-that-@-someone-else（选择性开启——
+  一条 @ 了任何非 bot 用户的群消息被静默丢弃，即便它同时也 @ 了 bot）——于是一个坐在繁忙群里的
+  bot 只在它应当作答时才作答。两者都是普通的配置布尔值；无论如何 channel 始终由 owner 门控，
+  所以这管的是「何时作答」，而非「谁能驱动 turn」。
+
+### D. Platform polish
+
+- **FR-036**: 收到与进度被确认，按能力（而非按 transport 类型）门控。在支持 reaction 的
+  transport（Telegram）上，一个 ack reaction（👀）立即在用户自己的消息上标记收到，一个 ✅
+  在干净完成时标记完成（出错/被打断的 turn 只保留收到标记）。不支持 reaction 的 transport
+  （SeaTalk）改用它的 typing/working 信号作为收到与进度的提示。全部尽力而为——一次失败的
+  ack 绝不打断 turn。
+- **FR-037**: 长回复按平台的最佳机制流式呈现，该机制由 adapter 的能力（而非其类型）
+  决定。可编辑（`supports_edit`）的平台（Telegram）把回复文本流式写入**同一条**节流
+  的可编辑状态消息，仅在一个 turn 运行到足够长时才打开它——要么是工具活动打开它（先显示
+  工具进度行，随后回复文本到达时接管同一条消息），要么在纯文本 turn 中由回复本身在跑过
+  节流间隔后打开它。一个在该间隔内就结束的回复根本不打开状态消息（没有 create→delete→
+  resend 抖动）——它的最终发送就够了。中途编辑是**纯文本**并裁剪到单条上限，因此过长或
+  半成品 markdown 的预览既不会撑破平台解析器也不会超上限；结束时删除该消息，最终回复以
+  HTML 渲染并按段落分块到平台上限发送。仅
+  支持打字提示（`supports_typing`）的平台（SeaTalk）无法流式，因此在私聊中于 turn 期间
+  维持周期性打字心跳（一个短暂动作，零聊天噪声）并发送最终分块回复；SeaTalk 群组/线程
+  的 turn 完全没有中途信号（它既不能编辑、删除也没有群组打字接口）——最终分块回复就是
+  完成信号。全部尽力而为——一次失败的编辑或心跳绝不打断 turn。
+- **FR-038**: Telegram album 是一个 turn。共享同一 `media_group_id` 的消息被去抖成携带
+  它们全部附件的单个 turn，而非每张图一个 turn。
+- **FR-039**: 入站事件被去重。一个被重投的平台事件（相同 message id）只被处理一次。
 
 ## Assumptions
 
@@ -574,6 +1087,8 @@ status / notify`。
   等）。
 - 对 SeaTalk，用户自行运行一条隧道（cloudflared、ngrok 或等价物）把公网
   URL 通到本地回调端口；Coffer 在 quickstart 中给出做法，但不管理隧道。
-- channel 承载文本对话；富媒体会收到一条礼貌的「只支持文本」回复。唯一的例外是
+- channel 承载文本以及入站的图片和文件（FR-020）：媒体被下载并交给 agent，而一条
+  没有可下载内容的空消息会收到礼貌的「发文本、图片或文件」回复。出站是文本、加上
+  agent 选择发送的文件（FR-021，在 `supports_media` 的传输上），以及作为富例外的
   **命令选择卡片**：在 `supports_buttons` 的传输上，`/agent` 与 `/model` 可以把候选
   渲染成交互按钮（FR-018）。

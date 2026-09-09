@@ -42,7 +42,14 @@ const AGENT_LABEL_KEY: Record<AgentType, string> = {
   codex: "settings.connections.agentCodex",
 };
 
-export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate, onCancel }: Props) {
+export function ProviderForm({
+  initial,
+  submitError,
+  pending,
+  onSubmit,
+  onUpdate,
+  onCancel,
+}: Props) {
   const { t } = useTranslation();
   const isEdit = initial != null;
   const [name, setName] = useState(initial?.name ?? "");

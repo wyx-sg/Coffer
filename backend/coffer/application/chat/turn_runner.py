@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Sequence
 
 from coffer.application.audit_service import AuditService
 from coffer.application.chat.ports import AgentAdapter
@@ -21,6 +22,7 @@ from coffer.application.chat.turn_persistence import (
     recover_placeholder_id,
 )
 from coffer.application.chat.turn_state import _ACTIVE_TURNS, _ActiveTurn
+from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
     TextDelta,
     ToolCall,
@@ -28,9 +30,34 @@ from coffer.domain.chat.events import (
     TurnDone,
     TurnError,
 )
-from coffer.domain.chat.message import Message, Role, ToolResultBlock, ToolUseBlock
+from coffer.domain.chat.message import (
+    AttachmentBlock,
+    Message,
+    Role,
+    ToolResultBlock,
+    ToolUseBlock,
+)
 
 log = logging.getLogger(__name__)
+
+
+def _attachments_from_history(history: Sequence[Message]) -> list[Attachment]:
+    """Re-materialise this turn's attachments from the persisted history.
+
+    The current user message (the last ``Role.USER`` row — it was persisted
+    before ``history`` was fetched) is the single source of truth for the turn's
+    channel media: map each of its ``AttachmentBlock`` references back to an
+    ``Attachment`` VO the adapter materialises. Reading them back from history
+    (rather than threading a param down) means the reference survives a daemon
+    restart and stays consistent with what the web Chat page shows (FR-033)."""
+    for msg in reversed(history):
+        if msg.role is Role.USER:
+            return [
+                Attachment(path=b.path, mime=b.mime, filename=b.filename)
+                for b in msg.content
+                if isinstance(b, AttachmentBlock)
+            ]
+    return []
 
 
 async def run_turn_task(
@@ -41,7 +68,11 @@ async def run_turn_task(
     chat: ChatService,
     audit: AuditService,
 ) -> None:
-    """Async task body: drive the adapter, publish events, persist the result."""
+    """Async task body: drive the adapter, publish events, persist the result.
+
+    The turn's attachments (channel media) are derived from ``history``'s last
+    user message (FR-033) and handed to the adapter, which materialises them in
+    its own native shape."""
     bus = active.bus
 
     def emit(event: object) -> None:
@@ -62,6 +93,7 @@ async def run_turn_task(
 
     try:
         history = await chat.list_messages(conversation_id)
+        turn_attachments = _attachments_from_history(history)
         # Write a ``streaming`` placeholder assistant row BEFORE the first event.
         # A daemon crash mid-turn then leaves a row the startup sweep flips to
         # ``failed`` (FR-022). It is finalised in place on completion (one row, no
@@ -79,7 +111,7 @@ async def run_turn_task(
         )
         placeholder_id = (await asyncio.shield(append_task)).id
 
-        async for event in await adapter.run_turn(history=history):
+        async for event in await adapter.run_turn(history=history, attachments=turn_attachments):
             emit(event)
             if isinstance(event, TextDelta):
                 text_parts.append(event.text)

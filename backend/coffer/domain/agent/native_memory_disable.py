@@ -31,11 +31,7 @@ _CLAUDE_KEY = "autoMemoryEnabled"
 
 
 def _is_json(fmt: ConfigFileFormat, agent_type: AgentType) -> bool:
-    """JSON (Claude Code) backend vs TOML (Codex) backend.
-
-    Dispatch is by agent type, with ``fmt`` carried so callers can pass the
-    descriptor format directly; the two always agree for current agents.
-    """
+    """JSON (Claude Code) backend vs TOML (Codex) backend."""
     if agent_type is AgentType.CLAUDE_CODE:
         return True
     if agent_type is AgentType.CODEX:
@@ -56,31 +52,35 @@ def apply_disable(content: str, *, fmt: ConfigFileFormat, agent_type: AgentType)
         data[_CLAUDE_KEY] = False
         return _dump_json(data)
 
-    doc = _parse_toml(content)
-    if not isinstance(doc.get("features"), MutableMapping):
-        doc["features"] = tomlkit.table()
-    doc["features"]["memories"] = False
-    if not isinstance(doc.get("memories"), MutableMapping):
-        doc["memories"] = tomlkit.table()
-    doc["memories"]["generate_memories"] = False
-    return tomlkit.dumps(doc)
+    doc_toml = _parse_toml(content)
+    if not isinstance(doc_toml.get("features"), MutableMapping):
+        doc_toml["features"] = tomlkit.table()
+    doc_toml["features"]["memories"] = False
+    if not isinstance(doc_toml.get("memories"), MutableMapping):
+        doc_toml["memories"] = tomlkit.table()
+    doc_toml["memories"]["generate_memories"] = False
+    return tomlkit.dumps(doc_toml)
 
 
 def apply_restore(content: str, *, fmt: ConfigFileFormat, agent_type: AgentType) -> str:
-    """Return new config text with the disable removed (restore native memory)."""
+    """Return new config text with the disable removed (restore native memory).
+
+    Only the key(s) Coffer added are removed; unrelated settings are left
+    untouched.
+    """
     if _is_json(fmt, agent_type):
         data = _parse_json(content)
         data.pop(_CLAUDE_KEY, None)
         return _dump_json(data)
 
-    doc = _parse_toml(content)
-    features = doc.get("features")
+    doc_toml = _parse_toml(content)
+    features = doc_toml.get("features")
     if isinstance(features, MutableMapping) and "memories" in features:
         del features["memories"]
-    memories = doc.get("memories")
+    memories = doc_toml.get("memories")
     if isinstance(memories, MutableMapping) and "generate_memories" in memories:
         del memories["generate_memories"]
-    return tomlkit.dumps(doc)
+    return tomlkit.dumps(doc_toml)
 
 
 def is_disabled(content: str, *, fmt: ConfigFileFormat, agent_type: AgentType) -> bool:
@@ -90,9 +90,9 @@ def is_disabled(content: str, *, fmt: ConfigFileFormat, agent_type: AgentType) -
     if _is_json(fmt, agent_type):
         return _parse_json(content).get(_CLAUDE_KEY) is False
 
-    doc = _parse_toml(content)
-    features = doc.get("features")
-    memories = doc.get("memories")
+    doc_toml = _parse_toml(content)
+    features = doc_toml.get("features")
+    memories = doc_toml.get("memories")
     features_off = isinstance(features, MutableMapping) and features.get("memories") is False
     generate_off = (
         isinstance(memories, MutableMapping) and memories.get("generate_memories") is False

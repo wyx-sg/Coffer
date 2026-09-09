@@ -459,7 +459,6 @@ async def test_message_handler_forwards_server_notification() -> None:
     from mcp.types import (
         LoggingMessageNotification,
         LoggingMessageNotificationParams,
-        ServerNotification,
     )
 
     conn = HttpUpstreamConnection(
@@ -475,11 +474,9 @@ async def test_message_handler_forwards_server_notification() -> None:
     conn.on_notification(_on_notification)
     assert conn._notification_callback is _on_notification
 
-    notif = ServerNotification(
-        LoggingMessageNotification(
-            method="notifications/message",
-            params=LoggingMessageNotificationParams(level="info", data="hello"),
-        )
+    notif = LoggingMessageNotification(
+        method="notifications/message",
+        params=LoggingMessageNotificationParams(level="info", data="hello"),
     )
     await conn._message_handler(notif)
     assert received == [notif]
@@ -495,18 +492,15 @@ async def test_message_handler_no_callback_is_noop() -> None:
     from mcp.types import (
         LoggingMessageNotification,
         LoggingMessageNotificationParams,
-        ServerNotification,
     )
 
     conn = HttpUpstreamConnection(
         transport=HttpTransport(type="http", url="http://127.0.0.1:1/mcp"),
         header_overlay={},
     )
-    notif = ServerNotification(
-        LoggingMessageNotification(
-            method="notifications/message",
-            params=LoggingMessageNotificationParams(level="info", data="hello"),
-        )
+    notif = LoggingMessageNotification(
+        method="notifications/message",
+        params=LoggingMessageNotificationParams(level="info", data="hello"),
     )
     # Must not raise even though no callback is registered.
     await conn._message_handler(notif)
@@ -566,10 +560,10 @@ async def test_capabilities_attributeerror_falls_back_to_empty_dict(monkeypatch)
     import coffer.infrastructure.mcp.http_client as mod
 
     # Fake streamable_http transport: an async context manager yielding
-    # (read, write, get_session_id).
+    # (read, write).
     @contextlib.asynccontextmanager
     async def _fake_transport(url, http_client):
-        yield (object(), object(), lambda: "sid")
+        yield (object(), object())
 
     class _NoModelDumpCaps:
         pass  # no model_dump() -> .model_dump() raises AttributeError
@@ -612,7 +606,7 @@ def _patch_transport_and_session(monkeypatch, *, initialize_raises: Exception):
 
     @contextlib.asynccontextmanager
     async def _fake_transport(url, http_client):
-        yield (object(), object(), lambda: "sid")
+        yield (object(), object())
 
     class _FakeClientSession:
         def __init__(self, read, write, **kwargs) -> None:
@@ -633,12 +627,16 @@ def _patch_transport_and_session(monkeypatch, *, initialize_raises: Exception):
 
 @pytest.mark.asyncio
 async def test_initialize_httpx_timeout_wraps_as_upstream_timeout(monkeypatch) -> None:
-    """An httpx.TimeoutException raised during session.initialize() is wrapped as
-    UpstreamTimeout (lines 131-132), and the connection is cleaned up."""
-    import httpx
+    """An httpx2.TimeoutException raised during session.initialize() is wrapped as
+    UpstreamTimeout (lines 131-132), and the connection is cleaned up.
+
+    httpx2, not httpx: the mcp SDK builds on httpx's 2.x line as of mcp 2.0, so
+    that is the exception family the transport actually raises.
+    """
+    import httpx2
 
     _patch_transport_and_session(
-        monkeypatch, initialize_raises=httpx.TimeoutException("read timed out")
+        monkeypatch, initialize_raises=httpx2.TimeoutException("read timed out")
     )
     conn = HttpUpstreamConnection(
         transport=HttpTransport(type="http", url="http://127.0.0.1:1/mcp"),

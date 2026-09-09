@@ -4,12 +4,20 @@ The service is constructed with a dict of registered kinds; it never
 imports any kind-specific module. Each mutation is audited via
 AuditService. `delete` calls the kind's optional `on_delete` hook
 BEFORE persistence; a hook that raises aborts the deletion.
+
+Two mutation paths delegate to sibling ops modules to keep this file under
+the 400-LOC ceiling (mirroring `skill/service.py` + its `*_ops.py` satellites):
+`update_scope`'s body lives in `resource_scope_ops`, and `delete`'s
+credential-release step lives in `resource_delete_ops`.
 """
 
 from __future__ import annotations
 
 import builtins
 import inspect
+import logging
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
@@ -27,9 +35,12 @@ from coffer.domain.errors import (
 )
 from coffer.domain.resource import Kind, Resource, ResourceRef
 
+_logger = logging.getLogger(__name__)
+
 
 class _CredentialStorePort(Protocol):
-    """Minimal kind-agnostic port for register-time credential probing.
+    """Minimal kind-agnostic port for register-time credential probing and
+    delete-time release.
 
     Mirrors :class:`coffer.application.mcp.ports.CredentialStorePort` but
     defined locally so the kind-agnostic resource service does not import
@@ -37,6 +48,10 @@ class _CredentialStorePort(Protocol):
     """
 
     def get(self, ref: str) -> str | None: ...
+
+    def exists(self, ref: str) -> bool: ...
+
+    def delete(self, ref: str) -> None: ...
 
 
 def _audit_safe_config(kind_def: Kind, config: dict[str, Any]) -> dict[str, Any]:
@@ -63,6 +78,22 @@ def _extract_credential_refs(kind_def: Kind, config: dict[str, Any]) -> dict[str
     return kind_def.credential_ref_extractor(config)
 
 
+@dataclass(frozen=True)
+class ReleasedCredential:
+    """Delete-listener notice for a credential released with its last citer.
+
+    Duck-types ``ResourceRef`` (``.kind``/``.name``) for the listeners'
+    benefit; a real ``ResourceRef`` cannot carry it because credential refs
+    contain slashes, which the resource name pattern rightly rejects.
+    """
+
+    name: str
+    kind: str = field(default="credential", init=False)
+
+    def __str__(self) -> str:
+        return f"{self.kind}:{self.name}"
+
+
 class ResourceService:
     def __init__(
         self,
@@ -75,6 +106,30 @@ class ResourceService:
         self._repo = repo
         self._audit = audit
         self._credentials = credentials
+        # Cross-cutting observers of completed deletions (e.g. the sync
+        # tombstone ledger, spec 010) — kind-agnostic, registered by the
+        # composition root, called AFTER the row is gone with the acting
+        # surface, so sync-applied deletions can be told apart from the user's.
+        self._delete_listeners: list[Callable[[ResourceRef | ReleasedCredential, str], Any]] = []
+        self._change_listeners: list[Callable[[], Any]] = []
+
+    def add_delete_listener(
+        self, listener: Callable[[ResourceRef | ReleasedCredential, str], Any]
+    ) -> None:
+        """Register a callback (sync or async) invoked after every deletion."""
+        self._delete_listeners.append(listener)
+
+    def add_change_listener(self, listener: Callable[[], Any]) -> None:
+        """Register a fire-and-forget callback invoked after every mutation
+        (register / update / enable / delete) — e.g. the auto-sync debouncer."""
+        self._change_listeners.append(listener)
+
+    def _notify_change(self) -> None:
+        for listener in self._change_listeners:
+            try:
+                listener()
+            except Exception:
+                _logger.exception("resource.change_listener_failed")
 
     def _probe_credentials(self, kind_def: Kind, config: dict[str, Any]) -> None:
         """Raise CredentialMissing if any cited credential_ref is absent from the credential store.
@@ -93,6 +148,15 @@ class ResourceService:
         if kind not in self._kinds:
             raise UnknownKind(kind)
         return self._kinds[kind]
+
+    def scope_axes(self, kind: str) -> tuple[str, ...]:
+        """Return the kind's declared machine x agent scope axes (ADR-045).
+
+        Public accessor (unlike ``_require_kind``) so the REST GET
+        .../scope route can report which axes a client may set, without
+        reaching into the private kinds registry.
+        """
+        return self._require_kind(kind).scope_axes
 
     def _validate_config(self, kind_def: Kind, config: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -155,6 +219,12 @@ class ResourceService:
                 enabled=True,
                 created_at=now,
                 updated_at=now,
+                # Kind-supplied registration default (ADR-045 amendment); None
+                # for every kind that doesn't set one (unscoped, unchanged).
+                # Copied (not the kind's own dict) so no two registrations —
+                # or a caller mutating a returned Resource's .scope in place —
+                # ever alias the same shared-mutable default.
+                scope=dict(kind_def.default_scope) if kind_def.default_scope is not None else None,
             )
         )
         await self._audit.record(
@@ -163,6 +233,7 @@ class ResourceService:
             actor=actor,
             details={"config": _audit_safe_config(kind_def, validated)},
         )
+        self._notify_change()
         return created
 
     async def list(
@@ -240,6 +311,7 @@ class ResourceService:
                 "after": _audit_safe_config(kind_def, validated),
             },
         )
+        self._notify_change()
         return updated
 
     async def set_enabled(self, ref: ResourceRef, enabled: bool, actor: str) -> Resource:
@@ -249,9 +321,30 @@ class ResourceService:
         updated = await self._repo.set_enabled(ref, enabled)
         event = AuditEventType.RESOURCE_ENABLED if enabled else AuditEventType.RESOURCE_DISABLED
         await self._audit.record(event.value, ref=ref, actor=actor)
+        self._notify_change()
         return updated
 
+    async def update_scope(
+        self,
+        ref: ResourceRef,
+        scope: dict[str, Any] | None,
+        *,
+        actor: str,
+    ) -> Resource:
+        """Set (or clear) a resource's machine x agent activation scope (ADR-045).
+
+        Delegates to ``resource_scope_ops`` to keep this module under the
+        file-size limit; see that module for the full behavior.
+        """
+        from coffer.application.resource_scope_ops import update_scope as _update_scope
+
+        return await _update_scope(self, ref, scope, actor=actor)
+
     async def delete(self, ref: ResourceRef, actor: str) -> None:
+        # Credential release (on successful delete) delegates to
+        # resource_delete_ops to keep this module under the file-size limit.
+        from coffer.application.resource_delete_ops import release_orphaned_credentials
+
         kind_def = self._require_kind(ref.kind)
         snapshot = await self.get(ref)  # raises ResourceNotFound if missing
         if kind_def.on_delete is not None:
@@ -265,6 +358,7 @@ class ResourceService:
             if inspect.isawaitable(result):
                 await result
         await self._repo.delete(ref)
+        released = await release_orphaned_credentials(self, kind_def, snapshot.config, actor)
         await self._audit.record(
             AuditEventType.RESOURCE_DELETED.value,
             ref=ref,
@@ -278,3 +372,19 @@ class ResourceService:
                 }
             },
         )
+        # Released credentials notify like deletions of their own pseudo-kind
+        # so the sync ledger tombstones them and other machines drop their
+        # copies too (an orphan row would re-export on every future sync).
+        notifications: list[ResourceRef | ReleasedCredential] = [ref]
+        notifications += [ReleasedCredential(r) for r in released]
+        for listener in self._delete_listeners:
+            # A listener failure must not turn an already-completed deletion
+            # into a caller-facing error.
+            for notice in notifications:
+                try:
+                    result = listener(notice, actor)
+                    if inspect.isawaitable(result):
+                        await result
+                except Exception:
+                    _logger.exception("resource.delete_listener_failed", extra={"ref": str(notice)})
+        self._notify_change()

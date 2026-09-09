@@ -13,7 +13,7 @@ from typing import Any
 
 import httpx
 import pytest
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from coffer.application.channel.ports import AdapterCallbacks
@@ -62,15 +62,31 @@ class FakeTelegram:
         self.reject_html_sends = 0  # reject sendMessage with parse_mode=HTML N times
         self.reject_all_sends = 0  # reject any sendMessage N times
         self.fail_get_updates = 0  # answer getUpdates with HTTP 500 N times
+        self.bad_payload_get_updates = False  # answer getUpdates ok:true with a non-list result
         self.html_error_sends = 0  # answer sendMessage with a non-JSON HTML body N times
         self._next_message_id = 100
+        self.file_bytes = b"FAKE-IMAGE-BYTES"  # served for any file download
         self.app = FastAPI()
         self.app.post("/bot{token}/{method}")(self._handle)
+        self.app.get("/file/bot{token}/{file_path:path}")(self._serve_file)
+
+    async def _serve_file(self, token: str, file_path: str) -> Response:
+        return Response(content=self.file_bytes, media_type="application/octet-stream")
 
     async def _handle(self, token: str, method: str, request: Request) -> JSONResponse:
-        params: dict[str, Any] = await request.json()
+        # sendPhoto/sendDocument upload multipart (data + files); everything
+        # else posts JSON. Parse whichever the request carries so the recorded
+        # ``params`` are the flat field dict either way.
+        if request.headers.get("content-type", "").startswith("multipart/form-data"):
+            form = await request.form()
+            params: dict[str, Any] = {k: v for k, v in form.items() if isinstance(v, str)}
+        else:
+            params = await request.json()
         self.calls.append((method, params))
         if method == "getUpdates":
+            if self.bad_payload_get_updates:
+                # A well-formed envelope whose result is not a list of updates.
+                return JSONResponse(content={"ok": True, "result": {}})
             if self.fail_get_updates > 0:
                 self.fail_get_updates -= 1
                 return JSONResponse(status_code=500, content={"ok": False, "description": "boom"})
@@ -102,6 +118,14 @@ class FakeTelegram:
             return JSONResponse(
                 content={"ok": True, "result": {"message_id": self._next_message_id}}
             )
+        if method == "getFile":
+            file_id = params.get("file_id")
+            return JSONResponse(
+                content={
+                    "ok": True,
+                    "result": {"file_id": file_id, "file_path": f"downloads/{file_id}.bin"},
+                }
+            )
         return JSONResponse(content={"ok": True, "result": {}})
 
     def calls_for(self, method: str) -> list[dict[str, Any]]:
@@ -115,14 +139,27 @@ class FakeSeaTalk:
     def __init__(self) -> None:
         self.token_calls = 0
         self.single_chat_calls: list[tuple[dict[str, Any], str]] = []  # (body, Authorization)
+        self.group_chat_calls: list[tuple[dict[str, Any], str]] = []  # (body, Authorization)
         self.typing_calls: list[dict[str, Any]] = []
-        self.scripted: list[tuple[int, dict[str, Any]]] = []  # popped per single_chat call
+        self.scripted: list[tuple[int, dict[str, Any]]] = []  # popped per single/group_chat call
         self.html_error_sends = 0  # answer single_chat with a non-JSON HTML body N times
         self._next_message_id = 0
+        # -- thread fetch (Task 5) --
+        self.thread_calls: list[dict[str, Any]] = []  # query params, one per /get_thread... GET
+        self.thread_response: dict[str, Any] = {"code": 0, "thread_messages": []}
+        self.file_downloads: list[str] = []  # file ids fetched, one per media GET
+        self.file_bytes = b"\x89PNG\r\n\x1a\nFAKE"  # served for any file download
         self.app = FastAPI()
         self.app.post("/auth/app_access_token")(self._token)
         self.app.post("/messaging/v2/single_chat")(self._single_chat)
+        self.app.post("/messaging/v2/group_chat")(self._group_chat)
         self.app.post("/messaging/v2/single_chat_typing")(self._typing)
+        self.app.get("/messaging/v2/group_chat/get_thread_by_thread_id")(self._thread)
+        self.app.get("/messaging/v2/file/{file_id}")(self._serve_file)
+
+    async def _serve_file(self, file_id: str) -> Response:
+        self.file_downloads.append(file_id)
+        return Response(content=self.file_bytes, media_type="image/png")
 
     async def _token(self, request: Request) -> JSONResponse:
         await request.json()
@@ -147,9 +184,27 @@ class FakeSeaTalk:
         self._next_message_id += 1
         return JSONResponse(content={"code": 0, "message_id": f"m{self._next_message_id}"})
 
+    async def _group_chat(self, request: Request) -> JSONResponse:
+        body: dict[str, Any] = await request.json()
+        self.group_chat_calls.append((body, request.headers.get("Authorization", "")))
+        if self.html_error_sends > 0:
+            self.html_error_sends -= 1
+            return HTMLResponse(
+                status_code=502, content="<html><body>502 Bad Gateway</body></html>"
+            )
+        if self.scripted:
+            status, payload = self.scripted.pop(0)
+            return JSONResponse(status_code=status, content=payload)
+        self._next_message_id += 1
+        return JSONResponse(content={"code": 0, "message_id": f"m{self._next_message_id}"})
+
     async def _typing(self, request: Request) -> JSONResponse:
         self.typing_calls.append(await request.json())
         return JSONResponse(content={"code": 0})
+
+    async def _thread(self, request: Request) -> JSONResponse:
+        self.thread_calls.append(dict(request.query_params))
+        return JSONResponse(content=self.thread_response)
 
 
 def make_telegram_adapter(fake: FakeTelegram, *, poll_timeout: int = 1) -> TelegramAdapter:
@@ -159,9 +214,11 @@ def make_telegram_adapter(fake: FakeTelegram, *, poll_timeout: int = 1) -> Teleg
     )
 
 
-def make_seatalk_adapter(fake: FakeSeaTalk) -> SeaTalkAdapter:
+def make_seatalk_adapter(fake: FakeSeaTalk, *, media_dir: Any = None) -> SeaTalkAdapter:
     client = httpx.AsyncClient(transport=httpx.ASGITransport(app=fake.app), base_url="http://fake")
-    return SeaTalkAdapter("st", "app-1", "app-secret", client=client, base_url="http://fake")
+    return SeaTalkAdapter(
+        "st", "app-1", "app-secret", client=client, base_url="http://fake", media_dir=media_dir
+    )
 
 
 @pytest.fixture

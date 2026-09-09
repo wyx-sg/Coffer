@@ -17,12 +17,15 @@ from coffer.application.chat.ports import AgentAdapter
 from coffer.application.chat.service import ConversationRepo
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.errors import AgentConfigRejected, ConversationNotFound
+from coffer.infrastructure.chat.adapter_support import channel_system_context
 from coffer.infrastructure.chat.claude_sdk_agent import (
     ClaudeSdkAgentAdapter,
     SdkSessionFactory,
     default_session_factory,
 )
 from coffer.infrastructure.chat.default_workspace import default_workspace_dir
+from coffer.infrastructure.chat.document_extract import default_document_extractor
+from coffer.infrastructure.chat.transcribe import default_transcriber
 
 
 class ClaudeSdkProvider:
@@ -82,12 +85,24 @@ class ClaudeSdkProvider:
                 conversation_id, replace(latest, session_id=session_id)
             )
 
+        # A channel-originated conversation drives the agent from a phone chat —
+        # tell it so (concise replies, no clickable dialogs) via a system-prompt
+        # append. Non-channel (web UI) turns leave the prompt untouched.
+        system_context = channel_system_context(conv.channel_name) if conv.channel_name else None
+
         return ClaudeSdkAgentAdapter(
             cwd=config.cwd,
             resume_session=config.session_id,
             extra={"model": config.model},
             session_factory=self._session_factory,
             on_session=_save_session,
+            system_context=system_context,
+            # Claude cannot hear audio; a voice attachment is transcribed to text
+            # by the best local engine available here (ADR-039).
+            transcriber=default_transcriber(),
+            # A document (PDF/office file) is text-extracted so it reaches the
+            # agent as text rather than a vision/binary block (FR-030).
+            document_extractor=default_document_extractor(),
         )
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:

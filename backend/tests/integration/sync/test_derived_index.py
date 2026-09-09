@@ -38,8 +38,8 @@ def _wire_memory(machine, store_dir):  # type: ignore[no-untyped-def]
     # Reuse the machine's own git working tree (machine.root/"ws") so the
     # exporter writes where GitRepo operates.
     ws = Workspace(machine.root / "ws", trees=[("memory", store_dir)])
-    machine.service._exporter = SyncExporter(machine.resources, cred, ws)
-    machine.service._importer = SyncImporter(machine.resources, cred, ws)
+    machine.service._exporter = SyncExporter(machine.resources, cred, ws, home=None)
+    machine.service._importer = SyncImporter(machine.resources, cred, ws, home=None)
 
 
 @pytest.mark.acceptance(spec="010-sync", scenario="only shared state syncs")

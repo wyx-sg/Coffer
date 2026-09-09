@@ -21,7 +21,7 @@ from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Literal
 
-from sqlalchemy import TIMESTAMP, Index, Integer, String, Text, select
+from sqlalchemy import TIMESTAMP, Index, Integer, String, Text, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -170,6 +170,35 @@ class MCPInvocationRepo:
             stmt = stmt.limit(limit)
             rows = (await session.execute(stmt)).scalars().all()
             return [_inv_to_domain(r) for r in rows]
+
+    async def usage_counts(
+        self,
+        *,
+        since: datetime,
+    ) -> dict[tuple[str, str], int]:
+        """Tool-invocation counts per (server, tool) at or after ``since``.
+
+        The ranking signal for ADR-046 tool tiering. Every status counts — an
+        errored call still proves the agent reached for that tool, and demoting
+        a tool because its upstream was flaky would hide it exactly when the
+        user is trying to get it working.
+        """
+        async with self._sm() as session:
+            stmt = (
+                select(
+                    MCPInvocationModel.resource_name,
+                    MCPInvocationModel.capability_key,
+                    func.count().label("n"),
+                )
+                .where(MCPInvocationModel.capability_type == "tool")
+                .where(MCPInvocationModel.timestamp >= since)
+                .group_by(
+                    MCPInvocationModel.resource_name,
+                    MCPInvocationModel.capability_key,
+                )
+            )
+            rows = (await session.execute(stmt)).all()
+        return {(r.resource_name, r.capability_key): int(r.n) for r in rows}
 
     # --- internals ------------------------------------------------------- #
 

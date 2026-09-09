@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import platform
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -30,7 +31,12 @@ from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.kind import make_mcp_kind
 from coffer.application.mcp.supervisor import SubprocessSupervisor
+from coffer.application.mcp.sync_state import McpPreferenceSyncState
 from coffer.application.resource_service import ResourceService
+from coffer.application.retention_service import RetentionService
+from coffer.application.sync.identity import MachineIdentityService
+from coffer.infrastructure.channel.media_retention import default_media_sweep
+from coffer.infrastructure.knowledge.ids import new_ulid
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
@@ -41,10 +47,12 @@ from coffer.infrastructure.persistence.retention import (
     PrunableRegistry,
     PrunableTable,
 )
+from coffer.infrastructure.sync.persistence import SqlAlchemyMachineIdentityRepo
 from coffer.surfaces.http.dependencies import (
     set_capability_discovery,
     set_health_repo,
     set_invocation_repo,
+    set_local_machine_id_provider,
     set_mcp_session_factory,
     set_preferences_repo,
     set_supervisor,
@@ -67,6 +75,11 @@ def wire_mcp_kind(
     """
     # 1. Build the MCP-side repos
     prefs_repo = MCPCapabilityPreferenceRepo(sm)  # type: ignore[arg-type]
+    providers = getattr(app.state, "sync_state_providers", None)
+    if providers is None:
+        providers = []
+        app.state.sync_state_providers = providers
+    providers.append(McpPreferenceSyncState(resource_svc, prefs_repo))
     inv_repo = MCPInvocationRepo(sm)  # type: ignore[arg-type]
     health_repo = MCPServerHealthRepo(sm)  # type: ignore[arg-type]
 
@@ -77,12 +90,33 @@ def wire_mcp_kind(
     mcp_kind = make_mcp_kind(session_supervisors)
     app.state.kinds["mcp_server"] = mcp_kind
 
+    # ADR-045 machine axis (Task 8): this daemon's stable sync identity, built
+    # exactly as channel_wiring.py does, so every supervisor and gateway
+    # session in this process resolves the same machine id. A None provider
+    # anywhere means "no filtering" (legacy behavior); here we always wire it
+    # so a daemon never spawns an upstream server scoped to a different
+    # machine, whether via a session's tool call or a management REST route.
+    identity = MachineIdentityService(
+        SqlAlchemyMachineIdentityRepo(sm),  # type: ignore[arg-type]
+        audit,
+        new_id=new_ulid,
+        default_name=lambda: platform.node() or "coffer",
+    )
+
+    async def _local_machine_id() -> str:
+        return (await identity.get()).machine_id
+
     # 4. Build the process-wide supervisor + discovery for REST routes
-    #    (management routes: capabilities, refresh, test — not per-session protocol routing)
+    #    (management routes: capabilities listing + refresh, via
+    #    CapabilityDiscovery's self-heal path — not per-session protocol
+    #    routing). The "test" route does NOT go through this supervisor: it
+    #    builds its own transient upstream connection directly, so it gates
+    #    on scope itself via the machine-id provider wired below (5b).
     process_supervisor = SubprocessSupervisor(
         resource_service=resource_svc,
         credential_resolver=CredentialResolver(credential_store),
         upstream_factory=build_upstream,
+        machine_id=_local_machine_id,
     )
     process_discovery = CapabilityDiscovery(
         resource_service=resource_svc,
@@ -97,6 +131,7 @@ def wire_mcp_kind(
             resource_service=resource_svc,
             credential_resolver=CredentialResolver(credential_store),
             upstream_factory=build_upstream,
+            machine_id=_local_machine_id,
         )
         session_supervisors[session_id] = supervisor
 
@@ -123,6 +158,7 @@ def wire_mcp_kind(
             on_dispose=_drop_supervisor,
             builtin_tools=builtin_tools,
             embedder_provider=embedder_provider,
+            machine_id=_local_machine_id,
         )
 
     # 6. Set ALL the MCP dependency providers
@@ -132,6 +168,10 @@ def wire_mcp_kind(
     set_invocation_repo(inv_repo)
     set_health_repo(health_repo)
     set_mcp_session_factory(mcp_session_factory)
+    # 5b. Expose the same machine id resolved above to REST routes that need
+    # to gate on scope without going through a supervisor (e.g. the mcp_server
+    # "test" route — see comment at 4 above).
+    set_local_machine_id_provider(_local_machine_id)
 
     return process_supervisor, session_supervisors
 
@@ -182,6 +222,21 @@ def build_prunable_registry() -> PrunableRegistry:
         )
     )
     return registry
+
+
+def build_retention_service(sm: Any, *, audit: AuditService) -> RetentionService:
+    """Compose the ``RetentionService`` (registry + repo + audit) and bind the
+    channel-media dir sweep (FR-033) at composition root, so the application
+    layer never imports the infrastructure prune. The caller runs
+    ``initialize_defaults`` and drives the worker cadence."""
+    from coffer.infrastructure.persistence.repos import SqlAlchemyRetentionRepo
+
+    return RetentionService(
+        registry=build_prunable_registry(),
+        repo=SqlAlchemyRetentionRepo(sm),
+        audit=audit,
+        media_sweep=default_media_sweep,
+    )
 
 
 def reaper_kwargs_from_env() -> dict[str, float]:

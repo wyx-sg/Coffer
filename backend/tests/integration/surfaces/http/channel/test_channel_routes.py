@@ -75,6 +75,7 @@ class _Ctx:
     runtime: _StubRuntime
     peers: ChannelPeerRepo
     pairing: PairingManager
+    resources: ResourceService
     tg_id: int = 0
     st_id: int = 0
     extra: dict[str, Any] = field(default_factory=dict)
@@ -120,7 +121,15 @@ async def ctx(tmp_path) -> AsyncIterator[_Ctx]:
     app.include_router(channel_router)
     set_channel_service(service)
     set_active_token(_TOKEN)
-    yield _Ctx(app=app, runtime=runtime, peers=peers, pairing=pairing, tg_id=tg.id, st_id=st.id)
+    yield _Ctx(
+        app=app,
+        runtime=runtime,
+        peers=peers,
+        pairing=pairing,
+        resources=resources,
+        tg_id=tg.id,
+        st_id=st.id,
+    )
     set_channel_service(None)
     set_active_token(None)
     await engine.dispose()
@@ -221,6 +230,49 @@ async def test_status_reports_runtime_pairing_and_callback_details(ctx: _Ctx) ->
         "tunnel_managed": False,
         "tunnel_running": False,
     }
+
+
+@pytest.mark.acceptance(
+    spec="009-channels",
+    scenario=(
+        "the management surface lists each Coffer-hosted channel "
+        "with status, owner, agent, and health"
+    ),
+)
+async def test_management_surface_reports_status_owner_agent_and_health(ctx: _Ctx) -> None:
+    # A registered + running Coffer-hosted channel, bound to an agent and paired
+    # with an owner. The management surface = the resource list (kind=channel,
+    # carrying enabled + the routed agent) plus the per-channel status endpoint
+    # (live health + paired owner). FR-041: it must report all four.
+    mg = await ctx.resources.register(
+        "channel",
+        "mg",
+        {
+            "channel_type": "telegram",
+            "bot_token_ref": "channel/mg/bot",
+            "default_agent": "claude_code",
+        },
+        actor="test",
+    )
+    ctx.runtime.adapters["mg"] = _StubAdapter()  # adapter live -> healthy
+    await _pair(ctx, mg.id)
+
+    # The list view mirrors the MCP-server/memory/skill surfaces: each row is a
+    # resource carrying its enabled status and the routed agent.
+    listed = {r.name: r for r in await ctx.resources.list(kind="channel")}
+    assert "mg" in listed
+    assert listed["mg"].enabled is True  # status
+    assert listed["mg"].config["default_agent"] == "claude_code"  # agent
+
+    # The per-channel status supplies the live health + paired owner.
+    async with _client(ctx.app) as c:
+        r = await c.get("/api/v1/channels/mg/status")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["enabled"] is True  # status
+    assert body["running"] is True  # health — adapter live in the runtime
+    assert body["peer"]["display_name"] == "Yu"  # paired owner
+    assert body["peer"]["chat_id"] == "emp-1"
 
 
 async def test_notify_delivers_to_paired_peer(ctx: _Ctx) -> None:

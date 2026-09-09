@@ -232,23 +232,24 @@ message answered by it; send `/model <name>` and observe the next turn use it.
 Because the entrypoint is remote-reachable, every turn a channel message drives
 is recorded in the audit log
 with the channel, peer, and agent — answering "who drove which agent through
-which channel". And because some platforms cannot
-edit messages and show nothing while a long bridged turn runs, every turn ends
-with one compact summary pushed to the chat: done with tool count, duration,
-and tokens, or the error, or the stop.
+which channel". And when a turn ends abnormally, one compact summary is pushed
+to the chat: the failure, the stop, or the tool-iteration limit, with tool
+count, duration, and tokens. A clean success sends no summary on any channel —
+the reply itself is the signal, so the fact line would just be noise.
 
 **Why this priority**: An entrypoint manager's two unclaimed differentiators are
 first-class auth/audit and a reliable completion signal; both must be true on
 every channel, including the silent ones.
 
 **Independent Test**: Drive a turn from a paired channel and observe a
-turn-started audit record with the channel, peer, and agent; observe a completion
-summary message after the turn on a channel that cannot edit messages.
+turn-started audit record with the channel, peer, and agent; observe that a
+clean success sends no completion summary while a failed turn does.
 
 **Covering scenarios**:
 
 - a channel-driven turn is audited with channel, peer, and agent
-- a completion summary is sent after every turn
+- a clean success sends no completion summary
+- a turn that does not end normally sends a completion summary
 - a group member who is not the paired sender is ignored
 
 ---
@@ -270,8 +271,10 @@ summary message after the turn on a channel that cannot edit messages.
   exponentially and resumes; no inbound message is double-processed after
   reconnect (update offset is committed only after dispatch).
 - SeaTalk sender rate limits (HTTP 429) → outbound sends back off and retry.
-- Non-text inbound content (images, files, voice) → the channel replies that
-  only text is supported in this version.
+- Inbound photos and files → downloaded and handed to the agent for the turn
+  (images inlined for a vision agent; any agent gets the file's path). An empty
+  message with nothing downloadable (a sticker, a location) → the channel replies
+  that it needs text, a photo, or a file.
 
 ## Requirements
 
@@ -297,7 +300,9 @@ summary message after the turn on a channel that cannot edit messages.
 - **FR-005**: Replies render per channel capability: Telegram converts
   markdown to Telegram HTML with a plain-text fallback and 4000-character
   paragraph-boundary chunking, and streams tool progress into one throttled
-  editable status message; SeaTalk sends markdown with 4096-byte chunking and
+  editable status message whose lines describe each call from its input (e.g.
+  `⏳ Bash · list the desktop`, `✅ Read · wedding.json`); SeaTalk sends markdown
+  with 4096-byte chunking and
   signals progress with a typing indicator. Capabilities are declared by the
   adapter, not special-cased in the core.
 - **FR-006**: Commands `/new`, `/stop`, `/status`, `/help` work from any
@@ -339,12 +344,12 @@ status / notify`.
   stored `sender_id`) degrades to the chat-id-only gate. One channel-driven
   event is audited beyond FR-012: a turn started by an inbound message
   (channel, peer, agent, conversation).
-- **FR-015**: After every turn the channel sends one compact completion summary
-  as a fresh message, independent of message-edit capability: success reports a
-  done marker with tool count, duration, and token usage; a failed turn reports
-  the error; an interrupted turn reports the stop. This is the end-of-turn
-  signal on platforms that cannot edit messages and show nothing while a long
-  bridged turn runs.
+- **FR-015**: After a turn that did not end normally the channel sends one compact
+  completion summary as a fresh message: a failure reports the error, an interrupt
+  reports the stop, and the tool-iteration limit reports the limit, each with tool
+  count, duration, and token usage. A clean success sends **no** summary on any
+  channel — the reply itself is the completion signal, so the fact line would only
+  be noise (this holds regardless of whether the transport can edit messages).
 - **FR-017**: The owner switches the model from chat. `/model` with no argument
   reports the current model; `/model <name>` for the builtin agent resolves the
   name against the model registry and sets the conversation's model override,
@@ -367,6 +372,78 @@ status / notify`.
   realizes the interactive-button capability that
   [ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md)'s
   `ChannelCapabilities` anticipated ("show buttons?").
+- **FR-019**: A channel-originated turn tells the agent it is bridged to a chat
+  channel, not a terminal: the agent receives a short system-prompt note carrying
+  the channel name and mobile-chat guidance — keep replies concise, and it cannot
+  click permission or confirmation dialogs on the user's computer (they may be
+  away from it). This prevents terminal-sized replies and silent waits on
+  un-clickable dialogs. Web-UI turns are unaffected — the note rides only on a
+  conversation whose `channel_name` is set.
+- **FR-020**: Inbound photos and files drive a turn. The transport downloads each
+  attachment to a Coffer-managed media dir; the bytes never enter the chat DB (the
+  persisted user message keeps the caption, or a short note when there is none).
+  For the turn, each attachment is handed to the agent adapter, which materialises
+  it in its own native shape — a vision agent (Claude Code) inlines an image as a
+  base64 content block it sees directly and a PDF as a document block; a
+  path-native agent (Codex) and any non-vision file receive the on-disk path to
+  open. This keeps history small, works for arbitrary file types, and generalises
+  to future modalities (a new type is a new mime, not a new schema). See
+  [ADR-038](../../docs/decisions/ADR-038-channel-media.md).
+- **FR-021**: The agent sends a file back to the user by an explicit opt-in: a
+  line-anchored sentinel `MEDIA:/absolute/path` (optionally `MEDIA:/absolute/path |
+  caption`), told to it by FR-019's system note. On a transport that declares
+  `supports_media`, the channel uploads that file (an image extension as an inline
+  photo, otherwise a document) and strips the line from the delivered text; ordinary
+  prose — including a legitimate markdown image `![alt](path)` written only to
+  reference a file — is not this syntax and is never uploaded, and a sentinel whose
+  file is missing, relative, or oversized is left as text. The unambiguous sentinel
+  keeps outbound file delivery deliberate, not guessed, and never collides with
+  normal markdown.
+- **FR-022**: An inbound voice message drives a turn as a transcript. The built-in
+  agents (Claude Code, Codex) cannot hear audio, so the adapter transcribes the
+  audio to text **locally** and folds it into the turn's prompt. Transcription is a
+  per-agent seam (ADR-038): the frozen desktop app uses a bundled, torch-free
+  `whisper.cpp` engine (Apple-Silicon Metal) whose small model is downloaded on
+  first use; a source run falls back to `mlx-whisper` (the optional `[voice-mlx]`
+  extra). See ADR-039. A future audio-native agent's adapter forwards the audio
+  instead of transcribing. When no engine is available — or the model has not been
+  fetched yet — the voice is handed over as an audio file rather than lost.
+- **FR-023**: A group chat is a first-class peer. When the paired owner
+  @mentions the bot (or the message is delivered as an addressed group event)
+  the bot answers there; the group becomes an additional `channel_peers` row
+  keyed by `(channel, group chat id)`, inheriting the owner's `sender_id`. No
+  schema migration — the table's `(resource_id, chat_id)` unique key already
+  permits multiple peers per channel.
+- **FR-024**: The bot acts in a group ONLY on an addressed message (an
+  @mention of the bot). Un-addressed group messages are ignored. An addressed
+  message from a non-owner is refused with a short "not authorized" reply and
+  starts no turn.
+- **FR-025**: Forwarded chat records are flattened into readable text folded
+  into the turn so the agent sees them — SeaTalk
+  `combined_forwarded_chat_history` and Telegram `forward_origin`. Each entry
+  renders as `<sender>: <text | [image] url | [file] name>` under a
+  `[Forwarded chat record]` heading. Images carried by SeaTalk messages — a
+  directly-sent image, or any image nested (recursively) in a forwarded record
+  — are additionally downloaded with the app token (SeaTalk file links require
+  auth, so the URL alone is useless to the agent) and attached to the turn, so
+  a vision agent sees the actual picture, not just a link.
+- **FR-026**: Threads are read and replied-to in place, and a group reply
+  always lands in a thread — never the group main chat. On SeaTalk a thread's
+  id equals its root message's id: an @mention inside a thread already carries
+  that id, so the bot reads that thread's messages for context (SeaTalk
+  `get_thread_by_thread_id`) and replies into it; an @mention in the group main
+  chat carries no thread id, so the bot roots a fresh thread at that @mention
+  (replying under the @mention's own message id) and, since the thread holds
+  only the @mention itself, reads no history. A DM or group message sent in a
+  thread also replies into that thread. Reading *recent group-main* history is
+  intentionally NOT done (the SeaTalk group-chat-history permission is not
+  granted; the @mention message is self-contained). Telegram cannot fetch any
+  history (Bot API limitation), so on Telegram thread context is not read — the
+  bot answers on the @mention message and still replies into the forum topic. A
+  quoted/replied message contributes a `> sender: …` context prefix where the
+  platform inlines it.
+- **FR-027**: Each `(channel, chat, thread)` has its own turn queue/session,
+  so a DM turn, a group-main turn, and a thread turn never share state.
 
 ### Key Entities
 
@@ -375,8 +452,9 @@ status / notify`.
 - **ChannelPeer** — the paired owner of a channel: `(resource, chat_id)`,
   display name, paired-at, pointer to the active conversation, the paired
   sender's identity (`sender_id`), and sticky preferences (chosen agent).
-  One per channel today; keyed by chat so group chats can become
-  peers later without a schema change.
+  One row per (channel, chat): the paired owner plus one row per
+  group/thread the owner has addressed the bot in; the `(resource_id, chat_id)`
+  unique key already allows this with no migration.
 - **InboundMessage / InboundCallback / OutboundMessage** — the normalized
   envelopes every adapter produces and consumes; the core never sees platform
   payloads. Inbound carries the sender's identity (`sender_id`) for the owner
@@ -407,11 +485,53 @@ status / notify`.
 - **SC-006**: From one paired chat the owner reaches every registered agent
   with a chosen model (demonstrated by driving two scripted providers in tests).
 - **SC-007**: Every channel-driven turn
-  is queryable in the audit log by channel, peer, and agent; and every turn,
-  including on a channel that cannot edit messages, ends with a completion
-  summary in the chat (demonstrated against the edit-incapable fake adapter).
+  is queryable in the audit log by channel, peer, and agent; a clean success
+  sends no completion summary on any channel, while a turn that ends abnormally
+  (failed, interrupted, tool-limit) sends one reporting the outcome.
+
+## Machine affinity (spec 010 amendment)
+
+A channel's platform identity (a polled bot, a webhook endpoint) tolerates only
+ONE consumer, but channel definitions sync to every machine (spec 010). The
+channel runtime consults the framework-level `scope` field (machine axis
+only — a channel's `scope` entries accept only `"*"` as their value) to
+decide whether to start the adapter locally: `scope` carries exactly one
+exact-ULID machine entry (or none = dormant); the `"*"` key is rejected for
+channels (`Kind.validate_scope_shape`, ADR-045 review Fix 1) — it would match
+every machine at once, the double-adapter fight ADR-043 exists to prevent, by
+a different route. Only the machine present as that single entry starts the
+adapter. `scope == {}` (dormant everywhere — the equivalent of the
+pre-amendment `runs_on: null`) starts nowhere until the user picks a machine
+in the channel detail page. The creating surface defaults scope to
+`{"<creating-machine-id>": "*"}`. Rebinding is a normal config edit (an
+ordinary `scope` write) that propagates through sync; pairing state syncs
+with the vault (spec 010 state area `channel-peers`), so a rebound channel
+needs no re-pairing. During the propagation window (one sync round trip)
+both machines may briefly poll the platform at once — self-healing
+seconds-long overlap, accepted for a single-user tool.
+
+**`runs_on` → `scope` migration** (Amendment 2026-07-10 — machine × agent
+scope, [ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md)).
+The single-machine `runs_on: <machine_id>` field described above is
+**superseded** by the framework's machine axis: a data migration converts
+every existing channel's `runs_on: <machine_id>` to
+`scope: {"<machine_id>": "*"}`, and `runs_on: null` to `scope: {}`, on
+upgrade. `runs_on` is **not removed** from the schema or the API — old
+payloads and synced docs from not-yet-upgraded machines must still validate —
+but it becomes **inert**: the channel runtime reads `scope` only, and
+`runs_on` is documented as deprecated in place (a frozen pre-migration value;
+stale after any rebind; not consulted).
 
 ## Acceptance Scenarios
+
+### Scenario: a channel runs on exactly one machine
+
+- **Given** channels bound to this machine, to another machine, and to no
+  machine
+- **When** the runtime reconciles
+- **Then** only the channel bound to this machine starts its adapter
+- **And** rebinding a channel away from this machine stops it on the next
+  reconcile
 
 ### Scenario: register a telegram channel
 
@@ -605,6 +725,15 @@ status / notify`.
 - **When** a different member of the chat taps a selection-card button
 - **Then** the tap is ignored and the owner's agent/model is unchanged
 
+### Scenario: a group selection-card tap replies in the group/thread
+
+- **Given** a paired channel with a group peer, on a button-capable transport,
+  with a second agent registered
+- **When** the owner taps an `/agent` selection-card button in a group thread
+- **Then** the switch is applied to that group thread and the "switched"
+  confirmation is routed back into the group/thread (never a DM); a non-owner's
+  tap is refused with a routed "not authorized" reply and no switch
+
 ### Scenario: a channel-driven turn is audited with channel, peer, and agent
 
 - **Given** a paired channel
@@ -612,18 +741,529 @@ status / notify`.
 - **Then** an audit record names the channel, the peer, the agent, and the
   conversation
 
-### Scenario: a completion summary is sent after every turn
+### Scenario: a turn that does not end normally sends a completion summary
 
-- **Given** a paired channel on an adapter that cannot edit messages
-- **When** a turn completes
-- **Then** a compact completion summary is sent to the chat reporting the
-  outcome, and a failed turn reports the error
+- **Given** a paired channel
+- **When** a turn fails, is interrupted, or hits the tool-iteration limit
+- **Then** a compact completion summary is sent to the chat reporting the outcome
+  (the error / stop / limit) with tool count, duration, and tokens
+
+### Scenario: a clean success sends no completion summary
+
+- **Given** a paired channel (whether or not the transport can edit messages)
+- **When** a turn completes successfully
+- **Then** no completion summary is sent — the reply itself is the end-of-turn
+  signal
+
+### Scenario: channel progress lines describe each tool call from its input
+
+- **Given** a paired channel on an adapter that can edit messages
+- **When** the agent invokes a tool during a turn
+- **Then** the progress status line names the tool and a short descriptor drawn
+  from its input (e.g. the Bash description, the file basename for Read)
+
+### Scenario: reply text streams into the editable status message as it arrives
+
+- **Given** a paired channel on an adapter that can edit messages
+- **When** the agent's reply text arrives in deltas during a turn
+- **Then** the single status message shows tool-progress lines first, then is
+  edited in place with the accumulating reply text (plain, not HTML) so the user
+  watches the answer materialize; on finish the status message is deleted and the
+  final reply is sent once (HTML-rendered and paragraph-chunked)
+
+### Scenario: the streamed reply preview is clipped to the platform limit
+
+- **Given** a paired channel on an adapter that can edit messages
+- **When** the accumulating reply text grows past the platform's per-message limit
+- **Then** each interim edit is clipped to that limit (keeping the most recent
+  text behind a leading ellipsis) so the edit never fails, while the final reply
+  carries the full text
+
+### Scenario: a slow text-only reply streams into a status message
+
+- **Given** a paired channel on an adapter that can edit messages
+- **When** a text-only turn (no tool calls) keeps producing reply text past the
+  throttle interval
+- **Then** a status message is opened with the streaming reply text and edited in
+  place as the answer grows, then deleted on finish while the final reply is sent
+  once
+
+### Scenario: a fast text-only reply opens no status message
+
+- **Given** a paired channel on an adapter that can edit messages
+- **When** a text-only turn completes within the throttle interval
+- **Then** no status message is opened (no create → delete → resend flicker) — only
+  the single final reply is sent
+
+### Scenario: a supports_typing-only DM keeps the typing indicator alive during a long turn
+
+- **Given** a paired channel on an adapter that can show typing but cannot edit
+  (SeaTalk), in a direct chat
+- **When** a long turn runs
+- **Then** the typing indicator is re-sent periodically for the turn's duration
+  (an ephemeral action, no chat clutter), and is stopped when the turn ends
+
+### Scenario: a supports_typing-only group turn posts no interim status message
+
+- **Given** a paired channel on an adapter that can show typing but cannot edit
+  or delete (SeaTalk), in a group/thread
+- **When** a turn runs
+- **Then** no interim signal is posted (no typing heartbeat, no editable status
+  message) — only the final chunked reply lands in the originating group/thread
 
 ### Scenario: a group member who is not the paired sender is ignored
 
 - **Given** a peer paired with a stored sender identity
 - **When** a message arrives with the same chat id but a different sender id
 - **Then** no reply is sent and no turn is started
+
+### Scenario: the channel-driven agent is told it is on a chat channel
+
+- **Given** a channel-originated conversation
+- **When** a turn is driven from the channel
+- **Then** the agent receives a system-prompt note naming the channel and telling
+  it to keep replies concise and that it cannot click the user's OS dialogs,
+  while a web-UI conversation gets no such note
+
+### Scenario: an inbound photo is downloaded and drives a turn
+
+- **Given** a paired Telegram channel
+- **When** the owner sends a photo (with an optional caption)
+- **Then** the largest photo size is downloaded to the media dir and carried on
+  the inbound message as an attachment, and the caption becomes the message text
+
+### Scenario: a Telegram album is handled as one turn
+
+- **Given** a paired Telegram channel
+- **When** the owner sends a multi-photo album (delivered as separate messages
+  that share a `media_group_id`, the caption on the first item only)
+- **Then** the items are debounced and combined into a single inbound message
+  carrying all their attachments and the album's caption — one turn, not one per
+  photo — while a lone photo without a `media_group_id` still drives its turn
+  immediately
+
+### Scenario: an inbound image reaches a vision agent as an inline block
+
+- **Given** a turn carrying an image attachment
+- **When** the Claude adapter builds the turn's content
+- **Then** the image is a base64 `image` content block (a non-vision file becomes
+  a path pointer instead), so the bytes are sent inline for this turn only and
+  never stored in the chat database
+
+### Scenario: the agent sends a file to the user via a reply marker
+
+- **Given** a media-capable channel and an agent reply containing a
+  `MEDIA:/absolute/path` sentinel line (optionally `| caption`) for a file that exists
+- **When** the turn's reply is delivered
+- **Then** the file is uploaded (an image as a photo, otherwise a document) and the
+  sentinel line is removed from the text; ordinary prose — including a markdown
+  image `![alt](path)` — is not this syntax and is not uploaded
+
+### Scenario: an inbound voice message is transcribed for a text-only agent
+
+- **Given** a voice attachment on a turn for an agent that cannot hear audio
+- **When** the adapter prepares the turn
+- **Then** the audio is transcribed to text and folded into the prompt, and the
+  audio is not also sent as a file (a future audio-native agent would forward it)
+
+### Scenario: a PDF reaches a path-native agent as extracted text
+
+- **Given** a turn carrying a PDF (or office document) attachment for a
+  path-native agent (Codex)
+- **When** the adapter prepares the turn
+- **Then** the document is text-extracted and folded into the prompt as a
+  labelled `[Document: <name>]` block, and the document is not also sent as a
+  binary path note; when no extraction engine is available the document degrades
+  to a file path rather than wedging the turn
+
+### Scenario: an un-addressed group message is ignored
+
+- **Given** a paired channel and a group chat the bot is a member of
+- **When** a group message arrives with no @mention of the bot
+- **Then** no reply is sent and no turn or peer row is created for the group
+
+### Scenario: the owner @mentions the bot in a group main chat
+
+- **Given** a paired channel and a group chat with no active thread
+- **When** the owner @mentions the bot in the group's main chat
+- **Then** a turn runs and the reply is delivered into a fresh thread rooted at
+  that @mention (never the group main chat), no thread history is read, and a
+  `channel_peers` row is created for the group chat inheriting the owner's
+  `sender_id`
+
+### Scenario: a non-owner @mention in a group is refused
+
+- **Given** a paired channel with a known owner
+- **When** someone other than the owner @mentions the bot in a group chat
+- **Then** the bot replies that the sender is not authorized and no turn is
+  started
+
+### Scenario: an empty sender_id in a group cannot bypass the owner gate
+
+- **Given** a paired channel with a known owner and a group chat
+- **When** an addressed group message arrives with no resolvable `sender_id`
+  (the transport failed to supply one)
+- **Then** the bot refuses it exactly like a non-owner sender — no turn is
+  started and no peer row is created
+
+### Scenario: require_mention on drops an un-addressed group message
+
+- **Given** a paired channel with `require_mention` on (the default)
+- **When** an un-addressed group message arrives (no @mention/reply-to-bot),
+  even from the owner
+- **Then** it is dropped at the mention gate — no reply, no turn, and no peer row
+
+### Scenario: require_mention off admits an un-addressed owner group message
+
+- **Given** a paired channel with `require_mention` off
+- **When** an un-addressed group message arrives from the owner
+- **Then** it passes the mention gate and drives a turn (still owner-gated: a
+  non-owner would be refused by the sender checks below the gate)
+
+### Scenario: ignore_other_mentions drops a message that also @mentions a human
+
+- **Given** a paired channel with `ignore_other_mentions` on
+- **When** a group message @mentions the bot but also @mentions another user
+- **Then** it is dropped silently — no reply and no turn — so the bot does not
+  butt into human-aimed traffic
+
+### Scenario: ignore_other_mentions off still answers when @mentioned alongside a human
+
+- **Given** a paired channel with `ignore_other_mentions` off (the default)
+- **When** a group message @mentions the bot alongside another user
+- **Then** the turn still runs — the extra human @mention does not suppress it
+
+### Scenario: a group slash-command reply routes to the group/thread
+
+- **Given** a paired channel and a group chat/thread the owner has messaged in
+- **When** the owner sends a slash command (e.g. `/status`) inside that
+  group/thread
+- **Then** the command's reply is routed with the same `chat_kind`/`thread_id`
+  as the triggering message, not the DM defaults
+
+### Scenario: the owner @mentions the bot inside a thread
+
+- **Given** a paired channel and a group chat with a thread, on a transport
+  that can fetch thread history
+- **When** the owner @mentions the bot inside that thread
+- **Then** the thread's own messages are read and folded into the turn, and
+  the reply is routed back into the same thread
+
+### Scenario: a forwarded chat record reaches the agent
+
+- **Given** a paired channel
+- **When** the owner forwards a chat record to the bot
+- **Then** the turn's message text carries a `[Forwarded chat record]` block
+  listing each forwarded item
+
+### Scenario: thread-history images reach a vision agent
+
+- **Given** a paired channel and a group thread whose own messages include an
+  image (a directly-sent one and one nested in a forwarded record)
+- **When** the owner @mentions the bot inside that thread
+- **Then** the thread's images are downloaded and attached to the turn — reaching
+  the vision agent as real bytes, not a dead auth-gated file link
+
+### Scenario: each group thread is an independent conversation
+
+- **Given** a paired channel and a group whose threads share one `chat_id`
+- **When** the owner drives a turn in thread A and, before it finishes, a turn
+  in thread B
+- **Then** the two threads resolve to two different conversations, both turns
+  run concurrently, and neither is refused with "a turn is already running"
+
+### Scenario: one bot runs different agents in different threads
+
+- **Given** a paired channel and a group
+- **When** the owner switches thread A to a different agent and leaves thread B
+  on the channel default
+- **Then** thread A's conversation drives the switched agent and thread B's
+  drives the default — one bot running different agents per thread
+
+### Scenario: SeaTalk outbound media is delivered into the originating thread
+
+- **Given** a paired SeaTalk channel and a group-thread turn whose reply
+  contains a `MEDIA:/absolute/path` sentinel line for a file that exists
+- **When** the turn's reply is delivered
+- **Then** SeaTalk uploads the file (an image as an `image` message, otherwise a
+  `file` message) into that same group and thread — not the group main chat —
+  because `supports_media` is now true and `send_media` routes on the turn's
+  chat_kind + thread_id; any caption follows as a threaded text message
+
+### Scenario: a redelivered event is processed once
+
+- **Given** a paired channel that has already handled an inbound event
+- **When** the platform redelivers that same event (same id) after a slow ack or
+  a network hiccup
+- **Then** the redelivery is dropped and the turn runs exactly once — no double
+  reply or duplicate work — while a genuinely new event still drives its own turn
+
+### Scenario: an inbound SeaTalk file drives a turn
+
+- **Given** a paired SeaTalk channel
+- **When** the owner sends a file directly (a `file` message whose
+  `file.content` is an auth-gated file URL and `file.filename` the original name)
+- **Then** the bytes are downloaded with the app token and carried on the inbound
+  message as an attachment keeping its real filename and a non-image mime, so the
+  file drives a turn like a photo does instead of hitting the "send text, a
+  photo, or a file" reply
+
+### Scenario: an inbound attachment is persisted as a reference on the user message
+
+- **Given** a paired channel driving a turn with an image attachment
+- **When** the turn starts
+- **Then** the persisted user message carries an `AttachmentBlock` reference
+  (path, mime, filename — never the bytes) after its text, so the attachment
+  survives in history
+
+### Scenario: a later turn re-materialises the attachment from history
+
+- **Given** a persisted user message that carries an attachment reference
+- **When** the turn task runs (including after a daemon restart, when nothing is
+  threaded down)
+- **Then** the adapter receives an `Attachment` with the reference's path/mime,
+  re-materialised from the last user message in history — the single source of
+  truth
+
+### Scenario: the message API exposes an attachment block without leaking the path
+
+- **Given** a user message with an attachment reference
+- **When** the client reads the conversation's messages
+- **Then** the content block has `type=attachment` with `filename` and `mime`,
+  and no `path` field is present on the wire
+
+### Scenario: the media dir prune deletes stale files and keeps fresh ones
+
+- **Given** the channel-media dir with one file older than 30 days and one recent
+- **When** the retention sweep runs
+- **Then** the stale file is deleted and the recent one is kept
+
+### Scenario: the management surface lists each Coffer-hosted channel with status, owner, agent, and health
+
+- **Given** a registered and running Coffer-hosted channel with a paired owner
+  and a routed agent
+- **When** the management surface reads the channel
+- **Then** it reports the channel's enabled status, its live health (adapter
+  running), the paired owner, and the routed agent — mirroring the MCP-server /
+  memory / skill management surfaces
+
+### Scenario: receipt and completion are acked with reactions where supported
+
+- **Given** a paired channel on an adapter that supports reactions (Telegram)
+- **When** the owner sends a message that drives a clean turn
+- **Then** a 👀 reaction is set on the owner's own message immediately on receipt and
+  a ✅ reaction on completion, both targeting that inbound message id
+
+### Scenario: a transport without reaction support attempts no reaction
+
+- **Given** a paired channel on an adapter that does not support reactions (SeaTalk,
+  whose receipt-and-progress cue is the typing signal)
+- **When** the owner sends a message that drives a turn
+- **Then** no reaction is attempted, while the turn still runs and replies normally
+
+### Scenario: a failed reaction never breaks the turn
+
+- **Given** a paired channel on a reaction-supporting adapter whose set_reaction fails
+- **When** the owner sends a message that drives a turn
+- **Then** the reply is still delivered — the best-effort reaction is suppressed
+
+### Scenario: a group turn names the group it came from
+
+- **Given** a paired channel whose owner @mentions the bot in a group thread
+- **When** the turn is driven
+- **Then** the turn text opens with a `[Message origin]` block naming the platform,
+  the chat kind and title, the chat id, the thread id, and the sender
+
+### Scenario: a DM turn names its own chat
+
+- **Given** a paired channel and a DM from its owner
+- **When** the turn is driven
+- **Then** the origin block names the platform and the direct chat by id, omitting
+  the thread line a DM has no value for
+
+### Scenario: every turn carries its origin
+
+- **Given** a paired channel that has already run one turn
+- **When** the owner sends a second message
+- **Then** that turn's text opens with its own origin block too — the provenance is
+  not a first-turn-only header
+
+### Scenario: a slash command keeps its leading slash
+
+- **Given** a paired channel
+- **When** the owner sends `/help`
+- **Then** it is handled as a command (no origin block is prefixed, no conversation
+  is created)
+
+## Channels as a management plane (north star)
+
+Channels are managed the way Coffer manages MCP servers, memory, and skills:
+one place to register, credential, configure, and observe every way a user
+reaches their agents over chat. The distinguishing capability — which no
+agent-native or official channel can offer — is **one bot controls all agents**:
+a single paired SeaTalk/Telegram bot drives *any* managed agent and switches
+between them, so a user runs their whole agent fleet from one chat.
+
+Two kinds of channel live under this plane:
+
+- **Coffer-hosted channel (this spec's adapters).** Coffer runs the SeaTalk /
+  Telegram adapter, normalizes each message (media download, forward flattening,
+  owner-gate, audit, vault), and drives **any** managed agent for one turn —
+  switchable per conversation, and (since each thread is its own conversation,
+  FR-032) per thread, so one bot can run Claude Code in one thread and Codex in
+  another. This is Coffer's moat: agents with no channel of their own (Claude
+  Code, Codex) reach IM *only* this way; and **SeaTalk is
+  Coffer-hosted for every agent, because no external gateway speaks SeaTalk.**
+  All of spec 009 — including the enhancements below (FR-028…FR-042) — describes
+  this path. The one seam that keeps it agent-agnostic: every inbound message
+  becomes text plus on-disk `Attachment(path, mime, filename)`, and each agent
+  adapter materializes attachments its own way (Claude inlines images/PDFs;
+  Codex receives file paths; audio is transcribed upstream). The
+  channel layer never branches per agent.
+- **Externally-hosted channels are a non-goal.** An agent-native gateway
+  (OpenClaw, Hermes run standalone) or an official vendor integration
+  (Claude-in-Slack, Codex-in-Slack, Cursor-in-Slack, Claude Code's official
+  Telegram/Discord/iMessage plugin) owns its own transport and drives only its
+  own agent. Coffer neither proxies these nor manages them: stacking Coffer's
+  channel in front would collide with their own runtime; holding a token that is
+  then written into an external process's own config defeats the vault (secrets
+  must stay encrypted until point of use); and the official cloud integrations
+  have no local credential to hold at all. When a user wants one of these, they
+  set it up through that tool's own flow — Coffer's docs point the way, nothing
+  more. A native/official channel that does not support a platform (e.g. SeaTalk)
+  simply does not run there; **Coffer does not bridge it onto SeaTalk.** Coffer's
+  channel plane manages only what Coffer hosts.
+
+Because official Telegram/Slack integrations either don't exist for most agents
+(Codex/Gemini/OpenCode have no official Telegram; SeaTalk has no official
+anything) or are single-agent and often cloud-only, the Coffer-hosted channel
+is not redundant with them — it is the only path to unified, local, multi-agent
+control, and the enhancements below are exactly the group/thread/voice/media
+capabilities the official personal bridges lack.
+
+### E. Unified channel management and one-bot-all-agents
+
+- **FR-040**: One bot controls all agents. A single paired Coffer-hosted bot
+  drives any managed agent, switchable via `/agent` and selection cards; agent
+  choice is per conversation, and since each thread is its own conversation
+  (FR-032) one bot can run different agents in different threads concurrently.
+- **FR-041**: Coffer-hosted channels have a unified management surface. A
+  management view lists every Coffer-hosted channel with its status, paired
+  owner, agent, and health, mirroring the MCP-server / memory / skill management
+  surfaces; each channel's credentials (bot tokens, app secrets) are held in the
+  Coffer vault. Externally-hosted channels are out of scope (a non-goal).
+
+### A. Media pipeline completeness
+
+- **FR-028**: SeaTalk inbound media covers all types, not just images.
+  `handle_event` downloads files/documents, video, and voice/audio with the app
+  token — each becoming an `Attachment` — as it already does for images. A
+  directly-sent PDF or voice memo drives a turn like a photo does; only a
+  message with nothing text-or-downloadable still gets the "send text, a photo,
+  or a file" reply.
+- **FR-029**: Thread-history media is downloaded, not flattened to a dead link.
+  When the owner @mentions the bot inside a thread, `fetch_thread` downloads the
+  images/files carried by the thread's own messages (recursing forwarded records
+  within them) and attaches them to the turn, alongside the existing flattened
+  text. (Previously thread media surfaced only as an auth-gated `[image] <url>`
+  the agent could not open.)
+- **FR-030**: PDFs and office documents reach every agent as extracted text, not
+  as a vision input. A document attachment is text-extracted into a context
+  block so path-native agents (Codex) and vision agents alike
+  see its content; images stay vision-inlined for agents that support it.
+- **FR-031**: SeaTalk outbound media is delivered and thread-aware. `send_media`
+  is wired to SeaTalk's file-upload API (`supports_media` true); an agent
+  `MEDIA:/path` sentinel sends the file back into the same chat **and
+  thread** the turn came from — a generated chart returns to the group thread,
+  not the main chat (closing the gap where SeaTalk agents could not return
+  files at all, and where outbound media ignored the thread).
+
+### B. Conversation model
+
+- **FR-032**: Each group thread is its own conversation. Conversation identity is
+  keyed by `(channel, chat_id, thread_id)`, not by the peer alone. A DM
+  (`thread_id=""`) is one conversation; each thread in a group is independent —
+  its own history and its own turn lock. Concurrent turns in different threads
+  of one group no longer collide on a single conversation (the "a turn is
+  already running" error). Pairing/owner identity stays on the peer row.
+- **FR-033**: Inbound attachments are visible on later turns. The persisted user
+  message records an attachment *reference* as an `AttachmentBlock` (path, mime,
+  filename; the bytes stay in the media dir, never the chat DB) — the single
+  source of truth. The turn task re-materializes the current turn's attachments
+  by reading them back from the last user message in history (not a threaded
+  param), so materialization survives a daemon restart and stays consistent with
+  what the web shows; scope is within the conversation (no cross-session /
+  agent-switch full-history replay). The web Chat page renders the reference as a
+  compact `📎 filename · mime` chip; the local path is never emitted to the wire.
+  The media dir is bounded by a 30-day mtime retention prune on the retention
+  cadence (bytes are re-downloadable; no size cap). See ADR-041.
+- **FR-042**: Every turn carries its own origin. The turn text opens with a
+  `[Message origin]` block naming the platform, the chat (kind, the chat title
+  where the platform supplies one, and always the chat id), the thread, and the
+  sender (display name **and** the stable platform id — SeaTalk `employee_code`,
+  Telegram `from.id` — which a platform tool call takes and which, in a group,
+  appears nowhere else because `chat_id` is the group's) — so an agent asked "which group is this?" answers from the turn it was
+  given instead of listing the bot's groups and inferring, and a platform tool
+  call (send-to-group, fetch-group-info) has a chat id to aim at. The block is
+  folded in after command detection (a prefixed `/help` would stop being a
+  command) and after the empty-envelope check, and is persisted on the user
+  message exactly like thread context (FR-029) — the single source of truth
+  (FR-033) stays one string. It rides on **every** turn, not just a
+  conversation's first: `/agent` can swap the agent mid-conversation (FR-040)
+  and a resumed session would otherwise lose it. Title and sender name are
+  chat-member-settable, so both are collapsed to one clipped line before they
+  reach the prompt — a rename cannot forge extra origin lines. Where a platform
+  hands the chat title over for free it is included (Telegram `chat.title`);
+  where it does not (SeaTalk group events carry only `group_id`) the chat is
+  named by id alone, which an agent can resolve to a name through the platform's
+  own tools.
+
+### C. Group UX and gating
+
+- **FR-034**: Group selection-card taps route to the group/thread.
+  `InboundCallback` carries `chat_kind`/`thread_id` and is owner-gated by the
+  group's peer (`get_by_chat`, not the single-peer `get`); a button tap's reply
+  lands in the same group/thread, not a DM.
+- **FR-035**: Per-group inbound gating is configurable. A channel may set
+  require-mention (default on for groups — the bot answers only when @mentioned
+  or replied-to) and ignore-messages-that-@-someone-else (opt-in — a group
+  message that @mentions any non-bot user is dropped silently, even when it also
+  mentions the bot) — so a bot sitting in a busy group answers only when it
+  should. Both are plain config bools; the channel stays owner-gated regardless,
+  so this is about *when* to answer, not *who* may drive turns.
+
+### D. Platform polish
+
+- **FR-036**: Receipt and progress are acknowledged, capability-gated (never by
+  transport type). On a `supports_reactions` transport (Telegram) an ack reaction
+  (👀) marks receipt on the owner's own message immediately, and a ✅ marks
+  completion on a clean finish (an errored/interrupted turn keeps just the receipt).
+  A transport without reactions (SeaTalk) uses its typing/working signal as the
+  receipt-and-progress cue instead. All best-effort — a failed ack never breaks the
+  turn.
+- **FR-037**: Long replies stream by the platform's best mechanism, chosen from
+  the adapter's capabilities (never its type). A `supports_edit` platform
+  (Telegram) streams the reply text into ONE throttled editable status message,
+  opened once a turn runs long enough to warrant it — either tool activity opens
+  it (tool-progress lines show first, then the reply text takes over the same
+  message as it arrives) or, on a text-only turn, the reply itself opens it once
+  it has run past the throttle interval. A reply that finishes within that
+  interval opens no status message at all (no create → delete → resend flicker) —
+  its final send is enough. Interim edits are PLAIN and clipped to the
+  per-message limit, so a long or partial-markdown preview never breaks the
+  platform parser or exceeds the cap; on finish that message is deleted and the
+  final reply is sent HTML-rendered and paragraph-chunked to the platform limit. A
+  `supports_typing`-only platform (SeaTalk) cannot stream, so on a DM it keeps a
+  periodic typing heartbeat alive during the turn (an ephemeral action, zero
+  chat clutter) and sends the final chunked reply; a SeaTalk group/thread turn
+  gets no interim signal at all (it can neither edit, delete, nor group-type) —
+  the final chunked reply is the completion signal. All best-effort — a failed
+  edit or heartbeat never breaks the turn.
+- **FR-038**: Telegram albums are one turn. Messages sharing a `media_group_id`
+  are debounced into a single turn carrying all their attachments, not one turn
+  per photo.
+- **FR-039**: Inbound events are de-duplicated. A redelivered platform event
+  (same message id) is processed once.
 
 ## Assumptions
 
@@ -633,7 +1273,10 @@ status / notify`.
 - For SeaTalk, the user runs a tunnel (cloudflared, ngrok, or equivalent)
   from a public URL to the local callback port; Coffer documents this in the
   quickstart but does not manage the tunnel.
-- Channels carry text conversations; rich media arrives as a polite
-  "text only" reply. The one exception is **command selection cards**: on a
+- Channels carry text plus inbound photos and files (FR-020): media is
+  downloaded and handed to the agent, while an empty message with nothing
+  downloadable gets a polite "send text, a photo, or a file" reply. Outbound is
+  text plus files the agent chooses to send (FR-021, on a `supports_media`
+  transport) and, as a rich exception, **command selection cards**: on a
   transport that `supports_buttons`, `/agent` and `/model` may render their
   choices as interactive buttons (FR-018).

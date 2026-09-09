@@ -167,7 +167,9 @@ describe("AgentOverviewTab", () => {
   });
 
   test("confirm stays disabled until the connection test passes", () => {
-    useProvidersMock.mockReturnValue({ data: [makeConn({ name: "official", is_active: true }), agnes()] });
+    useProvidersMock.mockReturnValue({
+      data: [makeConn({ name: "official", is_active: true }), agnes()],
+    });
     useListMock.mockReturnValue({
       mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: string[] }) => void }) =>
         opts?.onSuccess?.({ models: ["agnes-2.0"] }),
@@ -182,7 +184,9 @@ describe("AgentOverviewTab", () => {
   });
 
   test("a failed test keeps confirm disabled and shows the error message", () => {
-    useProvidersMock.mockReturnValue({ data: [makeConn({ name: "official", is_active: true }), agnes()] });
+    useProvidersMock.mockReturnValue({
+      data: [makeConn({ name: "official", is_active: true }), agnes()],
+    });
     useListMock.mockReturnValue({
       mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: string[] }) => void }) =>
         opts?.onSuccess?.({ models: ["agnes-2.0"] }),
@@ -202,7 +206,9 @@ describe("AgentOverviewTab", () => {
   });
 
   test("test then confirm binds both model slots and activates the connection", () => {
-    useProvidersMock.mockReturnValue({ data: [makeConn({ name: "official", is_active: true }), agnes()] });
+    useProvidersMock.mockReturnValue({
+      data: [makeConn({ name: "official", is_active: true }), agnes()],
+    });
     useListMock.mockReturnValue({
       mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: string[] }) => void }) =>
         opts?.onSuccess?.({ models: ["agnes-2.0", "agnes-1.5-flash"] }),

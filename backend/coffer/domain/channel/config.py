@@ -51,6 +51,24 @@ class _CommonChannelFields(BaseModel):
     # value reaches turn time and fails with UNKNOWN_AGENT.
     default_agent: str = "claude_code"
     default_agent_config: dict[str, Any] | None = None
+    # Group inbound gating (FR-035). ``require_mention`` (default on) keeps the
+    # bot silent in a group until @mentioned / replied-to; ``ignore_other_mentions``
+    # (opt-in) drops a group message that @mentions any non-bot user, even when
+    # it also mentions the bot, so the bot never butts into human-aimed traffic.
+    require_mention: bool = True
+    ignore_other_mentions: bool = False
+    # DEPRECATED / INERT (ADR-045 amendment, spec 009): superseded by the
+    # framework-level machine x agent `scope` column on the resource itself
+    # (see coffer.domain.scope, coffer.domain.resource.Resource.scope).
+    # ChannelRuntime no longer reads this field — it consults `scope` via
+    # `machine_in_scope`. Kept in the schema (not removed) purely so old
+    # config payloads / docs referencing it still validate; a migration
+    # (0047) backfills `scope` from whatever value this held at upgrade time.
+    # Was: the machine_id of the ONE machine whose runtime starts this
+    # channel's adapter — a bot identity polled (or a webhook received) from
+    # two synced machines at once would fight over the platform. None = not
+    # started anywhere until the user picks a machine.
+    runs_on: str | None = Field(default=None, max_length=64)
 
 
 class TelegramChannelConfig(_CommonChannelFields):

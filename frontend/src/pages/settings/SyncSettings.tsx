@@ -7,31 +7,24 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { StatusBadge, type StatusTone } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { translateApiError } from "@/lib/api/errors";
-import {
-  useRunSync,
-  useSyncConfig,
-  useSyncStatus,
-  useUpdateSyncConfig,
-} from "@/lib/hooks/useSync";
+import { ApiError, translateApiError } from "@/lib/api/errors";
+import { useRunSync, useSyncConfig, useSyncStatus, useUpdateSyncConfig } from "@/lib/hooks/useSync";
 
-import { SyncConflictPanel } from "./SyncConflictPanel";
+import { SyncMachinesCard } from "./SyncMachinesCard";
 import { SyncMasterKeyCard } from "./SyncMasterKeyCard";
+import { SyncStatusLine } from "./SyncStatusLine";
 
-const SYNC_TONE: Record<string, StatusTone> = {
-  clean: "success",
-  conflicted: "warning",
-  credentials_locked: "warning",
-  error: "danger",
-  syncing: "info",
-  unconfigured: "neutral",
-};
+/** The actionable hint of a rejected remote save (SYNC_REMOTE_UNREACHABLE). */
+function saveHint(error: unknown): string | null {
+  if (!(error instanceof ApiError) || error.code !== "SYNC_REMOTE_UNREACHABLE") return null;
+  const hint = (error.details as { hint?: string } | undefined)?.hint;
+  return hint ?? null;
+}
 
 export function SyncSettings() {
   const { t } = useTranslation();
@@ -41,6 +34,7 @@ export function SyncSettings() {
   const run = useRunSync();
   const [remote, setRemote] = useState("");
   const [branch, setBranch] = useState("main");
+  const [pollRemote, setPollRemote] = useState(15);
   const [enabled, setEnabled] = useState(false);
   const [auto, setAuto] = useState(false);
   const [interval, setIntervalSeconds] = useState(300);
@@ -49,6 +43,7 @@ export function SyncSettings() {
     if (!config) return;
     setRemote(config.remote ?? "");
     setBranch(config.branch);
+    setPollRemote(config.poll_remote_seconds);
     setEnabled(config.enabled);
     setAuto(config.auto);
     setIntervalSeconds(config.interval_seconds);
@@ -73,6 +68,7 @@ export function SyncSettings() {
       enabled,
       auto,
       interval_seconds: interval,
+      poll_remote_seconds: pollRemote,
       ...override,
     });
 
@@ -83,8 +79,6 @@ export function SyncSettings() {
     if (interval !== config?.interval_seconds) persist({ interval_seconds: interval });
   };
 
-  const syncTone: StatusTone = status ? (SYNC_TONE[status.status] ?? "neutral") : "neutral";
-
   return (
     <div className="space-y-6">
       <Card>
@@ -94,29 +88,7 @@ export function SyncSettings() {
         <CardContent className="space-y-4">
           <p className="text-sm text-foreground/70">{t("settings.sync.description")}</p>
 
-          {status && (
-            <div className="rounded-md border p-3 text-sm">
-              <span className="text-foreground/60">{t("settings.sync.status")}: </span>
-              <span role="status">
-                <StatusBadge
-                  tone={syncTone}
-                  label={t(`settings.sync.statuses.${status.status}`)}
-                  pulse={status.status === "syncing"}
-                />
-              </span>
-              {status.last_sync_at && (
-                <span className="ml-2 text-foreground/50">
-                  {t("settings.sync.lastSync")}: {new Date(status.last_sync_at).toLocaleString()}
-                </span>
-              )}
-              {status.locked_refs.length > 0 && (
-                <p className="mt-1 text-amber-600">
-                  {t("settings.sync.lockedHint", { refs: status.locked_refs.join(", ") })}
-                </p>
-              )}
-              {status.last_error && <p className="mt-1 text-red-600">{status.last_error}</p>}
-            </div>
-          )}
+          {status && <SyncStatusLine status={status} />}
 
           <div className="space-y-2">
             <Label htmlFor="sync-remote">{t("settings.sync.remote")}</Label>
@@ -177,9 +149,14 @@ export function SyncSettings() {
           {update.error && (
             <p className="text-sm text-red-600">{translateApiError(t, update.error)}</p>
           )}
-          {run.error && (
-            <p className="text-sm text-red-600">{translateApiError(t, run.error)}</p>
+          {/* A rejected remote save carries an actionable hint
+              (auth/not_found/network) — render the guidance, not just stderr. */}
+          {saveHint(update.error) && (
+            <p className="text-sm text-foreground/70">
+              {t(`settings.sync.errorHints.${saveHint(update.error)}`)}
+            </p>
           )}
+          {run.error && <p className="text-sm text-red-600">{translateApiError(t, run.error)}</p>}
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => run.mutate()} disabled={run.isPending}>
               {t("settings.sync.syncNow")}
@@ -188,7 +165,7 @@ export function SyncSettings() {
         </CardContent>
       </Card>
 
-      <SyncConflictPanel />
+      <SyncMachinesCard />
 
       <SyncMasterKeyCard />
     </div>

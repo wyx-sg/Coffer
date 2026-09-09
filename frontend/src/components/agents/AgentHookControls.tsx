@@ -3,10 +3,12 @@
 // left, a Switch on the right) so it sits inside the Memory tab's combined box
 // next to the "disable native memory" toggle — both govern what Coffer feeds the
 // agent at session start. Toggling the switch on installs the SessionStart hook
-// (POST), off uninstalls it (DELETE), with pending state + inline error. When
-// the agent type has no hook support the status read fails with a 422
-// HOOK_INSTALL_UNSUPPORTED — we present a disabled switch + explanatory text so a
-// hook-less agent type never shows a broken control. No Card wrapper: the parent
+// (POST), off uninstalls it (DELETE), with pending state + inline error. When the
+// agent type declares no context injection, `status` succeeds with
+// `supported: false` (it never 422s — only install/uninstall do), so we read that
+// flag to present a disabled switch + explanatory text rather than a control that
+// would fail on click. The legacy 422 check is kept as a belt-and-braces fallback
+// for a daemon older than the `supported` field. No Card wrapper: the parent
 // provides the box + padding.
 import { useTranslation } from "react-i18next";
 
@@ -17,8 +19,8 @@ import { useAgentHookInstall, useAgentHookStatus } from "@/lib/hooks/useAgents";
 
 /**
  * Session-start hook toggle row. Reads install status; when the agent type
- * doesn't support hooks (422 `HOOK_INSTALL_UNSUPPORTED`), renders a disabled
- * switch with an explanatory line instead of a control that would always fail.
+ * doesn't support hooks (`supported: false`), renders a disabled switch with an
+ * explanatory line instead of a control that would always fail.
  */
 export function AgentHookToggle({ name }: { name: string }) {
   const { t } = useTranslation();
@@ -26,7 +28,8 @@ export function AgentHookToggle({ name }: { name: string }) {
   const mutate = useAgentHookInstall(name);
 
   const unsupported =
-    status.error instanceof ApiError && status.error.code === "HOOK_INSTALL_UNSUPPORTED";
+    status.data?.supported === false ||
+    (status.error instanceof ApiError && status.error.code === "HOOK_INSTALL_UNSUPPORTED");
   const installed = status.data?.installed ?? false;
 
   return (

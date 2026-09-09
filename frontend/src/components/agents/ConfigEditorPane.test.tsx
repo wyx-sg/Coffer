@@ -51,8 +51,8 @@ describe("ConfigEditorPane", () => {
     expect(screen.queryByText("What this file is for.")).not.toBeInTheDocument();
   });
 
-  test("renders the memory-projection annotation when memoryBlock is set", () => {
+  test("renders the legacy-memory-block annotation when memoryBlock is set", () => {
     render(<ConfigEditorPane {...baseProps({ memoryBlock: true })} />);
-    expect(screen.getByText(/memory-projection block/i)).toBeInTheDocument();
+    expect(screen.getByText(/legacy Coffer memory block/i)).toBeInTheDocument();
   });
 });

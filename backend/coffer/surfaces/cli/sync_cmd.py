@@ -7,6 +7,7 @@ from typing import Any
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 
 from coffer.surfaces.cli import _client as _cli_client
 
@@ -16,6 +17,8 @@ app = typer.Typer(
 )
 key_app = typer.Typer(help="Out-of-band master-key transfer for new machines")
 app.add_typer(key_app, name="key")
+override_app = typer.Typer(help="Per-machine config overrides (applied on this machine only)")
+app.add_typer(override_app, name="override")
 _console = Console()
 
 
@@ -35,6 +38,11 @@ def _print_status(payload: dict[str, Any]) -> None:
     if payload.get("locked_refs"):
         _console.print(f"  locked credentials: {', '.join(payload['locked_refs'])}")
         _console.print("  (run 'coffer sync key import <path>' to unlock)")
+    if payload.get("quarantined_refs"):
+        _console.print(
+            f"  quarantined (import failed here): {', '.join(payload['quarantined_refs'])}"
+        )
+        _console.print("  (kept in the workspace and retried every run)")
     if payload.get("last_error"):
         _console.print(f"  [red]error:[/red] {payload['last_error']}")
 
@@ -116,6 +124,9 @@ def config(
     ctx: typer.Context,
     auto: str | None = typer.Option(None, "--auto", help="on | off — enable auto-sync"),
     interval: int | None = typer.Option(None, "--interval", help="Auto-sync interval (seconds)"),
+    poll: int | None = typer.Option(
+        None, "--poll", help="Remote-head probe cadence for auto-sync (seconds)"
+    ),
     remote: str | None = typer.Option(None, "--remote", help="Change the git remote"),
     branch: str | None = typer.Option(None, "--branch", help="Change the branch"),
     enable: bool = typer.Option(False, "--enable", help="Enable sync"),
@@ -128,11 +139,13 @@ def config(
         current = c.get("/sync/config")
         _cli_client.check(current, verbose=verbose)
         cfg = current.json()
-        if any(v is not None for v in (auto, interval, remote, branch)) or enable or disable:
+        if any(v is not None for v in (auto, interval, poll, remote, branch)) or enable or disable:
             if auto is not None:
                 cfg["auto"] = auto.lower() in ("on", "true", "yes", "1")
             if interval is not None:
                 cfg["interval_seconds"] = interval
+            if poll is not None:
+                cfg["poll_remote_seconds"] = poll
             if remote is not None:
                 cfg["remote"] = remote
             if branch is not None:
@@ -145,6 +158,30 @@ def config(
             _cli_client.check(r, verbose=verbose)
             cfg = r.json()
     typer.echo(_json.dumps(cfg, indent=2))
+
+
+@app.command()
+def machines(
+    ctx: typer.Context,
+    rename: str | None = typer.Option(
+        None, "--rename", help="Rename this machine (display name only)"
+    ),
+) -> None:
+    """List every machine known to this vault; --rename renames this one."""
+    verbose = _verbose(ctx)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        if rename is not None:
+            put = c.put("/sync/machine", json={"display_name": rename})
+            _cli_client.check(put, verbose=verbose)
+        r = c.get("/sync/machines")
+        _cli_client.check(r, verbose=verbose)
+    for m in r.json()["machines"]:
+        marker = " [dim](this machine)[/dim]" if m["is_local"] else ""
+        last = m.get("last_sync_at") or "never"
+        plat = m.get("platform") or "?"
+        name = escape(m["display_name"])
+        _console.print(f"- [bold]{name}[/bold]{marker}  {plat}  last sync: {last}")
 
 
 @app.command()
@@ -197,3 +234,56 @@ def key_import(
         r = c.post("/sync/key/import", json={"path": path})
         _cli_client.check(r, verbose=verbose)
     _print_status(r.json())
+
+
+@override_app.command("list")
+def override_list(ctx: typer.Context) -> None:
+    """Show this machine's per-resource config overrides."""
+    verbose = _verbose(ctx)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get("/sync/overrides")
+        _cli_client.check(r, verbose=verbose)
+    typer.echo(_json.dumps(r.json()["overrides"], indent=2, ensure_ascii=False))
+
+
+@override_app.command("set")
+def override_set(
+    ctx: typer.Context,
+    ref: str = typer.Argument(..., help="Resource as <kind>:<name>"),
+    patch: str = typer.Argument(..., help='JSON merge patch, e.g. \'{"config_dir": "/opt/x"}\''),
+) -> None:
+    """Set a per-machine merge patch; applies on the next sync run."""
+    verbose = _verbose(ctx)
+    kind, _, name = ref.partition(":")
+    if not kind or not name:
+        typer.echo("ref must be <kind>:<name>", err=True)
+        raise typer.Exit(2)
+    try:
+        parsed = _json.loads(patch)
+    except _json.JSONDecodeError:
+        typer.echo("patch must be valid JSON", err=True)
+        raise typer.Exit(2) from None
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.put(f"/sync/overrides/{kind}/{name}", json={"patch": parsed})
+        _cli_client.check(r, verbose=verbose)
+    typer.echo(f"override set for {kind}:{name} (applies on the next sync run)")
+
+
+@override_app.command("unset")
+def override_unset(
+    ctx: typer.Context,
+    ref: str = typer.Argument(..., help="Resource as <kind>:<name>"),
+) -> None:
+    """Remove this machine's merge patch for a resource."""
+    verbose = _verbose(ctx)
+    kind, _, name = ref.partition(":")
+    if not kind or not name:
+        typer.echo("ref must be <kind>:<name>", err=True)
+        raise typer.Exit(2)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.delete(f"/sync/overrides/{kind}/{name}")
+        _cli_client.check(r, verbose=verbose)
+    typer.echo(f"override removed for {kind}:{name}")

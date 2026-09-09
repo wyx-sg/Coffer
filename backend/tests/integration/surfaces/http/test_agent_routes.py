@@ -106,6 +106,23 @@ def test_agent_get_one(tmp_path, monkeypatch):
         assert "skill_dir_override" not in r.json()
 
 
+def test_agent_out_has_no_capability_matrix(tmp_path, monkeypatch):
+    """FR-003a: with the supported types narrowed to claude_code + codex, every
+    agent supports every facet — so AgentOut carries no capability matrix."""
+    app = _app(tmp_path, monkeypatch, 59608)
+    config_dir = tmp_path / "cfg"
+    config_dir.mkdir()
+    with _client(app) as c:
+        assert _post_codex(c, "cur", config_dir).status_code == 201
+        r = c.get("/api/v1/agents/cur")
+        assert r.status_code == 200, r.text
+        assert "capabilities" not in r.json()
+
+        r = c.get("/api/v1/agents")
+        assert r.status_code == 200, r.text
+        assert all("capabilities" not in item for item in r.json()["items"])
+
+
 def test_agent_list_after_register(tmp_path, monkeypatch):
     """A freshly registered agent appears in the list."""
     app = _app(tmp_path, monkeypatch, 59603)
@@ -238,12 +255,11 @@ def test_candidates_endpoint_reports_marker_present_agents(tmp_path, monkeypatch
         assert c.get("/api/v1/agents").json()["items"] == []
 
 
-def test_candidates_excludes_disabled_agent_types(tmp_path, monkeypatch):
+def test_candidates_offers_exactly_the_manifest_types(tmp_path, monkeypatch):
     """Only the exposed agent types (Claude Code, Codex) are offered as candidates.
 
-    The other manifest entries (Cursor, OpenCode, OpenClaw, Hermes) are wired
-    end-to-end on the backend but hidden from discovery (``enabled=False``) until
-    each is validated and exposed — even an on-disk marker must not surface them.
+    Discovery enumerates the ``enabled=True`` manifest records and nothing else —
+    an on-disk marker for a product Coffer does not manage must not surface.
     """
     app = _app(tmp_path, monkeypatch, 59621)
     for subpath in (".claude", ".codex"):

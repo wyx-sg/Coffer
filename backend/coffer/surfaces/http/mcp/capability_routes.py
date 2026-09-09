@@ -1,49 +1,50 @@
-"""MCP-specific capability list/enable/disable/refresh/test routes."""
+"""MCP-specific capability list/enable/disable/refresh routes.
+
+The transient upstream health-check route (POST /{name}/test) lives in
+``server_test_routes`` to keep this module under the file-size limit.
+"""
 
 from __future__ import annotations
 
 import asyncio
-import time
-from datetime import UTC, datetime
 from typing import Any, Literal
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
+from coffer.application.mcp.runner_install import (
+    missing_runner,
+    runner_installable,
+)
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import UpstreamUnavailable
-from coffer.domain.mcp.server_config import HttpTransport, MCPServerConfig, StdioTransport
-from coffer.domain.resource import ResourceRef
-from coffer.infrastructure.mcp.http_client import HttpUpstreamConnection
+from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
+from coffer.domain.mcp.server_config import MCPServerConfig
+from coffer.domain.resource import Resource, ResourceRef
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
     MCPInvocationRepo,
     MCPServerHealthRepo,
 )
-from coffer.infrastructure.mcp.subprocess import StdioUpstreamConnection
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import (
     get_actor,
     get_audit_service,
     get_capability_discovery,
-    get_credential_store,
     get_health_repo,
     get_invocation_repo,
     get_preferences_repo,
     get_resource_service,
 )
+from coffer.surfaces.http.mcp.capability_views import (
+    cached_capability_list,
+    live_capability_list,
+)
 from coffer.surfaces.http.schemas import (
     CapabilityKeyBody,
     CapabilityListOut,
-    MCPPromptView,
-    MCPResourceView,
     McpServerStatusOut,
-    McpTestResultOut,
-    MCPToolView,
-    _MCPPromptArgument,
 )
 
 router = APIRouter(
@@ -67,14 +68,23 @@ _CAPABILITY_LIST_TIMEOUT = 35.0
 async def list_capabilities(
     name: str,
     discovery: CapabilityDiscovery = Depends(get_capability_discovery),  # noqa: B008
+    prefs: MCPCapabilityPreferenceRepo = Depends(get_preferences_repo),  # noqa: B008
+    resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> CapabilityListOut:
     """Return the live (cache-aware) capability list for one MCP server.
 
     This is the management surface: it returns every discovered capability
     with its ``enabled`` flag (including disabled ones) so the UI can show and
     re-enable them. The three discovery calls run concurrently under a single
-    timeout budget (CODE-M2); a dead upstream surfaces ``UpstreamUnavailable``
-    (→ UPSTREAM_UNAVAILABLE) instead of hanging the detail page for minutes.
+    timeout budget (CODE-M2).
+
+    When the upstream can't be live-queried — a *disabled* server (the gateway
+    won't connect it) or an unreachable one — fall back to the persisted
+    enable/disable preferences so the detail page still lists the
+    previously-discovered capabilities (name + enabled flag) with
+    ``from_cache=True``, instead of a dead-end "couldn't load" error. Only when
+    nothing was ever discovered (no persisted rows) does the upstream failure
+    surface as ``UpstreamUnavailable`` (→ UPSTREAM_UNAVAILABLE).
     """
     tasks: list[asyncio.Task[Any]] = [
         asyncio.ensure_future(discovery.list_tools(name, include_disabled=True)),
@@ -86,61 +96,30 @@ async def list_capabilities(
             asyncio.gather(*tasks),
             timeout=_CAPABILITY_LIST_TIMEOUT,
         )
-    except TimeoutError as e:
-        raise UpstreamUnavailable(
-            f"{name!r} did not respond within {_CAPABILITY_LIST_TIMEOUT:.0f}s"
-        ) from e
+    except (TimeoutError, UpstreamUnavailable, UpstreamTimeout) as e:
+        # A disabled/unreachable/hung upstream. gather() propagates the first
+        # child failure WITHOUT cancelling the siblings (wait_for's timeout path
+        # does) — reap them so they don't grind the spawn retry ladder in the
+        # background, then serve the persisted preferences as a degraded view.
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        cached = await cached_capability_list(name, prefs, resource_service)
+        if cached is not None:
+            return cached
+        if isinstance(e, TimeoutError):
+            raise UpstreamUnavailable(
+                f"{name!r} did not respond within {_CAPABILITY_LIST_TIMEOUT:.0f}s"
+            ) from e
+        raise
     except BaseException:
-        # gather() propagates the first child failure WITHOUT cancelling the
-        # siblings — reap them so they don't grind the spawn retry ladder in
-        # the background. (wait_for's timeout path already cancels the gather.)
+        # Any other failure (e.g. ResourceNotFound for an unknown server → 404):
+        # reap siblings and let the global handler map it.
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
         raise
-    return CapabilityListOut(
-        server_name=name,
-        tools=[
-            MCPToolView(
-                prefixed_name=t.prefixed_name,
-                original_name=t.original_name,
-                description=t.description,
-                input_schema=t.input_schema,
-                enabled=t.enabled,
-            )
-            for t in tools
-        ],
-        resources=[
-            MCPResourceView(
-                prefixed_uri=r.prefixed_uri,
-                original_uri=r.original_uri,
-                name=r.name,
-                description=r.description,
-                mime_type=r.mime_type,
-                enabled=r.enabled,
-            )
-            for r in resources
-        ],
-        prompts=[
-            MCPPromptView(
-                prefixed_name=p.prefixed_name,
-                original_name=p.original_name,
-                description=p.description,
-                arguments=[
-                    _MCPPromptArgument(
-                        name=a.get("name", ""),
-                        description=a.get("description"),
-                        required=bool(a.get("required", False)),
-                    )
-                    for a in p.arguments
-                ],
-                enabled=p.enabled,
-            )
-            for p in prompts
-        ],
-        fetched_at=datetime.now(tz=UTC),
-        from_cache=False,
-    )
+    return live_capability_list(name, tools, resources, prompts)
 
 
 @router.get("/{name}/status", response_model=McpServerStatusOut)
@@ -152,14 +131,22 @@ async def get_server_status(
     health_repo: MCPServerHealthRepo = Depends(get_health_repo),  # noqa: B008
 ) -> McpServerStatusOut:
     """Per-server status from persisted state — health record (from /test),
-    discovered capabilities, or last invocation. Cheap (DB only); never spawns."""
+    discovered capabilities, or last invocation. Cheap (DB only + one PATH
+    lookup); never spawns."""
+    resource = await resource_service.get(ResourceRef("mcp_server", name))
+    # A stdio launcher that does not resolve on THIS machine (synced server,
+    # runner not installed here) — surfaced with a one-click install.
+    runner = await asyncio.to_thread(_missing_runner_of, resource)
+    installable = runner is not None and runner_installable(runner)
+
     # T7: prefer the persisted health state written by POST /test
     health = await health_repo.get(name)
     if health is not None:
         health_status, _ = health
-        return McpServerStatusOut(status=health_status)
+        return McpServerStatusOut(
+            status=health_status, missing_runner=runner, runner_installable=installable
+        )
 
-    resource = await resource_service.get(ResourceRef("mcp_server", name))
     caps = await prefs.list_for(resource.id)
     recent = await invocations.query(resource_name=name, limit=1)
     last = recent[0] if recent else None
@@ -170,7 +157,17 @@ async def get_server_status(
         state = "healthy"
     else:
         state = "unknown"
-    return McpServerStatusOut(status=state)
+    return McpServerStatusOut(status=state, missing_runner=runner, runner_installable=installable)
+
+
+def _missing_runner_of(resource: Resource) -> str | None:
+    try:
+        config = MCPServerConfig.model_validate(resource.config)
+    except Exception:
+        return None
+    if config.transport.type != "stdio":
+        return None
+    return missing_runner(config.transport.command)
 
 
 async def _toggle_capability(
@@ -331,70 +328,3 @@ async def refresh_capabilities(
     await resource_service.get(ResourceRef("mcp_server", name))
     discovery.invalidate(name)
     return await list_capabilities(name, discovery)
-
-
-@router.post("/{name}/test", response_model=McpTestResultOut)
-async def test_mcp_server(
-    name: str,
-    resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
-    health_repo: MCPServerHealthRepo = Depends(get_health_repo),  # noqa: B008
-    credential_store: Any = Depends(get_credential_store),  # noqa: B008
-) -> McpTestResultOut:
-    """Open a transient upstream session, run MCP initialize, return health info.
-    Persists the result to mcp_server_health so GET /status reflects it."""
-    resource = await resource_service.get(ResourceRef("mcp_server", name))
-    config = MCPServerConfig.model_validate(resource.config)
-
-    resolver = CredentialResolver(credential_store)
-
-    start = time.monotonic()
-    try:
-        if isinstance(config.transport, StdioTransport):
-            # CODE-034: offload the blocking credential-store read off the event loop.
-            overlay = await asyncio.to_thread(
-                resolver.materialize, config.transport.credential_refs
-            )
-            conn: StdioUpstreamConnection | HttpUpstreamConnection = StdioUpstreamConnection(
-                transport=config.transport,
-                env_overlay=overlay,
-                spawn_timeout_seconds=config.spawn_timeout_seconds,
-                request_timeout_seconds=config.request_timeout_seconds,
-                server_name=name,
-            )
-        elif isinstance(config.transport, HttpTransport):
-            overlay = await asyncio.to_thread(
-                resolver.materialize, config.transport.credential_refs
-            )
-            conn = HttpUpstreamConnection(
-                transport=config.transport,
-                header_overlay=overlay,
-                spawn_timeout_seconds=config.spawn_timeout_seconds,
-                request_timeout_seconds=config.request_timeout_seconds,
-            )
-        else:
-            return McpTestResultOut(
-                ok=False,
-                latency_ms=0,
-                error_message=f"unsupported transport: {type(config.transport).__name__}",
-            )
-        try:
-            caps = await conn.spawn_and_initialize()
-            latency_ms = int((time.monotonic() - start) * 1000)
-            await health_repo.upsert(name, "healthy", datetime.now(tz=UTC))
-            return McpTestResultOut(
-                ok=True,
-                latency_ms=latency_ms,
-                protocol_version="2025-06-18",
-                server_capabilities=caps,
-                error_message=None,
-            )
-        finally:
-            await conn.close()
-    except Exception as e:  # incl. UpstreamUnavailable / UpstreamTimeout
-        latency_ms = int((time.monotonic() - start) * 1000)
-        await health_repo.upsert(name, "failing", datetime.now(tz=UTC))
-        return McpTestResultOut(
-            ok=False,
-            latency_ms=latency_ms,
-            error_message=str(e),
-        )

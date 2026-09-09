@@ -1,5 +1,6 @@
 """Message domain entity and ContentBlock value-object union.
 
+A ``ContentBlock`` is one of ``text | tool_use | tool_result | attachment``.
 The persistence layer stores ``content`` as a JSON array of block dicts.
 The helpers ``block_to_dict`` / ``block_from_dict`` are the single point of
 that serialisation logic so the infrastructure layer does not need to know
@@ -59,7 +60,20 @@ class ToolResultBlock:
     type: Literal["tool_result"] = "tool_result"
 
 
-ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock
+@dataclass(frozen=True)
+class AttachmentBlock:
+    """A reference to a user-supplied file (channel media) — path/mime/filename,
+    never the bytes. Persisted in the user message so the attachment survives in
+    history, shows in the web Chat page, and is re-materialised for the agent on
+    later turns. See ADR-038 / ADR-041 (FR-033)."""
+
+    path: str  # absolute local path in the media dir (NOT emitted to the wire)
+    mime: str
+    filename: str
+    type: Literal["attachment"] = "attachment"
+
+
+ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | AttachmentBlock
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +99,13 @@ def block_to_dict(block: ContentBlock) -> dict[str, Any]:
             "tool_name": block.tool_name,
             "output": block.output,
             "error": block.error,
+        }
+    if isinstance(block, AttachmentBlock):
+        return {
+            "type": "attachment",
+            "path": block.path,
+            "mime": block.mime,
+            "filename": block.filename,
         }
     # This branch is unreachable given the union, but makes mypy happy.
     raise TypeError(f"unhandled ContentBlock type: {type(block)!r}")  # pragma: no cover
@@ -112,6 +133,12 @@ def block_from_dict(data: dict[str, Any]) -> ContentBlock:
                 tool_name=data["tool_name"],
                 output=data.get("output"),
                 error=data.get("error"),
+            )
+        if block_type == "attachment":
+            return AttachmentBlock(
+                path=data["path"],
+                mime=data["mime"],
+                filename=data["filename"],
             )
     except KeyError as exc:
         raise ValueError(

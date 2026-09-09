@@ -15,7 +15,7 @@ from coffer.application.chat.turn_orchestrator import active_turns
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
 from coffer.domain.chat.message import Message, Role, TextBlock
 
-from .conftest import ChannelEnv, inbound, wait_until
+from .conftest import ChannelEnv, inbound, turn_body, wait_until
 
 
 class GatedAdapter:
@@ -28,9 +28,11 @@ class GatedAdapter:
         self.release = asyncio.Event()
         self.runs: list[str] = []
 
-    async def run_turn(self, *, history: Sequence[Message]) -> AsyncIterator[AgentEvent]:
+    async def run_turn(
+        self, *, history: Sequence[Message], **_: object
+    ) -> AsyncIterator[AgentEvent]:
         last = history[-1]
-        text = "".join(b.text for b in last.content if isinstance(b, TextBlock))
+        text = turn_body("".join(b.text for b in last.content if isinstance(b, TextBlock)))
 
         async def gen() -> AsyncIterator[AgentEvent]:
             self.runs.append(text)
@@ -49,21 +51,18 @@ async def test_new_command_switches_to_a_fresh_conversation(env: ChannelEnv) -> 
 
     await env.processor.on_message(inbound("tg", "owner", "hi"))
     await wait_until(lambda: "Hello world" in adapter.texts())
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    old_conversation = peer.active_conversation_id
+    old_conversation = await env.active_conversation(resource)
     assert old_conversation is not None
 
     await env.processor.on_message(inbound("tg", "owner", "/new"))
 
     assert "🆕 Started a fresh conversation." in adapter.texts()
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    assert peer.active_conversation_id is not None
-    assert peer.active_conversation_id != old_conversation
+    fresh = await env.active_conversation(resource)
+    assert fresh is not None
+    assert fresh != old_conversation
     listed = [c.id for c in await env.chat.list_conversations()]
     assert old_conversation in listed  # the old thread stays in history
-    assert peer.active_conversation_id in listed
+    assert fresh in listed
 
 
 @pytest.mark.acceptance(spec="009-channels", scenario="/stop interrupts a running turn")
@@ -74,9 +73,7 @@ async def test_stop_command_interrupts_the_running_turn(env: ChannelEnv) -> None
 
     await env.processor.on_message(inbound("tg", "owner", "long job"))
     await asyncio.wait_for(gated.entered.wait(), timeout=5.0)
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    conversation_id = peer.active_conversation_id
+    conversation_id = await env.active_conversation(resource)
     assert conversation_id is not None
     assert conversation_id in active_turns()
 
@@ -102,16 +99,12 @@ async def test_stop_after_new_interrupts_the_still_draining_turn(env: ChannelEnv
 
     await env.processor.on_message(inbound("tg", "owner", "long job"))
     await asyncio.wait_for(gated.entered.wait(), timeout=5.0)
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    running_conversation = peer.active_conversation_id
+    running_conversation = await env.active_conversation(resource)
     assert running_conversation is not None
     assert running_conversation in active_turns()
 
     await env.processor.on_message(inbound("tg", "owner", "/new"))
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    fresh_conversation = peer.active_conversation_id
+    fresh_conversation = await env.active_conversation(resource)
     assert fresh_conversation is not None
     assert fresh_conversation != running_conversation
     # The fresh conversation has no turn — interrupting it would be a no-op.
@@ -136,9 +129,7 @@ async def test_unbind_mid_turn_interrupts_the_draining_turn(env: ChannelEnv) -> 
 
     await env.processor.on_message(inbound("tg", "owner", "long job"))
     await asyncio.wait_for(gated.entered.wait(), timeout=5.0)
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    running_conversation = peer.active_conversation_id
+    running_conversation = await env.active_conversation(resource)
     assert running_conversation is not None
     assert running_conversation in active_turns()
 
@@ -168,13 +159,12 @@ async def test_messages_sent_mid_turn_run_as_consecutive_turns_in_order(env: Cha
         "echo:B",
         "echo:C",
     ]
-    # All three turns landed in the peer's single conversation, in order.
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    assert peer.active_conversation_id is not None
-    messages = await env.chat.list_messages(peer.active_conversation_id)
+    # All three turns landed in the thread's single conversation, in order.
+    conversation_id = await env.active_conversation(resource)
+    assert conversation_id is not None
+    messages = await env.chat.list_messages(conversation_id)
     user_texts = [
-        "".join(b.text for b in m.content if isinstance(b, TextBlock))
+        turn_body("".join(b.text for b in m.content if isinstance(b, TextBlock)))
         for m in messages
         if m.role == Role.USER
     ]

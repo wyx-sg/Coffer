@@ -14,9 +14,13 @@ from coffer.domain.resource import Kind, ResourceRef
 
 # Sync or async — ResourceService awaits the result if it's an Awaitable.
 OnDeleteHook = Callable[[ResourceRef], Awaitable[None] | None]
+OnScopeChangedHook = Callable[[ResourceRef], Awaitable[None] | None]
 
 
-def make_agent_kind(on_delete: OnDeleteHook | None = None) -> Kind:
+def make_agent_kind(
+    on_delete: OnDeleteHook | None = None,
+    on_scope_changed: OnScopeChangedHook | None = None,
+) -> Kind:
     """Construct the `agent` Kind.
 
     `on_delete` (if provided) is invoked by ResourceService BEFORE the
@@ -24,6 +28,11 @@ def make_agent_kind(on_delete: OnDeleteHook | None = None) -> Kind:
     awaited (so symlink + binding-row cleanup completes before the agent
     row vanishes); sync hooks run inline. The skill module supplies the
     callback at the composition root.
+
+    `on_scope_changed` (if provided) is invoked by ResourceService.update_scope
+    AFTER persistence + audit (ADR-045 / Task 11 Fix 2): re-runs the agent's
+    own follow reconciliation so a scope edit is applied immediately instead
+    of waiting on an unrelated trigger.
     """
     return Kind(
         name="agent",
@@ -34,4 +43,6 @@ def make_agent_kind(on_delete: OnDeleteHook | None = None) -> Kind:
         # dir by AgentService; the generic POST /resources path must not create
         # an undetected, folder-less agent (CODE-REG).
         generic_create_allowed=False,
+        scope_axes=("machine",),
+        on_scope_changed=on_scope_changed,
     )

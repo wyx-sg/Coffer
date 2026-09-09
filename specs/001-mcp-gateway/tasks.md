@@ -2263,7 +2263,7 @@ Handle stdin EOF (client closed) and SIGTERM. Close upstream connections, exit 0
 
 - Create: `backend/tests/contract/test_mcp_protocol_conformance.py`
 
-Use `mcp.client.streamable_http.streamablehttp_client` to drive coffer's `/mcp` endpoint as if it were any upstream MCP server. Assert:
+Use `mcp.client.streamable_http.streamable_http_client` to drive coffer's `/mcp` endpoint as if it were any upstream MCP server. Assert:
 
 - `initialize` returns valid `ServerCapabilities` shape
 - `tools/list` returns valid `Tool` shape per the SDK's types

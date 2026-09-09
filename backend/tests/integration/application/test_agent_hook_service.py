@@ -169,3 +169,11 @@ async def test_quoted_command_when_binary_has_spaces(agent_bundle, tmp_path, mon
     st = await svc.install("cc", actor="ui")
     assert "'/Apps/My App/coffer-hook'" in st.command
     assert (await svc.status("cc")).installed is True
+
+
+async def test_supported_true_for_both_agent_types(agent_bundle, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    await _register_claude(agent_bundle, tmp_path)
+    await _register_codex(agent_bundle, tmp_path)
+    assert (await agent_bundle.hook.status("cc")).supported is True
+    assert (await agent_bundle.hook.status("cx")).supported is True

@@ -79,6 +79,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mcp/tiering": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How much of the aggregated tool catalogue agents currently see (ADR-046)
+         * @description Global across every enabled server, because the listing budget is shared: a server whose tools all fit locally can still be crowded out. Computed from the last-discovered catalogue, so it never cold-spawns an upstream to answer a management question.
+         */
+        get: operations["getToolTiering"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/resources/mcp_server/{name}/capabilities": {
         parameters: {
             query?: never;
@@ -212,6 +232,26 @@ export interface paths {
         get: operations["getMcpServerStatus"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/resources/mcp_server/{name}/install-runner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install the stdio server's missing launcher (allowlisted formulas only).
+         * @description Installs the missing launcher command via a FIXED runner→Homebrew mapping (uvx/uv, npx/node, bunx/bun) — never an arbitrary command from config; the launcher itself fetches the actual MCP package on first run. 422 (MCP_RUNNER_INSTALL_UNSUPPORTED) when nothing is missing or the runner has no unambiguous install; MCP_RUNNER_INSTALL_FAILED carries the package manager's stderr tail. Audited as mcp_runner_installed.
+         */
+        post: operations["installMcpRunner"];
         delete?: never;
         options?: never;
         head?: never;
@@ -578,6 +618,22 @@ export interface components {
             }[];
             enabled: boolean;
         };
+        ToolTieringServerOut: {
+            server: string;
+            total: number;
+            listed: number;
+        };
+        ToolTieringOut: {
+            enabled: boolean;
+            /** @example 50 */
+            budget: number;
+            /** @example 90 */
+            window_days: number;
+            total: number;
+            listed: number;
+            hidden: number;
+            servers: components["schemas"]["ToolTieringServerOut"][];
+        };
         CapabilityListOut: {
             server_name: string;
             tools: components["schemas"]["MCPToolView"][];
@@ -614,6 +670,15 @@ export interface components {
         McpServerStatusOut: {
             /** @enum {string} */
             status: "healthy" | "failing" | "unknown";
+            /** @description The stdio launcher's basename when it does not resolve on THIS machine (a synced server referencing e.g. uvx where uv is not installed). The UI renders "missing <runner>" with a one-click install when runner_installable. */
+            missing_runner?: string | null;
+            /** @description Whether the missing runner has an allowlisted install. */
+            runner_installable?: boolean;
+        };
+        McpRunnerInstallOut: {
+            runner: string;
+            /** @description The Homebrew formula installed */
+            formula: string;
         };
         AuditEntryOut: {
             id: number;
@@ -928,6 +993,27 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    getToolTiering: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolTieringOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
     listMcpCapabilities: {
         parameters: {
             query?: never;
@@ -1108,6 +1194,31 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    installMcpRunner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Installed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpRunnerInstallOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     listAuditEntries: {

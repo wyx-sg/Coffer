@@ -194,7 +194,7 @@ describe("AgentConfigFilesEditor (read-only)", () => {
     expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
   });
 
-  test("memory_block content renders the memory-projection annotation", () => {
+  test("memory_block content renders the legacy-memory-block annotation", () => {
     stubFiles();
     stubFile("# CLAUDE.md", { memory_block: true });
     stubChild(undefined);
@@ -202,7 +202,7 @@ describe("AgentConfigFilesEditor (read-only)", () => {
     render(<AgentConfigFilesEditor name="cc" />);
     openSettings();
 
-    expect(screen.getByText(/memory-projection block/i)).toBeInTheDocument();
+    expect(screen.getByText(/legacy Coffer memory block/i)).toBeInTheDocument();
   });
 
   test("en and zh locales carry the same agents.config keys", () => {

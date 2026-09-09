@@ -14,18 +14,24 @@ from __future__ import annotations
 import json
 import pathlib
 import shutil
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
+from datetime import datetime
 
 import yaml
 
 from coffer.domain.sync.errors import SyncSerializationError
 from coffer.domain.sync.manifest import Manifest
+from coffer.domain.sync.models import MachineEntry, Tombstone
 from coffer.domain.sync.serialization import ResourceDoc, parse_resource_doc
 from coffer.infrastructure.sync.paths import mirrored_trees as _default_mirrored_trees
+from coffer.infrastructure.sync.tree_mirror import _mirror_tree
 
 _MANIFEST = "manifest.json"
 _RESOURCES = "resources"
 _CREDENTIALS = "credentials"
+_MACHINES = "machines"
+_TOMBSTONES = "tombstones"
+_STATE = "state"
 
 #: Files that are *derived* from the source-of-truth files and must NOT be
 #: synced — they would differ per machine and cause spurious same-path
@@ -37,20 +43,6 @@ _CREDENTIALS = "credentials"
 #: changelog) are likewise derived/machine-local — the topic docs themselves DO
 #: sync as the source of truth.
 DERIVED_INDEX_NAMES = frozenset({"MEMORY.md", "INDEX.md", "consolidation-log.md"})
-
-
-def _replace_tree(
-    src: pathlib.Path, dst: pathlib.Path, exclude: frozenset[str] = frozenset()
-) -> None:
-    """Make ``dst`` a copy of ``src`` (empty when ``src`` is absent), skipping
-    any basename in ``exclude``."""
-    if dst.exists():
-        shutil.rmtree(dst)
-    if src.exists():
-        ignore = shutil.ignore_patterns(*exclude) if exclude else None
-        shutil.copytree(src, dst, ignore=ignore)
-    else:
-        dst.mkdir(parents=True, exist_ok=True)
 
 
 class Workspace:
@@ -69,17 +61,26 @@ class Workspace:
 
     # --- live trees <-> workspace -----------------------------------------
 
-    def mirror_trees_out(self) -> None:
+    def mirror_trees_out(self, *, delete_missing: bool = True) -> None:
         self._root.mkdir(parents=True, exist_ok=True)
         for subdir, live_root in self._trees:
             # Derived indexes never enter the workspace, so they never conflict.
-            _replace_tree(live_root, self._root / subdir, exclude=DERIVED_INDEX_NAMES)
+            # Diff-aware on the workspace side too: with delete_missing=False
+            # (no import completed yet) remote-authored files survive the export.
+            _mirror_tree(
+                live_root,
+                self._root / subdir,
+                exclude=DERIVED_INDEX_NAMES,
+                delete_missing=delete_missing,
+            )
 
     def mirror_trees_in(self) -> None:
+        # Diff-aware on the live side: a no-change import must neither storm
+        # the file watcher nor delete the machine-local derived indexes.
         for subdir, live_root in self._trees:
             ws_tree = self._root / subdir
             if ws_tree.exists():
-                _replace_tree(ws_tree, live_root, exclude=DERIVED_INDEX_NAMES)
+                _mirror_tree(ws_tree, live_root, exclude=DERIVED_INDEX_NAMES)
 
     # --- manifest ----------------------------------------------------------
 
@@ -100,21 +101,81 @@ class Workspace:
             raise SyncSerializationError(f"manifest is not valid JSON: {e}") from e
         return Manifest.from_dict(data)
 
+    # --- machine registry ----------------------------------------------------
+
+    def write_machine_entry(self, entry: MachineEntry) -> None:
+        """Write this machine's own registry entry (never another machine's).
+
+        Write-to-temp + atomic rename, so a crash mid-write can never leave a
+        truncated entry behind (a reader may run concurrently)."""
+        target = self._root / _MACHINES
+        target.mkdir(parents=True, exist_ok=True)
+        final = target / f"{entry.machine_id}.json"
+        tmp = target / f".{entry.machine_id}.json.tmp"
+        tmp.write_text(
+            json.dumps(entry.to_dict(), sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        tmp.replace(final)
+
+    def read_machine_entries(self) -> list[MachineEntry]:
+        """All parseable machine registry entries.
+
+        The registry is informational, so one corrupt entry (hand-edited repo,
+        interrupted writer on an old build) must never halt syncing the vault:
+        invalid files are skipped, and a machine whose own entry is unreadable
+        simply rewrites it on its next run."""
+        target = self._root / _MACHINES
+        if not target.exists():
+            return []
+        entries: list[MachineEntry] = []
+        for path in sorted(target.glob("*.json")):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if not isinstance(data, dict) or "machine_id" not in data:
+                    continue
+                entries.append(MachineEntry.from_dict(data))
+            except (json.JSONDecodeError, OSError, KeyError, ValueError):
+                continue
+        return entries
+
     # --- resource docs -----------------------------------------------------
 
-    def write_resource_docs(self, docs: Sequence[Mapping[str, object]]) -> None:
+    def write_resource_docs(
+        self,
+        docs: Sequence[Mapping[str, object]],
+        preserve: Collection[str] = (),
+    ) -> None:
+        """Replace ``resources/`` with one YAML per doc.
+
+        ``preserve`` names quarantined ``<kind>:<name>`` refs whose CURRENT
+        workspace doc must survive verbatim — their import failed here, so the
+        local vault holds nothing (or a stale row) and must never overwrite or
+        drop the remote intent (spec 010 quarantine)."""
         target = self._root / _RESOURCES
+        preserved: dict[tuple[str, str], str] = {}
+        for ref in preserve:
+            kind, _, name = ref.partition(":")
+            path = target / kind / f"{name}.yaml"
+            if path.exists():
+                preserved[(kind, name)] = path.read_text(encoding="utf-8")
         if target.exists():
             shutil.rmtree(target)
         for doc in docs:
             kind = str(doc["kind"])
             name = str(doc["name"])
+            if (kind, name) in preserved:
+                continue
             kind_dir = target / kind
             kind_dir.mkdir(parents=True, exist_ok=True)
             (kind_dir / f"{name}.yaml").write_text(
                 yaml.safe_dump(dict(doc), sort_keys=True, allow_unicode=True),
                 encoding="utf-8",
             )
+        for (kind, name), text in preserved.items():
+            path = target / kind / f"{name}.yaml"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
 
     def read_resource_docs(self) -> list[ResourceDoc]:
         target = self._root / _RESOURCES
@@ -131,19 +192,184 @@ class Workspace:
             docs.append(parse_resource_doc(raw))
         return docs
 
+    # --- tombstones ----------------------------------------------------------
+
+    def write_tombstone(self, tombstone: Tombstone) -> None:
+        # Credential tombstones use the ref as the name; refs contain slashes,
+        # so the file may nest deeper than kind/name.json.
+        path = self._root / _TOMBSTONES / _RESOURCES / tombstone.kind / f"{tombstone.name}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.parent / f".{path.name}.tmp"
+        tmp.write_text(
+            json.dumps(tombstone.to_dict(), sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        tmp.replace(path)
+
+    def remove_tombstone(self, kind: str, name: str) -> None:
+        path = self._root / _TOMBSTONES / _RESOURCES / kind / f"{name}.json"
+        path.unlink(missing_ok=True)
+
+    def read_tombstones(self) -> list[Tombstone]:
+        """All parseable tombstones. A corrupt file is skipped — the resource
+        then survives (the safe direction) and the deleting machine's next
+        export rewrites the tombstone."""
+        base = self._root / _TOMBSTONES / _RESOURCES
+        if not base.exists():
+            return []
+        out: list[Tombstone] = []
+        for path in sorted(base.rglob("*.json")):
+            rel = path.relative_to(base)
+            if len(rel.parts) < 2:
+                continue
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if not isinstance(data, dict):
+                    continue
+                raw_by = data.get("by")
+                out.append(
+                    Tombstone(
+                        kind=rel.parts[0],
+                        name="/".join(rel.parts[1:])[: -len(".json")],
+                        deleted_at=datetime.fromisoformat(str(data["deleted_at"])),
+                        by=str(raw_by) if raw_by else None,
+                    )
+                )
+            except (json.JSONDecodeError, OSError, KeyError, ValueError):
+                continue
+        return out
+
+    # --- per-machine overrides -------------------------------------------------
+
+    def _overrides_dir(self, machine_id: str) -> pathlib.Path:
+        return self._root / _MACHINES / machine_id / "overrides"
+
+    def write_override(
+        self, machine_id: str, kind: str, name: str, patch: Mapping[str, object]
+    ) -> None:
+        path = self._overrides_dir(machine_id) / kind / f"{name}.yaml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            yaml.safe_dump(dict(patch), sort_keys=True, allow_unicode=True),
+            encoding="utf-8",
+        )
+
+    def remove_override(self, machine_id: str, kind: str, name: str) -> None:
+        (self._overrides_dir(machine_id) / kind / f"{name}.yaml").unlink(missing_ok=True)
+
+    def read_overrides(self, machine_id: str) -> dict[tuple[str, str], dict[str, object]]:
+        """This machine's own merge patches, keyed by (kind, name). Corrupt
+        files are skipped (the owner rewrites them via the override surface)."""
+        base = self._overrides_dir(machine_id)
+        if not base.exists():
+            return {}
+        out: dict[tuple[str, str], dict[str, object]] = {}
+        for path in sorted(base.glob("*/*.yaml")):
+            try:
+                data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            except (yaml.YAMLError, OSError):
+                continue
+            if isinstance(data, dict):
+                out[(path.parent.name, path.stem)] = data
+        return out
+
+    # --- shared-state areas ---------------------------------------------------
+
+    def write_state_docs(
+        self,
+        area: str,
+        docs: Sequence[tuple[str, Mapping[str, object]]],
+        owned_prefixes: Collection[str] = (),
+        preserve: Collection[str] = (),
+    ) -> None:
+        """Prefix-scoped reconcile, never a blanket replace: docs outside
+        ``owned_prefixes`` belong to entities this machine does not know
+        locally (quarantined / not yet imported) and must survive its export —
+        a blanket rmtree would erase the fleet's state and ping-pong forever
+        against the machines that keep re-publishing it."""
+        target = self._root / _STATE / area
+        kept = set(preserve)
+        wanted = {rel for rel, _doc in docs if rel not in kept}
+        if target.exists():
+            for path in sorted(target.rglob("*.yaml")):
+                rel = path.relative_to(target).with_suffix("").as_posix()
+                # Boundary-aware: prefix "jira" owns "jira" and "jira/...",
+                # never the sibling "jira-internal" (a bare startswith would
+                # cross-delete docs of servers this machine does not hold).
+                owned = any(
+                    rel == prefix.rstrip("/") or rel.startswith(prefix.rstrip("/") + "/")
+                    for prefix in owned_prefixes
+                )
+                if owned and rel not in wanted and rel not in kept:
+                    path.unlink(missing_ok=True)
+        for rel, doc in docs:
+            if rel in kept:
+                continue  # import failed here: the foreign doc must survive
+            path = target / f"{rel}.yaml"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                yaml.safe_dump(dict(doc), sort_keys=True, allow_unicode=True),
+                encoding="utf-8",
+            )
+
+    def read_state_docs(self, area: str) -> list[tuple[str, dict[str, object]]]:
+        """All parseable docs in an area; corrupt files are skipped (state is
+        re-exported by its owner on its next run)."""
+        target = self._root / _STATE / area
+        if not target.exists():
+            return []
+        out: list[tuple[str, dict[str, object]]] = []
+        for path in sorted(target.rglob("*.yaml")):
+            try:
+                data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            except (yaml.YAMLError, OSError):
+                continue
+            if isinstance(data, dict):
+                out.append((path.relative_to(target).with_suffix("").as_posix(), data))
+        return out
+
     # --- credential blobs --------------------------------------------------
 
-    def write_credential_blobs(self, blobs: Mapping[str, bytes]) -> None:
+    def write_credential_blobs(
+        self, blobs: Mapping[str, bytes], *, delete_missing: bool = True
+    ) -> None:
         target = self._root / _CREDENTIALS
-        if target.exists():
-            shutil.rmtree(target)
         target.mkdir(parents=True, exist_ok=True)
+        existing = {
+            path.relative_to(target).with_suffix("").as_posix(): path
+            for path in sorted(target.rglob("*.enc"))
+        }
+        # Case-fold map so a ref that differs from an existing blob only by
+        # case replaces it instead of creating a second variant — two case
+        # aliases in one git index break every checkout on a case-insensitive
+        # filesystem (macOS). Local refs win; pre-v3 exports lowercased ref
+        # segments, so the alias disappears once every machine is upgraded.
+        by_folded = {ref.casefold(): ref for ref in existing}
         for ref, blob in blobs.items():
+            twin = by_folded.get(ref.casefold())
+            if twin is not None and twin != ref:
+                stale = existing.pop(twin)
+                stale.unlink(missing_ok=True)
+                # Directories alias by case too: prune now-empty parents so
+                # mkdir below recreates the path with THIS ref's casing.
+                parent = stale.parent
+                while parent != target and not any(parent.iterdir()):
+                    parent.rmdir()
+                    parent = parent.parent
+                by_folded[ref.casefold()] = ref
             # Refs are namespaced with slashes (e.g. ``channel/seatalk/app-secret``),
             # so the ``.enc`` file lives in a nested dir that must exist first.
             dest = target / f"{ref}.enc"
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(blob)
+        if not delete_missing:
+            return
+        # Blobs for refs this machine no longer holds — only once an import
+        # has run (the exporter's guard), so foreign ciphertext is never
+        # deleted before it was ever ingested here.
+        for ref, path in existing.items():
+            if ref not in blobs:
+                path.unlink(missing_ok=True)
 
     def read_credential_blobs(self) -> dict[str, bytes]:
         target = self._root / _CREDENTIALS

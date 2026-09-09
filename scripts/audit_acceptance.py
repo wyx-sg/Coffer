@@ -43,9 +43,19 @@ SCENARIO_HEADING_RE = re.compile(r"^###\s+(?:Scenario:\s*)?(.+?)\s*$", re.IGNORE
 #
 # The lookbehind (?<![.\w]) ensures we don't false-match method calls or
 # identifiers — only the bare acceptance() call counts.
+#
+# Each string argument is matched as one of two alternatives — a
+# double-quoted run or a single-quoted run — so the closing delimiter must
+# match the opening one. The excluded-char class inside each alternative
+# only excludes ITS OWN delimiter, so a scenario title containing an
+# apostrophe (e.g. "the fleet view renders any machine's activation slice")
+# parses fully when the call uses double quotes, instead of truncating at
+# the apostrophe as a naive "either quote" class would.
 TS_ACCEPTANCE_RE = re.compile(
-    r"(?<![.\w])acceptance\s*\(\s*[\"'](?P<spec>[^\"']+)[\"']\s*,"
-    r"\s*[\"'](?P<scenario>[^\"']+)[\"']"
+    r"(?<![.\w])acceptance\s*\(\s*"
+    r"(?:\"(?P<spec_dq>[^\"]+)\"|'(?P<spec_sq>[^']+)')"
+    r"\s*,\s*"
+    r"(?:\"(?P<scenario_dq>[^\"]+)\"|'(?P<scenario_sq>[^']+)')"
 )
 
 # Strip JS/TS comments before regex matching. Without this, a quoted
@@ -106,7 +116,11 @@ def _extract_acceptance_call(node: ast.Call) -> tuple[str, str] | None:
             scenario = kw.value.value
     if spec is None and node.args and isinstance(node.args[0], ast.Constant):
         spec = node.args[0].value
-    if scenario is None and len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
+    if (
+        scenario is None
+        and len(node.args) >= 2
+        and isinstance(node.args[1], ast.Constant)
+    ):
         scenario = node.args[1].value
     if isinstance(spec, str) and isinstance(scenario, str):
         return (spec, scenario)
@@ -139,9 +153,15 @@ def _module_pytestmark_skips(tree: ast.Module) -> bool:
     for stmt in tree.body:
         if not isinstance(stmt, ast.Assign):
             continue
-        if not any(isinstance(t, ast.Name) and t.id == "pytestmark" for t in stmt.targets):
+        if not any(
+            isinstance(t, ast.Name) and t.id == "pytestmark" for t in stmt.targets
+        ):
             continue
-        values = stmt.value.elts if isinstance(stmt.value, ast.List | ast.Tuple) else [stmt.value]
+        values = (
+            stmt.value.elts
+            if isinstance(stmt.value, ast.List | ast.Tuple)
+            else [stmt.value]
+        )
         if any(_is_unconditional_skip(v) for v in values):
             return True
     return False
@@ -184,7 +204,13 @@ def _scan_python_file(
                 for pair in pairs:
                     markers.add(pair)
                     if fn_skipped:
-                        dead.append((pair[0], pair[1], f"{py.relative_to(REPO_ROOT)}::{child.name}"))
+                        dead.append(
+                            (
+                                pair[0],
+                                pair[1],
+                                f"{py.relative_to(REPO_ROOT)}::{child.name}",
+                            )
+                        )
                 visit(child, fn_skipped)
             else:
                 visit(child, scope_skipped)
@@ -224,7 +250,17 @@ def collect_ts_markers(roots: list[Path]) -> set[tuple[str, str]]:
                     continue
                 stripped = _strip_ts_comments(text)
                 for m in TS_ACCEPTANCE_RE.finditer(stripped):
-                    markers.add((m.group("spec"), m.group("scenario")))
+                    spec = (
+                        m.group("spec_dq")
+                        if m.group("spec_dq") is not None
+                        else m.group("spec_sq")
+                    )
+                    scenario = (
+                        m.group("scenario_dq")
+                        if m.group("scenario_dq") is not None
+                        else m.group("scenario_sq")
+                    )
+                    markers.add((spec, scenario))
     return markers
 
 
@@ -243,11 +279,19 @@ def main() -> int:
     # (missing the `## Acceptance Scenarios` section, or all `###` subsections
     # deleted). Without this guard the audit silently passes as "0 missing
     # coverage", giving false confidence.
-    empty_specs = sorted(spec_id for spec_id, scenarios in specs.items() if not scenarios)
+    empty_specs = sorted(
+        spec_id for spec_id, scenarios in specs.items() if not scenarios
+    )
     if empty_specs:
-        print("audit_acceptance: FAIL — spec.md(s) with no acceptance scenarios:", file=sys.stderr)
+        print(
+            "audit_acceptance: FAIL — spec.md(s) with no acceptance scenarios:",
+            file=sys.stderr,
+        )
         for spec_id in empty_specs:
-            print(f"    - {spec_id} (add `## Acceptance Scenarios` with `### <title>` items)", file=sys.stderr)
+            print(
+                f"    - {spec_id} (add `## Acceptance Scenarios` with `### <title>` items)",
+                file=sys.stderr,
+            )
         return 1
 
     py_markers, dead = collect_python_markers_and_dead(BACKEND_TESTS)

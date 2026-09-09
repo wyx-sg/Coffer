@@ -90,20 +90,12 @@ for the full decision rationale and rejected alternatives.
 
 **Supported transcript readers**: distillation reads each agent's native local
 store through a versioned, defensive per-agent reader. **Claude Code** and
-**Codex** read one `.jsonl` file per session under the agent's config dir;
-**OpenCode** reads its multi-file JSON storage tree under the XDG data dir
-(`~/.local/share/opencode/storage/{project,session,message,part}`), joining the
-records into sessions with the project working directory taken from the project
-record. Readers for **Cursor**, **OpenClaw**, and **Hermes** are deferred: their
-formats can't be read reliably for project-scoped distillation today — Cursor's
-`agent-transcripts/*.jsonl` are ephemeral (emptied on restart) with the durable
-state in an internal `vscdb` SQLite; OpenClaw's session format is undocumented;
-and Hermes sessions are cross-platform chat sessions that record no working
-directory, so they can't be scoped to a project. Distillation for those agents
+**Codex** both read one `.jsonl` file per session under the agent's config dir.
+Both supported agents have a reader; distillation for an unregistered agent
 returns an explicit "unsupported agent" error rather than guessing.
 
-**Independent Test**: From a project with at least one Claude Code, Codex, or
-OpenCode transcript in the agent's native store, run
+**Independent Test**: From a project with at least one Claude Code or Codex
+transcript in the agent's native store, run
 `coffer transcript distill <agent> --project <path> --dry-run` and observe
 at least one insight printed without any fact being written to disk. Then run
 without `--dry-run` and confirm via `coffer memory recall <store> "<topic>"`
@@ -278,6 +270,15 @@ scenarios above pin the read endpoints the lane views consume.)
 
 Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="007-memory", scenario="…")`.
 
+### Scenario: project memory follows the repository across checkout paths
+
+- **Given** the same repository (same `origin` remote) checked out at different
+  paths — e.g. on two synced machines with different usernames
+- **When** each checkout resolves its per-project memory store
+- **Then** both resolve to the same store (same project ULID)
+- **And** a store provisioned under the legacy path-derived id is adopted under
+  the portable id on first resolve, keeping its facts, root mapping, and label
+
 ### Scenario: agent remembers a project fact
 
 - **Given** an MCP client running inside a git project,
@@ -382,7 +383,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 ### Scenario: distill-transcript-to-memory
 
-- **Given** a registered agent (Claude Code, Codex, or OpenCode) with at least
+- **Given** a registered agent (Claude Code or Codex) with at least
   one local transcript in its native store containing natural-language turns,
 - **When** `POST /api/v1/agents/{name}/transcripts/distill` is called (or
   `coffer transcript distill <agent>` in the CLI) with `dry_run=false`,
@@ -618,6 +619,49 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
   uninstalling) restores the prior setting; while it is `false` Coffer never
   touches the agent's native memory (ADR-026).
 
+### Scenario: merge scan proposes same-project stores
+
+- **Given** two per-project stores that describe the same project — one pair
+  provably (both roots locally readable and normalizing to the same origin
+  remote) and one pair only plausibly (labels/paths/content align but no
+  common remote is provable),
+- **When** the user runs the merge scan with an internal engine configured,
+- **Then** the provable pair is proposed with `confidence="certain"` and
+  `judged_by="remote"` without consulting the engine, the plausible pair is
+  proposed with the engine's verdict (`judged_by="engine"`, a confidence and
+  a reason), and each proposal suggests the surviving store per the direction
+  heuristic — and nothing is mutated by the scan.
+
+### Scenario: merge scan degrades cleanly without an internal engine
+
+- **Given** per-project stores including a provably-same pair, and no
+  internal engine configured,
+- **When** the user runs the merge scan,
+- **Then** the response reports `engine="no_model"` and still carries the
+  deterministic (`judged_by="remote"`) proposals; engine-tier pairs are
+  simply absent — no error.
+
+### Scenario: merging two stores consolidates additively and retires the source
+
+- **Given** two per-project stores each holding facts (with at least one
+  overlapping journal period and one colliding non-journal filename),
+- **When** the user merges the source into the target,
+- **Then** every source lane file lands under the target (journal entries
+  deduped by timestamp, the filename collision keeping both copies), the
+  source's label and root mapping move to a target that lacked its own, the
+  target's recall returns the merged facts, the source store (resource,
+  index rows, on-disk dir) is retired, and a `memory_stores_merged` audit
+  entry is recorded.
+
+### Scenario: a merged identity resolves to the surviving store
+
+- **Given** store `project-X` was merged into `project-Y` (so `X` is listed
+  in `Y`'s `merged_identities`),
+- **When** an agent remembers a fact from a checkout whose computed project
+  identity is `X`,
+- **Then** the fact is written to `project-Y` and no new `project-X` store is
+  provisioned.
+
 > **Deferred to future test work** (tests land with the e2e infrastructure; `make verify-acceptance` does not gate on them): desktop memory list view per scope, the desktop read-only fact viewer's open-in-editor / reveal affordances, CLI `coffer memory …` end-to-end with a running daemon, per-store metrics (HTTP route).
 
 ## Requirements
@@ -630,6 +674,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **FR-002**: System MUST support two memory scopes: **global** (one store keyed by `project_id = WORKSPACE_GLOBAL_PROJECT_ID`, the existing sentinel `00000000000000000000000000`) and **per-project** (one store per project, keyed by the project's ULID), stored under `~/.coffer/memory/global/knowledge/` and `~/.coffer/memory/projects/<project-ulid>/knowledge/` respectively.
 - **FR-003**: `coffer__remember` (and a user add) MUST append a memory item to the per-scope inbox (`knowledge/inbox/`) with no LLM at write time; organization into topic documents is performed asynchronously by the consolidation organizer (a later memory PR) and never blocks the write or `recall`.
 - **FR-004**: System MUST resolve the per-project store from the agent's reported launch cwd at session handshake: the daemon computes the git-root and resolves — lazily provisioning if absent — the store for that project's ULID.
+- **FR-004a** (spec 010 / ADR-043 amendment): the project ULID MUST be **machine-portable** — derived from the normalized `origin` remote URL when the repo has one (ssh/https/scp-like forms of the same repository normalize identically), falling back to the absolute-git-root-path hash for repos without a remote. The same repository therefore resolves to the same memory store on every synced machine, whatever its checkout path. A store provisioned under the legacy path-derived id is adopted **once** on first resolve: its files move to the portable id's dir, the resource is re-registered under the new name, and the root mapping and display label carry over (the old resource is deleted, which also propagates the rename through sync tombstones).
 
 **Fact lifecycle**
 
@@ -699,12 +744,20 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 - **FR-017**: Users MUST be able to perform full memory CRUD through the programmatic write surfaces — (a) a REST API under `/api/v1/memory_stores/` and (b) `coffer memory …` subcommands. (The REST write endpoints are also what agents author facts through via the MCP gateway.) User writes set `metadata.actor = "user"`, write the canonical markdown under the store's `knowledge/inbox/` subdir, reindex, and audit. The desktop/web UI surfaces facts **read-only** (it does not edit fact content in-app); humans curate by editing the canonical markdown in their own external editor (picked up by lazy reindex-on-read, FR-010) or via the REST/CLI write surface. The read-only viewer MUST render fact content at a comfortable reading **max-width** (centered), and the detail-page fact **list** MUST be a single **scrollable** list with **no in-UI page-based pager** (the UI fetches one page at the max `limit`; the facts **API** stays paginated by `limit`/`offset`). Store names on these surfaces are validated: only `global` or `project-<26-char ULID>` are legal — a well-formed name lazily provisions its store; anything else returns 404 (`MEMORY_STORE_NOT_FOUND`).
 - **FR-017a**: Surfaces MUST present a per-project store by a **human-readable identity derived from its `project_root`** — the root directory's basename as the primary label and the absolute root path as a secondary detail — never only the opaque `project-<ULID>` store name (the project ULID is a one-way digest of the root and is not human-recognisable). When the root is unknown (a store provisioned before the root was tracked) the surface falls back to the store name; the global store needs no derivation (its name `global` is already readable). The underlying store name stays `project-<ULID>` (FR-017) — this is a **display** concern. Verified by frontend tests; desktop acceptance is deferred to e2e like the other desktop-view items.
-- **FR-017c**: A user MUST be able to set a **display label** for any memory store — a chosen name that takes precedence over the FR-017a `project_root` derivation in every surface. This gives a readable identity to a store whose originating folder was never recorded (where FR-017a would otherwise fall back to the opaque `project-<ULID>` name). Setting an empty / whitespace label clears it, reverting to the FR-017a derivation or fallback. The label is **display metadata**: it does not change the store name (FR-017) or `project_id`, and is set via `PATCH /memory_stores/{name}/label`. Verified by an HTTP acceptance test; the desktop rename view is deferred to e2e like the other desktop-view items.
+- **FR-017c**: A user MUST be able to set a **display label** for any memory store — a chosen name that takes precedence over the FR-017a `project_root` derivation in every surface. This gives a readable identity to a store whose originating folder was never recorded (where FR-017a would otherwise fall back to the opaque `project-<ULID>` name). Setting an empty / whitespace label clears it, reverting to the FR-017a derivation or fallback. The label is **display metadata**: it does not change the store name (FR-017) or `project_id`, and is set via `PATCH /memory_stores/{name}/label`. Verified by an HTTP acceptance test; the desktop rename view is deferred to e2e like the other desktop-view items. Labels sync across machines as the `memory-labels` state area (spec 010, amendment 2026-07-10): set, rename, AND clear all propagate (a clear travels as an empty-label marker so it cannot resurrect from a stale doc) — a store synced from another machine reads by its label instead of "unnamed store".
 - **FR-021**: The read-only fact viewer MUST offer, for both a fact file and its containing folder, affordances to (a) **open in external editor** and (b) **reveal in file manager / Finder**. Both perform the real OS action on **both** surfaces: the desktop (Tauri) build via the OS opener, the web build via the loopback daemon's filesystem-action endpoints (spec 004 FR-039), since the daemon is on the user's own machine (ADR-033). There is no copy-path fallback. Which editor opens is decided by the global preferred-editor preference (specced in 002-ui-shell; not re-specified here). The read responses MUST surface the absolute paths these affordances act on (see FR-022).
 - **FR-022**: Read responses MUST surface the on-disk truth: the fact read endpoints (`GET …/facts`, `GET …/facts/{id}`) MUST include each fact file's absolute `.md` path and its containing folder's absolute path, and the store read endpoint (`GET …/{name}`) MUST include the store's absolute on-disk directory. These power the FR-021 open/reveal affordances and let a human locate the canonical file to correct out-of-band.
 
 - **FR-053**: The memory store detail page MUST present the store as **four lane sections** (Knowledge / Rules / Journal / Handoff) plus a **consolidation-changelog** view, replacing the flat fact list. Each lane gets a shape-fit view: **knowledge** = the fact/topic list + content; **rules** = a single document; **journal** = time-ordered entries (newest first); **handoff** = a per-branch list. All views are **read-only**, render via the **unified file preview** (no hand-styled `<pre>`), and offer **open in external editor / reveal in file manager / copy path** for the underlying lane files (files-as-truth, FR-017/FR-021). Recall continues to operate over the **Knowledge** lane only (the rules/journal/handoff/changelog views are read projections, not recall surfaces).
 - **FR-054**: The system MUST expose read endpoints for the lanes the UI needs: `GET /api/v1/memory_stores/{name}/journal` (the time-ordered journal files, newest period first), `GET /api/v1/memory_stores/{name}/handoff` (the handoff scenes per branch, each carrying its `branch` and `updated_at`), and `GET /api/v1/memory_stores/{name}/consolidation-log` (the organizer's 固化 changelog; `null` when absent). These are **read-only**, **addressed by store name** (not cwd), and MUST return **HTTP 200 with empty lists / `null`** for an empty store (never a 404). (The Rules lane already has its read surface, `GET /api/v1/memory_stores/{name}/rules`, FR-036.)
+- **FR-055**: The SessionStart context (FR-049) MUST additionally inject an **ambient project-memory index** — the "ambient loading" slice ADR-026 deferred — so an agent starts knowing what the project remembers without having to call `recall`. The `GET /api/v1/agents/{name}/session-context` response appends, after the rules bundle, a **"## Project memory (via Coffer)"** section built from the cwd's project store: a **title-only knowledge index** ("Known topics" — each fact's short title, no bodies or descriptions) and a **few recent journal lines** ("Recent activity" — the newest episodic entries, one line each). It is deliberately an **index, not the memory itself** — an orientation pointer that tells the agent what exists and to call `recall <query>` for any bodies it needs, keeping the injection light. The index is **read-only and best-effort** — a cwd outside a git project, an empty store, or any read error yields **nothing** (never an error; the hook must never block the agent) — and is **budget-bounded**: the combined bundle stays within the hook's ≤10k-char contract, the index taking whatever remains after the rules bundle so the seeded built-in rules (FR-050) are never truncated. Delivery rides the existing per-agent SessionStart hook (`ContextInjectionSpec`, spec 004 FR-043), which is **opt-in per agent** (installed explicitly, not by default), so it is already the gate for whether Coffer injects: every agent whose hook is installed (Claude Code, Codex) receives the index; injection-only, never a native-file write.
+
+**Store consolidation — AI-assisted (amendment 2026-07-10)**
+
+- **FR-056**: The system MUST provide an explicit **merge scan** — `POST /api/v1/memory_stores/merge_scan` and `coffer memory merge-scan` — that examines every pair of per-project stores and returns merge proposals. A pair whose locally-readable roots normalize to the **same non-empty origin remote** (FR-004a normalization) is proposed deterministically (`confidence="certain"`, `judged_by="remote"`) with no LLM involved; every other pair is judged by the **internal engine** (the FR-033 internal-default connection) via one one-shot completion returning a strict JSON verdict `{same_project, confidence, reason}` — a malformed response skips the pair, never errors. With no internal engine configured the scan returns `engine="no_model"` and the deterministic proposals only. The engine tier is bounded (at most 50 judged pairs per scan, `truncated=true` when capped; per-store evidence samples are size-capped). Each proposal carries a suggested merge direction: the store with a locally-resolvable root survives, then the higher fact count, then the lexically smaller name. Scanning never mutates anything.
+- **FR-057**: The system MUST provide an explicit **merge execution** — `POST /api/v1/memory_stores/merge` with `{source, target}` and `coffer memory merge <source> <target>` — that consolidates two per-project stores with the existing additive machinery (`merge_store_dir`): journal entries content-merged and deduped by timestamp, derived files skipped, any other collision keeping both copies (suffixed) — memory is gained, never lost. The source's display label and `project_root` mapping move to the target when the target lacks its own. The target is force-reconciled, the source store is retired (resource delete cascading documents/index/dir), and one `memory_stores_merged` audit entry (names + counts only) is recorded. `source` and `target` MUST be distinct, existing, per-project stores — the global store is never mergeable; violations are 4xx with no side effects. Merge execution serializes with resolve-time adoption on the same lock; fact writes do not hold that lock, so the merge re-sweeps the source immediately before retirement (the file merge is content-idempotent) to carry over anything remembered mid-merge.
+- **FR-058**: A merge MUST leave a **no-resurrection alias**: the surviving store's config gains `merged_identities` (a system-managed list of project ULIDs, default empty) holding the source's ULID plus the source's own aliases (transitive across chained merges). `ScopeResolver` MUST consult the aliases **only when the computed identity's store does not exist** and resolve to the aliased survivor instead of re-provisioning an empty duplicate. Exactly one live store holds a given alias (recording aliases on a new holder strips them from every other store), and the boot consolidation pass MUST honor the aliases the same way — a merged-away canonical identity redirects to its holder rather than being re-provisioned, and boot/adoption merges carry the retired store's aliases onto the canonical store. Because the alias lives in the store's `config_json`, it syncs with the resource (spec 010) so the redirect holds on every machine.
+- **FR-059**: Merge execution MUST accept `organize` (default `true`): after a successful merge, when the internal engine is configured, the FR-033 reorg pass runs on the target store and its outcome is reported as `reorg_status` in the merge response (`"reorganized"`, `"no_model"`, `"empty"`, `"skipped"` when `organize=false`, or `"error: …"`). A failed or unavailable organize step never fails the merge itself.
 
 **Substrate isolation**
 

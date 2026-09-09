@@ -32,9 +32,9 @@ async def test_long_call_with_progress_does_not_premature_timeout() -> None:
     - test_http_dispatch_passes_read_timeout_seconds  (mock-verified, not behavioral)
 
     The fake server only emits progress notifications when the request carries a
-    progressToken in _meta.  We supply a progress_callback to conn.request() which
-    causes the SDK to inject a progressToken automatically; the server reads it from
-    ctx.meta.progressToken and fires send_progress_notification for each step.
+    progress token in _meta.  We supply a progress_callback to conn.request() which
+    causes the SDK to inject one automatically; the server reads it from
+    ctx.meta["progress_token"] and fires send_progress_notification for each step.
     """
     from coffer.infrastructure.mcp.subprocess import StdioUpstreamConnection
 

@@ -9,6 +9,20 @@ vi.mock("@/lib/api/client", () => ({
   getApiClient: vi.fn(),
 }));
 
+// ScopeCard (Task 19) mounts on this page and pulls its own data through
+// hand-written fetch hooks (not the generated client above) — stub them so
+// the card renders without a real daemon.
+vi.mock("@/lib/hooks/useScope", () => ({
+  useResourceScope: vi.fn(() => ({ data: { scope: null, axes: ["machine", "agent"] } })),
+  useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+}));
+vi.mock("@/lib/hooks/useMachines", () => ({
+  useMachines: vi.fn(() => ({ data: { machines: [] } })),
+}));
+vi.mock("@/lib/hooks/useAgents", () => ({
+  useAgents: vi.fn(() => ({ data: [] })),
+}));
+
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
 
@@ -330,5 +344,23 @@ describe("McpServerDetailPage", () => {
     await waitFor(() => {
       expect(screen.getByTestId("resources-page")).toBeInTheDocument();
     });
+  });
+
+  test("mounts the ScopeCard (Task 19) for the resource", async () => {
+    const getMock = vi.fn().mockResolvedValue({
+      data: stdioResource,
+      error: undefined,
+    });
+    getApiClientMock.mockReturnValue({
+      GET: getMock,
+      POST: vi.fn(),
+      DELETE: vi.fn(),
+    } as unknown as ReturnType<typeof getApiClient>);
+
+    render(wrap(<McpServerDetailPage />));
+    await waitFor(() => {
+      expect(screen.getByText("fs")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("scope-card")).toBeInTheDocument();
   });
 });

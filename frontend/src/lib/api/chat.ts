@@ -10,13 +10,16 @@ import { ApiError } from "./errors";
 // ---------------------------------------------------------------------------
 
 export interface ContentBlock {
-  type: "text" | "tool_use" | "tool_result";
+  type: "text" | "tool_use" | "tool_result" | "attachment";
   text?: string | null;
   tool_use_id?: string | null;
   tool_name?: string | null;
   tool_input?: Record<string, unknown> | null;
   output?: Record<string, unknown> | null;
   error?: string | null;
+  /** `attachment` blocks: the file's name/mime (channel media); no path (FR-033). */
+  filename?: string | null;
+  mime?: string | null;
 }
 
 export type MessageRole = "user" | "assistant";

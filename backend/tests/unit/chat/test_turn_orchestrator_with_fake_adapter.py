@@ -84,7 +84,7 @@ class _BlockingAdapter:
         self._lead = lead
         self.model_id = model_id
 
-    async def run_turn(self, *, history: Any) -> AsyncIterator[AgentEvent]:
+    async def run_turn(self, *, history: Any, **_: object) -> AsyncIterator[AgentEvent]:
         lead = self._lead
 
         async def gen() -> AsyncIterator[AgentEvent]:
@@ -301,7 +301,7 @@ class _RaisingAdapter:
 
     model_id = None
 
-    async def run_turn(self, *, history: Any) -> AsyncIterator[AgentEvent]:
+    async def run_turn(self, *, history: Any, **_: object) -> AsyncIterator[AgentEvent]:
         async def gen() -> AsyncIterator[AgentEvent]:
             yield TextDelta(text="partial")
             raise RuntimeError("boom")

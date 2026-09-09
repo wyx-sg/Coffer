@@ -16,10 +16,12 @@ from typing import Any, Protocol, runtime_checkable
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
     ChoiceButton,
+    InboundAttachment,
     InboundCallback,
     InboundMessage,
     SentMessage,
 )
+from coffer.domain.channel.rich_content import ForwardedItem
 
 
 @dataclass(frozen=True)
@@ -54,10 +56,19 @@ class ChannelAdapter(Protocol):
         markdown: str,
         *,
         buttons: Sequence[ChoiceButton] | None = None,
+        thread_id: str = "",
+        chat_kind: str = "direct",
     ) -> SentMessage:
         """Send markdown text. When ``buttons`` is given AND the transport
         ``supports_buttons``, render them as an interactive selection card;
-        otherwise the text is sent plain (buttons ignored)."""
+        otherwise the text is sent plain (buttons ignored).
+
+        ``chat_kind`` distinguishes a group ``chat_id`` from a direct one —
+        transports whose group/DM APIs differ (SeaTalk) route on it; a
+        transport with one unified send path (Telegram) ignores it.
+        ``thread_id``, when non-empty, threads the message where the
+        transport supports it; transports without thread support ignore it.
+        """
         ...
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None: ...
@@ -65,6 +76,33 @@ class ChannelAdapter(Protocol):
     async def delete_message(self, chat_id: str, message_id: str) -> None: ...
 
     async def send_typing(self, chat_id: str) -> None: ...
+
+    async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
+        """Set an emoji reaction on ``message_id`` (FR-036: 👀 on receipt, ✅ on
+        completion). Only called when the transport declares
+        ``capabilities.supports_reactions`` — others may raise; the core never
+        reaches them (SeaTalk uses its typing signal for the same receipt cue).
+        Best-effort at the call site: a failed reaction never breaks the turn."""
+        ...
+
+    async def send_media(
+        self,
+        chat_id: str,
+        path: str,
+        *,
+        caption: str | None = None,
+        as_photo: bool = True,
+        thread_id: str = "",
+        chat_kind: str = "direct",
+    ) -> SentMessage:
+        """Upload a local file to the chat. ``as_photo`` sends it as an inline
+        image; otherwise as a document. Only called when the transport declares
+        ``capabilities.supports_media`` — others may raise.
+
+        ``thread_id``/``chat_kind`` route the upload the same way ``send_text``
+        does: a file returned during a group/thread turn lands in that same
+        chat_kind + thread, not the group main chat."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -78,6 +116,9 @@ class ChannelBinding:
     default_agent: str
     default_agent_config: dict[str, Any] | None
     adapter: ChannelAdapter
+    # Group inbound gating (FR-035), sourced from the channel config.
+    require_mention: bool = True
+    ignore_other_mentions: bool = False
 
 
 @dataclass(frozen=True)
@@ -103,10 +144,20 @@ class ChannelPeerRepoPort(Protocol):
 
     async def get(self, resource_id: int) -> ChannelPeer | None: ...
 
+    async def get_by_chat(self, resource_id: int, chat_id: str) -> ChannelPeer | None: ...
+
+    async def list_by_resource(self, resource_id: int) -> list[ChannelPeer]: ...
+
+    async def owner_sender_id(self, resource_id: int) -> str | None:
+        """The first non-null ``sender_id`` paired for this channel, across
+        all its peer rows (DM + any groups/threads). ``None`` when the
+        channel has no peer with a known sender identity."""
+        ...
+
     async def upsert(self, peer: ChannelPeer) -> None: ...
 
     async def set_active_conversation(
-        self, resource_id: int, conversation_id: str | None
+        self, resource_id: int, chat_id: str, conversation_id: str | None
     ) -> None: ...
 
     async def set_preferences(
@@ -115,6 +166,54 @@ class ChannelPeerRepoPort(Protocol):
         *,
         preferred_agent: str | None,
     ) -> None: ...
+
+
+@dataclass(frozen=True)
+class ChannelThreadConversation:
+    """The per-thread conversation binding (one row in
+    ``channel_thread_conversations``): conversation identity is keyed by
+    ``(resource_id, chat_id, thread_id)`` (FR-032), not by the peer alone.
+
+    ``thread_id=""`` is the DM (or a group's main chat); each thread in a group
+    is an independent row with its own active conversation and its own sticky
+    agent. Pairing/owner identity stays on ``ChannelPeer`` — this binding only
+    owns the conversation a turn drives and the agent it opens with."""
+
+    resource_id: int
+    chat_id: str
+    thread_id: str
+    active_conversation_id: str | None
+    # Sticky structural choice for THIS thread: which agent new conversations
+    # use. ``None`` means fall back to the channel default.
+    preferred_agent: str | None
+    updated_at: datetime
+
+
+class ChannelThreadConversationRepoPort(Protocol):
+    """Persistence for per-thread conversation bindings (FR-032).
+
+    The source of truth for driving a turn: which conversation a
+    ``(resource_id, chat_id, thread_id)`` resolves to, and the sticky agent it
+    opens with. Two threads of one group therefore never collide on a single
+    conversation (the "a turn is already running" error)."""
+
+    async def get(
+        self, resource_id: int, chat_id: str, thread_id: str
+    ) -> ChannelThreadConversation | None: ...
+
+    async def set_active_conversation(
+        self, resource_id: int, chat_id: str, thread_id: str, conversation_id: str | None
+    ) -> None:
+        """Upsert the thread's active conversation, leaving ``preferred_agent``
+        untouched (creating the row if this thread has none yet)."""
+        ...
+
+    async def set_preferred_agent(
+        self, resource_id: int, chat_id: str, thread_id: str, preferred_agent: str | None
+    ) -> None:
+        """Upsert the thread's sticky agent, leaving ``active_conversation_id``
+        untouched (creating the row if this thread has none yet)."""
+        ...
 
 
 class AgentCatalogPort(Protocol):
@@ -135,6 +234,25 @@ class ModelSuggestionPort(Protocol):
     no active profile — the card then offers only the free-text path."""
 
     async def suggest(self, agent_key: str) -> list[str]: ...
+
+
+class ContextFetchPort(Protocol):
+    """Best-effort thread-context reader for a group @mention: when the
+    @mention landed inside a thread, the thread's own messages ground the
+    turn. Group-main @mentions fetch nothing (reading all group chatter is
+    undesirable — the group-chat-history permission is intentionally not
+    granted). Platforms without a history-fetch API (Telegram's Bot API)
+    satisfy this by always returning ``([], ())``."""
+
+    async def fetch_thread(
+        self, chat_id: str, thread_id: str, *, limit: int = 50
+    ) -> tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]:
+        """Return the thread's ``(text items, downloaded attachments)``: the
+        flattened text of each thread message plus the images/files those
+        messages carry, already fetched to local paths (FR-029) so an in-thread
+        @mention reaches the turn with the real pictures, not dead file links.
+        Degrades to ``([], ())`` on any error."""
+        ...
 
 
 @runtime_checkable

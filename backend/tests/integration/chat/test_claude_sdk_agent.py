@@ -10,6 +10,7 @@ approval relay.
 from __future__ import annotations
 
 import asyncio
+import base64
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -34,6 +35,7 @@ from claude_agent_sdk import (
     ToolUseBlock as SdkToolUseBlock,
 )
 
+from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
     TextDelta,
     ToolCall,
@@ -67,11 +69,11 @@ class FakeSdkSession:
         self._messages = messages
         # If set, the stream pauses on this event so a cancel can be injected.
         self._block_after = block_after
-        self.connected_prompt: str | None = None
+        self.connected_prompt: str | list[dict[str, Any]] | None = None
         self.interrupted = False
         self.disconnected = False
 
-    async def connect(self, prompt: str) -> None:
+    async def connect(self, prompt: str | list[dict[str, Any]]) -> None:
         self.connected_prompt = prompt
 
     async def receive_messages(self) -> AsyncIterator[Any]:
@@ -124,12 +126,25 @@ async def _dummy_sink(sid: str) -> None:
     return None
 
 
+class _FakeExtractor:
+    """A ``DocumentExtractor`` that returns canned text (no ``markitdown``)."""
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+        self.calls: list[str] = []
+
+    async def extract(self, path: str) -> str:
+        self.calls.append(path)
+        return self.text
+
+
 def _adapter(
     factory: _Factory,
     *,
     on_session: Any = _dummy_sink,
     resume: str | None = None,
     extra: dict[str, Any] | None = None,
+    document_extractor: Any = None,
 ) -> ClaudeSdkAgentAdapter:
     return ClaudeSdkAgentAdapter(
         cwd="/tmp",
@@ -137,12 +152,124 @@ def _adapter(
         extra=extra or {},
         session_factory=factory,
         on_session=on_session,
+        document_extractor=document_extractor,
     )
 
 
-async def _collect(adapter: ClaudeSdkAgentAdapter, history: list[Message]):
-    stream = await adapter.run_turn(history=history)
+async def _collect(
+    adapter: ClaudeSdkAgentAdapter,
+    history: list[Message],
+    attachments: Any = (),
+):
+    stream = await adapter.run_turn(history=history, attachments=attachments)
     return [ev async for ev in stream]
+
+
+# ---------------------------------------------------------------------------
+# Attachment materialisation (spec 009 channel media)
+# ---------------------------------------------------------------------------
+
+
+def test_build_content_is_the_plain_prompt_without_attachments() -> None:
+    # No attachments → unchanged behaviour: the content is the bare string.
+    assert ClaudeSdkAgentAdapter._build_content("hello", []) == "hello"
+
+
+@pytest.mark.acceptance(
+    spec="009-channels",
+    scenario="an inbound image reaches a vision agent as an inline block",
+)
+def test_build_content_inlines_an_image_as_a_base64_block(tmp_path: Any) -> None:
+    img = tmp_path / "photo.png"
+    img.write_bytes(b"\x89PNG-fake")
+    att = Attachment(path=str(img), mime="image/png", filename="photo.png")
+
+    content = ClaudeSdkAgentAdapter._build_content("what is this?", [att])
+
+    assert isinstance(content, list)
+    assert content[0] == {"type": "text", "text": "what is this?"}
+    image = content[1]
+    assert image["type"] == "image"
+    assert image["source"]["type"] == "base64"
+    assert image["source"]["media_type"] == "image/png"
+    # The bytes are read from disk and encoded here, never stored as base64.
+    assert base64.b64decode(image["source"]["data"]) == b"\x89PNG-fake"
+
+
+def test_build_content_hands_off_a_non_vision_file_by_path(tmp_path: Any) -> None:
+    data = tmp_path / "notes.csv"
+    data.write_text("a,b\n1,2\n")
+    att = Attachment(path=str(data), mime="text/csv", filename="notes.csv")
+
+    content = ClaudeSdkAgentAdapter._build_content("", [att])
+
+    # A non-vision file is not inlined — the agent gets its path to open.
+    assert isinstance(content, list)
+    assert content[0]["type"] == "text"
+    assert str(data) in content[0]["text"]
+
+
+def test_build_content_does_not_inline_an_unsupported_image_format(tmp_path: Any) -> None:
+    # An image/heic (e.g. an iPhone photo sent as a document) is NOT an API-inlinable
+    # type — inlining it would 400 the turn, so it falls to the path pointer instead.
+    heic = tmp_path / "photo.heic"
+    heic.write_bytes(b"HEIC-bytes")
+    att = Attachment(path=str(heic), mime="image/heic", filename="photo.heic")
+
+    content = ClaudeSdkAgentAdapter._build_content("", [att])
+
+    assert isinstance(content, list)
+    assert content[0]["type"] == "text"
+    assert str(heic) in content[0]["text"]
+
+
+def test_build_content_no_longer_inlines_a_pdf_as_a_document_block(tmp_path: Any) -> None:
+    # FR-030: documents are text-extracted upstream, so a PDF that reaches
+    # _build_content (extraction absent/failed) degrades to a path note — not a
+    # base64 ``document`` block (uniform text-or-path across all agents).
+    pdf = tmp_path / "report.pdf"
+    pdf.write_bytes(b"%PDF-1.7 fake")
+    att = Attachment(path=str(pdf), mime="application/pdf", filename="report.pdf")
+
+    content = ClaudeSdkAgentAdapter._build_content("", [att])
+
+    assert isinstance(content, list)
+    assert content[0]["type"] == "text"
+    assert str(pdf) in content[0]["text"]
+    assert not any(b.get("type") == "document" for b in content)
+
+
+@pytest.mark.asyncio
+async def test_pdf_reaches_claude_as_extracted_text_not_a_document_block(tmp_path: Any) -> None:
+    # FR-030: a PDF is text-extracted and folded into the prompt as a labelled
+    # text block; it is NOT sent as a base64 ``document`` block. An image on the
+    # same turn stays vision-inlined — only documents go through extraction.
+    pdf = tmp_path / "report.pdf"
+    pdf.write_bytes(b"%PDF-1.7 fake")
+    img = tmp_path / "chart.png"
+    img.write_bytes(b"\x89PNG-fake")
+    pdf_att = Attachment(path=str(pdf), mime="application/pdf", filename="report.pdf")
+    img_att = Attachment(path=str(img), mime="image/png", filename="chart.png")
+    extractor = _FakeExtractor("Quarterly revenue was $4.2M.")
+
+    factory = _Factory(_basic_messages())
+    adapter = _adapter(factory, document_extractor=extractor)
+    events = await _collect(adapter, _user_turn("summarise this"), attachments=(pdf_att, img_att))
+
+    assert isinstance(events[-1], TurnDone)
+    assert extractor.calls == [str(pdf)]
+    assert factory.session is not None
+    content = factory.session.connected_prompt
+    assert isinstance(content, list)
+    # The extracted PDF text is a labelled text block…
+    text_blocks = [b["text"] for b in content if b.get("type") == "text"]
+    joined = "\n".join(text_blocks)
+    assert "[Document: report.pdf]" in joined
+    assert "Quarterly revenue was $4.2M." in joined
+    # …no document/binary block was sent for the PDF…
+    assert not any(b.get("type") == "document" for b in content)
+    # …and the image stays vision-inlined (images are untouched by FR-030).
+    assert any(b.get("type") == "image" for b in content)
 
 
 # Canned SDK message stream: init → assistant text+tool → tool result → text → done.
@@ -346,10 +473,10 @@ class _ErrorSdkSession:
 
     def __init__(self, options: ClaudeAgentOptions) -> None:
         self.options = options
-        self.connected_prompt: str | None = None
+        self.connected_prompt: str | list[dict[str, Any]] | None = None
         self.disconnected = False
 
-    async def connect(self, prompt: str) -> None:
+    async def connect(self, prompt: str | list[dict[str, Any]]) -> None:
         self.connected_prompt = prompt
 
     async def receive_messages(self) -> AsyncIterator[Any]:
@@ -444,7 +571,7 @@ class _FailingSdkSession:
         self.options = options
         self.disconnected = False
 
-    async def connect(self, prompt: str) -> None:
+    async def connect(self, prompt: str | list[dict[str, Any]]) -> None:
         raise RuntimeError("Command failed with exit code 1")
 
     async def receive_messages(self) -> AsyncIterator[Any]:

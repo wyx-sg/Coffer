@@ -14,6 +14,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.config_service import SyncConfigService
 from coffer.application.sync.exporter import SyncExporter
+from coffer.application.sync.identity import MachineIdentityService
 from coffer.application.sync.importer import SyncImporter
 from coffer.application.sync.service import SyncService
 from coffer.domain.resource import Kind
@@ -30,6 +31,7 @@ from coffer.infrastructure.persistence.repos import (
 from coffer.infrastructure.sync.credentials import CredentialSyncAdapter
 from coffer.infrastructure.sync.git_repo import GitRepo
 from coffer.infrastructure.sync.persistence import (
+    SqlAlchemyMachineIdentityRepo,
     SqlAlchemySyncConfigRepo,
     SqlAlchemySyncStateRepo,
 )
@@ -76,15 +78,23 @@ async def client(tmp_path):  # type: ignore[no-untyped-def]
     workspace = Workspace(tmp_path / "ws", trees=[])
     git = GitRepo(tmp_path / "ws")
     config_svc = SyncConfigService(SqlAlchemySyncConfigRepo(sm), SqlAlchemySyncStateRepo(sm), audit)
+    identity = MachineIdentityService(
+        SqlAlchemyMachineIdentityRepo(sm),
+        audit,
+        new_id=lambda: "01TESTMACHINE00000000000AA",
+        default_name=lambda: "test-machine",
+    )
     service = SyncService(
         config=config_svc,
         git=git,
-        exporter=SyncExporter(resources, cred_sync, workspace),
-        importer=SyncImporter(resources, cred_sync, workspace),
+        exporter=SyncExporter(resources, cred_sync, workspace, home=None),
+        importer=SyncImporter(resources, cred_sync, workspace, home=None),
         credentials=cred_sync,
         master_key=master_key,
         audit=audit,
-        machine_id="test",
+        identity=identity,
+        workspace=workspace,
+        coffer_version="0.0.0-test",
     )
     set_sync_service(service)
 
@@ -174,3 +184,162 @@ async def test_configure_and_run_clean(client) -> None:  # type: ignore[no-untyp
 async def test_requires_token(client) -> None:  # type: ignore[no-untyped-def]
     r = await client.get("/api/v1/sync/config", headers={"X-Coffer-Token": "wrong"})
     assert r.status_code == 401
+
+
+async def test_machines_lists_local_before_first_sync(client) -> None:  # type: ignore[no-untyped-def]
+    r = await client.get("/api/v1/sync/machines")
+    assert r.status_code == 200
+    machines = r.json()["machines"]
+    assert len(machines) == 1
+    assert machines[0]["is_local"] is True
+    assert machines[0]["display_name"] == "test-machine"
+    assert machines[0]["last_sync_at"] is None
+
+
+async def test_rename_machine_round_trips(client) -> None:  # type: ignore[no-untyped-def]
+    r = await client.put("/api/v1/sync/machine", json={"display_name": "studio"})
+    assert r.status_code == 200
+    assert r.json()["display_name"] == "studio"
+    assert r.json()["is_local"] is True
+
+    r = await client.get("/api/v1/sync/machines")
+    assert r.json()["machines"][0]["display_name"] == "studio"
+
+
+async def test_rename_machine_rejects_blank(client) -> None:  # type: ignore[no-untyped-def]
+    for blank in ("", "   "):
+        r = await client.put("/api/v1/sync/machine", json={"display_name": blank})
+        assert r.status_code == 422
+
+
+async def test_rename_machine_trims_whitespace(client) -> None:  # type: ignore[no-untyped-def]
+    r = await client.put("/api/v1/sync/machine", json={"display_name": "  studio  "})
+    assert r.status_code == 200
+    assert r.json()["display_name"] == "studio"
+
+
+async def test_machine_entry_recorded_after_run(client) -> None:  # type: ignore[no-untyped-def]
+    bare = client.tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(bare)], check=True, capture_output=True)
+    await client.put(
+        "/api/v1/sync/config",
+        json={
+            "remote": str(bare),
+            "enabled": True,
+            "auto": False,
+            "interval_seconds": 300,
+            "branch": "main",
+        },
+    )
+    r = await client.post("/api/v1/sync/run")
+    assert r.status_code == 200
+
+    r = await client.get("/api/v1/sync/machines")
+    machines = r.json()["machines"]
+    assert len(machines) == 1
+    assert machines[0]["last_sync_at"] is not None
+    assert machines[0]["platform"]
+
+
+async def test_put_config_round_trips_poll_and_rejects_low(client) -> None:  # type: ignore[no-untyped-def]
+    r = await client.put(
+        "/api/v1/sync/config",
+        json={
+            "remote": "x",
+            "enabled": False,
+            "auto": False,
+            "interval_seconds": 60,
+            "poll_remote_seconds": 10,
+            "branch": "main",
+        },
+    )
+    assert r.status_code == 200
+    assert r.json()["poll_remote_seconds"] == 10
+
+    r = await client.put(
+        "/api/v1/sync/config",
+        json={
+            "remote": "x",
+            "enabled": False,
+            "auto": False,
+            "interval_seconds": 60,
+            "poll_remote_seconds": 2,
+            "branch": "main",
+        },
+    )
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "CONFIG_INVALID"
+
+
+async def test_override_crud_round_trips(client) -> None:  # type: ignore[no-untyped-def]
+    r = await client.get("/api/v1/sync/overrides")
+    assert r.status_code == 200
+    assert r.json() == {"overrides": []}
+
+    r = await client.put(
+        "/api/v1/sync/overrides/mcp_server/tool",
+        json={"patch": {"value": "/opt/homebrew/bin/x"}},
+    )
+    assert r.status_code == 200
+    assert r.json()["overrides"] == [
+        {"kind": "mcp_server", "name": "tool", "patch": {"value": "/opt/homebrew/bin/x"}}
+    ]
+
+    r = await client.delete("/api/v1/sync/overrides/mcp_server/tool")
+    assert r.status_code == 200
+    assert r.json() == {"overrides": []}
+
+
+async def test_key_fingerprint_endpoint(client) -> None:  # type: ignore[no-untyped-def]
+    """The fingerprint (never the key) lets the user compare machines."""
+    r = await client.get("/api/v1/sync/key/fingerprint")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["present"] is True
+    assert isinstance(body["fingerprint"], str) and len(body["fingerprint"]) == 12
+
+
+async def test_put_config_probes_new_remote_when_enabled(client) -> None:  # type: ignore[no-untyped-def]
+    """Enabling sync against an unreachable remote fails the save in place
+    with an actionable hint instead of surfacing later from a background run."""
+    r = await client.put(
+        "/api/v1/sync/config",
+        json={
+            "remote": str(client.tmp_path / "definitely-missing.git"),
+            "enabled": True,
+            "auto": False,
+            "interval_seconds": 300,
+            "branch": "main",
+        },
+    )
+    assert r.status_code == 422
+    body = r.json()["error"]
+    assert body["code"] == "SYNC_REMOTE_UNREACHABLE"
+    assert body["details"]["hint"] == "not_found"
+
+
+async def test_status_classifies_auth_errors(client) -> None:  # type: ignore[no-untyped-def]
+    """A recorded auth failure carries the actionable error_hint."""
+    from coffer.surfaces.http.sync_routes import get_sync_service
+
+    # Status passes through the stored state only once sync is configured.
+    bare = client.tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(bare)], check=True, capture_output=True)
+    ok = await client.put(
+        "/api/v1/sync/config",
+        json={
+            "remote": str(bare),
+            "enabled": True,
+            "auto": False,
+            "interval_seconds": 300,
+            "branch": "main",
+        },
+    )
+    assert ok.status_code == 200
+    svc = get_sync_service()
+    await svc._record_error(
+        "git fetch failed: fatal: could not read Username for 'https://github.com'"
+    )
+    r = await client.get("/api/v1/sync/status")
+    assert r.status_code == 200
+    assert r.json()["error_hint"] == "auth"

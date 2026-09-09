@@ -71,6 +71,7 @@ async def agent_bundle(tmp_path: pathlib.Path):
         store=store,
         shim_resolver=lambda: "/opt/coffer/coffer-mcp-shim",
     )
+
     hook = AgentHookService(
         agent_service=svc,
         audit=audit,
