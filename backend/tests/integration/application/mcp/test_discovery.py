@@ -478,7 +478,7 @@ class _Tool:
     def __init__(self, name: str) -> None:
         self.name = name
         self.description = None
-        self.inputSchema: dict = {}  # type: ignore[type-arg]
+        self.input_schema: dict = {}  # type: ignore[type-arg]
 
 
 @pytest.mark.asyncio
@@ -544,11 +544,9 @@ async def test_list_prompts_method_not_found_does_not_evict_or_retry(
     )
     try:
         import mcp.types as mcp_types
-        from mcp import McpError
+        from mcp import MCPError
 
-        not_found = McpError(
-            mcp_types.ErrorData(code=mcp_types.METHOD_NOT_FOUND, message="no prompts")
-        )
+        not_found = MCPError(code=mcp_types.METHOD_NOT_FOUND, message="no prompts")
         conn = _Conn(error=not_found)
         fake_sup = _FakeSupervisor([conn])
         discovery = _discovery_with_supervisor(rsvc, prefs, audit, fake_sup)

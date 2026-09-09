@@ -84,7 +84,7 @@ REST API 是规范接口——CLI、Web UI 和桌面应用都调用它。
 
 ## Stdio Shim（`coffer-mcp-shim`）
 
-**它是什么。** MCP 客户端（Claude Code、Codex、Cursor 以及任何支持 stdio MCP 服务器的工具）与守护进程 MCP 端点之间的桥接。MCP 客户端配置为 `"command": "coffer-mcp-shim"`，而不是特定的上游服务器。shim 在客户端的 stdin/stdout 接口和守护进程的 HTTP/SSE MCP 端点之间进行转换，使守护进程从客户端角度看起来像一个普通的 stdio MCP 服务器。
+**它是什么。** MCP 客户端（Claude Code、Codex 以及任何支持 stdio MCP 服务器的工具）与守护进程 MCP 端点之间的桥接。MCP 客户端配置为 `"command": "coffer-mcp-shim"`，而不是特定的上游服务器。shim 在客户端的 stdin/stdout 接口和守护进程的 HTTP/SSE MCP 端点之间进行转换，使守护进程从客户端角度看起来像一个普通的 stdio MCP 服务器。
 
 **所在进程。** 每个连接的 MCP 客户端会话一个 shim 进程。每个 MCP 客户端在客户端启动时启动一个新的 shim 进程。三个同时运行的 MCP 客户端意味着三个 shim 进程，每个都维护自己与守护进程的 HTTP/SSE 连接，每个都产生自己独立的 `MCPGatewaySession`，带有自己的上游子进程集合。
 

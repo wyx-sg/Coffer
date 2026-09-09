@@ -191,66 +191,8 @@ def test_session_start_empty_context_prints_nothing(monkeypatch, capsys):
     assert out.strip() == ""
 
 
-# --- cursor dialect (ADR-042) --------------------------------------------------
-
-
-def test_cursor_dialect_prints_top_level_additional_context(monkeypatch, capsys):
-    def fake_http(method, url, *, token, body=None, timeout):
-        return 200, json.dumps({"additional_context": "RULES BUNDLE TEXT"})
-
-    code, out = _run(
-        monkeypatch,
-        capsys,
-        stdin=json.dumps({"cwd": "/work/proj"}),
-        argv=["--agent", "cur", "--dialect", "cursor", "--event", "sessionStart"],
-        daemon=_daemon_info(),
-        request_fn=fake_http,
-    )
-    assert code == 0
-    # Cursor reads a top-level `additional_context`, not Claude's nested envelope.
-    assert json.loads(out) == {"additional_context": "RULES BUNDLE TEXT"}
-
-
-# --- raw dialect (ADR-042 PLUGIN_DROP) ------------------------------------------
-
-
-def test_raw_dialect_prints_bare_bundle_text(monkeypatch, capsys):
-    # The dropped opencode plugin spawns this and pushes stdout onto the system
-    # prompt verbatim — no JSON envelope, and stdin is never read (the plugin
-    # spawns with stdio "ignore"; --event names the SessionStart).
-    def fake_http(method, url, *, token, body=None, timeout):
-        return 200, json.dumps({"additional_context": "RULES BUNDLE TEXT"})
-
-    code, out = _run(
-        monkeypatch,
-        capsys,
-        stdin="",  # never read on the --event sessionStart path
-        argv=["--agent", "oc", "--dialect", "raw", "--event", "sessionStart"],
-        daemon=_daemon_info(),
-        request_fn=fake_http,
-    )
-    assert code == 0
-    assert out == "RULES BUNDLE TEXT"
-
-
-def test_raw_dialect_prints_nothing_on_empty_bundle(monkeypatch, capsys):
-    def fake_http(method, url, *, token, body=None, timeout):
-        return 200, json.dumps({"additional_context": ""})
-
-    code, out = _run(
-        monkeypatch,
-        capsys,
-        stdin="",
-        argv=["--agent", "oc", "--dialect", "raw", "--event", "sessionStart"],
-        daemon=_daemon_info(),
-        request_fn=fake_http,
-    )
-    assert code == 0
-    assert out.strip() == ""
-
-
 def test_event_flag_wins_over_absent_stdin_event(monkeypatch, capsys):
-    """Cursor's payload names no event; --event carries it and the hook still fires."""
+    """A payload naming no event still fires: --event carries it (FR-044 fallback)."""
     calls = []
 
     def fake_http(method, url, *, token, body=None, timeout):
@@ -261,14 +203,14 @@ def test_event_flag_wins_over_absent_stdin_event(monkeypatch, capsys):
         monkeypatch,
         capsys,
         stdin=json.dumps({"conversation_id": "abc"}),  # no hook_event_name, no cwd
-        argv=["--agent", "cur", "--dialect", "cursor", "--event", "sessionStart"],
+        argv=["--agent", "cc", "--event", "SessionStart"],
         daemon=_daemon_info(),
         request_fn=fake_http,
     )
     assert code == 0
     assert len(calls) == 1
-    assert "/agents/cur/session-context" in calls[0]
-    assert json.loads(out) == {"additional_context": "CTX"}
+    assert "/agents/cc/session-context" in calls[0]
+    assert json.loads(out)["hookSpecificOutput"]["additionalContext"] == "CTX"
 
 
 def test_unparseable_stdin_still_injects_when_event_given(monkeypatch, capsys):
@@ -281,12 +223,12 @@ def test_unparseable_stdin_still_injects_when_event_given(monkeypatch, capsys):
         monkeypatch,
         capsys,
         stdin="not json at all",
-        argv=["--agent", "cur", "--dialect", "cursor", "--event", "sessionStart"],
+        argv=["--agent", "cc", "--event", "SessionStart"],
         daemon=_daemon_info(),
         request_fn=fake_http,
     )
     assert code == 0
-    assert json.loads(out) == {"additional_context": "CTX"}
+    assert json.loads(out)["hookSpecificOutput"]["additionalContext"] == "CTX"
 
 
 def test_cwd_falls_back_to_process_cwd_when_payload_omits_it(monkeypatch, capsys, tmp_path):
@@ -301,7 +243,7 @@ def test_cwd_falls_back_to_process_cwd_when_payload_omits_it(monkeypatch, capsys
         monkeypatch,
         capsys,
         stdin=json.dumps({}),
-        argv=["--agent", "cur", "--dialect", "cursor", "--event", "sessionStart"],
+        argv=["--agent", "cc", "--event", "SessionStart"],
         daemon=_daemon_info(),
         request_fn=fake_http,
     )
@@ -312,7 +254,7 @@ def test_cwd_falls_back_to_process_cwd_when_payload_omits_it(monkeypatch, capsys
     assert pathlib.Path(cwd_param).resolve() == tmp_path.resolve()
 
 
-def test_default_dialect_is_claude_envelope(monkeypatch, capsys):
+def test_output_is_always_the_hook_specific_output_envelope(monkeypatch, capsys):
     def fake_http(method, url, *, token, body=None, timeout):
         return 200, json.dumps({"additional_context": "CTX"})
 
@@ -320,12 +262,17 @@ def test_default_dialect_is_claude_envelope(monkeypatch, capsys):
         monkeypatch,
         capsys,
         stdin=json.dumps({"hook_event_name": "SessionStart", "cwd": "/w"}),
-        argv=["--agent", "cc"],  # no --dialect
+        argv=["--agent", "cc"],
         daemon=_daemon_info(),
         request_fn=fake_http,
     )
     assert code == 0
-    assert json.loads(out)["hookSpecificOutput"]["additionalContext"] == "CTX"
+    assert json.loads(out) == {
+        "hookSpecificOutput": {
+            "hookEventName": "SessionStart",
+            "additionalContext": "CTX",
+        }
+    }
 
 
 # --- review hardening (ADR-042 follow-up) --------------------------------------
@@ -347,13 +294,14 @@ def test_named_session_start_never_reads_stdin(monkeypatch, capsys):
     monkeypatch.setattr(
         hook_main.sys,
         "argv",
-        ["coffer-hook", "--agent", "cur", "--dialect", "cursor", "--event", "sessionStart"],
+        ["coffer-hook", "--agent", "cc", "--event", "SessionStart"],
     )
     monkeypatch.setattr(hook_main, "_read_daemon_info", lambda: _daemon_info())
     monkeypatch.setattr(hook_main, "_http", fake_http)
     with pytest.raises(SystemExit):
         hook_main.run()
-    assert json.loads(capsys.readouterr().out) == {"additional_context": "CTX"}
+    out = capsys.readouterr().out
+    assert json.loads(out)["hookSpecificOutput"]["additionalContext"] == "CTX"
 
 
 def test_claude_path_still_reads_stdin(monkeypatch, capsys):
@@ -413,9 +361,9 @@ def test_deleted_cwd_does_not_kill_the_injection(monkeypatch, capsys, tmp_path):
         monkeypatch,
         capsys,
         stdin=json.dumps({}),
-        argv=["--agent", "cur", "--dialect", "cursor", "--event", "sessionStart"],
+        argv=["--agent", "cc", "--event", "SessionStart"],
         daemon=_daemon_info(),
         request_fn=fake_http,
     )
     assert code == 0
-    assert json.loads(out) == {"additional_context": "CTX"}
+    assert json.loads(out)["hookSpecificOutput"]["additionalContext"] == "CTX"

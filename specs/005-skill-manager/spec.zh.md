@@ -169,8 +169,7 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - **非托管条目是指向主库之外的 symlink**：列为非托管但不可收编（收编会搬走别人的事实来源）；用户可手动处理链接目标，或删除该链接。
 - **非托管 skill 没有合法 SKILL.md**：以 `valid=false` 及原因列出；可删除，但在通过校验之前不可收编。
 - **开启跟随时目标路径已存在同名的非 Coffer 文件夹**：该 skill 报告为冲突（与 FR-011 同规则）而不被覆盖；主库其余部分照常投递。
-- **各 agent 的交付目标**：当前两种 agent 类型（Claude Code、Codex）均使用 `folder` 交付模式，投递到 `<config_dir>/skills/<name>`。每个 agent 的模式与子路径来自能力清单，因此将来新增 agent 的交付目标是数据而非新分支。
-- **非 folder 交付模式（保留扩展点）**：`rules_mdc` 与 `external_dir` 是已识别的 `SkillDeliveryMode` 枚举值，但当前没有任何 agent 类型使用它们。为使用这些模式的（假想）agent 启用 skill 会在任何文件系统写入之前以 HTTP 422 拒绝；follow / relink 协调器会跳过此类 agent，因此注册与策略变更仍可成功。
+- **各 agent 的交付目标**：Coffer 只有一种交付方式——把 master skill 文件夹符号链接（失败则复制）进 `<config_dir>/skills/<name>`。每个 agent 的 skill 子路径来自能力清单，因此将来新增 agent 的交付目标是数据而非新分支。
 
 ## Skill delivery scope（2026-07-10 修订 —— machine × agent scope，[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.zh.md)）
 

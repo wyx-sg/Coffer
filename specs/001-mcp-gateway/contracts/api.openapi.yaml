@@ -177,6 +177,24 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /mcp/tiering:
+    get:
+      tags: [mcp]
+      operationId: getToolTiering
+      summary: How much of the aggregated tool catalogue agents currently see (ADR-046)
+      description: >
+        Global across every enabled server, because the listing budget is
+        shared: a server whose tools all fit locally can still be crowded out.
+        Computed from the last-discovered catalogue, so it never cold-spawns an
+        upstream to answer a management question.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ToolTieringOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /resources/mcp_server/{name}/capabilities:
     parameters:
       - in: path
@@ -882,6 +900,28 @@ components:
               description: { type: string, nullable: true }
               required: { type: boolean }
         enabled: { type: boolean }
+
+    ToolTieringServerOut:
+      type: object
+      required: [server, total, listed]
+      properties:
+        server: { type: string }
+        total: { type: integer }
+        listed: { type: integer }
+
+    ToolTieringOut:
+      type: object
+      required: [enabled, budget, window_days, total, listed, hidden, servers]
+      properties:
+        enabled: { type: boolean }
+        budget: { type: integer, example: 50 }
+        window_days: { type: integer, example: 90 }
+        total: { type: integer }
+        listed: { type: integer }
+        hidden: { type: integer }
+        servers:
+          type: array
+          items: { $ref: "#/components/schemas/ToolTieringServerOut" }
 
     CapabilityListOut:
       type: object

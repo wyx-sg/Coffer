@@ -2,7 +2,7 @@
 
 > English: [AGENTS.md](./AGENTS.md)
 
-Coffer 项目的 AI 代理操作手册（Claude Code、Codex、Cursor 及未来的 agent）。会话开始时阅读。
+Coffer 项目的 AI 代理操作手册（Claude Code、Codex 及未来的 agent）。会话开始时阅读。
 
 ## 1. 一览
 

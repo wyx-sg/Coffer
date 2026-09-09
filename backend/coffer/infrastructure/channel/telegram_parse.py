@@ -202,6 +202,9 @@ def build_inbound_message(
         timestamp=datetime.fromtimestamp(int(message.get("date", 0)), tz=UTC),
         sender_id=str(sender.get("id") or ""),
         chat_kind="group" if group else "direct",
+        # Telegram hands the group's name over for free on every update (FR-042);
+        # a DM's chat has no title.
+        chat_title=str(message.get("chat", {}).get("title") or ""),
         addressed=addressed,
         mentions_others=mentions_other,
         thread_id=str(message.get("message_thread_id") or ""),

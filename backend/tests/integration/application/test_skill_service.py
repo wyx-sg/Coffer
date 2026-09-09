@@ -70,14 +70,10 @@ async def _setup(tmp_path: pathlib.Path):
     # Cross-kind resolver — tests are outside the contract scope so we can
     # import both kinds here without violating Contract 5.
     from coffer.domain.agent.config import AgentConfig
-    from coffer.domain.agent.descriptor import descriptor_for
 
     def _agent_skill_dir(r: Resource):
         cfg = AgentConfig.model_validate(r.config)
         return cfg.resolved_skill_dir()
-
-    def _agent_skill_delivery(r: Resource) -> str:
-        return descriptor_for(AgentConfig.model_validate(r.config).type).skill_delivery_mode.value
 
     # Order: create services first, then kinds (with cross-kind hooks).
     placeholder_kinds: dict = {}
@@ -91,7 +87,6 @@ async def _setup(tmp_path: pathlib.Path):
         master_store=master_store,
         sync_engine=SyncEngine(),
         agent_skill_dir_resolver=_agent_skill_dir,
-        agent_skill_delivery_resolver=_agent_skill_delivery,
     )
 
     agent_svc = AgentService(

@@ -136,7 +136,10 @@ def _generate(
             headers["Authorization"] = f"Bearer {spec.api_key}"
 
     req = urllib.request.Request(url, data=json.dumps(body).encode(), headers=headers)
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — operator-configured
+    # The URL is operator-configured (a provider base_url from the eval spec),
+    # not attacker-supplied. `S310` is not in this project's ruff select set, so
+    # a `noqa` for it would itself be flagged as unused (RUF100).
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         data = json.loads(resp.read())
     if spec.provider == "ollama":
         return data[key]

@@ -245,12 +245,12 @@ def test_json_typed_local_object_entry_with_agent_name_appends_to_command_array(
         SHIM,
         container_key="mcp",
         entry_style=McpEntryStyle.TYPED_LOCAL_OBJECT,
-        agent_name="opencode_agent",
+        agent_name="typed_agent",
     )
     data = json.loads(out)
     assert data["mcp"][COFFER_SERVER_KEY] == {
         "type": "local",
-        "command": [SHIM, "--agent", "opencode_agent"],
+        "command": [SHIM, "--agent", "typed_agent"],
         "enabled": True,
     }
     assert is_installed(ConfigFileFormat.JSON, out, container_key="mcp")
@@ -328,7 +328,7 @@ def test_json_install_preserves_non_ascii():
     assert "\\u" not in out
 
 
-# --- opencode typed-local-object entry style (ADR-040) ---
+# --- typed-local-object entry style ---
 
 
 def test_json_typed_local_object_entry_install_detect_uninstall():
@@ -371,7 +371,7 @@ def test_json_typed_local_object_preserves_user_mcp_entries():
     assert data["mcp"][COFFER_SERVER_KEY]["enabled"] is True
 
 
-# --- nested JSON container (openclaw `mcp.servers`, ADR-044) --------------------
+# --- nested JSON container (a dotted `mcp.servers` container key) --------------------
 
 
 def test_json_dotted_container_install_into_empty():

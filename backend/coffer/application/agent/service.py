@@ -364,7 +364,7 @@ class AgentService:
         existing = await self.get(name)
         cfg = AgentConfig.model_validate(existing.config)
         target = native_memory_disable_target(cfg.type)
-        if target is None:  # e.g. opencode: no native memory — absent, not broken (ADR-040)
+        if target is None:  # no native memory for this type — absent, not broken
             raise NativeMemoryDisableUnsupported(cfg.type.value)
         config_key, fmt = target
         spec = spec_for(cfg.type, config_key, cfg.resolved_config_dir())

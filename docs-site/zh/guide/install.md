@@ -22,7 +22,7 @@
 
 - **`coffer`** —— 管理 CLI（`coffer mcp add`、`coffer mcp list` 等）
 - **`coffer-daemon`** —— 长生命周期的后台进程，负责聚合上游 MCP 服务器
-- **`coffer-mcp-shim`** —— MCP 客户端（Claude Code、Cursor 等）与 daemon 通信的 stdio 桥接程序
+- **`coffer-mcp-shim`** —— MCP 客户端（Claude Code、Codex 等）与 daemon 通信的 stdio 桥接程序
 
 ### macOS / Linux
 
