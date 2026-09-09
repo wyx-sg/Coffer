@@ -17,7 +17,7 @@ from coffer.application.skill.lifecycle_ops import infer_link_mode
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import TargetConflict
 from coffer.domain.resource import ResourceRef
-from coffer.domain.scope import agent_in_scope, machine_in_scope
+from coffer.domain.scope import agent_in_scope
 from coffer.domain.skill.binding import BindingState
 from coffer.domain.workspace_errors import SkillOutOfScope
 
@@ -35,13 +35,9 @@ async def enable_skill_for_agent(
 ) -> BindingState:
     skill = await service._rs.get(ResourceRef("skill", skill_name))
     agent = await service._rs.get(ResourceRef("agent", agent_name))
-    # ADR-045 hard grant (Task 11): scope overrides manual bindings — a
-    # (machine, agent) pair outside the skill's scope can never be bound, even
-    # with force=True. No provider wired → no filtering (legacy contract).
-    local = await service._local_machine_id()
-    if local is not None and not (
-        machine_in_scope(skill.scope, local) and agent_in_scope(skill.scope, local, agent_name)
-    ):
+    # ADR-045 hard grant: scope overrides manual bindings — an agent outside
+    # the skill's scope can never be bound, even with force=True.
+    if not agent_in_scope(skill.scope, agent_name):
         raise SkillOutOfScope(skill_name, agent_name)
     target_dir = service._resolve_agent_skill_dir(agent)
     link_path = target_dir / skill_name

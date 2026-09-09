@@ -6,7 +6,7 @@
 1. **仅监听 loopback。** HTTP API 只绑定到 `127.0.0.1`。任何面向公网的接口面必须以独立进程运行，并仅限于经过签名校验的回调路径——具体来说就是 SeaTalk 回调监听器（见 [通道与面向公网的接口面](#通道与面向公网的接口面)）。
 2. **密钥明文永不落盘。** 密钥只以 Fernet 密文形式存于 `credentials` 表；配置只存储凭据的 _引用_，而不是凭据值本身。明文仅在解密与拉起子进程/注入 header（消费密钥处）之间短暂存在于内存——永不以明文进入 SQLite、日志、审计或任何结构化事件。Fernet 主密钥由 `infrastructure/credentials/` 独占管理，它是唯一被允许 import `keyring` 的位置。
 3. **REST API 启用 Token + CORS 鉴权。** 每次管理 API 调用都需要 `X-Coffer-Token` header。daemon token 存储在权限位为 `0600` 的 `~/.coffer/daemon.json` 中。
-4. **出站 HTTP 如今已有真实路径；SSRF 防护的缺口仅限于 HTTP 传输的 MCP 客户端。** daemon 如今已会发起出站调用——向 OpenAI 兼容的供应商请求 embeddings、为 sync 执行 `git push`、以及调用 Telegram/SeaTalk API（用裸 httpx 访问固定主机）。章程要求出站 HTTP 必须经过具备 SSRF 防护的客户端；目前仅剩的缺口是 HTTP 传输的 MCP 客户端，它仍使用 MCP SDK 的 httpx 客户端，没有 IP 范围过滤。针对该客户端的受保护 SSRF 防护封装器已列入计划。面向公网的接口面必须以独立进程运行，并仅限于经过签名校验的回调路径。
+4. **出站 HTTP 如今已有真实路径；SSRF 防护的缺口仅限于 HTTP 传输的 MCP 客户端。** daemon 如今已会发起出站调用——向 OpenAI 兼容的供应商请求 embeddings，以及调用 Telegram/SeaTalk API（用裸 httpx 访问固定主机）。章程要求出站 HTTP 必须经过具备 SSRF 防护的客户端；目前仅剩的缺口是 HTTP 传输的 MCP 客户端，它仍使用 MCP SDK 的 httpx 客户端，没有 IP 范围过滤。针对该客户端的受保护 SSRF 防护封装器已列入计划。面向公网的接口面必须以独立进程运行，并仅限于经过签名校验的回调路径。
    :::
 
 ## 威胁模型与信任边界
@@ -76,14 +76,15 @@ envelope 加密意味着数据库之外只剩唯一一份密钥材料：Fernet *
 
 密钥到达监听器的方式与上游 MCP 子进程获取密钥的方式相同：签名密钥、daemon URL 和 daemon token 在拉起时注入子进程的环境，永不落盘。拉起记录在 upstream-pids 目录中，因此 daemon 崩溃不会遗留任何东西——启动时的孤儿清扫会将其回收。daemon token 轮换会重新拉起监听器（token 在拉起时已烘焙进子进程的环境）。
 
-## Sync 安全
+## 导出安全
 
-多机 sync（[ADR-016](/zh/reference/adr/ADR-016-multi-machine-sync)）通过**一个用户自己拥有的 git 仓库**在机器之间搬运 vault 状态。其安全性建立在把密钥材料完全排除在该介质之外：
+仓库的导出与导入（[ADR-016](/zh/reference/adr/ADR-016-vault-export-import)）以**一个用户自己命名、自己搬运的目录**在机器之间搬运 vault 状态。其安全性建立在把密钥材料排除在该目录之外：
 
-- **介质上只有密文。** 凭据以 Fernet 密文 blob 形式导出，并以密文形式通过 git 流转——git 仓库始终只持有无法解密的数据。即使远端是托管的 GitHub 仓库，供应商也始终只持有密文。
-- **主密钥永不进入介质。** Fernet 主密钥通过 `coffer sync key export/import` **带外**引导到每台机器——永不提交、永不推送。这正是让宪章论证保持干净的原因：sync 介质不是任何可解密密钥的系统记录。
-- **密钥就位前处于 `credentials_locked`。** 一台已拉取密文但尚未拿到配套主密钥的机器会报告 `credentials_locked`，并拒绝拉起受影响的资源。它永不静默地解密失败。
-- **git 以子进程运行，使用环境中的凭据。** 出站 git 是真实的网络出口，但它遵循仅监听 loopback 的姿态：git 以子进程运行，使用用户自己环境中的 git 凭据，而非 Coffer 的 HTTP 客户端。Coffer 永不注入或存储 git 远端的凭据。
+- **完全没有网络出口。** 导出与导入只触碰本地文件系统——没有远程、没有 git 子进程、没有后台复制。搬运这个目录的手段（`scp`、U 盘、用户自己的 git 仓库）都在 Coffer 之外，用的是用户自己的工具与凭据。
+- **凭据是 opt-in 的。** 不给 `--with-credentials` 时，导出完全不包含任何凭据材料，因为一个导出目录很容易被随手落在什么地方。
+- **一旦包含，也只有密文。** 凭据以 Fernet 密文 blob 写出；bundle 始终只持有无法解密的数据。
+- **主密钥永不进入 bundle。** Fernet 主密钥通过 `coffer sync key export/import` **带外**引导到每台机器——绝不写入导出物。
+- **密钥就位前处于 `credentials_locked`。** 一台导入了密文但尚未拿到配套主密钥的机器会报告 `credentials_locked`，并拒绝拉起受影响的资源。它永不静默地解密失败。
 
 ## Token 鉴权
 
@@ -106,7 +107,6 @@ daemon 配置 CORS 以拒绝浏览器上下文中的跨域请求。由于 HTTP A
 daemon 如今已会发起出站 HTTP 调用。真实的出站路径包括：
 
 - 构建知识索引时，向 OpenAI 兼容的供应商请求 **embeddings**（一个 `AsyncOpenAI` 客户端，按供应商切换 `base_url`）。
-- 为 sync 执行 **`git push`**——但这是以 git 子进程运行，使用用户环境中的 git 凭据，而非 Coffer 的 HTTP 客户端（见 [Sync 安全](#sync-安全)）。
 - 为通道调用 **Telegram 与 SeaTalk API**——用裸 httpx 访问固定的、众所周知的主机。
 - **HTTP 传输的 MCP 服务器**，经由 MCP SDK 的 `create_mcp_http_client`（基于 `httpx`）。
 

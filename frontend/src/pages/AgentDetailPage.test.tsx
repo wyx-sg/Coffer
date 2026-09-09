@@ -7,7 +7,6 @@ import { AgentDetailPage } from "./AgentDetailPage";
 
 vi.mock("@/lib/hooks/useAgents", () => ({
   useAgent: vi.fn(),
-  // ScopeCard (Task 19) also imports the plural list hook from this module.
   useAgents: vi.fn(() => ({ data: [] })),
   usePatchAgent: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useRemoveAgent: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
@@ -28,16 +27,6 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   useTogglePlugin: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useUninstallPlugin: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
-// ScopeCard (Task 19) pulls its scope/machines data through hand-written
-// fetch hooks — stub them so the card renders without a real daemon.
-vi.mock("@/lib/hooks/useScope", () => ({
-  useResourceScope: vi.fn(() => ({ data: { scope: null, axes: ["machine"] } })),
-  useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-}));
-vi.mock("@/lib/hooks/useMachines", () => ({
-  useMachines: vi.fn(() => ({ data: { machines: [] } })),
-}));
-
 const hooks = await import("@/lib/hooks/useAgents");
 const useAgentMock = vi.mocked(hooks.useAgent);
 
@@ -104,10 +93,12 @@ describe("AgentDetailPage", () => {
     expect(screen.queryByText(/skill directory/i)).not.toBeInTheDocument();
   });
 
-  test("mounts the ScopeCard (Task 19) for the agent", () => {
+  // `agent` declares no scope (ADR-045) — it is not a resource other agents
+  // draw on, so there is no activation scope to edit.
+  test("mounts no ScopeCard for the agent", () => {
     mockAgentLoaded();
     renderAt();
-    expect(screen.getByTestId("scope-card")).toBeInTheDocument();
+    expect(screen.queryByTestId("scope-card")).not.toBeInTheDocument();
   });
 
   test("clicking Edit opens the edit form in a modal dialog", () => {

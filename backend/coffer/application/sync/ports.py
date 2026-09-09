@@ -1,210 +1,54 @@
 """Ports the sync application layer depends on; infrastructure implements them.
 
-Keeping these as protocols lets ``application/sync`` stay free of git, the
-filesystem, and sqlite (Contract 2b) while the composition root injects the
+Keeping these as protocols lets ``application/sync`` stay free of the
+filesystem and sqlite (Contract 2b) while the composition root injects the
 concrete adapters.
 """
 
 from __future__ import annotations
 
-from collections.abc import Collection, Mapping, Sequence
-from dataclasses import dataclass, field
-from datetime import datetime
+from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 
 from coffer.domain.sync.manifest import Manifest
-from coffer.domain.sync.models import MachineEntry, MachineIdentity, Tombstone
 from coffer.domain.sync.serialization import ResourceDoc
-
-
-@dataclass(frozen=True)
-class PullOutcome:
-    """Result of a git pull/merge."""
-
-    conflicted_paths: tuple[str, ...] = ()
-
-    @property
-    def is_conflict(self) -> bool:
-        return bool(self.conflicted_paths)
-
-
-class GitPort(Protocol):
-    """Git transport over the sync workspace working tree."""
-
-    def ensure_repo(self, remote: str, branch: str) -> None:
-        """Clone the remote on first use, or point an existing tree at it."""
-
-    def has_conflicts(self) -> bool: ...
-
-    def conflicted_paths(self) -> list[str]: ...
-
-    def commit_all(self, message: str) -> bool:
-        """Stage everything and commit; return False if there was nothing to do."""
-
-    def has_changes(self) -> bool:
-        """Whether the working tree differs from HEAD (uncommitted changes)."""
-
-    def head(self) -> str | None:
-        """The workspace's current commit sha, or None before the first commit."""
-
-    def remote_head(self, remote: str, branch: str) -> str | None:
-        """The remote branch head sha (one ``ls-remote`` round trip), or None."""
-
-    def check_remote(self, remote: str, branch: str) -> None:
-        """Reachability probe; raises ``GitOperationFailed`` (raw stderr) on
-        auth/host/repo failures. A missing branch on a reachable repo is fine."""
-
-    def last_commit_ts(self, rev: str, path: str) -> int | None:
-        """Unix ts of the last commit touching ``path`` on ``rev``, or None."""
-
-    def read_blob(self, rev: str, path: str) -> bytes | None:
-        """Raw bytes of ``path`` at ``rev`` (e.g. HEAD / MERGE_HEAD), or None
-        when the path does not exist on that side."""
-
-    def pull(self, branch: str) -> PullOutcome: ...
-
-    def push(self, branch: str) -> None: ...
-
-    def resolve(self, strategy: str, paths: Sequence[str]) -> None:
-        """Resolve conflicts with 'ours'/'theirs'/'resolved' then stage them."""
 
 
 class ImportGate(Protocol):
     """Per-kind validation the importing machine runs BEFORE upserting a doc
-    (spec 010 import reconciliation). Raise ``CofferError`` to quarantine the
-    doc — it retries every run and clears once this machine satisfies it
+    (spec 010 import reconciliation). Raise ``CofferError`` to report the doc
+    as a per-resource failure — the rest of the bundle still imports, and the
+    user can re-run the import once this machine satisfies the precondition
     (e.g. the agent's config dir exists here).
 
-    ``scope`` is the doc's ADR-045 machine x agent activation scope (spec 004
-    amendment): a gate that is scope-aware can pass a doc scoped to another
-    machine through untouched (row upserts dormant) instead of quarantining
-    on a machine-local precondition that is meaningless there. Optional
-    keyword so existing gates that ignore scope keep working unchanged."""
+    ``scope`` is the doc's ADR-045 activation scope, passed so a scope-aware
+    gate can let a doc that is dormant here through untouched instead of
+    failing it on a machine-local precondition that does not apply."""
 
     kind: str
 
-    async def validate(
-        self, config: Mapping[str, object], *, scope: dict[str, Any] | None = None
-    ) -> None: ...
+    async def validate(self, config: Mapping[str, object], *, scope: Any = None) -> None: ...
 
 
 class PostImportHook(Protocol):
-    """Per-kind side-effect reconciliation run AFTER every import (spec 010
+    """Per-kind side-effect reconciliation run AFTER an import (spec 010
     import reconciliation). Re-applies machine-local side-effects (native
     config projections, on-disk transforms, deliveries) idempotently from the
-    converged rows — current state, not deltas — and returns error strings;
-    failures are reported in the run and retried on the next import."""
+    imported rows — current state, not deltas — and returns error strings,
+    which are reported in the import summary."""
 
     kind: str
 
     async def reconcile(self) -> list[str]: ...
 
 
-class WorkspacePort(Protocol):
-    """Filesystem IO over the sync workspace (mirrors, manifest, docs, blobs)."""
-
-    def mirror_trees_out(self, *, delete_missing: bool = True) -> None:
-        """Converge the workspace trees on the live knowledge/memory trees.
-
-        ``delete_missing=False`` copies adds/changes only — used until a run
-        has completed an import, so files that arrived from the remote but
-        were never imported locally are not exported away as deletions."""
-
-    def mirror_trees_in(self) -> None:
-        """Copy the workspace knowledge/memory trees back into the live vault."""
-
-    def write_manifest(self, manifest: Manifest) -> None: ...
-
-    def read_manifest(self) -> Manifest | None: ...
-
-    def write_resource_docs(
-        self, docs: Sequence[Mapping[str, object]], preserve: Collection[str] = ()
-    ) -> None:
-        """Replace ``resources/`` with one deterministic YAML file per doc,
-        preserving the current workspace docs of quarantined ``preserve`` refs."""
-
-    def read_resource_docs(self) -> list[ResourceDoc]: ...
-
-    def write_tombstone(self, tombstone: Tombstone) -> None: ...
-
-    def remove_tombstone(self, kind: str, name: str) -> None: ...
-
-    def read_tombstones(self) -> list[Tombstone]: ...
-
-    def write_override(
-        self, machine_id: str, kind: str, name: str, patch: Mapping[str, object]
-    ) -> None:
-        """Write this machine's merge patch for one resource."""
-
-    def remove_override(self, machine_id: str, kind: str, name: str) -> None: ...
-
-    def read_overrides(self, machine_id: str) -> dict[tuple[str, str], dict[str, object]]: ...
-
-    def write_state_docs(
-        self,
-        area: str,
-        docs: Sequence[tuple[str, Mapping[str, object]]],
-        owned_prefixes: Collection[str] = (),
-        preserve: Collection[str] = (),
-    ) -> None:
-        """Reconcile ``state/<area>/``: replace docs under ``owned_prefixes``,
-        write ``docs``, preserve everything else verbatim — including owned
-        paths listed in ``preserve`` (their import failed here; replacing them
-        with local values would revert the fleet)."""
-
-    def read_state_docs(self, area: str) -> list[tuple[str, dict[str, object]]]: ...
-
-    def write_credential_blobs(
-        self, blobs: Mapping[str, bytes], *, delete_missing: bool = True
-    ) -> None:
-        """Write one ``<ref>.enc`` per ciphertext blob. Existing blobs for refs
-        this machine does not hold are removed only with ``delete_missing``
-        (same not-yet-imported guard as the trees). A ref whose path collides
-        case-insensitively with a differently-cased existing blob replaces it —
-        two case variants in one git index break checkouts on macOS."""
-
-    def read_credential_blobs(self) -> dict[str, bytes]: ...
-
-    def list_files(self) -> list[str]:
-        """All tracked workspace-relative paths (for the 'no key in medium' check)."""
-
-    def write_machine_entry(self, entry: MachineEntry) -> None:
-        """Write this machine's own ``machines/<id>.json`` registry entry."""
-
-    def read_machine_entries(self) -> list[MachineEntry]:
-        """All machine registry entries present in the workspace."""
-
-
-class MachineIdentityPort(Protocol):
-    """Persistence of this machine's stable identity singleton (ADR-043)."""
-
-    async def get(self) -> MachineIdentity | None: ...
-
-    async def create(self, machine_id: str, display_name: str) -> MachineIdentity: ...
-
-    async def set_display_name(self, display_name: str) -> MachineIdentity: ...
-
-
-class TombstoneLedgerPort(Protocol):
-    """This machine's pending deletion records (spec 010 tombstones)."""
-
-    async def record(self, kind: str, name: str) -> None: ...
-
-    async def list(self) -> list[Tombstone]: ...
-
-    async def remove(self, kind: str, name: str) -> None: ...
-
-    async def prune_older_than(self, cutoff: datetime) -> int: ...
-
-
 class SyncedStatePort(Protocol):
-    """A module-owned shared-state area synced under ``state/<area>/``.
+    """A module-owned shared-state area carried under ``state/<area>/``.
 
-    Modules (channel pairing, MCP preferences, ...) implement this and the
-    composition root registers the providers with the sync engine — sync never
-    imports kind modules (cross-kind fence). Docs are deterministic payloads;
-    export replaces the whole area (git's 3-way merge reconciles machines),
-    import upserts into local state."""
+    Modules (channel pairing, memory store labels, ...) implement this and the
+    composition root registers the providers — sync never imports kind modules
+    (cross-kind fence). Docs are deterministic payloads: export writes the
+    area, import upserts into local state."""
 
     @property
     def area(self) -> str:
@@ -212,17 +56,17 @@ class SyncedStatePort(Protocol):
         ...
 
     async def export_docs(self) -> tuple[list[tuple[str, dict[str, object]]], list[str]]:
-        """Local state as (relative doc path without extension, payload) pairs,
-        plus the path PREFIXES this machine can vouch for. Export replaces only
-        docs under owned prefixes — docs for entities this machine does not
-        know locally (quarantined / not yet imported) are preserved verbatim,
-        so an incomplete machine can never erase the fleet's state."""
+        """Local state as (relative doc path without extension, payload) pairs.
+
+        The second element is the path prefixes this machine owns. It is
+        retained for provider compatibility and ignored by the exporter: a
+        bundle is a snapshot of THIS machine, so every doc it returns is
+        written and nothing else is preserved."""
         ...
 
     async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[tuple[str, str]]:
-        """Apply merged docs to local state; returns (doc path, error) pairs.
-        A failed doc's path is preserved verbatim by the next export so the
-        retry sees the foreign value instead of this machine's stale one."""
+        """Apply the bundle's docs to local state; returns (doc path, error)
+        pairs, which are reported as per-doc import failures."""
         ...
 
 
@@ -234,9 +78,6 @@ class CredentialSyncPort(Protocol):
     def read_ciphertext(self, ref: str) -> bytes | None: ...
 
     def write_ciphertext(self, ref: str, blob: bytes) -> None: ...
-
-    def delete_ciphertext(self, ref: str) -> None:
-        """Remove the row for ``ref`` (idempotent; applying a credential tombstone)."""
 
     def locked_refs(self) -> list[str]:
         """Refs whose ciphertext cannot be decrypted on this machine (no/other key)."""
@@ -250,12 +91,50 @@ class MasterKeyPort(Protocol):
     def install_key(self, key: bytes) -> None: ...
 
 
-@dataclass
-class ResourceSnapshot:
-    """A resource as seen by export: identity + curation + validated config."""
+class BundlePort(Protocol):
+    """Filesystem IO over one export bundle directory (spec 010 layout).
 
-    kind: str
-    name: str
-    description: str | None
-    enabled: bool
-    config: dict[str, object] = field(default_factory=dict)
+    Every method is synchronous blocking IO; the application layer runs them
+    off the event loop."""
+
+    def open_for_write(self) -> None:
+        """Create (or clear) the bundle directory so an export is a snapshot
+        of this vault rather than a merge with whatever was there before."""
+
+    def require_readable(self) -> None:
+        """Raise ``SyncBundleInvalid`` unless the path is an existing bundle."""
+
+    @property
+    def path(self) -> str: ...
+
+    def mirror_trees_out(self) -> None:
+        """Copy the live knowledge/memory/skill trees into the bundle."""
+
+    def mirror_trees_in(self) -> None:
+        """Copy the bundle's trees back into the live vault (never deleting)."""
+
+    def tree_counts(self) -> list[tuple[str, int]]:
+        """(subdir, file count) for each mirrored tree present in the bundle."""
+
+    def write_manifest(self, manifest: Manifest) -> None: ...
+
+    def read_manifest(self) -> Manifest | None: ...
+
+    def write_resource_docs(self, docs: Sequence[Mapping[str, object]]) -> None:
+        """Write one deterministic YAML file per doc under ``resources/``."""
+
+    def read_resource_docs(self) -> list[ResourceDoc]: ...
+
+    def write_state_docs(
+        self, area: str, docs: Sequence[tuple[str, Mapping[str, object]]]
+    ) -> None: ...
+
+    def read_state_docs(self, area: str) -> list[tuple[str, dict[str, object]]]: ...
+
+    def write_credential_blobs(self, blobs: Mapping[str, bytes]) -> None:
+        """Write one ``<ref>.enc`` per ciphertext blob under ``credentials/``."""
+
+    def read_credential_blobs(self) -> dict[str, bytes]: ...
+
+    def list_files(self) -> list[str]:
+        """All bundle-relative file paths (for the 'no key in the bundle' check)."""

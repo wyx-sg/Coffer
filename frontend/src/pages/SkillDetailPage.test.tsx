@@ -17,14 +17,11 @@ vi.mock("@/lib/hooks/useSkills", () => ({
   useSkillFileContent: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
 }));
 
-// ScopeCard (Task 19) mounts on this page and pulls its own data through
+// ScopeCard mounts on this page and pulls its own data through
 // hand-written fetch hooks — stub them so the card renders without a daemon.
 vi.mock("@/lib/hooks/useScope", () => ({
-  useResourceScope: vi.fn(() => ({ data: { scope: null, axes: ["machine", "agent"] } })),
+  useResourceScope: vi.fn(() => ({ data: { scope: null, supports_scope: true } })),
   useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-}));
-vi.mock("@/lib/hooks/useMachines", () => ({
-  useMachines: vi.fn(() => ({ data: { machines: [] } })),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({
   useAgents: vi.fn(() => ({ data: [] })),
@@ -91,7 +88,7 @@ describe("SkillDetailPage", () => {
     expect(screen.queryByRole("button", { name: /^update$/i })).not.toBeInTheDocument();
   });
 
-  test("mounts the ScopeCard (Task 19) for the skill", () => {
+  test("mounts the ScopeCard for the skill", () => {
     mockSkill(LOCAL_SKILL);
     renderAt();
     expect(screen.getByTestId("scope-card")).toBeInTheDocument();

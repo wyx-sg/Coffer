@@ -1,9 +1,9 @@
-"""Sync path resolution (spec 010).
+"""Export/import path resolution (spec 010).
 
-Sync mirrors the file-backed trees (knowledge, memory, skills) and lives in its
-own working tree. The tree roots are resolved here — not imported from the kind
-modules — so the sync slice stays decoupled from every kind (cross-kind import
-fence) while honouring the same ``$COFFER_*_ROOT`` overrides the kinds use.
+An export mirrors the file-backed trees (knowledge, memory, skills). Their
+roots are resolved here — not imported from the kind modules — so the sync
+slice stays decoupled from every kind (cross-kind import fence) while
+honouring the same ``$COFFER_*_ROOT`` overrides the kinds use.
 """
 
 from __future__ import annotations
@@ -23,11 +23,6 @@ def _rooted(env_var: str, *segments: str) -> pathlib.Path:
     return _expand_home().joinpath(".coffer", *segments)
 
 
-def sync_root() -> pathlib.Path:
-    """``~/.coffer/sync/`` — the git working tree (override ``$COFFER_SYNC_ROOT``)."""
-    return _rooted("COFFER_SYNC_ROOT", "sync")
-
-
 def knowledge_root() -> pathlib.Path:
     """``~/.coffer/knowledge/`` (override ``$COFFER_KNOWLEDGE_ROOT``)."""
     return _rooted("COFFER_KNOWLEDGE_ROOT", "knowledge")
@@ -43,7 +38,7 @@ def skills_root() -> pathlib.Path:
     return _rooted("COFFER_SKILLS_ROOT", "skills")
 
 
-#: The file-backed trees sync mirrors, as (workspace-subdir, live-root) pairs.
+#: The file-backed trees an export mirrors, as (bundle-subdir, live-root) pairs.
 def mirrored_trees() -> list[tuple[str, pathlib.Path]]:
     return [
         ("knowledge", knowledge_root()),

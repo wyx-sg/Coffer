@@ -1,4 +1,4 @@
-"""Unit tests for deterministic resource <-> sync-document projection."""
+"""Unit tests for deterministic resource <-> bundle-document projection."""
 
 from __future__ import annotations
 
@@ -18,7 +18,8 @@ def test_doc_excludes_machine_local_fields() -> None:
         scope=None,
     )
     assert set(doc) == {"kind", "name", "description", "enabled", "config", "scope"}
-    # No id / created_at / updated_at leak into the synced form.
+    # No id / created_at / updated_at leak into the exported form — they are
+    # machine-local and would make two exports of one vault differ.
     assert "id" not in doc
     assert "created_at" not in doc
     assert "updated_at" not in doc
@@ -43,26 +44,21 @@ def test_round_trip_preserves_fields() -> None:
 
 
 def test_round_trip_preserves_scope() -> None:
-    matrix = {"machine-1": ["agent-a", "agent-b"], "machine-2": "*"}
+    # Scope rides the doc unmodified — an ordinary field, no machinery.
+    scope = ["claude_code", "codex"]
     doc = resource_to_doc(
         kind="agent",
         name="coder",
         description=None,
         enabled=True,
         config={},
-        scope=matrix,
+        scope=scope,
     )
-    assert doc["scope"] == matrix
-    parsed = parse_resource_doc(doc)
-    assert parsed.scope == matrix
+    assert doc["scope"] == scope
+    assert parse_resource_doc(doc).scope == scope
 
 
-def test_parse_tolerates_missing_scope_key() -> None:
-    # Backward tolerance: a v3 workspace doc has no "scope" key at all — it
-    # must still parse cleanly, with scope defaulting to None AND
-    # scope_present False (distinct from an explicit `scope: null`, which
-    # is also None but scope_present True — the importer relies on telling
-    # these apart).
+def test_parse_tolerates_a_missing_scope_key() -> None:
     parsed = parse_resource_doc(
         {
             "kind": "mcp_server",
@@ -73,33 +69,14 @@ def test_parse_tolerates_missing_scope_key() -> None:
         }
     )
     assert parsed.scope is None
-    assert parsed.scope_present is False
 
 
-def test_parse_marks_scope_present_for_explicit_null() -> None:
-    # An explicit `scope: null` is an OPINION (unscoped) — unlike the
-    # missing-key case above, scope_present must be True here.
-    parsed = parse_resource_doc(
-        {
-            "kind": "channel",
-            "name": "x",
-            "description": None,
-            "enabled": True,
-            "config": {},
-            "scope": None,
-        }
-    )
-    assert parsed.scope is None
-    assert parsed.scope_present is True
-
-
-def test_resource_to_doc_output_always_parses_scope_present() -> None:
-    # v4+ writers always emit the "scope" key (resource_to_doc's contract),
-    # so anything round-tripped through it must parse as scope_present=True.
+def test_scope_key_is_always_emitted() -> None:
+    # Always present (even when null) so two exports stay byte-identical.
     doc = resource_to_doc(
         kind="channel", name="tg", description=None, enabled=True, config={}, scope=None
     )
-    assert parse_resource_doc(doc).scope_present is True
+    assert "scope" in doc and doc["scope"] is None
 
 
 def test_config_is_copied_not_aliased() -> None:
@@ -109,15 +86,6 @@ def test_config_is_copied_not_aliased() -> None:
     )
     config["a"] = 2
     assert doc["config"]["a"] == 1
-
-
-def test_scope_is_copied_not_aliased() -> None:
-    scope = {"machine-1": ["agent-a"]}
-    doc = resource_to_doc(
-        kind="agent", name="x", description=None, enabled=True, config={}, scope=scope
-    )
-    scope["machine-1"] = ["agent-b"]
-    assert doc["scope"]["machine-1"] == ["agent-a"]
 
 
 def test_parse_rejects_missing_fields() -> None:
@@ -152,15 +120,4 @@ def test_parse_rejects_wrong_types() -> None:
     with pytest.raises(SyncSerializationError):
         parse_resource_doc(
             {"kind": "k", "name": "x", "description": None, "enabled": True, "config": []}
-        )
-    with pytest.raises(SyncSerializationError):
-        parse_resource_doc(
-            {
-                "kind": "k",
-                "name": "x",
-                "description": None,
-                "enabled": True,
-                "config": {},
-                "scope": "not-a-mapping",
-            }
         )
