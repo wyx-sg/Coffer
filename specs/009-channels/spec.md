@@ -1200,7 +1200,9 @@ capabilities the official personal bridges lack.
 - **FR-042**: Every turn carries its own origin. The turn text opens with a
   `[Message origin]` block naming the platform, the chat (kind, the chat title
   where the platform supplies one, and always the chat id), the thread, and the
-  sender — so an agent asked "which group is this?" answers from the turn it was
+  sender (display name **and** the stable platform id — SeaTalk `employee_code`,
+  Telegram `from.id` — which a platform tool call takes and which, in a group,
+  appears nowhere else because `chat_id` is the group's) — so an agent asked "which group is this?" answers from the turn it was
   given instead of listing the bot's groups and inferring, and a platform tool
   call (send-to-group, fetch-group-info) has a chat id to aim at. The block is
   folded in after command detection (a prefixed `/help` would stop being a

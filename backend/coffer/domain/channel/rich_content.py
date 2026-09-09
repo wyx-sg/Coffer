@@ -84,7 +84,14 @@ def format_origin(msg: InboundMessage, *, platform: str) -> str:
     ]
     if msg.thread_id:
         lines.append(f"thread: {msg.thread_id}")
+    # The display name is what a human recognises; the sender id (SeaTalk
+    # employee_code, Telegram from.id) is what a platform tool call takes and is
+    # the identity that does not change under a rename. In a DM the id happens to
+    # equal chat_id, but in a group chat_id is the GROUP's — without this line the
+    # sender's own id appears nowhere at all.
     sender = _one_line(msg.sender_display)
-    if sender:
-        lines.append(f"from: {sender}")
+    sender_id = _one_line(msg.sender_id)
+    if sender or sender_id:
+        who = sender or "unknown"
+        lines.append(f"from: {who} (id: {sender_id})" if sender_id else f"from: {who}")
     return "\n".join(lines)

@@ -50,7 +50,7 @@ async def test_group_turn_carries_the_chat_id_title_thread_and_sender(env: Chann
         "platform: telegram\n"
         'chat: group "account-campaign-reaction" (id: grp-1)\n'
         "thread: th-1\n"
-        "from: yuxing.wu@shopee.com\n"
+        "from: yuxing.wu@shopee.com (id: owner-1)\n"
         "\n"
         "@bot which group is this?"
     )
