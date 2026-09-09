@@ -45,7 +45,7 @@ from coffer.application.channel.turn_driver import (
 )
 from coffer.domain.audit import AuditEventType
 from coffer.domain.channel.envelopes import ChoiceButton, InboundCallback, InboundMessage
-from coffer.domain.channel.rich_content import flatten_context
+from coffer.domain.channel.rich_content import flatten_context, format_origin
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.resource import ResourceRef
 
@@ -274,11 +274,19 @@ class InboundProcessor:
             )
             return
         # A media message with no caption still needs non-blank text to persist.
+        # FR-042: the turn opens with its own provenance (platform, chat kind +
+        # title + id, thread, sender) so the agent knows which group/thread it is
+        # answering in instead of inferring it from the bot's group list. Folded
+        # in AFTER command detection (a prefixed "/help" would stop being a
+        # command) and after the empty-envelope check (a header is not content).
+        # It rides on EVERY turn, not just the first: ``/agent`` can swap the
+        # agent mid-conversation and a resumed session would otherwise lose it.
         # The inbound platform_message_id rides along so the turn can react on it
         # (FR-036 receipt/completion ack) where the transport supports reactions.
+        origin = format_origin(msg, platform=binding.channel_type)
         session.queue.append(
             (
-                text or _attachment_note(attachments),
+                f"{origin}\n\n{text or _attachment_note(attachments)}",
                 attachments,
                 msg.thread_id,
                 msg.chat_kind,

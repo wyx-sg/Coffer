@@ -19,7 +19,7 @@ from coffer.application.chat.turn_orchestrator import active_turns
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
 from coffer.domain.chat.message import Message, TextBlock
 
-from .conftest import ChannelEnv, inbound, wait_until
+from .conftest import ChannelEnv, inbound, turn_body, wait_until
 
 
 class GatedAdapter:
@@ -36,7 +36,7 @@ class GatedAdapter:
         self, *, history: Sequence[Message], **_: object
     ) -> AsyncIterator[AgentEvent]:
         last = history[-1]
-        text = "".join(b.text for b in last.content if isinstance(b, TextBlock))
+        text = turn_body("".join(b.text for b in last.content if isinstance(b, TextBlock)))
 
         async def gen() -> AsyncIterator[AgentEvent]:
             self.runs.append(text)

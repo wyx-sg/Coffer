@@ -931,6 +931,31 @@ key 对渠道会被拒绝（`Kind.validate_scope_shape`，ADR-045 复审 Fix 1�
 - **When** owner 发来一条消息并驱动一个 turn
 - **Then** 回复仍被送达——尽力而为的 reaction 被吞掉
 
+### Scenario: a group turn names the group it came from
+
+- **Given** 一个已配对的 channel，其 owner 在某个群的线程里 @ 了 bot
+- **When** 该 turn 被驱动
+- **Then** turn 文本以一个 `[Message origin]` 块开头，写明平台、会话 kind 与标题、
+  chat id、thread id 和发送者
+
+### Scenario: a DM turn names its own chat
+
+- **Given** 一个已配对的 channel 与来自其 owner 的私聊消息
+- **When** 该 turn 被驱动
+- **Then** origin 块以 id 指明平台与该私聊会话，并省略私聊无意义的 thread 行
+
+### Scenario: every turn carries its origin
+
+- **Given** 一个已跑过一个 turn 的已配对 channel
+- **When** owner 发出第二条消息
+- **Then** 该 turn 的文本同样以自己的 origin 块开头——来源不是只出现在首个 turn 的头部
+
+### Scenario: a slash command keeps its leading slash
+
+- **Given** 一个已配对的 channel
+- **When** owner 发送 `/help`
+- **Then** 它仍按命令处理（不会被前置 origin 块，也不会创建会话）
+
 ## Channels as a management plane（北极星）
 
 channel 被管理的方式，与 Coffer 管理 MCP server、memory、skill 的方式一致：在一处
@@ -947,7 +972,7 @@ chat 里运行整个 agent 舰队。
   FR-032）可按线程切换，于是一个 bot 能在一个线程里跑 Claude Code、在另一个线程里跑
   Codex。这是 Coffer 的护城河：没有自己 channel 的 agent（Claude Code、Codex、Cursor、
   OpenCode）**只能**经此触达 IM；且 **SeaTalk 对每个 agent 都是 Coffer-hosted，因为
-  没有任何外部网关会说 SeaTalk。** 整个 spec 009——包括下方的增强（FR-028…FR-041）
+  没有任何外部网关会说 SeaTalk。** 整个 spec 009——包括下方的增强（FR-028…FR-042）
   ——描述的都是这条路径。保持其 agent 无关的那一处接缝：每条入站消息都变成文本加上
   磁盘上的 `Attachment(path, mime, filename)`，每个 agent adapter 按自己的方式物化附件
   （Claude 内联图片/PDF；Codex/Hermes/OpenCode 收到文件路径；音频在上游被转写）。
@@ -1008,6 +1033,18 @@ Coffer-hosted channel 与它们并不冗余——它是通往统一、本地、�
   限于会话内（无跨会话／切换 agent 的全历史重放）。网页 Chat 页把该引用渲染为一个紧凑的
   `📎 filename · mime` 芯片；本地 path 绝不发到线上。媒体目录由保留节奏上的 30 天 mtime
   清扫界定大小（bytes 可重新下载；无大小上限）。见 ADR-041。
+- **FR-042**: 每个 turn 都带上自己的来源。turn 文本以一个 `[Message origin]` 块开头，
+  写明平台、会话（kind、平台白送时的会话标题，以及始终存在的 chat id）、线程和发送者
+  （显示名**以及**稳定的平台 id——SeaTalk `employee_code`、Telegram `from.id`；平台工具调用要的是它，
+  而在群里它无处可寻，因为 `chat_id` 是群的）——
+  于是被问到「这是哪个群」的 agent 直接从收到的 turn 作答，而不是列出 bot 所在群再去推断；
+  平台工具调用（发群消息、查群信息）也有了明确的 chat id 可用。该块在命令识别之后（加了前缀的
+  `/help` 会不再是命令）、空信封检查之后折入，并像线程上下文（FR-029）一样持久化在用户消息
+  上——单一事实来源（FR-033）仍是一个字符串。它出现在**每一个** turn 上，而不只是会话的第一个：
+  `/agent` 可以在会话中途切换 agent（FR-040），resume 的 session 否则会丢掉它。标题与发送者
+  名字可由群成员设置，因此两者在进入 prompt 前都被压成一行并截断——改名无法伪造出额外的
+  origin 行。平台白送会话标题时就带上（Telegram `chat.title`）；不给时（SeaTalk 群事件只带
+  `group_id`）就只用 id 指名该会话，agent 可以通过平台自己的工具把 id 解析成名字。
 
 ### C. Group UX and gating
 

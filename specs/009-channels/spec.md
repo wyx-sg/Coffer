@@ -1067,6 +1067,34 @@ stale after any rebind; not consulted).
 - **When** the owner sends a message that drives a turn
 - **Then** the reply is still delivered — the best-effort reaction is suppressed
 
+### Scenario: a group turn names the group it came from
+
+- **Given** a paired channel whose owner @mentions the bot in a group thread
+- **When** the turn is driven
+- **Then** the turn text opens with a `[Message origin]` block naming the platform,
+  the chat kind and title, the chat id, the thread id, and the sender
+
+### Scenario: a DM turn names its own chat
+
+- **Given** a paired channel and a DM from its owner
+- **When** the turn is driven
+- **Then** the origin block names the platform and the direct chat by id, omitting
+  the thread line a DM has no value for
+
+### Scenario: every turn carries its origin
+
+- **Given** a paired channel that has already run one turn
+- **When** the owner sends a second message
+- **Then** that turn's text opens with its own origin block too — the provenance is
+  not a first-turn-only header
+
+### Scenario: a slash command keeps its leading slash
+
+- **Given** a paired channel
+- **When** the owner sends `/help`
+- **Then** it is handled as a command (no origin block is prefixed, no conversation
+  is created)
+
 ## Channels as a management plane (north star)
 
 Channels are managed the way Coffer manages MCP servers, memory, and skills:
@@ -1086,7 +1114,7 @@ Two kinds of channel live under this plane:
   another. This is Coffer's moat: agents with no channel of their own (Claude
   Code, Codex, Cursor, OpenCode) reach IM *only* this way; and **SeaTalk is
   Coffer-hosted for every agent, because no external gateway speaks SeaTalk.**
-  All of spec 009 — including the enhancements below (FR-028…FR-041) — describes
+  All of spec 009 — including the enhancements below (FR-028…FR-042) — describes
   this path. The one seam that keeps it agent-agnostic: every inbound message
   becomes text plus on-disk `Attachment(path, mime, filename)`, and each agent
   adapter materializes attachments its own way (Claude inlines images/PDFs;
@@ -1169,6 +1197,26 @@ capabilities the official personal bridges lack.
   compact `📎 filename · mime` chip; the local path is never emitted to the wire.
   The media dir is bounded by a 30-day mtime retention prune on the retention
   cadence (bytes are re-downloadable; no size cap). See ADR-041.
+- **FR-042**: Every turn carries its own origin. The turn text opens with a
+  `[Message origin]` block naming the platform, the chat (kind, the chat title
+  where the platform supplies one, and always the chat id), the thread, and the
+  sender (display name **and** the stable platform id — SeaTalk `employee_code`,
+  Telegram `from.id` — which a platform tool call takes and which, in a group,
+  appears nowhere else because `chat_id` is the group's) — so an agent asked "which group is this?" answers from the turn it was
+  given instead of listing the bot's groups and inferring, and a platform tool
+  call (send-to-group, fetch-group-info) has a chat id to aim at. The block is
+  folded in after command detection (a prefixed `/help` would stop being a
+  command) and after the empty-envelope check, and is persisted on the user
+  message exactly like thread context (FR-029) — the single source of truth
+  (FR-033) stays one string. It rides on **every** turn, not just a
+  conversation's first: `/agent` can swap the agent mid-conversation (FR-040)
+  and a resumed session would otherwise lose it. Title and sender name are
+  chat-member-settable, so both are collapsed to one clipped line before they
+  reach the prompt — a rename cannot forge extra origin lines. Where a platform
+  hands the chat title over for free it is included (Telegram `chat.title`);
+  where it does not (SeaTalk group events carry only `group_id`) the chat is
+  named by id alone, which an agent can resolve to a name through the platform's
+  own tools.
 
 ### C. Group UX and gating
 

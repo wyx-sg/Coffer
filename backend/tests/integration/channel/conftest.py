@@ -101,6 +101,7 @@ def inbound(
     sender_id: str = "",
     thread_id: str = "",
     chat_kind: str = "direct",
+    chat_title: str = "",
     addressed: bool = True,
     mentions_others: bool = False,
     platform_message_id: str = "pm-1",
@@ -115,9 +116,26 @@ def inbound(
         sender_id=sender_id,
         thread_id=thread_id,
         chat_kind=chat_kind,
+        chat_title=chat_title,
         addressed=addressed,
         mentions_others=mentions_others,
     )
+
+
+ORIGIN_HEADER = "[Message origin]"
+
+
+def turn_body(text: str) -> str:
+    """The user's own text from a turn prompt, with the FR-042 origin block
+    stripped.
+
+    Every turn now opens with a provenance block; tests about queueing,
+    ordering, threading and history assert on what the user actually typed, not
+    on that header (``test_message_origin.py`` owns the header itself).
+    """
+    if not text.startswith(ORIGIN_HEADER):
+        return text
+    return text.split("\n\n", 1)[1]
 
 
 def tap_event(
