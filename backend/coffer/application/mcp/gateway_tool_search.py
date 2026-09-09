@@ -16,6 +16,7 @@ from typing import Any
 
 from coffer.application.builtin_tools import COFFER_TOOL_PREFIX
 from coffer.domain.mcp.tool_search import ScoredTool, rank_by_similarity, rank_tools
+from coffer.domain.mcp.tool_tiering import split_prefixed
 
 _logger = logging.getLogger(__name__)
 
@@ -60,6 +61,22 @@ def tool_search_descriptor() -> dict[str, Any]:
     return {"name": TOOL_SEARCH_NAME, "description": _DESCRIPTION, "inputSchema": _INPUT_SCHEMA}
 
 
+def _search_corpus(tools: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    """Build the (name_text, description) pairs the rankers score.
+
+    The listed name is doubly namespaced — ``jira__jira_get_issue`` tokenizes as
+    jira, jira, get, issue — so the server token lands twice at the ranker's
+    name weight, inflating the document length and crowding out the tokens that
+    actually carry the intent. Splitting the namespace off collapses it to one.
+    """
+    corpus: list[tuple[str, str]] = []
+    for tool in tools:
+        server, bare = split_prefixed(str(tool.get("name", "")))
+        text = f"{server} {bare}" if server else bare
+        corpus.append((text, str(tool.get("description", ""))))
+    return corpus
+
+
 def _clamp_top_k(raw: Any) -> int:
     try:
         value = int(raw) if raw is not None else _DEFAULT_TOP_K
@@ -88,7 +105,7 @@ async def execute_tool_search(
     candidates = [
         t for t in aggregated_tools if not str(t.get("name", "")).startswith(COFFER_TOOL_PREFIX)
     ]
-    catalogue = [(str(t.get("name", "")), str(t.get("description", ""))) for t in candidates]
+    catalogue = _search_corpus(candidates)
 
     ranked = await _rank(query, catalogue, top_k, embedder)
 
@@ -153,4 +170,8 @@ def _cache_key(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-__all__ = ["TOOL_SEARCH_NAME", "execute_tool_search", "tool_search_descriptor"]
+__all__ = [
+    "TOOL_SEARCH_NAME",
+    "execute_tool_search",
+    "tool_search_descriptor",
+]

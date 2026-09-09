@@ -16,9 +16,12 @@ Two design decisions matter:
    max(times) ≈ P. Without this, two fresh-spawn servers crossed 10 s
    and tripped client read timeouts (concurrent_clients spec).
 
-On per-server timeout / unavailable: log + drop. The supervisor's
-retry/cooldown continues in the background; on subsequent calls the
-dead server is in cooldown and short-circuits to UpstreamUnavailable.
+On per-server timeout / unavailable: log the server and error, then leave
+that server out of the batch and NAME it in the outcome (ADR-046). The
+supervisor's retry/cooldown continues in the background; the session uses
+the named failures to retry and tell the client to re-list, because a
+client that cached the truncated list will otherwise never see those tools
+again this session.
 """
 
 from __future__ import annotations
@@ -26,6 +29,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import Any
 
 from coffer.application.mcp.discovery import CapabilityDiscovery
@@ -48,6 +52,20 @@ PER_SERVER_LIST_TIMEOUT = 5.0
 EnsureSubscribed = Callable[[str], Awaitable[None]]
 
 
+@dataclass(frozen=True)
+class AggregateOutcome:
+    """One aggregate list plus the servers that could not be reached.
+
+    ADR-046: a caller that knows WHICH servers failed can retry them and tell
+    the client to re-list. Returning only the survivors made a slow cold spawn
+    cost the client that server for the whole session, because the correcting
+    list_changed would have to come from the server that never connected.
+    """
+
+    items: list[dict[str, Any]]
+    failed_servers: list[str]
+
+
 async def _one(
     server: str,
     fetcher: Callable[[str], Awaitable[Any]],
@@ -67,7 +85,16 @@ async def _one(
         CredentialLocked,
         CredentialMissing,
     ) as e:
-        _logger.warning(failure_event, extra={"server": server, "error": str(e)})
+        # Rendered into the message, not extra=: the configured log format does
+        # not emit extra fields, so the previous call site produced warnings
+        # that said only that something, somewhere, had failed.
+        _logger.warning(
+            "%s server=%s error=%s: %s",
+            failure_event,
+            server,
+            type(e).__name__,
+            e,
+        )
         return None
     return result
 
@@ -107,34 +134,36 @@ async def _aggregate(
     *,
     failure_event: str,
     project: Callable[[Any], dict[str, Any]],
-    result_key: str,
-) -> dict[str, Any]:
+) -> AggregateOutcome:
     """Shared parallel fan-out: discover each server under the per-server
-    budget, drop failed batches, then flatten via ``project`` into one list.
-    The three public functions differ only in (fetcher, event, project, key)."""
+    budget, record failed batches, then flatten via ``project`` into one list.
+    The three public functions differ only in (fetcher, event, project)."""
     results = await asyncio.gather(
         *(_one(s, fetcher, ensure_subscribed, failure_event) for s in servers)
     )
     items: list[dict[str, Any]] = []
-    for batch in results:
+    failed: list[str] = []
+    for server, batch in zip(servers, results, strict=True):
         if batch is None:
+            failed.append(server)
             continue
         items.extend(project(x) for x in batch)
-    return {result_key: items}
+    return AggregateOutcome(items=items, failed_servers=failed)
 
 
 async def list_tools_across(
     discovery: CapabilityDiscovery,
     ensure_subscribed: EnsureSubscribed,
     servers: list[str],
-) -> dict[str, Any]:
+) -> AggregateOutcome:
+    """Returns the outcome, not a bare list: the tools path is the one that
+    needs to know which servers failed so it can retry them (ADR-046)."""
     return await _aggregate(
         discovery.list_tools,
         ensure_subscribed,
         servers,
         failure_event="mcp.gateway.list_tools.upstream_failed",
         project=_tool_entry,
-        result_key="tools",
     )
 
 
@@ -143,14 +172,14 @@ async def list_resources_across(
     ensure_subscribed: EnsureSubscribed,
     servers: list[str],
 ) -> dict[str, Any]:
-    return await _aggregate(
+    outcome = await _aggregate(
         discovery.list_resources,
         ensure_subscribed,
         servers,
         failure_event="mcp.gateway.list_resources.upstream_failed",
         project=_resource_entry,
-        result_key="resources",
     )
+    return {"resources": outcome.items}
 
 
 async def list_prompts_across(
@@ -158,11 +187,11 @@ async def list_prompts_across(
     ensure_subscribed: EnsureSubscribed,
     servers: list[str],
 ) -> dict[str, Any]:
-    return await _aggregate(
+    outcome = await _aggregate(
         discovery.list_prompts,
         ensure_subscribed,
         servers,
         failure_event="mcp.gateway.list_prompts.upstream_failed",
         project=_prompt_entry,
-        result_key="prompts",
     )
+    return {"prompts": outcome.items}

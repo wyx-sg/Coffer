@@ -105,6 +105,41 @@ coffer__search_tools(query: string [required], top_k?: int = 5, max 20)
 - Each returned `name` is the same `<server>__<tool>` namespaced identifier the agent would call directly; routing is unchanged.
 - The invocation is recorded in the invocation log like any other gateway call.
 
+#### Budgeted listing ("tool tiering")
+
+`tools/list` advertises a budgeted slice of the catalogue rather than all of it
+(see [ADR-046](../../docs/decisions/ADR-046-budget-driven-tool-tiering.md)).
+Coffer's own `coffer__*` tools — `search_tools` among them — are always listed
+and do not consume the budget. Upstream tools are listed in full while they fit
+the budget (default 50, `COFFER_TOOL_TIERING_BUDGET`); beyond it the gateway
+lists the most-invoked ones over a trailing window (default 90 days,
+`COFFER_TOOL_TIERING_WINDOW_DAYS`), reserving one slot per server so no server
+becomes wholly invisible.
+
+Unlisted is **not** disabled: `tools/call` gates on the capability preference,
+never on list membership, so an unlisted tool routes exactly as before, and
+`coffer__search_tools` keeps ranking the **full** catalogue. Tiering fails open
+— `COFFER_TOOL_TIERING=off`, or any failure of the usage query, lists
+everything. `GET /api/v1/mcp/tiering` reports the current split, and the MCP
+servers page surfaces it when tools are unlisted.
+
+#### `initialize` instructions
+
+The `initialize` response carries an MCP `instructions` string stating what
+Coffer is and that `coffer__search_tools` reaches whatever tiering left
+unlisted. It is the only channel Coffer has into the client's system prompt, so
+it is capped (~800 characters) and omits the tiering sentence when nothing is
+actually hidden.
+
+#### Degraded upstream discovery
+
+When a server misses the per-server discovery budget its tools are left out of
+that listing, but the server is **named**, retried in the background, and on
+recovery the gateway emits `notifications/tools/list_changed` so the client
+re-lists. Without that a client's cached `tools/list` would keep those tools
+missing for the whole session, since the correcting notification could only
+come from the server that never connected.
+
 ---
 
 ### Edge Cases

@@ -79,6 +79,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mcp/tiering": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How much of the aggregated tool catalogue agents currently see (ADR-046)
+         * @description Global across every enabled server, because the listing budget is shared: a server whose tools all fit locally can still be crowded out. Computed from the last-discovered catalogue, so it never cold-spawns an upstream to answer a management question.
+         */
+        get: operations["getToolTiering"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/resources/mcp_server/{name}/capabilities": {
         parameters: {
             query?: never;
@@ -598,6 +618,22 @@ export interface components {
             }[];
             enabled: boolean;
         };
+        ToolTieringServerOut: {
+            server: string;
+            total: number;
+            listed: number;
+        };
+        ToolTieringOut: {
+            enabled: boolean;
+            /** @example 50 */
+            budget: number;
+            /** @example 90 */
+            window_days: number;
+            total: number;
+            listed: number;
+            hidden: number;
+            servers: components["schemas"]["ToolTieringServerOut"][];
+        };
         CapabilityListOut: {
             server_name: string;
             tools: components["schemas"]["MCPToolView"][];
@@ -955,6 +991,27 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getToolTiering: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolTieringOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
     };
     listMcpCapabilities: {
