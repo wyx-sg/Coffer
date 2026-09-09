@@ -42,7 +42,7 @@
 
 - disable an individual capability
 - capability preferences survive upstream changes
-- new capabilities default per server policy
+- a newly discovered capability is enabled by default
 
 ---
 
@@ -268,11 +268,11 @@ null 值在校验阶段被拒绝（422）。
 - **When** 该上游服务器升级导致该工具 schema 改变（或短暂消失再出现）,
 - **Then** 用户的禁用状态被保留，无需手动重新配置。
 
-### Scenario: new capabilities default per server policy
+### Scenario: a newly discovered capability is enabled by default
 
-- **Given** 服务器被配置为自动启用新能力（默认）或不自动启用,
+- **Given** 一台已注册、已完成能力发现的服务器,
 - **When** 升级在该服务器上新增了一个工具,
-- **Then** 该新工具按该服务器的策略被启用或禁用，并在 audit 日志中留下记录。
+- **Then** 该新工具被启用，事件在 audit 日志中留下记录，用户可通过逐能力开关（FR-008）将其禁用。
 
 ### Scenario: command line covers every visual operation
 
@@ -346,18 +346,6 @@ null 值在校验阶段被拒绝（422）。
 - **When** 用户触发 token 轮换操作,
 - **Then** 用旧 token 的管理 API 调用返回 401，用新 token 调用成功，且这次轮换被记为 `token_rotated` 类型的 audit 条目。
 
-### Scenario: vault backup captures db + file trees, restore round-trips them
-
-- **Given** `~/.coffer/` 下有一个已填充的 vault——`coffer.db` 加上作为事实源的 markdown 文件树（`knowledge/`、`memory/`、`skills/`）,
-- **When** 用户运行 `coffer backup <dest>`，之后再 `coffer restore <dest>` 到一个全新的 vault,
-- **Then** 目标目录包含 `coffer.db` 与每一棵文件树；恢复会把它们全部重新放回，使得一个样例 KB 文档与一个样例 memory fact 逐字节往返一致，且恢复后的 `coffer.db` 是这些文件树的一份一致索引。
-
-### Scenario: backup excludes the master key by default
-
-- **Given** vault 中存有解密 `coffer.db` 内凭据密文的 Fernet `master.key`,
-- **When** 用户在不带 `--include-master-key` 的情况下运行 `coffer backup <dest>`,
-- **Then** `master.key` 不会被写入备份（因此备份可以放心 copy 出机器），命令会提示已存储的凭据需要该 key 才能解密；传入 `--include-master-key` 会在打印明确警告后才把 key 一并打包。
-
 ### Scenario: gateway overhead stays under budget
 
 - **Given** 一个既能通过 coffer 也能直连的进程内快工具,
@@ -382,11 +370,11 @@ null 值在校验阶段被拒绝（422）。
 - **When** daemon 启动,
 - **Then** 它在支持的端口范围内选择下一个空闲端口，把所选端口写入 `~/.coffer/daemon.json`，并使每个 Coffer 入口（shim、CLI）都无需手动配置就连上该端口。
 
-### Scenario: a missing stdio launcher is surfaced and installable
+### Scenario: a missing stdio launcher is named in the server status
 
 - **Given** 一个 stdio server（例如从另一台机器导入而来），其启动器命令在本机无法解析,
 - **When** 读取该 server 的状态,
-- **Then** 它报告「本机未安装 `<runner>`」而不是一个没有原因的异常状态；当该 runner 属于允许清单中的自拉取启动器时，一键安装执行固定的 runner→Homebrew 映射并记录审计（FR-019）。
+- **Then** 它报告「本机未安装 `<runner>`」而不是一个没有原因的异常状态，且 UI 告诉用户应当安装哪个命令，而不是代为安装（FR-019）。
 
 ### Scenario: an out-of-scope server is invisible to a session
 
@@ -415,7 +403,7 @@ null 值在校验阶段被拒绝（422）。
 
 - **FR-008**: Users MUST 能在每台服务器上分别启用或禁用单个的 tool、resource 和 prompt。
 - **FR-009**: System MUST 在 daemon 重启、上游升级、上游临时消失等情况下保留用户的启用/禁用决定。
-- **FR-010**: System MUST 在发现一个先前未见过的能力时，按每服务器的 "auto-enable new capabilities" 策略（默认为 true）处理。
+- **FR-010**: System MUST 在发现一个先前未见过的能力时默认启用它，之后交由 FR-008 策展。不存在每服务器的自动启用策略：该设置只是一个没有 UI 入口的配置字段，所有已注册服务器都保持默认值，一个从未被做出过的选择不构成策略。
 
 **Credentials and safety**
 
@@ -439,7 +427,7 @@ null 值在校验阶段被拒绝（422）。
 
 **缺失启动器**
 
-- **FR-019**: 一个 stdio server 的启动器命令在本机无法解析时（导入来的 server 引用了 `uvx` 而本机没装 `uv`），MUST 在 server 状态中明确显示「本机未安装 `<runner>`」，而不是一个没有原因的「异常」。当该 runner 属于允许清单中的自拉取启动器（`uvx`/`uv`、`npx`/`node`、`bunx`/`bun`）时，UI MUST 提供一键安装，执行**固定的** runner→Homebrew 映射（绝不执行来自 server 配置的任意命令；实际的 MCP 包由启动器首次运行时自行拉取），审计为 `mcp_runner_installed`。其他缺失命令只报告、不提供安装按钮。
+- **FR-019**: 一个 stdio server 的启动器命令在本机无法解析时（导入来的 server 引用了 `uvx` 而本机没装 `uv`），MUST 在 server 状态中明确显示「本机未安装 `<runner>`」，而不是一个没有原因的「异常」，并由 UI 指出应当安装哪个命令。Coffer MUST NOT 代为安装。价值全部来自检测——把一个没有信息量的失败变成可行动的失败；而让一个常驻 daemon 去跑包管理器，会把 Coffer 的职责从「管理配置」扩到「往用户机器上装软件」，那张刻意保持极小的 runner→formula 映射表在 pip、cargo、go 被要求加入后守不住这条线，何况它只在 macOS 上生效过。
 
 **Scope enforcement（[ADR-045](../../docs/decisions/ADR-045-per-agent-resource-scope.zh.md)）**
 
@@ -449,7 +437,7 @@ null 值在校验阶段被拒绝（422）。
 ### Key Entities
 
 - **Resource**: coffer 内由用户管理的实体，按 `(kind, name)` 标识。本 spec 注册一个 kind: `mcp_server`。每个 resource 携带 kind 特定的配置、enabled 标记、描述以及时间戳。框架本身是 kind-agnostic 的，后续 spec 可在不重新建模的前提下加入新 kind。
-- **MCP Server** (kind 为 `mcp_server` 的 resource): 一台上游 MCP 服务器的配置——传输方式（stdio 命令行 或 HTTP URL）、凭据引用，以及每服务器的策略 (auto-enable, timeouts)。
+- **MCP Server** (kind 为 `mcp_server` 的 resource): 一台上游 MCP 服务器的配置——传输方式（stdio 命令行 或 HTTP URL）、凭据引用，以及每服务器的超时设置。
 - **Capability**: MCP 服务器暴露的一个 tool、resource 或 prompt。由上游实时发现；仅持久化用户的启用/禁用偏好以及 last-seen 时间戳。
 - **Audit Event**: 任意 resource 或 capability 的生命周期变更记录。包含 actor、target、event type、时间戳和结构化载荷。
 - **Invocation Record**: 通过网关进行的一次能力调用记录。包含 target、时间戳、耗时和结果——不含参数和返回内容。
@@ -478,3 +466,7 @@ null 值在校验阶段被拒绝（422）。
 - Fernet 主密钥在 coffer 启动时可解析（默认为可读的 `~/.coffer/master.key`，钥匙串模式下则是已解锁的操作系统钥匙串）；如不可用，用户会看到明确提示（存在密文但无可解析密钥是致命的 `MasterKeyMissing` 启动错误）。
 - 本 spec 只引入一个 resource kind（`mcp_server`）。Resource 框架的设计允许后续 spec 在不重新建模现有数据的前提下加入更多 kind。
 - 并发 MCP 客户端负载较小（低个位数）；coffer 不是 fleet 规模的网关。
+
+## Deliberately out of scope
+
+- **Vault 备份与恢复。** Coffer 不再自带 `~/.coffer/` 的 `.tar.gz` 快照。spec 010 的 vault 导出已经涵盖了全部事实源——三棵文件树、资源、凭据密文与同步状态区。备份相对它多带的只有派生数据：日志表（本就按 30 天保留期滚动清理）、chat 会话行、按设计可从文件重建的索引（ADR-012），以及 `distilled_sessions` 幂等台账——丢了只是重蒸一遍，不是数据丢失。而且它默认把归档写在同一台机器上，因此并没有真正回答它看起来在回答的异地容灾问题。想要逐字节拷贝的用户可以用 `cp -r ~/.coffer/`；想要迁移 vault 的用户可以用导出。

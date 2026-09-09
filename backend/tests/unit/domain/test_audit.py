@@ -16,7 +16,6 @@ def test_audit_event_type_values():
     assert AuditEventType.DAEMON_STOPPED.value == "daemon_stopped"
     assert AuditEventType.TOKEN_ROTATED.value == "token_rotated"
     assert AuditEventType.RETENTION_UPDATED.value == "retention_updated"
-    assert AuditEventType.BACKUP_CREATED.value == "backup_created"
 
 
 def test_slice6_hook_and_native_memory_event_values():

@@ -26,9 +26,9 @@ coffer kb describe design-notes             # doc count + chunk count + indexed 
 coffer kb list-docs design-notes            # document rows (id, title, source_mode, original_filename)
 coffer kb list-docs design-notes --json     # for piping
 
-# Read a document's normalized markdown (`read` is an alias of `get-doc`).
+# Read a document's normalized markdown.
 coffer kb read design-notes 8a3f1c2b...
-coffer kb get-doc design-notes 8a3f1c2b... --json
+coffer kb read design-notes 8a3f1c2b... --json
 
 # Retrieve. Default mode = the KB's default_mode (keyword).
 coffer kb search design-notes "how does our retry policy work?"

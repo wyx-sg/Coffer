@@ -84,8 +84,7 @@
 
 ### 研究暴露的两处事实更正
 
-- **KB** 暴露的是**四个只读 MCP 工具**（list / search / grep / read），不是单一 `coffer__ask`；
-  `ask` 是 ADR-024 叠在其上的 agentic 层。
+- **KB** 暴露的是**四个只读 MCP 工具**（list / search / grep / read），不是单一的问答入口。
 - **评估不是蓝图** —— ADR-019 已 Accepted（2026-06-14），且本地优先 `evals/` harness 已落地
   （捕获 → 精选 → 金样 → CI 门禁）。
 

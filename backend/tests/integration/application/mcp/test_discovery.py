@@ -54,7 +54,6 @@ async def _setup(
     tmp_path: Path,
     *,
     server_configs: dict[str, dict],  # type: ignore[type-arg]
-    auto_enable: bool = True,
 ) -> tuple[
     CapabilityDiscovery,
     SubprocessSupervisor,
@@ -79,8 +78,6 @@ async def _setup(
     }
     rsvc = ResourceService(kinds=kinds, repo=repo, audit=audit)
     for name, cfg in server_configs.items():
-        if not auto_enable:
-            cfg = {**cfg, "auto_enable_new_capabilities": False}
         await rsvc.register(kind="mcp_server", name=name, config=cfg, actor="test")
     supervisor = SubprocessSupervisor(
         upstream_factory=build_upstream,
@@ -177,33 +174,6 @@ async def test_disabled_tool_is_filtered_out(
         await engine.dispose()
 
 
-@pytest.mark.acceptance(
-    spec="001-mcp-gateway", scenario="new capabilities default per server policy"
-)
-@pytest.mark.asyncio
-async def test_auto_enable_false_new_tools_default_disabled(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _with_in_memory(monkeypatch)
-    discovery, sup, rsvc, _audit, prefs, engine = await _setup(
-        tmp_path,
-        server_configs={"fs": _stdio_config("read_file", "write_file")},
-        auto_enable=False,
-    )
-    try:
-        tools = await discovery.list_tools("fs")
-        # All filtered out because preferences default to disabled
-        assert tools == []
-        # But the preferences rows exist
-        resource = await rsvc.get(ResourceRef("mcp_server", "fs"))
-        pref_rows = await prefs.list_for(resource.id, "tool")
-        assert len(pref_rows) == 2
-        assert all(not p.enabled for p in pref_rows)
-    finally:
-        await sup.dispose()
-        await engine.dispose()
-
-
 @pytest.mark.asyncio
 async def test_resources_round_trip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _with_in_memory(monkeypatch)
@@ -264,6 +234,54 @@ async def test_prompts_round_trip(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
         p = prompts[0]
         assert p.original_name == "summarise"
         assert p.prefixed_name == "gh__summarise"
+    finally:
+        await sup.dispose()
+        await engine.dispose()
+
+
+@pytest.mark.acceptance(
+    spec="001-mcp-gateway", scenario="a newly discovered capability is enabled by default"
+)
+@pytest.mark.asyncio
+async def test_newly_discovered_tool_is_enabled_by_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A tool that shows up after the first discovery is enabled without asking.
+
+    The user can still turn it off afterwards via the per-capability toggle;
+    what is gone is any per-server opt-out of the default itself.
+    """
+    _with_in_memory(monkeypatch)
+    discovery, sup, rsvc, audit, prefs, engine = await _setup(
+        tmp_path,
+        server_configs={"fs": _stdio_config("read_file")},
+    )
+    try:
+        assert {t.original_name for t in await discovery.list_tools("fs")} == {"read_file"}
+
+        # The upstream is upgraded and now exposes a second tool.
+        await rsvc.update_config(
+            ResourceRef("mcp_server", "fs"),
+            new_config=_stdio_config("read_file", "write_file"),
+            actor="test",
+        )
+        await sup.evict("fs")
+        discovery.invalidate("fs", "tool")
+
+        tools = await discovery.list_tools("fs")
+        assert {t.original_name for t in tools} == {"read_file", "write_file"}
+        assert all(t.enabled for t in tools)
+
+        resource = await rsvc.get(ResourceRef("mcp_server", "fs"))
+        pref_rows = await prefs.list_for(resource.id, "tool")
+        wf = next(p for p in pref_rows if p.capability_key == "write_file")
+        assert wf.enabled is True
+
+        # The first sighting is auditable.
+        events = await audit.query(event_type=AuditEventType.CAPABILITY_FIRST_SEEN.value)
+        assert [e.details["key"] for e in events if e.details["key"] == "write_file"] == [
+            "write_file"
+        ]
     finally:
         await sup.dispose()
         await engine.dispose()

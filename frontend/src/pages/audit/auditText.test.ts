@@ -110,12 +110,6 @@ describe("describeActivity", () => {
     );
   });
 
-  test("backup_created → 'Created a backup'", () => {
-    expect(describeActivity(t, makeEntry({ event_type: "backup_created" }))).toBe(
-      "Created a backup",
-    );
-  });
-
   test("unknown event_type falls back to the raw event code", () => {
     const result = describeActivity(t, makeEntry({ event_type: "totally_unknown_event_xyz" }));
     // i18next defaultValue is the event_type itself

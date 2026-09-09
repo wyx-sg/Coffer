@@ -53,7 +53,7 @@ function planServer(srv: ParsedServer): ServerPlan {
           credential_refs: credentialRefs,
         }
       : { type: "http", url: srv.url, headers: plain, credential_refs: credentialRefs };
-  return { config: { transport, auto_enable_new_capabilities: true }, secrets };
+  return { config: { transport }, secrets };
 }
 
 async function registerResource(name: string, config: Record<string, unknown>): Promise<void> {

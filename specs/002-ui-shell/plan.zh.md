@@ -150,7 +150,7 @@ Tailwind 配置 (`frontend/tailwind.config.js`)、shadcn primitives、`AppShell`
 
 ### Phase 5 — US4：Settings 重组
 
-Settings tabs 侧栏、`DataSettings` (retention + prune + backup)、`AboutSettings`，删除 Shutdown / Rotate-token / Daemon-status / 重复语言选择器 / kind 列表等控件。
+Settings tabs 侧栏、`DataSettings` (retention + prune)、`AboutSettings`，删除 Shutdown / Rotate-token / Daemon-status / 重复语言选择器 / kind 列表等控件。
 
 **Done when:** US4 的 representative scenarios 通过。
 

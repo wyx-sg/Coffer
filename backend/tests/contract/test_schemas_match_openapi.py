@@ -57,7 +57,6 @@ def openapi_components() -> dict[str, Any]:
         ("RetentionPolicyUpdate", "RetentionPolicyUpdate", set()),  # retention_days nullable
         ("PruneResultOut", "PruneResultOut", {"tables"}),
         ("DaemonStatusOut", "DaemonStatusOut", {"status", "version", "started_at", "port"}),
-        ("BackupResultOut", "BackupResultOut", {"path", "size_bytes"}),
         ("TokenRotationOut", "TokenRotationOut", {"token"}),
         # MCP / credentials schemas
         ("CredentialSetIn", "CredentialSetIn", {"ref", "value"}),

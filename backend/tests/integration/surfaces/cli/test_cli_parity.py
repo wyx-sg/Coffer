@@ -31,7 +31,6 @@ def test_cli_covers_every_visual_operation():
     operation name the UI exposes is present in the help output.
     """
     expected_subcommands: dict[str, list[str]] = {
-        "": ["backup"],  # top-level vault snapshot (coffer backup) — replaces daemon backup
         "daemon": ["start", "stop", "status", "rotate-token"],
         "resource": ["list", "show", "enable", "disable", "delete"],
         "audit": ["list"],

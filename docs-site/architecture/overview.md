@@ -86,7 +86,6 @@ Every persistent artifact lives in one directory:
 ├── knowledge/           # knowledge_base files-as-truth (docs/ + raw/ per KB)
 ├── memory/              # memory files-as-truth (global/ + projects/<ulid>/)
 ├── skills/              # canonical master skill store
-├── backups/             # default destination for vault backups
 ├── bin/                 # co-located coffer binaries (daemon/shim/CLI)
 ├── logs/
 │   └── daemon.log       # structured JSON logs from the daemon

@@ -110,7 +110,7 @@ note it's still pre-GA).
 ### Two factual corrections the research surfaced
 
 - **KB** exposes **four read-only MCP tools** (list / search / grep / read), not a
-  single `coffer__ask`; `ask` is the ADR-024 agentic layer on top.
+  single question-answering entry point.
 - **Eval is not a blueprint** — ADR-019 is Accepted (2026-06-14) and a working
   local-first `evals/` harness has shipped (capture → curate → golden → CI-gate).
 

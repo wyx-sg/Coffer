@@ -179,30 +179,19 @@ by ref.)
 ├── logs/
 │   ├── daemon.log         # structured JSON, one line per event
 │   └── upstream-<name>.log
-├── backups/               # produced by `coffer backup`
 └── upstream-pids/         # for orphan-subprocess cleanup
 ```
 
-### Backup & restore
+### Copying the vault
 
 The markdown trees (`knowledge/`, `memory/`, `skills/`) are the system of
-record; `coffer.db` is a rebuildable index over them.
+record; `coffer.db` is a rebuildable index over them. Coffer ships no backup
+command of its own — everything that is a system of record moves through the
+spec 010 vault export, and a byte-copy of the whole directory is `cp -r
+~/.coffer/ <dest>` while the daemon is stopped.
 
-`coffer backup <dest.tar.gz>` is the full **vault** backup: it bundles
-`coffer.db` and every file tree (`knowledge/`, `memory/`, `skills/`) into a
-single `.tar.gz` snapshot under `backups/`. `coffer restore <src.tar.gz>`
-verifies the archive and re-places the db + trees into `~/.coffer/`, so a
-fresh machine comes back to life. The restored `coffer.db` is already a
-consistent index; pass `coffer restore <src.tar.gz> --reindex` to rebuild it
-from the trees anyway. The same snapshot is also available via HTTP:
-`POST /api/v1/vault/backup` (no body) triggers a backup and returns
-`{ "path": "...", "size_bytes": ... }`.
-
-**Master-key policy.** `coffer backup` EXCLUDES `master.key` by default, so the
-backup is safe to copy off-machine — bundling the Fernet key next to the
-ciphertext it unlocks would defeat the encryption. A restored vault works for
-everything except *reading* previously-stored credentials; re-place
-`master.key` at `~/.coffer/master.key` or re-enter the secrets with
-`coffer credentials set`. Pass `coffer backup <dest> --include-master-key` to
-bundle the key (after a printed warning) — only into storage you trust as much
-as the live key.
+**Master key.** `master.key` decrypts the credential ciphertext in
+`coffer.db`. Bundling it next to that ciphertext defeats the encryption, so
+keep it out of anything you copy off-machine; a vault without it works for
+everything except *reading* previously-stored credentials, which can be
+re-entered with `coffer credentials set`.

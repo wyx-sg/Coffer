@@ -72,8 +72,7 @@ agents (`claude_code`, `codex`, and future managed agents), and the surface
 reverts from _Vault Console_ to **Chat**. The "talk to the vault through the
 built-in agent" job is dropped; the local model is recast as an **internal-only**
 capability reachable solely through `coffer__*` MCP tools — a semantic upgrade to
-`coffer__search_tools` and a new `coffer__ask` agentic-RAG tool over
-knowledge/memory (see ADR-024). The **observe channel-driven conversations**
+`coffer__search_tools` (see ADR-024). The **observe channel-driven conversations**
 job (ADR-021 job 2) stands unchanged, over the same `ConversationPort` /
 `TurnPort` seams.
 
@@ -81,8 +80,8 @@ Where the User Stories, Acceptance Scenarios, and Functional Requirements below
 still describe the built-in agent as a selectable chat agent (its model picker,
 its in-chat vault tool calls, `coffer chat` against it), read them as the
 historical shipped behaviour that ADR-024 removes from the chat surface; the
-LLM/agentic-loop machinery is kept but repurposed behind `coffer__ask` rather
-than presented to the user as a chat persona.
+LLM/agentic-loop machinery is kept for internal flows (distillation, memory
+reorganization) rather than presented to the user as a chat persona.
 
 ## Repositioning — single-owner live mirror ([ADR-031](../../docs/decisions/ADR-031-chat-single-owner-live-mirror.md))
 

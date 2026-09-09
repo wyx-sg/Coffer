@@ -59,13 +59,13 @@ provider 接缝保持诚实的 test-drive 目标，(b) IM peer 驱动、用户�
 （`claude_code`、`codex`，及将来的受管 agent）对话，界面从 _Vault Console（金库控制
 台）_ 改回 **Chat（聊天）**。"通过内置 agent 与金库对话"这一职责被去掉；本地模型重塑
 为**仅内部**能力，只能通过 `coffer__*` MCP 工具触达——即对 `coffer__search_tools` 的
-语义升级，与一个对知识/记忆的新 `coffer__ask` agentic-RAG 工具（见 ADR-024）。**观测
+语义升级（见 ADR-024）。**观测
 channel 驱动会话**这一职责（ADR-021 职责 2）原样存续，走同一套
 `ConversationPort` / `TurnPort` 接缝。
 
 下文用户故事、验收场景与功能需求中仍把内置 agent 描述为可选聊天 agent 的部分（它的
 model 选择器、它在聊天里的金库工具调用、对它的 `coffer chat`），应读作 ADR-024 从聊天
-面移除的历史已交付行为；LLM/agentic-loop 机器保留但被重塑到 `coffer__ask` 之后，而非
+面移除的历史已交付行为；LLM/agentic-loop 机器保留给内部流程（蒸馏、记忆重组），而非
 作为聊天人格呈现给用户。
 
 ## 再次定位 —— 单属主实时镜像（[ADR-031](../../docs/decisions/ADR-031-chat-single-owner-live-mirror.zh.md)）

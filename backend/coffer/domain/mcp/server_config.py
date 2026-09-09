@@ -70,7 +70,6 @@ Transport = Annotated[
 
 class MCPServerConfig(BaseModel):
     transport: Transport
-    auto_enable_new_capabilities: bool = True
     spawn_timeout_seconds: int = Field(default=30, ge=5, le=120)
     request_timeout_seconds: int = Field(default=120, ge=5, le=1800)
     idle_timeout_seconds: int = Field(default=600, ge=60, le=86400)

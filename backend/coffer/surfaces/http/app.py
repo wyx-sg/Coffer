@@ -67,7 +67,6 @@ from coffer.surfaces.http.auto_distill_wiring import (
     stop_auto_distill,
     wire_session_end_distiller,
 )
-from coffer.surfaces.http.backup_wiring import start_backup_worker, stop_backup_worker
 from coffer.surfaces.http.channel_wiring import wire_channel_kind
 from coffer.surfaces.http.consolidate_wiring import run_store_consolidation
 from coffer.surfaces.http.credential_composition import (
@@ -224,9 +223,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # coffer-builtin-agent gateway session sees the fully-populated
     # BuiltinToolRegistry (KB + memory + skill + MCP tools). The session factory
     # is the one wire_mcp_kind registered via set_mcp_session_factory.
-    chat_gateway_session = wire_chat(
-        audit, sm, get_mcp_session_factory(), credential_store, builtin_tools
-    )
+    chat_gateway_session = wire_chat(audit, sm, get_mcp_session_factory(), credential_store)
     # The chat session's supervisor stays in session_supervisors so on_delete evicts
     # its upstreams; shutdown disposes it first (on_dispose deregisters; idempotent).
     app.state.mcp_session_supervisors = session_supervisors
@@ -276,8 +273,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.retention_worker = worker
     app.state.retention_worker_task = worker_task
 
-    # Optional opt-in background workers (default OFF).
-    start_backup_worker(app)
     # Auto session-end organize → 固化 pipeline (007 FR-035): default-ON.
     start_auto_organize(app, memory_service, get_organizer_service())
     # Auto-distill catch-up sweep (007 FR-046): default-ON memory write guarantee.
@@ -323,8 +318,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         with contextlib.suppress(Exception):
             await audit.record(AuditEventType.DAEMON_STOPPED.value, actor="system")
         worker.stop()
-        # Best-effort shutdown of the optional backup worker.
-        await stop_backup_worker(app)
         await stop_auto_organize(app)
         await stop_auto_distill(app)
         await stop_async_batches(app)

@@ -56,7 +56,7 @@ The substrate (`coffer.{domain,infrastructure}.knowledge`) is **shared with spec
 
 - [x] T-0050 `surfaces/http/knowledge_base/schemas.py` (matches OpenAPI)
 - [x] T-0051 `surfaces/http/knowledge_base/routes.py` — create/list/get/ingest/docs/edit/reconvert/delete/reindex/search/grep/metrics
-- [x] T-0052 `surfaces/cli/knowledge_base_cmd.py` — `coffer kb create/ingest/list-docs/get-doc(read)/search/grep/edit/reconvert/reindex/set-embedding/set-chunking/delete-doc/delete-kb/describe`
+- [x] T-0052 `surfaces/cli/knowledge_base_cmd.py` — `coffer kb create/ingest/list-docs/read/search/grep/edit/reconvert/reindex/set-embedding/set-chunking/delete-doc/delete-kb/describe`
 - [x] T-0053 Integration tests: `test_http_routes.py`, `test_retrieval_modes.py` (grep/keyword/vector + fallback — acceptance), `test_reindex_idempotency.py`, `test_kb_lifecycle.py` (acceptance)
 
 ## Phase 7 — MCP built-in tools (read-only)

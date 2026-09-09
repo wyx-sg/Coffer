@@ -50,8 +50,8 @@ both agents.
 
 In addition to per-agent activation, a connection MAY carry a single GLOBAL
 `internal_default` flag (≤1 across all connections) marking the connection
-Coffer's own internal LLM engine uses (memory organizer, reorg, distill,
-`coffer__ask`). The third wire `ollama` is internal-only: it never projects to
+Coffer's own internal LLM engine uses (memory organizer, reorg, distill).
+The third wire `ollama` is internal-only: it never projects to
 any agent, and because it has no API key its `credential_ref` is absent — it
 needs only a `base_url`. `credential_ref` is therefore OPTIONAL: required for
 anthropic/openai, absent for ollama. One connection may be BOTH active (projected
@@ -300,7 +300,7 @@ gated behind an explicit test + confirm, and the binding is never left empty.
 - Internal-engine connection selection: the global `internal_default` flag,
   `set_internal_default(name)` + `resolve_internal_connection()`, the
   `provider_internal_default_set` audit event, consumed by Coffer's internal
-  LLM engine (memory organizer / reorg / distill / `coffer__ask`).
+  LLM engine (memory organizer / reorg / distill).
 - Retire the standalone `ModelConfig` registry (model CRUD REST + `coffer model`
   CLI), folding internal-engine model selection into the connection. The
   provider introspection routes (`list-models`, `test-connection`) are KEPT.
@@ -422,7 +422,7 @@ write failure aborts the switch with the registry unchanged.
 
 Separate from per-agent activation, the global `internal_default` flag (≤1 across
 all connections) selects the connection Coffer's own internal LLM engine uses —
-the memory organizer, reorg, distill, and `coffer__ask`.
+the memory organizer, reorg, and distill.
 
 - `set_internal_default(name)`: clears `internal_default` on all other
   connections, then sets it on the target (sequential clear-then-set, serialised
@@ -430,8 +430,8 @@ the memory organizer, reorg, distill, and `coffer__ask`.
   holds), and emits a `provider_internal_default_set` audit event.
 - `resolve_internal_connection() -> ProviderConfig | None`: returns the
   `internal_default` connection's config, or `None` when no connection is marked.
-  When `None`, the internal engine (memory organizer / reorg / distill /
-  `coffer__ask`) is a clean no-op rather than an error.
+  When `None`, the internal engine (memory organizer / reorg / distill) is a
+  clean no-op rather than an error.
 - `build_chat_model(connection, ...)`: the internal engine builds its chat model
   from the resolved connection, dispatched by `wire_format` (anthropic / openai /
   ollama). This replaces the retired `ModelConfig` registry's model selection.
@@ -879,7 +879,7 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
 - **FR-023**: `resolve_internal_connection()` MUST return the
   `internal_default` connection's `ProviderConfig`, or `None` when no connection
   is marked. When `None`, the internal engine (memory organizer / reorg /
-  distill / `coffer__ask`) MUST be a clean no-op rather than an error.
+  distill) MUST be a clean no-op rather than an error.
 - **FR-024**: The standalone `ModelConfig` registry (model CRUD REST +
   `coffer model` CLI) MUST be retired. The internal engine MUST build its chat
   model from the internal-default connection via `build_chat_model(connection,
@@ -926,7 +926,7 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
 - **SC-005**: Activating a profile writes the target native-config key set and
   does NOT touch any key outside the defined managed set.
 - **SC-006**: With an `internal_default` connection configured, Coffer's internal
-  engine (memory organize / reorg / distill / `coffer__ask`) runs on it; with no
+  engine (memory organize / reorg / distill) runs on it; with no
   connection marked `internal_default`, the internal engine is a clean no-op.
 
 ## Assumptions

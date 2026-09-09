@@ -30,7 +30,6 @@ from coffer.domain.mcp.capability import (
     MCPTool,
 )
 from coffer.domain.mcp.namespace import prefix_prompt, prefix_resource_uri, prefix_tool
-from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import ResourceRef
 
 _DEFAULT_CACHE_TTL_SECONDS = 60.0
@@ -344,7 +343,7 @@ class CapabilityDiscovery:
         capability_type: CapabilityType,
         current_keys: list[str],
     ) -> None:
-        """Insert new keys at the server's default; touch last_seen for existing.
+        """Insert newly seen keys enabled; touch last_seen for existing ones.
 
         Missing keys are NOT deleted — this preserves any disable intent the
         user expressed for a capability that temporarily disappeared upstream.
@@ -356,17 +355,15 @@ class CapabilityDiscovery:
         sessions reconciled the same upstream concurrently).
 
         CODE-036: takes the already-fetched ``resource`` so the cold path does
-        not re-query + re-validate the same row that the caller just loaded.
+        not re-query the same row that the caller just loaded.
         """
-        config = MCPServerConfig.model_validate(resource.config)
-        default_enabled = config.auto_enable_new_capabilities
         now = datetime.now(tz=UTC)
 
         new_keys = await self._prefs.reconcile(
             resource.id,
             capability_type,
             current_keys,
-            default_enabled=default_enabled,
+            default_enabled=True,
             when=now,
         )
 
@@ -378,6 +375,6 @@ class CapabilityDiscovery:
                 details={
                     "capability_type": capability_type,
                     "key": key,
-                    "default_enabled": default_enabled,
+                    "default_enabled": True,
                 },
             )
