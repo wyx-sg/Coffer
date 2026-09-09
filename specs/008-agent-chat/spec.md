@@ -238,7 +238,7 @@ that completes without error and is still visible after reload.
 
 The user asks the built-in agent something that needs their own data ("what do
 my notes say about OAuth?"). The agent calls tools through Coffer's MCP
-gateway — upstream MCP server tools, `coffer__recall`, `coffer__search_knowledge`,
+gateway — upstream MCP server tools, `coffer__search`, `coffer__write`,
 `coffer__load_skill` — and each call appears in the message stream as an inline,
 expandable card showing the tool name, status, inputs, and result.
 
@@ -246,7 +246,7 @@ expandable card showing the tool name, status, inputs, and result.
 rather than a generic chat box — it dogfoods the vault.
 
 **Independent Test**: With a memory store holding a known record, ask the agent a
-question answerable only from that record; observe a `coffer__recall`
+question answerable only from that record; observe a `coffer__search`
 tool-call card in the stream and an answer grounded in the record.
 
 **Covering scenarios**:
@@ -865,7 +865,7 @@ referenced by at least one test marked
 - The application shell from spec 002-ui-shell — sidebar IA, layout, routing,
   design system, and the Settings layout — is in place; the Chat page and the
   Settings → LLM Connections page (spec 011) render within that shell.
-- Memory and knowledge-base tools (`coffer__recall`, `coffer__search_knowledge`,
+- Knowledge-layer tools (`coffer__search`, `coffer__read`,
   and siblings) already exist as gateway built-in tools from specs 005–006; this
   spec consumes them and does not redefine them.
 - The built-in agent's agentic loop is implemented with the LangGraph framework
@@ -886,7 +886,7 @@ referenced by at least one test marked
   beyond the gateway's existing gating; conversation
   summarisation and export; resuming/continuing a past foreign agent session;
   and any cross-agent raw-transcript browse/search surface (sharing across agents
-  is served by what an agent explicitly writes with `coffer__remember`; automatic
+  is served by what an agent explicitly writes with `coffer__write`; automatic
   transcript distillation was removed on 2026-09-09).
   Remote channels are delivered separately by Spec 009.
 - The standalone `ModelConfig`/`chat_models` registry that `Conversation.model_id`

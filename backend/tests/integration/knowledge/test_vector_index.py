@@ -12,7 +12,8 @@ from datetime import UTC, datetime
 import pytest
 
 from coffer.domain.knowledge.document import (
-    KIND_KNOWLEDGE_BASE,
+    KIND_KNOWLEDGE,
+    LANE_INGEST,
     WORKSPACE_GLOBAL_PROJECT_ID,
     Document,
 )
@@ -24,10 +25,11 @@ def _doc(doc_id: str, resource: str) -> Document:
     now = datetime.now(UTC)
     return Document(
         id=doc_id,
-        kind=KIND_KNOWLEDGE_BASE,
+        kind=KIND_KNOWLEDGE,
         resource_name=resource,
         project_id=WORKSPACE_GLOBAL_PROJECT_ID,
         path=f"docs/{doc_id}.md",
+        lane=LANE_INGEST,
         title="T",
         content_sha256="x",
         source_mode="converted",
@@ -48,9 +50,7 @@ def _sqlite_vec_available() -> bool:
 async def test_vector_search_degrades_without_vec(substrate) -> None:
     """No VecIndex wired ⇒ vector_search returns [] (never raises)."""
     await substrate.repo.upsert_document(_doc("d1", "kb1"))
-    idx = SqliteKnowledgeIndex(
-        substrate.sm, kind=KIND_KNOWLEDGE_BASE, resource_name="kb1", vec=None
-    )
+    idx = SqliteKnowledgeIndex(substrate.sm, kind=KIND_KNOWLEDGE, resource_name="kb1", vec=None)
     await idx.upsert_chunks("d1", ["alpha"], [[0.1, 0.2, 0.3]])
     assert await idx.vector_search("kb1", [0.1, 0.2, 0.3], top_k=5) == []
 
@@ -59,15 +59,13 @@ def _vec(substrate, resource: str, dimensions: int) -> VecIndex:
     return VecIndex(
         str(substrate.db_path),
         dimensions,
-        kind=KIND_KNOWLEDGE_BASE,
+        kind=KIND_KNOWLEDGE,
         resource_name=resource,
     )
 
 
 def _index(substrate, resource: str, vec: VecIndex) -> SqliteKnowledgeIndex:
-    return SqliteKnowledgeIndex(
-        substrate.sm, kind=KIND_KNOWLEDGE_BASE, resource_name=resource, vec=vec
-    )
+    return SqliteKnowledgeIndex(substrate.sm, kind=KIND_KNOWLEDGE, resource_name=resource, vec=vec)
 
 
 @pytest.mark.skipif(not _sqlite_vec_available(), reason="sqlite-vec not installed/loadable")
@@ -164,7 +162,7 @@ async def test_maintenance_delete_without_dimensions_removes_vec_rows(substrate)
     idx3 = _index(substrate, "kb1", _vec(substrate, "kb1", 3))
     await idx3.upsert_chunks("d1", ["near"], [[1.0, 0.0, 0.0]])
 
-    maint = VecIndex(str(substrate.db_path), None, kind=KIND_KNOWLEDGE_BASE, resource_name="kb1")
+    maint = VecIndex(str(substrate.db_path), None, kind=KIND_KNOWLEDGE, resource_name="kb1")
     await maint.delete(["d1:0"])
 
     assert await idx3.vector_search("kb1", [1.0, 0.0, 0.0], top_k=5) == []

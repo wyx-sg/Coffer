@@ -29,13 +29,12 @@ from coffer.surfaces.http.credential_routes import router as credential_router
 from coffer.surfaces.http.embedding_routes import router as embedding_router
 from coffer.surfaces.http.fs_routes import router as fs_router
 from coffer.surfaces.http.internal_engine_routes import router as internal_engine_router
-from coffer.surfaces.http.knowledge_base import router as kb_router
+from coffer.surfaces.http.knowledge import router as knowledge_router
 from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_router
 from coffer.surfaces.http.mcp.invocation_routes import router as mcp_invocation_router
 from coffer.surfaces.http.mcp.protocol_routes import router as mcp_protocol_router
 from coffer.surfaces.http.mcp.server_test_routes import router as mcp_server_test_router
 from coffer.surfaces.http.mcp.tiering_routes import router as mcp_tiering_router
-from coffer.surfaces.http.memory import router as memory_router
 from coffer.surfaces.http.provider_routes import router as provider_router
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
@@ -67,14 +66,13 @@ def include_all_routers(app: FastAPI) -> None:
         fs_router,
         skill_router,
         skill_file_router,
-        kb_router,  # spec 006
         # MCP
         mcp_protocol_router,
         mcp_capability_router,
         mcp_server_test_router,
         mcp_invocation_router,
         mcp_tiering_router,
-        memory_router,  # spec 007
+        knowledge_router,  # the one knowledge kind
         # chat (008)
         chat_conversation_router,
         chat_turn_router,

@@ -27,7 +27,7 @@ from coffer.infrastructure.knowledge.vec_index import VecIndex
 def store_scope(kind: str, resource_name: str) -> str:
     """12-hex digest namespacing chunk ids per ``(kind, resource_name)`` store.
 
-    Document ids (ULIDs, ADR-028) are unique only within one store, so the
+    Document ids (ULIDs, spec 007 FR-062) are unique only within one store, so the
     same doc id can appear across stores; a bare ``<doc-id>:<position>`` chunk
     id would then collide across stores (``chunks.id`` is the PK and
     ``documents_fts`` has no ``kind`` column), letting the second store steal

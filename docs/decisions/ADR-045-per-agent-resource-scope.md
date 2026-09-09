@@ -66,7 +66,7 @@ enforcement point.
    | --- | --- | --- |
    | `mcp_server` | agent | The gateway filters the server's tools by the session's identity. |
    | `skill` | agent | Delivery filters by scope intersected with the existing per-agent follow policy; out-of-scope delivered copies are reconciled away. |
-   | `agent`, `channel`, `knowledge_base`, `memory` | none | A non-null scope is rejected at validation. |
+   | `agent`, `channel`, `knowledge` | none | A non-null scope is rejected at validation. |
 
 4. **Shim self-reported `--agent` identity.** The shim install writes
    `coffer-mcp-shim --agent <name>` into the agent's config; the shim reports
@@ -83,8 +83,11 @@ enforcement point.
    exclusions. Scope is a hard grant that overrides manual bindings: an
    out-of-scope skill is reclaimed even if it was previously delivered by hand.
 
-6. **Knowledge and memory never scope.** `knowledge_base` and `memory` declare
-   no scope and reject a non-null value — always shared across every agent.
+6. **Knowledge never scopes.** The `knowledge` kind declares no scope and
+   rejects a non-null value — always shared across every agent. (Its own
+   `global` / `project-<ULID>` / named-collection axis is a knowledge-layer
+   scope over *content*, unrelated to this framework field, which is about
+   *which agent may see a resource*.)
    Chat history, audit logs, runtime state and machine-local settings stay
    machine-local (restated as a boundary, not a new decision).
 

@@ -18,7 +18,8 @@ from pathlib import Path
 
 import coffer.infrastructure.knowledge  # noqa: F401 — registers ORM + FTS5 DDL
 from coffer.domain.knowledge.document import (
-    KIND_KNOWLEDGE_BASE,
+    KIND_KNOWLEDGE,
+    LANE_INGEST,
     WORKSPACE_GLOBAL_PROJECT_ID,
     Document,
 )
@@ -40,10 +41,11 @@ def _doc(doc_id: str, title: str) -> Document:
     now = datetime.now(UTC)
     return Document(
         id=doc_id,
-        kind=KIND_KNOWLEDGE_BASE,
+        kind=KIND_KNOWLEDGE,
         resource_name=_RESOURCE,
         project_id=WORKSPACE_GLOBAL_PROJECT_ID,
-        path=f"docs/{doc_id}.md",
+        path=f"inbox/{doc_id}.md",
+        lane=LANE_INGEST,
         title=title,
         content_sha256="x",
         source_mode="converted",
@@ -66,7 +68,7 @@ async def run_retrieval_eval(*, top_k: int = 3) -> dict:
             sm = session_maker(engine)
             repo = DocumentRepo(sm)
             index = SqliteKnowledgeIndex(
-                sm, kind=KIND_KNOWLEDGE_BASE, resource_name=_RESOURCE
+                sm, kind=KIND_KNOWLEDGE, resource_name=_RESOURCE
             )
 
             for doc in corpus:

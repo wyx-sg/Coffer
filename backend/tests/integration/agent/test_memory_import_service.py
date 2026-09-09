@@ -3,7 +3,7 @@
 Exercises the orchestration only — confirm-agent → resolve-path → read facts →
 add each → organize + store_name — against an in-memory reader/sink so the suite
 needs no real git project or internal LLM. The composition-root wiring (real
-MemoryService sink + OrganizerService) is covered by the route smoke test.
+KnowledgeService sink + OrganizerService) is covered by the route smoke test.
 """
 
 from __future__ import annotations

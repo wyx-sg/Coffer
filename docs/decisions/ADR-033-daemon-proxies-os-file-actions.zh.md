@@ -5,7 +5,7 @@
 - **状态:** Accepted
 - **日期:** 2026-06-21
 - **决策者:** Yuxing Wu
-- **Spec:** [004-agent-registry](../../specs/004-agent-registry/spec.zh.md) 拥有 `/fs` 路由与共享 FileActions 操作栏(FR-038、新增 FR-039);并改动 [005](../../specs/005-skill-manager/spec.zh.md) FR-027 / 新增 FR-030、[006](../../specs/006-knowledge-base/spec.zh.md) FR-020、[007](../../specs/007-memory/spec.zh.md) FR-021 中的 open/reveal 回退条款 —— 不新增 spec 编号;`spec.md` 在实现前先更新。
+- **Spec:** [004-agent-registry](../../specs/004-agent-registry/spec.zh.md) 拥有 `/fs` 路由与共享 FileActions 操作栏(FR-038、新增 FR-039);并改动 [005](../../specs/005-skill-manager/spec.zh.md) FR-027 / 新增 FR-030，以及 [007](../../specs/007-memory/spec.zh.md) FR-020 / FR-021（知识层 spec，现同时拥有文档与条目两个界面）中的 open/reveal 回退条款 —— 不新增 spec 编号;`spec.md` 在实现前先更新。
 - **取代:** 004 FR-009/FR-038、005 FR-027、006 FR-020、007 FR-021 中"web 端 open/reveal 回退到 copy-path"的立场。
 
 ## 背景

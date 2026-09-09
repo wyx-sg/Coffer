@@ -8,17 +8,32 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from typing import cast
 
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.sql.selectable import ScalarSelect
 
-from coffer.domain.knowledge.document import Document
+from coffer.domain.knowledge.document import Document, DocumentLane
 from coffer.infrastructure.knowledge.models import ChunkModel, DocumentModel
 
 
 def _tz(dt: datetime) -> datetime:
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+
+
+def _lane_doc_ids(kind: str, resource_name: str, lane: str) -> ScalarSelect[str]:
+    """Ids of the documents in one lane — the subquery chunk counts filter on."""
+    return (
+        select(DocumentModel.id)
+        .where(
+            DocumentModel.kind == kind,
+            DocumentModel.resource_name == resource_name,
+            DocumentModel.lane == lane,
+        )
+        .scalar_subquery()
+    )
 
 
 def _to_domain(row: DocumentModel) -> Document:
@@ -28,6 +43,7 @@ def _to_domain(row: DocumentModel) -> Document:
         resource_name=row.resource_name,
         project_id=row.project_id,
         path=row.path,
+        lane=cast(DocumentLane, row.lane),
         title=row.title,
         description=row.description,
         content_sha256=row.content_sha256,
@@ -61,6 +77,7 @@ class DocumentRepo:
                     resource_name=d.resource_name,
                     project_id=d.project_id,
                     path=d.path,
+                    lane=d.lane,
                     title=d.title,
                     description=d.description,
                     metadata_json=payload,
@@ -73,6 +90,7 @@ class DocumentRepo:
                 session.add(row)
             else:
                 row.path = d.path
+                row.lane = d.lane
                 row.project_id = d.project_id
                 row.title = d.title
                 row.description = d.description
@@ -103,6 +121,7 @@ class DocumentRepo:
         limit: int = 50,
         offset: int = 0,
         q: str | None = None,
+        lane: str | None = None,
     ) -> list[Document]:
         async with self._sm() as session:
             stmt = (
@@ -122,10 +141,19 @@ class DocumentRepo:
                 stmt = stmt.where(
                     func.lower(DocumentModel.title).contains(q.lower(), autoescape=True)
                 )
+            if lane is not None:
+                stmt = stmt.where(DocumentModel.lane == lane)
             rows = (await session.execute(stmt)).scalars().all()
             return [_to_domain(r) for r in rows]
 
-    async def count_documents(self, kind: str, resource_name: str, *, q: str | None = None) -> int:
+    async def count_documents(
+        self,
+        kind: str,
+        resource_name: str,
+        *,
+        q: str | None = None,
+        lane: str | None = None,
+    ) -> int:
         async with self._sm() as session:
             stmt = (
                 select(func.count())
@@ -135,6 +163,8 @@ class DocumentRepo:
                     DocumentModel.resource_name == resource_name,
                 )
             )
+            if lane is not None:
+                stmt = stmt.where(DocumentModel.lane == lane)
             # Mirror the list filter so ``total`` is the filtered count (FR-010a).
             if q:
                 stmt = stmt.where(
@@ -142,7 +172,9 @@ class DocumentRepo:
                 )
             return int((await session.execute(stmt)).scalar_one())
 
-    async def count_pending_embeds(self, kind: str, resource_name: str) -> int:
+    async def count_pending_embeds(
+        self, kind: str, resource_name: str, *, lane: str | None = None
+    ) -> int:
         """Documents whose embed is pending (provider was unavailable) — the
         persisted ``documents_degraded`` surfaced on any read (KB8)."""
         async with self._sm() as session:
@@ -155,10 +187,17 @@ class DocumentRepo:
                     DocumentModel.embed_pending.is_(True),
                 )
             )
+            if lane is not None:
+                stmt = stmt.where(DocumentModel.lane == lane)
             return int((await session.execute(stmt)).scalar_one())
 
-    async def count_chunks(self, kind: str, resource_name: str) -> int:
-        """Total chunk rows for a store (used by KB / memory metrics)."""
+    async def count_chunks(self, kind: str, resource_name: str, *, lane: str | None = None) -> int:
+        """Total chunk rows for a scope.
+
+        A chunk has no lane of its own — it follows its document, so the filter
+        joins rather than duplicating the discriminator onto ``chunks`` where it
+        could drift.
+        """
         async with self._sm() as session:
             stmt = (
                 select(func.count())
@@ -168,9 +207,15 @@ class DocumentRepo:
                     ChunkModel.resource_name == resource_name,
                 )
             )
+            if lane is not None:
+                stmt = stmt.where(
+                    ChunkModel.document_id.in_(_lane_doc_ids(kind, resource_name, lane))
+                )
             return int((await session.execute(stmt)).scalar_one())
 
-    async def chunk_counts(self, kind: str, resource_name: str) -> dict[str, int]:
+    async def chunk_counts(
+        self, kind: str, resource_name: str, *, lane: str | None = None
+    ) -> dict[str, int]:
         """Per-document chunk counts for a store, in one GROUP BY query (the
         wire ``chunk_count`` field — never an N+1)."""
         async with self._sm() as session:
@@ -182,13 +227,17 @@ class DocumentRepo:
                 )
                 .group_by(ChunkModel.document_id)
             )
+            if lane is not None:
+                stmt = stmt.where(
+                    ChunkModel.document_id.in_(_lane_doc_ids(kind, resource_name, lane))
+                )
             rows = (await session.execute(stmt)).all()
             return {str(doc_id): int(n) for doc_id, n in rows}
 
     async def find_by_filename(
         self, kind: str, resource_name: str, project_id: str, original_filename: str
     ) -> Document | None:
-        """KB re-upload match (ADR-028): the document in this store/scope whose
+        """KB re-upload match (spec 007 FR-062): the document in this store/scope whose
         ``metadata->>'original_filename'`` matches, or ``None``.
 
         The doc id is a stable ULID decoupled from content, so a re-upload is

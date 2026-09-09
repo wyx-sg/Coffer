@@ -7,7 +7,7 @@
 - **Deciders:** Yuxing Wu
 - **Spec:** [008-agent-chat](../../specs/008-agent-chat/spec.md) and [004-agent-registry](../../specs/004-agent-registry/spec.md) (repositioning + capability move — no new spec number; both `spec.md` files are updated before implementation)
 - **Supersedes:** the "converse with the vault through the `builtin` agent" half of [ADR-021](./ADR-021-chat-as-vault-console.md); **amends** [ADR-018](./ADR-018-tool-retrieval-for-overload.md) (search-tools ranking)
-- **Related:** [007-memory](../../specs/007-memory/spec.md), [006-knowledge-base](../../specs/006-knowledge-base/spec.md), [ADR-012](./ADR-012-files-as-truth-sqlite-retrieval.md)
+- **Related:** [007-memory](../../specs/007-memory/spec.md) (the Knowledge Layer spec), [ADR-012](./ADR-012-files-as-truth-sqlite-retrieval.md)
 
 ## Context
 

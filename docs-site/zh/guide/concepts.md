@@ -6,11 +6,13 @@
 
 Coffer 中每一个由用户管理的实体都是一个**资源 (Resource)**，标识形如 `<kind>:<name>`。资源框架统一处理所有 kind 的身份 (identity)、生命周期（register / update / enable / disable / delete）、审计与模式校验。
 
-目前已发布三个 kind：
+目前已发布五个 kind：
 
 - `mcp_server`——一个已注册的上游 MCP 服务器，承载传输配置、凭据引用以及各服务器的策略。
 - `agent`——一个已注册的本地 AI 编码助手（`claude_code` 或 `codex`），Coffer 可以查看和编辑它经过策展的配置文件，并可将自身的 MCP 服务器安装进去。
 - `skill`——一个 AgentSkills 文件夹，Coffer 从单一的 master 副本管理它，并可将其交付到某个 agent 的配置目录。按 agent 的启用/禁用绑定在该 agent 的详情页中管理。
+- `knowledge`——你的 agent 所知内容的一个作用域：它们写下的条目与你摄取的文档，以磁盘上的 Markdown 存放，其上是一份可重建的 SQLite 索引。作用域由名字承载——`global`、`project-<ULID>`，或你自己命名的集合。
+- `channel`——一个 Telegram 或 SeaTalk 绑定，让你从消息应用触达自己的 agent。
 
 该框架与 kind 无关：未来新增 kind 时，无需改动核心资源机制。
 

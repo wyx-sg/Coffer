@@ -22,7 +22,7 @@ const hooks = await import("@/lib/hooks/useResources");
 const useResourcesMock = vi.mocked(hooks.useResources);
 
 // A self-contained kind so ResourceListView has a Card and the page has an
-// addPath (knowledge_base/memory register no addPath).
+// addPath (the knowledge kind registers no addPath).
 registerKindUI({
   name: "test_kind",
   displayName: "Test Kind",
@@ -43,8 +43,8 @@ function wrap() {
 
 function renderPage() {
   // The i18n namespace is irrelevant to the states under test; reuse the
-  // knowledgeBases keys so title/subtitle/add/empty all resolve.
-  return render(<KindResourcePage kind="test_kind" icon={Library} i18nKey="knowledgeBases" />, {
+  // knowledge keys so title/subtitle/add/empty all resolve.
+  return render(<KindResourcePage kind="test_kind" icon={Library} i18nKey="knowledge" />, {
     wrapper: wrap(),
   });
 }
@@ -93,7 +93,7 @@ describe("KindResourcePage", () => {
 
     renderPage();
     expect(screen.getByText("card:alpha")).toBeInTheDocument();
-    const cta = screen.getByRole("link", { name: /new knowledge base/i });
+    const cta = screen.getByRole("link", { name: /new collection/i });
     expect(cta).toHaveAttribute("href", "/test-kind/new");
   });
 
@@ -105,7 +105,7 @@ describe("KindResourcePage", () => {
     } as unknown as ReturnType<typeof hooks.useResources>);
 
     renderPage();
-    expect(screen.getByText(/no knowledge bases yet/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /new knowledge base/i })).toBeInTheDocument();
+    expect(screen.getByText(/no knowledge scopes yet/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /new collection/i })).toBeInTheDocument();
   });
 });

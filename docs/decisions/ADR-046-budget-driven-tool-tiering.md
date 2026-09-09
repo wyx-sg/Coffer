@@ -8,7 +8,7 @@
 **Amends**: [ADR-018](ADR-018-tool-retrieval-for-overload.md) — the "nothing is
 hidden server-side" clause is replaced by budget-driven tiering
 **Related**: [ADR-024](ADR-024-builtin-agent-is-internal-capability.md)
-(semantic ranking), [ADR-045](ADR-045-machine-agent-resource-scope.md)
+(semantic ranking), [ADR-045](ADR-045-per-agent-resource-scope.md)
 (machine × agent scope), [ADR-004](ADR-004-capability-state-model.md)
 (capability preferences), reverted [ADR-026](ADR-026-per-agent-mcp-scoping.md)
 (per-agent scoping), [spec `001-mcp-gateway`](../../specs/001-mcp-gateway/spec.md),
@@ -55,7 +55,7 @@ Prior art matters here. [ADR-026](ADR-026-per-agent-mcp-scoping.md) built
 per-agent server scoping and was reverted as over-complex; the field's
 "strategy 1" (ContextForge virtual servers, MetaMCP namespaces, MCPJungle tool
 groups, Docker profiles) all require the user to curate a subset by hand.
-[ADR-045](ADR-045-machine-agent-resource-scope.md) has since restored a
+[ADR-045](ADR-045-per-agent-resource-scope.md) has since restored a
 machine × agent `scope` axis, but it gates whole servers and, like every
 manual scheme, does nothing until configured. The default install is where the
 overload actually bites.

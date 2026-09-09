@@ -5,7 +5,7 @@
 - **Status:** Accepted
 - **Date:** 2026-06-21
 - **Deciders:** Yuxing Wu
-- **Spec:** [004-agent-registry](../../specs/004-agent-registry/spec.md) owns the `/fs` router and the shared FileActions bar (FR-038, FR-039 new); touches the open/reveal fallback clause in [005](../../specs/005-skill-manager/spec.md) FR-027 / FR-030 (new), [006](../../specs/006-knowledge-base/spec.md) FR-020, [007](../../specs/007-memory/spec.md) FR-021 — no new spec number; the `spec.md` files are updated before implementation.
+- **Spec:** [004-agent-registry](../../specs/004-agent-registry/spec.md) owns the `/fs` router and the shared FileActions bar (FR-038, FR-039 new); touches the open/reveal fallback clause in [005](../../specs/005-skill-manager/spec.md) FR-027 / FR-030 (new) and [007](../../specs/007-memory/spec.md) FR-020 / FR-021 (the Knowledge Layer spec, which now owns both the document and the entry surfaces) — no new spec number; the `spec.md` files are updated before implementation.
 - **Supersedes:** the "on the web, open/reveal falls back to copy-path" stance in 004 FR-009/FR-038, 005 FR-027, 006 FR-020, 007 FR-021.
 
 ## Context

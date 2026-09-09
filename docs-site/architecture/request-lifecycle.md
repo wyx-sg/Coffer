@@ -1,7 +1,7 @@
 # Request Lifecycle
 
 ::: tip Mental model
-Coffer now serves **several** request lifecycles, not one. The original — and still the load-bearing — path is the **MCP `tools/call`** lifecycle: MCP client → daemon → upstream server, with the shim translating stdio to HTTP/SSE at the entry and the namespace resolver splitting `filesystem__read_file` into server `filesystem` + tool `read_file` at dispatch. Alongside it run an **agent-chat turn** lifecycle, a **channel-inbound** lifecycle, and a **knowledge/memory retrieval** lifecycle. This page walks the MCP path in full detail first, then sketches the other three.
+Coffer now serves **several** request lifecycles, not one. The original — and still the load-bearing — path is the **MCP `tools/call`** lifecycle: MCP client → daemon → upstream server, with the shim translating stdio to HTTP/SSE at the entry and the namespace resolver splitting `filesystem__read_file` into server `filesystem` + tool `read_file` at dispatch. Alongside it run an **agent-chat turn** lifecycle, a **channel-inbound** lifecycle, and a **knowledge retrieval** lifecycle. This page walks the MCP path in full detail first, then sketches the other three.
 :::
 
 ## MCP tool-call lifecycle
@@ -211,15 +211,16 @@ Messaging channels (Telegram, SeaTalk) deliver user messages into the **same `Tu
 
 Progress is rendered from the agent's capabilities, not the adapter type: Telegram streams progress by editing one message, SeaTalk degrades to ack-then-final.
 
-## Knowledge / memory retrieval lifecycle
+## Knowledge retrieval lifecycle
 
-Retrieval requests (KB search, and the `recall` / `remember` memory tools) follow a lifecycle anchored in [ADR-012](/reference/adr/ADR-012-files-as-truth-sqlite-retrieval): **markdown files are the source of truth**, and `coffer.db` holds only a derived index.
+Retrieval requests — `coffer__search`, `coffer__grep`, and the REST `search` / `recall` / `grep` routes — follow a lifecycle anchored in [ADR-012](/reference/adr/ADR-012-files-as-truth-sqlite-retrieval): **markdown files are the source of truth**, and `coffer.db` holds only a derived index.
 
 - **`grep`** — ripgrep over the raw files (zero index, language-agnostic).
 - **keyword** — SQLite **FTS5** with `MATCH … ORDER BY bm25()`.
-- **vector** — **sqlite-vec** KNN over chunk embeddings (opt-in; embeddings come from a user-configurable OpenAI-compatible endpoint).
+- **vector** — **sqlite-vec** KNN over chunk embeddings (opt-in per scope; embeddings come from the installation-wide OpenAI-compatible endpoint configured under Settings).
+- **hybrid** — reciprocal-rank fusion over keyword + vector.
 
-A KB search fuses the enabled engines and returns ranked chunks; `recall` reads from the memory store and `remember` writes a fact file, after which the derived FTS5/vec index is regenerated from the files. Because files are truth, the index can always be rebuilt and the user can diff/grep/edit content with ordinary tools.
+The engine picks among these from the scope's configuration — callers never name a mode ([ADR-034](/reference/adr/ADR-034-retrieval-mode-is-internal)) — and one search covers both lanes of the scope, the entries agents wrote and the documents you ingested. A write (`coffer__write`, or an ingest) lands a markdown file first, after which the derived FTS5/vec index is regenerated from the files. Because files are truth, the index can always be rebuilt and the user can diff/grep/edit content with ordinary tools.
 
 ---
 

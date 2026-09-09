@@ -28,8 +28,7 @@ const guideEn = [
       { text: 'Agents', link: '/guide/agents' },
       { text: 'Chat', link: '/guide/chat' },
       { text: 'Skills', link: '/guide/skills' },
-      { text: 'Knowledge bases', link: '/guide/knowledge-base' },
-      { text: 'Memory', link: '/guide/memory' },
+      { text: 'Knowledge', link: '/guide/knowledge' },
       { text: 'Channels', link: '/guide/channels' },
       { text: 'Export and import', link: '/guide/sync' },
       { text: 'Credentials', link: '/guide/credentials' },
@@ -90,8 +89,7 @@ const guideZh = [
       { text: 'Agents', link: '/zh/guide/agents' },
       { text: '对话', link: '/zh/guide/chat' },
       { text: '技能', link: '/zh/guide/skills' },
-      { text: '知识库', link: '/zh/guide/knowledge-base' },
-      { text: '记忆', link: '/zh/guide/memory' },
+      { text: '知识', link: '/zh/guide/knowledge' },
       { text: '渠道', link: '/zh/guide/channels' },
       { text: '导出与导入', link: '/zh/guide/sync' },
       { text: '凭证', link: '/zh/guide/credentials' },
@@ -136,7 +134,7 @@ const contribZh = [
 export default withMermaid(
   defineConfig({
     title: 'Coffer',
-    description: 'Local-first AI agent vault — one secure, shared interface for every AI agent on your machine: MCP tools, skills, knowledge, memory, chat, channels, and sync.',
+    description: 'Local-first AI agent vault — one secure, shared interface for every AI agent on your machine: MCP tools, skills, knowledge, chat, channels, and vault export/import.',
     base: '/Coffer/',
     cleanUrls: true,
     lastUpdated: true,

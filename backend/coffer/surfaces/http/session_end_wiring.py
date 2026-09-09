@@ -4,7 +4,7 @@ import contextlib
 import os
 from typing import Any
 
-from coffer.application.memory.auto_organize import MemoryAutoOrganizer
+from coffer.application.knowledge.auto_organize import KnowledgeAutoOrganizer
 
 AUTO_ORGANIZE_ENV = "COFFER_MEMORY_AUTO_ORGANIZE"
 _FALSY = {"0", "false", "no", "off"}
@@ -17,14 +17,14 @@ def auto_organize_enabled() -> bool:
     return os.environ.get(AUTO_ORGANIZE_ENV, "").strip().lower() not in _FALSY
 
 
-def start_auto_organize(app: Any, memory_service: Any, organizer: Any) -> None:
+def start_auto_organize(app: Any, knowledge_service: Any, organizer: Any) -> None:
     """Default-ON. Unless disabled via the env off-switch, install the debounced
-    auto-organizer on the memory write-notify hook and stash it on app.state for
+    auto-organizer on the knowledge write-notify hook and stash it on app.state for
     teardown."""
     if not auto_organize_enabled():
         return
-    auto = MemoryAutoOrganizer(organize=organizer)
-    memory_service.set_on_change(auto.on_change)
+    auto = KnowledgeAutoOrganizer(organize=organizer)
+    knowledge_service.set_on_change(auto.on_change)
     app.state.auto_organizer = auto
 
 

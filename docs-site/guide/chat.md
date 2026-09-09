@@ -2,7 +2,7 @@
 
 Coffer's **Chat** is a streamed conversation with an AI agent that runs against your vault. Two kinds of agent answer here:
 
-- the **built-in agent** ("Coffer Assistant") — an in-process agent that runs on an LLM you configure and reaches your MCP tools, knowledge bases, memory, and skills through Coffer's own gateway;
+- the **built-in agent** ("Coffer Assistant") — an in-process agent that runs on an LLM you configure and reaches your MCP tools, knowledge, and skills through Coffer's own gateway;
 - **CLI agents** — your installed **Claude Code** or **Codex** binaries, driven in a working directory you pick per conversation.
 
 ::: tip Configure a model first
@@ -14,7 +14,7 @@ The built-in agent has no model of its own. Add one under **Settings → Models*
 `coffer chat` talks to the **built-in agent**:
 
 ```bash
-coffer chat -m "what MCP servers and knowledge bases do I have?"   # one turn, prints the reply
+coffer chat -m "what MCP servers and knowledge scopes do I have?"   # one turn, prints the reply
 coffer chat                                                        # interactive multi-turn session
 coffer chat --model <model-id>                                     # pick a model for a new conversation
 coffer chat -c <conversation-id>                                   # resume a conversation

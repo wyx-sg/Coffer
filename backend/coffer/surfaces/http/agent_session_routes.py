@@ -16,9 +16,9 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from coffer.application.memory.session_context import assemble_memory_digest
+from coffer.application.knowledge.session_context import assemble_memory_digest
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import get_agent_service, get_memory_service
+from coffer.surfaces.http.dependencies import get_agent_service, get_knowledge_service
 
 #: SessionStart bundles are capped by the external hook contract (≤10k chars);
 #: the memory digest takes whatever budget the rules bundle leaves.
@@ -40,7 +40,7 @@ async def session_context(
     name: str,
     cwd: str | None = None,
     agents: Any = Depends(get_agent_service),  # noqa: B008
-    memory: Any = Depends(get_memory_service),  # noqa: B008
+    memory: Any = Depends(get_knowledge_service),  # noqa: B008
 ) -> SessionContextOut:
     # Raises ResourceNotFound (→ 404) when the agent doesn't exist; the hook
     # swallows non-200s and injects nothing, so a 404 never blocks the agent.

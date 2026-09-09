@@ -1,28 +1,113 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
-  title: Coffer — Memory API
-  version: 0.2.0
+  title: Coffer — Knowledge API
+  version: 0.3.0
   description: |
-    REST surface for the `memory` resource kind (redesign). Spec 007.
+    REST surface for the one `knowledge` resource kind (spec 007, Knowledge
+    Layer). This contract is the merge of the two pre-merge ones: the `memory`
+    face (`/api/v1/memory_stores/*`) and the `knowledge_base` face
+    (`/api/v1/knowledge_bases/*`). Neither route tree exists any more — there is
+    one kind, one route tree, one storage root.
 
-    Memory is the memory face of Coffer's unified knowledge substrate. Facts are
-    per-fact markdown files (the source of truth) plus a regenerated MEMORY.md
-    index, stored under ~/.coffer/memory/{global,projects/<ulid>}. Two scopes:
-    global (project_id = WORKSPACE_GLOBAL_PROJECT_ID sentinel) and per-project
-    (project_id = project ULID). No LLM runs at write time. Retrieval reuses the
-    shared engine (grep / keyword FTS5+BM25 / vector sqlite-vec).
+    ## One kind, three scopes
+
+    A **scope** is where a piece of knowledge belongs, and the resource *name*
+    says which of the three it is (`domain.knowledge.scope.scope_kind_of`) —
+    derived, never stored, so the two can never disagree:
+
+    - `global`          — knowledge that follows the user everywhere.
+                          Auto-provisions on first access.
+    - `project-<ULID>`  — resolved from the cwd's git root.
+                          Auto-provisions on first access.
+    - any other name    — a **named collection** the user created deliberately
+                          (what used to be a separate `knowledge_base`).
+                          It does **NOT** auto-provision: silently conjuring a
+                          scope out of a typo'd name would be worse than a 404,
+                          so an unknown named scope is an error, and creating
+                          one goes through `POST /api/v1/knowledge`.
+
+    ## One storage root, several lanes
+
+    Everything lives under `~/.coffer/knowledge/<scope>/`:
+
+    - `knowledge/`        entries an agent or person wrote (freshly-written ones
+                          land in `knowledge/inbox/` until `organize` drains
+                          them into topic docs)
+    - `inbox/`            ingested documents, normalized to Markdown
+    - `rules/`            behavioural rules the organizer classified out
+    - `handoff/`          one working-state scene per git branch
+    - `superseded/`       recoverable tombstones from `reorg`
+    - `.raw/`             the ingested originals, kept for re-conversion. Hidden
+                          (leading dot) so ripgrep skips it and a grep never
+                          matches the same content twice.
+
+    The Markdown files are the source of truth (ADR-012); SQLite (documents /
+    chunks / FTS5 / sqlite-vec) is a rebuildable index, never a thing that must
+    be migrated.
+
+    ## The lane discriminator
+
+    Both writers index into one `documents` table under one
+    `(kind, resource_name)`, and the path alone cannot separate them — an entry
+    lives at `<scope>/knowledge/inbox/<id>.md` and an ingested document at
+    `<scope>/inbox/<id>.md`, so matching on `inbox/` catches both. Each row
+    therefore carries a stored `lane` discriminator, `knowledge` (entry) or
+    `inbox` (ingested). It is why `entry_count` and `document_count` are two
+    lane-scoped numbers rather than one total — while retrieval deliberately
+    spans both lanes, because a caller asking a question does not care which
+    writer produced the answer.
+
+    `lane` is an internal storage discriminator and is deliberately NOT on the
+    document wire shape: the endpoint you called already tells you the lane.
+
+    ## Retrieval mode is internal (ADR-034)
+
+    No endpoint takes a `mode`. `POST /{name}/search` and `POST /{name}/recall`
+    resolve the strategy from the scope's `default_mode`; when the resolved
+    strategy needs vectors and no embedding provider is available, the engine
+    degrades to `keyword` internally. The degradation is NOT surfaced as a
+    per-query flag — it is reported as state, through the `documents_degraded`
+    metric and the per-document `embed_status`. `grep` is a separate capability
+    with its own endpoint.
+
+    ## No per-scope embedding configuration
+
+    `KnowledgeConfig` carries **no embedding fields at all**. Both pre-merge
+    faces had them (flat `embedding_*` on memory, a nested `embedding` block on
+    the KB) and by the time the two were merged neither was read. Embedding
+    resolves through the installation-wide config (`/api/v1/embedding/*`, out of
+    scope for this contract); a scope opts into semantic search purely by
+    listing `vector` (or `hybrid`) in `retrieval_modes`.
+
+    ## Deleting a scope
+
+    There is deliberately **no** `DELETE /api/v1/knowledge/{name}`. Scope
+    deletion goes through the kind-agnostic resource route,
+    `DELETE /api/v1/resources/knowledge/{name}` (spec 002), so that unregistering
+    a knowledge scope runs the same lifecycle, audit and cascade as
+    unregistering any other resource.
+
+    ## Transport
 
     All routes are loopback-only and require the daemon's auth token in the
-    `X-Coffer-Token` header (token from `~/.coffer/daemon.json`). All error
-    responses use the app-wide envelope `{ "error": { code, message, details } }`.
+    `X-Coffer-Token` header (token from `~/.coffer/daemon.json`). Write routes
+    additionally read an optional `X-Coffer-Actor` header. Every error response
+    uses the app-wide envelope `{ "error": { code, message, details } }`.
 
-    Slice-6 rules runtime injection (FR-049–FR-052) adds one **agent-scoped**
-    endpoint that backs the SessionStart hook —
-    `GET /api/v1/agents/{name}/session-context?cwd=` (the rules bundle). Because
-    it is agent-scoped (not `memory_stores`-scoped), it lives in
-    `session-context.openapi.yaml`. The hook-install trio
-    (`/api/v1/agents/{name}/hook-install`) and the `disable_native_memory` field
-    on `AgentPatch`/`AgentOut` live in `004-agent-registry/contracts/api.openapi.yaml`.
+    The agent-scoped SessionStart rules bundle
+    (`GET /api/v1/agents/{name}/session-context`) lives in
+    `session-context.openapi.yaml`.
+
+    ## Reading this file against the code
+
+    The path parameter is spelled `{name}` here because that is what the route
+    functions call it — it denotes the **scope name** throughout. Component
+    names deliberately mirror the Pydantic class names in
+    `coffer/surfaces/http/knowledge/{schemas,document_schemas}.py` and
+    `merge_routes.py`, so this contract can be diffed against the app's
+    generated OpenAPI without a translation table. The only exceptions are the
+    three contract-only aliases with no model of their own — `ScopeKind`,
+    `RetrievalMode` and `ErrorEnvelope`.
 
 servers:
   - url: http://127.0.0.1:8000
@@ -31,142 +116,296 @@ servers:
 security:
   - cofferToken: []
 
+tags:
+  - name: knowledge
+    description: |
+      The single `knowledge` kind: scopes, the entries an agent wrote, the
+      documents someone ingested, retrieval over both, and the organizing
+      passes. Mounted by `coffer.surfaces.http.knowledge` as one router with the
+      prefix `/api/v1/knowledge`.
+
 paths:
-  /api/v1/memory_stores:
+  # --- scopes ---------------------------------------------------------------
+
+  /api/v1/knowledge:
     get:
-      summary: List memory stores (one per scope)
-      operationId: listMemoryStores
-      tags: [memory_stores]
+      summary: List knowledge scopes
+      description: |
+        Every knowledge scope: the auto-provisioned `global` scope, one
+        `project-<ULID>` scope per project seen so far, and every named
+        collection. `global` is provisioned as a side effect of this call, so
+        the list is never empty.
+
+        Each row's `entry_count` / `document_count` are cheap indexed counts;
+        `disk_bytes` is deliberately absent here (it needs a per-scope disk
+        walk) — read `GET /{name}/metrics` for that.
+      operationId: listKnowledgeScopes
+      tags: [knowledge]
       responses:
         "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MemoryStoreListOut"
-
-  /api/v1/memory_stores/{name}:
-    parameters:
-      - $ref: "#/components/parameters/StoreName"
-    get:
-      summary: Get one memory store
-      operationId: getMemoryStore
-      tags: [memory_stores]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MemoryStoreOut"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-    patch:
-      summary: Update mutable config (retrieval modes, embedding, max_fact_chars)
-      operationId: updateMemoryStore
-      tags: [memory_stores]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/MemoryStoreConfigPatch"
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MemoryStoreOut"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-  /api/v1/memory_stores/{name}/label:
-    parameters:
-      - $ref: "#/components/parameters/StoreName"
-    patch:
-      summary: Set or clear the store's display label (FR-017c)
-      operationId: updateMemoryStoreLabel
-      tags: [memory_stores]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/MemoryStoreLabelPatch"
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MemoryStoreOut"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-  /api/v1/memory_stores/{name}/metrics:
-    parameters:
-      - $ref: "#/components/parameters/StoreName"
-    get:
-      summary: Memory store metrics
-      operationId: getMemoryStoreMetrics
-      tags: [memory_stores]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MemoryStoreMetrics"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-  /api/v1/memory_stores/{name}/facts:
-    parameters:
-      - $ref: "#/components/parameters/StoreName"
+                $ref: "#/components/schemas/ScopeListOut"
 
     post:
-      summary: Add a fact (writes canonical markdown, regenerates MEMORY.md, indexes)
-      description: >
-        Well-formed store names (`global` / `project-<26-char id>`) lazily
-        provision the store on first write; any other name is 404 (a POST must
-        never manufacture a store under an arbitrary name).
-      operationId: addFact
-      tags: [facts]
+      summary: Create a named collection
+      description: |
+        Creates a **named** scope — the deliberate kind. `global` and
+        `project-<ULID>` are rejected by the schema (422): they are provisioned
+        on first use, and conjuring one by hand would let a typo'd name
+        masquerade as an auto-scope. Names that would escape the knowledge root
+        (dot-only, containing `/`, `\` or `..`) are rejected for the same
+        reason.
+
+        Equivalent to `POST /api/v1/resources` with `kind="knowledge"`, but
+        returns the created resource already projected as a `ScopeOut`.
+      operationId: createKnowledgeScope
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/ActorHeader"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/FactCreate"
+              $ref: "#/components/schemas/ScopeCreate"
       responses:
         "201":
           description: Created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/FactOut"
+                $ref: "#/components/schemas/ScopeOut"
+        "409":
+          $ref: "#/components/responses/AlreadyExists"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  # --- merge (collection-level literals; declared before /{name} because the
+  #     scope route only ever resolves an existing scope and no scope may be
+  #     named for one of these verbs) -----------------------------------------
+
+  /api/v1/knowledge/merge_scan:
+    post:
+      summary: Propose same-project scope pairs to merge (FR-056)
+      description: |
+        Read-only. Finds `project-<ULID>` scopes that are really the same
+        project seen twice (the same repo cloned to two paths, a project ULID
+        re-minted after a move) and proposes which of each pair should survive.
+
+        Deterministic same-remote proof is judged `remote`; anything softer is
+        judged by the internal engine. With no internal engine configured the
+        scan still returns the deterministic proposals and reports
+        `engine="no_model"` — a clean degradation, not an error.
+      operationId: scanKnowledgeMerges
+      tags: [knowledge]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MergeScanOut"
+
+  /api/v1/knowledge/merge:
+    post:
+      summary: Merge one project scope into another (FR-057/FR-058/FR-059)
+      description: |
+        Moves the source scope's lane files into the target, carries over its
+        display label and project-root mapping, and records the source's identity
+        in the target's `merged_identities` so a later resolve that computes the
+        retired ULID lands on the survivor instead of provisioning an empty
+        duplicate. The post-merge reorg pass never fails the merge itself
+        (FR-059) — its outcome is reported in `reorg_status`.
+      operationId: mergeKnowledgeScopes
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/ActorHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MergeIn"
+      responses:
+        "200":
+          description: Merged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MergeOut"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  /api/v1/knowledge/{name}:
+    parameters:
+      - $ref: "#/components/parameters/ScopeName"
+    get:
+      summary: Get one knowledge scope
+      description: |
+        `global` is provisioned on demand, so it always resolves. A
+        `project-<ULID>` scope that has never been written to, and any unknown
+        named collection, is a 404 (`MEMORY_STORE_NOT_FOUND`).
+      operationId: getKnowledgeScope
+      tags: [knowledge]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScopeOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      summary: Update a scope's mutable config (partial merge)
+      description: |
+        **Merges** the supplied fields into the scope's existing config — the
+        body is read with `exclude_unset` + `exclude_none`, so an omitted field
+        and an explicit `null` both mean "leave it alone", and only the fields
+        you send change. The merged result is then re-validated as a whole, so a
+        patch that would make the config internally inconsistent (a
+        `default_mode` outside `retrieval_modes`, a `chunk_overlap` above half
+        the `chunk_size`) is refused with 422 and nothing is written.
+
+        Changing a retrieval or chunking field re-indexes the scope through the
+        kind's `on_update_config` hook. That is cheap and safe precisely because
+        the files on disk are the truth: the index is always rebuildable.
+        `auto_update_sources` is deliberately not a reindex trigger — toggling
+        it must not re-chunk.
+
+        `merged_identities` is system-managed (written by the merge flow) and
+        is not patchable.
+      operationId: updateKnowledgeScope
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/ActorHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KnowledgeConfigPatch"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScopeOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "422":
-          description: >
-            Fact rejected (`MEMORY_REJECTED`: empty / too_long) or schema-level
-            request validation failure (`CONFIG_INVALID`) — both carry the
-            standard error envelope.
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/knowledge/{name}/label:
+    parameters:
+      - $ref: "#/components/parameters/ScopeName"
+    patch:
+      summary: Set or clear a scope's display label
+      description: |
+        The label is UI-only metadata held outside the resource config, so
+        renaming what a scope is *called* never touches what it *is*. An empty
+        or whitespace-only label clears it, reverting to the derived name (the
+        project-dir basename for a project scope).
+      operationId: updateKnowledgeScopeLabel
+      tags: [knowledge]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScopeLabelPatch"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScopeOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/knowledge/{name}/metrics:
+    parameters:
+      - $ref: "#/components/parameters/ScopeName"
+    get:
+      summary: One scope's counts, indexed modes and on-disk size
+      description: |
+        The union of what the two pre-merge faces reported, for one scope. The
+        entry/document split is the `lane` discriminator surfaced as numbers.
+        `disk_bytes` walks the scope directory, which is why the list endpoint
+        omits it.
+      operationId: getKnowledgeScopeMetrics
+      tags: [knowledge]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScopeMetrics"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # --- entries (the `knowledge/` lane) --------------------------------------
+
+  /api/v1/knowledge/{name}/entries:
+    parameters:
+      - $ref: "#/components/parameters/ScopeName"
+    post:
+      summary: Write one entry into a scope
+      description: |
+        No LLM runs at write time: a write is a Markdown file under the scope's
+        `knowledge/inbox/`, plus an index row, plus an audit event. Shaping the
+        inbox into topic docs is the separate, explicit `organize` pass.
+
+        Writing to `global` or `project-<ULID>` provisions the scope if needed —
+        an agent that wants to record something should not have to ask
+        permission first. Writing to an unknown *named* collection is a 404.
+      operationId: addKnowledgeEntry
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/ActorHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntryCreate"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntryOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: |
+            Empty or over-long entry (`MEMORY_REJECTED` with
+            `details.reason` = `empty` | `too_long`), or schema validation
+            failure (`CONFIG_INVALID`). The schema cap is the hard ceiling
+            (32768); a scope configured with a smaller `max_entry_chars` is
+            enforced by the service, which is why the same 422 can come from
+            either layer.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
     get:
-      summary: List facts in the store
-      operationId: listFacts
-      tags: [facts]
+      summary: List a scope's entries
+      operationId: listKnowledgeEntries
+      tags: [knowledge]
       parameters:
         - in: query
           name: limit
@@ -180,88 +419,564 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/FactListOut"
-
-    delete:
-      summary: Clear every fact in the store (store Resource preserved)
-      operationId: clearFacts
-      tags: [facts]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [cleared]
-                properties:
-                  cleared: { type: integer }
-
-  /api/v1/memory_stores/{name}/facts/{fact_id}:
-    parameters:
-      - $ref: "#/components/parameters/StoreName"
-      - in: path
-        name: fact_id
-        required: true
-        schema: { type: string }
-
-    get:
-      summary: Get a fact (frontmatter + body)
-      operationId: getFact
-      tags: [facts]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/FactOut"
+                $ref: "#/components/schemas/EntryListOut"
         "404":
           $ref: "#/components/responses/NotFound"
 
+    delete:
+      summary: Clear every entry in a scope
+      description: |
+        Removes the scope's entries; the scope itself, its ingested documents
+        and its other lanes survive. Deleting the scope is a resource-level
+        operation (`DELETE /api/v1/resources/knowledge/{name}`).
+      operationId: clearKnowledgeEntries
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/ActorHeader"
+      responses:
+        "200":
+          description: Cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClearResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/knowledge/{name}/entries/{entry_id}:
+    parameters:
+      - $ref: "#/components/parameters/ScopeName"
+      - $ref: "#/components/parameters/EntryId"
+    get:
+      summary: Read one entry
+      operationId: getKnowledgeEntry
+      tags: [knowledge]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntryOut"
+        "404":
+          $ref: "#/components/responses/EntryNotFound"
+
     patch:
-      summary: Edit a fact's text (rewrites markdown, reindexes, regenerates MEMORY.md)
-      operationId: updateFact
-      tags: [facts]
+      summary: Rewrite one entry
+      description: |
+        `text` is required — an entry update replaces the body rather than
+        appending to it. `title` / `description` are optional; omitting them
+        leaves the frontmatter values as they were.
+      operationId: updateKnowledgeEntry
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/ActorHeader"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/FactUpdate"
+              $ref: "#/components/schemas/EntryUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntryOut"
+        "404":
+          $ref: "#/components/responses/EntryNotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+    delete:
+      summary: Delete one entry
+      operationId: deleteKnowledgeEntry
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/ActorHeader"
+      responses:
+        "204":
+          description: No Content
+        "404":
+          $ref: "#/components/responses/EntryNotFound"
+
+  # --- documents: async re-embed -------------------------------------------
+  #
+  # These two live on their own router, which `knowledge/__init__.py` includes
+  # BEFORE the main one, so the literal segments `status` and `reembed-batch`
+  # are matched before `/documents/{document_id}` can capture them as a
+  # document id. They are declared here, ahead of the `{document_id}` paths, to
+  # keep that precedence visible to a reader of the contract.
+
+  /api/v1/knowledge/{name}/documents/status:
+    parameters:
+      - $ref: "#/components/parameters/ScopeName"
+    get:
+      summary: In-flight re-embed state for a scope's documents
+      description: |
+        Only **in-flight** documents appear (`queued` / `running` / `error`). A
+        document absent from the list is either done or still pending an embed —
+        read the list endpoint's per-document `embed_status` for that.
+      operationId: getKnowledgeDocumentStatus
+      tags: [knowledge]
       responses:
         "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/FactOut"
+                $ref: "#/components/schemas/DocumentStatusResponse"
+
+  /api/v1/knowledge/{name}/documents/reembed-batch:
+    parameters:
+      - $ref: "#/components/parameters/ScopeName"
+    post:
+      summary: Enqueue re-embed of existing documents (async, 202)
+      description: |
+        The slow part of ingest is convert + chunk + embed. A document indexed
+        keyword-only because the embedding provider was unavailable is marked
+        pending, and this endpoint moves the retry of those EXISTING documents
+        off the request path: it returns 202 immediately and the work runs on
+        the shared async op runner.
+
+        Either name an explicit `document_ids` set, or send `all: true` to
+        re-embed every document still pending an embed. Already-embedded
+        documents are skipped. Poll `GET /{name}/documents/status` (and the
+        list's `embed_status`) for progress.
+      operationId: reembedKnowledgeDocuments
+      tags: [knowledge]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReembedBatchRequest"
+      responses:
+        "202":
+          description: Accepted — work enqueued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReembedBatchResponse"
         "404":
           $ref: "#/components/responses/NotFound"
-        "422":
-          description: Fact rejected (empty / too_long)
+
+  # --- documents: the `inbox/` lane ----------------------------------------
+
+  /api/v1/knowledge/{name}/documents:
+    parameters:
+      - $ref: "#/components/parameters/ScopeName"
+    post:
+      summary: Ingest an uploaded file into a scope (any format → Markdown)
+      description: |
+        Streams the uploaded bytes, detects the format, converts to Markdown via
+        the converter registry, cleans it, and writes `<scope>/inbox/<doc-id>.md`
+        (the truth) plus `<scope>/.raw/<doc-id>.<ext>` (provenance, hidden so
+        grep never matches the same content twice). The Markdown is then chunked
+        and indexed into FTS5, and embedded when the scope lists `vector` and an
+        embedding provider is available.
+
+        A new document gets a fresh ULID and `source_mode=converted`. A
+        re-upload is matched to an existing document by `original_filename`:
+        byte-identical content is an idempotent no-op; changed content under the
+        same filename updates the SAME document in place (same id, `inbox/` and
+        `.raw/` overwritten) when `replace=true`, and is otherwise refused as a
+        duplicate (409).
+
+        Uploading into `global` provisions it on demand. The absolute size
+        ceiling (100 MiB) is checked before the body is buffered, so an
+        oversized upload is rejected without being read into memory; the scope's
+        own `max_document_bytes` (which may be smaller) is enforced after.
+      operationId: ingestKnowledgeDocument
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/DocActorHeader"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                replace:
+                  type: boolean
+                  default: false
+                  description: |
+                    If true, a changed re-upload of a filename already in the
+                    scope updates that document in place. Byte-identical
+                    re-uploads are a no-op regardless.
+                source_path:
+                  type: [string, "null"]
+                  default: null
+                  description: |
+                    Absolute path of the external original, supplied only by
+                    trusted clients (CLI / native file picker) so
+                    `check-sources` can later re-hash it. The web surface merely
+                    forwards what the client sends and never auto-derives a
+                    server path; an untrusted upload leaves this unset.
+      responses:
+        "201":
+          description: Document ingested
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: |
+            Duplicate filename without `replace=true` (`INGEST_REJECTED` with
+            `details.reason = "duplicate"`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "413":
+          description: |
+            Upload exceeds the absolute ceiling or the scope's
+            `max_document_bytes` (`INGEST_REJECTED`, `details.reason = "too_large"`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "415":
+          description: |
+            Unsupported type, empty file, or empty after conversion
+            (`INGEST_REJECTED`, `details.reason` =
+            `unsupported_type` | `empty` | `scanned_pdf`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: Converter engine unavailable for this format (`ENGINE_UNAVAILABLE`).
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
+    get:
+      summary: List a scope's ingested documents
+      operationId: listKnowledgeDocuments
+      tags: [knowledge]
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+        - in: query
+          name: q
+          required: false
+          description: |
+            Optional case-insensitive title filter, applied server-side BEFORE
+            pagination, so `total` reflects the filtered count.
+          schema: { type: [string, "null"] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentListOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/knowledge/{name}/documents/{document_id}:
+    parameters:
+      - $ref: "#/components/parameters/ScopeName"
+      - $ref: "#/components/parameters/DocumentId"
+    get:
+      summary: Read a document's normalized Markdown
+      operationId: getKnowledgeDocument
+      tags: [knowledge]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentDetailOut"
+        "404":
+          $ref: "#/components/responses/DocumentNotFound"
+
+    put:
+      summary: Edit a document's Markdown (sets source_mode=edited, reindexes)
+      description: |
+        Replaces the Markdown body. The document's `source_mode` becomes
+        `edited`, which blocks re-conversion from the raw original until a new
+        source is uploaded — a hand edit is never silently clobbered. Runs the
+        single idempotent re-index routine (a no-op when the content hash is
+        unchanged).
+      operationId: editKnowledgeDocument
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/DocActorHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DocumentEditRequest"
+      responses:
+        "200":
+          description: Edited and reindexed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentOut"
+        "404":
+          $ref: "#/components/responses/DocumentNotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
     delete:
-      summary: Forget a fact (deletes markdown, removes index rows, regenerates MEMORY.md)
-      operationId: forgetFact
-      tags: [facts]
+      summary: Delete a document
+      operationId: deleteKnowledgeDocument
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/DocActorHeader"
       responses:
         "204":
           description: No Content
         "404":
+          $ref: "#/components/responses/DocumentNotFound"
+
+  /api/v1/knowledge/{name}/documents/{document_id}/reconvert:
+    parameters:
+      - $ref: "#/components/parameters/ScopeName"
+      - $ref: "#/components/parameters/DocumentId"
+    post:
+      summary: Re-run conversion from the stored raw original
+      description: |
+        Re-converts the document from its original upload in `<scope>/.raw/`,
+        regenerating the Markdown and reindexing. Refused with
+        `RECONVERSION_BLOCKED` (409) when `source_mode` is `edited` — upload a
+        new source file first to reset it to `converted`.
+      operationId: reconvertKnowledgeDocument
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/DocActorHeader"
+      responses:
+        "200":
+          description: Re-converted and reindexed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentOut"
+        "404":
+          $ref: "#/components/responses/DocumentNotFound"
+        "409":
+          $ref: "#/components/responses/ReconversionBlocked"
+        "503":
+          description: Converter engine unavailable for this format (`ENGINE_UNAVAILABLE`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/knowledge/{name}/documents/{document_id}/update-source:
+    parameters:
+      - $ref: "#/components/parameters/ScopeName"
+      - $ref: "#/components/parameters/DocumentId"
+    post:
+      summary: Re-ingest a document from its tracked external original
+      description: |
+        Re-reads the external original at the document's stored `source_path`
+        and replays the `replace=true` ingest path, so the stable ULID is
+        preserved and the corpus is re-chunked and re-indexed in place. Refused
+        with `RECONVERSION_BLOCKED` (409) when `source_mode` is `edited`; a
+        document with no `source_path`, or whose source file has vanished, is
+        rejected with `INGEST_REJECTED` (400).
+      operationId: updateKnowledgeDocumentSource
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/DocActorHeader"
+      responses:
+        "200":
+          description: Re-ingested from source and reindexed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/DocumentNotFound"
+        "409":
+          $ref: "#/components/responses/ReconversionBlocked"
+
+  # --- maintenance ----------------------------------------------------------
+
+  /api/v1/knowledge/{name}/reindex:
+    parameters:
+      - $ref: "#/components/parameters/ScopeName"
+    post:
+      summary: Rescan the scope's ingested files and rebuild the index from disk
+      description: |
+        Rescans `<scope>/inbox/` for deltas and runs the single idempotent
+        re-index routine per file, reconstructing the SQLite index state from
+        the Markdown. Re-embeds when the scope lists `vector` and a provider is
+        available; documents that end up keyword-only are counted in
+        `documents_degraded` and retried on the next pass.
+      operationId: reindexKnowledgeScope
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/DocActorHeader"
+      responses:
+        "200":
+          description: Reindex complete
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReindexResult"
+        "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/memory_stores/{name}/recall:
+  /api/v1/knowledge/{name}/check-sources:
     parameters:
-      - $ref: "#/components/parameters/StoreName"
+      - $ref: "#/components/parameters/ScopeName"
     post:
-      summary: Recall facts (lazy reindex-on-read, then search)
-      operationId: recall
-      tags: [recall]
+      summary: Detect whether path-tracked documents' external originals changed
+      description: |
+        For each document carrying a `source_path`, re-hashes the external
+        original (streamed) against the stored `source_sha256` and classifies it
+        `unchanged` / `changed` / `missing`. Detection alone changes nothing and
+        audits nothing.
+
+        When the scope's `auto_update_sources` is true, a changed document whose
+        `source_mode` is not `edited` is refreshed in place and reported
+        `updated`; a changed hand-edited document is left alone and reported
+        `edited`. On-demand only — there is no filesystem watcher.
+      operationId: checkKnowledgeSources
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/DocActorHeader"
+      responses:
+        "200":
+          description: Source-status report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SourceCheckResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # --- retrieval ------------------------------------------------------------
+
+  /api/v1/knowledge/{name}/search:
+    parameters:
+      - $ref: "#/components/parameters/ScopeName"
+    post:
+      summary: Passage search over a scope (one query → one answer)
+      description: |
+        Relevance search returning passages. The caller does NOT choose a
+        retrieval mode (ADR-034): the engine resolves the scope's `default_mode`
+        internally — `hybrid` (reciprocal rank fusion of keyword + vector, per
+        ADR-012) when the scope lists `vector`, else `keyword`. When the
+        resolved strategy needs vectors and no embedding provider is available,
+        it degrades to `keyword`; that is never an error and is deliberately not
+        reported as a per-query flag, because a degraded index is a state of the
+        scope (`documents_degraded`, `embed_status`) rather than a property of
+        one question.
+
+        `grep` is a separate capability with its own endpoint.
+      operationId: searchKnowledge
+      tags: [knowledge]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "503":
+          description: Index engine unavailable (`ENGINE_UNAVAILABLE`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/knowledge/{name}/grep:
+    parameters:
+      - $ref: "#/components/parameters/ScopeName"
+    post:
+      summary: Literal / regex grep over every Markdown file in a scope
+      description: |
+        Exact or regex match across the scope's lanes. No index, no embedding,
+        so it works on a scope that has never been indexed. `<scope>/.raw/` is
+        hidden and therefore skipped, which is what keeps an ingested document
+        from matching twice (once as Markdown, once as its original).
+
+        Bounded by `max_matches` and a server-side timeout; a scan cut short by
+        either returns `truncated=true` (a timed-out grep returns no hits with
+        `truncated=true`).
+      operationId: grepKnowledge
+      tags: [knowledge]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GrepRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrepResponse"
+        "400":
+          description: Invalid regex (`GREP_PATTERN_INVALID`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "503":
+          description: ripgrep binary unavailable (`ENGINE_UNAVAILABLE`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/knowledge/{name}/recall:
+    parameters:
+      - $ref: "#/components/parameters/ScopeName"
+    post:
+      summary: Recall entries from a scope (one query → one answer)
+      description: |
+        The entry-oriented read: same engine as `/search`, same
+        mode-stays-internal rule (ADR-034), but returning whole recalled items
+        rather than passages, and able to widen past the addressed scope.
+
+        `scope` in the body says how wide to look: `project` = the addressed
+        scope only, `global` = the global scope only, `both` (default) = the two
+        merged by reciprocal rank fusion — so an agent working in a project
+        still sees the knowledge that follows the user everywhere.
+      operationId: recallKnowledge
+      tags: [knowledge]
       requestBody:
         required: true
         content:
@@ -276,247 +991,167 @@ paths:
               schema:
                 $ref: "#/components/schemas/RecallResponse"
         "404":
-          description: >
-            Memory store not found (`MEMORY_STORE_NOT_FOUND`) — e.g. a
-            never-provisioned project store.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
+          $ref: "#/components/responses/NotFound"
         "422":
-          description: >
-            Schema-level request validation failure (`CONFIG_INVALID`
-            envelope).
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
+          $ref: "#/components/responses/ValidationFailed"
 
-  /api/v1/memory_stores/{name}/organize:
+  # --- organizing passes ----------------------------------------------------
+
+  /api/v1/knowledge/{name}/organize:
     parameters:
-      - $ref: "#/components/parameters/StoreName"
+      - $ref: "#/components/parameters/ScopeName"
     post:
-      summary: >
-        Organize the store: drain `knowledge/inbox/` into coherent topic
-        documents using Coffer's internal LLM (explicit trigger; no auto-fire).
-      operationId: organizeMemoryStore
-      tags: [organize]
+      summary: Drain the inbox into topic docs and the rules lane
+      description: |
+        Explicit trigger — nothing auto-fires, because reshaping what someone
+        wrote is not something to do behind their back. Each `knowledge/inbox/`
+        item is merged into a topic doc or, when it reads as a behavioural rule,
+        appended to `rules/`. An item the model fails on stays in the inbox
+        (counted as `skipped`) and is never lost.
+      operationId: organizeKnowledge
+      tags: [knowledge]
       responses:
         "200":
-          description: >
-            OK. Reports counts and the outcome status. `status="no_model"` (no
-            internal model configured) and `status="empty"` (nothing to organize)
-            are clean no-ops, not errors.
+          description: Organize pass complete
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/OrganizeResponse"
         "404":
-          description: >
-            Memory store not found (`MEMORY_STORE_NOT_FOUND`).
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
+          $ref: "#/components/responses/NotFound"
 
-  /api/v1/memory_stores/{name}/reorg:
+  /api/v1/knowledge/{name}/reorg:
     parameters:
-      - $ref: "#/components/parameters/StoreName"
+      - $ref: "#/components/parameters/ScopeName"
     post:
-      summary: >
-        Reorganize the store: run Coffer's internal agentic loop over the
-        existing topic documents to consolidate duplicates and split over-long
-        ones (explicit trigger; no auto-fire). Non-destructive — superseded or
-        overwritten content is archived to the recoverable `superseded/`
-        tombstone, never hard-deleted.
-      operationId: reorgMemoryStore
-      tags: [organize]
+      summary: Agentic reorg pass over the scope's topic docs
+      description: |
+        Explicit trigger, like `organize`. Consolidates and rewrites topic
+        documents; retired ones move to the recoverable `superseded/`
+        tombstone rather than being deleted.
+      operationId: reorgKnowledge
+      tags: [knowledge]
       responses:
         "200":
-          description: >
-            OK. Reports counts and the outcome status. `status="no_model"` (no
-            internal model configured) and `status="empty"` (no topic documents
-            to reorganize) are clean no-ops, not errors.
+          description: Reorg pass complete
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReorgResponse"
         "404":
-          description: >
-            Memory store not found (`MEMORY_STORE_NOT_FOUND`).
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
+          $ref: "#/components/responses/NotFound"
 
-  /api/v1/memory_stores/merge_scan:
-    post:
-      summary: >
-        Scan every pair of per-project stores for same-project duplicates
-        (FR-056): pairs provably equal by normalized origin remote are proposed
-        deterministically; the rest are judged by Coffer's internal engine.
-        Read-only — the scan never mutates a store.
-      operationId: memoryStoreMergeScan
-      tags: [organize]
-      responses:
-        "200":
-          description: >
-            OK. `engine="no_model"` (no internal engine configured) still
-            carries the deterministic proposals and is not an error.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MergeScanResponse"
+  # --- the other lanes ------------------------------------------------------
 
-  /api/v1/memory_stores/merge:
-    post:
-      summary: >
-        Merge one per-project store into another (FR-057): additive lane-file
-        merge (collisions keep both copies), label/root carry-over, no-resurrection identity alias (FR-058),
-        force-reconcile, source retirement, audit. Optionally runs the FR-033
-        reorg pass on the target afterwards (FR-059).
-      operationId: memoryStoreMerge
-      tags: [organize]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/MergeRequest"
-      responses:
-        "200":
-          description: Merged. Reports what moved and the post-merge organize outcome.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MergeResponse"
-        "400":
-          description: >
-            Invalid pair — identical names, the global store, or a name that is
-            not a legal project-store name (`MEMORY_STORE_MERGE_INVALID`).
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "404":
-          description: >
-            Source or target store not found (`MEMORY_STORE_NOT_FOUND`).
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-
-  /api/v1/memory_stores/{name}/rules:
+  /api/v1/knowledge/{name}/rules:
     parameters:
-      - $ref: "#/components/parameters/StoreName"
+      - $ref: "#/components/parameters/ScopeName"
     get:
-      summary: >
-        Return the store's procedural rules text — every `rules/*.md` file
-        concatenated (`rules.md` plus the per-topic `<slug>.md` files the split
-        produces) — the behavioural rules the organizer classified into the
-        rules lane, read-only. This is
-        the surface a later session-start injection reads; rules are NOT returned
-        by `recall` (the lane sits outside the knowledge recall glob).
-      operationId: getMemoryStoreRules
-      tags: [rules]
+      summary: Read the scope's rules lane
+      description: |
+        Returns the `rules/` text, or `text: null` when the scope has no rules
+        yet. An empty scope is 200 with null content, never a 404 — the lane is
+        a view of the scope, not a resource of its own.
+      operationId: getKnowledgeRules
+      tags: [knowledge]
       responses:
         "200":
-          description: >
-            OK. Returns the rules text, or a null body when the store has no
-            rules yet (never an error).
+          description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RulesResponse"
+                $ref: "#/components/schemas/RulesOut"
         "404":
-          description: >
-            Memory store not found (`MEMORY_STORE_NOT_FOUND`).
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
+          $ref: "#/components/responses/NotFound"
+
     delete:
-      summary: >
-        Delete the whole `rules/` lane (every `rules/*.md` file) and append a
-        changelog line. The rules lane is not indexed for recall.
-      operationId: deleteMemoryStoreRules
-      tags: [rules]
+      summary: Remove the whole rules lane
+      description: The lane is not indexed, so the delete is a file removal only.
+      operationId: deleteKnowledgeRules
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/ActorHeader"
       responses:
         "204":
           description: No Content
         "404":
-          $ref: "#/components/responses/NotFound"
+          $ref: "#/components/responses/LaneNotFound"
 
-  /api/v1/memory_stores/{name}/handoff:
+  /api/v1/knowledge/{name}/handoff:
     parameters:
-      - $ref: "#/components/parameters/StoreName"
+      - $ref: "#/components/parameters/ScopeName"
     get:
-      summary: >
-        List the store's handoff lane — one working-state scene per branch
-        (`handoff/<branch-slug>.md`), each carrying its branch + last-updated
-        timestamp. Read-only; the lane sits outside the knowledge recall glob.
-      operationId: getMemoryStoreHandoff
-      tags: [handoff]
+      summary: List the scope's per-branch handoff scenes
+      description: |
+        One `handoff/<branch-slug>.md` scene per git branch — the working state
+        an agent left behind. Read-only here; scenes are written through the
+        `coffer__set_handoff` built-in tool and pulled on demand by
+        `coffer__resume`, never injected wholesale at session start.
+      operationId: getKnowledgeHandoff
+      tags: [knowledge]
       responses:
         "200":
-          description: >
-            OK. One scene per branch, or an empty list when the store has no
-            handoff scenes yet (never an error).
+          description: OK
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/HandoffOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
-  /api/v1/memory_stores/{name}/handoff/{branch}:
+  /api/v1/knowledge/{name}/handoff/{branch}:
     parameters:
-      - $ref: "#/components/parameters/StoreName"
-      - in: path
-        name: branch
-        required: true
-        description: Branch name (slugified to the on-disk `handoff/<branch-slug>.md`).
-        schema: { type: string }
+      - $ref: "#/components/parameters/ScopeName"
+      - $ref: "#/components/parameters/Branch"
     delete:
-      summary: >
-        Delete one `handoff/<branch-slug>.md` scene and append a changelog line.
-        The handoff lane is not indexed for recall.
-      operationId: deleteMemoryStoreHandoffBranch
-      tags: [handoff]
+      summary: Delete one branch's handoff scene
+      description: The lane is not indexed, so the delete is a file removal only.
+      operationId: deleteKnowledgeHandoffBranch
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/ActorHeader"
       responses:
         "204":
           description: No Content
         "404":
-          $ref: "#/components/responses/NotFound"
+          $ref: "#/components/responses/LaneNotFound"
 
-  /api/v1/memory_stores/{name}/consolidation-log:
+  /api/v1/knowledge/{name}/consolidation-log:
     parameters:
-      - $ref: "#/components/parameters/StoreName"
+      - $ref: "#/components/parameters/ScopeName"
     get:
-      summary: >
-        Return the store-root `consolidation-log.md` changelog (the append-only
-        record of organize/reorg passes), read-only. The text is null when the
-        store has no changelog yet.
-      operationId: getMemoryStoreConsolidationLog
-      tags: [consolidation]
+      summary: Read the scope's consolidation changelog
+      description: |
+        The scope-root `consolidation-log.md` — what the organizing passes did.
+        `text` is null when the scope has no changelog yet, but `path` and
+        `folder_path` always point at where it would live so the UI can still
+        offer reveal-in-file-manager.
+      operationId: getKnowledgeConsolidationLog
+      tags: [knowledge]
       responses:
         "200":
-          description: >
-            OK. Returns the changelog text (or null when absent) plus its path
-            so the UI can reveal it in a file manager (never an error).
+          description: OK
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ConsolidationLogOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
     delete:
-      summary: >
-        Delete the store-root `consolidation-log.md`. This does NOT self-append a
-        changelog line (the file being removed is the changelog).
-      operationId: deleteMemoryStoreConsolidationLog
-      tags: [consolidation]
+      summary: Delete the consolidation changelog
+      description: |
+        Removes the scope-root `consolidation-log.md`. Deliberately does not
+        append its own removal to the changelog it just deleted.
+      operationId: deleteKnowledgeConsolidationLog
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/ActorHeader"
       responses:
         "204":
           description: No Content
         "404":
-          $ref: "#/components/responses/NotFound"
+          $ref: "#/components/responses/LaneNotFound"
 
 components:
   securitySchemes:
@@ -526,164 +1161,358 @@ components:
       name: X-Coffer-Token
 
   parameters:
-    StoreName:
+    ScopeName:
       in: path
       name: name
       required: true
-      description: Memory store name (a scope store; e.g. the global store or a project store).
+      description: |
+        The **scope name**, which is also the resource name and the directory
+        name under `~/.coffer/knowledge/`. `global`, `project-<ULID>`, or a
+        named collection. The scope's kind is derived from this name, never
+        stored separately.
+      schema: { type: string }
+      examples:
+        global: { value: global }
+        project: { value: project-01J0000000000000000000000A }
+        named: { value: design-notes }
+    EntryId:
+      in: path
+      name: entry_id
+      required: true
+      description: The entry's ULID.
+      schema: { type: string }
+    DocumentId:
+      in: path
+      name: document_id
+      required: true
+      description: The document's stable ULID, minted at first ingest.
+      schema: { type: string }
+    Branch:
+      in: path
+      name: branch
+      required: true
+      description: Git branch name; slugified server-side to find `handoff/<slug>.md`.
+      schema: { type: string }
+    ActorHeader:
+      in: header
+      name: X-Coffer-Actor
+      required: false
+      description: |
+        Who is writing, for the audit trail. `agent` is recorded as such;
+        anything else (including an absent header) is recorded as `user`.
+      schema:
+        type: string
+        enum: [agent, user]
+    DocActorHeader:
+      in: header
+      name: X-Coffer-Actor
+      required: false
+      description: |
+        Who is writing, for the audit trail. Document routes accept a free-form
+        actor string rather than the entry routes' two-value enum; an absent
+        header is recorded as `api`.
       schema: { type: string }
 
   responses:
     BadRequest:
-      description: Validation failed
+      description: Validation or precondition failure (`INGEST_REJECTED`, `SCOPE_UNRESOLVED`, …)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ValidationFailed:
+      description: |
+        Request schema validation failed (`CONFIG_INVALID`), or the config as
+        merged is internally inconsistent.
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
     NotFound:
-      description: Resource not found
+      description: |
+        Scope not found (`MEMORY_STORE_NOT_FOUND`). Reachable for a
+        `project-<ULID>` scope never written to and for any unknown named
+        collection; `global` auto-provisions and so does not 404.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    EntryNotFound:
+      description: Scope or entry not found (`MEMORY_STORE_NOT_FOUND` / `MEMORY_NOT_FOUND`)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    DocumentNotFound:
+      description: Scope or document not found (`MEMORY_STORE_NOT_FOUND` / `DOCUMENT_NOT_FOUND`)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    LaneNotFound:
+      description: The lane file does not exist (`MEMORY_NOT_FOUND`)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    AlreadyExists:
+      description: A knowledge scope with the same name already exists (`RESOURCE_ALREADY_EXISTS`)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ReconversionBlocked:
+      description: |
+        The document's `source_mode` is `edited`; re-conversion is refused
+        (`RECONVERSION_BLOCKED`) so a hand edit is never clobbered.
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
 
   schemas:
-    Scope:
+    ScopeKind:
       type: string
-      enum: [global, project]
+      enum: [global, project, named]
       description: |
-        global → project_id = WORKSPACE_GLOBAL_PROJECT_ID sentinel
-        (00000000000000000000000000); project → project_id = project ULID.
+        Which of the three a scope is, derived from its name: `global` and
+        `project` auto-provision on first use; `named` does not, because a
+        collection exists only because someone decided it should.
 
     RetrievalMode:
       type: string
-      description: >
-        Retrieval mode. `hybrid` fuses `keyword` + `vector` by reciprocal rank
-        fusion (ADR-012); like `vector` it degrades to keyword-only (flagged)
-        when no embedding provider is available. Shared with the KB face.
       enum: [grep, keyword, vector, hybrid]
+      description: |
+        A retrieval strategy the substrate supports. `hybrid` fuses `keyword`
+        and `vector` by reciprocal rank fusion (ADR-012); like `vector` it
+        degrades to keyword-only when no embedding provider is available. A
+        scope opts into semantic search by listing `vector` (or `hybrid`) here —
+        that listing IS the opt-in, which is why there are no per-scope
+        embedding settings.
 
-    MemoryStoreConfig:
+    KnowledgeConfig:
       type: object
-      required:
-        [retrieval_modes, default_mode, embedding_dimensions, max_fact_chars]
+      description: |
+        Per-scope knowledge settings — the union of what the two pre-merge
+        faces actually used: the write bound from the memory face, the ingestion
+        parameters from the knowledge-base face, and retrieval settings that
+        were already identical on both sides.
+
+        **There are no embedding fields.** Both faces carried their own and by
+        the time they were merged neither was read. Embedding resolves through
+        the installation-wide config; the dead fields were dropped rather than
+        carried across.
+
+        Changing a retrieval or chunking field re-indexes the scope — safe
+        because the files on disk are the truth and the index is always
+        rebuildable.
+
+        Every field has a default, so none is required on input (`ScopeCreate`
+        may omit `config` entirely). On output every field is always present:
+        the stored config is the fully-defaulted model.
       properties:
         retrieval_modes:
           type: array
           items: { $ref: "#/components/schemas/RetrievalMode" }
           default: [grep, keyword]
+          description: |
+            The modes this scope indexes for. Duplicates are collapsed and at
+            least one mode is required. Listing `vector` also adds `hybrid`
+            (fusion becomes possible, so it is offered), and makes `hybrid` the
+            `default_mode` unless one was set explicitly.
         default_mode:
-          $ref: "#/components/schemas/RetrievalMode"
-        embedding_provider: { type: string, nullable: true }
-        embedding_model: { type: string, nullable: true, example: bge-m3 }
-        embedding_base_url: { type: string, nullable: true }
-        embedding_credential_ref: { type: string, nullable: true }
-        embedding_dimensions:
-          type: integer
-          minimum: 1
-          maximum: 8192
-          default: 768
-          description: Width of the per-store vector table (vector mode only).
-        max_fact_chars:
+          allOf:
+            - $ref: "#/components/schemas/RetrievalMode"
+          default: keyword
+          description: |
+            The strategy `/search` and `/recall` resolve internally. Must be one
+            of `retrieval_modes`. Never accepted as a request parameter
+            (ADR-034).
+        max_entry_chars:
           type: integer
           minimum: 64
           maximum: 32768
           default: 8192
+          description: |
+            Bound on one written entry. The per-scope value bounds ordinary
+            agent writes; the hard ceiling (32768) is what a trusted bulk import
+            of the user's own notes may reach, so a long note is never silently
+            truncated.
+        chunk_size:
+          type: integer
+          minimum: 64
+          maximum: 2048
+          default: 512
+        chunk_overlap:
+          type: integer
+          minimum: 0
+          default: 64
+          description: |
+            Must be at most half of `chunk_size`; there is no independent upper
+            bound, because the meaningful constraint is the ratio.
+        max_document_bytes:
+          type: integer
+          minimum: 1024
+          maximum: 104857600
+          default: 26214400
+          description: |
+            Per-scope ingest ceiling. The surface additionally refuses anything
+            over the absolute 100 MiB bound before buffering the body.
+        auto_update_sources:
+          type: boolean
+          default: false
+          description: |
+            When true, `check-sources` refreshes documents whose tracked
+            external original changed, skipping hand-edited ones. Deliberately
+            NOT a reindex-triggering field — toggling it must not re-chunk.
+        merged_identities:
+          type: array
+          items: { type: string }
+          default: []
+          description: |
+            Project ids merged INTO this scope. System-managed, written by the
+            merge flow and never user-set: a resolve whose computed identity is
+            listed here — and whose own scope no longer exists — lands here
+            instead of provisioning an empty duplicate.
 
-    MemoryStoreConfigPatch:
+    KnowledgeConfigPatch:
       type: object
-      description: Only mutable fields. All fields optional.
+      description: |
+        The mutable config fields, all optional. Applied as a **merge**: an
+        omitted field and an explicit `null` both leave the stored value alone,
+        and only what you send changes. The merged result is re-validated as a
+        whole before it is written.
+
+        `merged_identities` is absent by design — it is system-managed.
       properties:
         retrieval_modes:
-          type: array
+          type: [array, "null"]
           items: { $ref: "#/components/schemas/RetrievalMode" }
         default_mode:
-          $ref: "#/components/schemas/RetrievalMode"
-        embedding_provider: { type: string, nullable: true }
-        embedding_model: { type: string, nullable: true }
-        embedding_base_url: { type: string, nullable: true }
-        embedding_credential_ref: { type: string, nullable: true }
-        embedding_dimensions: { type: integer, minimum: 1, maximum: 8192 }
-        max_fact_chars: { type: integer, minimum: 64, maximum: 32768 }
+          oneOf:
+            - $ref: "#/components/schemas/RetrievalMode"
+            - type: "null"
+        max_entry_chars: { type: [integer, "null"], minimum: 64, maximum: 32768 }
+        chunk_size: { type: [integer, "null"], minimum: 64, maximum: 2048 }
+        chunk_overlap: { type: [integer, "null"], minimum: 0 }
+        max_document_bytes: { type: [integer, "null"], minimum: 1024, maximum: 104857600 }
+        auto_update_sources: { type: [boolean, "null"] }
 
-    MemoryStoreLabelPatch:
+    ScopeLabelPatch:
       type: object
-      description: >-
-        Set or clear a store's display label (FR-017c). An empty or
-        whitespace-only label clears it, reverting to the derived / fallback name.
+      description: |
+        Set or clear a scope's display label. An empty or whitespace-only label
+        clears it, reverting to the derived / fallback name.
       properties:
         label:
-          type: string
-          nullable: true
+          type: [string, "null"]
           maxLength: 200
 
-    MemoryStoreOut:
+    ScopeCreate:
       type: object
-      required:
-        [
-          ref,
-          name,
-          kind,
-          scope,
-          project_id,
-          store_dir,
-          config,
-          enabled,
-          created_at,
-          updated_at,
-        ]
+      description: |
+        Create a NAMED collection. `global` and `project-<ULID>` are rejected:
+        they are provisioned on first use, and creating one by hand would let a
+        typo masquerade as an auto-scope. Names that would traverse out of the
+        knowledge root are rejected too.
+      required: [name]
       properties:
-        ref: { type: string }
-        kind: { type: string, example: memory }
+        name:
+          type: string
+          description: |
+            The collection's name, which becomes both the resource name and the
+            directory name. Not `global`, not `project-`-prefixed, not dot-only,
+            and free of `/`, `\` and `..`.
+          examples: [design-notes]
+        description: { type: [string, "null"] }
+        config:
+          $ref: "#/components/schemas/KnowledgeConfig"
+
+    ScopeOut:
+      type: object
+      description: |
+        One knowledge scope, whatever kind of material it holds. The single
+        model replaces the two pre-merge ones: a scope is a scope whether it
+        holds entries an agent wrote, documents someone ingested, or both, so
+        the wire stops asking the caller which of the two it is looking at.
+      required: [ref, kind, name, scope, project_id, scope_dir, config, enabled, created_at, updated_at]
+      properties:
+        ref: { type: string, examples: ["knowledge:design-notes"] }
+        kind: { type: string, const: knowledge }
         name: { type: string }
-        scope: { $ref: "#/components/schemas/Scope" }
+        scope: { $ref: "#/components/schemas/ScopeKind" }
         project_id:
           type: string
-          description: WORKSPACE_GLOBAL sentinel or project ULID.
+          description: |
+            The project ULID for a project scope, the installation-global
+            sentinel (`00000000000000000000000000`) for `global`, and the
+            collection's own name for a named one — whatever keys this scope's
+            rows.
         project_root:
-          type: string
-          nullable: true
+          type: [string, "null"]
+          default: null
           description: |
-            Absolute git-root the project store was provisioned from. Null for
-            the global store (and for project stores provisioned before the root
-            was tracked).
+            Absolute git root a project scope was provisioned from. Null for
+            `global`, for named collections, and for project scopes provisioned
+            before the root was tracked.
         label:
-          type: string
-          nullable: true
+          type: [string, "null"]
+          default: null
           description: |
-            User-set display label (FR-017c). When present it is the store's
-            readable name in the UI, taking precedence over the derived
-            project-dir basename. Null when the user has not named the store.
-        store_dir:
+            User-set display label. When present it is the scope's readable name
+            in the UI, taking precedence over the derived project-dir basename.
+        scope_dir:
           type: string
-          description: >-
-            Absolute on-disk directory holding the store's per-fact markdown
-            files. The in-app viewer is read-only; this backs
-            reveal-in-file-manager for the whole store.
-        description: { type: string, nullable: true }
-        config:
-          $ref: "#/components/schemas/MemoryStoreConfig"
+          description: |
+            Absolute on-disk directory holding the scope's Markdown
+            (`~/.coffer/knowledge/<scope>/`). The in-app viewer is read-only;
+            this backs reveal-in-file-manager for the whole scope.
+        description: { type: [string, "null"], default: null }
+        config: { $ref: "#/components/schemas/KnowledgeConfig" }
         enabled: { type: boolean }
+        entry_count:
+          type: integer
+          default: 0
+          description: Rows in the `knowledge` lane — entries an agent or person wrote.
+        document_count:
+          type: integer
+          default: 0
+          description: Rows in the `inbox` lane — documents someone ingested.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
-    MemoryStoreListOut:
+    ScopeListOut:
       type: object
-      required: [memory_stores]
+      required: [scopes]
       properties:
-        memory_stores:
+        scopes:
           type: array
-          items:
-            $ref: "#/components/schemas/MemoryStoreOut"
+          items: { $ref: "#/components/schemas/ScopeOut" }
 
-    MemoryStoreMetrics:
+    ScopeMetrics:
       type: object
-      required: [fact_count, disk_bytes]
+      description: The union of what the two pre-merge faces reported for one scope.
+      required: [entry_count, document_count, chunk_count, indexed_modes, disk_bytes]
       properties:
-        fact_count: { type: integer }
+        entry_count: { type: integer }
+        document_count: { type: integer }
+        chunk_count: { type: integer }
+        documents_degraded:
+          type: integer
+          default: 0
+          description: |
+            Documents indexed keyword-only because the embedding provider was
+            unavailable (the embed is retried on the next reconcile). Surfaced
+            from the persisted pending flag, so it reflects a degraded embed
+            observed during any read — not only an explicit `/reindex`.
+        indexed_modes:
+          type: array
+          items: { $ref: "#/components/schemas/RetrievalMode" }
         disk_bytes: { type: integer }
 
-    FactCreate:
+    # --- entries -------------------------------------------------------------
+
+    EntryCreate:
       type: object
       required: [text]
       properties:
@@ -691,74 +1520,71 @@ components:
           type: string
           minLength: 1
           maxLength: 32768
-          description: The fact (markdown body).
+          description: |
+            The entry body (Markdown). The schema cap is the hard ceiling; a
+            scope with a smaller `max_entry_chars` is enforced by the service,
+            which answers `MEMORY_REJECTED { reason: "too_long" }`.
         title:
-          {
-            type: string,
-            nullable: true,
-            description: Frontmatter title; derived from text if omitted.,
-          }
+          type: [string, "null"]
+          default: null
+          description: Frontmatter title; derived from the text when omitted.
         description:
-          {
-            type: string,
-            nullable: true,
-            description: Frontmatter one-line description.,
-          }
+          type: [string, "null"]
+          default: null
+          description: Frontmatter one-line description.
 
-    FactUpdate:
+    EntryUpdate:
       type: object
+      description: |
+        Replaces the entry body. `text` is required — an update rewrites rather
+        than appends; omitted `title` / `description` keep their stored values.
       required: [text]
       properties:
         text: { type: string, minLength: 1, maxLength: 32768 }
-        title: { type: string, nullable: true }
-        description: { type: string, nullable: true }
+        title: { type: [string, "null"], default: null }
+        description: { type: [string, "null"], default: null }
 
-    FactOut:
+    EntryOut:
       type: object
-      required:
-        [
-          id,
-          store_name,
-          scope,
-          title,
-          description,
-          text,
-          actor,
-          path,
-          folder_path,
-          created_at,
-          updated_at,
-        ]
+      required: [id, scope_name, scope, title, description, text, actor, path, folder_path, created_at, updated_at]
       properties:
-        id: { type: string, description: Document id (ULID). }
-        store_name: { type: string }
-        scope: { $ref: "#/components/schemas/Scope" }
+        id: { type: string, description: The entry's ULID. }
+        scope_name: { type: string }
+        scope: { $ref: "#/components/schemas/ScopeKind" }
         title: { type: string }
         description: { type: string }
         text: { type: string, description: Markdown body. }
         actor: { type: string, enum: [agent, user] }
-        origin_session_id: { type: string, nullable: true }
+        origin_session_id: { type: [string, "null"], default: null }
         path:
           type: string
-          description: >-
-            Absolute canonical .md path of the fact file (source of truth). The
-            in-app viewer is read-only; this backs open-in-external-editor /
-            reveal-in-file-manager.
+          description: |
+            Absolute canonical `.md` path of the entry file (the source of
+            truth). Freshly-written entries sit under the scope's
+            `knowledge/inbox/` until `organize` folds them into a topic doc, so
+            this path can change across an organize pass.
         folder_path:
           type: string
-          description: Absolute path of the fact file's containing folder (the store dir).
+          description: Absolute path of the entry file's containing folder.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
-    FactListOut:
+    EntryListOut:
       type: object
-      required: [facts, total]
+      required: [entries, total]
       properties:
-        facts:
+        entries:
           type: array
-          items:
-            $ref: "#/components/schemas/FactOut"
+          items: { $ref: "#/components/schemas/EntryOut" }
         total: { type: integer }
+
+    ClearResponse:
+      type: object
+      required: [cleared]
+      properties:
+        cleared: { type: integer, description: Entries removed. }
+
+    # --- recall --------------------------------------------------------------
 
     RecallRequest:
       type: object
@@ -769,10 +1595,10 @@ components:
           type: string
           enum: [global, project, both]
           default: both
-          description: >
-            `project` = the named store only, `global` = the global store
-            only, `both` (default) = the named store + the global store
-            merged by reciprocal rank fusion.
+          description: |
+            How wide to look: `project` = the addressed scope only, `global` =
+            the global scope only, `both` (default) = the two merged by
+            reciprocal rank fusion.
         top_k:
           type: integer
           minimum: 1
@@ -788,205 +1614,426 @@ components:
         score: { type: number, format: float }
         source:
           type: string
-          description: Scope + canonical path of the source fact file.
+          description: Scope plus the canonical path of the source file.
         time: { type: string, format: date-time }
 
     RecallResponse:
       type: object
+      description: |
+        Hits only. The resolved mode and any vector→keyword degradation are
+        deliberately not on the response: mode is internal (ADR-034), and
+        degradation is scope state reported through metrics.
       required: [hits]
       properties:
         hits:
           type: array
-          items:
-            $ref: "#/components/schemas/RecallHit"
+          items: { $ref: "#/components/schemas/RecallHit" }
 
-    StoreEvidence:
+    # --- documents -----------------------------------------------------------
+
+    DocumentOut:
       type: object
+      description: |
+        One ingested document. The stored `lane` discriminator is not on the
+        wire — every route that returns this shape is already a document route,
+        so the lane is implied.
+      required: [id, kind, resource_name, title, source_mode, content_sha256, project_id, metadata, path, folder_path, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          description: |
+            Stable ULID minted at first ingest, decoupled from content — a
+            re-upload of the same filename keeps it, so links and chunk
+            references survive an update. The source sha256 is provenance, in
+            `metadata`.
+        kind: { type: string, const: knowledge }
+        resource_name:
+          type: string
+          description: The owning scope's name.
+        title: { type: string }
+        description: { type: [string, "null"], default: null }
+        source_mode:
+          type: string
+          enum: [converted, edited]
+          description: |
+            `converted` = still derived from the raw original, so re-conversion
+            is allowed; `edited` = hand-edited, so re-conversion and
+            source-refresh are refused until a new source is uploaded.
+        content_sha256: { type: string }
+        project_id:
+          type: string
+          description: |
+            The owning scope's project id — a project ULID, the global sentinel,
+            or a named collection's own name. Surfaced so the UI can group
+            documents.
+        chunk_count: { type: integer, default: 0 }
+        metadata:
+          type: object
+          description: |
+            Per-document provenance. Ingest keys are listed below; the map is
+            open, and entry rows use a different key set entirely.
+          properties:
+            original_filename: { type: string }
+            original_format: { type: string, examples: [docx] }
+            source_sha256: { type: string }
+            source_path:
+              type: string
+              description: |
+                The external original's absolute path, present only for
+                path-tracked ingests so `check-sources` can detect drift.
+            converted_at: { type: string, format: date-time }
+            conversion_engine: { type: string, examples: [markitdown] }
+          additionalProperties: true
+        path:
+          type: string
+          description: |
+            Absolute path of the normalized Markdown on disk
+            (`<scope>/inbox/<doc-id>.md`, the source of truth). The in-app viewer
+            is read-only; this backs open-in-external-editor /
+            reveal-in-file-manager.
+        folder_path:
+          type: string
+          description: Absolute path of the document's containing folder (the scope's `inbox/`).
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        embed_status:
+          type: [string, "null"]
+          enum: [done, embedding, queued, running, error, null]
+          default: null
+          description: |
+            Per-document embed state: derived from the pending flag (`embedding`
+            while pending, else `done`) with any in-flight `queued` / `running` /
+            `error` re-embed overlaid. Null when the async batch service is not
+            wired (minimal apps and tests) — absence means "unknown", not "done".
+
+    DocumentDetailOut:
+      allOf:
+        - $ref: "#/components/schemas/DocumentOut"
+        - type: object
+          required: [markdown]
+          properties:
+            markdown:
+              type: string
+              description: The normalized Markdown body (without frontmatter).
+
+    DocumentListOut:
+      type: object
+      required: [documents, total]
+      properties:
+        documents:
+          type: array
+          items: { $ref: "#/components/schemas/DocumentOut" }
+        total: { type: integer }
+
+    DocumentEditRequest:
+      type: object
+      required: [markdown]
+      properties:
+        markdown:
+          type: string
+          minLength: 1
+          description: The new Markdown body. Replaces the file and sets `source_mode=edited`.
+
+    ReindexResult:
+      type: object
+      required: [documents_scanned, documents_reindexed, documents_skipped]
+      properties:
+        documents_scanned:
+          type: integer
+          description: Reindexed plus skipped — every file the scan considered.
+        documents_reindexed: { type: integer }
+        documents_skipped: { type: integer, description: Unchanged content (no-op). }
+        documents_removed:
+          type: integer
+          default: 0
+          description: Rows pruned because their Markdown file was removed out-of-band.
+        documents_degraded:
+          type: integer
+          default: 0
+          description: |
+            Documents indexed keyword-only because the embedding provider was
+            unavailable; marked pending so the next scan retries just the embed.
+
+    SourceStatusOut:
+      type: object
+      required: [document_id, title, source_path, status]
+      properties:
+        document_id: { type: string }
+        title: { type: string }
+        source_path:
+          type: string
+          description: The external original's absolute path (machine-local).
+        status:
+          type: string
+          enum: [unchanged, changed, missing, edited, updated]
+          description: |
+            `unchanged` = the tracked file's sha256 still matches; `changed` =
+            it differs; `missing` = the tracked file is gone; `edited` = it
+            changed but the document was hand-edited, so it was skipped;
+            `updated` = a changed source that `auto_update_sources` re-ingested
+            in place.
+
+    SourceCheckResponse:
+      type: object
+      required: [sources]
+      properties:
+        sources:
+          type: array
+          items: { $ref: "#/components/schemas/SourceStatusOut" }
+
+    # --- retrieval shapes ----------------------------------------------------
+
+    SearchRequest:
+      type: object
+      description: |
+        No `mode`. The retrieval strategy is resolved from the scope's
+        `default_mode` (ADR-034).
+      required: [query]
+      properties:
+        query: { type: string, minLength: 1, maxLength: 4096 }
+        top_k: { type: integer, minimum: 1, maximum: 20, default: 5 }
+
+    Passage:
+      type: object
+      required: [text, document_id, title, score, position]
+      properties:
+        text: { type: string }
+        document_id: { type: string }
+        title: { type: string }
+        score: { type: number, format: float }
+        position: { type: integer, description: The chunk's ordinal within its document. }
+
+    SearchResponse:
+      type: object
+      description: |
+        Passages only — no resolved-mode or fallback flag, for the same reason
+        `RecallResponse` carries none.
+      required: [passages]
+      properties:
+        passages:
+          type: array
+          items: { $ref: "#/components/schemas/Passage" }
+
+    GrepRequest:
+      type: object
+      required: [pattern]
+      properties:
+        pattern: { type: string, minLength: 1, maxLength: 1024 }
+        max_matches: { type: integer, minimum: 1, maximum: 1000, default: 100 }
+
+    GrepHitOut:
+      type: object
+      required: [path, line_number, line]
+      properties:
+        path: { type: string, examples: ["inbox/01J0000000000000000000000A.md"] }
+        line_number: { type: integer }
+        line: { type: string }
+
+    GrepResponse:
+      type: object
+      required: [hits, truncated]
+      properties:
+        hits:
+          type: array
+          items: { $ref: "#/components/schemas/GrepHitOut" }
+        truncated:
+          type: boolean
+          description: |
+            True when matches beyond `max_matches` exist or the server-side
+            timeout cut the scan short — never a count heuristic. A timed-out
+            grep returns no hits with `truncated=true`.
+
+    # --- async re-embed ------------------------------------------------------
+
+    ReembedBatchRequest:
+      type: object
+      description: |
+        Either re-embed an explicit `document_ids` set, or set `all` to re-embed
+        every document still pending an embed. Already-embedded documents are
+        skipped either way.
+      properties:
+        document_ids:
+          type: [array, "null"]
+          items: { type: string }
+          default: null
+          description: Re-embed these specific documents.
+        all:
+          type: boolean
+          default: false
+          description: Re-embed every document still pending an embed.
+
+    ReembedBatchResponse:
+      type: object
+      required: [queued, skipped, total]
+      properties:
+        queued: { type: integer, description: Newly enqueued documents. }
+        skipped: { type: integer, description: Skipped — already embedded (nothing to retry). }
+        total: { type: integer, description: Candidate documents considered. }
+
+    DocumentEmbedStatus:
+      type: object
+      description: One in-flight document's re-embed state.
+      required: [document_id, state]
+      properties:
+        document_id: { type: string }
+        state: { type: string, enum: [queued, running, error] }
+        message:
+          type: [string, "null"]
+          default: null
+          description: Error detail when `state` is `error`.
+
+    DocumentStatusResponse:
+      type: object
+      required: [statuses]
+      properties:
+        statuses:
+          type: array
+          items: { $ref: "#/components/schemas/DocumentEmbedStatus" }
+
+    # --- merge ---------------------------------------------------------------
+
+    StoreEvidenceOut:
+      type: object
+      description: What is known about one side of a proposed merge.
       required: [store, facts]
       properties:
-        store:
-          type: string
-          description: Store name (`project-<ULID>`).
-        label:
-          type: string
-          nullable: true
-          description: Display label (FR-017c), when set.
-        root:
-          type: string
-          nullable: true
-          description: Recorded project root path, when known.
+        store: { type: string, description: "Scope name (`project-<ULID>`)." }
+        label: { type: [string, "null"], default: null, description: Display label, when set. }
+        root: { type: [string, "null"], default: null, description: Recorded project root path, when known. }
         remote:
-          type: string
-          nullable: true
-          description: >
-            Normalized origin remote URL when the root is locally readable
-            (FR-004a normalization); null otherwise.
+          type: [string, "null"]
+          default: null
+          description: |
+            Normalized origin remote URL when the root is locally readable; null
+            otherwise. A matching remote is what makes a proposal deterministic.
         facts:
           type: integer
-          description: Fact count in the knowledge lane.
+          description: |
+            Entry count in the scope's `knowledge` lane. (The wire field is
+            still named `facts`, from the pre-merge vocabulary.)
 
-    MergeProposal:
+    MergeProposalOut:
       type: object
       required: [source, target, confidence, judged_by, reason, source_evidence, target_evidence]
       properties:
-        source:
-          type: string
-          description: Suggested store to merge away.
-        target:
-          type: string
-          description: Suggested surviving store (direction heuristic FR-056).
-        confidence:
-          type: string
-          enum: [certain, high, medium, low]
+        source: { type: string, description: Suggested scope to merge away. }
+        target: { type: string, description: Suggested surviving scope. }
+        confidence: { type: string, enum: [certain, high, medium, low] }
         judged_by:
           type: string
           enum: [remote, engine]
-          description: >
+          description: |
             `remote` = deterministic same-remote proof; `engine` = internal
             engine verdict.
-        reason:
-          type: string
-          description: Human-readable justification.
-        source_evidence:
-          $ref: "#/components/schemas/StoreEvidence"
-        target_evidence:
-          $ref: "#/components/schemas/StoreEvidence"
+        reason: { type: string, description: Human-readable justification. }
+        source_evidence: { $ref: "#/components/schemas/StoreEvidenceOut" }
+        target_evidence: { $ref: "#/components/schemas/StoreEvidenceOut" }
 
-    MergeScanResponse:
+    MergeScanOut:
       type: object
       required: [engine, truncated, proposals]
       properties:
         engine:
           type: string
           enum: [ok, no_model]
-          description: >
-            `no_model` = no internal engine configured — deterministic
-            proposals only (clean degradation, not an error).
-        truncated:
-          type: boolean
-          description: True when the engine tier hit its per-scan pair cap.
+          description: |
+            `no_model` = no internal engine configured, so only the
+            deterministic proposals are returned. A clean degradation, not an
+            error.
+        truncated: { type: boolean, description: True when the engine tier hit its per-scan pair cap. }
         proposals:
           type: array
-          items:
-            $ref: "#/components/schemas/MergeProposal"
+          items: { $ref: "#/components/schemas/MergeProposalOut" }
 
-    MergeRequest:
+    MergeIn:
       type: object
       required: [source, target]
       properties:
-        source:
-          type: string
-          description: Per-project store merged away (retired on success).
-        target:
-          type: string
-          description: Per-project store that survives and absorbs the source.
+        source: { type: string, description: The project scope merged away (retired on success). }
+        target: { type: string, description: The project scope that survives and absorbs the source. }
         organize:
           type: boolean
           default: true
-          description: Run the FR-033 reorg pass on the target after the merge.
+          description: Run the reorg pass on the target after the merge.
 
-    MergeResponse:
+    MergeOut:
       type: object
       required: [target, merged_files, label_moved, root_moved, aliases, reorg_status]
       properties:
-        target:
-          type: string
-          description: The surviving store.
-        merged_files:
-          type: integer
-          description: Lane files merged/created under the target.
-        label_moved:
-          type: boolean
-          description: Whether the source's display label moved to the target.
-        root_moved:
-          type: boolean
-          description: Whether the source's project-root mapping moved to the target.
+        target: { type: string, description: The surviving scope. }
+        merged_files: { type: integer, description: Lane files merged or created under the target. }
+        label_moved: { type: boolean }
+        root_moved: { type: boolean }
         aliases:
           type: array
-          items:
-            type: string
-          description: >
-            The target's `merged_identities` after the merge (FR-058) — the
-            source's ULID plus any aliases carried over transitively.
+          items: { type: string }
+          description: |
+            The target's `merged_identities` after the merge — the source's ULID
+            plus any aliases carried over transitively.
         reorg_status:
           type: string
-          description: >
-            Outcome of the post-merge FR-033 reorg pass — `reorganized`,
-            `no_model`, `empty`, `skipped` (organize=false), or `error: …`.
-            Never fails the merge itself (FR-059).
+          description: |
+            Outcome of the post-merge reorg pass — `reorganized`, `no_model`,
+            `empty`, `skipped` (organize=false), or `error: …`. Never fails the
+            merge itself (FR-059).
+
+    # --- organizing passes ---------------------------------------------------
 
     OrganizeResponse:
       type: object
+      description: |
+        Result of an explicit `organize` run (inbox → topic docs / rules).
+        `no_model` (nothing configured to do the shaping) and `empty` (nothing
+        to shape) are clean no-ops, not errors.
       required: [status, items_processed, topics_created, topics_updated, rules_appended, skipped]
       properties:
-        status:
-          type: string
-          enum: [organized, no_model, empty]
-          description: >
-            `organized` = the inbox was drained; `no_model` = no internal model
-            configured (clean no-op, inbox untouched); `empty` = nothing to organize.
-        items_processed:
-          type: integer
-          description: Inbox items successfully drained (merged into a topic doc or appended as a rule).
-        topics_created:
-          type: integer
-          description: New topic documents created.
-        topics_updated:
-          type: integer
-          description: Existing topic documents merged into / overwritten with merged content.
-        rules_appended:
-          type: integer
-          description: Inbox items classified as behavioural rules and appended to rules/rules.md.
-        skipped:
-          type: integer
-          description: Items left in the inbox due to an LLM/parse failure (never lost).
+        status: { type: string, enum: [organized, no_model, empty] }
+        items_processed: { type: integer, description: Inbox items successfully drained. }
+        topics_created: { type: integer }
+        topics_updated: { type: integer }
+        rules_appended: { type: integer, description: Items classified as behavioural rules and appended to the rules lane. }
+        skipped: { type: integer, description: Items left in the inbox after a model/parse failure (never lost). }
         model:
-          type: string
-          nullable: true
-          description: Display name of the internal model used (null when status="no_model").
+          type: [string, "null"]
+          default: null
+          description: Display name of the internal model used; null when `status="no_model"`.
 
     ReorgResponse:
       type: object
+      description: |
+        Result of an explicit `reorg` run (topic-doc consolidation). `no_model`
+        and `empty` are clean no-ops, not errors.
       required: [status, topics_before, topics_after, topics_written, topics_superseded]
       properties:
-        status:
-          type: string
-          enum: [reorganized, no_model, empty]
-          description: >
-            `reorganized` = the agentic loop ran; `no_model` = no internal model
-            configured (clean no-op, nothing changed); `empty` = no topic
-            documents to reorganize.
-        topics_before:
-          type: integer
-          description: Number of topic documents in the lane before the pass.
-        topics_after:
-          type: integer
-          description: Number of topic documents in the lane after the pass.
-        topics_written:
-          type: integer
-          description: Topic documents created or overwritten by the loop (prior versions archived).
-        topics_superseded:
-          type: integer
-          description: Topic documents retired to the recoverable `superseded/` tombstone.
+        status: { type: string, enum: [reorganized, no_model, empty] }
+        topics_before: { type: integer }
+        topics_after: { type: integer }
+        topics_written: { type: integer, description: Topic docs created or overwritten (prior versions archived). }
+        topics_superseded: { type: integer, description: Topic docs retired to the recoverable `superseded/` tombstone. }
         model:
-          type: string
-          nullable: true
-          description: Display name of the internal model used (null when status="no_model").
+          type: [string, "null"]
+          default: null
+          description: Display name of the internal model used; null when `status="no_model"`.
 
-    RulesResponse:
+    # --- lanes ---------------------------------------------------------------
+
+    RulesOut:
       type: object
+      description: |
+        The scope's rules text. Always present as a field, nullable in value —
+        an empty rules lane is `null`, never a 404.
       required: [text]
       properties:
         text:
-          type: string
-          nullable: true
-          description: >
-            The store's rules text — every `rules/*.md` file concatenated (the
-            procedural rules the organizer classified into the rules lane), or
-            null when there are no rules yet.
+          type: [string, "null"]
+          description: |
+            Every `rules/*.md` file concatenated (the behavioural rules the
+            organizer classified into the lane), or null when there are none
+            yet.
 
     HandoffSceneOut:
       type: object
+      description: One per-branch `handoff/<slug>.md` scene (read-only here).
       required: [branch, text, updated_at, path, folder_path]
       properties:
         branch: { type: string, description: The git branch this scene captures. }
@@ -997,12 +2044,11 @@ components:
           description: Timestamp of the last overwrite of this branch's scene.
         path:
           type: string
-          description: >-
-            Absolute path of the `handoff/<branch-slug>.md` file (source of
-            truth). The in-app viewer is read-only; this backs reveal-in-file-manager.
-        folder_path:
-          type: string
-          description: Absolute path of the handoff/ folder containing the scene.
+          description: |
+            Absolute path of the `handoff/<branch-slug>.md` file (the source of
+            truth). The in-app viewer is read-only; this backs
+            reveal-in-file-manager.
+        folder_path: { type: string, description: "Absolute path of the scope's `handoff/` folder." }
 
     HandoffOut:
       type: object
@@ -1010,44 +2056,57 @@ components:
       properties:
         scenes:
           type: array
-          description: One scene per branch (empty when no handoff scenes yet).
-          items:
-            $ref: "#/components/schemas/HandoffSceneOut"
+          description: One scene per branch; empty when the scope has no handoff scenes yet.
+          items: { $ref: "#/components/schemas/HandoffSceneOut" }
 
     ConsolidationLogOut:
       type: object
       required: [text, path, folder_path]
       properties:
         text:
-          type: string
-          nullable: true
-          description: >
-            The store-root `consolidation-log.md` changelog text, or null when
-            the store has no changelog yet.
+          type: [string, "null"]
+          description: The scope-root `consolidation-log.md` text, or null when there is no changelog yet.
         path:
           type: string
-          description: >-
-            Absolute path of the `consolidation-log.md` file (always present even
-            when the file does not yet exist, so the UI can reveal where it lives).
-        folder_path:
-          type: string
-          description: Absolute path of the store dir containing the changelog.
+          description: |
+            Absolute path of the `consolidation-log.md` file — always present
+            even when the file does not exist yet, so the UI can still reveal
+            where it would live.
+        folder_path: { type: string, description: Absolute path of the scope dir containing the changelog. }
+
+    # --- errors --------------------------------------------------------------
 
     ErrorEnvelope:
       type: object
+      description: |
+        The app-wide error shape. Note the scope- and entry-level codes still
+        carry the pre-merge `MEMORY_*` names: they are the wire contract
+        frontends already match on, so renaming them would be a breaking change
+        with no behavioural payoff.
       required: [error]
       properties:
         error:
           type: object
-          required: [code, message]
+          required: [code, message, details]
           properties:
             code:
               type: string
               description: |
-                Stable error code, e.g. MEMORY_NOT_FOUND, MEMORY_REJECTED,
-                SCOPE_UNRESOLVED, RESOURCE_NOT_FOUND, VALIDATION_ERROR.
-            message: { type: string }
+                Stable machine-readable code. The ones this surface emits:
+                `MEMORY_STORE_NOT_FOUND` (404, scope), `MEMORY_NOT_FOUND` (404,
+                entry or lane file), `MEMORY_REJECTED` (422, empty/over-long
+                entry), `MEMORY_STORE_MERGE_INVALID` (400),
+                `DOCUMENT_NOT_FOUND` (404), `INGEST_REJECTED`
+                (400/409/413/415 by `details.reason`), `RECONVERSION_BLOCKED`
+                (409), `GREP_PATTERN_INVALID` (400), `ENGINE_UNAVAILABLE` (503),
+                `SCOPE_UNRESOLVED` (400), `RESOURCE_ALREADY_EXISTS` (409),
+                `CONFIG_INVALID` (422).
+              examples: [INGEST_REJECTED]
+            message: { type: string, description: Human-readable description. }
             details:
               type: object
               additionalProperties: true
-              nullable: true
+              description: |
+                Machine-readable extras. `reason` is set for `INGEST_REJECTED`
+                (`too_large` | `duplicate` | `unsupported_type` | `empty` |
+                `scanned_pdf`) and for `MEMORY_REJECTED` (`empty` | `too_long`).

@@ -2,6 +2,16 @@
 
 > 中文版: [plan.zh.md](./plan.zh.md)
 
+> **Historical — 2026-09-10.** Spec 006 (Knowledge Base) and spec 007 (Memory)
+> merged into one **Knowledge Layer** on this date. [`spec.md`](./spec.md) is the
+> authority for the merged model — one `knowledge` kind, three scopes, one
+> storage root `~/.coffer/knowledge/<scope>/`, eight `coffer__*` tools. This
+> document records the design as it stood before that merge; where it says
+> "memory face", "`memory` kind", `~/.coffer/memory/`, `/api/v1/memory_stores`
+> or `coffer memory …`, read the merged equivalents in `spec.md`. The folder
+> name `specs/007-memory/` is likewise historical: it is the spec id every
+> inbound link and the acceptance audit key on.
+
 **Branch**: `feature/kb-memory-redesign`
 **Spec**: [./spec.md](./spec.md)
 **Status**: Accepted (redesign — in development)

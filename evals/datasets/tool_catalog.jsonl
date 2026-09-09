@@ -1,8 +1,10 @@
-{"name": "search_knowledge", "description": "Semantic and keyword search across the user's knowledge bases; returns the most relevant passages for a natural-language query."}
-{"name": "grep_knowledge", "description": "Exact substring / regex search across knowledge-base files; use when the user wants a literal string or pattern, not semantic relevance."}
-{"name": "recall", "description": "Retrieve relevant stored memories about the user or project (preferences, facts, decisions)."}
-{"name": "remember", "description": "Persist a new memory fact about the user or project for later recall."}
+{"name": "search", "description": "Semantic and keyword search across the user's knowledge — everything an agent wrote and every document ingested; returns the most relevant passages for a natural-language query."}
+{"name": "grep", "description": "Exact substring / regex search across knowledge files; use when the user wants a literal string or pattern, not semantic relevance."}
+{"name": "read", "description": "Read one specific knowledge entry or ingested document by its id."}
+{"name": "list", "description": "List the knowledge scopes, or the contents of one scope."}
+{"name": "write", "description": "Persist a new entry, or update an existing one, in a knowledge scope."}
+{"name": "delete", "description": "Delete one knowledge entry or ingested document by its id."}
+{"name": "set_handoff", "description": "Record the working state for the current branch so a later session can pick it up."}
+{"name": "resume", "description": "Read back the handoff recorded for the current branch to continue prior work."}
 {"name": "list_skills", "description": "List the skills currently available to load."}
 {"name": "load_skill", "description": "Load a specific named skill's full instructions into context."}
-{"name": "list_knowledge_bases", "description": "List the knowledge bases registered in Coffer."}
-{"name": "read_document", "description": "Read one specific knowledge-base document by its id or path."}

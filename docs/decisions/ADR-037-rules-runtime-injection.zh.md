@@ -3,7 +3,7 @@
 > English: [ADR-037-rules-runtime-injection.md](ADR-037-rules-runtime-injection.md)
 
 **Status**: Accepted
-**Date**: 2026-06-22（2026-09-09 修订，见「修订历史」）
+**Date**: 2026-06-22（2026-09-09、2026-09-10 修订，见「修订历史」）
 **Deciders**: Yuxing Wu
 **Related**: spec `007-memory`（FR-049–FR-052）；基于 [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md)（记忆经 MCP，而非原生投射）；参考 [`docs/research/memory-systems-landscape.zh.md`](../research/memory-systems-landscape.zh.md)
 
@@ -43,7 +43,7 @@ agent，且在 resume/clear/compact 时重跑。这正是一个不碰任何记�
   作为 `additionalContext` 输出并退出 0。**它绝不阻塞 agent**：无 hook、daemon 不可达、超时或报错
   → 不注入、仍退出 0。它在 resume/clear/compact 时重跑。
 - **播种的内置规则（FR-050）。** bundle 始终携带两条 Coffer 播种的规则（即便 rules lane 为空也在场）：
-  (a) 调 `coffer__resume()` 接续此前工作，(b) 一条软引导，优先用 `coffer__remember`/`coffer__recall`
+  (a) 调 `coffer__resume()` 接续此前工作，(b) 一条软引导，优先用 `coffer__write`/`coffer__search`
   而非 agent 的原生记忆。**handoff 正文本身不被注入** —— 它经 `coffer__resume`（FR-025）按需拉取，
   于是 bundle 保持精简、陈旧现场绝不被硬塞进上下文。
 - **可选 `disable_native_memory`（FR-052）。** 一个 per-agent 配置，**默认 `false`**（Coffer 绝不碰
@@ -88,7 +88,12 @@ agent，且在 resume/clear/compact 时重跑。这正是一个不碰任何记�
   SessionEnd hook（把刚关闭的会话蒸馏进 journal 记忆带），以及可选的 `disable_native_memory` 开关。
 - **2026-09-09** —— transcript 蒸馏与 journal 记忆带已从 Coffer 移除，故本 ADR 中一切关于 SessionEnd
   蒸馏的内容（FR-051、Codex 延迟不对称、以及被否决的每轮 `Stop` 近似）一并删除。现在没有任何东西
-  会自动写记忆：agent 用 `coffer__remember` 记下事实，用 `coffer__recall` 取回。这更简单、更可预测，
-  同时也是一次真实的取舍 —— 蒸馏本身是跑得通的（已蒸馏 1,320 个会话、journal 有 4,669 条），
+  会自动写记忆：agent 用 `coffer__remember` 记下事实，用 `coffer__recall` 取回（二者已于 2026-09-10
+  改名，见下）。这更简单、更可预测，同时也是一次真实的取舍 —— 蒸馏本身是跑得通的（已蒸馏 1,320 个会话、journal 有 4,669 条），
   它被移除是因为它所喂养的「摄取 → 交付」闭环已不再端到端存在，而不是因为它失败了。
   **上文的 SessionStart 规则注入决定依然成立、未变**，也正是本 ADR 现在所记录的内容。
+- **2026-09-10** —— 仅词汇变更：`memory` 与 `knowledge_base` 合并为一个 `knowledge` kind，
+  故上文点名的工具现在是 `coffer__write` 与 `coffer__search`，`rules` lane 也落在某个知识
+  scope 之下（`~/.coffer/knowledge/<scope>/rules/`），而不再属于某个 memory store。
+  **SessionStart 规则注入的决定未变**，本次合并也未触及它：规则仍由注入交付而非检索取回，
+  rules lane 也仍被排除在 `coffer__search` 之外。

@@ -1,4 +1,4 @@
-"""Startup wiring for the one-time worktree-store consolidation (spec 007).
+"""Startup wiring for the one-time worktree-scope consolidation.
 
 Kept out of ``app.py`` / ``wiring.py`` (both at the 400-LOC ceiling), mirroring
 the sibling ``*_wiring.py`` modules. Builds a :class:`StoreConsolidator` from the
@@ -10,12 +10,12 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from coffer.application.memory.consolidate import ConsolidationReport, StoreConsolidator
-from coffer.application.memory.sync import MemoryReconciler
+from coffer.application.knowledge.consolidate import ConsolidationReport, StoreConsolidator
+from coffer.application.knowledge.sync import KnowledgeReconciler
 from coffer.infrastructure.knowledge import paths
-from coffer.infrastructure.memory.project_root_repo import ProjectRootRepo
-from coffer.infrastructure.memory.scope_fs import git_root, project_identity
-from coffer.infrastructure.memory.store_label_repo import StoreLabelRepo
+from coffer.infrastructure.knowledge_scope.project_root_repo import ProjectRootRepo
+from coffer.infrastructure.knowledge_scope.scope_fs import git_root, project_identity
+from coffer.infrastructure.knowledge_scope.store_label_repo import StoreLabelRepo
 
 if TYPE_CHECKING:
     from coffer.application.knowledge.reindex import Reindexer
@@ -32,16 +32,18 @@ async def run_store_consolidation(
     sm: object,
     substrate: tuple[DocumentRepo, KnowledgeRetrieval, Reindexer],
 ) -> ConsolidationReport:
-    """Heal per-project memory stores fragmented across git worktrees by the old
+    """Heal per-project knowledge scopes fragmented across git worktrees by the old
     path-hash bug. Best-effort and idempotent: never raises, and a second boot
     after a clean pass is a no-op."""
     documents, retrieval, reindexer = substrate
     consolidator = StoreConsolidator(
         resources=resources,
-        reconciler=MemoryReconciler(documents=documents, retrieval=retrieval, reindexer=reindexer),
+        reconciler=KnowledgeReconciler(
+            documents=documents, retrieval=retrieval, reindexer=reindexer
+        ),
         roots=ProjectRootRepo(sm),  # type: ignore[arg-type]
         labels=StoreLabelRepo(sm),  # type: ignore[arg-type]
-        store_dir=paths.memory_store_dir,
+        scope_dir=paths.scope_dir,
         git_root=git_root,
         project_ulid=project_identity,
     )

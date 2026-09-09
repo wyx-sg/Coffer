@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import {
   Bot,
   Boxes,
-  Brain,
   MessageSquare,
   Library,
   PanelLeftClose,
@@ -42,8 +41,9 @@ interface NavGroup {
  *   with them, and the Channels they communicate over. Agents are NOT vault
  *   assets, so they are not under Resources.
  * - **Resources** — the assets agents draw on, modelled as kind-agnostic
- *   resource kinds (MCP servers today; skills / knowledge / memory as they
- *   land), surfaced through the kind registry.
+ *   resource kinds (MCP servers, skills, and knowledge — one kind covering
+ *   both what agents write and what people ingest), surfaced through the kind
+ *   registry.
  * - **System** — cross-cutting tooling: the Audit log (who did what, when),
  *   Observability (system health/metrics — a distinct future surface), and
  *   Settings.
@@ -67,8 +67,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/mcp-servers", labelKey: "nav.mcpServers", icon: Server, end: true },
       { to: "/skills", labelKey: "nav.skills", icon: Sparkles, end: true },
-      { to: "/knowledge-bases", labelKey: "nav.knowledgeBases", icon: Library, end: true },
-      { to: "/memory", labelKey: "nav.memory", icon: Brain, end: true },
+      { to: "/knowledge", labelKey: "nav.knowledge", icon: Library, end: true },
     ],
   },
   {

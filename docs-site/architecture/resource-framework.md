@@ -4,18 +4,17 @@ The Resource framework is Coffer's core abstraction. Understanding it is the key
 
 ## Everything is a resource kind
 
-Every user-managed entity in Coffer is a **Resource**, identified by a stable string of the form `<kind>:<name>`. Six kinds are registered today:
+Every user-managed entity in Coffer is a **Resource**, identified by a stable string of the form `<kind>:<name>`. Five kinds are registered today:
 
 | Kind             | Spec                                                   | Description                                                                                                       |
 | ---------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
 | `mcp_server`     | [001-mcp-gateway](/reference/specs/001-mcp-gateway/spec)         | A registered upstream MCP server: transport config, credential references, and the per-server gateway policies.  |
 | `agent`          | [004-agent-registry](/reference/specs/004-agent-registry/spec)   | A registered local AI coding agent (e.g. Claude Code): its config directory, Coffer-MCP install state, and derived workspace facets. |
 | `skill`          | [005-skill-manager](/reference/specs/005-skill-manager/spec)     | A master skill bundle Coffer delivers into one or more agents' skill directories.                                |
-| `knowledge_base` | [006-knowledge-base](/reference/specs/006-knowledge-base/spec)   | KB face of the shared knowledge substrate: any-format upload → markdown truth + grep / FTS5 / vector retrieval.  |
-| `memory`         | [007-memory](/reference/specs/007-memory/spec)                   | memory face of the same substrate: per-fact markdown + regenerated `MEMORY.md`, shared across agents.            |
+| `knowledge`      | [007 — Knowledge Layer](/reference/specs/007-memory/spec)        | One scope of what agents know: entries they wrote plus any-format documents ingested to markdown, under one grep / FTS5 / vector retrieval. |
 | `channel`        | [009-channels](/reference/specs/009-channels/spec)               | A messaging-channel binding (Telegram, SeaTalk): transport config, credential refs, and a default agent.         |
 
-`knowledge_base` and `memory` are two faces of **one knowledge substrate** — markdown files on disk are the source of truth and SQLite is a rebuildable index ([ADR-012](/reference/adr/ADR-012-files-as-truth-sqlite-retrieval)). New kinds plug into the same framework without modifying it. The encrypted credential store and multi-machine sync are deliberately **cross-cutting concerns, not kinds**: they serve every kind rather than being managed entities in their own right.
+`knowledge` was once two kinds — a `knowledge_base` you could only read and a `memory` only agents wrote to — but `documents`, `chunks`, FTS5 and sqlite-vec were shared from the start, so the split bought nothing and forced every caller to classify its own data before it could pick a tool. They are now one kind over one storage root, where markdown files on disk are the source of truth and SQLite is a rebuildable index ([ADR-012](/reference/adr/ADR-012-files-as-truth-sqlite-retrieval)). A knowledge resource is **co-managed**: both you and your agents write into it, and its scope is read from its own name (`global`, `project-<ULID>`, or a collection you named). New kinds plug into the same framework without modifying it. The encrypted credential store and multi-machine sync are deliberately **cross-cutting concerns, not kinds**: they serve every kind rather than being managed entities in their own right.
 
 The framework provides four things, and only four things:
 

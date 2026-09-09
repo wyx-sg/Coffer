@@ -7,14 +7,14 @@ from datetime import UTC, datetime
 import pytest
 
 from coffer.domain.knowledge.document import (
-    KIND_KNOWLEDGE_BASE,
-    KIND_MEMORY,
+    KIND_KNOWLEDGE,
+    LANE_INGEST,
     WORKSPACE_GLOBAL_PROJECT_ID,
     Document,
 )
 
 
-def _doc(doc_id: str, resource: str, title: str, kind: str = KIND_KNOWLEDGE_BASE) -> Document:
+def _doc(doc_id: str, resource: str, title: str, kind: str = KIND_KNOWLEDGE) -> Document:
     now = datetime.now(UTC)
     return Document(
         id=doc_id,
@@ -22,6 +22,7 @@ def _doc(doc_id: str, resource: str, title: str, kind: str = KIND_KNOWLEDGE_BASE
         resource_name=resource,
         project_id=WORKSPACE_GLOBAL_PROJECT_ID,
         path=f"docs/{doc_id}.md",
+        lane=LANE_INGEST,
         title=title,
         content_sha256="x",
         source_mode="converted",
@@ -34,7 +35,7 @@ def _doc(doc_id: str, resource: str, title: str, kind: str = KIND_KNOWLEDGE_BASE
 async def test_keyword_search_returns_ranked_passages(substrate) -> None:
     await substrate.repo.upsert_document(_doc("d1", "kb1", "Alpha"))
     await substrate.repo.upsert_document(_doc("d2", "kb1", "Beta"))
-    idx = substrate.index(KIND_KNOWLEDGE_BASE, "kb1")
+    idx = substrate.index(KIND_KNOWLEDGE, "kb1")
     await idx.upsert_chunks("d1", ["the quick brown fox jumps", "lazy dog sleeps"], None)
     await idx.upsert_chunks("d2", ["unrelated content about cats"], None)
 
@@ -55,8 +56,8 @@ async def test_keyword_search_returns_ranked_passages(substrate) -> None:
 async def test_keyword_search_scopes_by_resource(substrate) -> None:
     await substrate.repo.upsert_document(_doc("d1", "kb1", "A"))
     await substrate.repo.upsert_document(_doc("d2", "kb2", "B"))
-    idx1 = substrate.index(KIND_KNOWLEDGE_BASE, "kb1")
-    idx2 = substrate.index(KIND_KNOWLEDGE_BASE, "kb2")
+    idx1 = substrate.index(KIND_KNOWLEDGE, "kb1")
+    idx2 = substrate.index(KIND_KNOWLEDGE, "kb2")
     await idx1.upsert_chunks("d1", ["shared keyword apple"], None)
     await idx2.upsert_chunks("d2", ["shared keyword apple"], None)
 
@@ -65,34 +66,15 @@ async def test_keyword_search_scopes_by_resource(substrate) -> None:
 
 
 @pytest.mark.asyncio
-async def test_keyword_search_scopes_by_kind(substrate) -> None:
-    """A KB and a memory store may share a resource name (the unique constraint
-    is on (kind, name)); keyword search must not leak across kinds."""
-    await substrate.repo.upsert_document(_doc("kbdoc", "foo", "KB", KIND_KNOWLEDGE_BASE))
-    await substrate.repo.upsert_document(_doc("memdoc", "foo", "MEM", KIND_MEMORY))
-    kb_idx = substrate.index(KIND_KNOWLEDGE_BASE, "foo")
-    mem_idx = substrate.index(KIND_MEMORY, "foo")
-    await kb_idx.upsert_chunks("kbdoc", ["knowledge pineapple content"], None)
-    await mem_idx.upsert_chunks("memdoc", ["memory pineapple content"], None)
-
-    kb_hits = await kb_idx.keyword_search("foo", "pineapple", top_k=5)
-    mem_hits = await mem_idx.keyword_search("foo", "pineapple", top_k=5)
-    assert {h.document_id for h in kb_hits} == {"kbdoc"}
-    assert {h.document_id for h in mem_hits} == {"memdoc"}
-    assert {h.title for h in kb_hits} == {"KB"}
-    assert {h.title for h in mem_hits} == {"MEM"}
-
-
-@pytest.mark.asyncio
 async def test_same_document_id_in_two_stores_does_not_collide(substrate) -> None:
-    """Document ids (ULIDs, ADR-028) are unique only within a store, so the same
+    """Document ids (ULIDs, spec 007 FR-062) are unique only within a store, so the same
     id can appear in two stores. Indexing the second store must not steal/re-tag
     the first store's chunk + FTS rows, and deleting the document from one store
     must not wipe the other's index (P0: cross-KB chunk-id collision)."""
     await substrate.repo.upsert_document(_doc("dd", "kb1", "One"))
     await substrate.repo.upsert_document(_doc("dd", "kb2", "Two"))
-    idx1 = substrate.index(KIND_KNOWLEDGE_BASE, "kb1")
-    idx2 = substrate.index(KIND_KNOWLEDGE_BASE, "kb2")
+    idx1 = substrate.index(KIND_KNOWLEDGE, "kb1")
+    idx2 = substrate.index(KIND_KNOWLEDGE, "kb2")
     await idx1.upsert_chunks("dd", ["shared mango content"], None)
     await idx2.upsert_chunks("dd", ["shared mango content"], None)
 
@@ -113,7 +95,7 @@ async def test_same_document_id_in_two_stores_does_not_collide(substrate) -> Non
 @pytest.mark.asyncio
 async def test_reindex_replaces_chunks(substrate) -> None:
     await substrate.repo.upsert_document(_doc("d1", "kb1", "A"))
-    idx = substrate.index(KIND_KNOWLEDGE_BASE, "kb1")
+    idx = substrate.index(KIND_KNOWLEDGE, "kb1")
     await idx.upsert_chunks("d1", ["original banana text"], None)
     assert len(await idx.keyword_search("kb1", "banana", top_k=5)) == 1
     # Re-index with new content; old chunk must be gone.
@@ -125,7 +107,7 @@ async def test_reindex_replaces_chunks(substrate) -> None:
 @pytest.mark.asyncio
 async def test_delete_chunks_clears_fts(substrate) -> None:
     await substrate.repo.upsert_document(_doc("d1", "kb1", "A"))
-    idx = substrate.index(KIND_KNOWLEDGE_BASE, "kb1")
+    idx = substrate.index(KIND_KNOWLEDGE, "kb1")
     await idx.upsert_chunks("d1", ["grape soda"], None)
     await idx.delete_chunks("d1")
     assert await idx.keyword_search("kb1", "grape", top_k=5) == []
@@ -134,7 +116,7 @@ async def test_delete_chunks_clears_fts(substrate) -> None:
 @pytest.mark.asyncio
 async def test_punctuation_in_query_is_safe(substrate) -> None:
     await substrate.repo.upsert_document(_doc("d1", "kb1", "A"))
-    idx = substrate.index(KIND_KNOWLEDGE_BASE, "kb1")
+    idx = substrate.index(KIND_KNOWLEDGE, "kb1")
     await idx.upsert_chunks("d1", ["the make release target"], None)
     # A query with FTS operators must not raise.
     hits = await idx.keyword_search("kb1", "make OR (release", top_k=5)
@@ -146,7 +128,7 @@ async def test_keyword_search_matches_cjk_via_trigram(substrate) -> None:
     """unicode61 made a no-space Chinese run one token, so a CJK query never
     matched; the trigram tokenizer matches the substring."""
     await substrate.repo.upsert_document(_doc("d1", "kb1", "向量"))
-    idx = substrate.index(KIND_KNOWLEDGE_BASE, "kb1")
+    idx = substrate.index(KIND_KNOWLEDGE, "kb1")
     await idx.upsert_chunks("d1", ["向量检索使用语义嵌入模型来匹配查询"], None)
     hits = await idx.keyword_search("kb1", "向量检索", top_k=5)
     assert {h.document_id for h in hits} == {"d1"}
@@ -157,7 +139,7 @@ async def test_short_cjk_query_uses_like_fallback(substrate) -> None:
     """A < 3-character query produces no trigram tokens; keyword_search falls
     back to a substring (LIKE) scan rather than returning empty."""
     await substrate.repo.upsert_document(_doc("d1", "kb1", "A"))
-    idx = substrate.index(KIND_KNOWLEDGE_BASE, "kb1")
+    idx = substrate.index(KIND_KNOWLEDGE, "kb1")
     await idx.upsert_chunks("d1", ["向量检索很有用"], None)
     hits = await idx.keyword_search("kb1", "向量", top_k=5)
     assert {h.document_id for h in hits} == {"d1"}
@@ -173,7 +155,7 @@ async def test_multi_term_and_first_ranks_all_terms_above_one(substrate) -> None
     the remainder)."""
     await substrate.repo.upsert_document(_doc("dA", "kb1", "Both"))
     await substrate.repo.upsert_document(_doc("dB", "kb1", "One"))
-    idx = substrate.index(KIND_KNOWLEDGE_BASE, "kb1")
+    idx = substrate.index(KIND_KNOWLEDGE, "kb1")
     await idx.upsert_chunks("dA", ["alpha beta together here"], None)
     await idx.upsert_chunks("dB", ["alpha alpha alpha alpha alpha"], None)
 
@@ -190,7 +172,7 @@ async def test_multi_term_falls_back_to_or_when_and_empty(substrate) -> None:
     surface rather than returning empty."""
     await substrate.repo.upsert_document(_doc("d1", "kb1", "A"))
     await substrate.repo.upsert_document(_doc("d2", "kb1", "B"))
-    idx = substrate.index(KIND_KNOWLEDGE_BASE, "kb1")
+    idx = substrate.index(KIND_KNOWLEDGE, "kb1")
     await idx.upsert_chunks("d1", ["gamma only content here"], None)
     await idx.upsert_chunks("d2", ["delta only content here"], None)
 
@@ -205,7 +187,7 @@ async def test_single_term_query_unchanged(substrate) -> None:
     """A one-term query behaves exactly as before (AND == OR, single search)."""
     await substrate.repo.upsert_document(_doc("d1", "kb1", "Alpha"))
     await substrate.repo.upsert_document(_doc("d2", "kb1", "Beta"))
-    idx = substrate.index(KIND_KNOWLEDGE_BASE, "kb1")
+    idx = substrate.index(KIND_KNOWLEDGE, "kb1")
     await idx.upsert_chunks("d1", ["the quick brown fox jumps", "lazy dog sleeps"], None)
     await idx.upsert_chunks("d2", ["unrelated content about cats"], None)
 
@@ -221,7 +203,7 @@ async def test_multi_term_dedupes_across_and_or(substrate) -> None:
     chunk identity (document_id, position) and keeps the AND hit first."""
     await substrate.repo.upsert_document(_doc("dA", "kb1", "Both"))
     await substrate.repo.upsert_document(_doc("dB", "kb1", "One"))
-    idx = substrate.index(KIND_KNOWLEDGE_BASE, "kb1")
+    idx = substrate.index(KIND_KNOWLEDGE, "kb1")
     await idx.upsert_chunks("dA", ["sigma tau co-occur"], None)
     await idx.upsert_chunks("dB", ["sigma alone"], None)
 
@@ -238,7 +220,7 @@ async def test_and_sufficient_skips_or_widening(substrate) -> None:
     await substrate.repo.upsert_document(_doc("dA", "kb1", "Both A"))
     await substrate.repo.upsert_document(_doc("dB", "kb1", "Both B"))
     await substrate.repo.upsert_document(_doc("dC", "kb1", "One"))
-    idx = substrate.index(KIND_KNOWLEDGE_BASE, "kb1")
+    idx = substrate.index(KIND_KNOWLEDGE, "kb1")
     await idx.upsert_chunks("dA", ["sigma tau both here"], None)
     await idx.upsert_chunks("dB", ["sigma tau also both"], None)
     await idx.upsert_chunks("dC", ["sigma only here"], None)  # one term only

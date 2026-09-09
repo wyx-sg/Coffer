@@ -200,14 +200,14 @@ anthropic connection，标记为内部默认；观察它被列出；Chat 页面�
 
 用户向内置 agent 询问需要他们自己数据的东西（"what do my notes say about
 OAuth?"）。agent 通过 Coffer 的 MCP gateway 调用工具 —— 上游 MCP server 工具、
-`coffer__recall`、`coffer__search_knowledge`、`coffer__load_skill` —— 且每次调用
+`coffer__search`、`coffer__write`、`coffer__load_skill` —— 且每次调用
 在消息流中以一张内联、可展开的卡片出现，展示工具名、状态、输入与结果。
 
 **为何此优先级**：这是让内置 agent 成为 _Coffer 的_ agent 而非一个通用聊天框的
 东西 —— 它 dogfood 了 vault。
 
 **独立测试**：在一个 memory store 持有一条已知记录的情况下，向 agent 询问一个只能
-从该记录回答的问题；观察流中一张 `coffer__recall` 工具调用卡片以及一个植根于该
+从该记录回答的问题；观察流中一张 `coffer__search` 工具调用卡片以及一个植根于该
 记录的回答。
 
 **覆盖的场景**：
@@ -720,7 +720,7 @@ agent 使用哪一个。
   001–006 —— 已就位于本分支的基底上。
 - 来自 spec 002-ui-shell 的应用 shell —— 侧边栏 IA、布局、路由、设计系统，与
   Settings 布局 —— 已就位；Chat 页面与 Settings → LLM Connections 页面（spec 011）在该 shell 内渲染。
-- Memory 与知识库工具（`coffer__recall`、`coffer__search_knowledge`，与同类）已
+- 知识层工具（`coffer__search`、`coffer__read`，与同类）已
   作为来自 specs 005–006 的 gateway 内置工具存在；本规格消费它们且不重新定义它们。
 - 内置 agent 的 agentic 循环用 LangGraph 框架实现，LLM 客户端通过 LangChain 的
   provider 抽象触达；这些是开源依赖，且分层架构规则被遵守 —— 那些 SDK 保持限制在
@@ -734,7 +734,7 @@ agent 使用哪一个。
 - 以下被明确**列为不在范围**：用户创建或用户编辑的 agent；一个管理 agent 注册表的
   GUI；超出 gateway 现有门控的每 agent 能力作用域；对话摘要与导出；过去
   外部 agent 会话的恢复/继续；以及任何跨 agent 的原始 transcript 浏览/搜索界面（跨
-  agent 的共享由 agent 用 `coffer__remember` 显式写下的内容承担；自动的 transcript 蒸馏
+  agent 的共享由 agent 用 `coffer__write` 显式写下的内容承担；自动的 transcript 蒸馏
   已于 2026-09-09 移除）。
   远程通道由 Spec 009 单独交付。
 - `Conversation.model_id` 所引用的独立 `ModelConfig`/`chat_models` 注册表已**退役**

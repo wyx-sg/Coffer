@@ -164,7 +164,7 @@ async def _make_vault(
     memory = root / "memory"
     knowledge.mkdir(parents=True, exist_ok=True)
     memory.mkdir(parents=True, exist_ok=True)
-    trees = [("knowledge", knowledge), ("memory", memory)]
+    trees = [("knowledge", knowledge)]
     state = _StubStateProvider()
     resolved_home = home or str(root)
 
@@ -220,7 +220,7 @@ def _areas(summary) -> dict[str, int]:  # type: ignore[no-untyped-def]
 async def test_export_writes_a_bundle_and_reports_counts(alice, tmp_path) -> None:  # type: ignore[no-untyped-def]
     await alice.resources.register("mcp_server", "files", {"value": "a"}, "user")
     (alice.knowledge / "note.md").write_text("hello", encoding="utf-8")
-    (alice.memory / "topic.md").write_text("remembered", encoding="utf-8")
+    (alice.knowledge / "topic.md").write_text("remembered", encoding="utf-8")
     alice.state.docs["peer-1"] = {"paired": True}
 
     out = tmp_path / "bundle"
@@ -229,15 +229,14 @@ async def test_export_writes_a_bundle_and_reports_counts(alice, tmp_path) -> Non
     assert (out / "manifest.json").exists()
     assert (out / "resources" / "mcp_server" / "files.yaml").exists()
     assert (out / "knowledge" / "note.md").read_text(encoding="utf-8") == "hello"
-    assert (out / "memory" / "topic.md").exists()
+    assert (out / "knowledge" / "topic.md").exists()
     assert (out / "state" / "peers" / "peer-1.yaml").exists()
     # No credentials/ directory without --with-credentials.
     assert not (out / "credentials").exists()
 
     counts = _areas(summary)
     assert counts["resources"] == 1
-    assert counts["knowledge"] == 1
-    assert counts["memory"] == 1
+    assert counts["knowledge"] == 2
     assert counts["state/peers"] == 1
     assert summary.path == str(out)
     assert summary.failures == []

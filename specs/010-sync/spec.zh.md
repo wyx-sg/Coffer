@@ -9,7 +9,7 @@
 ## 为什么
 
 开发者配置一台新笔记本，或者希望台式机从笔记本已经知道的东西开始。今天每台机器
-都是一座孤岛：知识、记忆、已注册资源与凭据都得手工重建一遍。
+都是一座孤岛：知识、已注册资源与凭据都得手工重建一遍。
 
 本特性把仓库写入用户选定的目录，并能把这样一个目录读回来。至于怎么把那个目录弄到
 另一台机器上——`scp`、U 盘、他们自己的 git 仓库——是用户自己的事，不在本 spec
@@ -17,13 +17,14 @@
 
 ## 会导出什么
 
-- **知识库 + 记忆** —— `~/.coffer/knowledge/` 和 `~/.coffer/memory/` 下的
-  markdown 文件（这些文件本身已经是事实来源）。
+- **知识** —— `~/.coffer/knowledge/<scope>/` 下的 markdown 文件（这些文件本身
+  已经是事实来源）。2026-09-10 知识层合并之后只剩一个根；`~/.coffer/memory/`
+  已不复存在。
 - **技能** —— `~/.coffer/skills/` 下的 skill 主库。
 - **配置资源** —— `mcp_server`、`agent`、`skill`、`channel` 定义（记录系统是
   SQLite；为搬运而序列化成文本）。
 - **共享状态** —— 由各模块自有、属于仓库而非某一台机器的状态区（例如渠道对端配对、
-  记忆 store 标签）。
+  knowledge scope 标签）。
 - **凭据** —— **仅** Fernet **密文**，且仅在明确要求时。
 
 ## 不会导出什么（仅本机）
@@ -38,7 +39,6 @@
   ```
   manifest.json                  # bundle schema version + creation time
   knowledge/                     # mirror of ~/.coffer/knowledge
-  memory/                        # mirror of ~/.coffer/memory
   skills/                        # mirror of ~/.coffer/skills (master skill store)
   resources/<kind>/<name>.yaml   # one deterministic file per config resource
   state/<area>/...yaml           # module-owned shared state
@@ -110,7 +110,7 @@ agent 都不在 scope 内的资源，仍会被注册、仍然可见，只是不�
 
 ### Scenario: 把仓库导出到一个目录
 
-- **Given** 一个含有知识、记忆、技能与已注册资源的仓库，
+- **Given** 一个含有知识、技能与已注册资源的仓库，
 - **When** 用户运行 `coffer sync export <dir>`，
 - **Then** 该目录中含有 `manifest.json`、镜像过来的文件树、每个配置资源一个确定性
   YAML，且**没有** `credentials/` 目录，命令并报告各状态区的计数。
@@ -125,7 +125,7 @@ agent 都不在 scope 内的资源，仍会被注册、仍然可见，只是不�
 
 - **Given** 一个从另一台机器导出的 bundle，以及一个没有任何资源的仓库，
 - **When** 用户运行 `coffer sync import <dir>`，
-- **Then** 知识、记忆与技能树被镜像进来，SQLite 索引据此重建，每个配置资源都被注册，
+- **Then** 知识与技能树被镜像进来，SQLite 索引据此重建，每个配置资源都被注册，
   且每个 kind 的导入后钩子都已运行，因此这些资源无需进一步操作即可使用。
 
 ### Scenario: bundle 覆盖已存在的本地资源

@@ -6,7 +6,7 @@
 **日期**：2026-09-09
 **决策者**：Yuxing Wu
 **修订**：[ADR-018](ADR-018-tool-retrieval-for-overload.zh.md) —— 其「绝不在服务端隐藏」条款由预算驱动分层取代
-**关联**：[ADR-024](ADR-024-builtin-agent-is-internal-capability.zh.md)（语义排序）、[ADR-045](ADR-045-machine-agent-resource-scope.zh.md)（machine × agent scope）、[ADR-004](ADR-004-capability-state-model.zh.md)（能力偏好）、已撤销的 [ADR-026](ADR-026-per-agent-mcp-scoping.zh.md)（per-agent scoping）、[spec `001-mcp-gateway`](../../specs/001-mcp-gateway/spec.zh.md)、[`docs/research/mcp-ecosystem.zh.md`](../research/mcp-ecosystem.zh.md)
+**关联**：[ADR-024](ADR-024-builtin-agent-is-internal-capability.zh.md)（语义排序）、[ADR-045](ADR-045-per-agent-resource-scope.zh.md)（machine × agent scope）、[ADR-004](ADR-004-capability-state-model.zh.md)（能力偏好）、已撤销的 [ADR-026](ADR-026-per-agent-mcp-scoping.zh.md)（per-agent scoping）、[spec `001-mcp-gateway`](../../specs/001-mcp-gateway/spec.zh.md)、[`docs/research/mcp-ecosystem.zh.md`](../research/mcp-ecosystem.zh.md)
 
 ## 背景
 
@@ -31,7 +31,7 @@ ADR-018 交付了 `coffer__search_tools` 作为聚合过载的答案，并押了
 
 ADR-018 自己引用的研究就是标定值：agent 的工具选择准确率在目录超过 **30–50 个工具**后急剧下降。Coffer 一直在提供该数字的二到四倍，并指望客户端来收拾。
 
-先例在此很重要。[ADR-026](ADR-026-per-agent-mcp-scoping.zh.md) 做过 per-agent 服务器 scope，因过度复杂被撤销；业界的「strategy 1」（ContextForge virtual server、MetaMCP namespace、MCPJungle tool group、Docker profile）无一例外要求用户手工策展一个子集。[ADR-045](ADR-045-machine-agent-resource-scope.zh.md) 此后恢复了 machine × agent 的 `scope` 轴，但它以整台服务器为粒度，且和所有手工方案一样——不配置就不生效。而默认安装恰恰是过载真正咬人的地方。
+先例在此很重要。[ADR-026](ADR-026-per-agent-mcp-scoping.zh.md) 做过 per-agent 服务器 scope，因过度复杂被撤销；业界的「strategy 1」（ContextForge virtual server、MetaMCP namespace、MCPJungle tool group、Docker profile）无一例外要求用户手工策展一个子集。[ADR-045](ADR-045-per-agent-resource-scope.zh.md) 此后恢复了 machine × agent 的 `scope` 轴，但它以整台服务器为粒度，且和所有手工方案一样——不配置就不生效。而默认安装恰恰是过载真正咬人的地方。
 
 ## 决策
 

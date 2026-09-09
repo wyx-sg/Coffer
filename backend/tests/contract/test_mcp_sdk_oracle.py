@@ -136,7 +136,7 @@ async def running_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 @pytest.mark.acceptance(spec="001-mcp-gateway", scenario="register a stdio MCP server")
 @pytest.mark.acceptance(
-    spec="006-knowledge-base",
+    spec="007-memory",
     scenario="built-in KB tools appear in client tool list",
 )
 @pytest.mark.acceptance(
@@ -183,28 +183,28 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
         assert any(n.startswith("coffer__") for n in tool_names), (
             f"no coffer__ built-in tools found in tools/list: {tool_names}"
         )
-        # And the KB tools specifically must be there (spec 006).
-        expected_kb_tools = {
-            "coffer__list_knowledge_bases",
-            "coffer__search_knowledge",
-            "coffer__grep_knowledge",
-            "coffer__read_document",
+        # And the knowledge tools specifically must be there. One kind, eight
+        # tools — the retrieval half.
+        expected_knowledge_tools = {
+            "coffer__search",
+            "coffer__grep",
+            "coffer__read",
+            "coffer__list",
         }
-        assert expected_kb_tools.issubset(tool_names), (
-            f"KB built-in tools missing from tools/list; "
-            f"missing={expected_kb_tools - tool_names}; got={sorted(tool_names)}"
+        assert expected_knowledge_tools.issubset(tool_names), (
+            f"knowledge built-in tools missing from tools/list; "
+            f"missing={expected_knowledge_tools - tool_names}; got={sorted(tool_names)}"
         )
-        # And the memory tools (spec 007).
-        expected_memory_tools = {
-            "coffer__recall",
-            "coffer__remember",
-            "coffer__list_memory",
+        # …and the write half plus the two handoff tools.
+        expected_write_tools = {
+            "coffer__write",
+            "coffer__delete",
             "coffer__set_handoff",
             "coffer__resume",
         }
-        assert expected_memory_tools.issubset(tool_names), (
-            f"memory built-in tools missing from tools/list; "
-            f"missing={expected_memory_tools - tool_names}; got={sorted(tool_names)}"
+        assert expected_write_tools.issubset(tool_names), (
+            f"knowledge write tools missing from tools/list; "
+            f"missing={expected_write_tools - tool_names}; got={sorted(tool_names)}"
         )
 
         # 3. tools/call — SDK validates CallToolResult
@@ -216,17 +216,17 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
         assert call_result.content is not None, "expected non-empty content"
 
         # 4. tools/call of a coffer__ BUILT-IN end-to-end through the daemon:
-        # remember writes a fact, recall finds it (review gap: builtins were
+        # write files an entry, search finds it (review gap: builtins were
         # only ever listed, never called over the wire).
-        remember_result = await session.call_tool(
-            "coffer__remember",
+        write_result = await session.call_tool(
+            "coffer__write",
             arguments={"text": "oracle smoke fact about axolotls", "scope": "global"},
         )
-        assert not remember_result.is_error, remember_result.content
-        recall_result = await session.call_tool(
-            "coffer__recall",
+        assert not write_result.is_error, write_result.content
+        search_result = await session.call_tool(
+            "coffer__search",
             arguments={"query": "axolotls", "scope": "global"},
         )
-        assert not recall_result.is_error, recall_result.content
-        recall_text = "".join(getattr(item, "text", "") for item in recall_result.content or [])
-        assert "axolotls" in recall_text, f"recall did not return the fact: {recall_text!r}"
+        assert not search_result.is_error, search_result.content
+        search_text = "".join(getattr(item, "text", "") for item in search_result.content or [])
+        assert "axolotls" in search_text, f"search did not return the entry: {search_text!r}"

@@ -19,11 +19,10 @@ Coffer 是一个守护进程 (daemon) + CLI + Web UI，它为你机器上的每�
 - **MCP 服务器** —— 把上游 (upstream) MCP 服务器聚合起来，再通过一个统一、带命名空间的接口重新暴露给各类 MCP 客户端（Claude Code、Codex）。配置一次，所有客户端看到的工具完全一致。
 - **Agents** —— 检测并注册你本地的 AI 编码 agent、在应用内编辑它们的配置文件，并一键把 Coffer 自己的 MCP 服务器安装到任意 agent 中。
 - **Skills** —— 维护一个 agent skill 包的主库，把它们投递到一个或多个 agent 的 skill 目录，并做漂移 (drift) 校正。
-- **知识库 (Knowledge base)** —— 放入任意格式的文档（自动转换为 markdown），让 agent 通过 grep / 关键词 / 向量检索取用。
-- **Memory** —— 一个跨 agent（Claude / Codex）共享的、agent-native 的唯一权威 memory 存储，可经 MCP 读写。
+- **知识 (Knowledge)** —— 一个统一的知识层，按项目分作用域（也可以是 global，或你自己命名的集合）。agent 经 MCP 往里写条目、规则与交接记录；你则放入任意格式的文档（自动转换为 markdown，原件保留作出处）。一次检索横跨全部内容 —— grep / 关键词 / 向量由引擎自行决定，不需要调用方回答这个问题。
 - **Channels** —— 从 Telegram 或 SeaTalk 与内置 agent 聊天，并在手机上接收通知。
 
-在多台机器上用 Coffer？**多机同步**通过一个你自己掌控的 git 仓库让一个仓库在多机间保持一致 —— 知识、记忆、资源，以及仅密文的凭证都会同步；加密密钥绝不离开你的机器。
+在多台机器上用 Coffer？**仓库导出与导入**把整个仓库写进你选定的目录，再在另一台机器上读回来 —— 知识、资源，以及仅密文的凭证都会随行；加密密钥绝不离开你的机器。
 
 内置的 **chat** 平台与 Web UI（由 daemon 自己在其 loopback origin 上托管）把它们串起来：与 Coffer agent 对话、浏览并管理每一种 kind，并实时观察 invocation。
 

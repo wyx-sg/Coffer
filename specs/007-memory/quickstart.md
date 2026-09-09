@@ -2,6 +2,16 @@
 
 > 中文版: [quickstart.zh.md](./quickstart.zh.md)
 
+> **Historical — 2026-09-10.** Spec 006 (Knowledge Base) and spec 007 (Memory)
+> merged into one **Knowledge Layer** on this date. [`spec.md`](./spec.md) is the
+> authority for the merged model — one `knowledge` kind, three scopes, one
+> storage root `~/.coffer/knowledge/<scope>/`, eight `coffer__*` tools. This
+> document records the design as it stood before that merge; where it says
+> "memory face", "`memory` kind", `~/.coffer/memory/`, `/api/v1/memory_stores`
+> or `coffer memory …`, read the merged equivalents in `spec.md`. The folder
+> name `specs/007-memory/` is likewise historical: it is the spec id every
+> inbound link and the acceptance audit key on.
+
 Memory is the **memory face** of Coffer's unified knowledge substrate. Facts are markdown files (the source of truth) shared across every agent — read and written **only over MCP** (Coffer keeps its own canonical format and does not touch agents' native memory files). No LLM runs at write time; the agent writes a clean fact.
 
 ## Through an MCP client (the primary surface)

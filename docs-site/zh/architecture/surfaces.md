@@ -25,10 +25,9 @@ Coffer 的每个接口面都是通向同一底层守护进程的入口点。守�
 | --------------------------------- | ------------------------------------------------------------------ |
 | `/resources`                      | 与 kind 无关的资源 CRUD、启用/禁用、生命周期。                     |
 | `/resources/mcp_server`           | MCP 能力偏好与调用日志。                                           |
-| `/agents`                         | Agent 注册表、配置文件、工作区切面、memory 投影。                  |
+| `/agents`                         | Agent 注册表、配置文件、工作区切面。                               |
 | `/skills`                         | 技能主存储与各 agent 的绑定。                                      |
-| `/knowledge_bases`                | KB 文档、上传、重建索引、检索。                                    |
-| `/memory_stores`                  | Memory 事实、scope 与原生投影。                                    |
+| `/knowledge/{scope}`              | 单个知识作用域：`entries`、`documents`、检索、车道、重建索引。      |
 | `/channels`                       | 通道绑定（Telegram、SeaTalk）、配对。                             |
 | `/chat`、`/models`                | Chat 会话/轮次与模型目录。                                        |
 | `/credentials`、`/settings`       | 加密凭据存储；设置含 `/settings/credentials`（主密钥存储）与 `/embedding` 配置。 |
@@ -66,9 +65,9 @@ REST API 是规范接口——CLI 和 Web UI 都调用它。
 
 **它是什么。** 命令行管理接口。通过 REST API 可用的每个管理操作也可以作为 `coffer` 子命令使用，按 kind 与跨切面关注点分组：
 
-- **各 kind 分组：** `coffer mcp`、`coffer agent`、`coffer skill`、`coffer kb`、`coffer memory`、`coffer channel`。
+- **各 kind 分组：** `coffer mcp`、`coffer agent`、`coffer skill`、`coffer knowledge`、`coffer channel`。
 - **跨切面分组：** `coffer credentials`、`coffer sync`、`coffer chat`、`coffer model`。
-- **与 kind 无关 / 运维分组：** `coffer resource`、`coffer audit`、`coffer retention`、`coffer daemon`。重建单个知识库的索引是 `coffer kb reindex`。
+- **与 kind 无关 / 运维分组：** `coffer resource`、`coffer audit`、`coffer retention`、`coffer daemon`。重建单个知识作用域的索引是 `coffer knowledge reindex`。
 
 典型命令读作 `coffer mcp add`、`coffer mcp tool enable/disable`、`coffer audit`、`coffer daemon start/stop/status`。CLI 是 Coffer 用于脚本化工作流、基于 dotfile 的配置和没有浏览器的远程（无头）机器的主要接口。每个子命令都支持 `--json` 输出，以便机器可读集成。
 

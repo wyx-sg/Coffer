@@ -2,7 +2,7 @@
 
 Coffer 的**对话**是与一个运行在你保险库之上的 AI agent 的流式对话。这里有两类 agent 应答:
 
-- **内置 agent**(“Coffer Assistant”)—— 一个进程内 agent,运行在你配置的 LLM 上,通过 Coffer 自己的网关访问你的 MCP 工具、知识库、记忆与技能;
+- **内置 agent**(“Coffer Assistant”)—— 一个进程内 agent,运行在你配置的 LLM 上,通过 Coffer 自己的网关访问你的 MCP 工具、知识与技能;
 - **CLI agent** —— 你已安装的 **Claude Code** 或 **Codex** 二进制,在你为每个对话挑选的工作目录里被驱动。
 
 ::: tip 先配置一个模型
@@ -14,7 +14,7 @@ Coffer 的**对话**是与一个运行在你保险库之上的 AI agent 的流�
 `coffer chat` 与**内置 agent**对话:
 
 ```bash
-coffer chat -m "我有哪些 MCP 服务器和知识库?"           # 单轮,打印回复
+coffer chat -m "我有哪些 MCP 服务器和知识作用域?"           # 单轮,打印回复
 coffer chat                                           # 交互式多轮会话
 coffer chat --model <model-id>                        # 为新对话选择模型
 coffer chat -c <conversation-id>                      # 恢复一个对话

@@ -66,8 +66,7 @@
     },
     "mcpServers": "MCP servers",
     "skills": "Skills",
-    "knowledgeBases": "Knowledge bases",
-    "memory": "Memory",
+    "knowledge": "Knowledge",
     "settings": "Settings",
     "language": "Language",
     "collapse": "Collapse sidebar",
@@ -776,7 +775,7 @@
       "empty": "No memory stores yet.",
       "accessViaGateway": "This agent accesses Coffer memory via the MCP gateway; manage stores on the Memory page.",
       "notInstalled": "Coffer MCP isn't installed on this agent yet — install it to give the agent access to Coffer memory.",
-      "openMemoryPage": "Open the Memory page",
+      "openMemoryPage": "Open the Knowledge page",
       "nativeHint": "The agent's own native memory stores (not managed by Coffer), read-only.",
       "nativeEmpty": "This agent has no native memory stores.",
       "searchPlaceholder": "Search project or path…",
@@ -985,134 +984,32 @@
       }
     }
   },
-  "knowledgeBases": {
-    "title": "Knowledge bases",
-    "subtitle": "Local document collections your agents can search through the MCP gateway.",
-    "add": "New knowledge base",
-    "empty": "No knowledge bases yet. Create one, then upload documents your agents can search.",
-    "loadFailed": "Failed to load knowledge bases",
-    "searchPlaceholder": "Search knowledge bases…",
-    "noMatches": "No knowledge bases match your search.",
-    "modes": {
-      "grep": "Grep",
-      "keyword": "Keyword",
-      "vector": "Vector"
-    },
-    "sourceMode": {
-      "converted": "Converted",
-      "edited": "Edited"
-    },
-    "cols": {
-      "name": "Name",
-      "mode": "Retrieval",
-      "description": "Description",
-      "docs": "Documents"
-    },
-    "dialog": {
-      "title": "New knowledge base",
-      "name": "Name",
-      "description": "Description (optional)",
-      "vector": "Vector search"
-    },
-    "detail": {
-      "embedStatus": {
-        "statusDone": "Embedded",
-        "statusEmbedding": "Embedding",
-        "statusQueued": "Queued",
-        "statusRunning": "Embedding",
-        "statusError": "Embed failed"
-      },
-      "reindex": "Reindex",
-      "search": "Search",
-      "mode": "Mode",
-      "searchPlaceholder": "Search this knowledge base…",
-      "fallback": "No embedding configured — fell back to {{mode}}.",
-      "noMatches": "No matches.",
-      "grep": "Grep",
-      "grepPlaceholder": "Pattern (exact / regex) over the Markdown files…",
-      "truncated": "Results truncated (max matches or timeout reached).",
-      "documents": "Documents",
-      "upload": "Upload",
-      "replaceExisting": "Upload again and replace",
-      "reconvert": "Reconvert",
-      "settings": "Settings",
-      "checkSources": "Check sources",
-      "deleteConfirm": "Delete document {{title}}? This cannot be undone.",
-      "empty": "No documents yet. Upload a file of any format to populate this knowledge base.",
-      "back": "Back to knowledge bases",
-      "docBadge": "{{count}} documents",
-      "chunkBadge": "{{count}} chunks",
-      "degradedBadge": "{{count}} documents pending vector embed (embedding service unavailable; indexed by keyword)",
-      "selectDocument": "Select a document on the left to preview or edit it.",
-      "sourceCheck": {
-        "title": "Source files",
-        "description": "Documents ingested from a file on disk, checked against their original source.",
-        "empty": "No documents track an external source file. Web uploads aren't tracked — only documents ingested from a path (via the CLI or desktop app) have a source file to re-check.",
-        "update": "Update from source",
-        "updated": "Document updated from its source file.",
-        "missingNote": "Source file not found at that path.",
-        "editedNote": "This document was edited locally, so updating from source is blocked to avoid clobbering your changes.",
-        "status": {
-          "unchanged": "Up to date",
-          "changed": "Source changed",
-          "missing": "Source missing",
-          "edited": "Locally edited",
-          "updated": "Auto-updated"
-        }
-      }
-    },
-    "settings": {
-      "title": "Knowledge base settings",
-      "description": "Update chunking and embedding for this knowledge base. Reindex afterwards to apply chunking changes to existing documents.",
-      "chunkSize": "Chunk size",
-      "chunkOverlap": "Chunk overlap",
-      "vectorHint": "Add meaning-based vector retrieval for this knowledge base (keyword + grep are always on). The embedding model is configured globally in Settings → Embedding.",
-      "autoUpdateSources": "Auto-update from source",
-      "autoUpdateSourcesHint": "When a document's external source file changes, re-ingest it automatically on the next source check (locally edited documents are always skipped)."
-    },
-    "welcome": {
-      "title": "Manage your knowledge bases",
-      "body": "Collect local documents your coding agents can search through the MCP gateway — keyword and grep work out of the box, vector search is one toggle away.",
-      "featureKeyword": {
-        "title": "Keyword + grep by default",
-        "body": "Search ingested files instantly — no embedding model or download required."
-      },
-      "featureSemantic": {
-        "title": "Vector when you want it",
-        "body": "Opt into meaning-based vector search with a configurable embedding provider."
-      },
-      "featureAgent": {
-        "title": "Reachable by agents",
-        "body": "Agents search and fetch documents through Coffer's built-in MCP tools."
-      }
-    },
-    "deleteConfirm": "Delete knowledge base \"{{name}}\"? Its documents and index are removed. This cannot be undone."
-  },
-  "memory": {
-    "title": "Memory",
-    "subtitle": "Local memory stores your agents read and write through the MCP gateway. Stores are provisioned automatically.",
-    "empty": "No memory stores yet — they appear automatically as your agents work.",
-    "loadFailed": "Failed to load memory stores",
-    "searchPlaceholder": "Search memory stores…",
-    "noMatches": "No memory stores match your search.",
-    "unnamedStore": "Unnamed memory",
+  "knowledge": {
+    "title": "Knowledge",
+    "subtitle": "One local knowledge store per scope — what your agents write and what you ingest — searchable through the MCP gateway. The global and per-project scopes are created automatically.",
+    "add": "New collection",
+    "empty": "No knowledge scopes yet. Create a collection, or let the global and per-project scopes appear as your agents work.",
+    "loadFailed": "Failed to load knowledge scopes",
+    "searchPlaceholder": "Search knowledge scopes…",
+    "noMatches": "No knowledge scopes match your search.",
+    "unnamedScope": "Unnamed scope",
     "rename": {
-      "title": "Rename memory store",
-      "description": "Give this store a readable display name. This is a label only — it doesn't change the store's id or where agents read and write.",
+      "title": "Rename knowledge scope",
+      "description": "Give this scope a readable display name. This is a label only — it doesn't change the scope's id or where agents read and write.",
       "label": "Display name",
       "placeholder": "e.g. My research notes",
       "clear": "Clear name"
     },
     "merge": {
       "action": "Find duplicates (AI)",
-      "title": "Merge duplicate memory stores",
-      "description": "Coffer's internal engine judges whether two project stores describe the same project. Merging is additive — colliding files keep both copies, and nothing is ever lost.",
-      "scanning": "Scanning stores…",
+      "title": "Merge duplicate project scopes",
+      "description": "Coffer's internal engine judges whether two project scopes describe the same project. Merging is additive — colliding files keep both copies, and nothing is ever lost.",
+      "scanning": "Scanning scopes…",
       "noCandidates": "No merge candidates found.",
       "noModelHint": "No internal engine is configured, so only provable duplicates (matching git remotes) are shown. Configure one under Settings → LLM connections to judge the rest.",
       "judgedByRemote": "Proved by matching origin remote",
       "judgedByEngine": "Judged by the internal engine",
-      "factCount": "{{count}} facts",
+      "entryCount": "{{count}} entries",
       "swap": "Swap direction",
       "merge": "Merge",
       "merging": "Merging…",
@@ -1127,62 +1024,116 @@
     "modes": {
       "grep": "Grep",
       "keyword": "Keyword",
-      "vector": "Vector"
+      "vector": "Vector",
+      "hybrid": "Hybrid"
+    },
+    "sourceMode": {
+      "converted": "Converted",
+      "edited": "Edited"
     },
     "cols": {
       "name": "Name",
       "scope": "Scope",
-      "description": "Description",
-      "facts": "Facts"
+      "entries": "Entries",
+      "documents": "Documents",
+      "description": "Description"
     },
     "scope": {
       "global": "Global",
       "project": "Project",
+      "named": "Collection",
       "unknown": "Unknown"
     },
+    "dialog": {
+      "title": "New knowledge collection",
+      "description": "A collection you curate yourself. The global and per-project scopes appear on their own — you never create those by hand.",
+      "name": "Name",
+      "nameHint": "Letters, digits, dash and underscore. \"global\" and names starting with \"project-\" are reserved for the automatic scopes.",
+      "descriptionField": "Description (optional)",
+      "vector": "Vector search"
+    },
     "detail": {
-      "metrics": "{{facts}} facts · {{bytes}}",
-      "recall": "Recall",
-      "mode": "Mode",
-      "recallPlaceholder": "Recall facts from this store…",
-      "fallback": "No embedding configured — fell back to keyword.",
-      "noMatches": "No matches.",
-      "addFact": "Add fact",
-      "factName": "Name (optional)",
-      "factNamePlaceholder": "Derived from the text if left blank",
-      "factType": "Type (optional)",
-      "factDescription": "Description (optional)",
-      "factBody": "Fact",
-      "factBodyPlaceholder": "Write the fact in Markdown…",
-      "facts": "Facts",
-      "clearAll": "Clear all",
-      "clearTitle": "Clear all facts?",
-      "clearConfirm": "Clear all facts in {{store}}? This cannot be undone.",
-      "deleteTitle": "Delete fact?",
-      "deleteConfirm": "Delete fact {{name}}? This cannot be undone.",
-      "editAria": "Edit fact {{name}}",
-      "loadFailed": "Failed to load this memory store.",
-      "empty": "No facts yet.",
-      "back": "Back to memory stores",
-      "factBadge": "{{count}} facts",
-      "selectFact": "Select a memory on the left to preview or edit it.",
-      "untitled": "(untitled)",
+      "back": "Back to knowledge",
       "tabs": {
-        "knowledge": "Knowledge",
+        "entries": "Entries",
+        "documents": "Documents",
         "rules": "Rules",
         "handoff": "Handoff",
         "changelog": "Changelog"
+      },
+      "entries": "Entries",
+      "emptyEntries": "No entries yet.",
+      "selectEntry": "Select an entry on the left to preview it.",
+      "untitled": "(untitled)",
+      "documents": "Documents",
+      "emptyDocuments": "No documents yet. Upload a file of any format to populate this scope.",
+      "selectDocument": "Select a document on the left to preview it.",
+      "recall": "Recall",
+      "recallPlaceholder": "Recall entries from this scope…",
+      "search": "Search",
+      "searchPlaceholder": "Search this scope's documents…",
+      "noMatches": "No matches.",
+      "entryBadge": "{{count}} entries",
+      "docBadge": "{{count}} documents",
+      "chunkBadge": "{{count}} chunks",
+      "degradedBadge": "{{count}} documents pending vector embed (embedding service unavailable; indexed by keyword)",
+      "clearAll": "Clear all entries",
+      "clearTitle": "Clear all entries?",
+      "clearConfirm": "Clear every entry in {{scope}}? Its ingested documents are untouched. This cannot be undone.",
+      "deleteEntryTitle": "Delete entry?",
+      "deleteEntryConfirm": "Delete entry {{name}}? This cannot be undone.",
+      "deleteTitle": "Delete file?",
+      "deleteConfirm": "Delete {{name}}? This cannot be undone.",
+      "deleteDocConfirm": "Delete document {{title}}? This cannot be undone.",
+      "reindex": "Reindex",
+      "settings": "Settings",
+      "checkSources": "Check sources",
+      "upload": "Upload",
+      "replaceExisting": "Upload again and replace",
+      "reconvert": "Reconvert",
+      "embedStatus": {
+        "statusDone": "Embedded",
+        "statusEmbedding": "Embedding",
+        "statusQueued": "Queued",
+        "statusRunning": "Embedding",
+        "statusError": "Embed failed"
+      },
+      "sourceCheck": {
+        "title": "Source files",
+        "description": "Documents ingested from a file on disk, checked against their original source.",
+        "empty": "No documents track an external source file. Web uploads aren't tracked — only documents ingested from a path (via the CLI) have a source file to re-check.",
+        "update": "Update from source",
+        "updated": "Document updated from its source file.",
+        "missingNote": "Source file not found at that path.",
+        "editedNote": "This document was edited locally, so updating from source is blocked to avoid clobbering your changes.",
+        "status": {
+          "unchanged": "Up to date",
+          "changed": "Source changed",
+          "missing": "Source missing",
+          "edited": "Locally edited",
+          "updated": "Auto-updated"
+        }
       }
+    },
+    "settings": {
+      "title": "Knowledge scope settings",
+      "description": "Update chunking and retrieval for this scope. Reindex afterwards to apply chunking changes to existing documents.",
+      "chunkSize": "Chunk size",
+      "chunkOverlap": "Chunk overlap",
+      "vectorHint": "Add meaning-based vector retrieval for this scope (keyword + grep are always on). The embedding model is configured globally in Settings → Embedding.",
+      "autoUpdateSources": "Auto-update from source",
+      "autoUpdateSourcesHint": "When a document's external source file changes, re-ingest it automatically on the next source check (locally edited documents are always skipped)."
     },
     "lanes": {
       "rules": "Rules",
       "handoff": "Branches",
       "changelog": "Changelog",
       "intro": {
-        "knowledge": "Facts the agent has written with `remember` — one file each. Correct them in your editor or delete.",
+        "entries": "What the agent wrote — one file each. Correct them in your editor or delete.",
+        "documents": "Files you ingested, converted to Markdown on disk. Upload any format from the header.",
         "rules": "Long-lived rules that shape the agent's behavior, injected at session start.",
         "handoff": "Per-branch handoff notes so work can continue on another machine or session.",
-        "changelog": "History of memory consolidation and edits."
+        "changelog": "History of knowledge consolidation and edits."
       }
     },
     "rules": {
@@ -1195,26 +1146,26 @@
       "updatedAt": "Updated {{time}}"
     },
     "changelog": {
-      "empty": "No changelog yet — it records each memory consolidation.",
+      "empty": "No changelog yet — it records each knowledge consolidation.",
       "select": "Select the changelog on the left to read it."
     },
     "welcome": {
-      "title": "Your shared agent memory",
-      "body": "A global store plus one per project, shared across every agent — facts are written directly (no LLM) and recalled through Coffer's built-in MCP tools. Everything stays on your machine.",
-      "featureRecall": {
-        "title": "Remembers facts",
-        "body": "Agents store and recall short facts across sessions."
+      "title": "One place for everything your agents know",
+      "body": "A global scope, one per project, plus any collection you make — holding both the entries agents write and the documents you ingest. Keyword and grep work out of the box, vector search is one toggle away, and everything stays on your machine.",
+      "featureEntries": {
+        "title": "What agents write",
+        "body": "Agents store and recall what they learn across sessions, through Coffer's built-in MCP tools."
+      },
+      "featureDocuments": {
+        "title": "What you ingest",
+        "body": "Upload a file of any format; Coffer converts it to Markdown and indexes it for search."
       },
       "featureLocal": {
         "title": "Local-first",
-        "body": "Facts are plain Markdown files on your machine; the index rebuilds from them."
-      },
-      "featureAgent": {
-        "title": "Reachable by agents",
-        "body": "Add, recall, and curate facts through Coffer's built-in MCP tools."
+        "body": "Everything is plain Markdown on your machine; the index rebuilds from the files."
       }
     },
-    "deleteStoreConfirm": "Delete memory store \"{{name}}\"? Its facts are removed. This cannot be undone."
+    "deleteScopeConfirm": "Delete knowledge scope \"{{name}}\"? Its entries, documents and index are removed. This cannot be undone."
   },
   "chat": {
     "title": "Chat",

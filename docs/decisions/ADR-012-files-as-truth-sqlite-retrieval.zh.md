@@ -3,10 +3,10 @@
 > English: [ADR-012-files-as-truth-sqlite-retrieval.md](./ADR-012-files-as-truth-sqlite-retrieval.md)
 
 **Status**: Accepted
-**Date**: 2026-06-09
+**Date**: 2026-06-09（2026-09-10 修订；见修订历史）
 **Deciders**: Yuxing Wu
 **Supersedes**: ADR-010（LlamaIndex RAG 引擎）与 ADR-011（mem0 memory 引擎）—— 二者均已作为废弃文档移除
-**Related**: spec `006-knowledge-base`、spec `007-memory`、[ADR-002](ADR-002-code-layout-layer-first.md)、[ADR-007](ADR-007-everything-is-a-resource-kind.md)、[ADR-013](ADR-013-agent-native-shared-memory.md)
+**Related**: spec `007-memory`（知识层 spec）、[ADR-002](ADR-002-code-layout-layer-first.md)、[ADR-007](ADR-007-everything-is-a-resource-kind.md)、[ADR-013](ADR-013-agent-native-shared-memory.md)
 
 ## Context
 
@@ -146,3 +146,47 @@ kind 自己持有的端口背后，测试用 fake，importlinter 契约保持 `a
 `domain/` 干净。换 converter、换 embedding provider，乃至换向量扩展，都是一次
 单 adapter 改动。关键在于：因为**文件即事实源**，最深的那种锁定 —— 一份你出不来
 的私有索引格式 —— 已经不存在了：任何引擎都能从 markdown 重建出来。
+
+## 修订历史
+
+- **2026-06-09** —— 初版决定：markdown 文件是唯一事实源；SQLite FTS5 + sqlite-vec
+  持有一份完全可重建的索引；embedding 来自可配置的 OpenAI 兼容 provider；导入走
+  可插拔的 `MarkdownConverter` 端口。一个基底、**两副面孔** —— 一个
+  `knowledge_base` kind 与一个 `memory` kind。
+- **2026-09-10** —— **两副面孔合而为一。** `memory` 与 `knowledge_base` 合并为
+  单一资源 kind `knowledge`。基底一动未动，因为本来就没有什么要动：
+  `documents`、`chunks`、`documents_fts` 与 `vec_chunks` 从本 ADR 落地那天起就是
+  共享的，`infrastructure/knowledge/paths.py` 也早已同时持有两套落盘布局。分成
+  两份的只有门面 —— 两套 MCP 工具、两个 REST router、两个 CLI 命令组、两个页面
+  —— 而它逼着调用方在能搜之前先猜「这条事实属于哪副面孔」。所以这次合并不是立场
+  的改变，而是把这个立场贯彻到底。它对上文的修订：
+  - **存储根与 lane。** 一个根 `~/.coffer/knowledge/<scope>/`，lane 为
+    `knowledge/`（agent 写下的条目）、`inbox/`（导入的文档）、`rules/`、
+    `handoff/`、`superseded/`，外加一个隐藏的 `.raw/` 存放导入原件。因此上文
+    Decision 里那对 `docs/<doc-id>.md` + `raw/<doc-id>.<ext>` 现在是
+    `<scope>/inbox/<doc-id>.md` + `<scope>/.raw/<doc-id>.<ext>`，逐条 memory
+    markdown 则成为 `<scope>/knowledge/` 下的一条 entry。出处保留与可重新转换
+    不变；`.raw/` 之所以隐藏，只是为了让 ripgrep 不再对每份导入文档返回两条命中
+    —— 转换后的 Markdown 与它的原件。
+  - **scope 取代 store 名。** scope 由资源名读出：`global` 与
+    `project-<ULID>`（由 cwd 的 git 根解析）在首次使用时自动开通；其余任何名字
+    都是用户有意创建的集合，绝不自动开通 —— 因为从一个拼写错误里悄悄造出一个
+    scope，比报错更糟。
+  - **落库的 lane 判别列。** `documents.lane`（`knowledge` | `inbox`，
+    migration `0052`）记录一行归哪个写入方所有，因为两条 lane 的路径在同一个根
+    下确实会重叠。计数按 lane 分开；而**检索有意横跨两条 lane** —— 一份索引、
+    一次查询 —— 这正是合并的全部意义。
+  - **逐语料 embedding 配置消失。** 逐 scope 的 `KnowledgeConfig` 完全不带
+    embedding 字段；到合并时，两个旧 config 的这些字段都已无人读取。embedding
+    改由安装级配置解析，某个 scope 是否启用向量检索，纯粹由它是否列出该检索
+    mode 决定。上文关于可变性的论证不受影响 —— 文件仍是事实，重新 embed 仍然
+    只是一次重新派生。
+- **2026-09-10，关于清空索引。** migration `0051` 在合并两个 kind 的同时
+  **清空了派生索引**。这是本 ADR 立场的落实，而非对它的例外。`memory:global` 与
+  `knowledge_base:global` 同时存在，而 `resources` 以 `(kind, name)` 为键，两边
+  都转换会在 `knowledge:global` 上撞车，任何自动改名都只是猜测。代价也很小：
+  `documents` 里每一行都是 `kind='memory'` —— 一份指向 journal lane 的 memory
+  侧索引，而那条 lane 已在此前的改动中移除 —— 所以索引早就指着不存在的文件，
+  而知识库那副面孔更是从未存过一份文档。**文件即事实，SQLite 是可重建索引**：
+  清掉一份文件能重建的索引不会丢失任何权威内容，因为索引从来就不是事实源。
+  重新累积靠显式的 `coffer__write` 与文件导入。

@@ -19,11 +19,10 @@ Coffer is a daemon + CLI + web UI that gives every AI agent on your machine one 
 - **MCP servers** — aggregate upstream MCP servers and re-expose them to MCP clients (Claude Code, Codex) through a unified, namespaced surface. Configure once; every client sees the same tools.
 - **Agents** — detect and register your local AI coding agents, edit their config files in-app, and one-click install Coffer's own MCP server into any of them.
 - **Skills** — keep a master library of agent skill bundles and deliver them into one or more agents' skill directories, with drift reconciliation.
-- **Knowledge base** — drop in any-format documents (auto-converted to markdown) and let agents retrieve them by grep / keyword / vector search.
-- **Memory** — one canonical, agent-native memory store shared across agents (Claude / Codex), readable and writable over MCP.
+- **Knowledge** — one knowledge layer, scoped per project (or global, or a collection you name). Agents write entries, rules and handoffs into it over MCP; you drop in any-format documents (auto-converted to markdown, originals kept for provenance). One search spans everything — grep / keyword / vector is an engine decision, not a question the caller has to answer.
 - **Channels** — chat with a built-in agent from Telegram or SeaTalk, and receive notifications from your phone.
 
-Run Coffer on more than one machine? **Multi-machine sync** keeps one vault consistent across them through a git repository you own — knowledge, memory, resources, and ciphertext-only credentials travel; the encryption key never leaves your machines.
+Run Coffer on more than one machine? **Vault export & import** writes the whole vault to a directory you pick and reads one back on the other machine — knowledge, resources, and ciphertext-only credentials travel; the encryption key never leaves your machines.
 
 A built-in **chat** platform and a web UI — served by the daemon itself at its own loopback origin — tie them together: talk to a Coffer agent, browse and curate every kind, and watch invocations live.
 

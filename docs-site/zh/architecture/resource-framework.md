@@ -4,18 +4,17 @@ Resource 框架是 Coffer 的核心抽象。理解它，是理解系统如何随
 
 ## 一切皆资源 kind
 
-Coffer 中每一个由用户管理的实体都是一个 **Resource（资源）**，由形如 `<kind>:<name>` 的稳定字符串标识。当前已注册六个 kind：
+Coffer 中每一个由用户管理的实体都是一个 **Resource（资源）**，由形如 `<kind>:<name>` 的稳定字符串标识。当前已注册五个 kind：
 
 | Kind             | 规范                                                   | 说明                                                                                             |
 | ---------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
 | `mcp_server`     | [001-mcp-gateway](/zh/reference/specs/001-mcp-gateway/spec)       | 一个已注册的上游 MCP 服务器：传输配置、凭据引用，以及网关所需的各服务器策略。                     |
 | `agent`          | [004-agent-registry](/zh/reference/specs/004-agent-registry/spec) | 一个已注册的本地 AI 编码助手（如 Claude Code）：其配置目录、Coffer-MCP 安装状态及派生的工作区切面。 |
 | `skill`          | [005-skill-manager](/zh/reference/specs/005-skill-manager/spec)   | 一个主技能包，Coffer 将其分发到一个或多个 agent 的技能目录中。                                    |
-| `knowledge_base` | [006-knowledge-base](/zh/reference/specs/006-knowledge-base/spec) | 共享知识基底的 KB 面：任意格式上传 → markdown 真相 + grep / FTS5 / 向量检索。                     |
-| `memory`         | [007-memory](/zh/reference/specs/007-memory/spec)                 | 同一基底的 memory 面：按事实的 markdown + 重新生成的 `MEMORY.md`，在各 agent 间共享。             |
+| `knowledge`      | [007 — 知识层](/zh/reference/specs/007-memory/spec)               | agent 所知内容的一个作用域：它们写下的条目，加上被摄取为 markdown 的任意格式文档，同在一套 grep / FTS5 / 向量检索之下。 |
 | `channel`        | [009-channels](/zh/reference/specs/009-channels/spec)             | 一个消息通道绑定（Telegram、SeaTalk）：传输配置、凭据引用和一个默认 agent。                       |
 
-`knowledge_base` 和 `memory` 是**同一个知识基底**的两个面——磁盘上的 markdown 文件是真相之源，SQLite 是可重建的索引（[ADR-012](/zh/reference/adr/ADR-012-files-as-truth-sqlite-retrieval)）。新的 kind 接入同一个框架，无需对框架本身做任何修改。加密凭据存储和多机同步是刻意设计的**跨切面关注点，而非 kind**：它们服务于每一个 kind，本身并不是被管理的实体。
+`knowledge` 曾经是两个 kind——一个只可读的 `knowledge_base` 和一个只有 agent 写入的 `memory`——但 `documents`、`chunks`、FTS5 与 sqlite-vec 从一开始就是共用的，这种拆分什么也没换来，反而逼着每个调用方先给自己的数据归类才能挑工具。它们现在是一个 kind、一个存储根，磁盘上的 markdown 文件是真相之源，SQLite 是可重建的索引（[ADR-012](/zh/reference/adr/ADR-012-files-as-truth-sqlite-retrieval)）。一个 knowledge 资源是**共管**的：你和你的 agent 都往里写，其作用域由名字本身读出（`global`、`project-<ULID>`，或你自己命名的集合）。新的 kind 接入同一个框架，无需对框架本身做任何修改。加密凭据存储和多机同步是刻意设计的**跨切面关注点，而非 kind**：它们服务于每一个 kind，本身并不是被管理的实体。
 
 框架提供四件事，且仅此四件：
 

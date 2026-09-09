@@ -8,7 +8,7 @@ For operational observability (structured logs, trace correlation, error envelop
 
 ## The problem this solves
 
-A developer registers a fleet of MCP servers, imports skills, builds knowledge bases, accumulates memory, runs chat conversations, pairs notification channels, and syncs it all across machines — driven from Claude Code, Codex, the UI, and custom scripts, often simultaneously. Without accountability records, answering even basic governance questions becomes opaque: "Who disabled the `filesystem__write_file` tool — me or the UI?" "Which server's tool did Claude Code call at 2pm, and what was the outcome?" "When was this server's config last changed?" "When was a credential last rotated, or the master key relocated?" The audit log and invocation log answer these questions without requiring the user to run a separate monitoring stack.
+A developer registers a fleet of MCP servers, imports skills, accumulates knowledge, runs chat conversations, pairs notification channels, and syncs it all across machines — driven from Claude Code, Codex, the UI, and custom scripts, often simultaneously. Without accountability records, answering even basic governance questions becomes opaque: "Who disabled the `filesystem__write_file` tool — me or the UI?" "Which server's tool did Claude Code call at 2pm, and what was the outcome?" "When was this server's config last changed?" "When was a credential last rotated, or the master key relocated?" The audit log and invocation log answer these questions without requiring the user to run a separate monitoring stack.
 
 Coffer's approach is deliberately lean: a pair of local database tables, not a time-series database or a log-management SaaS. All records stay on-device and within the `~/.coffer/` backup footprint.
 
@@ -86,20 +86,18 @@ The full set of audited event types (defined as `AuditEventType` in `domain/audi
 | `skill_drift_detected`                           | When on-disk drift from the managed skill is detected    |
 | `skill_adopted` / `skill_unmanaged_deleted`      | When an unmanaged skill is adopted / a stray is deleted  |
 
-**Knowledge base:**
+**Knowledge:**
 
-| Event                                                      | Trigger                                        |
-| --------------------------------------------------------- | ---------------------------------------------- |
-| `kb_document_ingested` / `kb_document_updated` / `kb_document_deleted` | When a KB document is ingested / updated / deleted |
-| `kb_reindexed`                                            | After `coffer kb reindex` rebuilds the index   |
+| Event                                                                 | Trigger                                                          |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `kb_document_ingested` / `kb_document_updated` / `kb_document_deleted` | When a document is ingested / updated / deleted                  |
+| `kb_reindexed`                                                        | After `coffer knowledge reindex` rebuilds the index              |
+| `memory_added` / `memory_updated` / `memory_deleted`                  | When an entry is added / updated / deleted                       |
+| `memory_cleared`                                                      | When a knowledge scope's entries are cleared                     |
+| `memory_organized` / `memory_reorganized`                             | When the inbox is consolidated / the topic docs are re-shaped    |
+| `handoff_set`                                                         | When working state is saved for a project + branch               |
 
-**Memory:**
-
-| Event                                                    | Trigger                                                |
-| -------------------------------------------------------- | ------------------------------------------------------ |
-| `memory_added` / `memory_updated` / `memory_deleted`     | When a memory fact is added / updated / deleted        |
-| `memory_cleared`                                         | When a memory store is cleared                         |
-| `memory_projected`                                       | When memory is projected into an agent/project         |
+The `kb_*` and `memory_*` prefixes are historical: they were the wire values before the two kinds merged into `knowledge`, and they are kept verbatim so existing audit rows and queries stay valid.
 
 **Chat, conversation & model:**
 

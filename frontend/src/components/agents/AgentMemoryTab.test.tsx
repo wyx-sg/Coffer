@@ -97,12 +97,12 @@ describe("AgentMemoryTab", () => {
     expect(screen.getByText(/accesses coffer memory via the mcp gateway/i)).toBeInTheDocument();
   });
 
-  test("the Coffer-managed card links to the standalone Memory page", () => {
+  test("the Coffer-managed card links to the standalone Knowledge page", () => {
     stubMcp(true);
     stubNative();
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
-    fireEvent.click(screen.getByRole("button", { name: /open the memory page/i }));
-    expect(navigateMock).toHaveBeenCalledWith("/memory");
+    fireEvent.click(screen.getByRole("button", { name: /open the knowledge page/i }));
+    expect(navigateMock).toHaveBeenCalledWith("/knowledge");
   });
 
   test("without Coffer MCP installed, shows the not-installed note and no link", () => {
@@ -110,7 +110,9 @@ describe("AgentMemoryTab", () => {
     stubNative();
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
     expect(screen.getByText(/coffer mcp isn't installed on this agent/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /open the memory page/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /open the knowledge page/i }),
+    ).not.toBeInTheDocument();
     // Section B (the agent's own native memory) is independent of the gateway —
     // it still renders when Coffer MCP is not installed.
     expect(screen.getByText("Coffer")).toBeInTheDocument();

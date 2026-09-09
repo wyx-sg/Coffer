@@ -1,12 +1,11 @@
-"""Per-kind wiring helpers for the FastAPI composition root (specs 006/007).
+"""Shared-substrate + chat wiring for the FastAPI composition root.
 
 Extracted from `app.py` so that file stays under the project's 400-LOC ceiling.
 ``build_substrate`` constructs the shared knowledge substrate ONCE per process
-(unified ``DocumentRepo``, the ``SqliteKnowledgeIndex`` factory, the converter
-registry, the cached ``make_embedder`` factory bound to the encrypted credential store, ripgrep,
-the retrieval facade + reindexer); each `wire_<kind>` function takes it,
-constructs the kind's service, registers the kind into ``app.state.kinds`` and
-its built-in tools into the shared registry.
+(unified ``DocumentRepo``, the ``SqliteKnowledgeIndex`` factory, the cached
+``make_embedder`` factory bound to the encrypted credential store, ripgrep, the
+retrieval facade + reindexer); the knowledge kind's own wiring
+(``knowledge_wiring.py``) takes it and builds the one service over it.
 """
 
 from __future__ import annotations
@@ -14,21 +13,15 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from coffer.application.agent.model_catalogue import AgentModelCatalogueService
-from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.application.knowledge.reindex import Reindexer
 from coffer.application.knowledge.retrieval import (
-    EmbeddingResolver,
     KnowledgeRetrieval,
-    no_embedding,
 )
-from coffer.application.knowledge_base.builtin_tools import register_kb_builtin_tools
-from coffer.application.knowledge_base.kind import make_kb_kind
-from coffer.application.knowledge_base.service import KnowledgeBaseService
 from coffer.application.providers.ports import ModelIntrospectionService
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.knowledge.embedder import EmbeddingConfig
@@ -41,8 +34,6 @@ from coffer.infrastructure.agent.model_discovery import (
 from coffer.infrastructure.chat.codex_app_server import default_app_server_session
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
-from coffer.infrastructure.knowledge import paths
-from coffer.infrastructure.knowledge.converters.registry import default_registry
 from coffer.infrastructure.knowledge.embeddings import make_embedder
 from coffer.infrastructure.knowledge.grep import RipgrepGrep
 from coffer.infrastructure.knowledge.repository import DocumentRepo
@@ -58,18 +49,14 @@ from coffer.surfaces.http.dependencies import (
     get_agent_service,
     set_agent_registry,
     set_chat_service,
-    set_kb_service,
     set_turn_orchestrator,
 )
 
 if TYPE_CHECKING:
-    from fastapi import FastAPI
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from coffer.application.audit_service import AuditService
     from coffer.application.mcp.gateway import MCPGatewaySession
-    from coffer.application.resource_service import ResourceService
-    from coffer.domain.knowledge.converter import MarkdownConverter
     from coffer.domain.knowledge.index import KnowledgeIndex
 
 
@@ -146,35 +133,6 @@ def build_substrate(
     return documents, retrieval, reindexer
 
 
-def wire_kb_kind(
-    app: FastAPI,
-    resource_svc: ResourceService,
-    audit: AuditService,
-    sm: object,
-    builtin_tools: BuiltinToolRegistry,
-    substrate: tuple[DocumentRepo, KnowledgeRetrieval, Reindexer] | None = None,
-    embedding_resolver: EmbeddingResolver = no_embedding,
-) -> KnowledgeBaseService:
-    """Wire the ``knowledge_base`` kind (spec 006) into the app."""
-    documents, retrieval, reindexer = substrate or build_substrate(sm)  # type: ignore[arg-type]
-    kb_service = KnowledgeBaseService(
-        resource_service=resource_svc,
-        documents=documents,
-        # ``ConverterRegistry`` provides the ``convert`` the service calls; it is
-        # the production stand-in for the ``MarkdownConverter`` port.
-        converters=cast("MarkdownConverter", default_registry()),
-        retrieval=retrieval,
-        reindexer=reindexer,
-        audit=audit,
-        paths=paths,
-        embedding_resolver=embedding_resolver,
-    )
-    app.state.kinds["knowledge_base"] = make_kb_kind(kb_service)
-    set_kb_service(kb_service)
-    register_kb_builtin_tools(builtin_tools, resources=resource_svc, kb_service=kb_service)
-    return kb_service
-
-
 def wire_chat(
     audit: AuditService,
     sm: object,
@@ -184,7 +142,7 @@ def wire_chat(
     """Wire the agent-chat feature (spec 008) into the running app.
 
     Must be called **after** the ``BuiltinToolRegistry`` is fully populated
-    (after KB, memory, MCP, and skill wiring) so the ``coffer-builtin-agent``
+    (after knowledge, MCP, and skill wiring) so the ``coffer-builtin-agent``
     gateway session sees all built-in tools.
 
     Chat talks only to Coffer-managed agents (``claude_code`` / ``codex``); the
@@ -200,7 +158,7 @@ def wire_chat(
 
     # 2. Long-lived in-process gateway session for the built-in agent. Built
     #    via the shared mcp_session_factory so it reuses the fully-populated
-    #    BuiltinToolRegistry (KB + memory + skill tools + MCP).
+    #    BuiltinToolRegistry (knowledge + skill tools + MCP).
     agent_session: MCPGatewaySession = mcp_session_factory("coffer-builtin-agent")
 
     # 3. Credential resolver: resolve a credential ref → raw API key from the

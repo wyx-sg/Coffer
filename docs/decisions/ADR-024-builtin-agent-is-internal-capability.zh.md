@@ -7,7 +7,7 @@
 - **决策者：** Yuxing Wu
 - **Spec：** [008-agent-chat](../../specs/008-agent-chat/spec.md) 与 [004-agent-registry](../../specs/004-agent-registry/spec.md)（重新定位 + 能力迁移——不新增 spec 编号；实现前更新两份 `spec.md`）
 - **取代：** [ADR-021](./ADR-021-chat-as-vault-console.md) 中"通过 `builtin` agent 与金库对话"这一半；**修订** [ADR-018](./ADR-018-tool-retrieval-for-overload.md)（search-tools 排序）
-- **相关：** [007-memory](../../specs/007-memory/spec.md)、[006-knowledge-base](../../specs/006-knowledge-base/spec.md)、[ADR-012](./ADR-012-files-as-truth-sqlite-retrieval.md)
+- **相关：** [007-memory](../../specs/007-memory/spec.md)（知识层 spec）、[ADR-012](./ADR-012-files-as-truth-sqlite-retrieval.md)
 
 ## 背景
 

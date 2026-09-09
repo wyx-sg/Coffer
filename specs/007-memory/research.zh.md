@@ -2,6 +2,15 @@
 
 > English: [research.md](./research.md)
 
+> **历史文档 —— 2026-09-10。** spec 006（Knowledge Base）与 spec 007（Memory）
+> 于当日合并为统一的 **Knowledge Layer（知识层）**。合并后的模型以
+> [`spec.md`](./spec.md) 为准 —— 一个 `knowledge` kind、三种 scope、单一存储根
+> `~/.coffer/knowledge/<scope>/`、八个 `coffer__*` 工具。本文档记录的是合并之前
+> 的设计；凡出现「memory 面」「`memory` kind」`~/.coffer/memory/`
+> `/api/v1/memory_stores` 或 `coffer memory …` 之处，请以 `spec.md` 中合并后的
+> 对应物为准。目录名 `specs/007-memory/` 同样是历史遗留：它是所有入链与验收审计
+> 所依赖的 spec id。
+
 ## 1. 为何放弃 mem0（与每 agent 的 silo 模型）
 
 **问题**：memory 应继续用 mem0（写入时调 LLM 做事实抽取 + 向量库）吗？
@@ -92,7 +101,7 @@ memory 用 **lazy reindex-on-read**：`recall` 先按 `content_sha256` 扫描这
 - 多机同步（constitutional）。
 - 默认开启文件系统 watcher。
 - 超出自由 `metadata.type` 之外的 memory 分类。
-- 在此定义文件写入原子性：memory 的真相之源文件（facts、主题文档、`INDEX.md`、handoff）通过共享的 `infrastructure.knowledge.fs.atomic_write_*` 辅助函数写入（同目录临时文件 → fsync → `os.replace`），在 KB19 一次性决策（见 `specs/006-knowledge-base/research.md` §13）。
+- 在此定义文件写入原子性：memory 的真相之源文件（facts、主题文档、`INDEX.md`、handoff）通过共享的 `infrastructure.knowledge.fs.atomic_write_*` 辅助函数写入（同目录临时文件 → fsync → `os.replace`），在 KB19 一次性决策（该研究记录原在已删除的 `specs/006-knowledge-base/` 中；如今以该辅助函数本身为准）。
 
 ## 11. 实现期需验证的 open items
 

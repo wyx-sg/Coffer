@@ -11,7 +11,7 @@ The daemon is the system's center of gravity. It is a FastAPI application bound 
 - Is the **single SQLite writer**. No other process opens the database for writes. This makes WAL-mode isolation trivially correct and eliminates the class of bugs caused by concurrent schema modifications.
 - Owns all in-memory session state for connected MCP clients.
 - Spawns and supervises upstream MCP server subprocesses (one set per connected client session — see [Upstream session model](#upstream-session-model) below).
-- Persists all control-plane and vault state: resource registrations, capability preferences, audit log, retention policies, the encrypted credential store, the knowledge/memory index, chat conversations and turns, channel bindings, and sync state.
+- Persists all control-plane and vault state: resource registrations, capability preferences, audit log, retention policies, the encrypted credential store, the knowledge retrieval index, chat conversations and turns, channel bindings, and sync state.
 - Does **not** auto-shutdown. The daemon keeps running until `coffer daemon stop` or a system shutdown. This is intentional: the daemon's job is to outlive any single client or CLI invocation.
 
 ### stdio shim (coffer-mcp-shim)

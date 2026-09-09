@@ -1,171 +1,169 @@
-# ADR-013: Agent-Native Shared Memory Projection
+# ADR-013: One Shared Knowledge Store Across Agents
 
 > 中文版: [ADR-013-agent-native-shared-memory.zh.md](./ADR-013-agent-native-shared-memory.zh.md)
 
-**Status**: Superseded by [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md) (2026-06-18) — native projection was removed; memory is now accessed only via the MCP gateway. The design below is kept for history.
-**Date**: 2026-06-09
+**Status**: Partially superseded by [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md) (2026-06-18) — the native-projection half of the decision below was removed; Coffer never writes an agent's own native memory files. The shared-store half stands, and is what this ADR records. Re-expressed in knowledge-layer vocabulary 2026-09-10 (see Revision history).
+**Date**: 2026-06-09 (revised 2026-09-10; see Revision history)
 **Deciders**: Yuxing Wu
-**Related**: spec `007-memory`, [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md), [ADR-007](ADR-007-everything-is-a-resource-kind.md), [ADR-009](ADR-009-cross-platform-skill-delivery.md)
+**Related**: spec `007-memory` (the Knowledge Layer spec), [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md), [ADR-007](ADR-007-everything-is-a-resource-kind.md), [ADR-009](ADR-009-cross-platform-skill-delivery.md), [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md), [ADR-035](ADR-035-adopt-native-memory.md), [ADR-037](ADR-037-rules-runtime-injection.md)
 
 ## Context
 
-The first `memory` design (ADR-011) treated each memory store as a private
-silo queried over MCP. In practice a developer runs more than one coding agent
-(Claude Code, Codex, …) over the same project. Each agent has its own native
-memory location — Claude Code's auto-memory directory, Codex's `memories`, etc.
-The same project fact ("we use squash-merge", "the API base URL is X") then gets
-written once per agent and **drifts**: each copy is edited independently and the
-agents disagree about the project.
+The first memory design (ADR-011) treated each store as a private silo queried
+over MCP. In practice a developer runs more than one coding agent (Claude Code,
+Codex, …) over the same project. Each agent has its own native memory location —
+Claude Code's auto-memory directory, Codex's `memories`, and so on. The same
+project fact ("we use squash-merge", "the API base URL is X") then gets written
+once per agent and **drifts**: each copy is edited independently and the agents
+disagree about the project.
 
 Two forces shape the fix:
 
 1. **A fact about a project is about the project, not about the agent.** It
    should exist once and be visible to every agent working in that project.
-2. **Agents load native memory ambiently, MCP memory deliberately.** Native
-   files (Claude's memory dir, `CLAUDE.md`, `AGENTS.md`) are read into context
-   automatically at session start; MCP tools are only consulted when the agent
-   chooses to call `recall`. Dropping native loading would make memory
-   strictly worse than what agents already do for free.
+2. **Agents load native files ambiently, MCP tools deliberately.** Native files
+   (an agent's memory dir, `CLAUDE.md`, `AGENTS.md`) are read into context
+   automatically at session start; an MCP tool is only consulted when the agent
+   chooses to call it. Whatever we build has to answer for that gap, or a shared
+   store is strictly worse than what each agent already does for free.
 
-This sits on top of [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md): there
-is now a single canonical, per-fact-markdown memory store with files as truth.
-The open question is how that one store reaches multiple agents without
-re-introducing divergent copies.
+This sits on top of [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md):
+there is one canonical, markdown-files-as-truth substrate underneath. The open
+question is how that one store reaches multiple agents without re-introducing
+divergent copies.
 
 ## Decision
 
-**Keep one canonical per-fact-markdown memory store and share it across agents
-through a hybrid mechanism: MCP read/write for every agent, plus native
-projection per agent via an `AgentMemoryAdapter` whose `projection_mode` is
-`SYMLINK | RENDER | NONE`. When an agent is projected, disable that agent's own
-native memory so the canonical store is the only writer and copies cannot
-diverge. Memory scope is two-layer: global (cross-project) + per-project.**
+**Coffer holds one shared store, and every agent reads and writes it through
+Coffer's own tools. A fact is written once, into Coffer's `knowledge` layer,
+and is visible to every agent in that scope. Coffer does not keep a per-agent
+copy, and — since [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md) —
+does not write into any agent's native memory files either.**
 
-Concrete shape:
+Concrete shape, as it stands today:
 
-- **Canonical format.** Per-fact `.md` files with YAML frontmatter
-  (`name`, `description`, `metadata.type`, `origin_session_id`) + a markdown
-  body, plus a regenerated `MEMORY.md` index. This is Claude Code's auto-memory
-  format, adopted as canonical _precisely so_ the Claude projection can be a
-  native directory symlink (no rendering, no lossy round-trip).
-- **Two-layer scope.** Global facts live in the `WORKSPACE_GLOBAL_PROJECT_ID`
-  sentinel store (the existing `00000000000000000000000000` sentinel — not a
-  new one); per-project facts
-  live in `projects/<project-ulid>/`. `remember(scope=project)` resolves to the
-  project store via the MCP shim's reported cwd → git-root; `recall` defaults to
-  both layers.
-- **Projection matrix.**
+- **One resource kind: `knowledge`.** One storage root,
+  `~/.coffer/knowledge/<scope>/`, with lanes `knowledge/` (entries an agent
+  wrote), `inbox/` (ingested documents), `rules/`, `handoff/`, `superseded/`,
+  and a hidden `.raw/` holding the originals of ingested documents. Files are
+  truth; SQLite is a rebuildable index over them (ADR-012).
+- **Three scopes, read from the resource name.** `global` (cross-project) and
+  `project-<ULID>` (resolved from the cwd's git root) both auto-provision on
+  first use; any other name is a collection the user created deliberately and
+  never auto-provisions, because silently minting a scope from a typo would be
+  worse than an error. This is the two-layer scope of the original decision,
+  plus a third, deliberate layer for corpora that belong to neither.
+- **Canonical format.** An entry is a `.md` file with YAML frontmatter
+  (`name`, `description`, `metadata.type`, `origin_session_id`) plus a markdown
+  body, under `<scope>/knowledge/`. An ingested document is normalized markdown
+  under `<scope>/inbox/`, with its original retained in `<scope>/.raw/` so it
+  can be re-converted later. Both lanes index into the same `documents` /
+  `chunks` / FTS5 / sqlite-vec substrate, and retrieval spans both.
+- **One tool surface, the same for every agent.** Eight MCP tools —
+  `coffer__search`, `coffer__grep`, `coffer__read`, `coffer__list`,
+  `coffer__write`, `coffer__delete`, `coffer__set_handoff`, `coffer__resume`.
+  Each takes an optional `scope`, defaulting to the project scope resolved from
+  the shim's reported cwd and falling back to `global`. The caller never has to
+  decide which store a fact belongs to before it can search for it. **Adding a
+  new agent adds no knowledge-layer code at all** — the tools are already
+  agent-agnostic.
+- **Ambient delivery without touching the agent's files.** The gap named in
+  Context (native loads for free, MCP does not) is closed by
+  [ADR-037](ADR-037-rules-runtime-injection.md): the `rules` lane is injected
+  into the session at SessionStart, and handoff is pulled on demand via
+  `coffer__resume`. Injection is runtime state, so it achieves the ambient
+  effect while writing no file the agent owns.
+- **Import, never project.** Where an agent has already accumulated its own
+  native memory, Coffer reads it and lets the user adopt it **into** the shared
+  store once ([ADR-035](ADR-035-adopt-native-memory.md)). The flow is
+  one-directional and inbound; nothing flows back out into the agent's files.
 
-  |                   | Claude Code                                                                                                                        | Codex                                                                               |
-  | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-  | **Project layer** | `SYMLINK` the canonical dir → `~/.claude/projects/<slug>/memory/` (native, bidirectional, keep auto-memory ON — it _is_ canonical) | `RENDER` a marker-fenced block into `<project>/AGENTS.md`; disable Codex `memories` |
-  | **Global layer**  | `RENDER` block into `~/.claude/CLAUDE.md`                                                                                          | `RENDER` block into `~/.codex/AGENTS.md`                                            |
-
-- **Managed block** for `RENDER` mode (idempotent, re-rendered on memory change):
-
-  ```
-  <!-- coffer:memory:start (managed, do not edit) -->
-  … rendered facts …
-  <!-- coffer:memory:end -->
-  ```
-
-- **`AgentMemoryAdapter`** lives with the agent driver (the agent layer that
-  already owns L1 config files — `CLAUDE.md` / `AGENTS.md` / rules), **not** with
-  the memory kind:
-
-  ```
-  memory_location(project) -> path | None
-  projection_mode          -> SYMLINK | RENDER | NONE
-  disable_native_memory(agent_config)   # only when native memory would be a separate copy
-  render(facts) -> bytes                # RENDER mode
-  ```
-
-  The projection engine dispatches on `projection_mode`; the adapter performs all
-  file mutations. The memory substrate only provides canonical files + rendered
-  markdown, keeping it agent-agnostic and the L1/L2 boundary clean (memory never
-  authors config; the agent's own adapter injects the managed block).
-  **Adding a new agent = one adapter, no core change** ([ADR-009](ADR-009-cross-platform-skill-delivery.md)'s
-  per-agent-delivery shape recurs here).
-
-- **Disable native memory on projection.** Where a `RENDER` agent has its own
-  writable native memory (Codex `memories`), it is turned off so the only writer
-  is the canonical store. `SYMLINK` agents keep native memory ON because the
-  symlinked directory _is_ the canonical store (same inode → no divergence).
-- **Establish lazily** at session start per reported cwd. If an agent's native
-  memory dir already holds real files, **merge into canonical first, then**
-  replace with a symlink — never silently overwrite.
+**The mechanism this ADR originally chose was different, and was removed.** It
+projected the canonical store *outward* into each agent's native location — an
+`AgentMemoryAdapter` per agent with a `projection_mode` of
+`SYMLINK | RENDER | NONE`, symlinking the canonical directory into Claude
+Code's auto-memory path, rendering a marker-fenced managed block into Codex
+config files, and **disabling each agent's own native memory** so the canonical
+store stayed the only writer.
+[ADR-026](ADR-026-memory-via-mcp-not-native-projection.md) withdrew all of it
+in 2026-06-18: writing and disabling another tool's config is intrusive, the
+per-agent adapters had to track upstream formats that keep moving, and the
+ambient-loading benefit that justified the cost is obtainable by injection
+instead. What survives, and what this ADR is now read for, is the shared-store
+decision itself.
 
 ## Consequences
 
 **Positive**
 
-- **One fact, every agent, no drift.** A project fact is written once and read
-  by Claude (live symlink) and Codex (re-rendered block) and any future agent.
-  The dual/triple-copy divergence problem is structurally removed.
-- **Ambient native loading preserved.** Agents still read memory from their
-  native locations at session start; MCP `recall` is additive, not the only
-  path. Memory is strictly better than per-agent native memory, not a sidegrade.
-- **Clean layering.** Memory (L2) never authors config (L1); the agent's adapter
-  — which already owns the agent's L1 files — is the single component that
-  touches them. Adding an agent does not touch the memory kind.
-- **Cheap freshness.** Symlinks are live (same inode); managed blocks re-render
-  idempotently on memory change; `recall` does a lazy reindex-on-read of the
-  small fact dir, so Claude's symlink edits are immediately visible to all agents
-  with no filesystem watcher.
+- **One fact, every agent, no drift.** A fact is written once and every agent
+  in that scope reads the same file. The dual/triple-copy divergence problem is
+  structurally removed, and it is removed by there being one copy rather than
+  by keeping several in sync.
+- **No per-agent knowledge code.** Because the tool surface is agent-agnostic
+  and Coffer never touches an agent's own files, onboarding a new agent costs
+  nothing in the knowledge layer — in contrast to the per-agent adapter the
+  original mechanism required.
+- **Clean layering.** Knowledge (L2) never authors an agent's config (L1). The
+  boundary the original decision maintained through an adapter is now
+  maintained by simply not crossing it.
+- **The caller does not classify.** With one kind and one set of tools, an
+  agent no longer has to decide whether something is "memory" or "knowledge"
+  before it can store or find it.
 
 **Negative**
 
-- **Per-agent adapter maintenance.** Each agent's native memory shape, config
-  flag to disable it, and file location must be tracked and can change upstream.
-  Mitigated by the one-adapter-per-agent confinement.
-- **`RENDER` is one-directional.** For `RENDER` agents, edits flow canonical →
-  native only; the agent cannot edit memory by editing its `AGENTS.md` block (it
-  would be overwritten on the next render). Those agents write via MCP instead.
-  This is a deliberate trade to avoid lossy round-tripping (see Alternatives).
-- **Disabling native memory is intrusive.** Coffer flips an agent's own config to
-  turn off its native memory. This must be explicit, reversible, and never
-  silent — and we must migrate any pre-existing native facts into canonical
-  before doing it.
-- **Symlink portability.** Directory symlinks have the same cross-platform
-  caveats as [ADR-009](ADR-009-cross-platform-skill-delivery.md)'s skill
-  delivery (Windows junction / copy-fallback considerations) and must follow the
-  same strategy.
+- **Retrieval is deliberate, not automatic.** An agent sees a fact when it
+  calls `coffer__search` (or when the rules lane is injected). Only the rules
+  and handoff paths are ambient; ordinary entries are not pushed into context.
+  This is the cost of not writing the agent's files, and it is accepted.
+- **The user must adopt existing native memory explicitly.** Facts already
+  sitting in an agent's own store do not migrate on their own; ADR-035's import
+  is a user action.
+- **Coffer's tools are the only write path.** An agent that cannot speak MCP
+  cannot contribute to the shared store.
 
 ## Alternatives Considered
 
-**MCP-only (no native projection), as in ADR-011.** Viable and simplest: one
-canonical store, every agent reads/writes via `recall`/`remember`. Rejected as
-the _sole_ mechanism because it loses ambient native loading — the agent only
-sees memory if it remembers to call the tool, whereas native files load into
-context for free at session start. We keep MCP as the universal floor and add
-projection on top.
+**A silo per agent, as in ADR-011.** Rejected: it is the drift this ADR
+exists to remove.
 
-**Render-per-agent in each agent's own memory format, bidirectional.** Project
-the canonical store _into_ each agent's proprietary memory format and parse it
-_back_ on edit, so every agent edits memory natively and changes flow both ways.
-Rejected: round-tripping a proprietary, evolving agent memory format losslessly
-is industry-unsolved and inherently lossy. We sidestep it — symlink where the
-format already matches (Claude), one-directional managed block elsewhere, MCP for
-writes — rather than build a fragile bidirectional translator.
+**Native projection per agent (the original mechanism here).** Symlink where
+the format already matches, a managed block where it does not, and disable the
+agent's own native memory so copies cannot diverge. Superseded by ADR-026:
+Coffer would be mutating and disabling another tool's configuration, and every
+supported agent would owe a hand-maintained adapter tracking a format that
+changes upstream.
 
-**Fold memory into the agent-workspace config (let memory write `CLAUDE.md`
+**Render into each agent's own memory format, bidirectional.** Project the
+canonical store *into* each agent's proprietary format and parse it *back* on
+edit, so every agent edits natively and changes flow both ways. Rejected:
+round-tripping a proprietary, evolving agent memory format losslessly is
+industry-unsolved and inherently lossy.
+
+**Fold knowledge into the agent-workspace config (let it write `CLAUDE.md`
 directly).** Rejected on layering grounds: it collapses the L1 (config) / L2
-(knowledge) boundary. Memory stays agent-agnostic; only the agent's own adapter
-injects a marker-fenced block, which is reversible and clearly demarcated.
+(knowledge) boundary. Knowledge stays agent-agnostic.
 
-## Prior art & novelty
+**Two kinds, one substrate — a `memory` face and a `knowledge_base` face.**
+This is how the store was actually built, and it was merged away on 2026-09-10
+(see [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md)'s revision history).
+The substrate was shared from the start; only the facade was two, and it made
+callers guess which face a fact belonged to. Rejected in retrospect: sharing a
+store across agents is the point, and a second face over the same store is a
+second thing to keep in sync for no gain.
 
-Managed-block injection into agent config files is established prior art:
-**Next.js** ships a `<!-- BEGIN:nextjs-agent-rules -->` block into `AGENTS.md`,
-and **claude-mem** injects a `<claude-mem-context>` block into `CLAUDE.md`.
-Coffer reuses this proven pattern for `RENDER` mode.
+## Revision history
 
-What is **novel** is multi-agent native projection of accumulated memory. Every
-canonical-memory system surveyed (mem0/OpenMemory, Letta, Zep, Cognee, the MCP
-memory server, MemPalace) is MCP-centric; the only native-file projectors
-(claude-mem, agentmemory) are Claude-only, single-target. Coffer's fan-out of
-one canonical store into _multiple_ agents' native locations (symlink where the
-format matches, managed block where it does not, MCP everywhere) is unclaimed in
-OSS as of mid-2026. The risk of a novel mechanism is mitigated by the
-adapter confinement and by MCP remaining the universal fallback if a given
-agent's projection is not yet implemented.
+- **2026-06-09** — Initial decision: one canonical per-fact-markdown memory
+  store, shared across agents by a hybrid of MCP read/write plus per-agent
+  native projection (`SYMLINK | RENDER | NONE`), with each projected agent's own
+  native memory disabled. Scope was two-layer: global + per-project.
+- **2026-06-18** — [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md)
+  removed the projection half: Coffer never writes or disables an agent's native
+  memory files. The shared-store half was unaffected.
+- **2026-09-10** — Re-expressed for the knowledge-layer merge. The store this
+  ADR shares across agents is now the single `knowledge` kind (`memory` and
+  `knowledge_base` merged); store names became the three scopes; the twelve
+  `coffer__*` memory/KB tools became eight. The decision — one shared store, not
+  one per agent — is unchanged; only the vocabulary it is written in has moved.

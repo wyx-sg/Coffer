@@ -25,10 +25,9 @@ The surfaces are described below using a consistent template: **What it is · Wh
 | --------------------------------- | ------------------------------------------------------------------ |
 | `/resources`                      | Kind-agnostic resource CRUD, enable/disable, lifecycle.            |
 | `/resources/mcp_server`           | MCP capability preferences and invocation logs.                   |
-| `/agents`                         | Agent registry, config files, workspace facets, memory projection. |
+| `/agents`                         | Agent registry, config files, workspace facets.                    |
 | `/skills`                         | Skill master store and per-agent bindings.                        |
-| `/knowledge_bases`                | KB documents, upload, reindex, retrieval.                         |
-| `/memory_stores`                  | Memory facts, scopes, and native projection.                      |
+| `/knowledge/{scope}`              | One knowledge scope: `entries`, `documents`, retrieval, lanes, reindex. |
 | `/channels`                       | Channel bindings (Telegram, SeaTalk), pairing.                    |
 | `/chat`, `/models`                | Chat conversations/turns and the model catalog.                   |
 | `/credentials`, `/settings`       | Encrypted credential store; settings incl. `/settings/credentials` (master-key storage) and `/embedding` config. |
@@ -66,9 +65,9 @@ The REST API is the canonical interface — the CLI and the Web UI both call it.
 
 **What it is.** The command-line management interface. Every management operation available through the REST API is also available as a `coffer` subcommand, grouped to mirror the kinds and cross-cutting concerns:
 
-- **Per-kind groups:** `coffer mcp`, `coffer agent`, `coffer skill`, `coffer kb`, `coffer memory`, `coffer channel`.
+- **Per-kind groups:** `coffer mcp`, `coffer agent`, `coffer skill`, `coffer knowledge`, `coffer channel`.
 - **Cross-cutting groups:** `coffer credentials`, `coffer sync`, `coffer chat`, `coffer model`.
-- **Kind-agnostic / operational groups:** `coffer resource`, `coffer audit`, `coffer retention`, `coffer daemon`. Reindexing a single knowledge base is `coffer kb reindex`.
+- **Kind-agnostic / operational groups:** `coffer resource`, `coffer audit`, `coffer retention`, `coffer daemon`. Reindexing a single knowledge scope is `coffer knowledge reindex`.
 
 Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `coffer audit`, `coffer daemon start/stop/status`. The CLI is Coffer's primary interface for scripted workflows, dotfile-based setup, and remote (headless) machines where a browser is not available. Every subcommand supports `--json` output for machine-readable integration.
 

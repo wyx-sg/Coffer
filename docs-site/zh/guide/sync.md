@@ -12,7 +12,7 @@ coffer sync export ~/coffer-bundle --with-credentials    # + Fernet ciphertext b
 产物是一个纯文本目录,你在搬走之前就能读懂它:
 
 ```
-manifest.json  knowledge/  memory/  skills/  resources/  state/  [credentials/]
+manifest.json  knowledge/  skills/  resources/  state/  [credentials/]
 ```
 
 每个配置资源一个确定性 YAML,意味着同一个未发生变化的保险库两次导出字节一致 —— 因此对两个 bundle 执行 `diff -r`,能准确看出两台机器之间到底有什么不同。
@@ -31,14 +31,14 @@ scp -r ~/coffer-bundle you@machine-b:~/coffer-bundle
 coffer sync import ~/coffer-bundle
 ```
 
-导入会把知识、记忆与技能树镜像回来,据此重建 SQLite 索引,注册每一个配置资源,并运行每个 kind 的导入后步骤 —— 因此导入进来的 agent 已装好它的 shim,导入进来的技能已有符号链接。它会报告各状态区的计数,以及任何无法在本机应用的资源(例如某个 agent 的 `config_dir` 在这台机器上并不存在);这些会连同原因一起被报告,并不致命。
+导入会把知识与技能树镜像回来,据此重建 SQLite 索引,注册每一个配置资源,并运行每个 kind 的导入后步骤 —— 因此导入进来的 agent 已装好它的 shim,导入进来的技能已有符号链接。它会报告各状态区的计数,以及任何无法在本机应用的资源(例如某个 agent 的 `config_dir` 在这台机器上并不存在);这些会连同原因一起被报告,并不致命。
 
 - **bundle 说了算。** bundle 中包含的任何东西都会替换掉本地版本 —— 你在敲下命令时就选定了方向。
 - **导入从不删除。** 本机有、而 bundle 里没有的资源保持原样不动。一个 bundle 是某一台机器的快照,而不是对"哪些东西应当到处都存在"的断言。
 
 ## 哪些会随行
 
-**在 bundle 里:**知识库与记忆的 Markdown、技能主库、你的配置资源(MCP 服务器、agent、技能、渠道)、各模块自有的共享状态(渠道配对、记忆 store 标签、引擎设置),以及 —— 仅在带 `--with-credentials` 时 —— **仅以 Fernet 密文形式**的凭证。
+**在 bundle 里:**知识的 Markdown 树(条目与摄取的文档一并)、技能主库、你的配置资源(MCP 服务器、agent、技能、渠道)、各模块自有的共享状态(渠道配对、知识作用域标签、引擎设置),以及 —— 仅在带 `--with-credentials` 时 —— **仅以 Fernet 密文形式**的凭证。
 
 **机器本地(永不导出):**日志、可重建的 `coffer.db` 索引、`daemon.json`、PID 文件、端口分配、聊天历史与审计日志。
 

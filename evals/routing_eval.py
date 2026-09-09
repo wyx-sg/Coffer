@@ -63,7 +63,7 @@ def parse_tool_choice(response: str, valid_names: list[str]) -> str | None:
 
     Returns the valid tool whose name appears earliest in the response
     (case-insensitive), or ``None`` if no known tool is mentioned. Longer names
-    win ties so ``list_knowledge_bases`` isn't shadowed by a shorter prefix.
+    win ties so ``list_skills`` isn't shadowed by the shorter ``list``.
     """
     text = response.lower()
     best: tuple[int, int, str] | None = None  # (position, -len, name)

@@ -30,9 +30,9 @@ coffer agent list              # → claude-code | claude_code | registered
 | `claude_code` | `settings`       | `~/.claude/settings.json`                     |
 | `claude_code` | `settings_local` | `~/.claude/settings.local.json`               |
 | `claude_code` | `global`         | `~/.claude.json`（同时存放用户级 MCP 服务器） |
-| `claude_code` | `memory`         | `~/.claude/CLAUDE.md`                         |
+| `claude_code` | `instructions`   | `~/.claude/CLAUDE.md`                         |
 | `codex`       | `config`         | `~/.codex/config.toml`                        |
-| `codex`       | `memory`         | `~/.codex/AGENTS.md`                          |
+| `codex`       | `instructions`   | `~/.codex/AGENTS.md`                          |
 
 列出某个 agent 的键、打印某个文件，或编辑某个文件：
 

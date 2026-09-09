@@ -2,6 +2,15 @@
 
 > English: [plan.md](./plan.md)
 
+> **历史文档 —— 2026-09-10。** spec 006（Knowledge Base）与 spec 007（Memory）
+> 于当日合并为统一的 **Knowledge Layer（知识层）**。合并后的模型以
+> [`spec.md`](./spec.md) 为准 —— 一个 `knowledge` kind、三种 scope、单一存储根
+> `~/.coffer/knowledge/<scope>/`、八个 `coffer__*` 工具。本文档记录的是合并之前
+> 的设计；凡出现「memory 面」「`memory` kind」`~/.coffer/memory/`
+> `/api/v1/memory_stores` 或 `coffer memory …` 之处，请以 `spec.md` 中合并后的
+> 对应物为准。目录名 `specs/007-memory/` 同样是历史遗留：它是所有入链与验收审计
+> 所依赖的 spec id。
+
 **Branch**: `feature/kb-memory-redesign`
 **Spec**: [./spec.zh.md](./spec.zh.md)
 **Status**: Accepted (redesign — in development)

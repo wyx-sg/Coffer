@@ -2,7 +2,7 @@
 
 > English: [visual-language.md](./visual-language.md)
 >
-> 给所有动 `frontend/` 的 agent 看的配套参考。token 的事实来源是 [`frontend/tailwind.config.js`](../../frontend/tailwind.config.js)；本文件记录约定。
+> 给所有动 `frontend/` 的 agent 看的配套参考。token 的事实来源是 [`frontend/tailwind.config.js`](../frontend/tailwind.config.js)；本文件记录约定。
 
 ## 事实来源
 

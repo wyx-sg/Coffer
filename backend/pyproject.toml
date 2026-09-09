@@ -14,7 +14,7 @@ dependencies = [
     # first route of a multi-route router), which strips most endpoints off the
     # app — observed in 0.137.0 and still present in 0.137.1, so the whole
     # 0.137 line is excluded (a fresh CI install otherwise grabs 0.137.1 and
-    # the kb/memory contract checks fail). Lift the cap once a fixed
+    # the knowledge contract checks fail). Lift the cap once a fixed
     # release is verified.
     "fastapi>=0.141.1,<0.142",
     "uvicorn[standard]>=0.52.4",
@@ -43,7 +43,7 @@ dependencies = [
     # comments/order on MCP install, the YAML analogue of tomlkit. pyyaml alone
     # would clobber comments.
     "ruamel.yaml>=0.18",
-    # specs 006 (knowledge_base) + 007 (memory): shared knowledge substrate.
+    # The knowledge substrate.
     # Converters → Markdown (MarkItDown default); FTS5 ships with SQLite; the
     # OpenAI SDK drives the swappable-base_url embedding client; sqlite-vec is
     # the vector index. Removed: llama-index-*, sentence-transformers, chromadb,
@@ -185,24 +185,23 @@ forbidden_modules = ["coffer.surfaces"]
 # (Protocols in application/*); it must not import infrastructure directly.
 # Concrete infrastructure adapters are wired at composition root.
 #
-# Exception (specs 006/007): the shared knowledge substrate
-# (``coffer.infrastructure.knowledge`` + ``coffer.infrastructure.memory``) is a
-# kind-agnostic set of pure-ish helpers (chunking, frontmatter/YAML, content
-# ids, per-fact file I/O, path layout) that the application phase composes
-# behind the shared ``RetrievalPort`` / reindex routine. The data-model frames
-# this substrate as application-composable; the heavy engines (markitdown,
-# sqlite-vec, embedding SDKs) are still injected as ports and confined to
-# infrastructure by Contract 7 (engine confinement). So the application MAY
-# import the substrate helper modules, but no other infrastructure.
+# Exception: the knowledge substrate (``coffer.infrastructure.knowledge`` +
+# ``coffer.infrastructure.knowledge_scope``) is a set of pure-ish helpers
+# (chunking, frontmatter/YAML, content ids, per-entry file I/O, path layout)
+# that the application phase composes behind the shared ``RetrievalPort`` /
+# reindex routine. The data-model frames this substrate as
+# application-composable; the heavy engines (markitdown, sqlite-vec, embedding
+# SDKs) are still injected as ports and confined to infrastructure by Contract 7
+# (engine confinement). So the application MAY import the substrate helper
+# modules, but no other infrastructure.
 [[tool.importlinter.contracts]]
 name = "Application does not import infrastructure"
 type = "forbidden"
 source_modules = ["coffer.application"]
 forbidden_modules = ["coffer.infrastructure"]
 ignore_imports = [
-    "coffer.application.knowledge_base.* -> coffer.infrastructure.knowledge.*",
-    "coffer.application.memory.* -> coffer.infrastructure.knowledge.*",
-    "coffer.application.memory.* -> coffer.infrastructure.memory.*",
+    "coffer.application.knowledge.* -> coffer.infrastructure.knowledge.*",
+    "coffer.application.knowledge.* -> coffer.infrastructure.knowledge_scope.*",
 ]
 
 # Contract 3: domain is pure — no imports from any other project layer, no
@@ -275,16 +274,14 @@ forbidden_modules = [
     "coffer.infrastructure.skill",
     "coffer.surfaces.http.skill_routes",
     "coffer.surfaces.cli.skill_cmd",
-    "coffer.domain.knowledge_base",
-    "coffer.application.knowledge_base",
-    "coffer.infrastructure.knowledge_base",
-    "coffer.surfaces.http.knowledge_base",
-    "coffer.surfaces.cli.knowledge_base_cmd",
-    "coffer.domain.memory",
-    "coffer.application.memory",
-    "coffer.infrastructure.memory",
-    "coffer.surfaces.http.memory",
-    "coffer.surfaces.cli.memory_cmd",
+    # ``domain.knowledge`` and ``infrastructure.knowledge`` are the SUBSTRATE
+    # (Document/retrieval ports, chunker, index) and stay exempt: the
+    # kind-agnostic embedding config is defined in terms of them. Only the
+    # knowledge FACADE is fenced off from the other kinds.
+    "coffer.application.knowledge",
+    "coffer.infrastructure.knowledge_scope",
+    "coffer.surfaces.http.knowledge",
+    "coffer.surfaces.cli.knowledge_cmd",
     "coffer.domain.channel",
     "coffer.application.channel",
     "coffer.infrastructure.channel",
@@ -315,16 +312,14 @@ forbidden_modules = [
     "coffer.infrastructure.skill",
     "coffer.surfaces.http.skill_routes",
     "coffer.surfaces.cli.skill_cmd",
-    "coffer.domain.knowledge_base",
-    "coffer.application.knowledge_base",
-    "coffer.infrastructure.knowledge_base",
-    "coffer.surfaces.http.knowledge_base",
-    "coffer.surfaces.cli.knowledge_base_cmd",
-    "coffer.domain.memory",
-    "coffer.application.memory",
-    "coffer.infrastructure.memory",
-    "coffer.surfaces.http.memory",
-    "coffer.surfaces.cli.memory_cmd",
+    # ``domain.knowledge`` and ``infrastructure.knowledge`` are the SUBSTRATE
+    # (Document/retrieval ports, chunker, index) and stay exempt: the
+    # kind-agnostic embedding config is defined in terms of them. Only the
+    # knowledge FACADE is fenced off from the other kinds.
+    "coffer.application.knowledge",
+    "coffer.infrastructure.knowledge_scope",
+    "coffer.surfaces.http.knowledge",
+    "coffer.surfaces.cli.knowledge_cmd",
     "coffer.domain.channel",
     "coffer.application.channel",
     "coffer.infrastructure.channel",
@@ -357,16 +352,14 @@ forbidden_modules = [
     "coffer.infrastructure.agent",
     "coffer.surfaces.http.agent_routes",
     "coffer.surfaces.cli.agent_cmd",
-    "coffer.domain.knowledge_base",
-    "coffer.application.knowledge_base",
-    "coffer.infrastructure.knowledge_base",
-    "coffer.surfaces.http.knowledge_base",
-    "coffer.surfaces.cli.knowledge_base_cmd",
-    "coffer.domain.memory",
-    "coffer.application.memory",
-    "coffer.infrastructure.memory",
-    "coffer.surfaces.http.memory",
-    "coffer.surfaces.cli.memory_cmd",
+    # ``domain.knowledge`` and ``infrastructure.knowledge`` are the SUBSTRATE
+    # (Document/retrieval ports, chunker, index) and stay exempt: the
+    # kind-agnostic embedding config is defined in terms of them. Only the
+    # knowledge FACADE is fenced off from the other kinds.
+    "coffer.application.knowledge",
+    "coffer.infrastructure.knowledge_scope",
+    "coffer.surfaces.http.knowledge",
+    "coffer.surfaces.cli.knowledge_cmd",
     "coffer.domain.channel",
     "coffer.application.channel",
     "coffer.infrastructure.channel",
@@ -375,16 +368,20 @@ forbidden_modules = [
     "coffer.surfaces.callback",
 ]
 
-# Contract 5d: knowledge_base kind may not reach into mcp/agent/skill. Symmetric.
+# Contract 5d: the knowledge kind may not reach into mcp/agent/skill/channel.
+# Symmetric with the others. There is ONE knowledge kind — ``memory`` and
+# ``knowledge_base`` were merged into it — so this replaces what used to be two
+# contracts fencing the two faces off from each other as well.
 [[tool.importlinter.contracts]]
-name = "Cross-kind imports forbidden (knowledge_base)"
+name = "Cross-kind imports forbidden (knowledge)"
 type = "forbidden"
 source_modules = [
-    "coffer.domain.knowledge_base",
-    "coffer.application.knowledge_base",
-    "coffer.infrastructure.knowledge_base",
-    "coffer.surfaces.http.knowledge_base",
-    "coffer.surfaces.cli.knowledge_base_cmd",
+    "coffer.domain.knowledge",
+    "coffer.application.knowledge",
+    "coffer.infrastructure.knowledge",
+    "coffer.infrastructure.knowledge_scope",
+    "coffer.surfaces.http.knowledge",
+    "coffer.surfaces.cli.knowledge_cmd",
 ]
 forbidden_modules = [
     "coffer.domain.mcp",
@@ -402,51 +399,6 @@ forbidden_modules = [
     "coffer.infrastructure.skill",
     "coffer.surfaces.http.skill_routes",
     "coffer.surfaces.cli.skill_cmd",
-    "coffer.domain.memory",
-    "coffer.application.memory",
-    "coffer.infrastructure.memory",
-    "coffer.surfaces.http.memory",
-    "coffer.surfaces.cli.memory_cmd",
-    "coffer.domain.channel",
-    "coffer.application.channel",
-    "coffer.infrastructure.channel",
-    "coffer.surfaces.http.channel_routes",
-    "coffer.surfaces.cli.channel_cmd",
-    "coffer.surfaces.callback",
-]
-
-# Contract 5e: memory kind may not reach into mcp/agent/skill/knowledge_base.
-[[tool.importlinter.contracts]]
-name = "Cross-kind imports forbidden (memory)"
-type = "forbidden"
-source_modules = [
-    "coffer.domain.memory",
-    "coffer.application.memory",
-    "coffer.infrastructure.memory",
-    "coffer.surfaces.http.memory",
-    "coffer.surfaces.cli.memory_cmd",
-]
-forbidden_modules = [
-    "coffer.domain.mcp",
-    "coffer.application.mcp",
-    "coffer.infrastructure.mcp",
-    "coffer.surfaces.http.mcp",
-    "coffer.surfaces.cli.mcp",
-    "coffer.domain.agent",
-    "coffer.application.agent",
-    "coffer.infrastructure.agent",
-    "coffer.surfaces.http.agent_routes",
-    "coffer.surfaces.cli.agent_cmd",
-    "coffer.domain.skill",
-    "coffer.application.skill",
-    "coffer.infrastructure.skill",
-    "coffer.surfaces.http.skill_routes",
-    "coffer.surfaces.cli.skill_cmd",
-    "coffer.domain.knowledge_base",
-    "coffer.application.knowledge_base",
-    "coffer.infrastructure.knowledge_base",
-    "coffer.surfaces.http.knowledge_base",
-    "coffer.surfaces.cli.knowledge_base_cmd",
     "coffer.domain.channel",
     "coffer.application.channel",
     "coffer.infrastructure.channel",
@@ -483,16 +435,14 @@ forbidden_modules = [
     "coffer.infrastructure.skill",
     "coffer.surfaces.http.skill_routes",
     "coffer.surfaces.cli.skill_cmd",
-    "coffer.domain.knowledge_base",
-    "coffer.application.knowledge_base",
-    "coffer.infrastructure.knowledge_base",
-    "coffer.surfaces.http.knowledge_base",
-    "coffer.surfaces.cli.knowledge_base_cmd",
-    "coffer.domain.memory",
-    "coffer.application.memory",
-    "coffer.infrastructure.memory",
-    "coffer.surfaces.http.memory",
-    "coffer.surfaces.cli.memory_cmd",
+    # ``domain.knowledge`` and ``infrastructure.knowledge`` are the SUBSTRATE
+    # (Document/retrieval ports, chunker, index) and stay exempt: the
+    # kind-agnostic embedding config is defined in terms of them. Only the
+    # knowledge FACADE is fenced off from the other kinds.
+    "coffer.application.knowledge",
+    "coffer.infrastructure.knowledge_scope",
+    "coffer.surfaces.http.knowledge",
+    "coffer.surfaces.cli.knowledge_cmd",
 ]
 
 # Contract 6: kind-agnostic core does not import kind-specific modules.
@@ -526,14 +476,11 @@ forbidden_modules = [
     "coffer.application.skill",
     "coffer.infrastructure.skill",
     "coffer.surfaces.http.skill_routes",
-    "coffer.domain.knowledge_base",
-    "coffer.application.knowledge_base",
-    "coffer.infrastructure.knowledge_base",
-    "coffer.surfaces.http.knowledge_base",
-    "coffer.domain.memory",
-    "coffer.application.memory",
-    "coffer.infrastructure.memory",
-    "coffer.surfaces.http.memory",
+    # Substrate exempt (see the note in the cross-kind contracts); the facade
+    # is what the kind-agnostic core must not reach into.
+    "coffer.application.knowledge",
+    "coffer.infrastructure.knowledge_scope",
+    "coffer.surfaces.http.knowledge",
     "coffer.domain.channel",
     "coffer.application.channel",
     "coffer.infrastructure.channel",
@@ -557,8 +504,7 @@ source_modules = [
     "coffer.infrastructure.agent",
     "coffer.infrastructure.skill",
     "coffer.infrastructure.channel",
-    "coffer.infrastructure.knowledge_base",
-    "coffer.infrastructure.memory",
+    "coffer.infrastructure.knowledge_scope",
     "coffer.infrastructure.persistence",
     "coffer.infrastructure.credentials",
     "coffer.infrastructure.daemon",
@@ -602,7 +548,7 @@ source_modules = [
     "coffer.infrastructure.mcp",
     "coffer.infrastructure.channel",
     "coffer.infrastructure.knowledge",
-    "coffer.infrastructure.memory",
+    "coffer.infrastructure.knowledge_scope",
     "coffer.infrastructure.persistence",
     "coffer.infrastructure.credentials",
     "coffer.infrastructure.daemon",

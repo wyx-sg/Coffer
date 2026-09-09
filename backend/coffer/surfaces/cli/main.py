@@ -10,10 +10,11 @@ from coffer.surfaces.cli import (
     channel_cmd,
     credentials_cmd,
     daemon_cmd,
-    knowledge_base_cmd,
-    knowledge_base_source_cmd,  # noqa: F401 — registers `kb check-sources`/`update-source` onto kb app
-    memory_cmd,
-    memory_merge_cmd,  # noqa: F401 — registers `memory merge-scan`/`merge` onto memory app
+    knowledge_cmd,
+    knowledge_document_cmd,  # noqa: F401 — registers the document subcommands
+    knowledge_lane_cmd,  # noqa: F401 — registers organize/reorg/rules/handoff/log
+    knowledge_merge_cmd,  # noqa: F401 — registers `merge-scan`/`merge`
+    knowledge_source_cmd,  # noqa: F401 — registers `check-sources`/`update-source`
     open_cmd,
     provider_cmd,
     resource_cmd,
@@ -53,8 +54,7 @@ app.add_typer(credentials_cmd.app, name="credentials")
 app.add_typer(agent_cmd.app, name="agent")
 app.add_typer(channel_cmd.app, name="channel")
 app.add_typer(skill_cmd.app, name="skill")
-app.add_typer(knowledge_base_cmd.app, name="kb")
-app.add_typer(memory_cmd.app, name="memory")
+app.add_typer(knowledge_cmd.app, name="knowledge")
 app.add_typer(provider_cmd.app, name="provider")
 app.add_typer(sync_cmd.app, name="sync")
 

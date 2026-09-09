@@ -3,7 +3,7 @@ layout: home
 hero:
   name: Coffer
   text: Local-first AI agent vault
-  tagline: One secure, shared interface for every AI agent on your machine. Configure your tools, skills, knowledge, and memory once — every agent sees the same vault. Nothing leaves your machine.
+  tagline: One secure, shared interface for every AI agent on your machine. Configure your tools, skills, and knowledge once — every agent sees the same vault. Nothing leaves your machine.
   actions:
     - theme: brand
       text: Get started
@@ -16,8 +16,8 @@ features:
     details: All state lives on your machine — no cloud accounts, no vendor lock-in. Secrets are Fernet-encrypted at rest behind a master key you control.
   - title: One MCP endpoint
     details: Aggregate every upstream MCP server and re-expose their tools namespaced as &lt;server&gt;__&lt;tool&gt;. Claude Code, Codex, and any MCP client see exactly the same tools.
-  - title: Skills · Knowledge · Memory
-    details: Keep one master skill library and deliver it into each agent; curate knowledge bases your agents can search; share one memory across every agent.
+  - title: Skills · Knowledge
+    details: Keep one master skill library and deliver it into each agent; keep one knowledge store — ingested documents and the entries agents write — that every agent searches and contributes to.
   - title: Chat with any agent
     details: Talk to Coffer's built-in agent — or drive Claude Code and Codex — from a streamed chat in the web UI.
   - title: Reach agents anywhere
@@ -37,13 +37,13 @@ flowchart LR
   A["AI agents<br/>Claude Code · Codex"] -->|MCP| D
   UI --> D
   IM --> D
-  D["coffer-daemon<br/>the vault: MCP gateway · skills · knowledge · memory · agents · chat"]
+  D["coffer-daemon<br/>the vault: MCP gateway · skills · knowledge · agents · chat"]
   D -->|namespaced tools| U["Upstream MCP servers"]
   D -->|chat| L["LLM providers"]
   D -->|export / import| G["A directory you carry"]
 ```
 
-Coffer is a long-lived local daemon that holds your vault. The MCP gateway is one part of it: every AI agent connects through one auto-discovering endpoint and sees the same tools, skills, knowledge, and memory — while secrets stay encrypted and nothing leaves your machine. Moving to another of your own machines is an explicit act: export the vault to a directory, carry it across, import it there.
+Coffer is a long-lived local daemon that holds your vault. The MCP gateway is one part of it: every AI agent connects through one auto-discovering endpoint and sees the same tools, skills, and knowledge — while secrets stay encrypted and nothing leaves your machine. Moving to another of your own machines is an explicit act: export the vault to a directory, carry it across, import it there.
 
 ## Quickstart
 
@@ -52,12 +52,12 @@ Coffer is a long-lived local daemon that holds your vault. The MCP gateway is on
 coffer mcp add filesystem --stdio "npx -y @modelcontextprotocol/server-filesystem /tmp"
 claude mcp add coffer coffer-mcp-shim
 
-# Curate a knowledge base and a shared skill — your agents pick them up automatically.
-coffer kb create handbook
+# Curate a knowledge collection and a shared skill — your agents pick them up automatically.
+coffer knowledge create handbook
 coffer skill import ./my-skill
 
 # Chat with Coffer's built-in agent from the terminal.
-coffer chat -m "what MCP servers and knowledge bases do I have?"
+coffer chat -m "what MCP servers and knowledge scopes do I have?"
 ```
 
 [Read the full guide →](/guide/getting-started)

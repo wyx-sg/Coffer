@@ -3,7 +3,7 @@
 > 中文版: [ADR-037-rules-runtime-injection.zh.md](ADR-037-rules-runtime-injection.zh.md)
 
 **Status**: Accepted
-**Date**: 2026-06-22 (revised 2026-09-09; see Revision history)
+**Date**: 2026-06-22 (revised 2026-09-09, 2026-09-10; see Revision history)
 **Deciders**: Yuxing Wu
 **Related**: spec `007-memory` (FR-049–FR-052); builds on [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md) (memory via MCP, not native projection); informed by [`docs/research/memory-systems-landscape.md`](../research/memory-systems-landscape.md)
 
@@ -60,7 +60,7 @@ Concretely:
 - **Seeded built-in rules (FR-050).** The bundle always carries two
   Coffer-seeded rules (present even when the rules lanes are empty): (a) call
   `coffer__resume()` to continue prior work, and (b) a soft steer to prefer
-  `coffer__remember`/`coffer__recall` over the agent's native memory. The
+  `coffer__write`/`coffer__search` over the agent's native memory. The
   **handoff body itself is NOT injected** — it is pulled on demand via
   `coffer__resume` (FR-025), so the bundle stays small and a stale scene is never
   force-fed into context.
@@ -124,9 +124,17 @@ excluded from `recall` and delivered by injection instead.
   from Coffer, so everything this ADR said about SessionEnd distillation (FR-051,
   the Codex latency asymmetry, and the rejected per-turn `Stop` approximation) is
   struck. Nothing now writes memory automatically: an agent records a fact with
-  `coffer__remember` and retrieves it with `coffer__recall`. That is simpler and
-  more predictable, and it is a genuine trade-off — distillation was working
+  `coffer__remember` and retrieves it with `coffer__recall` (both renamed
+  2026-09-10, below). That is simpler and more predictable, and it is a genuine
+  trade-off — distillation was working
   (1,320 sessions distilled, 4,669 journal entries) and is being removed because
   the ingest→deliver loop it fed no longer exists end to end, not because it
   failed. **The SessionStart rules-injection decision above still stands
   unchanged** and is what this ADR now records.
+- **2026-09-10** — Vocabulary only: `memory` and `knowledge_base` merged into
+  one `knowledge` kind, so the tools named above are now `coffer__write` and
+  `coffer__search`, and the `rules` lane lives under a knowledge scope
+  (`~/.coffer/knowledge/<scope>/rules/`) rather than a memory store. **The
+  SessionStart rules-injection decision is unchanged**, and the merge does not
+  touch it: rules are still delivered by injection, not by retrieval, and the
+  rules lane is still excluded from `coffer__search`.

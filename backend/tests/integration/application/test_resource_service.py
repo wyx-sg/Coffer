@@ -10,6 +10,7 @@ from coffer.domain.errors import (
     ResourceNotFound,
     UnknownKind,
 )
+from coffer.domain.knowledge.document import KIND_KNOWLEDGE
 from coffer.domain.resource import Kind, ResourceRef
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
@@ -376,84 +377,40 @@ async def test_delete_unknown_resource_raises(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_kb_and_memory_credential_extractors_probe_missing_refs(tmp_path):
-    """The KB kind (nested ``embedding.credential_ref``) and memory kind (flat
-    ``embedding_credential_ref``) supply credential extractors; a missing
-    keychain entry must fail register/PATCH BEFORE any DB write (rebase
-    follow-up: the extractors previously executed in zero tests)."""
-    from coffer.application.knowledge_base.kind import make_kb_kind
-    from coffer.application.memory.kind import make_memory_kind
-    from coffer.domain.errors import CredentialMissing, ResourceNotFound
-    from coffer.domain.resource import ResourceRef
+async def test_knowledge_kind_declares_no_credentials(tmp_path):
+    """The knowledge kind supplies no credential extractor, so registering a
+    scope never probes the keychain.
 
-    class _FakeKeyring:
-        def __init__(self, present: set[str]) -> None:
-            self._present = present
+    Both former faces used to extract an embedding API-key ref from their own
+    config. Embedding is resolved installation-wide now, so there is no
+    per-scope credential to probe — and a register must not fail on a keychain
+    that holds nothing."""
+    from coffer.application.knowledge.kind import make_knowledge_kind
 
+    class _EmptyKeyring:
         def get(self, ref: str) -> str | None:
-            return "value" if ref in self._present else None
+            return None
 
-    # The extractor functions never touch the wrapped service, so the kinds can
-    # be built without one for register-time probing.
-    kinds = {
-        "knowledge_base": make_kb_kind(None),  # type: ignore[arg-type]
-        "memory": make_memory_kind(None),  # type: ignore[arg-type]
-    }
-    kb_config = {
-        "enabled_modes": ["keyword", "grep", "vector"],
-        "default_mode": "keyword",
-        "embedding": {
-            "provider": "openai",
-            "model": "text-embedding-3-small",
-            "dimensions": 1536,
-            "credential_ref": "openai-key",
-        },
-    }
-    mem_config = {
-        "retrieval_modes": ["grep", "keyword", "vector"],
-        "default_mode": "keyword",
-        "embedding_provider": "openai",
-        "embedding_model": "text-embedding-3-small",
-        "embedding_dimensions": 1536,
-        "embedding_credential_ref": "openai-key",
-    }
+    # The kind's hooks never touch the wrapped service at register time.
+    kind = make_knowledge_kind(None)  # type: ignore[arg-type]
+    assert kind.credential_ref_extractor is None
 
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sm = session_maker(engine)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
-    repo = SqlAlchemyResourceRepo(sm)
     try:
-        svc_missing = ResourceService(
-            kinds=kinds, repo=repo, audit=audit, credentials=_FakeKeyring(present=set())
+        svc = ResourceService(
+            kinds={KIND_KNOWLEDGE: kind},
+            repo=SqlAlchemyResourceRepo(sm),
+            audit=audit,
+            credentials=_EmptyKeyring(),
         )
-        with pytest.raises(CredentialMissing):
-            await svc_missing.register(
-                kind="knowledge_base", name="kb1", config=kb_config, actor="cli"
-            )
-        with pytest.raises(CredentialMissing):
-            await svc_missing.register(kind="memory", name="global", config=mem_config, actor="cli")
-        # Nothing was written.
-        with pytest.raises(ResourceNotFound):
-            await svc_missing.get(ResourceRef("knowledge_base", "kb1"))
-        with pytest.raises(ResourceNotFound):
-            await svc_missing.get(ResourceRef("memory", "global"))
-
-        svc_ok = ResourceService(
-            kinds=kinds, repo=repo, audit=audit, credentials=_FakeKeyring(present={"openai-key"})
-        )
-        await svc_ok.register(kind="knowledge_base", name="kb1", config=kb_config, actor="cli")
-        await svc_ok.register(kind="memory", name="global", config=mem_config, actor="cli")
-
-        # PATCH introducing a missing ref is rejected before the DB write too.
-        bad_kb = {**kb_config, "embedding": {**kb_config["embedding"], "credential_ref": "nope"}}
-        with pytest.raises(CredentialMissing):
-            await svc_ok.update_config(
-                ResourceRef("knowledge_base", "kb1"), new_config=bad_kb, actor="cli"
-            )
-        unchanged = await svc_ok.get(ResourceRef("knowledge_base", "kb1"))
-        assert unchanged.config["embedding"]["credential_ref"] == "openai-key"
+        config = {"retrieval_modes": ["grep", "keyword", "vector"], "default_mode": "keyword"}
+        await svc.register(kind=KIND_KNOWLEDGE, name="global", config=config, actor="cli")
+        stored = await svc.get(ResourceRef(KIND_KNOWLEDGE, "global"))
+        assert "hybrid" in stored.config["retrieval_modes"]
     finally:
         await engine.dispose()
 
