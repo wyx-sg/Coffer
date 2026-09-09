@@ -321,7 +321,7 @@ class MemoryService:
         return await asyncio.to_thread(find_fact_store, scopes, fact_id, store_name_for)
 
     async def fact_count(self, *, store_name: str) -> int:
-        """Knowledge-lane fact count — excludes the recall-only journal lane (FR-043)."""
+        """Knowledge-lane fact count."""
         sd = (await self._resolved_for_store(store_name)).store_dir
         return len((await asyncio.to_thread(scan_store_dir, sd)).files)
 
@@ -338,8 +338,8 @@ class MemoryService:
     async def delete_lane(
         self, *, store_name: str, lane: lane_deletes.Lane, identifier: str, actor: str
     ) -> None:
-        """Delete a non-knowledge lane file (journal/handoff/rules/changelog) → drop
-        the indexed journal lane's rows → changelog append → audit → notify."""
+        """Delete a non-knowledge lane file (handoff/rules/changelog) → changelog
+        append → audit → notify."""
         resolved = await self.resolved_store(store_name)
         await lane_deletes.delete_lane(
             lane, deps=self._writes, resolved=resolved,

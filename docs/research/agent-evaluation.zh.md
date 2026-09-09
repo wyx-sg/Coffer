@@ -79,8 +79,9 @@
 2. **无 RAG 忠实度指标。** Ragas 式无参考指标（忠实度、上下文精度）直接契合 Coffer 的 KB，且无需金样答案。
 3. **无人工反馈环 / 评判器校准。** LangSmith 的 Align Evals（把评判器对齐到人工标注）和负反馈驱动捕获
    是最值得借鉴的强模式——聊天里的"踩"可自动把迹捕获进评估 sink。
-4. **调用日志 + 迹蒸馏是未被利用的捕获源。** ADR-020 迹蒸馏已读取本地迹；把调用日志 + 蒸馏后的迹喂进
-   同一个 `COFFER_EVAL_CAPTURE` sink，能把飞轮拓宽到工具检索之外。
+4. **调用日志是未被利用的捕获源。** 把它喂进同一个 `COFFER_EVAL_CAPTURE` sink，能把飞轮拓宽到
+   工具检索之外。（本条借鉴原本还点名了迹蒸馏作为捕获源；该能力已于 2026-09-09 从 Coffer 移除，
+   故只剩调用日志。）
 
 ## 4. 给 Coffer 的关键结论
 
@@ -89,7 +90,7 @@
 2. **加入本地 LLM-as-judge**（经 ADR-024 内部模型）评确定性检查够不到的开放式质量——最大的单一缺口。
 3. **加入 Ragas 式无参考 RAG 指标**给 KB / `ask`——无需金样答案，可直接套用。
 4. **借鉴负反馈捕获 + 评判器校准**（LangSmith）：聊天"踩"自动捕获进评估 sink；用用户自己的标注校准本地评判器。
-5. **把调用日志 + ADR-020 迹接入捕获 sink**，把飞轮拓宽到工具检索之外。
+5. **把调用日志接入捕获 sink**，把飞轮拓宽到工具检索之外。
 
 ## 5. 来源
 
@@ -122,10 +123,10 @@
   工具检索 0.05 / 路由 0.10），回归时非零退出；`repo:.github/workflows/evals.yml` 在 PR
   上跑确定性、无模型的检索 + 工具检索门禁，按路径过滤（路由套件仅按需触发）。
 - **支撑各项借鉴的 ADR 状态。** ADR-019（闭合 eval 飞轮）已 Accepted，2026-06-14；
-  ADR-020（迹蒸馏）已 Accepted——对应借鉴 #4 / 结论 #5；ADR-024（内置 agent 是内部能力）
-  已 Accepted，2026-06-14——对应本地 LLM 评判借鉴 #1。
+  ADR-024（内置 agent 是内部能力）已 Accepted，2026-06-14——对应本地 LLM 评判借鉴 #1。
+  （撰写本调研时，ADR-020「迹蒸馏」支撑着借鉴 #4 / 结论 #5；该 ADR 已于 2026-09-09 随它所
+  描述的能力一并删除。）
   `repo:docs/decisions/ADR-019-close-the-eval-flywheel.md`、
-  `repo:docs/decisions/ADR-020-transcript-distillation.md`、
   `repo:docs/decisions/ADR-024-builtin-agent-is-internal-capability.md`
 - **Promptfoo —— MIT、2026-03 被 OpenAI 收购。** 收购于 2026-03-09 宣布；Promptfoo
   "将保持开源……在当前许可证下"。MIT 由仓库许可证本身确认（公告只确认开源延续、未点名许可证）。

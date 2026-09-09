@@ -4,7 +4,7 @@
 
 - **状态：** 已接受
 - **Spec:** [004-agent-registry](../../specs/004-agent-registry/spec.md)（FR-040 原生记忆扫描、FR-041 导入/收编）、[007-memory](../../specs/007-memory/spec.md)（整理导入事实的 organizer）
-- **关联：** [ADR-020](./ADR-020-transcript-distillation.md)（读取对话记录 → 写入 memory 事实——同样的「读外部、写 Coffer」形态）、[ADR-026](./ADR-026-memory-via-mcp-not-native-projection.md)（Coffer 绝不写 agent 的原生记忆文件）、[ADR-013](./ADR-013-agent-native-shared-memory.md)（agent 原生共享 memory）、Spec 004（agent 注册表——只读工作区不变量）
+- **关联：** [ADR-026](./ADR-026-memory-via-mcp-not-native-projection.md)（Coffer 绝不写 agent 的原生记忆文件）、[ADR-013](./ADR-013-agent-native-shared-memory.md)（agent 原生共享 memory）、Spec 004（agent 注册表——只读工作区不变量）
 
 ## 背景
 
@@ -29,9 +29,9 @@ slug 到路径的映射是关键：Claude Code 通过替换分隔符把项目的
 
 结果上报 `imported`、`skipped`、`store`、`project_path` 与 `organized`。跨 agent 共享与跨机同步是自然后果：memory 事实已通过 MCP `recall` 网关共享（Spec 007）并经 git 同步（ADR-016）。
 
-### 架构 —— 组合根边界，与 `distill` 一致
+### 架构 —— 组合根边界
 
-导入切片是 `agent`、`memory`、`organizer` 三个 kind 交汇的边界站点。`application.agent` 不得 import memory kind（import-linter Contract 5b），因此 memory 写入 / organize / store 名解析的管线只能经由在 `native_memory_import_wiring.py` 中连线的组合根 sink 适配器触达（镜像 `distill_wiring.py`）。连线必须在 `wire_organize` **之后**运行，使 organizer 可达。
+导入切片是 `agent`、`memory`、`organizer` 三个 kind 交汇的边界站点。`application.agent` 不得 import memory kind（import-linter Contract 5b），因此 memory 写入 / organize / store 名解析的管线只能经由在 `native_memory_import_wiring.py` 中连线的组合根 sink 适配器触达。连线必须在 `wire_organize` **之后**运行，使 organizer 可达。
 
 ### 不变量
 
@@ -67,4 +67,8 @@ slug 到路径的映射是关键：Claude Code 通过替换分隔符把项目的
 - 新增两条 CLI 子命令：`coffer agent native-memory <name>`（读取，`--json`）与 `coffer agent import-native-memory <name> <memory_dir>`（收编）——FR-009 REST+CLI 等价。
 - agent 的 Memory tab 展示 Coffer 受管记忆链接，外加这张原生表格（只读，按 FR-038 提供打开 / 显示 / 复制路径），并带一个收编某个 store 的导入按钮。
 - 不分配新 spec 编号，不新增 audit 事件。Spec 004 的 FR 与验收场景就地扩展（FR-040 / FR-041）；导入复用 Spec 007 的 organizer 与 memory 写入事件。
-- slug 编码与 transcript `.jsonl` 格式无文档；路径解析适配器为防御性实现，当 Claude Code 改变其磁盘布局时需重新审视。
+- slug 编码与 transcript `.jsonl` 格式无文档；路径解析适配器为防御性实现，当 Claude Code 改变其磁盘布局时需重新审视。（仅为恢复项目 `cwd` 而读取兄弟 `.jsonl` 的逻辑属于本切片自有，不随 transcript 蒸馏的移除而失效。）
+
+## 修订历史
+
+- **2026-09-09** —— transcript 蒸馏已从 Coffer 移除，故本 ADR 不再以它作为「读外部、写 Coffer」的同形流程来引用，`distill_wiring.py` 这一镜像对象也已不存在。决定本身不变：原生记忆导入现在是唯一「读 agent 自己的文件、写 Coffer memory 事实」的流程，且它始终由用户显式触发——如今再没有任何东西会自行写入记忆。

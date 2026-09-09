@@ -3,7 +3,7 @@
 > 中文版: [ADR-037-rules-runtime-injection.zh.md](ADR-037-rules-runtime-injection.zh.md)
 
 **Status**: Accepted
-**Date**: 2026-06-22
+**Date**: 2026-06-22 (revised 2026-09-09; see Revision history)
 **Deciders**: Yuxing Wu
 **Related**: spec `007-memory` (FR-049–FR-052); builds on [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md) (memory via MCP, not native projection); informed by [`docs/research/memory-systems-landscape.md`](../research/memory-systems-landscape.md)
 
@@ -27,18 +27,13 @@ and a procedural **rules lane** (`rules/rules.md`, FR-036) that is deliberately
 not discovered by a model that remembers to search. Without an injection
 mechanism the rules lane is write-only: the agent never reads it.
 
-Two external facts shape the mechanism:
-
-1. **Both Claude Code and Codex have a SessionStart hook** with the same JSON
-   schema (a top-level `hooks` key; Claude Code in `~/.claude/settings.json`,
-   Codex in `~/.codex/hooks.json`). The hook prints
-   `{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": …}}`,
-   cannot block the agent, and re-runs on resume/clear/compact. This is exactly
-   an ambient-context channel that touches no memory or instruction file.
-2. **Only Claude Code has a SessionEnd hook.** Codex emits no session-end event
-   (only a per-turn `Stop`). So an immediate-on-close distill is available for
-   Claude Code but not Codex — an asymmetry the design must absorb rather than
-   fight.
+One external fact shapes the mechanism: **both Claude Code and Codex have a
+SessionStart hook** with the same JSON schema (a top-level `hooks` key; Claude
+Code in `~/.claude/settings.json`, Codex in `~/.codex/hooks.json`). The hook
+prints
+`{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": …}}`,
+cannot block the agent, and re-runs on resume/clear/compact. This is exactly an
+ambient-context channel that touches no memory or instruction file.
 
 ## Decision
 
@@ -69,14 +64,6 @@ Concretely:
   **handoff body itself is NOT injected** — it is pulled on demand via
   `coffer__resume` (FR-025), so the bundle stays small and a stale scene is never
   force-fed into context.
-- **SessionEnd distill, Claude Code only (FR-051).** Coffer installs a SessionEnd
-  hook for Claude Code that, on close, calls
-  `POST /api/v1/agents/{name}/sessions/{session_id}/end`; the daemon distils the
-  just-closed session into the journal lane reusing the slice-3b distill path and
-  the FR-046 `distilled_sessions` idempotency ledger (never double-distilled,
-  no-op when already distilled / no model / not a git project). **Codex installs
-  no SessionEnd hook** and degrades to the FR-046 catch-up sweep — which remains
-  the write guarantee; the hook only lowers latency.
 - **Opt-in `disable_native_memory` (FR-052).** A per-agent config, **default
   `false`** (Coffer never touches native memory — the ADR-026 posture). When
   turned on, Coffer writes the agent's native-memory off-switch (Claude Code
@@ -97,10 +84,8 @@ Concretely:
   Native memory is touched only when the user explicitly opts into
   `disable_native_memory`.
 - **Robust by construction.** A hook-less or failed injection never blocks the
-  agent (exit 0); the rules bundle and session-end distill work regardless of the
+  agent (exit 0); the rules bundle works regardless of the
   `disable_native_memory` toggle.
-- **Lower-latency capture on Claude Code** via the SessionEnd hook, while the
-  FR-046 sweep keeps the write guarantee for both agents.
 
 **Negative**
 
@@ -108,10 +93,6 @@ Concretely:
   config shape and native-memory off-switch — a small surface that can drift as
   upstream formats evolve (mitigated: idempotent, basename-scoped install; both
   agents share the SessionStart JSON schema today).
-- **Codex asymmetry.** No immediate-on-close distill for Codex; its sessions are
-  captured only by the periodic sweep, so capture latency is higher than Claude
-  Code's. Accepted — the sweep is the guarantee; the hook is a latency
-  optimisation, not a correctness requirement.
 - **Bundle size ceiling.** `additionalContext` is bounded (~10k chars); a very
   large rules lane could be truncated. Accepted for now (rules are meant to be
   few and durable; the organizer keeps the lane small).
@@ -133,7 +114,19 @@ specifically: rules are imperative guidance that must be present before the agen
 acts, not retrieved only when it thinks to search. That is why the rules lane is
 excluded from `recall` and delivered by injection instead.
 
-**Approximate SessionEnd on Codex with the per-turn `Stop` event.** Rejected:
-`Stop` fires every turn, not at session close, so it would either over-distill or
-need its own settle/debounce logic — duplicating the FR-046 sweep, which already
-solves "settled, not-yet-distilled, idempotent" cleanly. Codex reuses the sweep.
+## Revision history
+
+- **2026-06-22** — Original decision: SessionStart rules injection, handoff
+  pull-on-demand, a Claude-Code-only SessionEnd hook that distilled the
+  just-closed session into the journal lane, and the opt-in
+  `disable_native_memory` switch.
+- **2026-09-09** — Transcript distillation and the journal lane were removed
+  from Coffer, so everything this ADR said about SessionEnd distillation (FR-051,
+  the Codex latency asymmetry, and the rejected per-turn `Stop` approximation) is
+  struck. Nothing now writes memory automatically: an agent records a fact with
+  `coffer__remember` and retrieves it with `coffer__recall`. That is simpler and
+  more predictable, and it is a genuine trade-off — distillation was working
+  (1,320 sessions distilled, 4,669 journal entries) and is being removed because
+  the ingest→deliver loop it fed no longer exists end to end, not because it
+  failed. **The SessionStart rules-injection decision above still stands
+  unchanged** and is what this ADR now records.

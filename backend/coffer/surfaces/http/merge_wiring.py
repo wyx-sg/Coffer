@@ -63,8 +63,7 @@ def wire_merge(
     Must be called AFTER ``wire_memory_kind`` (needs the shared consolidator +
     binding repos), ``wire_provider_kind`` (internal-engine resolution), and
     ``wire_reorg`` (the FR-059 post-merge pass reaches the reorg service) —
-    ``wire_distill`` is the single internal-LLM call site that satisfies all
-    three.
+    the app composition root calls all three before it.
     """
     resources: ResourceService = get_resource_service()
     audit = get_audit_service()

@@ -1,4 +1,4 @@
-"""Slice-7 four-lane routes: journal / handoff / rules / consolidation-log.
+"""Slice-7 lane routes: handoff / rules / consolidation-log.
 
 Registered on the shared ``memory`` router (imported from ``routes``) to keep
 each module under the file-size budget. The GET reads mirror ``get_rules``:
@@ -22,26 +22,7 @@ from coffer.surfaces.http.memory.schemas import (
     ConsolidationLogOut,
     HandoffOut,
     HandoffSceneOut,
-    JournalFileOut,
-    JournalOut,
 )
-
-
-@router.get("/{name}/journal", response_model=JournalOut)
-async def get_journal(
-    name: str,
-    mem_svc: MemoryService = Depends(get_memory_service),  # noqa: B008
-) -> JournalOut:
-    """List the store's ``journal/<period>.md`` files, newest period first."""
-    if name == GLOBAL_STORE_NAME:
-        await mem_svc.ensure_store(name)
-    files = await lane_reads.journal_for_store(name, mem_svc.resolved_store)
-    return JournalOut(
-        files=[
-            JournalFileOut(period=f.period, text=f.text, path=f.path, folder_path=f.folder_path)
-            for f in files
-        ]
-    )
 
 
 @router.get("/{name}/handoff", response_model=HandoffOut)
@@ -80,22 +61,6 @@ async def get_consolidation_log(
 
 
 # --- lane deletes -----------------------------------------------------------
-
-
-@router.delete(
-    "/{name}/journal/{period}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    response_class=Response,
-)
-async def delete_journal_period(
-    name: str,
-    period: str,
-    mem_svc: MemoryService = Depends(get_memory_service),  # noqa: B008
-    actor: Actor = Depends(_actor),  # noqa: B008
-) -> Response:
-    """Delete one ``journal/<period>.md`` file + its recall-index rows."""
-    await mem_svc.delete_lane(store_name=name, lane="journal", identifier=period, actor=actor)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.delete(

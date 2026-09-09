@@ -82,6 +82,9 @@ describe("AgentDetailPage", () => {
     expect(screen.getByRole("tab", { name: /config files/i })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /subagents & commands/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /memory & rules/i })).not.toBeInTheDocument();
+    // Transcript distillation was removed with the automatic ingest half of the
+    // memory loop, and the Conversations tab went with it.
+    expect(screen.queryByRole("tab", { name: /conversations/i })).not.toBeInTheDocument();
     // The Instructions tab was removed as redundant with Config files; master-
     // instructions delivery stays available via the API/CLI.
     expect(screen.queryByRole("tab", { name: /instructions/i })).not.toBeInTheDocument();

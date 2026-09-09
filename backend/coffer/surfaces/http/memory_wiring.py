@@ -3,8 +3,7 @@
 Extracted from ``wiring.py`` (which sits at the 400-LOC ceiling) so the memory
 kind's growing composition — reconcile-on-append, the startup reindex sweep —
 has room. ``wire_memory_kind`` builds the memory service + its sibling handoff
-and journal services; ``run_memory_reindex_sweep`` heals the search index at
-boot.
+service; ``run_memory_reindex_sweep`` heals the search index at boot.
 """
 
 from __future__ import annotations
@@ -24,7 +23,6 @@ from coffer.application.knowledge.retrieval import (
 from coffer.application.memory.builtin_tools import register_memory_builtin_tools
 from coffer.application.memory.consolidate import StoreConsolidator, find_alias_holder
 from coffer.application.memory.handoff import HandoffService
-from coffer.application.memory.journal import JournalService
 from coffer.application.memory.kind import make_memory_kind
 from coffer.application.memory.labels_sync import MemoryLabelsSyncState
 from coffer.application.memory.scope import GLOBAL_STORE_NAME, ScopeResolver
@@ -44,7 +42,6 @@ from coffer.infrastructure.memory.scope_fs import (
 from coffer.infrastructure.memory.store_label_repo import StoreLabelRepo
 from coffer.surfaces.http.dependencies import set_memory_service
 from coffer.surfaces.http.memory.dependencies import (
-    set_journal_service,
     set_project_root_repo,
     set_store_label_repo,
 )
@@ -127,17 +124,6 @@ def wire_memory_kind(
         audit=audit,
         now=lambda: datetime.now(tz=UTC),
     )
-    journal_service = JournalService(
-        scope=scope,
-        store_dir=paths.memory_store_dir,
-        audit=audit,
-        now=lambda: datetime.now(tz=UTC),
-        # Reconcile-on-append: a distilled journal entry is indexed immediately
-        # so it is recall-able without waiting for a lazy reconcile-on-read.
-        reconciler=reconciler,
-        embedding=embedding_resolver,
-    )
-    set_journal_service(journal_service)
     app.state.kinds["memory"] = make_memory_kind(memory_service)
     set_memory_service(memory_service)
     # Store labels sync as a state area (spec 010 x FR-017c): a labelled
@@ -171,8 +157,8 @@ async def reindex_all_memory_stores(
     reconciler: MemoryReconciler,
     embedding_resolver: EmbeddingResolver,
 ) -> None:
-    """Index every memory store's on-disk lanes so journal written while a store
-    was not being recalled becomes searchable (FR-043). Idempotent
+    """Index every memory store's on-disk knowledge lane so facts written while a
+    store was not being recalled become searchable. Idempotent
     (``content_sha256`` no-op gate) and best-effort — a per-store failure is
     logged and skipped, never blocking boot."""
     try:

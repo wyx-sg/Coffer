@@ -235,24 +235,6 @@ class RulesOut(BaseModel):
     text: str | None
 
 
-# --- journal lane (Slice 7) -------------------------------------------------
-
-
-class JournalFileOut(BaseModel):
-    """One time-partitioned ``journal/<period>.md`` file (read-only)."""
-
-    period: str
-    text: str
-    path: str
-    folder_path: str
-
-
-class JournalOut(BaseModel):
-    """The store's journal lane — period files, newest first."""
-
-    files: list[JournalFileOut]
-
-
 # --- handoff lane (Slice 7) -------------------------------------------------
 
 

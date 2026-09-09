@@ -1,7 +1,7 @@
 # backend/coffer/surfaces/http/internal_engine_routes.py
 """/api/v1/internal-engine-config — the single, global internal-engine model.
 
-Coffer's internal LLM engine (organizer / reorg / distill)
+Coffer's internal LLM engine (organizer / reorg / merge)
 takes its endpoint + key from the ``internal_default`` connection but its MODEL
 from this singleton (spec 011 amendment 2026-06-22b). The connection no longer
 owns the internal-engine model."""

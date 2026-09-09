@@ -63,11 +63,6 @@ from coffer.surfaces.http.app_mcp_composition import (
 )
 from coffer.surfaces.http.async_batch_wiring import start_async_batches, stop_async_batches
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.auto_distill_wiring import (
-    start_auto_distill,
-    stop_auto_distill,
-    wire_session_end_distiller,
-)
 from coffer.surfaces.http.channel_wiring import wire_channel_kind
 from coffer.surfaces.http.consolidate_wiring import run_store_consolidation
 from coffer.surfaces.http.credential_composition import (
@@ -88,16 +83,19 @@ from coffer.surfaces.http.dependencies import (
     set_resource_service,
     set_retention_service,
 )
-from coffer.surfaces.http.distill_wiring import wire_distill
 from coffer.surfaces.http.mcp.protocol_routes import (
     shutdown_all_sessions,
     start_session_reaper,
 )
 from coffer.surfaces.http.memory.organize_state import get_organizer_service
 from coffer.surfaces.http.memory_wiring import run_memory_reindex_sweep, wire_memory_kind
+from coffer.surfaces.http.merge_wiring import wire_merge
 from coffer.surfaces.http.migrations_runner import run_migrations
+from coffer.surfaces.http.native_memory_import_wiring import wire_native_memory_import
+from coffer.surfaces.http.organize_wiring import wire_organize
 from coffer.surfaces.http.provider_wiring import wire_provider_kind
 from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
+from coffer.surfaces.http.reorg_wiring import wire_reorg
 from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.session_end_wiring import start_auto_organize, stop_auto_organize
 from coffer.surfaces.http.sync_wiring import start_sync
@@ -229,13 +227,17 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # its upstreams; shutdown disposes it first (on_dispose deregisters; idempotent).
     app.state.mcp_session_supervisors = session_supervisors
 
-    # Wire transcript distillation + organizer (spec 007 FR-027..031, ADR-020).
-    distill_service = wire_distill(
-        memory_service=memory_service,
-        agent_service=get_agent_service(),
-        provider_svc=get_provider_service(),
-        credential_resolver=make_credential_resolver(credential_store),
-    )
+    # Internal-LLM memory consumers (spec 007): the consolidation organizer
+    # (FR-027..031), the agentic reorg (FR-033/034), the AI-assisted same-project
+    # store merge (FR-056-059, AFTER reorg so its post-merge pass can reach it),
+    # and native-memory adoption (spec 004 FR-041, AFTER organize so the import
+    # sink can reach the organizer). One place, so the composition root keeps a
+    # single internal-LLM call site.
+    _credential_resolver = make_credential_resolver(credential_store)
+    wire_organize(memory_service, get_provider_service(), _credential_resolver)
+    wire_reorg(memory_service, get_provider_service(), _credential_resolver)
+    wire_merge(memory_service, get_provider_service(), _credential_resolver)
+    wire_native_memory_import(memory_service, get_agent_service())
 
     # Wire the channel kind (spec 009) AFTER wire_chat: the inbound processor
     # drives turns through the chat service handles wire_chat published.
@@ -248,7 +250,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
 
     # Boot memory heal (best-effort, idempotent): collapse worktree-fragmented
-    # stores, then reindex so distilled journal is searchable (FR-043).
+    # stores, then reindex so memory is searchable (FR-043).
     await run_store_consolidation(resources=resource_svc, sm=sm, substrate=substrate)
     await run_memory_reindex_sweep(app, resource_svc, _resolve_embedding)  # type: ignore[arg-type]
 
@@ -279,16 +281,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Auto session-end organize → 固化 pipeline (007 FR-035): default-ON.
     start_auto_organize(app, memory_service, get_organizer_service())
-    # Auto-distill catch-up sweep (007 FR-046): default-ON memory write guarantee.
-    start_auto_distill(
-        app, distill_service=distill_service, agent_service=get_agent_service(), session_maker=sm
-    )
-    # On-demand SessionEnd distill (Slice 6 FR-051): reuses the FR-046 ledger.
-    wire_session_end_distiller(distill_service=distill_service, session_maker=sm)
-    await start_async_batches(  # distill, KB re-embed, native import — off the request path
+    await start_async_batches(  # KB re-embed, native import — off the request path
         app,
-        distill_service=distill_service,
-        session_maker=sm,
         kb_service=kb_service,
         import_service=get_agent_memory_import_service(),
     )
@@ -323,7 +317,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             await audit.record(AuditEventType.DAEMON_STOPPED.value, actor="system")
         worker.stop()
         await stop_auto_organize(app)
-        await stop_auto_distill(app)
         await stop_async_batches(app)
         # Stop channel adapters first so no new turns start mid-teardown.
         # Order matters: cancel the reconciler task BEFORE dispose() so an

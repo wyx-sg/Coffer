@@ -63,14 +63,13 @@ Concretely:
   `MEMORY.md` ([ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md)); the
   two-layer scope (global + per-project, resolved from the MCP shim's cwd →
   git-root); the shared retrieval engine (grep / FTS5 keyword / sqlite-vec
-  vector) with lazy reindex-on-read; transcript distillation (ADR-020); and full
-  human curation via UI/CLI.
+  vector) with lazy reindex-on-read; and full human curation via UI/CLI.
 - **Legibility (FR-017a):** because Coffer owns its format, a per-project store is
   presented by a human-readable identity derived from its `project_root` (the
   directory basename + path) instead of the `project-<ULID>` name.
 - **Ambient loading (~~deferred follow-up~~ — SHIPPED, spec 007 FR-055):** the
-  session-start hook now injects an ambient project-memory digest — the recent
-  journal + the knowledge index — into the agent's context (context injection via
+  session-start hook now injects an ambient project-memory digest — the knowledge
+  index — into the agent's context (context injection via
   the `session-context` endpoint, never a file write), so an agent starts with
   memory without calling `recall`; bodies are still fetched on demand via
   `recall`. Delivered through the per-agent SessionStart hook

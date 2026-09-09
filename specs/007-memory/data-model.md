@@ -155,7 +155,7 @@ CREATE TABLE memory_store_labels (
 
 The `label` takes precedence over the `project_root`-derived basename when rendering a store's readable identity; clearing the label deletes its row, reverting to the FR-017a derivation / fallback. Neither table touches the store's name (`project-<ULID>`) or `project_id`.
 
-**One store per repo, across git worktrees.** The project ULID is `sha256(git-root path)`. A linked git worktree has its own `.git` *file*, so `git_root` (`infrastructure/memory/scope_fs.py`) follows that pointer's `gitdir`/`commondir` to the **main** repo toplevel — every worktree of a repo (and the main checkout) resolves to one ULID, hence one store. Branch resolution (`git_branch`) stays per-worktree, since handoffs are branch-keyed. Stores fragmented by the earlier path-hash-per-worktree behaviour are healed at daemon startup by a one-time, idempotent, additive consolidation (`application/memory/consolidate.py`): it re-resolves each `project_root`, and any store whose name is no longer the canonical `project-<ULID>` for its root has its lane files merged (journal deduped by timestamp, other collisions kept as `--from-<ulid>` siblings) into the canonical store and is then retired (resource + `documents` + label + root rows).
+**One store per repo, across git worktrees.** The project ULID is `sha256(git-root path)`. A linked git worktree has its own `.git` *file*, so `git_root` (`infrastructure/memory/scope_fs.py`) follows that pointer's `gitdir`/`commondir` to the **main** repo toplevel — every worktree of a repo (and the main checkout) resolves to one ULID, hence one store. Branch resolution (`git_branch`) stays per-worktree, since handoffs are branch-keyed. Stores fragmented by the earlier path-hash-per-worktree behaviour are healed at daemon startup by a one-time, idempotent, additive consolidation (`application/memory/consolidate.py`): it re-resolves each `project_root`, and any store whose name is no longer the canonical `project-<ULID>` for its root has its lane files merged (name collisions kept as `--from-<ulid>` siblings) into the canonical store and is then retired (resource + `documents` + label + root rows).
 
 ## On-disk canonical layout (source of truth)
 
@@ -177,13 +177,12 @@ The `label` takes precedence over the `project_root`-derived basename when rende
         │   └── INDEX.md
         ├── consolidation-log.md
         ├── superseded/<slug>-<ts>.md
-        ├── rules/*.md                    # rules.md + per-topic <slug>.md (autonomous split past the threshold)
-        └── journal/<YYYY-MM-DD>.md       # episodic, append-only, one file PER DAY (a day with no entry → no file); indexed for recall (FR-043)
+        └── rules/*.md                    # rules.md + per-topic <slug>.md (autonomous split past the threshold)
 ```
 
-There is **no `MEMORY.md`** — the prior derived projection is removed. `recall` globs `knowledge/**/*.md` (excluding `INDEX.md`), so it transparently picks up topic docs once the organizer writes them and finds a hand-written topic doc immediately. `INDEX.md` and the store-root `consolidation-log.md` are **derived/machine-local**: excluded from recall and from the sync mirror (each machine regenerates `INDEX.md` from the synced topic docs; the log is per-machine). Topic docs themselves are source-of-truth and DO sync. The store-root **`superseded/`** tombstone holds prior versions retired by the reorg pass (FR-033/034): like `handoff/` it sits outside the `knowledge/` lane so it is **excluded from recall**, but unlike the derived files it **DOES sync** — it is recoverable source-of-truth history, not a regenerated artifact. The store-root **`rules/`** lane is the **procedural lane** (FR-036): the organizer classifies rule-shaped inbox items into `rules/rules.md` (append, not topic-merge); once any rules file exceeds the threshold the organizer's reorg pass splits it by topic into per-category `rules/<slug>.md` files (amendment 2026-06-22), and the read surface concatenates every `rules/*.md`. It sits outside the `knowledge/` lane so it is **excluded from recall** (rules are delivered by session-start injection, a later slice, not by `recall`), and it **DOES sync** as source-of-truth (like `handoff/`). It is read-only over `GET /memory_stores/{name}/rules` / `coffer memory rules`. The store-root **`journal/`** lane is the **episodic lane** (FR-040): unlike `rules/`/`handoff/`/`superseded/` it **participates in recall** — the reconciler indexes each `journal/<YYYY-MM-DD>.md` (one file per day; a day with no entry creates no file) as one memory document (chunked like topic docs) and the grep guard keeps `journal/` hits, so episodic events are searchable (FR-043). Indexing is **eager**: `JournalService.append` indexes the period file immediately (reconcile-on-append) so a distilled entry is recall-able without waiting for a lazy reconcile-on-read, and a boot-time reindex sweep (`run_memory_reindex_sweep`) indexes any journal that was written to disk while its store was not being recalled. It still **DOES sync** as source-of-truth history and is **not** counted in a store's `fact_count` (that counts only the `knowledge/` lane).
+There is **no `MEMORY.md`** — the prior derived projection is removed. `recall` globs `knowledge/**/*.md` (excluding `INDEX.md`), so it transparently picks up topic docs once the organizer writes them and finds a hand-written topic doc immediately. `INDEX.md` and the store-root `consolidation-log.md` are **derived/machine-local**: excluded from recall and from the sync mirror (each machine regenerates `INDEX.md` from the synced topic docs; the log is per-machine). Topic docs themselves are source-of-truth and DO sync. The store-root **`superseded/`** tombstone holds prior versions retired by the reorg pass (FR-033/034): like `handoff/` it sits outside the `knowledge/` lane so it is **excluded from recall**, but unlike the derived files it **DOES sync** — it is recoverable source-of-truth history, not a regenerated artifact. The store-root **`rules/`** lane is the **procedural lane** (FR-036): the organizer classifies rule-shaped inbox items into `rules/rules.md` (append, not topic-merge); once any rules file exceeds the threshold the organizer's reorg pass splits it by topic into per-category `rules/<slug>.md` files (amendment 2026-06-22), and the read surface concatenates every `rules/*.md`. It sits outside the `knowledge/` lane so it is **excluded from recall** (rules are delivered by session-start injection, a later slice, not by `recall`), and it **DOES sync** as source-of-truth (like `handoff/`). It is read-only over `GET /memory_stores/{name}/rules` / `coffer memory rules`. A boot-time reindex sweep (`run_memory_reindex_sweep`) indexes any `knowledge/` lane content that reached disk while its store was not being recalled.
 
-The **organizer** (`application/memory/organizer.py`, internal-LLM, explicit `organize` trigger only) drains `inbox/` into the topic docs via a one-shot completion per item: retrieve up to 3 candidate topic docs (no LLM) → one LLM merge/create call → write `knowledge/<slug>.md` → delete the inbox item (only after the write succeeds) → append a changelog line. A malformed LLM response skips the item (left in inbox, never corrupts a doc). Topic-doc `.md` frontmatter is `{title, description, updated_at}` + body. The langchain LLM call stays in `infrastructure/chat` (Contract 9); `application/memory` reaches it through a memory-local `LlmCompletionPort` (clone of the distill slice; Contract 5e forbids importing `application.distill`).
+The **organizer** (`application/memory/organizer.py`, internal-LLM, explicit `organize` trigger only) drains `inbox/` into the topic docs via a one-shot completion per item: retrieve up to 3 candidate topic docs (no LLM) → one LLM merge/create call → write `knowledge/<slug>.md` → delete the inbox item (only after the write succeeds) → append a changelog line. A malformed LLM response skips the item (left in inbox, never corrupts a doc). Topic-doc `.md` frontmatter is `{title, description, updated_at}` + body. The langchain LLM call stays in `infrastructure/chat` (Contract 9); `application/memory` reaches it through a memory-local `LlmCompletionPort`.
 
 The **reorg pass** (`application/memory/reorg.py`, internal-LLM, explicit `reorg` trigger only — FR-033/034) deepens the organizer with an **agentic** loop: a bounded langgraph `create_react_agent` (confined to `infrastructure/chat` by Contract 9, reached via an injected memory-local port — clone of the agentic-RAG slice) driving four internal tools over the topic docs — `list_topics`, `read_topic`, `write_topic`, `supersede_topic`. It consolidates duplicate/overlapping docs and splits over-long ones. The data-loss guarantee is one invariant: **no byte leaves the `knowledge/` lane without first being archived** — a `write_topic` that overwrites an existing doc archives the prior version to `superseded/<slug>-<ts>.md` before writing, and `supersede_topic` moves the doc there. After the loop the pass regenerates `INDEX.md`, reconciles, and audits `memory_reorganized`. The four tools are **internal LangChain `StructuredTool`s** built from memory-local callables — never registered on the MCP gateway, never agent-facing.
 
@@ -216,7 +215,7 @@ release target tags and pushes atomically.
 | `remember` / user add                          | Write `knowledge/inbox/<item-slug>.md` → index into `documents`/`chunks`/FTS5/(vec) → audit.                                                                                  |
 | User edit (REST/CLI/external editor)           | Rewrite `.md` → single re-index routine (sha256 changed → re-chunk/-embed) → audit. (A direct external-editor edit takes effect on the next lazy reindex-on-read.) MCP has no edit tool — REST/CLI only. |
 | User delete (REST/CLI)                         | Delete `.md` → remove `documents`/`chunks`/FTS5/vec rows → audit. MCP has no delete tool — REST/CLI only.                                                                      |
-| Lane delete (REST)                             | `DELETE /memory_stores/{name}/{journal/<period>,handoff/<branch>,rules,consolidation-log}` → remove the lane file(s) → drop the journal lane's index rows (FR-043; handoff/rules are outside recall) → append one human-readable line to `consolidation-log.md` (EXCEPT the changelog's own delete) → audit `memory_deleted`. A missing lane file → 404 (mirrors fact-delete). |
+| Lane delete (REST)                             | `DELETE /memory_stores/{name}/{handoff/<branch>,rules,consolidation-log}` → remove the lane file(s) (none of these lanes is indexed for recall) → append one human-readable line to `consolidation-log.md` (EXCEPT the changelog's own delete) → audit `memory_deleted`. A missing lane file → 404 (mirrors fact-delete). |
 | Clear a scope                                  | Delete every memory item under `knowledge/` → remove all index rows → audit. Store Resource preserved.                                                                        |
 | Organize (explicit trigger; internal LLM)      | Per inbox item: retrieve ≤3 candidate topic docs → one-shot LLM merge/create/**classify** → if the LLM marks the item a **rule**, append it to `rules/rules.md` (procedural lane, FR-036); else write `knowledge/<slug>.md` → delete the inbox item (only after the write/append) → append `consolidation-log.md`. Then regenerate `INDEX.md`, reconcile the index, **split any over-threshold `rules/*.md` file into per-topic `rules/<slug>.md` via a one-shot LLM classify** (amendment 2026-06-22), audit `memory_organized` (with a `rules_appended` count). Malformed LLM output skips the item (stays in inbox); no internal model → no-op. |
 | Reorg (explicit trigger; internal agentic LLM) | A bounded langgraph `create_react_agent` loop over the topic docs with list/read/write/supersede tools: consolidate duplicates + split over-long docs. **Every overwrite/supersede first archives the prior version to `superseded/<slug>-<ts>.md`** (never hard-delete). Then regenerate `INDEX.md`, reconcile, audit `memory_reorganized`. No internal model → no-op (`no_model`); no topic docs → no-op (`empty`). |
@@ -254,27 +253,23 @@ When a vector-enabled store's embed degrades (embedding provider unavailable), t
 
 | Value                          | When emitted                                                       |
 | ------------------------------ | ----------------------------------------------------------------- |
-| `"agent_hook_installed"`       | After Coffer installs its SessionStart (+ SessionEnd for Claude Code) hook entry into an agent's hooks config |
+| `"agent_hook_installed"`       | After Coffer installs its SessionStart hook entry into an agent's hooks config |
 | `"agent_hook_uninstalled"`     | After Coffer removes its hook entry from an agent's hooks config   |
 | `"agent_native_memory_disabled"`  | After `disable_native_memory` is turned ON and the agent's native-memory off-switch is written (FR-052) |
 | `"agent_native_memory_restored"`  | After `disable_native_memory` is turned OFF (or the hook is uninstalled) and the agent's prior native-memory setting is restored (FR-052) |
 
 These four events live on the **agent** surface (spec 004), recorded by the
 `AgentHookService` / native-memory toggle; they carry the agent name and the
-config file touched only — never any rules-bundle or memory content. The
-SessionStart/SessionEnd hook callbacks themselves write through spec 007's
-existing memory paths: a session-end distill reuses the `memory_added` /
-`journal_append` events (no distinct audit event, like the FR-046 sweep), and a
+config file touched only — never any rules-bundle or memory content. A
 session-context read emits no audit event (it is a read).
 
-## Rules runtime injection (slice 6 — FR-049–FR-052)
+## Rules runtime injection (slice 6 — FR-049/FR-050/FR-052)
 
 Slice 6 delivers the rules lane (FR-036) into each managed agent at runtime by
 **installing session hooks** that call back to Coffer for a **context-only**
 bundle — never a native file write (ADR-026). The agent-config plumbing
 (`AgentConfig`, hook install/uninstall, native-memory toggle) lives in spec
-**004-agent-registry**; the bundle assembly and the session-end distill reuse
-spec 007's memory paths. This section documents the 007-facing shapes; the
+**004-agent-registry**; the bundle assembly reuses spec 007's memory paths. This section documents the 007-facing shapes; the
 `AgentConfig` field and the hook-install / native-memory REST trio are added to
 spec 004's data-model + `004-agent-registry/contracts/api.openapi.yaml`.
 
@@ -332,9 +327,7 @@ command basename — user hooks are never touched.
 `GET …/session-context?cwd=<cwd>`, and prints
 `{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "<bundle>"}}`
 then exits 0 (bundle ≤ 10k chars). **Any** failure (no daemon, timeout, error) →
-print nothing, exit 0 (never blocks the agent). **SessionEnd contract** (Claude
-Code only): the hook reads stdin `{session_id, transcript_path, cwd, reason}`,
-calls `POST …/sessions/{session_id}/end` with `{cwd}`, ignores the result, exits 0.
+print nothing, exit 0 (never blocks the agent).
 
 ### Bundle assembly (`assemble_session_context(cwd) -> str`, FR-049/FR-050)
 
@@ -352,106 +345,26 @@ FR-050). Returns markdown; an empty result still carries the seeded rules.
 
 ### New endpoints (slice 6)
 
-Two agent-scoped endpoints back the hooks. They live alongside the other
-`/api/v1/agents/{name}/…` routes in `contracts/transcripts.openapi.yaml` (the
-agent-scoped 007 contract); see the wire-contract note below.
+One agent-scoped endpoint backs the hook. It lives in
+`contracts/session-context.openapi.yaml` (the agent-scoped 007 contract); see
+the wire-contract note below.
 
 | Method + path                                              | Body / query | Returns | Notes |
 | ---------------------------------------------------------- | ------------ | ------- | ----- |
 | `GET /api/v1/agents/{name}/session-context?cwd=`           | `cwd` query  | `{additional_context: string}` | SessionStart bundle (FR-049/FR-050). Read-only; no audit. `cwd` outside a git project → global + seeded rules only. |
-| `POST /api/v1/agents/{name}/sessions/{session_id}/end`     | `{cwd}`      | `202`/`200` | SessionEnd distill (FR-051). Idempotent via the `distilled_sessions` ledger; no-op when already distilled / no model / not a git project. |
 
 The hook-install trio (`GET/POST/DELETE /api/v1/agents/{name}/hook-install`,
 cloning `/mcp-install`) and the `disable_native_memory` field on `PATCH
 /api/v1/agents/{name}` live in spec **004-agent-registry** (where `AgentOut` /
 `AgentPatch` / `/mcp-install` already live), not here.
 
-### `distilled_sessions` idempotency ledger (shared with FR-046)
+## Lane read endpoints (slice 7 — FR-053/FR-054)
 
-The SessionEnd distill (FR-051) reuses the **same** machine-local ledger keyed by
-`(agent, session_id, content_sha256)` introduced for the FR-046 catch-up sweep —
-a session is never double-distilled across the two paths (the hook lowers
-latency; the sweep is the standalone write guarantee). No new ledger table is
-introduced for slice 6.
-
-## Transcript distillation (Spec 007 extension)
-
-Transcript distillation is a **producer of memory facts** — it uses the existing `MemoryFact` substrate (no new tables, no new resource kind).
-
-### Insights are untyped (no classification)
-
-The one-shot LLM call returns a JSON array of insights, each carrying only `name` / `description` / `body` — distillation stays "dumb" and MUST NOT classify a per-insight `type` (the legacy `InsightType` vocabulary `decision` / `gotcha` / `convention` / `todo` is retired — FR-045). Each insight is appended to the session's project **journal** lane (episodic) with `actor="agent"`, never a typed `knowledge/` fact; promotion of recurring journal patterns into `knowledge`/`rules` is the organizer's job (固化 — FR-047). `Lane` is the single classification axis (FR-048); there is no free-form `type`.
-
-### Provenance — `origin_session_id`
-
-Every distilled fact carries `origin_session_id` (the transcript's session id) in the fact frontmatter and in `documents.metadata`. This makes the automated origin auditable: a user can see which session produced a given fact and, if needed, delete or correct it.
-
-Example fact frontmatter for a distilled insight:
-
-```markdown
----
-name: use-make-release-for-tagging
-description: Always tag and push via make release; never git push --tags directly.
-metadata:
-  actor: agent
-origin_session_id: 01JXYZ…
-created_at: 2026-06-14T08:00:00+00:00
-updated_at: 2026-06-14T08:00:00+00:00
----
-
-Always tag and push via `make release`. The Makefile target is atomic — it
-tags and pushes in one step. Running `git push --tags` directly bypasses the
-release checks and can leave the repo in a half-tagged state.
-```
-
-### Scrub-before-LLM invariant
-
-The raw transcript is **never persisted** and never reaches the fact body. Before the LLM call:
-
-- All `tool_use` / `tool_result` blocks (Claude/Codex) are dropped.
-- File-content passages and command output embedded in assistant turns are dropped.
-- Common secret patterns (API keys, tokens, PEM blocks) are redacted by a regex scrubber.
-- Long blobs are truncated.
-
-Only scrubbed natural-language text (user + assistant prose) is sent to the LLM. Only the distilled insight text is written to the fact store. Neither the raw transcript nor the scrubbed intermediate text is stored anywhere in `~/.coffer/`.
-
-Coffer reads `~/.claude/projects/` and `~/.codex/sessions/` but **never writes to them** in this flow — Spec 004's read-only invariant is fully preserved.
-
-### Audit
-
-Distillation reuses the existing memory write path: the `memory_added` event fires
-for each individual fact written, carrying its `origin_session_id`. No
-distillation-specific audit event is emitted.
-
-### Transcript session summary (history list view)
-
-The transcript **history** surface lists an agent's past sessions for browsing
-and distillation. A summary is a read-only projection parsed from each session
-`.jsonl` — nothing is persisted (Spec 004 read-only invariant):
-
-| Field              | Source                                                                                                              |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `session_id`       | Claude Code `sessionId` / Codex `payload.id`; falls back to the file path.                                          |
-| `title`            | Claude Code `ai-title` (latest wins), else the first *real* user message (preambles/shell/slash-commands skipped), truncated; nullable. |
-| `project_path`     | Claude Code top-level `cwd` / Codex `session_meta.payload.cwd`.                                                     |
-| `message_count`    | Count of conversation turns — Codex counts `response_item` messages only (never the duplicate `event_msg` events). |
-| `started_at`       | First event timestamp.                                                                                              |
-| `last_activity_at` | Last event timestamp.                                                                                               |
-| `source_path`      | Absolute path of the session `.jsonl` (powers reveal-in-file-manager via the shared `FileActions`).                |
-
-The list endpoint applies server-side search (title or project path), filtering
-(exact project; `started_at` range), and sorting (`started_at` /
-`last_activity_at` / `message_count`, asc/desc), paged by `limit`/`offset`. The
-reader keeps an in-process, mtime-keyed cache of parsed summaries, so an agent
-with thousands of sessions re-parses only files whose mtime changed.
-
-## Four-lane read endpoints (slice 7 — FR-053/FR-054)
-
-The memory store detail page presents the store as four lane sections
-(Knowledge / Rules / Journal / Handoff) plus a consolidation-changelog view
+The memory store detail page presents the store as three lane sections
+(Knowledge / Rules / Handoff) plus a consolidation-changelog view
 (FR-053). Knowledge reuses the existing fact read surface (`GET …/facts`) and is
 what `recall` operates over; Rules already has `GET …/{name}/rules` (FR-036).
-Slice 7 adds three more **read-only** lane endpoints (FR-054), each addressed by
+Slice 7 adds two more **read-only** lane endpoints (FR-054), each addressed by
 **store name** (not cwd) — they are thin **read projections of on-disk lane
 files**, no LLM, mirroring `get_rules`/metrics on `MemoryService` (resolve
 `store_dir` via the resolved scope, read via the lane path helper + infra reader
@@ -460,7 +373,6 @@ HTTP 200** — never a 404.
 
 | Method + path                                        | Returns               | Lane source                                                                 |
 | ---------------------------------------------------- | --------------------- | -------------------------------------------------------------------------- |
-| `GET /api/v1/memory_stores/{name}/journal`           | `JournalOut`          | `journal/<YYYY-MM-DD>.md` files (one per day), **newest period first** (episodic; FR-040). |
 | `GET /api/v1/memory_stores/{name}/handoff`           | `HandoffOut`          | `handoff/<branch-slug>.md` scenes, one per branch (continuity; FR-023).     |
 | `GET /api/v1/memory_stores/{name}/consolidation-log` | `ConsolidationLogOut` | `consolidation-log.md` at the store root; `text = null` when absent (FR-031). |
 
@@ -470,21 +382,6 @@ These are **read DTOs only** — not new domain entities or tables. Each surface
 the lane file's on-disk truth (absolute `.md` `path` + containing `folder_path`)
 so the read-only lane views can offer the FR-021 open-in-editor / reveal /
 copy-path affordances, exactly like `FactOut`.
-
-**`JournalFileOut`** — one time-partitioned journal file.
-
-| Field         | Type  | Notes                                                       |
-| ------------- | ----- | ----------------------------------------------------------- |
-| `period`      | `str` | `YYYY-MM-DD` stem of the `journal/<period>.md` file (one per day). |
-| `text`        | `str` | The journal file's markdown body.                           |
-| `path`        | `str` | Absolute on-disk `.md` path of the journal file.            |
-| `folder_path` | `str` | Absolute path of the containing `journal/` folder.          |
-
-**`JournalOut`**
-
-| Field   | Type                | Notes                                                            |
-| ------- | ------------------- | --------------------------------------------------------------- |
-| `files` | `JournalFileOut[]`  | Journal files **newest period first**; empty list for an empty store. |
 
 **`HandoffSceneOut`** — one per-branch handoff scene.
 
@@ -502,7 +399,7 @@ copy-path affordances, exactly like `FactOut`.
 | -------- | ------------------- | ----------------------------------------------------------- |
 | `scenes` | `HandoffSceneOut[]` | One scene per branch; empty list for a store with no handoff. |
 
-**`ConsolidationLogOut`** — the organizer's append-only 固化 changelog.
+**`ConsolidationLogOut`** — the organizer's append-only consolidation changelog.
 
 | Field         | Type          | Notes                                                            |
 | ------------- | ------------- | ---------------------------------------------------------------- |
@@ -515,6 +412,6 @@ the backend; the spec/data-model side documents only the shapes above.
 
 ## Wire contract (REST)
 
-Lives in `contracts/api.openapi.yaml`. Routes under `/api/v1/memory_stores` (list/get/metrics; add/list/get/edit/delete/clear facts; recall; the slice-7 journal/handoff/consolidation-log lane reads of FR-054). The write endpoints (add/edit/delete/clear) are retained — they are how agents (via MCP) and the CLI author facts; the web UI is a read-only viewer. Read DTOs surface on-disk truth: `FactOut` carries the fact's absolute `.md` `path` and its containing folder's `folder_path`, and `MemoryStoreOut` carries the store's absolute `store_dir`, so the read-only viewer can offer open-in-editor / reveal. The kind-agnostic `/api/v1/resources/...` continues to work for memory stores. App-wide error envelope: `{ "error": { "code", "message", "details" } }`.
+Lives in `contracts/api.openapi.yaml`. Routes under `/api/v1/memory_stores` (list/get/metrics; add/list/get/edit/delete/clear facts; recall; the slice-7 handoff/consolidation-log lane reads of FR-054). The write endpoints (add/edit/delete/clear) are retained — they are how agents (via MCP) and the CLI author facts; the web UI is a read-only viewer. Read DTOs surface on-disk truth: `FactOut` carries the fact's absolute `.md` `path` and its containing folder's `folder_path`, and `MemoryStoreOut` carries the store's absolute `store_dir`, so the read-only viewer can offer open-in-editor / reveal. The kind-agnostic `/api/v1/resources/...` continues to work for memory stores. App-wide error envelope: `{ "error": { "code", "message", "details" } }`.
 
-The slice-6 agent-scoped endpoints (`GET …/session-context`, `POST …/sessions/{session_id}/end`) live in `contracts/transcripts.openapi.yaml` alongside the other `/api/v1/agents/{name}/…` routes; the hook-install trio and the `disable_native_memory` agent field live in `004-agent-registry/contracts/api.openapi.yaml` (see "Rules runtime injection" above).
+The slice-6 agent-scoped endpoint (`GET …/session-context`) lives in `contracts/session-context.openapi.yaml`; the hook-install trio and the `disable_native_memory` agent field live in `004-agent-registry/contracts/api.openapi.yaml` (see "Rules runtime injection" above).

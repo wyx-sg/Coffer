@@ -26,7 +26,6 @@ from coffer.surfaces.http.chat.conversation_routes import router as chat_convers
 from coffer.surfaces.http.chat.model_routes import router as chat_model_router
 from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
 from coffer.surfaces.http.credential_routes import router as credential_router
-from coffer.surfaces.http.distill import router as distill_router  # spec 007 extension
 from coffer.surfaces.http.embedding_routes import router as embedding_router
 from coffer.surfaces.http.fs_routes import router as fs_router
 from coffer.surfaces.http.internal_engine_routes import router as internal_engine_router
@@ -76,7 +75,6 @@ def include_all_routers(app: FastAPI) -> None:
         mcp_invocation_router,
         mcp_tiering_router,
         memory_router,  # spec 007
-        distill_router,  # spec 007 extension — transcript distillation
         # chat (008)
         chat_conversation_router,
         chat_turn_router,

@@ -1,15 +1,17 @@
 """``coffer-hook`` — the agent session-lifecycle → Coffer-daemon bridge.
 
-Spawned by the agent (Claude Code / Codex) at SessionStart / SessionEnd. Reads
-the hook JSON from stdin and the Coffer agent name from ``--agent <name>`` (the
-hook payload does not carry Coffer's agent identity), then talks to the local
-daemon discovered via ``~/.coffer/daemon.json``:
+Spawned by the agent (Claude Code / Codex) at SessionStart. Reads the hook JSON
+from stdin and the Coffer agent name from ``--agent <name>`` (the hook payload
+does not carry Coffer's agent identity), then talks to the local daemon
+discovered via ``~/.coffer/daemon.json``:
 
 - **SessionStart** → ``GET /api/v1/agents/{agent}/session-context?cwd=<cwd>``;
   on 200 print the rules bundle in the ``hookSpecificOutput.additionalContext``
   envelope so the agent injects it.
-- **SessionEnd** → ``POST /api/v1/agents/{agent}/sessions/{session_id}/end``
-  with ``{"cwd": cwd}``; the body is ignored.
+
+SessionEnd used to POST to the daemon to trigger transcript distillation. That
+was its only purpose, and distillation is gone, so the event is now ignored
+like any other.
 
 ``--event`` is a fallback naming the event when the agent's stdin payload does
 not. When it names a SessionStart the payload is never read at all — stdin has
@@ -131,13 +133,6 @@ def _handle_session_start(agent: str, cwd: str | None, info: DaemonInfo) -> None
     sys.stdout.flush()
 
 
-def _handle_session_end(agent: str, cwd: str, session_id: str, info: DaemonInfo) -> None:
-    if not session_id:
-        return
-    url = f"http://127.0.0.1:{info.port}/api/v1/agents/{agent}/sessions/{session_id}/end"
-    _http("POST", url, token=info.token, body={"cwd": cwd}, timeout=_TIMEOUT)
-
-
 def _read_payload() -> dict[str, Any]:
     """The hook's stdin JSON, or ``{}`` when absent or unparseable.
 
@@ -178,8 +173,8 @@ def _dispatch() -> None:
 
     # A SessionStart named by --event needs nothing from stdin, so don't read it:
     # a stdin left open by the agent would block until EOF and stall its startup.
-    # Every other path (the installed no-`--event` command, or any SessionEnd
-    # needing `session_id`) reads the payload, which both agents send and close.
+    # The installed command omits --event and names the event on stdin, so that
+    # path still reads the payload, which both agents send and close.
     known_start = _canonical_event(args.event) == "SessionStart" if args.event else False
     payload = {} if known_start else _read_payload()
 
@@ -190,16 +185,12 @@ def _dispatch() -> None:
     # session's project when the payload omits it. `None` means unknown — never
     # "", which the daemon would resolve against its OWN cwd.
     cwd = payload.get("cwd") or _process_cwd()
-    session_id = payload.get("session_id") or ""
-
     info = _read_daemon_info()
     if info is None:
         return
 
     if event == "SessionStart":
         _handle_session_start(args.agent, cwd, info)
-    elif event == "SessionEnd":
-        _handle_session_end(args.agent, cwd or "", session_id, info)
     # Any other event → nothing to do.
 
 

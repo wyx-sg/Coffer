@@ -1,7 +1,7 @@
 """Integration tests for the OrganizerService over the real memory stack.
 
 Extends the ``mem`` harness (real SQLite + real fact files + real ripgrep) with a
-fake ``LlmCompletionPort`` (scripted JSON, distill ``_Llm`` pattern) and a fake
+fake ``LlmCompletionPort`` (scripted JSON) and a fake
 ``ModelSelectorPort`` — so no real LLM is ever called. The organizer's storage
 I/O, reconcile, INDEX, changelog, and the data-loss safety invariants are
 exercised end-to-end.

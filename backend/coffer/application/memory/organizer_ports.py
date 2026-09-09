@@ -2,10 +2,9 @@
 
 The langchain one-shot completion lives in ``infrastructure.chat`` (Contract 9);
 the organizer reaches it ONLY through these memory-local Protocols, injected at a
-composition root (``surfaces/http/organize_wiring.py``). This mirrors the
-transcript-distillation slice (``application/distill/ports.py``) but is defined
+composition root (``surfaces/http/organize_wiring.py``). They are defined
 memory-locally on purpose: Contract 5e forbids ``application.memory`` from
-importing ``application.distill``.
+importing ``infrastructure.chat``.
 """
 
 from __future__ import annotations

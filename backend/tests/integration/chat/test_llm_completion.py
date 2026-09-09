@@ -11,7 +11,7 @@ from coffer.infrastructure.chat import llm_completion
 @pytest.mark.asyncio
 async def test_complete_returns_text(monkeypatch: pytest.MonkeyPatch) -> None:
     class _Resp:
-        content = "distilled"
+        content = "completed"
 
     class _Model:
         async def ainvoke(self, messages: object) -> _Resp:
@@ -29,4 +29,4 @@ async def test_complete_returns_text(monkeypatch: pytest.MonkeyPatch) -> None:
         model="llama3",
     )
     out = await port.complete(system="s", user="u", model=cfg, credential_resolver=lambda r: "")
-    assert out == "distilled"
+    assert out == "completed"

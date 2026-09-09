@@ -1,6 +1,6 @@
 """Integration: the Slice-7 lane routes over the real app — reads + deletes.
 
-``GET .../journal`` / ``.../handoff`` / ``.../consolidation-log`` mirror
+``GET .../handoff`` / ``.../consolidation-log`` mirror
 ``get_rules``: ``ensure_store`` for the global name, read-only, 200 with an
 empty list / null text for an empty store (never 404). The ``DELETE`` routes
 mirror ``forget_fact``: 204 on success, 404 when the lane file is missing; each
@@ -17,11 +17,9 @@ from starlette.testclient import TestClient
 from coffer.infrastructure.knowledge.paths import (
     consolidation_log_path,
     handoff_path,
-    journal_path,
     rules_path,
 )
 from coffer.infrastructure.memory.handoff_files import write_handoff
-from coffer.infrastructure.memory.journal_files import append_entry
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
@@ -42,42 +40,6 @@ def _provision(c: TestClient) -> None:
     set_active_token(_TOKEN)
     r = c.get("/api/v1/memory_stores", headers=_HEADERS)
     assert r.status_code == 200, r.text
-
-
-# --- journal ----------------------------------------------------------------
-
-
-def test_journal_route_lists_newest_first(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59920)
-    store_dir = tmp_path / "memory" / "global"
-    with TestClient(app) as c:
-        _provision(c)
-        append_entry(
-            journal_path(store_dir, "2026-05"),
-            timestamp=datetime(2026, 5, 1, tzinfo=UTC),
-            body="May",
-        )
-        append_entry(
-            journal_path(store_dir, "2026-06"),
-            timestamp=datetime(2026, 6, 1, tzinfo=UTC),
-            body="June",
-        )
-        r = c.get("/api/v1/memory_stores/global/journal", headers=_HEADERS)
-        assert r.status_code == 200, r.text
-        files = r.json()["files"]
-        assert [f["period"] for f in files] == ["2026-06", "2026-05"]
-        assert "June" in files[0]["text"]
-        assert files[0]["path"].endswith("journal/2026-06.md")
-        assert files[0]["folder_path"].endswith("journal")
-
-
-def test_journal_route_empty_store(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59930)
-    with TestClient(app) as c:
-        _provision(c)
-        r = c.get("/api/v1/memory_stores/global/journal", headers=_HEADERS)
-        assert r.status_code == 200, r.text
-        assert r.json() == {"files": []}
 
 
 # --- handoff ----------------------------------------------------------------
@@ -146,23 +108,6 @@ def test_consolidation_log_route_absent(tmp_path, monkeypatch):
 
 
 # --- lane deletes -----------------------------------------------------------
-
-
-def test_delete_journal_period_removes_file_and_logs(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59980)
-    store_dir = tmp_path / "memory" / "global"
-    with TestClient(app) as c:
-        _provision(c)
-        period_file = journal_path(store_dir, "2026-06")
-        append_entry(period_file, timestamp=datetime(2026, 6, 1, tzinfo=UTC), body="June")
-        r = c.delete("/api/v1/memory_stores/global/journal/2026-06", headers=_HEADERS)
-        assert r.status_code == 204, r.text
-        assert not period_file.exists()
-        log = consolidation_log_path(store_dir).read_text(encoding="utf-8")
-        assert "deleted journal/2026-06" in log
-        # Deleting a now-missing period is a 404 (matches fact-delete semantics).
-        r2 = c.delete("/api/v1/memory_stores/global/journal/2026-06", headers=_HEADERS)
-        assert r2.status_code == 404, r2.text
 
 
 def test_delete_handoff_branch_removes_file_and_logs(tmp_path, monkeypatch):

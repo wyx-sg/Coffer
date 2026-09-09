@@ -178,31 +178,15 @@ export interface FactInput {
   description?: string | null;
 }
 
-// --- four-lane read views (spec 007 slice 7) -------------------------------
-// The memory store detail page surfaces five read-only lanes beyond the flat
-// fact list: Rules (a single curated doc), Journal (period digests), Handoff
-// (per-branch scene notes), and Changelog (the consolidation log). All are
-// agent-authored and rendered through the unified file preview.
+// --- lane read views (spec 007 slice 7) ------------------------------------
+// The memory store detail page surfaces three read-only lanes beyond the flat
+// fact list: Rules (a single curated doc), Handoff (per-branch scene notes),
+// and Changelog (the consolidation log). All are agent-authored and rendered
+// through the unified file preview.
 
 /** Rules lane: a single curated doc; `text` is null when the store has none. */
 export interface RulesOut {
   text: string | null;
-}
-
-/** One journal period digest (`journal/<period>.md`). */
-export interface JournalFileOut {
-  /** YYYY-MM period stem. */
-  period: string;
-  text: string;
-  /** Absolute on-disk path of the period file (FileActions). */
-  path: string;
-  /** Absolute on-disk path of the file's containing folder. */
-  folder_path: string;
-}
-
-/** Journal lane: period digests, newest period first; empty store → `files:[]`. */
-export interface JournalOut {
-  files: JournalFileOut[];
 }
 
 /** One handoff scene note (`handoff/<branch-slug>.md`). */

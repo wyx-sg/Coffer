@@ -249,28 +249,6 @@ def rule_file_path(store_dir: pathlib.Path, slug: str) -> pathlib.Path:
     return d / f"{slug}.md"
 
 
-def journal_dir(store_dir: pathlib.Path) -> pathlib.Path:
-    """The store-root ``journal/`` dir — episodic events fed by distillation.
-    Unlike ``handoff/``/``rules/``, the journal DOES participate in recall
-    (FR-043): the reconciler indexes each ``journal/<period>.md`` into a
-    ``documents`` row and the grep guard preserves journal hits. It also syncs
-    (source-of-truth history)."""
-    candidate = (store_dir / "journal").resolve()
-    if not candidate.is_relative_to(store_dir.resolve()):
-        raise ValueError("journal dir escapes the store dir")
-    return store_dir / "journal"
-
-
-def journal_path(store_dir: pathlib.Path, period: str) -> pathlib.Path:
-    """Path of a time-partitioned journal file ``<store_dir>/journal/<period>.md``."""
-    _safe_segment(period, "journal period")
-    d = journal_dir(store_dir)
-    candidate = (d / f"{period}.md").resolve()
-    if not candidate.is_relative_to(d.resolve()):
-        raise ValueError(f"journal period {period!r} escapes the journal dir")
-    return d / f"{period}.md"
-
-
 def handoff_path(store_dir: pathlib.Path, branch_slug: str) -> pathlib.Path:
     """Path of a per-branch handoff file ``<store_dir>/handoff/<branch-slug>.md``."""
     _safe_segment(branch_slug, "branch slug")

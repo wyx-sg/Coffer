@@ -734,7 +734,8 @@ agent 使用哪一个。
 - 以下被明确**列为不在范围**：用户创建或用户编辑的 agent；一个管理 agent 注册表的
   GUI；超出 gateway 现有门控的每 agent 能力作用域；对话摘要与导出；过去
   外部 agent 会话的恢复/继续；以及任何跨 agent 的原始 transcript 浏览/搜索界面（跨
-  agent 的共享由蒸馏后的 memory 承担，[ADR-020](../../docs/decisions/ADR-020-transcript-distillation.zh.md)）。
+  agent 的共享由 agent 用 `coffer__remember` 显式写下的内容承担；自动的 transcript 蒸馏
+  已于 2026-09-09 移除）。
   远程通道由 Spec 009 单独交付。
 - `Conversation.model_id` 所引用的独立 `ModelConfig`/`chat_models` 注册表已**退役**
   （折叠进 provider connection，spec 011 / ADR-032）。`model_id` 现在是一个**残留的遗留列**，

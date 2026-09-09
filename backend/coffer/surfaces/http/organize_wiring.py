@@ -1,11 +1,10 @@
 """Composition-root helper that wires the memory consolidation organizer.
 
-Clones ``distill_wiring.py``: the langchain one-shot completion adapter
-(``LangchainLlmCompletion``) and a ``ProviderService`` wrapper are injected here,
-at a surfaces composition root (cross-kind imports allowed). The organizer's
-``application/memory`` code reaches the LLM only through the memory-local
-``LlmCompletionPort`` (Contract 9 keeps langchain in ``infrastructure.chat``;
-Contract 5e keeps memory off ``application.distill``).
+The langchain one-shot completion adapter (``LangchainLlmCompletion``) and a
+``ProviderService`` wrapper are injected here, at a surfaces composition root
+(cross-kind imports allowed). The organizer's ``application/memory`` code
+reaches the LLM only through the memory-local ``LlmCompletionPort`` (Contract 9
+keeps langchain in ``infrastructure.chat``).
 """
 
 from __future__ import annotations

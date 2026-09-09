@@ -76,9 +76,10 @@ examines every pair of per-project stores and returns **merge proposals**.
 using the **existing additive merge machinery** (`merge_store_dir` — the
 boot-consolidation/adoption primitives):
 
-- Journal files content-merge entry-by-entry deduped by timestamp; derived
-  files are skipped; any other collision keeps **both** copies (suffixed) —
-  memory can be gained, never lost.
+- Derived files are skipped; any collision keeps **both** copies (suffixed) —
+  memory can be gained, never lost. (Entry-by-entry timestamp dedupe applied
+  to the `journal` lane, which has since been removed along with transcript
+  distillation, its only writer.)
 - The source's display label moves to the target when the target has none;
   the source's `project_root` mapping moves likewise.
 - The target is reconciled (force) so recall reflects the merged facts, the
@@ -162,8 +163,8 @@ failed — files-first, polish-second.
 Unit: verdict prompt build/parse (fence-strip, malformed → skip), candidate
 pairing + deterministic tier, target-direction heuristic, alias carry-over
 logic, `MemoryStoreConfig.merged_identities` round-trip. Integration: merge
-endpoint end-to-end on real stores (files moved additively, journal deduped,
-label/root moved, source retired, audit written), alias redirect on resolve
+endpoint end-to-end on real stores (files moved additively, label/root
+moved, source retired, audit written), alias redirect on resolve
 (remember at a merged identity's checkout lands in the survivor), scan with a
 stubbed engine port (deterministic + engine tiers, no_model degradation),
 CLI subcommands. Contract: OpenAPI drift. Acceptance markers on the four new

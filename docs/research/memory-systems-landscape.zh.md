@@ -105,7 +105,7 @@ _置信度:high(3-0)。_
 | **Cursor**            | `.mdc` markdown                                | 用户 / 后台生成的 rules                               | 文件加载                                     | Project / User / Team            | 仅原生;隔离                                                                                    | 人工                            | 强(git)                 |
 | **Windsurf Cascade**  | Markdown                                       | 用户 rules + LLM 自动记忆(plain notes)                | 文件加载                                     | global / workspace / system      | 仅原生;隔离                                                                                    | 人工                            | 强                      |
 | **ChatGPT**           | 不透明画像 + bio 列表                          | LLM curation + 用户 saved                             | 隐式画像                                     | 每个用户账号                     | N/A                                                                                            | LLM 自动 curation               | 部分(saved 列表可编辑)  |
-| **Coffer**            | **Markdown 文件即真相** + 可重建的 SQLite 索引 | **直写,写时不用 LLM**(仅批量 transcript 蒸馏才用 LLM) | **grep + FTS5/BM25 + sqlite-vec**(语义,可选) | global + per-project(git-root)   | **一份共享库 → 投射进 N 个 agent 原生位置**(格式吻合则 symlink,否则托管块)                     | **人工 / 人来策展**(无自动去重) | **强**(UI + CLI + 文件) |
+| **Coffer**            | **Markdown 文件即真相** + 可重建的 SQLite 索引 | **直写,写时不用 LLM**(见下方 2026-09-09 本地更新) | **grep + FTS5/BM25 + sqlite-vec**(语义,可选) | global + per-project(git-root)   | **一份共享库 → 投射进 N 个 agent 原生位置**(格式吻合则 symlink,否则托管块)                     | **人工 / 人来策展**(无自动去重) | **强**(UI + CLI + 文件) |
 
 ---
 
@@ -183,3 +183,10 @@ _由 Coffer 的 `deep-research` 工作流跑三轮生成。第一轮:广义全�
 - **LlamaIndex memory 模块** —— 一个 `Memory` 类 = 短期(token 上限内的最近 X 条消息)+ 长期(从短期 flush 出的 Memory Block 对象):StaticMemoryBlock、FactExtractionMemoryBlock(LLM 抽取事实)、VectorMemoryBlock(向量库存取消息批次);按优先级截断。**A 阵营** —— 会话/agent 作用域的对话缓冲 + 向量库,无跨 agent 共享,无原生文件投射。https://developers.llamaindex.ai/python/framework/module_guides/deploying/agents/memory/
 
 三者都强化了报告"A 阵营 = 中心库、写时用 LLM/抽取、向量/图检索、无原生投射"的论点,所以加上它们不削弱 Coffer 第 3 块的新颖性主张。
+
+
+---
+
+## 本地更新(2026-09-09)
+
+- **Coffer 不再做 transcript 蒸馏,`journal` 记忆带也已移除。** 上文表格行与结论 #3 提到 Coffer 会用 LLM 做"批量 transcript 蒸馏"——那是它记忆闭环里自动的 **摄取(INGEST)** 一半:读取 agent 对话记录,把摘要写进 `journal` 记忆带——该能力已于 2026-09-09 连同它所喂养的记忆带一并移除(`distill_wiring.py` 持有该记忆带唯一的写入方)。保留三条记忆带:`knowledge`(语义,即 `recall` 检索的对象)、`rules`(过程性)、`handoff`(按分支的工作现场)。写入从此完全显式:agent 用 `coffer__remember` 记下事实,用 `coffer__recall` 取回。这使 Coffer 比本报告所描述的更是一个**纯粹的 B 阵营**系统——直写,写入路径上任何环节都不用 LLM——但这是一次真实的取舍,而非白得的简化:Coffer 放弃了自动积累。从数据看蒸馏本身是跑得通的(已蒸馏 1,320 个会话、journal 有 4,669 条);它被移除是因为它所喂养的"摄取 → 交付"闭环已不再端到端存在,而不是因为它失败了。因此结论 #3 中那个开放问题——是否值得加一道轻量的批量合并/去重 pass——失去了"就像 Coffer 已经在蒸馏上做的那样"这个先例,但问题本身依然成立,而 AI 辅助的记忆库合并(2026-07-10)如今是 Coffer 最接近它的东西。

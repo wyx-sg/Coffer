@@ -35,7 +35,6 @@ from coffer.domain.errors import ResourceAlreadyExists, ResourceNotFound
 from coffer.domain.memory.config import MemoryStoreConfig
 from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.knowledge.fs import atomic_write_text
-from coffer.infrastructure.memory.journal_files import append_entry, read_entries
 from coffer.infrastructure.memory.project_root_repo import ProjectRootRepo
 from coffer.infrastructure.memory.store_label_repo import StoreLabelRepo
 
@@ -78,8 +77,6 @@ def merge_store_dir(src: Path, dst: Path, *, tag: str) -> int:
     """Merge every lane file under ``src`` into ``dst`` (additive). Returns the
     number of files merged/created.
 
-    - ``journal/<period>.md`` files are content-merged entry-by-entry, deduped by
-      timestamp, so overlapping days never duplicate or overwrite.
     - Derived/machine-local files are skipped.
     - A collision whose content is byte-identical is a no-op, so re-running the
       merge (a retry after a mid-merge failure, or the pre-retire delta sweep)
@@ -95,10 +92,6 @@ def merge_store_dir(src: Path, dst: Path, *, tag: str) -> int:
         if rel.name in _DERIVED_NAMES:
             continue
         target = dst / rel
-        if rel.parts[0] == "journal" and rel.suffix == ".md":
-            if _merge_journal_file(path, target):
-                merged += 1
-            continue
         target.parent.mkdir(parents=True, exist_ok=True)
         body = path.read_text(encoding="utf-8")
         if target.exists():
@@ -111,20 +104,6 @@ def merge_store_dir(src: Path, dst: Path, *, tag: str) -> int:
         atomic_write_text(target, body)
         merged += 1
     return merged
-
-
-def _merge_journal_file(src_file: Path, dst_file: Path) -> bool:
-    """Append entries from ``src_file`` into ``dst_file`` that aren't already
-    there (deduped by ISO timestamp). Returns whether anything was written."""
-    existing = {e.timestamp.isoformat() for e in read_entries(dst_file)}
-    wrote = False
-    for entry in read_entries(src_file):
-        if entry.timestamp.isoformat() in existing:
-            continue
-        append_entry(dst_file, timestamp=entry.timestamp, body=entry.body)
-        existing.add(entry.timestamp.isoformat())
-        wrote = True
-    return wrote
 
 
 def _suffixed(target: Path, tag: str, body: str) -> Path | None:

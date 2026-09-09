@@ -14,7 +14,7 @@ dependencies = [
     # first route of a multi-route router), which strips most endpoints off the
     # app — observed in 0.137.0 and still present in 0.137.1, so the whole
     # 0.137 line is excluded (a fresh CI install otherwise grabs 0.137.1 and
-    # the kb/memory/distill contract checks fail). Lift the cap once a fixed
+    # the kb/memory contract checks fail). Lift the cap once a fixed
     # release is verified.
     "fastapi>=0.141.1,<0.142",
     "uvicorn[standard]>=0.52.4",

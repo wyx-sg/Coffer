@@ -108,10 +108,11 @@ flywheel, deliberately privacy-scoped.
    (calibrate the judge against human labels) and negative-feedback-driven
    capture are the strongest patterns to borrow — a thumbs-down in chat could
    auto-capture the trace into the eval sink.
-4. **Invocation log + transcript distillation are an untapped capture source.**
-   ADR-020 transcript distillation already reads local transcripts; feeding the
-   invocation log + distilled transcripts into the same `COFFER_EVAL_CAPTURE`
-   sink would widen the flywheel beyond tool-search.
+4. **The invocation log is an untapped capture source.** Feeding it into the
+   same `COFFER_EVAL_CAPTURE` sink would widen the flywheel beyond tool-search.
+   (This borrow originally also named transcript distillation as a capture
+   source; that capability was removed from Coffer on 2026-09-09, so only the
+   invocation log remains.)
 
 ## 4. Key takeaways for Coffer
 
@@ -125,8 +126,8 @@ flywheel, deliberately privacy-scoped.
 4. **Borrow negative-feedback capture + judge calibration** (LangSmith): a chat
    thumbs-down auto-captures into the eval sink; calibrate the local judge against
    the user's own labels.
-5. **Wire the invocation log + ADR-020 transcripts into the capture sink** to
-   broaden the flywheel beyond tool-search.
+5. **Wire the invocation log into the capture sink** to broaden the flywheel
+   beyond tool-search.
 
 ## 5. Sources
 
@@ -164,11 +165,11 @@ Coffer repo verified: `evals/` (suites, baselines, `curate.py`), `.github/workfl
   runs the deterministic model-free retrieval + tool-search gate on PRs,
   path-filtered (routing suite is on-demand only).
 - **ADR statuses underpinning the borrows.** ADR-019 (close the eval flywheel)
-  Accepted, 2026-06-14; ADR-020 (transcript distillation) Accepted — borrow #4 /
-  takeaway #5; ADR-024 (built-in agent is internal capability) Accepted,
-  2026-06-14 — local LLM-judge borrow #1.
+  Accepted, 2026-06-14; ADR-024 (built-in agent is internal capability)
+  Accepted, 2026-06-14 — local LLM-judge borrow #1. (ADR-020, transcript
+  distillation, backed borrow #4 / takeaway #5 when this research was written;
+  it was deleted on 2026-09-09 with the capability it described.)
   `repo:docs/decisions/ADR-019-close-the-eval-flywheel.md`,
-  `repo:docs/decisions/ADR-020-transcript-distillation.md`,
   `repo:docs/decisions/ADR-024-builtin-agent-is-internal-capability.md`
 - **Promptfoo — MIT, OpenAI-acquired Mar 2026.** Acquisition announced 2026-03-09;
   Promptfoo "will remain open source ... under the current license." MIT is

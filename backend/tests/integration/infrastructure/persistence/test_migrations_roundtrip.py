@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0049"
+HEAD_REVISION = "0050"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -69,7 +69,9 @@ HEAD_REVISION = "0049"
 # downgrade recreates the (empty) table, so it reappears once we step below 0036
 # (until 0012's downgrade drops it again at 0011).
 # 0038 ADDs the ``distilled_sessions`` table — the auto-distill catch-up sweep
-# idempotency ledger (007 FR-046) — present at head; its downgrade drops it.
+# idempotency ledger — and 0050 DROPs it again when transcript distillation is
+# removed, so it is ABSENT at head; 0050's downgrade recreates it empty, so it
+# reappears one step down (until 0038's own downgrade drops it at 0037).
 # 0039 ADDs the ``internal_engine_config`` singleton (spec 011 amendment) —
 # present at head; its downgrade drops it. 0041 ADDs
 # ``channel_thread_conversations`` (spec 009 FR-032: per-thread conversation
@@ -106,7 +108,6 @@ EXPECTED_TABLES = {
     "resources",
     "audit_log",
     "retention_policies",
-    "distilled_sessions",
     "internal_engine_config",
     "mcp_capability_preferences",
     "mcp_invocations",
@@ -733,10 +734,12 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     # 0041 adds channel_thread_conversations (spec 009 FR-032); present at head,
     # dropped by its downgrade just below head.
     assert "channel_thread_conversations" in _user_tables(db_path)
-    # 0039 adds internal_engine_config + 0038 adds the distilled_sessions ledger;
-    # both present at head, both dropped by their downgrades on the way to 0037.
+    # 0039 adds internal_engine_config — present at head, dropped by its
+    # downgrade on the way to 0037.
     assert "internal_engine_config" in _user_tables(db_path)
-    assert "distilled_sessions" in _user_tables(db_path)
+    # 0050 dropped distilled_sessions (transcript distillation removed), so it
+    # is ABSENT at head; its downgrade recreates it empty one step down.
+    assert "distilled_sessions" not in _user_tables(db_path)
     # 0049 dropped the four sync-only tables (continuous sync withdrawn,
     # ADR-016), so they are ABSENT at head; its downgrade recreates them empty
     # one step down, where 0043/0042/0019's own downgrades drop them again.
@@ -750,6 +753,8 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         with sqlite3.connect(db_path) as conn:
             return {r[1] for r in conn.execute("PRAGMA table_info(sync_config)")}
 
+    command.downgrade(cfg, "0049")
+    assert "distilled_sessions" in _user_tables(db_path)
     command.downgrade(cfg, "0048")
     assert _user_tables(db_path) >= SYNC_TABLES
     assert "quarantined_refs_json" in _sync_state_columns()
