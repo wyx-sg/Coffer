@@ -62,6 +62,7 @@ class FakeTelegram:
         self.reject_html_sends = 0  # reject sendMessage with parse_mode=HTML N times
         self.reject_all_sends = 0  # reject any sendMessage N times
         self.fail_get_updates = 0  # answer getUpdates with HTTP 500 N times
+        self.bad_payload_get_updates = False  # answer getUpdates ok:true with a non-list result
         self.html_error_sends = 0  # answer sendMessage with a non-JSON HTML body N times
         self._next_message_id = 100
         self.file_bytes = b"FAKE-IMAGE-BYTES"  # served for any file download
@@ -83,6 +84,9 @@ class FakeTelegram:
             params = await request.json()
         self.calls.append((method, params))
         if method == "getUpdates":
+            if self.bad_payload_get_updates:
+                # A well-formed envelope whose result is not a list of updates.
+                return JSONResponse(content={"ok": True, "result": {}})
             if self.fail_get_updates > 0:
                 self.fail_get_updates -= 1
                 return JSONResponse(status_code=500, content={"ok": False, "description": "boom"})

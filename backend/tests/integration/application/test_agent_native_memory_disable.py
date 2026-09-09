@@ -30,23 +30,6 @@ async def _register_codex(bundle, home: pathlib.Path):
     await bundle.svc.register(agent_type=AgentType.CODEX, name="cx", actor="cli")
 
 
-async def _register_opencode(bundle, home: pathlib.Path):
-    (home / ".config" / "opencode" / "skills").mkdir(parents=True, exist_ok=True)
-    await bundle.svc.register(agent_type=AgentType.OPENCODE, name="oc", actor="cli")
-
-
-async def test_opencode_native_memory_disable_is_unsupported(agent_bundle, tmp_path, monkeypatch):
-    # opencode has no native write-side memory (ADR-040): the toggle is an absent
-    # facet, so the service rejects it (422) rather than raising AssertionError/500.
-    from coffer.domain.workspace_errors import NativeMemoryDisableUnsupported
-
-    monkeypatch.setenv("HOME", str(tmp_path))
-    await _register_opencode(agent_bundle, tmp_path)
-
-    with pytest.raises(NativeMemoryDisableUnsupported):
-        await agent_bundle.svc.set_disable_native_memory(name="oc", enabled=True, actor="ui")
-
-
 async def test_enable_persists_field_and_writes_claude_settings(
     agent_bundle, tmp_path, monkeypatch
 ):
@@ -110,38 +93,3 @@ async def test_idempotent_enable(agent_bundle, tmp_path, monkeypatch):
     assert AgentConfig.model_validate(r.config).disable_native_memory is True
     data = json.loads((tmp_path / ".claude" / "settings.json").read_text())
     assert data["autoMemoryEnabled"] is False
-
-
-# --- openclaw (JSON plugins.slots.memory, ADR-044) --------------------------------
-
-
-async def _register_openclaw(bundle, home: pathlib.Path):
-    (home / ".openclaw" / "skills").mkdir(parents=True, exist_ok=True)
-    await bundle.svc.register(agent_type=AgentType.OPENCLAW, name="ow", actor="cli")
-
-
-async def test_enable_writes_openclaw_memory_slot_and_restore_inverts(
-    agent_bundle, tmp_path, monkeypatch
-):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    await _register_openclaw(agent_bundle, tmp_path)
-    config = tmp_path / ".openclaw" / "openclaw.json"
-    config.write_text(json.dumps({"gateway": {"port": 18789}}), encoding="utf-8")
-
-    updated = await agent_bundle.svc.set_disable_native_memory(name="ow", enabled=True, actor="ui")
-    assert AgentConfig.model_validate(updated.config).disable_native_memory is True
-    data = json.loads(config.read_text())
-    assert data["plugins"]["slots"]["memory"] == "none"
-    assert data["gateway"] == {"port": 18789}
-    rows = await agent_bundle.audit.query(
-        kind="agent", name="ow", event_type=AuditEventType.AGENT_NATIVE_MEMORY_DISABLED.value
-    )
-    assert len(rows) == 1
-
-    restored = await agent_bundle.svc.set_disable_native_memory(
-        name="ow", enabled=False, actor="ui"
-    )
-    assert AgentConfig.model_validate(restored.config).disable_native_memory is False
-    data = json.loads(config.read_text())
-    assert "plugins" not in data  # the block Coffer created is tidied away
-    assert data["gateway"] == {"port": 18789}

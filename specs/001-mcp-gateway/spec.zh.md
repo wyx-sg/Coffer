@@ -107,6 +107,35 @@ coffer__search_tools(query: string [required], top_k?: int = 5, max 20)
 - 返回的每个 `name` 就是 agent 会直接调用的 `<server>__<tool>` 带命名空间标识符；路由不变。
 - 这次调用像任何其他网关调用一样被记入 invocation 日志。
 
+#### 预算化列表（工具分层）
+
+`tools/list` 通告的是目录中一个按预算裁剪的切片，而非全部（见
+[ADR-046](../../docs/decisions/ADR-046-budget-driven-tool-tiering.zh.md)）。
+Coffer 自己的 `coffer__*` 工具——包括 `search_tools`——恒定列出，且不占用预算。
+上游工具在预算（默认 50，`COFFER_TOOL_TIERING_BUDGET`）之内全部列出；超出后，
+网关按滑动窗口（默认 90 天，`COFFER_TOOL_TIERING_WINDOW_DAYS`）内调用次数最多的
+排序取用，并为每台服务器保留一个名额，使任何服务器都不会整体消失。
+
+未列出**不等于**被禁用：`tools/call` 校验的是能力偏好，从不校验是否在列表中，
+因此未列出的工具路由与此前完全一致，而 `coffer__search_tools` 检索的仍是**完整**
+目录。分层是 fail-open 的——`COFFER_TOOL_TIERING=off`，或使用统计查询的任何失败，
+都会列出全部。`GET /api/v1/mcp/tiering` 报告当前切分情况，MCP 服务器页面在确有
+工具未列出时会提示。
+
+#### `initialize` instructions
+
+`initialize` 应答携带一个 MCP `instructions` 字符串，说明 Coffer 是什么，以及
+`coffer__search_tools` 可触达分层未列出的部分。这是 Coffer 进入客户端系统提示的
+唯一通道，因此设有上限（约 800 字符），并在确实没有隐藏任何工具时省略分层那句话。
+
+#### 上游发现降级
+
+当某台服务器未能在 per-server 发现预算内响应时，它的工具会被排除在该次列表之外，
+但该服务器会被**具名记录**、在后台重试，并在恢复后由网关发出
+`notifications/tools/list_changed`，使客户端重新拉取。若无此机制，客户端缓存的
+`tools/list` 会让那些工具在整场会话中持续缺失——因为纠正用的通知只可能来自那台
+从未连上的服务器。
+
 ---
 
 ### Edge Cases

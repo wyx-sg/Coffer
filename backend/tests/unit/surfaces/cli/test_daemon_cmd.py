@@ -173,7 +173,7 @@ def test_daemon_stop_sends_sigterm_and_succeeds(
 
     info = _fake_info()
     monkeypatch.setattr(daemon_cmd._cli_client, "discover", lambda: info)
-    monkeypatch.setattr(daemon_cmd, "_pid_is_coffer_daemon", lambda pid: True)
+    monkeypatch.setattr(daemon_cmd, "pid_is_coffer_daemon", lambda pid: True)
 
     signals_sent: list[tuple[int, int]] = []
 
@@ -203,7 +203,7 @@ def test_daemon_stop_does_not_sigterm_an_unverified_pid(
     info = _fake_info()
     monkeypatch.setattr(daemon_cmd._cli_client, "discover", lambda: info)
     # The pid now belongs to some unrelated process.
-    monkeypatch.setattr(daemon_cmd, "_pid_is_coffer_daemon", lambda pid: False)
+    monkeypatch.setattr(daemon_cmd, "pid_is_coffer_daemon", lambda pid: False)
 
     def _must_not_kill(pid: int, sig: int) -> None:
         raise AssertionError("must NOT SIGTERM an unverified pid")
@@ -228,7 +228,7 @@ def test_daemon_stop_handles_already_gone_pid(
 
     info = _fake_info()
     monkeypatch.setattr(daemon_cmd._cli_client, "discover", lambda: info)
-    monkeypatch.setattr(daemon_cmd, "_pid_is_coffer_daemon", lambda pid: True)
+    monkeypatch.setattr(daemon_cmd, "pid_is_coffer_daemon", lambda pid: True)
 
     def _gone(pid: int, sig: int) -> None:
         raise ProcessLookupError
@@ -262,7 +262,7 @@ def test_daemon_stop_reports_failure_if_daemon_json_lingers(
     """If the daemon never removes daemon.json after SIGTERM, stop() exits 1."""
     _setup_home(tmp_path, monkeypatch)
     monkeypatch.setattr(daemon_cmd._cli_client, "discover", lambda: _fake_info())
-    monkeypatch.setattr(daemon_cmd, "_pid_is_coffer_daemon", lambda pid: True)
+    monkeypatch.setattr(daemon_cmd, "pid_is_coffer_daemon", lambda pid: True)
     monkeypatch.setattr(daemon_cmd.os, "kill", lambda pid, sig: None)
     monkeypatch.setattr(daemon_cmd, "_wait_for_daemon_json_gone", lambda path, timeout: False)
 

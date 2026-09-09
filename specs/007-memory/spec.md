@@ -90,20 +90,12 @@ for the full decision rationale and rejected alternatives.
 
 **Supported transcript readers**: distillation reads each agent's native local
 store through a versioned, defensive per-agent reader. **Claude Code** and
-**Codex** read one `.jsonl` file per session under the agent's config dir;
-**OpenCode** reads its multi-file JSON storage tree under the XDG data dir
-(`~/.local/share/opencode/storage/{project,session,message,part}`), joining the
-records into sessions with the project working directory taken from the project
-record. Readers for **Cursor**, **OpenClaw**, and **Hermes** are deferred: their
-formats can't be read reliably for project-scoped distillation today — Cursor's
-`agent-transcripts/*.jsonl` are ephemeral (emptied on restart) with the durable
-state in an internal `vscdb` SQLite; OpenClaw's session format is undocumented;
-and Hermes sessions are cross-platform chat sessions that record no working
-directory, so they can't be scoped to a project. Distillation for those agents
+**Codex** both read one `.jsonl` file per session under the agent's config dir.
+Both supported agents have a reader; distillation for an unregistered agent
 returns an explicit "unsupported agent" error rather than guessing.
 
-**Independent Test**: From a project with at least one Claude Code, Codex, or
-OpenCode transcript in the agent's native store, run
+**Independent Test**: From a project with at least one Claude Code or Codex
+transcript in the agent's native store, run
 `coffer transcript distill <agent> --project <path> --dry-run` and observe
 at least one insight printed without any fact being written to disk. Then run
 without `--dry-run` and confirm via `coffer memory recall <store> "<topic>"`
@@ -391,7 +383,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 ### Scenario: distill-transcript-to-memory
 
-- **Given** a registered agent (Claude Code, Codex, or OpenCode) with at least
+- **Given** a registered agent (Claude Code or Codex) with at least
   one local transcript in its native store containing natural-language turns,
 - **When** `POST /api/v1/agents/{name}/transcripts/distill` is called (or
   `coffer transcript distill <agent>` in the CLI) with `dry_run=false`,
@@ -758,7 +750,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 - **FR-053**: The memory store detail page MUST present the store as **four lane sections** (Knowledge / Rules / Journal / Handoff) plus a **consolidation-changelog** view, replacing the flat fact list. Each lane gets a shape-fit view: **knowledge** = the fact/topic list + content; **rules** = a single document; **journal** = time-ordered entries (newest first); **handoff** = a per-branch list. All views are **read-only**, render via the **unified file preview** (no hand-styled `<pre>`), and offer **open in external editor / reveal in file manager / copy path** for the underlying lane files (files-as-truth, FR-017/FR-021). Recall continues to operate over the **Knowledge** lane only (the rules/journal/handoff/changelog views are read projections, not recall surfaces).
 - **FR-054**: The system MUST expose read endpoints for the lanes the UI needs: `GET /api/v1/memory_stores/{name}/journal` (the time-ordered journal files, newest period first), `GET /api/v1/memory_stores/{name}/handoff` (the handoff scenes per branch, each carrying its `branch` and `updated_at`), and `GET /api/v1/memory_stores/{name}/consolidation-log` (the organizer's 固化 changelog; `null` when absent). These are **read-only**, **addressed by store name** (not cwd), and MUST return **HTTP 200 with empty lists / `null`** for an empty store (never a 404). (The Rules lane already has its read surface, `GET /api/v1/memory_stores/{name}/rules`, FR-036.)
-- **FR-055**: The SessionStart context (FR-049) MUST additionally inject an **ambient project-memory index** — the "ambient loading" slice ADR-026 deferred — so an agent starts knowing what the project remembers without having to call `recall`. The `GET /api/v1/agents/{name}/session-context` response appends, after the rules bundle, a **"## Project memory (via Coffer)"** section built from the cwd's project store: a **title-only knowledge index** ("Known topics" — each fact's short title, no bodies or descriptions) and a **few recent journal lines** ("Recent activity" — the newest episodic entries, one line each). It is deliberately an **index, not the memory itself** — an orientation pointer that tells the agent what exists and to call `recall <query>` for any bodies it needs, keeping the injection light. The index is **read-only and best-effort** — a cwd outside a git project, an empty store, or any read error yields **nothing** (never an error; the hook must never block the agent) — and is **budget-bounded**: the combined bundle stays within the hook's ≤10k-char contract, the index taking whatever remains after the rules bundle so the seeded built-in rules (FR-050) are never truncated. Delivery rides the existing per-agent SessionStart hook (ADR-042 `ContextInjectionSpec`), which is **opt-in per agent** (installed explicitly, not by default), so it is already the gate for whether Coffer injects: every agent whose hook is installed (Claude Code, Codex, Cursor) receives the index; injection-only, never a native-file write.
+- **FR-055**: The SessionStart context (FR-049) MUST additionally inject an **ambient project-memory index** — the "ambient loading" slice ADR-026 deferred — so an agent starts knowing what the project remembers without having to call `recall`. The `GET /api/v1/agents/{name}/session-context` response appends, after the rules bundle, a **"## Project memory (via Coffer)"** section built from the cwd's project store: a **title-only knowledge index** ("Known topics" — each fact's short title, no bodies or descriptions) and a **few recent journal lines** ("Recent activity" — the newest episodic entries, one line each). It is deliberately an **index, not the memory itself** — an orientation pointer that tells the agent what exists and to call `recall <query>` for any bodies it needs, keeping the injection light. The index is **read-only and best-effort** — a cwd outside a git project, an empty store, or any read error yields **nothing** (never an error; the hook must never block the agent) — and is **budget-bounded**: the combined bundle stays within the hook's ≤10k-char contract, the index taking whatever remains after the rules bundle so the seeded built-in rules (FR-050) are never truncated. Delivery rides the existing per-agent SessionStart hook (`ContextInjectionSpec`, spec 004 FR-043), which is **opt-in per agent** (installed explicitly, not by default), so it is already the gate for whether Coffer injects: every agent whose hook is installed (Claude Code, Codex) receives the index; injection-only, never a native-file write.
 
 **Store consolidation — AI-assisted (amendment 2026-07-10)**
 

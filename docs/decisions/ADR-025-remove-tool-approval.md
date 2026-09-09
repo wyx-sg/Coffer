@@ -23,7 +23,7 @@ Two things make this the wrong shape now:
    owner; non-owner messages are ignored, and the web console is the owner too.
    Every instruction the agent acts on is one the owner just issued. A per-tool
    prompt re-confirms what the owner already authorized — friction, not safety.
-   This is why peer agents (Claude Code, Codex, OpenClaw, Hermes) driven from a
+   This is why peer agents (Claude Code, Codex) driven from a
    chat surface do not gate individual tool calls: the human is already in the
    loop by issuing the request.
 

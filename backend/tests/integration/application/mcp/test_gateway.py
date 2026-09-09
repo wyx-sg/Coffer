@@ -957,7 +957,7 @@ async def test_upstream_crash_mid_call_then_respawn(
         assert isinstance(result1, dict)
 
         # --- Second call: upstream has exited after the 1st call → error ---
-        # The crash surfaces as McpError("Connection closed") or UpstreamUnavailable
+        # The crash surfaces as MCPError("Connection closed") or UpstreamUnavailable
         # depending on how quickly the SDK detects the dead pipe.
         with pytest.raises(BaseException):  # noqa: B017
             await session.handle_request("tools/call", {"name": "crash_srv__boom", "arguments": {}})
@@ -1486,7 +1486,7 @@ async def test_upstream_crash_mid_prompt_get_then_respawn(
 
 
 # ---------------------------------------------------------------------------
-# P2 — McpError (well-formed tool error) must NOT evict a healthy upstream
+# P2 — MCPError (well-formed tool error) must NOT evict a healthy upstream
 # ---------------------------------------------------------------------------
 
 
@@ -1494,7 +1494,7 @@ async def test_upstream_crash_mid_prompt_get_then_respawn(
 async def test_mcp_error_does_not_evict_healthy_upstream(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A protocol-level McpError means the tool ran and the upstream returned a
+    """A protocol-level MCPError means the tool ran and the upstream returned a
     well-formed JSON-RPC error — the connection is healthy. The invocation must
     record an `error` row but the supervisor must NOT evict the upstream
     (mirrors discovery._request_self_heal, which only self-heals transport
@@ -1502,7 +1502,7 @@ async def test_mcp_error_does_not_evict_healthy_upstream(
     tool that returns an error result.
     """
     import mcp.types as mcp_types
-    from mcp import McpError
+    from mcp import MCPError
 
     from coffer.application.mcp.gateway_handlers import handle_tools_call
 
@@ -1520,9 +1520,7 @@ async def test_mcp_error_does_not_evict_healthy_upstream(
     )
 
     boom_conn = AsyncMock()
-    boom_conn.request.side_effect = McpError(
-        mcp_types.ErrorData(code=mcp_types.INVALID_PARAMS, message="tool said no")
-    )
+    boom_conn.request.side_effect = MCPError(code=mcp_types.INVALID_PARAMS, message="tool said no")
     evicted: list[str] = []
 
     class _SpySup:
@@ -1536,7 +1534,7 @@ async def test_mcp_error_does_not_evict_healthy_upstream(
         pass
 
     try:
-        with pytest.raises(McpError):
+        with pytest.raises(MCPError):
             await handle_tools_call(
                 {"name": "fs__stub", "arguments": {}},
                 resources=rsvc,
@@ -1549,7 +1547,7 @@ async def test_mcp_error_does_not_evict_healthy_upstream(
             )
 
         # The healthy upstream must survive — no eviction.
-        assert evicted == [], f"McpError must not evict; evicted={evicted}"
+        assert evicted == [], f"MCPError must not evict; evicted={evicted}"
 
         # But the failed call is still recorded as an error invocation.
         rows = await inv.query(resource_name="fs")
@@ -1633,9 +1631,9 @@ async def test_inband_iserror_result_is_recorded_as_error(
 async def test_transport_drop_still_evicts_for_self_heal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A non-McpError exception (a dropped pipe / dead process) is a transport
+    """A non-MCPError exception (a dropped pipe / dead process) is a transport
     failure: the connection must be evicted so the next call self-heals onto a
-    fresh spawn. This is the counterpart to the McpError case above.
+    fresh spawn. This is the counterpart to the MCPError case above.
     """
     from coffer.application.mcp.gateway_handlers import handle_tools_call
 

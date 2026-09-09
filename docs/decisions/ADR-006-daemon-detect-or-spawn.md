@@ -9,7 +9,7 @@
 
 Coffer has multiple entry points that need a running daemon:
 
-- `coffer-mcp-shim` — spawned by an MCP client (Claude Code, Cursor) on every
+- `coffer-mcp-shim` — spawned by an MCP client (Claude Code, Codex) on every
   client startup.
 - `coffer …` CLI — invoked ad hoc by the user.
 
@@ -132,6 +132,34 @@ both require either a configuration file or a discovery file. Choosing one
 file with everything in it is simpler than splitting state.
 
 ## Revision history
+
+- **2026-09-09** — Orphan self-eviction. The spawn guard is one-sided: it probes
+  only the single port `daemon.json` records, so it cannot see a daemon alive on
+  any other port. Whenever that probe failed while a daemon was in fact running
+  — `daemon.json` lost, or an already-serving daemon still finishing its warm-up
+  and too slow to answer `/daemon/status` within the 2s probe timeout (measured
+  at ~9s in the field) — the spawn bound the next free port and left the older
+  daemon running forever holding its own. Nothing reclaimed it:
+  `reap_stale_daemons` no-ops outside frozen builds (matching `python3`'s
+  basename would target unrelated interpreters), so a run-from-source setup
+  accumulated one orphan per restart. Observed in the wild: ten daemons holding
+  all of 8000–8009, every one still serving, after which `bind_free_socket`
+  could not start a daemon at all.
+
+  Fixed from the other side, where no cross-process authority is needed. A
+  serving daemon now re-reads `daemon.json` every 30s and, if it names a
+  **different, live** Coffer daemon, shuts itself down
+  (`bootstrap.superseded_by` → `entry._evict_when_superseded`). The conditions
+  are deliberately narrow — an absent file never evicts anyone (deleting
+  `daemon.json` must not take the healthy daemon down), a malformed one is no
+  evidence, and a recorded pid that is dead or not a Coffer daemon means we are
+  still the only daemon alive. A group of daemons therefore converges on the one
+  `daemon.json` names, while a lone daemon with a missing or stale discovery
+  file keeps serving. The liveness probe timeout also went 2s → 15s so a
+  serving-but-busy daemon stops reading as absent; a stale `daemon.json` costs
+  nothing there, since a dead port refuses the connection at once. The pid check
+  both `daemon stop` and the new evictor need moved out of the CLI into
+  `pid_lock.pid_is_coffer_daemon` (infrastructure cannot import surfaces).
 
 - **2026-05-20** — Initial decision: detect-or-spawn pattern with daemon as
   independent process; shim and CLI both use the same helper; daemon writes

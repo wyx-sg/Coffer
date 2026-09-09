@@ -135,7 +135,7 @@ class HookInstallUnsupported(CofferError):  # noqa: N818
 
 
 class NativeMemoryDisableUnsupported(CofferError):  # noqa: N818
-    """The agent type has no native write-side memory to disable (e.g. opencode has
+    """The agent type has no native write-side memory to disable (a type with
     no cross-session native memory). Maps to 422 — the toggle is absent, not broken."""
 
     code = "NATIVE_MEMORY_DISABLE_UNSUPPORTED"
@@ -174,21 +174,6 @@ class UnmanagedSkillInvalid(CofferError):  # noqa: N818
         super().__init__(f"unmanaged skill {name!r} cannot be adopted: {reason}")
         self.name = name
         self.reason = reason
-
-
-class SkillDeliveryUnsupported(CofferError):  # noqa: N818
-    """The agent's skill-delivery mode is a recognized extension point with no
-    current agent type (``rules_mdc`` / ``external_dir``). Coffer refuses to
-    mis-deliver via the folder model. Maps to 422."""
-
-    code = "SKILL_DELIVERY_UNSUPPORTED"
-
-    def __init__(self, agent_type: str, mode: str) -> None:
-        super().__init__(
-            f"skill delivery for agent type {agent_type!r} (mode {mode!r}) is not yet supported"
-        )
-        self.agent_type = agent_type
-        self.mode = mode
 
 
 class SkillOutOfScope(CofferError):  # noqa: N818

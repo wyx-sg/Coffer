@@ -21,7 +21,7 @@ from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
 from coffer.domain.chat.message import Message, Role, TextBlock
 
-from .conftest import ChannelEnv, FakeChannelAdapter, inbound, wait_until
+from .conftest import ChannelEnv, FakeChannelAdapter, inbound, turn_body, wait_until
 
 
 def _text(message: object) -> str:  # type: ignore[no-untyped-def]
@@ -212,7 +212,7 @@ async def test_owner_mention_in_a_thread_folds_fetched_history_into_the_turn(
     messages = await env.chat.list_messages(conversations[0].id)
     user_messages = [m for m in messages if m.role == Role.USER]
     assert len(user_messages) == 1
-    user_text = _text(user_messages[0])
+    user_text = turn_body(_text(user_messages[0]))
     assert user_text.startswith("[Thread messages]")
     assert "Alice: what's the status?" in user_text
     assert "Bob: waiting on the deploy" in user_text
@@ -319,7 +319,7 @@ async def test_owner_mention_in_a_thread_skips_fetch_when_unsupported(env: Chann
     messages = await env.chat.list_messages(conversations[0].id)
     user_messages = [m for m in messages if m.role == Role.USER]
     assert len(user_messages) == 1
-    assert _text(user_messages[0]) == "@bot what's up"
+    assert turn_body(_text(user_messages[0])) == "@bot what's up"
 
 
 async def test_dm_still_pairs_and_drives_a_turn(env: ChannelEnv) -> None:

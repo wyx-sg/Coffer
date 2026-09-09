@@ -294,22 +294,4 @@ describe("AgentOverviewTab", () => {
     const combobox = screen.getByRole("combobox", { name: /connection/i });
     expect(combobox).toHaveTextContent(/built-in/i);
   });
-
-  test("a type without connection support shows the uniform note, no picker", () => {
-    // FR-003a / ADR-042 presentation amendment: cursor renders the neutral
-    // "not supported" note with its reason instead of a functional-looking
-    // picker that can never offer a compatible connection.
-    const cursor: AgentOut = {
-      ...agent,
-      name: "cursor",
-      type: "cursor",
-      config_dir: "/home/me/.cursor",
-      capabilities: { plugins: false, transcripts: false, connections: false },
-    };
-    render(<AgentOverviewTab agent={cursor} />);
-    expect(screen.getByText(/does not support llm connections/i)).toBeInTheDocument();
-    expect(screen.getByText(/locked to cursor's own backend/i)).toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: /connection/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /confirm/i })).not.toBeInTheDocument();
-  });
 });

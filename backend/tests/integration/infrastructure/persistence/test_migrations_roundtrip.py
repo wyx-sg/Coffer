@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0047"
+HEAD_REVISION = "0048"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -88,7 +88,10 @@ HEAD_REVISION = "0047"
 # 0047 is DATA-only: it backfills ``scope_json`` for every ``kind='channel'``
 # row from its stored ``config_json.runs_on`` (ADR-045 amendment, spec 009 —
 # runs_on migrates to framework scope) — no DDL, table/column set unchanged.
-# The ``documents_fts_*`` shadow
+# 0048 is DATA-only: it DELETEs ``kind='agent'`` rows carrying one of the four
+# removed agent types again (they were re-introduced after 0031 and really
+# shipped this time; agent types narrowed to claude_code + codex for good) — no
+# DDL, table/column set unchanged. The ``documents_fts_*`` shadow
 # tables FTS5 creates under the hood are excluded — the assertions speak to the
 # logical schema.
 EXPECTED_TABLES = {

@@ -40,4 +40,10 @@ def bind_free_socket(start: int = 8000, end: int = 8009) -> socket.socket:
             s.close()
             continue
         return s
-    raise NoFreePort(f"no free port in {start}-{end}")
+    raise NoFreePort(
+        f"no free port in {start}-{end} — every port in the daemon's range is "
+        "taken. Most often these are orphaned Coffer daemons a previous spawn "
+        "could not see (check for other 'coffer.infrastructure.daemon.entry' "
+        "processes); a live daemon now evicts itself once another takes over "
+        "daemon.json, so this should not accumulate."
+    )

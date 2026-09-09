@@ -103,7 +103,7 @@ def _clip_stream_preview(text: str, limit: int) -> str:
 
 
 #: The agent's opt-in to send a file: a line-anchored ``MEDIA:/abs/path``
-#: sentinel (Hermes-style), with an optional ``| caption`` after a pipe. Unlike
+#: sentinel, with an optional ``| caption`` after a pipe. Unlike
 #: markdown image syntax, this never collides with ordinary prose or a legitimate
 #: markdown image the agent wrote only to *reference* a file. The path group
 #: allows spaces (absolute macOS paths routinely contain them).
