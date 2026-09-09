@@ -57,7 +57,7 @@ Schema 演化由 Alembic 管理，配置文件为 `backend/alembic.ini`，迁移
 | `0002`   | `20260521_0002_mcp_tables.py`        | `mcp_capability_preferences`、`mcp_invocations` |
 | `0003`   | `20260522_0003_mcp_server_health.py` | `mcp_server_health`                             |
 
-后续修订版本陆续加入了 skill、knowledge、memory、embedding 配置、chat、channel、credentials 和 sync 等表（以及若干索引和数据修复修订版本），止于 `0020`。在 daemon 首次启动时，`alembic upgrade head` 会在 HTTP 服务开始接受连接之前运行。由于 Alembic 迁移作为数据文件被打包进 PyInstaller daemon 二进制文件，最终用户的安装在首次启动时也能正确创建 schema，无需单独的迁移步骤。
+后续修订版本陆续加入了 skill、knowledge、memory、embedding 配置、chat、channel、credentials 等表（以及若干索引和数据修复修订版本）；在持续同步被撤销之后，又有一个修订版本把 sync 相关的表删除（[ADR-016](/zh/reference/adr/ADR-016-vault-export-import)）。在 daemon 首次启动时，`alembic upgrade head` 会在 HTTP 服务开始接受连接之前运行。由于 Alembic 迁移作为数据文件被打包进 PyInstaller daemon 二进制文件，最终用户的安装在首次启动时也能正确创建 schema，无需单独的迁移步骤。
 
 ## 数据库表概览
 
@@ -122,12 +122,7 @@ Schema 演化由 Alembic 管理，配置文件为 `backend/alembic.ini`，迁移
 | ---------------------- | --------------------------------------------- |
 | `skill_agent_bindings` | 记录哪些技能绑定到哪些 agent 工作区。          |
 
-**同步 (sync)：**
-
-| 数据表        | 用途                                                       |
-| ------------- | ---------------------------------------------------------- |
-| `sync_config` | 用户的多机同步配置（远端、分支、开关）。                   |
-| `sync_state`  | 上次同步的记账信息（commit ref、冲突状态）。               |
+**导出 / 导入：** 没有表。导出与导入是对活着的仓库执行的一次性操作；没有需要持久化的配置、没有上次运行状态、没有机器注册表，也没有墓碑账本（[ADR-016](/zh/reference/adr/ADR-016-vault-export-import)）。
 
 ## 文件即事实源，SQLite 是可重建的索引（ADR-012）
 
@@ -154,7 +149,6 @@ Coffer 写入的完整文件集合：
 | `~/.coffer/master.key`     | 凭据存储主密钥（默认文件存储；可选钥匙串）。参阅[安全](/zh/architecture/security)。 |
 | `~/.coffer/knowledge/`     | 以 markdown 形式存放的知识库文档——由 SQLite 索引的事实源 |
 | `~/.coffer/memory/`        | 以 markdown 形式存放的记忆 fact——由 SQLite 索引的事实源 |
-| `~/.coffer/sync/`          | 镜像各文件树、用于多机同步的 git 工作树          |
 | `~/.coffer/logs/`          | `structlog` 输出的结构化 JSON 日志文件           |
 | `~/.coffer/bin/`           | 由桌面应用部署的 `coffer-mcp-shim` 与 `coffer-daemon` 二进制文件 |
 | `~/.coffer/backups/`       | 按时间点的 SQLite 备份副本                       |

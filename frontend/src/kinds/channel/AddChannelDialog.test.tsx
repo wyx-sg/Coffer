@@ -3,10 +3,9 @@
 // The registration flow's ordering contract (mirrors AddMcpServerDialog's
 // test): secrets are written to the credential store BEFORE the resource is
 // registered (registration probes the refs), and a failed registration rolls
-// the just-written secrets back so nothing orphaned stays behind. Runtime
-// affinity (spec 010) no longer rides `config.runs_on` (inert) — a successful
-// registration binds the creating machine via a separate scope PUT
-// (useUpdateChannelScope), mirroring ChannelMachineCard's "run here" button.
+// the just-written secrets back so nothing orphaned stays behind. Channels
+// carry no activation scope (ADR-045) and no machine affinity, so registration
+// is the whole flow — there is no follow-up bind.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -17,26 +16,6 @@ import { acceptance } from "@/test/acceptance";
 import { mockApiClient, type ApiClientMock } from "@/test/mockApiClient";
 
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
-
-const LOCAL_MACHINE = {
-  machine_id: "M-LOCAL",
-  display_name: "studio",
-  platform: "darwin",
-  os_version: null,
-  coffer_version: null,
-  last_sync_at: null,
-  is_local: true,
-};
-
-let syncMachines: unknown[] = [LOCAL_MACHINE];
-vi.mock("@/lib/hooks/useSync", () => ({
-  useSyncMachines: vi.fn(() => ({ data: { machines: syncMachines } })),
-}));
-
-const scopeMutate = vi.fn();
-vi.mock("@/lib/hooks/useChannels", () => ({
-  useUpdateChannelScope: vi.fn(() => ({ mutate: scopeMutate, isPending: false })),
-}));
 
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
@@ -68,10 +47,7 @@ function submit() {
   fireEvent.click(screen.getByRole("button", { name: /^add channel$/i }));
 }
 
-afterEach(() => {
-  vi.clearAllMocks();
-  syncMachines = [LOCAL_MACHINE];
-});
+afterEach(() => vi.clearAllMocks());
 
 acceptance("009-channels", "register a telegram channel", async () => {
   const api = installApi(mockApiClient());
@@ -85,8 +61,7 @@ acceptance("009-channels", "register a telegram channel", async () => {
     "/credentials",
     { body: { ref: "channel/tg/bot-token", value: "123:abc" } },
   ]);
-  // … then the resource registration with refs only (never the secret, and
-  // never `runs_on` — that field is inert; affinity rides scope instead).
+  // … then the resource registration with refs only (never the secret).
   expect(api.POST.mock.calls[1]).toEqual([
     "/resources",
     {
@@ -102,9 +77,6 @@ acceptance("009-channels", "register a telegram channel", async () => {
     },
   ]);
   expect(api.DELETE).not.toHaveBeenCalled();
-  // Auto-bind: after a successful create, the creating machine is bound via
-  // the scope API — not config.
-  await waitFor(() => expect(scopeMutate).toHaveBeenCalledWith({ "M-LOCAL": "*" }));
 });
 
 describe("AddChannelDialog", () => {
@@ -120,7 +92,6 @@ describe("AddChannelDialog", () => {
 
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(api.POST).not.toHaveBeenCalled();
-    expect(scopeMutate).not.toHaveBeenCalled();
   });
 
   test("seatalk happy path writes both secrets, then registers with refs", async () => {
@@ -153,7 +124,6 @@ describe("AddChannelDialog", () => {
         },
       },
     });
-    await waitFor(() => expect(scopeMutate).toHaveBeenCalledWith({ "M-LOCAL": "*" }));
   });
 
   test("rolls back the written secrets when registration fails", async () => {
@@ -176,19 +146,5 @@ describe("AddChannelDialog", () => {
     });
     // The translated error surfaces in the dialog.
     expect(await screen.findByRole("alert")).toHaveTextContent(/configuration is invalid/i);
-    // Registration never succeeded, so there is nothing to bind.
-    expect(scopeMutate).not.toHaveBeenCalled();
-  });
-
-  test("no local machine known: registration still succeeds, no scope bind attempted", async () => {
-    syncMachines = [{ ...LOCAL_MACHINE, machine_id: "M-OTHER", is_local: false }];
-    const api = installApi(mockApiClient());
-    renderDialog();
-    fillTelegram();
-    submit();
-
-    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
-    expect(api.DELETE).not.toHaveBeenCalled();
-    expect(scopeMutate).not.toHaveBeenCalled();
   });
 });

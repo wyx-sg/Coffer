@@ -1,43 +1,63 @@
-# 多机同步
+# 导出与导入
 
-**同步**(sync)通过一个**你自己拥有的 git 仓库**推送和拉取保险库状态,让一个 Coffer 保险库在你所有机器上保持一致 —— 没有厂商云,且加密主密钥永远不离开你的掌控。
+换了新笔记本,或者想让台式机从笔记本已经知道的东西开始?把保险库**导出**到一个目录,把那个目录搬过去,在另一台机器上**导入**。没有远端、没有后台复制、也没有厂商云 —— 加密主密钥也绝不随目录同行。
 
-## 配置
+## 在机器 A 上导出
 
 ```bash
-coffer sync init git@github.com:me/coffer-vault.git    # 指向你自己的远端、启用、首次同步
-coffer sync                                            # 完整同步:导出 → 拉取 → 推送 → 导入
-coffer sync status                                     # clean / syncing / conflicted / error
+coffer sync export ~/coffer-bundle                       # everything except credentials
+coffer sync export ~/coffer-bundle --with-credentials    # + Fernet ciphertext blobs
 ```
 
-- 远端是一个你拥有的私有 git URL;Coffer 使用你环境里的 git 凭证(SSH key 或 token),与一次普通的 `git push` 完全一样。Coffer 不提供任何托管端点。
-- `coffer sync config --auto on --interval 300` 启用可选的周期性同步;自动同步默认**关闭**。
+产物是一个纯文本目录,你在搬走之前就能读懂它:
 
-## 哪些会传输
+```
+manifest.json  knowledge/  memory/  skills/  resources/  state/  [credentials/]
+```
 
-**会镜像:**知识库与记忆的 Markdown、你的配置资源(MCP 服务器、agent、技能、渠道),以及**仅以 Fernet 密文形式**的凭证。**机器本地(永不同步):**日志、可重建的 `coffer.db` 索引、`daemon.json`、PID 文件、端口分配。
+每个配置资源一个确定性 YAML,意味着同一个未发生变化的保险库两次导出字节一致 —— 因此对两个 bundle 执行 `diff -r`,能准确看出两台机器之间到底有什么不同。
+
+## 把它搬过去
+
+Coffer 不负责搬运这个目录,那部分归你自己。`scp`、U 盘,或者你自己的 git 仓库都可以:
+
+```bash
+scp -r ~/coffer-bundle you@machine-b:~/coffer-bundle
+```
+
+## 在机器 B 上导入
+
+```bash
+coffer sync import ~/coffer-bundle
+```
+
+导入会把知识、记忆与技能树镜像回来,据此重建 SQLite 索引,注册每一个配置资源,并运行每个 kind 的导入后步骤 —— 因此导入进来的 agent 已装好它的 shim,导入进来的技能已有符号链接。它会报告各状态区的计数,以及任何无法在本机应用的资源(例如某个 agent 的 `config_dir` 在这台机器上并不存在);这些会连同原因一起被报告,并不致命。
+
+- **bundle 说了算。** bundle 中包含的任何东西都会替换掉本地版本 —— 你在敲下命令时就选定了方向。
+- **导入从不删除。** 本机有、而 bundle 里没有的资源保持原样不动。一个 bundle 是某一台机器的快照,而不是对"哪些东西应当到处都存在"的断言。
+
+## 哪些会随行
+
+**在 bundle 里:**知识库与记忆的 Markdown、技能主库、你的配置资源(MCP 服务器、agent、技能、渠道)、各模块自有的共享状态(渠道配对、记忆 store 标签、引擎设置),以及 —— 仅在带 `--with-credentials` 时 —— **仅以 Fernet 密文形式**的凭证。
+
+**机器本地(永不导出):**日志、可重建的 `coffer.db` 索引、`daemon.json`、PID 文件、端口分配、聊天历史与审计日志。
 
 ## 主密钥(带外)
 
-加密主密钥**绝不**写入仓库 —— 只有密文会传输。请你自己把密钥搬到每台新机器:
+主密钥**绝不**写入 bundle —— 只有密文会随行。请你自己把密钥搬到每台新机器:
 
 ```bash
 coffer sync key export ./master.key       # 在源机器上
-# 通过可信渠道搬运 master.key —— 绝不经由仓库
+# 通过可信渠道搬运 master.key —— 绝不放在 bundle 里
 coffer sync key import ./master.key        # 在目标机器上
 ```
 
-在密钥到位之前,导入的凭证保持**锁定**(`coffer sync status` 会报告),依赖它们的资源不会启动。
+在密钥到位之前,导入的凭证保持**锁定**(被报为 `credentials_locked`),依赖它们的资源不会启动。
 
-## 冲突
+## 让两台机器保持一致
 
-一次 git 合并冲突会让本次运行停在 `conflicted` 状态且不导入任何内容 —— 两边都不丢弃。解决后再次运行:
+不存在后台收敛,也没有任何东西盯着分叉。如果两台机器发生了分叉,就按你想要的方向重新导出、重新导入一次 —— 这个手工步骤,正是为了甩掉持续同步所需的那套机制而有意接受的取舍。
 
-```bash
-coffer sync resolve --theirs path/to/resource.json   # 或 --ours / --resolved
-coffer sync
-```
-
-每个资源一个文件,使冲突保持很小。一个桌面 **Sync** 设置面板无需终端即可完成这一切,同样的操作也通过 REST 在 `/api/v1/sync/*` 提供。
+桌面端的 **Sync** 设置面板无需终端即可完成这两个操作(每个按钮打开一个原生目录选择器),同样的操作也通过 REST 在 `/api/v1/sync/*` 提供。
 
 [凭证 →](/zh/guide/credentials)

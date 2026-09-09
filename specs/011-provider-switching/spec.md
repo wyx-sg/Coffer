@@ -15,7 +15,7 @@ on it. One connection retires the separate `ModelConfig`/`chat_models` registry,
 folding internal-engine model selection into the same record. Coffer's
 differentiator over `claude switch` or equivalent per-tool scripting: a unified
 registry with governance — Fernet-encrypted credentials, full audit trail, and
-git-sync — not per-tool silos.
+an inspectable export/import bundle — not per-tool silos.
 
 ## Why
 
@@ -80,7 +80,8 @@ native config file.
 
 ### Decision C — phased; hot-switch is OUT OF SCOPE for this PR
 
-This PR ships: registry + projection + switch op + audit + sync wiring.
+This PR ships: registry + projection + switch op + audit + export/import
+wiring.
 
 Hot-switch (mid-session reload of a running Claude Code or Codex process) is a
 **separate, later PR** and is explicitly **out of scope here**.
@@ -291,10 +292,11 @@ gated behind an explicit test + confirm, and the binding is never left empty.
 ### In scope
 
 - Backend `provider` resource Kind (CRUD via ResourceService → automatic audit
-  + automatic sync); credential handling (store secret to Fernet vault, keep
-  only ref); projection service (write native config for the matching agent);
-  switch / activate operation; `PROVIDER_SWITCHED` audit event; sync wiring
-  (register the kind); key-resolution used by Claude's `apiKeyHelper`.
+  + automatic inclusion in export/import); credential handling (store secret to
+  Fernet vault, keep only ref); projection service (write native config for the
+  matching agent); switch / activate operation; `PROVIDER_SWITCHED` audit event;
+  export/import wiring (register the kind); key-resolution used by Claude's
+  `apiKeyHelper`.
 - Internal-engine connection selection: the global `internal_default` flag,
   `set_internal_default(name)` + `resolve_internal_connection()`, the
   `provider_internal_default_set` audit event, consumed by Coffer's internal
@@ -331,7 +333,7 @@ gated behind an explicit test + confirm, and the binding is never left empty.
 Resource `name` = the profile name (unique within kind; validated by
 `validate_name`).
 
-### Config fields (synced `config` dict; deterministic, no machine-local ids)
+### Config fields (exported `config` dict; deterministic, no machine-local ids)
 
 | Field | Type | Notes |
 |---|---|---|
@@ -448,14 +450,16 @@ A connection may be BOTH `is_active` (projected to its wire's agent) AND
 This is the command Claude Code's `apiKeyHelper` invokes (`--wire anthropic`).
 For Codex, the user exports: `export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"`.
 
-## Sync (reuse, ~zero engine change)
+## Export / import (reuse, ~zero engine change)
 
-Modeling `provider` as a ResourceService Kind makes it sync automatically:
+Modeling `provider` as a ResourceService Kind puts it in the export bundle
+automatically ([ADR-016](../../docs/decisions/ADR-016-vault-export-import.md)):
 
 - `SyncExporter` lists all kinds → serialises each row to
   `resources/provider/<name>.yaml` via `resource_to_doc`.
 - `SyncImporter` reconciles by `(kind, name)`.
-- Credentials already sync as Fernet ciphertext at `credentials/<ref>.enc`.
+- Credentials already travel as Fernet ciphertext at `credentials/<ref>.enc`,
+  and only when the user exports with credentials.
 
 Touch points: define the Kind, add a `wire_provider_kind(...)` helper (mirror
 `wire_kb_kind` in `surfaces/http/wiring.py`), register into `app.state.kinds`
@@ -679,10 +683,10 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
 ### Scenario: a provider profile round-trips through sync export and import
 
 - **Given** a provider profile with a credential ref exists,
-- **When** the sync exporter runs followed by the sync importer on a clean DB,
+- **When** the exporter runs followed by the importer on a clean DB,
 - **Then** the profile row is restored with identical `config` fields, the
   credential ciphertext is present at `credentials/<ref>.enc`, and no secret
-  is exposed in the sync workspace plaintext.
+  is exposed in the bundle's plaintext.
 
 ### Scenario: the command line covers create, list, and switch
 
@@ -830,7 +834,7 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
   print to stdout only. The raw key MUST NOT be logged. Resolution by profile
   `<name>` is NOT supported on this subcommand; use `--wire` only.
 
-**Sync**
+**Export / import**
 
 - **FR-015**: The `provider` kind MUST be registered into `app.state.kinds` so
   `SyncExporter`/`SyncImporter` handle it automatically. No new migration or
@@ -913,7 +917,7 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
   activate it, and have Claude Code pick up the new endpoint within one
   `coffer provider switch` command.
 - **SC-002**: No raw key ever appears in `settings.json`, `config.toml`, or the
-  sync workspace (`resources/provider/*.yaml`) — verified by an automated scan
+  export bundle (`resources/provider/*.yaml`) — verified by an automated scan
   in integration tests.
 - **SC-003**: Every Acceptance Scenario is covered by at least one test marked
   `acceptance(spec="011-provider-switching", scenario="…")`, and

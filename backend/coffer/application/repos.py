@@ -14,6 +14,7 @@ from typing import Any, Protocol
 from coffer.domain.audit import AuditEntry
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.retention import RetentionPolicy
+from coffer.domain.scope import Scope
 
 
 class ResourceRepo(Protocol):
@@ -34,7 +35,7 @@ class ResourceRepo(Protocol):
     async def update_scope(
         self,
         ref: ResourceRef,
-        scope: dict[str, Any] | None,
+        scope: Scope | None,
     ) -> Resource | None: ...
     async def delete(self, ref: ResourceRef) -> None: ...
 

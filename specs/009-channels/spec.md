@@ -489,49 +489,28 @@ status / notify`.
   sends no completion summary on any channel, while a turn that ends abnormally
   (failed, interrupted, tool-limit) sends one reporting the outcome.
 
-## Machine affinity (spec 010 amendment)
+## Where a channel runs
 
-A channel's platform identity (a polled bot, a webhook endpoint) tolerates only
-ONE consumer, but channel definitions sync to every machine (spec 010). The
-channel runtime consults the framework-level `scope` field (machine axis
-only — a channel's `scope` entries accept only `"*"` as their value) to
-decide whether to start the adapter locally: `scope` carries exactly one
-exact-ULID machine entry (or none = dormant); the `"*"` key is rejected for
-channels (`Kind.validate_scope_shape`, ADR-045 review Fix 1) — it would match
-every machine at once, the double-adapter fight ADR-043 exists to prevent, by
-a different route. Only the machine present as that single entry starts the
-adapter. `scope == {}` (dormant everywhere — the equivalent of the
-pre-amendment `runs_on: null`) starts nowhere until the user picks a machine
-in the channel detail page. The creating surface defaults scope to
-`{"<creating-machine-id>": "*"}`. Rebinding is a normal config edit (an
-ordinary `scope` write) that propagates through sync; pairing state syncs
-with the vault (spec 010 state area `channel-peers`), so a rebound channel
-needs no re-pairing. During the propagation window (one sync round trip)
-both machines may briefly poll the platform at once — self-healing
-seconds-long overlap, accepted for a single-user tool.
+A channel's platform identity (a polled bot, a webhook endpoint) tolerates
+only ONE consumer. Coffer keeps one vault per machine and never replicates a
+running one ([ADR-016](../../docs/decisions/ADR-016-vault-export-import.md)),
+so there is nothing to arbitrate: an **enabled channel runs its adapter here**,
+on the machine whose daemon holds it, and a disabled channel runs nowhere.
+There is no machine binding, no affinity field, and no per-machine override.
 
-**`runs_on` → `scope` migration** (Amendment 2026-07-10 — machine × agent
-scope, [ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md)).
-The single-machine `runs_on: <machine_id>` field described above is
-**superseded** by the framework's machine axis: a data migration converts
-every existing channel's `runs_on: <machine_id>` to
-`scope: {"<machine_id>": "*"}`, and `runs_on: null` to `scope: {}`, on
-upgrade. `runs_on` is **not removed** from the schema or the API — old
-payloads and synced docs from not-yet-upgraded machines must still validate —
-but it becomes **inert**: the channel runtime reads `scope` only, and
-`runs_on` is documented as deprecated in place (a frozen pre-migration value;
-stale after any rebind; not consulted).
+The `channel` kind declares no `scope`
+([ADR-045](../../docs/decisions/ADR-045-per-agent-resource-scope.md)): a
+non-null value is rejected at validation (422). Enabling is the only control
+over whether the adapter starts.
+
+If the user carries a bundle to a second machine (spec 010) the channel is
+registered there too — pairing state rides along in the bundle's
+`channel-peers` state area, so it needs no re-pairing — and enabling it on
+both machines would point two adapters at one bot identity. That is a deliberate act by the user, not a state Coffer
+arbitrates — the export/import model has no background replication that could
+produce it on its own.
 
 ## Acceptance Scenarios
-
-### Scenario: a channel runs on exactly one machine
-
-- **Given** channels bound to this machine, to another machine, and to no
-  machine
-- **When** the runtime reconciles
-- **Then** only the channel bound to this machine starts its adapter
-- **And** rebinding a channel away from this machine stops it on the next
-  reconcile
 
 ### Scenario: register a telegram channel
 

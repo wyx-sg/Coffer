@@ -28,7 +28,7 @@ Every vault asset — registered server configs, credential references, audit lo
 
 Replicating user state to a **vendor-controlled** cloud as a system of record requires a formal constitutional amendment — an explicit, recorded decision, not a silent configuration change.
 
-**Sync exception (constitution v0.3.0).** Multi-machine sync is permitted under a bounded exception to this principle, added in constitution v0.3.0 alongside spec 010. Sync runs only over a **user-owned, user-controlled** medium (the user's own git repository); every participating machine keeps the full vault, so the medium is transport and history, never a new system of record. Secrets travel as Fernet **ciphertext only** — the master key never crosses the sync medium and is bootstrapped onto each machine out-of-band. Sync is **opt-in** and points at a remote the user supplies. See [ADR-016](/reference/adr/ADR-016-multi-machine-sync).
+**Export and import need no exception (constitution v0.4.0).** Moving a vault to another of your machines is a plain **export to a local directory** and an **import of one back** (spec 010). Because that is ordinary local file output under the user's control, it creates no second system of record and nothing reaches a vendor-controlled service — so it needs no exception to this principle. Constitution v0.4.0 therefore **removes** the v0.3.0 user-controlled-sync-medium exception along with the continuous git-based sync it was written for. Secrets travel as Fernet **ciphertext only**, and only when explicitly requested; the master key never enters an export and is bootstrapped onto each machine out-of-band. See [ADR-016](/reference/adr/ADR-016-vault-export-import).
 
 ### II. Spec-as-Truth (Spec-Driven Development)
 
@@ -60,7 +60,7 @@ Understanding scope is as important as understanding capabilities.
 
 **Not a cloud service.** There is no hosted Coffer, no SaaS plan, no account required. The daemon is a process on your machine.
 
-**Not a hosted sync service.** Coffer does sync vault state across machines (spec 010), but only over a medium the user owns and controls — their own git repository — under the v0.3.0 sync exception above. Coffer ships no hosted or vendor sync endpoint; offering one would still require a further constitutional amendment.
+**Not a sync service.** Coffer does not keep two machines convergent. It exports the vault to a directory you name and imports one back (spec 010); carrying that directory between machines — `scp`, a USB drive, your own git repo — is yours to do. Coffer ships no remote, no background replication and no hosted sync endpoint; offering one would require a constitutional amendment.
 
 **Not a model provider.** Coffer is not itself an LLM and does not host one. The MCP gateway routes protocol messages without reasoning about tool outputs, and the in-process LangGraph chat agent (spec 008) does invoke LLMs to converse — but those models are external providers Coffer calls, never models Coffer ships or trains. Coffer orchestrates models and tools; it is not the model.
 

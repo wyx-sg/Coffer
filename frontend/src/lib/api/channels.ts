@@ -63,25 +63,6 @@ export interface NotifyOut {
   sent: boolean;
 }
 
-/**
- * Machine x agent activation scope (ADR-045). Channels only ever use the
- * "machine" axis: a value is always "*" (bound to that one machine) — there
- * is no per-agent narrowing for channels, unlike mcp_server/skill/agent.
- * `{}` = dormant (runs nowhere); `{<machineId>: "*"}` = bound to that machine.
- * Supersedes `config.runs_on` (spec 009 amendment / ADR-045) — see
- * ChannelMachineCard. Kept here as the channel-specific narrowing of the
- * generic `Scope`/`ResourceScope` types (`lib/hooks/useScope.ts`), which own
- * the actual fetch/mutation now (Task 16) — the GET/PUT fetchers that used to
- * live in this module were absorbed into `useResourceScope` /
- * `useUpdateResourceScope`.
- */
-export type ChannelScopeValue = Record<string, "*">;
-
-export interface ChannelScope {
-  scope: ChannelScopeValue | null;
-  axes: string[];
-}
-
 // ---------------------------------------------------------------------------
 // Internal fetch helper
 // ---------------------------------------------------------------------------

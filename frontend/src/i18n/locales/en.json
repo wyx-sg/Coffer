@@ -74,7 +74,6 @@
     "expand": "Expand sidebar",
     "agents": "Agents",
     "channels": "Channels",
-    "machines": "Machines",
     "audit": "Audit log",
     "chat": "Chat"
   },
@@ -504,46 +503,34 @@
       "fetchedCount": "{{count}} models fetched — pick one or type your own"
     },
     "sync": {
-      "title": "Multi-machine sync",
-      "description": "Keep this vault in sync across your machines using a git repository you own. The master key never travels through git — bring it to each new machine once, out-of-band.",
-      "remote": "Git remote (yours)",
-      "branch": "Branch",
-      "enable": "Enable sync",
-      "auto": "Auto-sync in the background",
-      "interval": "Auto-sync interval (seconds)",
-      "syncNow": "Sync now",
-      "status": "Status",
-      "lastSync": "last sync",
-      "conflictGuidance": "Coffer could not settle this conflict automatically. Resolve it in your own repository (e.g. on GitHub), then sync again.",
-      "errorHints": {
-        "auth": "Git needs credentials that work without a terminal. Use an SSH remote (git@github.com:you/repo.git), or run `gh auth setup-git` once and retry.",
-        "not_found": "The repository was not found — check the remote URL and that the repo exists.",
-        "network": "The remote host is unreachable — check your network and the remote URL."
+      "title": "Export / import vault",
+      "description": "Write this vault into a directory you pick, or read one back. Carrying that directory to your other machine — scp, a USB drive, your own git repo — is up to you.",
+      "withCredentials": "Include credentials",
+      "withCredentialsHint": "Credentials travel as encrypted ciphertext, never the master key. Leave this off unless the other machine needs them — an export directory is easy to leave somewhere careless.",
+      "exportVault": "Export vault…",
+      "importVault": "Import vault…",
+      "bundlePath": "Bundle directory",
+      "bundlePathManualHint": "This machine has no native folder dialog — type the path, then click again.",
+      "exported": "Vault exported to {{path}}",
+      "imported": "Bundle imported from {{path}}",
+      "bundleFailure": "{{ref}} — {{reason}}",
+      "areas": {
+        "knowledge": "Knowledge",
+        "memory": "Memory",
+        "skills": "Skills",
+        "resources": "Resources",
+        "state": "Shared state",
+        "credentials": "Credentials"
       },
-      "lockedHint": "Credentials present but locked: {{refs}} — import the master key to unlock.",
       "masterKey": "Master key (out-of-band)",
-      "masterKeyHint": "Export this machine's key to a file and move it to another machine over a channel you trust, then import it there. Never put it in the sync repo.",
+      "masterKeyHint": "Export this machine's key to a file and move it to another machine over a channel you trust, then import it there. It is never written into an export bundle.",
       "keyFingerprint": "Key fingerprint",
       "keyFingerprintHint": "Matching fingerprints on two machines mean they hold the same key.",
       "keyPath": "Local key file path",
       "keyPathManualHint": "This machine has no native file dialog — type the path, then click again.",
       "exportKey": "Export key",
       "importKey": "Import key",
-      "statuses": {
-        "unconfigured": "Not configured",
-        "clean": "In sync",
-        "syncing": "Syncing…",
-        "conflicted": "Conflicted",
-        "error": "Error",
-        "credentials_locked": "Credentials locked"
-      },
-      "keyExported": "Key written to {{path}}",
-      "machines": "Machines",
-      "machinesHint": "Every machine known to this vault. Each machine registers itself when it syncs.",
-      "thisMachine": "This machine",
-      "neverSynced": "Never synced",
-      "machineName": "Machine name",
-      "quarantinedHint": "Import failed here for (quarantined, retried every sync): {{refs}}"
+      "keyExported": "Key written to {{path}}"
     },
     "connections": {
       "title": "LLM Connections",
@@ -633,7 +620,6 @@
     "CHANNEL_NOT_RUNNING": "The channel adapter is not running",
     "CHANNEL_SEND_FAILED": "Delivery to the IM platform failed",
     "GENERIC_CREATE_NOT_ALLOWED": "This kind can't be created directly",
-    "MACHINE_NOT_FOUND": "Machine not found",
     "MASTER_KEY_MISSING": "The master key is missing — Coffer can't decrypt stored secrets",
     "DB_SCHEMA_TOO_NEW": "This database was written by a newer version of Coffer. Upgrade to open it.",
     "PRIVILEGED_PATH": "That path is privileged and can't be used here",
@@ -1499,51 +1485,15 @@
       "hint": "Point a tunnel (cloudflared, ngrok) at the local listener address. The reachability test verifies the path and handshake; whether the signing secret matches SeaTalk's is confirmed only on a real event."
     },
     "deleteTitle": "Delete channel",
-    "deleteConfirm": "Delete channel “{{name}}”? Its adapter stops and the pairing is removed.",
-    "machine": {
-      "title": "Machine",
-      "runsOn": "Runs on",
-      "unbound": "Not bound — this channel currently runs nowhere",
-      "thisMachine": "This machine",
-      "runHere": "Run on this machine",
-      "hint": "A synced channel runs on exactly one machine so two machines never fight over the same bot. Rebinding propagates on the next sync; the other machine stops automatically."
-    }
+    "deleteConfirm": "Delete channel “{{name}}”? Its adapter stops and the pairing is removed."
   },
   "scope": {
     "title": "Activation scope",
-    "subtitle": "Where this is active — everywhere, or only on chosen machines (and, for MCP servers and skills, only for chosen agents).",
-    "everywhere": "Everywhere",
-    "custom": "Custom",
-    "dormant": "Custom with no machines turned on — dormant. Nothing is active anywhere until you turn on at least one machine below.",
-    "allAgents": "All agents",
+    "subtitle": "Which agents this is active for — every agent, or only the ones you select. Out of scope it stays registered, just not exposed or delivered.",
+    "everyAgent": "Every agent",
+    "selectedAgents": "Selected agents",
+    "dormant": "No agent selected — dormant. This stays registered but reaches no agent until you select at least one below.",
     "noAgents": "No agents registered yet.",
-    "noMachines": "No machines synced yet.",
-    "notActiveHere": "Not active on this machine.",
-    "unknownMachine": "Unknown to this vault's machine registry",
-    "rowToggle": "Active on {{machine}}"
-  },
-  "machines": {
-    "title": "Machines",
-    "subtitle": "Every machine synced into this vault, and what's active on each.",
-    "status": "Sync status",
-    "runNow": "Sync now",
-    "configureLink": "Configure sync",
-    "lastSync": "Last sync",
-    "neverSynced": "Never synced",
-    "thisMachine": "This machine",
-    "viewSlice": "View machine",
-    "loadFailed": "Failed to load machines.",
-    "empty": "No machines yet. Once you configure sync and run it, machines will appear here.",
-    "slice": {
-      "back": "Back to machines",
-      "agents": "Agents",
-      "mcpServers": "MCP servers",
-      "skills": "Skills",
-      "channels": "Channels",
-      "active": "Active",
-      "inactive": "Inactive",
-      "empty": "Nothing here yet.",
-      "intentOnly": "This is a remote machine — activation shown here is intent only, computed from the synced registry and scope, not confirmed against the machine itself."
-    }
+    "unknownAgent": "Not registered here"
   }
 }

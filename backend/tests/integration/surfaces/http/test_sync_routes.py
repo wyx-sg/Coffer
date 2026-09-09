@@ -1,10 +1,9 @@
-"""HTTP contract tests for /api/v1/sync (spec 010)."""
+"""HTTP contract tests for /api/v1/sync (spec 010 vault export/import)."""
 
 from __future__ import annotations
 
-import subprocess
+import json
 
-import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -12,12 +11,11 @@ from pydantic import BaseModel
 
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
-from coffer.application.sync.config_service import SyncConfigService
 from coffer.application.sync.exporter import SyncExporter
-from coffer.application.sync.identity import MachineIdentityService
 from coffer.application.sync.importer import SyncImporter
 from coffer.application.sync.service import SyncService
 from coffer.domain.resource import Kind
+from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
@@ -28,14 +26,8 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyResourceRepo,
 )
+from coffer.infrastructure.sync.bundle import Bundle
 from coffer.infrastructure.sync.credentials import CredentialSyncAdapter
-from coffer.infrastructure.sync.git_repo import GitRepo
-from coffer.infrastructure.sync.persistence import (
-    SqlAlchemyMachineIdentityRepo,
-    SqlAlchemySyncConfigRepo,
-    SqlAlchemySyncStateRepo,
-)
-from coffer.infrastructure.sync.workspace import Workspace
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.sync_routes import router as sync_router
@@ -75,26 +67,17 @@ async def client(tmp_path):  # type: ignore[no-untyped-def]
     master_key = MasterKeyManager(tmp_path / "master.key", _NoKeyring())
     master_key.resolve(allow_create=True)
     cred_sync = CredentialSyncAdapter(db_path, master_key)
-    workspace = Workspace(tmp_path / "ws", trees=[])
-    git = GitRepo(tmp_path / "ws")
-    config_svc = SyncConfigService(SqlAlchemySyncConfigRepo(sm), SqlAlchemySyncStateRepo(sm), audit)
-    identity = MachineIdentityService(
-        SqlAlchemyMachineIdentityRepo(sm),
-        audit,
-        new_id=lambda: "01TESTMACHINE00000000000AA",
-        default_name=lambda: "test-machine",
-    )
+    knowledge = tmp_path / "knowledge"
+    knowledge.mkdir()
+    trees = [("knowledge", knowledge)]
+
     service = SyncService(
-        config=config_svc,
-        git=git,
-        exporter=SyncExporter(resources, cred_sync, workspace, home=None),
-        importer=SyncImporter(resources, cred_sync, workspace, home=None),
+        exporter=SyncExporter(resources, cred_sync, home=None),
+        importer=SyncImporter(resources, cred_sync, home=None),
         credentials=cred_sync,
         master_key=master_key,
         audit=audit,
-        identity=identity,
-        workspace=workspace,
-        coffer_version="0.0.0-test",
+        bundle_factory=lambda p: Bundle(p, trees=trees),
     )
     set_sync_service(service)
 
@@ -107,239 +90,112 @@ async def client(tmp_path):  # type: ignore[no-untyped-def]
         transport=transport, base_url="http://t", headers={"X-Coffer-Token": _TOKEN}
     ) as c:
         c.tmp_path = tmp_path  # type: ignore[attr-defined]
+        c.resources = resources  # type: ignore[attr-defined]
+        c.db_path = db_path  # type: ignore[attr-defined]
+        c.master_key = master_key  # type: ignore[attr-defined]
         yield c
     set_active_token(None)
     await engine.dispose()
 
 
-async def test_config_get_defaults_then_put(client) -> None:  # type: ignore[no-untyped-def]
-    r = await client.get("/api/v1/sync/config")
+async def test_export_then_import_round_trip(client) -> None:  # type: ignore[no-untyped-def]
+    await client.resources.register("mcp_server", "files", {"value": "a"}, "user")
+    (client.tmp_path / "knowledge" / "n.md").write_text("hi", encoding="utf-8")
+    out = client.tmp_path / "bundle"
+
+    r = await client.post("/api/v1/sync/export", json={"path": str(out)})
     assert r.status_code == 200
-    assert r.json()["enabled"] is False
-    assert r.json()["interval_seconds"] == 300
+    body = r.json()
+    assert body["path"] == str(out)
+    assert body["credentials_included"] is False
+    assert {a["area"]: a["count"] for a in body["areas"]}["resources"] == 1
+    assert body["failures"] == []
 
-    bare = client.tmp_path / "remote.git"
-    subprocess.run(["git", "init", "--bare", str(bare)], check=True, capture_output=True)
-    r = await client.put(
-        "/api/v1/sync/config",
-        json={
-            "remote": str(bare),
-            "enabled": True,
-            "auto": False,
-            "interval_seconds": 120,
-            "branch": "main",
-        },
-    )
+    r = await client.post("/api/v1/sync/import", json={"path": str(out)})
     assert r.status_code == 200
-    assert r.json()["enabled"] is True
-    assert r.json()["interval_seconds"] == 120
+    body = r.json()
+    assert {a["area"]: a["count"] for a in body["areas"]}["resources"] == 1
+    assert body["locked_refs"] == []
 
 
-async def test_put_config_rejects_short_interval(client) -> None:  # type: ignore[no-untyped-def]
-    r = await client.put(
-        "/api/v1/sync/config",
-        json={
-            "remote": "x",
-            "enabled": False,
-            "auto": False,
-            "interval_seconds": 5,
-            "branch": "main",
-        },
+async def test_export_with_credentials_is_opt_in(client) -> None:  # type: ignore[no-untyped-def]
+    key = client.master_key.export_key()
+    assert key is not None
+    EncryptedCredentialStore(client.db_path, key).set("mcp/files/token", "s3cret")
+
+    plain = client.tmp_path / "plain"
+    r = await client.post("/api/v1/sync/export", json={"path": str(plain)})
+    assert r.json()["credentials_included"] is False
+    assert not (plain / "credentials").exists()
+
+    withcreds = client.tmp_path / "withcreds"
+    r = await client.post(
+        "/api/v1/sync/export", json={"path": str(withcreds), "with_credentials": True}
     )
-    assert r.status_code == 422
-    assert r.json()["error"]["code"] == "CONFIG_INVALID"
+    assert r.json()["credentials_included"] is True
+    assert (withcreds / "credentials" / "mcp" / "files" / "token.enc").exists()
 
 
-async def test_run_unconfigured_is_conflict(client) -> None:  # type: ignore[no-untyped-def]
-    r = await client.post("/api/v1/sync/run")
+async def test_import_of_a_newer_bundle_is_409(client) -> None:  # type: ignore[no-untyped-def]
+    out = client.tmp_path / "bundle"
+    await client.post("/api/v1/sync/export", json={"path": str(out)})
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    manifest["schema_version"] += 1
+    (out / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    r = await client.post("/api/v1/sync/import", json={"path": str(out)})
     assert r.status_code == 409
-    assert r.json()["error"]["code"] == "SYNC_NOT_CONFIGURED"
+    assert r.json()["error"]["code"] == "SYNC_BUNDLE_TOO_NEW"
 
 
-async def test_status_unconfigured(client) -> None:  # type: ignore[no-untyped-def]
-    r = await client.get("/api/v1/sync/status")
-    assert r.status_code == 200
-    assert r.json()["status"] == "unconfigured"
-
-
-@pytest.mark.acceptance(spec="010-sync", scenario="initialise sync against a user remote")
-async def test_configure_and_run_clean(client) -> None:  # type: ignore[no-untyped-def]
-    bare = client.tmp_path / "remote.git"
-    subprocess.run(["git", "init", "--bare", str(bare)], check=True, capture_output=True)
-    await client.put(
-        "/api/v1/sync/config",
-        json={
-            "remote": str(bare),
-            "enabled": True,
-            "auto": False,
-            "interval_seconds": 300,
-            "branch": "main",
-        },
-    )
-    r = await client.post("/api/v1/sync/run")
-    assert r.status_code == 200
-    assert r.json()["status"] == "clean"
-
-
-async def test_requires_token(client) -> None:  # type: ignore[no-untyped-def]
-    r = await client.get("/api/v1/sync/config", headers={"X-Coffer-Token": "wrong"})
-    assert r.status_code == 401
-
-
-async def test_machines_lists_local_before_first_sync(client) -> None:  # type: ignore[no-untyped-def]
-    r = await client.get("/api/v1/sync/machines")
-    assert r.status_code == 200
-    machines = r.json()["machines"]
-    assert len(machines) == 1
-    assert machines[0]["is_local"] is True
-    assert machines[0]["display_name"] == "test-machine"
-    assert machines[0]["last_sync_at"] is None
-
-
-async def test_rename_machine_round_trips(client) -> None:  # type: ignore[no-untyped-def]
-    r = await client.put("/api/v1/sync/machine", json={"display_name": "studio"})
-    assert r.status_code == 200
-    assert r.json()["display_name"] == "studio"
-    assert r.json()["is_local"] is True
-
-    r = await client.get("/api/v1/sync/machines")
-    assert r.json()["machines"][0]["display_name"] == "studio"
-
-
-async def test_rename_machine_rejects_blank(client) -> None:  # type: ignore[no-untyped-def]
-    for blank in ("", "   "):
-        r = await client.put("/api/v1/sync/machine", json={"display_name": blank})
-        assert r.status_code == 422
-
-
-async def test_rename_machine_trims_whitespace(client) -> None:  # type: ignore[no-untyped-def]
-    r = await client.put("/api/v1/sync/machine", json={"display_name": "  studio  "})
-    assert r.status_code == 200
-    assert r.json()["display_name"] == "studio"
-
-
-async def test_machine_entry_recorded_after_run(client) -> None:  # type: ignore[no-untyped-def]
-    bare = client.tmp_path / "remote.git"
-    subprocess.run(["git", "init", "--bare", str(bare)], check=True, capture_output=True)
-    await client.put(
-        "/api/v1/sync/config",
-        json={
-            "remote": str(bare),
-            "enabled": True,
-            "auto": False,
-            "interval_seconds": 300,
-            "branch": "main",
-        },
-    )
-    r = await client.post("/api/v1/sync/run")
-    assert r.status_code == 200
-
-    r = await client.get("/api/v1/sync/machines")
-    machines = r.json()["machines"]
-    assert len(machines) == 1
-    assert machines[0]["last_sync_at"] is not None
-    assert machines[0]["platform"]
-
-
-async def test_put_config_round_trips_poll_and_rejects_low(client) -> None:  # type: ignore[no-untyped-def]
-    r = await client.put(
-        "/api/v1/sync/config",
-        json={
-            "remote": "x",
-            "enabled": False,
-            "auto": False,
-            "interval_seconds": 60,
-            "poll_remote_seconds": 10,
-            "branch": "main",
-        },
-    )
-    assert r.status_code == 200
-    assert r.json()["poll_remote_seconds"] == 10
-
-    r = await client.put(
-        "/api/v1/sync/config",
-        json={
-            "remote": "x",
-            "enabled": False,
-            "auto": False,
-            "interval_seconds": 60,
-            "poll_remote_seconds": 2,
-            "branch": "main",
-        },
-    )
+async def test_import_of_a_non_bundle_is_422(client) -> None:  # type: ignore[no-untyped-def]
+    r = await client.post("/api/v1/sync/import", json={"path": str(client.tmp_path / "nope")})
     assert r.status_code == 422
-    assert r.json()["error"]["code"] == "CONFIG_INVALID"
+    assert r.json()["error"]["code"] == "SYNC_BUNDLE_INVALID"
 
 
-async def test_override_crud_round_trips(client) -> None:  # type: ignore[no-untyped-def]
-    r = await client.get("/api/v1/sync/overrides")
-    assert r.status_code == 200
-    assert r.json() == {"overrides": []}
-
-    r = await client.put(
-        "/api/v1/sync/overrides/mcp_server/tool",
-        json={"patch": {"value": "/opt/homebrew/bin/x"}},
-    )
-    assert r.status_code == 200
-    assert r.json()["overrides"] == [
-        {"kind": "mcp_server", "name": "tool", "patch": {"value": "/opt/homebrew/bin/x"}}
-    ]
-
-    r = await client.delete("/api/v1/sync/overrides/mcp_server/tool")
-    assert r.status_code == 200
-    assert r.json() == {"overrides": []}
-
-
-async def test_key_fingerprint_endpoint(client) -> None:  # type: ignore[no-untyped-def]
-    """The fingerprint (never the key) lets the user compare machines."""
+async def test_key_fingerprint_never_returns_the_key(client) -> None:  # type: ignore[no-untyped-def]
     r = await client.get("/api/v1/sync/key/fingerprint")
     assert r.status_code == 200
     body = r.json()
     assert body["present"] is True
-    assert isinstance(body["fingerprint"], str) and len(body["fingerprint"]) == 12
+    assert len(body["fingerprint"]) == 12
+    key = client.master_key.export_key()
+    assert key is not None
+    assert body["fingerprint"] not in key.decode()
 
 
-async def test_put_config_probes_new_remote_when_enabled(client) -> None:  # type: ignore[no-untyped-def]
-    """Enabling sync against an unreachable remote fails the save in place
-    with an actionable hint instead of surfacing later from a background run."""
-    r = await client.put(
-        "/api/v1/sync/config",
-        json={
-            "remote": str(client.tmp_path / "definitely-missing.git"),
-            "enabled": True,
-            "auto": False,
-            "interval_seconds": 300,
-            "branch": "main",
-        },
-    )
-    assert r.status_code == 422
-    body = r.json()["error"]
-    assert body["code"] == "SYNC_REMOTE_UNREACHABLE"
-    assert body["details"]["hint"] == "not_found"
-
-
-async def test_status_classifies_auth_errors(client) -> None:  # type: ignore[no-untyped-def]
-    """A recorded auth failure carries the actionable error_hint."""
-    from coffer.surfaces.http.sync_routes import get_sync_service
-
-    # Status passes through the stored state only once sync is configured.
-    bare = client.tmp_path / "remote.git"
-    subprocess.run(["git", "init", "--bare", str(bare)], check=True, capture_output=True)
-    ok = await client.put(
-        "/api/v1/sync/config",
-        json={
-            "remote": str(bare),
-            "enabled": True,
-            "auto": False,
-            "interval_seconds": 300,
-            "branch": "main",
-        },
-    )
-    assert ok.status_code == 200
-    svc = get_sync_service()
-    await svc._record_error(
-        "git fetch failed: fatal: could not read Username for 'https://github.com'"
-    )
-    r = await client.get("/api/v1/sync/status")
+async def test_key_export_then_import(client) -> None:  # type: ignore[no-untyped-def]
+    target = client.tmp_path / "master.out"
+    r = await client.post("/api/v1/sync/key/export", json={"path": str(target)})
     assert r.status_code == 200
-    assert r.json()["error_hint"] == "auth"
+    assert r.json()["path"] == str(target)
+    assert target.exists()
+
+    r = await client.post("/api/v1/sync/key/import", json={"path": str(target)})
+    assert r.status_code == 200
+    assert r.json()["locked_refs"] == []
+
+
+async def test_key_import_of_a_missing_file_is_422(client) -> None:  # type: ignore[no-untyped-def]
+    r = await client.post("/api/v1/sync/key/import", json={"path": str(client.tmp_path / "absent")})
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "MASTER_KEY_FILE_INVALID"
+
+
+async def test_routes_require_the_token(client) -> None:  # type: ignore[no-untyped-def]
+    r = await client.post(
+        "/api/v1/sync/export",
+        json={"path": str(client.tmp_path / "x")},
+        headers={"X-Coffer-Token": "wrong"},
+    )
+    assert r.status_code == 401
+
+
+async def test_withdrawn_continuous_sync_routes_are_gone(client) -> None:  # type: ignore[no-untyped-def]
+    # ADR-016 withdrew continuous sync; its surface must not linger.
+    assert (await client.get("/api/v1/sync/config")).status_code == 404
+    assert (await client.get("/api/v1/sync/status")).status_code == 404
+    assert (await client.post("/api/v1/sync/run", json={})).status_code == 404
+    assert (await client.get("/api/v1/sync/machines")).status_code == 404
+    assert (await client.get("/api/v1/sync/overrides")).status_code == 404
