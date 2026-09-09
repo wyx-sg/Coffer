@@ -1,4 +1,4 @@
-"""Integration test for daemon_cmd._pid_is_coffer_daemon against real procs.
+"""Integration test for pid_lock.pid_is_coffer_daemon against real procs.
 
 The P1-1 fix verifies a recorded pid's cmdline before SIGTERMing it, so a
 recycled PID now owned by an unrelated process is never killed. Drive it
@@ -15,7 +15,7 @@ import time
 
 import psutil
 
-from coffer.surfaces.cli import daemon_cmd
+from coffer.infrastructure.daemon import pid_lock
 
 
 def _wait_cmdline_visible(pid: int, timeout: float = 3.0) -> None:
@@ -42,7 +42,7 @@ def test_pid_is_coffer_daemon_true_for_real_entry_invocation() -> None:
     try:
         _wait_cmdline_visible(proc.pid)
         if psutil.pid_exists(proc.pid):
-            assert daemon_cmd._pid_is_coffer_daemon(proc.pid) is True
+            assert pid_lock.pid_is_coffer_daemon(proc.pid) is True
     finally:
         proc.kill()
         proc.wait()
@@ -53,7 +53,7 @@ def test_pid_is_coffer_daemon_false_for_unrelated_process() -> None:
     proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(5)"])
     try:
         _wait_cmdline_visible(proc.pid)
-        assert daemon_cmd._pid_is_coffer_daemon(proc.pid) is False
+        assert pid_lock.pid_is_coffer_daemon(proc.pid) is False
     finally:
         proc.kill()
         proc.wait()
@@ -63,4 +63,4 @@ def test_pid_is_coffer_daemon_false_for_dead_pid() -> None:
     """A pid with no live process is not a coffer daemon."""
     proc = subprocess.Popen([sys.executable, "-c", "pass"])
     proc.wait()
-    assert daemon_cmd._pid_is_coffer_daemon(proc.pid) is False
+    assert pid_lock.pid_is_coffer_daemon(proc.pid) is False
