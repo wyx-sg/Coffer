@@ -37,15 +37,12 @@ from typing import Any
 
 import mcp.types as mcp_types
 from mcp.server import Server
-from mcp.server.lowlevel.helper_types import ReadResourceContents
+from mcp.server.lowlevel.server import ServerRequestContext
 from mcp.server.stdio import stdio_server
-from pydantic import AnyUrl
 
 
-def _build_server(args: argparse.Namespace) -> tuple[Server[Any, Any], dict[str, Any]]:
+def _build_server(args: argparse.Namespace) -> tuple[Server[Any], dict[str, Any]]:
     """Return the configured mcp.Server plus a mutable state dict for hooks."""
-    server: Server[Any, Any] = Server("fake-mcp-server")
-
     state: dict[str, Any] = {
         "scenario": args.scenario,
         "tools": list(args.tools or []),
@@ -60,24 +57,32 @@ def _build_server(args: argparse.Namespace) -> tuple[Server[Any, Any], dict[str,
         "progress_delay_ms": args.progress_delay_ms,
     }
 
-    @server.list_tools()  # type: ignore[no-untyped-call, untyped-decorator]
-    async def list_tools() -> list[mcp_types.Tool]:
+    async def on_list_tools(
+        ctx: ServerRequestContext[Any],
+        params: mcp_types.PaginatedRequestParams | None,
+    ) -> mcp_types.ListToolsResult:
         # In the `mutating` scenario, after the list_changed has fired,
         # remove the first tool from the published set.
         tools = list(state["tools"])
         if state["scenario"] == "mutating" and state["list_changed_fired"]:
             tools = tools[1:]
-        return [
-            mcp_types.Tool(
-                name=name,
-                description=f"fake tool {name}",
-                inputSchema={"type": "object", "properties": {}},
-            )
-            for name in tools
-        ]
+        return mcp_types.ListToolsResult(
+            tools=[
+                mcp_types.Tool(
+                    name=name,
+                    description=f"fake tool {name}",
+                    inputSchema={"type": "object", "properties": {}},
+                )
+                for name in tools
+            ]
+        )
 
-    @server.call_tool()  # type: ignore[untyped-decorator]
-    async def call_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types.TextContent]:
+    async def on_call_tool(
+        ctx: ServerRequestContext[Any],
+        params: mcp_types.CallToolRequestParams,
+    ) -> mcp_types.CallToolResult:
+        name = params.name
+        arguments = params.arguments
         state["calls"] += 1
         # crash_after applies to any scenario so tests can combine crash+mutating.
         if state["crash_after"] is not None and state["calls"] == state["crash_after"]:
@@ -91,11 +96,10 @@ def _build_server(args: argparse.Namespace) -> tuple[Server[Any, Any], dict[str,
             and state["calls"] == state["notify_list_changed_after"]
         ):
             state["list_changed_fired"] = True
-            # send_tool_list_changed() is called from inside a request handler,
-            # so server.request_context is always set here.  Any error means the
-            # fixture is broken and tests should fail loudly rather than silently
-            # passing with no notification delivered.
-            ctx = server.request_context
+            # The per-request context carries the connection's session, so a
+            # notification can always be sent from inside a handler. Any error
+            # means the fixture is broken and tests should fail loudly rather
+            # than silently passing with no notification delivered.
             await ctx.session.send_tool_list_changed()
         if state["scenario"] == "progress":
             # Emit a series of progress notifications with a configurable delay between
@@ -105,9 +109,8 @@ def _build_server(args: argparse.Namespace) -> tuple[Server[Any, Any], dict[str,
             #     is used (the SDK resets its idle-read timer on each progress event).
             steps: int = state["progress_steps"] or 3
             delay_s: float = (state["progress_delay_ms"] or 100) / 1000.0
-            ctx = server.request_context
-            # Extract the progressToken from the request metadata (if provided).
-            progress_token = ctx.meta.progressToken if ctx.meta else None
+            # Extract the progress token from the request metadata (if provided).
+            progress_token = ctx.meta.get("progress_token") if ctx.meta else None
             for step in range(steps):
                 if progress_token is not None:
                     await ctx.session.send_progress_notification(
@@ -117,42 +120,49 @@ def _build_server(args: argparse.Namespace) -> tuple[Server[Any, Any], dict[str,
                         message=f"step {step + 1}/{steps}",
                     )
                 await asyncio.sleep(delay_s)
-            return [
-                mcp_types.TextContent(
-                    type="text",
-                    text=f"done:{name}:steps={steps}",
-                )
-            ]
-        return [mcp_types.TextContent(type="text", text=f"echo:{name}:{arguments or {}}")]
+            return mcp_types.CallToolResult(
+                content=[mcp_types.TextContent(type="text", text=f"done:{name}:steps={steps}")]
+            )
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(type="text", text=f"echo:{name}:{arguments or {}}")]
+        )
 
-    # When --no-resources / --no-prompts are given, the corresponding handlers
-    # are NOT registered. The MCP SDK then has no handler for resources/list or
-    # prompts/list and replies with JSON-RPC -32601 METHOD_NOT_FOUND, exactly as
-    # a real tools-only upstream does. This is the only way to drive a genuine
-    # method-not-found: a registered handler returning [] would reply 200/empty.
-    if not args.no_resources:
-
-        @server.list_resources()  # type: ignore[no-untyped-call, untyped-decorator]
-        async def list_resources() -> list[mcp_types.Resource]:
-            return [
+    async def on_list_resources(
+        ctx: ServerRequestContext[Any],
+        params: mcp_types.PaginatedRequestParams | None,
+    ) -> mcp_types.ListResourcesResult:
+        return mcp_types.ListResourcesResult(
+            resources=[
                 mcp_types.Resource(
-                    uri=AnyUrl(uri),
+                    uri=uri,
                     name=f"resource {uri}",
                     description=f"fake resource {uri}",
                     mimeType="text/plain",
                 )
                 for uri in state["resources"]
             ]
+        )
 
-        @server.read_resource()  # type: ignore[no-untyped-call, untyped-decorator]
-        async def read_resource(uri: Any) -> list[ReadResourceContents]:
-            return [ReadResourceContents(content=f"content of {uri}", mime_type="text/plain")]
+    async def on_read_resource(
+        ctx: ServerRequestContext[Any],
+        params: mcp_types.ReadResourceRequestParams,
+    ) -> mcp_types.ReadResourceResult:
+        return mcp_types.ReadResourceResult(
+            contents=[
+                mcp_types.TextResourceContents(
+                    uri=params.uri,
+                    text=f"content of {params.uri}",
+                    mimeType="text/plain",
+                )
+            ]
+        )
 
-    if not args.no_prompts:
-
-        @server.list_prompts()  # type: ignore[no-untyped-call, untyped-decorator]
-        async def list_prompts() -> list[mcp_types.Prompt]:
-            return [
+    async def on_list_prompts(
+        ctx: ServerRequestContext[Any],
+        params: mcp_types.PaginatedRequestParams | None,
+    ) -> mcp_types.ListPromptsResult:
+        return mcp_types.ListPromptsResult(
+            prompts=[
                 mcp_types.Prompt(
                     name=name,
                     description=f"fake prompt {name}",
@@ -160,21 +170,37 @@ def _build_server(args: argparse.Namespace) -> tuple[Server[Any, Any], dict[str,
                 )
                 for name in state["prompts"]
             ]
+        )
 
-        @server.get_prompt()  # type: ignore[no-untyped-call, untyped-decorator]
-        async def get_prompt(
-            name: str, arguments: dict[str, str] | None
-        ) -> mcp_types.GetPromptResult:
-            return mcp_types.GetPromptResult(
-                description=f"fake prompt {name}",
-                messages=[
-                    mcp_types.PromptMessage(
-                        role="user",
-                        content=mcp_types.TextContent(type="text", text=f"prompt-text:{name}"),
-                    )
-                ],
-            )
+    async def on_get_prompt(
+        ctx: ServerRequestContext[Any],
+        params: mcp_types.GetPromptRequestParams,
+    ) -> mcp_types.GetPromptResult:
+        return mcp_types.GetPromptResult(
+            description=f"fake prompt {params.name}",
+            messages=[
+                mcp_types.PromptMessage(
+                    role="user",
+                    content=mcp_types.TextContent(type="text", text=f"prompt-text:{params.name}"),
+                )
+            ],
+        )
 
+    # When --no-resources / --no-prompts are given, the corresponding handlers
+    # are NOT passed to the Server. The MCP SDK then has no handler for
+    # resources/list or prompts/list and replies with JSON-RPC -32601
+    # METHOD_NOT_FOUND, exactly as a real tools-only upstream does. This is the
+    # only way to drive a genuine method-not-found: a registered handler
+    # returning [] would reply 200/empty.
+    server: Server[Any] = Server(
+        "fake-mcp-server",
+        on_list_tools=on_list_tools,
+        on_call_tool=on_call_tool,
+        on_list_resources=None if args.no_resources else on_list_resources,
+        on_read_resource=None if args.no_resources else on_read_resource,
+        on_list_prompts=None if args.no_prompts else on_list_prompts,
+        on_get_prompt=None if args.no_prompts else on_get_prompt,
+    )
     return server, state
 
 
@@ -195,34 +221,21 @@ async def _run_http(args: argparse.Namespace) -> None:
     used to let the kernel assign a free port).
     """
     # These imports are deferred because they are only needed for HTTP mode
-    # (uvicorn + Starlette + MCP streamable-HTTP classes are not installed in
-    # stdio-only environments).
-    import contextlib
+    # (uvicorn + the MCP streamable-HTTP app are not needed in stdio-only
+    # environments).
     import socket
     import sys
-    from collections.abc import AsyncIterator
 
     import uvicorn
-    from mcp.server.fastmcp.server import StreamableHTTPASGIApp
-    from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-    from starlette.applications import Starlette
-    from starlette.routing import Mount
 
     mcp_server, _state = _build_server(args)
-    session_manager = StreamableHTTPSessionManager(
-        app=mcp_server,
-        stateless=True,  # stateless is simplest for test upstreams
-    )
-    asgi_handler = StreamableHTTPASGIApp(session_manager)
-
-    @contextlib.asynccontextmanager
-    async def _lifespan(app: Starlette) -> AsyncIterator[None]:
-        async with session_manager.run():
-            yield
-
-    starlette_app = Starlette(
-        routes=[Mount("/mcp", app=asgi_handler)],
-        lifespan=_lifespan,
+    # mcp 2.x builds the Starlette app (session manager + lifespan included)
+    # from the Server itself; the 1.x StreamableHTTPASGIApp / manual
+    # StreamableHTTPSessionManager wiring is gone. stateless_http is simplest
+    # for test upstreams.
+    starlette_app = mcp_server.streamable_http_app(
+        streamable_http_path="/mcp",
+        stateless_http=True,
     )
 
     # Bind a socket up-front so the OS assigns a free port atomically —

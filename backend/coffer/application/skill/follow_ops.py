@@ -16,7 +16,6 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING
 
-from coffer.application.skill.delivery_ops import delivers_skill_folders
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import CofferError
 from coffer.domain.resource import ResourceRef
@@ -74,12 +73,6 @@ async def apply_follow_for_agent(
         agent = await service._rs.get(ResourceRef("agent", agent_name))
     except CofferError:
         return []
-    # Non-folder agents (rules_mdc — recognized extension point) can't receive
-    # folder deliveries; skip reconciliation so registration / policy-change
-    # flows don't crash. FOLDER and EXTERNAL_DIR agents follow the master library.
-    if not delivers_skill_folders(service, agent):
-        return []
-
     local = await service._local_machine_id()
     if local is not None and not machine_in_scope(agent.scope, local):
         # The agent itself isn't in scope on this machine — its config dir

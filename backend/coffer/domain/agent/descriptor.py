@@ -21,30 +21,15 @@ import pathlib
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from coffer.domain.agent.allowlists import (
-    _claude_code_files,
-    _codex_files,
-    _cursor_files,
-    _hermes_files,
-    _home,
-    _openclaw_files,
-    _opencode_files,
-)
+from coffer.domain.agent.allowlists import _claude_code_files, _codex_files, _home
 from coffer.domain.agent.config_files import ConfigFileFormat, ConfigFileSpec
-from coffer.domain.agent.context_injection import (
-    ContextInjectionSpec,
-    HookEvent,
-    HookFlavor,
-    InjectionMode,
-    PluginFlavor,
-)
+from coffer.domain.agent.context_injection import ContextInjectionSpec, HookEvent
 from coffer.domain.agent.mcp_injection import McpEntryStyle, McpInjectionSpec
 from coffer.domain.agent.plugin_capability import (
     PluginCapability,
     PluginModel,
     UninstallStrategy,
 )
-from coffer.domain.agent.skill_delivery import SkillDeliveryMode
 from coffer.domain.agent.types import AgentType
 
 
@@ -64,18 +49,16 @@ class AgentDescriptor:
     mcp: McpInjectionSpec | None = None
     #: How Coffer injects its session context — rules + memory — into this agent
     #: (None = the agent offers no usable injection point). Claude Code installs
-    #: SessionStart + SessionEnd shell hooks; Codex and Cursor install
-    #: SessionStart only (neither has a usable session-end event).
+    #: SessionStart + SessionEnd shell hooks; Codex installs SessionStart only
+    #: (it has no usable session-end event).
     context_injection: ContextInjectionSpec | None = None
     #: Allowlist keys of files scanned when listing the agent's *own* MCP
     #: entries (FR-025). Defaults to the MCP injection file when unset.
     mcp_source_keys: tuple[str, ...] = ()
     #: Subpath of the skills-delivery directory under the config dir
-    #: (``skills``). Used by the ``FOLDER`` delivery mode.
+    #: (``skills``). Coffer delivers a managed skill by symlinking (copy
+    #: fallback) the master folder into it.
     skill_subpath: str = "skills"
-    #: How Coffer hands a managed skill to this agent. ``FOLDER`` symlinks the
-    #: master folder into ``skill_subpath``.
-    skill_delivery_mode: SkillDeliveryMode = SkillDeliveryMode.FOLDER
     #: How Coffer manages this agent's plugins (``None`` = no plugin concept).
     plugins: PluginCapability | None = None
     #: Whether this agent is surfaced in discovery — the only UI entry point that
@@ -116,11 +99,9 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         ),
         mcp_source_keys=("global", "settings"),
         context_injection=ContextInjectionSpec(
-            mode=InjectionMode.SHELL_COMMAND,
             config_key="settings",
             format=ConfigFileFormat.JSON,
             events=(HookEvent.SESSION_START, HookEvent.SESSION_END),
-            flavor=HookFlavor.CLAUDE,
         ),
         plugins=PluginCapability(
             model=PluginModel.CLAUDE,
@@ -146,11 +127,9 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         ),
         mcp_source_keys=("config",),
         context_injection=ContextInjectionSpec(
-            mode=InjectionMode.SHELL_COMMAND,
             config_key="hooks",
             format=ConfigFileFormat.JSON,
             events=(HookEvent.SESSION_START,),
-            flavor=HookFlavor.CLAUDE,
         ),
         plugins=PluginCapability(
             model=PluginModel.CODEX,
@@ -158,139 +137,6 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             can_toggle=True,
             can_uninstall=True,
         ),
-    ),
-    AgentType.OPENCODE: AgentDescriptor(
-        type=AgentType.OPENCODE,
-        display_name="opencode",
-        config_subpath=".config/opencode",
-        config_files=_opencode_files,
-        mcp=McpInjectionSpec(
-            config_key="opencode",
-            container_key="mcp",
-            format=ConfigFileFormat.JSON,
-            entry_style=McpEntryStyle.TYPED_LOCAL_OBJECT,
-        ),
-        # opencode has no shell-command hook; its JS plugin API injects instead
-        # (`experimental.chat.system.transform` pushes onto the system prompt —
-        # probe-verified on 1.14.48). Coffer drops a plugin file into the
-        # auto-loaded `plugin/` dir that spawns coffer-hook (PLUGIN_DROP,
-        # ADR-042). Dynamic like the shell hooks: fetches the bundle live, so
-        # no pre-turn refresh exists for it. No lifecycle events; flavor unused.
-        context_injection=ContextInjectionSpec(
-            mode=InjectionMode.PLUGIN_DROP,
-            config_key="plugin",
-            format=ConfigFileFormat.TEXT,
-        ),
-        # See the Agent capability matrix in spec 004 / ADR-042:
-        #  * plugins=None    — opencode's plugins are JS modules, a different model
-        #                      from Claude/Codex; not managed by Coffer in this slice
-        #                      (the PLUGIN_DROP facet drops ONE Coffer-owned file;
-        #                      it does not manage the agent's other plugins).
-        #  * native memory   — opencode has no cross-session native memory, so there
-        #                      is nothing to disable (absent from
-        #                      _NATIVE_MEMORY_DISABLE_TARGET below).
-    ),
-    AgentType.HERMES: AgentDescriptor(
-        type=AgentType.HERMES,
-        display_name="Hermes",
-        config_subpath=".hermes",
-        config_files=_hermes_files,
-        mcp=McpInjectionSpec(
-            config_key="config",
-            container_key="mcp_servers",
-            format=ConfigFileFormat.YAML,
-            entry_style=McpEntryStyle.COMMAND_MAP,
-        ),
-        # Native memory IS present (the memory.memory_enabled toggle) — wired in
-        # _NATIVE_MEMORY_DISABLE_TARGET below.
-        # hermes' on_session_start / pre_llm_call hooks are documented but NEVER
-        # INVOKED upstream (NousResearch/hermes-agent#2817, closed as not
-        # planned) — only the tool hooks fire. So context reaches hermes as a
-        # marker block Coffer renders into SOUL.md (INSTRUCTIONS_BLOCK,
-        # ADR-042) — the one file hermes injects globally (see _hermes_files):
-        # static between refreshes, re-rendered before each Coffer-driven turn.
-        # No lifecycle events; flavor is unused.
-        context_injection=ContextInjectionSpec(
-            mode=InjectionMode.INSTRUCTIONS_BLOCK,
-            config_key="soul",
-            format=ConfigFileFormat.MARKDOWN,
-        ),
-        # plugins=None: hermes plugins are a different model, not managed here.
-    ),
-    AgentType.CURSOR: AgentDescriptor(
-        type=AgentType.CURSOR,
-        display_name="Cursor",
-        config_subpath=".cursor",
-        config_files=_cursor_files,
-        mcp=McpInjectionSpec(
-            config_key="mcp",
-            container_key="mcpServers",
-            format=ConfigFileFormat.JSON,
-            entry_style=McpEntryStyle.COMMAND_MAP,
-        ),
-        # Cursor's hooks.json documents a `sessionStart` hook whose output carries
-        # an `additional_context` field — exactly Coffer's injection point. Its
-        # shape differs from Claude/Codex (flat command entries, camelCase event
-        # keys, top-level `version`), which HookFlavor.CURSOR carries. Cursor has no
-        # usable session-end event for Coffer's purposes, so SESSION_START only.
-        context_injection=ContextInjectionSpec(
-            mode=InjectionMode.SHELL_COMMAND,
-            config_key="hooks",
-            format=ConfigFileFormat.JSON,
-            events=(HookEvent.SESSION_START,),
-            flavor=HookFlavor.CURSOR,
-        ),
-        # Absent facets (ADR-042 capability matrix):
-        #  * native memory         — cursor "Memories" is an IDE-only toggle with no
-        #                            CLI, so it is omitted from
-        #                            _NATIVE_MEMORY_DISABLE_TARGET below.
-        #  * provider projection   — cursor is locked to Cursor's own backend with no
-        #                            custom LLM base URL, so it is NOT a projection
-        #                            target (absent from _AGENT_TARGETS and the
-        #                            connection-compatible defaults); cursor-agent
-        #                            uses its OWN auth (`cursor-agent login`), which
-        #                            Coffer does not inject.
-    ),
-    AgentType.OPENCLAW: AgentDescriptor(
-        type=AgentType.OPENCLAW,
-        display_name="OpenClaw",
-        config_subpath=".openclaw",
-        config_files=_openclaw_files,
-        # openclaw.json keeps its servers map NESTED (`mcp.servers.<name>`,
-        # plain command-map entries — probe-verified on 2026.6.11 via
-        # `openclaw mcp status`); the dotted container key descends into it.
-        # CAUTION: openclaw REJECTS interpreter-startup env keys (NODE_OPTIONS,
-        # PYTHONPATH, …) inside a server's `env` at config load — Coffer's own
-        # entry carries no env, so this bites only hand-added entries.
-        mcp=McpInjectionSpec(
-            config_key="config",
-            container_key="mcp.servers",
-            format=ConfigFileFormat.JSON,
-            entry_style=McpEntryStyle.COMMAND_MAP,
-        ),
-        # No shell hook; openclaw's in-process plugin API is the injection point
-        # (ADR-044). Unlike opencode's flat auto-loaded file, openclaw wants a
-        # package DIRECTORY under `extensions/` AND an explicit
-        # `plugins.entries.<id>.enabled: true` in openclaw.json (non-bundled
-        # plugins are fail-closed) — the OPENCLAW PluginFlavor. `--local` runs
-        # preload the plugin registry per run, so Coffer-driven turns see the
-        # extension immediately; the long-running gateway needs a restart
-        # (documented caveat for channel-driven openclaw use). Dynamic like the
-        # shell hooks: no lifecycle events, no refresh machinery.
-        context_injection=ContextInjectionSpec(
-            mode=InjectionMode.PLUGIN_DROP,
-            config_key="extensions",
-            format=ConfigFileFormat.TEXT,
-            plugin_flavor=PluginFlavor.OPENCLAW,
-            plugin_enable_config_key="config",
-        ),
-        # Native memory IS disableable (`plugins.slots.memory: "none"`) — wired
-        # in _NATIVE_MEMORY_DISABLE_TARGET below. plugins=None: openclaw's
-        # extension registry is its own model, not managed by Coffer (the
-        # PLUGIN_DROP facet drops ONE Coffer-owned extension; it does not manage
-        # the agent's other plugins). Skills: ~/.openclaw/skills/<name>/SKILL.md,
-        # symlinked folders ARE discovered (probe-verified) — the FOLDER default
-        # works unchanged.
     ),
 }
 
@@ -310,18 +156,14 @@ def descriptor_for(agent_type: AgentType) -> AgentDescriptor:
 _NATIVE_MEMORY_DISABLE_TARGET: dict[AgentType, tuple[str, ConfigFileFormat]] = {
     AgentType.CLAUDE_CODE: ("settings", ConfigFileFormat.JSON),
     AgentType.CODEX: ("config", ConfigFileFormat.TOML),
-    # Hermes → config.yaml (YAML) memory.memory_enabled / user_profile_enabled.
-    AgentType.HERMES: ("config", ConfigFileFormat.YAML),
-    # openclaw → openclaw.json (JSON) plugins.slots.memory = "none" (ADR-044).
-    AgentType.OPENCLAW: ("config", ConfigFileFormat.JSON),
 }
 
 
 def native_memory_disable_target(agent_type: AgentType) -> tuple[str, ConfigFileFormat] | None:
     """The ``(config_key, format)`` that holds the native-memory toggle, or ``None``
-    for an agent type with no native write-side memory to disable (e.g. opencode —
-    see the Agent capability matrix in spec 004 / ADR-040). Callers treat ``None``
-    as "this facet is absent" and reject/hide the toggle rather than failing."""
+    for an agent type with no native write-side memory to disable. Both supported
+    types have one (FR-003a); callers still treat ``None`` as "this facet is
+    absent" and reject/hide the toggle rather than failing."""
     return _NATIVE_MEMORY_DISABLE_TARGET.get(agent_type)
 
 

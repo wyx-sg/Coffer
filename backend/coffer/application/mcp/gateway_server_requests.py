@@ -25,7 +25,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any, NamedTuple
 
 import mcp.types as mcp_types
-from mcp.shared.context import RequestContext
+from mcp.client.session import ClientRequestContext
 
 from coffer.domain.errors import UpstreamUnavailable
 
@@ -129,7 +129,7 @@ def build_sampling_callback(
     """Build an async callable that the mcp SDK will invoke for sampling/createMessage."""
 
     async def _sampling_callback(
-        context: RequestContext,  # type: ignore[type-arg]
+        context: ClientRequestContext,
         params: mcp_types.CreateMessageRequestParams,
     ) -> (
         mcp_types.CreateMessageResult | mcp_types.CreateMessageResultWithTools | mcp_types.ErrorData
@@ -144,7 +144,7 @@ def build_sampling_callback(
                 message="downstream client does not support sampling",
             )
         raw_params: dict[str, Any] = (
-            params.model_dump(exclude_none=True, mode="json")
+            params.model_dump(exclude_none=True, mode="json", by_alias=True)
             if hasattr(params, "model_dump")
             else (params if isinstance(params, dict) else {})
         )
@@ -173,7 +173,7 @@ def build_list_roots_callback(
     """Build an async callable that the mcp SDK will invoke for roots/list."""
 
     async def _list_roots_callback(
-        context: RequestContext,  # type: ignore[type-arg]
+        context: ClientRequestContext,
     ) -> mcp_types.ListRootsResult | mcp_types.ErrorData:
         _logger.debug("mcp.gateway.roots.forward", extra={"session": session_id})
         try:

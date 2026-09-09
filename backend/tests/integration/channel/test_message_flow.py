@@ -13,7 +13,7 @@ from coffer.domain.chat.events import TextDelta, TurnDone, TurnError, TurnStarte
 from coffer.domain.chat.message import Role, TextBlock
 from tests.unit.chat.conftest import FakeAgentAdapter
 
-from .conftest import ChannelEnv, inbound, wait_until
+from .conftest import ChannelEnv, inbound, turn_body, wait_until
 
 
 def _text(message) -> str:  # type: ignore[no-untyped-def]
@@ -43,7 +43,7 @@ async def test_paired_message_runs_a_turn_and_delivers_the_reply(env: ChannelEnv
     assert await env.active_conversation(resource) == conversations[0].id
 
     messages = await env.chat.list_messages(conversations[0].id)
-    assert [(m.role, _text(m)) for m in messages] == [
+    assert [(m.role, turn_body(_text(m))) for m in messages] == [
         (Role.USER, "hi"),
         (Role.ASSISTANT, "Hello world"),
     ]
@@ -73,7 +73,7 @@ async def test_channel_conversation_appears_in_the_chat_platform_apis(env: Chann
 
     messages = await env.chat.list_messages(conversation.id)
     assert [m.role for m in messages] == [Role.USER, Role.ASSISTANT]
-    assert _text(messages[0]) == "meaning of life?"
+    assert turn_body(_text(messages[0])) == "meaning of life?"
     assert _text(messages[1]) == "42"
 
 
@@ -161,4 +161,4 @@ async def test_dangling_active_conversation_is_recreated_on_next_message(
     assert fresh is not None
     assert fresh != old_conversation
     messages = await env.chat.list_messages(fresh)
-    assert _text(messages[0]) == "second"
+    assert turn_body(_text(messages[0])) == "second"

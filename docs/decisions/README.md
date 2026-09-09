@@ -1,7 +1,7 @@
 # Architecture Decision Records (ADR)
 
-Coffer records every major technical or architectural decision as a numbered,
-immutable ADR. ADRs capture **why** — code shows _what_, this directory shows
+Coffer records every major technical or architectural decision as a numbered
+ADR. ADRs capture **why** — code shows _what_, this directory shows
 _why we chose what we chose_.
 
 ## When to write an ADR
@@ -25,8 +25,15 @@ Do **not** write an ADR for:
 
 - Filename: `ADR-NNN-short-kebab-case-title.md` — NNN is a zero-padded ordinal
   (`ADR-001-…`, `ADR-002-…`, …). Never renumber.
-- ADRs are append-only. To change a decision, write a new ADR that **Supersedes**
-  the old one; mark the old one `Status: Superseded by ADR-NNN`.
+- This directory records the **live** design, not a chronological archive. A
+  reader must be able to learn today's answer by reading the ADRs present, never
+  by replaying a chain of supersessions. So:
+  - When a decision changes, **rewrite the ADR that owns it**.
+  - When the thing an ADR decided is **removed outright**, delete the ADR.
+  - Keep an ADR marked `Superseded by ADR-NNN` only when the superseded design
+    still explains a constraint the live one inherits.
+  Git history is the archive: `git log --follow docs/decisions/` recovers any
+  decision this directory no longer states.
 - One decision per file.
 - Keep each ADR short — usually under 200 lines. If you need more, you're
   describing implementation, not the decision.

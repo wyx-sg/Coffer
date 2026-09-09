@@ -710,3 +710,24 @@ async def test_private_message_is_direct_and_always_addressed(fake_telegram: Fak
     assert msg.chat_kind == "direct"
     assert msg.addressed is True
     assert msg.text == "hi there"
+
+
+async def test_a_non_list_getupdates_result_backs_off_instead_of_spinning(
+    fake_telegram: FakeTelegram,
+) -> None:
+    """Regression: the ``ok: true`` / non-list-result branch used to ``continue``
+    with no delay, so a payload the Bot API kept returning span the poll task —
+    and with it the daemon's whole event loop — at 100% CPU. It now backs off on
+    the same ladder a raised failure uses."""
+    fake_telegram.bad_payload_get_updates = True
+    adapter = make_telegram_adapter(fake_telegram)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await asyncio.sleep(0.5)
+    finally:
+        await adapter.stop()
+
+    # The first ladder rung is 1s, so half a second of polling is one call —
+    # a couple more would still prove the point; hundreds would be the old spin.
+    assert len(fake_telegram.calls_for("getUpdates")) <= 3

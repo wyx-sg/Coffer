@@ -84,22 +84,17 @@ async def test_mutating_server_actually_sends_list_changed() -> None:
     )
     received: list[object] = []
 
-    async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
-        # We capture notifications via a private SDK hook (_received_notification)
-        # because the mcp library (pinned in pyproject.toml) does not yet expose a
-        # public notification callback.  The assert below ensures an SDK rename fails
-        # loudly rather than silently passing with an empty `received` list.
-        assert hasattr(session, "_received_notification"), (
-            "MCP SDK changed: notification-capture hook renamed — update this test"
-        )
-        original_recv = session._received_notification  # type: ignore[attr-defined]
+    async def _capture(message: object) -> None:
+        received.append(message)
 
-        async def _capture(n: object) -> None:
-            received.append(n)
-            await original_recv(n)
-
-        session._received_notification = _capture  # type: ignore[method-assign]
-
+    # `message_handler` is the SDK's public per-session notification hook — the
+    # same one coffer's own upstream connections use. An earlier version of this
+    # test reached for the private `_received_notification` attribute, which mcp
+    # 2.x removed.
+    async with (
+        stdio_client(params) as (read, write),
+        ClientSession(read, write, message_handler=_capture) as session,
+    ):
         await session.initialize()
         # First call triggers send_tool_list_changed() inside the handler.
         await session.call_tool("alpha", arguments={})
@@ -119,7 +114,7 @@ async def test_mutating_server_actually_sends_list_changed() -> None:
 async def test_crash_scenario_exits_after_n_calls() -> None:
     """`--scenario crash --crash-after-calls 1` makes the server os._exit
     after the first tool call. The client sees the stdio pipe close and
-    McpError("Connection closed") propagates out of the context stack."""
+    MCPError("Connection closed") propagates out of the context stack."""
     params = _params(
         "--scenario",
         "crash",
@@ -128,14 +123,14 @@ async def test_crash_scenario_exits_after_n_calls() -> None:
         "--crash-after-calls",
         "1",
     )
-    # Let call_tool's McpError propagate naturally — catching it inside the
+    # Let call_tool's MCPError propagate naturally — catching it inside the
     # ClientSession context leaves background tasks alive and the TaskGroup hangs.
     # pytest.raises at this level catches after the context managers fully unwind.
-    # The combined async-with form wraps McpError in ExceptionGroup, so we keep
+    # The combined async-with form wraps MCPError in ExceptionGroup, so we keep
     # the nested form here and match on the base Exception class.
     with pytest.raises(Exception, match="unhandled errors in a TaskGroup"):
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
-                # Server calls os._exit(1) during this call; client surfaces McpError.
+                # Server calls os._exit(1) during this call; client surfaces MCPError.
                 await session.call_tool("boom")
