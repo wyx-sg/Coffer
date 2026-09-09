@@ -4,7 +4,7 @@ import { getCofferBaseUrl, getCofferToken } from "../auth";
 import { ApiError } from "./errors";
 
 // Keep AgentType in sync with the backend domain (`domain/agent/types.py`).
-export type AgentType = "claude_code" | "codex" | "opencode" | "hermes" | "cursor" | "openclaw";
+export type AgentType = "claude_code" | "codex";
 
 export type ConfigFileFormat = "json" | "toml" | "markdown" | "text";
 
@@ -96,9 +96,6 @@ export interface AgentOut {
   updated_at: string;
   follow_all_skills?: boolean;
   skill_exclusions?: string[];
-  /** FR-003a per-type facet support (see lib/api/agentCapabilities.ts).
-   * Optional until every fixture carries it; missing = full support. */
-  capabilities?: import("@/lib/api/agentCapabilities").AgentCapabilities;
   /** When true, the agent's own native memory is disabled (via its config) so it
    * uses Coffer as the shared memory store. Hand-added until openapi codegen. */
   disable_native_memory?: boolean;

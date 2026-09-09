@@ -2,7 +2,7 @@
 
 > 中文版: [AGENTS.zh.md](./AGENTS.zh.md)
 
-Operating manual for AI agents (Claude Code, Codex, Cursor, future ones) entering Coffer. Read at session start.
+Operating manual for AI agents (Claude Code, Codex, future ones) entering Coffer. Read at session start.
 
 ## 1. At a Glance
 

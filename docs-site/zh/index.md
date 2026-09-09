@@ -34,7 +34,7 @@ flowchart LR
     UI["CLI · Web · 桌面端"]
     IM["Telegram · SeaTalk"]
   end
-  A["AI agents<br/>Claude Code · Codex · Cursor"] -->|MCP| D
+  A["AI agents<br/>Claude Code · Codex"] -->|MCP| D
   UI --> D
   IM --> D
   D["coffer-daemon<br/>保险库:MCP 网关 · 技能 · 知识 · 记忆 · agents · 对话"]

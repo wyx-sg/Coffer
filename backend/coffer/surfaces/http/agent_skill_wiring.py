@@ -30,7 +30,6 @@ from coffer.application.skill.kind import make_skill_kind
 from coffer.application.skill.service import SkillService
 from coffer.application.sync.identity import MachineIdentityService
 from coffer.domain.agent.config import AgentConfig
-from coffer.domain.agent.descriptor import descriptor_for
 from coffer.domain.agent.scan import scan_locations
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
@@ -98,12 +97,6 @@ def wire_agent_and_skill_kinds(
         cfg = AgentConfig.model_validate(r.config)
         return (cfg.follow_all_skills, cfg.skill_exclusions)
 
-    def _agent_skill_delivery(r: Resource) -> str:
-        # Plain str (the SkillDeliveryMode value), never the enum, so the skill
-        # service stays free of agent-kind imports (Contract 5). Only this
-        # composition root may read the agent's capability descriptor.
-        return descriptor_for(AgentConfig.model_validate(r.config).type).skill_delivery_mode.value
-
     # ADR-045 machine axis (Task 11): this daemon's stable sync identity,
     # built exactly as channel_wiring.py does, so skill delivery/reclaim
     # gates on the same machine id as every other scope-aware subsystem.
@@ -127,7 +120,6 @@ def wire_agent_and_skill_kinds(
         workspace_scan=WorkspaceScan(),
         agent_scan_locations_resolver=_agent_scan_locations,
         agent_skill_policy_resolver=_agent_skill_policy,
-        agent_skill_delivery_resolver=_agent_skill_delivery,
         machine_id=_local_machine_id,
     )
 
@@ -186,15 +178,6 @@ def wire_agent_and_skill_kinds(
     )
     agent_mcp_svc = AgentMcpService(agent_service=agent_svc, audit=audit, store=config_file_store)
 
-    # The INSTRUCTIONS_BLOCK payload (ADR-042): the FR-044 rules bundle at
-    # global scope. Resolved lazily via the dependencies getter because the
-    # memory service is wired after this module runs.
-    async def _session_context_payload() -> str:
-        from coffer.surfaces.http.dependencies import get_memory_service
-
-        payload: str = await get_memory_service().assemble_session_context(cwd=None)
-        return payload
-
     # Coffer's lifecycle-hook install (Slice 6 SessionStart/SessionEnd).
     # The hook-binary resolver lives in infrastructure; only this composition
     # root (which may import infra) injects it, keeping the application service
@@ -204,7 +187,6 @@ def wire_agent_and_skill_kinds(
         audit=audit,
         store=config_file_store,
         hook_resolver=default_hook_resolver,
-        session_context=_session_context_payload,
     )
 
     # Read-only listing of an agent's OWN native per-project memory stores

@@ -159,9 +159,9 @@ def test_remove_entry_json_custom_container() -> None:
     assert {e.name for e in entries} == {"b"}
 
 
-# --- nested JSON container (openclaw `mcp.servers`, ADR-044) --------------------
+# --- nested JSON container (a dotted `mcp.servers` container key) --------------------
 
-OPENCLAW_JSON = (
+NESTED_JSON = (
     '{"gateway": {"port": 18789}, "mcp": {"servers": {'
     '"coffer": {"command": "/bin/coffer-mcp-shim"}, '
     '"files": {"command": "npx", "args": ["-y", "files-mcp"]}}}}'
@@ -170,7 +170,7 @@ OPENCLAW_JSON = (
 
 def test_parse_entries_json_dotted_container():
     entries = me.parse_entries(
-        ConfigFileFormat.JSON, OPENCLAW_JSON, source="config", container_key="mcp.servers"
+        ConfigFileFormat.JSON, NESTED_JSON, source="config", container_key="mcp.servers"
     )
     by_name = {e.name: e for e in entries}
     assert set(by_name) == {"coffer", "files"}
@@ -194,9 +194,7 @@ def test_parse_entries_json_dotted_container_absent_or_scalar_is_empty():
 
 
 def test_remove_entry_json_dotted_container():
-    out = me.remove_entry(
-        ConfigFileFormat.JSON, OPENCLAW_JSON, "files", container_key="mcp.servers"
-    )
+    out = me.remove_entry(ConfigFileFormat.JSON, NESTED_JSON, "files", container_key="mcp.servers")
     entries = me.parse_entries(
         ConfigFileFormat.JSON, out, source="config", container_key="mcp.servers"
     )
