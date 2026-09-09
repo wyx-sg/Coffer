@@ -33,20 +33,20 @@ describe("useResourceScope", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   test("fetches GET /resources/{kind}/{name}/scope", async () => {
-    const fetchMock = stubFetch({ scope: { "M-LOCAL": "*" }, axes: ["machine"] });
+    const fetchMock = stubFetch({ scope: ["claude"], supported: true });
 
     const { wrapper } = makeWrapper();
-    const { result } = renderHook(() => useResourceScope("channel", "tg"), { wrapper });
+    const { result } = renderHook(() => useResourceScope("mcp_server", "fs"), { wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual({ scope: { "M-LOCAL": "*" }, axes: ["machine"] });
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/resources\/channel\/tg\/scope$/);
+    expect(result.current.data).toEqual({ scope: ["claude"], supported: true });
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/resources\/mcp_server\/fs\/scope$/);
   });
 
   test("is disabled for an empty name", () => {
     const fetchMock = stubFetch({});
     const { wrapper } = makeWrapper();
-    const { result } = renderHook(() => useResourceScope("channel", ""), { wrapper });
+    const { result } = renderHook(() => useResourceScope("mcp_server", ""), { wrapper });
 
     expect(result.current.fetchStatus).toBe("idle");
     expect(fetchMock).not.toHaveBeenCalled();
@@ -62,7 +62,7 @@ describe("useUpdateResourceScope", () => {
       kind: "mcp_server",
       name: "fs",
       config: {},
-      scope: { "M-LOCAL": "*" },
+      scope: ["claude"],
       enabled: true,
       created_at: "2026-07-10T00:00:00Z",
       updated_at: "2026-07-10T00:00:00Z",
@@ -72,43 +72,45 @@ describe("useUpdateResourceScope", () => {
     const { result } = renderHook(() => useUpdateResourceScope("mcp_server", "fs"), { wrapper });
 
     await act(async () => {
-      await result.current.mutateAsync({ "M-LOCAL": "*" });
+      await result.current.mutateAsync(["claude"]);
     });
 
     expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/resources\/mcp_server\/fs\/scope$/);
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     expect(init.method).toBe("PUT");
-    expect(JSON.parse(init.body as string)).toEqual({ scope: { "M-LOCAL": "*" } });
+    expect(JSON.parse(init.body as string)).toEqual({ scope: ["claude"] });
   });
 
-  test("invalidates the scope key and the machines list on success", async () => {
+  test("invalidates the scope key and the agent list on success", async () => {
     stubFetch({ scope: null });
 
     const { qc, wrapper } = makeWrapper();
     const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
 
-    const { result } = renderHook(() => useUpdateResourceScope("channel", "tg"), { wrapper });
+    const { result } = renderHook(() => useUpdateResourceScope("skill", "writing"), { wrapper });
 
     await act(async () => {
-      await result.current.mutateAsync({});
+      await result.current.mutateAsync([]);
     });
 
     await waitFor(() => expect(invalidateSpy).toHaveBeenCalled());
     expect(invalidateSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ queryKey: ["scope", "channel", "tg"] }),
+      expect.objectContaining({ queryKey: ["scope", "skill", "writing"] }),
     );
-    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["machines"] }));
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["agents"] }));
   });
 
   test("surfaces an ApiError when the PUT fails", async () => {
     stubFetch({ error: { code: "RESOURCE_NOT_FOUND", message: "not found" } }, false, 404);
 
     const { wrapper } = makeWrapper();
-    const { result } = renderHook(() => useUpdateResourceScope("channel", "missing"), { wrapper });
+    const { result } = renderHook(() => useUpdateResourceScope("mcp_server", "missing"), {
+      wrapper,
+    });
 
     await act(async () => {
       try {
-        await result.current.mutateAsync({});
+        await result.current.mutateAsync([]);
       } catch {
         // expected
       }

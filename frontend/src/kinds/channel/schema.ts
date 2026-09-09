@@ -67,11 +67,6 @@ export function channelSecretRef(
  * Turn validated form values into the resource config plus the credential-store
  * writes. Pure (no network) — the config is fully built before any side
  * effect runs, mirroring AddMcpServerDialog's planServer.
- *
- * Runtime affinity (ADR-045) is NOT part of the config anymore — `runs_on`
- * is inert (superseded by the resource's `scope`, see coffer.domain.channel.
- * config). The create-time auto-bind-to-this-machine now happens as a
- * separate PUT .../scope call after registration — see AddChannelDialog.
  */
 export function planChannel(values: AddChannelFormValues): ChannelPlan {
   if (values.channel_type === "telegram") {

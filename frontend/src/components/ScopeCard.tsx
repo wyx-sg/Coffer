@@ -1,86 +1,59 @@
 // frontend/src/components/ScopeCard.tsx
 //
-// ScopeCard: the resource-detail-page editor for a Kind's machine x agent
-// activation scope (ADR-045). GET/PUT /resources/{kind}/{name}/scope (Task 16's
-// useResourceScope/useUpdateResourceScope) backs this; useMachines() supplies
-// the synced-machine registry to render rows for, and useAgents() supplies the
-// registered-agent list for dual-axis kinds' (axes includes "agent") per-row
-// agent multi-select. Machine-only kinds (agent, channel) render a bare on/off
-// per machine — the scope value is always "*" (see backend/coffer/domain/
-// scope.py validate_scope, which rejects list values on machine-only axes).
+// ScopeCard: the resource-detail-page editor for a kind's per-agent activation
+// scope (ADR-045). GET/PUT /resources/{kind}/{name}/scope
+// (useResourceScope/useUpdateResourceScope) backs this; useAgents() supplies
+// the registered-agent list. Only `mcp_server` and `skill` support scope — the
+// card renders nothing for kinds that don't, so their detail pages don't have
+// to know.
 //
-// Mutation pattern: immediate PUT per change, no local staging + explicit
-// Save button — matching ChannelMachineCard (Task 13's scope-backed rebind
-// control) rather than SyncSettings' save-button flow. Every control in this
-// card already represents a complete, valid scope value on its own, so there
-// is nothing to batch:
-//   - Everywhere -> Custom writes `{}` — "custom, no entries" is itself a
-//     well-defined, already-rendered state (the dormant warning below), so
-//     the header switch is an honest mutation rather than local-only UI state
-//     that silently diverges from the server until some later action.
-//   - Custom -> Everywhere writes `null`.
-//   - A row's on/off switch writes `"*"` (on) or removes the entry (off).
-//     Dual-axis kinds default a freshly-on row to `"*"` (all agents) so the
-//     row is immediately meaningful without a second interaction.
-//   - The "all agents" checkbox writes `"*"` (checked) or `[]` (unchecked).
-//   - Per-agent checkboxes add/remove that agent from the row's list.
+// The value is a single axis: a list of agent names.
+//   null  → active for every agent ("Every agent")
+//   []    → active for no agent (dormant)
+//   [...] → active only for the named agents
+//
+// Mutation pattern: immediate PUT per change, no local staging + Save button.
+// Every control already represents a complete, valid scope value on its own:
+//   - "Every agent" writes `null`.
+//   - "Selected agents" writes `[]` — "selected, nothing selected yet" is
+//     itself a well-defined state (the dormant warning below), so the switch is
+//     an honest mutation rather than local-only UI state that silently diverges
+//     from the server until some later action.
+//   - A checkbox adds/removes that agent from the list.
+// An agent name in the list that isn't registered here is legal (a resource can
+// be scoped in before the agent exists), so it renders as an extra row.
 import { Globe2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useAgents } from "@/lib/hooks/useAgents";
-import { useMachines } from "@/lib/hooks/useMachines";
-import { useResourceScope, useUpdateResourceScope, type Scope } from "@/lib/hooks/useScope";
-import {
-  ScopeMachineRow,
-  WILDCARD,
-  type ScopeMachineRowData,
-} from "@/components/scope/ScopeMachineRow";
-
-type Row = ScopeMachineRowData;
+import { useResourceScope, useUpdateResourceScope } from "@/lib/hooks/useScope";
 
 export function ScopeCard({ kind, name }: { kind: string; name: string }) {
   const { t } = useTranslation();
   const { data: scopeData } = useResourceScope(kind, name);
-  const { data: machinesData } = useMachines();
   const { data: agentsData } = useAgents();
   const update = useUpdateResourceScope(kind, name);
 
-  const axes = scopeData?.axes ?? [];
-  const dualAxis = axes.includes("agent");
+  // Kinds that declare no scope (agent, channel, knowledge_base, memory) get
+  // no editor at all.
+  if (scopeData && !scopeData.supported) return null;
+
   const scope = scopeData?.scope ?? null;
   const isCustom = scope !== null;
-  const machines = machinesData?.machines ?? [];
-  const agents = agentsData ?? [];
-
-  const rows: Row[] = [
-    ...machines.map((m) => ({
-      id: m.machine_id,
-      displayName: m.display_name,
-      isLocal: m.is_local,
-      isKnown: true,
-    })),
-    ...Object.keys(scope ?? {})
-      .filter((id) => !machines.some((m) => m.machine_id === id))
-      .map((id) => ({ id, displayName: id, isLocal: false, isKnown: false })),
+  const registered = (agentsData ?? []).map((a) => a.name);
+  const unknown = (scope ?? []).filter((n) => !registered.includes(n));
+  const rows = [
+    ...registered.map((n) => ({ name: n, known: true })),
+    ...unknown.map((n) => ({ name: n, known: false })),
   ];
 
-  const localMachine = machines.find((m) => m.is_local);
-  const activeHere = (() => {
-    if (!isCustom) return true;
-    if (!localMachine) return false;
-    const value = scope?.[localMachine.machine_id];
-    if (value === undefined) return false;
-    if (value === WILDCARD) return true;
-    return value.length > 0;
-  })();
-
-  const setRowValue = (id: string, value: Scope[string] | null) => {
-    const next = { ...(scope ?? {}) };
-    if (value === null) delete next[id];
-    else next[id] = value;
-    update.mutate(next);
+  const toggleAgent = (agentName: string, checked: boolean) => {
+    const list = scope ?? [];
+    update.mutate(checked ? [...list, agentName] : list.filter((a) => a !== agentName));
   };
 
   return (
@@ -98,22 +71,16 @@ export function ScopeCard({ kind, name }: { kind: string; name: string }) {
             disabled={update.isPending || !isCustom}
             onClick={() => update.mutate(null)}
           >
-            {t("scope.everywhere")}
+            {t("scope.everyAgent")}
           </Button>
           <Button
             type="button"
             size="sm"
             variant={isCustom ? "secondary" : "ghost"}
             disabled={update.isPending || isCustom}
-            onClick={() =>
-              update.mutate(
-                machines.length === 0
-                  ? {}
-                  : Object.fromEntries(machines.map((m) => [m.machine_id, WILDCARD])),
-              )
-            }
+            onClick={() => update.mutate([])}
           >
-            {t("scope.custom")}
+            {t("scope.selectedAgents")}
           </Button>
         </div>
       </CardHeader>
@@ -122,39 +89,31 @@ export function ScopeCard({ kind, name }: { kind: string; name: string }) {
 
         {isCustom ? (
           <>
-            {Object.keys(scope ?? {}).length === 0 ? (
+            {scope.length === 0 ? (
               <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-400">
                 {t("scope.dormant")}
               </p>
             ) : null}
 
-            {!activeHere ? (
-              <p className="text-xs text-muted-foreground">{t("scope.notActiveHere")}</p>
-            ) : null}
-
             {rows.length === 0 ? (
-              <p className="text-xs text-muted-foreground">{t("scope.noMachines")}</p>
+              <p className="text-xs text-muted-foreground">{t("scope.noAgents")}</p>
             ) : (
               <div className="space-y-2">
                 {rows.map((row) => (
-                  <ScopeMachineRow
-                    key={row.id}
-                    row={row}
-                    value={scope?.[row.id]}
-                    dualAxis={dualAxis}
-                    agents={agents.map((a) => a.name)}
-                    disabled={update.isPending}
-                    onToggle={(on) => setRowValue(row.id, on ? WILDCARD : null)}
-                    onAllAgentsChange={(all) => setRowValue(row.id, all ? WILDCARD : [])}
-                    onAgentToggle={(agentName, checked) => {
-                      const current = scope?.[row.id];
-                      const list = Array.isArray(current) ? current : [];
-                      const next = checked
-                        ? [...list, agentName]
-                        : list.filter((a) => a !== agentName);
-                      setRowValue(row.id, next);
-                    }}
-                  />
+                  <label
+                    key={row.name}
+                    data-testid={`scope-agent-${row.name}`}
+                    className="flex w-full cursor-pointer items-center gap-2 rounded-md border border-border/60 p-2.5 text-sm"
+                  >
+                    <Checkbox
+                      checked={scope.includes(row.name)}
+                      disabled={update.isPending}
+                      aria-label={row.name}
+                      onChange={(e) => toggleAgent(row.name, e.target.checked)}
+                    />
+                    <span className="font-medium">{row.name}</span>
+                    {!row.known ? <Badge variant="outline">{t("scope.unknownAgent")}</Badge> : null}
+                  </label>
                 ))}
               </div>
             )}

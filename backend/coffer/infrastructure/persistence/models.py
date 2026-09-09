@@ -37,8 +37,8 @@ class ResourceModel(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    # Framework-level machine x agent activation scope (ADR-045); NULL means
-    # unscoped. Added by migration 0046.
+    # Framework-level per-agent activation scope (ADR-045): a JSON list of
+    # agent names; NULL means unscoped. Added by migration 0046.
     scope_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (

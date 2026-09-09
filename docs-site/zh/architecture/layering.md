@@ -112,7 +112,7 @@ backend/coffer/
 │   ├── knowledge_base/           # KB collection 服务
 │   ├── memory/                   # recall/remember 服务
 │   ├── chat/                     # TurnOrchestrator、历史
-│   ├── sync/                     # 跨层——多机同步（非 kind）
+│   ├── sync/                     # 跨层——仓库导出 / 导入（非 kind）
 │   ├── credentials/              # 跨层——CredentialResolver（引用 → 密钥）
 │   └── fs/                       # 跨层——文件系统浏览服务
 ├── infrastructure/
@@ -126,7 +126,7 @@ backend/coffer/
 │   ├── knowledge_base/           # KB collection 存储
 │   ├── memory/                   # memory 文件存储 + 投影
 │   ├── chat/                     # LangGraph agent、网关工具 provider、CLI agents
-│   ├── sync/                     # 跨层——git 仓库同步工作区（非 kind）
+│   ├── sync/                     # 跨层——导出包文件 IO（非 kind）
 │   └── credentials/              # 跨层——加密凭据存储 + 主密钥——唯一被允许 import `keyring` 的位置
 └── surfaces/
     ├── http/
@@ -143,7 +143,7 @@ backend/coffer/
 
 在每一层中，根目录文件与 kind 无关。kind 专用代码位于具名子目录下——`mcp/`、`agent/`、`skill/`、`channel/`、`knowledge/`、`knowledge_base/`、`memory/`、`chat/`——每种 kind 一个，并在 `domain/`、`application/`、`infrastructure/` 以及（当该 kind 有接口面时）`surfaces/` 中镜像。当新 kind 到来时，其目录出现在每一层，而不改动与 kind 无关的根目录文件。
 
-少数切片是**跨层而非 kind**：`application/sync/` + `infrastructure/sync/`（基于用户自有 git 仓库的多机同步）、`application/credentials/` + `infrastructure/credentials/`（凭据解析与加密存储）以及 `application/fs/`（文件系统浏览）。它们遵循与 kind 相同的分层规则，但不注册为 `KindModule`——它们是跨 kind 复用的共享服务。
+少数切片是**跨层而非 kind**：`application/sync/` + `infrastructure/sync/`（把仓库导出到一个目录、并把这样一个目录导入回来）、`application/credentials/` + `infrastructure/credentials/`（凭据解析与加密存储）以及 `application/fs/`（文件系统浏览）。它们遵循与 kind 相同的分层规则，但不注册为 `KindModule`——它们是跨 kind 复用的共享服务。
 
 ### 为何选择层优先而非功能优先（纵向切片）？
 

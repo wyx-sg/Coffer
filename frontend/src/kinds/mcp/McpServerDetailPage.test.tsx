@@ -9,15 +9,12 @@ vi.mock("@/lib/api/client", () => ({
   getApiClient: vi.fn(),
 }));
 
-// ScopeCard (Task 19) mounts on this page and pulls its own data through
+// ScopeCard mounts on this page and pulls its own data through
 // hand-written fetch hooks (not the generated client above) — stub them so
 // the card renders without a real daemon.
 vi.mock("@/lib/hooks/useScope", () => ({
-  useResourceScope: vi.fn(() => ({ data: { scope: null, axes: ["machine", "agent"] } })),
+  useResourceScope: vi.fn(() => ({ data: { scope: null, supported: true } })),
   useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-}));
-vi.mock("@/lib/hooks/useMachines", () => ({
-  useMachines: vi.fn(() => ({ data: { machines: [] } })),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({
   useAgents: vi.fn(() => ({ data: [] })),
@@ -346,7 +343,7 @@ describe("McpServerDetailPage", () => {
     });
   });
 
-  test("mounts the ScopeCard (Task 19) for the resource", async () => {
+  test("mounts the ScopeCard for the resource", async () => {
     const getMock = vi.fn().mockResolvedValue({
       data: stdioResource,
       error: undefined,

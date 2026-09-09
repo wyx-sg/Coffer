@@ -2,6 +2,14 @@
 
 > English: [machine-agent-scope.md](./machine-agent-scope.md)
 
+> **历史记录。** 本笔记是在持续多机同步之上设计的**机器 × agent** scope 矩阵。
+> 二者此后均已被撤销：同步现在是一次性的仓库导出/导入
+> （[ADR-016](../decisions/ADR-016-vault-export-import.zh.md)），机器轴也已移除，
+> `scope` 只剩一个 agent 名字列表
+> （[ADR-045](../decisions/ADR-045-per-agent-resource-scope.zh.md)）。当前形态请以
+> 这两份 ADR 为准；下文保留的是 agent 轴当初是怎么得出来的记录。
+
+
 将机器身份（spec 010 / ADR-043）推广为资源框架级 **scope** 设施的设计笔记，
 外加顶级 **Machines** 舰队视图。经 2026-07-10 头脑风暴会话确认；本笔记是后续
 ADR + spec 修订（承载产品契约）的输入。

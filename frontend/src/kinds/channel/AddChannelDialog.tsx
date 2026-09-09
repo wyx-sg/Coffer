@@ -23,7 +23,6 @@ import { translateApiError } from "@/lib/api/errors";
 import type { ChannelType } from "@/lib/api/channels";
 import { createChannel } from "./registerChannel";
 import { addChannelFormSchema, planChannel, type ChannelPlan } from "./schema";
-import { useCreateTimeMachineBind } from "./useCreateTimeMachineBind";
 
 export function AddChannelDialog({
   open,
@@ -45,11 +44,6 @@ export function AddChannelDialog({
   const [publicBaseUrl, setPublicBaseUrl] = useState("");
   const [tunnelToken, setTunnelToken] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
-  // The name frozen at submit time, for the post-create scope bind below:
-  // `name` itself isn't disabled while the mutation is in flight, so it
-  // could drift before onSuccess fires.
-  const [pendingName, setPendingName] = useState("");
-  const { machines, bindToLocalMachine } = useCreateTimeMachineBind(pendingName);
 
   const reset = () => {
     setChannelType("telegram");
@@ -68,7 +62,6 @@ export function AddChannelDialog({
     onSuccess: (createdName) => {
       void qc.invalidateQueries({ queryKey: ["resources"] });
       toast.success(t("channels.dialog.created", { name: createdName }));
-      bindToLocalMachine();
       reset();
       onOpenChange(false);
       navigate(`/channels/${createdName}`);
@@ -99,7 +92,6 @@ export function AddChannelDialog({
       setFormError(`${issue.path.join(".")}: ${issue.message}`);
       return;
     }
-    setPendingName(parsed.data.name);
     create.mutate(planChannel(parsed.data));
   };
 
@@ -231,7 +223,7 @@ export function AddChannelDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t("common.cancel")}
             </Button>
-            <Button type="submit" disabled={create.isPending || machines === undefined}>
+            <Button type="submit" disabled={create.isPending}>
               {create.isPending ? t("common.saving") : t("channels.add")}
             </Button>
           </div>

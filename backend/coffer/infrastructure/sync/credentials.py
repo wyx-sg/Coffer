@@ -1,4 +1,4 @@
-"""Ciphertext-only credential IO for sync (spec 010).
+"""Ciphertext-only credential IO for export/import (spec 010).
 
 Reads/writes the ``credentials`` table as raw Fernet ciphertext — no master
 key needed, so exporting/importing never touches plaintext. Locked-ref
@@ -53,10 +53,6 @@ class CredentialSyncAdapter:
                 "ciphertext = excluded.ciphertext, updated_at = excluded.updated_at",
                 (ref, blob, now, now),
             )
-
-    def delete_ciphertext(self, ref: str) -> None:
-        with closing(self._connect()) as conn, conn:
-            conn.execute("DELETE FROM credentials WHERE ref = ?", (ref,))
 
     def locked_refs(self) -> list[str]:
         refs = self.list_refs()

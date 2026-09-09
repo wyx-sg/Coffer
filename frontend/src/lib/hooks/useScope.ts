@@ -1,13 +1,10 @@
 // frontend/src/lib/hooks/useScope.ts
 //
-// Generic machine x agent activation scope (ADR-045): any resource kind that
-// opts in (Kind.scope_axes) exposes GET/PUT /resources/{kind}/{name}/scope
-// via the framework-level resource_routes.py (Task 7) — not a per-kind
-// endpoint. This is the shared mechanism kind-specific scope hooks should
-// delegate to (see useChannels.ts's useChannelScope/useUpdateChannelScope,
-// which used to own a private copy of this fetch logic before it existed).
-// Hand-written fetch, mirroring useSync.ts (the generated client doesn't
-// cover the /scope sub-routes yet).
+// Generic per-agent activation scope (ADR-045): any resource kind that opts in
+// (today `mcp_server` and `skill`) exposes GET/PUT
+// /resources/{kind}/{name}/scope via the framework-level resource_routes.py —
+// not a per-kind endpoint. Hand-written fetch, mirroring useSync.ts (the
+// generated client doesn't cover the /scope sub-routes yet).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
@@ -17,20 +14,21 @@ import { useToast } from "@/components/ui/toast";
 import type { components } from "@/lib/api/types";
 
 /**
- * A resource's machine x agent activation map. Keys are machine ids; each
- * value is `"*"` (active on that machine for every agent) or a list of agent
- * names (active on that machine only for those agents).
+ * A resource's activation scope: the list of agent names it is active for.
+ * `null` (absent from this type — see `ResourceScope.scope`) means every
+ * agent; `[]` means no agent, i.e. dormant.
  */
-export type Scope = Record<string, string[] | "*">;
+export type Scope = string[];
 
 /**
- * GET .../scope response: the current scope (`null` = unscoped, visible
- * everywhere) plus which axes this kind supports (empty axes means the kind
- * doesn't support scope at all).
+ * GET .../scope response: the current scope (`null` = unscoped, active for
+ * every agent) plus whether this kind supports scope at all (`supported:
+ * false` for `agent`, `channel`, `knowledge_base` and `memory`, which reject a
+ * non-null value at validation).
  */
 export interface ResourceScope {
   scope: Scope | null;
-  axes: string[];
+  supported: boolean;
 }
 
 type ResourceOut = components["schemas"]["ResourceOut"];
@@ -77,7 +75,7 @@ function scopePath(kind: string, name: string): string {
   return `/resources/${encodeURIComponent(kind)}/${encodeURIComponent(name)}/scope`;
 }
 
-/** Current activation scope for one resource, plus the axes its kind supports. */
+/** Current activation scope for one resource, plus whether its kind supports scope. */
 export function useResourceScope(kind: string, name: string) {
   return useQuery({
     queryKey: resourceScopeKey(kind, name),
@@ -87,9 +85,10 @@ export function useResourceScope(kind: string, name: string) {
 }
 
 /**
- * Replace a resource's activation scope (`null` clears it back to unscoped).
- * Invalidates the scope itself and `["machines"]` — a scope change can flip
- * what's active on any machine's fleet-view slice.
+ * Replace a resource's activation scope (`null` clears it back to unscoped —
+ * active for every agent). A scope change flips what the gateway exposes and
+ * what skill delivery reconciles, so the agent-facing lists are invalidated
+ * alongside the scope itself.
  */
 export function useUpdateResourceScope(kind: string, name: string) {
   const qc = useQueryClient();
@@ -99,7 +98,7 @@ export function useUpdateResourceScope(kind: string, name: string) {
     mutationFn: (scope: Scope | null) => putJson<ResourceOut>(scopePath(kind, name), { scope }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: resourceScopeKey(kind, name) });
-      void qc.invalidateQueries({ queryKey: ["machines"] });
+      void qc.invalidateQueries({ queryKey: ["agents"] });
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });

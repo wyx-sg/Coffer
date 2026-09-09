@@ -21,7 +21,7 @@ features:
   - title: Chat with any agent
     details: Talk to Coffer's built-in agent — or drive Claude Code and Codex — from a streamed chat, in the web or desktop app.
   - title: Reach agents anywhere
-    details: Pair a Telegram or SeaTalk channel and chat with your agents from your phone. Multi-machine sync keeps every machine consistent over a git repo you own.
+    details: Pair a Telegram or SeaTalk channel and chat with your agents from your phone. Moving to a new machine? Export the whole vault to a directory and import it there.
   - title: CLI · Web · Desktop
     details: Drive the whole vault from a terminal, a local web UI, or the desktop app. Agents auto-discover the daemon — no port or token wiring.
 ---
@@ -40,10 +40,10 @@ flowchart LR
   D["coffer-daemon<br/>the vault: MCP gateway · skills · knowledge · memory · agents · chat"]
   D -->|namespaced tools| U["Upstream MCP servers"]
   D -->|chat| L["LLM providers"]
-  D -->|sync| G["Your git remote"]
+  D -->|export / import| G["A directory you carry"]
 ```
 
-Coffer is a long-lived local daemon that holds your vault. The MCP gateway is one part of it: every AI agent connects through one auto-discovering endpoint and sees the same tools, skills, knowledge, and memory — while secrets stay encrypted and nothing leaves your machine unless you sync it to a git remote you own.
+Coffer is a long-lived local daemon that holds your vault. The MCP gateway is one part of it: every AI agent connects through one auto-discovering endpoint and sees the same tools, skills, knowledge, and memory — while secrets stay encrypted and nothing leaves your machine. Moving to another of your own machines is an explicit act: export the vault to a directory, carry it across, import it there.
 
 ## Quickstart
 

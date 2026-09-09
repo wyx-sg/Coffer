@@ -21,12 +21,11 @@ flowchart TD
         SHIM["coffer-mcp-shim\n（每客户端会话一份）"]
         WEBUI["Web UI\n（浏览器）"]
         DESKTOP["Desktop 应用\n（Tauri 2 / Rust + WebView）"]
-        DAEMON["coffer-daemon\nFastAPI · 自动端口\n/api/v1  /mcp\n6 种 kind + 聊天/渠道/同步"]
+        DAEMON["coffer-daemon\nFastAPI · 自动端口\n/api/v1  /mcp\n6 种 kind + 聊天/渠道/导出"]
         CB["coffer 回调监听\n（守护进程拉起的子进程）\nPOST /seatalk/{channel}"]
         DB[("SQLite\n~/.coffer/coffer.db")]
         MK[("master.key 0600\n或操作系统钥匙串（opt-in）")]
         FILES[("文件即真理\n~/.coffer/{knowledge,memory,skills}")]
-        SYNC[("同步工作区\n~/.coffer/sync（git）")]
     end
 
     subgraph upstream["上游 MCP 服务器"]
@@ -45,7 +44,7 @@ flowchart TD
     DAEMON --- DB
     DAEMON --- MK
     DAEMON --- FILES
-    DAEMON --- SYNC
+    DAEMON -->|"导出 / 导入\n(你自己选的目录)"| BUNDLE[("导出包")]
     DAEMON -->|"拉起（SeaTalk 渠道启用时）"| CB
     CB -->|"转发已签名事件\nloopback"| DAEMON
     DAEMON -->|"stdio 子进程\n每会话独立"| S1
@@ -57,9 +56,9 @@ flowchart TD
 
 | 组件                            | 类型                                      | 职责                                                                                                                                                                                                                                                         |
 | ------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `coffer-daemon`                 | 长生命周期进程                            | FastAPI 服务，监听 `127.0.0.1:<auto-port>`。持有六种资源 kind 以及横切特性（聊天、渠道、同步）的全部状态，是唯一的 SQLite 写入者。                                                                                                                           |
+| `coffer-daemon`                 | 长生命周期进程                            | FastAPI 服务，监听 `127.0.0.1:<auto-port>`。持有六种资源 kind 以及横切特性（聊天、渠道、导出/导入）的全部状态，是唯一的 SQLite 写入者。                                                                                                                           |
 | 资源 kind                       | 守护进程承载的抽象                        | 构建于一个与 kind 无关的 Resource 框架之上的六种 kind：`mcp_server`（网关上游）、`agent`（已注册的编码 agent）、`skill`（投递进 agent 的主技能包）、`knowledge_base` 与 `memory`（文件即真理 + SQLite 检索底座的两面）、`channel`（Telegram/SeaTalk 绑定）。 |
-| 聊天 / 渠道 / 同步              | 守护进程的横切特性                        | 进程内 LangGraph 聊天 agent 以及 Claude Code/Codex CLI agent（spec 008）；从 IM 应用中转聊天的消息渠道（ADR-014）；基于用户自有 git 仓库、opt-in 的多机同步（ADR-016）。它们不是 kind——而是横跨各 kind。                                                     |
+| 聊天 / 渠道 / 导出导入          | 守护进程的横切特性                        | 进程内 LangGraph 聊天 agent 以及 Claude Code/Codex CLI agent（spec 008）；从 IM 应用中转聊天的消息渠道（ADR-014）；一次性地把仓库导出到一个目录、并把这样一个目录导入回来（ADR-016）。它们不是 kind——而是横跨各 kind。                                                     |
 | `coffer` 回调监听               | 守护进程拉起的子进程                      | 仅服务经过签名校验的渠道 webhook（`POST /seatalk/{channel}`），监听一个位于用户自运行隧道之后的 loopback 端口；校验 SeaTalk 签名并将事件转发给守护进程。当某个 SeaTalk 渠道启用时运行（ADR-014）。                                                           |
 | `coffer-mcp-shim`               | 短生命周期进程（每个 MCP 客户端会话一份） | 桥接 MCP 客户端 stdio ↔ 守护进程 HTTP/SSE。检测已运行的守护进程，或在需要时拉起一个。                                                                                                                                                                        |
 | `coffer` CLI                    | 短生命周期子进程                          | 面向用户的管理命令。通过 loopback HTTP 调用守护进程。                                                                                                                                                                                                        |
@@ -87,7 +86,6 @@ flowchart TD
 ├── knowledge/           # knowledge_base 文件即真理（每个 KB 含 docs/ + raw/）
 ├── memory/              # memory 文件即真理（global/ + projects/<ulid>/）
 ├── skills/              # 主技能存储（canonical）
-├── sync/                # 多机同步的 git 工作树（opt-in）
 ├── backups/             # 仓库备份的默认目标目录
 ├── bin/                 # 同处一地的 coffer 二进制（daemon/shim/CLI）
 ├── logs/
