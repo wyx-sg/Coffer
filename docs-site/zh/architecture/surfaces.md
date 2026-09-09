@@ -32,7 +32,7 @@ Coffer 的每个接口面都是通向同一底层守护进程的入口点。守�
 | `/channels`                       | 通道绑定（Telegram、SeaTalk）、配对。                             |
 | `/chat`、`/models`                | Chat 会话/轮次与模型目录。                                        |
 | `/credentials`、`/settings`       | 加密凭据存储；设置含 `/settings/credentials`（主密钥存储）与 `/embedding` 配置。 |
-| `/sync`                           | 多机同步运行与配置。                                              |
+| `/sync`                           | 仓库导出 / 导入运行与主密钥传递。                                 |
 | `/fs`                             | 用于配置选择器的文件系统浏览辅助。                                |
 | `/audit`、`/retention`、`/daemon` | 审计日志、保留策略、守护进程 token/备份操作。                     |
 

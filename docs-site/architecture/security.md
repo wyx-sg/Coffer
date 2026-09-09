@@ -6,7 +6,7 @@ These rules are non-negotiable and apply to the entire codebase. They are enforc
 1. **Loopback-only binding.** The HTTP API binds exclusively to `127.0.0.1`. Any public-reachable surface runs as a separate process limited to signed callback paths — concretely, the SeaTalk callback listener (see [Channels & the public-reachable surface](#channels-the-public-reachable-surface)).
 2. **Secret plaintext never persists.** Secrets are stored only as Fernet ciphertext in the `credentials` table; configuration stores credential _references_, not values. Plaintext exists in memory solely between decrypt and the spawn/header injection that consumes it — never in SQLite as plaintext, logs, audit, or any structured event. The Fernet master key is managed exclusively by `infrastructure/credentials/`, the only place permitted to import `keyring`.
 3. **Token + CORS on the REST API.** Every management API call requires the `X-Coffer-Token` header. The daemon token lives in `~/.coffer/daemon.json` at mode `0600`.
-4. **Outbound HTTP has real paths today; SSRF-guarding is still scoped to the HTTP-transport MCP client.** The daemon makes outbound calls now — embeddings to OpenAI-compatible providers, `git push` for sync, and the Telegram/SeaTalk APIs (raw httpx to fixed hosts). The constitution requires that outbound HTTP go through a SSRF-guarded client; the gap that remains is the HTTP-transport MCP client, which still uses the MCP SDK's httpx client with no IP filtering. A hardened SSRF-guarded wrapper is planned for that client. Public-reachable surfaces run as a separate process limited to signed callback paths.
+4. **Outbound HTTP has real paths today; SSRF-guarding is still scoped to the HTTP-transport MCP client.** The daemon makes outbound calls now — embeddings to OpenAI-compatible providers and the Telegram/SeaTalk APIs (raw httpx to fixed hosts). The constitution requires that outbound HTTP go through a SSRF-guarded client; the gap that remains is the HTTP-transport MCP client, which still uses the MCP SDK's httpx client with no IP filtering. A hardened SSRF-guarded wrapper is planned for that client. Public-reachable surfaces run as a separate process limited to signed callback paths.
    :::
 
 ## Threat model and trust boundaries
@@ -76,14 +76,15 @@ The loopback-only invariant says a public-reachable surface runs as a separate p
 
 Secrets reach the listener the same way upstream MCP subprocesses get theirs: the signing secrets, the daemon URL, and the daemon token are injected into the child's environment at spawn, never written to disk. The spawn is recorded in the upstream-pids directory so a daemon crash leaves nothing behind — the startup orphan sweep reaps it. A daemon-token rotation respawns the listener (the token is baked into the child's env).
 
-## Sync security
+## Export security
 
-Multi-machine sync ([ADR-016](/reference/adr/ADR-016-multi-machine-sync)) moves vault state between machines through **a git repository the user owns**. Its security rests on keeping the secret material out of that medium entirely:
+Vault export and import ([ADR-016](/reference/adr/ADR-016-vault-export-import)) move vault state between machines as a **directory the user names and carries**. Its security rests on keeping the secret material out of that directory:
 
-- **Ciphertext only over the medium.** Credentials are exported as Fernet ciphertext blobs and travel through git as ciphertext — the git repo only ever holds undecryptable data. Even if the remote is a hosted GitHub repo, the vendor only ever holds ciphertext.
-- **The master key never enters the medium.** The Fernet master key is bootstrapped onto each machine **out-of-band**, via `coffer sync key export/import` — never committed, never pushed. This is what keeps the constitutional argument clean: the sync medium is not a system of record for any decryptable secret.
-- **`credentials_locked` until the key is present.** A machine that has pulled ciphertext but does not yet have the matching master key reports `credentials_locked` and refuses to spawn the affected resources. It never silently fails decryption.
-- **Git runs as a subprocess with ambient credentials.** Outbound git is a real network egress, but it respects the loopback-only posture: git runs as a subprocess using the user's own ambient git credentials, not Coffer's HTTP client. Coffer never injects or stores the git remote's credentials.
+- **No network egress at all.** Export and import touch the local filesystem only — no remote, no git subprocess, no background replication. Whatever carries the directory (`scp`, a USB drive, the user's own git repo) is outside Coffer, using the user's own tools and credentials.
+- **Credentials are opt-in.** An export omits credential material entirely unless `--with-credentials` is given, because an export directory is easy to leave somewhere careless.
+- **Ciphertext only, when included.** Credentials are written as Fernet ciphertext blobs; the bundle only ever holds undecryptable data.
+- **The master key never enters a bundle.** The Fernet master key is bootstrapped onto each machine **out-of-band**, via `coffer sync key export/import` — never written into an export.
+- **`credentials_locked` until the key is present.** A machine that imported ciphertext but does not yet have the matching master key reports `credentials_locked` and refuses to spawn the affected resources. It never silently fails decryption.
 
 ## Token authentication
 
@@ -106,7 +107,6 @@ In production, the allowed origins are the Tauri desktop shell's `tauri://localh
 The daemon makes outbound HTTP calls today. The real outbound paths are:
 
 - **Embeddings** to OpenAI-compatible providers (an `AsyncOpenAI` client with the `base_url` swapped per provider) when building the knowledge index.
-- **`git push`** for sync — but this runs as a git subprocess with the user's ambient git credentials, not through Coffer's HTTP client (see [Sync security](#sync-security)).
 - **The Telegram and SeaTalk APIs** for channels — raw httpx to fixed, well-known hosts.
 - **HTTP-transport MCP servers**, via the MCP SDK's `create_mcp_http_client` (backed by `httpx`).
 

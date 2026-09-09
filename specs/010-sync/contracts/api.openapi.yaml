@@ -1,13 +1,15 @@
 openapi: 3.0.3
 info:
-  title: Coffer — Sync API
-  version: 0.1.0
+  title: Coffer — Vault Export/Import API
+  version: 0.2.0
   description: >
-    REST surface for multi-machine sync (spec 010). Sync is a cross-cutting
-    service, not a resource kind, so it has its own endpoints rather than riding
-    /resources. All paths require the loopback bearer token. The master key is
-    never returned over the network except via the explicit, audited
-    key-export endpoint that writes it to a local file path.
+    REST surface for vault export and import (spec 010, ADR-016). Export and
+    import are a cross-cutting service, not a resource kind, so they have their
+    own endpoints rather than riding /resources. All paths require the loopback
+    bearer token. Both operations act on a directory path on this machine; no
+    request ever carries vault content over the wire. The master key is never
+    returned over the network except via the explicit, audited key-export
+    endpoint that writes it to a local file path.
 
 servers:
   - url: http://127.0.0.1:8000
@@ -16,169 +18,54 @@ security:
   - bearerAuth: []
 
 paths:
-  /api/v1/sync/config:
-    get:
-      summary: Get sync configuration
-      operationId: getSyncConfig
-      tags: [sync]
-      responses:
-        '200':
-          description: Current sync config
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/SyncConfigOut' }
-    put:
-      summary: Update sync configuration
-      operationId: putSyncConfig
+  /api/v1/sync/export:
+    post:
+      summary: Export this vault into a bundle directory
+      operationId: exportVault
       tags: [sync]
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/SyncConfigIn' }
+            schema: { $ref: '#/components/schemas/ExportIn' }
       responses:
         '200':
-          description: Updated config
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/SyncConfigOut' }
-        '422':
           description: >-
-            Invalid fields, or the new remote failed the save-time headless
-            reachability probe (`SYNC_REMOTE_UNREACHABLE`; `details.hint` is
-            `auth` / `not_found` / `network` for actionable UI guidance).
+            Bundle written. Per-resource failures are reported in `failures`
+            rather than failing the request.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-
-  /api/v1/sync/status:
-    get:
-      summary: Get last-run sync status
-      operationId: getSyncStatus
-      tags: [sync]
-      responses:
-        '200':
-          description: Current sync state
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/SyncStatusOut' }
-
-  /api/v1/sync/run:
-    post:
-      summary: Trigger a sync run (export -> pull -> push -> import)
-      operationId: runSync
-      tags: [sync]
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/SyncRunIn' }
-      responses:
-        '200':
-          description: Run completed (possibly into conflicted/locked state)
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/SyncStatusOut' }
-        '409':
-          description: Sync not configured or already running
-          $ref: '#/components/responses/Conflict'
-
-  /api/v1/sync/resolve:
-    post:
-      summary: Resolve conflicting paths
-      operationId: resolveSync
-      tags: [sync]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/SyncResolveIn' }
-      responses:
-        '200':
-          description: Conflict resolved; resulting status
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/SyncStatusOut' }
-        '409':
-          $ref: '#/components/responses/Conflict'
-
-  /api/v1/sync/machines:
-    get:
-      summary: List every machine known to this vault (workspace registry + this machine)
-      operationId: listSyncMachines
-      tags: [sync]
-      responses:
-        '200':
-          description: Machines attached to the vault
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/SyncMachinesOut' }
-
-  /api/v1/sync/machine:
-    put:
-      summary: Rename this machine (display name only; the machine id is immutable)
-      operationId: renameSyncMachine
-      tags: [sync]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/MachineRenameIn' }
-      responses:
-        '200':
-          description: Updated local machine entry
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/SyncMachineOut' }
+              schema: { $ref: '#/components/schemas/ExportOut' }
         '422':
+          description: The path cannot hold a bundle (`SYNC_BUNDLE_INVALID`)
           $ref: '#/components/responses/ValidationError'
 
-  /api/v1/sync/overrides:
-    get:
-      summary: This machine's per-resource config overrides
-      operationId: listSyncOverrides
+  /api/v1/sync/import:
+    post:
+      summary: Import an export bundle into this vault
+      operationId: importVault
       tags: [sync]
-      responses:
-        '200':
-          description: Overrides for this machine
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/OverridesOut' }
-
-  /api/v1/sync/overrides/{kind}/{name}:
-    put:
-      summary: Set a per-machine merge patch for a resource
-      operationId: setSyncOverride
-      tags: [sync]
-      parameters:
-        - { name: kind, in: path, required: true, schema: { type: string } }
-        - { name: name, in: path, required: true, schema: { type: string } }
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/OverrideIn' }
+            schema: { $ref: '#/components/schemas/ImportIn' }
       responses:
         '200':
-          description: Updated override list
+          description: >-
+            Bundle applied. The bundle wins per resource, nothing local-only is
+            deleted, and per-resource failures are reported in `failures`.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/OverridesOut' }
+              schema: { $ref: '#/components/schemas/ImportOut' }
+        '409':
+          description: >-
+            The bundle declares a schema version this build does not know
+            (`SYNC_BUNDLE_TOO_NEW`); nothing was applied.
+          $ref: '#/components/responses/Conflict'
         '422':
+          description: Not a readable export bundle (`SYNC_BUNDLE_INVALID`)
           $ref: '#/components/responses/ValidationError'
-    delete:
-      summary: Remove this machine's merge patch for a resource
-      operationId: unsetSyncOverride
-      tags: [sync]
-      parameters:
-        - { name: kind, in: path, required: true, schema: { type: string } }
-        - { name: name, in: path, required: true, schema: { type: string } }
-      responses:
-        '200':
-          description: Updated override list
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/OverridesOut' }
 
   /api/v1/sync/key/fingerprint:
     get:
@@ -203,13 +90,16 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/KeyExportIn' }
+            schema: { $ref: '#/components/schemas/KeyPathIn' }
       responses:
         '200':
           description: Key written to the given local path
           content:
             application/json:
               schema: { $ref: '#/components/schemas/KeyOpOut' }
+        '422':
+          description: No master key on this machine (`MASTER_KEY_FILE_INVALID`)
+          $ref: '#/components/responses/ValidationError'
 
   /api/v1/sync/key/import:
     post:
@@ -220,13 +110,16 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/KeyImportIn' }
+            schema: { $ref: '#/components/schemas/KeyPathIn' }
       responses:
         '200':
-          description: Key installed; resulting status
+          description: Key installed; credential refs that remain locked here
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/SyncStatusOut' }
+              schema: { $ref: '#/components/schemas/KeyImportOut' }
+        '422':
+          description: Missing file or not a valid Fernet key (`MASTER_KEY_FILE_INVALID`)
+          $ref: '#/components/responses/ValidationError'
 
 components:
   securitySchemes:
@@ -247,55 +140,68 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
 
   schemas:
-    SyncConfigIn:
+    AreaCountOut:
       type: object
+      required: [area, count]
       properties:
-        remote: { type: string, nullable: true }
-        enabled: { type: boolean }
-        auto: { type: boolean }
-        interval_seconds: { type: integer, minimum: 30 }
-        poll_remote_seconds: { type: integer, minimum: 5, description: "Auto-sync remote-head probe cadence" }
-        branch: { type: string }
-    SyncConfigOut:
-      type: object
-      required: [enabled, auto, interval_seconds, poll_remote_seconds, branch]
-      properties:
-        remote: { type: string, nullable: true }
-        enabled: { type: boolean }
-        auto: { type: boolean }
-        interval_seconds: { type: integer }
-        poll_remote_seconds: { type: integer }
-        branch: { type: string }
-        updated_at: { type: string }
-    SyncStatusOut:
-      type: object
-      required: [status, conflict_paths, locked_refs, quarantined_refs]
-      properties:
-        status:
+        area:
           type: string
-          enum: [unconfigured, clean, syncing, conflicted, error, credentials_locked]
-        last_sync_at: { type: string, nullable: true }
-        last_error: { type: string, nullable: true }
-        error_hint:
+          description: "Bundle area: resources, knowledge, memory, skills, state/<area>, credentials"
+        count: { type: integer }
+    FailureOut:
+      type: object
+      required: [ref, reason]
+      properties:
+        ref:
           type: string
-          nullable: true
-          enum: [auth, not_found, network, null]
-          description: "Actionable classification of last_error for UI guidance"
-        conflict_paths:
+          description: "<kind>:<name>, state/<area>/<doc>, or reconcile[<kind>]"
+        reason: { type: string }
+    ExportIn:
+      type: object
+      required: [path]
+      properties:
+        path:
+          type: string
+          description: "Local directory to write the bundle into (created if absent)"
+        with_credentials:
+          type: boolean
+          description: >-
+            Include Fernet ciphertext under credentials/. Off by default; the
+            master key is never written regardless.
+    ExportOut:
+      type: object
+      required: [path, areas, failures, credentials_included]
+      properties:
+        path: { type: string }
+        areas:
           type: array
-          items: { type: string }
+          items: { $ref: '#/components/schemas/AreaCountOut' }
+        failures:
+          type: array
+          items: { $ref: '#/components/schemas/FailureOut' }
+        credentials_included: { type: boolean }
+    ImportIn:
+      type: object
+      required: [path]
+      properties:
+        path: { type: string, description: "Local export bundle directory to apply" }
+    ImportOut:
+      type: object
+      required: [path, areas, failures, locked_refs]
+      properties:
+        path: { type: string }
+        areas:
+          type: array
+          items: { $ref: '#/components/schemas/AreaCountOut' }
+        failures:
+          type: array
+          items: { $ref: '#/components/schemas/FailureOut' }
         locked_refs:
           type: array
           items: { type: string }
-        quarantined_refs:
-          type: array
-          items: { type: string }
-          description: "<kind>:<name> refs whose import failed on this machine; retried each run"
-    SyncRunIn:
-      type: object
-      properties:
-        push: { type: boolean, description: "Push after a clean merge (default true)" }
-        pull: { type: boolean, description: "Pull before pushing (default true)" }
+          description: >-
+            Credential refs whose ciphertext cannot be decrypted here; bootstrap
+            the master key with key/import to unlock them.
     KeyFingerprintOut:
       type: object
       required: [present, fingerprint]
@@ -305,77 +211,23 @@ components:
           type: string
           nullable: true
           description: "First 12 hex chars of SHA-256(master key); null when absent"
-    SyncResolveIn:
-      type: object
-      required: [strategy]
-      properties:
-        strategy:
-          type: string
-          enum: [ours, theirs, resolved]
-        paths:
-          type: array
-          items: { type: string }
-          description: "Paths to resolve; empty means all conflicting paths"
-    SyncMachineOut:
-      type: object
-      required: [machine_id, display_name, is_local]
-      properties:
-        machine_id: { type: string, description: "Stable ULID minted at first daemon start" }
-        display_name: { type: string }
-        platform: { type: string, nullable: true }
-        os_version: { type: string, nullable: true }
-        coffer_version: { type: string, nullable: true }
-        last_sync_at: { type: string, nullable: true }
-        is_local: { type: boolean, description: "True for the machine serving this request" }
-    SyncMachinesOut:
-      type: object
-      required: [machines]
-      properties:
-        machines:
-          type: array
-          items: { $ref: '#/components/schemas/SyncMachineOut' }
-    MachineRenameIn:
-      type: object
-      required: [display_name]
-      properties:
-        display_name: { type: string, minLength: 1, maxLength: 100 }
-    OverrideIn:
-      type: object
-      required: [patch]
-      properties:
-        patch:
-          type: object
-          additionalProperties: true
-          description: "RFC 7386 JSON Merge Patch applied over the imported config on this machine only"
-    OverrideOut:
-      type: object
-      required: [kind, name, patch]
-      properties:
-        kind: { type: string }
-        name: { type: string }
-        patch: { type: object, additionalProperties: true }
-    OverridesOut:
-      type: object
-      required: [overrides]
-      properties:
-        overrides:
-          type: array
-          items: { $ref: '#/components/schemas/OverrideOut' }
-    KeyExportIn:
+    KeyPathIn:
       type: object
       required: [path]
       properties:
-        path: { type: string, description: "Local filesystem path to write the key to" }
-    KeyImportIn:
-      type: object
-      required: [path]
-      properties:
-        path: { type: string, description: "Local filesystem path to read the key from" }
+        path: { type: string, description: "Local filesystem path for the key file" }
     KeyOpOut:
       type: object
       required: [path]
       properties:
         path: { type: string }
+    KeyImportOut:
+      type: object
+      required: [locked_refs]
+      properties:
+        locked_refs:
+          type: array
+          items: { type: string }
     Error:
       type: object
       properties:

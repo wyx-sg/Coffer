@@ -1,4 +1,4 @@
-"""Contract tests for the resource scope REST endpoints (ADR-045, Task 7).
+"""Contract tests for the resource scope REST endpoints (ADR-045).
 
 GET/PUT /api/v1/resources/{kind}/{name}/scope. Colocated under tests/contract
 (not tests/integration/surfaces/http, where the base CRUD routes are covered)
@@ -16,10 +16,10 @@ from httpx import ASGITransport, AsyncClient
 
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.audit_service import AuditService
-from coffer.application.channel.kind import make_channel_kind
 from coffer.application.mcp.kind import make_mcp_kind
 from coffer.application.memory.kind import make_memory_kind
 from coffer.application.resource_service import ResourceService
+from coffer.application.skill.kind import make_skill_kind
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -36,14 +36,12 @@ from coffer.surfaces.http.resource_routes import router as resource_router
 
 
 async def _client(tmp_path):
-    """Wire a real app with the production mcp_server/memory/agent/channel Kinds.
+    """Wire a real app with the production mcp_server/memory/agent/skill Kinds.
 
-    mcp_server and memory are the two ends of the scope_axes spectrum
-    (("machine", "agent") vs () — no scope support); agent is a lifecycle
-    kind (generic_create_allowed=False) used to prove update_scope is NOT
-    gated on that flag. channel is machine-only like agent but additionally
-    wires ``validate_scope_shape`` (ADR-045 review Fix 1) — at most one
-    machine entry, no ``"*"`` key.
+    mcp_server and memory are the two ends of the spectrum (supports_scope
+    True vs False); skill is a lifecycle kind (generic_create_allowed=False)
+    that DOES support scope, proving update_scope is not gated on that flag;
+    agent is a lifecycle kind that does NOT.
     """
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
@@ -54,7 +52,7 @@ async def _client(tmp_path):
         "mcp_server": make_mcp_kind({}),
         "memory": make_memory_kind(None),  # type: ignore[arg-type]
         "agent": make_agent_kind(None),
-        "channel": make_channel_kind(),
+        "skill": make_skill_kind(None),  # type: ignore[arg-type]
     }
     repo = SqlAlchemyResourceRepo(sm)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
@@ -74,7 +72,7 @@ async def _client(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_get_scope_returns_null_and_axes_for_mcp_server(tmp_path):
+async def test_get_scope_returns_null_and_supports_scope_for_mcp_server(tmp_path):
     c, engine, svc = await _client(tmp_path)
     async with c:
         await svc.register(
@@ -87,12 +85,25 @@ async def test_get_scope_returns_null_and_axes_for_mcp_server(tmp_path):
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["scope"] is None
-        assert sorted(body["axes"]) == ["agent", "machine"]
+        assert body["supports_scope"] is True
     await engine.dispose()
 
 
 @pytest.mark.asyncio
-async def test_put_scope_round_trips_matrix_and_response_carries_scope(tmp_path):
+async def test_get_scope_reports_kinds_without_scope(tmp_path):
+    c, engine, svc = await _client(tmp_path)
+    async with c:
+        await svc.register(kind="memory", name="notes", config={}, actor="cli")
+        r = await c.get("/api/v1/resources/memory/notes/scope")
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["scope"] is None
+        assert body["supports_scope"] is False
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_put_scope_round_trips_agent_list_and_response_carries_scope(tmp_path):
     c, engine, svc = await _client(tmp_path)
     async with c:
         await svc.register(
@@ -101,22 +112,44 @@ async def test_put_scope_round_trips_matrix_and_response_carries_scope(tmp_path)
             config={"transport": {"type": "http", "url": "http://example.com/mcp"}},
             actor="cli",
         )
-        matrix = {"machine-1": ["agent-a", "agent-b"], "machine-2": "*"}
-        r = await c.put("/api/v1/resources/mcp_server/fs/scope", json={"scope": matrix})
+        agents = ["claude-code", "codex"]
+        r = await c.put("/api/v1/resources/mcp_server/fs/scope", json={"scope": agents})
         assert r.status_code == 200, r.text
         body = r.json()
-        assert body["scope"] == matrix
+        assert body["scope"] == agents
         assert body["ref"] == "mcp_server:fs"
 
         # Round-trip through GET too.
         get_r = await c.get("/api/v1/resources/mcp_server/fs/scope")
         assert get_r.status_code == 200
-        assert get_r.json()["scope"] == matrix
+        assert get_r.json()["scope"] == agents
 
         # Full ResourceOut GET also carries scope.
         full_r = await c.get("/api/v1/resources/mcp_server/fs")
         assert full_r.status_code == 200
-        assert full_r.json()["scope"] == matrix
+        assert full_r.json()["scope"] == agents
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_put_empty_scope_is_dormant_and_null_clears(tmp_path):
+    """The three states are distinct on the wire: [] (dormant) is persisted
+    as an empty list, null clears back to unscoped."""
+    c, engine, svc = await _client(tmp_path)
+    async with c:
+        await svc.register(
+            kind="mcp_server",
+            name="fs",
+            config={"transport": {"type": "http", "url": "http://example.com/mcp"}},
+            actor="cli",
+        )
+        r = await c.put("/api/v1/resources/mcp_server/fs/scope", json={"scope": []})
+        assert r.status_code == 200, r.text
+        assert r.json()["scope"] == []
+
+        r2 = await c.put("/api/v1/resources/mcp_server/fs/scope", json={"scope": None})
+        assert r2.status_code == 200, r2.text
+        assert r2.json()["scope"] is None
     await engine.dispose()
 
 
@@ -127,7 +160,7 @@ async def test_put_scope_on_memory_kind_returns_422_scope_invalid(tmp_path):
         await svc.register(kind="memory", name="notes", config={}, actor="cli")
         r = await c.put(
             "/api/v1/resources/memory/notes/scope",
-            json={"scope": {"machine-1": "*"}},
+            json={"scope": ["claude-code"]},
         )
         assert r.status_code == 422, r.text
         assert r.json()["error"]["code"] == "SCOPE_INVALID"
@@ -135,29 +168,11 @@ async def test_put_scope_on_memory_kind_returns_422_scope_invalid(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_put_scope_unknown_name_returns_404(tmp_path):
-    c, engine, _svc = await _client(tmp_path)
-    async with c:
-        r = await c.put(
-            "/api/v1/resources/mcp_server/nope/scope",
-            json={"scope": {"machine-1": "*"}},
-        )
-        assert r.status_code == 404, r.text
-        assert r.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_put_scope_works_for_lifecycle_kind_agent(tmp_path):
-    """update_scope is framework-level and must not be gated on
-    generic_create_allowed — an agent (a lifecycle kind whose creation is
-    owned by AgentService, not the generic POST /resources path) must still
-    accept scope writes through the dedicated PUT .../scope route."""
+async def test_put_scope_on_agent_kind_returns_422_scope_invalid(tmp_path):
+    """The `agent` kind declares no scope: scope names the agents a resource
+    is active for, so an agent scoping itself is meaningless."""
     c, engine, svc = await _client(tmp_path)
     async with c:
-        # Seed directly (agent's real creation flow is owned by AgentService,
-        # not exercised here) — allow_lifecycle_kind mirrors that dedicated
-        # service opting in, per CODE-REG.
         await svc.register(
             kind="agent",
             name="claude",
@@ -167,38 +182,7 @@ async def test_put_scope_works_for_lifecycle_kind_agent(tmp_path):
         )
         r = await c.put(
             "/api/v1/resources/agent/claude/scope",
-            json={"scope": {"machine-1": "*"}},
-        )
-        assert r.status_code == 200, r.text
-        assert r.json()["scope"] == {"machine-1": "*"}
-    await engine.dispose()
-
-
-# -- channel scope-shape constraint (ADR-045 review Fix 1) -------------------
-# A channel's platform identity tolerates only ONE machine consumer (ADR-043)
-# — two exact-ULID entries, or the "*" key, would each start its adapter on
-# more than one machine. Generic scope_axes=("machine",) can't express "at
-# most one", hence Kind.validate_scope_shape (invoked right after the
-# axis-generic check, same 422 SCOPE_INVALID envelope).
-
-
-async def _register_channel(svc, name: str = "tg") -> None:
-    await svc.register(
-        kind="channel",
-        name=name,
-        config={"channel_type": "telegram", "bot_token_ref": "channel/tg/bot"},
-        actor="cli",
-    )
-
-
-@pytest.mark.asyncio
-async def test_put_channel_scope_two_entries_returns_422_scope_invalid(tmp_path):
-    c, engine, svc = await _client(tmp_path)
-    async with c:
-        await _register_channel(svc)
-        r = await c.put(
-            "/api/v1/resources/channel/tg/scope",
-            json={"scope": {"machine-1": "*", "machine-2": "*"}},
+            json={"scope": ["claude-code"]},
         )
         assert r.status_code == 422, r.text
         assert r.json()["error"]["code"] == "SCOPE_INVALID"
@@ -206,55 +190,63 @@ async def test_put_channel_scope_two_entries_returns_422_scope_invalid(tmp_path)
 
 
 @pytest.mark.asyncio
-async def test_put_channel_scope_wildcard_key_returns_422_scope_invalid(tmp_path):
+async def test_put_scope_rejects_a_non_list_payload(tmp_path):
     c, engine, svc = await _client(tmp_path)
     async with c:
-        await _register_channel(svc)
+        await svc.register(
+            kind="mcp_server",
+            name="fs",
+            config={"transport": {"type": "http", "url": "http://example.com/mcp"}},
+            actor="cli",
+        )
         r = await c.put(
-            "/api/v1/resources/channel/tg/scope",
-            json={"scope": {"*": "*"}},
+            "/api/v1/resources/mcp_server/fs/scope",
+            json={"scope": {"machine-1": "*"}},
         )
         assert r.status_code == 422, r.text
-        assert r.json()["error"]["code"] == "SCOPE_INVALID"
     await engine.dispose()
 
 
 @pytest.mark.asyncio
-async def test_put_channel_scope_single_entry_ok(tmp_path):
+async def test_put_scope_unknown_name_returns_404(tmp_path):
+    c, engine, _svc = await _client(tmp_path)
+    async with c:
+        r = await c.put(
+            "/api/v1/resources/mcp_server/nope/scope",
+            json={"scope": ["claude-code"]},
+        )
+        assert r.status_code == 404, r.text
+        assert r.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_put_scope_works_for_lifecycle_kind_skill(tmp_path):
+    """update_scope is framework-level and must not be gated on
+    generic_create_allowed — a skill (a lifecycle kind whose creation is
+    owned by SkillService, not the generic POST /resources path) must still
+    accept scope writes through the dedicated PUT .../scope route."""
     c, engine, svc = await _client(tmp_path)
     async with c:
-        await _register_channel(svc)
+        # Seed directly (a skill's real creation flow is owned by SkillService,
+        # not exercised here) — allow_lifecycle_kind mirrors that dedicated
+        # service opting in, per CODE-REG.
+        await svc.register(
+            kind="skill",
+            name="reviewer",
+            config={
+                "source": {"type": "local_import", "original_path": "/tmp/reviewer"},
+                "skill_md_name": "reviewer",
+                "skill_md_description": "reviews things",
+                "version_hash": "abc123",
+            },
+            actor="skill-service",
+            allow_lifecycle_kind=True,
+        )
         r = await c.put(
-            "/api/v1/resources/channel/tg/scope",
-            json={"scope": {"machine-1": "*"}},
+            "/api/v1/resources/skill/reviewer/scope",
+            json={"scope": ["claude-code"]},
         )
         assert r.status_code == 200, r.text
-        assert r.json()["scope"] == {"machine-1": "*"}
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_put_channel_scope_empty_dict_ok(tmp_path):
-    c, engine, svc = await _client(tmp_path)
-    async with c:
-        await _register_channel(svc)
-        r = await c.put("/api/v1/resources/channel/tg/scope", json={"scope": {}})
-        assert r.status_code == 200, r.text
-        assert r.json()["scope"] == {}
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_put_channel_scope_null_ok(tmp_path):
-    c, engine, svc = await _client(tmp_path)
-    async with c:
-        await _register_channel(svc)
-        r = await c.put(
-            "/api/v1/resources/channel/tg/scope",
-            json={"scope": {"machine-1": "*"}},
-        )
-        assert r.status_code == 200, r.text
-        r2 = await c.put("/api/v1/resources/channel/tg/scope", json={"scope": None})
-        assert r2.status_code == 200, r2.text
-        assert r2.json()["scope"] is None
+        assert r.json()["scope"] == ["claude-code"]
     await engine.dispose()

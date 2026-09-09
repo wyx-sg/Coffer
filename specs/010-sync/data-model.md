@@ -4,118 +4,54 @@
 
 ## Persistent state
 
-### `sync_config` (single row)
+**None.** Export and import are one-shot operations over the live vault; they
+own no tables. There is no sync configuration to persist (the user names a
+directory per invocation), no last-run state to arbitrate against, no machine
+registry, and no tombstone ledger — continuous sync and everything that served
+it is withdrawn ([ADR-016](../../docs/decisions/ADR-016-vault-export-import.md)).
 
-Mirrors the `embedding_config` singleton pattern (one row, fixed id).
+`infrastructure/sync/` therefore contributes no ORM models and no migration of
+its own beyond the one that drops the withdrawn `sync_config`, `sync_state`,
+`machine_identity` and `sync_tombstones` tables.
 
-| Field              | Type    | Notes                                              |
-| ------------------ | ------- | -------------------------------------------------- |
-| `id`               | String  | `SINGLETON` constant primary key.                  |
-| `remote`           | String? | Git remote URL; null until configured.             |
-| `enabled`          | bool    | Master on/off for sync. Default `false`.           |
-| `auto`             | bool    | Whether the daemon auto-sync worker runs. Default `false`. |
-| `interval_seconds` | int     | Auto-sync fallback sweep interval. Default `300`.  |
-| `poll_remote_seconds` | int  | Auto-sync remote-head probe cadence. Default `15`, min `5`. |
-| `branch`           | String  | Git branch to sync on. Default `main`.             |
-| `updated_at`       | String  | ISO-8601.                                          |
+The credential ciphertext an export carries comes from the existing
+`credentials` table; the resource documents come from the existing resource
+tables via `ResourceService`. SQLite remains the local system of record.
 
-No secrets are stored here. Git remote auth is the user's ambient git
-credential configuration.
+## Filesystem state (the export bundle)
 
-### `sync_state` (single row)
-
-Last-run status, also a singleton row.
-
-| Field             | Type    | Notes                                                          |
-| ----------------- | ------- | -------------------------------------------------------------- |
-| `id`              | String  | `SINGLETON`.                                                   |
-| `status`          | String  | `clean` / `syncing` / `conflicted` / `error` / `credentials_locked` / `unconfigured`. |
-| `last_sync_at`    | String? | ISO-8601 of the last successful run.                           |
-| `last_error`      | String? | Last error message (redacted, no secrets).                     |
-| `conflict_paths`  | JSON    | List of workspace-relative paths currently in conflict.        |
-| `locked_refs`     | JSON    | Credential refs present as ciphertext but undecryptable here.  |
-| `quarantined_refs`| JSON    | `<kind>:<name>` refs whose import failed here; retried each run. |
-| `updated_at`      | String  | ISO-8601.                                                      |
-
-Both tables live in `infrastructure/sync/persistence.py`; migration `0017`.
-
-### `machine_identity` (single row)
-
-This machine's stable identity (ADR-043). Machine-local state *about* the
-machine — never exported as vault data (the workspace `machines/` entry is
-derived from it at export time).
-
-| Field          | Type   | Notes                                             |
-| -------------- | ------ | ------------------------------------------------- |
-| `id`           | int    | `1` (CHECK-constrained singleton).                |
-| `machine_id`   | String | ULID minted on first daemon start; never changes. |
-| `display_name` | String | Defaults to the hostname; user-editable.          |
-| `created_at`   | String | ISO-8601.                                         |
-| `updated_at`   | String | ISO-8601.                                         |
-
-Lives in `infrastructure/sync/persistence.py`; migration `0042`.
-
-### `sync_tombstones` (ledger)
-
-Local record of this machine's config-resource deletions, pending export as
-workspace tombstone files. A row is dropped when the resource is re-registered
-locally or after the 90-day TTL.
-
-| Field        | Type   | Notes                                  |
-| ------------ | ------ | -------------------------------------- |
-| `id`         | int    | Autoincrement PK.                      |
-| `kind`       | String | Resource kind. Unique with `name`.     |
-| `name`       | String | Resource name.                         |
-| `deleted_at` | String | ISO-8601 of the local deletion.        |
-
-Lives in `infrastructure/sync/persistence.py`; migration `0043`.
-
-## Filesystem state (the sync workspace)
-
-Default `~/.coffer/sync/` (overridable via `$COFFER_SYNC_ROOT` for tests), a git
-working tree whose `origin` is the user's remote.
+A bundle is a plain directory the user names on each export. It is not managed
+by Coffer between runs: nothing is remembered about it, nothing is written to
+it in the background, and it has no relationship to any other bundle.
 
 ```
-manifest.json
-machines/<machine-id>.json      per-machine registry entry (owner-written only)
-machines/<machine-id>/overrides/<kind>/<name>.yaml   per-machine merge patch
-knowledge/                      mirror of ~/.coffer/knowledge
-memory/                         mirror of ~/.coffer/memory
-skills/                         mirror of ~/.coffer/skills
-resources/<kind>/<name>.yaml    one deterministic file per config resource
-tombstones/resources/<kind>/<name>.json   explicit deletion record
-state/<area>/...yaml            module-owned shared state docs
-credentials/<ref>.enc           Fernet ciphertext, base64 text; never the key
+manifest.json                  bundle schema version + creation time
+knowledge/                     mirror of ~/.coffer/knowledge
+memory/                        mirror of ~/.coffer/memory
+skills/                        mirror of ~/.coffer/skills (master skill store)
+resources/<kind>/<name>.yaml   one deterministic file per config resource
+state/<area>/...yaml           module-owned shared state docs
+credentials/<ref>.enc          Fernet ciphertext, base64 text; never the key
 ```
+
+`credentials/` exists only when the export was taken with `--with-credentials`.
 
 ### `manifest.json`
 
-| Field             | Type   | Notes                                            |
-| ----------------- | ------ | ------------------------------------------------ |
-| `schema_version`  | int    | Bumped on incompatible workspace layout changes. |
+| Field            | Type   | Notes                                          |
+| ---------------- | ------ | ---------------------------------------------- |
+| `schema_version` | int    | Bumped on incompatible bundle layout changes.  |
+| `created_at`     | String | ISO-8601 of when the bundle was written.       |
 
-Only the schema version — the manifest is byte-identical on every machine so it
-can never merge-conflict. Per-machine facts live in `machines/` instead.
-`schema_version` is checked on import; a workspace newer than the running build
-fails fast (`SYNC_WORKSPACE_TOO_NEW`), mirroring the DB `DB_SCHEMA_TOO_NEW` rule.
-Current version: **3** (2 = tombstone-driven deletion; 3 = `${HOME}`-normalized
-paths — an older importer would install the literal token into configs). All
-machines upgrade before the first sync at a new version.
+Current version: **1**. The bundle is a new format with its own lineage; the
+withdrawn git workspace's `schema_version` (which had reached 3) does not carry
+over, because no bundle in that layout was ever produced by this format.
 
-### Machine entry (`machines/<machine-id>.json`)
-
-| Field            | Type    | Notes                                             |
-| ---------------- | ------- | ------------------------------------------------- |
-| `machine_id`     | String  | The owning machine's ULID (= the filename).       |
-| `display_name`   | String  | Hostname by default; user-editable.               |
-| `platform`       | String  | e.g. `darwin` / `linux`.                          |
-| `os_version`     | String  | Human-readable OS release.                        |
-| `coffer_version` | String  | Producer version, for diagnostics.                |
-| `last_sync_at`   | String  | ISO-8601 of the machine's last completed export.  |
-
-Each machine writes **only its own** entry; rewrite happens only when the run's
-commit is otherwise non-empty or the entry is >24 h old (heartbeat), so idle
-machines don't generate registry-only commit chains.
+`schema_version` is checked on import: a bundle newer than the running build
+fails closed with `SYNC_BUNDLE_TOO_NEW` before anything is applied, mirroring
+the DB `DB_SCHEMA_TOO_NEW` rule. `created_at` is informational — it is the only
+field that legitimately differs between two exports of an unchanged vault, so
+determinism comparisons exclude it.
 
 ### Resource serialization (`resources/<kind>/<name>.yaml`)
 
@@ -126,83 +62,98 @@ kind: mcp_server
 name: confluence
 description: "..."
 enabled: true
-config: { ... }     # the validated, json-mode config; keys sorted
+scope: ["claude-code"]   # omitted when null (active for every agent)
+config: { ... }          # the validated, json-mode config; keys sorted
 ```
 
-`created_at` / `updated_at` / local `id` are **excluded** (machine-local, would
-churn diffs). String values under the exporting machine's home are normalized
-to `${HOME}/...` (expanded on import), and keys covered by this machine's
-merge patch are stripped back to the last shared values. On import the resource is upserted by `<kind>:<name>`. A local
-resource is deleted **only** when its tombstone file is present — absence from
-the workspace alone never deletes (a failed import elsewhere must not
-masquerade as a deletion). When both a resource doc and a tombstone exist for
-the same ref (merge artifact), the resource doc wins.
+- `created_at` / `updated_at` / the local `id` are **excluded** — machine-local,
+  and they would make every export differ from the last.
+- Mapping keys are sorted; there is exactly one document per resource, so two
+  exports of an unchanged vault are byte-identical.
+- `scope` ([ADR-045](../../docs/decisions/ADR-045-per-agent-resource-scope.md))
+  is an ordinary field — a list of agent names — and rides through export and
+  import unmodified. No dedicated machinery; a resource out of scope for every
+  local agent still imports, and simply is not activated.
+- String values under the exporting machine's home are normalized to
+  `${HOME}/...` and expanded against the importing machine's home (see
+  [Path portability](#path-portability)).
 
-### Tombstone (`tombstones/resources/<kind>/<name>.json`)
+On import the resource is upserted by `<kind>:<name>` through the kind-agnostic
+`ResourceService`, and the kind's post-import hook runs so the machine-local
+side-effects (shim install, native-config projection, skill symlink) are
+performed. A local resource is **never** deleted by an import: absence from a
+bundle carries no meaning, because a bundle is one machine's snapshot rather
+than an assertion about what should exist everywhere.
 
-| Field        | Type   | Notes                                            |
-| ------------ | ------ | ------------------------------------------------ |
-| `deleted_at` | String | ISO-8601 of the deletion.                        |
-| `by`         | String | `machine_id` of the deleting machine.            |
+### Path portability
 
-Written at export from the `sync_tombstones` ledger; removed at export when the
-resource exists live again (re-registration wins); pruned after 90 days.
+An export written on one machine must import on another whose home directory
+differs.
+
+| Path shape         | On export                    | On import                              |
+| ------------------ | ---------------------------- | -------------------------------------- |
+| Under `$HOME`      | stored as `${HOME}/...`      | expanded against the importing home    |
+| Outside `$HOME`    | stored verbatim              | used verbatim; may not resolve here    |
+
+A verbatim path that does not exist on the importing machine surfaces as a
+per-resource import failure (that resource's ref plus the reason in the import
+result), never as a silent mismatch and never as a fatal error for the run.
 
 ### State areas (`state/<area>/...yaml`)
 
-Module-owned shared state synced alongside the vault. Each module implements
-`SyncedStatePort` (export/import of deterministic YAML docs) and the
-composition root registers the providers — sync never imports kind modules.
-Current areas:
+Module-owned shared state that belongs to the vault rather than to one machine.
+Each module implements `SyncedStatePort` (export/import of deterministic YAML
+docs) and the composition root registers the providers — the sync slice never
+imports kind modules. Current areas:
 
 - `channel-peers/<channel>/<chat>.yaml` — pairing identity (chat_id, sender_id,
   display name, preferred agent, paired_at; the machine-local
-  `active_conversation_id` never travels). Import upserts; docs referencing a
-  channel not present locally are skipped and retried next run.
+  `active_conversation_id` never travels). Import upserts; a doc referencing a
+  channel not present locally is reported as a per-doc failure and skipped.
 - `mcp-preferences/<server>.yaml` — the DISABLED capabilities per server
   (enabled is the default; seen-timestamps stay machine-local). Import
-  reconciles servers present locally to match; owned prefixes = local servers.
-  Conflict semantics are doc-granular: if both machines disabled different
-  capabilities on the same server before their first common sync, the merge
-  conflicts and the resolved side wins wholesale — the losing machine's local
-  disables are re-enabled by its next import. Embedding may stay degraded on a
-  machine until its master key is bootstrapped (locked credential refs import
-  fine; vector indexing simply stays inactive).
-- `settings/embedding.yaml` + `settings/internal-engine.yaml` — the two
-  engine singletons. A machine owns (and publishes) a singleton only once it
-  has persisted it locally, so a fresh machine's defaults never same-path
-  conflict with the fleet's values on its first merge.
-- `memory-labels/<store>.yaml` — the user-set display label of a memory
-  store (spec 007 FR-017c), so a `project-<ULID>` store reads by its name on
-  every machine instead of "unnamed store". Set, rename, and clear all
-  propagate: a clear travels as an empty-label marker doc (`{label: ""}`) —
-  mere doc absence could never distinguish "cleared" from "not yet synced",
-  and would resurrect the label from the stale workspace doc.
+  reconciles the servers present locally to match the bundle.
+- `settings/embedding.yaml` + `settings/internal-engine.yaml` — the two engine
+  singletons. Exported only once the exporting machine has persisted them
+  locally, so an untouched machine never exports its defaults over another
+  machine's configured values.
+- `memory-labels/<store>.yaml` — the user-set display label of a memory store
+  (spec 007 FR-017c), so a `project-<ULID>` store reads by its name after an
+  import instead of "unnamed store". A cleared label travels as an explicit
+  empty-label doc (`{label: ""}`) rather than as doc absence, which import
+  cannot distinguish from "never set".
 
 Skill delivery bindings (`skill_agent_bindings`) stay machine-local by
-decision: delivery is a side-effectful file operation with no row-level
-reconcile loop — syncing the rows would misreport delivery state. Adopt skills
-per machine via the existing skill surfaces.
+decision: delivery is a side-effectful file operation against directories that
+differ per machine. Adopt skills per machine through the existing skill
+surfaces after importing the master store.
 
 ### Credential blob (`credentials/<ref>.enc`)
 
-The Fernet ciphertext for `ref`, base64-encoded as text so git stores a stable
-line. No master key, no plaintext, no metadata beyond the ref (the path).
+The Fernet ciphertext for `ref`, base64-encoded as text. No master key, no
+plaintext, no metadata beyond the ref (which is the path).
 
 `ref` may be namespaced with slashes (e.g. `channel/seatalk/app-secret`,
 `provider/agnes/key`), so the blob lives at the matching nested path
-`credentials/channel/seatalk/app-secret.enc`. Export creates the parent dirs;
-import walks recursively and rebuilds the full slash ref from the relative path.
+`credentials/channel/seatalk/app-secret.enc`. Export creates the parent
+directories; import walks recursively and rebuilds the full slash ref from the
+relative path.
 
-## Local-only, never in the workspace
+Ciphertext imported onto a machine that does not hold the matching master key
+is stored as-is and reported as `credentials_locked`; the affected resources
+refuse to spawn rather than failing decryption silently. The key is
+bootstrapped out-of-band (`coffer sync key export` / `coffer sync key import`)
+and never appears in a bundle.
 
-`~/.coffer/logs/`, `coffer.db`, `daemon.json`, PID/port files, and the master
-key file/keychain entry.
+## Local-only, never in a bundle
+
+`~/.coffer/logs/`, `coffer.db`, `daemon.json`, PID/port files, chat history,
+the audit log, and the master key file / keychain entry.
 
 ## Derived indexes (excluded + regenerated)
 
 Files that are *regenerated* from the source-of-truth files are excluded from
-the mirror — they differ per machine, so syncing them would cause spurious
-same-path conflicts. The memory store's `MEMORY.md` index is the current case:
-the per-fact `<slug>.md` files sync, and `MEMORY.md` is rebuilt from the merged
-facts on import. The set lives in `infrastructure/sync/workspace.DERIVED_INDEX_NAMES`.
+the mirror — carrying them would let a stale copy overwrite a freshly rebuilt
+one. The memory store's `MEMORY.md` index is the current case: the per-fact
+`<slug>.md` files travel, and `MEMORY.md` is rebuilt from the imported facts.
+The set lives in `infrastructure/sync/` alongside the bundle layout.

@@ -1,10 +1,9 @@
-"""Integration tests for `coffer scope ...` CLI subcommands (ADR-045, Task 15).
+"""Integration tests for `coffer scope ...` CLI subcommands (ADR-045).
 
 Reuses the shared ``in_proc_daemon`` fixture (see conftest.py), which wires
-two scope-capable Kinds specifically for this file: ``fake_scoped``
-(machine + agent axes, mirrors mcp_server/skill) and ``fake_machine_only``
-(machine axis only, mirrors agent/channel) — alongside the plain
-``fake_kind`` (no scope support) used by test_resource_cmd.py.
+``fake_scoped`` (supports_scope=True, mirrors mcp_server/skill) alongside the
+plain ``fake_kind`` (no scope support, mirrors agent/channel/knowledge_base/
+memory) used by test_resource_cmd.py.
 
 Setup/assertions talk to the resource-scope HTTP routes directly via the
 monkeypatched client (bypassing the CLI, like test_resource_cmd.py's
@@ -54,16 +53,26 @@ def test_scope_show_happy_path(in_proc_daemon):
     assert result.exit_code == 0, result.output
     body = json.loads(result.output)
     assert body["scope"] is None
-    assert sorted(body["axes"]) == ["agent", "machine"]
+    assert body["supports_scope"] is True
+
+
+def test_scope_show_reports_kinds_without_scope(in_proc_daemon):
+    client, _info = _cli_client.client_or_exit()
+    r = client.post("/resources", json={"kind": "fake_kind", "name": "n1", "config": {"foo": 1}})
+    assert r.status_code == 201, r.text
+    result = _runner.invoke(cli_app, ["scope", "show", "fake_kind:n1"])
+    assert result.exit_code == 0, result.output
+    body = json.loads(result.output)
+    assert body["scope"] is None
+    assert body["supports_scope"] is False
 
 
 def test_scope_show_reflects_current_scope(in_proc_daemon):
     _register("fake_scoped", "w1")
-    _put_scope("fake_scoped", "w1", {"m1": ["a", "b"], "m2": "*"})
+    _put_scope("fake_scoped", "w1", ["claude-code", "codex"])
     result = _runner.invoke(cli_app, ["scope", "show", "fake_scoped:w1"])
     assert result.exit_code == 0, result.output
-    body = json.loads(result.output)
-    assert body["scope"] == {"m1": ["a", "b"], "m2": "*"}
+    assert json.loads(result.output)["scope"] == ["claude-code", "codex"]
 
 
 def test_scope_show_bad_ref_exit_2(in_proc_daemon):
@@ -79,102 +88,57 @@ def test_scope_show_bad_ref_exit_2(in_proc_daemon):
 def test_scope_set_with_agents(in_proc_daemon):
     _register("fake_scoped", "w1")
     result = _runner.invoke(
-        cli_app, ["scope", "set", "fake_scoped:w1", "--machine", "m1", "--agents", "a,b"]
+        cli_app, ["scope", "set", "fake_scoped:w1", "--agents", "claude-code,codex"]
     )
     assert result.exit_code == 0, result.output
-    assert _get_scope("fake_scoped", "w1")["scope"] == {"m1": ["a", "b"]}
+    assert _get_scope("fake_scoped", "w1")["scope"] == ["claude-code", "codex"]
 
 
-def test_scope_set_with_all_agents(in_proc_daemon):
+def test_scope_set_replaces_the_whole_list(in_proc_daemon):
     _register("fake_scoped", "w1")
-    result = _runner.invoke(
-        cli_app, ["scope", "set", "fake_scoped:w1", "--machine", "m1", "--all-agents"]
-    )
+    _put_scope("fake_scoped", "w1", ["claude-code", "codex"])
+    result = _runner.invoke(cli_app, ["scope", "set", "fake_scoped:w1", "--agents", "cursor"])
     assert result.exit_code == 0, result.output
-    assert _get_scope("fake_scoped", "w1")["scope"] == {"m1": "*"}
+    assert _get_scope("fake_scoped", "w1")["scope"] == ["cursor"]
 
 
-def test_scope_set_merges_additional_machine(in_proc_daemon):
+def test_scope_set_no_agents_is_dormant(in_proc_daemon):
     _register("fake_scoped", "w1")
-    first = _runner.invoke(
-        cli_app, ["scope", "set", "fake_scoped:w1", "--machine", "m1", "--all-agents"]
-    )
-    assert first.exit_code == 0, first.output
-    second = _runner.invoke(
-        cli_app, ["scope", "set", "fake_scoped:w1", "--machine", "m2", "--agents", "x"]
-    )
-    assert second.exit_code == 0, second.output
-    assert _get_scope("fake_scoped", "w1")["scope"] == {"m1": "*", "m2": ["x"]}
-
-
-def test_scope_set_overwrites_same_machine(in_proc_daemon):
-    _register("fake_scoped", "w1")
-    _put_scope("fake_scoped", "w1", {"m1": ["a"]})
-    result = _runner.invoke(
-        cli_app, ["scope", "set", "fake_scoped:w1", "--machine", "m1", "--all-agents"]
-    )
+    result = _runner.invoke(cli_app, ["scope", "set", "fake_scoped:w1", "--no-agents"])
     assert result.exit_code == 0, result.output
-    assert _get_scope("fake_scoped", "w1")["scope"] == {"m1": "*"}
+    assert _get_scope("fake_scoped", "w1")["scope"] == []
+    assert "dormant" in result.output.lower()
 
 
 def test_scope_set_requires_exactly_one_mode(in_proc_daemon):
     _register("fake_scoped", "w1")
-    neither = _runner.invoke(cli_app, ["scope", "set", "fake_scoped:w1", "--machine", "m1"])
+    neither = _runner.invoke(cli_app, ["scope", "set", "fake_scoped:w1"])
     assert neither.exit_code == 2
 
     both = _runner.invoke(
-        cli_app,
-        [
-            "scope",
-            "set",
-            "fake_scoped:w1",
-            "--machine",
-            "m1",
-            "--agents",
-            "a",
-            "--all-agents",
-        ],
+        cli_app, ["scope", "set", "fake_scoped:w1", "--agents", "codex", "--no-agents"]
     )
     assert both.exit_code == 2
 
 
 def test_scope_set_empty_agents_list_exit_2(in_proc_daemon):
-    """`--agents ","` (no actual names) must not silently PUT a dormant entry."""
+    """`--agents ","` (no actual names) must not silently PUT a dormant scope."""
     _register("fake_scoped", "w1")
-    result = _runner.invoke(
-        cli_app, ["scope", "set", "fake_scoped:w1", "--machine", "m1", "--agents", ","]
-    )
+    result = _runner.invoke(cli_app, ["scope", "set", "fake_scoped:w1", "--agents", ","])
     assert result.exit_code == 2
     assert _get_scope("fake_scoped", "w1")["scope"] is None
 
 
-def test_scope_set_machine_only_rejects_agents(in_proc_daemon):
-    _register("fake_machine_only", "b1")
-    result = _runner.invoke(
-        cli_app,
-        ["scope", "set", "fake_machine_only:b1", "--machine", "m1", "--agents", "a,b"],
-    )
-    assert result.exit_code == 2
-
-
-def test_scope_set_machine_only_implies_all_agents(in_proc_daemon):
-    _register("fake_machine_only", "b1")
-    result = _runner.invoke(cli_app, ["scope", "set", "fake_machine_only:b1", "--machine", "m1"])
-    assert result.exit_code == 0, result.output
-    assert _get_scope("fake_machine_only", "b1")["scope"] == {"m1": "*"}
-
-
-def test_scope_set_machine_only_explicit_all_agents_ok(in_proc_daemon):
-    _register("fake_machine_only", "b1")
-    result = _runner.invoke(
-        cli_app, ["scope", "set", "fake_machine_only:b1", "--machine", "m1", "--all-agents"]
-    )
-    assert result.exit_code == 0, result.output
-    assert _get_scope("fake_machine_only", "b1")["scope"] == {"m1": "*"}
+def test_scope_set_on_kind_without_scope_fails(in_proc_daemon):
+    client, _info = _cli_client.client_or_exit()
+    r = client.post("/resources", json={"kind": "fake_kind", "name": "n2", "config": {"foo": 1}})
+    assert r.status_code == 201, r.text
+    result = _runner.invoke(cli_app, ["scope", "set", "fake_kind:n2", "--agents", "codex"])
+    assert result.exit_code != 0
 
 
 def test_scope_set_bad_ref_exit_2(in_proc_daemon):
-    result = _runner.invoke(cli_app, ["scope", "set", "noref", "--machine", "m1", "--all-agents"])
+    result = _runner.invoke(cli_app, ["scope", "set", "noref", "--agents", "codex"])
     assert result.exit_code == 2
 
 
@@ -183,42 +147,20 @@ def test_scope_set_bad_ref_exit_2(in_proc_daemon):
 # ---------------------------------------------------------------------------
 
 
-def test_scope_clear_one_entry_leaves_others(in_proc_daemon):
+def test_scope_clear_restores_active_for_every_agent(in_proc_daemon):
     _register("fake_scoped", "w1")
-    _put_scope("fake_scoped", "w1", {"m1": ["a"], "m2": "*"})
-    result = _runner.invoke(cli_app, ["scope", "clear", "fake_scoped:w1", "--machine", "m1"])
-    assert result.exit_code == 0, result.output
-    assert _get_scope("fake_scoped", "w1")["scope"] == {"m2": "*"}
-    assert "dormant" not in result.output.lower()
-
-
-def test_scope_clear_last_entry_warns_dormant(in_proc_daemon):
-    _register("fake_scoped", "w1")
-    _put_scope("fake_scoped", "w1", {"m1": "*"})
-    result = _runner.invoke(cli_app, ["scope", "clear", "fake_scoped:w1", "--machine", "m1"])
-    assert result.exit_code == 0, result.output
-    assert _get_scope("fake_scoped", "w1")["scope"] == {}
-    assert "dormant" in result.output.lower()
-
-
-def test_scope_clear_all_restores_active_everywhere(in_proc_daemon):
-    _register("fake_scoped", "w1")
-    _put_scope("fake_scoped", "w1", {"m1": "*"})
+    _put_scope("fake_scoped", "w1", ["claude-code"])
     result = _runner.invoke(cli_app, ["scope", "clear", "fake_scoped:w1"])
     assert result.exit_code == 0, result.output
     assert _get_scope("fake_scoped", "w1")["scope"] is None
-    lowered = result.output.lower()
-    assert "everywhere" in lowered or "every machine" in lowered
+    assert "every agent" in result.output.lower()
 
 
-def test_scope_clear_machine_on_null_scope_is_noop(in_proc_daemon):
-    """Clearing a machine from a null scope (active everywhere) is a no-op."""
+def test_scope_clear_from_dormant(in_proc_daemon):
     _register("fake_scoped", "w1")
-    # scope stays null (active everywhere)
-    result = _runner.invoke(cli_app, ["scope", "clear", "fake_scoped:w1", "--machine", "m1"])
+    _put_scope("fake_scoped", "w1", [])
+    result = _runner.invoke(cli_app, ["scope", "clear", "fake_scoped:w1"])
     assert result.exit_code == 0, result.output
-    assert "already active everywhere" in result.output.lower()
-    # Verify scope is still null
     assert _get_scope("fake_scoped", "w1")["scope"] is None
 
 

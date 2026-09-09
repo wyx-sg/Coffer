@@ -5,7 +5,6 @@ import {
   Bot,
   Boxes,
   Brain,
-  Laptop,
   MessageSquare,
   Library,
   PanelLeftClose,
@@ -75,7 +74,6 @@ const NAV_GROUPS: NavGroup[] = [
   {
     labelKey: "nav.group.system",
     items: [
-      { to: "/machines", labelKey: "nav.machines", icon: Laptop, end: true },
       { to: "/audit", labelKey: "nav.audit", icon: ScrollText },
       { to: "/settings", labelKey: "nav.settings", icon: SettingsIcon },
     ],
