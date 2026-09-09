@@ -766,7 +766,7 @@ key 对渠道会被拒绝（`Kind.validate_scope_shape`，ADR-045 复审 Fix 1�
 
 ### Scenario: a PDF reaches a path-native agent as extracted text
 
-- **Given** 一个给路径原生 agent（Codex/Hermes/OpenCode/Cursor）的 turn 上带一个
+- **Given** 一个给路径原生 agent（Codex）的 turn 上带一个
   PDF（或 office 文档）附件
 - **When** adapter 准备该 turn
 - **Then** 文档被抽取成文字并以带标签的 `[Document: <name>]` 块折进 prompt，且该
@@ -970,12 +970,12 @@ chat 里运行整个 agent 舰队。
   adapter，规范化每条消息（媒体下载、转发展平、owner-gate、审计、vault），并为一个
   turn 驱动**任意**受管 agent——可按会话切换，且（因为每个线程都是自己的会话，
   FR-032）可按线程切换，于是一个 bot 能在一个线程里跑 Claude Code、在另一个线程里跑
-  Codex。这是 Coffer 的护城河：没有自己 channel 的 agent（Claude Code、Codex、Cursor、
-  OpenCode）**只能**经此触达 IM；且 **SeaTalk 对每个 agent 都是 Coffer-hosted，因为
+  Codex。这是 Coffer 的护城河：没有自己 channel 的 agent（Claude Code、Codex）**只能**
+  经此触达 IM；且 **SeaTalk 对每个 agent 都是 Coffer-hosted，因为
   没有任何外部网关会说 SeaTalk。** 整个 spec 009——包括下方的增强（FR-028…FR-042）
   ——描述的都是这条路径。保持其 agent 无关的那一处接缝：每条入站消息都变成文本加上
   磁盘上的 `Attachment(path, mime, filename)`，每个 agent adapter 按自己的方式物化附件
-  （Claude 内联图片/PDF；Codex/Hermes/OpenCode 收到文件路径；音频在上游被转写）。
+  （Claude 内联图片/PDF；Codex 收到文件路径；音频在上游被转写）。
   channel 层从不按 agent 分支。
 - **Externally-hosted channel 是非目标（non-goal）。** 一个 agent 原生网关（独立运行的
   OpenClaw、Hermes）或一个官方厂商集成（Claude-in-Slack、Codex-in-Slack、
@@ -1013,7 +1013,7 @@ Coffer-hosted channel 与它们并不冗余——它是通往统一、本地、�
   转发记录）并挂到 turn，与既有的展平文本并列。（此前线程媒体只作为 agent 无法打开的、
   需鉴权的 `[image] <url>` 出现。）
 - **FR-030**: PDF 与 office 文档以抽取文本触达每个 agent，而非作为视觉输入。一个文档
-  附件被文本抽取进一个上下文块，于是路径原生 agent（Codex/Hermes/OpenCode）与视觉
+  附件被文本抽取进一个上下文块，于是路径原生 agent（Codex）与视觉
   agent 都能看到其内容；图片对支持它的 agent 仍保持视觉内联。
 - **FR-031**: SeaTalk 出站媒体被投递且线程感知。`send_media` 接到 SeaTalk 的文件上传 API
   （`supports_media` 为 true）；一个 agent 的 `MEDIA:/path` sentinel 把文件发回该 turn

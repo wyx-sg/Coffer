@@ -4,17 +4,14 @@ Pure domain text transforms — no filesystem access. The application layer read
 the agent's hooks file, calls one of these to produce new text, and writes it
 back through the atomic store.
 
-Two on-disk shapes exist, discriminated by :class:`HookFlavor` (see
-``context_injection`` for the exact JSON of each). Both nest under a top-level
-``hooks`` object keyed by event name; they differ in whether an event's list
-holds matcher *groups* (Claude Code, Codex) or flat *command* entries (Cursor),
-and in how the event is spelled.
+One on-disk shape exists (see ``context_injection`` for its exact JSON): a
+top-level ``hooks`` object keyed by the event's PascalCase name, each event
+holding matcher *groups*. Both supported products read it.
 
 Coffer recognises *its own* entry by the command basename ``coffer-hook`` — the
-installed command is an absolute path plus ``--agent <name>``, and for a non-Claude
-flavor also ``--dialect <flavor> --event <key>``. Only ``argv[0]``'s basename is
-matched, so the args may grow without breaking recognition. User-authored hook
-entries for the same event are never touched.
+installed command is an absolute path plus ``--agent <name>``. Only ``argv[0]``'s
+basename is matched, so the args may grow without breaking recognition.
+User-authored hook entries for the same event are never touched.
 """
 
 from __future__ import annotations
@@ -26,20 +23,14 @@ from collections.abc import Mapping, MutableMapping
 from typing import Any
 
 from coffer.domain.agent.config_files import ConfigFileFormat
-from coffer.domain.agent.context_injection import (
-    CURSOR_SCHEMA_VERSION,
-    HOOK_CONTAINER_KEY,
-    HookEvent,
-    HookFlavor,
-    event_key,
-)
+from coffer.domain.agent.context_injection import HOOK_CONTAINER_KEY, HookEvent
 from coffer.domain.agent.mcp_entries import _parse_json
 
 #: Basename that marks an entry as Coffer's own (vs a user-authored hook).
 COFFER_HOOK_BASENAME = "coffer-hook"
 
-#: The ``matcher`` Coffer registers per event, for the matcher-group flavor (the
-#: union of trigger sources the external hook contract recognises for that event).
+#: The ``matcher`` Coffer registers per event (the union of trigger sources the
+#: external hook contract recognises for that event).
 _MATCHERS: dict[HookEvent, str] = {
     HookEvent.SESSION_START: "startup|resume|clear|compact",
     HookEvent.SESSION_END: "clear|logout|prompt_input_exit|other",
@@ -74,14 +65,11 @@ def _entry_command(entry: Any) -> str | None:
     return str(cmd) if cmd is not None else None
 
 
-def _is_coffer_entry(entry: Any, flavor: HookFlavor) -> bool:
+def _is_coffer_entry(entry: Any) -> bool:
     """Whether one entry in an event's list was installed by Coffer.
 
-    ``CURSOR`` entries carry the command directly; ``CLAUDE`` entries are matcher
-    groups whose ``hooks`` leaves carry it.
+    An entry is a matcher group whose ``hooks`` leaves carry the command.
     """
-    if flavor is HookFlavor.CURSOR:
-        return _is_coffer_command(_entry_command(entry))
     if not isinstance(entry, MutableMapping):
         return False
     leaves = entry.get("hooks")
@@ -90,9 +78,7 @@ def _is_coffer_entry(entry: Any, flavor: HookFlavor) -> bool:
     return any(_is_coffer_command(_entry_command(leaf)) for leaf in leaves)
 
 
-def _coffer_entry(command: str, event: HookEvent, flavor: HookFlavor) -> dict[str, Any]:
-    if flavor is HookFlavor.CURSOR:
-        return {"command": command}
+def _coffer_entry(command: str, event: HookEvent) -> dict[str, Any]:
     return {
         "matcher": _MATCHERS[event],
         "hooks": [{"type": "command", "command": command}],
@@ -109,15 +95,12 @@ def apply_install(
     commands: Mapping[HookEvent, str],
     events: tuple[HookEvent, ...],
     fmt: ConfigFileFormat,
-    flavor: HookFlavor = HookFlavor.CLAUDE,
 ) -> str:
     """Return new hooks text with Coffer's ``coffer-hook`` entry for each event.
 
-    ``commands`` maps each event to the exact command string to install. It is
-    per-event because Cursor's hooks file keys entries by event but its stdin
-    payload is not guaranteed to name the event, so the event is baked into the
-    command's args; Claude/Codex read the event from stdin and so map every event
-    to the same command.
+    ``commands`` maps each event to the exact command string to install; both
+    supported products read the event from stdin, so every event maps to the
+    same command.
 
     Idempotent: Coffer's existing entry (recognised by the ``coffer-hook``
     basename) is replaced in place; user-authored hooks for the same event are
@@ -130,19 +113,14 @@ def apply_install(
         hooks = {}
         data[HOOK_CONTAINER_KEY] = hooks
 
-    # Cursor's schema carries a version at the top level. Only supply it when
-    # creating the key — an existing value is the user's (or a newer Cursor's).
-    if flavor is HookFlavor.CURSOR and "version" not in data:
-        data["version"] = CURSOR_SCHEMA_VERSION
-
     for event in events:
-        key = event_key(flavor, event)
+        key = event.value
         entries = hooks.get(key)
         if not isinstance(entries, list):
             entries = []
         # Drop any prior coffer entry, keep user-authored ones, append fresh.
-        kept = [e for e in entries if not _is_coffer_entry(e, flavor)]
-        kept.append(_coffer_entry(commands[event], event, flavor))
+        kept = [e for e in entries if not _is_coffer_entry(e)]
+        kept.append(_coffer_entry(commands[event], event))
         hooks[key] = kept
 
     return _dump(data)
@@ -153,18 +131,11 @@ def apply_uninstall(
     *,
     events: tuple[HookEvent, ...],
     fmt: ConfigFileFormat,
-    flavor: HookFlavor = HookFlavor.CLAUDE,
 ) -> str:
     """Return new hooks text with ONLY Coffer's entries removed.
 
     User-authored hooks and unrelated keys are left intact. Now-empty event
     arrays and an empty top-level ``hooks`` object are dropped cleanly.
-
-    Cursor's top-level ``version`` describes the file, not our entry, so it
-    survives alongside any other content. But when removing our hooks empties the
-    document down to ``version`` alone, that ``version`` is one ``apply_install``
-    wrote into a file that had none — leaving it behind would mean uninstall does
-    not undo install. So an otherwise-empty document is emptied completely.
     """
     assert fmt is ConfigFileFormat.JSON, f"hook uninstall unsupported for format {fmt!r}"
     data = _parse_json(content)
@@ -173,11 +144,11 @@ def apply_uninstall(
         return _dump(data)
 
     for event in events:
-        key = event_key(flavor, event)
+        key = event.value
         entries = hooks.get(key)
         if not isinstance(entries, list):
             continue
-        kept = [e for e in entries if not _is_coffer_entry(e, flavor)]
+        kept = [e for e in entries if not _is_coffer_entry(e)]
         if kept:
             hooks[key] = kept
         else:
@@ -185,10 +156,6 @@ def apply_uninstall(
 
     if not hooks:
         del data[HOOK_CONTAINER_KEY]
-
-    # Only our own `version` can be all that remains — see the docstring.
-    if flavor is HookFlavor.CURSOR and set(data) == {"version"}:
-        del data["version"]
 
     return _dump(data)
 
@@ -198,7 +165,6 @@ def is_installed(
     *,
     events: tuple[HookEvent, ...],
     fmt: ConfigFileFormat,
-    flavor: HookFlavor = HookFlavor.CLAUDE,
 ) -> bool:
     """Whether Coffer's ``coffer-hook`` entry is present for every given event."""
     assert fmt is ConfigFileFormat.JSON, f"hook status unsupported for format {fmt!r}"
@@ -208,7 +174,7 @@ def is_installed(
     if not isinstance(hooks, dict):
         return False
     for event in events:
-        entries = hooks.get(event_key(flavor, event))
-        if not isinstance(entries, list) or not any(_is_coffer_entry(e, flavor) for e in entries):
+        entries = hooks.get(event.value)
+        if not isinstance(entries, list) or not any(_is_coffer_entry(e) for e in entries):
             return False
     return True

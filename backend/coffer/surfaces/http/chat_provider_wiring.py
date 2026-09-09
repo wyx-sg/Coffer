@@ -1,10 +1,10 @@
 """Chat agent-provider registry wiring (spec 008), split from ``wiring.py``.
 
-The agent-provider registry is the platform seam: chat lists only
-Coffer-managed agents, and a further agent is one more ``register()`` call
-here, with no change to the chat surface, persistence, or the wire contract.
-Providers surface in the picker only when their binary is on PATH
-(``availability()``).
+The agent-provider registry is the platform seam: chat lists only Coffer's two
+managed agents — Claude Code and Codex — and a further agent would be one more
+``register()`` call here, with no change to the chat surface, persistence, or
+the wire contract. Providers surface in the picker only when their binary is on
+PATH (``availability()``).
 """
 
 from __future__ import annotations
@@ -18,10 +18,6 @@ from coffer.domain.errors import CredentialMissing
 from coffer.domain.provider.errors import NoActiveProvider
 from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
-from coffer.infrastructure.chat.cursor_provider import CursorProvider
-from coffer.infrastructure.chat.hermes_provider import HermesProvider
-from coffer.infrastructure.chat.openclaw_provider import OpenclawProvider
-from coffer.infrastructure.chat.opencode_provider import OpencodeProvider
 from coffer.surfaces.http.dependencies import get_provider_service
 
 if TYPE_CHECKING:
@@ -33,10 +29,9 @@ def build_agent_provider_registry(conv_repo: ConversationRepo) -> AgentProviderR
     registry = AgentProviderRegistry()
     registry.register(ClaudeSdkProvider(conversations=conv_repo), display_name="Claude Code")
 
-    # Codex / opencode / hermes each read Coffer's projected key from the
-    # COFFER_PROVIDER_KEY env var (config.toml env_key; opencode.json + config.yaml
-    # {env:...} references). Resolve the connection active FOR that agent per turn —
-    # keyed by agent, not wire, so an openai-compatible gateway routed to any of them
+    # Codex reads Coffer's projected key from the COFFER_PROVIDER_KEY env var
+    # (config.toml env_key). Resolve the connection active FOR that agent per turn —
+    # keyed by agent, not wire, so an openai-compatible gateway routed to it
     # resolves correctly — and inject it into the subprocess env; with no active
     # connection it stays None so the agent uses its own login (ADR-032 env_key seam).
     def _key_resolver(agent_type: AgentType) -> Callable[[], Awaitable[str | None]]:
@@ -53,39 +48,5 @@ def build_agent_provider_registry(conv_repo: ConversationRepo) -> AgentProviderR
     registry.register(
         CodexAppServerProvider(conversations=conv_repo, resolve_key=_key_resolver(AgentType.CODEX)),
         display_name="Codex",
-    )
-    registry.register(
-        OpencodeProvider(conversations=conv_repo, resolve_key=_key_resolver(AgentType.OPENCODE)),
-        display_name="opencode",
-    )
-
-    # hermes has no working upstream hook, so its session context lives in a
-    # static SOUL.md block (ADR-042 INSTRUCTIONS_BLOCK) that this closure
-    # re-renders before each Coffer-driven turn. Lazy getter: the hook service
-    # is wired by agent_skill_wiring, after this module.
-    async def _refresh_hermes_blocks() -> int:
-        from coffer.surfaces.http.dependencies import get_agent_hook_service
-
-        count: int = await get_agent_hook_service().refresh_blocks_for_type(AgentType.HERMES)
-        return count
-
-    registry.register(
-        HermesProvider(
-            conversations=conv_repo,
-            resolve_key=_key_resolver(AgentType.HERMES),
-            refresh_context=_refresh_hermes_blocks,
-        ),
-        display_name="Hermes",
-    )
-    # Cursor is locked to Cursor's own backend and uses its OWN auth
-    # (`cursor-agent login` / CURSOR_API_KEY): Coffer projects no connection and
-    # injects no key, so there is NO resolve_key here (provider-projection-N/A).
-    registry.register(CursorProvider(conversations=conv_repo), display_name="Cursor")
-    # openclaw reads Coffer's projected key from COFFER_PROVIDER_KEY too
-    # (openclaw.json models.providers.coffer.apiKey = "${...}", ADR-044) — same
-    # per-turn env injection seam as Codex/opencode/hermes.
-    registry.register(
-        OpenclawProvider(conversations=conv_repo, resolve_key=_key_resolver(AgentType.OPENCLAW)),
-        display_name="OpenClaw",
     )
     return registry

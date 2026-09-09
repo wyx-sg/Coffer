@@ -12,7 +12,7 @@
 [ADR-013](ADR-013-agent-native-shared-memory.md) made Coffer's one canonical
 memory store reach multiple agents through **native projection**: symlink the
 canonical per-project memory dir into Claude Code's auto-memory location, render
-a marker-fenced managed block into Codex / OpenCode / OpenClaw / Hermes config
+a marker-fenced managed block into Codex config
 files, and **disable each agent's own native memory** so no second copy could
 diverge. MCP `recall`/`remember` were the universal floor; projection was the
 extra layer that made memory load "ambiently" at session start.
@@ -73,9 +73,9 @@ Concretely:
   journal + the knowledge index — into the agent's context (context injection via
   the `session-context` endpoint, never a file write), so an agent starts with
   memory without calling `recall`; bodies are still fetched on demand via
-  `recall`. Delivered through the per-agent SessionStart hook (ADR-042
-  `ContextInjectionSpec`) for every agent that has one (Claude Code, Codex,
-  Cursor). This restores the ambient auto-load the projection layer used to
+  `recall`. Delivered through the per-agent SessionStart hook
+  (`ContextInjectionSpec`, spec 004 FR-043) for every agent that has one
+  (Claude Code, Codex). This restores the ambient auto-load the projection layer used to
   provide, without touching native files.
 
 ## Consequences

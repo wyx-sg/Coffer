@@ -15,10 +15,6 @@ import sys
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from coffer.application.skill.delivery_ops import (
-    delivers_skill_folders,
-    reconcile_external_registration,
-)
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import CofferError, ResourceAlreadyExists
 from coffer.domain.resource import Resource, ResourceRef
@@ -152,18 +148,6 @@ async def auto_bind_all(*, service: SkillService, skill: Resource, actor: str) -
     for a in await service._rs.list(kind="agent"):
         if not a.enabled:
             continue
-        # Non-folder delivery agents (rules_mdc — recognized extension point)
-        # can't receive folder deliveries; skip auto-bind audibly rather than
-        # raise per-agent. FOLDER and EXTERNAL_DIR agents both proceed.
-        if not delivers_skill_folders(service, a):
-            await audit_autobind_skipped(
-                service=service,
-                skill_name=skill.name,
-                agent_name=a.name,
-                reason="delivery_mode_unsupported",
-                actor=actor,
-            )
-            continue
         # Per-agent follow policy (FR-025): agents that opted out of the
         # master library, or excluded this skill, are skipped — audibly, so
         # "imported but not delivered to agent X" is observable.
@@ -229,12 +213,6 @@ async def relink_agent_skills(*, service: SkillService, agent_name: str, actor: 
     try:
         agent = await service._rs.get(ResourceRef("agent", agent_name))
     except CofferError:
-        return
-    # Non-folder agents (rules_mdc — recognized extension point) have no folder
-    # bindings to move; skip rather than crash on config-dir-change
-    # reconciliation. FOLDER and EXTERNAL_DIR agents relink via their resolved
-    # target dir.
-    if not delivers_skill_folders(service, agent):
         return
     local = await service._local_machine_id()
     if local is not None and not machine_in_scope(agent.scope, local):
@@ -309,8 +287,3 @@ async def relink_agent_skills(*, service: SkillService, agent_name: str, actor: 
         except (CofferError, OSError) as e:
             logger.warning("relink of skill %r for agent %r skipped: %s", skill.name, agent_name, e)
             continue
-
-    # EXTERNAL_DIR agents: the Coffer-owned external dir is agent-name-based, so
-    # the links above don't move on a config-dir change — but the registration
-    # target (the agent's config file) did, so re-apply it to the new config.
-    await reconcile_external_registration(service, agent)

@@ -869,7 +869,7 @@ stale after any rebind; not consulted).
 ### Scenario: a PDF reaches a path-native agent as extracted text
 
 - **Given** a turn carrying a PDF (or office document) attachment for a
-  path-native agent (Codex/Hermes/OpenCode/Cursor)
+  path-native agent (Codex)
 - **When** the adapter prepares the turn
 - **Then** the document is text-extracted and folded into the prompt as a
   labelled `[Document: <name>]` block, and the document is not also sent as a
@@ -1112,13 +1112,13 @@ Two kinds of channel live under this plane:
   switchable per conversation, and (since each thread is its own conversation,
   FR-032) per thread, so one bot can run Claude Code in one thread and Codex in
   another. This is Coffer's moat: agents with no channel of their own (Claude
-  Code, Codex, Cursor, OpenCode) reach IM *only* this way; and **SeaTalk is
+  Code, Codex) reach IM *only* this way; and **SeaTalk is
   Coffer-hosted for every agent, because no external gateway speaks SeaTalk.**
   All of spec 009 — including the enhancements below (FR-028…FR-042) — describes
   this path. The one seam that keeps it agent-agnostic: every inbound message
   becomes text plus on-disk `Attachment(path, mime, filename)`, and each agent
   adapter materializes attachments its own way (Claude inlines images/PDFs;
-  Codex/Hermes/OpenCode receive file paths; audio is transcribed upstream). The
+  Codex receives file paths; audio is transcribed upstream). The
   channel layer never branches per agent.
 - **Externally-hosted channels are a non-goal.** An agent-native gateway
   (OpenClaw, Hermes run standalone) or an official vendor integration
@@ -1169,7 +1169,7 @@ capabilities the official personal bridges lack.
   the agent could not open.)
 - **FR-030**: PDFs and office documents reach every agent as extracted text, not
   as a vision input. A document attachment is text-extracted into a context
-  block so path-native agents (Codex/Hermes/OpenCode) and vision agents alike
+  block so path-native agents (Codex) and vision agents alike
   see its content; images stay vision-inlined for agents that support it.
 - **FR-031**: SeaTalk outbound media is delivered and thread-aware. `send_media`
   is wired to SeaTalk's file-upload API (`supports_media` true); an agent

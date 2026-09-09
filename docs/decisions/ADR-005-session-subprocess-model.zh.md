@@ -9,7 +9,7 @@
 
 ## 背景
 
-当两个 MCP 客户端（例如 Claude Code 和 Cursor）同时连接到 Coffer 时，
+当两个 MCP 客户端（例如 Claude Code 和 Codex）同时连接到 Coffer 时，
 gateway 必须决定如何管理上游 MCP 服务器子进程：
 
 - 所有下游会话 (session) 共享同一上游子进程，由 gateway 多路复用 MCP 协议

@@ -190,27 +190,18 @@ resource kind 一样。
 
 ### 各 agent 的交付目标
 
-每个 agent 通过能力清单（`domain/agent/descriptor.py`）声明 Coffer _如何_ 以及
-_交付到哪里_：`skill_delivery_mode`（`SkillDeliveryMode` —
-`folder` / `rules_mdc` / `external_dir`），folder 模式还携带 agent 配置目录下的
-`skill_subpath`。skill 服务通过组合根注入的 resolver 读取该模式，resolver 返回
-普通字符串（契约 5：服务永不导入 descriptor）。
+skill 交付只有一种模型：Coffer 把 master skill 文件夹符号链接（失败则复制）进
+agent 的 skills 目录。每个 agent 通过能力清单（`domain/agent/descriptor.py`）声明
+该目录在_哪里_——即 agent 配置目录下的 `skill_subpath`。skill 服务通过组合根注入的
+resolver 解析目标目录（契约 5：服务永不导入 descriptor）。
 
-| Agent          | 交付模式       | folder 目标                  | 状态                               |
-| -------------- | -------------- | ---------------------------- | ---------------------------------- |
-| Claude Code    | `folder`       | `<config_dir>/skills/<name>` | 已交付                             |
-| Codex          | `folder`       | `<config_dir>/skills/<name>` | 已交付                             |
-| `rules_mdc`    | —              | —                            | 保留扩展点（当前无 agent 类型使用）|
-| `external_dir` | —              | —                            | 保留扩展点（当前无 agent 类型使用）|
+| Agent          | folder 目标                  | 状态   |
+| -------------- | ---------------------------- | ------ |
+| Claude Code    | `<config_dir>/skills/<name>` | 已交付 |
+| Codex          | `<config_dir>/skills/<name>` | 已交付 |
 
-folder 交付通过 symlink（FAT32 上回退为复制）把 master 目录链接到目标，agent 读取
-到的是规范的 `SKILL.md`，路径为 `<config_dir>/skills/<name>/SKILL.md`。
-
-**`external_dir` 与 `rules_mdc`——保留扩展点。** 这两个 `SkillDeliveryMode` 枚举值
-作为有意保留的扩展点存在，当前没有任何 agent 类型使用。为使用这些模式的（假想）
-agent 启用 skill 会在任何文件系统写入之前抛出 `SkillDeliveryUnsupported`（HTTP 422）；
-follow / relink 协调器会跳过此类 agent，因此注册、配置目录变更和策略变更流程永远
-不会失败。
+链接指向 master 目录，因此 agent 读取到的是规范的 `SKILL.md`，路径为
+`<config_dir>/skills/<name>/SKILL.md`。
 
 ## Application 服务契约（`backend/coffer/application/skill/`）
 

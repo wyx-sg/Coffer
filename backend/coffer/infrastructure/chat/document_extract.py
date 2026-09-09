@@ -2,7 +2,7 @@
 
 An inbound document (PDF, docx, pptx, xlsx, …) should reach the agent as
 **extracted text folded into the turn**, not as a vision input or an opaque
-binary path. A path-native agent (Codex/Hermes/OpenCode/Cursor) otherwise only
+binary path. A path-native agent (Codex) otherwise only
 gets a "file saved at /path" note and cannot parse a binary PDF; a vision agent
 would waste the document as an image. So the adapter extracts the document to
 text before building the turn — mirroring the audio transcription seam.

@@ -167,8 +167,7 @@ Per-skill bindings are precise but chatty: every new skill must be enabled agent
 - **Unmanaged entry is a symlink pointing outside the master store**: Listed as unmanaged-but-not-adoptable (adopting would move someone else's source of truth); the user can follow the link's target manually or delete the link.
 - **Unmanaged skill without a valid SKILL.md**: Listed with `valid=false` and the reason; it can be deleted but not adopted until it validates.
 - **Follow-all enabled while a target path holds a non-Coffer folder of the same name**: That skill is reported as a conflict (same rule as FR-011) instead of being overwritten; the rest of the master store is delivered normally.
-- **Per-agent delivery target**: Both current agent types (Claude Code, Codex) use the `folder` delivery mode and deliver to `<config_dir>/skills/<name>`. Each agent's mode and subpath come from the capability manifest, so adding a future agent's delivery target is data, not a new branch.
-- **Non-folder delivery modes (reserved extension points)**: `rules_mdc` and `external_dir` are recognized `SkillDeliveryMode` values with no current agent type assigned. Enabling a skill for a hypothetical agent using one of these modes is refused with HTTP 422 before any filesystem write; the follow / relink reconcilers skip such agents so registration and policy changes still succeed.
+- **Per-agent delivery target**: Coffer delivers a managed skill in exactly one way — the master skill folder is symlinked (copy fallback) into `<config_dir>/skills/<name>`. Each agent's skill subpath comes from the capability manifest, so adding a future agent's delivery target is data, not a new branch.
 
 ## Skill delivery scope (Amendment 2026-07-10 — machine × agent scope, [ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.md))
 

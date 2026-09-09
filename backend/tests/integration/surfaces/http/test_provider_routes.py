@@ -295,8 +295,8 @@ def test_activate_without_matching_agent(tmp_path, monkeypatch):
         r = c.post("/api/v1/providers/acme/activate")
         assert r.status_code == 200, r.text
         assert r.json()["projected"] == []
-        # The anthropic wire defaults into claude_code AND openclaw (ADR-044).
-        assert r.json()["skipped"] == ["claude_code", "openclaw"]
+        # The anthropic wire defaults into claude_code.
+        assert r.json()["skipped"] == ["claude_code"]
         assert c.get("/api/v1/providers/acme").json()["is_active"] is True
 
 
