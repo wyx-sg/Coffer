@@ -112,6 +112,25 @@ daemon 必须**比任一单一入口活得更久**：用户期望某个 MCP 客�
 
 ## 修订历史
 
+- **2026-09-09** —— 孤儿自我退出。spawn 保护是单向的：它只探 `daemon.json` 记录的那**一个**
+  端口，因此看不到活在其他端口上的 daemon。只要这次探活在确实有 daemon 在跑时失败——
+  `daemon.json` 丢了，或者一个已经在服务、但仍在完成预热的 daemon 没能在 2 秒探活超时内
+  应答 `/daemon/status`（实测约 9 秒）——spawn 就会绑下一个空闲端口，并把老 daemon 永远留在
+  那里占着它自己的端口。而且没有任何机制回收它：`reap_stale_daemons` 在非 frozen 构建下直接
+  no-op（按 `python3` 的 basename 匹配会误伤无关解释器），所以源码运行的环境每重启一次就多
+  一个孤儿。线上实际观察到：十个 daemon 占满 8000–8009、每一个都还在正常服务，此后
+  `bind_free_socket` 根本起不了新 daemon。
+
+  修复放在另一侧——那里不需要任何跨进程权限。正在服务的 daemon 现在每 30 秒重读一次
+  `daemon.json`，若它指向**另一个活着的** Coffer daemon，就关闭自己
+  （`bootstrap.superseded_by` → `entry._evict_when_superseded`）。触发条件刻意收得很窄：
+  文件不存在时绝不驱逐任何人（删掉 `daemon.json` 不该把健康的 daemon 一起带走），文件损坏
+  不构成证据，记录的 pid 已死或不是 Coffer daemon 则说明我们仍是唯一活着的那个。于是一组
+  daemon 会收敛到 `daemon.json` 指名的那一个，而发现文件缺失或过期的独苗 daemon 继续服务。
+  探活超时同时由 2 秒放宽到 15 秒，让"在服务但正忙"的 daemon 不再被读成不存在；过期的
+  `daemon.json` 在这里不付出代价，因为死端口会立刻拒绝连接。`daemon stop` 与新的驱逐器共用的
+  pid 检查从 CLI 移到了 `pid_lock.pid_is_coffer_daemon`（infrastructure 不能 import surfaces）。
+
 - **2026-05-20** —— 初版决定：detect-or-spawn 模式，daemon 作为独立进程；shim
   和 CLI 共用同一个辅助函数；daemon 启动时写出 `~/.coffer/daemon.json`。
 - **2026-05-30** —— 实现更新：`coffer` CLI 现已全面实现 detect-or-spawn。此前
