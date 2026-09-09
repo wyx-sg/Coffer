@@ -87,7 +87,6 @@ frozen dataclass。一个资源 kind 的纯描述符。只属于 domain——不
 | `"daemon_stopped"`                                          | daemon 优雅关闭时                                   |
 | `"token_rotated"`                                           | `POST /api/v1/daemon/rotate-token` 之后             |
 | `"retention_updated"`                                       | retention policy 变更时                             |
-| `"backup_created"`                                          | `POST /api/v1/vault/backup` 之后                    |
 | `"credential_set"`                                          | `POST /api/v1/credentials` 存储 secret 之后         |
 | `"credential_read"`                                         | `GET /api/v1/credentials/{ref}` 读取 secret 之后    |
 | `"credential_deleted"`                                      | `DELETE /api/v1/credentials/{ref}` 删除 secret 之后 |
@@ -149,13 +148,12 @@ Pydantic `BaseModel`。Discriminator 值：`"http"`。
 
 Pydantic `BaseModel`——这是 `mcp_server` 对应的 `Resource.config`。
 
-| Field                          | Type                                                                      | Notes                                                 |
-| ------------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `transport`                    | `Annotated[StdioTransport \| HttpTransport, Field(discriminator="type")]` | tagged union                                          |
-| `auto_enable_new_capabilities` | `bool`                                                                    | 默认 `True`                                           |
-| `spawn_timeout_seconds`        | `int`                                                                     | 默认 `30`；范围 `5–120`                               |
-| `request_timeout_seconds`      | `int`                                                                     | 默认 `120`；范围 `5–1800`；progress 到来时重置        |
-| `idle_timeout_seconds`         | `int`                                                                     | 默认 `600`；范围 `60–86400`；空闲超过此值即 GC 子进程 |
+| Field                     | Type                                                                      | Notes                                                 |
+| ------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `transport`               | `Annotated[StdioTransport \| HttpTransport, Field(discriminator="type")]` | tagged union                                          |
+| `spawn_timeout_seconds`   | `int`                                                                     | 默认 `30`；范围 `5–120`                               |
+| `request_timeout_seconds` | `int`                                                                     | 默认 `120`；范围 `5–1800`；progress 到来时重置        |
+| `idle_timeout_seconds`    | `int`                                                                     | 默认 `600`；范围 `60–86400`；空闲超过此值即 GC 子进程 |
 
 ### `MCPTool` / `MCPResource` / `MCPPrompt` (`domain/mcp/capability.py`)
 
@@ -185,15 +183,15 @@ Pydantic `BaseModel`。上游查询返回的实时表示；从不持久化（按
 
 ### `MCPCapabilityPreference` (`domain/mcp/capability.py`)
 
-| Field             | Type                                    | Notes                                             |
-| ----------------- | --------------------------------------- | ------------------------------------------------- |
-| `id`              | `int \| None`                           | DB 代理主键                                       |
-| `resource_id`     | `int`                                   | FK 指向 `resources.id`                            |
-| `capability_type` | `Literal["tool", "resource", "prompt"]` |                                                   |
-| `capability_key`  | `str`                                   | 原始（无前缀）名称；resource 则是原始 URI         |
-| `enabled`         | `bool`                                  | 默认依赖该服务器的 `auto_enable_new_capabilities` |
-| `first_seen_at`   | `datetime`                              |                                                   |
-| `last_seen_at`    | `datetime`                              | 每次发现成功都会更新                              |
+| Field             | Type                                    | Notes                                     |
+| ----------------- | --------------------------------------- | ----------------------------------------- |
+| `id`              | `int \| None`                           | DB 代理主键                               |
+| `resource_id`     | `int`                                   | FK 指向 `resources.id`                    |
+| `capability_type` | `Literal["tool", "resource", "prompt"]` |                                           |
+| `capability_key`  | `str`                                   | 原始（无前缀）名称；resource 则是原始 URI |
+| `enabled`         | `bool`                                  | 首次发现时默认启用                        |
+| `first_seen_at`   | `datetime`                              |                                           |
+| `last_seen_at`    | `datetime`                              | 每次发现成功都会更新                      |
 
 ### `MCPInvocation` (`domain/mcp/capability.py`)
 
@@ -344,7 +342,7 @@ for table_name, days in defaults:
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /api/v1/daemon/status` | 被 CLI 与 `coffer-mcp-shim` 用作廉价的就绪探针，在还没从 `~/.coffer/daemon.json` 读到任何 token 之前调用。只返回生命周期阶段、版本、端口、started-at 以及一个聚合的 upstream 概要 —— 不含 secret、不含逐 resource 细节、不含审计数据。 |
 
-所有改动型 endpoint（包括 `/vault/backup`、`/daemon/rotate-token`、
+所有改动型 endpoint（包括 `/daemon/rotate-token` 与
 `/daemon/shutdown`）都要求 token。`/mcp` JSON-RPC 面也要求 token。客户端
 SHOULD 设置可选的 `X-Coffer-Actor` header（`cli` | `api` | `ui` | `system`），
 使审计条目带上来源 surface；缺省时默认为 `"api"`。

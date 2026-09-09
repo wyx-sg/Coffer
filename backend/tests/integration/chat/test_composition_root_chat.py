@@ -87,8 +87,7 @@ def test_conversation_crud_via_wired_daemon(app, tmp_path) -> None:  # type: ign
 
 # NOTE: the former NoModelConfigured / CREDENTIAL_MISSING turn tests were removed
 # with ADR-024 — those behaviours belonged to the builtin chat agent's model +
-# credential resolution, which is retired. The model registry's no-model path is
-# now exercised through ``coffer__ask`` (see test_agentic_rag.py).
+# credential resolution, which is retired.
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +129,7 @@ def test_list_agents_via_wired_daemon(app) -> None:  # type: ignore[no-untyped-d
         agents = resp.json()["agents"]
         by_key = {a["agent_key"]: a for a in agents}
         # The built-in chat persona is retired (ADR-024); chat lists managed
-        # agents only — the local model now lives on as the coffer__ask tool.
+        # agents only.
         assert "builtin" not in by_key
         # The CLI agents are registered; availability tracks whether their
         # binary is on PATH on this host (a bool either way, but present).

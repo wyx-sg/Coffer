@@ -134,7 +134,7 @@ row to expand its raw log JSON. The legacy `/audit` URL redirects here.
 
 ### Settings
 
-Open `/settings` for **Data** (retention policy, manual prune, backups) and **About**
+Open `/settings` for **Data** (retention policy, manual prune) and **About**
 (version, license, source). There is no "Daemon" tab and no daemon-status panel — the
 daemon is an implementation detail surfaced only by the offline banner when something goes
 wrong.

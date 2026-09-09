@@ -200,7 +200,7 @@ class Protocol(StrEnum):
 | `activate(name, actor) -> ActivateResult` | 顺序 clear-then-set 实现单活跃不变量；向匹配的已注册 agent 投影；发出 `PROVIDER_SWITCHED`。 |
 | `resolve_active_key(wire: WireFormat) -> str` | 找到给定 wire format 的活跃 profile；解密并返回 key（仅 stdout；调用方不得记录）。不支持按名称解析。 |
 | `set_internal_default(name, actor) -> Resource` | 清除所有其他 connection 的 `internal_default`，再设置目标（全局单一内部默认不变量，FR-021）；发出 `PROVIDER_INTERNAL_DEFAULT_SET`。 |
-| `resolve_internal_connection() -> ProviderConfig \| None` | 返回 `internal_default` connection 的 config，或 `None`（→ 内部引擎——memory organizer / reorg / distill / `coffer__ask`——是干净的 no-op）。 |
+| `resolve_internal_connection() -> ProviderConfig \| None` | 返回 `internal_default` connection 的 config，或 `None`（→ 内部引擎——memory organizer / reorg / distill——是干净的 no-op）。 |
 
 ### `ActivateResult`（`application/provider/service.py`）
 

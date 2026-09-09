@@ -7,7 +7,6 @@ import typer
 from coffer.surfaces.cli import (
     agent_cmd,
     audit_cmd,
-    backup_cmd,
     channel_cmd,
     credentials_cmd,
     daemon_cmd,
@@ -58,11 +57,6 @@ app.add_typer(memory_cmd.app, name="memory")
 app.add_typer(provider_cmd.app, name="provider")
 app.add_typer(sync_cmd.app, name="sync")
 app.add_typer(transcript_cmd.app, name="transcript")
-
-# Vault-level backup / restore are top-level verbs (not under `daemon`): they
-# operate on the on-disk vault offline, independent of the daemon lifecycle.
-app.command("backup")(backup_cmd.backup)
-app.command("restore")(backup_cmd.restore)
 
 
 def run() -> None:

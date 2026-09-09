@@ -118,7 +118,7 @@ backend/coffer/
     ├── http/knowledge_base/
     │   ├── routes.py                            # /api/v1/knowledge_bases/* (create/list/get/ingest/docs/edit/reconvert/delete/reindex/search/grep/metrics)
     │   └── schemas.py
-    └── cli/knowledge_base_cmd.py                # coffer kb create/ingest/list-docs/get-doc(read)/edit/reconvert/reindex/search/grep/set-embedding/set-chunking/delete-doc/delete-kb/describe
+    └── cli/knowledge_base_cmd.py                # coffer kb create/ingest/list-docs/read/edit/reconvert/reindex/search/grep/set-embedding/set-chunking/delete-doc/delete-kb/describe
 ```
 
 Existing files modified (intersection with spec 007 — land in the same redesign PR):

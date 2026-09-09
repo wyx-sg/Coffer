@@ -51,8 +51,8 @@ Resolution is **file-first**: the daemon looks for the file before the keychain.
 
 A brand-new master key is generated **only when the `credentials` table is empty**. Ciphertext present with no resolvable key is a fatal, actionable startup error (`MasterKeyMissing`) — Coffer refuses to start rather than silently lose access to existing secrets.
 
-::: warning Backup caveat
-`coffer.db` now contains ciphertext. Restoring a backup of it requires the matching `master.key` file (or the keychain entry, in keychain mode). Back up the master key alongside the database, or a restored `coffer.db` is unreadable.
+::: warning Copy caveat
+`coffer.db` now contains ciphertext. Reading credentials out of a copied or exported vault requires the matching `master.key` file (or the keychain entry, in keychain mode). Keep the master key somewhere you can recover it, or a copied `coffer.db` yields no secrets.
 :::
 
 ### Legacy keychain migration

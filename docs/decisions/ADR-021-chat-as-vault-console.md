@@ -9,7 +9,7 @@
 > **Note (2026-06-14):** [ADR-024](./ADR-024-builtin-agent-is-internal-capability.md)
 > supersedes the **"converse with the vault through the `builtin` agent"** job below —
 > the built-in agent is retired as a chat persona and recast as internal Coffer
-> capabilities (`coffer__search_tools` semantic ranking, `coffer__ask`); the chat
+> capabilities (`coffer__search_tools` semantic ranking); the chat
 > surface reverts from _Vault Console_ to _Chat_.
 >
 > **Note (2026-06-18):** [ADR-025](./ADR-025-remove-tool-approval.md) supersedes the

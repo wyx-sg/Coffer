@@ -197,7 +197,7 @@ this audit-log view.)
 
 ### Phase 5 — US4: Settings reorganisation
 
-Settings tabs sidebar, `DataSettings` (retention + prune + backup),
+Settings tabs sidebar, `DataSettings` (retention + prune),
 `AboutSettings`, removal of the Shutdown / Rotate-token / Daemon-status /
 duplicate-language-picker / kind-list controls.
 

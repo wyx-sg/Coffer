@@ -28,7 +28,7 @@ Claude Code 和 Codex 各有自己的原生配置文件（`~/.claude/settings.js
 
 每种 wire format 最多同时存在一条活跃 connection（与已退役的 chat-model 注册表中 `ModelConfig.is_default` 的模式类似）。Claude Code 和 Codex"共用"同一注册表，一个 `credential_ref` 可被多条 connection 复用，但绝非用一条记录同时驱动两个 agent。
 
-除按 agent 激活外，一条 connection 还可以携带单一的全局 `internal_default` 标志（所有 connection 中 ≤1），标记 Coffer 自身内部 LLM 引擎（memory organizer、reorg、distill、`coffer__ask`）使用的 connection。第三种 wire `ollama` 仅供内部：它从不投影到任何 agent；且因其没有 API key，其 `credential_ref` 不存在——只需一个 `base_url`。因此 `credential_ref` 是**可选**的：anthropic/openai 必填，ollama 不存在。一条 connection 可以**同时**是活跃的（投影到其 wire 的 agent）和 `internal_default`（供内部使用）——一份密钥，两种用途。
+除按 agent 激活外，一条 connection 还可以携带单一的全局 `internal_default` 标志（所有 connection 中 ≤1），标记 Coffer 自身内部 LLM 引擎（memory organizer、reorg、distill）使用的 connection。第三种 wire `ollama` 仅供内部：它从不投影到任何 agent；且因其没有 API key，其 `credential_ref` 不存在——只需一个 `base_url`。因此 `credential_ref` 是**可选**的：anthropic/openai 必填，ollama 不存在。一条 connection 可以**同时**是活跃的（投影到其 wire 的 agent）和 `internal_default`（供内部使用）——一份密钥，两种用途。
 
 ### 决策 B——凭证隔离；明文密钥不得写入原生配置
 
@@ -144,7 +144,7 @@ exist or you may not have access"。用户既没机会选一个该 endpoint 支�
 ### 在范围内
 
 - 后端 `provider` resource Kind（通过 ResourceService 实现 CRUD，自动审计 + 自动进入导出/导入）；凭证处理（将 secret 存入 Fernet vault，只保留 ref）；投影服务（将原生配置写入匹配 agent）；切换/激活操作；`PROVIDER_SWITCHED` 审计事件；导出/导入接入（注册 kind）；Claude `apiKeyHelper` 使用的密钥解析。
-- 内部引擎 connection 选择：全局 `internal_default` 标志、`set_internal_default(name)` + `resolve_internal_connection()`、`provider_internal_default_set` 审计事件，供 Coffer 内部 LLM 引擎（memory organizer / reorg / distill / `coffer__ask`）消费。
+- 内部引擎 connection 选择：全局 `internal_default` 标志、`set_internal_default(name)` + `resolve_internal_connection()`、`provider_internal_default_set` 审计事件，供 Coffer 内部 LLM 引擎（memory organizer / reorg / distill）消费。
 - 退役独立的 `ModelConfig` 注册表（model CRUD REST + `coffer model` CLI），将内部引擎的模型选择折叠进 connection。provider 的 introspection 路由（`list-models`、`test-connection`）保留。
 - CLI：`coffer provider list|add|show|edit|remove|switch|key|internal-default`
 - HTTP API：`/api/v1/providers`（list / create / get / patch / delete）以及 `/api/v1/providers/{name}/activate` 和 `/api/v1/providers/{name}/internal-default`
@@ -233,10 +233,10 @@ ollama connection 不投影到任何 agent 配置：`target_for(WireFormat.ollam
 
 ## 内部引擎（Coffer 自己的 LLM）
 
-与按 agent 激活分开，全局 `internal_default` 标志（所有 connection 中 ≤1）选择 Coffer 自身内部 LLM 引擎使用的 connection——memory organizer、reorg、distill 和 `coffer__ask`。
+与按 agent 激活分开，全局 `internal_default` 标志（所有 connection 中 ≤1）选择 Coffer 自身内部 LLM 引擎使用的 connection——memory organizer、reorg 和 distill。
 
 - `set_internal_default(name)`：清除所有其他 connection 的 `internal_default`，再设置目标（顺序 clear-then-set，由单进程 daemon 串行化，保证全局单一内部默认不变量），并发出 `provider_internal_default_set` 审计事件。
-- `resolve_internal_connection() -> ProviderConfig | None`：返回 `internal_default` connection 的 config，或在无 connection 被标记时返回 `None`。为 `None` 时，内部引擎（memory organizer / reorg / distill / `coffer__ask`）是干净的 no-op 而非报错。
+- `resolve_internal_connection() -> ProviderConfig | None`：返回 `internal_default` connection 的 config，或在无 connection 被标记时返回 `None`。为 `None` 时，内部引擎（memory organizer / reorg / distill）是干净的 no-op 而非报错。
 - `build_chat_model(connection, ...)`：内部引擎根据解析出的 connection 构建其 chat model，按 `wire_format`（anthropic / openai / ollama）分派。这取代了已退役 `ModelConfig` 注册表的模型选择。
 
 一条 connection 可以**同时**是 `is_active`（投影到其 wire 的 agent）和 `internal_default`（供内部使用）——一份密钥，两种用途。
@@ -530,7 +530,7 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - **FR-020**：`credential_ref` 必须可选——anthropic/openai 必填，ollama 不存在。创建时，既不提供 `secret_value` 也不提供 `credential_ref` 仅对 `wire_format=ollama` 合法；对 anthropic/openai，FR-004 的 exactly-one 规则不变。
 - **FR-021**：全局最多一条 connection 的 `internal_default=true`。`set_internal_default` 必须先清除所有其他 connection 的 `internal_default`，再设置目标（顺序 clear-then-set，由单进程 daemon 串行化）。导入时若有 >1 内部默认，则归一化：保留最近更新的，清除其余。
 - **FR-022**：`POST /api/v1/providers/{name}/internal-default` 必须将所命名的 connection 设为内部引擎默认（应用 FR-021），发出 `provider_internal_default_set` 审计事件，并返回更新后的 `ProviderOut`。
-- **FR-023**：`resolve_internal_connection()` 必须返回 `internal_default` connection 的 `ProviderConfig`，或在无 connection 被标记时返回 `None`。为 `None` 时，内部引擎（memory organizer / reorg / distill / `coffer__ask`）必须是干净的 no-op 而非报错。
+- **FR-023**：`resolve_internal_connection()` 必须返回 `internal_default` connection 的 `ProviderConfig`，或在无 connection 被标记时返回 `None`。为 `None` 时，内部引擎（memory organizer / reorg / distill）必须是干净的 no-op 而非报错。
 - **FR-024**：独立的 `ModelConfig` 注册表（model CRUD REST + `coffer model` CLI）必须退役。内部引擎必须通过 `build_chat_model(connection, ...)`（按 `wire_format` 分派）从内部默认 connection 构建其 chat model。provider introspection 路由（`POST /api/v1/models/list-models`、`/api/v1/models/test-connection`）必须保留。
 
 ## 成功标准
@@ -540,7 +540,7 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - **SC-003**：每个 Acceptance Scenario 都有至少一个 `acceptance(spec="011-provider-switching", scenario="…")` 标记的测试，`make verify-acceptance` 报告零遗漏场景。
 - **SC-004**：`make verify` 本地和 CI 通过。
 - **SC-005**：激活 profile 只写入定义的托管键集，不触碰任何托管集以外的键。
-- **SC-006**：当配置了 `internal_default` connection 时，Coffer 内部引擎（memory organize / reorg / distill / `coffer__ask`）在其上运行；当无 connection 被标记 `internal_default` 时，内部引擎是干净的 no-op。
+- **SC-006**：当配置了 `internal_default` connection 时，Coffer 内部引擎（memory organize / reorg / distill）在其上运行；当无 connection 被标记 `internal_default` 时，内部引擎是干净的 no-op。
 
 ## 假设
 

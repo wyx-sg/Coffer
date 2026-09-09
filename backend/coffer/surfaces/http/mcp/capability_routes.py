@@ -13,10 +13,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 
 from coffer.application.audit_service import AuditService
 from coffer.application.mcp.discovery import CapabilityDiscovery
-from coffer.application.mcp.runner_install import (
-    missing_runner,
-    runner_installable,
-)
+from coffer.application.mcp.runner_detect import missing_runner
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
@@ -135,17 +132,14 @@ async def get_server_status(
     lookup); never spawns."""
     resource = await resource_service.get(ResourceRef("mcp_server", name))
     # A stdio launcher that does not resolve on THIS machine (synced server,
-    # runner not installed here) — surfaced with a one-click install.
+    # runner not installed here) — surfaced so the cause is visible.
     runner = await asyncio.to_thread(_missing_runner_of, resource)
-    installable = runner is not None and runner_installable(runner)
 
     # T7: prefer the persisted health state written by POST /test
     health = await health_repo.get(name)
     if health is not None:
         health_status, _ = health
-        return McpServerStatusOut(
-            status=health_status, missing_runner=runner, runner_installable=installable
-        )
+        return McpServerStatusOut(status=health_status, missing_runner=runner)
 
     caps = await prefs.list_for(resource.id)
     recent = await invocations.query(resource_name=name, limit=1)
@@ -157,7 +151,7 @@ async def get_server_status(
         state = "healthy"
     else:
         state = "unknown"
-    return McpServerStatusOut(status=state, missing_runner=runner, runner_installable=installable)
+    return McpServerStatusOut(status=state, missing_runner=runner)
 
 
 def _missing_runner_of(resource: Resource) -> str | None:

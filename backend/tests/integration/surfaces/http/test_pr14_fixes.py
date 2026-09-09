@@ -4,7 +4,6 @@ Covers the small fixes that were not already exercised by the existing
 suite:
 
 - CODE-001 — capability_key in request body (legacy path-style + body-style routes both work)
-- CODE-002 — backup endpoint rejects ".." path traversal
 - CODE-006 — audit details strip transport ``env`` / ``headers``
 - CODE-018 — token rotation tmp file never exists with mode wider than 0600
 - CODE-023 — Pydantic validation failures do not echo per-field input back
@@ -39,7 +38,6 @@ def test_audit_safe_config_strips_env_and_headers() -> None:
             "headers": {"Authorization": "Bearer secret123"},
             "credential_refs": {"X-Api-Key": "mykey"},
         },
-        "auto_enable_new_capabilities": True,
     }
     sanitised = _mcp_audit_redactor(cfg)
     assert "headers" not in sanitised["transport"]

@@ -123,7 +123,7 @@ agent 头部的 **Install Coffer MCP** 开关会将 Coffer 自身的 `coffer` MC
 
 ### Settings
 
-打开 `/settings` 可访问 **Data**（retention 策略、手动清理、备份）和
+打开 `/settings` 可访问 **Data**（retention 策略、手动清理）和
 **About**（版本、许可证、源代码）。没有"Daemon"标签，也没有 daemon 状态面板 ——
 守护进程是实现细节，只有在出现问题时才会通过离线横幅呈现给用户。
 

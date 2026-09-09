@@ -51,9 +51,6 @@ def add(
     credential: list[str] = typer.Option(  # noqa: B008
         [], "--credential", help="ENV_OR_HEADER=CREDENTIAL_REF (repeatable)"
     ),
-    no_auto_enable: bool = typer.Option(
-        False, "--no-auto-enable", help="Default new capabilities to disabled"
-    ),
     description: str | None = typer.Option(None, "--description"),
 ) -> None:
     """Register a new MCP server (stdio OR http; pick one)."""
@@ -80,10 +77,7 @@ def add(
             "credential_refs": _parse_credentials(credential),
         }
 
-    config = {
-        "transport": transport,
-        "auto_enable_new_capabilities": not no_auto_enable,
-    }
+    config = {"transport": transport}
     payload = {
         "kind": "mcp_server",
         "name": name,

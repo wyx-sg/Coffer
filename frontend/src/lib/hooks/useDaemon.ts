@@ -1,5 +1,5 @@
 // frontend/src/lib/hooks/useDaemon.ts
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/client";
 import { ApiError, throwApiError } from "@/lib/api/errors";
 import { daemonVersionMatches } from "@/lib/tauri";
@@ -42,17 +42,6 @@ export function useDaemonOutOfDate(version: string | undefined) {
       if (version === undefined) return false;
       // matches === true → compatible → NOT out of date.
       return !(await daemonVersionMatches(version));
-    },
-  });
-}
-
-export function useVaultBackup() {
-  return useMutation({
-    mutationFn: async () => {
-      const client = getApiClient();
-      const { data, error } = await client.POST("/vault/backup", {});
-      if (error) throwApiError(error, "INTERNAL_ERROR", "backup failed");
-      return data;
     },
   });
 }

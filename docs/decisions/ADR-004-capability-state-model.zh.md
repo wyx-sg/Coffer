@@ -40,9 +40,9 @@ enabled, first_seen_at, last_seen_at)` —— **唯一**持久化的能力状态
   - 上游 `notifications/*/list_changed`（同时会转发给下游客户端）。
   - 用户主动刷新 (`coffer mcp refresh <name>`)。
   - 上游 session 重启。
-- 每次成功 list 后，将偏好与实时列表对账：新出现的 capability key 插入一行
-  （依据该服务器的 `auto_enable_new_capabilities` 策略决定是否启用）；
-  消失的 capability key **不**会被删除（这样用户的选择能在上游波动中保留下来）。
+- 每次成功 list 后，将偏好与实时列表对账：新出现的 capability key 插入一行，
+  默认启用；消失的 capability key **不**会被删除（这样用户的选择能在上游波动
+  中保留下来）。
 
 ## 后果
 

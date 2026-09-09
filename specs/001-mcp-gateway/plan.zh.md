@@ -216,7 +216,7 @@ audit 日志、invocation 日志、retention 框架本身在 Phase 2 作为 kind
 
 **Done when:** User Story 4 的 acceptance scenario 通过（`audit lifecycle
 changes`、`invocation log records calls without arguments`、`configure
-retention per log`、`vault backup produces a portable tar.gz snapshot`）。
+retention per log`）。
 
 ### Phase 6 — 加固
 

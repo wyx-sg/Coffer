@@ -7,8 +7,8 @@
 > talks **only** to Coffer-managed agents (Claude Code, Codex), and the page is
 > labelled **Chat** (not _Vault Console_). The local model is no longer a chat
 > agent; it powers internal `coffer__*` capabilities — semantic
-> `coffer__search_tools` and the `coffer__ask` agentic-RAG tool over your
-> knowledge and memory. The sections below describe the earlier built-in-agent
+> `coffer__search_tools` — and Coffer-internal flows such as distillation and
+> memory reorganization. The sections below describe the earlier built-in-agent
 > chat flow and are kept for historical reference.
 
 The Chat page lets you talk to **Coffer Assistant** — Coffer's built-in agent.

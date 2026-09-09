@@ -16,8 +16,8 @@ import warnings
 from collections.abc import Sequence
 from typing import Any
 
-from coffer.infrastructure.chat.agentic_rag import _sanitise_name, _schema_to_pydantic
 from coffer.infrastructure.chat.langchain_models import build_chat_model
+from coffer.infrastructure.chat.tool_schema import sanitise_name, schema_to_pydantic
 
 log = logging.getLogger(__name__)
 
@@ -63,9 +63,9 @@ async def run_agentic_reorg(
 
         lc_tool = StructuredTool.from_function(
             coroutine=_coroutine,
-            name=_sanitise_name(tool_name),
+            name=sanitise_name(tool_name),
             description=tool.description or tool_name,
-            args_schema=_schema_to_pydantic(tool_name, tool.input_schema),
+            args_schema=schema_to_pydantic(tool_name, tool.input_schema),
         )
         lc_tools.append(lc_tool)
 

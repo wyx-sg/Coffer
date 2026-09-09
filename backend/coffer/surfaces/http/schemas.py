@@ -144,11 +144,6 @@ class DaemonStatusOut(BaseModel):
     vec_available: bool = False
 
 
-class BackupResultOut(BaseModel):
-    path: str
-    size_bytes: int
-
-
 class TokenRotationOut(BaseModel):
     token: str = Field(description="New token; clients must re-read daemon.json")
 
@@ -296,16 +291,8 @@ class McpServerStatusOut(BaseModel):
     status: Literal["healthy", "failing", "unknown"]
     # A stdio server whose launcher command does not resolve on THIS machine
     # (a synced server referencing e.g. uvx on a machine without uv). The UI
-    # renders "missing <runner>" with a one-click install when installable.
+    # renders "missing <runner>" so the cause is visible.
     missing_runner: str | None = None
-    runner_installable: bool = False
-
-
-class McpRunnerInstallOut(BaseModel):
-    """Result of installing a stdio server's missing launcher."""
-
-    runner: str
-    formula: str
 
 
 # --- Settings ---

@@ -128,7 +128,7 @@ Code to read a file), then refresh the **Invocations** tab.
   redirects here. (Observability — system health / metrics — is a distinct
   surface reserved for the future, not this audit log.)
 - `/settings` — tabs sidebar opening on **General** (default rows-per-page
-  preference), plus **Data** (retention policy, manual prune, backups) and
+  preference), plus **Data** (retention policy, manual prune) and
   **About** (version / license / source).
 
 You will notice three deliberately absent surfaces compared to the v0

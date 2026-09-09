@@ -26,11 +26,7 @@ import {
 } from "@/lib/hooks/useResourceMutations";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 import { resourcesApi } from "@/lib/api/resources";
-import {
-  useInstallMcpRunner,
-  useMcpServerRunner,
-  useMcpServerStatus,
-} from "@/lib/hooks/useMcpInvocations";
+import { useMcpServerRunner, useMcpServerStatus } from "@/lib/hooks/useMcpInvocations";
 import { HealthBadge } from "./HealthBadge";
 import { McpServerDeleteDialog } from "./McpServerDeleteDialog";
 
@@ -38,33 +34,23 @@ const DESTRUCTIVE_CLS =
   "text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive";
 
 /** Persisted health (last /test probe or most recent invocation), else "—".
- * A stdio server whose launcher is missing on THIS machine says so and, when
- * the runner has an allowlisted install, offers it in one click. */
+ * A stdio server whose launcher is missing on THIS machine says so, with a
+ * static hint naming the runner to install — Coffer surfaces the cause, the
+ * user installs the software. */
 export function ServerHealthCell({ name }: { name: string }) {
   const { t } = useTranslation();
   const { data: status } = useMcpServerStatus(name);
   const { data: runner } = useMcpServerRunner(name);
-  const install = useInstallMcpRunner();
 
   if (runner?.missingRunner) {
     return (
-      <span className="flex items-center gap-2">
+      <span className="flex flex-col gap-0.5">
         <span className="text-sm text-amber-600">
           {t("mcp.missingRunner", { runner: runner.missingRunner })}
         </span>
-        {runner.installable && (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={install.isPending}
-            onClick={(e) => {
-              e.stopPropagation();
-              install.mutate(name);
-            }}
-          >
-            {install.isPending ? t("mcp.installingRunner") : t("mcp.installRunner")}
-          </Button>
-        )}
+        <span className="text-xs text-muted-foreground">
+          {t("mcp.missingRunnerHint", { runner: runner.missingRunner })}
+        </span>
       </span>
     );
   }

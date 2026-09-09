@@ -184,7 +184,7 @@ paths:
       summary: Set a connection as Coffer's internal-engine default
       description: |
         Marks this connection as the one Coffer's internal LLM engine uses
-        (memory organizer, reorg, distill, `coffer__ask`). At most one
+        (memory organizer, reorg, distill). At most one
         connection globally is the internal default; setting one clears the
         previous one (sequential clear-then-set, serialised by the
         single-process daemon).
@@ -296,7 +296,7 @@ paths:
       summary: Get the global internal-engine model selection
       description: |
         The single, global model Coffer's internal LLM engine (memory organizer,
-        reorg, distill, `coffer__ask`) runs on. The engine takes its endpoint +
+        reorg, distill) runs on. The engine takes its endpoint +
         key from the `internal_default` connection but its MODEL from this
         singleton (ADR-032 amendment E3). `model` is `null` until one is chosen.
       responses:

@@ -1,6 +1,6 @@
 """Global internal-engine model service (spec 011 amendment 2026-06-22b).
 
-Coffer's internal LLM engine (organizer / reorg / distill / ``coffer__ask``)
+Coffer's internal LLM engine (organizer / reorg / distill)
 takes its endpoint + key from the ``internal_default`` connection but its MODEL
 from this singleton — the connection no longer owns a model. The wiring overlays
 ``get().model`` onto the resolved connection before building the chat model."""

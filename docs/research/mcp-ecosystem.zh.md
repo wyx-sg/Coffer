@@ -127,20 +127,16 @@ Composio、Docker MCP Catalog），而非根注册表。**它明确不是网关�
 
 > 再核验：除一条已被落地代码推翻外，其余 claim 均成立——"没有按 agent 范围控制"这条
 > LOCAL 头号结论已翻转（PR #108 / ADR-026，已于 2026-06-18 合并），下移至 ✏️ 已修正；
-> `search_tools`/`ask` 那条 LOCAL 结论仍成立。WEB claim 在两处升级了引用来源、一处
+> `search_tools` 那条 LOCAL 结论仍成立。WEB claim 在两处升级了引用来源、一处
 > 收窄了表述后确认。
 
 ### ✅ 已确认
 
-- **Coffer 同时提供 `search_tools` 与 `ask`。** `search_tools` 是内建元工具
+- **Coffer 提供 `search_tools`。** 它是内建元工具
   （`tool_search_descriptor()` 在 `append_builtin_tools()` 中追加，由
-  `dispatch_tool_search()` 派发——默认 BM25，提供 embedder 时走语义检索，依 ADR-024）；
-  `ask` 是一个 `BuiltinTool`（对外暴露为 `coffer__ask`），由 `make_ask_tool()`
-  构建——一个对 knowledge base + memory 的有界 ReAct 检索-综合循环（仅只读检索工具）。
-  二者经由同一网关暴露。
-  `repo:backend/coffer/application/mcp/gateway_builtin.py:144-201`、
-  `repo:backend/coffer/infrastructure/chat/agentic_rag.py:53-165`、
-  `repo:backend/coffer/surfaces/http/wiring.py:253-293`
+  `dispatch_tool_search()` 派发——默认 BM25，提供 embedder 时走语义检索，依 ADR-024），
+  经由网关暴露。
+  `repo:backend/coffer/application/mcp/gateway_builtin.py:144-201`
 - **ToolHive vMCP 逐实例工具过滤**（报告中标记其精确机制未通过核验）——现据 Stacklok
   一手文档确认：每个 `VirtualMCPServer` 引用一个 `MCPGroup` 并独立定义自己的聚合配置，
   因此同一批后端上的不同 vMCP 实例可暴露不同的定制子集。关键字段：

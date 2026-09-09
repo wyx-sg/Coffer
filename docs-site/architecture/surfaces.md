@@ -34,7 +34,7 @@ The surfaces are described below using a consistent template: **What it is · Wh
 | `/credentials`, `/settings`       | Encrypted credential store; settings incl. `/settings/credentials` (master-key storage) and `/embedding` config. |
 | `/sync`                           | Vault export / import runs and the master-key transfer.           |
 | `/fs`                             | Filesystem browse helper for config pickers.                      |
-| `/audit`, `/retention`, `/daemon` | Audit log, retention policies, daemon token/backup operations.    |
+| `/audit`, `/retention`, `/daemon` | Audit log, retention policies, daemon token operations.           |
 
 The REST API is the canonical interface — the CLI, Web UI, and Desktop all call it.
 
@@ -68,7 +68,7 @@ The REST API is the canonical interface — the CLI, Web UI, and Desktop all cal
 
 - **Per-kind groups:** `coffer mcp`, `coffer agent`, `coffer skill`, `coffer kb`, `coffer memory`, `coffer channel`.
 - **Cross-cutting groups:** `coffer credentials`, `coffer sync`, `coffer chat`, `coffer model`.
-- **Kind-agnostic / operational groups:** `coffer resource`, `coffer audit`, `coffer retention`, `coffer daemon`, plus top-level `coffer backup` / `coffer restore` (the latter taking `--reindex` to rebuild the knowledge index). Reindexing a single knowledge base is `coffer kb reindex`.
+- **Kind-agnostic / operational groups:** `coffer resource`, `coffer audit`, `coffer retention`, `coffer daemon`. Reindexing a single knowledge base is `coffer kb reindex`.
 
 Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `coffer audit`, `coffer daemon start/stop/status`. The CLI is Coffer's primary interface for scripted workflows, dotfile-based setup, and remote (headless) machines where a browser is not available. Every subcommand supports `--json` output for machine-readable integration.
 

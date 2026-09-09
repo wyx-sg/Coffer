@@ -149,21 +149,16 @@ Tool overload / commentary:
 > Re-verification pass: claims hold except one that was overtaken by shipped
 > code — the "no per-agent scoping" LOCAL headline finding flipped (PR #108 /
 > ADR-026, merged 2026-06-18) and moves to ✏️ Corrected below; the
-> `search_tools`/`ask` LOCAL finding still holds. WEB claims confirmed with two
+> `search_tools` LOCAL finding still holds. WEB claims confirmed with two
 > source upgrades and one scoping correction.
 
 ### ✅ Confirmed
 
-- **Coffer ships both `search_tools` and `ask`.** `search_tools` is the built-in
-  meta-tool (`tool_search_descriptor()` appended in `append_builtin_tools()`,
-  dispatched by `dispatch_tool_search()` — BM25 default, semantic when an
-  embedder is provided, per ADR-024); `ask` is a `BuiltinTool` (exposed as
-  `coffer__ask`) built by `make_ask_tool()` — a bounded ReAct
-  retrieve-and-synthesize loop over knowledge base + memory (read-only retrieval
-  only). Both surface through the same gateway.
-  `repo:backend/coffer/application/mcp/gateway_builtin.py:144-201`,
-  `repo:backend/coffer/infrastructure/chat/agentic_rag.py:53-165`,
-  `repo:backend/coffer/surfaces/http/wiring.py:253-293`
+- **Coffer ships `search_tools`.** It is the built-in meta-tool
+  (`tool_search_descriptor()` appended in `append_builtin_tools()`, dispatched
+  by `dispatch_tool_search()` — BM25 default, semantic when an embedder is
+  provided, per ADR-024), surfaced through the gateway.
+  `repo:backend/coffer/application/mcp/gateway_builtin.py:144-201`
 - **ToolHive vMCP per-instance tool filtering** (the report flagged the exact
   mechanism as unverified) — now confirmed from primary Stacklok docs: each
   `VirtualMCPServer` references an `MCPGroup` and defines its own aggregation, so

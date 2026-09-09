@@ -1,9 +1,9 @@
 // frontend/src/lib/hooks/useDaemon.test.tsx
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { renderHook, act, waitFor } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
-import { useDaemonStatus, useVaultBackup } from "./useDaemon";
+import { useDaemonStatus } from "./useDaemon";
 
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
 const { getApiClient } = await import("@/lib/api/client");
@@ -51,49 +51,5 @@ describe("useDaemonStatus", () => {
     const { result } = renderHook(() => useDaemonStatus(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect((result.current.error as Error).message).toContain("not authorized");
-  });
-});
-
-describe("useVaultBackup", () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  test("mutation calls POST /vault/backup with no body and returns data", async () => {
-    const postMock = vi.fn().mockResolvedValue({
-      data: { path: "/home/user/.coffer/backups/coffer-20260522T120000.tar.gz", size_bytes: 4096 },
-      error: undefined,
-    });
-    getApiClientMock.mockReturnValue({
-      POST: postMock,
-    } as unknown as ReturnType<typeof getApiClient>);
-
-    const { result } = renderHook(() => useVaultBackup(), { wrapper: wrapper() });
-
-    await act(async () => {
-      await result.current.mutateAsync();
-    });
-
-    expect(postMock).toHaveBeenCalledWith("/vault/backup", {});
-  });
-
-  test("surfaces error when POST fails", async () => {
-    getApiClientMock.mockReturnValue({
-      POST: vi.fn().mockResolvedValue({
-        data: undefined,
-        error: { error: { code: "INTERNAL_ERROR", message: "disk full" } },
-      }),
-    } as unknown as ReturnType<typeof getApiClient>);
-
-    const { result } = renderHook(() => useVaultBackup(), { wrapper: wrapper() });
-
-    await act(async () => {
-      try {
-        await result.current.mutateAsync();
-      } catch {
-        // expected
-      }
-    });
-
-    await waitFor(() => expect(result.current.isError).toBe(true));
-    expect((result.current.error as Error).message).toContain("disk full");
   });
 });

@@ -6,7 +6,7 @@
 - **日期：** 2026-06-14
 - **决策者：** Yuxing Wu
 - **Spec：** [008-agent-chat](../../specs/008-agent-chat/spec.md) 与 [004-agent-registry](../../specs/004-agent-registry/spec.md)（重新定位 + 能力迁移——不新增 spec 编号；实现前更新两份 `spec.md`）
-- **取代：** [ADR-021](./ADR-021-chat-as-vault-console.md) 中"通过 `builtin` agent 与金库对话"这一半；**修订** [ADR-018](./ADR-018-tool-retrieval-for-overload.md)（search-tools 排序）并 un-defer 其 Capability B
+- **取代：** [ADR-021](./ADR-021-chat-as-vault-console.md) 中"通过 `builtin` agent 与金库对话"这一半；**修订** [ADR-018](./ADR-018-tool-retrieval-for-overload.md)（search-tools 排序）
 - **相关：** [007-memory](../../specs/007-memory/spec.md)、[006-knowledge-base](../../specs/006-knowledge-base/spec.md)、[ADR-012](./ADR-012-files-as-truth-sqlite-retrieval.md)、[ADR-020](./ADR-020-transcript-distillation.md)
 
 ## 背景
@@ -52,21 +52,20 @@ IM 没有持久使用场景，还悄悄重新打开了 ADR-021 自己想关掉�
 - `/agents` 列表去掉内置 agent 卡片；`/agents` 纯粹是受管 agent。
 - 删除 `/agents/builtin` 详情页。其中唯一仍有意义的部分——本地模型配置——迁入
   **Settings → Models**，从"Coffer Assistant 使用的模型"重构为**「Coffer 内部模型」**，
-  驱动检索、agentic RAG 与蒸馏。
+  驱动检索、记忆重组与蒸馏。
 
 ### 3. 本地模型成为内部能力的引擎
 
 LLM 机器**保留但重新定位**，永不面向用户：
 
 - **保留**模型工厂（`langchain_models.py`）和单轮补全（`llm_completion.py`）——蒸馏已依赖
-  它们，(b) 也将依赖。
+  它们。
 - **移除**面向聊天的部分：`builtin` 聊天 provider、其注册表条目、聊天事件映射。
-- **重塑** ReAct 循环为内部 agentic-RAG 引擎，置于一个新内置工具 (b) 之后，复用既有的
-  in-process gateway 会话（`coffer-builtin-agent`）访问知识/记忆。
+- **保留** ReAct 循环作为仅内部的引擎（记忆重组，spec 007），永不作为聊天 agent 暴露。
 
-本次改动交付两项能力：
+本次改动交付一项能力：
 
-**(a) `coffer__search_tools` 获得语义排序（修订 ADR-018）。** BM25-lite 排序有真实召回缺
+**`coffer__search_tools` 获得语义排序（修订 ADR-018）。** BM25-lite 排序有真实召回缺
 口：纯词法匹配，意图"notify someone"会漏掉 `send_message` 工具，跨语言 query 会漏掉英文工
 具名。ADR-018 *自己引用的证据*里，赢的选择器是**嵌入**索引（Copilot：embedding 94.5% >
 LLM 87.5%）——是嵌入，不是关键词。于是 `coffer__search_tools` 现在**在配置了 embedder 时
@@ -75,20 +74,13 @@ LLM 87.5%）——是嵌入，不是关键词。于是 `coffer__search_tools` �
 embedder 的用户修掉召回。注意这**并不**推翻 ADR-018 对工具选择用 _LLM router_ 的否决：下游
 agent 仍负责 select-and-call，我们只改善它看到的候选集。
 
-**(b) `coffer__ask` —— 对金库的 agentic 检索（un-defer ADR-018 Capability B）。** 一个新内置
-MCP 工具，对用户的**知识库 + 记忆**跑一个有界的"检索-综合"循环，返回带引用的答案。ADR-018
-defer Capability B 是*针对工具选择*的——那里下游 frontier 模型本就擅长从排序结果里挑。知识/记
-忆综合是另一个问题：跨文档的多步检索 + 阅读 + 摘要，本来需要调用方做大量手工
-`search_knowledge` / `read_document` 往返。`coffer__ask` 正是"RAG 里的 embedding 模型"这个
-比喻的字面形态——主 agent 调用的内部子组件，绝非聊天对象。
-
 ### 不变量
 
 - **没有面向用户的内置人格。** 本地模型只能作为 `coffer__*` 工具（及蒸馏等内部流程）触达，
   绝不作为聊天 agent，也绝不被 UI 当作助手呈现。
-- **附加的、可审计的工具。** `coffer__ask` 与升级后的 `coffer__search_tools` 像任何 `coffer__`
-  内置工具一样在 `tools/list` 中通告，记入调用日志（who/when/how-long/outcome，无参数/结果），
-  并优雅降级（搜索回退 BM25；未配置模型时给出明确错误而非崩溃）。
+- **附加的、可审计的工具。** 升级后的 `coffer__search_tools` 像任何 `coffer__` 内置工具一样
+  在 `tools/list` 中通告，记入调用日志（who/when/how-long/outcome，无参数/结果），并优雅降级
+  （未配置 embedder 时回退 BM25，而非崩溃）。
 - **接缝对等性保留。** 移除 `builtin` 聊天 provider 不触碰渠道与受管 agent 聊天共享的
   `ConversationPort` / `TurnPort` 机器。
 
@@ -101,8 +93,8 @@ defer Capability B 是*针对工具选择*的——那里下游 frontier 模型�
 
 ### B — 现在就移除内置 agent *并*删掉所有 LLM 机器
 
-**否决。** 蒸馏已依赖模型工厂 + 单轮补全，agentic RAG (b) 又给 ReAct 底座提供了真实内部消费
-者。删掉会让蒸馏失依赖，并迫使 (b) 从零重建。我们只删聊天外壳。
+**否决。** 蒸馏已依赖模型工厂 + 单轮补全，记忆重组（spec 007）又是 ReAct 底座的真实内部消费
+者。删掉会让两者都失依赖。我们只删聊天外壳。
 
 ### C — `coffer__search_tools` 保持纯 BM25、不加 embedder 路径
 
@@ -119,11 +111,19 @@ defer Capability B 是*针对工具选择*的——那里下游 frontier 模型�
 - Spec 008（`spec.md`、验收场景）与 Spec 004（agent registry）更新：聊天只列受管 agent；内置
   agent 不再是注册的聊天 agent。
 - ADR-021 标记为**部分被取代**：渠道观测职责存续；"通过 builtin agent 与金库对话"职责移除。
-- ADR-018 被**修订**：`coffer__search_tools` 获得带 BM25 回退的语义排序路径；Capability B 针对
-  知识/记忆 un-defer 为 `coffer__ask`。
+- ADR-018 被**修订**：`coffer__search_tools` 获得带 BM25 回退的语义排序路径。
 - UI：`/chat` 改回「聊天」；移除 `/agents/builtin` 路由与内置卡片；Settings → Models 重构为
   Coffer 内部模型。
 - CLI：移除 `coffer chat` 命令（内置 agent 的终端聊天）；`coffer model` 及其余 CLI 不变。
-- LangGraph/LangChain 作为**内部**依赖保留（蒸馏 + `coffer__ask`）；删除聊天事件映射与 `builtin`
+- LangGraph/LangChain 作为**内部**依赖保留（蒸馏 + 记忆重组）；删除聊天事件映射与 `builtin`
   聊天 provider。
 - 除 Settings → Models 已存储的内容外无新增持久状态；无迁移。
+
+## 修订历史
+
+- **2026-09-09** — 移除 `coffer__ask`。本 ADR 作为能力 (b) 交付的 agentic-RAG 能力已删除：
+  ReAct 循环只保留为本 ADR 同时描述的内部记忆重组引擎。`coffer__ask` 的调用方是
+  Claude Code 与 Codex，它们本身就是很强的 ReAct agent；让 Coffer 的内部小模型代替
+  它们跑一个有界的 16 步检索循环，是把职责搞反了，而且用的还是比提问者更弱的模型。
+  使用数据印证了这一点——30 天内 4 次调用，其中 1 次失败。该循环所包装的检索工具
+  仍可直接调用，因此失去的只是这层包装。

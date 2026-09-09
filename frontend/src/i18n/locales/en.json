@@ -117,8 +117,7 @@
   },
   "mcp": {
     "missingRunner": "{{runner}} is not installed on this machine",
-    "installRunner": "Install",
-    "installingRunner": "Installing…",
+    "missingRunnerHint": "Install {{runner}}, then refresh",
     "table": {
       "transport": "Transport",
       "health": "Health",
@@ -271,7 +270,6 @@
       "daemon_stopped": "Daemon stopped",
       "token_rotated": "Access token rotated",
       "retention_updated": "Updated a data-retention policy",
-      "backup_created": "Created a backup",
       "keychain_set": "Stored a credential",
       "keychain_deleted": "Removed a credential",
       "keychain_read": "Read a credential",
@@ -336,7 +334,6 @@
       "daemon_stopped": "Daemon stopped",
       "token_rotated": "Token rotated",
       "retention_updated": "Retention changed",
-      "backup_created": "Backup created",
       "keychain_set": "Credential stored",
       "keychain_deleted": "Credential removed",
       "keychain_read": "Credential read",
@@ -375,7 +372,7 @@
   },
   "settings": {
     "title": "Settings",
-    "subtitle": "Your data, backups, and app preferences.",
+    "subtitle": "Your data and app preferences.",
     "tabs": {
       "general": "General",
       "data": "Data",
@@ -422,13 +419,6 @@
           "description": "Delete archived conversations this many days after archival (with their messages)."
         }
       }
-    },
-    "backup": {
-      "title": "Data backup",
-      "description": "Save a complete copy of your data to a single file under ~/.coffer/backups/.",
-      "create": "Create backup",
-      "creating": "Backing up…",
-      "saved": "Saved to {{path}}"
     },
     "about": {
       "title": "About Coffer",
@@ -562,7 +552,7 @@
     },
     "internalEngine": {
       "title": "Internal engine",
-      "subtitle": "The connection and model Coffer's own LLM engine (memory organizer / reorg / distill / coffer__ask) runs on. The connection provides the endpoint + key; the model is chosen separately here.",
+      "subtitle": "The connection and model Coffer's own LLM engine (memory organizer / reorg / distill) runs on. The connection provides the endpoint + key; the model is chosen separately here.",
       "connection": "Connection",
       "connectionPlaceholder": "Select a connection",
       "model": "Model",

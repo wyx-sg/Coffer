@@ -8,7 +8,7 @@
 
 > **注（2026-06-14）：** [ADR-024](./ADR-024-builtin-agent-is-internal-capability.md)
 > 取代下文中**"通过 `builtin` agent 与金库对话"**这一职责 —— 内置 agent 退出聊天人格,
-> 重塑为 Coffer 内部能力（`coffer__search_tools` 语义排序、`coffer__ask`）；聊天面从
+> 重塑为 Coffer 内部能力（`coffer__search_tools` 语义排序）；聊天面从
 > _Vault Console（金库控制台）_ 改回 _Chat（聊天）_。
 >
 > **注（2026-06-18）：** [ADR-025](./ADR-025-remove-tool-approval.md) 取代下文的**「审批

@@ -73,7 +73,7 @@ rows migrate to provider resources; the provider model-introspection routes
   optional (required for anthropic/openai, absent for ollama).
 - A global `internal_default` flag (≤1 across all connections) marks the
   connection Coffer's internal LLM engine uses (memory organizer, reorg,
-  distill, `coffer__ask`), set via `POST /providers/{name}/internal-default`
+  distill), set via `POST /providers/{name}/internal-default`
   (audit event `provider_internal_default_set`) / `coffer provider
   internal-default`. One connection MAY be BOTH `is_active` (projected to its
   wire's agent) AND `internal_default` — one key, two uses.
