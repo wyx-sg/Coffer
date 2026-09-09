@@ -184,7 +184,7 @@ Tool overload / commentary:
 - **"No per-client/per-agent scoping" is now stale — Coffer shipped it.** This
   report's headline differentiator ("the lone whole-gateway-per-agent; the only
   gateway with no per-client scoping," §1/§2 table/§3/§4) was overtaken by
-  **PR #108 / ADR-026** (`docs/decisions/ADR-026-per-agent-mcp-scoping.md`),
+  **PR #108 / ADR-045** (`docs/decisions/ADR-045-per-agent-resource-scope.md`),
   merged **2026-06-18**. Coffer now supports **per-agent MCP server scoping**
   with two modes: `auto` (default — every enabled server, fully backward
   compatible) and `selected` (an explicit per-agent allowlist). Agent identity
@@ -207,7 +207,7 @@ Tool overload / commentary:
   `repo:backend/coffer/application/agent/scope_service.py:33-96`,
   `repo:backend/coffer/application/mcp/gateway.py:165-222`,
   `repo:frontend/src/components/agents/AgentGatewayMcpSection.tsx`,
-  `repo:docs/decisions/ADR-026-per-agent-mcp-scoping.md`
+  `repo:docs/decisions/ADR-045-per-agent-resource-scope.md`
 - **"Only gateway with runtime tool-search" overstated for the broader field.**
   Old: the table marks runtime tool-search as a Coffer-unique `—` across all five
   rivals. Corrected: tool-search / progressive disclosure is not unique even

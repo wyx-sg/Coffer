@@ -1,114 +1,51 @@
-# Spec 010 — Data Model
+# Spec 010 — 数据模型
 
 > English: [data-model.md](./data-model.md)
 
 ## 持久化状态
 
-### `sync_config`（单行）
+**没有。** 导出与导入是对活着的仓库执行的一次性操作；它们不拥有任何表。没有需要持久化
+的同步配置（用户每次调用都自己给出目录）、没有需要用来仲裁的上次运行状态、没有机器
+注册表、也没有墓碑账本——持续同步以及为它服务的一切都已被撤销
+（[ADR-016](../../docs/decisions/ADR-016-vault-export-import.md)）。
 
-沿用 `embedding_config` 的单例模式（一行，固定 id）。
+因此 `infrastructure/sync/` 不贡献任何 ORM 模型，除了那次删除已撤销的 `sync_config`、
+`sync_state`、`machine_identity` 与 `sync_tombstones` 表的迁移之外，也没有自己的迁移。
 
-| Field              | Type    | Notes                                              |
-| ------------------ | ------- | -------------------------------------------------- |
-| `id`               | String  | `SINGLETON` 常量主键。                              |
-| `remote`           | String? | Git 远端 URL；配置前为 null。                       |
-| `enabled`          | bool    | 同步的总开关。默认 `false`。                        |
-| `auto`             | bool    | 守护进程是否运行自动同步 worker。默认 `false`。     |
-| `interval_seconds` | int     | auto-sync 兜底轮询间隔。默认 `300`。                |
-| `poll_remote_seconds` | int  | auto-sync 远端 HEAD 探测频率。默认 `15`，最小 `5`。 |
-| `branch`           | String  | 同步所在的 Git 分支。默认 `main`。                  |
-| `updated_at`       | String  | ISO-8601。                                          |
+导出携带的凭据密文来自既有的 `credentials` 表；资源文档经由 `ResourceService` 来自
+既有的资源表。SQLite 仍是本机的事实记录方。
 
-此处不存储任何密钥。Git 远端鉴权依赖用户当前环境的 git 凭据配置。
+## 文件系统状态（导出包）
 
-### `sync_state`（单行）
-
-最近一次运行的状态，同样是单例行。
-
-| Field             | Type    | Notes                                                          |
-| ----------------- | ------- | -------------------------------------------------------------- |
-| `id`              | String  | `SINGLETON`。                                                  |
-| `status`          | String  | `clean` / `syncing` / `conflicted` / `error` / `credentials_locked` / `unconfigured`。 |
-| `last_sync_at`    | String? | 最近一次成功运行的 ISO-8601 时间。                            |
-| `last_error`      | String? | 最近一次错误信息（已脱敏，不含密钥）。                        |
-| `conflict_paths`  | JSON    | 当前处于冲突状态的、相对于 workspace 的路径列表。             |
-| `locked_refs`     | JSON    | 以密文形式存在、但在本机无法解密的凭据 ref。                  |
-| `quarantined_refs`| JSON    | 在本机导入失败的 `<kind>:<name>` ref；每次运行重试。          |
-| `updated_at`      | String  | ISO-8601。                                                      |
-
-两张表都位于 `infrastructure/sync/persistence.py`；迁移 `0017`。
-
-### `machine_identity`（单行）
-
-本机的稳定身份（ADR-043）。它是*关于*这台机器的本机状态——永不作为 vault 数据
-导出（workspace 的 `machines/` 注册项在导出时由它派生）。
-
-| Field          | Type   | Notes                                       |
-| -------------- | ------ | ------------------------------------------- |
-| `id`           | int    | `1`（CHECK 约束的单例）。                    |
-| `machine_id`   | String | 守护进程首次启动时铸造的 ULID；永不改变。    |
-| `display_name` | String | 默认取主机名；用户可编辑。                   |
-| `created_at`   | String | ISO-8601。                                   |
-| `updated_at`   | String | ISO-8601。                                   |
-
-位于 `infrastructure/sync/persistence.py`；迁移 `0042`。
-
-### `sync_tombstones`（台账）
-
-本机配置资源删除的本地记录，等待导出为 workspace 墓碑文件。资源在本机重新
-注册、或超过 90 天 TTL 后，对应行被删除。
-
-| Field        | Type   | Notes                            |
-| ------------ | ------ | -------------------------------- |
-| `id`         | int    | 自增主键。                        |
-| `kind`       | String | 资源 kind。与 `name` 联合唯一。   |
-| `name`       | String | 资源名。                          |
-| `deleted_at` | String | 本地删除的 ISO-8601 时间。        |
-
-位于 `infrastructure/sync/persistence.py`；迁移 `0043`。
-
-## 文件系统状态（同步 workspace）
-
-默认为 `~/.coffer/sync/`（测试时可通过 `$COFFER_SYNC_ROOT` 覆盖），这是一个
-git 工作树，其 `origin` 指向用户的远端。
+一个 bundle 就是用户在每次导出时命名的一个普通目录。Coffer 不在两次运行之间管理它：
+不记住关于它的任何信息、不在后台往里写入任何东西，它与其他任何 bundle 也没有关系。
 
 ```
-manifest.json
-machines/<machine-id>.json      每机注册项（只由其所属机器写入）
-machines/<machine-id>/overrides/<kind>/<name>.yaml   每机 merge patch
-knowledge/                      mirror of ~/.coffer/knowledge
-memory/                         mirror of ~/.coffer/memory
-skills/                         mirror of ~/.coffer/skills
-resources/<kind>/<name>.yaml    one deterministic file per config resource
-tombstones/resources/<kind>/<name>.json   显式删除记录
-state/<area>/...yaml            模块自有的共享状态文档
-credentials/<ref>.enc           Fernet ciphertext, base64 text; never the key
+manifest.json                  bundle schema version + creation time
+knowledge/                     mirror of ~/.coffer/knowledge
+memory/                        mirror of ~/.coffer/memory
+skills/                        mirror of ~/.coffer/skills (master skill store)
+resources/<kind>/<name>.yaml   one deterministic file per config resource
+state/<area>/...yaml           module-owned shared state docs
+credentials/<ref>.enc          Fernet ciphertext, base64 text; never the key
 ```
+
+只有当导出带了 `--with-credentials` 时，`credentials/` 才会存在。
 
 ### `manifest.json`
 
-| Field             | Type   | Notes                                            |
-| ----------------- | ------ | ------------------------------------------------ |
-| `schema_version`  | int    | 当 workspace 布局发生不兼容变更时递增。           |
+| 字段             | 类型   | 说明                                       |
+| ---------------- | ------ | ------------------------------------------ |
+| `schema_version` | int    | bundle 布局发生不兼容变更时递增。          |
+| `created_at`     | String | 写出该 bundle 的时间，ISO-8601。           |
 
-只有 schema 版本——manifest 在每台机器上字节一致，因此永远不会发生合并冲突。
-每机信息改放在 `machines/` 区。`schema_version` 会在导入时校验；若 workspace 比
-正在运行的构建版本更新，则会快速失败（`SYNC_WORKSPACE_TOO_NEW`），与数据库的
-`DB_SCHEMA_TOO_NEW` 规则相对应。
+当前版本：**1**。bundle 是一个有自己版本谱系的新格式；已撤销的 git workspace 的
+`schema_version`（当时已到 3）不会延续过来，因为这个格式从未产出过那种布局的 bundle。
 
-### 机器注册项（`machines/<machine-id>.json`）
-
-| Field            | Type    | Notes                                        |
-| ---------------- | ------- | -------------------------------------------- |
-| `machine_id`     | String  | 所属机器的 ULID（= 文件名）。                 |
-| `display_name`   | String  | 默认主机名；用户可编辑。                      |
-| `platform`       | String  | 如 `darwin` / `linux`。                       |
-| `os_version`     | String  | 人类可读的操作系统版本。                      |
-| `coffer_version` | String  | 生产者版本，用于诊断。                        |
-| `last_sync_at`   | String  | 该机器最近一次完成导出的 ISO-8601 时间。      |
-
-每台机器**只写自己的**注册项；仅当本次运行的提交本就非空、或注册项已超过 24 小时
-（心跳）时才重写，因此空闲机器不会产生纯注册项的提交链。
+`schema_version` 在导入时被校验：比运行中的构建更新的 bundle 会在任何东西被应用之前
+以 `SYNC_BUNDLE_TOO_NEW` 快速失败，与数据库的 `DB_SCHEMA_TOO_NEW` 规则一致。
+`created_at` 仅供参考——它是同一个未发生变化的仓库两次导出之间唯一合理会不同的字段，
+因此确定性比对会排除它。
 
 ### 资源序列化（`resources/<kind>/<name>.yaml`）
 
@@ -119,68 +56,80 @@ kind: mcp_server
 name: confluence
 description: "..."
 enabled: true
-config: { ... }     # the validated, json-mode config; keys sorted
+scope: ["claude-code"]   # omitted when null (active for every agent)
+config: { ... }          # the validated, json-mode config; keys sorted
 ```
 
-`created_at` / `updated_at` 以及本地 `id` 被**排除**（属于机器本地数据，会让
-diff 频繁变动）。导入时按 `<kind>:<name>` 对资源执行 upsert。**仅**当墓碑文件
-存在时才删除本地资源——资源只是从 workspace 缺席永远不会导致删除（别处的导入
-失败绝不能伪装成删除）。当同一 ref 的资源文档与墓碑同时存在时（合并残留），
-资源文档胜出。
+- `created_at` / `updated_at` / 本地 `id` 被**排除**——它们仅属于本机，且会让每次导出
+  都与上一次不同。
+- 映射的键是排序的；每个资源恰好一个文档，因此一个未发生变化的仓库两次导出字节一致。
+- `scope`（[ADR-045](../../docs/decisions/ADR-045-per-agent-resource-scope.md)）是一个
+  普通字段——一个 agent 名字列表——原样穿过导出与导入。没有任何专属机制；一个对所有
+  本机 agent 都不在 scope 内的资源照样导入，只是不被激活。
+- 导出方机器 home 之下的字符串值被归一化为 `${HOME}/...`，并在导入时对着导入方机器的
+  home 展开（见[路径可移植](#路径可移植)）。
 
-### 墓碑（`tombstones/resources/<kind>/<name>.json`）
+导入时资源经由 kind 无关的 `ResourceService` 按 `<kind>:<name>` upsert，并运行该 kind
+的导入后钩子，从而执行仅本机的副作用（安装 shim、投影原生配置、物化 skill 符号链接）。
+本地资源**绝不**会因为一次导入而被删除：某个资源不在 bundle 中不代表任何含义，因为
+一个 bundle 是某一台机器的快照，而不是对"哪些东西应当到处都存在"的断言。
 
-| Field        | Type   | Notes                              |
-| ------------ | ------ | ---------------------------------- |
-| `deleted_at` | String | 删除的 ISO-8601 时间。              |
-| `by`         | String | 执行删除的机器的 `machine_id`。     |
+### 路径可移植
 
-导出时由 `sync_tombstones` 台账写出；当资源重新存活时在导出中移除（重新注册
-胜出）；90 天后清理。
+在一台机器上写出的导出物，必须能在 home 目录不同的另一台机器上导入。
+
+| 路径形态       | 导出时                     | 导入时                             |
+| -------------- | -------------------------- | ---------------------------------- |
+| `$HOME` 之下   | 存为 `${HOME}/...`         | 对着导入方的 home 展开             |
+| `$HOME` 之外   | 原样存储                   | 原样使用；在本机可能解析不到       |
+
+一个在导入方机器上并不存在的原样路径，会呈现为逐资源的导入失败（该资源的 ref 加上
+原因出现在导入结果里），既不会是静默的错配，也不会让整次运行致命失败。
 
 ### 状态区（`state/<area>/...yaml`）
 
-随 vault 同步的模块自有共享状态。各模块实现 `SyncedStatePort`（确定性 YAML 文档的
-导出/导入），由组合根注册提供者——sync 永不导入 kind 模块。当前区域：
+由各模块自有、属于仓库而非某一台机器的共享状态。每个模块实现 `SyncedStatePort`
+（确定性 YAML 文档的导出/导入），由组合根注册这些 provider——sync 切片从不 import
+kind 模块。当前的状态区：
 
 - `channel-peers/<channel>/<chat>.yaml` —— 配对身份（chat_id、sender_id、显示名、
-  首选 agent、paired_at；机器本地的 `active_conversation_id` 永不传播）。导入执行
-  upsert；引用本地不存在渠道的文档被跳过并在下轮重试。
-- `mcp-preferences/<server>.yaml` —— 每服务器被**禁用**的能力（启用为默认；
-  seen 时间戳保持本机）。导入将本地存在的服务器收敛到文档内容；认领前缀 = 本地服务器。
-  冲突语义按文档粒度：若两台机器在首次共同同步前对同一服务器禁用了不同能力，
-  合并将冲突、被解决的一方整体获胜——落败机器的本地禁用会在其下一次导入被重新
-  启用。凭证 ref 尚未解锁的机器上 embedding 会保持降级（锁定 ref 可正常导入；
-  向量索引只是不激活）。
-- `settings/embedding.yaml` + `settings/internal-engine.yaml` —— 两个引擎单例。
-  机器只有在本地持久化过该单例后才认领（并发布）它，全新机器的默认值不会在首次
-  合并时与舰队值同路径冲突。
-- `memory-labels/<store>.yaml` —— 记忆库的用户显示标签（spec 007 FR-017c），让
-  `project-<ULID>` 库在每台机器上都以其名字显示，而不是「未命名记忆库」。设置、
-  改名与清除全部传播：清除以空标签标记文档（`{label: ""}`）传播——单纯的文档
-  缺席无法区分「已清除」与「尚未同步」，还会让标签从工作区的陈旧文档复活。
+  首选 agent、paired_at；仅本机的 `active_conversation_id` 永不随行）。导入执行
+  upsert；引用了本机不存在的 channel 的文档，会作为逐文档失败被报告并跳过。
+- `mcp-preferences/<server>.yaml` —— 每个服务器上被**禁用**的能力（启用是默认值；
+  seen 时间戳仅属本机）。导入把本机存在的服务器对账成与 bundle 一致。
+- `settings/embedding.yaml` + `settings/internal-engine.yaml` —— 两个引擎单例。只有在
+  导出方机器已经在本地持久化过它们之后才会被导出，因此一台未曾配置过的机器绝不会用
+  自己的默认值盖掉另一台机器已配置好的值。
+- `memory-labels/<store>.yaml` —— 记忆 store 的用户自设显示标签（spec 007 FR-017c），
+  这样一个 `project-<ULID>` store 在导入之后读起来是它的名字，而不是"未命名 store"。
+  被清空的标签以一个显式的空标签文档（`{label: ""}`）随行，而不是靠文档缺失——后者
+  导入方无法与"从未设置过"区分开。
 
-skill 投递绑定（`skill_agent_bindings`）**按决定保持本机**：投递是有副作用的文件
-操作且没有行级 reconcile 循环——同步这些行会虚报投递状态。请在每台机器上经现有
-skill 表面自行采用。
+Skill 投递绑定（`skill_agent_bindings`）按决策保持仅本机：投递是针对各机器不同的目录
+执行的、有副作用的文件操作。导入 skill 主库之后，请在每台机器上通过既有的 skill 表面
+各自采纳。
 
-### 凭据 blob（`credentials/<ref>.enc`）
+### 凭据密文块（`credentials/<ref>.enc`）
 
-`ref` 对应的 Fernet 密文，以 base64 文本编码，使 git 存储稳定的行内容。不含主密钥、
-不含明文，除 ref（即路径）外不含任何元数据。
+`ref` 对应的 Fernet 密文，以 base64 文本存放。没有主密钥、没有明文，除了 ref（即路径）
+之外没有任何元数据。
 
-`ref` 可带斜杠命名空间（如 `channel/seatalk/app-secret`、`provider/agnes/key`），
-因此 blob 存放在对应的嵌套路径 `credentials/channel/seatalk/app-secret.enc`。导出时
-会创建父目录；导入时递归遍历并由相对路径还原出完整的斜杠 ref。
+`ref` 可以带斜杠命名空间（例如 `channel/seatalk/app-secret`、`provider/agnes/key`），
+因此密文块位于对应的嵌套路径 `credentials/channel/seatalk/app-secret.enc`。导出会创建
+父目录；导入递归遍历并从相对路径重建出完整的带斜杠 ref。
 
-## 仅本地、永不进入 workspace
+被导入到一台没有对应主密钥的机器上的密文原样存储，并被报为 `credentials_locked`；
+受影响的资源会拒绝拉起，而不是静默地解密失败。密钥经带外途径引导
+（`coffer sync key export` / `coffer sync key import`），且永不出现在 bundle 里。
 
-`~/.coffer/logs/`、`coffer.db`、`daemon.json`、PID/端口文件，以及主密钥
-文件 / keychain 条目。
+## 仅本机、绝不进入 bundle
+
+`~/.coffer/logs/`、`coffer.db`、`daemon.json`、PID/端口文件、聊天历史、审计日志，以及
+主密钥文件 / 钥匙串条目。
 
 ## 派生索引（排除并重建）
 
-由「事实源文件」重新生成的派生文件会被排除出镜像——它们逐机不同，若同步会
-造成同路径的伪冲突。当前的例子是 memory store 的 `MEMORY.md` 索引：逐条
-`<slug>.md` 事实文件照常同步，`MEMORY.md` 在导入后由合并后的事实文件重建。
-排除集合见 `infrastructure/sync/workspace.DERIVED_INDEX_NAMES`。
+那些由事实来源文件*重新生成*出来的文件被排除在镜像之外——把它们带上会让一份陈旧的
+副本盖掉刚刚重建出来的那份。记忆 store 的 `MEMORY.md` 索引就是当前的例子：逐条事实的
+`<slug>.md` 文件随行，而 `MEMORY.md` 由导入进来的事实重建。这个集合与 bundle 布局一起
+定义在 `infrastructure/sync/` 中。

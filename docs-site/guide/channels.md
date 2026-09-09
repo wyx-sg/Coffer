@@ -31,4 +31,4 @@ In a paired chat, the in-chat commands `/new`, `/stop`, `/status`, and `/help` c
 
 The **Channels** page in the app does the same without the terminal: add a channel (store its secret and register in one step), pair, toggle it on or off, and send a test message from the channel detail page.
 
-[Multi-machine sync →](/guide/sync)
+[Export and import →](/guide/sync)

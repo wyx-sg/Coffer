@@ -39,11 +39,12 @@ The callback listener is a daemon-spawned child process that exists only to acce
 
 ## Supervised background workers
 
-Beyond the subprocesses above, the daemon runs several in-process background workers — supervised asyncio tasks, not separate processes — that keep vault state converging without any user action:
+Beyond the subprocesses above, the daemon runs a couple of in-process background workers — supervised asyncio tasks, not separate processes — that keep vault state converging without any user action:
 
 - **Retention worker.** Prunes log-style tables (audit log, invocation log) according to the configured retention policies.
 - **Channel adapter reconciler** ([ADR-014](/reference/adr/ADR-014-channel-adapter-framework)). On every tick it diffs enabled channel resources against running adapters and starts/stops/restarts to match — and starts or stops the callback listener with the SeaTalk channel set. REST/CLI/UI never start or stop adapters directly; the reconciler owns all runtime state transitions, which keeps status truthful.
-- **Sync worker** ([ADR-016](/reference/adr/ADR-016-multi-machine-sync)), **opt-in and off by default.** Modeled on the retention worker, it adds debounced push-on-change plus interval pull for users who want hands-off multi-machine convergence. `coffer sync` remains the explicit, predictable default.
+
+Vault export and import ([ADR-016](/reference/adr/ADR-016-vault-export-import)) are deliberately **not** among them: they run only when the user asks, in the request that asked, with no worker and no background replication.
 
 ## Detect-or-spawn (ADR-006)
 
