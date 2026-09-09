@@ -32,7 +32,13 @@ from coffer.application.knowledge_base.service import KnowledgeBaseService
 from coffer.application.providers.ports import ModelIntrospectionService
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.knowledge.embedder import EmbeddingConfig
-from coffer.infrastructure.agent.model_discovery import NativeConfigModelDiscovery
+from coffer.infrastructure.agent.claude_binary_models import ClaudeBinaryModelDiscovery
+from coffer.infrastructure.agent.codex_rpc_models import CodexRpcModelDiscovery
+from coffer.infrastructure.agent.model_discovery import (
+    ChainedModelDiscovery,
+    NativeConfigModelDiscovery,
+)
+from coffer.infrastructure.chat.codex_app_server import default_app_server_session
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.knowledge import paths
@@ -240,13 +246,28 @@ def wire_chat(
     #    service resolves credential refs to keys server-side.
     introspection_svc = ModelIntrospectionService(ProviderIntrospector(), _credential_resolver)
 
-    # 8. The model catalogue — one list of models per managed agent (curated
-    #    aliases + whatever the agent's own config advertises) shared by the web
-    #    picker, the channel /model card, and the note each turn tells the agent
-    #    about the model it is on. Needs the agent registry (spec 004), which
-    #    wire_agent_and_skill_kinds published before this call.
+    # 8. The model catalogue — one list of models per managed agent, shared by
+    #    the web picker, the channel /model card, and the note each turn tells
+    #    the agent about the model it is on. Coffer names no model itself: every
+    #    entry is read back from the agent, from three sources whose ORDER here
+    #    is the order the picker shows.
+    #      1. the Claude Code executable — its tier aliases, then its versioned
+    #         catalog, which is the only place the Opus 5 / Opus 4.8 distinction
+    #         is written down;
+    #      2. Codex's own model/list RPC, driven over the same app-server
+    #         transport a turn uses;
+    #      3. each CLI's config file, for the local choices only it knows about.
+    #    Needs the agent registry (spec 004), which wire_agent_and_skill_kinds
+    #    published before this call.
     model_catalogue = AgentModelCatalogueService(
-        agents=get_agent_service(), discovery=NativeConfigModelDiscovery()
+        agents=get_agent_service(),
+        discovery=ChainedModelDiscovery(
+            [
+                ClaudeBinaryModelDiscovery(),
+                CodexRpcModelDiscovery(default_app_server_session),
+                NativeConfigModelDiscovery(),
+            ]
+        ),
     )
 
     # 9. Register dependency providers.

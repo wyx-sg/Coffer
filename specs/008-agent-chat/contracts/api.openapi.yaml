@@ -494,8 +494,10 @@ components:
           type: string
           enum: [alias, discovered]
           description: >
-            `alias` — a curated CLI alias resolving to the newest model in its
-            tier; `discovered` — read out of the agent's own native config.
+            `alias` — a tier alias the CLI accepts, resolving to the newest
+            model in that tier; `discovered` — a concrete, version-bearing model
+            the agent reported. Coffer names no model itself: every entry is
+            read back from the installed agent.
 
     AgentModelsOut:
       type: object

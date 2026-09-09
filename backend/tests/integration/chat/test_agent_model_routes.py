@@ -2,9 +2,15 @@
 
 Wires the real route against the real ``AgentModelCatalogueService`` and the real
 on-disk discovery adapter (only the spec-004 agent registry is faked), so the
-whole chain from HTTP down to the agent's own ``.claude.json`` is exercised. The
-regression it guards: Coffer used to offer a hardcoded three-model list and
-users could not select the newest tier at all.
+whole chain from HTTP down to the agent's own ``.claude.json`` is exercised.
+
+Only the config-file source is wired here, deliberately: the other two sources
+read an installed CLI, which would make this test say different things on a
+developer's laptop and on CI. Their own unit tests cover them against fixtures.
+
+The regression it guards: Coffer used to answer this route from a list written
+into its own source, which named models that did not exist on the machine and
+omitted the ones that did.
 """
 
 from __future__ import annotations
@@ -42,13 +48,13 @@ class _FakeAgents:
         return list(self._resources)
 
 
-def _agent_resource(config_dir: pathlib.Path) -> Resource:
+def _agent_resource(config_dir: pathlib.Path, *, agent_type: str = "claude_code") -> Resource:
     return Resource(
         id=1,
         kind="agent",
-        name="cc",
+        name=agent_type,
         description=None,
-        config={"type": "claude_code", "config_dir": str(config_dir)},
+        config={"type": agent_type, "config_dir": str(config_dir)},
         enabled=True,
         created_at=_NOW,
         updated_at=_NOW,
@@ -76,23 +82,31 @@ def client_no_agents() -> Generator[TestClient, None, None]:
         yield client
 
 
-def test_curated_catalogue_includes_the_newest_alias(client_no_agents: TestClient) -> None:
-    """With no agent registered the catalogue is the curated alias list — which
-    must carry ``fable``, the tier users previously could not select at all."""
+def test_no_registered_agent_means_nothing_to_read(client_no_agents: TestClient) -> None:
+    """Coffer invents nothing: with no agent registered and only the config-file
+    source wired, the route answers 200 with an empty catalogue rather than a
+    list of names it made up."""
     resp = client_no_agents.get("/api/v1/chat/agents/claude_code/models", headers=_HEADERS)
 
     assert resp.status_code == 200, resp.text
-    models = resp.json()["models"]
-    assert [m["id"] for m in models] == ["fable", "opus", "opusplan", "sonnet", "haiku"]
-    assert {m["source"] for m in models} == {"alias"}
-    assert models[0]["label"] == "Fable"
+    assert resp.json()["models"] == []
 
 
-def test_codex_catalogue(client_no_agents: TestClient) -> None:
-    resp = client_no_agents.get("/api/v1/chat/agents/codex/models", headers=_HEADERS)
+def test_codex_catalogue_comes_from_the_agents_own_config(tmp_path: pathlib.Path) -> None:
+    config_dir = tmp_path / ".codex"
+    config_dir.mkdir()
+    (config_dir / "config.toml").write_text(
+        'model = "some-codex-model"\n\n[profiles.deep]\nmodel = "some-other-model"\n',
+        encoding="utf-8",
+    )
+
+    set_active_token(_TOKEN)
+    agents = _FakeAgents([_agent_resource(config_dir, agent_type="codex")])
+    with TestClient(_build_app(agents)) as client:
+        resp = client.get("/api/v1/chat/agents/codex/models", headers=_HEADERS)
 
     assert resp.status_code == 200, resp.text
-    assert [m["id"] for m in resp.json()["models"]] == ["gpt-5-codex", "gpt-5", "o3"]
+    assert [m["id"] for m in resp.json()["models"]] == ["some-codex-model", "some-other-model"]
 
 
 def test_unknown_agent_key_is_404(client_no_agents: TestClient) -> None:
@@ -102,8 +116,8 @@ def test_unknown_agent_key_is_404(client_no_agents: TestClient) -> None:
 
 
 def test_discovered_models_from_the_agents_own_config(tmp_path: pathlib.Path) -> None:
-    """A model advertised by the registered agent's ``.claude.json`` appears
-    after the curated aliases, tagged ``discovered``."""
+    """A model the registered agent cached in its own ``.claude.json`` reaches
+    the wire verbatim, tagged ``discovered``."""
     config_dir = tmp_path / ".claude"
     config_dir.mkdir()
     (tmp_path / ".claude.json").write_text(
@@ -126,11 +140,11 @@ def test_discovered_models_from_the_agents_own_config(tmp_path: pathlib.Path) ->
         resp = client.get("/api/v1/chat/agents/claude_code/models", headers=_HEADERS)
 
     assert resp.status_code == 200, resp.text
-    models = resp.json()["models"]
-    assert [m["id"] for m in models[:5]] == ["fable", "opus", "opusplan", "sonnet", "haiku"]
-    assert models[5] == {
-        "id": "claude-fable-5-1[1m]",
-        "label": "Fable",
-        "description": "Fable 5.1 · Most capable",
-        "source": "discovered",
-    }
+    assert resp.json()["models"] == [
+        {
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable",
+            "description": "Fable 5.1 · Most capable",
+            "source": "discovered",
+        }
+    ]

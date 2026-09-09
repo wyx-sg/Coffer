@@ -1,9 +1,15 @@
-"""``NativeConfigModelDiscovery`` — read an agent's own config for extra models.
+"""On-disk model discovery + the composite that fans the sources out.
 
-The CLIs already keep a machine-readable record of the models they can be put
-on: Claude Code caches the extra options its picker offers in ``.claude.json``,
-and Codex's ``config.toml`` names the model each profile runs. Reading them is
-how a model that shipped after this release still reaches Coffer's picker.
+``NativeConfigModelDiscovery`` reads what each CLI has already written down for
+itself: Claude Code caches the extra options its own picker offers in
+``.claude.json``, and Codex's ``config.toml`` names the model each profile runs.
+Those files capture choices the user made locally — a profile pinned to
+something unusual, an option the CLI cached after a login — which no amount of
+interrogating the binary would reveal, so they stay a source in their own right.
+
+``ChainedModelDiscovery`` is the composite the composition root wires: it asks
+every source about the agent and concatenates the answers, so the ORDER of the
+sources is the order of the picker.
 
 Best-effort by contract (``ModelDiscoveryPort``): every failure is an empty
 list. A missing file is the ordinary case — the user may simply never have
@@ -12,29 +18,67 @@ opened that CLI — so it is not even logged.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import pathlib
 import tomllib
+from collections.abc import Sequence
 from typing import Any
 
+from coffer.application.agent.model_catalogue import ModelDiscoveryPort
 from coffer.domain.agent.model_catalogue import AgentModel
 
 _log = logging.getLogger(__name__)
 
 #: Claude Code's cache of the extra model options its own picker offers, e.g.
-#: ``[{"value": "claude-fable-5-1[1m]", "label": "Fable", "description": "…"}]``.
+#: ``[{"value": "…[1m]", "label": "…", "description": "…"}]``.
 _CLAUDE_CACHE_KEY = "additionalModelOptionsCache"
+
+
+class ChainedModelDiscovery:
+    """``ModelDiscoveryPort`` that concatenates several sources in order.
+
+    Sources are asked one after another rather than concurrently: the expensive
+    ones each apply to a different agent type, so at most one of them actually
+    does work on any given call, and sequencing keeps the ordering obvious.
+    Dedupe by id is the catalogue service's job — this only decides the order.
+    """
+
+    def __init__(self, sources: Sequence[ModelDiscoveryPort]) -> None:
+        self._sources = list(sources)
+
+    async def discover(
+        self, *, agent_key: str, config_dir: pathlib.Path | None
+    ) -> list[AgentModel]:
+        models: list[AgentModel] = []
+        for source in self._sources:
+            try:
+                models.extend(await source.discover(agent_key=agent_key, config_dir=config_dir))
+            except Exception:
+                # One misbehaving source must not cost the user the others.
+                _log.debug(
+                    "agent.model_discovery.source_failed source=%s",
+                    type(source).__name__,
+                    exc_info=True,
+                )
+        return models
 
 
 class NativeConfigModelDiscovery:
     """``ModelDiscoveryPort`` backed by the agent's native config file."""
 
-    def discover(self, *, agent_key: str, config_dir: pathlib.Path) -> list[AgentModel]:
+    async def discover(
+        self, *, agent_key: str, config_dir: pathlib.Path | None
+    ) -> list[AgentModel]:
+        if config_dir is None:
+            # No agent of this type is registered, so there is no config dir to
+            # read; the binary-level sources still answer for this agent.
+            return []
         if agent_key == "claude_code":
-            return self._claude_code(config_dir)
+            return await asyncio.to_thread(self._claude_code, config_dir)
         if agent_key == "codex":
-            return self._codex(config_dir)
+            return await asyncio.to_thread(self._codex, config_dir)
         return []
 
     # --- claude code ---------------------------------------------------------
@@ -119,4 +163,4 @@ class NativeConfigModelDiscovery:
             return None
 
 
-__all__ = ["NativeConfigModelDiscovery"]
+__all__ = ["ChainedModelDiscovery", "NativeConfigModelDiscovery"]

@@ -155,16 +155,20 @@ exist or you may not have access"。用户既没机会选一个该 endpoint 支�
 根本没有 Coffer 的任何投影——也就是说 agent 实际跑在内置登录上——但聊天里只给出 `agnes-*` 这些
 id，而这些 id 该 agent 一个都用不了。
 
-- **H1 — 模型清单是后端的一个接口，按 agent 提供。**
-  `GET /api/v1/chat/agents/{agent_key}/models` 返回某个 agent 可以被切到的模型：精选的 CLI
-  **别名**（每个别名总是解析到该档位最新的模型——Claude Code 的 `opus` / `sonnet` / `haiku` /
-  `fable` / `opusplan` / `default`），与从 agent **自己的原生配置**里**发现**的模型合并
-  （Claude Code 在 `~/.claude.json` 里发布 `additionalModelOptionsCache`；Codex 的
-  `config.toml` 里写着它配置的模型）。每一项带 `id`（原样传给 CLI）、`label`、`description`
-  和 `source ∈ {alias, discovered}`。未知的 `agent_key` 返回 404。契约见
+- **H1 — 模型清单是后端的一个接口，按 agent 提供，且 Coffer 自己不写死任何模型名。**
+  `GET /api/v1/chat/agents/{agent_key}/models` 返回某个 agent 可以被切到的模型。每一项——id、
+  显示名、描述——都是从**已安装的 agent 那里读回来的**，绝不写进 Coffer：写在这里的清单会在 CLI
+  下一次发版时过期，而且分不清同一档位的两个版本。共有三个来源，它们的顺序就是选择器的顺序：
+  Claude Code 可执行文件内嵌的模型目录（先是它的档位**别名**，再是带版本的模型——那是唯一写着
+  各版本显示名的地方）；Codex 自己的 `model/list` app-server RPC；以及各 CLI 的原生配置，用于
+  只有它才知道的本地选择（Claude Code 在 `~/.claude.json` 里发布
+  `additionalModelOptionsCache`；Codex 的 `config.toml` 里写着它配置的模型）。每一项带
+  `id`（原样传给 CLI）、`label`、`description` 和 `source ∈ {alias, discovered}`。每个来源都
+  各自静默降级——CLI 没装、bundle 结构变了、agent 没登录或卡住，代价只是少了这个来源本来会补上的
+  模型，仅此而已。未知的 `agent_key` 返回 404。契约见
   [`specs/008-agent-chat/contracts/api.openapi.yaml`](../008-agent-chat/contracts/api.openapi.yaml)。
 - **H2 — 单一事实来源。** 前端常量被删除；channel 的 `/model` 卡片读同一份清单。清单只在一处维护，
-  因此新发布的档位无需前端发版就能到达每个界面。
+  而且由 agent 自己拥有，因此新发布的模型完全不需要 Coffer 发版就能到达每个界面。
 - **H3 — 选项是并集，不是二选一。** 聊天选择器的选项 = agent 的模型清单（H1）∪ 当前生效连接
   introspect 出的模型（`POST /models/list-models`）∪ 该对话当前的取值。D4 禁止自由输入这一条**保持
   不变**——选择器仍是固定下拉，且当前值始终可选。于是连接是往选择器里**增加** id，而不是把 agent
@@ -175,7 +179,10 @@ id，而这些 id 该 agent 一个都用不了。
 - **H5 — Coffer 会告诉 agent 它跑在哪个模型上。** Coffer 每轮追加的 system prompt 现在会说明
   Coffer 把 agent 切到了哪个模型——或者说明 Coffer 没有设置任何覆盖——以及有哪些 id 可用。触发这条的
   事件：在一次真实的 channel 会话里被问到时，agent 很自信地报出了一个它并没有在跑的模型，因为它的
-  上下文里没有任何信息说明真实情况。
+  上下文里没有任何信息说明真实情况。**仅限 Claude Code。** Codex 的 app-server 不接受按线程注入的
+  instructions——它的 `ThreadSettings` 只有 approval/sandbox/model/effort 等字段，没有提示词入口——
+  除非把说明塞进对话的第一条用户消息里污染对话，否则无处安放。Codex 拿到的是准确的模型清单（H1），
+  但没有这条说明。
 
 **Supersede：** D4 的精选内置清单（现在改为后端的模型清单）及其二选一的选项规则（现在是 H3 的并集）。
 D4 的固定下拉 / 禁止自由输入规则不变。**仍不在范围：** proxy / 热切换 / 协议转换。

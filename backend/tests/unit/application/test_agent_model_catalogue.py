@@ -1,8 +1,9 @@
-"""Unit tests for ``AgentModelCatalogueService`` — curated aliases merged with
-whatever the agent's own config advertises.
+"""Unit tests for ``AgentModelCatalogueService``.
 
-Both collaborators are fakes: the agent lister stands in for the spec-004
-registry, the discovery port for the on-disk read.
+The service names no model of its own — it decides WHICH config dir discovery is
+pointed at and dedupes what comes back. Both collaborators are fakes: the agent
+lister stands in for the spec-004 registry, the discovery port for the sources
+that interrogate the installed CLIs.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ import datetime as dt
 import pathlib
 
 from coffer.application.agent.model_catalogue import AgentModelCatalogueService
-from coffer.domain.agent.model_catalogue import AgentModel, curated_for
+from coffer.domain.agent.model_catalogue import AgentModel
 from coffer.domain.resource import Resource
 
 _NOW = dt.datetime(2026, 9, 9, tzinfo=dt.UTC)
@@ -43,67 +44,71 @@ class _FakeDiscovery:
 
     def __init__(self, models: list[AgentModel] | None = None) -> None:
         self.models = models or []
-        self.seen: list[pathlib.Path] = []
+        self.seen: list[pathlib.Path | None] = []
 
-    def discover(self, *, agent_key: str, config_dir: pathlib.Path) -> list[AgentModel]:
+    async def discover(
+        self, *, agent_key: str, config_dir: pathlib.Path | None
+    ) -> list[AgentModel]:
         self.seen.append(config_dir)
         return list(self.models)
 
 
 class _RaisingDiscovery:
-    def discover(self, *, agent_key: str, config_dir: pathlib.Path) -> list[AgentModel]:
-        raise RuntimeError("config file exploded")
+    async def discover(
+        self, *, agent_key: str, config_dir: pathlib.Path | None
+    ) -> list[AgentModel]:
+        raise RuntimeError("the CLI exploded")
 
 
-async def test_curated_only_when_no_agent_of_that_type_is_registered() -> None:
-    discovery = _FakeDiscovery([AgentModel("never-read", source="discovered")])
-    svc = AgentModelCatalogueService(agents=_FakeAgents([]), discovery=discovery)
-
-    models = await svc.catalogue("claude_code")
-
-    assert models == list(curated_for("claude_code"))
-    # Nothing on disk to read without a registered agent — discovery is skipped.
-    assert discovery.seen == []
-
-
-async def test_curated_list_leads_with_the_newest_tier_alias() -> None:
-    svc = AgentModelCatalogueService(agents=_FakeAgents([]), discovery=_FakeDiscovery())
-
-    ids = await svc.suggest("claude_code")
-
-    assert ids == ["fable", "opus", "opusplan", "sonnet", "haiku"]
-
-
-async def test_discovered_models_append_after_curated_and_dedupe_by_id(
-    tmp_path: pathlib.Path,
-) -> None:
+async def test_the_catalogue_is_whatever_discovery_reports(tmp_path: pathlib.Path) -> None:
+    """No curated table sits in front of discovery any more — order and content
+    both come from the agent."""
     discovery = _FakeDiscovery(
         [
-            # Already curated — dropped so the curated label survives.
-            AgentModel("opus", "Opus (cached)", source="discovered"),
-            AgentModel("claude-fable-5-1[1m]", "Fable", "newest", source="discovered"),
-            # Repeated within the discovered list — kept once.
-            AgentModel("claude-fable-5-1[1m]", "Fable", "newest", source="discovered"),
+            AgentModel("opus", source="alias"),
+            AgentModel("claude-opus-9", "Opus 9", "Knowledge cutoff May 2026", source="discovered"),
         ]
     )
     svc = AgentModelCatalogueService(
-        agents=_FakeAgents([_agent("cc", "claude_code", str(tmp_path))]),
-        discovery=discovery,
+        agents=_FakeAgents([_agent("cc", "claude_code", str(tmp_path))]), discovery=discovery
     )
 
     models = await svc.catalogue("claude_code")
 
-    assert [m.id for m in models] == [
-        "fable",
-        "opus",
-        "opusplan",
-        "sonnet",
-        "haiku",
-        "claude-fable-5-1[1m]",
+    assert [(m.id, m.source) for m in models] == [
+        ("opus", "alias"),
+        ("claude-opus-9", "discovered"),
     ]
-    assert models[1].label == "Opus"  # curated wins the dedupe
-    assert models[-1].source == "discovered"
+    assert models[1].label == "Opus 9"
     assert discovery.seen == [tmp_path]
+
+
+async def test_discovery_still_runs_without_a_registered_agent() -> None:
+    """The CLI can be installed without being registered as a managed agent, and
+    the sources that read the binary answer either way — so discovery is asked
+    with ``config_dir=None`` rather than skipped."""
+    discovery = _FakeDiscovery([AgentModel("from-the-binary", source="alias")])
+    svc = AgentModelCatalogueService(agents=_FakeAgents([]), discovery=discovery)
+
+    assert await svc.suggest("claude_code") == ["from-the-binary"]
+    assert discovery.seen == [None]
+
+
+async def test_duplicate_ids_collapse_and_the_first_source_wins(tmp_path: pathlib.Path) -> None:
+    discovery = _FakeDiscovery(
+        [
+            AgentModel("dup", "From the binary", source="discovered"),
+            AgentModel("dup", "From the config", source="discovered"),
+            AgentModel("other", source="discovered"),
+        ]
+    )
+    svc = AgentModelCatalogueService(
+        agents=_FakeAgents([_agent("cc", "claude_code", str(tmp_path))]), discovery=discovery
+    )
+
+    models = await svc.catalogue("claude_code")
+
+    assert [(m.id, m.label) for m in models] == [("dup", "From the binary"), ("other", "")]
 
 
 async def test_disabled_agents_are_skipped(tmp_path: pathlib.Path) -> None:
@@ -137,22 +142,22 @@ async def test_other_agent_types_do_not_supply_the_config_dir(tmp_path: pathlib.
         discovery=discovery,
     )
 
-    ids = await svc.suggest("codex")
+    await svc.suggest("codex")
 
     assert discovery.seen == [codex_dir]
-    assert ids == ["gpt-5-codex", "gpt-5", "o3"]
 
 
-async def test_a_raising_discovery_degrades_to_the_curated_list(tmp_path: pathlib.Path) -> None:
+async def test_a_raising_discovery_degrades_to_an_empty_catalogue(tmp_path: pathlib.Path) -> None:
+    """A picker must never 500 because a CLI is odd today."""
     svc = AgentModelCatalogueService(
         agents=_FakeAgents([_agent("cc", "claude_code", str(tmp_path))]),
         discovery=_RaisingDiscovery(),
     )
 
-    assert await svc.catalogue("claude_code") == list(curated_for("claude_code"))
+    assert await svc.catalogue("claude_code") == []
 
 
-async def test_unknown_agent_key_yields_an_empty_catalogue() -> None:
+async def test_an_agent_nothing_can_discover_yields_an_empty_catalogue() -> None:
     svc = AgentModelCatalogueService(agents=_FakeAgents([]), discovery=_FakeDiscovery())
 
     assert await svc.catalogue("hermes") == []

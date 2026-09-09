@@ -47,3 +47,18 @@ def test_empty_catalogue_still_produces_a_usable_note() -> None:
 def test_stays_short_enough_to_ride_on_every_turn() -> None:
     # It is appended to every prompt; a few sentences, not a document.
     assert len(model_system_context(None, _AVAILABLE)) < 700
+
+
+def test_a_long_catalogue_is_trimmed_and_says_so() -> None:
+    """Discovery now reads ~30 ids out of the CLI itself. Naming all of them on
+    every turn is prompt weight the agent gains nothing from, so the note keeps
+    the head of the list — the aliases and newest releases — and points at the
+    picker for the tail."""
+    catalogue = [f"model-{n:02d}" for n in range(30)]
+
+    text = model_system_context("model-00", catalogue)
+
+    assert "model-00" in text
+    assert "model-29" not in text
+    assert "more in Coffer's picker" in text
+    assert len(text) < 700

@@ -2,9 +2,13 @@
 
 One catalogue for every surface that offers a model choice (the web picker, the
 channel ``/model`` card, and the note the agent itself is told at turn time), so
-they can never drift apart again. The list is the curated alias table plus
-whatever the agent's own config file advertises, which is how a brand-new model
-reaches the picker without a Coffer release.
+they can never drift apart again.
+
+Coffer holds no list of its own: the catalogue is whatever the injected
+``ModelDiscoveryPort`` reports, which is how a model released after this build
+still reaches the picker with the right version in its name. This service only
+adds the two things discovery cannot know: which agent's config dir to look in,
+and a stable dedupe so the same id offered by two sources appears once.
 """
 
 from __future__ import annotations
@@ -14,21 +18,31 @@ import pathlib
 from typing import Protocol
 
 from coffer.domain.agent.config import AgentConfig
-from coffer.domain.agent.model_catalogue import AgentModel, curated_for
+from coffer.domain.agent.model_catalogue import AgentModel
 from coffer.domain.resource import Resource
 
 _log = logging.getLogger(__name__)
 
 
 class ModelDiscoveryPort(Protocol):
-    """Reads extra models out of an agent's own config dir.
+    """Asks an agent what models it can run.
 
-    Best-effort by contract: a missing, unreadable or malformed config is the
-    normal case (the user may never have opened the CLI), so an implementation
-    MUST return an empty list rather than raise.
+    Async because the implementations do real I/O — scanning a CLI binary,
+    driving a JSON-RPC subprocess — and a model picker must not block the
+    daemon's event loop while they do (CODE-034).
+
+    ``config_dir`` is ``None`` when no agent of this type is registered with
+    Coffer; sources that need it return nothing, sources that interrogate the
+    installed CLI directly still answer.
+
+    Best-effort by contract: a missing binary, an unreadable config, a CLI that
+    is not logged in or does not answer are all ordinary states of the world, so
+    an implementation MUST return an empty list rather than raise.
     """
 
-    def discover(self, *, agent_key: str, config_dir: pathlib.Path) -> list[AgentModel]: ...
+    async def discover(
+        self, *, agent_key: str, config_dir: pathlib.Path | None
+    ) -> list[AgentModel]: ...
 
 
 class AgentLister(Protocol):
@@ -39,24 +53,20 @@ class AgentLister(Protocol):
 
 
 class AgentModelCatalogueService:
-    """Merges the curated alias table with the models discovered on disk."""
+    """The deduped view of whatever discovery reports for one agent type."""
 
     def __init__(self, *, agents: AgentLister, discovery: ModelDiscoveryPort) -> None:
         self._agents = agents
         self._discovery = discovery
 
     async def catalogue(self, agent_key: str) -> list[AgentModel]:
-        """Every model ``agent_key`` can be put on: the curated aliases first
-        (stable, human-ordered), then anything discovered that is not already
-        there. Deduped by ``id``, curated wins so its label survives."""
-        models = list(curated_for(agent_key))
+        """Every model ``agent_key`` can be put on, in the order discovery
+        returned them, deduped by ``id`` (first occurrence wins, so the source
+        that carries the better label leads)."""
         config_dir = await self._config_dir(agent_key)
-        if config_dir is None:
-            # No agent of this type is registered, so there is no config dir to
-            # read — the curated aliases are the whole catalogue.
-            return models
-        seen = {m.id for m in models}
-        for found in self._discover(agent_key, config_dir):
+        models: list[AgentModel] = []
+        seen: set[str] = set()
+        for found in await self._discover(agent_key, config_dir):
             if found.id in seen:
                 continue
             seen.add(found.id)
@@ -71,7 +81,8 @@ class AgentModelCatalogueService:
     # --- internals -----------------------------------------------------------
 
     async def _config_dir(self, agent_key: str) -> pathlib.Path | None:
-        """The config dir of the first ENABLED agent resource of this type.
+        """The config dir of the first ENABLED agent resource of this type, or
+        ``None`` when the user has not registered one.
 
         Disabled agents are skipped: the user has told Coffer to leave them
         alone, so their config should not feed the picker either.
@@ -89,11 +100,11 @@ class AgentModelCatalogueService:
                 return cfg.resolved_config_dir()
         return None
 
-    def _discover(self, agent_key: str, config_dir: pathlib.Path) -> list[AgentModel]:
+    async def _discover(self, agent_key: str, config_dir: pathlib.Path | None) -> list[AgentModel]:
         """Belt-and-braces around the port's never-raise contract — a picker
-        must never 500 because an agent's config file is odd today."""
+        must never 500 because a CLI is odd today."""
         try:
-            return self._discovery.discover(agent_key=agent_key, config_dir=config_dir)
+            return await self._discovery.discover(agent_key=agent_key, config_dir=config_dir)
         except Exception:
             _log.debug("agent.model_discovery.failed", exc_info=True)
             return []

@@ -70,6 +70,12 @@ def channel_system_context(channel_name: str) -> str:
     )
 
 
+#: How many ids the per-turn model note names before deferring to the picker.
+#: Discovery leads with the tier aliases and the newest releases, so the head of
+#: the list is the part worth spending prompt on.
+_MODELS_IN_NOTE = 12
+
+
 def model_system_context(current: str | None, available: Sequence[str]) -> str:
     """A system-prompt append telling the agent which model Coffer put it on.
 
@@ -77,7 +83,15 @@ def model_system_context(current: str | None, available: Sequence[str]) -> str:
     confidently named the wrong model. This note is authoritative, so it says so.
     It rides on every turn, hence the tight wording.
     """
-    ids = ", ".join(available) if available else "none listed"
+    # The catalogue is now read from the CLI itself and runs to ~30 ids. All of
+    # them on every turn is prompt weight the agent gains nothing from — it only
+    # needs enough to answer "what could I be switched to", so name the leading
+    # few and point at the picker for the rest.
+    shown = list(available[:_MODELS_IN_NOTE])
+    rest = len(available) - len(shown)
+    ids = ", ".join(shown) if shown else "none listed"
+    if rest > 0:
+        ids += f" (+{rest} more in Coffer's picker)"
     if current:
         opening = (
             f"Coffer is running this session on the model `{current}` — trust this "

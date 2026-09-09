@@ -2,12 +2,13 @@
 // /api/v1/chat/agents/{agent_key}/models.
 //
 // The agent's model catalogue. It replaces the hardcoded per-agent constant the
-// frontend used to carry: the backend is now the single source of truth, so a
-// newly released tier (Claude Code's `fable`, say) reaches the UI without a
-// frontend release. The list mixes curated CLI aliases with ids discovered from
-// the agent's own config, tagged by `source` so the UI can say where each came
-// from; the order the backend returns is meaningful (aliases first) and must be
-// preserved.
+// frontend used to carry: the backend is the single source of truth, and it in
+// turn writes down no model of its own — every entry is read back from the
+// installed agent. So a newly released model reaches the UI with no release of
+// anything. The list mixes the CLI's own tier aliases with the concrete,
+// version-bearing models it reported, tagged by `source` so the UI can say
+// where each came from; the order the backend returns is meaningful (aliases
+// first) and must be preserved.
 
 import { getCofferBaseUrl, getCofferToken } from "../auth";
 import { ApiError } from "./errors";
@@ -16,10 +17,10 @@ import { ApiError } from "./errors";
 // Types
 // ---------------------------------------------------------------------------
 
-/** Where an id came from: `"alias"` = a curated CLI alias that always resolves
- * to the newest model in its tier; `"discovered"` = read out of the agent's own
- * config (e.g. Claude Code's `~/.claude.json` model cache). Kept a plain string
- * — the backend may add sources the frontend has no branch for. */
+/** Where an id came from: `"alias"` = a tier alias the CLI accepts, which
+ * always resolves to the newest model in that tier and so names no version;
+ * `"discovered"` = a concrete, version-bearing model the agent reported. Kept a
+ * plain string — the backend may add sources the frontend has no branch for. */
 export type AgentModelSource = string;
 
 export interface AgentModel {

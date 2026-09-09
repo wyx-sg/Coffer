@@ -309,20 +309,28 @@ carried no Coffer projection at all — the agent was in fact running on its
 built-in login — yet the chat offered only `agnes-*` ids, none of which the
 agent could use.
 
-- **H1 — The catalogue is a backend surface, per agent.**
+- **H1 — The catalogue is a backend surface, per agent, and Coffer names no
+  model in it.**
   `GET /api/v1/chat/agents/{agent_key}/models` returns the models one agent can
-  be put on: curated CLI **aliases** (each resolving to the newest model in its
-  tier — Claude Code `opus` / `sonnet` / `haiku` / `fable` / `opusplan` /
-  `default`) merged with models **discovered** from the agent's own native
-  config (Claude Code publishes `additionalModelOptionsCache` in
-  `~/.claude.json`; Codex's `config.toml` names its configured models). Each
-  entry carries `id` (passed verbatim to the CLI), `label`, `description` and
-  `source ∈ {alias, discovered}`. An unknown `agent_key` is a 404. Contract:
+  be put on. Every entry — id, display name, description — is read back from the
+  installed agent, never written into Coffer, because a list written down here
+  goes stale on the next CLI release and cannot tell one release of a tier from
+  the next. Three sources answer, and their order is the order of the picker:
+  the Claude Code executable's embedded catalog (its tier **aliases** first,
+  then its versioned models, which is the only place the per-release display
+  names exist); Codex's own `model/list` app-server RPC; and each CLI's native
+  config for the local choices only it knows about (Claude Code publishes
+  `additionalModelOptionsCache` in `~/.claude.json`; Codex's `config.toml` names
+  its configured models). Each entry carries `id` (passed verbatim to the CLI),
+  `label`, `description` and `source ∈ {alias, discovered}`. Every source
+  degrades to nothing on its own — a missing CLI, a changed bundle layout, an
+  unauthenticated or wedged agent costs the models that source would have added
+  and nothing else. An unknown `agent_key` is a 404. Contract:
   [`specs/008-agent-chat/contracts/api.openapi.yaml`](../008-agent-chat/contracts/api.openapi.yaml).
 - **H2 — Single source of truth.** The frontend constant is deleted; the
   channel `/model` card reads the same catalogue. The list is owned in one
-  place, so a newly released tier reaches every surface without a frontend
-  release.
+  place — and owned by the agents themselves — so a newly released model reaches
+  every surface with no Coffer release at all.
 - **H3 — Options are a UNION, not an either/or.** The chat picker's options are
   the agent's catalogue (H1) ∪ the active connection's introspected models
   (`POST /models/list-models`) ∪ the conversation's current value. D4's ban on
@@ -338,7 +346,11 @@ agent could use.
   Coffer adds on every turn now states which model Coffer put the agent on — or
   that Coffer set no override — and which ids are available. The motivating
   incident: asked in a real channel session, the agent confidently named a model
-  it was not running on, because nothing in its context said otherwise.
+  it was not running on, because nothing in its context said otherwise. **Claude
+  Code only.** Codex's app-server takes no per-thread instructions — its
+  `ThreadSettings` carries approval/sandbox/model/effort and no prompt seam — so
+  there is nowhere to put the note without polluting the conversation's first
+  user message. Codex gets the accurate catalogue (H1) but not the note.
 
 **Supersedes:** D4's curated built-in list (now the backend catalogue) and its
 either/or option rule (now the union in H3). D4's fixed-dropdown / no-free-text

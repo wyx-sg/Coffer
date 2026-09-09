@@ -156,8 +156,9 @@ class ChatAgentListOut(BaseModel):
 
 
 class AgentModelOut(BaseModel):
-    """One model a managed agent can be put on. ``source`` distinguishes a
-    curated alias from one discovered in the agent's own config."""
+    """One model a managed agent can be put on, as the agent itself reported it.
+    ``source`` distinguishes a moving tier alias from a concrete, version-bearing
+    model."""
 
     id: str
     label: str = ""
@@ -166,7 +167,7 @@ class AgentModelOut(BaseModel):
 
 
 class AgentModelsOut(BaseModel):
-    """The model catalogue for one agent, curated entries first."""
+    """The model catalogue for one agent, aliases first."""
 
     models: list[AgentModelOut]
 
