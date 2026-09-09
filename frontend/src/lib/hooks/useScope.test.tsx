@@ -33,13 +33,13 @@ describe("useResourceScope", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   test("fetches GET /resources/{kind}/{name}/scope", async () => {
-    const fetchMock = stubFetch({ scope: ["claude"], supported: true });
+    const fetchMock = stubFetch({ scope: ["claude"], supports_scope: true });
 
     const { wrapper } = makeWrapper();
     const { result } = renderHook(() => useResourceScope("mcp_server", "fs"), { wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual({ scope: ["claude"], supported: true });
+    expect(result.current.data).toEqual({ scope: ["claude"], supports_scope: true });
     expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/resources\/mcp_server\/fs\/scope$/);
   });
 

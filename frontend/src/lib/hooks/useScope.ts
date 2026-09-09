@@ -22,13 +22,18 @@ export type Scope = string[];
 
 /**
  * GET .../scope response: the current scope (`null` = unscoped, active for
- * every agent) plus whether this kind supports scope at all (`supported:
- * false` for `agent`, `channel`, `knowledge_base` and `memory`, which reject a
- * non-null value at validation).
+ * every agent) plus whether this kind supports scope at all
+ * (`supports_scope: false` for `agent`, `channel`, `knowledge_base` and
+ * `memory`, which reject a non-null value at validation).
+ *
+ * Field names here MUST match `ResourceScopeOut` in
+ * `backend/coffer/surfaces/http/schemas.py` — these sub-routes are hand-written
+ * (the generated client does not cover them), so nothing checks this at compile
+ * time. `resourceScopeContract` below is the regression guard.
  */
 export interface ResourceScope {
   scope: Scope | null;
-  supported: boolean;
+  supports_scope: boolean;
 }
 
 type ResourceOut = components["schemas"]["ResourceOut"];

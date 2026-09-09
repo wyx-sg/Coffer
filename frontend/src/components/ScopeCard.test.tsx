@@ -16,10 +16,10 @@ const agentHooks = await import("@/lib/hooks/useAgents");
 
 const mutate = vi.fn();
 
-function seed(opts: { scope: Scope | null; supported?: boolean; agents?: { name: string }[] }) {
-  const { scope, supported = true, agents = [{ name: "claude" }, { name: "codex" }] } = opts;
+function seed(opts: { scope: Scope | null; supports_scope?: boolean; agents?: { name: string }[] }) {
+  const { scope, supports_scope = true, agents = [{ name: "claude" }, { name: "codex" }] } = opts;
   vi.mocked(scopeHooks.useResourceScope).mockReturnValue({
-    data: { scope, supported },
+    data: { scope, supports_scope },
     isPending: false,
   } as unknown as ReturnType<typeof scopeHooks.useResourceScope>);
   vi.mocked(scopeHooks.useUpdateResourceScope).mockReturnValue({
@@ -35,7 +35,7 @@ afterEach(() => vi.clearAllMocks());
 
 describe("ScopeCard", () => {
   test("renders nothing for a kind that declares no scope", () => {
-    seed({ scope: null, supported: false });
+    seed({ scope: null, supports_scope: false });
     const { container } = render(<ScopeCard kind="channel" name="tg" />);
     expect(container).toBeEmptyDOMElement();
   });

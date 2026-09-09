@@ -40,7 +40,7 @@ export function ScopeCard({ kind, name }: { kind: string; name: string }) {
 
   // Kinds that declare no scope (agent, channel, knowledge_base, memory) get
   // no editor at all.
-  if (scopeData && !scopeData.supported) return null;
+  if (scopeData && !scopeData.supports_scope) return null;
 
   const scope = scopeData?.scope ?? null;
   const isCustom = scope !== null;
