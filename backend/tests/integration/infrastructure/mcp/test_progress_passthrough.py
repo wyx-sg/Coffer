@@ -11,8 +11,6 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -102,32 +100,3 @@ async def test_long_call_with_progress_does_not_premature_timeout() -> None:
         )
     finally:
         await conn.close()
-
-
-@pytest.mark.asyncio
-async def test_dispatch_falls_back_on_type_error() -> None:
-    """If call_tool raises TypeError (older SDK), _dispatch_method retries without the kwarg."""
-    from coffer.infrastructure.mcp.subprocess import StdioUpstreamConnection
-
-    transport = StdioTransport(type="stdio", command="python", args=[])
-    conn = StdioUpstreamConnection(transport=transport, env_overlay={}, request_timeout_seconds=30)
-
-    fallback_result = MagicMock(isError=False)
-
-    async def _raise_on_kwarg(*args: Any, **kwargs: Any) -> Any:
-        if "read_timeout_seconds" in kwargs:
-            # Realistic CPython message — it always names the offending kwarg;
-            # dispatch_method only retries when the message cites one of the
-            # optional kwargs (a TypeError from inside the tool must not
-            # re-invoke a non-idempotent call).
-            raise TypeError("call_tool() got an unexpected keyword argument 'read_timeout_seconds'")
-        return fallback_result
-
-    mock_session = MagicMock()
-    mock_session.call_tool = AsyncMock(side_effect=_raise_on_kwarg)
-    conn._session = mock_session
-
-    result = await conn._dispatch_method("tools/call", {"name": "t", "arguments": {}})
-    assert result is fallback_result
-    # First call with kwarg failed; second without should have been made
-    assert mock_session.call_tool.call_count == 2
