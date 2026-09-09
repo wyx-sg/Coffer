@@ -236,6 +236,10 @@
       "credentialNew": "Secret value",
       "credentialHint": "Credential values are encrypted into Coffer's local database. Removing a credential deletes its stored entry.",
       "errRenameNeedsValue": "Re-enter the secret value for \"{{name}}\" to rename it."
+    },
+    "tiering": {
+      "summary": "Agents see {{listed}} of {{total}} tools; {{hidden}} are reachable only through coffer__search_tools.",
+      "hint": "They stay callable by name. Set COFFER_TOOL_TIERING=off to list every tool."
     }
   },
   "audit": {

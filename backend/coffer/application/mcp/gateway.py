@@ -52,12 +52,13 @@ from coffer.application.mcp.gateway_handlers import (
     handle_resources_read,
     handle_tools_call,
 )
+from coffer.application.mcp.gateway_instructions import build_initialize_result
+from coffer.application.mcp.gateway_notifications import forward_upstream_notification
 from coffer.application.mcp.gateway_parsing import (
     _extract_agent,
     _extract_cwd,
-    _extract_method,
-    _extract_params,
 )
+from coffer.application.mcp.gateway_recovery import DegradedTracker
 from coffer.application.mcp.gateway_scope import (
     enabled_mcp_servers,
     resolve_local_machine_id,
@@ -66,15 +67,16 @@ from coffer.application.mcp.gateway_server_requests import (
     ServerRequestRegistry,
     build_session_callbacks,
 )
+from coffer.application.mcp.gateway_tiering import apply_tiering
 from coffer.application.mcp.gateway_tool_search import TOOL_SEARCH_NAME
 from coffer.application.mcp.ports import (
     MCPCapabilityPreferenceRepoPort,
     MCPInvocationRepoPort,
 )
 from coffer.application.mcp.supervisor import SubprocessSupervisor
+from coffer.application.mcp.tiering_config import TieringConfig, load_tiering_config
 from coffer.application.resource_service import ResourceService
 from coffer.domain.errors import UpstreamUnavailable
-from coffer.domain.mcp.namespace import prefix_resource_uri
 
 _logger = logging.getLogger(__name__)
 
@@ -82,14 +84,6 @@ _logger = logging.getLogger(__name__)
 # Downstream-bound notification: a dict that gets serialised as JSON-RPC
 DownstreamNotification = dict[str, Any]
 NotificationSink = Callable[[DownstreamNotification], Awaitable[None]]
-
-
-# MCP server capabilities coffer declares to clients.
-_COFFER_SERVER_CAPABILITIES: dict[str, Any] = {
-    "tools": {"listChanged": True},
-    "resources": {"listChanged": True, "subscribe": False},
-    "prompts": {"listChanged": True},
-}
 
 
 class MCPGatewaySession:
@@ -110,6 +104,7 @@ class MCPGatewaySession:
         builtin_tools: BuiltinToolRegistry | None = None,
         embedder_provider: Callable[[], Awaitable[Any | None]] | None = None,
         machine_id: Callable[[], Awaitable[str | None]] | None = None,
+        tiering: TieringConfig | None = None,
     ) -> None:
         self.id = session_id or str(uuid.uuid4())
         self._resources = resource_service
@@ -137,6 +132,13 @@ class MCPGatewaySession:
         # daemon's lifetime and the on_delete hook walks dead ones).
         self._on_dispose = on_dispose
         self._builtin = builtin_tools or BuiltinToolRegistry()
+        # ADR-046: how much of the aggregated catalogue this session lists.
+        # Resolved once per session; None means "read the environment".
+        self._tiering = tiering or load_tiering_config()
+        # Upstream tools left unlisted by the most recent tools/list, read by
+        # handle_initialize's instructions text. 0 until the client has listed
+        # once — the honest value, since nothing has been hidden yet.
+        self.last_hidden_count = 0
         self._embedder_provider = embedder_provider  # semantic search_tools; None → BM25
         self._initialized = False
         # FR-004: the agent's launch cwd, reported by the shim at the
@@ -151,6 +153,10 @@ class MCPGatewaySession:
         # ensure_future() task can be garbage-collected mid-flight, silently
         # dropping an upstream notification. Hold strong refs until done.
         self._notification_tasks: set[asyncio.Task[None]] = set()
+        # ADR-046: servers whose discovery failed on the last tools/list. The
+        # client caches tools/list and no list_changed can arrive from a server
+        # that never connected, so the tracker retries them itself.
+        self._degraded = DegradedTracker(discovery, self._send_downstream)
         # Downstream client capabilities declared during initialize (T-061/T-062).
         self._client_capabilities: dict[str, Any] = {}
         # Server-initiated request bookkeeping (T-061 sampling, T-062 roots).
@@ -184,14 +190,10 @@ class MCPGatewaySession:
         # identity, when it stamped one (params._meta["coffer/agent"]).
         self._session_agent = _extract_agent(params)
         self._initialized = True
-        return {
-            "protocolVersion": "2025-06-18",
-            "capabilities": _COFFER_SERVER_CAPABILITIES,
-            "serverInfo": {
-                "name": "coffer",
-                "version": "0.1.0",
-            },
-        }
+        # ADR-046: the instructions field is the only channel into the client's
+        # system prompt. On the first handshake nothing has been listed yet, so
+        # hidden_count is 0 and the tiering paragraph is omitted.
+        return build_initialize_result(hidden_count=self.last_hidden_count)
 
     # --- Request dispatch ---
 
@@ -252,16 +254,34 @@ class MCPGatewaySession:
         conn.on_roots_request(self._list_roots_callback)
         self._notification_subscriptions.add(server_name)
 
+    @property
+    def degraded_servers(self) -> set[str]:
+        """Servers whose tools are missing from the last listing (ADR-046)."""
+        return self._degraded.servers
+
+    async def recover_degraded_now(self) -> bool:
+        """Re-discover degraded servers once; True if any recovered."""
+        return await self._degraded.recover_now()
+
     # --- tools/list, resources/list, prompts/list ---
     # Aggregate fan-out lives in gateway_aggregate_lists.py — see that
     # module's header for the per-server budget + parallelism rationale.
 
     async def _handle_tools_list(self) -> dict[str, Any]:
-        result = await list_tools_across(
+        outcome = await list_tools_across(
             self._discovery, self._ensure_subscribed, await self._enabled_mcp_servers()
         )
-        append_builtin_tools(result["tools"], self._builtin)
-        return result
+        self._degraded.record(outcome.failed_servers)
+        tools = list(outcome.items)
+        append_builtin_tools(tools, self._builtin)
+        tiered = await apply_tiering(
+            tools,
+            invocations=self._invocations,
+            config=self._tiering,
+            clock=self._clock,
+        )
+        self.last_hidden_count = tiered.hidden_count
+        return {"tools": tiered.listed}
 
     async def _handle_resources_list(self) -> dict[str, Any]:
         return await list_resources_across(
@@ -286,13 +306,15 @@ class MCPGatewaySession:
     async def _handle_tools_call(self, params: dict[str, Any]) -> Any:
         name = str(params.get("name") or "")
         if name == TOOL_SEARCH_NAME:
-            listed = await list_tools_across(
+            # Deliberately the untiered outcome: search is what makes an
+            # unlisted tool reachable, so it must see the whole catalogue.
+            outcome = await list_tools_across(
                 self._discovery, self._ensure_subscribed, await self._enabled_mcp_servers()
             )
             embedder = await self._embedder_provider() if self._embedder_provider else None
             return await dispatch_tool_search(
                 params=params,
-                aggregated_tools=listed["tools"],
+                aggregated_tools=outcome.items,
                 invocations=self._invocations,
                 session_id=self.id,
                 clock=self._clock,
@@ -344,34 +366,12 @@ class MCPGatewaySession:
     # --- Upstream → downstream notification forwarding ---
 
     async def _on_upstream_notification(self, server_name: str, notification: Any) -> None:
-        """Handle one incoming notification from `server_name`.
-
-        Invalidates the appropriate discovery cache slice + forwards
-        downstream (with URI rewriting for resources/updated).
-        """
-        # The notification object's shape varies by SDK version; we look at
-        # `method` (the JSON-RPC method name) and `params` defensively.
-        method = _extract_method(notification)
-        if method is None:
-            return
-
-        if method == "notifications/tools/list_changed":
-            self._discovery.invalidate(server_name, "tool")
-            await self._send_downstream({"method": method, "params": {}})
-        elif method == "notifications/resources/list_changed":
-            self._discovery.invalidate(server_name, "resource")
-            await self._send_downstream({"method": method, "params": {}})
-        elif method == "notifications/prompts/list_changed":
-            self._discovery.invalidate(server_name, "prompt")
-            await self._send_downstream({"method": method, "params": {}})
-        elif method == "notifications/resources/updated":
-            raw_params = _extract_params(notification) or {}
-            original_uri = raw_params.get("uri")
-            if original_uri:
-                raw_params = {**raw_params, "uri": prefix_resource_uri(server_name, original_uri)}
-            await self._send_downstream({"method": method, "params": raw_params})
-        # Everything else (notifications/message, notifications/progress) is
-        # dropped on the floor — out of scope for this task (T060 adds progress).
+        await forward_upstream_notification(
+            server_name,
+            notification,
+            discovery=self._discovery,
+            send_downstream=self._send_downstream,
+        )
 
     async def _send_downstream(self, payload: DownstreamNotification) -> None:
         if self._downstream_sink is None:
@@ -388,6 +388,7 @@ class MCPGatewaySession:
         # Cancel any in-flight server-initiated requests
         self._server_request_registry.cancel_all()
 
+        await self._degraded.dispose()
         await self._supervisor.dispose()
         self._notification_subscriptions.clear()
         self._initialized = False

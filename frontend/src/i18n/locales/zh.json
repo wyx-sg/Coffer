@@ -236,6 +236,10 @@
       "credentialNew": "密钥值",
       "credentialHint": "凭证值会加密存入 Coffer 本地数据库；移除凭证会删除对应的存储条目。",
       "errRenameNeedsValue": "重命名「{{name}}」需要重新输入密钥值。"
+    },
+    "tiering": {
+      "summary": "agent 当前可见 {{listed}}/{{total}} 个工具，另有 {{hidden}} 个仅可经 coffer__search_tools 触达。",
+      "hint": "它们仍可按名调用。设 COFFER_TOOL_TIERING=off 可列出全部工具。"
     }
   },
   "audit": {
