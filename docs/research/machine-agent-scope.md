@@ -2,6 +2,16 @@
 
 > 中文版: [machine-agent-scope.zh.md](./machine-agent-scope.zh.md)
 
+> **Historical record.** This note designed a **machine × agent** scope matrix
+> on top of continuous multi-machine sync. Both have since been withdrawn: sync
+> is now a one-shot vault export/import
+> ([ADR-016](../decisions/ADR-016-vault-export-import.md)) and the machine axis
+> is gone, leaving `scope` as a plain list of agent names
+> ([ADR-045](../decisions/ADR-045-per-agent-resource-scope.md)). Read the two
+> ADRs for the shipped shape; what follows is the record of how the agent axis
+> was arrived at.
+
+
 Design note for generalizing machine identity (spec 010 / ADR-043) into a
 resource-framework-level **scope** facility, plus a top-level **Machines**
 fleet view. Validated in a brainstorming session on 2026-07-10; this note is

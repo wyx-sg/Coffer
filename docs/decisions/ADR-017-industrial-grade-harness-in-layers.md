@@ -3,7 +3,7 @@
 **Status**: Proposed
 **Date**: 2026-06-13
 **Deciders**: Yuxing Wu
-**Related**: `.specify/memory/constitution.md`, [`agents/testing.md`](../../agents/testing.md), [`agents/workflow.md`](../../agents/workflow.md), [ADR-014](ADR-014-channel-adapter-framework.md), [ADR-016](ADR-016-multi-machine-sync.md), specs `009-channels` / `010-sync`
+**Related**: `.specify/memory/constitution.md`, [`agents/testing.md`](../../agents/testing.md), [`agents/workflow.md`](../../agents/workflow.md), [ADR-014](ADR-014-channel-adapter-framework.md), [ADR-016](ADR-016-vault-export-import.md), specs `009-channels` / `010-sync`
 
 ## Context
 

@@ -1,13 +1,8 @@
-"""Path-portability pure helpers (spec 010 slice 5)."""
+"""Path-portability pure helpers (spec 010 "Path portability")."""
 
 from __future__ import annotations
 
-from coffer.domain.sync.portability import (
-    apply_merge_patch,
-    expand_home,
-    normalize_home,
-    strip_overridden,
-)
+from coffer.domain.sync.portability import expand_home, normalize_home
 
 
 def test_home_round_trip_across_two_homes() -> None:
@@ -25,6 +20,13 @@ def test_home_round_trip_across_two_homes() -> None:
     assert landed["not_a_path"] == "hello"
 
 
+def test_paths_outside_home_are_carried_verbatim() -> None:
+    # They may simply not resolve on the other machine, which surfaces as a
+    # reported import failure rather than a silent rewrite.
+    config = {"cmd": "/opt/homebrew/bin/x"}
+    assert expand_home(normalize_home(config, "/Users/alice"), "/home/bob") == config
+
+
 def test_home_prefix_requires_path_boundary() -> None:
     config = {"a": "/Users/alicelong/x", "b": "/Users/alice"}
     portable = normalize_home(config, "/Users/alice")
@@ -37,22 +39,6 @@ def test_literal_token_survives_normalize() -> None:
     assert normalize_home(config, "/Users/alice")["a"] == "${HOME}/already"
 
 
-def test_merge_patch_semantics() -> None:
-    target = {"a": 1, "b": {"x": 1, "y": 2}, "c": 3}
-    patch = {"a": 9, "b": {"y": None, "z": 5}, "c": None}
-    assert apply_merge_patch(target, patch) == {"a": 9, "b": {"x": 1, "z": 5}}
-
-
-def test_strip_overridden_restores_shared_values() -> None:
-    shared = {"cmd": "/usr/local/bin/x", "keep": 1}
-    live = {"cmd": "/opt/homebrew/bin/x", "keep": 1, "extra": True}
-    patch = {"cmd": "/opt/homebrew/bin/x", "extra": True}
-    assert strip_overridden(live, patch, shared) == {"cmd": "/usr/local/bin/x", "keep": 1}
-
-
-def test_strip_overridden_nested() -> None:
-    shared = {"transport": {"command": "/usr/bin/npx", "args": ["-y"]}}
-    live = {"transport": {"command": "/opt/npx", "args": ["-y"]}}
-    patch = {"transport": {"command": "/opt/npx"}}
-    out = strip_overridden(live, patch, shared)
-    assert out == {"transport": {"command": "/usr/bin/npx", "args": ["-y"]}}
+def test_blank_home_is_a_no_op() -> None:
+    config = {"a": "/Users/alice/x"}
+    assert normalize_home(config, "") == config

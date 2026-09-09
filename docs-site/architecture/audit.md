@@ -118,13 +118,7 @@ The full set of audited event types (defined as `AuditEventType` in `domain/audi
 | `channel_pairing_issued` / `channel_paired`              | When a channel pairing code is issued / a peer pairs   |
 | `channel_notify_sent`                                    | When a notification is sent to a paired channel        |
 
-**Sync:**
-
-| Event                                                    | Trigger                                                |
-| -------------------------------------------------------- | ------------------------------------------------------ |
-| `sync_config_updated`                                    | When the sync configuration is changed                 |
-| `sync_completed`                                         | After a sync run finishes                              |
-| `sync_conflicted` / `sync_resolved`                      | When a sync run conflicts / a conflict is resolved     |
+**Export / import:** every vault export and import is audited — the operation, the bundle path, and the per-area counts. The resource writes an import performs are additionally recorded as ordinary resource lifecycle events, so an imported change is as traceable as one made by hand. There are no configuration or conflict events, because there is no sync configuration and no conflict state ([ADR-016](/reference/adr/ADR-016-vault-export-import)).
 
 Note that `credential_set` and `credential_deleted` are audited — the _fact_ that a secret was stored or removed is recorded. The secret value itself is never in the `details` payload. (The legacy `keychain_set` / `keychain_deleted` event types remain renderable for historical rows.)
 

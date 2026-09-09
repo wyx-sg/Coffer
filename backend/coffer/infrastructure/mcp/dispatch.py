@@ -29,22 +29,12 @@ async def dispatch_method(
         # T-060: pass read_timeout_seconds so the SDK resets the idle timer
         # on every notifications/progress event, preventing premature timeout
         # of long-running tools that stream progress.
-        try:
-            return await session.call_tool(
-                params["name"],
-                arguments=params.get("arguments"),
-                read_timeout_seconds=request_timeout_seconds,
-                progress_callback=progress_callback,
-            )
-        except TypeError as e:
-            # Older SDK build that doesn't accept the optional kwargs. Retry
-            # ONLY for that signature mismatch: a TypeError raised after the
-            # call started (bad argument shape, SDK-internal bug) must not
-            # re-invoke a possibly non-idempotent tool.
-            msg = str(e)
-            if "read_timeout_seconds" not in msg and "progress_callback" not in msg:
-                raise
-            return await session.call_tool(params["name"], arguments=params.get("arguments"))
+        return await session.call_tool(
+            params["name"],
+            arguments=params.get("arguments"),
+            read_timeout_seconds=request_timeout_seconds,
+            progress_callback=progress_callback,
+        )
     if method == "resources/list":
         return await session.list_resources()
     if method == "resources/read":

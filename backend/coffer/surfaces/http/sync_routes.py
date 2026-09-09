@@ -1,31 +1,19 @@
-"""/api/v1/sync — multi-machine sync (spec 010).
+"""/api/v1/sync — vault export and import (spec 010, ADR-016).
 
-Sync is a cross-cutting service, not a resource kind, so it has its own routes
-rather than riding /resources. The master key is never returned over the wire;
-the key-export route writes it to a local file path the user then moves
-out-of-band.
+Export/import is a cross-cutting service, not a resource kind, so it has its
+own routes rather than riding /resources. The master key is never returned over
+the wire; the key-export route writes it to a local file path the user then
+moves out-of-band.
 """
 
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel
 
 from coffer.application.sync.service import SyncService
-from coffer.domain.sync.errors import classify_git_error
-from coffer.domain.sync.models import (
-    DEFAULT_BRANCH,
-    DEFAULT_INTERVAL_SECONDS,
-    DEFAULT_POLL_REMOTE_SECONDS,
-    MachineEntry,
-    MachineIdentity,
-    SyncConfig,
-    SyncState,
-)
+from coffer.domain.sync.models import ExportSummary, ImportSummary
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import get_actor
 
 router = APIRouter(prefix="/api/v1/sync", tags=["sync"], dependencies=[Depends(require_token)])
 
@@ -46,45 +34,39 @@ def get_sync_service() -> SyncService:
 # --- schemas ---------------------------------------------------------------
 
 
-class SyncConfigIn(BaseModel):
-    remote: str | None = None
-    enabled: bool = False
-    auto: bool = False
-    interval_seconds: int = DEFAULT_INTERVAL_SECONDS
-    poll_remote_seconds: int = DEFAULT_POLL_REMOTE_SECONDS
-    branch: str = DEFAULT_BRANCH
+class AreaCountOut(BaseModel):
+    area: str
+    count: int
 
 
-class SyncConfigOut(BaseModel):
-    remote: str | None
-    enabled: bool
-    auto: bool
-    interval_seconds: int
-    poll_remote_seconds: int
-    branch: str
-    updated_at: str
+class FailureOut(BaseModel):
+    ref: str
+    reason: str
 
 
-class SyncStatusOut(BaseModel):
-    status: str
-    last_sync_at: str | None
-    last_error: str | None
-    # Actionable classification of last_error (auth/not_found/network) — the
-    # UI renders configuration guidance from it instead of raw git stderr.
-    error_hint: str | None
-    conflict_paths: list[str]
+class ExportIn(BaseModel):
+    path: str
+    # Off by default: an export directory is easy to leave somewhere careless
+    # (spec 010 "Credentials").
+    with_credentials: bool = False
+
+
+class ExportOut(BaseModel):
+    path: str
+    areas: list[AreaCountOut]
+    failures: list[FailureOut]
+    credentials_included: bool
+
+
+class ImportIn(BaseModel):
+    path: str
+
+
+class ImportOut(BaseModel):
+    path: str
+    areas: list[AreaCountOut]
+    failures: list[FailureOut]
     locked_refs: list[str]
-    quarantined_refs: list[str]
-
-
-class SyncRunIn(BaseModel):
-    pull: bool = True
-    push: bool = True
-
-
-class SyncResolveIn(BaseModel):
-    strategy: str = Field(pattern="^(ours|theirs|resolved)$")
-    paths: list[str] = Field(default_factory=list)
 
 
 class KeyPathIn(BaseModel):
@@ -95,160 +77,8 @@ class KeyOpOut(BaseModel):
     path: str
 
 
-class MachineOut(BaseModel):
-    machine_id: str
-    display_name: str
-    platform: str | None
-    os_version: str | None
-    coffer_version: str | None
-    last_sync_at: str | None
-    is_local: bool
-
-
-class MachinesOut(BaseModel):
-    machines: list[MachineOut]
-
-
-class OverrideIn(BaseModel):
-    patch: dict[str, Any]
-
-
-class OverrideOut(BaseModel):
-    kind: str
-    name: str
-    patch: dict[str, Any]
-
-
-class OverridesOut(BaseModel):
-    overrides: list[OverrideOut]
-
-
-class MachineRenameIn(BaseModel):
-    display_name: str = Field(min_length=1, max_length=100)
-
-    @field_validator("display_name")
-    @classmethod
-    def _strip_and_require_visible(cls, v: str) -> str:
-        stripped = v.strip()
-        if not stripped:
-            raise ValueError("display_name must not be blank")
-        return stripped
-
-
-def _config_out(c: SyncConfig) -> SyncConfigOut:
-    return SyncConfigOut(
-        remote=c.remote,
-        enabled=c.enabled,
-        auto=c.auto,
-        interval_seconds=c.interval_seconds,
-        poll_remote_seconds=c.poll_remote_seconds,
-        branch=c.branch,
-        updated_at=c.updated_at.isoformat(),
-    )
-
-
-def _status_out(s: SyncState) -> SyncStatusOut:
-    return SyncStatusOut(
-        status=s.status.value,
-        last_sync_at=s.last_sync_at.isoformat() if s.last_sync_at else None,
-        last_error=s.last_error,
-        error_hint=classify_git_error(s.last_error),
-        conflict_paths=s.conflict_paths,
-        locked_refs=s.locked_refs,
-        quarantined_refs=s.quarantined_refs,
-    )
-
-
-def machine_out(entry: MachineEntry, identity: MachineIdentity) -> MachineOut:
-    return MachineOut(
-        machine_id=entry.machine_id,
-        display_name=entry.display_name,
-        platform=entry.platform,
-        os_version=entry.os_version,
-        coffer_version=entry.coffer_version,
-        last_sync_at=entry.last_sync_at.isoformat() if entry.last_sync_at else None,
-        is_local=entry.machine_id == identity.machine_id,
-    )
-
-
-def machines_out(identity: MachineIdentity, entries: list[MachineEntry]) -> MachinesOut:
-    """Shared wire-shape builder — used by both ``GET /sync/machines`` (this
-    module) and ``GET /api/v1/machines`` (``machines_routes``), so the two
-    endpoints' responses stay byte-identical by construction."""
-    return MachinesOut(machines=[machine_out(e, identity) for e in entries])
-
-
-# --- routes ----------------------------------------------------------------
-
-
-@router.get("/config", response_model=SyncConfigOut)
-async def get_config() -> SyncConfigOut:
-    return _config_out(await get_sync_service().get_config())
-
-
-@router.put("/config", response_model=SyncConfigOut)
-async def put_config(body: SyncConfigIn, actor: str = Depends(get_actor)) -> SyncConfigOut:
-    saved = await get_sync_service().update_config(
-        remote=body.remote,
-        enabled=body.enabled,
-        auto=body.auto,
-        interval_seconds=body.interval_seconds,
-        branch=body.branch,
-        actor=actor,
-        poll_remote_seconds=body.poll_remote_seconds,
-    )
-    return _config_out(saved)
-
-
-@router.get("/status", response_model=SyncStatusOut)
-async def get_status() -> SyncStatusOut:
-    return _status_out(await get_sync_service().status())
-
-
-@router.post("/run", response_model=SyncStatusOut)
-async def run_sync(body: SyncRunIn | None = None) -> SyncStatusOut:
-    body = body or SyncRunIn()
-    return _status_out(await get_sync_service().run(pull=body.pull, push=body.push))
-
-
-@router.post("/resolve", response_model=SyncStatusOut)
-async def resolve_sync(body: SyncResolveIn) -> SyncStatusOut:
-    return _status_out(await get_sync_service().resolve(body.strategy, body.paths))
-
-
-@router.get("/machines", response_model=MachinesOut)
-async def list_machines() -> MachinesOut:
-    identity, entries = await get_sync_service().list_machines()
-    return machines_out(identity, entries)
-
-
-@router.put("/machine", response_model=MachineOut)
-async def rename_machine(body: MachineRenameIn, actor: str = Depends(get_actor)) -> MachineOut:
-    service = get_sync_service()
-    await service.rename_machine(body.display_name, actor=actor)
-    identity, entries = await service.list_machines()
-    own = next(e for e in entries if e.machine_id == identity.machine_id)
-    return machine_out(own, identity)
-
-
-@router.get("/overrides", response_model=OverridesOut)
-async def list_overrides() -> OverridesOut:
-    rows = await get_sync_service().list_overrides()
-    return OverridesOut(overrides=[OverrideOut(kind=k, name=n, patch=p) for k, n, p in rows])
-
-
-@router.put("/overrides/{kind}/{name}", response_model=OverridesOut)
-async def set_override(
-    kind: str, name: str, body: OverrideIn, actor: str = Depends(get_actor)
-) -> OverridesOut:
-    await get_sync_service().set_override(kind, name, body.patch, actor=actor)
-    return await list_overrides()
-
-
-@router.delete("/overrides/{kind}/{name}", response_model=OverridesOut)
-async def unset_override(kind: str, name: str, actor: str = Depends(get_actor)) -> OverridesOut:
-    await get_sync_service().unset_override(kind, name, actor=actor)
-    return await list_overrides()
+class KeyImportOut(BaseModel):
+    locked_refs: list[str]
 
 
 class KeyFingerprintOut(BaseModel):
@@ -256,6 +86,41 @@ class KeyFingerprintOut(BaseModel):
     # Short SHA-256 fingerprint of the master key (never the key itself);
     # matching fingerprints on two machines = the same key.
     fingerprint: str | None
+
+
+def _areas(summary: ExportSummary | ImportSummary) -> list[AreaCountOut]:
+    return [AreaCountOut(area=a.area, count=a.count) for a in summary.areas]
+
+
+def _failures(summary: ExportSummary | ImportSummary) -> list[FailureOut]:
+    return [FailureOut(ref=ref, reason=reason) for ref, reason in summary.failures]
+
+
+# --- routes ----------------------------------------------------------------
+
+
+@router.post("/export", response_model=ExportOut)
+async def export_bundle(body: ExportIn) -> ExportOut:
+    summary = await get_sync_service().export_bundle(
+        body.path, with_credentials=body.with_credentials
+    )
+    return ExportOut(
+        path=summary.path,
+        areas=_areas(summary),
+        failures=_failures(summary),
+        credentials_included=summary.credentials_included,
+    )
+
+
+@router.post("/import", response_model=ImportOut)
+async def import_bundle(body: ImportIn) -> ImportOut:
+    summary = await get_sync_service().import_bundle(body.path)
+    return ImportOut(
+        path=summary.path,
+        areas=_areas(summary),
+        failures=_failures(summary),
+        locked_refs=summary.locked_refs,
+    )
 
 
 @router.get("/key/fingerprint", response_model=KeyFingerprintOut)
@@ -269,6 +134,6 @@ async def export_key(body: KeyPathIn) -> KeyOpOut:
     return KeyOpOut(path=await get_sync_service().export_key(body.path))
 
 
-@router.post("/key/import", response_model=SyncStatusOut)
-async def import_key(body: KeyPathIn) -> SyncStatusOut:
-    return _status_out(await get_sync_service().import_key(body.path))
+@router.post("/key/import", response_model=KeyImportOut)
+async def import_key(body: KeyPathIn) -> KeyImportOut:
+    return KeyImportOut(locked_refs=await get_sync_service().import_key(body.path))

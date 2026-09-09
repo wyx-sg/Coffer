@@ -3,56 +3,29 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 
 import { ScopeCard } from "./ScopeCard";
-import type { SyncMachine } from "@/lib/hooks/useMachines";
 import type { Scope } from "@/lib/hooks/useScope";
 
 vi.mock("@/lib/hooks/useScope", () => ({
   useResourceScope: vi.fn(),
   useUpdateResourceScope: vi.fn(),
 }));
-vi.mock("@/lib/hooks/useMachines", () => ({ useMachines: vi.fn() }));
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: vi.fn() }));
 
 const scopeHooks = await import("@/lib/hooks/useScope");
-const machineHooks = await import("@/lib/hooks/useMachines");
 const agentHooks = await import("@/lib/hooks/useAgents");
-
-const LOCAL: SyncMachine = {
-  machine_id: "M-LOCAL",
-  display_name: "studio",
-  platform: "darwin",
-  os_version: null,
-  coffer_version: null,
-  last_sync_at: null,
-  is_local: true,
-};
-const OTHER: SyncMachine = {
-  ...LOCAL,
-  machine_id: "M-OTHER",
-  display_name: "laptop",
-  is_local: false,
-};
 
 const mutate = vi.fn();
 
-function seed(opts: {
-  scope: Scope | null;
-  axes: string[];
-  machines?: SyncMachine[];
-  agents?: { name: string }[];
-}) {
-  const { scope, axes, machines = [LOCAL, OTHER], agents = [] } = opts;
+function seed(opts: { scope: Scope | null; supports_scope?: boolean; agents?: { name: string }[] }) {
+  const { scope, supports_scope = true, agents = [{ name: "claude" }, { name: "codex" }] } = opts;
   vi.mocked(scopeHooks.useResourceScope).mockReturnValue({
-    data: { scope, axes },
+    data: { scope, supports_scope },
     isPending: false,
   } as unknown as ReturnType<typeof scopeHooks.useResourceScope>);
   vi.mocked(scopeHooks.useUpdateResourceScope).mockReturnValue({
     mutate,
     isPending: false,
   } as unknown as ReturnType<typeof scopeHooks.useUpdateResourceScope>);
-  vi.mocked(machineHooks.useMachines).mockReturnValue({
-    data: { machines },
-  } as unknown as ReturnType<typeof machineHooks.useMachines>);
   vi.mocked(agentHooks.useAgents).mockReturnValue({
     data: agents,
   } as unknown as ReturnType<typeof agentHooks.useAgents>);
@@ -61,168 +34,85 @@ function seed(opts: {
 afterEach(() => vi.clearAllMocks());
 
 describe("ScopeCard", () => {
-  test("everywhere mode shows no machine rows", () => {
-    seed({ scope: null, axes: ["machine"] });
-    render(<ScopeCard kind="agent" name="cur" />);
-    expect(screen.getByRole("button", { name: /everywhere/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /custom/i })).toBeInTheDocument();
-    expect(screen.queryByText("studio")).not.toBeInTheDocument();
+  test("renders nothing for a kind that declares no scope", () => {
+    seed({ scope: null, supports_scope: false });
+    const { container } = render(<ScopeCard kind="channel" name="tg" />);
+    expect(container).toBeEmptyDOMElement();
   });
 
-  test("switching Everywhere -> Custom pre-seeds known machines", () => {
-    seed({ scope: null, axes: ["machine", "agent"] });
+  test("every-agent mode shows no agent checkboxes", () => {
+    seed({ scope: null });
     render(<ScopeCard kind="mcp_server" name="fs" />);
-    fireEvent.click(screen.getByRole("button", { name: /custom/i }));
-    expect(mutate).toHaveBeenCalledWith({
-      "M-LOCAL": "*",
-      "M-OTHER": "*",
-    });
+    expect(screen.getByRole("button", { name: /every agent/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /selected agents/i })).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
-  test("switching Everywhere -> Custom with no machines PUTs {}", () => {
-    seed({ scope: null, axes: ["machine"], machines: [] });
+  test("switching every-agent -> selected PUTs an empty list", () => {
+    seed({ scope: null });
     render(<ScopeCard kind="mcp_server" name="fs" />);
-    fireEvent.click(screen.getByRole("button", { name: /custom/i }));
-    expect(mutate).toHaveBeenCalledWith({});
+    fireEvent.click(screen.getByRole("button", { name: /selected agents/i }));
+    expect(mutate).toHaveBeenCalledWith([]);
   });
 
-  test("switching Custom -> Everywhere PUTs null", () => {
-    seed({ scope: { "M-LOCAL": "*" }, axes: ["machine"] });
-    render(<ScopeCard kind="agent" name="cur" />);
-    fireEvent.click(screen.getByRole("button", { name: /everywhere/i }));
+  test("switching selected -> every-agent PUTs null", () => {
+    seed({ scope: ["claude"] });
+    render(<ScopeCard kind="mcp_server" name="fs" />);
+    fireEvent.click(screen.getByRole("button", { name: /every agent/i }));
     expect(mutate).toHaveBeenCalledWith(null);
   });
 
-  test("dormant warning renders for custom scope with no entries", () => {
-    seed({ scope: {}, axes: ["machine"] });
-    render(<ScopeCard kind="agent" name="cur" />);
+  test("dormant warning renders for an empty selection", () => {
+    seed({ scope: [] });
+    render(<ScopeCard kind="skill" name="writing" />);
     expect(screen.getByText(/dormant/i)).toBeInTheDocument();
   });
 
-  test("no dormant warning once at least one machine is on", () => {
-    seed({ scope: { "M-LOCAL": "*" }, axes: ["machine"] });
-    render(<ScopeCard kind="agent" name="cur" />);
+  test("no dormant warning once at least one agent is selected", () => {
+    seed({ scope: ["claude"] });
+    render(<ScopeCard kind="skill" name="writing" />);
     expect(screen.queryByText(/dormant/i)).not.toBeInTheDocument();
   });
 
-  test("marks the local machine row with the this-machine badge", () => {
-    seed({ scope: {}, axes: ["machine"] });
-    render(<ScopeCard kind="agent" name="cur" />);
-    const localRow = within(screen.getByTestId("scope-row-M-LOCAL"));
-    expect(localRow.getByText(/this machine/i)).toBeInTheDocument();
-    const otherRow = within(screen.getByTestId("scope-row-M-OTHER"));
-    expect(otherRow.queryByText(/this machine/i)).not.toBeInTheDocument();
-  });
-
-  test("machine-only kind: toggling a row on PUTs { id: '*' }, no agent selectors", () => {
-    seed({ scope: {}, axes: ["machine"] });
-    render(<ScopeCard kind="agent" name="cur" />);
-    const row = within(screen.getByTestId("scope-row-M-LOCAL"));
-    fireEvent.click(row.getByRole("switch"));
-    expect(mutate).toHaveBeenCalledWith({ "M-LOCAL": "*" });
-    expect(screen.queryByText(/all agents/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
-  });
-
-  test("machine-only kind: toggling an on row off removes its entry", () => {
-    seed({ scope: { "M-LOCAL": "*" }, axes: ["machine"] });
-    render(<ScopeCard kind="agent" name="cur" />);
-    const row = within(screen.getByTestId("scope-row-M-LOCAL"));
-    fireEvent.click(row.getByRole("switch"));
-    expect(mutate).toHaveBeenCalledWith({});
-  });
-
-  test("dual-axis kind: turning a row on defaults to all agents ('*')", () => {
-    seed({
-      scope: {},
-      axes: ["machine", "agent"],
-      agents: [{ name: "claude" }, { name: "codex" }],
-    });
+  test("checking an agent adds it to the list", () => {
+    seed({ scope: ["claude"] });
     render(<ScopeCard kind="mcp_server" name="fs" />);
-    const row = within(screen.getByTestId("scope-row-M-LOCAL"));
-    fireEvent.click(row.getByRole("switch"));
-    expect(mutate).toHaveBeenCalledWith({ "M-LOCAL": "*" });
+    fireEvent.click(screen.getByRole("checkbox", { name: "codex" }));
+    expect(mutate).toHaveBeenCalledWith(["claude", "codex"]);
   });
 
-  test("dual-axis kind: unchecking all-agents reveals per-agent checkboxes and PUTs []", () => {
-    seed({
-      scope: { "M-LOCAL": "*" },
-      axes: ["machine", "agent"],
-      agents: [{ name: "claude" }, { name: "codex" }],
-    });
+  test("unchecking the last agent PUTs an empty list", () => {
+    seed({ scope: ["claude"] });
     render(<ScopeCard kind="mcp_server" name="fs" />);
-    const row = within(screen.getByTestId("scope-row-M-LOCAL"));
-    const allAgents = row.getByRole("checkbox", { name: /all agents/i });
-    expect(allAgents).toBeChecked();
-    fireEvent.click(allAgents);
-    expect(mutate).toHaveBeenCalledWith({ "M-LOCAL": [] });
+    fireEvent.click(screen.getByRole("checkbox", { name: "claude" }));
+    expect(mutate).toHaveBeenCalledWith([]);
   });
 
-  test("dual-axis kind: per-agent checkbox toggling updates the agent list", () => {
-    seed({
-      scope: { "M-LOCAL": ["claude"] },
-      axes: ["machine", "agent"],
-      agents: [{ name: "claude" }, { name: "codex" }],
-    });
+  test("an agent registered here but not selected renders unchecked", () => {
+    seed({ scope: ["claude"] });
     render(<ScopeCard kind="mcp_server" name="fs" />);
-    const row = within(screen.getByTestId("scope-row-M-LOCAL"));
-
-    fireEvent.click(row.getByRole("checkbox", { name: "codex" }));
-    expect(mutate).toHaveBeenCalledWith({ "M-LOCAL": ["claude", "codex"] });
-
-    fireEvent.click(row.getByRole("checkbox", { name: "claude" }));
-    expect(mutate).toHaveBeenCalledWith({ "M-LOCAL": [] });
+    expect(screen.getByRole("checkbox", { name: "claude" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "codex" })).not.toBeChecked();
   });
 
-  test("dual-axis kind: checking all-agents PUTs '*'", () => {
-    seed({
-      scope: { "M-LOCAL": ["claude"] },
-      axes: ["machine", "agent"],
-      agents: [{ name: "claude" }],
-    });
+  test("a scoped-in agent that is not registered here renders with an unknown hint", () => {
+    seed({ scope: ["ghost"], agents: [{ name: "claude" }] });
     render(<ScopeCard kind="mcp_server" name="fs" />);
-    const row = within(screen.getByTestId("scope-row-M-LOCAL"));
-    fireEvent.click(row.getByRole("checkbox", { name: /all agents/i }));
-    expect(mutate).toHaveBeenCalledWith({ "M-LOCAL": "*" });
+    const row = within(screen.getByTestId("scope-agent-ghost"));
+    expect(row.getByText("ghost")).toBeInTheDocument();
+    expect(row.getByText(/not registered/i)).toBeInTheDocument();
   });
 
-  test("machine-only kind renders no agent selectors even when a row is on", () => {
-    seed({ scope: { "M-LOCAL": "*" }, axes: ["machine"] });
-    render(<ScopeCard kind="channel" name="tg" />);
-    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
-    expect(screen.queryByText(/all agents/i)).not.toBeInTheDocument();
+  test("selecting an agent preserves unregistered names already in scope", () => {
+    seed({ scope: ["ghost"], agents: [{ name: "claude" }] });
+    render(<ScopeCard kind="mcp_server" name="fs" />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "claude" }));
+    expect(mutate).toHaveBeenCalledWith(["ghost", "claude"]);
   });
 
-  test("unknown machine ids in the scope map (not in the registry) render with the raw id and a hint", () => {
-    seed({ scope: { "M-GHOST": "*" }, axes: ["machine"], machines: [LOCAL] });
-    render(<ScopeCard kind="agent" name="cur" />);
-    const row = within(screen.getByTestId("scope-row-M-GHOST"));
-    expect(row.getByText("M-GHOST")).toBeInTheDocument();
-    expect(row.getByText(/unknown/i)).toBeInTheDocument();
-  });
-
-  test("shows a not-active-here hint when custom scope excludes the local machine", () => {
-    seed({ scope: { "M-OTHER": "*" }, axes: ["machine"] });
-    render(<ScopeCard kind="agent" name="cur" />);
-    expect(screen.getByText(/not active on this machine/i)).toBeInTheDocument();
-  });
-
-  test("no not-active-here hint when the local machine is included", () => {
-    seed({ scope: { "M-LOCAL": "*" }, axes: ["machine"] });
-    render(<ScopeCard kind="agent" name="cur" />);
-    expect(screen.queryByText(/not active on this machine/i)).not.toBeInTheDocument();
-  });
-
-  test("toggling a row on preserves unknown machines in scope", () => {
-    seed({
-      scope: { "M-LOCAL": "*", "M-GHOST": "*" },
-      axes: ["machine"],
-      machines: [LOCAL],
-    });
-    render(<ScopeCard kind="agent" name="cur" />);
-    const row = within(screen.getByTestId("scope-row-M-LOCAL"));
-    // First turn M-LOCAL off, then back on to verify M-GHOST is preserved
-    fireEvent.click(row.getByRole("switch"));
-    expect(mutate).toHaveBeenCalledWith({ "M-GHOST": "*" });
+  test("shows the empty hint when no agent is registered and none is scoped", () => {
+    seed({ scope: [], agents: [] });
+    render(<ScopeCard kind="mcp_server" name="fs" />);
+    expect(screen.getByText(/no agents registered/i)).toBeInTheDocument();
   });
 });

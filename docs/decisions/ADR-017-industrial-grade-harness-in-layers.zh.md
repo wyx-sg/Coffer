@@ -3,7 +3,7 @@
 **状态**：Proposed
 **日期**：2026-06-13
 **决策者**：Yuxing Wu
-**关联**：`.specify/memory/constitution.md`、[`agents/testing.md`](../../agents/testing.zh.md)、[`agents/workflow.md`](../../agents/workflow.zh.md)、[ADR-014](ADR-014-channel-adapter-framework.zh.md)、[ADR-016](ADR-016-multi-machine-sync.zh.md)、specs `009-channels` / `010-sync`
+**关联**：`.specify/memory/constitution.md`、[`agents/testing.md`](../../agents/testing.zh.md)、[`agents/workflow.md`](../../agents/workflow.zh.md)、[ADR-014](ADR-014-channel-adapter-framework.zh.md)、[ADR-016](ADR-016-vault-export-import.zh.md)、specs `009-channels` / `010-sync`
 
 ## 背景
 

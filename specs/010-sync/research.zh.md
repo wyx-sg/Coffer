@@ -2,8 +2,15 @@
 
 > English: [research.md](./research.md)
 
+> **历史记录。** 本文件记录的是当初通向**基于用户自有 git 仓库的持续多机同步**
+> 的调研。该方案此后已被撤销：spec 010 现在交付的是一次性的仓库**导出/导入**到
+> 一个目录，没有远程、没有工作区、也没有后台 worker
+> （[ADR-016](../../docs/decisions/ADR-016-vault-export-import.md)、章程 0.4.0）。
+> 下面的内容作为当时权衡各方案的记录保留——它们并不描述当前形态。存活下来的部分
+> 是：路径可移植、仅密文加带外密钥的凭据处理，以及确定性要求。
+
 决策理由记录在
-[ADR-016](../../docs/decisions/ADR-016-multi-machine-sync.md) 以及
+[ADR-016](../../docs/decisions/ADR-016-vault-export-import.md) 以及
 宪章 0.3.0 修订案中。本文件记录背景以及权衡过的各种方案。
 
 ## 问题

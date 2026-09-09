@@ -171,32 +171,31 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - **开启跟随时目标路径已存在同名的非 Coffer 文件夹**：该 skill 报告为冲突（与 FR-011 同规则）而不被覆盖；主库其余部分照常投递。
 - **各 agent 的交付目标**：Coffer 只有一种交付方式——把 master skill 文件夹符号链接（失败则复制）进 `<config_dir>/skills/<name>`。每个 agent 的 skill 子路径来自能力清单，因此将来新增 agent 的交付目标是数据而非新分支。
 
-## Skill delivery scope（2026-07-10 修订 —— machine × agent scope，[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.zh.md)）
+## Skill delivery scope（[ADR-045](../../docs/decisions/ADR-045-per-agent-resource-scope.zh.md)）
 
-`skill` resource 携带一个框架级的 `scope`（machine × agent 两个轴，见
-[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.zh.md)）。
-scope 是资源侧的**授予**（「这个 skill 可以在这里运行」）；既有的按 agent
-follow policy（FR-025）则是 agent 侧的**意图**（「把 skill 投递给我」）。投递
-是二者的**交集**，再减去手动排除项：
+`skill` resource 携带一个框架级的 `scope`——一个 agent 名列表，或 `None`
+表示「对每个 agent 生效」。scope 是资源侧的**授予**（「这个 skill 可以在这里
+运行」）；既有的按 agent follow policy（FR-025）则是 agent 侧的**意图**（「把
+skill 投递给我」）。投递是二者的**交集**，再减去手动排除项：
 
 - **逐 skill binding**（User Story 3 / FR-009）只在该 agent**同时**处于该
-  skill 对本机 scope 的授予范围内时才投递（本机满足 `machine_in_scope`，且
-  该 binding 的 agent 满足 `agent_in_scope`）。一个被 skill scope 排除的
-  agent/机器组合的 binding 请求，会像今天拒绝一个非法投递目标一样被拒绝。
+  skill 的 scope 授予范围内时才投递（该 binding 的 agent 满足
+  `agent_in_scope`）。一个被 skill scope 排除的 agent 的 binding 请求，会像
+  今天拒绝一个非法投递目标一样被拒绝。
 - **Follow-all 投递**（FR-025）计算一个跟随中的 agent 的有效集合时，先取主库
-  减去排除列表，再进一步过滤为 scope 同时包含本机与该 agent 的那些
-  skill——一个不在 scope 内的 skill 永远不会被自动投递给跟随中的 agent，无
-  论排除列表里有没有它。
+  减去排除列表，再进一步过滤为 scope 包含该 agent 的那些 skill——一个不在
+  scope 内的 skill 永远不会被自动投递给跟随中的 agent，无论排除列表里有没有
+  它。
 - **Scope 是硬性授予——它凌驾于手动 binding 之上。** 把一个 skill 的 scope
-  编辑为排除某台机器或某个 agent（此前曾向其投递过）会在下一次调和时收回该
-  投递：链接被移除，binding 被标为禁用/移除，与 follow-policy 驱动的移除
-  （FR-010）完全一样——即便这个 binding 是手动创建（不经 follow）的。skill
-  重新进入 scope 不会自动重新投递——跟随中的 agent 会在下一次 follow 调和时
-  重新拿到它；显式的逐 skill binding 必须由用户重新启用。
-- 机器本地的调和——同步引擎的按导入调和钩子（spec 010）——是执行把关点：每
-  次导入之后（另一台机器传来的 scope 编辑、一个 skill 的新增/移除，或
-  follow policy 变化），每个受影响 agent 的已投递集合都被重新计算为
-  `scope ∩ follow-or-binding`，任何现在不在 scope 内的已投递副本都会被收回。
+  编辑为排除某个此前曾向其投递过的 agent，会在下一次调和时收回该投递：链接被
+  移除，binding 被标为禁用/移除，与 follow-policy 驱动的移除（FR-010）完全
+  一样——即便这个 binding 是手动创建（不经 follow）的。skill 重新进入 scope
+  不会自动重新投递——跟随中的 agent 会在下一次 follow 调和时重新拿到它；显式
+  的逐 skill binding 必须由用户重新启用。
+- 调和是执行把关点——包括导入之后运行的按导入调和钩子（spec 010）。在一次
+  scope 编辑、一个 skill 的新增/移除，或一次 follow policy 变化之后，每个受
+  影响 agent 的已投递集合都被重新计算为 `scope ∩ follow-or-binding`，任何现
+  在不在 scope 内的已投递副本都会被收回。
 
 ## Acceptance Scenarios
 
@@ -378,8 +377,8 @@ follow policy（FR-025）则是 agent 侧的**意图**（「把 skill 投递给�
 
 ### Scenario: delivery is the intersection of scope and follow policy; an out-of-scope copy is reclaimed
 
-- **Given** 一个跟随主库、且当前有一个 skill 已投递给它的 agent，该 skill 的 scope 当前包含本机与这个 agent，
-- **When** 用户把这个 skill 的 scope 编辑为排除这个 agent（或这台机器），下一次调和运行，
+- **Given** 一个跟随主库、且当前有一个 skill 已投递给它的 agent，该 skill 的 scope 当前包含这个 agent，
+- **When** 用户把这个 skill 的 scope 编辑为排除这个 agent，下一次调和运行，
 - **Then** 已投递的 symlink 被移除、binding 被收回——即便这个 agent 仍然跟随主库，也从未把这个 skill 加入自己的排除列表——投递等于 scope ∩ follow policy，scope 的排除项胜出。
 
 ### Scenario: opt-in repair re-delivers repairable drift from master
@@ -414,7 +413,7 @@ follow policy（FR-025）则是 agent 侧的**意图**（「把 skill 投递给�
 - **FR-010**：禁用一个 binding 必须移除目标 link，不动 master。
 - **FR-011**：启用时若目标位置已存在非 Coffer 目标，未加 `--force` 则拒绝；`--force` 在创建 link 前先备份既有目标。
 - **FR-012**：当符号链接/目录 junction 不可用（如 FAT32、网络共享）时，系统可降级为复制模式；绑定记录 `link_mode=copy_fallback`（enable 事件审计为 `mode: copy_fallback`），UI 必须呈现该降级状态（Agent 的 Skills 标签页对此类绑定显示 "已复制" 警示徽标）。
-- **FR-012a**（2026-07-10 修订 —— machine × agent scope，[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.zh.md)）：向某个 agent 投递 skill 必须额外要求该 skill 对本机**及**该 agent 处于 scope 内（`scope(M, agent)`），无论投递是逐 skill binding（FR-009）还是 follow-all（FR-025）。调和过程中发现一个已投递的 binding 现在不在 scope 内，必须收回它（移除链接、禁用/移除 binding），与 FR-010 收回一个被禁用的 binding 完全一样——scope 是凌驾于此前手动 binding 之上的硬性授予。
+- **FR-012a**（[ADR-045](../../docs/decisions/ADR-045-per-agent-resource-scope.zh.md)）：向某个 agent 投递 skill 必须额外要求该 skill 对该 agent 处于 scope 内（`agent_in_scope(scope, agent)`），无论投递是逐 skill binding（FR-009）还是 follow-all（FR-025）。调和过程中发现一个已投递的 binding 现在不在 scope 内，必须收回它（移除链接、禁用/移除 binding），与 FR-010 收回一个被禁用的 binding 完全一样——scope 是凌驾于此前手动 binding 之上的硬性授予。
 
 **Drift**
 
@@ -452,7 +451,7 @@ follow policy（FR-025）则是 agent 侧的**意图**（「把 skill 投递给�
 
 ### Key Entities
 
-- **Skill**：kind 为 `skill` 的 Resource，按 `skill:<name>`（name 来自 SKILL.md frontmatter）标识。承载源 provenance、内容哈希、元数据；内容文件夹位于 `~/.coffer/skills/<name>/`。携带一个框架级 `scope`（machine × agent 两个轴），它与按 agent follow policy 的交集决定投递（2026-07-10 修订 —— machine × agent scope，ADR-045；见「Skill delivery scope」）。
+- **Skill**：kind 为 `skill` 的 Resource，按 `skill:<name>`（name 来自 SKILL.md frontmatter）标识。承载源 provenance、内容哈希、元数据；内容文件夹位于 `~/.coffer/skills/<name>/`。携带一个框架级 `scope`（一个 agent 名列表，或 `None` 表示对每个 agent 生效），它与按 agent follow policy 的交集决定投递（ADR-045；见「Skill delivery scope」）。
 - **Skill Source**：记录 skill 来源的结构。本地导入仅含原始路径作 provenance 用。
 - **Skill–Agent Binding**：连接一个 skill Resource 与一个 agent Resource（kind `agent`，按 spec 004）的一行；带 `enabled` 标志与最近 link path。磁盘上的 symlink 是 live 表达；binding 是持久化表达。
 - **Drift Report**：`verify` 返回的瞬时结构，列出每条与磁盘不一致的 binding，附 drift 类型与建议处置方式。

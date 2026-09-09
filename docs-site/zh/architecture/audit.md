@@ -118,13 +118,7 @@ Coffer 的方案刻意保持精简：一对本地数据库表，而非时序数�
 | `channel_pairing_issued` / `channel_paired` | 通道配对码被签发 / 对端完成配对时     |
 | `channel_notify_sent`                       | 向已配对通道发送通知时                |
 
-**同步：**
-
-| 事件                                | 触发时机                              |
-| ----------------------------------- | ------------------------------------- |
-| `sync_config_updated`               | 同步配置发生变更时                    |
-| `sync_completed`                    | 一次同步运行完成之后                  |
-| `sync_conflicted` / `sync_resolved` | 同步运行发生冲突 / 冲突被解决时       |
+**导出 / 导入：** 每一次仓库导出与导入都会被审计——操作本身、bundle 路径，以及各状态区的计数。导入所执行的资源写入还会另外记录为普通的资源生命周期事件，因此一次导入带来的变更和手工做出的变更一样可追溯。不存在配置事件与冲突事件，因为既没有同步配置、也没有冲突状态（[ADR-016](/zh/reference/adr/ADR-016-vault-export-import)）。
 
 注意，`credential_set` 和 `credential_deleted` 都会被审计——密钥被存储或删除这一*事实*会被记录下来。密钥值本身永远不会出现在 `details` payload 中。（legacy 的 `keychain_set` / `keychain_deleted` 事件类型对历史记录仍可渲染。）
 
