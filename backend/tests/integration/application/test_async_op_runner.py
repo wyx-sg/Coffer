@@ -25,12 +25,12 @@ async def test_enqueue_runs_factory_then_clears():
     async def work() -> None:
         ran.set()
 
-    runner.enqueue("distill", "s1", work)
+    runner.enqueue("kb_reembed", "s1", work)
     # marked queued synchronously on enqueue
-    assert reg.get("distill", "s1").state is OpState.queued  # type: ignore[union-attr]
+    assert reg.get("kb_reembed", "s1").state is OpState.queued  # type: ignore[union-attr]
 
     await asyncio.wait_for(ran.wait(), timeout=2.0)
-    await _wait_until(lambda: reg.get("distill", "s1") is None)
+    await _wait_until(lambda: reg.get("kb_reembed", "s1") is None)
     await runner.stop()
 
 
@@ -48,14 +48,14 @@ async def test_failure_is_recorded_and_worker_survives():
     async def fine() -> None:
         ok.set()
 
-    runner.enqueue("distill", "bad", boom)
-    runner.enqueue("distill", "good", fine)
+    runner.enqueue("kb_reembed", "bad", boom)
+    runner.enqueue("kb_reembed", "good", fine)
 
     # the failing item is recorded as error...
     await _wait_until(
-        lambda: (e := reg.get("distill", "bad")) is not None and e.state is OpState.error
+        lambda: (e := reg.get("kb_reembed", "bad")) is not None and e.state is OpState.error
     )
-    assert reg.get("distill", "bad").message == "kaboom"  # type: ignore[union-attr]
+    assert reg.get("kb_reembed", "bad").message == "kaboom"  # type: ignore[union-attr]
     # ...and the worker kept going for the next item
     await asyncio.wait_for(ok.wait(), timeout=2.0)
     await runner.stop()
@@ -81,12 +81,12 @@ async def test_concurrency_cap_is_respected():
             active -= 1
 
     for i in range(6):
-        runner.enqueue("distill", f"s{i}", hold)
+        runner.enqueue("kb_reembed", f"s{i}", hold)
 
     # let workers pick up; with cap=2 only 2 run at once
     await _wait_until(lambda: active == 2)
     await asyncio.sleep(0.05)
     assert peak == 2
     release.set()
-    await _wait_until(lambda: reg.snapshot("distill") == {})
+    await _wait_until(lambda: reg.snapshot("kb_reembed") == {})
     await runner.stop()

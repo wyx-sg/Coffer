@@ -13,7 +13,6 @@ Three layers over real SQLite + real lane files:
 from __future__ import annotations
 
 import pathlib
-from datetime import UTC, datetime
 
 import pytest
 from starlette.testclient import TestClient
@@ -24,8 +23,7 @@ from coffer.domain.errors import ResourceNotFound
 from coffer.domain.memory.config import MemoryStoreConfig
 from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.knowledge import paths
-from coffer.infrastructure.knowledge.paths import journal_path, topic_path
-from coffer.infrastructure.memory.journal_files import append_entry, read_entries
+from coffer.infrastructure.knowledge.paths import topic_path
 from coffer.infrastructure.memory.project_root_repo import ProjectRootRepo
 from coffer.infrastructure.memory.store_label_repo import StoreLabelRepo
 from coffer.surfaces.http.app import create_app
@@ -38,8 +36,11 @@ _SRC = project_store_name(_SRC_ULID)
 _DST = project_store_name(_DST_ULID)
 
 
-def _ts(day: int, hour: int) -> datetime:
-    return datetime(2026, 7, day, hour, tzinfo=UTC)
+def _write_topic(store_dir: pathlib.Path, slug: str, body: str) -> None:
+    """Write a raw ``knowledge/<slug>.md`` lane file (the merge is byte-level)."""
+    path = topic_path(store_dir, slug)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(body, encoding="utf-8")
 
 
 def _consolidator(mem, *, resolves_to: str = _DST_ULID) -> StoreConsolidator:
@@ -66,10 +67,9 @@ async def test_merge_consolidates_additively_and_retires_source(mem):
     src_dir = paths.memory_store_dir(_SRC_ULID)
     dst_dir = paths.memory_store_dir(_DST_ULID)
 
-    # Target: its own journal day + an 'auth' topic that must stay untouched.
-    append_entry(journal_path(dst_dir, "2026-07-01"), timestamp=_ts(1, 8), body="dst-day1")
-    topic_path(dst_dir, "auth").parent.mkdir(parents=True, exist_ok=True)
-    topic_path(dst_dir, "auth").write_text("dst-auth\n", encoding="utf-8")
+    # Target: its own topic + an 'auth' topic that must stay untouched.
+    _write_topic(dst_dir, "dst-only", "dst-only\n")
+    _write_topic(dst_dir, "auth", "dst-auth\n")
     await mem.resources.register(
         kind="memory",
         name=_DST,
@@ -77,12 +77,10 @@ async def test_merge_consolidates_additively_and_retires_source(mem):
         actor="system",
     )
 
-    # Source: overlapping journal period + colliding topic filename + a label,
-    # a root, and a pre-existing alias (a store merged into IT earlier).
-    append_entry(journal_path(src_dir, "2026-07-01"), timestamp=_ts(1, 15), body="src-day1")
-    append_entry(journal_path(src_dir, "2026-07-06"), timestamp=_ts(6, 9), body="src-day6")
-    topic_path(src_dir, "auth").parent.mkdir(parents=True, exist_ok=True)
-    topic_path(src_dir, "auth").write_text("src-auth\n", encoding="utf-8")
+    # Source: a fresh topic + colliding topic filename + a label, a root, and a
+    # pre-existing alias (a store merged into IT earlier).
+    _write_topic(src_dir, "src-only", "src-only\n")
+    _write_topic(src_dir, "auth", "src-auth\n")
     src_cfg = MemoryStoreConfig(merged_identities=[_OLD_ULID]).model_dump(mode="json")
     await mem.resources.register(kind="memory", name=_SRC, config=src_cfg, actor="system")
     await roots.set(_SRC, "/old-machine/repo")
@@ -90,15 +88,13 @@ async def test_merge_consolidates_additively_and_retires_source(mem):
 
     outcome = await _consolidator(mem).merge(_SRC, _DST, actor="user")
 
-    # Additive: both journal days landed, the colliding topic kept BOTH copies.
-    day1 = {e.body for e in read_entries(journal_path(dst_dir, "2026-07-01"))}
-    assert day1 == {"dst-day1", "src-day1"}
-    day6 = [e.body for e in read_entries(journal_path(dst_dir, "2026-07-06"))]
-    assert day6 == ["src-day6"]
+    # Additive: the source's own topic landed, the colliding topic kept BOTH copies.
+    assert topic_path(dst_dir, "dst-only").read_text() == "dst-only\n"
+    assert topic_path(dst_dir, "src-only").read_text() == "src-only\n"
     assert topic_path(dst_dir, "auth").read_text() == "dst-auth\n"
     suffixed = dst_dir / "knowledge" / f"auth--from-{_SRC_ULID[:5]}.md"
     assert suffixed.read_text() == "src-auth\n"
-    assert outcome.merged_files == 3  # day1 merged + day6 created + auth suffixed
+    assert outcome.merged_files == 2  # src-only created + auth suffixed
 
     # Label + root moved (target had neither).
     assert outcome.label_moved and outcome.root_moved
@@ -117,9 +113,8 @@ async def test_merge_consolidates_additively_and_retires_source(mem):
     assert await labels.get(_SRC) is None
     assert not src_dir.exists()
 
-    # Reconcile made the merged journal recall-able.
-    doc = await mem.documents.get_document("memory", _DST, "journal-2026-07-06")
-    assert doc is not None
+    # Reconcile dropped the retired source's index rows and kept the target's.
+    assert await mem.documents.get_document("memory", _SRC, "src-only") is None
 
 
 async def test_merge_keeps_targets_own_label_and_root(mem):
@@ -245,7 +240,7 @@ async def test_boot_pass_does_not_reverse_a_merge(mem):
     y_cfg = MemoryStoreConfig(merged_identities=[_SRC_ULID]).model_dump(mode="json")
     await mem.resources.register(kind="memory", name=_DST, config=y_cfg, actor="system")
     dst_dir = paths.memory_store_dir(_DST_ULID)
-    append_entry(journal_path(dst_dir, "2026-07-01"), timestamp=_ts(1, 8), body="kept")
+    _write_topic(dst_dir, "kept", "kept\n")
     await roots.set(_DST, "/checkout-that-minted-the-merged-id")
 
     # Every root re-resolves to the MERGED-AWAY identity.
@@ -256,7 +251,7 @@ async def test_boot_pass_does_not_reverse_a_merge(mem):
     assert dst_res.config["merged_identities"] == [_SRC_ULID]  # aliases intact
     with pytest.raises(ResourceNotFound):  # the retired identity stayed retired
         await mem.resources.get(ResourceRef(kind="memory", name=_SRC))
-    assert {e.body for e in read_entries(journal_path(dst_dir, "2026-07-01"))} == {"kept"}
+    assert topic_path(dst_dir, "kept").read_text() == "kept\n"
 
 
 async def test_boot_adoption_records_the_retired_identity_as_alias(mem):
@@ -267,7 +262,7 @@ async def test_boot_adoption_records_the_retired_identity_as_alias(mem):
     stale_cfg = MemoryStoreConfig(merged_identities=[_OLD_ULID]).model_dump(mode="json")
     await mem.resources.register(kind="memory", name=_SRC, config=stale_cfg, actor="system")
     src_dir = paths.memory_store_dir(_SRC_ULID)
-    append_entry(journal_path(src_dir, "2026-07-02"), timestamp=_ts(2, 9), body="moved")
+    _write_topic(src_dir, "moved", "moved\n")
     await roots.set(_SRC, "/repo")
 
     report = await _consolidator(mem, resolves_to=_DST_ULID).run()

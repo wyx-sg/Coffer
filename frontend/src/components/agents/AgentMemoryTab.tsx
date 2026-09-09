@@ -81,7 +81,7 @@ function DisableNativeMemoryRow({ agent }: { agent: AgentOut }) {
 /** Per-row "import this native memory store into Coffer" button. Enqueues an
  * async batch import (returns 202 at once) so the work runs off the request path
  * and the row's status column polls queued → running → done — matching the bulk
- * action and the Conversations tab's per-row distill. A summary toast confirms
+ * action. A summary toast confirms
  * the enqueue; the imported facts land in the matching Coffer project store. */
 function ImportButton({ agentName, store }: { agentName: string; store: NativeMemoryStore }) {
   const { t } = useTranslation();

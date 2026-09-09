@@ -173,7 +173,9 @@ def test_0049_is_idempotent(tmp_path, monkeypatch):
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
     cfg = _alembic_config()
 
-    command.upgrade(cfg, "head")
+    # Target 0049 explicitly rather than "head": this test is about 0049, and
+    # every later revision would otherwise have to keep this assertion current.
+    command.upgrade(cfg, "0049")
     assert _alembic_version(db_path) == "0049"
     assert not (DROPPED_TABLES & _user_tables(db_path))
 

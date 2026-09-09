@@ -19,7 +19,6 @@ import type {
   FactOut,
   RecallResponse,
   RulesOut,
-  JournalOut,
   HandoffOut,
   ConsolidationLogOut,
   MergeScanOut,
@@ -133,7 +132,7 @@ export async function clearFacts(store: string): Promise<number> {
   return data.cleared;
 }
 
-// --- four-lane read views (spec 007 slice 7) -------------------------------
+// --- lane read views (spec 007 slice 7) ------------------------------------
 // Pure GET reads of the store's curated lanes (no LLM, no mutation). Each
 // mirrors the listFacts/getFact fetch+error style; empty stores still 200 with
 // empty lists / null text.
@@ -142,12 +141,6 @@ export async function getMemoryRules(store: string): Promise<RulesOut> {
   const r = await fetch(`${storeBase(store)}/rules`, { headers: headers() });
   await checkOk(r);
   return (await r.json()) as RulesOut;
-}
-
-export async function getMemoryJournal(store: string): Promise<JournalOut> {
-  const r = await fetch(`${storeBase(store)}/journal`, { headers: headers() });
-  await checkOk(r);
-  return (await r.json()) as JournalOut;
 }
 
 export async function getMemoryHandoff(store: string): Promise<HandoffOut> {
@@ -167,14 +160,6 @@ export async function getMemoryConsolidationLog(store: string): Promise<Consolid
 // removes the file from disk; the backend appends one line to the consolidation
 // log (except deleting the log itself), so callers also invalidate the
 // changelog query key after a delete.
-
-export async function deleteJournalPeriod(store: string, period: string): Promise<void> {
-  const r = await fetch(`${storeBase(store)}/journal/${enc(period)}`, {
-    method: "DELETE",
-    headers: headers(),
-  });
-  await checkOk(r);
-}
 
 export async function deleteHandoffBranch(store: string, branch: string): Promise<void> {
   const r = await fetch(`${storeBase(store)}/handoff/${enc(branch)}`, {

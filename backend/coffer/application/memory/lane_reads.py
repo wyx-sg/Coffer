@@ -1,7 +1,7 @@
-"""Read-only lane projections for the four-lane memory UI (spec 007 Slice 7).
+"""Read-only lane projections for the three-lane memory UI (spec 007 Slice 7).
 
-Pure file reads over a store's ``journal/`` / ``handoff/`` lanes and the
-store-root ``consolidation-log.md`` — no LLM, no index. The HTTP surface maps
+Pure file reads over a store's ``handoff/`` lane and the store-root
+``consolidation-log.md`` — no LLM, no index. The HTTP surface maps
 these value objects straight onto its wire schemas; the ``MemoryService``
 methods are thin ``asyncio.to_thread`` wrappers around the free functions here.
 
@@ -18,24 +18,10 @@ from datetime import datetime
 from pathlib import Path
 
 from coffer.domain.memory.scope import ResolvedScope
-from coffer.infrastructure.knowledge.paths import (
-    consolidation_log_path,
-    handoff_dir,
-    journal_dir,
-)
+from coffer.infrastructure.knowledge.paths import consolidation_log_path, handoff_dir
 from coffer.infrastructure.memory.handoff_files import read_handoff
 
 ResolveStoreFn = Callable[[str], Awaitable[ResolvedScope]]
-
-
-@dataclass(frozen=True)
-class JournalFile:
-    """One time-partitioned ``journal/<period>.md`` file (raw markdown body)."""
-
-    period: str
-    text: str
-    path: str
-    folder_path: str
 
 
 @dataclass(frozen=True)
@@ -56,24 +42,6 @@ class ConsolidationLog:
     text: str | None
     path: str
     folder_path: str
-
-
-def read_journal_files(store_dir: Path) -> list[JournalFile]:
-    """List ``journal/<period>.md`` files, NEWEST period first (empty → ``[]``)."""
-    d = journal_dir(store_dir)
-    if not d.exists():
-        return []
-    out: list[JournalFile] = []
-    for path in sorted(d.glob("*.md"), key=lambda p: p.stem, reverse=True):
-        out.append(
-            JournalFile(
-                period=path.stem,
-                text=path.read_text(encoding="utf-8").strip("\n"),
-                path=str(path),
-                folder_path=str(path.parent),
-            )
-        )
-    return out
 
 
 def read_handoff_scenes(store_dir: Path) -> list[HandoffScene]:
@@ -106,11 +74,6 @@ def read_consolidation_log(store_dir: Path) -> ConsolidationLog:
     except OSError:
         text = None
     return ConsolidationLog(text=text, path=str(path), folder_path=str(path.parent))
-
-
-async def journal_for_store(store_name: str, resolved_store: ResolveStoreFn) -> list[JournalFile]:
-    sd = (await resolved_store(store_name)).store_dir
-    return await asyncio.to_thread(read_journal_files, sd)
 
 
 async def handoff_for_store(store_name: str, resolved_store: ResolveStoreFn) -> list[HandoffScene]:

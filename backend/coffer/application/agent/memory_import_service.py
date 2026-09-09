@@ -7,9 +7,9 @@ Coffer's project-scoped memory inbox, then run the internal organizer once.
 
 Cross-kind boundary (Contract 5b): ``application.agent`` may NOT import the
 memory kind, so the memory write/organize/store-name plumbing is reached only
-through ``MemoryImportSinkPort`` — wired by a composition-root adapter, exactly
-like transcript distillation's insight sink. The reader port hides the infra
-parse/resolution helpers. This module imports neither memory nor infrastructure.
+through ``MemoryImportSinkPort`` — wired by a composition-root adapter. The
+reader port hides the infra parse/resolution helpers. This module imports
+neither memory nor infrastructure.
 """
 
 from __future__ import annotations

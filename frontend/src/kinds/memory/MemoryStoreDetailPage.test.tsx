@@ -2,8 +2,8 @@
 //
 // Exercises the redesigned memory store detail surface (slice 7): the metrics
 // header, the recall box ("one query → one answer"; no mode toggle / fallback),
-// and the five-lane Tabs shell — Knowledge / Rules / Journal / Handoff /
-// Changelog. Knowledge is the default tab: the page-fetched fact list → a
+// and the Tabs shell — the three lanes Knowledge / Rules / Handoff plus the
+// consolidation Changelog view. Knowledge is the default tab: the page-fetched fact list → a
 // READ-ONLY preview (select a fact on the left; the right pane renders the
 // Markdown with FileActions + delete, no in-app editing), with recall filtering
 // it. Switching tabs lazily renders each lane. The `./api` module is mocked so
@@ -24,7 +24,6 @@ vi.mock("./api", async (importOriginal) => ({
   getMemoryStore: vi.fn(),
   getMemoryStoreMetrics: vi.fn(),
   getMemoryRules: vi.fn(),
-  getMemoryJournal: vi.fn(),
   getMemoryHandoff: vi.fn(),
   getMemoryConsolidationLog: vi.fn(),
   addFact: vi.fn(),
@@ -77,7 +76,6 @@ function stubLists() {
   vi.mocked(api.getMemoryStoreMetrics).mockResolvedValue({ fact_count: 1, disk_bytes: 50 });
   // Lane reads default to empty/null so the lanes render without a backend.
   vi.mocked(api.getMemoryRules).mockResolvedValue({ text: null });
-  vi.mocked(api.getMemoryJournal).mockResolvedValue({ files: [] });
   vi.mocked(api.getMemoryHandoff).mockResolvedValue({ scenes: [] });
   vi.mocked(api.getMemoryConsolidationLog).mockResolvedValue({
     text: null,
@@ -119,12 +117,11 @@ describe("MemoryStoreDetailPage", () => {
     expect(await screen.findByText("uses tabs over spaces")).toBeInTheDocument();
   });
 
-  test("renders the five-lane Tabs shell", async () => {
+  test("renders the three lanes plus the changelog view", async () => {
     stubLists();
     renderPage();
     expect(await screen.findByRole("tab", { name: "Knowledge" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Rules" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Journal" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Handoff" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Changelog" })).toBeInTheDocument();
   });
@@ -135,16 +132,6 @@ describe("MemoryStoreDetailPage", () => {
     await selectTab("Rules");
     expect(await screen.findByText(/no rules yet/i)).toBeInTheDocument();
     await waitFor(() => expect(api.getMemoryRules).toHaveBeenCalledWith("global"));
-  });
-
-  test("switching to the Journal tab shows the period list / empty-state", async () => {
-    stubLists();
-    vi.mocked(api.getMemoryJournal).mockResolvedValue({
-      files: [{ period: "2026-06", text: "june", path: "/p/2026-06.md", folder_path: "/p" }],
-    });
-    renderPage();
-    await selectTab("Journal");
-    expect(await screen.findByText("2026-06")).toBeInTheDocument();
   });
 
   test("switching to the Handoff tab shows the branch list", async () => {

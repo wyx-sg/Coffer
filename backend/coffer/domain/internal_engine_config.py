@@ -1,7 +1,7 @@
 """The single, global internal-engine model selection (spec 011 amendment
 2026-06-22b).
 
-Coffer's own internal LLM engine (memory organizer / reorg / distill)
+Coffer's own internal LLM engine (memory organizer / reorg / merge)
 runs on the connection flagged ``internal_default`` for its
 endpoint + key + wire, but the MODEL it uses is chosen separately here — the
 connection no longer carries a model. ``model`` is ``None`` until the operator

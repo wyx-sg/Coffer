@@ -4,7 +4,7 @@
 
 - **Status:** Accepted
 - **Spec:** [004-agent-registry](../../specs/004-agent-registry/spec.md) (FR-040 native-memory scan, FR-041 import/adopt), [007-memory](../../specs/007-memory/spec.md) (the organizer that transforms imported facts)
-- **Related:** [ADR-020](./ADR-020-transcript-distillation.md) (read transcripts → write memory facts — the same read-foreign, write-Coffer shape), [ADR-026](./ADR-026-memory-via-mcp-not-native-projection.md) (Coffer never writes the agent's native memory files), [ADR-013](./ADR-013-agent-native-shared-memory.md) (agent-native shared memory), Spec 004 (agent registry — read-only workspace invariant)
+- **Related:** [ADR-026](./ADR-026-memory-via-mcp-not-native-projection.md) (Coffer never writes the agent's native memory files), [ADR-013](./ADR-013-agent-native-shared-memory.md) (agent-native shared memory), Spec 004 (agent registry — read-only workspace invariant)
 
 ## Context
 
@@ -69,14 +69,14 @@ The result reports `imported`, `skipped`, `store`, `project_path`, and
 consequences: memory facts are already shared over the MCP `recall` gateway
 (Spec 007) and synced over git (ADR-016).
 
-### Architecture — a composition-root boundary, like `distill`
+### Architecture — a composition-root boundary
 
 The import slice is the boundary site where the `agent`, `memory`, and
 `organizer` kinds meet. `application.agent` may not import the memory kind
 (import-linter Contract 5b), so the memory write / organize / store-name plumbing
 is reached only through a composition-root sink adapter wired in
-`native_memory_import_wiring.py` (mirroring `distill_wiring.py`). The wiring must
-run AFTER `wire_organize` so the organizer is reachable.
+`native_memory_import_wiring.py`. The wiring must run AFTER `wire_organize` so
+the organizer is reachable.
 
 ### Invariants
 
@@ -153,4 +153,15 @@ already surfaces.
   organizer and memory write events.
 - The slug-encoding and transcript `.jsonl` formats are undocumented; the
   path-resolution adapters are defensive and must be revisited if Claude Code
-  changes its on-disk layout.
+  changes its on-disk layout. (Reading a sibling `.jsonl` only to recover a
+  project `cwd` is local to this slice and survives the removal of transcript
+  distillation.)
+
+## Revision history
+
+- **2026-09-09** — Transcript distillation was removed from Coffer, so this ADR
+  no longer points at it as the sibling read-foreign / write-Coffer flow, and the
+  `distill_wiring.py` mirror is gone. The decision is unchanged: native-memory
+  import is now the only flow that reads an agent's own files and writes Coffer
+  memory facts, and it remains explicitly user-triggered — nothing writes memory
+  on its own any more.

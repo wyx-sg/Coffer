@@ -1,8 +1,9 @@
 // frontend/src/kinds/memory/MemoryStoreDetailPage.tsx
 //
 // Memory store detail surface (spec 007 slice 7): a back link + header (scope +
-// metric badges + Clear all), a recall box, and a Tabs shell of FIVE read-only
-// lanes — Knowledge / Rules / Journal / Handoff / Changelog. Knowledge is the
+// metric badges + Clear all), a recall box, and a Tabs shell over the three
+// read-only lanes — Knowledge / Rules / Handoff — plus the consolidation
+// changelog, which is a view rather than a lane (FR-053). Knowledge is the
 // fact tree + read-only preview (recall filters it); the other lanes are
 // shape-fit views over the store's curated files, all rendered through the
 // unified file preview (never a hand-styled <pre>). Memory is AI-authored —
@@ -29,7 +30,6 @@ import { MemoryRenameDialog } from "./MemoryRenameDialog";
 import { MemoryRecallPanel } from "./MemoryRecallPanel";
 import { MemoryKnowledgeLane } from "./MemoryKnowledgeLane";
 import { MemoryRulesLane } from "./MemoryRulesLane";
-import { MemoryJournalLane } from "./MemoryJournalLane";
 import { MemoryHandoffLane } from "./MemoryHandoffLane";
 import { MemoryChangelogLane } from "./MemoryChangelogLane";
 
@@ -104,7 +104,6 @@ export function MemoryStoreDetailPage() {
         <TabsList>
           <TabsTrigger value="knowledge">{t("memory.detail.tabs.knowledge")}</TabsTrigger>
           <TabsTrigger value="rules">{t("memory.detail.tabs.rules")}</TabsTrigger>
-          <TabsTrigger value="journal">{t("memory.detail.tabs.journal")}</TabsTrigger>
           <TabsTrigger value="handoff">{t("memory.detail.tabs.handoff")}</TabsTrigger>
           <TabsTrigger value="changelog">{t("memory.detail.tabs.changelog")}</TabsTrigger>
         </TabsList>
@@ -119,9 +118,6 @@ export function MemoryStoreDetailPage() {
         </TabsContent>
         <TabsContent value="rules" className="pt-4">
           <MemoryRulesLane store={store} />
-        </TabsContent>
-        <TabsContent value="journal" className="pt-4">
-          <MemoryJournalLane store={store} />
         </TabsContent>
         <TabsContent value="handoff" className="pt-4">
           <MemoryHandoffLane store={store} />

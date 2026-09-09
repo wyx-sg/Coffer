@@ -7,7 +7,7 @@
 - **Deciders:** Yuxing Wu
 - **Spec:** [008-agent-chat](../../specs/008-agent-chat/spec.md) and [004-agent-registry](../../specs/004-agent-registry/spec.md) (repositioning + capability move — no new spec number; both `spec.md` files are updated before implementation)
 - **Supersedes:** the "converse with the vault through the `builtin` agent" half of [ADR-021](./ADR-021-chat-as-vault-console.md); **amends** [ADR-018](./ADR-018-tool-retrieval-for-overload.md) (search-tools ranking)
-- **Related:** [007-memory](../../specs/007-memory/spec.md), [006-knowledge-base](../../specs/006-knowledge-base/spec.md), [ADR-012](./ADR-012-files-as-truth-sqlite-retrieval.md), [ADR-020](./ADR-020-transcript-distillation.md)
+- **Related:** [007-memory](../../specs/007-memory/spec.md), [006-knowledge-base](../../specs/006-knowledge-base/spec.md), [ADR-012](./ADR-012-files-as-truth-sqlite-retrieval.md)
 
 ## Context
 
@@ -29,8 +29,9 @@ Meanwhile the `builtin` model's _only_ exclusive consumer is that chat persona.
 An audit of what actually uses the local LLM machinery:
 
 - **`coffer__search_tools`** (ADR-018) — a pure BM25-lite ranker. **No LLM.**
-- **Transcript distillation** (ADR-020) — uses a one-shot LLM completion
-  (`LangchainLlmCompletion`) against _any_ configured model, not the chat loop.
+- **Memory organization and store merge** (spec 007) — use a one-shot LLM
+  completion (`LangchainLlmCompletion`) against _any_ configured model, not the
+  chat loop.
 - **The `builtin` chat agent** — the only thing that needs the LangGraph ReAct
   loop, and the only thing that puts a model in front of the user as a persona.
 
@@ -64,14 +65,15 @@ capabilities.** Three moves.
 - The `/agents/builtin` detail page is removed. Its one still-meaningful piece —
   the local model configuration — moves to **Settings → Models**, reframed from
   "models used by Coffer Assistant" to **"Coffer's internal model"** that powers
-  retrieval, memory reorganization, and distillation.
+  retrieval and memory reorganization.
 
 ### 3. The local model becomes the engine for internal capabilities
 
 The LLM machinery is **kept but repurposed**, never user-facing:
 
 - **Keep** the model factory (`langchain_models.py`) and the one-shot completion
-  (`llm_completion.py`) — distillation already depends on them.
+  (`llm_completion.py`) — memory organization and store merge already depend on
+  them.
 - **Remove** the chat-facing pieces: the `builtin` chat provider, its registry
   entry, and the chat-event mapping.
 - **Keep** the ReAct loop as an internal-only engine (memory reorganization,
@@ -96,8 +98,8 @@ which candidates it sees.
 ### Invariants
 
 - **No user-facing built-in persona.** The local model is reachable only as
-  `coffer__*` tools (and internal flows like distillation), never as a chat
-  agent or a thing the UI presents as an assistant.
+  `coffer__*` tools (and internal flows like memory organization), never as a
+  chat agent or a thing the UI presents as an assistant.
 - **Additive, auditable tools.** The upgraded `coffer__search_tools` is
   advertised in `tools/list` like any `coffer__` built-in, logged in the
   invocation log (who/when/how-long/outcome, no args/results), and degrades
@@ -116,10 +118,10 @@ which candidates it sees.
 
 ### B — Remove the built-in agent _and_ delete all LLM machinery now
 
-**Rejected.** Distillation already depends on the model factory + one-shot
-completion, and memory reorganization (spec 007) is a real internal consumer of
-the ReAct substrate. Deleting it would orphan both. We delete only the
-chat-facing shell.
+**Rejected.** Memory organization and store merge already depend on the model
+factory + one-shot completion, and memory reorganization (spec 007) is a real
+internal consumer of the ReAct substrate. Deleting it would orphan both. We
+delete only the chat-facing shell.
 
 ### C — Keep `coffer__search_tools` BM25-only; do not add an embedder path
 
@@ -147,14 +149,20 @@ keeps the very "built-in agent is a thing" framing this ADR removes.
   card are removed; Settings → Models is reframed as Coffer's internal model.
 - CLI: the `coffer chat` command (the built-in agent's terminal chat) is removed;
   `coffer model` and the rest of the CLI are unchanged.
-- LangGraph/LangChain stay as **internal** dependencies (distillation + memory
-  reorganization); the chat-event mapping and `builtin` chat provider are
+- LangGraph/LangChain stay as **internal** dependencies (memory reorganization
+  + store merge); the chat-event mapping and `builtin` chat provider are
   deleted.
 - No new persisted state beyond what Settings → Models already stores; no
   migration.
 
 ## Revision history
 
+- **2026-09-09** — Transcript distillation removed. It was one of the two
+  internal consumers this ADR cited to justify keeping the LLM machinery after
+  the chat persona left; the surviving consumers named above (memory
+  organization, store merge, and the ReAct reorganization engine) carry that
+  justification on their own, so **the decision is unchanged** — only the
+  examples are.
 - **2026-09-09** — `coffer__ask` removed. The agentic-RAG capability this ADR
   delivered as capability (b) is gone: the ReAct loop survives only as the
   internal memory-reorganization engine it also describes. The callers of

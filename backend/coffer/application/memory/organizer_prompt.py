@@ -1,7 +1,6 @@
 """Prompt builder + JSON parser for the memory organizer's one-shot merge.
 
-Clones the distillation prompt pattern (``application/distill/prompt.py``):
-manual structured output — strip ``` fences, ``json.loads``, validate keys —
+Manual structured output — strip ``` fences, ``json.loads``, validate keys —
 never ``with_structured_output``. A malformed response parses to ``None`` so the
 organizer SKIPS the item (leaves it in the inbox) rather than writing or
 corrupting a topic doc.

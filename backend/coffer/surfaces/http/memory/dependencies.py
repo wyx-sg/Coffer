@@ -1,15 +1,12 @@
 """Dependency providers for the memory-store side-repos.
 
 Extracted from the kind-agnostic ``surfaces/http/dependencies`` so that core
-stays under its file-size budget (mirrors how chat / distill DI live in their
-own surface modules). These hold the two tiny ``store_name``-keyed repos that
+stays under its file-size budget (mirrors how chat DI lives in its own
+surface module). These hold the two tiny ``store_name``-keyed repos that
 the memory routes read and ``wiring`` populates at startup:
 
 - ``ProjectRootRepo`` — the originating git-root (FR-017a readable identity).
 - ``StoreLabelRepo`` — a user-set display label (FR-017c).
-
-It also holds the ``JournalService`` provider (spec 007 journal lane); the distill
-sink reaches it via ``dependencies.get_journal_service`` (re-exported there).
 """
 
 from __future__ import annotations
@@ -18,7 +15,6 @@ from typing import Any
 
 _project_root_repo: Any | None = None
 _store_label_repo: Any | None = None
-_journal_service: Any | None = None
 
 
 def set_project_root_repo(repo: Any) -> None:
@@ -41,14 +37,3 @@ def get_store_label_repo() -> Any:
     if _store_label_repo is None:
         raise RuntimeError("store-label repo not initialised")
     return _store_label_repo
-
-
-def set_journal_service(svc: Any) -> None:
-    global _journal_service
-    _journal_service = svc
-
-
-def get_journal_service() -> Any:
-    if _journal_service is None:
-        raise RuntimeError("journal service not initialised")
-    return _journal_service

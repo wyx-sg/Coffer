@@ -3,7 +3,7 @@
 > English: [ADR-037-rules-runtime-injection.md](ADR-037-rules-runtime-injection.md)
 
 **Status**: Accepted
-**Date**: 2026-06-22
+**Date**: 2026-06-22（2026-09-09 修订，见「修订历史」）
 **Deciders**: Yuxing Wu
 **Related**: spec `007-memory`（FR-049–FR-052）；基于 [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md)（记忆经 MCP，而非原生投射）；参考 [`docs/research/memory-systems-landscape.zh.md`](../research/memory-systems-landscape.zh.md)
 
@@ -21,14 +21,10 @@ Coffer 已交付 MCP 底座（`recall`/`remember`）与一条过程性 **rules l
 后者被**有意排除在 `recall` 之外**，因为 rules 本就该**环境式交付**，而非靠一个想起来搜索的模型去发现。
 没有注入机制，rules lane 就只写不读：agent 永远不读它。
 
-两个外部事实决定了机制：
-
-1. **Claude Code 与 Codex 都有 SessionStart hook**，且共用同一套 JSON schema（顶层 `hooks` 键；
-   Claude Code 在 `~/.claude/settings.json`，Codex 在 `~/.codex/hooks.json`）。hook 打印
-   `{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": …}}`，不能阻塞
-   agent，且在 resume/clear/compact 时重跑。这正是一个不碰任何记忆或指令文件的环境式上下文通道。
-2. **只有 Claude Code 有 SessionEnd hook。** Codex 不发 session-end 事件（只有每轮的 `Stop`）。
-   故即时的关闭即蒸馏对 Claude Code 可用、对 Codex 不可用 —— 这是设计必须吸收而非对抗的不对称。
+一个外部事实决定了机制：**Claude Code 与 Codex 都有 SessionStart hook**，且共用同一套 JSON schema
+（顶层 `hooks` 键；Claude Code 在 `~/.claude/settings.json`，Codex 在 `~/.codex/hooks.json`）。hook 打印
+`{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": …}}`，不能阻塞
+agent，且在 resume/clear/compact 时重跑。这正是一个不碰任何记忆或指令文件的环境式上下文通道。
 
 ## Decision
 
@@ -50,11 +46,6 @@ Coffer 已交付 MCP 底座（`recall`/`remember`）与一条过程性 **rules l
   (a) 调 `coffer__resume()` 接续此前工作，(b) 一条软引导，优先用 `coffer__remember`/`coffer__recall`
   而非 agent 的原生记忆。**handoff 正文本身不被注入** —— 它经 `coffer__resume`（FR-025）按需拉取，
   于是 bundle 保持精简、陈旧现场绝不被硬塞进上下文。
-- **SessionEnd 蒸馏，仅 Claude Code（FR-051）。** Coffer 为 Claude Code 安装一个 SessionEnd hook，
-  关闭时调 `POST /api/v1/agents/{name}/sessions/{session_id}/end`；daemon 把刚关闭的会话蒸馏进
-  journal 记忆带，复用 slice-3b 蒸馏路径与 FR-046 `distilled_sessions` 幂等账本（绝不重复蒸馏，
-  已蒸馏 / 无模型 / 非 git 项目时为 no-op）。**Codex 不安装 SessionEnd hook**，退回到 FR-046 补扫
-  —— 补扫仍是写入保证；hook 只降低延迟。
 - **可选 `disable_native_memory`（FR-052）。** 一个 per-agent 配置，**默认 `false`**（Coffer 绝不碰
   原生记忆 —— ADR-026 姿态）。打开时 Coffer 原子写入 agent 的原生记忆关闭开关（Claude Code
   `autoMemoryEnabled=false`；Codex `features.memories=false` + `memories.generate_memories=false`），
@@ -69,16 +60,13 @@ Coffer 已交付 MCP 底座（`recall`/`remember`）与一条过程性 **rules l
 - **不侵入（仍是 ADR-026）。** 注入的 bundle 是上下文而非写文件；hook 条目可逆且只识别 Coffer
   自己那行。只有用户显式启用 `disable_native_memory` 时才碰原生记忆。
 - **结构性稳健。** 无 hook 或注入失败绝不阻塞 agent（退出 0）；无论 `disable_native_memory` 开关如何，
-  规则 bundle 与 session-end 蒸馏都照常工作。
-- **Claude Code 上更低延迟的捕获**（经 SessionEnd hook），而 FR-046 补扫为两个 agent 守住写入保证。
+  规则 bundle 都照常工作。
 
 **Negative**
 
 - **per-agent hook 形态维护。** Coffer 现在要跟踪每个 agent 的 hooks 配置形态与原生记忆关闭开关 ——
   一个会随上游格式演进而漂移的小面（缓解：幂等、按 basename 限定的安装；两个 agent 今天共用 SessionStart
   JSON schema）。
-- **Codex 不对称。** Codex 没有关闭即蒸馏；其会话只由周期性补扫捕获，故捕获延迟高于 Claude Code。
-  接受 —— 补扫是保证；hook 是延迟优化，不是正确性要求。
 - **bundle 大小上限。** `additionalContext` 有界（约 10k 字符）；超大 rules lane 可能被截断。暂时接受
   （rules 本就该少而持久；organizer 让 lane 保持精简）。
 
@@ -94,6 +82,13 @@ Coffer 已交付 MCP 底座（`recall`/`remember`）与一条过程性 **rules l
 **纯 MCP —— 让 agent 按需 `recall` 规则。** 对 rules 特别地否决：rules 是必须在 agent 动作前在场的
 祈使性引导，而非只在它想起来搜索时才取回。这正是 rules lane 被排除在 `recall` 之外、改由注入交付的原因。
 
-**用每轮 `Stop` 事件在 Codex 上近似 SessionEnd。** 否决：`Stop` 每轮都触发、不在会话关闭时触发，
-故要么过度蒸馏、要么需要自己的 settle/debounce 逻辑 —— 重复 FR-046 补扫，而后者已干净地解决
-「已结束、尚未蒸馏、幂等」。Codex 复用补扫。
+## 修订历史
+
+- **2026-06-22** —— 初版决定：SessionStart 规则注入、handoff 按需拉取、一个仅 Claude Code 的
+  SessionEnd hook（把刚关闭的会话蒸馏进 journal 记忆带），以及可选的 `disable_native_memory` 开关。
+- **2026-09-09** —— transcript 蒸馏与 journal 记忆带已从 Coffer 移除，故本 ADR 中一切关于 SessionEnd
+  蒸馏的内容（FR-051、Codex 延迟不对称、以及被否决的每轮 `Stop` 近似）一并删除。现在没有任何东西
+  会自动写记忆：agent 用 `coffer__remember` 记下事实，用 `coffer__recall` 取回。这更简单、更可预测，
+  同时也是一次真实的取舍 —— 蒸馏本身是跑得通的（已蒸馏 1,320 个会话、journal 有 4,669 条），
+  它被移除是因为它所喂养的「摄取 → 交付」闭环已不再端到端存在，而不是因为它失败了。
+  **上文的 SessionStart 规则注入决定依然成立、未变**，也正是本 ADR 现在所记录的内容。

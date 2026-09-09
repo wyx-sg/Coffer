@@ -9,10 +9,10 @@ Two layers:
   JSON verdict, malformed → skip). No internal engine → ``engine="no_model"``
   and deterministic proposals only. The scan never mutates anything.
 - ``merge()`` executes one confirmed pair through the existing additive
-  consolidation machinery (``StoreConsolidator.merge`` — journal dedupe,
-  collision suffixing, label/root carry-over, FR-058 aliases, reconcile,
-  retire), records the audit entry, then optionally runs the FR-033 reorg
-  pass on the survivor (FR-059) — merge success never depends on it.
+  consolidation machinery (``StoreConsolidator.merge`` — collision suffixing,
+  label/root carry-over, FR-058 aliases, reconcile, retire), records the audit
+  entry, then optionally runs the FR-033 reorg pass on the survivor (FR-059) —
+  merge success never depends on it.
 """
 
 from __future__ import annotations

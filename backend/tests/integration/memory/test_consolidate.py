@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pathlib
-from datetime import UTC, datetime
 
 import pytest
 
@@ -13,35 +12,20 @@ from coffer.domain.errors import ResourceNotFound
 from coffer.domain.memory.config import MemoryStoreConfig
 from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.knowledge import paths
-from coffer.infrastructure.knowledge.paths import journal_path, topic_path
-from coffer.infrastructure.memory.journal_files import append_entry, read_entries
+from coffer.infrastructure.knowledge.paths import topic_path
 from coffer.infrastructure.memory.project_root_repo import ProjectRootRepo
 from coffer.infrastructure.memory.scope_fs import project_ulid
 from coffer.infrastructure.memory.store_label_repo import StoreLabelRepo
 
 
-def _ts(day: int, hour: int) -> datetime:
-    return datetime(2026, 7, day, hour, tzinfo=UTC)
+def _write_topic(store_dir: pathlib.Path, slug: str, body: str) -> None:
+    """Write a raw ``knowledge/<slug>.md`` lane file (the merge is byte-level)."""
+    path = topic_path(store_dir, slug)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(body, encoding="utf-8")
 
 
 # ----- pure-fs merge_store_dir -----
-
-
-def test_merge_journal_dedupes_by_timestamp_and_keeps_both_days(tmp_path):
-    src, dst = tmp_path / "src", tmp_path / "dst"
-    # dst already has a 07-01 entry; src has a duplicate 07-01 ts + a new one + a new day
-    append_entry(journal_path(dst, "2026-07-01"), timestamp=_ts(1, 10), body="orig")
-    append_entry(journal_path(src, "2026-07-01"), timestamp=_ts(1, 10), body="orig")  # dup ts
-    append_entry(journal_path(src, "2026-07-01"), timestamp=_ts(1, 12), body="new-same-day")
-    append_entry(journal_path(src, "2026-07-05"), timestamp=_ts(5, 9), body="new-day")
-
-    merged = merge_store_dir(src, dst, tag="ABCDE")
-
-    day1 = [e.body for e in read_entries(journal_path(dst, "2026-07-01"))]
-    assert day1 == ["orig", "new-same-day"]  # duplicate ts collapsed, order preserved
-    day5 = [e.body for e in read_entries(journal_path(dst, "2026-07-05"))]
-    assert day5 == ["new-day"]
-    assert merged == 2  # 07-01 file changed + 07-05 file created
 
 
 def test_merge_keeps_both_on_topic_name_collision(tmp_path):
@@ -96,15 +80,15 @@ async def test_consolidator_collapses_stale_worktree_store(mem):
     canonical_dir = paths.memory_store_dir(project_ulid(canonical_root))
     stale_dir = paths.memory_store_dir(project_ulid(stale_root))
 
-    # Canonical store: pre-existing journal entry that MUST survive untouched.
-    append_entry(journal_path(canonical_dir, "2026-07-01"), timestamp=_ts(1, 8), body="canon")
+    # Canonical store: a pre-existing topic that MUST survive untouched.
+    _write_topic(canonical_dir, "shared", "canon\n")
     await mem.resources.register(kind="memory", name=canonical_store, config=cfg, actor="system")
     await roots.set(canonical_store, canonical_root)
 
-    # Stale worktree store: a same-day (distinct ts) + a new-day journal entry, a
-    # knowledge topic, and a user label — none of which may be lost.
-    append_entry(journal_path(stale_dir, "2026-07-01"), timestamp=_ts(1, 15), body="wt-day1")
-    append_entry(journal_path(stale_dir, "2026-07-06"), timestamp=_ts(6, 9), body="wt-day6")
+    # Stale worktree store: a colliding topic + a fresh topic and a user label —
+    # none of which may be lost.
+    _write_topic(stale_dir, "shared", "wt-shared\n")
+    _write_topic(stale_dir, "wt-only", "wt-only\n")
     await mem.resources.register(kind="memory", name=stale_store, config=cfg, actor="system")
     await roots.set(stale_store, stale_root)
     await labels.set(stale_store, "Feature WT")
@@ -128,16 +112,13 @@ async def test_consolidator_collapses_stale_worktree_store(mem):
     assert not stale_dir.exists()
 
     # Canonical store kept its own data and gained the stale store's.
-    day1 = {e.body for e in read_entries(journal_path(canonical_dir, "2026-07-01"))}
-    assert day1 == {"canon", "wt-day1"}  # additive, no clobber
-    day6 = {e.body for e in read_entries(journal_path(canonical_dir, "2026-07-06"))}
-    assert day6 == {"wt-day6"}
+    assert topic_path(canonical_dir, "shared").read_text() == "canon\n"  # no clobber
+    stale_tag = project_ulid(stale_root)[:5]
+    suffixed = canonical_dir / "knowledge" / f"shared--from-{stale_tag}.md"
+    assert suffixed.read_text() == "wt-shared\n"  # additive, both copies kept
+    assert topic_path(canonical_dir, "wt-only").read_text() == "wt-only\n"
     assert await labels.get(canonical_store) == "Feature WT"  # label moved (canon had none)
     assert await roots.get(canonical_store) == canonical_root
-
-    # Reconcile indexed the merged journal into documents.
-    doc = await mem.documents.get_document("memory", canonical_store, "journal-2026-07-06")
-    assert doc is not None
 
 
 @pytest.mark.asyncio
@@ -152,7 +133,7 @@ async def test_consolidator_is_idempotent_and_leaves_canonical_alone(mem):
 
     cfg = MemoryStoreConfig().model_dump(mode="json")
     canonical_dir = paths.memory_store_dir(project_ulid(canonical_root))
-    append_entry(journal_path(canonical_dir, "2026-07-02"), timestamp=_ts(2, 9), body="solo")
+    _write_topic(canonical_dir, "solo", "solo\n")
     await mem.resources.register(kind="memory", name=canonical_store, config=cfg, actor="system")
     await roots.set(canonical_store, canonical_root)
 
@@ -170,7 +151,7 @@ async def test_consolidator_is_idempotent_and_leaves_canonical_alone(mem):
 
     assert first.merged_stores == [] and second.merged_stores == []
     assert await roots.get(canonical_store) == canonical_root
-    assert {e.body for e in read_entries(journal_path(canonical_dir, "2026-07-02"))} == {"solo"}
+    assert topic_path(canonical_dir, "solo").read_text() == "solo\n"
 
 
 @pytest.mark.asyncio

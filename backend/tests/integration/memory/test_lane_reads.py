@@ -1,7 +1,7 @@
-"""Integration: MemoryService lane read methods (Slice 7 four-lane UI).
+"""Integration: MemoryService lane read methods (Slice 7 lane UI).
 
-Pure reads over the real substrate — journal / handoff / consolidation-log
-lanes. Populated store → ordered entries; empty store → empty/None, never an
+Pure reads over the real substrate — handoff / consolidation-log lanes.
+Populated store → ordered entries; empty store → empty/None, never an
 error. The HTTP routes (test_lane_routes.py) wrap the same reads.
 """
 
@@ -14,13 +14,8 @@ import pytest
 
 from coffer.application.memory import lane_reads
 from coffer.application.memory.scope import GLOBAL_STORE_NAME
-from coffer.infrastructure.knowledge.paths import (
-    consolidation_log_path,
-    handoff_path,
-    journal_path,
-)
+from coffer.infrastructure.knowledge.paths import consolidation_log_path, handoff_path
 from coffer.infrastructure.memory.handoff_files import write_handoff
-from coffer.infrastructure.memory.journal_files import append_entry
 
 pytestmark = pytest.mark.asyncio
 
@@ -29,39 +24,6 @@ async def _global_store_dir(mem) -> Path:
     """Provision the global store and return its on-disk dir."""
     await mem.service.ensure_store(GLOBAL_STORE_NAME)
     return (await mem.service.resolved_store(GLOBAL_STORE_NAME)).store_dir
-
-
-# --- journal ----------------------------------------------------------------
-
-
-@pytest.mark.acceptance(
-    spec="007-memory",
-    scenario="journal lane entries are readable for a store",
-)
-async def test_read_journal_newest_period_first(mem) -> None:
-    store_dir = await _global_store_dir(mem)
-    append_entry(
-        journal_path(store_dir, "2026-05"),
-        timestamp=datetime(2026, 5, 1, tzinfo=UTC),
-        body="May event",
-    )
-    append_entry(
-        journal_path(store_dir, "2026-06"),
-        timestamp=datetime(2026, 6, 1, tzinfo=UTC),
-        body="June event",
-    )
-
-    files = await lane_reads.journal_for_store(GLOBAL_STORE_NAME, mem.service.resolved_store)
-
-    assert [f.period for f in files] == ["2026-06", "2026-05"]
-    assert "June event" in files[0].text
-    assert files[0].path == str(journal_path(store_dir, "2026-06"))
-    assert files[0].folder_path == str(journal_path(store_dir, "2026-06").parent)
-
-
-async def test_read_journal_empty_store(mem) -> None:
-    await _global_store_dir(mem)
-    assert await lane_reads.journal_for_store(GLOBAL_STORE_NAME, mem.service.resolved_store) == []
 
 
 # --- handoff ----------------------------------------------------------------

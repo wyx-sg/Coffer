@@ -60,22 +60,6 @@ def test_session_context_unknown_agent_404(tmp_path, monkeypatch):
         assert r.status_code == 404, r.text
 
 
-def test_session_end_unknown_session_is_noop_200(tmp_path, monkeypatch):
-    app, _ = _app(tmp_path, monkeypatch, 59812)
-    with _client(app) as c:
-        _register_claude(c, tmp_path)
-        r = c.post("/api/v1/agents/cc/sessions/no-such/end", json={"cwd": str(tmp_path)})
-        assert r.status_code == 200, r.text
-        assert r.json()["outcome"] in {"not_found", "no_model", "skipped"}
-
-
-def test_session_end_unknown_agent_404(tmp_path, monkeypatch):
-    app, _ = _app(tmp_path, monkeypatch, 59813)
-    with _client(app) as c:
-        r = c.post("/api/v1/agents/nope/sessions/s1/end", json={})
-        assert r.status_code == 404, r.text
-
-
 def test_hook_install_lifecycle(tmp_path, monkeypatch):
     app, hook = _app(tmp_path, monkeypatch, 59814)
     with _client(app) as c:

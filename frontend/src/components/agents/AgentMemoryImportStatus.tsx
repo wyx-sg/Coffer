@@ -2,7 +2,7 @@
 // Maps a native-memory store's import_status (queued | running | error) to the
 // shared StatusBadge. Idle/finished stores carry no in-flight status, so they
 // render a neutral "—" placeholder. Kept apart so AgentMemoryTab stays within
-// its size budget (mirrors AgentConversationsStatus).
+// its size budget (mirrors KnowledgeBaseDocStatus).
 import { useTranslation } from "react-i18next";
 
 import { StatusBadge, type StatusTone } from "@/components/StatusBadge";

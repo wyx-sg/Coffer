@@ -3,7 +3,7 @@
 // Shared read-only "list → preview" lane for the memory store detail page: a
 // left list of files (DocRow pattern from the KB doc tree) → select → the
 // selected file's Markdown rendered through the unified preview with an
-// open / reveal / delete toolbar. Journal, Handoff, Rules and Changelog all
+// open / reveal / delete toolbar. Handoff, Rules and Changelog all
 // flow through this; each maps its rows to the common item shape and passes a
 // delete handler that calls the matching api.ts helper. Single-doc lanes
 // (Rules/Changelog) pass exactly one item. Never a hand-styled <pre>: the body
@@ -21,7 +21,7 @@ import { MemoryPreviewBody } from "./MemoryPreviewBody";
 
 export interface LaneItem {
   id: string;
-  /** Primary row label (e.g. a journal period or a handoff branch). */
+  /** Primary row label (e.g. a handoff branch). */
   title: string;
   /** Optional secondary line (e.g. a relative/absolute timestamp). */
   subtitle?: string;

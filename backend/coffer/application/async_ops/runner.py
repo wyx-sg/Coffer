@@ -1,8 +1,8 @@
 """Bounded async worker pool for non-blocking operations.
 
 Drains an ``asyncio.Queue`` of work items with a fixed concurrency cap so a batch
-(e.g. distilling hundreds of transcripts, each a live LLM call) cannot saturate
-the internal engine. ``enqueue`` records the item as queued and returns
+(e.g. re-embedding hundreds of KB documents, each a live embedding call) cannot
+saturate the engine. ``enqueue`` records the item as queued and returns
 immediately; a worker marks it running, invokes the supplied coroutine factory,
 clears the registry entry on success, or records the error on failure.
 

@@ -1,8 +1,8 @@
 """Composition root for native-memory ADOPTION (spec 004, FR-041).
 
 Wires ``AgentMemoryImportService`` — the slice that imports a coding agent's OWN
-native per-project memory into Coffer memory. Like ``distill_wiring``, this is the
-boundary site where ``agent`` + ``memory`` + ``organizer`` meet: ``application.agent``
+native per-project memory into Coffer memory. This is the boundary site where
+``agent`` + ``memory`` + ``organizer`` meet: ``application.agent``
 may not import the memory kind (Contract 5b), so the memory write/organize/store-name
 plumbing is reached only through a composition-root sink adapter.
 

@@ -12,12 +12,10 @@ import {
   deleteConsolidationLog,
   deleteFact,
   deleteHandoffBranch,
-  deleteJournalPeriod,
   deleteMemoryRules,
   getFact,
   getMemoryConsolidationLog,
   getMemoryHandoff,
-  getMemoryJournal,
   getMemoryRules,
   getMemoryStore,
   getMemoryStoreMetrics,
@@ -165,14 +163,6 @@ describe("deleteFact", () => {
 });
 
 describe("lane deletes", () => {
-  test("deleteJournalPeriod DELETEs /journal/<period> (period encoded)", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({}));
-    await deleteJournalPeriod("prefs", "2026-06");
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${BASE}/memory_stores/prefs/journal/2026-06`);
-    expect(init?.method).toBe("DELETE");
-  });
-
   test("deleteHandoffBranch DELETEs /handoff/<branch> (branch encoded)", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({}));
     await deleteHandoffBranch("prefs", "feat/x");
@@ -201,7 +191,7 @@ describe("lane deletes", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       notOkJson(404, { error: { code: "MEMORY_NOT_FOUND", message: "no such file" } }),
     );
-    const err = await deleteJournalPeriod("prefs", "ghost").catch((e) => e);
+    const err = await deleteHandoffBranch("prefs", "ghost").catch((e) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect((err as ApiError).code).toBe("MEMORY_NOT_FOUND");
   });
@@ -298,26 +288,6 @@ describe("getMemoryRules", () => {
     const err = await getMemoryRules("ghost").catch((e) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect((err as ApiError).code).toBe("MEMORY_NOT_FOUND");
-  });
-});
-
-describe("getMemoryJournal", () => {
-  test("GETs /memory_stores/<name>/journal and returns the files list", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      okJson({
-        files: [{ period: "2026-06", text: "june", path: "/p/2026-06.md", folder_path: "/p" }],
-      }),
-    );
-    const out = await getMemoryJournal("prefs");
-    expect(out.files).toHaveLength(1);
-    expect(out.files[0].period).toBe("2026-06");
-    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/memory_stores/prefs/journal`);
-  });
-
-  test("URL-encodes the store name", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({ files: [] }));
-    await getMemoryJournal("store with space");
-    expect(fetchMock.mock.calls[0][0]).toContain("store%20with%20space");
   });
 });
 

@@ -40,7 +40,7 @@
 
 `POST /api/v1/memory_stores/merge` 传 `{source, target}`（及 `coffer memory merge <source> <target>`），用**既有的增量合并机制**（`merge_store_dir`——启动合并 / 收养同款原语）归并两个项目库：
 
-- journal 文件按时间戳去重逐条内容合并；派生文件跳过；其余同名冲突**两份都保留**（加后缀）——记忆只增不失。
+- 派生文件跳过；同名冲突**两份都保留**（加后缀）——记忆只增不失。（按时间戳逐条去重曾用于 `journal` lane，该 lane 已随其唯一写入方——转录蒸馏——一并移除。）
 - source 的显示标签在 target 无标签时移交；`project_root` 映射同理。
 - target 强制 reconcile 使 recall 反映合并后的事实；source 库裁撤（资源删除级联文档 / 索引 / 目录）；记录一条 `memory_stores_merged` 审计（只含库名与计数）。
 - 校验：`source` 与 `target` 必须是**互异、存在的项目库**——全局库永不可合并；违规返回 4xx 且无副作用。
@@ -78,4 +78,4 @@
 
 ## 测试计划
 
-单元：裁决 prompt 构建 / 解析（去 fence、格式不合法 → 跳过）、候选配对与确定性层、方向启发式、别名传递逻辑、`MemoryStoreConfig.merged_identities` 往返。集成：合并端点对真实库端到端（文件增量搬移、journal 去重、标签 / root 移交、source 裁撤、审计落盘）、resolve 别名改道（被合并身份的 checkout 下 `remember` 落进幸存库）、桩引擎端口下的扫描（确定性 + 引擎两层、no_model 降级）、CLI 子命令。合同：OpenAPI 漂移。四个新场景挂验收标记。
+单元：裁决 prompt 构建 / 解析（去 fence、格式不合法 → 跳过）、候选配对与确定性层、方向启发式、别名传递逻辑、`MemoryStoreConfig.merged_identities` 往返。集成：合并端点对真实库端到端（文件增量搬移、标签 / root 移交、source 裁撤、审计落盘）、resolve 别名改道（被合并身份的 checkout 下 `remember` 落进幸存库）、桩引擎端口下的扫描（确定性 + 引擎两层、no_model 降级）、CLI 子命令。合同：OpenAPI 漂移。四个新场景挂验收标记。

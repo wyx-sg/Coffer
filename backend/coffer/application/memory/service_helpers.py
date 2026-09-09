@@ -18,9 +18,8 @@ from coffer.domain.errors import MemoryRejected
 from coffer.domain.knowledge.document import Document
 from coffer.domain.knowledge.retrieval import GrepHit, MemoryHit, Passage
 from coffer.domain.memory.scope import ResolvedScope
-from coffer.infrastructure.knowledge.paths import journal_dir, knowledge_dir
+from coffer.infrastructure.knowledge.paths import knowledge_dir
 from coffer.infrastructure.memory.files import read_fact_file
-from coffer.infrastructure.memory.journal_files import journal_doc_id
 
 
 def validate_fact(body: str, max_chars: int) -> None:
@@ -87,25 +86,18 @@ def grep_hits_to_memory_hits(hits: Sequence[GrepHit], resolved: ResolvedScope) -
     NEVER surface in recall: the ``handoff/`` / ``rules/`` sibling lanes, the
     ``superseded/`` tombstone, facts abandoned at the store root by a pre-lane
     build, and a leftover legacy ``MEMORY.md``. Recall therefore keeps ONLY hits
-    inside the two searchable lanes — the ``knowledge/`` lane (semantic facts) and
-    the ``journal/`` lane (episodic events, FR-043) — and skips everything else.
-    Knowledge hits are parsed as fact files (id/updated_at from frontmatter);
-    journal hits are NOT fact files, so they're keyed per period file."""
+    inside the single searchable lane — ``knowledge/`` (semantic facts), parsed
+    as fact files (id/updated_at from frontmatter) — and skips everything else."""
     out: list[MemoryHit] = []
     seen: set[str] = set()
     knowledge_root = knowledge_dir(resolved.store_dir).resolve()
-    journal_root = journal_dir(resolved.store_dir).resolve()
     for h in hits:
         path = Path(h.path)
         # Resolve so a relative or absolute grep path compares against the
-        # absolute lane roots. Anything outside both lanes is recall-excluded.
-        hit: MemoryHit | None
-        if _is_under(path, journal_root):
-            hit = _journal_grep_hit(h, path, resolved)
-        elif _is_under(path, knowledge_root):
-            hit = _knowledge_grep_hit(h, path, resolved)
-        else:
+        # absolute lane root. Anything outside the lane is recall-excluded.
+        if not _is_under(path, knowledge_root):
             continue
+        hit = _knowledge_grep_hit(h, path, resolved)
         if hit is None or hit.id in seen:
             continue
         seen.add(hit.id)
@@ -130,24 +122,6 @@ def _knowledge_grep_hit(h: GrepHit, path: Path, resolved: ResolvedScope) -> Memo
         score=1.0,
         source=f"{resolved.scope.value}:{path}",
         time=ff.fact.updated_at,
-    )
-
-
-def _journal_grep_hit(h: GrepHit, path: Path, resolved: ResolvedScope) -> MemoryHit:
-    """A grep hit inside the ``journal/`` lane. Journal files are not fact files,
-    so the hit is keyed by ``journal-<period>`` (matching the indexed document id
-    so a grep and a keyword hit on the same month dedupe) and timestamped by the
-    file mtime rather than parsed frontmatter."""
-    try:
-        mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
-    except OSError:
-        mtime = datetime.now(tz=UTC)
-    return MemoryHit(
-        id=journal_doc_id(path.stem),
-        text=h.line,
-        score=1.0,
-        source=f"{resolved.scope.value}:{path}",
-        time=mtime,
     )
 
 

@@ -2,8 +2,8 @@
 
 Contract: the hook must NEVER raise and NEVER block the agent. Any failure
 (no daemon.json, connection refused, timeout, non-200, bad JSON) → print
-nothing and exit 0. SessionStart prints the additionalContext bundle; SessionEnd
-POSTs the session-end signal and prints nothing.
+nothing and exit 0. SessionStart prints the additionalContext bundle; every
+other event, SessionEnd included, is ignored.
 """
 
 from __future__ import annotations
@@ -77,13 +77,17 @@ def test_session_start_prints_additional_context(monkeypatch, capsys):
     assert captured["token"] == "tok-secret"
 
 
-def test_session_end_posts_and_prints_nothing(monkeypatch, capsys):
+def test_session_end_is_ignored(monkeypatch, capsys):
+    """SessionEnd existed only to trigger distillation, which is gone.
+
+    The hook must now treat it like any unrecognised event: touch the daemon
+    not at all, print nothing, exit 0. An agent still configured to fire the
+    hook on SessionEnd therefore pays a process spawn and nothing else.
+    """
     captured = {}
 
     def fake_http(method, url, *, token, body=None, timeout):
-        captured["method"] = method
-        captured["url"] = url
-        captured["body"] = body
+        captured["called"] = True
         return 200, ""
 
     stdin = json.dumps(
@@ -99,9 +103,7 @@ def test_session_end_posts_and_prints_nothing(monkeypatch, capsys):
     )
     assert code == 0
     assert out.strip() == ""
-    assert captured["method"] == "POST"
-    assert "/api/v1/agents/my-claude/sessions/sess-9/end" in captured["url"]
-    assert captured["body"] == {"cwd": "/work/proj"}
+    assert "called" not in captured
 
 
 @pytest.mark.acceptance(

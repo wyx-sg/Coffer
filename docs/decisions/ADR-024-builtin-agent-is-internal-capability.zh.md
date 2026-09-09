@@ -7,7 +7,7 @@
 - **决策者：** Yuxing Wu
 - **Spec：** [008-agent-chat](../../specs/008-agent-chat/spec.md) 与 [004-agent-registry](../../specs/004-agent-registry/spec.md)（重新定位 + 能力迁移——不新增 spec 编号；实现前更新两份 `spec.md`）
 - **取代：** [ADR-021](./ADR-021-chat-as-vault-console.md) 中"通过 `builtin` agent 与金库对话"这一半；**修订** [ADR-018](./ADR-018-tool-retrieval-for-overload.md)（search-tools 排序）
-- **相关：** [007-memory](../../specs/007-memory/spec.md)、[006-knowledge-base](../../specs/006-knowledge-base/spec.md)、[ADR-012](./ADR-012-files-as-truth-sqlite-retrieval.md)、[ADR-020](./ADR-020-transcript-distillation.md)
+- **相关：** [007-memory](../../specs/007-memory/spec.md)、[006-knowledge-base](../../specs/006-knowledge-base/spec.md)、[ADR-012](./ADR-012-files-as-truth-sqlite-retrieval.md)
 
 ## 背景
 
@@ -24,8 +24,8 @@ IM 没有持久使用场景，还悄悄重新打开了 ADR-021 自己想关掉�
 而且 `builtin` 模型**唯一独占的消费者**就是这个聊天人格。盘点真正用到本地 LLM 机器的地方：
 
 - **`coffer__search_tools`**（ADR-018）——纯 BM25-lite 排序，**不用 LLM**。
-- **转写蒸馏**（ADR-020）——用单轮 LLM 补全（`LangchainLlmCompletion`）对*任意*配置模型，
-  不走聊天循环。
+- **记忆重组与记忆库合并**（spec 007）——用单轮 LLM 补全（`LangchainLlmCompletion`）对*任意*
+  配置模型，不走聊天循环。
 - **`builtin` 聊天 agent**——唯一需要 LangGraph ReAct 循环的东西，也是唯一把模型当人格
   摆到用户面前的东西。
 
@@ -52,14 +52,14 @@ IM 没有持久使用场景，还悄悄重新打开了 ADR-021 自己想关掉�
 - `/agents` 列表去掉内置 agent 卡片；`/agents` 纯粹是受管 agent。
 - 删除 `/agents/builtin` 详情页。其中唯一仍有意义的部分——本地模型配置——迁入
   **Settings → Models**，从"Coffer Assistant 使用的模型"重构为**「Coffer 内部模型」**，
-  驱动检索、记忆重组与蒸馏。
+  驱动检索与记忆重组。
 
 ### 3. 本地模型成为内部能力的引擎
 
 LLM 机器**保留但重新定位**，永不面向用户：
 
-- **保留**模型工厂（`langchain_models.py`）和单轮补全（`llm_completion.py`）——蒸馏已依赖
-  它们。
+- **保留**模型工厂（`langchain_models.py`）和单轮补全（`llm_completion.py`）——记忆重组与
+  记忆库合并已依赖它们。
 - **移除**面向聊天的部分：`builtin` 聊天 provider、其注册表条目、聊天事件映射。
 - **保留** ReAct 循环作为仅内部的引擎（记忆重组，spec 007），永不作为聊天 agent 暴露。
 
@@ -76,7 +76,7 @@ agent 仍负责 select-and-call，我们只改善它看到的候选集。
 
 ### 不变量
 
-- **没有面向用户的内置人格。** 本地模型只能作为 `coffer__*` 工具（及蒸馏等内部流程）触达，
+- **没有面向用户的内置人格。** 本地模型只能作为 `coffer__*` 工具（及记忆重组等内部流程）触达，
   绝不作为聊天 agent，也绝不被 UI 当作助手呈现。
 - **附加的、可审计的工具。** 升级后的 `coffer__search_tools` 像任何 `coffer__` 内置工具一样
   在 `tools/list` 中通告，记入调用日志（who/when/how-long/outcome，无参数/结果），并优雅降级
@@ -93,8 +93,8 @@ agent 仍负责 select-and-call，我们只改善它看到的候选集。
 
 ### B — 现在就移除内置 agent *并*删掉所有 LLM 机器
 
-**否决。** 蒸馏已依赖模型工厂 + 单轮补全，记忆重组（spec 007）又是 ReAct 底座的真实内部消费
-者。删掉会让两者都失依赖。我们只删聊天外壳。
+**否决。** 记忆重组与记忆库合并已依赖模型工厂 + 单轮补全，记忆重组（spec 007）又是 ReAct 底座
+的真实内部消费者。删掉会让两者都失依赖。我们只删聊天外壳。
 
 ### C — `coffer__search_tools` 保持纯 BM25、不加 embedder 路径
 
@@ -115,12 +115,15 @@ agent 仍负责 select-and-call，我们只改善它看到的候选集。
 - UI：`/chat` 改回「聊天」；移除 `/agents/builtin` 路由与内置卡片；Settings → Models 重构为
   Coffer 内部模型。
 - CLI：移除 `coffer chat` 命令（内置 agent 的终端聊天）；`coffer model` 及其余 CLI 不变。
-- LangGraph/LangChain 作为**内部**依赖保留（蒸馏 + 记忆重组）；删除聊天事件映射与 `builtin`
-  聊天 provider。
+- LangGraph/LangChain 作为**内部**依赖保留（记忆重组 + 记忆库合并）；删除聊天事件映射与
+  `builtin` 聊天 provider。
 - 除 Settings → Models 已存储的内容外无新增持久状态；无迁移。
 
 ## 修订历史
 
+- **2026-09-09** —— 移除 transcript 蒸馏。它曾是本 ADR 用以论证「聊天人格离场后仍保留 LLM 机器」
+  的两个内部消费者之一；上文列出的其余消费者（记忆重组、记忆库合并，以及 ReAct 重组引擎）
+  自身即可支撑该论证，因此**决定本身不变**，变的只是举例。
 - **2026-09-09** — 移除 `coffer__ask`。本 ADR 作为能力 (b) 交付的 agentic-RAG 能力已删除：
   ReAct 循环只保留为本 ADR 同时描述的内部记忆重组引擎。`coffer__ask` 的调用方是
   Claude Code 与 Codex，它们本身就是很强的 ReAct agent；让 Coffer 的内部小模型代替

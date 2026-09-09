@@ -886,7 +886,8 @@ referenced by at least one test marked
   beyond the gateway's existing gating; conversation
   summarisation and export; resuming/continuing a past foreign agent session;
   and any cross-agent raw-transcript browse/search surface (sharing across agents
-  is served by distilled memory, [ADR-020](../../docs/decisions/ADR-020-transcript-distillation.md)).
+  is served by what an agent explicitly writes with `coffer__remember`; automatic
+  transcript distillation was removed on 2026-09-09).
   Remote channels are delivered separately by Spec 009.
 - The standalone `ModelConfig`/`chat_models` registry that `Conversation.model_id`
   referenced is **retired** (folded into provider connections, spec 011 /

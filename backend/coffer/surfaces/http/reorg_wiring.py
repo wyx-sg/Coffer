@@ -5,7 +5,7 @@ adapter) and a ``ProviderService`` wrapper are injected here, at a surfaces
 composition root (cross-kind imports allowed). The reorg's
 ``application/memory`` code reaches the loop only through the memory-local
 ``AgenticReorgPort`` (Contract 9 keeps langgraph in ``infrastructure.chat``;
-Contract 5e keeps memory off ``application.distill`` / ``infrastructure.chat``).
+Contract 5e keeps memory off ``infrastructure.chat``).
 """
 
 from __future__ import annotations

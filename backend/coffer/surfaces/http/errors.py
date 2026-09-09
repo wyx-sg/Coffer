@@ -87,9 +87,6 @@ _STATUS: dict[str, int] = {
     "EMBEDDING_UNAVAILABLE": 503,
     # agent chat (spec 008)
     "CONVERSATION_NOT_FOUND": 404,
-    # NO_MODEL_CONFIGURED is still emitted by transcript distillation (its own
-    # NoModelConfiguredError) when no internal connection is configured.
-    "NO_MODEL_CONFIGURED": 409,
     "TURN_IN_PROGRESS": 409,
     "UNKNOWN_AGENT": 400,
     "AGENT_CONFIG_REJECTED": 400,
@@ -97,9 +94,6 @@ _STATUS: dict[str, int] = {
     "CHANNEL_NOT_PAIRED": 409,
     "CHANNEL_NOT_RUNNING": 409,
     "CHANNEL_SEND_FAILED": 502,
-    # transcript distillation (spec 007 extension — ADR-020)
-    "UNSUPPORTED_AGENT_TYPE": 400,
-    "TRANSCRIPT_SESSION_NOT_FOUND": 404,
     # vault export/import (spec 010, ADR-016)
     "SYNC_BUNDLE_TOO_NEW": 409,
     "SYNC_BUNDLE_INVALID": 422,

@@ -1,7 +1,7 @@
 """DI singleton for the async KB batch (re-embed) service.
 
 Kept apart from ``surfaces/http/dependencies.py`` to stay under the file-size
-limit, mirroring ``surfaces/http/distill/state.py``. The ``_optional`` accessor
+limit. The ``_optional`` accessor
 lets the documents list/detail endpoints degrade to no status overlay (rather
 than failing) when the batch service is not wired (minimal apps / route tests).
 """

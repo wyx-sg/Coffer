@@ -72,8 +72,8 @@ rows migrate to provider resources; the provider model-introspection routes
   agent (`target_for` returns `None`), and keyless — so `credential_ref` becomes
   optional (required for anthropic/openai, absent for ollama).
 - A global `internal_default` flag (≤1 across all connections) marks the
-  connection Coffer's internal LLM engine uses (memory organizer, reorg,
-  distill), set via `POST /providers/{name}/internal-default`
+  connection Coffer's internal LLM engine uses (memory organizer, reorg),
+  set via `POST /providers/{name}/internal-default`
   (audit event `provider_internal_default_set`) / `coffer provider
   internal-default`. One connection MAY be BOTH `is_active` (projected to its
   wire's agent) AND `internal_default` — one key, two uses.

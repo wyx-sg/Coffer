@@ -64,7 +64,7 @@ def get_master_key_manager() -> Any:
 
 def make_credential_resolver(store: Any) -> Callable[[str], str]:
     """Build the ``ref -> plaintext`` resolver used by internal-LLM consumers
-    (distillation, organize, reorg). Raises CredentialMissing for an unknown ref."""
+    (organize, reorg, merge). Raises CredentialMissing for an unknown ref."""
 
     def _resolve(ref: str) -> str:
         value: str | None = store.get(ref)

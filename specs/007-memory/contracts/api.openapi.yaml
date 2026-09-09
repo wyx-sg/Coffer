@@ -16,13 +16,11 @@ info:
     `X-Coffer-Token` header (token from `~/.coffer/daemon.json`). All error
     responses use the app-wide envelope `{ "error": { code, message, details } }`.
 
-    Slice-6 rules runtime injection (FR-049–FR-052) adds two **agent-scoped**
-    endpoints that back the SessionStart/SessionEnd hooks —
-    `GET /api/v1/agents/{name}/session-context?cwd=` (the rules bundle) and
-    `POST /api/v1/agents/{name}/sessions/{session_id}/end` (the session-end
-    distil). Because they are agent-scoped (not `memory_stores`-scoped), they
-    live in `transcripts.openapi.yaml` alongside the other
-    `/api/v1/agents/{name}/…` routes. The hook-install trio
+    Slice-6 rules runtime injection (FR-049–FR-052) adds one **agent-scoped**
+    endpoint that backs the SessionStart hook —
+    `GET /api/v1/agents/{name}/session-context?cwd=` (the rules bundle). Because
+    it is agent-scoped (not `memory_stores`-scoped), it lives in
+    `session-context.openapi.yaml`. The hook-install trio
     (`/api/v1/agents/{name}/hook-install`) and the `disable_native_memory` field
     on `AgentPatch`/`AgentOut` live in `004-agent-registry/contracts/api.openapi.yaml`.
 
@@ -374,8 +372,7 @@ paths:
     post:
       summary: >
         Merge one per-project store into another (FR-057): additive lane-file
-        merge (journal deduped by timestamp, collisions keep both copies),
-        label/root carry-over, no-resurrection identity alias (FR-058),
+        merge (collisions keep both copies), label/root carry-over, no-resurrection identity alias (FR-058),
         force-reconcile, source retirement, audit. Optionally runs the FR-033
         reorg pass on the target afterwards (FR-059).
       operationId: memoryStoreMerge
@@ -444,46 +441,6 @@ paths:
         changelog line. The rules lane is not indexed for recall.
       operationId: deleteMemoryStoreRules
       tags: [rules]
-      responses:
-        "204":
-          description: No Content
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-  /api/v1/memory_stores/{name}/journal:
-    parameters:
-      - $ref: "#/components/parameters/StoreName"
-    get:
-      summary: >
-        List the store's journal lane — the time-partitioned `journal/<period>.md`
-        files (episodic events fed by distillation), newest period first. Read-only;
-        the lane sits outside the knowledge recall glob.
-      operationId: getMemoryStoreJournal
-      tags: [journal]
-      responses:
-        "200":
-          description: >
-            OK. Period files newest first, or an empty list when the store has no
-            journal yet (never an error).
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/JournalOut"
-
-  /api/v1/memory_stores/{name}/journal/{period}:
-    parameters:
-      - $ref: "#/components/parameters/StoreName"
-      - in: path
-        name: period
-        required: true
-        description: Journal period key (e.g. `2026-06-21`).
-        schema: { type: string }
-    delete:
-      summary: >
-        Delete one `journal/<period>.md` file (removes its recall-index rows —
-        the journal lane is indexed) and append a changelog line.
-      operationId: deleteMemoryStoreJournalPeriod
-      tags: [journal]
       responses:
         "204":
           description: No Content
@@ -1027,33 +984,6 @@ components:
             The store's rules text — every `rules/*.md` file concatenated (the
             procedural rules the organizer classified into the rules lane), or
             null when there are no rules yet.
-
-    JournalFileOut:
-      type: object
-      required: [period, text, path, folder_path]
-      properties:
-        period:
-          type: string
-          description: The time-partition key (`YYYY-MM-DD` stem of the per-day period file).
-        text: { type: string, description: Raw markdown body of the period file. }
-        path:
-          type: string
-          description: >-
-            Absolute path of the `journal/<period>.md` file (source of truth).
-            The in-app viewer is read-only; this backs reveal-in-file-manager.
-        folder_path:
-          type: string
-          description: Absolute path of the journal/ folder containing the file.
-
-    JournalOut:
-      type: object
-      required: [files]
-      properties:
-        files:
-          type: array
-          description: Period files, newest period first (empty when no journal yet).
-          items:
-            $ref: "#/components/schemas/JournalFileOut"
 
     HandoffSceneOut:
       type: object

@@ -1,7 +1,7 @@
 """DI singleton for the memory OrganizerService (spec 007 — internal organizer).
 
-Mirrors ``surfaces/http/distill/state.py``: the composition root
-(``surfaces/http/organize_wiring.py``) registers the service once on startup;
+The composition root (``surfaces/http/organize_wiring.py``) registers the
+service once on startup;
 the ``organize`` route reaches it via ``get_organizer_service``.
 """
 

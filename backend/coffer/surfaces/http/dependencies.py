@@ -320,24 +320,6 @@ def get_memory_service() -> Any:
     return _memory_service
 
 
-# --- session-end distiller (Slice 6 FR-051) ---
-_session_end_distiller: Any | None = None
-
-
-def set_session_end_distiller(svc: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _session_end_distiller
-    _session_end_distiller = svc
-
-
-def get_session_end_distiller() -> Any:
-    """FastAPI Depends() target — actual type is SessionEndDistiller."""
-    if _session_end_distiller is None:
-        raise RuntimeError("session-end distiller not initialised")
-    return _session_end_distiller
-
-
-# More providers split out for the file-size budget: memory.dependencies (incl.
-# the spec-007 journal-lane provider — imported there directly by the composition
-# roots, NOT re-exported here so kind-agnostic core stays clean), distill.state,
-# chat.dependencies (re-exported at top).
+# More providers split out for the file-size budget: memory.dependencies
+# (imported there directly by the composition roots, NOT re-exported here so
+# kind-agnostic core stays clean) and chat.dependencies (re-exported at top).
