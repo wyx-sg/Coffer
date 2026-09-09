@@ -47,6 +47,7 @@ def spec_doc() -> dict[str, Any]:
     "path,method",
     [
         ("/api/v1/chat/agents", "get"),
+        ("/api/v1/chat/agents/{agent_key}/models", "get"),
         ("/api/v1/chat/conversations", "get"),
         ("/api/v1/chat/conversations", "post"),
         ("/api/v1/chat/conversations/{id}", "get"),
@@ -112,6 +113,8 @@ def test_every_yaml_path_is_implemented(
         ("ConversationListOut", {"conversations"}),
         ("ChatAgentOut", {"agent_key", "display_name", "available"}),
         ("ChatAgentListOut", {"agents"}),
+        ("AgentModelOut", {"id", "source"}),
+        ("AgentModelsOut", {"models"}),
         ("MessageOut", {"id", "conversation_id", "seq", "role", "content", "status", "created_at"}),
         ("MessageListOut", {"messages"}),
         ("SendMessageRequest", {"text"}),

@@ -70,4 +70,50 @@ def channel_system_context(channel_name: str) -> str:
     )
 
 
-__all__ = ["ParseState", "SessionSink", "channel_system_context", "last_user_text"]
+#: How many ids the per-turn model note names before deferring to the picker.
+#: Discovery leads with the tier aliases and the newest releases, so the head of
+#: the list is the part worth spending prompt on.
+_MODELS_IN_NOTE = 12
+
+
+def model_system_context(current: str | None, available: Sequence[str]) -> str:
+    """A system-prompt append telling the agent which model Coffer put it on.
+
+    The agent cannot see Coffer's choice — asked in a real channel session it
+    confidently named the wrong model. This note is authoritative, so it says so.
+    It rides on every turn, hence the tight wording.
+    """
+    # The catalogue is now read from the CLI itself and runs to ~30 ids. All of
+    # them on every turn is prompt weight the agent gains nothing from — it only
+    # needs enough to answer "what could I be switched to", so name the leading
+    # few and point at the picker for the rest.
+    shown = list(available[:_MODELS_IN_NOTE])
+    rest = len(available) - len(shown)
+    ids = ", ".join(shown) if shown else "none listed"
+    if rest > 0:
+        ids += f" (+{rest} more in Coffer's picker)"
+    if current:
+        opening = (
+            f"Coffer is running this session on the model `{current}` — trust this "
+            "note over your own guess about which model you are."
+        )
+    else:
+        opening = (
+            "Coffer set no model override for this session, so you are running on "
+            "your CLI's own default model. Trust this note over your own guess: do "
+            "not name a specific model or version, say the default is in use."
+        )
+    return (
+        f"{opening} Models available here: {ids}. The user switches with "
+        "`/model <id>` in a chat channel, or Coffer's model picker in the web UI — "
+        "point them there instead of changing models yourself."
+    )
+
+
+__all__ = [
+    "ParseState",
+    "SessionSink",
+    "channel_system_context",
+    "last_user_text",
+    "model_system_context",
+]

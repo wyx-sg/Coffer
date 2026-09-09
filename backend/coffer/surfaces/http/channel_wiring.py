@@ -36,6 +36,7 @@ from coffer.surfaces.http import daemon_routes
 from coffer.surfaces.http.auth import get_active_token
 from coffer.surfaces.http.channel_routes import set_channel_service
 from coffer.surfaces.http.chat.dependencies import (
+    get_agent_model_catalogue,
     get_agent_registry,
     get_chat_service,
     get_turn_orchestrator,
@@ -53,25 +54,6 @@ def _daemon_info() -> tuple[str, str]:
     if token is None:
         raise RuntimeError("daemon token not published yet")
     return f"http://127.0.0.1:{daemon_routes.get_port()}", token
-
-
-# Curated built-in model quick-picks per managed agent type — the models
-# reachable through the agent's OWN login (mirrors the web ModelPicker's
-# no-connection case + frontend BUILTIN_MODELS_BY_AGENT). The connection no
-# longer carries a model (spec 011 E3), so the channel /model card offers these.
-_BUILTIN_MODELS_BY_AGENT = {
-    "claude_code": ["opus", "sonnet", "haiku"],
-    "codex": ["gpt-5-codex", "gpt-5", "o3"],
-}
-
-
-class _ModelSuggestions:
-    """ModelSuggestionPort: best-effort model quick-picks for a managed agent's
-    ``/model`` card — the agent's curated built-in models. Empty for an unknown
-    agent, so the card falls back to the free-text path."""
-
-    async def suggest(self, agent_key: str) -> list[str]:
-        return list(_BUILTIN_MODELS_BY_AGENT.get(agent_key, []))
 
 
 def wire_channel_kind(
@@ -92,7 +74,10 @@ def wire_channel_kind(
         turns=get_turn_orchestrator(),
         audit=audit,
         agents=get_agent_registry(),
-        model_suggestions=_ModelSuggestions(),
+        # The /model card offers the same catalogue as everything else; the
+        # catalogue service's ``suggest`` IS the ModelSuggestionPort shape, so
+        # it goes in directly rather than through a hardcoded local list.
+        model_suggestions=get_agent_model_catalogue(),
     )
 
     # Production injects the EncryptedCredentialStore; None (tests) falls back

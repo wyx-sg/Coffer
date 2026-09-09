@@ -15,10 +15,13 @@ vi.mock("@/lib/hooks/useModelIntrospection", () => ({
   useTestConnection: vi.fn(),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({ usePatchAgent: vi.fn() }));
+vi.mock("@/lib/hooks/useAgentModels", () => ({ useAgentModels: vi.fn() }));
 
 import { useActivateProvider, useProviders, useUseBuiltinProvider } from "@/lib/hooks/useProviders";
 import { useListProviderModels, useTestConnection } from "@/lib/hooks/useModelIntrospection";
 import { usePatchAgent } from "@/lib/hooks/useAgents";
+import { useAgentModels } from "@/lib/hooks/useAgentModels";
+import type { AgentModel } from "@/lib/api/agentModels";
 
 const useProvidersMock = useProviders as unknown as ReturnType<typeof vi.fn>;
 const useActivateMock = useActivateProvider as unknown as ReturnType<typeof vi.fn>;
@@ -26,6 +29,14 @@ const useUseBuiltinMock = useUseBuiltinProvider as unknown as ReturnType<typeof 
 const useListMock = useListProviderModels as unknown as ReturnType<typeof vi.fn>;
 const useTestMock = useTestConnection as unknown as ReturnType<typeof vi.fn>;
 const usePatchAgentMock = usePatchAgent as unknown as ReturnType<typeof vi.fn>;
+const useAgentModelsMock = useAgentModels as unknown as ReturnType<typeof vi.fn>;
+
+/** The daemon-served catalogue for claude_code: curated aliases, then an id
+ * discovered from the agent's own config. */
+const CATALOGUE: AgentModel[] = [
+  { id: "opus", label: "Opus", description: "", source: "alias" },
+  { id: "fable", label: "", description: "", source: "discovered" },
+];
 
 const activateMutate = vi.fn();
 const useBuiltinMutate = vi.fn();
@@ -116,6 +127,7 @@ beforeEach(() => {
     data: undefined,
   });
   usePatchAgentMock.mockReturnValue({ mutate: patchAgentMutate, isPending: false });
+  useAgentModelsMock.mockReturnValue({ data: CATALOGUE });
   useProvidersMock.mockReturnValue({ data: [] });
 });
 
@@ -284,6 +296,28 @@ describe("AgentOverviewTab", () => {
     });
     render(<AgentOverviewTab agent={codex} />);
     expect(screen.queryByRole("combobox", { name: /fast model/i })).not.toBeInTheDocument();
+  });
+
+  test("the built-in login shows a read-only catalogue instead of dead model slots", () => {
+    // Nothing reads `agent.model` on the built-in login, so offering two model
+    // dropdowns there would be a control that writes a field nobody reads. Show
+    // what the agent can run on, and say where the choice really happens.
+    useProvidersMock.mockReturnValue({ data: [] });
+    render(<AgentOverviewTab agent={agent} />);
+    expect(screen.queryByRole("combobox", { name: /^model$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /fast model/i })).not.toBeInTheDocument();
+    expect(screen.getByText("opus")).toBeInTheDocument();
+    expect(screen.getByText("fable")).toBeInTheDocument();
+    expect(screen.getByText(/chosen per conversation/i)).toBeInTheDocument();
+  });
+
+  test("picking a connection brings the model slots back, enabled", () => {
+    useProvidersMock.mockReturnValue({ data: [agnes()] });
+    render(<AgentOverviewTab agent={agent} />);
+    openSelectOptions(/connection/i);
+    fireEvent.click(screen.getByRole("option", { name: "agnes" }));
+    expect(screen.getByRole("combobox", { name: /^model$/i })).toBeEnabled();
+    expect(screen.getByRole("combobox", { name: /fast model/i })).toBeEnabled();
   });
 
   test("with no compatible connection, still defaults to the built-in connection", () => {

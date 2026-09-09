@@ -2,13 +2,15 @@
 //
 // Per-conversation model picker for a managed agent (ADR-024 → ADR-032 D4). The
 // value is `agent_config.model`, passed through to the agent's CLI. The picker
-// is a FIXED dropdown — never free-text (D4). Its options are state-dependent:
-// when a connection overrides the agent, the connection's introspected models
-// (fetched lazily on first open); otherwise the agent's curated built-in models.
-// It does NOT read the connection's stored `model`/`fast_model` (those leave the
-// connection in the E1 amendment); the current value is always shown so it stays
-// selectable. An empty value inherits the agent's projected default. To pick a
-// model outside this list, change the connection/binding on the Agent page.
+// is a FIXED dropdown — never free-text (D4). Its options are the UNION, deduped
+// by id, of: the agent's own model catalogue from the daemon (curated aliases
+// first, then ids discovered from the agent's config), the active connection's
+// introspected models (fetched lazily on first open), and the current value so
+// it always stays selectable. The union matters: a connection being active does
+// not mean every chat runs through it, so hiding the agent's own models behind
+// an active connection left real models unreachable. It does NOT read the
+// connection's stored `model`/`fast_model` (those leave the connection in the E1
+// amendment). An empty value inherits the agent's projected default.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -19,7 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BUILTIN_MODELS_BY_AGENT, type AgentType } from "@/lib/api/providers";
+import { type AgentType } from "@/lib/api/providers";
+import { useAgentModels } from "@/lib/hooks/useAgentModels";
 import { useListProviderModels } from "@/lib/hooks/useModelIntrospection";
 import { useProviders } from "@/lib/hooks/useProviders";
 
@@ -27,6 +30,12 @@ import { useProviders } from "@/lib/hooks/useProviders";
 // arbitrary strings; Radix forbids an empty-string item value, so this reserved
 // token cannot realistically collide with a model id.
 const INHERIT = "__inherit__";
+
+/** One dropdown row. `id` is what the CLI receives; `label` is decoration only. */
+interface Option {
+  id: string;
+  label?: string;
+}
 
 interface Props {
   agentKey: string;
@@ -53,6 +62,7 @@ export function ModelPicker({ agentKey, value, onCommit, disabled = false }: Pro
 
   const providers = useProviders();
   const list = useListProviderModels();
+  const catalogue = useAgentModels(agentKey);
 
   // The active connection for this agent is matched by its compatible-agents set
   // (not its wire), so a connection the user routed to this agent shows up even if
@@ -67,20 +77,21 @@ export function ModelPicker({ agentKey, value, onCommit, disabled = false }: Pro
   );
 
   const suggestions = useMemo(() => {
-    const out: string[] = [];
-    if (activeConnection) {
-      // An override is active → the agent talks to the connection; offer the
-      // models its endpoint lists (introspected). Built-in ids don't apply.
-      for (const m of fetched) out.push(m);
-    } else {
-      // No override → the agent runs on its own login; offer its curated
-      // built-in models (ADR-032 amendment D4).
-      for (const m of BUILTIN_MODELS_BY_AGENT[agentKey] ?? []) out.push(m);
-    }
-    // Always keep the current value selectable, even when it is not in the list.
-    if (value && !out.includes(value)) out.push(value);
+    const out: Option[] = [];
+    const seen = new Set<string>();
+    const add = (id: string, label?: string) => {
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      out.push({ id, label: label && label !== id ? label : undefined });
+    };
+    // The agent's own catalogue first — the models it runs on its own login.
+    for (const m of catalogue.data ?? []) add(m.id, m.label);
+    // Then whatever the active connection's endpoint advertises.
+    for (const m of fetched) add(m);
+    // Always keep the current value selectable, even when it is in neither list.
+    if (value) add(value);
     return out;
-  }, [activeConnection, fetched, agentKey, value]);
+  }, [catalogue.data, fetched, value]);
 
   // Pull the connection's catalogue once, the first time the dropdown is opened.
   // Best-effort: a connection that can't list models just yields nothing.
@@ -106,7 +117,7 @@ export function ModelPicker({ agentKey, value, onCommit, disabled = false }: Pro
 
   const currentValue = value ?? "";
   const selectValue =
-    currentValue !== "" && suggestions.includes(currentValue) ? currentValue : INHERIT;
+    currentValue !== "" && suggestions.some((o) => o.id === currentValue) ? currentValue : INHERIT;
 
   return (
     <Select
@@ -120,9 +131,13 @@ export function ModelPicker({ agentKey, value, onCommit, disabled = false }: Pro
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={INHERIT}>{t("chat.modelPicker.inheritNoModel")}</SelectItem>
-        {suggestions.map((m) => (
-          <SelectItem key={m} value={m}>
-            {m}
+        {/* Lead with the display name when the catalogue supplies one: an id
+            like `claude-opus-4-8` is unambiguous but unreadable at this width,
+            and "Opus 4.8" is exactly the distinction the user needs to make. */}
+        {suggestions.map((o) => (
+          <SelectItem key={o.id} value={o.id}>
+            {o.label ?? o.id}
+            {o.label && <span className="ml-2 text-xs text-muted-foreground">{o.id}</span>}
           </SelectItem>
         ))}
       </SelectContent>

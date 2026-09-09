@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pathlib
 import shutil
+from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from typing import Any
 
@@ -17,7 +18,10 @@ from coffer.application.chat.ports import AgentAdapter
 from coffer.application.chat.service import ConversationRepo
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.errors import AgentConfigRejected, ConversationNotFound
-from coffer.infrastructure.chat.adapter_support import channel_system_context
+from coffer.infrastructure.chat.adapter_support import (
+    channel_system_context,
+    model_system_context,
+)
 from coffer.infrastructure.chat.claude_sdk_agent import (
     ClaudeSdkAgentAdapter,
     SdkSessionFactory,
@@ -26,6 +30,11 @@ from coffer.infrastructure.chat.claude_sdk_agent import (
 from coffer.infrastructure.chat.default_workspace import default_workspace_dir
 from coffer.infrastructure.chat.document_extract import default_document_extractor
 from coffer.infrastructure.chat.transcribe import default_transcriber
+
+#: The model ids this agent can be put on, looked up per turn. A narrow callable
+#: rather than the application catalogue service itself, so infrastructure keeps
+#: no dependency on an application type it would only read one list from.
+ModelLister = Callable[[str], Awaitable[list[str]]]
 
 
 class ClaudeSdkProvider:
@@ -44,10 +53,14 @@ class ClaudeSdkProvider:
         conversations: ConversationRepo,
         session_factory: SdkSessionFactory | None = None,
         which: Any = shutil.which,
+        list_models: ModelLister | None = None,
     ) -> None:
         self._conversations = conversations
         self._session_factory: SdkSessionFactory = session_factory or default_session_factory
         self._which = which
+        # None ⇒ the model note lists no ids (still tells the agent WHICH model
+        # it is on, which is the part it otherwise gets wrong).
+        self._list_models = list_models
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
@@ -85,10 +98,17 @@ class ClaudeSdkProvider:
                 conversation_id, replace(latest, session_id=session_id)
             )
 
-        # A channel-originated conversation drives the agent from a phone chat —
-        # tell it so (concise replies, no clickable dialogs) via a system-prompt
-        # append. Non-channel (web UI) turns leave the prompt untouched.
-        system_context = channel_system_context(conv.channel_name) if conv.channel_name else None
+        # Two system-prompt appends, joined into one:
+        # - a channel-originated conversation drives the agent from a phone chat,
+        #   so tell it so (concise replies, no clickable dialogs);
+        # - EVERY conversation gets the model note, because the agent cannot see
+        #   which model Coffer put it on and otherwise invents an answer.
+        parts: list[str] = []
+        if conv.channel_name:
+            parts.append(channel_system_context(conv.channel_name))
+        available = await self._list_models(self.agent_key) if self._list_models else []
+        parts.append(model_system_context(config.model, available))
+        system_context = "\n\n".join(parts)
 
         return ClaudeSdkAgentAdapter(
             cwd=config.cwd,
@@ -112,4 +132,4 @@ class ClaudeSdkProvider:
         return self._which(self._binary) is not None
 
 
-__all__ = ["ClaudeSdkProvider"]
+__all__ = ["ClaudeSdkProvider", "ModelLister"]

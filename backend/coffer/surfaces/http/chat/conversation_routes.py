@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
+from coffer.application.agent.model_catalogue import AgentModelCatalogueService
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
@@ -23,9 +24,12 @@ from coffer.domain.chat.message import (
     ToolUseBlock,
 )
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.chat.dependencies import get_agent_model_catalogue
 from coffer.surfaces.http.chat.schemas import (
     AgentConfigOut,
     AgentConfigPatch,
+    AgentModelOut,
+    AgentModelsOut,
     ChannelBindingOut,
     ChatAgentListOut,
     ChatAgentOut,
@@ -136,6 +140,31 @@ async def list_agents(
             )
         )
     return ChatAgentListOut(agents=agents)
+
+
+@router.get("/agents/{agent_key}/models", response_model=AgentModelsOut)
+async def list_agent_models(
+    agent_key: str,
+    registry: AgentProviderRegistry = Depends(get_agent_registry),  # noqa: B008
+    catalogue: AgentModelCatalogueService = Depends(get_agent_model_catalogue),  # noqa: B008
+) -> AgentModelsOut:
+    """The models this agent can be put on: Coffer's curated aliases plus
+    anything its own config advertises.
+
+    An unregistered ``agent_key`` is a 404 raised here rather than the domain's
+    ``UnknownAgent`` — that error means "no provider for this conversation" and
+    is mapped app-wide to 400, which is the wrong answer for a missing
+    subresource path.
+    """
+    if agent_key not in registry.agent_keys():
+        raise HTTPException(status_code=404, detail=f"unknown agent: {agent_key!r}")
+    models = await catalogue.catalogue(agent_key)
+    return AgentModelsOut(
+        models=[
+            AgentModelOut(id=m.id, label=m.label, description=m.description, source=m.source)
+            for m in models
+        ]
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -278,7 +278,11 @@ async def test_channel_conversation_appends_system_context(tmp_path) -> None:  #
     repo, engine = await _repo(tmp_path)
     conv = await repo.create(_conv(channel_name="Telegram"))
     factory, captured = _make_factory(_simple_messages())
-    provider = ClaudeSdkProvider(conversations=repo, session_factory=factory)
+
+    async def _models(agent_key: str) -> list[str]:
+        return ["fable", "sonnet"]
+
+    provider = ClaudeSdkProvider(conversations=repo, session_factory=factory, list_models=_models)
 
     await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
     adapter = await provider.build_adapter(conv.id)
@@ -289,23 +293,36 @@ async def test_channel_conversation_appends_system_context(tmp_path) -> None:  #
     assert system_prompt["type"] == "preset"
     assert system_prompt["preset"] == "claude_code"
     assert "Telegram" in system_prompt["append"]
+    # The channel note and the model note are composed into one append.
+    assert "no model override" in system_prompt["append"]
 
     await engine.dispose()
 
 
 @pytest.mark.asyncio
-async def test_web_conversation_has_no_system_context(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """A non-channel (web UI) conversation leaves the system prompt untouched."""
+async def test_web_conversation_gets_the_model_note_only(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A non-channel (web UI) conversation gets no channel guidance, but still
+    gets the model note — the agent cannot otherwise tell which model Coffer put
+    it on, and left to itself it guesses wrong."""
     repo, engine = await _repo(tmp_path)
     conv = await repo.create(_conv())  # no channel_name
     factory, captured = _make_factory(_simple_messages())
-    provider = ClaudeSdkProvider(conversations=repo, session_factory=factory)
 
-    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+    async def _models(agent_key: str) -> list[str]:
+        return ["fable", "sonnet"]
+
+    provider = ClaudeSdkProvider(conversations=repo, session_factory=factory, list_models=_models)
+
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path), "model": "fable"})
     adapter = await provider.build_adapter(conv.id)
     await _collect(adapter, _user_turn("hi", conv.id))
 
-    assert captured[0].system_prompt is None
+    system_prompt = captured[0].system_prompt
+    assert isinstance(system_prompt, dict)
+    append = system_prompt["append"]
+    assert "`fable`" in append
+    assert "sonnet" in append
+    assert "chat channel — " not in append  # no channel guidance for a web turn
 
     await engine.dispose()
 

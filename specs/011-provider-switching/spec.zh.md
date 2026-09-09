@@ -139,6 +139,54 @@ exist or you may not have access"。用户既没机会选一个该 endpoint 支�
 **Supersede：** E4 隐含的「一选中就立即激活」——激活现在被显式的测试 + 确认门控，且绑定不会留空。
 **仍不在范围：** proxy / 热切换 / 协议转换。
 
+## 修订 2026-09-09 — Agent 的模型清单由后端提供
+
+> 状态：Draft。**Supersede D4 的「精选内置清单」及其二选一的选项规则。** 在一次线上会话里，
+> 一个 Claude Code 对话只被提供 `agnes-*` 模型 id 之后记录。交叉引用
+> [ADR-032](../../docs/decisions/ADR-032-provider-switching.md)。
+
+**缺陷。** D4 所说的「精选内置清单」实际上只是一个硬编码常量——`["opus", "sonnet", "haiku"]`
+——在 `frontend/src/lib/api/providers.ts` 和 `backend/coffer/surfaces/http/channel_wiring.py`
+里各有一份。两份拷贝、无人负责，而且已经过时：Claude Code 的 `--model` 还接受 `fable`、`opusplan`
+和 `default`，于是 `fable` 在 Coffer 里根本无法选到——选择器是固定下拉、没有自由输入（D4），
+常量里没有的 id 也无法手输。D4 的选项规则更让事情雪上加霜，因为它是二选一的：当有连接覆盖该 agent
+时，选择器**只**显示这条连接 introspect 出来的模型，把 agent 自己的模型藏了起来。线上观察到的现象：
+一条 `is_active` 的 openai 连接被路由到 `claude_code`，而 `~/.claude/settings.json` 里
+根本没有 Coffer 的任何投影——也就是说 agent 实际跑在内置登录上——但聊天里只给出 `agnes-*` 这些
+id，而这些 id 该 agent 一个都用不了。
+
+- **H1 — 模型清单是后端的一个接口，按 agent 提供，且 Coffer 自己不写死任何模型名。**
+  `GET /api/v1/chat/agents/{agent_key}/models` 返回某个 agent 可以被切到的模型。每一项——id、
+  显示名、描述——都是从**已安装的 agent 那里读回来的**，绝不写进 Coffer：写在这里的清单会在 CLI
+  下一次发版时过期，而且分不清同一档位的两个版本。共有三个来源，它们的顺序就是选择器的顺序：
+  Claude Code 可执行文件内嵌的模型目录（先是它的档位**别名**，再是带版本的模型——那是唯一写着
+  各版本显示名的地方）；Codex 自己的 `model/list` app-server RPC；以及各 CLI 的原生配置，用于
+  只有它才知道的本地选择（Claude Code 在 `~/.claude.json` 里发布
+  `additionalModelOptionsCache`；Codex 的 `config.toml` 里写着它配置的模型）。每一项带
+  `id`（原样传给 CLI）、`label`、`description` 和 `source ∈ {alias, discovered}`。每个来源都
+  各自静默降级——CLI 没装、bundle 结构变了、agent 没登录或卡住，代价只是少了这个来源本来会补上的
+  模型，仅此而已。未知的 `agent_key` 返回 404。契约见
+  [`specs/008-agent-chat/contracts/api.openapi.yaml`](../008-agent-chat/contracts/api.openapi.yaml)。
+- **H2 — 单一事实来源。** 前端常量被删除；channel 的 `/model` 卡片读同一份清单。清单只在一处维护，
+  而且由 agent 自己拥有，因此新发布的模型完全不需要 Coffer 发版就能到达每个界面。
+- **H3 — 选项是并集，不是二选一。** 聊天选择器的选项 = agent 的模型清单（H1）∪ 当前生效连接
+  introspect 出的模型（`POST /models/list-models`）∪ 该对话当前的取值。D4 禁止自由输入这一条**保持
+  不变**——选择器仍是固定下拉，且当前值始终可选。于是连接是往选择器里**增加** id，而不是把 agent
+  自己的模型藏起来。
+- **H4 — Agent 页的模型槽位在内置登录下保持只读。** 这些槽位绑的是**连接**的模型（E3/E4）：
+  只有当 Coffer 投影了一条连接时才会读 `agent.model`。它们现在展示这份模型清单，并附一句提示说明
+  内置登录的模型是按对话选择的——让只读状态有解释，而不是看起来像坏了。
+- **H5 — Coffer 会告诉 agent 它跑在哪个模型上。** Coffer 每轮追加的 system prompt 现在会说明
+  Coffer 把 agent 切到了哪个模型——或者说明 Coffer 没有设置任何覆盖——以及有哪些 id 可用。触发这条的
+  事件：在一次真实的 channel 会话里被问到时，agent 很自信地报出了一个它并没有在跑的模型，因为它的
+  上下文里没有任何信息说明真实情况。**仅限 Claude Code。** Codex 的 app-server 不接受按线程注入的
+  instructions——它的 `ThreadSettings` 只有 approval/sandbox/model/effort 等字段，没有提示词入口——
+  除非把说明塞进对话的第一条用户消息里污染对话，否则无处安放。Codex 拿到的是准确的模型清单（H1），
+  但没有这条说明。
+
+**Supersede：** D4 的精选内置清单（现在改为后端的模型清单）及其二选一的选项规则（现在是 H3 的并集）。
+D4 的固定下拉 / 禁止自由输入规则不变。**仍不在范围：** proxy / 热切换 / 协议转换。
+
 ## 范围
 
 ### 在范围内
@@ -472,8 +520,9 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 
 - **Given** 一个绑定到无覆盖连接的 agent 的会话，
 - **When** 打开模型选择器，
-- **Then** 它给出该 agent 内置模型的固定下拉（无自由输入「Custom…」项）；当有连接覆盖该 agent 时，
-  下拉改为列出该连接 introspect 出的模型，绝不读连接存储的 `model` 字段（TypeScript 验收测试）。
+- **Then** 它给出该 agent 模型清单（`GET /api/v1/chat/agents/{agent_key}/models`）的固定下拉
+  （无自由输入「Custom…」项）；当有连接覆盖该 agent 时，下拉在该清单和当前取值之外**追加**该连接
+  introspect 出的模型，绝不读连接存储的 `model` 字段（TypeScript 验收测试；并集规则见 2026-09-09 修订）。
 
 ## 需求
 

@@ -66,3 +66,17 @@ def get_agent_registry() -> Any:
     if _agent_registry is None:
         raise RuntimeError("agent registry not initialised")
     return _agent_registry
+
+
+_agent_model_catalogue: Any | None = None
+
+
+def set_agent_model_catalogue(svc: Any) -> None:
+    global _agent_model_catalogue
+    _agent_model_catalogue = svc
+
+
+def get_agent_model_catalogue() -> Any:
+    if _agent_model_catalogue is None:
+        raise RuntimeError("agent model catalogue not initialised")
+    return _agent_model_catalogue
