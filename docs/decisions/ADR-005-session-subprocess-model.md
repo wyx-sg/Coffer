@@ -7,7 +7,7 @@
 
 ## Context
 
-When two MCP clients (e.g., Claude Code and Cursor) connect to Coffer at the
+When two MCP clients (e.g., Claude Code and Codex) connect to Coffer at the
 same time, the gateway must decide how upstream MCP server subprocesses are
 managed:
 

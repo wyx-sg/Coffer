@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0047"
+HEAD_REVISION = "0049"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -88,7 +88,18 @@ HEAD_REVISION = "0047"
 # 0047 is DATA-only: it backfills ``scope_json`` for every ``kind='channel'``
 # row from its stored ``config_json.runs_on`` (ADR-045 amendment, spec 009 —
 # runs_on migrates to framework scope) — no DDL, table/column set unchanged.
-# The ``documents_fts_*`` shadow
+# 0048 is DATA-only: it DELETEs ``kind='agent'`` rows carrying one of the four
+# removed agent types again (they were re-introduced after 0031 and really
+# shipped this time; agent types narrowed to claude_code + codex for good) — no
+# DDL, table/column set unchanged. 0049 withdraws continuous multi-machine sync
+# (ADR-016 — export/import replaces it): it DROPs ``sync_config`` + ``sync_state``
+# (0019), ``machine_identity`` (0042) and ``sync_tombstones`` (0043), so all four
+# are ABSENT at head, and collapses every ``resources.scope_json`` from the old
+# machine x agent mapping to a flat agent list (ADR-045 — the machine axis went
+# with the registry that keyed it), which is data-only. 0049's downgrade
+# recreates the four tables EMPTY so 0019/0042/0043's own downgrades still find
+# them on the way down (mirroring 0030's treatment of the MCP scope tables), so
+# they reappear once we step below 0049. The ``documents_fts_*`` shadow
 # tables FTS5 creates under the hood are excluded — the assertions speak to the
 # logical schema.
 EXPECTED_TABLES = {
@@ -112,11 +123,12 @@ EXPECTED_TABLES = {
     "chat_messages",
     "channel_peers",
     "channel_thread_conversations",
-    "sync_config",
-    "sync_state",
-    "machine_identity",
-    "sync_tombstones",
 }
+
+# The four sync-only tables 0049 DROPs (continuous multi-machine sync withdrawn,
+# ADR-016). Absent at head; recreated empty by 0049's downgrade so the older
+# revisions that own them can drop them again on the way down.
+SYNC_TABLES = {"sync_config", "sync_state", "machine_identity", "sync_tombstones"}
 
 # FTS5 creates these shadow tables for ``documents_fts``; they are an
 # implementation detail of the virtual table, not schema the migrations name.
@@ -725,8 +737,10 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     # both present at head, both dropped by their downgrades on the way to 0037.
     assert "internal_engine_config" in _user_tables(db_path)
     assert "distilled_sessions" in _user_tables(db_path)
-    assert "machine_identity" in _user_tables(db_path)
-    assert "sync_tombstones" in _user_tables(db_path)
+    # 0049 dropped the four sync-only tables (continuous sync withdrawn,
+    # ADR-016), so they are ABSENT at head; its downgrade recreates them empty
+    # one step down, where 0043/0042/0019's own downgrades drop them again.
+    assert not (SYNC_TABLES & _user_tables(db_path))
 
     def _sync_state_columns() -> set[str]:
         with sqlite3.connect(db_path) as conn:
@@ -736,6 +750,8 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         with sqlite3.connect(db_path) as conn:
             return {r[1] for r in conn.execute("PRAGMA table_info(sync_config)")}
 
+    command.downgrade(cfg, "0048")
+    assert _user_tables(db_path) >= SYNC_TABLES
     assert "quarantined_refs_json" in _sync_state_columns()
     assert "failed_state_json" in _sync_state_columns()
     assert "poll_remote_seconds" in _sync_config_columns()
@@ -796,25 +812,25 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     # chat_models is back (recreated by 0036's downgrade; dropped again at 0011).
     # distilled_sessions was dropped at 0038's downgrade (the first step), so it
     # is absent from here down.
-    assert _user_tables(db_path) == (EXPECTED_TABLES | scope_tables | {"chat_models"}) - {
+    assert _user_tables(db_path) == (
+        EXPECTED_TABLES | scope_tables | {"chat_models", "sync_config", "sync_state"}
+    ) - {
         "memory_store_labels",
         "distilled_sessions",
         "internal_engine_config",
         "channel_thread_conversations",
-        "machine_identity",
-        "sync_tombstones",
     }
 
     # 0025 -> 0024: 0025's downgrade drops documents.locked (column-only).
     command.downgrade(cfg, "0024")
     assert "locked" not in _documents_columns()
-    assert _user_tables(db_path) == (EXPECTED_TABLES | scope_tables | {"chat_models"}) - {
+    assert _user_tables(db_path) == (
+        EXPECTED_TABLES | scope_tables | {"chat_models", "sync_config", "sync_state"}
+    ) - {
         "memory_store_labels",
         "distilled_sessions",
         "internal_engine_config",
         "channel_thread_conversations",
-        "machine_identity",
-        "sync_tombstones",
     }
 
     # 0024 -> 0023: 0024's downgrade recreates memory_projection_bindings,
@@ -861,14 +877,10 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     ) - {
         "credentials",
         "channel_peers",
-        "sync_config",
-        "sync_state",
         "memory_store_labels",
         "distilled_sessions",
         "internal_engine_config",
         "channel_thread_conversations",
-        "machine_identity",
-        "sync_tombstones",
     }
 
     # 0012 -> 0011: drops the chat tables (spec 008-agent-chat).
@@ -876,8 +888,6 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     assert _user_tables(db_path) == (EXPECTED_TABLES | {"memory_projection_bindings"}) - {
         "credentials",
         "channel_peers",
-        "sync_config",
-        "sync_state",
         "conversations",
         "chat_messages",
         "chat_models",
@@ -885,8 +895,6 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         "distilled_sessions",
         "internal_engine_config",
         "channel_thread_conversations",
-        "machine_identity",
-        "sync_tombstones",
     }
 
     # 0011 -> 0010: drops embedding_config (global embedding singleton).
@@ -922,8 +930,6 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     assert _user_tables(db_path) == EXPECTED_TABLES - {
         "credentials",
         "channel_peers",
-        "sync_config",
-        "sync_state",
         "embedding_config",
         "conversations",
         "chat_messages",
@@ -934,8 +940,6 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         "distilled_sessions",
         "internal_engine_config",
         "channel_thread_conversations",
-        "machine_identity",
-        "sync_tombstones",
         "documents",
         "chunks",
         "documents_fts",

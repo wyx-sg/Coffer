@@ -11,7 +11,7 @@
 
 Coffer 有多个入口都需要一个正在运行的 daemon：
 
-- `coffer-mcp-shim` —— 每次 MCP 客户端 (Claude Code、Cursor) 启动时由其拉起。
+- `coffer-mcp-shim` —— 每次 MCP 客户端 (Claude Code、Codex) 启动时由其拉起。
 - `coffer …` CLI —— 由用户临时调用。
 
 daemon 必须**比任一单一入口活得更久**：用户期望某个 MCP 客户端的 shim 不会因为

@@ -7,12 +7,10 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 
-import { ScopeCard } from "@/components/ScopeCard";
 import { AgentConfigFilesEditor } from "@/components/agents/AgentConfigFilesEditor";
 import { AgentConversationsTab } from "@/components/agents/AgentConversationsTab";
 import { AgentDeleteDialog } from "@/components/agents/AgentDeleteDialog";
 import { AgentEditForm } from "@/components/agents/AgentEditForm";
-import { AgentFacetUnsupported } from "@/components/agents/AgentFacetUnsupported";
 import { AgentMcpButton } from "@/components/agents/AgentMcpControls";
 import { AgentMcpServersTab } from "@/components/agents/AgentMcpServersTab";
 import { AgentMemoryTab } from "@/components/agents/AgentMemoryTab";
@@ -23,7 +21,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { facetSupported } from "@/lib/api/agentCapabilities";
 import { translateApiError } from "@/lib/api/errors";
 import { useAgent } from "@/lib/hooks/useAgents";
 
@@ -112,8 +109,6 @@ export function AgentDetailPage() {
         />
       ) : null}
 
-      <ScopeCard kind="agent" name={agent.name} />
-
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">{t("agents.workspace.overview")}</TabsTrigger>
@@ -138,11 +133,7 @@ export function AgentDetailPage() {
         </TabsContent>
 
         <TabsContent value="plugins" className="pt-6">
-          {facetSupported(agent, "plugins") ? (
-            <AgentPluginsTab agent={agent} />
-          ) : (
-            <AgentFacetUnsupported message={t("agents.facetUnsupported.plugins")} />
-          )}
+          <AgentPluginsTab agent={agent} />
         </TabsContent>
 
         <TabsContent value="memory" className="pt-6">
@@ -150,11 +141,7 @@ export function AgentDetailPage() {
         </TabsContent>
 
         <TabsContent value="conversations" className="pt-6">
-          {facetSupported(agent, "transcripts") ? (
-            <AgentConversationsTab name={name} />
-          ) : (
-            <AgentFacetUnsupported message={t("agents.facetUnsupported.transcripts")} />
-          )}
+          <AgentConversationsTab name={name} />
         </TabsContent>
 
         <TabsContent value="config" className="pt-6">

@@ -13,18 +13,13 @@ import pathlib
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from coffer.application.skill.delivery_ops import (
-    delivers_skill_folders,
-    reconcile_external_registration,
-    resolve_agent_skill_delivery,
-)
 from coffer.application.skill.lifecycle_ops import infer_link_mode
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import TargetConflict
 from coffer.domain.resource import ResourceRef
-from coffer.domain.scope import agent_in_scope, machine_in_scope
+from coffer.domain.scope import agent_in_scope
 from coffer.domain.skill.binding import BindingState
-from coffer.domain.workspace_errors import SkillDeliveryUnsupported, SkillOutOfScope
+from coffer.domain.workspace_errors import SkillOutOfScope
 
 if TYPE_CHECKING:
     from coffer.application.skill.service import SkillService
@@ -40,25 +35,10 @@ async def enable_skill_for_agent(
 ) -> BindingState:
     skill = await service._rs.get(ResourceRef("skill", skill_name))
     agent = await service._rs.get(ResourceRef("agent", agent_name))
-    # Gate delivery modes that have no on-disk folder delivery wired BEFORE any
-    # filesystem work. FOLDER (own skills dir) and EXTERNAL_DIR (a Coffer-owned
-    # dir the agent scans) are both folder-style; rules_mdc is a recognized
-    # extension point the folder model must not mis-deliver into, so it fails
-    # explicitly (422).
-    mode = resolve_agent_skill_delivery(service, agent)
-    if not delivers_skill_folders(service, agent):
-        agent_type = str(agent.config.get("type", "")) if isinstance(agent.config, dict) else ""
-        raise SkillDeliveryUnsupported(agent_type, mode)
-    # ADR-045 hard grant (Task 11): scope overrides manual bindings — a
-    # (machine, agent) pair outside the skill's scope can never be bound, even
-    # with force=True. No provider wired → no filtering (legacy contract).
-    local = await service._local_machine_id()
-    if local is not None and not (
-        machine_in_scope(skill.scope, local) and agent_in_scope(skill.scope, local, agent_name)
-    ):
+    # ADR-045 hard grant: scope overrides manual bindings — an agent outside
+    # the skill's scope can never be bound, even with force=True.
+    if not agent_in_scope(skill.scope, agent_name):
         raise SkillOutOfScope(skill_name, agent_name)
-    # For EXTERNAL_DIR agents the resolver returns the Coffer-owned external dir
-    # (not the agent's own skills dir); the link mechanics below are identical.
     target_dir = service._resolve_agent_skill_dir(agent)
     link_path = target_dir / skill_name
     master = service._store.paths_for(skill_name).folder
@@ -86,7 +66,6 @@ async def enable_skill_for_agent(
                 last_link_path=str(link_path),
                 link_mode=prior_mode or infer_link_mode(link_path),
             )
-            await reconcile_external_registration(service, agent)
             return binding
         if not force:
             raise TargetConflict(str(link_path), status.drift.value)
@@ -123,9 +102,6 @@ async def enable_skill_for_agent(
             "mode": mode.value,
         },
     )
-    # EXTERNAL_DIR agents: ensure the Coffer-owned dir is registered in the
-    # agent's config now that it holds a delivered skill (no-op otherwise).
-    await reconcile_external_registration(service, agent)
     return binding
 
 
@@ -165,7 +141,4 @@ async def disable_skill_for_agent(
         actor=actor,
         details={"agent": agent_name},
     )
-    # EXTERNAL_DIR agents: deregister the Coffer-owned dir once its last
-    # delivered skill is removed (no-op otherwise).
-    await reconcile_external_registration(service, agent)
     return binding

@@ -1,6 +1,6 @@
-"""Multi-machine sync domain (spec 010).
+"""Vault export/import domain (spec 010, ADR-016).
 
-Pure value objects and contracts: sync config/state, the workspace manifest,
-deterministic resource serialization, and the sync error family. No git, no
-filesystem, no database — those live in infrastructure.
+Pure value objects and contracts: the bundle manifest, the export/import
+summaries, deterministic resource serialization, path portability, and the
+error family. No filesystem, no database — those live in infrastructure.
 """

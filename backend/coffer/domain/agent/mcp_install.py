@@ -10,7 +10,7 @@ The write is driven by two orthogonal axes (see :mod:`mcp_injection`):
   (each preserving the user's other content: comments, ordering, unrelated
   keys).
 - **shape** — ``container_key`` (the top-level table: ``mcpServers`` /
-  ``mcp_servers``; a dotted JSON key like openclaw's ``mcp.servers`` descends
+  ``mcp_servers``; a dotted JSON key like ``mcp.servers`` descends
   one object per dot) and ``entry_style`` (how a single stdio entry is
   rendered: a ``{"command": shim}`` command-map, or the typed-command-array
   shape ``{"type": "local", "command": [shim]}``).
@@ -45,7 +45,7 @@ from coffer.domain.agent.mcp_injection import McpEntryStyle, default_container_k
 
 def _json_container_create(data: dict[str, Any], dotted_key: str) -> dict[str, Any]:
     """The JSON servers container for a possibly-dotted ``container_key``
-    (``mcp.servers`` — openclaw nests its map one level down), creating each
+    (``mcp.servers`` — an agent may nest its map one level down), creating each
     missing step. A hand-edit that left a non-object at any step is replaced
     (mirrors the flat branch's ``isinstance(dict)`` guard). JSON only — the
     TOML/YAML container keys in use carry no dots."""

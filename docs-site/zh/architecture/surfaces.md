@@ -32,7 +32,7 @@ Coffer 的每个接口面都是通向同一底层守护进程的入口点。守�
 | `/channels`                       | 通道绑定（Telegram、SeaTalk）、配对。                             |
 | `/chat`、`/models`                | Chat 会话/轮次与模型目录。                                        |
 | `/credentials`、`/settings`       | 加密凭据存储；设置含 `/settings/credentials`（主密钥存储）与 `/embedding` 配置。 |
-| `/sync`                           | 多机同步运行与配置。                                              |
+| `/sync`                           | 仓库导出 / 导入运行与主密钥传递。                                 |
 | `/fs`                             | 用于配置选择器的文件系统浏览辅助。                                |
 | `/audit`、`/retention`、`/daemon` | 审计日志、保留策略、守护进程 token/备份操作。                     |
 
@@ -84,7 +84,7 @@ REST API 是规范接口——CLI、Web UI 和桌面应用都调用它。
 
 ## Stdio Shim（`coffer-mcp-shim`）
 
-**它是什么。** MCP 客户端（Claude Code、Codex、Cursor 以及任何支持 stdio MCP 服务器的工具）与守护进程 MCP 端点之间的桥接。MCP 客户端配置为 `"command": "coffer-mcp-shim"`，而不是特定的上游服务器。shim 在客户端的 stdin/stdout 接口和守护进程的 HTTP/SSE MCP 端点之间进行转换，使守护进程从客户端角度看起来像一个普通的 stdio MCP 服务器。
+**它是什么。** MCP 客户端（Claude Code、Codex 以及任何支持 stdio MCP 服务器的工具）与守护进程 MCP 端点之间的桥接。MCP 客户端配置为 `"command": "coffer-mcp-shim"`，而不是特定的上游服务器。shim 在客户端的 stdin/stdout 接口和守护进程的 HTTP/SSE MCP 端点之间进行转换，使守护进程从客户端角度看起来像一个普通的 stdio MCP 服务器。
 
 **所在进程。** 每个连接的 MCP 客户端会话一个 shim 进程。每个 MCP 客户端在客户端启动时启动一个新的 shim 进程。三个同时运行的 MCP 客户端意味着三个 shim 进程，每个都维护自己与守护进程的 HTTP/SSE 连接，每个都产生自己独立的 `MCPGatewaySession`，带有自己的上游子进程集合。
 

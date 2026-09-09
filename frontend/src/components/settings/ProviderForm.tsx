@@ -40,10 +40,6 @@ interface Props {
 const AGENT_LABEL_KEY: Record<AgentType, string> = {
   claude_code: "settings.connections.agentClaudeCode",
   codex: "settings.connections.agentCodex",
-  opencode: "settings.connections.agentOpencode",
-  hermes: "settings.connections.agentHermes",
-  cursor: "settings.connections.agentCursor",
-  openclaw: "settings.connections.agentOpenclaw",
 };
 
 export function ProviderForm({
@@ -183,9 +179,6 @@ export function ProviderForm({
         <div className="space-y-1.5">
           <Label>{t("settings.connections.compatibleAgents")}</Label>
           <div className="flex flex-wrap gap-3">
-            {/* Never-projectable agents (cursor) are omitted outright — the
-                "not supported" reason lives on the agent's own detail page
-                (ADR-042 presentation amendment 2026-07-10). */}
             {SELECTABLE_AGENTS.map((a) => (
               <label key={a} className="flex items-center gap-1.5 text-sm">
                 <input

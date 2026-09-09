@@ -112,7 +112,7 @@ backend/coffer/
 │   ├── knowledge_base/           # KB collection services
 │   ├── memory/                   # recall/remember services
 │   ├── chat/                     # TurnOrchestrator, history
-│   ├── sync/                     # cross-cutting — multi-machine sync (not a kind)
+│   ├── sync/                     # cross-cutting — vault export / import (not a kind)
 │   ├── credentials/              # cross-cutting — CredentialResolver (refs → secrets)
 │   └── fs/                       # cross-cutting — filesystem-browse service
 ├── infrastructure/
@@ -126,7 +126,7 @@ backend/coffer/
 │   ├── knowledge_base/           # KB collection store
 │   ├── memory/                   # memory file store + projection
 │   ├── chat/                     # LangGraph agent, gateway tool provider, CLI agents
-│   ├── sync/                     # cross-cutting — git-repo sync workspace (not a kind)
+│   ├── sync/                     # cross-cutting — export-bundle file IO (not a kind)
 │   └── credentials/              # cross-cutting — encrypted credential store + master key — only place importing `keyring`
 └── surfaces/
     ├── http/
@@ -143,7 +143,7 @@ backend/coffer/
 
 Within each layer, the root files are kind-agnostic. Kind-specific code lives under named subdirectories — `mcp/`, `agent/`, `skill/`, `channel/`, `knowledge/`, `knowledge_base/`, `memory/`, `chat/` — one per kind, mirrored across `domain/`, `application/`, `infrastructure/`, and (where the kind has a surface) `surfaces/`. When a new kind arrives, its directories appear at each layer without altering the kind-agnostic root files.
 
-A handful of slices are **cross-cutting, not kinds**: `application/sync/` + `infrastructure/sync/` (multi-machine sync over a user-owned git repo), `application/credentials/` + `infrastructure/credentials/` (credential resolution and the encrypted store), and `application/fs/` (filesystem-browse). These follow the same layering rules as kinds but are not registered as `KindModule`s — they are shared services used across kinds.
+A handful of slices are **cross-cutting, not kinds**: `application/sync/` + `infrastructure/sync/` (vault export to a directory and import of one back), `application/credentials/` + `infrastructure/credentials/` (credential resolution and the encrypted store), and `application/fs/` (filesystem-browse). These follow the same layering rules as kinds but are not registered as `KindModule`s — they are shared services used across kinds.
 
 ### Why layer-first, not feature-first (vertical slices)?
 

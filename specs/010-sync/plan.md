@@ -2,70 +2,79 @@
 
 > 中文版: [plan.zh.md](./plan.zh.md)
 
-Sync is a **cross-cutting service**, not a resource kind (see
-[ADR-016](../../docs/decisions/ADR-016-multi-machine-sync.md)). It follows the
-retention/credentials pattern across the four layers.
+Export/import is a **cross-cutting service**, not a resource kind (see
+[ADR-016](../../docs/decisions/ADR-016-vault-export-import.md)). It follows the
+retention/credentials pattern across the four layers, and it owns no persistent
+state.
 
 ## Layering
 
 ```
 domain/sync/          pure value objects + contracts
   manifest.py         Manifest, SCHEMA_VERSION
-  models.py           SyncConfig, SyncState, SyncStatus enum, ConflictInfo
+  models.py           ExportResult, ImportResult, ResourceFailure, area counts
   serialization.py    deterministic Resource <-> dict projection (pure)
+  paths.py            ${HOME} normalization / expansion (pure)
   errors.py           SyncError family (codes for the error envelope)
 
 application/sync/
-  ports.py            GitPort, ManifestStore, WorkspaceLayout protocols
-  exporter.py         vault -> workspace (files, resources, ciphertext)
-  importer.py         workspace -> vault (mirror+reindex, reconcile, ciphertext)
-  service.py          SyncService: run/status/config/resolve/key orchestration
-  worker.py           SyncWorker: debounced + interval auto-sync loop
-  config_service.py   SyncConfigService over the sync_config/sync_state rows
+  ports.py            BundleLayout, SyncedStatePort protocols
+  exporter.py         vault -> bundle (files, resources, state, ciphertext)
+  importer.py         bundle -> vault (mirror+reindex, reconcile, ciphertext)
+  service.py          SyncService: export / import / key export / key import
 
 infrastructure/sync/
-  git_repo.py         GitPort impl over the `git` subprocess (sole net egress)
-  workspace.py        file mirror + manifest read/write + ciphertext dump/load
-  persistence.py      SyncConfigModel, SyncStateModel + repos
+  bundle.py           file mirror + manifest read/write + ciphertext dump/load
 
 surfaces/
   http/sync_routes.py + sync_wiring.py    /api/v1/sync/*
   cli/sync_cmd.py                         `coffer sync` group
 ```
 
+No `git_repo.py`, no `worker.py`, no `config_service.py`, no
+`persistence.py` — there is no remote, no background loop, and no sync table.
+
 ## Build order (TDD, each a committable chunk)
 
-1. **domain/sync** — models, manifest, deterministic serialization, errors.
-   Unit tests: serialization determinism (sorted keys, excluded fields, round
-   trip), status transitions.
-2. **infrastructure/sync persistence** — config/state tables + repos + migration
-   `0017`. Integration test: round-trip rows.
-3. **infrastructure/sync git_repo + workspace** — git subprocess adapter and the
-   file/manifest/ciphertext IO. Integration test against a local **bare** repo
-   as `origin` (real git).
-4. **application/sync exporter + importer** — using a real `ResourceService` +
-   real credential store + tmp vault dirs. Integration test: export → import
-   round-trip reproduces resources, files, and decryptable credentials.
-5. **application/sync service + config_service** — orchestrate a run, status,
-   resolve, key export/import. Integration test: two tmp vaults + one bare repo
-   simulate machine A and B; assert convergence, locked-credentials, conflict
-   stop/resolve, and that the workspace never contains the master key.
-6. **surfaces http + wiring** — routes, schemas, error codes; wire in `_lifespan`
-   and start `SyncWorker` (gated on `auto`). Contract test for `/api/v1/sync/*`.
-7. **surfaces cli** — `coffer sync` group over the loopback client. Contract test.
-8. **frontend** — Sync settings panel (config, status, run, resolve) on the
-   existing API/query-key conventions.
-9. **docs** — architecture.md cross-cutting row, README feature line, bilingual
-   companions; acceptance markers tie each `spec.md` scenario to a test.
+1. **Removal migration** — drop `sync_config`, `sync_state`, `machine_identity`
+   and `sync_tombstones`, and delete the code that read them. Integration test:
+   a vault created on the previous revision upgrades cleanly.
+2. **domain/sync** — manifest, deterministic serialization, path normalization,
+   result models, errors. Unit tests: serialization determinism (sorted keys,
+   excluded fields, round trip), `${HOME}` normalize/expand on both path shapes.
+3. **infrastructure/sync bundle** — the file/manifest/ciphertext IO against a
+   tmp directory. Integration test: writing and re-reading a bundle.
+4. **application/sync exporter + importer** — using a real `ResourceService`,
+   the real credential store, and tmp vault dirs. Integration tests: export →
+   import round-trip reproduces resources, files, state areas and decryptable
+   credentials; a second export of the unchanged vault is byte-identical apart
+   from `created_at`; import never deletes a local-only resource; a resource
+   that cannot apply here is reported without failing the run.
+5. **application/sync service** — orchestrate the two operations plus key
+   export/import. Integration test: two tmp vaults simulate machine A and B;
+   assert the bundle wins, credentials stay locked without the key, and the
+   bundle never contains the master key.
+6. **surfaces http + wiring** — routes, schemas, error codes; wire in
+   `_lifespan`. No worker to start. Contract test for `/api/v1/sync/*`.
+7. **surfaces cli** — `coffer sync export|import` and `coffer sync key
+   export|import` over the loopback client. Contract test.
+8. **frontend** — Settings → Sync: an export button and an import button over
+   the daemon-hosted native directory picker (spec 004 FR-042 /
+   [ADR-036](../../docs/decisions/ADR-036-daemon-native-file-and-save-dialogs.md)),
+   a result summary, and the master-key card. The fleet view and the
+   remote/auto-sync/conflict UI are removed.
+9. **docs** — architecture.md cross-cutting row, roadmap status, docs-site
+   guide + architecture pages, bilingual companions; acceptance markers tie each
+   `spec.md` scenario to a test.
 
 ## Key constraints honored
 
-- Every file ≤ 400 lines; split `service.py`/`importer.py` if they grow.
-- `application/` must not import `infrastructure/`: git/workspace/persistence are
-  injected as `GitPort` / `WorkspaceLayout` / repo protocols.
-- `domain/sync` stays pure (no git, no sqlalchemy, no fs).
+- Every file ≤ 400 lines; split `exporter.py`/`importer.py` if they grow.
+- `application/` must not import `infrastructure/`: the bundle IO is injected as
+  a `BundleLayout` port.
+- `domain/sync` stays pure (no sqlalchemy, no fs).
 - New error codes added to the HTTP error envelope `_STATUS` map.
-- Outbound git uses the user's ambient credentials via subprocess, not the
-  Coffer HTTP client; no new loopback-binding exception.
+- **No network egress at all** — export and import touch the local filesystem
+  only, so the slice needs no outbound-HTTP or git-subprocess exception.
 - `response_model` on every route; mypy --strict; importlinter contract for the
   `sync` package (it imports no other kind).

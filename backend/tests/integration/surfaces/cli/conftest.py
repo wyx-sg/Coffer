@@ -79,22 +79,16 @@ def _build_app(tmp_path) -> tuple[FastAPI, object]:  # type: ignore[type-ignore]
     sm = session_maker(engine)
     kinds = {
         "fake_kind": Kind(name="fake_kind", display_name="Fake", config_schema=_FakeConfig),
-        # Scope-capable test doubles for test_scope_cmd.py (ADR-045, Task 15):
-        # one dual-axis kind (mirrors mcp_server/skill) and one machine-only
-        # kind (mirrors agent/channel) — declared here (rather than a
-        # one-off fixture) so `coffer scope ...` tests reuse the same
-        # in_proc_daemon wiring as every other CLI test module.
+        # Scope-capable test double for test_scope_cmd.py (ADR-045): mirrors
+        # mcp_server/skill. Declared here (rather than a one-off fixture) so
+        # `coffer scope ...` tests reuse the same in_proc_daemon wiring as
+        # every other CLI test module. ``fake_kind`` above is the no-scope
+        # counterpart (mirrors agent/channel/knowledge_base/memory).
         "fake_scoped": Kind(
             name="fake_scoped",
             display_name="Fake Scoped",
             config_schema=_FakeScopedConfig,
-            scope_axes=("machine", "agent"),
-        ),
-        "fake_machine_only": Kind(
-            name="fake_machine_only",
-            display_name="Fake Machine-Only",
-            config_schema=_FakeScopedConfig,
-            scope_axes=("machine",),
+            supports_scope=True,
         ),
     }
     resource_repo = SqlAlchemyResourceRepo(sm)

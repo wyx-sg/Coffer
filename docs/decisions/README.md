@@ -1,7 +1,7 @@
 # Architecture Decision Records (ADR)
 
-Coffer records every major technical or architectural decision as a numbered,
-immutable ADR. ADRs capture **why** — code shows _what_, this directory shows
+Coffer records every major technical or architectural decision as a numbered
+ADR. ADRs capture **why** — code shows _what_, this directory shows
 _why we chose what we chose_.
 
 ## When to write an ADR
@@ -25,8 +25,15 @@ Do **not** write an ADR for:
 
 - Filename: `ADR-NNN-short-kebab-case-title.md` — NNN is a zero-padded ordinal
   (`ADR-001-…`, `ADR-002-…`, …). Never renumber.
-- ADRs are append-only. To change a decision, write a new ADR that **Supersedes**
-  the old one; mark the old one `Status: Superseded by ADR-NNN`.
+- This directory records the **live** design, not a chronological archive. A
+  reader must be able to learn today's answer by reading the ADRs present, never
+  by replaying a chain of supersessions. So:
+  - When a decision changes, **rewrite the ADR that owns it**.
+  - When the thing an ADR decided is **removed outright**, delete the ADR.
+  - Keep an ADR marked `Superseded by ADR-NNN` only when the superseded design
+    still explains a constraint the live one inherits.
+  Git history is the archive: `git log --follow docs/decisions/` recovers any
+  decision this directory no longer states.
 - One decision per file.
 - Keep each ADR short — usually under 200 lines. If you need more, you're
   describing implementation, not the decision.
@@ -86,7 +93,7 @@ section that future readers most often want — don't skip it.>
 | [013](ADR-013-agent-native-shared-memory.md)             | Agent-native shared memory projection                                                       | Accepted                                                                                                      |
 | [014](ADR-014-channel-adapter-framework.md)              | Channel adapter framework: thin adapters over the chat platform seams                       | Accepted                                                                                                      |
 | [015](ADR-015-envelope-encrypted-credential-store.md)    | Envelope-encrypted credential store (Fernet ciphertext in SQLite, file-default master key)  | Accepted                                                                                                      |
-| [016](ADR-016-multi-machine-sync.md)                     | Multi-machine sync over a user-owned git repository                                         | Accepted                                                                                                      |
+| [016](ADR-016-vault-export-import.md)                     | Vault export and import                                                                                             | Accepted                                                                                                      |
 | [017](ADR-017-industrial-grade-harness-in-layers.md)     | Industrial-grade harness, built in layers                                                   | Proposed                                                                                                      |
 | [018](ADR-018-tool-retrieval-for-overload.md)            | Tool retrieval for aggregation overload (`coffer__search_tools`)                            | Accepted — amended by [024](ADR-024-builtin-agent-is-internal-capability.md)                                  |
 | [019](ADR-019-close-the-eval-flywheel.md)                | Close the eval flywheel (loop engineering)                                                  | Accepted                                                                                                      |
@@ -95,7 +102,6 @@ section that future readers most often want — don't skip it.>
 | [023](ADR-023-channel-entrypoint-differentiation.md)     | Channel entrypoint differentiation layer                                                    | Accepted                                                                                                      |
 | [024](ADR-024-builtin-agent-is-internal-capability.md)   | The built-in agent is an internal capability, not a chat persona                            | Accepted                                                                                                      |
 | [025](ADR-025-remove-tool-approval.md)                   | Remove the tool-approval system; owner-pairing is the gate                                  | Accepted                                                                                                      |
-| [026](ADR-026-per-agent-mcp-scoping.md)                  | Per-agent MCP server scoping at the gateway                                                 | Reverted (2026-06-20)                                                                                         |
 | [027](ADR-027-skill-content-trust-layer.md)              | Skill content trust layer (heuristic scan, warn-don't-block)                                | Accepted                                                                                                      |
 | [028](ADR-028-knowledge-base-documents-co-managed.md)    | Knowledge base documents are co-managed (agent-writable) with stable identity               | Accepted                                                                                                      |
 | [029](ADR-029-consume-official-mcp-registry.md)          | Consume the official MCP Registry for server discovery                                      | Reverted                                                                                                      |

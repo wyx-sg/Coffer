@@ -74,7 +74,6 @@
     "expand": "展开侧边栏",
     "agents": "Agent",
     "channels": "渠道",
-    "machines": "机器",
     "audit": "审计日志",
     "chat": "聊天"
   },
@@ -504,46 +503,34 @@
       "fetchedCount": "已拉取 {{count}} 个模型——选择或手填"
     },
     "sync": {
-      "title": "多机同步",
-      "description": "通过你自己的 git 仓库在多台机器间保持此仓库同步。master key 绝不经过 git——首次接入每台新机器时用带外通道带过去一次。",
-      "remote": "Git remote（你自己的）",
-      "branch": "分支",
-      "enable": "启用同步",
-      "auto": "后台自动同步",
-      "interval": "自动同步间隔（秒）",
-      "syncNow": "立即同步",
-      "status": "状态",
-      "lastSync": "上次同步",
-      "conflictGuidance": "Coffer 无法自动解决此冲突。请到你自己的仓库（如 GitHub）手动解决后再同步。",
-      "errorHints": {
-        "auth": "Git 需要无终端环境可用的凭据。建议改用 SSH 地址（git@github.com:you/repo.git），或运行一次 `gh auth setup-git` 后重试。",
-        "not_found": "找不到该仓库——请检查 remote 地址以及仓库是否存在。",
-        "network": "无法连接远端主机——请检查网络与 remote 地址。"
+      "title": "导出 / 导入 vault",
+      "description": "把本 vault 写入你指定的目录，或从一个目录读回。把这个目录带到另一台机器——scp、U 盘、你自己的 git 仓库——由你自己决定。",
+      "withCredentials": "包含凭据",
+      "withCredentialsHint": "凭据以密文形式随行，绝不包含 master key。除非另一台机器确实需要，否则保持关闭——导出目录很容易被随手丢在某处。",
+      "exportVault": "导出 vault…",
+      "importVault": "导入 vault…",
+      "bundlePath": "Bundle 目录",
+      "bundlePathManualHint": "本机没有原生目录对话框——请手动输入路径，然后再次点击。",
+      "exported": "vault 已导出到 {{path}}",
+      "imported": "已从 {{path}} 导入 bundle",
+      "bundleFailure": "{{ref}} — {{reason}}",
+      "areas": {
+        "knowledge": "知识库",
+        "memory": "记忆",
+        "skills": "技能",
+        "resources": "资源",
+        "state": "共享状态",
+        "credentials": "凭据"
       },
-      "lockedHint": "凭证已存在但被锁定：{{refs}}——导入 master key 后解锁。",
       "masterKey": "Master key（带外）",
-      "masterKeyHint": "把本机的 key 导出到文件，通过你信任的通道带到另一台机器再导入。切勿放进同步仓库。",
+      "masterKeyHint": "把本机的 key 导出到文件，通过你信任的通道带到另一台机器再导入。它绝不会被写入导出 bundle。",
       "keyFingerprint": "Key 指纹",
       "keyFingerprintHint": "两台机器指纹一致即为同一把 key。",
       "keyPath": "本地 key 文件路径",
       "keyPathManualHint": "本机没有原生文件对话框——请手动输入路径，然后再次点击。",
       "exportKey": "导出 key",
       "importKey": "导入 key",
-      "statuses": {
-        "unconfigured": "未配置",
-        "clean": "已同步",
-        "syncing": "同步中…",
-        "conflicted": "有冲突",
-        "error": "错误",
-        "credentials_locked": "凭证已锁定"
-      },
-      "keyExported": "key 已写入 {{path}}",
-      "machines": "机器",
-      "machinesHint": "这个 vault 已知的所有机器。每台机器在同步时登记自己。",
-      "thisMachine": "本机",
-      "neverSynced": "从未同步",
-      "machineName": "机器名称",
-      "quarantinedHint": "以下资源在本机导入失败（已隔离，每次同步会重试）：{{refs}}"
+      "keyExported": "key 已写入 {{path}}"
     },
     "connections": {
       "title": "LLM 连接",
@@ -559,10 +546,6 @@
       "compatibleAgentsHint": "此连接可驱动哪些编码 Agent。具体由各 Agent 概览页按 Agent 选择连接。",
       "agentClaudeCode": "Claude Code",
       "agentCodex": "Codex",
-      "agentOpencode": "opencode",
-      "agentHermes": "Hermes",
-      "agentCursor": "Cursor",
-      "agentOpenclaw": "OpenClaw",
       "deleteTitle": "删除连接",
       "deleteConfirm": "删除连接「{{name}}」？其保存的凭据也会一并删除。",
       "name": "名称",
@@ -637,7 +620,6 @@
     "CHANNEL_NOT_RUNNING": "渠道适配器未在运行",
     "CHANNEL_SEND_FAILED": "向 IM 平台发送失败",
     "GENERIC_CREATE_NOT_ALLOWED": "该类型不支持直接创建",
-    "MACHINE_NOT_FOUND": "未找到该机器",
     "MASTER_KEY_MISSING": "主密钥缺失，Coffer 无法解密已存储的密钥",
     "DB_SCHEMA_TOO_NEW": "该数据库由更新版本的 Coffer 写入，请升级后再打开。",
     "PRIVILEGED_PATH": "该路径受保护，无法在此使用",
@@ -726,12 +708,6 @@
     "name": "名称",
     "type": "类型",
     "configDir": "配置目录",
-    "facetUnsupported": {
-      "plugins": "Coffer 不管理此 agent 类型的插件。",
-      "transcripts": "Coffer 无法读取此 agent 类型的对话记录。",
-      "connections": "此 agent 类型不支持 LLM 连接。",
-      "cursorConnectionsReason": "cursor-agent 锁定 Cursor 官方后端，没有可配置的端点；它使用自己的 cursor-agent login 认证。"
-    },
     "connection": {
       "title": "LLM 连接",
       "label": "连接",
@@ -896,8 +872,7 @@
         "instructions": "在该目录下每个会话都会自动加载的指令。",
         "subagents": "自定义子智能体定义，每个子智能体一个 Markdown 文件。",
         "config": "Codex CLI 配置：模型、供应商与工具设置。",
-        "hooks": "围绕 Codex 事件运行命令的生命周期钩子。",
-        "soul": "Hermes 的 persona 与全局指令（SOUL.md）——Hermes 每个会话唯一注入的文件；Coffer 的会话上下文块就放在这里。"
+        "hooks": "围绕 Codex 事件运行命令的生命周期钩子。"
       }
     },
     "mcp": {
@@ -1510,51 +1485,15 @@
       "hint": "用隧道工具（cloudflared、ngrok）指向本地监听地址。可达性测试仅验证链路与握手，签名密钥是否与 SeaTalk 一致需真实事件才能确认。"
     },
     "deleteTitle": "删除渠道",
-    "deleteConfirm": "确定删除渠道“{{name}}”？其适配器将停止，配对关系也会被移除。",
-    "machine": {
-      "title": "运行机器",
-      "runsOn": "运行于",
-      "unbound": "未绑定机器——渠道当前不在任何机器上运行",
-      "thisMachine": "本机",
-      "runHere": "改到本机运行",
-      "hint": "同步的渠道只在一台机器上运行，避免两台机器争抢同一个 bot。改绑后经下一次同步传播，原机器会自动停止。"
-    }
+    "deleteConfirm": "确定删除渠道“{{name}}”？其适配器将停止，配对关系也会被移除。"
   },
   "scope": {
     "title": "启用范围",
-    "subtitle": "这项资源在哪里启用——所有机器，或只在选定的机器上（对 MCP 服务器和技能，还可以进一步限定到选定的 agent）。",
-    "everywhere": "所有机器",
-    "custom": "自定义",
-    "dormant": "已选择自定义，但没有开启任何机器——处于休眠状态。至少开启下面一台机器前，它不会在任何地方启用。",
-    "allAgents": "所有 agent",
+    "subtitle": "这项资源对哪些 agent 生效——所有 agent，或只对你选中的那些。不在范围内时它依然保持注册，只是不会被暴露或分发。",
+    "everyAgent": "所有 agent",
+    "selectedAgents": "指定 agent",
+    "dormant": "没有选中任何 agent——处于休眠状态。它依然保持注册，但在你至少选中一个 agent 之前不会到达任何 agent。",
     "noAgents": "还没有注册任何 agent。",
-    "noMachines": "还没有同步任何机器。",
-    "notActiveHere": "在本机未启用。",
-    "unknownMachine": "不在本 vault 的机器注册表中",
-    "rowToggle": "在 {{machine}} 上启用"
-  },
-  "machines": {
-    "title": "机器",
-    "subtitle": "这个 vault 已同步的所有机器，以及各自启用了什么。",
-    "status": "同步状态",
-    "runNow": "立即同步",
-    "configureLink": "配置同步",
-    "lastSync": "上次同步",
-    "neverSynced": "从未同步",
-    "thisMachine": "本机",
-    "viewSlice": "查看机器",
-    "loadFailed": "加载机器列表失败。",
-    "empty": "还没有机器。配置并运行同步后，机器会出现在这里。",
-    "slice": {
-      "back": "返回机器列表",
-      "agents": "Agent",
-      "mcpServers": "MCP 服务器",
-      "skills": "技能",
-      "channels": "频道",
-      "active": "已启用",
-      "inactive": "未启用",
-      "empty": "暂无内容。",
-      "intentOnly": "这是一台远程机器 —— 启用状态根据已同步的注册表与作用域计算得出，未向该机器本身核实。"
-    }
+    "unknownAgent": "本机未注册"
   }
 }

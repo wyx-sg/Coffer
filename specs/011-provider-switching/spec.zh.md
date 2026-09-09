@@ -8,7 +8,7 @@
 
 ## 一句话总结
 
-统一的 **LLM connection** 让用户只需配置一次密钥（名称、wire 格式、base URL、加密凭证、模型），并以两种方式使用它：既投影到对应 agent 的本地配置文件，也让 Coffer 自身的内部 LLM 引擎在其上运行。一条 connection 即退役独立的 `ModelConfig`/`chat_models` 注册表，将内部引擎的模型选择折叠进同一条记录。相比 `claude switch` 或各工具的独立脚本，Coffer 的优势在于统一注册表加治理层——Fernet 加密凭证、完整审计日志、git 同步——而非各工具各管各的。
+统一的 **LLM connection** 让用户只需配置一次密钥（名称、wire 格式、base URL、加密凭证、模型），并以两种方式使用它：既投影到对应 agent 的本地配置文件，也让 Coffer 自身的内部 LLM 引擎在其上运行。一条 connection 即退役独立的 `ModelConfig`/`chat_models` 注册表，将内部引擎的模型选择折叠进同一条记录。相比 `claude switch` 或各工具的独立脚本，Coffer 的优势在于统一注册表加治理层——Fernet 加密凭证、完整审计日志、可检视的导出/导入 bundle——而非各工具各管各的。
 
 ## 为什么要做
 
@@ -41,7 +41,7 @@ Claude Code 和 Codex 各有自己的原生配置文件（`~/.claude/settings.js
 
 ### 决策 C——分阶段交付；本 PR 不包含 hot-switch
 
-本 PR 交付：注册表 + 投影 + 切换操作 + 审计 + sync 接入。
+本 PR 交付：注册表 + 投影 + 切换操作 + 审计 + 导出/导入接入。
 
 Hot-switch（对正在运行的 Claude Code 或 Codex 进程的会话内热重载）是**单独的后续 PR**，明确**不在本 PR 范围内**。
 
@@ -143,7 +143,7 @@ exist or you may not have access"。用户既没机会选一个该 endpoint 支�
 
 ### 在范围内
 
-- 后端 `provider` resource Kind（通过 ResourceService 实现 CRUD，自动审计 + 自动 sync）；凭证处理（将 secret 存入 Fernet vault，只保留 ref）；投影服务（将原生配置写入匹配 agent）；切换/激活操作；`PROVIDER_SWITCHED` 审计事件；sync 接入（注册 kind）；Claude `apiKeyHelper` 使用的密钥解析。
+- 后端 `provider` resource Kind（通过 ResourceService 实现 CRUD，自动审计 + 自动进入导出/导入）；凭证处理（将 secret 存入 Fernet vault，只保留 ref）；投影服务（将原生配置写入匹配 agent）；切换/激活操作；`PROVIDER_SWITCHED` 审计事件；导出/导入接入（注册 kind）；Claude `apiKeyHelper` 使用的密钥解析。
 - 内部引擎 connection 选择：全局 `internal_default` 标志、`set_internal_default(name)` + `resolve_internal_connection()`、`provider_internal_default_set` 审计事件，供 Coffer 内部 LLM 引擎（memory organizer / reorg / distill / `coffer__ask`）消费。
 - 退役独立的 `ModelConfig` 注册表（model CRUD REST + `coffer model` CLI），将内部引擎的模型选择折叠进 connection。provider 的 introspection 路由（`list-models`、`test-connection`）保留。
 - CLI：`coffer provider list|add|show|edit|remove|switch|key|internal-default`
@@ -164,7 +164,7 @@ exist or you may not have access"。用户既没机会选一个该 endpoint 支�
 
 Resource `name` = profile 名称（在 kind 内唯一，经 `validate_name` 校验）。
 
-### Config 字段（同步的 `config` 字典；确定性，不含机器本地 id）
+### Config 字段（导出的 `config` 字典；确定性，不含机器本地 id）
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -254,13 +254,13 @@ Claude Code 的 `apiKeyHelper` 调用此命令（`--wire anthropic`）。Codex �
 export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 ```
 
-## Sync（复用，几乎零引擎改动）
+## 导出 / 导入（复用，几乎零引擎改动）
 
-将 `provider` 建模为 ResourceService Kind 可自动同步：
+将 `provider` 建模为 ResourceService Kind，它就会自动进入导出 bundle（[ADR-016](../../docs/decisions/ADR-016-vault-export-import.zh.md)）：
 
 - `SyncExporter` 列出所有 kind → 通过 `resource_to_doc` 将每行序列化为 `resources/provider/<name>.yaml`。
 - `SyncImporter` 按 `(kind, name)` 进行 reconcile。
-- 凭证已以 Fernet 密文形式同步至 `credentials/<ref>.enc`。
+- 凭证已以 Fernet 密文形式随行于 `credentials/<ref>.enc`，且仅在用户选择连同凭证一起导出时才出现。
 
 接入点：定义 Kind，添加 `wire_provider_kind(...)` 辅助函数（镜像 `surfaces/http/wiring.py` 中的 `wire_kb_kind`），在 `surfaces/http/app.py` 的 composition root 中注册到 `app.state.kinds`。无需新迁移，无需 SCHEMA_VERSION bump。
 
@@ -408,8 +408,8 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 ### Scenario: a provider profile round-trips through sync export and import
 
 - **Given** 存在一条含 credential ref 的 provider profile，
-- **When** sync exporter 运行，随后在全新 DB 上运行 sync importer，
-- **Then** profile 行以相同的 `config` 字段被还原，凭证密文出现在 `credentials/<ref>.enc`，sync workspace 明文中无 secret 暴露。
+- **When** exporter 运行，随后在全新 DB 上运行 importer，
+- **Then** profile 行以相同的 `config` 字段被还原，凭证密文出现在 `credentials/<ref>.enc`，bundle 明文中无 secret 暴露。
 
 ### Scenario: the command line covers create, list, and switch
 
@@ -511,7 +511,7 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 
 - **FR-014**：`coffer provider key --wire <wire_format>` 必须找到该 wire 的活跃 profile，通过 `EncryptedCredentialStore.get(ref)` 解密，只打印到 stdout。原始 key 绝不记录到日志。不支持按 profile `<name>` 解析；仅接受 `--wire` 形式。
 
-**Sync**
+**导出 / 导入**
 
 - **FR-015**：`provider` kind 必须注册到 `app.state.kinds`，使 `SyncExporter`/`SyncImporter` 自动处理。无需新迁移或 SCHEMA_VERSION bump。
 
@@ -536,7 +536,7 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 ## 成功标准
 
 - **SC-001**：从全新安装开始，用户可以添加一条 anthropic provider profile，激活它，并通过一条 `coffer provider switch` 命令让 Claude Code 使用新 endpoint。
-- **SC-002**：原始 key 不会出现在 `settings.json`、`config.toml` 或 sync workspace（`resources/provider/*.yaml`）中——在集成测试中通过自动扫描验证。
+- **SC-002**：原始 key 不会出现在 `settings.json`、`config.toml` 或导出 bundle（`resources/provider/*.yaml`）中——在集成测试中通过自动扫描验证。
 - **SC-003**：每个 Acceptance Scenario 都有至少一个 `acceptance(spec="011-provider-switching", scenario="…")` 标记的测试，`make verify-acceptance` 报告零遗漏场景。
 - **SC-004**：`make verify` 本地和 CI 通过。
 - **SC-005**：激活 profile 只写入定义的托管键集，不触碰任何托管集以外的键。

@@ -7,9 +7,7 @@
 **Status**: Accepted
 **Input**: 用户描述：「管理 Coffer 已知的本地安装 AI agent，让后续功能（skills、memory、knowledge base）能向它们投递资产。每个 agent 都是 kind-agnostic Resource 框架（由 spec 001-mcp-gateway 引入）下 kind 为 `agent` 的一种 Resource。v1 支持两种 agent 类型：Claude Code 与 OpenAI Codex——每种都同时涵盖其 CLI 与桌面/IDE 形态，因为它们共享同一份磁盘配置。除注册 agent 外，用户还能查看（只读）每个 agent 的已知配置文件并在外部编辑器中打开它们，并一键把 Coffer 自己的 MCP server 安装到某个 agent 上。」
 
-> **关于 agent 类型的说明。** 受支持的产品：**Claude Code**（`claude_code`，`~/.claude/`）、**OpenAI Codex**（`codex`，`~/.codex/`），以及——由下方多 agent 增补重新加回的——**opencode**（`opencode`，`~/.config/opencode/`）、**hermes**（`hermes`，`~/.hermes/`）、**cursor**（`cursor`，`~/.cursor/`）与 **OpenClaw**（`openclaw`，`~/.openclaw/`，[ADR-044](../../docs/decisions/ADR-044-openclaw-managed-agent.zh.md)）。每种都同时覆盖其 CLI _与_ app/IDE 形态，因为它们读取同一个共享配置目录。每类型的行为都集中在能力清单（`AGENT_DESCRIPTORS`）里——新增一个产品 = 一个枚举值 + 一条描述符记录（配置文件 allowlist、MCP 注入形态等）。独立的 **Claude Desktop** 聊天应用（拥有自己的 `~/Library/Application Support/Claude/` 配置）不在范围内。
-
-> **多 agent 重新加宽增补（[ADR-040](../../docs/decisions/ADR-040-re-widen-agent-registry.zh.md)）。** 早先的一次简化把 registry 收窄到两个产品，并删除了 `cursor` / `opencode` / `openclaw` / `hermes` 枚举值（数据迁移 `0031`）。本增补为另外三个**受管 coding CLI**——`opencode`、`hermes`、`cursor`——撤销该收窄，每个都作为一条 `AgentDescriptor` 记录交付，外加当其 wire 协议尚未被覆盖时的一个 chat-provider 适配器（spec 008）。清单还是它一贯的那个接缝；重新加宽是数据、而非新机制，除非某产品的原生格式不同于两个原始 agent 所用的 JSON/TOML。有两条约束被记录为**能力 gap** 而非 bug，并经清单呈现，使不受支持的操作被隐藏而非失败：(a) `opencode` 没有 shell 命令生命周期 hook——只有进程内 JS 插件回调——因此其 session-context 注入不同于 Claude Code/Codex；(b) `cursor` 锁死在 Cursor 自己的后端，不暴露自定义 LLM base URL，因此 provider/API-key 投影（spec 011）对它是 **N/A**。第四个被移除的类型 **openclaw** 最初以「对等网关、不是叶子」为由被留在外面（[ADR-040](../../docs/decisions/ADR-040-re-widen-agent-registry.zh.md)）；[ADR-042](../../docs/decisions/ADR-042-context-injection-mechanisms.zh.md) 的复查发现该结论五格能力表错了三格，[ADR-044](../../docs/decisions/ADR-044-openclaw-managed-agent.zh.md) 予以撤销——**openclaw 是第六个受管 agent**，每个 facet 都对着真实安装（openclaw 2026.6.11）探针验证过。逐 agent 的 facet 支持在 Requirements（FR-003）下的 **Agent 能力矩阵**中列表化。
+> **关于 agent 类型的说明。** 受支持的产品：**Claude Code**（`claude_code`，`~/.claude/`）与 **OpenAI Codex**（`codex`，`~/.codex/`）。每个都同时覆盖其 CLI *与* app/IDE 形态，因为它们读取同一个共享配置目录。每类型的行为存放在能力清单（`AGENT_DESCRIPTORS`）中——新增一个产品是一个枚举值 + 一条描述符记录（配置文件 allowlist、MCP 注入形态等）。独立的 **Claude Desktop** 聊天应用（有它自己的 `~/Library/Application Support/Claude/` 配置）不在范围内。
 
 > **工作区增补（Workspace amendment）。** Story 9–12 把 registry 扩展到 agent 真实的磁盘工作区：agent 自己文件里实际配置的 MCP server、agent 已安装的插件、以及目录型配置条目。指导原则是**收编 → 主库 → 投递（ingest → hub → deliver）**：在 agent 工作区里发现的任何可共享内容，都可以被收编进 Coffer 的中枢（MCP 网关、spec 005 的 skill 主库），再投递给任意 agent，而不是作为各 agent 各自为政的一次性配置存在。所有写操作只经由每个 agent 的文档化配置路径；内部状态文件只读、绝不写入。
 
@@ -230,7 +228,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 - **第二次扫描时的发现**：已注册的类型不会作为候选项被提供；发现绝不重复已有条目。
 - **用户删除一个 agent**：移除并非永久。下次扫描会把该 agent 重新作为候选项呈现（删除可能是误操作）；Coffer 不保留任何抑制列表。用户再确认一次即可重新添加。
-- **agent 类型不在受支持列表中**：注册拒绝，给出清晰错误信息与受支持类型列表（清单中的类型——`claude_code`、`codex`、`opencode`、`hermes`、`cursor`、`openclaw`）。
+- **agent 类型不在受支持列表中**：注册拒绝，给出清晰错误信息与受支持类型列表（清单中的类型——`claude_code`、`codex`）。
 - **`config_dir` 路径不存在或不可写**：注册拒绝；不留下任何中间状态。
 - **`config_dir` 指向特权路径**（`/etc`、`/usr` 等）：注册拒绝。
 - **在 `agent` kind 内出现重名**：被 kind-agnostic Resource 框架拒绝。
@@ -248,30 +246,6 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - **agent 自身进程在 Coffer 读与写之间改写了配置文件**：写入因指纹不匹配被拒绝为过期（409）；用户重新读取后重试。Coffer 每次写入保留的 `.bak` 在相反方向的竞争中保证旧内容可恢复。
 - **指令文件包含 spec 007 的记忆投影受管块**：只读查看器标注该区块由记忆功能管理；任何编辑都发生在用户的外部编辑器中。
 - **`~/.codex/auth.json` 及其他凭据/状态文件**：永不进入任何 allowlist 或列表；插件与 MCP 解析也绝不读取它们。
-
-## Agent machine scope（2026-07-10 修订 —— machine × agent scope，[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.zh.md)）
-
-`agent` resource 携带一个仅限 **machine** 轴的框架级 `scope`（一个 `agent` 的
-scope 条目只接受 `"*"` 作为其 value，schema 强制——agent 名列表会被拒绝，因为
-agent resource 本身正是其他 kind 的 agent 轴所指向的对象，而不是某个 scope 的
-指向目标）。`scope == None`（默认）意味着这个 agent 在每台机器上都被预期存
-在；`scope == {"<ulid>": "*"}`（或 `{"*": "*"}`）把它限定到指名的机器。
-
-- **不在 scope 内的机器跳过副作用，但不跳过同步。** agent 的资源文档仍然同步
-  到、并在每台机器上可见（spec 010 既有的导入流水线不变）。在 agent scope**之
-  外**的机器上，导入会 upsert 这条 registry 行，但不执行原本会跟着发生的任何
-  机器本地副作用：不做 Coffer-MCP 投影、不跑导入后调和钩子（spec 010 的
-  「Import reconciliation」）、不做 shim 安装/刷新、不做 session-context 钩子
-  安装。这个 agent 只是静静地躺在那台机器的 registry 里——在 Machines fleet
-  view（spec 010）中显示为「这里不存在」，绝不会是被隔离或出错的行。
-- **导入门降级为「在 scope 内」的兜底。** spec 010 的导入门（`config_dir` 存
-  在性检查，本机没有对应目录时会把 agent 文档隔离）现在**仅**对在该 agent
-  scope**之内**的机器运行（或当 scope 为默认的 `None`——「每台机器」——时也运
-  行）。不在该 agent scope 内的机器根本不会走到这道门——它 `config_dir` 缺失
-  是预期之内，而不是隔离条件。这正好补上了 ADR-045 Context 一节指出的缺口：
-  一旦某个 agent 的 scope 排除了某台机器，它在那台机器上就不再产生永久的隔离
-  噪音；这道门仍然是安全网，用于 scope 说某台机器**应该**有这个 agent、但它
-  的目录还没就位（尚未安装，而非不在 scope 内）的情形。
 
 ## Acceptance Scenarios
 
@@ -380,12 +354,6 @@ agent resource 本身正是其他 kind 的 agent 轴所指向的对象，而不�
 - **Given** daemon 正在运行，
 - **When** 用户尝试注册受支持集合之外的类型（例如 `claude_desktop`、`gemini_cli` 或一个垃圾值），
 - **Then** 注册以 `unprocessable_entity`（422）被拒绝，并指明受支持类型，且不留下任何持久化数据。
-
-### Scenario: an agent scoped to machine A causes no quarantine noise on machine B
-
-- **Given** 机器 A 注册了一个 `scope` 仅设为机器 A 的 agent，而机器 B 上该 agent 的 `config_dir` 不存在，
-- **When** B 的 sync run 导入这个 agent 资源，
-- **Then** 这条 agent 行在 B 上被 upsert，且不评估 spec 010 的导入门；B 的同步状态不为它报告任何隔离；B 不为这个 agent 执行任何投影 / 调和 / shim 安装——而 A 继续正常运行它。
 
 ### Scenario: list an agent's config files
 
@@ -597,60 +565,6 @@ agent resource 本身正是其他 kind 的 agent 轴所指向的对象，而不�
 - **When** 用户导入该 store，
 - **Then** Coffer 不污染任何 inbox，返回零导入结果——`imported=0`、`store=null`、`project_path=null`、`organized=false`——而非报错。
 
-### Scenario: install Coffer's session hook into Cursor
-
-- **Given** 一个已注册的 `cursor` agent，其 manifest 声明 `cursor` flavor 的 `SHELL_COMMAND` 注入，
-- **When** 用户安装 Coffer 的生命周期 hook，
-- **Then** `~/.cursor/hooks.json` 新增一条扁平的 `sessionStart` 命令条目——`coffer-hook --agent <name> --dialect cursor --event sessionStart`——位于顶层 `version` 之下，且其他事件的既有条目不受影响。
-
-### Scenario: install Coffer's session-context block into Hermes
-
-- **Given** 一个已注册的 `hermes` agent，其 manifest 声明写入 allowlist `soul` 文件的 `INSTRUCTIONS_BLOCK` 注入，且 `~/.hermes/SOUL.md` 里已有用户自己的 persona，
-- **When** 用户安装 Coffer 的会话上下文注入，
-- **Then** `SOUL.md` 新增 Coffer 的 marker 围栏块，携带 FR-044 的会话上下文载荷（安装时渲染，全局作用域）；围栏之外用户内容逐字节保留；保留 `.bak` 副本；安装审计 `agent_hook_installed`；`status` 报 `installed=true, supported=true` 且无 `command`（块本身即载荷）。
-
-### Scenario: uninstalling the Hermes context block is a true inverse
-
-- **Given** 一个已注册的 `hermes` agent，Coffer 的上下文块已装入同时载有用户内容的 `SOUL.md`，
-- **When** 用户卸载该注入，
-- **Then** 仅移除 Coffer 的块（连同安装时添加的分隔空行）——文档回到安装前的内容（尾部换行归一化除外：安装会先 rstrip 尾部再追加）——卸载审计 `agent_hook_uninstalled`；再次卸载是 no-op 成功，不写入也不审计。
-
-### Scenario: a Coffer-driven turn refreshes the Hermes context block
-
-- **Given** 一个已注册且装有上下文块的 `hermes` agent，规则/记忆在安装后发生了变化，
-- **When** Coffer 驱动一个 hermes chat 回合（provider 构建该回合的 adapter），
-- **Then** 在 agent 启动前，块被原位重渲染为最新的 FR-044 载荷——恰好保留一个块；例行刷新不产生审计事件；未装块的 agent 被跳过（不创建任何文件）；刷新失败绝不阻塞回合。
-
-### Scenario: install Coffer's session-context plugin into opencode
-
-- **Given** 一个已注册的 `opencode` agent，其 manifest 声明写入 allowlist `plugin` 目录的 `PLUGIN_DROP` 注入，
-- **When** 用户安装 Coffer 的会话上下文注入，
-- **Then** 写入 `~/.config/opencode/plugin/coffer-session-context.js`——一个自包含模块：spawn `coffer-hook --agent <name> --dialect raw --event sessionStart`（argv 直接执行、无 shell；hook 路径与 agent 名以 JSON 字符串字面量嵌入），并经 `experimental.chat.system.transform` 把 stdout 推入系统提示词——安装审计 `agent_hook_installed`（含文件路径与命令）；`status` 报 `installed=true, supported=true` 且携带命令；重复安装原位覆盖 Coffer 自己的文件（始终恰好一个文件）。
-
-### Scenario: uninstalling the opencode plugin removes only Coffer's file
-
-- **Given** 一个已注册的 `opencode` agent，Coffer 插件与用户自己的插件文件同目录共存，
-- **When** 用户卸载该注入，
-- **Then** 仅移除 `coffer-session-context.js`（保留 `.bak`）；用户自己的插件文件不受影响；卸载审计 `agent_hook_uninstalled`；再次卸载是 no-op 成功、不再审计。
-
-### Scenario: install Coffer's MCP into OpenClaw's nested servers map
-
-- **Given** 一个已注册的 `openclaw` agent，其 `openclaw.json` 的嵌套 `mcp.servers` map 里已有一条用户自己的 MCP server，
-- **When** 用户安装 Coffer 的 MCP，
-- **Then** 一条 `coffer` command-map 条目落入 `mcp.servers` **内部**（manifest 的点分 container key 每个点下钻一层对象），用户的 server 与所有无关顶层键保留，留 `.bak`；status/uninstall 通过同一嵌套路径读取与编辑。
-
-### Scenario: install Coffer's session-context plugin package into OpenClaw
-
-- **Given** 一个已注册的 `openclaw` agent，其 manifest 声明 `openclaw` 插件风味的 `PLUGIN_DROP` 注入（package 目录 + fail-closed 启用开关），
-- **When** 用户安装 Coffer 的会话上下文注入,
-- **Then** 写入 `~/.openclaw/extensions/coffer-session-context/` 的三个文件——`package.json`（其 `openclaw.extensions` 指名入口）、`openclaw.plugin.json`（`{id, configSchema}` manifest）与 `index.js`（`definePluginEntry` + 返回 `{appendSystemContext}` 的 `before_prompt_build` handler，以 argv spawn `coffer-hook --agent <name> --dialect raw --event sessionStart`）——**并**在 `openclaw.json` 中置 `plugins.entries.coffer-session-context.enabled: true`（用户其余配置保留）；安装审计 `agent_hook_installed`（含 package 路径与命令）；重复安装原位覆盖 Coffer 自己的 package。
-
-### Scenario: uninstalling the OpenClaw plugin package removes the extension and its enable flag
-
-- **Given** 一个已注册的 `openclaw` agent，Coffer 扩展与用户自己的扩展、用户自己的 `plugins.entries` 条目并存，
-- **When** 用户卸载该注入，
-- **Then** 整个 `extensions/coffer-session-context/` package 被移除（不留 `.bak`——内容为 Coffer 渲染、可逐字节重建；残留的备份 package 仍会被 openclaw 扫描到）；Coffer 的 `plugins.entries` 键被移除而用户的扩展与条目幸存；卸载审计 `agent_hook_uninstalled`；再次卸载是 no-op 成功、既不写盘也不审计。
-
 ## Requirements
 
 ### Functional Requirements
@@ -659,26 +573,18 @@ agent resource 本身正是其他 kind 的 agent 轴所指向的对象，而不�
 
 - **FR-001**: 系统 MUST 将每个已知的本地 agent 注册为 kind 为 `agent` 的 Resource，按 spec 001-mcp-gateway 的 `<kind>:<name>` 约定，标识为 `agent:<name>`。
 - **FR-002**: 系统 MUST 用一个 kind 专属 schema 校验 agent 配置，字段包括 `type`（enum）与 `config_dir`（path，可选的绝对路径覆盖；省略时回退到该类型的标准位置——`claude_code` 用 `~/.claude`，`codex` 用 `~/.codex`）。skill 投递到 `<config_dir>/skills`。
-- **FR-003**: 系统 MUST 支持 `claude_code`、`codex`、`opencode`、`hermes`、`cursor` 与 `openclaw` 这些 agent 类型；注册清单之外的任何类型（例如 `claude_desktop` 聊天应用、某个 Gemini CLI）以 `unprocessable_entity`（422）被拒绝。每类型的行为由能力清单（`AGENT_DESCRIPTORS`）定义，因此新增一个类型 = 一个枚举值 + 一条描述符记录（外加，当该产品的 wire 协议是新的时，一个 chat-provider 适配器）。每个受支持类型都同时覆盖该产品的 CLI 与 app/IDE 形态，二者共享同一个配置目录。某个产品若在上游不存在某个 facet 的能力，就在其描述符中把该 facet 声明为缺失，界面 MUST 隐藏对应操作而非让它失败（逐 facet 的支持见下方能力矩阵）。
+- **FR-003**：系统 MUST 支持 `claude_code` 与 `codex` 这两个 agent 类型；注册清单之外的任何类型（例如 `claude_desktop` 聊天应用、某个 Gemini CLI）以 `unprocessable_entity`（422）被拒绝。每类型的行为由能力清单（`AGENT_DESCRIPTORS`）定义，因此新增一个类型 = 一个枚举值 + 一条描述符记录（外加，当该产品的 wire 协议是新的时，一个 chat-provider 适配器）。每个受支持类型都同时覆盖该产品的 CLI 与 app/IDE 形态，二者共享同一个配置目录。
 
-**Agent 能力矩阵（FR-003a）。** 逐 agent 的 facet 支持。「✓」= 与两个原始 agent 完全对齐；「N/A」= 该能力在上游不存在——**每一处 N/A MUST 引用使其成立的上游文档、参数或 issue**（[ADR-042](../../docs/decisions/ADR-042-context-injection-mechanisms.zh.md)：ADR-040 那四格未引证的 N/A 里有三格是错的）。标注「slice」表示这是 Coffer 尚未实现的机制——那是 Coffer 的缺口，不是产品的。
+**Agent 能力矩阵（FR-003a）。** 两个受支持类型都支持全部 facet，因此该矩阵记录的是每个产品**如何**实现各 facet，而非它是否存在。agent 界面上不存在逐 facet 的「不支持」状态，wire 上也没有能力布尔量——一个无法支持某 facet 的产品，本身就是不该加进来的产品。
 
-矩阵是机器可读的：`AgentOut.capabilities` 报告 UI 消费的逐类型 facet 布尔值（`plugins`、`transcripts`、`connections`），每个都派生自该 facet 自己的事实来源（清单里的 `plugins` 记录、对话记录布局映射、provider 投影目标——绝不硬编码类型列表）。facet 标志为 false 的界面用一个统一、中性的「不支持」状态取代其正常内容（不出现空表格、不出现原始报错）；跨资源选择器（连接表单的兼容 Agent 勾选框）则完全省略不具备能力的 agent——逐 agent 的原因写在该 agent 自己的详情页上，而不是别的资源的表单里（修订 ADR-042 的呈现规则，2026-07-10）。
+**会话上下文注入**列指明 hook 条目落在哪个文件。两个产品都暴露 shell hook：agent 在会话启动时 exec `coffer-hook` 并读取其 stdout，其中承载 FR-044 载荷（`GET /agents/{name}/session-context`）。两个产品的磁盘条目形状相同——按事件自身名称分键的 matcher 组——只在安装哪些生命周期事件上有区别。
 
-**会话上下文注入**这一列给出该 agent 在 manifest 中声明的 `InjectionMode`。上游存在三种机制，三者投递同一份载荷（`GET /agents/{name}/session-context`）：`SHELL_COMMAND`（agent 执行 `coffer-hook`）、`PLUGIN_DROP`（Coffer 落一个 JS/TS 插件去 spawn 它）、`INSTRUCTIONS_BLOCK`（Coffer 把它渲染进 instructions 文件的 marker 块）。
+| Agent | 配置目录 | chat provider（spec 008） | Coffer-MCP 注入（FR-019） | 会话上下文注入（FR-043/044） | provider 投影（spec 011） | 原生记忆禁用（FR-046） |
+| --- | --- | --- | --- | --- | --- | --- |
+| `claude_code` | `~/.claude/` | Claude Agent SDK | `mcpServers` JSON | `settings.json`（SessionStart + SessionEnd） | `apiKeyHelper` | `autoMemoryEnabled` |
+| `codex` | `~/.codex/` | `codex app-server` | `[mcp_servers]` TOML | `hooks.json`（仅 SessionStart） | `[model_providers]` env_key | `features.memories` |
 
-| Agent | 配置目录 | chat provider（spec 008） | Coffer-MCP 注入（FR-019） | 会话上下文注入（FR-043/044） | provider 投影（spec 011） | 原生记忆禁用（FR-046） | 交付 |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `claude_code` | `~/.claude/` | Claude Agent SDK | ✓ `mcpServers` JSON | ✓ `SHELL_COMMAND`——`settings.json`（Start+End） | ✓ `apiKeyHelper` | ✓ `autoMemoryEnabled` | 已交付 |
-| `codex` | `~/.codex/` | `codex app-server` | ✓ `[mcp_servers]` TOML | ✓ `SHELL_COMMAND`——`hooks.json`（仅 Start） | ✓ `[model_providers]` env_key | ✓ `features.memories` | 已交付 |
-| `opencode` | `~/.config/opencode/` | `opencode run --format json`（JSONL） | ✓ `mcp` typed-local JSON | ✓ `PLUGIN_DROP`——投放在自动加载的 `plugin/` 目录里的插件（FR-048），spawn `coffer-hook --dialect raw`；注入点 `experimental.chat.system.transform` push 进 system prompt（1.14.48 上探针实证；上游不存在 shell hook） | ✓ `provider` 块，`apiKey:"{env:COFFER_PROVIDER_KEY}"` | **N/A**——不存在可关闭的跨会话原生记忆特性 | 已交付 |
-| `hermes` | `~/.hermes/` | `hermes acp`（ACP JSON-RPC over stdio） | ✓ `mcp_servers` YAML | ✓ `INSTRUCTIONS_BLOCK`——`SOUL.md` 里的 marker 块，那是 hermes 从其 home 目录全局读取的唯一指令文件（`prompt_builder.load_soul_md`；`AGENTS.md` 只按 cwd 解析——两者均在 v0.18.0 上探针实证）（FR-047：安装时渲染，每个 Coffer 驱动的回合前刷新），因为 `on_session_start` / `pre_llm_call` 文档里有但上游**从不调用**（[hermes-agent#2817](https://github.com/NousResearch/hermes-agent/issues/2817)，closed as not planned）；只有 tool hook 触发 | ✓ `providers.coffer` + `key_env: COFFER_PROVIDER_KEY` | ✓ `memory.memory_enabled:false` | 已交付 |
-| `cursor` | `~/.cursor/` | `cursor-agent -p --output-format stream-json`（NDJSON） | ✓ `mcp.json` 中的 `mcpServers` | ✓ `SHELL_COMMAND`——`hooks.json` 的 `sessionStart`（自有 flavor：扁平条目、camelCase 键、顶层 `version`），输出字段 `additional_context` | **N/A**——`cursor-agent --help`（v2026.02.27）无任何 base-URL 参数，`cli-config.json` 无 endpoint 键；自定义 base URL 是 IDE-only。用它自己的 `cursor-agent login` auth | **N/A**——Memories 是 IDE-only 的 Settings→Rules 开关，无 CLI 参数或配置键 | 已交付 |
-| `openclaw` | `~/.openclaw/` | `openclaw agent --agent main --session-key <key> -m … --json --local`——stdout 上一个 JSON blob，**非流式**（Coffer 唯一的非流式适配器；探针实证，2026.6.11）。没有 cwd 参数：回合在 openclaw 自己的 workspace 里运行，绝不在会话目录（[ADR-044](../../docs/decisions/ADR-044-openclaw-managed-agent.zh.md)） | ✓ `openclaw.json` 中嵌套的 `mcp.servers` command-map（探针：`openclaw mcp status` 列出手写的 `{command}` 条目） | ✓ `PLUGIN_DROP`（`openclaw` 风味）——`extensions/` 下的 package 目录 + fail-closed 的 `plugins.entries.<id>.enabled: true`（探针：`openclaw config validate` 接受这对组合）；hook `before_prompt_build` 返回 `{appendSystemContext}`。`--local` 每次运行预载插件 → Coffer 驱动的回合立即可见；长驻 gateway 需重启（channel 用法的注意事项） | ✓ `models.providers.coffer` + `apiKey: "${COFFER_PROVIDER_KEY}"`——env var 缺失只是启动 WARNING、exit 0（2026-07-10 探针，推翻文档「加载即抛错」的说法）；`models[].{id,name}` 均必填、`models: []` 合法；置 `agents.defaults.model.primary`、保留用户 `fallbacks`（均经 `openclaw config validate` 探针） | ✓ `plugins.slots.memory: "none"`（探针：校验通过；恢复即移除该键） | 本 slice |
-
-**Cursor 的 `sessionStart` 在 headless 下触发已实证**（2026-07-10，登录后的真实探针）：装入 Coffer 的确切 `hooks.json` 形状后，`cursor-agent -p` 触发了 hook 命令（marker 文件落盘），且 `additional_context` 信封抵达模型。ADR-042「影响」中唯一仅有文档背书的断言就此关闭。
-
-`openclaw`——第四个被移除的类型——最初以「对等网关、不是叶子」为由被排除在外（[ADR-040](../../docs/decisions/ADR-040-re-widen-agent-registry.zh.md)）；[ADR-044](../../docs/decisions/ADR-044-openclaw-managed-agent.zh.md) 推翻了这一结论，上表每一格都对着真实安装验证过。openclaw *同时也*是一个网关（它编排 coding CLI、承载 channels）这一点依然成立；Coffer 管理的是它作为叶子 agent 的那一面，不触碰它的网关角色。
+**为什么只有这两个。** registry 一度还携带另外四个产品——`opencode`、`hermes`、`cursor`、`openclaw`。它们已被移除。这四个产品都没有装在维护者自己的机器上，因此每个 facet 都是照着上游文档和一次性探针写出来的，本地永远无法回归验证：每改动一次核心机制，就意味着同时盲改六条代码路径。一个 Coffer 无法真正实操的产品，其承载成本高于它带来的回报。移除它们同时把三种上下文注入机制收敛回一种（见 FR-043），并去掉了那四个类型才需要的逐 facet 能力矩阵。重新加回一个产品是一个枚举值加一条描述符记录——等到那个产品真正被使用时再做，而不是提前做。
 
 **发现（检测 = 发现 + 确认）**
 
@@ -690,11 +596,10 @@ agent resource 本身正是其他 kind 的 agent 轴所指向的对象，而不�
 - **FR-006**: 用户 MUST 能注册、列出、查看、更新（config_dir、description）与移除 agent。agent **没有启用/禁用的概念**——已注册的 agent 就是存在的，agent 层面不存在启用/禁用状态。注册时 agent 名称是可选的——省略时系统 MUST 派生一个稳定的按类型默认名（下划线变连字符，如 `claude_code` → `claude-code`）。
 - **FR-007**: 注册时系统 MUST 自动创建 `<config_dir>/skills` 子目录，再验证解析后的 `config_dir` 存在、是目录、可写且不是特权系统路径，方可接受该值。skill 投递到 `<config_dir>/skills`。
 - **FR-008**: 系统 MUST 拒绝任何会造成重复 `agent:<name>` 的注册，并 MUST 拒绝为同一个配置目录注册多于一个 agent。`config_dir` 由 agent 类型派生，因此每个受支持类型——也即每个磁盘上的配置目录——至多只能注册一次；第二次尝试以 `conflict`（409）拒绝且不持久化任何内容。
-- **FR-008a**（2026-07-10 修订 —— machine × agent scope，[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.zh.md)）：agent 资源的 `scope` MUST 只接受 machine 轴——每个条目的 value MUST 为 `"*"`；一个指名了具体 agent 的 scope 条目 MUST 在校验阶段被拒绝（422）。在一个 agent scope 之外的机器上，系统 MUST NOT 为该 agent 运行导入后调和钩子、Coffer-MCP 投影，或 shim/session-context 安装，且 spec 010 的导入门 MUST NOT 对该 agent 在那台机器上被评估——文档仍然 upsert 进 registry。在一个 agent scope 之内的机器上（包括默认的 `scope=None`），导入门仍是 `config_dir` 缺失时的兜底安全网。
 
 **配置文件**
 
-- **FR-013**: 每个受支持 agent 类型 MUST 定义一份精选的配置文件 allowlist（在其能力清单记录中），每个条目携带稳定的 `key`、一个显示名、一个解析后的绝对路径与一个 `format`（`json`、`toml`、`yaml`、`markdown` 或 `text`）。Claude Code → `settings.json`、`settings.local.json`、`~/.claude.json`、`CLAUDE.md`（key 为 `instructions`）与 `agents/` 目录条目（FR-034）；Codex → `config.toml`、`AGENTS.md`（key 为 `instructions`）与 `hooks.json`；Cursor → `cli-config.json`（key `config`）、`mcp.json`（key `mcp`）、`hooks.json`（key `hooks`）与 `AGENTS.md`（key `instructions`）；opencode → `opencode.json`（key `opencode`）、`AGENTS.md`（key `instructions`）与 `plugin/` 目录条目（key `plugin`——opencode 从中自动加载插件模块；存放 Coffer 投放的会话上下文插件，FR-048；目录查看器只列 `.md` 子文件，`.js` 插件仅经 FR-048 的 install/uninstall 操作管理）；Hermes → `config.yaml`（key `config`）与 `SOUL.md`（key `soul`）——SOUL.md 是 hermes 从其 home 目录读取的**唯一**指令文件（其 `AGENTS.md` 只按会话 cwd 解析，所以 `~/.hermes/AGENTS.md` 是死文件、不入 allowlist；两者均在 hermes v0.18.0 上探针实证）；OpenClaw → `openclaw.json`（key `config`——承载嵌套的 `mcp.servers` 块、`models.providers` 投影块与 `plugins.entries`/`plugins.slots` 开关）、workspace 指令文件 `AGENTS.md`（key `instructions`）、`SOUL.md`（key `soul`）、`IDENTITY.md`（key `identity`）、`USER.md`（key `user`）、`TOOLS.md`（key `tools`）与 `MEMORY.md`（key `memory`——openclaw 由 agent 维护的记忆索引，只读呈现）——路径假定默认 workspace `~/.openclaw/workspace`（`agents.defaults.workspace` 可配置；被挪走的 workspace 只是列为不存在）——外加 `extensions/` 目录条目（key `extensions`——本地扩展 package；存放 Coffer 投放的会话上下文 package，FR-048；目录查看器只列 `.md` 子文件，package 的 JS/JSON 文件仅经 FR-048 的 install/uninstall 操作管理）。Claude Code/Codex 原 `memory` key 改名为 `instructions`——那些文件是人写的指令，区别于 agent 自写的记忆（spec 007 的领域）。
+- **FR-013**：每个受支持 agent 类型 MUST 定义一份精选的配置文件 allowlist（在其能力清单记录中），每个条目携带稳定的 `key`、一个显示名、一个解析后的绝对路径与一个 `format`（`json`、`toml`、`markdown` 或 `text`）。Claude Code → `settings.json`、`settings.local.json`、`~/.claude.json`、`CLAUDE.md`（key 为 `instructions`）与 `agents/` 目录条目（FR-034）；Codex → `config.toml`、`AGENTS.md`（key 为 `instructions`）与 `hooks.json`。Claude Code/Codex 原 `memory` key 改名为 `instructions`——那些文件是人写的指令，区别于 agent 自写的记忆（spec 007 的领域）。
 - **FR-014**: 用户 MUST 能列出一个 agent 的配置文件，并对每个文件给出其 key、显示名、路径、所在文件夹的绝对路径（`folder_path`）、格式与存在性（文件存在时附带大小与修改时间）。`path`/`folder_path` 这一对支撑只读 UI 的「在外部编辑器中打开 / 在文件管理器中显示」（FR-038）。
 - **FR-015**: 用户 MUST 能读取任一 allowlist 内配置文件的内容。不存在的文件读为空内容、`exists=false`，且读取不会创建它。
 - **FR-016**: 系统 MUST 通过 REST API 与 `coffer agent` CLI 为任一 allowlist 内配置文件的内容暴露一个程序化写入（保存）；应用内 UI 是只读的，不写入配置文件内容。写入前 MUST 按文件的 `format` 校验内容；畸形的 `json`/`toml` MUST 被拒绝（`unprocessable_entity`，422）且磁盘文件保持不变。`markdown`/`text` 文件接受任意内容。
@@ -703,7 +608,7 @@ agent resource 本身正是其他 kind 的 agent 轴所指向的对象，而不�
 
 **Coffer MCP 安装**
 
-- **FR-019**: 用户 MUST 能一键把 Coffer 自己的 MCP server 安装到某个 agent。安装把一个 `coffer` stdio MCP-server 条目写进 agent 的 MCP 配置，按该 agent 清单中 `McpInjectionSpec` 声明的形态——`claude_code` 写 `~/.claude.json` 的 `mcpServers`；`codex` 写 `~/.codex/config.toml` 的 `[mcp_servers.coffer]`。`command` 设为 `coffer-mcp-shim` 二进制的绝对路径（先在 `PATH` 中解析，再查找当前解释器的脚本目录——这样即使守护进程的 `PATH` 不含 venv，也能找到装在 venv 里的 shim——最后回退到打包的二进制；环境变量 `COFFER_MCP_SHIM_PATH` 优先于以上全部）。安装还会把 `--agent <name>`（该 agent 的注册名）作为 shim 调用的参数写入——写在条目形态对应的参数位置（command-map 条目写 `args`，typed-array 条目追加到 `command` 数组）——使 gateway 能把会话归属到该 agent，用于 agent 轴的 scope 把关（2026-07-10 修订，[ADR-045](../../docs/decisions/ADR-045-machine-agent-resource-scope.zh.md)；与 FR-043 的 hook 安装模式一致）。若无法解析 shim，安装被拒绝且不写入任何内容。
+- **FR-019**: 用户 MUST 能一键把 Coffer 自己的 MCP server 安装到某个 agent。安装把一个 `coffer` stdio MCP-server 条目写进 agent 的 MCP 配置，按该 agent 清单中 `McpInjectionSpec` 声明的形态——`claude_code` 写 `~/.claude.json` 的 `mcpServers`；`codex` 写 `~/.codex/config.toml` 的 `[mcp_servers.coffer]`。`command` 设为 `coffer-mcp-shim` 二进制的绝对路径（先在 `PATH` 中解析，再查找当前解释器的脚本目录——这样即使守护进程的 `PATH` 不含 venv，也能找到装在 venv 里的 shim——最后回退到打包的二进制；环境变量 `COFFER_MCP_SHIM_PATH` 优先于以上全部）。安装还会把 `--agent <name>`（该 agent 的注册名）作为 shim 调用的参数写入——写在条目形态对应的参数位置（command-map 条目写 `args`，typed-array 条目追加到 `command` 数组）——使 gateway 能把会话归属到该 agent，用于按 agent 的 scope 把关（[ADR-045](../../docs/decisions/ADR-045-per-agent-resource-scope.zh.md)；与 FR-043 的 hook 安装模式一致）。若无法解析 shim，安装被拒绝且不写入任何内容。
 - **FR-020**: 安装 MUST 幂等——重复安装就地更新已有的 `coffer` 条目，绝不产生重复。系统 MUST 暴露一个状态操作，报告该 agent 当前是否已安装 Coffer 的 MCP。
 - **FR-021**: 用户 MUST 能卸载 Coffer 的 MCP，从 agent 的 MCP 配置中移除 `coffer` 条目。未安装时卸载为空操作（no-op）成功。
 - **FR-022**: 安装与卸载 MUST 复用 FR-017 的原子写入 + `.bak` 机制，并写一条 audit 条目（`agent_mcp_installed` / `agent_mcp_uninstalled`）。
@@ -737,12 +642,10 @@ agent resource 本身正是其他 kind 的 agent 轴所指向的对象，而不�
 - **FR-040**: 系统 MUST 暴露一个只读的**原生记忆扫描**，列出某 agent 类型自己的原生记忆 store。支持两种布局。`claude_code` 为逐项目布局，store 位于 `<config_dir>/projects/<slug>/memory/`：每个含 `memory/` 目录的项目一行，`item_count` 为排除 `MEMORY.md` 的 `.md` 事实文件数——当无事实文件但 `MEMORY.md` 含内联内容（较旧/手写的 hub 文档）时为 `1`，因为该内联文档本身即可导入条目。`project` 标签与 `path` 为**真实**项目目录，从该项目的 session transcript `cwd` 还原（slug 编码有损——`/`、`.`、`_` 全部坍缩成 `-`——无法可靠从 slug 重建路径；有损 slug 解码仅作最后兜底）。`codex` 为单一**全局** task-grouped 文档，位于 `<config_dir>/memories/MEMORY.md`，其中每个 `# Task Group` 块带一行 `applies_to: cwd=…` 把它路由到一个或多个项目工作目录；扫描把它解析成「每个不同 cwd 一行」，`item_count` 为路由到此 cwd 的 Task Group 数、`path` 为该 cwd（`memory_dir` 为所有行共享的那个全局 store）。没有原生记忆布局的 agent 类型、没有 `projects/` 目录、或没有 `memories/MEMORY.md`，都返回空列表。扫描是只读的，一切在读取时从磁盘派生（不存储），并——遵循 FR-011 的「工作区列表只读，均不发出 audit 事件」——MUST NOT 发出任何 audit 事件。它绝不写入 agent 的 store。
 - **FR-041**: 用户 MUST 能把一个原生记忆 store **导入（收编）**进 Coffer。`claude_code`：给定一个 store 的 `memory_dir`，系统读取其事实文件（跳过 `MEMORY.md`，或当无事实文件时解析内联 `MEMORY.md`），解析出真实项目路径——存在于磁盘时用解码后的 slug，否则用兄弟 transcript `.jsonl` 中记录的 `cwd`（slug 解码有损）。`codex`：其全局 store 被所有行共享，故请求另带所选行的 `project_path`，系统只导入路由到该 cwd 的 Task Group 块。两种情况都把每条目写成项目作用域的 Coffer memory 事实，进入该项目 store 的 `knowledge/inbox/` 通道（如同一批 `remember`；一次受信任的导入 MAY 写到 32768 字符的领域上限）。随后把 spec 007 的 organizer 作为**后台**任务触发，因为一次批量导入是数十次顺序的内部 LLM 调用，MUST NOT 阻塞请求。结果上报 `imported`、`skipped`、`store`（项目无法映射到 Coffer store 时为 null）、`project_path` 与 `organized`。任何 git 项目之外的 store（无可映射的 Coffer 项目）产出 `imported=0`、`store=null`、`project_path=null`、`organized=false`——它不污染任何 inbox，也不是错误。导入的 memory 写入经 spec 007 既有的 memory 事件审计；导入不新增任何 004 audit 事件。
 
-- **FR-043**：用户 MUST 能一键**安装 Coffer 的生命周期 hook** 到某个 agent，并能卸载与查询状态。安装会按该 agent manifest 的 `ContextInjectionSpec` 把一条 `coffer-hook` 命令条目写入其 hooks 文件——`claude_code` 为 `settings.json`，`codex` 与 `cursor` 为 `hooks.json`——命令是 `coffer-hook` 二进制的绝对路径（解析顺序同 shim：`COFFER_HOOK_PATH` 覆盖 → `PATH` → 解释器的 scripts 目录 → 内置）外加 `--agent <name>` 参数，因为外部 hook 负载不携带 Coffer 的 agent 身份。磁盘条目形状与事件键拼写遵循该 spec 的 `HookFlavor`：`claude`（matcher 组、PascalCase 键）用于 `claude_code`/`codex`；`cursor`（扁平命令条目、camelCase 键、创建时写入顶层 `version` 且此后绝不重写）。非 `claude` flavor 还会把 `--dialect <flavor> --event <key>` 烘进命令，因为 Cursor 的 `hooks.json` 按事件分键、却不契约性地在 stdin 里给出事件名。`claude_code` 安装 SessionStart **与** SessionEnd；`codex` 与 `cursor` **仅**安装 SessionStart（两者都没有可用的会话结束事件）。安装 MUST 幂等（原位替换 Coffer 自己的条目，按 `coffer-hook` basename 识别，绝不触碰用户自建的 hook）；卸载仅移除 Coffer 的条目；与其他内容并存的 Cursor 顶层 `version` 予以保留，但 Coffer 自己写进一个原本没有 `version` 的文件的那个 `version`，在文档再无其他内容时 MUST 一并移除，使卸载成为安装的真逆运算。识别 Coffer 自有条目时 MUST 容忍无法解析的用户命令（引号不配对的命令按定义不是 Coffer 的——它写入的每一段都做了引号转义），而不是让请求失败。若二进制无法解析，或该 agent 类型未声明上下文注入，则拒绝安装（`HOOK_INSTALL_UNSUPPORTED`，422）且不写入任何内容；对这样的 agent，`status` 报 `installed=false` 而非报错。三种 `InjectionMode` 均已实现，经由同一组 install/uninstall/status 操作：`INSTRUCTIONS_BLOCK` 走 FR-047 路径，`PLUGIN_DROP` 走 FR-048 路径。两个事件都审计（`agent_hook_installed` / `agent_hook_uninstalled`）。
+- **FR-043**：用户 MUST 能一键**安装 Coffer 的生命周期 hook** 到某个 agent，并能卸载与查询状态。安装会按该 agent manifest 的 `ContextInjectionSpec` 把一条 `coffer-hook` 命令条目写入其 hooks 文件——`claude_code` 为 `settings.json`，`codex` 为 `hooks.json`——命令是 `coffer-hook` 二进制的绝对路径（解析顺序同 shim：`COFFER_HOOK_PATH` 覆盖 → `PATH` → 解释器的 scripts 目录 → 内置）外加 `--agent <name>` 参数，因为外部 hook 负载不携带 Coffer 的 agent 身份。两个产品的条目形状相同：按事件自身名称分键的 matcher 组。`claude_code` 安装 SessionStart **与** SessionEnd；`codex` **仅**安装 SessionStart（它没有可用的会话结束事件）。安装 MUST 幂等（原位替换 Coffer 自己的条目，按 `coffer-hook` basename 识别，绝不触碰用户自建的 hook）；卸载仅移除 Coffer 的条目，使卸载成为安装的真逆运算。识别 Coffer 自有条目时 MUST 容忍无法解析的用户命令（引号不配对的命令按定义不是 Coffer 的——它写入的每一段都做了引号转义），而不是让请求失败。若二进制无法解析，则拒绝安装（`HOOK_INSTALL_UNSUPPORTED`，422）且不写入任何内容。两个事件都审计（`agent_hook_installed` / `agent_hook_uninstalled`）。
 - **FR-044**（Slice 6）：在 SessionStart 时，已安装的 hook MUST 能拉取一份**规则 bundle** 作为附加上下文注入：系统从会话的 `cwd` 解析召回作用域（若是 git 项目则有 project，再加 global），按顺序拼接各 store 的规则（先 project 后 global），并**始终**附加两条内置种子规则——一条*恢复*规则（引导 agent 在用户要求继续此前工作时调用 `coffer__resume()`），一条*软引导*规则（优先 `coffer__remember` / `coffer__recall` 而非 agent 自身的原生记忆）。bundle 仅运行时存在（不写入 agent 的任何文件），上限 ≤10000 字符；当任何地方都没有用户规则时仍返回种子规则。通过 `GET /agents/{name}/session-context?cwd=` 暴露。
 - **FR-045**（Slice 6）：在 SessionEnd 时（仅 Claude Code——Codex 没有会话结束事件，降级到 FR-046 的补扫），已安装的 hook MUST 能触发对**单个会话**的固化（写入 journal 通道），复用 FR-046 的幂等账本，使某会话绝不会被补扫重复固化。该操作幂等且始终成功（2xx）：无内部引擎、未知会话、已固化或非 git 项目的会话都是被容忍的 no-op。通过 `POST /agents/{name}/sessions/{session_id}/end` 暴露。
-- **FR-046**（Slice 6）：用户 MUST 能通过 agent 上的 `disable_native_memory`（默认 false）选择**禁用 agent 的原生写侧记忆**。切换它会同步驱动持久化字段与磁盘变换——Claude Code 在 `settings.json` 置 `autoMemoryEnabled=false`；Codex 在 `config.toml` 置 `features.memories=false` + `memories.generate_memories=false`；Hermes 在 `config.yaml` 置 `memory.memory_enabled=false` + `memory.user_profile_enabled=false`；OpenClaw 在 `openclaw.json` 置 `plugins.slots.memory: "none"`（清空 memory 插件槽——探针验证，[ADR-044](../../docs/decisions/ADR-044-openclaw-managed-agent.zh.md)）——使 Coffer 成为唯一的共享记忆 store。切回 false 会恢复 agent 的原生记忆（移除 Coffer 添加的键）。**OpenClaw 注意**：该槽键携带用户选定的**值**（memory 插件 id），不同于其他 agent 的布尔开关——恢复即移除键，落回 openclaw 的**默认** memory 插件（`memory-core`）；此前选了非默认插件（如 `memory-lancedb`）的用户需手动重选。Coffer 不快照先前的选择。它不会阻止 agent 读取其指令文件（CLAUDE.md / AGENTS.md）。两种切换都审计（`agent_native_memory_disabled` / `agent_native_memory_restored`）。
-- **FR-047**：对 manifest 声明 `INSTRUCTIONS_BLOCK` 注入的 agent（`hermes`——上游没有可用 hook，[ADR-042](../../docs/decisions/ADR-042-context-injection-mechanisms.zh.md)），FR-043 的 install/uninstall/status 操作 MUST 作用于 manifest `config_key` 所指指令文件里的一个 **marker 围栏块**，而非 hooks 条目。该文件 MUST 是 agent 在会话启动时真实全局注入的那个——hermes 为 `soul` key（`~/.hermes/SOUL.md`，包括 ACP 在内所有平台的身份槽 #1）；其 `AGENTS.md` 只按会话 cwd 解析，不是合法目标（探针实证，v0.18.0）。安装把 FR-044 载荷（按**全局作用域**取——块不分项目）渲染进 `<!-- coffer:session-context:start -->` / `<!-- coffer:session-context:end -->` 围栏之间：原位替换 Coffer 已有的块，否则追加在用户内容之后；围栏之外的用户内容绝不触碰，写入走原子 store（`.bak`）。卸载仅移除配平的块，在尾部换行归一化的意义下是安装的逆运算；围栏配对 MUST 把每个结束围栏绑定到最近的前置起始围栏（跨度因此绝不可能吞掉孤儿围栏与真实块之间的用户文本）；不配平的围栏（用户损坏）视为*不是 Coffer 的*——因此安装会追加一个新的配平块，卸载不触碰任何内容；载荷内出现的围栏标记 MUST 在渲染前被中和，使载荷无法越出块外。`status` 报块的存在性，`command=null`。因为块在两次写入之间是**静态的**，System MUST 在每个 Coffer 驱动的该类型 chat 回合前重渲染它（尽力而为，绝不阻塞或使回合失败，无审计事件）；未装块的 agent 被跳过。install/uninstall 动作审计与 FR-043 相同的 `agent_hook_installed` / `agent_hook_uninstalled` 事件。
-- **FR-048**：对 manifest 声明 `PLUGIN_DROP` 注入的 agent（`opencode`、`openclaw`——没有 shell hook；进程内 JS 插件 API 即注入点，[ADR-042](../../docs/decisions/ADR-042-context-injection-mechanisms.zh.md)），FR-043 的 install/uninstall/status 操作 MUST 作用于 agent 插件目录里 **Coffer 自己的插件**（manifest 的 `config_key` 指向 allowlist 的 DIRECTORY 条目），磁盘形状由 manifest 的 **`PluginFlavor`** 声明。`opencode` 风味是一个扁平文件（自动加载的 `plugin/` 目录里的 `coffer-session-context.js`），其模块经 `experimental.chat.system.transform` 把 bundle 推入系统提示词。`openclaw` 风味（[ADR-044](../../docs/decisions/ADR-044-openclaw-managed-agent.zh.md)）是一个 **package 目录** `extensions/coffer-session-context/`——`package.json`（其 `openclaw.extensions` 指名入口）、`openclaw.plugin.json`（`{id, configSchema}`）与 `index.js`（`definePluginEntry`，其 `before_prompt_build` handler 返回 `{appendSystemContext}`）——**并且**，因为非内置的 openclaw 插件是 **fail-closed** 的，还要在 manifest 的 `plugin_enable_config_key` 指名的配置文件里置 `plugins.entries.coffer-session-context.enabled: true`；`--local` 嵌入式运行每次都预载插件注册表，Coffer 驱动的回合立即可见该扩展，而长驻 gateway 要重启后才认（channel 驱动 openclaw 用法的已记录注意事项）。两种风味都 spawn 同一个 `coffer-hook` 二进制，参数 `--dialect raw --event sessionStart`（argv 直接执行、无 shell——hook 路径与 agent 名以 JSON 字符串字面量嵌入，任意路径安全），按会话缓存且失败静默（daemon 挂了绝不拖垮 agent；spawn 有有界超时）。与 FR-047 不同，此 mode 是**动态的**——插件实时取 bundle，因此没有回合前刷新机制。安装 MUST 幂等（原位覆盖 Coffer 的命名文件/package）且 MUST NOT 触碰插件目录中的其他文件；卸载只移除 Coffer 的文件（保留 `.bak`）或 package 加启用开关（package 不留 `.bak`——内容为 Coffer 渲染、可逐字节重建，且残留的备份 package 仍会被 openclaw 扫描到），不存在时为 no-op 成功；`status` 报插件存在性并携带 spawn 命令。`raw` 方言输出无信封的 bundle 文本且从不读 stdin。审计同 FR-043。
+- **FR-046**（Slice 6）：用户 MUST 能通过 agent 上的 `disable_native_memory`（默认 false）选择**禁用 agent 的原生写侧记忆**。切换它会同步驱动持久化字段与磁盘变换——Claude Code 在 `settings.json` 置 `autoMemoryEnabled=false`；Codex 在 `config.toml` 置 `features.memories=false` + `memories.generate_memories=false`——使 Coffer 成为唯一的共享记忆 store。切回 false 会恢复 agent 的原生记忆（移除 Coffer 添加的键）。它不会阻止 agent 读取其指令文件（CLAUDE.md / AGENTS.md）。两种切换都审计（`agent_native_memory_disabled` / `agent_native_memory_restored`）。
 
 **界面**
 
@@ -767,9 +670,9 @@ agent resource 本身正是其他 kind 的 agent 轴所指向的对象，而不�
 
 ### Key Entities
 
-- **Agent**：一个 kind 为 `agent` 的 Resource。代表一份本地安装的 AI agent。Config: `type`（受支持的 enum）、`config_dir`（可选的绝对路径覆盖；默认回退到该类型的标准位置）。skill 投递到 `<config_dir>/skills`。标识为 `agent:<name>`。携带一个仅限 machine 轴（条目 value 只能为 `"*"`）的框架级 `scope`，限定这个 agent 被预期存在于哪些机器上（2026-07-10 修订 —— machine × agent scope，ADR-045；见「Agent machine scope」）。
-- **Agent Type**：一个 enum 值，标识一个已知 agent 产品（`claude_code`、`codex`、`opencode`、`hermes`、`cursor`、`openclaw`）。每个值映射到**能力清单**（`AGENT_DESCRIPTORS`）中的一条记录，携带其默认 `config_dir`、显示名、用于发现的安装标记、精选的**配置文件 allowlist**、**MCP 注入形态**，以及可选的 上下文注入 / provider 投影 / 原生记忆 facet——某产品在上游缺失的 facet 留空（FR-003a 下的能力矩阵），界面隐藏对应操作。当某个 facet 缺席是因为 **Coffer** 尚未实现该产品的机制（而非产品本身没有），界面 MUST 如实说明，而不是把它呈现为上游限制。
-- **Context Injection Spec**：描述 Coffer 的会话上下文（规则 + 记忆）如何抵达某个 agent 模型的 manifest facet。携带一个 `InjectionMode`（`SHELL_COMMAND` / `PLUGIN_DROP` / `INSTRUCTIONS_BLOCK`）、它写入的 allowlist 配置 `key` + `format`、它安装的生命周期 `events`（`INSTRUCTIONS_BLOCK` 为空——块不是事件驱动的），一个 `HookFlavor`（同时决定磁盘条目形状与 `coffer-hook` 打印的 stdout 信封；仅对 `SHELL_COMMAND` 有意义），以及——仅对 `PLUGIN_DROP`——一个 `PluginFlavor`（决定插件的磁盘形状：`opencode` 为单个自动加载的扁平文件；`openclaw` 为 package 目录外加 `plugin_enable_config_key` 指名文件里的 fail-closed 启用开关）。三种 mode 均已实现：`SHELL_COMMAND`（FR-043）、`INSTRUCTIONS_BLOCK`（FR-047）、`PLUGIN_DROP`（FR-048）。见 [ADR-042](../../docs/decisions/ADR-042-context-injection-mechanisms.zh.md)。
+- **Agent**：一个 kind 为 `agent` 的 Resource。代表一份本地安装的 AI agent。Config: `type`（受支持的 enum）、`config_dir`（可选的绝对路径覆盖；默认回退到该类型的标准位置）。skill 投递到 `<config_dir>/skills`。标识为 `agent:<name>`。`agent` kind 不声明 `scope`：非 null 值在校验阶段被拒绝（422）——agent resource 正是其他 kind 的 scope 所指向的对象，而它自己绝不是某个 scope 的目标（[ADR-045](../../docs/decisions/ADR-045-per-agent-resource-scope.zh.md)）。
+- **Agent Type**：一个 enum 值，标识一个已知 agent 产品（`claude_code`、`codex`）。每个值映射到**能力清单**（`AGENT_DESCRIPTORS`）中的一条记录，携带其默认 `config_dir`、显示名、用于发现的安装标记、精选的**配置文件 allowlist**、**MCP 注入形态**，以及其 上下文注入 / provider 投影 / 原生记忆 facet。两个受支持产品都携带全部 facet；一个做不到的产品，本身就不值得加入（FR-003a）。
+- **Context Injection Spec**：描述 Coffer 的会话上下文（规则 + 记忆）如何抵达某个 agent 模型的 manifest facet。携带它写入的 allowlist 配置 `key` + `format`、以及它安装的生命周期 `events`。只存在一种机制：agent 在会话启动时 exec `coffer-hook` 并读取其 stdout（FR-043）。
 - **Agent Candidate（候选项）**：一个被发现的、已安装但尚未注册的 agent——`type`、`display_name`、`config_dir`（该类型的默认配置目录）、`default_skill_dir` 与 `suggested_name`。在扫描时派生，从不存储；用户确认某个候选项即可注册它。
 - **Config File（配置文件）**：属于某个 agent 类型、在 allowlist 内的精选文件，以稳定的 `key` 标识。携带显示名、解析后的绝对路径、其所在文件夹的绝对路径（`folder_path`）、`format`（`json` / `toml` / `markdown` / `text`），以及（存在时）大小与修改时间。在 UI 中只读呈现（查看其内容、在外部编辑器中打开该文件 / 其文件夹）；按 key 读取并程序化写入（REST/CLI），绝不按任意路径。不持久化到 SQLite——磁盘上的文件即为事实来源。
 - **Coffer MCP Install Status（安装状态）**：某个 agent 的派生（非存储）状态：其 MCP 配置文件中是否存在 `coffer` MCP-server 条目。
@@ -796,7 +699,7 @@ agent resource 本身正是其他 kind 的 agent 轴所指向的对象，而不�
 ## Assumptions
 
 - 用户在自己的机器上运行 Coffer；不存在多租户或远程访问需求。
-- 多种 agent 类型已在能力清单（`AGENT_DESCRIPTORS`）中接线——`claude_code`、`codex`、`opencode`、`hermes`、`cursor` 与 `openclaw`——每种都是一个 `AgentType` 枚举值加一条记录（安装标记、配置文件 allowlist、MCP 注入形态，以及它支持的任何可选 facet）。再增加一个产品也是同样的一条记录变更，外加当其 wire 协议是新的时一个 chat-provider 适配器，并在某 facet 于上游不存在时把该 facet 留空（能力矩阵，FR-003a）。从早先的两类型状态重新加宽即 [ADR-040](../../docs/decisions/ADR-040-re-widen-agent-registry.zh.md)。
+- 两种 agent 类型已在能力清单（`AGENT_DESCRIPTORS`）中接线——`claude_code` 与 `codex`——每种都是一个 `AgentType` 枚举值加一条记录（安装标记、配置文件 allowlist、MCP 注入形态，以及它的各 facet）。再增加一个产品也是同样的一条记录变更，外加当其 wire 协议是新的时一个 chat-provider 适配器；一个 Coffer 无法在真实安装上实操其 facet 的产品不会被加入（FR-003a）。
 - 每个受支持 agent 的 CLI 与 app/IDE 形态读取同一个共享配置目录（`~/.claude/` 与 `~/.codex/`），因此 Coffer 对每个 agent 管理一份配置集合。
 - 配置文件以原始文本方式只读呈现，供用户查看；编辑发生在用户的外部编辑器中（从查看器打开），而程序化写入路径（REST/CLI）保留校验 + 原子写入 + `.bak` 兜底。只读查看器加上「在外部编辑器中打开」是长尾需求的兜底入口；反复出现的结构化需求按工作区增补「毕业」为 facet（MCP 条目、插件）。凭据/状态文件 `~/.codex/auth.json` 被有意排除在 allowlist 之外。
 - agent 的内部状态文件（`~/.claude.json` 中 `mcpServers` 映射之外的部分、`~/.claude/plugins/*.json`、Codex 的 `[marketplaces.*]` / `[hooks.state.*]` / `[projects.*]` 表）在需要时作为输入读取，工作区 facet 绝不写入它们；唯一的写目标是按各厂商文档核实过的文档化配置面。实际情况（已在真实机器上验证）：Claude Code 的 user 级 MCP server 存在于 `~/.claude.json` 的 `mcpServers`，也可能出现在 `settings.json` 的 `mcpServers`——两处都解析。

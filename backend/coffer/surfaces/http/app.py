@@ -97,9 +97,10 @@ from coffer.surfaces.http.memory.organize_state import get_organizer_service
 from coffer.surfaces.http.memory_wiring import run_memory_reindex_sweep, wire_memory_kind
 from coffer.surfaces.http.migrations_runner import run_migrations
 from coffer.surfaces.http.provider_wiring import wire_provider_kind
+from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
 from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.session_end_wiring import start_auto_organize, stop_auto_organize
-from coffer.surfaces.http.sync_wiring import start_sync, stop_sync
+from coffer.surfaces.http.sync_wiring import start_sync
 from coffer.surfaces.http.wiring import (
     build_substrate,
     wire_chat,
@@ -125,6 +126,12 @@ _logger = logging.getLogger(__name__)
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Run migrations BEFORE building services so they have a schema to talk to.
     await asyncio.get_running_loop().run_in_executor(None, run_migrations, _db_url())
+
+    # 0048 dropped the removed-type agent rows; name what they left on disk.
+    try:  # Courtesy notice only: never fatal.
+        report_removed_agent_leftovers()
+    except Exception:
+        _logger.exception("removed_agent_type.leftover_scan_failed")
 
     # Startup process hygiene (ADR-006), BEFORE new upstreams: reap leaked MCP
     # upstreams AND stale sibling daemons. Best-effort; never blocks startup.
@@ -287,8 +294,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         import_service=get_agent_memory_import_service(),
     )
 
-    # Multi-machine sync (spec 010); worker is inert until the user enables it.
-    start_sync(app, resource_svc, audit, sm, db_path, get_master_key_manager())
+    # Vault export/import (spec 010). Nothing runs in the background: the
+    # service only acts when the user exports or imports a bundle.
+    start_sync(app, resource_svc, audit, db_path, get_master_key_manager())
 
     # Channel adapter reconciler (spec 009). Started after the daemon token is
     # published so the callback listener can be spawned with valid loopback
@@ -320,7 +328,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         await stop_auto_organize(app)
         await stop_auto_distill(app)
         await stop_async_batches(app)
-        await stop_sync(app)
         # Stop channel adapters first so no new turns start mid-teardown.
         # Order matters: cancel the reconciler task BEFORE dispose() so an
         # in-flight tick cannot resurrect adapters dispose() just stopped;

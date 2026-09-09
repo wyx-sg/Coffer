@@ -1,6 +1,6 @@
 # 为 Coffer 贡献代码
 
-感谢你对 Coffer 感兴趣。本页是面向**人类贡献者**的入口。AI agents（Claude Code、Codex、Cursor）请改读仓库根目录中的 `AGENTS.md`。
+感谢你对 Coffer 感兴趣。本页是面向**人类贡献者**的入口。AI agents（Claude Code、Codex）请改读仓库根目录中的 `AGENTS.md`。
 
 ## 快速开始
 

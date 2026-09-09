@@ -72,7 +72,6 @@ _STATUS: dict[str, int] = {
     "HOOK_INSTALL_UNSUPPORTED": 422,
     "NATIVE_MEMORY_DISABLE_UNSUPPORTED": 422,
     "UNMANAGED_SKILL_INVALID": 422,
-    "SKILL_DELIVERY_UNSUPPORTED": 422,
     "SKILL_OUT_OF_SCOPE": 422,  # ADR-045 machine x agent activation scope
     # knowledge_base kind (spec 006)
     "KB_NOT_FOUND": 404,
@@ -103,17 +102,11 @@ _STATUS: dict[str, int] = {
     # transcript distillation (spec 007 extension — ADR-020)
     "UNSUPPORTED_AGENT_TYPE": 400,
     "TRANSCRIPT_SESSION_NOT_FOUND": 404,
-    # sync (spec 010)
-    "SYNC_NOT_CONFIGURED": 409,
-    "SYNC_IN_PROGRESS": 409,
-    "SYNC_CONFLICT": 409,
-    "SYNC_WORKSPACE_TOO_NEW": 409,
-    "SYNC_GIT_FAILED": 502,
+    # vault export/import (spec 010, ADR-016)
+    "SYNC_BUNDLE_TOO_NEW": 409,
+    "SYNC_BUNDLE_INVALID": 422,
     "SYNC_SERIALIZATION_INVALID": 422,
-    "SYNC_REMOTE_UNREACHABLE": 422,
     "MASTER_KEY_FILE_INVALID": 422,
-    # machines fleet view (spec 010 amendment, ADR-045)
-    "MACHINE_NOT_FOUND": 404,
     # provider switching (spec 011)
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": 422,
     "NO_ACTIVE_PROVIDER": 404,

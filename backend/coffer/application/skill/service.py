@@ -11,14 +11,12 @@ import contextlib
 import logging
 import pathlib
 import shutil
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
-from coffer.application.skill import delivery_ops
 from coffer.application.skill.ports import (
-    ExternalDirRegistrarPort,
     MasterStorePort,
     SkillBindingRepoPort,
     SyncEnginePort,
@@ -32,7 +30,6 @@ from coffer.domain.skill.drift import (
     DriftReport,
     RepairResult,
 )
-from coffer.domain.skill.external_dir import ExternalDirRegistration
 from coffer.domain.skill.source import LocalImportSource
 from coffer.domain.skill.validator import (
     ValidationFailure,
@@ -60,16 +57,6 @@ AgentScanLocationsResolver = Callable[[Resource], list[pathlib.Path]]
 # from AgentConfig — same Contract 5 seam as above.
 AgentSkillPolicyResolver = Callable[[Resource], tuple[bool, list[str]]]
 
-# Resolver for an agent's skill-delivery MODE (spec 005): a plain ``str`` (the
-# SkillDeliveryMode value, never the enum, so this layer imports no agent-kind
-# code — Contract 5). Built at the composition root from the descriptor.
-AgentSkillDeliveryResolver = Callable[[Resource], str]
-
-# Resolver for an agent's external-dir registration (spec 005, EXTERNAL_DIR
-# mode): an ``ExternalDirRegistration`` for EXTERNAL_DIR agents, ``None``
-# otherwise.
-AgentExternalRegistrationResolver = Callable[[Resource], ExternalDirRegistration | None]
-
 
 class SkillService:
     """Skill-kind lifecycle on top of the kind-agnostic Resource framework."""
@@ -87,11 +74,7 @@ class SkillService:
         workspace_scan: WorkspaceScanPort | None = None,
         agent_scan_locations_resolver: AgentScanLocationsResolver | None = None,
         agent_skill_policy_resolver: AgentSkillPolicyResolver | None = None,
-        agent_skill_delivery_resolver: AgentSkillDeliveryResolver | None = None,
-        external_dir_registrar: ExternalDirRegistrarPort | None = None,
-        agent_external_registration_resolver: AgentExternalRegistrationResolver | None = None,
         rmtree: Callable[[pathlib.Path], None] = shutil.rmtree,
-        machine_id: Callable[[], Awaitable[str | None]] | None = None,
     ) -> None:
         self._rs = resource_service
         self._audit = audit
@@ -108,26 +91,7 @@ class SkillService:
         # Follow-policy resolver (FR-025). Optional: an unwired context falls
         # back to (True, []) — the pre-amendment trust-mode auto-bind.
         self._agent_skill_policy_resolver = agent_skill_policy_resolver
-        # Skill-delivery-mode resolver (spec 005); unwired → folder model.
-        self._agent_skill_delivery_resolver = agent_skill_delivery_resolver
-        # EXTERNAL_DIR delivery (spec 005): registrar edits the agent's config,
-        # resolver yields where/how; unwired → skip registration.
-        self._external_dir_registrar = external_dir_registrar
-        self._agent_external_registration_resolver = agent_external_registration_resolver
         self._rmtree = rmtree
-        # ADR-045 machine axis (Task 11): this daemon's local machine id, so
-        # follow reconciliation and manual binds can gate on skill/agent scope.
-        # None (unwired) means "no filtering" — the legacy single-machine
-        # contract, mirroring ChannelRuntime (application/channel/runtime.py).
-        self._machine_id_provider = machine_id
-        self._machine_id_cache: str | None = None
-
-    async def _local_machine_id(self) -> str | None:
-        if self._machine_id_provider is None:
-            return None
-        if self._machine_id_cache is None:
-            self._machine_id_cache = await self._machine_id_provider()
-        return self._machine_id_cache
 
     # ---------- imports ----------
 
@@ -237,20 +201,11 @@ class SkillService:
         agent = await self._rs.get(ref)
         self._unlink_all(await self._bindings.list_for_agent(agent.id))
         await self._bindings.delete_for_agent(agent.id)
-        # Agent + bindings gone — drop any external-dir registration in its config.
-        delivery_ops.deregister_external(self, agent)
 
     async def _cleanup_bindings_internal(self, *, skill_id: int) -> None:
         bindings = await self._bindings.list_for_skill(skill_id)
-        affected_agent_ids = {b.agent_resource_id for b in bindings}
         self._unlink_all(bindings)
         await self._bindings.delete_for_skill(skill_id)
-        # A removed skill may have been an external-dir agent's last one —
-        # reconcile each affected agent's registration.
-        for agent_id in affected_agent_ids:
-            agent = await self._get_agent_by_id(agent_id)
-            if agent is not None:
-                await delivery_ops.reconcile_external_registration(self, agent)
 
     def _unlink_all(self, bindings: list[BindingState]) -> None:
         """Best-effort symlink teardown for a list of bindings."""
@@ -317,13 +272,6 @@ class SkillService:
         )
 
     # ---------- helpers ----------
-
-    async def _get_agent_by_id(self, agent_id: int) -> Resource | None:
-        # ResourceService doesn't expose by-id lookup; use list-then-filter.
-        for a in await self._rs.list(kind="agent"):
-            if a.id == agent_id:
-                return a
-        return None
 
     async def bindings_for(self, skill_name: str) -> list[BindingState]:
         skill = await self._rs.get(ResourceRef("skill", skill_name))

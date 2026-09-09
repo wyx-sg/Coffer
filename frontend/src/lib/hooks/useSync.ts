@@ -1,47 +1,36 @@
 // frontend/src/lib/hooks/useSync.ts
 //
-// Multi-machine sync (spec 010): GET/PUT /sync/config, GET /sync/status, and
-// POST /sync/{run,resolve,key/import,key/export}. Hand-written fetch, mirroring
+// Vault export / import (spec 010): POST /sync/export, POST /sync/import, and
+// the out-of-band master-key routes GET /sync/key/fingerprint + POST
+// /sync/key/{export,import}. There is no remote, no status poll and no
+// background run — a bundle is an ordinary local directory the user carries to
+// the other machine themselves. Hand-written fetch, mirroring
 // useEmbeddingConfig (the generated client only covers spec 001).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getCofferBaseUrl, getCofferToken } from "@/lib/auth";
 import { ApiError } from "@/lib/api/errors";
 
-export interface SyncConfig {
-  remote: string | null;
-  enabled: boolean;
-  auto: boolean;
-  interval_seconds: number;
-  poll_remote_seconds: number;
-  branch: string;
-  updated_at?: string;
+/** One resource that could not be written/applied, with the reason why. */
+export interface BundleFailure {
+  ref: string;
+  reason: string;
 }
 
-export interface SyncStatus {
-  status: "unconfigured" | "clean" | "syncing" | "conflicted" | "error" | "credentials_locked";
-  last_sync_at: string | null;
-  last_error: string | null;
-  /** Actionable classification of last_error: auth | not_found | network. */
-  error_hint: string | null;
-  conflict_paths: string[];
-  locked_refs: string[];
-  quarantined_refs: string[];
+/**
+ * The summary both operations report: how many items landed in each area
+ * (knowledge/memory/skills/resources/state/credentials), which refs failed,
+ * and the bundle directory the operation read or wrote.
+ */
+export interface BundleResult {
+  path: string;
+  counts: Record<string, number>;
+  failures: BundleFailure[];
 }
 
 export interface KeyFingerprint {
   present: boolean;
   fingerprint: string | null;
-}
-
-export interface SyncMachine {
-  machine_id: string;
-  display_name: string;
-  platform: string | null;
-  os_version: string | null;
-  coffer_version: string | null;
-  last_sync_at: string | null;
-  is_local: boolean;
 }
 
 function headers(extra: HeadersInit = {}): HeadersInit {
@@ -53,8 +42,6 @@ async function checkOk(r: Response): Promise<Response> {
     const data = (await r.json().catch(() => null)) as {
       error?: { code?: string; message?: string; details?: unknown };
     } | null;
-    // details carries the actionable hint of SYNC_REMOTE_UNREACHABLE
-    // (auth/not_found/network) — the save-failure UI renders guidance from it.
     throw new ApiError(
       data?.error?.code ?? "INTERNAL_ERROR",
       data?.error?.message ?? `request failed: ${r.status}`,
@@ -80,55 +67,36 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   return (await r.json()) as T;
 }
 
-export function useSyncConfig() {
-  return useQuery({
-    queryKey: ["sync-config"],
-    queryFn: () => getJson<SyncConfig>("/sync/config"),
+/**
+ * Write the vault into a bundle directory. Credentials (Fernet ciphertext,
+ * never the master key) ride along only when `with_credentials` is set.
+ */
+export function useExportVault() {
+  return useMutation({
+    mutationFn: (args: { path: string; withCredentials: boolean }) =>
+      postJson<BundleResult>("/sync/export", {
+        path: args.path,
+        with_credentials: args.withCredentials,
+      }),
   });
 }
 
-export function useSyncStatus() {
-  return useQuery({
-    queryKey: ["sync-status"],
-    queryFn: () => getJson<SyncStatus>("/sync/status"),
-  });
-}
-
-function useInvalidate() {
+/**
+ * Apply a bundle directory back into this vault. The bundle wins per resource,
+ * nothing is deleted, and per-resource failures come back in `failures`. An
+ * import rewrites essentially the whole registry, so invalidate broadly.
+ */
+export function useImportVault() {
   const qc = useQueryClient();
-  return () => {
-    void qc.invalidateQueries({ queryKey: ["sync-config"] });
-    void qc.invalidateQueries({ queryKey: ["sync-status"] });
-    // A run rewrites this machine's registry entry (last-sync time).
-    void qc.invalidateQueries({ queryKey: ["sync-machines"] });
-    // The Machines fleet view reads the same registry under its own key.
-    void qc.invalidateQueries({ queryKey: ["machines"] });
-    // A key import changes the fingerprint the user compares across machines.
-    void qc.invalidateQueries({ queryKey: ["sync-key-fingerprint"] });
-  };
-}
-
-export function useUpdateSyncConfig() {
-  const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: async (body: SyncConfig) => {
-      const r = await fetch(`${getCofferBaseUrl()}/sync/config`, {
-        method: "PUT",
-        headers: { ...headers(), "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      await checkOk(r);
-      return (await r.json()) as SyncConfig;
+    mutationFn: (path: string) => postJson<BundleResult>("/sync/import", { path }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["resources"] });
+      void qc.invalidateQueries({ queryKey: ["agents"] });
+      void qc.invalidateQueries({ queryKey: ["skills"] });
+      // Imported ciphertext is only usable once this machine holds the key.
+      void qc.invalidateQueries({ queryKey: ["sync-key-fingerprint"] });
     },
-    onSuccess: invalidate,
-  });
-}
-
-export function useRunSync() {
-  const invalidate = useInvalidate();
-  return useMutation({
-    mutationFn: () => postJson<SyncStatus>("/sync/run", {}),
-    onSuccess: invalidate,
   });
 }
 
@@ -139,38 +107,13 @@ export function useKeyFingerprint() {
   });
 }
 
-export function useSyncMachines() {
-  return useQuery({
-    queryKey: ["sync-machines"],
-    queryFn: () => getJson<{ machines: SyncMachine[] }>("/sync/machines"),
-  });
-}
-
-export function useRenameMachine() {
+export function useImportMasterKey() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (display_name: string) => {
-      const r = await fetch(`${getCofferBaseUrl()}/sync/machine`, {
-        method: "PUT",
-        headers: { ...headers(), "Content-Type": "application/json" },
-        body: JSON.stringify({ display_name }),
-      });
-      await checkOk(r);
-      return (await r.json()) as SyncMachine;
-    },
+    mutationFn: (path: string) => postJson<{ fingerprint: string }>("/sync/key/import", { path }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["sync-machines"] });
-      // The Machines fleet view reads the same registry under its own key.
-      void qc.invalidateQueries({ queryKey: ["machines"] });
+      void qc.invalidateQueries({ queryKey: ["sync-key-fingerprint"] });
     },
-  });
-}
-
-export function useImportMasterKey() {
-  const invalidate = useInvalidate();
-  return useMutation({
-    mutationFn: (path: string) => postJson<SyncStatus>("/sync/key/import", { path }),
-    onSuccess: invalidate,
   });
 }
 

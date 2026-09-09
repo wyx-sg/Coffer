@@ -11,9 +11,7 @@ channel 是既有 `resources` 表中的行（kind = `channel`）。`config_json`
 ChannelConfig (discriminator: channel_type)
 ├── common (两种类型共有, _CommonChannelFields)
 │   ├── default_agent: str = "claude_code"  # chat provider key；必须是已注册的 agent
-│   ├── default_agent_config: dict | None
-│   └── runs_on: str | None                # 运行该适配器的机器 machine_id
-│                                          #（spec 010 亲和）；None = 不在任何机器上运行
+│   └── default_agent_config: dict | None
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"
 │   └── bot_token_ref: str            # credential-store ref, probed at register

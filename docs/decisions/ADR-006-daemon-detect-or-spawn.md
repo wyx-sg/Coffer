@@ -9,7 +9,7 @@
 
 Coffer has multiple entry points that need a running daemon:
 
-- `coffer-mcp-shim` — spawned by an MCP client (Claude Code, Cursor) on every
+- `coffer-mcp-shim` — spawned by an MCP client (Claude Code, Codex) on every
   client startup.
 - `coffer …` CLI — invoked ad hoc by the user.
 

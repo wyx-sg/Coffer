@@ -1,43 +1,63 @@
-# Multi-machine sync
+# Export and import
 
-**Sync** keeps one Coffer vault consistent across all your own machines by pushing and pulling vault state through a **git repository you own** — no vendor cloud, and the encryption master key never leaves your control.
+Moving to a new laptop, or want your desktop to start from what your laptop already knows? **Export** the vault to a directory, carry that directory across, and **import** it on the other machine. There is no remote, no background replication, and no vendor cloud — and the encryption master key never travels inside the directory.
 
-## Set it up
+## Export on machine A
 
 ```bash
-coffer sync init git@github.com:me/coffer-vault.git    # point at YOUR remote, enable, first sync
-coffer sync                                            # full sync: export → pull → push → import
-coffer sync status                                     # clean / syncing / conflicted / error
+coffer sync export ~/coffer-bundle                       # everything except credentials
+coffer sync export ~/coffer-bundle --with-credentials    # + Fernet ciphertext blobs
 ```
 
-- The remote is a private git URL you own; Coffer uses your ambient git credentials (SSH key or token), exactly like a normal `git push`. Coffer ships no hosted endpoint.
-- `coffer sync config --auto on --interval 300` enables opt-in periodic sync; auto-sync is **off** by default.
+The result is a plain directory of text you can read before you carry it:
+
+```
+manifest.json  knowledge/  memory/  skills/  resources/  state/  [credentials/]
+```
+
+One deterministic YAML per config resource means two exports of an unchanged vault are byte-identical — so `diff -r` between two bundles shows exactly what differs between two machines.
+
+## Carry it across
+
+Coffer does not transport the directory; that part is yours. `scp`, a USB drive, or your own git repository all work:
+
+```bash
+scp -r ~/coffer-bundle you@machine-b:~/coffer-bundle
+```
+
+## Import on machine B
+
+```bash
+coffer sync import ~/coffer-bundle
+```
+
+The import mirrors the knowledge, memory and skill trees back, rebuilds the SQLite index from them, registers every config resource, and runs each kind's post-import step — so an imported agent has its shim installed and an imported skill has its symlink. It reports counts per area plus any resource that could not be applied here (for example an agent whose `config_dir` does not exist on this machine); those are reported with their reason, not fatal.
+
+- **The bundle wins.** Anything the bundle contains replaces the local version — you chose the direction when you ran the command.
+- **Import never deletes.** A resource this machine has that the bundle does not is left alone. A bundle is one machine's snapshot, not a statement about what should exist everywhere.
 
 ## What travels
 
-**Mirrored:** knowledge-base and memory Markdown, your config resources (MCP servers, agents, skills, channels), and credentials **as Fernet ciphertext only**. **Machine-local (never synced):** logs, the rebuildable `coffer.db` index, `daemon.json`, PID files, and port allocations.
+**In the bundle:** knowledge-base and memory Markdown, the master skill store, your config resources (MCP servers, agents, skills, channels), module-owned shared state (channel pairings, memory-store labels, engine settings), and — only with `--with-credentials` — credentials **as Fernet ciphertext only**.
+
+**Machine-local (never exported):** logs, the rebuildable `coffer.db` index, `daemon.json`, PID files, port allocations, chat history, and the audit log.
 
 ## The master key (out of band)
 
-The encryption master key is **never** written to the repo — only ciphertext travels. Move the key to each new machine yourself:
+The master key is **never** written into a bundle — only ciphertext travels. Move the key to each new machine yourself:
 
 ```bash
 coffer sync key export ./master.key       # on the source machine
-# move master.key over a trusted channel — NEVER through the repo
+# move master.key over a trusted channel — NEVER inside the bundle
 coffer sync key import ./master.key        # on the target machine
 ```
 
-Until the key is present, imported credentials stay **locked** (`coffer sync status` reports it) and resources that need them won't start.
+Until the key is present, imported credentials stay **locked** (reported as `credentials_locked`) and resources that need them won't start.
 
-## Conflicts
+## Keeping two machines aligned
 
-A git merge conflict stops the run in a `conflicted` state and imports nothing — neither side is discarded. Resolve, then run again:
+There is no background convergence and nothing watches for drift. If the two machines diverge, re-export and re-import in the direction you want — that manual step is the deliberate trade for dropping the machinery continuous sync needed.
 
-```bash
-coffer sync resolve --theirs path/to/resource.json   # or --ours / --resolved
-coffer sync
-```
-
-One file per resource keeps conflicts small. A desktop **Sync** settings panel does all of this without the terminal, and the same operations are available over REST at `/api/v1/sync/*`.
+A desktop **Sync** settings panel does both operations without the terminal (each button opens a native directory picker), and the same operations are available over REST at `/api/v1/sync/*`.
 
 [Credentials →](/guide/credentials)
