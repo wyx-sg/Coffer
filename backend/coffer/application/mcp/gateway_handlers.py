@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 import mcp.types as mcp_types
-from mcp import McpError
+from mcp import MCPError
 
 from coffer.application.mcp.ports import (
     MCPCapabilityPreferenceRepoPort,
@@ -68,19 +68,19 @@ def _is_transport_failure(e: BaseException) -> bool:
     """True when an upstream request failure should self-heal by evicting the
     connection (transport/process death), False when the upstream answered.
 
-    A well-formed ``McpError`` is a protocol-level JSON-RPC error: the request
+    A well-formed ``MCPError`` is a protocol-level JSON-RPC error: the request
     reached the upstream, the tool ran, and it returned an error result. The
     connection is healthy — evicting it would kill+respawn a perfectly good
     server on every tool that returns an error.
 
-    The one exception is the SDK's ``CONNECTION_CLOSED`` (-32000) McpError: the
+    The one exception is the SDK's ``CONNECTION_CLOSED`` (-32000) MCPError: the
     SDK raises that when the transport itself died mid-request (a crashed
-    subprocess, a dropped pipe), so despite being an McpError it IS a transport
-    failure and must self-heal. Everything that is not an McpError (a raw pipe
+    subprocess, a dropped pipe), so despite being an MCPError it IS a transport
+    failure and must self-heal. Everything that is not an MCPError (a raw pipe
     error, a dead-process exception) is likewise a transport failure.
     """
-    if isinstance(e, McpError):
-        return e.error.code == mcp_types.CONNECTION_CLOSED
+    if isinstance(e, MCPError):
+        return e.code == mcp_types.CONNECTION_CLOSED
     return True
 
 
@@ -258,7 +258,7 @@ async def _invoke(
     except Exception as e:
         status = "error"
         error_msg = _safe_error_summary(e)
-        # Only self-heal on a transport/process failure. A well-formed McpError
+        # Only self-heal on a transport/process failure. A well-formed MCPError
         # means the tool ran and returned an error result over a healthy
         # connection — evicting it would needlessly kill+respawn a good server.
         if _is_transport_failure(e):
@@ -314,7 +314,9 @@ def _coerce_result(sdk_result: Any, method: str) -> dict[str, Any]:
     which used to be byte-identical except for that message.
     """
     if hasattr(sdk_result, "model_dump"):
-        dumped: dict[str, Any] = sdk_result.model_dump(exclude_none=True, mode="json")
+        dumped: dict[str, Any] = sdk_result.model_dump(
+            exclude_none=True, mode="json", by_alias=True
+        )
         return dumped
     if isinstance(sdk_result, dict):
         return sdk_result

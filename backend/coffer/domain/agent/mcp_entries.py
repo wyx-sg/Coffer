@@ -108,7 +108,7 @@ class McpEntry:
 
 def _json_container(data: MutableMapping[str, Any], dotted_key: str) -> Any:
     """Resolve a JSON container key that may be a dotted PATH (``mcp.servers``
-    — openclaw nests its servers map one level down). Each dot descends one
+    — an agent may nest its servers map one level down). Each dot descends one
     object; a missing/non-mapping step resolves to ``None``. Single-segment
     keys behave exactly like a plain ``get``. JSON only — the TOML/YAML
     container keys in use carry no dots."""
@@ -161,7 +161,7 @@ def parse_entries(
     ``container_key`` selects the top-level table (default: the format's
     conventional key — ``mcpServers`` for JSON, ``mcp_servers`` for TOML/YAML;
     agents with a non-default container pass it explicitly, and a dotted JSON
-    key like openclaw's ``mcp.servers`` descends one object per dot). Handles both the
+    key like ``mcp.servers`` descends one object per dot). Handles both the
     command-map and command-array entry shapes and both ``env``/``environment``
     key names. Returns an empty list for an empty or absent section; raises
     ``AgentConfigParseError`` on malformed input.

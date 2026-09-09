@@ -4,9 +4,9 @@ Coffer exists to solve a specific, concrete problem. Understanding that problem 
 
 ## The problem
 
-Modern AI development involves many MCP servers — file systems, databases, web browsers, code executors, APIs — and multiple MCP clients: Claude Code, Codex, Cursor, and whatever ships next month. The naive setup requires configuring each client separately for each server: N clients × M servers configurations, each maintained by hand, each holding its own copy of API keys and credentials. When a server's URL changes or a credential rotates, every client config must be updated individually. Worse, the tool names exposed by the same upstream server may differ between clients because each client applies its own filtering or aliasing.
+Modern AI development involves many MCP servers — file systems, databases, web browsers, code executors, APIs — and multiple MCP clients: Claude Code, Codex, and whatever ships next month. The naive setup requires configuring each client separately for each server: N clients × M servers configurations, each maintained by hand, each holding its own copy of API keys and credentials. When a server's URL changes or a credential rotates, every client config must be updated individually. Worse, the tool names exposed by the same upstream server may differ between clients because each client applies its own filtering or aliasing.
 
-The result is credential sprawl, config drift between clients, and an identity problem: the `read_file` tool in Claude Code may or may not be the same as `read_file` in Cursor. There is no single point of control.
+The result is credential sprawl, config drift between clients, and an identity problem: the `read_file` tool in Claude Code may or may not be the same as `read_file` in Codex. There is no single point of control.
 
 Coffer's answer to this slice is a long-lived local daemon that registers upstream MCP servers once, exposes all of them through a single namespaced surface (every tool appears as `<server-name>__<tool-name>`), and handles all client connections through that one point. Configure once; every client sees the same tools, the same names, the same policies.
 

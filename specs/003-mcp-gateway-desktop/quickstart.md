@@ -23,7 +23,7 @@ two tiers, both built from the same `coffer` + `coffer-daemon` +
 ## Prerequisites
 
 - A Mac running macOS 12+ on Apple Silicon (M-series). No Python required.
-- An MCP client (Claude Code, Claude Desktop, Cursor, or any other client
+- An MCP client (Claude Code, Claude Desktop, or any other client
   that supports stdio MCP servers).
 
 ## 1. Download the installer
@@ -84,7 +84,7 @@ In your MCP client's config, add Coffer's shim as a server. Paste these
 snippets verbatim — they self-discover the daemon, no per-machine
 parameterisation:
 
-**Claude Code / Claude Desktop / Cursor** (`.mcp.json` or vendor-specific
+**Claude Code / Claude Desktop / other stdio MCP clients** (`.mcp.json` or vendor-specific
 config):
 
 ```json

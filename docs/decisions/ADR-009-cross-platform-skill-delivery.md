@@ -10,7 +10,7 @@
 Spec `005-skill-manager` introduces a canonical store at
 `~/.coffer/skills/<name>/` and requires each registered agent's skill
 directory to "see" the managed skills under its own normal layout — i.e.
-`~/.claude/skills/<name>/`, `~/.cursor/skills/<name>/`, etc. The store must
+`~/.claude/skills/<name>/`, `~/.codex/skills/<name>/`, etc. The store must
 be the **single editable source of truth** (FR-003) while every agent reads
 through its own pre-existing path conventions.
 
@@ -25,7 +25,7 @@ Three obvious mechanisms were on the table:
 Copy creates immediate drift: a user edit inside one agent's skill dir does
 not propagate, every update must touch N agents, and `verify` becomes a
 content-diff rather than a structural check. Configuration pointer is
-rejected because most agents (Claude Code, Cursor, Claude Desktop) hard-code
+rejected because most agents (Claude Code, Codex, Claude Desktop) hard-code
 their skill directory; even the ones that allow overriding store it in a
 client-private config we cannot reliably touch.
 

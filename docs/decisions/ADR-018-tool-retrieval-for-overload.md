@@ -2,6 +2,7 @@
 
 **Status**: Accepted
 **Amended by**: [ADR-024](ADR-024-builtin-agent-is-internal-capability.md) (2026-06-14) — `coffer__search_tools` gains a semantic (embedding) ranking path with BM25 fallback, and Capability B is un-deferred for knowledge/memory as the `coffer__ask` built-in tool.
+**Amended by**: [ADR-046](ADR-046-budget-driven-tool-tiering.md) (2026-09-09) — the "nothing is hidden server-side / tool deferral stays the client's choice" clause is replaced by budget-driven tool tiering; `coffer__search_tools` still ranks the full catalogue, and unlisted tools stay callable.
 **Date**: 2026-06-14
 **Deciders**: Yuxing Wu
 **Related**: `.specify/memory/constitution.md`, [spec `001-mcp-gateway`](../../specs/001-mcp-gateway/spec.md), [ADR-007](ADR-007-everything-is-a-resource-kind.md), [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md)

@@ -1,6 +1,6 @@
 # Contributing to Coffer
 
-Thanks for your interest in Coffer. This page is the **human contributor** entry point. AI agents (Claude Code, Codex, Cursor) should read `AGENTS.md` in the repository root instead.
+Thanks for your interest in Coffer. This page is the **human contributor** entry point. AI agents (Claude Code, Codex) should read `AGENTS.md` in the repository root instead.
 
 ## Quick Start
 

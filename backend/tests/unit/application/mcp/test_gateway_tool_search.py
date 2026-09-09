@@ -97,3 +97,33 @@ async def test_execute_caches_tool_embeddings_across_calls():
     # query.
     doc_batches = [call for call in embedder.embed_calls if len(call) > 1]
     assert len(doc_batches) == 1
+
+
+def test_corpus_drops_the_duplicated_server_token():
+    """`jira__jira_get_issue` tokenizes as jira, jira, get, issue — the server
+    name lands twice at the ranker's name weight and crowds out the tokens that
+    carry the intent."""
+    corpus = gateway_tool_search._search_corpus(
+        [{"name": "jira__jira_get_issue", "description": "Fetch an issue"}]
+    )
+
+    assert corpus == [("jira jira_get_issue", "Fetch an issue")]
+
+
+def test_corpus_handles_a_tool_name_containing_the_separator():
+    corpus = gateway_tool_search._search_corpus([{"name": "srv__weird__tool", "description": "d"}])
+
+    assert corpus == [("srv weird__tool", "d")]
+
+
+def test_corpus_handles_an_unprefixed_name():
+    corpus = gateway_tool_search._search_corpus([{"name": "bare", "description": "d"}])
+
+    assert corpus == [("bare", "d")]
+
+
+@pytest.mark.asyncio
+async def test_ranking_still_finds_the_right_tool_after_the_corpus_change():
+    result = await execute_tool_search({"query": "create an issue", "top_k": 1}, _agg())
+
+    assert result["tools"][0]["name"] == "github__create_issue"

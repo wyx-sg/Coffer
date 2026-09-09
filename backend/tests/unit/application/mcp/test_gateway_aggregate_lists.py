@@ -65,5 +65,8 @@ async def test_credential_failure_on_one_server_is_dropped_not_fatal(
 
     result = await list_tools_across(discovery, _noop_subscribe, ["good", "broken"])  # type: ignore[arg-type]
 
-    names = {t["name"] for t in result["tools"]}
+    names = {t["name"] for t in result.items}
     assert names == {"good__read_file"}
+    # ADR-046: dropped, but named — so the session can retry it and tell the
+    # client to re-list instead of the tools being gone for the session.
+    assert result.failed_servers == ["broken"]

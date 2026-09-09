@@ -16,8 +16,7 @@ import pytest
 
 from coffer.domain.errors import DatabaseSchemaTooNew
 from coffer.surfaces.http.migrations_runner import _alembic_config, _guard_schema_not_newer
-
-HEAD_REVISION = "0013"  # mirrors test_migrations_roundtrip.HEAD_REVISION
+from tests.integration.infrastructure.persistence.test_migrations_roundtrip import HEAD_REVISION
 
 
 def _stamp(db_path: pathlib.Path, revision: str) -> None:
@@ -50,7 +49,7 @@ def test_known_head_revision_passes(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     db = tmp_path / "coffer.db"
-    _stamp(db, HEAD_REVISION)  # a revision this build knows
+    _stamp(db, HEAD_REVISION)  # the revision an up-to-date DB carries
     _point_db_at(monkeypatch, db)
 
     # Must not raise — head is a known revision.
