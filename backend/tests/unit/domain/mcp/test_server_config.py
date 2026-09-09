@@ -62,7 +62,6 @@ def test_mcp_server_config_discriminated_union_http():
 
 def test_mcp_server_config_defaults():
     cfg = MCPServerConfig.model_validate({"transport": {"type": "stdio", "command": "x"}})
-    assert cfg.auto_enable_new_capabilities is True
     assert cfg.spawn_timeout_seconds == 30
     assert cfg.request_timeout_seconds == 120
     assert cfg.idle_timeout_seconds == 600

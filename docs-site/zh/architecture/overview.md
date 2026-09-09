@@ -86,7 +86,6 @@ flowchart TD
 ├── knowledge/           # knowledge_base 文件即真理（每个 KB 含 docs/ + raw/）
 ├── memory/              # memory 文件即真理（global/ + projects/<ulid>/）
 ├── skills/              # 主技能存储（canonical）
-├── backups/             # 仓库备份的默认目标目录
 ├── bin/                 # 同处一地的 coffer 二进制（daemon/shim/CLI）
 ├── logs/
 │   └── daemon.log       # 守护进程的结构化 JSON 日志

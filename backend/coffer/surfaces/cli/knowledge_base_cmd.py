@@ -170,9 +170,8 @@ def list_docs(
     _console.print(table)
 
 
-@app.command("get-doc")
-@app.command("read", help="Alias of get-doc.")
-def get_doc(
+@app.command("read")
+def read_doc(
     ctx: typer.Context,
     name: str = typer.Argument(...),
     document_id: str = typer.Argument(...),

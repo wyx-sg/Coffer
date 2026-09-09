@@ -1,7 +1,7 @@
 # ADR-018：面向聚合过载的工具检索
 
 **状态**：Accepted
-**修订自**：[ADR-024](ADR-024-builtin-agent-is-internal-capability.zh.md)（2026-06-14）—— `coffer__search_tools` 获得带 BM25 回退的语义（嵌入）排序路径；Capability B 针对知识/记忆 un-defer 为 `coffer__ask` 内置工具。
+**修订自**：[ADR-024](ADR-024-builtin-agent-is-internal-capability.zh.md)（2026-06-14）—— `coffer__search_tools` 获得带 BM25 回退的语义（嵌入）排序路径。
 **修订自**：[ADR-046](ADR-046-budget-driven-tool-tiering.zh.md)（2026-09-09）—— 「服务端不隐藏任何东西 / tool deferral 是客户端的选择」条款由预算驱动的工具分层取代；`coffer__search_tools` 仍检索完整目录，未列出的工具仍可调用。
 **日期**：2026-06-14
 **决策者**：Yuxing Wu

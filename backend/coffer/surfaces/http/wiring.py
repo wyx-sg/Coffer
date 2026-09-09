@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
@@ -32,8 +31,6 @@ from coffer.application.knowledge_base.service import KnowledgeBaseService
 from coffer.application.providers.ports import ModelIntrospectionService
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.knowledge.embedder import EmbeddingConfig
-from coffer.infrastructure.chat.agentic_rag import DEFAULT_RECURSION_LIMIT, make_ask_tool
-from coffer.infrastructure.chat.gateway_tool_provider import GatewayToolProvider
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.knowledge import paths
@@ -47,7 +44,6 @@ from coffer.infrastructure.providers.provider_introspector import ProviderIntros
 from coffer.surfaces.http.chat.dependencies import set_introspection_service
 from coffer.surfaces.http.chat_provider_wiring import build_agent_provider_registry
 from coffer.surfaces.http.dependencies import (
-    get_provider_service,
     set_agent_registry,
     set_chat_service,
     set_kb_service,
@@ -167,29 +163,11 @@ def wire_kb_kind(
     return kb_service
 
 
-def _agent_recursion_limit() -> int:
-    """Resolve the built-in agent's tool-iteration (graph recursion) limit.
-
-    Configurable via ``COFFER_AGENT_RECURSION_LIMIT``; falls back to
-    ``DEFAULT_RECURSION_LIMIT`` when unset, non-numeric, or non-positive.
-    Each tool call is ~2 graph steps, so the limit bounds tool iterations.
-    """
-    raw = os.environ.get("COFFER_AGENT_RECURSION_LIMIT")
-    if raw is None:
-        return DEFAULT_RECURSION_LIMIT
-    try:
-        value = int(raw)
-    except ValueError:
-        return DEFAULT_RECURSION_LIMIT
-    return value if value > 0 else DEFAULT_RECURSION_LIMIT
-
-
 def wire_chat(
     audit: AuditService,
     sm: object,
     mcp_session_factory: Callable[[str], Any],
     credential_store: Any,
-    builtin_tools: BuiltinToolRegistry,
 ) -> MCPGatewaySession:
     """Wire the agent-chat feature (spec 008) into the running app.
 
@@ -198,13 +176,11 @@ def wire_chat(
     gateway session sees all built-in tools.
 
     Chat talks only to Coffer-managed agents (``claude_code`` / ``codex``); the
-    former ``builtin`` chat persona is retired (ADR-024). The local model lives
-    on as an internal capability: this function registers the ``coffer__ask``
-    agentic-retrieval built-in tool, which reuses the same gateway session.
+    former ``builtin`` chat persona is retired (ADR-024).
 
     Returns the long-lived ``MCPGatewaySession`` (the ``coffer-builtin-agent``
-    session that backs ``coffer__ask`` and other internal flows) so the caller
-    (``_lifespan``) can dispose it on shutdown.
+    session that backs Coffer's internal flows) so the caller (``_lifespan``)
+    can dispose it on shutdown.
     """
     # 1. Persistence repos.
     conv_repo = ConversationRepo(sm)  # type: ignore[arg-type]
@@ -214,9 +190,8 @@ def wire_chat(
     #    via the shared mcp_session_factory so it reuses the fully-populated
     #    BuiltinToolRegistry (KB + memory + skill tools + MCP).
     agent_session: MCPGatewaySession = mcp_session_factory("coffer-builtin-agent")
-    tool_gateway = GatewayToolProvider(agent_session)
 
-    # 4. Credential resolver: resolve a credential ref → raw API key from the
+    # 3. Credential resolver: resolve a credential ref → raw API key from the
     #    encrypted credential store.
     def _credential_resolver(ref: str) -> str:
         value: str | None = credential_store.get(ref)
@@ -227,27 +202,11 @@ def wire_chat(
             raise CredentialMissing(ref)
         return value
 
-    # 5. ``coffer__ask`` — the local model's internal job (ADR-024). The retired
-    #    builtin chat persona is replaced by an agentic-retrieval built-in tool
-    #    that reuses the same gateway session + model registry. Registered into
-    #    the (already-populated) BuiltinToolRegistry so every gateway session —
-    #    including the one Claude Code / Codex connect to — advertises it. The
-    #    tool exposes only read-only retrieval tools to its loop, so it can never
-    #    recurse into itself.
-    builtin_tools.register(
-        make_ask_tool(
-            resolve_connection=lambda: get_provider_service().resolve_internal_connection(),
-            tool_gateway=tool_gateway,
-            credential_resolver=_credential_resolver,
-            recursion_limit=_agent_recursion_limit(),
-        )
-    )
-
-    # 6. The agent-provider registry — the platform seam (chat_provider_wiring:
+    # 4. The agent-provider registry — the platform seam (chat_provider_wiring:
     #    adding an agent is one more register() call there).
     registry = build_agent_provider_registry(conv_repo)
 
-    # 7. Application services + the agent-agnostic turn orchestrator.
+    # 5. Application services + the agent-agnostic turn orchestrator.
     chat_svc = ChatService(
         conversations=conv_repo,
         messages=msg_repo,
@@ -256,7 +215,7 @@ def wire_chat(
     )
     orchestrator = TurnOrchestrator(chat_service=chat_svc, registry=registry, audit=audit)
 
-    # 8. Startup sweep: flip any lingering ``status='streaming'`` rows to
+    # 6. Startup sweep: flip any lingering ``status='streaming'`` rows to
     #    ``'failed'`` (recover from a prior daemon crash).
     loop = asyncio.get_running_loop()
 
@@ -270,12 +229,12 @@ def wire_chat(
 
     loop.create_task(_sweep())  # noqa: RUF006
 
-    # 8. Provider introspection (test-connection + list-models). The OpenAI-
+    # 7. Provider introspection (test-connection + list-models). The OpenAI-
     #    compatible client + SSRF guard live in the infrastructure adapter; the
     #    service resolves credential refs to keys server-side.
     introspection_svc = ModelIntrospectionService(ProviderIntrospector(), _credential_resolver)
 
-    # 9. Register dependency providers.
+    # 8. Register dependency providers.
     set_chat_service(chat_svc)
     set_introspection_service(introspection_svc)
     set_turn_orchestrator(orchestrator)

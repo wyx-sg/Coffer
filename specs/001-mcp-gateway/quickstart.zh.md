@@ -165,14 +165,11 @@ coffer credentials set github-token "<new value>"
 ├── logs/
 │   ├── daemon.log         # structured JSON, one line per event
 │   └── upstream-<name>.log
-├── backups/               # 由 `coffer backup` 产出
 └── upstream-pids/         # for orphan-subprocess cleanup
 ```
 
-### 备份与恢复
+### 拷贝 vault
 
-markdown 树（`knowledge/`、`memory/`、`skills/`）是事实源；`coffer.db` 只是其上可重建的索引。
+markdown 树（`knowledge/`、`memory/`、`skills/`）是事实源；`coffer.db` 只是其上可重建的索引。Coffer 不再自带备份命令——全部事实源都经由 spec 010 的 vault 导出流转；若要逐字节拷贝整个目录，在 daemon 停止的前提下执行 `cp -r ~/.coffer/ <dest>` 即可。
 
-`coffer backup <dest.tar.gz>` 是完整的 **vault** 备份：它将 `coffer.db` 与全部文件树（`knowledge/`、`memory/`、`skills/`）打包成一个 `.tar.gz` 快照，写入 `backups/`。`coffer restore <src.tar.gz>` 会校验该归档，并把 db 与文件树重新放回 `~/.coffer/`，让一台全新机器重新可用。恢复后的 `coffer.db` 已经是一份一致的索引；如仍想从文件树重建，可加 `coffer restore <src.tar.gz> --reindex`。同一快照也可通过 HTTP 触发：`POST /api/v1/vault/backup`（无请求体）触发备份并返回 `{ "path": "...", "size_bytes": ... }`。
-
-**Master-key 策略。** `coffer backup` 默认**排除** `master.key`，因此备份可以放心 copy 出机器——把 Fernet key 与它解密的密文放在一起会让加密形同虚设。恢复出来的 vault 除了**读取**此前存储的凭据外都可正常工作；可把 `master.key` 重新放回 `~/.coffer/master.key`，或用 `coffer credentials set` 重新录入这些密钥。传入 `coffer backup <dest> --include-master-key` 可（在打印警告后）把 key 一并打包——仅限放进你与对待 live key 同等信任的存储中。
+**Master key。** `master.key` 用于解密 `coffer.db` 中的凭据密文。把它和它解密的密文放在一起会让加密形同虚设，因此拷贝出机器的内容中不要包含它；缺少该 key 的 vault 除了**读取**此前存储的凭据外都可正常工作，这些密钥可用 `coffer credentials set` 重新录入。

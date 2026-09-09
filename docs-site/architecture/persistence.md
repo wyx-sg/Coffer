@@ -22,7 +22,7 @@ The practical consequences of the SQLite choice shape every detail of the persis
 
 - **Single writer** — SQLite's write concurrency is bounded; having one writer (the daemon) eliminates all write conflicts by design. The daemon serialises every mutation; surfaces that need to write (CLI commands, HTTP handlers) go through the daemon over loopback HTTP.
 - **WAL mode** — Write-Ahead Logging allows readers (e.g., a CLI `list` command calling the REST API) to proceed concurrently with the writer without blocking on a lock. In practice this means `coffer mcp list` never hangs waiting for an ongoing migration.
-- **Zero-infra backup** — because all Coffer state lives under `~/.coffer/`, the full vault can be captured as a single `.tar.gz` snapshot (db + `knowledge/`/`memory/`/`skills/` trees, master key excluded by default). Run `coffer backup <dest.tar.gz>` from the CLI, or trigger `POST /api/v1/vault/backup` from the HTTP surface; both write the archive to `~/.coffer/backups/`. Restore with `coffer restore <src.tar.gz>`.
+- **Zero-infra copy** — because all Coffer state lives under `~/.coffer/`, moving or duplicating a vault needs no tooling: `cp -r ~/.coffer/ <dest>` with the daemon stopped is a complete byte-copy, and the spec 010 vault export carries everything that is a system of record between machines. Coffer ships no backup command of its own; keep `master.key` out of anything copied off-machine.
 
 ## SQLAlchemy 2.0 async ORM
 
@@ -151,7 +151,6 @@ The full set of files Coffer writes:
 | `~/.coffer/memory/`        | Memory facts as markdown — source of truth indexed by SQLite |
 | `~/.coffer/logs/`          | Structured JSON log files from `structlog`             |
 | `~/.coffer/bin/`           | `coffer-mcp-shim` + `coffer-daemon` binaries deployed by the desktop app |
-| `~/.coffer/backups/`       | Point-in-time SQLite backup copies                     |
 | `~/.coffer/upstream-pids/` | Per-upstream subprocess PID files for session tracking |
 
 Keeping everything under one parent directory makes backup simple, migration unambiguous, and clean-uninstall complete. The daemon's detect-or-spawn protocol (ADR-006) also benefits: every process that needs to find the daemon reads `~/.coffer/daemon.json` — there is no registry, no environment variable, and no platform-specific service directory to probe.

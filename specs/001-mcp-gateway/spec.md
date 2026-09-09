@@ -40,7 +40,7 @@ The developer doesn't want every upstream tool exposed to AI. Some are dangerous
 
 - disable an individual capability
 - capability preferences survive upstream changes
-- new capabilities default per server policy
+- a newly discovered capability is enabled by default
 
 ---
 
@@ -281,11 +281,11 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** the upstream server is upgraded so that tool's schema changes (or it briefly disappears and returns),
 - **Then** the user's disabled state is preserved without manual re-configuration.
 
-### Scenario: new capabilities default per server policy
+### Scenario: a newly discovered capability is enabled by default
 
-- **Given** a server is configured to auto-enable new capabilities (default) or not,
+- **Given** a registered server whose capabilities have already been discovered,
 - **When** an upgrade adds a new tool to that server,
-- **Then** the new tool is enabled or disabled according to that server's policy, and the event is recorded in the audit log.
+- **Then** the new tool is enabled, the event is recorded in the audit log, and the user can disable it through the per-capability toggle (FR-008).
 
 ### Scenario: command line covers every visual operation
 
@@ -359,18 +359,6 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** the user invokes the rotate-token operation,
 - **Then** subsequent management API calls with the previous token are rejected with 401, calls with the new token succeed, and the rotation is recorded as a `token_rotated` audit entry.
 
-### Scenario: vault backup captures db + file trees, restore round-trips them
-
-- **Given** a populated vault under `~/.coffer/` — `coffer.db` plus the markdown file trees that are the system of record (`knowledge/`, `memory/`, `skills/`),
-- **When** the user runs `coffer backup <dest>` and later `coffer restore <dest>` into a fresh vault,
-- **Then** the destination holds `coffer.db` and every file tree; restoring re-places them all so a sample KB document and a sample memory fact round-trip byte-for-byte and the restored `coffer.db` is a consistent index of the restored trees.
-
-### Scenario: backup excludes the master key by default
-
-- **Given** the vault contains the Fernet `master.key` that decrypts the credential ciphertext in `coffer.db`,
-- **When** the user runs `coffer backup <dest>` without `--include-master-key`,
-- **Then** `master.key` is NOT written into the backup (so the backup is safe to copy off-machine), and the command warns that stored credentials need the key to decrypt; passing `--include-master-key` bundles the key only after printing an explicit warning.
-
 ### Scenario: gateway overhead stays under budget
 
 - **Given** an in-process fast tool reachable through coffer and directly,
@@ -395,11 +383,11 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** the daemon starts,
 - **Then** it picks the next free port in the supported range, writes the chosen port to `~/.coffer/daemon.json`, and every Coffer surface (shim, CLI) connects to that port without manual configuration.
 
-### Scenario: a missing stdio launcher is surfaced and installable
+### Scenario: a missing stdio launcher is named in the server status
 
 - **Given** a stdio server (e.g. imported from another machine) whose launcher command does not resolve on this machine,
 - **When** the server's status is read,
-- **Then** it reports `missing <runner>` instead of a bare failing state, and — when the runner is an allowlisted self-fetching launcher — a one-click install runs the fixed runner→Homebrew mapping and is audited (FR-019).
+- **Then** it reports `missing <runner>` instead of a bare failing state, and the UI tells the user which command to install rather than installing it (FR-019).
 
 ### Scenario: an out-of-scope server is invisible to a session
 
@@ -428,7 +416,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 - **FR-008**: Users MUST be able to enable or disable individual tools, resources, and prompts on a per-server basis.
 - **FR-009**: System MUST preserve the user's enable/disable decisions across daemon restarts, upstream upgrades, and upstream temporary disappearances.
-- **FR-010**: System MUST apply a per-server "auto-enable new capabilities" policy (default true) when a previously unseen capability is discovered.
+- **FR-010**: System MUST enable a previously unseen capability by default when it is discovered, leaving it to FR-008 to curate. There is no per-server auto-enable policy: the setting existed as a config field with no UI to change it, every registered server carried the default, and a choice that is never made is not a policy.
 
 **Credentials and safety**
 
@@ -452,7 +440,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 **Missing launcher**
 
-- **FR-019**: A stdio server whose launcher command does not resolve on this machine (an imported server referencing e.g. `uvx` where `uv` is not installed) MUST be surfaced as such — `missing <runner>` in the server status — instead of a bare "failing" with no cause. When the runner is one of the allowlisted self-fetching launchers (`uvx`/`uv`, `npx`/`node`, `bunx`/`bun`), the UI MUST offer a one-click install that runs the FIXED runner→Homebrew mapping (never an arbitrary command from server config; the launcher fetches the actual MCP package itself on first run), audited as `mcp_runner_installed`. Any other missing command is reported with no install affordance.
+- **FR-019**: A stdio server whose launcher command does not resolve on this machine (an imported server referencing e.g. `uvx` where `uv` is not installed) MUST be surfaced as such — `missing <runner>` in the server status — instead of a bare "failing" with no cause, and the UI MUST name the command to install. Coffer MUST NOT install it. Detection turns an uninformative failure into an actionable one, which is the whole of the value here; running a package manager from a long-lived daemon would widen Coffer's remit from managing configuration to installing software on the user's machine, a line the deliberately-minimal runner→formula map could not hold once pip, cargo, and go were asked for — and it only ever worked on macOS.
 
 **Scope enforcement ([ADR-045](../../docs/decisions/ADR-045-per-agent-resource-scope.md))**
 
@@ -462,7 +450,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 ### Key Entities
 
 - **Resource**: A user-managed entity inside coffer, identified by `(kind, name)`. This spec registers one kind, `mcp_server`. Each resource carries kind-specific configuration, an enabled flag, description, and timestamps. The framework is kind-agnostic so additional kinds can be added by later specs without re-modelling.
-- **MCP Server** (a resource of kind `mcp_server`): Configuration for one upstream MCP server — its transport (stdio command-line or HTTP URL), credential references, and per-server policies (auto-enable, timeouts).
+- **MCP Server** (a resource of kind `mcp_server`): Configuration for one upstream MCP server — its transport (stdio command-line or HTTP URL), credential references, and per-server timeouts.
 - **Capability**: A tool, resource, or prompt exposed by an MCP server. Discovered live from the upstream; only the user's enable/disable preference and last-seen timestamp are persisted.
 - **Audit Event**: A record of a lifecycle change to any resource or capability. Includes the actor, target, event type, timestamp, and a structured payload.
 - **Invocation Record**: A record of a single capability call through the gateway. Includes target, timestamp, duration, and outcome — no arguments or return content.
@@ -491,3 +479,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - The Fernet master key is resolvable at coffer startup (a readable `~/.coffer/master.key` by default, or an unlocked OS keychain in keychain mode), or the user is shown a clear message when it isn't (ciphertext with no resolvable key is a fatal `MasterKeyMissing` startup error).
 - This spec ships with one resource kind (`mcp_server`). The Resource framework is designed so additional kinds can be added by later specs without re-modelling existing data.
 - Concurrent MCP client load is small (low single digits); coffer is not a fleet-scale gateway.
+
+## Deliberately out of scope
+
+- **Vault backup and restore.** Coffer does not bundle its own `.tar.gz` snapshot of `~/.coffer/`. The vault export in spec 010 already captures everything that is a system of record — the three file trees, the resources, the credential ciphertext, and the sync state areas. What a backup added on top of that was derived data only: the log tables (which roll off on a 30-day retention anyway), the chat conversation rows, indexes that are rebuilt from the files by design (ADR-012), and the `distilled_sessions` idempotency ledger, whose loss costs a re-distill rather than any data. It also wrote its archive to the same machine by default, so it never answered the off-site question it appeared to answer. Users who want a byte-copy have `cp -r ~/.coffer/`; users who want to move a vault have the export.

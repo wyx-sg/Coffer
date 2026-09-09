@@ -1,10 +1,7 @@
-"""/api/v1/daemon/* routes — status, shutdown, rotate-token.
-/api/v1/vault/* routes — backup.
-"""
+"""/api/v1/daemon/* routes — status, shutdown, rotate-token."""
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import secrets
@@ -23,7 +20,6 @@ from coffer.domain.audit import AuditEventType
 from coffer.surfaces.http.auth import require_token, set_active_token
 from coffer.surfaces.http.dependencies import get_actor, get_audit_service
 from coffer.surfaces.http.schemas import (
-    BackupResultOut,
     DaemonStatusOut,
     TokenRotationOut,
     UpstreamSummary,
@@ -34,7 +30,6 @@ from coffer.surfaces.http.schemas import (
 # used by _get_optional_resource_service below.
 
 router = APIRouter(prefix="/api/v1/daemon", tags=["daemon"])
-vault_router = APIRouter(prefix="/api/v1/vault", tags=["vault"])
 
 # Daemon lifecycle phase — written by app.py's lifespan, read by /status.
 # Lives here (the reader) so app.py stays under the 400-line guideline and
@@ -160,15 +155,11 @@ async def get_status(
     )
 
 
-# === T035: backup / shutdown / rotate-token ===
+# === T035: shutdown / rotate-token ===
 
 
 def _daemon_json_path() -> Path:
     return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "daemon.json"
-
-
-def _default_backup_dir() -> Path:
-    return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "backups"
 
 
 def _schedule_shutdown() -> None:
@@ -228,36 +219,6 @@ async def rotate_token(
     set_active_token(new_token)
     await audit.record(AuditEventType.TOKEN_ROTATED.value, actor=actor)
     return TokenRotationOut(token=new_token)
-
-
-@vault_router.post(
-    "/backup",
-    response_model=BackupResultOut,
-    dependencies=[Depends(require_token)],
-)
-async def vault_backup(
-    audit: AuditService = Depends(get_audit_service),  # noqa: B008
-    actor: str = Depends(get_actor),
-) -> BackupResultOut:
-    """Create a full vault snapshot (.tar.gz) in the default backups directory."""
-    from coffer.infrastructure.vault.backup import create_backup
-
-    backup_dir = _default_backup_dir()
-    backup_dir.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%S")
-    dest = backup_dir / f"coffer-{ts}.tar.gz"
-
-    try:
-        await asyncio.to_thread(create_backup, dest, include_master_key=False)
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-    await audit.record(
-        AuditEventType.BACKUP_CREATED.value,
-        actor=actor,
-        details={"path": str(dest)},
-    )
-    return BackupResultOut(path=str(dest), size_bytes=dest.stat().st_size)
 
 
 @router.post(

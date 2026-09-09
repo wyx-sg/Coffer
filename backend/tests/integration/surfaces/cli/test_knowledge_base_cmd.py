@@ -1,7 +1,7 @@
 """Integration tests for `coffer kb ...` CLI subcommands (spec 006 redesign).
 
 Every verb (`create` / `list` / `describe` / `ingest` / `list-docs` /
-`get-doc` / `edit` / `reindex` / `search` / `grep` / `delete-doc` /
+`read` / `edit` / `reindex` / `search` / `grep` / `delete-doc` /
 `delete-kb`) plus the ``--json`` switch where it exists.
 
 Boots the full FastAPI app (real SQLite + real files under a temp HOME) and
@@ -117,7 +117,7 @@ def test_ingest_list_get_edit_reindex_search_grep_delete(kb_cli_daemon, tmp_path
     assert len(docs) == 1
     doc_id = docs[0]["id"]
 
-    got = _runner.invoke(cli_app, ["kb", "get-doc", "kb", doc_id])
+    got = _runner.invoke(cli_app, ["kb", "read", "kb", doc_id])
     assert got.exit_code == 0, got.output
     assert "make release" in got.output
 
@@ -152,9 +152,9 @@ def test_delete_kb(kb_cli_daemon):
     assert all(k["name"] != "kb" for k in listed["knowledge_bases"])
 
 
-def test_kb_set_embedding_and_read_alias(kb_cli_daemon, tmp_path):
+def test_kb_set_embedding_and_read(kb_cli_daemon, tmp_path):
     """FR-019/FR-014: vector enablement is reachable from the CLI, and ``read``
-    aliases ``get-doc`` (the quickstart's documented verb)."""
+    prints a document's markdown body."""
     r = _runner.invoke(cli_app, ["kb", "create", "kb1"])
     assert r.exit_code == 0, r.output
     r = _runner.invoke(
@@ -178,15 +178,15 @@ def test_kb_set_embedding_and_read_alias(kb_cli_daemon, tmp_path):
     assert cfg["embedding"]["dimensions"] == 32
     assert "vector" in cfg["enabled_modes"]
 
-    # read == get-doc
-    doc_file = tmp_path / "alias.md"
-    doc_file.write_text("# Alias\n\nhello from read alias\n", encoding="utf-8")
+    # read prints the document body
+    doc_file = tmp_path / "body.md"
+    doc_file.write_text("# Body\n\nhello from kb read\n", encoding="utf-8")
     ing = _runner.invoke(cli_app, ["kb", "ingest", "kb1", str(doc_file)])
     assert ing.exit_code == 0, ing.output
     doc_id = ing.output.split("id=")[1].split(" ")[0]
     out = _runner.invoke(cli_app, ["kb", "read", "kb1", doc_id])
     assert out.exit_code == 0, out.output
-    assert "hello from read alias" in out.output
+    assert "hello from kb read" in out.output
 
 
 def test_kb_set_chunking_and_reconvert(kb_cli_daemon, tmp_path):

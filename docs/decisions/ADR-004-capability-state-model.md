@@ -44,9 +44,9 @@ enabled, first_seen_at, last_seen_at)` — the **only** persisted capability
   - User-initiated refresh (`coffer mcp refresh <name>`).
   - Upstream session restart.
 - On every successful list, preferences are reconciled with the live list:
-  newly-seen capability keys get a row inserted (enabled per the server's
-  `auto_enable_new_capabilities` policy); capability keys that disappear are
-  **not** deleted (so the user's choice survives upstream churn).
+  newly-seen capability keys get a row inserted, enabled by default;
+  capability keys that disappear are **not** deleted (so the user's choice
+  survives upstream churn).
 
 ## Consequences
 

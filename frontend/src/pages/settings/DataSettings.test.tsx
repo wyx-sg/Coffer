@@ -72,14 +72,6 @@ describe("DataSettings", () => {
     expect(screen.getByText("MCP invocations")).toBeInTheDocument();
   });
 
-  test("renders the backup action alongside retention", async () => {
-    mockPolicies(MOCK_POLICIES);
-    render(wrap(<DataSettings />));
-
-    await screen.findByText("Audit log");
-    expect(screen.getByRole("button", { name: /create backup/i })).toBeInTheDocument();
-  });
-
   test("days input hidden when 'keep forever' is toggled on", async () => {
     mockPolicies([MOCK_POLICIES[0]]);
     render(wrap(<DataSettings />));

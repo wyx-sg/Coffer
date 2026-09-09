@@ -6,7 +6,7 @@
 - **Date:** 2026-06-14
 - **Deciders:** Yuxing Wu
 - **Spec:** [008-agent-chat](../../specs/008-agent-chat/spec.md) and [004-agent-registry](../../specs/004-agent-registry/spec.md) (repositioning + capability move — no new spec number; both `spec.md` files are updated before implementation)
-- **Supersedes:** the "converse with the vault through the `builtin` agent" half of [ADR-021](./ADR-021-chat-as-vault-console.md); **amends** [ADR-018](./ADR-018-tool-retrieval-for-overload.md) (search-tools ranking) and un-defers its Capability B
+- **Supersedes:** the "converse with the vault through the `builtin` agent" half of [ADR-021](./ADR-021-chat-as-vault-console.md); **amends** [ADR-018](./ADR-018-tool-retrieval-for-overload.md) (search-tools ranking)
 - **Related:** [007-memory](../../specs/007-memory/spec.md), [006-knowledge-base](../../specs/006-knowledge-base/spec.md), [ADR-012](./ADR-012-files-as-truth-sqlite-retrieval.md), [ADR-020](./ADR-020-transcript-distillation.md)
 
 ## Context
@@ -64,23 +64,22 @@ capabilities.** Three moves.
 - The `/agents/builtin` detail page is removed. Its one still-meaningful piece —
   the local model configuration — moves to **Settings → Models**, reframed from
   "models used by Coffer Assistant" to **"Coffer's internal model"** that powers
-  retrieval, agentic RAG, and distillation.
+  retrieval, memory reorganization, and distillation.
 
 ### 3. The local model becomes the engine for internal capabilities
 
 The LLM machinery is **kept but repurposed**, never user-facing:
 
 - **Keep** the model factory (`langchain_models.py`) and the one-shot completion
-  (`llm_completion.py`) — distillation already depends on them, and so will (b).
+  (`llm_completion.py`) — distillation already depends on them.
 - **Remove** the chat-facing pieces: the `builtin` chat provider, its registry
   entry, and the chat-event mapping.
-- **Repurpose** the ReAct loop into an internal agentic-RAG engine behind a new
-  built-in tool (b), reusing the existing in-process gateway session
-  (`coffer-builtin-agent`) for knowledge/memory access.
+- **Keep** the ReAct loop as an internal-only engine (memory reorganization,
+  spec 007), never exposed as a chat agent.
 
-Two capabilities are delivered in this change:
+One capability is delivered in this change:
 
-**(a) `coffer__search_tools` gains semantic ranking (amends ADR-018).** The
+**`coffer__search_tools` gains semantic ranking (amends ADR-018).** The
 BM25-lite ranker has a real recall gap: it is purely lexical, so an intent like
 "notify someone" misses a `send_message` tool, and cross-language queries miss
 English tool names. ADR-018's _own cited evidence_ found the winning selector was
@@ -94,27 +93,16 @@ Note this does **not** reverse ADR-018's rejection of an _LLM router_ for tool
 selection: the downstream agent still does the select-and-call; we only improve
 which candidates it sees.
 
-**(b) `coffer__ask` — agentic retrieval over the vault (un-defers ADR-018
-Capability B).** A new built-in MCP tool that runs a bounded retrieve-and-
-synthesize loop over the user's **knowledge base + memory** and returns a cited
-answer. ADR-018 deferred Capability B _for tool selection_, where the downstream
-frontier model already excels at picking from a ranked set. Knowledge/memory
-synthesis is a different problem: multi-step retrieval + reading + summarizing
-across documents is work the calling agent would otherwise do with many manual
-`search_knowledge` / `read_document` round-trips. `coffer__ask` is the literal
-form of the "embedding model in RAG" analogy — an internal sub-component the main
-agent calls, never a chat partner.
-
 ### Invariants
 
 - **No user-facing built-in persona.** The local model is reachable only as
   `coffer__*` tools (and internal flows like distillation), never as a chat
   agent or a thing the UI presents as an assistant.
-- **Additive, auditable tools.** `coffer__ask` and the upgraded
-  `coffer__search_tools` are advertised in `tools/list` like any `coffer__`
-  built-in, logged in the invocation log (who/when/how-long/outcome, no
-  args/results), and degrade gracefully (search falls back to BM25; an
-  unconfigured model surfaces a clear error, never a crash).
+- **Additive, auditable tools.** The upgraded `coffer__search_tools` is
+  advertised in `tools/list` like any `coffer__` built-in, logged in the
+  invocation log (who/when/how-long/outcome, no args/results), and degrades
+  gracefully (it falls back to BM25 when no embedder is configured, never a
+  crash).
 - **Seam parity preserved.** Removing the `builtin` chat provider does
   not touch the `ConversationPort` / `TurnPort` machinery that
   channels and managed-agent chat share.
@@ -129,9 +117,9 @@ agent calls, never a chat partner.
 ### B — Remove the built-in agent _and_ delete all LLM machinery now
 
 **Rejected.** Distillation already depends on the model factory + one-shot
-completion, and agentic RAG (b) gives the ReAct substrate a real internal
-consumer. Deleting it would orphan distillation and force a from-scratch rebuild
-for (b). We delete only the chat-facing shell.
+completion, and memory reorganization (spec 007) is a real internal consumer of
+the ReAct substrate. Deleting it would orphan both. We delete only the
+chat-facing shell.
 
 ### C — Keep `coffer__search_tools` BM25-only; do not add an embedder path
 
@@ -154,13 +142,25 @@ keeps the very "built-in agent is a thing" framing this ADR removes.
 - ADR-021 is marked **partially superseded**: its channel-observe job
   stands; its "converse with the vault through the builtin agent" job is removed.
 - ADR-018 is **amended**: `coffer__search_tools` gains a semantic ranking path
-  with BM25 fallback; Capability B is un-deferred for knowledge/memory as
-  `coffer__ask`.
+  with BM25 fallback.
 - UI: `/chat` reverts to "Chat"; the `/agents/builtin` route and the built-in
   card are removed; Settings → Models is reframed as Coffer's internal model.
 - CLI: the `coffer chat` command (the built-in agent's terminal chat) is removed;
   `coffer model` and the rest of the CLI are unchanged.
-- LangGraph/LangChain stay as **internal** dependencies (distillation +
-  `coffer__ask`); the chat-event mapping and `builtin` chat provider are deleted.
+- LangGraph/LangChain stay as **internal** dependencies (distillation + memory
+  reorganization); the chat-event mapping and `builtin` chat provider are
+  deleted.
 - No new persisted state beyond what Settings → Models already stores; no
   migration.
+
+## Revision history
+
+- **2026-09-09** — `coffer__ask` removed. The agentic-RAG capability this ADR
+  delivered as capability (b) is gone: the ReAct loop survives only as the
+  internal memory-reorganization engine it also describes. The callers of
+  `coffer__ask` are Claude Code and Codex, which are already strong ReAct
+  agents; having Coffer's small internal model run a bounded 16-step retrieval
+  loop on their behalf inverts the responsibility, and does it with a weaker
+  model than the one that asked. Usage bore that out — four calls in thirty
+  days, one of them a failure. The retrieval tools the loop wrapped remain
+  directly callable, so nothing is lost but the wrapper.

@@ -34,7 +34,6 @@ from coffer.surfaces.http.knowledge_base import router as kb_router
 from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_router
 from coffer.surfaces.http.mcp.invocation_routes import router as mcp_invocation_router
 from coffer.surfaces.http.mcp.protocol_routes import router as mcp_protocol_router
-from coffer.surfaces.http.mcp.runner_routes import router as mcp_runner_router
 from coffer.surfaces.http.mcp.server_test_routes import router as mcp_server_test_router
 from coffer.surfaces.http.mcp.tiering_routes import router as mcp_tiering_router
 from coffer.surfaces.http.memory import router as memory_router
@@ -51,7 +50,6 @@ def include_all_routers(app: FastAPI) -> None:
     """Mount every sub-router, grouped by spec (kind-agnostic core first)."""
     for sub_router in (
         daemon_routes.router,
-        daemon_routes.vault_router,  # POST /api/v1/vault/backup
         resource_router,
         audit_router,
         retention_router,
@@ -75,7 +73,6 @@ def include_all_routers(app: FastAPI) -> None:
         mcp_protocol_router,
         mcp_capability_router,
         mcp_server_test_router,
-        mcp_runner_router,
         mcp_invocation_router,
         mcp_tiering_router,
         memory_router,  # spec 007

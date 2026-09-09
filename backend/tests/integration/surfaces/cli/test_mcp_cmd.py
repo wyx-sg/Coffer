@@ -366,18 +366,6 @@ def test_mcp_add_config_422_exits_6(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "config invalid" in (result.output + (result.stderr or ""))
 
 
-def test_mcp_add_no_auto_enable(mcp_daemon: Any) -> None:
-    result = _runner.invoke(app, ["mcp", "add", "fs", "--stdio", "cat", "--no-auto-enable"])
-    assert result.exit_code == 0, result.output
-    # Verify the flag was persisted
-    from coffer.surfaces.cli import _client as _cli_client
-
-    client, _ = _cli_client.client_or_exit()
-    r = client.get("/resources/mcp_server/fs")
-    assert r.status_code == 200
-    assert r.json()["config"]["auto_enable_new_capabilities"] is False
-
-
 # ---------------------------------------------------------------------------
 # coffer mcp list
 # ---------------------------------------------------------------------------

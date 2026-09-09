@@ -88,7 +88,6 @@ String-valued enum (use `StrEnum`):
 | `"daemon_stopped"`                                          | At daemon graceful shutdown                                             |
 | `"token_rotated"`                                           | After `POST /api/v1/daemon/rotate-token`                                |
 | `"retention_updated"`                                       | When a retention policy is changed                                      |
-| `"backup_created"`                                          | After `POST /api/v1/vault/backup`                                       |
 | `"credential_set"`                                          | After `POST /api/v1/credentials` stores a secret                        |
 | `"credential_read"`                                         | After `GET /api/v1/credentials/{ref}` reads a secret                    |
 | `"credential_deleted"`                                      | After `DELETE /api/v1/credentials/{ref}` removes a secret               |
@@ -152,13 +151,12 @@ Pydantic `BaseModel`. Discriminator value: `"http"`.
 
 Pydantic `BaseModel` — this is what `Resource.config` holds for an `mcp_server`.
 
-| Field                          | Type                                                                      | Notes                                                                 |
-| ------------------------------ | ------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `transport`                    | `Annotated[StdioTransport \| HttpTransport, Field(discriminator="type")]` | tagged union                                                          |
-| `auto_enable_new_capabilities` | `bool`                                                                    | default `True`                                                        |
-| `spawn_timeout_seconds`        | `int`                                                                     | default `30`; range `5–120`                                           |
-| `request_timeout_seconds`      | `int`                                                                     | default `120`; range `5–1800`; reset on progress                      |
-| `idle_timeout_seconds`         | `int`                                                                     | default `600`; range `60–86400`; subprocess GC after this idle period |
+| Field                     | Type                                                                      | Notes                                                                 |
+| ------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `transport`               | `Annotated[StdioTransport \| HttpTransport, Field(discriminator="type")]` | tagged union                                                          |
+| `spawn_timeout_seconds`   | `int`                                                                     | default `30`; range `5–120`                                           |
+| `request_timeout_seconds` | `int`                                                                     | default `120`; range `5–1800`; reset on progress                      |
+| `idle_timeout_seconds`    | `int`                                                                     | default `600`; range `60–86400`; subprocess GC after this idle period |
 
 ### `MCPTool` / `MCPResource` / `MCPPrompt` (`domain/mcp/capability.py`)
 
@@ -195,7 +193,7 @@ persisted (per [ADR-004](../../docs/decisions/ADR-004-capability-state-model.md)
 | `resource_id`     | `int`                                   | FK to `resources.id`                                        |
 | `capability_type` | `Literal["tool", "resource", "prompt"]` |                                                             |
 | `capability_key`  | `str`                                   | original (unprefixed) name; for resources, the original URI |
-| `enabled`         | `bool`                                  | default depends on server's `auto_enable_new_capabilities`  |
+| `enabled`         | `bool`                                  | enabled by default when first discovered                    |
 | `first_seen_at`   | `datetime`                              |                                                             |
 | `last_seen_at`    | `datetime`                              | updated every successful discovery                          |
 
@@ -353,7 +351,7 @@ intentional exception is:
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /api/v1/daemon/status` | Used by the CLI and the `coffer-mcp-shim` as a cheap readiness probe before any token has been read from `~/.coffer/daemon.json`. Returns only lifecycle phase, version, port, started-at, and an aggregate upstream summary — no secrets, no per-resource details, no audit data. |
 
-All mutating endpoints (including `/vault/backup`, `/daemon/rotate-token`,
+All mutating endpoints (including `/daemon/rotate-token` and
 `/daemon/shutdown`) require the token. The `/mcp` JSON-RPC surface also
 requires the token. Clients SHOULD set the optional `X-Coffer-Actor` header
 (`cli` | `api` | `ui` | `system`) so audit entries carry the originating

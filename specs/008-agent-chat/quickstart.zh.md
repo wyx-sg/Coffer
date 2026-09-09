@@ -6,7 +6,7 @@
 > 下文描述的 **Coffer Assistant** 聊天人格已退场。聊天现在**只**与 Coffer 受管
 > agent（Claude Code、Codex）对话，页面标签为 **Chat（聊天）**（而非 _Vault Console
 > 金库控制台_）。本地模型不再是聊天 agent；它驱动内部 `coffer__*` 能力——语义化的
-> `coffer__search_tools` 与对你知识/记忆的 `coffer__ask` agentic-RAG 工具。下文描述的是
+> `coffer__search_tools`——以及蒸馏、记忆重组等 Coffer 内部流程。下文描述的是
 > 早先的内置 agent 聊天流程，保留作历史参考。
 
 Chat 页面让你与 **Coffer Assistant** 对话 —— 这是 Coffer 的内置 agent。

@@ -117,8 +117,7 @@
   },
   "mcp": {
     "missingRunner": "本机未安装 {{runner}}",
-    "installRunner": "安装",
-    "installingRunner": "安装中…",
+    "missingRunnerHint": "请先安装 {{runner}}，然后刷新",
     "table": {
       "transport": "传输方式",
       "health": "健康",
@@ -271,7 +270,6 @@
       "daemon_stopped": "守护进程已停止",
       "token_rotated": "已轮换访问令牌",
       "retention_updated": "更新了数据保留策略",
-      "backup_created": "创建了备份",
       "keychain_set": "保存了一个凭证",
       "keychain_deleted": "删除了一个凭证",
       "keychain_read": "读取了一个凭证",
@@ -336,7 +334,6 @@
       "daemon_stopped": "守护进程停止",
       "token_rotated": "轮换令牌",
       "retention_updated": "保留策略变更",
-      "backup_created": "创建备份",
       "keychain_set": "保存凭证",
       "keychain_deleted": "删除凭证",
       "keychain_read": "读取凭证",
@@ -375,7 +372,7 @@
   },
   "settings": {
     "title": "设置",
-    "subtitle": "你的数据、备份与应用设置。",
+    "subtitle": "你的数据与应用设置。",
     "tabs": {
       "general": "通用",
       "data": "数据",
@@ -422,13 +419,6 @@
           "description": "对话归档后超过设定天数将被删除（连同其消息）。"
         }
       }
-    },
-    "backup": {
-      "title": "数据备份",
-      "description": "把你的全部数据完整保存为一个文件,存放在 ~/.coffer/backups/ 下。",
-      "create": "创建备份",
-      "creating": "备份中…",
-      "saved": "已保存至 {{path}}"
     },
     "about": {
       "title": "关于 Coffer",
@@ -562,7 +552,7 @@
     },
     "internalEngine": {
       "title": "内部引擎",
-      "subtitle": "Coffer 自身的 LLM 引擎（记忆整理 / 重组 / 蒸馏 / coffer__ask）使用的连接与模型。连接提供接入地址与密钥，模型在此单独选择。",
+      "subtitle": "Coffer 自身的 LLM 引擎（记忆整理 / 重组 / 蒸馏）使用的连接与模型。连接提供接入地址与密钥，模型在此单独选择。",
       "connection": "使用的连接",
       "connectionPlaceholder": "选择连接",
       "model": "模型",

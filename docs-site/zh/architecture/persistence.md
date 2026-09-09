@@ -22,7 +22,7 @@ SQLite 选择的实际后果塑造了持久化层的每一个细节：
 
 - **单写入者** — SQLite 的写并发有限；由一个写入者（daemon）负责，从设计上消除了所有写冲突。daemon 序列化每一次变更；需要写入的接口面（CLI 命令、HTTP handler）都通过 loopback HTTP 经由 daemon 进行。
 - **WAL 模式** — Write-Ahead Logging 允许读取者（例如调用 REST API 的 `coffer mcp list` 命令）与写入者并发执行，而不会被锁阻塞。实际效果是 `coffer mcp list` 不会因等待正在进行的迁移而挂起。
-- **零基础设施备份** — 由于所有 Coffer 状态都在 `~/.coffer/` 下，完整 vault 可打包成一个 `.tar.gz` 快照（db + `knowledge/`/`memory/`/`skills/` 文件树，默认不含 master key）。从 CLI 运行 `coffer backup <dest.tar.gz>`，或通过 HTTP 触发 `POST /api/v1/vault/backup`；两者均将归档写入 `~/.coffer/backups/`。使用 `coffer restore <src.tar.gz>` 恢复。
+- **零基础设施拷贝** — 由于所有 Coffer 状态都在 `~/.coffer/` 下，迁移或复制一个 vault 不需要任何工具：在 daemon 停止的前提下 `cp -r ~/.coffer/ <dest>` 就是一份完整的逐字节拷贝，而 spec 010 的 vault 导出会把全部事实源带到另一台机器。Coffer 不再自带备份命令；拷贝出机器的内容中不要包含 `master.key`。
 
 ## SQLAlchemy 2.0 异步 ORM
 
@@ -151,7 +151,6 @@ Coffer 写入的完整文件集合：
 | `~/.coffer/memory/`        | 以 markdown 形式存放的记忆 fact——由 SQLite 索引的事实源 |
 | `~/.coffer/logs/`          | `structlog` 输出的结构化 JSON 日志文件           |
 | `~/.coffer/bin/`           | 由桌面应用部署的 `coffer-mcp-shim` 与 `coffer-daemon` 二进制文件 |
-| `~/.coffer/backups/`       | 按时间点的 SQLite 备份副本                       |
 | `~/.coffer/upstream-pids/` | 用于会话追踪的每个上游子进程的 PID 文件          |
 
 将所有文件统一置于一个父目录下，使备份变得简单，迁移路径清晰，彻底卸载也能做到完整。daemon 的检测-或-拉起协议（ADR-006）也因此受益：每一个需要查找 daemon 的进程都读取 `~/.coffer/daemon.json`——没有注册表，没有环境变量，也不需要探测任何平台特定的服务目录。

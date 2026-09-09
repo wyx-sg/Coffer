@@ -34,7 +34,7 @@ Coffer 的每个接口面都是通向同一底层守护进程的入口点。守�
 | `/credentials`、`/settings`       | 加密凭据存储；设置含 `/settings/credentials`（主密钥存储）与 `/embedding` 配置。 |
 | `/sync`                           | 仓库导出 / 导入运行与主密钥传递。                                 |
 | `/fs`                             | 用于配置选择器的文件系统浏览辅助。                                |
-| `/audit`、`/retention`、`/daemon` | 审计日志、保留策略、守护进程 token/备份操作。                     |
+| `/audit`、`/retention`、`/daemon` | 审计日志、保留策略、守护进程 token 操作。                         |
 
 REST API 是规范接口——CLI、Web UI 和桌面应用都调用它。
 
@@ -68,7 +68,7 @@ REST API 是规范接口——CLI、Web UI 和桌面应用都调用它。
 
 - **各 kind 分组：** `coffer mcp`、`coffer agent`、`coffer skill`、`coffer kb`、`coffer memory`、`coffer channel`。
 - **跨切面分组：** `coffer credentials`、`coffer sync`、`coffer chat`、`coffer model`。
-- **与 kind 无关 / 运维分组：** `coffer resource`、`coffer audit`、`coffer retention`、`coffer daemon`，以及顶级的 `coffer backup` / `coffer restore`（后者带 `--reindex` 以重建知识索引）。重建单个知识库的索引是 `coffer kb reindex`。
+- **与 kind 无关 / 运维分组：** `coffer resource`、`coffer audit`、`coffer retention`、`coffer daemon`。重建单个知识库的索引是 `coffer kb reindex`。
 
 典型命令读作 `coffer mcp add`、`coffer mcp tool enable/disable`、`coffer audit`、`coffer daemon start/stop/status`。CLI 是 Coffer 用于脚本化工作流、基于 dotfile 的配置和没有浏览器的远程（无头）机器的主要接口。每个子命令都支持 `--json` 输出，以便机器可读集成。
 

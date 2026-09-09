@@ -233,7 +233,7 @@ needed for those).
 | `activate(name, actor) -> ActivateResult` | Sequential clear-then-set for single-active invariant; project to matching registered agents; emit `PROVIDER_SWITCHED`. |
 | `resolve_active_key(wire: WireFormat) -> str` | Find active profile for the given wire format; decrypt and return key (stdout only; caller must not log). No by-name resolution. |
 | `set_internal_default(name, actor) -> Resource` | Clear `internal_default` on all other connections then set the target (global single-internal-default invariant, FR-021); emit `PROVIDER_INTERNAL_DEFAULT_SET`. |
-| `resolve_internal_connection() -> ProviderConfig \| None` | Return the `internal_default` connection's config, or `None` (→ the internal engine — memory organizer / reorg / distill / `coffer__ask` — is a clean no-op). |
+| `resolve_internal_connection() -> ProviderConfig \| None` | Return the `internal_default` connection's config, or `None` (→ the internal engine — memory organizer / reorg / distill — is a clean no-op). |
 
 ### `ActivateResult` (`application/provider/service.py`)
 

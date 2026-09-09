@@ -81,7 +81,6 @@
     "agent_native_memory_restored",
     "agent_plugin_toggled",
     "agent_plugin_uninstalled",
-    "backup_created",
     "capability_disabled",
     "capability_enabled",
     "capability_first_seen",
