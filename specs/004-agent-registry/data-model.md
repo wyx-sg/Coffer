@@ -197,10 +197,7 @@ The workspace amendment adds:
 | Value                       | When emitted                                                                    |
 | --------------------------- | ------------------------------------------------------------------------------- |
 | `agent_config_file_deleted` | A directory-entry child file was deleted (prior content preserved as `.bak`)    |
-| `agent_mcp_entry_removed`   | A direct MCP entry was removed from the agent's config file (FR-026)            |
 | `agent_mcp_entry_adopted`   | A direct MCP entry was adopted into a registered `mcp_server` resource (FR-028) |
-| `agent_plugin_toggled`      | A plugin's enabled state was changed on its documented config surface (FR-032)  |
-| `agent_plugin_uninstalled`  | A Codex plugin entry + cache directory were removed (FR-033)                    |
 
 The lifecycle steps required by FR-011 — registration, update, and removal — are emitted as the existing kind-agnostic `resource_created`, `resource_updated`, and `resource_deleted` events (each carrying the affected `agent:<name>` reference). No `agent_*` duplicates are added for these; surfaces filter by `kind='agent'` plus the kind-agnostic event type. A successful config-file save emits `agent_config_file_written` (ref `agent:<name>`, details `{key}`). Agents have no enable/disable concept, and discovery is read-only and registers nothing, so neither emits an audit event of its own.
 
@@ -276,9 +273,10 @@ through the same store. Reuses `domain/agent/mcp_install.py`.
 
 ## Workspace amendment — derived entities (never stored)
 
-The workspace facets (FR-025..FR-033) operate on the agent's own config files;
+The workspace facets (FR-025..FR-031) operate on the agent's own config files;
 the files on disk stay the source of truth and Coffer keeps no copy. Both
-entities below are read-time projections.
+entities below are read-time projections, and the only write any of them
+performs is the source-entry removal that FR-028's adoption owns.
 
 ### Agent MCP Entry (`domain/agent/mcp_entries.py` — `McpEntry`)
 
@@ -296,11 +294,12 @@ preserves the user's TOML layout).
 | `env` / `headers`  | `dict[str,str]`  | `repr=False` — values may carry secrets; over HTTP only KEY NAMES leave the daemon (`env_keys`, `header_keys`, plus `secret_keys` flagging secret-looking names) |
 | `url`              | `str \| None`    | http transport target                                                                                                                                            |
 | `enabled`          | `bool \| None`   | per-entry flag where the format defines one (codex); `None` for claude_code                                                                                      |
-| `is_coffer`        | `bool`           | Coffer's own gateway entry — protected from remove/toggle/adopt                                                                                                  |
+| `is_coffer`        | `bool`           | Coffer's own gateway entry — never adoptable                                                                                                                     |
 | `matches_resource` | `str \| None`    | equivalent registered `mcp_server` resource, filled by the application layer                                                                                     |
 
-Companion helpers: `parse_entries`, `remove_entry`, `set_entry_enabled` (TOML
-only), `secret_env_keys` (TOKEN/SECRET/PASSWORD/API_KEY/CREDENTIAL/AUTHORIZATION
+Companion helpers: `parse_entries`, `remove_entry` (retained solely for the
+removal step of an adoption), `secret_env_keys`
+(TOKEN/SECRET/PASSWORD/API_KEY/CREDENTIAL/AUTHORIZATION
 patterns), and `to_transport_config` (entry → `mcp_server` transport config
 with secret keys moved to `credential_refs` for adoption). Malformed files
 raise `AgentConfigParseError`, which the listing degrades to a `parse_errors`
@@ -309,28 +308,28 @@ item instead of failing the view (FR-030).
 ### `PluginCapability` / `PluginModel` (`domain/agent/descriptor.py`)
 
 The plugin facet of the capability manifest. `PluginModel` is the strategy
-discriminator — `CLAUDE`, `CODEX` — each mapping to a parse/toggle/uninstall
-strategy in `plugin_state.py`. `PluginCapability` (frozen) carries enough for the
+discriminator — `CLAUDE`, `CODEX` — each mapping to a parse strategy in
+`plugin_state.py`. `PluginCapability` (frozen) carries enough for the
 service to dispatch without an `AgentType` switch:
 
-| Field           | Type          | Notes                                                                |
-| --------------- | ------------- | -------------------------------------------------------------------- |
-| `model`         | `PluginModel` | parse/toggle/uninstall strategy                                      |
-| `config_key`    | `str \| None` | allowlist key of the write surface                                   |
-| `can_toggle`    | `bool`        | whether `set_enabled` is supported                                   |
-| `can_uninstall` | `bool`        | whether `uninstall` is supported                                     |
+| Field        | Type          | Notes                                                    |
+| ------------ | ------------- | -------------------------------------------------------- |
+| `model`      | `PluginModel` | parse strategy                                           |
+| `config_key` | `str \| None` | allowlist key of the file the enabled state is read from |
 
 `AgentDescriptor.plugins` is `PluginCapability | None`. The per-agent
-mapping: Claude Code `CLAUDE`/`settings`/toggle-only; Codex `CODEX`/`config`/full.
+mapping: Claude Code `CLAUDE`/`settings`; Codex `CODEX`/`config`. There are no
+`can_toggle` / `can_uninstall` / `uninstall_strategy` fields — the facet is
+list-only, so there is no write to gate.
 
 ### Agent Plugin (`domain/agent/plugin_state.py` — `PluginInfo` / `MarketplaceInfo`)
 
-One installed plugin, id `<name>@<marketplace>`. Codex state lives in
-`config.toml` (`[plugins."…"]` + `[marketplaces.*]`, both readable and the
-plugins table writable). Claude Code splits state across the internal
-inventory files `installed_plugins.json` / `known_marketplaces.json`
-(read-only inputs — Coffer never writes them) and the documented write surface
-`settings.json` `enabledPlugins`.
+One installed plugin, id `<name>@<marketplace>`. Every input is read-only —
+Coffer parses these files and never writes any of them. Codex state lives in
+`config.toml` (`[plugins."…"]` + `[marketplaces.*]`). Claude Code splits state
+across the internal inventory files `installed_plugins.json` /
+`known_marketplaces.json` and the documented surface `settings.json`
+`enabledPlugins`.
 
 | Field         | Type   | Notes                                                               |
 | ------------- | ------ | ------------------------------------------------------------------- |
@@ -349,17 +348,21 @@ the plugin's cache directory exists on disk (no repair is attempted, FR-031).
 | Method                                                                | Purpose                                                                                                                                                                                                                                                                     |
 | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `list_entries(name)`                                                  | Parse all MCP-bearing files of the agent's type; mark `is_coffer` and `matches_resource`; collect per-file `parse_errors`.                                                                                                                                                  |
-| `set_enabled(name, entry, enabled, actor)`                            | Toggle the `enabled` flag in place (codex `config.toml` only — claude_code → `McpEntryToggleUnsupported` → 422). `coffer` entry → `McpEntryProtected`.                                                                                                                      |
-| `remove_entry(name, entry, source=None, actor)`                       | Remove the entry from its source file (atomic + `.bak`); `source` disambiguates when claude_code carries the name in both files (else `McpEntrySourceAmbiguous`); audits `agent_mcp_entry_removed`.                                                                         |
-| `adopt(name, entry, source=None, new_name=None, secrets=None, actor)` | FR-028 promotion: secret-looking keys MUST map to keychain refs (`AdoptSecretUnresolved` lists unresolved keys); register the `mcp_server` resource → verify it reads back → remove the source entry, with rollback on any later failure; audits `agent_mcp_entry_adopted`. |
+| `adopt(name, entry, source=None, new_name=None, secrets=None, actor)` | FR-028 promotion: secret-looking keys MUST map to keychain refs (`AdoptSecretUnresolved` lists unresolved keys); register the `mcp_server` resource → verify it reads back → remove the source entry (atomic + `.bak`; `source` disambiguates when claude_code carries the name in both files, else `McpEntrySourceAmbiguous`), with rollback on any later failure; audits `agent_mcp_entry_adopted`. |
+
+There is no standalone remove and no `set_enabled`: editing the agent's own MCP
+entries is the agent's own job (see the removal note under spec FR-030). The
+only write here is adoption's own removal step.
 
 ### `AgentPluginService` (`application/agent/plugin_service.py`)
 
 | Method                                         | Purpose                                                                                                                                                                                                                                  |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list_plugins(name)`                           | Dispatch on `descriptor.plugins.model`; parse plugin + marketplace state from the documented file(s); compute `cache_present`; collect `parse_errors`. No capability → empty listing.                                                    |
-| `set_enabled(name, plugin_id, enabled, actor)` | Dispatch on the `PluginModel`; write only the capability's `config_key` surface; audits `agent_plugin_toggled`.                                 |
-| `uninstall(name, plugin_id, actor)`            | Dispatch on the `PluginModel`; remove the entry (Codex also deletes the cache directory); `can_uninstall=false` (Claude Code) → `PluginUninstallUnsupported` → 422; audits `agent_plugin_uninstalled`. |
+| `list_plugins(name)`                           | Dispatch on `descriptor.plugins.model`; parse plugin + marketplace state from the documented file(s); compute `cache_present`; read best-effort manifest detail from the plugin's install path; collect `parse_errors`. No capability → empty listing. |
+
+This service is read-only — `list_plugins` is its whole surface. Enable/disable
+and uninstall were removed with FR-032/FR-033, and with them the plugin
+CLI-runner adapter.
 
 ### `ConfigFileStorePort` (Protocol, defined in application)
 

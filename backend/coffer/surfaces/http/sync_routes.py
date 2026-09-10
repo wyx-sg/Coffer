@@ -1,9 +1,13 @@
 """/api/v1/sync — vault export and import (spec 010, ADR-016).
 
 Export/import is a cross-cutting service, not a resource kind, so it has its
-own routes rather than riding /resources. The master key is never returned over
-the wire; the key-export route writes it to a local file path the user then
-moves out-of-band.
+own routes rather than riding /resources.
+
+The master key never travels *inside* a bundle — moving it is a separate,
+deliberate act. The key-export route hands its material back to the caller
+over the token-guarded loopback API, and the caller decides where it lands (a
+browser download, a file the CLI writes); the daemon no longer writes to a
+path a caller named, because a browser has no path to give it.
 """
 
 from __future__ import annotations
@@ -69,12 +73,15 @@ class ImportOut(BaseModel):
     locked_refs: list[str]
 
 
-class KeyPathIn(BaseModel):
-    path: str
+class KeyMaterialIn(BaseModel):
+    material: str
 
 
-class KeyOpOut(BaseModel):
-    path: str
+class KeyMaterialOut(BaseModel):
+    #: The Fernet key text. Crosses only the token-guarded loopback API — the
+    #: caller decides where it lands (a browser download, a file the CLI
+    #: writes), because a browser has no path to hand the daemon.
+    material: str
 
 
 class KeyImportOut(BaseModel):
@@ -129,11 +136,11 @@ async def key_fingerprint() -> KeyFingerprintOut:
     return KeyFingerprintOut(present=fp is not None, fingerprint=fp)
 
 
-@router.post("/key/export", response_model=KeyOpOut)
-async def export_key(body: KeyPathIn) -> KeyOpOut:
-    return KeyOpOut(path=await get_sync_service().export_key(body.path))
+@router.post("/key/export", response_model=KeyMaterialOut)
+async def export_key() -> KeyMaterialOut:
+    return KeyMaterialOut(material=await get_sync_service().export_key())
 
 
 @router.post("/key/import", response_model=KeyImportOut)
-async def import_key(body: KeyPathIn) -> KeyImportOut:
-    return KeyImportOut(locked_refs=await get_sync_service().import_key(body.path))
+async def import_key(body: KeyMaterialIn) -> KeyImportOut:
+    return KeyImportOut(locked_refs=await get_sync_service().import_key(body.material))

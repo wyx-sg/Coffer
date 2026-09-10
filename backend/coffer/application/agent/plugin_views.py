@@ -28,20 +28,6 @@ class PluginDetailReader(Protocol):
     def read(self, install_path: str) -> PluginDetail | None: ...
 
 
-class PluginCliRunner(Protocol):
-    """Shells out to an agent's own plugin CLI for CLI-mediated uninstall.
-
-    Implemented by ``infrastructure.agent.plugin_cli.ClaudePluginCli`` and
-    injected so the application layer never spawns subprocesses. ``available``
-    reports whether the CLI is on PATH (the listing gates ``can_uninstall`` on
-    it); ``uninstall`` runs the command and raises on failure.
-    """
-
-    def available(self) -> bool: ...
-
-    def uninstall(self, plugin_id: str) -> None: ...
-
-
 @dataclass(frozen=True)
 class PluginView:
     """One plugin as seen by API consumers.
@@ -72,7 +58,3 @@ class PluginsOut:
     items: list[PluginView]
     marketplaces: list[MarketplaceInfo]
     parse_errors: list[ParseErrorInfo]
-    #: Whether in-app uninstall is available for this agent right now — the
-    #: capability flag AND (for CLI-strategy agents) the CLI being on PATH. The
-    #: UI shows the uninstall button on this, not the agent type.
-    can_uninstall: bool = False

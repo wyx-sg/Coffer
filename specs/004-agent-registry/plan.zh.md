@@ -105,10 +105,11 @@ frontend/src/lib/hooks/useAgents.ts                # 新增 useAgentConfigFiles 
 frontend/src/i18n/locales/{en,zh}.json             # agents.config.* / agents.mcp.* 字符串
 ```
 
-agent 详情页（`/agents/:name`）是一个简单的 **Overview + Config files** 详情页：
-一个 Overview tab 汇总 agent 已注册的配置，一个 Config files tab 在**只读**查看器中
-呈现其已知配置文件，带格式标签，并为每个文件及其所在文件夹提供「在外部编辑器中
-打开 / 在文件管理器中显示」操作。
+agent 详情页（`/agents/:name`）有**四个** tab —— Overview、Skills、MCP 服务器与
+Config files：Overview tab 汇总 agent 已注册的配置，Skills tab 列出其 skill，
+MCP 服务器 tab 呈现 Coffer 自身的安装状态与 agent 自己的条目（含收编动作），
+Config files tab 在**只读**查看器中呈现其已知配置文件，带格式标签，并为每个文件
+及其所在文件夹提供「在外部编辑器中打开 / 在文件管理器中显示」操作。
 
 ## 阶段
 
@@ -143,7 +144,7 @@ agent 详情页（`/agents/:name`）是一个简单的 **Overview + Config files
 ### Phase 4 —— 前端
 
 - `AgentConfigPanel` —— 列出配置文件、在只读内容视图里打开某个文件（带格式标签），并为该文件及其所在文件夹提供「在外部编辑器中打开 / 在文件管理器中显示」。`AgentMcpInstall` —— 状态徽标 + 安装/卸载开关。
-- agent 详情页是一个简单的 Overview + Config files 详情页。
+- agent 详情页有四个 tab：Overview、Skills、MCP 服务器与 Config files。
 - `FolderPicker` —— 无需输入路径即可选择自定义 `config_dir`：通过 daemon 打开宿主的原生目录对话框，回退到 daemon 支撑的 `GET /fs/browse` 文件夹浏览器。add/edit 表单把 agent 名称设为可选（省略时由服务端按类型派生默认名）。
 - 用 TanStack Query + openapi-fetch 接 hooks；英文 + 简体中文 i18n 字符串（`agents.config.*`、`agents.mcp.*`）。
 - e2e（`e2e/web/specs/shell_agents.spec.ts`）：只读查看一个配置文件（及其 打开/显示 操作）；安装 Coffer MCP 并观察状态翻转。
@@ -161,16 +162,17 @@ agent 详情页（`/agents/:name`）是一个简单的 **Overview + Config files
 
 ## Workspace 修订（在 `feature/agent-workspace` 上交付）
 
-spec.md 的 workspace 修订（FR-025..FR-037）把 agent 详情页变成了完整的
-workspace。各层新增模块：
+spec.md 的 workspace 修订（FR-025..FR-037）把 agent 详情页变成了一个
+workspace。此后它被收窄回只有 Coffer 才提供的那部分：MCP 条目的列出 + 收编、
+一份没有 UI 的只读插件列表，以及只读的配置文件查看器。条目的移除/开关与插件的
+开关/卸载都已删除（FR-026/FR-027/FR-032/FR-033）。各层模块：
 
-- **Domain**：`agent/mcp_entries.py`（MCP 条目的解析/移除/开关 + 密钥键检测 + adopt 传输映射）、`agent/plugin_state.py`（Codex/Claude plugin + marketplace 解析，只写文档化的面）、`agent/scan.py`（按类型的 skill 扫描位置，供 spec 005 的未托管扫描使用）以及 `config_files.py` v2（`ConfigFileKind` 目录条目、`instructions` 更名、`subagents`/`hooks` 条目、`validate_child_relpath`）。
-- **Application**：`agent/mcp_entry_service.py`（list/toggle/remove/adopt，密钥经 keychain 路由、注册优先并可回滚）、`agent/plugin_service.py`（list/toggle/Codex 卸载 + 缓存处理）、`config_file_service.py` v2（目录子文件读/写/删、内容指纹与 `ConfigFileStale` → 409、memory-block 提示）。
-- **Surfaces**：`http/agent_workspace_routes.py`（`/agents/{name}/mcp-entries*`、`/agents/{name}/plugins*`）、`agent_config_routes.py` v2（`/config-files/{key}/files/{relpath}` GET/PUT/DELETE + 指纹字段）、`agent_routes.py`（AgentPatch/AgentOut 的 follow 策略字段）；CLI `cli/agent_workspace_cmd.py` 挂接到 `agent_cmd.py` 的既有 typer 上（`coffer agent mcp entries|remove-entry|toggle-entry|adopt`、`coffer agent plugin list|enable|disable|uninstall`、`coffer agent config files|write|rm`、`coffer agent follow`）。
-- **前端**：agent 详情标签页 `AgentMcpServersTab`（gateway + 直连条目、adopt 对话框）、`AgentPluginsTab`，以及 `AgentConfigFilesEditor`（覆盖单文件与目录子文件的只读查看器——内容只读渲染，为文件及其文件夹提供 在外部编辑器中打开 / 显示，外加 memory-block 提示；程序化写入/创建/删除仍走 REST/CLI）。
+- **Domain**：`agent/mcp_entries.py`（MCP 条目的解析 + 密钥键检测 + adopt 传输映射 + 收编自带的那步移除）、`agent/plugin_state.py`（Codex/Claude plugin + marketplace 解析，只读）、`agent/scan.py`（按类型的 skill 扫描位置，供 spec 005 的未托管扫描使用）以及 `config_files.py` v2（`ConfigFileKind` 目录条目、`instructions` 更名、`subagents`/`hooks` 条目、`validate_child_relpath`）。
+- **Application**：`agent/mcp_entry_service.py`（list/adopt，密钥经 keychain 路由、注册优先并可回滚）、`agent/plugin_service.py`（list + 缓存处理 + 尽力读取的清单信息）、`config_file_service.py` v2（目录子文件读/写/删、内容指纹与 `ConfigFileStale` → 409、memory-block 提示）。
+- **Surfaces**：`http/agent_workspace_routes.py`（`/agents/{name}/mcp-entries*`、`/agents/{name}/plugins*`）、`agent_config_routes.py` v2（`/config-files/{key}/files/{relpath}` GET/PUT/DELETE + 指纹字段）、`agent_routes.py`（AgentPatch/AgentOut 的 follow 策略字段）；CLI `cli/agent_workspace_cmd.py` 挂接到 `agent_cmd.py` 的既有 typer 上（`coffer agent mcp entries|adopt`、`coffer agent plugin list`、`coffer agent config files|write|rm`、`coffer agent follow`）。
+- **前端**：agent 详情标签页 `AgentMcpServersTab`（gateway + 直连条目、adopt 对话框）与 `AgentConfigFilesEditor`（覆盖单文件与目录子文件的只读查看器——内容只读渲染，为文件及其文件夹提供 在外部编辑器中打开 / 显示，外加 memory-block 提示；程序化写入/创建/删除仍走 REST/CLI）。插件列表没有 UI——只经 REST 与 CLI 提供。
 
-新增 audit 事件：`agent_config_file_deleted`、`agent_mcp_entry_removed`、
-`agent_mcp_entry_adopted`、`agent_plugin_toggled`、`agent_plugin_uninstalled`。
+新增 audit 事件：`agent_config_file_deleted`、`agent_mcp_entry_adopted`。
 无存储变更——每个 workspace 面都在读取时从 agent 自己的文件派生。
 
 ## 延期至后续 spec 的开放项

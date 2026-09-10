@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build every Coffer binary (coffer, coffer-daemon, coffer-mcp-shim,
-# coffer-hook, coffer-callback) with PyInstaller into dist/, plus the
+# coffer-callback) with PyInstaller into dist/, plus the
 # whisper-cli STT sidecar built from source. The release workflow packages
 # all of dist/ into coffer-cli-<triple>.tar.gz; the daemon deploys the
 # helper binaries sitting next to it into ~/.coffer/bin/ at startup.
@@ -80,9 +80,6 @@ echo ">>> Building coffer-mcp-shim for $TRIPLE"
 echo ">>> Building coffer (management CLI) for $TRIPLE"
 ( cd "$REPO_ROOT/backend" && "${PYINSTALLER[@]}" --clean --noconfirm \
     --distpath "$DIST_DIR" --workpath "$BUILD_DIR" coffer.spec )
-echo ">>> Building coffer-hook for $TRIPLE"
-( cd "$REPO_ROOT/backend" && "${PYINSTALLER[@]}" --clean --noconfirm \
-    --distpath "$DIST_DIR" --workpath "$BUILD_DIR" coffer-hook.spec )
 echo ">>> Building coffer-callback for $TRIPLE"
 ( cd "$REPO_ROOT/backend" && "${PYINSTALLER[@]}" --clean --noconfirm \
     --distpath "$DIST_DIR" --workpath "$BUILD_DIR" coffer-callback.spec )
@@ -97,7 +94,6 @@ fi
 chmod +x "$DIST_DIR/coffer${EXT}" \
          "$DIST_DIR/coffer-daemon${EXT}" \
          "$DIST_DIR/coffer-mcp-shim${EXT}" \
-         "$DIST_DIR/coffer-hook${EXT}" \
          "$DIST_DIR/coffer-callback${EXT}"
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 """Start/stop for the async-operation batch workers.
 
 Two things run off the request path: document re-embed (the slow tail of ingest
-— convert+chunk+embed) and native-memory import. Each builds its own
+— convert+chunk+embed). It builds its own
 :class:`AsyncOpRunner` + registry and registers its service for the routes;
 this module groups them behind one start/stop pair so the app lifespan stays
 under the file-size limit.
@@ -20,10 +20,6 @@ from coffer.application.knowledge.batch import KnowledgeBaseBatchService
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.knowledge.document import DOCUMENT_SCAN_LIMIT, Document
 from coffer.surfaces.http.knowledge.batch_state import set_batch_service
-from coffer.surfaces.http.native_import_batch_wiring import (
-    start_native_import_batch,
-    stop_native_import_batch,
-)
 
 _DEFAULT_CONCURRENCY = 2
 _MAX_SELECT_ALL = 1000
@@ -78,14 +74,11 @@ async def start_async_batches(
     app: FastAPI,
     *,
     knowledge_service: Any,
-    import_service: Any,
 ) -> None:
     """Start every async-operation batch worker (off the request path)."""
     await start_document_batch(app, knowledge_service=knowledge_service)
-    await start_native_import_batch(app, import_service=import_service)
 
 
 async def stop_async_batches(app: FastAPI) -> None:
     """Stop every async-operation batch worker (best-effort)."""
     await stop_document_batch(app)
-    await stop_native_import_batch(app)

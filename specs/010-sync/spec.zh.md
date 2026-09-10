@@ -89,6 +89,23 @@
 `coffer sync key import` 引导到另一台机器上。只有密文而没有密钥的机器会报
 `credentials_locked` 并拒绝拉起受影响的资源——它绝不静默地解密失败。
 
+**密钥以材料本身跨越，而不是以路径跨越。** `POST /sync/key/export` 收空 body，
+把 Fernet 密钥文本放在 `material` 字段里返回；`POST /sync/key/import` 收同一个
+`material` 字段，返回仍处于锁定状态的 ref。daemon 不再打开任何由调用方指定的文件
+系统路径。各个表面自己做文件 I/O：`coffer sync key export <path>` 由 CLI 自己把
+材料写到那个路径（权限 `0600`），`coffer sync key import <path>` 也由 CLI 自己读回
+文件；Web UI 则把材料交给浏览器下载，导入时从文件选择框读取。
+
+原因在 Web UI。两个方向过去都走守护进程的原生保存/打开对话框——由守护进程代替用户
+执行 `osascript`/`zenity` 并返回选中的路径——而那些对话框已被移除。浏览器本来也拿不到
+可以交给守护进程的绝对路径，而文件选择框直接交出**文件内容**，这比一个还要往返
+一趟的路径严格地更有用。
+
+代价，直说：密钥材料现在会跨过带 token 守卫的 loopback API，而以前不会。这是可以
+接受的。要求导出主密钥的人，无论如何都会拿到明文——导出的含义正是如此——而另一条路
+是让守护进程代替用户去执行一个原生对话框程序，只为了省掉一次从未离开 `127.0.0.1`
+的跳转。
+
 ## Scope
 
 资源的 `scope`（一个 agent 名字列表，
@@ -100,9 +117,9 @@ agent 都不在 scope 内的资源，仍会被注册、仍然可见，只是不�
 
 | 表面 | 操作 |
 | --- | --- |
-| CLI | `coffer sync export <dir> [--with-credentials]` · `coffer sync import <dir>` · `coffer sync key export` / `coffer sync key import` |
+| CLI | `coffer sync export <dir> [--with-credentials]` · `coffer sync import <dir>` · `coffer sync key export <file>` / `coffer sync key import <file>` |
 | HTTP | `POST /api/v1/sync/export` · `POST /api/v1/sync/import` · `GET /api/v1/sync/key/fingerprint` · `POST /api/v1/sync/key/export` · `POST /api/v1/sync/key/import` |
-| UI | 设置 → Sync：一个导出按钮和一个导入按钮，各自打开由守护进程托管的原生目录选择器（spec 004 FR-042 / [ADR-036](../../docs/decisions/ADR-036-daemon-native-file-and-save-dialogs.md)），外加主密钥卡片 |
+| UI | 设置 → Sync：一个导出按钮和一个导入按钮，各自打开由守护进程托管的原生**目录**选择器（spec 004 FR-042），外加主密钥卡片——后者用浏览器自己的下载与 `<input type="file">`，不走守护进程对话框 |
 
 两个操作都会报告一份摘要：各状态区的计数、失败的资源，以及 bundle 路径。
 

@@ -142,7 +142,11 @@ Ciphertext imported onto a machine that does not hold the matching master key
 is stored as-is and reported as `credentials_locked`; the affected resources
 refuse to spawn rather than failing decryption silently. The key is
 bootstrapped out-of-band (`coffer sync key export` / `coffer sync key import`)
-and never appears in a bundle.
+and never appears in a bundle. Those commands move the key **material** over the
+loopback API — `POST /sync/key/export` returns `{material}`, `POST
+/sync/key/import` accepts it — and each surface does its own file I/O: the CLI
+writes and reads the file itself (`0600`), the web UI uses a browser download
+and an `<input type="file">`. The daemon opens no caller-named path.
 
 ## Local-only, never in a bundle
 

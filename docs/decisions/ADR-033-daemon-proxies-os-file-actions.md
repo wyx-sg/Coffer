@@ -91,9 +91,12 @@ path feeds the unchanged `POST /skills/import`.
 
 This ADR unified open/reveal but not *picking*: at the time an OS-native directory
 dialog was available only inside the packaged native shell, so the browser UI kept the
-in-app daemon folder browser. That reasoning no longer holds — the daemon itself opens
-the host's native dialogs ([ADR-036](./ADR-036-daemon-native-file-and-save-dialogs.md),
-which supersedes this section) — and the native shell it referred to is gone.
+in-app daemon folder browser. The native shell is gone, and the daemon now opens the
+host's native **directory** dialog itself (spec 004 FR-042). It does not proxy an
+open-file or save-file dialog: the browser's own `<input type="file">` and
+`<a download>` cover those, and the first is better — it hands over the file's
+contents rather than a path the daemon must then read. A folder is the exception,
+because the browser deliberately withholds absolute paths.
 
 ## Consequences
 

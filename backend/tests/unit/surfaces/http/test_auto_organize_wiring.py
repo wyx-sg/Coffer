@@ -1,4 +1,4 @@
-"""Unit tests for session_end_wiring (FR-035 default-ON wiring)."""
+"""Unit tests for auto_organize_wiring (FR-035 default-ON wiring)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from coffer.surfaces.http.session_end_wiring import (
+from coffer.surfaces.http.auto_organize_wiring import (
     AUTO_ORGANIZE_ENV,
     auto_organize_enabled,
     start_auto_organize,

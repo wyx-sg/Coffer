@@ -1,21 +1,24 @@
-"""AgentPluginService — list / toggle / uninstall an agent's plugins.
+"""AgentPluginService — list an agent's plugins.
 
 Operates on agent plugin state using the pure text transforms in
 ``domain/agent/plugin_state.py`` (Claude Code, Codex).
 
+This is a READ surface. Coffer once toggled and uninstalled plugins too;
+those paths were removed because they hand-wrote another tool's private config
+format, where an upstream change would corrupt it silently. Reading the same
+files degrades, at worst, to FR-030's explicit parse-error state.
+
 The per-agent behaviour is data, not control flow: each agent's
 :class:`~coffer.domain.agent.descriptor.PluginCapability` (read from the
-capability manifest) carries the :class:`PluginModel` strategy discriminator,
-the allowlist ``config_key`` of the write surface, and the ``can_toggle`` /
-``can_uninstall`` flags. The service dispatches on those — it never switches on
-:class:`AgentType`.
+capability manifest) carries the :class:`PluginModel` strategy discriminator
+and the allowlist ``config_key`` the state is read from. The service dispatches
+on those — it never switches on :class:`AgentType`.
 
-Write-surface notes preserved from the original behaviour:
-- **Codex** writes ``config.toml`` (``config`` key) and removes the plugin
-  cache at ``<config_dir>/plugins/cache/<marketplace>/<name>`` on uninstall.
-- **Claude Code** writes only ``settings.json`` (``settings`` key); the two
-  internal inventory files are read by path and never written. Uninstall is not
-  supported.
+Where each agent's state is read from:
+- **Codex** — ``config.toml`` (``config`` key), plus the presence of the plugin
+  cache at ``<config_dir>/plugins/cache/<marketplace>/<name>``.
+- **Claude Code** — the enabled map in ``settings.json`` (``settings`` key),
+  plus two internal inventory files read by path. None of them is ever written.
 """
 
 from __future__ import annotations
@@ -23,14 +26,11 @@ from __future__ import annotations
 import pathlib
 import shutil
 from collections.abc import Callable
-from dataclasses import replace
 from typing import Protocol
 
 from coffer.application.agent.config_file_service import ConfigFileStorePort
 from coffer.application.agent.mcp_entry_service import ParseErrorInfo
-from coffer.application.agent.plugin_uninstall import uninstall_codex, uninstall_via_cli
 from coffer.application.agent.plugin_views import (
-    PluginCliRunner,
     PluginDetailReader,
     PluginsOut,
     PluginView,
@@ -42,22 +42,15 @@ from coffer.domain.agent.descriptor import descriptor_for
 from coffer.domain.agent.plugin_capability import (
     PluginCapability,
     PluginModel,
-    UninstallStrategy,
 )
 from coffer.domain.agent.plugin_state import (
     PluginInfo,
     parse_claude,
     parse_codex,
-    set_claude_enabled,
-    set_codex_enabled,
 )
-from coffer.domain.audit import AuditEventType
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.domain.workspace_errors import (
     AgentConfigParseError,
-    PluginNotFound,
-    PluginToggleUnsupported,
-    PluginUninstallUnsupported,
 )
 
 
@@ -79,7 +72,6 @@ class AgentPluginService:
         dir_exists: Callable[[pathlib.Path], bool] | None = None,
         rmtree: Callable[[pathlib.Path], None] | None = None,
         detail_reader: PluginDetailReader | None = None,
-        cli_runner: PluginCliRunner | None = None,
     ) -> None:
         self._agents = agent_service
         self._audit = audit
@@ -93,9 +85,6 @@ class AgentPluginService:
         # Optional: when absent the listing carries no per-plugin detail
         # (description / bundled components), only the config-derived fields.
         self._detail_reader = detail_reader
-        # Optional: runs an agent's own plugin CLI for CLI-strategy uninstall
-        # (Claude). When absent, CLI-strategy agents report can_uninstall=False.
-        self._cli_runner = cli_runner
 
     async def _config_for(self, name: str) -> AgentConfig:
         resource = await self._agents.get(name)
@@ -121,18 +110,7 @@ class AgentPluginService:
         else:  # PluginModel.CLAUDE
             out = self._list_claude(cfg, cfg_dir)
 
-        # Surface whether in-app uninstall can run now so the UI shows the
-        # button on capability, not on agent type.
-        return replace(out, can_uninstall=self._uninstall_available(cap))
-
-    def _uninstall_available(self, cap: PluginCapability) -> bool:
-        """In-app uninstall is possible when the capability allows it AND, for
-        CLI-strategy agents (Claude), the agent's plugin CLI is on PATH."""
-        if not cap.can_uninstall:
-            return False
-        if cap.uninstall_strategy is UninstallStrategy.CLI:
-            return self._cli_runner is not None and self._cli_runner.available()
-        return True
+        return out
 
     def _surface_path(self, cfg: AgentConfig, cap: PluginCapability) -> pathlib.Path:
         """Resolve the write-surface file path from the capability's config_key."""
@@ -224,78 +202,4 @@ class AgentPluginService:
             skills=detail.skills if detail else (),
             commands=detail.commands if detail else (),
             mcp_servers=detail.mcp_servers if detail else (),
-        )
-
-    # ------------------------------------------------------------------
-    # set_enabled
-    # ------------------------------------------------------------------
-
-    async def set_enabled(
-        self, name: str, plugin_id: str, enabled: bool, *, actor: str = "api"
-    ) -> None:
-        """Enable or disable a plugin by id."""
-        cfg, cap = await self._capability(name)
-        if cap is None or not cap.can_toggle:
-            raise PluginToggleUnsupported(cfg.type.value)
-        spec_path = self._surface_path(cfg, cap)
-
-        if cap.model is PluginModel.CODEX:
-            text = self._store.read_text(spec_path)
-            if text is None:
-                raise PluginNotFound(plugin_id)
-            new_text = set_codex_enabled(text, plugin_id, enabled)
-        else:  # PluginModel.CLAUDE
-            # write settings.json only; create if missing
-            text = self._store.read_text(spec_path) or ""
-            new_text = set_claude_enabled(text, plugin_id, enabled)
-
-        self._store.write_text_atomic(spec_path, new_text)
-
-        await self._audit.record(
-            AuditEventType.AGENT_PLUGIN_TOGGLED.value,
-            ref=ResourceRef("agent", name),
-            actor=actor,
-            details={"plugin": plugin_id, "enabled": enabled},
-        )
-
-    # ------------------------------------------------------------------
-    # uninstall
-    # ------------------------------------------------------------------
-
-    async def uninstall(self, name: str, plugin_id: str, *, actor: str = "api") -> None:
-        """Remove a plugin entry (and, for Codex, its cache).
-
-        Dispatches on the capability's uninstall strategy: CLI-strategy agents
-        (Claude) delegate to the agent's own ``plugin uninstall`` command —
-        Coffer never hand-writes that agent's internal inventory — while the
-        rest edit their documented config surface directly.
-        """
-        cfg, cap = await self._capability(name)
-        if cap is None or not cap.can_uninstall:
-            raise PluginUninstallUnsupported(cfg.type.value)
-
-        if cap.uninstall_strategy is UninstallStrategy.CLI:
-            await uninstall_via_cli(
-                cli_runner=self._cli_runner,
-                audit=self._audit,
-                agent_type=cfg.type.value,
-                name=name,
-                plugin_id=plugin_id,
-                actor=actor,
-            )
-            return
-
-        cfg_dir = cfg.resolved_config_dir()
-        spec_path = self._surface_path(cfg, cap)
-
-        await uninstall_codex(
-            store=self._store,
-            audit=self._audit,
-            dir_exists=self._dir_exists,
-            rmtree=self._rmtree,
-            name=name,
-            plugin_id=plugin_id,
-            spec_path=spec_path,
-            cfg_dir=cfg_dir,
-            actor=actor,
         )

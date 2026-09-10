@@ -6,9 +6,12 @@
 // whose config dir is seeded with a config.toml carrying one direct MCP
 // entry and one plugin, then walk the detail page's tabs and assert each
 // workspace facet renders real (file-derived) data:
-//   - Plugins tab lists the seeded plugin,
 //   - MCP servers tab shows the seeded direct entry,
 //   - Skills tab shows the follow-master-library switch.
+//
+// The seed still carries a `[plugins."…"]` table even though the Plugins tab
+// was removed: it keeps the fixture a realistic Codex config, and the MCP
+// entry must parse out of a file that has plugin tables in it.
 //
 // Acceptance coverage for the amendment scenarios lives in the backend
 // suites (audit already green), so this spec carries no acceptance marker.
@@ -27,8 +30,8 @@ beforeEachInjectToken();
 function mkSeededConfigDir(): string {
   const dir = path.join(os.tmpdir(), `coffer-e2e-ws-cfg-${Date.now()}`);
   fs.mkdirSync(dir, { recursive: true });
-  // Codex keeps MCP entries AND plugin state in config.toml — one seed file
-  // covers both facets. The plugin's cache dir is deliberately absent; the
+  // Codex keeps MCP entries AND plugin state in config.toml. The plugin table
+  // is seeded for realism only — nothing surfaces it. The cache dir is absent; the
   // row still renders (with a "cache missing" badge), which is all we assert.
   fs.writeFileSync(
     path.join(dir, "config.toml"),
@@ -61,7 +64,7 @@ async function deleteAgentByApi(name: string): Promise<void> {
   }
 }
 
-test("agent workspace tabs render plugins, MCP entries, and follow switch", async ({
+test("agent workspace tabs render MCP entries and the follow switch", async ({
   page,
 }) => {
   const { token, port } = readDaemonToken();
@@ -88,16 +91,9 @@ test("agent workspace tabs render plugins, MCP entries, and follow switch", asyn
 
     // Open the agent detail page.
     await page.goto(`/agents/${name}`);
-    await expect(page.getByRole("tab", { name: /plugins/i })).toBeVisible({
+    await expect(page.getByRole("tab", { name: /mcp servers/i })).toBeVisible({
       timeout: 10_000,
     });
-
-    // Plugins tab — the seeded plugin (and its marketplace group) render.
-    await page.getByRole("tab", { name: /plugins/i }).click();
-    await expect(page.getByText("e2e-plugin", { exact: true })).toBeVisible({
-      timeout: 10_000,
-    });
-    await expect(page.getByText(/e2e-market/).first()).toBeVisible();
 
     // MCP servers tab — the direct entry parsed from config.toml renders.
     await page.getByRole("tab", { name: /mcp servers/i }).click();

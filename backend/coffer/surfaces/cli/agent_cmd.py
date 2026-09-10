@@ -11,8 +11,6 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
-from coffer.surfaces.cli import agent_hook_cmd as _hook
-from coffer.surfaces.cli import agent_native_memory_cmd as _native_memory
 from coffer.surfaces.cli import agent_workspace_cmd as _workspace
 
 app = typer.Typer(help="Manage registered AI agents")
@@ -111,14 +109,9 @@ def edit(
     name: str = typer.Argument(...),
     config_dir: str | None = typer.Option(None, "--config-dir"),
     description: str | None = typer.Option(None, "--description"),
-    disable_native_memory: bool | None = typer.Option(
-        None,
-        "--disable-native-memory/--enable-native-memory",
-        help="Disable (or restore) the agent's native write-side memory (Coffer becomes the store)",
-    ),
 ) -> None:
     """Update an agent's fields."""
-    if config_dir is None and description is None and disable_native_memory is None:
+    if config_dir is None and description is None:
         typer.echo("nothing to update", err=True)
         raise typer.Exit(1)
     verbose = (ctx.obj or {}).get("verbose", False)
@@ -127,8 +120,6 @@ def edit(
         body["config_dir"] = config_dir
     if description is not None:
         body["description"] = description
-    if disable_native_memory is not None:
-        body["disable_native_memory"] = disable_native_memory
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.patch(f"/agents/{name}", json=body)
@@ -349,17 +340,7 @@ def mcp_uninstall(
     typer.echo(f"removed Coffer MCP from agent:{name}")
 
 
-# --- coffer agent hook ... ---------------------------------------------------
-# Implemented in agent_hook_cmd.py to keep this file under the size cap.
-
-_hook.attach(app)
-
 # --- workspace subcommands (mcp entries/plugins/dir configs/follow) -----------
 # Implemented in agent_workspace_cmd.py to keep this file under the size cap.
 
 _workspace.attach(app, config_app=config_app, mcp_app=mcp_app)
-
-# --- native-memory subcommands (spec 004 FR-040/FR-041: list + import) --------
-# Implemented in agent_native_memory_cmd.py to keep this file under the size cap.
-
-_native_memory.attach(app)

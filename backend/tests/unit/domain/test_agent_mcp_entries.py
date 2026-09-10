@@ -76,14 +76,6 @@ def test_remove_entry_toml_preserves_layout() -> None:
     assert "Authorization" in out  # untouched sibling content survives round-trip
 
 
-def test_set_enabled_toml() -> None:
-    out = me.set_entry_enabled(CODEX_TOML, "gas", True)
-    entries = me.parse_entries(ConfigFileFormat.TOML, out, source="config")
-    assert {e.name: e.enabled for e in entries}["gas"] is True
-    with pytest.raises(McpEntryNotFound):
-        me.set_entry_enabled(CODEX_TOML, "ghost", True)
-
-
 def test_secret_env_keys() -> None:
     entries = me.parse_entries(ConfigFileFormat.JSON, CLAUDE_JSON, source="global")
     jira = next(e for e in entries if e.name == "jira")

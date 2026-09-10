@@ -155,12 +155,8 @@ coffer agent mcp entries claude-code --json
 （Codex），以及 Coffer 中是否已注册了等价的 `mcp_server` 资源。env/header 的
 值绝不离开 daemon——只列出键名。
 
-就地移除或开关一个条目（文件会保留 `.bak`）：
-
-```bash
-coffer agent mcp remove-entry claude-code my-server
-coffer agent mcp toggle-entry codex my-server --disabled   # 仅 Codex
-```
+这份列表是只读的。要移除条目或翻转 Codex 的 `enabled` 开关，请用 agent 自己的
+界面——Coffer 不就地编辑这些条目。它在这里提供的唯一写操作是下面的 adopt。
 
 把一个直连条目 **adopt** 进 Coffer，改为通过 gateway 服务所有 agent。疑似密钥
 的 env/header 键必须映射到凭据 (credential) 引用——Coffer 把值作为 Fernet 密文
@@ -175,21 +171,19 @@ Coffer 先注册 `mcp_server` 资源、验证它可以回读，然后才从 agen
 该条目；任何失败都会回滚，你绝不会丢失一个可用的条目。名称冲突时错误会给出
 建议名——用 `--name <suggested>` 重试。
 
-## 开关或卸载 plugin
+## 列出 agent 的 plugin
 
-Plugins 标签页（与 CLI）列出 agent 已安装的 plugin，按 marketplace 分组：
+CLI 列出 agent 已安装的 plugin，按 marketplace 分组。这是一个**只读**视图，
+没有 Web UI——不存在 Plugins 标签页：
 
 ```bash
 coffer agent plugin list codex
-coffer agent plugin disable codex my-plugin@my-marketplace
-coffer agent plugin enable codex my-plugin@my-marketplace
-coffer agent plugin uninstall codex my-plugin@my-marketplace   # 仅 Codex
+coffer agent plugin list codex --json
 ```
 
-开关只写文档化的配置面（Codex 条目的 `enabled` 字段；Claude Code
-`settings.json` 中的 `enabledPlugins` 映射）——绝不写 agent 的内部状态文件。
-`uninstall` 会移除 Codex 的配置条目及其缓存目录；Claude Code 的卸载需要
-agent 自己的工具（`claude plugin`），因此 Coffer 提供禁用外加一条提示。
+每个 plugin 显示其 `<name>@<marketplace>` id、启用状态，以及磁盘缓存是否存在。
+Coffer 只解析这些文件，一个都不写：启用、禁用、卸载与安装全部留给 agent 自己的
+工具（`claude plugin …`、Codex 的 `config.toml`）。
 
 ## 把 Coffer 的 MCP 安装到某个 agent
 

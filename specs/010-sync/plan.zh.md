@@ -54,9 +54,8 @@ surfaces/
 7. **surfaces cli** —— 经 loopback 客户端实现 `coffer sync export|import` 与
    `coffer sync key export|import`。契约测试。
 8. **frontend** —— 设置 → Sync：一个导出按钮和一个导入按钮，基于守护进程托管的原生
-   目录选择器（spec 004 FR-042 /
-   [ADR-036](../../docs/decisions/ADR-036-daemon-native-file-and-save-dialogs.md)）、
-   一份结果摘要，以及主密钥卡片。fleet view 以及 remote/自动同步/冲突相关的 UI 一并
+   目录选择器（spec 004 FR-042）、一份结果摘要，以及主密钥卡片 —— 卡片本身用浏览器
+   自己的下载与 `<input type="file">`，因此密钥材料走 API、守护进程不打开任何路径。fleet view 以及 remote/自动同步/冲突相关的 UI 一并
    移除。
 9. **docs** —— architecture.md 的横切行、roadmap 状态、docs-site 的 guide 与
    architecture 页面、中文 companion；用验收标记把 `spec.md` 中每个场景与一个测试关联。

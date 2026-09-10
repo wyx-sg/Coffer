@@ -48,7 +48,6 @@ class AgentPatch(BaseModel):
     skill_exclusions: list[str] | None = None
     # Slice 6: opt-in native write-side memory disable. Toggling drives the
     # on-disk transform (Claude settings.json / Codex config.toml) in lockstep.
-    disable_native_memory: bool | None = None
     # spec 011 amendment 2026-06-22b (E3): per-agent model binding. Explicit null
     # on `fast_model` clears the fast slot (distinguished via model_fields_set).
     model: str | None = None
@@ -68,7 +67,6 @@ class AgentOut(BaseModel):
     follow_all_skills: bool
     skill_exclusions: list[str]
     # Slice 6: whether the agent's native write-side memory is disabled.
-    disable_native_memory: bool
     # spec 011 amendment 2026-06-22b (E3): per-agent model binding (None = unbound,
     # falls back to the active connection's model during rollout).
     model: str | None
@@ -105,7 +103,6 @@ def _to_out(r: Resource) -> AgentOut:
         description=r.description,
         follow_all_skills=cfg.follow_all_skills,
         skill_exclusions=list(cfg.skill_exclusions),
-        disable_native_memory=cfg.disable_native_memory,
         model=cfg.model,
         fast_model=cfg.fast_model,
         wire_api=cfg.wire_api,
@@ -197,12 +194,6 @@ async def update_agent(
             follow_all_skills=body.follow_all_skills if "follow_all_skills" in sent else None,
             skill_exclusions=body.skill_exclusions if "skill_exclusions" in sent else None,
             actor=actor,
-        )
-    if "disable_native_memory" in sent and body.disable_native_memory is not None:
-        # Drives the persisted field AND the on-disk native-memory transform in
-        # lockstep (Claude settings.json / Codex config.toml).
-        r = await svc.set_disable_native_memory(
-            name=name, enabled=body.disable_native_memory, actor=actor
         )
     if "model" in sent or "fast_model" in sent or "wire_api" in sent:
         # Per-agent model binding (E3). An explicit null fast_model clears the

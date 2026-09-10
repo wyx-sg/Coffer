@@ -1,7 +1,7 @@
 // frontend/src/components/knowledge/KnowledgeDocStatus.tsx
 // Maps an ingested document's embed_status (done | embedding | queued | running |
 // error) to the shared StatusBadge. Kept apart so the doc tree/table stays
-// within its size budget; mirrors AgentMemoryImportStatus.tsx.
+// within its size budget.
 import { useTranslation } from "react-i18next";
 
 import { StatusBadge, type StatusTone } from "@/components/StatusBadge";

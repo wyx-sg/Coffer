@@ -23,7 +23,6 @@ import {
   usePatchAgent,
   useRegisterAgent,
   useRemoveAgent,
-  useTogglePlugin,
 } from "./useAgents";
 
 function wrapper() {
@@ -320,24 +319,6 @@ describe("useAdoptMcpEntry", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toMatch(/\/agents\/my-agent\/mcp-entries\/my-server\/adopt$/);
     expect((init as RequestInit).method).toBe("POST");
-  });
-});
-
-describe("useTogglePlugin", () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  test("on success, invalidates plugins query", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { result } = renderHook(() => useTogglePlugin("my-agent"), {
-      wrapper: wrapper(),
-    });
-    await result.current.mutateAsync({ id: "plugin-1", enabled: true });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/agents\/my-agent\/plugins\/plugin-1$/);
-    expect((init as RequestInit).method).toBe("PATCH");
   });
 });
 

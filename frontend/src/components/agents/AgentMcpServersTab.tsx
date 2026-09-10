@@ -7,12 +7,13 @@
 //      file inside the size cap.
 //
 //   B. Direct servers — the agent's own MCP entries read from its config
-//      files (specs 004/005 workspace amendment). Each row shows source/transport, a per-entry enable
-//      Switch when the agent supports it (codex; `enabled` is null for
-//      claude_code), and actions to adopt the entry into Coffer or remove it
-//      (with a confirm — removal writes a .bak). Entries that duplicate an
-//      existing Coffer resource get an inline hint + a remove-duplicate
-//      shortcut. Config files that failed to parse are surfaced in a banner;
+//      files (specs 004/005 workspace amendment). The listing is read-only and
+//      the one write is adopt-into-Coffer: each row shows source/transport, the
+//      entry's enabled state as a plain badge (null for claude_code, whose
+//      config format has no per-entry flag), and an Adopt action. Coffer no
+//      longer edits another tool's private config, so there is no delete and no
+//      toggle; entries that duplicate an existing Coffer resource just get an
+//      inline hint. Config files that failed to parse are surfaced in a banner;
 //      their entries can't be listed, so the banner is the only signal.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -25,26 +26,14 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
 import type { McpEntryOut } from "@/lib/api/agents";
-import { useAgentMcpEntries, useRemoveMcpEntry, useToggleMcpEntry } from "@/lib/hooks/useAgents";
+import { useAgentMcpEntries } from "@/lib/hooks/useAgents";
 
 export function AgentMcpServersTab({ agentName }: { agentName: string }) {
   const { t } = useTranslation();
   const entries = useAgentMcpEntries(agentName);
-  const toggle = useToggleMcpEntry(agentName);
-  const removeEntry = useRemoveMcpEntry(agentName);
   const [adoptTarget, setAdoptTarget] = useState<McpEntryOut | null>(null);
-  const [removeTarget, setRemoveTarget] = useState<McpEntryOut | null>(null);
 
   // The `coffer` entry IS the gateway hookup — it's section A's concern, so
   // the direct list only shows the agent's other (non-Coffer) servers.
@@ -60,17 +49,9 @@ export function AgentMcpServersTab({ agentName }: { agentName: string }) {
         <div className="space-y-1">
           <span className="font-medium">{e.name}</span>
           {e.matches_resource !== null && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>{t("agents.workspace.mcp.alreadyInCoffer", { name: e.matches_resource })}</span>
-              <Button
-                variant="link"
-                size="sm"
-                className="h-auto p-0 text-xs"
-                onClick={() => setRemoveTarget(e)}
-              >
-                {t("agents.workspace.mcp.removeDuplicate")}
-              </Button>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              {t("agents.workspace.mcp.alreadyInCoffer", { name: e.matches_resource })}
+            </p>
           )}
         </div>
       ),
@@ -99,18 +80,16 @@ export function AgentMcpServersTab({ agentName }: { agentName: string }) {
       key: "enabled",
       header: t("agents.workspace.mcp.enabled"),
       className: "whitespace-nowrap",
-      // `enabled` is null when the agent's config format has no per-entry
-      // enable flag (claude_code) — no Switch in that case.
+      // Read-only: `enabled` is null when the agent's config format has no
+      // per-entry enable flag (claude_code). Flipping it would mean writing the
+      // agent's own config, which Coffer no longer does.
       cell: (e) =>
         e.enabled === null ? (
           <span className="text-muted-foreground">—</span>
         ) : (
-          <Switch
-            checked={e.enabled}
-            disabled={toggle.isPending}
-            onCheckedChange={(checked) => toggle.mutate({ entry: e.name, enabled: checked })}
-            aria-label={`${t("agents.workspace.mcp.enabled")}: ${e.name}`}
-          />
+          <Badge variant={e.enabled ? "secondary" : "outline"}>
+            {e.enabled ? t("common.enabled") : t("common.disabled")}
+          </Badge>
         ),
     },
     {
@@ -118,17 +97,9 @@ export function AgentMcpServersTab({ agentName }: { agentName: string }) {
       header: "",
       className: "text-right",
       cell: (e) => (
-        <span className="flex justify-end gap-2">
+        <span className="flex justify-end">
           <Button size="sm" variant="outline" onClick={() => setAdoptTarget(e)}>
             {t("agents.workspace.mcp.adopt")}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => setRemoveTarget(e)}
-          >
-            {t("agents.workspace.mcp.remove")}
           </Button>
         </span>
       ),
@@ -203,40 +174,6 @@ export function AgentMcpServersTab({ agentName }: { agentName: string }) {
           }}
         />
       )}
-
-      <Dialog
-        open={removeTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setRemoveTarget(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {t("agents.workspace.mcp.remove")}: {removeTarget?.name}
-            </DialogTitle>
-            <DialogDescription>{t("agents.workspace.mcp.removeConfirm")}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setRemoveTarget(null)}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={removeEntry.isPending}
-              onClick={() => {
-                if (!removeTarget) return;
-                removeEntry.mutate(
-                  { entry: removeTarget.name, source: removeTarget.source },
-                  { onSuccess: () => setRemoveTarget(null) },
-                );
-              }}
-            >
-              {t("agents.workspace.mcp.remove")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

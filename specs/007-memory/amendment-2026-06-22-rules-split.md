@@ -18,6 +18,15 @@ Scope axis unchanged: the lanes (`knowledge` / `rules` / `handoff`) and files-as
 > `journal` lane has since been removed (its only writer, transcript
 > distillation, is gone), so that half is dropped; only the rules split below
 > remains in force.
+>
+> **Also stale, 2026-09-10:** every mention below of a *rules bundle*, a
+> *SessionStart bundle* or *injection* describes a delivery channel that no
+> longer exists. The `coffer-hook` SessionStart hook, the `session-context`
+> route and `RulesBundleAssembler` are deleted with FR-049/FR-050/FR-052/FR-055.
+> The split itself, `read_all_rules`, and the concatenating read surface
+> (`GET /api/v1/knowledge/{scope}/rules`, `coffer knowledge rules <scope>`) are
+> unaffected and still in force — only the "and then it gets injected" half is
+> gone.
 
 ## Motivation
 
@@ -46,12 +55,12 @@ This is a machine-local data operation, not a code change. Recorded here for tra
 - **Small (≤ threshold rules in the lane):** unchanged — a single `rules/rules.md`.
 - **Grown (> threshold in any single rules file):** the organizer's reorg pass runs an LLM **categorization** step that rewrites that file's rules into multiple `rules/<category>.md` files (one bullet list per file) and removes the now-split source file.
 - **Recursive:** the same rule applies to any `rules/**/*.md`. A category file that itself exceeds the threshold splits again into `rules/<category>/<sub-topic>.md`. One uniform mechanism — "any rules file over threshold is re-categorized into finer files" — handles both the first split and every deeper level; no special-casing per level.
-- **Threshold:** **100 rules** per file (count of bullets). Chosen on rule count (not bytes) because management bloat is driven by the number of entries; a dozen-to-~hundred rules read/inject cleanly as one file, beyond that topic grouping earns its keep.
+- **Threshold:** **100 rules** per file (count of bullets). Chosen on rule count (not bytes) because management bloat is driven by the number of entries; a dozen-to-~hundred rules read cleanly as one file, beyond that topic grouping earns its keep.
 - Slugs are LLM-chosen, guarded as safe path segments (existing `_safe_segment`); nested dirs are allowed (`rules/git/commit.md`).
 
 ### Read surface (concatenation)
 - New `read_all_rules(rules_dir)`: recursively globs `rules/**/*.md` (sorted) and concatenates them; if only the legacy single `rules/rules.md` exists, it reads that. Returns one markdown string.
-- `session_context.get_rules` switches from `read_rules(rules_path(...))` to `read_all_rules(rules_dir(...))`. The `RulesBundleAssembler` injection logic is **unchanged** (it still consumes one rules string per scope).
+- `session_context.get_rules` switches from `read_rules(rules_path(...))` to `read_all_rules(rules_dir(...))`. (At the time this also fed `RulesBundleAssembler`, which consumed one rules string per scope; that assembler is since deleted — `get_rules` now only backs the read endpoint.)
 - The `GET /api/v1/memory_stores/{name}/rules` read surface returns the concatenated markdown (per-file sections), so its DTO shape is unchanged.
 
 ### Write paths (post-split routing)
@@ -73,7 +82,7 @@ Rules:
 - a category file crossing 100 → recursive split into `rules/<category>/<sub>.md`;
 - `read_all_rules` concatenates all files (recursive) and falls back to legacy single file;
 - a new rule after a split routes to the matching category file;
-- the injected SessionStart bundle still contains the rules + the two seeded built-in rules.
+- ~~the injected SessionStart bundle still contains the rules + the two seeded built-in rules~~ — dropped with the injection channel (2026-09-10); the equivalent check is that the read surface returns every `rules/*.md` concatenated.
 
 ## Docs to update with the code (same change)
 

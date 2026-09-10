@@ -251,26 +251,6 @@ def remove_entry(
     raise AssertionError(f"remove_entry unsupported for format {fmt!r}")  # pragma: no cover
 
 
-def set_entry_enabled(text: str, name: str, enabled: bool) -> str:
-    """Return new TOML config text with the named entry's ``enabled`` flag set.
-
-    Raises ``McpEntryNotFound`` if the entry does not exist or is not a table.
-    Raises ``AgentConfigParseError`` on malformed input.
-    """
-    try:
-        doc = _parse_toml(text)
-    except ConfigFileFormatInvalid as e:
-        raise AgentConfigParseError("<config>", str(e)) from e
-    servers = doc.get("mcp_servers")
-    if not isinstance(servers, MutableMapping) or name not in servers:
-        raise McpEntryNotFound(name)
-    entry = servers[name]
-    if not isinstance(entry, MutableMapping):
-        raise McpEntryNotFound(name)
-    doc["mcp_servers"][name]["enabled"] = enabled
-    return tomlkit.dumps(doc)
-
-
 def secret_env_keys(env: dict[str, str]) -> list[str]:
     """Return sorted list of env keys whose names look like secrets.
 

@@ -109,3 +109,10 @@ Both operations are also available over `/api/v1/sync/*` and in the web UI's
 **Sync** settings panel — an export button and an import button, each opening a
 native directory picker, plus the master-key card for comparing fingerprints and
 running the out-of-band key transfer.
+
+The key routes carry the key **material**, not a path: `POST /sync/key/export`
+takes `{}` and returns `{"material": "<fernet key text>"}`, and `POST
+/sync/key/import` takes `{"material": "…"}`. The CLI commands above still write
+and read a file — the CLI does that file I/O itself, so the daemon never opens a
+path a caller named. In the web UI the export lands as a browser download and
+the import reads an `<input type="file">`.

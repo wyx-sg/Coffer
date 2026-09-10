@@ -20,16 +20,6 @@ class McpEntryNotFound(CofferError):  # noqa: N818
         self.entry = entry
 
 
-class McpEntryToggleUnsupported(CofferError):  # noqa: N818
-    """The agent type does not support a per-entry enabled flag. Maps to 422."""
-
-    code = "MCP_ENTRY_TOGGLE_UNSUPPORTED"
-
-    def __init__(self, agent_type: str) -> None:
-        super().__init__(f"per-entry enabled flag is not supported by {agent_type}")
-        self.agent_type = agent_type
-
-
 class McpEntryProtected(CofferError):  # noqa: N818
     """The entry is Coffer's own gateway entry and must not be mutated directly. Maps to 422."""
 
@@ -83,37 +73,6 @@ class PluginNotFound(CofferError):  # noqa: N818
         self.plugin_id = plugin_id
 
 
-class PluginUninstallUnsupported(CofferError):  # noqa: N818
-    """The agent type requires its own tooling to uninstall plugins. Maps to 422."""
-
-    code = "PLUGIN_UNINSTALL_UNSUPPORTED"
-
-    def __init__(self, agent_type: str) -> None:
-        super().__init__(f"{agent_type} plugins must be uninstalled with the agent's own tooling")
-        self.agent_type = agent_type
-
-
-class PluginToggleUnsupported(CofferError):  # noqa: N818
-    """The agent type does not support enabling/disabling plugins via Coffer. Maps to 422."""
-
-    code = "PLUGIN_TOGGLE_UNSUPPORTED"
-
-    def __init__(self, agent_type: str) -> None:
-        super().__init__(f"{agent_type} plugins cannot be toggled through Coffer")
-        self.agent_type = agent_type
-
-
-class PluginUninstallFailed(CofferError):  # noqa: N818
-    """A CLI-mediated uninstall (e.g. ``claude plugin uninstall``) failed. Maps to 422."""
-
-    code = "PLUGIN_UNINSTALL_FAILED"
-
-    def __init__(self, plugin_id: str, reason: str) -> None:
-        super().__init__(f"failed to uninstall {plugin_id}: {reason}")
-        self.plugin_id = plugin_id
-        self.reason = reason
-
-
 class McpInstallUnsupported(CofferError):  # noqa: N818
     """The agent type does not declare an MCP injection target. Maps to 422."""
 
@@ -121,27 +80,6 @@ class McpInstallUnsupported(CofferError):  # noqa: N818
 
     def __init__(self, agent_type: str) -> None:
         super().__init__(f"agent type {agent_type!r} does not support Coffer MCP install")
-        self.agent_type = agent_type
-
-
-class HookInstallUnsupported(CofferError):  # noqa: N818
-    """The agent type does not declare a lifecycle-hook injection target. Maps to 422."""
-
-    code = "HOOK_INSTALL_UNSUPPORTED"
-
-    def __init__(self, agent_type: str) -> None:
-        super().__init__(f"agent type {agent_type!r} does not support Coffer hook install")
-        self.agent_type = agent_type
-
-
-class NativeMemoryDisableUnsupported(CofferError):  # noqa: N818
-    """The agent type has no native write-side memory to disable (a type with
-    no cross-session native memory). Maps to 422 — the toggle is absent, not broken."""
-
-    code = "NATIVE_MEMORY_DISABLE_UNSUPPORTED"
-
-    def __init__(self, agent_type: str) -> None:
-        super().__init__(f"agent type {agent_type!r} has no native memory to disable")
         self.agent_type = agent_type
 
 

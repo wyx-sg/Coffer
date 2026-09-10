@@ -116,8 +116,11 @@ agent 详情页有四个标签：
 - **Overview** —— 该 agent 的类型与配置目录。
 - **Skills** —— Coffer 为此 agent 管理的技能，每个都带启用/禁用开关。**Install skills**
   按钮会打开一个选择对话框（搜索、过滤、分页、多选），用于为该 agent 绑定更多技能。
-- **MCP servers** —— Coffer 当前向该 agent 暴露的 MCP 服务器，以只读表格呈现（按 agent
-  的 MCP 授权是计划中的功能）。
+- **MCP servers** —— 分两部分。*Via Coffer gateway* 显示 shim 的安装状态并链接到 MCP
+  servers 页面。*Direct servers* 列出从该 agent 自己的配置文件读到的 MCP 条目：每行显示
+  来源、传输方式，以及作为纯展示徽章的 enabled 状态；唯一的写操作是 **Adopt** ——
+  把该条目接管进 Coffer 成为受管资源。Coffer 不改动别的工具的私有配置，因此这里既没有
+  移除、也没有启用/禁用开关。
 - **Config files** —— 在编辑器中打开该 agent 任意经过策展的配置文件。保存时会校验文件
   格式（格式错误的 JSON/TOML 会被拒绝，文件保持不变），以原子方式写入并保留 `.bak`
   备份，并提供一个可滚动到匹配项的查找/替换框。
@@ -150,7 +153,7 @@ agent 头部的 **Install Coffer MCP** 开关会将 Coffer 自身的 `coffer` MC
 - **Entries** —— agent(和你)写下的内容。可在此新增、编辑与删除条目。
 - **Documents** —— 被摄取并转换为 Markdown 的文件。可拖入文件、阅读、重新转换或删除。
   追踪了外部原件的文档会显示该原件在磁盘上是否已变化。
-- **Rules** —— 该作用域的行为规则,会在会话开始时注入 agent。
+- **Rules** —— 该作用域的行为规则。按需读取;没有任何东西会把它们推进 agent 会话。
 - **Handoff** —— 已保存的工作现场,每个 git 分支一条。
 - **Changelog** —— 只追加的记录:整合做了什么、什么时候做的。
 

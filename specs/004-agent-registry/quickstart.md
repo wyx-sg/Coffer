@@ -167,12 +167,9 @@ the format has one (Codex), and whether an equivalent `mcp_server` resource is
 already registered in Coffer. Env/header values never leave the daemon — only
 key names are listed.
 
-Remove or toggle an entry in place (a `.bak` of the file is kept):
-
-```bash
-coffer agent mcp remove-entry claude-code my-server
-coffer agent mcp toggle-entry codex my-server --disabled   # Codex only
-```
+The listing is read-only. To remove an entry or flip a Codex `enabled` flag,
+use the agent's own UI — Coffer does not edit these entries in place. The one
+write it offers here is adoption, below.
 
 **Adopt** a direct entry into Coffer to serve it to all agents through the
 gateway instead. Secret-looking env/header keys must be mapped to credential
@@ -189,23 +186,20 @@ then removes the entry from the agent's file; any failure rolls back so you
 never lose a working entry. On a name conflict the error suggests an
 alternative — retry with `--name <suggested>`.
 
-## Toggle or uninstall a plugin
+## List an agent's plugins
 
-The Plugins tab (and CLI) lists the agent's installed plugins, grouped by
-marketplace:
+The CLI lists the agent's installed plugins, grouped by marketplace. This is a
+**read-only** view with no web UI — there is no Plugins tab:
 
 ```bash
 coffer agent plugin list codex
-coffer agent plugin disable codex my-plugin@my-marketplace
-coffer agent plugin enable codex my-plugin@my-marketplace
-coffer agent plugin uninstall codex my-plugin@my-marketplace   # Codex only
+coffer agent plugin list codex --json
 ```
 
-Toggles write only the documented config surface (the Codex entry's `enabled`
-field; Claude Code's `enabledPlugins` map in `settings.json`) — never the
-agents' internal state files. `uninstall` removes the Codex config entry and
-its cache directory; for Claude Code, uninstall requires the agent's own
-tooling (`claude plugin`), so Coffer offers disable plus a hint instead.
+Each plugin shows its `<name>@<marketplace>` id, enabled state, and whether its
+on-disk cache is present. Coffer parses these files and writes none of them:
+enabling, disabling, uninstalling and installing all stay with the agent's own
+tooling (`claude plugin …`, Codex's `config.toml`).
 
 ## Install Coffer's MCP into an agent
 

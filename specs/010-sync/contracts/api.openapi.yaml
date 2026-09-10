@@ -6,10 +6,15 @@ info:
     REST surface for vault export and import (spec 010, ADR-016). Export and
     import are a cross-cutting service, not a resource kind, so they have their
     own endpoints rather than riding /resources. All paths require the loopback
-    bearer token. Both operations act on a directory path on this machine; no
-    request ever carries vault content over the wire. The master key is never
-    returned over the network except via the explicit, audited key-export
-    endpoint that writes it to a local file path.
+    bearer token. Export and import act on a directory path on this machine; no
+    request ever carries vault content over the wire. The master key is the one
+    exception: `key/export` returns the key **material** and `key/import` accepts
+    it, because the daemon no longer opens a filesystem path a caller named — a
+    browser has no path to hand it, and `<input type="file">` gives the contents
+    directly. The key therefore crosses the token-guarded loopback API, where it
+    previously did not; that is acceptable because exporting a master key means
+    the caller holds the plaintext either way, and the alternative had the daemon
+    running `osascript`/`zenity` save/open dialogs on the user's behalf.
 
 servers:
   - url: http://127.0.0.1:8000
@@ -83,34 +88,41 @@ paths:
 
   /api/v1/sync/key/export:
     post:
-      summary: Export this machine's master key to a local file (out-of-band transfer)
+      summary: Return this machine's master key material (out-of-band transfer)
       operationId: exportMasterKey
       tags: [sync]
       requestBody:
         required: true
+        description: Empty object — the caller decides where the material lands.
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/KeyPathIn' }
+            schema: { $ref: '#/components/schemas/EmptyIn' }
       responses:
         '200':
-          description: Key written to the given local path
+          description: >-
+            The Fernet key text. The caller writes it wherever it belongs — the
+            CLI to the file path its argument names, the web UI to a browser
+            download. The daemon writes nothing.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/KeyOpOut' }
+              schema: { $ref: '#/components/schemas/KeyMaterialOut' }
         '422':
           description: No master key on this machine (`MASTER_KEY_FILE_INVALID`)
           $ref: '#/components/responses/ValidationError'
 
   /api/v1/sync/key/import:
     post:
-      summary: Import a master key from a local file onto this machine
+      summary: Install master key material brought from another machine
       operationId: importMasterKey
       tags: [sync]
       requestBody:
         required: true
+        description: >-
+          The key material itself. The CLI reads it from the file its argument
+          names; the web UI reads it from an `<input type="file">`.
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/KeyPathIn' }
+            schema: { $ref: '#/components/schemas/KeyMaterialIn' }
       responses:
         '200':
           description: Key installed; credential refs that remain locked here
@@ -118,7 +130,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/KeyImportOut' }
         '422':
-          description: Missing file or not a valid Fernet key (`MASTER_KEY_FILE_INVALID`)
+          description: Not a valid Fernet key (`MASTER_KEY_FILE_INVALID`)
           $ref: '#/components/responses/ValidationError'
 
 components:
@@ -211,16 +223,24 @@ components:
           type: string
           nullable: true
           description: "First 12 hex chars of SHA-256(master key); null when absent"
-    KeyPathIn:
+    EmptyIn:
       type: object
-      required: [path]
-      properties:
-        path: { type: string, description: "Local filesystem path for the key file" }
-    KeyOpOut:
+      additionalProperties: false
+      description: "No fields — key export takes no arguments."
+    KeyMaterialIn:
       type: object
-      required: [path]
+      required: [material]
       properties:
-        path: { type: string }
+        material: { type: string, description: "The Fernet key text to install here" }
+    KeyMaterialOut:
+      type: object
+      required: [material]
+      properties:
+        material:
+          type: string
+          description: >-
+            The Fernet key text. Crosses the token-guarded loopback API only;
+            it is never written into an export bundle.
     KeyImportOut:
       type: object
       required: [locked_refs]

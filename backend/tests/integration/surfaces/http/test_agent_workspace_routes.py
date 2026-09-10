@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import pathlib
 import tomllib
-import types
 
 import pytest
 from starlette.testclient import TestClient
@@ -167,60 +166,6 @@ def test_list_mcp_entries(tmp_path, monkeypatch):
         assert PLAIN_VALUE not in r.text
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="remove a direct MCP entry")
-def test_remove_mcp_entry(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59810)
-    with _client(app) as c:
-        _register_codex(c, tmp_path)
-        config = tmp_path / ".codex" / "config.toml"
-
-        r = c.delete("/api/v1/agents/cx/mcp-entries/fetcher")
-        assert r.status_code == 204, r.text
-        data = tomllib.loads(config.read_text(encoding="utf-8"))
-        assert "fetcher" not in data["mcp_servers"]
-        # Atomic write preserved the prior content in a .bak.
-        bak = tmp_path / ".codex" / "config.toml.bak"
-        assert bak.exists()
-        assert "fetcher" in bak.read_text(encoding="utf-8")
-
-        r = c.get("/api/v1/agents/cx/mcp-entries")
-        assert "fetcher" not in [e["name"] for e in r.json()["items"]]
-
-
-@pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="toggle a Codex MCP entry's enabled flag"
-)
-def test_toggle_codex_mcp_entry(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59820)
-    with _client(app) as c:
-        _register_codex(c, tmp_path)
-
-        r = c.patch("/api/v1/agents/cx/mcp-entries/fetcher", json={"enabled": False})
-        assert r.status_code == 204, r.text
-        config = tmp_path / ".codex" / "config.toml"
-        data = tomllib.loads(config.read_text(encoding="utf-8"))
-        assert data["mcp_servers"]["fetcher"]["enabled"] is False
-
-        r = c.get("/api/v1/agents/cx/mcp-entries")
-        by_name = {e["name"]: e for e in r.json()["items"]}
-        assert by_name["fetcher"]["enabled"] is False
-
-
-@pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="reject toggling a Claude Code MCP entry"
-)
-def test_reject_toggle_claude_mcp_entry(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59830)
-    with _client(app) as c:
-        _register_claude(c, tmp_path)
-        before = (tmp_path / ".claude.json").read_bytes()
-
-        r = c.patch("/api/v1/agents/cc/mcp-entries/solo", json={"enabled": False})
-        assert r.status_code == 422, r.text
-        assert r.json()["error"]["code"] == "MCP_ENTRY_TOGGLE_UNSUPPORTED"
-        assert (tmp_path / ".claude.json").read_bytes() == before
-
-
 @pytest.mark.acceptance(
     spec="004-agent-registry", scenario="degrade to read-only when MCP config is unparseable"
 )
@@ -366,26 +311,32 @@ def test_mcp_entries_unknown_agent_404(tmp_path, monkeypatch):
 
 
 def test_mcp_entries_unknown_entry_404(tmp_path, monkeypatch):
+    """Locating an entry that is not there is a 404, reached through adopt —
+    the only route that still names one entry."""
     app = _app(tmp_path, monkeypatch, 59900)
     with _client(app) as c:
         _register_codex(c, tmp_path)
-        r = c.delete("/api/v1/agents/cx/mcp-entries/nope")
+        r = c.post("/api/v1/agents/cx/mcp-entries/nope/adopt", json={})
         assert r.status_code == 404
         assert r.json()["error"]["code"] == "MCP_ENTRY_NOT_FOUND"
 
 
 def test_mcp_entry_source_ambiguous_without_source_param(tmp_path, monkeypatch):
+    """An entry present in two config files cannot be addressed without naming
+    the file; naming it resolves. Exercised through adopt, which is the route
+    that still locates one entry — and which then removes it from the file it
+    was adopted out of."""
     app = _app(tmp_path, monkeypatch, 59910)
     with _client(app) as c:
         _register_claude(c, tmp_path)
         # "dup" lives in BOTH ~/.claude.json and settings.json.
-        r = c.delete("/api/v1/agents/cc/mcp-entries/dup")
+        r = c.post("/api/v1/agents/cc/mcp-entries/dup/adopt", json={})
         assert r.status_code == 422
         assert r.json()["error"]["code"] == "MCP_ENTRY_SOURCE_AMBIGUOUS"
 
         # Naming the source disambiguates.
-        r = c.delete("/api/v1/agents/cc/mcp-entries/dup", params={"source": "settings"})
-        assert r.status_code == 204, r.text
+        r = c.post("/api/v1/agents/cc/mcp-entries/dup/adopt", json={"source": "settings"})
+        assert r.status_code == 201, r.text
         settings = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
         assert "dup" not in settings["mcpServers"]
         global_cfg = json.loads((tmp_path / ".claude.json").read_text(encoding="utf-8"))
@@ -420,89 +371,6 @@ def test_list_plugins(tmp_path, monkeypatch):
         assert body["marketplaces"] == [
             {"name": "m1", "source_type": "git", "source": "https://example.com/m1.git"}
         ]
-
-
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="toggle a plugin's enabled state")
-def test_toggle_claude_plugin_writes_settings_only(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59930)
-    with _client(app) as c:
-        _register_claude(c, tmp_path)
-        installed = tmp_path / ".claude" / "plugins" / "installed_plugins.json"
-        installed_before = installed.read_bytes()
-
-        r = c.patch("/api/v1/agents/cc/plugins/q1@mk", json={"enabled": False})
-        assert r.status_code == 204, r.text
-
-        settings = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
-        assert settings["enabledPlugins"]["q1@mk"] is False
-        # The internal inventory file is byte-identical — never written.
-        assert installed.read_bytes() == installed_before
-
-        r = c.get("/api/v1/agents/cc/plugins")
-        by_id = {p["id"]: p for p in r.json()["items"]}
-        assert by_id["q1@mk"]["enabled"] is False
-
-
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="uninstall a Codex plugin")
-def test_uninstall_codex_plugin(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59940)
-    with _client(app) as c:
-        _register_codex(c, tmp_path)
-        cache_dir = tmp_path / ".codex" / "plugins" / "cache" / "m1" / "p1"
-        assert cache_dir.is_dir()
-
-        r = c.delete("/api/v1/agents/cx/plugins/p1@m1")
-        assert r.status_code == 204, r.text
-        data = tomllib.loads((tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8"))
-        assert "p1@m1" not in data.get("plugins", {})
-        assert not cache_dir.exists()
-
-
-@pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="uninstall a Claude Code plugin via its CLI"
-)
-def test_uninstall_claude_plugin_via_cli(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59950)
-    with _client(app) as c:
-        _register_claude(c, tmp_path)
-        installed = tmp_path / ".claude" / "plugins" / "installed_plugins.json"
-        settings = tmp_path / ".claude" / "settings.json"
-        installed_before, settings_before = installed.read_bytes(), settings.read_bytes()
-
-        # `claude` present and the CLI succeeds — Coffer delegates, never writing
-        # Claude's internal files itself.
-        monkeypatch.setattr("shutil.which", lambda _exe: "/usr/bin/claude")
-        monkeypatch.setattr(
-            "subprocess.run",
-            lambda *a, **k: types.SimpleNamespace(returncode=0, stdout="", stderr=""),
-        )
-
-        r = c.delete("/api/v1/agents/cc/plugins/q1@mk")
-        assert r.status_code == 204, r.text
-        # Coffer wrote neither the internal inventory nor settings.json.
-        assert installed.read_bytes() == installed_before
-        assert settings.read_bytes() == settings_before
-
-
-@pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="reject Claude uninstall when its CLI is unavailable"
-)
-def test_reject_claude_uninstall_no_cli(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59955)
-    with _client(app) as c:
-        _register_claude(c, tmp_path)
-        settings = tmp_path / ".claude" / "settings.json"
-        before = settings.read_bytes()
-
-        # No `claude` on PATH → uninstall is unavailable.
-        monkeypatch.setattr("shutil.which", lambda _exe: None)
-
-        r = c.delete("/api/v1/agents/cc/plugins/q1@mk")
-        assert r.status_code == 422, r.text
-        assert r.json()["error"]["code"] == "PLUGIN_UNINSTALL_UNSUPPORTED"
-        assert settings.read_bytes() == before
-        # The listing also hides the affordance.
-        assert c.get("/api/v1/agents/cc/plugins").json()["can_uninstall"] is False
 
 
 @pytest.mark.acceptance(spec="004-agent-registry", scenario="flag a plugin whose cache is missing")

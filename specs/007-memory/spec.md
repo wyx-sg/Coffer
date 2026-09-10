@@ -7,7 +7,7 @@
 **Status**: Accepted — shipped
 **Folder name**: this spec lives at `specs/007-memory/`, which is **historical**. The directory name is the spec id used by every inbound link and by `scripts/audit_acceptance.py` (which keys acceptance markers on it), so it was deliberately left alone when the feature was renamed. Read `007-memory` as "the Knowledge Layer spec".
 
-**Input**: Coffer stores one thing — **knowledge** — and serves it to every agent the user runs. Knowledge arrives two ways: an agent **writes** it (a fact, a decision, a preference worth surviving the session) or a human **ingests** it (a file in any format, converted to Markdown). It is held as per-item Markdown files on disk, the **sole source of truth**; SQLite (`documents`, `chunks`, FTS5, sqlite-vec) is a derived, rebuildable index ([ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md)). One resource kind, `knowledge`, with three scopes (`global`, `project-<ULID>`, and named collections), a fixed set of lanes per scope, one retrieval engine whose mode is internal ([ADR-034](../../docs/decisions/ADR-034-retrieval-mode-is-internal.md)), and eight `coffer__*` MCP tools. Coffer keeps its own canonical format and never writes into an agent's native memory files — rules reach a session by **injection only** ([ADR-026](../../docs/decisions/ADR-026-memory-via-mcp-not-native-projection.md)).
+**Input**: Coffer stores one thing — **knowledge** — and serves it to every agent the user runs. Knowledge arrives two ways: an agent **writes** it (a fact, a decision, a preference worth surviving the session) or a human **ingests** it (a file in any format, converted to Markdown). It is held as per-item Markdown files on disk, the **sole source of truth**; SQLite (`documents`, `chunks`, FTS5, sqlite-vec) is a derived, rebuildable index ([ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md)). One resource kind, `knowledge`, with three scopes (`global`, `project-<ULID>`, and named collections), a fixed set of lanes per scope, one retrieval engine whose mode is internal ([ADR-034](../../docs/decisions/ADR-034-retrieval-mode-is-internal.md)), and eight `coffer__*` MCP tools. Coffer keeps its own canonical format and never writes into an agent's native memory files ([ADR-026](../../docs/decisions/ADR-026-memory-via-mcp-not-native-projection.md)); knowledge reaches a session only when the agent **asks for it** over MCP — nothing is pushed in.
 
 ## Why this is one layer (the 2026-09-10 merge)
 
@@ -140,15 +140,17 @@ The developer pauses mid-task with Claude Code — at a known step, with specifi
 
 ---
 
-### User Story 9 — Rules arrive ambiently at the start of every session (Priority: P2)
+### User Story 9 — Rules accumulate in a lane of their own (Priority: P2)
 
-The developer has accumulated behavioural rules (global "always run the verify step before pushing", project "this repo deploys via `make release`") and wants them in front of the agent **automatically at the start of every session** — for Claude Code in the morning and Codex in the afternoon — without the agent having to remember to search, and **without Coffer writing into the agent's own memory or instruction files** ([ADR-026](../../docs/decisions/ADR-026-memory-via-mcp-not-native-projection.md)). A Coffer-installed **SessionStart hook** asks Coffer for a rules bundle (the always-on global rules plus the current project's rules when the cwd resolves to a git project) and injects it as **context only**. The bundle also carries two Coffer-seeded built-in rules — call `coffer__resume()` to continue prior work, and prefer Coffer's shared knowledge over the agent's native memory — plus an ambient title-only index of what the project scope knows. A developer who wants a clean separation can opt in to `disable_native_memory`.
+The developer has accumulated behavioural rules (global "always run the verify step before pushing", project "this repo deploys via `make release`") and wants them kept as rules — a readable list of standing instructions — rather than dissolved into topic prose. The organizer recognises a rule-shaped note and **appends** it to the scope's `rules/` lane instead of merging it into a topic document. The lane sits at the scope root, outside retrieval, and is read **on demand** through its own surface: `GET /api/v1/knowledge/{scope}/rules` or `coffer knowledge rules <scope>`. Coffer never writes into the agent's own memory or instruction files ([ADR-026](../../docs/decisions/ADR-026-memory-via-mcp-not-native-projection.md)).
 
-**Why this priority**: rules are useless if the agent never reads them. Ambient session-start injection is the non-intrusive way to make procedural knowledge present without search-discipline and without touching native files. It is P2 because it builds on the rules lane (FR-036) and the shared core: injection delivers rules that already exist, and a hook-less or failed injection never blocks the agent.
+**Why this priority**: procedural knowledge has a different shape from topical knowledge — a rule is a standing instruction, not a search hit — so it earns a lane that retrieval leaves alone. It is P2 because it builds on the organizer and the shared core: the lane stores rules that the ordinary write path already produced.
 
-**Independent Test**: Register a Claude Code agent, install its hooks, write one global rule and one project rule, then start a session inside that git project and observe the injected `additionalContext` contains both plus the two seeded rules — with no write to `~/.claude/CLAUDE.md`. Repeat for Codex. Stop the daemon and start a session: the hook prints nothing and exits 0.
+**What this story no longer covers — and the cost.** Rules used to arrive **ambiently**. Coffer installed a `coffer-hook` SessionStart hook into each managed agent; on every session start (and resume/clear/compact) the hook called `GET /api/v1/agents/{name}/session-context?cwd=<cwd>` and injected the scope's rules, two Coffer-seeded built-in rules, and a title-only index of the project's knowledge as `additionalContext`. That entire delivery channel is **removed** — FR-049, FR-050, FR-052 and FR-055 are deleted, along with the `coffer-hook` binary, the hook install/uninstall surface, the `session-context` route and the bundle assembler. Nothing pushes anything into an agent session any more. See "Delivery — removed" under Functional Requirements for the full statement of what that costs.
 
-**Covering scenarios**: rules bundle is injected at session start as context only; the bundle carries the two seeded built-in rules; a failed or hook-less injection never blocks the agent; disable_native_memory turns native memory off and restores it; the organizer routes a rule-shaped note into the rules lane; the rules read surface returns the stored rules.
+**Independent Test**: Write a rule-shaped note through the ordinary write path, run `organize`, and confirm it lands appended in `rules/rules.md` rather than merged into a topic document, with `rules_appended` counted in the result. Then read it back with `coffer knowledge rules <scope>` and over `GET /api/v1/knowledge/{scope}/rules`, and confirm a scope with no rules returns empty rather than an error.
+
+**Covering scenarios**: the organizer routes a rule-shaped note into the rules lane; the rules read surface returns the stored rules.
 
 ---
 
@@ -181,9 +183,7 @@ Entries and Documents are separate tabs with separate counts precisely because t
 - **Empty or over-long entry text**: rejected at the API boundary (`max_entry_chars`, default 8192, hard ceiling 32768); nothing written.
 - **Resume on a fresh branch**: `coffer__resume` returns `found=false` rather than erroring; nothing is fabricated.
 - **Handoff outside a git project**: no project scope and no branch, so `coffer__resume` returns `found=false` and `coffer__set_handoff` is rejected (there is no global handoff).
-- **Injection with the daemon down**: the SessionStart hook prints nothing and exits 0 — the session starts with no bundle and is never blocked.
-- **Injection cwd outside a git project**: the bundle still carries the global rules and the two seeded built-in rules; there are no project rules to include.
-- **Disable-native-memory toggle off / uninstall**: restores the agent's prior native-memory setting; the default (off) never touches native memory at all (ADR-026).
+- **An agent that never asks for the rules**: nothing happens. With the session-start delivery channel removed, an agent that does not call `coffer__recall` / `coffer__search` (or read `GET /api/v1/knowledge/{scope}/rules`) simply never sees the lane. This is the accepted consequence, not a bug — see "Delivery — removed".
 - **Grep and the ingested originals**: `.raw/` is dot-prefixed so ripgrep skips it. Without that, every ingested document produced two grep hits — the Markdown and the original it was converted from.
 - **Tracked source moved/deleted**: `check-sources` reports it `missing` and never crashes. `source_path` is machine-local, so a `missing` result on another machine is expected and benign.
 - **Concurrent searches**: multiple searches against one scope run independently; no per-scope lock degrades read latency.
@@ -404,8 +404,8 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **Given** a knowledge scope whose `rules/rules.md` holds one or more rules,
 - **When** `GET /api/v1/knowledge/{scope}/rules` (or `coffer knowledge rules <scope>`)
   is called,
-- **Then** the response returns the rules text verbatim (the surface that
-  session-start injection reads), and a scope with no rules returns an
+- **Then** the response returns the rules text verbatim (the only surface the
+  lane leaves disk through), and a scope with no rules returns an
   empty/`null` body rather than an error.
 
 ### Scenario: handoff scenes are listed per branch for a store
@@ -428,46 +428,6 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **Then** the response returns the changelog `text` with its absolute on-disk
   `path` and `folder_path`; a scope with no changelog returns `text = null` with
   HTTP 200 (never a 404).
-
-### Scenario: rules bundle is injected at session start as context only
-
-- **Given** a managed agent (Claude Code or Codex) with the Coffer SessionStart
-  hook installed, a global rule, and a project rule in the cwd's git project,
-- **When** a session starts and the hook calls `GET /api/v1/agents/{name}/session-context?cwd=<cwd>`,
-- **Then** the daemon returns `additional_context` holding the project rules then
-  the global rules, the hook emits it as the SessionStart `additionalContext`
-  (context only), and **no** write is made to the agent's native memory or
-  instruction files (ADR-026). When the cwd is not inside a git project, the
-  bundle carries the global rules only (no project rules).
-
-### Scenario: the bundle carries the two seeded built-in rules
-
-- **Given** the session-context endpoint assembles a bundle (even when the scope
-  has no rules),
-- **When** the bundle is returned,
-- **Then** it always includes the two Coffer-seeded built-in rules — call
-  `coffer__resume()` to continue prior work, and prefer Coffer's shared
-  knowledge tools over the agent's native memory — and the
-  handoff body itself is NOT injected (it is pulled on demand via `coffer__resume`).
-
-### Scenario: a failed or hook-less injection never blocks the agent
-
-- **Given** the SessionStart hook is installed but the daemon is unreachable (not
-  running, timeout, or any error),
-- **When** a session starts,
-- **Then** the hook prints nothing and exits 0, the session starts with no
-  injected bundle, and the agent is never blocked; an agent with no hook
-  installed simply receives no injection.
-
-### Scenario: disable_native_memory turns native memory off and restores it
-
-- **Given** a managed agent with `disable_native_memory=false` (the default),
-- **When** the user sets `disable_native_memory=true`,
-- **Then** Coffer writes the agent's native-memory off-switch
-  (Claude Code `autoMemoryEnabled=false`; Codex `features.memories=false` +
-  `memories.generate_memories=false`), and setting it back to `false` (or
-  uninstalling) restores the prior setting; while it is `false` Coffer never
-  touches the agent's native memory (ADR-026).
 
 ### Scenario: merge scan proposes same-project stores
 
@@ -771,17 +731,43 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **FR-033**: The system MUST provide an **internal agentic reorganization pass** (`POST /api/v1/knowledge/{scope}/reorg`, `coffer knowledge reorg <scope>`; explicit trigger only) running a bounded **langgraph `create_react_agent` loop** driven by the internal LLM connection over the scope's topic documents — consolidating duplicates and splitting over-long ones. Its fixed tool surface is **list / read / write / supersede** over topic docs, and it is **never agent-facing**. langchain/langgraph code MUST stay confined to `infrastructure.chat` (importlinter Contract 9); `application/knowledge` reaches it only through an injected port. With no internal connection it is a clean no-op (`status="no_model"`); a scope with no topic documents is likewise a no-op (`status="empty"`). Afterwards the pass regenerates `INDEX.md`, reconciles the index, and records one `memory_reorganized` audit entry.
 - **FR-034**: The reorg pass MUST be **non-destructive and incremental**. Every mutation that removes or replaces existing topic-doc content MUST first **archive the current version** to the scope-root `superseded/` tombstone (`superseded/<slug>-<timestamp>.md`): a `write` that overwrites archives the prior version first, and a `supersede` **moves** the document there. The tombstone is **excluded from retrieval** and **DOES sync** as recoverable history. Topic-doc writes remain **atomic**, and every write/supersede is appended to `consolidation-log.md`. This is the data-loss guarantee: no byte leaves the `knowledge/` lane without first being recoverably archived.
 - **FR-035**: The system MUST provide an **auto idle organize trigger** that fires `organize` (FR-027) automatically in the background when a scope goes idle — approximating "session end" without a per-agent disconnect signal. Each knowledge write (re)arms a single **debounced** timer; after the idle delay elapses with no further writes the organizer runs for the changed scope(s) as a background task. It MUST be **conservative and non-blocking**: (a) **default-ON**, controlled by an environment off-switch; (b) it MUST NEVER block or break daemon shutdown — a pending timer is cancelled and the un-fired inbox left intact (nothing is lost: retrieval already covers the inbox and `organize` is idempotent); (c) a background-pass failure MUST be suppressed + logged; (d) with no internal connection it is a clean no-op. It introduces **no new REST/CLI surface** and reuses the `memory_organized` audit.
-- **FR-036**: The system MUST provide a **procedural `rules` lane** — `rules/rules.md` per scope — holding "do this / don't do that" behavioural rules. The lane stays a single file while small; once any `rules/*.md` exceeds **100 rules**, the organizer classifies its rules by topic via a one-shot LLM call and redistributes them into per-category `rules/<slug>.md` files (applied recursively). New rules keep appending to `rules/rules.md`; the read surface concatenates **every `rules/*.md`**. The lane is **agent-written via the organizer's classification, never an explicit agent parameter**: during `organize` the per-item LLM call MAY classify an inbox item as a **rule**, which is **appended** to `rules/rules.md` (the inbox item drained only after the append succeeds) instead of merged into a topic document, and the result/audit reports a `rules_appended` count. The `rules/` lane sits at the scope ROOT so it is **excluded from retrieval** for free — rules are **delivered by ambient session-start injection, not by search**. The lane is source-of-truth and DOES sync. The system MUST expose the stored rules read-only: `GET /api/v1/knowledge/{scope}/rules` and `coffer knowledge rules <scope>` return the rules text (empty/`null` when there are none, never an error).
+- **FR-036**: The system MUST provide a **procedural `rules` lane** — `rules/rules.md` per scope — holding "do this / don't do that" behavioural rules. The lane stays a single file while small; once any `rules/*.md` exceeds **100 rules**, the organizer classifies its rules by topic via a one-shot LLM call and redistributes them into per-category `rules/<slug>.md` files (applied recursively). New rules keep appending to `rules/rules.md`; the read surface concatenates **every `rules/*.md`**. The lane is **agent-written via the organizer's classification, never an explicit agent parameter**: during `organize` the per-item LLM call MAY classify an inbox item as a **rule**, which is **appended** to `rules/rules.md` (the inbox item drained only after the append succeeds) instead of merged into a topic document, and the result/audit reports a `rules_appended` count. The `rules/` lane sits at the scope ROOT so it is **excluded from retrieval** for free — a rule is a standing instruction, not a search hit. It is read **on demand through its own surface**, and **nothing pushes it into an agent session**: the system MUST expose the stored rules read-only over `GET /api/v1/knowledge/{scope}/rules` and `coffer knowledge rules <scope>`, returning the rules text (empty/`null` when there are none, never an error), and that read is the only way the lane leaves disk. The lane is source-of-truth and DOES sync.
 
 **Lane taxonomy**
 
 - **FR-048**: The free-form `type` field is **retired** — `Lane` (`knowledge` / `rules` / `handoff`) is the **single classification axis** for written items. The system MUST NOT carry a `type` field on the entry entity, in file frontmatter (`metadata.type`), in the `documents.metadata` JSON, in the `coffer__write` tool schema, or in the REST/CLI write surface. An item's lane is determined by **internal routing** (the organizer), never supplied by the writer.
 
-**Rules runtime injection & native-memory (session hooks)**
+**Delivery — removed**
 
-- **FR-049**: The system MUST deliver the rules lane (FR-036) into each managed agent via a **SessionStart hook** that injects a **rules bundle as context only — never a native file write** ([ADR-026](../../docs/decisions/ADR-026-memory-via-mcp-not-native-projection.md)). Coffer installs the hook into the agent's own hooks config (**Claude Code** → `~/.claude/settings.json` top-level `hooks`; **Codex** → `~/.codex/hooks.json` — same JSON schema), recognising only its own entry and leaving user hooks untouched; install/uninstall is idempotent and atomic (`.bak` backup) and audits `AGENT_HOOK_INSTALLED`/`AGENT_HOOK_UNINSTALLED`. On SessionStart the hook calls `GET /api/v1/agents/{name}/session-context?cwd=<cwd>` with the daemon token, and the daemon returns the **global rules (always)** plus the **current-project rules (when the cwd resolves to a git project)**, project rules first. The hook emits it as `additionalContext` and exits 0. It MUST **never block the agent**: with no hook installed, or an unreachable/timed-out/erroring daemon, there is no injection and the hook still exits 0. The hook re-runs on **resume/clear/compact**.
-- **FR-050**: The injected bundle MUST additionally carry **two Coffer-seeded built-in rules**, present even when `rules/rules.md` is empty: (a) when the user wants to continue prior work, call `coffer__resume()` to pull the saved handoff for this project + branch; and (b) a **soft steer** to prefer Coffer's shared knowledge tools (`coffer__write` / `coffer__search`) over the agent's own native memory, because Coffer is the shared store across the user's agents. The **handoff body itself is NOT injected** — it is pulled on demand via `coffer__resume` (FR-025), so the bundle stays small and a stale scene is never force-fed into context.
-- **FR-052**: The system MUST provide an **opt-in per-agent `disable_native_memory` config (default `false`)**. When **off** Coffer **never touches the agent's native memory** (ADR-026). When turned **on**, Coffer writes the agent's config to disable native memory — Claude Code `autoMemoryEnabled=false`; Codex `features.memories=false` + `memories.generate_memories=false` — atomically (`.bak` backup) and audits the disable; turning it **off again, or uninstalling**, **restores** the prior setting. This is a **cleanliness option**, not required for the bundle.
+The rules lane has an **ingest** half and no **delivery** half. Knowledge still
+goes in — an agent writes, the organizer classifies, rules land in `rules/*.md`
+and sync — but nothing carries it back out to a session on its own.
+
+Until 2026-09-10 it did. **FR-049** delivered the lane through a Coffer-installed
+`coffer-hook` SessionStart hook (`GET /api/v1/agents/{name}/session-context?cwd=`
+→ `additionalContext`, never a native file write); **FR-050** added two
+Coffer-seeded built-in rules to that bundle (call `coffer__resume()` to continue
+prior work; prefer Coffer's shared knowledge tools over the agent's native
+memory); **FR-052** offered an opt-in per-agent `disable_native_memory`
+cleanliness switch; **FR-055** appended a title-only project-knowledge index so
+an agent started knowing what the project held. All four are **deleted**, along
+with the binary, the hook install/uninstall surface, the `session-context` route,
+the bundle assembler and the digest renderer.
+
+**The cost, stated plainly.** This removes the delivery half of cross-agent
+memory. An agent must now call `coffer__recall` / `coffer__search` itself; it
+will **not** be told what the project knows unless it asks, and the rules the
+user accumulated sit on disk until something goes looking for them. Search
+discipline — the exact thing ambient injection existed to not depend on — is
+now load-bearing.
+
+**Why that is accepted.** The hook shipped, but it was never actually installed
+on this user's machine, so the injection path had never run in practice. What
+was removed is a capability on paper that no session had ever exercised, and
+keeping it meant keeping a second frozen binary, a hooks-file writer for two
+agent formats, an agent-scoped HTTP route and a budget-bounded bundle assembler
+alive for it. Re-introducing ambient delivery is a deliberate future decision,
+not an oversight.
 
 **Surfaces**
 
@@ -795,7 +781,6 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **FR-053**: The Knowledge detail page MUST present a scope as **five tabs** — **Entries**, **Documents**, **Rules**, **Handoff**, **Changelog**. Each gets a shape-fit view: Entries and Documents are trees plus content, Rules is a single document, Handoff is a per-branch list, Changelog is an append-only log. All views are **read-only**, render via the **unified file preview** (no hand-styled `<pre>`), and offer **open in external editor / reveal in file manager / copy path** on the underlying file. The Entries/Documents split is presentational (FR-008a): retrieval still crosses both.
 - **FR-053a**: The web UI MUST route the layer at **`/knowledge`** and **`/knowledge/:scope`**, and MUST keep the pre-merge URLs working as redirects: `/memory` and `/knowledge-bases` → `/knowledge`; `/memory/:name` and `/knowledge-bases/:name` → the corresponding `/knowledge/:scope`. Bookmarks predate the merge; breaking them would be a gratuitous cost.
 - **FR-054**: The system MUST expose read endpoints for the lanes the UI needs: `GET /api/v1/knowledge/{scope}/handoff` (scenes per branch, each with `branch` and `updated_at`) and `GET /api/v1/knowledge/{scope}/consolidation-log` (`null` when absent). These are **read-only**, **addressed by scope name** (not cwd), and MUST return **HTTP 200 with empty lists / `null`** for an empty scope, never a 404. (Rules already has `GET /api/v1/knowledge/{scope}/rules`, FR-036.)
-- **FR-055**: The SessionStart context (FR-049) MUST additionally inject an **ambient project-knowledge index** so an agent starts knowing what the project holds without calling search. The session-context response appends, after the rules bundle, a **"## Project memory (via Coffer)"** section built from the cwd's project scope: a **title-only index** ("Known topics" — each item's short title, no bodies or descriptions). It is deliberately an **index, not the knowledge itself** — an orientation pointer telling the agent what exists and to search for any bodies it needs. It is **read-only and best-effort** — a cwd outside a git project, an empty scope, or any read error yields nothing — and is **budget-bounded**: the combined bundle stays within the hook's ≤10k-char contract, the index taking whatever remains so the seeded rules (FR-050) are never truncated. Delivery rides the existing per-agent SessionStart hook (`ContextInjectionSpec`, spec 004 FR-043), which is opt-in per agent.
 
 **Scope consolidation — AI-assisted**
 

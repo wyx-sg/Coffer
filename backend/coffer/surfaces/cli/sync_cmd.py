@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pathlib
 from typing import Any
 
 import typer
@@ -84,9 +85,14 @@ def key_export(
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post("/sync/key/export", json={"path": path})
+        r = c.post("/sync/key/export", json={})
         _cli_client.check(r, verbose=verbose)
-    _console.print(f"master key written to {r.json()['path']}")
+    # The daemon hands back the material; the CLI writes the file, so the
+    # daemon never opens a path a caller named.
+    target = pathlib.Path(path).expanduser()
+    target.write_text(r.json()["material"], encoding="utf-8")
+    target.chmod(0o600)
+    _console.print(f"master key written to {target}")
     _console.print("[yellow]move it over a channel you trust — never inside a bundle[/yellow]")
 
 
@@ -97,9 +103,13 @@ def key_import(
 ) -> None:
     """Install a master key brought from another machine, unlocking credentials."""
     verbose = _verbose(ctx)
+    source = pathlib.Path(path).expanduser()
+    if not source.exists():
+        _console.print(f"[red]no such file: {source}[/red]")
+        raise typer.Exit(1)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post("/sync/key/import", json={"path": path})
+        r = c.post("/sync/key/import", json={"material": source.read_text(encoding="utf-8")})
         _cli_client.check(r, verbose=verbose)
     locked = r.json()["locked_refs"]
     if locked:

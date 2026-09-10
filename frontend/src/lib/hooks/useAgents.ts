@@ -6,7 +6,6 @@ import {
   type AdoptMcpEntryBody,
   type AgentCreate,
   type AgentPatch,
-  type NativeMemoryListResponse,
 } from "@/lib/api/agents";
 
 const AGENTS_KEY = ["agents"] as const;
@@ -111,29 +110,6 @@ export function useAgentMcpInstall(name: string) {
 
 // --- Session-start hook install (rules injection, slice 6) ---
 
-const hookKey = (name: string) => ["agents", name, "hook-install"] as const;
-
-export function useAgentHookStatus(name: string) {
-  return useQuery({
-    queryKey: hookKey(name),
-    queryFn: () => agentsApi.hookStatus(name),
-    enabled: !!name,
-    // A 422 HOOK_INSTALL_UNSUPPORTED is a stable signal, not transient — don't retry.
-    retry: false,
-  });
-}
-
-export function useAgentHookInstall(name: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (install: boolean) =>
-      install ? agentsApi.hookInstall(name) : agentsApi.hookUninstall(name),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: hookKey(name) });
-    },
-  });
-}
-
 // --- MCP entries (specs 004/005 workspace amendment) ---
 
 export function useAgentMcpEntries(name: string) {
@@ -141,28 +117,6 @@ export function useAgentMcpEntries(name: string) {
     queryKey: ["agents", name, "mcp-entries"],
     queryFn: () => agentsApi.mcpEntries(name),
     enabled: !!name,
-  });
-}
-
-export function useToggleMcpEntry(agentName: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ entry, enabled }: { entry: string; enabled: boolean }) =>
-      agentsApi.toggleMcpEntry(agentName, entry, enabled),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["agents", agentName, "mcp-entries"] });
-    },
-  });
-}
-
-export function useRemoveMcpEntry(agentName: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ entry, source }: { entry: string; source?: string }) =>
-      agentsApi.removeMcpEntry(agentName, entry, source),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["agents", agentName, "mcp-entries"] });
-    },
   });
 }
 
@@ -174,37 +128,6 @@ export function useAdoptMcpEntry(agentName: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["agents", agentName, "mcp-entries"] });
       qc.invalidateQueries({ queryKey: ["resources", { kind: "mcp_server" }] });
-    },
-  });
-}
-
-// --- Plugins (specs 004/005 workspace amendment) ---
-
-export function useAgentPlugins(name: string) {
-  return useQuery({
-    queryKey: ["agents", name, "plugins"],
-    queryFn: () => agentsApi.plugins(name),
-    enabled: !!name,
-  });
-}
-
-export function useTogglePlugin(agentName: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
-      agentsApi.togglePlugin(agentName, id, enabled),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["agents", agentName, "plugins"] });
-    },
-  });
-}
-
-export function useUninstallPlugin(agentName: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id }: { id: string }) => agentsApi.uninstallPlugin(agentName, id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["agents", agentName, "plugins"] });
     },
   });
 }
@@ -226,39 +149,6 @@ export function useUnmanagedSkills(name: string) {
     queryKey: ["agents", name, "unmanaged-skills"],
     queryFn: () => agentsApi.unmanagedSkills(name),
     enabled: !!name,
-  });
-}
-
-// --- Native memory (the agent's OWN per-project memory stores, read-only) ---
-
-const nativeMemoryKey = (name: string) => ["agents", name, "native-memory"] as const;
-
-/** Poll the list (2s) while any store is queued/running; stop once settled. */
-function nativeImportRefetch(data: NativeMemoryListResponse | undefined): number | false {
-  const busy = (data?.items ?? []).some(
-    (s) => s.import_status === "queued" || s.import_status === "running",
-  );
-  return busy ? 2000 : false;
-}
-
-export function useAgentNativeMemory(name: string) {
-  return useQuery({
-    queryKey: nativeMemoryKey(name),
-    queryFn: () => agentsApi.nativeMemory(name),
-    enabled: !!name,
-    refetchInterval: (query) => nativeImportRefetch(query.state.data),
-  });
-}
-
-/** Enqueue async batch import for native-memory stores (returns at once). */
-export function useImportNativeMemoryBatch(agentName: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (memoryDirs: string[]) => agentsApi.importNativeMemoryBatch(agentName, memoryDirs),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: nativeMemoryKey(agentName) });
-      qc.invalidateQueries({ queryKey: ["memory-stores"] });
-    },
   });
 }
 

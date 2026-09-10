@@ -4,15 +4,16 @@
 //   A. "Via Coffer gateway" — install status + a link to the standalone MCP
 //      servers page (the exposed servers are managed there, not re-listed here).
 //   B. "Direct servers" — the agent's own MCP entries with source/transport,
-//      a per-entry Switch only where the agent supports it (codex-style
-//      entries carry enabled: true/false; claude entries carry null), adopt
-//      into Coffer, and remove (confirm → DELETE with the entry's source).
-//      The `coffer` entry itself is hidden here (it IS the gateway hookup),
-//      duplicate-of-Coffer entries get an inline hint + remove-duplicate
-//      shortcut, and unparseable config files surface as a banner.
+//      a read-only enabled badge where the agent's format has one (codex-style
+//      entries carry enabled: true/false; claude entries carry null), and the
+//      one write: adopt into Coffer. Removing and toggling an entry are gone —
+//      Coffer no longer edits another tool's private config — so the listing
+//      offers neither. The `coffer` entry itself is hidden here (it IS the
+//      gateway hookup), duplicate-of-Coffer entries get an inline hint, and
+//      unparseable config files surface as a banner.
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -25,8 +26,6 @@ vi.mock("@/lib/api/agents", () => ({
   agentsApi: {
     mcpStatus: vi.fn(),
     mcpEntries: vi.fn(),
-    toggleMcpEntry: vi.fn(),
-    removeMcpEntry: vi.fn(),
     adoptMcpEntry: vi.fn(),
   },
 }));
@@ -82,8 +81,6 @@ function stub(entries: Partial<McpEntriesResponse> = {}) {
     parse_errors: [],
     ...entries,
   });
-  api.toggleMcpEntry.mockResolvedValue(undefined);
-  api.removeMcpEntry.mockResolvedValue(undefined);
 }
 
 function renderTab() {
@@ -115,7 +112,7 @@ describe("AgentMcpServersTab", () => {
     ).not.toHaveLength(0);
   });
 
-  test("direct entries render source + transport; coffer entry hidden; Switch only for codex-style entries", async () => {
+  test("direct entries render source + transport; coffer entry hidden; enabled shown read-only", async () => {
     stub();
     renderTab();
 
@@ -130,9 +127,13 @@ describe("AgentMcpServersTab", () => {
     expect(screen.getByText("npx -y gh-mcp")).toBeInTheDocument();
     expect(screen.getByText("https://example.com/mcp")).toBeInTheDocument();
 
-    // Only the codex-style entry (enabled !== null) gets a Switch.
-    expect(screen.getAllByRole("switch")).toHaveLength(1);
-    expect(screen.getByRole("switch", { name: /fetcher/ })).toBeInTheDocument();
+    // The enabled state is reported, never offered as a control: the codex-style
+    // entry (enabled !== null) shows a badge, the claude one (null) a dash.
+    expect(screen.queryAllByRole("switch")).toHaveLength(0);
+    const codexRow = screen.getByText("fetcher").closest("tr") as HTMLElement;
+    expect(within(codexRow).getByText("Enabled")).toBeInTheDocument();
+    const claudeRow = screen.getByText("github").closest("tr") as HTMLElement;
+    expect(within(claudeRow).getByText("—")).toBeInTheDocument();
   });
 
   test("the direct-servers search filters rows by name", async () => {
@@ -152,28 +153,15 @@ describe("AgentMcpServersTab", () => {
     expect(screen.queryByText("fetcher")).not.toBeInTheDocument();
   });
 
-  test("toggling the Switch calls the API with the flipped enabled flag", async () => {
-    stub();
-    renderTab();
-    fireEvent.click(await screen.findByRole("switch"));
-    await waitFor(() => expect(api.toggleMcpEntry).toHaveBeenCalledWith("cc", "fetcher", false));
-  });
-
-  test("remove flows through the confirm dialog and passes the entry's source", async () => {
+  test("offers no remove or toggle affordance — adopt is the only write", async () => {
     stub();
     renderTab();
     await screen.findByText("github");
 
-    // Rows render in items order → the first Remove belongs to "github".
-    fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[0]);
-    const dialog = await screen.findByRole("dialog");
-    expect(
-      within(dialog).getByText(/remove this entry\? a \.bak backup will be written\./i),
-    ).toBeInTheDocument();
-
-    expect(api.removeMcpEntry).not.toHaveBeenCalled();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
-    await waitFor(() => expect(api.removeMcpEntry).toHaveBeenCalledWith("cc", "github", "global"));
+    expect(screen.queryAllByRole("switch")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: /^remove/i })).not.toBeInTheDocument();
+    // Every direct entry still offers Adopt into Coffer.
+    expect(screen.getAllByRole("button", { name: "Adopt into Coffer" })).toHaveLength(2);
   });
 
   test("parse_errors render the degraded-config banner", async () => {
@@ -187,17 +175,15 @@ describe("AgentMcpServersTab", () => {
     expect(screen.getByText(/settings: bad json/)).toBeInTheDocument();
   });
 
-  test("matches_resource renders the duplicate hint + remove-duplicate shortcut", async () => {
+  test("matches_resource renders the duplicate hint, with no remove shortcut", async () => {
     stub({
       items: [{ ...CODEX_ENTRY, matches_resource: "fetcher" }],
     });
     renderTab();
     expect(await screen.findByText(/already in coffer as fetcher/i)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Remove duplicate" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
-    await waitFor(() => expect(api.removeMcpEntry).toHaveBeenCalledWith("cc", "fetcher", "config"));
+    // The hint is informational now — dropping the duplicate is the user's job,
+    // in their own tool.
+    expect(screen.queryByRole("button", { name: /remove/i })).not.toBeInTheDocument();
   });
 
   test("en and zh locales carry the same agents.workspace.mcp keys", () => {

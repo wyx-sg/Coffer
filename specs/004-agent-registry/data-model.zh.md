@@ -181,10 +181,7 @@ workspace 修订新增：
 | 值                          | 触发时机                                                         |
 | --------------------------- | ---------------------------------------------------------------- |
 | `agent_config_file_deleted` | 一个目录条目的子文件被删除（先前内容保留为 `.bak`）              |
-| `agent_mcp_entry_removed`   | 一个直连 MCP 条目被从 agent 的配置文件中移除（FR-026）           |
 | `agent_mcp_entry_adopted`   | 一个直连 MCP 条目被 adopt 为已注册的 `mcp_server` 资源（FR-028） |
-| `agent_plugin_toggled`      | 一个 plugin 的启用状态在其文档化的配置面上被更改（FR-032）       |
-| `agent_plugin_uninstalled`  | 一个 Codex plugin 条目 + 缓存目录被移除（FR-033）                |
 
 FR-011 要求的生命周期步骤——注册、更新与移除——通过已有的 kind-agnostic `resource_created`、`resource_updated`、`resource_deleted` 事件发出（每条都携带对应的 `agent:<name>` 引用）。这些不新增 `agent_*` 重复事件；surfaces 按 `kind='agent'` 加 kind-agnostic 事件类型过滤。一次成功的配置文件保存会发出 `agent_config_file_written`（引用 `agent:<name>`，details 为 `{key}`）。agent 没有启用/禁用的概念，且发现（discovery）是只读的、不注册任何内容，因此二者都不发出任何 audit 事件。
 
@@ -255,8 +252,9 @@ allowlist 上操作。
 
 ## Workspace 修订 —— 派生实体（从不存储）
 
-workspace 各个面（FR-025..FR-033）在 agent 自己的配置文件上操作；磁盘上的文件
-始终是事实来源，Coffer 不保留任何副本。下面两个实体都是读取时的投影。
+workspace 各个面（FR-025..FR-031）在 agent 自己的配置文件上操作；磁盘上的文件
+始终是事实来源，Coffer 不保留任何副本。下面两个实体都是读取时的投影，它们所做的
+唯一一次写入，是 FR-028 收编自己拥有的那一步「移除来源条目」。
 
 ### Agent MCP 条目 (`domain/agent/mcp_entries.py` —— `McpEntry`)
 
@@ -274,10 +272,10 @@ agent 自身文件中配置的一个 MCP server 条目。从 claude_code 的 `~/
 | `env` / `headers`  | `dict[str,str]`  | `repr=False`——值可能携带密钥；HTTP 上只输出**键名**（`env_keys`、`header_keys`，外加标记疑似密钥键名的 `secret_keys`） |
 | `url`              | `str \| None`    | http 传输目标                                                                                                          |
 | `enabled`          | `bool \| None`   | 格式定义了逐条目开关时的标志（codex）；claude_code 为 `None`                                                           |
-| `is_coffer`        | `bool`           | Coffer 自己的 gateway 条目——移除/开关/adopt 均受保护                                                                   |
+| `is_coffer`        | `bool`           | Coffer 自己的 gateway 条目——永不可 adopt                                                                               |
 | `matches_resource` | `str \| None`    | 等价的已注册 `mcp_server` 资源，由 application 层填充                                                                  |
 
-配套工具：`parse_entries`、`remove_entry`、`set_entry_enabled`（仅 TOML）、
+配套工具：`parse_entries`、`remove_entry`（仅为收编的移除步骤保留）、
 `secret_env_keys`（TOKEN/SECRET/PASSWORD/API_KEY/CREDENTIAL/AUTHORIZATION
 模式）以及 `to_transport_config`（条目 → `mcp_server` 传输配置，密钥键移入
 `credential_refs` 供 adopt 使用）。畸形文件抛出 `AgentConfigParseError`，
@@ -286,24 +284,23 @@ agent 自身文件中配置的一个 MCP server 条目。从 claude_code 的 `~/
 ### `PluginCapability` / `PluginModel` (`domain/agent/descriptor.py`)
 
 能力清单的插件 facet。`PluginModel` 是策略判别符——`CLAUDE`、`CODEX`——各自映射到
-`plugin_state.py` 中的一种解析/开关/卸载策略。`PluginCapability`（frozen）
+`plugin_state.py` 中的一种解析策略。`PluginCapability`（frozen）
 携带让服务无需 `AgentType` 分支即可分派的全部信息：
 
-| 字段            | 类型          | 说明                     |
-| --------------- | ------------- | ------------------------ |
-| `model`         | `PluginModel` | 解析/开关/卸载策略       |
-| `config_key`    | `str \| None` | 写入面的 allowlist key   |
-| `can_toggle`    | `bool`        | 是否支持 `set_enabled`   |
-| `can_uninstall` | `bool`        | 是否支持 `uninstall`     |
+| 字段         | 类型          | 说明                             |
+| ------------ | ------------- | -------------------------------- |
+| `model`      | `PluginModel` | 解析策略                         |
+| `config_key` | `str \| None` | 读取启用状态的文件的 allowlist key |
 
-`AgentDescriptor.plugins` 为 `PluginCapability | None`。各 agent 映射：Claude Code `CLAUDE`/`settings`/仅开关；Codex `CODEX`/`config`/完整。
+`AgentDescriptor.plugins` 为 `PluginCapability | None`。各 agent 映射：Claude Code `CLAUDE`/`settings`；Codex `CODEX`/`config`。已不存在 `can_toggle` / `can_uninstall` / `uninstall_strategy` 字段——这个 facet 只列出，没有需要把关的写操作。
 
 ### Agent Plugin (`domain/agent/plugin_state.py` —— `PluginInfo` / `MarketplaceInfo`)
 
-一个已安装的 plugin，id 为 `<name>@<marketplace>`。Codex 的状态在 `config.toml`（`[plugins."…"]` +
-`[marketplaces.*]`，可读，plugins 表可写）。Claude Code 的状态分布在内部清单文件
-`installed_plugins.json` / `known_marketplaces.json`（只读输入——Coffer 绝不写
-它们）与文档化的写入面 `settings.json` `enabledPlugins` 之间。
+一个已安装的 plugin，id 为 `<name>@<marketplace>`。所有输入都是只读的——Coffer 解析
+这些文件，一个都不写。Codex 的状态在 `config.toml`（`[plugins."…"]` +
+`[marketplaces.*]`）。Claude Code 的状态分布在内部清单文件
+`installed_plugins.json` / `known_marketplaces.json` 与文档化的
+`settings.json` `enabledPlugins` 之间。
 
 | 字段          | 类型   | 说明                                                   |
 | ------------- | ------ | ------------------------------------------------------ |
@@ -322,17 +319,19 @@ agent 自身文件中配置的一个 MCP server 条目。从 claude_code 的 `~/
 | 方法                                                                  | 用途                                                                                                                                                                                                   |
 | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `list_entries(name)`                                                  | 解析该 agent 类型所有承载 MCP 的文件；标注 `is_coffer` 与 `matches_resource`；收集逐文件的 `parse_errors`。                                                                                            |
-| `set_enabled(name, entry, enabled, actor)`                            | 就地切换 `enabled` 标志（仅 codex `config.toml`——claude_code → `McpEntryToggleUnsupported` → 422）。`coffer` 条目 → `McpEntryProtected`。                                                              |
-| `remove_entry(name, entry, source=None, actor)`                       | 从来源文件移除条目（原子 + `.bak`）；当 claude_code 在两个文件中都有同名条目时由 `source` 消歧（否则 `McpEntrySourceAmbiguous`）；audit `agent_mcp_entry_removed`。                                    |
-| `adopt(name, entry, source=None, new_name=None, secrets=None, actor)` | FR-028 升级：疑似密钥键必须映射到 keychain 引用（`AdoptSecretUnresolved` 列出未解析的键）；注册 `mcp_server` 资源 → 验证可回读 → 移除来源条目，之后任何失败都会回滚；audit `agent_mcp_entry_adopted`。 |
+| `adopt(name, entry, source=None, new_name=None, secrets=None, actor)` | FR-028 升级：疑似密钥键必须映射到 keychain 引用（`AdoptSecretUnresolved` 列出未解析的键）；注册 `mcp_server` 资源 → 验证可回读 → 移除来源条目（原子 + `.bak`；claude_code 两文件同名时由 `source` 消歧，否则 `McpEntrySourceAmbiguous`），之后任何失败都会回滚；audit `agent_mcp_entry_adopted`。 |
+
+已不存在独立的移除，也不存在 `set_enabled`：编辑 agent 自己的 MCP 条目是 agent
+自己的事（见 spec FR-030 下的移除说明）。这里唯一的写入是收编自带的那一步移除。
 
 ### `AgentPluginService` (`application/agent/plugin_service.py`)
 
 | 方法                                           | 用途                                                                                                                                                                                            |
 | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list_plugins(name)`                           | 按 `descriptor.plugins.model` 分派；从文档化文件解析 plugin + marketplace 状态；计算 `cache_present`；收集 `parse_errors`。无能力 → 空列表。                                                    |
-| `set_enabled(name, plugin_id, enabled, actor)` | 按 `PluginModel` 分派；只写能力的 `config_key` 面；audit `agent_plugin_toggled`。                              |
-| `uninstall(name, plugin_id, actor)`            | 按 `PluginModel` 分派；移除条目（Codex 还删除缓存目录）；`can_uninstall=false`（Claude Code）→ `PluginUninstallUnsupported` → 422；audit `agent_plugin_uninstalled`。 |
+| `list_plugins(name)`                           | 按 `descriptor.plugins.model` 分派；从文档化文件解析 plugin + marketplace 状态；计算 `cache_present`；从插件安装目录尽力读取清单信息；收集 `parse_errors`。无能力 → 空列表。 |
+
+这个服务是只读的——`list_plugins` 就是它的全部界面。启用/禁用与卸载随 FR-032/FR-033
+一起删除，插件的 CLI-runner adapter 也一并删除。
 
 
 ### `ConfigFileStorePort`（Protocol，定义在 application）

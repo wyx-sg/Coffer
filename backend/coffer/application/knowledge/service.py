@@ -328,14 +328,6 @@ class KnowledgeService(EntryReads, DocumentOps):
             scope_name=scope_name, identifier=identifier, actor=actor,
         )  # fmt: skip
 
-    async def assemble_session_context(self, *, cwd: str | None) -> str:
-        """SessionStart rules bundle (Slice 6 FR-049/050); see ``session_context``."""
-        return await session_context.assemble_session_context(
-            cwd=cwd,
-            resolve_recall_scopes=lambda c: self._scope.resolve_recall_scopes(cwd=c),
-            get_rules_for=lambda scope_name: self.get_rules(scope_name=scope_name),
-        )
-
     # ----- on_update_config / on_delete kind hooks -----
 
     async def reindex_scope(

@@ -69,6 +69,6 @@ The **Agents** page in the [Web UI](/guide/web-ui) covers the same flow without 
 2. The agent detail page has four tabs — **Overview**, **Skills**, **MCP servers**, and **Config files**.
 3. On the **Config files** tab, open any curated config file in the editor. The editor validates format on save, writes atomically with a `.bak` backup, and includes a **find/replace** box that scrolls to the match.
 4. Use the **Install Coffer MCP** toggle in the header to add or remove the `coffer` entry, with a live status indicator.
-5. On the **Skills** tab, toggle each skill on or off for this agent, or use **Install skills** to bind more. The **MCP servers** tab shows the servers Coffer exposes to the agent (read-only for now).
+5. On the **Skills** tab, toggle each skill on or off for this agent, or use **Install skills** to bind more. The **MCP servers** tab shows the gateway install status alongside the agent's own direct MCP entries; those are read-only apart from **Adopt**, which brings an entry into Coffer as a managed resource — Coffer does not remove or disable entries in another tool's config.
 
 [Connect a client →](/guide/connect-client)

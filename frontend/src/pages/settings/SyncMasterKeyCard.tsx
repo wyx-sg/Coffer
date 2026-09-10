@@ -1,57 +1,78 @@
 // frontend/src/pages/settings/SyncMasterKeyCard.tsx
 //
-// Out-of-band master-key transfer (spec 010). Click → native dialog picks the
-// path (save dialog for export, open dialog for import) via the daemon picker
-// (spec 004 FR-042 / ADR-036). A typed path
-// field appears only as a fallback on hosts with no native dialog tool. The key
-// is never written into an export bundle — a machine holding ciphertext but not
-// the key reports credentials_locked, so the key comes across separately.
-import { useState } from "react";
+// Out-of-band master-key transfer (spec 010), using the browser's own file
+// mechanisms rather than a native dialog driven by the daemon:
+//
+//   Export → ask the daemon for the key MATERIAL, wrap it in a Blob and click a
+//            hidden `<a download>`, so the file lands wherever the browser puts
+//            downloads.
+//   Import → a hidden `<input type="file">`; its change handler reads
+//            `file.text()` and POSTs the material.
+//
+// The browser hands us contents directly, so no absolute path has to survive a
+// round-trip through the daemon. The key is still never written into an export
+// bundle — a machine holding ciphertext but not the key reports
+// credentials_locked, so the key comes across separately.
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { pickOpenFile, pickSaveFile } from "@/lib/filePicker";
+import { translateApiError } from "@/lib/api/errors";
 import { useExportMasterKey, useImportMasterKey, useKeyFingerprint } from "@/lib/hooks/useSync";
 
 const DEFAULT_KEY_NAME = "coffer-master.key";
 
+/** Save `text` to the user's downloads as `filename`, via a transient anchor. */
+function downloadText(text: string, filename: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type: "application/octet-stream" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function SyncMasterKeyCard() {
   const { t } = useTranslation();
-  // manual mode is revealed only after a pick reports no native dialog tool.
-  const [manual, setManual] = useState(false);
-  const [keyPath, setKeyPath] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
+  // Local status lines: the mutations report transport errors, but an empty
+  // file never reaches the daemon, so that one is validated here.
+  const [exported, setExported] = useState<string | null>(null);
+  const [imported, setImported] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
   const importKey = useImportMasterKey();
   const exportKey = useExportMasterKey();
   const fingerprint = useKeyFingerprint();
 
-  const onExport = async () => {
-    if (manual) {
-      if (keyPath) exportKey.mutate(keyPath);
-      return;
-    }
-    const res = await pickSaveFile(DEFAULT_KEY_NAME);
-    if (res.unavailable) {
-      setManual(true);
-      return;
-    }
-    if (res.path) exportKey.mutate(res.path);
+  const onExport = () => {
+    setExported(null);
+    setImported(false);
+    setLocalError(null);
+    exportKey.mutate(undefined, {
+      onSuccess: (res) => {
+        downloadText(res.material, DEFAULT_KEY_NAME);
+        setExported(DEFAULT_KEY_NAME);
+      },
+    });
   };
 
-  const onImport = async () => {
-    if (manual) {
-      if (keyPath) importKey.mutate(keyPath);
+  const onFileChosen = async (file: File | undefined) => {
+    setExported(null);
+    setImported(false);
+    setLocalError(null);
+    if (!file) return;
+    const material = (await file.text()).trim();
+    if (!material) {
+      setLocalError(t("settings.sync.keyFileEmpty"));
       return;
     }
-    const res = await pickOpenFile();
-    if (res.unavailable) {
-      setManual(true);
-      return;
-    }
-    if (res.path) importKey.mutate(res.path);
+    importKey.mutate(material, { onSuccess: () => setImported(true) });
   };
+
+  const error = exportKey.error ?? importKey.error;
 
   return (
     <Card>
@@ -71,37 +92,45 @@ export function SyncMasterKeyCard() {
             </span>
           </p>
         )}
-        {manual && (
-          <div className="space-y-2">
-            <Label htmlFor="sync-key-path">{t("settings.sync.keyPath")}</Label>
-            <Input
-              id="sync-key-path"
-              value={keyPath}
-              placeholder="/path/to/coffer-master.key"
-              onChange={(e) => setKeyPath(e.target.value)}
-            />
-            <p className="text-xs text-foreground/60">{t("settings.sync.keyPathManualHint")}</p>
-          </div>
-        )}
         <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            onClick={onExport}
-            disabled={exportKey.isPending || (manual && !keyPath)}
-          >
+          <Button variant="secondary" onClick={onExport} disabled={exportKey.isPending}>
             {t("settings.sync.exportKey")}
           </Button>
           <Button
             variant="secondary"
-            onClick={onImport}
-            disabled={importKey.isPending || (manual && !keyPath)}
+            onClick={() => fileInput.current?.click()}
+            disabled={importKey.isPending}
           >
             {t("settings.sync.importKey")}
           </Button>
+          {/* Hidden on purpose: the Button above is the affordance, so the
+              control keeps the same label it had with the native dialog. */}
+          <input
+            ref={fileInput}
+            type="file"
+            className="hidden"
+            aria-label={t("settings.sync.importKey")}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              // Reset first, so re-picking the SAME file fires change again.
+              e.target.value = "";
+              void onFileChosen(file);
+            }}
+          />
         </div>
-        {exportKey.data && (
+        {exported && (
           <p className="text-xs text-green-600" role="status">
-            {t("settings.sync.keyExported", { path: exportKey.data.path })}
+            {t("settings.sync.keyExported", { name: exported })}
+          </p>
+        )}
+        {imported && (
+          <p className="text-xs text-green-600" role="status">
+            {t("settings.sync.keyImported")}
+          </p>
+        )}
+        {(localError || error) && (
+          <p className="text-xs text-destructive" role="alert">
+            {localError ?? translateApiError(t, error)}
           </p>
         )}
       </CardContent>
