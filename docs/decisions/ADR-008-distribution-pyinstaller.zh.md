@@ -56,13 +56,13 @@ CI 发布任务产出单一下载层级。**
   一个独立外壳。没有额外的 GUI 制品需要构建、签名或安装。
 - **daemon 在冻结态启动时部署同目录二进制**（spec 001 FR-026）。当
   `coffer-daemon` 检测到自己运行自冻结构建时，它会幂等地把同目录的
-  `coffer-mcp-shim`、`coffer-callback`、`whisper-cli` 复制到 `~/.coffer/bin/`，
+  `coffer-mcp-shim`、`coffer-callback` 复制到 `~/.coffer/bin/`，
   使用原子的「临时复制再重命名」以及 3 信号陈旧判定（字节大小、mtime、
   版本哨兵）。这既让 MCP 客户端能解析 `command: coffer-mcp-shim` 配置，也
   让 shim 旁边始终有一份 `coffer-daemon`，使冻结态 shim 的 detect-or-spawn
   （[ADR-006](ADR-006-daemon-detect-or-spawn.md)）在重启后能找到可启动的
   daemon。由 daemon 承担这件事是自然的：运行期正是它拉起 `coffer-callback`
-  与 `whisper-cli`。`~/.coffer/bin/` 与 [ADR-006](ADR-006-daemon-detect-or-spawn.md)
+  。`~/.coffer/bin/` 与 [ADR-006](ADR-006-daemon-detect-or-spawn.md)
   里的 `~/.coffer/daemon.json` 共处一处，简化用户心智模型（"Coffer 的所有
   东西都在 `~/.coffer/` 之下"）。源码安装完全不需要这套逻辑 ——
   `pip install` 已经把 console scripts 放到 `PATH` 上（spec 001 FR-018）。
@@ -112,7 +112,7 @@ CI 发布任务产出单一下载层级。**
 
 - 每个 `v*` tag，CI 发布任务只产出一份归档 —— macOS arm64 的
   `coffer-cli-<triple>.tar.gz`，内含 `coffer`、`coffer-daemon`、
-  `coffer-mcp-shim` 以及运行期辅助二进制（`coffer-callback`、`whisper-cli`）
+  `coffer-mcp-shim` 以及运行期辅助二进制（`coffer-callback`）
   —— 外加一份覆盖全部发布制品的聚合 `SHA256SUMS`（spec 001 FR-022 / FR-023）。
 - 每次发布前都对 bundle 跑一次 post-build smoke test
   ([`scripts/smoke_test_bundle.sh`](../../scripts/smoke_test_bundle.sh)) ——
@@ -196,7 +196,7 @@ CI 发布任务产出单一下载层级。**
   `Coffer-unsigned-<triple>.app.zip` 退役；
   (c) 向 `~/.coffer/bin/` 的二进制部署**移入 daemon 的冻结态启动路径**
   （spec 001 FR-026），沿用同一套原子「临时复制再重命名」与同一套 3 信号
-  陈旧判定，并新增覆盖 `coffer-callback` 与 `whisper-cli`；
+  陈旧判定，并新增覆盖 `coffer-callback`；
   (d) macOS 公证 runbook（`docs/distribution/macos-notarization.md`）被删除
   —— 其中每一步都是 `cargo tauri build` / `.dmg` 签名与 staple，对应的流水线
   已不存在；CLI 归档的 Gatekeeper 隔离与 `xattr -d com.apple.quarantine`

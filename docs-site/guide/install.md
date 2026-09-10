@@ -33,8 +33,8 @@ unpacks its binaries into `~/.coffer/bin`:
   and serves the web UI
 - **`coffer-mcp-shim`** — the stdio bridge that MCP clients (Claude Code, Codex, …) talk to
 
-plus the runtime helper binaries the daemon spawns for itself (`coffer-callback` for SeaTalk
-channels, `whisper-cli` for local speech-to-text).
+plus the runtime helper binary the daemon spawns for itself (`coffer-callback`, for SeaTalk
+channels).
 
 ### macOS (Apple Silicon)
 

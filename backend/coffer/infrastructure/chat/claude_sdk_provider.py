@@ -29,12 +29,18 @@ from coffer.infrastructure.chat.claude_sdk_agent import (
 )
 from coffer.infrastructure.chat.default_workspace import default_workspace_dir
 from coffer.infrastructure.chat.document_extract import default_document_extractor
-from coffer.infrastructure.chat.transcribe import default_transcriber
+from coffer.infrastructure.chat.transcribe import Transcriber
 
 #: The model ids this agent can be put on, looked up per turn. A narrow callable
 #: rather than the application catalogue service itself, so infrastructure keeps
 #: no dependency on an application type it would only read one list from.
 ModelLister = Callable[[str], Awaitable[list[str]]]
+
+#: Builds the transcriber for one turn, or ``None`` to leave audio untouched.
+#: Resolved per turn so designating (or clearing) the internal connection takes
+#: effect without a daemon restart. ``None`` here means the composition root
+#: wired no transcription at all.
+TranscriberFactory = Callable[[], Awaitable["Transcriber | None"]]
 
 
 class ClaudeSdkProvider:
@@ -54,6 +60,7 @@ class ClaudeSdkProvider:
         session_factory: SdkSessionFactory | None = None,
         which: Any = shutil.which,
         list_models: ModelLister | None = None,
+        transcriber_factory: TranscriberFactory | None = None,
     ) -> None:
         self._conversations = conversations
         self._session_factory: SdkSessionFactory = session_factory or default_session_factory
@@ -61,6 +68,9 @@ class ClaudeSdkProvider:
         # None ⇒ the model note lists no ids (still tells the agent WHICH model
         # it is on, which is the part it otherwise gets wrong).
         self._list_models = list_models
+        # None ⇒ voice is never transcribed and the audio file reaches the agent
+        # as-is. That is the default: nothing leaves the machine unasked.
+        self._transcriber_factory = transcriber_factory
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
@@ -117,9 +127,10 @@ class ClaudeSdkProvider:
             session_factory=self._session_factory,
             on_session=_save_session,
             system_context=system_context,
-            # Claude cannot hear audio; a voice attachment is transcribed to text
-            # by the best local engine available here (ADR-039).
-            transcriber=default_transcriber(),
+            # Claude cannot hear audio. A voice attachment is transcribed by the
+            # user's configured connection, or handed over untouched when there
+            # is none (spec 009 FR-022).
+            transcriber=await self._transcriber(),
             # A document (PDF/office file) is text-extracted so it reaches the
             # agent as text rather than a vision/binary block (FR-030).
             document_extractor=default_document_extractor(),
@@ -127,6 +138,11 @@ class ClaudeSdkProvider:
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:
         return
+
+    async def _transcriber(self) -> Transcriber | None:
+        if self._transcriber_factory is None:
+            return None
+        return await self._transcriber_factory()
 
     async def availability(self) -> bool:
         return self._which(self._binary) is not None

@@ -64,14 +64,6 @@ jobs:
           UV_PROJECT_ENVIRONMENT: ${{ github.workspace }}/.venv
         run: uv sync --frozen --extra dev --project backend
 
-      # The frozen daemon decodes inbound voice in-process with soundfile + soxr
-      # (the `voice` extra, ADR-039); they must be in the build venv so
-      # PyInstaller bundles them. mlx-whisper (voice-mlx) is deliberately NOT
-      # installed — the frozen app transcribes via the whisper-cli sidecar.
-      - name: install voice decode deps (frozen STT)
-        shell: bash
-        run: uv pip install --python "${{ github.workspace }}/.venv" "soundfile>=0.12" "soxr>=0.5"
-
       - name: install frontend deps
         working-directory: frontend
         run: npm ci
@@ -84,13 +76,6 @@ jobs:
         run: |
           npm run codegen
           npm run build
-
-      # build_binaries.sh builds the whisper-cli STT sidecar from source with
-      # cmake (ADR-039). macOS runners ship cmake, but guard explicitly so a
-      # runner-image change can't silently break the release build.
-      - name: ensure cmake (whisper.cpp build)
-        shell: bash
-        run: cmake --version || brew install cmake
 
       - name: bundle sidecar binaries
         shell: bash
@@ -110,8 +95,8 @@ jobs:
       # triple suffix) so both the one-line installer and manual extraction
       # yield co-located plain-named binaries, which the frozen detect-or-spawn
       # logic requires (ADR-006): `coffer` looks for `coffer-daemon` next to
-      # itself at runtime, and the daemon deploys `coffer-callback` and
-      # `whisper-cli` from its own directory into ~/.coffer/bin/ at startup.
+      # itself at runtime, and the daemon deploys `coffer-callback` from its
+      # own directory into ~/.coffer/bin/ at startup.
       - name: package CLI archive
         shell: bash
         run: |
@@ -123,7 +108,6 @@ jobs:
             coffer-daemon
             coffer-mcp-shim
             coffer-callback
-            whisper-cli
           )
           for b in "${binaries[@]}"; do
             if [ ! -f "dist/$b" ]; then
@@ -202,8 +186,8 @@ jobs:
         run: |
           cat > release-notes.md <<'NOTES'
           Download `coffer-cli-<platform>.tar.gz` and extract it. It contains
-          `coffer` (management CLI), `coffer-daemon`, `coffer-mcp-shim`,
-          `coffer-callback` and `whisper-cli`. Keep the binaries
+          `coffer` (management CLI), `coffer-daemon`, `coffer-mcp-shim` and
+          `coffer-callback`. Keep the binaries
           co-located: `coffer` finds `coffer-daemon` next to itself, and the
           daemon deploys the helper binaries into `~/.coffer/bin/` on startup.
 

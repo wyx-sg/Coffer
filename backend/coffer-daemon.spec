@@ -97,14 +97,11 @@ a = Analysis(
     hookspath=[],
     runtime_hooks=[],
     excludes=[
-        # Heavy ML stack pulled in transitively by the [voice] extra's
-        # mlx-whisper (torch/mlx/numba/scipy/…). transcribe.py imports
-        # mlx_whisper LAZILY, but PyInstaller scans function bodies and would
-        # bundle the whole ~700 MB stack whenever [voice] is installed in the
-        # build venv — inflating every binary from ~95 MB to ~260 MB (and torch
-        # is fragile under PyInstaller). The frozen app transcribes via the
-        # bundled torch-free whisper-cli sidecar instead (ADR-039), so no coffer
-        # binary ever needs these. No coffer source imports them directly.
+        # Heavy ML stack (torch/mlx/numba/scipy/…). No coffer source imports
+        # any of it: transcription is remote (spec 009 FR-022), so nothing
+        # local decodes or runs a model. The exclude stays as a guard — a
+        # transitive pull would inflate every binary from ~95 MB to ~260 MB,
+        # and torch is fragile under PyInstaller.
         "torch",
         "mlx",
         "mlx_whisper",

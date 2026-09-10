@@ -401,14 +401,36 @@ status / notify`.
   normal markdown.
 - **FR-022**: An inbound voice message drives a turn as a transcript. The built-in
   agents (Claude Code, Codex) cannot hear audio, so the adapter transcribes the
-  audio to text **locally** and folds it into the turn's prompt. Transcription is a
-  per-agent seam (ADR-038): the frozen build uses a bundled, torch-free
-  `whisper.cpp` engine (Apple-Silicon Metal) — the `whisper-cli` binary the frozen
-  daemon deploys into `~/.coffer/bin/` — whose small model is downloaded on
-  first use; a source run falls back to `mlx-whisper` (the optional `[voice-mlx]`
-  extra). See ADR-039. A future audio-native agent's adapter forwards the audio
-  instead of transcribing. When no engine is available — or the model has not been
-  fetched yet — the voice is handed over as an audio file rather than lost.
+  audio to text and folds it into the turn's prompt. Transcription is a per-agent
+  seam (ADR-038); a future audio-native agent's adapter forwards the audio instead
+  of transcribing.
+
+  Transcription runs **remotely**, on the connection the user designated as
+  Coffer's `internal_default` — the same one that runs knowledge merge, organize
+  and reorg (spec 011). Voice therefore adds no new concept and no second place
+  to configure. The endpoint is OpenAI-shaped
+  (`POST <base_url>/audio/transcriptions`); a connection whose protocol has none
+  (`anthropic`, `ollama`) is not used for it.
+
+  **This is the one place in Coffer where user content may leave the machine, and
+  it is off by default.** With no internal connection designated, an unsupported
+  protocol, or a credential that will not resolve, nothing is uploaded: the voice
+  is handed to the agent as an audio file rather than lost, exactly as when the
+  local engine was absent. A failed or slow request degrades the same way — a
+  transcription problem must never fail a turn.
+
+  The constitution permits this. Principle I admits cloud services as **LLM and
+  tool providers**, and a transcription endpoint is a tool provider; the audio is
+  data in transit rather than vault state, and the transcript lands locally like
+  any other turn text.
+
+  _Was local until 2026-09-10:_ the frozen build bundled a `whisper.cpp` sidecar
+  compiled from source in CI, plus an `mlx-whisper` fallback for source runs.
+  That was the project's heaviest build dependency — a `git clone` and a cmake
+  compile on every release — carried for a feature a remote endpoint does at
+  least as well. It is removed along with ADR-039, the `whisper-cli` binary, and
+  the `[voice]` / `[voice-mlx]` extras.
+
 - **FR-023**: A group chat is a first-class peer. When the paired owner
   @mentions the bot (or the message is delivered as an addressed group event)
   the bot answers there; the group becomes an additional `channel_peers` row

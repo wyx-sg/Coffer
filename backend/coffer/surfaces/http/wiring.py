@@ -174,7 +174,7 @@ def wire_chat(
 
     # 4. The agent-provider registry — the platform seam (chat_provider_wiring:
     #    adding an agent is one more register() call there).
-    registry = build_agent_provider_registry(conv_repo)
+    registry = build_agent_provider_registry(conv_repo, _credential_resolver)
 
     # 5. Application services + the agent-agnostic turn orchestrator.
     chat_svc = ChatService(

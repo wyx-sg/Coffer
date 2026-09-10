@@ -28,11 +28,18 @@ from coffer.infrastructure.chat.codex_app_server import (
 )
 from coffer.infrastructure.chat.default_workspace import default_workspace_dir
 from coffer.infrastructure.chat.document_extract import default_document_extractor
-from coffer.infrastructure.chat.transcribe import default_transcriber
+from coffer.infrastructure.chat.transcribe import Transcriber
 
 #: Resolve the active openai connection's decrypted API key, or ``None`` when no
 #: Coffer connection is active for Codex (it then runs on its own login).
 KeyResolver = Callable[[], Awaitable[str | None]]
+
+
+#: Builds the transcriber for one turn, or ``None`` to leave audio untouched.
+#: Resolved per turn so designating (or clearing) the internal connection takes
+#: effect without a daemon restart. ``None`` here means the composition root
+#: wired no transcription at all.
+TranscriberFactory = Callable[[], Awaitable["Transcriber | None"]]
 
 
 class CodexAppServerProvider:
@@ -52,6 +59,7 @@ class CodexAppServerProvider:
         session_factory: AppServerSessionFactory | None = None,
         which: Any = shutil.which,
         resolve_key: KeyResolver | None = None,
+        transcriber_factory: TranscriberFactory | None = None,
     ) -> None:
         self._conversations = conversations
         self._session_factory: AppServerSessionFactory = (
@@ -62,6 +70,9 @@ class CodexAppServerProvider:
         # injection (ADR-032 env_key seam). ``None`` → no injection, codex
         # inherits the daemon env and uses its own login.
         self._resolve_key = resolve_key
+        # None ⇒ voice is never transcribed and the audio file reaches the agent
+        # as-is. That is the default: nothing leaves the machine unasked.
+        self._transcriber_factory = transcriber_factory
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
@@ -114,9 +125,10 @@ class CodexAppServerProvider:
             session_factory=self._session_factory,
             on_session=_save_session,
             env=env,
-            # Codex cannot hear audio; a voice attachment is transcribed to text
-            # by the best local engine available here (ADR-039).
-            transcriber=default_transcriber(),
+            # Codex cannot hear audio. A voice attachment is transcribed by the
+            # user's configured connection, or handed over untouched when there
+            # is none (spec 009 FR-022).
+            transcriber=await self._transcriber(),
             # Codex is path-native and cannot parse a binary PDF; a document is
             # text-extracted so it reaches the agent as text (FR-030).
             document_extractor=default_document_extractor(),
@@ -124,6 +136,11 @@ class CodexAppServerProvider:
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:
         return
+
+    async def _transcriber(self) -> Transcriber | None:
+        if self._transcriber_factory is None:
+            return None
+        return await self._transcriber_factory()
 
     async def availability(self) -> bool:
         return self._which(self._binary) is not None

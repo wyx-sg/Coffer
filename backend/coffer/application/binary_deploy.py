@@ -2,8 +2,8 @@
 
 The Tauri shell used to do this on every launch. With the shell gone the daemon
 inherits the job, and it is the right owner: ``coffer-callback`` (the channel
-webhook listener) and ``whisper-cli`` (voice transcription) are processes the
-*daemon* spawns at runtime, and ``coffer-mcp-shim`` must be able to find
+webhook listener) is a process the *daemon* spawns at runtime, and
+``coffer-mcp-shim`` must be able to find
 ``coffer-daemon`` as a sibling so an MCP client can auto-spawn a daemon after a
 reboot (ADR-006).
 
@@ -44,7 +44,6 @@ DEPLOYED_BINARIES: tuple[str, ...] = (
     "coffer-daemon",
     "coffer-mcp-shim",
     "coffer-callback",
-    "whisper-cli",
 )
 
 

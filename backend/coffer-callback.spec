@@ -40,10 +40,11 @@ a = Analysis(
     hookspath=[],
     runtime_hooks=[],
     excludes=[
-        # Heavy ML stack from the [voice] extra's mlx-whisper — the frozen app
-        # transcribes via the bundled whisper-cli sidecar, not mlx (ADR-039).
-        # collect_submodules("coffer") would otherwise trace transcribe.py's
-        # lazy `import mlx_whisper` and bundle ~700 MB of torch/mlx.
+        # Heavy ML stack (torch/mlx/numba/scipy/…). No coffer source imports
+        # any of it: transcription is remote (spec 009 FR-022), so nothing
+        # local decodes or runs a model. The exclude stays as a guard — a
+        # transitive pull would inflate every binary from ~95 MB to ~260 MB,
+        # and torch is fragile under PyInstaller.
         "torch",
         "mlx",
         "mlx_whisper",

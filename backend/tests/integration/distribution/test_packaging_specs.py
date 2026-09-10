@@ -354,7 +354,7 @@ def test_release_workflow_packages_the_single_cli_archive() -> None:
     """The release produces exactly one download tier: coffer-cli-<triple>.tar.gz.
 
     Every binary the daemon resolves at runtime must be inside it. The daemon
-    deploys `coffer-mcp-shim`, `coffer-callback` and `whisper-cli` out of its
+    deploys `coffer-mcp-shim` and `coffer-callback` out of its
     own directory (spec 001 FR-026) and finds `coffer-daemon` as a sibling
     (ADR-006), so an archive missing any of them ships a build whose helper
     processes cannot start.
@@ -367,7 +367,6 @@ def test_release_workflow_packages_the_single_cli_archive() -> None:
         "coffer-daemon",
         "coffer-mcp-shim",
         "coffer-callback",
-        "whisper-cli",
     ):
         assert binary in text, f"CLI archive must include {binary}"
 

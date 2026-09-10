@@ -69,21 +69,6 @@ dependencies = [
 local-embeddings = [
     "fastembed>=0.3",
 ]
-# Local speech-to-text for inbound channel voice messages. The frozen desktop
-# app transcribes with a bundled torch-free `whisper-cli` (Metal) and decodes
-# audio in-process with soundfile + soxr — this `voice` extra IS the decode
-# stack, small and torch-free, so it is installed into the frozen build venv and
-# bundled. See spec 009 FR-022 / ADR-039 (builds on ADR-038).
-voice = [
-    "soundfile>=0.12",
-    "soxr>=0.5",
-]
-# Optional source-run STT fallback engine. `mlx-whisper` drags torch/mlx, so it
-# is EXCLUDED from the frozen build (which uses whisper-cli); install it only for
-# a `make dev` source run that wants the mlx engine instead of a local whisper-cli.
-voice-mlx = [
-    "mlx-whisper>=0.4",
-]
 dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
@@ -142,9 +127,6 @@ module = [
     "markitdown.*",
     "fastembed.*",
     "ruamel.*",
-    "mlx_whisper.*",
-    "soundfile.*",
-    "soxr.*",
 ]
 ignore_missing_imports = true
 
