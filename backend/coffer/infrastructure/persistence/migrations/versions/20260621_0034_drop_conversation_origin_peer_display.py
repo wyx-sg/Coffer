@@ -1,4 +1,4 @@
-"""drop conversation origin + peer_display_name (ADR-031)
+"""drop conversation origin + peer_display_name
 
 Revision ID: 0034
 Revises: 0033

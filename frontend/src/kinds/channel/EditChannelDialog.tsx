@@ -25,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useChatAgents } from "@/lib/hooks/useChatAgents";
+import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
 import { useUpdateChannel } from "@/lib/hooks/useChannels";
 import type { ResourceOut } from "@/lib/components/kindRegistry";
 import { DEFAULT_AGENT, planChannelEdit } from "./schema";
@@ -52,7 +52,7 @@ export function EditChannelDialog({
   // claude_code) — the same registry the turn resolves by — not the resource
   // list (names like claude-code), which would re-bind to an agent that fails
   // at turn time with UNKNOWN_AGENT.
-  const { data: agents } = useChatAgents();
+  const { data: agents } = useAgentProviders();
 
   const [defaultAgent, setDefaultAgent] = useState(
     strField(config, "default_agent") || DEFAULT_AGENT,

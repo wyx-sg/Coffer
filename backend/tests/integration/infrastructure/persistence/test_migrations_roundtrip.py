@@ -900,7 +900,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         "channel_thread_conversations",
     }
 
-    # 0012 -> 0011: drops the chat tables (spec 008-agent-chat).
+    # 0012 -> 0011: drops the chat tables (the turn platform).
     command.downgrade(cfg, "0011")
     assert _user_tables(db_path) == (PRE_MERGE_TABLES | {"memory_projection_bindings"}) - {
         "credentials",

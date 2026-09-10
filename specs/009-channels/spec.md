@@ -88,7 +88,7 @@ the IM chat, rendered for that platform (Telegram HTML, SeaTalk Markdown) and
 chunked when long. On Telegram the bot shows progress while the turn runs and
 streams tool activity into one editable status message; on SeaTalk, which
 cannot edit messages, the bot acknowledges with a typing indicator and sends
-the finished reply. The same conversation is visible in the Chat page with
+the finished reply. The same conversation is recorded in the vault with
 full history.
 
 **Why this priority**: This is the product: the vault's agents reachable from
@@ -265,7 +265,7 @@ clean success sends no completion summary while a failed turn does.
   message.
 - A pairing code expires (1 hour) or suffers repeated wrong guesses → the
   code is invalidated; a fresh code must be issued.
-- The active conversation is deleted from the Chat page → the peer's next
+- The active conversation is deleted → the peer's next
   message creates a fresh conversation with the default agent.
 - Telegram long polling loses connectivity → the adapter backs off
   exponentially and resumes; no inbound message is double-processed after
@@ -1005,13 +1005,6 @@ produce it on its own.
   re-materialised from the last user message in history — the single source of
   truth
 
-### Scenario: the message API exposes an attachment block without leaking the path
-
-- **Given** a user message with an attachment reference
-- **When** the client reads the conversation's messages
-- **Then** the content block has `type=attachment` with `filename` and `mime`,
-  and no `path` field is present on the wire
-
 ### Scenario: the media dir prune deletes stale files and keeps fresh ones
 
 - **Given** the channel-media dir with one file older than 30 days and one recent
@@ -1074,6 +1067,107 @@ produce it on its own.
 - **When** the owner sends `/help`
 - **Then** it is handled as a command (no origin block is prefixed, no conversation
   is created)
+
+### Scenario: list available agents
+
+- **Given** a running daemon,
+- **When** the platform is asked which agents it offers,
+- **Then** the managed agents (`claude_code`, `codex`) are listed, each with a
+  display name and an availability flag, the `builtin` agent is **not** among
+  them ([ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md)),
+  and the list is reachable from the REST API.
+
+### Scenario: choose an agent when starting a conversation
+
+- **Given** a running daemon,
+- **When** a conversation is created for a named managed agent with a working
+  directory,
+- **Then** the conversation records that agent and its configuration.
+
+### Scenario: reject an unknown agent or invalid agent configuration
+
+- **Given** a running daemon,
+- **When** a conversation is created for an `agent_key` no agent provides, or
+  with a working directory that is not an existing directory,
+- **Then** each is rejected as a domain error and nothing is persisted. An
+  *absent* working directory is not invalid — it defaults to the Coffer-managed
+  workspace.
+
+### Scenario: send a message and receive a streamed reply
+
+- **Given** a conversation on a registered agent,
+- **When** a turn is started,
+- **Then** the turn's events stream in order — start, text deltas, completion —
+  and the assistant reply is persisted.
+
+### Scenario: observe a turn started from another surface
+
+- **Given** a turn already running on a conversation,
+- **When** a second subscriber attaches to that conversation's event bus,
+- **Then** it receives the current turn's events from the beginning and then
+  follows live, so a subscriber that arrives mid-turn misses nothing.
+
+### Scenario: second message queues during a streaming turn
+
+- **Given** a turn is streaming,
+- **When** another message is sent on the same conversation,
+- **Then** it is accepted and enqueued rather than rejected, and runs as its own
+  turn after the current one ends.
+
+### Scenario: a queued message runs after the current turn
+
+- **Given** a message queued behind a running turn,
+- **When** that turn completes,
+- **Then** the queued message is committed as the next user message and its turn
+  runs, one turn per queued message.
+
+### Scenario: interrupting a turn pauses the pending queue
+
+- **Given** a running turn with messages queued behind it,
+- **When** the turn is interrupted,
+- **Then** the current turn stops, and the queued messages are held rather than
+  auto-run until they are resumed or dropped.
+
+### Scenario: stop a running turn
+
+- **Given** a turn that has streamed partial text and is still running,
+- **When** it is interrupted,
+- **Then** the stream ends with a terminal turn-done carrying stop reason
+  `interrupted`, and the partial assistant message is persisted as complete.
+
+### Scenario: reply survives a restart
+
+- **Given** a completed turn,
+- **When** the daemon is restarted and the conversation is read back,
+- **Then** the assistant reply is there — the message store, not the live
+  stream, is the system of record.
+
+### Scenario: manage conversations
+
+- **Given** a running daemon,
+- **When** conversations are created, renamed, and deleted,
+- **Then** each operation persists and the listing reflects it; a deleted
+  conversation and its messages are removed.
+
+### Scenario: skills are reachable as tools
+
+- **Given** a vault holding skills,
+- **When** an agent runs a turn,
+- **Then** the vault's skills are offered to it as gateway tools.
+
+### Scenario: model selection is recorded
+
+- **Given** a conversation whose model has been set,
+- **When** a turn completes,
+- **Then** the assistant message records the model that produced it.
+
+### Scenario: token usage and audit
+
+- **Given** a turn that completes,
+- **When** the turn ends,
+- **Then** the assistant message records token usage and the audit log contains
+  the completed turn with actor `agent`.
+
 
 ## Channels as a management plane (north star)
 
@@ -1173,8 +1267,8 @@ capabilities the official personal bridges lack.
   by reading them back from the last user message in history (not a threaded
   param), so materialization survives a daemon restart and stays consistent with
   what the web shows; scope is within the conversation (no cross-session /
-  agent-switch full-history replay). The web Chat page renders the reference as a
-  compact `📎 filename · mime` chip; the local path is never emitted to the wire.
+  agent-switch full-history replay). The path stays inside the daemon: only the
+  agent adapter, which must read the bytes, ever sees it.
   The media dir is bounded by a 30-day mtime retention prune on the retention
   cadence (bytes are re-downloadable; no size cap). See ADR-041.
 - **FR-042**: Every turn carries its own origin. The turn text opens with a
@@ -1244,6 +1338,120 @@ capabilities the official personal bridges lack.
   per photo.
 - **FR-039**: Inbound events are de-duplicated. A redelivered platform event
   (same message id) is processed once.
+
+### E. The turn platform
+
+Folded in from the retired spec 008. These requirements describe the machinery
+*underneath* every channel turn — the registry, the adapters, the conversation
+store, and the turn lifecycle. They lived in their own spec while a web Chat
+page was their other client; that page was removed (see **Deliberately out of
+scope** below), leaving channels as the platform's only surface. Keeping the
+description here means the whole path — IM message → turn → reply — reads in
+one document instead of two.
+
+- **FR-043**: A turn MUST reach an agent only through an **agent-provider
+  registry**: a turn is run, a conversation is initialised, and a conversation's
+  agent state is torn down by asking the registry for the agent named on the
+  conversation. Adding another agent MUST be a new registry entry only — no
+  change to the conversation/message schema, the turn orchestrator, or the
+  channel layer. The channel layer never branches per agent.
+- **FR-044**: Each conversation MUST record which agent it belongs to via an
+  `agent_key`, plus an opaque, agent-specific configuration that the named agent
+  validates and persists. An `agent_key` no agent provides MUST be rejected, and
+  an invalid configuration MUST be rejected as a domain error — both before
+  anything is written. This is what a channel binding resolves against on the
+  peer's first message.
+- **FR-045**: The platform MUST expose its registered agents — each with a
+  stable key, a display name, and a current availability flag — over the REST
+  API, so the channel editor offers only agents that exist, and marks the ones
+  whose CLI is absent on this host. It MUST likewise expose, per agent, the
+  models that agent can be put on.
+- **FR-046**: An agent is addressed for a turn through an **agent adapter** that
+  is self-contained: given only the conversation history, it yields a stream of
+  typed turn events. The adapter carries its own model, tools, and
+  configuration; the orchestrator MUST NOT inject them.
+- **FR-047**: System MUST ship subprocess-backed agent providers for Claude Code
+  and Codex. Each runs in a working directory (its `agent_config.cwd`); when a
+  turn supplies none, the provider MUST default to the Coffer-managed workspace
+  `~/.coffer/workspace` (created on first use) rather than reject the turn — so
+  a channel with no configured workspace works out of the box. An
+  explicitly-supplied cwd MUST be an existing directory or the configuration is
+  rejected. Availability MUST reflect whether the agent's binary is resolvable
+  on the daemon's PATH; an unavailable agent is listed but not selectable. A
+  turn MUST stream the tool's line-delimited JSON output mapped onto the
+  platform's turn events, and persist the upstream session id so the next turn
+  continues the same session. Claude Code is driven through the Claude Agent SDK
+  and Codex through `codex app-server` (JSON-RPC 2.0 over stdio, NDJSON-framed);
+  both run with full permissions — owner pairing (FR-005) is the security gate.
+- **FR-048**: System MUST persist conversations and their messages in SQLite as
+  the system of record; they are not Resources of the kind-agnostic Resource
+  framework. A message MUST store its role and an ordered list of content blocks
+  of types `text`, `tool_use`, `tool_result`, and `attachment` (FR-033);
+  assistant messages MUST also store token usage and the model that produced
+  them when the agent reports one.
+- **FR-049**: Conversations MUST follow a two-stage, retention-managed
+  lifecycle, both windows configurable under Settings → Data: the retention
+  worker auto-archives a conversation with no new message for the auto-archive
+  window (default 7 days), then deletes archived conversations and their
+  messages the configured number of days after archiving (default 30 days).
+  Either window may be set to keep-forever to disable that stage. Auto-archiving
+  is reversible; only deletion is destructive.
+- **FR-050**: System MUST process at most one in-flight turn per conversation
+  without rejecting a message sent while a turn is running: such a message is
+  enqueued on a per-conversation **pending queue**. When the in-flight turn
+  ends, System MUST dequeue the head, commit it as the next user message, and
+  run its turn — sequential FIFO, one turn per queued message, never coalesced.
+  A pending message is not committed to the message sequence until its turn
+  starts. The queue is in-memory, so a daemon restart drops what has not yet
+  been committed. (A message arriving from a channel while a turn is in flight
+  is held by that channel's own inbound buffering, FR-027, rather than this
+  queue.)
+- **FR-051**: Interrupting a turn MUST also **pause** the pending queue: the
+  current turn stops with its partial output kept, and queued messages are held
+  rather than auto-run until the owner resumes them. This is what `/stop`
+  (FR-011) reaches.
+- **FR-052**: System MUST express a turn as a sequence of typed events covering,
+  at minimum, turn start, text deltas, tool calls, tool results, turn
+  completion, turn error, and pending-queue change.
+- **FR-053**: System MUST publish those events on a per-conversation in-process
+  bus that any number of subscribers may attach to. On attach, if a turn is in
+  flight the bus MUST replay the current turn's events so a late subscriber
+  catches up, then stream live. A turn runs as a detached task, so it survives
+  the subscriber that started it going away — which is why a reply completes and
+  is persisted even when the peer's connection drops mid-turn.
+- **FR-054**: An interrupted turn — user interrupt, adapter failure, or daemon
+  restart — MUST leave the partial assistant message persisted and marked
+  complete rather than discarded. Stopping a turn is distinct from discarding
+  the conversation, which throws the turn away.
+- **FR-055**: Every completed turn MUST be recorded in the audit log with the
+  actor, the agent, the conversation, and the turn's token usage, so "which
+  agent did what, driven by whom" is answerable after the fact (see FR-030 for
+  the channel-specific fields).
+
+## Deliberately out of scope
+
+**The web Chat page.** Spec 008 shipped a two-column chat page in the web UI —
+conversation list, message thread, composer, model picker, pending-queue
+management — and a REST/SSE surface under `/api/v1/chat` to serve it. Both are
+removed. The page was never used as a chat interface: every conversation in the
+vault was created by a channel, and ADR-031's "single-owner live mirror"
+responsibility — watch from the desktop a conversation you are driving from your
+phone — was never exercised either, which the conversation records would show if
+it had been. The honest counterweight, recorded because it argues the other way:
+driving an agent from a phone while watching on a desktop is a reasonable thing
+to want, and the feature simply never got used. It was removed anyway, because a
+6,000-line surface that has never run is a liability, not an option.
+
+What survives is everything underneath it (FR-043…FR-055) plus the two read
+routes the rest of the product still asks for — the agent registry listing and
+the per-agent model catalogue — which moved from `/api/v1/chat/agents` to
+`/api/v1/agent-providers`, since neither was ever about a conversation. The
+conversation store keeps its full API surface even where only the retention
+worker now calls parts of it, because the store is the platform's, not the
+page's.
+
+**ADR-021** (chat as the Vault Console) and **ADR-031** (chat as a single-owner
+live mirror) are removed with the page.
 
 ## Assumptions
 

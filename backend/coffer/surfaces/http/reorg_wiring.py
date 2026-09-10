@@ -18,7 +18,7 @@ from coffer.application.knowledge.reorg_deps import reorg_collaborators_from_ser
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.application.provider.service import ProviderService
 from coffer.domain.provider.config import ResolvedConnection
-from coffer.infrastructure.chat.agentic_reorg import LangchainAgenticReorg
+from coffer.infrastructure.llm.agentic_reorg import LangchainAgenticReorg
 from coffer.surfaces.http.knowledge.reorg_state import set_reorg_service
 
 

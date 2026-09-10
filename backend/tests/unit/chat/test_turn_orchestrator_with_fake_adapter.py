@@ -163,7 +163,7 @@ async def test_happy_path_emits_audit_event() -> None:
     assert any(e.event_type == "chat_turn_completed" for e in audit_repo.entries)
 
 
-@pytest.mark.acceptance(spec="008-agent-chat", scenario="token usage and audit")
+@pytest.mark.acceptance(spec="009-channels", scenario="token usage and audit")
 @pytest.mark.asyncio
 async def test_completed_turn_records_token_usage_and_agent_audit() -> None:
     scripted: list[AgentEvent] = [
@@ -202,7 +202,7 @@ async def test_history_passed_to_adapter_includes_the_user_message() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="008-agent-chat", scenario="model selection is recorded")
+@pytest.mark.acceptance(spec="009-channels", scenario="model selection is recorded")
 async def test_model_id_recorded_from_adapter() -> None:
     adapter = FakeAgentAdapter(
         [TurnDone(prompt_tokens=1, completion_tokens=1, stop_reason="end_turn")],
@@ -359,7 +359,7 @@ async def test_cancel_turn_noop_when_no_active_turn() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="008-agent-chat", scenario="stop a running turn")
+@pytest.mark.acceptance(spec="009-channels", scenario="stop a running turn")
 async def test_interrupt_persists_the_partial_message() -> None:
     orchestrator, _, msg_repo, _, _ = make_orchestrator(
         adapter=_BlockingAdapter([TextDelta(text="partial answer")])

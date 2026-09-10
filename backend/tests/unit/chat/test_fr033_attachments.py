@@ -16,7 +16,6 @@ import pytest
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.message import AttachmentBlock, Role, TextBlock
 from coffer.infrastructure.channel.media_retention import prune_media_dir
-from coffer.surfaces.http.chat.conversation_routes import _block_out
 
 from .conftest import FakeAgentAdapter
 from .test_turn_orchestrator_with_fake_adapter import drain_queue, make_orchestrator
@@ -63,22 +62,6 @@ async def test_turn_re_materialises_attachment_from_history() -> None:
     # The adapter received the attachment derived from history's last user
     # message — nothing is threaded down from the orchestrator any more.
     assert adapter.recorded_attachments[0] == [_IMG]
-
-
-@pytest.mark.acceptance(
-    spec="009-channels",
-    scenario="the message API exposes an attachment block without leaking the path",
-)
-def test_attachment_block_out_omits_path() -> None:
-    out = _block_out(
-        AttachmentBlock(path="/secret/on/disk.jpg", mime="image/jpeg", filename="p.jpg")
-    )
-    assert out.type == "attachment"
-    assert out.filename == "p.jpg"
-    assert out.mime == "image/jpeg"
-    dumped = out.model_dump()
-    assert "path" not in dumped
-    assert "/secret/on/disk.jpg" not in dumped.values()
 
 
 @pytest.mark.acceptance(

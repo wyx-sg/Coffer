@@ -9,10 +9,10 @@ from coffer.application.embedding_config_service import EmbeddingConfigService
 from coffer.application.providers.ports import ModelIntrospectionService
 from coffer.domain.embedding_config import GlobalEmbeddingConfig
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.chat.dependencies import get_introspection_service
-from coffer.surfaces.http.chat.schemas import EmbeddingTestIn, TestResultOut
 from coffer.surfaces.http.dependencies import get_actor, get_embedding_config_service
+from coffer.surfaces.http.provider_schemas import EmbeddingTestIn, TestResultOut
 from coffer.surfaces.http.schemas import EmbeddingConfigOut, EmbeddingConfigUpdate
+from coffer.surfaces.http.turn_dependencies import get_introspection_service
 
 router = APIRouter(
     prefix="/api/v1/embedding",

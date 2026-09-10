@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
+
+import { acceptance } from "@/test/acceptance";
 import { fireEvent, render, screen } from "@testing-library/react";
 
 import { AgentOverviewTab } from "./AgentOverviewTab";
@@ -153,13 +155,21 @@ describe("AgentOverviewTab", () => {
     expect(options).not.toContain("gpt");
   });
 
-  test("the model dropdown offers the connection's introspected models", () => {
-    useProvidersMock.mockReturnValue({ data: [makeConn({ is_active: true })] });
-    render(<AgentOverviewTab agent={agent} />);
-    const options = openSelectOptions(/^model$/i);
-    expect(options).toContain("claude-opus-4-8");
-    expect(options).toContain("claude-haiku-4-5");
-  });
+  acceptance(
+    "011-provider-switching",
+    "the agent's model picker offers a fixed list without free-form entry",
+    () => {
+      useProvidersMock.mockReturnValue({ data: [makeConn({ is_active: true })] });
+      render(<AgentOverviewTab agent={agent} />);
+      const options = openSelectOptions(/^model$/i);
+      // The connection's INTROSPECTED models, never its stored model field.
+      expect(options).toContain("claude-opus-4-8");
+      expect(options).toContain("claude-haiku-4-5");
+      // No free-text escape hatch: a model id is chosen, never typed.
+      expect(options.some((o) => /custom/i.test(o))).toBe(false);
+      expect(screen.queryByRole("textbox")).toBeNull();
+    },
+  );
 
   test("picking a connection is a draft: it stages a default model, activates nothing", () => {
     useProvidersMock.mockReturnValue({ data: [agnes()] });

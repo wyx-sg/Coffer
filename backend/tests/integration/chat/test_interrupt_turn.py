@@ -1,9 +1,11 @@
-"""Integration test: the interrupt route stops a turn, keeping its partial output.
+"""Integration test: interrupting a turn stops it, keeping its partial output.
 
-A turn streams partial text and then blocks; the real ``POST .../interrupt``
-route handler stops it. The stream closes with a terminal ``TurnDone`` (stop
-reason ``interrupted``) and the partial assistant message is persisted —
-distinct from deleting the conversation, which discards the turn.
+A turn streams partial text and then blocks; ``TurnOrchestrator.interrupt_turn``
+stops it. The stream closes with a terminal ``TurnDone`` (stop reason
+``interrupted``) and the partial assistant message is persisted — distinct from
+discarding the conversation, which throws the turn away. A channel reaches this
+through ``ChannelTurnDriver``'s ``TurnPort.interrupt_turn``; it used to also be
+reachable over HTTP, and the behaviour is the platform's, not the surface's.
 """
 
 from __future__ import annotations
@@ -17,7 +19,6 @@ import pytest
 from coffer.application.chat.turn_orchestrator import active_turns, clear_active_turns
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
 from coffer.domain.chat.message import Role, TextBlock
-from coffer.surfaces.http.chat.turn_routes import interrupt_turn
 from tests.unit.chat.conftest import FakeAgentProvider, make_chat_services
 
 
@@ -43,7 +44,7 @@ def _reset() -> Any:
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="008-agent-chat", scenario="stop a running turn")
+@pytest.mark.acceptance(spec="009-channels", scenario="stop a running turn")
 async def test_interrupt_route_stops_turn_and_keeps_partial_output() -> None:
     chat_svc, orchestrator, _registry = make_chat_services(
         provider=FakeAgentProvider(_BlockingAdapter(), agent_key="builtin")
@@ -56,9 +57,8 @@ async def test_interrupt_route_stops_turn_and_keeps_partial_output() -> None:
     assert isinstance(text_event, TextDelta)
     assert conv.id in active_turns()
 
-    # Stop the running turn through the real POST .../interrupt route handler.
-    resp = await interrupt_turn(conv.id, svc=chat_svc, orchestrator=orchestrator)
-    assert resp.status_code == 204
+    # Stop the running turn the way a channel does.
+    orchestrator.interrupt_turn(conv.id)
 
     # The stream ends with an interrupted turn_done.
     rest: list[AgentEvent] = []

@@ -156,7 +156,7 @@ exist or you may not have access"。用户既没机会选一个该 endpoint 支�
 id，而这些 id 该 agent 一个都用不了。
 
 - **H1 — 模型清单是后端的一个接口，按 agent 提供，且 Coffer 自己不写死任何模型名。**
-  `GET /api/v1/chat/agents/{agent_key}/models` 返回某个 agent 可以被切到的模型。每一项——id、
+  `GET /api/v1/agent-providers/{agent_key}/models` 返回某个 agent 可以被切到的模型。每一项——id、
   显示名、描述——都是从**已安装的 agent 那里读回来的**，绝不写进 Coffer：写在这里的清单会在 CLI
   下一次发版时过期，而且分不清同一档位的两个版本。共有三个来源，它们的顺序就是选择器的顺序：
   Claude Code 可执行文件内嵌的模型目录（先是它的档位**别名**，再是带版本的模型——那是唯一写着
@@ -166,7 +166,7 @@ id，而这些 id 该 agent 一个都用不了。
   `id`（原样传给 CLI）、`label`、`description` 和 `source ∈ {alias, discovered}`。每个来源都
   各自静默降级——CLI 没装、bundle 结构变了、agent 没登录或卡住，代价只是少了这个来源本来会补上的
   模型，仅此而已。未知的 `agent_key` 返回 404。契约见
-  [`specs/008-agent-chat/contracts/api.openapi.yaml`](../008-agent-chat/contracts/api.openapi.yaml)。
+  [`specs/011-provider-switching/contracts/api.openapi.yaml`](contracts/api.openapi.yaml)。
 - **H2 — 单一事实来源。** 前端常量被删除；channel 的 `/model` 卡片读同一份清单。清单只在一处维护，
   而且由 agent 自己拥有，因此新发布的模型完全不需要 Coffer 发版就能到达每个界面。
 - **H3 — 选项是并集，不是二选一。** 聊天选择器的选项 = agent 的模型清单（H1）∪ 当前生效连接
@@ -520,6 +520,21 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
   `internal_engine_model_set` 审计条目，且 `resolve_internal_connection()` 将所选
   模型覆盖到解析出的内部默认 connection 上（模型独立于 connection，见下方 amendment）。
 
+### Scenario: list a provider's models
+
+- **Given** 正在新增或编辑一条连接，已填入 provider（以及该 provider 需要的
+  base URL / credential ref）
+- **When** 拉取该 provider 的模型
+- **Then** Coffer 返回该 provider 暴露的模型 id 供选择；若一个都列不出，
+  则返回空列表并附一条消息，用户仍可手动输入模型 id
+
+### Scenario: test a model connection
+
+- **Given** 一条连接的 provider、模型 id 和（需要时的）credential ref
+- **When** 测试该连接
+- **Then** Coffer 向 provider 发一个最小请求，报告成功或一条人话化的失败消息，
+  且不持久化任何东西
+
 ### Scenario: test or fetch models with an inline unsaved secret
 
 - **Given** 连接对话框已打开，尚未保存任何连接（也无对应 credential ref），
@@ -529,11 +544,11 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - **Then** introspection 服务将明文 key 直接传给 provider、不查 credential vault，
   探测成功，拉取到的模型填入可选下拉框（见 ADR-032 amendment D6）。
 
-### Scenario: the chat model picker offers a fixed list without free-form entry
+### Scenario: the agent's model picker offers a fixed list without free-form entry
 
 - **Given** 一个绑定到无覆盖连接的 agent 的会话，
 - **When** 打开模型选择器，
-- **Then** 它给出该 agent 模型清单（`GET /api/v1/chat/agents/{agent_key}/models`）的固定下拉
+- **Then** 它给出该 agent 模型清单（`GET /api/v1/agent-providers/{agent_key}/models`）的固定下拉
   （无自由输入「Custom…」项）；当有连接覆盖该 agent 时，下拉在该清单和当前取值之外**追加**该连接
   introspect 出的模型，绝不读连接存储的 `model` 字段（TypeScript 验收测试；并集规则见 2026-09-09 修订）。
 

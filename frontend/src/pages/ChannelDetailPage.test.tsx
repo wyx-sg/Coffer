@@ -20,7 +20,7 @@ vi.mock("@/lib/hooks/useChannels", () => ({
   useUpdateChannel: vi.fn(),
   useNotifyChannel: vi.fn(),
 }));
-vi.mock("@/lib/hooks/useChatAgents", () => ({ useChatAgents: vi.fn(() => ({ data: [] })) }));
+vi.mock("@/lib/hooks/useAgentProviders", () => ({ useAgentProviders: vi.fn(() => ({ data: [] })) }));
 vi.mock("@/lib/hooks/useResourceMutations", () => ({
   useEnableResource: vi.fn(),
   useDisableResource: vi.fn(),

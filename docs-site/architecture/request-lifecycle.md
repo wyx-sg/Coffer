@@ -189,21 +189,19 @@ A complete round-trip as seen at the shim's stdin/stdout boundary:
 
 The daemon adds no wrapper or extra fields to the upstream's success result. The error structure follows JSON-RPC 2.0 with Coffer-specific negative codes in the -32000 range.
 
-## Agent-chat-turn lifecycle
+## Agent-turn lifecycle
 
-The chat surface drives a different lifecycle: instead of forwarding a single JSON-RPC call to an upstream, it runs a multi-step **agent turn** that may itself call several of Coffer's own gateway tools before producing a reply. This path is specified by [spec 008](/reference/specs/008-agent-chat/spec).
+A turn drives a different lifecycle from a gateway call: instead of forwarding a single JSON-RPC call to an upstream, it runs a multi-step **agent turn** that may itself call several of Coffer's own gateway tools before producing a reply. This path is specified by [spec 009](/reference/specs/009-channels/spec) (FR-043…FR-055).
 
-1. **Turn start.** A chat client (web UI or a channel) posts a user message. The `TurnOrchestrator` (`application/chat/turn_orchestrator.py`) creates or resumes the conversation, persists the user turn, and starts streaming.
+1. **Turn start.** A channel delivers a user message. The `TurnOrchestrator` (`application/chat/turn_orchestrator.py`) creates or resumes the conversation, persists the user turn, and starts streaming. Only one turn runs per conversation at a time; a message arriving during a turn is enqueued rather than rejected.
 
-2. **In-process agent.** For the built-in agent, the orchestrator drives an in-process LangGraph agent (`infrastructure/chat/langgraph_agent.py`). The agent's tools are Coffer's own gateway tools, exposed to the model through the gateway tool provider (`infrastructure/chat/gateway_tool_provider.py`) — so the chat agent can call the same aggregated MCP capabilities that an external MCP client would, in-process and without a shim.
+2. **The agent adapter.** The orchestrator asks the **agent-provider registry** for the agent named on the conversation and hands it the history. The adapter is self-contained — it carries its own model, tools, and configuration. The shipped adapters drive an external coding-agent subprocess: Claude Code through the Claude Agent SDK (`infrastructure/chat/claude_sdk_agent.py`), Codex through `codex app-server` (`infrastructure/chat/codex_agent.py`). Each maps the tool's line-delimited JSON output onto the platform's typed turn events, and persists the upstream session id so the next turn continues the same session. Coffer's own aggregated MCP capabilities reach the agent through the gateway tool provider (`infrastructure/chat/gateway_tool_provider.py`).
 
-3. **Streaming back.** Tokens and tool-call events stream to the client over SSE as the run progresses; `interrupt_turn` cancels an in-flight turn, and the final assistant turn is persisted on completion.
-
-**CLI-agent variant.** Instead of the in-process LangGraph agent, a chat agent may drive an **external coding-agent subprocess** (Claude Code or Codex) through `infrastructure/chat/cli_agent.py` and `infrastructure/chat/cli_providers.py`. The orchestrator seam is identical — same turn persistence, same streaming contract — but the model loop runs in the external CLI process rather than in-process.
+3. **Streaming back.** Turn events publish to a per-conversation in-process bus as the run progresses; a subscriber that attaches mid-turn is replayed the events it missed. `interrupt_turn` stops an in-flight turn, keeping its partial output, and the final assistant turn is persisted on completion. The turn itself runs as a detached task, so it completes even if the subscriber that started it goes away.
 
 ## Channel-inbound lifecycle
 
-Messaging channels (Telegram, SeaTalk) deliver user messages into the **same `TurnOrchestrator` seam** as the web UI — a channel turn is indistinguishable from a UI turn once it reaches the orchestrator. The inbound transport differs per platform (per [ADR-014](/reference/adr/ADR-014-channel-adapter-framework)):
+Messaging channels (Telegram, SeaTalk) are how a user reaches an agent. Each delivers user messages into the **`TurnOrchestrator` seam** described above; once a message reaches the orchestrator, nothing downstream knows which platform it came from. The inbound transport differs per platform (per [ADR-014](/reference/adr/ADR-014-channel-adapter-framework)):
 
 - **SeaTalk (webhook).** SeaTalk delivers events only by public webhook. A separate **callback-listener process** (`coffer-callback`, spawned by the daemon while any SeaTalk channel is enabled) serves `POST /seatalk/{channel}` on a loopback port. It answers the platform's verification challenge, verifies the request signature (`sha256(body + signing_secret)`), normalises the event, and forwards it to the daemon — which feeds it into the orchestrator.
 
@@ -224,4 +222,4 @@ The engine picks among these from the scope's configuration — callers never na
 
 ---
 
-**See also:** [Spec 001: MCP Gateway](/reference/specs/001-mcp-gateway/spec), [ADR-005: Session subprocess model](/reference/adr/ADR-005-session-subprocess-model), [Spec 008: Agent chat](/reference/specs/008-agent-chat/spec), [ADR-014: Channel adapter framework](/reference/adr/ADR-014-channel-adapter-framework), [ADR-012: Files as truth, SQLite retrieval](/reference/adr/ADR-012-files-as-truth-sqlite-retrieval)
+**See also:** [Spec 001: MCP Gateway](/reference/specs/001-mcp-gateway/spec), [ADR-005: Session subprocess model](/reference/adr/ADR-005-session-subprocess-model), [Spec 009: Channels](/reference/specs/009-channels/spec), [ADR-014: Channel adapter framework](/reference/adr/ADR-014-channel-adapter-framework), [ADR-012: Files as truth, SQLite retrieval](/reference/adr/ADR-012-files-as-truth-sqlite-retrieval)

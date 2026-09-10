@@ -17,7 +17,7 @@ from coffer.application.knowledge.organizer_deps import collaborators_from_servi
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.application.provider.service import ProviderService
 from coffer.domain.provider.config import ResolvedConnection
-from coffer.infrastructure.chat.llm_completion import LangchainLlmCompletion
+from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
 from coffer.surfaces.http.knowledge.organize_state import set_organizer_service
 
 

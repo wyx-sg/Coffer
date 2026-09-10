@@ -10,9 +10,9 @@ from httpx import ASGITransport, AsyncClient
 from coffer.application.providers.ports import ModelIntrospectionService
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.chat.dependencies import set_introspection_service
-from coffer.surfaces.http.chat.model_routes import router as model_router
 from coffer.surfaces.http.embedding_routes import router as embedding_router
+from coffer.surfaces.http.model_routes import router as model_router
+from coffer.surfaces.http.turn_dependencies import set_introspection_service
 
 _TOKEN = "t-introspect"
 
@@ -53,7 +53,7 @@ async def client():  # type: ignore[no-untyped-def]
     set_active_token(None)
 
 
-@pytest.mark.acceptance(spec="008-agent-chat", scenario="list a provider's models")
+@pytest.mark.acceptance(spec="011-provider-switching", scenario="list a provider's models")
 async def test_list_models(client) -> None:  # type: ignore[no-untyped-def]
     r = await client.post(
         "/api/v1/models/list-models", json={"provider": "openai", "credential_ref": "ok"}
@@ -69,7 +69,7 @@ async def test_list_models_degrades(client) -> None:  # type: ignore[no-untyped-
     assert "connection refused" in r.json()["message"]
 
 
-@pytest.mark.acceptance(spec="008-agent-chat", scenario="test a model connection")
+@pytest.mark.acceptance(spec="011-provider-switching", scenario="test a model connection")
 async def test_test_connection_ok_and_fail(client) -> None:  # type: ignore[no-untyped-def]
     ok = await client.post(
         "/api/v1/models/test-connection",

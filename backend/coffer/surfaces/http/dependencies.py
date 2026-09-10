@@ -14,23 +14,23 @@ from coffer.application.internal_engine_config_service import InternalEngineConf
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 
-# Agent-chat (spec 008) providers re-exported so the get_chat_service paths work.
-from coffer.surfaces.http.chat.dependencies import (
+# Turn-platform singletons re-exported so the long-standing import paths work.
+from coffer.surfaces.http.turn_dependencies import (
     get_agent_registry as get_agent_registry,
 )
-from coffer.surfaces.http.chat.dependencies import (
+from coffer.surfaces.http.turn_dependencies import (
     get_chat_service as get_chat_service,
 )
-from coffer.surfaces.http.chat.dependencies import (
+from coffer.surfaces.http.turn_dependencies import (
     get_turn_orchestrator as get_turn_orchestrator,
 )
-from coffer.surfaces.http.chat.dependencies import (
+from coffer.surfaces.http.turn_dependencies import (
     set_agent_registry as set_agent_registry,
 )
-from coffer.surfaces.http.chat.dependencies import (
+from coffer.surfaces.http.turn_dependencies import (
     set_chat_service as set_chat_service,
 )
-from coffer.surfaces.http.chat.dependencies import (
+from coffer.surfaces.http.turn_dependencies import (
     set_turn_orchestrator as set_turn_orchestrator,
 )
 

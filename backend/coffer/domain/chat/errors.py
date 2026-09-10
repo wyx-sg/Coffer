@@ -1,4 +1,4 @@
-"""Chat-platform domain errors (spec 008-agent-chat).
+"""Chat-platform domain errors (the turn platform, spec 009).
 
 Split out of ``coffer.domain.errors`` for the file-size limit; that module
 re-exports everything here, so ``from coffer.domain.errors import

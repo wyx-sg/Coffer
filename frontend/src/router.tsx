@@ -3,7 +3,6 @@ import { Layout } from "./components/Layout";
 import { LegacyScopeRedirect } from "./components/LegacyScopeRedirect";
 import { AgentsPage } from "./pages/AgentsPage";
 import { AgentDetailPage } from "./pages/AgentDetailPage";
-import { ChatPage } from "./pages/ChatPage";
 import { ChannelsPage } from "./pages/ChannelsPage";
 import { ChannelDetailPage } from "./pages/ChannelDetailPage";
 import { SkillsPage } from "./pages/SkillsPage";
@@ -28,8 +27,6 @@ export const router = createBrowserRouter([
     element: <Layout />,
     children: [
       { index: true, element: <Navigate to="/agents" replace /> },
-      { path: "chat", element: <ChatPage /> },
-      { path: "chat/:id", element: <ChatPage /> },
       { path: "mcp-servers", element: <ResourcesPage /> },
       { path: "mcp-servers/:kind/:name", element: <ResourceDetailPage /> },
       // Legacy route — this surface used to live at /resources. Keep old

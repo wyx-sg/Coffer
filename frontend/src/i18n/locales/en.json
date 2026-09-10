@@ -73,8 +73,7 @@
     "expand": "Expand sidebar",
     "agents": "Agents",
     "channels": "Channels",
-    "audit": "Audit log",
-    "chat": "Chat"
+    "audit": "Audit log"
   },
   "resources": {
     "title": "MCP servers",
@@ -1166,114 +1165,6 @@
       }
     },
     "deleteScopeConfirm": "Delete knowledge scope \"{{name}}\"? Its entries, documents and index are removed. This cannot be undone."
-  },
-  "chat": {
-    "title": "Chat",
-    "thinking": "Thinking…",
-    "emptyState": {
-      "title": "No connection configured",
-      "body": "Add an LLM connection before you can start chatting.",
-      "cta": "Go to Settings → LLM Connections"
-    },
-    "message": {
-      "failed": "This response did not complete.",
-      "tokens": "{{prompt}} in · {{completion}} out"
-    },
-    "modelBar": {
-      "model": "Model",
-      "noModel": "No model",
-      "noModels": "No models configured",
-      "selectAria": "Select model"
-    },
-    "history": {
-      "title": "Conversations",
-      "new": "New chat",
-      "empty": "No conversations yet",
-      "search": "Search conversations",
-      "noMatches": "No matching conversations",
-      "ariaLabel": "Conversation history",
-      "rename": "Rename",
-      "renameAria": "Rename conversation",
-      "delete": "Delete",
-      "collapse": "Collapse history",
-      "expand": "Expand history",
-      "restore": "Restore",
-      "archive": "Archive",
-      "viewArchived": "View archived",
-      "backToActive": "Back to active",
-      "archivedTitle": "Archived",
-      "archivedEmpty": "No archived conversations",
-      "filterLabel": "Filter conversations",
-      "filterActive": "Active",
-      "filterArchived": "Archived",
-      "viaChannel": "via {{channel}}"
-    },
-    "thread": {
-      "empty": "Send a message to start the conversation.",
-      "selectOrCreate": "Select a conversation or start a new one.",
-      "notFoundTitle": "Conversation not found",
-      "notFoundBody": "It may have been deleted, or the link may be stale.",
-      "notFoundCta": "Start a new chat"
-    },
-    "archivedThread": {
-      "notice": "This conversation is archived.",
-      "restore": "Restore to continue",
-      "restoring": "Restoring…"
-    },
-    "composer": {
-      "placeholder": "Type a message… (Enter to send, Shift+Enter for new line)",
-      "ariaLabel": "Message input",
-      "send": "Send",
-      "stop": "Stop",
-      "streaming": "A reply is streaming — your next message will queue."
-    },
-    "queue": {
-      "label": "Queued:",
-      "edit": "Edit queued message",
-      "remove": "Remove from queue"
-    },
-    "toolCard": {
-      "unknown": "unknown tool",
-      "running": "running",
-      "done": "done",
-      "error": "error",
-      "input": "Input",
-      "result": "Result",
-      "errorLabel": "Error",
-      "toggleAria": "Toggle tool call {{name}}"
-    },
-    "newConversation": {
-      "agent": "Agent",
-      "model": "Model",
-      "noModels": "No models yet — add a connection in Settings → LLM Connections first.",
-      "unavailable": "unavailable",
-      "workdir": "Working directory",
-      "workdirPlaceholder": "/path/to/your/project",
-      "recent": "Recent directories"
-    },
-    "modelPicker": {
-      "label": "Agent model",
-      "placeholder": "Model (optional)",
-      "inheritNoModel": "Default"
-    },
-    "draft": {
-      "guide": "Message {{agent}} to start a new conversation.",
-      "workdirNeeded": "Enter a working directory above to start chatting with {{agent}}.",
-      "noAgentTitle": "No managed agent available",
-      "noAgentBody": "Chat talks to a Coffer-managed agent. Install or configure Claude Code or Codex, then register it under Agents.",
-      "noConnectionTitle": "No connection configured",
-      "noConnectionBody": "This agent has no active LLM connection. Add one to start chatting.",
-      "noConnectionCta": "Go to Settings → LLM Connections"
-    },
-    "delete": {
-      "title": "Delete this conversation?",
-      "body": "This conversation and all of its messages will be permanently removed."
-    },
-    "archive": {
-      "title": "Archive this conversation?",
-      "body": "It will be moved to the archive. You can restore it anytime.",
-      "confirm": "Archive"
-    }
   },
   "channels": {
     "title": "Channels",

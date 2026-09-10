@@ -27,6 +27,12 @@ security:
 tags:
   - name: providers
     description: Provider profile registry and activation
+  - name: models
+    description: >
+      Read-only introspection of a connection — what it serves and whether it
+      answers. Used by the connection editor before a provider is saved, which
+      is why every operation accepts an inline `secret_value` as well as a
+      stored `credential_ref`.
 
 paths:
   /providers:
@@ -331,6 +337,72 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /models/list-models:
+    post:
+      tags: [models]
+      operationId: listProviderModels
+      summary: List the models a provider exposes
+      description: >
+        An empty list with a `message` means the endpoint does not advertise a
+        catalogue — the editor then asks the user to type a model id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListModelsIn'
+      responses:
+        '200':
+          description: The models the endpoint reported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderModelsOut'
+
+  /models/test-connection:
+    post:
+      tags: [models]
+      operationId: testProviderConnection
+      summary: Probe a connection with a minimal request
+      description: >
+        Always 200 — a failed probe is `ok: false` with a message, not an HTTP
+        error, because "this key is wrong" is a normal answer to this question.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestConnectionIn'
+      responses:
+        '200':
+          description: Probe result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestResultOut'
+
+  /models/detect-protocol:
+    post:
+      tags: [models]
+      operationId: detectProviderProtocol
+      summary: Classify an endpoint's wire protocol
+      description: >
+        Lets the connection dialog drop its manual type selector — the endpoint
+        is asked what it speaks.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DetectProtocolIn'
+      responses:
+        '200':
+          description: The detected protocol, or "unknown"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetectProtocolOut'
+
 components:
   securitySchemes:
     cofferToken:
@@ -339,6 +411,65 @@ components:
       name: X-Coffer-Token
 
   schemas:
+
+    ListModelsIn:
+      type: object
+      required: [provider]
+      properties:
+        provider: { type: string }
+        base_url: { type: string, nullable: true }
+        credential_ref: { type: string, nullable: true }
+        secret_value:
+          type: string
+          nullable: true
+          description: Inline secret, to fetch before the connection is saved.
+
+    ProviderModelsOut:
+      type: object
+      required: [models]
+      properties:
+        models:
+          type: array
+          items: { type: string }
+        message: { type: string, default: "" }
+
+    TestConnectionIn:
+      type: object
+      required: [provider, model]
+      properties:
+        provider: { type: string }
+        model: { type: string }
+        base_url: { type: string, nullable: true }
+        credential_ref: { type: string, nullable: true }
+        secret_value:
+          type: string
+          nullable: true
+          description: Inline secret, to test before the connection is saved.
+
+    TestResultOut:
+      type: object
+      required: [ok, message]
+      properties:
+        ok: { type: boolean }
+        message: { type: string }
+        detail:
+          type: object
+          additionalProperties: true
+
+    DetectProtocolIn:
+      type: object
+      properties:
+        base_url: { type: string, nullable: true }
+        credential_ref: { type: string, nullable: true }
+        secret_value: { type: string, nullable: true }
+
+    DetectProtocolOut:
+      type: object
+      required: [protocol]
+      properties:
+        protocol:
+          type: string
+          description: '"anthropic" | "openai" | "ollama" | "unknown"'
 
     Protocol:
       type: string

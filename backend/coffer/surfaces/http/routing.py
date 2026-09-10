@@ -14,6 +14,7 @@ from coffer.surfaces.http.agent_config_routes import router as agent_config_rout
 from coffer.surfaces.http.agent_native_memory_routes import (
     router as agent_native_memory_router,
 )
+from coffer.surfaces.http.agent_provider_routes import router as agent_provider_router
 from coffer.surfaces.http.agent_routes import router as agent_router
 from coffer.surfaces.http.agent_session_routes import router as agent_session_router
 from coffer.surfaces.http.agent_unmanaged_skill_routes import (
@@ -22,9 +23,6 @@ from coffer.surfaces.http.agent_unmanaged_skill_routes import (
 from coffer.surfaces.http.agent_workspace_routes import router as agent_workspace_router
 from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.channel_routes import router as channel_router
-from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
-from coffer.surfaces.http.chat.model_routes import router as chat_model_router
-from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
 from coffer.surfaces.http.credential_routes import router as credential_router
 from coffer.surfaces.http.embedding_routes import router as embedding_router
 from coffer.surfaces.http.fs_routes import router as fs_router
@@ -35,6 +33,7 @@ from coffer.surfaces.http.mcp.invocation_routes import router as mcp_invocation_
 from coffer.surfaces.http.mcp.protocol_routes import router as mcp_protocol_router
 from coffer.surfaces.http.mcp.server_test_routes import router as mcp_server_test_router
 from coffer.surfaces.http.mcp.tiering_routes import router as mcp_tiering_router
+from coffer.surfaces.http.model_routes import router as model_router
 from coffer.surfaces.http.provider_routes import router as provider_router
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
@@ -73,10 +72,9 @@ def include_all_routers(app: FastAPI) -> None:
         mcp_invocation_router,
         mcp_tiering_router,
         knowledge_router,  # the one knowledge kind
-        # chat (008)
-        chat_conversation_router,
-        chat_turn_router,
-        chat_model_router,
+        # the turn platform's own surfaces (spec 009's agents run on it)
+        agent_provider_router,
+        model_router,
         channel_router,  # spec 009
         provider_router,  # spec 011
     ):
