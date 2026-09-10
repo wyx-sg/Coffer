@@ -158,6 +158,14 @@ MCP 配置在不同 agent 间沿**两条相互独立的轴**变化，由 `McpInj
 列表需要持久化。因此 head 迁移版本号保持在 **0004**；spec 004 不新增任何 Alembic
 迁移。
 
+后续版本确实会改写 agent 行的 `config_json`——但那是*数据*迁移，不是 schema
+迁移。`0005` 把退役的 `skill_dir` override 映射到 `config_dir`；`0056` 剥掉
+`disable_native_memory` 与 `auto_detected`——这两个字段已从 `AgentConfig` 移除。
+由于 `AgentConfig` 是 `extra="forbid"`，被删字段遗留下来的键并非无害：它会让整行
+无法加载，`GET /agents` 直接 422。**因此从 `AgentConfig` 删字段，必须在同一次改动
+里配一条把它在库中剥掉的迁移。** 模型不为死键保留任何 load-time 容错：迁移在
+daemon 启动时、任何读取之前就已跑完，永久垫片只会掩盖缺失的迁移。
+
 **配置文件与 Coffer-MCP 安装状态不持久化到 SQLite**——agent 磁盘上的配置文件即
 为事实来源。安装状态通过按需读取相关配置文件派生得出。
 
