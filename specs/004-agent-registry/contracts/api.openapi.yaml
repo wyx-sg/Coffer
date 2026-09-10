@@ -329,62 +329,6 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /agents/{name}/mcp-entries/{entry}:
-    parameters:
-      - in: path
-        name: name
-        required: true
-        schema: { type: string }
-      - in: path
-        name: entry
-        required: true
-        schema: { type: string }
-        description: MCP entry name as it appears in the agent's config file.
-    patch:
-      tags: [agents]
-      operationId: toggleAgentMcpEntry
-      summary: Enable or disable one MCP entry in place (Codex only)
-      description: |
-        Sets the entry's `enabled` flag in `config.toml` (FR-027). For
-        `claude_code`, whose format has no per-entry flag, the toggle is
-        rejected with 422 (`MCP_ENTRY_TOGGLE_UNSUPPORTED`). The `coffer`
-        entry is protected (422, `MCP_ENTRY_PROTECTED`).
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/McpEntryPatch" }
-      responses:
-        "204":
-          description: No Content
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "422": { $ref: "#/components/responses/UnprocessableEntity" }
-    delete:
-      tags: [agents]
-      operationId: deleteAgentMcpEntry
-      summary: Remove one MCP entry from the agent's config file
-      description: |
-        Edits only the entry's source file with the atomic-write + `.bak`
-        machinery and records an `agent_mcp_entry_removed` audit entry
-        (FR-026). When the same name exists in several files (claude_code),
-        the `source` query parameter disambiguates; omitting it then is
-        rejected with 422 (`MCP_ENTRY_SOURCE_AMBIGUOUS`). The `coffer` entry
-        is not removable here (422, `MCP_ENTRY_PROTECTED`) — it is managed by
-        the `/mcp-install` operations.
-      parameters:
-        - in: query
-          name: source
-          required: false
-          schema: { type: string }
-          description: Config-file key the entry lives in, when ambiguous.
-      responses:
-        "204":
-          description: No Content
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "422": { $ref: "#/components/responses/UnprocessableEntity" }
-
   /agents/{name}/mcp-entries/{entry}/adopt:
     parameters:
       - in: path
@@ -450,6 +394,8 @@ paths:
         inventory is read-only from `installed_plugins.json` /
         `known_marketplaces.json`, with enabled state from `settings.json`
         `enabledPlugins`. Parse failures degrade to `parse_errors` (FR-030).
+        Read-only: nothing here is written back, and there is no web UI on this
+        route — enable/disable and uninstall belong to the agent's own tooling.
       responses:
         "200":
           description: OK
@@ -458,58 +404,6 @@ paths:
               schema: { $ref: "#/components/schemas/PluginsOut" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
-
-  /agents/{name}/plugins/{pluginId}:
-    parameters:
-      - in: path
-        name: name
-        required: true
-        schema: { type: string }
-      - in: path
-        name: pluginId
-        required: true
-        schema: { type: string }
-        description: Plugin id, `<name>@<marketplace>`.
-    patch:
-      tags: [agents]
-      operationId: toggleAgentPlugin
-      summary: Enable or disable a plugin
-      description: |
-        Writes only the documented config surface — the Codex entry's
-        `enabled` field in `config.toml`; the Claude Code `enabledPlugins`
-        map in `settings.json` — and never the agents' internal state files
-        (FR-032). Audited as `agent_plugin_toggled`.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/PluginPatch" }
-      responses:
-        "204":
-          description: No Content
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "422": { $ref: "#/components/responses/UnprocessableEntity" }
-    delete:
-      tags: [agents]
-      operationId: uninstallAgentPlugin
-      summary: Uninstall a plugin
-      description: |
-        Uninstalls a plugin, dispatching on the agent's uninstall strategy.
-        For Codex, removes the `[plugins."…"]` entry from `config.toml` and
-        deletes the plugin's cache directory. For Claude Code, delegates to
-        `claude plugin uninstall <id>` — Coffer never hand-writes Claude's
-        internal `installed_plugins.json`; the CLI owns that state. Audited as
-        `agent_plugin_uninstalled` (FR-033). Rejected with 422
-        (`PLUGIN_UNINSTALL_UNSUPPORTED`) when the agent can't uninstall or the
-        required CLI is not on PATH; a CLI uninstall that errors returns 422
-        (`PLUGIN_UNINSTALL_FAILED`) with the CLI's message.
-      responses:
-        "204":
-          description: No Content
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /agents/{name}/mcp-install:
     parameters:
@@ -558,168 +452,6 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/McpInstallStatus" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
-  /agents/{name}/hook-install:
-    parameters:
-      - in: path
-        name: name
-        required: true
-        schema: { type: string }
-    get:
-      tags: [agents]
-      operationId: getAgentHookInstallStatus
-      summary: Whether Coffer's lifecycle hooks are installed in this agent
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/HookInstallStatus" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-    post:
-      tags: [agents]
-      operationId: installAgentHook
-      summary: Install Coffer's session-context injection into this agent
-      description: |
-        Installs the injection mechanism the agent's manifest declares
-        (ADR-042). SHELL_COMMAND (Claude Code `settings.json` Start+End; Codex
-        and Cursor `hooks.json` Start only): writes a `coffer-hook` command
-        entry (absolute path + `--agent <name>` args, plus `--dialect/--event`
-        for the cursor flavor). INSTRUCTIONS_BLOCK (Hermes, FR-047): renders
-        the session-context payload into a marker block in `SOUL.md`.
-        PLUGIN_DROP (opencode, FR-048): drops `coffer-session-context.js` into
-        the auto-loaded `plugin/` directory. All writes are atomic with a
-        `.bak` backup, idempotent (Coffer's own entry/block/file is replaced in
-        place), and never touch user-authored content. Returns 422 if the
-        coffer-hook binary cannot be resolved, or if the agent type declares no
-        context injection (`HOOK_INSTALL_UNSUPPORTED`).
-      responses:
-        "200":
-          description: Installed (or already installed)
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/HookInstallStatus" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "422": { $ref: "#/components/responses/UnprocessableEntity" }
-    delete:
-      tags: [agents]
-      operationId: uninstallAgentHook
-      summary: Remove Coffer's lifecycle hooks from this agent
-      description: Removes only Coffer's entries/block/file. No-op success when not installed.
-      responses:
-        "200":
-          description: Uninstalled (or was not installed)
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/HookInstallStatus" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
-  /agents/{name}/session-context:
-    parameters:
-      - in: path
-        name: name
-        required: true
-        schema: { type: string }
-      - in: query
-        name: cwd
-        required: false
-        schema: { type: string }
-        description: The session's working directory (resolves the project scope).
-    get:
-      tags: [agents]
-      operationId: getAgentSessionContext
-      summary: SessionStart rules bundle to inject as additional context
-      description: |
-        Returns the markdown rules bundle (project + global rules plus the two
-        seeded built-in rules) the installed `coffer-hook` injects at
-        SessionStart. Runtime-only — nothing is written to the agent's files.
-        Bounded to ≤10000 chars.
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: false
-                required: [additional_context]
-                properties:
-                  additional_context: { type: string }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
-  /agents/{name}/native-memory:
-    parameters:
-      - in: path
-        name: name
-        required: true
-        schema: { type: string }
-    get:
-      tags: [agents]
-      operationId: listAgentNativeMemory
-      summary: List the agent's OWN native per-project memory stores
-      description: |
-        Read-only scan of the coding agent's own native per-project memory —
-        distinct from the `instructions` config files of FR-013 (CLAUDE.md /
-        AGENTS.md are human-authored instructions; this is the agent's
-        self-written memory store). For `claude_code` these live at
-        `<config_dir>/projects/<slug>/memory/*.md` (FR-040). Each store carries
-        a readable `project` label decoded from the slug, a best-effort decoded
-        `path` (the slug decode is lossy and may be null), the real
-        `memory_dir`, and an `item_count` of `.md` files excluding `MEMORY.md`.
-        Derived at read time, never stored; the agent's store is never written.
-        An agent type with no native memory layout (`codex`), or one whose
-        `projects/` directory is absent, returns an empty list. Read-only —
-        emits no audit event (FR-011).
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/NativeMemoryListResponse" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
-  /agents/{name}/native-memory/import:
-    parameters:
-      - in: path
-        name: name
-        required: true
-        schema: { type: string }
-    post:
-      tags: [agents]
-      operationId: importAgentNativeMemory
-      summary: Adopt a native memory store into the matching Coffer project memory
-      description: |
-        Reads the store's fact files (skipping `MEMORY.md`), resolves the REAL
-        project path — the decoded slug when it exists on disk, else the `cwd`
-        recorded in a sibling transcript `.jsonl` (the slug decode is lossy) —
-        and writes each fact as a project-scoped Coffer memory fact into the
-        project store's `knowledge/inbox/` lane (like a batch of `remember`s; a
-        trusted import may write a note up to the 32768-character domain
-        ceiling). It then triggers spec 007's organizer as a BACKGROUND task —
-        a bulk import is dozens of sequential internal-LLM calls and must not
-        block the request (FR-041). The imported facts audit through spec 007's
-        existing memory write events; the import adds no new 004 audit event. A
-        store outside any git project (no mappable Coffer project) yields
-        `imported=0`, `store=null`, `project_path=null`, `organized=false` — it
-        corrupts no inbox and is not an error.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/NativeMemoryImportRequest" }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/NativeMemoryImportResult" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
@@ -823,6 +555,9 @@ paths:
         counterpart to the in-app folder browser (`/fs/browse`). `available:false`
         means this host has no native dialog tool (caller falls back to the in-app
         browser); `available:true` with `path:null` means the user cancelled.
+        This is the ONLY native dialog the daemon opens: the open-file and
+        save-file dialogs are gone (FR-042) — the browser's own
+        `<input type="file">` / `<a download>` cover those better.
       requestBody:
         required: true
         content:
@@ -836,54 +571,6 @@ paths:
               schema: { $ref: "#/components/schemas/FsPickFolderOut" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
-  /fs/pick-file:
-    post:
-      tags: [fs]
-      operationId: pickFile
-      summary: Open the host's native open-file dialog
-      description: |
-        Open the OS-native open-file dialog via the loopback daemon (macOS
-        `osascript`, Linux `zenity`/`kdialog`) and return the chosen absolute
-        file path (ADR-036). `available:false` means this host has no native
-        dialog tool (caller falls back to a typed path); `available:true` with
-        `path:null` means the user cancelled.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/FsPickFileRequest" }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/FsFilePickOut" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-
-  /fs/save-file:
-    post:
-      tags: [fs]
-      operationId: saveFile
-      summary: Open the host's native save-file dialog
-      description: |
-        Open the OS-native save-file dialog via the loopback daemon (macOS
-        `osascript`, Linux `zenity`/`kdialog`) with an optional suggested file
-        name and return the chosen destination path (ADR-036). `available:false`
-        means this host has no native dialog tool (caller falls back to a typed
-        path); `available:true` with `path:null` means the user cancelled.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/FsSaveFileRequest" }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/FsFilePickOut" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-
 components:
   securitySchemes:
     cofferToken:
@@ -894,7 +581,7 @@ components:
   schemas:
     AgentType:
       type: string
-      enum: [claude_code, codex, opencode, hermes, cursor, openclaw]
+      enum: [claude_code, codex]
       description: >
         Supported agent product identifiers (the capability manifest). Each
         value covers both the CLI and the app/IDE form of that product (shared
@@ -941,13 +628,6 @@ components:
           description: >-
             Skill names excluded from delivery while following. Replaces the
             whole list when present.
-        disable_native_memory:
-          type: boolean
-          description: >-
-            Slice 6 opt-in toggle. When true, Coffer disables the agent's native
-            write-side memory in its config file (Claude `autoMemoryEnabled`;
-            Codex `features.memories` / `memories.generate_memories`) so Coffer is
-            the single shared memory store. Toggling back to false restores it.
         model: { type: string, nullable: true, description: "Per-agent model binding (spec 011 amendment 2026-06-22b) → ANTHROPIC_MODEL / Codex model." }
         fast_model: { type: string, nullable: true, description: "Fast slot → ANTHROPIC_SMALL_FAST_MODEL (anthropic only). Explicit null clears it." }
         wire_api: { type: string, nullable: true, description: "Codex chat/responses choice for this agent's binding." }
@@ -961,7 +641,6 @@ components:
           config_dir,
           follow_all_skills,
           skill_exclusions,
-          disable_native_memory,
           model,
           fast_model,
           wire_api,
@@ -984,9 +663,6 @@ components:
           type: array
           items: { type: string }
           description: "Skill names excluded from delivery while following."
-        disable_native_memory:
-          type: boolean
-          description: "Slice 6: whether the agent's native write-side memory is disabled. Defaults to false."
         model: { type: string, nullable: true, description: "Per-agent model binding (null = unbound, falls back to the active connection during rollout)." }
         fast_model: { type: string, nullable: true }
         wire_api: { type: string, nullable: true }
@@ -1217,7 +893,7 @@ components:
             null for claude_code, whose format has no per-entry flag.
         is_coffer:
           type: boolean
-          description: "True for Coffer's own gateway entry (protected)."
+          description: "True for Coffer's own gateway entry (never adoptable)."
         matches_resource:
           type: string
           nullable: true
@@ -1235,13 +911,6 @@ components:
         parse_errors:
           type: array
           items: { $ref: "#/components/schemas/ParseError" }
-
-    McpEntryPatch:
-      type: object
-      required: [enabled]
-      additionalProperties: false
-      properties:
-        enabled: { type: boolean }
 
     McpEntryAdopt:
       type: object
@@ -1335,20 +1004,6 @@ components:
         parse_errors:
           type: array
           items: { $ref: "#/components/schemas/ParseError" }
-        can_uninstall:
-          type: boolean
-          default: false
-          description: >-
-            Whether in-app uninstall is available for this agent now — the
-            capability allows it AND, for CLI-strategy agents (Claude Code), the
-            agent's plugin CLI is on PATH. Drives the UI's uninstall affordance.
-
-    PluginPatch:
-      type: object
-      required: [enabled]
-      additionalProperties: false
-      properties:
-        enabled: { type: boolean }
 
     McpInstallStatus:
       type: object
@@ -1361,102 +1016,6 @@ components:
           type: string
           nullable: true
           description: "The resolved coffer-mcp-shim command written/found, when installed."
-
-    HookInstallStatus:
-      type: object
-      required: [installed]
-      properties:
-        installed:
-          type: boolean
-          description: "Whether Coffer's `coffer-hook` entry is present for every managed event."
-        command:
-          type: string
-          nullable: true
-          description: "The resolved `coffer-hook --agent <name>` command, when installed."
-
-    NativeMemoryStore:
-      type: object
-      required: [project, path, memory_dir, item_count]
-      description: >-
-        One of the coding agent's OWN per-project native memory directories
-        (claude_code: `<config_dir>/projects/<slug>/memory`) — derived at read
-        time, never stored; the agent's store is never written (FR-040).
-      properties:
-        project:
-          type: string
-          description: "Readable project label decoded from the on-disk slug."
-        path:
-          type: string
-          nullable: true
-          description: >-
-            Best-effort decoded absolute project path. The slug decode is lossy
-            (path separators and slug encoding are ambiguous), so this is null
-            when the path cannot be reconstructed.
-        memory_dir:
-          type: string
-          description: "The real on-disk memory directory (the scan's source of truth)."
-        item_count:
-          type: integer
-          description: "Count of `.md` fact files in the store, excluding `MEMORY.md`."
-
-    NativeMemoryListResponse:
-      type: object
-      required: [items]
-      properties:
-        items:
-          type: array
-          items: { $ref: "#/components/schemas/NativeMemoryStore" }
-
-    NativeMemoryImportRequest:
-      type: object
-      required: [memory_dir]
-      additionalProperties: false
-      properties:
-        memory_dir:
-          type: string
-          description: >-
-            Absolute path to the native memory store to adopt (the `memory_dir`
-            of a NativeMemoryStore from the scan).
-        project_path:
-          type: string
-          nullable: true
-          description: >-
-            For Codex's shared global store (one store, many project rows), the
-            chosen row's project cwd (its `path`) — only the Task-Group blocks
-            routed to it are imported. Omitted/null for Claude Code, where
-            `memory_dir` alone identifies the project.
-
-    NativeMemoryImportResult:
-      type: object
-      required: [imported, skipped, store, project_path, organized]
-      description: >-
-        Outcome of adopting one native memory store. A store that cannot be
-        mapped to a Coffer project (non-git project, or an unresolvable lossy
-        slug with no transcript `cwd`) yields imported=0 with store and
-        project_path null and organized=false (FR-041).
-      properties:
-        imported:
-          type: integer
-          description: "Number of fact files written into the project store's `knowledge/inbox/` lane."
-        skipped:
-          type: integer
-          description: "Number of fact files skipped (e.g. unparseable)."
-        store:
-          type: string
-          nullable: true
-          description: >-
-            Resolved Coffer project memory store name (e.g. `project-…`); null
-            when the project cannot be mapped to a Coffer store.
-        project_path:
-          type: string
-          nullable: true
-          description: "The resolved real project path; null when unresolvable."
-        organized:
-          type: boolean
-          description: >-
-            Whether spec 007's organizer was scheduled as a background task
-            (false when the store could not be resolved, or no items were
-            imported).
 
     FsEntry:
       type: object
@@ -1549,40 +1108,6 @@ components:
           nullable: true
           description: "The chosen absolute directory, or null if cancelled/unavailable."
 
-    FsPickFileRequest:
-      type: object
-      properties:
-        start:
-          type: string
-          nullable: true
-          description: "Absolute path to seed the dialog's starting directory."
-
-    FsSaveFileRequest:
-      type: object
-      properties:
-        suggested_name:
-          type: string
-          nullable: true
-          description: "Default file name to pre-fill in the save dialog."
-        start:
-          type: string
-          nullable: true
-          description: "Absolute path to seed the dialog's starting directory."
-
-    FsFilePickOut:
-      type: object
-      required: [available, path]
-      properties:
-        available:
-          type: boolean
-          description: >-
-            Whether this host has a native file-dialog tool. When false the
-            caller falls back to a typed path.
-        path:
-          type: string
-          nullable: true
-          description: "The chosen absolute file path, or null if cancelled/unavailable."
-
     ErrorOut:
       type: object
       required: [error]
@@ -1625,7 +1150,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorOut" }
     UnprocessableEntity:
-      description: Validation failure (config_dir not writable, privileged path, unknown type, malformed content, unsupported toggle/uninstall, protected/ambiguous MCP entry, unresolved adopt secrets, unparseable config file, ...)
+      description: Validation failure (config_dir not writable, privileged path, unknown type, malformed content, protected/ambiguous MCP entry, unresolved adopt secrets, unparseable config file, ...)
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorOut" }

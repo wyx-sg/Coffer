@@ -42,10 +42,7 @@ class AuditEventType(StrEnum):
     AGENT_MCP_UNINSTALLED = "agent_mcp_uninstalled"
     # agent workspace (specs 004/005 amendment)
     AGENT_CONFIG_FILE_DELETED = "agent_config_file_deleted"
-    AGENT_MCP_ENTRY_REMOVED = "agent_mcp_entry_removed"
     AGENT_MCP_ENTRY_ADOPTED = "agent_mcp_entry_adopted"
-    AGENT_PLUGIN_TOGGLED = "agent_plugin_toggled"
-    AGENT_PLUGIN_UNINSTALLED = "agent_plugin_uninstalled"
     # spec 005-skill-manager
     SKILL_IMPORTED = "skill_imported"
     SKILL_UPDATED = "skill_updated"
@@ -92,11 +89,6 @@ class AuditEventType(StrEnum):
     # spec 011-provider-switching
     PROVIDER_SWITCHED = "provider_switched"
     PROVIDER_INTERNAL_DEFAULT_SET = "provider_internal_default_set"
-    # spec 007 slice 6 — rules injection + native-memory disable
-    AGENT_HOOK_INSTALLED = "agent_hook_installed"
-    AGENT_HOOK_UNINSTALLED = "agent_hook_uninstalled"
-    AGENT_NATIVE_MEMORY_DISABLED = "agent_native_memory_disabled"
-    AGENT_NATIVE_MEMORY_RESTORED = "agent_native_memory_restored"
 
 
 @dataclass

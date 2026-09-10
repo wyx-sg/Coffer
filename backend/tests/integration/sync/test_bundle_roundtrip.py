@@ -469,16 +469,12 @@ async def test_ciphertext_travels_but_the_key_never_does(alice, bob, tmp_path) -
     assert summary.locked_refs == ["mcp/files/token"]
 
     # The out-of-band key bootstrap unlocks it.
-    key_file = tmp_path / "master.key"
-    await alice.service.export_key(str(key_file))
-    assert await bob.service.import_key(str(key_file)) == []
+    assert await bob.service.import_key(await alice.service.export_key()) == []
     assert bob.cred_store().get("mcp/files/token") == "s3cret"
 
 
 @pytest.mark.asyncio
 async def test_key_fingerprints_match_after_the_bootstrap(alice, bob, tmp_path) -> None:  # type: ignore[no-untyped-def]
     assert bob.service.key_fingerprint() is None
-    key_file = tmp_path / "master.key"
-    await alice.service.export_key(str(key_file))
-    await bob.service.import_key(str(key_file))
+    await bob.service.import_key(await alice.service.export_key())
     assert bob.service.key_fingerprint() == alice.service.key_fingerprint()

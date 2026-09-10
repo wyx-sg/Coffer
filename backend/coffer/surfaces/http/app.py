@@ -63,6 +63,7 @@ from coffer.surfaces.http.app_mcp_composition import (
 )
 from coffer.surfaces.http.async_batch_wiring import start_async_batches, stop_async_batches
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.auto_organize_wiring import start_auto_organize, stop_auto_organize
 from coffer.surfaces.http.channel_wiring import wire_channel_kind
 from coffer.surfaces.http.consolidate_wiring import run_store_consolidation
 from coffer.surfaces.http.credential_composition import (
@@ -71,8 +72,6 @@ from coffer.surfaces.http.credential_composition import (
     run_legacy_keychain_migration,
 )
 from coffer.surfaces.http.dependencies import (
-    get_agent_memory_import_service,
-    get_agent_service,
     get_invocation_repo_optional,
     get_master_key_manager,
     get_mcp_session_factory,
@@ -94,7 +93,6 @@ from coffer.surfaces.http.mcp.protocol_routes import (
 )
 from coffer.surfaces.http.merge_wiring import wire_merge
 from coffer.surfaces.http.migrations_runner import run_migrations
-from coffer.surfaces.http.native_memory_import_wiring import wire_native_memory_import
 from coffer.surfaces.http.organize_wiring import wire_organize
 from coffer.surfaces.http.provider_wiring import (
     run_provider_projection_sweep,
@@ -103,7 +101,6 @@ from coffer.surfaces.http.provider_wiring import (
 from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
 from coffer.surfaces.http.reorg_wiring import wire_reorg
 from coffer.surfaces.http.routing import include_all_routers
-from coffer.surfaces.http.session_end_wiring import start_auto_organize, stop_auto_organize
 from coffer.surfaces.http.sync_wiring import start_sync
 from coffer.surfaces.http.wiring import build_substrate, wire_chat
 
@@ -221,16 +218,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.mcp_session_supervisors = session_supervisors
 
     # Internal-LLM knowledge consumers: the consolidation organizer
-    # (FR-027..031), the agentic reorg (FR-033/034), the AI-assisted same-project
-    # store merge (FR-056-059, AFTER reorg so its post-merge pass can reach it),
-    # and native-memory adoption (spec 004 FR-041, AFTER organize so the import
-    # sink can reach the organizer). One place, so the composition root keeps a
-    # single internal-LLM call site.
+    # (FR-027..031), the agentic reorg (FR-033/034), and the AI-assisted
+    # same-project store merge (FR-056-059, AFTER reorg so its post-merge pass
+    # can reach it). One place, so the composition root keeps a single
+    # internal-LLM call site.
     _credential_resolver = make_credential_resolver(credential_store)
     wire_organize(knowledge_service, get_provider_service(), _credential_resolver)
     wire_reorg(knowledge_service, get_provider_service(), _credential_resolver)
     wire_merge(knowledge_service, get_provider_service(), _credential_resolver)
-    wire_native_memory_import(knowledge_service, get_agent_service())
 
     # Wire the channel kind (spec 009) AFTER wire_chat: the inbound processor
     # drives turns through the chat service handles wire_chat published.
@@ -276,12 +271,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.retention_worker = worker
     app.state.retention_worker_task = worker_task
 
-    # Auto session-end organize → 固化 pipeline (007 FR-035): default-ON.
+    # Auto organize → 固化 pipeline (007 FR-035): default-ON.
     start_auto_organize(app, knowledge_service, get_organizer_service())
-    await start_async_batches(  # document re-embed, native import — off the request path
+    await start_async_batches(  # document re-embed — off the request path
         app,
         knowledge_service=knowledge_service,
-        import_service=get_agent_memory_import_service(),
     )
 
     # Vault export/import (spec 010). Nothing runs in the background: the

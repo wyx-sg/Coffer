@@ -5,7 +5,7 @@
 **Status**: Partially superseded by [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md) (2026-06-18) — the native-projection half of the decision below was removed; Coffer never writes an agent's own native memory files. The shared-store half stands, and is what this ADR records. Re-expressed in knowledge-layer vocabulary 2026-09-10 (see Revision history).
 **Date**: 2026-06-09 (revised 2026-09-10; see Revision history)
 **Deciders**: Yuxing Wu
-**Related**: spec `007-memory` (the Knowledge Layer spec), [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md), [ADR-007](ADR-007-everything-is-a-resource-kind.md), [ADR-009](ADR-009-cross-platform-skill-delivery.md), [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md), [ADR-035](ADR-035-adopt-native-memory.md), [ADR-037](ADR-037-rules-runtime-injection.md)
+**Related**: spec `007-memory` (the Knowledge Layer spec), [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md), [ADR-007](ADR-007-everything-is-a-resource-kind.md), [ADR-009](ADR-009-cross-platform-skill-delivery.md), [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md)
 
 ## Context
 
@@ -67,16 +67,19 @@ Concrete shape, as it stands today:
   decide which store a fact belongs to before it can search for it. **Adding a
   new agent adds no knowledge-layer code at all** — the tools are already
   agent-agnostic.
-- **Ambient delivery without touching the agent's files.** The gap named in
-  Context (native loads for free, MCP does not) is closed by
-  [ADR-037](ADR-037-rules-runtime-injection.md): the `rules` lane is injected
-  into the session at SessionStart, and handoff is pulled on demand via
-  `coffer__resume`. Injection is runtime state, so it achieves the ambient
-  effect while writing no file the agent owns.
-- **Import, never project.** Where an agent has already accumulated its own
-  native memory, Coffer reads it and lets the user adopt it **into** the shared
-  store once ([ADR-035](ADR-035-adopt-native-memory.md)). The flow is
-  one-directional and inbound; nothing flows back out into the agent's files.
+- **Ambient delivery without touching the agent's files.** _Withdrawn
+  2026-09-10._ The gap named in Context — native memory loads for free, MCP does
+  not — was to be closed by a SessionStart shell hook that injected the `rules`
+  lane as runtime context. That mechanism shipped and was never installed on any
+  agent, so it is removed (spec 004 FR-043…FR-048). The gap is therefore **open
+  again**: nothing pushes knowledge into a session, and an agent reaches the
+  shared store only by calling `coffer__recall` / `coffer__search` itself. The
+  rest of this ADR stands; this bullet does not.
+- **Import, never project.** _Withdrawn 2026-09-10._ Coffer could read an
+  agent's own accumulated native memory and let the user adopt it inward, once.
+  That too shipped unused and is removed (spec 004 FR-040/FR-041). The
+  *direction* it established still holds — nothing flows back out into the
+  agent's files — but there is no longer a path in either.
 
 **The mechanism this ADR originally chose was different, and was removed.** It
 projected the canonical store *outward* into each agent's native location — an
@@ -113,13 +116,15 @@ decision itself.
 
 **Negative**
 
-- **Retrieval is deliberate, not automatic.** An agent sees a fact when it
-  calls `coffer__search` (or when the rules lane is injected). Only the rules
-  and handoff paths are ambient; ordinary entries are not pushed into context.
-  This is the cost of not writing the agent's files, and it is accepted.
-- **The user must adopt existing native memory explicitly.** Facts already
-  sitting in an agent's own store do not migrate on their own; ADR-035's import
-  is a user action.
+- **Retrieval is deliberate, not automatic.** An agent sees a fact only when it
+  calls `coffer__search`. Since the session-start injection was removed
+  (2026-09-10) *nothing* is ambient — not even the rules lane, which is now read
+  on demand through its own endpoint. This is the full cost of not writing the
+  agent's files, and it is accepted knowingly: the ambient path had never
+  actually run.
+- **Facts in an agent's own native store stay there.** They do not migrate on
+  their own, and since the import was removed there is no longer a way to bring
+  them across.
 - **Coffer's tools are the only write path.** An agent that cannot speak MCP
   cannot contribute to the shared store.
 

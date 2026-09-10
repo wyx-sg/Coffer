@@ -7,7 +7,7 @@
 **Status**: Accepted —— 已交付
 **目录名说明**：本规范位于 `specs/007-memory/`，这是**历史遗留**。目录名就是 spec id：所有入链以及 `scripts/audit_acceptance.py`（按目录名匹配验收标记）都依赖它，因此功能改名时刻意没有改目录。请把 `007-memory` 读作「Knowledge Layer 规范」。
 
-**Input**: Coffer 只存一样东西 —— **知识（knowledge）** —— 并把它提供给用户运行的每一个 agent。知识有两个来路：agent **写入**（一条事实、一个决定、一项值得跨会话存活的偏好），或人 **摄取**（任意格式的文件，转换为 Markdown）。它以每条一个 Markdown 文件的形式存放在磁盘上，是**唯一真相源**；SQLite（`documents`、`chunks`、FTS5、sqlite-vec）只是可重建的派生索引（[ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md)）。一个资源 kind `knowledge`，三种 scope（`global`、`project-<ULID>`、用户命名的集合），每个 scope 一套固定的 lane，一套检索引擎且其模式对外不可见（[ADR-034](../../docs/decisions/ADR-034-retrieval-mode-is-internal.md)），以及八个 `coffer__*` MCP 工具。Coffer 保留自己的规范化格式，绝不写入 agent 的原生记忆文件 —— 规则只通过**注入**到达会话（[ADR-026](../../docs/decisions/ADR-026-memory-via-mcp-not-native-projection.md)）。
+**Input**: Coffer 只存一样东西 —— **知识（knowledge）** —— 并把它提供给用户运行的每一个 agent。知识有两个来路：agent **写入**（一条事实、一个决定、一项值得跨会话存活的偏好），或人 **摄取**（任意格式的文件，转换为 Markdown）。它以每条一个 Markdown 文件的形式存放在磁盘上，是**唯一真相源**；SQLite（`documents`、`chunks`、FTS5、sqlite-vec）只是可重建的派生索引（[ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md)）。一个资源 kind `knowledge`，三种 scope（`global`、`project-<ULID>`、用户命名的集合），每个 scope 一套固定的 lane，一套检索引擎且其模式对外不可见（[ADR-034](../../docs/decisions/ADR-034-retrieval-mode-is-internal.md)），以及八个 `coffer__*` MCP 工具。Coffer 保留自己的规范化格式，绝不写入 agent 的原生记忆文件（[ADR-026](../../docs/decisions/ADR-026-memory-via-mcp-not-native-projection.md)）；知识只在 agent 经 MCP **主动索取**时才到达会话 —— 没有任何东西被推进去。
 
 ## 为什么它是一层（2026-09-10 的合并）
 
@@ -140,15 +140,17 @@
 
 ---
 
-### User Story 9 —— 规则在每次会话开始时环境式到达（优先级 P2）
+### User Story 9 —— 规则自成一条 lane（优先级 P2）
 
-开发者积累了行为规则（全局「推送前先跑 verify」、项目「这个 repo 通过 `make release` 发版」），希望它们在**每次会话开始时自动**摆在 agent 面前 —— 上午的 Claude Code 与下午的 Codex 都是 —— 而不需要 agent 记得去搜索，也**不需要 Coffer 写入 agent 自己的记忆或指令文件**（[ADR-026](../../docs/decisions/ADR-026-memory-via-mcp-not-native-projection.md)）。由 Coffer 安装的 **SessionStart hook** 向 Coffer 索取规则包（始终生效的全局规则，加上 cwd 解析到 git 项目时的当前项目规则），并**仅以上下文形式**注入。规则包还携带两条 Coffer 内置种子规则 —— 调 `coffer__resume()` 接续既有工作，以及优先用 Coffer 的共享知识而非 agent 原生记忆 —— 外加一份该项目 scope 的仅标题环境索引。想要彻底分离的开发者可以选择开启 `disable_native_memory`。
+开发者积累了行为规则（全局「推送前先跑 verify」、项目「这个 repo 通过 `make release` 发版」），希望它们**作为规则**保留 —— 一份可读的常驻指令清单 —— 而不是被揉进主题文档的散文里。organizer 识别出规则形态的笔记后把它**追加**进该 scope 的 `rules/` lane，而不是并入主题文档。该 lane 位于 scope 根、不参与检索，并**按需**通过它自己的读取面读取：`GET /api/v1/knowledge/{scope}/rules` 或 `coffer knowledge rules <scope>`。Coffer 从不写入 agent 自己的记忆或指令文件（[ADR-026](../../docs/decisions/ADR-026-memory-via-mcp-not-native-projection.md)）。
 
-**为什么是这个优先级**：agent 从不读的规则毫无用处。会话开始时的环境式注入，是在不触碰原生文件、不依赖搜索自觉的前提下让流程性知识在场的非侵入方式。它是 P2 因为它建立在 rules lane（FR-036）与共享核心之上：注入投递的是已经存在的规则，而缺失或失败的注入从不阻塞 agent。
+**为什么是这个优先级**：流程性知识与主题性知识形态不同 —— 规则是常驻指令，不是检索命中 —— 所以它值得一条被检索放过的 lane。它是 P2 因为它建立在 organizer 与共享核心之上：这条 lane 存放的是既有写入路径已经产出的规则。
 
-**独立可测**：注册一个 Claude Code agent，安装其 hook，写入一条全局规则与一条项目规则，然后在该 git 项目内开一个会话，观察注入的 `additionalContext` 同时包含两者与两条种子规则 —— 且没有写入 `~/.claude/CLAUDE.md`。对 Codex 重复一次。停掉 daemon 再开会话：hook 什么也不打印并以 0 退出。
+**这个 story 不再覆盖什么 —— 以及代价。** 规则过去是**环境式**到达的。Coffer 会把一个 `coffer-hook` SessionStart hook 安装进每个受管 agent；每次会话开始（以及 resume/clear/compact）时，hook 调用 `GET /api/v1/agents/{name}/session-context?cwd=<cwd>`，把该 scope 的规则、两条 Coffer 内置种子规则，以及一份该项目知识的仅标题索引，作为 `additionalContext` 注入。整条投递通道已被**删除** —— FR-049、FR-050、FR-052、FR-055 一并删除，`coffer-hook` 二进制、hook 安装/卸载面、`session-context` 路由与规则包组装器也随之删除。现在没有任何东西再往 agent 会话里推送内容。完整代价陈述见 Functional Requirements 下的「投递 —— 已删除」。
 
-**代表性场景**：规则包在会话开始时仅作为上下文注入；规则包携带两条内置种子规则；注入失败或缺失从不阻塞 agent；disable_native_memory 关闭原生记忆并可恢复；organizer 把规则形态的笔记路由进 rules lane；rules 读取面返回已存规则。
+**独立可测**：走普通写入路径写一条规则形态的笔记，跑 `organize`，确认它被**追加**进 `rules/rules.md` 而不是并入主题文档，且结果里计入 `rules_appended`。再用 `coffer knowledge rules <scope>` 与 `GET /api/v1/knowledge/{scope}/rules` 读回来，并确认没有规则的 scope 返回空而不是报错。
+
+**代表性场景**：organizer 把规则形态的笔记路由进 rules lane；rules 读取面返回已存规则。
 
 ---
 
@@ -181,9 +183,7 @@ Entries 与 Documents 是两个 tab、两套计数，恰恰因为它们来路不
 - **条目正文为空或过长**：在 API 边界拒绝（`max_entry_chars`，默认 8192，硬上限 32768）；不落任何持久化。
 - **在新分支上 resume**：`coffer__resume` 返回 `found=false` 而不是报错；不编造任何内容。
 - **git 项目之外的 handoff**：没有 project scope 也没有分支，因此 `coffer__resume` 返回 `found=false`，`coffer__set_handoff` 被拒绝（不存在全局 handoff）。
-- **daemon 未运行时的注入**：SessionStart hook 什么也不打印并以 0 退出 —— 会话无规则包启动，永不被阻塞。
-- **注入时 cwd 在 git 项目之外**：规则包仍携带全局规则与两条内置种子规则；没有项目规则可包含。
-- **关闭 disable_native_memory / 卸载**：恢复 agent 先前的原生记忆设置；默认（关）从不触碰原生记忆（ADR-026）。
+- **agent 从不索取规则**：什么也不会发生。会话开始的投递通道被移除后，一个不调 `coffer__recall` / `coffer__search`（或不读 `GET /api/v1/knowledge/{scope}/rules`）的 agent 就是永远看不到这条 lane。这是被接受的后果，不是 bug —— 见「投递 —— 已删除」。
 - **grep 与摄取原件**：`.raw/` 以点号开头，ripgrep 会跳过它。否则每个摄取文档都会产生两条 grep 命中 —— Markdown 与它转换自的原件。
 - **被跟踪的源文件移动或删除**：`check-sources` 报告 `missing`，从不崩溃。`source_path` 是本机局部的，因此在另一台机器上得到 `missing` 是预期且良性的。
 - **并发搜索**：对同一 scope 的多次搜索独立运行；没有按 scope 的锁拖慢读延迟。
@@ -359,7 +359,7 @@ Entries 与 Documents 是两个 tab、两套计数，恰恰因为它们来路不
 
 - **Given** 一个 `rules/rules.md` 中含一条或多条规则的知识 scope，
 - **When** 调用 `GET /api/v1/knowledge/{scope}/rules`（或 `coffer knowledge rules <scope>`），
-- **Then** 响应原样返回规则文本（会话开始注入所读取的那个面），而没有规则的 scope 返回空/`null` 正文而不是报错。
+- **Then** 响应原样返回规则文本（该 lane 离开磁盘的唯一途径），而没有规则的 scope 返回空/`null` 正文而不是报错。
 
 ### Scenario: handoff scenes are listed per branch for a store
 
@@ -372,30 +372,6 @@ Entries 与 Documents 是两个 tab、两套计数，恰恰因为它们来路不
 - **Given** 一个 organizer 已在 scope 根写出 `consolidation-log.md` 的知识 scope，
 - **When** 调用 `GET /api/v1/knowledge/{scope}/consolidation-log`（按 scope 名寻址，而非 cwd），
 - **Then** 响应返回变更日志 `text` 及其绝对磁盘 `path` 与 `folder_path`；没有日志的 scope 返回 `text = null` 与 HTTP 200（绝不是 404）。
-
-### Scenario: rules bundle is injected at session start as context only
-
-- **Given** 一个已安装 Coffer SessionStart hook 的受管 agent（Claude Code 或 Codex），一条全局规则，以及 cwd 所在 git 项目的一条项目规则，
-- **When** 会话开始，hook 调用 `GET /api/v1/agents/{name}/session-context?cwd=<cwd>`，
-- **Then** daemon 返回 `additional_context`，其中先是项目规则、后是全局规则；hook 把它作为 SessionStart 的 `additionalContext` 输出（仅上下文），且**没有**写入 agent 的原生记忆或指令文件（ADR-026）。当 cwd 不在 git 项目内时，规则包只携带全局规则。
-
-### Scenario: the bundle carries the two seeded built-in rules
-
-- **Given** session-context 端点组装规则包（即使该 scope 没有规则），
-- **When** 规则包返回，
-- **Then** 它始终包含两条 Coffer 内置种子规则 —— 调 `coffer__resume()` 接续既有工作，以及优先使用 Coffer 的共享知识工具而非 agent 原生记忆 —— 且 handoff 正文本身**不**被注入（它由 `coffer__resume` 按需拉取）。
-
-### Scenario: a failed or hook-less injection never blocks the agent
-
-- **Given** SessionStart hook 已安装但 daemon 不可达（未运行、超时或任何错误），
-- **When** 会话开始，
-- **Then** hook 什么也不打印并以 0 退出，会话在无注入规则包的情况下启动，agent 从不被阻塞；未安装 hook 的 agent 则根本没有注入。
-
-### Scenario: disable_native_memory turns native memory off and restores it
-
-- **Given** 一个 `disable_native_memory=false`（默认）的受管 agent，
-- **When** 用户把它设为 `true`，
-- **Then** Coffer 写入该 agent 的原生记忆开关（Claude Code `autoMemoryEnabled=false`；Codex `features.memories=false` + `memories.generate_memories=false`），而设回 `false`（或卸载）会恢复先前设置；只要它是 `false`，Coffer 就从不触碰 agent 的原生记忆（ADR-026）。
 
 ### Scenario: merge scan proposes same-project stores
 
@@ -680,17 +656,37 @@ Entries 与 Documents 是两个 tab、两套计数，恰恰因为它们来路不
 - **FR-033**：系统必须提供一个**内部 agentic 重整流程**（`POST /api/v1/knowledge/{scope}/reorg`、`coffer knowledge reorg <scope>`；仅显式触发），由内部 LLM 连接驱动一个有界的 **langgraph `create_react_agent` 循环**处理该 scope 的主题文档 —— 合并重复、拆分过长。其固定工具面是对主题文档的 **list / read / write / supersede**，且**绝不面向 agent**。langchain/langgraph 代码必须限制在 `infrastructure.chat`（importlinter Contract 9）；`application/knowledge` 只经注入的端口触达它。未配置内部连接时是干净的 no-op（`status="no_model"`）；没有主题文档的 scope 同样是 no-op（`status="empty"`）。流程结束后重新生成 `INDEX.md`、协调索引，并记录一条 `memory_reorganized` 审计。
 - **FR-034**：reorg 流程必须**非破坏且增量**。任何移除或替换既有主题文档内容的变更，都必须先把当前版本**归档**到 scope 根的 `superseded/` 墓碑（`superseded/<slug>-<timestamp>.md`）：覆盖式 `write` 先归档旧版，`supersede` 则把文档**移动**过去。墓碑**不参与检索**，但作为可恢复历史**参与同步**。主题文档写入必须保持**原子**，且每次 write/supersede 都追加进 `consolidation-log.md`。这是数据不丢失的保证：没有任何字节能在未被可恢复归档的情况下离开 `knowledge/` lane。
 - **FR-035**：系统必须提供一个**空闲自动整理触发**，在 scope 空闲时于后台自动执行 `organize`（FR-027）—— 在没有 per-agent 断连信号的情况下近似「会话结束」。每次知识写入都（重新）武装一个**防抖**定时器；空闲延迟内不再有写入后，organizer 作为后台任务对变更的 scope 运行。它必须**保守且非阻塞**：（a）**默认开启**，由环境变量提供关闭开关；（b）它必须永不阻塞或破坏 daemon 关停 —— 待触发的定时器被取消，未触发的 inbox 原样留下（不丢东西：检索本就覆盖 inbox，且 `organize` 幂等）；（c）后台流程失败必须被抑制并记日志；（d）未配置内部连接时是干净的 no-op。它不引入**任何新的 REST/CLI 面**，并复用 `memory_organized` 审计。
-- **FR-036**：系统必须提供**流程性 `rules` lane** —— 每个 scope 一份 `rules/rules.md` —— 存放「要这样 / 不要那样」的行为规则。文件较小时该 lane 保持单文件；一旦任一 `rules/*.md` 超过 **100 条规则**，organizer 通过一次性 LLM 调用按主题分类并把它们重分布到按类别的 `rules/<slug>.md`（可递归应用）。新规则继续追加到 `rules/rules.md`；读取面串联**全部 `rules/*.md`**。该 lane 由 **organizer 的分类写入，绝不由 agent 显式指定**：`organize` 期间每条条目的那次 LLM 调用可以额外把某条 inbox 条目分类为**规则**，该条目被**追加**到 `rules/rules.md`（追加成功后才排空 inbox 条目）而不是并入主题文档，结果/审计报告 `rules_appended` 计数。`rules/` lane 位于 scope 根，因此天然**不参与检索** —— 规则**由会话开始的环境式注入投递，而不是由搜索**。该 lane 是真相源且参与同步。系统必须只读暴露已存规则：`GET /api/v1/knowledge/{scope}/rules` 与 `coffer knowledge rules <scope>` 返回规则文本（没有规则时为空/`null`，绝不报错）。
+- **FR-036**：系统必须提供**流程性 `rules` lane** —— 每个 scope 一份 `rules/rules.md` —— 存放「要这样 / 不要那样」的行为规则。文件较小时该 lane 保持单文件；一旦任一 `rules/*.md` 超过 **100 条规则**，organizer 通过一次性 LLM 调用按主题分类并把它们重分布到按类别的 `rules/<slug>.md`（可递归应用）。新规则继续追加到 `rules/rules.md`；读取面串联**全部 `rules/*.md`**。该 lane 由 **organizer 的分类写入，绝不由 agent 显式指定**：`organize` 期间每条条目的那次 LLM 调用可以额外把某条 inbox 条目分类为**规则**，该条目被**追加**到 `rules/rules.md`（追加成功后才排空 inbox 条目）而不是并入主题文档，结果/审计报告 `rules_appended` 计数。`rules/` lane 位于 scope 根，因此天然**不参与检索** —— 规则是常驻指令，不是检索命中。它**按需通过自己的读取面读取**，且**没有任何东西把它推进 agent 会话**：系统必须只读暴露已存规则 —— `GET /api/v1/knowledge/{scope}/rules` 与 `coffer knowledge rules <scope>` 返回规则文本（没有规则时为空/`null`，绝不报错）—— 而这次读取是该 lane 离开磁盘的唯一途径。该 lane 是真相源且参与同步。
 
 **Lane 分类法**
 
 - **FR-048**：自由形式的 `type` 字段**已退役** —— `Lane`（`knowledge` / `rules` / `handoff`）是写入项的**唯一分类轴**。系统必须不在条目实体、文件 frontmatter（`metadata.type`）、`documents.metadata` JSON、`coffer__write` 工具 schema，或 REST/CLI 写入面中携带 `type` 字段。一项的 lane 由**内部路由**（organizer）决定，绝不由写入方提供。
 
-**规则运行时注入与原生记忆（会话 hook）**
+**投递 —— 已删除**
 
-- **FR-049**：系统必须通过 **SessionStart hook** 把 rules lane（FR-036）投递给每个受管 agent，**仅以上下文注入 —— 绝不写原生文件**（[ADR-026](../../docs/decisions/ADR-026-memory-via-mcp-not-native-projection.md)）。Coffer 把 hook 安装进 agent 自己的 hooks 配置（**Claude Code** → `~/.claude/settings.json` 顶层 `hooks`；**Codex** → `~/.codex/hooks.json` —— 同一 JSON schema），只认自己的条目、不动用户的 hook；安装/卸载幂等且原子（`.bak` 备份），并审计 `AGENT_HOOK_INSTALLED`/`AGENT_HOOK_UNINSTALLED`。SessionStart 时 hook 带 daemon token 调用 `GET /api/v1/agents/{name}/session-context?cwd=<cwd>`，daemon 返回**全局规则（始终）**加**当前项目规则（cwd 解析到 git 项目时）**，项目规则在前。hook 把它作为 `additionalContext` 输出并以 0 退出。它必须**永不阻塞 agent**：未安装 hook、daemon 不可达/超时/报错时都没有注入，hook 仍以 0 退出。hook 在 **resume/clear/compact** 时重跑。
-- **FR-050**：注入的规则包必须额外携带**两条 Coffer 内置种子规则**，即使 `rules/rules.md` 为空也在：（a）用户想接续既有工作时，调 `coffer__resume()` 拉取本项目 + 分支保存的 handoff；（b）**柔性引导**优先使用 Coffer 的共享知识工具（`coffer__write` / `coffer__search`）而非 agent 自己的原生记忆，因为 Coffer 是用户所有 agent 之间的共享存储。**handoff 正文本身不被注入** —— 它由 `coffer__resume`（FR-025）按需拉取，使规则包保持精简，也不会把陈旧现场硬塞进上下文。
-- **FR-052**：系统必须提供**可选的 per-agent `disable_native_memory` 配置（默认 `false`）**。**关**时 Coffer **从不触碰** agent 的原生记忆（ADR-026）。**开**时 Coffer 写入 agent 配置以关闭其原生记忆 —— Claude Code `autoMemoryEnabled=false`；Codex `features.memories=false` + `memories.generate_memories=false` —— 原子写入（`.bak` 备份）并审计；再**关回**（或卸载）会**恢复**先前设置。这是**整洁性选项**，不是规则包的前提。
+rules lane 有**进**的一半，没有**出**的一半。知识照样进得来 —— agent 写入、
+organizer 分类、规则落进 `rules/*.md` 并参与同步 —— 但没有任何东西再自动把它
+送回一个会话。
+
+2026-09-10 之前是有的。**FR-049** 通过 Coffer 安装的 `coffer-hook` SessionStart
+hook 投递这条 lane（`GET /api/v1/agents/{name}/session-context?cwd=` →
+`additionalContext`，绝不写原生文件）；**FR-050** 往那个规则包里加两条 Coffer
+内置种子规则（调 `coffer__resume()` 接续既有工作；优先用 Coffer 的共享知识工具
+而非 agent 原生记忆）；**FR-052** 提供可选的 per-agent `disable_native_memory`
+整洁性开关；**FR-055** 追加一份仅标题的项目知识索引，让 agent 一开始就知道项目里
+有什么。四条全部**删除**，连同那个二进制、hook 安装/卸载面、`session-context`
+路由、规则包组装器与摘要渲染器。
+
+**代价，直说。** 这删掉的是跨 agent 记忆中**投递**的那一半。agent 现在必须自己调
+`coffer__recall` / `coffer__search`；除非它主动问，否则**不会**有人告诉它这个项目
+知道些什么，用户积累的规则就躺在磁盘上，直到有东西去找它们。搜索自觉 —— 恰恰是
+环境式注入当初为了不依赖它才存在的东西 —— 现在变成了承重结构。
+
+**为什么接受。** 那个 hook 是上线了，但它从未真正安装到这位用户的机器上，因此这条
+注入路径在实践中一次都没跑过。被删掉的是一项纸面能力，没有任何会话真正用过它；而
+保留它意味着要为它继续养着第二个冻结二进制、两种 agent 格式的 hooks 文件写入器、
+一个 agent 维度的 HTTP 路由，以及一个受预算约束的规则包组装器。重新引入环境式投递
+是将来的一个主动决定，不是遗漏。
 
 **各类面（Surfaces）**
 
@@ -704,7 +700,6 @@ Entries 与 Documents 是两个 tab、两套计数，恰恰因为它们来路不
 - **FR-053**：Knowledge 详情页必须把一个 scope 呈现为**五个 tab** —— **Entries**、**Documents**、**Rules**、**Handoff**、**Changelog**。每个都有贴合形态的视图：Entries 与 Documents 是树 + 内容，Rules 是单一文档，Handoff 是按分支列表，Changelog 是只追加日志。所有视图**只读**、经**统一文件预览**渲染（不用手写 `<pre>`），并对底层文件提供**在外部编辑器中打开 / 在文件管理器中显示 / 复制路径**。Entries/Documents 的划分是呈现层面的（FR-008a）：检索仍横跨两者。
 - **FR-053a**：Web UI 必须把这一层路由在 **`/knowledge`** 与 **`/knowledge/:scope`**，且必须以重定向保持合并前的 URL 可用：`/memory` 与 `/knowledge-bases` → `/knowledge`；`/memory/:name` 与 `/knowledge-bases/:name` → 对应的 `/knowledge/:scope`。书签早于这次合并，弄坏它们是无谓的代价。
 - **FR-054**：系统必须为 UI 所需的 lane 暴露读端点：`GET /api/v1/knowledge/{scope}/handoff`（按分支的现场，各带 `branch` 与 `updated_at`）与 `GET /api/v1/knowledge/{scope}/consolidation-log`（不存在时为 `null`）。它们**只读**、**按 scope 名寻址**（而非 cwd），且对空 scope 必须返回 **HTTP 200 加空列表 / `null`**，绝不是 404。（Rules 已有 `GET /api/v1/knowledge/{scope}/rules`，FR-036。）
-- **FR-055**：SessionStart 上下文（FR-049）必须额外注入一份**环境式项目知识索引**，使 agent 一开始就知道该项目里有什么、而不必先搜索。session-context 响应在规则包之后追加一节 **"## Project memory (via Coffer)"**，由 cwd 所在项目 scope 构建：一份**仅标题的索引**（"Known topics" —— 每项的短标题，不含正文或描述）。它刻意是**索引而非知识本身** —— 一个定位指针，告诉 agent 存在什么、需要正文就去搜索。它**只读且尽力而为** —— cwd 在 git 项目之外、scope 为空或任何读错误都产出空（绝不报错）—— 并且**受预算约束**：合并后的包保持在 hook 的 ≤10k 字符契约内，索引占用规则包之后的剩余空间，使种子规则（FR-050）永不被截断。投递搭载既有的 per-agent SessionStart hook（`ContextInjectionSpec`，spec 004 FR-043），该 hook 按 agent 选择性安装。
 
 **Scope 合并 —— AI 辅助**
 

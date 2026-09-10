@@ -39,7 +39,6 @@ class AgentConfig(BaseModel):
     # / ``memories.generate_memories``) so Coffer is the single shared memory
     # store. Default OFF; toggling it back off restores the agent's native
     # memory. Old persisted rows (pre-Slice-6) load with this default.
-    disable_native_memory: bool = False
     # Per-agent model binding (spec 011 amendment 2026-06-22b, E3). The model the
     # agent projects comes from HERE, not the connection: ``model`` →
     # ``ANTHROPIC_MODEL`` / Codex ``model``; ``fast_model`` →

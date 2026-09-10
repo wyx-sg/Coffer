@@ -39,9 +39,6 @@ from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.workspace_errors import (
     AdoptSecretUnresolved,
-    McpEntryProtected,
-    McpEntrySourceAmbiguous,
-    McpEntryToggleUnsupported,
 )
 
 pytestmark = pytest.mark.asyncio
@@ -360,89 +357,6 @@ async def test_list_annotates_matches_resource(svc, store, rs):
 
 # ---------------------------------------------------------------------------
 # 4. remove: ambiguity requires source; targeted remove touches one file only
-# ---------------------------------------------------------------------------
-
-
-async def test_remove_requires_source_when_ambiguous(svc, store):
-    dup_global = '{"mcpServers": {"dup": {"command": "a"}}}'
-    dup_settings = '{"mcpServers": {"dup": {"command": "b"}}}'
-    store._files[_CLAUDE_GLOBAL] = dup_global
-    store._files[_CLAUDE_SETTINGS] = dup_settings
-
-    with pytest.raises(McpEntrySourceAmbiguous):
-        await svc.remove_entry("cc", "dup")
-    assert store._writes == []  # nothing touched
-
-    await svc.remove_entry("cc", "dup", source="settings")
-
-    # settings rewritten without the entry; global untouched.
-    assert "dup" not in store._files[_CLAUDE_SETTINGS]
-    assert store._files[_CLAUDE_GLOBAL] == dup_global
-    assert [p for p, _ in store._writes] == [_CLAUDE_SETTINGS]
-
-
-async def test_remove_audits_with_source(svc, store, audit_svc):
-    store._files[_CLAUDE_GLOBAL] = _CLAUDE_GLOBAL_JSON
-
-    await svc.remove_entry("cc", "alpha", actor="cli")
-
-    entries = await audit_svc.query(event_type=AuditEventType.AGENT_MCP_ENTRY_REMOVED.value)
-    assert len(entries) == 1
-    assert entries[0].details == {"entry": "alpha", "source": "global"}
-
-
-# ---------------------------------------------------------------------------
-# 5. coffer entry is protected
-# ---------------------------------------------------------------------------
-
-
-async def test_remove_coffer_protected(svc, store):
-    store._files[_CLAUDE_GLOBAL] = _CLAUDE_GLOBAL_JSON
-
-    with pytest.raises(McpEntryProtected):
-        await svc.remove_entry("cc", "coffer")
-    assert store._writes == []
-
-
-async def test_toggle_coffer_protected(svc, store):
-    store._files[_CODEX_CONFIG] = _CODEX_TOML
-
-    with pytest.raises(McpEntryProtected):
-        await svc.set_enabled("cx", "coffer", False)
-    assert store._writes == []
-
-
-# ---------------------------------------------------------------------------
-# 6. toggle: codex writes enabled flag + audits; claude rejected
-# ---------------------------------------------------------------------------
-
-
-async def test_toggle_codex_writes_enabled_and_audits(svc, store, audit_svc):
-    store._files[_CODEX_CONFIG] = _CODEX_TOML
-
-    await svc.set_enabled("cx", "jira", False, actor="cli")
-
-    new_text = store._files[_CODEX_CONFIG]
-    assert "enabled = false" in new_text
-    view = await svc.list_entries("cx")
-    jira = next(e for e in view.items if e.name == "jira")
-    assert jira.enabled is False
-
-    entries = await audit_svc.query(event_type=AuditEventType.AGENT_CONFIG_FILE_WRITTEN.value)
-    assert len(entries) == 1
-    assert entries[0].details == {"key": "config", "entry": "jira", "enabled": False}
-
-
-async def test_toggle_claude_rejected(svc, store):
-    store._files[_CLAUDE_GLOBAL] = _CLAUDE_GLOBAL_JSON
-
-    with pytest.raises(McpEntryToggleUnsupported):
-        await svc.set_enabled("cc", "alpha", False)
-    assert store._writes == []
-
-
-# ---------------------------------------------------------------------------
-# 7. adopt happy path
 # ---------------------------------------------------------------------------
 
 

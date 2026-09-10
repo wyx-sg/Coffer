@@ -10,11 +10,7 @@ import { render, screen } from "@testing-library/react";
 
 import { SyncSettings } from "./SyncSettings";
 
-vi.mock("@/lib/filePicker", () => ({
-  pickDirectory: vi.fn(),
-  pickOpenFile: vi.fn(),
-  pickSaveFile: vi.fn(),
-}));
+vi.mock("@/lib/filePicker", () => ({ pickDirectory: vi.fn() }));
 
 vi.mock("@/lib/hooks/useSync", () => ({
   useExportVault: vi.fn(() => ({ mutate: vi.fn(), isPending: false, data: undefined })),

@@ -120,6 +120,10 @@ Skill 投递绑定（`skill_agent_bindings`）按决策保持仅本机：投递�
 被导入到一台没有对应主密钥的机器上的密文原样存储，并被报为 `credentials_locked`；
 受影响的资源会拒绝拉起，而不是静默地解密失败。密钥经带外途径引导
 （`coffer sync key export` / `coffer sync key import`），且永不出现在 bundle 里。
+这两条命令通过 loopback API 传递密钥**材料** —— `POST /sync/key/export` 返回
+`{material}`，`POST /sync/key/import` 接收它 —— 文件 I/O 各表面自己做：CLI 自己写、
+自己读那个文件（权限 `0600`），Web UI 用浏览器下载与 `<input type="file">`。守护进程
+不打开任何由调用方指定的路径。
 
 ## 仅本机、绝不进入 bundle
 

@@ -558,33 +558,6 @@ def test_mcp_entries_list_json_and_table(workspace_cli):
     assert "fetcher" in r.output
 
 
-def test_mcp_toggle_entry(workspace_cli):
-    r = _runner.invoke(cli_app, ["agent", "mcp", "toggle-entry", "cx", "fetcher", "--disabled"])
-    assert r.exit_code == 0, r.output
-    body = json.loads(
-        _extract_json(_runner.invoke(cli_app, ["agent", "mcp", "entries", "cx", "--json"]).output)
-    )
-    by_name = {e["name"]: e for e in body["items"]}
-    assert by_name["fetcher"]["enabled"] is False
-
-
-def test_mcp_remove_entry_force_and_prompt(workspace_cli):
-    # Without --force the prompt aborts and the entry survives.
-    r = _runner.invoke(cli_app, ["agent", "mcp", "remove-entry", "cx", "fetcher"], input="n\n")
-    assert r.exit_code == 1
-    body = json.loads(
-        _extract_json(_runner.invoke(cli_app, ["agent", "mcp", "entries", "cx", "--json"]).output)
-    )
-    assert "fetcher" in [e["name"] for e in body["items"]]
-
-    r = _runner.invoke(cli_app, ["agent", "mcp", "remove-entry", "cx", "fetcher", "--force"])
-    assert r.exit_code == 0, r.output
-    body = json.loads(
-        _extract_json(_runner.invoke(cli_app, ["agent", "mcp", "entries", "cx", "--json"]).output)
-    )
-    assert "fetcher" not in [e["name"] for e in body["items"]]
-
-
 def test_mcp_adopt_with_secret(workspace_cli):
     """`mcp adopt --secret KEY=REF` adopts the entry into a managed resource."""
     _tmp, _keyring = workspace_cli
@@ -612,46 +585,3 @@ def test_mcp_adopt_bad_secret_syntax_exit2(workspace_cli):
         cli_app, ["agent", "mcp", "adopt", "cx", "fetcher", "--secret", "MISSING_EQUALS"]
     )
     assert r.exit_code == 2, r.output
-
-
-def test_plugin_list_disable_uninstall(workspace_cli):
-    r = _runner.invoke(cli_app, ["agent", "plugin", "list", "cx", "--json"])
-    assert r.exit_code == 0, r.output
-    body = json.loads(_extract_json(r.output))
-    by_id = {p["id"]: p for p in body["items"]}
-    assert by_id["p1@m1"]["enabled"] is True
-    assert by_id["p1@m1"]["cache_present"] is True
-    assert by_id["p2@m1"]["cache_present"] is False
-    assert [m["name"] for m in body["marketplaces"]] == ["m1"]
-
-    # Table path renders without crashing and shows the marketplace line.
-    r = _runner.invoke(cli_app, ["agent", "plugin", "list", "cx"])
-    assert r.exit_code == 0, r.output
-    assert "p1@m1" in r.output
-    assert "marketplace: m1" in r.output
-
-    r = _runner.invoke(cli_app, ["agent", "plugin", "disable", "cx", "p1@m1"])
-    assert r.exit_code == 0, r.output
-    body = json.loads(
-        _extract_json(_runner.invoke(cli_app, ["agent", "plugin", "list", "cx", "--json"]).output)
-    )
-    assert {p["id"]: p for p in body["items"]}["p1@m1"]["enabled"] is False
-
-    # Uninstall without --force prompts and aborts.
-    r = _runner.invoke(cli_app, ["agent", "plugin", "uninstall", "cx", "p2@m1"], input="n\n")
-    assert r.exit_code == 1
-    r = _runner.invoke(cli_app, ["agent", "plugin", "uninstall", "cx", "p2@m1", "--force"])
-    assert r.exit_code == 0, r.output
-    body = json.loads(
-        _extract_json(_runner.invoke(cli_app, ["agent", "plugin", "list", "cx", "--json"]).output)
-    )
-    assert "p2@m1" not in [p["id"] for p in body["items"]]
-
-
-def test_plugin_enable(workspace_cli):
-    r = _runner.invoke(cli_app, ["agent", "plugin", "enable", "cx", "p2@m1"])
-    assert r.exit_code == 0, r.output
-    body = json.loads(
-        _extract_json(_runner.invoke(cli_app, ["agent", "plugin", "list", "cx", "--json"]).output)
-    )
-    assert {p["id"]: p for p in body["items"]}["p2@m1"]["enabled"] is True

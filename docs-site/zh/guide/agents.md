@@ -69,6 +69,6 @@ coffer agent mcp uninstall claude-code   # 移除它
 2. agent 详情页有四个标签 —— **Overview**、**Skills**、**MCP servers** 和 **Config files**。
 3. 在 **Config files** 标签中，在编辑器中打开任意策展的配置文件。编辑器在保存时校验格式、以原子方式写入并保留 `.bak` 备份，还内置一个**查找/替换**框，可滚动到匹配项。
 4. 使用头部的 **Install Coffer MCP** 开关添加或移除 `coffer` 条目，并配有实时状态指示。
-5. 在 **Skills** 标签中，为此 agent 逐个启用或禁用技能，或用 **Install skills** 绑定更多技能。**MCP servers** 标签显示 Coffer 向该 agent 暴露的服务器（目前为只读）。
+5. 在 **Skills** 标签中，为此 agent 逐个启用或禁用技能，或用 **Install skills** 绑定更多技能。**MCP servers** 标签既显示 gateway 的安装状态，也列出该 agent 自己的直连 MCP 条目；这些条目除 **Adopt**（把条目接管进 Coffer 成为受管资源）外均为只读 —— Coffer 不会移除或禁用别的工具配置里的条目。
 
 [接入客户端 →](/zh/guide/connect-client)

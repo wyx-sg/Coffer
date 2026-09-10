@@ -70,8 +70,7 @@ Coffer 的方案刻意保持精简：一对本地数据库表，而非时序数�
 | --------------------------------------------------------- | ----------------------------------------------- |
 | `agent_config_file_written` / `agent_config_file_deleted` | agent 配置文件被写入 / 删除时                   |
 | `agent_mcp_installed` / `agent_mcp_uninstalled`           | MCP 条目被安装到 / 从 agent 卸载时              |
-| `agent_mcp_entry_removed` / `agent_mcp_entry_adopted`     | MCP 条目被从 agent 移除 / 被 agent 接管时       |
-| `agent_plugin_toggled` / `agent_plugin_uninstalled`       | agent 插件被切换 / 卸载时                       |
+| `agent_mcp_entry_adopted`                                 | agent 自有配置里的 MCP 条目被接管进 Coffer 时   |
 
 **技能：**
 

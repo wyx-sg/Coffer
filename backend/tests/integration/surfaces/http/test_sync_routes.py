@@ -166,19 +166,26 @@ async def test_key_fingerprint_never_returns_the_key(client) -> None:  # type: i
 
 
 async def test_key_export_then_import(client) -> None:  # type: ignore[no-untyped-def]
-    target = client.tmp_path / "master.out"
-    r = await client.post("/api/v1/sync/key/export", json={"path": str(target)})
+    """The key crosses as material, not as a path the daemon writes: a browser
+    has no path to hand over, and the caller decides where the bytes land."""
+    r = await client.post("/api/v1/sync/key/export", json={})
     assert r.status_code == 200
-    assert r.json()["path"] == str(target)
-    assert target.exists()
+    material = r.json()["material"]
+    assert material
 
-    r = await client.post("/api/v1/sync/key/import", json={"path": str(target)})
+    r = await client.post("/api/v1/sync/key/import", json={"material": material})
     assert r.status_code == 200
     assert r.json()["locked_refs"] == []
 
 
-async def test_key_import_of_a_missing_file_is_422(client) -> None:  # type: ignore[no-untyped-def]
-    r = await client.post("/api/v1/sync/key/import", json={"path": str(client.tmp_path / "absent")})
+async def test_key_import_of_empty_material_is_422(client) -> None:  # type: ignore[no-untyped-def]
+    r = await client.post("/api/v1/sync/key/import", json={"material": "   "})
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "MASTER_KEY_FILE_INVALID"
+
+
+async def test_key_import_of_junk_material_is_422(client) -> None:  # type: ignore[no-untyped-def]
+    r = await client.post("/api/v1/sync/key/import", json={"material": "not-a-fernet-key"})
     assert r.status_code == 422
     assert r.json()["error"]["code"] == "MASTER_KEY_FILE_INVALID"
 

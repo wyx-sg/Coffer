@@ -110,9 +110,8 @@ jobs:
       # triple suffix) so both the one-line installer and manual extraction
       # yield co-located plain-named binaries, which the frozen detect-or-spawn
       # logic requires (ADR-006): `coffer` looks for `coffer-daemon` next to
-      # itself at runtime, and the daemon deploys `coffer-hook`,
-      # `coffer-callback` and `whisper-cli` from its own directory into
-      # ~/.coffer/bin/ at startup.
+      # itself at runtime, and the daemon deploys `coffer-callback` and
+      # `whisper-cli` from its own directory into ~/.coffer/bin/ at startup.
       - name: package CLI archive
         shell: bash
         run: |
@@ -123,7 +122,6 @@ jobs:
             coffer
             coffer-daemon
             coffer-mcp-shim
-            coffer-hook
             coffer-callback
             whisper-cli
           )
@@ -205,7 +203,7 @@ jobs:
           cat > release-notes.md <<'NOTES'
           Download `coffer-cli-<platform>.tar.gz` and extract it. It contains
           `coffer` (management CLI), `coffer-daemon`, `coffer-mcp-shim`,
-          `coffer-hook`, `coffer-callback` and `whisper-cli`. Keep the binaries
+          `coffer-callback` and `whisper-cli`. Keep the binaries
           co-located: `coffer` finds `coffer-daemon` next to itself, and the
           daemon deploys the helper binaries into `~/.coffer/bin/` on startup.
 

@@ -54,6 +54,8 @@ coffer sync key import ./master.key        # on the target machine
 
 Until the key is present, imported credentials stay **locked** (reported as `credentials_locked`) and resources that need them won't start.
 
+The daemon never opens a path you name for this. `POST /api/v1/sync/key/export` returns the key **material** and `POST /api/v1/sync/key/import` accepts it; the CLI does the file I/O itself (`0600` on write), and the web UI's master-key card saves the key as a browser download and reads it back through an `<input type="file">`.
+
 ## Keeping two machines aligned
 
 There is no background convergence and nothing watches for drift. If the two machines diverge, re-export and re-import in the direction you want — that manual step is the deliberate trade for dropping the machinery continuous sync needed.

@@ -119,7 +119,6 @@ def _collect_hidden_string_literals(tree: ast.AST) -> set[str]:
     [
         ("coffer-daemon.spec", "coffer/infrastructure/daemon/entry.py"),
         ("coffer-mcp-shim.spec", "coffer/surfaces/shim/main.py"),
-        ("coffer-hook.spec", "coffer/surfaces/hook/main.py"),
         ("coffer-callback.spec", "coffer/surfaces/callback/__main__.py"),
     ],
 )
@@ -367,7 +366,6 @@ def test_release_workflow_packages_the_single_cli_archive() -> None:
     for binary in (
         "coffer-daemon",
         "coffer-mcp-shim",
-        "coffer-hook",
         "coffer-callback",
         "whisper-cli",
     ):

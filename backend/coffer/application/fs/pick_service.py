@@ -1,4 +1,4 @@
-"""Native OS picker dialogs via the loopback daemon (spec 004 FR-042, ADR-036).
+"""Native OS picker dialogs via the loopback daemon (spec 004 FR-042).
 
 A web browser cannot open an OS-native file/folder dialog that returns an
 absolute path. But the daemon is *always co-located with the client on the
@@ -34,16 +34,17 @@ class PickResult:
 
 
 class FsPickService:
-    """Open the host's native folder/file/save dialog and return the chosen path."""
+    """Open the host's native folder dialog and return the chosen path.
+
+    Only *folders*. The open- and save-file dialogs this used to offer are gone:
+    a browser has `<input type="file">` and `<a download>` for those, and they
+    hand over file contents rather than a path, which is what a web page can
+    actually use. A folder is the exception the browser has no answer for — it
+    deliberately withholds absolute paths, and registering an agent needs one.
+    """
 
     def pick_folder(self, start: str | None = None) -> PickResult:
         return _run_dialog(_folder_cmd(start))
-
-    def pick_file(self, start: str | None = None) -> PickResult:
-        return _run_dialog(_file_cmd(start))
-
-    def save_file(self, suggested_name: str | None = None, start: str | None = None) -> PickResult:
-        return _run_dialog(_save_cmd(suggested_name, start))
 
 
 def _run_dialog(cmd: list[str] | None) -> PickResult:
@@ -93,49 +94,3 @@ def _folder_cmd(start: str | None) -> list[str] | None:
     if shutil.which("kdialog"):
         return ["kdialog", "--getexistingdirectory", start or ""]
     return None
-
-
-def _file_cmd(start: str | None) -> list[str] | None:
-    """The native open-file-dialog argv for this host, or None if none is available."""
-    if sys.platform == "darwin":
-        location = f" default location {_applescript_posix_file(start)}" if start else ""
-        script = f'POSIX path of (choose file with prompt "Select a file"{location})'
-        return ["osascript", "-e", script]
-    if sys.platform == "win32":
-        return None
-    if shutil.which("zenity"):
-        cmd = ["zenity", "--file-selection", "--title=Select a file"]
-        if start:
-            # Trailing slash so GTK opens *inside* `start` rather than
-            # pre-selecting its last component as a file name (matches _folder_cmd).
-            cmd.append(f"--filename={start.rstrip('/')}/")
-        return cmd
-    if shutil.which("kdialog"):
-        return ["kdialog", "--getopenfilename", start or ""]
-    return None
-
-
-def _save_cmd(suggested_name: str | None, start: str | None) -> list[str] | None:
-    """The native save-file-dialog argv for this host, or None if none is available."""
-    if sys.platform == "darwin":
-        name = f" default name {_applescript_str(suggested_name)}" if suggested_name else ""
-        location = f" default location {_applescript_posix_file(start)}" if start else ""
-        script = f'POSIX path of (choose file name with prompt "Save as"{name}{location})'
-        return ["osascript", "-e", script]
-    if sys.platform == "win32":
-        return None
-    seed = _save_seed(suggested_name, start)
-    if shutil.which("zenity"):
-        cmd = ["zenity", "--file-selection", "--save", "--confirm-overwrite", "--title=Save as"]
-        if seed:
-            cmd.append(f"--filename={seed}")
-        return cmd
-    if shutil.which("kdialog"):
-        return ["kdialog", "--getsavefilename", seed or ""]
-    return None
-
-
-def _save_seed(suggested_name: str | None, start: str | None) -> str:
-    """The `--filename` seed for a save dialog: ``<start>/<suggested_name>``."""
-    base = f"{start.rstrip('/')}/" if start else ""
-    return f"{base}{suggested_name or ''}"

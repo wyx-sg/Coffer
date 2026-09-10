@@ -178,7 +178,7 @@ CREATE TABLE memory_store_labels (
     │   │   └── INDEX.md               # 人类审阅入口（由 organizer 重新生成）
     │   ├── consolidation-log.md       # 只追加 changelog（store 根目录；机器本地，在 recall 之外）
     │   ├── superseded/<slug>-<ts>.md  # reorg tombstone（store 根目录；在 recall 之外；可恢复；DO 同步）
-    │   └── rules/*.md                 # 过程性 lane：rules.md + 拆分后的 per-topic <slug>.md（store 根目录；在 recall 之外；session-start 注入；DO 同步）
+    │   └── rules/*.md                 # 过程性 lane：rules.md + 拆分后的 per-topic <slug>.md（store 根目录；在 recall 之外；按需读取；DO 同步）
     └── projects/<project-ulid>/       # 每项目一个目录
         ├── knowledge/
         │   ├── inbox/<item>.md
@@ -189,7 +189,7 @@ CREATE TABLE memory_store_labels (
         └── rules/*.md                    # rules.md + per-topic <slug>.md（超阈值后自主拆分）
 ```
 
-**没有 `MEMORY.md`** —— 此前的派生投影已移除。`recall` glob `knowledge/**/*.md`（排除 `INDEX.md`），所以 organizer 写入主题文档后会被透明拾取，手写的主题文档也会被立即发现。`INDEX.md` 与 store 根目录的 `consolidation-log.md` 是**派生/机器本地**的：排除在 recall 与同步镜像之外（每台机器从已同步的主题文档重新生成 `INDEX.md`；日志按机器各自维护）。主题文档本身是真相源，DO 同步。store 根的 **`superseded/`** tombstone 保存 reorg pass（FR-033/034）退役的旧版本：与 `handoff/` 一样在 `knowledge/` lane 之外，故**排除在 recall 之外**；但与派生文件不同，它**DO 同步** —— 它是可恢复的真相源历史，而非重新生成的派生物。store 根的 **`rules/`** 是**过程性 lane**（FR-036）：organizer 把规则形态的 inbox 条目分类追加进 `rules/rules.md`（追加，而非主题合并）；任一 `rules/*.md` 超过阈值后，reorg pass 按主题（one-shot LLM）把它拆分为 per-topic `rules/<slug>.md`（amendment 2026-06-22），读取面拼接全部 `rules/*.md`。它在 `knowledge/` lane 之外，故**排除在 recall 之外**（rules 由 session-start 注入交付 —— 那是之后的切片 —— 而非 `recall`），且作为真相源**DO 同步**（与 `handoff/` 一样）。它经 `GET /memory_stores/{name}/rules` / `coffer memory rules` 只读暴露。启动时的 reindex sweep（`run_memory_reindex_sweep`）会把此前"写入磁盘却因 store 未被 recall 而未索引"的 `knowledge/` lane 内容补索引。
+**没有 `MEMORY.md`** —— 此前的派生投影已移除。`recall` glob `knowledge/**/*.md`（排除 `INDEX.md`），所以 organizer 写入主题文档后会被透明拾取，手写的主题文档也会被立即发现。`INDEX.md` 与 store 根目录的 `consolidation-log.md` 是**派生/机器本地**的：排除在 recall 与同步镜像之外（每台机器从已同步的主题文档重新生成 `INDEX.md`；日志按机器各自维护）。主题文档本身是真相源，DO 同步。store 根的 **`superseded/`** tombstone 保存 reorg pass（FR-033/034）退役的旧版本：与 `handoff/` 一样在 `knowledge/` lane 之外，故**排除在 recall 之外**；但与派生文件不同，它**DO 同步** —— 它是可恢复的真相源历史，而非重新生成的派生物。store 根的 **`rules/`** 是**过程性 lane**（FR-036）：organizer 把规则形态的 inbox 条目分类追加进 `rules/rules.md`（追加，而非主题合并）；任一 `rules/*.md` 超过阈值后，reorg pass 按主题（one-shot LLM）把它拆分为 per-topic `rules/<slug>.md`（amendment 2026-06-22），读取面拼接全部 `rules/*.md`。它在 `knowledge/` lane 之外，故**排除在 recall 之外**（规则是常驻指令，不是检索命中），且作为真相源**DO 同步**（与 `handoff/` 一样）。它**只按需读取** —— 曾经把它推送进 agent 的 session-start 注入已被移除（spec FR-049/FR-050/FR-052/FR-055 删除）。它经 `GET /memory_stores/{name}/rules` / `coffer memory rules` 只读暴露。启动时的 reindex sweep（`run_memory_reindex_sweep`）会把此前"写入磁盘却因 store 未被 recall 而未索引"的 `knowledge/` lane 内容补索引。
 
 **organizer**（`application/memory/organizer.py`，内部 LLM，仅显式 `organize` 触发）通过每条目一次 one-shot completion 把 `inbox/` 排空进主题文档：取回至多 3 个候选主题文档（不用 LLM）→ 一次 LLM 合并/创建调用 → 写 `knowledge/<slug>.md` → 删除 inbox 条目（仅在写入成功之后）→ 追加一行 changelog。畸形的 LLM 响应会跳过该条目（留在 inbox，绝不损坏文档）。主题文档 `.md` 的 frontmatter 是 `{title, description, updated_at}` + 正文。langchain 的 LLM 调用留在 `infrastructure/chat`（Contract 9）；`application/memory` 经一个 memory 本地的 `LlmCompletionPort` 触达它。
 
@@ -256,93 +256,28 @@ memory 对账器向该例程提供自己的**分块器**（见 FR-032）：共�
 | `"memory_deleted"` | 用户删除（REST/CLI）成功后 |
 | `"memory_cleared"` | 清空一个 scope 后         |
 
-### 规则注入审计事件（slice 6，FR-049/FR-052）
+### 规则投递 —— 已删除（原 slice 6，FR-049/FR-050/FR-052/FR-055）
 
-| 值                                 | 何时发出                                                              |
-| ---------------------------------- | -------------------------------------------------------------------- |
-| `"agent_hook_installed"`           | Coffer 把它的 SessionStart hook 条目装入某 agent 的 hooks 配置后 |
-| `"agent_hook_uninstalled"`         | Coffer 从某 agent 的 hooks 配置移除它的 hook 条目后                   |
-| `"agent_native_memory_disabled"`   | `disable_native_memory` 被打开、agent 的原生记忆关闭开关被写入后（FR-052） |
-| `"agent_native_memory_restored"`   | `disable_native_memory` 被关闭（或 hook 被卸载）、agent 先前的原生记忆设置被恢复后（FR-052） |
+slice 6 曾把 rules lane 交付进一个运行中的 agent：Coffer 把一个 `coffer-hook`
+SessionStart hook 装进 agent 自己的 hooks 配置，hook 调
+`GET /api/v1/agents/{name}/session-context?cwd=<cwd>`，daemon 组装一个 bundle
+（项目规则、全局规则、两条内置种子规则、一份仅标题的项目知识索引），由 hook 作为
+`additionalContext` 输出。一个 per-agent 的 `disable_native_memory` 开关随行。
 
-这四个事件位于 **agent** 面（spec 004），由 `AgentHookService` / 原生记忆开关记录；
-它们只携带 agent 名与被改动的配置文件 —— 绝不携带任何规则 bundle 或记忆内容。
-session-context 读取不发审计事件（它是读）。
+**全部已删除。** 随该切片一并删除的有：`coffer-hook` 二进制及其 PyInstaller spec、
+`application/agent/hook_service.py`、`domain/agent/hook_install.py`、
+`domain/agent/context_injection.py`、`infrastructure/agent/hook_resolver.py`、
+原生记忆相关模块、`application/knowledge/rules_bundle.py`（bundle 组装器）、摘要
+渲染器、`GET /api/v1/agents/{name}/session-context` 路由、hook-install 三件套，
+以及 `contracts/session-context.openapi.yaml`。该切片定义的四个审计事件类型 ——
+`agent_hook_installed`、`agent_hook_uninstalled`、`agent_native_memory_disabled`、
+`agent_native_memory_restored` —— 已从 `AuditEventType` 移除。
 
-## 规则运行时注入（slice 6 —— FR-049/FR-050/FR-052）
-
-slice 6 通过**安装 session hook** 在运行时把 rules lane（FR-036）交付到每个受管 agent，hook
-回调 Coffer 索取一个**只作为上下文**的 bundle —— 绝不原生写文件（ADR-026）。agent 配置管道
-（`AgentConfig`、hook 安装/卸载、原生记忆开关）位于 spec **004-agent-registry**；bundle 组装
-复用 spec 007 的记忆路径。本节记录面向 007 的形状；`AgentConfig` 字段与
-hook-install / 原生记忆 REST 三件套加在 spec 004 的 data-model + `004-agent-registry/contracts/api.openapi.yaml`。
-
-### `AgentConfig.disable_native_memory`（spec 004 domain）
-
-agent 持久化配置上的新布尔字段，**默认 `false`**（ADR-026 姿态 —— Coffer 绝不碰原生记忆）。
-在 `AgentPatch`（可设）与 `AgentOut`（可读）上呈现。
-
-| 字段                    | 类型   | 说明                                                                                          |
-| ----------------------- | ------ | --------------------------------------------------------------------------------------------- |
-| `disable_native_memory` | `bool` | 默认 `false`。为 `true` 时 Coffer 写入 agent 的原生记忆关闭开关，并在关闭/卸载时恢复（FR-052）。迁移校验器宽容（无该键的配置读作 `false`）。 |
-
-设为 `true` 时 Coffer 写入：
-
-- **Claude Code** —— `~/.claude/settings.json`：`{"autoMemoryEnabled": false}`（JSON、原子、`.bak`）。恢复 = 删除该键。
-- **Codex** —— `~/.codex/config.toml`：`features.memories = false` + `memories.generate_memories = false`（TOML、tomlkit、原子、`.bak`）。恢复 = 删除这两个键。
-
-### 已安装 hook 条目形状
-
-Coffer 把它的 hook 装进 agent 顶层 `hooks` 键（Claude Code `settings.json`；Codex `hooks.json`
-—— 同一套 JSON schema）。命令是 `coffer-hook` 控制台脚本的绝对路径，并把 agent 名烤进参数
-（`coffer-hook --agent <name>`），因为 hook stdin JSON 不携带 Coffer 的 agent 身份（cwd /
-session_id / event 来自 stdin）。安装/卸载幂等，且**只**按 `coffer-hook` 命令 basename 识别
-Coffer 自己的条目 —— 绝不动用户 hook。
-
-```jsonc
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "startup|resume|clear|compact",
-        "hooks": [
-          { "type": "command", "command": "/abs/path/to/coffer-hook --agent claude-code" }
-        ]
-      }
-    ]
-  }
-}
-```
-
-**SessionStart 契约**（两个 agent）：hook 读 stdin
-`{session_id, transcript_path, cwd, hook_event_name, source, …}`，调
-`GET …/session-context?cwd=<cwd>`，打印
-`{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "<bundle>"}}`
-然后退出 0（bundle ≤ 10k 字符）。**任何**失败（无 daemon、超时、报错）→ 什么都不打印、退出 0
-（绝不阻塞 agent）。
-
-### bundle 组装（`assemble_session_context(cwd) -> str`，FR-049/FR-050）
-
-为 `cwd` 解析 recall 作用域 → 对每个作用域读其 rules（拼接全部 `rules/*.md`，FR-036 读取面）→ 拼接
-**先项目规则、后全局规则** → 追加**两条播种的内置规则**（常量，即便 rules lane 为空也始终在场）：
-
-- **播种 resume 规则** —— 当用户想接续此前工作时，调 `coffer__resume()` 拉取本项目 + 分支保存的工作状态 handoff。
-- **播种软引导规则** —— 优先用 `coffer__remember` / `coffer__recall` 而非 agent 的原生记忆；Coffer 是用户各 agent 间的共享 store。
-
-handoff 正文**不**在 bundle 里（经 `coffer__resume` 按需拉取，FR-050）。返回 markdown；空结果仍携带播种规则。
-
-### 新增端点（slice 6）
-
-一个 agent 作用域端点支撑该 hook。它位于
-`contracts/session-context.openapi.yaml`（面向 agent 的 007 契约）；见下文线上契约说明。
-
-| 方法 + 路径                                                | 正文 / 查询  | 返回    | 说明 |
-| ---------------------------------------------------------- | ------------ | ------- | ---- |
-| `GET /api/v1/agents/{name}/session-context?cwd=`           | `cwd` 查询   | `{additional_context: string}` | SessionStart bundle（FR-049/FR-050）。只读；无审计。`cwd` 不在 git 项目里 → 只含全局 + 播种规则。 |
-
-hook-install 三件套（`GET/POST/DELETE /api/v1/agents/{name}/hook-install`，克隆 `/mcp-install`）
-与 `PATCH /api/v1/agents/{name}` 上的 `disable_native_memory` 字段位于 spec **004-agent-registry**
-（`AgentOut` / `AgentPatch` / `/mcp-install` 已在那里），不在本处。
+留下的只有读的一侧。`application/knowledge/session_context.py` 名字未变，但只剩读侧助手
+—— `get_rules(scope)`（拼接全部 `rules/*.md`）以及写后的 `notify_change` 钩子 —— 供
+`GET /api/v1/knowledge/{scope}/rules` 与 `coffer knowledge rules <scope>` 使用。
+没有任何东西再把这条 lane 推进会话；想要它的 agent 必须自己开口。这笔取舍为何被
+接受，见 spec 的「投递 —— 已删除」。
 
 ## Lane 读端点（slice 7 —— FR-053/FR-054）
 
@@ -395,4 +330,4 @@ Handoff）外加一个整合 changelog 视图（FR-053）。Knowledge 复用既�
 
 位于 `contracts/api.openapi.yaml`。路由在 `/api/v1/memory_stores` 下（list/get/metrics；事实的 add/list/get/edit/delete/clear；recall；FR-054 的 slice-7 handoff/consolidation-log lane 读取）。写入端点（add/edit/delete/clear）保留 —— 它们是 agent（经 MCP）与 CLI 写入事实的途径；Web UI 是只读视图。读 DTO 携带磁盘真相：`FactOut` 带事实的绝对 `.md` `path` 及其所在文件夹的 `folder_path`，`MemoryStoreOut` 带 store 的绝对 `store_dir`，使只读视图能提供「在外部编辑器打开 / 显示」。kind 无关的 `/api/v1/resources/...` 对 memory store 继续可用。全应用统一错误包络：`{ "error": { "code", "message", "details" } }`。
 
-slice-6 的 agent 作用域端点（`GET …/session-context`）位于 `contracts/session-context.openapi.yaml`；hook-install 三件套与 `disable_native_memory` agent 字段位于 `004-agent-registry/contracts/api.openapi.yaml`（见上文「规则运行时注入」）。
+不再有第二份 agent 作用域契约：`contracts/session-context.openapi.yaml` 已随它描述的 `GET …/session-context` 路由一起删除（见上文「规则投递 —— 已删除」）。

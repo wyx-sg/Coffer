@@ -1,7 +1,7 @@
 // frontend/src/pages/AgentDetailPage.tsx — spec 004-agent-registry.
 // Per-agent detail page: a back link, a header with the Coffer-MCP install
-// button + edit + delete, and two tabs — Overview and Config files. Editing
-// opens a modal dialog (AgentEditForm). Agents have no enable/disable concept.
+// button + edit + delete, and four tabs — Overview, Skills, MCP servers and
+// Config files. Editing opens a modal dialog (AgentEditForm). Agents have no enable/disable concept.
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -12,9 +12,7 @@ import { AgentDeleteDialog } from "@/components/agents/AgentDeleteDialog";
 import { AgentEditForm } from "@/components/agents/AgentEditForm";
 import { AgentMcpButton } from "@/components/agents/AgentMcpControls";
 import { AgentMcpServersTab } from "@/components/agents/AgentMcpServersTab";
-import { AgentMemoryTab } from "@/components/agents/AgentMemoryTab";
 import { AgentOverviewTab } from "@/components/agents/AgentOverviewTab";
-import { AgentPluginsTab } from "@/components/agents/AgentPluginsTab";
 import { AgentSkillsTab } from "@/components/agents/AgentSkillsTab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -113,8 +111,6 @@ export function AgentDetailPage() {
           <TabsTrigger value="overview">{t("agents.workspace.overview")}</TabsTrigger>
           <TabsTrigger value="skills">{t("agents.workspace.skills")}</TabsTrigger>
           <TabsTrigger value="mcpServers">{t("agents.workspace.mcpServers")}</TabsTrigger>
-          <TabsTrigger value="plugins">{t("agents.workspace.plugins")}</TabsTrigger>
-          <TabsTrigger value="memory">{t("agents.workspace.memory")}</TabsTrigger>
           <TabsTrigger value="config">{t("agents.workspace.config")}</TabsTrigger>
         </TabsList>
 
@@ -128,14 +124,6 @@ export function AgentDetailPage() {
 
         <TabsContent value="mcpServers" className="pt-6">
           <AgentMcpServersTab agentName={name} />
-        </TabsContent>
-
-        <TabsContent value="plugins" className="pt-6">
-          <AgentPluginsTab agent={agent} />
-        </TabsContent>
-
-        <TabsContent value="memory" className="pt-6">
-          <AgentMemoryTab agent={agent} />
         </TabsContent>
 
         <TabsContent value="config" className="pt-6">

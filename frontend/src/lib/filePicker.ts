@@ -1,9 +1,13 @@
-// frontend/src/lib/filePicker.ts — native open-file / save-file dialogs
-// (spec 004 FR-042, ADR-036). Mirrors FolderPicker's strategy: the web asks the
-// loopback daemon to open the host's native dialog. `unavailable` is true only
-// when the host has no native dialog tool (or the call errors), so the caller
-// can reveal a typed-path fallback — there is no in-app file browser the way
-// there is for folders.
+// frontend/src/lib/filePicker.ts — native FOLDER picker (spec 004 FR-024).
+// A browser deliberately refuses to hand a page an absolute path, but naming a
+// vault-bundle directory needs one, so the web asks the loopback daemon to open
+// the host's native folder dialog. `unavailable` is true only when the host has
+// no native dialog tool (or the call errors), so the caller can reveal a
+// typed-path fallback.
+//
+// The open-file / save-file counterparts are gone: a file's CONTENTS can travel
+// through the browser itself (`<input type="file">` in, `<a download>` out), so
+// they needed no daemon round-trip and no native dialog.
 import { fsApi } from "./api/fs";
 
 export interface PickOutcome {
@@ -13,37 +17,13 @@ export interface PickOutcome {
   unavailable: boolean;
 }
 
-/** Pick an existing file to open. */
-export async function pickOpenFile(start?: string | null): Promise<PickOutcome> {
-  try {
-    const res = await fsApi.pickFile(start ?? undefined);
-    return { path: res.path, unavailable: !res.available };
-  } catch {
-    return { path: null, unavailable: true };
-  }
-}
-
 /**
  * Pick a directory. Used by the vault export/import buttons, which name a
- * bundle directory rather than a file. Same `unavailable` semantics as
- * `pickOpenFile`: the caller reveals a typed-path fallback.
+ * bundle directory rather than a file.
  */
 export async function pickDirectory(start?: string | null): Promise<PickOutcome> {
   try {
     const res = await fsApi.pickFolder(start ?? undefined);
-    return { path: res.path, unavailable: !res.available };
-  } catch {
-    return { path: null, unavailable: true };
-  }
-}
-
-/** Pick a destination to save a file to, pre-filled with `suggestedName`. */
-export async function pickSaveFile(
-  suggestedName: string,
-  start?: string | null,
-): Promise<PickOutcome> {
-  try {
-    const res = await fsApi.saveFile(suggestedName, start ?? undefined);
     return { path: res.path, unavailable: !res.available };
   } catch {
     return { path: null, unavailable: true };

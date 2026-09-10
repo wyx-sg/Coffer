@@ -28,7 +28,7 @@ Retrieval spans both lanes of a scope, and an agent that names no scope gets the
 | -------------- | --------------------------------------------------------------------------------- |
 | `knowledge/`   | Entries an agent wrote. Fresh ones land in `knowledge/inbox/` before consolidation. |
 | `inbox/`       | Ingested documents, normalized to Markdown.                                        |
-| `rules/`       | Behavioural rules, injected into an agent at session start.                        |
+| `rules/`       | Behavioural rules, read on demand — never pushed into a session.                    |
 | `handoff/`     | Working state, one file per git branch.                                            |
 | `superseded/`  | Retired topic docs, kept rather than deleted.                                      |
 | `.raw/`        | The untouched originals of ingested files. Hidden, so ripgrep skips it.            |
@@ -91,7 +91,9 @@ The index is a projection, never the truth. `coffer knowledge reindex <scope>` r
 
 Two lanes are less about search and more about how an agent starts and stops work.
 
-**Rules** are the behavioural instructions a scope carries — how you want work done in this project. They are injected into the agent at session start, so an agent follows them without having to search first.
+**Rules** are the behavioural instructions a scope carries — how you want work done in this project. The lane sits at the scope root, outside retrieval, and is read **on demand** through its own command or endpoint.
+
+Nothing delivers rules into a session automatically. Coffer used to install a `coffer-hook` SessionStart hook that injected them as ambient context; that hook is removed, so an agent sees the rules only when it (or you) asks for them.
 
 ```bash
 coffer knowledge rules global

@@ -100,3 +100,9 @@ diff -r ~/bundle-from-a ~/bundle-from-b
 这两个操作同样可以通过 `/api/v1/sync/*` 以及 Web UI 的 **Sync** 设置面板使用——一个导出
 按钮和一个导入按钮，各自打开原生目录选择器，外加用于比对指纹、执行带外密钥传递的主密钥
 卡片。
+
+密钥相关的两条路由传的是密钥**材料**，不是路径：`POST /sync/key/export` 收 `{}`，返回
+`{"material": "<fernet key text>"}`；`POST /sync/key/import` 收 `{"material": "…"}`。
+上面那两条 CLI 命令仍然写文件、读文件——只是文件 I/O 由 CLI 自己做，守护进程从此不打开
+任何由调用方指定的路径。在 Web UI 里，导出会落成一次浏览器下载，导入则从
+`<input type="file">` 读取。

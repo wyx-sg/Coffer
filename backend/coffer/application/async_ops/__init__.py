@@ -1,7 +1,7 @@
 """Shared async-operation primitives.
 
 A lightweight, cross-cutting layer (justified by the features that need it:
-KB ingest and native-memory import) for running time-consuming operations off
+KB ingest) for running time-consuming operations off
 the request path and surfacing their in-flight state to the UI.
 
 - ``AsyncOpRegistry`` — in-memory map of transient states (queued/running/error).

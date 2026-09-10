@@ -37,9 +37,6 @@ from coffer.domain.agent.mcp_entries import (
 from coffer.domain.agent.mcp_entries import (
     remove_entry as remove_entry_text,
 )
-from coffer.domain.agent.mcp_entries import (
-    set_entry_enabled as set_entry_enabled_text,
-)
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ConfigFileNotAllowed
@@ -50,7 +47,6 @@ from coffer.domain.workspace_errors import (
     McpEntryNotFound,
     McpEntryProtected,
     McpEntrySourceAmbiguous,
-    McpEntryToggleUnsupported,
 )
 
 
@@ -244,45 +240,6 @@ class AgentMcpEntryService:
         if len(hits) > 1:
             raise McpEntrySourceAmbiguous(entry)
         return hits[0]
-
-    async def remove_entry(
-        self, name: str, entry: str, *, source: str | None = None, actor: str = "api"
-    ) -> None:
-        """Remove ``entry`` from the agent config file that contains it."""
-        cfg = await self._config_for(name)
-        spec, text, _parsed = await self._locate(name, entry, source)
-        new_text = remove_entry_text(
-            spec.format, text, entry, container_key=_container_key(cfg.type)
-        )
-        self._store.write_text_atomic(spec.path, new_text)
-        await self._audit.record(
-            AuditEventType.AGENT_MCP_ENTRY_REMOVED.value,
-            ref=ResourceRef("agent", name),
-            actor=actor,
-            details={"entry": entry, "source": spec.key},
-        )
-
-    async def set_enabled(
-        self, name: str, entry: str, enabled: bool, *, actor: str = "api"
-    ) -> None:
-        """Set the per-entry ``enabled`` flag (Codex TOML only)."""
-        cfg = await self._config_for(name)
-        if cfg.type is not AgentType.CODEX:
-            raise McpEntryToggleUnsupported(cfg.type.value)
-        if entry == COFFER_SERVER_KEY:
-            raise McpEntryProtected(entry)
-        spec = spec_for(cfg.type, _source_keys(cfg.type)[0], cfg.resolved_config_dir())
-        text = self._store.read_text(spec.path)
-        if text is None:
-            raise McpEntryNotFound(entry)
-        new_text = set_entry_enabled_text(text, entry, enabled)
-        self._store.write_text_atomic(spec.path, new_text)
-        await self._audit.record(
-            AuditEventType.AGENT_CONFIG_FILE_WRITTEN.value,
-            ref=ResourceRef("agent", name),
-            actor=actor,
-            details={"key": spec.key, "entry": entry, "enabled": enabled},
-        )
 
     async def _cleanup_refs(self, refs: dict[str, str]) -> None:
         """Best-effort removal of keychain entries written by a failed adopt."""

@@ -28,7 +28,7 @@ coffer knowledge describe global
 | -------------- | -------------------------------------------------------------------- |
 | `knowledge/`   | agent 写下的条目。新写的先落在 `knowledge/inbox/`,之后再做整合。      |
 | `inbox/`       | 摄取进来的文档,已规范化为 Markdown。                                  |
-| `rules/`       | 行为规则,在会话开始时注入 agent。                                     |
+| `rules/`       | 行为规则,按需读取 —— 不会被推进会话。                                 |
 | `handoff/`     | 工作现场,每个 git 分支一份。                                          |
 | `superseded/`  | 已退役的主题文档 —— 保留而非删除。                                    |
 | `.raw/`        | 摄取文件未经改动的原件。隐藏目录,ripgrep 会跳过。                     |
@@ -91,7 +91,9 @@ coffer knowledge configure handbook --enable-vector
 
 有两条车道与其说关乎检索,不如说关乎 agent 如何开始与停下工作。
 
-**规则**(rules)是一个作用域携带的行为指令 —— 你希望这个项目里的活怎么干。它们在会话开始时注入 agent,因此 agent 无需先检索就会遵循。
+**规则**(rules)是一个作用域携带的行为指令 —— 你希望这个项目里的活怎么干。这条 lane 位于 scope 根、不参与检索,通过它自己的命令或端点**按需**读取。
+
+没有任何东西会自动把规则送进会话。Coffer 过去会安装一个 `coffer-hook` SessionStart hook 把它们作为环境上下文注入;那个 hook 已被移除,所以只有 agent(或你)主动索取时才看得到规则。
 
 ```bash
 coffer knowledge rules global

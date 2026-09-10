@@ -5,7 +5,7 @@
 **Status**: 部分被 [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md) 取代（2026-06-18）—— 下文决策中「原生投影」那一半已移除；Coffer 绝不写 agent 自己的原生记忆文件。「共享单一 store」那一半依然成立，也正是本 ADR 现在所记录的内容。2026-09-10 以知识层词汇重新表述（见修订历史）。
 **Date**: 2026-06-09（2026-09-10 修订；见修订历史）
 **Deciders**: Yuxing Wu
-**Related**: spec `007-memory`（知识层 spec）、[ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md)、[ADR-007](ADR-007-everything-is-a-resource-kind.md)、[ADR-009](ADR-009-cross-platform-skill-delivery.md)、[ADR-026](ADR-026-memory-via-mcp-not-native-projection.md)、[ADR-035](ADR-035-adopt-native-memory.md)、[ADR-037](ADR-037-rules-runtime-injection.md)
+**Related**: spec `007-memory`（知识层 spec）、[ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md)、[ADR-007](ADR-007-everything-is-a-resource-kind.md)、[ADR-009](ADR-009-cross-platform-skill-delivery.md)、[ADR-026](ADR-026-memory-via-mcp-not-native-projection.md)
 
 ## Context
 
@@ -56,13 +56,16 @@ agent 各写一份，并**分叉**：每份副本被独立编辑，agent 们对�
   `scope`，默认取由 shim 上报的 cwd 解析出的项目 scope，回退到 `global`。调用方
   再也不必在能搜之前先判定一条事实属于哪个 store。**新加一个 agent，知识层零代码**
   —— 这些工具本就与 agent 无关。
-- **不碰 agent 文件也能做环境式交付。** Context 里点出的那个落差（原生免费加载、
-  MCP 不会）由 [ADR-037](ADR-037-rules-runtime-injection.md) 补上：`rules` lane
-  在 SessionStart 注入会话，handoff 经 `coffer__resume` 按需拉取。注入是运行时
-  状态，因此既达到环境式效果，又不写任何归 agent 所有的文件。
-- **只导入，不投影。** 若某个 agent 已经积累了自己的原生记忆，Coffer 读取它，并让
-  用户把它一次性接管**进**共享 store（[ADR-035](ADR-035-adopt-native-memory.md)）。
-  这条流向是单向、向内的；没有任何东西回流到 agent 的文件里。
+- **不碰 agent 文件也能做环境式交付。** _2026-09-10 撤回。_ Context 里点出的那个
+  落差——原生记忆免费加载、MCP 不会——原本要靠一个 SessionStart shell hook 把
+  `rules` lane 作为运行时上下文注入来补上。那个机制 ship 了，但从未被安装到任何
+  agent 上，因此已删除（spec 004 FR-043…FR-048）。于是这个落差**重新敞开**：没有
+  任何东西会把知识推进会话，agent 只能自己调 `coffer__recall` / `coffer__search`
+  才能触达共享 store。本 ADR 其余部分依然成立，唯独这一条不再成立。
+- **只导入，不投影。** _2026-09-10 撤回。_ Coffer 曾能读取某个 agent 自己积累的
+  原生记忆，让用户一次性把它接管进来。这一条同样 ship 了却从未被使用，已删除
+  （spec 004 FR-040/FR-041）。它确立的那个**方向**仍然成立——没有任何东西回流到
+  agent 的文件里——但如今两个方向都没有路径了。
 
 **本 ADR 最初选定的机制并非如此，且已被移除。** 它把规范 store *向外*投影到每个
 agent 的原生位置 —— 每个 agent 一个 `AgentMemoryAdapter`，`projection_mode` 取值
@@ -91,11 +94,12 @@ ADR 今天被读的理由，是「共享单一 store」这个决策本身。
 
 **负面**
 
-- **取回是有意的，不是自动的。** agent 只有在调用 `coffer__search`（或 rules lane
-  被注入）时才看得见一条事实。只有 rules 与 handoff 两条路径是环境式的；普通
-  entry 不会被推进上下文。这是「不写 agent 文件」的代价，我们接受。
-- **既有原生记忆需用户显式接管。** 已经躺在 agent 自己 store 里的事实不会自行迁移；
-  ADR-035 的导入是一个用户动作。
+- **取回是有意的，不是自动的。** agent 只有在调用 `coffer__search` 时才看得见一条
+  事实。自 2026-09-10 删除 session-start 注入后，**没有任何东西**是环境式的——连
+  rules lane 也不例外，它现在只能经自己的端点按需读取。这是「不写 agent 文件」的
+  完整代价，我们明知而接受：那条环境式路径本来就从未真正跑起来过。
+- **躺在 agent 自己 store 里的事实就留在那里。** 它们不会自行迁移；导入功能删除后，
+  也不再有把它们搬过来的办法。
 - **Coffer 的工具是唯一写入路径。** 不会讲 MCP 的 agent 无法向共享 store 贡献内容。
 
 ## Alternatives Considered

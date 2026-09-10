@@ -44,49 +44,6 @@ export interface McpInstallStatus {
   command: string | null;
 }
 
-/** Session-start hook (rules-injection) install status — mirrors McpInstallStatus.
- * `command` is the resolved shim command line when installed, null otherwise. */
-export interface HookInstallStatus {
-  installed: boolean;
-  command: string | null;
-  /** False when the agent's manifest declares no context injection. */
-  supported?: boolean;
-}
-
-/** One of the agent's OWN native per-project memory stores (read-only scan). */
-export interface NativeMemoryStore {
-  /** Readable project label (the project dir's basename). */
-  project: string;
-  /** Real project path (Codex global store: the cwd routed to). Null if unresolved. */
-  path: string | null;
-  /** The agent's native memory dir (Claude Code: per-project; Codex: one global). */
-  memory_dir: string;
-  /** Number of memory entries (Claude Code fact files / an inline MEMORY.md /
-   * Codex Task Groups routed to this project). */
-  item_count: number;
-  /** queued | running | error — in-flight only; null when idle. */
-  import_status?: string | null;
-}
-
-export interface NativeMemoryImportBatchResult {
-  queued: number;
-  total: number;
-}
-
-export interface NativeMemoryImportStatus {
-  memory_dir: string;
-  state: string;
-  message?: string | null;
-}
-
-export interface NativeMemoryImportStatusResponse {
-  statuses: NativeMemoryImportStatus[];
-}
-
-export interface NativeMemoryListResponse {
-  items: NativeMemoryStore[];
-}
-
 export interface AgentOut {
   name: string;
   type: AgentType;
@@ -96,9 +53,6 @@ export interface AgentOut {
   updated_at: string;
   follow_all_skills?: boolean;
   skill_exclusions?: string[];
-  /** When true, the agent's own native memory is disabled (via its config) so it
-   * uses Coffer as the shared memory store. Hand-added until openapi codegen. */
-  disable_native_memory?: boolean;
   /** Per-agent model binding (spec 011 amendment 2026-06-22b). The model the
    * agent projects — null = unbound (falls back to the active connection). */
   model?: string | null;
@@ -124,7 +78,6 @@ export interface AgentPatch {
   description?: string | null;
   follow_all_skills?: boolean;
   skill_exclusions?: string[];
-  disable_native_memory?: boolean;
   // Per-agent model binding (E3); explicit null fast_model clears the fast slot.
   model?: string | null;
   fast_model?: string | null;
@@ -143,23 +96,19 @@ export interface AgentCandidatesOut {
   candidates: AgentCandidate[];
 }
 
-// Agent workspace wire types (MCP entries / plugins / unmanaged skills) live in
+// Agent workspace wire types (MCP entries / unmanaged skills) live in
 // agents-workspace.ts for the file-size budget; re-exported so existing
 // `from "@/lib/api/agents"` import paths keep working.
 export type {
   AdoptMcpEntryBody,
-  MarketplaceOut,
   McpEntriesResponse,
   McpEntryOut,
-  PluginOut,
-  PluginsResponse,
   UnmanagedSkillOut,
   UnmanagedSkillsResponse,
 } from "./agents-workspace";
 import type {
   AdoptMcpEntryBody,
   McpEntriesResponse,
-  PluginsResponse,
   UnmanagedSkillsResponse,
 } from "./agents-workspace";
 
@@ -220,33 +169,15 @@ export const agentsApi = {
 
   // Session-start hook (rules injection): install/uninstall/status. A 422 with
   // code HOOK_INSTALL_UNSUPPORTED means the agent type has no hook support.
-  hookStatus: (name: string) => call<HookInstallStatus>("GET", `/agents/${enc(name)}/hook-install`),
-  hookInstall: (name: string) =>
-    call<HookInstallStatus>("POST", `/agents/${enc(name)}/hook-install`),
-  hookUninstall: (name: string) =>
-    call<HookInstallStatus>("DELETE", `/agents/${enc(name)}/hook-install`),
 
   // MCP entries (specs 004/005 workspace amendment)
   mcpEntries: (name: string) => call<McpEntriesResponse>("GET", `/agents/${enc(name)}/mcp-entries`),
-  toggleMcpEntry: (name: string, entry: string, enabled: boolean) =>
-    call<void>("PATCH", `/agents/${enc(name)}/mcp-entries/${enc(entry)}`, { enabled }),
-  removeMcpEntry: (name: string, entry: string, source?: string) => {
-    const qs = source ? `?source=${encodeURIComponent(source)}` : "";
-    return call<void>("DELETE", `/agents/${enc(name)}/mcp-entries/${enc(entry)}${qs}`);
-  },
   adoptMcpEntry: (name: string, entry: string, body: AdoptMcpEntryBody) =>
     call<{ kind: string; name: string }>(
       "POST",
       `/agents/${enc(name)}/mcp-entries/${enc(entry)}/adopt`,
       body,
     ),
-
-  // Plugins (specs 004/005 workspace amendment)
-  plugins: (name: string) => call<PluginsResponse>("GET", `/agents/${enc(name)}/plugins`),
-  togglePlugin: (name: string, id: string, enabled: boolean) =>
-    call<void>("PATCH", `/agents/${enc(name)}/plugins/${encodeURIComponent(id)}`, { enabled }),
-  uninstallPlugin: (name: string, id: string) =>
-    call<void>("DELETE", `/agents/${enc(name)}/plugins/${encodeURIComponent(id)}`),
 
   // Config-file child (per-file inside a directory-backed config key) — read-only.
   readConfigChild: (name: string, key: string, relpath: string) => {
@@ -268,17 +199,5 @@ export const agentsApi = {
     call<void>(
       "DELETE",
       `/agents/${enc(name)}/unmanaged-skills/${enc(skill)}?location=${encodeURIComponent(location)}`,
-    ),
-  // Native memory: the agent's OWN per-project memory stores (read-only scan).
-  nativeMemory: (name: string) =>
-    call<NativeMemoryListResponse>("GET", `/agents/${enc(name)}/native-memory`),
-  importNativeMemoryBatch: (name: string, memoryDirs: string[]) =>
-    call<NativeMemoryImportBatchResult>("POST", `/agents/${enc(name)}/native-memory/import-batch`, {
-      memory_dirs: memoryDirs,
-    }),
-  nativeMemoryImportStatus: (name: string) =>
-    call<NativeMemoryImportStatusResponse>(
-      "GET",
-      `/agents/${enc(name)}/native-memory/import-status`,
     ),
 };

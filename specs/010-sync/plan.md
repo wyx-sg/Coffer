@@ -59,9 +59,10 @@ No `git_repo.py`, no `worker.py`, no `config_service.py`, no
 7. **surfaces cli** — `coffer sync export|import` and `coffer sync key
    export|import` over the loopback client. Contract test.
 8. **frontend** — Settings → Sync: an export button and an import button over
-   the daemon-hosted native directory picker (spec 004 FR-042 /
-   [ADR-036](../../docs/decisions/ADR-036-daemon-native-file-and-save-dialogs.md)),
-   a result summary, and the master-key card. The fleet view and the
+   the daemon-hosted native directory picker (spec 004 FR-042), a result
+   summary, and the master-key card — the card itself uses the browser's own
+   download and `<input type="file">`, so the key material crosses the API and
+   the daemon opens no path. The fleet view and the
    remote/auto-sync/conflict UI are removed.
 9. **docs** — architecture.md cross-cutting row, roadmap status, docs-site
    guide + architecture pages, bilingual companions; acceptance markers tie each

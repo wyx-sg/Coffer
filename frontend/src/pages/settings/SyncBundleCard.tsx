@@ -1,7 +1,7 @@
 // frontend/src/pages/settings/SyncBundleCard.tsx
 //
 // Settings → Sync → Export / Import (spec 010). Two buttons, each opening the
-// daemon-hosted native directory picker (spec 004 FR-042 / ADR-036) to name a
+// daemon-hosted native directory picker (spec 004 FR-042) to name a
 // bundle directory; the export one is gated by an opt-in "include credentials"
 // switch, off by default, because an export directory is easy to leave
 // somewhere careless. Both operations report the backend's summary: counts per

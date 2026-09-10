@@ -2,7 +2,9 @@
 //
 // Vault export / import (spec 010): POST /sync/export, POST /sync/import, and
 // the out-of-band master-key routes GET /sync/key/fingerprint + POST
-// /sync/key/{export,import}. There is no remote, no status poll and no
+// /sync/key/{export,import} — the latter two carry the key MATERIAL in the
+// body, so the browser downloads/uploads a file itself rather than naming a
+// host path for the daemon to write. There is no remote, no status poll and no
 // background run — a bundle is an ordinary local directory the user carries to
 // the other machine themselves. Hand-written fetch, mirroring
 // useEmbeddingConfig (the generated client only covers spec 001).
@@ -107,18 +109,29 @@ export function useKeyFingerprint() {
   });
 }
 
+/**
+ * Install a key the user carried here as a FILE, read in the browser. The
+ * material travels in the request body — the daemon never resolves a path the
+ * page named, and the browser never has to learn one.
+ */
 export function useImportMasterKey() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (path: string) => postJson<{ fingerprint: string }>("/sync/key/import", { path }),
+    mutationFn: (material: string) =>
+      postJson<{ locked_refs: string[] }>("/sync/key/import", { material }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["sync-key-fingerprint"] });
     },
   });
 }
 
+/**
+ * Hand this machine's key back to the page so it can be downloaded as a file.
+ * The key crosses only the loopback origin the user is already authenticated
+ * against; it is still never written into an export bundle.
+ */
 export function useExportMasterKey() {
   return useMutation({
-    mutationFn: (path: string) => postJson<{ path: string }>("/sync/key/export", { path }),
+    mutationFn: () => postJson<{ material: string }>("/sync/key/export", {}),
   });
 }

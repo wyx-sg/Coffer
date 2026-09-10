@@ -7,11 +7,9 @@ door. An installation without the agent quarantines the doc (retried every
 run; self-heals once the agent is installed), instead of creating a registry
 row pointing at a dead directory.
 
-Hook: two agent-config fields drive on-disk side-effects that the registry
-upsert alone does not perform — ``disable_native_memory`` (the native-config
-transform of spec 004 slice 6) and ``follow_all_skills`` (skill delivery,
-FR-025). After every import both are re-applied idempotently from the
-converged rows.
+Hook: one agent-config field drives an on-disk side-effect that the registry
+upsert alone does not perform — ``follow_all_skills`` (skill delivery, FR-025).
+After every import it is re-applied idempotently from the converged rows.
 """
 
 from __future__ import annotations
@@ -23,9 +21,6 @@ from typing import Protocol
 
 from coffer.application.agent.service import AgentService
 from coffer.domain.agent.config import AgentConfig
-from coffer.domain.agent.config_files import spec_for
-from coffer.domain.agent.descriptor import native_memory_disable_target
-from coffer.domain.agent.native_memory_disable import apply_disable, apply_restore, is_disabled
 from coffer.domain.errors import ConfigValidationError
 
 
@@ -88,10 +83,6 @@ class AgentSideEffectsReconcile:
             if not cfg.resolved_config_dir().is_dir():
                 errors.append(f"{row.name}: config dir missing on this machine; skipped")
                 continue
-            try:
-                await asyncio.to_thread(self._apply_native_memory, cfg)
-            except Exception as e:
-                errors.append(f"{row.name} (native memory): {e}")
             if self._on_skill_policy_changed is not None:
                 try:
                     # Re-run delivery reconciliation for the row's follow
@@ -101,25 +92,3 @@ class AgentSideEffectsReconcile:
                 except Exception as e:
                     errors.append(f"{row.name} (skill delivery): {e}")
         return errors
-
-    def _apply_native_memory(self, cfg: AgentConfig) -> None:
-        """The on-disk half of ``AgentService.set_disable_native_memory``,
-        applied from the row's CURRENT value (no flag flip, no audit — the
-        originating machine already audited the user's action)."""
-        target = native_memory_disable_target(cfg.type)
-        if target is None:
-            return  # the type has no native memory to disable — nothing to converge
-        config_key, fmt = target
-        spec = spec_for(cfg.type, config_key, cfg.resolved_config_dir())
-        text = self._store.read_text(spec.path)
-        # Converge on SEMANTICS, not bytes: an already-correct file is never
-        # rewritten (no reformat of user formatting, no `{}` file creation,
-        # no churn on every import). is_disabled("") is False, so a missing
-        # file with the flag off is already converged.
-        if is_disabled(text or "", fmt=fmt, agent_type=cfg.type) == cfg.disable_native_memory:
-            return
-        if cfg.disable_native_memory:
-            new_text = apply_disable(text or "", fmt=fmt, agent_type=cfg.type)
-        else:
-            new_text = apply_restore(text or "", fmt=fmt, agent_type=cfg.type)
-        self._store.write_text_atomic(spec.path, new_text)

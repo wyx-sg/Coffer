@@ -14,7 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from coffer.application.agent.auto_detect import AutoDetectService
 from coffer.application.agent.config_file_service import AgentConfigFileService
-from coffer.application.agent.hook_service import AgentHookService
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.mcp_service import AgentMcpService
 from coffer.application.agent.service import AgentService
@@ -40,7 +39,6 @@ class AgentTestBundle:
     detect: AutoDetectService
     config_files: AgentConfigFileService
     mcp: AgentMcpService
-    hook: AgentHookService
     audit: AuditService
     engine: AsyncEngine
     db_path: pathlib.Path
@@ -71,20 +69,12 @@ async def agent_bundle(tmp_path: pathlib.Path):
         store=store,
         shim_resolver=lambda: "/opt/coffer/coffer-mcp-shim",
     )
-
-    hook = AgentHookService(
-        agent_service=svc,
-        audit=audit,
-        store=store,
-        hook_resolver=lambda: "/opt/coffer/coffer-hook",
-    )
     try:
         yield AgentTestBundle(
             svc=svc,
             detect=detect,
             config_files=config_files,
             mcp=mcp,
-            hook=hook,
             audit=audit,
             engine=engine,
             db_path=db_path,

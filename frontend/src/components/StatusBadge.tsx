@@ -1,6 +1,6 @@
 // frontend/src/components/StatusBadge.tsx
-// One shared status pill for the async-operation tables (KB ingest,
-// native-memory import). Each surface maps its own status enum to a
+// One shared status pill for the async-operation tables (KB ingest today).
+// Each surface maps its own status enum to a
 // neutral `tone` + label here, so the colour vocabulary stays consistent:
 //   neutral  — not started / idle
 //   info     — queued / in-flight, no action needed

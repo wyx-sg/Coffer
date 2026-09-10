@@ -126,8 +126,12 @@ The agent detail page has four tabs:
 - **Skills** — the skills Coffer manages for this agent, each with an enable/disable toggle.
   An **Install skills** button opens a picker dialog (search, filter, pagination,
   multi-select) to bind more skills to the agent.
-- **MCP servers** — the MCP servers Coffer currently exposes to the agent, as a read-only
-  table (per-agent MCP grants are a planned feature).
+- **MCP servers** — two sections. *Via Coffer gateway* shows the shim's install status and
+  links to the MCP servers page. *Direct servers* lists the agent's own MCP entries, read
+  from its config files: each row shows its source, transport, and enabled state as a plain
+  badge, and the one write available is **Adopt** — pulling the entry into Coffer as a
+  managed resource. Coffer does not edit another tool's private config, so there is no
+  remove and no enable/disable toggle here.
 - **Config files** — open any of the agent's curated config files in an editor. Saving
   validates the file's format (malformed JSON/TOML is rejected and the file left unchanged),
   writes atomically with a `.bak` backup, and offers a find/replace box that scrolls to the
@@ -164,7 +168,7 @@ Clicking a scope opens `/knowledge/:scope` with five tabs:
 - **Documents** — files ingested and converted to Markdown. Drag files in, read one,
   re-run conversion, or delete. Documents that track an external original show whether
   that original has changed on disk.
-- **Rules** — the scope's behavioural rules, injected into agents at session start.
+- **Rules** — the scope's behavioural rules. Read on demand; nothing pushes them into an agent session.
 - **Handoff** — the saved working state, one entry per git branch.
 - **Changelog** — the append-only record of what consolidation did and when.
 

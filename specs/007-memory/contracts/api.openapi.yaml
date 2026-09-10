@@ -94,10 +94,6 @@ info:
     additionally read an optional `X-Coffer-Actor` header. Every error response
     uses the app-wide envelope `{ "error": { code, message, details } }`.
 
-    The agent-scoped SessionStart rules bundle
-    (`GET /api/v1/agents/{name}/session-context`) lives in
-    `session-context.openapi.yaml`.
-
     ## Reading this file against the code
 
     The path parameter is spelled `{name}` here because that is what the route
@@ -1086,7 +1082,7 @@ paths:
         One `handoff/<branch-slug>.md` scene per git branch — the working state
         an agent left behind. Read-only here; scenes are written through the
         `coffer__set_handoff` built-in tool and pulled on demand by
-        `coffer__resume`, never injected wholesale at session start.
+        `coffer__resume`. Nothing is pushed into a session: the agent asks.
       operationId: getKnowledgeHandoff
       tags: [knowledge]
       responses:

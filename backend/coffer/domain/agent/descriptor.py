@@ -23,12 +23,10 @@ from dataclasses import dataclass
 
 from coffer.domain.agent.allowlists import _claude_code_files, _codex_files, _home
 from coffer.domain.agent.config_files import ConfigFileFormat, ConfigFileSpec
-from coffer.domain.agent.context_injection import ContextInjectionSpec, HookEvent
 from coffer.domain.agent.mcp_injection import McpEntryStyle, McpInjectionSpec
 from coffer.domain.agent.plugin_capability import (
     PluginCapability,
     PluginModel,
-    UninstallStrategy,
 )
 from coffer.domain.agent.types import AgentType
 
@@ -47,11 +45,6 @@ class AgentDescriptor:
     config_files: Callable[[pathlib.Path], tuple[ConfigFileSpec, ...]]
     #: How Coffer installs its own ``coffer`` MCP entry (None = MCP not managed).
     mcp: McpInjectionSpec | None = None
-    #: How Coffer injects its session context — rules + memory — into this agent
-    #: (None = the agent offers no usable injection point). Claude Code installs
-    #: SessionStart + SessionEnd shell hooks; Codex installs SessionStart only
-    #: (it has no usable session-end event).
-    context_injection: ContextInjectionSpec | None = None
     #: Allowlist keys of files scanned when listing the agent's *own* MCP
     #: entries (FR-025). Defaults to the MCP injection file when unset.
     mcp_source_keys: tuple[str, ...] = ()
@@ -98,20 +91,9 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             entry_style=McpEntryStyle.COMMAND_MAP,
         ),
         mcp_source_keys=("global", "settings"),
-        context_injection=ContextInjectionSpec(
-            config_key="settings",
-            format=ConfigFileFormat.JSON,
-            events=(HookEvent.SESSION_START, HookEvent.SESSION_END),
-        ),
         plugins=PluginCapability(
             model=PluginModel.CLAUDE,
             config_key="settings",
-            can_toggle=True,
-            # Claude's install inventory is an internal file Coffer never writes,
-            # so uninstall is delegated to the `claude plugin uninstall` CLI,
-            # which owns that state. Gated at runtime on `claude` being on PATH.
-            can_uninstall=True,
-            uninstall_strategy=UninstallStrategy.CLI,
         ),
     ),
     AgentType.CODEX: AgentDescriptor(
@@ -126,16 +108,9 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             entry_style=McpEntryStyle.COMMAND_MAP,
         ),
         mcp_source_keys=("config",),
-        context_injection=ContextInjectionSpec(
-            config_key="hooks",
-            format=ConfigFileFormat.JSON,
-            events=(HookEvent.SESSION_START,),
-        ),
         plugins=PluginCapability(
             model=PluginModel.CODEX,
             config_key="config",
-            can_toggle=True,
-            can_uninstall=True,
         ),
     ),
 }
@@ -146,25 +121,6 @@ def descriptor_for(agent_type: AgentType) -> AgentDescriptor:
         return AGENT_DESCRIPTORS[agent_type]
     except KeyError:  # pragma: no cover - every enum value has a record
         raise AssertionError(f"no descriptor for AgentType {agent_type!r}") from None
-
-
-#: Which allowlisted config file (key + format) holds an agent's native
-#: write-side memory toggle (Slice 6). Claude Code → ``settings.json`` (JSON,
-#: ``autoMemoryEnabled``); Codex → ``config.toml`` (TOML, ``features.memories``
-#: + ``memories.generate_memories``). The transforms live in
-#: :mod:`coffer.domain.agent.native_memory_disable`.
-_NATIVE_MEMORY_DISABLE_TARGET: dict[AgentType, tuple[str, ConfigFileFormat]] = {
-    AgentType.CLAUDE_CODE: ("settings", ConfigFileFormat.JSON),
-    AgentType.CODEX: ("config", ConfigFileFormat.TOML),
-}
-
-
-def native_memory_disable_target(agent_type: AgentType) -> tuple[str, ConfigFileFormat] | None:
-    """The ``(config_key, format)`` that holds the native-memory toggle, or ``None``
-    for an agent type with no native write-side memory to disable. Both supported
-    types have one (FR-003a); callers still treat ``None`` as "this facet is
-    absent" and reject/hide the toggle rather than failing."""
-    return _NATIVE_MEMORY_DISABLE_TARGET.get(agent_type)
 
 
 def is_agent_enabled(agent_type: AgentType) -> bool:

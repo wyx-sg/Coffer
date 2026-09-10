@@ -108,6 +108,28 @@ import`. A machine that holds ciphertext but not the key reports
 `credentials_locked` and refuses to spawn the affected resources — it never
 silently fails decryption.
 
+**The key crosses as material, not as a path.** `POST /sync/key/export` takes an
+empty body and returns `{"material": "<fernet key text>"}`; `POST
+/sync/key/import` takes `{"material": "<fernet key text>"}` and returns the refs
+that remain locked. The daemon never opens a filesystem path a caller named.
+Each surface then does its own file I/O: the CLI writes `coffer sync key export
+<path>` to that path itself (mode `0600`) and reads the file back for `key
+import`; the web UI hands the material to a browser download and reads an
+`<input type="file">` for the import.
+
+The reason is the web UI. Both directions used to go through the daemon's
+native save/open dialogs — the daemon ran `osascript`/`zenity` on the user's
+behalf and returned a chosen path — and those dialogs are removed. A browser has
+no absolute path to hand the daemon anyway, while `<input type="file">` hands
+over the *contents* directly, which is strictly more useful than a path that has
+to survive a round-trip.
+
+The trade, stated: the key material now crosses the token-guarded loopback API,
+where before it did not. That is acceptable. Whoever asked to export the master
+key was going to hold the plaintext either way — that is what exporting it
+means — and the alternative was the daemon executing a native dialog binary on
+the user's behalf to avoid a hop that never left `127.0.0.1`.
+
 ## Scope
 
 Resource `scope` (a list of agent names,
@@ -120,9 +142,9 @@ for every agent on this machine is registered and visible, just not activated.
 
 | Surface | Operation |
 | --- | --- |
-| CLI | `coffer sync export <dir> [--with-credentials]` · `coffer sync import <dir>` · `coffer sync key export` / `coffer sync key import` |
+| CLI | `coffer sync export <dir> [--with-credentials]` · `coffer sync import <dir>` · `coffer sync key export <file>` / `coffer sync key import <file>` |
 | HTTP | `POST /api/v1/sync/export` · `POST /api/v1/sync/import` · `GET /api/v1/sync/key/fingerprint` · `POST /api/v1/sync/key/export` · `POST /api/v1/sync/key/import` |
-| UI | Settings → Sync: an export button and an import button, each opening the daemon-hosted native directory picker (spec 004 FR-042 / [ADR-036](../../docs/decisions/ADR-036-daemon-native-file-and-save-dialogs.md)), plus the master-key card |
+| UI | Settings → Sync: an export button and an import button, each opening the daemon-hosted native **directory** picker (spec 004 FR-042), plus the master-key card — which uses the browser's own download / `<input type="file">`, not a daemon dialog |
 
 Both operations report a summary: counts per area, the resources that failed,
 and the bundle path.
