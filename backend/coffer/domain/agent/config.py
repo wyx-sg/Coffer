@@ -13,9 +13,8 @@ to ``<config_dir>/skills`` — there is no separate skill-dir concept.
 from __future__ import annotations
 
 import pathlib
-from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from coffer.domain.agent.types import AgentType
 
@@ -34,11 +33,6 @@ class AgentConfig(BaseModel):
     # pre-amendment trust-mode: every master skill is auto-delivered.
     follow_all_skills: bool = True
     skill_exclusions: list[str] = Field(default_factory=list)
-    # Slice 6 opt-in toggle. When True, Coffer disables the agent's *native*
-    # write-side memory (Claude ``autoMemoryEnabled``; Codex ``features.memories``
-    # / ``memories.generate_memories``) so Coffer is the single shared memory
-    # store. Default OFF; toggling it back off restores the agent's native
-    # memory. Old persisted rows (pre-Slice-6) load with this default.
     # Per-agent model binding (spec provider-switching amendment 2026-06-22b, E3). The model the
     # agent projects comes from HERE, not the connection: ``model`` →
     # ``ANTHROPIC_MODEL`` / Codex ``model``; ``fast_model`` →
@@ -50,31 +44,6 @@ class AgentConfig(BaseModel):
     # Validated against the allowed Codex wire-api values (see _validate_wire_api)
     # so a bad value is a 422 at PATCH time, not a corrupt projected Codex config.
     wire_api: str | None = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def _migrate_legacy_keys(cls, data: Any) -> Any:
-        """Tolerate / migrate keys from older persisted rows that
-        ``extra="forbid"`` would otherwise reject on load:
-
-        - ``auto_detected`` — detection is confirm-based now (registers like a
-          manual add), so the flag was removed; the dead key is dropped.
-        - ``skill_dir`` — superseded by ``config_dir`` (skills now go to
-          ``<config_dir>/skills``). Rather than silently drop a user's
-          override and revert skill delivery to the type default, MAP it onto
-          ``config_dir``: a ``<dir>/skills`` override becomes ``config_dir=<dir>``
-          (skills land in the same place); any other custom dir becomes the
-          config dir itself (skills land in its ``skills/`` subfolder). The
-          0005 migration rewrites rows at rest; this is the load-time safety
-          net. Genuinely-unknown fields are still rejected.
-        """
-        if isinstance(data, dict):
-            data = {k: v for k, v in data.items() if k != "auto_detected"}
-            legacy = data.pop("skill_dir", None)
-            if legacy and not data.get("config_dir"):
-                p = pathlib.Path(legacy)
-                data["config_dir"] = str(p.parent) if p.name == "skills" else legacy
-        return data
 
     @field_validator("wire_api")
     @classmethod

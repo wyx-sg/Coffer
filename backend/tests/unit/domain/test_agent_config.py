@@ -42,41 +42,28 @@ def test_config_dir_empty_rejected():
         AgentConfig(type=AgentType.CLAUDE_CODE, config_dir="   ")
 
 
-def test_legacy_skill_dir_key_migrated_to_config_dir():
-    """Older rows stored a now-removed ``skill_dir`` override. Loading them must
-    succeed (extra="forbid") AND preserve the override by mapping it onto
-    ``config_dir`` instead of silently reverting to the type default."""
-    # A ``<dir>/skills`` override maps to config_dir=<dir> (same on-disk loc).
-    cfg = AgentConfig.model_validate({"type": "claude_code", "skill_dir": "/data/team/skills"})
-    assert cfg.type is AgentType.CLAUDE_CODE
-    assert cfg.config_dir == "/data/team"
-    assert cfg.resolved_skill_dir() == pathlib.Path("/data/team/skills")
-    assert not hasattr(cfg, "skill_dir")
-
-    # Any other custom dir becomes the config dir itself.
-    cfg2 = AgentConfig.model_validate({"type": "codex", "skill_dir": "/data/custom"})
-    assert cfg2.config_dir == "/data/custom"
-
-    # An explicit config_dir wins over a legacy skill_dir if both are present.
-    cfg3 = AgentConfig.model_validate(
-        {"type": "claude_code", "config_dir": "/keep/me", "skill_dir": "/data/x/skills"}
-    )
-    assert cfg3.config_dir == "/keep/me"
-
-
 def test_extra_fields_rejected():
     with pytest.raises(ValidationError):
         AgentConfig.model_validate({"type": "claude_code", "wat": "no"})
 
 
-def test_legacy_auto_detected_key_tolerated():
-    """Legacy rows stored a now-removed ``auto_detected`` flag. Loading them
-    must succeed (the key is silently dropped) even though extra="forbid"."""
-    cfg = AgentConfig.model_validate({"type": "claude_code", "auto_detected": False})
-    assert cfg.type is AgentType.CLAUDE_CODE
-    assert not hasattr(cfg, "auto_detected")
-    cfg_true = AgentConfig.model_validate({"type": "codex", "auto_detected": True})
-    assert cfg_true.type is AgentType.CODEX
+@pytest.mark.parametrize(
+    "dead_key, value",
+    [
+        ("skill_dir", "/data/team/skills"),
+        ("auto_detected", True),
+        ("disable_native_memory", False),
+    ],
+)
+def test_removed_fields_are_rejected_not_tolerated(dead_key, value):
+    """Each of these was a real field once, and each was carried by rows a
+    migration has since rewritten (0005, 0056). The model used to tolerate them
+    at load time on top of that; it no longer does, so the only way one reaches
+    here is a config that never went through this database's migrations — an
+    import bundle from an older build, which quarantines rather than corrupts.
+    """
+    with pytest.raises(ValidationError):
+        AgentConfig.model_validate({"type": "claude_code", dead_key: value})
 
 
 def test_unknown_type_rejected():
