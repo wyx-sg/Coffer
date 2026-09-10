@@ -345,12 +345,30 @@ status / notify`。
   sentinel 则作为文本保留。这个无歧义的 sentinel 让出站发文件是刻意的、而非猜测，且绝不
   与普通 markdown 冲突。
 - **FR-022**: 入站语音消息以转写文本驱动一个 turn。内置 agent（Claude Code、Codex）
-  无法听音频，所以 adapter 把音频**本地**转写成文字并折进 turn 的 prompt。转写是一个
-  按 agent 的接缝（ADR-038）：冻结构建用随包、torch-free 的 `whisper.cpp` 引擎
-  （Apple Silicon Metal）——即冻结 daemon 部署到 `~/.coffer/bin/` 的 `whisper-cli`
-  二进制——其小模型首次使用时下载；源码运行则回退到 `mlx-whisper`
-  （可选 `[voice-mlx]` extra）。见 ADR-039。未来音频原生 agent 的 adapter 直接转发音频而非
-  转写。没有可用引擎时——或模型尚未下载时——语音作为音频文件交出而非丢失。
+  听不见音频，因此 adapter 先把音频转写成文本、折进这个 turn 的 prompt。转写是一条
+  按 agent 的接缝（ADR-038）；将来若有原生听得见音频的 agent，其 adapter 直接转发音频
+  而不转写。
+
+  转写走**远程**，落在用户指定为 Coffer `internal_default` 的那条连接上——也就是跑
+  knowledge merge / organize / reorg 的同一条（spec 011）。因此语音不引入新概念，
+  也不引入第二处配置。端点是 OpenAI 形状的
+  （`POST <base_url>/audio/transcriptions`）；协议本身没有这个端点的连接
+  （`anthropic`、`ollama`）不会被用于转写。
+
+  **这是 Coffer 里唯一一处用户内容可能离开本机的地方，且默认关闭。** 没有指定内部连接、
+  协议不支持、或凭据解析不出来时，什么都不会上传：语音以音频文件的形式交给 agent，
+  而不是丢失——与本地引擎缺席时的行为完全一致。请求失败或过慢也以同样方式降级：
+  转写出问题绝不允许让一个 turn 失败。
+
+  这不违反 constitution。Principle I 明确允许云服务作为 **LLM 与工具 provider**，
+  而转写端点就是一个工具 provider；音频是过路数据而非金库状态，转写结果与任何其他
+  turn 文本一样落在本机。
+
+  _2026-09-10 之前是本地的：_ 冻结构建随包一个在 CI 里从源码编译的 `whisper.cpp`
+  sidecar，外加源码运行时的 `mlx-whisper` 回退。那是整个项目最重的构建依赖——每次发布
+  都要 `git clone` 加一次 cmake 编译——而它撑的这个能力，远程端点做得至少一样好。
+  它与 ADR-039、`whisper-cli` 二进制、以及 `[voice]` / `[voice-mlx]` extra 一并删除。
+
 - **FR-023**: 群聊是一等 peer。当已配对的 owner @mention bot（或消息以带地址的群
   事件形式投递）时，bot 会在那里作答；该群成为一条额外的 `channel_peers` 行，键为
   `(channel, 群聊 chat id)`，继承 owner 的 `sender_id`。无需 schema 迁移——该表的

@@ -47,7 +47,7 @@ For end-user distribution, `make bundle-binaries` (driven by `scripts/build_bina
 
 PyInstaller bundles the Python interpreter, all dependencies, and the application code into a single-file executable. The user runs `coffer-daemon` directly; no `python` command, no `venv`, no `pip`. The shim binary is deliberately lean — it excludes all server-side dependencies because the shim only needs `httpx` to forward requests to the daemon over loopback HTTP. MCP clients that re-spawn the shim every session benefit from the shorter cold-start time a smaller binary provides.
 
-Alongside these, the release archive carries the **runtime helper binaries** the daemon spawns as child processes: `coffer-callback` (the SeaTalk callback listener, `surfaces/callback/`, spawned while a SeaTalk channel is enabled) and `whisper-cli` (local speech-to-text). In a source/dev run the daemon spawns the callback listener as `python -m coffer.surfaces.callback`; in a frozen build `listener_spawn.py` looks for a `coffer-callback` sibling next to the daemon binary. This sibling relationship is exactly why the daemon — not an installer — owns deploying these binaries (see [Binary deployment at frozen start](#binary-deployment-at-frozen-start)).
+Alongside these, the release archive carries the **runtime helper binaries** the daemon spawns as child processes: `coffer-callback` (the SeaTalk callback listener, `surfaces/callback/`, spawned while a SeaTalk channel is enabled). In a source/dev run the daemon spawns the callback listener as `python -m coffer.surfaces.callback`; in a frozen build `listener_spawn.py` looks for a `coffer-callback` sibling next to the daemon binary. This sibling relationship is exactly why the daemon — not an installer — owns deploying these binaries (see [Binary deployment at frozen start](#binary-deployment-at-frozen-start)).
 
 Alembic migration files ship as data files inside the daemon binary via PyInstaller's `datas` mechanism. On first launch, the daemon runs `alembic upgrade head` against a fresh database before accepting connections — the end-user gets correct schema creation with no separate step.
 
@@ -73,7 +73,7 @@ Every release publishes a single kind of user-facing artifact (**FR-022**): a `c
 - `coffer` (the management CLI)
 - `coffer-daemon` (standalone executable, with the built web UI inside it)
 - `coffer-mcp-shim` (standalone executable)
-- the runtime helper binaries the daemon spawns — `coffer-callback` and `whisper-cli`
+- the runtime helper binary the daemon spawns — `coffer-callback`
 
 The user extracts the archive, runs `coffer-daemon` (or `coffer daemon start`), and opens the UI with `coffer open`. The same archive serves headless servers, CI environments and workstations, because the UI is a browser page rather than a native application: on a headless box you simply never open it.
 
@@ -98,11 +98,11 @@ Because the UI is same-origin with the API, CORS is **same-origin by default**. 
 
 The desktop shell used to deploy `coffer-mcp-shim` onto the user's `PATH` at every launch. The daemon now does it at startup, and only when it detects that it is running as a frozen build (**FR-026**). It idempotently copies its sibling binaries into `~/.coffer/bin/`:
 
-- macOS / Linux: `~/.coffer/bin/coffer-mcp-shim`, plus `coffer-daemon`, `coffer-callback` and `whisper-cli`
+- macOS / Linux: `~/.coffer/bin/coffer-mcp-shim`, plus `coffer-daemon` and `coffer-callback`
 
 The mechanics are unchanged from the desktop implementation: an atomic temp-copy-then-rename, guarded by the same **three-signal staleness check** — byte size, mtime, and a version sentinel. If all three match, the deployment is a no-op; any mismatch triggers an atomic replace, so upgrading Coffer by extracting a newer archive updates the deployed binaries on the next daemon start with no manual `PATH` management.
 
-The daemon is the natural owner of this step because it is the process that actually spawns `coffer-callback` and `whisper-cli` at runtime and needs them at known sibling paths. A source install skips deployment entirely — it is not a frozen build, and `pip install` has already put the console scripts on `PATH`.
+The daemon is the natural owner of this step because it is the process that actually spawns `coffer-callback` at runtime and needs it at a known sibling path. A source install skips deployment entirely — it is not a frozen build, and `pip install` has already put the console scripts on `PATH`.
 
 ## Release pipeline
 

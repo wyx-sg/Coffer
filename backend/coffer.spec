@@ -47,10 +47,9 @@ a = Analysis(
     hookspath=[],
     runtime_hooks=[],
     excludes=[
-        # Heavy ML stack from the [voice] extra — no coffer binary ships
-        # torch/mlx (the frozen app uses the whisper-cli sidecar, ADR-039).
-        # The CLI never imports these; the exclude documents the invariant and
-        # guards against a future transitive pull.
+        # Heavy ML stack no coffer binary ships. Transcription is remote, so
+        # nothing here should ever pull torch/mlx; the exclude documents the
+        # invariant and guards against a future transitive pull.
         "torch",
         "mlx",
         "mlx_whisper",

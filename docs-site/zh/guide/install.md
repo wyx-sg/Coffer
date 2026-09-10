@@ -29,8 +29,8 @@ Coffer 只发布**单个工件**：`coffer-cli-<triple>.tar.gz`。没有单独�
 - **`coffer-daemon`** —— 长生命周期的后台进程，负责聚合上游 MCP 服务器并提供 Web UI
 - **`coffer-mcp-shim`** —— MCP 客户端（Claude Code、Codex 等）与 daemon 通信的 stdio 桥接程序
 
-以及守护进程自己会拉起的运行时辅助二进制文件（用于 SeaTalk 渠道的 `coffer-callback`、
-用于本地语音转文字的 `whisper-cli`）。
+以及守护进程自己会拉起的运行时辅助二进制文件（用于 SeaTalk 渠道的
+`coffer-callback`）。
 
 ### macOS（Apple Silicon）
 

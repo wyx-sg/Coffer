@@ -64,14 +64,14 @@ Concrete choices:
 - **The daemon deploys its sibling binaries on a frozen start**
   (spec 001 FR-026). When `coffer-daemon` detects it is running from a
   frozen build, it idempotently copies its siblings — `coffer-mcp-shim`,
-  `coffer-callback`, and `whisper-cli` — into `~/.coffer/bin/`, using an
+  and `coffer-callback` — into `~/.coffer/bin/`, using an
   atomic temp-copy-then-rename and a 3-signal staleness check (byte size,
   mtime, version sentinel). This makes MCP clients able to resolve the
   `command: coffer-mcp-shim` config, and it keeps a `coffer-daemon`
   sibling next to the shim so the frozen shim's detect-or-spawn
   ([ADR-006](ADR-006-daemon-detect-or-spawn.md)) finds a daemon to start
   after a reboot. The daemon is the natural owner because it is the
-  process that spawns `coffer-callback` and `whisper-cli` at runtime.
+  process that spawns `coffer-callback` at runtime.
   `~/.coffer/bin/` co-locates with the daemon's `~/.coffer/daemon.json`
   from [ADR-006](ADR-006-daemon-detect-or-spawn.md), which simplifies the
   user mental model ("everything Coffer lives under `~/.coffer/`"). A
@@ -133,7 +133,7 @@ Concrete choices:
 - Per `v*` tag the CI release job produces exactly one archive —
   `coffer-cli-<triple>.tar.gz` for macOS arm64, containing `coffer`,
   `coffer-daemon`, `coffer-mcp-shim` and the runtime helper binaries
-  (`coffer-callback`, `whisper-cli`) — plus one aggregated `SHA256SUMS`
+  (`coffer-callback`) — plus one aggregated `SHA256SUMS`
   file covering every published artifact (spec 001 FR-022 / FR-023).
 - Before every release, the bundle runs a post-build smoke test
   ([`scripts/smoke_test_bundle.sh`](../../scripts/smoke_test_bundle.sh))
@@ -232,7 +232,7 @@ Rejected.
   (c) binary deployment into `~/.coffer/bin/` **moved into the daemon's
   frozen-start path** (spec 001 FR-026), keeping the same atomic
   temp-copy-then-rename and the same 3-signal staleness check, and now also
-  covering `coffer-callback` and `whisper-cli`;
+  covering `coffer-callback`;
   (d) the macOS notarisation runbook (`docs/distribution/macos-notarization.md`)
   was deleted — every step in it was `cargo tauri build` / `.dmg` signing
   and stapling for a pipeline that no longer exists; Gatekeeper quarantine

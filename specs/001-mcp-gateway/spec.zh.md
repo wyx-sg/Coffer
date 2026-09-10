@@ -418,7 +418,7 @@ null 值在校验阶段被拒绝（422）。
 
 ### Scenario: a frozen daemon deploys its sibling binaries on start
 
-- **Given** 一个从解压后的 release 归档启动的冻结态 `coffer-daemon`，其同目录下放着 `coffer-mcp-shim`、`coffer-callback` 与 `whisper-cli`,
+- **Given** 一个从解压后的 release 归档启动的冻结态 `coffer-daemon`，其同目录下放着 `coffer-mcp-shim` 与 `coffer-callback`,
 - **When** daemon 启动,
 - **Then** 每个同目录二进制都出现在 `~/.coffer/bin/` 下且具备可执行位，复制过程经由同目录临时文件加 rename 原子完成,
 - **And** 在没有任何变化的情况下再启动一次不会动这些文件，而版本变化则会替换它们 —— 由字节大小、mtime 与版本哨兵三个信号共同判定是否过期。
@@ -465,11 +465,11 @@ null 值在校验阶段被拒绝（422）。
 **Distribution**
 
 - **FR-018**: 从源码安装（`pip install ./backend`）MUST 把 `coffer` CLI 与 `coffer-mcp-shim` stdio 入口作为 console script 装到用户的 `PATH` 上，使 daemon 与 shim 无需额外部署步骤即可使用。
-- **FR-022**: 发布流水线 MUST 为每个 `v*` tag 产出**仅 macOS arm64** 的单一下载层级：一份 `coffer-cli-<triple>.tar.gz` 归档，内含 `coffer`（管理 CLI）、`coffer-daemon`、`coffer-mcp-shim`，以及 daemon 在运行期拉起的辅助二进制（`coffer-callback`、`whisper-cli`）。这些二进制 MUST 在归档内保持同目录共处，使冻结态的 detect-or-spawn 解析（[ADR-006](../../docs/decisions/ADR-006-daemon-detect-or-spawn.zh.md)）能在 `coffer` 旁边找到 `coffer-daemon`。macOS x64（Intel）、Linux 与 Windows 刻意不构建 —— 这几条腿从未端到端验证过。这份归档独自承载「无需系统 Python」的承诺（SC-011）；不存在第二个桌面层级。其背后的打包决策见 [ADR-008](../../docs/decisions/ADR-008-distribution-pyinstaller.zh.md)。
+- **FR-022**: 发布流水线 MUST 为每个 `v*` tag 产出**仅 macOS arm64** 的单一下载层级：一份 `coffer-cli-<triple>.tar.gz` 归档，内含 `coffer`（管理 CLI）、`coffer-daemon`、`coffer-mcp-shim`，以及 daemon 在运行期拉起的辅助二进制（`coffer-callback`）。这些二进制 MUST 在归档内保持同目录共处，使冻结态的 detect-or-spawn 解析（[ADR-006](../../docs/decisions/ADR-006-daemon-detect-or-spawn.zh.md)）能在 `coffer` 旁边找到 `coffer-daemon`。macOS x64（Intel）、Linux 与 Windows 刻意不构建 —— 这几条腿从未端到端验证过。这份归档独自承载「无需系统 Python」的承诺（SC-011）；不存在第二个桌面层级。其背后的打包决策见 [ADR-008](../../docs/decisions/ADR-008-distribution-pyinstaller.zh.md)。
 - **FR-023**: 发布流水线 MUST 产出单一一份聚合的 `SHA256SUMS`（在 CI 中生成，并在 release job 中跨 matrix leg 拼接），覆盖每一个制品，使下载者无需只凭 GitHub Release 页面就能校验完整性。
 - **FR-024**: daemon MUST 自己以静态文件的形式，在它自己的 loopback origin 上提供构建好的 Web UI，使 UI 与管理 API 同源 (same-origin)。因此跨域访问 MUST 默认关闭；Vite dev server 的 origin 仅在既有的 `COFFER_DEV_CORS` opt-in 之下仍可访问。
 - **FR-025**: `coffer open` MUST 读取 `~/.coffer/daemon.json`，通过一个需鉴权的管理端点铸造一个**一次性、短时效**的鉴权 code（有效期约一分钟），并在 daemon 自己的 origin 上打开用户浏览器，把该 code 放在 URL 的 **fragment** 里。页面 MUST 用该 code 换取 API token，并把 token 保存在 `localStorage` 中。API token MUST NOT 在任何环节出现在 URL 里 —— URL 会落进浏览器历史，而那与 FR-012 / FR-013 的「仅 loopback + token」姿态相抵触。code 则可以出现在那里，因为它是一次性的，等到有人回头翻历史时它早已过期。
-- **FR-026**: 当 daemon 检测到自己以冻结构建运行时，它 MUST 在启动时把同目录的二进制 —— `coffer-mcp-shim`、`coffer-callback`、`whisper-cli` —— 幂等地部署到 `~/.coffer/bin/`。复制 MUST 是原子的（同目录临时文件、先设可执行位、再 rename 覆盖目标），使崩溃或正在并发执行的二进制永远不会观察到被截断的文件；是否过期 MUST 由三个信号判定 —— 字节大小、源比目标更新的 mtime、以及一个版本哨兵 —— 使同样大小的跨版本升级也能被检出。源码安装 MUST NOT 做这件事：`pip install` 已经把 console script 装到 `PATH` 上了（FR-018）。这件事归 daemon 所有，因为运行期正是它在拉起 `coffer-callback` 与 `whisper-cli`。
+- **FR-026**: 当 daemon 检测到自己以冻结构建运行时，它 MUST 在启动时把同目录的二进制 —— `coffer-mcp-shim`、`coffer-callback` —— 幂等地部署到 `~/.coffer/bin/`。复制 MUST 是原子的（同目录临时文件、先设可执行位、再 rename 覆盖目标），使崩溃或正在并发执行的二进制永远不会观察到被截断的文件；是否过期 MUST 由三个信号判定 —— 字节大小、源比目标更新的 mtime、以及一个版本哨兵 —— 使同样大小的跨版本升级也能被检出。源码安装 MUST NOT 做这件事：`pip install` 已经把 console script 装到 `PATH` 上了（FR-018）。这件事归 daemon 所有，因为运行期正是它在拉起 `coffer-callback`。
 
 **缺失启动器**
 

@@ -47,7 +47,7 @@ daemon 直接作为 Python 进程运行：`coffer daemon start` 调用已安装�
 
 PyInstaller 将 Python 解释器、所有依赖以及应用程序代码打包成单个可执行文件。用户直接运行 `coffer-daemon`，不需要 `python` 命令，不需要 `venv`，不需要 `pip`。shim 二进制文件刻意保持精简——它不包含任何服务端依赖，因为 shim 只需要 `httpx` 来通过 loopback HTTP 向 daemon 转发请求。每次会话都重新拉起 shim 的 MCP 客户端受益于更小二进制文件带来的更短冷启动时间。
 
-除此之外，发布压缩包还携带 daemon 在运行时作为子进程拉起的**运行时辅助二进制文件**：`coffer-callback`（SeaTalk 回调监听器，`surfaces/callback/`，在任何 SeaTalk channel 启用期间由 daemon 启动）与 `whisper-cli`（本地语音转文字）。在源码/开发运行中，daemon 以 `python -m coffer.surfaces.callback` 启动回调监听器；在 frozen 构建里，`listener_spawn.py` 会在 daemon 二进制旁寻找同级的 `coffer-callback`。正是这种同级关系，决定了部署这些二进制文件应该由 daemon 负责，而不是由安装程序负责（见[frozen 启动时的二进制部署](#frozen-启动时的二进制部署)）。
+除此之外，发布压缩包还携带 daemon 在运行时作为子进程拉起的**运行时辅助二进制文件**：`coffer-callback`（SeaTalk 回调监听器，`surfaces/callback/`，在任何 SeaTalk channel 启用期间由 daemon 启动）。在源码/开发运行中，daemon 以 `python -m coffer.surfaces.callback` 启动回调监听器；在 frozen 构建里，`listener_spawn.py` 会在 daemon 二进制旁寻找同级的 `coffer-callback`。正是这种同级关系，决定了部署这些二进制文件应该由 daemon 负责，而不是由安装程序负责（见[frozen 启动时的二进制部署](#frozen-启动时的二进制部署)）。
 
 Alembic 迁移文件通过 PyInstaller 的 `datas` 机制，以数据文件的形式随 daemon 二进制一起发布。首次启动时，daemon 会在接受连接之前对一个全新的数据库执行 `alembic upgrade head`——最终用户无需额外步骤即可得到正确的 schema。
 
@@ -73,7 +73,7 @@ v0 阶段明确考虑并否决了两个替代方案：
 - `coffer`（管理 CLI）
 - `coffer-daemon`（独立可执行文件，构建好的 Web UI 就在其中）
 - `coffer-mcp-shim`（独立可执行文件）
-- daemon 会拉起的运行时辅助二进制文件 —— `coffer-callback` 与 `whisper-cli`
+- daemon 会拉起的运行时辅助二进制文件 —— `coffer-callback`
 
 用户解压压缩包，运行 `coffer-daemon`（或 `coffer daemon start`），再用 `coffer open` 打开界面。同一个压缩包同时服务于无界面服务器、CI 环境和工作站，因为 UI 只是一个浏览器页面而非原生应用：在无界面机器上，你不打开它就是了。
 
@@ -98,11 +98,11 @@ token 本身绝不出现在 URL 里。放进 URL 会把它写入浏览器历史�
 
 桌面外壳过去会在每次启动时把 `coffer-mcp-shim` 部署到用户的 `PATH` 上。现在改由 daemon 在启动时完成，并且仅当它检测到自己以 frozen 构建方式运行时才执行（**FR-026**）。它会幂等地把同级的二进制文件复制进 `~/.coffer/bin/`：
 
-- macOS / Linux：`~/.coffer/bin/coffer-mcp-shim`，以及 `coffer-daemon`、`coffer-callback` 与 `whisper-cli`
+- macOS / Linux：`~/.coffer/bin/coffer-mcp-shim`，以及 `coffer-daemon` 与 `coffer-callback`
 
 具体机制与桌面实现完全一致：先复制到临时文件再原子重命名，并由同样的**三信号陈旧性检查**把关 —— 字节大小、mtime 和一个版本哨兵。三者全部匹配时部署是无操作；任一项不匹配都会触发原子替换。因此，通过解压更新的压缩包升级 Coffer 的用户，会在下一次 daemon 启动时自动获得更新后的二进制文件，无需手动管理 `PATH`。
 
-daemon 是这一步天然的归属者，因为正是它在运行时拉起 `coffer-callback` 与 `whisper-cli`，需要它们位于已知的同级路径上。源码安装则完全跳过部署 —— 它不是 frozen 构建，而 `pip install` 已经把控制台脚本放到 `PATH` 上了。
+daemon 是这一步天然的归属者，因为正是它在运行时拉起 `coffer-callback`，需要它位于已知的同级路径上。源码安装则完全跳过部署 —— 它不是 frozen 构建，而 `pip install` 已经把控制台脚本放到 `PATH` 上了。
 
 ## 发布流水线
 

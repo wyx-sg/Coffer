@@ -18,6 +18,7 @@ from coffer.domain.errors import CredentialMissing
 from coffer.domain.provider.errors import NoActiveProvider
 from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
+from coffer.infrastructure.llm.transcription import remote_transcriber_factory
 from coffer.surfaces.http.dependencies import get_provider_service
 from coffer.surfaces.http.turn_dependencies import get_agent_model_catalogue
 
@@ -25,9 +26,30 @@ if TYPE_CHECKING:
     from coffer.infrastructure.chat.persistence import ConversationRepo
 
 
-def build_agent_provider_registry(conv_repo: ConversationRepo) -> AgentProviderRegistry:
-    """Construct and populate the chat agent-provider registry."""
+def build_agent_provider_registry(
+    conv_repo: ConversationRepo,
+    credential_resolver: Callable[[str], str] | None = None,
+) -> AgentProviderRegistry:
+    """Construct and populate the agent-provider registry.
+
+    ``credential_resolver`` is what lets voice be transcribed: with it, a turn
+    carrying audio reaches the user's ``internal_default`` connection — the same
+    one that runs knowledge merge, organize and reorg. Without it (and without
+    such a connection) audio is handed to the agent untouched and nothing leaves
+    the machine. That is the default.
+    """
     registry = AgentProviderRegistry()
+
+    # Resolved per turn, so designating or clearing the internal default takes
+    # effect immediately. Returns None whenever transcription must not happen.
+    transcriber_factory = (
+        remote_transcriber_factory(
+            lambda: get_provider_service().resolve_internal_connection(),
+            credential_resolver,
+        )
+        if credential_resolver is not None
+        else None
+    )
 
     # Tell Claude Code, on every turn, which model Coffer put it on and what
     # else it could be switched to — it cannot see either, and left to itself it
@@ -38,7 +60,11 @@ def build_agent_provider_registry(conv_repo: ConversationRepo) -> AgentProviderR
         return ids
 
     registry.register(
-        ClaudeSdkProvider(conversations=conv_repo, list_models=_list_models),
+        ClaudeSdkProvider(
+            conversations=conv_repo,
+            list_models=_list_models,
+            transcriber_factory=transcriber_factory,
+        ),
         display_name="Claude Code",
     )
 
@@ -59,7 +85,11 @@ def build_agent_provider_registry(conv_repo: ConversationRepo) -> AgentProviderR
         return _resolve
 
     registry.register(
-        CodexAppServerProvider(conversations=conv_repo, resolve_key=_key_resolver(AgentType.CODEX)),
+        CodexAppServerProvider(
+            conversations=conv_repo,
+            resolve_key=_key_resolver(AgentType.CODEX),
+            transcriber_factory=transcriber_factory,
+        ),
         display_name="Codex",
     )
     return registry
