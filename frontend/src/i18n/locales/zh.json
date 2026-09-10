@@ -257,18 +257,6 @@
       "search": "搜索",
       "searchPlaceholder": "搜索活动"
     },
-    "table": {
-      "time": "时间",
-      "activity": "活动",
-      "actor": "操作者",
-      "sortByTime": "按时间排序"
-    },
-    "emptyState": "没有匹配的审计条目。",
-    "capType": {
-      "tool": "工具",
-      "resource": "资源",
-      "prompt": "提示词"
-    },
     "actor": {
       "ui": "用户",
       "cli": "命令行",
@@ -287,9 +275,7 @@
       "all": "全部时间",
       "custom": "自定义范围…"
     },
-    "applyRange": "应用",
-    "title": "审计日志",
-    "subtitle": "记录所有资源和功能的生命周期变更。"
+    "applyRange": "应用"
   },
   "settings": {
     "title": "设置",

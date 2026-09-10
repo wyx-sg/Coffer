@@ -257,18 +257,6 @@
       "search": "Search",
       "searchPlaceholder": "Search activity"
     },
-    "table": {
-      "time": "Time",
-      "activity": "Activity",
-      "actor": "Actor",
-      "sortByTime": "Sort by time"
-    },
-    "emptyState": "No matching audit entries.",
-    "capType": {
-      "tool": "tool",
-      "resource": "resource",
-      "prompt": "prompt"
-    },
     "actor": {
       "ui": "User",
       "cli": "CLI",
@@ -287,9 +275,7 @@
       "all": "All time",
       "custom": "Custom range…"
     },
-    "applyRange": "Apply",
-    "title": "Audit log",
-    "subtitle": "Every lifecycle change to any resource or capability."
+    "applyRange": "Apply"
   },
   "settings": {
     "title": "Settings",

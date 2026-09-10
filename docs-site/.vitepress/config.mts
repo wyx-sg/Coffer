@@ -136,9 +136,8 @@ export default withMermaid(
     base: '/Coffer/',
     cleanUrls: true,
     lastUpdated: true,
-    appearance: false, // light-only: no dark mode (DESIGN.md §9, spec 002)
+    appearance: false, // light-only: no dark mode (spec 002)
     ignoreDeadLinks: true,
-    srcExclude: ['**/DESIGN.md', '**/IMPLEMENTATION-PLAN.md'],
     themeConfig: {
       search: { provider: 'local' },
       socialLinks: [{ icon: 'github', link: 'https://github.com/wyx-sg/Coffer' }],
