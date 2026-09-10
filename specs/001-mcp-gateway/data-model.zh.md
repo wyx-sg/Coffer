@@ -362,4 +362,4 @@ SHOULD 设置可选的 `X-Coffer-Actor` header（`cli` | `api` | `ui` | `system`
 | **5**    | 禁止 cross-kind 导入：`coffer.{domain,application,infrastructure,surfaces}.mcp.*` 不导入 `coffer.{domain,application,infrastructure,surfaces}.<other_kind>.*`（目前只有一个 kind 时此契约空成立，但从第一天起就把规则立好，第二个 kind 落地时立即生效） |
 | **6**    | kind-agnostic 核心不导入 kind 专属代码：`coffer.application.resource_service` 不导入 `coffer.domain.mcp` 或 `coffer.application.mcp`                                                                                                                    |
 
-两条新契约在任务 `T-0010`（见 tasks.md）中添加。
+两条新契约已是网关已交付接口的一部分。

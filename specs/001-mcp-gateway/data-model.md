@@ -376,4 +376,4 @@ spec's setup phase:
 | **5**    | cross-kind imports forbidden: `coffer.{domain,application,infrastructure,surfaces}.mcp.*` does not import `coffer.{domain,application,infrastructure,surfaces}.<other_kind>.*` (vacuously true with one kind, but the contract is in place from day one so it bites the first time the second kind lands) |
 | **6**    | kind-agnostic core does not import kind-specific code: `coffer.application.resource_service` does not import `coffer.domain.mcp` or `coffer.application.mcp`                                                                                                                                              |
 
-Both new contracts are added in Task `T-0010` (see tasks.md).
+Both new contracts are part of the gateway's shipped surface.
