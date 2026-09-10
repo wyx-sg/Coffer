@@ -87,7 +87,7 @@ async function toggleCapability(name: string, key: string): Promise<void> {
     const r = await fetch(`${base}/${verb}`, {
       method: "POST",
       headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ key }),
+      body: JSON.stringify({ capability_key: key }),
     });
     if (!r.ok) throw new Error(`${verb} failed: ${r.status} ${await r.text()}`);
   }
