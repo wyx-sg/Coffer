@@ -371,6 +371,13 @@ status / notify`.
   realizes the interactive-button capability that
   [ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md)'s
   `ChannelCapabilities` anticipated ("show buttons?").
+
+  The card payload MUST follow each platform's published shape. SeaTalk's is
+  one flat `elements` array in which **a button is itself an element**
+  (`{"element_type": "button", "button": {...}}`) — not a `buttons` array
+  beside it. Coffer emitted the latter until 2026-09-10, a shape guessed while
+  the API docs were login-gated, so a SeaTalk selection card would have
+  rendered without its buttons or been refused outright.
 - **FR-019**: A channel-originated turn tells the agent it is bridged to a chat
   channel, not a terminal: the agent receives a short system-prompt note carrying
   the channel name and mobile-chat guidance — keep replies concise, and it cannot

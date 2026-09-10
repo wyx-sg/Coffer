@@ -423,8 +423,16 @@ async def test_send_text_with_buttons_emits_interactive_card(fake_seatalk: FakeS
     [(body, _auth)] = fake_seatalk.single_chat_calls
     message = body["message"]
     assert message["tag"] == "interactive_message"
-    assert message["interactive_message"]["buttons"] == [
-        {"button_type": "callback", "text": "opus", "value": "model:opus"}
+    card = message["interactive_message"]
+    # A button is an ELEMENT, not a sibling of `elements`. Emitting a `buttons`
+    # array alongside them is the shape SeaTalk does not render.
+    assert "buttons" not in card
+    assert card["elements"] == [
+        {"element_type": "description", "description": {"format": 1, "text": "Pick a model:"}},
+        {
+            "element_type": "button",
+            "button": {"button_type": "callback", "text": "opus", "value": "model:opus"},
+        },
     ]
 
 

@@ -981,6 +981,15 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
   the target (sequential clear-then-set serialised by the single-process
   daemon). On import with >1 internal default, normalise: keep
   most-recently-updated, clear the rest.
+
+  The invariant MUST be enforced by the **database**, not only by that method.
+  `internal_default` is an ordinary config field, so the generic resource-update
+  route, `coffer provider edit`, and an imported document all write it without
+  going through the clear-then-set — and a live vault was found holding two
+  flagged connections, which makes "which connection does the internal engine
+  use?" a question with no defined answer. A partial unique index over
+  `kind` restricted to flagged provider rows makes a second one
+  unrepresentable, whatever writes it.
 - **FR-022**: `POST /api/v1/providers/{name}/internal-default` MUST set the named
   connection as the internal-engine default (applying FR-021), emit a
   `provider_internal_default_set` audit event, and return the updated

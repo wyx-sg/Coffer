@@ -237,6 +237,15 @@
     "tiering": {
       "summary": "agent 当前可见 {{listed}}/{{total}} 个工具，另有 {{hidden}} 个仅可经 coffer__search_tools 触达。",
       "hint": "它们仍可按名调用。设 COFFER_TOOL_TIERING=off 可列出全部工具。"
+    },
+    "timeouts": {
+      "legend": "超时（秒）",
+      "spawn": "启动",
+      "spawnHint": "启动服务器进程。5–120，默认 30。",
+      "request": "请求",
+      "requestHint": "对该服务器的单次调用。5–1800，默认 120。",
+      "idle": "空闲",
+      "idleHint": "闲置连接关闭前的等待。60–86400，默认 600。"
     }
   },
   "audit": {

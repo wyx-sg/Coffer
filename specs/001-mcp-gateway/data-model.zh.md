@@ -151,6 +151,12 @@ Pydantic `BaseModel`——这是 `mcp_server` 对应的 `Resource.config`。
 | `request_timeout_seconds` | `int`                                                                     | 默认 `120`；范围 `5–1800`；progress 到来时重置        |
 | `idle_timeout_seconds`    | `int`                                                                     | 默认 `600`；范围 `60–86400`；空闲超过此值即 GC 子进程 |
 
+这三个字段在 Web UI 的编辑服务器对话框里可改，而不只是经 API。它们直到 2026-09-10
+都完全没有界面，因此每个已注册 server 都跑在默认值上，不管它的上游是什么——而实测
+一个金库里各 server 的平均延迟横跨三个数量级（9ms 到 10.9s），最慢的那个经常超过
+60s，而默认值是 120s。超时错误会写明是哪个 server、等了多久，好让正在干等的 agent
+分得清「上游慢」和「网关坏了」。
+
 ### `MCPTool` / `MCPResource` / `MCPPrompt` (`domain/mcp/capability.py`)
 
 Pydantic `BaseModel`。上游查询返回的实时表示；从不持久化（按 [ADR-004](../../docs/decisions/ADR-004-capability-state-model.md)）。

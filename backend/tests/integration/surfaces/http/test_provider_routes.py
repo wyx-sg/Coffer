@@ -464,6 +464,54 @@ def test_set_internal_default_clears_previous(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_a_second_internal_default_cannot_be_written_behind_the_service(
+    tmp_path, monkeypatch
+):
+    """The single-internal-default invariant is enforced by the DATABASE, not
+    only by ``set_internal_default``.
+
+    A live vault was found with two connections flagged, because the flag is an
+    ordinary config field and the generic resource-update path writes it without
+    clearing anything. A partial unique index makes the second row
+    unrepresentable, whatever writes it.
+    """
+    import sqlite3
+
+    app = _app(tmp_path, monkeypatch, 59872)
+    with _client(app) as c:
+        c.post("/api/v1/providers", json=_anthropic_body(name="first"))
+        c.post(
+            "/api/v1/providers",
+            json={
+                "name": "second",
+                "protocol": "openai",
+                "base_url": "https://gw/v1",
+                "secret_value": "sk-2",
+            },
+        )
+        c.post("/api/v1/providers/first/internal-default")
+
+    conn = sqlite3.connect(tmp_path / "c.db")
+    try:
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                "UPDATE resources SET config_json = "
+                "json_set(config_json, '$.internal_default', json('true')) "
+                "WHERE kind = 'provider' AND name = 'second'"
+            )
+        flagged = [
+            r[0]
+            for r in conn.execute(
+                "SELECT name FROM resources WHERE kind = 'provider' "
+                "AND json_extract(config_json, '$.internal_default') = 1"
+            )
+        ]
+        assert flagged == ["first"]
+    finally:
+        conn.close()
+
+
+@pytest.mark.asyncio
 @pytest.mark.acceptance(
     spec="011-provider-switching",
     scenario="choose the model the internal engine runs on",

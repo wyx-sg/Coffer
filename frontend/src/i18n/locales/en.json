@@ -237,6 +237,15 @@
     "tiering": {
       "summary": "Agents see {{listed}} of {{total}} tools; {{hidden}} are reachable only through coffer__search_tools.",
       "hint": "They stay callable by name. Set COFFER_TOOL_TIERING=off to list every tool."
+    },
+    "timeouts": {
+      "legend": "Timeouts (seconds)",
+      "spawn": "Spawn",
+      "spawnHint": "Starting the server process. 5–120, default 30.",
+      "request": "Request",
+      "requestHint": "One call to this server. 5–1800, default 120.",
+      "idle": "Idle",
+      "idleHint": "Before an unused connection closes. 60–86400, default 600."
     }
   },
   "audit": {

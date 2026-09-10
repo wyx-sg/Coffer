@@ -154,6 +154,14 @@ Pydantic `BaseModel` — this is what `Resource.config` holds for an `mcp_server
 | `request_timeout_seconds` | `int`                                                                     | default `120`; range `5–1800`; reset on progress                      |
 | `idle_timeout_seconds`    | `int`                                                                     | default `600`; range `60–86400`; subprocess GC after this idle period |
 
+All three are editable in the web UI's edit-server dialog, not only over the
+API. They had no UI at all until 2026-09-10, so every registered server ran on
+the defaults regardless of its upstream — and measured latency across one
+vault's servers spanned three orders of magnitude (9ms to 10.9s average), with
+the slowest routinely exceeding 60s against a 120s default. A timeout error
+names the server and the elapsed limit, so an agent waiting one out can tell a
+slow upstream from a broken gateway.
+
 ### `MCPTool` / `MCPResource` / `MCPPrompt` (`domain/mcp/capability.py`)
 
 Pydantic `BaseModel`s. Live representations returned by upstream queries; never

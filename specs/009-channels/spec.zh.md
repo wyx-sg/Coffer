@@ -324,6 +324,12 @@ status / notify`。
   文本命令相同的切换。点选从不配对；不支持的传输静默保持文本路径。这兑现了
   [ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.zh.md) 的
   `ChannelCapabilities` 已预想的交互按钮能力（「show buttons?」）。
+
+  卡片载荷必须遵循各平台公布的结构。SeaTalk 的结构是一个扁平的 `elements` 数组，
+  其中**按钮本身就是一个 element**（`{"element_type": "button", "button": {...}}`），
+  而不是与之并列的一个 `buttons` 数组。Coffer 在 2026-09-10 之前发出的是后者——
+  那是 API 文档处于登录态不可达时猜出来的结构——因此一张 SeaTalk 选择卡片要么渲染
+  不出按钮，要么被平台直接拒收。
 - **FR-019**: 一个 channel 发起的 turn 会告诉 agent 它是被桥接到聊天 channel、
   而非终端：agent 收到一条简短的 system-prompt 注记，携带 channel 名与移动聊天
   指引——回复要简短，且它无法点击用户电脑上的权限/确认弹窗（用户可能不在电脑旁）。

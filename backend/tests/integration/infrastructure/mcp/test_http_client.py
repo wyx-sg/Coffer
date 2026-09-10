@@ -645,7 +645,7 @@ async def test_initialize_httpx_timeout_wraps_as_upstream_timeout(monkeypatch) -
         header_overlay={},
         spawn_timeout_seconds=7,
     )
-    with pytest.raises(UpstreamTimeout, match="exceeded 7s"):
+    with pytest.raises(UpstreamTimeout, match=r"did not finish starting within 7s"):
         await conn.spawn_and_initialize()
     # _cleanup ran -> no session left behind.
     assert conn._session is None
