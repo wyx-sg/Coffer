@@ -79,6 +79,40 @@ describe("EditMcpServerDialog", () => {
     expect(configVal).not.toContain("credential_refs");
   });
 
+  test("timeouts are editable fields, defaulted, and saved back into config", async () => {
+    // They were configurable on the backend and had no UI at all, so every
+    // server ran on the defaults regardless of how slow its upstream was.
+    const patch = vi.fn().mockResolvedValue({ data: {}, error: undefined });
+    getApiClientMock.mockReturnValue({
+      PATCH: patch,
+      POST: vi.fn().mockResolvedValue({ data: {}, error: undefined }),
+      DELETE: vi.fn().mockResolvedValue({ data: undefined, error: undefined }),
+    } as unknown as ReturnType<typeof getApiClient>);
+
+    render(wrap(<EditMcpServerDialog resource={noCredsResource} />));
+    openDialog();
+
+    // A server that never set one shows the backend default, not an empty box.
+    const request = screen.getByLabelText(/^request$/i) as HTMLInputElement;
+    expect(request.value).toBe("120");
+    expect((screen.getByLabelText(/^spawn$/i) as HTMLInputElement).value).toBe("30");
+    expect((screen.getByLabelText(/^idle$/i) as HTMLInputElement).value).toBe("600");
+
+    // The JSON textarea must not ALSO carry them — two controls over one key
+    // would fight on save.
+    const textarea = screen.getByRole("textbox", { name: /config/i }) as HTMLTextAreaElement;
+    expect(textarea.value).not.toContain("request_timeout_seconds");
+
+    fireEvent.change(request, { target: { value: "45" } });
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() => expect(patch).toHaveBeenCalled());
+    const body = patch.mock.calls[0][1].body as { config: Record<string, unknown> };
+    expect(body.config.request_timeout_seconds).toBe(45);
+    expect(body.config.spawn_timeout_seconds).toBe(30);
+    expect(body.config.idle_timeout_seconds).toBe(600);
+  });
+
   test("pre-populates existing credential rows with keep-existing placeholder", () => {
     getApiClientMock.mockReturnValue({
       PATCH: vi.fn(),

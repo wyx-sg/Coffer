@@ -35,4 +35,5 @@ def build_upstream(
         header_overlay=overlay,
         spawn_timeout_seconds=spawn_timeout,
         request_timeout_seconds=request_timeout,
+        server_name=server_name,
     )

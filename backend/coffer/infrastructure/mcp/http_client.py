@@ -54,11 +54,16 @@ class HttpUpstreamConnection:
         header_overlay: dict[str, str],
         spawn_timeout_seconds: int = 30,
         request_timeout_seconds: int = 120,
+        server_name: str = "upstream",
     ) -> None:
         self._transport = transport
         self._header_overlay = header_overlay
         self._spawn_timeout = spawn_timeout_seconds
         self._request_timeout = request_timeout_seconds
+        # Named so a timeout can say WHICH server stalled. An agent waiting out
+        # a 120s request timeout with no attribution cannot tell a slow upstream
+        # from a broken Coffer.
+        self._server_name = server_name
 
         self._exit_stack: AsyncExitStack | None = None
         self._session: ClientSession | None = None
@@ -132,7 +137,10 @@ class HttpUpstreamConnection:
             init_result = await session.initialize()
         except httpx2.TimeoutException as exc:
             await self._cleanup()
-            raise UpstreamTimeout(f"upstream init exceeded {self._spawn_timeout}s") from exc
+            raise UpstreamTimeout(
+                f"MCP server {self._server_name!r} did not finish starting within "
+                f"{self._spawn_timeout}s (its spawn timeout)"
+            ) from exc
         except asyncio.CancelledError as exc:
             # anyio propagates connection failures (e.g. ConnectError in its
             # background task group) as a CancelledError to the awaiting
@@ -178,7 +186,10 @@ class HttpUpstreamConnection:
                 timeout=float(self._request_timeout),
             )
         except TimeoutError as exc:
-            raise UpstreamTimeout(f"upstream {method} exceeded {self._request_timeout}s") from exc
+            raise UpstreamTimeout(
+                f"MCP server {self._server_name!r} did not answer {method} within "
+                f"{self._request_timeout}s (its request timeout)"
+            ) from exc
 
     async def _dispatch_method(
         self,

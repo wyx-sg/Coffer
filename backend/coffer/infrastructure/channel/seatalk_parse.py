@@ -147,22 +147,26 @@ def strip_group_mentions(plain_text: str, mentioned_list: Sequence[Any] | None) 
 
 def interactive_card(text: str, buttons: Sequence[ChoiceButton]) -> dict[str, Any]:
     """A SeaTalk ``interactive_message`` card: a markdown body + callback buttons
-    each carrying our custom ``value`` (research.md). A tap returns the value in
-    an ``interactive_message_click`` event.
+    each carrying our custom ``value``. A tap returns the value in an
+    ``interactive_message_click`` event.
 
-    research.md pins only ``tag="interactive_message"``, ``button_type="callback"``
-    and the custom ``value``; the ``elements``/``description`` body nesting and
-    the button ``text`` field are inferred (the live API docs are login-gated and
-    unreachable from this machine). If SeaTalk rejects the payload, adjust this
-    one helper — the rest of the card pipeline is shape-agnostic."""
-    return {
-        "tag": "interactive_message",
-        "interactive_message": {
-            "elements": [
-                {"element_type": "description", "description": {"format": 1, "text": text}},
-            ],
-            "buttons": [
-                {"button_type": "callback", "text": b.label, "value": b.value} for b in buttons
-            ],
-        },
-    }
+    **Buttons are elements, not a sibling of them.** Every entry in ``elements``
+    is a ``{element_type, <element_type>: {...}}`` pair, buttons included. This
+    helper previously emitted a ``buttons`` array alongside ``elements``, a shape
+    inferred while the API docs were login-gated; the platform would have
+    rendered no buttons (or refused the card outright), which is why a selection
+    card never worked. Verified against SeaTalk's published card format
+    2026-09-09.
+
+    ``format: 1`` selects SeaTalk's markdown for the description body."""
+    elements: list[dict[str, Any]] = [
+        {"element_type": "description", "description": {"format": 1, "text": text}}
+    ]
+    elements.extend(
+        {
+            "element_type": "button",
+            "button": {"button_type": "callback", "text": b.label, "value": b.value},
+        }
+        for b in buttons
+    )
+    return {"tag": "interactive_message", "interactive_message": {"elements": elements}}

@@ -164,7 +164,10 @@ class StdioUpstreamConnection:
             )
         except TimeoutError as exc:
             await self._cleanup()
-            raise UpstreamTimeout(f"upstream init exceeded {self._spawn_timeout}s") from exc
+            raise UpstreamTimeout(
+                f"MCP server {self._server_name!r} did not finish starting within "
+                f"{self._spawn_timeout}s (its spawn timeout)"
+            ) from exc
         except Exception as exc:
             await self._cleanup()
             # CODE-039: don't interpolate the raw exception into the message —
@@ -197,7 +200,10 @@ class StdioUpstreamConnection:
                 timeout=self._request_timeout,
             )
         except TimeoutError as exc:
-            raise UpstreamTimeout(f"upstream {method} exceeded {self._request_timeout}s") from exc
+            raise UpstreamTimeout(
+                f"MCP server {self._server_name!r} did not answer {method} within "
+                f"{self._request_timeout}s (its request timeout)"
+            ) from exc
 
     async def _dispatch_method(
         self,

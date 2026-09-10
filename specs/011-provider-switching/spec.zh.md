@@ -606,6 +606,8 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - **FR-019**：`ollama` wire 仅供内部，不投影到任何 agent：`target_for(WireFormat.ollama)` 必须返回 `None`，ollama connection 从不 `is_active`，激活它不写任何原生配置。
 - **FR-020**：`credential_ref` 必须可选——anthropic/openai 必填，ollama 不存在。创建时，既不提供 `secret_value` 也不提供 `credential_ref` 仅对 `wire_format=ollama` 合法；对 anthropic/openai，FR-004 的 exactly-one 规则不变。
 - **FR-021**：全局最多一条 connection 的 `internal_default=true`。`set_internal_default` 必须先清除所有其他 connection 的 `internal_default`，再设置目标（顺序 clear-then-set，由单进程 daemon 串行化）。导入时若有 >1 内部默认，则归一化：保留最近更新的，清除其余。
+
+  这条不变量必须由**数据库**来保证，而不是只靠那个方法。`internal_default` 就是一个普通的 config 字段，因此通用的资源更新路由、`coffer provider edit`、以及被导入的文档都能绕过 clear-then-set 直接写它——而实测发现一个线上金库里有两条 connection 同时被标记，这让「内部引擎到底用哪条连接」变成一个没有定义的问题。一个作用在 `kind` 上、仅覆盖被标记的 provider 行的部分唯一索引，使第二条在存储层就无法表示，无论是谁写的。
 - **FR-022**：`POST /api/v1/providers/{name}/internal-default` 必须将所命名的 connection 设为内部引擎默认（应用 FR-021），发出 `provider_internal_default_set` 审计事件，并返回更新后的 `ProviderOut`。
 - **FR-023**：`resolve_internal_connection()` 必须返回 `internal_default` connection 的 `ProviderConfig`，或在无 connection 被标记时返回 `None`。为 `None` 时，内部引擎（memory organizer / reorg / distill）必须是干净的 no-op 而非报错。
 - **FR-024**：独立的 `ModelConfig` 注册表（model CRUD REST + `coffer model` CLI）必须退役。内部引擎必须通过 `build_chat_model(connection, ...)`（按 `wire_format` 分派）从内部默认 connection 构建其 chat model。provider introspection 路由（`POST /api/v1/models/list-models`、`/api/v1/models/test-connection`）必须保留。
