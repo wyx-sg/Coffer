@@ -18,8 +18,8 @@ from coffer.domain.errors import CredentialMissing
 from coffer.domain.provider.errors import NoActiveProvider
 from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
-from coffer.surfaces.http.chat.dependencies import get_agent_model_catalogue
 from coffer.surfaces.http.dependencies import get_provider_service
+from coffer.surfaces.http.turn_dependencies import get_agent_model_catalogue
 
 if TYPE_CHECKING:
     from coffer.infrastructure.chat.persistence import ConversationRepo

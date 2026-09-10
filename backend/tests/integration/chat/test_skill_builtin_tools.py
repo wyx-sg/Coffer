@@ -91,7 +91,7 @@ def _make_skill_service(
 
 
 @pytest.mark.acceptance(
-    spec="008-agent-chat",
+    spec="009-channels",
     scenario="skills are reachable as tools",
 )
 async def test_list_skills_returns_catalogue(tmp_path: pathlib.Path) -> None:

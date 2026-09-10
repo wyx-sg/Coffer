@@ -58,6 +58,12 @@ capabilities.** Three moves.
   `ConversationPort` / `TurnPort` seams. "Chat" names the set
   of conversations — whoever drove them — so the name still fits.
 
+  _Superseded 2026-09-10:_ the observation seat was never used and the Chat
+  page is removed with spec 008. The `ConversationPort` / `TurnPort` seams
+  named here survive as spec 009 FR-043…FR-055; only the surface is gone. The
+  first two bullets — managed agents only, no `builtin` in the registry — still
+  hold, and are now what the agent-provider listing returns.
+
 ### 2. The "built-in agent" concept leaves the UI
 
 - The `/agents` list drops the built-in-agent card; `/agents` is purely managed

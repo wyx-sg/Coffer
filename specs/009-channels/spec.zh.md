@@ -80,8 +80,8 @@ turn 启动。
 回到 IM 聊天，按该平台渲染（Telegram HTML、SeaTalk Markdown），过长时
 分块 (chunk)。在 Telegram 上，bot 会在 turn 运行期间展示进度，并把工具
 活动流式写进一条可编辑的状态消息；在无法编辑消息的 SeaTalk 上，bot 用
-typing indicator 表示已收到，并发送完成后的回复。同一段对话在 Chat 页面
-可见，带完整历史。
+typing indicator 表示已收到，并发送完成后的回复。同一段对话连同完整历史
+都记在 vault 里。
 
 **Why this priority**: 这就是产品本身：vault 里的 agent，从用户本就常驻的
 IM 应用里即可触达。
@@ -241,7 +241,7 @@ agent 的 turn-started 审计记录；观察干净成功不发完成摘要、而
 - daemon 在 turn 进行中重启 → 平台的启动清扫 (startup sweep) 把孤儿 turn
   标记为 failed；channel 对话在下一条消息上自然继续。
 - 配对码过期（1 小时）或被反复猜错 → 该码作废；必须重新签发一个新码。
-- 活跃对话在 Chat 页面被删除 → peer 的下一条消息会用默认 agent 创建一段
+- 活跃对话被删除 → peer 的下一条消息会用默认 agent 创建一段
   新对话。
 - Telegram long polling 失去连接 → adapter 指数退避后恢复；重连后没有任何
   入站消息被重复处理（update offset 只在分发完成后提交）。
@@ -878,12 +878,6 @@ Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制
 - **Then** adapter 收到一个带该引用 path/mime 的 `Attachment`，从历史里最后一条用户
   消息重新物化——单一事实来源
 
-### Scenario: the message API exposes an attachment block without leaking the path
-
-- **Given** 一条带附件引用的用户消息
-- **When** 客户端读取该会话的消息
-- **Then** 内容块为 `type=attachment`，带 `filename` 与 `mime`，线上不出现 `path` 字段
-
 ### Scenario: the media dir prune deletes stale files and keeps fresh ones
 
 - **Given** 媒体目录里有一个超过 30 天的文件和一个较新的文件
@@ -942,6 +936,99 @@ Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制
 - **Given** 一个已配对的 channel
 - **When** owner 发送 `/help`
 - **Then** 它仍按命令处理（不会被前置 origin 块，也不会创建会话）
+
+### Scenario: list available agents
+
+- **Given** 一个运行中的守护进程
+- **When** 询问平台它提供哪些 agent
+- **Then** 受管 agent（`claude_code`、`codex`）被列出，各带显示名与可用标志，
+  `builtin` agent **不**在其中
+  （[ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md)），
+  且该列表可从 REST API 取到
+
+### Scenario: choose an agent when starting a conversation
+
+- **Given** 一个运行中的守护进程
+- **When** 为某个受管 agent 带工作目录创建一段会话
+- **Then** 该会话记下这个 agent 和它的配置
+
+### Scenario: reject an unknown agent or invalid agent configuration
+
+- **Given** 一个运行中的守护进程
+- **When** 用没有任何 agent 提供的 `agent_key`、或用一个并不存在的目录作为工作目录
+  创建会话
+- **Then** 两者都作为领域错误被拒绝，且什么都没有被持久化。*缺省*工作目录不算无效
+  ——它回落到 Coffer 托管的工作区
+
+### Scenario: send a message and receive a streamed reply
+
+- **Given** 一段绑定到已注册 agent 的会话
+- **When** 启动一个 turn
+- **Then** turn 事件按序流出——开始、文本增量、完成——且 assistant 回复被持久化
+
+### Scenario: observe a turn started from another surface
+
+- **Given** 某段会话上已有一个 turn 在跑
+- **When** 第二个订阅者接入该会话的事件总线
+- **Then** 它从头收到当前 turn 的事件，然后转为实时跟随，因此中途接入的订阅者
+  不会漏掉任何东西
+
+### Scenario: second message queues during a streaming turn
+
+- **Given** 一个 turn 正在流式输出
+- **When** 同一段会话上又发来一条消息
+- **Then** 它被接受并入队而不是被拒绝，并在当前 turn 结束后作为自己的 turn 运行
+
+### Scenario: a queued message runs after the current turn
+
+- **Given** 一条消息排在运行中的 turn 后面
+- **When** 那个 turn 完成
+- **Then** 排队的消息被提交为下一条用户消息并跑它的 turn，一条排队消息一个 turn
+
+### Scenario: interrupting a turn pauses the pending queue
+
+- **Given** 一个运行中的 turn，后面排着消息
+- **When** 该 turn 被中断
+- **Then** 当前 turn 停止，排队的消息被挂起、不自动运行，直到被恢复或丢弃
+
+### Scenario: stop a running turn
+
+- **Given** 一个已流出部分文本、仍在运行的 turn
+- **When** 它被中断
+- **Then** 流以一个终止的 turn-done 结束，stop reason 为 `interrupted`，
+  且部分 assistant 消息以完成状态被持久化
+
+### Scenario: reply survives a restart
+
+- **Given** 一个已完成的 turn
+- **When** 守护进程重启后读回该会话
+- **Then** assistant 回复还在——事实来源是消息存储，不是实时流
+
+### Scenario: manage conversations
+
+- **Given** 一个运行中的守护进程
+- **When** 创建、重命名、删除会话
+- **Then** 每个操作都持久化，列表随之反映；被删除的会话及其消息被移除
+
+### Scenario: skills are reachable as tools
+
+- **Given** 一个存有 skill 的 vault
+- **When** 某个 agent 跑一个 turn
+- **Then** vault 里的 skill 作为网关工具提供给它
+
+### Scenario: model selection is recorded
+
+- **Given** 一段已设定模型的会话
+- **When** 一个 turn 完成
+- **Then** assistant 消息记下产出它的那个模型
+
+### Scenario: token usage and audit
+
+- **Given** 一个会完成的 turn
+- **When** 该 turn 结束
+- **Then** assistant 消息记下 token 用量，且审计日志中含有这个已完成的 turn，
+  actor 为 `agent`
+
 
 ## Channels as a management plane（北极星）
 
@@ -1017,8 +1104,8 @@ Coffer-hosted channel 与它们并不冗余——它是通往统一、本地、�
   `AttachmentBlock`（path、mime、filename；bytes 留在媒体目录、绝不进 chat DB）——单一
   事实来源。turn 任务通过从历史里最后一条用户消息读回引用来为当前 turn 重新物化附件（而
   非向下线程传递一个参数），因此物化能在守护进程重启后存活、并与网页所见保持一致；作用域
-  限于会话内（无跨会话／切换 agent 的全历史重放）。网页 Chat 页把该引用渲染为一个紧凑的
-  `📎 filename · mime` 芯片；本地 path 绝不发到线上。媒体目录由保留节奏上的 30 天 mtime
+  限于会话内（无跨会话／切换 agent 的全历史重放）。path 留在守护进程内部：只有必须读取
+  bytes 的 agent 适配器见得到它。媒体目录由保留节奏上的 30 天 mtime
   清扫界定大小（bytes 可重新下载；无大小上限）。见 ADR-041。
 - **FR-042**: 每个 turn 都带上自己的来源。turn 文本以一个 `[Message origin]` 块开头，
   写明平台、会话（kind、平台白送时的会话标题，以及始终存在的 chat id）、线程和发送者
@@ -1066,6 +1153,86 @@ Coffer-hosted channel 与它们并不冗余——它是通往统一、本地、�
 - **FR-038**: Telegram album 是一个 turn。共享同一 `media_group_id` 的消息被去抖成携带
   它们全部附件的单个 turn，而非每张图一个 turn。
 - **FR-039**: 入站事件被去重。一个被重投的平台事件（相同 message id）只被处理一次。
+
+### E. Turn 平台
+
+自已退役的 spec 008 并入。这些需求描述的是**每个 channel turn 底下**那层机制——
+注册表、适配器、会话存储与 turn 生命周期。它们原本独占一个 spec，是因为当时
+Web 端 Chat 页面是它们的另一个客户端；那个页面已被删除（见下方
+**Deliberately out of scope**），于是 channels 成了这层平台唯一的接口面。
+把描述放在这里，是为了让「IM 消息 → turn → 回复」这条完整链路在一份文档里读完，
+而不是跨两个 spec。
+
+- **FR-043**: 一个 turn 触达 agent 只能经由 **agent provider 注册表**：跑 turn、
+  初始化会话、拆除会话的 agent 状态，都是拿会话上记的那个 agent 名字去问注册表。
+  再加一个 agent 只能是加一条注册表条目——不得改动会话/消息 schema、turn 编排器
+  或 channel 层。channel 层永远不按 agent 分支。
+- **FR-044**: 每段会话必须用 `agent_key` 记下它属于哪个 agent，外加一份不透明的、
+  agent 专属的配置，由被点名的那个 agent 校验并持久化。没有任何 agent 提供的
+  `agent_key` 必须被拒绝，agent 拒绝的配置必须作为领域错误被拒绝——两者都发生在
+  写入任何东西之前。channel 绑定在 peer 的第一条消息上解析的就是这个。
+- **FR-045**: 平台必须通过 REST API 暴露它注册了哪些 agent——每个带稳定 key、
+  显示名和当前可用标志——好让 channel 编辑器只提供真实存在的 agent，并标出那些
+  CLI 不在本机上的。它同样必须按 agent 暴露该 agent 可以被切到的模型。
+- **FR-046**: 一个 agent 通过**agent 适配器**被寻址来跑一个 turn；适配器是自足的：
+  只给它会话历史，它产出一串类型化的 turn 事件。适配器自带模型、工具和配置，
+  编排器不得注入这些。
+- **FR-047**: 系统必须提供由子进程支撑的 Claude Code 与 Codex agent provider。
+  每个都在一个工作目录里运行（它的 `agent_config.cwd`）；turn 没给工作目录时，
+  provider 必须回落到 Coffer 托管的工作区 `~/.coffer/workspace`（首次使用时创建）
+  而不是拒绝该 turn——这样一个没配工作区的 channel 开箱即用。显式给出的 cwd 必须
+  是一个已存在的目录，否则配置被拒。可用性必须反映该 agent 的二进制在守护进程的
+  PATH 上是否可解析；不可用的 agent 会被列出但不可选。turn 必须把工具的行分隔
+  JSON 输出映射为平台的 turn 事件，并持久化上游 session id，使下一个 turn 接着
+  同一个 session 跑。Claude Code 走 Claude Agent SDK，Codex 走 `codex app-server`
+  （stdio 上的 JSON-RPC 2.0，NDJSON 分帧）；两者都以完整权限运行——owner 配对
+  （FR-005）才是安全闸门。
+- **FR-048**: 系统必须把会话及其消息持久化在 SQLite 里作为事实来源；它们不建模为
+  kind-agnostic Resource 框架里的 Resource。一条消息必须存下它的 role 和一个有序的
+  content block 列表，类型为 `text`、`tool_use`、`tool_result` 和 `attachment`
+  （FR-033）；assistant 消息在 agent 报告时还必须存下 token 用量与产出它的模型。
+- **FR-049**: 会话必须遵循两段式、由保留策略管理的生命周期，两个窗口都在
+  Settings → Data 下可配：保留 worker 先把超过自动归档窗口（默认 7 天）没有新消息
+  的会话自动归档，再在归档若干天后（默认 30 天）删除已归档会话及其消息。任一窗口
+  都可设为永久保留以禁用该段。自动归档可逆；只有删除是破坏性的。
+- **FR-050**: 系统必须做到每个会话同时最多一个进行中的 turn，且不得拒绝在 turn
+  运行期间发来的消息：这样的消息进入该会话的**待处理队列**。进行中的 turn 结束时，
+  系统必须从队首出队、把它提交为下一条用户消息并跑它的 turn——顺序 FIFO，
+  一条排队消息一个 turn，绝不合并。待处理消息在它的 turn 开始前不会进入消息序列。
+  该队列在内存中，因此守护进程重启会丢掉尚未提交的部分。（turn 进行中从 channel
+  到达的消息由该 channel 自己的入站缓冲承接，见 FR-027，而不是这个队列。）
+- **FR-051**: 中断一个 turn 必须同时**暂停**待处理队列：当前 turn 停止并保留其部分
+  输出，排队的消息被挂起、不自动运行，直到属主恢复它们。`/stop`（FR-011）触达的
+  就是这里。
+- **FR-052**: 系统必须把一个 turn 表达为一串类型化事件，至少覆盖 turn 开始、
+  文本增量、工具调用、工具结果、turn 完成、turn 错误和待处理队列变化。
+- **FR-053**: 系统必须把这些事件发布到每会话的进程内事件总线上，任意数量的订阅者
+  都可以接入。接入时若有 turn 正在进行，总线必须重放当前 turn 的事件让迟到的订阅者
+  跟上，然后转为实时流。turn 作为脱离任务运行，因此发起它的订阅者离开后它仍然存活
+  ——这就是为什么 peer 的连接在 turn 中途断掉，回复依然跑完并被持久化。
+- **FR-054**: 被中断的 turn——用户中断、适配器失败或守护进程重启——必须留下已持久化
+  且标记为完成的部分 assistant 消息，而不是丢弃它。停止一个 turn 与丢弃会话不同，
+  后者会把这个 turn 扔掉。
+- **FR-055**: 每个完成的 turn 必须以 actor、agent、会话和该 turn 的 token 用量记入
+  审计日志，使「哪个 agent 做了什么、由谁驱动」事后可查（channel 专属字段见 FR-030）。
+
+## Deliberately out of scope
+
+**Web 端 Chat 页面。** spec 008 交付过一个 Web 端两栏聊天页面——会话列表、消息线程、
+输入框、模型选择器、待处理队列管理——以及 `/api/v1/chat` 下为它服务的一套 REST/SSE
+接口。两者都被删除。这个页面从未被当作聊天界面用过：库里每一条会话都由 channel 创建；
+ADR-031 定义的「单属主实时镜像」职责——在电脑上旁观你正用手机驱动的那段会话——同样
+从未被行使，若行使过，会话记录里会有痕迹。如实记录反面事实：手机发消息、电脑看实况
+是个合理的需求，这个功能只是从来没用起来。仍然删除，因为一个从未跑过的六千行接口面
+是负债，不是选项。
+
+存活下来的是它底下的全部（FR-043…FR-055），加上产品其余部分仍然要用的两条读路由
+——agent 注册表列表与按 agent 的模型清单——它们从 `/api/v1/chat/agents` 移到了
+`/api/v1/agent-providers`，因为这两者从来就与「会话」无关。会话存储保留其完整 API
+面，即使其中一部分现在只有保留 worker 在调用——这个存储属于平台，不属于那个页面。
+
+**ADR-021**（chat 作为 Vault Console）与 **ADR-031**（chat 是单属主实时镜像）随页面
+一并删除。
 
 ## Assumptions
 

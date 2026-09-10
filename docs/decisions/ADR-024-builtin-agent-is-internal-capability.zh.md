@@ -47,6 +47,11 @@ IM 没有持久使用场景，还悄悄重新打开了 ADR-021 自己想关掉�
   席位，走同一套 `ConversationPort` / `TurnPort` 接缝。"聊天"命名的是
   会话集合——无论由谁驱动——所以名字仍贴切。
 
+  _2026-09-10 取代：_ 这个观测席位从未被使用，Chat 页面随 spec 008 一并删除。
+  这里点名的 `ConversationPort` / `TurnPort` 接缝作为 spec 009 FR-043…FR-055
+  存活下来；消失的只是接口面。前两条——只面向受管 agent、注册表里没有 `builtin`
+  ——仍然成立，现在正是 agent provider 列表所返回的内容。
+
 ### 2. "内置 agent"概念离开 UI
 
 - `/agents` 列表去掉内置 agent 卡片；`/agents` 纯粹是受管 agent。

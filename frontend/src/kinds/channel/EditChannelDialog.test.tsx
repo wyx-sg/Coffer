@@ -12,14 +12,15 @@ import { EditChannelDialog } from "./EditChannelDialog";
 import { mockApiClient, type ApiClientMock } from "@/test/mockApiClient";
 
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
-// The agent picker reads the chat provider registry (GET /chat/agents) — the
-// same registry a turn resolves by — so it can only offer real provider keys.
-vi.mock("@/lib/api/chat", () => ({ chatApi: { listAgents: vi.fn() } }));
+// The agent picker reads the turn platform's provider registry
+// (GET /agent-providers) — the same registry a turn resolves by — so it can
+// only offer real provider keys.
+vi.mock("@/lib/api/agentProviders", () => ({ agentProvidersApi: { list: vi.fn() } }));
 
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
-const { chatApi } = await import("@/lib/api/chat");
-const listAgentsMock = vi.mocked(chatApi.listAgents);
+const { agentProvidersApi } = await import("@/lib/api/agentProviders");
+const listAgentsMock = vi.mocked(agentProvidersApi.list);
 
 function installApi(api: ApiClientMock) {
   getApiClientMock.mockReturnValue(api as unknown as ReturnType<typeof getApiClient>);
@@ -66,7 +67,7 @@ function save() {
 describe("EditChannelDialog", () => {
   test("sources the agent picker from the chat provider registry, not the resource list", async () => {
     // The bound agent is a chat provider key (claude_code, underscore). The
-    // picker must read the same registry the turn resolves by (chatApi.listAgents
+    // picker must read the same registry the turn resolves by (agentProvidersApi.list
     // → GET /chat/agents) so a re-bind can only ever pick a real provider key.
     // The old useAgents() source served resource names (claude-code), which
     // fail at turn time with UNKNOWN_AGENT.

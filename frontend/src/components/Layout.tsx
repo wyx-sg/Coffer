@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import {
   Bot,
   Boxes,
-  MessageSquare,
   Library,
   PanelLeftClose,
   PanelLeftOpen,
@@ -37,9 +36,9 @@ interface NavGroup {
 /**
  * Sidebar navigation — a role-based information architecture (see ADR-007):
  *
- * - **Agents** — the consumers: the agents you use (Claude Code, Codex), Chat
- *   with them, and the Channels they communicate over. Agents are NOT vault
- *   assets, so they are not under Resources.
+ * - **Agents** — the consumers: the agents you use (Claude Code, Codex) and
+ *   the Channels they communicate over. Agents are NOT vault assets, so they
+ *   are not under Resources.
  * - **Resources** — the assets agents draw on, modelled as kind-agnostic
  *   resource kinds (MCP servers, skills, and knowledge — one kind covering
  *   both what agents write and what people ingest), surfaced through the kind
@@ -49,15 +48,13 @@ interface NavGroup {
  *   Settings.
  *
  * Sidebar policy (ADR-007): show only what ships today — no "soon"
- * placeholders. Chat, Channels, the extra resource kinds, and Observability
- * appear as each feature lands. The sidebar collapses to an icon-only rail;
- * the choice persists in localStorage.
+ * placeholders, and no entry outliving its feature. The sidebar collapses to
+ * an icon-only rail; the choice persists in localStorage.
  */
 const NAV_GROUPS: NavGroup[] = [
   {
     labelKey: "nav.group.agents",
     items: [
-      { to: "/chat", labelKey: "nav.chat", icon: MessageSquare },
       { to: "/agents", labelKey: "nav.agents", icon: Bot, end: true },
       { to: "/channels", labelKey: "nav.channels", icon: Radio, end: true },
     ],

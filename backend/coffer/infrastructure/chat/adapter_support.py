@@ -13,7 +13,7 @@ app-server-backed (:mod:`codex_agent`) adapters both need:
   user message in the history.
 
 These were extracted from the now-deleted ``cli_agent`` module when the legacy
-CLI adapters were retired (ADR-031 §4); the live adapters are the only callers.
+The pre-SDK CLI adapters were retired; the live adapters are the only callers.
 """
 
 from __future__ import annotations

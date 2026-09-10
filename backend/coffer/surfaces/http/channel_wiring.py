@@ -35,7 +35,7 @@ from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.surfaces.http import daemon_routes
 from coffer.surfaces.http.auth import get_active_token
 from coffer.surfaces.http.channel_routes import set_channel_service
-from coffer.surfaces.http.chat.dependencies import (
+from coffer.surfaces.http.turn_dependencies import (
     get_agent_model_catalogue,
     get_agent_registry,
     get_chat_service,

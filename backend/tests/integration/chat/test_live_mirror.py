@@ -136,9 +136,7 @@ def _is_done(ev: object) -> bool:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(
-    spec="008-agent-chat", scenario="send a message and receive a streamed reply"
-)
+@pytest.mark.acceptance(spec="009-channels", scenario="send a message and receive a streamed reply")
 async def test_streamed_reply_over_subscription() -> None:
     adapter = FakeAgentAdapter(
         [TurnStarted(), TextDelta(text="Hello!"), TurnDone(None, None, "end_turn")]
@@ -157,9 +155,7 @@ async def test_streamed_reply_over_subscription() -> None:
     assert "turn_done" in types
 
 
-@pytest.mark.acceptance(
-    spec="008-agent-chat", scenario="observe a turn started from another surface"
-)
+@pytest.mark.acceptance(spec="009-channels", scenario="observe a turn started from another surface")
 async def test_observe_turn_from_another_surface() -> None:
     adapter = FakeAgentAdapter(
         [TurnStarted(), TextDelta(text="from-channel"), TurnDone(None, None, "end_turn")]
@@ -177,7 +173,7 @@ async def test_observe_turn_from_another_surface() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="008-agent-chat", scenario="second message queues during a streaming turn"
+    spec="009-channels", scenario="second message queues during a streaming turn"
 )
 async def test_second_message_queues() -> None:
     release = asyncio.Event()
@@ -196,7 +192,7 @@ async def test_second_message_queues() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="008-agent-chat", scenario="a queued message runs after the current turn"
+    spec="009-channels", scenario="a queued message runs after the current turn"
 )
 async def test_queued_message_runs_after_current() -> None:
     release = asyncio.Event()
@@ -233,7 +229,7 @@ async def test_queued_message_runs_after_current() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="008-agent-chat", scenario="interrupting a turn pauses the pending queue"
+    spec="009-channels", scenario="interrupting a turn pauses the pending queue"
 )
 async def test_interrupt_pauses_queue() -> None:
     release = asyncio.Event()
@@ -284,7 +280,7 @@ async def test_send_after_interrupt_resumes_queue() -> None:
     assert any(isinstance(e, TextDelta) and e.text == "resumed" for e in seen)
 
 
-@pytest.mark.acceptance(spec="008-agent-chat", scenario="reply survives a restart")
+@pytest.mark.acceptance(spec="009-channels", scenario="reply survives a restart")
 async def test_reply_persisted() -> None:
     adapter = FakeAgentAdapter(
         [TurnStarted(), TextDelta(text="Hello, world!"), TurnDone(12, 6, "end_turn")]

@@ -11,7 +11,7 @@ the SSE event name on the wire:
   TurnError        → ``turn_error``
   QueueChanged     → ``queue_changed``
 
-``QueueChanged`` is a conversation-level event (the pending-message queue, ADR-031)
+``QueueChanged`` is a conversation-level event (the pending-message queue, spec 009 FR-050)
 rather than a turn-content event: it is broadcast by the orchestrator, never
 emitted by an adapter, and is not accumulated into the assistant message.
 """
@@ -85,7 +85,7 @@ class TurnError:
 
 @dataclass(frozen=True)
 class QueueChanged:
-    """The conversation's pending-message queue changed (ADR-031).
+    """The conversation's pending-message queue changed (spec 009 FR-052).
 
     Carries the ordered texts still waiting to run as their own turns, so every
     subscriber renders the same pending state. Conversation-level, not turn

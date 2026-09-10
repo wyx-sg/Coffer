@@ -25,8 +25,8 @@ from coffer.application.knowledge.service import KnowledgeService
 from coffer.application.provider.service import ProviderService
 from coffer.application.resource_service import ResourceService
 from coffer.domain.provider.config import ResolvedConnection
-from coffer.infrastructure.chat.llm_completion import LangchainLlmCompletion
 from coffer.infrastructure.knowledge_scope.scope_fs import normalize_remote_url, origin_remote_url
+from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
 from coffer.surfaces.http.dependencies import get_audit_service, get_resource_service
 from coffer.surfaces.http.knowledge.dependencies import (
     get_project_root_repo,

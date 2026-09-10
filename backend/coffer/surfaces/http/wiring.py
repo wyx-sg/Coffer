@@ -40,16 +40,16 @@ from coffer.infrastructure.knowledge.repository import DocumentRepo
 from coffer.infrastructure.knowledge.sqlite_index import SqliteKnowledgeIndex
 from coffer.infrastructure.knowledge.vec_index import VecIndex
 from coffer.infrastructure.providers.provider_introspector import ProviderIntrospector
-from coffer.surfaces.http.chat.dependencies import (
-    set_agent_model_catalogue,
-    set_introspection_service,
-)
 from coffer.surfaces.http.chat_provider_wiring import build_agent_provider_registry
 from coffer.surfaces.http.dependencies import (
     get_agent_service,
     set_agent_registry,
     set_chat_service,
     set_turn_orchestrator,
+)
+from coffer.surfaces.http.turn_dependencies import (
+    set_agent_model_catalogue,
+    set_introspection_service,
 )
 
 if TYPE_CHECKING:

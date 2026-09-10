@@ -535,16 +535,19 @@ forbidden_modules = [
     "sentence_transformers",
 ]
 
-# Contract 9: langgraph + langchain* confined to infrastructure/chat (spec 008).
-# Domain + application MUST NOT import these SDKs; all other infrastructure
-# packages MUST NOT either. The composition root (surfaces/http/app.py +
-# surfaces/http/wiring.py) instantiates LangGraphBuiltinAgent via wire_chat.
+# Contract 9a: langgraph + langchain* confined to infrastructure/llm.
+# These SDKs call a plain chat model on Coffer's behalf (knowledge merge,
+# organize, agentic reorg). infrastructure/llm is their only home — including
+# infrastructure/chat, which drives coding agents through their own SDKs and
+# has no business reaching for a chat model. Domain and application reach the
+# loop only through injected ports (Contracts 2b / 5e).
 [[tool.importlinter.contracts]]
-name = "LangGraph and LangChain confined to infrastructure/chat"
+name = "LangGraph and LangChain confined to infrastructure/llm"
 type = "forbidden"
 source_modules = [
     "coffer.domain",
     "coffer.application",
+    "coffer.infrastructure.chat",
     "coffer.infrastructure.mcp",
     "coffer.infrastructure.channel",
     "coffer.infrastructure.knowledge",
@@ -561,5 +564,27 @@ forbidden_modules = [
     "langchain_anthropic",
     "langchain_openai",
     "langchain_ollama",
+]
+
+# Contract 9b: the Claude Agent SDK confined to infrastructure/chat, which is
+# where agent adapters live. Everything else — including infrastructure/llm —
+# must not import it.
+[[tool.importlinter.contracts]]
+name = "Claude Agent SDK confined to infrastructure/chat"
+type = "forbidden"
+source_modules = [
+    "coffer.domain",
+    "coffer.application",
+    "coffer.infrastructure.llm",
+    "coffer.infrastructure.mcp",
+    "coffer.infrastructure.channel",
+    "coffer.infrastructure.knowledge",
+    "coffer.infrastructure.knowledge_scope",
+    "coffer.infrastructure.persistence",
+    "coffer.infrastructure.credentials",
+    "coffer.infrastructure.daemon",
+    "coffer.infrastructure.logging",
+]
+forbidden_modules = [
     "claude_agent_sdk",
 ]

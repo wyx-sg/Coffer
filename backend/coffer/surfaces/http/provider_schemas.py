@@ -94,3 +94,55 @@ class ActiveKeyOut(BaseModel):
     """
 
     value: str
+
+
+# ---------------------------------------------------------------------------
+# Introspection: probe a connection, list what it serves.
+#
+# These moved here from the chat page's schema module when that page was
+# removed. They were never chat schemas — the connection editor and the
+# embedding settings are what post to /api/v1/models.
+# ---------------------------------------------------------------------------
+
+
+class TestConnectionIn(BaseModel):
+    provider: str
+    model: str
+    credential_ref: str | None = None
+    secret_value: str | None = None  # inline secret to test before saving
+    base_url: str | None = None
+
+
+class ListModelsIn(BaseModel):
+    provider: str
+    credential_ref: str | None = None
+    secret_value: str | None = None  # inline secret to fetch before saving
+    base_url: str | None = None
+
+
+class DetectProtocolIn(BaseModel):
+    base_url: str | None = None
+    credential_ref: str | None = None
+    secret_value: str | None = None  # inline secret to probe before saving
+
+
+class DetectProtocolOut(BaseModel):
+    protocol: str  # "anthropic" | "openai" | "ollama" | "unknown"
+
+
+class TestResultOut(BaseModel):
+    ok: bool
+    message: str
+    detail: dict[str, object] = {}
+
+
+class ProviderModelsOut(BaseModel):
+    models: list[str]
+    message: str = ""
+
+
+class EmbeddingTestIn(BaseModel):
+    provider: str
+    model: str
+    credential_ref: str | None = None
+    base_url: str | None = None

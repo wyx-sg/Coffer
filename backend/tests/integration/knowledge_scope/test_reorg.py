@@ -74,7 +74,7 @@ class _FakeAgent:
         credential_resolver: Any,
         recursion_limit: int,
     ) -> dict[str, Any]:
-        from coffer.infrastructure.chat.agentic_reorg import run_agentic_reorg
+        from coffer.infrastructure.llm.agentic_reorg import run_agentic_reorg
 
         lc_model = _fake_chat_model(self._scripted)
         return await run_agentic_reorg(

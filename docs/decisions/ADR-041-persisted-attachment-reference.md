@@ -19,7 +19,7 @@ contract) and the DB-bloat risk of inlining base64.
 
 The consequence ADR-038 accepted: an attachment was materialised per turn but
 never persisted, so anything that re-reads full history (no session resume) saw
-a note, not the image, and the attachment was invisible in the web Chat page.
+a note, not the image, and the attachment left no trace in the conversation.
 FR-033 revisits that decision — the key realisation is that a **reference** block
 (path/mime/filename, **no bytes**) removes the DB-bloat objection entirely.
 
@@ -72,9 +72,8 @@ turn.**
 
 ## Consequences
 
-- The attachment lives in history, shows in the web Chat page, and survives a
-  daemon restart; the persisted reference is the one source of truth for
-  materialisation.
+- The attachment lives in history and survives a daemon restart; the persisted
+  reference is the one source of truth for materialisation.
 - Adapters are untouched — the seam moved (history read-back instead of a param),
   not the adapter contract. The modality-agnostic property from ADR-038 holds.
 - Old text-only message rows deserialise unchanged (schemaless JSON content, no

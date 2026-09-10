@@ -123,7 +123,7 @@ async def test_inline_secret_overrides_credential_ref() -> None:
     assert port.seen_key == "sk-inline"
 
 
-@pytest.mark.acceptance(spec="008-agent-chat", scenario="test a model connection")
+@pytest.mark.acceptance(spec="011-provider-switching", scenario="test a model connection")
 async def test_acceptance_test_connection() -> None:
     res = await _svc(_FakePort()).test_connection(
         provider="openai", model="gpt-4o", base_url=None, credential_ref="ref-x"

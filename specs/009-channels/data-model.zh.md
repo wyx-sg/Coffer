@@ -60,7 +60,7 @@ ChannelConfig (discriminator: channel_type)
 约束：`UNIQUE (resource_id, chat_id)`；对 `resource_id` 建索引。
 
 `active_conversation_id` 是指向聊天平台 `conversations` 表的软引用（跨
-接缝不建 FK）：如果对话已在 Chat 页面被删除，下一条入站消息会检测到悬空
+接缝不建 FK）：如果对话已被删除，下一条入站消息会检测到悬空
 的 id 并创建一段新对话。
 
 `sender_id` / `preferred_agent` 都可空，使本修订前配对的 peer 优雅退化：

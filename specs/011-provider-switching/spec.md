@@ -311,7 +311,7 @@ agent could use.
 
 - **H1 — The catalogue is a backend surface, per agent, and Coffer names no
   model in it.**
-  `GET /api/v1/chat/agents/{agent_key}/models` returns the models one agent can
+  `GET /api/v1/agent-providers/{agent_key}/models` returns the models one agent can
   be put on. Every entry — id, display name, description — is read back from the
   installed agent, never written into Coffer, because a list written down here
   goes stale on the next CLI release and cannot tell one release of a tier from
@@ -326,7 +326,7 @@ agent could use.
   degrades to nothing on its own — a missing CLI, a changed bundle layout, an
   unauthenticated or wedged agent costs the models that source would have added
   and nothing else. An unknown `agent_key` is a 404. Contract:
-  [`specs/008-agent-chat/contracts/api.openapi.yaml`](../008-agent-chat/contracts/api.openapi.yaml).
+  [`specs/011-provider-switching/contracts/api.openapi.yaml`](contracts/api.openapi.yaml).
 - **H2 — Single source of truth.** The frontend constant is deleted; the
   channel `/model` card reads the same catalogue. The list is owned in one
   place — and owned by the agents themselves — so a newly released model reaches
@@ -803,6 +803,23 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
   `apiKeyHelper = "coffer provider key --connection <name>"`, and
   `GET /providers/{name}/key` returns exactly that connection's key.
 
+### Scenario: list a provider's models
+
+- **Given** a connection being added or edited, with a provider entered (plus
+  base URL / credential ref where the provider needs them),
+- **When** the provider's models are fetched,
+- **Then** Coffer returns the model ids the provider exposes for selection, and
+  if none can be listed it returns an empty list with a message so the user can
+  still type a model id manually.
+
+### Scenario: test a model connection
+
+- **Given** a connection's provider, model id, and (where required) credential
+  ref,
+- **When** the connection is tested,
+- **Then** Coffer makes a minimal request to the provider and reports success or
+  a humanized failure message, without persisting anything.
+
 ### Scenario: test or fetch models with an inline unsaved secret
 
 - **Given** the connection dialog is open and no connection (nor its credential
@@ -847,12 +864,12 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
   internal-default connection (the model lives apart from the connection, per
   the amendment below).
 
-### Scenario: the chat model picker offers a fixed list without free-form entry
+### Scenario: the agent's model picker offers a fixed list without free-form entry
 
-- **Given** a conversation bound to an agent that has no overriding connection,
+- **Given** an agent whose model binding is being edited,
 - **When** the model picker is opened,
 - **Then** it offers a fixed dropdown of the agent's model catalogue
-  (`GET /api/v1/chat/agents/{agent_key}/models`) with no free-text "Custom…"
+  (`GET /api/v1/agent-providers/{agent_key}/models`) with no free-text "Custom…"
   entry; and when a connection overrides the agent the dropdown offers that
   connection's introspected models IN ADDITION to the catalogue and the current
   value, never reading the connection's stored `model` field (TypeScript

@@ -18,7 +18,7 @@ class Conversation:
 
     An optional **channel binding** (``channel_name`` + ``peer_chat_id``) is the
     return address for relaying the agent's output back to an IM channel
-    (ADR-031). A conversation "has a channel binding" iff ``channel_name`` is set.
+    (spec 009). A conversation "has a channel binding" iff ``channel_name`` is set.
     Under the single-owner premise the IM peer is always the owner, so there is no
     separate peer identity to display.
     """

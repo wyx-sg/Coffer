@@ -65,7 +65,7 @@ Constraints: `UNIQUE (resource_id, chat_id)`; index on `resource_id`.
 
 `active_conversation_id` is a soft reference into the chat platform's
 `conversations` table (no FK across the seam): if the conversation was
-deleted from the Chat page, the next inbound message detects the dangling id
+deleted, the next inbound message detects the dangling id
 and creates a fresh conversation.
 
 `sender_id` / `preferred_agent` are nullable so a peer paired before this

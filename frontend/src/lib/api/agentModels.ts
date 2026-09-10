@@ -1,5 +1,5 @@
 // frontend/src/lib/api/agentModels.ts — typed fetch helper for
-// /api/v1/chat/agents/{agent_key}/models.
+// /api/v1/agent-providers/{agent_key}/models.
 //
 // The agent's model catalogue. It replaces the hardcoded per-agent constant the
 // frontend used to carry: the backend is the single source of truth, and it in
@@ -63,5 +63,5 @@ async function get<T>(path: string): Promise<T> {
 export const agentModelsApi = {
   /** The catalogue for one agent type. 404s on an unknown agent key. */
   list: (agentKey: string) =>
-    get<AgentModelsOut>(`/chat/agents/${encodeURIComponent(agentKey)}/models`),
+    get<AgentModelsOut>(`/agent-providers/${encodeURIComponent(agentKey)}/models`),
 };
