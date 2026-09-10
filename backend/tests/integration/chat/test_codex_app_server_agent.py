@@ -1,4 +1,4 @@
-"""App-server-backed Codex adapter tests (spec 008).
+"""App-server-backed Codex adapter tests (spec channels).
 
 Drives ``CodexAppServerAdapter`` through a ``FakeCodexAppServer`` — a fake
 JSON-RPC peer implementing the same reader/writer seam ``CodexRpcClient``
@@ -500,7 +500,7 @@ async def test_stream_end_without_terminal_no_pending_task_warning(recwarn: Any)
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="a PDF reaches a path-native agent as extracted text",
 )
 @pytest.mark.asyncio

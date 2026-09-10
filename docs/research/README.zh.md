@@ -39,7 +39,7 @@
 | 8   | [多机同步](./multi-machine-sync.zh.md) · [en](./multi-machine-sync.md)                            | 同步（010）         | **对账而非覆盖**独一无二；借鉴 chezmoi 的**按机器模板**。                                                                    |
 | 9   | [凭证与密钥](./credentials-secrets.zh.md) · [en](./credentials-secrets.md)                        | 凭证（015）         | Coffer 已实现 1Password "**访问而不暴露**"理想；借鉴**外部提供者引用**（`op://`）。                                          |
 | 10  | [可观测、审计 + MCP 安全](./observability-governance.zh.md) · [en](./observability-governance.md) | 审计/retention/安全 | 治理/审计**领先**（免费 vs Langfuse 付费墙）；借鉴 **MCP tool-pinning**（mcp-scan）。                                        |
-| 11  | [Agent 评估](./agent-evaluation.zh.md) · [en](./agent-evaluation.md)                              | 评估（ADR-019/017） | **更正：飞轮已落地**（ADR-019 已 Accepted、`evals/` 存在）；借鉴 **LLM-as-judge**。                                          |
+| 11  | [Agent 评估](./agent-evaluation.zh.md) · [en](./agent-evaluation.md)                              | 评估（飞轮 / harness） | **更正：飞轮已落地**（eval 飞轮 ADR 已 Accepted、`evals/` 存在）；借鉴 **LLM-as-judge**。                                    |
 | 12  | [记忆系统](./memory-systems-landscape.zh.md) · [en](./memory-systems-landscape.md)                | 记忆（007）         | _并行 session 产出。_ 该领域分文件为真相 vs 向量为真相两派；Coffer 是有意的混合。                                            |
 | 13  | [平台级竞品](./platform-competitors.zh.md) · [en](./platform-competitors.md)                      | 整体产品（补查）    | **盲区修正（2026-06-20）：** 前 12 份报告漏掉了 cc-switch（~105k）+ 整个中文生态；无在位者覆盖 Coffer 完整的 10 项能力矩阵。 |
 
@@ -85,7 +85,7 @@
 ### 研究暴露的两处事实更正
 
 - **KB** 暴露的是**四个只读 MCP 工具**（list / search / grep / read），不是单一的问答入口。
-- **评估不是蓝图** —— ADR-019 已 Accepted（2026-06-14），且本地优先 `evals/` harness 已落地
+- **评估不是蓝图** —— eval 飞轮 ADR 已 Accepted（2026-06-14），且本地优先 `evals/` harness 已落地
   （捕获 → 精选 → 金样 → CI 门禁）。
 
 ## 覆盖说明

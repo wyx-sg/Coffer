@@ -1,4 +1,4 @@
-"""Native OS picker dialogs via the loopback daemon (spec 004 FR-042).
+"""Native OS picker dialogs via the loopback daemon (spec agent-registry FR-042).
 
 A web browser cannot open an OS-native file/folder dialog that returns an
 absolute path. But the daemon is *always co-located with the client on the

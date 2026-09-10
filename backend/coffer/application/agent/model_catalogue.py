@@ -46,7 +46,7 @@ class ModelDiscoveryPort(Protocol):
 
 
 class AgentLister(Protocol):
-    """The spec-004 agent registry, narrowed to the one call this service needs
+    """The agent registry, narrowed to the one call this service needs
     (the same port ``ProviderService`` takes as ``agents``)."""
 
     async def list(self) -> list[Resource]: ...

@@ -1,4 +1,4 @@
-"""Tests for the curate hop: captured traces -> golden cases (ADR-019, slice 3).
+"""Tests for the curate hop: captured traces -> golden cases (eval flywheel, slice 3).
 
 The interactive shell is thin; the logic lives in pure functions (load, dedup,
 parse a selection, build a case) plus a ``curate`` driver that takes an injected

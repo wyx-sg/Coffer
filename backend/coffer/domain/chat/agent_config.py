@@ -1,4 +1,4 @@
-"""Typed per-conversation agent provider config (spec 009 FR-044).
+"""Typed per-conversation agent provider config (spec channels FR-044).
 
 The chat platform keeps a small per-conversation blob of provider-owned state:
 the working directory a turn runs in, the upstream session id to ``--resume``,

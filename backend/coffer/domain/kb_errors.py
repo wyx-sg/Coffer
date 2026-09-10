@@ -1,4 +1,4 @@
-"""Knowledge-base kind (spec 006) error classes.
+"""Knowledge-base kind (spec knowledge) error classes.
 
 Split out of :mod:`coffer.domain.errors` (which re-exports them, so the
 ``coffer.domain.errors.X`` import paths keep working) to keep that aggregation

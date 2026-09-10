@@ -20,7 +20,7 @@ def _text(message) -> str:  # type: ignore[no-untyped-def]
     return "".join(b.text for b in message.content if isinstance(b, TextBlock))
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="a paired message gets an agent reply")
+@pytest.mark.acceptance(spec="channels", scenario="a paired message gets an agent reply")
 async def test_paired_message_runs_a_turn_and_delivers_the_reply(env: ChannelEnv) -> None:
     env.provider.adapter = FakeAgentAdapter(
         [
@@ -51,7 +51,7 @@ async def test_paired_message_runs_a_turn_and_delivers_the_reply(env: ChannelEnv
 
 
 @pytest.mark.acceptance(
-    spec="009-channels", scenario="the channel conversation is a normal chat conversation"
+    spec="channels", scenario="the channel conversation is a normal chat conversation"
 )
 async def test_channel_conversation_appears_in_the_chat_platform_apis(env: ChannelEnv) -> None:
     env.provider.adapter = FakeAgentAdapter(
@@ -77,7 +77,7 @@ async def test_channel_conversation_appears_in_the_chat_platform_apis(env: Chann
     assert _text(messages[1]) == "42"
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="a turn error is reported to the IM chat")
+@pytest.mark.acceptance(spec="channels", scenario="a turn error is reported to the IM chat")
 async def test_turn_error_is_delivered_as_a_short_notice(env: ChannelEnv) -> None:
     env.provider.adapter = FakeAgentAdapter(
         [TurnStarted(), TurnError(code="PROVIDER_TIMEOUT", message="upstream timed out")]

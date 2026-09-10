@@ -1,4 +1,4 @@
-// frontend/src/components/agents/AgentAddDialog.tsx — spec 004-agent-registry.
+// frontend/src/components/agents/AgentAddDialog.tsx — spec agent-registry.
 // One combined "Add agent" dialog. On open it auto-runs candidate detection
 // (discovery + confirm: nothing is registered silently) and lists installed-
 // but-unregistered agents as a checklist, default all ticked. Below that, an

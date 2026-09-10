@@ -216,7 +216,7 @@ class ScopeResolver:
         to skip — on a second synced machine the portable scope arrives via
         an import while that machine's own legacy scope (different path,
         different id) still holds its entries; adoption merges them in
-        additively (ADR-043)."""
+        additively."""
         if self._legacy_project_ulid is None or self._migrate_store is None:
             return
         legacy_id = self._legacy_project_ulid(root)

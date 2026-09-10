@@ -5,10 +5,10 @@ Revises: 0048
 Create Date: 2026-09-09
 
 The database half of withdrawing continuous multi-machine sync: exporting and
-importing a vault bundle replaces it (ADR-016), so the machine registry, the
+importing a vault bundle replaces it (ADR vault-export-import), so the machine registry, the
 tombstone ledger and the sync run state have nothing left to serve, and the
 machine axis of a resource's activation scope loses the machine ids that gave
-it meaning (ADR-045). Two changes, one revision, because they are the same
+it meaning (ADR per-agent-resource-scope). Two changes, one revision, because they are the same
 removal.
 
 **Scope collapses.** ``resources.scope_json`` keeps its column and its JSON-text
@@ -65,7 +65,7 @@ down_revision: str | None = "0048"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-# Kinds that still declare an activation scope (ADR-045). Every other kind's
+# Kinds that still declare an activation scope (ADR per-agent-resource-scope). Every other kind's
 # stored scope is cleared. Inlined: migrations never import application code.
 _SCOPED_KINDS = ("mcp_server", "skill")
 _WILDCARD = "*"

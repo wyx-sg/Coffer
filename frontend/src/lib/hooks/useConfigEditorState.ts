@@ -1,4 +1,4 @@
-// frontend/src/lib/hooks/useConfigEditorState.ts — spec 004.
+// frontend/src/lib/hooks/useConfigEditorState.ts — spec agent-registry.
 // All state + data plumbing for the read-only agent config viewer, extracted
 // from AgentConfigFilesEditor.tsx so the component stays inside the size cap.
 // Config files are viewed in-app and edited in the user's own editor, so this

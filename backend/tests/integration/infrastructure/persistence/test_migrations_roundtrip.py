@@ -22,28 +22,30 @@ from alembic.config import Config as AlembicConfig
 HEAD_REVISION = "0055"
 
 # Tables that should exist once the full migration chain has been applied.
-# The agent kind (spec 004-agent-registry) needs no table of its own — agents
-# live in the generic `resources` table. The skill kind (spec 005-skill-manager)
-# adds skill_agent_bindings in revision 0005. The knowledge_base kind (spec
-# 006-knowledge-base) replaces the old per-kind ``kb_documents`` table with the
+# The agent kind (spec agent-registry) needs no table of its own — agents
+# live in the generic `resources` table. The skill kind (spec skill-manager)
+# adds skill_agent_bindings in revision 0005. The knowledge_base kind (from the
+# since-merged knowledge-base spec) replaces the old per-kind ``kb_documents``
+# table with the
 # unified ``documents`` + ``chunks`` + ``documents_fts`` (FTS5) schema in 0006;
-# the memory kind (spec 007-memory) reuses that same unified schema (0007 adds
+# the memory kind (spec knowledge) reuses that same unified schema (0007 adds
 # no table of its own); 0008 added ``memory_projection_bindings`` for the old
 # native-memory projection, which 0024 DROPS again (projection removed — Coffer
 # keeps its own memory format, agents read/write via MCP), so the binding table
 # is ABSENT at head; 0009 adds ``memory_store_project_roots`` mapping a project
 # store to the absolute git-root it was provisioned from. 0015 adds ``channel_peers``
-# (spec 009-channels: the paired owner of a messaging channel); 0016 adds the
+# (spec channels: the paired owner of a messaging channel); 0016 adds the
 # ``credentials`` table for the Fernet-encrypted secret store (envelope
 # encryption); 0017 adds no table — it rekeys ``chunks.id`` /
 # ``documents_fts.chunk_id`` to the per-store namespaced form (cross-store
 # chunk-id collision fix); 0018 adds no table (conversation agent-config column);
-# 0019 adds ``sync_config`` + ``sync_state`` for multi-machine sync (spec 010);
+# 0019 adds ``sync_config`` + ``sync_state`` for multi-machine sync (spec vault-export-import);
 # 0023 adds ``agent_mcp_scope`` + ``agent_mcp_scope_server`` for per-agent MCP
-# server scoping (ADR-026) — but 0030 DROPs both again (per-agent scoping removed,
-# simplification 1.6), so they are ABSENT at head (asserted in the stepwise test).
+# server scoping (a decision since retired) — but 0030 DROPs both again
+# (per-agent scoping removed, simplification 1.6), so they are ABSENT at head
+# (asserted in the stepwise test).
 # 0025 adds NO table — it ADDs the ``documents.locked``
-# column for the co-management lock (ADR-028); 0026 adds ``memory_store_labels``
+# column for the co-management lock; 0026 adds ``memory_store_labels``
 # (a store's user-set display name, 007 FR-017c); 0027 DROPs ``documents.locked``
 # again (per-document lock removed, simplification 5.7), so EXPECTED_TABLES is
 # unchanged and the column is ABSENT at head (asserted separately below). 0028
@@ -72,12 +74,12 @@ HEAD_REVISION = "0055"
 # idempotency ledger — and 0050 DROPs it again when transcript distillation is
 # removed, so it is ABSENT at head; 0050's downgrade recreates it empty, so it
 # reappears one step down (until 0038's own downgrade drops it at 0037).
-# 0039 ADDs the ``internal_engine_config`` singleton (spec 011 amendment) —
+# 0039 ADDs the ``internal_engine_config`` singleton (spec provider-switching amendment) —
 # present at head; its downgrade drops it. 0041 ADDs
-# ``channel_thread_conversations`` (spec 009 FR-032: per-thread conversation
+# ``channel_thread_conversations`` (spec channels FR-032: per-thread conversation
 # identity) and backfills each peer's DM row — present at head; its downgrade
 # drops it (asserted stepwise just below head). 0042 ADDs the
-# ``machine_identity`` singleton (spec 010 amendment, ADR-043) — present at
+# ``machine_identity`` singleton (spec vault-export-import amendment, continuous sync) — present at
 # head; its downgrade drops it. 0043 ADDs the ``sync_tombstones`` ledger and the
 # ``sync_state.quarantined_refs_json`` column (tombstone-driven deletion +
 # import quarantine) — present at head; its downgrade drops both. 0044 ADDs the
@@ -85,19 +87,19 @@ HEAD_REVISION = "0055"
 # — column-only, table set unchanged; its downgrade drops the column. 0045
 # ADDs ``sync_state.failed_state_json`` (state-doc import failures preserved
 # across exports) — column-only; its downgrade drops the column. 0046 ADDs
-# ``resources.scope_json`` (framework-level machine x agent activation scope,
-# ADR-045) — column-only, table set unchanged; its downgrade drops the column.
+# ``resources.scope_json`` (framework-level machine x agent activation scope)
+# — column-only, table set unchanged; its downgrade drops the column.
 # 0047 is DATA-only: it backfills ``scope_json`` for every ``kind='channel'``
-# row from its stored ``config_json.runs_on`` (ADR-045 amendment, spec 009 —
+# row from its stored ``config_json.runs_on`` (per-agent scope amendment, spec channels —
 # runs_on migrates to framework scope) — no DDL, table/column set unchanged.
 # 0048 is DATA-only: it DELETEs ``kind='agent'`` rows carrying one of the four
 # removed agent types again (they were re-introduced after 0031 and really
 # shipped this time; agent types narrowed to claude_code + codex for good) — no
 # DDL, table/column set unchanged. 0049 withdraws continuous multi-machine sync
-# (ADR-016 — export/import replaces it): it DROPs ``sync_config`` + ``sync_state``
+# (export/import replaces it): it DROPs ``sync_config`` + ``sync_state``
 # (0019), ``machine_identity`` (0042) and ``sync_tombstones`` (0043), so all four
 # are ABSENT at head, and collapses every ``resources.scope_json`` from the old
-# machine x agent mapping to a flat agent list (ADR-045 — the machine axis went
+# machine x agent mapping to a flat agent list (the machine axis went
 # with the registry that keyed it), which is data-only. 0049's downgrade
 # recreates the four tables EMPTY so 0019/0042/0043's own downgrades still find
 # them on the way down (mirroring 0030's treatment of the MCP scope tables), so
@@ -142,9 +144,9 @@ PRE_MERGE_TABLES = (
 ) | {"memory_store_project_roots", "memory_store_labels"}
 
 
-# The four sync-only tables 0049 DROPs (continuous multi-machine sync withdrawn,
-# ADR-016). Absent at head; recreated empty by 0049's downgrade so the older
-# revisions that own them can drop them again on the way down.
+# The four sync-only tables 0049 DROPs (continuous multi-machine sync withdrawn
+# for export/import). Absent at head; recreated empty by 0049's downgrade so
+# the older revisions that own them can drop them again on the way down.
 SYNC_TABLES = {"sync_config", "sync_state", "machine_identity", "sync_tombstones"}
 
 # FTS5 creates these shadow tables for ``documents_fts``; they are an
@@ -649,7 +651,7 @@ def test_0040_slims_connection_to_protocol(tmp_path, monkeypatch):
     """0040 is a data migration: a connection becomes ``{protocol, base_url,
     credential_ref}`` — ``wire_format`` is renamed to ``protocol`` and
     ``model`` / ``fast_model`` / ``wire_api`` are stripped (the model leaves the
-    connection, spec 011 E3). The downgrade restores the keys with placeholders."""
+    connection, spec provider-switching E3). The downgrade restores the keys with placeholders."""
     db_path = tmp_path / "slim.db"
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
     cfg = _alembic_config()
@@ -701,10 +703,10 @@ def test_0040_slims_connection_to_protocol(tmp_path, monkeypatch):
 
 
 def test_0047_migrates_channel_runs_on_to_scope(tmp_path, monkeypatch):
-    """0047 is a data migration (ADR-045 amendment, spec 009): every
+    """0047 is a data migration (per-agent scope amendment, spec channels): every
     ``kind='channel'`` row's ``scope_json`` is backfilled from its stored
     ``config_json.runs_on`` — bound (``"<id>"``) becomes ``{"<id>": "*"}``,
-    unbound (``null``) becomes ``{}`` (NOT NULL — a channel's ADR-043 "runs
+    unbound (``null``) becomes ``{}`` (NOT NULL — a channel's old "runs
     nowhere until picked" default, the opposite of NULL's framework meaning of
     "everywhere"). Only rows where ``scope_json IS NULL`` are touched, so an
     already-scoped row survives untouched and a re-run is a no-op."""
@@ -780,7 +782,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     cfg = _alembic_config()
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
-    # 0041 adds channel_thread_conversations (spec 009 FR-032); present at head,
+    # 0041 adds channel_thread_conversations (spec channels FR-032); present at head,
     # dropped by its downgrade just below head.
     assert "channel_thread_conversations" in _user_tables(db_path)
     # 0039 adds internal_engine_config — present at head, dropped by its
@@ -789,8 +791,8 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     # 0050 dropped distilled_sessions (transcript distillation removed), so it
     # is ABSENT at head; its downgrade recreates it empty one step down.
     assert "distilled_sessions" not in _user_tables(db_path)
-    # 0049 dropped the four sync-only tables (continuous sync withdrawn,
-    # ADR-016), so they are ABSENT at head; its downgrade recreates them empty
+    # 0049 dropped the four sync-only tables (continuous sync withdrawn for
+    # export/import), so they are ABSENT at head; its downgrade recreates them empty
     # one step down, where 0043/0042/0019's own downgrades drop them again.
     assert not (SYNC_TABLES & _user_tables(db_path))
 
@@ -897,7 +899,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     assert "agent_mcp_scope" not in _user_tables(db_path)
     assert "agent_mcp_scope_server" not in _user_tables(db_path)
 
-    # 0022 -> 0016: drops sync_config + sync_state (spec 010); the
+    # 0022 -> 0016: drops sync_config + sync_state (spec vault-export-import); the
     # intervening 0017 (chunk-id rekey), 0018 (conversation agent-config
     # column) and 0020 (conversation-retention reset) add no tables.
     command.downgrade(cfg, "0016")
@@ -908,12 +910,12 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     command.downgrade(cfg, "0015")
     assert "credentials" not in _user_tables(db_path)
 
-    # 0013 added conversations.archived_at (spec 008 archive); it exists at head.
+    # 0013 added conversations.archived_at (agent-chat archive); it exists at head.
     with sqlite3.connect(db_path) as conn:
         cols = {r[1] for r in conn.execute("PRAGMA table_info(conversations)")}
     assert "archived_at" in cols
 
-    # 0015 -> 0014: drops channel_peers (spec 009-channels).
+    # 0015 -> 0014: drops channel_peers (spec channels).
     command.downgrade(cfg, "0014")
     assert "channel_peers" not in _user_tables(db_path)
 
@@ -955,11 +957,11 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     command.downgrade(cfg, "0010")
     assert "embedding_config" not in _user_tables(db_path)
 
-    # 0009 -> 0008: drops memory_store_project_roots (spec 007-memory project root).
+    # 0009 -> 0008: drops memory_store_project_roots (spec knowledge project root).
     command.downgrade(cfg, "0008")
     assert "memory_store_project_roots" not in _user_tables(db_path)
 
-    # 0008 -> 0007: drops memory_projection_bindings (spec 007-memory projection).
+    # 0008 -> 0007: drops memory_projection_bindings (spec knowledge projection).
     command.downgrade(cfg, "0007")
     assert "memory_projection_bindings" not in _user_tables(db_path)
 
@@ -968,14 +970,14 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     command.downgrade(cfg, "0006")
     assert {"documents", "chunks", "documents_fts"} <= _user_tables(db_path)
 
-    # 0006 -> 0005: drops the unified substrate (spec 006-knowledge-base).
+    # 0006 -> 0005: drops the unified substrate (the knowledge-base kind).
     command.downgrade(cfg, "0005")
     tables_after_0005 = _user_tables(db_path)
     assert "documents" not in tables_after_0005
     assert "chunks" not in tables_after_0005
     assert "documents_fts" not in tables_after_0005
 
-    # 0005 -> 0004: drops skill_agent_bindings (spec 005-skill-manager).
+    # 0005 -> 0004: drops skill_agent_bindings (spec skill-manager).
     command.downgrade(cfg, "0004")
     assert "skill_agent_bindings" not in _user_tables(db_path)
 
@@ -1026,7 +1028,7 @@ def test_migration_0005_maps_legacy_skill_dir_to_config_dir(tmp_path, monkeypatc
     # Schema up to just before the skill migration.
     command.upgrade(cfg, "0004")
 
-    # Seed a pre-005-skill-manager agent row carrying a legacy skill_dir override
+    # Seed a pre-skill-manager agent row carrying a legacy skill_dir override
     # (a `<dir>/skills` path) plus one with a non-standard override.
     conn = sqlite3.connect(str(db_path))
     try:

@@ -2,7 +2,7 @@
 
 > English: this file · 中文版: [agent-skills.zh.md](./agent-skills.zh.md)
 >
-> Internal competitive-research report for Coffer's skill manager (spec 005).
+> Internal competitive-research report for Coffer's skill manager (spec skill-manager).
 > **Date:** 2026-06-16. **Method:** deep-research harness (fan-out web search →
 > source fetch → adversarial claim verification). **Provenance caveat:** the run
 > fetched 21 sources and extracted 104 claims, but API rate-limiting during the
@@ -207,11 +207,11 @@ Commentary:
   update-detection / out-of-date signal was already stale when this check ran —
   PR #115 added one (see ✏️ below). (The pinning fact itself no longer holds:
   skills became local-import only and the whole Git fetch lifecycle — `GitSource`
-  and the FR-006 that specced the pinned ref — was deleted. Spec 005's FR-006 was
-  later reused for the in-app viewer's open/reveal affordances, so that number no
-  longer resolves to anything in this passage.)
+  and the FR-006 that specced the pinned ref — was deleted. The skill-manager
+  spec's FR-006 was later reused for the in-app viewer's open/reveal
+  affordances, so that number no longer resolves to anything in this passage.)
   [`repo:backend/coffer/domain/skill/source.py`,
-  `repo:specs/005-skill-manager/{spec,plan}.md`]
+  `repo:specs/skill-manager/{spec,plan}.md`]
 - **SKILL.md frontmatter is now aligned to the agentskills.io constraints
   (PR #105, 2026-06-18) — partially.** As of #105, `SkillFrontmatter`
   enforces the standard's caps (`name` ≤64, `description` ≤1024) and now
@@ -221,7 +221,7 @@ Commentary:
   consumes). Two gaps the report flagged remain by design, not omission: it
   still does **not** enforce `name == parent-directory`, and the `name` regex
   still tolerates underscores (see ✏️ below). [`repo:backend/coffer/domain/skill/frontmatter.py`,
-  `repo:specs/005-skill-manager/{spec,data-model,plan}.md`, spec FR-004/FR-027]
+  `repo:specs/skill-manager/{spec,data-model,plan}.md`, spec FR-004/FR-027]
 - **Reversec "Skill Issues" post is real and as described.** "Skill Issues:
   Compromising Claude Code with malicious skills & agents — Part 1," James
   Henderson, published **May 5, 2026** (report's "May 2026" is correct). Thesis
@@ -272,14 +272,14 @@ Commentary:
   enabling a skill for an agent until the user explicitly acknowledges the risk
   (409; follow/auto-bind reconcilers skip un-acked skills)**. It is explicitly
   advisory and non-authoritative — Coffer delivers but never executes skills,
-  so a clean report is not a safety guarantee (ADR-027). Note this is Coffer's
+  so a clean report is not a safety guarantee (ADR skill-content-trust-layer). Note this is Coffer's
   _own_ scanner; it is unrelated to the external scanner-evasion story above
   (Snyk/Cisco/VirusTotal), which concerns third-party auditors missing payloads
   in bundled test files. [`repo:backend/coffer/domain/skill/content_scan.py`,
   `repo:backend/coffer/domain/skill/config.py`,
   `repo:backend/coffer/application/skill/{scan_ops,lifecycle_ops,update_ops,binding_ops}.py`,
   `repo:backend/coffer/surfaces/http/skill_routes.py`, spec FR-028/FR-029,
-  `repo:docs/decisions/ADR-027-skill-content-trust-layer.md`]
+  `repo:docs/decisions/skill-content-trust-layer.md`]
 - **§4's "no update-detection / pinning UX" gap is now CLOSED (PR #115,
   2026-06-18 — skill update detection + pinning).** The report listed
   "no 'update available' signal" as one of the two UX gaps versus

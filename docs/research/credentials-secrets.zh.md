@@ -2,7 +2,7 @@
 
 > 中文版：本文件 · English: [credentials-secrets.md](./credentials-secrets.md)
 >
-> 面向 Coffer 凭证库（constitution 原则；ADR-015）的内部竞品调研报告。**日期：** 2026-06-16。
+> 面向 Coffer 凭证库（constitution 原则；[Envelope-Encrypted Credentials](../decisions/envelope-encrypted-credential-store.zh.md)）的内部竞品调研报告。**日期：** 2026-06-16。
 > **方法：** deep-research harness。**来源说明：** 本轮在核验时撞到 API 会话上限，故 claim 未能
 > 经投票复核——但它们取自一手厂商文档（1Password、ToolHive、Infisical、Vault），反映有充分记录
 > 的行为。对外引用前请做轻量复核。
@@ -105,10 +105,10 @@ agent/MCP 的密钥管理跨四种姿态：
 - **Coffer 仅存密文 + "访问而不暴露"。** `EncryptedCredentialStore` 仅以 Fernet 密文形式把密钥
   存进 SQLite 的 `credentials` 表——`set()` 加密、`get()` 仅解密进内存、`exists()` 是从不解密的
   存在性探测。模块 docstring："明文仅在解密与消费它的 spawn 之间存在于内存。密文列从不进入日志或
-  审计行。" ADR-015（2026-06-12 已接受）重申"静态密文……从不进入日志、审计或结构化事件"，主密钥
+  审计行。" Envelope-Encrypted Credentials ADR（2026-06-12 已接受）重申"静态密文……从不进入日志、审计或结构化事件"，主密钥
   默认放在 0600 文件 / 可选 OS keychain（与"主解锁模型"一行相符）。
   [repo:backend/coffer/infrastructure/credentials/encrypted_store.py;
-  repo:docs/decisions/ADR-015-envelope-encrypted-credential-store.md]
+  repo:docs/decisions/envelope-encrypted-credential-store.md]
 - **1Password `op run` 在 spawn 时物化。** 文档："载入指定的密钥，然后在子进程中运行所给命令，密钥
   仅在进程存续期间作为环境变量可用。"它解析 `op://` 引用并注入子进程；值不会持久化到 shell env 或
   磁盘。https://www.1password.dev/cli/secrets-environment-variables/
@@ -125,7 +125,7 @@ agent/MCP 的密钥管理跨四种姿态：
 
 ### ✏️ 已修正
 
-- **出处："spec 015" → ADR-015 + spec 001-mcp-gateway。** 抬头引用了"spec 015 / ADR-015"；ADR
-  确实存在，但并无 `specs/015-*` 目录。凭证功能由 ADR-015 加 spec 001-mcp-gateway 记录（credentials
+- **出处：一个并不存在的 spec → 凭证 ADR + spec mcp-gateway。** 抬头引用了一个从来就没有对应目录的编号 spec；
+  Envelope-Encrypted Credentials ADR 确实存在。凭证功能由该 ADR 加 spec mcp-gateway 记录（credentials
   表、审计事件）。不影响该 claim 的实质。
-  [repo:docs/decisions/ADR-015-envelope-encrypted-credential-store.md]
+  [repo:docs/decisions/envelope-encrypted-credential-store.md]

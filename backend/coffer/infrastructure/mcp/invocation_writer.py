@@ -178,7 +178,7 @@ class MCPInvocationRepo:
     ) -> dict[tuple[str, str], int]:
         """Tool-invocation counts per (server, tool) at or after ``since``.
 
-        The ranking signal for ADR-046 tool tiering. Every status counts — an
+        The ranking signal for tool tiering. Every status counts — an
         errored call still proves the agent reached for that tool, and demoting
         a tool because its upstream was flaky would hide it exactly when the
         user is trying to get it working.

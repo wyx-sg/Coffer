@@ -1,4 +1,4 @@
-"""/api/v1/agents/{name}/unmanaged-skills routes (spec 005 FR-022/023).
+"""/api/v1/agents/{name}/unmanaged-skills routes (spec skill-manager FR-022/023).
 
 Unmanaged skills are skill-shaped folders discovered in an agent's workspace
 that are not yet part of the Coffer master store. Routes here let the caller

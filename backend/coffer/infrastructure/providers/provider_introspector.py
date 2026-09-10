@@ -1,4 +1,4 @@
-"""Outbound provider introspection adapter (spec 008/006).
+"""Outbound provider introspection adapter (specs channels and knowledge).
 
 Implements ``application.providers.ports.ProviderIntrospectionPort``. One
 OpenAI-compatible ``AsyncOpenAI`` client (base_url swapped per provider) powers

@@ -7,7 +7,7 @@ import type { components } from "@/lib/api/types";
 type ToolTieringOut = components["schemas"]["ToolTieringOut"];
 
 /**
- * How much of the aggregated tool catalogue agents currently see (ADR-046).
+ * How much of the aggregated tool catalogue agents currently see (ADR budget-driven-tool-tiering).
  *
  * Global, not per server: the listing budget is shared, so a server whose tools
  * all fit locally can still be crowded out of what agents are shown.

@@ -1,4 +1,4 @@
-"""Process-global per-conversation turn state (spec 009 FR-050, FR-053).
+"""Process-global per-conversation turn state (spec channels FR-050, FR-053).
 
 Single-daemon by design: the in-flight turn, the live-event bus, and the pending
 queue for each conversation live in module-level dicts. Shared by the
@@ -30,7 +30,7 @@ class _ActiveTurn:
 
 @dataclass
 class _PendingState:
-    """A conversation's pending-message queue (spec 009 FR-050)."""
+    """A conversation's pending-message queue (spec channels FR-050)."""
 
     queue: list[str] = field(default_factory=list)
     # Set by an interrupt; blocks auto-advance until the owner resumes (any

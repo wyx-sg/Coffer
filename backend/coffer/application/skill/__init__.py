@@ -1,1 +1,1 @@
-"""Application services for the `skill` Resource kind (spec 004)."""
+"""Application services for the `skill` Resource kind (spec agent-registry)."""

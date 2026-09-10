@@ -242,7 +242,7 @@ from coffer.surfaces.http.credential_composition import (  # noqa: E402, I001
     set_master_key_manager as set_master_key_manager,
 )
 
-# --- Agent kind-specific dependency providers (spec 004-agent-registry) ---
+# --- Agent kind-specific dependency providers (spec agent-registry) ---
 # Split into dependencies_agent for the file-size budget; re-exported here so the
 # existing `from ...dependencies import get_agent_service` paths keep working.
 from coffer.surfaces.http.dependencies_agent import (  # noqa: E402
@@ -260,7 +260,7 @@ from coffer.surfaces.http.dependencies_agent import (  # noqa: E402
 )
 
 
-# --- Skill kind (spec 005-skill-manager) ---
+# --- Skill kind (spec skill-manager) ---
 
 _skill_service: Any | None = None
 

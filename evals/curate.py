@@ -1,4 +1,4 @@
-"""Curate captured traces into golden eval cases (ADR-019, slice 3).
+"""Curate captured traces into golden eval cases (eval flywheel, slice 3).
 
 The curate hop of the eval flywheel: ``capture -> [curate] -> dataset -> gate``.
 It reads the opt-in capture sink (JSONL written when ``COFFER_EVAL_CAPTURE`` is

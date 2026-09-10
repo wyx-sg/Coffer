@@ -1,6 +1,6 @@
 // e2e/web/specs/shell_settings.spec.ts
 //
-// Spec 002 §User Story 5 — the redesigned Settings: tabs grouped by what
+// UI Shell §User Story 5 — the redesigned Settings: tabs grouped by what
 // the user manages (Data / About), the daemon never surfaced as a concept,
 // the sidebar language switcher, and the removal of the confusing controls.
 
@@ -11,7 +11,7 @@ import { beforeEachInjectToken, readDaemonToken } from "./_helpers";
 beforeEachInjectToken();
 
 acceptance(
-  "002-ui-shell",
+  "ui-shell",
   "settings layout uses the redesigned tabbed sidebar",
   async ({ page }) => {
     await page.goto("/settings");
@@ -38,7 +38,7 @@ acceptance(
 );
 
 acceptance(
-  "002-ui-shell",
+  "ui-shell",
   "settings drops the confusing controls",
   async ({ page }) => {
     // No Settings tab exposes a daemon-shutdown or token-rotation control
@@ -65,7 +65,7 @@ acceptance(
 );
 
 acceptance(
-  "002-ui-shell",
+  "ui-shell",
   "retention period persists across reload",
   async ({ page }) => {
     const { token, port } = readDaemonToken();
@@ -128,7 +128,7 @@ acceptance(
 );
 
 acceptance(
-  "002-ui-shell",
+  "ui-shell",
   "language switcher round-trips correctly",
   async ({ page }) => {
     await page.goto("/mcp-servers");

@@ -1,6 +1,6 @@
 // frontend/src/pages/settings/SyncBundleCard.test.tsx
 //
-// Vault export/import (spec 010). Clicking a button opens the native directory
+// Vault export/import (spec vault-export-import). Clicking a button opens the native directory
 // dialog (mocked here); the chosen directory is handed to the mutation, with
 // credentials only when the opt-in checkbox is on. Only when the host has no
 // native dialog (pick returns unavailable) does a typed-path field appear.

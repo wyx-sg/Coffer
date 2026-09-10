@@ -4,7 +4,7 @@ Pure domain text transforms — no filesystem access. Claude Code keeps JSON
 ``mcpServers`` maps (``~/.claude.json`` and ``settings.json``); Codex keeps
 ``[mcp_servers.*]`` tables in ``config.toml``. Parser failures surface as
 ``AgentConfigParseError`` so the application layer can degrade the listing to
-an explicit parse-error state (spec 004 FR-030) instead of failing the view.
+an explicit parse-error state (spec agent-registry FR-030) instead of failing the view.
 
 ``mcp_install.py`` (Coffer's own ``coffer`` entry) imports the shared parse
 helpers from here.

@@ -2,13 +2,15 @@
 
 > English: this file · 中文版: [agent-evaluation.zh.md](./agent-evaluation.zh.md)
 >
-> Internal competitive-research report for Coffer's eval direction (ADR-019
-> "close the eval flywheel", ADR-017 AI-eval layer). **Date:** 2026-06-16.
+> Internal competitive-research report for Coffer's eval direction (the
+> [Eval Flywheel](../decisions/close-the-eval-flywheel.md) ADR, and the AI-eval
+> layer of [Harness in Layers](../decisions/industrial-grade-harness-in-layers.md)).
+> **Date:** 2026-06-16.
 > **Method:** deep-research harness (this run read Coffer's repo to verify state;
 > several findings 3-0 confirmed).
 >
 > **Correction to the brief.** The premise that Coffer's eval is "largely a
-> blueprint, not yet built" is **partly outdated.** ADR-019 is **Accepted
+> blueprint, not yet built" is **partly outdated.** The eval-flywheel ADR is **Accepted
 > (2026-06-14)** and a working local-first `evals/` harness has **shipped** —
 > deterministic retrieval + tool-search suites, a pluggable-model tool-routing
 > suite, committed baselines with a relative-regression gate, an `evals.yml` CI
@@ -99,7 +101,7 @@ flywheel, deliberately privacy-scoped.
 
 1. **No LLM-as-judge.** Every leader uses LLM-as-judge for open-ended quality
    (chat answers, RAG faithfulness) where deterministic checks can't reach.
-   Coffer's internal model (ADR-024) could run a **local LLM-judge** over chat /
+   Coffer's internal model (ADR builtin-agent-is-internal-capability) could run a **local LLM-judge** over chat /
    `ask` outputs — no cloud needed.
 2. **No RAG-faithfulness metrics.** Ragas-style reference-free metrics
    (faithfulness, context precision) fit Coffer's KB directly and need no golden
@@ -116,10 +118,11 @@ flywheel, deliberately privacy-scoped.
 
 ## 4. Key takeaways for Coffer
 
-1. **Update the framing: the flywheel is shipped, not a blueprint.** ADR-019 is
-   Accepted and `evals/` implements capture→curate→golden→gate locally — lead
+1. **Update the framing: the flywheel is shipped, not a blueprint.** The
+   eval-flywheel ADR is Accepted and `evals/` implements capture→curate→golden→gate locally — lead
    with "we built the privacy-scoped version of Braintrust/LangSmith's loop."
-2. **Add a local LLM-as-judge** (via the ADR-024 internal model) for open-ended
+2. **Add a local LLM-as-judge** (via the internal model of the
+   built-in-agent-is-internal-capability ADR) for open-ended
    quality where deterministic checks can't reach — the single biggest gap.
 3. **Add Ragas-style reference-free RAG metrics** for the KB / `ask` — no golden
    answers required, directly applicable.
@@ -138,7 +141,7 @@ Primary:
 - github.com/confident-ai/deepeval · promptfoo.dev (OpenAI acquisition, Mar 2026) · github.com/explodinggradients/ragas
 - Galileo (galileo.ai) · Arize Phoenix (docs.arize.com/phoenix)
 
-Coffer repo verified: `evals/` (suites, baselines, `curate.py`), `.github/workflows/evals.yml`, ADR-019, ADR-017.
+Coffer repo verified: `evals/` (suites, baselines, `curate.py`), `.github/workflows/evals.yml`, the eval-flywheel and harness-in-layers ADRs.
 
 ## Verification update (2026-06-19)
 
@@ -164,13 +167,13 @@ Coffer repo verified: `evals/` (suites, baselines, `curate.py`), `.github/workfl
   routing 0.10) with non-zero exit on regression; `repo:.github/workflows/evals.yml`
   runs the deterministic model-free retrieval + tool-search gate on PRs,
   path-filtered (routing suite is on-demand only).
-- **ADR statuses underpinning the borrows.** ADR-019 (close the eval flywheel)
-  Accepted, 2026-06-14; ADR-024 (built-in agent is internal capability)
-  Accepted, 2026-06-14 — local LLM-judge borrow #1. (ADR-020, transcript
-  distillation, backed borrow #4 / takeaway #5 when this research was written;
+- **ADR statuses underpinning the borrows.** Close the eval flywheel:
+  Accepted, 2026-06-14; built-in agent is internal capability:
+  Accepted, 2026-06-14 — local LLM-judge borrow #1. (The transcript-distillation
+  ADR backed borrow #4 / takeaway #5 when this research was written;
   it was deleted on 2026-09-09 with the capability it described.)
-  `repo:docs/decisions/ADR-019-close-the-eval-flywheel.md`,
-  `repo:docs/decisions/ADR-024-builtin-agent-is-internal-capability.md`
+  `repo:docs/decisions/close-the-eval-flywheel.md`,
+  `repo:docs/decisions/builtin-agent-is-internal-capability.md`
 - **Promptfoo — MIT, OpenAI-acquired Mar 2026.** Acquisition announced 2026-03-09;
   Promptfoo "will remain open source ... under the current license." MIT is
   confirmed from the repo license (the announcement affirms open-source continuity
@@ -200,11 +203,11 @@ Coffer repo verified: `evals/` (suites, baselines, `curate.py`), `.github/workfl
 
 ### ❓ Still uncertain
 
-- **ADR-017 status nuance.** ADR-017 (industrial-grade harness in layers) is
+- **Harness-in-layers status nuance.** The industrial-grade-harness-in-layers ADR is
   Status: **Proposed** (Date 2026-06-13), **not** Accepted. The report references it
   only as the "AI-eval layer" related context and never asserts it is Accepted, so
   no in-text fix is needed — flagged here per the verification brief.
-  `repo:docs/decisions/ADR-017-industrial-grade-harness-in-layers.md`
+  `repo:docs/decisions/industrial-grade-harness-in-layers.md`
 - **Promptfoo license naming.** MIT is confirmed only from the repo license itself;
   the OpenAI/Promptfoo statements say "remain open source under the current license"
   without naming MIT.

@@ -55,7 +55,7 @@ class StoreLabelRepo:
 
         Persists an EMPTY-STRING marker row instead of deleting: sync needs to
         distinguish "cleared here" from "never labelled" so a clear propagates
-        instead of resurrecting from the fleet's stale doc (spec 010
+        instead of resurrecting from the fleet's stale doc (spec vault-export-import
         ``memory-labels``). The read surfaces (`get`/`get_many`) hide the
         marker, so every display path still sees "no label"."""
         await self.set(scope_name, "")

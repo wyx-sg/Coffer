@@ -1,4 +1,4 @@
-"""Read-only view of the ADR-046 tool-tiering decision.
+"""Read-only view of the tool-tiering decision (ADR budget-driven-tool-tiering).
 
 Its own router (not ``/resources/mcp_server/...``) because the decision is
 global across every enabled server: reporting it per server would give the

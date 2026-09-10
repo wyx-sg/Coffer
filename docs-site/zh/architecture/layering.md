@@ -80,9 +80,9 @@ surfaces 层将外部协议适配为应用层调用。它包含 FastAPI 应用�
 
 两者都在每个 PR 上运行。组合意味着任何违反四层契约或单一凭据访问规则的 import 在合并前就会被发现，而不是在代码审查中才被发现。
 
-## 代码布局（ADR-002）
+## 代码布局（ADR code-layout-layer-first）
 
-层优先布局由 [ADR-002](/zh/reference/adr/ADR-002-code-layout-layer-first) 规定。完整目录树：
+层优先布局由 [Layer-First Code Layout](/zh/reference/adr/code-layout-layer-first) 规定。完整目录树：
 
 ```
 backend/coffer/
@@ -142,7 +142,7 @@ backend/coffer/
 
 ### 为何选择层优先而非功能优先（纵向切片）？
 
-ADR-002 考虑并否决了纵向切片替代方案——在顶层目录 `kinds/` 中，每种 kind 包含其自己的 `domain/`、`application/`、`infrastructure/` 和 `surfaces/` 子树。
+[层优先代码布局](/zh/reference/adr/code-layout-layer-first) ADR 考虑并否决了纵向切片替代方案——在顶层目录 `kinds/` 中，每种 kind 包含其自己的 `domain/`、`application/`、`infrastructure/` 和 `surfaces/` 子树。
 
 否决基于三点观察：
 
@@ -190,4 +190,4 @@ graph TD
 
 ---
 
-**参见：** [ADR-002：代码布局——层优先](/zh/reference/adr/ADR-002-code-layout-layer-first)，[架构参考](/zh/reference/project/architecture)
+**参见：** [代码布局——层优先](/zh/reference/adr/code-layout-layer-first)，[架构参考](/zh/reference/project/architecture)

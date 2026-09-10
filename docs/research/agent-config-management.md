@@ -3,7 +3,7 @@
 > English: this file · 中文版: [agent-config-management.zh.md](./agent-config-management.zh.md)
 >
 > Internal competitive-research report for Coffer's agent registry + config-file
-> management (spec 004). **Date:** 2026-06-16. **Method:** deep-research harness.
+> management (spec agent-registry). **Date:** 2026-06-16. **Method:** deep-research harness.
 > **Provenance caveat:** 1 claim (Ruler's MCP propagation) survived full 3-vote
 > adversarial verification; the rest are primary-sourced from project READMEs but
 > rate-limiting cut re-verification short — treat as primary-sourced, flag for a
@@ -153,14 +153,14 @@ Primary (project repos/docs):
 - **Coffer's hidden agent set.** The manifest's 4 disabled agents are exactly
   Cursor / OpenCode / OpenClaw / Hermes (`enabled=False`), and exactly 2 are
   enabled (Claude Code, Codex). `repo:backend/coffer/domain/agent/descriptor.py`
-- **Coffer ingests config bi-directionally (the "ingest half").** Spec 004 frames
-  the workspace amendment as ingest→hub→deliver; US10 / FR-028 define "Adopt a
+- **Coffer ingests config bi-directionally (the "ingest half").** The
+  agent-registry spec frames the workspace amendment as ingest→hub→deliver; US10 / FR-028 define "Adopt a
   direct MCP server into Coffer" as "the ingest half of Coffer's hub-and-spoke
   model." `adopt()` registers an `mcp_server` resource, verifies read-back via
   `self._rs.get(...)`, then removes the direct entry — and drift-awareness is
   backed by the derived-never-stored Agent MCP Entry view (`cache_present=false`
   example). A parallel skill `adopt_unmanaged` path exists too.
-  `repo:specs/004-agent-registry/spec.md`,
+  `repo:specs/agent-registry/spec.md`,
   `repo:backend/coffer/application/agent/mcp_entry_service.py`
 - **ai-rulez ships its own built-in MCP server.** README: "ai-rulez includes a
   built-in MCP server with 35+ tools that lets AI assistants manage their own
@@ -178,7 +178,7 @@ Primary (project repos/docs):
   §2 "Rules/instructions distribution" row).** The report's single most important
   finding — "Coffer does NOT distribute rules/instructions from one source to many
   agents, the defining feature of this entire category" — is **no longer true as of
-  PR #112** ("master-instructions hub with per-agent delivery", spec 004 US13 /
+  PR #112** ("master-instructions hub with per-agent delivery", spec agent-registry US13 /
   FR-041–FR-046). Coffer now keeps one canonical **master instructions** document in
   its hub (`~/.coffer/instructions/AGENTS.md`) and **delivers** it into each agent's
   native instructions file (`CLAUDE.md` / `AGENTS.md` / `SOUL.md`) as a Coffer-managed
@@ -186,7 +186,7 @@ Primary (project repos/docs):
   edit) -->` … `<!-- coffer:instructions:end -->`). Delivery is a **merge, not an
   overwrite** — only the managed block is upserted in place (idempotently), every byte
   outside the markers is preserved, and the block's own markers are deliberately
-  distinct from spec-007's memory markers so the two coexist in one file. Per agent
+  distinct from the knowledge spec's memory markers so the two coexist in one file. Per agent
   Coffer derives a read-time `delivered` / `in_sync` status (drift-aware), and — in
   Coffer's signature bi-directional move — an agent's existing instructions can be
   **adopted** back into the master. This means §2's "Rules/instructions distribution"
@@ -197,7 +197,7 @@ Primary (project repos/docs):
   `repo:backend/coffer/domain/agent/instructions.py`,
   `repo:backend/coffer/domain/agent/managed_block.py`,
   `repo:backend/coffer/surfaces/http/agent_instructions_routes.py`,
-  `repo:specs/004-agent-registry/spec.md` (US13, FR-041–FR-046)
+  `repo:specs/agent-registry/spec.md` (US13, FR-041–FR-046)
 - **Coffer agent count (§4 takeaway #4 / area table).** Old: "4 wired, 2 enabled"
   → corrected: **6 wired total, 2 enabled, 4 hidden.** The manifest defines 6
   `AgentDescriptor` records, not 4; the named-and-hidden set and "2 enabled" were

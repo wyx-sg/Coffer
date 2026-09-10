@@ -160,7 +160,7 @@ class AgentMcpEntryService:
         """Merged MCP entries across all MCP-bearing config files.
 
         Missing files are skipped; unparseable files degrade to an explicit
-        ``ParseErrorInfo`` instead of failing the whole view (spec 004 FR-030).
+        ``ParseErrorInfo`` instead of failing the whole view (spec agent-registry FR-030).
         Entries (except Coffer's own) are annotated with the name of an
         equivalent registered ``mcp_server`` resource, if any.
         """

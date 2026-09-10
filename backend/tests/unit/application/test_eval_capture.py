@@ -1,4 +1,4 @@
-"""Unit tests for the opt-in eval-capture emit helpers (ADR-019, slice 2).
+"""Unit tests for the opt-in eval-capture emit helpers (eval flywheel, slice 2).
 
 The capture half of the eval flywheel records the *shape* of real tool-search
 calls (query + the tool names that came back) so the `evals` curate CLI can turn

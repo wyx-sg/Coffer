@@ -62,7 +62,7 @@ def _group_msg(thread_id: str, text: str = "hi") -> object:
 
 
 @pytest.mark.acceptance(
-    spec="009-channels", scenario="each group thread is an independent conversation"
+    spec="channels", scenario="each group thread is an independent conversation"
 )
 async def test_group_threads_are_independent_conversations(env: ChannelEnv) -> None:
     gated = GatedAdapter()
@@ -91,7 +91,7 @@ async def test_group_threads_are_independent_conversations(env: ChannelEnv) -> N
 
 
 @pytest.mark.acceptance(
-    spec="009-channels", scenario="one bot runs different agents in different threads"
+    spec="channels", scenario="one bot runs different agents in different threads"
 )
 async def test_one_bot_runs_different_agents_in_different_threads(env: ChannelEnv) -> None:
     env.add_agent("codex", reply="codex-here")

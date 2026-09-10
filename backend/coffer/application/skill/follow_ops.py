@@ -5,7 +5,7 @@ that take the SkillService instance and reach into its (private) attributes —
 conceptually private to the skill subpackage.
 
 The per-agent policy (``follow_all_skills`` + ``skill_exclusions``) lives on
-the agent resource's config (spec 004); SkillService reads it through the
+the agent resource's config (spec agent-registry); SkillService reads it through the
 injected ``agent_skill_policy_resolver`` so this module never imports
 agent-kind code (Contract 5c).
 """
@@ -29,12 +29,12 @@ async def apply_follow_for_agent(
     *, service: SkillService, agent_name: str, actor: str
 ) -> list[str]:
     """Reconcile an agent's deliveries with its follow policy (FR-025) and its
-    ADR-045 activation scope (spec 005 amendment — delivery = scope ∩ follow
-    policy, with reclaim).
+    activation scope (ADR per-agent-resource-scope; spec skill-manager amendment —
+    delivery = scope ∩ follow policy, with reclaim).
 
     Invoked when the agent's policy changes (flag flip / exclusion edit),
     after registration (new agents default to follow-all), and by the sync
-    post-import hook (spec 010 import reconciliation). While following, the
+    post-import hook (spec vault-export-import import reconciliation). While following, the
     effective set is the master store minus the exclusion list AND minus any
     skill whose scope excludes this agent: wanted-but-unbound
     skills are delivered, bound-but-excluded skills are removed. NOT
@@ -46,7 +46,7 @@ async def apply_follow_for_agent(
     Scope is a hard grant that overrides manual bindings: a previously
     delivered copy is ALWAYS reclaimed the instant its skill falls out of
     scope, regardless of the follow flag. The `agent` kind carries no scope
-    of its own (ADR-045) — only the skill's scope gates delivery.
+    of its own (ADR per-agent-resource-scope) — only the skill's scope gates delivery.
 
     Returns the per-skill delivery failures as human-readable strings so the
     sync hook can surface them in the run's errors; front-door callers ignore

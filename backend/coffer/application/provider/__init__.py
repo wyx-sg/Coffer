@@ -1,1 +1,1 @@
-"""Provider-switching application layer (spec 011)."""
+"""Provider-switching application layer (spec provider-switching)."""

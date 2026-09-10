@@ -74,7 +74,7 @@ GitHub API 核对。
   大得多。
 - **claude-mem**（~83k）与 **Mem0 / OpenMemory**（~59k）—— 单一类目的**记忆**巨头。
   Mem0 的 OpenMemory MCP 是"跨 agent 共享记忆"的范式；**Basic Memory**（~3.3k）是
-  最接近 Coffer "共管纯 Markdown 知识库"（spec 006）的类比。
+  最接近 Coffer "共管纯 Markdown 知识库"（Knowledge Base 规范）的类比。
 - **claude-code-templates**（~28k）与 **opcode**/Claudia（~22k）—— 分别是资产目录/
   安装器，以及桌面指挥中心。
 

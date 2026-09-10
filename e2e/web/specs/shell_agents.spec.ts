@@ -1,6 +1,6 @@
 // e2e/web/specs/shell_agents.spec.ts
 //
-// Spec 004 §User Story 4 — the desktop /agents surface.
+// Agent Registry §User Story 4 — the desktop /agents surface.
 //
 // TEST25-208: walk through cold-start → /agents → register → list → delete
 // to prove the page is wired end-to-end against the real daemon (not a
@@ -40,7 +40,7 @@ async function deleteAgentByApi(name: string): Promise<void> {
 }
 
 acceptance(
-  "004-agent-registry",
+  "agent-registry",
   "desktop app agents page",
   async ({ page }) => {
     const { token, port } = readDaemonToken();

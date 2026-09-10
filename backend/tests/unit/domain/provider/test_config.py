@@ -1,4 +1,4 @@
-"""ProviderConfig validation tests (spec 011). Pure — unit tier."""
+"""ProviderConfig validation tests (spec provider-switching). Pure — unit tier."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-// frontend/src/components/agents/AgentConfigFilesEditor.tsx — spec 004.
+// frontend/src/components/agents/AgentConfigFilesEditor.tsx — spec agent-registry.
 // Two-pane, READ-ONLY config viewer for one agent: a left "tree" of the curated
 // config files (the allowlist — credential and machine-state files are
 // deliberately excluded), and a right pane that previews the selected file's

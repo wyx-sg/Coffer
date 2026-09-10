@@ -1,6 +1,6 @@
 """The management-side view of what tiering is doing to the catalogue.
 
-ADR-046 makes tools/list policy-dependent, so this report is the answer to
+Tool tiering makes tools/list policy-dependent, so this report is the answer to
 "why can't the agent see tool X". It must agree with the gateway's decision and
 must never invent hidden tools when it cannot compute one.
 """

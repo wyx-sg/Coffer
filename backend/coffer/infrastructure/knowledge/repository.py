@@ -237,7 +237,7 @@ class DocumentRepo:
     async def find_by_filename(
         self, kind: str, resource_name: str, project_id: str, original_filename: str
     ) -> Document | None:
-        """KB re-upload match (spec 007 FR-062): the document in this store/scope whose
+        """KB re-upload match (spec knowledge FR-062): the document in this store/scope whose
         ``metadata->>'original_filename'`` matches, or ``None``.
 
         The doc id is a stable ULID decoupled from content, so a re-upload is

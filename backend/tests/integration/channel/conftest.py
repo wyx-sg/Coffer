@@ -1,4 +1,4 @@
-"""Shared fixtures for the channel-core integration tests (spec 009).
+"""Shared fixtures for the channel-core integration tests (spec channels).
 
 ``FakeChannelAdapter`` implements ``ChannelAdapter`` structurally and is the
 SC-003 proof: a new channel needs a transport adapter and nothing else —
@@ -8,7 +8,7 @@ bridge are all exercised here through the real shared core.
 Everything except the transport is real: real SQLite (resources, audit,
 channel_peers, conversations, messages), the real ``ChatService`` +
 ``TurnOrchestrator`` driven by scripted agent providers — the same pattern
-the spec-008 chat integration tests use.
+the chat integration tests use.
 """
 
 from __future__ import annotations

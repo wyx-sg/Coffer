@@ -1,5 +1,5 @@
 """Legacy path-derived stores are adopted under the portable id
-(spec 007 FR-004a, ADR-043) — merge-based, boot- and resolve-time."""
+(spec knowledge FR-004a) — merge-based, boot- and resolve-time."""
 
 from __future__ import annotations
 
@@ -108,7 +108,7 @@ async def _provision_legacy(resources, roots, labels, project_root):  # type: ig
 
 
 @pytest.mark.acceptance(
-    spec="007-memory", scenario="project memory follows the repository across checkout paths"
+    spec="knowledge", scenario="project memory follows the repository across checkout paths"
 )
 async def test_legacy_store_adopted_under_portable_id(wired) -> None:  # type: ignore[no-untyped-def]
     resolver, _adopter, resources, roots, labels, project_root = wired

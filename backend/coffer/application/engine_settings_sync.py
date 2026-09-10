@@ -1,4 +1,4 @@
-"""Engine settings as a synced state area (spec 010 slice 7).
+"""Engine settings as a synced state area (spec vault-export-import slice 7).
 
 The embedding configuration and the internal-engine model choice are
 installation-wide singletons that should match across machines: vector

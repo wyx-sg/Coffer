@@ -33,7 +33,7 @@ interface NavGroup {
 }
 
 /**
- * Sidebar navigation — a role-based information architecture (see ADR-007):
+ * Sidebar navigation — a role-based information architecture (ADR everything-is-a-resource-kind):
  *
  * - **Agents** — the consumers: the agents you use (Claude Code, Codex).
  *   Agents are NOT vault assets, so they are not under Resources. The group
@@ -46,7 +46,7 @@ interface NavGroup {
  *   surface a person actually opens. The audit log is deliberately NOT here:
  *   its reader is an agent diagnosing a problem, not a person browsing rows.
  *
- * Sidebar policy (ADR-007): show only what ships today — no "soon"
+ * Sidebar policy (ADR everything-is-a-resource-kind): show only what ships today — no "soon"
  * placeholders, and no entry outliving its feature. The sidebar collapses to
  * an icon-only rail; the choice persists in localStorage.
  */

@@ -1,5 +1,5 @@
 // pages/settings/InternalEngineSettings.tsx — the internal-engine selection
-// (spec 011 amendment 2026-06-22b). Coffer's own LLM engine (memory organizer /
+// (spec provider-switching amendment 2026-06-22b). Coffer's own LLM engine (memory organizer /
 // reorg) runs on whichever connection is picked here
 // (endpoint + key) with the model chosen here. Both live apart from the chat
 // agents: the connection is the global `internal_default`, the model is a

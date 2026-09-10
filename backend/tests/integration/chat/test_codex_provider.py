@@ -1,4 +1,4 @@
-"""CodexAppServerProvider integration tests (spec 008 — app-server-backed Codex provider).
+"""CodexAppServerProvider integration tests (spec channels — app-server-backed Codex provider).
 
 Mirrors ``test_sdk_provider.py`` but for ``CodexAppServerProvider``:
 - ``init_conversation`` rejects a missing or non-directory cwd.
@@ -282,7 +282,7 @@ async def test_build_adapter_session_sink_writes_back(tmp_path: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
-# build_adapter — COFFER_PROVIDER_KEY injection (ADR-032 env_key seam)
+# build_adapter — COFFER_PROVIDER_KEY injection (provider-switching env_key seam)
 # ---------------------------------------------------------------------------
 
 

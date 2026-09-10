@@ -57,7 +57,7 @@ def write(path: Path, info: DaemonInfo) -> None:
     — CODE-018).
 
     The staging file gets a UNIQUE per-call name in the target directory.
-    Two daemons racing to publish daemon.json (the ADR-006 detect-or-spawn
+    Two daemons racing to publish daemon.json (the detect-or-spawn
     window) therefore never collide on a shared ``daemon.json.tmp`` — the old
     fixed-name + O_EXCL form crashed the loser with FileExistsError, or let
     one unlink the other's tmp. The final ``os.replace`` is atomic, so the

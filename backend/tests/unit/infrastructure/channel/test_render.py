@@ -92,7 +92,7 @@ class TestMarkdownToSeatalk:
         assert markdown_to_seatalk("**bold** and `code`") == "**bold** and `code`"
 
     @pytest.mark.acceptance(
-        spec="009-channels", scenario="seatalk markdown escapes a literal marker character"
+        spec="channels", scenario="seatalk markdown escapes a literal marker character"
     )
     def test_stray_markers_are_escaped_with_a_double_backslash(self):
         # `snake_case` must survive as typed instead of being read as markup.

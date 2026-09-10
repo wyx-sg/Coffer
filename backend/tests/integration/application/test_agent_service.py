@@ -24,7 +24,7 @@ from coffer.domain.errors import (
 
 
 @pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="register an agent with a custom config dir"
+    spec="agent-registry", scenario="register an agent with a custom config dir"
 )
 async def test_register_with_custom_config_dir(agent_bundle, tmp_path):
     custom = tmp_path / "cfg"
@@ -45,7 +45,7 @@ async def test_register_with_custom_config_dir(agent_bundle, tmp_path):
 
 
 @pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="reject registration with an invalid config dir"
+    spec="agent-registry", scenario="reject registration with an invalid config dir"
 )
 async def test_register_rejects_unhostable_config_dir(agent_bundle, tmp_path):
     # config_dir points at an existing regular file, so <file>/skills cannot be
@@ -78,7 +78,7 @@ async def test_register_rejects_missing_config_dir(agent_bundle, tmp_path):
     assert (await agent_bundle.svc.list()) == []
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="reject duplicate agent name")
+@pytest.mark.acceptance(spec="agent-registry", scenario="reject duplicate agent name")
 async def test_register_rejects_duplicate_name(agent_bundle, tmp_path):
     # Distinct config dirs so the only collision is on the name (not the
     # one-agent-per-config-dir rule).
@@ -96,7 +96,7 @@ async def test_register_rejects_duplicate_name(agent_bundle, tmp_path):
 
 
 @pytest.mark.acceptance(
-    spec="004-agent-registry",
+    spec="agent-registry",
     scenario="reject a second agent for an already-registered config dir",
 )
 async def test_register_rejects_duplicate_config_dir(agent_bundle, tmp_path):
@@ -119,7 +119,7 @@ async def test_register_rejects_duplicate_config_dir(agent_bundle, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="update an existing agent")
+@pytest.mark.acceptance(spec="agent-registry", scenario="update an existing agent")
 async def test_update_config_dir(agent_bundle, tmp_path):
     old = tmp_path / "old"
     new = tmp_path / "new"
@@ -168,7 +168,7 @@ async def test_update_config_dir_description_only(agent_bundle, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="remove an agent")
+@pytest.mark.acceptance(spec="agent-registry", scenario="remove an agent")
 async def test_remove_deletes_agent(agent_bundle, tmp_path):
     """Removing an agent deletes it and audits the deletion. A removal is never
     permanent — the next scan re-surfaces it as a candidate (no suppression)."""
@@ -192,7 +192,7 @@ async def test_remove_deletes_agent(agent_bundle, tmp_path):
 
 
 @pytest.mark.acceptance(
-    spec="004-agent-registry",
+    spec="agent-registry",
     scenario="discover installed agents as candidates",
 )
 async def test_discover_returns_installed_candidate(agent_bundle, tmp_path, monkeypatch):
@@ -217,7 +217,7 @@ async def test_discover_skips_types_without_marker(agent_bundle, tmp_path, monke
 
 
 @pytest.mark.acceptance(
-    spec="004-agent-registry",
+    spec="agent-registry",
     scenario="skip already-registered types on subsequent scan",
 )
 async def test_discover_skips_already_registered(agent_bundle, tmp_path, monkeypatch):
@@ -238,7 +238,7 @@ async def test_discover_skips_already_registered(agent_bundle, tmp_path, monkeyp
 
 
 @pytest.mark.acceptance(
-    spec="004-agent-registry",
+    spec="agent-registry",
     scenario="re-surface removed agents on subsequent scan",
 )
 async def test_discover_re_surfaces_removed_agent(agent_bundle, tmp_path, monkeypatch):
@@ -266,7 +266,7 @@ async def test_discover_re_surfaces_removed_agent(agent_bundle, tmp_path, monkey
 
 
 @pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="reject registration into privileged system path"
+    spec="agent-registry", scenario="reject registration into privileged system path"
 )
 @pytest.mark.parametrize(
     "privileged",
@@ -402,7 +402,7 @@ async def test_update_config_dir_invalid_raises_config_validation_error(agent_bu
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="audit lifecycle events")
+@pytest.mark.acceptance(spec="agent-registry", scenario="audit lifecycle events")
 async def test_audit_records_lifecycle_events(agent_bundle, tmp_path):
     custom = tmp_path / "cfg"
     custom.mkdir()

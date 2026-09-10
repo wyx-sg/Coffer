@@ -1,4 +1,5 @@
-"""Unit coverage for FsOpenService command building + validation (FR-039, ADR-033)."""
+"""Unit coverage for FsOpenService command building + validation
+(FR-039, ADR: daemon-proxies-os-file-actions)."""
 
 from __future__ import annotations
 

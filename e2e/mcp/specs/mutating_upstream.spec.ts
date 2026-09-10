@@ -20,7 +20,7 @@ import {
 } from "./_helpers";
 
 acceptance(
-  "001-mcp-gateway",
+  "mcp-gateway",
   "upstream tool list changes mid-session",
   async () => {
     const name = uniqueName("e2e-mut");

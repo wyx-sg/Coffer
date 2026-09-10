@@ -10,7 +10,7 @@ The daemon is the system's center of gravity. It is a FastAPI application bound 
 
 - Is the **single SQLite writer**. No other process opens the database for writes. This makes WAL-mode isolation trivially correct and eliminates the class of bugs caused by concurrent schema modifications.
 - Owns all in-memory session state for connected MCP clients.
-- Spawns and supervises upstream MCP server subprocesses (one set per connected client session — see [Upstream session model](#upstream-session-model) below).
+- Spawns and supervises upstream MCP server subprocesses (one set per connected client session — see [Upstream session model](#upstream-session-model-adr-session-subprocess-model) below).
 - Persists all control-plane and vault state: resource registrations, capability preferences, audit log, retention policies, the encrypted credential store, the knowledge retrieval index, chat conversations and turns, channel bindings, and sync state.
 - Does **not** auto-shutdown. The daemon keeps running until `coffer daemon stop` or a system shutdown. This is intentional: the daemon's job is to outlive any single client or CLI invocation.
 
@@ -30,7 +30,7 @@ The CLI (`coffer …`) is a short-lived child process. Users invoke it for manag
 
 ### callback listener (coffer-callback)
 
-The callback listener is a daemon-spawned child process that exists only to accept inbound SeaTalk webhooks (spec 009, [ADR-014](/reference/adr/ADR-014-channel-adapter-framework)). Unlike the shim and CLI — which the user (or an MCP client) starts — the listener is spawned and supervised by the daemon itself. It:
+The callback listener is a daemon-spawned child process that exists only to accept inbound SeaTalk webhooks (spec channels, [Channel Adapter Framework](/reference/adr/channel-adapter-framework)). Unlike the shim and CLI — which the user (or an MCP client) starts — the listener is spawned and supervised by the daemon itself. It:
 
 - Runs **only while a SeaTalk channel is enabled**. The channel reconciler starts it when the first SeaTalk channel comes up and stops it when the last one goes away.
 - Serves exactly one route, `POST /seatalk/{channel}`, on a loopback port (default `8787`, overridable via `COFFER_CALLBACK_PORT`). It holds no other state and can reach nothing but the daemon.
@@ -42,11 +42,11 @@ The callback listener is a daemon-spawned child process that exists only to acce
 Beyond the subprocesses above, the daemon runs a couple of in-process background workers — supervised asyncio tasks, not separate processes — that keep vault state converging without any user action:
 
 - **Retention worker.** Prunes log-style tables (audit log, invocation log) according to the configured retention policies.
-- **Channel adapter reconciler** ([ADR-014](/reference/adr/ADR-014-channel-adapter-framework)). On every tick it diffs enabled channel resources against running adapters and starts/stops/restarts to match — and starts or stops the callback listener with the SeaTalk channel set. REST/CLI/UI never start or stop adapters directly; the reconciler owns all runtime state transitions, which keeps status truthful.
+- **Channel adapter reconciler** ([Channel Adapter Framework](/reference/adr/channel-adapter-framework)). On every tick it diffs enabled channel resources against running adapters and starts/stops/restarts to match — and starts or stops the callback listener with the SeaTalk channel set. REST/CLI/UI never start or stop adapters directly; the reconciler owns all runtime state transitions, which keeps status truthful.
 
-Vault export and import ([ADR-016](/reference/adr/ADR-016-vault-export-import)) are deliberately **not** among them: they run only when the user asks, in the request that asked, with no worker and no background replication.
+Vault export and import ([Vault Export and Import](/reference/adr/vault-export-import)) are deliberately **not** among them: they run only when the user asks, in the request that asked, with no worker and no background replication.
 
-## Detect-or-spawn (ADR-006)
+## Detect-or-spawn (ADR daemon-detect-or-spawn)
 
 The detect-or-spawn pattern ensures that any Coffer entry point can bootstrap the system — the user never sees "daemon not running" as a user-facing error.
 
@@ -95,7 +95,7 @@ sequenceDiagram
     SH-->>C: initialize response
 ```
 
-## Upstream session model (ADR-005)
+## Upstream session model (ADR session-subprocess-model)
 
 When a downstream MCP client connects (via the shim or directly to `/mcp`), the daemon creates a `MCPGatewaySession` that owns all upstream subprocess state for that connection.
 
@@ -111,7 +111,7 @@ Protocol correctness beats resource efficiency at single-user scale. N × M subp
 
 **Session teardown.** When the downstream client disconnects (shim exits, HTTP/SSE connection closes), the session is disposed and all its upstream subprocesses are reaped. Orphaned upstream subprocesses from a daemon crash are cleaned up at the next daemon startup using PID files in `~/.coffer/upstream-pids/`.
 
-**Capability discovery.** Each session maintains a 60-second in-memory cache of capability lists (tools, resources, prompts) per upstream. Cache invalidation triggers: TTL expiry, an upstream `notifications/*/list_changed` notification, user-initiated refresh, or upstream session restart. Capability names and schemas are never persisted to the database — only user preference flags (enabled/disabled) are stored, keyed on the capability name. See [ADR-004](/reference/adr/ADR-004-capability-state-model).
+**Capability discovery.** Each session maintains a 60-second in-memory cache of capability lists (tools, resources, prompts) per upstream. Cache invalidation triggers: TTL expiry, an upstream `notifications/*/list_changed` notification, user-initiated refresh, or upstream session restart. Capability names and schemas are never persisted to the database — only user preference flags (enabled/disabled) are stored, keyed on the capability name. See [Capability State Model](/reference/adr/capability-state-model).
 
 ## Rejected alternatives
 
@@ -125,4 +125,4 @@ Protocol correctness beats resource efficiency at single-user scale. N × M subp
 
 ---
 
-**See also:** [ADR-006: Daemon detect-or-spawn](/reference/adr/ADR-006-daemon-detect-or-spawn), [ADR-005: Session subprocess model](/reference/adr/ADR-005-session-subprocess-model)
+**See also:** [Daemon detect-or-spawn](/reference/adr/daemon-detect-or-spawn), [Session subprocess model](/reference/adr/session-subprocess-model)

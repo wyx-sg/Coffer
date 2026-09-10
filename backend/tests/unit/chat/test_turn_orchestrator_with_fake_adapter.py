@@ -143,7 +143,7 @@ async def test_happy_path_persists_assistant_message() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="009-channels", scenario="token usage is recorded on the assistant message"
+    spec="channels", scenario="token usage is recorded on the assistant message"
 )
 @pytest.mark.asyncio
 async def test_completed_turn_records_token_usage() -> None:
@@ -181,7 +181,7 @@ async def test_history_passed_to_adapter_includes_the_user_message() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="009-channels", scenario="model selection is recorded")
+@pytest.mark.acceptance(spec="channels", scenario="model selection is recorded")
 async def test_model_id_recorded_from_adapter() -> None:
     adapter = FakeAgentAdapter(
         [TurnDone(prompt_tokens=1, completion_tokens=1, stop_reason="end_turn")],
@@ -338,7 +338,7 @@ async def test_cancel_turn_noop_when_no_active_turn() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="009-channels", scenario="stop a running turn")
+@pytest.mark.acceptance(spec="channels", scenario="stop a running turn")
 async def test_interrupt_persists_the_partial_message() -> None:
     orchestrator, _, msg_repo, _ = make_orchestrator(
         adapter=_BlockingAdapter([TextDelta(text="partial answer")])

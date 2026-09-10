@@ -79,4 +79,4 @@ The `code` is a stable UPPER_SNAKE_CASE string defined in `domain/errors.py`. Th
 
 - [Audit & accountability](/architecture/audit) — audit log, invocation log, and retention
 - [Architecture reference](/reference/project/architecture) — Errors and Logging entries in the cross-cutting concerns table
-- [Spec 001 reference](/reference/specs/001-mcp-gateway/spec) — token authentication and `X-Coffer-Actor` header semantics
+- [MCP Gateway spec reference](/reference/specs/mcp-gateway/spec) — token authentication and `X-Coffer-Actor` header semantics

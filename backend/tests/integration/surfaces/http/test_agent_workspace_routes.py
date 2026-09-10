@@ -134,7 +134,7 @@ def _register_claude(c: TestClient, tmp_path: pathlib.Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="list an agent's real MCP entries")
+@pytest.mark.acceptance(spec="agent-registry", scenario="list an agent's real MCP entries")
 def test_list_mcp_entries(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59800)
     with _client(app) as c:
@@ -167,7 +167,7 @@ def test_list_mcp_entries(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="degrade to read-only when MCP config is unparseable"
+    spec="agent-registry", scenario="degrade to read-only when MCP config is unparseable"
 )
 def test_parse_error_degrades_listing(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59840)
@@ -183,7 +183,7 @@ def test_parse_error_degrades_listing(tmp_path, monkeypatch):
         assert body["parse_errors"][0]["error"]
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="adopt a direct MCP entry into Coffer")
+@pytest.mark.acceptance(spec="agent-registry", scenario="adopt a direct MCP entry into Coffer")
 def test_adopt_mcp_entry(tmp_path, monkeypatch, fake_keyring):
     app = _app(tmp_path, monkeypatch, 59850)
     with _client(app) as c:
@@ -215,9 +215,7 @@ def test_adopt_mcp_entry(tmp_path, monkeypatch, fake_keyring):
         assert r.json() == {"value": SECRET_VALUE}
 
 
-@pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="reject adoption on resource name conflict"
-)
+@pytest.mark.acceptance(spec="agent-registry", scenario="reject adoption on resource name conflict")
 def test_adopt_name_conflict_409_with_suggestion(tmp_path, monkeypatch, fake_keyring):
     app = _app(tmp_path, monkeypatch, 59860)
     with _client(app) as c:
@@ -248,7 +246,7 @@ def test_adopt_name_conflict_409_with_suggestion(tmp_path, monkeypatch, fake_key
 
 
 @pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="require keychain mapping for secret-like env values"
+    spec="agent-registry", scenario="require keychain mapping for secret-like env values"
 )
 def test_adopt_requires_secret_mapping(tmp_path, monkeypatch, fake_keyring):
     app = _app(tmp_path, monkeypatch, 59870)
@@ -273,7 +271,7 @@ def test_adopt_requires_secret_mapping(tmp_path, monkeypatch, fake_keyring):
 
 
 @pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="adoption failure leaves agent config untouched"
+    spec="agent-registry", scenario="adoption failure leaves agent config untouched"
 )
 def test_adopt_failure_rolls_back(tmp_path, monkeypatch, fake_keyring):
     app = _app(tmp_path, monkeypatch, 59880)
@@ -349,7 +347,7 @@ def test_mcp_entry_source_ambiguous_without_source_param(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="list an agent's plugins with enabled state"
+    spec="agent-registry", scenario="list an agent's plugins with enabled state"
 )
 def test_list_plugins(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59920)
@@ -373,7 +371,7 @@ def test_list_plugins(tmp_path, monkeypatch):
         ]
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="flag a plugin whose cache is missing")
+@pytest.mark.acceptance(spec="agent-registry", scenario="flag a plugin whose cache is missing")
 def test_plugin_cache_missing_flagged(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59960)
     with _client(app) as c:

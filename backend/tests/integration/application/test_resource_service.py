@@ -134,7 +134,7 @@ async def test_generic_register_rejects_lifecycle_kind(tmp_path):
 
 @pytest.mark.asyncio
 async def test_kind_supplied_credential_extractor_and_audit_redactor(tmp_path):
-    """CODE-006/ADR-001: ResourceService must NOT hardcode the mcp_server
+    """CODE-006 / resource framework: ResourceService must NOT hardcode the mcp_server
     ``transport`` config shape. A kind supplies its own credential-ref
     extractor (probed before any DB write) and audit redactor (secrets stripped
     before audit), and the kind-agnostic core just calls them — proven here with

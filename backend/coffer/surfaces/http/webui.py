@@ -1,4 +1,4 @@
-"""Serve the built web UI from the daemon itself (spec 001 FR-024).
+"""Serve the built web UI from the daemon itself (spec mcp-gateway FR-024).
 
 Coffer used to ship the UI inside a Tauri desktop shell. The shell is gone: the
 daemon now serves ``frontend/dist`` at its own loopback origin, so the UI and

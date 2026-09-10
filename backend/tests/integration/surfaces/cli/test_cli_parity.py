@@ -21,7 +21,7 @@ runner = CliRunner()
 
 
 @pytest.mark.acceptance(
-    spec="001-mcp-gateway",
+    spec="mcp-gateway",
     scenario="command line covers every visual operation",
 )
 def test_cli_covers_every_visual_operation():
@@ -65,7 +65,7 @@ def test_cli_covers_every_visual_operation():
 
 
 @pytest.mark.acceptance(
-    spec="001-mcp-gateway",
+    spec="mcp-gateway",
     scenario="command line surfaces same errors",
 )
 def test_cli_surfaces_same_errors(tmp_path, monkeypatch):
@@ -77,7 +77,7 @@ def test_cli_surfaces_same_errors(tmp_path, monkeypatch):
     - The exit code is within the documented range (1-8).
     - A human-readable message is present on stderr or stdout.
 
-    ADR-006: client_or_exit() now auto-spawns on missing daemon.json. We
+    Detect-or-spawn: client_or_exit() now auto-spawns on missing daemon.json. We
     simulate a spawn-that-times-out so the DaemonNotRunning (exit 3) path
     is exercised.
     """

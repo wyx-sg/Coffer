@@ -3,7 +3,7 @@
 #
 # Output: dist/coffer-daemon (single-file executable)
 # Ships the built web UI (frontend/dist) as `webui/` — the daemon serves it
-# itself now that the desktop shell is gone (spec 001 FR-024).
+# itself now that the desktop shell is gone (spec mcp-gateway FR-024).
 
 # -*- mode: python ; coding: utf-8 -*-
 
@@ -24,7 +24,7 @@ hidden = (
     # that fails to trace them still ships a working daemon.
     + collect_submodules("tomlkit")
     + collect_submodules("yaml")
-    # KB/memory/chat deps (specs 006/007/008). These are imported LAZILY
+    # Knowledge-layer and turn-platform deps. These are imported LAZILY
     # (inside functions) so the daemon ships even when an extra is missing —
     # which is exactly why PyInstaller's static analysis cannot trace them.
     # Declare them explicitly so a frozen build can convert documents, embed,
@@ -98,7 +98,7 @@ a = Analysis(
     runtime_hooks=[],
     excludes=[
         # Heavy ML stack (torch/mlx/numba/scipy/…). No coffer source imports
-        # any of it: transcription is remote (spec 009 FR-022), so nothing
+        # any of it: transcription is remote (spec channels FR-022), so nothing
         # local decodes or runs a model. The exclude stays as a guard — a
         # transitive pull would inflate every binary from ~95 MB to ~260 MB,
         # and torch is fragile under PyInstaller.

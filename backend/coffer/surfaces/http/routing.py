@@ -48,10 +48,10 @@ def include_all_routers(app: FastAPI) -> None:
         retention_router,
         credential_router,
         settings_router,
-        sync_router,  # spec 010
+        sync_router,  # spec vault-export-import
         embedding_router,
-        internal_engine_router,  # spec 011
-        # agent + skill (specs 004/005)
+        internal_engine_router,  # spec provider-switching
+        # agent + skill (specs agent-registry/skill-manager)
         agent_router,
         agent_config_router,
         agent_workspace_router,
@@ -66,10 +66,10 @@ def include_all_routers(app: FastAPI) -> None:
         mcp_invocation_router,
         mcp_tiering_router,
         knowledge_router,  # the one knowledge kind
-        # the turn platform's own surfaces (spec 009's agents run on it)
+        # the turn platform's own surfaces (spec channels's agents run on it)
         agent_provider_router,
         model_router,
-        channel_router,  # spec 009
-        provider_router,  # spec 011
+        channel_router,  # spec channels
+        provider_router,  # spec provider-switching
     ):
         app.include_router(sub_router)

@@ -25,7 +25,7 @@ def _channel_credential_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
 def _validate_default_agent(config: dict[str, Any], agent_keys: Callable[[], list[str]]) -> None:
     """The channel's default agent must name a registered agent.
 
-    A stale value (e.g. the pre-ADR-024 ``builtin``) would otherwise be
+    A stale value (e.g. the withdrawn ``builtin``) would otherwise be
     accepted at create/edit and only fail at turn time, deep inside a chat —
     where the owner can't tell why the bot went silent. Reject it loudly here
     instead. Skip when the registry is empty (can't validate) so a misconfigured
@@ -105,9 +105,9 @@ def make_channel_kind(
         credential_ref_extractor=_channel_credential_ref_extractor,
         validate_config=_make_validator(agent_keys),
         on_update_config=_make_update_validator(agent_keys),
-        # No activation scope (ADR-045): scope names the AGENTS a resource is
+        # No activation scope (ADR per-agent-resource-scope): scope names the AGENTS a resource is
         # active for, and a channel is not consumed by an agent — it is an
         # inbound surface that runs wherever the daemon runs. The machine
-        # affinity this once carried went away with continuous sync (ADR-016):
+        # affinity this once carried went away with continuous sync (ADR vault-export-import):
         # an enabled channel now simply runs on this, the only, machine.
     )

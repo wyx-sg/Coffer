@@ -76,14 +76,14 @@ class MasterKeyManager:
     def export_key(self) -> bytes | None:
         """Return the current master key for out-of-band transfer, or None.
 
-        Used by sync (spec 010) to write the key to a file the user moves to
+        Used by sync (spec vault-export-import) to write the key to a file the user moves to
         another machine by a channel they trust — the key never travels through
         the sync medium itself.
         """
         return self.resolve(allow_create=False)
 
     def install_key(self, key: bytes) -> None:
-        """Install a master key brought from another machine (spec 010 bootstrap).
+        """Install a master key brought from another machine (spec vault-export-import bootstrap).
 
         Writes to the 0600 file store (the default); a machine that prefers the
         keychain can ``relocate("keychain")`` afterwards. Validates the bytes are

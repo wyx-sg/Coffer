@@ -16,12 +16,12 @@ from coffer.domain.sync.serialization import ResourceDoc
 
 class ImportGate(Protocol):
     """Per-kind validation the importing machine runs BEFORE upserting a doc
-    (spec 010 import reconciliation). Raise ``CofferError`` to report the doc
+    (spec vault-export-import import reconciliation). Raise ``CofferError`` to report the doc
     as a per-resource failure — the rest of the bundle still imports, and the
     user can re-run the import once this machine satisfies the precondition
     (e.g. the agent's config dir exists here).
 
-    ``scope`` is the doc's ADR-045 activation scope, passed so a scope-aware
+    ``scope`` is the doc's per-agent activation scope, passed so a scope-aware
     gate can let a doc that is dormant here through untouched instead of
     failing it on a machine-local precondition that does not apply."""
 
@@ -31,7 +31,7 @@ class ImportGate(Protocol):
 
 
 class PostImportHook(Protocol):
-    """Per-kind side-effect reconciliation run AFTER an import (spec 010
+    """Per-kind side-effect reconciliation run AFTER an import (spec vault-export-import
     import reconciliation). Re-applies machine-local side-effects (native
     config projections, on-disk transforms, deliveries) idempotently from the
     imported rows — current state, not deltas — and returns error strings,
@@ -92,7 +92,7 @@ class MasterKeyPort(Protocol):
 
 
 class BundlePort(Protocol):
-    """Filesystem IO over one export bundle directory (spec 010 layout).
+    """Filesystem IO over one export bundle directory (spec vault-export-import layout).
 
     Every method is synchronous blocking IO; the application layer runs them
     off the event loop."""

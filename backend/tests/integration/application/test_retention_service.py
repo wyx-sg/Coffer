@@ -68,7 +68,7 @@ async def test_initialize_defaults_is_idempotent(tmp_path):
     await engine.dispose()
 
 
-@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="configure retention per log")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="configure retention per log")
 @pytest.mark.asyncio
 async def test_set_retention_audits(tmp_path):
     svc, sm, engine = await _service(tmp_path)

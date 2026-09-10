@@ -8,7 +8,7 @@ from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.daemon_routes import set_daemon_phase
 
 
-@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="daemon status reflects ready state")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="daemon status reflects ready state")
 @pytest.mark.asyncio
 async def test_status_returns_ready(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))

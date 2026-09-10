@@ -1,4 +1,4 @@
-"""failed state-doc paths in sync_state (spec 010 slice 7 amendment)
+"""failed state-doc paths in sync_state (spec vault-export-import slice 7 amendment)
 
 Revision ID: 0045
 Revises: 0044

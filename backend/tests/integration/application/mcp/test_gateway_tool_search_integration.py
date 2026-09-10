@@ -102,7 +102,7 @@ async def test_tools_list_includes_search_tool(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="001-mcp-gateway", scenario="search the aggregated catalogue for matching tools"
+    spec="mcp-gateway", scenario="search the aggregated catalogue for matching tools"
 )
 @pytest.mark.asyncio
 async def test_search_returns_ranked_upstream_tool(tmp_path, monkeypatch):

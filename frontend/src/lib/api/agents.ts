@@ -1,5 +1,5 @@
 // frontend/src/lib/api/agents.ts — typed fetch helpers for /api/v1/agents/*
-// Wire types hand-written to match specs/004-agent-registry/contracts/api.openapi.yaml.
+// Wire types hand-written to match specs/agent-registry/contracts/api.openapi.yaml.
 import { getCofferBaseUrl, getCofferToken } from "../auth";
 import { ApiError } from "./errors";
 
@@ -53,7 +53,7 @@ export interface AgentOut {
   updated_at: string;
   follow_all_skills?: boolean;
   skill_exclusions?: string[];
-  /** Per-agent model binding (spec 011 amendment 2026-06-22b). The model the
+  /** Per-agent model binding (spec provider-switching amendment 2026-06-22b). The model the
    * agent projects — null = unbound (falls back to the active connection). */
   model?: string | null;
   fast_model?: string | null;
@@ -170,7 +170,7 @@ export const agentsApi = {
   // Session-start hook (rules injection): install/uninstall/status. A 422 with
   // code HOOK_INSTALL_UNSUPPORTED means the agent type has no hook support.
 
-  // MCP entries (specs 004/005 workspace amendment)
+  // MCP entries (specs agent-registry/skill-manager workspace amendment)
   mcpEntries: (name: string) => call<McpEntriesResponse>("GET", `/agents/${enc(name)}/mcp-entries`),
   adoptMcpEntry: (name: string, entry: string, body: AdoptMcpEntryBody) =>
     call<{ kind: string; name: string }>(
@@ -188,7 +188,7 @@ export const agentsApi = {
     );
   },
 
-  // Unmanaged skills (specs 004/005 workspace amendment)
+  // Unmanaged skills (specs agent-registry/skill-manager workspace amendment)
   unmanagedSkills: (name: string) =>
     call<UnmanagedSkillsResponse>("GET", `/agents/${enc(name)}/unmanaged-skills`),
   adoptUnmanagedSkill: (name: string, skill: string, location: string) =>

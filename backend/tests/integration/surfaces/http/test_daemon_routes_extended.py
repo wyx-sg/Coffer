@@ -95,7 +95,7 @@ async def test_status_reports_vec_availability(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="001-mcp-gateway", scenario="rotating the daemon token invalidates the previous one"
+    spec="mcp-gateway", scenario="rotating the daemon token invalidates the previous one"
 )
 @pytest.mark.asyncio
 async def test_rotate_token_returns_new_token_and_updates_daemon_json(tmp_path):
@@ -247,7 +247,7 @@ async def test_rotate_token_records_token_rotated_audit(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Browser hand-off: one-time code → token (spec 001 FR-025)
+# Browser hand-off: one-time code → token (spec mcp-gateway FR-025)
 # ---------------------------------------------------------------------------
 
 
@@ -269,7 +269,7 @@ async def test_web_code_requires_the_token(tmp_path):
 
 
 @pytest.mark.acceptance(
-    spec="001-mcp-gateway",
+    spec="mcp-gateway",
     scenario="coffer open lands an authenticated browser session",
 )
 @pytest.mark.asyncio

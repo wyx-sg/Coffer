@@ -91,7 +91,7 @@ e2e/
 ...
 ```
 
-spec ID 就是 spec 文件夹名（例如 `specs/001-foo/spec.md` → `001-foo`）。
+spec ID 就是 spec 文件夹名（例如 `specs/foo/spec.md` → `foo`）。
 
 **Python（pytest）：**
 

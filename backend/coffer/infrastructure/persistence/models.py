@@ -37,7 +37,7 @@ class ResourceModel(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    # Framework-level per-agent activation scope (ADR-045): a JSON list of
+    # Framework-level per-agent activation scope (ADR per-agent-resource-scope): a JSON list of
     # agent names; NULL means unscoped. Added by migration 0046.
     scope_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -121,7 +121,7 @@ class InternalEngineConfigModel(Base):
     """The single, global internal-engine model selection (one row, ``id`` = 1).
 
     The internal engine takes its endpoint + key from the ``internal_default``
-    connection; only the model is stored here (spec 011 amendment 2026-06-22b)."""
+    connection; only the model is stored here (spec provider-switching amendment 2026-06-22b)."""
 
     __tablename__ = "internal_engine_config"
 

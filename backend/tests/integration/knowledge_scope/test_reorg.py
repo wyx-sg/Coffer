@@ -1,4 +1,4 @@
-"""Integration tests for ReorgService over the real memory stack (spec 007).
+"""Integration tests for ReorgService over the real memory stack (spec knowledge).
 
 Extends the ``mem`` harness (real SQLite + real fact files + real ripgrep) with a
 fake ``AgenticReorgPort`` that drives ``run_agentic_reorg`` directly (via a
@@ -121,7 +121,7 @@ def _seed_topic(store_dir: Any, slug: str, title: str, body: str) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory",
+    spec="knowledge",
     scenario="the reorg pass consolidates duplicate topic documents",
 )
 async def test_reorg_consolidates_duplicate_topics(mem: Any) -> None:
@@ -218,7 +218,7 @@ async def test_reorg_consolidates_duplicate_topics(mem: Any) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory",
+    spec="knowledge",
     scenario="reorg never destroys content — a superseded topic stays recoverable",
 )
 async def test_reorg_superseded_topic_stays_recoverable(mem: Any) -> None:
@@ -286,7 +286,7 @@ async def test_reorg_superseded_topic_stays_recoverable(mem: Any) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory",
+    spec="knowledge",
     scenario="reorg is a no-op when no internal model is configured",
 )
 async def test_reorg_no_model_is_clean_noop(mem: Any) -> None:

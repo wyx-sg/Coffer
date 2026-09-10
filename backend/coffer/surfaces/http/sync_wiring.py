@@ -1,4 +1,5 @@
-"""Composition root for the vault export/import service (spec 010, ADR-016).
+"""Composition root for the vault export/import service
+(spec vault-export-import, ADR: vault-export-import).
 
 Builds the object graph (bundle IO factory, ciphertext credential adapter,
 exporter/importer) over the same master-key manager the rest of the daemon

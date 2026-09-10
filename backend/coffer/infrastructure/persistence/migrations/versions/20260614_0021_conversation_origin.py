@@ -1,10 +1,10 @@
-"""add conversation origin + channel-peer columns (ADR-021)
+"""add conversation origin + channel-peer columns (Vault Console repositioning)
 
 Revision ID: 0021
 Revises: 0020
 Create Date: 2026-06-14
 
-Repositioning the chat surface as the Vault Console (ADR-021) needs each
+Repositioning the chat surface as the Vault Console needs each
 conversation to record where it was opened from: ``origin`` is ``"web"`` for a
 Vault Console draft, ``"channel"`` for one an IM peer drives. For a channel
 thread the peer's identity (``channel_name`` + ``peer_chat_id`` +

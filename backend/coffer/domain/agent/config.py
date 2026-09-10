@@ -30,7 +30,7 @@ class AgentConfig(BaseModel):
     # standard location (``~/.claude`` / ``~/.codex``). This is the one
     # directory the user chooses; skills go to ``<config_dir>/skills``.
     config_dir: str | None = None
-    # Skill-delivery policy (spec 005 FR-025). True preserves the
+    # Skill-delivery policy (spec skill-manager FR-025). True preserves the
     # pre-amendment trust-mode: every master skill is auto-delivered.
     follow_all_skills: bool = True
     skill_exclusions: list[str] = Field(default_factory=list)
@@ -39,7 +39,7 @@ class AgentConfig(BaseModel):
     # / ``memories.generate_memories``) so Coffer is the single shared memory
     # store. Default OFF; toggling it back off restores the agent's native
     # memory. Old persisted rows (pre-Slice-6) load with this default.
-    # Per-agent model binding (spec 011 amendment 2026-06-22b, E3). The model the
+    # Per-agent model binding (spec provider-switching amendment 2026-06-22b, E3). The model the
     # agent projects comes from HERE, not the connection: ``model`` →
     # ``ANTHROPIC_MODEL`` / Codex ``model``; ``fast_model`` →
     # ``ANTHROPIC_SMALL_FAST_MODEL`` (anthropic only); ``wire_api`` → the Codex

@@ -1,4 +1,4 @@
-"""Pure projection-transform tests (spec 011). No I/O — unit tier."""
+"""Pure projection-transform tests (spec provider-switching). No I/O — unit tier."""
 
 from __future__ import annotations
 

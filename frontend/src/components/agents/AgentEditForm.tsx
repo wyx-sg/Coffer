@@ -1,4 +1,4 @@
-// frontend/src/components/agents/AgentEditForm.tsx — spec 004-agent-registry
+// frontend/src/components/agents/AgentEditForm.tsx — spec agent-registry
 // User Story 4 / FR-006: edit an existing agent's config_dir override and
 // description. Rendered as a modal dialog (mirrors AgentAddDialog); the agent
 // name and type are immutable post-registration so they show read-only.

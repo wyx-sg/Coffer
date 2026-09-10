@@ -1,7 +1,7 @@
 // frontend/src/pages/SkillsPage.test.tsx
 //
 // Carries the acceptance marker for spec scenario "desktop and CLI cover
-// every operation" — the desktop surface that the 005-skill-manager spec §US 6
+// every operation" — the desktop surface that the skill-manager spec §US 6
 // requires. The page now mirrors AgentsPage: PageHeader + welcome/loading/
 // error/grid, with the Add action opening a dialog. (Verification moved to
 // per-row + bulk actions inside SkillsTable, covered by SkillsTable.test.tsx.)
@@ -95,7 +95,7 @@ function stubHooks(opts: {
   } as unknown as ReturnType<typeof hooks.useRepairSkillDrift>);
 }
 
-acceptance("005-skill-manager", "desktop and CLI cover every operation", async () => {
+acceptance("skill-manager", "desktop and CLI cover every operation", async () => {
   stubHooks({ data: SAMPLE });
   render(<SkillsPage />, { wrapper: wrap(null) });
   expect(screen.getByRole("heading", { name: /skills/i })).toBeInTheDocument();

@@ -1,4 +1,4 @@
-"""Path-portability pure helpers (spec 010 "Path portability")."""
+"""Path-portability pure helpers (spec vault-export-import "Path portability")."""
 
 from __future__ import annotations
 

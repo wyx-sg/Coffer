@@ -87,7 +87,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * How much of the aggregated tool catalogue agents currently see (ADR-046)
+         * How much of the aggregated tool catalogue agents currently see (ADR budget-driven-tool-tiering)
          * @description Global across every enabled server, because the listing budget is shared: a server whose tools all fit locally can still be crowded out. Computed from the last-discovered catalogue, so it never cold-spawns an upstream to answer a management question.
          */
         get: operations["getToolTiering"];

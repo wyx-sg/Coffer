@@ -1,6 +1,6 @@
 // frontend/src/pages/settings/SyncSettings.test.tsx
 //
-// Settings → Sync is a composition of exactly two cards after spec 010's
+// Settings → Sync is a composition of exactly two cards after spec vault-export-import's
 // rewrite: export/import and the master key. This guards the composition — the
 // cards' own behaviour is covered by SyncBundleCard.test.tsx and
 // SyncMasterKeyCard.test.tsx — and that the withdrawn continuous-sync controls

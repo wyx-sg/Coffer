@@ -1,5 +1,5 @@
 // components/settings/EmbeddingModelDialog.tsx — add / edit the single global
-// embedding model (spec 006). Mirrors the LLM-connection dialog: provider +
+// embedding model (spec knowledge). Mirrors the LLM-connection dialog: provider +
 // model (with Fetch models / Test connection via ProviderModelField, kind
 // "embedding") + dimensions + base URL + credential reference. There is only
 // ever ONE embedding model, so this is an add-or-edit form, not a list.

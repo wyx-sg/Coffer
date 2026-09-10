@@ -46,7 +46,7 @@ def _tool(reg: BuiltinToolRegistry, name: str):
 
 
 @pytest.mark.acceptance(
-    spec="007-memory", scenario="built-in memory tools appear in client tool list"
+    spec="knowledge", scenario="built-in memory tools appear in client tool list"
 )
 async def test_the_eight_tools_are_registered(mem) -> None:
     reg = _registry(mem)
@@ -131,7 +131,7 @@ async def test_the_pre_merge_tool_names_are_gone(mem) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory", scenario="remembered items are stored in the knowledge lane"
+    spec="knowledge", scenario="remembered items are stored in the knowledge lane"
 )
 async def test_write_lands_in_the_knowledge_inbox(mem) -> None:
     """A written entry lands under the project scope's ``knowledge/inbox/`` (never

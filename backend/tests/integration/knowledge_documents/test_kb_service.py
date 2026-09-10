@@ -18,7 +18,7 @@ async def _ingest(kb, name: str, filename: str, data: bytes, **kw):
     )
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="create a knowledge base")
+@pytest.mark.acceptance(spec="knowledge", scenario="create a knowledge base")
 async def test_create_kb_makes_dirs(kb) -> None:
     await kb.create_kb("design-notes")
     config = await kb.service.get_config("design-notes")
@@ -27,7 +27,7 @@ async def test_create_kb_makes_dirs(kb) -> None:
     assert [r.name for r in listed] == ["design-notes"]
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="ingest converts any format to markdown")
+@pytest.mark.acceptance(spec="knowledge", scenario="ingest converts any format to markdown")
 async def test_ingest_converts_csv_to_markdown(kb) -> None:
     await kb.create_kb("kb1")
     doc = await _ingest(kb, "kb1", "data.csv", b"a,b\n1,2\n")
@@ -67,7 +67,7 @@ async def test_ingest_rejects_unsupported_type(kb) -> None:
     assert exc.value.reason == "unsupported_type"
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="re-upload of an identical file is a no-op")
+@pytest.mark.acceptance(spec="knowledge", scenario="re-upload of an identical file is a no-op")
 async def test_reupload_identical_file_is_noop(kb) -> None:
     await kb.create_kb("kb1")
     first = await _ingest(kb, "kb1", "a.md", b"# Hello\n\nworld")
@@ -79,7 +79,7 @@ async def test_reupload_identical_file_is_noop(kb) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory",
+    spec="knowledge",
     scenario="re-upload of an updated file updates the document in place",
 )
 async def test_reupload_updated_file_updates_in_place(kb) -> None:
@@ -108,9 +108,9 @@ async def test_reupload_updated_file_updates_in_place(kb) -> None:
     assert len((await kb.service.search(scope_name="kb1", query="banana", top_k=5)).passages) == 1
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="ingest converts any format to markdown")
+@pytest.mark.acceptance(spec="knowledge", scenario="ingest converts any format to markdown")
 async def test_doc_id_is_ulid_not_content_hash(kb) -> None:
-    """spec 007 FR-062: the doc id is a stable ULID (26-char Crockford base32), not the
+    """spec knowledge FR-062: the doc id is a stable ULID (26-char Crockford base32), not the
     source sha256 prefix; the sha is kept in metadata as provenance only."""
     await kb.create_kb("kb1")
     doc = await _ingest(kb, "kb1", "a.md", b"# A\n\nbody")
@@ -119,7 +119,7 @@ async def test_doc_id_is_ulid_not_content_hash(kb) -> None:
     assert doc.metadata["source_sha256"]  # provenance retained
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="list documents in a knowledge base")
+@pytest.mark.acceptance(spec="knowledge", scenario="list documents in a knowledge base")
 async def test_list_documents_paginated(kb) -> None:
     await kb.create_kb("kb1")
     await _ingest(kb, "kb1", "a.md", b"# Alpha\n\nthe alpha doc")
@@ -129,7 +129,7 @@ async def test_list_documents_paginated(kb) -> None:
     assert len(docs) == 1
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="keyword search returns ranked passages")
+@pytest.mark.acceptance(spec="knowledge", scenario="keyword search returns ranked passages")
 async def test_keyword_search_ranks(kb) -> None:
     await kb.create_kb("kb1")
     await _ingest(kb, "kb1", "fox.md", b"# Fox\n\nthe quick brown fox jumps")
@@ -142,7 +142,7 @@ async def test_keyword_search_ranks(kb) -> None:
     assert result.passages[0].title == "Fox"
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="keyword search matches CJK (Chinese) content")
+@pytest.mark.acceptance(spec="knowledge", scenario="keyword search matches CJK (Chinese) content")
 async def test_keyword_search_matches_cjk(kb) -> None:
     await kb.create_kb("kb1")
     await _ingest(kb, "kb1", "zh.md", "# 向量\n\n向量检索使用语义嵌入模型来匹配查询".encode())
@@ -157,7 +157,7 @@ async def test_keyword_search_matches_cjk(kb) -> None:
     assert any("向量" in p.text for p in short.passages)
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="grep returns file/line matches")
+@pytest.mark.acceptance(spec="knowledge", scenario="grep returns file/line matches")
 async def test_grep_returns_hits(kb) -> None:
     await kb.create_kb("kb1")
     await _ingest(kb, "kb1", "a.md", b"# Make\n\nthe make release target ships it")
@@ -168,7 +168,7 @@ async def test_grep_returns_hits(kb) -> None:
     assert result.truncated is False
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="vector search returns ranked passages")
+@pytest.mark.acceptance(spec="knowledge", scenario="vector search returns ranked passages")
 async def test_vector_search_with_embedding(kb, vector_config) -> None:
     await kb.create_kb("kb1", config=vector_config)
     await _ingest(kb, "kb1", "a.md", b"# Alpha\n\nthe alpha passage about deploys")
@@ -179,7 +179,7 @@ async def test_vector_search_with_embedding(kb, vector_config) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory",
+    spec="knowledge",
     scenario="vector falls back to keyword when embedding unconfigured",
 )
 async def test_vector_falls_back_to_keyword(kb) -> None:
@@ -190,9 +190,7 @@ async def test_vector_falls_back_to_keyword(kb) -> None:
     assert len(result.passages) >= 1
 
 
-@pytest.mark.acceptance(
-    spec="007-memory", scenario="hybrid search fuses keyword and vector via RRF"
-)
+@pytest.mark.acceptance(spec="knowledge", scenario="hybrid search fuses keyword and vector via RRF")
 async def test_hybrid_search_fuses_keyword_and_vector(kb, vector_config) -> None:
     await kb.create_kb("kb1", config=vector_config)
     await _ingest(kb, "kb1", "a.md", b"# Alpha\n\nthe alpha passage about deploys")
@@ -231,7 +229,7 @@ async def test_hybrid_falls_back_to_keyword_when_embedding_unconfigured(kb) -> N
     assert len(result.passages) >= 1
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="edit a document and reindex")
+@pytest.mark.acceptance(spec="knowledge", scenario="edit a document and reindex")
 async def test_edit_sets_edited_mode_and_reflects_in_search(kb) -> None:
     await kb.create_kb("kb1")
     doc = await _ingest(kb, "kb1", "a.md", b"# Orig\n\noriginal banana content")
@@ -247,7 +245,7 @@ async def test_edit_sets_edited_mode_and_reflects_in_search(kb) -> None:
     assert len((await kb.service.search(scope_name="kb1", query="cherry", top_k=5)).passages) == 1
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="external edit picked up by reindex-on-read")
+@pytest.mark.acceptance(spec="knowledge", scenario="external edit picked up by reindex-on-read")
 async def test_out_of_band_edit_visible_on_reindex_on_read(kb) -> None:
     """The in-app viewer is read-only, so users edit ``docs/<id>.md`` directly
     in their external editor. The next read/search reconciles the on-disk file
@@ -271,7 +269,7 @@ async def test_out_of_band_edit_visible_on_reindex_on_read(kb) -> None:
     assert "platypus" in hits[0].text
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="external edit picked up by reindex-on-read")
+@pytest.mark.acceptance(spec="knowledge", scenario="external edit picked up by reindex-on-read")
 async def test_out_of_band_file_removal_pruned_on_read(kb) -> None:
     """A document whose markdown file is removed out-of-band is pruned from the
     index on the next read (files are truth in both directions)."""
@@ -286,7 +284,7 @@ async def test_out_of_band_file_removal_pruned_on_read(kb) -> None:
     assert (await kb.service.search(scope_name="kb1", query="vanish", top_k=5)).passages == ()
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="re-conversion blocked once edited")
+@pytest.mark.acceptance(spec="knowledge", scenario="re-conversion blocked once edited")
 async def test_reconversion_blocked_after_edit(kb) -> None:
     await kb.create_kb("kb1")
     doc = await _ingest(kb, "kb1", "a.md", b"# T\n\nbody one")
@@ -297,7 +295,7 @@ async def test_reconversion_blocked_after_edit(kb) -> None:
         await kb.service.reconvert_document(scope_name="kb1", document_id=doc.id, actor="user")
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="changing chunk params re-indexes")
+@pytest.mark.acceptance(spec="knowledge", scenario="changing chunk params re-indexes")
 async def test_changing_chunk_params_reindexes(kb) -> None:
     await kb.create_kb("kb1")
     body = b"# Doc\n\n" + (b"alpha beta gamma delta " * 80)
@@ -323,7 +321,7 @@ async def test_changing_chunk_params_reindexes(kb) -> None:
 # installation-wide and a scope opts in by listing the mode — but the marker
 # string is the spec's to change, not ours, so it stays until the docs pass
 # rewrites the merged spec.
-@pytest.mark.acceptance(spec="007-memory", scenario="changing embedding model re-embeds")
+@pytest.mark.acceptance(spec="knowledge", scenario="changing embedding model re-embeds")
 async def test_changing_retrieval_modes_reindexes(kb, vector_config) -> None:
     """The merged config has no per-scope embedding fields — a scope opts into
     vector by listing the mode, and flipping that list re-indexes the corpus."""
@@ -341,7 +339,7 @@ async def test_changing_retrieval_modes_reindexes(kb, vector_config) -> None:
     assert len(after.passages) >= 1
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="delete a single document")
+@pytest.mark.acceptance(spec="knowledge", scenario="delete a single document")
 async def test_delete_document_removes_files_and_rows(kb) -> None:
     await kb.create_kb("kb1")
     doc = await _ingest(kb, "kb1", "a.md", b"# A\n\ngrape soda")
@@ -356,7 +354,7 @@ async def test_delete_document_removes_files_and_rows(kb) -> None:
 
 
 async def test_same_file_in_two_kbs_keeps_both_searchable(kb) -> None:
-    """Doc ids are stable ULIDs (spec 007 FR-062), so the same file uploaded into two
+    """Doc ids are stable ULIDs (spec knowledge FR-062), so the same file uploaded into two
     KBs gets two distinct ids — no cross-store dedup. The second ingest must not
     corrupt the first KB's index, and deleting the doc from one KB must not wipe
     the other's chunks (per-store chunk-id namespacing)."""
@@ -377,7 +375,7 @@ async def test_same_file_in_two_kbs_keeps_both_searchable(kb) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory", scenario="delete a knowledge base cleans up files and index"
+    spec="knowledge", scenario="delete a knowledge base cleans up files and index"
 )
 async def test_delete_kb_cleans_up(kb) -> None:
     await kb.create_kb("kb1")
@@ -392,7 +390,7 @@ async def test_delete_kb_cleans_up(kb) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory", scenario="delete a knowledge base cleans up files and index"
+    spec="knowledge", scenario="delete a knowledge base cleans up files and index"
 )
 async def test_delete_kb_purges_index_rows_and_vec_store(kb, vector_config) -> None:
     """SC-003: deleting a KB removes 100% of its SQLite rows — chunks and FTS
@@ -420,7 +418,7 @@ async def test_delete_kb_purges_index_rows_and_vec_store(kb, vector_config) -> N
     assert vec is not None and vec.dropped
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="KB metrics report counts and disk usage")
+@pytest.mark.acceptance(spec="knowledge", scenario="KB metrics report counts and disk usage")
 async def test_metrics(kb) -> None:
     await kb.create_kb("kb1")
     await _ingest(kb, "kb1", "a.md", b"# A\n\nalpha content here")
@@ -458,7 +456,7 @@ async def test_document_count_uses_indexed_count_without_du_walk(kb) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory",
+    spec="knowledge",
     scenario="degraded embed surfaces documents_degraded and retries without re-chunking",
 )
 async def test_degraded_embed_surfaces_and_retries_without_rechunk(kb, vector_config) -> None:
@@ -649,7 +647,7 @@ async def _ingest_from_file(kb, name: str, src, *, replace: bool = False):
 
 
 @pytest.mark.acceptance(
-    spec="007-memory",
+    spec="knowledge",
     scenario="check sources detects changed, unchanged, and missing originals",
 )
 async def test_check_sources_classifies_changed_unchanged_missing(kb, tmp_path) -> None:
@@ -696,7 +694,7 @@ async def test_check_sources_ignores_byte_uploads_without_source_path(kb, tmp_pa
 
 
 @pytest.mark.acceptance(
-    spec="007-memory",
+    spec="knowledge",
     scenario="update from source refreshes a changed document in place",
 )
 async def test_update_from_source_updates_in_place(kb, tmp_path) -> None:
@@ -719,7 +717,7 @@ async def test_update_from_source_updates_in_place(kb, tmp_path) -> None:
     assert len((await kb.service.search(scope_name="kb1", query="banana", top_k=5)).passages) == 1
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="update from source refuses an edited document")
+@pytest.mark.acceptance(spec="knowledge", scenario="update from source refuses an edited document")
 async def test_update_from_source_refuses_edited(kb, tmp_path) -> None:
     await kb.create_kb("kb1")
     src = tmp_path / "doc.md"
@@ -744,7 +742,7 @@ async def test_update_from_source_refuses_edited(kb, tmp_path) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory", scenario="auto_update_sources refreshes changed sources on check"
+    spec="knowledge", scenario="auto_update_sources refreshes changed sources on check"
 )
 async def test_auto_update_sources_refreshes_changed(kb, tmp_path) -> None:
     await kb.create_kb("kb1", config={"auto_update_sources": True})

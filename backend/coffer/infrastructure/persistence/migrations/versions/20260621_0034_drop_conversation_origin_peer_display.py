@@ -4,7 +4,7 @@ Revision ID: 0034
 Revises: 0033
 Create Date: 2026-06-21
 
-The chat surface is repositioned as the single-owner live mirror (ADR-031): the
+The chat surface is repositioned as the single-owner live mirror: the
 web/channel ``origin`` dichotomy collapses to an optional channel binding
 (``channel_name`` + ``peer_chat_id`` — the return address for relaying output
 back to an IM channel). Under the single-owner premise the IM peer is always the

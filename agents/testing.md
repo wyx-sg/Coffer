@@ -89,7 +89,7 @@ Every `spec.md` scenario in `## Acceptance Scenarios` must be covered by at leas
 ...
 ```
 
-The spec ID is the spec folder name (e.g. `specs/001-foo/spec.md` → `001-foo`).
+The spec ID is the spec folder name (e.g. `specs/foo/spec.md` → `foo`).
 
 **Python (pytest):**
 

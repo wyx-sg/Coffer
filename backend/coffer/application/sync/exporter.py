@@ -1,4 +1,4 @@
-"""Write local vault state into an export bundle (spec 010, ADR-016).
+"""Write local vault state into an export bundle (spec and ADR vault-export-import).
 
 An export is a snapshot of THIS vault at THIS moment: the bundle directory is
 cleared and rewritten, so what comes out is exactly what is here. There is no

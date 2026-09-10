@@ -186,7 +186,7 @@ build/
 dist/
 *.spec.lock
 
-# Opt-in eval-capture sink (ADR-019) — a local dev artefact, never committed.
+# Opt-in eval-capture sink (ADR close-the-eval-flywheel) — a local dev artefact, never committed.
 *eval-capture*.jsonl
 evals/captured/
 

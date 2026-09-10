@@ -159,21 +159,14 @@ const ACRONYMS = {
 
 /**
  * Turn a spec folder name into a nav label.
- * '001-mcp-gateway' → '001 · MCP Gateway'
+ * 'mcp-gateway' → '001 · MCP Gateway'
  * If the first segment is not numeric, title-case all words joined by space.
  */
 export function specFolderLabel(folder) {
-  const parts = folder.split("-");
-  if (/^\d+$/.test(parts[0])) {
-    const num = parts[0];
-    const words = parts.slice(1).map((w) => {
-      const lo = w.toLowerCase();
-      return ACRONYMS[lo] ?? lo.charAt(0).toUpperCase() + lo.slice(1);
-    });
-    return `${num} · ${words.join(" ")}`;
-  }
-  // Non-numeric first segment: title-case all words
-  return parts
+  // Spec directories are named, not numbered, so the folder name is the whole
+  // label: title-case each hyphen-separated word, honouring known acronyms.
+  return folder
+    .split("-")
     .map((w) => {
       const lo = w.toLowerCase();
       return ACRONYMS[lo] ?? lo.charAt(0).toUpperCase() + lo.slice(1);

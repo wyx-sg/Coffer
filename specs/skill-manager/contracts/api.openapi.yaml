@@ -1,0 +1,649 @@
+openapi: 3.1.0
+info:
+  title: Coffer — Skill Manager API
+  version: "0.1.0"
+  description: |
+    Skill manager endpoints. Merged into the main Coffer Management API at
+    runtime; this document scopes only the skill-specific routes added by
+    the skill-manager spec. Depends on the agent kind from spec agent-registry.
+
+    All routes use the same `X-Coffer-Token` authentication from
+    `specs/mcp-gateway/contracts/api.openapi.yaml`.
+
+servers:
+  - url: http://127.0.0.1:{port}/api/v1
+    variables:
+      port:
+        default: "8000"
+
+security:
+  - cofferToken: []
+
+tags:
+  - name: skills
+    description: Managed AgentSkills folders
+  - name: agents
+    description: >-
+      Per-agent workspace skill operations (unmanaged scan / adopt / delete);
+      mounted under /agents/{name} but owned by this spec (FR-022..FR-024).
+
+paths:
+  /skills:
+    get:
+      tags: [skills]
+      operationId: listSkills
+      summary: List managed skills
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/SkillOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /skills/import:
+    post:
+      tags: [skills]
+      operationId: importSkill
+      summary: Import a skill from a local filesystem path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillImportRequest" }
+      responses:
+        "201":
+          description: Imported
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /skills/{name}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      tags: [skills]
+      operationId: getSkill
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [skills]
+      operationId: deleteSkill
+      summary: Remove a skill and all its bindings
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /skills/{name}/enable:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      tags: [skills]
+      operationId: enableSkillForAgent
+      summary: Enable a skill for one agent (creates a directory symlink)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillEnableRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillBindingOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: >
+            Target path already exists and is not a Coffer-managed link
+            (TARGET_CONFLICT).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorOut" }
+
+  /skills/{name}/disable:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      tags: [skills]
+      operationId: disableSkillForAgent
+      summary: Disable a skill for one agent (removes the symlink)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillDisableRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillBindingOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /skills/{name}/files:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      tags: [skills]
+      operationId: listSkillFiles
+      summary: List a skill's master folder as a read-only file tree
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillFileTreeOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /skills/{name}/files/content:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      tags: [skills]
+      operationId: readSkillFile
+      summary: Read a single file's contents from a skill's master folder
+      parameters:
+        - in: query
+          name: path
+          required: true
+          description: Path to the file, relative to the skill's master folder.
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillFileContentOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    put:
+      tags: [skills]
+      operationId: writeSkillFile
+      summary: Overwrite one existing text file in a skill's master folder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillFileWriteRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillFileContentOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /skills/verify:
+    post:
+      tags: [skills]
+      operationId: verifySkillDrift
+      summary: Report drift between bindings and on-disk symlinks
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DriftReport" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /skills/repair:
+    post:
+      tags: [skills]
+      operationId: repairSkillDrift
+      summary: Opt-in repair that re-delivers repairable drift from the master library
+      description: |
+        Re-delivers repairable drift kinds (missing_link, tampered_link) from the
+        master library. Foreign/user content (replaced_with_regular), a missing master,
+        and orphan_master entries are left intact and returned in `remaining`. Each
+        repair is audited. This endpoint is the HTTP surface for `coffer skill verify
+        --fix`; `POST /skills/verify` remains report-only (FR-016).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RepairReport" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /agents/{name}/unmanaged-skills:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+        description: Agent name (kind `agent`, spec agent-registry).
+    get:
+      tags: [agents]
+      operationId: listUnmanagedSkills
+      summary: List skill-shaped folders in the agent's workspace that Coffer doesn't manage
+      description: |
+        Read-only scan of the agent's skill locations — `<config_dir>/skills`
+        for both types, plus `~/.agents/skills` for codex — derived at request
+        time, never stored (FR-022). Coffer-managed links (symlinks resolving
+        inside `~/.coffer/skills/`) and dot-entries such as Codex's `.system`
+        are excluded. Symlinks pointing outside the master store are listed
+        with `foreign_link=true` and are never adoptable.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/UnmanagedSkillOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{name}/unmanaged-skills/{skill}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+      - in: path
+        name: skill
+        required: true
+        schema: { type: string }
+        description: Unmanaged skill folder name as reported by the scan.
+    delete:
+      tags: [agents]
+      operationId: deleteUnmanagedSkill
+      summary: Delete an unmanaged skill folder from the agent's workspace
+      description: |
+        Removes only that entry from disk — never master content or bindings
+        (FR-024). Audited as `skill_unmanaged_deleted`.
+      parameters:
+        - in: query
+          name: location
+          required: true
+          schema: { type: string, enum: [skills, agents_dir] }
+          description: Where the folder was discovered, as reported by the scan.
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{name}/unmanaged-skills/{skill}/adopt:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+      - in: path
+        name: skill
+        required: true
+        schema: { type: string }
+    post:
+      tags: [agents]
+      operationId: adoptUnmanagedSkill
+      summary: Adopt an unmanaged skill folder into the Coffer master store
+      description: |
+        Validates the folder, moves it to `~/.coffer/skills/<name>/`,
+        registers the `skill` resource, delivers the managed link to
+        `<config_dir>/skills/<name>`, and records an enabled binding for the
+        agent — in that order (FR-023). Adopting from `~/.agents/skills`
+        consolidates: the original folder there is removed and the link lands
+        in `<config_dir>/skills`. Any failure before registration leaves the
+        original folder unmoved. Audited as `skill_adopted`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UnmanagedAdoptRequest" }
+      responses:
+        "201":
+          description: Adopted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillRefOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422":
+          description: >-
+            Invalid skill folder (`UNMANAGED_SKILL_INVALID`) or a foreign
+            symlink, which is never adoptable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorOut" }
+
+components:
+  securitySchemes:
+    cofferToken:
+      type: apiKey
+      in: header
+      name: X-Coffer-Token
+
+  schemas:
+    SkillSourceType:
+      type: string
+      enum: [local_import]
+
+    SkillImportRequest:
+      type: object
+      required: [path]
+      additionalProperties: false
+      properties:
+        path:
+          {
+            type: string,
+            description: "Path to the existing skill folder; supports `~` expansion.",
+          }
+        overwrite:
+          {
+            type: boolean,
+            default: false,
+            description: "Replace an existing skill of the same name instead of rejecting.",
+          }
+
+    SkillEnableRequest:
+      type: object
+      required: [agent_name]
+      additionalProperties: false
+      properties:
+        agent_name: { type: string }
+        force: { type: boolean, default: false }
+
+    SkillDisableRequest:
+      type: object
+      required: [agent_name]
+      additionalProperties: false
+      properties:
+        agent_name: { type: string }
+
+    SkillSource:
+      $ref: "#/components/schemas/LocalImportSource"
+
+    LocalImportSource:
+      type: object
+      required: [type, original_path]
+      properties:
+        type: { type: string, enum: [local_import] }
+        original_path: { type: string }
+
+    SkillOut:
+      type: object
+      required:
+        [
+          name,
+          description,
+          source,
+          enabled,
+          version_hash,
+          master_path,
+          created_at,
+          updated_at,
+          bindings,
+        ]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        source: { $ref: "#/components/schemas/SkillSource" }
+        enabled: { type: boolean }
+        version_hash: { type: string }
+        master_path: { type: string }
+        last_synced_from_source_at:
+          { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        bindings:
+          type: array
+          items: { $ref: "#/components/schemas/SkillBindingOut" }
+
+    SkillBindingOut:
+      type: object
+      required: [agent_name, enabled]
+      properties:
+        agent_name: { type: string }
+        enabled: { type: boolean }
+        last_linked_at: { type: string, format: date-time, nullable: true }
+        last_link_path: { type: string, nullable: true }
+        link_mode:
+          type: string
+          enum: [symlink, junction, copy_fallback]
+          nullable: true
+
+    DriftEntry:
+      type: object
+      required: [skill_name, agent_name, kind, suggested_remedy]
+      properties:
+        skill_name: { type: string }
+        agent_name: { type: string }
+        kind:
+          type: string
+          enum:
+            [
+              missing_link,
+              tampered_link,
+              replaced_with_regular,
+              missing_master,
+              orphan_master,
+            ]
+        target_path: { type: string }
+        suggested_remedy: { type: string }
+
+    DriftReport:
+      type: object
+      required: [entries]
+      properties:
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/DriftEntry" }
+
+    RepairReport:
+      type: object
+      required: [remediated, remaining]
+      properties:
+        remediated:
+          type: array
+          description: Drift entries that were successfully re-delivered from master during this repair run.
+          items: { $ref: "#/components/schemas/DriftEntry" }
+        remaining:
+          $ref: "#/components/schemas/DriftReport"
+          description: Drift still present after repair (foreign content, missing master, orphan master — requires manual action).
+
+    SkillFileNodeOut:
+      type: object
+      required: [name, path, abs_path, folder_abs_path, type]
+      properties:
+        name: { type: string }
+        path:
+          type: string
+          description: POSIX path relative to the master folder root ("" for the root).
+        abs_path:
+          type: string
+          description: >-
+            Resolved absolute path of this entry on disk. The in-app file
+            viewer is read-only; this path backs open-in-external-editor /
+            reveal-in-file-manager.
+        folder_abs_path:
+          type: string
+          description: >-
+            Absolute path of this entry's containing folder (its parent
+            directory). For the root node it equals the master folder's parent.
+        type: { type: string, enum: [file, dir] }
+        size:
+          type: integer
+          nullable: true
+          description: Byte size for files; null for directories.
+        truncated:
+          type: boolean
+          default: false
+          description: True on a directory whose children were clipped at the max tree depth.
+        children:
+          type: array
+          description: Child nodes; empty for files.
+          items: { $ref: "#/components/schemas/SkillFileNodeOut" }
+
+    SkillFileTreeOut:
+      type: object
+      required: [root]
+      properties:
+        root: { $ref: "#/components/schemas/SkillFileNodeOut" }
+
+    UnmanagedSkillOut:
+      type: object
+      required: [name, path, location, valid, reason, foreign_link]
+      description: >-
+        A skill-shaped entry found in an agent's skill locations that Coffer
+        does not manage — derived at scan time, never stored.
+      properties:
+        name: { type: string, description: "Folder name." }
+        path: { type: string, description: "Absolute path on disk." }
+        location:
+          type: string
+          enum: [skills, agents_dir]
+          description: >-
+            Which scan location the entry was found in: `skills` =
+            `<config_dir>/skills`; `agents_dir` = the agent product's
+            secondary standard location (today: Codex's `~/.agents/skills`).
+        valid:
+          type: boolean
+          description: "Whether the folder passes AgentSkills validation (FR-004)."
+        reason:
+          type: string
+          nullable: true
+          description: "Validation failure reason when `valid` is false; null otherwise."
+        foreign_link:
+          type: boolean
+          description: >-
+            True for symlinks whose target resolves outside the master store;
+            surfaced to the user but never adoptable (origin is unknown).
+
+    UnmanagedAdoptRequest:
+      type: object
+      required: [location]
+      additionalProperties: false
+      properties:
+        location:
+          type: string
+          enum: [skills, agents_dir]
+          description: Where the folder was discovered, as reported by the scan.
+
+    SkillRefOut:
+      type: object
+      required: [name]
+      properties:
+        name:
+          { type: string, description: "Name of the adopted skill resource." }
+
+    SkillFileContentOut:
+      type: object
+      required:
+        [path, abs_path, folder_abs_path, content, truncated, binary, size]
+      properties:
+        path:
+          type: string
+          description: POSIX path relative to the master folder root.
+        abs_path:
+          type: string
+          description: >-
+            Resolved absolute path of the file on disk. The in-app viewer is
+            read-only; this path backs open-in-external-editor /
+            reveal-in-file-manager.
+        folder_abs_path:
+          type: string
+          description: Absolute path of the file's containing folder (its parent directory).
+        content:
+          type: string
+          description: File text; empty when `binary` is true.
+        truncated:
+          type: boolean
+          description: True when the file exceeded the read cap and was truncated.
+        binary:
+          type: boolean
+          description: True for non-UTF-8 / NUL-containing files (content is empty).
+        size:
+          type: integer
+          description: True byte size of the file on disk.
+    SkillFileWriteRequest:
+      type: object
+      required: [path, content]
+      properties:
+        path:
+          type: string
+          minLength: 1
+          description: >-
+            POSIX path of an EXISTING text file, relative to the master folder
+            root. Must stay inside the folder; new files / directories are not
+            created here.
+        content:
+          type: string
+          description: >-
+            Full new UTF-8 contents. Rejected (400) if it exceeds the file-size
+            cap or the target is an existing binary file.
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid X-Coffer-Token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    BadRequest:
+      description: Malformed request
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    NotFound:
+      description: Skill or agent not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    Conflict:
+      description: Duplicate skill name
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    UnprocessableEntity:
+      description: Validation failure (invalid SKILL.md, size limit, path-escape, ...)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }

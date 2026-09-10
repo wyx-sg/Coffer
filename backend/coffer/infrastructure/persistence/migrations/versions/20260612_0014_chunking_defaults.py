@@ -1,4 +1,4 @@
-"""global knowledge-base chunking defaults (spec 006)
+"""global knowledge-base chunking defaults (spec knowledge)
 
 Revision ID: 0014
 Revises: 0013

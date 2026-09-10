@@ -1,13 +1,13 @@
 // frontend/src/lib/hooks/useSync.ts
 //
-// Vault export / import (spec 010): POST /sync/export, POST /sync/import, and
+// Vault export / import (spec vault-export-import): POST /sync/export, POST /sync/import, and
 // the out-of-band master-key routes GET /sync/key/fingerprint + POST
 // /sync/key/{export,import} — the latter two carry the key MATERIAL in the
 // body, so the browser downloads/uploads a file itself rather than naming a
 // host path for the daemon to write. There is no remote, no status poll and no
 // background run — a bundle is an ordinary local directory the user carries to
 // the other machine themselves. Hand-written fetch, mirroring
-// useEmbeddingConfig (the generated client only covers spec 001).
+// useEmbeddingConfig (the generated client only covers spec mcp-gateway).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getCofferBaseUrl, getCofferToken } from "@/lib/auth";

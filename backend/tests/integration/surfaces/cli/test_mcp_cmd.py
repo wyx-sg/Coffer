@@ -372,7 +372,7 @@ def test_mcp_add_config_422_exits_6(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="001-mcp-gateway", scenario="CLI returns non-zero exit on daemon unreachable"
+    spec="mcp-gateway", scenario="CLI returns non-zero exit on daemon unreachable"
 )
 def test_mcp_list_exits_3_when_daemon_unreachable(
     tmp_path: Any, monkeypatch: pytest.MonkeyPatch
@@ -380,7 +380,7 @@ def test_mcp_list_exits_3_when_daemon_unreachable(
     """No daemon.json + spawn timeout => `coffer mcp list` exits with code 3
     and prints a daemon-unreachable hint to stderr/stdout.
 
-    ADR-006: client_or_exit() now auto-spawns; we prevent the real spawn and
+    Detect-or-spawn: client_or_exit() now auto-spawns; we prevent the real spawn and
     simulate a timeout so the error path (exit 3) is exercised.
     """
     from coffer.surfaces.cli import _client as cli_client
@@ -402,7 +402,7 @@ def test_mcp_list_empty(mcp_daemon: Any) -> None:
     assert data == {"resources": []}
 
 
-@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="CLI --json output is machine-readable")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="CLI --json output is machine-readable")
 def test_mcp_list_shows_registered(mcp_daemon: Any) -> None:
     _register_server()
     result = _runner.invoke(app, ["mcp", "list", "--json"])

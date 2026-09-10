@@ -1,4 +1,4 @@
-"""The daemon's self-eviction watcher (ADR-006 amendment).
+"""The daemon's self-eviction watcher (detect-or-spawn amendment).
 
 A daemon orphaned by a spawn that could not see it — daemon.json lost, or an
 already-serving daemon too busy to answer the liveness probe in time — used to

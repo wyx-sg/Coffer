@@ -1,4 +1,4 @@
-"""Agentic langgraph reorg loop for memory topic docs (spec 007).
+"""Agentic langgraph reorg loop for memory topic docs (spec knowledge).
 
 The create_react_agent loop driven by Coffer's internal model over the store's
 existing topic docs with 4 internal write-capable tools. Lives in

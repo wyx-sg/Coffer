@@ -1,5 +1,5 @@
 // components/settings/ConnectionCard.tsx — one LLM-connection row on the
-// connections page (spec 011). Shows name + active chip + wire/base_url and the
+// connections page (spec provider-switching). Shows name + active chip + wire/base_url and the
 // connection's compatible agents, plus the per-row edit / delete actions. There
 // is NO per-row "switch" — activation is per-agent and lives on the Agent detail
 // → Overview tab; this page is purely the connection library. The internal-engine

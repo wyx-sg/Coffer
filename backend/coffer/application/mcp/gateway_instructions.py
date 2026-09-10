@@ -1,8 +1,8 @@
-"""What Coffer tells a client at ``initialize`` (ADR-046).
+"""What Coffer tells a client at ``initialize`` (ADR budget-driven-tool-tiering).
 
 The MCP ``instructions`` field is the only channel a server has into the
 client's system prompt, so it is the one place the tiering contract can
-actually reach the agent that has to follow it. ADR-018 documented that
+actually reach the agent that has to follow it. The tool-retrieval ADR documented that
 contract for humans and never delivered it to the agent.
 
 It is charged against every session's context, so it is capped and

@@ -1,4 +1,4 @@
-"""conversations.agent_config (spec 008 — multi-provider agent state)
+"""conversations.agent_config (agent chat — multi-provider agent state)
 
 Revision ID: 0018
 Revises: 0017

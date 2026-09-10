@@ -59,7 +59,7 @@ def _audit_safe_config(kind_def: Kind, config: dict[str, Any]) -> dict[str, Any]
     The kind-agnostic core knows nothing about where a given kind stores
     secrets; each kind supplies its own ``audit_redactor`` (e.g. mcp_server
     strips ``transport.env``/``headers``). Kinds without one audit their
-    config verbatim. See ADR-001 / CODE-006.
+    config verbatim. See the resource-framework-upfront ADR / CODE-006.
     """
     if kind_def.audit_redactor is None:
         return config
@@ -109,7 +109,7 @@ class ResourceService:
         return self._kinds[kind]
 
     def supports_scope(self, kind: str) -> bool:
-        """Whether the kind carries a per-agent activation scope (ADR-045).
+        """Whether the kind carries a per-agent activation scope (ADR per-agent-resource-scope).
 
         Public accessor (unlike ``_require_kind``) so the REST GET
         .../scope route can tell a client whether scope may be set at all,
@@ -178,7 +178,7 @@ class ResourceService:
                 enabled=True,
                 created_at=now,
                 updated_at=now,
-                # A freshly registered resource is always unscoped (ADR-045):
+                # A freshly registered resource is always unscoped (ADR per-agent-resource-scope):
                 # active for every agent until the user narrows it.
                 scope=None,
             )
@@ -284,7 +284,7 @@ class ResourceService:
         *,
         actor: str,
     ) -> Resource:
-        """Set (or clear) a resource's per-agent activation scope (ADR-045).
+        """Set (or clear) a resource's per-agent activation scope (ADR per-agent-resource-scope).
 
         Delegates to ``resource_scope_ops`` to keep this module under the
         file-size limit; see that module for the full behavior.

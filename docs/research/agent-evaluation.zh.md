@@ -2,11 +2,12 @@
 
 > 中文版：本文件 · English: [agent-evaluation.md](./agent-evaluation.md)
 >
-> 面向 Coffer 评估方向（ADR-019"闭合 eval 飞轮"、ADR-017 AI-eval 层）的内部竞品调研报告。
+> 面向 Coffer 评估方向（[Eval Flywheel](../decisions/close-the-eval-flywheel.zh.md)"闭合 eval 飞轮"、
+> [Harness in Layers](../decisions/industrial-grade-harness-in-layers.zh.md) 的 AI-eval 层）的内部竞品调研报告。
 > **日期：** 2026-06-16。**方法：** deep-research harness（本轮读了 Coffer 仓库核对现状；
 > 多条结论 3-0 确认）。
 >
-> **对设定的更正。** "Coffer 评估基本是蓝图、尚未落地"这一前提**部分已过时。** ADR-019 已
+> **对设定的更正。** "Coffer 评估基本是蓝图、尚未落地"这一前提**部分已过时。** eval 飞轮 ADR 已
 > **Accepted（2026-06-14）**，且本地优先的 `evals/` harness 已**落地**——确定性检索 + 工具检索
 > 套件、可插拔模型工具路由套件、带相对回归门的提交基线、`evals.yml` CI 工作流、可选 gitignore 的
 > 捕获 sink（`COFFER_EVAL_CAPTURE`）、以及把捕获的工具检索迹提升为金样的交互式 `curate.py`。
@@ -75,7 +76,7 @@
 **Coffer 落后 —— 具体借鉴。**
 
 1. **无 LLM-as-judge。** 每个领头者都用 LLM-as-judge 评开放式质量（聊天答案、RAG 忠实度），确定性
-   检查够不到。Coffer 的内部模型（ADR-024）可在聊天 / `ask` 输出上跑**本地 LLM 评判**——无需云。
+   检查够不到。Coffer 的内部模型（见"内置 agent 是内部能力"ADR）可在聊天 / `ask` 输出上跑**本地 LLM 评判**——无需云。
 2. **无 RAG 忠实度指标。** Ragas 式无参考指标（忠实度、上下文精度）直接契合 Coffer 的 KB，且无需金样答案。
 3. **无人工反馈环 / 评判器校准。** LangSmith 的 Align Evals（把评判器对齐到人工标注）和负反馈驱动捕获
    是最值得借鉴的强模式——聊天里的"踩"可自动把迹捕获进评估 sink。
@@ -85,9 +86,9 @@
 
 ## 4. 给 Coffer 的关键结论
 
-1. **更新表述：飞轮已落地，不是蓝图。** ADR-019 已 Accepted，`evals/` 在本地实现 捕获→精选→金样→门禁
+1. **更新表述：飞轮已落地，不是蓝图。** eval 飞轮 ADR 已 Accepted，`evals/` 在本地实现 捕获→精选→金样→门禁
    ——以"我们建出了 Braintrust/LangSmith 那个循环的隐私限定版"作为头条。
-2. **加入本地 LLM-as-judge**（经 ADR-024 内部模型）评确定性检查够不到的开放式质量——最大的单一缺口。
+2. **加入本地 LLM-as-judge**（经"内置 agent 是内部能力"ADR 的内部模型）评确定性检查够不到的开放式质量——最大的单一缺口。
 3. **加入 Ragas 式无参考 RAG 指标**给 KB / `ask`——无需金样答案，可直接套用。
 4. **借鉴负反馈捕获 + 评判器校准**（LangSmith）：聊天"踩"自动捕获进评估 sink；用用户自己的标注校准本地评判器。
 5. **把调用日志接入捕获 sink**，把飞轮拓宽到工具检索之外。
@@ -101,7 +102,7 @@
 - github.com/confident-ai/deepeval · promptfoo.dev（OpenAI 收购，2026-03）· github.com/explodinggradients/ragas
 - Galileo（galileo.ai）· Arize Phoenix（docs.arize.com/phoenix）
 
-已核对 Coffer 仓库：`evals/`（套件、基线、`curate.py`）、`.github/workflows/evals.yml`、ADR-019、ADR-017。
+已核对 Coffer 仓库：`evals/`（套件、基线、`curate.py`）、`.github/workflows/evals.yml`、eval 飞轮与分层 harness 两份 ADR。
 
 ## 核查更新（2026-06-19）
 
@@ -122,12 +123,12 @@
   均存在；`repo:evals/run.py` 以 `floor = baseline - tolerance` 做门禁（检索 0.01 /
   工具检索 0.05 / 路由 0.10），回归时非零退出；`repo:.github/workflows/evals.yml` 在 PR
   上跑确定性、无模型的检索 + 工具检索门禁，按路径过滤（路由套件仅按需触发）。
-- **支撑各项借鉴的 ADR 状态。** ADR-019（闭合 eval 飞轮）已 Accepted，2026-06-14；
-  ADR-024（内置 agent 是内部能力）已 Accepted，2026-06-14——对应本地 LLM 评判借鉴 #1。
-  （撰写本调研时，ADR-020「迹蒸馏」支撑着借鉴 #4 / 结论 #5；该 ADR 已于 2026-09-09 随它所
+- **支撑各项借鉴的 ADR 状态。** 「闭合 eval 飞轮」已 Accepted，2026-06-14；
+  「内置 agent 是内部能力」已 Accepted，2026-06-14——对应本地 LLM 评判借鉴 #1。
+  （撰写本调研时，「迹蒸馏」ADR 支撑着借鉴 #4 / 结论 #5；该 ADR 已于 2026-09-09 随它所
   描述的能力一并删除。）
-  `repo:docs/decisions/ADR-019-close-the-eval-flywheel.md`、
-  `repo:docs/decisions/ADR-024-builtin-agent-is-internal-capability.md`
+  `repo:docs/decisions/close-the-eval-flywheel.md`、
+  `repo:docs/decisions/builtin-agent-is-internal-capability.md`
 - **Promptfoo —— MIT、2026-03 被 OpenAI 收购。** 收购于 2026-03-09 宣布；Promptfoo
   "将保持开源……在当前许可证下"。MIT 由仓库许可证本身确认（公告只确认开源延续、未点名许可证）。
   https://www.promptfoo.dev/blog/promptfoo-joining-openai/ ;
@@ -151,10 +152,10 @@
 
 ### ❓ 仍待核查
 
-- **ADR-017 状态细节。** ADR-017（分层工业级 harness）状态为 **Proposed**（日期 2026-06-13），
+- **分层 harness 状态细节。** 「分层工业级 harness」ADR 状态为 **Proposed**（日期 2026-06-13），
   **并非** Accepted。报告只把它当作"AI-eval 层"的相关背景引用，从未声称其已 Accepted，故无需正文
   改动——此处按核查要求标注。
-  `repo:docs/decisions/ADR-017-industrial-grade-harness-in-layers.md`
+  `repo:docs/decisions/industrial-grade-harness-in-layers.md`
 - **Promptfoo 许可证命名。** MIT 仅由仓库许可证本身确认；OpenAI/Promptfoo 的声明只说"在当前许可证
   下保持开源"，未点名 MIT。
 

@@ -314,7 +314,7 @@ class AgentService:
         wire_api: str | None = None,
         actor: str = "api",
     ) -> Resource:
-        """Persist this agent's per-agent model binding (spec 011 amendment
+        """Persist this agent's per-agent model binding (spec provider-switching amendment
         2026-06-22b E3). ``None`` fields are left unchanged; ``clear_fast_model``
         explicitly removes the fast slot. The new model takes effect on disk the
         next time the agent's connection is (re-)activated — the caller re-runs

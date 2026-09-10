@@ -1,1 +1,1 @@
-"""Channel kind — application services (spec 009)."""
+"""Channel kind — application services (spec channels)."""

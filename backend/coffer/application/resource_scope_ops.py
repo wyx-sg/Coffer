@@ -28,7 +28,7 @@ async def update_scope(
     *,
     actor: str,
 ) -> Resource:
-    """Set (or clear) a resource's per-agent activation scope (ADR-045).
+    """Set (or clear) a resource's per-agent activation scope (ADR per-agent-resource-scope).
 
     Framework-level: unlike ``update_config``/``delete``, this is NOT gated
     on ``allow_lifecycle_kind`` — scope is orthogonal to a kind's creation

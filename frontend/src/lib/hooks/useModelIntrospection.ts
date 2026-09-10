@@ -1,6 +1,6 @@
 // frontend/src/lib/hooks/useModelIntrospection.ts
 //
-// Provider introspection (spec 008/006): list a provider's models + test a
+// Provider introspection (specs channels and knowledge): list a provider's models + test a
 // connection, so the model forms offer a fetched dropdown (with manual
 // fallback) and a Test button — DevPilot-style. Hand-written fetch, mirroring
 // useEmbeddingConfig.

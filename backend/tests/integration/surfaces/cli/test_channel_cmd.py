@@ -1,4 +1,4 @@
-"""Integration tests for `coffer channel ...` subcommands (spec 009).
+"""Integration tests for `coffer channel ...` subcommands (spec channels).
 
 Same in-process daemon pattern as conftest.in_proc_daemon, but with the
 channel kind + channel routes wired over a real SQLite ResourceService, a
@@ -201,7 +201,7 @@ def _listed_names(daemon: _Daemon) -> list[str]:
 
 
 @pytest.mark.acceptance(
-    spec="009-channels", scenario="register and list channels from the command line"
+    spec="channels", scenario="register and list channels from the command line"
 )
 def test_register_and_list_channels(channel_daemon: _Daemon) -> None:
     r = _register_tg()
@@ -225,9 +225,9 @@ def test_register_and_list_channels(channel_daemon: _Daemon) -> None:
 
 
 def test_register_carries_no_scope(channel_daemon: _Daemon) -> None:
-    """A channel declares no activation scope (ADR-045) — registration writes
+    """A channel declares no activation scope (ADR per-agent-resource-scope) — registration writes
     none, and an enabled channel simply runs on this, the only, machine. The
-    withdrawn `--runs-on` flag is gone with the machine registry (ADR-016)."""
+    withdrawn `--runs-on` flag is gone with the machine registry (ADR vault-export-import)."""
     r = _register_tg()
     assert r.exit_code == 0, r.output
     resource = channel_daemon.run(

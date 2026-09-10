@@ -1,4 +1,4 @@
-"""The frozen daemon's sidecar deployment (spec 001 FR-026).
+"""The frozen daemon's sidecar deployment (spec mcp-gateway FR-026).
 
 The desktop shell used to place these binaries in ``~/.coffer/bin``; the daemon
 does it now. The staleness rules are the part worth pinning — each of the three
@@ -72,7 +72,7 @@ def test_missing_sentinel_forces_a_copy(tmp_path: Path) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="001-mcp-gateway",
+    spec="mcp-gateway",
     scenario="a frozen daemon deploys its sibling binaries on start",
 )
 def test_deploy_is_atomic_and_executable(tmp_path: Path) -> None:

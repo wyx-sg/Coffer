@@ -21,7 +21,7 @@ _SEATALK_CONFIG = {
 
 
 @pytest.mark.acceptance(
-    spec="009-channels", scenario="disable stops the adapter and enable restarts it"
+    spec="channels", scenario="disable stops the adapter and enable restarts it"
 )
 async def test_disable_stops_the_adapter_and_enable_restarts_it(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
@@ -51,7 +51,7 @@ async def test_disable_stops_the_adapter_and_enable_restarts_it(env: ChannelEnv)
 
 
 @pytest.mark.acceptance(
-    spec="009-channels", scenario="deleting a channel cleans up its runtime and peer"
+    spec="channels", scenario="deleting a channel cleans up its runtime and peer"
 )
 async def test_delete_stops_the_adapter_and_removes_the_peer_row(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
@@ -75,7 +75,7 @@ async def test_delete_stops_the_adapter_and_removes_the_peer_row(env: ChannelEnv
 
 
 @pytest.mark.acceptance(
-    spec="009-channels", scenario="the listener runs only while a seatalk channel is enabled"
+    spec="channels", scenario="the listener runs only while a seatalk channel is enabled"
 )
 async def test_listener_tracks_the_enabled_seatalk_channel(env: ChannelEnv) -> None:
     env.keyring.set("channel/st/app", "app-secret-value")

@@ -3,7 +3,7 @@
 //
 // Coffer's file viewers are read-only; editing happens in the user's own tools.
 // The browser can't reach the filesystem, so both actions go through the
-// loopback daemon (spec 004 FR-039, ADR-033), which is always on the user's own
+// loopback daemon (spec agent-registry FR-039, ADR daemon-proxies-os-file-actions), which is always on the user's own
 // machine. There is no copy-path fallback.
 import { fsApi } from "@/lib/api/fs";
 

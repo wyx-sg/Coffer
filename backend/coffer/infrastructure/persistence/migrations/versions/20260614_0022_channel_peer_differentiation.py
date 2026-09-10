@@ -1,4 +1,4 @@
-"""channel_peers: sender identity + sticky preferences (ADR-023)
+"""channel_peers: sender identity + sticky preferences (ADR channel-entrypoint-differentiation)
 
 Revision ID: 0022
 Revises: 0021

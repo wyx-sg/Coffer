@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "codegen": "openapi-typescript ../specs/001-mcp-gateway/contracts/api.openapi.yaml -o src/lib/api/types.ts",
+    "codegen": "openapi-typescript ../specs/mcp-gateway/contracts/api.openapi.yaml -o src/lib/api/types.ts",
     "lint": "eslint .",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest",

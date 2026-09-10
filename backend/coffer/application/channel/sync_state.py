@@ -1,4 +1,4 @@
-"""Channel pairing state as a synced area (spec 010 / ADR-043, slice 4).
+"""Channel pairing state as a synced area (spec vault-export-import, slice 4).
 
 Pairing identity (chat_id, sender_id, display name, preferred agent) is
 platform-level, not machine-level — syncing it means rebinding a channel to

@@ -1,6 +1,6 @@
 // e2e/web/specs/shell_skills.spec.ts
 //
-// The 005-skill-manager spec §User Story 6 — the desktop /skills surface.
+// The skill-manager spec §User Story 6 — the desktop /skills surface.
 //
 // TEST21-014: walk through cold-start → /skills → import a local skill →
 // enable for an agent → disable → remove. State is provisioned via the
@@ -51,7 +51,7 @@ async function bestEffortDelete(url: string, token: string): Promise<void> {
 }
 
 acceptance(
-  "005-skill-manager",
+  "skill-manager",
   "desktop and CLI cover every operation",
   async ({ page }) => {
     const { token, port } = readDaemonToken();

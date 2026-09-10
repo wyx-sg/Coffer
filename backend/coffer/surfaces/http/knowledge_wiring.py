@@ -135,7 +135,7 @@ def wire_knowledge_kind(
     )
     app.state.kinds[KIND_KNOWLEDGE] = make_knowledge_kind(knowledge_service)
     set_knowledge_service(knowledge_service)
-    # Scope labels sync as a state area (spec 010 x FR-017c): a labelled project
+    # Scope labels sync as a state area (spec vault-export-import x FR-017c): a labelled project
     # scope reads by its name on every machine, not "unnamed store".
     providers = getattr(app.state, "sync_state_providers", None)
     if providers is None:

@@ -37,8 +37,8 @@ class KnowledgeConfig(BaseModel):
     """Per-scope knowledge settings. All fields are mutable.
 
     Changing a retrieval or chunking field re-indexes the scope: the files on
-    disk are the source of truth (ADR-012), so the index is always rebuildable
-    and never the thing that must be migrated.
+    disk are the source of truth (ADR files-as-truth-sqlite-retrieval), so the
+    index is always rebuildable and never the thing that must be migrated.
     """
 
     retrieval_modes: list[RetrievalMode] = Field(

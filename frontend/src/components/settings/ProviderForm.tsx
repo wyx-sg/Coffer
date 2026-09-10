@@ -1,4 +1,4 @@
-// components/settings/ProviderForm.tsx — add / edit an LLM connection (spec 011).
+// components/settings/ProviderForm.tsx — add / edit an LLM connection (spec provider-switching).
 // A connection = endpoint + key + protocol. The model lives apart from the
 // connection (amendment E1/E3) — chosen at the point of use — so the dialog has
 // no model field. On create the user picks a PROVIDER preset (OpenAI, Anthropic,

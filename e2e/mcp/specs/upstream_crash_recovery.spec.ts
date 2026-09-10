@@ -17,7 +17,7 @@ import {
   uniqueName,
 } from "./_helpers";
 
-acceptance("001-mcp-gateway", "upstream crash recovery", async () => {
+acceptance("mcp-gateway", "upstream crash recovery", async () => {
   const name = uniqueName("e2e-crash");
   // crash-after-calls=2: the upstream handles call #1 successfully, then
   // crashes on call #2.  After eviction+respawn the fresh upstream handles

@@ -36,7 +36,7 @@ async def prepare_upload(
     markdown, meta = await converters.convert(raw_bytes, fmt)
     body = markdown.strip()
     return Prepared(
-        # Stable ULID, decoupled from content (spec 007 FR-062); a re-upload reuses the
+        # Stable ULID, decoupled from content (spec knowledge FR-062); a re-upload reuses the
         # matched document's existing id.
         doc_id=new_ulid(),
         source_sha256=source_sha,

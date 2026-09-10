@@ -1,4 +1,4 @@
-"""End-to-end HTTP coverage for /api/v1/agents/* (spec 004-agent-registry)."""
+"""End-to-end HTTP coverage for /api/v1/agents/* (spec agent-registry)."""
 
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ def test_agent_register_post(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="register an agent without an explicit name"
+    spec="agent-registry", scenario="register an agent without an explicit name"
 )
 def test_agent_register_without_name_defaults_to_type(tmp_path, monkeypatch):
     """POST /agents with no name derives a stable default from the type
@@ -228,9 +228,7 @@ def test_patch_description_only_preserves_config_dir(tmp_path, monkeypatch):
         assert r.json()["config_dir"] == str(config_dir)
 
 
-@pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="discover installed agents as candidates"
-)
+@pytest.mark.acceptance(spec="agent-registry", scenario="discover installed agents as candidates")
 def test_candidates_endpoint_reports_marker_present_agents(tmp_path, monkeypatch):
     """GET /candidates reports installed agents as candidates and registers nothing."""
     app = _app(tmp_path, monkeypatch, 59620)
@@ -328,7 +326,7 @@ def test_error_422_skill_dir_not_writable(tmp_path, monkeypatch):
         assert r.json()["error"]["code"] == "SKILL_DIR_NOT_WRITABLE"
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="reject unsupported agent type")
+@pytest.mark.acceptance(spec="agent-registry", scenario="reject unsupported agent type")
 def test_error_422_unprocessable_body(tmp_path, monkeypatch):
     """Types outside the supported set — e.g. the unsupported Claude Desktop chat
     app and any garbage value — are rejected with 422."""

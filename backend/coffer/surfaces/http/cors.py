@@ -1,6 +1,6 @@
 """CORS allowlist for browser-origin requests.
 
-The daemon serves the web UI at its own origin now (spec 001 FR-024), so the
+The daemon serves the web UI at its own origin now (spec mcp-gateway FR-024), so the
 production path is **same-origin** and needs no CORS at all — the browser does
 not preflight a request to the page's own origin. That makes the empty
 allowlist the correct default, and a narrower one than the desktop shell's

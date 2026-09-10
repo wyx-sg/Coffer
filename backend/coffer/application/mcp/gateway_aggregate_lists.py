@@ -17,7 +17,7 @@ Two design decisions matter:
    and tripped client read timeouts (concurrent_clients spec).
 
 On per-server timeout / unavailable: log the server and error, then leave
-that server out of the batch and NAME it in the outcome (ADR-046). The
+that server out of the batch and NAME it in the outcome (ADR budget-driven-tool-tiering). The
 supervisor's retry/cooldown continues in the background; the session uses
 the named failures to retry and tell the client to re-list, because a
 client that cached the truncated list will otherwise never see those tools
@@ -56,7 +56,7 @@ EnsureSubscribed = Callable[[str], Awaitable[None]]
 class AggregateOutcome:
     """One aggregate list plus the servers that could not be reached.
 
-    ADR-046: a caller that knows WHICH servers failed can retry them and tell
+    Tool tiering: a caller that knows WHICH servers failed can retry them and tell
     the client to re-list. Returning only the survivors made a slow cold spawn
     cost the client that server for the whole session, because the correcting
     list_changed would have to come from the server that never connected.
@@ -157,7 +157,7 @@ async def list_tools_across(
     servers: list[str],
 ) -> AggregateOutcome:
     """Returns the outcome, not a bare list: the tools path is the one that
-    needs to know which servers failed so it can retry them (ADR-046)."""
+    needs to know which servers failed so it can retry them (ADR budget-driven-tool-tiering)."""
     return await _aggregate(
         discovery.list_tools,
         ensure_subscribed,

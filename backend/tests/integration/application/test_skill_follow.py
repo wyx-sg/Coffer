@@ -135,7 +135,7 @@ async def _enabled_bound_names(skill_svc: SkillService, agent: Resource) -> set[
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
-    spec="005-skill-manager", scenario="enable follow-all and deliver every master skill"
+    spec="skill-manager", scenario="enable follow-all and deliver every master skill"
 )
 async def test_enable_follow_delivers_every_master_skill(tmp_path):
     skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
@@ -155,7 +155,7 @@ async def test_enable_follow_delivers_every_master_skill(tmp_path):
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
-    spec="005-skill-manager", scenario="auto-deliver new skills to following agents"
+    spec="skill-manager", scenario="auto-deliver new skills to following agents"
 )
 async def test_new_skill_auto_delivered_to_following_agent(tmp_path):
     skill_svc, agent_svc, _, engine = await _setup(tmp_path)
@@ -169,7 +169,7 @@ async def test_new_skill_auto_delivered_to_following_agent(tmp_path):
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
-    spec="005-skill-manager", scenario="auto-remove deleted skills from following agents"
+    spec="skill-manager", scenario="auto-remove deleted skills from following agents"
 )
 async def test_master_removal_cleans_up_following_agent(tmp_path):
     skill_svc, agent_svc, _, engine = await _setup(tmp_path)
@@ -185,7 +185,7 @@ async def test_master_removal_cleans_up_following_agent(tmp_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="005-skill-manager", scenario="exclude a skill from a following agent")
+@pytest.mark.acceptance(spec="skill-manager", scenario="exclude a skill from a following agent")
 async def test_exclude_removes_link_and_never_redelivers(tmp_path):
     skill_svc, agent_svc, _, engine = await _setup(tmp_path)
     agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
@@ -211,7 +211,7 @@ async def test_exclude_removes_link_and_never_redelivers(tmp_path):
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
-    spec="005-skill-manager", scenario="disable follow-all preserving current bindings"
+    spec="skill-manager", scenario="disable follow-all preserving current bindings"
 )
 async def test_disable_follow_preserves_bindings(tmp_path):
     skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
@@ -359,7 +359,7 @@ async def _setup_with_scope_reconcile(tmp_path: pathlib.Path):
     return skill_svc, agent_svc, audit, engine
 
 
-# ----- ADR-045 scope intersection + reclaim -----
+# ----- scope intersection + reclaim -----
 
 
 @pytest.mark.asyncio
@@ -408,7 +408,7 @@ async def test_skill_scoped_to_this_agent_is_delivered(tmp_path):
 
 
 @pytest.mark.acceptance(
-    spec="005-skill-manager",
+    spec="skill-manager",
     scenario=(
         "delivery is the intersection of scope and follow policy; an out-of-scope copy is reclaimed"
     ),
@@ -497,7 +497,7 @@ async def test_config_dir_change_does_not_resurrect_out_of_scope_link(tmp_path):
     await engine.dispose()
 
 
-# ----- ADR-045 scope-edit reconciliation hook -----
+# ----- scope-edit reconciliation hook -----
 
 
 @pytest.mark.asyncio
@@ -542,7 +542,7 @@ async def test_update_scope_on_skill_immediately_delivers_newly_in_scope(tmp_pat
 
 @pytest.mark.asyncio
 async def test_update_scope_on_agent_kind_is_rejected(tmp_path):
-    """The `agent` kind declares no scope (ADR-045) — scope names the agents a
+    """The `agent` kind declares no scope (ADR per-agent-resource-scope) — scope names the agents a
     resource is active for, so an agent scoping itself is meaningless."""
     skill_svc, agent_svc, _audit, engine = await _setup_with_scope_reconcile(tmp_path)
     await _register_agent(agent_svc, tmp_path, name="a1")

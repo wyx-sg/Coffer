@@ -3,8 +3,8 @@
 One kind, one set of hooks — the union of what the two former faces had:
 
 - ``on_update_config`` re-indexes when a retrieval or chunking field changes.
-  The files are truth (ADR-012), so the index is always rebuildable and never
-  the thing that must be migrated.
+  The files are truth (ADR files-as-truth-sqlite-retrieval), so the index is
+  always rebuildable and never the thing that must be migrated.
 - ``on_delete`` is async so ``ResourceService`` awaits the on-disk teardown
   before the Resource row is gone.
 

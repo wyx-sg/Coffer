@@ -29,8 +29,8 @@ class AdapterCallbacks:
     """What an adapter calls when the platform delivers something."""
 
     on_message: Callable[[InboundMessage], Awaitable[None]]
-    # A selection-card button tap (ADR-014). ``None`` for transports/tests that
-    # never emit one; adapters skip the callback when unset.
+    # A selection-card button tap (ADR channel-adapter-framework). ``None`` for
+    # transports/tests that never emit one; adapters skip the callback when unset.
     on_callback: Callable[[InboundCallback], Awaitable[None]] | None = None
 
 
@@ -274,7 +274,7 @@ class AgentCatalogPort(Protocol):
 class ModelSuggestionPort(Protocol):
     """Best-effort model quick-picks for a managed agent's ``/model`` selection
     card: the active provider profile's ``model`` (and ``fast_model``) for the
-    agent's wire (ADR-032), mirroring the web model picker. Empty when there is
+    agent's wire (ADR provider-switching), mirroring the web model picker. Empty when there is
     no active profile — the card then offers only the free-text path."""
 
     async def suggest(self, agent_key: str) -> list[str]: ...

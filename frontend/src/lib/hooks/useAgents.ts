@@ -64,7 +64,7 @@ export function useAgentCandidates(enabled: boolean) {
   });
 }
 
-// --- config files (spec 004 v2) ---
+// --- config files (spec agent-registry v2) ---
 
 const configFilesKey = (name: string) => ["agents", name, "config-files"] as const;
 const configFileKey = (name: string, key: string) => ["agents", name, "config-files", key] as const;
@@ -85,7 +85,7 @@ export function useAgentConfigFile(name: string, key: string | null) {
   });
 }
 
-// --- Coffer MCP install (spec 004 v2) ---
+// --- Coffer MCP install (spec agent-registry v2) ---
 
 const mcpKey = (name: string) => ["agents", name, "mcp-install"] as const;
 
@@ -110,7 +110,7 @@ export function useAgentMcpInstall(name: string) {
 
 // --- Session-start hook install (rules injection, slice 6) ---
 
-// --- MCP entries (specs 004/005 workspace amendment) ---
+// --- MCP entries (specs agent-registry/skill-manager workspace amendment) ---
 
 export function useAgentMcpEntries(name: string) {
   return useQuery({
@@ -132,7 +132,7 @@ export function useAdoptMcpEntry(agentName: string) {
   });
 }
 
-// --- Config-file children (specs 004/005 workspace amendment) — read-only ---
+// --- Config-file children (specs agent-registry/skill-manager workspace amendment) — read-only ---
 
 export function useAgentConfigChild(name: string, key: string, relpath: string) {
   return useQuery({
@@ -142,7 +142,7 @@ export function useAgentConfigChild(name: string, key: string, relpath: string) 
   });
 }
 
-// --- Unmanaged skills (specs 004/005 workspace amendment) ---
+// --- Unmanaged skills (specs agent-registry/skill-manager workspace amendment) ---
 
 export function useUnmanagedSkills(name: string) {
   return useQuery({

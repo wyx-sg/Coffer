@@ -2,7 +2,7 @@
 
 > 中文版：本文件 · English: [agent-config-management.md](./agent-config-management.md)
 >
-> 面向 Coffer agent 注册表 + 配置文件管理（spec 004）的内部竞品调研报告。
+> 面向 Coffer agent 注册表 + 配置文件管理（spec agent-registry）的内部竞品调研报告。
 > **日期：** 2026-06-16。**方法：** deep-research harness。**来源说明：** 1 条 claim
 > （Ruler 的 MCP 传播）通过完整三票对抗式核验；其余为项目 README 一手来源，但限流导致
 > 复核未跑完——视为一手来源，对外引用前请做轻量复核。
@@ -120,12 +120,12 @@ ai-agent-config），在纯规则工具（airul、vibe-rules）和 AGENTS.md 标
 - **Coffer 的隐藏 agent 集合。** manifest 中 4 个被禁用的 agent 恰好是
   Cursor / OpenCode / OpenClaw / Hermes（`enabled=False`），启用的恰好是 2 个
   （Claude Code、Codex）。`repo:backend/coffer/domain/agent/descriptor.py`
-- **Coffer 双向采集配置（即"采集那一半"）。** spec 004 把工作区修订表述为
+- **Coffer 双向采集配置（即"采集那一半"）。** spec agent-registry 把工作区修订表述为
   采集→中枢→投递；US10 / FR-028 将"把直连 MCP server 采纳进 Coffer"定义为
   "Coffer 中枢-辐射模型的采集那一半"。`adopt()` 会注册一个 `mcp_server` 资源、
   通过 `self._rs.get(...)` 验证可回读，然后移除直连条目——而漂移感知由"派生而从不
   存储"的 Agent MCP Entry 视图（`cache_present=false` 示例）支撑。技能侧也存在一条
-  平行的 `adopt_unmanaged` 路径。`repo:specs/004-agent-registry/spec.md`、
+  平行的 `adopt_unmanaged` 路径。`repo:specs/agent-registry/spec.md`、
   `repo:backend/coffer/application/agent/mcp_entry_service.py`
 - **ai-rulez 自带内置 MCP server。** README 称："ai-rulez 包含一个带 35+ 工具的内置
   MCP server，让 AI 助手自行管理其治理"，通过 `[[mcp_servers]]` 名为 `ai-rulez`
@@ -141,12 +141,12 @@ ai-agent-config），在纯规则工具（airul、vibe-rules）和 AGENTS.md 标
 - **头号结论被推翻 —— Coffer 现已分发指令（§3 缺口 #1、§4 结论 #1、§2"规则/指令分发"行）。**
   本报告最重要的那条结论——"Coffer 不把规则/指令从一个源分发到多个 agent，而这正是整个
   品类的定义性功能"——**自 PR #112 起已不再成立**（"master-instructions 中枢 + per-agent
-  投递"，spec 004 US13 / FR-041–FR-046）。Coffer 现在在中枢里保存一份规范的**母指令**文档
+  投递"，spec agent-registry US13 / FR-041–FR-046）。Coffer 现在在中枢里保存一份规范的**母指令**文档
   （`~/.coffer/instructions/AGENTS.md`），并将其**投递**进每个 agent 的原生指令文件
   （`CLAUDE.md` / `AGENTS.md` / `SOUL.md`），形式为一个由专属标记包围的 Coffer 托管块
   （`<!-- coffer:instructions:start (managed, do not edit) -->` … `<!-- coffer:instructions:end -->`）。
   投递是**合并、而非覆盖**——只就地（幂等地）upsert 该托管块，标记之外的每个字节都原样保留，
-  且该块的标记刻意与 spec-007 的记忆标记区分，使两者在同一文件中共存。Coffer 按 agent 在读时
+  且该块的标记刻意与知识层 spec 的记忆标记区分，使两者在同一文件中共存。Coffer 按 agent 在读时
   派生 `delivered` / `in_sync` 状态（具漂移感知），并且——以 Coffer 标志性的双向操作——可把某
   agent 已有的指令**采纳（adopt）**回母指令。这使 §2"规则/指令分发"行从"❌ 不是中枢资产"翻转为
   一种具合并语义的中枢投递资产，并补上了报告其余部分视为 Coffer 核心差异化缺口的 §3 缺口 #1 /
@@ -155,7 +155,7 @@ ai-agent-config），在纯规则工具（airul、vibe-rules）和 AGENTS.md 标
   `repo:backend/coffer/domain/agent/instructions.py`、
   `repo:backend/coffer/domain/agent/managed_block.py`、
   `repo:backend/coffer/surfaces/http/agent_instructions_routes.py`、
-  `repo:specs/004-agent-registry/spec.md`（US13、FR-041–FR-046）
+  `repo:specs/agent-registry/spec.md`（US13、FR-041–FR-046）
 - **Coffer 的 agent 数（§4 结论 #4 / 概览表格）。** 旧："4 个接好、2 个启用"
   → 修正为：**共接入 6 个，2 个启用，4 个隐藏。** manifest 定义了 6 条
   `AgentDescriptor` 记录，而非 4 条；点名的隐藏集合与"2 个启用"原本就正确。

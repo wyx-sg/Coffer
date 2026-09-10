@@ -1,4 +1,4 @@
-"""Unit tests for ConversationBus — per-conversation event fan-out + replay (ADR-031)."""
+"""Unit tests for ConversationBus — per-conversation event fan-out + replay."""
 
 from __future__ import annotations
 

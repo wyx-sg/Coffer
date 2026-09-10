@@ -1,18 +1,19 @@
-"""channel runs_on config migrates to framework scope (ADR-045 amendment)
+"""channel runs_on config migrates to framework scope (per-agent scope amendment)
 
 Revision ID: 0047
 Revises: 0046
 Create Date: 2026-07-10
 
-Spec 009 amendment: a channel's runtime affinity (which single machine's
+Channels amendment: a channel's runtime affinity (which single machine's
 runtime starts its adapter) was carried in `config_json.runs_on`
-(ADR-043); it is now superseded by the framework-level machine x agent
-`scope` column 0046 added (ADR-045). This migration backfills every
+(from the machine-identity design, since retired); it is now superseded by the
+framework-level machine x agent `scope` column 0046 added
+(ADR per-agent-resource-scope). This migration backfills every
 existing `kind='channel'` row's `scope_json` from its stored
 `config_json.runs_on`:
 
   - runs_on: "<id>"  -> scope_json = '{"<id>": "*"}'  (bound to that machine)
-  - runs_on: null    -> scope_json = '{}'             (ADR-043's "unbound
+  - runs_on: null    -> scope_json = '{}'             (the old "unbound
     runs nowhere" — an EMPTY scope object, deliberately NOT NULL: at the
     framework level NULL now means "unscoped / active everywhere", the
     opposite of a channel's historical off-by-default safety)
@@ -23,9 +24,9 @@ scope endpoint, or a prior partial run of this same migration).
 `config_json.runs_on` itself is left untouched — the field stays in the
 schema, inert (see coffer.domain.channel.config).
 
-ResourceService.register() also gains a channel-kind default (`{}`, ADR-045
-amendment) so a channel registered AFTER this migration starts dormant too,
-matching this backfill rather than reverting to "active everywhere".
+ResourceService.register() also gains a channel-kind default (`{}`, from the
+per-agent scope amendment) so a channel registered AFTER this migration starts
+dormant too, matching this backfill rather than reverting to "active everywhere".
 
 Migration scripts never import application code, so field names stay
 inlined (mirrors 0037's `_migrate` pattern for `resources` row rewrites).

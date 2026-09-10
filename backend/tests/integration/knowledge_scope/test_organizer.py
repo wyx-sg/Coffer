@@ -105,7 +105,7 @@ async def _remember(mem, *, body: str, title: str) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory",
+    spec="knowledge",
     scenario="the organizer drains the inbox into a topic document",
 )
 async def test_organizer_drains_inbox_into_topic_doc(mem) -> None:
@@ -177,7 +177,7 @@ async def test_organizer_drains_inbox_into_topic_doc(mem) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory",
+    spec="knowledge",
     scenario="organizing merges a note into an existing topic without clobbering it",
 )
 async def test_organizer_merges_without_clobbering_existing_topic(mem) -> None:
@@ -223,7 +223,7 @@ async def test_organizer_merges_without_clobbering_existing_topic(mem) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory",
+    spec="knowledge",
     scenario="organize is a no-op when no internal model is configured",
 )
 async def test_organize_no_model_is_clean_noop(mem) -> None:
@@ -348,7 +348,7 @@ async def test_second_organize_on_empty_inbox_is_noop(mem) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory",
+    spec="knowledge",
     scenario="a topic document recalls at passage granularity",
 )
 async def test_topic_doc_recalls_at_passage_granularity(mem) -> None:
@@ -407,7 +407,7 @@ async def test_index_and_changelog_never_surface_in_recall(mem) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory",
+    spec="knowledge",
     scenario="the organizer routes a rule-shaped note into the rules lane",
 )
 async def test_organizer_routes_rule_into_rules_lane(mem) -> None:

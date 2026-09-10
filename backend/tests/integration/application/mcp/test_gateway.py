@@ -94,7 +94,7 @@ async def _setup(
                 name="mcp_server",
                 display_name="MCP Server",
                 config_schema=MCPServerConfig,
-                # ADR-045: the gateway filters a scoped server's tools by the
+                # Per-agent scope: the gateway filters a scoped server's tools by the
                 # session's self-reported agent identity.
                 supports_scope=True,
             )
@@ -136,7 +136,7 @@ async def test_tools_list_excludes_dormant_server_and_unscoped_is_unaffected(
 ) -> None:
     """A dormant server (``scope == []`` — active for no agent) vanishes from
     tools/list while an unscoped server on the same session is unaffected
-    (ADR-045). The row itself stays present and visible in the registry: out
+    (ADR per-agent-resource-scope). The row itself stays present and visible in the registry: out
     of scope means not activated, never deleted and never hidden from the
     resource API.
     """
@@ -190,7 +190,7 @@ async def test_initialize_returns_capabilities(
 async def test_initialize_captures_agent_identity_from_meta(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Spec 001 FR-021 (amended): the shim self-reports its bound agent's name
+    """MCP Gateway FR-021 (amended): the shim self-reports its bound agent's name
     at the handshake via ``params._meta["coffer/agent"]``, alongside the
     existing ``coffer/cwd`` key; the gateway captures it onto the session."""
     _with_in_memory(monkeypatch)
@@ -248,14 +248,14 @@ async def _tools_list_names_for_agent(
 
 
 @pytest.mark.acceptance(
-    spec="001-mcp-gateway",
+    spec="mcp-gateway",
     scenario="an out-of-scope server is invisible to a session",
 )
 @pytest.mark.asyncio
 async def test_tools_list_agent_scoped_server_visible_only_to_matching_agent(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """ADR-045 (FR-020/021): a server scoped to ``["claude-code"]`` is visible
+    """Per-agent scope (FR-020/021): a server scoped to ``["claude-code"]`` is visible
     in tools/list to a session that initialized with agent ``claude-code``;
     invisible to a session that initialized with agent ``codex``; and
     invisible to an unidentified session (no ``coffer/agent`` key in the
@@ -301,7 +301,7 @@ async def test_tools_list_unscoped_server_visible_to_all_sessions(
 
 
 @pytest.mark.acceptance(
-    spec="001-mcp-gateway",
+    spec="mcp-gateway",
     scenario="an out-of-scope server is invisible to a session",
 )
 @pytest.mark.asyncio
@@ -396,9 +396,7 @@ async def test_tools_call_refused_for_dormant_server(
         await _safe_dispose(engine)
 
 
-@pytest.mark.acceptance(
-    spec="001-mcp-gateway", scenario="aggregate tools across servers in one client"
-)
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="aggregate tools across servers in one client")
 @pytest.mark.asyncio
 async def test_tools_list_aggregates_two_servers(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -421,7 +419,7 @@ async def test_tools_list_aggregates_two_servers(
 
 
 @pytest.mark.acceptance(
-    spec="001-mcp-gateway", scenario="tool-name collision across servers is prevented"
+    spec="mcp-gateway", scenario="tool-name collision across servers is prevented"
 )
 @pytest.mark.asyncio
 async def test_same_upstream_tool_name_namespaced_per_server(
@@ -450,9 +448,7 @@ async def test_same_upstream_tool_name_namespaced_per_server(
         await _safe_dispose(engine)
 
 
-@pytest.mark.acceptance(
-    spec="001-mcp-gateway", scenario="route a tool call to the correct upstream"
-)
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="route a tool call to the correct upstream")
 @pytest.mark.asyncio
 async def test_tools_call_routes_and_records_invocation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -561,7 +557,7 @@ async def test_resources_list_aggregates(tmp_path: Path, monkeypatch: pytest.Mon
         await _safe_dispose(engine)
 
 
-@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="resources forward through the gateway")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="resources forward through the gateway")
 @pytest.mark.asyncio
 async def test_resources_read_routes_and_records(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -589,7 +585,7 @@ async def test_resources_read_routes_and_records(
         await _safe_dispose(engine)
 
 
-@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="prompts forward through the gateway")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="prompts forward through the gateway")
 @pytest.mark.asyncio
 async def test_prompts_list_and_get(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _with_in_memory(monkeypatch)
@@ -727,7 +723,7 @@ async def test_aggregate_list_drops_dead_server_keeps_live(
         await _safe_dispose(engine)
 
 
-@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="concurrent clients")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="concurrent clients")
 @pytest.mark.asyncio
 async def test_concurrent_sessions_are_isolated(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -745,7 +741,8 @@ async def test_concurrent_sessions_are_isolated(
         "gh": _stdio_config(tools=["create_issue"]),
     }
 
-    # Create two independent sessions (each with its own supervisor, per ADR-005).
+    # Create two independent sessions (each with its own supervisor, per the
+    # session-subprocess model).
     path_a = tmp_path / "a"
     path_b = tmp_path / "b"
     path_a.mkdir()
@@ -792,7 +789,7 @@ async def test_concurrent_sessions_are_isolated(
         await _safe_dispose(engine_b)
 
 
-@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="upstream crash recovery")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="upstream crash recovery")
 @pytest.mark.asyncio
 async def test_upstream_crash_mid_call_then_respawn(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -867,7 +864,7 @@ async def test_upstream_crash_mid_call_then_respawn(
         await _safe_dispose(engine)
 
 
-@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="upstream tool list changes mid-session")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="upstream tool list changes mid-session")
 @pytest.mark.asyncio
 async def test_upstream_list_change_forwarded_to_client(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1265,7 +1262,7 @@ async def test_handler_records_timeout_invocation_on_upstream_timeout(
         await _safe_dispose(engine)
 
 
-@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="upstream crash recovery")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="upstream crash recovery")
 @pytest.mark.asyncio
 async def test_upstream_crash_mid_resource_read_then_respawn(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1317,7 +1314,7 @@ async def test_upstream_crash_mid_resource_read_then_respawn(
         await _safe_dispose(engine)
 
 
-@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="upstream crash recovery")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="upstream crash recovery")
 @pytest.mark.asyncio
 async def test_upstream_crash_mid_prompt_get_then_respawn(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1569,7 +1566,7 @@ async def test_transport_drop_still_evicts_for_self_heal(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="upstream tool list changes mid-session")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="upstream tool list changes mid-session")
 @pytest.mark.asyncio
 async def test_notification_resubscribed_after_crash_evict(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

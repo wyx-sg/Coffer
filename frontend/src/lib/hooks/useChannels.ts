@@ -5,7 +5,7 @@
 // — the kind-agnostic useEnableResource / useDisableResource / useDeleteResource
 // mutations (useResourceMutations.ts) invalidate it for free. The
 // channel-specific operations (status, pairing) live under a "channels" key.
-// Channels declare no scope (ADR-045) — a non-null value is rejected at
+// Channels declare no scope (ADR per-agent-resource-scope) — a non-null value is rejected at
 // validation — so there is no scope binding here.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";

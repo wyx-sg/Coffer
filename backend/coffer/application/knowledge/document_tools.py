@@ -5,7 +5,7 @@ half plus the handoff pair live in ``builtin_tools``. Split across two modules
 only for the project's file-size ceiling — one kind, one tool family.
 
 Every write funnels through the same service paths as the REST surface.
-Documents are co-managed (spec 007 FR-062): an agent may add and edit them, not
+Documents are co-managed (spec knowledge FR-062): an agent may add and edit them, not
 only read them.
 """
 
@@ -155,7 +155,7 @@ def register_document_builtin_tools(
         if isinstance(filename, str) and filename:
             # A filename means "this is a document". Re-using a filename already
             # in the scope updates that document in place; identical bytes are a
-            # no-op (spec 007 FR-062).
+            # no-op (spec knowledge FR-062).
             doc = await knowledge_service.ingest_bytes(
                 scope_name=scope_name,
                 filename=filename,

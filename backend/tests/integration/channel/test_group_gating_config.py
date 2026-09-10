@@ -15,7 +15,7 @@ from .conftest import ChannelEnv, inbound, wait_until
 
 
 @pytest.mark.acceptance(
-    spec="009-channels", scenario="require_mention on drops an un-addressed group message"
+    spec="channels", scenario="require_mention on drops an un-addressed group message"
 )
 async def test_require_mention_on_drops_unaddressed_group_message(env: ChannelEnv) -> None:
     """With ``require_mention`` on (the default), an un-addressed group message —
@@ -41,7 +41,7 @@ async def test_require_mention_on_drops_unaddressed_group_message(env: ChannelEn
 
 
 @pytest.mark.acceptance(
-    spec="009-channels", scenario="require_mention off admits an un-addressed owner group message"
+    spec="channels", scenario="require_mention off admits an un-addressed owner group message"
 )
 async def test_require_mention_off_admits_unaddressed_owner_message(env: ChannelEnv) -> None:
     """With ``require_mention`` off, an un-addressed group message from the owner
@@ -67,7 +67,7 @@ async def test_require_mention_off_admits_unaddressed_owner_message(env: Channel
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="ignore_other_mentions drops a message that also @mentions a human",
 )
 async def test_ignore_other_mentions_drops_message_mentioning_a_human(env: ChannelEnv) -> None:
@@ -97,7 +97,7 @@ async def test_ignore_other_mentions_drops_message_mentioning_a_human(env: Chann
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="ignore_other_mentions off still answers when @mentioned alongside a human",
 )
 async def test_ignore_other_mentions_off_still_answers_when_mentioned_with_a_human(

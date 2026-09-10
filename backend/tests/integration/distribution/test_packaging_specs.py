@@ -220,7 +220,7 @@ def test_daemon_spec_ships_migrations_directory() -> None:
     out, brand-new installs fail with `KeyError: 'no such revision'`."""
     tree = _parse_spec(_REPO / "backend" / "coffer-daemon.spec")
 
-    # The build runs pyinstaller from backend/ (ADR-008 build_binaries.sh), so
+    # The build runs pyinstaller from backend/ (build_binaries.sh), so
     # the data-file source path is relative to backend/ — "coffer/…", not
     # "backend/coffer/…". Both src and dst are the package-relative path.
     migrations_src = "coffer/infrastructure/persistence/migrations"
@@ -262,8 +262,8 @@ def test_daemon_spec_collects_sqlite_vec_data_files() -> None:
 
 
 def test_daemon_spec_includes_kb_memory_chat_hidden_imports() -> None:
-    """The hidden-imports list predates specs 006 (knowledge base), 007
-    (memory), and 008 (agent chat), whose runtime deps are imported LAZILY
+    """The hidden-imports list predates the knowledge base, memory and
+    agent-chat features, whose runtime deps are imported LAZILY
     (inside functions) so PyInstaller's static analysis misses them. Declare
     them explicitly so a frozen daemon can convert documents, embed, run the
     vector index, and drive the built-in chat agent.
@@ -286,7 +286,7 @@ def test_daemon_spec_includes_kb_memory_chat_hidden_imports() -> None:
     for pkg in ("sqlite_vec", "markitdown", "openai", "langgraph", "langchain"):
         assert pkg in submodules, (
             f"daemon spec must collect_submodules({pkg!r}) — it is imported "
-            "lazily by specs 006/007/008 code and PyInstaller misses it statically"
+            "lazily by knowledge/chat code and PyInstaller misses it statically"
         )
     for pkg in ("pdfminer", "pdfplumber", "pptx", "mammoth", "openpyxl", "xlrd"):
         assert pkg in submodules, (
@@ -311,7 +311,7 @@ def test_shim_spec_includes_anyio_backend_hidden_import() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="001-mcp-gateway",
+    spec="mcp-gateway",
     scenario="release tag produces the CLI archive and SHA256SUMS",
 )
 def test_release_workflow_produces_platform_artifact_matrix() -> None:
@@ -355,8 +355,8 @@ def test_release_workflow_packages_the_single_cli_archive() -> None:
 
     Every binary the daemon resolves at runtime must be inside it. The daemon
     deploys `coffer-mcp-shim` and `coffer-callback` out of its
-    own directory (spec 001 FR-026) and finds `coffer-daemon` as a sibling
-    (ADR-006), so an archive missing any of them ships a build whose helper
+    own directory (spec mcp-gateway FR-026) and finds `coffer-daemon` as a sibling
+    (ADR daemon-detect-or-spawn), so an archive missing any of them ships a build whose helper
     processes cannot start.
     """
     text = _release_yml_text()
@@ -478,7 +478,7 @@ def test_release_workflow_smoke_test_runs_on_all_legs() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="001-mcp-gateway",
+    spec="mcp-gateway",
     scenario="release tag produces the CLI archive and SHA256SUMS",
 )
 def test_smoke_test_bundle_script_present_and_invokes_shim() -> None:

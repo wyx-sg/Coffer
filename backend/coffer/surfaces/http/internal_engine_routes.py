@@ -3,7 +3,7 @@
 
 Coffer's internal LLM engine (organizer / reorg / merge)
 takes its endpoint + key from the ``internal_default`` connection but its MODEL
-from this singleton (spec 011 amendment 2026-06-22b). The connection no longer
+from this singleton (spec provider-switching amendment 2026-06-22b). The connection no longer
 owns the internal-engine model."""
 
 from __future__ import annotations

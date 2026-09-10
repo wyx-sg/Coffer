@@ -1,4 +1,4 @@
-"""Unit tests for the MCP gateway's session-cwd propagation (spec 007 FR-004).
+"""Unit tests for the MCP gateway's session-cwd propagation (spec knowledge FR-004).
 
 The shim reports its launch cwd at the ``initialize`` handshake
 (``params._meta["coffer/cwd"]``); the gateway captures it and threads it into
@@ -43,7 +43,7 @@ async def test_initialize_without_meta_leaves_cwd_none():
 
 @pytest.mark.asyncio
 async def test_initialize_captures_agent_from_meta():
-    """Spec 001 FR-021 (amended): the shim's self-reported agent identity rides
+    """MCP Gateway FR-021 (amended): the shim's self-reported agent identity rides
     the same ``_meta`` extension bag as the launch cwd."""
     session = _session_with(BuiltinToolRegistry())
     await session.handle_initialize(

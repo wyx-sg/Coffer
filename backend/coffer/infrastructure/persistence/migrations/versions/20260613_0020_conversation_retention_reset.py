@@ -4,7 +4,7 @@ Revision ID: 0020
 Revises: 0019
 Create Date: 2026-06-13
 
-Spec 008's conversation retention became a two-stage lifecycle: auto-archive
+Agent chat's conversation retention became a two-stage lifecycle: auto-archive
 idle threads (``conversations_archive``, matched by ``updated_at``) then delete
 archived threads (``conversations``, matched by ``archived_at``). With that, the
 ``conversations`` retention row's meaning flipped from "delete by updated_at" to

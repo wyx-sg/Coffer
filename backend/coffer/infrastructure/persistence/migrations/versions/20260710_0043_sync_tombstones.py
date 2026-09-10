@@ -1,4 +1,4 @@
-"""sync tombstone ledger + quarantined refs (spec 010 amendment, ADR-043)
+"""sync tombstone ledger + quarantined refs (spec vault-export-import amendment, continuous sync)
 
 Revision ID: 0043
 Revises: 0042

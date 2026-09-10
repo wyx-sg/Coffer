@@ -235,7 +235,7 @@ async def test_since_filter(inv_client: tuple) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="001-mcp-gateway", scenario="invocation log records calls without arguments"
+    spec="mcp-gateway", scenario="invocation log records calls without arguments"
 )
 @pytest.mark.asyncio
 async def test_invocation_response_shape(inv_client: tuple) -> None:

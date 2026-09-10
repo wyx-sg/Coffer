@@ -1,4 +1,4 @@
-"""drop memory_projection_bindings (native projection removed, supersedes ADR-013)
+"""drop memory_projection_bindings (native projection removed, amends agent-native-shared-memory)
 
 Revision ID: 0024
 Revises: 0023

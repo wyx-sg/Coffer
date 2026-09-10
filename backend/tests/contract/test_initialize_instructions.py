@@ -1,4 +1,5 @@
-"""The ``initialize`` handshake carries Coffer's MCP ``instructions`` (ADR-046).
+"""The ``initialize`` handshake carries Coffer's MCP ``instructions``
+(ADR budget-driven-tool-tiering).
 
 This is the only channel a server has into the client's system prompt. Without
 it no agent is ever told what Coffer is or that ``coffer__search_tools`` reaches
@@ -19,7 +20,7 @@ from coffer.application.mcp.gateway_instructions import (
 
 
 def test_instructions_fit_the_system_prompt_budget():
-    # It lands in every session's system prompt; ADR-046 caps it so the context
+    # It lands in every session's system prompt; tool tiering caps it so the context
     # it spends stays far below what tiering saves.
     assert len(build_instructions(hidden_count=0)) <= MAX_INSTRUCTIONS_CHARS
     assert len(build_instructions(hidden_count=999_999)) <= MAX_INSTRUCTIONS_CHARS

@@ -28,7 +28,7 @@ Every vault asset — registered server configs, credential references, audit lo
 
 Replicating user state to a **vendor-controlled** cloud as a system of record requires a formal constitutional amendment — an explicit, recorded decision, not a silent configuration change.
 
-**Export and import need no exception (constitution v0.4.0).** Moving a vault to another of your machines is a plain **export to a local directory** and an **import of one back** (spec 010). Because that is ordinary local file output under the user's control, it creates no second system of record and nothing reaches a vendor-controlled service — so it needs no exception to this principle. Constitution v0.4.0 therefore **removes** the v0.3.0 user-controlled-sync-medium exception along with the continuous git-based sync it was written for. Secrets travel as Fernet **ciphertext only**, and only when explicitly requested; the master key never enters an export and is bootstrapped onto each machine out-of-band. See [ADR-016](/reference/adr/ADR-016-vault-export-import).
+**Export and import need no exception (constitution v0.4.0).** Moving a vault to another of your machines is a plain **export to a local directory** and an **import of one back** (spec vault-export-import). Because that is ordinary local file output under the user's control, it creates no second system of record and nothing reaches a vendor-controlled service — so it needs no exception to this principle. Constitution v0.4.0 therefore **removes** the v0.3.0 user-controlled-sync-medium exception along with the continuous git-based sync it was written for. Secrets travel as Fernet **ciphertext only**, and only when explicitly requested; the master key never enters an export and is bootstrapped onto each machine out-of-band. See [Vault Export and Import](/reference/adr/vault-export-import).
 
 ### II. Spec-as-Truth (Spec-Driven Development)
 
@@ -60,11 +60,11 @@ Understanding scope is as important as understanding capabilities.
 
 **Not a cloud service.** There is no hosted Coffer, no SaaS plan, no account required. The daemon is a process on your machine.
 
-**Not a sync service.** Coffer does not keep two machines convergent. It exports the vault to a directory you name and imports one back (spec 010); carrying that directory between machines — `scp`, a USB drive, your own git repo — is yours to do. Coffer ships no remote, no background replication and no hosted sync endpoint; offering one would require a constitutional amendment.
+**Not a sync service.** Coffer does not keep two machines convergent. It exports the vault to a directory you name and imports one back (spec vault-export-import); carrying that directory between machines — `scp`, a USB drive, your own git repo — is yours to do. Coffer ships no remote, no background replication and no hosted sync endpoint; offering one would require a constitutional amendment.
 
 **Not a model provider.** Coffer is not itself an LLM and does not host one. The MCP gateway routes protocol messages without reasoning about tool outputs, and the turn platform behind the channels drives your registered coding agents, which do invoke LLMs to converse — but those models are external providers Coffer calls, never models Coffer ships or trains. Coffer orchestrates models and tools; it is not the model.
 
-**Not a firewall or security boundary.** Coffer applies capability-level enable/disable policies (per ADR-004), but it is a developer tool running as the user's own process — it does not sandbox upstream server code or enforce OS-level access control.
+**Not a firewall or security boundary.** Coffer applies capability-level enable/disable policies (per [Capability State Model](/reference/adr/capability-state-model)), but it is a developer tool running as the user's own process — it does not sandbox upstream server code or enforce OS-level access control.
 
 ## Rejected alternatives
 
@@ -74,7 +74,7 @@ These rejections are recorded in the ADRs; the summaries here anchor the princip
 
 **Why not per-client configuration?** Per-client config is the status quo — it is the problem Coffer solves. The pain it creates (N × M maintenance burden, credential sprawl, identity inconsistency) is precisely the motivation for a central daemon.
 
-**Why not extract cross-cutting abstractions eagerly?** The constitution states that cross-cutting modules should be extracted only when a second feature needs them, to avoid over-engineering. The sole exception is the Resource framework, which was designed upfront because it spans every layer (domain, persistence, audit, surface routing) — retrofitting it after a second resource kind arrived would require a non-trivial migration, not a modest extraction. See [ADR-001](/reference/adr/ADR-001-resource-framework-upfront).
+**Why not extract cross-cutting abstractions eagerly?** The constitution states that cross-cutting modules should be extracted only when a second feature needs them, to avoid over-engineering. The sole exception is the Resource framework, which was designed upfront because it spans every layer (domain, persistence, audit, surface routing) — retrofitting it after a second resource kind arrived would require a non-trivial migration, not a modest extraction. See [Resource Framework Upfront](/reference/adr/resource-framework-upfront).
 
 ---
 

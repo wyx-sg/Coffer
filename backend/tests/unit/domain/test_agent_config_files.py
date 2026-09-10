@@ -1,6 +1,6 @@
 """Unit tests for the config-file allowlist + format validation.
 
-Covers spec 004 scenarios: list curated files, allowlist enforcement, and
+Covers spec agent-registry scenarios: list curated files, allowlist enforcement, and
 malformed structured content rejection (domain half).
 """
 

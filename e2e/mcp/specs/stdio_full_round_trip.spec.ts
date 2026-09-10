@@ -17,7 +17,7 @@ import {
   uniqueName,
 } from "./_helpers";
 
-acceptance("001-mcp-gateway", "register a stdio MCP server", async () => {
+acceptance("mcp-gateway", "register a stdio MCP server", async () => {
   const name = uniqueName("e2e-stdio");
   await registerMcpServer(name, ["--tools", "read_file"]);
 

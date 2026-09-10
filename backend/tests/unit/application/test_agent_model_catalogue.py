@@ -2,7 +2,7 @@
 
 The service names no model of its own — it decides WHICH config dir discovery is
 pointed at and dedupes what comes back. Both collaborators are fakes: the agent
-lister stands in for the spec-004 registry, the discovery port for the sources
+lister stands in for the agent registry, the discovery port for the sources
 that interrogate the installed CLIs.
 """
 

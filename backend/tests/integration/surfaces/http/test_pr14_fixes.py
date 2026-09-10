@@ -26,7 +26,7 @@ import pytest
 def test_audit_safe_config_strips_env_and_headers() -> None:
     """`env` and `headers` inside transport are stripped from the audited config.
 
-    CODE-006 lives in the mcp_server Kind's redactor now (ADR-001: the
+    CODE-006 lives in the mcp_server Kind's redactor now (resource framework: the
     kind-agnostic ResourceService no longer hardcodes the transport shape).
     """
     from coffer.application.mcp.kind import _mcp_audit_redactor

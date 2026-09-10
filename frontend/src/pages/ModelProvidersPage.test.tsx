@@ -93,7 +93,7 @@ describe("ModelProvidersPage", () => {
   });
 
   acceptance(
-    "011-provider-switching",
+    "provider-switching",
     "the connections page lists profiles and their compatible agents",
     async () => {
       apiMock.list.mockResolvedValue({
@@ -140,7 +140,7 @@ describe("ModelProvidersPage", () => {
   });
 
   acceptance(
-    "011-provider-switching",
+    "provider-switching",
     "create an ollama connection without a credential",
     async () => {
       apiMock.list.mockResolvedValue({ providers: [] });
@@ -178,7 +178,7 @@ describe("ModelProvidersPage", () => {
   );
 
   acceptance(
-    "011-provider-switching",
+    "provider-switching",
     "set a connection as the internal engine default",
     async () => {
       apiMock.list.mockResolvedValue({
@@ -202,7 +202,7 @@ describe("ModelProvidersPage", () => {
   );
 
   acceptance(
-    "011-provider-switching",
+    "provider-switching",
     "setting a new internal default clears the previous one",
     async () => {
       // A is the internal default; the dropdown reflects A as selected and lets

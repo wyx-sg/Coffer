@@ -1,4 +1,4 @@
-"""Native-config projection orchestration for ``ProviderService`` (spec 011).
+"""Native-config projection orchestration for ``ProviderService`` (spec provider-switching).
 
 Extracted from the service so each file stays within its size budget. A
 ``ProviderProjector`` reads an agent's native config file, applies one of the
@@ -88,7 +88,7 @@ class ProviderProjector:
         agent_cfg = AgentConfig.model_validate(agent.config)
         spec = spec_for(agent_cfg.type, config_key, agent_cfg.resolved_config_dir())
         text = self._config_store.read_text(spec.path) or ""
-        # Model comes solely from the per-agent binding (spec 011 E3/E4) — the
+        # Model comes solely from the per-agent binding (spec provider-switching E3/E4) — the
         # connection no longer carries one. An unbound agent projects no model so
         # it runs on its OWN default model.
         if agent_type is AgentType.CLAUDE_CODE:

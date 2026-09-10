@@ -1,4 +1,4 @@
-"""Memory-local ports for the agentic reorg service (spec 007).
+"""Memory-local ports for the agentic reorg service (spec knowledge).
 
 Keeps ``application.memory`` decoupled from ``infrastructure.chat``
 (Contract 2b / Contract 5e): the reorg service reaches the langgraph loop ONLY

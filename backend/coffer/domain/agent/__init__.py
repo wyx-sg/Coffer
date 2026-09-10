@@ -1,1 +1,1 @@
-"""Domain types for the `agent` Resource kind (spec 004)."""
+"""Domain types for the `agent` Resource kind (spec agent-registry)."""

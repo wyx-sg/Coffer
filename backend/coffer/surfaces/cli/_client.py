@@ -1,6 +1,6 @@
 """HTTP client wrapper that reads ~/.coffer/daemon.json and attaches the token.
 
-Implements the ADR-006 detect-or-spawn pattern: when the daemon is absent,
+Implements the detect-or-spawn ADR: when the daemon is absent,
 ``client_or_exit()`` spawns it automatically instead of asking the user to
 run ``coffer daemon start``.
 """
@@ -113,7 +113,7 @@ def _spawn_daemon() -> subprocess.Popen[bytes] | None:
 def client_or_exit() -> tuple[httpx.Client, DaemonInfo]:
     """Return an authenticated httpx.Client + DaemonInfo for the running daemon.
 
-    Implements ADR-006 detect-or-spawn: if no daemon is *reachable* — daemon.json
+    Implements detect-or-spawn: if no daemon is *reachable* — daemon.json
     absent, OR present but stale (a crashed daemon left it behind and nothing is
     serving its port) — spawn one automatically and wait up to
     ``_DAEMON_BOOT_TIMEOUT`` seconds for it to start serving.
@@ -125,7 +125,7 @@ def client_or_exit() -> tuple[httpx.Client, DaemonInfo]:
     # client pointed at a dead port that every command would then fail against.
     info = live_daemon()
     if info is None:
-        # ADR-006: auto-spawn the daemon rather than asking the user.
+        # Detect-or-spawn: auto-spawn the daemon rather than asking the user.
         proc = _spawn_daemon()
         info = _wait_for_daemon(timeout=_DAEMON_BOOT_TIMEOUT)
         if info is None:

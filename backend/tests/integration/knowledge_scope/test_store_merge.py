@@ -60,7 +60,7 @@ def _consolidator(mem, *, resolves_to: str = _DST_ULID) -> StoreConsolidator:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory",
+    spec="knowledge",
     scenario="merging two stores consolidates additively and retires the source",
 )
 async def test_merge_consolidates_additively_and_retires_source(mem):
@@ -146,7 +146,7 @@ async def test_merge_missing_store_raises_resource_not_found(mem):
 
 
 @pytest.mark.acceptance(
-    spec="007-memory", scenario="a merged identity resolves to the surviving store"
+    spec="knowledge", scenario="a merged identity resolves to the surviving store"
 )
 async def test_merged_identity_resolves_to_survivor(mem, tmp_path):
     # The survivor Y holds X in merged_identities (as a real merge records it).

@@ -2,7 +2,7 @@
 
 Plain-markdown (no frontmatter): a ``# Rules`` header + one ``- `` bullet per
 rule. New rules append to ``rules.md``; once it grows past a threshold the
-autonomous split (spec 007 amendment 2026-06-22) redistributes rules into
+autonomous split (spec knowledge amendment 2026-06-22) redistributes rules into
 per-topic ``rules/<slug>.md`` files. ``read_all_rules`` concatenates every file
 in the lane for injection. Idempotent on exact-duplicate bullet text; atomic
 writes via ``infrastructure.knowledge.fs.atomic_write_text`` so a crash never

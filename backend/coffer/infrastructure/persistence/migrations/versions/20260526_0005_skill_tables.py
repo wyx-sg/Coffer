@@ -1,4 +1,4 @@
-"""skill kind tables (spec 005-skill-manager)
+"""skill kind tables (spec skill-manager)
 
 Revision ID: 0005
 Revises: 0004

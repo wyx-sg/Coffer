@@ -52,7 +52,7 @@ from coffer.infrastructure.persistence.repos import (
 _FAKE = Path(__file__).resolve().parents[2] / "fixtures" / "fake_mcp_server.py"
 
 
-@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="credentials never leak to logs or audit")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="credentials never leak to logs or audit")
 @pytest.mark.asyncio
 async def test_secret_value_never_in_db_or_logs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

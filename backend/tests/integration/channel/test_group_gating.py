@@ -52,7 +52,7 @@ class _AttachmentRecordingAdapter:
             yield event
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="an un-addressed group message is ignored")
+@pytest.mark.acceptance(spec="channels", scenario="an un-addressed group message is ignored")
 async def test_unaddressed_group_message_is_ignored(env: ChannelEnv) -> None:
     """A group message with no @mention/reply-to-bot never drives a turn and
     never even creates a peer row for the group chat."""
@@ -75,7 +75,7 @@ async def test_unaddressed_group_message_is_ignored(env: ChannelEnv) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="009-channels", scenario="an empty sender_id in a group cannot bypass the owner gate"
+    spec="channels", scenario="an empty sender_id in a group cannot bypass the owner gate"
 )
 async def test_empty_sender_id_in_a_group_is_refused_not_treated_as_owner(
     env: ChannelEnv,
@@ -109,7 +109,7 @@ async def test_empty_sender_id_in_a_group_is_refused_not_treated_as_owner(
     assert await env.peers.get_by_chat(resource.id, "grp-1") is None
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="a non-owner @mention in a group is refused")
+@pytest.mark.acceptance(spec="channels", scenario="a non-owner @mention in a group is refused")
 async def test_non_owner_mention_in_a_group_is_refused(env: ChannelEnv) -> None:
     """An @mention from someone other than the channel's paired owner gets a
     refusal reply routed to the group chat/thread — no turn is driven."""
@@ -138,7 +138,7 @@ async def test_non_owner_mention_in_a_group_is_refused(env: ChannelEnv) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="009-channels", scenario="the owner @mentions the bot in a group main chat"
+    spec="channels", scenario="the owner @mentions the bot in a group main chat"
 )
 async def test_owner_mention_in_group_main_drives_a_turn_and_creates_a_peer(
     env: ChannelEnv,
@@ -173,7 +173,7 @@ async def test_owner_mention_in_group_main_drives_a_turn_and_creates_a_peer(
     assert peer.sender_id == "owner-1"
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="the owner @mentions the bot inside a thread")
+@pytest.mark.acceptance(spec="channels", scenario="the owner @mentions the bot inside a thread")
 async def test_owner_mention_in_a_thread_folds_fetched_history_into_the_turn(
     env: ChannelEnv,
 ) -> None:
@@ -219,7 +219,7 @@ async def test_owner_mention_in_a_thread_folds_fetched_history_into_the_turn(
     assert user_text.endswith("@bot summarize this thread")
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="thread-history images reach a vision agent")
+@pytest.mark.acceptance(spec="channels", scenario="thread-history images reach a vision agent")
 async def test_thread_image_reaches_the_turn_as_an_attachment(
     env: ChannelEnv, tmp_path: Any
 ) -> None:

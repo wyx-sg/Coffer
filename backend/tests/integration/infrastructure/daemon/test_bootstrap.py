@@ -57,7 +57,7 @@ def test_acquire_writes_daemon_json_with_0600(
 
 
 @pytest.mark.acceptance(
-    spec="001-mcp-gateway", scenario="daemon port conflict falls back to the next free port"
+    spec="mcp-gateway", scenario="daemon port conflict falls back to the next free port"
 )
 def test_second_daemon_picks_free_port_and_clients_discover(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

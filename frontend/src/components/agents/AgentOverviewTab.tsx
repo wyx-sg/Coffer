@@ -1,7 +1,7 @@
 // frontend/src/components/agents/AgentOverviewTab.tsx — the agent detail page's
 // Overview tab: type + config-dir summary plus this agent's LLM connection and
 // its per-agent model binding. Picking a connection/model is a DRAFT — the user
-// stages a choice, must «测试连接», then «确认切换» to apply it (spec 011 amendment
+// stages a choice, must «测试连接», then «确认切换» to apply it (spec provider-switching amendment
 // 2026-06-23c). The draft → test → confirm state machine lives in
 // useAgentConnectionDraft; this file is presentation only. Claude Code exposes two
 // model slots (primary + fast); Codex one. Those slots belong to a connection: on

@@ -2,7 +2,7 @@
 
 > 中文版：本文件 · English: [messaging-channels.md](./messaging-channels.md)
 >
-> 面向 Coffer 渠道特性（spec 009，ADR-014）的内部竞品调研报告。**日期：** 2026-06-16。
+> 面向 Coffer 渠道特性（spec channels，[Channel Adapter Framework](../decisions/channel-adapter-framework.zh.md)）的内部竞品调研报告。**日期：** 2026-06-16。
 > **方法：** deep-research harness。A/B/C 三个角度已覆盖；部分 HITL 平台与
 > Rasa/Chatwoot/Voiceflow/Sweep 未取证。
 
@@ -104,9 +104,9 @@
 
 ### ✅ 已确认
 
-- **渠道 = 受管资源。** ADR-014 §决策第 1 条把渠道做成一种资源类型（`channel:<name>`，
-  ADR-007），跑在通用的生命周期/审计/凭证引用机制上；`kind.py` 在注册时探测 `*_ref`
-  凭证字段。（`repo:docs/decisions/ADR-014-channel-adapter-framework.md`、
+- **渠道 = 受管资源。** Channel Adapter Framework ADR §决策第 1 条把渠道做成一种资源类型
+  （`channel:<name>`，依「一切皆资源 kind」），跑在通用的生命周期/审计/凭证引用机制上；`kind.py` 在注册时探测 `*_ref`
+  凭证字段。（`repo:docs/decisions/channel-adapter-framework.md`、
   `repo:backend/coffer/application/channel/kind.py`）
 - **单 owner 隐身配对。** `pairing.py` 实现每渠道一个待用配对码（8 位、1 小时 TTL、限次、
   失败即关闭、仅内存）；`inbound.py` 是 owner 门禁桥，对错误成员/陌生人消息静默忽略
@@ -137,7 +137,7 @@
   `send`/`resolve_approval_prompt` + `on_approval_click` 中继、web `ApprovalCard` + 审批席位、
   `/conversations/{id}/approvals` 路由、以及 `CHANNEL_APPROVAL_RESOLVED` 审计事件均被删除；
   `backend/coffer/application/chat/approvals.py` 已不存在；`backend/coffer/` 与
-  `specs/009-channels/` 下不再有 `ApprovalGate`/"审批闸"相关符号；agent 现以全权限运行。
+  `specs/channels/` 下不再有 `ApprovalGate`/"审批闸"相关符号；agent 现以全权限运行。
   该提交的理由恰是报告自己的说法反过来：该中继"与 owner 配对冗余（只有配对的 owner 能驱动
   渠道，而 web 控制台也是 owner）"。本地论断 #1 的另两条腿（渠道 = 资源；单 owner 隐身配对）
   仍是承重的差异化点；审批闸这一条应删除或改写为历史。（git 提交 `165f0e6`）

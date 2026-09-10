@@ -1,4 +1,4 @@
-"""Autonomous rules-lane split (spec 007 amendment 2026-06-22).
+"""Autonomous rules-lane split (spec knowledge amendment 2026-06-22).
 
 When a rules file in the ``rules/`` lane grows past a threshold, the lane splits
 itself by topic: an injected classifier assigns each rule a short category slug,

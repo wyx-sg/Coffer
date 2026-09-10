@@ -1,4 +1,4 @@
-"""coffer scope ... commands (ADR-045 per-agent activation scope).
+"""coffer scope ... commands (per-agent activation scope; ADR: per-agent-resource-scope).
 
 Thin CLI wrapper over ``GET/PUT /api/v1/resources/{kind}/{name}/scope``.
 Same ``<kind>:<name>`` ref parsing (``kind, _, name = ref.partition(":")`` +

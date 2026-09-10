@@ -75,7 +75,7 @@ def _make_organizer(mem, llm: _ScriptedLlm, models: _Models) -> OrganizerService
 
 
 @pytest.mark.acceptance(
-    spec="007-memory", scenario="memory is auto-organized after the store goes idle"
+    spec="knowledge", scenario="memory is auto-organized after the store goes idle"
 )
 @pytest.mark.asyncio
 async def test_auto_organize_fires_after_idle(mem) -> None:

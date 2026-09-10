@@ -1,4 +1,4 @@
-"""Channel routes (spec 009): pairing, status, notify, event ingest.
+"""Channel routes (spec channels): pairing, status, notify, event ingest.
 
 Channel CRUD rides the generic /resources endpoints; these are the
 channel-specific operations from contracts/api.openapi.yaml.

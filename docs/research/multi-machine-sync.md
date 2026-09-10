@@ -2,8 +2,8 @@
 
 > English: this file · 中文版: [multi-machine-sync.zh.md](./multi-machine-sync.zh.md)
 >
-> Internal competitive-research report for Coffer's multi-machine sync (spec 010,
-> ADR-016). **Date:** 2026-06-16. **Method:** deep-research harness. **Provenance
+> Internal competitive-research report for Coffer's multi-machine sync (spec vault-export-import,
+> [Vault Export and Import](../decisions/vault-export-import.md)). **Date:** 2026-06-16. **Method:** deep-research harness. **Provenance
 > caveat:** this run hit an API session limit mid-verification — 1 claim
 > (whole-file encryption support) is 3-0 confirmed; the rest are primary-sourced
 > from project docs but not re-verified. Flag for a light fact-check.
@@ -130,7 +130,7 @@ just spec'd.
   removed-upstream — never a blind file overwrite. `update_config` re-validates
   config, probes credential refs, and runs per-kind cross-version hooks, so it is
   a validated kind-aware reconcile. [`backend/coffer/application/sync/importer.py:71-110`;
-  `backend/coffer/application/resource_service.py:206-243`; ADR-016; spec 010]
+  `backend/coffer/application/resource_service.py:206-243`; the vault export/import ADR; spec vault-export-import]
 - **chezmoi whole-file encryption via four backends** — age, git-crypt, gpg,
   transcrypt; encrypted files stored ASCII-armored with the `encrypted_`
   attribute, auto-decrypted only when needed.
@@ -159,7 +159,7 @@ just spec'd.
   mergeable); the importer then reconciles the local SQLite DB _to_ the
   already-merged workspace. The report's "semantic merge, not a blind overwrite"
   framing stands; the merge and the reconcile are two distinct layers.
-  [ADR-016; `backend/coffer/application/sync/importer.py:71-110`]
+  [the vault export/import ADR; `backend/coffer/application/sync/importer.py:71-110`]
 - The chezmoi **FAQ** encryption page lists only age/gpg/rage, but the
   **user-guide/encryption** page names all four backends, matching the report —
   cite the user-guide, not the FAQ, for the four-backend claim.

@@ -1,4 +1,4 @@
-"""Vault export/import service (spec 010, ADR-016).
+"""Vault export/import service (spec vault-export-import, ADR: vault-export-import).
 
 Two operations over a directory the user names, plus the out-of-band master-key
 bootstrap. No remote, no background replication, no state machine: each call

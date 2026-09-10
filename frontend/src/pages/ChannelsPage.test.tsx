@@ -1,6 +1,6 @@
 // frontend/src/pages/ChannelsPage.test.tsx
 //
-// The channels list surface (spec 009). We mock the data hook + the two
+// The channels list surface (spec channels). We mock the data hook + the two
 // heavy children (dialog, table) so the test asserts ChannelsPage's own
 // branching (loading / error / empty-welcome / populated) and that the Add
 // action opens the dialog.

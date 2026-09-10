@@ -1,4 +1,4 @@
-"""Channel-kind domain errors (spec 009).
+"""Channel-kind domain errors (spec channels).
 
 Kept in their own module because `domain/errors.py` is at its size budget;
 HTTP status mapping lives in `surfaces/http/errors.py` like every other code.

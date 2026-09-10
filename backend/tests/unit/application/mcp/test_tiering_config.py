@@ -31,7 +31,7 @@ def test_unparseable_or_nonpositive_values_fall_back_to_defaults():
 
 def test_unknown_mode_keeps_tiering_on():
     """Only the explicit 'off' disables it: a typo must not silently restore
-    the pre-ADR-046 full-catalogue listing."""
+    the pre-tiering full-catalogue listing."""
     assert load_tiering_config({"COFFER_TOOL_TIERING": "auto"}).enabled is True
     assert load_tiering_config({"COFFER_TOOL_TIERING": "banana"}).enabled is True
 

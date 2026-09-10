@@ -1,4 +1,4 @@
-// frontend/src/components/agents/ConfigEditorPane.tsx — spec 004.
+// frontend/src/components/agents/ConfigEditorPane.tsx — spec agent-registry.
 // Right pane of the agent config viewer: path/format header, the external-file
 // action bar (open-in-editor / reveal), an optional read-only
 // managed-block annotation, and a read-only preview of the file's content.

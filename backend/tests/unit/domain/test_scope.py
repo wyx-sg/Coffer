@@ -1,6 +1,6 @@
-"""Per-agent activation scope semantics (ADR-045, single-axis).
+"""Per-agent activation scope semantics (ADR per-agent-resource-scope, single-axis).
 
-The machine axis was withdrawn with continuous sync (ADR-016); scope is now
+The machine axis was withdrawn with continuous sync (ADR vault-export-import); scope is now
 a plain agent-name list.
 """
 

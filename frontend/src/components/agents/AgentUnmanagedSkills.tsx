@@ -1,4 +1,4 @@
-// frontend/src/components/agents/AgentUnmanagedSkills.tsx — spec 005 FR-022..024.
+// frontend/src/components/agents/AgentUnmanagedSkills.tsx — spec skill-manager FR-022..024.
 // "Unmanaged skills" section of the agent Skills tab: skills found on disk in
 // the agent's skill locations that Coffer does not manage, with adopt-into-
 // master and delete actions. Foreign symlinks (targets outside the master

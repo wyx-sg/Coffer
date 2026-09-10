@@ -69,7 +69,7 @@ class ChannelCapabilities:
     supports_edit: bool  # can rewrite an already-delivered message (edit_text)
     supports_typing: bool  # typing indicator ack
     max_message_chars: int  # outbound chunk budget
-    supports_buttons: bool = False  # interactive selection cards (ADR-014)
+    supports_buttons: bool = False  # interactive selection cards (ADR channel-adapter-framework)
     # A surface the core can keep updating during a turn — by edit (Telegram)
     # or by streaming (SeaTalk). Drives the FR-037 progress/reply strategy.
     supports_live_text: bool = False

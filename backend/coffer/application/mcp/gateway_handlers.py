@@ -174,7 +174,7 @@ async def _invoke(
 
     resource = await resources.get(ResourceRef("mcp_server", server_name))
 
-    # ADR-045 (FR-020): tools/list already hides a server whose scope
+    # Per-agent scope (FR-020): tools/list already hides a server whose scope
     # excludes this session's agent identity (gateway._enabled_mcp_servers),
     # but that is only a listing-side filter — nothing on the call-routing
     # path re-checked it, so a caller that already knows (or guesses) a

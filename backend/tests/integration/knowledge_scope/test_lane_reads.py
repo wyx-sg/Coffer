@@ -30,7 +30,7 @@ async def _global_store_dir(mem) -> Path:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory",
+    spec="knowledge",
     scenario="handoff scenes are listed per branch for a store",
 )
 async def test_read_handoff_scenes_per_branch(mem) -> None:
@@ -67,7 +67,7 @@ async def test_read_handoff_empty_store(mem) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory",
+    spec="knowledge",
     scenario="the consolidation changelog is readable for a store",
 )
 async def test_read_consolidation_log_present(mem) -> None:

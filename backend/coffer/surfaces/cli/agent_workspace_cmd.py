@@ -1,4 +1,4 @@
-"""coffer agent workspace subcommands (spec 004/005 amendment).
+"""coffer agent workspace subcommands (spec agent-registry/005 amendment).
 
 MCP entries, plugins, directory config-file children, and the follow-policy
 verb. Kept out of ``agent_cmd.py`` to respect the 400-line backend file cap;

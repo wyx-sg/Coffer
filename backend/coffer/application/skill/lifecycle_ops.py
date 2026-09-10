@@ -173,7 +173,7 @@ async def relink_agent_skills(*, service: SkillService, agent_name: str, actor: 
     orphaned the old links and left the new dir empty while verify reported
     no drift.
 
-    ADR-045 hard grant: a config_dir change must not resurrect a link that
+    Scope is a hard grant: a config_dir change must not resurrect a link that
     scope no longer grants. A skill that has fallen out of this agent's scope
     has its old link torn down like any other, but the new-location link is
     NOT recreated — the binding row is left untouched (not deleted); reclaim

@@ -1,7 +1,7 @@
 """Remote speech-to-text over an OpenAI-compatible ``/audio/transcriptions``.
 
 Coffer used to transcribe voice locally, bundling a ``whisper.cpp`` sidecar
-built from source in CI (ADR-039, now retired). That was the heaviest build
+built from source in CI (a decision since retired). That was the heaviest build
 dependency in the project by a wide margin, for a feature a remote endpoint
 does at least as well.
 

@@ -1,4 +1,4 @@
-"""Infrastructure sweep for the channel-media dir (spec 009 — FR-033).
+"""Infrastructure sweep for the channel-media dir (spec channels — FR-033).
 
 The pure decision (which files are too old) lives in
 ``coffer.domain.channel.media_retention``; this module does the I/O: stat every

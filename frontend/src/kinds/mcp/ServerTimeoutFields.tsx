@@ -1,6 +1,6 @@
 // frontend/src/kinds/mcp/ServerTimeoutFields.tsx — the three per-server timeouts.
 //
-// These have been configurable on the backend since spec 001 and had no UI at
+// These have been configurable on the backend since spec mcp-gateway and had no UI at
 // all, so every registered server ran on the defaults. That is a poor fit for
 // real upstreams: measured across one vault, average call latency spanned three
 // orders of magnitude between servers (9ms to 10.9s), and the slowest routinely

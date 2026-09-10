@@ -142,7 +142,7 @@ def test_size_limit_exceeded(tmp_path):
 
 
 @pytest.mark.acceptance(
-    spec="005-skill-manager", scenario="reject a skill with an over-long description"
+    spec="skill-manager", scenario="reject a skill with an over-long description"
 )
 def test_description_over_1024_chars_rejected(tmp_path):
     """agentskills.io caps `description` at 1024 chars; over-long is a clean 422."""
@@ -154,7 +154,7 @@ def test_description_over_1024_chars_rejected(tmp_path):
 
 
 @pytest.mark.acceptance(
-    spec="005-skill-manager",
+    spec="skill-manager",
     scenario="recognize optional agentskills.io frontmatter fields",
 )
 def test_optional_frontmatter_fields_surfaced(tmp_path):

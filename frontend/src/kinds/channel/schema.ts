@@ -2,7 +2,7 @@
 //
 // Zod schema driving the add-channel form, plus the pure planning step that
 // turns validated form values into the resource config + the list of
-// credential-store writes. Field names mirror specs/009-channels/data-model.md:
+// credential-store writes. Field names mirror specs/channels/data-model.md:
 // secrets never live in the config — only `*_ref` references do.
 import { z } from "zod";
 
@@ -14,7 +14,7 @@ import type { ChannelType } from "@/lib/api/channels";
  * resolves an agent by — not the `claude-code` resource name. A hyphenated
  * value passes registration but fails at turn time with UNKNOWN_AGENT, leaving
  * the bot silently dead. The backend validates `default_agent` against the live
- * provider registry (ADR-024 retired the old "builtin" pseudo-agent). The owner
+ * provider registry (the builtin-agent-is-internal-capability ADR retired the old "builtin" pseudo-agent). The owner
  * can re-bind it later via the edit dialog.
  */
 export const DEFAULT_AGENT = "claude_code";

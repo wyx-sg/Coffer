@@ -148,7 +148,7 @@ class ChatService:
         invalid configuration leaves nothing half-created.
 
         An optional channel binding (``channel_name`` + ``peer_chat_id``) is the
-        return address for relaying output back to an IM channel (spec 009).
+        return address for relaying output back to an IM channel (spec channels).
         """
         provider = self._registry.get(agent_key)  # raises UnknownAgent (-> 400)
 

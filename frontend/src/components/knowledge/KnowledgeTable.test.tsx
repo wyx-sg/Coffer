@@ -1,7 +1,7 @@
 // frontend/src/components/knowledge/KnowledgeTable.test.tsx
 //
 // The memory-stores list (the /memory landing surface). Asserts the
-// human-readable project identity (spec 007 FR-017a): a per-project store is
+// human-readable project identity (spec knowledge FR-017a): a per-project store is
 // shown by its root directory's basename + absolute path rather than the opaque
 // project-<ULID> store name, with the global store and untracked projects
 // falling back to the raw name.

@@ -1,4 +1,4 @@
-"""Chat agent-provider registry wiring (spec 008), split from ``wiring.py``.
+"""Chat agent-provider registry wiring (spec channels), split from ``wiring.py``.
 
 The agent-provider registry is the platform seam: chat lists only Coffer's two
 managed agents — Claude Code and Codex — and a further agent would be one more
@@ -72,7 +72,8 @@ def build_agent_provider_registry(
     # (config.toml env_key). Resolve the connection active FOR that agent per turn —
     # keyed by agent, not wire, so an openai-compatible gateway routed to it
     # resolves correctly — and inject it into the subprocess env; with no active
-    # connection it stays None so the agent uses its own login (ADR-032 env_key seam).
+    # connection it stays None so the agent uses its own login (the
+    # provider-switching env_key seam).
     def _key_resolver(agent_type: AgentType) -> Callable[[], Awaitable[str | None]]:
         async def _resolve() -> str | None:
             try:

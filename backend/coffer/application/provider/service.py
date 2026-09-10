@@ -1,5 +1,5 @@
 """``ProviderService`` — CRUD, switch (activate) and key resolution for
-provider profiles (spec 011).
+provider profiles (spec provider-switching).
 
 A profile is stored as a ``provider`` resource (CRUD + audit + sync come free
 from ``ResourceService``). This service adds the credential-vault handling, the
@@ -78,7 +78,7 @@ class ProviderService:
         self._agents = agents
         self._audit = audit
         self._projector = ProviderProjector(config_store)
-        # Resolves the internal-engine model (spec 011 E3), overlaid onto the
+        # Resolves the internal-engine model (spec provider-switching E3), overlaid onto the
         # internal_default connection. None ⇒ no overlay (connection's own model).
         self._resolve_internal_model = resolve_internal_model
 
@@ -123,7 +123,7 @@ class ProviderService:
         or ``credential_ref`` (reuse an existing vault entry). An ``ollama``
         connection has no key — supply neither. ``compatible_agents`` overrides
         the wire default for which agents the connection projects into (``None``
-        ⇒ the default). The model lives apart from the connection (spec 011 E3)
+        ⇒ the default). The model lives apart from the connection (spec provider-switching E3)
         and is chosen at the point of use."""
         ref: str | None
         minted = False
@@ -180,7 +180,7 @@ class ProviderService:
         (identity); change them by recreating. ``secret_value`` rotates the
         secret stored under the profile's existing ref. ``compatible_agents``
         re-targets which agents the connection projects into (it is mutable,
-        unlike the wire). The model is not stored on the connection (spec 011
+        unlike the wire). The model is not stored on the connection (spec provider-switching
         E3). Re-activate afterwards to re-project under the new targets."""
         current = await self.get(name)
         config = dict(current.config)
@@ -239,7 +239,8 @@ class ProviderService:
 
         # 2) Flip activation: take over from any overlapping active connection,
         #    de-projecting it from the agents this one will not cover. The
-        #    single-process daemon serialises the clear-then-set (ADR-032 / FR-011).
+        #    single-process daemon serialises the clear-then-set (provider
+        #    switching / FR-011).
         mine = set(targets)
         previous: str | None = None
         for r in await self.list():
@@ -364,7 +365,7 @@ class ProviderService:
     async def resolve_internal_connection(self) -> ResolvedConnection | None:
         """The connection + model Coffer's internal LLM engine runs on: the
         ``internal_default`` connection paired with the global internal-engine
-        model (spec 011 E3). ``None`` when no connection is marked OR no model is
+        model (spec provider-switching E3). ``None`` when no connection is marked OR no model is
         set — either way the internal engine is a clean no-op (the model no
         longer lives on the connection, so there is no fallback)."""
         model = await self._resolve_internal_model() if self._resolve_internal_model else None

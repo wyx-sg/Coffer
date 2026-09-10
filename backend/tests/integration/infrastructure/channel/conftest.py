@@ -1,4 +1,4 @@
-"""Shared in-process platform fakes for channel transport tests (spec 009).
+"""Shared in-process platform fakes for channel transport tests (spec channels).
 
 ``FakeTelegram`` / ``FakeSeaTalk`` are small FastAPI apps mounted via
 ``httpx.ASGITransport`` — the adapters talk to them exactly as they would

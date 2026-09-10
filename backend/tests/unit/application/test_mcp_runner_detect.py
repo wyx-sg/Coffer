@@ -1,4 +1,4 @@
-"""Missing-runner detection (spec 001 amendment)."""
+"""Missing-runner detection (spec mcp-gateway amendment)."""
 
 from __future__ import annotations
 

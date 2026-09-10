@@ -14,7 +14,7 @@ from coffer.infrastructure.knowledge_scope.handoff_files import (
 
 
 def test_branch_slug_is_filesystem_safe() -> None:
-    assert branch_slug("feature/007-memory") == "feature-007-memory"
+    assert branch_slug("feature/knowledge") == "feature-knowledge"
     assert branch_slug("main") == "main"
 
 

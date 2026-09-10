@@ -1,4 +1,4 @@
-"""The daemon serving the built web UI (spec 001 FR-024).
+"""The daemon serving the built web UI (spec mcp-gateway FR-024).
 
 The load-bearing property is that mounting a SPA at ``/`` must not swallow the
 API. Everything else here is about degrading quietly when no UI was built.

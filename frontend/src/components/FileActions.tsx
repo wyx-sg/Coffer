@@ -1,9 +1,10 @@
 // frontend/src/components/FileActions.tsx
-// Coffer's file viewers are read-only (specs 002/004/005/006/007): editing
-// happens in the user's own editor, not in-app. This shared action bar takes a
-// managed file to those external tools — open it in the preferred editor (see
-// the "preferred editor" preference in General settings) and reveal it in the OS
-// file manager. The web and desktop surfaces show the same buttons.
+// Coffer's file viewers are read-only (the ui-shell, agent-registry,
+// skill-manager and knowledge specs): editing happens in the user's own editor,
+// not in-app. This shared action bar takes a managed file to those external
+// tools — open it in the preferred editor (see the "preferred editor"
+// preference in General settings) and reveal it in the OS file manager. The web
+// and desktop surfaces show the same buttons.
 //
 // The actions themselves live in lib/fileActionItems.ts (`useFileActionItems`)
 // so a crowded table row can fold the same open/reveal into the RowActions "⋯"

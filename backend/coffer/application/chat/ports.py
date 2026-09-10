@@ -1,4 +1,4 @@
-"""Ports for the agent-chat platform (spec 008).
+"""Ports for the agent-chat platform (spec channels).
 
 These Protocols are the **platform seam**: the chat surface, the turn
 orchestrator, and persistence reach an agent only through them. Adding another

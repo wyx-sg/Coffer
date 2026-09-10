@@ -1,6 +1,6 @@
 """Integration tests for AgentMcpService (install/uninstall/status).
 
-Covers spec 004 acceptance scenarios for one-click Coffer-MCP install.
+Covers spec agent-registry acceptance scenarios for one-click Coffer-MCP install.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ async def _register_codex(bundle, home: pathlib.Path):
     await bundle.svc.register(agent_type=AgentType.CODEX, name="cx", actor="cli")
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="report Coffer-MCP install status")
+@pytest.mark.acceptance(spec="agent-registry", scenario="report Coffer-MCP install status")
 async def test_status_false_when_absent(agent_bundle, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     await _register_claude(agent_bundle, tmp_path)
@@ -40,7 +40,7 @@ async def test_status_false_when_absent(agent_bundle, tmp_path, monkeypatch):
     assert st.command is None
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="install Coffer's MCP into an agent")
+@pytest.mark.acceptance(spec="agent-registry", scenario="install Coffer's MCP into an agent")
 async def test_install_claude_writes_entry_with_backup_and_audit(
     agent_bundle, tmp_path, monkeypatch
 ):
@@ -53,7 +53,7 @@ async def test_install_claude_writes_entry_with_backup_and_audit(
     assert st.installed is True
     assert st.command == SHIM
     data = json.loads(claude_json.read_text())
-    # Spec 004 FR-019 (amended): install threads the agent's own name through
+    # Agent Registry FR-019 (amended): install threads the agent's own name through
     # as `--agent <name>` so the shim self-reports its identity at handshake.
     assert data["mcpServers"]["coffer"] == {"command": SHIM, "args": ["--agent", "cc"]}
     # Untouched neighbouring state preserved; prior file backed up.
@@ -67,7 +67,7 @@ async def test_install_claude_writes_entry_with_backup_and_audit(
     assert rows[0].details.get("command") == SHIM
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="install Coffer's MCP into an agent")
+@pytest.mark.acceptance(spec="agent-registry", scenario="install Coffer's MCP into an agent")
 async def test_install_codex_writes_toml(agent_bundle, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     await _register_codex(agent_bundle, tmp_path)
@@ -82,7 +82,7 @@ async def test_install_codex_writes_toml(agent_bundle, tmp_path, monkeypatch):
     assert await _status(agent_bundle, "cx") is True
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="install Coffer's MCP is idempotent")
+@pytest.mark.acceptance(spec="agent-registry", scenario="install Coffer's MCP is idempotent")
 async def test_install_idempotent(agent_bundle, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     await _register_claude(agent_bundle, tmp_path)
@@ -119,7 +119,7 @@ async def test_reinstall_upgrades_preexisting_entry_without_args(
     assert data["mcpServers"]["coffer"] == {"command": SHIM, "args": ["--agent", "cc"]}
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="uninstall Coffer's MCP from an agent")
+@pytest.mark.acceptance(spec="agent-registry", scenario="uninstall Coffer's MCP from an agent")
 async def test_uninstall_removes_entry(agent_bundle, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     await _register_claude(agent_bundle, tmp_path)

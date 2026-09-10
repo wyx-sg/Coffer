@@ -1,4 +1,4 @@
-"""The memory substrate the reorg service is built from (spec 007).
+"""The memory substrate the reorg service is built from (spec knowledge).
 
 Kept out of the service file (budget) and separated so each service has a
 clear dependency manifest. Reuses ``OrganizerCollaborators`` directly since the

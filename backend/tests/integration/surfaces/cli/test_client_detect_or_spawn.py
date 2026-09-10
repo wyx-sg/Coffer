@@ -1,4 +1,4 @@
-"""Unit tests for CLI detect-or-spawn — ADR-006.
+"""Unit tests for CLI detect-or-spawn (ADR daemon-detect-or-spawn).
 
 TEST-020: client_or_exit() must auto-spawn the daemon when daemon.json is
 absent, rather than printing 'start it with: coffer daemon start' and exiting.
@@ -83,7 +83,7 @@ def test_client_or_exit_respawns_when_daemon_json_is_stale(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A crashed daemon can leave daemon.json behind. When the recorded daemon
-    is not reachable, client_or_exit() must respawn (ADR-006 auto-recovery)
+    is not reachable, client_or_exit() must respawn (detect-or-spawn auto-recovery)
     rather than hand back a client pointed at a dead port."""
     home = tmp_path / "home"
     home.mkdir()
@@ -197,7 +197,7 @@ def test_client_or_exit_does_not_print_old_start_message(
 def test_spawn_daemon_invokes_popen(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """_spawn_daemon() must call subprocess.Popen with the spawn command,
     DEVNULL stdin, AND the platform's detachment flags — so the daemon
-    survives the short-lived CLI that launched it (ADR-006). It must also
+    survives the short-lived CLI that launched it (ADR daemon-detect-or-spawn). It must also
     return the Popen handle so the caller can kill it on a boot timeout."""
     import subprocess
 

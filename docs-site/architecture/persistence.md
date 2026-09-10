@@ -8,7 +8,7 @@ All Coffer state lives on the user's machine. The daemon is the single writer. E
 
 Coffer is a local-first developer tool: the user's accumulated AI assets — registered MCP servers, capability preferences, audit history, knowledge, chat conversations, channels, and sync state — must never depend on a cloud service to be readable or writable. That constraint demands a persistence layer that is self-contained, zero-configuration, and trivially backed up.
 
-The answer is two layers. A single SQLite file at `~/.coffer/coffer.db` is the system of record for all control-plane state. Bulk user content — ingested documents and the entries agents write — lives as markdown files on the local filesystem (the source of truth); SQLite carries a rebuildable retrieval index over it (ADR-012). There is no separate database server to install, no connection pool to tune, no network hop between the daemon and its storage. The user's data is their file.
+The answer is two layers. A single SQLite file at `~/.coffer/coffer.db` is the system of record for all control-plane state. Bulk user content — ingested documents and the entries agents write — lives as markdown files on the local filesystem (the source of truth); SQLite carries a rebuildable retrieval index over it (ADR files-as-truth-sqlite-retrieval). There is no separate database server to install, no connection pool to tune, no network hop between the daemon and its storage. The user's data is their file.
 
 ## Why SQLite, not Postgres
 
@@ -22,7 +22,7 @@ The practical consequences of the SQLite choice shape every detail of the persis
 
 - **Single writer** — SQLite's write concurrency is bounded; having one writer (the daemon) eliminates all write conflicts by design. The daemon serialises every mutation; surfaces that need to write (CLI commands, HTTP handlers) go through the daemon over loopback HTTP.
 - **WAL mode** — Write-Ahead Logging allows readers (e.g., a CLI `list` command calling the REST API) to proceed concurrently with the writer without blocking on a lock. In practice this means `coffer mcp list` never hangs waiting for an ongoing migration.
-- **Zero-infra copy** — because all Coffer state lives under `~/.coffer/`, moving or duplicating a vault needs no tooling: `cp -r ~/.coffer/ <dest>` with the daemon stopped is a complete byte-copy, and the spec 010 vault export carries everything that is a system of record between machines. Coffer ships no backup command of its own; keep `master.key` out of anything copied off-machine.
+- **Zero-infra copy** — because all Coffer state lives under `~/.coffer/`, moving or duplicating a vault needs no tooling: `cp -r ~/.coffer/ <dest>` with the daemon stopped is a complete byte-copy, and the spec vault-export-import vault export carries everything that is a system of record between machines. Coffer ships no backup command of its own; keep `master.key` out of anything copied off-machine.
 
 ## SQLAlchemy 2.0 async ORM
 
@@ -57,7 +57,7 @@ Schema evolution is managed by Alembic, configured in `backend/alembic.ini` with
 | `0002`   | `20260521_0002_mcp_tables.py`        | `mcp_capability_preferences`, `mcp_invocations` |
 | `0003`   | `20260522_0003_mcp_server_health.py` | `mcp_server_health`                             |
 
-Later revisions add the skill, knowledge, embedding-config, chat, channel and credentials tables (plus index and data-fix revisions); a later revision drops the sync tables again when continuous sync is withdrawn ([ADR-016](/reference/adr/ADR-016-vault-export-import)). On first daemon startup, `alembic upgrade head` runs before the HTTP server accepts connections. Because Alembic migrations are bundled as data files inside the PyInstaller daemon binary, end-user installs also get correct schema creation on first launch — no separate migration step.
+Later revisions add the skill, knowledge, embedding-config, chat, channel and credentials tables (plus index and data-fix revisions); a later revision drops the sync tables again when continuous sync is withdrawn ([Vault Export and Import](/reference/adr/vault-export-import)). On first daemon startup, `alembic upgrade head` runs before the HTTP server accepts connections. Because Alembic migrations are bundled as data files inside the PyInstaller daemon binary, end-user installs also get correct schema creation on first launch — no separate migration step.
 
 ## Table map
 
@@ -83,7 +83,7 @@ The tables that exist after applying all revisions, grouped by domain:
 
 | Table              | Purpose                                                                                                                                                              |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `credentials`      | Envelope-encrypted secret store: each secret is Fernet-encrypted under a master key before it reaches SQLite. Plaintext never lands on disk. See [Security](/architecture/security) and ADR-015. |
+| `credentials`      | Envelope-encrypted secret store: each secret is Fernet-encrypted under a master key before it reaches SQLite. Plaintext never lands on disk. See [Security](/architecture/security) and [Envelope-Encrypted Credentials](/reference/adr/envelope-encrypted-credential-store). |
 | `embedding_config` | The active embedding provider/model configuration used by the retrieval index.                                                                                      |
 
 **Knowledge substrate:**
@@ -122,9 +122,9 @@ The tables that exist after applying all revisions, grouped by domain:
 | ---------------------- | ------------------------------------------------------------ |
 | `skill_agent_bindings` | Records which skills are bound to which agent workspaces.     |
 
-**Export / import:** no tables. Export and import are one-shot operations over the live vault; there is no configuration to persist, no last-run state, no machine registry and no tombstone ledger ([ADR-016](/reference/adr/ADR-016-vault-export-import)).
+**Export / import:** no tables. Export and import are one-shot operations over the live vault; there is no configuration to persist, no last-run state, no machine registry and no tombstone ledger ([Vault Export and Import](/reference/adr/vault-export-import)).
 
-## Files as truth, SQLite as a rebuildable index (ADR-012)
+## Files as truth, SQLite as a rebuildable index (ADR files-as-truth-sqlite-retrieval)
 
 The control-plane tables above are the system of record for their rows. The **knowledge substrate** is different: the markdown files under `~/.coffer/knowledge/` are the source of truth, and the SQLite retrieval index (the `documents` / `chunks` / `documents_fts` FTS5 tables plus the per-scope sqlite-vec virtual tables) is a **fully rebuildable** projection of those files.
 
@@ -152,7 +152,7 @@ The full set of files Coffer writes:
 | `~/.coffer/bin/`           | `coffer-mcp-shim`, `coffer-daemon` and the runtime helper binaries, deployed by the daemon on a frozen start |
 | `~/.coffer/upstream-pids/` | Per-upstream subprocess PID files for session tracking |
 
-Keeping everything under one parent directory makes backup simple, migration unambiguous, and clean-uninstall complete. The daemon's detect-or-spawn protocol (ADR-006) also benefits: every process that needs to find the daemon reads `~/.coffer/daemon.json` — there is no registry, no environment variable, and no platform-specific service directory to probe.
+Keeping everything under one parent directory makes backup simple, migration unambiguous, and clean-uninstall complete. The daemon's detect-or-spawn protocol (ADR daemon-detect-or-spawn) also benefits: every process that needs to find the daemon reads `~/.coffer/daemon.json` — there is no registry, no environment variable, and no platform-specific service directory to probe.
 
 ## Retention defaults
 
@@ -169,5 +169,5 @@ Conversations follow a two-stage lifecycle: idle threads are auto-archived, then
 
 ## See also
 
-- [Data model reference](/reference/specs/001-mcp-gateway/data-model) — full DDL, ORM mapping table, cascade rules, and default seeds
+- [Data model reference](/reference/specs/mcp-gateway/data-model) — full DDL, ORM mapping table, cascade rules, and default seeds
 - [Architecture reference](/reference/project/architecture) — persistence section and the full cross-cutting concerns table

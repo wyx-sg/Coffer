@@ -5,10 +5,10 @@ inherits the job, and it is the right owner: ``coffer-callback`` (the channel
 webhook listener) is a process the *daemon* spawns at runtime, and
 ``coffer-mcp-shim`` must be able to find
 ``coffer-daemon`` as a sibling so an MCP client can auto-spawn a daemon after a
-reboot (ADR-006).
+reboot (ADR daemon-detect-or-spawn).
 
 Only frozen builds need this. A source install has already been handled by
-``pip install``, which puts the console scripts on PATH (spec 001 FR-018) — so
+``pip install``, which puts the console scripts on PATH (spec mcp-gateway FR-018) — so
 :func:`deploy_frozen_sidecars` is a no-op outside a PyInstaller bundle rather
 than something the caller has to guard.
 
@@ -37,7 +37,8 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 # The binaries a frozen daemon deploys beside itself. `coffer-daemon` is
-# included so the shim's ADR-006 sibling probe resolves after a reboot, and
+# included so the shim's detect-or-spawn sibling probe resolves after a reboot,
+# and
 # `coffer` so the user has the CLI on PATH once ~/.coffer/bin is added to it.
 DEPLOYED_BINARIES: tuple[str, ...] = (
     "coffer",

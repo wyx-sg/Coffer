@@ -1,4 +1,4 @@
-"""Shim bootstrap helpers — daemon detect-or-spawn (ADR-006) + handshake plumbing.
+"""Shim bootstrap helpers — daemon detect-or-spawn + handshake plumbing.
 
 Split out of ``main.py`` so that module stays focused on the ``_Bridge`` stdio↔
 HTTP/SSE pump. These free functions cover everything the bridge needs *around*
@@ -32,7 +32,7 @@ _DAEMON_BOOT_TIMEOUT = 10  # seconds
 #: MCP-reserved extension key the daemon reads the launch cwd from.
 _CWD_META_KEY = "coffer/cwd"
 #: MCP-reserved extension key the daemon reads the shim's self-reported
-#: ``--agent`` identity from (spec 001 FR-021, amended).
+#: ``--agent`` identity from (spec mcp-gateway FR-021, amended).
 _AGENT_META_KEY = "coffer/agent"
 
 
@@ -106,7 +106,7 @@ async def _wait_for_daemon(timeout: float) -> DaemonInfo | None:
 def _spawn_daemon() -> None:
     """Best-effort detached spawn of the coffer-daemon binary.
 
-    Uses ``daemon_spawn_command()`` (ADR-006) so the correct binary is chosen
+    Uses ``daemon_spawn_command()`` (ADR daemon-detect-or-spawn) so the correct binary is chosen
     whether the shim is running from source (dev/pip) or as a frozen
     PyInstaller bundle co-located with ``coffer-daemon``.
     """

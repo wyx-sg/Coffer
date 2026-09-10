@@ -1,4 +1,4 @@
-"""Integration tests for bootstrap.live_daemon() — ADR-006 duplicate guard.
+"""Integration tests for bootstrap.live_daemon() — the detect-or-spawn duplicate guard.
 
 live_daemon() returns the running daemon's info ONLY when daemon.json exists
 AND a Coffer daemon answers /daemon/status on its recorded port; otherwise

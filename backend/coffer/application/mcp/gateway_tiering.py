@@ -1,4 +1,4 @@
-"""Applies the ADR-046 tiering policy to an aggregated tools/list result.
+"""Applies the budget-driven tiering policy to an aggregated tools/list result.
 
 Kept out of ``gateway.py`` so that file stays under its 400-LOC ceiling. The
 policy itself is pure and lives in ``domain.mcp.tool_tiering``; this module
@@ -27,7 +27,7 @@ async def apply_tiering(
     config: TieringConfig,
     clock: Callable[[], datetime],
 ) -> TieringResult:
-    """Return the slice of ``tools`` to list, per ADR-046.
+    """Return the slice of ``tools`` to list, per the tool-tiering ADR.
 
     Fails open: when tiering is off, or the usage query raises, every tool is
     listed. A broken statistics layer must never be able to hide tools — that

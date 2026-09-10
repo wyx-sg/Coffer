@@ -1,4 +1,4 @@
-"""HTTP coverage for the read-only skill file viewer (spec 005-skill-manager).
+"""HTTP coverage for the read-only skill file viewer (spec skill-manager).
 
 Boots the app exactly like ``test_skill_routes.py``: a temp ``HOME`` so the
 master store lands under ``tmp_path/.coffer/skills`` and a temp SQLite DB.
@@ -67,7 +67,7 @@ def _import(c: TestClient, src: pathlib.Path) -> dict:
     return r.json()
 
 
-@pytest.mark.acceptance(spec="005-skill-manager", scenario="view a skill's files as a tree")
+@pytest.mark.acceptance(spec="skill-manager", scenario="view a skill's files as a tree")
 def test_list_skill_files_returns_tree(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59700)
     src = tmp_path / "src"
@@ -118,7 +118,7 @@ def test_list_skill_files_returns_tree(tmp_path, monkeypatch):
         assert scripts["size"] is None
 
 
-@pytest.mark.acceptance(spec="005-skill-manager", scenario="view a single skill file's contents")
+@pytest.mark.acceptance(spec="skill-manager", scenario="view a single skill file's contents")
 def test_read_single_skill_file(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59710)
     src = tmp_path / "src"
@@ -155,7 +155,7 @@ def test_read_single_skill_file(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="005-skill-manager", scenario="reject reading a path outside the skill folder"
+    spec="skill-manager", scenario="reject reading a path outside the skill folder"
 )
 def test_reject_path_escape(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59720)
@@ -213,7 +213,7 @@ def test_binary_file_returns_binary_true(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="005-skill-manager",
+    spec="skill-manager",
     scenario="programmatically overwrite a skill file via the write API",
 )
 def test_write_skill_file_roundtrip(tmp_path, monkeypatch):

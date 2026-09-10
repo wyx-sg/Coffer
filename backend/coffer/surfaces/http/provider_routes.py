@@ -1,4 +1,4 @@
-"""/api/v1/providers — provider-profile CRUD + switch (spec 011).
+"""/api/v1/providers — provider-profile CRUD + switch (spec provider-switching).
 
 Domain errors propagate to the app-wide handler in ``surfaces/http/errors.py``.
 """

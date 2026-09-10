@@ -1,6 +1,6 @@
 """Daemon bootstrap: allocate port + generate token + write/remove daemon.json.
 
-ADR-006 (detect-or-spawn) calls for a ``flock`` held while a freshly-spawned
+The detect-or-spawn ADR calls for a ``flock`` held while a freshly-spawned
 daemon decides whether to bind. :func:`acquire_or_existing` is that critical
 section: it takes an exclusive lock on ``~/.coffer/daemon.lock`` and, under it,
 probes :func:`live_daemon`, and only if none is live binds a port and writes
@@ -80,7 +80,7 @@ def _spawn_lock_path() -> Path:
 def _acquire_spawn_lock() -> int:
     """Open ``~/.coffer/daemon.lock`` and take an exclusive ``flock``; return fd.
 
-    ADR-006: this is the lock that serialises the probe+bind+write+announce
+    Detect-or-spawn: this is the lock that serialises the probe+bind+write+announce
     critical section so two racing auto-spawns can't both bind. The caller MUST
     eventually free it via :func:`_release_spawn_lock`. On Windows (no
     ``fcntl``) the lock degrades to a bare open fd — the daemon's own
@@ -139,7 +139,7 @@ def live_daemon() -> DaemonInfo | None:
     daemon answers on its recorded port; otherwise ``None`` (absent,
     malformed, stale, or a foreign listener).
 
-    ADR-006: a freshly-spawned daemon calls this *before* binding so it
+    Detect-or-spawn: a freshly-spawned daemon calls this *before* binding so it
     refuses to start a duplicate when one is already serving. Without this
     guard, two near-simultaneous auto-spawns (CLI + shim, or two clients) each
     bind a different free port and the second's ``os.replace`` clobbers
@@ -219,7 +219,7 @@ def acquire() -> tuple[DaemonInfo, socket.socket]:
     never released between publishing ``daemon.json`` and the server binding.
     The caller closes ``sock`` when the server stops.
 
-    Prefer :func:`acquire_or_existing`, which wraps this in the ADR-006 spawn
+    Prefer :func:`acquire_or_existing`, which wraps this in the detect-or-spawn
     lock together with the duplicate-daemon probe. ``acquire`` is kept as the
     lock-free primitive (and is called by ``acquire_or_existing`` while the
     lock is held).
@@ -241,7 +241,7 @@ def acquire() -> tuple[DaemonInfo, socket.socket]:
 
 
 def acquire_or_existing() -> tuple[DaemonInfo, socket.socket | None, ReleaseSpawnLock]:
-    """ADR-006 spawn critical section, under the exclusive spawn lock.
+    """Detect-or-spawn critical section, under the exclusive spawn lock.
 
     Takes ``~/.coffer/daemon.lock`` and then:
       1. probes :func:`live_daemon`;

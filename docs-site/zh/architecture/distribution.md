@@ -51,12 +51,12 @@ PyInstaller 将 Python 解释器、所有依赖以及应用程序代码打包成
 
 Alembic 迁移文件通过 PyInstaller 的 `datas` 机制，以数据文件的形式随 daemon 二进制一起发布。首次启动时，daemon 会在接受连接之前对一个全新的数据库执行 `alembic upgrade head`——最终用户无需额外步骤即可得到正确的 schema。
 
-daemon 二进制还打包了更重的知识与对话依赖（spec 007/008）：用于向量索引的 `sqlite_vec`、用于文档转换的 `markitdown`、用于 embedding 的 `openai`，以及 `langchain*` / `langgraph` 对话 agent 栈。它们在函数内部惰性导入，PyInstaller 的静态分析无法追踪——因此 `coffer-daemon.spec` 把它们显式声明为 hidden imports，让 frozen 的 daemon 能够转换文档、做 embedding、执行向量检索并驱动内置对话 agent。
+daemon 二进制还打包了更重的知识与对话依赖（knowledge 与对话两份规范）：用于向量索引的 `sqlite_vec`、用于文档转换的 `markitdown`、用于 embedding 的 `openai`，以及 `langchain*` / `langgraph` 对话 agent 栈。它们在函数内部惰性导入，PyInstaller 的静态分析无法追踪——因此 `coffer-daemon.spec` 把它们显式声明为 hidden imports，让 frozen 的 daemon 能够转换文档、做 embedding、执行向量检索并驱动内置对话 agent。
 
-构建好的 Web UI（spec 002）同样以数据文件的形式随 daemon 二进制发布，这正是 frozen 的 daemon 能从自己的 origin 提供 UI 的原因。
+构建好的 Web UI（spec ui-shell）同样以数据文件的形式随 daemon 二进制发布，这正是 frozen 的 daemon 能从自己的 origin 提供 UI 的原因。
 
 ::: warning 捆绑验证——sqlite-vec 原生扩展
-`sqlite-vec` 以**包数据**而非 Python 子模块的形式分发其可加载原生扩展（`vec0.dylib` / `vec0.so` / `vec0.dll`），因此 `collect_submodules` 永远捕获不到它——`coffer-daemon.spec` 通过 `collect_data_files("sqlite_vec")` 加入它。如果冻结构建缺失该数据文件，daemon 将无法加载 `vec0` 扩展，向量检索会静默降级为仅关键字（`VecIndex.available()` 吞掉加载失败）。因此发布冒烟测试必须把「捆绑的 daemon 能加载 `vec0`」作为一个显式的捆绑验证项（按 [ADR-012](/zh/reference/adr/ADR-012-files-as-truth-sqlite-retrieval) 与 [ADR-008](/zh/reference/adr/ADR-008-distribution-pyinstaller)）。
+`sqlite-vec` 以**包数据**而非 Python 子模块的形式分发其可加载原生扩展（`vec0.dylib` / `vec0.so` / `vec0.dll`），因此 `collect_submodules` 永远捕获不到它——`coffer-daemon.spec` 通过 `collect_data_files("sqlite_vec")` 加入它。如果冻结构建缺失该数据文件，daemon 将无法加载 `vec0` 扩展，向量检索会静默降级为仅关键字（`VecIndex.available()` 吞掉加载失败）。因此发布冒烟测试必须把「捆绑的 daemon 能加载 `vec0`」作为一个显式的捆绑验证项（按 [Files as Truth](/zh/reference/adr/files-as-truth-sqlite-retrieval) 与 [PyInstaller Distribution](/zh/reference/adr/distribution-pyinstaller)）。
 :::
 
 ::: tip 为什么选 PyInstaller，而不是其他方案
@@ -90,7 +90,7 @@ daemon 在自己的 loopback origin 上，以静态文件的形式提供构建�
 3. 在 daemon 的 origin 上打开浏览器，并把该 code 放在 URL 的 **fragment** 里。
 4. 页面用该 code 换取 API token，并把 token 保存在 `localStorage` 中。
 
-token 本身绝不出现在 URL 里。放进 URL 会把它写入浏览器历史记录，这与 spec 001（FR-012 / FR-013）的 loopback + token 安全姿态相冲突。而交换用的 code 是一次性的，且约一分钟即过期，因此它出现在历史记录里是无害的。
+token 本身绝不出现在 URL 里。放进 URL 会把它写入浏览器历史记录，这与 spec mcp-gateway（FR-012 / FR-013）的 loopback + token 安全姿态相冲突。而交换用的 code 是一次性的，且约一分钟即过期，因此它出现在历史记录里是无害的。
 
 由于 UI 与 API 同源，CORS **默认即为同源**。Vite 开发服务器的 origin 仍然保留在既有的 `COFFER_DEV_CORS` 开关之后，供前端开发使用。完整安全姿态见[安全](/zh/architecture/security)。
 
@@ -124,5 +124,5 @@ xattr -d com.apple.quarantine ~/coffer/coffer ~/coffer/coffer-daemon ~/coffer/co
 
 ## 参见
 
-- [ADR-008：分发——PyInstaller 打包的 daemon、shim 与 CLI](/zh/reference/adr/ADR-008-distribution-pyinstaller) — 决策记录、被否决的替代方案和修订历史
-- [Spec 001 参考](/zh/reference/specs/001-mcp-gateway/spec) — FR-022 单层级压缩包、FR-023 聚合 `SHA256SUMS`、FR-024 daemon 提供 Web UI、FR-025 `coffer open`、FR-026 frozen 启动时的二进制部署
+- [分发——PyInstaller 打包的 daemon、shim 与 CLI](/zh/reference/adr/distribution-pyinstaller) — 决策记录、被否决的替代方案和修订历史
+- [MCP Gateway 规范参考](/zh/reference/specs/mcp-gateway/spec) — FR-022 单层级压缩包、FR-023 聚合 `SHA256SUMS`、FR-024 daemon 提供 Web UI、FR-025 `coffer open`、FR-026 frozen 启动时的二进制部署

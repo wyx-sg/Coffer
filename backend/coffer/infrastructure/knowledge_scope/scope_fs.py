@@ -2,7 +2,7 @@
 
 Computes the git-root of a working directory (walking up for a ``.git`` marker)
 and derives a **deterministic** project id for it. The id is machine-portable
-(spec 010 / ADR-043): it hashes the normalized ``origin`` remote URL when the
+(spec vault-export-import): it hashes the normalized ``origin`` remote URL when the
 repo has one — the same repository maps to the same memory store on every
 machine, whatever its checkout path — and falls back to the absolute-path hash
 (the legacy scheme) for repos without a remote. Pure filesystem reads only.

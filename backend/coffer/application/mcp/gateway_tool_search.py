@@ -95,7 +95,8 @@ async def execute_tool_search(
     Coffer's own ``coffer__`` built-ins are excluded so search only surfaces
     upstream capabilities (the overload source). When an ``embedder`` is
     configured, ranking is semantic (cosine over embeddings); otherwise — or if
-    embedding fails — it falls back to the deterministic BM25 ranker (ADR-024).
+    embedding fails — it falls back to the deterministic BM25 ranker
+    (ADR builtin-agent-is-internal-capability).
     """
     query = args.get("query")
     if not isinstance(query, str) or not query.strip():

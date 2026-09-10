@@ -24,7 +24,7 @@ _IMG = Attachment(path="/tmp/coffer-media/abc.jpg", mime="image/jpeg", filename=
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="an inbound attachment is persisted as a reference on the user message",
 )
 @pytest.mark.asyncio
@@ -47,7 +47,7 @@ async def test_channel_turn_persists_attachment_block() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="a later turn re-materialises the attachment from history",
 )
 @pytest.mark.asyncio
@@ -65,7 +65,7 @@ async def test_turn_re_materialises_attachment_from_history() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="the media dir prune deletes stale files and keeps fresh ones",
 )
 def test_media_dir_prune_ages_out_by_mtime(tmp_path: object) -> None:

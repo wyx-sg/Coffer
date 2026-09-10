@@ -13,7 +13,7 @@ from typing import Any
 #: The extension key the shim stamps the launch cwd into (initialize handshake).
 _CWD_META_KEY = "coffer/cwd"
 #: The extension key the shim stamps its self-reported ``--agent`` identity
-#: into (spec 001 FR-021, amended).
+#: into (spec mcp-gateway FR-021, amended).
 _AGENT_META_KEY = "coffer/agent"
 
 

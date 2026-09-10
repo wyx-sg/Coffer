@@ -1,6 +1,6 @@
 // frontend/src/pages/settings/SyncMasterKeyCard.test.tsx
 //
-// Master-key export/import (spec 010) through the browser's own file
+// Master-key export/import (spec vault-export-import) through the browser's own file
 // mechanisms. Export asks the daemon for the key material and saves it via a
 // transient `<a download>`; import reads a picked File with `file.text()` and
 // POSTs the material. Neither path names a host path, so there is no native

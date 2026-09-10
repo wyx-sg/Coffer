@@ -1,4 +1,4 @@
-"""SDK-backed Claude adapter tests (spec 008).
+"""SDK-backed Claude adapter tests (spec channels).
 
 Drives ``ClaudeSdkAgentAdapter`` through a ``FakeSdkSession`` that replays a
 scripted list of SDK message objects. No real ``claude`` binary or network is
@@ -166,7 +166,7 @@ async def _collect(
 
 
 # ---------------------------------------------------------------------------
-# Attachment materialisation (spec 009 channel media)
+# Attachment materialisation (spec channels channel media)
 # ---------------------------------------------------------------------------
 
 
@@ -176,7 +176,7 @@ def test_build_content_is_the_plain_prompt_without_attachments() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="an inbound image reaches a vision agent as an inline block",
 )
 def test_build_content_inlines_an_image_as_a_base64_block(tmp_path: Any) -> None:
@@ -556,7 +556,7 @@ async def test_adapter_omits_env_from_options_when_none():
 
 
 # ---------------------------------------------------------------------------
-# Resume-failure fallback (spec 008) — a poisoned session id must not brick the
+# Resume-failure fallback (spec channels) — a poisoned session id must not brick
 # conversation. A turn that never persisted a session (e.g. a /model slash
 # command the CLI rejects in headless mode) leaves an id the CLI can't resume,
 # so every later --resume exits non-zero; the adapter retries fresh.

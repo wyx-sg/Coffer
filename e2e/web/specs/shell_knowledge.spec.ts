@@ -5,8 +5,8 @@
 // now — a SCOPE holds both the entries an agent wrote and the documents someone
 // ingested — so the walks live together here.
 //
-// Entries (spec 007 §User Story 5): cold-start → /knowledge → write an entry
-// into the global scope → list → clear the scope. Documents (spec 006): create
+// Entries (spec knowledge §User Story 5): cold-start → /knowledge → write an entry
+// into the global scope → list → clear the scope. Documents (spec knowledge): create
 // a named collection through the UI dialog, ingest a document via the REST API
 // (file-picker dialogs are not automatable portably), then drive SEARCH and the
 // document list through the real UI.
@@ -30,7 +30,7 @@ async function openDocumentsTab(page: Page) {
   await page.getByRole("tab", { name: "Documents" }).click();
 }
 
-acceptance("007-memory", "clear a memory scope", async ({ page }) => {
+acceptance("knowledge", "clear a memory scope", async ({ page }) => {
   const { token, port } = readDaemonToken();
   const apiBase = `http://127.0.0.1:${port}/api/v1`;
   const headers = {
@@ -80,12 +80,12 @@ acceptance("007-memory", "clear a memory scope", async ({ page }) => {
   expect(scopeResp.status).toBe(200);
 });
 
-// Spec 007 §User Story 5 — an entry is added (entries are agent-authored: the
+// Knowledge §User Story 5 — an entry is added (entries are agent-authored: the
 // agent writes over the MCP gateway / API, the wire behind the UI & CLI). This
 // pins that a written entry surfaces in the read-only UI and that the viewer
 // hands the file off to an external editor (open/reveal, daemon-backed on the
 // web) instead of editing in-app — humans correct entries in their own editor.
-acceptance("007-memory", "user adds a fact", async ({ page }) => {
+acceptance("knowledge", "user adds a fact", async ({ page }) => {
   const { token, port } = readDaemonToken();
   const entryText = `e2e ui entry ${Date.now().toString(36)}`;
 
@@ -129,7 +129,7 @@ acceptance("007-memory", "user adds a fact", async ({ page }) => {
   }
 });
 
-acceptance("007-memory", "keyword search returns ranked passages", async ({ page }) => {
+acceptance("knowledge", "keyword search returns ranked passages", async ({ page }) => {
   const { token, port } = readDaemonToken();
   const apiBase = `http://127.0.0.1:${port}/api/v1`;
   const scopeName = `e2e-kb-${Date.now().toString(36)}`;

@@ -59,7 +59,7 @@ def wire_agent_and_skill_kinds(
     builtin_tools: BuiltinToolRegistry | None = None,
     credential_store: Any = None,
 ) -> None:
-    """Wire the agent + skill kinds (specs 004, 005) into a running app.
+    """Wire the agent + skill kinds (specs agent-registry, skill-manager) into a running app.
 
     Mirrors the `wire_mcp_kind` pattern. Both kinds are wired in lockstep so
     the cross-kind on_delete hook (deleting an agent cascades into skill
@@ -99,7 +99,7 @@ def wire_agent_and_skill_kinds(
         agent_skill_policy_resolver=_agent_skill_policy,
     )
 
-    # Agent kind (spec 004-agent-registry). Detection is discovery-only (no
+    # Agent kind (spec agent-registry). Detection is discovery-only (no
     # auto-registration): AutoDetectService reports installed-but-unregistered
     # agents as candidates the user confirms on the Agents page.
     #
@@ -121,7 +121,7 @@ def wire_agent_and_skill_kinds(
     async def _sync_skill_reconcile(agent_name: str) -> list[str]:
         return await skill_svc.apply_follow_for_agent(agent_name, actor="sync")
 
-    # `on_scope_changed` for the SKILL kind (ADR-045): the `agent` kind
+    # `on_scope_changed` for the SKILL kind (ADR per-agent-resource-scope): the `agent` kind
     # carries no scope of its own, so only a skill's edit triggers this. A
     # skill's scope edit can gain or lose any agent, so every registered
     # agent's delivery is re-reconciled — the same per-agent reconciliation
@@ -130,7 +130,7 @@ def wire_agent_and_skill_kinds(
         for row in await resource_svc.list(kind="agent"):
             await _sync_skill_reconcile(row.name)
 
-    # Config-file view/edit + one-click Coffer-MCP install (spec 004 v2).
+    # Config-file view/edit + one-click Coffer-MCP install (spec agent-registry v2).
     config_file_store = ConfigFileStore()
 
     agent_svc = AgentService(
@@ -190,7 +190,7 @@ def wire_agent_and_skill_kinds(
     app.state.kinds["agent"] = agent_kind
     app.state.kinds["skill"] = skill_kind
 
-    # Import reconciliation (spec 010): an agent doc only imports where the
+    # Import reconciliation (spec vault-export-import): an agent doc only imports where the
     # agent is installed (gate → quarantine otherwise), and imported rows
     # re-apply their on-disk side-effects (skill
     # delivery) after every sync import. start_sync reads these registries.

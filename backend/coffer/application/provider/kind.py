@@ -1,4 +1,4 @@
-"""``provider`` Kind wiring for the composition root (spec 011).
+"""``provider`` Kind wiring for the composition root (spec provider-switching).
 
 A provider profile is a pure-config resource (no on-disk artifact), so it uses
 the generic create/update path. Its only credential is ``credential_ref``,

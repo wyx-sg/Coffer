@@ -43,7 +43,7 @@ fi
 # ---------------------------------------------------------------------------
 # Locate a binary by name in the archive directory. The CLI archive ships every
 # binary co-located under its plain name (no triple suffix) — that co-location
-# is what the frozen detect-or-spawn logic relies on at runtime (ADR-006), so
+# is what the frozen detect-or-spawn logic relies on at runtime (ADR daemon-detect-or-spawn), so
 # probing a single directory is exactly the layout under test. The `.exe`
 # variant is tried too for Windows-style extractions.
 # ---------------------------------------------------------------------------

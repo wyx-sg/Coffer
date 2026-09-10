@@ -8,14 +8,14 @@ Browse everything in the left sidebar or use the search box at the top.
 
 ## Specs
 
-| Spec                             | Status                             | Read                                                  |
-| -------------------------------- | ---------------------------------- | ----------------------------------------------------- |
-| 001 — MCP Gateway                | Accepted — code merged (PR #14)    | [spec](/reference/specs/001-mcp-gateway/spec)         |
-| 002 — UI Shell & Visual Language | Accepted — code merged (PR #23)    | [spec](/reference/specs/002-ui-shell/spec)            |
-| 004 — Agent Registry             | Accepted — in development          | [spec](/reference/specs/004-agent-registry/spec)      |
+| Spec                       | Status                          | Read                                         |
+| -------------------------- | ------------------------------- | -------------------------------------------- |
+| MCP Gateway                | Accepted — code merged (PR #14) | [spec](/reference/specs/mcp-gateway/spec)    |
+| UI Shell & Visual Language | Accepted — code merged (PR #23) | [spec](/reference/specs/ui-shell/spec)       |
+| Agent Registry             | Accepted — in development       | [spec](/reference/specs/agent-registry/spec) |
 
-Spec 003 (MCP Gateway Desktop) is **retired**: the Tauri desktop shell was removed, and the
-requirements worth keeping were absorbed into spec 001 as FR-022 – FR-026 (single-tier release
+The MCP Gateway Desktop spec is **retired**: the Tauri desktop shell was removed, and the
+requirements worth keeping were absorbed into spec mcp-gateway as FR-022 – FR-026 (single-tier release
 archive, aggregated `SHA256SUMS`, daemon-served web UI, `coffer open`, and frozen-start binary
 deployment). See [Distribution](/architecture/distribution).
 

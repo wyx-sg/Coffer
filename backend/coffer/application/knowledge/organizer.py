@@ -1,4 +1,4 @@
-"""OrganizerService — the internal-LLM inbox→topic-doc consolidation (spec 007).
+"""OrganizerService — the internal-LLM inbox→topic-doc consolidation (spec knowledge).
 
 Drains ``knowledge/inbox/`` into coherent topic docs (one LLM call per item) or the
 rules lane (``rules/rules.md``) on an explicit trigger. Safety invariants: inbox

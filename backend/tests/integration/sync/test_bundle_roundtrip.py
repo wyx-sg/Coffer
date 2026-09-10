@@ -1,4 +1,4 @@
-"""Vault export/import, end to end (spec 010, ADR-016).
+"""Vault export/import, end to end (spec vault-export-import, ADR: vault-export-import).
 
 Two independent vaults (separate SQLite DBs, credential stores, knowledge
 trees, and *homes*) exchange state through one export bundle directory on
@@ -70,7 +70,7 @@ class _NoKeyring:
 
 
 class _StubStateProvider:
-    """A module-owned shared-state area (spec 010 "Shared state")."""
+    """A module-owned shared-state area (spec vault-export-import "Shared state")."""
 
     area = "peers"
 
@@ -215,7 +215,7 @@ def _areas(summary) -> dict[str, int]:  # type: ignore[no-untyped-def]
 # --- export ----------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="010-sync", scenario="export a vault to a directory")
+@pytest.mark.acceptance(spec="vault-export-import", scenario="export a vault to a directory")
 @pytest.mark.asyncio
 async def test_export_writes_a_bundle_and_reports_counts(alice, tmp_path) -> None:  # type: ignore[no-untyped-def]
     await alice.resources.register("mcp_server", "files", {"value": "a"}, "user")
@@ -242,7 +242,9 @@ async def test_export_writes_a_bundle_and_reports_counts(alice, tmp_path) -> Non
     assert summary.failures == []
 
 
-@pytest.mark.acceptance(spec="010-sync", scenario="an unchanged vault exports byte-identically")
+@pytest.mark.acceptance(
+    spec="vault-export-import", scenario="an unchanged vault exports byte-identically"
+)
 @pytest.mark.asyncio
 async def test_two_exports_of_an_unchanged_vault_match(alice, tmp_path) -> None:  # type: ignore[no-untyped-def]
     await alice.resources.register(
@@ -280,7 +282,7 @@ async def test_re_export_into_the_same_directory_is_a_snapshot(alice, tmp_path) 
 # --- import ----------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="010-sync", scenario="import a bundle into an empty vault")
+@pytest.mark.acceptance(spec="vault-export-import", scenario="import a bundle into an empty vault")
 @pytest.mark.asyncio
 async def test_import_into_an_empty_vault(alice, bob, tmp_path) -> None:  # type: ignore[no-untyped-def]
     await alice.resources.register("mcp_server", "files", {"value": "a"}, "user")
@@ -301,7 +303,9 @@ async def test_import_into_an_empty_vault(alice, bob, tmp_path) -> None:  # type
     assert summary.failures == []
 
 
-@pytest.mark.acceptance(spec="010-sync", scenario="the bundle wins over an existing local resource")
+@pytest.mark.acceptance(
+    spec="vault-export-import", scenario="the bundle wins over an existing local resource"
+)
 @pytest.mark.asyncio
 async def test_bundle_wins_over_a_local_resource(alice, bob, tmp_path) -> None:  # type: ignore[no-untyped-def]
     await alice.resources.register("mcp_server", "files", {"value": "from-alice"}, "user")
@@ -315,7 +319,9 @@ async def test_bundle_wins_over_a_local_resource(alice, bob, tmp_path) -> None: 
     assert row.config["value"] == "from-alice"
 
 
-@pytest.mark.acceptance(spec="010-sync", scenario="import never deletes a local-only resource")
+@pytest.mark.acceptance(
+    spec="vault-export-import", scenario="import never deletes a local-only resource"
+)
 @pytest.mark.asyncio
 async def test_import_never_deletes_local_only_state(alice, bob, tmp_path) -> None:  # type: ignore[no-untyped-def]
     await alice.resources.register("mcp_server", "shared", {"value": "a"}, "user")
@@ -331,7 +337,9 @@ async def test_import_never_deletes_local_only_state(alice, bob, tmp_path) -> No
     assert (bob.knowledge / "bob-only.md").exists()
 
 
-@pytest.mark.acceptance(spec="010-sync", scenario="config paths follow each machine's home")
+@pytest.mark.acceptance(
+    spec="vault-export-import", scenario="config paths follow each machine's home"
+)
 @pytest.mark.asyncio
 async def test_home_paths_land_on_the_importing_machine(tmp_path) -> None:  # type: ignore[no-untyped-def]
     a_home, b_home = tmp_path / "homes" / "a", tmp_path / "homes" / "b"
@@ -350,7 +358,7 @@ async def test_home_paths_land_on_the_importing_machine(tmp_path) -> None:  # ty
 
 
 @pytest.mark.acceptance(
-    spec="010-sync", scenario="a resource that cannot apply here is reported, not fatal"
+    spec="vault-export-import", scenario="a resource that cannot apply here is reported, not fatal"
 )
 @pytest.mark.asyncio
 async def test_one_unappliable_resource_does_not_stop_the_rest(alice, tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -385,7 +393,9 @@ async def test_a_failing_state_doc_is_reported_not_fatal(alice, bob, tmp_path) -
     assert summary.failures == [("state/peers/bad", "cannot bind here")]
 
 
-@pytest.mark.acceptance(spec="010-sync", scenario="an older build refuses a newer bundle")
+@pytest.mark.acceptance(
+    spec="vault-export-import", scenario="an older build refuses a newer bundle"
+)
 @pytest.mark.asyncio
 async def test_a_newer_bundle_is_refused(alice, bob, tmp_path) -> None:  # type: ignore[no-untyped-def]
     await alice.resources.register("mcp_server", "files", {"value": "a"}, "user")
@@ -410,7 +420,7 @@ async def test_a_directory_that_is_not_a_bundle_is_refused(bob, tmp_path) -> Non
         await bob.service.import_bundle(str(tmp_path / "missing"))
 
 
-@pytest.mark.acceptance(spec="010-sync", scenario="a scoped resource imports dormant")
+@pytest.mark.acceptance(spec="vault-export-import", scenario="a scoped resource imports dormant")
 @pytest.mark.asyncio
 async def test_scope_rides_the_bundle_unmodified(alice, bob, tmp_path) -> None:  # type: ignore[no-untyped-def]
     created = await alice.resources.register("mcp_server", "files", {"value": "a"}, "user")
@@ -431,7 +441,9 @@ async def test_scope_rides_the_bundle_unmodified(alice, bob, tmp_path) -> None: 
 # --- credentials -----------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="010-sync", scenario="credentials are omitted unless requested")
+@pytest.mark.acceptance(
+    spec="vault-export-import", scenario="credentials are omitted unless requested"
+)
 @pytest.mark.asyncio
 async def test_credentials_are_opt_in(alice, bob, tmp_path) -> None:  # type: ignore[no-untyped-def]
     alice.cred_store().set("mcp/files/token", "s3cret")
@@ -445,7 +457,7 @@ async def test_credentials_are_opt_in(alice, bob, tmp_path) -> None:  # type: ig
     assert CredentialSyncAdapter(bob.db_path, bob.master_key).list_refs() == []
 
 
-@pytest.mark.acceptance(spec="010-sync", scenario="master key never enters the bundle")
+@pytest.mark.acceptance(spec="vault-export-import", scenario="master key never enters the bundle")
 @pytest.mark.asyncio
 async def test_ciphertext_travels_but_the_key_never_does(alice, bob, tmp_path) -> None:  # type: ignore[no-untyped-def]
     alice.cred_store().set("mcp/files/token", "s3cret")

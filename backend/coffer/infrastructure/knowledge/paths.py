@@ -235,7 +235,7 @@ def rules_path(store_dir: pathlib.Path) -> pathlib.Path:
 def rule_file_path(store_dir: pathlib.Path, slug: str) -> pathlib.Path:
     """Path of a per-category rules file ``<store_dir>/rules/<slug>.md``.
 
-    The autonomous split (spec 007 amendment 2026-06-22) groups rules into these
+    The autonomous split (spec knowledge amendment 2026-06-22) groups rules into these
     by topic once ``rules.md`` grows past the threshold. The slug is guarded as a
     single safe segment (no traversal, no nested dirs)."""
     _safe_segment(slug, "rules slug")

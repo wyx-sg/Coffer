@@ -1,4 +1,4 @@
-"""The export bundle manifest (spec 010).
+"""The export bundle manifest (spec vault-export-import).
 
 ``manifest.json`` carries the bundle's layout schema version plus the moment
 it was written. The version is the only load-bearing field: a build that does
@@ -17,7 +17,8 @@ from datetime import UTC, datetime
 from coffer.domain.sync.errors import SyncSerializationError
 
 #: Bundle layout version, bumped only on an incompatible layout change.
-#: 1 = the export/import bundle introduced by ADR-016 (manifest + mirrored
+#: 1 = the export/import bundle introduced by the vault-export-import ADR
+#: (manifest + mirrored
 #: trees + resources/ + state/ + optional credentials/). The continuous-sync
 #: workspace layouts that preceded it are a different artifact entirely and
 #: are not readable here.

@@ -7,7 +7,7 @@
 //      file inside the size cap.
 //
 //   B. Direct servers — the agent's own MCP entries read from its config
-//      files (specs 004/005 workspace amendment). The listing is read-only and
+//      files (specs agent-registry/skill-manager workspace amendment). The listing is read-only and
 //      the one write is adopt-into-Coffer: each row shows source/transport, the
 //      entry's enabled state as a plain badge (null for claude_code, whose
 //      config format has no per-entry flag), and an Adopt action. Coffer no

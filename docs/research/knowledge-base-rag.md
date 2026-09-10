@@ -2,8 +2,8 @@
 
 > English: this file · 中文版: [knowledge-base-rag.zh.md](./knowledge-base-rag.zh.md)
 >
-> Internal competitive-research report for Coffer's knowledge base (spec 006,
-> ADR-012). **Date:** 2026-06-16. **Method:** deep-research harness (this run
+> Internal competitive-research report for Coffer's knowledge base (the
+> Knowledge Base spec, [Files as Truth](../decisions/files-as-truth-sqlite-retrieval.md)). **Date:** 2026-06-16. **Method:** deep-research harness (this run
 > also read Coffer's own KB code to verify the comparison).
 >
 > **✓ Coverage gap filled.** The first pass went deep on txtai, Open WebUI
@@ -75,7 +75,7 @@ ingestion pipeline is**:
    index trivial (`coffer reindex`) — a durability and flexibility win.
 2. **Read-only + agent-via-MCP is the right safety posture** for a vault. Coffer
    exposes granular read-only MCP tools (list / keyword-or-vector search / grep /
-   read) and layers an agentic `ask` (ADR-024) on top; the agent never writes the
+   read) and layers an agentic `ask` (ADR builtin-agent-is-internal-capability) on top; the agent never writes the
    KB. (Cognee, by contrast, is writable.)
 3. **The SQLite-FTS5+sqlite-vec peers validate the whole architecture** —
    independent projects converged on Coffer's exact substrate.

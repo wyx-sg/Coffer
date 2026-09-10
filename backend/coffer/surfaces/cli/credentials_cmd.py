@@ -5,7 +5,7 @@ Secrets are Fernet-encrypted into coffer's database; the master key lives in
 through the daemon's HTTP API; secrets never appear in logs / audit /
 structured events.
 
-Spec 006: the daemon is the sole credential owner (creator = reader → silent
+The daemon is the sole credential owner (creator = reader → silent
 reads within an app version). The CLI here imports no credential/keyring code.
 """
 

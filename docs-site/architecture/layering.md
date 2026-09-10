@@ -80,9 +80,9 @@ These rules are not advisory. They are enforced by two complementary mechanisms 
 
 Both are run on every PR. The combination means that any import that violates the four-layer contract or the single-credential-access rule is caught before merge, not discovered in a code review.
 
-## Code layout (ADR-002)
+## Code layout (ADR code-layout-layer-first)
 
-The layer-first layout is specified by [ADR-002](/reference/adr/ADR-002-code-layout-layer-first). The full directory tree:
+The layer-first layout is specified by [Layer-First Code Layout](/reference/adr/code-layout-layer-first). The full directory tree:
 
 ```
 backend/coffer/
@@ -142,7 +142,7 @@ A handful of slices are **cross-cutting, not kinds**: `application/sync/` + `inf
 
 ### Why layer-first, not feature-first (vertical slices)?
 
-ADR-002 considered and rejected the vertical-slice alternative — a `kinds/` top-level directory where each kind would contain its own `domain/`, `application/`, `infrastructure/`, and `surfaces/` subtree.
+The [Layer-First Code Layout](/reference/adr/code-layout-layer-first) ADR considered and rejected the vertical-slice alternative — a `kinds/` top-level directory where each kind would contain its own `domain/`, `application/`, `infrastructure/`, and `surfaces/` subtree.
 
 The rejection rests on three observations:
 
@@ -190,4 +190,4 @@ Cross-kind imports within a layer are also forbidden: `domain/mcp/` may not impo
 
 ---
 
-**See also:** [ADR-002: Code layout — layer-first](/reference/adr/ADR-002-code-layout-layer-first), [Architecture reference](/reference/project/architecture)
+**See also:** [Code layout — layer-first](/reference/adr/code-layout-layer-first), [Architecture reference](/reference/project/architecture)

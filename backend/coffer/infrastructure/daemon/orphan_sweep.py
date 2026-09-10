@@ -158,12 +158,13 @@ def _select_stale_daemons(
 
 
 def reap_stale_daemons() -> int:
-    """Terminate any OTHER process running this daemon's executable (ADR-006).
+    """Terminate any OTHER process running this daemon's executable (ADR daemon-detect-or-spawn).
 
     Called by the winning daemon at startup: it has just bound the port under the
     spawn lock because ``live_daemon()`` found nobody serving, so any process
     sharing our executable is a stale/wedged sibling a prior app launch or crash
-    left behind — reap it. The ADR-006 flock means a racing spawn is blocked, not
+    left behind — reap it. The detect-or-spawn flock means a racing spawn is blocked,
+    not
     mid-bind, so it is never a legitimate target.
 
     **Frozen builds only.** In a source run ``sys.executable`` is the Python

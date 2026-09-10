@@ -1,4 +1,4 @@
-// frontend/src/components/agents/ConfigFileTree.tsx — spec 004.
+// frontend/src/components/agents/ConfigFileTree.tsx — spec agent-registry.
 // Left pane of the agent config viewer: the curated config-file allowlist as
 // a "tree". Single files are flat rows; directory-backed keys (kind ===
 // "directory") render as expandable nodes whose children come from the list

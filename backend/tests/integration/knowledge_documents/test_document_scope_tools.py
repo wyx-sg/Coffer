@@ -36,11 +36,11 @@ def _tool(reg: BuiltinToolRegistry, name: str):
     return tool
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="built-in KB tools appear in client tool list")
+@pytest.mark.acceptance(spec="knowledge", scenario="built-in KB tools appear in client tool list")
 async def test_the_eight_tools_are_registered(kb) -> None:
     reg = await _registry(kb)
     # Twelve tools over two kinds became eight over one. Documents stay
-    # co-managed (spec 007 FR-062): read AND write are both here.
+    # co-managed (spec knowledge FR-062): read AND write are both here.
     assert {t.name for t in reg.list()} == {
         "search",
         "grep",
@@ -56,7 +56,7 @@ async def test_the_eight_tools_are_registered(kb) -> None:
     assert reg.is_builtin(f"{COFFER_TOOL_PREFIX}write")
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="agent searches a knowledge base")
+@pytest.mark.acceptance(spec="knowledge", scenario="agent searches a knowledge base")
 async def test_search_finds_an_ingested_document(kb) -> None:
     await kb.create_kb("kb1")
     await kb.service.ingest_bytes(
@@ -71,7 +71,7 @@ async def test_search_finds_an_ingested_document(kb) -> None:
     assert out["hits"][0]["id"]
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="agent greps a knowledge base")
+@pytest.mark.acceptance(spec="knowledge", scenario="agent greps a knowledge base")
 async def test_grep_matches_a_literal_line(kb) -> None:
     await kb.create_kb("kb1")
     await kb.service.ingest_bytes(
@@ -83,7 +83,7 @@ async def test_grep_matches_a_literal_line(kb) -> None:
     assert "make release" in out["hits"][0]["line"]
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="agent reads a document")
+@pytest.mark.acceptance(spec="knowledge", scenario="agent reads a document")
 async def test_read_returns_the_full_markdown(kb) -> None:
     await kb.create_kb("kb1")
     doc = await kb.service.ingest_bytes(
@@ -115,7 +115,7 @@ async def test_list_shows_the_scope_catalogue_and_one_scope(kb) -> None:
     assert one["documents"][0]["title"]
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="agent adds a document via MCP")
+@pytest.mark.acceptance(spec="knowledge", scenario="agent adds a document via MCP")
 async def test_write_with_a_filename_adds_a_document(kb) -> None:
     await kb.create_kb("kb1")
     reg = await _registry(kb)
@@ -128,7 +128,7 @@ async def test_write_with_a_filename_adds_a_document(kb) -> None:
     assert len((await kb.service.search(scope_name="kb1", query="wombat", top_k=5)).passages) == 1
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="agent edits a document via MCP")
+@pytest.mark.acceptance(spec="knowledge", scenario="agent edits a document via MCP")
 async def test_write_with_an_id_rewrites_a_document(kb) -> None:
     await kb.create_kb("kb1")
     doc = await kb.service.ingest_bytes(
@@ -143,7 +143,7 @@ async def test_write_with_an_id_rewrites_a_document(kb) -> None:
     assert len((await kb.service.search(scope_name="kb1", query="seal", top_k=5)).passages) == 1
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="agent deletes a document via MCP")
+@pytest.mark.acceptance(spec="knowledge", scenario="agent deletes a document via MCP")
 async def test_delete_removes_a_document(kb) -> None:
     await kb.create_kb("kb1")
     doc = await kb.service.ingest_bytes(

@@ -264,7 +264,7 @@ class ChannelCommands:
         parts = text.split()
         if len(parts) < 2:
             # Show the current model. Coffer-managed CLI agents own their own
-            # model namespace (ADR-024 retired the builtin model-registry agent),
+            # model namespace (the builtin model-registry agent is retired),
             # so we just report what will be passed through to the agent's CLI.
             cfg = await self._conversations.get_agent_config(conversation_id)
             current = cfg.model or "(CLI default)"

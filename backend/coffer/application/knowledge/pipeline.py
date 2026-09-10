@@ -107,7 +107,7 @@ class IngestPipeline:
         ULID id), ``"updated"`` (a changed re-upload of an existing filename, same
         id, ``replace=true``), or ``"unchanged"`` (a byte-identical re-upload, an
         idempotent no-op). Identity is a stable ULID decoupled from content
-        (spec 007 FR-062): a re-upload is matched by ``original_filename`` in
+        (spec knowledge FR-062): a re-upload is matched by ``original_filename`` in
         scope, not by bytes."""
         check_upload_size(raw_bytes, config)
         prepared = await prepare_upload(self._converters, filename, raw_bytes)

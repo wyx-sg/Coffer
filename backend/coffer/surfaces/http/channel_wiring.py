@@ -1,4 +1,4 @@
-"""Channel-kind composition (spec 009) — called from the app lifespan.
+"""Channel-kind composition (spec channels) — called from the app lifespan.
 
 Wires the kind, the peer repo, the inbound processor (against the chat
 platform's service handles), the adapter factory, the callback-listener
@@ -131,7 +131,7 @@ def wire_channel_kind(
         http_client=httpx.AsyncClient(),
     )
     set_channel_service(service)
-    # Pairing identity syncs across machines (spec 010 state area); the sync
+    # Pairing identity syncs across machines (spec vault-export-import state area); the sync
     # composition root (wired later) picks the provider up from app.state.
     providers = getattr(app.state, "sync_state_providers", None)
     if providers is None:

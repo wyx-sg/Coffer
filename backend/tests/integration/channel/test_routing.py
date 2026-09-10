@@ -36,7 +36,7 @@ async def test_agent_switch_opens_new_conversation_and_sticks(env: ChannelEnv) -
     await wait_until(lambda: "codex-here" in adapter.texts())
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="/agent rejects an unknown agent")
+@pytest.mark.acceptance(spec="channels", scenario="/agent rejects an unknown agent")
 async def test_agent_rejects_unknown_key(env: ChannelEnv) -> None:
     resource, adapter = await env.paired_channel()
 
@@ -51,7 +51,7 @@ async def test_agent_rejects_unknown_key(env: ChannelEnv) -> None:
 # -- /new + /status honor sticky choices ---------------------------------------
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="/agent switches the agent and sticks")
+@pytest.mark.acceptance(spec="channels", scenario="/agent switches the agent and sticks")
 async def test_new_reuses_sticky_agent(env: ChannelEnv) -> None:
     env.add_agent("codex", reply="codex-here")
     resource, adapter = await env.paired_channel()
@@ -68,13 +68,13 @@ async def test_new_reuses_sticky_agent(env: ChannelEnv) -> None:
 
 
 # NOTE: the builtin-agent /model tests (registry override + reject-unknown) were
-# removed with ADR-024 — the builtin chat agent that resolved models from the
+# removed — the builtin chat agent that resolved models from the
 # registry is retired. Channels route to managed agents only, whose /model is the
 # raw passthrough covered by the bridged test below (which now carries the
-# spec-009 "/model" acceptance marker).
+# channels "/model" acceptance marker).
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="/model switches the model for the next turn")
+@pytest.mark.acceptance(spec="channels", scenario="/model switches the model for the next turn")
 async def test_model_switch_for_bridged_agent_passes_through_to_agent_config(
     env: ChannelEnv,
 ) -> None:
@@ -107,7 +107,7 @@ async def test_status_reports_agent(env: ChannelEnv) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="009-channels", scenario="a group slash-command reply routes to the group/thread"
+    spec="channels", scenario="a group slash-command reply routes to the group/thread"
 )
 async def test_group_status_command_reply_routes_to_group_and_thread(env: ChannelEnv) -> None:
     """Regression: an owner's ``/status`` sent inside a group thread must have

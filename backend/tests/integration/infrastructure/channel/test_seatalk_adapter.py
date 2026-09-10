@@ -359,7 +359,7 @@ async def test_handle_event_forwarded_record_downloads_images(
     assert att.mime == "image/png"
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="an inbound SeaTalk file drives a turn")
+@pytest.mark.acceptance(spec="channels", scenario="an inbound SeaTalk file drives a turn")
 async def test_handle_event_direct_file_downloads_attachment(
     fake_seatalk: FakeSeaTalk, tmp_path: Any
 ) -> None:
@@ -684,7 +684,7 @@ def _subscriber_text_envelope(*, event_id: str, message_id: str, text: str) -> d
     }
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="a redelivered event is processed once")
+@pytest.mark.acceptance(spec="channels", scenario="a redelivered event is processed once")
 async def test_handle_event_dedups_redelivered_event_id(fake_seatalk: FakeSeaTalk) -> None:
     """FR-039: SeaTalk retries a slow callback, so the SAME event_id can arrive
     twice — the second delivery must be dropped, driving the turn once. Two
@@ -827,7 +827,7 @@ async def test_fetch_thread_recurses_forwarded_records_in_the_thread(
     assert all(it.text != "[forwarded chat record]" for it in items)
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="thread-history images reach a vision agent")
+@pytest.mark.acceptance(spec="channels", scenario="thread-history images reach a vision agent")
 async def test_fetch_thread_downloads_thread_images(
     fake_seatalk: FakeSeaTalk, tmp_path: Any
 ) -> None:
@@ -1247,7 +1247,7 @@ def _live(adapter: Any, chat_id: str = "emp-1", **kwargs: Any) -> SeaTalkLiveTex
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="each seatalk stream update carries the full reply so far",
 )
 async def test_stream_opens_once_and_updates_carry_full_snapshots(
@@ -1298,7 +1298,7 @@ async def test_stream_updates_are_buffered_not_sent_per_token(fake_seatalk: Fake
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="a terminated seatalk stream is never reused",
 )
 async def test_a_terminated_stream_is_never_reused_and_the_reply_is_handed_back(
@@ -1341,7 +1341,7 @@ async def test_a_stream_that_never_opened_hands_the_whole_reply_back(
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="a reply past the stream budget finishes the stream and sends the rest",
 )
 async def test_reply_past_the_stream_budget_finishes_at_the_limit_and_returns_the_rest(

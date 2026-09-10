@@ -1,4 +1,4 @@
-"""Rules-lane helpers for ``KnowledgeService`` (spec 007).
+"""Rules-lane helpers for ``KnowledgeService`` (spec knowledge).
 
 Split out of :mod:`coffer.application.knowledge.service` for the file-size
 budget. These are thin free functions the service's ``get_rules`` method
@@ -6,7 +6,7 @@ delegates to; the service's public API is unchanged.
 
 The rules lane once had a second job: assembling a SessionStart bundle for the
 shell hook Coffer installed into each agent. That delivery channel is gone
-(spec 004 FR-043…FR-048 removed), so what remains here is the read side — the
+(spec agent-registry FR-043…FR-048 removed), so what remains here is the read side — the
 lane's content is still written by ``organize`` and still readable through
 ``coffer knowledge rules``; nothing pushes it into an agent session any more.
 """

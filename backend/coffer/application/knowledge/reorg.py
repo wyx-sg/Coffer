@@ -1,4 +1,4 @@
-"""ReorgService — agentic topic-doc reorganization (spec 007).
+"""ReorgService — agentic topic-doc reorganization (spec knowledge).
 
 On an explicit ``reorg`` trigger (REST/CLI; no auto-fire in this PR), runs a
 bounded langgraph create_react_agent loop over the store's existing topic docs,

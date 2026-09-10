@@ -42,7 +42,7 @@ async def _reacting_channel(
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="receipt and completion are acked with reactions where supported",
 )
 async def test_reaction_ack_on_receipt_and_completion(env: ChannelEnv) -> None:
@@ -74,7 +74,7 @@ async def test_errored_turn_keeps_only_the_receipt_reaction(env: ChannelEnv) -> 
 
 
 @pytest.mark.acceptance(
-    spec="009-channels", scenario="a transport without reaction support attempts no reaction"
+    spec="channels", scenario="a transport without reaction support attempts no reaction"
 )
 async def test_no_reaction_on_a_non_reacting_transport(env: ChannelEnv) -> None:
     # A SeaTalk-like transport: supports typing but not reactions. Its receipt
@@ -91,7 +91,7 @@ async def test_no_reaction_on_a_non_reacting_transport(env: ChannelEnv) -> None:
     assert adapter.typing == ["owner"]  # the typing signal still fires
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="a failed reaction never breaks the turn")
+@pytest.mark.acceptance(spec="channels", scenario="a failed reaction never breaks the turn")
 async def test_failing_reaction_still_delivers_the_reply(env: ChannelEnv) -> None:
     env.provider.adapter = _clean_reply("still here")
     adapter = await _reacting_channel(env, set_reaction_fails=True)

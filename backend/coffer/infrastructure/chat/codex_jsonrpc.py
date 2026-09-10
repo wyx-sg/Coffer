@@ -1,4 +1,4 @@
-"""JSON-RPC 2.0 over stdio client for ``codex app-server`` (spec 008, T1).
+"""JSON-RPC 2.0 over stdio client for ``codex app-server`` (spec channels, T1).
 
 ``codex app-server`` speaks **newline-delimited JSON** (NDJSON) over stdin/stdout
 — one JSON object per line, ``\\n``-terminated, in both directions (empirically

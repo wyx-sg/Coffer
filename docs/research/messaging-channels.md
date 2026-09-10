@@ -2,8 +2,9 @@
 
 > English: this file · 中文版: [messaging-channels.zh.md](./messaging-channels.zh.md)
 >
-> Internal competitive-research report for Coffer's channels feature (spec 009,
-> ADR-014). **Date:** 2026-06-16. **Method:** deep-research harness. Angles A/B/C
+> Internal competitive-research report for Coffer's channels feature (spec channels,
+> [Channel Adapter Framework](../decisions/channel-adapter-framework.md)).
+> **Date:** 2026-06-16. **Method:** deep-research harness. Angles A/B/C
 > covered; some HITL platforms and Rasa/Chatwoot/Voiceflow/Sweep unverified.
 
 ## 1. Landscape at a glance
@@ -127,10 +128,11 @@ Primary:
 
 ### ✅ Confirmed
 
-- **Channel = managed resource.** ADR-014 §Decision item 1 makes a channel a
-  resource kind (`channel:<name>`, ADR-007) on the generic
+- **Channel = managed resource.** The Channel Adapter Framework ADR §Decision
+  item 1 makes a channel a resource kind (`channel:<name>`, per Everything Is a
+  Resource Kind) on the generic
   lifecycle/audit/credential-ref machinery; `kind.py` probes `*_ref` credential
-  fields at registration. (`repo:docs/decisions/ADR-014-channel-adapter-framework.md`,
+  fields at registration. (`repo:docs/decisions/channel-adapter-framework.md`,
   `repo:backend/coffer/application/channel/kind.py`)
 - **Single-owner stealth pairing.** `pairing.py` implements one pending pairing
   code per channel (8 chars, 1-hour TTL, bounded attempts, fail-closed,
@@ -171,7 +173,7 @@ Primary:
   `/conversations/{id}/approvals` route, and the `CHANNEL_APPROVAL_RESOLVED`
   audit event; `backend/coffer/application/chat/approvals.py` is gone; no
   `ApprovalGate`/"approval gate" symbols remain under `backend/coffer/` or
-  `specs/009-channels/`; agents now run with full permissions. The commit's
+  `specs/channels/`; agents now run with full permissions. The commit's
   rationale is the report's own framing turned against it: the relay was
   "redundant with owner-pairing (only the paired owner can drive a channel, and
   the web console is the owner too)." The other two legs of local claim #1

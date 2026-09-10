@@ -1,4 +1,4 @@
-"""HTTP contract tests for /api/v1/sync (spec 010 vault export/import)."""
+"""HTTP contract tests for /api/v1/sync (spec vault-export-import vault export/import)."""
 
 from __future__ import annotations
 
@@ -200,7 +200,7 @@ async def test_routes_require_the_token(client) -> None:  # type: ignore[no-unty
 
 
 async def test_withdrawn_continuous_sync_routes_are_gone(client) -> None:  # type: ignore[no-untyped-def]
-    # ADR-016 withdrew continuous sync; its surface must not linger.
+    # Vault export/import withdrew continuous sync; its surface must not linger.
     assert (await client.get("/api/v1/sync/config")).status_code == 404
     assert (await client.get("/api/v1/sync/status")).status_code == 404
     assert (await client.post("/api/v1/sync/run", json={})).status_code == 404

@@ -1,1 +1,1 @@
-"""Channel kind — infrastructure adapters (spec 009)."""
+"""Channel kind — infrastructure adapters (spec channels)."""

@@ -118,7 +118,7 @@ async def _create_tables(engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="CLI surface mirrors REST operations")
+@pytest.mark.acceptance(spec="agent-registry", scenario="CLI surface mirrors REST operations")
 def test_agent_list_empty_json(agent_cli_daemon):
     """`agent list --json` prints an empty JSON list when no agents are registered."""
     result = _runner.invoke(cli_app, ["agent", "list", "--json"])

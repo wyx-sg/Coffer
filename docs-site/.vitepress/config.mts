@@ -136,7 +136,7 @@ export default withMermaid(
     base: '/Coffer/',
     cleanUrls: true,
     lastUpdated: true,
-    appearance: false, // light-only: no dark mode (spec 002)
+    appearance: false, // light-only: no dark mode (spec ui-shell)
     ignoreDeadLinks: true,
     themeConfig: {
       search: { provider: 'local' },

@@ -1,4 +1,4 @@
-"""/api/v1/sync — vault export and import (spec 010, ADR-016).
+"""/api/v1/sync — vault export and import (spec vault-export-import, ADR: vault-export-import).
 
 Export/import is a cross-cutting service, not a resource kind, so it has its
 own routes rather than riding /resources.
@@ -51,7 +51,7 @@ class FailureOut(BaseModel):
 class ExportIn(BaseModel):
     path: str
     # Off by default: an export directory is easy to leave somewhere careless
-    # (spec 010 "Credentials").
+    # (spec vault-export-import "Credentials").
     with_credentials: bool = False
 
 

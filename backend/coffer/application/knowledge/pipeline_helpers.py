@@ -266,7 +266,7 @@ def build_ingested_document(
     source_path: str | None = None,
 ) -> Document:
     """Build the in-memory ``Document`` for a freshly-converted upload. ``id`` is
-    the stable ULID (new for an ingest, reused for an in-place update — spec 007 FR-062);
+    the stable ULID (new for an ingest, reused for an in-place update — spec knowledge FR-062);
     ``content_sha256`` is set by the reindex routine. ``source_path`` is the
     external original's absolute path, recorded only for path-based ingests."""
     metadata: dict[str, object] = {

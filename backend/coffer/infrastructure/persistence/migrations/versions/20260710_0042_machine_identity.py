@@ -1,4 +1,4 @@
-"""machine identity singleton (spec 010 amendment, ADR-043)
+"""machine identity singleton (spec vault-export-import amendment, continuous sync)
 
 Revision ID: 0042
 Revises: 0041

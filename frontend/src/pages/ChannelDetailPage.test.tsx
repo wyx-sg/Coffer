@@ -1,6 +1,6 @@
 // frontend/src/pages/ChannelDetailPage.test.tsx
 //
-// The channel operating surface (spec 009, User Stories 2 + 8). Data hooks
+// The channel operating surface (spec channels, User Stories 2 + 8). Data hooks
 // and the generic resource mutations are mocked so the test asserts the
 // page's own rendering: status (peer + callback), pairing-code generation,
 // and the enable/disable toggle wiring.
@@ -124,7 +124,7 @@ beforeEach(() => {
 // The UI half of the status scenario: the page queries /channels/{name}/status
 // over REST and reports adapter run state, the paired peer, and the seatalk
 // callback details (the CLI half lives in the backend suite).
-acceptance("009-channels", "channel status reports runtime, pairing, and callback details", () => {
+acceptance("channels", "channel status reports runtime, pairing, and callback details", () => {
   stubResource();
   stubStatus({
     peer: {

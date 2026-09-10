@@ -80,7 +80,7 @@ MCP 客户端（Claude Code、Codex）期望通过 stdio 与 MCP 服务器通信
 
 ## 会话模型与惰性启动
 
-每个下游客户端连接在守护进程中创建一个 `MCPGatewaySession`（按 [ADR-005](/zh/reference/adr/ADR-005-session-subprocess-model)）。此会话拥有该连接的上游子进程。子进程不在会话创建时启动——它们在第一次需要时惰性启动，即路由到给定上游的第一个 `tools/list` 或 `tools/call` 支付一次子进程启动和 `initialize` 握手的代价。同一会话中的后续调用重用正在运行的上游。
+每个下游客户端连接在守护进程中创建一个 `MCPGatewaySession`（按 [Session Subprocess Model](/zh/reference/adr/session-subprocess-model)）。此会话拥有该连接的上游子进程。子进程不在会话创建时启动——它们在第一次需要时惰性启动，即路由到给定上游的第一个 `tools/list` 或 `tools/call` 支付一次子进程启动和 `initialize` 握手的代价。同一会话中的后续调用重用正在运行的上游。
 
 同时连接的两个 MCP 客户端（例如 Claude Code 和 Codex 同时运行）产生两个独立的 `MCPGatewaySession` 对象，每个都有自己的上游子进程集。它们不共享任何状态。这防止了一个客户端的上游崩溃影响另一个客户端，并保持 MCP 协议正确性：每个上游 `initialize` 为每个会话新鲜协商能力，守护进程无需多路复用或伪造会话状态。
 
@@ -191,7 +191,7 @@ MCP 客户端（Claude Code、Codex）期望通过 stdio 与 MCP 服务器通信
 
 ## Agent 回合全链路
 
-回合驱动的全链路与网关调用不同：它不是把单个 JSON-RPC 调用转发给上游，而是运行一个多步的 **agent 回合**，在生成回复前可能先调用 Coffer 自己的若干网关工具。此路径由[规约 009](/zh/reference/specs/009-channels/spec)（FR-043…FR-055）规定。
+回合驱动的全链路与网关调用不同：它不是把单个 JSON-RPC 调用转发给上游，而是运行一个多步的 **agent 回合**，在生成回复前可能先调用 Coffer 自己的若干网关工具。此路径由 [channels 规约](/zh/reference/specs/channels/spec)（FR-043…FR-055）规定。
 
 1. **回合开始。** 某个 channel 送进一条用户消息。`TurnOrchestrator`（`application/chat/turn_orchestrator.py`）创建或恢复会话，持久化用户回合，并开始流式输出。每个会话同时只跑一个回合；回合进行中到达的消息会入队，而不是被拒绝。
 
@@ -203,7 +203,7 @@ MCP 客户端（Claude Code、Codex）期望通过 stdio 与 MCP 服务器通信
 
 ## Channel 入站全链路
 
-消息 channel（Telegram、SeaTalk）是用户触达 agent 的方式。每一种都把用户消息送入上面那个 **`TurnOrchestrator` 接缝**；一旦消息到达编排器，下游就不再知道它来自哪个平台。入站传输因平台而异（按 [ADR-014](/zh/reference/adr/ADR-014-channel-adapter-framework)）：
+消息 channel（Telegram、SeaTalk）是用户触达 agent 的方式。每一种都把用户消息送入上面那个 **`TurnOrchestrator` 接缝**；一旦消息到达编排器，下游就不再知道它来自哪个平台。入站传输因平台而异（按 [Channel Adapter Framework](/zh/reference/adr/channel-adapter-framework)）：
 
 - **SeaTalk（webhook）。** SeaTalk 只通过公开 webhook 投递事件。一个独立的**回调监听器进程**（`coffer-callback`，在任何 SeaTalk channel 启用期间由守护进程启动）在 loopback 端口上提供 `POST /seatalk/{channel}`。它应答平台的验证挑战，校验请求签名（`sha256(body + signing_secret)`），归一化事件，并转发给守护进程——再由守护进程送入编排器。
 
@@ -213,15 +213,15 @@ MCP 客户端（Claude Code、Codex）期望通过 stdio 与 MCP 服务器通信
 
 ## 知识检索全链路
 
-检索请求——`coffer__search`、`coffer__grep`，以及 REST 的 `search` / `recall` / `grep` 路由——遵循一条锚定于 [ADR-012](/zh/reference/adr/ADR-012-files-as-truth-sqlite-retrieval) 的全链路：**markdown 文件是事实来源**，`coffer.db` 只保存派生索引。
+检索请求——`coffer__search`、`coffer__grep`，以及 REST 的 `search` / `recall` / `grep` 路由——遵循一条锚定于 [Files as Truth](/zh/reference/adr/files-as-truth-sqlite-retrieval) 的全链路：**markdown 文件是事实来源**，`coffer.db` 只保存派生索引。
 
 - **`grep`** —— 对原始文件做 ripgrep（零索引、与语言无关）。
 - **keyword** —— SQLite **FTS5** 的 `MATCH … ORDER BY bm25()`。
 - **vector** —— **sqlite-vec** 对 chunk 嵌入做 KNN（按作用域可选启用；嵌入来自 Settings 中整个安装配置一次的 OpenAI 兼容端点）。
 - **hybrid** —— 在 keyword + vector 之上做 RRF 融合。
 
-引擎根据作用域的配置在这些模式中自行选择——调用方从不指定模式（[ADR-034](/zh/reference/adr/ADR-034-retrieval-mode-is-internal)）——并且一次检索同时覆盖作用域的两条车道:agent 写下的条目与你摄取的文档。一次写入（`coffer__write` 或一次摄取）先落成一个 markdown 文件，随后从文件重新生成派生的 FTS5/vec 索引。由于文件即事实，索引随时可重建，用户也可用普通工具 diff/grep/编辑内容。
+引擎根据作用域的配置在这些模式中自行选择——调用方从不指定模式（[Retrieval Mode Is Internal](/zh/reference/adr/retrieval-mode-is-internal)）——并且一次检索同时覆盖作用域的两条车道:agent 写下的条目与你摄取的文档。一次写入（`coffer__write` 或一次摄取）先落成一个 markdown 文件，随后从文件重新生成派生的 FTS5/vec 索引。由于文件即事实，索引随时可重建，用户也可用普通工具 diff/grep/编辑内容。
 
 ---
 
-**参见：** [规约 001：MCP 网关](/zh/reference/specs/001-mcp-gateway/spec)，[ADR-005：会话子进程模型](/zh/reference/adr/ADR-005-session-subprocess-model)，[规约 009：Channels](/zh/reference/specs/009-channels/spec)，[ADR-014：Channel 适配器框架](/zh/reference/adr/ADR-014-channel-adapter-framework)，[ADR-012：文件即事实，SQLite 检索](/zh/reference/adr/ADR-012-files-as-truth-sqlite-retrieval)
+**参见：** [MCP 网关规约](/zh/reference/specs/mcp-gateway/spec)，[会话子进程模型](/zh/reference/adr/session-subprocess-model)，[Channels 规约](/zh/reference/specs/channels/spec)，[Channel 适配器框架](/zh/reference/adr/channel-adapter-framework)，[文件即事实，SQLite 检索](/zh/reference/adr/files-as-truth-sqlite-retrieval)

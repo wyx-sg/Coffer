@@ -72,7 +72,7 @@ async def test_upsert_updates_existing(substrate) -> None:
 
 @pytest.mark.asyncio
 async def test_find_by_filename_matches_in_scope(substrate) -> None:
-    """spec 007 FR-062 re-upload match: a document is found by its original_filename
+    """spec knowledge FR-062 re-upload match: a document is found by its original_filename
     within (kind, resource, project_id), the stable key for re-upload."""
     repo = substrate.repo
     await repo.upsert_document(_doc("ulid-aaaa", KIND_KNOWLEDGE, "kb1", filename="a.md"))

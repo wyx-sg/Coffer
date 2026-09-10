@@ -1,10 +1,10 @@
-"""add documents.locked (per-document co-management lock, ADR-028)
+"""add documents.locked (per-document co-management lock)
 
 Revision ID: 0025
 Revises: 0024
 Create Date: 2026-06-19
 
-KB documents become co-managed by humans and agents (ADR-028). A per-document
+KB documents become co-managed by humans and agents. A per-document
 ``locked`` flag lets an authoritative document opt out of all mutation: while
 locked, edit / reconvert / re-upload-replace / delete are refused for every
 caller. The column is additive on the unified ``documents`` table (shared with

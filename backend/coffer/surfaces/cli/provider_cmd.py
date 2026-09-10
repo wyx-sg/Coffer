@@ -1,4 +1,4 @@
-"""`coffer provider …` — provider-profile CLI commands (spec 011)."""
+"""`coffer provider …` — provider-profile CLI commands (spec provider-switching)."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def add(
     of --secret / --credential-ref; an ollama connection needs neither. Pass
     --compatible to route the connection to specific agents (e.g. an openai
     gateway to claude_code). The model is chosen at the point of use, not on the
-    connection (spec 011 E3)."""
+    connection (spec provider-switching E3)."""
     body: dict[str, object] = {
         "name": name,
         "protocol": protocol,

@@ -9,7 +9,7 @@ overridden); the companion integration test ``test_port_alloc`` pins that
 ``bind_free_socket`` actually binds loopback (asserting the bound address
 needs the ``socket`` module, which is banned in the pure unit tier).
 
-They also pin the ADR-006 boot-window fix: the spawn lock is released only via
+They also pin the detect-or-spawn boot-window fix: the spawn lock is released only
 the ``on_started`` callback, which fires once uvicorn reports it is serving —
 not when daemon.json is written.
 """
@@ -167,7 +167,7 @@ def test_no_host_override_path_exists(tmp_path: Path, monkeypatch: pytest.Monkey
 def test_main_refuses_to_start_when_a_daemon_is_already_live(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """ADR-006: if a daemon is already reachable, entry.main() must exit
+    """Detect-or-spawn: if a daemon is already reachable, entry.main() must exit
     cleanly WITHOUT serving — so a racing auto-spawn can't clobber daemon.json
     and orphan the running daemon."""
     from datetime import UTC, datetime

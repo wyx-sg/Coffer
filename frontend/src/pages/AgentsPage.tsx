@@ -1,4 +1,4 @@
-// frontend/src/pages/AgentsPage.tsx — spec 004-agent-registry surface.
+// frontend/src/pages/AgentsPage.tsx — spec agent-registry surface.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Bot, Plus } from "lucide-react";

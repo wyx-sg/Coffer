@@ -1,6 +1,6 @@
 // frontend/src/lib/hooks/useScope.ts
 //
-// Generic per-agent activation scope (ADR-045): any resource kind that opts in
+// Generic per-agent activation scope (ADR per-agent-resource-scope): any resource kind that opts in
 // (today `mcp_server` and `skill`) exposes GET/PUT
 // /resources/{kind}/{name}/scope via the framework-level resource_routes.py —
 // not a per-kind endpoint. Hand-written fetch, mirroring useSync.ts (the

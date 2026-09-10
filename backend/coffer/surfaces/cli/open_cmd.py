@@ -1,6 +1,6 @@
 """``coffer open`` — open the web UI in a browser, already signed in.
 
-The daemon serves the UI at its own loopback origin (spec 001 FR-024), but a
+The daemon serves the UI at its own loopback origin (spec mcp-gateway FR-024), but a
 browser opened at that origin has no API token. This command bridges that: it
 holds the token already (via ``~/.coffer/daemon.json``), so it mints a
 single-use code and hands it to the browser in the URL **fragment**.
@@ -34,7 +34,7 @@ def open_web_ui(
         help="Print the URL instead of launching a browser.",
     ),
 ) -> None:
-    """Mint a one-time sign-in code and open the UI (ADR-006 auto-spawns)."""
+    """Mint a one-time sign-in code and open the UI (detect-or-spawn auto-spawns)."""
     if ctx.invoked_subcommand is not None:
         return
 

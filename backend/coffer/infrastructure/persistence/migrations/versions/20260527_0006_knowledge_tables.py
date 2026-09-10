@@ -1,4 +1,4 @@
-"""unified knowledge substrate tables (specs 006-knowledge-base + 007-memory)
+"""unified knowledge substrate tables (knowledge-base + memory kinds)
 
 Revision ID: 0006
 Revises: 0005

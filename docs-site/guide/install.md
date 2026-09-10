@@ -17,7 +17,7 @@ desktop application — the daemon serves the web UI itself, and you open it wit
 ::: tip Daemon auto-starts — you never run it manually
 Once Coffer is installed, just point your MCP client at `coffer-mcp-shim` and connect. The
 daemon starts itself the first time it is needed. This is the core design of
-[ADR-006 (detect-or-spawn)](/architecture/processes#detect-or-spawn-adr-006). You will never see a
+[Detect-or-Spawn](/architecture/processes#detect-or-spawn-adr-daemon-detect-or-spawn). You will never see a
 "daemon not running" error from a fresh install.
 :::
 

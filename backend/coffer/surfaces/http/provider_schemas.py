@@ -1,8 +1,8 @@
-"""Request / response schemas for ``/api/v1/providers`` (spec 011).
+"""Request / response schemas for ``/api/v1/providers`` (spec provider-switching).
 
 ``ProviderOut`` NEVER carries the secret — only its ``credential_ref``. A
 connection is a credentialed endpoint ``{protocol, base_url, credential_ref}``;
-the model lives apart from it (spec 011 E3) and is chosen at the point of use.
+the model lives apart from it (spec provider-switching E3) and is chosen at the point of use.
 """
 
 from __future__ import annotations

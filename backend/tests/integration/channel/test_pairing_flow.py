@@ -11,7 +11,7 @@ import pytest
 from .conftest import ChannelEnv, inbound
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="pair by sending the code")
+@pytest.mark.acceptance(spec="channels", scenario="pair by sending the code")
 async def test_sending_the_code_pairs_the_chat_and_consumes_the_code(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
     adapter = env.bind(resource)
@@ -44,7 +44,7 @@ async def test_sending_the_code_pairs_the_chat_and_consumes_the_code(env: Channe
     assert len(await env.audit_entries("channel_paired", name="tg")) == 1
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="ignore messages from strangers")
+@pytest.mark.acceptance(spec="channels", scenario="ignore messages from strangers")
 async def test_message_from_a_different_chat_is_silently_ignored(env: ChannelEnv) -> None:
     resource, adapter = await env.paired_channel("tg", chat_id="owner")
 
@@ -57,7 +57,7 @@ async def test_message_from_a_different_chat_is_silently_ignored(env: ChannelEnv
     assert peer.chat_id == "owner"
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="an expired or wrong code does not pair")
+@pytest.mark.acceptance(spec="channels", scenario="an expired or wrong code does not pair")
 async def test_wrong_guesses_get_no_reply_and_exhaust_the_code(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
     adapter = env.bind(resource)

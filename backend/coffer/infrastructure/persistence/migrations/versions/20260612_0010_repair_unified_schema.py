@@ -1,4 +1,4 @@
-"""repair: ensure the unified knowledge schema exists (specs 006 + 007)
+"""repair: ensure the unified knowledge schema exists (knowledge-base + memory)
 
 Revision ID: 0010
 Revises: 0009
