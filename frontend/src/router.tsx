@@ -18,7 +18,7 @@ import { DataSettings } from "./pages/settings/DataSettings";
 import { SecuritySettings } from "./pages/settings/SecuritySettings";
 import { SyncSettings } from "./pages/settings/SyncSettings";
 import { AboutPage } from "./pages/settings/AboutPage";
-import { LlmConnectionsPage } from "./pages/settings/LlmConnectionsPage";
+import { ModelProvidersPage } from "./pages/ModelProvidersPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
 export const router = createBrowserRouter([
@@ -40,6 +40,7 @@ export const router = createBrowserRouter([
       { path: "skills/:name", element: <SkillDetailPage /> },
       { path: "knowledge", element: <KnowledgePage /> },
       { path: "knowledge/:scope", element: <KnowledgeDetailPage /> },
+      { path: "model-providers", element: <ModelProvidersPage /> },
       // Legacy routes — `memory` and `knowledge_base` were two resource kinds
       // with two surfaces before they merged into the one Knowledge kind. Keep
       // old bookmarks and links working by redirecting to the merged paths.
@@ -63,16 +64,17 @@ export const router = createBrowserRouter([
             element: <Navigate to="/settings/general" replace />,
           },
           { path: "general", element: <GeneralSettings /> },
-          { path: "llm-connections", element: <LlmConnectionsPage /> },
-          // Legacy routes — the separate Models page is retired and Providers is
-          // folded into the unified LLM Connections page. Keep old bookmarks and
-          // links working by redirecting.
-          { path: "models", element: <Navigate to="/settings/llm-connections" replace /> },
-          { path: "providers", element: <Navigate to="/settings/llm-connections" replace /> },
+          // Legacy routes — this surface used to live under Settings as
+          // "LLM connections" (and before that as separate Models/Providers
+          // pages). It is now /model-providers under RESOURCES. Keep old
+          // bookmarks and links working by redirecting.
+          { path: "llm-connections", element: <Navigate to="/model-providers" replace /> },
+          { path: "models", element: <Navigate to="/model-providers" replace /> },
+          { path: "providers", element: <Navigate to="/model-providers" replace /> },
           { path: "data", element: <DataSettings /> },
           // Legacy route — embedding/chunking config merged into the LLM
           // Connections page. Keep old bookmarks and links working by redirecting.
-          { path: "embedding", element: <Navigate to="/settings/llm-connections" replace /> },
+          { path: "embedding", element: <Navigate to="/model-providers" replace /> },
           { path: "sync", element: <SyncSettings /> },
           { path: "security", element: <SecuritySettings /> },
           { path: "about", element: <AboutPage /> },

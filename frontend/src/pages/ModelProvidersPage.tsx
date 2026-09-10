@@ -1,11 +1,15 @@
-// pages/settings/LlmConnectionsPage.tsx — the unified LLM-connection surface
-// (spec 011). A connection = key + endpoint + wire + model; one configured key
-// is usable by both agents (per-wire `activate`) and Coffer's internal engine
-// (`internal_default`). This page is the connection library (add / delete /
-// switch active) plus the Coffer-internal-engine selection. It shows ONLY
-// connection (provider + model) info — never agent names; per-agent connection
-// selection lives on the Agent detail → Overview tab. The Embedding card stays
-// at the bottom.
+// pages/ModelProvidersPage.tsx — the model-provider surface (spec 011).
+//
+// A provider here is a credentialed endpoint: `{protocol, base_url,
+// credential_ref}`. The MODEL is not stored on it and not chosen here — that
+// happens at the point of use (the per-agent binding on Agent detail →
+// Overview, the internal-engine selector below). Hence the name: this page
+// manages vendor endpoints and their keys.
+//
+// It lives under RESOURCES rather than Settings because `provider` is a
+// resource kind like any other, and spec 002's rule is that RESOURCES holds
+// the kinds with a list UI. It was the only one of the five filed elsewhere.
+// The Embedding card stays at the bottom.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Boxes, Plus } from "lucide-react";
@@ -23,10 +27,10 @@ import {
 } from "@/lib/hooks/useProviders";
 import { translateApiError } from "@/lib/api/errors";
 import type { Provider } from "@/lib/api/providers";
-import { EmbeddingSettings } from "./EmbeddingSettings";
-import { InternalEngineSettings } from "./InternalEngineSettings";
+import { EmbeddingSettings } from "./settings/EmbeddingSettings";
+import { InternalEngineSettings } from "./settings/InternalEngineSettings";
 
-export function LlmConnectionsPage() {
+export function ModelProvidersPage() {
   const { t } = useTranslation();
   const { data: providers = [], isPending, error } = useProviders();
   const createProvider = useCreateProvider();

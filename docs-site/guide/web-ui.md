@@ -8,7 +8,7 @@ enable, and disable MCP servers; browse the audit and invocation log; and adjust
 
 The Web UI is a React/Vite single-page application built on top of the daemon's REST API.
 It is the primary visual surface for day-to-day MCP gateway work. The sidebar is organised
-into two groups:
+into three groups:
 
 ```
 AGENTS
@@ -17,10 +17,16 @@ RESOURCES
   MCP servers      manage your registered servers
   Skills           manage the skills Coffer can deliver to agents
   Knowledge        one page per knowledge scope: entries, documents, rules, handoff
+  Model providers  vendor endpoints and their keys
+  Channels         the IM transports your agents answer on
 SYSTEM
-  Observability    audit and invocation log
+  Audit log        who did what, when
   Settings
 ```
+
+RESOURCES carries one entry per resource kind that has a list UI — five kinds,
+five entries. AGENTS carries one, because agents are the thing that *uses* the
+vault rather than living in it.
 
 The **daemon serves the Web UI itself**, as static files at its own loopback origin, so the
 page and the REST API are same-origin. There is nothing extra to install and no second
@@ -175,16 +181,40 @@ Clicking a scope opens `/knowledge/:scope` with five tabs:
 The older `/memory`, `/memory/:name`, `/knowledge-bases`, and `/knowledge-bases/:name` URLs
 redirect here.
 
-### Observability
+### Model providers
 
-Open `/observability` to see the audit log — every lifecycle event (server added, tool
-enabled, etc.) as a plain-language activity line. Filter by time range and actor; click any
-row to expand its raw log JSON. The legacy `/audit` URL redirects here.
+Open `/model-providers` for the vendor endpoints Coffer holds keys for. A provider is
+`{protocol, base_url, credential_ref}` — the endpoint and its key. The **model** is not
+stored here and not chosen here: an agent's model is picked on its own detail page, and
+Coffer's internal engine picks its own below. Mark one provider **internal default** and
+it becomes the connection that runs knowledge merge, organize, reorg and voice
+transcription. The embedding configuration is a card at the bottom of the same page.
+
+This surface used to sit under Settings as "LLM connections". It moved because `provider`
+is a resource kind like any other, and it was renamed because the old name described the
+page rather than the thing it manages.
+
+### Channels
+
+Open `/channels` for the IM transports your agents answer on — Telegram and SeaTalk. Each
+channel is registered with its credentials, paired with you through a single-use code, and
+bound to a default agent. It used to sit under AGENTS; a channel is a credentialed
+transport the vault owns, so it belongs with the other resources.
+
+### Audit log
+
+Open `/audit` to see every lifecycle event (server added, tool enabled, credential read)
+as a plain-language activity line. Filter by time range and actor; click any row to expand
+its raw JSON. The legacy `/observability` URL redirects here.
+
+The log is deliberately short on event types — it records what changed outside Coffer,
+what cannot be undone, and low-frequency configuration changes. It does not record that
+the daemon started or that a turn completed.
 
 ### Settings
 
-Open `/settings` for **Data** (retention policy, manual prune) and **About**
-(version, license, source). There is no "Daemon" tab and no daemon-status panel — the
+Open `/settings` for **General**, **Data** (retention policy, manual prune), **Sync**
+(vault export and import), **Security** and **About** (version, license, source). There is no "Daemon" tab and no daemon-status panel — the
 daemon is an implementation detail surfaced only by the offline banner when something goes
 wrong.
 

@@ -358,9 +358,9 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 ## 前端（最简）
 
 - `frontend/src/lib/api/providers.ts`——手写客户端 + TS 类型（`types.ts` codegen 只覆盖 001 gateway spec；此处不期望生成类型）。
-- 统一的 **Settings → LLM Connections** 页（路由 `/settings/llm-connections`）即 connection 库：一个 `DataTable`（复用共享组件；参见 SkillsPage / MCP 页），列 name / wire_format / base_url / model / active / internal，顶部操作 create，行操作 switch / set-internal-default / delete，外加 Embedding 卡片。该页只显示 connection（provider + model）信息——无 agent 名称、无 presets、无 modality 拆分。编辑 connection 通过 CLI（`coffer provider edit`）和 PATCH API 实现，Web 页不需要内联编辑功能。
-- 逐 agent 的 connection + model 选择位于 **agent detail 页（Overview tab）**，按该 agent 的 wire 过滤，复用 activate API。LLM Connections 页不绑定 agent。
-- 旧的 `/settings/models` 和 `/settings/providers` 路由重定向到 `/settings/llm-connections`。
+- **Model providers** 页（路由 `/model-providers`，位于侧边栏 RESOURCES 组——`provider` 是一个带列表 UI 的 resource kind，spec 002 的 IA 规则把它放在那里）即 connection 库：一个 `DataTable`（复用共享组件；参见 SkillsPage / MCP 页），列 name / wire_format / base_url / model / active / internal，顶部操作 create，行操作 switch / set-internal-default / delete，外加 Embedding 卡片。该页只显示 connection（provider + model）信息——无 agent 名称、无 presets、无 modality 拆分。编辑 connection 通过 CLI（`coffer provider edit`）和 PATCH API 实现，Web 页不需要内联编辑功能。
+- 逐 agent 的 connection + model 选择位于 **agent detail 页（Overview tab）**，按该 agent 的 wire 过滤，复用 activate API。Model providers 页不绑定 agent。
+- 旧的 `/settings/models`、`/settings/providers` 与 `/settings/llm-connections` 路由重定向到 `/model-providers`。
 - 新 hook 的测试需添加 `vi.mock`。
 
 > **修订 2026-06-23（提供方预设）。** 添加连接的表单不再从 base_url + 密钥自动探测

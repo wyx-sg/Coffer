@@ -1,7 +1,7 @@
 // frontend/src/pages/settings/SettingsLayout.test.tsx
 //
 // Direct-render tests for the settings tab-strip + pane-swap behaviour.
-// Settings renders LLM Connections + Data + Security + About; the daemon is
+// Settings renders General + Data + Sync + Security + About; the daemon is
 // never a tab.
 
 import { describe, expect, test } from "vitest";
@@ -34,16 +34,16 @@ describe("SettingsLayout", () => {
     expect(screen.queryByRole("link", { name: /^Daemon$/ })).not.toBeInTheDocument();
   });
 
-  test("folds Models + Providers + Embedding into one LLM Connections tab", () => {
+  test("holds no model-provider tab — that surface is a sidebar resource", () => {
     render(wrap());
-    // The Models and Providers tabs are retired (unified) and the embedding
-    // config lives on the LLM Connections page (its own card), so there is no
-    // separate Models / Providers / Embedding nav item.
+    // Model providers is a resource kind with a list UI, so it lives in the
+    // sidebar's RESOURCES group at /model-providers, not under Settings. The
+    // Models / Providers / Embedding tabs it replaced are long gone too.
     expect(screen.queryByRole("link", { name: /^Models$/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /^Providers$/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Embedding/ })).not.toBeInTheDocument();
-    // The single unified tab is "LLM Connections".
-    expect(screen.getByRole("link", { name: /LLM Connections/ })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /LLM Connections/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Model providers/ })).not.toBeInTheDocument();
   });
 
   test("renders the active pane and swaps content when another tab is clicked", () => {

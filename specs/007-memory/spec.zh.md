@@ -647,7 +647,7 @@ Entries 与 Documents 是两个 tab、两套计数，恰恰因为它们来路不
 
 **整理 —— 内部 organizer**
 
-- **FR-027**：系统必须提供一个**内部 organizer**，用 Coffer 的**内部 LLM 连接**（标记为 internal-default 的连接；Settings → LLM Connections，spec 011）以**每条一次性补全**的方式，把一个 scope 的 `knowledge/inbox/` 排空成少量连贯的**主题文档**（`knowledge/<topic-slug>.md`）—— 它绝非面向 agent 的工具。触发方式为显式调用（`POST /api/v1/knowledge/{scope}/organize`、`coffer knowledge organize <scope>`）与空闲自动触发（FR-035）。条目顺序处理，单条的 LLM/解析失败必须不中断整轮。
+- **FR-027**：系统必须提供一个**内部 organizer**，用 Coffer 的**内部 LLM 连接**（标记为 internal-default 的连接；Model providers，spec 011）以**每条一次性补全**的方式，把一个 scope 的 `knowledge/inbox/` 排空成少量连贯的**主题文档**（`knowledge/<topic-slug>.md`）—— 它绝非面向 agent 的工具。触发方式为显式调用（`POST /api/v1/knowledge/{scope}/organize`、`coffer knowledge organize <scope>`）与空闲自动触发（FR-035）。条目顺序处理，单条的 LLM/解析失败必须不中断整轮。
 - **FR-028**：对每条 inbox 条目，organizer 必须（a）经共享检索引擎取回至多 top-K（K=3）最相关的**既有主题文档**（此步不调 LLM）作为合并候选，（b）做**一次 LLM 调用**，或把该条目合并进最合适的候选 —— **保留全部既有内容与人的编辑**、整合新信息、去掉完全重复 —— 或在没有合适候选时创建新主题，（c）把返回的完整文档正文写入 `knowledge/<topic-slug>.md`。它必须是**增量合并，绝非从零重生成**，且必须不硬删既有主题文档。
 - **FR-029**：inbox 条目必须**只在**其内容成功写入主题文档**之后**才被删除。畸形或无法解析的 LLM 响应必须导致该条目被**跳过** —— 留在 inbox，不写出也不写坏任何主题文档 —— 且整轮继续；结果报告跳过数。对空 inbox 调 `organize` 是 no-op（`status="empty"`）；未配置内部连接时是干净的 no-op（`status="no_model"`）而非错误。
 - **FR-030**：排空之后，organizer 必须由所有主题文档的 frontmatter 重新生成该 scope 的 `knowledge/INDEX.md` 目录、协调索引（丢掉被排空的 inbox 行、（重新）索引新建/更新的主题文档）。检索必须返回整理后的主题文档内容，且必须不返回 `INDEX.md`。

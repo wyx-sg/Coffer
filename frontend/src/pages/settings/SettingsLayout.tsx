@@ -1,7 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
-  Boxes,
   Database,
   Info,
   RefreshCw,
@@ -23,11 +22,6 @@ const GENERAL_ITEM: Item = {
   to: "/settings/general",
   labelKey: "settings.tabs.general",
   icon: SlidersHorizontal,
-};
-const LLM_CONNECTIONS_ITEM: Item = {
-  to: "/settings/llm-connections",
-  labelKey: "settings.tabs.llmConnections",
-  icon: Boxes,
 };
 const DATA_ITEM: Item = {
   to: "/settings/data",
@@ -54,7 +48,6 @@ export function SettingsLayout() {
   const { t } = useTranslation();
   const items: Item[] = [
     GENERAL_ITEM,
-    LLM_CONNECTIONS_ITEM,
     DATA_ITEM,
     SYNC_ITEM,
     SECURITY_ITEM,
