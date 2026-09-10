@@ -84,16 +84,22 @@ _EXPECTED_TOOLS = {
 
 @pytest.fixture(scope="module")
 def app_routes() -> set[tuple[str, str]]:
+    """Every (method, path) the app publishes.
+
+    Read from the generated OpenAPI document rather than by walking
+    ``app.routes``: since FastAPI 0.141 ``include_router`` stores an opaque
+    wrapper instead of copying the sub-router's routes up, so a direct walk
+    sees nothing for any router that was included. The schema is what the app
+    actually serves, and it is stable across that implementation detail.
+    """
     from coffer.surfaces.http.app import create_app
 
-    app = create_app()
-    out: set[tuple[str, str]] = set()
-    for route in app.routes:
-        path = getattr(route, "path", None)
-        for method in getattr(route, "methods", None) or set():
-            if path:
-                out.add((method.upper(), path))
-    return out
+    schema = create_app().openapi()
+    return {
+        (method.upper(), path)
+        for path, operations in schema["paths"].items()
+        for method in operations
+    }
 
 
 def test_every_knowledge_route_is_declared(app_routes) -> None:

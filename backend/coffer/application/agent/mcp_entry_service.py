@@ -1,4 +1,4 @@
-"""AgentMcpEntryService — list / remove / toggle / adopt MCP entries in an agent's own config files.
+"""AgentMcpEntryService — list and adopt MCP entries in an agent's own config files.
 
 Operates on the MCP-bearing subset of the per-type config-file allowlist
 (``_MCP_SOURCE_KEYS``) using the pure text transforms in

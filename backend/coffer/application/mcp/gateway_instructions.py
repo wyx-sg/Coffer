@@ -26,12 +26,35 @@ SERVER_CAPABILITIES: dict[str, Any] = {
 
 PROTOCOL_VERSION = "2025-06-18"
 
+# Every bare tool name this text names. Kept as data so a contract test can
+# hold it against the tools actually registered — the instructions are the one
+# thing no caller ever validates, so a tool renamed or retired here goes
+# unnoticed until an agent calls a name that no longer exists.
+NAMED_TOOLS: frozenset[str] = frozenset(
+    {
+        "search",
+        "grep",
+        "read",
+        "list",
+        "write",
+        "delete",
+        "set_handoff",
+        "resume",
+        "list_skills",
+        "load_skill",
+        "diagnose",
+        "search_tools",
+    }
+)
+
 _BASE = (
     "Coffer is this machine's local vault: it aggregates the user's MCP servers "
-    "behind one endpoint and adds its own coffer__* tools for memory (recall, "
-    "remember), knowledge (search_knowledge, ask) and skills (list_skills, "
-    "load_skill). Prefer coffer__recall before asking the user something they "
-    "may have already told Coffer."
+    "behind one endpoint and adds its own tools under the coffer__ prefix — "
+    "knowledge (search, grep, read, list, write, delete), continuity across "
+    "sessions and agents (set_handoff, resume), skills (list_skills, "
+    "load_skill), and diagnose, which returns Coffer's own audit and daemon "
+    "logs when something has gone wrong with Coffer itself. Search Coffer "
+    "before asking the user something they may already have told it."
 )
 
 _TIERED = (
@@ -67,6 +90,7 @@ def build_initialize_result(*, hidden_count: int) -> dict[str, Any]:
 
 __all__ = [
     "MAX_INSTRUCTIONS_CHARS",
+    "NAMED_TOOLS",
     "PROTOCOL_VERSION",
     "SERVER_CAPABILITIES",
     "build_initialize_result",

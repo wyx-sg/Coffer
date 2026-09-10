@@ -161,9 +161,12 @@ Anthropic 对技能捆绑的代码**不提供任何内建沙箱或签名**；安
 
 - **Coffer 将技能来源锁定到某个 `git_ref`。** `GitSource` 携带
   `git_url`/`git_ref`/`git_subpath`（`repo:backend/coffer/domain/skill/source.py`），
-  fetch/clone 会精确解析并把该 ref 复制进母库（spec FR-006）。这一锁定事实在
-  `main` 上仍然成立；但报告随附的"没有更新检测 / 落后上游信号"的说法现已过时——
-  PR #115 已补上该能力（见下方 ✏️）。
+  fetch/clone 会精确解析并把该 ref 复制进母库（spec FR-006）。报告随附的"没有更新
+  检测 / 落后上游信号"的说法在这次核查时就已过时——PR #115 已补上该能力（见下方
+  ✏️）。（而这条锁定事实本身也已不再成立：skill 改为只支持本地导入，整条 Git fetch
+  生命周期——`GitSource` 以及规定了 pinned ref 的那条 FR-006——已被删除。spec 005 的
+  FR-006 后来被复用给了应用内查看器的 open/reveal 操作，因此这个编号在本段中已不再
+  指向任何东西。）
   [`repo:backend/coffer/domain/skill/source.py`、
   `repo:specs/005-skill-manager/{spec,plan}.md`]
 - **SKILL.md frontmatter 现已对齐 agentskills.io 约束（PR #105，2026-06-18）——

@@ -203,9 +203,13 @@ Commentary:
 - **Coffer pins a skill's source to a `git_ref`.** `GitSource` carries
   `git_url`/`git_ref`/`git_subpath` (`repo:backend/coffer/domain/skill/source.py`),
   and a fetch/clone resolves and copies exactly that ref into the master store
-  (spec FR-006). This pinning fact still holds on `main`; the report's
-  accompanying claim that there is **no** update-detection / out-of-date signal
-  is now stale — PR #115 added one (see ✏️ below).
+  (spec FR-006). The report's accompanying claim that there is **no**
+  update-detection / out-of-date signal was already stale when this check ran —
+  PR #115 added one (see ✏️ below). (The pinning fact itself no longer holds:
+  skills became local-import only and the whole Git fetch lifecycle — `GitSource`
+  and the FR-006 that specced the pinned ref — was deleted. Spec 005's FR-006 was
+  later reused for the in-app viewer's open/reveal affordances, so that number no
+  longer resolves to anything in this passage.)
   [`repo:backend/coffer/domain/skill/source.py`,
   `repo:specs/005-skill-manager/{spec,plan}.md`]
 - **SKILL.md frontmatter is now aligned to the agentskills.io constraints

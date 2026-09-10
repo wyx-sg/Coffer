@@ -20,11 +20,11 @@ Coffer 是一个守护进程 (daemon) + CLI + Web UI，它为你机器上的每�
 - **Agents** —— 检测并注册你本地的 AI 编码 agent、在应用内编辑它们的配置文件，并一键把 Coffer 自己的 MCP 服务器安装到任意 agent 中。
 - **Skills** —— 维护一个 agent skill 包的主库，把它们投递到一个或多个 agent 的 skill 目录，并做漂移 (drift) 校正。
 - **知识 (Knowledge)** —— 一个统一的知识层，按项目分作用域（也可以是 global，或你自己命名的集合）。agent 经 MCP 往里写条目、规则与交接记录；你则放入任意格式的文档（自动转换为 markdown，原件保留作出处）。一次检索横跨全部内容 —— grep / 关键词 / 向量由引擎自行决定，不需要调用方回答这个问题。
-- **Channels** —— 从 Telegram 或 SeaTalk 与内置 agent 聊天，并在手机上接收通知。
+- **Channels** —— 从 Telegram 或 SeaTalk 与你已注册的编码 agent（Claude Code、Codex）聊天，并在手机上接收通知。
 
 在多台机器上用 Coffer？**仓库导出与导入**把整个仓库写进你选定的目录，再在另一台机器上读回来 —— 知识、资源，以及仅密文的凭证都会随行；加密密钥绝不离开你的机器。
 
-内置的 **chat** 平台与 Web UI（由 daemon 自己在其 loopback origin 上托管）把它们串起来：与 Coffer agent 对话、浏览并管理每一种 kind，并实时观察 invocation。
+**Web UI**（由 daemon 自己在其 loopback origin 上托管）把它们串起来：注册并配置你的 agent、浏览并管理每一种 kind，并在一处完成仓库的各项设置。
 
 📖 **文档站点：** https://wyx-sg.github.io/Coffer/
 

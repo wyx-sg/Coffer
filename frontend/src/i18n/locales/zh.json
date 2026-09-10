@@ -264,28 +264,6 @@
       "sortByTime": "按时间排序"
     },
     "emptyState": "没有匹配的审计条目。",
-    "eventLabel": {
-      "resource_created": "注册服务器",
-      "resource_updated": "重配服务器",
-      "resource_enabled": "启用服务器",
-      "resource_disabled": "停用服务器",
-      "resource_deleted": "删除服务器",
-      "capability_first_seen": "发现能力",
-      "capability_enabled": "启用能力",
-      "capability_disabled": "停用能力",
-      "daemon_started": "守护进程启动",
-      "daemon_stopped": "守护进程停止",
-      "token_rotated": "轮换令牌",
-      "retention_updated": "保留策略变更",
-      "keychain_set": "保存凭证",
-      "keychain_deleted": "删除凭证",
-      "keychain_read": "读取凭证",
-      "credential_set": "已存储凭证",
-      "credential_read": "已读取凭证",
-      "credential_deleted": "已删除凭证",
-      "credential_migrated": "凭证已从系统 keychain 迁移",
-      "master_key_relocated": "主密钥存储位置已变更"
-    },
     "capType": {
       "tool": "工具",
       "resource": "资源",
@@ -409,7 +387,7 @@
     },
     "models": {
       "title": "模型",
-      "subtitle": "Coffer 内部模型——驱动工具/知识检索与 agentic RAG。",
+      "subtitle": "Coffer 内部模型——驱动工具/知识检索与知识整理。",
       "add": "添加模型",
       "addTitle": "添加模型",
       "editTitle": "编辑模型",
@@ -736,11 +714,6 @@
       "install": "安装 Coffer MCP",
       "uninstall": "卸载 Coffer MCP",
       "installedStatus": "已安装 Coffer MCP"
-    },
-    "hook": {
-      "title": "会话启动规则",
-      "help": "开启后，Coffer 在会话启动时向该 Agent 注入规则集——按该 Agent 支持的方式：SessionStart 钩子、投放的插件，或指令文件里的托管块。",
-      "unsupported": "Coffer 尚未支持向该 Agent 类型注入会话上下文。"
     },
     "welcome": {
       "title": "管理你的本地 AI Agent",

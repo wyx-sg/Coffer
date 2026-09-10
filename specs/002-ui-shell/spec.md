@@ -171,7 +171,7 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - **When** they navigate to `http://localhost:5173/` in a real browser
 - **Then** the index redirects to `/agents` and the page renders the sidebar + main content area within 2 seconds
 - **And** the main content shows the Agents welcome view (no generic error card)
-- **And** the sidebar lists Coffer's operational surfaces — Agents, MCP servers, Audit log, Settings — grouped under "Agents", "Resources", and "System" headings
+- **And** the sidebar lists Coffer's operational surfaces — Agents, MCP servers, Skills, Knowledge, Model providers, Channels, Settings — grouped under "Agents", "Resources", and "System" headings
 
 ### Scenario: token-missing renders an actionable empty state
 
@@ -302,7 +302,7 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 
 - Every scenario above has at least one covering test (unit, integration, or e2e) and the `audit_acceptance` script passes 002 alongside 001.
 - A first-time user can register an MCP server and reach a working gateway in-app; pointing an MCP client at the shim is documented in the project README.
-- The sidebar shows only operational surfaces (Agents, MCP servers, Audit log, Settings), grouped by role; no feature appears as a dead "soon" entry.
-- The audit log lives at `/audit` with the redesigned filter + table; the legacy `/observability` URL still resolves (redirects to `/audit`). Audit log and MCP invocation log rows each expand to the row's raw log JSON. Observability (system health / metrics) is a reserved future surface, not the audit log.
+- The sidebar shows only operational surfaces (Agents, MCP servers, Skills, Knowledge, Model providers, Channels, Settings), grouped by role; no feature appears as a dead "soon" entry.
+- The audit log has no page: neither `/audit` nor the legacy `/observability` URL resolves, and no sidebar entry points at either. An agent reads the log through `coffer__diagnose`; scripts read it through the REST route and `coffer audit`. MCP invocation log rows still expand to the row's raw log JSON. Observability (system health / metrics) is a reserved future surface, not the audit log.
 - Settings groups data controls (retention and prune) under a Data tab; the daemon is never surfaced as a user-facing concept, and no tab exposes a shutdown or token-rotation control.
 - `make verify` + `make verify-e2e` are green.

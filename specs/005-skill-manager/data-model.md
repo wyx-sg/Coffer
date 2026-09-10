@@ -260,7 +260,7 @@ Stateless helpers beside `service.py` (same pattern as
 surfaces. The **read** helpers (`build_file_tree`, `read_skill_file`) back the
 read-only in-app viewer and surface each node's absolute on-disk path so the UI
 can offer open-in-external-editor / reveal-in-file-manager
-affordances (FR-027); the UI viewer never edits content. A separate **write**
+affordances (FR-006); the UI viewer never edits content. A separate **write**
 helper (`write_skill_file`) backs the programmatic REST/CLI overwrite (FR-028)
 and is the only mutation here — the in-app UI does not call it to edit content.
 No DB, no audit; containment is enforced by resolving every candidate path and
@@ -281,7 +281,7 @@ One node in the recursive tree. The root node has `path == ""`.
 | ---------- | ----------------- | -------------------------------------------------------------------------- |
 | `name`     | `str`             | entry's base name                                                          |
 | `path`     | `str`             | POSIX path relative to the master folder root (`""` for the root)          |
-| `abs_path` | `str`             | absolute on-disk path (for open-in-editor / reveal, FR-027)    |
+| `abs_path` | `str`             | absolute on-disk path (for open-in-editor / reveal, FR-006)    |
 | `type`     | `"file" \| "dir"` | node kind                                                                  |
 | `size`     | `int \| None`     | byte size for files; `null` for directories                                |
 | `children` | `list[FileNode]`  | populated for directories (sorted dirs-first then by name); `[]` for files |
@@ -294,8 +294,8 @@ shape is returned by the programmatic write (FR-028).
 | Field             | Type   | Notes                                                                            |
 | ----------------- | ------ | -------------------------------------------------------------------------------- |
 | `path`            | `str`  | POSIX path relative to the master folder root                                    |
-| `abs_path`        | `str`  | absolute on-disk path of the file (FR-027)                                       |
-| `folder_abs_path` | `str`  | absolute on-disk path of the file's containing folder (FR-027)                   |
+| `abs_path`        | `str`  | absolute on-disk path of the file (FR-006)                                       |
+| `folder_abs_path` | `str`  | absolute on-disk path of the file's containing folder (FR-006)                   |
 | `content`         | `str`  | file text; empty (`""`) when `binary` is true                                    |
 | `truncated`       | `bool` | true when the file exceeded the 256 KiB read cap and only the prefix is returned |
 | `binary`          | `bool` | true when the file is non-UTF-8 or contains a NUL byte (content is empty)        |

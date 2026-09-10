@@ -32,7 +32,7 @@ domain 层包含与 kind 无关的实体和协议，定义了 Coffer 在概念�
 
 ### application/
 
-application 层使用 infrastructure 和 surfaces 来编排 domain 实体。它定义了实现 Coffer 用例的服务：`resource_service.py` 用于与 kind 无关的 CRUD（任意 kind 的资源创建/读取/更新/启用/禁用/删除），`audit_service.py` 用于记录生命周期事件，`retention_service.py` 用于后台日志清理工作进程，以及每种 kind 一个子目录——`application/mcp/`（会话管理、能力筛选、调用记录）、`application/agent/`、`application/skill/`、`application/channel/`、`application/knowledge/` 和 `application/chat/`（`TurnOrchestrator` 与回合历史）。与 kind 并列的还有**并非 kind** 的跨层服务切片：`application/sync/`（多机同步）、`application/credentials/`（共享的 `CredentialResolver`）和 `application/fs/`（文件系统浏览）。
+application 层使用 infrastructure 和 surfaces 来编排 domain 实体。它定义了实现 Coffer 用例的服务：`resource_service.py` 用于与 kind 无关的 CRUD（任意 kind 的资源创建/读取/更新/启用/禁用/删除），`audit_service.py` 用于记录生命周期事件，`retention_service.py` 用于后台日志清理工作进程，以及每种 kind 一个子目录——`application/mcp/`（会话管理、能力筛选、调用记录）、`application/agent/`、`application/skill/`、`application/channel/` 和 `application/knowledge/`。与 kind 并列的还有**并非 kind** 的跨层服务切片：`application/chat/`（渠道运行 agent 所依托的回合平台——`TurnOrchestrator` 与回合历史）、`application/sync/`（仓库导出与导入）、`application/credentials/`（共享的 `CredentialResolver`）和 `application/fs/`（文件系统浏览）。
 
 应用层服务通过构造函数参数接收其 infrastructure 依赖（repository、钥匙串适配器、上游客户端）——它们不自行实例化这些依赖。这就是依赖倒置模式：application 层通过 `domain/` 中的接口或协议类定义它需要什么，组装入口提供具体实现。
 
@@ -42,7 +42,7 @@ application 层使用 infrastructure 和 surfaces 来编排 domain 实体。它�
 
 ### infrastructure/
 
-infrastructure 层包含所有执行外部 I/O 的代码：SQLAlchemy ORM 模型与 Alembic 迁移（`infrastructure/persistence/`）、加密凭据存储与主密钥管理器（`infrastructure/credentials/`——整个代码库中唯一允许 import `keyring` 的地方）、daemon 发现工具类（`infrastructure/daemon/`），MCP 上游传输实现（`infrastructure/mcp/`——stdio 上游的子进程管理，以及 HTTP 传输上游的 HTTP 客户端），以及每种 kind 的 I/O 模块：`infrastructure/agent/`（agent 配置文件存储）、`infrastructure/skill/`（主存储、来源拉取器、同步引擎）、`infrastructure/channel/`（Telegram/SeaTalk 传输、peer 仓库、渲染）、`infrastructure/knowledge/`（文档转换器、FTS5、sqlite-vec 索引、嵌入、作用域文件存储）连同 `infrastructure/knowledge_scope/`（机器本地的作用域侧表）、以及 `infrastructure/chat/`（进程内 LangGraph agent、网关工具 provider、CLI-agent 子进程驱动）。跨层的 `infrastructure/sync/` 切片（git 仓库同步工作区）并非 kind。
+infrastructure 层包含所有执行外部 I/O 的代码：SQLAlchemy ORM 模型与 Alembic 迁移（`infrastructure/persistence/`）、加密凭据存储与主密钥管理器（`infrastructure/credentials/`——整个代码库中唯一允许 import `keyring` 的地方）、daemon 发现工具类（`infrastructure/daemon/`），MCP 上游传输实现（`infrastructure/mcp/`——stdio 上游的子进程管理，以及 HTTP 传输上游的 HTTP 客户端），以及每种 kind 的 I/O 模块：`infrastructure/agent/`（agent 配置文件存储）、`infrastructure/skill/`（主存储、来源拉取器、同步引擎）、`infrastructure/channel/`（Telegram/SeaTalk 传输、peer 仓库、渲染）、`infrastructure/knowledge/`（文档转换器、FTS5、sqlite-vec 索引、嵌入、作用域文件存储）连同 `infrastructure/knowledge_scope/`（机器本地的作用域侧表）、以及 `infrastructure/chat/`（Claude Code 与 Codex 的 agent 驱动、网关工具 provider、回合持久化）。跨层的 `infrastructure/sync/` 切片（磁盘上的导出/导入包）并非 kind。
 
 infrastructure 在组装入口处注入到系统中，不被 domain 或 application 代码直接 import。应用层服务以注入依赖的方式接收 infrastructure 对象。这意味着可以将真实的 SQLAlchemy repository 替换为测试替身（内存字典或 SQLite `:memory:` 数据库），而无需更改任何 application 或 domain 代码。
 

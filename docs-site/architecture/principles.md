@@ -10,7 +10,7 @@ The result is credential sprawl, config drift between clients, and an identity p
 
 Coffer's answer to this slice is a long-lived local daemon that registers upstream MCP servers once, exposes all of them through a single namespaced surface (every tool appears as `<server-name>__<tool-name>`), and handles all client connections through that one point. Configure once; every client sees the same tools, the same names, the same policies.
 
-The MCP gateway, though, is only one capability of a broader vault. Coffer is a local-first AI agent vault: the same daemon and the same kind-agnostic Resource framework also manage registered coding agents, master skill bundles, the shared knowledge store, and messaging channels — five resource kinds in all — plus cross-cutting chat, channels, and multi-machine sync. The principles below govern the whole vault, with the gateway as the founding kind rather than the entire system.
+The MCP gateway, though, is only one capability of a broader vault. Coffer is a local-first AI agent vault: the same daemon and the same kind-agnostic Resource framework also manage registered coding agents, master skill bundles, the shared knowledge store, and messaging channels — five resource kinds in all — plus the cross-cutting turn platform that drives those agents behind the channels, and one-shot vault export/import. The principles below govern the whole vault, with the gateway as the founding kind rather than the entire system.
 
 ## The three principles
 
@@ -62,7 +62,7 @@ Understanding scope is as important as understanding capabilities.
 
 **Not a sync service.** Coffer does not keep two machines convergent. It exports the vault to a directory you name and imports one back (spec 010); carrying that directory between machines — `scp`, a USB drive, your own git repo — is yours to do. Coffer ships no remote, no background replication and no hosted sync endpoint; offering one would require a constitutional amendment.
 
-**Not a model provider.** Coffer is not itself an LLM and does not host one. The MCP gateway routes protocol messages without reasoning about tool outputs, and the in-process LangGraph chat agent (spec 008) does invoke LLMs to converse — but those models are external providers Coffer calls, never models Coffer ships or trains. Coffer orchestrates models and tools; it is not the model.
+**Not a model provider.** Coffer is not itself an LLM and does not host one. The MCP gateway routes protocol messages without reasoning about tool outputs, and the turn platform behind the channels drives your registered coding agents, which do invoke LLMs to converse — but those models are external providers Coffer calls, never models Coffer ships or trains. Coffer orchestrates models and tools; it is not the model.
 
 **Not a firewall or security boundary.** Coffer applies capability-level enable/disable policies (per ADR-004), but it is a developer tool running as the user's own process — it does not sandbox upstream server code or enforce OS-level access control.
 
