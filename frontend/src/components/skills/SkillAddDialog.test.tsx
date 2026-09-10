@@ -61,7 +61,7 @@ describe("SkillAddDialog", () => {
     expect(screen.getByPlaceholderText(/\.claude\/skills/i)).toBeInTheDocument();
   });
 
-  test("offers a folder picker beside the path display (spec 005 FR-030)", () => {
+  test("offers a folder picker beside the path display (spec skill-manager FR-030)", () => {
     stub({});
     render(<SkillAddDialog open onOpenChange={() => {}} onCreated={() => {}} />, {
       wrapper: wrap(null),

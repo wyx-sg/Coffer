@@ -1,4 +1,4 @@
-"""The opt-in eval-capture JSONL handler (ADR-019, slice 2).
+"""The opt-in eval-capture JSONL handler (eval flywheel, slice 2).
 
 ``install_eval_capture_handler`` binds a file sink to the capture logger only
 when ``COFFER_EVAL_CAPTURE`` points somewhere; ``record_tool_search`` then lands

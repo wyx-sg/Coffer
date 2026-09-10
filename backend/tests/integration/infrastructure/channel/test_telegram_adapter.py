@@ -71,7 +71,7 @@ def _photo_update(update_id: int, *, caption: str | None = None) -> dict:
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="an inbound photo is downloaded and drives a turn",
 )
 async def test_photo_message_is_downloaded_as_an_attachment(
@@ -108,7 +108,7 @@ def _album_update(update_id: int, *, media_group_id: str, caption: str | None = 
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="a Telegram album is handled as one turn",
 )
 async def test_album_debounces_to_one_turn_with_all_attachments(
@@ -266,7 +266,7 @@ async def test_poll_error_backs_off_then_recovers(fake_telegram: FakeTelegram) -
     assert len(fake_telegram.calls_for("getUpdates")) >= 2  # failed poll + retried poll
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="a long reply is chunked for the platform")
+@pytest.mark.acceptance(spec="channels", scenario="a long reply is chunked for the platform")
 async def test_long_reply_is_chunked_on_paragraph_boundary(fake_telegram: FakeTelegram) -> None:
     para1 = ("alpha " * 500).strip()  # 2999 chars
     para2 = ("bravo " * 500).strip()
@@ -284,7 +284,7 @@ async def test_long_reply_is_chunked_on_paragraph_boundary(fake_telegram: FakeTe
 
 
 @pytest.mark.acceptance(
-    spec="009-channels", scenario="markdown rendering degrades by channel capability"
+    spec="channels", scenario="markdown rendering degrades by channel capability"
 )
 async def test_markdown_renders_html_falls_back_to_plain_and_seatalk_keeps_markdown(
     fake_telegram: FakeTelegram, fake_seatalk: FakeSeaTalk
@@ -675,7 +675,7 @@ async def test_forum_topic_message_carries_thread_id(fake_telegram: FakeTelegram
     assert msg.thread_id == "9"
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="a forwarded chat record reaches the agent")
+@pytest.mark.acceptance(spec="channels", scenario="a forwarded chat record reaches the agent")
 async def test_forwarded_message_text_starts_with_forwarded_marker(
     fake_telegram: FakeTelegram,
 ) -> None:

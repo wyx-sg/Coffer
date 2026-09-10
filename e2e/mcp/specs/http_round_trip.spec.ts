@@ -98,7 +98,7 @@ async function registerHttpMcpServer(
 }
 
 acceptance(
-  "001-mcp-gateway",
+  "mcp-gateway",
   "HTTP-transport MCP server round trip",
   async () => {
     const name = uniqueName("e2e-http");

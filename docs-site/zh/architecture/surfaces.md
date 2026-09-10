@@ -97,7 +97,7 @@ REST API 是规范接口——CLI 和 Web UI 都调用它。
 
 ## 回调监听器（Callback Listener）
 
-**它是什么。** 唯一可被公网访问的接口面。它是一个独立的签名回调进程，接收来自聊天平台的入站 webhook——具体为 `POST /seatalk/{channel}`——以该通道的签名密钥校验每个请求的 SeaTalk 签名，回应 `event_verification` 挑战，并将真实事件转发给守护进程，由通道运行时处理。它之所以存在，是因为 SeaTalk 将事件推送到一个 URL，而不是让 Coffer 长轮询（Telegram 采用的模型），因此需要一个可达的 HTTP 端点（规约 009，[ADR-014](/zh/reference/adr/ADR-014-channel-adapter-framework)）。
+**它是什么。** 唯一可被公网访问的接口面。它是一个独立的签名回调进程，接收来自聊天平台的入站 webhook——具体为 `POST /seatalk/{channel}`——以该通道的签名密钥校验每个请求的 SeaTalk 签名，回应 `event_verification` 挑战，并将真实事件转发给守护进程，由通道运行时处理。它之所以存在，是因为 SeaTalk 将事件推送到一个 URL，而不是让 Coffer 长轮询（Telegram 采用的模型），因此需要一个可达的 HTTP 端点（规约 009，[Channel Adapter Framework](/zh/reference/adr/channel-adapter-framework)）。
 
 **所在进程。** 一个由守护进程启动的子进程，刻意与守护进程分离。它仅在至少有一个 SeaTalk 通道启用时运行。将其置于主守护进程之外，意味着可被公网访问的代码路径是一个小而隔离的接口面，在任何流量到达有状态内核之前先完成签名校验。
 
@@ -111,7 +111,7 @@ REST API 是规范接口——CLI 和 Web UI 都调用它。
 
 ## Web UI
 
-**它是什么。** 基于浏览器的管理界面，由[规约 002](/zh/reference/specs/002-ui-shell/spec) 规定。Web UI 提供与每个 CLI 管理操作等价的可视化操作：通过 JSON 导入注册 MCP 服务器、浏览服务器健康状态和能力列表、开/关工具/资源/提示、查看审计日志和调用历史，以及配置保留策略。信息架构反映了资源 kind 模型：侧边栏显示 `Agents`（agent 与触达它们的 Channels）、`Resources`（已上线的 kind——MCP 服务器、Skills、Knowledge），以及 `System`（审计日志与设置）。不显示任何「即将推出」的占位符——一个 kind 只有真正可用后才会出现，也不会有哪一项活得比它的功能久。
+**它是什么。** 基于浏览器的管理界面，由 [ui-shell 规约](/zh/reference/specs/ui-shell/spec) 规定。Web UI 提供与每个 CLI 管理操作等价的可视化操作：通过 JSON 导入注册 MCP 服务器、浏览服务器健康状态和能力列表、开/关工具/资源/提示、查看审计日志和调用历史，以及配置保留策略。信息架构反映了资源 kind 模型：侧边栏显示 `Agents`（agent 与触达它们的 Channels）、`Resources`（已上线的 kind——MCP 服务器、Skills、Knowledge），以及 `System`（审计日志与设置）。不显示任何「即将推出」的占位符——一个 kind 只有真正可用后才会出现，也不会有哪一项活得比它的功能久。
 
 **所在进程。** 浏览器进程，由守护进程提供页面。在生产环境中，守护进程在自己的 loopback origin 上以静态文件的形式提供构建好的前端（**FR-024**）——因此页面与 API 同源。在开发模式下，Vite 开发服务器运行在 `http://localhost:5173`，跨源访问守护进程需要打开 `COFFER_DEV_CORS` 开关。所有数据都从守护进程的 REST API 获取。
 
@@ -138,4 +138,4 @@ REST API 是规范接口——CLI 和 Web UI 都调用它。
 
 ---
 
-**参见：** [架构参考](/zh/reference/project/architecture)，[规约 002：UI Shell](/zh/reference/specs/002-ui-shell/spec)，[分发](/zh/architecture/distribution)
+**参见：** [架构参考](/zh/reference/project/architecture)，[UI Shell 规约](/zh/reference/specs/ui-shell/spec)，[分发](/zh/architecture/distribution)

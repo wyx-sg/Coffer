@@ -1,4 +1,4 @@
-// frontend/src/components/agents/AgentDeleteDialog.tsx — spec 004-agent-registry.
+// frontend/src/components/agents/AgentDeleteDialog.tsx — spec agent-registry.
 // Delete-confirmation dialog for AgentDetailPage. Extracted to keep that
 // page under the file-size limit; owns the useRemoveAgent mutation itself so
 // the page only wires the open state and the post-delete navigation.

@@ -1,4 +1,4 @@
-"""conversations.archived_at (spec 008 — archive/restore)
+"""conversations.archived_at (agent chat — archive/restore)
 
 Revision ID: 0013
 Revises: 0012

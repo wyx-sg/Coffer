@@ -1,4 +1,4 @@
-"""Opt-in JSONL sink for eval capture (ADR-019, slice 2).
+"""Opt-in JSONL sink for eval capture (eval flywheel, slice 2).
 
 The application layer *emits* capture events to the ``coffer.eval_capture``
 logger (``coffer.application.eval_capture``). This infrastructure module binds a

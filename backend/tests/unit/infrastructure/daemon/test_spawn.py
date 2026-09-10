@@ -1,4 +1,4 @@
-"""Unit tests for daemon_spawn_command() — ADR-006 frozen-aware spawn.
+"""Unit tests for daemon_spawn_command() — frozen-aware detect-or-spawn.
 
 TEST-019: daemon_spawn_command() returns the correct launch command in both
 dev/pip mode (not frozen) and PyInstaller frozen mode.

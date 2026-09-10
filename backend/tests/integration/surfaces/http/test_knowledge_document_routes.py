@@ -393,7 +393,7 @@ def test_documents_ingest_into_the_auto_provisioned_global_scope(tmp_path, monke
         assert listed["total"] == 1
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="filter documents by title")
+@pytest.mark.acceptance(spec="knowledge", scenario="filter documents by title")
 def test_list_documents_filtered_by_title(tmp_path, monkeypatch):
     """``GET /documents?q=`` applies a case-insensitive title substring filter
     server-side BEFORE limit/offset; ``total`` is the filtered count."""

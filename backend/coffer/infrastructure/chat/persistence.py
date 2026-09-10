@@ -59,7 +59,7 @@ class ConversationModel(Base):
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
-    # Optional channel binding (return address, spec 009) for a conversation the
+    # Optional channel binding (return address, spec channels) for a conversation the
     # owner also drives from an IM channel; "has a binding" iff channel_name set.
     channel_name: Mapped[str | None] = mapped_column(String, nullable=True)
     peer_chat_id: Mapped[str | None] = mapped_column(String, nullable=True)

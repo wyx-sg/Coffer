@@ -1,4 +1,4 @@
-"""Provider profiles round-trip through an export bundle (spec 011).
+"""Provider profiles round-trip through an export bundle (spec provider-switching).
 
 A ``provider`` resource rides the generic ResourceDoc machinery, so it carries
 across machines with no export/import changes of its own. Two vaults exchange
@@ -58,7 +58,7 @@ async def _vault(root: pathlib.Path) -> tuple[ResourceService, CredentialSyncAda
 
 
 @pytest.mark.acceptance(
-    spec="011-provider-switching",
+    spec="provider-switching",
     scenario="a provider profile round-trips through sync export and import",
 )
 async def test_provider_round_trips_through_a_bundle(tmp_path):  # type: ignore[no-untyped-def]

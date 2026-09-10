@@ -80,7 +80,7 @@ It then:
 
 ## Session model and lazy spawn
 
-Each downstream client connection creates one `MCPGatewaySession` in the daemon (per [ADR-005](/reference/adr/ADR-005-session-subprocess-model)). This session owns the upstream subprocesses for that connection. Subprocesses are not started at session creation — they are started lazily on first need, meaning the first `tools/list` or `tools/call` that routes to a given upstream pays the subprocess spawn and `initialize` handshake cost once. Subsequent calls in the same session reuse the running upstream.
+Each downstream client connection creates one `MCPGatewaySession` in the daemon (per [Session Subprocess Model](/reference/adr/session-subprocess-model)). This session owns the upstream subprocesses for that connection. Subprocesses are not started at session creation — they are started lazily on first need, meaning the first `tools/list` or `tools/call` that routes to a given upstream pays the subprocess spawn and `initialize` handshake cost once. Subsequent calls in the same session reuse the running upstream.
 
 Two MCP clients connected simultaneously (e.g., Claude Code and Codex both running) produce two independent `MCPGatewaySession` objects, each with their own upstream subprocess set. They share no state. This prevents a crash in one client's upstream from affecting the other client, and preserves MCP protocol correctness: each upstream `initialize` negotiates capabilities fresh for each session, without the daemon needing to multiplex or fabricate session state.
 
@@ -191,7 +191,7 @@ The daemon adds no wrapper or extra fields to the upstream's success result. The
 
 ## Agent-turn lifecycle
 
-A turn drives a different lifecycle from a gateway call: instead of forwarding a single JSON-RPC call to an upstream, it runs a multi-step **agent turn** that may itself call several of Coffer's own gateway tools before producing a reply. This path is specified by [spec 009](/reference/specs/009-channels/spec) (FR-043…FR-055).
+A turn drives a different lifecycle from a gateway call: instead of forwarding a single JSON-RPC call to an upstream, it runs a multi-step **agent turn** that may itself call several of Coffer's own gateway tools before producing a reply. This path is specified by [spec channels](/reference/specs/channels/spec) (FR-043…FR-055).
 
 1. **Turn start.** A channel delivers a user message. The `TurnOrchestrator` (`application/chat/turn_orchestrator.py`) creates or resumes the conversation, persists the user turn, and starts streaming. Only one turn runs per conversation at a time; a message arriving during a turn is enqueued rather than rejected.
 
@@ -201,7 +201,7 @@ A turn drives a different lifecycle from a gateway call: instead of forwarding a
 
 ## Channel-inbound lifecycle
 
-Messaging channels (Telegram, SeaTalk) are how a user reaches an agent. Each delivers user messages into the **`TurnOrchestrator` seam** described above; once a message reaches the orchestrator, nothing downstream knows which platform it came from. The inbound transport differs per platform (per [ADR-014](/reference/adr/ADR-014-channel-adapter-framework)):
+Messaging channels (Telegram, SeaTalk) are how a user reaches an agent. Each delivers user messages into the **`TurnOrchestrator` seam** described above; once a message reaches the orchestrator, nothing downstream knows which platform it came from. The inbound transport differs per platform (per [Channel Adapter Framework](/reference/adr/channel-adapter-framework)):
 
 - **SeaTalk (webhook).** SeaTalk delivers events only by public webhook. A separate **callback-listener process** (`coffer-callback`, spawned by the daemon while any SeaTalk channel is enabled) serves `POST /seatalk/{channel}` on a loopback port. It answers the platform's verification challenge, verifies the request signature (`sha256(body + signing_secret)`), normalises the event, and forwards it to the daemon — which feeds it into the orchestrator.
 
@@ -211,15 +211,15 @@ Progress is rendered from the agent's capabilities, not the adapter type: Telegr
 
 ## Knowledge retrieval lifecycle
 
-Retrieval requests — `coffer__search`, `coffer__grep`, and the REST `search` / `recall` / `grep` routes — follow a lifecycle anchored in [ADR-012](/reference/adr/ADR-012-files-as-truth-sqlite-retrieval): **markdown files are the source of truth**, and `coffer.db` holds only a derived index.
+Retrieval requests — `coffer__search`, `coffer__grep`, and the REST `search` / `recall` / `grep` routes — follow a lifecycle anchored in [Files as Truth](/reference/adr/files-as-truth-sqlite-retrieval): **markdown files are the source of truth**, and `coffer.db` holds only a derived index.
 
 - **`grep`** — ripgrep over the raw files (zero index, language-agnostic).
 - **keyword** — SQLite **FTS5** with `MATCH … ORDER BY bm25()`.
 - **vector** — **sqlite-vec** KNN over chunk embeddings (opt-in per scope; embeddings come from the installation-wide OpenAI-compatible endpoint configured under Settings).
 - **hybrid** — reciprocal-rank fusion over keyword + vector.
 
-The engine picks among these from the scope's configuration — callers never name a mode ([ADR-034](/reference/adr/ADR-034-retrieval-mode-is-internal)) — and one search covers both lanes of the scope, the entries agents wrote and the documents you ingested. A write (`coffer__write`, or an ingest) lands a markdown file first, after which the derived FTS5/vec index is regenerated from the files. Because files are truth, the index can always be rebuilt and the user can diff/grep/edit content with ordinary tools.
+The engine picks among these from the scope's configuration — callers never name a mode ([Retrieval Mode Is Internal](/reference/adr/retrieval-mode-is-internal)) — and one search covers both lanes of the scope, the entries agents wrote and the documents you ingested. A write (`coffer__write`, or an ingest) lands a markdown file first, after which the derived FTS5/vec index is regenerated from the files. Because files are truth, the index can always be rebuilt and the user can diff/grep/edit content with ordinary tools.
 
 ---
 
-**See also:** [Spec 001: MCP Gateway](/reference/specs/001-mcp-gateway/spec), [ADR-005: Session subprocess model](/reference/adr/ADR-005-session-subprocess-model), [Spec 009: Channels](/reference/specs/009-channels/spec), [ADR-014: Channel adapter framework](/reference/adr/ADR-014-channel-adapter-framework), [ADR-012: Files as truth, SQLite retrieval](/reference/adr/ADR-012-files-as-truth-sqlite-retrieval)
+**See also:** [MCP Gateway spec](/reference/specs/mcp-gateway/spec), [Session subprocess model](/reference/adr/session-subprocess-model), [Channels spec](/reference/specs/channels/spec), [Channel adapter framework](/reference/adr/channel-adapter-framework), [Files as truth, SQLite retrieval](/reference/adr/files-as-truth-sqlite-retrieval)

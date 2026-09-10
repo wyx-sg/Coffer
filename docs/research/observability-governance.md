@@ -89,14 +89,14 @@ This space splits into two angles Coffer straddles partially:
 1. **No MCP tool-definition integrity / Tool Pinning (headline security borrow).**
    mcp-scan hashes tool definitions to detect rug-pull / silent redefinition and
    scans tool descriptions for prompt injection / poisoning. Coffer **aggregates
-   upstream MCP servers and already live-queries their capabilities (ADR-004)** —
+   upstream MCP servers and already live-queries their capabilities (ADR capability-state-model)** —
    it is perfectly positioned to hash + pin tool definitions at the gateway and
    alert on drift. This is the single most on-mission security feature to add.
 2. **No opt-in arg/result capture for debugging.** The invariant is right as a
    _default_, but every debugging workflow needs an escape hatch. Borrow OTel's
    model: opt-in, off-by-default, local-only arg/result capture.
 3. **No LLM-layer observability.** Coffer doesn't trace its internal model
-   (ADR-024) calls — token/cost/latency. If/when it adds tracing, **adopt the
+   (ADR builtin-agent-is-internal-capability) calls — token/cost/latency. If/when it adds tracing, **adopt the
    OpenTelemetry GenAI conventions** (while noting they are still Development, not
    GA).
 4. **No runtime policy/guardrail engine.** Lasso/Prompt Security enforce
@@ -109,7 +109,7 @@ This space splits into two angles Coffer straddles partially:
    accountability is the right headline.
 2. **Add MCP tool-definition pinning (mcp-scan style)** — hash + pin upstream
    tool definitions at the gateway, alert on rug-pull/silent-redefinition, scan
-   tool descriptions for injection. Your gateway + ADR-004 capability tracking
+   tool descriptions for injection. Your gateway + capability tracking (ADR capability-state-model)
    make this a natural, high-value addition; the threat is real and consolidating
    (Snyk/SentinelOne).
 3. **Add opt-in, off-by-default arg/result capture** for debugging (OTel content-

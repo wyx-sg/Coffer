@@ -1,4 +1,4 @@
-"""Integration tests for `coffer scope ...` CLI subcommands (ADR-045).
+"""Integration tests for `coffer scope ...` CLI subcommands (ADR per-agent-resource-scope).
 
 Reuses the shared ``in_proc_daemon`` fixture (see conftest.py), which wires
 ``fake_scoped`` (supports_scope=True, mirrors mcp_server/skill) alongside the

@@ -52,7 +52,7 @@ def _should_run() -> bool:
 pytestmark = pytest.mark.benchmark
 
 
-@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="gateway overhead stays under budget")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="gateway overhead stays under budget")
 @pytest.mark.skipif(
     not _should_run(),
     reason="benchmark suite disabled by default; set COFFER_RUN_BENCHMARKS=1",

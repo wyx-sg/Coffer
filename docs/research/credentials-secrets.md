@@ -3,7 +3,8 @@
 > English: this file · 中文版: [credentials-secrets.zh.md](./credentials-secrets.zh.md)
 >
 > Internal competitive-research report for Coffer's credential store (constitution
-> Principle; ADR-015). **Date:** 2026-06-16. **Method:** deep-research harness.
+> Principle; [Envelope-Encrypted Credentials](../decisions/envelope-encrypted-credential-store.md)).
+> **Date:** 2026-06-16. **Method:** deep-research harness.
 > **Provenance caveat:** this run hit an API session limit during verification, so
 > claims could not be re-verified by vote — but they are drawn from primary
 > vendor docs (1Password, ToolHive, Infisical, Vault) and reflect well-documented
@@ -134,11 +135,11 @@ Primary:
   `set()` encrypts, `get()` decrypts into memory only, `exists()` is a presence
   probe that never decrypts. Docstring: "Plaintext exists only in memory between
   decrypt and the spawn that consumes it. The ciphertext column never reaches logs
-  or audit rows." ADR-015 (Accepted 2026-06-12) restates "Ciphertext at rest…
+  or audit rows." The Envelope-Encrypted Credentials ADR (Accepted 2026-06-12) restates "Ciphertext at rest…
   never in logs, audit, or structured events," with the master key in a 0600 file
   by default / OS keychain opt-in (matches the "Master-unlock model" row).
   [repo:backend/coffer/infrastructure/credentials/encrypted_store.py;
-  repo:docs/decisions/ADR-015-envelope-encrypted-credential-store.md]
+  repo:docs/decisions/envelope-encrypted-credential-store.md]
 - **1Password `op run` materialize-at-spawn.** Docs: "loads the specified secrets,
   then runs the provided command in a subprocess with the secrets made available as
   environment variables only for the duration of the process." It resolves `op://`
@@ -161,8 +162,8 @@ Primary:
 
 ### ✏️ Corrected
 
-- **Provenance: "spec 015" → ADR-015 + spec 001-mcp-gateway.** The header cites
-  "spec 015 / ADR-015"; the ADR exists, but there is no `specs/015-*` folder. The
-  credentials feature is documented via ADR-015 plus spec 001-mcp-gateway
+- **Provenance: a spec that does not exist → the credentials ADR + spec mcp-gateway.** The header
+  cited a numbered spec that was never a directory; the Envelope-Encrypted Credentials ADR exists. The
+  credentials feature is documented via that ADR plus spec mcp-gateway
   (credentials table, audit events). Does not change the substance of the claim.
-  [repo:docs/decisions/ADR-015-envelope-encrypted-credential-store.md]
+  [repo:docs/decisions/envelope-encrypted-credential-store.md]

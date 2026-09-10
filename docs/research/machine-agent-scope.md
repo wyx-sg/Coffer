@@ -5,14 +5,14 @@
 > **Historical record.** This note designed a **machine × agent** scope matrix
 > on top of continuous multi-machine sync. Both have since been withdrawn: sync
 > is now a one-shot vault export/import
-> ([ADR-016](../decisions/ADR-016-vault-export-import.md)) and the machine axis
+> ([Vault Export and Import](../decisions/vault-export-import.md)) and the machine axis
 > is gone, leaving `scope` as a plain list of agent names
-> ([ADR-045](../decisions/ADR-045-per-agent-resource-scope.md)). Read the two
+> ([Per-Agent Resource Scope](../decisions/per-agent-resource-scope.md)). Read the two
 > ADRs for the shipped shape; what follows is the record of how the agent axis
 > was arrived at.
 
-
-Design note for generalizing machine identity (spec 010 / ADR-043) into a
+Design note for generalizing machine identity (spec vault-export-import, and the since-removed
+machine-identity ADR) into a
 resource-framework-level **scope** facility, plus a top-level **Machines**
 fleet view. Validated in a brainstorming session on 2026-07-10; this note is
 the input to the ADR + spec amendments that will carry the product contract.
@@ -20,11 +20,12 @@ the input to the ADR + spec amendments that will carry the product contract.
 ## Problem
 
 Multi-machine sync converges every resource onto every machine, but some
-resources are only *usable* on one machine or by one agent: an MCP server
+resources are only _usable_ on one machine or by one agent: an MCP server
 whose binary exists only on the MacBook, a skill written for Claude Code
 only. Today the vault has no way to say so —
 
-- Channels are the only kind with machine affinity (`runs_on`, ADR-043).
+- Channels are the only kind with machine affinity (`runs_on`, per the
+  machine-identity ADR).
 - Skills have per-agent delivery policy (consumer-side follow flag +
   exclusions) but no machine dimension.
 - MCP servers have neither: the gateway exposes every server's tools to every
@@ -32,7 +33,7 @@ only. Today the vault has no way to say so —
 - Agents not installed on a machine are handled implicitly by the import
   gate — permanent quarantine noise, retried every run.
 
-ADR-043 explicitly reserved "per-resource runtime affinity" as a follow-up
+The machine-identity ADR explicitly reserved "per-resource runtime affinity" as a follow-up
 hanging off machine identity. This design is that follow-up, widened to an
 agent axis.
 
@@ -157,8 +158,8 @@ hold). What changes is wording: "local = this one machine" matures into
 | `constitution.md`                    | Editorial 0.3.x amendment: Principle I "the user's machine" → "the user's machines". No principle change.          |
 | `architecture.md`                    | Machine identity promoted to a framework core concept; `scope` facility documented alongside the kinds table.       |
 | `AGENTS.md` / `README.md`            | Positioning line gains "one vault across the user's machines".                                                      |
-| New ADR (amends ADR-043)             | Scope matrix semantics, shim identity, follow-policy intersection, `runs_on` migration.                              |
-| Specs 010 / 001 / 004 / 005 / 009    | Amendments per the enforcement table above, each with acceptance scenarios, bilingual pairs.                          |
+| New ADR (amends the machine-identity ADR) | Scope matrix semantics, shim identity, follow-policy intersection, `runs_on` migration.                       |
+| The sync, gateway, agent, skill and channel specs | Amendments per the enforcement table above, each with acceptance scenarios, bilingual pairs.        |
 
 ## Testing
 

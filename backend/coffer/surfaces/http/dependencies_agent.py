@@ -1,4 +1,4 @@
-"""Agent-kind FastAPI dependency providers (spec 004-agent-registry).
+"""Agent-kind FastAPI dependency providers (spec agent-registry).
 
 Split out of :mod:`coffer.surfaces.http.dependencies` for the file-size budget.
 Re-exported there so existing ``from ...dependencies import get_agent_service``
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-# --- Agent kind-specific dependency providers (spec 004-agent-registry) ---
+# --- Agent kind-specific dependency providers (spec agent-registry) ---
 _agent_service: Any | None = None
 _auto_detect_service: Any | None = None
 
@@ -38,7 +38,7 @@ def set_provider_service(svc: Any) -> None:
 
 
 def get_provider_service() -> Any:
-    """FastAPI Depends() target — actual type is ProviderService (spec 011)."""
+    """FastAPI Depends() target — actual type is ProviderService (spec provider-switching)."""
     if _provider_service is None:
         raise RuntimeError("provider service not initialised")
     return _provider_service

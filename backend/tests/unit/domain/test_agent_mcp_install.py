@@ -161,7 +161,7 @@ def test_toml_uninstall_noop_for_scalar_mcp_servers():
     assert tomlkit.parse(out)["mcp_servers"] == "coffer-ish"
 
 
-# --- self-reported agent identity (spec 004 FR-019 amended, Task 9) -------------
+# --- self-reported agent identity (spec agent-registry FR-019 amended, Task 9) -------------
 
 
 def test_entry_fields_command_map_with_agent_name():
@@ -236,7 +236,7 @@ def test_toml_command_map_entry_with_agent_name_carries_args():
 
 def test_json_typed_local_object_entry_with_agent_name_appends_to_command_array():
     """Typed-array styles have no ``args`` key — the agent flag is appended
-    directly onto the ``command`` array (spec 004 FR-019 amended)."""
+    directly onto the ``command`` array (spec agent-registry FR-019 amended)."""
     from coffer.domain.agent.mcp_injection import McpEntryStyle
 
     out = apply_install(

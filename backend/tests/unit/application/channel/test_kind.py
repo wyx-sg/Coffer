@@ -137,8 +137,8 @@ def test_update_skips_when_registry_empty():
     _update_validate({"channel_type": "telegram", "default_agent": "builtin"}, agent_keys=list)
 
 
-# -- no activation scope (ADR-045) ------------------------------------------
-# The machine axis went away with continuous sync (ADR-016), and scope now
+# -- no activation scope (ADR per-agent-resource-scope) ------------------------------------------
+# The machine axis went away with continuous sync (ADR vault-export-import), and scope now
 # names the AGENTS a resource is active for — meaningless for a channel, which
 # is an inbound surface no agent consumes. So the kind declares no scope at
 # all and ResourceService.update_scope rejects any non-null payload (422,

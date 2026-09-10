@@ -9,7 +9,7 @@ kinds are wired with the same cross-kind on_delete hook the production
 daemon uses, then route ``_cli_client.client_or_exit`` to a Starlette
 ``TestClient`` against that app.
 
-The 005-skill-manager spec §User Story 7 — every CLI verb mirrors the REST surface.
+The skill-manager spec §User Story 7 — every CLI verb mirrors the REST surface.
 """
 
 from __future__ import annotations
@@ -163,7 +163,7 @@ def _register_agent(home: pathlib.Path, name: str) -> pathlib.Path:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="005-skill-manager", scenario="desktop and CLI cover every operation")
+@pytest.mark.acceptance(spec="skill-manager", scenario="desktop and CLI cover every operation")
 def test_skill_list_empty_json(skill_cli_daemon):
     """`skill list --json` is an empty JSON array when no skills exist."""
     result = _runner.invoke(cli_app, ["skill", "list", "--json"])

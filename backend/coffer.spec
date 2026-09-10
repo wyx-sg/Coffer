@@ -3,7 +3,7 @@
 #
 # Output: dist/coffer (single-file executable)
 # Packaged into coffer-cli-<triple>.tar.gz beside the daemon and shim; the
-# frozen detect-or-spawn resolution needs them co-located (ADR-006).
+# frozen detect-or-spawn resolution needs them co-located (ADR daemon-detect-or-spawn).
 #
 # The CLI is a thin HTTP client — it does NOT embed FastAPI / uvicorn /
 # SQLAlchemy / Alembic.  Those live only in the daemon binary.

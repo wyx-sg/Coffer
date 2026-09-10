@@ -1,4 +1,4 @@
-"""Unit tests for ``map_codex_notification`` (spec 008, T3).
+"""Unit tests for ``map_codex_notification`` (spec channels, T3).
 
 Pure, table-driven: each canned ``(method, params)`` notification maps to the
 expected list of ``AgentEvent``s. Covers text deltas, command/file-change

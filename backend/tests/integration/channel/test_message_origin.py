@@ -26,7 +26,7 @@ async def _user_texts(env: ChannelEnv) -> list[str]:
     return [_text(m) for m in messages if m.role is Role.USER]
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="a group turn names the group it came from")
+@pytest.mark.acceptance(spec="channels", scenario="a group turn names the group it came from")
 async def test_group_turn_carries_the_chat_id_title_thread_and_sender(env: ChannelEnv) -> None:
     _resource, adapter = await env.paired_channel(sender_id="owner-1")
 
@@ -56,7 +56,7 @@ async def test_group_turn_carries_the_chat_id_title_thread_and_sender(env: Chann
     )
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="a DM turn names its own chat")
+@pytest.mark.acceptance(spec="channels", scenario="a DM turn names its own chat")
 async def test_dm_turn_carries_a_direct_origin_block(env: ChannelEnv) -> None:
     _resource, adapter = await env.paired_channel()
 
@@ -68,7 +68,7 @@ async def test_dm_turn_carries_a_direct_origin_block(env: ChannelEnv) -> None:
     )
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="every turn carries its origin")
+@pytest.mark.acceptance(spec="channels", scenario="every turn carries its origin")
 async def test_origin_is_repeated_on_later_turns_not_just_the_first(env: ChannelEnv) -> None:
     """An agent can be switched mid-conversation (``/agent``) and a session can
     be resumed, so a first-turn-only header would silently go missing."""
@@ -85,7 +85,7 @@ async def test_origin_is_repeated_on_later_turns_not_just_the_first(env: Channel
     assert texts[0].endswith("\n\nfirst") and texts[1].endswith("\n\nsecond")
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="a slash command keeps its leading slash")
+@pytest.mark.acceptance(spec="channels", scenario="a slash command keeps its leading slash")
 async def test_a_command_is_not_prefixed_with_an_origin_block(env: ChannelEnv) -> None:
     """The origin block is folded in after command detection — prefixing it
     first would turn every ``/command`` into an ordinary turn."""

@@ -133,7 +133,7 @@ async def _register_agent(
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="005-skill-manager", scenario="import a valid local skill folder")
+@pytest.mark.acceptance(spec="skill-manager", scenario="import a valid local skill folder")
 async def test_import_valid_skill(tmp_path):
     skill_svc, _, audit, store, engine = await _setup(tmp_path)
     src = tmp_path / "src"
@@ -148,9 +148,7 @@ async def test_import_valid_skill(tmp_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="005-skill-manager", scenario="reject import of an invalid skill folder"
-)
+@pytest.mark.acceptance(spec="skill-manager", scenario="reject import of an invalid skill folder")
 async def test_import_rejects_invalid_frontmatter(tmp_path):
     skill_svc, _, _, store, engine = await _setup(tmp_path)
     src = tmp_path / "src"
@@ -164,7 +162,7 @@ async def test_import_rejects_invalid_frontmatter(tmp_path):
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
-    spec="005-skill-manager", scenario="reject import containing path-escape symlinks"
+    spec="skill-manager", scenario="reject import containing path-escape symlinks"
 )
 async def test_import_rejects_path_escape_symlink(tmp_path):
     skill_svc, _, _, _, engine = await _setup(tmp_path)
@@ -182,7 +180,7 @@ async def test_import_rejects_path_escape_symlink(tmp_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="005-skill-manager", scenario="enable a skill for a registered agent")
+@pytest.mark.acceptance(spec="skill-manager", scenario="enable a skill for a registered agent")
 async def test_enable_creates_link(tmp_path):
     skill_svc, agent_svc, _, _, engine = await _setup(tmp_path)
     _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
@@ -197,7 +195,7 @@ async def test_enable_creates_link(tmp_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="005-skill-manager", scenario="disable a skill for an agent")
+@pytest.mark.acceptance(spec="skill-manager", scenario="disable a skill for an agent")
 async def test_disable_removes_link_keeps_master(tmp_path):
     skill_svc, agent_svc, _, store, engine = await _setup(tmp_path)
     _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
@@ -213,7 +211,7 @@ async def test_disable_removes_link_keeps_master(tmp_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="005-skill-manager", scenario="enable for multiple agents")
+@pytest.mark.acceptance(spec="skill-manager", scenario="enable for multiple agents")
 async def test_enable_for_two_agents(tmp_path):
     skill_svc, agent_svc, _, _, engine = await _setup(tmp_path)
     _, sd1 = await _register_agent(agent_svc, tmp_path, name="cur1")
@@ -229,9 +227,7 @@ async def test_enable_for_two_agents(tmp_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="005-skill-manager", scenario="refuse to overwrite a non-Coffer target"
-)
+@pytest.mark.acceptance(spec="skill-manager", scenario="refuse to overwrite a non-Coffer target")
 async def test_refuse_to_overwrite_non_coffer_target(tmp_path):
     skill_svc, agent_svc, _, _, engine = await _setup(tmp_path)
     _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
@@ -268,9 +264,7 @@ async def test_refuse_to_overwrite_non_coffer_target(tmp_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="005-skill-manager", scenario="detect drift in agent skill directories"
-)
+@pytest.mark.acceptance(spec="skill-manager", scenario="detect drift in agent skill directories")
 async def test_verify_detects_missing_link(tmp_path):
     skill_svc, agent_svc, _, _, engine = await _setup(tmp_path)
     _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
@@ -288,7 +282,7 @@ async def test_verify_detects_missing_link(tmp_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="005-skill-manager", scenario="remove a skill cleans up all bindings")
+@pytest.mark.acceptance(spec="skill-manager", scenario="remove a skill cleans up all bindings")
 async def test_remove_skill_cleans_everything(tmp_path):
     skill_svc, agent_svc, _, store, engine = await _setup(tmp_path)
     _, sd1 = await _register_agent(agent_svc, tmp_path, name="cur1")
@@ -334,8 +328,8 @@ async def test_kind_agnostic_delete_skill_cleans_everything(tmp_path):
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
-    spec="005-skill-manager",
-    scenario="removing an agent (per spec 004) cleans up its skill bindings",
+    spec="skill-manager",
+    scenario="removing an agent (per spec agent-registry) cleans up its skill bindings",
 )
 async def test_remove_agent_cleans_its_bindings(tmp_path):
     skill_svc, agent_svc, _, store, engine = await _setup(tmp_path)
@@ -447,7 +441,7 @@ async def test_verify_detects_missing_master(tmp_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="005-skill-manager", scenario="audit skill lifecycle")
+@pytest.mark.acceptance(spec="skill-manager", scenario="audit skill lifecycle")
 async def test_audit_skill_lifecycle(tmp_path):
     skill_svc, _, audit, _, engine = await _setup(tmp_path)
     src = tmp_path / "src"
@@ -583,7 +577,7 @@ async def test_config_dir_change_does_not_clobber_foreign_content_at_new_target(
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
-    spec="005-skill-manager",
+    spec="skill-manager",
     scenario="re-import a skill with overwrite replaces it",
 )
 async def test_reimport_overwrite_replaces_and_preserves_bindings(tmp_path):
@@ -676,7 +670,7 @@ async def test_reimport_overwrite_registers_orphan_master(tmp_path):
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
-    spec="005-skill-manager",
+    spec="skill-manager",
     scenario="opt-in repair re-delivers repairable drift from master",
 )
 async def test_repair_redelivers_repairable_drift_and_leaves_foreign(tmp_path):

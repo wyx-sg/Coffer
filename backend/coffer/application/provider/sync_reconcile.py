@@ -1,4 +1,4 @@
-"""Provider projection as a sync post-import hook (spec 010 import
+"""Provider projection as a sync post-import hook (spec vault-export-import import
 reconciliation).
 
 ``is_active`` rides the synced provider resource, but the projection into the

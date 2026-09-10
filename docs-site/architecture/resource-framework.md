@@ -8,13 +8,13 @@ Every user-managed entity in Coffer is a **Resource**, identified by a stable st
 
 | Kind             | Spec                                                   | Description                                                                                                       |
 | ---------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `mcp_server`     | [001-mcp-gateway](/reference/specs/001-mcp-gateway/spec)         | A registered upstream MCP server: transport config, credential references, and the per-server gateway policies.  |
-| `agent`          | [004-agent-registry](/reference/specs/004-agent-registry/spec)   | A registered local AI coding agent (e.g. Claude Code): its config directory, Coffer-MCP install state, and derived workspace facets. |
-| `skill`          | [005-skill-manager](/reference/specs/005-skill-manager/spec)     | A master skill bundle Coffer delivers into one or more agents' skill directories.                                |
-| `knowledge`      | [007 — Knowledge Layer](/reference/specs/007-memory/spec)        | One scope of what agents know: entries they wrote plus any-format documents ingested to markdown, under one grep / FTS5 / vector retrieval. |
-| `channel`        | [009-channels](/reference/specs/009-channels/spec)               | A messaging-channel binding (Telegram, SeaTalk): transport config, credential refs, and a default agent.         |
+| `mcp_server`     | [mcp-gateway](/reference/specs/mcp-gateway/spec)         | A registered upstream MCP server: transport config, credential references, and the per-server gateway policies.  |
+| `agent`          | [agent-registry](/reference/specs/agent-registry/spec)   | A registered local AI coding agent (e.g. Claude Code): its config directory, Coffer-MCP install state, and derived workspace facets. |
+| `skill`          | [skill-manager](/reference/specs/skill-manager/spec)     | A master skill bundle Coffer delivers into one or more agents' skill directories.                                |
+| `knowledge`      | [007 — Knowledge Layer](/reference/specs/knowledge/spec)        | One scope of what agents know: entries they wrote plus any-format documents ingested to markdown, under one grep / FTS5 / vector retrieval. |
+| `channel`        | [channels](/reference/specs/channels/spec)               | A messaging-channel binding (Telegram, SeaTalk): transport config, credential refs, and a default agent.         |
 
-`knowledge` was once two kinds — a `knowledge_base` you could only read and a `memory` only agents wrote to — but `documents`, `chunks`, FTS5 and sqlite-vec were shared from the start, so the split bought nothing and forced every caller to classify its own data before it could pick a tool. They are now one kind over one storage root, where markdown files on disk are the source of truth and SQLite is a rebuildable index ([ADR-012](/reference/adr/ADR-012-files-as-truth-sqlite-retrieval)). A knowledge resource is **co-managed**: both you and your agents write into it, and its scope is read from its own name (`global`, `project-<ULID>`, or a collection you named). New kinds plug into the same framework without modifying it. The encrypted credential store and vault export/import are deliberately **cross-cutting concerns, not kinds**: they serve every kind rather than being managed entities in their own right.
+`knowledge` was once two kinds — a `knowledge_base` you could only read and a `memory` only agents wrote to — but `documents`, `chunks`, FTS5 and sqlite-vec were shared from the start, so the split bought nothing and forced every caller to classify its own data before it could pick a tool. They are now one kind over one storage root, where markdown files on disk are the source of truth and SQLite is a rebuildable index ([Files as Truth](/reference/adr/files-as-truth-sqlite-retrieval)). A knowledge resource is **co-managed**: both you and your agents write into it, and its scope is read from its own name (`global`, `project-<ULID>`, or a collection you named). New kinds plug into the same framework without modifying it. The encrypted credential store and vault export/import are deliberately **cross-cutting concerns, not kinds**: they serve every kind rather than being managed entities in their own right.
 
 The framework provides four things, and only four things:
 
@@ -29,7 +29,7 @@ The framework provides four things, and only four things:
 The Resource framework does not unify invocation semantics. Each kind defines how its capabilities are used. There is no god `invoke()` method, no shared call path, no cross-kind behavior. The framework describes how a resource is registered, described, and curated — not what happens when you use it.
 :::
 
-## Why kind-agnostic upfront (ADR-001)
+## Why kind-agnostic upfront (ADR resource-framework-upfront)
 
 The constitution normally defers cross-cutting abstractions until a second feature needs them ("extract on second feature"). The Resource framework is an explicit exception, and the reason is cost asymmetry.
 
@@ -37,9 +37,9 @@ The framework spans every layer: domain entities, database schema, audit table, 
 
 The alternative of building per-kind silos with no shared abstraction was also rejected: with multiple kinds planned with high confidence (six are registered today), building identity + lifecycle + audit + surface CRUD separately for each would produce more code and more drift than one framework.
 
-The consequence is that the first spec (`001-mcp-gateway`) carries the framework's abstraction overhead with only one concrete kind to justify it. This is accepted as a known cost, explicitly balanced against the avoided refactor.
+The consequence is that the first spec (`mcp-gateway`) carries the framework's abstraction overhead with only one concrete kind to justify it. This is accepted as a known cost, explicitly balanced against the avoided refactor.
 
-## Identifier format: `<kind>:<name>` (ADR-003)
+## Identifier format: `<kind>:<name>` (ADR resource-identifier-format)
 
 Resources are referenced externally by the string `<kind>:<name>`:
 
@@ -57,7 +57,7 @@ Internally, the database uses a surrogate `id INTEGER PRIMARY KEY AUTOINCREMENT`
 - **Pure UUID**: Rejected because opaque, not self-describing, and forces a separate `kind` field on every reference.
 - **Path-style** (`mcp_server/filesystem`): Functionally equivalent but rejected because slashes are overloaded in URLs, file paths, and many DSLs; the colon makes the kind-namespace relationship clearer.
 
-## Capability state model (ADR-004)
+## Capability state model (ADR capability-state-model)
 
 Each resource moves through a defined lifecycle. The state machine is intentionally simple:
 
@@ -88,7 +88,7 @@ stateDiagram-v2
 
 Every state transition is recorded in the audit log with an actor. The audit log cannot be modified or deleted through the normal API — it is append-only.
 
-For `mcp_server` specifically, there is a parallel capability-level state: each individual tool, resource, or prompt exposed by an upstream server can be individually enabled or disabled (per ADR-004). The database stores only user preference flags for these capabilities — it does not cache capability schemas or descriptions. Those are fetched live from the upstream on each request and held in a per-session in-memory cache with a 60-second TTL.
+For `mcp_server` specifically, there is a parallel capability-level state: each individual tool, resource, or prompt exposed by an upstream server can be individually enabled or disabled (per [Capability State Model](/reference/adr/capability-state-model)). The database stores only user preference flags for these capabilities — it does not cache capability schemas or descriptions. Those are fetched live from the upstream on each request and held in a per-session in-memory cache with a 60-second TTL.
 
 ## Kind registration at the composition root
 
@@ -96,7 +96,7 @@ The framework uses no global registry and no import side effects. Each kind is w
 
 Adding a new kind is mechanical: create the kind's subdirectories in each layer (`domain/<kind>/`, `application/<kind>/`, `infrastructure/<kind>/`, `surfaces/http/<kind>/`, `surfaces/cli/<kind>/`), implement the kind-specific logic, and register a `KindModule` at the composition root. The audit, retention, and resource-list surfaces are inherited automatically.
 
-## Why "everything is a resource kind" (ADR-007)
+## Why "everything is a resource kind" (ADR everything-is-a-resource-kind)
 
 The information architecture follows the same principle as the domain model: there is a single-axis navigation model where every user-facing managed entity is a resource kind, surfaced through the same sidebar group. There is no separate "surface" concept sitting beside the resource concept.
 
@@ -106,4 +106,4 @@ A deliberate policy follows: **no "coming soon" placeholders**. A kind is not sh
 
 ---
 
-**See also:** [ADR-001: Resource framework upfront](/reference/adr/ADR-001-resource-framework-upfront), [ADR-007: Everything is a resource kind](/reference/adr/ADR-007-everything-is-a-resource-kind), [ADR-003: Resource identifier format](/reference/adr/ADR-003-resource-identifier-format), [ADR-004: Capability state model](/reference/adr/ADR-004-capability-state-model)
+**See also:** [Resource framework upfront](/reference/adr/resource-framework-upfront), [Everything is a resource kind](/reference/adr/everything-is-a-resource-kind), [Resource identifier format](/reference/adr/resource-identifier-format), [Capability state model](/reference/adr/capability-state-model)

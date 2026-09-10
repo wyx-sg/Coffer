@@ -1,6 +1,6 @@
 // frontend/src/lib/hooks/useAgentConfig.test.tsx
 //
-// Covers the spec-004-v2 agent config-file + Coffer-MCP-install hooks that the
+// Covers the v2 agent config-file + Coffer-MCP-install hooks that the
 // AgentDetailPage drives. Like useAgents.test.tsx these call raw `fetch`
 // against `${getCofferBaseUrl()}/agents/*`, so we stub `globalThis.fetch` and
 // assert URL shaping, method, body, gating, and cache invalidation.

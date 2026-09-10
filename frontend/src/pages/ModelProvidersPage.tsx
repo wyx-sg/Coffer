@@ -1,4 +1,4 @@
-// pages/ModelProvidersPage.tsx — the model-provider surface (spec 011).
+// pages/ModelProvidersPage.tsx — the model-provider surface (spec provider-switching).
 //
 // A provider here is a credentialed endpoint: `{protocol, base_url,
 // credential_ref}`. The MODEL is not stored on it and not chosen here — that
@@ -7,7 +7,7 @@
 // manages vendor endpoints and their keys.
 //
 // It lives under RESOURCES rather than Settings because `provider` is a
-// resource kind like any other, and spec 002's rule is that RESOURCES holds
+// resource kind like any other, and spec ui-shell's rule is that RESOURCES holds
 // the kinds with a list UI. It was the only one of the five filed elsewhere.
 // The Embedding card stays at the bottom.
 import { useState } from "react";
@@ -160,7 +160,7 @@ export function ModelProvidersPage() {
 
       {/* The internal-engine selection: which connection (endpoint + key) and
           which model Coffer's own LLM engine runs on. A separate section, not a
-          per-card flag — model lives apart from the connection (spec 011). */}
+          per-card flag — model lives apart from the connection (spec provider-switching). */}
       <InternalEngineSettings providers={providers} />
 
       {/* Embedding is its own separate config (own shape with dimensions) — its

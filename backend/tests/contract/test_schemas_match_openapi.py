@@ -16,9 +16,7 @@ import yaml
 from coffer.domain.mcp import server_config as mcp_server_config
 from coffer.surfaces.http import schemas
 
-_OPENAPI_PATH = (
-    Path(__file__).resolve().parents[3] / "specs/001-mcp-gateway/contracts/api.openapi.yaml"
-)
+_OPENAPI_PATH = Path(__file__).resolve().parents[3] / "specs/mcp-gateway/contracts/api.openapi.yaml"
 
 
 @pytest.fixture(scope="session")

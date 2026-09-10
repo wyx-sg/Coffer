@@ -44,7 +44,7 @@ daemon 的 FastAPI 应用将其 HTTP 服务器绑定到 `127.0.0.1`，而非 `0.
 
 envelope 加密意味着数据库之外只剩唯一一份密钥材料：Fernet **主密钥**。它**恰好**存在于以下两个位置之一：
 
-- **`~/.coffer/master.key`** —— 数据库旁的 `0600` 文件。这是**默认**：零钥匙串弹窗。（原因：macOS 把钥匙串 ACL 绑定到二进制的 cdhash，因此每次重新构建未签名 daemon 都会对每个密钥重新弹窗。文件背书的主密钥彻底消除了弹窗。见 [ADR-015](/zh/reference/adr/ADR-015-envelope-encrypted-credential-store)。）
+- **`~/.coffer/master.key`** —— 数据库旁的 `0600` 文件。这是**默认**：零钥匙串弹窗。（原因：macOS 把钥匙串 ACL 绑定到二进制的 cdhash，因此每次重新构建未签名 daemon 都会对每个密钥重新弹窗。文件背书的主密钥彻底消除了弹窗。见 [Envelope-Encrypted Credentials](/zh/reference/adr/envelope-encrypted-credential-store)。）
 - **操作系统钥匙串**（service `coffer`，ref `master-key`）—— 通过 **设置 → 安全** 或 `coffer credentials storage --set keychain` opt-in 的加固。macOS 每次 daemon 启动可能弹窗一次。这是防范 `~/.coffer/` 离线窃取的模式。
 
 解析采用 **file-first**：daemon 先找文件，再找钥匙串。这让迁移**崩溃安全**——`relocate` 只移动主密钥，并**最后**删除旧副本，因此被中断的迁移总能解析回一个可用状态。迁移永不触碰 `credentials` 表中的密文（密钥搬家，数据不动）；切换存储模式不会重新加密。
@@ -67,7 +67,7 @@ envelope 加密意味着数据库之外只剩唯一一份密钥材料：Fernet *
 
 ## 通道与面向公网的接口面
 
-仅监听 loopback 的不变量规定：面向公网的接口面必须以独立进程运行，并仅限于经过签名校验的回调路径。**SeaTalk 回调监听器**就是该规则的具体实现（spec 009，[ADR-014](/zh/reference/adr/ADR-014-channel-adapter-framework)）。SeaTalk 只通过公网 webhook 投递事件，因此它是 Coffer 唯一接收来自机器外部入站流量的地方——而它是通过一个 daemon 永不让网络触及的进程来完成的。
+仅监听 loopback 的不变量规定：面向公网的接口面必须以独立进程运行，并仅限于经过签名校验的回调路径。**SeaTalk 回调监听器**就是该规则的具体实现（spec channels，[Channel Adapter Framework](/zh/reference/adr/channel-adapter-framework)）。SeaTalk 只通过公网 webhook 投递事件，因此它是 Coffer 唯一接收来自机器外部入站流量的地方——而它是通过一个 daemon 永不让网络触及的进程来完成的。
 
 - **独立进程，永远不是 daemon。** 监听器是 daemon 拉起的子进程，仅在某个 SeaTalk 通道启用时运行。它只服务一条路由 `POST /seatalk/{channel}`，监听一个 loopback 端口（默认 `8787`，可通过 `COFFER_CALLBACK_PORT` 覆盖）。它不持有任何其他状态，除了 daemon 之外什么都触及不到。daemon 自身始终仅监听 loopback——永不暴露。
 - **签名校验。** 每个回调 POST 都携带一个 `Signature` header，由 SeaTalk 按 `sha256(raw_body + signing_secret)`（小写十六进制）计算。监听器用原始 body 和该通道的签名密钥重新计算同样的摘要，并以常量时间（`hmac.compare_digest`）比较。空密钥或空签名永不通过校验——空密钥会让 MAC 退化为 `sha256(body)`，任何人都能算出。平台的 `event_verification` 挑战在原地应答；其他每个有效事件都携带 daemon token 经 loopback 转发给 daemon。
@@ -78,7 +78,7 @@ envelope 加密意味着数据库之外只剩唯一一份密钥材料：Fernet *
 
 ## 导出安全
 
-仓库的导出与导入（[ADR-016](/zh/reference/adr/ADR-016-vault-export-import)）以**一个用户自己命名、自己搬运的目录**在机器之间搬运 vault 状态。其安全性建立在把密钥材料排除在该目录之外：
+仓库的导出与导入（[Vault Export and Import](/zh/reference/adr/vault-export-import)）以**一个用户自己命名、自己搬运的目录**在机器之间搬运 vault 状态。其安全性建立在把密钥材料排除在该目录之外：
 
 - **完全没有网络出口。** 导出与导入只触碰本地文件系统——没有远程、没有 git 子进程、没有后台复制。搬运这个目录的手段（`scp`、U 盘、用户自己的 git 仓库）都在 Coffer 之外，用的是用户自己的工具与凭据。
 - **凭据是 opt-in 的。** 不给 `--with-credentials` 时，导出完全不包含任何凭据材料，因为一个导出目录很容易被随手落在什么地方。

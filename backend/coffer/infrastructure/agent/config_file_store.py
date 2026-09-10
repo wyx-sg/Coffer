@@ -121,7 +121,7 @@ class ConfigFileStore:
 
         The containment re-check behind `validate_child_relpath`'s pure path
         math: a symlinked child pointing outside the entry's directory fails
-        here even though its relpath looked legal (spec 004 FR-035).
+        here even though its relpath looked legal (spec agent-registry FR-035).
         """
         try:
             return path.resolve().is_relative_to(root.resolve())

@@ -1,4 +1,4 @@
-"""memory projection bindings (spec 007-memory)
+"""memory projection bindings (spec knowledge)
 
 Revision ID: 0008
 Revises: 0007

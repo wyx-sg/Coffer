@@ -11,7 +11,7 @@ from coffer.domain.errors import ResourceNotFound
 # NOTE: these imports are intentionally gated behind TYPE_CHECKING (type-hints only).
 # SkillService (application/skill/service.py) currently imports
 # coffer.infrastructure.skill.* directly — a pre-existing application→infrastructure
-# layering violation from the spec-003/004 base code.  Importing it at runtime here
+# layering violation inherited from the original base code.  Importing it at runtime here
 # would drag ORM/SQLAlchemy modules into the import graph of this module and every
 # caller.  The TYPE_CHECKING guard is the surgical fix.
 #

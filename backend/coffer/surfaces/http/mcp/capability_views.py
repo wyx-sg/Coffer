@@ -90,12 +90,12 @@ async def cached_capability_list(
     """Build the capability list from persisted enable/disable preferences.
 
     The fallback path when the live upstream can't be queried (a disabled
-    server, an unreachable one). Per ADR-004 the DB never stores tool schemas —
-    only each capability's key and its ``enabled`` flag — so the views carry
-    name + enabled with empty descriptions/schemas: enough for the management
-    list and its toggles. Returns ``None`` when the server was never discovered
-    (no rows) or is unknown, so the caller surfaces the upstream error instead
-    of a misleadingly empty page.
+    server, an unreachable one). Per the capability-state model the DB never
+    stores tool schemas — only each capability's key and its ``enabled`` flag —
+    so the views carry name + enabled with empty descriptions/schemas: enough
+    for the management list and its toggles. Returns ``None`` when the server
+    was never discovered (no rows) or is unknown, so the caller surfaces the
+    upstream error instead of a misleadingly empty page.
     """
     try:
         resource = await resource_service.get(ResourceRef("mcp_server", name))

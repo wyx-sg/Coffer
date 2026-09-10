@@ -53,7 +53,7 @@ async def client():  # type: ignore[no-untyped-def]
     set_active_token(None)
 
 
-@pytest.mark.acceptance(spec="011-provider-switching", scenario="list a provider's models")
+@pytest.mark.acceptance(spec="provider-switching", scenario="list a provider's models")
 async def test_list_models(client) -> None:  # type: ignore[no-untyped-def]
     r = await client.post(
         "/api/v1/models/list-models", json={"provider": "openai", "credential_ref": "ok"}
@@ -69,7 +69,7 @@ async def test_list_models_degrades(client) -> None:  # type: ignore[no-untyped-
     assert "connection refused" in r.json()["message"]
 
 
-@pytest.mark.acceptance(spec="011-provider-switching", scenario="test a model connection")
+@pytest.mark.acceptance(spec="provider-switching", scenario="test a model connection")
 async def test_test_connection_ok_and_fail(client) -> None:  # type: ignore[no-untyped-def]
     ok = await client.post(
         "/api/v1/models/test-connection",
@@ -83,7 +83,7 @@ async def test_test_connection_ok_and_fail(client) -> None:  # type: ignore[no-u
     assert bad.status_code == 200 and bad.json()["ok"] is False
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="test an embedding model")
+@pytest.mark.acceptance(spec="knowledge", scenario="test an embedding model")
 async def test_embedding_test_reports_dimension(client) -> None:  # type: ignore[no-untyped-def]
     r = await client.post(
         "/api/v1/embedding/test",

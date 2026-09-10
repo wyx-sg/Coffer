@@ -1,4 +1,4 @@
-"""Apply an export bundle back into the local vault (spec 010, ADR-016).
+"""Apply an export bundle back into the local vault (spec and ADR vault-export-import).
 
 Three rules, and no arbitration machinery behind them (there is no concurrent
 writer — the user chose the direction when they ran the command):
@@ -60,7 +60,7 @@ class SyncImporter:
     async def import_(self, bundle: BundlePort) -> ImportSummary:
         summary = ImportSummary(path=bundle.path)
         # Version gate first: nothing is touched before we know we understand
-        # the layout (spec 010 "an older build refuses a newer bundle").
+        # the layout (spec vault-export-import "an older build refuses a newer bundle").
         await asyncio.to_thread(self._check_version, bundle)
         docs = [self._localize(doc) for doc in await asyncio.to_thread(bundle.read_resource_docs)]
         blobs = await asyncio.to_thread(bundle.read_credential_blobs)

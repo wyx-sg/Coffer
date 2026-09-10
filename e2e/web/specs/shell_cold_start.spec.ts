@@ -1,6 +1,6 @@
 // e2e/web/specs/shell_cold_start.spec.ts
 //
-// Spec 002 §User Story 1 — first-visit experience must render authenticated
+// UI Shell §User Story 1 — first-visit experience must render authenticated
 // content without ceremony. We exercise three paths in one file:
 //   1. cold-start renders authenticated content (no addInitScript token)
 //   2. token-missing renders an actionable empty state (override base URL
@@ -16,7 +16,7 @@ import { acceptance } from "./_acceptance";
 import { readDaemonToken } from "./_helpers";
 
 acceptance(
-  "002-ui-shell",
+  "ui-shell",
   "cold-start renders authenticated content",
   async ({ page }) => {
     // No beforeEachInjectToken — rely on the vite plugin to inject token
@@ -69,7 +69,7 @@ acceptance(
 );
 
 acceptance(
-  "002-ui-shell",
+  "ui-shell",
   "daemon-offline banner appears when daemon is unreachable",
   async ({ page }) => {
     // Same setup as the token-missing scenario below — pointing at a
@@ -93,7 +93,7 @@ acceptance(
 );
 
 acceptance(
-  "002-ui-shell",
+  "ui-shell",
   "token-missing renders an actionable empty state",
   async ({ page }) => {
     // Point the FE at a base URL that won't resolve to a daemon. That
@@ -122,7 +122,7 @@ acceptance(
 );
 
 acceptance(
-  "002-ui-shell",
+  "ui-shell",
   "empty resources list renders a welcome view",
   async ({ page, context }) => {
     // Inject a valid token so the API calls succeed, but ensure no

@@ -1,5 +1,5 @@
 // frontend/src/pages/ChannelDetailPage.tsx — one channel's operating surface
-// (spec 009, User Stories 2 + 8): edit / enable-disable / delete in the header
+// (spec channels, User Stories 2 + 8): edit / enable-disable / delete in the header
 // (mirrors McpServerDetailPage), a live status card (adapter, paired peer),
 // the pairing-code generator, a send-test-message card wired to the notify
 // capability, and — for SeaTalk — the callback endpoint to point a tunnel at.

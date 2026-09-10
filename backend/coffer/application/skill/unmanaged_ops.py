@@ -121,7 +121,7 @@ async def adopt_unmanaged(
     agent's canonical delivery location ``<config_dir>/skills/<name>`` —
     in-place replacement when adopting from there, consolidation when
     adopting from ``~/.agents/skills`` (the original is removed; Codex reads
-    both locations, so the skill stays visible). See spec 005 FR-023.
+    both locations, so the skill stays visible). See spec skill-manager FR-023.
     Auto-bind inside ``register_from_validated`` skips THIS agent with a
     TargetConflict while the original folder still occupies the link path —
     that is why the rmtree happens first and ``enable_for`` runs after it.

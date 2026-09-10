@@ -2,7 +2,7 @@
 
 > 中文版：本文件 · English: [agent-skills.md](./agent-skills.md)
 >
-> 面向 Coffer 技能管理器（spec 005）的内部竞品调研报告。**日期：** 2026-06-16。
+> 面向 Coffer 技能管理器（spec skill-manager）的内部竞品调研报告。**日期：** 2026-06-16。
 > **方法：** deep-research harness（扇出网络搜索 → 抓取来源 → 对抗式 claim 核验）。
 > **来源说明：** 本轮抓取 21 个来源、提取 104 条 claim，但核验/综合阶段遭遇 API
 > 限流，三票核验未跑完——2 条经 3 票确认，其余为单一一手来源（行内标注）。下文事实
@@ -164,11 +164,11 @@ Anthropic 对技能捆绑的代码**不提供任何内建沙箱或签名**；安
   fetch/clone 会精确解析并把该 ref 复制进母库（spec FR-006）。报告随附的"没有更新
   检测 / 落后上游信号"的说法在这次核查时就已过时——PR #115 已补上该能力（见下方
   ✏️）。（而这条锁定事实本身也已不再成立：skill 改为只支持本地导入，整条 Git fetch
-  生命周期——`GitSource` 以及规定了 pinned ref 的那条 FR-006——已被删除。spec 005 的
+  生命周期——`GitSource` 以及规定了 pinned ref 的那条 FR-006——已被删除。spec skill-manager 的
   FR-006 后来被复用给了应用内查看器的 open/reveal 操作，因此这个编号在本段中已不再
   指向任何东西。）
   [`repo:backend/coffer/domain/skill/source.py`、
-  `repo:specs/005-skill-manager/{spec,plan}.md`]
+  `repo:specs/skill-manager/{spec,plan}.md`]
 - **SKILL.md frontmatter 现已对齐 agentskills.io 约束（PR #105，2026-06-18）——
   部分对齐。** 自 #105 起，`SkillFrontmatter` 强制执行标准的上限（`name` ≤64、
   `description` ≤1024），并且现在会**识别并保留**可选的 `license` 与实验性的
@@ -176,7 +176,7 @@ Anthropic 对技能捆绑的代码**不提供任何内建沙箱或签名**；安
   规整为列表，正是信任层所消费的数据）。报告指出的两处差距属于有意保留、并非遗漏：
   它仍**不**强制 `name == 父目录名`，且 `name` 正则仍容忍下划线（见下方 ✏️）。
   [`repo:backend/coffer/domain/skill/frontmatter.py`、
-  `repo:specs/005-skill-manager/{spec,data-model,plan}.md`、spec FR-004/FR-027]
+  `repo:specs/skill-manager/{spec,data-model,plan}.md`、spec FR-004/FR-027]
 - **Reversec "Skill Issues" 一文确有其事，且与描述一致。** 标题为"Skill Issues:
   Compromising Claude Code with malicious skills & agents — Part 1"，作者
   James Henderson，发布于 **2026-05-05**（报告写的"2026-05"正确）。论点吻合：技能/agent
@@ -216,13 +216,13 @@ Anthropic 对技能捆绑的代码**不提供任何内建沙箱或签名**；安
   `SkillConfig` 上；并且 **`high`/`critical` 裁定会拦截把技能启用给某个 agent，
   直到用户显式确认风险（409；follow/auto-bind 协调器会跳过未确认的技能）**。它被明确
   定位为咨询性、非权威——Coffer 只分发、从不执行技能，因此报告干净并不等于安全保证
-  （ADR-027）。注意这是 Coffer **自有**的扫描器，与上文外部扫描器绕过事件
+  （ADR skill-content-trust-layer）。注意这是 Coffer **自有**的扫描器，与上文外部扫描器绕过事件
   （Snyk/Cisco/VirusTotal）无关，后者讲的是第三方审计工具漏掉了藏在捆绑测试文件里的
   载荷。[`repo:backend/coffer/domain/skill/content_scan.py`、
   `repo:backend/coffer/domain/skill/config.py`、
   `repo:backend/coffer/application/skill/{scan_ops,lifecycle_ops,update_ops,binding_ops}.py`、
   `repo:backend/coffer/surfaces/http/skill_routes.py`、spec FR-028/FR-029、
-  `repo:docs/decisions/ADR-027-skill-content-trust-layer.md`]
+  `repo:docs/decisions/skill-content-trust-layer.md`]
 - **§4 的"没有更新检测 / 锁定 UX"缺口现已补齐（PR #115，2026-06-18——技能更新
   检测 + 锁定）。** 报告把"没有'有更新'信号"列为相对 ClaudeKit/ccpi 的两处 UX 缺口
   之一，并明确建议"更新检测 + 显式 pin/unpin"。Coffer 现已两者皆备。按需的

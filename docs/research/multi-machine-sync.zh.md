@@ -2,7 +2,7 @@
 
 > 中文版：本文件 · English: [multi-machine-sync.md](./multi-machine-sync.md)
 >
-> 面向 Coffer 多机同步（spec 010，ADR-016）的内部竞品调研报告。**日期：** 2026-06-16。
+> 面向 Coffer 多机同步（spec vault-export-import，[Vault Export and Import](../decisions/vault-export-import.zh.md)）的内部竞品调研报告。**日期：** 2026-06-16。
 > **方法：** deep-research harness。**来源说明：** 本轮在核验中途撞到 API 会话上限——1 条
 > claim（整文件加密支持）经 3-0 确认；其余为项目文档一手来源但未复核。请做轻量复核。
 
@@ -102,7 +102,7 @@
   ——已存在的走 `update_config` + `set_enabled`，新增的走 `register`，上游删除的走 `delete`
   ——绝非对文件的盲目覆盖。`update_config` 会重新校验配置、探测凭证引用并运行各 kind 的跨版本
   钩子，因此这是一次经校验、感知 kind 的对账。[`backend/coffer/application/sync/importer.py:71-110`；
-  `backend/coffer/application/resource_service.py:206-243`；ADR-016；spec 010]
+  `backend/coffer/application/resource_service.py:206-243`；仓库导出/导入 ADR；spec vault-export-import]
 - **chezmoi 整文件加密经四种后端**——age、git-crypt、gpg、transcrypt；加密文件以
   ASCII-armored 形态存于源目录并带 `encrypted_` 属性，仅在需要时自动解密。
   https://github.com/twpayne/chezmoi/blob/master/assets/chezmoi.io/docs/user-guide/encryption.md
@@ -124,7 +124,7 @@
 - **属补充说明，并非事实修正（§3.1）：** 三方*内容*合并发生在 git/YAML 文本层（确定性序列化
   ——每个资源一份 YAML、键排序、时间戳归一化、剥离仅本地字段——使 diff 可合并）；importer 随后
   把本地 SQLite 库对账*到*已合并的工作区。报告"语义合并而非盲目覆盖"的表述成立；合并与对账是两个
-  不同的层。[ADR-016；`backend/coffer/application/sync/importer.py:71-110`]
+  不同的层。[仓库导出/导入 ADR；`backend/coffer/application/sync/importer.py:71-110`]
 - chezmoi 的 **FAQ** 加密页只列出 age/gpg/rage，但 **user-guide/encryption** 页列出了全部
   四种后端，与报告一致——四后端 claim 应引用 user-guide 而非 FAQ。
   https://github.com/twpayne/chezmoi/blob/master/assets/chezmoi.io/docs/user-guide/encryption.md

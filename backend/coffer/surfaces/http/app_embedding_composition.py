@@ -2,7 +2,7 @@
 
 Split out of :mod:`coffer.surfaces.http.app` for the file-size budget. Builds the
 two embedding resolvers the lifespan wires into KB/memory and the gateway's
-semantic search_tools (ADR-024).
+semantic search_tools (ADR builtin-agent-is-internal-capability).
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from coffer.infrastructure.knowledge.embeddings import make_embedder
 
 def build_config_services(app: Any, sm: Any, audit: Any, credential_store: Any) -> tuple[Any, Any]:
     """Build the two engine-config singletons and register their synced state
-    area (spec 010 slice 7) before start_sync snapshots the provider list."""
+    area (spec vault-export-import slice 7) before start_sync snapshots the provider list."""
     from coffer.application.engine_settings_sync import EngineSettingsSyncState
     from coffer.application.internal_engine_config_service import InternalEngineConfigService
     from coffer.infrastructure.persistence.repos import (

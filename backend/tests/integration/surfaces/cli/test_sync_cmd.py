@@ -1,4 +1,4 @@
-"""Integration tests for `coffer sync ...` (spec 010 vault export/import).
+"""Integration tests for `coffer sync ...` (spec vault-export-import vault export/import).
 
 Drives the real CLI against a minimal app carrying only the sync router, so
 these stay a test of the command surface rather than of daemon composition.
@@ -175,7 +175,8 @@ def test_key_export_then_import(sync_cli):  # type: ignore[no-untyped-def]
 
 
 def test_withdrawn_continuous_sync_commands_are_gone(sync_cli):  # type: ignore[no-untyped-def]
-    # ADR-016 withdrew continuous sync; typer must not still offer its verbs.
+    # Vault export/import withdrew continuous sync; typer must not still offer
+    # its verbs.
     for argv in (
         ["sync", "init", "git@example.com:me/vault.git"],
         ["sync", "run"],

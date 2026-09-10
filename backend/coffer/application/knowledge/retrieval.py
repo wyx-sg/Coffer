@@ -77,7 +77,7 @@ class _StoreDroppable(Protocol):
 
 
 def _rrf_fuse(lists: list[Sequence[Passage]], *, top_k: int) -> list[Passage]:
-    """Reciprocal Rank Fusion over ranked passage lists (ADR-012).
+    """Reciprocal Rank Fusion over ranked passage lists (ADR files-as-truth-sqlite-retrieval).
 
     For each passage, ``score = Σ_over_lists 1/(RRF_K + rank)`` where ``rank`` is
     its 0-based position in that list. Passages are deduped by chunk identity
@@ -167,7 +167,8 @@ class KnowledgeRetrieval:
         A ``vector`` or ``hybrid`` request with no usable embedding provider
         degrades to ``keyword`` and the result carries ``fallback="keyword"`` —
         it never raises ``EngineUnavailable`` to the caller. ``hybrid`` fuses the
-        keyword + vector result lists by reciprocal rank fusion (ADR-012).
+        keyword + vector result lists by reciprocal rank fusion
+        (ADR files-as-truth-sqlite-retrieval).
         """
         if mode == "grep":
             raise ValueError("grep is not a passage mode; call grep() instead")
@@ -206,7 +207,7 @@ class KnowledgeRetrieval:
         top_k: int,
         embedding: EmbeddingConfig | None,
     ) -> SearchResult:
-        """RRF fusion of keyword + vector results (ADR-012).
+        """RRF fusion of keyword + vector results (ADR files-as-truth-sqlite-retrieval).
 
         When no usable embedding provider is available the vector half is empty,
         so hybrid degrades to keyword-only and FLAGS it (``fallback="keyword"``)

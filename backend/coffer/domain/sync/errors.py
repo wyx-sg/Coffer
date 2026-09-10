@@ -1,4 +1,4 @@
-"""Export/import error family (spec 010). Surfaces map these to HTTP codes."""
+"""Export/import error family (spec vault-export-import). Surfaces map these to HTTP codes."""
 
 from __future__ import annotations
 

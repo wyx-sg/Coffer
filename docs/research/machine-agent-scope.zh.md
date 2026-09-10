@@ -4,23 +4,22 @@
 
 > **历史记录。** 本笔记是在持续多机同步之上设计的**机器 × agent** scope 矩阵。
 > 二者此后均已被撤销：同步现在是一次性的仓库导出/导入
-> （[ADR-016](../decisions/ADR-016-vault-export-import.zh.md)），机器轴也已移除，
+> （[Vault Export and Import](../decisions/vault-export-import.zh.md)），机器轴也已移除，
 > `scope` 只剩一个 agent 名字列表
-> （[ADR-045](../decisions/ADR-045-per-agent-resource-scope.zh.md)）。当前形态请以
+> （[Per-Agent Resource Scope](../decisions/per-agent-resource-scope.zh.md)）。当前形态请以
 > 这两份 ADR 为准；下文保留的是 agent 轴当初是怎么得出来的记录。
 
-
-将机器身份（spec 010 / ADR-043）推广为资源框架级 **scope** 设施的设计笔记，
+将机器身份（spec vault-export-import，以及已移除的机器身份 ADR）推广为资源框架级 **scope** 设施的设计笔记，
 外加顶级 **Machines** 舰队视图。经 2026-07-10 头脑风暴会话确认；本笔记是后续
 ADR + spec 修订（承载产品契约）的输入。
 
 ## 问题
 
 多机同步把每个资源收敛到每台机器，但有些资源只在某台机器或某个 agent 上
-*可用*：二进制只存在于 MacBook 的 MCP server、只为 Claude Code 写的 skill。
+_可用_：二进制只存在于 MacBook 的 MCP server、只为 Claude Code 写的 skill。
 今天 vault 无法表达这一点——
 
-- 只有 channel 这一个 kind 有机器亲和性（`runs_on`，ADR-043）。
+- 只有 channel 这一个 kind 有机器亲和性（`runs_on`，见机器身份 ADR）。
 - Skill 有 per-agent 投递策略（消费者侧 follow 开关 + 排除清单），但没有
   机器维度。
 - MCP server 两者皆无：gateway 在每台机器上把每个 server 的工具暴露给每个
@@ -28,7 +27,7 @@ ADR + spec 修订（承载产品契约）的输入。
 - 未安装在某机器上的 agent 靠 import gate 隐式处理——永久的 quarantine
   噪声，每次运行重试。
 
-ADR-043 明确把 "per-resource runtime affinity" 预留为挂在机器身份上的后续
+机器身份 ADR 明确把 "per-resource runtime affinity" 预留为挂在机器身份上的后续
 修订。本设计就是那个后续，并拓宽出 agent 轴。
 
 ## 决策（与用户确认）
@@ -136,8 +135,8 @@ scope: {}                         # 处处休眠
 | `constitution.md`                    | 0.3.x 编辑性修正：Principle I "the user's machine" → "the user's machines"。原则不变。              |
 | `architecture.md`                    | 机器身份提升为框架核心概念；`scope` 设施与 kinds 表并列记述。                                        |
 | `AGENTS.md` / `README.md`            | 定位语补 "one vault across the user's machines"。                                                   |
-| 新 ADR（amends ADR-043）             | 作用域矩阵语义、shim 身份、follow 策略求交、`runs_on` 迁移。                                         |
-| Specs 010 / 001 / 004 / 005 / 009    | 按上方执行点表分别修订，各带验收场景，中英双语对。                                                    |
+| 新 ADR（amends 机器身份 ADR）     | 作用域矩阵语义、shim 身份、follow 策略求交、`runs_on` 迁移。                           |
+| sync、gateway、agent、skill、channel 五份 spec | 按上方执行点表分别修订，各带验收场景，中英双语对。                                        |
 
 ## 测试
 

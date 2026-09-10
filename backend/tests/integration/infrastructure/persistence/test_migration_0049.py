@@ -1,8 +1,9 @@
 """Revision 0049: scope collapses to an agent list, sync tables are dropped.
 
-Continuous multi-machine sync is withdrawn (ADR-016 — export/import replaces
+Continuous multi-machine sync is withdrawn (ADR vault-export-import — export/import
+replaces
 it) and the machine axis of ``scope`` goes with the machine registry that gave
-machine ids meaning (ADR-045). This is the database half of that removal:
+machine ids meaning (ADR per-agent-resource-scope). This is the database half of that removal:
 
 * every ``resources.scope_json`` value is rewritten from the old machine x
   agent mapping to a flat list of agent names (``null`` = every agent,
@@ -112,10 +113,10 @@ def test_0049_unions_overlapping_agents_without_duplicates(tmp_path, monkeypatch
 
 
 def test_0049_nulls_scope_for_kinds_that_no_longer_carry_it(tmp_path, monkeypatch):
-    """``agent`` and ``channel`` declare no scope now (ADR-045), so their stored
-    mapping is cleared rather than collapsed — leaving a dict behind would make
-    ``agent_in_scope`` test membership against a mapping's keys. This also
-    undoes 0047's channel ``runs_on -> scope`` backfill."""
+    """``agent`` and ``channel`` declare no scope now (ADR per-agent-resource-scope),
+    so their stored mapping is cleared rather than collapsed — leaving a dict
+    behind would make ``agent_in_scope`` test membership against a mapping's
+    keys. This also undoes 0047's channel ``runs_on -> scope`` backfill."""
     db_path = tmp_path / "clear_scope.db"
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
     cfg = _alembic_config()

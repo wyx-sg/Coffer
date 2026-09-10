@@ -278,10 +278,10 @@ describe("KnowledgeDetailPage", () => {
     expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
   });
 
-  // Spec 007 scenario (kept verbatim across the memory→knowledge merge): the
+  // Knowledge spec scenario (kept verbatim across the memory→knowledge merge): the
   // human-facing viewer is read-only and routes edits to the user's own editor
   // — it surfaces open/reveal affordances (daemon-backed), not an in-app editor.
-  acceptance("007-memory", "read-only viewer offers open/reveal affordances", async () => {
+  acceptance("knowledge", "read-only viewer offers open/reveal affordances", async () => {
     stubLists();
     renderPage();
     const tree = screen.getByRole("complementary");

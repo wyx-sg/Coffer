@@ -1,4 +1,4 @@
-"""Frozen-aware daemon spawn command resolution — ADR-006.
+"""Frozen-aware daemon spawn command resolution (ADR daemon-detect-or-spawn).
 
 ``daemon_spawn_command()`` is a pure, importable function that returns the
 correct subprocess command list to launch ``coffer-daemon``, regardless of

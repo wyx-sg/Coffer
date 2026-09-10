@@ -1,5 +1,5 @@
 // frontend/src/lib/hooks/useInternalEngine.ts — TanStack Query bindings for the
-// global internal-engine model selection (spec 011).
+// global internal-engine model selection (spec provider-switching).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 

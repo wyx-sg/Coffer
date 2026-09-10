@@ -228,7 +228,7 @@ async def test_prompts_round_trip(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.acceptance(
-    spec="001-mcp-gateway", scenario="a newly discovered capability is enabled by default"
+    spec="mcp-gateway", scenario="a newly discovered capability is enabled by default"
 )
 @pytest.mark.asyncio
 async def test_newly_discovered_tool_is_enabled_by_default(
@@ -272,7 +272,7 @@ async def test_newly_discovered_tool_is_enabled_by_default(
 
 
 @pytest.mark.acceptance(
-    spec="001-mcp-gateway", scenario="capability preferences survive upstream changes"
+    spec="mcp-gateway", scenario="capability preferences survive upstream changes"
 )
 @pytest.mark.asyncio
 async def test_missing_capability_preferences_preserved_across_invalidate(
@@ -306,7 +306,7 @@ async def test_missing_capability_preferences_preserved_across_invalidate(
         await engine.dispose()
 
 
-@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="register an HTTP MCP server")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="register an HTTP MCP server")
 @pytest.mark.asyncio
 async def test_register_http_mcp_server_discovers_capabilities(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

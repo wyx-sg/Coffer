@@ -1,4 +1,4 @@
-"""The single, global internal-engine model selection (spec 011 amendment
+"""The single, global internal-engine model selection (spec provider-switching amendment
 2026-06-22b).
 
 Coffer's own internal LLM engine (memory organizer / reorg / merge)

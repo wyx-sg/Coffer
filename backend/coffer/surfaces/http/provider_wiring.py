@@ -1,4 +1,4 @@
-"""Composition-root wiring for the ``provider`` kind (spec 011).
+"""Composition-root wiring for the ``provider`` kind (spec provider-switching).
 
 Registers the kind into ``app.state.kinds`` (so it gets CRUD + audit + sync for
 free) and constructs the :class:`ProviderService`, exposed via the DI getter.
@@ -30,7 +30,7 @@ _log = logging.getLogger(__name__)
 
 
 async def _resolve_internal_model() -> str | None:
-    """The internal-engine model (spec 011 amendment), resolved lazily so the
+    """The internal-engine model (spec provider-switching amendment), resolved lazily so the
     config service need only be set before the first internal-engine call."""
     return (await get_internal_engine_config_service().get()).model
 
@@ -42,7 +42,7 @@ def wire_provider_kind(
     credential_store: object,
     sm: object,
 ) -> ProviderService:
-    """Wire the ``provider`` kind (spec 011) into the app."""
+    """Wire the ``provider`` kind (spec provider-switching) into the app."""
     app.state.kinds["provider"] = make_provider_kind()
     provider_svc = ProviderService(
         resources=resource_svc,
@@ -54,7 +54,7 @@ def wire_provider_kind(
     )
     set_provider_service(provider_svc)
 
-    # Import reconciliation (spec 010): after every sync import, re-derive the
+    # Import reconciliation (spec vault-export-import): after every sync import, re-derive the
     # desired projection from the converged provider rows and apply it to the
     # agents registered on THIS machine — a switch made elsewhere takes real
     # effect here. A second stateless projector over the same store suffices.

@@ -1,5 +1,5 @@
 // frontend/src/lib/api/internalEngine.ts — typed fetch for the single, global
-// internal-engine model selection (spec 011 amendment 2026-06-22b). The internal
+// internal-engine model selection (spec provider-switching amendment 2026-06-22b). The internal
 // engine takes its endpoint + key from the `internal_default` connection but its
 // MODEL from this singleton.
 import { getCofferBaseUrl, getCofferToken } from "../auth";

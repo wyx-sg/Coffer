@@ -1,4 +1,4 @@
-"""coffer sync ... commands (spec 010 vault export/import)."""
+"""coffer sync ... commands (spec vault-export-import vault export/import)."""
 
 from __future__ import annotations
 

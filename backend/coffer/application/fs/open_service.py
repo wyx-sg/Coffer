@@ -1,9 +1,10 @@
 """Local-filesystem open / reveal actions for the read-only file viewers.
 
-Spec 004-agent-registry FR-039 (ADR-033). Coffer's file viewers are read-only;
-the user edits in their own tools. On the desktop the packaged app reaches the
-OS directly, but the web surface can't — so it asks the loopback daemon, which
-is *always co-located with the web client on the user's own machine*, to do it.
+Spec agent-registry FR-039 (ADR daemon-proxies-os-file-actions). Coffer's
+file viewers are read-only; the user edits in their own tools. On the desktop
+the packaged app reaches the OS directly, but the web surface can't — so it
+asks the loopback daemon, which is *always co-located with the web client on
+the user's own machine*, to do it.
 
 ``open_path`` launches an existing path in an application (the user's preferred
 editor, or the OS default); ``reveal_path`` selects it in the OS file manager.

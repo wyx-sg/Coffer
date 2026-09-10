@@ -1,4 +1,4 @@
-// frontend/src/pages/AgentDetailPage.tsx — spec 004-agent-registry.
+// frontend/src/pages/AgentDetailPage.tsx — spec agent-registry.
 // Per-agent detail page: a back link, a header with the Coffer-MCP install
 // button + edit + delete, and four tabs — Overview, Skills, MCP servers and
 // Config files. Editing opens a modal dialog (AgentEditForm). Agents have no enable/disable concept.

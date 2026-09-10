@@ -67,7 +67,7 @@ class CodexAppServerProvider:
         )
         self._which = which
         # Resolves the active openai connection's key for COFFER_PROVIDER_KEY
-        # injection (ADR-032 env_key seam). ``None`` → no injection, codex
+        # injection (the provider-switching env_key seam). ``None`` → no injection, codex
         # inherits the daemon env and uses its own login.
         self._resolve_key = resolve_key
         # None ⇒ voice is never transcribed and the audio file reaches the agent
@@ -127,7 +127,7 @@ class CodexAppServerProvider:
             env=env,
             # Codex cannot hear audio. A voice attachment is transcribed by the
             # user's configured connection, or handed over untouched when there
-            # is none (spec 009 FR-022).
+            # is none (spec channels FR-022).
             transcriber=await self._transcriber(),
             # Codex is path-native and cannot parse a binary PDF; a document is
             # text-extracted so it reaches the agent as text (FR-030).

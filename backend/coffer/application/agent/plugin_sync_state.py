@@ -1,4 +1,4 @@
-"""Agent plugin inventory as a synced state area (spec 010).
+"""Agent plugin inventory as a synced state area (spec vault-export-import).
 
 **An inventory, not a replicator.** Export writes down which plugins each
 agent has on THIS machine; import stores that list in the vault and writes
@@ -7,7 +7,7 @@ them with the vendor's own CLI.
 
 That asymmetry is deliberate, not a shortcut. Coffer removed its plugin write
 paths precisely because hand-writing another tool's private config format
-corrupts it silently when the format moves (spec 004 FR-032/FR-033), and it
+corrupts it silently when the format moves (spec agent-registry FR-032/FR-033), and it
 never had an *install* path at all — the retired code could only toggle and
 uninstall. "Keep the writes so sync can use them later" was never a real
 argument: installing is the one action sync would need, and it would have had

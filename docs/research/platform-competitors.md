@@ -88,7 +88,7 @@ them, cc-switch, already has.
 - **claude-mem** (~83k) and **Mem0 / OpenMemory** (~59k) — single-category
   **memory** giants. Mem0's OpenMemory MCP is the canonical shared-memory-across-
   agents pattern; **Basic Memory** (~3.3k) is the closest analog to Coffer's
-  co-managed plain-Markdown KB (spec 006).
+  co-managed plain-Markdown KB (the Knowledge Base spec).
 - **claude-code-templates** (~28k) and **opcode**/Claudia (~22k) — the asset
   catalog/installer and the desktop command-center, respectively.
 

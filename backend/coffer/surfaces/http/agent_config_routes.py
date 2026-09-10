@@ -1,4 +1,4 @@
-"""/api/v1/agents/{name}/config-files and /mcp-install routes (spec 004 v2).
+"""/api/v1/agents/{name}/config-files and /mcp-install routes (spec agent-registry v2).
 
 Config-file view + edit (list + read + write), directory-entry child files
 (read + write + delete under `/files/{relpath}`), and one-click Coffer-MCP

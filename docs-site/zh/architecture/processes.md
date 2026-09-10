@@ -10,7 +10,7 @@ Coffer 围绕进程职责的清晰分离而构建：一个持有全部状态的�
 
 - 是**唯一的 SQLite 写入者**。没有其他进程以写模式打开数据库。这使 WAL 模式的隔离正确性成为显然，并消除了并发 schema 修改引发的一整类 bug。
 - 持有已连接 MCP 客户端的全部内存会话状态。
-- 为上游 MCP 服务器拉起并监管子进程（每个已连接的客户端会话一套独立的子进程——详见下方[上游会话模型](#上游会话模型-adr-005)）。
+- 为上游 MCP 服务器拉起并监管子进程（每个已连接的客户端会话一套独立的子进程——详见下方[上游会话模型](#上游会话模型-adr-session-subprocess-model)）。
 - 持久化全部控制面与 vault 状态：资源注册、能力偏好、审计日志、保留策略、加密凭据存储、知识检索索引、chat 会话与 turn、通道绑定，以及 sync 状态。
 - **不**自动关闭。守护进程持续运行，直到执行 `coffer daemon stop` 或系统关机。这是有意为之：守护进程的职责就是比任何单个客户端或 CLI 调用活得更久。
 
@@ -30,7 +30,7 @@ CLI（`coffer …`）是一个短生命周期的子进程。用户用它执行�
 
 ### 回调监听器（coffer-callback）
 
-回调监听器是守护进程拉起的子进程，唯一存在目的是接收入站 SeaTalk webhook（spec 009，[ADR-014](/zh/reference/adr/ADR-014-channel-adapter-framework)）。与由用户（或 MCP 客户端）启动的 shim 和 CLI 不同，监听器由守护进程自己拉起并监管。它：
+回调监听器是守护进程拉起的子进程，唯一存在目的是接收入站 SeaTalk webhook（spec channels，[Channel Adapter Framework](/zh/reference/adr/channel-adapter-framework)）。与由用户（或 MCP 客户端）启动的 shim 和 CLI 不同，监听器由守护进程自己拉起并监管。它：
 
 - **仅在某个 SeaTalk 通道启用时运行**。通道协调器在第一个 SeaTalk 通道上线时启动它，并在最后一个下线时停止它。
 - 只服务一条路由 `POST /seatalk/{channel}`，监听一个 loopback 端口（默认 `8787`，可通过 `COFFER_CALLBACK_PORT` 覆盖）。它不持有任何其他状态，除了守护进程之外什么都触及不到。
@@ -42,11 +42,11 @@ CLI（`coffer …`）是一个短生命周期的子进程。用户用它执行�
 除上述子进程外，守护进程还运行两个进程内后台 worker——它们是受监管的 asyncio 任务，而非独立进程——在无需任何用户操作的情况下让 vault 状态持续收敛：
 
 - **保留 worker。** 按配置的保留策略修剪日志型表（审计日志、调用日志）。
-- **通道适配器协调器**（[ADR-014](/zh/reference/adr/ADR-014-channel-adapter-framework)）。每个 tick 它都会把已启用的通道资源与运行中的适配器做 diff，并启动/停止/重启以保持一致——并随 SeaTalk 通道集合启动或停止回调监听器。REST/CLI/UI 永不直接启动或停止适配器；协调器持有全部运行时状态转换，从而让状态保持真实。
+- **通道适配器协调器**（[Channel Adapter Framework](/zh/reference/adr/channel-adapter-framework)）。每个 tick 它都会把已启用的通道资源与运行中的适配器做 diff，并启动/停止/重启以保持一致——并随 SeaTalk 通道集合启动或停止回调监听器。REST/CLI/UI 永不直接启动或停止适配器；协调器持有全部运行时状态转换，从而让状态保持真实。
 
-仓库的导出与导入（[ADR-016](/zh/reference/adr/ADR-016-vault-export-import)）刻意**不在**其列：它们只在用户主动发起时、就在发起它们的那次请求里运行，没有 worker，也没有后台复制。
+仓库的导出与导入（[Vault Export and Import](/zh/reference/adr/vault-export-import)）刻意**不在**其列：它们只在用户主动发起时、就在发起它们的那次请求里运行，没有 worker，也没有后台复制。
 
-## Detect-or-spawn（ADR-006）
+## Detect-or-spawn（ADR daemon-detect-or-spawn）
 
 detect-or-spawn 模式确保任何 Coffer 入口点都能引导整个系统启动——用户永远不会看到「守护进程未运行」这样的错误。
 
@@ -95,7 +95,7 @@ sequenceDiagram
     SH-->>C: initialize 响应
 ```
 
-## 上游会话模型（ADR-005）
+## 上游会话模型（ADR session-subprocess-model）
 
 当下游 MCP 客户端连接时（通过 shim 或直接连接 `/mcp`），守护进程会创建一个 `MCPGatewaySession`，持有该连接的全部上游子进程状态。
 
@@ -111,7 +111,7 @@ sequenceDiagram
 
 **会话销毁。** 当下游客户端断开（shim 退出、HTTP/SSE 连接关闭），会话被销毁，其全部上游子进程被回收。守护进程崩溃产生的孤儿上游子进程，在下次守护进程启动时通过 `~/.coffer/upstream-pids/` 中的 PID 文件进行清理。
 
-**能力发现。** 每个会话在内存中为每个上游的能力列表（工具、资源、提示）维护一个 60 秒 TTL 的缓存。缓存失效触发条件：TTL 到期、上游 `notifications/*/list_changed` 通知、用户主动刷新、上游会话重启。能力名称和 schema **永不**持久化到数据库——只有用户偏好标志（启用/禁用）会被存储，以能力名称为键。见 [ADR-004](/zh/reference/adr/ADR-004-capability-state-model)。
+**能力发现。** 每个会话在内存中为每个上游的能力列表（工具、资源、提示）维护一个 60 秒 TTL 的缓存。缓存失效触发条件：TTL 到期、上游 `notifications/*/list_changed` 通知、用户主动刷新、上游会话重启。能力名称和 schema **永不**持久化到数据库——只有用户偏好标志（启用/禁用）会被存储，以能力名称为键。见 [Capability State Model](/zh/reference/adr/capability-state-model)。
 
 ## 被拒绝的替代方案
 
@@ -125,4 +125,4 @@ sequenceDiagram
 
 ---
 
-**参见：** [ADR-006：守护进程 detect-or-spawn](/zh/reference/adr/ADR-006-daemon-detect-or-spawn)，[ADR-005：会话子进程模型](/zh/reference/adr/ADR-005-session-subprocess-model)
+**参见：** [守护进程 detect-or-spawn](/zh/reference/adr/daemon-detect-or-spawn)，[会话子进程模型](/zh/reference/adr/session-subprocess-model)

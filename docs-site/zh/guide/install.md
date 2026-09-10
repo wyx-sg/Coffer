@@ -15,7 +15,7 @@ Coffer 只发布**单个工件**：`coffer-cli-<triple>.tar.gz`。没有单独�
 
 ::: tip 守护进程自动启动 —— 你不需要手动运行它
 安装完成后，只需把 MCP 客户端指向 `coffer-mcp-shim` 并连接即可。守护进程在首次需要时会自动启动。
-这是 [ADR-006（探测或拉起）](/zh/architecture/processes#detect-or-spawn-adr-006) 的核心设计。全新安装后，
+这是 [探测或拉起](/zh/architecture/processes#detect-or-spawn-adr-daemon-detect-or-spawn) 的核心设计。全新安装后，
 你永远不会看到「守护进程未运行」的错误。
 :::
 

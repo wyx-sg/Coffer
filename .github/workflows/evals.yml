@@ -1,6 +1,6 @@
 name: evals
 
-# The eval flywheel's PR gate (ADR-019). Runs the DETERMINISTIC, model-free
+# The eval flywheel's PR gate (ADR close-the-eval-flywheel). Runs the DETERMINISTIC, model-free
 # suites (retrieval-keyword + tool-search) and fails on relative regression vs
 # the committed baseline — so a prompt / ranker / retrieval / catalogue change
 # can't silently degrade Coffer's non-deterministic behaviour. The model-bearing

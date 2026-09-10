@@ -46,8 +46,9 @@ from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.workspace_errors import ConfigFileStale
 
 # Prefix of a LEGACY memory-projection block marker. Native projection was
-# removed (ADR-026) so Coffer no longer writes this block; the flag only lets
-# the editor annotate a leftover block as safe-to-delete, never parses it.
+# removed (ADR memory-via-mcp-not-native-projection) so Coffer no longer
+# writes this block; the flag only lets the editor annotate a leftover block
+# as safe-to-delete, never parses it.
 MEMORY_BLOCK_MARKER = "<!-- coffer:memory"
 
 
@@ -160,7 +161,7 @@ class AgentConfigFileService:
         `validate_child_relpath` covers traversal/extension by path math; the
         store's `resolved_within` then re-checks with symlinks resolved so a
         symlinked child pointing outside the entry's directory is rejected
-        (spec 004 FR-035 "no symlink escape").
+        (spec agent-registry FR-035 "no symlink escape").
         """
         path = validate_child_relpath(spec.path, relpath)
         if not self._store.resolved_within(path, spec.path):

@@ -1,4 +1,4 @@
-// frontend/src/components/agents/AgentManualAddForm.tsx — spec 004.
+// frontend/src/components/agents/AgentManualAddForm.tsx — spec agent-registry.
 // The "Add manually" disclosure + form inside the Add-agent dialog: agent type
 // + optional name + config_dir picker. Self-contained — registers via
 // useRegisterAgent, surfaces its own register error inline, and reports the new

@@ -126,7 +126,7 @@ async def _register_agent(
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
-    spec="005-skill-manager",
+    spec="skill-manager",
     scenario="exclude managed links and system entries from the unmanaged scan",
 )
 async def test_list_unmanaged_valid_invalid_and_exclusions(tmp_path):
@@ -156,7 +156,7 @@ async def test_list_unmanaged_valid_invalid_and_exclusions(tmp_path):
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
-    spec="005-skill-manager", scenario="list unmanaged skills across an agent's skill locations"
+    spec="skill-manager", scenario="list unmanaged skills across an agent's skill locations"
 )
 async def test_list_unmanaged_labels_codex_second_location(tmp_path):
     skill_svc, agent_svc, _, _, fake_home, engine = await _setup(tmp_path)
@@ -206,7 +206,7 @@ async def test_list_unmanaged_unknown_agent_raises(tmp_path):
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
-    spec="005-skill-manager", scenario="adopt an unmanaged skill into the master store"
+    spec="skill-manager", scenario="adopt an unmanaged skill into the master store"
 )
 async def test_adopt_happy_path(tmp_path):
     skill_svc, agent_svc, audit, store, _, engine = await _setup(tmp_path)
@@ -236,7 +236,7 @@ async def test_adopt_happy_path(tmp_path):
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
-    spec="005-skill-manager", scenario="reject adopting an invalid or conflicting unmanaged skill"
+    spec="skill-manager", scenario="reject adopting an invalid or conflicting unmanaged skill"
 )
 async def test_adopt_name_conflict_leaves_original_untouched(tmp_path):
     skill_svc, agent_svc, _, _, _, engine = await _setup(tmp_path)
@@ -336,7 +336,7 @@ async def test_adopt_unknown_raises_not_found(tmp_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="005-skill-manager", scenario="delete an unmanaged skill")
+@pytest.mark.acceptance(spec="skill-manager", scenario="delete an unmanaged skill")
 async def test_delete_unmanaged_dir(tmp_path):
     skill_svc, agent_svc, audit, _, _, engine = await _setup(tmp_path)
     _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")

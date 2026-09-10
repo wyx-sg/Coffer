@@ -86,7 +86,7 @@ def test_wrong_guess_burns_attempt_but_code_survives(manager: PairingManager):
     assert manager.try_claim("ch", code) is True
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="an expired or wrong code does not pair")
+@pytest.mark.acceptance(spec="channels", scenario="an expired or wrong code does not pair")
 def test_expired_or_wrong_code_does_not_pair(clock: Clock):
     manager = PairingManager(ttl_seconds=3600, max_attempts=3, now_fn=clock)
 

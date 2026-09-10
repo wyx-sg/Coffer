@@ -6,7 +6,7 @@ from coffer.application.mcp.gateway_parsing import _extract_agent, _extract_cwd
 
 
 def test_extract_agent_reads_meta_key():
-    """Spec 001 FR-021 (amended): the shim stamps its bound agent's name into
+    """MCP Gateway FR-021 (amended): the shim stamps its bound agent's name into
     ``params._meta["coffer/agent"]`` at the initialize handshake."""
     assert _extract_agent({"_meta": {"coffer/agent": "claude_code"}}) == "claude_code"
 

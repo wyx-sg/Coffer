@@ -89,7 +89,7 @@ describe("AgentDetailPage", () => {
     expect(screen.queryByText(/skill directory/i)).not.toBeInTheDocument();
   });
 
-  // `agent` declares no scope (ADR-045) — it is not a resource other agents
+  // `agent` declares no scope (ADR per-agent-resource-scope) — it is not a resource other agents
   // draw on, so there is no activation scope to edit.
   test("mounts no ScopeCard for the agent", () => {
     mockAgentLoaded();

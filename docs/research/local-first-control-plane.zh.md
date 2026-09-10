@@ -113,7 +113,7 @@ web 产品。
 
 > 对照仓库与一手厂商文档的再核查。关于 Coffer MCP 处理方式的三条本地 claim 中，有两条仍然成立
 > （裸的、无沙箱的子进程上游；SSRF 防护只覆盖 Coffer 自身的出站）。"每 agent 全有或全无" 这条
-> 已经反转：per-agent MCP 服务器范围已在 PR #108 / ADR-026（2026-06-18）落地——下移至 ✏️ 已修正。
+> 已经反转：per-agent MCP 服务器范围已在 PR #108（2026-06-18）落地——下移至 ✏️ 已修正。
 > vMCP "于 2025-12-11 GA" 这一日期仍需修正（一手 Stacklok 文档并不支持）。
 
 ### ✅ 已确认
@@ -145,14 +145,15 @@ web 产品。
 - **"每 agent 全有或全无" → 已解决：per-agent MCP 服务器范围已落地。** 原 ✅ 条目（以及 §2
   能力对比表、§3.2 与 §4.3 的 "借鉴" 建议）把 Coffer 的网关注入称为全有或全无——每个装了网关的
   agent 都能看到全部已启用的服务器，没有子集/profile 机制。该限制现已**关闭**：per-agent MCP
-  服务器范围已在 **PR #108 / ADR-045**（2026-06-18）落地。每个 agent 带一个范围**模式**——`auto`
+  服务器范围已在 **PR #108** /
+  [Per-Agent Resource Scope](../decisions/per-agent-resource-scope.zh.md)（2026-06-18）落地。每个 agent 带一个范围**模式**——`auto`
   （默认；全部已启用服务器，新服务器自动纳入）或 `selected`（一份显式的服务器白名单）。安装写入的
   `coffer` 条目通过 `--agent <name>`（转发为 `X-Coffer-Agent` 请求头）标记 agent 身份，网关在
   `tools/list` / `resources/list` / `prompts/list`、`coffer__search_tools` 排序，**以及**直接的
   `tools/call` / `resources/read` / `prompts/get` 调用路径上强制执行**有效范围**（已启用 ∩ 白名单）
   ——因此超出范围的工具既不会被列出、也不会被排序或调用。"全有或全无" 的缺口已解决；§3.2 / §4.3
   指出的竞品缺口（mcpm profiles、ToolHive vMCP 虚拟服务器）现已对齐。
-  `repo:docs/decisions/ADR-045-per-agent-resource-scope.md` ·
+  `repo:docs/decisions/per-agent-resource-scope.md` ·
   `repo:backend/coffer/application/agent/scope_service.py` ·
   `repo:backend/coffer/application/mcp/gateway.py`
   （`_effective_mcp_servers` / `authorize_server`）。_未变：_ 上文的沙箱缺口——上游仍是裸子进程、

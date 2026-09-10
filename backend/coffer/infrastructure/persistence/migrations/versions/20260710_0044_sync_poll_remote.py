@@ -1,4 +1,4 @@
-"""auto-sync remote-head probe cadence (spec 010 amendment, ADR-043)
+"""auto-sync remote-head probe cadence (spec vault-export-import amendment, near-real-time sync)
 
 Revision ID: 0044
 Revises: 0043

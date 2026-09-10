@@ -1,4 +1,4 @@
-"""Agent-workspace domain errors (specs 004/005 amendment).
+"""Agent-workspace domain errors (specs agent-registry/skill-manager amendment).
 
 Split out of ``coffer.domain.errors`` for the file-size limit. These cover the
 workspace facets of the agent and skill kinds: MCP config entries, plugins,
@@ -115,7 +115,7 @@ class UnmanagedSkillInvalid(CofferError):  # noqa: N818
 
 
 class SkillOutOfScope(CofferError):  # noqa: N818
-    """The (machine, agent) pair is outside the skill's ADR-045 activation
+    """The (machine, agent) pair is outside the skill's activation
     scope. Scope is a hard grant that overrides manual bindings, so a manual
     ``enable_for`` attempt is refused outright rather than silently narrowed.
     Maps to 422."""

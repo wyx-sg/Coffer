@@ -1,6 +1,6 @@
 """Pydantic API schemas (kind-agnostic).
 
-Wire-compatible with specs/001-mcp-gateway/contracts/api.openapi.yaml.
+Wire-compatible with specs/mcp-gateway/contracts/api.openapi.yaml.
 MCP-kind-specific schemas live in surfaces/http/mcp/schemas.py (Phase 3).
 """
 
@@ -33,7 +33,7 @@ class ResourceOut(BaseModel):
     name: str
     description: str | None = None
     config: dict[str, Any]
-    # Framework-level per-agent activation scope (ADR-045): a list of agent
+    # Framework-level per-agent activation scope (ADR per-agent-resource-scope): a list of agent
     # names. None = unscoped (active for every agent); only kinds whose
     # Kind.supports_scope is True may set it. See GET/PUT .../scope below.
     scope: list[str] | None = None
@@ -181,7 +181,7 @@ class ToolTieringServerOut(BaseModel):
 
 
 class ToolTieringOut(BaseModel):
-    """ADR-046: how much of the aggregated catalogue agents currently see."""
+    """Tool tiering: how much of the aggregated catalogue agents currently see."""
 
     enabled: bool
     budget: int
@@ -358,7 +358,7 @@ class EmbeddingConfigUpdate(BaseModel):
 
 
 class InternalEngineConfigOut(BaseModel):
-    """The single, global internal-engine model selection (spec 011)."""
+    """The single, global internal-engine model selection (spec provider-switching)."""
 
     model: str | None = None
     updated_at: datetime | None = None

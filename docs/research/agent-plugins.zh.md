@@ -2,7 +2,7 @@
 
 > 中文版：本文件 · English: [agent-plugins.md](./agent-plugins.md)
 >
-> 面向 Coffer 插件 facet（spec 004 工作区修订）的内部竞品调研报告。**日期：** 2026-06-16。
+> 面向 Coffer 插件 facet（spec agent-registry 工作区修订）的内部竞品调研报告。**日期：** 2026-06-16。
 > **方法：** deep-research harness。**来源说明：** 3 条 claim 经三票/部分确认；其余为
 > 官方文档/issue 一手来源，但限流导致复核未跑完。视为一手来源，对外引用前请轻量复核。
 
@@ -123,8 +123,8 @@ Coffer 的插件 facet **有意做最小**：读时列出某 agent 的插件（�
 ### ✅ 已确认
 
 - **Coffer 在插件描述符里按 agent 建模 `can_toggle`/`can_uninstall`。** `PluginCapability` 携带这两个标志（`repo:backend/coffer/domain/agent/plugin_capability.py:45-64`），并在描述符表中按 agent 设置（`repo:backend/coffer/domain/agent/descriptor.py:236-332`）。（这两个标志已于 2026-09-10 随插件管理的写入那一半一并删除；`PluginCapability` 现在只携带 `model` 与 `config_key`，Coffer 的插件界面是一份只读清单。）
-- **"跨 agent 插件视图——可行（未建）"准确。** spec 004 只描述了 per-agent 的 Plugins 标签页（`repo:specs/004-agent-registry/spec.md:184`）；代码与 FR 中均无跨 agent 聚合。
-- **Codex 的"toggle + 卸载"能力真实且有一手来源。** 由 Coffer 自身描述符背书（`PluginModel.CODEX`、`can_toggle=True`、`can_uninstall=True` —— `repo:backend/coffer/domain/agent/descriptor.py:259-264`）及 FR-033（`repo:specs/004-agent-registry/spec.md:191`、`:629`），外部则有 OpenAI 文档：在 `~/.codex/config.toml` 中以 `enabled = false` 禁用，经插件浏览器 / `codex plugin` CLI 卸载。（其中 Coffer 那一半背书已不存在——描述符的 `can_toggle` / `can_uninstall` 字段已于 2026-09-10 随 toggle 与卸载写入一并删除；OpenAI 文档那一半仍然成立，故 Codex 自身的能力不受影响。）https://developers.openai.com/codex/plugins
+- **"跨 agent 插件视图——可行（未建）"准确。** spec agent-registry 只描述了 per-agent 的 Plugins 标签页（`repo:specs/agent-registry/spec.md:184`）；代码与 FR 中均无跨 agent 聚合。
+- **Codex 的"toggle + 卸载"能力真实且有一手来源。** 由 Coffer 自身描述符背书（`PluginModel.CODEX`、`can_toggle=True`、`can_uninstall=True` —— `repo:backend/coffer/domain/agent/descriptor.py:259-264`）及 FR-033（`repo:specs/agent-registry/spec.md:191`、`:629`），外部则有 OpenAI 文档：在 `~/.codex/config.toml` 中以 `enabled = false` 禁用，经插件浏览器 / `codex plugin` CLI 卸载。（其中 Coffer 那一半背书已不存在——描述符的 `can_toggle` / `can_uninstall` 字段已于 2026-09-10 随 toggle 与卸载写入一并删除；OpenAI 文档那一半仍然成立，故 Codex 自身的能力不受影响。）https://developers.openai.com/codex/plugins
 - **OpenCode 无内建启停命令；`disabled_plugins[]` 仅为提案。** issue #11743（"Feature Request: CLI Support for Plugin Enable/Disable"）仍是开放的功能请求、尚未实现；用户当前靠改 `opencode.json` 来禁用。https://github.com/anomalyco/opencode/issues/11743
 - **Windsurf 已更名为 "Devin Desktop"。** Cognition 于 2026-06-02 宣布"Windsurf is now Devin Desktop"，以 OTA 更新发布（Cascade 由 Devin Local 取代）。截至 2026-06-19 仍现行。https://devin.ai/blog/windsurf-is-now-devin-desktop/
 

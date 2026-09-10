@@ -1,6 +1,6 @@
 """Read-only local-filesystem browsing for the skill-directory folder picker.
 
-Spec 004-agent-registry FR-024. Lists the immediate subdirectories of a
+Spec agent-registry FR-024. Lists the immediate subdirectories of a
 directory so the web folder browser can navigate the user's filesystem and
 hand back an absolute path (the daemon, unlike a browser, can read real
 paths). It never returns file contents — directories only.

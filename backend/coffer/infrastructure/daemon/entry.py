@@ -5,7 +5,7 @@ Port allocation happens HERE, before uvicorn binds, so that:
    writes daemon.json, and returns the pre-bound socket plus a `release`
    callable for that lock (still held).
 2. _run_server() hands the socket fd to uvicorn and releases the spawn lock
-   only once uvicorn reports it is serving (ADR-006 boot-window fix) — so a
+   only once uvicorn reports it is serving (detect-or-spawn boot-window fix) — so a
    racing auto-spawn can't bind a second port mid-boot and orphan this daemon.
 3. The FastAPI lifespan in app.py reads daemon.json (already present) and
    calls set_active_token / set_port to wire up auth and status reporting.
@@ -36,7 +36,7 @@ _logger = logging.getLogger(__name__)
 _STARTED_POLL_INTERVAL = 0.02
 
 # How often a serving daemon re-reads daemon.json to see whether another daemon
-# has taken it over (ADR-006 amendment). Long enough to be free, short enough
+# has taken it over (detect-or-spawn amendment). Long enough to be free, short
 # that an orphan cannot linger through a work session holding its port.
 _ORPHAN_CHECK_INTERVAL = 30.0
 
@@ -89,7 +89,7 @@ async def _evict_when_superseded(
 ) -> None:
     """Stand down once ``daemon.json`` names a different, live Coffer daemon.
 
-    ADR-006's spawn guard only ever probes the one port daemon.json records, so
+    The detect-or-spawn guard only ever probes the one port daemon.json records, so
     a spawn that cannot see us (the file was lost, or we were too busy to answer
     the liveness probe) binds a second port and leaves us running. Nothing ever
     reclaimed that port: ``orphan_sweep.reap_stale_daemons`` no-ops outside
@@ -126,7 +126,7 @@ def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
     """Serve the app on the pre-bound loopback fd; call ``on_started`` once the
     server is actually serving HTTP (uvicorn ``Server.started``).
 
-    ADR-006 boot-window fix: ``on_started`` releases the spawn lock. Releasing
+    Detect-or-spawn boot-window fix: ``on_started`` releases the spawn lock. Releasing
     it here — only after uvicorn has called ``listen()`` and is accepting — not
     when daemon.json was written, means a racing auto-spawn that probes
     ``/daemon/status`` either blocks on the still-held lock or sees a
@@ -172,7 +172,7 @@ def main() -> None:
     # the knowledge engine (engine-confinement contract).
     _raise_fd_soft_limit()
     _install_signal_handlers()
-    # ADR-006: probe + bind happen under one flock (acquire_or_existing). If a
+    # Detect-or-spawn: probe + bind happen under one flock (acquire_or_existing). If a
     # daemon is already reachable, sock is None and we exit cleanly so the
     # auto-spawn caller (CLI/shim) discovers it; otherwise we hold the bound
     # socket AND the spawn lock — release_lock frees the lock only once we are

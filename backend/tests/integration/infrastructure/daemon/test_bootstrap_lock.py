@@ -1,4 +1,4 @@
-"""Integration tests for the ADR-006 spawn-lock: a flock serialises
+"""Integration tests for the detect-or-spawn spawn-lock: a flock serialises
 probe+bind+write+**announce-ready** so two near-simultaneous auto-spawns can't
 both bind and clobber daemon.json (orphaning the loser's daemon).
 

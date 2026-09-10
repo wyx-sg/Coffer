@@ -1,7 +1,7 @@
 // frontend/src/lib/api/fs.ts — local filesystem browse + open/reveal through
-// the loopback daemon (spec 004-agent-registry FR-024/FR-039). A browser can't
+// the loopback daemon (spec agent-registry FR-024/FR-039). A browser can't
 // read absolute paths or reach the OS, but the daemon — always on the user's own
-// machine — can (ADR-033). `browse` backs the web folder picker; `open`/`reveal`
+// machine — can (ADR daemon-proxies-os-file-actions). `browse` backs the web folder picker; `open`/`reveal`
 // back the read-only file viewers' "open in editor" / "reveal in file manager".
 
 import { getCofferBaseUrl, getCofferToken } from "../auth";
@@ -18,7 +18,7 @@ export interface FsBrowseOut {
   entries: FsEntry[];
 }
 
-/** A GUI editor detected as installed (preferred-editor picker, spec 002/004). */
+/** A GUI editor detected as installed (preferred-editor picker, spec ui-shell/004). */
 export interface EditorOption {
   label: string;
   value: string;

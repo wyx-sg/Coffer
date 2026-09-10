@@ -35,7 +35,7 @@ async def enable_skill_for_agent(
 ) -> BindingState:
     skill = await service._rs.get(ResourceRef("skill", skill_name))
     agent = await service._rs.get(ResourceRef("agent", agent_name))
-    # ADR-045 hard grant: scope overrides manual bindings — an agent outside
+    # Hard grant: scope overrides manual bindings — an agent outside
     # the skill's scope can never be bound, even with force=True.
     if not agent_in_scope(skill.scope, agent_name):
         raise SkillOutOfScope(skill_name, agent_name)

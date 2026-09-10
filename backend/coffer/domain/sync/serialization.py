@@ -2,7 +2,7 @@
 
 A *resource document* is the plain-dict form written to
 ``resources/<kind>/<name>.yaml`` in an export bundle. Determinism is
-load-bearing (spec 010 "Determinism"): machine-local, churn-prone fields
+load-bearing (spec vault-export-import "Determinism"): machine-local, churn-prone fields
 (``id``, ``created_at``, ``updated_at``) are excluded and the encoder
 (infrastructure) dumps with sorted keys — so two exports of an unchanged vault
 produce byte-identical files, and the user can diff a bundle to see exactly
@@ -33,8 +33,8 @@ class ResourceDoc:
     description: str | None
     enabled: bool
     config: dict[str, Any]
-    # Activation scope (ADR-045). An ordinary field with no dedicated
-    # machinery (spec 010 "Scope"): it names agents, never paths, so it is
+    # Activation scope (ADR per-agent-resource-scope). An ordinary field with no dedicated
+    # machinery (spec vault-export-import "Scope"): it names agents, never paths, so it is
     # exempt from ${HOME} normalization and rides the document unmodified.
     scope: Any = None
 

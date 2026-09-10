@@ -24,7 +24,7 @@ def _app(tmp_path, monkeypatch, port_start: int):
 
 
 @pytest.mark.acceptance(
-    spec="007-memory",
+    spec="knowledge",
     scenario="the rules read surface returns the stored rules",
 )
 def test_rules_read_surface_returns_stored_rules(tmp_path, monkeypatch):

@@ -1,4 +1,4 @@
-// frontend/src/lib/filePicker.ts — native FOLDER picker (spec 004 FR-024).
+// frontend/src/lib/filePicker.ts — native FOLDER picker (spec agent-registry FR-024).
 // A browser deliberately refuses to hand a page an absolute path, but naming a
 // vault-bundle directory needs one, so the web asks the loopback daemon to open
 // the host's native folder dialog. `unavailable` is true only when the host has

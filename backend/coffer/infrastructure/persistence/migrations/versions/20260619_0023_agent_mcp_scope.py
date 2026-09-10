@@ -1,4 +1,4 @@
-"""agent mcp scope tables (ADR-026)
+"""agent mcp scope tables (per-agent MCP server scoping, since retired)
 
 Revision ID: 0023
 Revises: 0022

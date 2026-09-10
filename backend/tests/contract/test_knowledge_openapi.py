@@ -1,9 +1,9 @@
 """Wire contract for the one ``knowledge`` kind.
 
-The pre-merge version of this module diffed the live app against
-``specs/006-knowledge-base`` and ``specs/007-memory``'s OpenAPI yamls. Those two
-contracts describe a world with two kinds and two route trees, which no longer
-exists; until the merged spec lands they cannot be the oracle. So the oracle
+The pre-merge version of this module diffed the live app against the OpenAPI
+yamls of the two specs that have since merged — the knowledge base's and
+memory's. Those contracts describe a world with two kinds and two route trees,
+which no longer exists; until the merged spec lands they cannot be the oracle. So the oracle
 here is an explicit table instead: the routes, the enums and the built-in tool
 set are written down, and the app must match them.
 

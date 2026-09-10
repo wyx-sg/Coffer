@@ -1,4 +1,4 @@
-"""ADR-045 per-agent scope filtering for the MCP gateway session.
+"""Per-agent scope filtering for the MCP gateway session (ADR per-agent-resource-scope).
 
 Extracted from `gateway.py` to keep that file under the project's 400-LOC
 ceiling. Filters the enabled mcp_server resource list down to the servers

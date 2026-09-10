@@ -1,4 +1,4 @@
-"""Reaping stale sibling daemons on bind (ADR-006 follow-on).
+"""Reaping stale sibling daemons on bind (detect-or-spawn follow-on).
 
 A persistent, detached daemon that stops answering the liveness probe (wedged,
 mid-crash, or a spawn-race loser) is never terminated by the existing machinery:

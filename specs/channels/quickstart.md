@@ -1,0 +1,124 @@
+# Quickstart: Channels
+
+> 中文版: [quickstart.zh.md](./quickstart.zh.md)
+
+Talk to your Coffer agents from Telegram or SeaTalk, and let Coffer push
+notifications to you.
+
+## Telegram
+
+### 1. Create a bot
+
+Open [@BotFather](https://t.me/BotFather) in Telegram, send `/newbot`, follow
+the prompts, and copy the bot token.
+
+### 2. Store the token and register the channel
+
+UI: **Channels → Add channel → Telegram**, paste the token, name the channel
+(for example `my-telegram`). The dialog stores the token in the credential
+store and registers the channel in one step.
+
+CLI equivalent:
+
+```bash
+coffer credentials set channel/my-telegram/bot-token     # paste token at prompt
+coffer channel register my-telegram --type telegram \
+  --bot-token-ref channel/my-telegram/bot-token
+```
+
+### 3. Pair your account
+
+```bash
+coffer channel pair my-telegram        # prints an 8-character code
+```
+
+(or click **Pair** on the channel's page). Open your bot in Telegram and send
+the code as a message. The bot confirms; you are now the channel's owner.
+Messages from anyone else are ignored silently.
+
+### 4. Chat
+
+Send any message — it lands in a conversation with the channel's default
+agent (a Coffer-managed agent such as Claude Code or Codex) and the
+reply comes back to Telegram. The same conversation is visible on the Chat
+page.
+
+> Per [Built-in Agent Is Internal](../../docs/decisions/builtin-agent-is-internal-capability.md),
+> channels route to managed agents only; the built-in "Coffer Assistant" is no
+> longer a chat target.
+
+Commands: `/new` fresh conversation · `/stop` interrupt the running turn ·
+`/status` what's active · `/help`.
+
+## SeaTalk
+
+### 1. Create the app
+
+On the [SeaTalk Open Platform](https://open.seatalk.io/), create an app,
+enable the **Bot** capability and set it Online, and request the scopes your
+admin must approve (at minimum _Send Message to Bot User_). Note the
+**App ID**, **App Secret**, and the Event Callback **Signing Secret**.
+
+### 2. Register the channel
+
+UI: **Channels → Add channel → SeaTalk**, fill App ID and paste both secrets.
+
+CLI equivalent:
+
+```bash
+coffer credentials set channel/st/app-secret
+coffer credentials set channel/st/signing-secret
+coffer channel register my-seatalk --type seatalk --app-id <APP_ID> \
+  --app-secret-ref channel/st/app-secret \
+  --signing-secret-ref channel/st/signing-secret
+```
+
+### 3. Expose the callback listener
+
+While a SeaTalk channel is enabled, Coffer runs a small callback listener on
+`127.0.0.1:8787` (override with `COFFER_CALLBACK_PORT`). Point a tunnel at it:
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:8787
+# or: ngrok http 8787
+```
+
+Copy the public URL and set the app's **Event Callback URL** to
+`<public-url>/seatalk/my-seatalk` on the Open Platform. SeaTalk sends a
+verification challenge; the listener answers it automatically — the portal
+shows the URL as verified. `coffer channel status my-seatalk` shows the
+exact port and path at any time.
+
+### 4. Pair and chat
+
+Same as Telegram: `coffer channel pair my-seatalk`, send the code to the bot
+in SeaTalk, then just talk. Replies render SeaTalk Markdown.
+
+## Notifications
+
+Push a message to a paired channel any time — no inbound message needed:
+
+```bash
+coffer channel notify my-telegram "nightly build finished ✅"
+```
+
+REST: `POST /api/v1/channels/my-telegram/notify {"text": "..."}`.
+
+UI: the channel detail page has a **Send test message** card — type a line and
+push it to the paired peer (the natural way to confirm delivery right after
+pairing). It stays disabled until the channel is paired.
+
+## Day-to-day
+
+- **Edit** a channel from its detail page (**Edit channel**): change the bound
+  agent, or rotate a secret (Telegram bot token / SeaTalk app secret +
+  signing secret). A rotated secret is written back to the same credential
+  reference, so the binding and pairing are untouched; leave a secret field
+  blank to keep the current value.
+- **Disable** a channel to stop its traffic instantly (polling halts, events
+  are refused); **enable** to resume. The adapter state shows in
+  `coffer channel status` and on the Channels page.
+- **Re-pair** by issuing a new code and sending it from the new account — the
+  old binding is replaced.
+- **Delete** the channel to remove everything; past conversations remain in
+  Chat history.

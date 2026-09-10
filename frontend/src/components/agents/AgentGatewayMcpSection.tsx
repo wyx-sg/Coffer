@@ -1,4 +1,4 @@
-// frontend/src/components/agents/AgentGatewayMcpSection.tsx — spec 004.
+// frontend/src/components/agents/AgentGatewayMcpSection.tsx — spec agent-registry.
 // Section A of the agent "MCP servers" tab: the servers Coffer exposes through
 // the gateway are managed on the standalone MCP servers page, so this section
 // does NOT re-list them — it renders the shared CofferGatewayCard, which shows a

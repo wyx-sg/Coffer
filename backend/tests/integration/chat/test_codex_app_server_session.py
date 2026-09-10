@@ -1,4 +1,4 @@
-"""Integration test for the Codex app-server subprocess seam (spec 008, T2).
+"""Integration test for the Codex app-server subprocess seam (spec channels, T2).
 
 The real-subprocess factory is exercised here, NOT in the unit tier (unit tests
 must stay pure). The whole module is skipped when ``codex`` is absent so CI

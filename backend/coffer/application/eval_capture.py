@@ -1,4 +1,4 @@
-"""Opt-in, dev-only capture of eval-relevant interactions (ADR-019, slice 2).
+"""Opt-in, dev-only capture of eval-relevant interactions (eval flywheel, slice 2).
 
 The capture half of the eval flywheel: when ``COFFER_EVAL_CAPTURE`` is set, the
 gateway records the *shape* of real ``coffer__search_tools`` calls — the query

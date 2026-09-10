@@ -1,6 +1,6 @@
 """Tiering as the gateway applies it — including the two fail-open paths.
 
-ADR-046 is only safe to enable by default because it fails open in both
+Tool tiering is only safe to enable by default because it fails open in both
 directions: tiering switched off, or a usage query that raises, must list
 everything. A broken statistics layer must never be able to hide tools.
 """

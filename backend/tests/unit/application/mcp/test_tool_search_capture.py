@@ -1,4 +1,4 @@
-"""``dispatch_tool_search`` feeds the eval-capture sink (ADR-019, slice 2).
+"""``dispatch_tool_search`` feeds the eval-capture sink (eval flywheel, slice 2).
 
 A real ``coffer__search_tools`` call is the cleanest capture surface: the query
 (the agent's intent) and the ranked tool names are both right there. When

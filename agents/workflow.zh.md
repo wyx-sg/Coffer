@@ -19,7 +19,7 @@
 规则：
 
 - 全程 kebab-case。
-- short name 一般映射（或描述）受影响的 spec 文件夹（`specs/001-mcp-servers/` → `feature/mcp-servers-...`）。分支名不必带数字前缀。
+- short name 一般映射（或描述）受影响的 spec 文件夹（`specs/mcp-servers/` → `feature/mcp-servers-...`）。
 - 从最新 `main` 拉分支：`git checkout main && git pull --ff-only && git checkout -b <prefix>/<name>`。
 - 合并后分支自动删除（squash merge 策略）。
 

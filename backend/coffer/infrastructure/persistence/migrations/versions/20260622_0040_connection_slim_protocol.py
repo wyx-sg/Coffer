@@ -4,7 +4,7 @@ Revision ID: 0040
 Revises: 0039
 Create Date: 2026-06-22
 
-Spec 011 amendment E1/E3: a connection is a credentialed endpoint
+Provider-switching amendment E1/E3: a connection is a credentialed endpoint
 ``{protocol, base_url, credential_ref}``. The MODEL it runs leaves the
 connection — it is chosen at the point of use (the per-agent binding, the
 internal-engine selector, the chat surface). This migration rewrites every

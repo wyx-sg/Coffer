@@ -1,4 +1,4 @@
-"""Filesystem IO over one export bundle directory (spec 010, ADR-016).
+"""Filesystem IO over one export bundle directory (spec and ADR vault-export-import).
 
 Layout::
 
@@ -9,7 +9,7 @@ Layout::
     credentials/<ref>.enc          # Fernet ciphertext, opt-in; never the key
 
 Resource and state docs are dumped with sorted keys so two exports of an
-unchanged vault are byte-identical (spec 010 "Determinism"). Fernet ciphertext
+unchanged vault are byte-identical (spec vault-export-import "Determinism"). Fernet ciphertext
 is urlsafe-base64 ascii, so blobs are written as one text line — readable,
 diffable, and never key material.
 """

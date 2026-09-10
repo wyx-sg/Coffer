@@ -1,4 +1,4 @@
-"""Framework-level per-agent activation scope (ADR-045).
+"""Framework-level per-agent activation scope (ADR per-agent-resource-scope).
 
 A resource's ``scope`` is a plain list of agent names:
 
@@ -9,7 +9,7 @@ A resource's ``scope`` is a plain list of agent names:
 Unknown agent names in the list are legal and simply never match, so a
 resource can be scoped in before that agent is registered. The machine axis
 this module once carried was withdrawn with continuous multi-machine sync
-(ADR-016): without a machine registry there are no machine identities for it
+(ADR vault-export-import): without a machine registry there are no machine identities for it
 to name.
 """
 

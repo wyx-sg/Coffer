@@ -131,7 +131,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception:
         _logger.exception("removed_agent_type.leftover_scan_failed")
 
-    # Startup process hygiene (ADR-006), BEFORE new upstreams: reap leaked MCP
+    # Startup process hygiene (ADR daemon-detect-or-spawn), BEFORE new upstreams: reap leaked MCP
     # upstreams AND stale sibling daemons. Best-effort; never blocks startup.
     try:
         orphans, stale = await asyncio.get_running_loop().run_in_executor(None, startup_sweep)
@@ -159,7 +159,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     retention_svc = build_retention_service(sm, audit=audit)
     await retention_svc.initialize_defaults()
-    # Also registers the engine-settings synced state area (spec 010 slice 7).
+    # Also registers the engine-settings synced state area (spec vault-export-import slice 7).
     embedding_config_svc, internal_engine_config_svc = build_config_services(
         app, sm, audit, credential_store
     )
@@ -185,7 +185,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Agent + skill kinds (004/005), lockstep: on_delete cascade + skill tools → gateway.
     wire_agent_and_skill_kinds(app, resource_svc, audit, sm, builtin_tools, credential_store)
 
-    # Provider switching (spec 011) — AFTER the agent kind: it projects the
+    # Provider switching (spec provider-switching) — AFTER the agent kind: it projects the
     # active profile into each agent's native config (see provider_wiring).
     wire_provider_kind(app, resource_svc, audit, credential_store, sm)
 
@@ -195,7 +195,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Embedding is global: the knowledge kind resolves the current config at
     # index/recall time so a Settings change applies without a daemon restart.
-    # The tool-search embedder (ADR-024) reuses it, cached per config.
+    # The tool-search embedder (ADR builtin-agent-is-internal-capability)
+    # reuses it, cached per config.
     _resolve_embedding, _tool_search_embedder = build_embedding_resolvers(
         embedding_config_svc, credential_store
     )
@@ -218,7 +219,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         app, resource_svc, audit, sm, credential_store, builtin_tools, _tool_search_embedder
     )
 
-    # Wire the chat feature (spec 008). Must come AFTER all other wiring so the
+    # Wire the chat feature (spec channels). Must come AFTER all other wiring so the
     # coffer-builtin-agent gateway session sees the fully-populated
     # BuiltinToolRegistry (knowledge + skill + MCP tools). The session factory
     # is the one wire_mcp_kind registered via set_mcp_session_factory.
@@ -237,7 +238,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     wire_reorg(knowledge_service, get_provider_service(), _credential_resolver)
     wire_merge(knowledge_service, get_provider_service(), _credential_resolver)
 
-    # Wire the channel kind (spec 009) AFTER wire_chat: the inbound processor
+    # Wire the channel kind (spec channels) AFTER wire_chat: the inbound processor
     # drives turns through the chat service handles wire_chat published.
     channel_runtime = wire_channel_kind(app, resource_svc, audit, sm, credential_store)
 
@@ -288,11 +289,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         knowledge_service=knowledge_service,
     )
 
-    # Vault export/import (spec 010). Nothing runs in the background: the
+    # Vault export/import (spec vault-export-import). Nothing runs in the background: the
     # service only acts when the user exports or imports a bundle.
     start_sync(app, resource_svc, audit, db_path, get_master_key_manager())
 
-    # Channel adapter reconciler (spec 009). Started after the daemon token is
+    # Channel adapter reconciler (spec channels). Started after the daemon token is
     # published so the callback listener can be spawned with valid loopback
     # credentials on its first tick.
     channel_runtime_task = asyncio.create_task(channel_runtime.run())

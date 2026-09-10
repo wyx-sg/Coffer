@@ -1,4 +1,4 @@
-"""channel_thread_conversations: per-thread conversation identity (spec 009 FR-032)
+"""channel_thread_conversations: per-thread conversation identity (spec channels FR-032)
 
 Revision ID: 0041
 Revises: 0040

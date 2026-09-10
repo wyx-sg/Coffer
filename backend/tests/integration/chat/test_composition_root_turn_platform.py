@@ -76,17 +76,19 @@ def test_chat_db_tables_created_on_startup(app, tmp_path) -> None:  # type: igno
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="list available agents")
+@pytest.mark.acceptance(spec="channels", scenario="list available agents")
 def test_list_agents_via_wired_daemon(app) -> None:  # type: ignore[no-untyped-def]
-    """GET /api/v1/agent-providers lists only Coffer-managed agents (ADR-024)."""
+    """GET /api/v1/agent-providers lists only Coffer-managed agents
+    (ADR builtin-agent-is-internal-capability)."""
     with TestClient(app) as client:
         set_active_token(_TOKEN)
         resp = client.get("/api/v1/agent-providers", headers=_HEADERS)
         assert resp.status_code == 200, resp.text
         agents = resp.json()["agents"]
         by_key = {a["agent_key"]: a for a in agents}
-        # The built-in chat persona is retired (ADR-024); the registry holds
-        # managed agents only.
+        # The built-in chat persona is retired
+        # (ADR builtin-agent-is-internal-capability); the registry holds managed
+        # agents only.
         assert "builtin" not in by_key
         # The CLI agents are registered; availability tracks whether their
         # binary is on PATH on this host (a bool either way, but present).
@@ -95,9 +97,7 @@ def test_list_agents_via_wired_daemon(app) -> None:  # type: ignore[no-untyped-d
         assert isinstance(by_key["codex"]["available"], bool)
 
 
-@pytest.mark.acceptance(
-    spec="009-channels", scenario="choose an agent when starting a conversation"
-)
+@pytest.mark.acceptance(spec="channels", scenario="choose an agent when starting a conversation")
 @pytest.mark.asyncio
 async def test_create_conversation_with_agent_via_wired_daemon(app, tmp_path) -> None:  # type: ignore[no-untyped-def]
     """Creating a conversation records the chosen managed agent and its config.
@@ -114,7 +114,7 @@ async def test_create_conversation_with_agent_via_wired_daemon(app, tmp_path) ->
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="reject an unknown agent or invalid agent configuration",
 )
 @pytest.mark.asyncio

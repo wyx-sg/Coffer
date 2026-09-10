@@ -1,4 +1,4 @@
-"""Ciphertext-only credential IO for export/import (spec 010).
+"""Ciphertext-only credential IO for export/import (spec vault-export-import).
 
 Reads/writes the ``credentials`` table as raw Fernet ciphertext — no master
 key needed, so exporting/importing never touches plaintext. Locked-ref

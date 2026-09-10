@@ -1,4 +1,4 @@
-"""Environment-sourced knobs for ADR-046 tool tiering.
+"""Environment-sourced knobs for tool tiering (ADR budget-driven-tool-tiering).
 
 Follows the repo's existing env-var tuning pattern (cf.
 ``COFFER_MCP_SESSION_IDLE_S``). No DB table and no CRUD surface: these are
@@ -43,7 +43,7 @@ def _positive_int(raw: str | None, default: int) -> int:
 def load_tiering_config(env: Mapping[str, str] | None = None) -> TieringConfig:
     source: Mapping[str, str] = os.environ if env is None else env
     # Only the explicit "off" disables tiering: a typo must not silently
-    # restore the pre-ADR-046 full-catalogue listing.
+    # restore the pre-tiering full-catalogue listing.
     enabled = source.get(MODE_ENV, "auto").strip().lower() != "off"
     return TieringConfig(
         enabled=enabled,

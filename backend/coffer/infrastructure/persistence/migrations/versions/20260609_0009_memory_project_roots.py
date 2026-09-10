@@ -1,4 +1,4 @@
-"""memory store project roots (spec 007-memory)
+"""memory store project roots (spec knowledge)
 
 Revision ID: 0009
 Revises: 0008

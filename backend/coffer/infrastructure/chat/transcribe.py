@@ -1,4 +1,4 @@
-"""Speech-to-text seam for inbound voice (spec 009 FR-022).
+"""Speech-to-text seam for inbound voice (spec channels FR-022).
 
 An agent that cannot hear audio (Claude Code, Codex) receives a voice message as
 a **transcript** rather than an opaque file: the adapter transcribes the audio to
@@ -9,7 +9,7 @@ about where transcription happens.
 The shipped engine is remote — see
 :mod:`coffer.infrastructure.llm.transcription` — and is absent unless the user
 has designated an internal connection. Absent, transcription degrades to handing
-over the audio file path (ADR-038's per-agent materialisation), which is the
+over the audio file path (channel media's per-agent materialisation), which is the
 default and means nothing leaves the machine.
 """
 

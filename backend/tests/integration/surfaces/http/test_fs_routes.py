@@ -1,4 +1,4 @@
-"""HTTP coverage for /api/v1/fs/* (spec 004-agent-registry FR-024/FR-039/FR-042)."""
+"""HTTP coverage for /api/v1/fs/* (spec agent-registry FR-024/FR-039/FR-042)."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def _client(app) -> TestClient:
 
 
 @pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="browse local folders to choose a config dir"
+    spec="agent-registry", scenario="browse local folders to choose a config dir"
 )
 def test_fs_browse_lists_subdirectories(tmp_path, monkeypatch):
     """GET /fs/browse returns a directory's path, parent, and immediate subdirs."""
@@ -79,7 +79,7 @@ def _capture_spawn(monkeypatch, platform: str = "darwin") -> list[list[str]]:
 
 
 @pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="open a managed file via the daemon (web open/reveal)"
+    spec="agent-registry", scenario="open a managed file via the daemon (web open/reveal)"
 )
 def test_fs_open_launches_default_app(tmp_path, monkeypatch):
     """POST /fs/open with no editor → default TEXT editor (`open -t`), 204.

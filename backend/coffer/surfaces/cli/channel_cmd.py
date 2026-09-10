@@ -1,4 +1,4 @@
-"""coffer channel ... commands (spec 009)."""
+"""coffer channel ... commands (spec channels)."""
 
 from __future__ import annotations
 
@@ -100,8 +100,9 @@ def register(
         raise typer.Exit(int(ExitCode.INVALID_INPUT))
     c, _info = _cli_client.client_or_exit()
     with c:
-        # No runtime affinity to bind (ADR-045 / ADR-016): a channel carries no
-        # scope, so an enabled channel starts on this, the only, machine.
+        # No runtime affinity to bind (ADR per-agent-resource-scope,
+        # vault-export-import): a channel carries no scope, so an enabled channel
+        # starts on this, the only, machine.
         r = c.post("/resources", json={"kind": "channel", "name": name, "config": config})
         _cli_client.check(r, verbose=verbose)
     typer.echo(f"registered: channel:{name}")

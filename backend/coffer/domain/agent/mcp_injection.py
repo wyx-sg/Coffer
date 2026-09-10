@@ -10,7 +10,7 @@ Two orthogonal axes describe MCP configuration across agents:
 The two are independent: Claude Code uses JSON ``mcpServers`` command-maps;
 Codex uses TOML ``mcp_servers`` command-maps. Bundling them into one
 :class:`McpInjectionSpec` lets a single code path serve every agent — the agent
-descriptor (spec 004) carries one spec per agent.
+descriptor (spec agent-registry) carries one spec per agent.
 """
 
 from __future__ import annotations

@@ -44,7 +44,7 @@ def _reset() -> Any:
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="009-channels", scenario="stop a running turn")
+@pytest.mark.acceptance(spec="channels", scenario="stop a running turn")
 async def test_interrupt_route_stops_turn_and_keeps_partial_output() -> None:
     chat_svc, orchestrator, _registry = make_chat_services(
         provider=FakeAgentProvider(_BlockingAdapter(), agent_key="builtin")

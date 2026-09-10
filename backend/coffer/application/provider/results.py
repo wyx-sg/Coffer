@@ -1,4 +1,4 @@
-"""Result value objects for :class:`ProviderService` switch operations (spec 011)."""
+"""Result value objects for :class:`ProviderService` switch operations (spec provider-switching)."""
 
 from __future__ import annotations
 

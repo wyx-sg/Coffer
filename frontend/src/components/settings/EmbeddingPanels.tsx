@@ -1,5 +1,5 @@
 // components/settings/EmbeddingPanels.tsx — presentational pieces of the global
-// Embedding settings card (spec 006): the configured-model summary row (or an
+// Embedding settings card (spec knowledge): the configured-model summary row (or an
 // empty hint) and the chunking-defaults block that also hosts the enable
 // switch. Kept apart from EmbeddingSettings so the page stays small.
 import type { KeyboardEvent } from "react";

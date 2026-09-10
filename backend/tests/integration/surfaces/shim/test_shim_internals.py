@@ -63,7 +63,7 @@ def test_inject_cwd_alias_does_not_stamp_agent(monkeypatch):
 
 
 def test_inject_meta_stamps_cwd_and_agent(monkeypatch):
-    """Spec 001 FR-021 (amended): when a ``--agent`` name is known, it rides
+    """MCP Gateway FR-021 (amended): when a ``--agent`` name is known, it rides
     the same ``_meta`` bag as the launch cwd under ``coffer/agent``."""
     monkeypatch.setattr("os.getcwd", lambda: "/work/my-repo")
     envelope: dict[str, Any] = {"method": "initialize", "params": {"protocolVersion": "x"}}
@@ -769,7 +769,7 @@ async def test_setup_shim_log_swallows_oserror(monkeypatch: pytest.MonkeyPatch) 
 
 @pytest.mark.asyncio
 async def test_spawn_daemon_invokes_popen(monkeypatch: pytest.MonkeyPatch) -> None:
-    """_spawn_daemon uses daemon_spawn_command() (ADR-006) and passes the
+    """_spawn_daemon uses daemon_spawn_command() (ADR daemon-detect-or-spawn) and passes the
     resulting command to subprocess.Popen with start_new_session on POSIX
     (or CREATE_NO_WINDOW|DETACHED_PROCESS on Windows).
 

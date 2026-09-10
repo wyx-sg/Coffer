@@ -12,7 +12,7 @@
 // DOCUMENTS someone ingested (`<scope>/inbox/`). The counts are separate on
 // purpose — never sum or conflate them.
 //
-// The knowledge routes are not in the spec-001 OpenAPI contract that
+// The knowledge routes are not in the mcp-gateway OpenAPI contract that
 // `npm run codegen` reads, so these are hand-written like the sibling kinds'.
 // Document-side shapes live in ./document-types; api.ts re-exports both.
 

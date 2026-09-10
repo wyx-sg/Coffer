@@ -2,7 +2,7 @@
 
 > 中文版：本文件 · English: [knowledge-base-rag.md](./knowledge-base-rag.md)
 >
-> 面向 Coffer 知识库（spec 006，ADR-012）的内部竞品调研报告。**日期：** 2026-06-16。
+> 面向 Coffer 知识库（Knowledge Base 规范，[Files as Truth](../decisions/files-as-truth-sqlite-retrieval.zh.md)）的内部竞品调研报告。**日期：** 2026-06-16。
 > **方法：** deep-research harness（本轮还读了 Coffer 自身 KB 代码以核对对比）。
 >
 > **✓ 覆盖缺口已补齐。** 第一轮深入了 txtai、Open WebUI Knowledge、RAGFlow、Cognee 和两个
@@ -61,7 +61,7 @@
    RAGFlow 甚至**在分块后锁定 embedding 模型**。Coffer 的 `docs/<id>.md` + `raw/` 真相 + 可丢弃
    SQLite 索引让换 embedding 或重建索引变得轻松（`coffer reindex`）。
 2. **只读 + 经 MCP 访问是金库的正确安全姿态。** Coffer 暴露细粒度只读 MCP 工具，并在其上叠加自主
-   `ask`（ADR-024）；agent 从不写 KB。（相比之下 Cognee 可写。）
+   `ask`（ADR builtin-agent-is-internal-capability）；agent 从不写 KB。（相比之下 Cognee 可写。）
 3. **SQLite-FTS5+sqlite-vec 同构项目验证了整套架构。**
 
 **Coffer 落后 —— 具体借鉴。**

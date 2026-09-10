@@ -1,4 +1,4 @@
-"""Merge-scan + merge routes (spec 007 amendment 2026-07-10, FR-056-059).
+"""Merge-scan + merge routes (spec knowledge amendment 2026-07-10, FR-056-059).
 
 Registered on the shared knowledge ``router`` (like ``lane_routes.py``). The
 route paths are literal collection-level segments (``/merge_scan``,

@@ -1,6 +1,6 @@
 # Architecture Decision Records (ADR)
 
-Coffer records every major technical or architectural decision as a numbered
+Coffer records every major technical or architectural decision as an
 ADR. ADRs capture **why** — code shows _what_, this directory shows
 _why we chose what we chose_.
 
@@ -23,14 +23,18 @@ Do **not** write an ADR for:
 
 ## File naming and lifecycle
 
-- Filename: `ADR-NNN-short-kebab-case-title.md` — NNN is a zero-padded ordinal
-  (`ADR-001-…`, `ADR-002-…`, …). Never renumber.
+- Filename: `short-kebab-case-title.md` — the title, in kebab case, with no
+  number. Numbers were dropped because deleting an ADR left a hole in the
+  sequence, and compacting those holes would have made every surviving
+  reference to a retired number point silently at an unrelated live decision —
+  which had already happened once. A name cannot do that, and chronology is
+  carried by each ADR's own `Date`.
 - This directory records the **live** design, not a chronological archive. A
   reader must be able to learn today's answer by reading the ADRs present, never
   by replaying a chain of supersessions. So:
   - When a decision changes, **rewrite the ADR that owns it**.
   - When the thing an ADR decided is **removed outright**, delete the ADR.
-  - Keep an ADR marked `Superseded by ADR-NNN` only when the superseded design
+  - Keep an ADR marked `Superseded by <title>` only when the superseded design
     still explains a constraint the live one inherits.
   Git history is the archive: `git log --follow docs/decisions/` recovers any
   decision this directory no longer states.
@@ -44,18 +48,18 @@ Do **not** write an ADR for:
 | ----------------------- | --------------------------------------------------- |
 | `Proposed`              | Drafted, not yet adopted.                           |
 | `Accepted`              | In effect.                                          |
-| `Superseded by ADR-NNN` | No longer the live answer; link to its replacement. |
+| `Superseded by <title>` | No longer the live answer; link to its replacement. |
 | `Deprecated`            | Withdrawn without replacement (rare).               |
 
 ## Template (Michael Nygard format)
 
 ```markdown
-# ADR-NNN: <short title in title case>
+# <short title in title case>
 
-**Status**: Proposed | Accepted | Superseded by ADR-NNN
+**Status**: Proposed | Accepted | Superseded by [<title>](<file>.md)
 **Date**: YYYY-MM-DD
 **Deciders**: <names / roles>
-**Related**: ADR-…, spec/…, issue/PR/…
+**Related**: [<ADR title>](<file>.md), spec/…, issue/PR/…
 
 ## Context
 
@@ -78,29 +82,35 @@ section that future readers most often want — don't skip it.>
 
 ## Index
 
-| ADR                                                      | Title                                                                                       | Status                                                                                                        |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| [001](ADR-001-resource-framework-upfront.md)             | Resource framework designed upfront, not after the second feature                           | Accepted                                                                                                      |
-| [002](ADR-002-code-layout-layer-first.md)                | Code layout: layer-first with kind subdirectories                                           | Accepted                                                                                                      |
-| [003](ADR-003-resource-identifier-format.md)             | Resource identifier format: `<kind>:<name>`, not URN                                        | Accepted                                                                                                      |
-| [004](ADR-004-capability-state-model.md)                 | MCP capability state: preferences in DB, list live-queried from upstream                    | Accepted                                                                                                      |
-| [005](ADR-005-session-subprocess-model.md)               | One upstream subprocess set per downstream client session                                   | Accepted                                                                                                      |
-| [006](ADR-006-daemon-detect-or-spawn.md)                 | Daemon detect-or-spawn pattern; daemon outlives any single client                           | Accepted                                                                                                      |
-| [007](ADR-007-everything-is-a-resource-kind.md)          | Information architecture: every managed entity is a resource kind                           | Accepted                                                                                                      |
-| [008](ADR-008-distribution-pyinstaller.md)               | Distribution: PyInstaller-bundled daemon, shim, and CLI                                     | Accepted                                                                                                      |
-| [009](ADR-009-cross-platform-skill-delivery.md)          | Cross-platform skill delivery: symlink / junction / copy-fallback                           | Accepted                                                                                                      |
-| [012](ADR-012-files-as-truth-sqlite-retrieval.md)        | Retrieval stack: markdown files as truth, SQLite FTS5 + sqlite-vec, configurable embeddings | Accepted                                                                                                      |
-| [013](ADR-013-agent-native-shared-memory.md)             | One shared knowledge store across agents                                                    | Accepted — projection half superseded by [026](ADR-026-memory-via-mcp-not-native-projection.md)               |
-| [014](ADR-014-channel-adapter-framework.md)              | Channel adapter framework: thin adapters over the chat platform seams                       | Accepted                                                                                                      |
-| [015](ADR-015-envelope-encrypted-credential-store.md)    | Envelope-encrypted credential store (Fernet ciphertext in SQLite, file-default master key)  | Accepted                                                                                                      |
-| [016](ADR-016-vault-export-import.md)                     | Vault export and import                                                                                             | Accepted                                                                                                      |
-| [017](ADR-017-industrial-grade-harness-in-layers.md)     | Industrial-grade harness, built in layers                                                   | Proposed                                                                                                      |
-| [018](ADR-018-tool-retrieval-for-overload.md)            | Tool retrieval for aggregation overload (`coffer__search_tools`)                            | Accepted — amended by [024](ADR-024-builtin-agent-is-internal-capability.md)                                  |
-| [019](ADR-019-close-the-eval-flywheel.md)                | Close the eval flywheel (loop engineering)                                                  | Accepted                                                                                                      |
-| [021](ADR-021-chat-as-vault-console.md)                  | Reposition Agent Chat as the Vault Console                                                  | Accepted — partially superseded by [024](ADR-024-builtin-agent-is-internal-capability.md)                     |
-| [023](ADR-023-channel-entrypoint-differentiation.md)     | Channel entrypoint differentiation layer                                                    | Accepted                                                                                                      |
-| [024](ADR-024-builtin-agent-is-internal-capability.md)   | The built-in agent is an internal capability, not a chat persona                            | Accepted                                                                                                      |
-| [025](ADR-025-remove-tool-approval.md)                   | Remove the tool-approval system; owner-pairing is the gate                                  | Accepted                                                                                                      |
-| [027](ADR-027-skill-content-trust-layer.md)              | Skill content trust layer (heuristic scan, warn-don't-block)                                | Accepted                                                                                                      |
-| [029](ADR-029-consume-official-mcp-registry.md)          | Consume the official MCP Registry for server discovery                                      | Reverted                                                                                                      |
-| [034](ADR-034-retrieval-mode-is-internal.md)             | Retrieval mode is an internal engine detail; external surfaces expose query→answer          | Accepted                                                                                                      |
+| ADR | Title | Status |
+| --- | --- | --- |
+| [`resource-framework-upfront`](resource-framework-upfront.md) | Resource Framework Designed Upfront | Accepted |
+| [`code-layout-layer-first`](code-layout-layer-first.md) | Code Layout — Layer-First with Kind Subdirectories | Accepted |
+| [`resource-identifier-format`](resource-identifier-format.md) | Resource Identifier Format — `<kind>:<name>`, Not URN | Accepted |
+| [`capability-state-model`](capability-state-model.md) | MCP Capability State — Preferences in DB, List Live-Queried From Upstream | Accepted |
+| [`session-subprocess-model`](session-subprocess-model.md) | One Upstream Subprocess Set Per Downstream Client Session | Accepted |
+| [`daemon-detect-or-spawn`](daemon-detect-or-spawn.md) | Daemon Detect-or-Spawn Pattern | Accepted |
+| [`everything-is-a-resource-kind`](everything-is-a-resource-kind.md) | Information Architecture — Everything Is a Resource Kind | Amended (2026-05-30, 2026-06-11) |
+| [`distribution-pyinstaller`](distribution-pyinstaller.md) | Distribution — PyInstaller-Bundled Daemon, Shim, and CLI | Accepted |
+| [`cross-platform-skill-delivery`](cross-platform-skill-delivery.md) | Cross-Platform Skill Delivery — Symlink / Junction / Copy-Fallback | Accepted |
+| [`files-as-truth-sqlite-retrieval`](files-as-truth-sqlite-retrieval.md) | Retrieval Stack — Markdown Files as Truth, SQLite FTS5 + sqlite-vec, Configurable Embeddings | Accepted |
+| [`agent-native-shared-memory`](agent-native-shared-memory.md) | One Shared Knowledge Store Across Agents | Accepted — projection half superseded by [Memory via MCP](memory-via-mcp-not-native-projection.md) |
+| [`channel-adapter-framework`](channel-adapter-framework.md) | Channel Adapter Framework | Accepted |
+| [`envelope-encrypted-credential-store`](envelope-encrypted-credential-store.md) | Envelope-Encrypted Credential Store | Accepted |
+| [`vault-export-import`](vault-export-import.md) | Vault Export and Import | Accepted |
+| [`industrial-grade-harness-in-layers`](industrial-grade-harness-in-layers.md) | Industrial-Grade Harness, Built in Layers | Proposed |
+| [`tool-retrieval-for-overload`](tool-retrieval-for-overload.md) | Tool Retrieval for Aggregation Overload | Accepted — amended by [Built-in Agent Is Internal](builtin-agent-is-internal-capability.md) and [Budget-Driven Tool Tiering](budget-driven-tool-tiering.md) |
+| [`close-the-eval-flywheel`](close-the-eval-flywheel.md) | Close the Eval Flywheel (Loop Engineering) | Accepted |
+| [`channel-entrypoint-differentiation`](channel-entrypoint-differentiation.md) | Channel Entrypoint Differentiation Layer | Accepted |
+| [`builtin-agent-is-internal-capability`](builtin-agent-is-internal-capability.md) | The Built-in Agent Is an Internal Capability, Not a Chat Persona | Accepted |
+| [`remove-tool-approval`](remove-tool-approval.md) | Remove the Tool-Approval System; Owner-Pairing Is the Gate | Accepted |
+| [`memory-via-mcp-not-native-projection`](memory-via-mcp-not-native-projection.md) | Memory via MCP, not native projection | Accepted |
+| [`skill-content-trust-layer`](skill-content-trust-layer.md) | Skill Content Trust Layer (Heuristic Scan, Warn-Don't-Block) | Reverted (2026-06-20) |
+| [`consume-official-mcp-registry`](consume-official-mcp-registry.md) | Consume the official MCP Registry for server discovery | Reverted (2026-06-20) |
+| [`provider-switching`](provider-switching.md) | Provider Switching | Proposed |
+| [`daemon-proxies-os-file-actions`](daemon-proxies-os-file-actions.md) | Local Daemon Proxies OS File Actions | Accepted |
+| [`retrieval-mode-is-internal`](retrieval-mode-is-internal.md) | Retrieval mode is an internal engine detail; external surfaces expose query→answer | Accepted |
+| [`channel-media`](channel-media.md) | Channel media — reference in the DB, materialise per agent at send | Accepted — the v1 "defer a persisted attachment block" decision is superseded by [Persisted Attachment Reference](persisted-attachment-reference.md) |
+| [`persisted-attachment-reference`](persisted-attachment-reference.md) | Persist channel attachments as a reference block, re-materialise from history | Accepted |
+| [`per-agent-resource-scope`](per-agent-resource-scope.md) | Per-Agent Resource Scope | Accepted |
+| [`budget-driven-tool-tiering`](budget-driven-tool-tiering.md) | Budget-Driven Tool Tiering at the Gateway | Accepted |

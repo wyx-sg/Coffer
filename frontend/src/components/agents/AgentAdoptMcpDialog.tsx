@@ -1,5 +1,5 @@
 // frontend/src/components/agents/AgentAdoptMcpDialog.tsx
-// "Adopt into Coffer" dialog for a direct MCP entry (specs 004/005 workspace amendment). Shows a short
+// "Adopt into Coffer" dialog for a direct MCP entry (specs agent-registry/skill-manager workspace amendment). Shows a short
 // summary of the entry, and — when the entry carries likely-secret env/header
 // keys — one input per secret key so the user can choose the keychain
 // reference each value is stored under (prefilled mcp/{agent}/{entry}/{KEY});

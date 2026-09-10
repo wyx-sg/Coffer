@@ -1,4 +1,4 @@
-"""bootstrap.superseded_by() — the self-eviction check (ADR-006 amendment).
+"""bootstrap.superseded_by() — the self-eviction check (detect-or-spawn amendment).
 
 ``live_daemon()`` only ever probes the ONE port recorded in daemon.json, so it
 cannot see a daemon alive on a different port: when the probe fails for any

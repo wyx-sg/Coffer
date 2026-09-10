@@ -94,7 +94,7 @@ jobs:
       # packaged into one tar.gz. The archive contains PLAIN binary names (no
       # triple suffix) so both the one-line installer and manual extraction
       # yield co-located plain-named binaries, which the frozen detect-or-spawn
-      # logic requires (ADR-006): `coffer` looks for `coffer-daemon` next to
+      # logic requires (ADR daemon-detect-or-spawn): `coffer` looks for `coffer-daemon` next to
       # itself at runtime, and the daemon deploys `coffer-callback` from its
       # own directory into ~/.coffer/bin/ at startup.
       - name: package CLI archive

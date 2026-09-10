@@ -1,4 +1,4 @@
-"""Memory store labels as a synced state area (spec 010 x spec 007 FR-017c).
+"""Memory store labels as a synced state area (spec vault-export-import x spec knowledge FR-017c).
 
 A per-project memory store is named ``project-<ULID>`` — portable across
 machines by construction (#287) but unreadable. The user-set display label

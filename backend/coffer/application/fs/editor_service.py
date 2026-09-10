@@ -1,6 +1,6 @@
 """Detect installed GUI editors for the preferred-editor picker.
 
-Spec 002-ui-shell (the preferred-editor preference) + spec 004-agent-registry
+Spec ui-shell (the preferred-editor preference) + spec agent-registry
 FR-039 (the /fs surface). The preference itself is a free-form string, but
 typing it blind is error-prone — so this service enumerates common code editors
 that are *actually installed* on the host, letting the settings UI offer them as

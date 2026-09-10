@@ -45,7 +45,7 @@ class GatedAdapter:
         return gen()
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="/new starts a fresh conversation")
+@pytest.mark.acceptance(spec="channels", scenario="/new starts a fresh conversation")
 async def test_new_command_switches_to_a_fresh_conversation(env: ChannelEnv) -> None:
     resource, adapter = await env.paired_channel()
 
@@ -65,7 +65,7 @@ async def test_new_command_switches_to_a_fresh_conversation(env: ChannelEnv) -> 
     assert fresh in listed
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="/stop interrupts a running turn")
+@pytest.mark.acceptance(spec="channels", scenario="/stop interrupts a running turn")
 async def test_stop_command_interrupts_the_running_turn(env: ChannelEnv) -> None:
     gated = GatedAdapter()
     env.provider.adapter = gated
@@ -139,7 +139,7 @@ async def test_unbind_mid_turn_interrupts_the_draining_turn(env: ChannelEnv) -> 
     await wait_until(lambda: running_conversation not in active_turns())
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="messages during a turn are queued in order")
+@pytest.mark.acceptance(spec="channels", scenario="messages during a turn are queued in order")
 async def test_messages_sent_mid_turn_run_as_consecutive_turns_in_order(env: ChannelEnv) -> None:
     gated = GatedAdapter()
     env.provider.adapter = gated
@@ -172,9 +172,7 @@ async def test_messages_sent_mid_turn_run_as_consecutive_turns_in_order(env: Cha
     assert len(messages) == 6  # user/assistant interleaved
 
 
-@pytest.mark.acceptance(
-    spec="009-channels", scenario="the queue is bounded and overflow is reported"
-)
+@pytest.mark.acceptance(spec="channels", scenario="the queue is bounded and overflow is reported")
 async def test_eleventh_queued_message_is_dropped_with_a_busy_notice(env: ChannelEnv) -> None:
     gated = GatedAdapter()
     env.provider.adapter = gated

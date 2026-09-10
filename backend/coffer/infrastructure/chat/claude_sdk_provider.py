@@ -129,7 +129,7 @@ class ClaudeSdkProvider:
             system_context=system_context,
             # Claude cannot hear audio. A voice attachment is transcribed by the
             # user's configured connection, or handed over untouched when there
-            # is none (spec 009 FR-022).
+            # is none (spec channels FR-022).
             transcriber=await self._transcriber(),
             # A document (PDF/office file) is text-extracted so it reaches the
             # agent as text rather than a vision/binary block (FR-030).

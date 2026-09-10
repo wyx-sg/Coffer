@@ -115,7 +115,7 @@ async def _create_tables(engine) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="config-file and MCP operations mirror across surfaces"
+    spec="agent-registry", scenario="config-file and MCP operations mirror across surfaces"
 )
 def test_config_ls_json(agent_config_cli):
     result = _runner.invoke(cli_app, ["agent", "config", "ls", "cc", "--json"])
@@ -149,7 +149,7 @@ def test_config_cat_unknown_key_exit4(agent_config_cli):
     assert r.exit_code == 4
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="save a config file with valid content")
+@pytest.mark.acceptance(spec="agent-registry", scenario="save a config file with valid content")
 def test_config_edit_from_file_valid(agent_config_cli):
     tmp_path, _shim = agent_config_cli
     settings = tmp_path / ".claude" / "settings.json"
@@ -211,7 +211,7 @@ def test_config_edit_interactive_no_changes(agent_config_cli, monkeypatch):
     assert not (tmp_path / ".claude" / "settings.json.bak").exists()
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="reject malformed config-file content")
+@pytest.mark.acceptance(spec="agent-registry", scenario="reject malformed config-file content")
 def test_config_edit_from_file_malformed_exit2_unchanged(agent_config_cli):
     tmp_path, _shim = agent_config_cli
     settings = tmp_path / ".claude" / "settings.json"

@@ -1,4 +1,4 @@
-// frontend/src/components/agents/AgentMcpControls.tsx — spec 004 v2.
+// frontend/src/components/agents/AgentMcpControls.tsx — spec agent-registry v2.
 // Compact Coffer-MCP install control: an "Install Coffer MCP" button when not
 // installed, and a plain "Coffer MCP installed" status (no uninstall action)
 // once installed. Plus a status badge for at-a-glance use elsewhere. Both read

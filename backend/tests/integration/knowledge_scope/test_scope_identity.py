@@ -1,4 +1,4 @@
-"""Machine-portable project identity (spec 007 FR-004a, ADR-043)."""
+"""Machine-portable project identity (spec knowledge FR-004a)."""
 
 from __future__ import annotations
 

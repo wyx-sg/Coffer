@@ -49,7 +49,8 @@ async def test_mcp_server(
     Persists the result to mcp_server_health so GET /status reflects it."""
     resource = await resource_service.get(ResourceRef("mcp_server", name))
 
-    # ADR-045 scope is per-AGENT and is enforced at the gateway, which knows
+    # Scope (ADR per-agent-resource-scope) is per-AGENT and is enforced at the
+    # gateway, which knows
     # the calling session's identity. This is a management route with no such
     # identity, so it does not gate on scope: the owner testing a server they
     # registered may reach it whatever agents it is scoped to.

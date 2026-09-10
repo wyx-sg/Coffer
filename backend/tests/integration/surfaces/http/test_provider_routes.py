@@ -1,4 +1,4 @@
-"""End-to-end HTTP coverage for /api/v1/providers/* (spec 011)."""
+"""End-to-end HTTP coverage for /api/v1/providers/* (spec provider-switching)."""
 
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ def _anthropic_body(name: str = "acme", **over) -> dict:
 
 
 @pytest.mark.acceptance(
-    spec="011-provider-switching",
+    spec="provider-switching",
     scenario="create an anthropic provider profile with an inline secret",
 )
 def test_create_with_inline_secret(tmp_path, monkeypatch):
@@ -71,7 +71,7 @@ def test_create_with_inline_secret(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="011-provider-switching",
+    spec="provider-switching",
     scenario="create a profile that reuses an existing credential ref",
 )
 def test_create_reusing_credential_ref(tmp_path, monkeypatch):
@@ -92,7 +92,7 @@ def test_create_reusing_credential_ref(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="011-provider-switching", scenario="reject a profile with an unknown wire format"
+    spec="provider-switching", scenario="reject a profile with an unknown wire format"
 )
 def test_reject_unknown_wire_format(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59730)
@@ -102,7 +102,7 @@ def test_reject_unknown_wire_format(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="011-provider-switching",
+    spec="provider-switching",
     scenario="reject a profile that supplies neither a secret nor a credential ref",
 )
 def test_reject_no_credential_source(tmp_path, monkeypatch):
@@ -115,7 +115,7 @@ def test_reject_no_credential_source(tmp_path, monkeypatch):
         assert "PROVIDER_CREDENTIAL_SOURCE_INVALID" in r.text
 
 
-@pytest.mark.acceptance(spec="011-provider-switching", scenario="update a provider profile")
+@pytest.mark.acceptance(spec="provider-switching", scenario="update a provider profile")
 def test_update_profile(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59750)
     with _client(app) as c:
@@ -125,7 +125,7 @@ def test_update_profile(tmp_path, monkeypatch):
         assert r.json()["base_url"] == "https://gw/anthropic/v2"
 
 
-@pytest.mark.acceptance(spec="011-provider-switching", scenario="list provider profiles")
+@pytest.mark.acceptance(spec="provider-switching", scenario="list provider profiles")
 def test_list_profiles(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59760)
     with _client(app) as c:
@@ -137,7 +137,7 @@ def test_list_profiles(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="011-provider-switching",
+    spec="provider-switching",
     scenario="delete a provider profile cleans up its owned credential",
 )
 def test_delete_cleans_owned_credential(tmp_path, monkeypatch):
@@ -151,7 +151,7 @@ def test_delete_cleans_owned_credential(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="011-provider-switching",
+    spec="provider-switching",
     scenario="activate an anthropic profile writes Claude Code settings",
 )
 def test_activate_writes_claude_settings(tmp_path, monkeypatch):
@@ -169,13 +169,13 @@ def test_activate_writes_claude_settings(tmp_path, monkeypatch):
         assert data["apiKeyHelper"] == "coffer provider key --connection acme"
         assert data["env"]["ANTHROPIC_BASE_URL"] == "https://gw/anthropic"
         # The agent is unbound (no per-agent model) → no model env is written, so
-        # Claude Code runs on its OWN default model (spec 011 E3/E4).
+        # Claude Code runs on its OWN default model (spec provider-switching E3/E4).
         assert "ANTHROPIC_MODEL" not in data["env"]
         assert "ANTHROPIC_SMALL_FAST_MODEL" not in data["env"]
 
 
 @pytest.mark.acceptance(
-    spec="011-provider-switching",
+    spec="provider-switching",
     scenario="an agent's model binding drives the projected model",
 )
 def test_agent_binding_drives_projected_model(tmp_path, monkeypatch):
@@ -185,7 +185,7 @@ def test_agent_binding_drives_projected_model(tmp_path, monkeypatch):
         _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
         c.post("/api/v1/providers", json=_anthropic_body())
         # Bind this agent to its own models; activating projects them (the model
-        # lives on the binding, not the connection — spec 011 E3/E4).
+        # lives on the binding, not the connection — spec provider-switching E3/E4).
         rb = c.patch(
             "/api/v1/agents/cc",
             json={"model": "bound-opus", "fast_model": "bound-haiku"},
@@ -199,7 +199,7 @@ def test_agent_binding_drives_projected_model(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="011-provider-switching", scenario="activate an openai profile writes Codex config"
+    spec="provider-switching", scenario="activate an openai profile writes Codex config"
 )
 def test_activate_writes_codex_config(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59790)
@@ -216,7 +216,7 @@ def test_activate_writes_codex_config(tmp_path, monkeypatch):
             },
         )
         # Bind the agent's model so the projection writes a top-level model (the
-        # model lives on the binding, not the connection — spec 011 E3/E4).
+        # model lives on the binding, not the connection — spec provider-switching E3/E4).
         c.patch("/api/v1/agents/cx", json={"model": "gpt-x"})
         r = c.post("/api/v1/providers/oa/activate")
         assert r.status_code == 200, r.text
@@ -230,7 +230,7 @@ def test_activate_writes_codex_config(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="011-provider-switching",
+    spec="provider-switching",
     scenario="switch a wire back to the agent built-in login",
 )
 def test_use_builtin_removes_projection_and_clears_active(tmp_path, monkeypatch):
@@ -268,7 +268,7 @@ def test_use_builtin_is_idempotent_noop(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="011-provider-switching",
+    spec="provider-switching",
     scenario="activating a profile deactivates the previous active profile of the same wire format",
 )
 def test_activate_deactivates_previous(tmp_path, monkeypatch):
@@ -285,7 +285,7 @@ def test_activate_deactivates_previous(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="011-provider-switching",
+    spec="provider-switching",
     scenario="activate a profile whose wire matches no registered agent records active but projects nothing",  # noqa: E501
 )
 def test_activate_without_matching_agent(tmp_path, monkeypatch):
@@ -301,7 +301,7 @@ def test_activate_without_matching_agent(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="011-provider-switching",
+    spec="provider-switching",
     scenario="switching preserves unrelated native-config keys and writes a .bak backup",
 )
 def test_switch_preserves_keys_and_backs_up(tmp_path, monkeypatch):
@@ -319,7 +319,7 @@ def test_switch_preserves_keys_and_backs_up(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="011-provider-switching", scenario="a provider switch is recorded in the audit log"
+    spec="provider-switching", scenario="a provider switch is recorded in the audit log"
 )
 def test_switch_is_audited(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59830)
@@ -333,7 +333,7 @@ def test_switch_is_audited(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="011-provider-switching", scenario="resolve the active provider key for the apiKeyHelper"
+    spec="provider-switching", scenario="resolve the active provider key for the apiKeyHelper"
 )
 def test_resolve_active_key(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59840)
@@ -348,7 +348,7 @@ def test_resolve_active_key(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="011-provider-switching",
+    spec="provider-switching",
     scenario="route an openai-compatible connection to Claude Code via compatible_agents",
 )
 def test_openai_connection_compatible_with_claude_code(tmp_path, monkeypatch):
@@ -389,7 +389,7 @@ def test_openai_connection_compatible_with_claude_code(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="011-provider-switching",
+    spec="provider-switching",
     scenario="create an ollama connection without a credential",
 )
 def test_create_ollama_without_credential(tmp_path, monkeypatch):
@@ -423,7 +423,7 @@ def test_create_ollama_without_credential(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="011-provider-switching",
+    spec="provider-switching",
     scenario="set a connection as the internal engine default",
 )
 def test_set_internal_default(tmp_path, monkeypatch):
@@ -438,7 +438,7 @@ def test_set_internal_default(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="011-provider-switching",
+    spec="provider-switching",
     scenario="setting a new internal default clears the previous one",
 )
 def test_set_internal_default_clears_previous(tmp_path, monkeypatch):
@@ -513,7 +513,7 @@ async def test_a_second_internal_default_cannot_be_written_behind_the_service(
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
-    spec="011-provider-switching",
+    spec="provider-switching",
     scenario="choose the model the internal engine runs on",
 )
 async def test_internal_engine_model_overlay(tmp_path, monkeypatch):

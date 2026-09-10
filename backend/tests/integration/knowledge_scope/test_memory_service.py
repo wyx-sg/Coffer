@@ -20,7 +20,7 @@ def _project_store(mem) -> str:
     return project_scope_name(project_ulid(str(Path(mem.project_cwd).parent)))
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="agent remembers a project fact")
+@pytest.mark.acceptance(spec="knowledge", scenario="agent remembers a project fact")
 async def test_remember_project_fact_writes_file_and_index(mem) -> None:
     fact = await mem.service.add_fact(
         scope=KnowledgeScope.PROJECT,
@@ -45,7 +45,7 @@ async def test_remember_project_fact_writes_file_and_index(mem) -> None:
     assert fact.id
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="agent recalls a project fact")
+@pytest.mark.acceptance(spec="knowledge", scenario="agent recalls a project fact")
 async def test_recall_returns_facts(mem) -> None:
     await mem.service.add_fact(
         scope=KnowledgeScope.PROJECT,
@@ -62,7 +62,7 @@ async def test_recall_returns_facts(mem) -> None:
     assert hits[0].source
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="remember at global scope")
+@pytest.mark.acceptance(spec="knowledge", scenario="remember at global scope")
 async def test_remember_global_scope(mem) -> None:
     await mem.service.add_fact(
         scope=KnowledgeScope.GLOBAL,
@@ -78,7 +78,7 @@ async def test_remember_global_scope(mem) -> None:
     assert any("tabs" in h.text for h in hits)
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="recall spans project and global scope")
+@pytest.mark.acceptance(spec="knowledge", scenario="recall spans project and global scope")
 async def test_recall_spans_project_and_global(mem) -> None:
     await mem.service.add_fact(
         scope=KnowledgeScope.GLOBAL,
@@ -103,7 +103,7 @@ async def test_recall_spans_project_and_global(mem) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory", scenario="project scope resolves from the agent's working directory"
+    spec="knowledge", scenario="project scope resolves from the agent's working directory"
 )
 async def test_project_scope_resolution_provisions_store(mem) -> None:
     resolved = await mem.service.resolve_scope(scope=KnowledgeScope.PROJECT, cwd=mem.project_cwd)
@@ -166,7 +166,7 @@ async def test_forget_removes_fact(mem) -> None:
     assert list(paths.inbox_dir(store_dir).glob("*.md")) == []
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="user adds a fact")
+@pytest.mark.acceptance(spec="knowledge", scenario="user adds a fact")
 async def test_user_add_sets_actor_user(mem) -> None:
     fact = await mem.service.add_fact(
         scope=KnowledgeScope.GLOBAL,
@@ -180,7 +180,7 @@ async def test_user_add_sets_actor_user(mem) -> None:
     assert got.actor == "user"
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="user corrects a fact out-of-band")
+@pytest.mark.acceptance(spec="knowledge", scenario="user corrects a fact out-of-band")
 async def test_user_corrects_fact_via_write_api(mem) -> None:
     """The programmatic write path (REST/CLI) — the in-app viewer is read-only.
 
@@ -202,7 +202,7 @@ async def test_user_corrects_fact_via_write_api(mem) -> None:
     assert got.body == "dark mode preferred"
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="user deletes a fact")
+@pytest.mark.acceptance(spec="knowledge", scenario="user deletes a fact")
 async def test_user_delete_fact(mem) -> None:
     fact = await mem.service.add_fact(
         scope=KnowledgeScope.GLOBAL,
@@ -218,7 +218,7 @@ async def test_user_delete_fact(mem) -> None:
     assert facts == []
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="clear a memory scope")
+@pytest.mark.acceptance(spec="knowledge", scenario="clear a memory scope")
 async def test_clear_scope_keeps_resource(mem) -> None:
     for i in range(3):
         await mem.service.add_fact(
@@ -292,7 +292,7 @@ async def test_fact_count_uses_indexed_count_without_disk_scan(mem) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory", scenario="vector recall falls back when embedding is unconfigured"
+    spec="knowledge", scenario="vector recall falls back when embedding is unconfigured"
 )
 async def test_vector_recall_falls_back_when_unconfigured(mem) -> None:
     """A store with no embedding provider, queried with mode=vector, returns
@@ -342,7 +342,7 @@ async def test_fact_over_default_allowed_with_max_fact_chars_override(mem) -> No
 
 
 @pytest.mark.acceptance(
-    spec="007-memory", scenario="out-of-band fact-file edits are visible on recall"
+    spec="knowledge", scenario="out-of-band fact-file edits are visible on recall"
 )
 async def test_lazy_reindex_picks_up_out_of_band_edit(mem) -> None:
     """An out-of-band edit to a fact file (the user editing it directly on disk,
@@ -400,7 +400,7 @@ def project_ulid_from(mem) -> str:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory",
+    spec="knowledge",
     scenario="vector recall falls back when embedding is unconfigured",
 )
 async def test_enabling_vector_backfills_existing_facts(mem) -> None:

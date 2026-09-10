@@ -1,6 +1,6 @@
 """Integration tests for `coffer credentials ...` subcommands.
 
-Spec 006: every credentials subcommand goes through the daemon HTTP API — the
+Every credentials subcommand goes through the daemon HTTP API — the
 CLI never touches credential storage in-process. These tests drive the CLI
 against a fake daemon client (an in-memory stand-in for the daemon's
 /api/v1/credentials routes) injected via `client_or_exit`.

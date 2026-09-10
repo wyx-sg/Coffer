@@ -28,7 +28,7 @@ from coffer.infrastructure.persistence.base import Base
 class DocumentModel(Base):
     """One Markdown file = one row. Composite PK ``(kind, resource_name, id)``
     keeps the unified table unambiguous across faces/resources (ids are now
-    globally-unique ULIDs — spec 007 FR-062 — so a bare id would already be unique)."""
+    globally-unique ULIDs — spec knowledge FR-062 — so a bare id would already be unique)."""
 
     __tablename__ = "documents"
 

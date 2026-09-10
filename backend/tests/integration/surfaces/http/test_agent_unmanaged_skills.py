@@ -1,5 +1,5 @@
 """HTTP coverage for /api/v1/agents/{name}/unmanaged-skills and
-follow-policy fields on PATCH /api/v1/agents/{name} (spec 005 FR-022/023/025).
+follow-policy fields on PATCH /api/v1/agents/{name} (spec skill-manager FR-022/023/025).
 """
 
 from __future__ import annotations

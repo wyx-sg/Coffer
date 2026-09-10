@@ -1,4 +1,4 @@
-"""The agent plugin inventory as a synced state area (spec 010).
+"""The agent plugin inventory as a synced state area (spec vault-export-import).
 
 It is an INVENTORY, not a replicator: export writes down what this machine has,
 import stores it and touches no agent config. These tests pin that asymmetry,

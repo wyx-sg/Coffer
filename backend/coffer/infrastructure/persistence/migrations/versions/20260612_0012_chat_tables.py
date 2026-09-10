@@ -19,7 +19,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # ----- conversations (spec 008) -----
+    # ----- conversations (agent chat) -----
     op.create_table(
         "conversations",
         sa.Column("id", sa.String(), nullable=False),
@@ -36,7 +36,7 @@ def upgrade() -> None:
         ["updated_at"],
     )
 
-    # ----- chat_messages (spec 008) -----
+    # ----- chat_messages (agent chat) -----
     op.create_table(
         "chat_messages",
         sa.Column("id", sa.String(), nullable=False),
@@ -58,7 +58,7 @@ def upgrade() -> None:
         ["conversation_id", "seq"],
     )
 
-    # ----- chat_models (spec 008) -----
+    # ----- chat_models (agent chat) -----
     op.create_table(
         "chat_models",
         sa.Column("id", sa.String(), nullable=False),

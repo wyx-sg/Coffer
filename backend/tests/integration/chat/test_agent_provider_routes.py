@@ -1,7 +1,7 @@
 """GET /api/v1/agent-providers/{agent_key}/models — the model catalogue route.
 
 Wires the real route against the real ``AgentModelCatalogueService`` and the real
-on-disk discovery adapter (only the spec-004 agent registry is faked), so the
+on-disk discovery adapter (only the agent registry is faked), so the
 whole chain from HTTP down to the agent's own ``.claude.json`` is exercised.
 
 Only the config-file source is wired here, deliberately: the other two sources

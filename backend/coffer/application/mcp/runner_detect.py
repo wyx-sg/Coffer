@@ -1,4 +1,4 @@
-"""Missing-runner detection for stdio MCP servers (spec 001 amendment).
+"""Missing-runner detection for stdio MCP servers (spec mcp-gateway amendment).
 
 A synced stdio server references a launcher command (``uvx``, ``npx``, …)
 that may not exist on this machine — the server then shows as failing with

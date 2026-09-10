@@ -25,7 +25,7 @@ def make_agent_kind(on_delete: OnDeleteHook | None = None) -> Kind:
     row vanishes); sync hooks run inline. The skill module supplies the
     callback at the composition root.
 
-    The kind declares no activation scope (ADR-045): scope names the agents a
+    The kind declares no activation scope (ADR per-agent-resource-scope): scope names the agents a
     resource is active for, so an agent scoping itself is meaningless. A
     non-null scope is rejected at validation (422).
     """

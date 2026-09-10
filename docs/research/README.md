@@ -50,7 +50,7 @@
 | 8   | [Multi-machine sync](./multi-machine-sync.md) · [zh](./multi-machine-sync.zh.md)                              | Sync (010)               | **Reconcile-not-overwrite** is unique; borrow chezmoi's **per-machine templating**.                                                                                   |
 | 9   | [Credentials & secrets](./credentials-secrets.md) · [zh](./credentials-secrets.zh.md)                         | Credentials (015)        | Coffer already implements 1Password's "**access without exposure**" ideal; borrow **external-provider refs** (`op://`).                                               |
 | 10  | [Observability, audit & MCP security](./observability-governance.md) · [zh](./observability-governance.zh.md) | Audit/retention/security | Governance/audit is **ahead** (free vs Langfuse's paywall); borrow **MCP tool-pinning** (mcp-scan).                                                                   |
-| 11  | [Agent evaluation](./agent-evaluation.md) · [zh](./agent-evaluation.zh.md)                                    | Eval (ADR-019/017)       | **Correction: the flywheel shipped** (ADR-019 accepted, `evals/` exists); borrow **LLM-as-judge**.                                                                    |
+| 11  | [Agent evaluation](./agent-evaluation.md) · [zh](./agent-evaluation.zh.md)                                    | Eval (flywheel / harness) | **Correction: the flywheel shipped** (the eval-flywheel ADR is accepted, `evals/` exists); borrow **LLM-as-judge**.                                                   |
 | 12  | [Memory systems](./memory-systems-landscape.md) · [zh](./memory-systems-landscape.zh.md)                      | Memory (007)             | _Parallel session._ Field splits file-truth vs vector-truth; Coffer is a deliberate hybrid.                                                                           |
 | 13  | [Platform-level competitors](./platform-competitors.md) · [zh](./platform-competitors.zh.md)                  | Whole-product (re-sweep) | **Blind-spot fix (2026-06-20):** the prior 12 reports missed cc-switch (~105k) + the whole Chinese ecosystem; no incumbent covers Coffer's full 10-capability matrix. |
 
@@ -111,7 +111,7 @@ note it's still pre-GA).
 
 - **KB** exposes **four read-only MCP tools** (list / search / grep / read), not a
   single question-answering entry point.
-- **Eval is not a blueprint** — ADR-019 is Accepted (2026-06-14) and a working
+- **Eval is not a blueprint** — the eval-flywheel ADR is Accepted (2026-06-14) and a working
   local-first `evals/` harness has shipped (capture → curate → golden → CI-gate).
 
 ## Coverage note

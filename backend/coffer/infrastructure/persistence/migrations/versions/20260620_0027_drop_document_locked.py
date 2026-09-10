@@ -4,7 +4,7 @@ Revision ID: 0027
 Revises: 0026
 Create Date: 2026-06-20
 
-The per-document co-management lock (ADR-028 pillar 3) is removed: KB
+The per-document co-management lock (pillar 3 of co-managed documents) is removed: KB
 documents are always writable by humans and agents, with the F01 audit
 trail plus vault backup as the safety net instead of an opt-out lock.
 This drops the additive ``locked`` column added in 0025. The column lived

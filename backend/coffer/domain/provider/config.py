@@ -3,7 +3,7 @@
 Value-level validation only (types, well-formedness). No I/O. A connection is a
 credentialed endpoint: ``{protocol, base_url, credential_ref}``. The MODEL it
 runs is NOT stored here — it is chosen at the point of use (per-agent binding,
-the internal-engine selector, the chat surface), per spec 011 amendment E1/E3.
+the internal-engine selector, the chat surface), per spec provider-switching amendment E1/E3.
 
 ``protocol`` is the upstream wire the endpoint speaks, detected at create time
 (``anthropic`` / ``openai`` / ``ollama`` / ``unknown``); it drives model
@@ -152,7 +152,7 @@ class ProviderConfig(BaseModel):
 class ResolvedConnection:
     """A connection paired with the model to run on it.
 
-    The model lives apart from the connection (spec 011 E3), so the two travel
+    The model lives apart from the connection (spec provider-switching E3), so the two travel
     together when Coffer's internal engine builds a chat model: the connection
     supplies the endpoint + protocol + credential, the ``model`` is resolved
     separately (the internal-engine selector, the per-agent binding, …).

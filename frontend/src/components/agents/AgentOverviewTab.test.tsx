@@ -116,7 +116,7 @@ beforeEach(() => {
   useActivateMock.mockReturnValue({ mutate: activateMutate, isPending: false });
   useUseBuiltinMock.mockReturnValue({ mutate: useBuiltinMutate, isPending: false });
   // The model dropdown is populated by introspecting the connection (the
-  // connection no longer carries a model — spec 011 E3); resolve its catalogue.
+  // connection no longer carries a model — spec provider-switching E3); resolve its catalogue.
   useListMock.mockReturnValue({
     mutate: (_probe: unknown, opts?: { onSuccess?: (r: { models: string[] }) => void }) =>
       opts?.onSuccess?.({ models: ["claude-opus-4-8", "claude-haiku-4-5"] }),
@@ -156,7 +156,7 @@ describe("AgentOverviewTab", () => {
   });
 
   acceptance(
-    "011-provider-switching",
+    "provider-switching",
     "the agent's model picker offers a fixed list without free-form entry",
     () => {
       useProvidersMock.mockReturnValue({ data: [makeConn({ is_active: true })] });

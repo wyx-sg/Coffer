@@ -1,5 +1,5 @@
 // frontend/src/lib/api/providers.ts — typed fetch helpers for /api/v1/providers/*
-// Hand-written wire types matching specs/011-provider-switching/contracts/api.openapi.yaml
+// Hand-written wire types matching specs/provider-switching/contracts/api.openapi.yaml
 // and backend/coffer/surfaces/http/provider_schemas.py.
 
 import { getCofferBaseUrl, getCofferToken } from "../auth";
@@ -18,7 +18,7 @@ export type Protocol = "anthropic" | "openai" | "ollama" | "unknown";
 export type AgentType = "claude_code" | "codex";
 
 /**
- * Chat agent_key → the protocol it speaks (ADR-032 projection targets). Shared by
+ * Chat agent_key → the protocol it speaks (provider-switching projection targets). Shared by
  * the chat ModelPicker and the agent Overview connection picker so both map an
  * agent to its compatible connections the same way. `ollama` is internal-only
  * (never projected to an agent), so it is not a value here.

@@ -27,7 +27,7 @@ _STATUS: dict[str, int] = {
     "GENERIC_CREATE_NOT_ALLOWED": 409,
     "UNKNOWN_KIND": 400,
     "CONFIG_INVALID": 422,
-    "SCOPE_INVALID": 422,  # ADR-045 machine x agent activation scope
+    "SCOPE_INVALID": 422,  # machine x agent activation scope (ADR per-agent-resource-scope)
     "CREDENTIAL_MISSING": 400,
     "CREDENTIAL_IN_USE": 409,
     "CREDENTIAL_LOCKED": 503,
@@ -50,10 +50,10 @@ _STATUS: dict[str, int] = {
     "BAD_REQUEST": 400,
     "NOT_FOUND": 404,
     "FORBIDDEN": 403,
-    # spec 005-skill-manager
+    # spec skill-manager
     "SKILL_INVALID": 422,
     "TARGET_CONFLICT": 409,
-    # agent workspace (specs 004/005 amendment)
+    # agent workspace (specs agent-registry/skill-manager amendment)
     "MCP_ENTRY_NOT_FOUND": 404,
     "PLUGIN_NOT_FOUND": 404,
     "UNMANAGED_SKILL_NOT_FOUND": 404,
@@ -64,36 +64,36 @@ _STATUS: dict[str, int] = {
     "AGENT_CONFIG_PARSE_ERROR": 422,
     "MCP_INSTALL_UNSUPPORTED": 422,
     "UNMANAGED_SKILL_INVALID": 422,
-    "SKILL_OUT_OF_SCOPE": 422,  # ADR-045 machine x agent activation scope
-    # knowledge_base kind (spec 006)
+    "SKILL_OUT_OF_SCOPE": 422,  # activation scope (ADR per-agent-resource-scope)
+    # knowledge_base kind (spec knowledge)
     "KB_NOT_FOUND": 404,
     "DOCUMENT_NOT_FOUND": 404,
     "INGEST_REJECTED": 400,  # `_status_for` refines this by reason
     "ENGINE_UNAVAILABLE": 503,
     "RECONVERSION_BLOCKED": 409,
     "GREP_PATTERN_INVALID": 400,
-    # memory kind (spec 007)
+    # memory kind (spec knowledge)
     "MEMORY_STORE_NOT_FOUND": 404,
     "MEMORY_STORE_MERGE_INVALID": 400,
     "MEMORY_NOT_FOUND": 404,
     "MEMORY_REJECTED": 422,  # empty / too-long fact rejected at the boundary
     "SCOPE_UNRESOLVED": 400,
     "EMBEDDING_UNAVAILABLE": 503,
-    # agent chat (spec 008)
+    # agent turns (spec channels)
     "CONVERSATION_NOT_FOUND": 404,
     "TURN_IN_PROGRESS": 409,
     "UNKNOWN_AGENT": 400,
     "AGENT_CONFIG_REJECTED": 400,
-    # channels (spec 009)
+    # channels (spec channels)
     "CHANNEL_NOT_PAIRED": 409,
     "CHANNEL_NOT_RUNNING": 409,
     "CHANNEL_SEND_FAILED": 502,
-    # vault export/import (spec 010, ADR-016)
+    # vault export/import (spec vault-export-import, ADR: vault-export-import)
     "SYNC_BUNDLE_TOO_NEW": 409,
     "SYNC_BUNDLE_INVALID": 422,
     "SYNC_SERIALIZATION_INVALID": 422,
     "MASTER_KEY_FILE_INVALID": 422,
-    # provider switching (spec 011)
+    # provider switching (spec provider-switching)
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": 422,
     "NO_ACTIVE_PROVIDER": 404,
 }

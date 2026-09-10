@@ -1,7 +1,7 @@
 """Substrate-facing error names.
 
 The canonical error classes live in :mod:`coffer.domain.errors` (one hierarchy
-for the whole app). The data-models for specs 006/007 reference some of them
+for the whole app). The knowledge-layer data models reference some of them
 under ``domain/knowledge/errors`` and ``domain/memory``; this module re-exports
 the substrate-relevant ones so importers can use the documented path.
 """

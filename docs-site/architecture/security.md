@@ -44,7 +44,7 @@ Secrets are stored as **Fernet ciphertext** in the `credentials` table of `~/.co
 
 Envelope encryption means there is exactly one piece of secret material outside the database: the Fernet **master key**. It lives in **exactly one** of two places:
 
-- **`~/.coffer/master.key`** — a `0600` file beside the database. This is the **default**: zero keychain prompts. (Why: macOS pins keychain ACLs to the binary's cdhash, so every rebuild of the unsigned daemon re-prompted for every secret. A file-backed master key removes the prompts entirely. See [ADR-015](/reference/adr/ADR-015-envelope-encrypted-credential-store).)
+- **`~/.coffer/master.key`** — a `0600` file beside the database. This is the **default**: zero keychain prompts. (Why: macOS pins keychain ACLs to the binary's cdhash, so every rebuild of the unsigned daemon re-prompted for every secret. A file-backed master key removes the prompts entirely. See [Envelope-Encrypted Credentials](/reference/adr/envelope-encrypted-credential-store).)
 - **The OS keychain** (service `coffer`, ref `master-key`) — opt-in hardening via **Settings → Security** or `coffer credentials storage --set keychain`. macOS may prompt once per daemon start. This is the mode that defends against offline exfiltration of `~/.coffer/`.
 
 Resolution is **file-first**: the daemon looks for the file before the keychain. This makes relocation **crash-safe** — `relocate` moves only the master key and removes the old copy **last**, so an interrupted move always resolves back to a working state. The ciphertext in the `credentials` table is never touched by a relocation (the key moves; the data stays); switching storage modes does not re-encrypt.
@@ -67,7 +67,7 @@ The `StdioTransport` config schema has a second layer of defence: its `env` fiel
 
 ## Channels & the public-reachable surface
 
-The loopback-only invariant says a public-reachable surface runs as a separate process limited to signed callback paths. The **SeaTalk callback listener** is the concrete instantiation of that rule (spec 009, [ADR-014](/reference/adr/ADR-014-channel-adapter-framework)). SeaTalk delivers events only by public webhook, so it is the one place Coffer accepts inbound traffic that originated off the machine — and it does so through a process the daemon never lets the network reach.
+The loopback-only invariant says a public-reachable surface runs as a separate process limited to signed callback paths. The **SeaTalk callback listener** is the concrete instantiation of that rule (spec channels, [Channel Adapter Framework](/reference/adr/channel-adapter-framework)). SeaTalk delivers events only by public webhook, so it is the one place Coffer accepts inbound traffic that originated off the machine — and it does so through a process the daemon never lets the network reach.
 
 - **Separate process, never the daemon.** The listener is a daemon-spawned child that runs only while a SeaTalk channel is enabled. It serves exactly one route, `POST /seatalk/{channel}`, on a loopback port (default `8787`, overridable via `COFFER_CALLBACK_PORT`). It holds no other state and can reach nothing but the daemon. The daemon itself stays loopback-only — it is never exposed.
 - **Signature verification.** Every callback POST carries a `Signature` header that SeaTalk computes as `sha256(raw_body + signing_secret)` (lowercase hex). The listener recomputes the same digest from the raw body and the channel's signing secret and compares it in constant time (`hmac.compare_digest`). An empty secret or empty signature never verifies — an empty secret would collapse the MAC to `sha256(body)`, computable by anyone. The platform's `event_verification` challenge is answered inline; every other valid event is forwarded to the daemon over loopback carrying the daemon token.
@@ -78,7 +78,7 @@ Secrets reach the listener the same way upstream MCP subprocesses get theirs: th
 
 ## Export security
 
-Vault export and import ([ADR-016](/reference/adr/ADR-016-vault-export-import)) move vault state between machines as a **directory the user names and carries**. Its security rests on keeping the secret material out of that directory:
+Vault export and import ([Vault Export and Import](/reference/adr/vault-export-import)) move vault state between machines as a **directory the user names and carries**. Its security rests on keeping the secret material out of that directory:
 
 - **No network egress at all.** Export and import touch the local filesystem only — no remote, no git subprocess, no background replication. Whatever carries the directory (`scp`, a USB drive, the user's own git repo) is outside Coffer, using the user's own tools and credentials.
 - **Credentials are opt-in.** An export omits credential material entirely unless `--with-credentials` is given, because an export directory is easy to leave somewhere careless.

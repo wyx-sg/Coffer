@@ -1,4 +1,4 @@
-"""Subprocess transport seam for ``codex app-server`` (spec 008, T2).
+"""Subprocess transport seam for ``codex app-server`` (spec channels, T2).
 
 Wraps the long-lived ``codex app-server`` process behind the
 :class:`CodexAppServerSession` protocol so the adapter drives a

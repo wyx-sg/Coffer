@@ -10,7 +10,7 @@ from .conftest import ChannelEnv, inbound, wait_until
 
 
 @pytest.mark.acceptance(
-    spec="009-channels", scenario="a group member who is not the paired sender is ignored"
+    spec="channels", scenario="a group member who is not the paired sender is ignored"
 )
 async def test_message_from_a_different_sender_is_ignored(env: ChannelEnv) -> None:
     _resource, adapter = await env.paired_channel(sender_id="u-owner")

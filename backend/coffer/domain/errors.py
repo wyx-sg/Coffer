@@ -50,7 +50,7 @@ class ConfigValidationError(CofferError):
 
 
 class ScopeInvalidError(CofferError):
-    """A machine x agent activation-scope payload failed validation (ADR-045):
+    """A machine x agent activation-scope payload failed validation (ADR per-agent-resource-scope):
     either the kind doesn't declare any ``scope_axes`` (doesn't support scope
     at all) or the payload's shape/axes don't match what it does declare.
 
@@ -186,7 +186,8 @@ class FsPathNotOpenable(CofferError):  # noqa: N818
 
     Surfaces map this to 400 — the caller-supplied path is invalid or the OS
     launcher could not be spawned. The daemon acts only on an existing absolute
-    path; it never creates anything (spec 004-agent-registry FR-039, ADR-033).
+    path; it never creates anything (spec agent-registry FR-039,
+    ADR: daemon-proxies-os-file-actions).
     """
 
     code = "FS_PATH_NOT_OPENABLE"
@@ -239,7 +240,7 @@ class DatabaseSchemaTooNew(CofferError):  # noqa: N818
         self.db_path = db_path
 
 
-# --- knowledge_base kind (spec 006) -----------------------------------------
+# --- knowledge_base kind (spec knowledge) -----------------------------------
 # Canonical classes live in coffer.domain.kb_errors (split for the file-size
 # limit); re-exported here so the coffer.domain.errors.X import paths keep working.
 from coffer.domain.kb_errors import (  # noqa: E402, I001
@@ -252,7 +253,7 @@ from coffer.domain.kb_errors import (  # noqa: E402, I001
 )
 
 
-# --- memory kind (spec 007) -------------------------------------------------
+# --- memory kind (spec knowledge) -------------------------------------------------
 
 
 class MemoryStoreNotFound(CofferError):  # noqa: N818
@@ -317,8 +318,8 @@ class EmbeddingUnavailable(CofferError):  # noqa: N818
         self.detail = detail
 
 
-# agent chat (spec 008): re-exported from coffer.domain.chat.errors (split for
-# the file-size limit) so the coffer.domain.errors.X import paths keep working.
+# agent chat (spec channels): re-exported from coffer.domain.chat.errors (split
+# for the file-size limit) so the coffer.domain.errors.X import paths keep working.
 from coffer.domain.chat.errors import (  # noqa: E402, I001
     AgentConfigRejected as AgentConfigRejected,
     ConversationNotFound as ConversationNotFound,

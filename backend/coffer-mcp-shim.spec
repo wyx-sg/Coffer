@@ -3,7 +3,7 @@
 #
 # Output: dist/coffer-mcp-shim (single-file executable)
 # Shipped in coffer-cli-<triple>.tar.gz; a frozen daemon deploys it into
-# ~/.coffer/bin/ at startup (spec 001 FR-026) so MCP clients can launch it.
+# ~/.coffer/bin/ at startup (spec mcp-gateway FR-026) so MCP clients can launch it.
 
 # -*- mode: python ; coding: utf-8 -*-
 
@@ -29,7 +29,7 @@ a = Analysis(
     runtime_hooks=[],
     excludes=[
         # Heavy ML stack (torch/mlx/numba/scipy/…). No coffer source imports
-        # any of it: transcription is remote (spec 009 FR-022), so nothing
+        # any of it: transcription is remote (spec channels FR-022), so nothing
         # local decodes or runs a model. The exclude stays as a guard — a
         # transitive pull would inflate every binary from ~95 MB to ~260 MB,
         # and torch is fragile under PyInstaller.

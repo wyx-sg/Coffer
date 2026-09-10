@@ -2,7 +2,7 @@
 
 The turn platform — conversations, the agent-provider registry, the turn
 orchestrator, the model catalogue — was first built for the web chat page and
-outlived it: IM channels (spec 009) are now its only client, and the provider
+outlived it: IM channels (spec channels) are now its only client, and the provider
 editors reuse the introspection service. These accessors were extracted from
 the kind-agnostic ``surfaces.http.dependencies`` to keep that module under its
 file-size budget, and are re-exported from there so the long-standing import

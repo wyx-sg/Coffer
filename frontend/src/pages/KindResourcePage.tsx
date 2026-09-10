@@ -22,7 +22,7 @@ interface KindResourcePageProps {
 }
 
 /**
- * Kind-scoped resource landing page. The 002-ui-shell sidebar gives each
+ * Kind-scoped resource landing page. The ui-shell sidebar gives each
  * resource kind its own nav entry; this renders the list + add CTA for a
  * single kind, reusing that kind's registered Card via ResourceListView.
  * Knowledge bases and memory stores both render through this component.

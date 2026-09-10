@@ -1,4 +1,4 @@
-"""One-time codes that hand a browser the API token (spec 001 FR-025).
+"""One-time codes that hand a browser the API token (spec mcp-gateway FR-025).
 
 ``coffer open`` has the token — it can read ``~/.coffer/daemon.json``. The
 browser it launches cannot. Something has to carry the credential across, and

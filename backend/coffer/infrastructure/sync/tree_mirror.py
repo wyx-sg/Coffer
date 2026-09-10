@@ -1,4 +1,4 @@
-"""Tree mirroring for export bundles (spec 010).
+"""Tree mirroring for export bundles (spec vault-export-import).
 
 ``_mirror_tree`` converges a destination tree on a source tree diff-aware in
 both directions: live→bundle on export (deleting what the vault no longer

@@ -8,8 +8,9 @@ from datetime import datetime
 from typing import Literal
 
 #: The retrieval modes the substrate supports. ``hybrid`` fuses ``keyword`` and
-#: ``vector`` via reciprocal rank fusion (ADR-012); it degrades to keyword-only,
-#: flagged, when no embedding provider is available (exactly like ``vector``).
+#: ``vector`` via reciprocal rank fusion (ADR files-as-truth-sqlite-retrieval);
+#: it degrades to keyword-only, flagged, when no embedding provider is
+#: available (exactly like ``vector``).
 RetrievalMode = Literal["grep", "keyword", "vector", "hybrid"]
 RETRIEVAL_MODES: tuple[RetrievalMode, ...] = ("grep", "keyword", "vector", "hybrid")
 

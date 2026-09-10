@@ -2,7 +2,7 @@
 
 Owned by an MCPGatewaySession (T054+). Each session has its own
 SubprocessSupervisor so concurrent client sessions don't share upstream
-subprocess state ([ADR-005](../../../../docs/decisions/ADR-005-session-subprocess-model.md)).
+subprocess state (ADR session-subprocess-model).
 """
 
 from __future__ import annotations
@@ -157,7 +157,7 @@ class SubprocessSupervisor:
             if not resource.enabled:
                 entry.state = UpstreamHealth.UNHEALTHY
                 raise UpstreamUnavailable(f"{server_name!r} is disabled")
-            # ADR-045 scope is NOT enforced here: the supervisor has no
+            # Per-agent scope is NOT enforced here: the supervisor has no
             # session context, and a server's per-agent scope is enforced at
             # the gateway (the seam that knows which agent is asking).
 

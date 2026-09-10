@@ -68,7 +68,7 @@ def _json_line(level: str, event: str, *, at: datetime | None = None) -> str:
 
 
 @pytest.mark.acceptance(
-    spec="002-ui-shell", scenario="an agent reads recent changes and failures in one call"
+    spec="ui-shell", scenario="an agent reads recent changes and failures in one call"
 )
 @pytest.mark.asyncio
 async def test_one_call_answers_from_both_records(tmp_path) -> None:

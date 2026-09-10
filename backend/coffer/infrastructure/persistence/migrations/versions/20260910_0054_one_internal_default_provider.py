@@ -1,4 +1,4 @@
-"""enforce the single internal-default provider invariant (spec 011 FR-021)
+"""enforce the single internal-default provider invariant (spec provider-switching FR-021)
 
 FR-021 says at most one connection carries ``internal_default=true`` — it names
 the connection Coffer's own LLM engine runs on, and "the internal engine" is

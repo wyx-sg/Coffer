@@ -1,7 +1,7 @@
 """Contract test: runtime OpenAPI dump conforms to the published wire shape.
 
 Compares the runtime FastAPI schema against the hand-written
-`specs/001-mcp-gateway/contracts/api.openapi.yaml` for the surfaces we
+`specs/mcp-gateway/contracts/api.openapi.yaml` for the surfaces we
 have already implemented. Additional endpoints are verified as their tasks land.
 """
 
@@ -11,9 +11,7 @@ import yaml
 
 from coffer.main import app
 
-_OPENAPI_PATH = (
-    Path(__file__).resolve().parents[3] / "specs/001-mcp-gateway/contracts/api.openapi.yaml"
-)
+_OPENAPI_PATH = Path(__file__).resolve().parents[3] / "specs/mcp-gateway/contracts/api.openapi.yaml"
 
 
 def _contract_info() -> dict:

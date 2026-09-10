@@ -74,7 +74,7 @@ class DocumentOps(ABC):
     ) -> Document:
         """Ingest one uploaded file: size check → convert → clean → frontmatter →
         write ``inbox/``+``.raw/`` → reindex. A re-upload is matched to an
-        existing document by filename (spec 007 FR-062): identical bytes are a no-op, a
+        existing document by filename (spec knowledge FR-062): identical bytes are a no-op, a
         changed file updates that document in place (``replace``).
 
         ``source_path`` is the external original's absolute path; it is recorded

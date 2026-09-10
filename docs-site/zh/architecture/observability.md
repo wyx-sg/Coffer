@@ -79,4 +79,4 @@ daemon 的每个 HTTP 响应还携带一个带有请求级别 UUID 的 `X-Coffer
 
 - [审计与问责](/zh/architecture/audit) — 审计日志、调用日志和保留策略
 - [架构参考](/zh/reference/project/architecture) — 跨层关注点表中的错误和日志条目
-- [Spec 001 参考](/zh/reference/specs/001-mcp-gateway/spec) — token 鉴权和 `X-Coffer-Actor` header 语义
+- [MCP Gateway 规范参考](/zh/reference/specs/mcp-gateway/spec) — token 鉴权和 `X-Coffer-Actor` header 语义

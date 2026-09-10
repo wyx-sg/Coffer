@@ -1,4 +1,4 @@
-"""memory kind reuses the unified substrate (spec 007-memory)
+"""memory kind reuses the unified substrate (spec knowledge)
 
 Revision ID: 0007
 Revises: 0006

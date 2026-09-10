@@ -14,7 +14,7 @@ The requirement, stated precisely in the spec: a user on a clean machine with no
 
 Coffer used to ship a second tier — a Tauri 2 desktop application that embedded the web UI in a native window. It was removed, and the judgement was about **the operating cost of every update**, not about lines of code.
 
-Every change to the product had to travel through a rebuild *and* a reinstall before it could be seen, and the built artifact kept drifting away from source. Two incidents are on the record: a build produced before fetching shipped an app that was quietly running stale code; and because the app was built from a separately pinned directory, UI bug reports had to be re-verified against `main` before they could be trusted at all. Neither failure mode survives in the web form. Restart the daemon, hard-refresh the browser, and you are looking at the current code.
+Every change to the product had to travel through a rebuild _and_ a reinstall before it could be seen, and the built artifact kept drifting away from source. Two incidents are on the record: a build produced before fetching shipped an app that was quietly running stale code; and because the app was built from a separately pinned directory, UI bug reports had to be re-verified against `main` before they could be trusted at all. Neither failure mode survives in the web form. Restart the daemon, hard-refresh the browser, and you are looking at the current code.
 
 What the desktop shell genuinely owned — serving the UI, and deploying helper binaries onto the user's machine — moved into the daemon, which is documented below.
 
@@ -51,12 +51,12 @@ Alongside these, the release archive carries the **runtime helper binaries** the
 
 Alembic migration files ship as data files inside the daemon binary via PyInstaller's `datas` mechanism. On first launch, the daemon runs `alembic upgrade head` against a fresh database before accepting connections — the end-user gets correct schema creation with no separate step.
 
-The daemon binary also bundles the heavier knowledge and chat dependencies (specs 007/008): `sqlite_vec` for the vector index, `markitdown` for document conversion, `openai` for embeddings, and the `langchain*` / `langgraph` chat-agent stack. These are imported lazily inside functions, so PyInstaller's static analysis cannot trace them — `coffer-daemon.spec` declares them explicitly as hidden imports so the frozen daemon can convert documents, embed, run vector retrieval, and drive the built-in chat agent.
+The daemon binary also bundles the heavier knowledge and chat dependencies (the knowledge and chat specs): `sqlite_vec` for the vector index, `markitdown` for document conversion, `openai` for embeddings, and the `langchain*` / `langgraph` chat-agent stack. These are imported lazily inside functions, so PyInstaller's static analysis cannot trace them — `coffer-daemon.spec` declares them explicitly as hidden imports so the frozen daemon can convert documents, embed, run vector retrieval, and drive the built-in chat agent.
 
-The built web UI (spec 002) also ships as data files inside the daemon binary, which is what lets the frozen daemon serve the UI from its own origin.
+The built web UI (spec ui-shell) also ships as data files inside the daemon binary, which is what lets the frozen daemon serve the UI from its own origin.
 
 ::: warning Bundle verification — sqlite-vec native extension
-`sqlite-vec` ships its loadable native extension (`vec0.dylib` / `vec0.so` / `vec0.dll`) as **package data**, not a Python submodule, so `collect_submodules` never captures it — `coffer-daemon.spec` adds it via `collect_data_files("sqlite_vec")`. If this data file is missing from a frozen build, the daemon cannot load the `vec0` extension and vector retrieval silently degrades to keyword-only (`VecIndex.available()` swallows the load failure). The release smoke test must therefore treat "the bundled daemon can load `vec0`" as an explicit bundle-verification item (per [ADR-012](/reference/adr/ADR-012-files-as-truth-sqlite-retrieval) and [ADR-008](/reference/adr/ADR-008-distribution-pyinstaller)).
+`sqlite-vec` ships its loadable native extension (`vec0.dylib` / `vec0.so` / `vec0.dll`) as **package data**, not a Python submodule, so `collect_submodules` never captures it — `coffer-daemon.spec` adds it via `collect_data_files("sqlite_vec")`. If this data file is missing from a frozen build, the daemon cannot load the `vec0` extension and vector retrieval silently degrades to keyword-only (`VecIndex.available()` swallows the load failure). The release smoke test must therefore treat "the bundled daemon can load `vec0`" as an explicit bundle-verification item (per [Files as Truth](/reference/adr/files-as-truth-sqlite-retrieval) and [PyInstaller Distribution](/reference/adr/distribution-pyinstaller)).
 :::
 
 ::: tip Why PyInstaller, not alternatives
@@ -90,7 +90,7 @@ The daemon serves the built web UI itself, as static files, at its own loopback 
 3. It opens the browser at the daemon's origin with that code in the URL **fragment**.
 4. The page exchanges the code for the API token and keeps the token in `localStorage`.
 
-The token itself never appears in a URL. Putting it there would write it into browser history, which contradicts the loopback-plus-token posture of spec 001 (FR-012 / FR-013). The exchange code is single-use and expires within about a minute, so its presence in history is inert.
+The token itself never appears in a URL. Putting it there would write it into browser history, which contradicts the loopback-plus-token posture of spec mcp-gateway (FR-012 / FR-013). The exchange code is single-use and expires within about a minute, so its presence in history is inert.
 
 Because the UI is same-origin with the API, CORS is **same-origin by default**. The Vite dev-server origins remain available behind the existing `COFFER_DEV_CORS` opt-in for frontend development. See [Security](/architecture/security) for the full posture.
 
@@ -124,5 +124,5 @@ xattr -d com.apple.quarantine ~/coffer/coffer ~/coffer/coffer-daemon ~/coffer/co
 
 ## See also
 
-- [ADR-008: Distribution — PyInstaller-bundled daemon, shim and CLI](/reference/adr/ADR-008-distribution-pyinstaller) — decision record, rejected alternatives, and revision history
-- [Spec 001 reference](/reference/specs/001-mcp-gateway/spec) — FR-022 single-tier archive, FR-023 aggregated `SHA256SUMS`, FR-024 daemon-served web UI, FR-025 `coffer open`, FR-026 frozen-start binary deployment
+- [Distribution — PyInstaller-bundled daemon, shim and CLI](/reference/adr/distribution-pyinstaller) — decision record, rejected alternatives, and revision history
+- [MCP Gateway spec reference](/reference/specs/mcp-gateway/spec) — FR-022 single-tier archive, FR-023 aggregated `SHA256SUMS`, FR-024 daemon-served web UI, FR-025 `coffer open`, FR-026 frozen-start binary deployment

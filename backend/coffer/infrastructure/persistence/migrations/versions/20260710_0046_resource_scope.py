@@ -1,4 +1,4 @@
-"""add resources.scope_json (framework-level machine x agent scope, ADR-045)
+"""add resources.scope_json (framework-level machine x agent activation scope)
 
 Revision ID: 0046
 Revises: 0045

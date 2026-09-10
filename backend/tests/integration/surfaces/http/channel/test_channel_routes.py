@@ -1,4 +1,4 @@
-"""Channel routes (spec 009) over a REAL ChannelService + SQLite resources.
+"""Channel routes (spec channels) over a REAL ChannelService + SQLite resources.
 
 The router is mounted on a minimal app with the shared error handlers; the
 service is wired over a real ResourceService/ChannelPeerRepo on a temp
@@ -201,7 +201,7 @@ async def test_status_telegram_defaults(ctx: _Ctx) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="channel status reports runtime, pairing, and callback details",
 )
 async def test_status_reports_runtime_pairing_and_callback_details(ctx: _Ctx) -> None:
@@ -233,7 +233,7 @@ async def test_status_reports_runtime_pairing_and_callback_details(ctx: _Ctx) ->
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario=(
         "the management surface lists each Coffer-hosted channel "
         "with status, owner, agent, and health"

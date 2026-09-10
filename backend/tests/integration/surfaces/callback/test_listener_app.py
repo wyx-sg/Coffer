@@ -86,7 +86,7 @@ async def test_verification_handshake_echoes_challenge_without_forwarding(
     assert stub.received == []  # answered locally, never forwarded
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="a signed seatalk event reaches the channel")
+@pytest.mark.acceptance(spec="channels", scenario="a signed seatalk event reaches the channel")
 async def test_signed_event_is_forwarded_to_the_daemon_with_token(
     listener: tuple[httpx.AsyncClient, _StubDaemon],
 ) -> None:
@@ -107,7 +107,7 @@ async def test_signed_event_is_forwarded_to_the_daemon_with_token(
     assert actor == "system"
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="a tampered seatalk event is rejected")
+@pytest.mark.acceptance(spec="channels", scenario="a tampered seatalk event is rejected")
 async def test_tampered_event_is_rejected_and_never_forwarded(
     listener: tuple[httpx.AsyncClient, _StubDaemon],
 ) -> None:

@@ -1,5 +1,5 @@
 """Contract test: the app's generated OpenAPI for the channel routes
-structurally matches specs/009-channels/contracts/api.openapi.yaml.
+structurally matches specs/channels/contracts/api.openapi.yaml.
 
 Mirrors test_chat_openapi.py: every path declared in the 009 yaml must be
 served, and every schema component must exist with at least the yaml's
@@ -17,7 +17,7 @@ import yaml
 from coffer.main import app
 
 _CHANNEL_OPENAPI_PATH = (
-    Path(__file__).resolve().parents[3] / "specs/009-channels/contracts/api.openapi.yaml"
+    Path(__file__).resolve().parents[3] / "specs/channels/contracts/api.openapi.yaml"
 )
 
 
@@ -29,7 +29,7 @@ def generated_schema() -> dict[str, Any]:
 
 @pytest.fixture(scope="module")
 def spec_doc() -> dict[str, Any]:
-    """Parse specs/009-channels/contracts/api.openapi.yaml once per module."""
+    """Parse specs/channels/contracts/api.openapi.yaml once per module."""
     return yaml.safe_load(_CHANNEL_OPENAPI_PATH.read_text())  # type: ignore[no-any-return]
 
 

@@ -1,6 +1,6 @@
 // frontend/src/pages/settings/SyncMasterKeyCard.tsx
 //
-// Out-of-band master-key transfer (spec 010), using the browser's own file
+// Out-of-band master-key transfer (spec vault-export-import), using the browser's own file
 // mechanisms rather than a native dialog driven by the daemon:
 //
 //   Export → ask the daemon for the key MATERIAL, wrap it in a Blob and click a

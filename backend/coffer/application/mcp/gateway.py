@@ -11,7 +11,7 @@ Invocation handlers (tools/call, resources/read, prompts/get) live in
 Server-initiated request plumbing (T-061 sampling, T-062 roots) lives in
 `gateway_server_requests` for the same reason. The pure envelope-parsing
 helpers (launch-cwd extraction, upstream-notification method/params parsing)
-live in `gateway_parsing`. The ADR-045 per-agent scope filter for the
+live in `gateway_parsing`. The per-agent scope filter for the
 enabled-server list lives in `gateway_scope`.
 
 For the spec's "upstream tool list changes mid-session" scenario, the
@@ -109,7 +109,7 @@ class MCPGatewaySession:
         self._invocations = invocations
         self._downstream_sink = downstream_sink
         self._clock = clock or (lambda: datetime.now(tz=UTC))
-        # ADR-045: the session's bound agent identity, set
+        # Per-agent scope: the session's bound agent identity, set
         # from the shim's self-reported ``--agent`` name on the ``initialize``
         # handshake (params._meta["coffer/agent"], see handle_initialize).
         # None when the shim was launched without one (pre-Task-9 install, or
@@ -121,7 +121,7 @@ class MCPGatewaySession:
         # daemon's lifetime and the on_delete hook walks dead ones).
         self._on_dispose = on_dispose
         self._builtin = builtin_tools or BuiltinToolRegistry()
-        # ADR-046: how much of the aggregated catalogue this session lists.
+        # Tool tiering: how much of the aggregated catalogue this session lists.
         # Resolved once per session; None means "read the environment".
         self._tiering = tiering or load_tiering_config()
         # Upstream tools left unlisted by the most recent tools/list, read by
@@ -142,7 +142,7 @@ class MCPGatewaySession:
         # ensure_future() task can be garbage-collected mid-flight, silently
         # dropping an upstream notification. Hold strong refs until done.
         self._notification_tasks: set[asyncio.Task[None]] = set()
-        # ADR-046: servers whose discovery failed on the last tools/list. The
+        # Tool tiering: servers whose discovery failed on the last tools/list. The
         # client caches tools/list and no list_changed can arrive from a server
         # that never connected, so the tracker retries them itself.
         self._degraded = DegradedTracker(discovery, self._send_downstream)
@@ -175,11 +175,11 @@ class MCPGatewaySession:
         # requests appropriately (T-061: sampling capability check).
         self._client_capabilities = params.get("capabilities", {}) or {}
         self._session_cwd = _extract_cwd(params)
-        # ADR-045 agent axis (Task 9): the shim's self-reported `--agent`
+        # Scope's agent axis (Task 9): the shim's self-reported `--agent`
         # identity, when it stamped one (params._meta["coffer/agent"]).
         self._session_agent = _extract_agent(params)
         self._initialized = True
-        # ADR-046: the instructions field is the only channel into the client's
+        # Tool tiering: the instructions field is the only channel into the client's
         # system prompt. On the first handshake nothing has been listed yet, so
         # hidden_count is 0 and the tiering paragraph is omitted.
         return build_initialize_result(hidden_count=self.last_hidden_count)
@@ -238,7 +238,7 @@ class MCPGatewaySession:
 
     @property
     def degraded_servers(self) -> set[str]:
-        """Servers whose tools are missing from the last listing (ADR-046)."""
+        """Servers whose tools are missing from the last listing (tool tiering)."""
         return self._degraded.servers
 
     async def recover_degraded_now(self) -> bool:

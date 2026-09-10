@@ -137,14 +137,14 @@ def wire_chat(
     mcp_session_factory: Callable[[str], Any],
     credential_store: Any,
 ) -> MCPGatewaySession:
-    """Wire the agent-chat feature (spec 008) into the running app.
+    """Wire the agent-chat feature (spec channels) into the running app.
 
     Must be called **after** the ``BuiltinToolRegistry`` is fully populated
     (after knowledge, MCP, and skill wiring) so the ``coffer-builtin-agent``
     gateway session sees all built-in tools.
 
     Chat talks only to Coffer-managed agents (``claude_code`` / ``codex``); the
-    former ``builtin`` chat persona is retired (ADR-024).
+    former ``builtin`` chat persona is retired (ADR builtin-agent-is-internal-capability).
 
     Returns the long-lived ``MCPGatewaySession`` (the ``coffer-builtin-agent``
     session that backs Coffer's internal flows) so the caller (``_lifespan``)
@@ -212,7 +212,7 @@ def wire_chat(
     #      2. Codex's own model/list RPC, driven over the same app-server
     #         transport a turn uses;
     #      3. each CLI's config file, for the local choices only it knows about.
-    #    Needs the agent registry (spec 004), which wire_agent_and_skill_kinds
+    #    Needs the agent registry (spec agent-registry), which wire_agent_and_skill_kinds
     #    published before this call.
     model_catalogue = AgentModelCatalogueService(
         agents=get_agent_service(),

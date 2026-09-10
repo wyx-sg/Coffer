@@ -1,4 +1,4 @@
-// frontend/src/pages/SkillsPage.tsx — spec 005-skill-manager surface.
+// frontend/src/pages/SkillsPage.tsx — spec skill-manager surface.
 // Mirrors AgentsPage: PageHeader + welcome/loading/error/grid; the Add-skill
 // header action appears only once skills exist — the empty state's welcome
 // panel carries the Add call-to-action instead. Verification moved to per-row

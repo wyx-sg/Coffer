@@ -82,7 +82,7 @@ def _build_app(
     return app
 
 
-@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="store and reference a credential")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="store and reference a credential")
 @pytest.mark.asyncio
 async def test_set_credential_stores_value() -> None:
     fake = _FakeCredentialStore()
@@ -193,7 +193,7 @@ async def test_set_credential_requires_token() -> None:
     assert fake.store == {}
 
 
-@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="delete a credential frees the reference")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="delete a credential frees the reference")
 @pytest.mark.asyncio
 async def test_delete_credential_removes_value() -> None:
     fake = _FakeCredentialStore()

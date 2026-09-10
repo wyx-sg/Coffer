@@ -77,7 +77,7 @@ _TOOL_TURN = [
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="a clean success sends no completion summary",
 )
 async def test_supports_edit_creates_then_deletes_a_progress_message() -> None:
@@ -97,7 +97,7 @@ async def test_supports_edit_creates_then_deletes_a_progress_message() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="a clean success sends no completion summary",
 )
 async def test_without_edit_support_no_progress_traffic_is_sent() -> None:
@@ -127,7 +127,7 @@ async def test_summary_reports_duration_and_tokens() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="a turn that does not end normally sends a completion summary",
 )
 async def test_error_turn_ends_with_a_failed_summary() -> None:
@@ -153,7 +153,7 @@ async def test_interrupted_turn_ends_with_a_stopped_summary() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="channel progress lines describe each tool call from its input",
 )
 async def test_progress_line_describes_a_bash_call_from_its_input() -> None:
@@ -192,7 +192,7 @@ async def test_progress_line_uses_the_file_basename_for_a_read() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="the agent sends a file to the user via a reply marker",
 )
 async def test_reply_file_sentinel_uploads_and_is_stripped(tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -312,7 +312,7 @@ async def test_sentinel_path_with_spaces_is_delivered(tmp_path) -> None:  # type
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="SeaTalk outbound media is delivered into the originating thread",
 )
 async def test_media_returned_in_a_group_thread_is_uploaded_into_that_thread(
@@ -357,7 +357,7 @@ async def test_media_returned_in_a_group_thread_is_uploaded_into_that_thread(
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="reply text streams into the editable status message as it arrives",
 )
 async def test_reply_text_streams_into_the_status_message() -> None:
@@ -385,7 +385,7 @@ async def test_reply_text_streams_into_the_status_message() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="the streamed reply preview is clipped to the platform limit",
 )
 async def test_streamed_preview_is_clipped_to_the_platform_limit() -> None:
@@ -414,7 +414,7 @@ async def test_streamed_preview_is_clipped_to_the_platform_limit() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="a slow text-only reply streams into a status message",
 )
 async def test_slow_text_only_reply_opens_and_streams_a_status_message() -> None:
@@ -441,7 +441,7 @@ async def test_slow_text_only_reply_opens_and_streams_a_status_message() -> None
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="a fast text-only reply opens no status message",
 )
 async def test_fast_text_only_reply_opens_no_status_message() -> None:
@@ -468,7 +468,7 @@ async def test_fast_text_only_reply_opens_no_status_message() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="a supports_typing-only DM keeps the typing indicator alive during a long turn",
 )
 async def test_typing_heartbeat_re_sends_on_a_supports_typing_only_dm() -> None:
@@ -506,7 +506,7 @@ async def test_typing_heartbeat_re_sends_on_a_supports_typing_only_dm() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="a transport with no live-text surface posts no interim status message",
 )
 async def test_no_interim_signal_without_a_live_text_surface_in_a_group() -> None:
@@ -566,7 +566,7 @@ def _streaming_adapter(**kwargs: Any) -> FakeChannelAdapter:
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="a reply grows in place on a transport that streams but cannot edit",
 )
 async def test_streaming_transport_grows_one_message_instead_of_sending_fragments() -> None:

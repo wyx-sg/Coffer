@@ -1,11 +1,11 @@
-"""A user-supplied attachment referenced by local path (spec 009 — channel media).
+"""A user-supplied attachment referenced by local path (spec channels — channel media).
 
 The bytes live on disk (downloaded from the channel into a Coffer-managed cache),
 never inline in the chat DB — so conversation history stays small and the same
 reference works for any modality. Each agent adapter *materialises* the reference
 in its own native shape at send time: a vision agent inlines an image/document
 content block (base64 read from ``path``), a path-native agent (Codex) receives
-the path. See ADR-038.
+the path. See the channel-media ADR.
 """
 
 from __future__ import annotations

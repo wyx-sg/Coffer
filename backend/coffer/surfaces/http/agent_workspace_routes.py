@@ -1,4 +1,4 @@
-"""/api/v1/agents/{name}/mcp-entries and /plugins routes (spec 004 agent workspace).
+"""/api/v1/agents/{name}/mcp-entries and /plugins routes (spec agent-registry agent workspace).
 
 MCP entries + plugins in the agent's OWN config files, derived at read time —
 nothing is stored. Env/header VALUES never cross HTTP: listings expose key

@@ -164,7 +164,7 @@ async def test_engine_tier_is_capped_and_flagged_truncated():
     assert len(llm.calls) == MAX_ENGINE_PAIRS
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="merge scan proposes same-project stores")
+@pytest.mark.acceptance(spec="knowledge", scenario="merge scan proposes same-project stores")
 async def test_scan_proposes_provable_and_engine_judged_pairs_without_mutating():
     """One scan, both tiers: the provable pair is certain/remote (no engine
     call), the plausible pair carries the engine verdict, directions follow
@@ -196,7 +196,7 @@ async def test_scan_proposes_provable_and_engine_judged_pairs_without_mutating()
 
 
 @pytest.mark.acceptance(
-    spec="007-memory", scenario="merge scan degrades cleanly without an internal engine"
+    spec="knowledge", scenario="merge scan degrades cleanly without an internal engine"
 )
 async def test_no_model_scan_is_the_acceptance_degradation():
     llm = _FakeLlm()

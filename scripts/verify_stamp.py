@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Freshness stamp for the verify-before-commit guard (ADR-017 control layer).
+"""Freshness stamp for the verify-before-commit guard (harness control layer).
 
 ``make verify`` records a content fingerprint of the repo's source files here;
 the ``verify_before_commit`` hook recomputes it at commit time and asks for

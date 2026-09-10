@@ -1,1 +1,1 @@
-"""Domain types for the `skill` Resource kind (spec 004)."""
+"""Domain types for the `skill` Resource kind (spec agent-registry)."""

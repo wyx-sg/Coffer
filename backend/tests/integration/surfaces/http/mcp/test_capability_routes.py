@@ -114,7 +114,7 @@ async def _build_app(
                 name="mcp_server",
                 display_name="MCP Server",
                 config_schema=MCPServerConfig,
-                # ADR-045 per-agent scope — lets tests exercise
+                # Per-agent scope — lets tests exercise
                 # ResourceService.update_scope without a separate app builder.
                 supports_scope=True,
             )
@@ -510,7 +510,7 @@ async def test_list_capabilities_requires_auth(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="disable an individual capability")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="disable an individual capability")
 @pytest.mark.asyncio
 async def test_enable_disable_capability_flips_preference(
     tmp_path: Path,
@@ -771,7 +771,7 @@ async def test_test_endpoint_unreachable_server_returns_ok_false(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="audit lifecycle changes")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="audit lifecycle changes")
 @pytest.mark.asyncio
 async def test_enable_capability_creates_audit_event(
     tmp_path: Path,
@@ -982,7 +982,7 @@ async def test_test_endpoint_persists_health_and_status_reflects_it(
 
 
 # ---------------------------------------------------------------------------
-# ADR-045 scope and the /test route
+# Per-agent scope and the /test route
 # ---------------------------------------------------------------------------
 
 
@@ -991,7 +991,7 @@ async def test_test_endpoint_ignores_scope(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """ADR-045 scope is per-AGENT and enforced at the gateway, which knows the
+    """Scope is per-AGENT and enforced at the gateway, which knows the
     calling session's identity. POST /{name}/test is a management route with
     no such identity, so it does not gate on scope: the owner testing a server
     they registered reaches it whatever agents it is scoped to."""
@@ -1080,7 +1080,7 @@ async def test_get_server_status_failing_branch(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="HTTP-transport MCP server round trip")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="HTTP-transport MCP server round trip")
 @pytest.mark.asyncio
 async def test_test_endpoint_http_transport(
     tmp_path: Path,
@@ -1205,7 +1205,7 @@ async def test_refresh_unknown_server_returns_404(
 
 
 @pytest.mark.acceptance(
-    spec="001-mcp-gateway", scenario="a missing stdio launcher is named in the server status"
+    spec="mcp-gateway", scenario="a missing stdio launcher is named in the server status"
 )
 async def test_status_reports_missing_runner(client_and_ctx, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     """A stdio server whose launcher does not resolve on this machine reports

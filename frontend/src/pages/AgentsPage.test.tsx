@@ -4,7 +4,7 @@
 // the agents hooks so the page doesn't depend on a running daemon.
 //
 // Carries the acceptance marker for spec scenario "desktop app agents
-// page" — the surface that spec 004 §US 4 requires.
+// page" — the surface that spec agent-registry §US 4 requires.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
@@ -64,7 +64,7 @@ function stubHooks(opts: { data?: unknown; isPending?: boolean; error?: unknown 
 
 afterEach(() => vi.clearAllMocks());
 
-acceptance("004-agent-registry", "desktop app agents page", async () => {
+acceptance("agent-registry", "desktop app agents page", async () => {
   stubHooks({
     data: [
       {

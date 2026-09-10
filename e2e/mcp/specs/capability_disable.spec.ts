@@ -69,7 +69,7 @@ async function disableTool(
 }
 
 acceptance(
-  "001-mcp-gateway",
+  "mcp-gateway",
   "disabled capability rejected through the shim",
   async () => {
     const name = uniqueName("e2e-dis");

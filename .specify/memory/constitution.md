@@ -48,7 +48,7 @@ plan.
   `domain/` may not import `infrastructure/`, `surfaces/`, or external SDKs.
   `application/` may not import `surfaces/`. Cross-cutting modules are
   extracted only after the second feature needs them. (Exception: the
-  Resource framework — see [ADR-001](../../docs/decisions/ADR-001-resource-framework-upfront.md).)
+  Resource framework — see [Resource Framework Upfront](../../docs/decisions/resource-framework-upfront.md).)
 - **Persistence.** SQLite is the system of record for control-plane state.
   Bulk user content (when introduced per spec) is stored as files on the
   local file system; indexed on demand.
@@ -97,7 +97,7 @@ change respects (or formally amends) them.
 
 **Version**: 0.4.0
 
-> **0.4.0 amendment (spec 010-sync scope reduction).** Removed the
+> **0.4.0 amendment (spec vault-export-import scope reduction).** Removed the
 > *user-controlled sync medium* exception from Principle I and reverted the
 > 0.3.1 wording of its opening line. Motivation: continuous multi-machine sync
 > over a git remote carried the machinery its guarantees required — machine
@@ -108,7 +108,7 @@ change respects (or formally amends) them.
 > conditions of the 0.3.0 exception. Proposed behaviour: Coffer exports the
 > vault to a user-chosen directory and imports one back; no transport medium,
 > no remote, no background replication, and therefore no exception to
-> Principle I to maintain. Downstream impact: spec 010 narrows to export and
+> Principle I to maintain. Downstream impact: spec vault-export-import narrows to export and
 > import; the machine registry, the fleet view and the framework's machine
 > scope axis go with it; the ciphertext-only rule the exception carried moves
 > into the Credentials constraint, where it applies to every export rather
@@ -116,14 +116,14 @@ change respects (or formally amends) them.
 > feature flag — rejected, because an unused code path still has to be
 > maintained and tested. Decision recorded by the project owner.
 
-> **0.3.0 amendment (spec 010-sync).** Added the *user-controlled sync medium*
+> **0.3.0 amendment (spec vault-export-import).** Added the *user-controlled sync medium*
 > exception to Principle I, authorising multi-machine sync over a user-owned
 > git repository under three conditions (no new system of record, ciphertext-
 > only secrets, user opt-in/ownership). Motivation: enable a single user to
 > keep one vault consistent across their own machines without ceding local-
 > first guarantees. Current behaviour: multi-machine sync was an explicit
 > non-goal. Proposed behaviour: permitted under the bounded exception above.
-> Downstream impact: new spec 010-sync (sync engine, CLI/HTTP surfaces, daemon
+> Downstream impact: new spec vault-export-import (sync engine, CLI/HTTP surfaces, daemon
 > auto-sync worker); no change to credential-at-rest or loopback-binding rules.
 > Alternatives considered: peer-to-peer (Syncthing-style) and user-owned object
 > storage — rejected in favour of git for built-in history, diff, and merge.
@@ -131,7 +131,8 @@ change respects (or formally amends) them.
 
 > **0.3.1 amendment (editorial).** Reworded Principle I's opening line to
 > match the multi-machine reality the 0.3.0 exception already authorised.
-> Motivation: ADR-045 (then machine × agent resource scope) extends multi-machine
+> Motivation: [Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)
+> (then machine × agent resource scope) extends multi-machine
 > sync further into the framework, underscoring that "local" has matured from
 > a single machine into the user's fleet — one vault, every machine holding
 > the full state — and the principle's opening sentence had not caught up.

@@ -18,7 +18,7 @@ import {
   waitForCapabilities,
 } from "./_helpers";
 
-acceptance("001-mcp-gateway", "concurrent clients", async () => {
+acceptance("mcp-gateway", "concurrent clients", async () => {
   const nameA = uniqueName("e2e-conc-a");
   const nameB = uniqueName("e2e-conc-b");
   await registerMcpServer(nameA, ["--tools", "alpha_tool"]);

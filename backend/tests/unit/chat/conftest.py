@@ -287,7 +287,7 @@ def make_chat_services(
     Returns ``(chat_service, turn_orchestrator, registry)``. The registry holds
     one ``FakeAgentProvider`` (or the supplied ``provider``). Chat no longer owns
     a model registry — a managed agent brings its own model via provider
-    projection (ADR-032).
+    projection (ADR provider-switching).
     """
     from coffer.application.chat.service import ChatService
     from coffer.application.chat.turn_orchestrator import TurnOrchestrator

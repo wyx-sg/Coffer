@@ -1,4 +1,4 @@
-"""Per-(server, tool) invocation counts — the ranking signal for ADR-046.
+"""Per-(server, tool) invocation counts — the ranking signal for tool tiering.
 
 Tool tiering decides what the gateway lists from real usage, so this query is
 the thing standing between the agent and a tool it uses every day. It counts

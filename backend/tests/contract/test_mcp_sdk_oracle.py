@@ -134,13 +134,13 @@ async def running_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     thread.join(timeout=10)
 
 
-@pytest.mark.acceptance(spec="001-mcp-gateway", scenario="register a stdio MCP server")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="register a stdio MCP server")
 @pytest.mark.acceptance(
-    spec="007-memory",
+    spec="knowledge",
     scenario="built-in KB tools appear in client tool list",
 )
 @pytest.mark.acceptance(
-    spec="007-memory",
+    spec="knowledge",
     scenario="built-in memory tools appear in client tool list",
 )
 async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:

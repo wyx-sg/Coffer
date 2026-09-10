@@ -300,7 +300,7 @@ def test_project_scope_get_returns_recorded_project_root(tmp_path, monkeypatch):
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="user adds a fact")
+@pytest.mark.acceptance(spec="knowledge", scenario="user adds a fact")
 def test_user_adds_an_entry(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59610)
     with TestClient(app) as c:
@@ -319,7 +319,7 @@ def test_user_adds_an_entry(tmp_path, monkeypatch):
         assert body["path"].endswith(".md")
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="user corrects a fact out-of-band")
+@pytest.mark.acceptance(spec="knowledge", scenario="user corrects a fact out-of-band")
 def test_user_corrects_an_entry_via_write_api(tmp_path, monkeypatch):
     """The programmatic write path (REST PATCH) — the in-app viewer is
     read-only. (The external-edit-on-disk + lazy-reindex half of this scenario
@@ -355,7 +355,7 @@ def test_user_corrects_an_entry_via_write_api(tmp_path, monkeypatch):
         assert scope["scope_dir"] == str(scope_dir)
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="user deletes a fact")
+@pytest.mark.acceptance(spec="knowledge", scenario="user deletes a fact")
 def test_user_deletes_an_entry(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59640)
     with TestClient(app) as c:
@@ -373,7 +373,7 @@ def test_user_deletes_an_entry(tmp_path, monkeypatch):
         _assert_envelope(got.json(), "MEMORY_NOT_FOUND")
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="clear a memory scope")
+@pytest.mark.acceptance(spec="knowledge", scenario="clear a memory scope")
 def test_clear_a_scope(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59650)
     with TestClient(app) as c:
@@ -393,7 +393,7 @@ def test_clear_a_scope(tmp_path, monkeypatch):
         assert c.get("/api/v1/knowledge/global", headers=_HEADERS).status_code == 200
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="user renames a memory store")
+@pytest.mark.acceptance(spec="knowledge", scenario="user renames a memory store")
 def test_user_renames_a_scope(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59760)
     with TestClient(app) as c:

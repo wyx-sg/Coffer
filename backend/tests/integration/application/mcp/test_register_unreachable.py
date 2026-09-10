@@ -4,7 +4,7 @@ Per spec edge-case "Upstream unreachable on register": coffer's register
 endpoint does not probe the upstream — it stores the config and returns 201.
 Discovery is what surfaces the failure.
 
-See specs/001-mcp-gateway/spec.md § Edge Cases.
+See specs/mcp-gateway/spec.md § Edge Cases.
 """
 
 from __future__ import annotations

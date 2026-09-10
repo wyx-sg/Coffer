@@ -5,7 +5,7 @@ Revises: 0029
 Create Date: 2026-06-20
 
 Per-agent MCP server scoping (auto/selected) is removed (simplification 1.6,
-reverts PR #108 / ADR-026-per-agent-mcp-scoping): the gateway serves every
+reverts PR #108 and the per-agent-MCP-scoping decision): the gateway serves every
 enabled server to every agent again, with no per-agent identity or allowlist.
 This drops the two tables added in 0023 (``agent_mcp_scope`` +
 ``agent_mcp_scope_server``). Guarded/idempotent — a re-run over a DB that

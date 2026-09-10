@@ -2,7 +2,7 @@
 //
 // The single GLOBAL embedding configuration (no longer per knowledge base /
 // memory store). GET/PUT /api/v1/embedding/config. Hand-written fetch (the
-// generated client only covers spec 001), mirroring the kb/memory api helpers.
+// generated client only covers spec mcp-gateway), mirroring the kb/memory api helpers.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getCofferBaseUrl, getCofferToken } from "@/lib/auth";

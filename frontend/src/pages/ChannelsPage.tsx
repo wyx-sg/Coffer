@@ -1,4 +1,4 @@
-// frontend/src/pages/ChannelsPage.tsx — spec 009-channels surface.
+// frontend/src/pages/ChannelsPage.tsx — spec channels surface.
 // Mirrors KnowledgeBasesPage: PageHeader + welcome/loading/error/table; the
 // Add-channel header action appears only once channels exist — the empty
 // state's welcome panel carries the Add call-to-action instead. Registration

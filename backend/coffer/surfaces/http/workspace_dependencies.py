@@ -1,9 +1,10 @@
 """FastAPI dependency providers for the agent-workspace facets.
 
-Split out of ``coffer.surfaces.http.dependencies`` (specs 004/005 amendment)
-to keep that kind-agnostic module under its file-size budget. Same pattern:
-the composition root calls the setters once on startup; routes Depends() on
-the getters. Typed as Any to avoid kind-specific imports (Contract 6).
+Split out of ``coffer.surfaces.http.dependencies`` (specs agent-registry and
+skill-manager, workspace amendment) to keep that kind-agnostic module under its
+file-size budget. Same pattern: the composition root calls the setters once on
+startup; routes Depends() on the getters. Typed as Any to avoid kind-specific
+imports (Contract 6).
 """
 
 from __future__ import annotations

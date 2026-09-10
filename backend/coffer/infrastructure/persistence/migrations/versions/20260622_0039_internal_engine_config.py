@@ -1,4 +1,4 @@
-"""internal-engine model selection (spec 011 amendment 2026-06-22b)
+"""internal-engine model selection (spec provider-switching amendment 2026-06-22b)
 
 Revision ID: 0039
 Revises: 0038

@@ -1,6 +1,6 @@
 // frontend/src/kinds/mcp/ToolTieringNotice.tsx
 //
-// ADR-046 makes tools/list policy-dependent, which turns "why can't the agent
+// Budget-driven tool tiering makes tools/list policy-dependent, which turns "why can't the agent
 // see tool X" into a question the UI has to be able to answer. This is that
 // answer. It renders nothing when nothing is hidden — a notice that is always
 // on stops being read.

@@ -1,4 +1,4 @@
-"""ClaudeSdkProvider integration tests (spec 008 — SDK-backed Claude provider).
+"""ClaudeSdkProvider integration tests (spec channels — SDK-backed Claude provider).
 
 Covers the ``ClaudeSdkProvider`` surface:
 - ``init_conversation`` rejects a missing or non-directory cwd.
@@ -268,7 +268,7 @@ async def test_build_adapter_resumes_stored_session(tmp_path) -> None:  # type: 
 
 
 @pytest.mark.acceptance(
-    spec="009-channels",
+    spec="channels",
     scenario="the channel-driven agent is told it is on a chat channel",
 )
 @pytest.mark.asyncio

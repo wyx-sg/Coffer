@@ -97,7 +97,7 @@ Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `co
 
 ## Callback Listener
 
-**What it is.** The only public-reachable surface. It is a separate signed-callback process that receives inbound webhooks from chat platforms — concretely `POST /seatalk/{channel}` — verifies each request's SeaTalk signature against the channel's signing secret, answers the `event_verification` challenge, and forwards genuine events to the daemon for the channel runtime to handle. It exists because SeaTalk pushes events to a URL rather than letting Coffer long-poll (the model Telegram uses), so a reachable HTTP endpoint is required (spec 009, [ADR-014](/reference/adr/ADR-014-channel-adapter-framework)).
+**What it is.** The only public-reachable surface. It is a separate signed-callback process that receives inbound webhooks from chat platforms — concretely `POST /seatalk/{channel}` — verifies each request's SeaTalk signature against the channel's signing secret, answers the `event_verification` challenge, and forwards genuine events to the daemon for the channel runtime to handle. It exists because SeaTalk pushes events to a URL rather than letting Coffer long-poll (the model Telegram uses), so a reachable HTTP endpoint is required (spec channels, [Channel Adapter Framework](/reference/adr/channel-adapter-framework)).
 
 **Which process.** A daemon-spawned child process, deliberately separate from the daemon. It runs only while at least one SeaTalk channel is enabled. Keeping it out of the main daemon means the public-reachable code path is a small, isolated surface that handles signature verification before anything reaches the stateful core.
 
@@ -111,7 +111,7 @@ Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `co
 
 ## Web UI
 
-**What it is.** The browser-based management interface, specified in [spec 002](/reference/specs/002-ui-shell/spec). The Web UI provides a visual equivalent of every CLI management operation: registering MCP servers via JSON import, browsing server health and capability lists, toggling tools/resources/prompts on/off, viewing the audit log and invocation history, and configuring retention policies. The information architecture reflects the resource-kind model: the sidebar shows `Agents` (agents and the Channels they are reached over), `Resources` (the shipped kinds — MCP servers, Skills, Knowledge), and `System` (Audit log and Settings). No "coming soon" placeholders appear — a kind only appears once it works, and none outlives its feature.
+**What it is.** The browser-based management interface, specified in [spec ui-shell](/reference/specs/ui-shell/spec). The Web UI provides a visual equivalent of every CLI management operation: registering MCP servers via JSON import, browsing server health and capability lists, toggling tools/resources/prompts on/off, viewing the audit log and invocation history, and configuring retention policies. The information architecture reflects the resource-kind model: the sidebar shows `Agents` (agents and the Channels they are reached over), `Resources` (the shipped kinds — MCP servers, Skills, Knowledge), and `System` (Audit log and Settings). No "coming soon" placeholders appear — a kind only appears once it works, and none outlives its feature.
 
 **Which process.** A browser process, served by the daemon. In production the daemon serves the built frontend itself, as static files at its own loopback origin (**FR-024**) — so the page and the API are same-origin. In development, a Vite dev server runs at `http://localhost:5173` and reaches the daemon across origins behind the `COFFER_DEV_CORS` opt-in. All data is fetched from the daemon's REST API.
 
@@ -138,4 +138,4 @@ Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `co
 
 ---
 
-**See also:** [Architecture reference](/reference/project/architecture), [Spec 002: UI Shell](/reference/specs/002-ui-shell/spec), [Distribution](/architecture/distribution)
+**See also:** [Architecture reference](/reference/project/architecture), [UI Shell spec](/reference/specs/ui-shell/spec), [Distribution](/architecture/distribution)

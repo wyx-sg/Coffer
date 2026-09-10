@@ -1,4 +1,4 @@
-"""ResourceService.update_scope end-to-end persistence (ADR-045).
+"""ResourceService.update_scope end-to-end persistence (ADR per-agent-resource-scope).
 
 Colocated with `test_resource_service.py` (no unit-level ResourceService test
 module exists — the real ResourceService tests already run against a real

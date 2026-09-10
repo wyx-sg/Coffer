@@ -1,6 +1,6 @@
 """Live capability discovery for MCP gateway sessions.
 
-Per ADR-004, the DB stores only user preferences (enabled/disabled per
+Per the capability-state model, the DB stores only user preferences (enabled/disabled per
 capability key). The actual tool/resource/prompt list is queried live
 from the upstream on each request, with a short in-process cache.
 """

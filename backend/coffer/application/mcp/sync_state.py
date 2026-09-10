@@ -1,4 +1,4 @@
-"""MCP capability preferences as a synced state area (spec 010 slice 7).
+"""MCP capability preferences as a synced state area (spec vault-export-import slice 7).
 
 Disabling a tool/prompt on one machine is shared intent — the same server on
 the other machine should honor it. Docs carry only the DISABLED capabilities

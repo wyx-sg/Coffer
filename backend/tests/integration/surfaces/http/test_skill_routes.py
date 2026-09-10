@@ -1,4 +1,4 @@
-"""End-to-end HTTP coverage for /api/v1/skills/* (spec 004)."""
+"""End-to-end HTTP coverage for /api/v1/skills/* (spec agent-registry)."""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ def _write_skill_folder(folder: pathlib.Path, *, name: str) -> pathlib.Path:
     return folder
 
 
-@pytest.mark.acceptance(spec="005-skill-manager", scenario="desktop and CLI cover every operation")
+@pytest.mark.acceptance(spec="skill-manager", scenario="desktop and CLI cover every operation")
 def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
     """End-to-end HTTP coverage — the surface both desktop and CLI consume."""
     app = _app(tmp_path, monkeypatch, 59600)

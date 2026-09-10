@@ -4,7 +4,7 @@
 // test): secrets are written to the credential store BEFORE the resource is
 // registered (registration probes the refs), and a failed registration rolls
 // the just-written secrets back so nothing orphaned stays behind. Channels
-// carry no activation scope (ADR-045) and no machine affinity, so registration
+// carry no activation scope (ADR per-agent-resource-scope) and no machine affinity, so registration
 // is the whole flow — there is no follow-up bind.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -49,7 +49,7 @@ function submit() {
 
 afterEach(() => vi.clearAllMocks());
 
-acceptance("009-channels", "register a telegram channel", async () => {
+acceptance("channels", "register a telegram channel", async () => {
   const api = installApi(mockApiClient());
   renderDialog();
   fillTelegram();

@@ -1,4 +1,4 @@
-// frontend/src/components/agents/FolderPickerField.tsx — spec 004 FR-023/FR-024/FR-042.
+// frontend/src/components/agents/FolderPickerField.tsx — spec agent-registry FR-023/FR-024/FR-042.
 // A read-only path display paired with the FolderPicker button: the folder is
 // picked (native dialog on desktop, daemon native dialog → in-app browser on
 // web), never typed. Replaces the raw text inputs that used to sit beside the

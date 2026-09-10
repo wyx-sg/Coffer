@@ -1,4 +1,4 @@
-"""/api/v1/agents/* — agent registry HTTP routes (spec 004)."""
+"""/api/v1/agents/* — agent registry HTTP routes (spec agent-registry)."""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ class AgentPatch(BaseModel):
     skill_exclusions: list[str] | None = None
     # Slice 6: opt-in native write-side memory disable. Toggling drives the
     # on-disk transform (Claude settings.json / Codex config.toml) in lockstep.
-    # spec 011 amendment 2026-06-22b (E3): per-agent model binding. Explicit null
+    # spec provider-switching amendment 2026-06-22b (E3): per-agent model binding. Explicit null
     # on `fast_model` clears the fast slot (distinguished via model_fields_set).
     model: str | None = None
     fast_model: str | None = None
@@ -67,7 +67,7 @@ class AgentOut(BaseModel):
     follow_all_skills: bool
     skill_exclusions: list[str]
     # Slice 6: whether the agent's native write-side memory is disabled.
-    # spec 011 amendment 2026-06-22b (E3): per-agent model binding (None = unbound,
+    # spec provider-switching amendment 2026-06-22b (E3): per-agent model binding (None = unbound,
     # falls back to the active connection's model during rollout).
     model: str | None
     fast_model: str | None

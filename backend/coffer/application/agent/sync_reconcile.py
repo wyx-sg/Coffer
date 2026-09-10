@@ -1,4 +1,4 @@
-"""Agent import gate + side-effect reconciliation for sync (spec 010 import
+"""Agent import gate + side-effect reconciliation for sync (spec vault-export-import import
 reconciliation).
 
 Gate: an agent doc only imports where its config dir exists and its skill
@@ -38,7 +38,7 @@ class AgentImportGate:
         self, config: Mapping[str, object], *, scope: list[str] | None = None
     ) -> None:
         # ``scope`` is accepted for interface compatibility only: the `agent`
-        # kind declares no activation scope (ADR-045), so there is nothing to
+        # kind declares no activation scope (ADR per-agent-resource-scope), so there is nothing to
         # gate on here.
         del scope
         try:

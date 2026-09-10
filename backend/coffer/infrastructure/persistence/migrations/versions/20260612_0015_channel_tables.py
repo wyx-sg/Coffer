@@ -1,4 +1,4 @@
-"""channel_peers table (spec 009)
+"""channel_peers table (spec channels)
 
 Revision ID: 0015
 Revises: 0014

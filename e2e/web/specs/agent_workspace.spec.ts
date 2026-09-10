@@ -1,6 +1,6 @@
 // e2e/web/specs/agent_workspace.spec.ts
 //
-// Specs 004/005 workspace amendment — the agent detail page as a workspace.
+// Agent Registry / Skill Manager workspace amendment — the agent detail page as a workspace.
 //
 // One pragmatic happy path against the real daemon: register a codex agent
 // whose config dir is seeded with a config.toml carrying one direct MCP

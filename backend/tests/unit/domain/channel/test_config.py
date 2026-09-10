@@ -88,7 +88,7 @@ def test_missing_channel_type_rejected():
 
 
 def test_default_agent_defaults_to_managed_agent():
-    # ADR-024 retired the builtin chat agent; channels default to a managed
+    # The builtin chat agent is retired; channels default to a managed
     # agent. The default must be the provider key ("claude_code", underscore) —
     # the same key the chat AgentProviderRegistry resolves a turn by — not the
     # "claude-code" resource name, which would fail with UNKNOWN_AGENT at turn time.

@@ -1,4 +1,4 @@
-"""Live-mirror + pending-queue behaviour (ADR-031), tested at the orchestrator
+"""Live-mirror + pending-queue behaviour, tested at the orchestrator
 level where turn timing is deterministic.
 
 A turn runs as a detached task and publishes to a per-conversation bus, so the
@@ -132,7 +132,7 @@ def _is_done(ev: object) -> bool:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="send a message and receive a streamed reply")
+@pytest.mark.acceptance(spec="channels", scenario="send a message and receive a streamed reply")
 async def test_streamed_reply_over_subscription() -> None:
     adapter = FakeAgentAdapter(
         [TurnStarted(), TextDelta(text="Hello!"), TurnDone(None, None, "end_turn")]
@@ -151,7 +151,7 @@ async def test_streamed_reply_over_subscription() -> None:
     assert "turn_done" in types
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="observe a turn started from another surface")
+@pytest.mark.acceptance(spec="channels", scenario="observe a turn started from another surface")
 async def test_observe_turn_from_another_surface() -> None:
     adapter = FakeAgentAdapter(
         [TurnStarted(), TextDelta(text="from-channel"), TurnDone(None, None, "end_turn")]
@@ -168,9 +168,7 @@ async def test_observe_turn_from_another_surface() -> None:
     assert "from-channel" in texts
 
 
-@pytest.mark.acceptance(
-    spec="009-channels", scenario="second message queues during a streaming turn"
-)
+@pytest.mark.acceptance(spec="channels", scenario="second message queues during a streaming turn")
 async def test_second_message_queues() -> None:
     release = asyncio.Event()
     orch, chat, _ = _make_orch(_SeqProvider([_BlockingAdapter(release)]))
@@ -187,9 +185,7 @@ async def test_second_message_queues() -> None:
     release.set()  # let the first turn finish so the loop can settle
 
 
-@pytest.mark.acceptance(
-    spec="009-channels", scenario="a queued message runs after the current turn"
-)
+@pytest.mark.acceptance(spec="channels", scenario="a queued message runs after the current turn")
 async def test_queued_message_runs_after_current() -> None:
     release = asyncio.Event()
     blocking = _BlockingAdapter(release, text="first")
@@ -224,9 +220,7 @@ async def test_queued_message_runs_after_current() -> None:
     assert user_texts == ["msg1", "msg2"]
 
 
-@pytest.mark.acceptance(
-    spec="009-channels", scenario="interrupting a turn pauses the pending queue"
-)
+@pytest.mark.acceptance(spec="channels", scenario="interrupting a turn pauses the pending queue")
 async def test_interrupt_pauses_queue() -> None:
     release = asyncio.Event()
     orch, chat, _ = _make_orch(_SeqProvider([_BlockingAdapter(release), FakeAgentAdapter([])]))
@@ -276,7 +270,7 @@ async def test_send_after_interrupt_resumes_queue() -> None:
     assert any(isinstance(e, TextDelta) and e.text == "resumed" for e in seen)
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="reply survives a restart")
+@pytest.mark.acceptance(spec="channels", scenario="reply survives a restart")
 async def test_reply_persisted() -> None:
     adapter = FakeAgentAdapter(
         [TurnStarted(), TextDelta(text="Hello, world!"), TurnDone(12, 6, "end_turn")]

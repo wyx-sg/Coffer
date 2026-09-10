@@ -1,1 +1,1 @@
-"""Infrastructure adapters for the `agent` kind (spec 004)."""
+"""Infrastructure adapters for the `agent` kind (spec agent-registry)."""

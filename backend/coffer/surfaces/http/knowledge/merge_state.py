@@ -1,4 +1,4 @@
-"""DI singletons for the AI-assisted store merge (spec 007, FR-056-059).
+"""DI singletons for the AI-assisted store merge (spec knowledge, FR-056-059).
 
 Mirrors ``organize_state.py``. Two registrations:
 

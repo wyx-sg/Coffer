@@ -3,7 +3,7 @@
 #
 # Output: dist/coffer-callback (single-file executable)
 # Shipped in coffer-cli-<triple>.tar.gz; a frozen daemon deploys it into
-# ~/.coffer/bin/ at startup (spec 001 FR-026) because it spawns it at runtime.
+# ~/.coffer/bin/ at startup (spec mcp-gateway FR-026) because it spawns it at runtime.
 #
 # The callback listener is the SeaTalk webhook-ingress child the daemon spawns
 # (channel/listener_spawn.py resolves it as a sibling of the frozen daemon).
@@ -41,7 +41,7 @@ a = Analysis(
     runtime_hooks=[],
     excludes=[
         # Heavy ML stack (torch/mlx/numba/scipy/…). No coffer source imports
-        # any of it: transcription is remote (spec 009 FR-022), so nothing
+        # any of it: transcription is remote (spec channels FR-022), so nothing
         # local decodes or runs a model. The exclude stays as a guard — a
         # transitive pull would inflate every binary from ~95 MB to ~260 MB,
         # and torch is fragile under PyInstaller.

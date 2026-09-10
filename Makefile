@@ -88,6 +88,7 @@ verify-acceptance:
 lint:
 	$(PY) scripts/check_file_sizes.py
 	$(PY) scripts/check_response_models.py
+	$(PY) scripts/check_doc_numbering.py
 	$(PY) -m ruff check $(BACKEND) evals
 	$(PY) -m ruff format --check $(BACKEND) evals
 	$(PY) -m mypy --config-file $(BACKEND)/pyproject.toml $(BACKEND)/coffer

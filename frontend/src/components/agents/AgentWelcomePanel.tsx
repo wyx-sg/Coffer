@@ -1,4 +1,4 @@
-// frontend/src/components/agents/AgentWelcomePanel.tsx — spec 004 v2.
+// frontend/src/components/agents/AgentWelcomePanel.tsx — spec agent-registry v2.
 // First-run welcome card shown on /agents when no agent is registered yet —
 // mirrors the resources WelcomePanel. Explains the surface and offers the
 // single next step (Add agent — detection + manual add live in that dialog).

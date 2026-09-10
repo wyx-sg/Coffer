@@ -1,4 +1,4 @@
-"""Provider-switching domain errors (spec 011). Surfaces map these to status."""
+"""Provider-switching domain errors (spec provider-switching). Surfaces map these to status."""
 
 from __future__ import annotations
 

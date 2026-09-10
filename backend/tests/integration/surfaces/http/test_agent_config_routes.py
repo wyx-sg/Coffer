@@ -44,7 +44,7 @@ def _register_claude(c: TestClient, tmp_path: pathlib.Path) -> None:
     assert r.status_code == 201, r.text
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="list an agent's config files")
+@pytest.mark.acceptance(spec="agent-registry", scenario="list an agent's config files")
 def test_list_and_read_config_file(tmp_path, monkeypatch):
     app, _ = _app(tmp_path, monkeypatch, 59700)
     with _client(app) as c:
@@ -96,7 +96,7 @@ def test_list_and_read_config_file(tmp_path, monkeypatch):
         assert r.json()["folder_path"] == str(claude_dir)
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="save a config file with valid content")
+@pytest.mark.acceptance(spec="agent-registry", scenario="save a config file with valid content")
 def test_write_config_file_valid(tmp_path, monkeypatch):
     app, _ = _app(tmp_path, monkeypatch, 59710)
     with _client(app) as c:
@@ -119,7 +119,7 @@ def test_write_config_file_valid(tmp_path, monkeypatch):
         assert r.json()["content"] == '{"theme": "dark"}'
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="reject malformed config-file content")
+@pytest.mark.acceptance(spec="agent-registry", scenario="reject malformed config-file content")
 def test_write_config_file_malformed_422_file_unchanged(tmp_path, monkeypatch):
     app, _ = _app(tmp_path, monkeypatch, 59712)
     with _client(app) as c:
@@ -196,7 +196,7 @@ def test_dir_entry_listing_and_child_round_trip(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="reject directory file paths outside the entry"
+    spec="agent-registry", scenario="reject directory file paths outside the entry"
 )
 def test_dir_child_path_escape_and_extension_rejected(tmp_path, monkeypatch):
     app, _ = _app(tmp_path, monkeypatch, 59760)
@@ -229,7 +229,7 @@ def test_dir_child_path_escape_and_extension_rejected(tmp_path, monkeypatch):
         assert not (tmp_path / ".claude" / "agents" / "note.txt").exists()
 
 
-@pytest.mark.acceptance(spec="004-agent-registry", scenario="reject stale config-file writes")
+@pytest.mark.acceptance(spec="agent-registry", scenario="reject stale config-file writes")
 def test_stale_write_409_then_fresh_fingerprint_succeeds(tmp_path, monkeypatch):
     app, _ = _app(tmp_path, monkeypatch, 59770)
     with _client(app) as c:
@@ -295,7 +295,7 @@ def test_mcp_install_lifecycle(tmp_path, monkeypatch):
         assert r.json()["installed"] is True
         assert r.json()["command"] == str(shim)
         data = json.loads((tmp_path / ".claude.json").read_text())
-        # Spec 004 FR-019 (amended): install writes `--agent <name>` so the
+        # Agent Registry FR-019 (amended): install writes `--agent <name>` so the
         # shim self-reports its identity at the MCP handshake.
         assert data["mcpServers"]["coffer"] == {
             "command": str(shim),

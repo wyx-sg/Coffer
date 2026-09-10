@@ -1,6 +1,6 @@
 """What tiering currently does to the catalogue, for the management UI.
 
-ADR-046 lists a policy-dependent slice of the aggregated tools, which makes
+Tool tiering lists a policy-dependent slice of the aggregated tools, which makes
 "why can't the agent see tool X" one layer harder to answer. This module
 answers it.
 

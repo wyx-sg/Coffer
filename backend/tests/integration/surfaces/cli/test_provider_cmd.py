@@ -1,4 +1,4 @@
-"""`coffer provider …` CLI coverage (spec 011).
+"""`coffer provider …` CLI coverage (spec provider-switching).
 
 Wires a minimal provider-only in-process daemon and monkeypatches
 ``client_or_exit`` to a Starlette TestClient over it (mirrors the conftest's
@@ -102,7 +102,7 @@ def provider_daemon(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="011-provider-switching", scenario="the command line covers create, list, and switch"
+    spec="provider-switching", scenario="the command line covers create, list, and switch"
 )
 def test_cli_create_list_switch(provider_daemon):
     r = _runner.invoke(

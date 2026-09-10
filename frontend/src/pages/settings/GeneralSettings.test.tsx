@@ -75,7 +75,7 @@ describe("GeneralSettings preferred editor", () => {
   });
 });
 
-acceptance("002-ui-shell", "general tab persists the preferred editor", () => {
+acceptance("ui-shell", "general tab persists the preferred editor", () => {
   const { unmount } = render(<GeneralSettings />);
 
   // Choosing an application from the picker persists it.

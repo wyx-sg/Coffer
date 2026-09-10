@@ -207,7 +207,7 @@ class StoreConsolidator:
             return holder or canonical
 
     async def adopt(self, stale: str, canonical: str, root: str) -> None:
-        """Resolve-time adoption of a store under its portable name (spec 007
+        """Resolve-time adoption of a store under its portable name (spec knowledge
         FR-004a): identical semantics to the boot pass — additive merge, never
         a destructive move, retire only after the merge landed."""
         async with self._adopt_lock:
@@ -215,7 +215,7 @@ class StoreConsolidator:
 
     async def merge(self, source: str, target: str, *, actor: str = "user") -> MergeOutcome:
         """Explicit user-triggered merge of two existing project stores
-        (spec 007 amendment 2026-07-10, FR-057/FR-058).
+        (spec knowledge amendment 2026-07-10, FR-057/FR-058).
 
         Unlike the root-driven ``_merge_and_retire``, both stores already
         exist and the target keeps its own label/root when it has them; the

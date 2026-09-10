@@ -11,7 +11,7 @@ pytestmark = pytest.mark.asyncio
 
 
 @pytest.mark.acceptance(
-    spec="007-memory", scenario="agent saves and resumes a working-state handoff"
+    spec="knowledge", scenario="agent saves and resumes a working-state handoff"
 )
 async def test_set_handoff_then_resume(handoff) -> None:
     """Full scenario: set writes the per-branch scene, resume returns it with a
@@ -71,7 +71,7 @@ async def test_handoff_never_returned_by_search(handoff) -> None:
     assert leaked == [], f"handoff leaked into coffer__search: {leaked}"
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="resume reports no handoff for a fresh branch")
+@pytest.mark.acceptance(spec="knowledge", scenario="resume reports no handoff for a fresh branch")
 async def test_resume_not_found(handoff) -> None:
     reg = BuiltinToolRegistry()
     register_knowledge_builtin_tools(

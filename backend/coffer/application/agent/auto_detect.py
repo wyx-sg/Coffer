@@ -1,4 +1,4 @@
-"""Discover locally-installed agents (spec 004-agent-registry).
+"""Discover locally-installed agents (spec agent-registry).
 
 Scans each ``AgentType.detect_marker()`` and reports the agents that are
 installed on disk but **not yet registered**, as *candidates*. Nothing is

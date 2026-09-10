@@ -16,7 +16,7 @@ class AuditEventType(StrEnum):
     RESOURCE_ENABLED = "resource_enabled"
     RESOURCE_DISABLED = "resource_disabled"
     RESOURCE_DELETED = "resource_deleted"
-    # ADR-045: framework-level machine x agent activation scope
+    # Framework-level machine x agent activation scope
     RESOURCE_SCOPE_UPDATED = "resource_scope_updated"
     CAPABILITY_ENABLED = "capability_enabled"
     CAPABILITY_DISABLED = "capability_disabled"
@@ -29,14 +29,14 @@ class AuditEventType(StrEnum):
     CREDENTIAL_DELETED = "credential_deleted"
     CREDENTIAL_MIGRATED = "credential_migrated"
     MASTER_KEY_RELOCATED = "master_key_relocated"
-    # spec 004-agent-registry
+    # spec agent-registry
     AGENT_CONFIG_FILE_WRITTEN = "agent_config_file_written"
     AGENT_MCP_INSTALLED = "agent_mcp_installed"
     AGENT_MCP_UNINSTALLED = "agent_mcp_uninstalled"
-    # agent workspace (specs 004/005 amendment)
+    # agent workspace (specs agent-registry/skill-manager amendment)
     AGENT_CONFIG_FILE_DELETED = "agent_config_file_deleted"
     AGENT_MCP_ENTRY_ADOPTED = "agent_mcp_entry_adopted"
-    # spec 005-skill-manager
+    # spec skill-manager
     SKILL_IMPORTED = "skill_imported"
     SKILL_UPDATED = "skill_updated"
     SKILL_BOUND = "skill_bound"
@@ -45,18 +45,18 @@ class AuditEventType(StrEnum):
     SKILL_DRIFT_REMEDIATED = "skill_drift_remediated"
     SKILL_ADOPTED = "skill_adopted"
     SKILL_UNMANAGED_DELETED = "skill_unmanaged_deleted"
-    # spec 006-knowledge-base
+    # knowledge_base kind (spec knowledge)
     KB_DOCUMENT_DELETED = "kb_document_deleted"
-    # memory kind (spec 007)
+    # memory kind (spec knowledge)
     MEMORY_DELETED = "memory_deleted"
     MEMORY_CLEARED = "memory_cleared"
-    # spec 009-channels
+    # spec channels
     CHANNEL_PAIRING_ISSUED = "channel_pairing_issued"
     CHANNEL_PAIRED = "channel_paired"
-    # spec 010-sync
+    # spec vault-export-import
     MASTER_KEY_EXPORTED = "master_key_exported"
     MASTER_KEY_IMPORTED = "master_key_imported"
-    # spec 011-provider-switching
+    # spec provider-switching
     PROVIDER_SWITCHED = "provider_switched"
     PROVIDER_INTERNAL_DEFAULT_SET = "provider_internal_default_set"
 

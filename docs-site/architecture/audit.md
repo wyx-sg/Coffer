@@ -120,7 +120,7 @@ The `kb_*` and `memory_*` prefixes are historical: they were the wire values bef
 | `provider_switched`             | When a connection is projected into an agent's native config |
 | `provider_internal_default_set` | When a connection becomes Coffer's internal engine           |
 
-**Export / import:** the resource writes an import performs are recorded as ordinary resource lifecycle events, so an imported change is as traceable as one made by hand. There are no configuration or conflict events, because there is no sync configuration and no conflict state ([ADR-016](/reference/adr/ADR-016-vault-export-import)).
+**Export / import:** the resource writes an import performs are recorded as ordinary resource lifecycle events, so an imported change is as traceable as one made by hand. There are no configuration or conflict events, because there is no sync configuration and no conflict state ([Vault Export and Import](/reference/adr/vault-export-import)).
 
 ## What is worth auditing
 
@@ -215,4 +215,4 @@ An asyncio task running inside the daemon polls the `retention_policies` table o
 ## See also
 
 - [Architecture reference](/reference/project/architecture) — Audit, Retention, and cross-cutting concerns table
-- [Spec 001 reference](/reference/specs/001-mcp-gateway/spec) — Invocation log invariant, token authentication, and `X-Coffer-Actor` header semantics
+- [MCP Gateway spec reference](/reference/specs/mcp-gateway/spec) — Invocation log invariant, token authentication, and `X-Coffer-Actor` header semantics

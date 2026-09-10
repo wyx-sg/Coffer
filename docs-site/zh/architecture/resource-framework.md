@@ -8,13 +8,13 @@ Coffer 中每一个由用户管理的实体都是一个 **Resource（资源）**
 
 | Kind             | 规范                                                   | 说明                                                                                             |
 | ---------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `mcp_server`     | [001-mcp-gateway](/zh/reference/specs/001-mcp-gateway/spec)       | 一个已注册的上游 MCP 服务器：传输配置、凭据引用，以及网关所需的各服务器策略。                     |
-| `agent`          | [004-agent-registry](/zh/reference/specs/004-agent-registry/spec) | 一个已注册的本地 AI 编码助手（如 Claude Code）：其配置目录、Coffer-MCP 安装状态及派生的工作区切面。 |
-| `skill`          | [005-skill-manager](/zh/reference/specs/005-skill-manager/spec)   | 一个主技能包，Coffer 将其分发到一个或多个 agent 的技能目录中。                                    |
-| `knowledge`      | [007 — 知识层](/zh/reference/specs/007-memory/spec)               | agent 所知内容的一个作用域：它们写下的条目，加上被摄取为 markdown 的任意格式文档，同在一套 grep / FTS5 / 向量检索之下。 |
-| `channel`        | [009-channels](/zh/reference/specs/009-channels/spec)             | 一个消息通道绑定（Telegram、SeaTalk）：传输配置、凭据引用和一个默认 agent。                       |
+| `mcp_server`     | [mcp-gateway](/zh/reference/specs/mcp-gateway/spec)       | 一个已注册的上游 MCP 服务器：传输配置、凭据引用，以及网关所需的各服务器策略。                     |
+| `agent`          | [agent-registry](/zh/reference/specs/agent-registry/spec) | 一个已注册的本地 AI 编码助手（如 Claude Code）：其配置目录、Coffer-MCP 安装状态及派生的工作区切面。 |
+| `skill`          | [skill-manager](/zh/reference/specs/skill-manager/spec)   | 一个主技能包，Coffer 将其分发到一个或多个 agent 的技能目录中。                                    |
+| `knowledge`      | [007 — 知识层](/zh/reference/specs/knowledge/spec)               | agent 所知内容的一个作用域：它们写下的条目，加上被摄取为 markdown 的任意格式文档，同在一套 grep / FTS5 / 向量检索之下。 |
+| `channel`        | [channels](/zh/reference/specs/channels/spec)             | 一个消息通道绑定（Telegram、SeaTalk）：传输配置、凭据引用和一个默认 agent。                       |
 
-`knowledge` 曾经是两个 kind——一个只可读的 `knowledge_base` 和一个只有 agent 写入的 `memory`——但 `documents`、`chunks`、FTS5 与 sqlite-vec 从一开始就是共用的，这种拆分什么也没换来，反而逼着每个调用方先给自己的数据归类才能挑工具。它们现在是一个 kind、一个存储根，磁盘上的 markdown 文件是真相之源，SQLite 是可重建的索引（[ADR-012](/zh/reference/adr/ADR-012-files-as-truth-sqlite-retrieval)）。一个 knowledge 资源是**共管**的：你和你的 agent 都往里写，其作用域由名字本身读出（`global`、`project-<ULID>`，或你自己命名的集合）。新的 kind 接入同一个框架，无需对框架本身做任何修改。加密凭据存储和仓库导出/导入是刻意设计的**跨切面关注点，而非 kind**：它们服务于每一个 kind，本身并不是被管理的实体。
+`knowledge` 曾经是两个 kind——一个只可读的 `knowledge_base` 和一个只有 agent 写入的 `memory`——但 `documents`、`chunks`、FTS5 与 sqlite-vec 从一开始就是共用的，这种拆分什么也没换来，反而逼着每个调用方先给自己的数据归类才能挑工具。它们现在是一个 kind、一个存储根，磁盘上的 markdown 文件是真相之源，SQLite 是可重建的索引（[Files as Truth](/zh/reference/adr/files-as-truth-sqlite-retrieval)）。一个 knowledge 资源是**共管**的：你和你的 agent 都往里写，其作用域由名字本身读出（`global`、`project-<ULID>`，或你自己命名的集合）。新的 kind 接入同一个框架，无需对框架本身做任何修改。加密凭据存储和仓库导出/导入是刻意设计的**跨切面关注点，而非 kind**：它们服务于每一个 kind，本身并不是被管理的实体。
 
 框架提供四件事，且仅此四件：
 
@@ -29,7 +29,7 @@ Coffer 中每一个由用户管理的实体都是一个 **Resource（资源）**
 Resource 框架不统一调用语义。每个 kind 自行定义其能力的使用方式。没有通用的 `invoke()` 方法，没有共享调用路径，没有跨 kind 行为。框架描述的是资源如何被注册、如何被自描述、如何被治理——而不是使用它时会发生什么。
 :::
 
-## 为什么提前设计 kind 无关框架（ADR-001）
+## 为什么提前设计 kind 无关框架（ADR resource-framework-upfront）
 
 章程通常将跨层公共抽象推迟到第二个 feature 也需要它时才抽取（「在第二个 feature 时抽取」）。Resource 框架是一个明确的例外，原因在于成本不对称。
 
@@ -37,9 +37,9 @@ Resource 框架不统一调用语义。每个 kind 自行定义其能力的使�
 
 构建各 kind 独立孤岛、没有共享抽象的替代方案同样被拒绝：已经有多个 kind 在高置信度的规划中（当前已注册六个），为每个 kind 分别构建身份 + 生命周期 + 审计 + 接口面 CRUD，将产生更多代码和更大的漂移风险。
 
-结果是第一个规范（`001-mcp-gateway`）在只有一个具体 kind 的情况下承担了框架的抽象开销。这被接受为已知的成本，明确以避免未来重构为收益来平衡。
+结果是第一个规范（`mcp-gateway`）在只有一个具体 kind 的情况下承担了框架的抽象开销。这被接受为已知的成本，明确以避免未来重构为收益来平衡。
 
-## 标识符格式：`<kind>:<name>`（ADR-003）
+## 标识符格式：`<kind>:<name>`（ADR resource-identifier-format）
 
 资源在外部以 `<kind>:<name>` 字符串引用：
 
@@ -57,7 +57,7 @@ Resource 框架不统一调用语义。每个 kind 自行定义其能力的使�
 - **纯 UUID**：被拒绝，因为不透明、不自描述，且强迫每个引用都携带单独的 `kind` 字段。
 - **路径风格**（`mcp_server/filesystem`）：功能上等价，但被拒绝，因为斜杠在 URL、文件路径和许多 DSL 中已经过载；冒号使 kind 命名空间关系更清晰直观。
 
-## 能力状态模型（ADR-004）
+## 能力状态模型（ADR capability-state-model）
 
 每个资源在一个明确定义的生命周期中流转。状态机有意保持简单：
 
@@ -88,7 +88,7 @@ stateDiagram-v2
 
 每一次状态转换都被记录到审计日志中，并附带操作者信息。审计日志无法通过普通 API 修改或删除——它是只追加的。
 
-对于 `mcp_server`，还存在并行的能力级别状态：上游服务器暴露的每个单独工具、资源或提示都可以单独启用或禁用（见 ADR-004）。数据库只存储这些能力的用户偏好标志——不缓存能力 schema 或描述。这些内容在每次请求时从上游实时获取，以每会话内存缓存的形式保存，TTL 为 60 秒。
+对于 `mcp_server`，还存在并行的能力级别状态：上游服务器暴露的每个单独工具、资源或提示都可以单独启用或禁用（见 [Capability State Model](/zh/reference/adr/capability-state-model)）。数据库只存储这些能力的用户偏好标志——不缓存能力 schema 或描述。这些内容在每次请求时从上游实时获取，以每会话内存缓存的形式保存，TTL 为 60 秒。
 
 ## Kind 在组装入口处注册
 
@@ -96,7 +96,7 @@ stateDiagram-v2
 
 添加新 kind 是机械性工作：在每一层创建 kind 的子目录（`domain/<kind>/`、`application/<kind>/`、`infrastructure/<kind>/`、`surfaces/http/<kind>/`、`surfaces/cli/<kind>/`），实现 kind 特定的逻辑，然后在组装入口注册一个 `KindModule`。审计、保留和资源列表接口面将自动继承。
 
-## 为什么「一切皆资源 kind」（ADR-007）
+## 为什么「一切皆资源 kind」（ADR everything-is-a-resource-kind）
 
 信息架构遵循与领域模型相同的原则：存在单一轴向的导航模型，每一个面向用户的被管理实体都是一个资源 kind，通过同一个侧边栏分组呈现。不存在与 resource 概念并列的独立「surface」概念。
 
@@ -106,4 +106,4 @@ stateDiagram-v2
 
 ---
 
-**参见：** [ADR-001：Resource 框架提前设计](/zh/reference/adr/ADR-001-resource-framework-upfront)，[ADR-007：一切皆资源 kind](/zh/reference/adr/ADR-007-everything-is-a-resource-kind)，[ADR-003：资源标识符格式](/zh/reference/adr/ADR-003-resource-identifier-format)，[ADR-004：能力状态模型](/zh/reference/adr/ADR-004-capability-state-model)
+**参见：** [Resource 框架提前设计](/zh/reference/adr/resource-framework-upfront)，[一切皆资源 kind](/zh/reference/adr/everything-is-a-resource-kind)，[资源标识符格式](/zh/reference/adr/resource-identifier-format)，[能力状态模型](/zh/reference/adr/capability-state-model)

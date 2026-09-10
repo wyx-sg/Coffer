@@ -6,7 +6,7 @@ for the conversation's provider, has the provider build a configured adapter, an
 spawns the detached turn task (``turn_runner.run_turn_task``) which drives the
 adapter and **publishes** events to the conversation's :class:`ConversationBus`.
 
-Turn lifecycle + pending queue (spec 009 FR-050…FR-054)
+Turn lifecycle + pending queue (spec channels FR-050…FR-054)
 -------------------------------------
 Starting a turn is decoupled from consuming its events. Every turn's events are
 published to a per-conversation bus; any number of clients ``subscribe`` (the web
@@ -96,7 +96,7 @@ class TurnOrchestrator:
         Returns ``True`` when the message was queued, ``False`` when its turn
         started immediately. Raises ``ConversationNotFound`` when the conversation
         does not exist. The composer never locks — a message sent during a turn is
-        never rejected (spec 009 FR-050).
+        never rejected (spec channels FR-050).
         """
         await self._chat.get_conversation(conversation_id)  # raises ConversationNotFound -> 404
         state = self._pending_for(conversation_id)

@@ -1,5 +1,5 @@
 // frontend/src/lib/api/channels.ts — typed fetch helpers for /api/v1/channels/*
-// Hand-written wire types matching specs/009-channels/contracts/api.openapi.yaml
+// Hand-written wire types matching specs/channels/contracts/api.openapi.yaml
 // and backend/coffer/surfaces/http/channel_routes.py (mirrors chat.ts: channel
 // CRUD rides the generic /resources endpoints; these are the channel-specific
 // operations — pairing, status, notify).

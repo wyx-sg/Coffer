@@ -79,7 +79,7 @@ def _build_app(tmp_path) -> tuple[FastAPI, object]:  # type: ignore[type-ignore]
     sm = session_maker(engine)
     kinds = {
         "fake_kind": Kind(name="fake_kind", display_name="Fake", config_schema=_FakeConfig),
-        # Scope-capable test double for test_scope_cmd.py (ADR-045): mirrors
+        # Scope-capable test double for test_scope_cmd.py (ADR per-agent-resource-scope): mirrors
         # mcp_server/skill. Declared here (rather than a one-off fixture) so
         # `coffer scope ...` tests reuse the same in_proc_daemon wiring as
         # every other CLI test module. ``fake_kind`` above is the no-scope

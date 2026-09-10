@@ -1,4 +1,4 @@
-"""/api/v1/skills/* — skill manager HTTP routes (spec 005-skill-manager)."""
+"""/api/v1/skills/* — skill manager HTTP routes (spec skill-manager)."""
 
 from __future__ import annotations
 

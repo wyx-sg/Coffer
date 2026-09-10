@@ -1,4 +1,4 @@
-"""Export/import result value objects (spec 010).
+"""Export/import result value objects (spec vault-export-import).
 
 Both operations report the same three things the spec asks for: how much of
 each area moved, which individual resources could not be applied, and where

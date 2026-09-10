@@ -55,7 +55,7 @@ The user has delegated architectural authority. **Default to deciding and explai
 
 | Decision                                                                    | Action                                                                                                                                                     |
 | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Architecture / scope within a spec / tech choice                            | **Decide.** Document in spec's `plan.md` or `docs/decisions/ADR-NNN.md`.                                                                                   |
+| Architecture / scope within a spec / tech choice                            | **Decide.** Document in spec's `plan.md` or `docs/decisions/<short-kebab-case-title>.md`.                                                                  |
 | Naming / API shape within a single spec                                     | **Decide.** Document in spec's `plan.md`.                                                                                                                  |
 | Adding/removing a feature spec                                              | **Pause.** User confirmation.                                                                                                                              |
 | Releasing a tag                                                             | **Pause.** User confirmation.                                                                                                                              |

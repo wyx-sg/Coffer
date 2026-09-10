@@ -27,8 +27,9 @@ worth explaining, because it is not merely tidying:
   longer exist.
 
 So the index tables are cleared and re-accumulated by explicit writes and file
-ingestion, which is what the files-as-truth design already assumes (ADR-012):
-the index is derived, never the system of record.
+ingestion, which is what the files-as-truth design already assumes
+(ADR files-as-truth-sqlite-retrieval): the index is derived, never the system
+of record.
 
 The two machine-local side tables are renamed, not dropped — a project root and
 a display label describe a scope regardless of what the kind is called. Their

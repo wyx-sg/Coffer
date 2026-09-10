@@ -17,7 +17,7 @@ surfaces  →  application  →  domain
 import 规则以及「跨层公共模块只在第二个 feature 也需要它时才抽取」这条
 规则都是不变量 (invariant)，其唯一权威源是
 [`constitution.md`](./constitution.md)；「层优先」代码布局背后的理由见
-[ADR-002](../../docs/decisions/ADR-002-code-layout-layer-first.md)。由
+[Layer-First Code Layout](../../docs/decisions/code-layout-layer-first.md)。由
 `scripts/check_*.py` 与 importlinter 契约强制执行。
 
 ## 资源框架 (Resource framework, 与 kind 无关的内核)
@@ -33,7 +33,7 @@ coffer 中每一个由用户管理的实体都是一个**资源 (Resource)**，�
 - 作用域 (scope)：可选的按 agent 激活列表，由框架统一拥有；每个 kind 自行
   声明是否支持 scope，并各自拥有自己的执行点；已注册但不激活
   (registered-but-inactive) 语义 ——
-  [ADR-045](../../docs/decisions/ADR-045-per-agent-resource-scope.md)
+  [Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)
 
 它**不**统一调用语义 (invocation semantics)。每个 kind 自行定义其能力
 (capability) 的使用方式；框架只描述一个 kind 如何被注册、如何被自描述、
@@ -43,11 +43,11 @@ coffer 中每一个由用户管理的实体都是一个**资源 (Resource)**，�
 
 | Kind             | Spec                                                         | 描述                                                                                                                                                                                                                                                                                                                                    |
 | ---------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mcp_server`     | [001-mcp-gateway](../../specs/001-mcp-gateway/spec.md)       | 一个已注册的上游 (upstream) MCP 服务器。承载传输配置、凭据引用以及网关 (gateway) 所需的逐服务器策略。                                                                                                                                                                                                                                    |
-| `agent`          | [004-agent-registry](../../specs/004-agent-registry/spec.md) | 一个已注册的编码 agent（如 Claude Code）。承载其配置目录以及 Coffer-MCP 的安装状态。workspace 修订还将 agent 自身的文件呈现为多个**只读**面 (facet)——MCP entries（只列出，唯一的写是 adopt 进 Coffer）、plugins（只列出）、目录型配置项（逐子文件编辑）——全部在读取时从文件派生，绝不落库。Coffer 不再为了移除、开关或卸载某个条目而写入别的工具的私有配置：plugin 的开关/卸载面与 MCP entry 的移除/开关面已删除，`agent_plugin_toggled`、`agent_plugin_uninstalled`、`agent_mcp_entry_removed` 三个审计事件也随之移除。                                                     |
-| `skill`          | [005-skill-manager](../../specs/005-skill-manager/spec.md)   | 一个主 skill 包，Coffer 可将其投递到一个或多个 agent 的 skill 目录。workspace 修订新增了未托管 skill 扫描（把手工放置的 skill adopt 进主库）以及逐 agent 的 follow-master-library 策略（开关 + 排除列表，存于 agent 配置），由同步引擎负责调和。                                                                                        |
-| `knowledge`      | [007-memory](../../specs/007-memory/spec.md)                 | 知识层——把 agent 所知道的一切收进一个 kind。scope 直接从资源名读出：`global` 与 `project-<ULID>`（由 cwd 的 git 根解析而来）在首次使用时自动开通，其他名字则是用户刻意创建的集合，绝不自动开通。单一存储根 `~/.coffer/knowledge/<scope>/`，下分 `knowledge/`（agent 写入的条目，新写的先落 `knowledge/inbox/`）、`inbox/`（摄取进来的文档，已归一为 markdown）、`rules/`、`handoff/`、`superseded/` 几条 lane，另有一个隐藏的 `.raw/` 存放摄取的原件。agent 经 MCP 既读也写；markdown 文件是事实，SQLite 是可重建索引。见 [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) + [ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)。 |
-| `channel`        | [009-channels](../../specs/009-channels/spec.md)             | 一个消息 channel 绑定（Telegram、SeaTalk）。承载传输配置 + 凭据 ref 与一个默认 agent；已配对的 owner 从 IM 应用里与聊天平台的 agent 对话、应答审批提示并接收通知。薄 adapter 架在 turn 平台的接缝之上（spec 009 FR-043…FR-055）（[ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md)）。                                                         |
+| `mcp_server`     | [mcp-gateway](../../specs/mcp-gateway/spec.md)       | 一个已注册的上游 (upstream) MCP 服务器。承载传输配置、凭据引用以及网关 (gateway) 所需的逐服务器策略。                                                                                                                                                                                                                                    |
+| `agent`          | [agent-registry](../../specs/agent-registry/spec.md) | 一个已注册的编码 agent（如 Claude Code）。承载其配置目录以及 Coffer-MCP 的安装状态。workspace 修订还将 agent 自身的文件呈现为多个**只读**面 (facet)——MCP entries（只列出，唯一的写是 adopt 进 Coffer）、plugins（只列出）、目录型配置项（逐子文件编辑）——全部在读取时从文件派生，绝不落库。Coffer 不再为了移除、开关或卸载某个条目而写入别的工具的私有配置：plugin 的开关/卸载面与 MCP entry 的移除/开关面已删除，`agent_plugin_toggled`、`agent_plugin_uninstalled`、`agent_mcp_entry_removed` 三个审计事件也随之移除。                                                     |
+| `skill`          | [skill-manager](../../specs/skill-manager/spec.md)   | 一个主 skill 包，Coffer 可将其投递到一个或多个 agent 的 skill 目录。workspace 修订新增了未托管 skill 扫描（把手工放置的 skill adopt 进主库）以及逐 agent 的 follow-master-library 策略（开关 + 排除列表，存于 agent 配置），由同步引擎负责调和。                                                                                        |
+| `knowledge`      | [knowledge](../../specs/knowledge/spec.md)                 | 知识层——把 agent 所知道的一切收进一个 kind。scope 直接从资源名读出：`global` 与 `project-<ULID>`（由 cwd 的 git 根解析而来）在首次使用时自动开通，其他名字则是用户刻意创建的集合，绝不自动开通。单一存储根 `~/.coffer/knowledge/<scope>/`，下分 `knowledge/`（agent 写入的条目，新写的先落 `knowledge/inbox/`）、`inbox/`（摄取进来的文档，已归一为 markdown）、`rules/`、`handoff/`、`superseded/` 几条 lane，另有一个隐藏的 `.raw/` 存放摄取的原件。agent 经 MCP 既读也写；markdown 文件是事实，SQLite 是可重建索引。见 [Files as Truth](../../docs/decisions/files-as-truth-sqlite-retrieval.md) + [One Shared Knowledge Store](../../docs/decisions/agent-native-shared-memory.md)。 |
+| `channel`        | [channels](../../specs/channels/spec.md)             | 一个消息 channel 绑定（Telegram、SeaTalk）。承载传输配置 + 凭据 ref 与一个默认 agent；已配对的 owner 从 IM 应用里与聊天平台的 agent 对话、应答审批提示并接收通知。薄 adapter 架在 turn 平台的接缝之上（spec channels FR-043…FR-055）（[Channel Adapter Framework](../../docs/decisions/channel-adapter-framework.md)）。                                                         |
 
 知识层就是**一个基底 (substrate)**：**落盘的 markdown 文件是事实源；SQLite 是
 可重建索引**（`coffer reindex` 据文件重建）。它一直都是同一个基底——`documents`、
@@ -62,20 +62,20 @@ lane，因为统一检索正是这次合并的意义所在。
 随后分块、跟踪外部来源（`check-sources` / `update-source`）并重建索引。检索模式
 ——`grep`（直接扫原始文件）、`keyword`（FTS5 + `bm25()`）、`vector`（sqlite-vec）
 与 `hybrid`——是**内部引擎细节**，不是调用方要做的选择
-（[ADR-034](../../docs/decisions/ADR-034-retrieval-mode-is-internal.zh.md)）。
+（[Retrieval Mode Is Internal](../../docs/decisions/retrieval-mode-is-internal.zh.md)）。
 逐 scope 的配置不带任何 embedding 字段：embedding 经安装级配置解析，一个 scope 只
 要在检索模式里列出 `vector` 就算选用了向量检索。基底与检索的决策见
-[ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) 与
-[ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)；它们取代了
-LlamaIndex（ADR-010）与 mem0（ADR-011）两个引擎。agent 只经 MCP 访问该层——写进
+[Files as Truth](../../docs/decisions/files-as-truth-sqlite-retrieval.md) 与
+[One Shared Knowledge Store](../../docs/decisions/agent-native-shared-memory.md)；它们取代了
+早先的 LlamaIndex 与 mem0 两个引擎。agent 只经 MCP 访问该层——写进
 agent 配置文件的原生投影已由
-[ADR-026](../../docs/decisions/ADR-026-memory-via-mcp-not-native-projection.zh.md)
+[Memory via MCP](../../docs/decisions/memory-via-mcp-not-native-projection.zh.md)
 退役。
 
 ## 代码布局 (Code layout)
 
 按「层优先」组织，每一层内部再按 kind 划分子目录。见
-[ADR-002](../../docs/decisions/ADR-002-code-layout-layer-first.md)。
+[Layer-First Code Layout](../../docs/decisions/code-layout-layer-first.md)。
 
 ```
 backend/coffer/
@@ -139,11 +139,11 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
 | Surface                        | 进程                    | 角色                                                                                                                   |
 | ------------------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | REST API                       | daemon                  | 管理面 (management plane)：`/api/v1/*`。Token 鉴权；默认同源 (same-origin)，`COFFER_DEV_CORS` 可放行 Vite dev origin。 |
-| Web UI                         | daemon                  | 构建好的前端，由 daemon 以静态文件形式在它自己的 loopback origin 上提供 —— 与 API 同源，因此不存在需要重新构建再重新安装的桌面外壳。`coffer open` 铸造一个一次性短时效 code，在该 origin 上打开浏览器并把 code 放在 URL fragment 里，页面再用它换取 API token（spec 001 FR-024 / FR-025）。 |
+| Web UI                         | daemon                  | 构建好的前端，由 daemon 以静态文件形式在它自己的 loopback origin 上提供 —— 与 API 同源，因此不存在需要重新构建再重新安装的桌面外壳。`coffer open` 铸造一个一次性短时效 code，在该 origin 上打开浏览器并把 code 放在 URL fragment 里，页面再用它换取 API token（spec mcp-gateway FR-024 / FR-025）。 |
 | MCP protocol                   | daemon                  | `/mcp` HTTP/SSE 端点，承载 MCP JSON-RPC。                                                                              |
 | CLI (`coffer …`)               | 短生命周期子进程        | 通过 loopback HTTP 调用 daemon。                                                                                       |
 | Stdio shim (`coffer-mcp-shim`) | 每个 MCP 客户端会话一份 | `stdin/stdout ↔ daemon HTTP/SSE` 转发器；检测 daemon，否则拉起。                                                      |
-| Callback listener              | daemon 拉起的子进程     | 只服务带签名的 channel webhook (`POST /seatalk/{channel}`)；loopback 端口，公网侧由用户自行运行的隧道承接 (spec 009)。 |
+| Callback listener              | daemon 拉起的子进程     | 只服务带签名的 channel webhook (`POST /seatalk/{channel}`)；loopback 端口，公网侧由用户自行运行的隧道承接 (spec channels)。 |
 
 ## 进程 (Processes)
 
@@ -152,11 +152,11 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
 - **Stdio shim** — 短生命周期；其生命周期绑定到单个 MCP 客户端进程。
 - **Callback listener** — daemon 拉起的子进程，只在
   `127.0.0.1:<callback-port>` 上服务带签名的 channel 回调路径；在任何
-  SeaTalk channel 处于启用状态时运行 (spec 009，[ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md))。
+  SeaTalk channel 处于启用状态时运行 (spec channels，[Channel Adapter Framework](../../docs/decisions/channel-adapter-framework.md))。
 
 两者通过 `~/.coffer/daemon.json` 发现 daemon (PID + 端口 + token，权限位
 `0600`)。见
-[ADR-006](../../docs/decisions/ADR-006-daemon-detect-or-spawn.md)。
+[Detect-or-Spawn](../../docs/decisions/daemon-detect-or-spawn.md)。
 
 ## 持久化 (Persistence)
 
@@ -172,7 +172,7 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
   **sqlite-vec**（对 chunk embedding 做向量 KNN）。没有独立的
   chroma / LlamaIndex / mem0 store ——
   `~/.coffer/knowledge/<scope>/` 下的 markdown 文件才是事实；DB（含 FTS 索引）可据其重建
-  （[ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md)）。
+  （[Files as Truth](../../docs/decisions/files-as-truth-sqlite-retrieval.md)）。
 - 数据库文件、daemon 发现文件、日志、knowledge 文件树与每个上游的 PID 文件
   都收纳在 `~/.coffer/` 下，便于单点备份。
 
@@ -180,10 +180,10 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
 
 | 关注点      | 位置                                                                                         | 备注                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ----------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 凭据        | `infrastructure/credentials/`(`encrypted_store.py`、`master_key.py`、`keyring_adapter.py`）  | 密钥只以 Fernet 密文形式存于 `credentials` 表；主密钥（默认 `0600` 文件，opt-in 时存于操作系统钥匙串）与 legacy 迁移是唯一的 `keyring` 使用方。**daemon 是唯一凭据存储所有者**:所有 surface(Web UI、CLI、shim)都通过 daemon 的 `/api/v1/credentials` 路由访问密钥，并通过 `/api/v1/settings/credentials` 切换主密钥存储位置 —— CLI 不在进程内直接访问存储（[ADR-015](../../docs/decisions/ADR-015-envelope-encrypted-credential-store.zh.md)）。配置里只放 ref；在上游进程拉起时按需物化（解密）；明文永不落盘。 |
+| 凭据        | `infrastructure/credentials/`(`encrypted_store.py`、`master_key.py`、`keyring_adapter.py`）  | 密钥只以 Fernet 密文形式存于 `credentials` 表；主密钥（默认 `0600` 文件，opt-in 时存于操作系统钥匙串）与 legacy 迁移是唯一的 `keyring` 使用方。**daemon 是唯一凭据存储所有者**:所有 surface(Web UI、CLI、shim)都通过 daemon 的 `/api/v1/credentials` 路由访问密钥，并通过 `/api/v1/settings/credentials` 切换主密钥存储位置 —— CLI 不在进程内直接访问存储（[Envelope-Encrypted Credentials](../../docs/decisions/envelope-encrypted-credential-store.zh.md)）。配置里只放 ref；在上游进程拉起时按需物化（解密）；明文永不落盘。 |
 | 审计        | `domain/audit.py` + `application/audit_service.py` + `audit_log` 表                          | 覆盖每一次资源生命周期变更。必须带 actor (cli / api / ui / system)。                                                                                                                                                                                                                                                                                                                                                                |
 | 保留策略    | `application/retention_service.py` + `retention_policies` 表 + asyncio worker                | 每个日志类表注册为 `PrunableTable`；中央注册表强制执行 SQL allowlist。                                                                                                                                                                                                                                                                                                                                                              |
 | 错误        | `domain/errors.py` + FastAPI 全局处理器                                                      | 统一 `{error: {code, message, details}}` 信封；用 `X-Coffer-Trace` header 做关联。                                                                                                                                                                                                                                                                                                                                                  |
 | 日志        | `structlog` 以 JSON-per-line 写入 `~/.coffer/logs/`                                          | 通过 contextvar 实现按请求级别的 trace ID。                                                                                                                                                                                                                                                                                                                                                                                         |
 | Converter   | `MarkdownConverter` 端口 + 逐格式 adapter，落在 `infrastructure/`                            | 唯一 import converter 库的地方（文本/源码走 passthrough、csv 走专用转换器、其余走 MarkItDown；新引擎可按格式插拔）。any-format → markdown。                                                                                                                                                                                                                                                                                         |
-| 导出 / 导入 | `application/sync/` + `infrastructure/sync/` + CLI 与 HTTP 表面 | 一次性地把仓库**导出到一个目录**、并把这样一个目录**导入回来**（spec 010，[ADR-016](../../docs/decisions/ADR-016-vault-export-import.md)）。没有 git、没有远程、没有工作区、没有后台 worker、没有墓碑，也没有自己的表。导出会镜像知识与技能的文件树、把每个配置资源序列化成一个**确定性** YAML、导出各模块自有的共享状态，并在被明确要求时**仅以密文**携带凭据（主密钥带外引导）。导入按资源 bundle-wins、从不删除、逐资源报告失败，并运行每个 kind 的导入后钩子。基于 `$HOME` 的相对路径归一化让一个 bundle 可在机器之间搬运。属横切，不是 kind。资源的 `scope`——一个 agent 名字列表（[ADR-045](../../docs/decisions/ADR-045-per-agent-resource-scope.md)）——作为普通字段搭乘资源文档穿过导出与导入。 |
+| 导出 / 导入 | `application/sync/` + `infrastructure/sync/` + CLI 与 HTTP 表面 | 一次性地把仓库**导出到一个目录**、并把这样一个目录**导入回来**（spec vault-export-import，[Vault Export and Import](../../docs/decisions/vault-export-import.md)）。没有 git、没有远程、没有工作区、没有后台 worker、没有墓碑，也没有自己的表。导出会镜像知识与技能的文件树、把每个配置资源序列化成一个**确定性** YAML、导出各模块自有的共享状态，并在被明确要求时**仅以密文**携带凭据（主密钥带外引导）。导入按资源 bundle-wins、从不删除、逐资源报告失败，并运行每个 kind 的导入后钩子。基于 `$HOME` 的相对路径归一化让一个 bundle 可在机器之间搬运。属横切，不是 kind。资源的 `scope`——一个 agent 名字列表（[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)）——作为普通字段搭乘资源文档穿过导出与导入。 |

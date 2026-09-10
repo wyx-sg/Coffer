@@ -95,5 +95,6 @@ def configure_logging(level: str = "INFO") -> None:
         cache_logger_on_first_use=True,
     )
     _attach_file_handler()
-    # Opt-in eval-capture sink (ADR-019): no-op unless COFFER_EVAL_CAPTURE is set.
+    # Opt-in eval-capture sink (ADR close-the-eval-flywheel): no-op unless
+    # COFFER_EVAL_CAPTURE is set.
     install_eval_capture_handler()

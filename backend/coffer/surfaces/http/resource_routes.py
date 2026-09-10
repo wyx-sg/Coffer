@@ -155,6 +155,6 @@ async def update_resource_scope(
 ) -> ResourceOut:
     # Deliberately NOT gated on allow_lifecycle_kind — scope is a
     # framework-level concern orthogonal to a kind's creation invariants
-    # (ResourceService.update_scope, ADR-045).
+    # (ResourceService.update_scope, ADR: per-agent-resource-scope).
     r = await svc.update_scope(ResourceRef(kind, name), body.scope, actor=actor)
     return _to_out(r)

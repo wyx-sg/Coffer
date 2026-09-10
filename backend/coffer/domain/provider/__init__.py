@@ -1,4 +1,4 @@
-"""Provider-switching domain (spec 011).
+"""Provider-switching domain (spec provider-switching).
 
 A *provider profile* is a config resource (Kind ``provider``) describing one
 upstream endpoint for one wire format. Switching = projecting the active profile

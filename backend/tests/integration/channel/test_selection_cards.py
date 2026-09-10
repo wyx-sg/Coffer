@@ -38,7 +38,7 @@ async def test_agent_no_arg_renders_a_card_when_supported(env: ChannelEnv) -> No
     assert any(b.label.endswith("✓") for b in buttons)
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="a selection-card tap switches the agent")
+@pytest.mark.acceptance(spec="channels", scenario="a selection-card tap switches the agent")
 async def test_agent_card_tap_switches_and_sticks(env: ChannelEnv) -> None:
     env.add_agent("codex", reply="codex-here")
     resource, _adapter = await _card_channel(env)
@@ -96,7 +96,7 @@ async def test_model_card_tap_sets_next_turn_model(env: ChannelEnv) -> None:
 # -- owner gate ----------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="a non-owner selection-card tap is ignored")
+@pytest.mark.acceptance(spec="channels", scenario="a non-owner selection-card tap is ignored")
 async def test_non_owner_tap_is_ignored(env: ChannelEnv) -> None:
     env.add_agent("codex")
     resource, _adapter = await _card_channel(env, sender_id="owner-1")
@@ -128,7 +128,7 @@ async def _group_card_channel(
 
 
 @pytest.mark.acceptance(
-    spec="009-channels", scenario="a group selection-card tap replies in the group/thread"
+    spec="channels", scenario="a group selection-card tap replies in the group/thread"
 )
 async def test_owner_group_card_tap_switches_and_replies_in_the_thread(env: ChannelEnv) -> None:
     """The owner tapping an /agent card in a group switches the agent for THAT

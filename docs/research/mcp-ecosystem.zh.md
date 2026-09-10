@@ -2,7 +2,7 @@
 
 > 中文版：本文件 · English: [mcp-ecosystem.md](./mcp-ecosystem.md)
 >
-> 面向 Coffer MCP gateway（spec 001）的内部竞品调研报告。**日期：** 2026-06-16。
+> 面向 Coffer MCP gateway（spec mcp-gateway）的内部竞品调研报告。**日期：** 2026-06-16。
 > **方法：** deep-research harness（25 条 claim 中 24 条经 3 票确认；下文两条头号结论
 > 通过了完整对抗式核验）。
 
@@ -126,7 +126,7 @@ Composio、Docker MCP Catalog），而非根注册表。**它明确不是网关�
 ## 核查更新（2026-06-19）
 
 > 再核验：除一条已被落地代码推翻外，其余 claim 均成立——"没有按 agent 范围控制"这条
-> LOCAL 头号结论已翻转（PR #108 / ADR-026，已于 2026-06-18 合并），下移至 ✏️ 已修正；
+> LOCAL 头号结论已翻转（PR #108，已于 2026-06-18 合并），下移至 ✏️ 已修正；
 > `search_tools` 那条 LOCAL 结论仍成立。WEB claim 在两处升级了引用来源、一处
 > 收窄了表述后确认。
 
@@ -134,7 +134,7 @@ Composio、Docker MCP Catalog），而非根注册表。**它明确不是网关�
 
 - **Coffer 提供 `search_tools`。** 它是内建元工具
   （`tool_search_descriptor()` 在 `append_builtin_tools()` 中追加，由
-  `dispatch_tool_search()` 派发——默认 BM25，提供 embedder 时走语义检索，依 ADR-024），
+  `dispatch_tool_search()` 派发——默认 BM25，提供 embedder 时走语义检索，依"内置 agent 是内部能力"ADR），
   经由网关暴露。
   `repo:backend/coffer/application/mcp/gateway_builtin.py:144-201`
 - **ToolHive vMCP 逐实例工具过滤**（报告中标记其精确机制未通过核验）——现据 Stacklok
@@ -154,8 +154,8 @@ Composio、Docker MCP Catalog），而非根注册表。**它明确不是网关�
 
 - **"没有按客户端/按 agent 的范围控制"现已过时——Coffer 已落地该能力。** 本报告的
   头号差异点（"唯一把整个网关塞给每个 agent、唯一没有按客户端范围控制的网关"，见
-  §1/§2 对比表/§3/§4）已被 **PR #108 / ADR-045**
-  （`docs/decisions/ADR-045-per-agent-resource-scope.md`）推翻，该 PR 已于 **2026-06-18**
+  §1/§2 对比表/§3/§4）已被 **PR #108** /
+  [Per-Agent Resource Scope](../decisions/per-agent-resource-scope.zh.md)推翻，该 PR 已于 **2026-06-18**
   合并。Coffer 现已支持**按 agent 的 MCP 服务器范围控制**，提供两种模式：`auto`
   （默认——暴露所有已启用服务器，完全向后兼容）与 `selected`（一份按 agent 的显式
   白名单）。agent 身份随会话传递：安装写入器把 `--agent <name>` 写进该 agent 的
@@ -174,7 +174,7 @@ Composio、Docker MCP Catalog），而非根注册表。**它明确不是网关�
   `repo:backend/coffer/application/agent/scope_service.py:33-96`、
   `repo:backend/coffer/application/mcp/gateway.py:165-222`、
   `repo:frontend/src/components/agents/AgentGatewayMcpSection.tsx`、
-  `repo:docs/decisions/ADR-045-per-agent-resource-scope.md`
+  `repo:docs/decisions/per-agent-resource-scope.md`
 - **"唯一带运行时工具检索的网关"对更大范围的业界而言表述过强。** 旧：对比表把运行时
   工具检索标为 Coffer 独有，对五家对手全部记为 `—`。修正：即便越出受访的五家，工具检索/
   渐进披露也并非独有——AIRIS 提供 7 个元工具（find/exec/schema/suggest/route…），

@@ -63,7 +63,7 @@ class Resource:
     enabled: bool
     created_at: datetime
     updated_at: datetime
-    # Framework-level per-agent activation scope (ADR-045): a list of agent
+    # Framework-level per-agent activation scope (ADR per-agent-resource-scope): a list of agent
     # names. None means unscoped (active for every agent) — the pre-scope
     # default, so every existing constructor keeps working unchanged.
     # Interpreted via coffer.domain.scope; only kinds whose Kind.supports_scope
@@ -106,7 +106,7 @@ class Kind:
     # Optional kind-supplied audit redactor: given a validated config dict,
     # return an audit-safe copy with secret-bearing fields stripped. Keeps the
     # kind-agnostic ResourceService from hardcoding any one kind's config shape
-    # (e.g. mcp_server's ``transport.env``/``headers``) — ADR-001 / CODE-006.
+    # (e.g. mcp_server's ``transport.env``/``headers``) — resource framework / CODE-006.
     audit_redactor: Callable[[dict[str, Any]], dict[str, Any]] | None = None
     # Optional kind-supplied credential-ref extractor: given a validated config
     # dict, return ``{logical_key: keychain_ref}``. ResourceService probes each
@@ -133,12 +133,12 @@ class Kind:
         | None
     ) = None
     # Whether this kind supports the framework-level per-agent activation
-    # scope (ADR-045). False (the default) means the kind has no scope at all:
+    # scope (ADR per-agent-resource-scope). False (the default) means the kind has no scope at all:
     # ResourceService.update_scope rejects any non-null payload for it (422).
     # `mcp_server` and `skill` set this True; `agent`, `channel`,
     # `knowledge_base` and `memory` deliberately do not.
     supports_scope: bool = False
-    # Optional post-write hook for ``ResourceService.update_scope`` (ADR-045).
+    # Optional post-write hook for ``ResourceService.update_scope`` (ADR per-agent-resource-scope).
     # Receives the ref whose scope just changed; invoked AFTER persistence +
     # audit (unlike ``on_update_config``, which runs BEFORE — scope
     # reconciliation needs to read the already-persisted scope), so it cannot

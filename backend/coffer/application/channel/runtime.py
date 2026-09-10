@@ -159,9 +159,9 @@ class ChannelRuntime:
             _logger.exception("channel.runtime.tick_failed")
 
     async def _enabled_channels(self) -> dict[str, tuple[int, dict[str, object]]]:
-        # A channel carries no activation scope (ADR-045): enabled means it
+        # A channel carries no activation scope (ADR per-agent-resource-scope): enabled means it
         # runs here, on the one machine the daemon is on. The machine-affinity
-        # gate this once had went away with continuous sync (ADR-016).
+        # gate this once had went away with continuous sync (ADR vault-export-import).
         rows = await self._resources.list(kind="channel")
         return {r.name: (r.id, dict(r.config)) for r in rows if r.enabled}
 

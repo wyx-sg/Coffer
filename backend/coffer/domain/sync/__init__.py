@@ -1,4 +1,4 @@
-"""Vault export/import domain (spec 010, ADR-016).
+"""Vault export/import domain (spec vault-export-import, ADR: vault-export-import).
 
 Pure value objects and contracts: the bundle manifest, the export/import
 summaries, deterministic resource serialization, path portability, and the

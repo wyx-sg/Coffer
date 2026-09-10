@@ -1,7 +1,7 @@
 // frontend/src/components/ScopeCard.tsx
 //
 // ScopeCard: the resource-detail-page editor for a kind's per-agent activation
-// scope (ADR-045). GET/PUT /resources/{kind}/{name}/scope
+// scope (ADR per-agent-resource-scope). GET/PUT /resources/{kind}/{name}/scope
 // (useResourceScope/useUpdateResourceScope) backs this; useAgents() supplies
 // the registered-agent list. Only `mcp_server` and `skill` support scope — the
 // card renders nothing for kinds that don't, so their detail pages don't have

@@ -145,7 +145,7 @@ class ModelIntrospectionService:
         secret_value: str | None = None,
     ) -> str:
         # Classify the endpoint's wire so the connection needs no manual type
-        # selector (ADR-032 D9). Never raises — a failed probe degrades to
+        # selector (provider switching, D9). Never raises — a failed probe degrades to
         # 'unknown', which the agent page surfaces to all agents (E5).
         try:
             key = self._key_for("", credential_ref, secret_value)

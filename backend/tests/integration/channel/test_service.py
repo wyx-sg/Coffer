@@ -17,7 +17,7 @@ from coffer.domain.errors import CredentialMissing, ResourceNotFound
 from .conftest import ChannelEnv
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="register a telegram channel")
+@pytest.mark.acceptance(spec="channels", scenario="register a telegram channel")
 async def test_register_telegram_channel_is_listed_with_config_and_audited(
     env: ChannelEnv,
 ) -> None:
@@ -42,7 +42,7 @@ async def test_register_telegram_channel_is_listed_with_config_and_audited(
     assert entries[0].details["config"]["bot_token_ref"] == "channel/tg/bot-token"
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="reject a channel with a missing credential")
+@pytest.mark.acceptance(spec="channels", scenario="reject a channel with a missing credential")
 async def test_register_with_dangling_credential_ref_persists_nothing(env: ChannelEnv) -> None:
     with pytest.raises(CredentialMissing):
         await env.resources.register(
@@ -55,7 +55,7 @@ async def test_register_with_dangling_credential_ref_persists_nothing(env: Chann
     assert await env.audit_entries("resource_created", name="tg") == []
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="issue a pairing code")
+@pytest.mark.acceptance(spec="channels", scenario="issue a pairing code")
 async def test_issue_pairing_code_returns_code_with_expiry_and_audits(env: ChannelEnv) -> None:
     await env.register_channel("tg")
 
@@ -76,7 +76,7 @@ async def test_issue_pairing_code_for_unknown_channel_raises(env: ChannelEnv) ->
         await env.service.issue_pairing_code("ghost", actor="cli")
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="notify delivers to the paired owner")
+@pytest.mark.acceptance(spec="channels", scenario="notify delivers to the paired owner")
 async def test_notify_sends_via_running_adapter(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
     await env.runtime.reconcile_once()
@@ -90,7 +90,7 @@ async def test_notify_sends_via_running_adapter(env: ChannelEnv) -> None:
     assert adapter.sent == [("owner", "backup finished")]
 
 
-@pytest.mark.acceptance(spec="009-channels", scenario="notify on an unpaired channel fails cleanly")
+@pytest.mark.acceptance(spec="channels", scenario="notify on an unpaired channel fails cleanly")
 async def test_notify_without_paired_peer_fails_and_sends_nothing(env: ChannelEnv) -> None:
     await env.register_channel("tg")
     await env.runtime.reconcile_once()

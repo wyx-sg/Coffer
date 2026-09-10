@@ -1,7 +1,7 @@
 // frontend/src/kinds/knowledge/types.test.ts
 //
 // Unit tests for the memory wire-type helpers. `projectDirName` backs the
-// human-readable project identity (spec 007 FR-017a): a per-project store is
+// human-readable project identity (spec knowledge FR-017a): a per-project store is
 // shown by its root directory's basename instead of the opaque project-<ULID>.
 
 import { describe, expect, test } from "vitest";

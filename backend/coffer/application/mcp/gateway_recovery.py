@@ -1,4 +1,4 @@
-"""Recovery for upstreams that failed a session's tools/list (ADR-046).
+"""Recovery for upstreams that failed a session's tools/list (ADR budget-driven-tool-tiering).
 
 A per-server discovery timeout leaves that server's tools out of the aggregate
 list. The client caches ``tools/list``, and the correcting

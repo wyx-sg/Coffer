@@ -8,7 +8,7 @@ def test_daemon_status_unreachable_message(tmp_path, monkeypatch):
     """When daemon.json is absent and the auto-spawn fails/times out, status
     should exit with code 3 and a hint about the daemon log.
 
-    ADR-006: client_or_exit() now auto-spawns; we simulate a spawn that never
+    Detect-or-spawn: client_or_exit() now auto-spawns; we simulate a spawn that never
     produces daemon.json (timeout) to exercise the error path.
     """
     monkeypatch.setenv("HOME", str(tmp_path))

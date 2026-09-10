@@ -1,6 +1,6 @@
 // frontend/src/kinds/channel/ChannelsTable.test.tsx
 //
-// The channels list (spec 009, FR-041). Each row carries the platform type,
+// The channels list (spec channels, FR-041). Each row carries the platform type,
 // default agent, a live runtime-health badge (Running/Stopped), enabled state,
 // and a paired-owner cell — all fed by the per-row /channels/{name}/status
 // query, which we stub here. The health badge mirrors the MCP-server surface's

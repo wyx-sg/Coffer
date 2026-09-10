@@ -1,0 +1,752 @@
+openapi: 3.1.0
+info:
+  title: Coffer — Provider Switching API
+  version: "0.1.0"
+  description: |
+    Provider registry endpoints. Merged into the main Coffer Management API at
+    runtime; this document scopes only the provider-specific routes added by
+    the provider-switching spec.
+
+    All routes use the same `X-Coffer-Token` authentication from
+    `specs/mcp-gateway/contracts/api.openapi.yaml`.
+
+    Hand-written; NOT contract-test-gated. Sync with the implementation manually.
+
+    Security note: `ProviderOut` never includes the raw secret. `credential_ref`
+    and `is_active` are always present.
+
+servers:
+  - url: http://127.0.0.1:{port}/api/v1
+    variables:
+      port:
+        default: "8000"
+
+security:
+  - cofferToken: []
+
+tags:
+  - name: providers
+    description: Provider profile registry and activation
+  - name: models
+    description: >
+      Read-only introspection of a connection — what it serves and whether it
+      answers. Used by the connection editor before a provider is saved, which
+      is why every operation accepts an inline `secret_value` as well as a
+      stored `credential_ref`.
+
+paths:
+  /providers:
+    get:
+      tags: [providers]
+      operationId: listProviders
+      summary: List all provider profiles
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderListOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+    post:
+      tags: [providers]
+      operationId: createProvider
+      summary: Create a new provider connection
+      description: |
+        Credential source depends on `protocol`:
+        - For `anthropic`/`openai`, exactly one credential source must be
+          supplied:
+          - `secret_value`: the raw API key — stored to the Fernet vault under
+            `provider/<name>/key` and kept only as a `credential_ref`.
+          - `credential_ref`: reuse an existing vault ref.
+          Supplying both or neither is rejected with 422.
+        - For `ollama`, the credential is OPTIONAL — supply NEITHER
+          `secret_value` nor `credential_ref` (an ollama connection has no
+          key). Supplying either is rejected with 422.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProviderCreateRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /providers/{name}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+        description: Provider profile name (unique within kind).
+
+    get:
+      tags: [providers]
+      operationId: getProvider
+      summary: Get a single provider profile
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+    patch:
+      tags: [providers]
+      operationId: updateProvider
+      summary: Update a provider profile
+      description: |
+        All fields are optional. Supplying `secret_value` rotates the stored
+        secret (overwrites the vault entry at the existing `credential_ref`).
+        `protocol` and `credential_ref` are immutable (identity) — change
+        them by recreating the profile.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProviderPatchRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+    delete:
+      tags: [providers]
+      operationId: deleteProvider
+      summary: Delete a provider profile
+      description: |
+        If the profile owns its `credential_ref` (no other profile cites it),
+        the Fernet vault entry is also deleted. Guarded by
+        `find_credential_citations`.
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /providers/{name}/activate:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+        description: Provider profile name to activate.
+
+    post:
+      tags: [providers]
+      operationId: activateProvider
+      summary: Activate (switch to) a provider profile
+      description: |
+        Sets this profile as the active one for its `protocol` (at most one
+        active per wire at any time). Atomically clears `is_active` on all
+        other profiles of the same `protocol`.
+
+        For each ENABLED registered agent whose native wire matches the
+        profile's `protocol`, projects (writes native config):
+        - `anthropic` → `~/.claude/settings.json` (apiKeyHelper + env keys)
+        - `openai` → `~/.codex/config.toml` (model + model_providers.coffer)
+
+        If no matching agent is registered, the profile is still activated and
+        the response carries the agent in `skipped` — NOT an error.
+
+        Emits a `PROVIDER_SWITCHED` audit event with details
+        `{from, to, protocol, agents: [...projected...]}`.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActivateOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /providers/{name}/internal-default:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+        description: Connection name to set as the internal-engine default.
+
+    post:
+      tags: [providers]
+      operationId: setInternalDefaultProvider
+      summary: Set a connection as Coffer's internal-engine default
+      description: |
+        Marks this connection as the one Coffer's internal LLM engine uses
+        (memory organizer, reorg, distill). At most one
+        connection globally is the internal default; setting one clears the
+        previous one (sequential clear-then-set, serialised by the
+        single-process daemon).
+
+        Emits a `PROVIDER_INTERNAL_DEFAULT_SET` audit event with details
+        `{from, to}` and returns the updated `ProviderOut`.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /providers/active-key/{wire}:
+    parameters:
+      - in: path
+        name: wire
+        required: true
+        schema: { type: string, enum: [anthropic, openai] }
+        description: Wire format whose active profile's key to resolve.
+
+    get:
+      tags: [providers]
+      operationId: activeProviderKey
+      summary: Resolve the active provider's API key for a wire format
+      description: |
+        Returns the decrypted API key of the active profile for `wire`, over the
+        local token-protected daemon API. This is what Claude Code's
+        `apiKeyHelper = "coffer provider key --wire anthropic"` invokes, so the
+        raw key never has to be written into `settings.json`. Not audited —
+        `apiKeyHelper` polls it frequently. 404 when no profile is active for
+        that wire.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActiveKeyOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /providers/{name}/key:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+        description: Connection name whose key to resolve.
+
+    get:
+      tags: [providers]
+      operationId: connectionKey
+      summary: Resolve a specific connection's API key
+      description: |
+        Returns the decrypted API key of the named connection. This is what Claude
+        Code's projected `apiKeyHelper = "coffer provider key --connection <name>"`
+        invokes, so the agent always reads exactly the activated connection's key
+        (no wire+active mismatch). Not audited — `apiKeyHelper` polls it frequently.
+        404 when the connection is absent or keyless (ollama).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActiveKeyOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /providers/use-builtin/{wire}:
+    parameters:
+      - in: path
+        name: wire
+        required: true
+        schema: { type: string, enum: [anthropic, openai] }
+        description: Wire format whose agent(s) to switch back to built-in.
+
+    post:
+      tags: [providers]
+      operationId: useBuiltinProvider
+      summary: Switch a wire's agent(s) back to their built-in login
+      description: |
+        Removes Coffer's projected keys from every ENABLED matching agent's
+        native config (the inverse of activate) and clears `is_active` on the
+        wire's active connection, so the agent runs on its OWN built-in
+        model/login. A Coffer LLM connection is an optional override, not a
+        prerequisite (ADR provider-switching, amendment D1/D3).
+
+        Idempotent — a no-op when nothing is active for the wire. Emits a
+        `PROVIDER_SWITCHED` audit event `{from, to: null, protocol, agents}`
+        only when something changed.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeactivateOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /internal-engine-config:
+    get:
+      tags: [internal-engine]
+      operationId: getInternalEngineConfig
+      summary: Get the global internal-engine model selection
+      description: |
+        The single, global model Coffer's internal LLM engine (memory organizer,
+        reorg, distill) runs on. The engine takes its endpoint +
+        key from the `internal_default` connection but its MODEL from this
+        singleton (ADR provider-switching, amendment E3). `model` is `null` until one is chosen.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalEngineConfigOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+    put:
+      tags: [internal-engine]
+      operationId: updateInternalEngineConfig
+      summary: Set the global internal-engine model
+      description: |
+        Sets the model the internal engine runs on (`null`/empty clears it).
+        Overlaid onto the resolved `internal_default` connection before the
+        engine builds its chat model. Emits an `internal_engine_model_set` audit
+        event.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InternalEngineConfigUpdate" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalEngineConfigOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /models/list-models:
+    post:
+      tags: [models]
+      operationId: listProviderModels
+      summary: List the models a provider exposes
+      description: >
+        An empty list with a `message` means the endpoint does not advertise a
+        catalogue — the editor then asks the user to type a model id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListModelsIn'
+      responses:
+        '200':
+          description: The models the endpoint reported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderModelsOut'
+
+  /models/test-connection:
+    post:
+      tags: [models]
+      operationId: testProviderConnection
+      summary: Probe a connection with a minimal request
+      description: >
+        Always 200 — a failed probe is `ok: false` with a message, not an HTTP
+        error, because "this key is wrong" is a normal answer to this question.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestConnectionIn'
+      responses:
+        '200':
+          description: Probe result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestResultOut'
+
+  /models/detect-protocol:
+    post:
+      tags: [models]
+      operationId: detectProviderProtocol
+      summary: Classify an endpoint's wire protocol
+      description: >
+        Lets the connection dialog drop its manual type selector — the endpoint
+        is asked what it speaks.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DetectProtocolIn'
+      responses:
+        '200':
+          description: The detected protocol, or "unknown"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetectProtocolOut'
+
+components:
+  securitySchemes:
+    cofferToken:
+      type: apiKey
+      in: header
+      name: X-Coffer-Token
+
+  schemas:
+
+    ListModelsIn:
+      type: object
+      required: [provider]
+      properties:
+        provider: { type: string }
+        base_url: { type: string, nullable: true }
+        credential_ref: { type: string, nullable: true }
+        secret_value:
+          type: string
+          nullable: true
+          description: Inline secret, to fetch before the connection is saved.
+
+    ProviderModelsOut:
+      type: object
+      required: [models]
+      properties:
+        models:
+          type: array
+          items: { type: string }
+        message: { type: string, default: "" }
+
+    TestConnectionIn:
+      type: object
+      required: [provider, model]
+      properties:
+        provider: { type: string }
+        model: { type: string }
+        base_url: { type: string, nullable: true }
+        credential_ref: { type: string, nullable: true }
+        secret_value:
+          type: string
+          nullable: true
+          description: Inline secret, to test before the connection is saved.
+
+    TestResultOut:
+      type: object
+      required: [ok, message]
+      properties:
+        ok: { type: boolean }
+        message: { type: string }
+        detail:
+          type: object
+          additionalProperties: true
+
+    DetectProtocolIn:
+      type: object
+      properties:
+        base_url: { type: string, nullable: true }
+        credential_ref: { type: string, nullable: true }
+        secret_value: { type: string, nullable: true }
+
+    DetectProtocolOut:
+      type: object
+      required: [protocol]
+      properties:
+        protocol:
+          type: string
+          description: '"anthropic" | "openai" | "ollama" | "unknown"'
+
+    Protocol:
+      type: string
+      enum: [anthropic, openai, ollama, unknown]
+      description: |
+        The connection's detected upstream protocol; determines which native
+        agent it projects to:
+        - `anthropic` → Claude Code (`~/.claude/settings.json`)
+        - `openai` → Codex (`~/.codex/config.toml`)
+        - `ollama` → internal-only; projected to NO agent (`target_for`
+          returns null). Used solely by Coffer's internal engine when this
+          connection is the internal default. Has no API key, so its
+          `credential_ref` is absent.
+        - `unknown` → the probe was inconclusive; the connection is offered to
+          every agent and the user decides.
+
+    ProviderOut:
+      type: object
+      required:
+        - name
+        - protocol
+        - base_url
+        - credential_ref
+        - compatible_agents
+        - is_active
+        - internal_default
+        - created_at
+        - updated_at
+      description: >-
+        A provider connection — a credentialed endpoint `{protocol, base_url,
+        credential_ref}`. Never includes the raw secret. The model lives apart
+        from the connection (spec provider-switching E3) and is chosen at the point of use.
+      properties:
+        name:
+          type: string
+          description: Connection name (unique within kind `provider`).
+        protocol:
+          $ref: "#/components/schemas/Protocol"
+        base_url:
+          type: string
+          description: The upstream LLM endpoint URL.
+        credential_ref:
+          type: string
+          nullable: true
+          description: >-
+            Fernet vault reference for the API key.
+            Pattern: `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`.
+            Typically `provider/<name>/key` for an owned secret.
+            Null for an ollama connection (no API key).
+        compatible_agents:
+          type: array
+          items: { $ref: "#/components/schemas/AgentType" }
+          description: >-
+            The EFFECTIVE (resolved) agents this connection projects into — the
+            explicit override or the wire default. The projection writer is chosen
+            by agent type, not protocol; the Agent Overview picker filters on this.
+        is_active:
+          type: boolean
+          description: >-
+            Whether this connection is the active override for its compatible
+            agents. At most one active connection per agent type. Always false
+            for ollama (internal-only, never projected).
+        internal_default:
+          type: boolean
+          description: >-
+            Whether this connection is Coffer's internal-engine default. At
+            most one connection globally has internal_default=true.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ProviderCreateRequest:
+      type: object
+      required:
+        - name
+        - protocol
+        - base_url
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          description: Profile name; must pass `validate_name`.
+        protocol:
+          $ref: "#/components/schemas/Protocol"
+        base_url:
+          type: string
+          description: The upstream LLM endpoint URL.
+        credential_ref:
+          type: string
+          nullable: true
+          description: >-
+            Reuse an existing vault ref. Mutually exclusive with
+            `secret_value`. For anthropic/openai/unknown exactly one of the two
+            must be supplied; for ollama supply neither.
+        secret_value:
+          type: string
+          nullable: true
+          description: >-
+            Raw API key. Stored to the vault under `provider/<name>/key`.
+            Mutually exclusive with `credential_ref`. For anthropic/openai/unknown
+            exactly one of the two must be supplied; for ollama supply
+            neither. Never echoed in any response.
+        compatible_agents:
+          type: array
+          nullable: true
+          items: { $ref: "#/components/schemas/AgentType" }
+          description: >-
+            Override the wire default for which agents the connection projects
+            into (e.g. an openai gateway routed to claude_code). Null ⇒ the wire
+            default. ollama must not declare any (it projects into no agent).
+
+    ProviderPatchRequest:
+      type: object
+      additionalProperties: false
+      description: >-
+        All fields optional. `protocol` and `credential_ref` are immutable
+        and cannot be patched. `compatible_agents` is mutable (re-target then
+        re-activate to re-project). The model is not on the connection (spec provider-switching E3).
+      properties:
+        base_url:
+          type: string
+          nullable: true
+        secret_value:
+          type: string
+          nullable: true
+          description: >-
+            Rotate the stored secret. Overwrites the vault entry at the
+            current `credential_ref`. Never echoed in any response.
+        compatible_agents:
+          type: array
+          nullable: true
+          items: { $ref: "#/components/schemas/AgentType" }
+          description: >-
+            Re-target which agents the connection projects into. Null ⇒ leave
+            unchanged.
+
+    AgentType:
+      type: string
+      enum: [claude_code, codex]
+      description: A coding agent a connection can project into.
+
+    ActivateOut:
+      type: object
+      required: [activated, protocol, projected, skipped]
+      description: Result of a successful activate operation.
+      properties:
+        activated:
+          type: string
+          description: Name of the profile that is now active.
+        protocol:
+          $ref: "#/components/schemas/Protocol"
+        projected:
+          type: array
+          items: { type: string }
+          description: Agent names whose native config was updated.
+        skipped:
+          type: array
+          items: { type: string }
+          description: >-
+            Agent type(s) matching this protocol that have no registered
+            enabled agent to project into. Not an error — the profile is still
+            activated. (A genuine native-config write failure aborts the switch
+            with a 5xx and leaves the registry unchanged, rather than skipping.)
+
+    DeactivateOut:
+      type: object
+      required: [protocol, deprojected]
+      description: Result of switching a wire back to the agent's built-in login.
+      properties:
+        protocol:
+          $ref: "#/components/schemas/Protocol"
+        deprojected:
+          type: array
+          items: { type: string }
+          description: Agent names whose Coffer projection was removed.
+        previous:
+          type: [string, "null"]
+          description: The connection that was active before, or null if none.
+
+    ProviderListOut:
+      type: object
+      required: [providers]
+      properties:
+        providers:
+          type: array
+          items: { $ref: "#/components/schemas/ProviderOut" }
+
+    ActiveKeyOut:
+      type: object
+      required: [value]
+      description: >-
+        The decrypted API key of the active profile for a wire format, served
+        for Claude Code's apiKeyHelper. Never logged or audited.
+      properties:
+        value:
+          type: string
+          description: The decrypted provider API key.
+
+    InternalEngineConfigOut:
+      type: object
+      description: >-
+        The single, global internal-engine model selection. The connection used
+        is the `internal_default` (endpoint + key); only the model lives here.
+      properties:
+        model:
+          type: string
+          nullable: true
+          description: The chosen model id, or null when unset.
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    InternalEngineConfigUpdate:
+      type: object
+      description: Set the internal-engine model; null/empty clears it.
+      properties:
+        model:
+          type: string
+          nullable: true
+
+    ErrorOut:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          description: Machine-readable error code.
+        message:
+          type: string
+          description: Human-readable description.
+        details:
+          type: object
+          additionalProperties: true
+          description: Optional structured error details.
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid X-Coffer-Token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    BadRequest:
+      description: Malformed request body or query parameters
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    NotFound:
+      description: Provider profile not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    Conflict:
+      description: A provider with this name already exists
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    UnprocessableEntity:
+      description: |
+        Validation failure. Common cases:
+        - Unknown `protocol`
+        - For anthropic/openai: both `secret_value` and `credential_ref`
+          supplied, or neither
+        - For ollama: a `secret_value` or `credential_ref` supplied (ollama
+          has no key)
+        - `credential_ref` pattern violation
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    InternalError:
+      description: >-
+        Server error during projection (e.g. config file write failed).
+        The profile's `is_active` state reflects the transaction outcome;
+        check the audit log for details.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }

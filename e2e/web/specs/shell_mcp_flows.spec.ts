@@ -1,6 +1,6 @@
 // e2e/web/specs/shell_mcp_flows.spec.ts
 //
-// Spec 002 §User Story 3 — day-to-day MCP work, tested through the
+// UI Shell §User Story 3 — day-to-day MCP work, tested through the
 // redesigned UI. Three scenarios in one walk: registration round-trip,
 // capability toggle round-trip, invocations empty-state. The 001-spec
 // tests already cover the backend correctness; here we pin the new
@@ -75,7 +75,7 @@ async function refreshCapabilities(name: string): Promise<void> {
 }
 
 acceptance(
-  "002-ui-shell",
+  "ui-shell",
   "MCP server registration round-trip via JSON import",
   async ({ page }) => {
     const name = generateUniqueName("e2e002reg");
@@ -120,7 +120,7 @@ acceptance(
 );
 
 acceptance(
-  "002-ui-shell",
+  "ui-shell",
   "capability toggle uses the redesigned tab layout",
   async ({ page }) => {
     const name = generateUniqueName("e2e002tog");
@@ -128,7 +128,7 @@ acceptance(
       await registerFakeServer(name);
       await page.goto(`/mcp-servers/mcp_server/${name}`);
       // Tabs row uses the new design tokens but the role + tab names are
-      // unchanged (spec 002 explicitly requires backwards-compatible
+      // unchanged (spec ui-shell explicitly requires backwards-compatible
       // selectors here).
       await page.getByRole("tab", { name: "Tools" }).click();
       await expect(page.getByText("read_file").first()).toBeVisible({
@@ -157,7 +157,7 @@ acceptance(
 );
 
 acceptance(
-  "002-ui-shell",
+  "ui-shell",
   "invocations table renders the redesigned empty + populated states",
   async ({ page }) => {
     const name = generateUniqueName("e2e002inv");
@@ -184,7 +184,7 @@ acceptance(
 );
 
 acceptance(
-  "002-ui-shell",
+  "ui-shell",
   "resource capability toggle works via the Resources tab",
   async ({ page }) => {
     const name = generateUniqueName("e2e002res");
@@ -232,7 +232,7 @@ acceptance(
 );
 
 acceptance(
-  "002-ui-shell",
+  "ui-shell",
   "prompt capability toggle works via the Prompts tab",
   async ({ page }) => {
     const name = generateUniqueName("e2e002prm");
@@ -277,7 +277,7 @@ acceptance(
 );
 
 acceptance(
-  "002-ui-shell",
+  "ui-shell",
   "add-server form navigates to detail then back to list shows card",
   async ({ page }) => {
     const name = generateUniqueName("e2e002back");
@@ -317,7 +317,7 @@ acceptance(
 );
 
 acceptance(
-  "002-ui-shell",
+  "ui-shell",
   "invocation status filter dropdown exposes selectable options",
   async ({ page }) => {
     const name = generateUniqueName("e2e002flt");
@@ -345,10 +345,10 @@ acceptance(
 );
 
 acceptance(
-  "002-ui-shell",
+  "ui-shell",
   "JSON import shows readable error for malformed JSON",
   async ({ page }) => {
-    // Spec 002 §Acceptance: pasting a non-JSON payload into the Add
+    // UI Shell §Acceptance: pasting a non-JSON payload into the Add
     // MCP server dialog must surface a parse-error message in-dialog
     // without firing a /resources request and without leaking the
     // generic "INTERNAL_ERROR" / "unexpected error" copy.
@@ -405,7 +405,7 @@ acceptance(
 );
 
 acceptance(
-  "002-ui-shell",
+  "ui-shell",
   "capability search box narrows the tool list",
   async ({ page }) => {
     const name = generateUniqueName("e2e002src");

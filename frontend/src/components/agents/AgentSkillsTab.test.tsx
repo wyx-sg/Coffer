@@ -5,7 +5,7 @@
 // binding's enabled state. (AgentInstallSkillsDialog also reads useSkills, so
 // the single mock below covers both.)
 //
-// Spec 005 FR-025 additions covered here:
+// Skill Manager FR-025 additions covered here:
 //   - the "Follow master library" switch reflects agent.follow_all_skills and
 //     PATCHes the agent on toggle
 //   - while following, the managed table is replaced by a link to the Skills

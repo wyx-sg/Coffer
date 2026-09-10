@@ -1,4 +1,4 @@
-"""Contract tests for the resource scope REST endpoints (ADR-045).
+"""Contract tests for the resource scope REST endpoints (ADR per-agent-resource-scope).
 
 GET/PUT /api/v1/resources/{kind}/{name}/scope. Colocated under tests/contract
 (not tests/integration/surfaces/http, where the base CRUD routes are covered)
