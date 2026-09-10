@@ -10,7 +10,6 @@ import asyncio
 import contextlib
 import logging
 import pathlib
-import uuid
 from collections.abc import Sequence
 from typing import Any
 
@@ -28,13 +27,14 @@ from coffer.domain.channel.envelopes import (
 )
 from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.domain.channel.rich_content import ForwardedItem
+from coffer.infrastructure.channel.live_text import TelegramLiveText
 from coffer.infrastructure.channel.render import chunk_text, markdown_to_telegram_html
 from coffer.infrastructure.channel.telegram_album import AlbumBuffer
 from coffer.infrastructure.channel.telegram_media import (
     COMMANDS,
     default_media_dir,
+    download_attachments,
     inline_keyboard,
-    media_specs,
     upload_media,
 )
 from coffer.infrastructure.channel.telegram_parse import build_inbound_message, is_group
@@ -84,6 +84,7 @@ class TelegramAdapter:
     def capabilities(self) -> ChannelCapabilities:
         return ChannelCapabilities(
             supports_edit=True,
+            supports_live_text=True,  # FR-037: the edit IS its live surface
             supports_typing=True,
             max_message_chars=_CHUNK_LIMIT,
             supports_buttons=True,
@@ -202,43 +203,9 @@ class TelegramAdapter:
         await self._callbacks.on_message(self._build_inbound(message, attachments))
 
     async def _download_attachments(self, message: dict[str, Any]) -> tuple[InboundAttachment, ...]:
-        """Download each attachment on ``message`` to the media dir. Best-effort:
-        a download that fails is skipped (logged), never wedging the message —
-        the text/caption still drives a turn."""
-        out: list[InboundAttachment] = []
-        for file_id, mime, filename in media_specs(message):
-            try:
-                data = await self._download_file(file_id)
-            except Exception:
-                _logger.warning(
-                    "telegram.media.download_failed",
-                    extra={"channel": self._name},
-                    exc_info=True,
-                )
-                continue
-            if data is None:
-                continue
-            path = self._save_media(data, filename)
-            out.append(InboundAttachment(path=path, mime=mime, filename=filename))
-        return tuple(out)
-
-    async def _download_file(self, file_id: str) -> bytes | None:
-        """``getFile`` → download the bytes from the file endpoint."""
-        info = await self._call("getFile", file_id=file_id)
-        file_path = info.get("file_path") if isinstance(info, dict) else None
-        if not file_path:
-            return None
-        response = await self._client.get(f"{self._file_base}/{file_path}")
-        response.raise_for_status()
-        return response.content
-
-    def _save_media(self, data: bytes, filename: str) -> str:
-        """Write bytes under the media dir with a unique name; return the path."""
-        self._media_dir.mkdir(parents=True, exist_ok=True)
-        suffix = pathlib.Path(filename).suffix
-        path = self._media_dir / f"{uuid.uuid4().hex}{suffix}"
-        path.write_bytes(data)
-        return str(path)
+        return await download_attachments(
+            self._client, self._call, self._file_base, self._media_dir, self._name, message
+        )
 
     async def _dispatch_callback(self, query: dict[str, Any]) -> None:
         if self._callbacks is None:
@@ -341,6 +308,13 @@ class TelegramAdapter:
                 raise
             sent = await self._call("sendMessage", chat_id=chat_id, text=chunk, **extra)
         return SentMessage(message_id=str(sent.get("message_id", "")))
+
+    async def open_live_text(
+        self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
+    ) -> TelegramLiveText:
+        """FR-037: Telegram's live surface is one message it keeps editing."""
+        del chat_kind  # a Telegram chat_id addresses a DM and a group alike
+        return TelegramLiveText(self._call, chat_id, thread_id=thread_id)
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None:
         await self._call("editMessageText", chat_id=chat_id, message_id=message_id, text=text)

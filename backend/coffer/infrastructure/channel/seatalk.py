@@ -28,6 +28,7 @@ from coffer.domain.channel.envelopes import (
 )
 from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.domain.channel.rich_content import ForwardedItem
+from coffer.infrastructure.channel.live_text import SeaTalkLiveText
 from coffer.infrastructure.channel.seatalk_media import (
     default_media_dir,
     media_attachments,
@@ -88,7 +89,9 @@ class SeaTalkAdapter:
     @property
     def capabilities(self) -> ChannelCapabilities:
         return ChannelCapabilities(
-            supports_edit=False,
+            supports_edit=False,  # no API rewrites a delivered SeaTalk message
+            # FR-037: but a message CAN grow in place — init_stream/update_stream.
+            supports_live_text=True,
             supports_typing=True,
             max_message_chars=_CHUNK_LIMIT,
             supports_buttons=True,
@@ -237,17 +240,23 @@ class SeaTalkAdapter:
         thread_id: str = "",
         chat_kind: str = "direct",
     ) -> SentMessage:
-        from coffer.infrastructure.channel.render import chunk_text
+        from coffer.infrastructure.channel.render import chunk_text, markdown_to_seatalk
 
         if buttons:
             # Selection prompts are short — one interactive card, no chunking.
+            # (A card description renders SeaTalk markdown but NOT tables.)
             result = await self._send(
-                chat_id, interactive_card(markdown, buttons), thread_id, chat_kind
+                chat_id,
+                interactive_card(markdown_to_seatalk(markdown), buttons),
+                thread_id,
+                chat_kind,
             )
             return SentMessage(message_id=str(result.get("message_id", "")))
         last = ""
         for chunk in chunk_text(markdown, self.capabilities.max_message_chars):
-            for piece in split_to_byte_limit(chunk, _BYTE_LIMIT):
+            # Render before the byte split so escaping cannot push a piece past
+            # the platform's byte cap.
+            for piece in split_to_byte_limit(markdown_to_seatalk(chunk), _BYTE_LIMIT):
                 result = await self._send(
                     chat_id,
                     {"tag": "text", "text": {"format": 1, "content": piece}},
@@ -256,6 +265,15 @@ class SeaTalkAdapter:
                 )
                 last = str(result.get("message_id", ""))
         return SentMessage(message_id=last)
+
+    async def open_live_text(
+        self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
+    ) -> SeaTalkLiveText:
+        """FR-037: SeaTalk cannot edit, but it can stream — one message that
+        re-renders from the full snapshot until the stream is finished."""
+        return SeaTalkLiveText(
+            self._post, chat_id, name=self._name, thread_id=thread_id, chat_kind=chat_kind
+        )
 
     async def _send(
         self, chat_id: str, message: dict[str, Any], thread_id: str, chat_kind: str
@@ -267,6 +285,8 @@ class SeaTalkAdapter:
         return await self._send_single_chat(chat_id, message, thread_id)
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None:
+        # supports_edit stays literally false: no SeaTalk API rewrites a
+        # delivered message. Live progress goes through open_live_text instead.
         raise ChannelSendFailed(self._name, "seatalk cannot edit messages")
 
     async def delete_message(self, chat_id: str, message_id: str) -> None:

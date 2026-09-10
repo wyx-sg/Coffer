@@ -13,6 +13,7 @@ import pathlib
 import pytest
 
 from coffer.domain.channel.errors import ChannelSendFailed
+from coffer.infrastructure.channel.live_text import TelegramLiveText
 from coffer.infrastructure.channel.telegram import TelegramAdapter
 
 from .conftest import (
@@ -23,6 +24,19 @@ from .conftest import (
     make_telegram_adapter,
     wait_until,
 )
+
+
+def _live_ticking(step: float = 1.0):  # type: ignore[no-untyped-def]
+    """A clock that advances past the live surface's buffer on every read, so a
+    test drives updates deterministically instead of sleeping."""
+    box = [0.0]
+
+    def now() -> float:
+        value = box[0]
+        box[0] += step
+        return value
+
+    return now
 
 
 def _message_update(update_id: int, *, text: str) -> dict:
@@ -731,3 +745,50 @@ async def test_a_non_list_getupdates_result_backs_off_instead_of_spinning(
     # The first ladder rung is 1s, so half a second of polling is one call —
     # a couple more would still prove the point; hundreds would be the old spin.
     assert len(fake_telegram.calls_for("getUpdates")) <= 3
+
+
+# -- live text: the editable surface (FR-037) ---------------------------------
+
+
+async def test_live_text_sends_once_then_edits_and_deletes_on_close(
+    fake_telegram: FakeTelegram,
+) -> None:
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        assert adapter.capabilities.supports_live_text is True
+        live = TelegramLiveText(adapter._call, "555", now=_live_ticking())
+        await live.update("I found")
+        await live.update("I found three cats.")
+        leftover = await live.close("I found three cats.")
+    finally:
+        await adapter.stop()
+
+    sends = fake_telegram.calls_for("sendMessage")
+    assert len(sends) == 1  # opened once…
+    assert sends[0]["text"] == "I found"
+    assert "parse_mode" not in sends[0]  # interim text is PLAIN, never HTML
+    edits = fake_telegram.calls_for("editMessageText")
+    assert [e["text"] for e in edits] == ["I found three cats."]  # …then edited in place
+    # The status message is scaffolding: it is deleted and the whole reply is
+    # handed back, so the caller sends it HTML-rendered and chunked.
+    assert fake_telegram.calls_for("deleteMessage") == [{"chat_id": "555", "message_id": "101"}]
+    assert leftover == "I found three cats."
+
+
+async def test_live_text_stops_writing_once_the_platform_rejects_an_update(
+    fake_telegram: FakeTelegram,
+) -> None:
+    fake_telegram.reject_all_sends = 1  # the very first snapshot is refused
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        live = TelegramLiveText(adapter._call, "555", now=_live_ticking())
+        await live.update("one")
+        await live.update("one two")  # the surface is dead — nothing more is sent
+        leftover = await live.close("one two three")
+    finally:
+        await adapter.stop()
+
+    assert len(fake_telegram.calls_for("sendMessage")) == 1
+    assert fake_telegram.calls_for("editMessageText") == []
+    assert fake_telegram.calls_for("deleteMessage") == []  # nothing to delete
+    assert leftover == "one two three"  # the reply still owes the user its text

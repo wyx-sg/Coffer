@@ -43,6 +43,11 @@ def test_channel_capabilities_carries_strategy_fields():
     assert (caps.supports_edit, caps.supports_typing) == (True, True)
     assert caps.max_message_chars == 4096
     assert caps.supports_buttons is False  # default off; transports opt in
+    # supports_edit is literal (can this transport rewrite a delivered message?);
+    # supports_live_text is the question the core asks (is there a surface I can
+    # keep updating?). A transport opts into each separately — SeaTalk streams
+    # without being able to edit (FR-037).
+    assert caps.supports_live_text is False  # default off; transports opt in
     assert caps.supports_media is False  # default off; media-capable transports opt in
     assert caps.supports_reactions is False  # default off; reaction-capable transports opt in
     assert {f.name for f in fields(ChannelCapabilities)} == {
@@ -50,6 +55,7 @@ def test_channel_capabilities_carries_strategy_fields():
         "supports_typing",
         "max_message_chars",
         "supports_buttons",
+        "supports_live_text",
         "supports_media",
         "supports_groups",
         "supports_history_fetch",

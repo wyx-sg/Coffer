@@ -49,12 +49,30 @@ class InboundMessage:
 
 @dataclass(frozen=True)
 class ChannelCapabilities:
-    """What a transport can do; the core picks strategies from this."""
+    """What a transport can do; the core picks strategies from this.
 
-    supports_edit: bool  # progress streaming via message edits
+    ``supports_edit`` and ``supports_live_text`` are easy to confuse, so keep
+    the distinction sharp (FR-037):
+
+    * ``supports_edit`` is literal — the transport can rewrite a message it
+      already delivered (Telegram ``editMessageText``). ``edit_text`` raises
+      on a transport without it.
+    * ``supports_live_text`` is the question the core actually asks — *is
+      there a surface I can keep updating while a turn runs?* Telegram
+      answers yes by editing; SeaTalk answers yes through its message
+      **streaming** API (``init_stream`` / ``update_stream``), which grows one
+      message in place while being unable to edit anything. The core asks for
+      a live-text handle (``open_live_text``) and never branches on which
+      mechanism is underneath.
+    """
+
+    supports_edit: bool  # can rewrite an already-delivered message (edit_text)
     supports_typing: bool  # typing indicator ack
     max_message_chars: int  # outbound chunk budget
     supports_buttons: bool = False  # interactive selection cards (ADR-014)
+    # A surface the core can keep updating during a turn — by edit (Telegram)
+    # or by streaming (SeaTalk). Drives the FR-037 progress/reply strategy.
+    supports_live_text: bool = False
     supports_media: bool = False  # outbound file/photo upload (send_media)
     supports_groups: bool = False  # group-chat send path exists
     supports_history_fetch: bool = False  # can fetch recent/thread messages for context

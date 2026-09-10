@@ -92,8 +92,8 @@ InboundCallback: channel name, chat_id, sender_id, data（点选的 ChoiceButton
                  value）, callback_id, platform message id (FR-018)
 OutboundText:    markdown text (rendered per adapter capability), 可选
                  ChoiceButtons（label + 不透明 value）→ 选择卡片
-ChannelCapabilities: supports_edit, supports_buttons, supports_typing,
-                 max_message_chars
+ChannelCapabilities: supports_live_text, supports_edit, supports_buttons,
+                 supports_typing, max_message_chars
 ```
 
 adapter 负责在平台载荷与这些信封之间互译；application 内核永远看不到

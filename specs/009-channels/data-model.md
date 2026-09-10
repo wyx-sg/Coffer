@@ -99,8 +99,8 @@ InboundCallback: channel name, chat_id, sender_id, data (tapped ChoiceButton
                  value), callback_id, platform message id (FR-018)
 OutboundText:    markdown text (rendered per adapter capability), optional
                  ChoiceButtons (label + opaque value) → selection card
-ChannelCapabilities: supports_edit, supports_buttons, supports_typing,
-                 max_message_chars
+ChannelCapabilities: supports_live_text, supports_edit, supports_buttons,
+                 supports_typing, max_message_chars
 ```
 
 Adapters translate platform payloads to/from these; the application core

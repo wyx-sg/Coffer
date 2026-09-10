@@ -85,11 +85,10 @@ The paired owner sends a text message to the bot. The channel routes it into
 the peer's long-lived conversation — created on first contact with the
 channel's configured default agent — and the agent's reply arrives back in
 the IM chat, rendered for that platform (Telegram HTML, SeaTalk Markdown) and
-chunked when long. On Telegram the bot shows progress while the turn runs and
-streams tool activity into one editable status message; on SeaTalk, which
-cannot edit messages, the bot acknowledges with a typing indicator and sends
-the finished reply. The same conversation is recorded in the vault with
-full history.
+chunked when long. The bot shows progress while the turn runs by growing ONE
+message in place — Telegram edits its status message, SeaTalk streams one that
+re-renders — so the answer never arrives as a run of fragments. The same
+conversation is recorded in the vault with full history.
 
 **Why this priority**: This is the product: the vault's agents reachable from
 the IM apps the user already lives in.
@@ -298,12 +297,14 @@ clean success sends no completion summary while a failed turn does.
   conversation service, turn orchestrator.
 - **FR-005**: Replies render per channel capability: Telegram converts
   markdown to Telegram HTML with a plain-text fallback and 4000-character
-  paragraph-boundary chunking, and streams tool progress into one throttled
-  editable status message whose lines describe each call from its input (e.g.
-  `⏳ Bash · list the desktop`, `✅ Read · wedding.json`); SeaTalk sends markdown
-  with 4096-byte chunking and
-  signals progress with a typing indicator. Capabilities are declared by the
-  adapter, not special-cased in the core.
+  paragraph-boundary chunking; SeaTalk converts the same markdown to SeaTalk's
+  own markdown (`format: 1` — bold, italic, inline code, fences, ordered and
+  unordered lists; headings become bold and links become `label (url)`, neither
+  being supported there, and a literal marker character is escaped with a
+  DOUBLE backslash) with 4096-byte chunking. Both stream a turn's progress into
+  ONE surface that grows in place (FR-037), its lines describing each call from
+  its input (e.g. `⏳ Bash · list the desktop`, `✅ Read · wedding.json`).
+  Capabilities are declared by the adapter, not special-cased in the core.
 - **FR-006**: Commands `/new`, `/stop`, `/status`, `/help` work from any
   paired chat. `/stop` and `/new` take effect even while a turn is running;
   other messages queue (FIFO, bounded at 10) and run in order.
@@ -490,9 +491,11 @@ status / notify`.
   gate. An `InboundCallback` is a selection-card button tap (an opaque `data`
   value instead of text, FR-018); outbound text MAY carry `ChoiceButton`s, which
   a button-capable transport renders as a selection card.
-- **ChannelCapabilities** — what an adapter declares it can do
-  (edit messages, interactive buttons via `supports_buttons`, typing indicator);
-  the core picks rendering strategies from it.
+- **ChannelCapabilities** — what an adapter declares it can do (a live-updating
+  surface via `supports_live_text`, rewriting a delivered message via
+  `supports_edit` — the two are independent, see FR-037 — interactive buttons
+  via `supports_buttons`, typing indicator); the core picks rendering strategies
+  from it.
 - **PairingCode** — in-memory, single-use, per-channel; never persisted.
 
 ## Success Criteria
@@ -804,13 +807,54 @@ produce it on its own.
 - **Then** the typing indicator is re-sent periodically for the turn's duration
   (an ephemeral action, no chat clutter), and is stopped when the turn ends
 
-### Scenario: a supports_typing-only group turn posts no interim status message
+### Scenario: a transport with no live-text surface posts no interim status message
 
-- **Given** a paired channel on an adapter that can show typing but cannot edit
-  or delete (SeaTalk), in a group/thread
+- **Given** a paired channel on an adapter that can neither edit nor stream, in
+  a group/thread (where the DM-only typing signal does not apply either)
 - **When** a turn runs
-- **Then** no interim signal is posted (no typing heartbeat, no editable status
-  message) — only the final chunked reply lands in the originating group/thread
+- **Then** no interim signal is posted at all — only the final chunked reply
+  lands in the originating group/thread
+
+### Scenario: a reply grows in place on a transport that streams but cannot edit
+
+- **Given** a paired channel on an adapter that cannot edit or delete a message
+  but can stream one (SeaTalk), in a group/thread
+- **When** a turn runs tools and then writes its reply
+- **Then** exactly ONE message reaches the chat and grows in place — tool
+  progress first, then the accumulating reply — and it finishes carrying the
+  final reply, so nothing is sent twice and the answer never arrives as
+  fragments
+
+### Scenario: each seatalk stream update carries the full reply so far
+
+- **Given** a SeaTalk channel streaming a reply
+- **When** the reply text arrives in deltas
+- **Then** the stream is opened once, every update carries the FULL accumulated
+  text (never a delta) under a monotonically increasing sequence number, and
+  only the last update finishes the stream
+
+### Scenario: a terminated seatalk stream is never reused
+
+- **Given** a SeaTalk stream the platform has terminated (an error, or a gap
+  past its 30-second limit)
+- **When** the turn produces more text and then ends
+- **Then** no further request names that stream id, no replacement stream is
+  opened, and the reply is delivered through the ordinary send path instead
+
+### Scenario: a reply past the stream budget finishes the stream and sends the rest
+
+- **Given** a SeaTalk reply longer than one stream may carry (4096 characters)
+- **When** the turn ends
+- **Then** the stream finishes at the budget on a paragraph boundary and the
+  remainder is delivered as ordinary chunked messages
+
+### Scenario: seatalk markdown escapes a literal marker character
+
+- **Given** a reply whose prose contains a SeaTalk formatting character that is
+  not markup (e.g. an underscore inside `snake_case`)
+- **When** it is rendered for SeaTalk
+- **Then** that character is escaped with a DOUBLE backslash so it survives as
+  typed, while genuine bold/italic/code/list markup is left as SeaTalk markdown
 
 ### Scenario: a group member who is not the paired sender is ignored
 
@@ -1335,24 +1379,56 @@ capabilities the official personal bridges lack.
   A transport without reactions (SeaTalk) uses its typing/working signal as the
   receipt-and-progress cue instead. All best-effort — a failed ack never breaks the
   turn.
-- **FR-037**: Long replies stream by the platform's best mechanism, chosen from
-  the adapter's capabilities (never its type). A `supports_edit` platform
-  (Telegram) streams the reply text into ONE throttled editable status message,
-  opened once a turn runs long enough to warrant it — either tool activity opens
-  it (tool-progress lines show first, then the reply text takes over the same
-  message as it arrives) or, on a text-only turn, the reply itself opens it once
-  it has run past the throttle interval. A reply that finishes within that
-  interval opens no status message at all (no create → delete → resend flicker) —
-  its final send is enough. Interim edits are PLAIN and clipped to the
-  per-message limit, so a long or partial-markdown preview never breaks the
-  platform parser or exceeds the cap; on finish that message is deleted and the
-  final reply is sent HTML-rendered and paragraph-chunked to the platform limit. A
-  `supports_typing`-only platform (SeaTalk) cannot stream, so on a DM it keeps a
-  periodic typing heartbeat alive during the turn (an ephemeral action, zero
-  chat clutter) and sends the final chunked reply; a SeaTalk group/thread turn
-  gets no interim signal at all (it can neither edit, delete, nor group-type) —
-  the final chunked reply is the completion signal. All best-effort — a failed
-  edit or heartbeat never breaks the turn.
+- **FR-037**: A reply grows in place, by whatever live-text mechanism the
+  platform has — chosen from the adapter's declared capabilities, never its
+  type. The capability the core asks about is `supports_live_text` ("is there a
+  surface I can keep updating while this turn runs?"), NOT `supports_edit`
+  ("can a delivered message be rewritten?"). Telegram answers yes by editing
+  one status message; SeaTalk answers yes through its message-**streaming**
+  API (`init_stream` / `update_stream`) while still being unable to edit
+  anything at all. The flag's meaning changed because keying the strategy on
+  `supports_edit` silently denied SeaTalk the live experience it does support:
+  its replies arrived as several chunked messages at the end of the turn, one
+  fragment at a time. `supports_edit` now means only what it literally says —
+  `edit_text` still raises on SeaTalk — and the two flags are set
+  independently.
+  A turn keeps exactly ONE live surface, opened once the turn runs long enough
+  to warrant it: either tool activity opens it (tool-progress lines show first,
+  then the reply text takes the same surface over as it arrives) or, on a
+  text-only turn, the reply itself opens it once it has run past the update
+  interval. A reply that finishes within that interval opens none (no
+  create → delete → resend flicker) — its final send is enough. Interim
+  snapshots are PLAIN and clipped to the platform's per-message limit, so a
+  long or half-written-markdown preview never breaks a platform parser or
+  exceeds the cap.
+  How a surface *ends* is the transport's business: Telegram's status message
+  is scaffolding — it is deleted and the final reply is sent HTML-rendered and
+  paragraph-chunked — whereas SeaTalk's stream IS the reply, so it finishes
+  carrying the final text rendered as SeaTalk markdown and nothing is sent
+  twice. A transport with no live surface at all posts no interim traffic; its
+  final reply is the whole signal.
+  The SeaTalk streaming constraints are contract, not implementation detail:
+  every update carries the FULL accumulated text, never a delta (the client
+  renders the latest snapshot); updates must be less than 30 s apart or the
+  platform terminates the stream, so the last snapshot is re-sent on a keep-alive
+  well inside that window; one stream carries at most 4096 characters, and a
+  reply that outgrows the budget finishes the stream at the limit with the
+  remainder sent as ordinary chunked messages (a reply's length is unknown
+  until it ends, so refusing to stream anything that *might* overrun would
+  withhold the live reply from every turn to serve the rare one); and a stream
+  that has ended — finished, timed out, or errored — is never reused, because
+  the platform rejects any later request naming its id: the surface latches
+  dead, no replacement stream is opened, and the ordinary send path delivers the
+  reply in full (the partial message the platform kept stays where it is —
+  visibly stale, but the user still gets the whole answer). Clients older than
+  3.67 simply see the finished message when the stream closes.
+  A transport that can show typing but has **no reaction** to ack with
+  (SeaTalk) additionally keeps a periodic typing heartbeat alive on a DM (an
+  ephemeral action, zero chat clutter), covering the window before the first
+  live update lands. The gate is the receipt mechanism, not editing: a
+  reaction-capable transport (Telegram) already acked receipt with 👀 (FR-036),
+  so `supports_edit` selects nothing at all any more. All best-effort — a
+  failed update, close, or heartbeat never breaks the turn.
 - **FR-038**: Telegram albums are one turn. Messages sharing a `media_group_id`
   are debounced into a single turn carrying all their attachments, not one turn
   per photo.
