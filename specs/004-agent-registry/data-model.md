@@ -173,6 +173,17 @@ generic `resources` table (kind-agnostic Resource framework from spec 001), and
 discovery is read-only with no suppression list to persist. The head migration
 revision therefore stays at **0004**; spec 004 adds no Alembic migration.
 
+Later revisions do rewrite the agent rows' `config_json` — as *data*
+migrations, not schema ones. `0005` maps the retired `skill_dir` override onto
+`config_dir`; `0056` strips `disable_native_memory` and `auto_detected`, whose
+fields were removed from `AgentConfig`. Because `AgentConfig` is
+`extra="forbid"`, a key left behind by a removal is not inert — it makes the
+row unloadable and `GET /agents` answers 422. **Removing a field from
+`AgentConfig` therefore requires a migration that strips it at rest, in the
+same change.** The model carries no load-time tolerance for dead keys: the
+migration runs at daemon startup before anything reads a row, so a permanent
+shim would only ever mask the missing migration.
+
 **Config files and Coffer-MCP install state are NOT persisted in SQLite** — the
 agent's on-disk config files are the source of truth. Install status is derived
 by reading the relevant config file on demand.
