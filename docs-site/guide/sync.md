@@ -38,7 +38,9 @@ The import mirrors the knowledge and skill trees back, rebuilds the SQLite index
 
 ## What travels
 
-**In the bundle:** the knowledge Markdown trees (entries and ingested documents alike), the master skill store, your config resources (MCP servers, agents, skills, channels), module-owned shared state (channel pairings, knowledge-scope labels, engine settings), and — only with `--with-credentials` — credentials **as Fernet ciphertext only**.
+**In the bundle:** the knowledge Markdown trees (entries and ingested documents alike), the master skill store, your config resources (MCP servers, agents, skills, channels), module-owned shared state (channel pairings, knowledge-scope labels, engine settings, MCP capability preferences, and the agent plugin inventory), and — only with `--with-credentials` — credentials **as Fernet ciphertext only**.
+
+The plugin inventory is a **list, not an installer**. It records which plugins each agent has here, under `state/agent-plugins/<agent>.yaml`. Importing it stores the list; it does not install anything and does not touch any agent's configuration. On the new machine, open the file and install them with the vendor's own CLI. Coffer deliberately does not write another tool's private plugin format — and it has no install path to offer even if it wanted to.
 
 **Machine-local (never exported):** logs, the rebuildable `coffer.db` index, `daemon.json`, PID files, port allocations, chat history, and the audit log.
 

@@ -28,7 +28,18 @@ local-first principle.
 - **Config resources** — `mcp_server`, `agent`, `skill`, `channel` definitions
   (system of record is SQLite; serialized to text for transport).
 - **Shared state** — module-owned areas that are part of the vault rather than
-  of one machine (e.g. channel peer pairings, knowledge scope labels).
+  of one machine (e.g. channel peer pairings, knowledge scope labels, MCP
+  capability preferences, and the **agent plugin inventory**).
+
+  The plugin inventory is an **inventory, not a replicator**: export writes
+  down which plugins each agent has on this machine; import stores that list
+  and writes nothing into any agent's configuration. Coffer removed its plugin
+  write paths because hand-writing another tool's private config format
+  corrupts it silently when the format moves (spec 004), and it never had an
+  install path at all — so "install these for me" is not on offer, and would
+  have had to be written from scratch either way. What the list gives is what
+  no single agent can: Codex on a new laptop has no idea which plugins the old
+  one had, because that fact exists only on the machine holding them.
 - **Credentials** — Fernet **ciphertext only**, and only when explicitly
   requested.
 

@@ -17,6 +17,7 @@ from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.mcp_entry_service import AgentMcpEntryService
 from coffer.application.agent.mcp_service import AgentMcpService
 from coffer.application.agent.plugin_service import AgentPluginService
+from coffer.application.agent.plugin_sync_state import AgentPluginSyncState
 from coffer.application.agent.service import AgentService
 from coffer.application.agent.sync_reconcile import AgentImportGate, AgentSideEffectsReconcile
 from coffer.application.audit_service import AuditService
@@ -162,6 +163,17 @@ def wire_agent_and_skill_kinds(
         store=config_file_store,
         detail_reader=FsPluginDetailReader(),
     )
+
+    # The plugin inventory travels in an export bundle. Codex on a new machine
+    # cannot know which plugins the old one had — that list exists only where
+    # they are installed — so carrying it is a thing no single agent can do for
+    # itself. Import stores the list and writes no agent config (see
+    # ``plugin_sync_state``).
+    providers = getattr(app.state, "sync_state_providers", None)
+    if providers is None:
+        providers = []
+        app.state.sync_state_providers = providers
+    providers.append(AgentPluginSyncState(resource_svc, agent_plugin_svc))
 
     async def _agent_on_delete(ref: ResourceRef) -> None:
         # Awaited by ResourceService.delete BEFORE the agent row is removed,
