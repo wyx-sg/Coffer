@@ -109,20 +109,20 @@ import`. A machine that holds ciphertext but not the key reports
 silently fails decryption.
 
 **The key crosses as material, not as a path.** `POST /sync/key/export` takes an
-empty body and returns `{"material": "<fernet key text>"}`; `POST
-/sync/key/import` takes `{"material": "<fernet key text>"}` and returns the refs
+empty body and returns the Fernet key text as a `material` field;
+`POST /sync/key/import` takes the same `material` field and returns the refs
 that remain locked. The daemon never opens a filesystem path a caller named.
-Each surface then does its own file I/O: the CLI writes `coffer sync key export
-<path>` to that path itself (mode `0600`) and reads the file back for `key
-import`; the web UI hands the material to a browser download and reads an
-`<input type="file">` for the import.
+Each surface then does its own file I/O: the CLI's `key export <path>` writes
+the material to that path itself (mode `0600`), its `key import <path>` reads
+the file back, and the web UI hands the material to a browser download and reads
+a file input for the import.
 
 The reason is the web UI. Both directions used to go through the daemon's
 native save/open dialogs — the daemon ran `osascript`/`zenity` on the user's
 behalf and returned a chosen path — and those dialogs are removed. A browser has
-no absolute path to hand the daemon anyway, while `<input type="file">` hands
-over the *contents* directly, which is strictly more useful than a path that has
-to survive a round-trip.
+no absolute path to hand the daemon anyway, while a file input hands over the
+*contents* directly, which is strictly more useful than a path that has to
+survive a round-trip.
 
 The trade, stated: the key material now crosses the token-guarded loopback API,
 where before it did not. That is acceptable. Whoever asked to export the master

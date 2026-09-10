@@ -89,17 +89,17 @@
 `coffer sync key import` 引导到另一台机器上。只有密文而没有密钥的机器会报
 `credentials_locked` 并拒绝拉起受影响的资源——它绝不静默地解密失败。
 
-**密钥以材料本身跨越，而不是以路径跨越。** `POST /sync/key/export` 收空 body，返回
-`{"material": "<fernet key text>"}`；`POST /sync/key/import` 收
-`{"material": "<fernet key text>"}`，返回仍处于锁定状态的 ref。daemon 不再打开任何
-由调用方指定的文件系统路径。各个表面自己做文件 I/O：CLI 的 `coffer sync key export
-<path>` 由 CLI 自己把材料写到那个路径（权限 `0600`），`key import` 也由 CLI 自己读回
-文件；Web UI 则把材料交给浏览器下载，导入时从 `<input type="file">` 读取。
+**密钥以材料本身跨越，而不是以路径跨越。** `POST /sync/key/export` 收空 body，
+把 Fernet 密钥文本放在 `material` 字段里返回；`POST /sync/key/import` 收同一个
+`material` 字段，返回仍处于锁定状态的 ref。daemon 不再打开任何由调用方指定的文件
+系统路径。各个表面自己做文件 I/O：`coffer sync key export <path>` 由 CLI 自己把
+材料写到那个路径（权限 `0600`），`coffer sync key import <path>` 也由 CLI 自己读回
+文件；Web UI 则把材料交给浏览器下载，导入时从文件选择框读取。
 
 原因在 Web UI。两个方向过去都走守护进程的原生保存/打开对话框——由守护进程代替用户
 执行 `osascript`/`zenity` 并返回选中的路径——而那些对话框已被移除。浏览器本来也拿不到
-可以交给守护进程的绝对路径，而 `<input type="file">` 直接交出**文件内容**，这比一个
-还要往返一趟的路径严格地更有用。
+可以交给守护进程的绝对路径，而文件选择框直接交出**文件内容**，这比一个还要往返
+一趟的路径严格地更有用。
 
 代价，直说：密钥材料现在会跨过带 token 守卫的 loopback API，而以前不会。这是可以
 接受的。要求导出主密钥的人，无论如何都会拿到明文——导出的含义正是如此——而另一条路
