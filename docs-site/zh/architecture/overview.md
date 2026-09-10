@@ -1,7 +1,7 @@
 # 系统总览
 
 ::: tip 核心模型
-Coffer 是一个本地优先的 AI agent 仓库：一个长生命周期的本地守护进程，将开发者积累的 AI 资产保存在本机，并让任意 AI agent（Claude Code、Codex、未来的工具）通过一个安全接口读取与贡献。仓库横跨五种资源 kind——`mcp_server`、`agent`、`skill`、`knowledge`、`channel`——构建于一个与 kind 无关的 Resource 框架之上，外加若干横切特性（进程内与 CLI agent 聊天、消息渠道、多机同步）。MCP 网关只是其中一种 kind：注册一次上游服务器，所有 MCP 客户端就连接同一个守护进程，看到相同的命名空间化工具集，工具名形如 `filesystem__read_file`。所有状态本地存储于 SQLite（密钥以 Fernet 密文形式存储），唯一的主密钥存于 DB 旁的 `0600` 文件（操作系统钥匙串为 opt-in）。守护进程仅绑定到 `127.0.0.1`——外部机器无法访问。
+Coffer 是一个本地优先的 AI agent 仓库：一个长生命周期的本地守护进程，将开发者积累的 AI 资产保存在本机，并让任意 AI agent（Claude Code、Codex、未来的工具）通过一个安全接口读取与贡献。仓库横跨五种资源 kind——`mcp_server`、`agent`、`skill`、`knowledge`、`channel`——构建于一个与 kind 无关的 Resource 框架之上，外加若干横切特性（在这些渠道背后驱动已注册编码 agent 的回合平台，以及一次性的仓库导出/导入）。MCP 网关只是其中一种 kind：注册一次上游服务器，所有 MCP 客户端就连接同一个守护进程，看到相同的命名空间化工具集，工具名形如 `filesystem__read_file`。所有状态本地存储于 SQLite（密钥以 Fernet 密文形式存储），唯一的主密钥存于 DB 旁的 `0600` 文件（操作系统钥匙串为 opt-in）。守护进程仅绑定到 `127.0.0.1`——外部机器无法访问。
 :::
 
 ## 系统拓扑

@@ -20,11 +20,11 @@ Coffer is a daemon + CLI + web UI that gives every AI agent on your machine one 
 - **Agents** — detect and register your local AI coding agents, edit their config files in-app, and one-click install Coffer's own MCP server into any of them.
 - **Skills** — keep a master library of agent skill bundles and deliver them into one or more agents' skill directories, with drift reconciliation.
 - **Knowledge** — one knowledge layer, scoped per project (or global, or a collection you name). Agents write entries, rules and handoffs into it over MCP; you drop in any-format documents (auto-converted to markdown, originals kept for provenance). One search spans everything — grep / keyword / vector is an engine decision, not a question the caller has to answer.
-- **Channels** — chat with a built-in agent from Telegram or SeaTalk, and receive notifications from your phone.
+- **Channels** — chat with your registered coding agents (Claude Code, Codex) from Telegram or SeaTalk, and receive notifications from your phone.
 
 Run Coffer on more than one machine? **Vault export & import** writes the whole vault to a directory you pick and reads one back on the other machine — knowledge, resources, and ciphertext-only credentials travel; the encryption key never leaves your machines.
 
-A built-in **chat** platform and a web UI — served by the daemon itself at its own loopback origin — tie them together: talk to a Coffer agent, browse and curate every kind, and watch invocations live.
+A **web UI** — served by the daemon itself at its own loopback origin — ties them together: register and configure your agents, browse and curate every kind, and manage the vault's settings from one place.
 
 📖 **Documentation site:** https://wyx-sg.github.io/Coffer/
 

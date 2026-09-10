@@ -7,6 +7,8 @@ the tools tiering leaves unlisted — the contract exists but never arrives.
 
 from __future__ import annotations
 
+import pathlib
+
 from coffer.application.mcp.gateway_instructions import (
     MAX_INSTRUCTIONS_CHARS,
     PROTOCOL_VERSION,
@@ -45,3 +47,55 @@ def test_initialize_result_keeps_the_protocol_contract():
     assert result["capabilities"] == SERVER_CAPABILITIES
     assert result["serverInfo"]["name"] == "coffer"
     assert 0 < len(result["instructions"]) <= MAX_INSTRUCTIONS_CHARS
+
+
+def test_instructions_only_name_tools_that_exist() -> None:
+    """Every tool the handshake advertises must actually be registered.
+
+    Nothing else validates this text: it is written into the client's system
+    prompt and never called against, so a tool that is renamed or retired
+    leaves the instructions telling every agent to call a name the gateway no
+    longer answers. That is exactly what happened when the knowledge layer
+    replaced ``recall`` / ``remember`` / ``search_knowledge`` / ``ask``.
+    """
+    from coffer.application.builtin_tools import BuiltinToolRegistry
+    from coffer.application.diagnostics import register_diagnostics_builtin_tools
+    from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
+    from coffer.application.knowledge.document_tools import register_document_builtin_tools
+    from coffer.application.mcp.gateway_instructions import NAMED_TOOLS
+    from coffer.application.skill.builtin_tools import register_skill_builtin_tools
+
+    registry = BuiltinToolRegistry()
+    register_knowledge_builtin_tools(
+        registry,
+        knowledge_service=None,  # type: ignore[arg-type]
+        handoff_service=None,  # type: ignore[arg-type]
+    )
+    register_document_builtin_tools(
+        registry,
+        resources=None,  # type: ignore[arg-type]
+        knowledge_service=None,  # type: ignore[arg-type]
+    )
+    register_skill_builtin_tools(
+        registry,
+        resources=None,  # type: ignore[arg-type]
+        skill_service=None,  # type: ignore[arg-type]
+    )
+    register_diagnostics_builtin_tools(
+        registry,
+        audit_repo=None,  # type: ignore[arg-type]
+        log_path=lambda: pathlib.Path("daemon.log"),
+    )
+    # ``search_tools`` is answered by the gateway itself rather than the
+    # registry, so it is the one name that is legitimately not in there.
+    available = {tool.name for tool in registry.list()} | {"search_tools"}
+
+    assert available >= NAMED_TOOLS, (
+        f"instructions name unregistered tools: {NAMED_TOOLS - available}"
+    )
+
+    text = build_instructions(hidden_count=70)
+    named_in_text = {name for name in NAMED_TOOLS if name in text}
+    assert named_in_text == NAMED_TOOLS, (
+        f"NAMED_TOOLS lists tools the text does not name: {NAMED_TOOLS - named_in_text}"
+    )

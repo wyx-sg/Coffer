@@ -4,7 +4,7 @@ For the audit trail and invocation records (who did what, who called what), see 
 
 ## The problem this solves
 
-A developer runs a busy vault: a couple dozen MCP servers, chat conversations against several agents, a connected messaging channel, and periodic sync runs — all in flight at once. Without operational observability, diagnosing live problems becomes opaque: "Why is this server suddenly returning errors?" "What exactly happened during that failing request, chat turn, or sync run?" Structured logs and trace correlation answer these questions without requiring the user to run a separate monitoring stack.
+A developer runs a busy vault: a couple dozen MCP servers, turns running against several coding agents, and a connected messaging channel — all in flight at once. Without operational observability, diagnosing live problems becomes opaque: "Why is this server suddenly returning errors?" "What exactly happened during that failing request or agent turn?" Structured logs and trace correlation answer these questions without requiring the user to run a separate monitoring stack.
 
 Coffer's approach is deliberately lean: structured local logs, not a metrics pipeline. All observability stays on-device and within the `~/.coffer/` backup footprint.
 

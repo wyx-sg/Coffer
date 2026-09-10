@@ -1,24 +1,22 @@
-"""Parse and toggle agent plugin state for Codex and Claude Code.
+"""Parse agent plugin state for Codex and Claude Code.
 
 Pure domain text transforms — no filesystem access.
 
-Codex stores plugin configuration in ``~/.codex/config.toml``:
+``parse_codex`` reads Codex's ``~/.codex/config.toml``:
 - ``[marketplaces.<name>]`` tables describe plugin sources (source_type, source).
 - ``[plugins."<name>@<marketplace>"]`` tables hold per-plugin state; ``enabled``
-  defaults to ``true`` when absent.  Coffer may read and write this file directly
-  via tomlkit round-trip (documented write surface).
+  defaults to ``true`` when absent.
 
-Claude Code splits plugin state across three files:
-- ``~/.claude/plugins/installed_plugins.json`` (INTERNAL, read-only): inventory
-  of installed plugins; shape ``{"version": 2, "plugins": {"<id>": [...]}}``.
-- ``~/.claude/plugins/known_marketplaces.json`` (INTERNAL, read-only): known
-  marketplace metadata; shape ``{"<mkt>": {"source": {"source": ..., "repo": ...}}}``.
-- ``~/.claude/settings.json`` (DOCUMENTED write surface): ``enabledPlugins`` map
-  ``{"<id>": true|false}``.
+``parse_claude`` reads Claude Code's plugin state, which is split across three
+files:
+- ``~/.claude/plugins/installed_plugins.json`` (INTERNAL): inventory of
+  installed plugins; shape ``{"version": 2, "plugins": {"<id>": [...]}}``.
+- ``~/.claude/plugins/known_marketplaces.json`` (INTERNAL): known marketplace
+  metadata; shape ``{"<mkt>": {"source": {"source": ..., "repo": ...}}}``.
+- ``~/.claude/settings.json``: ``enabledPlugins`` map ``{"<id>": true|false}``.
 
-**Coffer must only ever WRITE settings.json for Claude Code** — never the two
-internal files.  ``set_claude_enabled`` encodes this constraint by accepting only
-the settings text as a mutable input.
+Both functions return ``PluginInfo`` / ``MarketplaceInfo`` views of that text;
+neither writes anything back.
 """
 
 from __future__ import annotations

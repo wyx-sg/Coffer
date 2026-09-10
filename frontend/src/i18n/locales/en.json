@@ -264,28 +264,6 @@
       "sortByTime": "Sort by time"
     },
     "emptyState": "No matching audit entries.",
-    "eventLabel": {
-      "resource_created": "Server registered",
-      "resource_updated": "Server reconfigured",
-      "resource_enabled": "Server enabled",
-      "resource_disabled": "Server disabled",
-      "resource_deleted": "Server removed",
-      "capability_first_seen": "Capability discovered",
-      "capability_enabled": "Capability enabled",
-      "capability_disabled": "Capability disabled",
-      "daemon_started": "Daemon started",
-      "daemon_stopped": "Daemon stopped",
-      "token_rotated": "Token rotated",
-      "retention_updated": "Retention changed",
-      "keychain_set": "Credential stored",
-      "keychain_deleted": "Credential removed",
-      "keychain_read": "Credential read",
-      "credential_set": "Credential stored",
-      "credential_read": "Credential read",
-      "credential_deleted": "Credential removed",
-      "credential_migrated": "Credential migrated from OS keychain",
-      "master_key_relocated": "Master key storage changed"
-    },
     "capType": {
       "tool": "tool",
       "resource": "resource",
@@ -409,7 +387,7 @@
     },
     "models": {
       "title": "Models",
-      "subtitle": "Coffer's internal model — powers tool/knowledge retrieval and agentic RAG.",
+      "subtitle": "Coffer's internal model — powers tool/knowledge retrieval and the knowledge organizer.",
       "add": "Add model",
       "addTitle": "Add model",
       "editTitle": "Edit model",
@@ -736,11 +714,6 @@
       "install": "Install Coffer MCP",
       "uninstall": "Uninstall Coffer MCP",
       "installedStatus": "Coffer MCP installed"
-    },
-    "hook": {
-      "title": "Session-start rules",
-      "help": "When on, Coffer feeds its rules bundle to the agent at session start — via a SessionStart hook, a dropped plugin, or a managed block in the instructions file, whichever the agent supports.",
-      "unsupported": "Coffer can't inject session context into this agent type yet."
     },
     "welcome": {
       "title": "Manage your local AI agents",

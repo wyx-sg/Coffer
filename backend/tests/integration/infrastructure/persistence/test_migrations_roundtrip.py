@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0054"
+HEAD_REVISION = "0055"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -107,7 +107,11 @@ HEAD_REVISION = "0054"
 # one ``knowledge`` kind and RENAMEs the two machine-local side tables to
 # ``knowledge_scope_project_roots`` / ``knowledge_scope_labels`` — same tables,
 # new names at head; its downgrade renames them back, which is why the stepwise
-# assertions below still speak of the ``memory_store_*`` names.
+# assertions below still speak of the ``memory_store_*`` names. 0055 is
+# DATA-only: it DELETEs ``audit_log`` rows whose ``event_type`` is not one of
+# the 39 the enum still has (the simplification cut 27, and the retired rows
+# outlived the code that wrote them) — no DDL, table/column set unchanged, and
+# its downgrade is a no-op because deleted rows cannot be invented back.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",
@@ -290,6 +294,39 @@ def test_0029_rewrites_skill_config_to_local_import_only(tmp_path, monkeypatch):
     assert downgraded["update_available"] is False
     assert downgraded["pinned"] is False
     assert downgraded["source"]["type"] == "local_import"
+
+
+def test_0055_purges_retired_audit_events(tmp_path, monkeypatch):
+    """0055 is a data migration: ``audit_log`` rows whose ``event_type`` left
+    the enum are DELETED, and rows for live event types survive untouched.
+
+    The retired rows outlived the code that wrote them — ``journal_append``
+    alone was 98.5% of a real vault's audit table — and ``coffer__diagnose``
+    hands an agent a window of this table when something has gone wrong.
+    """
+    db_path = tmp_path / "audit_purge.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    # Stop one revision BEFORE 0055 and seed retired + live event rows.
+    command.upgrade(cfg, "0054")
+    retired = ("journal_append", "daemon_started", "keychain_read", "chat_turn_completed")
+    live = ("resource_created", "credential_read", "skill_bound")
+    with sqlite3.connect(db_path) as conn:
+        for event_type in retired + live:
+            conn.execute(
+                "INSERT INTO audit_log (timestamp, event_type, actor) "
+                "VALUES ('2026-09-01T00:00:00+00:00', ?, 'user')",
+                (event_type,),
+            )
+        conn.commit()
+
+    command.upgrade(cfg, "head")
+    assert _alembic_version(db_path) == HEAD_REVISION
+
+    with sqlite3.connect(db_path) as conn:
+        survivors = {row[0] for row in conn.execute("SELECT event_type FROM audit_log")}
+    assert survivors == set(live), f"unexpected audit rows after 0055: {sorted(survivors)}"
 
 
 def test_0031_deletes_removed_agent_type_rows(tmp_path, monkeypatch):

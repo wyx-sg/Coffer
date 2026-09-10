@@ -158,7 +158,7 @@ REST 路由与 `coffer audit` 保留，供脚本使用。消失的是那个页�
 - **When** 他们在真实浏览器里访问 `http://localhost:5173/`
 - **Then** index 重定向到 `/agents`，页面在 2 秒内渲染出侧栏 + 主内容区
 - **And** 主内容显示 Agents 欢迎视图（不出现 generic error 卡片）
-- **And** 侧栏列出 Coffer 的运营界面——Agents、MCP servers、Audit log、Settings——分组在 "Agents"、"Resources"、"System" 标题下
+- **And** 侧栏列出 Coffer 的运营界面——Agents、MCP servers、Skills、Knowledge、Model providers、Channels、Settings——分组在 "Agents"、"Resources"、"System" 标题下
 
 ### Scenario: token-missing renders an actionable empty state
 
@@ -289,7 +289,7 @@ REST 路由与 `coffer audit` 保留，供脚本使用。消失的是那个页�
 
 - 上面每一条 scenario 至少有一条覆盖测试（unit / integration / e2e），并且 `audit_acceptance` 同时通过 001 与 002。
 - 首次用户能在 app 内注册一台 MCP 服务器并到达一个能工作的 gateway；把 MCP 客户端指向 shim 这一步在项目 README 中记录。
-- 侧栏只展示运营界面（Agents、MCP servers、Audit log、Settings），按角色分组；没有任何功能以"敬请期待"的死占位项出现。
-- 审计日志住在 `/audit`，带重设计后的过滤 + 表格；legacy `/observability` URL 仍能解析（重定向到 `/audit`）。审计日志与 MCP invocation 日志的每一行都能展开为该行的原始日志 JSON。Observability（系统健康 / 指标）是预留的未来界面，不是审计日志。
+- 侧栏只展示运营界面（Agents、MCP servers、Skills、Knowledge、Model providers、Channels、Settings），按角色分组；没有任何功能以"敬请期待"的死占位项出现。
+- 审计日志没有页面：`/audit` 与 legacy `/observability` 都不再解析，侧栏也没有任何入口指向它们。agent 通过 `coffer__diagnose` 读这份日志，脚本通过 REST 路由与 `coffer audit` 读。MCP invocation 日志的每一行仍能展开为该行的原始日志 JSON。Observability（系统健康 / 指标）是预留的未来界面，不是审计日志。
 - Settings 把数据控件（retention 与 prune）归到 Data tab；daemon 永不作为用户可见概念出现，任何 tab 都不暴露 shutdown 或 token-rotation。
 - `make verify` + `make verify-e2e` 绿。
