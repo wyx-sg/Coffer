@@ -1,58 +1,67 @@
 // frontend/src/kinds/knowledge/KnowledgeDetailHeader.tsx
 //
-// Header for one knowledge scope, merging what the two former detail headers
-// showed: a back link to the list, the scope's readable name + rename pencil,
-// the scope badge, and BOTH lanes' counts side by side — entries an agent
-// wrote and documents someone ingested are separate numbers and are never
-// summed. Settings / Check sources / Reindex / Upload sit on the right.
+// Header for one knowledge scope: a back link to the list, the scope's
+// readable name + rename pencil, and the project path underneath. Two buttons
+// carry the actions a person actually reaches for — Upload and Tidy; Settings,
+// Check sources and Reindex live behind the overflow (⋯) menu. The only status
+// shown is the degraded-documents warning, and only when there is one: chunk
+// counts, byte sizes and index modes are internal mechanics, and the note /
+// document counts are already the tree headers one tab down.
 // Presentational — the page owns the data and the action triggers.
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   ArrowLeft,
   FileSearch,
+  MoreHorizontal,
   Pencil,
   RefreshCw,
   Settings as SettingsIcon,
+  Sparkles,
   TriangleAlert,
   Upload,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatBytes } from "@/lib/utils";
-import { deriveScope, scopeDisplayName, type ScopeMetrics, type ScopeOut } from "./api";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { scopeDisplayName, type ScopeOut } from "./api";
 
 interface Props {
   scope: string;
   scopeResource: ScopeOut | undefined;
-  metrics: ScopeMetrics | undefined;
+  /** Documents indexed keyword-only because the embedder was unavailable. */
+  degradedDocuments: number;
   isReindexPending: boolean;
   isUploadPending: boolean;
+  isTidyPending: boolean;
   checkingSources: boolean;
   onRename: () => void;
   onOpenSettings: () => void;
   onCheckSources: () => void;
   onReindex: () => void;
   onUpload: () => void;
+  onTidy: () => void;
 }
 
 export function KnowledgeDetailHeader({
   scope,
   scopeResource,
-  metrics,
+  degradedDocuments,
   isReindexPending,
   isUploadPending,
+  isTidyPending,
   checkingSources,
   onRename,
   onOpenSettings,
   onCheckSources,
   onReindex,
   onUpload,
+  onTidy,
 }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const kind = scopeResource ? deriveScope(scopeResource) : null;
+  const [menuOpen, setMenuOpen] = useState(false);
   // Readable identity: a user-set label, else the project_root basename, else
   // the scope's own (already readable) name — never the opaque project-<ULID>
   // as the title. While loading, show the raw scope name.
@@ -61,6 +70,29 @@ export function KnowledgeDetailHeader({
     : scope;
   const projectRoot = scopeResource?.project_root ?? null;
   const hasScope = Boolean(scopeResource);
+
+  // One row of the overflow menu; closing on select keeps the popover from
+  // hanging open over the dialog an item opens.
+  const menuItem = (
+    label: string,
+    icon: React.ReactNode,
+    onSelect: () => void,
+    disabled = false,
+  ) => (
+    <button
+      type="button"
+      role="menuitem"
+      disabled={disabled}
+      onClick={() => {
+        setMenuOpen(false);
+        onSelect();
+      }}
+      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+    >
+      {icon}
+      {label}
+    </button>
+  );
 
   return (
     <header className="space-y-2">
@@ -86,54 +118,52 @@ export function KnowledgeDetailHeader({
           >
             <Pencil className="size-4" />
           </Button>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {kind ? <Badge variant="secondary">{t(`knowledge.scope.${kind}`)}</Badge> : null}
-            {metrics ? (
-              <>
-                {/* Two lanes, two counts — never one summed total. */}
-                <Badge variant="outline">
-                  {t("knowledge.detail.entryBadge", { count: metrics.entry_count })}
-                </Badge>
-                <Badge variant="outline">
-                  {t("knowledge.detail.docBadge", { count: metrics.document_count })}
-                </Badge>
-                <Badge variant="outline">
-                  {t("knowledge.detail.chunkBadge", { count: metrics.chunk_count })}
-                </Badge>
-                <Badge variant="outline">{formatBytes(metrics.disk_bytes)}</Badge>
-                {metrics.indexed_modes.map((m) => (
-                  <Badge key={m} variant="outline">
-                    {t(`knowledge.modes.${m}`)}
-                  </Badge>
-                ))}
-                {metrics.documents_degraded > 0 ? (
-                  <Badge variant="outline" className="gap-1 text-amber-600 dark:text-amber-500">
-                    <TriangleAlert className="size-3" />
-                    {t("knowledge.detail.degradedBadge", { count: metrics.documents_degraded })}
-                  </Badge>
-                ) : null}
-              </>
-            ) : null}
-          </div>
+          {degradedDocuments > 0 ? (
+            <span className="inline-flex items-center gap-1 rounded-sm border border-border px-2 py-0.5 text-xs text-status-warn">
+              <TriangleAlert className="size-3" />
+              {t("knowledge.detail.degradedBadge", { count: degradedDocuments })}
+            </span>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={onOpenSettings} disabled={!hasScope}>
-            <SettingsIcon className="mr-1.5 size-3.5" /> {t("knowledge.detail.settings")}
-          </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={onCheckSources}
-            disabled={checkingSources || !hasScope}
+            onClick={onTidy}
+            disabled={isTidyPending || !hasScope}
           >
-            <FileSearch className="mr-1.5 size-3.5" /> {t("knowledge.detail.checkSources")}
-          </Button>
-          <Button variant="outline" size="sm" onClick={onReindex} disabled={isReindexPending}>
-            <RefreshCw className="mr-1.5 size-3.5" /> {t("knowledge.detail.reindex")}
+            <Sparkles className="mr-1.5 size-3.5" /> {t("knowledge.detail.tidy")}
           </Button>
           <Button size="sm" onClick={onUpload} disabled={isUploadPending}>
             <Upload className="mr-1.5 size-3.5" /> {t("knowledge.detail.upload")}
           </Button>
+          <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="sm" aria-label={t("knowledge.detail.moreActions")}>
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" role="menu" className="w-56 p-1">
+              {menuItem(
+                t("knowledge.detail.settings"),
+                <SettingsIcon className="size-3.5" />,
+                onOpenSettings,
+                !hasScope,
+              )}
+              {menuItem(
+                t("knowledge.detail.checkSources"),
+                <FileSearch className="size-3.5" />,
+                onCheckSources,
+                checkingSources || !hasScope,
+              )}
+              {menuItem(
+                t("knowledge.detail.reindex"),
+                <RefreshCw className="size-3.5" />,
+                onReindex,
+                isReindexPending,
+              )}
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 

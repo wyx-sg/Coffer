@@ -18,7 +18,7 @@ from coffer.domain.errors import MemoryRejected
 from coffer.domain.knowledge.document import Document
 from coffer.domain.knowledge.retrieval import GrepHit, MemoryHit, Passage
 from coffer.domain.knowledge.scope import ResolvedScope
-from coffer.infrastructure.knowledge.paths import knowledge_dir
+from coffer.infrastructure.knowledge.paths import notes_dir
 from coffer.infrastructure.knowledge_scope.files import read_fact_file
 
 
@@ -82,20 +82,19 @@ def grep_hits_to_memory_hits(hits: Sequence[GrepHit], resolved: ResolvedScope) -
     The matched line is the hit text; several matches inside one document dedupe
     to the first.
 
-    ripgrep runs over the whole store dir, so it also reaches content that must
-    NEVER surface in recall: the ``handoff/`` / ``rules/`` sibling lanes, the
-    ``superseded/`` tombstone, facts abandoned at the store root by a pre-lane
-    build, and a leftover legacy ``MEMORY.md``. Recall therefore keeps ONLY hits
-    inside the single searchable lane — ``knowledge/`` (semantic facts), parsed
-    as fact files (id/updated_at from frontmatter) — and skips everything else."""
+    ripgrep runs over the whole store dir, so it also reaches the ingested
+    ``docs/`` lane and any file abandoned at the store root by an older build.
+    Recall keeps ONLY hits inside ``notes/``, parsed as note files
+    (id/updated_at from frontmatter), and skips everything else — a document
+    hit is the ingest lane's to report, not this converter's."""
     out: list[MemoryHit] = []
     seen: set[str] = set()
-    knowledge_root = knowledge_dir(resolved.store_dir).resolve()
+    notes_root = notes_dir(resolved.store_dir).resolve()
     for h in hits:
         path = Path(h.path)
         # Resolve so a relative or absolute grep path compares against the
         # absolute lane root. Anything outside the lane is recall-excluded.
-        if not _is_under(path, knowledge_root):
+        if not _is_under(path, notes_root):
             continue
         hit = _knowledge_grep_hit(h, path, resolved)
         if hit is None or hit.id in seen:
@@ -106,10 +105,8 @@ def grep_hits_to_memory_hits(hits: Sequence[GrepHit], resolved: ResolvedScope) -
 
 
 def _knowledge_grep_hit(h: GrepHit, path: Path, resolved: ResolvedScope) -> MemoryHit | None:
-    """A grep hit inside the ``knowledge/`` lane (a per-fact file). ``None`` for
-    the lane's ``INDEX.md`` review index or an unparseable file."""
-    if path.name == "INDEX.md":  # the lane's human review index is not a fact
-        return None
+    """A grep hit inside the ``notes/`` lane (a per-note file). ``None`` when
+    the file will not parse as one."""
     try:
         ff = read_fact_file(path)
     except (OSError, ValueError):

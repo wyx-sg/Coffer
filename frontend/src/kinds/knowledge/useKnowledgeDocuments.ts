@@ -5,9 +5,11 @@
 // the API max) and rendered as a single scrollable list — no in-UI pager (the
 // documents API still supports `limit`/`offset` for programmatic callers).
 //
-// This reads only the documents lane: `listDocuments` never returns the entries
-// an agent wrote, and nothing here touches the entry count.
-import { useEffect, useRef, useState } from "react";
+// This reads only the documents lane: `listDocuments` never returns the notes
+// an agent wrote, and nothing here touches the note count. Filtering the list
+// is the lane component's own client-side concern — nothing here fetches for a
+// query.
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "@/lib/api/errors";
@@ -21,13 +23,12 @@ import {
   reconvertDocument,
   reembedDocuments,
   reindexScope,
-  searchDocuments,
+  tidyScope,
   updateFromSource,
   updateScopeConfig,
   type DocumentListOut,
   type KnowledgeConfigPatch,
   type ReembedBatchRequest,
-  type SearchResponse,
   type SourceCheckResponse,
 } from "./api";
 
@@ -46,8 +47,6 @@ export function useKnowledgeDocuments(scope: string) {
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [query, setQuery] = useState("");
-  const [searchResult, setSearchResult] = useState<SearchResponse | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [lastFile, setLastFile] = useState<File | null>(null);
@@ -115,7 +114,6 @@ export function useKnowledgeDocuments(scope: string) {
     mutationFn: (id: string) => deleteDocument(scope, id),
     onSuccess: () => {
       setSelectedId(null);
-      setSearchResult(null); // a delete returns to the full list (no stale hit rows)
       invalidate();
     },
   });
@@ -147,31 +145,18 @@ export function useKnowledgeDocuments(scope: string) {
       checkSourcesM.mutate();
     },
   });
-  const search = useMutation({
-    mutationFn: () => searchDocuments(scope, query, { topK: 5 }),
-    onSuccess: (data) => setSearchResult(data),
+  // The manual trigger for the tidy pass over the scope's NOTES. It lives here
+  // rather than in the notes lane because the header (which the page drives
+  // from this hook) is where the button sits; a pass can rewrite notes and
+  // change chunk counts, so both lanes' reads are invalidated.
+  const tidy = useMutation({
+    mutationFn: () => tidyScope(scope),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["knowledge-entries", scope] });
+      invalidate();
+    },
   });
 
-  // Recall mode: a search filters the tree to the deduped hit docs (passages carry
-  // the title) and opens the top hit highlighted; clearing the box restores the list.
-  const recalling = searchResult !== null;
-  const recallDocs: { id: string; title: string }[] = [];
-  const seenHits = new Set<string>();
-  for (const p of searchResult?.passages ?? []) {
-    if (seenHits.has(p.document_id)) continue;
-    seenHits.add(p.document_id);
-    recallDocs.push({ id: p.document_id, title: p.title });
-  }
-  useEffect(() => {
-    // Auto-select the top hit so its match opens highlighted in the viewer.
-    if (searchResult?.passages.length) setSelectedId(searchResult.passages[0].document_id);
-  }, [searchResult]);
-  const onQueryChange = (value: string) => {
-    setQuery(value);
-    if (!value) setSearchResult(null); // clearing the box exits recall mode
-  };
-
-  const runSearch = () => search.mutate();
   const selectDoc = (id: string) => setSelectedId(id);
   // Open the styled confirmation dialog (no native window.confirm). The lane
   // renders <ConfirmDialog open={deleteOpen} .../> and calls performDelete.
@@ -203,9 +188,6 @@ export function useKnowledgeDocuments(scope: string) {
 
   return {
     fileInputRef,
-    query,
-    setQuery,
-    searchResult,
     selectedId,
     showSettings,
     setShowSettings,
@@ -223,12 +205,8 @@ export function useKnowledgeDocuments(scope: string) {
     updateFromSource: updateFromSourceM,
     sourceReport,
     setSourceReport,
-    search,
-    runSearch,
+    tidy,
     selectDoc,
-    recalling,
-    recallDocs,
-    onQueryChange,
     confirmDelete,
     performDelete,
     deleteOpen,

@@ -2,9 +2,10 @@
 //
 // KnowledgePage mirrors SkillsPage: PageHeader + welcome panel (empty) /
 // DataTable (populated). It loads from the DEDICATED `/knowledge` endpoint (not
-// the generic `/resources` list) because only that endpoint carries the typed
-// `scope` discriminator the table's scope column needs, plus BOTH per-lane
-// counts (entries and documents stay separate numbers).
+// the generic `/resources` list) because only that endpoint carries BOTH
+// per-lane counts (notes and documents stay separate numbers). The table has
+// no Scope column: the Name cell already says which of the three kinds a row
+// is.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -14,8 +15,7 @@ import type { PropsWithChildren } from "react";
 import { KnowledgePage } from "./KnowledgePage";
 import type { ScopeListOut, ScopeOut } from "@/kinds/knowledge/api";
 
-// Partial mock: stub only the network call; keep the real `deriveScope` the
-// table uses to classify the scope column.
+// Partial mock: stub only the network call; the rest of the module is real.
 vi.mock("@/kinds/knowledge/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/kinds/knowledge/api")>()),
   listScopes: vi.fn(),
@@ -86,14 +86,21 @@ describe("KnowledgePage", () => {
     expect(await screen.findByText("global")).toBeInTheDocument();
   });
 
-  test("labels the global scope as Global, not Unknown", async () => {
-    // The real /knowledge payload carries a top-level `scope`; the table
-    // must surface it instead of the indeterminate "Unknown" fallback (which
-    // is what the scope-less generic /resources row produced — the bug).
+  test("has no Scope column — the Name cell already identifies the row", async () => {
     resolveWith([GLOBAL_SCOPE]);
     render(<KnowledgePage />, { wrapper: wrap() });
-    expect(await screen.findByText("Global")).toBeInTheDocument();
+    // The name is the identity; the badge that used to repeat it is gone.
+    expect(await screen.findByText("global")).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Scope" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Global")).not.toBeInTheDocument();
     expect(screen.queryByText("Unknown")).not.toBeInTheDocument();
+  });
+
+  test("offers no AI-merge action", async () => {
+    resolveWith([GLOBAL_SCOPE]);
+    render(<KnowledgePage />, { wrapper: wrap() });
+    await screen.findByText("global");
+    expect(screen.queryByRole("button", { name: /find duplicates/i })).not.toBeInTheDocument();
   });
 
   test("renders an error card when the scopes query fails", async () => {
@@ -110,12 +117,14 @@ describe("KnowledgePage", () => {
     expect(screen.getByLabelText(/^name$/i)).toBeInTheDocument();
     // The auto-provisioned scopes are never offered as a name to type.
     expect(screen.getByText(/reserved for the automatic scopes/i)).toBeInTheDocument();
+    // Which index a scope carries is not a question asked at creation time.
+    expect(screen.queryByLabelText(/vector search/i)).not.toBeInTheDocument();
   });
 
-  test("shows entries and documents as two columns, never one summed count", async () => {
+  test("shows notes and documents as two columns, never one summed count", async () => {
     resolveWith([{ ...GLOBAL_SCOPE, entry_count: 3, document_count: 5 }]);
     render(<KnowledgePage />, { wrapper: wrap() });
-    expect(await screen.findByRole("columnheader", { name: "Entries" })).toBeInTheDocument();
+    expect(await screen.findByRole("columnheader", { name: "Notes" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Documents" })).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
     expect(screen.getByText("5")).toBeInTheDocument();

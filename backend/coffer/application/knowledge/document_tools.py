@@ -1,8 +1,8 @@
 """Knowledge built-in MCP tools — enumerate and change what is stored.
 
-The write half of the eight (``list``, ``write``, ``delete``); the retrieval
-half plus the handoff pair live in ``builtin_tools``. Split across two modules
-only for the project's file-size ceiling — one kind, one tool family.
+The write half of the six (``list``, ``write``, ``delete``); the retrieval half
+lives in ``builtin_tools``. Split across two modules only for the project's
+file-size ceiling — one kind, one tool family.
 
 Every write funnels through the same service paths as the REST surface.
 Documents are co-managed (spec knowledge FR-062): an agent may add and edit them, not

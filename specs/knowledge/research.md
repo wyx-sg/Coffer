@@ -1,11 +1,11 @@
-# Research — Memory (Shared Agent Memory)
+# Research — 007 Memory (Shared Agent Memory)
 
 > 中文版: [research.zh.md](./research.zh.md)
 
-> **Historical — 2026-09-10.** The Knowledge Base and Memory specs merged into
-> one **Knowledge Layer** on this date. [`spec.md`](./spec.md) is the
+> **Historical — 2026-09-10.** Spec knowledge (Knowledge Base) and spec knowledge (Memory)
+> merged into one **Knowledge Layer** on this date. [`spec.md`](./spec.md) is the
 > authority for the merged model — one `knowledge` kind, three scopes, one
-> storage root `~/.coffer/knowledge/<scope>/`, eight `coffer__*` tools. This
+> storage root `~/.coffer/knowledge/<scope>/`, six `coffer__*` tools. This
 > document records the design as it stood before that merge; where it says
 > "memory face", "`memory` kind", `~/.coffer/memory/`, `/api/v1/memory_stores`
 > or `coffer memory …`, read the merged equivalents in `spec.md`. The folder
@@ -29,6 +29,8 @@
 **Question**: What is the on-disk truth?
 
 **Decision**: Per-fact markdown files with YAML frontmatter (`name`, `description`, `metadata.type`, `metadata.actor`, `origin_session_id`) + a markdown body, plus a `MEMORY.md` index (`- [name](file.md) — description`). This is **Claude Code's auto-memory format**, adopted as canonical so Claude projection is a native directory symlink. Files are the source of truth; SQLite is a rebuildable index. `MEMORY.md` is a Coffer-regenerated derived index — any writer triggers idempotent regeneration, so Claude's own `MEMORY.md` writes are harmlessly overwritten.
+
+**Superseded.** Every derived index is gone: `MEMORY.md` was removed with Files as Truth and `INDEX.md` with the two-lane redesign. Per-file markdown with YAML frontmatter is still the truth, and it now lives in one of two lanes — `notes/` for what someone wrote, `docs/` for what someone uploaded.
 
 ## 3. Two-layer scope
 
@@ -62,6 +64,8 @@ The projection engine dispatches on `projection_mode` (`SYMLINK` | `RENDER` | `N
 
 **Migration on first projection**: if Claude's memory dir already holds real files, merge them into canonical first, then replace with a symlink — never silently overwrite. Managed-block re-render is idempotent.
 
+**Superseded.** Native projection was removed (Memory via MCP). Sharing is MCP-only: every agent reads and writes through Coffer's gateway tools, and Coffer never touches an agent's native memory files.
+
 ## 6. Retrieval — shared engine, lazy reindex-on-read
 
 **Question**: How is recall implemented and kept fresh?
@@ -70,7 +74,7 @@ The projection engine dispatches on `projection_mode` (`SYMLINK` | `RENDER` | `N
 
 Memory uses **lazy reindex-on-read**: `recall` first scans the small fact dir for deltas (by `content_sha256`) and reconciles the index before searching. This makes Claude's symlink edits and any direct-disk edits instantly visible to all agents with **no filesystem watcher**. (KB, by contrast, reindexes on Coffer-mediated edits + explicit `coffer kb reindex` + an optional off-by-default watcher.)
 
-The **store-list** `fact_count` (KB14, see the Knowledge Base spec's research §12) reads the indexed `count_documents`, not a `scan_store_dir` of the fact files — any index-vs-disk staleness closes on the next recall/reconcile above. The per-store `/metrics` detail endpoint still scans + walks the disk for `disk_bytes`.
+The **store-list** `fact_count` (KB14, see 006 research §12) reads the indexed `count_documents`, not a `scan_store_dir` of the fact files — any index-vs-disk staleness closes on the next recall/reconcile above. The per-store `/metrics` detail endpoint still scans + walks the disk for `disk_bytes`.
 
 ## 7. Embedding configuration
 
@@ -88,6 +92,8 @@ Five memory tools, namespaced under `coffer__`, agent-centric and frictionless:
 - `coffer__resume()` → `{found, branch?, body?, updated_at?, note?}`.
 - `coffer__list_memory(scope?)` → facts for browse.
 
+**Superseded.** The surface is now **six** tools shared by the whole knowledge layer — `coffer__search`, `coffer__grep`, `coffer__read`, `coffer__list`, `coffer__write`, `coffer__delete` (FR-015). `coffer__set_handoff` and `coffer__resume` retired with the handoff lane; `recall`/`remember`/`list_memory` were renamed into the list above.
+
 Invocations are recorded in `mcp_invocations` the same way KB and upstream tools are: tool name + who/when/duration/outcome only — no arguments or returned content (existing privacy stance).
 
 ## 9. Prior art & novelty
@@ -102,7 +108,7 @@ Invocations are recorded in `mcp_invocations` the same way KB and upstream tools
 - Multi-machine sync (constitutional).
 - Filesystem watcher on by default.
 - Memory categories beyond a free-form `metadata.type`.
-- Defining file-write atomicity here: memory's source-of-truth files (facts, topic docs, `INDEX.md`, handoffs) are written via the shared `infrastructure.knowledge.fs.atomic_write_*` helper (same-dir temp → fsync → `os.replace`), decided once in KB19 (that research lived in the now-deleted Knowledge Base spec; the helper itself is the record).
+- Defining file-write atomicity here: memory's source-of-truth files (notes, the topic documents a tidy pass writes, and the normalized uploads under `docs/`) are written via the shared `infrastructure.knowledge.fs.atomic_write_*` helper (same-dir temp → fsync → `os.replace`), decided once in KB19 (that research lived in the now-deleted `specs/006-knowledge-base/`; the helper itself is the record).
 
 ## 11. Open items to verify in implementation
 

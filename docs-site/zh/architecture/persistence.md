@@ -8,7 +8,7 @@
 
 Coffer 是一个本地优先的开发者工具：用户沉淀下来的 AI 资产——已注册的 MCP 服务器、能力偏好、审计历史、知识、聊天会话、通道以及同步状态——必须在不依赖任何云服务的情况下可读可写。这个约束要求持久化层必须是自包含的、零配置的，并且可以简单地备份。
 
-答案是两层结构。`~/.coffer/coffer.db` 中的单个 SQLite 文件是所有控制面状态的事实记录方 (system of record)。批量用户内容——摄取的文档与 agent 写下的条目——以 markdown 文件的形式存放于本地文件系统（事实源）；SQLite 在其之上承载一个可重建的检索索引（ADR files-as-truth-sqlite-retrieval）。不需要安装独立的数据库服务进程，不需要调优连接池，daemon 与存储之间也没有网络跳转。用户的数据就是他们的文件。
+答案是两层结构。`~/.coffer/coffer.db` 中的单个 SQLite 文件是所有控制面状态的事实记录方 (system of record)。批量用户内容——摄取的文档与 agent 写下的笔记——以 markdown 文件的形式存放于本地文件系统（事实源）；SQLite 在其之上承载一个可重建的检索索引（Files as Truth）。不需要安装独立的数据库服务进程，不需要调优连接池，daemon 与存储之间也没有网络跳转。用户的数据就是他们的文件。
 
 ## 为什么选择 SQLite 而非 Postgres
 
@@ -57,7 +57,7 @@ Schema 演化由 Alembic 管理，配置文件为 `backend/alembic.ini`，迁移
 | `0002`   | `20260521_0002_mcp_tables.py`        | `mcp_capability_preferences`、`mcp_invocations` |
 | `0003`   | `20260522_0003_mcp_server_health.py` | `mcp_server_health`                             |
 
-后续修订版本陆续加入了 skill、knowledge、embedding 配置、chat、channel、credentials 等表（以及若干索引和数据修复修订版本）；在持续同步被撤销之后，又有一个修订版本把 sync 相关的表删除（[Vault Export and Import](/zh/reference/adr/vault-export-import)）。在 daemon 首次启动时，`alembic upgrade head` 会在 HTTP 服务开始接受连接之前运行。由于 Alembic 迁移作为数据文件被打包进 PyInstaller daemon 二进制文件，最终用户的安装在首次启动时也能正确创建 schema，无需单独的迁移步骤。
+后续修订版本陆续加入了 skill、knowledge、embedding 配置、chat、channel、credentials 等表（以及若干索引和数据修复修订版本）；在持续同步被撤销之后，又有一个修订版本把 sync 相关的表删除（[Vault Export and Import-vault-export-import](/zh/reference/adr/Vault Export and Import-vault-export-import)）。在 daemon 首次启动时，`alembic upgrade head` 会在 HTTP 服务开始接受连接之前运行。由于 Alembic 迁移作为数据文件被打包进 PyInstaller daemon 二进制文件，最终用户的安装在首次启动时也能正确创建 schema，无需单独的迁移步骤。
 
 ## 数据库表概览
 
@@ -83,14 +83,14 @@ Schema 演化由 Alembic 管理，配置文件为 `backend/alembic.ini`，迁移
 
 | 数据表             | 用途                                                                                                                                                  |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `credentials`      | 信封加密的密钥存储：每个密钥在到达 SQLite 之前都用主密钥进行 Fernet 加密。明文永远不会落盘。参阅[安全](/zh/architecture/security)和 [Envelope-Encrypted Credentials](/zh/reference/adr/envelope-encrypted-credential-store)。 |
+| `credentials`      | 信封加密的密钥存储：每个密钥在到达 SQLite 之前都用主密钥进行 Fernet 加密。明文永远不会落盘。参阅[安全](/zh/architecture/security)和 Envelope-Encrypted Credentials。 |
 | `embedding_config` | 检索索引所使用的当前 embedding 提供方/模型配置。                                                                                                     |
 
 **知识基底 (substrate)：**
 
 | 数据表          | 用途                                                                                  |
 | --------------- | ------------------------------------------------------------------------------------- |
-| `documents`     | 每个知识条目对应一行——摄取的文档或写下的条目——与磁盘上的 markdown 文件相互映射。       |
+| `documents`     | 每个知识条目对应一行——摄取的文档或写下的笔记——与磁盘上的 markdown 文件相互映射。       |
 | `chunks`        | 检索流水线从 markdown 切分出的逐文档 chunk 行。                                        |
 | `documents_fts` | 支撑对 chunk 文本进行关键词搜索的 FTS5 虚拟表。                                        |
 | _sqlite-vec_    | 每个作用域一个 `vec0` 虚拟表（惰性创建，以 kind + 维度命名），保存 chunk embedding 用于向量搜索。 |
@@ -122,9 +122,9 @@ Schema 演化由 Alembic 管理，配置文件为 `backend/alembic.ini`，迁移
 | ---------------------- | --------------------------------------------- |
 | `skill_agent_bindings` | 记录哪些技能绑定到哪些 agent 工作区。          |
 
-**导出 / 导入：** 没有表。导出与导入是对活着的仓库执行的一次性操作；没有需要持久化的配置、没有上次运行状态、没有机器注册表，也没有墓碑账本（[Vault Export and Import](/zh/reference/adr/vault-export-import)）。
+**导出 / 导入：** 没有表。导出与导入是对活着的仓库执行的一次性操作；没有需要持久化的配置、没有上次运行状态、没有机器注册表，也没有墓碑账本（[Vault Export and Import-vault-export-import](/zh/reference/adr/Vault Export and Import-vault-export-import)）。
 
-## 文件即事实源，SQLite 是可重建的索引（ADR files-as-truth-sqlite-retrieval）
+## 文件即事实源，SQLite 是可重建的索引（Files as Truth）
 
 上述控制面表是其行的事实记录方。**知识基底**则不同：`~/.coffer/knowledge/` 下的 markdown 文件才是事实源，而 SQLite 检索索引（`documents` / `chunks` / `documents_fts` FTS5 表以及每个作用域的 sqlite-vec 虚拟表）是这些文件的一个**完全可重建**的投影。
 
@@ -147,12 +147,12 @@ Coffer 写入的完整文件集合：
 | `~/.coffer/coffer.db`      | SQLite 数据库（WAL 模式）——事实记录方            |
 | `~/.coffer/daemon.json`    | Daemon PID、端口和 bearer token（权限位 `0600`） |
 | `~/.coffer/master.key`     | 凭据存储主密钥（默认文件存储；可选钥匙串）。参阅[安全](/zh/architecture/security)。 |
-| `~/.coffer/knowledge/`     | 每个作用域一个目录——条目、摄取的文档、规则、现场，以及隐藏的 `.raw/` 原件，全部以 markdown 存放；由 SQLite 索引的事实源 |
+| `~/.coffer/knowledge/`     | 每个作用域一个目录——以 markdown 存放的 `notes/` 与 `docs/`，外加隐藏的 `.raw/` 原件和 `.history/` 笔记旧版本；由 SQLite 索引的事实源 |
 | `~/.coffer/logs/`          | `structlog` 输出的结构化 JSON 日志文件           |
 | `~/.coffer/bin/`           | 由守护进程在 frozen 启动时部署的 `coffer-mcp-shim`、`coffer-daemon` 及运行时辅助二进制文件 |
 | `~/.coffer/upstream-pids/` | 用于会话追踪的每个上游子进程的 PID 文件          |
 
-将所有文件统一置于一个父目录下，使备份变得简单，迁移路径清晰，彻底卸载也能做到完整。daemon 的检测-或-拉起协议（ADR daemon-detect-or-spawn）也因此受益：每一个需要查找 daemon 的进程都读取 `~/.coffer/daemon.json`——没有注册表，没有环境变量，也不需要探测任何平台特定的服务目录。
+将所有文件统一置于一个父目录下，使备份变得简单，迁移路径清晰，彻底卸载也能做到完整。daemon 的检测-或-拉起协议（Detect-or-Spawn）也因此受益：每一个需要查找 daemon 的进程都读取 `~/.coffer/daemon.json`——没有注册表，没有环境变量，也不需要探测任何平台特定的服务目录。
 
 ## 保留策略默认值
 

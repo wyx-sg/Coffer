@@ -1,11 +1,11 @@
-# Research —— Memory（跨 agent 共享记忆）
+# Research —— 007 Memory（跨 agent 共享记忆）
 
 > English: [research.md](./research.md)
 
-> **历史文档 —— 2026-09-10。** Knowledge Base 与 Memory 两份规范于当日合并为统一的
-> **Knowledge Layer（知识层）**。合并后的模型以
+> **历史文档 —— 2026-09-10。** spec knowledge（Knowledge Base）与 spec knowledge（Memory）
+> 于当日合并为统一的 **Knowledge Layer（知识层）**。合并后的模型以
 > [`spec.md`](./spec.md) 为准 —— 一个 `knowledge` kind、三种 scope、单一存储根
-> `~/.coffer/knowledge/<scope>/`、八个 `coffer__*` 工具。本文档记录的是合并之前
+> `~/.coffer/knowledge/<scope>/`、六个 `coffer__*` 工具。本文档记录的是合并之前
 > 的设计；凡出现「memory 面」「`memory` kind」`~/.coffer/memory/`
 > `/api/v1/memory_stores` 或 `coffer memory …` 之处，请以 `spec.md` 中合并后的
 > 对应物为准。目录名 `specs/knowledge/` 同样是历史遗留：它是所有入链与验收审计
@@ -28,6 +28,8 @@
 **问题**：落盘的真相是什么？
 
 **决定**：每条事实一个 markdown 文件，带 YAML frontmatter（`name`、`description`、`metadata.type`、`metadata.actor`、`origin_session_id`）+ markdown 正文，加一个 `MEMORY.md` 索引（`- [name](file.md) — description`）。这就是 **Claude Code 的 auto-memory 格式**，采用它作为规范化格式，使 Claude 投影为原生目录 symlink。文件是真相源；SQLite 是可重建的索引。`MEMORY.md` 是 Coffer 重生的派生索引 —— 任何写入者都触发幂等重生，因此 Claude 自己对 `MEMORY.md` 的写入会被无害覆盖。
+
+**已被取代。** 所有派生索引都已消失：`MEMORY.md` 随 Files as Truth 移除，`INDEX.md` 随两 lane 重设计移除。真相仍是每文件一份、带 YAML frontmatter 的 markdown，只是如今落在两条 lane 之一 —— `notes/` 放谁写下的，`docs/` 放谁上传的。
 
 ## 3. 两层作用域
 
@@ -61,6 +63,8 @@
 
 **首次投影时的迁移**：若 Claude 的记忆目录已有真实文件，先把它们合并进规范化，再替换为 symlink —— 绝不静默覆盖。managed-block 重渲染是幂等的。
 
+**已被取代。** 原生投影已移除（Memory via MCP）。共享只走 MCP：每个 agent 经 Coffer 网关工具读写，Coffer 从不触碰 agent 的原生记忆文件。
+
 ## 6. 检索 —— 共享引擎、lazy reindex-on-read
 
 **问题**：recall 怎么实现、怎么保持新鲜？
@@ -69,7 +73,7 @@
 
 memory 用 **lazy reindex-on-read**：`recall` 先按 `content_sha256` 扫描这个小事实目录的增量，并在搜索前对账索引。这使 Claude 的 symlink 编辑与任何直接磁盘编辑对所有 agent 即时可见，**无需文件系统 watcher**。（相比之下 KB 在 Coffer 中介编辑 + 显式 `coffer kb reindex` + 一个默认关闭的可选 watcher 时重建索引。）
 
-**store 列表**的 `fact_count`（KB14，见 Knowledge Base 规范的 research §12）读取索引 `count_documents`，而非 `scan_store_dir` 扫描 fact 文件——任何索引-vs-磁盘的过期都会在上述下一次 recall/reconcile 时关闭。每个 store 的 `/metrics` 详情端点仍扫描并遍历磁盘以得到 `disk_bytes`。
+**store 列表**的 `fact_count`（KB14，见 006 research §12）读取索引 `count_documents`，而非 `scan_store_dir` 扫描 fact 文件——任何索引-vs-磁盘的过期都会在上述下一次 recall/reconcile 时关闭。每个 store 的 `/metrics` 详情端点仍扫描并遍历磁盘以得到 `disk_bytes`。
 
 ## 7. Embedding 配置
 
@@ -87,6 +91,8 @@ memory 用 **lazy reindex-on-read**：`recall` 先按 `content_sha256` 扫描这
 - `coffer__resume()` → `{found, branch?, body?, updated_at?, note?}`。
 - `coffer__list_memory(scope?)` → 用于浏览的事实。
 
+**已被取代。** 如今的对外面是整个知识层共用的**六个**工具 —— `coffer__search`、`coffer__grep`、`coffer__read`、`coffer__list`、`coffer__write`、`coffer__delete`（FR-015）。`coffer__set_handoff` 与 `coffer__resume` 随交接 lane 一起退役；`recall`/`remember`/`list_memory` 已改名并入上面这份清单。
+
 调用记录进 `mcp_invocations`，方式与 KB 及上游工具相同：只记工具名 + who/when/duration/outcome —— 不记参数也不记返回内容（既有隐私立场）。
 
 ## 9. Prior art & novelty
@@ -101,7 +107,7 @@ memory 用 **lazy reindex-on-read**：`recall` 先按 `content_sha256` 扫描这
 - 多机同步（constitutional）。
 - 默认开启文件系统 watcher。
 - 超出自由 `metadata.type` 之外的 memory 分类。
-- 在此定义文件写入原子性：memory 的真相之源文件（facts、主题文档、`INDEX.md`、handoff）通过共享的 `infrastructure.knowledge.fs.atomic_write_*` 辅助函数写入（同目录临时文件 → fsync → `os.replace`），在 KB19 一次性决策（该研究记录原在已删除的 Knowledge Base 规范中；如今以该辅助函数本身为准）。
+- 在此定义文件写入原子性：memory 的真相之源文件（note、整理写出的主题文档，以及 `docs/` 下归一化后的上传件）通过共享的 `infrastructure.knowledge.fs.atomic_write_*` 辅助函数写入（同目录临时文件 → fsync → `os.replace`），在 KB19 一次性决策（该研究记录原在已删除的 `specs/006-knowledge-base/` 中；如今以该辅助函数本身为准）。
 
 ## 11. 实现期需验证的 open items
 

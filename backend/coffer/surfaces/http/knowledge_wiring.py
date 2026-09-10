@@ -3,8 +3,8 @@
 Extracted from ``wiring.py`` (which sits at the 400-LOC ceiling) so the kind's
 composition — scope resolution, worktree adoption, reconcile-on-append, the
 startup reindex sweep — has room. There is ONE service: ``wire_knowledge_kind``
-builds it plus the sibling handoff service, registers both tool families
-(``coffer__search`` … and the two handoff tools) and the kind's lifecycle hooks;
+builds it, registers the six built-in tools (``search``, ``grep``, ``read``,
+``list``, ``write``, ``delete``) and the kind's lifecycle hooks;
 ``run_knowledge_reindex_sweep`` heals the entry index at boot.
 """
 
@@ -12,14 +12,12 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast
 
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
 from coffer.application.knowledge.consolidate import StoreConsolidator, find_alias_holder
 from coffer.application.knowledge.document_tools import register_document_builtin_tools
-from coffer.application.knowledge.handoff import HandoffService
 from coffer.application.knowledge.kind import make_knowledge_kind
 from coffer.application.knowledge.labels_sync import MemoryLabelsSyncState
 from coffer.application.knowledge.reindex import Reindexer
@@ -38,7 +36,6 @@ from coffer.infrastructure.knowledge.converters.registry import default_registry
 from coffer.infrastructure.knowledge.repository import DocumentRepo
 from coffer.infrastructure.knowledge_scope.project_root_repo import ProjectRootRepo
 from coffer.infrastructure.knowledge_scope.scope_fs import (
-    git_branch,
     git_root,
     project_identity,
     project_ulid,
@@ -49,7 +46,6 @@ from coffer.surfaces.http.knowledge.dependencies import (
     set_project_root_repo,
     set_scope_label_repo,
 )
-from coffer.surfaces.http.knowledge.merge_state import set_store_consolidator
 from coffer.surfaces.http.wiring import build_substrate
 
 if TYPE_CHECKING:
@@ -89,10 +85,6 @@ def wire_knowledge_kind(
         project_ulid=project_identity,
     )
 
-    # Shared with the explicit AI-assisted merge (FR-057) so merge + adoption
-    # serialize on the same lock; wire_merge picks it up at its own root.
-    set_store_consolidator(adopter)
-
     async def migrate_store(legacy_id: str, new_id: str, root: str) -> None:
         from coffer.application.knowledge.scope import project_scope_name
 
@@ -127,12 +119,6 @@ def wire_knowledge_kind(
         scope_dir=paths.scope_dir,
         embedding_resolver=embedding_resolver,
     )
-    handoff_service = HandoffService(
-        scope=scope,
-        git_branch=git_branch,
-        scope_dir=paths.scope_dir,
-        now=lambda: datetime.now(tz=UTC),
-    )
     app.state.kinds[KIND_KNOWLEDGE] = make_knowledge_kind(knowledge_service)
     set_knowledge_service(knowledge_service)
     # Scope labels sync as a state area (spec vault-export-import x FR-017c): a labelled project
@@ -142,11 +128,7 @@ def wire_knowledge_kind(
         providers = []
         app.state.sync_state_providers = providers
     providers.append(MemoryLabelsSyncState(label_repo))
-    register_knowledge_builtin_tools(
-        builtin_tools,
-        knowledge_service=knowledge_service,
-        handoff_service=handoff_service,
-    )
+    register_knowledge_builtin_tools(builtin_tools, knowledge_service=knowledge_service)
     register_document_builtin_tools(
         builtin_tools, resources=resource_svc, knowledge_service=knowledge_service
     )
@@ -171,7 +153,7 @@ async def reindex_all_scopes(
     reconciler: KnowledgeReconciler,
     embedding_resolver: EmbeddingResolver,
 ) -> None:
-    """Index every scope's on-disk knowledge lane so entries written while a
+    """Index every scope's on-disk ``notes/`` lane so notes written while a
     scope was not being recalled become searchable. Idempotent
     (``content_sha256`` no-op gate) and best-effort — a per-scope failure is
     logged and skipped, never blocking boot."""

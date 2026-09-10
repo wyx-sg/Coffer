@@ -3,10 +3,11 @@
 // `global` and `project-<ULID>` auto-provision on first use and the backend
 // rejects them with 422, so the name field refuses those shapes up front.
 //
-// Keyword + grep are always on; a toggle opts into vector retrieval (the
-// embedding model is GLOBAL — Settings → Embedding — never per scope). New
-// collections seed their chunking from the global default (overridable later in
-// the scope's own settings).
+// A new collection always gets keyword + grep + vector: which index a scope
+// carries is an implementation detail, not a question to put to the user at
+// creation time (the embedding model is GLOBAL — Settings → Embedding — and
+// the vector index can still be turned off later in the scope's own settings).
+// New collections seed their chunking from the global default.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -21,7 +22,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { createScope, type RetrievalMode } from "@/kinds/knowledge/api";
 import { scopeNameSchema } from "@/kinds/knowledge/schema";
 import { useEmbeddingConfig } from "@/lib/hooks/useEmbeddingConfig";
@@ -41,7 +41,6 @@ export function KnowledgeAddDialog({
   const { data: globalCfg } = useEmbeddingConfig();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [vectorEnabled, setVectorEnabled] = useState(false);
 
   // Reject the auto-provisioned names client-side so the user gets the reason
   // in place rather than a 422 after submit.
@@ -51,14 +50,11 @@ export function KnowledgeAddDialog({
   const reset = () => {
     setName("");
     setDescription("");
-    setVectorEnabled(false);
   };
 
   const create = useMutation({
     mutationFn: () => {
-      const retrievalModes: RetrievalMode[] = vectorEnabled
-        ? ["keyword", "grep", "vector"]
-        : ["keyword", "grep"];
+      const retrievalModes: RetrievalMode[] = ["keyword", "grep", "vector"];
       return createScope({
         name: name.trim(),
         description: description.trim() || null,
@@ -120,17 +116,6 @@ export function KnowledgeAddDialog({
               id="knowledge-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
-          <div className="flex items-center justify-between rounded-md border p-3">
-            <div className="space-y-0.5">
-              <Label htmlFor="knowledge-vector">{t("knowledge.dialog.vector")}</Label>
-              <p className="text-xs text-muted-foreground">{t("knowledge.settings.vectorHint")}</p>
-            </div>
-            <Switch
-              id="knowledge-vector"
-              checked={vectorEnabled}
-              onCheckedChange={setVectorEnabled}
             />
           </div>
           {create.error ? (

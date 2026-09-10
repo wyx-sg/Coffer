@@ -8,7 +8,7 @@ import pytest
 
 from coffer.domain.knowledge.document import (
     KIND_KNOWLEDGE,
-    LANE_INGEST,
+    LANE_DOCS,
     WORKSPACE_GLOBAL_PROJECT_ID,
     Document,
 )
@@ -22,7 +22,7 @@ def _doc(doc_id: str, resource: str, title: str, kind: str = KIND_KNOWLEDGE) -> 
         resource_name=resource,
         project_id=WORKSPACE_GLOBAL_PROJECT_ID,
         path=f"docs/{doc_id}.md",
-        lane=LANE_INGEST,
+        lane=LANE_DOCS,
         title=title,
         content_sha256="x",
         source_mode="converted",

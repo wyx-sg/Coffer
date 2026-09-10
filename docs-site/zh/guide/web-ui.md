@@ -14,7 +14,7 @@ AGENTS
 RESOURCES
   MCP servers      管理已注册的服务器
   Skills           管理 Coffer 可交付给 agent 的技能
-  Knowledge        每个知识作用域一个页面:条目、文档、规则、现场
+  Knowledge        每个知识作用域一个页面:笔记与文档
   Model providers  厂商端点及其密钥
   Channels         agent 应答所在的 IM 传输
 SYSTEM
@@ -148,18 +148,22 @@ agent 头部的 **Install Coffer MCP** 开关会将 Coffer 自身的 `coffer` MC
 ### Knowledge
 
 打开 **Knowledge** 查看你的知识作用域:`global`、每个项目一个,以及任何你创建的集合。
-每一行展示条目数、文档数、磁盘占用,以及已建索引的检索模式。**Add collection** 创建一个具名集合
-(向量检索的勾选框是唯一与知识相关的选项 —— embedding 模型本身在 **Settings → Embedding**
-中整个安装配置一次,而非按作用域配置)。
+每一行展示笔记数、文档数和磁盘占用。**Add collection** 创建一个具名集合;除了名字和描述之外
+它什么也不问 —— 一个作用域带哪种索引是实现细节,不该在创建时抛给你当问题。embedding 模型
+本身在 **Settings → Embedding** 中整个安装配置一次,而非按作用域配置。
 
-点击某个作用域,会打开 `/knowledge/:scope`,包含五个标签页:
+点击某个作用域,会打开 `/knowledge/:scope`,包含两个标签页,以及树上方一个随输入即时匹配
+文件名的过滤框 —— 纯客户端,没有按钮,也不发请求:
 
-- **Entries** —— agent(和你)写下的内容。可在此新增、编辑与删除条目。
 - **Documents** —— 被摄取并转换为 Markdown 的文件。可拖入文件、阅读、重新转换或删除。
   追踪了外部原件的文档会显示该原件在磁盘上是否已变化。
-- **Rules** —— 该作用域的行为规则。按需读取;没有任何东西会把它们推进 agent 会话。
-- **Handoff** —— 已保存的工作现场,每个 git 分支一条。
-- **Changelog** —— 只追加的记录:整合做了什么、什么时候做的。
+- **Notes** —— agent(和你)写下的内容。可在此新增、编辑与删除笔记。
+
+页头带着作用域标题、一支重命名铅笔和项目路径。**Upload** 与 **Tidy** 是仅有的两个按钮
+—— Tidy 按需对 `notes/` 跑一趟整理流程 —— Settings、Check sources 和 Reindex 收在溢出菜单里。
+只有当作用域里存在转换失败的文档时,标题旁才会出现一条告警。
+
+服务端检索不在这个页面上:agent 用 `coffer__search`,CLI 用 `coffer knowledge recall`。
 
 旧的 `/memory`、`/memory/:name`、`/knowledge-bases` 和 `/knowledge-bases/:name` URL 会重定向到此处。
 
@@ -168,7 +172,7 @@ agent 头部的 **Install Coffer MCP** 开关会将 Coffer 自身的 `coffer` MC
 打开 `/model-providers` 查看 Coffer 为之持有密钥的厂商端点。一个 provider 是
 `{protocol, base_url, credential_ref}`——端点加它的密钥。**模型**既不存在这里，
 也不在这里选：agent 的模型在它自己的详情页上选，Coffer 内部引擎的模型在本页下方选。
-把某个 provider 标记为 **internal default**，它就成了跑知识 merge、organize、reorg
+把某个 provider 标记为 **internal default**，它就成了跑知识整理流程（tidy）
 与语音转写的那条连接。embedding 配置是同一页底部的一张卡片。
 
 这个界面过去在 Settings 下叫「LLM connections」。它挪出来是因为 `provider` 和其他

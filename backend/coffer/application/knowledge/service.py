@@ -1,10 +1,11 @@
 """KnowledgeService — orchestration for the one ``knowledge`` kind.
 
 One facade over three scopes (``global``, ``project-<ULID>``, a named
-collection) and two kinds of material: **entries**, written directly by an
-agent or a person and organized into the ``knowledge/`` lane, and **documents**,
-ingested from files into ``inbox/``. Markdown on disk is the source of truth
-either way; no LLM at write time.
+collection) and the two kinds of material a person actually distinguishes:
+**notes**, what an agent or the user wrote, in ``notes/``, and **documents**,
+what someone uploaded, in ``docs/``. Markdown on disk is the source of truth
+either way; no LLM at write time — the tidy pass does its work later, on what
+is already filed.
 
 The ingestion half lives in ``documents.DocumentOps`` — a mixin, not a second
 service, so that both halves stay under the project's file-size ceiling while
@@ -20,7 +21,7 @@ from functools import partial
 from pathlib import Path
 
 from coffer.application.audit_service import AuditService
-from coffer.application.knowledge import admin, lane_deletes, session_context
+from coffer.application.knowledge import admin, session_context
 from coffer.application.knowledge.documents import DocumentOps
 from coffer.application.knowledge.entry_reads import EntryReads
 from coffer.application.knowledge.pipeline import IngestPipeline
@@ -177,7 +178,7 @@ class KnowledgeService(EntryReads, DocumentOps):
         origin_session_id: str | None = None,
         max_entry_chars: int | None = None,
     ) -> KnowledgeEntry:
-        """Write a fact to ``knowledge/inbox/`` → index (no LLM).
+        """Write a note to ``notes/`` → index (no LLM).
         ``max_entry_chars`` overrides the store length limit (a trusted import raises it)."""
         resolved = await self.resolve_scope(scope=scope, cwd=cwd)
         return await self._add(
@@ -261,7 +262,7 @@ class KnowledgeService(EntryReads, DocumentOps):
     forget = delete_fact  # agent-facing alias of delete
 
     async def clear(self, *, scope_name: str, actor: str) -> int:
-        """Remove every fact in a store; keep the store Resource."""
+        """Remove every note in a store; keep the store Resource."""
         await self.get_config(scope_name)
         resolved = await self._resolved_for_scope(scope_name)
         scan = await asyncio.to_thread(scan_scope_dir, resolved.store_dir)
@@ -317,17 +318,6 @@ class KnowledgeService(EntryReads, DocumentOps):
             resolved_for=self._resolved_for_scope,
         )
 
-    async def delete_lane(
-        self, *, scope_name: str, lane: lane_deletes.Lane, identifier: str, actor: str
-    ) -> None:
-        """Delete a non-knowledge lane file (handoff/rules/changelog) → changelog
-        append → audit → notify."""
-        resolved = await self.resolved_scope(scope_name)
-        await lane_deletes.delete_lane(
-            lane, deps=self._writes, resolved=resolved,
-            scope_name=scope_name, identifier=identifier, actor=actor,
-        )  # fmt: skip
-
     # ----- on_update_config / on_delete kind hooks -----
 
     async def reindex_scope(
@@ -375,7 +365,7 @@ class KnowledgeService(EntryReads, DocumentOps):
         return project_resolved_for_scope(scope_name, self._scope_dir)
 
     async def _store_fact(self, scope_name: str, fact_id: str) -> tuple[ResolvedScope, FactFile]:
-        """Validate the scope, resolve it, and read one entry off-loop."""
+        """Validate the scope, resolve it, and read one note off-loop."""
         resolved = await self.resolved_scope(scope_name)
         ff = await asyncio.to_thread(read_fact, resolved.store_dir, fact_id)
         return resolved, ff

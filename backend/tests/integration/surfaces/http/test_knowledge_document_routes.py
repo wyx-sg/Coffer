@@ -289,7 +289,7 @@ def test_document_flow_ingest_get_edit_reconvert_reindex_grep(tmp_path, monkeypa
         # The in-app viewer is read-only: each document carries the absolute
         # path of its normalized markdown + the containing folder so the UI
         # can open-in-external-editor / reveal.
-        docs_dir = tmp_path / ".coffer" / "knowledge" / "kb" / "inbox"
+        docs_dir = tmp_path / ".coffer" / "knowledge" / "kb" / "docs"
         assert doc["path"] == str(docs_dir / f"{doc_id}.md")
         assert doc["folder_path"] == str(docs_dir)
 
@@ -446,8 +446,8 @@ def test_entries_and_documents_share_a_scope_without_leaking_across_lanes(tmp_pa
     under a single ``(kind, resource_name)``. Nothing in the row said which lane
     it belonged to, so every document read also returned the entries: a scope
     holding one of each reported ``document_count == 2`` and listed the entry as
-    a document, with a path (``inbox/<id>.md``) that did not exist — the entry's
-    file lives under ``knowledge/inbox/``.
+    a document, with a path (``docs/<id>.md``) that did not exist — a note's
+    file lives under ``notes/``.
 
     Asserting the two counts on separate scopes, as the other tests here do,
     cannot catch this. The overlap is the whole point.

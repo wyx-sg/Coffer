@@ -1,10 +1,10 @@
 // frontend/src/kinds/knowledge/KnowledgeEntryTree.tsx
 //
-// Left-hand entry list for the Entries lane (mirrors the document tree next
-// door — same shape, different lane of the same scope). Each entry is one .md
-// file on disk; clicking selects it for the preview on the right. The full list
-// is rendered as a single scrollable list (no in-UI pager). The tree has NO
-// filter and NO multi-select.
+// Left-hand list for the Notes lane (mirrors the document tree next door —
+// same shape, different lane of the same scope). Each note is one .md file on
+// disk; clicking selects it for the preview on the right. The list is rendered
+// as a single scrollable list (no in-UI pager) and has NO multi-select; the
+// lane above owns the client-side filter that decides which rows reach it.
 import { useTranslation } from "react-i18next";
 import { FileText } from "lucide-react";
 
@@ -17,7 +17,7 @@ interface Props {
   isLoading: boolean;
   total: number;
   onSelect: (entry: EntryOut) => void;
-  /** Override the empty-state text (e.g. "no matches" in recall mode). */
+  /** Override the empty-state text (e.g. "no matches" while filtering). */
   emptyLabel?: string;
 }
 
@@ -35,7 +35,7 @@ export function KnowledgeEntryTree({
   return (
     <aside className="space-y-1">
       <p className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {t("knowledge.detail.entries")}
+        {t("knowledge.detail.notes")}
         {entries ? <span className="ml-1 normal-case">({total})</span> : null}
       </p>
       {isLoading ? (

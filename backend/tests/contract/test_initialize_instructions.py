@@ -70,7 +70,6 @@ def test_instructions_only_name_tools_that_exist() -> None:
     register_knowledge_builtin_tools(
         registry,
         knowledge_service=None,  # type: ignore[arg-type]
-        handoff_service=None,  # type: ignore[arg-type]
     )
     register_document_builtin_tools(
         registry,
@@ -91,8 +90,9 @@ def test_instructions_only_name_tools_that_exist() -> None:
     # registry, so it is the one name that is legitimately not in there.
     available = {tool.name for tool in registry.list()} | {"search_tools"}
 
-    assert available >= NAMED_TOOLS, (
-        f"instructions name unregistered tools: {NAMED_TOOLS - available}"
+    assert available == NAMED_TOOLS, (
+        f"instructions name unregistered tools: {sorted(NAMED_TOOLS - available)}; "
+        f"registered tools the instructions never name: {sorted(available - NAMED_TOOLS)}"
     )
 
     text = build_instructions(hidden_count=70)

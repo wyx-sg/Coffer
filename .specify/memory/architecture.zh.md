@@ -46,16 +46,27 @@ coffer 中每一个由用户管理的实体都是一个**资源 (Resource)**，�
 | `mcp_server`     | [mcp-gateway](../../specs/mcp-gateway/spec.md)       | 一个已注册的上游 (upstream) MCP 服务器。承载传输配置、凭据引用以及网关 (gateway) 所需的逐服务器策略。                                                                                                                                                                                                                                    |
 | `agent`          | [agent-registry](../../specs/agent-registry/spec.md) | 一个已注册的编码 agent（如 Claude Code）。承载其配置目录以及 Coffer-MCP 的安装状态。workspace 修订还将 agent 自身的文件呈现为多个**只读**面 (facet)——MCP entries（只列出，唯一的写是 adopt 进 Coffer）、plugins（只列出）、目录型配置项（逐子文件编辑）——全部在读取时从文件派生，绝不落库。Coffer 不再为了移除、开关或卸载某个条目而写入别的工具的私有配置：plugin 的开关/卸载面与 MCP entry 的移除/开关面已删除，`agent_plugin_toggled`、`agent_plugin_uninstalled`、`agent_mcp_entry_removed` 三个审计事件也随之移除。                                                     |
 | `skill`          | [skill-manager](../../specs/skill-manager/spec.md)   | 一个主 skill 包，Coffer 可将其投递到一个或多个 agent 的 skill 目录。workspace 修订新增了未托管 skill 扫描（把手工放置的 skill adopt 进主库）以及逐 agent 的 follow-master-library 策略（开关 + 排除列表，存于 agent 配置），由同步引擎负责调和。                                                                                        |
-| `knowledge`      | [knowledge](../../specs/knowledge/spec.md)                 | 知识层——把 agent 所知道的一切收进一个 kind。scope 直接从资源名读出：`global` 与 `project-<ULID>`（由 cwd 的 git 根解析而来）在首次使用时自动开通，其他名字则是用户刻意创建的集合，绝不自动开通。单一存储根 `~/.coffer/knowledge/<scope>/`，下分 `knowledge/`（agent 写入的条目，新写的先落 `knowledge/inbox/`）、`inbox/`（摄取进来的文档，已归一为 markdown）、`rules/`、`handoff/`、`superseded/` 几条 lane，另有一个隐藏的 `.raw/` 存放摄取的原件。agent 经 MCP 既读也写；markdown 文件是事实，SQLite 是可重建索引。见 [Files as Truth](../../docs/decisions/files-as-truth-sqlite-retrieval.md) + [One Shared Knowledge Store](../../docs/decisions/agent-native-shared-memory.md)。 |
+| `knowledge`      | [knowledge](../../specs/knowledge/spec.md)                 | 知识层——把 agent 所知道的一切收进一个 kind。scope 直接从资源名读出：`global` 与 `project-<ULID>`（由 cwd 的 git 根解析而来）在首次使用时自动开通，其他名字则是用户刻意创建的集合，绝不自动开通。单一存储根 `~/.coffer/knowledge/<scope>/`，下分两条 lane —— `notes/`（agent 或用户写下的内容，`coffer__write` 落这里）与 `docs/`（上传的文档，已归一为 markdown）—— 另有一个隐藏的 `.history/` 存放整理覆盖前的旧版本，以及一个隐藏的 `.raw/` 存放上传的原件。agent 经 MCP 既读也写；markdown 文件是事实，SQLite 是可重建索引。见 [Files as Truth](../../docs/decisions/files-as-truth-sqlite-retrieval.md) + [One Shared Knowledge Store](../../docs/decisions/agent-native-shared-memory.md)。 |
 | `channel`        | [channels](../../specs/channels/spec.md)             | 一个消息 channel 绑定（Telegram、SeaTalk）。承载传输配置 + 凭据 ref 与一个默认 agent；已配对的 owner 从 IM 应用里与聊天平台的 agent 对话、应答审批提示并接收通知。薄 adapter 架在 turn 平台的接缝之上（spec channels FR-043…FR-055）（[Channel Adapter Framework](../../docs/decisions/channel-adapter-framework.md)）。                                                         |
 
 知识层就是**一个基底 (substrate)**：**落盘的 markdown 文件是事实源；SQLite 是
 可重建索引**（`coffer reindex` 据文件重建）。它一直都是同一个基底——`documents`、
 `chunks`、FTS5 与 sqlite-vec 从一开始就是共用的，分成两副的只是门面（一个
 `memory` kind 与一个 `knowledge_base` kind），直到 **2026-09-10** 两者合并成这一个
-kind。一个落库的 lane 判别字段 `documents.lane`（`knowledge` | `inbox`）记录某条
-索引行归哪个写入方所有——条目数与文档数按 lane 分别统计——但检索刻意横跨两条
-lane，因为统一检索正是这次合并的意义所在。
+kind。一个落库的 lane 判别字段 `documents.lane`（`notes` | `docs`）记录某条
+索引行归哪个写入方所有——note 数与文档数按 lane 分别统计——但检索刻意横跨两条
+lane，因为统一检索正是这次合并的意义所在。分类的那根轴就是人真正会区分的两件
+事：谁写下的，和谁上传的。除此之外没有别的 lane —— 早先 `knowledge/inbox/` 到主题
+文档的梯度，以及 `rules/`、`handoff/`、`superseded/`，已于 **2026-09-11** 退役；
+`coffer__set_handoff` 与 `coffer__resume` 随交接 lane 一起退役，因此这一层对外只有
+六个工具：`coffer__search`、`coffer__grep`、`coffer__read`、`coffer__list`、
+`coffer__write`、`coffer__delete`。
+
+`notes/` 的可读性由**定期整理**维持：一趟有界的 agentic 流程，合并重复的 note、把
+它们重写成主题文档，任何覆盖或合并之前先把旧版本复制进 `.history/`。它由一个
+形状照抄 `RetentionWorker` 的后台 worker 驱动——开机跑一趟补齐，之后按间隔执行——
+未配置 internal model 时空转，也可从 UI 或 `coffer knowledge organize` 手动触发。
+每趟整理写进 Coffer 自己的审计日志；不再有 per-scope 的变更记录文件。
 
 摄取把任意格式转成 markdown，藏在 infrastructure 的一个 `MarkdownConverter` 端口
 背后（默认 `markitdown[docx,pdf,pptx,xls,xlsx]`），原件留在 `.raw/` 里作出处，
@@ -67,7 +78,7 @@ lane，因为统一检索正是这次合并的意义所在。
 要在检索模式里列出 `vector` 就算选用了向量检索。基底与检索的决策见
 [Files as Truth](../../docs/decisions/files-as-truth-sqlite-retrieval.md) 与
 [One Shared Knowledge Store](../../docs/decisions/agent-native-shared-memory.md)；它们取代了
-早先的 LlamaIndex 与 mem0 两个引擎。agent 只经 MCP 访问该层——写进
+LlamaIndex 与 mem0 两个引擎。agent 只经 MCP 访问该层——写进
 agent 配置文件的原生投影已由
 [Memory via MCP](../../docs/decisions/memory-via-mcp-not-native-projection.zh.md)
 退役。

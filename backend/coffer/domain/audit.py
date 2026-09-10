@@ -16,7 +16,7 @@ class AuditEventType(StrEnum):
     RESOURCE_ENABLED = "resource_enabled"
     RESOURCE_DISABLED = "resource_disabled"
     RESOURCE_DELETED = "resource_deleted"
-    # Framework-level machine x agent activation scope
+    # Per-Agent Resource Scope: framework-level machine x agent activation scope
     RESOURCE_SCOPE_UPDATED = "resource_scope_updated"
     CAPABILITY_ENABLED = "capability_enabled"
     CAPABILITY_DISABLED = "capability_disabled"
@@ -33,7 +33,7 @@ class AuditEventType(StrEnum):
     AGENT_CONFIG_FILE_WRITTEN = "agent_config_file_written"
     AGENT_MCP_INSTALLED = "agent_mcp_installed"
     AGENT_MCP_UNINSTALLED = "agent_mcp_uninstalled"
-    # agent workspace (specs agent-registry/skill-manager amendment)
+    # agent workspace (specs agent-registry/005 amendment)
     AGENT_CONFIG_FILE_DELETED = "agent_config_file_deleted"
     AGENT_MCP_ENTRY_ADOPTED = "agent_mcp_entry_adopted"
     # spec skill-manager
@@ -45,11 +45,12 @@ class AuditEventType(StrEnum):
     SKILL_DRIFT_REMEDIATED = "skill_drift_remediated"
     SKILL_ADOPTED = "skill_adopted"
     SKILL_UNMANAGED_DELETED = "skill_unmanaged_deleted"
-    # knowledge_base kind (spec knowledge)
+    # spec knowledge-knowledge-base
     KB_DOCUMENT_DELETED = "kb_document_deleted"
     # memory kind (spec knowledge)
     MEMORY_DELETED = "memory_deleted"
     MEMORY_CLEARED = "memory_cleared"
+    KNOWLEDGE_TIDIED = "knowledge_tidied"
     # spec channels
     CHANNEL_PAIRING_ISSUED = "channel_pairing_issued"
     CHANNEL_PAIRED = "channel_paired"

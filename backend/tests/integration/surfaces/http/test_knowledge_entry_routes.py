@@ -336,8 +336,8 @@ def test_user_corrects_an_entry_via_write_api(tmp_path, monkeypatch):
         eid = created["id"]
         # The read-only viewer needs absolute paths for open/reveal:
         # the entry carries its file path + containing folder (the knowledge-lane
-        # inbox, where freshly-remembered items live).
-        inbox = scope_dir / "knowledge" / "inbox"
+        # notes lane, where everything a writer files lands).
+        inbox = scope_dir / "notes"
         assert created["path"].endswith(".md")
         assert created["folder_path"] == str(inbox)
         r = c.patch(
@@ -634,7 +634,7 @@ def test_organize_returns_no_model_noop_shape(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59700)
     with TestClient(app) as c:
         set_active_token(_TOKEN)
-        # An item to (not) organize — proves the no-op leaves the inbox untouched.
+        # A note to (not) tidy — proves the no-op leaves the lane untouched.
         c.post(
             "/api/v1/knowledge/global/entries",
             json={"text": "an entry awaiting organization"},
@@ -644,12 +644,10 @@ def test_organize_returns_no_model_noop_shape(tmp_path, monkeypatch):
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["status"] == "no_model"
-        assert body["items_processed"] == 0
-        assert body["topics_created"] == 0
-        assert body["topics_updated"] == 0
-        assert body["skipped"] == 0
+        assert body["notes_written"] == 0
+        assert body["notes_archived"] == 0
         assert body["model"] is None
-        # The inbox item is untouched (still listed).
+        # The note is untouched (still listed).
         entries = c.get("/api/v1/knowledge/global/entries", headers=_HEADERS).json()
         assert entries["total"] == 1
 

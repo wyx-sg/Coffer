@@ -8,7 +8,7 @@ from coffer.infrastructure.knowledge import paths
 def test_knowledge_root_override(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "k"))
     assert paths.knowledge_root() == tmp_path / "k"
-    assert paths.docs_dir("kb1") == tmp_path / "k" / "kb1" / "inbox"
+    assert paths.docs_dir("kb1") == tmp_path / "k" / "kb1" / "docs"
     assert paths.raw_dir("kb1") == tmp_path / "k" / "kb1" / ".raw"
 
 
@@ -43,19 +43,39 @@ def test_fact_path_guard(monkeypatch, tmp_path) -> None:
         paths.fact_path(store, "../evil")
 
 
-def test_knowledge_lane_paths(monkeypatch, tmp_path) -> None:
+def test_notes_lane_paths(monkeypatch, tmp_path) -> None:
+    """One flat notes lane — no staging inbox nested inside it."""
     store = tmp_path / "store"
-    assert paths.knowledge_dir(store) == store / "knowledge"
-    assert paths.inbox_dir(store) == store / "knowledge" / "inbox"
-    item = paths.inbox_item_path(store, "deploy-01abcdef")
-    assert item == store / "knowledge" / "inbox" / "deploy-01abcdef.md"
-    assert item.name == "deploy-01abcdef.md"
+    assert paths.notes_dir(store) == store / "notes"
+    note = paths.note_path(store, "deploy-01abcdef")
+    assert note == store / "notes" / "deploy-01abcdef.md"
 
 
-def test_inbox_item_path_rejects_traversal(monkeypatch, tmp_path) -> None:
+def test_note_path_rejects_traversal(monkeypatch, tmp_path) -> None:
     store = tmp_path / "store"
     with pytest.raises(ValueError):
-        paths.inbox_item_path(store, "../evil")
+        paths.note_path(store, "../evil")
+
+
+def test_hidden_archives_are_scope_root_siblings(monkeypatch, tmp_path) -> None:
+    """``.history/`` sits beside ``.raw/`` at the scope root, NOT inside
+    ``notes/`` — so the lane scan and ripgrep both skip it for free."""
+    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "k"))
+    store = tmp_path / "store"
+    assert paths.history_dir(store) == store / ".history"
+    assert paths.history_dir(store).parent == paths.notes_dir(store).parent
+    assert paths.raw_dir("kb1").name.startswith(".")
+    assert paths.history_dir(store).name.startswith(".")
+
+
+def test_history_path_is_a_guarded_leaf(monkeypatch, tmp_path) -> None:
+    store = tmp_path / "store"
+    assert paths.history_path(store, "deploy-20260911T120000") == (
+        store / ".history" / "deploy-20260911T120000.md"
+    )
+    for bad in ["../evil", "a/b", ".."]:
+        with pytest.raises(ValueError):
+            paths.history_path(store, bad)
 
 
 def test_raw_path_rejects_slashed_ext(monkeypatch, tmp_path) -> None:

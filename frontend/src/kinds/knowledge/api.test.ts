@@ -1,8 +1,8 @@
 // frontend/src/kinds/knowledge/api.test.ts
 //
-// Exercises the scope / entry / lane fetch helpers of the one `knowledge` kind.
+// Exercises the scope / note fetch helpers of the one `knowledge` kind.
 // `global` and `project-<ULID>` auto-provision (only a NAMED collection is
-// created by hand); entries are written directly (no LLM). We stub the global
+// created by hand); notes are written directly (no LLM). We stub the global
 // fetch so each test can verify URL + method + headers + body.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -10,21 +10,13 @@ import { ApiError } from "@/lib/api/errors";
 import {
   addEntry,
   clearEntries,
-  deleteConsolidationLog,
   deleteEntry,
-  deleteHandoffBranch,
-  deleteKnowledgeRules,
   getEntry,
-  getConsolidationLog,
-  getKnowledgeHandoff,
-  getKnowledgeRules,
   getScope,
   getScopeMetrics,
   listEntries,
   listScopes,
-  mergeScopes,
-  mergeScanScopes,
-  recall,
+  tidyScope,
 } from "./api";
 
 const BASE = "http://test-host/api/v1";
@@ -161,41 +153,6 @@ describe("deleteEntry", () => {
   });
 });
 
-describe("lane deletes", () => {
-  test("deleteHandoffBranch DELETEs /handoff/<branch> (branch encoded)", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({}));
-    await deleteHandoffBranch("prefs", "feat/x");
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${BASE}/knowledge/prefs/handoff/feat%2Fx`);
-    expect(init?.method).toBe("DELETE");
-  });
-
-  test("deleteKnowledgeRules DELETEs /rules", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({}));
-    await deleteKnowledgeRules("prefs");
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${BASE}/knowledge/prefs/rules`);
-    expect(init?.method).toBe("DELETE");
-  });
-
-  test("deleteConsolidationLog DELETEs /consolidation-log", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({}));
-    await deleteConsolidationLog("prefs");
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${BASE}/knowledge/prefs/consolidation-log`);
-    expect(init?.method).toBe("DELETE");
-  });
-
-  test("throws a typed ApiError on non-2xx", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      notOkJson(404, { error: { code: "MEMORY_NOT_FOUND", message: "no such file" } }),
-    );
-    const err = await deleteHandoffBranch("prefs", "ghost").catch((e) => e);
-    expect(err).toBeInstanceOf(ApiError);
-    expect((err as ApiError).code).toBe("MEMORY_NOT_FOUND");
-  });
-});
-
 describe("getEntry", () => {
   test("GETs /knowledge/<scope>/entries/<id> and returns the full entry", async () => {
     const fetchMock = vi
@@ -228,34 +185,6 @@ describe("clearEntries", () => {
   });
 });
 
-describe("recall", () => {
-  test("POSTs query + top_k (no mode) to /recall and returns hits", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      okJson({
-        hits: [{ id: "m-1", text: "uses tabs", score: 0.92, source: "global", time: "t" }],
-      }),
-    );
-
-    const out = await recall("prefs", "tabs", { topK: 3 });
-    expect(out.hits).toHaveLength(1);
-    expect(out.hits[0].text).toBe("uses tabs");
-
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${BASE}/knowledge/prefs/recall`);
-    // "One query → one answer": the request carries no mode.
-    expect(JSON.parse(init!.body as string)).toEqual({ query: "tabs", top_k: 3 });
-  });
-
-  test("defaults top_k to 5 when omitted", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({ hits: [] }));
-    await recall("prefs", "anything");
-    expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toEqual({
-      query: "anything",
-      top_k: 5,
-    });
-  });
-});
-
 describe("getScopeMetrics", () => {
   test("returns the metrics payload as-is", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({ entry_count: 5, disk_bytes: 4096 }));
@@ -264,115 +193,24 @@ describe("getScopeMetrics", () => {
   });
 });
 
-describe("getKnowledgeRules", () => {
-  test("GETs /knowledge/<scope>/rules and returns the text payload", async () => {
+describe("tidyScope", () => {
+  test("POSTs /knowledge/<scope>/organize — the manual tidy trigger", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValue(okJson({ text: "always lint" }));
-    const out = await getKnowledgeRules("prefs");
-    expect(out.text).toBe("always lint");
-    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/knowledge/prefs/rules`);
-    expect((fetchMock.mock.calls[0][1] as RequestInit | undefined)?.method).toBeUndefined();
-  });
-
-  test("returns null text when the scope has no rules", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({ text: null }));
-    expect((await getKnowledgeRules("prefs")).text).toBeNull();
+      .mockResolvedValue(okJson({ status: "no_model" }));
+    const out = await tidyScope("prefs");
+    expect(out.status).toBe("no_model");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/knowledge/prefs/organize`);
+    expect(init?.method).toBe("POST");
   });
 
   test("throws a typed ApiError on non-2xx", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      notOkJson(404, { error: { code: "MEMORY_NOT_FOUND", message: "no scope" } }),
+      notOkJson(404, { error: { code: "MEMORY_STORE_NOT_FOUND", message: "no scope" } }),
     );
-    const err = await getKnowledgeRules("ghost").catch((e) => e);
+    const err: unknown = await tidyScope("ghost").catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
-    expect((err as ApiError).code).toBe("MEMORY_NOT_FOUND");
-  });
-});
-
-describe("getKnowledgeHandoff", () => {
-  test("GETs /knowledge/<scope>/handoff and returns the scenes list", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      okJson({
-        scenes: [
-          {
-            branch: "feat/x",
-            text: "wip",
-            updated_at: "2026-06-22T00:00:00Z",
-            path: "/p/feat-x.md",
-            folder_path: "/p",
-          },
-        ],
-      }),
-    );
-    const out = await getKnowledgeHandoff("prefs");
-    expect(out.scenes[0].branch).toBe("feat/x");
-    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/knowledge/prefs/handoff`);
-  });
-});
-
-describe("getConsolidationLog", () => {
-  test("GETs /knowledge/<scope>/consolidation-log and returns the text + path", async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(okJson({ text: "consolidated", path: "/p/log.md", folder_path: "/p" }));
-    const out = await getConsolidationLog("prefs");
-    expect(out.text).toBe("consolidated");
-    expect(out.path).toBe("/p/log.md");
-    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/knowledge/prefs/consolidation-log`);
-  });
-
-  test("returns null text when absent (still 200)", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      okJson({ text: null, path: "/p/log.md", folder_path: "/p" }),
-    );
-    expect((await getConsolidationLog("prefs")).text).toBeNull();
-  });
-});
-
-describe("mergeScanScopes", () => {
-  test("POSTs /knowledge/merge_scan and returns the proposals", async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(okJson({ engine: "no_model", truncated: false, proposals: [] }));
-    const out = await mergeScanScopes();
-    expect(out.engine).toBe("no_model");
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${BASE}/knowledge/merge_scan`);
-    expect(init?.method).toBe("POST");
-  });
-});
-
-describe("mergeScopes", () => {
-  test("POSTs source/target and defaults organize to true", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      okJson({
-        target: "project-a",
-        merged_files: 2,
-        label_moved: true,
-        root_moved: false,
-        aliases: ["b"],
-        reorg_status: "no_model",
-      }),
-    );
-    const out = await mergeScopes("project-b", "project-a");
-    expect(out.aliases).toEqual(["b"]);
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${BASE}/knowledge/merge`);
-    expect(JSON.parse(String(init?.body))).toEqual({
-      source: "project-b",
-      target: "project-a",
-      organize: true,
-    });
-  });
-
-  test("surfaces the typed error envelope on a 400", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      notOkJson(400, { error: { code: "MEMORY_STORE_MERGE_INVALID", message: "same scope" } }),
-    );
-    await expect(mergeScopes("project-a", "project-a")).rejects.toMatchObject({
-      code: "MEMORY_STORE_MERGE_INVALID",
-    });
-    expect(ApiError).toBeDefined();
+    expect((err as ApiError).code).toBe("MEMORY_STORE_NOT_FOUND");
   });
 });

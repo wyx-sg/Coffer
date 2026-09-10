@@ -3,7 +3,7 @@
 > 中文版: [files-as-truth-sqlite-retrieval.zh.md](./files-as-truth-sqlite-retrieval.zh.md)
 
 **Status**: Accepted
-**Date**: 2026-06-09 (revised 2026-09-10; see Revision history)
+**Date**: 2026-06-09 (revised 2026-09-11; see Revision history)
 **Deciders**: Yuxing Wu
 **Supersedes**: the LlamaIndex RAG engine decision and the mem0 memory engine decision — both ADRs since removed as dead docs
 **Related**: spec `knowledge` (the Knowledge Layer spec), [Layer-First Code Layout](code-layout-layer-first.md), [Everything Is a Resource Kind](everything-is-a-resource-kind.md), [One Shared Knowledge Store](agent-native-shared-memory.md)
@@ -208,7 +208,7 @@ leave — is gone: any engine can be rebuilt from the markdown.
     created deliberately and never auto-provisions, because silently minting a
     scope from a typo is worse than an error.
   - **A stored lane discriminator.** `documents.lane` (`knowledge` | `inbox`,
-    migration `0052`) records which writer owns a row, because the two lanes'
+    migration `0053`) records which writer owns a row, because the two lanes'
     paths genuinely overlap under one root. Counts are lane-scoped; **retrieval
     deliberately spans both lanes** — one index, one query — which is the whole
     point of the merge.
@@ -230,3 +230,43 @@ leave — is gone: any engine can be rebuilt from the markdown.
   SQLite is a rebuildable index**: clearing an index that files can rebuild
   loses nothing authoritative, because the index was never the system of
   record. Re-accumulation is by explicit `coffer__write` and file ingestion.
+- **2026-09-11** — **Two lanes.** The scope's storage lanes collapse to the two
+  kinds of material a person actually distinguishes: what someone wrote, and
+  what someone uploaded. Nothing about files-as-truth moves; what moves is how
+  many boxes the files are sorted into. What it revises above:
+  - **Lane layout.** A scope is `~/.coffer/knowledge/<scope>/` with `notes/`
+    (what an agent or the user wrote — `coffer__write` lands directly there) and
+    `docs/` (uploaded documents, normalized to markdown), plus a hidden
+    `.history/` and the hidden `.raw/` holding the uploaded originals. So
+    the `docs/<doc-id>.md` + original pair named in the Decision above is once
+    again literally `<scope>/docs/<doc-id>.md` + `<scope>/.raw/<doc-id>.<ext>`,
+    and the per-fact markdown is a note under `<scope>/notes/`. The lanes the
+    2026-09-10 entry listed — `knowledge/` with its `knowledge/inbox/` gradient,
+    `rules/`, `handoff/`, `superseded/` — are all deleted, and so is the
+    regenerated index file this ADR originally named `MEMORY.md` and latterly
+    `knowledge/INDEX.md`: nothing regenerates an index file any more. What
+    `superseded/` did is now done by `.history/`, which holds pre-rewrite
+    copies rather than tombstones. `.history/` is dot-prefixed for the same
+    reason `.raw/` is — ripgrep skips hidden entries, so `coffer__grep` never
+    returns an archived revision alongside the live file.
+  - **Lane discriminator values.** `documents.lane` becomes `notes` | `docs`.
+    Counts stay lane-scoped and retrieval still spans both lanes. The migration
+    is destructive by explicit decision — no holding pen — and leaves no
+    load-time compatibility shim: the data is corrected in the database and the
+    compatibility branch is removed in the same change. That is this ADR's own
+    position again: files are truth, so an index the files can rebuild is never
+    the thing being risked.
+  - **A periodic tidy over `notes/`.** A bounded agentic pass merges duplicate
+    notes and rewrites them into topic documents. Before any overwrite or merge
+    it copies the prior revision into `.history/`, so an unattended
+    rewrite is recoverable. It runs from a background worker shaped like the
+    existing `RetentionWorker` — one catch-up pass on boot, then on an interval
+    — no-ops when no internal model is configured, and can be triggered by hand.
+    Each pass is recorded in Coffer's existing audit log; the per-scope
+    `consolidation-log.md` is deleted and not replaced. The pass rewrites the
+    files, which remain the record; the index is re-derived from them as always.
+  - **Retrieval is untouched.** FTS5 + `bm25()`, sqlite-vec, the modes and their
+    fusion, the installation-wide embedder and the `MarkdownConverter` port all
+    stand exactly as decided. Dropping the vector-retrieval switch from the
+    create-a-collection dialog removes a question put to the user, not the
+    capability: a new collection still carries keyword + grep + vector.

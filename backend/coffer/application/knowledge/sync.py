@@ -1,12 +1,13 @@
-"""Lazy reindex-on-read reconcile for a scope's entry lanes.
+"""Lazy reindex-on-read reconcile for a scope's ``notes/`` lane.
 
-``recall`` (and every write) reconciles the index with the source-of-truth fact
+``recall`` (and every write) reconciles the index with the source-of-truth note
 files before searching: scan the (small) store dir for deltas by
-``content_sha256``, then re-index changed/added facts and drop removed ones.
-This is what makes out-of-band edits — including Claude's symlink edits —
-visible immediately with no filesystem watcher.
+``content_sha256``, then re-index changed/added notes and drop removed ones.
+This is what makes out-of-band edits — a note the user opened in their own
+editor, the tidy pass rewriting one — visible immediately with no filesystem
+watcher.
 
-Pure orchestration over the injected repo + index + reindexer; the per-fact file
+Pure orchestration over the injected repo + index + reindexer; the per-note file
 read/scan is delegated to ``infrastructure.knowledge_scope.files``.
 """
 
@@ -25,14 +26,14 @@ from coffer.application.knowledge.stores import in_lane
 from coffer.domain.knowledge.document import (
     DOCUMENT_SCAN_LIMIT,
     KIND_KNOWLEDGE,
-    LANE_ENTRY,
+    LANE_NOTES,
     Document,
 )
 from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.domain.knowledge.entry import KnowledgeEntry
 from coffer.domain.knowledge.retrieval import StoreRef
 from coffer.infrastructure.knowledge.chunking import chunk_markdown
-from coffer.infrastructure.knowledge.paths import knowledge_dir
+from coffer.infrastructure.knowledge.paths import notes_dir
 from coffer.infrastructure.knowledge_scope.files import (
     FactFile,
     legacy_root_facts,
@@ -49,11 +50,11 @@ class ReconcileStats:
     unchanged: int
 
 
-# Topic docs are chunked per passage (heading/structure-aware) so recall
-# surfaces the relevant section, not the whole document. Size/overlap are fixed
-# here (not a KnowledgeConfig field) to avoid per-scope schema churn; the
-# window mirrors the KB default. A short single-passage fact still yields one
-# chunk, so inbox items and recall-isolation are unaffected.
+# Notes are chunked per passage (heading/structure-aware) so recall surfaces
+# the relevant section, not the whole note — the tidy pass merges notes, so a
+# note is as likely to cover four subjects as one. Size/overlap are fixed here
+# (not a KnowledgeConfig field) to avoid per-scope schema churn; the window
+# mirrors the KB default. A short single-passage note still yields one chunk.
 _ENTRY_CHUNK_SIZE = 512
 _ENTRY_CHUNK_OVERLAP = 64
 
@@ -87,7 +88,7 @@ def fact_to_document(
         kind=KIND_KNOWLEDGE,
         resource_name=store.resource_name,
         project_id=store.project_id,
-        lane=LANE_ENTRY,
+        lane=LANE_NOTES,
         path=path,
         title=fact.title,
         description=fact.description,
@@ -137,20 +138,20 @@ class KnowledgeReconciler:
     async def _reconcile_locked(
         self, *, store: StoreRef, embedding: EmbeddingConfig | None, force: bool
     ) -> ReconcileStats:
-        # The scan reads + parses every item in the knowledge/ lane — keep it
-        # off the event loop.
+        # The scan reads + parses every file in the notes/ lane — keep it off
+        # the event loop.
         store_dir = Path(store.docs_dir)
         scan = await asyncio.to_thread(scan_scope_dir, store_dir)
         on_disk = scan.files
-        # FR-019: pre-lane facts at the store root are abandoned in place — note
-        # them once so an operator can re-remember or seed them if wanted.
+        # Facts abandoned at the store root by a pre-lane build stay where they
+        # are — log them once so an operator can re-file them if they matter.
         legacy = await asyncio.to_thread(legacy_root_facts, store_dir)
         if legacy:
             _logger.info(
                 "memory.legacy_root_facts_abandoned",
                 extra={"store": store.resource_name, "count": len(legacy)},
             )
-        lane = knowledge_dir(store_dir)
+        lane = notes_dir(store_dir)
         known = {
             d.id: d
             for d in await self._documents.list_documents(

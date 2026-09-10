@@ -1,13 +1,14 @@
 // frontend/src/components/knowledge/KnowledgeTable.tsx
 // The knowledge-scopes list rendered via the shared DataTable — one table where
 // there used to be two (memory stores + knowledge bases). Rows navigate to the
-// scope detail page, search covers the readable label / path / name /
-// description, and the scope column tells the three kinds apart: `global` and
-// `project-<ULID>` auto-provision, anything else is a collection the user made.
+// scope detail page and search covers the readable label / path / name /
+// description. There is NO scope column: the Name cell already reads `global`,
+// a project's absolute path, or a collection's name, so a badge repeating that
+// says nothing the row has not said.
 //
-// Entries and documents get their OWN columns. They are separate lanes of a
-// scope — entries are what an agent wrote, documents are what someone ingested
-// — so they are never summed into one "items" number.
+// Notes and documents get their OWN columns. They are separate lanes of a
+// scope — notes are what an agent or the user wrote, documents are what
+// someone uploaded — so they are never summed into one "items" number.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -18,12 +19,7 @@ import { DataTable, type Column } from "@/components/DataTable";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
-import {
-  deriveScope,
-  projectDirName,
-  scopeDisplayName,
-  type ScopeOut,
-} from "@/kinds/knowledge/api";
+import { projectDirName, scopeDisplayName, type ScopeOut } from "@/kinds/knowledge/api";
 
 export function KnowledgeTable({ items }: { items: ScopeOut[] }) {
   const { t } = useTranslation();
@@ -32,11 +28,6 @@ export function KnowledgeTable({ items }: { items: ScopeOut[] }) {
   const del = useDeleteResource();
   // Styled confirmation dialog (no native window.confirm). `null` = closed.
   const [deletingName, setDeletingName] = useState<string | null>(null);
-
-  const scopeLabel = (row: ScopeOut): string => {
-    const scope = deriveScope(row);
-    return scope ? t(`knowledge.scope.${scope}`) : t("knowledge.scope.unknown");
-  };
 
   const columns: Column<ScopeOut>[] = [
     {
@@ -66,17 +57,8 @@ export function KnowledgeTable({ items }: { items: ScopeOut[] }) {
       },
     },
     {
-      key: "scope",
-      header: t("knowledge.cols.scope"),
-      cell: (r) => (
-        <span className="inline-flex rounded-full border border-border/60 bg-secondary px-2 py-0.5 text-xs">
-          {scopeLabel(r)}
-        </span>
-      ),
-    },
-    {
-      key: "entries",
-      header: t("knowledge.cols.entries"),
+      key: "notes",
+      header: t("knowledge.cols.notes"),
       className: "tabular-nums",
       cell: (r) => <span className="text-muted-foreground">{r.entry_count ?? 0}</span>,
     },

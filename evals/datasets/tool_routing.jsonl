@@ -5,7 +5,5 @@
 {"request": "Which knowledge scopes do I have?", "expected_tool": "list"}
 {"request": "Open the entry with id 01J8ZK and show me its contents.", "expected_tool": "read"}
 {"request": "Remove the document with id 01J9QT from my knowledge.", "expected_tool": "delete"}
-{"request": "Note where I got to on this branch before I stop for the day.", "expected_tool": "set_handoff"}
-{"request": "What was I working on in this branch last time?", "expected_tool": "resume"}
 {"request": "Which skills can I use right now?", "expected_tool": "list_skills"}
 {"request": "Load the pql-generator skill so you can write a query.", "expected_tool": "load_skill"}

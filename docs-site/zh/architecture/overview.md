@@ -82,7 +82,7 @@ flowchart TD
 ├── coffer.db            # SQLite：控制面状态 + 可重建的检索索引
 ├── master.key           # Fernet 主密钥（0600；opt-in 钥匙串会将其移出）
 ├── knowledge/           # knowledge 文件即真理，每个作用域一个目录：
-│                        #   <scope>/{knowledge,inbox,rules,handoff,superseded,.raw}/
+│                        #   <scope>/{notes,docs,.raw,.history}/
 ├── skills/              # 主技能存储（canonical）
 ├── bin/                 # 同处一地的 coffer 二进制（daemon/shim/CLI）
 ├── logs/

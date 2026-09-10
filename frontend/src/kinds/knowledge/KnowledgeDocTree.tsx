@@ -1,11 +1,10 @@
 // frontend/src/kinds/knowledge/KnowledgeDocTree.tsx
 //
-// Left-hand document list for the Documents lane (a flat file list — ingested
-// documents have no folder hierarchy). Clicking a row selects it; the page renders the
-// preview on the right. The full list is rendered as a single scrollable list
-// (no in-UI pager) — both the fetched documents (normal mode) and the deduped
-// search hits (recall mode) flow through the same plain {id, title, sourceMode}
-// rows.
+// Left-hand document list for the Documents lane (a flat file list — uploaded
+// documents have no folder hierarchy). Clicking a row selects it; the page
+// renders the preview on the right. The list is rendered as a single
+// scrollable list (no in-UI pager); the lane above owns the client-side filter
+// that decides which of the fetched {id, title, sourceMode} rows reach it.
 import { useTranslation } from "react-i18next";
 import { FileText } from "lucide-react";
 
@@ -16,9 +15,9 @@ import { cn } from "@/lib/utils";
 export interface DocRow {
   id: string;
   title: string;
-  /** Source mode drives the "edited" badge; absent for search-hit rows. */
+  /** Source mode drives the "edited" badge. */
   sourceMode?: string;
-  /** Per-document embed status (done | embedding | queued | running | error); absent for search-hit rows. */
+  /** Per-document embed status (done | embedding | queued | running | error). */
   embedStatus?: string | null;
 }
 
@@ -28,7 +27,7 @@ interface Props {
   isLoading: boolean;
   total: number;
   onSelect: (documentId: string) => void;
-  /** Override the empty-state text (e.g. "no matches" in recall mode). */
+  /** Override the empty-state text (e.g. "no matches" while filtering). */
   emptyLabel?: string;
 }
 

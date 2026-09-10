@@ -95,15 +95,18 @@ Coffer 的方案刻意保持精简：一对本地数据库表，而非时序数�
 | `skill_drift_remediated`                    | 与受管 skill 的磁盘漂移被修复时              |
 | `skill_adopted` / `skill_unmanaged_deleted` | 未托管 skill 被收编 / 游离副本被删除时       |
 
-**知识** —— 只留破坏性的这几条：
+**知识** —— 只留会破坏或改写内容的这几条：
 
-| 事件                  | 触发时机                     |
-| --------------------- | ---------------------------- |
-| `kb_document_deleted` | 已摄入文档被删除时           |
-| `memory_deleted`      | 条目被删除时                 |
-| `memory_cleared`      | 某个知识 scope 被清空时      |
+| 事件                  | 触发时机                                 |
+| --------------------- | ---------------------------------------- |
+| `kb_document_deleted` | 已摄入文档被删除时                       |
+| `memory_deleted`      | 笔记被删除时                             |
+| `memory_cleared`      | 某个知识 scope 被清空时                  |
+| `knowledge_tidied`    | 一趟整理流程至少改写或归档了一条笔记时   |
 
 `kb_*` 与 `memory_*` 前缀是历史遗留：它们是两个 kind 合并为 `knowledge` 之前的线上取值，原样保留是为了让既有审计行与查询继续有效。
+
+`knowledge_tidied` 是"重算不审计"这条规则（见下文）的例外。整理流程无人值守、按计时器运行，并由一个 LLM 改写用户和其 agent 写下的文字 —— 这是对内容的改动，而非对派生索引的重算，而它归档进 `.history/` 的上一个版本是唯一的退路。它的 `details` 里带着整理前后的笔记数、写入与归档了多少条，以及执行改写的模型。什么都没写、什么都没归档的一趟不会留下记录，因此定时巡检不会把真正有意义的那几趟淹没掉。
 
 **通道：**
 
@@ -132,9 +135,9 @@ Coffer 的方案刻意保持精简：一对本地数据库表，而非时序数�
 
 - **运行遥测**（`daemon_started`、`chat_turn_completed`、`channel_turn_started`、`sync_completed` 等）—— daemon 跑起来了、一个 turn 完成了，这属于日志行，不属于「变更的持久记录」。
 - **表里已经有的事实**（`capability_first_seen`）—— `mcp_capability_preferences.first_seen_at` **就是**这个事件，而且存在一个可以被查询的地方。
-- **幂等重算**（`kb_reindexed`、`memory_organized`、`memory_reorganized`、`kb_document_ingested`、`memory_added` 等）—— 再跑一遍什么都不会变，而结果就在磁盘上。文件本身就是记录。
+- **幂等重算**（`kb_reindexed`、`kb_document_ingested`、`memory_added` 等）—— 再跑一遍什么都不会变，而结果就在磁盘上。文件本身就是记录。
 - **什么也没改的检测**（`skill_drift_detected`、`skill_autobind_skipped`）—— 发现不等于动手。**修复**会审计，发现不会。
-- **低价值会话状态**（`conversation_created`、`conversation_archived`、`handoff_set`）—— 可恢复、在对象本身里看得见、而且量大。
+- **低价值会话状态**（`conversation_created`、`conversation_archived` 等）—— 可恢复、在对象本身里看得见、而且量大。
 
 单笔收益最大的是删掉 `journal_append`：它曾占全部审计行的 **98.5%**（4384 条里的 4318 条），却只记录了一个字符数——它所描述的内容早就躺在一个 Markdown 文件里。
 

@@ -43,7 +43,7 @@ Currently registered kinds:
 | `mcp_server`     | [mcp-gateway](../../specs/mcp-gateway/spec.md)       | A registered upstream MCP server. Carries transport configuration, credential references, and the per-server policies the gateway needs.                                                                                                                                                                                                                                                                                  |
 | `agent`          | [agent-registry](../../specs/agent-registry/spec.md) | A registered coding agent (e.g. Claude Code). Carries its config directory and the Coffer-MCP install state. The workspace amendment also surfaces the agent's own files as **read-only** facets — MCP entries (listed, with adopt-into-Coffer the one write), plugins (listed only), and directory config entries with per-child edit — all derived at read time, never stored. Coffer no longer writes into another tool's private config to remove, toggle or uninstall an entry: the plugin toggle/uninstall surface and the MCP entry remove/toggle surface are gone, and with them the `agent_plugin_toggled`, `agent_plugin_uninstalled` and `agent_mcp_entry_removed` audit events.                                                       |
 | `skill`          | [skill-manager](../../specs/skill-manager/spec.md)   | A master skill bundle Coffer can deliver into one or more agents' skill directories. The workspace amendment adds an unmanaged-skill scan (adopt hand-placed skills into the master store) and a per-agent follow-master-library policy (flag + exclusions on the agent's config) that the sync engine reconciles.                                                                                                     |
-| `knowledge`      | [knowledge](../../specs/knowledge/spec.md)                 | The knowledge layer — one kind for everything an agent knows. Scope is read from the resource name: `global` and `project-<ULID>` (resolved from the cwd's git root) auto-provision on first use, any other name is a collection the user created deliberately and never auto-provisions. One storage root `~/.coffer/knowledge/<scope>/` with lanes `knowledge/` (entries an agent wrote; fresh ones land in `knowledge/inbox/`), `inbox/` (ingested documents, normalized to markdown), `rules/`, `handoff/`, `superseded/`, and a hidden `.raw/` holding ingested originals. Agents both read and write it over MCP; markdown files are truth, SQLite is a rebuildable index. See [Files as Truth](../../docs/decisions/files-as-truth-sqlite-retrieval.md) + [One Shared Knowledge Store](../../docs/decisions/agent-native-shared-memory.md). |
+| `knowledge`      | [knowledge](../../specs/knowledge/spec.md)                 | The knowledge layer — one kind for everything an agent knows. Scope is read from the resource name: `global` and `project-<ULID>` (resolved from the cwd's git root) auto-provision on first use, any other name is a collection the user created deliberately and never auto-provisions. One storage root `~/.coffer/knowledge/<scope>/` with two lanes — `notes/` (what an agent or the user wrote; `coffer__write` lands here) and `docs/` (uploaded documents, normalized to markdown) — plus a hidden `.history/` holding pre-rewrite copies and a hidden `.raw/` holding the uploaded originals. Agents both read and write it over MCP; markdown files are truth, SQLite is a rebuildable index. See [Files as Truth](../../docs/decisions/files-as-truth-sqlite-retrieval.md) + [One Shared Knowledge Store](../../docs/decisions/agent-native-shared-memory.md). |
 | `channel`        | [channels](../../specs/channels/spec.md)             | A messaging-channel binding (Telegram, SeaTalk). Carries transport config + credential refs and a default agent; a paired owner chats with managed agents from the IM app and receives notifications. Thin adapters over the turn-platform seams (spec channels FR-043…FR-055) ([Channel Adapter Framework](../../docs/decisions/channel-adapter-framework.md)).                                                                                              |
 
 The knowledge layer is **one substrate**: **markdown files on disk are the
@@ -52,9 +52,23 @@ it from the files). It was always one substrate — `documents`, `chunks`, FTS5
 and sqlite-vec were shared from the start, and only the facade was split in two
 (a `memory` kind and a `knowledge_base` kind) until the two merged into this one
 kind on **2026-09-10**. A stored lane discriminator `documents.lane`
-(`knowledge` | `inbox`) records which writer owns an indexed row — entry and
+(`notes` | `docs`) records which writer owns an indexed row — note and
 document counts are lane-scoped — but retrieval deliberately spans both lanes,
-because unified search is the whole point of the merge.
+because unified search is the whole point of the merge. The classification axis
+is what a person actually distinguishes: what someone wrote, and what someone
+uploaded. Nothing else is a lane — the earlier `knowledge/inbox/` gradient,
+`rules/`, `handoff/` and `superseded/` were retired on **2026-09-11**, and with
+the handoff lane went the `coffer__set_handoff` and `coffer__resume` tools, so
+the layer exposes six: `coffer__search`, `coffer__grep`, `coffer__read`,
+`coffer__list`, `coffer__write`, `coffer__delete`.
+
+`notes/` is kept readable by a **periodic tidy**: a bounded agentic pass that
+merges duplicate notes and rewrites them into topic documents, copying the prior
+revision into `.history/` before any overwrite or merge. It is run by a
+background worker shaped like the `RetentionWorker` — one catch-up pass on boot,
+then on an interval — no-ops when no internal model is configured, and can also
+be triggered by hand from the UI or `coffer knowledge organize`. Each pass is
+recorded in Coffer's own audit log; there is no per-scope changelog file.
 
 Ingestion converts any format to markdown behind a `MarkdownConverter` port in
 infrastructure (`markitdown[docx,pdf,pptx,xls,xlsx]` by default), keeps the
@@ -68,7 +82,7 @@ installation-wide config, and a scope opts into vector search purely by listing
 the retrieval mode. The substrate and retrieval decisions are in
 [Files as Truth](../../docs/decisions/files-as-truth-sqlite-retrieval.md) and
 [One Shared Knowledge Store](../../docs/decisions/agent-native-shared-memory.md); they
-supersede the earlier LlamaIndex and mem0 engines. Agents reach the
+supersede the LlamaIndex and mem0 engines. Agents reach the
 layer over MCP only — native projection into agent config files was retired by
 [Memory via MCP](../../docs/decisions/memory-via-mcp-not-native-projection.md).
 

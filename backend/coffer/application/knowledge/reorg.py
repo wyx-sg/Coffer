@@ -1,13 +1,21 @@
-"""ReorgService — agentic topic-doc reorganization (spec knowledge).
+"""The tidy pass: a bounded agentic loop that keeps ``notes/`` coherent.
 
-On an explicit ``reorg`` trigger (REST/CLI; no auto-fire in this PR), runs a
-bounded langgraph create_react_agent loop over the store's existing topic docs,
-with 4 internal tools, to consolidate duplicates and split over-long docs.
-Reaches the langgraph loop ONLY through the injected ``AgenticReorgPort``
-(Contract 5e: memory-local port, NOT ``infrastructure.chat``).
+A scope's notes accumulate the way notes do — the same thing written twice from
+two sessions, one note that grew until it covers four subjects. Nothing about
+that is wrong at write time, which is why the write path stays dumb: an agent
+should never have to think about filing. The tidying is deferred to here, where
+an LLM can read what is already on disk and merge or split it.
 
-Data-loss invariant: every topic overwrite/supersede first archives the prior
-topic doc to the recoverable ``superseded/`` tombstone. There is NO hard-delete.
+The loop reaches langgraph ONLY through the injected ``AgenticReorgPort``, so
+the knowledge kind never imports ``infrastructure.llm`` (the layered import
+contract). Four tools — list, read, write, delete — over one lane; there is no
+tombstone verb, because ``note_files`` archives every replaced revision into
+``.history/`` on its own. The loop cannot lose text even if it decides to.
+
+:meth:`ReorgService.reorg` is the whole surface: the periodic trigger, the REST
+route and the CLI all call exactly that, and ``no_model`` / ``empty`` are clean
+no-ops rather than errors — a vault with no internal engine configured simply
+never tidies.
 """
 
 from __future__ import annotations
@@ -19,6 +27,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from coffer.application.audit_service import AuditService
 from coffer.application.knowledge.ports import KnowledgeDocumentRepo
 from coffer.application.knowledge.reorg_ports import AgenticReorgPort, ModelSelectorPort, ReorgTool
 from coffer.application.knowledge.retrieval import (
@@ -27,32 +36,29 @@ from coffer.application.knowledge.retrieval import (
     no_embedding,
 )
 from coffer.application.knowledge.sync import KnowledgeReconciler
+from coffer.domain.audit import AuditEventType
+from coffer.domain.knowledge.document import KIND_KNOWLEDGE
 from coffer.domain.knowledge.retrieval import StoreRef
 from coffer.domain.knowledge.scope import ResolvedScope
 from coffer.domain.knowledge.scope_config import KnowledgeConfig
-from coffer.infrastructure.knowledge.paths import topic_path
-from coffer.infrastructure.knowledge_scope.topic_files import (
-    TopicDoc,
-    append_changelog,
-    archive_topic_doc,
-    list_topic_docs,
-    read_topic_doc,
-    supersede_topic_doc,
-    write_index,
-    write_topic_doc,
+from coffer.domain.resource import ResourceRef
+from coffer.infrastructure.knowledge_scope.note_files import (
+    delete_note,
+    list_notes,
+    read_note,
+    write_note,
 )
 
 logger = logging.getLogger(__name__)
 
 REORG_SYSTEM = (
-    "You maintain a small set of coherent topic documents. FIRST call "
-    "list_topics to see what exists, then read_topic for any documents you may "
-    "change. Consolidate duplicates: write the merged content (preserving ALL "
-    "existing info + human edits — never drop content) into ONE topic, then "
-    "supersede the now-redundant duplicate. Split an over-long topic into "
-    "focused topics. NEVER regenerate from scratch; integrate. "
-    "The system archives every prior version automatically, but still prefer "
-    "minimal, careful edits. When done, stop."
+    "You keep a small set of coherent notes tidy. FIRST call list_notes to see "
+    "what exists, then read_note for any note you may change. Consolidate "
+    "duplicates: write the merged content (preserving ALL existing info + human "
+    "edits — never drop content) into ONE note, then delete the now-redundant "
+    "duplicate. Split an over-long note into focused notes. NEVER regenerate "
+    "from scratch; integrate. The system archives every prior version "
+    "automatically, but still prefer minimal, careful edits. When done, stop."
 )
 
 #: ``scope_name -> ResolvedScope`` (validates the store exists).
@@ -69,13 +75,13 @@ DEFAULT_REORG_RECURSION_LIMIT = 24
 
 @dataclass(frozen=True)
 class ReorgResult:
-    """The outcome of one ``reorg`` run."""
+    """The outcome of one tidy pass."""
 
     status: str  # "reorganized" | "no_model" | "empty"
-    topics_before: int
-    topics_after: int
-    topics_written: int  # create + overwrite
-    topics_superseded: int
+    notes_before: int
+    notes_after: int
+    notes_written: int  # create + overwrite
+    notes_archived: int  # notes retired into .history/
     model: str | None  # display name of the internal model used
 
 
@@ -84,11 +90,11 @@ class _Actions:
 
     def __init__(self) -> None:
         self.written: int = 0
-        self.superseded: int = 0
+        self.archived: int = 0
 
 
 class ReorgService:
-    """Orchestrates the explicit agentic topic-doc reorganization."""
+    """Runs the tidy pass over one scope's ``notes/`` lane."""
 
     def __init__(
         self,
@@ -101,6 +107,7 @@ class ReorgService:
         reconciler: KnowledgeReconciler,
         agent: AgenticReorgPort,
         models: ModelSelectorPort,
+        audit: AuditService,
         credential_resolver: Callable[[str], str],
         now: NowFn,
         embedding_resolver: EmbeddingResolver = no_embedding,
@@ -113,12 +120,13 @@ class ReorgService:
         self._reconciler = reconciler
         self._agent = agent
         self._models = models
+        self._audit = audit
         self._credential_resolver = credential_resolver
         self._now = now
         self._resolve_embedding = embedding_resolver
 
     async def reorg(self, *, scope_name: str) -> ReorgResult:
-        """Run the agentic reorg loop over the store's topic docs.
+        """Tidy one scope's notes.
 
         Validates the store (404s an unknown name via ``resolve_store``). A
         ``no_model`` / ``empty`` outcome is a clean no-op, not an error."""
@@ -134,7 +142,7 @@ class ReorgService:
         embedding = await self._resolve_embedding() if config.vector_enabled else None
         await self._reconciler.reconcile(store=ref, embedding=embedding)
 
-        before = await asyncio.to_thread(list_topic_docs, store_dir)
+        before = await asyncio.to_thread(list_notes, store_dir)
         # Nothing to keep coherent → a clean no-op.
         if not before:
             return ReorgResult("empty", 0, 0, 0, 0, model.model)
@@ -151,146 +159,153 @@ class ReorgService:
                 recursion_limit=DEFAULT_REORG_RECURSION_LIMIT,
             )
         except Exception:
+            # A half-finished loop still moved files. Finalize from what is on
+            # disk rather than raising: the pass is best-effort, and the trigger
+            # that armed it must not be handed an exception for a partial tidy.
             logger.warning(
-                "reorg.agent_loop_failed; finalizing from on-disk state + action counters",
+                "knowledge.tidy.agent_loop_failed; finalizing from on-disk state",
                 exc_info=True,
             )
 
-        after = await asyncio.to_thread(list_topic_docs, store_dir)
-        await asyncio.to_thread(write_index, store_dir, after)
+        after = await asyncio.to_thread(list_notes, store_dir)
         await self._reconciler.reconcile(store=ref, embedding=embedding)
-        return ReorgResult(
+        result = ReorgResult(
             "reorganized",
             len(before),
             len(after),
             acts.written,
-            acts.superseded,
+            acts.archived,
             model.model,
+        )
+        await self._audit_pass(scope_name, result)
+        return result
+
+    async def _audit_pass(self, scope_name: str, result: ReorgResult) -> None:
+        """Record a pass that actually rewrote something.
+
+        The audit log records changes someone or something made, not that a
+        timer fired — and this pass revisits every scope on an interval, so
+        auditing every run would bury the changes it is supposed to make
+        legible. A pass that wrote and deleted nothing left the notes exactly
+        as it found them, and has nothing to report."""
+        if not result.notes_written and not result.notes_archived:
+            return
+        await self._audit.record(
+            AuditEventType.KNOWLEDGE_TIDIED.value,
+            ref=ResourceRef(KIND_KNOWLEDGE, scope_name),
+            actor="system",
+            details={
+                "notes_before": result.notes_before,
+                "notes_after": result.notes_after,
+                "notes_written": result.notes_written,
+                "notes_archived": result.notes_archived,
+                "model": result.model,
+            },
         )
 
     def _build_tools(self, *, store_dir: Path, acts: _Actions) -> list[ReorgTool]:
         now = self._now
 
-        async def _list_topics(args: dict) -> dict:  # type: ignore[type-arg]
-            docs = await asyncio.to_thread(list_topic_docs, store_dir)
+        async def _list_notes(args: dict) -> dict:  # type: ignore[type-arg]
+            docs = await asyncio.to_thread(list_notes, store_dir)
             return {
-                "topics": [
+                "notes": [
                     {
                         "slug": d.slug,
                         "title": d.title,
-                        "description": d.description,
+                        "summary": d.summary,
                         "length": len(d.body),
                     }
                     for d in docs
                 ]
             }
 
-        async def _read_topic(args: dict) -> dict:  # type: ignore[type-arg]
+        async def _read_note(args: dict) -> dict:  # type: ignore[type-arg]
             slug = args.get("slug", "")
             try:
-                path = await asyncio.to_thread(topic_path, store_dir, slug)
-            except ValueError as exc:
+                doc = await asyncio.to_thread(read_note, store_dir, slug)
+            except ValueError as exc:  # unsafe slug — never a path, always an error
                 return {"error": str(exc)}
-            doc = await asyncio.to_thread(read_topic_doc, path)
             if doc is None:
-                return {"error": f"no such topic: {slug}"}
+                return {"error": f"no such note: {slug}"}
             return {"slug": doc.slug, "body": doc.body}
 
-        async def _write_topic(args: dict) -> dict:  # type: ignore[type-arg]
+        async def _write_note(args: dict) -> dict:  # type: ignore[type-arg]
             slug = args.get("slug", "")
-            title = args.get("title", "")
-            description = args.get("description", "")
-            markdown = args.get("markdown", "")
-            # Validate slug — topic_path guards via _safe_segment internally.
             try:
-                path = await asyncio.to_thread(topic_path, store_dir, slug)
+                await asyncio.to_thread(
+                    write_note,
+                    store_dir,
+                    slug,
+                    title=args.get("title", ""),
+                    summary=args.get("summary", ""),
+                    body=args.get("markdown", ""),
+                    now=now(),
+                )
             except ValueError as exc:
                 return {"error": str(exc)}
-            ts = now()
-            # Archive prior version first (data-loss invariant).
-            if await asyncio.to_thread(path.exists):
-                await asyncio.to_thread(archive_topic_doc, store_dir, slug, when=ts)
-            doc = TopicDoc(
-                slug=slug,
-                title=title,
-                description=description,
-                body=markdown,
-                updated_at=ts,
-            )
-            await asyncio.to_thread(write_topic_doc, path, doc)
-            await asyncio.to_thread(
-                append_changelog,
-                store_dir,
-                f"{ts.isoformat()} · reorg wrote '{slug}'",
-            )
             acts.written += 1
             return {"ok": True, "slug": slug}
 
-        async def _supersede_topic(args: dict) -> dict:  # type: ignore[type-arg]
+        async def _delete_note(args: dict) -> dict:  # type: ignore[type-arg]
             slug = args.get("slug", "")
-            reason = args.get("reason", "")
-            ts = now()
-            archived = await asyncio.to_thread(supersede_topic_doc, store_dir, slug, when=ts)
-            if archived is None:
-                return {"error": f"no such topic: {slug}"}
-            await asyncio.to_thread(
-                append_changelog,
-                store_dir,
-                f"{ts.isoformat()} · reorg superseded '{slug}': {reason}",
-            )
-            acts.superseded += 1
+            try:
+                removed = await asyncio.to_thread(delete_note, store_dir, slug)
+            except ValueError as exc:
+                return {"error": str(exc)}
+            if not removed:
+                return {"error": f"no such note: {slug}"}
+            acts.archived += 1
             return {"ok": True}
 
         return [
             ReorgTool(
-                name="list_topics",
+                name="list_notes",
                 description=(
-                    "List all existing topic documents in the store with their "
-                    "slug, title, description, and length."
+                    "List every note in the scope with its slug, title, summary and length."
                 ),
                 input_schema={"type": "object", "properties": {}, "required": []},
-                handler=_list_topics,
+                handler=_list_notes,
             ),
             ReorgTool(
-                name="read_topic",
-                description="Read the full body of a topic document by slug.",
+                name="read_note",
+                description="Read the full body of one note by slug.",
                 input_schema={
                     "type": "object",
-                    "properties": {"slug": {"type": "string", "description": "The topic slug."}},
+                    "properties": {"slug": {"type": "string", "description": "The note slug."}},
                     "required": ["slug"],
                 },
-                handler=_read_topic,
+                handler=_read_note,
             ),
             ReorgTool(
-                name="write_topic",
+                name="write_note",
                 description=(
-                    "Create or overwrite a topic document. "
-                    "The prior version is archived automatically."
+                    "Create or overwrite a note. The prior revision is archived automatically."
                 ),
                 input_schema={
                     "type": "object",
                     "properties": {
                         "slug": {"type": "string"},
                         "title": {"type": "string"},
-                        "description": {"type": "string"},
+                        "summary": {"type": "string"},
                         "markdown": {"type": "string"},
                     },
-                    "required": ["slug", "title", "description", "markdown"],
+                    "required": ["slug", "title", "summary", "markdown"],
                 },
-                handler=_write_topic,
+                handler=_write_note,
             ),
             ReorgTool(
-                name="supersede_topic",
-                description=("Retire a topic document to the recoverable superseded/ tombstone."),
+                name="delete_note",
+                description=(
+                    "Remove a note whose content now lives elsewhere. The "
+                    "removed revision is archived automatically."
+                ),
                 input_schema={
                     "type": "object",
-                    "properties": {
-                        "slug": {"type": "string"},
-                        "reason": {"type": "string"},
-                    },
+                    "properties": {"slug": {"type": "string"}},
                     "required": ["slug"],
                 },
-                handler=_supersede_topic,
+                handler=_delete_note,
             ),
         ]
 

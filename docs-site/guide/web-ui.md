@@ -16,7 +16,7 @@ AGENTS
 RESOURCES
   MCP servers      manage your registered servers
   Skills           manage the skills Coffer can deliver to agents
-  Knowledge        one page per knowledge scope: entries, documents, rules, handoff
+  Knowledge        one page per knowledge scope: notes and documents
   Model providers  vendor endpoints and their keys
   Channels         the IM transports your agents answer on
 SYSTEM
@@ -162,20 +162,27 @@ On the skill detail page, switch between tabs:
 ### Knowledge
 
 Open **Knowledge** to see your knowledge scopes: `global`, one per project, and any
-collection you created. Each row shows entry and document counts, disk usage, and which
-retrieval modes are indexed. **Add collection** creates a named one (a vector-retrieval
-checkbox is the only knowledge-specific option — the embedding model itself is configured
-once under **Settings → Embedding**, not per scope).
+collection you created. Each row shows note and document counts and disk usage.
+**Add collection** creates a named one; it asks for nothing beyond a name and a
+description, because which index a scope carries is an implementation detail rather than a
+question to put to you at creation time. The embedding model itself is configured once
+under **Settings → Embedding**, not per scope.
 
-Clicking a scope opens `/knowledge/:scope` with five tabs:
+Clicking a scope opens `/knowledge/:scope` with two tabs, and a filter box above the tree
+that matches filenames as you type — client-side, no button and no request:
 
-- **Entries** — what agents (and you) wrote down. Add, edit, and delete entries here.
 - **Documents** — files ingested and converted to Markdown. Drag files in, read one,
   re-run conversion, or delete. Documents that track an external original show whether
   that original has changed on disk.
-- **Rules** — the scope's behavioural rules. Read on demand; nothing pushes them into an agent session.
-- **Handoff** — the saved working state, one entry per git branch.
-- **Changelog** — the append-only record of what consolidation did and when.
+- **Notes** — what agents (and you) wrote down. Add, edit, and delete notes here.
+
+The header carries the scope title, a rename pencil and the project path. **Upload** and
+**Tidy** are the two buttons — Tidy runs the tidy pass over `notes/` on demand — with
+Settings, Check sources and Reindex behind an overflow menu. A warning appears beside the
+title only when the scope holds documents that failed to convert.
+
+Searching the server is not on this page: agents use `coffer__search` and the CLI has
+`coffer knowledge recall`.
 
 The older `/memory`, `/memory/:name`, `/knowledge-bases`, and `/knowledge-bases/:name` URLs
 redirect here.
@@ -186,7 +193,7 @@ Open `/model-providers` for the vendor endpoints Coffer holds keys for. A provid
 `{protocol, base_url, credential_ref}` — the endpoint and its key. The **model** is not
 stored here and not chosen here: an agent's model is picked on its own detail page, and
 Coffer's internal engine picks its own below. Mark one provider **internal default** and
-it becomes the connection that runs knowledge merge, organize, reorg and voice
+it becomes the connection that runs the knowledge tidy pass and voice
 transcription. The embedding configuration is a card at the bottom of the same page.
 
 This surface used to sit under Settings as "LLM connections". It moved because `provider`

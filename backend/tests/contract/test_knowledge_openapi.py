@@ -9,7 +9,7 @@ set are written down, and the app must match them.
 
 That still catches the drift class the yaml check existed for — a route quietly
 renamed or dropped, an enum that grew a value the wire never learned about, a
-ninth built-in tool appearing without anyone deciding on it. **When the merged
+seventh built-in tool appearing without anyone deciding on it. **When the merged
 ``knowledge`` OpenAPI contract is written, restore the yaml-driven check** (the
 component→model coverage assertions) on top of this one.
 """
@@ -53,23 +53,13 @@ _EXPECTED_ROUTES = {
     ("POST", "/api/v1/knowledge/{name}/grep"),
     ("POST", "/api/v1/knowledge/{name}/reindex"),
     ("POST", "/api/v1/knowledge/{name}/check-sources"),
-    # organizing passes
+    # the tidy pass — one pass, one manual trigger
     ("POST", "/api/v1/knowledge/{name}/organize"),
-    ("POST", "/api/v1/knowledge/{name}/reorg"),
-    ("POST", "/api/v1/knowledge/merge_scan"),
-    ("POST", "/api/v1/knowledge/merge"),
-    # lanes
-    ("GET", "/api/v1/knowledge/{name}/rules"),
-    ("DELETE", "/api/v1/knowledge/{name}/rules"),
-    ("GET", "/api/v1/knowledge/{name}/handoff"),
-    ("DELETE", "/api/v1/knowledge/{name}/handoff/{branch}"),
-    ("GET", "/api/v1/knowledge/{name}/consolidation-log"),
-    ("DELETE", "/api/v1/knowledge/{name}/consolidation-log"),
 }
 
-#: The eight built-in MCP tools, unprefixed (the gateway adds ``coffer__``).
-#: Two came from the handoff lane and stay as they were; the other six replace
-#: the twelve the two pre-merge kinds registered between them.
+#: The six built-in MCP tools, unprefixed (the gateway adds ``coffer__``).
+#: They replace the twelve the two pre-merge kinds registered between them;
+#: ``set_handoff`` and ``resume`` retired with the handoff lane.
 _EXPECTED_TOOLS = {
     "search",
     "grep",
@@ -77,8 +67,6 @@ _EXPECTED_TOOLS = {
     "list",
     "write",
     "delete",
-    "set_handoff",
-    "resume",
 }
 
 
@@ -117,7 +105,7 @@ def test_no_pre_merge_route_trees_remain(app_routes) -> None:
     assert not stale, f"pre-merge route tree still mounted: {sorted(stale)}"
 
 
-def test_builtin_tool_set_is_the_eight() -> None:
+def test_builtin_tool_set_is_the_six() -> None:
     from coffer.application.builtin_tools import BuiltinToolRegistry
     from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
     from coffer.application.knowledge.document_tools import register_document_builtin_tools
@@ -126,7 +114,6 @@ def test_builtin_tool_set_is_the_eight() -> None:
     register_knowledge_builtin_tools(
         registry,
         knowledge_service=None,  # type: ignore[arg-type]
-        handoff_service=None,  # type: ignore[arg-type]
     )
     register_document_builtin_tools(
         registry,
@@ -147,7 +134,6 @@ def test_every_builtin_tool_describes_itself() -> None:
     register_knowledge_builtin_tools(
         registry,
         knowledge_service=None,  # type: ignore[arg-type]
-        handoff_service=None,  # type: ignore[arg-type]
     )
     register_document_builtin_tools(
         registry,

@@ -1,40 +1,29 @@
-"""Integration: the eight built-in MCP tools over the two auto-scopes.
+"""Integration: the six built-in MCP tools over the two auto-scopes.
 
 The sibling ``knowledge_documents/test_document_scope_tools.py`` drives the same
-eight against a named collection. Here the material is entries an agent writes
-and the scope is resolved from its cwd — what the pre-merge ``memory`` tools
-existed for.
+six against a named collection. Here the material is notes an agent writes and
+the scope is resolved from its cwd — what the pre-merge ``memory`` tools existed
+for.
 """
 
 from __future__ import annotations
-
-from datetime import UTC, datetime
 
 import pytest
 
 from coffer.application.builtin_tools import COFFER_TOOL_PREFIX, BuiltinToolRegistry
 from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
 from coffer.application.knowledge.document_tools import register_document_builtin_tools
-from coffer.application.knowledge.handoff import HandoffService
-from coffer.domain.knowledge.document import KIND_KNOWLEDGE
+from coffer.domain.knowledge.document import KIND_KNOWLEDGE, LANE_NOTES
 from coffer.domain.knowledge.scope import project_scope_name
 from coffer.infrastructure.knowledge import paths
-from coffer.infrastructure.knowledge_scope.scope_fs import git_branch, project_ulid
+from coffer.infrastructure.knowledge_scope.scope_fs import project_ulid
 
 pytestmark = pytest.mark.asyncio
 
 
 def _registry(mem) -> BuiltinToolRegistry:
     reg = BuiltinToolRegistry()
-    handoff_service = HandoffService(
-        scope=mem.scope,
-        git_branch=git_branch,
-        scope_dir=paths.scope_dir,
-        now=lambda: datetime.now(tz=UTC),
-    )
-    register_knowledge_builtin_tools(
-        reg, knowledge_service=mem.service, handoff_service=handoff_service
-    )
+    register_knowledge_builtin_tools(reg, knowledge_service=mem.service)
     register_document_builtin_tools(reg, resources=mem.resources, knowledge_service=mem.service)
     return reg
 
@@ -48,7 +37,9 @@ def _tool(reg: BuiltinToolRegistry, name: str):
 @pytest.mark.acceptance(
     spec="knowledge", scenario="built-in memory tools appear in client tool list"
 )
-async def test_the_eight_tools_are_registered(mem) -> None:
+async def test_the_six_tools_are_registered(mem) -> None:
+    # Exact equality, not a subset: a tool that silently disappears (or an
+    # unannounced new one) has to fail here.
     reg = _registry(mem)
     assert {t.name for t in reg.list()} == {
         "search",
@@ -57,8 +48,6 @@ async def test_the_eight_tools_are_registered(mem) -> None:
         "list",
         "write",
         "delete",
-        "set_handoff",
-        "resume",
     }
     assert reg.is_builtin(f"{COFFER_TOOL_PREFIX}search")
 
@@ -110,8 +99,9 @@ async def test_search_spans_project_and_global_by_default(mem) -> None:
 
 
 async def test_the_pre_merge_tool_names_are_gone(mem) -> None:
-    """Twelve names over two kinds became eight over one. None of the old names
-    survives as an alias — an agent reads the descriptions, not a synonym list."""
+    """Twelve names over two kinds became six over one. None of the old names
+    survives as an alias — an agent reads the descriptions, not a synonym list.
+    ``set_handoff``/``resume`` went with the handoff lane itself."""
     reg = _registry(mem)
     for gone in (
         "recall",
@@ -126,6 +116,8 @@ async def test_the_pre_merge_tool_names_are_gone(mem) -> None:
         "delete_document",
         "update_memory",
         "forget",
+        "set_handoff",
+        "resume",
     ):
         assert reg.get(f"{COFFER_TOOL_PREFIX}{gone}") is None, gone
 
@@ -133,19 +125,26 @@ async def test_the_pre_merge_tool_names_are_gone(mem) -> None:
 @pytest.mark.acceptance(
     spec="knowledge", scenario="remembered items are stored in the knowledge lane"
 )
-async def test_write_lands_in_the_knowledge_inbox(mem) -> None:
-    """A written entry lands under the project scope's ``knowledge/inbox/`` (never
-    the scope root), no ``MEMORY.md`` is generated, and ``search`` returns it."""
+async def test_write_lands_in_the_notes_lane(mem) -> None:
+    """A written note lands under the project scope's ``notes/`` (never the scope
+    root), indexes under the ``notes`` lane, no ``MEMORY.md`` is generated, and
+    ``search`` returns it."""
     from pathlib import Path
 
     reg = _registry(mem)
-    await _tool(reg, "write").handler(
+    written = await _tool(reg, "write").handler(
         {"text": "the wombat fact about burrows", "cwd": mem.project_cwd, "name": "wombat"}
     )
     store_dir = paths.scope_dir(project_scope_name(project_ulid(str(Path(mem.project_cwd).parent))))
-    assert len(list(paths.inbox_dir(store_dir).glob("*.md"))) == 1  # under knowledge/inbox/
+    notes = list(paths.notes_dir(store_dir).glob("*.md"))
+    assert len(notes) == 1  # under notes/
+    assert notes[0] == paths.note_path(store_dir, notes[0].stem)
+    assert "wombat" in notes[0].read_text(encoding="utf-8")
     assert list(store_dir.glob("*.md")) == []  # never at the store root
     assert not (store_dir / "MEMORY.md").exists()  # no derived index
+    # …and the row it indexed carries the notes lane, not the docs one.
+    rows = await mem.documents.list_documents(KIND_KNOWLEDGE, written["scope"], lane=LANE_NOTES)
+    assert [r.id for r in rows] == [written["id"]]
     out = await _tool(reg, "search").handler({"query": "wombat burrows", "cwd": mem.project_cwd})
     assert any("wombat" in h["text"] for h in out["hits"])
 

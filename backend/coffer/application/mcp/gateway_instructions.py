@@ -38,8 +38,6 @@ NAMED_TOOLS: frozenset[str] = frozenset(
         "list",
         "write",
         "delete",
-        "set_handoff",
-        "resume",
         "list_skills",
         "load_skill",
         "diagnose",
@@ -50,8 +48,7 @@ NAMED_TOOLS: frozenset[str] = frozenset(
 _BASE = (
     "Coffer is this machine's local vault: it aggregates the user's MCP servers "
     "behind one endpoint and adds its own tools under the coffer__ prefix — "
-    "knowledge (search, grep, read, list, write, delete), continuity across "
-    "sessions and agents (set_handoff, resume), skills (list_skills, "
+    "knowledge (search, grep, read, list, write, delete), skills (list_skills, "
     "load_skill), and diagnose, which returns Coffer's own audit and daemon "
     "logs when something has gone wrong with Coffer itself. Search Coffer "
     "before asking the user something they may already have told it."

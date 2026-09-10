@@ -34,7 +34,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.domain.errors import ResourceAlreadyExists, ResourceNotFound
 from coffer.domain.knowledge.scope_config import KnowledgeConfig
 from coffer.domain.resource import ResourceRef
-from coffer.infrastructure.knowledge.fs import atomic_write_text
+from coffer.infrastructure.knowledge.fs import atomic_write_bytes
 from coffer.infrastructure.knowledge_scope.project_root_repo import ProjectRootRepo
 from coffer.infrastructure.knowledge_scope.store_label_repo import StoreLabelRepo
 
@@ -43,20 +43,6 @@ _logger = logging.getLogger("coffer.memory.consolidate")
 GitRootFn = Callable[[str], "Path | None"]
 ProjectUlidFn = Callable[[str], str]
 ScopeDirFn = Callable[[str], Path]
-
-#: Machine-local / derived files that are never merged (regenerated per store).
-_DERIVED_NAMES = frozenset({"MEMORY.md", "INDEX.md", "consolidation-log.md"})
-
-
-@dataclass(frozen=True)
-class MergeOutcome:
-    """What an explicit user-triggered merge (FR-057) did."""
-
-    target: str
-    merged_files: int
-    label_moved: bool
-    root_moved: bool
-    aliases: list[str]
 
 
 @dataclass
@@ -74,10 +60,18 @@ class ConsolidationReport:
 
 
 def merge_store_dir(src: Path, dst: Path, *, tag: str) -> int:
-    """Merge every lane file under ``src`` into ``dst`` (additive). Returns the
+    """Merge every file under ``src`` into ``dst`` (additive). Returns the
     number of files merged/created.
 
-    - Derived/machine-local files are skipped.
+    Everything under a scope dir is content someone wrote or uploaded — notes,
+    documents, the originals and the archived revisions — so everything travels.
+
+    Bytes, not text: ``.raw/`` holds the uploads exactly as they arrived, and a
+    PDF or a .docx is not decodable UTF-8. Reading these as text used to raise
+    ``UnicodeDecodeError`` on the first real upload, which ``run()`` swallowed
+    into ``failed`` (the boot heal silently gave up on that project) and
+    ``adopt()`` propagated (an ordinary write or recall failed outright).
+
     - A collision whose content is byte-identical is a no-op, so re-running the
       merge (a retry after a mid-merge failure, or the pre-retire delta sweep)
       never duplicates files.
@@ -89,24 +83,22 @@ def merge_store_dir(src: Path, dst: Path, *, tag: str) -> int:
     merged = 0
     for path in sorted(p for p in src.rglob("*") if p.is_file()):
         rel = path.relative_to(src)
-        if rel.name in _DERIVED_NAMES:
-            continue
         target = dst / rel
         target.parent.mkdir(parents=True, exist_ok=True)
-        body = path.read_text(encoding="utf-8")
+        body = path.read_bytes()
         if target.exists():
-            if target.read_text(encoding="utf-8") == body:
+            if target.read_bytes() == body:
                 continue  # already merged (idempotent retry / delta sweep)
             slot = _suffixed(target, tag, body)
             if slot is None:  # a suffixed copy from an earlier attempt
                 continue
             target = slot
-        atomic_write_text(target, body)
+        atomic_write_bytes(target, body)
         merged += 1
     return merged
 
 
-def _suffixed(target: Path, tag: str, body: str) -> Path | None:
+def _suffixed(target: Path, tag: str, body: bytes) -> Path | None:
     """A non-colliding sibling of ``target`` marked with the source ``tag``.
 
     Content-aware: a candidate that already exists WITH this exact ``body``
@@ -115,7 +107,7 @@ def _suffixed(target: Path, tag: str, body: str) -> Path | None:
     candidate = target.with_name(f"{target.stem}--from-{tag}{target.suffix}")
     n = 2
     while candidate.exists():
-        if candidate.read_text(encoding="utf-8") == body:
+        if candidate.read_bytes() == body:
             return None
         candidate = target.with_name(f"{target.stem}--from-{tag}-{n}{target.suffix}")
         n += 1
@@ -123,12 +115,14 @@ def _suffixed(target: Path, tag: str, body: str) -> Path | None:
 
 
 async def find_alias_holder(resources: ResourceService, project_id: str) -> str | None:
-    """FR-058: the store whose ``merged_identities`` lists ``project_id``.
+    """The store whose ``merged_identities`` lists ``project_id``.
 
-    Deterministic (stores scanned in name order) and self-excluding (a store
-    never aliases its own identity). Shared by the resolver-redirect closure
-    (``memory_wiring``), the boot pass's merge-reversal guard, and tests — one
-    implementation, not three."""
+    A merged-away identity must keep resolving to the store that absorbed it,
+    or the next resolve would provision a fresh empty duplicate and undo the
+    heal. Deterministic (stores scanned in name order) and self-excluding (a
+    store never aliases its own identity). Shared by the resolver-redirect
+    closure (``knowledge_wiring``), the boot pass's merge-reversal guard, and
+    tests — one implementation, not three."""
     own = project_scope_name(project_id)
     for r in sorted(await resources.list(kind=KIND_KNOWLEDGE), key=lambda r: r.name):
         if r.name == own:
@@ -194,8 +188,8 @@ class StoreConsolidator:
         return report
 
     async def _redirect_merged(self, canonical: str) -> str:
-        """FR-058 guard for the boot pass: a canonical identity that was merged
-        AWAY must not be re-provisioned — its alias holder IS the canonical
+        """Boot-pass guard: a canonical identity that was merged AWAY must not
+        be re-provisioned — its alias holder IS the canonical
         store. Without this, a survivor whose recorded root re-resolves to a
         merged-away identity would be "healed" into a fresh empty duplicate at
         the next startup, reversing the user's merge and dropping every alias."""
@@ -207,59 +201,16 @@ class StoreConsolidator:
             return holder or canonical
 
     async def adopt(self, stale: str, canonical: str, root: str) -> None:
-        """Resolve-time adoption of a store under its portable name (spec knowledge
-        FR-004a): identical semantics to the boot pass — additive merge, never
+        """Resolve-time adoption of a store under its portable name: identical
+        semantics to the boot pass — additive merge, never
         a destructive move, retire only after the merge landed."""
         async with self._adopt_lock:
             await self._merge_and_retire(stale, canonical, root, ConsolidationReport())
 
-    async def merge(self, source: str, target: str, *, actor: str = "user") -> MergeOutcome:
-        """Explicit user-triggered merge of two existing project stores
-        (spec knowledge amendment 2026-07-10, FR-057/FR-058).
-
-        Unlike the root-driven ``_merge_and_retire``, both stores already
-        exist and the target keeps its own label/root when it has them; the
-        source's project ULID (plus its own aliases, transitively) is recorded
-        in the target's ``merged_identities`` so a future resolve of the
-        merged-away identity lands on the survivor instead of re-provisioning
-        an empty duplicate. Serialized with resolve-time adoption; fact writes
-        do NOT hold this lock, so a delta sweep right before retirement
-        re-merges anything written into the source mid-merge."""
-        async with self._adopt_lock:
-            target_res = await self._resources.get(ResourceRef(KIND_KNOWLEDGE, target))
-            source_res = await self._resources.get(ResourceRef(KIND_KNOWLEDGE, source))
-            source_dir = self._scope_dir(source)
-            target_dir = self._scope_dir(target)
-            tag = _ulid_of(source)[:5]
-            label_moved = await self._move_label(source, target)
-            root_moved = False
-            source_root = await self._roots.get(source)
-            if source_root and not await self._roots.get(target):
-                await self._roots.set(target, source_root)
-                root_moved = True
-            merged = merge_store_dir(source_dir, target_dir, tag=tag)
-            aliases = await self._record_aliases(target_res, source_res, actor=actor)
-            ref = store_ref_for(target, scope_dir=self._scope_dir)
-            await self._reconciler.reconcile(store=ref, embedding=None, force=True)
-            # Delta sweep: pick up facts written into the source during the
-            # merge's awaits (content-idempotent, so already-merged files no-op).
-            delta = merge_store_dir(source_dir, target_dir, tag=tag)
-            if delta:
-                merged += delta
-                await self._reconciler.reconcile(store=ref, embedding=None, force=False)
-            await self._retire(source)
-            return MergeOutcome(
-                target=target,
-                merged_files=merged,
-                label_moved=label_moved,
-                root_moved=root_moved,
-                aliases=aliases,
-            )
-
     async def _record_aliases(
         self, target_res: object, source_res: object, *, actor: str
     ) -> list[str]:
-        """FR-058: append the source's ULID + its own aliases to the target's
+        """Append the source's ULID + its own aliases to the target's
         ``merged_identities`` (order-preserving, deduped)."""
         target_cfg = KnowledgeConfig.model_validate(target_res.config)  # type: ignore[attr-defined]
         source_cfg = KnowledgeConfig.model_validate(source_res.config)  # type: ignore[attr-defined]
@@ -313,8 +264,8 @@ class StoreConsolidator:
         await self._ensure_store(canonical)
         await self._roots.set(canonical, root)
         await self._move_label(stale, canonical)
-        # FR-058 also holds for boot/adoption merges: the retired identity (and
-        # any aliases it accumulated) must keep resolving to the canonical store.
+        # The retired identity (and any aliases it accumulated) must keep
+        # resolving to the canonical store.
         with contextlib.suppress(ResourceNotFound):  # dir without a resource row
             canonical_res = await self._resources.get(ResourceRef(KIND_KNOWLEDGE, canonical))
             stale_res = await self._resources.get(ResourceRef(KIND_KNOWLEDGE, stale))

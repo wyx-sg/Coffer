@@ -55,6 +55,20 @@ function makeStore(overrides: Partial<ScopeOut> = {}): ScopeOut {
 }
 
 describe("KnowledgeTable — readable project identity (FR-017a)", () => {
+  test("has no Scope column — the Name cell already tells the kinds apart", () => {
+    render(wrap(<KnowledgeTable items={[makeStore()]} />));
+    expect(screen.queryByRole("columnheader", { name: "Scope" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Global")).not.toBeInTheDocument();
+  });
+
+  test("counts notes and documents in their own columns", () => {
+    render(wrap(<KnowledgeTable items={[makeStore({ entry_count: 3, document_count: 5 })]} />));
+    expect(screen.getByRole("columnheader", { name: "Notes" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Documents" })).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("5")).toBeInTheDocument();
+  });
+
   test("a per-project store shows its directory basename + absolute path, not the ULID", () => {
     const store = makeStore({
       name: "project-01HXYZ00000000000000000000",

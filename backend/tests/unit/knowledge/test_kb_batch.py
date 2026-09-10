@@ -13,7 +13,7 @@ from coffer.application.knowledge.batch import (
     STATUS_EMBEDDING,
     KnowledgeBaseBatchService,
 )
-from coffer.domain.knowledge.document import KIND_KNOWLEDGE, LANE_INGEST, Document
+from coffer.domain.knowledge.document import KIND_KNOWLEDGE, LANE_DOCS, Document
 
 pytestmark = pytest.mark.asyncio
 
@@ -25,7 +25,7 @@ def _doc(doc_id: str, *, embed_pending: bool) -> Document:
         kind=KIND_KNOWLEDGE,
         resource_name="kb1",
         path=f"docs/{doc_id}.md",
-        lane=LANE_INGEST,
+        lane=LANE_DOCS,
         title=doc_id,
         content_sha256="sha",
         source_mode="converted",

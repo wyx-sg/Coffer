@@ -4,12 +4,14 @@ Sole owner of path construction. One layout, one root:
 ``~/.coffer/knowledge/<scope>/`` — where ``<scope>`` is the resource name
 (``global``, ``project-<ULID>``, or a named collection). Inside a scope dir:
 
-- ``knowledge/``   topic docs + ``knowledge/inbox/`` (freshly written entries)
-- ``rules/``       behavioural rules
-- ``handoff/``     per-branch working state
-- ``superseded/``  retired topic docs
-- ``inbox/``       ingested documents (the normalized Markdown)
-- ``.raw/``        the ingested originals (hidden, so grep skips them)
+- ``notes/``     what an agent or the user wrote (one markdown file each)
+- ``docs/``      ingested documents (the normalized Markdown)
+- ``.raw/``      the ingested originals (hidden, so grep skips them)
+- ``.history/``  pre-rewrite copies kept by the tidy pass (hidden, likewise)
+
+Two content lanes and two hidden archives, nothing else. The archives are
+dot-prefixed so ripgrep skips them: ``coffer__grep`` must never return an
+ingested original, or a superseded revision, alongside the live file.
 
 ``$COFFER_KNOWLEDGE_ROOT`` overrides the root for tests. Every name that
 becomes a path segment goes through a traversal guard.
@@ -87,12 +89,35 @@ def scope_dir(scope_name: str) -> pathlib.Path:
     return _guard(knowledge_root(), scope_name, "knowledge scope")
 
 
-# --- the ingestion lane -----------------------------------------------------
+# --- the two content lanes --------------------------------------------------
 
 
 def docs_dir(scope_name: str) -> pathlib.Path:
-    """``<scope>/inbox/`` — the normalized Markdown of ingested documents."""
-    return scope_dir(scope_name) / "inbox"
+    """``<scope>/docs/`` — the normalized Markdown of ingested documents."""
+    return scope_dir(scope_name) / "docs"
+
+
+def doc_path(scope_name: str, doc_id: str) -> pathlib.Path:
+    """Path of the normalized markdown ``docs/<doc-id>.md``."""
+    return _leaf(docs_dir(scope_name), doc_id, "doc id")
+
+
+def notes_dir(store_dir: pathlib.Path) -> pathlib.Path:
+    """The ``notes/`` lane — everything an agent or the user wrote.
+
+    A write lands here directly. There is no staging inbox and no later
+    promotion into a separate topic-doc lane: the tidy pass merges and rewrites
+    notes in place, so a note is a note however recently it was written.
+    """
+    return _child(store_dir, "notes", "notes")
+
+
+def note_path(store_dir: pathlib.Path, slug: str) -> pathlib.Path:
+    """Path of one note ``<store_dir>/notes/<slug>.md``."""
+    return _leaf(notes_dir(store_dir), slug, "note slug")
+
+
+# --- the hidden archives ----------------------------------------------------
 
 
 def raw_dir(scope_name: str) -> pathlib.Path:
@@ -105,19 +130,14 @@ def raw_dir(scope_name: str) -> pathlib.Path:
     return scope_dir(scope_name) / ".raw"
 
 
-def doc_path(scope_name: str, doc_id: str) -> pathlib.Path:
-    """Path of the normalized markdown ``inbox/<doc-id>.md``."""
-    return _leaf(docs_dir(scope_name), doc_id, "doc id")
-
-
 def raw_path(scope_name: str, doc_id: str, ext: str) -> pathlib.Path:
-    """Path of the original upload ``raw/<doc-id>.<ext>``."""
+    """Path of the original upload ``.raw/<doc-id>.<ext>``."""
     _safe_segment(doc_id, "doc id")
     d = raw_dir(scope_name)
     bare_ext = ext.lstrip(".")
     if bare_ext:
         # A slashed/traversing ext (from an upload filename) would otherwise nest
-        # subdirs inside raw/; constrain it to a single safe segment.
+        # subdirs inside .raw/; constrain it to a single safe segment.
         _safe_segment(bare_ext, "raw extension")
     clean_ext = ext if ext.startswith(".") else f".{ext}" if ext else ""
     candidate = (d / f"{doc_id}{clean_ext}").resolve()
@@ -126,131 +146,33 @@ def raw_path(scope_name: str, doc_id: str, ext: str) -> pathlib.Path:
     return d / f"{doc_id}{clean_ext}"
 
 
-# --- the entry lanes --------------------------------------------------------
+def history_dir(store_dir: pathlib.Path) -> pathlib.Path:
+    """``<store>/.history/`` — the note revisions the tidy pass replaced.
+
+    The tidy pass runs unattended and lets an LLM merge and rewrite notes, so
+    every overwrite archives the prior revision here first. Hidden, and a
+    sibling of ``.raw/`` rather than a child of ``notes/``, so the lane scan
+    and grep both pass it by without needing to know it exists.
+    """
+    return _child(store_dir, ".history", "history")
+
+
+def history_path(store_dir: pathlib.Path, name: str) -> pathlib.Path:
+    """``<store>/.history/<name>.md``, guarded as a single safe segment."""
+    return _leaf(history_dir(store_dir), name, "history name")
+
+
+# --- generic ----------------------------------------------------------------
 
 
 def fact_path(store_dir: pathlib.Path, slug: str) -> pathlib.Path:
-    """Path of a per-fact markdown file ``<store_dir>/<slug>.md``."""
+    """Path of a per-note markdown file ``<store_dir>/<slug>.md``.
+
+    Takes the lane dir as an argument rather than deriving it, so the file I/O
+    layer can address a note by the directory it already resolved.
+    """
     _safe_segment(slug, "fact slug")
     candidate = (store_dir / f"{slug}.md").resolve()
     if not candidate.is_relative_to(store_dir.resolve()):
         raise ValueError(f"fact slug {slug!r} escapes the store dir")
     return store_dir / f"{slug}.md"
-
-
-def knowledge_dir(store_dir: pathlib.Path) -> pathlib.Path:
-    """The ``knowledge/`` lane of a memory store — the semantic memory the
-    ``recall`` glob searches (inbox items + organized topic docs)."""
-    candidate = (store_dir / "knowledge").resolve()
-    if not candidate.is_relative_to(store_dir.resolve()):
-        raise ValueError("knowledge dir escapes the store dir")
-    return store_dir / "knowledge"
-
-
-def inbox_dir(store_dir: pathlib.Path) -> pathlib.Path:
-    """The ``knowledge/inbox/`` subdir — freshly-remembered, not-yet-organized
-    items. The consolidation organizer drains it into topic docs."""
-    return knowledge_dir(store_dir) / "inbox"
-
-
-def inbox_item_path(store_dir: pathlib.Path, slug: str) -> pathlib.Path:
-    """Path of a per-item file ``<store_dir>/knowledge/inbox/<slug>.md``."""
-    _safe_segment(slug, "inbox item slug")
-    d = inbox_dir(store_dir)
-    candidate = (d / f"{slug}.md").resolve()
-    if not candidate.is_relative_to(d.resolve()):
-        raise ValueError(f"inbox item slug {slug!r} escapes the inbox dir")
-    return d / f"{slug}.md"
-
-
-def topic_path(store_dir: pathlib.Path, slug: str) -> pathlib.Path:
-    """Path of an organized topic doc ``<store_dir>/knowledge/<slug>.md``.
-
-    Topic docs live alongside ``inbox/`` in the ``knowledge/`` lane (so ``recall``
-    finds them) but are NOT inbox items. The organizer writes them; the slug is
-    guarded as a single safe segment (no traversal, no nested dirs)."""
-    _safe_segment(slug, "topic slug")
-    d = knowledge_dir(store_dir)
-    candidate = (d / f"{slug}.md").resolve()
-    if not candidate.is_relative_to(d.resolve()):
-        raise ValueError(f"topic slug {slug!r} escapes the knowledge dir")
-    return d / f"{slug}.md"
-
-
-def knowledge_index_path(store_dir: pathlib.Path) -> pathlib.Path:
-    """The ``knowledge/INDEX.md`` review catalog (regenerated by the organizer,
-    excluded from recall + the sync mirror)."""
-    return knowledge_dir(store_dir) / "INDEX.md"
-
-
-def consolidation_log_path(store_dir: pathlib.Path) -> pathlib.Path:
-    """The store-root ``consolidation-log.md`` append-only changelog. It sits at
-    the store ROOT (outside ``knowledge/``) so it is automatically excluded from
-    recall; it is also excluded from the sync mirror (machine-local)."""
-    return store_dir / "consolidation-log.md"
-
-
-def superseded_dir(store_dir: pathlib.Path) -> pathlib.Path:
-    """The store-root ``superseded/`` tombstone — topic docs retired by the reorg
-    pass. At the store ROOT (outside ``knowledge/``) so it is excluded from recall
-    like ``handoff/``; recoverable, and it DOES sync (source-of-truth history)."""
-    return store_dir / "superseded"
-
-
-def superseded_path(store_dir: pathlib.Path, name: str) -> pathlib.Path:
-    """``<store>/superseded/<name>.md``, guarded as a single safe segment."""
-    _safe_segment(name, "superseded name")
-    d = superseded_dir(store_dir)
-    candidate = (d / f"{name}.md").resolve()
-    if not candidate.is_relative_to(d.resolve()):
-        raise ValueError(f"superseded name {name!r} escapes the superseded dir")
-    return d / f"{name}.md"
-
-
-def handoff_dir(store_dir: pathlib.Path) -> pathlib.Path:
-    """The ``handoff/`` subdir of a memory store (working-state files live here,
-    excluded from recall which globs only the store dir's top-level ``*.md``)."""
-    candidate = (store_dir / "handoff").resolve()
-    if not candidate.is_relative_to(store_dir.resolve()):
-        raise ValueError("handoff dir escapes the store dir")
-    return store_dir / "handoff"
-
-
-def rules_dir(store_dir: pathlib.Path) -> pathlib.Path:
-    """The store-root ``rules/`` dir — behavioural rules classified by the
-    organizer. At the store ROOT (outside ``knowledge/``) so it is excluded from
-    recall; it DOES sync (source-of-truth, like ``superseded/``)."""
-    candidate = (store_dir / "rules").resolve()
-    if not candidate.is_relative_to(store_dir.resolve()):
-        raise ValueError("rules dir escapes the store dir")
-    return store_dir / "rules"
-
-
-def rules_path(store_dir: pathlib.Path) -> pathlib.Path:
-    """Path of the default rules file ``<store_dir>/rules/rules.md`` — the bucket
-    new rules append to before the autonomous split redistributes them."""
-    return rules_dir(store_dir) / "rules.md"
-
-
-def rule_file_path(store_dir: pathlib.Path, slug: str) -> pathlib.Path:
-    """Path of a per-category rules file ``<store_dir>/rules/<slug>.md``.
-
-    The autonomous split (spec knowledge amendment 2026-06-22) groups rules into these
-    by topic once ``rules.md`` grows past the threshold. The slug is guarded as a
-    single safe segment (no traversal, no nested dirs)."""
-    _safe_segment(slug, "rules slug")
-    d = rules_dir(store_dir)
-    candidate = (d / f"{slug}.md").resolve()
-    if not candidate.is_relative_to(d.resolve()):
-        raise ValueError(f"rules slug {slug!r} escapes the rules dir")
-    return d / f"{slug}.md"
-
-
-def handoff_path(store_dir: pathlib.Path, branch_slug: str) -> pathlib.Path:
-    """Path of a per-branch handoff file ``<store_dir>/handoff/<branch-slug>.md``."""
-    _safe_segment(branch_slug, "branch slug")
-    d = handoff_dir(store_dir)
-    candidate = (d / f"{branch_slug}.md").resolve()
-    if not candidate.is_relative_to(d.resolve()):
-        raise ValueError(f"branch slug {branch_slug!r} escapes the handoff dir")
-    return d / f"{branch_slug}.md"

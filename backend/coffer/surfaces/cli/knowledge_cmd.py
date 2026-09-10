@@ -6,10 +6,9 @@ exit-code mapping (``_cli_client.check``). One command group over three scopes:
 a named collection is created with ``create`` and removed with ``delete``.
 
 The document half (ingest / read / edit / reindex / search / grep) lives in
-``knowledge_document_cmd``, external-source tracking in ``knowledge_source_cmd``
-and the AI-assisted merge in ``knowledge_merge_cmd``; all three register onto
-the SAME ``app`` by import side effect, purely so no module runs past the
-project's file-size ceiling.
+``knowledge_document_cmd`` and external-source tracking in
+``knowledge_source_cmd``; both register onto the SAME ``app`` by import side
+effect, purely so no module runs past the project's file-size ceiling.
 """
 
 from __future__ import annotations
@@ -358,3 +357,42 @@ def recall(
         return
     for i, h in enumerate(data["hits"], start=1):
         typer.echo(f"{i}. (score={h['score']:.3f}) {h['text']}")
+
+
+# --- the tidy pass ----------------------------------------------------------
+
+
+@app.command("organize")
+def organize(
+    ctx: typer.Context,
+    name: str = typer.Argument(...),
+    output_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """Tidy a scope's notes now with Coffer's internal model: merge duplicates,
+    split what has grown over-long. The same pass also runs on its own after a
+    quiet spell and on a periodic sweep; this only says "now".
+
+    Each replaced revision is copied into ``.history/`` first, so a rewrite
+    is always recoverable."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        # An agentic loop over the whole lane, far beyond the client's default
+        # 15s timeout.
+        r = c.post(f"/knowledge/{name}/organize", timeout=600.0)
+        _cli_client.check(r, verbose=_verbose(ctx))
+    data = r.json()
+    if output_json:
+        typer.echo(_json.dumps(data, indent=2))
+        return
+    status = data["status"]
+    if status == "no_model":
+        typer.echo("no internal model configured — nothing tidied", err=True)
+        return
+    if status == "empty":
+        typer.echo("no notes — nothing to tidy")
+        return
+    typer.echo(
+        f"tidied: {data['notes_written']} written, {data['notes_archived']} archived "
+        f"(before: {data['notes_before']}, after: {data['notes_after']}, "
+        f"model: {data.get('model')})"
+    )

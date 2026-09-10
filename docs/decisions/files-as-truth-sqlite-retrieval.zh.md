@@ -3,7 +3,7 @@
 > English: [files-as-truth-sqlite-retrieval.md](./files-as-truth-sqlite-retrieval.md)
 
 **Status**: Accepted
-**Date**: 2026-06-09（2026-09-10 修订；见修订历史）
+**Date**: 2026-06-09（2026-09-11 修订；见修订历史）
 **Deciders**: Yuxing Wu
 **Supersedes**: LlamaIndex RAG 引擎与 mem0 memory 引擎这两项决策 —— 两份 ADR 均已作为废弃文档移除
 **Related**: spec `knowledge`（知识层 spec）、[Layer-First Code Layout](code-layout-layer-first.md)、[Everything Is a Resource Kind](everything-is-a-resource-kind.md)、[One Shared Knowledge Store](agent-native-shared-memory.md)
@@ -177,7 +177,7 @@ kind 自己持有的端口背后，测试用 fake，importlinter 契约保持 `a
     都是用户有意创建的集合，绝不自动开通 —— 因为从一个拼写错误里悄悄造出一个
     scope，比报错更糟。
   - **落库的 lane 判别列。** `documents.lane`（`knowledge` | `inbox`，
-    migration `0052`）记录一行归哪个写入方所有，因为两条 lane 的路径在同一个根
+    migration `0053`）记录一行归哪个写入方所有，因为两条 lane 的路径在同一个根
     下确实会重叠。计数按 lane 分开；而**检索有意横跨两条 lane** —— 一份索引、
     一次查询 —— 这正是合并的全部意义。
   - **逐语料 embedding 配置消失。** 逐 scope 的 `KnowledgeConfig` 完全不带
@@ -194,3 +194,35 @@ kind 自己持有的端口背后，测试用 fake，importlinter 契约保持 `a
   而知识库那副面孔更是从未存过一份文档。**文件即事实，SQLite 是可重建索引**：
   清掉一份文件能重建的索引不会丢失任何权威内容，因为索引从来就不是事实源。
   重新累积靠显式的 `coffer__write` 与文件导入。
+- **2026-09-11** —— **两条 lane。** 一个 scope 的存储 lane 收敛为人真正会区分的
+  两类材料：谁写下的，和谁上传的。files-as-truth 一动未动；动的只是这些文件被
+  分进几个盒子。它对上文的修订：
+  - **lane 布局。** 一个 scope 就是 `~/.coffer/knowledge/<scope>/`，下有 `notes/`
+    （agent 或用户写下的内容 —— `coffer__write` 直接落这里）与 `docs/`（上传的
+    文档，已归一为 markdown），外加一个隐藏的 `.history/` 与隐藏的 `.raw/`
+    （存放上传的原件）。因此上文 Decision 里那对「`docs/<doc-id>.md` + 原件」重新
+    字面成立：`<scope>/docs/<doc-id>.md` + `<scope>/.raw/<doc-id>.<ext>`，逐条
+    markdown 则是 `<scope>/notes/` 下的一条 note。2026-09-10 那条列出的 lane ——
+    `knowledge/` 及其 `knowledge/inbox/` 梯度、`rules/`、`handoff/`、
+    `superseded/` —— 全部删除；本 ADR 最初称作 `MEMORY.md`、后来叫
+    `knowledge/INDEX.md` 的那份重新生成的索引文件同样删除：不再有任何东西去生成
+    一个索引文件。`superseded/` 原本承担的角色现由 `.history/` 承担 ——
+    它存的是整理覆盖前的旧版本，而非墓碑。`.history/` 加点前缀的理由与 `.raw/`
+    相同 —— ripgrep 默认跳过隐藏项，因此 `coffer__grep` 永远不会在正文旁边又返回
+    一个归档旧版。
+  - **lane 判别列的取值。** `documents.lane` 改为 `notes` | `docs`。计数仍按 lane
+    分开，检索仍横跨两条 lane。这次迁移按明确要求做破坏性处理 —— 不设缓冲区 ——
+    且不留 load-time 垫片：数据在库里改干净，兼容分支在同一次改动里删掉。这正是
+    本 ADR 立场的再一次落实：文件即事实，一份文件能重建的索引从来就不是被冒险的
+    那个东西。
+  - **针对 `notes/` 的定期整理。** 一趟有界的 agentic 流程合并重复的 note，并把它们
+    重写成主题文档。任何覆盖或合并之前，先把旧版本复制进 `.history/`，因此
+    无人值守的重写始终可以捞回来。它由一个形状照抄现有 `RetentionWorker` 的后台
+    worker 驱动 —— 开机跑一趟补齐，之后按间隔执行 —— 未配置 internal model 时
+    空转，也可手动触发。每趟整理写进 Coffer 已有的审计日志；per-scope 的
+    `consolidation-log.md` 删除且不设替代物。整理重写的是文件，而文件仍是记录；
+    索引照旧由它们重新派生。
+  - **检索不受影响。** FTS5 + `bm25()`、sqlite-vec、各检索 mode 及其融合、安装级
+    embedding 与 `MarkdownConverter` 端口，全部照当初决定原样成立。创建集合对话框
+    去掉向量检索开关，去掉的是一个抛给用户的**提问**，不是能力本身：新建集合照旧
+    带 keyword + grep + vector。

@@ -2,10 +2,10 @@
 
 > English: [quickstart.md](./quickstart.md)
 
-> **历史文档 —— 2026-09-10。** Knowledge Base 与 Memory 两份规范于当日合并为统一的
-> **Knowledge Layer（知识层）**。合并后的模型以
+> **历史文档 —— 2026-09-10。** spec knowledge（Knowledge Base）与 spec knowledge（Memory）
+> 于当日合并为统一的 **Knowledge Layer（知识层）**。合并后的模型以
 > [`spec.md`](./spec.md) 为准 —— 一个 `knowledge` kind、三种 scope、单一存储根
-> `~/.coffer/knowledge/<scope>/`、八个 `coffer__*` 工具。本文档记录的是合并之前
+> `~/.coffer/knowledge/<scope>/`、六个 `coffer__*` 工具。本文档记录的是合并之前
 > 的设计；凡出现「memory 面」「`memory` kind」`~/.coffer/memory/` 或
 > `/api/v1/memory_stores` 之处，请以 `spec.md` 中合并后的对应物为准。下文的命令与
 > 工具名已更新到合并后的 surface，照抄即可运行。目录名 `specs/knowledge/` 同样是
@@ -15,16 +15,17 @@ memory 是 Coffer 统一知识底座的 **memory 面**。事实是 markdown 文�
 
 ## 通过 MCP 客户端（主要 surface）
 
-出现八个内置工具（无需 store 引用 —— 作用域由 agent 的工作目录解析）：
+出现六个内置工具（无需 store 引用 —— 作用域由 agent 的工作目录解析）：
 
-- `coffer__search(query, scope?, top_k?)` —— 一次检索同时覆盖某作用域里写下的条目与已 ingest 的文档，返回排序结果。
+- `coffer__search(query, scope?, top_k?)` —— 一次检索同时覆盖某作用域的 notes 与上传的文档，返回排序结果。
 - `coffer__grep(pattern, scope?, max_matches?)` —— 对作用域内每个 Markdown 文件做字面/正则匹配。
-- `coffer__read(id, scope?)` —— 按 id 读取整条（条目或文档）全文。
+- `coffer__read(id, scope?)` —— 按 id 读取整条（note 或文档）全文。
 - `coffer__list(scope?, all?, limit?)` —— 浏览单个作用域的内容，或 `all=true` 列出所有作用域的目录。
-- `coffer__write(text, title?, description?, filename?, id?, scope?)` —— 写一条条目、存一个文档（`filename`）、或改写已有条目（`id`）。
-- `coffer__delete(id, scope?)` —— 删除一条条目或文档。
-- `coffer__set_handoff(body)` —— 保存当前工作现场（按 project + 分支）。
-- `coffer__resume()` —— 返回当前 project + 分支已保存的工作现场。
+- `coffer__write(text, title?, description?, filename?, id?, scope?)` —— 写一条 note、存一个文档（`filename`）、或改写已有条目（`id`）。
+- `coffer__delete(id, scope?)` —— 删除一条 note 或文档。
+
+写入直接落进该作用域的 `notes/` lane —— 没有 inbox 要排空，也没有交接 lane，所以
+任何内容都不必先被归档到某处才能被找到。
 
 ```text
 # 在一个 git 项目内，agent 记下一条项目事实：
@@ -72,27 +73,31 @@ coffer knowledge clear project-01J… --yes
 
 `--json` 在上面每个读命令上都可用。没有 `--mode` flag：检索模式是引擎内部细节（[Retrieval Mode Is Internal](../../docs/decisions/retrieval-mode-is-internal.zh.md)）—— 引擎自行解析该作用域的策略（作用域列了 vector 就是 `hybrid`，否则 `keyword`），未配置 embedding provider 时内部静默回退到 `keyword`，不带逐查询标注。`coffer knowledge grep` 是真实服务的 —— ripgrep 扫 Markdown 文件，无索引、无分词器，所以在 FTS5 失效的地方（如 CJK）也能用。
 
-### 合并重复的项目作用域（AI 辅助）
+### 整理 notes lane
 
-多机同步可能给**同一个**项目留下两个 `project-<ulid>` 作用域（没有 origin remote、可携带身份之前铸的作用域、remote 改名）。先扫描，再合并确认的一对——增量式、任何内容都不会丢，被合并掉的身份此后仍会解析到幸存者（FR-056–059）：
+一个作用域的 notes 会被定期整理：后台 worker 在 daemon 启动时跑一趟补齐，之后按
+间隔执行，合并重复的 note 并把它们重写成主题文档。任何覆盖或合并之前，先把旧版本
+复制进隐藏的 `.history/`，因此无人值守的重写始终可以捞回来。未配置内部模型
+（设置 → LLM 连接）时这趟整理空转。
+
+手动跑一趟：
 
 ```bash
-coffer knowledge merge-scan               # 确定性 + 内部引擎两层提议
-coffer knowledge merge project-01H… project-01J…          # source → target
-coffer knowledge merge project-01H… project-01J… --no-organize   # 跳过合并后的 reorg
+coffer knowledge organize project-01J…    # 对该作用域的 notes/ 跑一趟整理
 ```
 
-Web UI 对应 **记忆 → 查找重复库（AI）**。未配置内部引擎（设置 → LLM 连接）时，扫描仍会报告能靠 git remote 一致证明的库对。
+Web UI 对应作用域 header 上的**「整理」**按钮。每趟整理在 Coffer 的审计日志里记一行
+—— 不再有 per-scope 的变更记录文件。
 
 ## Web UI
 
-1. 侧栏 → **Memory**。页面以表格列出所有记忆 store（global store 加每项目一个 —— 自动置备，所以没有「New store」操作）。
-2. 点一行 store 进入它的逐 store 详情页。
-3. 条目列表是主视图，顶部有 recall 框。没有模式选择器——检索 mode 是引擎内部细节（ADR: retrieval-mode-is-internal）。
-4. 点一条事实展开 **只读** 渲染（UI 不在应用内编辑事实内容）。每条事实及其所在文件夹提供 **在外部编辑器中打开** 与 **在文件管理器中显示**（由本地 daemon 执行的真实 OS 动作）；打开哪个编辑器由全局首选编辑器偏好决定（见 spec ui-shell）。要纠正一条事实，就在自己的编辑器里打开它 —— 下一次 recall 经 lazy reindex-on-read 拾取改动。
-5. 头部显示事实条数与落盘大小；kebab 菜单提供「Clear scope」。要添加或删除事实，用 `coffer knowledge remember` / `coffer knowledge forget`（或 REST API）。
+1. 侧栏 → **Memory**。页面以表格列出所有作用域（global 加每项目一个 —— 自动置备 —— 以及任意具名集合）。「Notes」列统计各作用域写下了多少条。
+2. 点一行进入该作用域的详情页。
+3. 详情页是**两个 tab：文档与 Notes**，树上方一个过滤框，输入即按文件名匹配 —— 纯本地，无按钮，不发请求。服务端检索留在它该在的地方：agent 走 `coffer__search`，命令行走 `coffer knowledge recall`。
+4. 点一条展开 **只读** 渲染（UI 不在应用内编辑 note 正文）。每个文件及其所在文件夹提供 **在外部编辑器中打开** 与 **在文件管理器中显示**（由本地 daemon 执行的真实 OS 动作）；打开哪个编辑器由全局首选编辑器偏好决定（见 spec ui-shell）。要纠正一条 note，就在自己的编辑器里打开它 —— 下一次检索经 lazy reindex-on-read 拾取改动。
+5. header 保留标题、重命名铅笔和项目路径。**「上传」**与**「整理」**是仅有的两个按钮；设置 / 检查源文件 / 重建索引收进溢出菜单。只有真的出现降级文档时才显示警告。
 
-每次写入 —— agent（MCP）、CLI 或 REST —— 都会重建索引并审计；Web UI 本身是只读视图。不存在派生的 `MEMORY.md`：`knowledge/` 下的 markdown 文件就是事实源（ADR: files-as-truth-sqlite-retrieval）。
+每次写入 —— agent（MCP）、CLI 或 REST —— 都会重建索引并审计；Web UI 只在上传文档或跑一趟整理时写入。不存在派生的 `MEMORY.md`，也没有 `INDEX.md`：`notes/` 与 `docs/` 下的 markdown 文件就是真相源（Files as Truth）。
 
 ## 可选：vector recall
 
@@ -103,7 +108,7 @@ coffer credentials set embed-key      # embedding 配置引用的那把 key
 coffer knowledge configure project-01J… --enable-vector
 ```
 
-`coffer knowledge configure <name>` 对作用域配置做 PATCH；其余旋钮有 `--max-entry-chars`、`--chunk-size`、`--chunk-overlap`、`--auto-update-sources/--no-auto-update-sources`。启用 vector 会对作用域里已有的内容重建索引。新建具名集合时也可以直接带上：`coffer knowledge create <name> --enable-vector`。
+`coffer knowledge configure <name>` 对作用域配置做 PATCH；其余旋钮有 `--max-entry-chars`、`--chunk-size`、`--chunk-overlap`、`--auto-update-sources/--no-auto-update-sources`。启用 vector 会对作用域里已有的内容重建索引。新建的具名集合天生就带 vector，创建对话框不再询问：一个作用域带哪种索引是实现细节，不该在创建时拿去问用户。
 
 双语内容推荐本地 provider（`fastembed` 配 `bge-m3`）或对中文嵌入好的云端模型。embedding 模型可变 —— 改它会重嵌每一个列了 vector 模式的作用域。未配置 embedding 时，启用了 vector 的作用域会在内部回退到 keyword，不带逐查询标注。
 
@@ -111,15 +116,23 @@ coffer knowledge configure project-01J… --enable-vector
 
 ```
 ~/.coffer/
-├── coffer.db                              # SQLite —— 可重建索引（documents、chunks、FTS5、vec、audit）
+├── coffer.db                                  # SQLite —— 可重建索引（documents、chunks、FTS5、vec、audit）
 └── memory/
     ├── global/
-    │   └── prefers-tabs.md                # 每条事实文件 = 真相
+    │   ├── notes/                             # 谁写下的内容（coffer__write 落这里）
+    │   │   ├── prefers-tabs.md                # 每条 note 一个文件 = 真相
+    │   │   └── .history/                      # 整理覆盖前的旧版本（隐藏）
+    │   ├── docs/                              # 上传的文档，统一转成 markdown
+    │   └── .raw/                              # 上传的原件（隐藏）
     └── projects/<project-ulid>/
-        └── deploy-via-make-release.md
+        ├── notes/deploy-via-make-release.md
+        ├── docs/
+        └── .raw/
 ```
 
-markdown 文件是真相源；`coffer.db` 随时可从它们重建。
+两条 lane：`notes/` 放人或 agent 写下的一切，`docs/` 放上传进来的一切。`.history/`
+与 `.raw/` 刻意隐藏 —— ripgrep 会跳过它们，所以 `coffer__grep` 永远不会在正文旁边
+又返回一个归档旧版或一份原件。markdown 文件是真相源；`coffer.db` 随时可从它们重建。
 
 ## Limits
 

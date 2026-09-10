@@ -26,20 +26,20 @@ info:
                           so an unknown named scope is an error, and creating
                           one goes through `POST /api/v1/knowledge`.
 
-    ## One storage root, several lanes
+    ## One storage root, two lanes
 
-    Everything lives under `~/.coffer/knowledge/<scope>/`:
+    There are only two kinds of material a person actually distinguishes: what
+    someone wrote, and what someone uploaded. Everything lives under
+    `~/.coffer/knowledge/<scope>/`:
 
-    - `knowledge/`        entries an agent or person wrote (freshly-written ones
-                          land in `knowledge/inbox/` until `organize` drains
-                          them into topic docs)
-    - `inbox/`            ingested documents, normalized to Markdown
-    - `rules/`            behavioural rules the organizer classified out
-    - `handoff/`          one working-state scene per git branch
-    - `superseded/`       recoverable tombstones from `reorg`
-    - `.raw/`             the ingested originals, kept for re-conversion. Hidden
-                          (leading dot) so ripgrep skips it and a grep never
-                          matches the same content twice.
+    - `notes/`            what an agent or the user wrote
+    - `.history/`   pre-rewrite copies kept by the tidy pass
+    - `docs/`             ingested documents, normalized to Markdown
+    - `.raw/`             the ingested originals, kept for re-conversion
+
+    `.history/` and `.raw/` are dot-prefixed deliberately: ripgrep skips hidden
+    entries, so a grep never returns an archived revision or an original
+    alongside the live file.
 
     The Markdown files are the source of truth (ADR files-as-truth-sqlite-retrieval); SQLite (documents /
     chunks / FTS5 / sqlite-vec) is a rebuildable index, never a thing that must
@@ -48,11 +48,8 @@ info:
     ## The lane discriminator
 
     Both writers index into one `documents` table under one
-    `(kind, resource_name)`, and the path alone cannot separate them — an entry
-    lives at `<scope>/knowledge/inbox/<id>.md` and an ingested document at
-    `<scope>/inbox/<id>.md`, so matching on `inbox/` catches both. Each row
-    therefore carries a stored `lane` discriminator, `knowledge` (entry) or
-    `inbox` (ingested). It is why `entry_count` and `document_count` are two
+    `(kind, resource_name)`, so each row carries a stored `lane` discriminator,
+    `notes` or `docs`. It is why `entry_count` and `document_count` are two
     lane-scoped numbers rather than one total — while retrieval deliberately
     spans both lanes, because a caller asking a question does not care which
     writer produced the answer.
@@ -99,9 +96,9 @@ info:
     The path parameter is spelled `{name}` here because that is what the route
     functions call it — it denotes the **scope name** throughout. Component
     names deliberately mirror the Pydantic class names in
-    `coffer/surfaces/http/knowledge/{schemas,document_schemas}.py` and
-    `merge_routes.py`, so this contract can be diffed against the app's
-    generated OpenAPI without a translation table. The only exceptions are the
+    `coffer/surfaces/http/knowledge/{schemas,document_schemas}.py`, so this
+    contract can be diffed against the app's generated OpenAPI without a
+    translation table. The only exceptions are the
     three contract-only aliases with no model of their own — `ScopeKind`,
     `RetrievalMode` and `ErrorEnvelope`.
 
@@ -115,10 +112,10 @@ security:
 tags:
   - name: knowledge
     description: |
-      The single `knowledge` kind: scopes, the entries an agent wrote, the
-      documents someone ingested, retrieval over both, and the organizing
-      passes. Mounted by `coffer.surfaces.http.knowledge` as one router with the
-      prefix `/api/v1/knowledge`.
+      The single `knowledge` kind: scopes, the notes an agent wrote, the
+      documents someone ingested, retrieval over both, and the tidy pass.
+      Mounted by `coffer.surfaces.http.knowledge` as one router with the prefix
+      `/api/v1/knowledge`.
 
 paths:
   # --- scopes ---------------------------------------------------------------
@@ -179,64 +176,6 @@ paths:
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
-  # --- merge (collection-level literals; declared before /{name} because the
-  #     scope route only ever resolves an existing scope and no scope may be
-  #     named for one of these verbs) -----------------------------------------
-
-  /api/v1/knowledge/merge_scan:
-    post:
-      summary: Propose same-project scope pairs to merge (FR-056)
-      description: |
-        Read-only. Finds `project-<ULID>` scopes that are really the same
-        project seen twice (the same repo cloned to two paths, a project ULID
-        re-minted after a move) and proposes which of each pair should survive.
-
-        Deterministic same-remote proof is judged `remote`; anything softer is
-        judged by the internal engine. With no internal engine configured the
-        scan still returns the deterministic proposals and reports
-        `engine="no_model"` — a clean degradation, not an error.
-      operationId: scanKnowledgeMerges
-      tags: [knowledge]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MergeScanOut"
-
-  /api/v1/knowledge/merge:
-    post:
-      summary: Merge one project scope into another (FR-057/FR-058/FR-059)
-      description: |
-        Moves the source scope's lane files into the target, carries over its
-        display label and project-root mapping, and records the source's identity
-        in the target's `merged_identities` so a later resolve that computes the
-        retired ULID lands on the survivor instead of provisioning an empty
-        duplicate. The post-merge reorg pass never fails the merge itself
-        (FR-059) — its outcome is reported in `reorg_status`.
-      operationId: mergeKnowledgeScopes
-      tags: [knowledge]
-      parameters:
-        - $ref: "#/components/parameters/ActorHeader"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/MergeIn"
-      responses:
-        "200":
-          description: Merged
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MergeOut"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
   /api/v1/knowledge/{name}:
     parameters:
       - $ref: "#/components/parameters/ScopeName"
@@ -275,7 +214,7 @@ paths:
         `auto_update_sources` is deliberately not a reindex trigger — toggling
         it must not re-chunk.
 
-        `merged_identities` is system-managed (written by the merge flow) and
+        `merged_identities` is system-managed (written by worktree adoption) and
         is not patchable.
       operationId: updateKnowledgeScope
       tags: [knowledge]
@@ -351,7 +290,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  # --- entries (the `knowledge/` lane) --------------------------------------
+  # --- entries (the `notes/` lane) ------------------------------------------
 
   /api/v1/knowledge/{name}/entries:
     parameters:
@@ -360,8 +299,8 @@ paths:
       summary: Write one entry into a scope
       description: |
         No LLM runs at write time: a write is a Markdown file under the scope's
-        `knowledge/inbox/`, plus an index row, plus an audit event. Shaping the
-        inbox into topic docs is the separate, explicit `organize` pass.
+        `notes/`, plus an index row, plus an audit event. Reshaping notes is the
+        separate tidy pass, which runs in the background and on `organize`.
 
         Writing to `global` or `project-<ULID>` provisions the scope if needed —
         an agent that wants to record something should not have to ask
@@ -558,7 +497,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  # --- documents: the `inbox/` lane ----------------------------------------
+  # --- documents: the `docs/` lane -----------------------------------------
 
   /api/v1/knowledge/{name}/documents:
     parameters:
@@ -567,7 +506,7 @@ paths:
       summary: Ingest an uploaded file into a scope (any format → Markdown)
       description: |
         Streams the uploaded bytes, detects the format, converts to Markdown via
-        the converter registry, cleans it, and writes `<scope>/inbox/<doc-id>.md`
+        the converter registry, cleans it, and writes `<scope>/docs/<doc-id>.md`
         (the truth) plus `<scope>/.raw/<doc-id>.<ext>` (provenance, hidden so
         grep never matches the same content twice). The Markdown is then chunked
         and indexed into FTS5, and embedded when the scope lists `vector` and an
@@ -576,7 +515,7 @@ paths:
         A new document gets a fresh ULID and `source_mode=converted`. A
         re-upload is matched to an existing document by `original_filename`:
         byte-identical content is an idempotent no-op; changed content under the
-        same filename updates the SAME document in place (same id, `inbox/` and
+        same filename updates the SAME document in place (same id, `docs/` and
         `.raw/` overwritten) when `replace=true`, and is otherwise refused as a
         duplicate (409).
 
@@ -818,7 +757,7 @@ paths:
     post:
       summary: Rescan the scope's ingested files and rebuild the index from disk
       description: |
-        Rescans `<scope>/inbox/` for deltas and runs the single idempotent
+        Rescans `<scope>/docs/` for deltas and runs the single idempotent
         re-index routine per file, reconstructing the SQLite index state from
         the Markdown. Re-embeds when the scope lists `vector` and a provider is
         available; documents that end up keyword-only are counted in
@@ -992,163 +931,32 @@ paths:
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
-  # --- organizing passes ----------------------------------------------------
+  # --- the tidy pass --------------------------------------------------------
 
   /api/v1/knowledge/{name}/organize:
     parameters:
       - $ref: "#/components/parameters/ScopeName"
     post:
-      summary: Drain the inbox into topic docs and the rules lane
+      summary: Tidy the scope's notes now
       description: |
-        Explicit trigger — nothing auto-fires, because reshaping what someone
-        wrote is not something to do behind their back. Each `knowledge/inbox/`
-        item is merged into a topic doc or, when it reads as a behavioural rule,
-        appended to `rules/`. An item the model fails on stays in the inbox
-        (counted as `skipped`) and is never lost.
+        Runs the tidy pass over `notes/`: merge duplicates, split what has grown
+        over-long. The same pass also fires on its own — after a quiet spell
+        following a write, and on a periodic sweep — so this endpoint only means
+        "now"; there is one pass and one name for it.
+
+        Before any overwrite the prior revision is copied into `.history/`,
+        so an unattended rewrite is always recoverable.
       operationId: organizeKnowledge
       tags: [knowledge]
       responses:
         "200":
-          description: Organize pass complete
+          description: Tidy pass complete
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/OrganizeResponse"
         "404":
           $ref: "#/components/responses/NotFound"
-
-  /api/v1/knowledge/{name}/reorg:
-    parameters:
-      - $ref: "#/components/parameters/ScopeName"
-    post:
-      summary: Agentic reorg pass over the scope's topic docs
-      description: |
-        Explicit trigger, like `organize`. Consolidates and rewrites topic
-        documents; retired ones move to the recoverable `superseded/`
-        tombstone rather than being deleted.
-      operationId: reorgKnowledge
-      tags: [knowledge]
-      responses:
-        "200":
-          description: Reorg pass complete
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ReorgResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-  # --- the other lanes ------------------------------------------------------
-
-  /api/v1/knowledge/{name}/rules:
-    parameters:
-      - $ref: "#/components/parameters/ScopeName"
-    get:
-      summary: Read the scope's rules lane
-      description: |
-        Returns the `rules/` text, or `text: null` when the scope has no rules
-        yet. An empty scope is 200 with null content, never a 404 — the lane is
-        a view of the scope, not a resource of its own.
-      operationId: getKnowledgeRules
-      tags: [knowledge]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RulesOut"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-    delete:
-      summary: Remove the whole rules lane
-      description: The lane is not indexed, so the delete is a file removal only.
-      operationId: deleteKnowledgeRules
-      tags: [knowledge]
-      parameters:
-        - $ref: "#/components/parameters/ActorHeader"
-      responses:
-        "204":
-          description: No Content
-        "404":
-          $ref: "#/components/responses/LaneNotFound"
-
-  /api/v1/knowledge/{name}/handoff:
-    parameters:
-      - $ref: "#/components/parameters/ScopeName"
-    get:
-      summary: List the scope's per-branch handoff scenes
-      description: |
-        One `handoff/<branch-slug>.md` scene per git branch — the working state
-        an agent left behind. Read-only here; scenes are written through the
-        `coffer__set_handoff` built-in tool and pulled on demand by
-        `coffer__resume`. Nothing is pushed into a session: the agent asks.
-      operationId: getKnowledgeHandoff
-      tags: [knowledge]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HandoffOut"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-  /api/v1/knowledge/{name}/handoff/{branch}:
-    parameters:
-      - $ref: "#/components/parameters/ScopeName"
-      - $ref: "#/components/parameters/Branch"
-    delete:
-      summary: Delete one branch's handoff scene
-      description: The lane is not indexed, so the delete is a file removal only.
-      operationId: deleteKnowledgeHandoffBranch
-      tags: [knowledge]
-      parameters:
-        - $ref: "#/components/parameters/ActorHeader"
-      responses:
-        "204":
-          description: No Content
-        "404":
-          $ref: "#/components/responses/LaneNotFound"
-
-  /api/v1/knowledge/{name}/consolidation-log:
-    parameters:
-      - $ref: "#/components/parameters/ScopeName"
-    get:
-      summary: Read the scope's consolidation changelog
-      description: |
-        The scope-root `consolidation-log.md` — what the organizing passes did.
-        `text` is null when the scope has no changelog yet, but `path` and
-        `folder_path` always point at where it would live so the UI can still
-        offer reveal-in-file-manager.
-      operationId: getKnowledgeConsolidationLog
-      tags: [knowledge]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ConsolidationLogOut"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-    delete:
-      summary: Delete the consolidation changelog
-      description: |
-        Removes the scope-root `consolidation-log.md`. Deliberately does not
-        append its own removal to the changelog it just deleted.
-      operationId: deleteKnowledgeConsolidationLog
-      tags: [knowledge]
-      parameters:
-        - $ref: "#/components/parameters/ActorHeader"
-      responses:
-        "204":
-          description: No Content
-        "404":
-          $ref: "#/components/responses/LaneNotFound"
 
 components:
   securitySchemes:
@@ -1183,12 +991,6 @@ components:
       name: document_id
       required: true
       description: The document's stable ULID, minted at first ingest.
-      schema: { type: string }
-    Branch:
-      in: path
-      name: branch
-      required: true
-      description: Git branch name; slugified server-side to find `handoff/<slug>.md`.
       schema: { type: string }
     ActorHeader:
       in: header
@@ -1242,12 +1044,6 @@ components:
             $ref: "#/components/schemas/ErrorEnvelope"
     DocumentNotFound:
       description: Scope or document not found (`MEMORY_STORE_NOT_FOUND` / `DOCUMENT_NOT_FOUND`)
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
-    LaneNotFound:
-      description: The lane file does not exist (`MEMORY_NOT_FOUND`)
       content:
         application/json:
           schema:
@@ -1367,8 +1163,8 @@ components:
           items: { type: string }
           default: []
           description: |
-            Project ids merged INTO this scope. System-managed, written by the
-            merge flow and never user-set: a resolve whose computed identity is
+            Project ids folded INTO this scope. System-managed, written by the
+            worktree-adoption flow and never user-set: a resolve whose computed identity is
             listed here — and whose own scope no longer exists — lands here
             instead of provisioning an empty duplicate.
 
@@ -1474,7 +1270,7 @@ components:
         document_count:
           type: integer
           default: 0
-          description: Rows in the `inbox` lane — documents someone ingested.
+          description: Rows in the `docs` lane — documents someone ingested.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -1556,10 +1352,10 @@ components:
         path:
           type: string
           description: |
-            Absolute canonical `.md` path of the entry file (the source of
-            truth). Freshly-written entries sit under the scope's
-            `knowledge/inbox/` until `organize` folds them into a topic doc, so
-            this path can change across an organize pass.
+            Absolute canonical `.md` path of the note file (the source of
+            truth), under the scope's `notes/`. The tidy pass may merge a note
+            into another, so this path can change across a pass; the revision it
+            replaced is kept under `.history/`.
         folder_path:
           type: string
           description: Absolute path of the entry file's containing folder.
@@ -1685,12 +1481,12 @@ components:
           type: string
           description: |
             Absolute path of the normalized Markdown on disk
-            (`<scope>/inbox/<doc-id>.md`, the source of truth). The in-app viewer
+            (`<scope>/docs/<doc-id>.md`, the source of truth). The in-app viewer
             is read-only; this backs open-in-external-editor /
             reveal-in-file-manager.
         folder_path:
           type: string
-          description: Absolute path of the document's containing folder (the scope's `inbox/`).
+          description: Absolute path of the document's containing folder (the scope's `docs/`).
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         embed_status:
@@ -1822,7 +1618,7 @@ components:
       type: object
       required: [path, line_number, line]
       properties:
-        path: { type: string, examples: ["inbox/01J0000000000000000000000A.md"] }
+        path: { type: string, examples: ["docs/01J0000000000000000000000A.md"] }
         line_number: { type: integer }
         line: { type: string }
 
@@ -1887,189 +1683,29 @@ components:
           type: array
           items: { $ref: "#/components/schemas/DocumentEmbedStatus" }
 
-    # --- merge ---------------------------------------------------------------
-
-    StoreEvidenceOut:
-      type: object
-      description: What is known about one side of a proposed merge.
-      required: [store, facts]
-      properties:
-        store: { type: string, description: "Scope name (`project-<ULID>`)." }
-        label: { type: [string, "null"], default: null, description: Display label, when set. }
-        root: { type: [string, "null"], default: null, description: Recorded project root path, when known. }
-        remote:
-          type: [string, "null"]
-          default: null
-          description: |
-            Normalized origin remote URL when the root is locally readable; null
-            otherwise. A matching remote is what makes a proposal deterministic.
-        facts:
-          type: integer
-          description: |
-            Entry count in the scope's `knowledge` lane. (The wire field is
-            still named `facts`, from the pre-merge vocabulary.)
-
-    MergeProposalOut:
-      type: object
-      required: [source, target, confidence, judged_by, reason, source_evidence, target_evidence]
-      properties:
-        source: { type: string, description: Suggested scope to merge away. }
-        target: { type: string, description: Suggested surviving scope. }
-        confidence: { type: string, enum: [certain, high, medium, low] }
-        judged_by:
-          type: string
-          enum: [remote, engine]
-          description: |
-            `remote` = deterministic same-remote proof; `engine` = internal
-            engine verdict.
-        reason: { type: string, description: Human-readable justification. }
-        source_evidence: { $ref: "#/components/schemas/StoreEvidenceOut" }
-        target_evidence: { $ref: "#/components/schemas/StoreEvidenceOut" }
-
-    MergeScanOut:
-      type: object
-      required: [engine, truncated, proposals]
-      properties:
-        engine:
-          type: string
-          enum: [ok, no_model]
-          description: |
-            `no_model` = no internal engine configured, so only the
-            deterministic proposals are returned. A clean degradation, not an
-            error.
-        truncated: { type: boolean, description: True when the engine tier hit its per-scan pair cap. }
-        proposals:
-          type: array
-          items: { $ref: "#/components/schemas/MergeProposalOut" }
-
-    MergeIn:
-      type: object
-      required: [source, target]
-      properties:
-        source: { type: string, description: The project scope merged away (retired on success). }
-        target: { type: string, description: The project scope that survives and absorbs the source. }
-        organize:
-          type: boolean
-          default: true
-          description: Run the reorg pass on the target after the merge.
-
-    MergeOut:
-      type: object
-      required: [target, merged_files, label_moved, root_moved, aliases, reorg_status]
-      properties:
-        target: { type: string, description: The surviving scope. }
-        merged_files: { type: integer, description: Lane files merged or created under the target. }
-        label_moved: { type: boolean }
-        root_moved: { type: boolean }
-        aliases:
-          type: array
-          items: { type: string }
-          description: |
-            The target's `merged_identities` after the merge — the source's ULID
-            plus any aliases carried over transitively.
-        reorg_status:
-          type: string
-          description: |
-            Outcome of the post-merge reorg pass — `reorganized`, `no_model`,
-            `empty`, `skipped` (organize=false), or `error: …`. Never fails the
-            merge itself (FR-059).
-
-    # --- organizing passes ---------------------------------------------------
+    # --- the tidy pass -------------------------------------------------------
 
     OrganizeResponse:
       type: object
       description: |
-        Result of an explicit `organize` run (inbox → topic docs / rules).
-        `no_model` (nothing configured to do the shaping) and `empty` (nothing
-        to shape) are clean no-ops, not errors.
-      required: [status, items_processed, topics_created, topics_updated, rules_appended, skipped]
-      properties:
-        status: { type: string, enum: [organized, no_model, empty] }
-        items_processed: { type: integer, description: Inbox items successfully drained. }
-        topics_created: { type: integer }
-        topics_updated: { type: integer }
-        rules_appended: { type: integer, description: Items classified as behavioural rules and appended to the rules lane. }
-        skipped: { type: integer, description: Items left in the inbox after a model/parse failure (never lost). }
-        model:
-          type: [string, "null"]
-          default: null
-          description: Display name of the internal model used; null when `status="no_model"`.
-
-    ReorgResponse:
-      type: object
-      description: |
-        Result of an explicit `reorg` run (topic-doc consolidation). `no_model`
-        and `empty` are clean no-ops, not errors.
-      required: [status, topics_before, topics_after, topics_written, topics_superseded]
+        Result of one tidy pass over a scope's `notes/` lane. `no_model`
+        (nothing configured to do the shaping) and `empty` (nothing to shape)
+        are clean no-ops, not errors.
+      required: [status, notes_before, notes_after, notes_written, notes_archived]
       properties:
         status: { type: string, enum: [reorganized, no_model, empty] }
-        topics_before: { type: integer }
-        topics_after: { type: integer }
-        topics_written: { type: integer, description: Topic docs created or overwritten (prior versions archived). }
-        topics_superseded: { type: integer, description: Topic docs retired to the recoverable `superseded/` tombstone. }
+        notes_before: { type: integer, description: Note files in the lane when the pass started. }
+        notes_after: { type: integer, description: Note files in the lane when it finished. }
+        notes_written: { type: integer, description: Notes created or overwritten by the pass. }
+        notes_archived:
+          type: integer
+          description: |
+            Prior revisions copied into `.history/` before being replaced.
+            The lane is never destructively rewritten.
         model:
           type: [string, "null"]
           default: null
           description: Display name of the internal model used; null when `status="no_model"`.
-
-    # --- lanes ---------------------------------------------------------------
-
-    RulesOut:
-      type: object
-      description: |
-        The scope's rules text. Always present as a field, nullable in value —
-        an empty rules lane is `null`, never a 404.
-      required: [text]
-      properties:
-        text:
-          type: [string, "null"]
-          description: |
-            Every `rules/*.md` file concatenated (the behavioural rules the
-            organizer classified into the lane), or null when there are none
-            yet.
-
-    HandoffSceneOut:
-      type: object
-      description: One per-branch `handoff/<slug>.md` scene (read-only here).
-      required: [branch, text, updated_at, path, folder_path]
-      properties:
-        branch: { type: string, description: The git branch this scene captures. }
-        text: { type: string, description: Freeform working-state body. }
-        updated_at:
-          type: string
-          format: date-time
-          description: Timestamp of the last overwrite of this branch's scene.
-        path:
-          type: string
-          description: |
-            Absolute path of the `handoff/<branch-slug>.md` file (the source of
-            truth). The in-app viewer is read-only; this backs
-            reveal-in-file-manager.
-        folder_path: { type: string, description: "Absolute path of the scope's `handoff/` folder." }
-
-    HandoffOut:
-      type: object
-      required: [scenes]
-      properties:
-        scenes:
-          type: array
-          description: One scene per branch; empty when the scope has no handoff scenes yet.
-          items: { $ref: "#/components/schemas/HandoffSceneOut" }
-
-    ConsolidationLogOut:
-      type: object
-      required: [text, path, folder_path]
-      properties:
-        text:
-          type: [string, "null"]
-          description: The scope-root `consolidation-log.md` text, or null when there is no changelog yet.
-        path:
-          type: string
-          description: |
-            Absolute path of the `consolidation-log.md` file — always present
-            even when the file does not exist yet, so the UI can still reveal
-            where it would live.
-        folder_path: { type: string, description: Absolute path of the scope dir containing the changelog. }
 
     # --- errors --------------------------------------------------------------
 
@@ -2091,8 +1727,7 @@ components:
               description: |
                 Stable machine-readable code. The ones this surface emits:
                 `MEMORY_STORE_NOT_FOUND` (404, scope), `MEMORY_NOT_FOUND` (404,
-                entry or lane file), `MEMORY_REJECTED` (422, empty/over-long
-                entry), `MEMORY_STORE_MERGE_INVALID` (400),
+                entry), `MEMORY_REJECTED` (422, empty/over-long entry),
                 `DOCUMENT_NOT_FOUND` (404), `INGEST_REJECTED`
                 (400/409/413/415 by `details.reason`), `RECONVERSION_BLOCKED`
                 (409), `GREP_PATTERN_INVALID` (400), `ENGINE_UNAVAILABLE` (503),

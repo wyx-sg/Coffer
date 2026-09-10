@@ -183,7 +183,7 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
         assert any(n.startswith("coffer__") for n in tool_names), (
             f"no coffer__ built-in tools found in tools/list: {tool_names}"
         )
-        # And the knowledge tools specifically must be there. One kind, eight
+        # And the knowledge tools specifically must be there. One kind, six
         # tools — the retrieval half.
         expected_knowledge_tools = {
             "coffer__search",
@@ -195,12 +195,10 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
             f"knowledge built-in tools missing from tools/list; "
             f"missing={expected_knowledge_tools - tool_names}; got={sorted(tool_names)}"
         )
-        # …and the write half plus the two handoff tools.
+        # …and the write half.
         expected_write_tools = {
             "coffer__write",
             "coffer__delete",
-            "coffer__set_handoff",
-            "coffer__resume",
         }
         assert expected_write_tools.issubset(tool_names), (
             f"knowledge write tools missing from tools/list; "

@@ -83,10 +83,10 @@ def store_ref_for(scope_name: str, *, scope_dir: ScopeDirFn) -> StoreRef:
 def in_lane(path: str, lane: Path) -> bool:
     """Whether an indexed document's file belongs to a given lane.
 
-    Both scanners — the entry reconciler over ``knowledge/`` and the ingest
-    scan over ``inbox/`` — write rows under the same ``(kind, resource_name)``,
-    so each prunes only what it owns. Without this they would delete each
-    other's index rows on every pass.
+    Both scanners — the note reconciler over ``notes/`` and the ingest scan
+    over ``docs/`` — write rows under the same ``(kind, resource_name)``, so
+    each prunes only what it owns. Without this they would delete each other's
+    index rows on every pass.
     """
     try:
         return Path(path).is_relative_to(lane)

@@ -1,29 +1,32 @@
-"""Integration tests for ReorgService over the real memory stack (spec knowledge).
+"""Integration tests for the notes tidy pass over the real stack (spec knowledge).
 
-Extends the ``mem`` harness (real SQLite + real fact files + real ripgrep) with a
-fake ``AgenticReorgPort`` that drives ``run_agentic_reorg`` directly (via a
-``GenericFakeChatModel`` with scripted AIMessages), so no real LLM is ever called.
+Extends the ``mem`` harness (real SQLite + real note files + real ripgrep) with
+a fake ``AgenticReorgPort`` that drives the REAL ``run_agentic_reorg`` loop (a
+``GenericFakeChatModel`` emitting scripted tool calls), so the langgraph tool
+plumbing is exercised without ever reaching an LLM.
 
-The acceptance tests cover:
-1. Duplicate consolidation (list → read a → read b → write merged → supersede b).
-2. Data-loss invariant: a superseded doc stays recoverable under ``superseded/``.
-3. No-op when no internal model is configured (``status == "no_model"``).
+One lane, four tools — ``list_notes`` / ``read_note`` / ``write_note`` /
+``delete_note`` — and one hidden archive: every revision the pass replaces (or
+deletes) lands in ``<scope>/.history/``, which is dot-prefixed so neither the
+lane scan nor ripgrep can hand it back as a live result.
 """
 
 from __future__ import annotations
 
+import shutil
 from datetime import UTC, datetime
 from typing import Any
 
 import pytest
 
 from coffer.application.knowledge.reorg import ReorgService
+from coffer.application.knowledge.reorg_deps import reorg_collaborators_from_service
+from coffer.domain.knowledge.document import KIND_KNOWLEDGE, LANE_NOTES
 from coffer.domain.provider.config import Protocol, ProviderConfig, ResolvedConnection
-from coffer.infrastructure.knowledge.paths import (
-    superseded_dir,
-    topic_path,
-)
-from coffer.infrastructure.knowledge_scope.topic_files import TopicDoc, write_topic_doc
+from coffer.infrastructure.knowledge.paths import history_dir, note_path
+from coffer.infrastructure.knowledge_scope.note_files import write_note
+
+NOW = datetime(2026, 6, 21, 12, 0, tzinfo=UTC)
 
 
 def _model() -> ResolvedConnection:
@@ -47,22 +50,40 @@ class _Models:
         return self._model
 
 
-def _fake_chat_model(scripted: list[Any]) -> Any:
+class _CountingScript:
+    """The scripted turns, counting how many the loop actually consumed."""
+
+    def __init__(self, scripted: list[Any]) -> None:
+        self.total = len(scripted)
+        self.consumed = 0
+        self._it = iter(scripted)
+
+    def __iter__(self) -> _CountingScript:
+        return self
+
+    def __next__(self) -> Any:
+        turn = next(self._it)
+        self.consumed += 1
+        return turn
+
+
+def _fake_chat_model(script: _CountingScript) -> Any:
     """A GenericFakeChatModel whose bind_tools is a no-op (returns self)."""
     from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 
-    class _Model(GenericFakeChatModel):  # type: ignore[misc]
+    class _Model(GenericFakeChatModel):
         def bind_tools(self, tools: Any, **kwargs: Any) -> Any:
             return self
 
-    return _Model(messages=iter(scripted))
+    return _Model(messages=script)
 
 
 class _FakeAgent:
-    """AgenticReorgPort that runs the real reorg loop with a scripted fake model."""
+    """AgenticReorgPort that runs the real reorg loop with a scripted model."""
 
     def __init__(self, scripted: list[Any]) -> None:
-        self._scripted = scripted
+        self.script = _CountingScript(scripted)
+        self.calls = 0
 
     async def run(
         self,
@@ -75,44 +96,78 @@ class _FakeAgent:
     ) -> dict[str, Any]:
         from coffer.infrastructure.llm.agentic_reorg import run_agentic_reorg
 
-        lc_model = _fake_chat_model(self._scripted)
+        self.calls += 1
         return await run_agentic_reorg(
-            lc_model=lc_model,
+            lc_model=_fake_chat_model(self.script),
             tools=tools,
             system_prompt=system_prompt,
             recursion_limit=recursion_limit,
         )
 
 
-def _make_reorg(mem: Any, agent: _FakeAgent, models: _Models) -> ReorgService:
-    svc = mem.service
+class _NeverCalledAgent:
+    """AgenticReorgPort that fails the test if the loop is armed at all."""
+
+    def __init__(self, why: str) -> None:
+        self._why = why
+
+    async def run(self, **_: Any) -> dict[str, Any]:
+        raise AssertionError(f"agent loop must not run {self._why}")
+
+
+def _tool_call(call_id: str, name: str, args: dict[str, Any]) -> Any:
+    from langchain_core.messages import AIMessage
+
+    return AIMessage(
+        content="",
+        tool_calls=[{"id": call_id, "name": name, "args": args, "type": "tool_call"}],
+    )
+
+
+def _done(text: str = "Done.") -> Any:
+    from langchain_core.messages import AIMessage
+
+    return AIMessage(content=text)
+
+
+def _make_reorg(mem: Any, agent: Any, models: _Models) -> ReorgService:
+    deps = reorg_collaborators_from_service(mem.service)
     return ReorgService(
-        resolve_store=svc.resolved_scope,
-        get_config=svc.get_config,
-        store_ref=svc._recall.store_ref,
-        documents=mem.documents,
-        retrieval=svc._retrieval,
-        reconciler=svc._reconciler,
+        resolve_store=deps.resolve_store,
+        get_config=deps.get_config,
+        store_ref=deps.store_ref,
+        documents=deps.documents,
+        retrieval=deps.retrieval,
+        reconciler=deps.reconciler,
         agent=agent,
         models=models,
+        audit=mem.audit,
         credential_resolver=lambda ref: "key",
-        now=lambda: datetime(2026, 6, 21, 12, 0, tzinfo=UTC),
-        embedding_resolver=svc._resolve_embedding,
+        now=lambda: NOW,
+        embedding_resolver=deps.embedding_resolver,
     )
 
 
-def _seed_topic(store_dir: Any, slug: str, title: str, body: str) -> None:
-    """Write a topic doc directly (not via the organizer) for test setup."""
-    write_topic_doc(
-        topic_path(store_dir, slug),
-        TopicDoc(
-            slug=slug,
-            title=title,
-            description=title,
-            body=body,
-            updated_at=datetime(2026, 6, 20, tzinfo=UTC),
-        ),
+def _seed_note(store_dir: Any, slug: str, title: str, body: str) -> None:
+    """Seed one note directly on disk (the tidy pass's input)."""
+    write_note(
+        store_dir,
+        slug,
+        title=title,
+        summary=title,
+        body=body,
+        now=datetime(2026, 6, 20, tzinfo=UTC),
     )
+
+
+async def _store_dir(mem: Any) -> Any:
+    await mem.service.ensure_scope("global")
+    return (await mem.service.resolved_scope("global")).store_dir
+
+
+async def _tidy_events(mem: Any) -> Any:
+    """Every ``knowledge_tidied`` audit entry recorded for the global scope."""
+    return await mem.audit.query(kind=KIND_KNOWLEDGE, name="global", event_type="knowledge_tidied")
 
 
 # ---------------------------------------------------------------------------
@@ -124,165 +179,119 @@ def _seed_topic(store_dir: Any, slug: str, title: str, body: str) -> None:
     spec="knowledge",
     scenario="the reorg pass consolidates duplicate topic documents",
 )
-async def test_reorg_consolidates_duplicate_topics(mem: Any) -> None:
-    """Seed two overlapping topics; the agent merges them and supersedes one."""
-    from langchain_core.messages import AIMessage
+async def test_reorg_consolidates_duplicate_notes(mem: Any) -> None:
+    """Two overlapping notes are merged into one; the redundant one is removed
+    from the lane, the merged text is what search returns, and the pass is
+    audited."""
+    store_dir = await _store_dir(mem)
 
-    await mem.service.ensure_scope("global")
-    store_dir = (await mem.service.resolved_scope("global")).store_dir
-
-    _seed_topic(store_dir, "deploy-a", "Deploy A", "# Deploy A\n\nDeploy via make release.")
-    _seed_topic(store_dir, "deploy-b", "Deploy B", "# Deploy B\n\nReleases tagged atomically.")
+    _seed_note(store_dir, "deploy-a", "Deploy A", "# Deploy A\n\nDeploy via make release.")
+    _seed_note(store_dir, "deploy-b", "Deploy B", "# Deploy B\n\nReleases are tagged atomically.")
 
     scripted = [
-        # list_topics → agent sees both docs
-        AIMessage(
-            content="",
-            tool_calls=[{"id": "c1", "name": "list_topics", "args": {}, "type": "tool_call"}],
+        _tool_call("c1", "list_notes", {}),
+        _tool_call("c2", "read_note", {"slug": "deploy-a"}),
+        _tool_call("c3", "read_note", {"slug": "deploy-b"}),
+        _tool_call(
+            "c4",
+            "write_note",
+            {
+                "slug": "deploy-a",
+                "title": "Deploy conventions",
+                "summary": "How we ship",
+                "markdown": (
+                    "# Deploy\n\nDeploy via make release.\nReleases are tagged atomically."
+                ),
+            },
         ),
-        # read deploy-a
-        AIMessage(
-            content="",
-            tool_calls=[
-                {
-                    "id": "c2",
-                    "name": "read_topic",
-                    "args": {"slug": "deploy-a"},
-                    "type": "tool_call",
-                }
-            ],
-        ),
-        # read deploy-b
-        AIMessage(
-            content="",
-            tool_calls=[
-                {
-                    "id": "c3",
-                    "name": "read_topic",
-                    "args": {"slug": "deploy-b"},
-                    "type": "tool_call",
-                }
-            ],
-        ),
-        # write merged content into deploy-a
-        AIMessage(
-            content="",
-            tool_calls=[
-                {
-                    "id": "c4",
-                    "name": "write_topic",
-                    "args": {
-                        "slug": "deploy-a",
-                        "title": "Deploy conventions",
-                        "description": "How we ship",
-                        "markdown": (
-                            "# Deploy\n\nDeploy via make release.\nReleases tagged atomically."
-                        ),
-                    },
-                    "type": "tool_call",
-                }
-            ],
-        ),
-        # supersede deploy-b
-        AIMessage(
-            content="",
-            tool_calls=[
-                {
-                    "id": "c5",
-                    "name": "supersede_topic",
-                    "args": {"slug": "deploy-b", "reason": "merged into deploy-a"},
-                    "type": "tool_call",
-                }
-            ],
-        ),
-        # done
-        AIMessage(content="Consolidation complete."),
+        _tool_call("c5", "delete_note", {"slug": "deploy-b"}),
+        _done("Consolidation complete."),
     ]
 
-    reorg_svc = _make_reorg(mem, _FakeAgent(scripted), _Models(_model()))
-    result = await reorg_svc.reorg(scope_name="global")
+    result = await _make_reorg(mem, _FakeAgent(scripted), _Models(_model())).reorg(
+        scope_name="global"
+    )
 
     assert result.status == "reorganized"
-    assert result.topics_before == 2
-    assert result.topics_written == 1
-    assert result.topics_superseded == 1
+    assert result.notes_before == 2
+    assert result.notes_after == 1
+    assert result.notes_written == 1
+    assert result.notes_archived == 1
     assert result.model == "llama3"
 
-    # deploy-a is now the merged doc
-    merged = topic_path(store_dir, "deploy-a").read_text(encoding="utf-8")
+    merged = note_path(store_dir, "deploy-a").read_text(encoding="utf-8")
     assert "make release" in merged
     assert "tagged atomically" in merged
+    assert not note_path(store_dir, "deploy-b").exists()
 
-    # deploy-b is gone from the live lane
-    assert not topic_path(store_dir, "deploy-b").exists()
+    # The merged content is what a subsequent search returns, and it comes from
+    # the surviving note — the redundant one is gone from the index too.
+    hits, _mode, _fb = await mem.service.recall_in_scope(
+        scope_name="global", query="atomically", scope="global"
+    )
+    assert hits, "the merged note must be searchable"
+    assert all("deploy-b" not in h.source for h in hits)
+    assert any("deploy-a" in h.source and "tagged atomically" in h.text for h in hits)
+
+    # The pass is recorded in the audit log with what it actually changed.
+    events = await _tidy_events(mem)
+    assert len(events) == 1
+    assert events[0].details["notes_written"] == 1
+    assert events[0].details["notes_archived"] == 1
+    assert events[0].details["model"] == "llama3"
 
 
 @pytest.mark.acceptance(
     spec="knowledge",
     scenario="reorg never destroys content — a superseded topic stays recoverable",
 )
-async def test_reorg_superseded_topic_stays_recoverable(mem: Any) -> None:
-    """Overwriting a topic archives the prior version to superseded/; superseding
-    archives + removes from the lane. Both prior versions must be readable."""
-    from langchain_core.messages import AIMessage
+async def test_reorg_replaced_revision_stays_in_history(mem: Any) -> None:
+    """The revision the pass overwrites lands in ``.history/`` holding the OLD
+    text — the live note no longer has it, the archive does."""
+    store_dir = await _store_dir(mem)
 
-    await mem.service.ensure_scope("global")
-    store_dir = (await mem.service.resolved_scope("global")).store_dir
-
-    original_body = "# Alpha\n\nOriginal content SENTINEL_KEEP_ME."
-    _seed_topic(store_dir, "alpha", "Alpha", original_body)
+    _seed_note(store_dir, "alpha", "Alpha", "# Alpha\n\nOriginal wording SENTINEL_ONLY_OLD.")
 
     scripted = [
-        AIMessage(
-            content="",
-            tool_calls=[{"id": "c1", "name": "list_topics", "args": {}, "type": "tool_call"}],
+        _tool_call("c1", "list_notes", {}),
+        _tool_call("c2", "read_note", {"slug": "alpha"}),
+        _tool_call(
+            "c3",
+            "write_note",
+            {
+                "slug": "alpha",
+                "title": "Alpha",
+                "summary": "Alpha note",
+                "markdown": "# Alpha\n\nRewritten wording SENTINEL_ONLY_NEW.",
+            },
         ),
-        AIMessage(
-            content="",
-            tool_calls=[
-                {"id": "c2", "name": "read_topic", "args": {"slug": "alpha"}, "type": "tool_call"}
-            ],
-        ),
-        # Overwrite alpha with updated content (prior version should be archived)
-        AIMessage(
-            content="",
-            tool_calls=[
-                {
-                    "id": "c3",
-                    "name": "write_topic",
-                    "args": {
-                        "slug": "alpha",
-                        "title": "Alpha",
-                        "description": "Alpha topic",
-                        "markdown": (
-                            "# Alpha\n\nUpdated content Y. Plus SENTINEL_KEEP_ME preserved."
-                        ),
-                    },
-                    "type": "tool_call",
-                }
-            ],
-        ),
-        AIMessage(content="Done."),
+        _done(),
     ]
 
-    reorg_svc = _make_reorg(mem, _FakeAgent(scripted), _Models(_model()))
-    result = await reorg_svc.reorg(scope_name="global")
+    result = await _make_reorg(mem, _FakeAgent(scripted), _Models(_model())).reorg(
+        scope_name="global"
+    )
 
     assert result.status == "reorganized"
-    assert result.topics_written == 1
+    assert result.notes_written == 1
 
-    # Live doc has the new content
-    live = topic_path(store_dir, "alpha").read_text(encoding="utf-8")
-    assert "Updated content Y" in live
+    live = note_path(store_dir, "alpha").read_text(encoding="utf-8")
+    assert "SENTINEL_ONLY_NEW" in live
+    assert "SENTINEL_ONLY_OLD" not in live
 
-    # Prior version is in superseded/
-    sup_dir = superseded_dir(store_dir)
-    archived = list(sup_dir.glob("alpha-*.md"))
-    assert archived, "prior version should have been archived to superseded/"
-    # The archived copy has the original content
+    archived = sorted(history_dir(store_dir).glob("alpha-*.md"))
+    assert len(archived) == 1, "the replaced revision must be archived under .history/"
     archived_text = archived[0].read_text(encoding="utf-8")
-    assert "SENTINEL_KEEP_ME" in archived_text
-    assert "Original content" in archived_text
+    assert "SENTINEL_ONLY_OLD" in archived_text
+    assert "SENTINEL_ONLY_NEW" not in archived_text
+
+    # The archive is a sibling of the lane, not a note: it never re-enters the
+    # index as a duplicate of the note it supersedes.
+    docs = await mem.documents.list_documents(KIND_KNOWLEDGE, "global", lane=LANE_NOTES)
+    assert [d.id for d in docs] == ["alpha"]
+
+    events = await _tidy_events(mem)
+    assert len(events) == 1
 
 
 @pytest.mark.acceptance(
@@ -290,148 +299,295 @@ async def test_reorg_superseded_topic_stays_recoverable(mem: Any) -> None:
     scenario="reorg is a no-op when no internal model is configured",
 )
 async def test_reorg_no_model_is_clean_noop(mem: Any) -> None:
-    """When no model is configured the service returns status='no_model' and the
-    agent loop is never called; on-disk state is untouched."""
-    await mem.service.ensure_scope("global")
-    store_dir = (await mem.service.resolved_scope("global")).store_dir
+    """No internal model → ``status='no_model'``, the loop is never armed, and
+    nothing on disk moves (not even a ``.history/`` dir)."""
+    store_dir = await _store_dir(mem)
+    _seed_note(store_dir, "existing", "Existing", "# Existing\n\nShould survive.")
 
-    _seed_topic(store_dir, "existing", "Existing", "# Existing\n\nShould survive.")
-
-    # _FakeAgent with empty scripted list — if called at all, it would fail
-    class _NeverCalledAgent:
-        async def run(self, **_: Any) -> dict[str, Any]:
-            raise AssertionError("agent loop must not be called when no model is configured")
-
-    reorg_svc = _make_reorg(mem, _NeverCalledAgent(), _Models(None))  # type: ignore[arg-type]
-    result = await reorg_svc.reorg(scope_name="global")
+    agent = _NeverCalledAgent("when no model is configured")
+    result = await _make_reorg(mem, agent, _Models(None)).reorg(scope_name="global")
 
     assert result.status == "no_model"
     assert result.model is None
-    assert result.topics_written == 0
-    assert result.topics_superseded == 0
+    assert result.notes_before == 0
+    assert result.notes_after == 0
+    assert result.notes_written == 0
+    assert result.notes_archived == 0
 
-    # On-disk state is untouched
-    assert topic_path(store_dir, "existing").exists()
-    text = topic_path(store_dir, "existing").read_text(encoding="utf-8")
+    text = note_path(store_dir, "existing").read_text(encoding="utf-8")
     assert "Should survive" in text
-    # superseded/ was NOT created
-    assert not superseded_dir(store_dir).exists()
+    assert not history_dir(store_dir).exists()
+    assert await _tidy_events(mem) == []
+
+
+@pytest.mark.acceptance(
+    spec="knowledge",
+    scenario="a topic document recalls at passage granularity",
+)
+async def test_tidied_note_recalls_at_passage_granularity(mem: Any) -> None:
+    """A multi-section note the tidy pass wrote is chunked per passage, so a
+    query hitting the second section gets that section — not the whole note."""
+    store_dir = await _store_dir(mem)
+    _seed_note(store_dir, "scratch", "Scratch", "# Scratch\n\nUnsorted notes about processes.")
+
+    scripted = [
+        _tool_call("c1", "list_notes", {}),
+        _tool_call(
+            "c2",
+            "write_note",
+            {
+                "slug": "team-conventions",
+                "title": "Team conventions",
+                "summary": "how the team works",
+                "markdown": (
+                    "## Alpha process\n\nUse the alphawidget for the alpha flow.\n\n"
+                    "## Beta process\n\nRun the betagizmo for the beta flow."
+                ),
+            },
+        ),
+        _tool_call("c3", "delete_note", {"slug": "scratch"}),
+        _done(),
+    ]
+
+    result = await _make_reorg(mem, _FakeAgent(scripted), _Models(_model())).reorg(
+        scope_name="global"
+    )
+    assert result.status == "reorganized"
+
+    hits, _mode, _fb = await mem.service.recall_in_scope(
+        scope_name="global", query="betagizmo", scope="global"
+    )
+    assert hits, "the tidied note must be searchable"
+    top = hits[0]
+    assert "betagizmo" in top.text  # the Beta passage came back
+    assert "alphawidget" not in top.text  # …as a passage, not the whole note
+    assert "team-conventions" in top.source
 
 
 # ---------------------------------------------------------------------------
-# Non-acceptance edge cases
+# The archive stays invisible to retrieval
 # ---------------------------------------------------------------------------
 
 
-async def test_read_topic_missing_slug_returns_error_dict(mem: Any) -> None:
-    """read_topic on a missing slug returns an error dict, no raise."""
-    from langchain_core.messages import AIMessage
-
-    await mem.service.ensure_scope("global")
-    store_dir = (await mem.service.resolved_scope("global")).store_dir
-    _seed_topic(store_dir, "real", "Real", "# Real\n\nExists.")
+@pytest.mark.skipif(shutil.which("rg") is None, reason="grep mode needs the rg binary")
+async def test_history_copy_never_surfaces_in_grep_recall(mem: Any) -> None:
+    """Grep reaches every file under the scope dir, so this is the strict check
+    that ``.history/`` is excluded: the marker is in BOTH the live note and its
+    archived revision, and only the live one may come back."""
+    store_dir = await _store_dir(mem)
+    _seed_note(store_dir, "zebra", "Zebra", "# Zebra\n\nContent marker ZEBRAMARK, first draft.")
 
     scripted = [
-        AIMessage(
-            content="",
-            tool_calls=[
-                {
-                    "id": "c1",
-                    "name": "read_topic",
-                    "args": {"slug": "nonexistent"},
-                    "type": "tool_call",
-                }
-            ],
+        _tool_call("c1", "list_notes", {}),
+        _tool_call(
+            "c2",
+            "write_note",
+            {
+                "slug": "zebra",
+                "title": "Zebra",
+                "summary": "zebra",
+                "markdown": "# Zebra\n\nContent marker ZEBRAMARK, rewritten.",
+            },
         ),
-        AIMessage(content="Topic not found; nothing to do."),
+        _done(),
     ]
+    await _make_reorg(mem, _FakeAgent(scripted), _Models(_model())).reorg(scope_name="global")
 
-    reorg_svc = _make_reorg(mem, _FakeAgent(scripted), _Models(_model()))
-    # Must not raise; tool error is handled by ToolNode
-    result = await reorg_svc.reorg(scope_name="global")
-    assert result.status == "reorganized"
-    assert result.topics_written == 0
-    assert result.topics_superseded == 0
+    # Both copies carry the marker on disk …
+    archived = sorted(history_dir(store_dir).glob("zebra-*.md"))
+    assert len(archived) == 1
+    assert "ZEBRAMARK" in archived[0].read_text(encoding="utf-8")
+
+    # … but only the live note is reachable.
+    hits, mode, _fb = await mem.service.recall_in_scope(
+        scope_name="global", query="ZEBRAMARK", scope="global", mode="grep"
+    )
+    assert mode == "grep"
+    assert hits, "the live note must still be grep-able"
+    assert all(".history" not in h.source for h in hits)
+    assert any("notes/zebra.md" in h.source for h in hits)
 
 
-async def test_write_topic_bad_slug_rejected_no_write(mem: Any) -> None:
-    """A write_topic call with a traversal slug is rejected without any write."""
-    from langchain_core.messages import AIMessage
+# ---------------------------------------------------------------------------
+# The pass finalizes from on-disk state whatever the loop does
+# ---------------------------------------------------------------------------
 
-    await mem.service.ensure_scope("global")
-    store_dir = (await mem.service.resolved_scope("global")).store_dir
-    _seed_topic(store_dir, "safe", "Safe", "# Safe\n\nContent.")
 
-    scripted = [
-        AIMessage(
-            content="",
-            tool_calls=[
+async def test_raising_agent_loop_still_finalizes_from_disk(mem: Any) -> None:
+    """A loop that dies mid-way (a dead model connection) must not propagate:
+    the pass finalizes from what the tools actually landed."""
+    store_dir = await _store_dir(mem)
+    _seed_note(store_dir, "keep", "Keep", "# Keep\n\nKeep this.")
+    _seed_note(store_dir, "drop", "Drop", "# Drop\n\nFold this away.")
+
+    class _RaisingAgent:
+        async def run(self, *, tools: Any, **_: Any) -> dict[str, Any]:
+            by_name = {t.name: t for t in tools}
+            await by_name["write_note"].handler(
                 {
-                    "id": "c1",
-                    "name": "write_topic",
-                    "args": {
-                        "slug": "../evil",
-                        "title": "Evil",
-                        "description": "bad",
-                        "markdown": "# Evil",
-                    },
-                    "type": "tool_call",
+                    "slug": "keep",
+                    "title": "Keep",
+                    "summary": "merged",
+                    "markdown": "# Keep\n\nKeep this. Fold this away.",
                 }
-            ],
-        ),
-        AIMessage(content="Got an error; aborting."),
-    ]
+            )
+            await by_name["delete_note"].handler({"slug": "drop"})
+            raise RuntimeError("the model connection died mid-loop")
 
-    reorg_svc = _make_reorg(mem, _FakeAgent(scripted), _Models(_model()))
-    result = await reorg_svc.reorg(scope_name="global")
+    result = await _make_reorg(mem, _RaisingAgent(), _Models(_model())).reorg(scope_name="global")
+
     assert result.status == "reorganized"
-    assert result.topics_written == 0
-    # The safe topic is untouched
-    assert "Content." in topic_path(store_dir, "safe").read_text(encoding="utf-8")
+    assert result.notes_before == 2
+    assert result.notes_after == 1  # counted from disk after the raise
+    assert result.notes_written == 1
+    assert result.notes_archived == 1
+
+    merged = note_path(store_dir, "keep").read_text(encoding="utf-8")
+    assert "Fold this away." in merged
+    assert not note_path(store_dir, "drop").exists()
+
+    # The final reconcile still ran: the index reflects the post-raise lane.
+    docs = await mem.documents.list_documents(KIND_KNOWLEDGE, "global", lane=LANE_NOTES)
+    assert [d.id for d in docs] == ["keep"]
 
 
-async def test_recursion_limit_still_finalizes_index(mem: Any) -> None:
-    """GraphRecursionError mid-loop still finalizes INDEX/reconcile/audit."""
-    from langchain_core.messages import AIMessage
+async def test_recursion_overflow_still_finalizes_from_disk(mem: Any) -> None:
+    """A loop that overruns its recursion limit finalizes the same way: the
+    counters report the tool calls that landed before the overflow."""
+    store_dir = await _store_dir(mem)
+    _seed_note(store_dir, "note-a", "Note A", "# A\n\nContent A.")
+    _seed_note(store_dir, "note-b", "Note B", "# B\n\nContent B.")
 
-    from coffer.infrastructure.knowledge.paths import knowledge_index_path
-
-    await mem.service.ensure_scope("global")
-    store_dir = (await mem.service.resolved_scope("global")).store_dir
-    _seed_topic(store_dir, "topic-a", "Topic A", "# A\n\nContent A.")
-    _seed_topic(store_dir, "topic-b", "Topic B", "# B\n\nContent B.")
-
-    # Script 13 list_topics calls — DEFAULT_REORG_RECURSION_LIMIT=24 steps
-    # means 12 tool calls fit; 13 will overflow.
     scripted = [
-        AIMessage(
-            content="",
-            tool_calls=[{"id": f"c{i}", "name": "list_topics", "args": {}, "type": "tool_call"}],
-        )
-        for i in range(13)
+        _tool_call(
+            "c1",
+            "write_note",
+            {
+                "slug": "note-a",
+                "title": "Note A",
+                "summary": "merged",
+                "markdown": "# A\n\nContent A. Content B.",
+            },
+        ),
+        _tool_call("c2", "delete_note", {"slug": "note-b"}),
     ]
+    # DEFAULT_REORG_RECURSION_LIMIT is 24 steps; far more list_notes turns than
+    # can fit, so the loop is guaranteed to overrun rather than run dry.
+    scripted += [_tool_call(f"c{i}", "list_notes", {}) for i in range(3, 60)]
 
-    reorg_svc = _make_reorg(mem, _FakeAgent(scripted), _Models(_model()))
-    result = await reorg_svc.reorg(scope_name="global")
+    agent = _FakeAgent(scripted)
+    result = await _make_reorg(mem, agent, _Models(_model())).reorg(scope_name="global")
+
+    # The loop really was cut short — it never reached the end of the script.
+    assert agent.script.consumed < agent.script.total
 
     assert result.status == "reorganized"
-    # INDEX was regenerated despite the truncated loop
-    assert knowledge_index_path(store_dir).exists()
+    assert result.notes_before == 2
+    assert result.notes_after == 1
+    assert result.notes_written == 1
+    assert result.notes_archived == 1
+
+    assert "Content B." in note_path(store_dir, "note-a").read_text(encoding="utf-8")
+    assert not note_path(store_dir, "note-b").exists()
+
+    docs = await mem.documents.list_documents(KIND_KNOWLEDGE, "global", lane=LANE_NOTES)
+    assert [d.id for d in docs] == ["note-a"]
 
 
-async def test_empty_guard_no_topics(mem: Any) -> None:
-    """A store with no topic docs returns status='empty' and never calls the
-    agent loop."""
+async def test_empty_lane_is_clean_noop(mem: Any) -> None:
+    """A scope with no notes short-circuits before the loop and touches
+    nothing."""
+    store_dir = await _store_dir(mem)
 
-    class _NeverCalledAgent:
-        async def run(self, **_: Any) -> dict[str, Any]:
-            raise AssertionError("agent loop must not run when the lane is empty")
-
-    await mem.service.ensure_scope("global")
-
-    reorg_svc = _make_reorg(mem, _NeverCalledAgent(), _Models(_model()))  # type: ignore[arg-type]
-    result = await reorg_svc.reorg(scope_name="global")
+    agent = _NeverCalledAgent("when the lane is empty")
+    result = await _make_reorg(mem, agent, _Models(_model())).reorg(scope_name="global")
 
     assert result.status == "empty"
-    assert result.topics_written == 0
+    assert result.notes_before == 0
+    assert result.notes_after == 0
+    assert result.notes_written == 0
+    assert result.notes_archived == 0
     assert result.model == "llama3"
+
+    assert not history_dir(store_dir).exists()
+    assert await _tidy_events(mem) == []
+
+
+# ---------------------------------------------------------------------------
+# Tool-level error handling
+# ---------------------------------------------------------------------------
+
+
+async def test_read_note_missing_slug_returns_error_not_raise(mem: Any) -> None:
+    """``read_note`` on a slug that isn't there answers with an error dict, so
+    the loop keeps going and the pass still finalizes."""
+    store_dir = await _store_dir(mem)
+    _seed_note(store_dir, "real", "Real", "# Real\n\nExists.")
+
+    scripted = [
+        _tool_call("c1", "read_note", {"slug": "nonexistent"}),
+        _done("Note not found; nothing to do."),
+    ]
+
+    result = await _make_reorg(mem, _FakeAgent(scripted), _Models(_model())).reorg(
+        scope_name="global"
+    )
+
+    assert result.status == "reorganized"
+    assert result.notes_before == 1
+    assert result.notes_after == 1
+    assert result.notes_written == 0
+    assert result.notes_archived == 0
+    assert not history_dir(store_dir).exists()
+
+
+async def test_write_note_traversal_slug_rejected_without_writing(mem: Any) -> None:
+    """A traversal slug is refused by the path guard: no file is created, the
+    counters stay at zero, and the existing note is untouched."""
+    store_dir = await _store_dir(mem)
+    _seed_note(store_dir, "safe", "Safe", "# Safe\n\nContent.")
+
+    scripted = [
+        _tool_call(
+            "c1",
+            "write_note",
+            {
+                "slug": "../evil",
+                "title": "Evil",
+                "summary": "bad",
+                "markdown": "# Evil",
+            },
+        ),
+        _done("Got an error; aborting."),
+    ]
+
+    result = await _make_reorg(mem, _FakeAgent(scripted), _Models(_model())).reorg(
+        scope_name="global"
+    )
+
+    assert result.status == "reorganized"
+    assert result.notes_written == 0
+    assert result.notes_after == 1
+    assert "Content." in note_path(store_dir, "safe").read_text(encoding="utf-8")
+    assert not (store_dir.parent / "evil.md").exists()
+
+
+async def test_delete_note_missing_slug_does_not_count_as_archived(mem: Any) -> None:
+    """Deleting a note that isn't there is an error dict, not an archive."""
+    store_dir = await _store_dir(mem)
+    _seed_note(store_dir, "only", "Only", "# Only\n\nStill here.")
+
+    scripted = [
+        _tool_call("c1", "delete_note", {"slug": "ghost"}),
+        _done(),
+    ]
+
+    result = await _make_reorg(mem, _FakeAgent(scripted), _Models(_model())).reorg(
+        scope_name="global"
+    )
+
+    assert result.status == "reorganized"
+    assert result.notes_archived == 0
+    assert result.notes_after == 1
+    assert note_path(store_dir, "only").exists()
+    assert not history_dir(store_dir).exists()

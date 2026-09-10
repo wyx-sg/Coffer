@@ -95,34 +95,6 @@ def git_root(cwd: str | Path) -> Path | None:
     return candidate
 
 
-def git_branch(cwd: str | Path) -> str | None:
-    """Current git branch for ``cwd``'s own checkout, or ``None`` outside a repo
-    or on a detached HEAD with no branch. Pure filesystem read.
-
-    Resolves against the *physical* checkout (``_nearest_git_marker``), NOT
-    ``git_root`` — a linked worktree keeps its OWN branch even though
-    ``git_root`` collapses its identity to the main repo, because handoffs are
-    keyed per branch."""
-    dot_git_dir = _nearest_git_marker(cwd)
-    if dot_git_dir is None:
-        return None
-    dot_git = dot_git_dir / ".git"
-    if dot_git.is_file():
-        # linked worktree: ".git" is "gitdir: <path>"
-        text = dot_git.read_text(encoding="utf-8").strip()
-        gitdir = Path(text.removeprefix("gitdir:").strip())
-        head = gitdir / "HEAD"
-    else:
-        head = dot_git / "HEAD"
-    try:
-        ref = head.read_text(encoding="utf-8").strip()
-    except OSError:
-        return None
-    if ref.startswith("ref: refs/heads/"):
-        return ref[len("ref: refs/heads/") :] or None
-    return None  # detached HEAD (bare sha)
-
-
 def _crockford26(key: str) -> str:
     digest = hashlib.sha256(key.encode("utf-8")).digest()
     value = int.from_bytes(digest[:16], "big")  # 128 bits, ULID-width
