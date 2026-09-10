@@ -80,11 +80,8 @@ frozen dataclass。一个资源 kind 的纯描述符。只属于 domain——不
 | `"resource_enabled"`                                        | `set_enabled(True)` 之后且状态确实翻转              |
 | `"resource_disabled"`                                       | `set_enabled(False)` 之后且状态确实翻转             |
 | `"resource_deleted"`                                        | `delete` 之后（`details` 含 pre-delete 快照）       |
-| `"capability_first_seen"`                                   | discovery 首次看到一个 capability                   |
 | `"capability_enabled"`                                      | 用户启用了原本禁用的 capability                     |
 | `"capability_disabled"`                                     | 用户禁用了一个 capability                           |
-| `"daemon_started"`                                          | daemon 启动并进入 ready 后                          |
-| `"daemon_stopped"`                                          | daemon 优雅关闭时                                   |
 | `"token_rotated"`                                           | `POST /api/v1/daemon/rotate-token` 之后             |
 | `"retention_updated"`                                       | retention policy 变更时                             |
 | `"credential_set"`                                          | `POST /api/v1/credentials` 存储 secret 之后         |
@@ -92,7 +89,6 @@ frozen dataclass。一个资源 kind 的纯描述符。只属于 domain——不
 | `"credential_deleted"`                                      | `DELETE /api/v1/credentials/{ref}` 删除 secret 之后 |
 | `"credential_migrated"`                                     | 每个 ref：legacy 钥匙串密钥迁入存储时               |
 | `"master_key_relocated"`                                    | `PUT /api/v1/settings/credentials` 迁移主密钥之后   |
-| `"keychain_set"` / `"keychain_read"` / `"keychain_deleted"` | _Legacy_（信封加密之前）；对历史记录仍可渲染        |
 
 ### `RetentionPolicy` (`domain/retention.py`)
 

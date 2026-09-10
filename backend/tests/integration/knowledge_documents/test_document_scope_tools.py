@@ -124,11 +124,8 @@ async def test_write_with_a_filename_adds_a_document(kb) -> None:
     )
     assert out["type"] == "document"
     assert out["id"] and out["source_mode"] == "converted"
-    # The added document is searchable, and an INGEST was audited as the agent.
+    # The added document is searchable.
     assert len((await kb.service.search(scope_name="kb1", query="wombat", top_k=5)).passages) == 1
-    events = await kb.audit.query(kind=KIND_KNOWLEDGE, name="kb1", limit=50)
-    ingested = [e for e in events if e.event_type == "kb_document_ingested"]
-    assert ingested and ingested[0].actor == "agent"
 
 
 @pytest.mark.acceptance(spec="007-memory", scenario="agent edits a document via MCP")
@@ -144,10 +141,6 @@ async def test_write_with_an_id_rewrites_a_document(kb) -> None:
     assert out["id"] == doc.id and out["source_mode"] == "edited"
     assert (await kb.service.search(scope_name="kb1", query="otter", top_k=5)).passages == ()
     assert len((await kb.service.search(scope_name="kb1", query="seal", top_k=5)).passages) == 1
-    # The MCP write is audited with the agent as actor (FR-018).
-    events = await kb.audit.query(kind=KIND_KNOWLEDGE, name="kb1", limit=50)
-    updated = [e for e in events if e.event_type == "kb_document_updated"]
-    assert updated and updated[0].actor == "agent"
 
 
 @pytest.mark.acceptance(spec="007-memory", scenario="agent deletes a document via MCP")

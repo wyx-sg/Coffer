@@ -106,12 +106,12 @@ async def test_query_limit_and_order(tmp_path):
 
 @pytest.mark.asyncio
 async def test_insert_with_null_resource_fields(tmp_path):
-    """Daemon-level events have no resource."""
+    """Ref-less events have no resource."""
     repo, engine = await _repo(tmp_path)
     await repo.insert(
         _entry(
             when=datetime(2026, 5, 20, tzinfo=UTC),
-            event_type=AuditEventType.DAEMON_STARTED.value,
+            event_type=AuditEventType.TOKEN_ROTATED.value,
             kind=None,
             name=None,
             actor="system",

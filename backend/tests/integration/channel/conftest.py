@@ -520,9 +520,8 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         conversations=ConversationRepo(sm),
         messages=MessageRepo(sm),
         registry=registry,
-        audit=audit,
     )
-    orchestrator = TurnOrchestrator(chat_service=chat, registry=registry, audit=audit)
+    orchestrator = TurnOrchestrator(chat_service=chat, registry=registry)
     model_suggestions = FakeModelSuggestions()
     processor = InboundProcessor(
         peers=peers,

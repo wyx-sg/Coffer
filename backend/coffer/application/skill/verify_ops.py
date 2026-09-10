@@ -68,16 +68,6 @@ async def verify_drift(service: SkillService) -> DriftReport:
             )
         )
 
-    if report.has_drift:
-        await service._audit.record(
-            AuditEventType.SKILL_DRIFT_DETECTED.value,
-            ref=None,
-            actor="system",
-            details={
-                "count": len(report.entries),
-                "kinds": [e.kind.value for e in report.entries],
-            },
-        )
     return report
 
 

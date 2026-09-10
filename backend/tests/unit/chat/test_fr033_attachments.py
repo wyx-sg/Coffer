@@ -30,7 +30,7 @@ _IMG = Attachment(path="/tmp/coffer-media/abc.jpg", mime="image/jpeg", filename=
 @pytest.mark.asyncio
 async def test_channel_turn_persists_attachment_block() -> None:
     adapter = FakeAgentAdapter([])
-    orchestrator, _conv, _msg, _audit, _prov = make_orchestrator(adapter=adapter)
+    orchestrator, _conv, _msg, _prov = make_orchestrator(adapter=adapter)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "look", attachments=[_IMG])
@@ -53,7 +53,7 @@ async def test_channel_turn_persists_attachment_block() -> None:
 @pytest.mark.asyncio
 async def test_turn_re_materialises_attachment_from_history() -> None:
     adapter = FakeAgentAdapter([])
-    orchestrator, _conv, _msg, _audit, _prov = make_orchestrator(adapter=adapter)
+    orchestrator, _conv, _msg, _prov = make_orchestrator(adapter=adapter)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "look", attachments=[_IMG])

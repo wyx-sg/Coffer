@@ -59,9 +59,9 @@ describe("describeActivity", () => {
     ).toBe("Removed old-server");
   });
 
-  test("capability_first_seen → includes cap type and key", () => {
+  test("capability_enabled → includes cap type and key", () => {
     const entry = makeEntry({
-      event_type: "capability_first_seen",
+      event_type: "capability_enabled",
       resource_name: "fs",
       details: { capability_type: "tool", key: "read_file" },
     });
@@ -88,14 +88,6 @@ describe("describeActivity", () => {
     });
     const result = describeActivity(t, entry);
     expect(result).toContain("my-prompt");
-  });
-
-  test("daemon_started → 'Daemon started'", () => {
-    expect(describeActivity(t, makeEntry({ event_type: "daemon_started" }))).toBe("Daemon started");
-  });
-
-  test("daemon_stopped → 'Daemon stopped'", () => {
-    expect(describeActivity(t, makeEntry({ event_type: "daemon_stopped" }))).toBe("Daemon stopped");
   });
 
   test("token_rotated → 'Access token rotated'", () => {

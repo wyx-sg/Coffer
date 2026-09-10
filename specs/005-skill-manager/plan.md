@@ -155,7 +155,7 @@ scan and the follow-master-library policy. New modules per layer:
 - **Frontend**: `AgentSkillsTab` v2 — follow switch with exclusion-mode per-skill toggles, unmanaged-skills section with adopt/delete, foreign-link and degraded-binding badges.
 
 New audit events: `skill_adopted`, `skill_unmanaged_deleted`,
-`skill_autobind_skipped`, `skill_relinked`. No schema change — the scan is
+`skill_relinked`. No schema change — the scan is
 derived at request time and the follow policy lives on the agent resource's
 config (spec 004).
 

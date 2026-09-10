@@ -27,96 +27,99 @@ Coffer 的方案刻意保持精简：一对本地数据库表，而非时序数�
 
 `actor` 字段值得特别关注。每个接口面都会显式设置它：Typer CLI 在向 daemon 的 HTTP 调用中传递 `X-Coffer-Actor: cli`；REST API 客户端可以设置 `X-Coffer-Actor: api` 或 `X-Coffer-Actor: ui`；如果 header 缺失，daemon 默认为 `"api"`。daemon 自身会为自动化操作（如保留策略清理）发出 `system` 事件。这意味着审计日志能准确反映一次变更是交互式发起的、程序化发起的，还是自动触发的。
 
-`AuditEventType`（定义在 `domain/audit.py`）的完整事件类型集合，按领域分组：
+全部被审计的事件类型（定义在 `domain/audit.py` 的 `AuditEventType`），按域分组。一共 39 个，这个列表是刻意保持短的——见下方 [什么值得审计](#什么值得审计)。
 
 **资源与能力：**
 
-| 事件                                         | 触发时机                                        |
-| -------------------------------------------- | ----------------------------------------------- |
-| `resource_created`                           | `ResourceService.register` 之后                 |
-| `resource_updated`                           | 配置或描述变更之后                              |
-| `resource_enabled` / `resource_disabled`     | 状态确实发生翻转时，在 `set_enabled` 之后       |
-| `resource_deleted`                           | `delete` 之后；`details` 中包含删除前的配置快照 |
-| `capability_first_seen`                      | 发现服务时首次看到该能力                        |
-| `capability_enabled` / `capability_disabled` | 用户切换能力状态时                              |
+| 事件                                         | 触发时机                                       |
+| -------------------------------------------- | ---------------------------------------------- |
+| `resource_created`                           | `ResourceService.register` 之后                |
+| `resource_updated`                           | config 或 description 变更之后                 |
+| `resource_enabled` / `resource_disabled`     | `set_enabled` 且状态确实翻转之后               |
+| `resource_deleted`                           | `delete` 之后；`details` 含删除前的 config 快照 |
+| `resource_scope_updated`                     | 资源的 per-agent 生效 scope 变更时             |
+| `capability_enabled` / `capability_disabled` | 用户开关某项能力时                             |
 
-**Daemon：**
+**Daemon 与设置：**
 
-| 事件                                | 触发时机                                |
-| ----------------------------------- | --------------------------------------- |
-| `daemon_started` / `daemon_stopped` | daemon 启动 / 优雅关闭时                |
-| `token_rotated`                     | `POST /api/v1/daemon/rotate-token` 之后 |
-| `retention_updated`                 | 保留策略发生变更时                      |
+| 事件                        | 触发时机                                 |
+| --------------------------- | ---------------------------------------- |
+| `token_rotated`             | `POST /api/v1/daemon/rotate-token` 之后  |
+| `retention_updated`         | 保留策略变更时                           |
+| `embedding_config_updated`  | embedding provider/模型变更时            |
+| `internal_engine_model_set` | 选定内部引擎所用模型时                   |
 
 **凭据与主密钥：**
 
-| 事件                                                        | 触发时机                                  |
-| ----------------------------------------------------------- | ----------------------------------------- |
-| `credential_set` / `credential_read` / `credential_deleted` | 加密凭据存储中写入 / 读取 / 删除之后       |
-| `credential_migrated`                                       | 每个 ref：legacy 钥匙串密钥迁入存储时      |
-| `master_key_relocated`                                      | 主密钥在文件与钥匙串存储之间迁移之后       |
-| `master_key_exported` / `master_key_imported`               | 主密钥向 / 从另一台机器的带外传输          |
-| `keychain_set` / `keychain_read` / `keychain_deleted`       | legacy（加密存储之前）事件，为历史行保留可渲染性 |
+| 事件                                                        | 触发时机                                       |
+| ----------------------------------------------------------- | ---------------------------------------------- |
+| `credential_set` / `credential_read` / `credential_deleted` | 加密凭据存储的写 / 读 / 删之后                 |
+| `credential_migrated`                                       | 逐 ref，遗留 keychain 密钥迁入存储时           |
+| `master_key_relocated`                                      | 主密钥在文件与 keychain 存储之间移动之后       |
+| `master_key_exported` / `master_key_imported`               | 主密钥带外传输到 / 自另一台机器                |
 
-**Embedding：**
+**Agent 工作区** —— 这里每一条写的都是 Coffer 并不拥有的文件：
 
-| 事件                       | 触发时机                          |
-| -------------------------- | --------------------------------- |
-| `embedding_config_updated` | embedding 提供方/模型变更时       |
-
-**Agent 工作区：**
-
-| 事件                                                      | 触发时机                                        |
-| --------------------------------------------------------- | ----------------------------------------------- |
-| `agent_config_file_written` / `agent_config_file_deleted` | agent 配置文件被写入 / 删除时                   |
-| `agent_mcp_installed` / `agent_mcp_uninstalled`           | MCP 条目被安装到 / 从 agent 卸载时              |
-| `agent_mcp_entry_adopted`                                 | agent 自有配置里的 MCP 条目被接管进 Coffer 时   |
+| 事件                                                      | 触发时机                                             |
+| --------------------------------------------------------- | ---------------------------------------------------- |
+| `agent_config_file_written` / `agent_config_file_deleted`  | agent 配置文件被写入 / 删除时                        |
+| `agent_mcp_installed` / `agent_mcp_uninstalled`            | Coffer 的 MCP 条目被安装进 / 移出某个 agent 时       |
+| `agent_mcp_entry_adopted`                                  | agent 自有配置里的 MCP 条目被收编进 Coffer 时        |
 
 **技能：**
 
-| 事件                                        | 触发时机                                       |
-| ------------------------------------------- | ---------------------------------------------- |
-| `skill_imported` / `skill_fetched`          | 技能被本地导入 / 从来源拉取时                  |
-| `skill_updated` / `skill_update_noop`       | 技能更新生效 / 为空操作时                      |
-| `skill_renamed`                             | 技能被重命名时                                 |
-| `skill_bound` / `skill_unbound`             | 技能被绑定到 / 从 agent 解绑时                 |
-| `skill_autobind_skipped`                    | autobind 被跳过时                              |
-| `skill_relinked`                            | 技能链接被修复时                               |
-| `skill_drift_detected`                      | 检测到磁盘上的内容与受管技能产生漂移时         |
-| `skill_adopted` / `skill_unmanaged_deleted` | 未受管技能被接管 / 散落技能被删除时            |
+| 事件                                        | 触发时机                                     |
+| ------------------------------------------- | -------------------------------------------- |
+| `skill_imported` / `skill_updated`          | skill 被导入 / 更新进主库时                  |
+| `skill_bound` / `skill_unbound`             | skill 被投递给 / 撤出某个 agent 时           |
+| `skill_relinked`                            | skill 链接被修复时                           |
+| `skill_drift_remediated`                    | 与受管 skill 的磁盘漂移被修复时              |
+| `skill_adopted` / `skill_unmanaged_deleted` | 未托管 skill 被收编 / 游离副本被删除时       |
 
-**知识：**
+**知识** —— 只留破坏性的这几条：
 
-| 事件                                                                  | 触发时机                                    |
-| --------------------------------------------------------------------- | ------------------------------------------- |
-| `kb_document_ingested` / `kb_document_updated` / `kb_document_deleted` | 文档被摄取 / 更新 / 删除时                   |
-| `kb_reindexed`                                                        | `coffer knowledge reindex` 重建索引之后      |
-| `memory_added` / `memory_updated` / `memory_deleted`                  | 条目被添加 / 更新 / 删除时                   |
-| `memory_cleared`                                                      | 某个知识作用域的条目被清空时                 |
-| `memory_organized` / `memory_reorganized`                             | inbox 被整合 / 主题文档被重新组织时          |
-| `handoff_set`                                                         | 某个项目 + 分支的工作现场被保存时            |
+| 事件                  | 触发时机                     |
+| --------------------- | ---------------------------- |
+| `kb_document_deleted` | 已摄入文档被删除时           |
+| `memory_deleted`      | 条目被删除时                 |
+| `memory_cleared`      | 某个知识 scope 被清空时      |
 
-`kb_*` 与 `memory_*` 前缀属于历史遗留：它们是两个 kind 合并为 `knowledge` 之前的线上取值，原样保留，以便既有的审计行与查询继续有效。
-
-**聊天、会话与模型：**
-
-| 事件                                                 | 触发时机                              |
-| ---------------------------------------------------- | ------------------------------------- |
-| `conversation_created` / `conversation_deleted`      | 会话被创建 / 删除时                   |
-| `conversation_archived` / `conversation_unarchived`  | 会话被归档 / 取消归档时               |
-| `chat_turn_completed`                                | 一次聊天回合完成之后                  |
-| `model_created` / `model_updated` / `model_deleted`  | 聊天模型定义被创建 / 更新 / 删除时     |
+`kb_*` 与 `memory_*` 前缀是历史遗留：它们是两个 kind 合并为 `knowledge` 之前的线上取值，原样保留是为了让既有审计行与查询继续有效。
 
 **通道：**
 
-| 事件                                        | 触发时机                              |
-| ------------------------------------------- | ------------------------------------- |
-| `channel_pairing_issued` / `channel_paired` | 通道配对码被签发 / 对端完成配对时     |
-| `channel_notify_sent`                       | 向已配对通道发送通知时                |
+| 事件                                        | 触发时机                           |
+| ------------------------------------------- | ---------------------------------- |
+| `channel_pairing_issued` / `channel_paired` | 签发配对码时 / 某个 peer 认领它时  |
 
-**导出 / 导入：** 每一次仓库导出与导入都会被审计——操作本身、bundle 路径，以及各状态区的计数。导入所执行的资源写入还会另外记录为普通的资源生命周期事件，因此一次导入带来的变更和手工做出的变更一样可追溯。不存在配置事件与冲突事件，因为既没有同步配置、也没有冲突状态（[ADR-016](/zh/reference/adr/ADR-016-vault-export-import)）。
+**Provider：**
 
-注意，`credential_set` 和 `credential_deleted` 都会被审计——密钥被存储或删除这一*事实*会被记录下来。密钥值本身永远不会出现在 `details` payload 中。（legacy 的 `keychain_set` / `keychain_deleted` 事件类型对历史记录仍可渲染。）
+| 事件                            | 触发时机                                     |
+| ------------------------------- | -------------------------------------------- |
+| `provider_switched`             | 某条连接被投射进 agent 的原生配置时          |
+| `provider_internal_default_set` | 某条连接成为 Coffer 内部引擎时               |
+
+**导出 / 导入：** 导入所执行的资源写入会记录为普通的资源生命周期事件，因此一次导入带来的变更和手工做出的变更一样可追溯。不存在配置事件与冲突事件，因为既没有同步配置、也没有冲突状态（[ADR-016](/zh/reference/adr/ADR-016-vault-export-import)）。
+
+## 什么值得审计
+
+一个事件必须至少满足以下三条之一，才配得上一行记录：
+
+- **它落在 Coffer 之外。** 某个 agent 的配置文件、伸进别人 `~/.claude/` 的符号链接、投射进 `~/.codex/config.toml` 的密钥。Coffer 伸进了它并不拥有的地界，而审计日志是唯一写下这件事的地方。
+- **它不可逆或安全敏感。** 删除、凭据读取、主密钥导出、token 轮换。事后已经没有状态可查，或者「读取」这个动作本身就是值得知道的事。
+- **它是低频配置变更，且当前状态推不出它曾发生。** 保留窗口被改了；某项能力被关掉了。当前值看得见，但**是谁在什么时候改的**看不见。
+
+2026-09 有 27 个事件类型因为一条都不满足而被退役。这些理由值得写下来，因为正是它们该阻止这个列表重新长回去：
+
+- **运行遥测**（`daemon_started`、`chat_turn_completed`、`channel_turn_started`、`sync_completed` 等）—— daemon 跑起来了、一个 turn 完成了，这属于日志行，不属于「变更的持久记录」。
+- **表里已经有的事实**（`capability_first_seen`）—— `mcp_capability_preferences.first_seen_at` **就是**这个事件，而且存在一个可以被查询的地方。
+- **幂等重算**（`kb_reindexed`、`memory_organized`、`memory_reorganized`、`kb_document_ingested`、`memory_added` 等）—— 再跑一遍什么都不会变，而结果就在磁盘上。文件本身就是记录。
+- **什么也没改的检测**（`skill_drift_detected`、`skill_autobind_skipped`）—— 发现不等于动手。**修复**会审计，发现不会。
+- **低价值会话状态**（`conversation_created`、`conversation_archived`、`handoff_set`）—— 可恢复、在对象本身里看得见、而且量大。
+
+单笔收益最大的是删掉 `journal_append`：它曾占全部审计行的 **98.5%**（4384 条里的 4318 条），却只记录了一个字符数——它所描述的内容早就躺在一个 Markdown 文件里。
+
+注意 `credential_set` 与 `credential_deleted` 是被审计的——「一个密钥被存入或移除」这个**事实**会被记录。密钥值本身永远不会出现在 `details` 载荷里。
 
 ## 调用日志：什么流量经过了网关
 

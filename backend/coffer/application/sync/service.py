@@ -45,36 +45,12 @@ class SyncService:
     async def export_bundle(self, path: str, *, with_credentials: bool = False) -> ExportSummary:
         bundle = self._bundle_factory(Path(path).expanduser())
         async with self._lock:
-            summary = await self._exporter.export(bundle, with_credentials=with_credentials)
-        await self._audit.record(
-            AuditEventType.SYNC_COMPLETED.value,
-            actor="sync",
-            details={
-                "operation": "export",
-                "path": summary.path,
-                "credentials": with_credentials,
-                "areas": {a.area: a.count for a in summary.areas},
-                "failed": len(summary.failures),
-            },
-        )
-        return summary
+            return await self._exporter.export(bundle, with_credentials=with_credentials)
 
     async def import_bundle(self, path: str) -> ImportSummary:
         bundle = self._bundle_factory(Path(path).expanduser())
         async with self._lock:
-            summary = await self._importer.import_(bundle)
-        await self._audit.record(
-            AuditEventType.SYNC_COMPLETED.value,
-            actor="sync",
-            details={
-                "operation": "import",
-                "path": summary.path,
-                "areas": {a.area: a.count for a in summary.areas},
-                "failed": len(summary.failures),
-                "locked": len(summary.locked_refs),
-            },
-        )
-        return summary
+            return await self._importer.import_(bundle)
 
     def key_fingerprint(self) -> str | None:
         """A short SHA-256 fingerprint of the master key (never the key): two

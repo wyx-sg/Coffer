@@ -14,7 +14,6 @@ from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
-from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import UpstreamUnavailable
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind, ResourceRef
@@ -89,7 +88,6 @@ async def _setup(
         resource_service=rsvc,
         supervisor=supervisor,
         preferences=prefs,
-        audit=audit,
     )
     return discovery, supervisor, rsvc, audit, prefs, engine
 
@@ -99,7 +97,7 @@ async def test_first_list_tools_populates_preferences_and_caches(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _with_in_memory(monkeypatch)
-    discovery, sup, rsvc, audit, prefs, engine = await _setup(
+    discovery, sup, rsvc, _audit, prefs, engine = await _setup(
         tmp_path,
         server_configs={"fs": _stdio_config("read_file", "write_file")},
     )
@@ -115,15 +113,8 @@ async def test_first_list_tools_populates_preferences_and_caches(
         resource = await rsvc.get(ResourceRef("mcp_server", "fs"))
         pref_rows = await prefs.list_for(resource.id, "tool")
         assert {p.capability_key for p in pref_rows} == {"read_file", "write_file"}
-        # capability_first_seen audit events written for each
-        events = await audit.query(event_type=AuditEventType.CAPABILITY_FIRST_SEEN.value)
-        assert len(events) == 2
-        # TEST-013: also assert the LITERAL event type string so a future
-        # rename of the enum without updating the persistence side (or vice
-        # versa) is caught by the test suite.
-        literal_events = await audit.query(event_type="capability_first_seen")
-        assert len(literal_events) >= 1
-        assert all(e.event_type == "capability_first_seen" for e in literal_events)
+        # Each row records when it was first seen.
+        assert all(p.first_seen_at is not None for p in pref_rows)
     finally:
         await sup.dispose()
         await engine.dispose()
@@ -134,7 +125,7 @@ async def test_subsequent_list_tools_uses_cache(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _with_in_memory(monkeypatch)
-    discovery, sup, _rsvc, audit, _prefs, engine = await _setup(
+    discovery, sup, _rsvc, _audit, _prefs, engine = await _setup(
         tmp_path,
         server_configs={"fs": _stdio_config("a")},
     )
@@ -143,9 +134,6 @@ async def test_subsequent_list_tools_uses_cache(
         t2 = await discovery.list_tools("fs")
         # Two identical lists; the second came from cache
         assert {t.original_name for t in t1} == {t.original_name for t in t2}
-        # Only one capability_first_seen audit (reconciliation only happens on cache miss)
-        events = await audit.query(event_type=AuditEventType.CAPABILITY_FIRST_SEEN.value)
-        assert len(events) == 1
     finally:
         await sup.dispose()
         await engine.dispose()
@@ -252,7 +240,7 @@ async def test_newly_discovered_tool_is_enabled_by_default(
     what is gone is any per-server opt-out of the default itself.
     """
     _with_in_memory(monkeypatch)
-    discovery, sup, rsvc, audit, prefs, engine = await _setup(
+    discovery, sup, rsvc, _audit, prefs, engine = await _setup(
         tmp_path,
         server_configs={"fs": _stdio_config("read_file")},
     )
@@ -276,12 +264,8 @@ async def test_newly_discovered_tool_is_enabled_by_default(
         pref_rows = await prefs.list_for(resource.id, "tool")
         wf = next(p for p in pref_rows if p.capability_key == "write_file")
         assert wf.enabled is True
-
-        # The first sighting is auditable.
-        events = await audit.query(event_type=AuditEventType.CAPABILITY_FIRST_SEEN.value)
-        assert [e.details["key"] for e in events if e.details["key"] == "write_file"] == [
-            "write_file"
-        ]
+        # The first sighting is recorded on the preference row itself.
+        assert wf.first_seen_at is not None
     finally:
         await sup.dispose()
         await engine.dispose()
@@ -456,7 +440,6 @@ def _discovery_with_supervisor(
         resource_service=rsvc,
         supervisor=supervisor,  # type: ignore[arg-type]
         preferences=prefs,
-        audit=audit,
     )
 
 

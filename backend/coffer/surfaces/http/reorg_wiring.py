@@ -56,7 +56,6 @@ def wire_reorg(
         agent=LangchainAgenticReorg(),
         models=_ModelSelector(provider_svc),
         credential_resolver=credential_resolver,
-        audit=deps.audit,
         now=lambda: datetime.now(tz=UTC),
         embedding_resolver=deps.embedding_resolver,
     )

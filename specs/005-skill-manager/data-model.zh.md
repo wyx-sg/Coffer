@@ -142,7 +142,6 @@ import agent-kind 代码（Contract 5c）。
 | `skill_updated`        | 就地文件编辑改动了 skill 内容（details 含前后哈希） |
 | `skill_bound`          | 按 agent 启用 binding（创建 symlink）             |
 | `skill_unbound`        | 按 agent 禁用 binding（移除 symlink）             |
-| `skill_drift_detected` | `verify` 报告 drift（details 含计数与类别）       |
 
 workspace 修订新增：
 
@@ -150,7 +149,6 @@ workspace 修订新增：
 | ------------------------- | --------------------------------------------------------------------------- |
 | `skill_adopted`           | 一个未托管 skill 文件夹被 adopt 进主库（FR-023）                            |
 | `skill_unmanaged_deleted` | 一个未托管 skill 文件夹被从 agent workspace 中删除（FR-024）                |
-| `skill_autobind_skipped`  | 自动绑定 / follow 调和跳过某个 agent（如目标冲突；尽力而为）                |
 | `skill_relinked`          | 某个已启用 binding 的托管链接在新投递路径上被重建（如 `config_dir` 变更后） |
 
 skill **删除** 没有专门的事件——删除一个 skill 走 `ResourceService.delete`，

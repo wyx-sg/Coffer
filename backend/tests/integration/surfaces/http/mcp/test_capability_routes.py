@@ -141,7 +141,6 @@ async def _build_app(
         resource_service=rsvc,
         supervisor=supervisor,
         preferences=prefs_repo,
-        audit=audit,
     )
 
     set_active_token("test-token")
@@ -289,7 +288,6 @@ async def test_list_capabilities_tools_only_upstream_method_not_found(
         resource_service=rsvc,
         supervisor=supervisor,
         preferences=prefs_repo,
-        audit=audit,
     )
 
     set_active_token("test-token")
@@ -728,7 +726,6 @@ async def test_test_endpoint_unreachable_server_returns_ok_false(
         resource_service=rsvc,
         supervisor=supervisor,
         preferences=prefs_repo,
-        audit=audit,
     )
 
     set_active_token("test-token")
@@ -811,7 +808,6 @@ async def test_enable_capability_creates_audit_event(
         resource_service=rsvc,
         supervisor=supervisor,
         preferences=prefs_repo,
-        audit=audit,
     )
 
     set_active_token("test-token")
@@ -1133,7 +1129,6 @@ async def test_test_endpoint_http_transport(
             resource_service=rsvc,
             supervisor=supervisor,
             preferences=prefs_repo,
-            audit=audit,
         )
         health_repo = MCPServerHealthRepo(sm)
 

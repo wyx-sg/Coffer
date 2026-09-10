@@ -247,7 +247,6 @@ clean success sends no completion summary while a failed turn does.
 
 **Covering scenarios**:
 
-- a channel-driven turn is audited with channel, peer, and agent
 - a clean success sends no completion summary
 - a turn that does not end normally sends a completion summary
 - a group member who is not the paired sender is ignored
@@ -736,13 +735,6 @@ produce it on its own.
   confirmation is routed back into the group/thread (never a DM); a non-owner's
   tap is refused with a routed "not authorized" reply and no switch
 
-### Scenario: a channel-driven turn is audited with channel, peer, and agent
-
-- **Given** a paired channel
-- **When** the peer sends a message that drives a turn
-- **Then** an audit record names the channel, the peer, the agent, and the
-  conversation
-
 ### Scenario: a turn that does not end normally sends a completion summary
 
 - **Given** a paired channel
@@ -1183,12 +1175,11 @@ produce it on its own.
 - **When** a turn completes,
 - **Then** the assistant message records the model that produced it.
 
-### Scenario: token usage and audit
+### Scenario: token usage is recorded on the assistant message
 
 - **Given** a turn that completes,
 - **When** the turn ends,
-- **Then** the assistant message records token usage and the audit log contains
-  the completed turn with actor `agent`.
+- **Then** the assistant message records the turn's token usage.
 
 
 ## Channels as a management plane (north star)

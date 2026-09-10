@@ -104,11 +104,11 @@ class IngestPipeline:
         source_path: str | None = None,
     ) -> tuple[Document, str]:
         """Ingest one upload. Returns ``(document, status)`` — ``"ingested"`` (new
-        ULID id, audited INGEST), ``"updated"`` (a changed re-upload of an existing
-        filename, same id, ``replace=true``, audited UPDATE), or ``"unchanged"`` (a
-        byte-identical re-upload, an idempotent no-op). Identity is a stable ULID
-        decoupled from content (spec 007 FR-062): a re-upload is matched by
-        ``original_filename`` in scope, not by bytes."""
+        ULID id), ``"updated"`` (a changed re-upload of an existing filename, same
+        id, ``replace=true``), or ``"unchanged"`` (a byte-identical re-upload, an
+        idempotent no-op). Identity is a stable ULID decoupled from content
+        (spec 007 FR-062): a re-upload is matched by ``original_filename`` in
+        scope, not by bytes."""
         check_upload_size(raw_bytes, config)
         prepared = await prepare_upload(self._converters, filename, raw_bytes)
         async with self._lock(scope_name):

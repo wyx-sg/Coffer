@@ -112,10 +112,10 @@ never sees a Telegram update or SeaTalk event shape.
 | ------------------------ | --------------------------------------------------------------------- |
 | `channel_pairing_issued` | a pairing code is generated                                           |
 | `channel_paired`         | a sender claims the code and becomes the peer                         |
-| `channel_notify_sent`    | notify delivers text to the peer                                      |
-| `channel_turn_started`   | an inbound message drives a turn (channel, peer, agent, conversation) |
 
 Resource lifecycle events (`resource_created` … `resource_deleted`) come from
-the framework automatically. The generic per-turn `chat_turn_completed` audit
-is channel-agnostic; `channel_turn_started`
-adds the channel/peer/agent context that makes channel-driven work queryable.
+the framework automatically. Turn activity is **not** audited: a turn happening
+is neither irreversible, security-sensitive, nor invisible afterwards — the
+conversation and its messages are the record. Pairing is audited because it
+grants a sender the right to drive turns, which is exactly the kind of change
+the log exists for.

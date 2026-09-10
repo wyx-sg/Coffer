@@ -162,7 +162,6 @@ Add to `AuditEventType`:
 | `skill_updated`        | In-place file edit changes skill content (with before/after hashes)        |
 | `skill_bound`          | Per-agent binding enabled (symlink created)                                |
 | `skill_unbound`        | Per-agent binding disabled (symlink removed)                               |
-| `skill_drift_detected` | `verify` op reported drift (count + categories in details)                 |
 
 The workspace amendment adds:
 
@@ -170,7 +169,6 @@ The workspace amendment adds:
 | ------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `skill_adopted`           | An unmanaged skill folder was adopted into the master store (FR-023)                                       |
 | `skill_unmanaged_deleted` | An unmanaged skill folder was deleted from an agent's workspace (FR-024)                                   |
-| `skill_autobind_skipped`  | Auto-bind / follow reconciliation skipped an agent (e.g. target conflict; best-effort)                     |
 | `skill_relinked`          | An enabled binding's managed link was re-created at a new delivery path (e.g. after a `config_dir` change) |
 
 Skill **removal** has no dedicated event — deleting a skill goes through

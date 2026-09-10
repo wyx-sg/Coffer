@@ -36,7 +36,6 @@ from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_worker import RetentionWorker
-from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Kind
 from coffer.infrastructure.daemon.orphan_sweep import startup_sweep
 from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
@@ -212,7 +211,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # coffer-builtin-agent gateway session sees the fully-populated
     # BuiltinToolRegistry (knowledge + skill + MCP tools). The session factory
     # is the one wire_mcp_kind registered via set_mcp_session_factory.
-    chat_gateway_session = wire_chat(audit, sm, get_mcp_session_factory(), credential_store)
+    chat_gateway_session = wire_chat(sm, get_mcp_session_factory(), credential_store)
     # The chat session's supervisor stays in session_supervisors so on_delete evicts
     # its upstreams; shutdown disposes it first (on_dispose deregisters; idempotent).
     app.state.mcp_session_supervisors = session_supervisors
@@ -295,17 +294,13 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     reaper_task = start_session_reaper(**reaper_kwargs_from_env())
     app.state.mcp_session_reaper_task = reaper_task
 
-    # FR-014: record daemon lifecycle audit events; T3: set lifecycle phase
+    # T3: set lifecycle phase
     daemon_routes.set_daemon_phase("ready")
-    with contextlib.suppress(Exception):
-        await audit.record(AuditEventType.DAEMON_STARTED.value, actor="system")
 
     try:
         yield
     finally:
         daemon_routes.set_daemon_phase("draining")
-        with contextlib.suppress(Exception):
-            await audit.record(AuditEventType.DAEMON_STOPPED.value, actor="system")
         worker.stop()
         await stop_auto_organize(app)
         await stop_async_batches(app)

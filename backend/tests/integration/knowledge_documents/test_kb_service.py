@@ -76,11 +76,6 @@ async def test_reupload_identical_file_is_noop(kb) -> None:
     again = await _ingest(kb, "kb1", "a.md", b"# Hello\n\nworld")
     assert again.id == first.id
     assert await kb.documents.count_documents(KIND_KNOWLEDGE, "kb1") == 1
-    # The no-op re-uploads NOTHING, so no second audit event is recorded.
-    events = await kb.audit.query(kind=KIND_KNOWLEDGE, name="kb1", limit=50)
-    types = [e.event_type for e in events]
-    assert types.count("kb_document_ingested") == 1
-    assert "kb_document_updated" not in types
 
 
 @pytest.mark.acceptance(
@@ -637,21 +632,6 @@ async def test_list_documents_offset_past_total(kb) -> None:
     assert total == 1
 
 
-async def test_replace_reupload_audits_document_updated(kb) -> None:
-    """FR-016: a changed replace re-upload of an existing filename is an UPDATE
-    in the audit trail, not a second INGEST (and a byte-identical no-op re-upload
-    audits nothing)."""
-    await kb.create_kb("kb1")
-    await _ingest(kb, "kb1", "a.md", b"# A\n\noriginal audited body")
-    await _ingest(kb, "kb1", "a.md", b"# A\n\noriginal audited body")  # identical → no-op
-    await _ingest(kb, "kb1", "a.md", b"# A\n\nchanged audited body", replace=True)
-
-    events = await kb.audit.query(kind=KIND_KNOWLEDGE, name="kb1", limit=50)
-    types = [e.event_type for e in events]
-    assert types.count("kb_document_ingested") == 1  # the no-op did not re-audit
-    assert types.count("kb_document_updated") == 1
-
-
 # ----- external source-file tracking (FR-021..024) -----
 
 
@@ -698,9 +678,6 @@ async def test_check_sources_classifies_changed_unchanged_missing(kb, tmp_path) 
     assert by_id[d_changed.id] == "changed"
     assert by_id[d_unchanged.id] == "unchanged"
     assert by_id[d_missing.id] == "missing"
-    # Detect-only: no document was re-indexed, so no UPDATE was audited.
-    events = await kb.audit.query(kind=KIND_KNOWLEDGE, name="kb1", limit=50)
-    assert "kb_document_updated" not in [e.event_type for e in events]
 
 
 async def test_check_sources_ignores_byte_uploads_without_source_path(kb, tmp_path) -> None:
@@ -781,9 +758,6 @@ async def test_auto_update_sources_refreshes_changed(kb, tmp_path) -> None:
     # Same document, refreshed content searchable.
     assert await kb.documents.count_documents(KIND_KNOWLEDGE, "kb1") == 1
     assert len((await kb.service.search(scope_name="kb1", query="banana", top_k=5)).passages) == 1
-    # The in-place refresh audited KB_DOCUMENT_UPDATED.
-    events = await kb.audit.query(kind=KIND_KNOWLEDGE, name="kb1", limit=50)
-    assert "kb_document_updated" in [e.event_type for e in events]
 
 
 async def test_update_from_source_missing_file_rejected(kb, tmp_path) -> None:

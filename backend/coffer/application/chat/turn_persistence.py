@@ -1,8 +1,8 @@
 """Persistence helpers for the turn orchestrator.
 
 Split out of ``turn_orchestrator.py`` (file-size limit): the end-of-turn
-finalize/audit write and the cancel-raced placeholder recovery. Both are pure
-application-layer helpers over the ``ChatService`` / ``AuditService`` ports.
+finalize write and the cancel-raced placeholder recovery. Both are pure
+application-layer helpers over the ``ChatService`` port.
 """
 
 from __future__ import annotations
@@ -10,9 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from coffer.application.audit_service import AuditService
 from coffer.application.chat.service import ChatService
-from coffer.domain.audit import AuditEventType
 from coffer.domain.chat.events import TurnDone, TurnError
 from coffer.domain.chat.message import (
     ContentBlock,
@@ -29,7 +27,6 @@ log = logging.getLogger(__name__)
 async def finalize_assistant_message(
     *,
     chat: ChatService,
-    audit: AuditService,
     conversation_id: str,
     message_id: str | None,
     model_id: str | None,
@@ -39,13 +36,13 @@ async def finalize_assistant_message(
     final_done: TurnDone | None,
     error_event: TurnError | None,
 ) -> None:
-    """Finalise the streaming placeholder with its content/status + audit it.
+    """Finalise the streaming placeholder with its content/status.
 
     Finalising the same placeholder row is idempotent, so a finalise that
     races a cancellation cannot leave two assistant messages. When
     ``message_id`` is ``None`` (the placeholder write itself failed or was
     cancelled before committing) the message is appended directly instead,
-    so the turn still leaves a persisted record and an audit entry.
+    so the turn still leaves a persisted record.
     """
     content: list[ContentBlock] = []
     if text_parts:
@@ -79,21 +76,6 @@ async def finalize_assistant_message(
             )
     except Exception:
         log.exception("Failed to finalize assistant message for conversation %s", conversation_id)
-
-    try:
-        await audit.record(
-            AuditEventType.CHAT_TURN_COMPLETED.value,
-            actor="agent",
-            details={
-                "conversation_id": conversation_id,
-                "model_id": model_id,
-                "status": status,
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
-            },
-        )
-    except Exception:
-        log.exception("Failed to emit audit event for conversation %s", conversation_id)
 
 
 async def recover_placeholder_id(

@@ -31,7 +31,6 @@ import asyncio
 import logging
 from collections.abc import Callable, Sequence
 
-from coffer.application.audit_service import AuditService
 from coffer.application.chat.bus import ConversationBus
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService, MessageRepo
@@ -61,11 +60,9 @@ class TurnOrchestrator:
         *,
         chat_service: ChatService,
         registry: AgentProviderRegistry,
-        audit: AuditService,
     ) -> None:
         self._chat = chat_service
         self._registry = registry
-        self._audit = audit
         # Keep references to fire-and-forget advance tasks so they are not GC'd
         # mid-flight; each discards itself on completion.
         self._bg_tasks: set[asyncio.Task[None]] = set()
@@ -294,7 +291,6 @@ class TurnOrchestrator:
                 active=active,
                 adapter=adapter,
                 chat=self._chat,
-                audit=self._audit,
             ),
             name=f"turn:{conversation_id}",
         )

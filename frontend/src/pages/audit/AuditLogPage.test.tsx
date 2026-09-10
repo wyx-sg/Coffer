@@ -146,7 +146,7 @@ describe("AuditLogPage", () => {
             {
               id: 7,
               timestamp: new Date(Date.now() - 5_000).toISOString(),
-              event_type: "daemon_started",
+              event_type: "token_rotated",
               resource_kind: null,
               resource_name: null,
               actor: "system",
@@ -160,7 +160,7 @@ describe("AuditLogPage", () => {
 
     render(wrap(<AuditLogPage />));
 
-    const activityCell = await screen.findByText("Daemon started");
+    const activityCell = await screen.findByText("Access token rotated");
     const row = activityCell.closest("tr")!;
 
     // Expand

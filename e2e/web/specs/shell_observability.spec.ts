@@ -57,8 +57,8 @@ async function registerFakeServer(
 }
 
 /**
- * Trigger capability refresh so that capability_first_seen audit events
- * are created synchronously before the test reads the audit log.
+ * Trigger capability discovery so the server's capabilities exist and can be
+ * addressed by key before the test toggles or reads them.
  */
 async function refreshServer(name: string): Promise<void> {
   const { token, port } = readDaemonToken();
@@ -70,6 +70,27 @@ async function refreshServer(name: string): Promise<void> {
     },
   );
   if (!r.ok) throw new Error(`refresh failed: ${r.status} ${await r.text()}`);
+}
+
+/**
+ * Disable then re-enable one capability. Each half writes an audit row
+ * (`capability_disabled` / `capability_enabled`), so calling this N times
+ * yields 2N rows attributable to this test — which is how the pagination test
+ * forces a second page now that first-sighting is no longer audited (it lives
+ * on `mcp_capability_preferences.first_seen_at` instead).
+ */
+async function toggleCapability(name: string, key: string): Promise<void> {
+  const { token, port } = readDaemonToken();
+  const base = `http://127.0.0.1:${port}/api/v1/resources/mcp_server/${name}/capabilities/tool`;
+  const headers = { "X-Coffer-Token": token, "X-Coffer-Actor": "e2e" };
+  for (const verb of ["disable", "enable"]) {
+    const r = await fetch(`${base}/${verb}`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ key }),
+    });
+    if (!r.ok) throw new Error(`${verb} failed: ${r.status} ${await r.text()}`);
+  }
 }
 
 acceptance(
@@ -183,9 +204,12 @@ acceptance(
   "002-ui-shell",
   "audit log pagination controls appear and advance page",
   async ({ page }) => {
-    // Register a server with 20 tools so that capability_first_seen events
-    // plus resource_created totals 21 entries — just over the default page
-    // size of 20, forcing a second page.
+    // Register a server with a handful of tools, then toggle each tool's
+    // capability off and on. Every toggle audits, so 11 toggles plus
+    // resource_created totals 23 entries — comfortably over the default page
+    // size of 20, forcing a second page. (Registering the server no longer
+    // audits one row per capability: first-sighting is a column on
+    // `mcp_capability_preferences`, not an audit event.)
     //
     // Because the audit log is shared across all tests in the run, we must
     // assert the DELTA caused by THIS test rather than assuming the page
@@ -194,28 +218,7 @@ acceptance(
     // reload, and assert that Next became (or stayed) enabled AND that a new
     // page boundary appeared that is attributable to this server's events.
     const name = generateUniqueName("e2e002pag");
-    const MANY_TOOLS = [
-      "t01",
-      "t02",
-      "t03",
-      "t04",
-      "t05",
-      "t06",
-      "t07",
-      "t08",
-      "t09",
-      "t10",
-      "t11",
-      "t12",
-      "t13",
-      "t14",
-      "t15",
-      "t16",
-      "t17",
-      "t18",
-      "t19",
-      "t20",
-    ];
+    const TOOLS = ["t01", "t02", "t03", "t04", "t05", "t06", "t07", "t08", "t09", "t10", "t11"];
     try {
       // ── Step 1: capture baseline page count BEFORE this test's writes ──
       await page.goto("/audit");
@@ -236,11 +239,13 @@ acceptance(
         ? parseInt(/Page \d+ of (\d+)/.exec(pageInfoBefore)?.[1] ?? "1", 10)
         : 1;
 
-      // ── Step 2: register the 20-tool server and trigger discovery ──
-      await registerFakeServer(name, ["--tools", ...MANY_TOOLS]);
-      // Trigger discovery synchronously so all capability_first_seen events
-      // exist before the page reloads.
+      // ── Step 2: register the server, discover, then toggle every tool ──
+      await registerFakeServer(name, ["--tools", ...TOOLS]);
+      // Discovery must complete before a capability can be toggled by key.
       await refreshServer(name);
+      for (const tool of TOOLS) {
+        await toggleCapability(name, tool);
+      }
 
       // ── Step 3: reload and wait for this server's entries to appear ──
       await page.reload();
@@ -248,7 +253,7 @@ acceptance(
         timeout: 15_000,
       });
 
-      // ── Step 4: assert pagination GREW because of this test's 21 events ──
+      // ── Step 4: assert pagination GREW because of this test's 23 events ──
       // The page count reported by "Page X of Y" must be strictly greater
       // than what it was before we registered this server — proving that
       // pagination is driven by THIS test's writes, not pre-existing rows.

@@ -30,7 +30,6 @@ def _registry(mem) -> BuiltinToolRegistry:
         scope=mem.scope,
         git_branch=git_branch,
         scope_dir=paths.scope_dir,
-        audit=mem.audit,
         now=lambda: datetime.now(tz=UTC),
     )
     register_knowledge_builtin_tools(

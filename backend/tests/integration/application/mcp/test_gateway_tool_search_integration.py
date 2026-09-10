@@ -74,7 +74,7 @@ async def _setup(tmp_path, server_configs):
     prefs_repo = MCPCapabilityPreferenceRepo(sm)
     inv_repo = MCPInvocationRepo(sm)
     discovery = CapabilityDiscovery(
-        resource_service=resource_svc, supervisor=supervisor, preferences=prefs_repo, audit=audit
+        resource_service=resource_svc, supervisor=supervisor, preferences=prefs_repo
     )
     session = MCPGatewaySession(
         session_id="test-session",

@@ -225,7 +225,6 @@ agent 的 turn-started 审计记录；观察干净成功不发完成摘要、而
 
 **Covering scenarios**:
 
-- a channel-driven turn is audited with channel, peer, and agent
 - a clean success sends no completion summary
 - a turn that does not end normally sends a completion summary
 - a group member who is not the paired sender is ignored
@@ -649,12 +648,6 @@ Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制
 - **Then** 切换被应用到该群 thread，且"已切换"的确认消息被路由回该群/thread
   （绝不发到 DM）；非 owner 的点选会收到一条被路由的"未授权"拒绝回复且不发生切换
 
-### Scenario: a channel-driven turn is audited with channel, peer, and agent
-
-- **Given** 一个已配对 channel
-- **When** peer 发一条驱动 turn 的消息
-- **Then** 一条审计记录写下 channel、peer、agent 与 conversation
-
 ### Scenario: a turn that does not end normally sends a completion summary
 
 - **Given** 一个已配对 channel
@@ -1040,12 +1033,11 @@ Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制
 - **When** 一个 turn 完成
 - **Then** assistant 消息记下产出它的那个模型
 
-### Scenario: token usage and audit
+### Scenario: token usage is recorded on the assistant message
 
 - **Given** 一个会完成的 turn
 - **When** 该 turn 结束
-- **Then** assistant 消息记下 token 用量，且审计日志中含有这个已完成的 turn，
-  actor 为 `agent`
+- **Then** assistant 消息记下这个 turn 的 token 用量
 
 
 ## Channels as a management plane（北极星）

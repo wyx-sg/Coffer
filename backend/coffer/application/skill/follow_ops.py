@@ -12,11 +12,9 @@ agent-kind code (Contract 5c).
 
 from __future__ import annotations
 
-import contextlib
 import logging
 from typing import TYPE_CHECKING
 
-from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import CofferError
 from coffer.domain.resource import ResourceRef
 from coffer.domain.scope import agent_in_scope
@@ -25,19 +23,6 @@ if TYPE_CHECKING:
     from coffer.application.skill.service import SkillService
 
 logger = logging.getLogger(__name__)
-
-
-async def audit_autobind_skipped(
-    *, service: SkillService, skill_name: str, agent_name: str, reason: str, actor: str
-) -> None:
-    """Best-effort SKILL_AUTOBIND_SKIPPED audit row (never raises)."""
-    with contextlib.suppress(Exception):
-        await service._audit.record(
-            AuditEventType.SKILL_AUTOBIND_SKIPPED.value,
-            ref=ResourceRef("skill", skill_name),
-            actor=actor,
-            details={"agent": agent_name, "reason": reason},
-        )
 
 
 async def apply_follow_for_agent(
@@ -65,7 +50,7 @@ async def apply_follow_for_agent(
 
     Returns the per-skill delivery failures as human-readable strings so the
     sync hook can surface them in the run's errors; front-door callers ignore
-    the return (the failures are audited there).
+    the return (the failures are logged).
     """
     try:
         agent = await service._rs.get(ResourceRef("agent", agent_name))
@@ -97,17 +82,6 @@ async def apply_follow_for_agent(
                     "follow delivery of skill %r to agent %r skipped: %s", name, agent_name, e
                 )
                 failures.append(f"skill {name!r}: {e}")
-                # The sync hook re-runs this on EVERY import; a standing failure
-                # would grow the audit log unboundedly. Sync failures surface in
-                # the run's errors instead; front-door attempts stay audited.
-                if actor != "sync":
-                    await audit_autobind_skipped(
-                        service=service,
-                        skill_name=name,
-                        agent_name=agent_name,
-                        reason=str(e),
-                        actor=actor,
-                    )
         excluded_reclaimed = bound & excluded
         for name in sorted(excluded_reclaimed):
             await service.disable_for(skill_name=name, agent_name=agent_name, actor=actor)

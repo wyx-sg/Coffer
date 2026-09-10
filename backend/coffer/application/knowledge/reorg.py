@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from coffer.application.audit_service import AuditService
 from coffer.application.knowledge.ports import KnowledgeDocumentRepo
 from coffer.application.knowledge.reorg_ports import AgenticReorgPort, ModelSelectorPort, ReorgTool
 from coffer.application.knowledge.retrieval import (
@@ -28,12 +27,9 @@ from coffer.application.knowledge.retrieval import (
     no_embedding,
 )
 from coffer.application.knowledge.sync import KnowledgeReconciler
-from coffer.domain.audit import AuditEventType
-from coffer.domain.knowledge.document import KIND_KNOWLEDGE
 from coffer.domain.knowledge.retrieval import StoreRef
 from coffer.domain.knowledge.scope import ResolvedScope
 from coffer.domain.knowledge.scope_config import KnowledgeConfig
-from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.knowledge.paths import topic_path
 from coffer.infrastructure.knowledge_scope.topic_files import (
     TopicDoc,
@@ -106,7 +102,6 @@ class ReorgService:
         agent: AgenticReorgPort,
         models: ModelSelectorPort,
         credential_resolver: Callable[[str], str],
-        audit: AuditService,
         now: NowFn,
         embedding_resolver: EmbeddingResolver = no_embedding,
     ) -> None:
@@ -119,7 +114,6 @@ class ReorgService:
         self._agent = agent
         self._models = models
         self._credential_resolver = credential_resolver
-        self._audit = audit
         self._now = now
         self._resolve_embedding = embedding_resolver
 
@@ -165,13 +159,6 @@ class ReorgService:
         after = await asyncio.to_thread(list_topic_docs, store_dir)
         await asyncio.to_thread(write_index, store_dir, after)
         await self._reconciler.reconcile(store=ref, embedding=embedding)
-        await self._record_audit(
-            scope_name=scope_name,
-            topics_before=len(before),
-            topics_after=len(after),
-            topics_written=acts.written,
-            topics_superseded=acts.superseded,
-        )
         return ReorgResult(
             "reorganized",
             len(before),
@@ -306,27 +293,6 @@ class ReorgService:
                 handler=_supersede_topic,
             ),
         ]
-
-    async def _record_audit(
-        self,
-        *,
-        scope_name: str,
-        topics_before: int,
-        topics_after: int,
-        topics_written: int,
-        topics_superseded: int,
-    ) -> None:
-        await self._audit.record(
-            AuditEventType.MEMORY_REORGANIZED.value,
-            ref=ResourceRef(KIND_KNOWLEDGE, scope_name),
-            actor="system",
-            details={
-                "topics_before": topics_before,
-                "topics_after": topics_after,
-                "topics_written": topics_written,
-                "topics_superseded": topics_superseded,
-            },
-        )
 
 
 __all__ = ["REORG_SYSTEM", "ReorgResult", "ReorgService"]

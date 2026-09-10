@@ -15,7 +15,6 @@ from collections.abc import AsyncIterator, Callable, Sequence
 
 import pytest
 
-from coffer.application.audit_service import AuditService
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import (
@@ -27,7 +26,6 @@ from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStart
 from coffer.domain.chat.message import Message
 from tests.unit.chat.conftest import (
     FakeAgentAdapter,
-    FakeAuditRepo,
     FakeConversationRepo,
     FakeMessageRepo,
 )
@@ -95,7 +93,6 @@ class _BlockingAdapter:
 
 
 def _make_orch(provider: object) -> tuple[TurnOrchestrator, ChatService, FakeMessageRepo]:
-    audit = AuditService(repo=FakeAuditRepo())  # type: ignore[arg-type]
     conv_repo = FakeConversationRepo()
     msg_repo = FakeMessageRepo()
     registry = AgentProviderRegistry()
@@ -104,9 +101,8 @@ def _make_orch(provider: object) -> tuple[TurnOrchestrator, ChatService, FakeMes
         conversations=conv_repo,
         messages=msg_repo,
         registry=registry,
-        audit=audit,  # type: ignore[arg-type]
     )
-    orch = TurnOrchestrator(chat_service=chat, registry=registry, audit=audit)
+    orch = TurnOrchestrator(chat_service=chat, registry=registry)
     return orch, chat, msg_repo
 
 

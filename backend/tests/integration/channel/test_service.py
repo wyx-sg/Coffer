@@ -77,7 +77,7 @@ async def test_issue_pairing_code_for_unknown_channel_raises(env: ChannelEnv) ->
 
 
 @pytest.mark.acceptance(spec="009-channels", scenario="notify delivers to the paired owner")
-async def test_notify_sends_via_running_adapter_and_audits(env: ChannelEnv) -> None:
+async def test_notify_sends_via_running_adapter(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
     await env.runtime.reconcile_once()
     assert len(env.created_adapters) == 1
@@ -88,9 +88,6 @@ async def test_notify_sends_via_running_adapter_and_audits(env: ChannelEnv) -> N
     await env.service.notify("tg", "backup finished", actor="cli")
 
     assert adapter.sent == [("owner", "backup finished")]
-    entries = await env.audit_entries("channel_notify_sent", name="tg")
-    assert len(entries) == 1
-    assert entries[0].details == {"chars": len("backup finished")}
 
 
 @pytest.mark.acceptance(spec="009-channels", scenario="notify on an unpaired channel fails cleanly")
@@ -103,4 +100,3 @@ async def test_notify_without_paired_peer_fails_and_sends_nothing(env: ChannelEn
         await env.service.notify("tg", "hello?", actor="cli")
 
     assert env.created_adapters[0].sent == []
-    assert await env.audit_entries("channel_notify_sent", name="tg") == []

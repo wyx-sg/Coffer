@@ -18,7 +18,6 @@ from typing import Any
 import pytest
 
 from coffer.application.knowledge.reorg import ReorgService
-from coffer.domain.audit import AuditEventType
 from coffer.domain.provider.config import Protocol, ProviderConfig, ResolvedConnection
 from coffer.infrastructure.knowledge.paths import (
     superseded_dir,
@@ -97,7 +96,6 @@ def _make_reorg(mem: Any, agent: _FakeAgent, models: _Models) -> ReorgService:
         agent=agent,
         models=models,
         credential_resolver=lambda ref: "key",
-        audit=mem.audit,
         now=lambda: datetime(2026, 6, 21, 12, 0, tzinfo=UTC),
         embedding_resolver=svc._resolve_embedding,
     )
@@ -217,10 +215,6 @@ async def test_reorg_consolidates_duplicate_topics(mem: Any) -> None:
 
     # deploy-b is gone from the live lane
     assert not topic_path(store_dir, "deploy-b").exists()
-
-    # Audit recorded
-    entries = await mem.audit.query(event_type=AuditEventType.MEMORY_REORGANIZED.value)
-    assert len(entries) == 1
 
 
 @pytest.mark.acceptance(
@@ -396,7 +390,7 @@ async def test_write_topic_bad_slug_rejected_no_write(mem: Any) -> None:
     assert "Content." in topic_path(store_dir, "safe").read_text(encoding="utf-8")
 
 
-async def test_recursion_limit_still_finalizes_index_and_audit(mem: Any) -> None:
+async def test_recursion_limit_still_finalizes_index(mem: Any) -> None:
     """GraphRecursionError mid-loop still finalizes INDEX/reconcile/audit."""
     from langchain_core.messages import AIMessage
 
@@ -423,9 +417,6 @@ async def test_recursion_limit_still_finalizes_index_and_audit(mem: Any) -> None
     assert result.status == "reorganized"
     # INDEX was regenerated despite the truncated loop
     assert knowledge_index_path(store_dir).exists()
-    # Audit was recorded
-    entries = await mem.audit.query(event_type=AuditEventType.MEMORY_REORGANIZED.value)
-    assert len(entries) == 1
 
 
 async def test_empty_guard_no_topics(mem: Any) -> None:

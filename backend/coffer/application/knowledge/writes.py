@@ -2,9 +2,9 @@
 
 Extracted from ``service.py`` to keep that file under the project's 400-LOC
 ceiling. These free functions own the full mutation pipeline: build / mutate a
-``KnowledgeEntry``, persist + reindex it (or remove it), then audit and fire the
-change-notify hook. The service resolves the store first (scope + config +
-store_ref) and delegates the mechanical work here.
+``KnowledgeEntry``, persist + reindex it (or remove it), then fire the
+change-notify hook (deletes are additionally audited). The service resolves the
+store first (scope + config + store_ref) and delegates the mechanical work here.
 """
 
 from __future__ import annotations
@@ -45,7 +45,8 @@ StoreRefFn = Callable[[str, str], StoreRef]
 class WriteDeps:
     """The collaborators every mutation needs, bundled by the service so the
     orchestrator call sites stay short. ``audit_and_notify`` records the audit
-    event then fires the post-write change hook (every mutation ends this way)."""
+    event then fires the post-write change hook (the delete/clear paths; the
+    add/update paths only notify)."""
 
     audit: AuditService
     reconciler: KnowledgeReconciler
@@ -177,7 +178,7 @@ async def add_new_fact(
     actor: Actor,
     origin_session_id: str | None,
 ) -> KnowledgeEntry:
-    """Build, persist, index, audit, and notify for a brand-new fact in a
+    """Build, persist, index, and notify for a brand-new fact in a
     resolved store. Shared by ``add_fact`` (scope→store) and
     ``add_fact_to_scope`` (store-by-name)."""
     body = body.strip()
@@ -197,12 +198,7 @@ async def add_new_fact(
         config=config,
         embedding_resolver=deps.embedding_resolver,
     )
-    await deps.audit_and_notify(
-        AuditEventType.MEMORY_ADDED,
-        scope_name=scope_name,
-        actor=actor,
-        details={"memory_id": fact.id, "scope": resolved.scope.value, "char_size": len(body)},
-    )
+    await deps.notify(scope_name)
     return fact
 
 
@@ -218,7 +214,7 @@ async def update_existing_fact(
     new_title: str | None = None,
     new_description: str | None = None,
 ) -> KnowledgeEntry:
-    """Apply edits to an existing fact, re-persist + reindex, audit, and notify."""
+    """Apply edits to an existing fact, re-persist + reindex, and notify."""
     new_body = new_body.strip()
     validate_fact(new_body, config.max_entry_chars)
     updated = apply_fact_changes(
@@ -235,12 +231,7 @@ async def update_existing_fact(
         config=config,
         embedding_resolver=deps.embedding_resolver,
     )
-    await deps.audit_and_notify(
-        AuditEventType.MEMORY_UPDATED,
-        scope_name=scope_name,
-        actor=actor,
-        details={"memory_id": existing.fact.id, "char_size": len(new_body)},
-    )
+    await deps.notify(scope_name)
     return updated
 
 

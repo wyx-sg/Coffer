@@ -4,9 +4,9 @@ The write half of the eight (``list``, ``write``, ``delete``); the retrieval
 half plus the handoff pair live in ``builtin_tools``. Split across two modules
 only for the project's file-size ceiling — one kind, one tool family.
 
-Every write funnels through the same service paths as the REST surface, so it
-records the F01 audit trail with the agent as actor. Documents are co-managed
-(spec 007 FR-062): an agent may add and edit them, not only read them.
+Every write funnels through the same service paths as the REST surface.
+Documents are co-managed (spec 007 FR-062): an agent may add and edit them, not
+only read them.
 """
 
 from __future__ import annotations

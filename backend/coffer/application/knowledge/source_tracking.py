@@ -4,7 +4,7 @@ Extracted from ``service.py`` so the orchestration service stays under the
 file-size ceiling. These are the bodies of ``KnowledgeService.check_sources``
 / ``update_from_source``; the service keeps thin delegating wrappers. The host
 service is passed in so re-ingest funnels through the existing ``ingest_bytes``
-re-upload path (preserving the ULID id + the ``KB_DOCUMENT_UPDATED`` audit).
+re-upload path (preserving the ULID id).
 """
 
 from __future__ import annotations
@@ -58,11 +58,10 @@ async def check_sources(service: DocumentOps, *, scope_name: str, actor: str) ->
     provenance.
 
     Only documents whose ``metadata.source_path`` is set (a path-based ingest
-    recorded one) are checked. Detection alone changes nothing and audits
-    nothing. When the KB's ``auto_update_sources`` is true, a changed document
-    whose ``source_mode != "edited"`` is refreshed in place via
-    ``update_from_source`` (which audits the existing ``KB_DOCUMENT_UPDATED``); a
-    changed hand-edited document is left alone and reported as ``"edited"``.
+    recorded one) are checked. Detection alone changes nothing. When the KB's
+    ``auto_update_sources`` is true, a changed document whose
+    ``source_mode != "edited"`` is refreshed in place via ``update_from_source``;
+    a changed hand-edited document is left alone and reported as ``"edited"``.
     On-demand only — there is no watcher."""
     config = await service.get_config(scope_name)
     docs = await service._documents.list_documents(

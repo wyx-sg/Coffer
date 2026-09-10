@@ -44,9 +44,9 @@ async def test_record_with_resource_ref(tmp_path):
 
 @pytest.mark.asyncio
 async def test_record_without_ref_uses_system_actor_default(tmp_path):
-    """Daemon-level events default to actor='system' and have no resource ref."""
+    """Ref-less events default to actor='system' and have no resource ref."""
     svc, engine = await _service(tmp_path)
-    await svc.record(AuditEventType.DAEMON_STARTED.value, details={"port": 8000})
+    await svc.record(AuditEventType.TOKEN_ROTATED.value, details={"port": 8000})
     entries = await svc.query()
     assert entries[0].resource_kind is None
     assert entries[0].resource_name is None

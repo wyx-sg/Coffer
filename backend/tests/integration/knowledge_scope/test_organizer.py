@@ -15,7 +15,6 @@ from datetime import UTC, datetime
 import pytest
 
 from coffer.application.knowledge.organizer import OrganizerService
-from coffer.domain.audit import AuditEventType
 from coffer.domain.knowledge.scope import KnowledgeScope
 from coffer.domain.provider.config import Protocol, ProviderConfig, ResolvedConnection
 from coffer.infrastructure.knowledge.paths import (
@@ -86,7 +85,6 @@ def _make_organizer(mem, llm: _ScriptedLlm, models: _Models) -> OrganizerService
         llm=llm,
         models=models,
         credential_resolver=lambda ref: "key",
-        audit=mem.audit,
         now=lambda: datetime(2026, 6, 21, 12, 0, tzinfo=UTC),
         embedding_resolver=svc._resolve_embedding,
     )
@@ -167,9 +165,6 @@ async def test_organizer_drains_inbox_into_topic_doc(mem) -> None:
     # INDEX lists it.
     idx = knowledge_index_path(store_dir).read_text(encoding="utf-8")
     assert "deploy-conventions.md" in idx
-    # An audit entry was recorded.
-    entries = await mem.audit.query(event_type=AuditEventType.MEMORY_ORGANIZED.value)
-    assert len(entries) == 1
     # recall returns content from the topic doc, not the (empty) inbox.
     hits, _mode, _fb = await mem.service.recall_in_scope(
         scope_name="global", query="make release", scope="global"

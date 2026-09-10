@@ -289,11 +289,9 @@ def make_chat_services(
     a model registry — a managed agent brings its own model via provider
     projection (ADR-032).
     """
-    from coffer.application.audit_service import AuditService
     from coffer.application.chat.service import ChatService
     from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 
-    audit = AuditService(repo=FakeAuditRepo())  # type: ignore[arg-type]
     conv_repo = FakeConversationRepo()
     msg_repo = FakeMessageRepo()
 
@@ -311,9 +309,8 @@ def make_chat_services(
         conversations=conv_repo,
         messages=msg_repo,
         registry=registry,
-        audit=audit,  # type: ignore[arg-type]
     )
-    orchestrator = TurnOrchestrator(chat_service=chat_svc, registry=registry, audit=audit)
+    orchestrator = TurnOrchestrator(chat_service=chat_svc, registry=registry)
     return chat_svc, orchestrator, registry
 
 

@@ -5,7 +5,7 @@ Responsibilities:
 - Append and list messages within a conversation.
 - Auto-generate a placeholder title for new conversations; replace it with a
   truncated version of the first user message text.
-- Cascade delete: messages first, then the conversation row; emit audit events.
+- Cascade delete: messages first, then the conversation row.
 
 The ``ConversationRepo`` and ``MessageRepo`` Protocols are defined inline here
 (same pattern as ``MemoryRecordRepo`` in ``application/memory/service.py``).
@@ -19,9 +19,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
-from coffer.application.audit_service import AuditService
 from coffer.application.chat.registry import AgentProviderRegistry
-from coffer.domain.audit import AuditEventType
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.message import ContentBlock, Message, Role, TextBlock
@@ -124,12 +122,10 @@ class ChatService:
         conversations: ConversationRepo,
         messages: MessageRepo,
         registry: AgentProviderRegistry,
-        audit: AuditService,
     ) -> None:
         self._conversations = conversations
         self._messages = messages
         self._registry = registry
-        self._audit = audit
 
     # ------------------------------------------------------------------
     # Conversation CRUD
@@ -140,7 +136,6 @@ class ChatService:
         *,
         agent_key: str,
         agent_config: dict[str, Any] | None = None,
-        actor: str = "user",
         channel_name: str | None = None,
         peer_chat_id: str | None = None,
     ) -> Conversation:
@@ -180,14 +175,7 @@ class ChatService:
         # init_conversation may have set agent-specific state (e.g. the model
         # override on the row); re-read so the caller sees the final shape.
         final = await self._conversations.get(created.id)
-        result = final if final is not None else created
-
-        await self._audit.record(
-            AuditEventType.CONVERSATION_CREATED.value,
-            actor=actor,
-            details={"conversation_id": result.id},
-        )
-        return result
+        return final if final is not None else created
 
     async def list_conversations(self, *, archived: bool = False) -> list[Conversation]:
         """Conversations newest first; active threads only unless ``archived``."""
@@ -229,37 +217,20 @@ class ChatService:
         """Persist the provider-private agent config for a conversation."""
         await self._conversations.set_agent_config(conversation_id, config)
 
-    async def archive_conversation(
-        self, conversation_id: str, *, actor: str = "user"
-    ) -> Conversation:
+    async def archive_conversation(self, conversation_id: str) -> Conversation:
         """Archive a conversation: hide it from the default list, keep it restorable."""
         await self.get_conversation(conversation_id)  # existence check
-        result = await self._conversations.set_archived(conversation_id, datetime.now(tz=UTC))
-        await self._audit.record(
-            AuditEventType.CONVERSATION_ARCHIVED.value,
-            actor=actor,
-            details={"conversation_id": conversation_id},
-        )
-        return result
+        return await self._conversations.set_archived(conversation_id, datetime.now(tz=UTC))
 
-    async def unarchive_conversation(
-        self, conversation_id: str, *, actor: str = "user"
-    ) -> Conversation:
+    async def unarchive_conversation(self, conversation_id: str) -> Conversation:
         """Restore an archived conversation back into the active list."""
         await self.get_conversation(conversation_id)  # existence check
-        result = await self._conversations.set_archived(conversation_id, None)
-        await self._audit.record(
-            AuditEventType.CONVERSATION_UNARCHIVED.value,
-            actor=actor,
-            details={"conversation_id": conversation_id},
-        )
-        return result
+        return await self._conversations.set_archived(conversation_id, None)
 
     async def delete_conversation(
         self,
         conversation_id: str,
         *,
-        actor: str = "user",
         cancel_turn_fn: Callable[[str], object] | None = None,
     ) -> None:
         """Delete a conversation and all its messages.
@@ -289,11 +260,6 @@ class ChatService:
 
         await self._messages.delete_by_conversation(conversation_id)
         await self._conversations.delete(conversation_id)
-        await self._audit.record(
-            AuditEventType.CONVERSATION_DELETED.value,
-            actor=actor,
-            details={"conversation_id": conversation_id},
-        )
 
     # ------------------------------------------------------------------
     # Message operations

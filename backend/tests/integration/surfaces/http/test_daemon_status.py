@@ -34,39 +34,6 @@ async def test_status_returns_ready(tmp_path, monkeypatch):
     assert "port" in body
 
 
-@pytest.mark.asyncio
-async def test_lifespan_records_daemon_started_and_stopped(tmp_path, monkeypatch):
-    """The lifespan must emit daemon_started on startup and daemon_stopped on shutdown."""
-    monkeypatch.setenv("HOME", str(tmp_path))
-    db_path = tmp_path / "c.db"
-    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
-
-    from coffer.application.audit_service import AuditService
-    from coffer.infrastructure.persistence.engine import (
-        create_async_engine_with_pragmas,
-        session_maker,
-    )
-    from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
-
-    # Drive the lifespan directly (ASGITransport does not drive lifespan).
-    app = create_app()
-    async with app.router.lifespan_context(app):
-        pass  # lifespan startup + yield + shutdown
-
-    # After lifespan exits the DB has the audit_log table (Alembic ran inside lifespan).
-    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{db_path}")
-    sm = session_maker(engine)
-    audit = AuditService(SqlAlchemyAuditRepo(sm))
-    started = await audit.query(event_type="daemon_started")
-    stopped = await audit.query(event_type="daemon_stopped")
-    await engine.dispose()
-
-    assert len(started) >= 1, "daemon_started audit entry missing"
-    assert started[0].actor == "system"
-    assert len(stopped) >= 1, "daemon_stopped audit entry missing"
-    assert stopped[0].actor == "system"
-
-
 # ---------------------------------------------------------------------------
 # T3 — real status + upstream_summary
 # ---------------------------------------------------------------------------

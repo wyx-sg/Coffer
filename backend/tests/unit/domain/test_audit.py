@@ -9,11 +9,8 @@ def test_audit_event_type_values():
     assert AuditEventType.RESOURCE_ENABLED.value == "resource_enabled"
     assert AuditEventType.RESOURCE_DISABLED.value == "resource_disabled"
     assert AuditEventType.RESOURCE_DELETED.value == "resource_deleted"
-    assert AuditEventType.CAPABILITY_FIRST_SEEN.value == "capability_first_seen"
     assert AuditEventType.CAPABILITY_ENABLED.value == "capability_enabled"
     assert AuditEventType.CAPABILITY_DISABLED.value == "capability_disabled"
-    assert AuditEventType.DAEMON_STARTED.value == "daemon_started"
-    assert AuditEventType.DAEMON_STOPPED.value == "daemon_stopped"
     assert AuditEventType.TOKEN_ROTATED.value == "token_rotated"
     assert AuditEventType.RETENTION_UPDATED.value == "retention_updated"
 
@@ -56,7 +53,7 @@ def test_audit_entry_nullable_resource_fields():
     e = AuditEntry(
         id=None,
         timestamp=datetime(2026, 5, 20, tzinfo=UTC),
-        event_type=AuditEventType.DAEMON_STARTED.value,
+        event_type=AuditEventType.TOKEN_ROTATED.value,
         resource_kind=None,
         resource_name=None,
         actor="system",

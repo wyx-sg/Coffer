@@ -131,7 +131,6 @@ def wire_knowledge_kind(
         scope=scope,
         git_branch=git_branch,
         scope_dir=paths.scope_dir,
-        audit=audit,
         now=lambda: datetime.now(tz=UTC),
     )
     app.state.kinds[KIND_KNOWLEDGE] = make_knowledge_kind(knowledge_service)
