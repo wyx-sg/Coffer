@@ -23,6 +23,7 @@ from mcp.types import ServerNotification
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.server_config import StdioTransport
 from coffer.infrastructure.daemon.orphan_sweep import reap_pidfile, record_spawn
+from coffer.infrastructure.logging.files import open_upstream_errlog
 from coffer.infrastructure.mcp.dispatch import dispatch_method
 
 NotificationCallback = Callable[[Any], Awaitable[None]]
@@ -123,8 +124,17 @@ class StdioUpstreamConnection:
             async with _SPAWN_SNAPSHOT_LOCK:
                 children_before = {c.pid for c in self_proc.children(recursive=False)}
 
+                # Give this upstream its own stderr file. The SDK's default
+                # is the daemon's stderr, which lands in daemon.log and
+                # drowns Coffer's own lines there (see logging/files.py).
+                errlog = open_upstream_errlog(self._server_name)
+                if errlog is not None:
+                    self._exit_stack.callback(errlog.close)
+                client = (
+                    stdio_client(params) if errlog is None else stdio_client(params, errlog=errlog)
+                )
                 read, write = await asyncio.wait_for(
-                    self._exit_stack.enter_async_context(stdio_client(params)),
+                    self._exit_stack.enter_async_context(client),
                     timeout=self._spawn_timeout,
                 )
 

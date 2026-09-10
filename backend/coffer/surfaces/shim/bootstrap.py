@@ -63,11 +63,19 @@ def _inject_cwd(envelope: dict[str, Any]) -> None:
 
 
 def _setup_shim_log() -> None:
-    """Send our diagnostic log to a file (NOT stdout — that's the MCP wire)."""
+    """Send our diagnostic log to a file (NOT stdout — that's the MCP wire).
+
+    One file per process start, because several shims run concurrently and a
+    shared handler is not multiprocess-safe. That is also why they accumulate:
+    2,137 of them (40 MB) had built up since June with nothing deleting any.
+    The daemon's retention worker now ages them out; this end just stops
+    writing a file for a run that produces no diagnostics, by deferring the
+    open until the first record.
+    """
     try:
         _SHIM_LOG_DIR.mkdir(parents=True, exist_ok=True)
         log_path = _SHIM_LOG_DIR / f"shim-{os.getpid()}-{int(time.time())}.log"
-        handler = logging.FileHandler(log_path)
+        handler = logging.FileHandler(log_path, delay=True)
         handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
         _logger.addHandler(handler)
         _logger.setLevel(logging.INFO)

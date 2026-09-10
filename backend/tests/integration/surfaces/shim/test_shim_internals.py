@@ -726,17 +726,28 @@ async def test_drain_sse_reconnects_after_stream_ends(
 async def test_setup_shim_log_creates_handler(
     tmp_path: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """_setup_shim_log adds a FileHandler under ~/.coffer/logs (lines 41-50)."""
+    """_setup_shim_log attaches a FileHandler that creates its file lazily.
+
+    One file per process start is unavoidable — several shims run concurrently
+    and a shared handler is not multiprocess-safe — which is how 2,137 of them
+    (40 MB) accumulated. Deferring the open means a run that logs nothing
+    leaves nothing behind; the daemon's retention worker ages out the rest.
+    """
+    import logging
+
     from coffer.surfaces.shim import bootstrap as shim_main
 
     monkeypatch.setattr(shim_main, "_SHIM_LOG_DIR", tmp_path / "logs")
     # Reset handlers between runs so the assertion is meaningful.
     shim_main._logger.handlers.clear()
     shim_main._setup_shim_log()
-    assert any(isinstance(h, __import__("logging").FileHandler) for h in shim_main._logger.handlers)
-    # The log file lives under our patched dir.
-    log_files = list((tmp_path / "logs").glob("shim-*.log"))
-    assert log_files, "expected a shim-*.log file to be created"
+    assert any(isinstance(h, logging.FileHandler) for h in shim_main._logger.handlers)
+
+    # Nothing written yet → no file yet.
+    assert list((tmp_path / "logs").glob("shim-*.log")) == []
+
+    shim_main._logger.info("something worth keeping")
+    assert list((tmp_path / "logs").glob("shim-*.log")), "expected a file once a record is logged"
 
 
 @pytest.mark.asyncio

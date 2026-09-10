@@ -181,7 +181,9 @@ async def test_upstream_env_does_not_inherit_daemon_secrets(
         async def __aexit__(self, *_a: object) -> bool:
             return False
 
-    def _fake_stdio_client(params: object) -> _StopCtx:
+    def _fake_stdio_client(params: object, **_kwargs: object) -> _StopCtx:
+        # **_kwargs absorbs `errlog`, which the adapter passes so an upstream's
+        # stderr lands in its own file rather than the daemon's.
         captured["env"] = dict(getattr(params, "env", None) or {})
         return _StopCtx()
 
@@ -276,7 +278,7 @@ async def test_stdio_init_failure_message_excludes_exception_detail(
 
     secret = "token=SECRET-abc123"
 
-    def _boom(params: object) -> object:
+    def _boom(params: object, **_kwargs: object) -> object:
         raise ValueError(f"connect failed https://host/?{secret}")
 
     monkeypatch.setattr(sp, "stdio_client", _boom)

@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -90,3 +91,32 @@ async def test_query_since(tmp_path):
     recent = await svc.query(since=datetime.now(tz=UTC) + timedelta(hours=1))
     assert recent == []
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_every_audited_event_is_also_logged(tmp_path, caplog) -> None:
+    """Coffer used to log only its failures. A live daemon.log held 4,277 lines
+    of which 62 were Coffer's own — all one error type — and a search across two
+    months for `credential_read`, `provider_switched`, `resource_deleted` and
+    four other key operations returned nothing at all.
+
+    The audit table already decides what is worth recording, so mirroring it is
+    the cheapest way to make that decision legible to whoever is tailing a log.
+    """
+    svc, _engine = await _service(tmp_path)
+    with caplog.at_level(logging.INFO, logger="coffer.application.audit_service"):
+        await svc.record(
+            AuditEventType.CREDENTIAL_READ.value,
+            ref=ResourceRef("mcp_server", "jira"),
+            actor="cli",
+            details={"ref": "jira.TOKEN"},
+        )
+
+    [record] = [r for r in caplog.records if r.name == "coffer.application.audit_service"]
+    assert record.event == "credential_read"
+    assert record.resource == "mcp_server:jira"
+    assert record.actor == "cli"
+    # `details` stays out: the audit table applies each kind's redactor before
+    # storing it, and re-deriving that here would duplicate the one place that
+    # knows which fields carry secrets.
+    assert not hasattr(record, "details")
