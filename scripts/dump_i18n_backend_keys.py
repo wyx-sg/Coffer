@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
-"""Dump the backend error codes + audit event types the frontend must localize.
+"""Dump the backend error codes the frontend must localize.
 
 The output is a checked-in JSON fixture
 (``frontend/src/i18n/backend-keys.fixture.json``) that the frontend i18n parity
 test diffs against ``locales/{en,zh}.json``. Re-run this whenever a new
-``CofferError`` subclass or ``AuditEventType`` value lands so the fixture — and
-therefore the locale-coverage guard — stays in sync:
+``CofferError`` subclass lands so the fixture — and therefore the
+locale-coverage guard — stays in sync:
 
     ./.venv/bin/python scripts/dump_i18n_backend_keys.py
 
 It is intentionally generated rather than hand-maintained: the source of truth
 is the Python enums, and a stale fixture would let untranslated codes ship
 silently — the exact drift this guard exists to prevent.
+
+Audit event types are deliberately NOT dumped. They were listed here to keep a
+zh user from seeing a raw snake_case event on an audit row; there is no audit
+row any more. Their reader is an agent calling ``coffer__diagnose``, which wants
+the wire value, not a translation.
 """
 
 from __future__ import annotations
@@ -49,23 +54,14 @@ def _error_codes() -> list[str]:
     return sorted(codes)
 
 
-def _audit_events() -> list[str]:
-    from coffer.domain.audit import AuditEventType
-
-    return sorted(e.value for e in AuditEventType)
-
-
 def build() -> dict[str, list[str]]:
-    return {"errorCodes": _error_codes(), "auditEvents": _audit_events()}
+    return {"errorCodes": _error_codes()}
 
 
 def main() -> None:
     payload = build()
     _FIXTURE.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n")
-    print(
-        f"wrote {len(payload['errorCodes'])} error codes + "
-        f"{len(payload['auditEvents'])} audit events to {_FIXTURE}"
-    )
+    print(f"wrote {len(payload['errorCodes'])} error codes to {_FIXTURE}")
 
 
 if __name__ == "__main__":

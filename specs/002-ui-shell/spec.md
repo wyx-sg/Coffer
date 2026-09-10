@@ -30,7 +30,6 @@ Today the sidebar's shipped surfaces are:
   Model providers  /model-providers   — credentialed vendor endpoints
   Channels         /channels          — the IM transports agents answer on
  SYSTEM
-  Audit log        /audit             — who did what, when
   Settings         /settings
 ```
 
@@ -50,11 +49,11 @@ are the one thing in the product that *uses* the vault rather than living in
 it, and collapsing the group would lose that distinction to save one line.
 
 The app's index (`/`) redirects to `/agents`, so a first-time visitor lands on
-the Agents surface. It is grouped into **Agents** (the consumers), **Resources** (the resource kinds), and **System** (cross-cutting tooling: the Audit log and Settings) so the navigation stays stable as Coffer grows. Agents live at `/agents` (list) and `/agents/:name` (detail) and do not appear in the `/mcp-servers` kind browser. (`/resources` is kept as a legacy redirect to `/mcp-servers` for old bookmarks.) The agent detail page is a simple **Overview + Config files** detail page: an Overview tab summarising the agent's registered config and a Config files tab that surfaces its known config files read-only, with no create / edit / delete / enable.
+the Agents surface. It is grouped into **Agents** (the consumers), **Resources** (the resource kinds), and **System** (cross-cutting tooling: Settings) so the navigation stays stable as Coffer grows. Agents live at `/agents` (list) and `/agents/:name` (detail) and do not appear in the `/mcp-servers` kind browser. (`/resources` is kept as a legacy redirect to `/mcp-servers` for old bookmarks.) The agent detail page is a simple **Overview + Config files** detail page: an Overview tab summarising the agent's registered config and a Config files tab that surfaces its known config files read-only, with no create / edit / delete / enable.
 
-All list surfaces (agents, MCP servers, skills, knowledge, model providers, channels, the audit log) use one shared, searchable, filterable, paginated table: a row click opens that item's detail page, and row actions are compact icons. Cards are reserved for welcome / empty states only.
+All list surfaces (agents, MCP servers, skills, knowledge, model providers, channels) use one shared, searchable, filterable, paginated table: a row click opens that item's detail page, and row actions are compact icons. Cards are reserved for welcome / empty states only.
 
-**Observability** (system health / metrics, a surface distinct from the audit log) is planned but not shown today; it appears in the sidebar only once it ships. The reverse rule holds too — an entry is removed when its feature is, which is how Chat and Machines left.
+**Observability** (system health / metrics) is planned but not shown today; it appears in the sidebar only once it ships. The reverse rule holds too — an entry is removed when its feature is, which is how Chat, Machines and the Audit log left.
 
 The sidebar collapses to an icon-only rail and back; the choice persists across sessions (localStorage).
 
@@ -80,7 +79,7 @@ A developer opens the web UI for the first time. They have never registered a se
 
 ### User Story 2 — Day-to-day MCP work feels polished, not bare (Priority: P1)
 
-A developer who already uses Coffer for MCP gateway aggregation wants the routine flows — registering a server, watching its health, browsing tools, toggling capabilities, viewing invocations — to look and feel like a real product, not a scaffold. Headings are typographically distinct; spacing is consistent; per-server pages have a primary "what is this server doing?" view before the per-tool toggles; empty / error / loading states are first-class. The Tools, Resources, and Prompts tabs are uniform — each carries the same search box, status filter, and per-row enable toggle, and keeps that chrome even when the upstream exposes none of that kind (the empty state renders inside the table, not as a bare card). The server list carries a search box, a status filter, and a client-side pager so a large vault stays navigable. The Invocations tab lists each call; expanding a row reveals its raw log — the invocation's full underlying JSON record, pretty-printed in a monospace, scrollable block — mirroring the audit log's expand behavior.
+A developer who already uses Coffer for MCP gateway aggregation wants the routine flows — registering a server, watching its health, browsing tools, toggling capabilities, viewing invocations — to look and feel like a real product, not a scaffold. Headings are typographically distinct; spacing is consistent; per-server pages have a primary "what is this server doing?" view before the per-tool toggles; empty / error / loading states are first-class. The Tools, Resources, and Prompts tabs are uniform — each carries the same search box, status filter, and per-row enable toggle, and keeps that chrome even when the upstream exposes none of that kind (the empty state renders inside the table, not as a bare card). The server list carries a search box, a status filter, and a client-side pager so a large vault stays navigable. The Invocations tab lists each call; expanding a row reveals its raw log — the invocation's full underlying JSON record, pretty-printed in a monospace, scrollable block — pretty-printed in a monospace, scrollable block.
 
 "Add MCP server" is a modal where the user pastes the standard `mcpServers` JSON (one or many servers at once) — the same block every MCP server's README provides. A review step lets them confirm which `env` values are secrets; those are lifted into the encrypted credential store (only their refs kept in the config) rather than stored as plaintext in the config.
 
@@ -98,20 +97,33 @@ A developer who already uses Coffer for MCP gateway aggregation wants the routin
 
 ---
 
-### User Story 3 — The audit log has a home (Priority: P2)
+### User Story 3 — The audit log is read by an agent, not browsed by a person (Priority: P2)
 
-A developer wants to see what changed in their Coffer vault — which resources and capabilities were added, enabled, disabled, or removed, by whom, and when. The **Audit log** entry (under System, at `/audit`) gives them that: an audit log of every lifecycle event where each row is a plain-language activity line ("Enabled demo-fs", "Discovered tool write_file on demo-fs") rather than a raw `event_type` code. It filters by time range and actor, pages client-side, and expands any row to its raw log — the entry's full underlying JSON record, pretty-printed in a monospace, scrollable block.
+The audit log had a page: a filtered, paged table of plain-language activity
+lines under System at `/audit`. **It is removed.** In practice nobody opened it.
+A person does not sit down to browse "what changed in my vault" — they notice
+something is broken and ask whoever is helping them, and that is an agent.
 
-The audit log is NOT **Observability** — system health / metrics is a distinct surface, reserved for the future and not in the nav today.
+So the log keeps its reader and loses its page. `coffer__diagnose` gives an
+agent both records at once — the audit log (what changed, and who changed it)
+and the daemon's own log (what happened, including the failures) — on one
+newest-first timeline. The agent already holds the tool, needs no file path,
+and gets the two sides already correlated instead of two things to join.
 
-**Why this priority**: P2 — the audit log already shipped in spec 001; this story is the redesigned filter + table and its `/audit` home.
+The REST route and `coffer audit` stay for scripting. What goes is the page,
+its plain-language rendering, and the 39 translated event strings that existed
+so a zh reader would not see a raw `event_type` on a row. Nothing renders a row
+any more, and an agent wants the wire value.
 
-**Independent Test**: open `/audit` — the audit-log view renders with the "Audit log" heading, a filter bar (time range / actor), and a paged table where each row is a readable activity line; clicking a row expands it to the entry's raw log JSON. Navigate to the legacy `/observability` URL — the app redirects to `/audit`.
+**Why this priority**: P2 — this is a removal plus one tool, not a surface.
+
+**Independent Test**: `/audit` is not routed and no sidebar entry links to it;
+an agent calling `coffer__diagnose` gets recent changes and recent log records
+back in one response.
 
 **Representative scenarios** (full list under `## Acceptance Scenarios`):
 
-- audit route renders the audit log
-- legacy /observability redirects to the audit log
+- an agent reads recent changes and failures in one call
 
 ---
 
@@ -143,6 +155,14 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 ---
 
 ## Acceptance Scenarios
+
+### Scenario: an agent reads recent changes and failures in one call
+
+- **Given** Coffer has recorded audit entries and written daemon log records
+- **When** an agent calls `coffer__diagnose`
+- **Then** it receives both timelines in one response, newest first — the audit
+  entries as `changes` and the log records as `log` — with no secret values in
+  either
 
 ### Scenario: cold-start renders authenticated content
 
@@ -224,40 +244,6 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - **Given** a registered server
 - **When** the user opens the Invocations tab and clicks the status filter combobox
 - **Then** at least the "All" option renders inside the dropdown portal
-
-### Scenario: audit route renders the audit log
-
-- **Given** at least one audit event exists
-- **When** the user opens `/audit`
-- **Then** the audit-log view renders with the "Audit log" heading
-- **And** it renders a filter bar (time range, actor) and a paged table where each row is a plain-language activity line, not a raw event code
-- **And** clicking a row expands it to the entry's raw log JSON
-- **And** the filters narrow the visible rows live
-
-### Scenario: audit log row expand shows raw log
-
-- **Given** the audit log has at least one row
-- **When** the user clicks (or presses Enter/Space on) a row on the audit-log page
-- **Then** an expanded region renders that entry's raw log — its full underlying JSON record, pretty-printed in a monospace, scrollable block
-
-### Scenario: audit log free-text filter narrows rows
-
-- **Given** the audit log contains rows for at least two distinct server names
-- **When** the user types one server name in the search box
-- **Then** only rows containing that name remain visible and rows for the other name disappear
-
-### Scenario: audit log pagination controls appear and advance page
-
-- **Given** the audit log contains more entries than the default page size
-- **When** the user opens the audit-log page and clicks the Next button
-- **Then** the page indicator advances to "Page 2 of …" and the Previous button becomes enabled
-
-### Scenario: legacy /observability redirects to the audit log
-
-- **Given** a user follows an old bookmark to `/observability`
-- **When** the route resolves
-- **Then** the app redirects to `/audit`
-- **And** no "page not found" view is shown
 
 ### Scenario: settings layout uses the redesigned tabbed sidebar
 

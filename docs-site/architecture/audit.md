@@ -12,6 +12,27 @@ A developer registers a fleet of MCP servers, imports skills, accumulates knowle
 
 Coffer's approach is deliberately lean: a pair of local database tables, not a time-series database or a log-management SaaS. All records stay on-device and within the `~/.coffer/` backup footprint.
 
+## Who reads this
+
+**An agent, not a person.** The audit log had a web page; it is removed, because
+nobody opened it. Someone does not sit down to browse "what changed in my
+vault" — they notice something is broken and ask whoever is helping them, and
+that is an agent.
+
+So both records are shaped for that reader:
+
+- **`coffer__diagnose`** is the way in. One call returns the audit log (what
+  changed, and who) and the daemon log (what happened, including failures) on a
+  single newest-first timeline, because an agent hitting a failure does not know
+  which of the two it needs — it needs to know what happened.
+- **Event types stay as wire values.** They were translated into plain-language
+  activity lines for the removed page ("Enabled demo-fs"); the 39 strings per
+  locale went with it. An agent wants `resource_enabled`.
+- **Every audited event is also a log line**, so the two records share
+  vocabulary and an agent grepping one finds the other.
+
+`GET /api/v1/audit` and `coffer audit` are unchanged for scripting.
+
 ## Audit log: lifecycle changes
 
 Every change to any resource or capability is written to the `audit_log` table before the response is returned to the caller. The audit entry captures:

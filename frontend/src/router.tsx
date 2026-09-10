@@ -11,7 +11,6 @@ import { KnowledgePage } from "./pages/KnowledgePage";
 import { KnowledgeDetailPage } from "./kinds/knowledge/KnowledgeDetailPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
 import { ResourceDetailPage } from "./pages/ResourceDetailPage";
-import { AuditLogPage } from "./pages/audit/AuditLogPage";
 import { SettingsLayout } from "./pages/settings/SettingsLayout";
 import { GeneralSettings } from "./pages/settings/GeneralSettings";
 import { DataSettings } from "./pages/settings/DataSettings";
@@ -48,13 +47,6 @@ export const router = createBrowserRouter([
       { path: "knowledge-bases/:name", element: <LegacyScopeRedirect /> },
       { path: "memory", element: <Navigate to="/knowledge" replace /> },
       { path: "memory/:name", element: <LegacyScopeRedirect /> },
-      { path: "audit", element: <AuditLogPage /> },
-      // Legacy route — this surface briefly lived at /observability. Keep the
-      // URL working so old bookmarks resolve.
-      {
-        path: "observability",
-        element: <Navigate to="/audit" replace />,
-      },
       {
         path: "settings",
         element: <SettingsLayout />,
