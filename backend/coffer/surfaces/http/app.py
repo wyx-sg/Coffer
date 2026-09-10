@@ -34,12 +34,13 @@ from coffer.application.audit_service import AuditService
 from coffer.application.binary_deploy import deploy_frozen_sidecars
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.kind import make_channel_kind
+from coffer.application.diagnostics import register_diagnostics_builtin_tools
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.resource import Kind
 from coffer.infrastructure.daemon.orphan_sweep import startup_sweep
 from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
-from coffer.infrastructure.logging.files import prune_log_dir
+from coffer.infrastructure.logging.files import log_dir, prune_log_dir
 from coffer.infrastructure.logging.setup import configure_logging
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -145,7 +146,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     db_path = pathlib.Path(_db_url().split("///", 1)[1]).expanduser()
     credential_store = await init_credential_store(engine, db_path)
 
-    audit = AuditService(SqlAlchemyAuditRepo(sm))
+    audit_repo = SqlAlchemyAuditRepo(sm)
+    audit = AuditService(audit_repo)
     resource_svc = ResourceService(
         kinds=app.state.kinds,
         repo=SqlAlchemyResourceRepo(sm),
@@ -171,6 +173,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Build the shared built-in tool registry; each kind contributes its tools.
     # Created before kind wiring so skill + knowledge can register into it.
     builtin_tools = BuiltinToolRegistry()
+
+    # Coffer's own history, read by the agent debugging Coffer. The audit log
+    # and the daemon log both lost their human reader — the audit page is gone
+    # and nobody greps a log by hand — so the reader is the agent, and the way
+    # in is a tool it already holds.
+    register_diagnostics_builtin_tools(
+        builtin_tools, audit_repo=audit_repo, log_path=lambda: log_dir() / "daemon.log"
+    )
 
     # Agent + skill kinds (004/005), lockstep: on_delete cascade + skill tools → gateway.
     wire_agent_and_skill_kinds(app, resource_svc, audit, sm, builtin_tools, credential_store)

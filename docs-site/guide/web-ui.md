@@ -1,7 +1,7 @@
 # Web UI
 
 Coffer includes a browser-based management UI for the gateway. It lets you add, edit,
-enable, and disable MCP servers; browse the audit and invocation log; and adjust settings
+enable, and disable MCP servers; browse the invocation log; and adjust settings
 — all without touching the CLI.
 
 ## What the Web UI is
@@ -20,7 +20,6 @@ RESOURCES
   Model providers  vendor endpoints and their keys
   Channels         the IM transports your agents answer on
 SYSTEM
-  Audit log        who did what, when
   Settings
 ```
 
@@ -203,13 +202,13 @@ transport the vault owns, so it belongs with the other resources.
 
 ### Audit log
 
-Open `/audit` to see every lifecycle event (server added, tool enabled, credential read)
-as a plain-language activity line. Filter by time range and actor; click any row to expand
-its raw JSON. The legacy `/observability` URL redirects here.
+There is no audit-log page. `/audit` is not routed and nothing in the sidebar links to it.
 
-The log is deliberately short on event types — it records what changed outside Coffer,
-what cannot be undone, and low-frequency configuration changes. It does not record that
-the daemon started or that a turn completed.
+In practice nobody opened it. A person does not sit down to browse "what changed in my vault" — they notice something is broken and ask whoever is helping them, which is an agent. So the log kept its reader and lost its page.
+
+An agent reads it with **`coffer__diagnose`**, which returns both records at once — the audit log (what changed, and who changed it) and the daemon's own log (what happened, including failures) — on one newest-first timeline. Ask your agent "why did that fail?" and it has the tool in hand.
+
+For scripting, `GET /api/v1/audit` and `coffer audit` are unchanged.
 
 ### Settings
 

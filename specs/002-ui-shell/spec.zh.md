@@ -26,7 +26,6 @@
   Model providers  /model-providers   — 带凭据的厂商端点
   Channels         /channels          — agent 应答所在的 IM 传输
  SYSTEM
-  Audit log        /audit             — 谁在什么时候做了什么
   Settings         /settings
 ```
 
@@ -42,11 +41,11 @@ Settings 下的 kind（当时叫「LLM connections」），而那个旧名字描
 于是 AGENTS 组只剩一项。这个不对称是有意的：agent 是这个产品里唯一**使用**金库、
 而不是住在金库里的东西，为省一行而合并掉这个分组会丢掉这个区分。
 
-应用的 index (`/`) 重定向到 `/agents`，因此首次访问者落在 Agents 界面。它分组为 **Agents**（消费者）、**Resources**（resource kind）与 **System**（横切工具：Audit log 与 Settings），这样导航在 Coffer 成长时保持稳定。agent 住在 `/agents`（列表）与 `/agents/:name`（详情），不出现在 `/mcp-servers` 的 kind 浏览器里。（`/resources` 保留为指向 `/mcp-servers` 的 legacy 重定向，兼容旧书签。）agent 详情页是一个简单的 **Overview + Config files** 详情页：一个 Overview tab 汇总 agent 已注册的配置，一个 Config files tab 只读地呈现其已知配置文件，没有创建 / 编辑 / 删除 / 启用。
+应用的 index (`/`) 重定向到 `/agents`，因此首次访问者落在 Agents 界面。它分组为 **Agents**（消费者）、**Resources**（resource kind）与 **System**（横切工具：Settings），这样导航在 Coffer 成长时保持稳定。agent 住在 `/agents`（列表）与 `/agents/:name`（详情），不出现在 `/mcp-servers` 的 kind 浏览器里。（`/resources` 保留为指向 `/mcp-servers` 的 legacy 重定向，兼容旧书签。）agent 详情页是一个简单的 **Overview + Config files** 详情页：一个 Overview tab 汇总 agent 已注册的配置，一个 Config files tab 只读地呈现其已知配置文件，没有创建 / 编辑 / 删除 / 启用。
 
-所有列表界面（agents、MCP servers、skills、knowledge、model providers、channels、审计日志）共用同一个可搜索、可过滤、可分页的表格：点击一行打开该项的详情页，行内操作是紧凑的图标。卡片只保留给欢迎 / 空态。
+所有列表界面（agents、MCP servers、skills、knowledge、model providers、channels）共用同一个可搜索、可过滤、可分页的表格：点击一行打开该项的详情页，行内操作是紧凑的图标。卡片只保留给欢迎 / 空态。
 
-**Observability**（系统健康 / 指标，一个与审计日志不同的界面）已规划但今天不展示；它只在自己上线时才进入侧栏。反过来这条规则同样成立——一个入口在它的功能被删掉时也要被删掉，Chat 与 Machines 就是这样离开的。
+**Observability**（系统健康 / 指标）已规划但今天不展示；它只在自己上线时才进入侧栏。反过来这条规则同样成立——一个入口在它的功能被删掉时也要被删掉，Chat、Machines 与 Audit log 就是这样离开的。
 
 侧栏可折叠到只剩图标的轨道再展开；选择跨会话持久化（localStorage）。
 
@@ -72,7 +71,7 @@ Settings 下的 kind（当时叫「LLM connections」），而那个旧名字描
 
 ### User Story 2 — 日常 MCP 操作有产品质感，不再像脚手架 (Priority: P1)
 
-已经在用 Coffer 做 MCP gateway 聚合的开发者希望日常流程——注册服务器、看健康、浏览工具、切换能力、看 invocation——看起来、用起来像一个真正的产品，而不是一坨脚手架。标题在字体上有区分；间距统一；每台服务器页面在 per-tool 开关之前先有一个"这台服务器在干嘛"的总览视图；空 / 错 / 加载态都是一等公民。Tools、Resources、Prompts 三个 tab 保持统一——各自带相同的搜索框、状态过滤和逐行启用开关，即使上游没有该类型的任何条目也保留这套外壳（空态渲染在表格内部，而不是一张光秃秃的卡片）。服务器列表带搜索框、状态过滤、客户端分页，让一个大 vault 也能浏览。Invocations tab 列出每一次调用；展开一行可看它的原始日志——该次 invocation 完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现——与审计日志的展开行为一致。
+已经在用 Coffer 做 MCP gateway 聚合的开发者希望日常流程——注册服务器、看健康、浏览工具、切换能力、看 invocation——看起来、用起来像一个真正的产品，而不是一坨脚手架。标题在字体上有区分；间距统一；每台服务器页面在 per-tool 开关之前先有一个"这台服务器在干嘛"的总览视图；空 / 错 / 加载态都是一等公民。Tools、Resources、Prompts 三个 tab 保持统一——各自带相同的搜索框、状态过滤和逐行启用开关，即使上游没有该类型的任何条目也保留这套外壳（空态渲染在表格内部，而不是一张光秃秃的卡片）。服务器列表带搜索框、状态过滤、客户端分页，让一个大 vault 也能浏览。Invocations tab 列出每一次调用；展开一行可看它的原始日志——该次 invocation 完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现。
 
 "Add MCP server" 是一个对话框，用户把标准的 `mcpServers` JSON 块粘进去（一次一台或多台都行）——就是每台 MCP server README 给的那块。Review 一步让他们确认哪些 `env` 是 secret；这些值会被提到加密凭据存储（config 里只保留它们的 ref），而不是以明文写在 config 里。
 
@@ -90,20 +89,29 @@ Settings 下的 kind（当时叫「LLM connections」），而那个旧名字描
 
 ---
 
-### User Story 3 — 审计日志有自己的家 (Priority: P2)
+### User Story 3 —— 审计日志由 agent 来读，而不是由人来浏览 (Priority: P2)
 
-开发者想知道自己的 Coffer vault 里发生了什么——哪些 resource 和能力被加、启用、禁用、删除了，谁干的，什么时候。**Audit log** 入口（在 System 下，位于 `/audit`）给他这个：一份审计日志，记录每一次生命周期事件，每一行都是一句口语化的活动描述（"Enabled demo-fs"、"Discovered tool write_file on demo-fs"）而不是裸的 `event_type` 代码。它按时间范围与 actor 过滤、客户端分页，展开任意一行可看它的原始日志——该条目完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现。
+审计日志曾经有一个页面：System 组下 `/audit` 处一张带过滤、分页的活动行表格。
+**它已被删除。** 实际上没人打开过它。人不会专门坐下来浏览「我的金库里改了什么」——
+人是发现有东西坏了，然后去问那个帮他的角色，而那个角色是 agent。
 
-审计日志**不是** **Observability**——系统健康 / 指标是另一个独立界面，预留给未来，今天不在导航里。
+于是这份日志保住了它的读者，丢掉了它的页面。`coffer__diagnose` 一次给 agent 两份
+记录——审计日志（改了什么、谁改的）与守护进程自己的日志（发生了什么，包括失败）——
+放在同一条从新到旧的时间线上。agent 手里本来就有这个工具，不需要知道文件路径，
+拿到的是已经对齐好的两侧，而不是两样还要自己拼起来的东西。
 
-**Why this priority**: P2——审计日志在 spec 001 已经交付；本故事是它的重设计过滤 + 表格以及 `/audit` 这个家。
+REST 路由与 `coffer audit` 保留，供脚本使用。消失的是那个页面、它那套口语化渲染，
+以及那 39 条翻译好的事件字符串——它们当初存在，是为了让中文读者不会在某一行上看到
+生的 `event_type`。现在没有任何东西再渲染一行了，而 agent 要的正是线上原值。
 
-**Independent Test**: 开 `/audit`——审计日志视图以 "Audit log" 标题渲染，带 filter bar (时间范围 / actor) 与分页表格，每一行是一条可读的活动行；点任意一行展开成该条目的原始日志 JSON。访问 legacy `/observability` URL——app 重定向到 `/audit`。
+**Why this priority**：P2 —— 这是一次删除加一个工具，不是一个新界面。
 
-**Representative scenarios** (完整 Given/When/Then 见 `## Acceptance Scenarios`):
+**Independent Test**：`/audit` 不再有路由，侧边栏也没有任何入口指向它；agent 调用
+`coffer__diagnose` 会在一个响应里拿回最近的变更与最近的日志记录。
 
-- audit route renders the audit log
-- legacy /observability redirects to the audit log
+**Representative scenarios**（完整列表见 `## Acceptance Scenarios`）：
+
+- an agent reads recent changes and failures in one call
 
 ---
 
@@ -135,6 +143,13 @@ Settings 下的 kind（当时叫「LLM connections」），而那个旧名字描
 ---
 
 ## Acceptance Scenarios
+
+### Scenario: an agent reads recent changes and failures in one call
+
+- **Given** Coffer 已记录过审计条目并写过守护进程日志
+- **When** 某个 agent 调用 `coffer__diagnose`
+- **Then** 它在一个响应里拿回两条时间线，都是从新到旧——审计条目在 `changes`，
+  日志记录在 `log`——且两侧都不含任何密钥值
 
 ### Scenario: cold-start renders authenticated content
 
@@ -216,40 +231,6 @@ Settings 下的 kind（当时叫「LLM connections」），而那个旧名字描
 - **Given** 一台已注册的服务器
 - **When** 用户在 Invocations tab 点开状态过滤 combobox
 - **Then** 下拉 portal 中至少渲染出 "All" 选项
-
-### Scenario: audit route renders the audit log
-
-- **Given** 至少存在一条审计事件
-- **When** 用户打开 `/audit`
-- **Then** 审计日志视图以 "Audit log" 标题渲染
-- **And** 它渲染 filter bar（时间范围、actor）与一个分页表格，每一行是口语化的活动行，不是裸 event 代码
-- **And** 点任意一行展开成该条目的原始日志 JSON
-- **And** filters 实时收窄可见行
-
-### Scenario: audit log row expand shows raw log
-
-- **Given** 审计日志至少有一行
-- **When** 用户在审计日志页点击一行（或在其上按 Enter/Space）
-- **Then** 展开区渲染出该条目的原始日志——它完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现
-
-### Scenario: audit log free-text filter narrows rows
-
-- **Given** 审计日志包含至少两个不同服务器名的行
-- **When** 用户在搜索框输入其中一个服务器名
-- **Then** 只有包含该名字的行仍然可见，另一个名字的行消失
-
-### Scenario: audit log pagination controls appear and advance page
-
-- **Given** 审计日志的条数多于默认 page size
-- **When** 用户打开审计日志页并点 Next
-- **Then** 页码指示前进到 "Page 2 of …"，Previous 按钮变为可用
-
-### Scenario: legacy /observability redirects to the audit log
-
-- **Given** 用户走老书签访问 `/observability`
-- **When** 路由解析
-- **Then** app 重定向到 `/audit`
-- **And** 不出现 "page not found" 视图
 
 ### Scenario: settings layout uses the redesigned tabbed sidebar
 

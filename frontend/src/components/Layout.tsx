@@ -8,7 +8,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Radio,
-  ScrollText,
   Server,
   Settings as SettingsIcon,
   Sparkles,
@@ -43,9 +42,9 @@ interface NavGroup {
  *   that has a list UI: MCP servers, skills, knowledge, model providers, and
  *   channels. A channel is a credentialed transport the vault owns, so it
  *   belongs here rather than beside the agents that happen to answer on it.
- * - **System** — cross-cutting tooling: the Audit log (who did what, when),
- *   Observability (system health/metrics — a distinct future surface), and
- *   Settings.
+ * - **System** — cross-cutting tooling: Settings, and whatever operational
+ *   surface a person actually opens. The audit log is deliberately NOT here:
+ *   its reader is an agent diagnosing a problem, not a person browsing rows.
  *
  * Sidebar policy (ADR-007): show only what ships today — no "soon"
  * placeholders, and no entry outliving its feature. The sidebar collapses to
@@ -72,7 +71,6 @@ const NAV_GROUPS: NavGroup[] = [
   {
     labelKey: "nav.group.system",
     items: [
-      { to: "/audit", labelKey: "nav.audit", icon: ScrollText },
       { to: "/settings", labelKey: "nav.settings", icon: SettingsIcon },
     ],
   },
