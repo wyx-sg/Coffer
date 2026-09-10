@@ -295,7 +295,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 - **Given** an MCP client running inside a git project on a branch,
 - **When** it calls `coffer__set_handoff` with a body and later (possibly as a different agent) calls `coffer__resume`,
-- **Then** `set_handoff` writes a per-`(project × branch)` Markdown file (frontmatter `branch`/`updated_at` + freeform body) under the project scope's `handoff/` lane — overwriting any prior scene for that branch and recording a `handoff_set` audit entry — and `resume` returns `found=true` with the saved branch, body, `updated_at`, and a freshness `note`; the handoff is never returned by `coffer__search`.
+- **Then** `set_handoff` writes a per-`(project × branch)` Markdown file (frontmatter `branch`/`updated_at` + freeform body) under the project scope's `handoff/` lane — overwriting any prior scene for that branch — and `resume` returns `found=true` with the saved branch, body, `updated_at`, and a freshness `note`; the handoff is never returned by `coffer__search`.
 
 ### Scenario: resume reports no handoff for a fresh branch
 
@@ -311,7 +311,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
   organize <scope>`) is called,
 - **Then** the internal LLM organizer drains the inbox (no items remain), at
   least one `knowledge/<topic>.md` topic document exists holding the merged
-  content, `knowledge/INDEX.md` lists that topic, a `memory_organized` audit
+  content, `knowledge/INDEX.md` lists that topic,
   entry is recorded, and a subsequent search returns content from the topic
   document (not the now-empty inbox).
 
@@ -355,7 +355,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
   content into one, and supersedes the now-redundant other,
 - **Then** a single topic document holds the combined content, the redundant
   document no longer appears in search or `INDEX.md`, a subsequent search
-  returns the merged content, and a `memory_reorganized` audit entry is recorded.
+  returns the merged content.
 
 ### Scenario: reorg never destroys content — a superseded topic stays recoverable
 
@@ -481,7 +481,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 - **Given** a knowledge scope exists,
 - **When** the user uploads a non-Markdown file (e.g. `.pdf`, `.docx`, `.csv`, `.html`),
-- **Then** Coffer converts it to Markdown at `inbox/<doc-id>.md` (with YAML frontmatter), preserves the original at `.raw/<doc-id>.<ext>`, inserts a `documents` row (`kind="knowledge"`, `lane="inbox"`, `source_mode="converted"`), chunks it into FTS5, and records audit `KB_DOCUMENT_INGESTED`.
+- **Then** Coffer converts it to Markdown at `inbox/<doc-id>.md` (with YAML frontmatter), preserves the original at `.raw/<doc-id>.<ext>`, inserts a `documents` row (`kind="knowledge"`, `lane="inbox"`, `source_mode="converted"`) and chunks it into FTS5.
 
 ### Scenario: list documents in a knowledge base
 
@@ -601,13 +601,13 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 - **Given** a knowledge scope exists,
 - **When** the client calls `coffer__write(text, filename, scope?)` with Markdown content,
-- **Then** Coffer ingests it like a human upload (a new ULID-id document under the `inbox` lane, `inbox/` + `.raw/` written, indexed), records audit `KB_DOCUMENT_INGESTED` with the agent as actor, and the document is searchable.
+- **Then** Coffer ingests it like a human upload (a new ULID-id document under the `inbox` lane, `inbox/` + `.raw/` written, indexed), and the document is searchable.
 
 ### Scenario: agent edits a document via MCP
 
 - **Given** a converted document exists,
 - **When** the client calls `coffer__write(text, id, scope?)` naming that document,
-- **Then** the body is replaced, `source_mode` becomes `edited`, the scope is reindexed, and audit `KB_DOCUMENT_UPDATED` is recorded with the agent as actor.
+- **Then** the body is replaced, `source_mode` becomes `edited`, and the scope is reindexed.
 
 ### Scenario: agent deletes a document via MCP
 
@@ -619,13 +619,13 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 - **Given** a document ingested from `report.md`,
 - **When** the user re-uploads a changed `report.md` with `replace=true`,
-- **Then** the SAME document id is updated in place (`.raw/` + Markdown overwritten, only the latest original kept, `source_mode` reset to `converted`), no second document is created, and audit `KB_DOCUMENT_UPDATED` is recorded.
+- **Then** the SAME document id is updated in place (`.raw/` + Markdown overwritten, only the latest original kept, `source_mode` reset to `converted`), and no second document is created.
 
 ### Scenario: re-upload of an identical file is a no-op
 
 - **Given** a document ingested from `report.md`,
 - **When** the user re-uploads the byte-identical `report.md`,
-- **Then** it is an idempotent no-op: the existing document is returned, no second document is created, and no `KB_DOCUMENT_UPDATED` audit is recorded.
+- **Then** it is an idempotent no-op: the existing document is returned and no second document is created.
 
 ### Scenario: KB metrics report counts and disk usage
 
@@ -649,7 +649,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 - **Given** a converted document whose external `source_path` original has changed on disk,
 - **When** the user runs `update-source` for that document,
-- **Then** Coffer re-ingests it from the tracked file in place (same ULID id, `source_mode` stays `converted`), the new content is searchable and the old content is gone, and `KB_DOCUMENT_UPDATED` is audited.
+- **Then** Coffer re-ingests it from the tracked file in place (same ULID id, `source_mode` stays `converted`), and the new content is searchable while the old content is gone.
 
 ### Scenario: update from source refuses an edited document
 
@@ -661,7 +661,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 - **Given** a scope with `auto_update_sources` enabled and a document whose external original has changed,
 - **When** the user runs `check-sources`,
-- **Then** the changed document is auto-refreshed in place (reported `updated`) and `KB_DOCUMENT_UPDATED` is audited, while a hand-edited changed document would be skipped (reported `edited`).
+- **Then** the changed document is auto-refreshed in place (reported `updated`), while a hand-edited changed document would be skipped (reported `edited`).
 
 ### Scenario: test an embedding model
 
@@ -716,7 +716,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 **Working-state handoff (continuity)**
 
 - **FR-023**: The system MUST provide a **working-state handoff** lane keyed by **(project scope × git branch)**: one file per branch under `~/.coffer/knowledge/project-<ULID>/handoff/<branch-slug>.md`, with YAML frontmatter (`branch`, `updated_at`) plus a freeform Markdown body. The branch is resolved from the agent's reported cwd. Handoff is **per-project only** — there is no global handoff.
-- **FR-024**: `coffer__set_handoff(body)` MUST **overwrite** the current branch's handoff file (one scene per branch), set `updated_at`, and record a `handoff_set` audit entry. The body is files-as-truth on disk and MUST NOT be returned by `coffer__search` (it lives outside the retrieval glob).
+- **FR-024**: `coffer__set_handoff(body)` MUST **overwrite** the current branch's handoff file (one scene per branch), and set `updated_at`. The body is files-as-truth on disk and MUST NOT be returned by `coffer__search` (it lives outside the retrieval glob).
 - **FR-025**: `coffer__resume()` MUST return the current branch's saved handoff — `found=true` with `branch`, `body`, `updated_at`, and a freshness `note` annotating that the scene may be stale — or `found=false` when no handoff exists for the branch or the cwd is not inside a git project. It MUST never error on a missing handoff and MUST NOT fabricate content.
 - **FR-026**: When the agent's cwd does not resolve to a git project, `coffer__set_handoff` MUST be rejected and `coffer__resume` MUST return `found=false`.
 
@@ -725,12 +725,12 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **FR-027**: The system MUST provide an **internal organizer** that drains a scope's `knowledge/inbox/` into a small set of coherent **topic documents** (`knowledge/<topic-slug>.md`) using Coffer's **internal LLM connection** (the connection marked internal-default; Settings → LLM Connections, spec 011) via a **one-shot completion per item** — never an agent-facing tool. It is triggered explicitly (`POST /api/v1/knowledge/{scope}/organize`, `coffer knowledge organize <scope>`) and automatically on idle (FR-035). Items process sequentially, and one item's LLM/parse failure MUST NOT abort the run.
 - **FR-028**: For each inbox item the organizer MUST (a) retrieve up to the top-K (K=3) most-relevant **existing topic docs** via the shared retrieval engine (no LLM on this step) as merge candidates, (b) make **one LLM call** that either MERGES the item into the best-fitting candidate — **preserving all existing content and human edits**, integrating the new information, removing exact duplicates — or CREATES a new topic when none fits, and (c) write the returned full document body to `knowledge/<topic-slug>.md`. It MUST be an **incremental merge, never a from-scratch regeneration**, and MUST NOT hard-delete an existing topic doc.
 - **FR-029**: An inbox item MUST be **deleted only after** its content is successfully written into a topic doc. A malformed or unparseable LLM response MUST cause that item to be **skipped** — left in the inbox, no topic doc written or corrupted — and the run continues; the result reports the skipped count. `organize` on an empty inbox is a no-op (`status="empty"`); with no internal connection configured it is a clean no-op (`status="no_model"`) rather than an error.
-- **FR-030**: After draining, the organizer MUST regenerate the scope's `knowledge/INDEX.md` catalogue from all topic docs' frontmatter, reconcile the index (dropping the drained inbox rows and (re)indexing the new/updated topic docs), and record one `memory_organized` audit entry (scope + counts only — no item content). Retrieval MUST surface organized topic-doc content and MUST NOT surface `INDEX.md`.
+- **FR-030**: After draining, the organizer MUST regenerate the scope's `knowledge/INDEX.md` catalogue from all topic docs' frontmatter, reconcile the index (dropping the drained inbox rows and (re)indexing the new/updated topic docs). Retrieval MUST surface organized topic-doc content and MUST NOT surface `INDEX.md`.
 - **FR-031**: The organizer MUST keep a **non-blocking consolidation changelog** at the scope root (`consolidation-log.md`, append-only, human-readable: one line per merged/created topic with the timestamp and the source inbox item). It is auditable, never a gate, and is **excluded from retrieval** (it lives outside the `knowledge/` lane) and from the sync mirror (machine-local, like `INDEX.md`; topic docs themselves DO sync as source-of-truth).
 - **FR-032**: The reconciler MUST chunk a file's body into **passage-granular, structure-aware chunks** using the shared Markdown chunker (`infrastructure/knowledge/chunking.chunk_markdown` — splits on heading sections, keeps fenced code / tables atomic, packs structural blocks up to a fixed window), so a multi-section topic document surfaces the **most relevant passage** rather than its entire body. A short single-passage item still chunks to one passage: this changes **granularity**, never *what* retrieval includes or excludes.
-- **FR-033**: The system MUST provide an **internal agentic reorganization pass** (`POST /api/v1/knowledge/{scope}/reorg`, `coffer knowledge reorg <scope>`; explicit trigger only) running a bounded **langgraph `create_react_agent` loop** driven by the internal LLM connection over the scope's topic documents — consolidating duplicates and splitting over-long ones. Its fixed tool surface is **list / read / write / supersede** over topic docs, and it is **never agent-facing**. langchain/langgraph code MUST stay confined to `infrastructure.chat` (importlinter Contract 9); `application/knowledge` reaches it only through an injected port. With no internal connection it is a clean no-op (`status="no_model"`); a scope with no topic documents is likewise a no-op (`status="empty"`). Afterwards the pass regenerates `INDEX.md`, reconciles the index, and records one `memory_reorganized` audit entry.
+- **FR-033**: The system MUST provide an **internal agentic reorganization pass** (`POST /api/v1/knowledge/{scope}/reorg`, `coffer knowledge reorg <scope>`; explicit trigger only) running a bounded **langgraph `create_react_agent` loop** driven by the internal LLM connection over the scope's topic documents — consolidating duplicates and splitting over-long ones. Its fixed tool surface is **list / read / write / supersede** over topic docs, and it is **never agent-facing**. langchain/langgraph code MUST stay confined to `infrastructure.llm` (importlinter Contract 9a); `application/knowledge` reaches it only through an injected port. With no internal connection it is a clean no-op (`status="no_model"`); a scope with no topic documents is likewise a no-op (`status="empty"`). Afterwards the pass regenerates `INDEX.md` and reconciles the index.
 - **FR-034**: The reorg pass MUST be **non-destructive and incremental**. Every mutation that removes or replaces existing topic-doc content MUST first **archive the current version** to the scope-root `superseded/` tombstone (`superseded/<slug>-<timestamp>.md`): a `write` that overwrites archives the prior version first, and a `supersede` **moves** the document there. The tombstone is **excluded from retrieval** and **DOES sync** as recoverable history. Topic-doc writes remain **atomic**, and every write/supersede is appended to `consolidation-log.md`. This is the data-loss guarantee: no byte leaves the `knowledge/` lane without first being recoverably archived.
-- **FR-035**: The system MUST provide an **auto idle organize trigger** that fires `organize` (FR-027) automatically in the background when a scope goes idle — approximating "session end" without a per-agent disconnect signal. Each knowledge write (re)arms a single **debounced** timer; after the idle delay elapses with no further writes the organizer runs for the changed scope(s) as a background task. It MUST be **conservative and non-blocking**: (a) **default-ON**, controlled by an environment off-switch; (b) it MUST NEVER block or break daemon shutdown — a pending timer is cancelled and the un-fired inbox left intact (nothing is lost: retrieval already covers the inbox and `organize` is idempotent); (c) a background-pass failure MUST be suppressed + logged; (d) with no internal connection it is a clean no-op. It introduces **no new REST/CLI surface** and reuses the `memory_organized` audit.
+- **FR-035**: The system MUST provide an **auto idle organize trigger** that fires `organize` (FR-027) automatically in the background when a scope goes idle — approximating "session end" without a per-agent disconnect signal. Each knowledge write (re)arms a single **debounced** timer; after the idle delay elapses with no further writes the organizer runs for the changed scope(s) as a background task. It MUST be **conservative and non-blocking**: (a) **default-ON**, controlled by an environment off-switch; (b) it MUST NEVER block or break daemon shutdown — a pending timer is cancelled and the un-fired inbox left intact (nothing is lost: retrieval already covers the inbox and `organize` is idempotent); (c) a background-pass failure MUST be suppressed + logged; (d) with no internal connection it is a clean no-op. It introduces **no new REST/CLI surface**.
 - **FR-036**: The system MUST provide a **procedural `rules` lane** — `rules/rules.md` per scope — holding "do this / don't do that" behavioural rules. The lane stays a single file while small; once any `rules/*.md` exceeds **100 rules**, the organizer classifies its rules by topic via a one-shot LLM call and redistributes them into per-category `rules/<slug>.md` files (applied recursively). New rules keep appending to `rules/rules.md`; the read surface concatenates **every `rules/*.md`**. The lane is **agent-written via the organizer's classification, never an explicit agent parameter**: during `organize` the per-item LLM call MAY classify an inbox item as a **rule**, which is **appended** to `rules/rules.md` (the inbox item drained only after the append succeeds) instead of merged into a topic document, and the result/audit reports a `rules_appended` count. The `rules/` lane sits at the scope ROOT so it is **excluded from retrieval** for free — a rule is a standing instruction, not a search hit. It is read **on demand through its own surface**, and **nothing pushes it into an agent session**: the system MUST expose the stored rules read-only over `GET /api/v1/knowledge/{scope}/rules` and `coffer knowledge rules <scope>`, returning the rules text (empty/`null` when there are none, never an error), and that read is the only way the lane leaves disk. The lane is source-of-truth and DOES sync.
 
 **Lane taxonomy**
@@ -797,10 +797,10 @@ not an oversight.
 - **FR-063** *(was 006 FR-010a)*: Listing documents MUST support an optional **case-insensitive title filter `q`**, applied server-side BEFORE pagination; `total` reflects the filtered count.
 - **FR-064** *(was 006 FR-011/FR-011b)*: The keyword index MUST use an FTS5 **trigram** tokenizer so CJK and substring queries match — `unicode61` does not segment CJK text, so a query like `向量检索` returned nothing; a query with no token of ≥ 3 characters falls back to a bounded substring (LIKE) scan rather than returning empty. Grep responses carry a `truncated` flag, true when matches beyond `max_matches` exist OR the server-side timeout cut the scan short (a timed-out grep returns no hits with `truncated=true`, and the `rg` process is killed). `hybrid` MUST run BOTH keyword and vector searches and fuse them by **reciprocal rank fusion**: each passage's fused score is `Σ 1/(K + rank)` with `K = 60` and `rank` the 0-based position in that list; passages are deduped by chunk identity `(document_id, position)` so a passage in both lists sums both contributions and outranks single-list hits.
 - **FR-065** *(was 006 FR-014)*: Chunk parameters MUST be mutable per scope; changing them re-chunks and re-indexes. The embedding model is mutable installation-wide; changing it re-embeds every scope that lists a vector mode. There is NO immutability lock on these fields.
-- **FR-066** *(was 006 FR-015/FR-016)*: Each ingested document MUST carry a `source_mode` of `converted` (Markdown derived from the original, re-convertible) or `edited` (re-conversion blocked). All write paths — re-upload, edit API, agent `coffer__write`, external edit, reindex scan — MUST funnel through **one idempotent re-index routine**, invoked lazily on read when the on-disk `content_sha256` has drifted: unchanged is a no-op; changed deletes old chunks/FTS5/vec rows, re-chunks, re-embeds (if vector is enabled), updates the `documents` row, and audits `KB_DOCUMENT_UPDATED`. Documents are co-managed: both humans and agents may add, edit and delete, and every agent write is audited with the agent as actor.
+- **FR-066** *(was 006 FR-015/FR-016)*: Each ingested document MUST carry a `source_mode` of `converted` (Markdown derived from the original, re-convertible) or `edited` (re-conversion blocked). All write paths — re-upload, edit API, agent `coffer__write`, external edit, reindex scan — MUST funnel through **one idempotent re-index routine**, invoked lazily on read when the on-disk `content_sha256` has drifted: unchanged is a no-op; changed deletes old chunks/FTS5/vec rows, re-chunks, re-embeds (if vector is enabled) and updates the `documents` row. Documents are co-managed: both humans and agents may add, edit and delete. Only a **delete** is audited (`kb_document_deleted`) — an ingest or an update leaves its result on disk, and re-running the routine changes nothing, so the file is the record.
 - **FR-067** *(was 006 FR-021)*: A **path-based** ingest (the CLI, and a native file picker in the web UI) MUST record the external original's **absolute path** in the document's free-form `metadata` as `source_path` — no schema migration; it rides the existing JSON. A byte-upload and an agent `coffer__write` MUST NOT set or infer `source_path` (an untrusted surface must never populate an arbitrary server path). `source_path` is machine-local.
 - **FR-068** *(was 006 FR-022)*: `check-sources` MUST classify each path-tracked document by re-hashing the external file with sha256 — streamed in chunks so a multi-GB original is never read fully into memory — and comparing to the stored `source_sha256`: `unchanged`, `changed`, or `missing`. Detection is **on-demand only** (no filesystem watcher); detect-only changes nothing and audits nothing.
-- **FR-069** *(was 006 FR-023)*: `update-source` MUST re-ingest a document from its `source_path` in place — replaying the `replace=true` re-ingest path, so the stable ULID is preserved and the scope re-chunked/re-indexed (audited via `KB_DOCUMENT_UPDATED`). A document whose `source_mode == edited` MUST be refused so hand edits are never clobbered; a vanished or untracked source is reported via `IngestRejected`.
+- **FR-069** *(was 006 FR-023)*: `update-source` MUST re-ingest a document from its `source_path` in place — replaying the `replace=true` re-ingest path, so the stable ULID is preserved and the scope re-chunked/re-indexed. A document whose `source_mode == edited` MUST be refused so hand edits are never clobbered; a vanished or untracked source is reported via `IngestRejected`.
 - **FR-070** *(was 006 FR-024)*: A per-scope `auto_update_sources` flag (default **false**) governs `check-sources`: when false, detection only classifies; when true, each `changed` document whose `source_mode != edited` is auto-refreshed in place (reported `updated`), while a `changed` hand-edited document is skipped (reported `edited`). Toggling the flag MUST NOT re-chunk or re-embed — it is not a reindex-triggering field.
 - **FR-071** *(was 006 FR-025)*: When an embed degrades because the embedding provider is unavailable (`EngineUnavailable`), the document MUST be indexed keyword-only and its retry state tracked on a dedicated persisted `embed_pending` flag — decoupled from `content_sha256`, which MUST always carry the real body hash. The scope MUST surface the count of such documents as `documents_degraded` in its metrics, computed from the persisted flag so it reflects a degrade observed during **any** read. The next reconcile MUST retry **only** the embed for a still-pending document whose body is unchanged — re-chunking in memory and upserting only the vectors, clearing `embed_pending` on success.
 

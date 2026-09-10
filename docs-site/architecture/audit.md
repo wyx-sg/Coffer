@@ -27,7 +27,7 @@ Every change to any resource or capability is written to the `audit_log` table b
 
 The actor field deserves particular attention. Every surface sets it explicitly: the Typer CLI passes `X-Coffer-Actor: cli` in its HTTP calls to the daemon; REST API clients can set `X-Coffer-Actor: api` or `X-Coffer-Actor: ui`; if the header is absent, the daemon defaults to `"api"`. The daemon itself emits `system` events for automated operations like retention cleanup. This means the audit log provides an accurate picture of whether a change was initiated interactively, programmatically, or automatically.
 
-The full set of audited event types (defined as `AuditEventType` in `domain/audit.py`), grouped by domain:
+The full set of audited event types (defined as `AuditEventType` in `domain/audit.py`), grouped by domain. There are 39, and the list is deliberately short — see [What is worth auditing](#what-is-worth-auditing) below.
 
 **Resource & capability:**
 
@@ -37,86 +37,89 @@ The full set of audited event types (defined as `AuditEventType` in `domain/audi
 | `resource_updated`                           | After config or description change                                 |
 | `resource_enabled` / `resource_disabled`     | After `set_enabled` when state actually flipped                    |
 | `resource_deleted`                           | After `delete`; includes a pre-delete config snapshot in `details` |
-| `capability_first_seen`                      | When discovery sees a capability for the first time                |
-| `capability_enabled` / `capability_disabled` | When user toggles a capability                                     |
+| `resource_scope_updated`                     | When a resource's per-agent activation scope changes               |
+| `capability_enabled` / `capability_disabled` | When a user toggles a capability                                   |
 
-**Daemon:**
+**Daemon & settings:**
 
-| Event                               | Trigger                                  |
-| ----------------------------------- | ---------------------------------------- |
-| `daemon_started` / `daemon_stopped` | At daemon startup / graceful shutdown    |
-| `token_rotated`                     | After `POST /api/v1/daemon/rotate-token` |
-| `retention_updated`                 | When a retention policy is changed       |
+| Event                         | Trigger                                       |
+| ----------------------------- | --------------------------------------------- |
+| `token_rotated`               | After `POST /api/v1/daemon/rotate-token`      |
+| `retention_updated`           | When a retention policy is changed            |
+| `embedding_config_updated`    | When the embedding provider/model is changed  |
+| `internal_engine_model_set`   | When the internal engine's model is chosen    |
 
 **Credentials & master key:**
 
 | Event                                                       | Trigger                                                           |
 | ----------------------------------------------------------- | ---------------------------------------------------------------- |
-| `credential_set` / `credential_read` / `credential_deleted` | After a write / read / delete in the encrypted credential store  |
+| `credential_set` / `credential_read` / `credential_deleted` | After a write / read / delete in the encrypted credential store   |
 | `credential_migrated`                                       | Per ref, when a legacy keychain secret is migrated into the store |
-| `master_key_relocated`                                      | After the master key moves between file and keychain storage     |
-| `master_key_exported` / `master_key_imported`               | Out-of-band master-key transfer to / from another machine        |
-| `keychain_set` / `keychain_read` / `keychain_deleted`       | Legacy (pre-encrypted-store) events, kept renderable for old rows |
+| `master_key_relocated`                                      | After the master key moves between file and keychain storage      |
+| `master_key_exported` / `master_key_imported`               | Out-of-band master-key transfer to / from another machine         |
 
-**Embedding:**
+**Agent workspace** — every one of these writes a file Coffer does not own:
 
-| Event                      | Trigger                                     |
-| -------------------------- | ------------------------------------------- |
-| `embedding_config_updated` | When the embedding provider/model is changed |
-
-**Agent workspace:**
-
-| Event                                              | Trigger                                          |
-| -------------------------------------------------- | ------------------------------------------------ |
-| `agent_config_file_written` / `agent_config_file_deleted` | When an agent config file is written / deleted   |
-| `agent_mcp_installed` / `agent_mcp_uninstalled`    | When an MCP entry is installed / uninstalled into an agent |
-| `agent_mcp_entry_adopted`                          | When an MCP entry found in an agent's own config is adopted into Coffer |
+| Event                                                     | Trigger                                                                 |
+| --------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `agent_config_file_written` / `agent_config_file_deleted`  | When an agent config file is written / deleted                          |
+| `agent_mcp_installed` / `agent_mcp_uninstalled`            | When Coffer's MCP entry is installed into / removed from an agent       |
+| `agent_mcp_entry_adopted`                                  | When an MCP entry found in an agent's own config is adopted into Coffer  |
 
 **Skill:**
 
-| Event                                            | Trigger                                                  |
-| ------------------------------------------------ | ------------------------------------------------------- |
-| `skill_imported` / `skill_fetched`               | When a skill is imported locally / fetched from a source |
-| `skill_updated` / `skill_update_noop`            | When a skill update applies / is a no-op                 |
-| `skill_renamed`                                  | When a skill is renamed                                  |
-| `skill_bound` / `skill_unbound`                  | When a skill is bound to / unbound from an agent         |
-| `skill_autobind_skipped`                         | When autobind is skipped                                 |
-| `skill_relinked`                                 | When a skill link is repaired                            |
-| `skill_drift_detected`                           | When on-disk drift from the managed skill is detected    |
-| `skill_adopted` / `skill_unmanaged_deleted`      | When an unmanaged skill is adopted / a stray is deleted  |
+| Event                                       | Trigger                                                 |
+| ------------------------------------------- | ------------------------------------------------------- |
+| `skill_imported` / `skill_updated`          | When a skill is imported / updated in the master store   |
+| `skill_bound` / `skill_unbound`             | When a skill is delivered to / withdrawn from an agent   |
+| `skill_relinked`                            | When a skill link is repaired                            |
+| `skill_drift_remediated`                    | When on-disk drift from the managed skill is repaired    |
+| `skill_adopted` / `skill_unmanaged_deleted` | When an unmanaged skill is adopted / a stray is deleted  |
 
-**Knowledge:**
+**Knowledge** — only the destructive pair:
 
-| Event                                                                 | Trigger                                                          |
-| --------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `kb_document_ingested` / `kb_document_updated` / `kb_document_deleted` | When a document is ingested / updated / deleted                  |
-| `kb_reindexed`                                                        | After `coffer knowledge reindex` rebuilds the index              |
-| `memory_added` / `memory_updated` / `memory_deleted`                  | When an entry is added / updated / deleted                       |
-| `memory_cleared`                                                      | When a knowledge scope's entries are cleared                     |
-| `memory_organized` / `memory_reorganized`                             | When the inbox is consolidated / the topic docs are re-shaped    |
-| `handoff_set`                                                         | When working state is saved for a project + branch               |
+| Event                 | Trigger                                      |
+| --------------------- | -------------------------------------------- |
+| `kb_document_deleted` | When an ingested document is deleted          |
+| `memory_deleted`      | When an entry is deleted                      |
+| `memory_cleared`      | When a knowledge scope's entries are cleared   |
 
 The `kb_*` and `memory_*` prefixes are historical: they were the wire values before the two kinds merged into `knowledge`, and they are kept verbatim so existing audit rows and queries stay valid.
 
-**Chat, conversation & model:**
-
-| Event                                                    | Trigger                                                |
-| -------------------------------------------------------- | ------------------------------------------------------ |
-| `conversation_created` / `conversation_deleted`          | When a conversation is created / deleted               |
-| `conversation_archived` / `conversation_unarchived`      | When a conversation is archived / unarchived           |
-| `chat_turn_completed`                                    | After a chat turn completes                            |
-| `model_created` / `model_updated` / `model_deleted`      | When a chat model definition is created / updated / deleted |
-
 **Channel:**
 
-| Event                                                    | Trigger                                                |
-| -------------------------------------------------------- | ------------------------------------------------------ |
-| `channel_pairing_issued` / `channel_paired`              | When a channel pairing code is issued / a peer pairs   |
-| `channel_notify_sent`                                    | When a notification is sent to a paired channel        |
+| Event                                       | Trigger                                              |
+| ------------------------------------------- | ---------------------------------------------------- |
+| `channel_pairing_issued` / `channel_paired` | When a pairing code is issued / a peer claims it     |
 
-**Export / import:** every vault export and import is audited — the operation, the bundle path, and the per-area counts. The resource writes an import performs are additionally recorded as ordinary resource lifecycle events, so an imported change is as traceable as one made by hand. There are no configuration or conflict events, because there is no sync configuration and no conflict state ([ADR-016](/reference/adr/ADR-016-vault-export-import)).
+**Provider:**
 
-Note that `credential_set` and `credential_deleted` are audited — the _fact_ that a secret was stored or removed is recorded. The secret value itself is never in the `details` payload. (The legacy `keychain_set` / `keychain_deleted` event types remain renderable for historical rows.)
+| Event                           | Trigger                                                     |
+| ------------------------------- | ----------------------------------------------------------- |
+| `provider_switched`             | When a connection is projected into an agent's native config |
+| `provider_internal_default_set` | When a connection becomes Coffer's internal engine           |
+
+**Export / import:** the resource writes an import performs are recorded as ordinary resource lifecycle events, so an imported change is as traceable as one made by hand. There are no configuration or conflict events, because there is no sync configuration and no conflict state ([ADR-016](/reference/adr/ADR-016-vault-export-import)).
+
+## What is worth auditing
+
+An event earns a row only if it meets at least one of three tests:
+
+- **It lands outside Coffer.** An agent's config file, a symlink into someone's `~/.claude/`, a key projected into `~/.codex/config.toml`. Coffer reached into territory it does not own, and the log is the only place that fact is written down.
+- **It is irreversible or security-sensitive.** A delete, a credential read, a master-key export, a token rotation. There is no state to inspect afterwards, or the reading itself is the thing worth knowing.
+- **It is a low-frequency configuration change that current state cannot reveal.** A retention window changed; a capability was turned off. The current value is visible, but *that someone changed it* is not.
+
+Twenty-seven event types were retired in 2026-09 for meeting none of these. The reasons are worth stating, because they are the same reasons that should stop the list growing back:
+
+- **Runtime telemetry** (`daemon_started`, `chat_turn_completed`, `channel_turn_started`, `sync_completed`, …) — that the daemon ran or a turn completed belongs in a log line, not in a durable record of changes.
+- **Facts a table already holds** (`capability_first_seen`) — `mcp_capability_preferences.first_seen_at` *is* that event, stored where it can be queried.
+- **Idempotent recomputation** (`kb_reindexed`, `memory_organized`, `memory_reorganized`, `kb_document_ingested`, `memory_added`, …) — running them again changes nothing, and the result is on disk. The file is the record.
+- **Detection that changed nothing** (`skill_drift_detected`, `skill_autobind_skipped`) — noticing is not doing. The *remediation* is audited; the noticing is not.
+- **Low-value session state** (`conversation_created`, `conversation_archived`, `handoff_set`) — recoverable, visible in the thing itself, and high-volume.
+
+The largest single win was removing `journal_append`, which had accounted for **98.5%** of all audit rows (4,318 of 4,384) while recording only a character count — the content it described was already sitting in a Markdown file.
+
+Note that `credential_set` and `credential_deleted` are audited — the _fact_ that a secret was stored or removed is recorded. The secret value itself is never in the `details` payload.
 
 ## Invocation log: what went through the gateway
 

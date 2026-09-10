@@ -15,7 +15,6 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
-from coffer.application.audit_service import AuditService
 from coffer.application.knowledge.organizer_ports import LlmCompletionPort, ModelSelectorPort
 from coffer.application.knowledge.organizer_prompt import (
     ORGANIZER_SYSTEM,
@@ -31,13 +30,11 @@ from coffer.application.knowledge.retrieval import (
 )
 from coffer.application.knowledge.rules_split import run_rules_split
 from coffer.application.knowledge.sync import KnowledgeReconciler
-from coffer.domain.audit import AuditEventType
 from coffer.domain.knowledge.document import KIND_KNOWLEDGE
 from coffer.domain.knowledge.retrieval import StoreRef
 from coffer.domain.knowledge.scope import ResolvedScope
 from coffer.domain.knowledge.scope_config import KnowledgeConfig
 from coffer.domain.provider.config import ResolvedConnection
-from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.knowledge.paths import knowledge_dir, rules_path, topic_path
 from coffer.infrastructure.knowledge_scope.files import (
     FactFile,
@@ -93,7 +90,6 @@ class OrganizerService:
         llm: LlmCompletionPort,
         models: ModelSelectorPort,
         credential_resolver: Callable[[str], str],
-        audit: AuditService,
         now: NowFn,
         embedding_resolver: EmbeddingResolver = no_embedding,
     ) -> None:
@@ -106,7 +102,6 @@ class OrganizerService:
         self._llm = llm
         self._models = models
         self._credential_resolver = credential_resolver
-        self._audit = audit
         self._now = now
         self._resolve_embedding = embedding_resolver
 
@@ -165,14 +160,6 @@ class OrganizerService:
             credential_resolver=self._credential_resolver,
         )
 
-        await self._record_audit(
-            scope_name=scope_name,
-            processed=processed,
-            created=created,
-            updated=updated,
-            rules=rules,
-            skipped=skipped,
-        )
         return OrganizeResult("organized", processed, created, updated, rules, skipped, model.model)
 
     # ------------------------------------------------------------------
@@ -339,29 +326,6 @@ class OrganizerService:
             if len(out) >= _TOP_K_CANDIDATES:
                 break
         return out
-
-    async def _record_audit(
-        self,
-        *,
-        scope_name: str,
-        processed: int,
-        created: int,
-        updated: int,
-        rules: int,
-        skipped: int,
-    ) -> None:
-        await self._audit.record(
-            AuditEventType.MEMORY_ORGANIZED.value,
-            ref=ResourceRef(KIND_KNOWLEDGE, scope_name),
-            actor="system",
-            details={
-                "items_processed": processed,
-                "topics_created": created,
-                "topics_updated": updated,
-                "rules_appended": rules,
-                "skipped": skipped,
-            },
-        )
 
 
 def topic_path_or_none(store_dir: Path, candidate_path: str) -> Path | None:

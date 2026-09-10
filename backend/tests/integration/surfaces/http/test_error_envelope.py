@@ -206,7 +206,6 @@ async def test_tool_disabled_returns_403_envelope(tmp_path, monkeypatch):
             resource_service=rsvc,
             supervisor=sup,
             preferences=prefs,
-            audit=audit,
         )
         return MCPGatewaySession(
             session_id=session_id,

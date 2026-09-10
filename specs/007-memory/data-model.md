@@ -194,7 +194,7 @@ There is **no `MEMORY.md`** — the prior derived projection is removed. `recall
 
 The **organizer** (`application/memory/organizer.py`, internal-LLM, explicit `organize` trigger only) drains `inbox/` into the topic docs via a one-shot completion per item: retrieve up to 3 candidate topic docs (no LLM) → one LLM merge/create call → write `knowledge/<slug>.md` → delete the inbox item (only after the write succeeds) → append a changelog line. A malformed LLM response skips the item (left in inbox, never corrupts a doc). Topic-doc `.md` frontmatter is `{title, description, updated_at}` + body. The langchain LLM call stays in `infrastructure/chat` (Contract 9); `application/memory` reaches it through a memory-local `LlmCompletionPort`.
 
-The **reorg pass** (`application/memory/reorg.py`, internal-LLM, explicit `reorg` trigger only — FR-033/034) deepens the organizer with an **agentic** loop: a bounded langgraph `create_react_agent` (confined to `infrastructure/chat` by Contract 9, reached via an injected memory-local port — clone of the agentic-RAG slice) driving four internal tools over the topic docs — `list_topics`, `read_topic`, `write_topic`, `supersede_topic`. It consolidates duplicate/overlapping docs and splits over-long ones. The data-loss guarantee is one invariant: **no byte leaves the `knowledge/` lane without first being archived** — a `write_topic` that overwrites an existing doc archives the prior version to `superseded/<slug>-<ts>.md` before writing, and `supersede_topic` moves the doc there. After the loop the pass regenerates `INDEX.md`, reconciles, and audits `memory_reorganized`. The four tools are **internal LangChain `StructuredTool`s** built from memory-local callables — never registered on the MCP gateway, never agent-facing.
+The **reorg pass** (`application/memory/reorg.py`, internal-LLM, explicit `reorg` trigger only — FR-033/034) deepens the organizer with an **agentic** loop: a bounded langgraph `create_react_agent` (confined to `infrastructure/llm` by Contract 9a, reached via an injected memory-local port) driving four internal tools over the topic docs — `list_topics`, `read_topic`, `write_topic`, `supersede_topic`. It consolidates duplicate/overlapping docs and splits over-long ones. The data-loss guarantee is one invariant: **no byte leaves the `knowledge/` lane without first being archived** — a `write_topic` that overwrites an existing doc archives the prior version to `superseded/<slug>-<ts>.md` before writing, and `supersede_topic` moves the doc there. After the loop the pass regenerates `INDEX.md` and reconciles. The four tools are **internal LangChain `StructuredTool`s** built from memory-local callables — never registered on the MCP gateway, never agent-facing.
 
 Per-fact `.md` frontmatter:
 
@@ -227,8 +227,8 @@ release target tags and pushes atomically.
 | User delete (REST/CLI)                         | Delete `.md` → remove `documents`/`chunks`/FTS5/vec rows → audit. MCP has no delete tool — REST/CLI only.                                                                      |
 | Lane delete (REST)                             | `DELETE /memory_stores/{name}/{handoff/<branch>,rules,consolidation-log}` → remove the lane file(s) (none of these lanes is indexed for recall) → append one human-readable line to `consolidation-log.md` (EXCEPT the changelog's own delete) → audit `memory_deleted`. A missing lane file → 404 (mirrors fact-delete). |
 | Clear a scope                                  | Delete every memory item under `knowledge/` → remove all index rows → audit. Store Resource preserved.                                                                        |
-| Organize (explicit trigger; internal LLM)      | Per inbox item: retrieve ≤3 candidate topic docs → one-shot LLM merge/create/**classify** → if the LLM marks the item a **rule**, append it to `rules/rules.md` (procedural lane, FR-036); else write `knowledge/<slug>.md` → delete the inbox item (only after the write/append) → append `consolidation-log.md`. Then regenerate `INDEX.md`, reconcile the index, **split any over-threshold `rules/*.md` file into per-topic `rules/<slug>.md` via a one-shot LLM classify** (amendment 2026-06-22), audit `memory_organized` (with a `rules_appended` count). Malformed LLM output skips the item (stays in inbox); no internal model → no-op. |
-| Reorg (explicit trigger; internal agentic LLM) | A bounded langgraph `create_react_agent` loop over the topic docs with list/read/write/supersede tools: consolidate duplicates + split over-long docs. **Every overwrite/supersede first archives the prior version to `superseded/<slug>-<ts>.md`** (never hard-delete). Then regenerate `INDEX.md`, reconcile, audit `memory_reorganized`. No internal model → no-op (`no_model`); no topic docs → no-op (`empty`). |
+| Organize (explicit trigger; internal LLM)      | Per inbox item: retrieve ≤3 candidate topic docs → one-shot LLM merge/create/**classify** → if the LLM marks the item a **rule**, append it to `rules/rules.md` (procedural lane, FR-036); else write `knowledge/<slug>.md` → delete the inbox item (only after the write/append) → append `consolidation-log.md`. Then regenerate `INDEX.md`, reconcile the index, **split any over-threshold `rules/*.md` file into per-topic `rules/<slug>.md` via a one-shot LLM classify** (amendment 2026-06-22). Malformed LLM output skips the item (stays in inbox); no internal model → no-op. |
+| Reorg (explicit trigger; internal agentic LLM) | A bounded langgraph `create_react_agent` loop over the topic docs with list/read/write/supersede tools: consolidate duplicates + split over-long docs. **Every overwrite/supersede first archives the prior version to `superseded/<slug>-<ts>.md`** (never hard-delete). Then regenerate `INDEX.md` and reconcile. No internal model → no-op (`no_model`); no topic docs → no-op (`empty`). |
 | Auto-organize (idle trigger; opt-in, default OFF) | The memory write-notify hook (re)arms a single **debounced** timer; after the store is idle for the delay it runs `Organize` (above) for the changed store(s) as a **background task** — a session-end proxy (FR-035). Non-blocking: cancelled on daemon shutdown (the un-fired inbox is left intact for a later pass; no data loss). Failure suppressed + logged. No new REST/CLI surface. |
 | Delete the store Resource                      | Remove `documents` rows for the store, `rmtree(store_dir)`, audit.                                                                                                            |
 | Recall                                         | **Lazy reindex-on-read**: scan the `knowledge/` lane for deltas (by `content_sha256`) → `reconcile` → search.                                                                 |
@@ -252,12 +252,16 @@ When a vector-enabled store's embed degrades (embedding provider unavailable), t
 
 ## Audit events added
 
-| Value              | When emitted                            |
-| ------------------ | --------------------------------------- |
-| `"memory_added"`   | After a successful `remember`/user add  |
-| `"memory_updated"` | After a successful user edit (REST/CLI) |
+| Value              | When emitted                              |
+| ------------------ | ----------------------------------------- |
 | `"memory_deleted"` | After a successful user delete (REST/CLI) |
-| `"memory_cleared"` | After clearing a scope                  |
+| `"memory_cleared"` | After clearing a scope                    |
+
+Only the destructive pair is audited. A write, an edit, an organize, a reorg
+and a reindex are all recoverable and all leave their result on disk — the file
+IS the record, and re-running any of them changes nothing a reader would need
+the log to reconstruct. A delete leaves nothing behind, which is what makes it
+worth a row.
 
 ### Rules delivery — removed (was slice 6, FR-049/FR-050/FR-052/FR-055)
 

@@ -16,13 +16,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from coffer.application.audit_service import AuditService
 from coffer.application.knowledge.scope import ScopeResolver, project_scope_name
-from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ScopeUnresolved
-from coffer.domain.knowledge.document import KIND_KNOWLEDGE
 from coffer.domain.knowledge.scope import KnowledgeScope
-from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.knowledge.paths import handoff_path
 from coffer.infrastructure.knowledge_scope import handoff_files as hf
 
@@ -55,13 +51,11 @@ class HandoffService:
         scope: ScopeResolver,
         git_branch: GitBranchFn,
         scope_dir: ScopeDirFn,
-        audit: AuditService,
         now: ClockFn,
     ) -> None:
         self._scope = scope
         self._git_branch = git_branch
         self._scope_dir = scope_dir
-        self._audit = audit
         self._now = now
 
     async def _locate(self, cwd: str | None) -> tuple[str, Path, str] | None:
@@ -81,7 +75,7 @@ class HandoffService:
         path = handoff_path(store_dir, hf.branch_slug(branch))
         return branch, path, scope_name
 
-    async def set_handoff(self, *, cwd: str | None, body: str, actor: str) -> HandoffResult:
+    async def set_handoff(self, *, cwd: str | None, body: str) -> HandoffResult:
         """Overwrite the handoff for the current project x branch."""
         located = await self._locate(cwd)
         if located is None:
@@ -89,12 +83,6 @@ class HandoffService:
         branch, path, scope_name = located
         ts = self._now()
         hf.write_handoff(path, branch=branch, body=body, updated_at=ts)
-        await self._audit.record(
-            AuditEventType.HANDOFF_SET.value,
-            ref=ResourceRef(KIND_KNOWLEDGE, scope_name),
-            actor=actor,
-            details={"branch": branch, "char_size": len(body)},
-        )
         return HandoffResult(branch=branch, body=body, updated_at=ts, scope_name=scope_name)
 
     async def resume(self, *, cwd: str | None) -> HandoffResult | None:

@@ -177,7 +177,7 @@ class KnowledgeService(EntryReads, DocumentOps):
         origin_session_id: str | None = None,
         max_entry_chars: int | None = None,
     ) -> KnowledgeEntry:
-        """Write a fact to ``knowledge/inbox/`` → index → audit (no LLM).
+        """Write a fact to ``knowledge/inbox/`` → index (no LLM).
         ``max_entry_chars`` overrides the store length limit (a trusted import raises it)."""
         resolved = await self.resolve_scope(scope=scope, cwd=cwd)
         return await self._add(
@@ -235,7 +235,7 @@ class KnowledgeService(EntryReads, DocumentOps):
     async def update_fact(
         self, *, scope_name: str, fact_id: str, **changes: object
     ) -> KnowledgeEntry:
-        """Edit a fact (``new_body`` + ``actor`` required) → reindex → audit."""
+        """Edit a fact (``new_body`` + ``actor`` required) → reindex."""
         resolved, ff = await self._store_fact(scope_name, fact_id)
         config = await self.get_config(scope_name)
         return await update_existing_fact(

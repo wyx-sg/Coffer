@@ -62,11 +62,13 @@ channel 配置里写死的那一个 agent、在（operator 写死的）那一个
    错误回传到 chat。（这同时修了 Claude Code provider 此前接受 `model` 选项却
    从不持久化、导致永远由 CLI 自选的问题。）
 
-5. **channel 驱动的工作在审计日志里是一等的。** 一个新事件类型记录通用 per-turn
-   审计记不下的东西：`CHANNEL_TURN_STARTED`（一条 inbound 消息驱动一个 turn 时
-   ——谁/何时/哪个 channel/哪个 agent/哪个 conversation）。审计落在 channel 层,
-   因为只有那里有 channel + peer 上下文;现有
-   自由格式的 `details_json` 承载结构化上下文,无需改 schema。
+5. ~~**channel 驱动的工作在审计日志里是一等的。**~~ _2026-09-10 撤回。_
+   `CHANNEL_TURN_STARTED` 曾记录谁在哪个 channel、经哪个 agent 驱动了哪个 turn。
+   它与另外 26 个事件类型一起被退役,依据是这一条本身通不过的规则:一个事件要值得
+   一行审计,必须落在 Coffer 之外、不可逆或安全敏感、或是当前状态看不出来的低频
+   配置变更。一个 turn 跑过了三条都不占——会话与其消息本身就是那份记录,而且量很大。
+   channel 层仍然审计的是**配对**(`channel_pairing_issued` / `channel_paired`),
+   因为那才是把「可以驱动 turn」这项权限授予某个发送者的动作。
 
 6. **owner gate 校验发送者身份,而非只看会话身份。** inbound 信封携带
    `sender_id`（Telegram `from.id`、SeaTalk `employee_code`）;pairing 把它记到

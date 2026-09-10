@@ -14,7 +14,6 @@ import asyncio
 import logging
 from collections.abc import Sequence
 
-from coffer.application.audit_service import AuditService
 from coffer.application.chat.ports import AgentAdapter
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_persistence import (
@@ -66,7 +65,6 @@ async def run_turn_task(
     active: _ActiveTurn,
     adapter: AgentAdapter,
     chat: ChatService,
-    audit: AuditService,
 ) -> None:
     """Async task body: drive the adapter, publish events, persist the result.
 
@@ -146,7 +144,6 @@ async def run_turn_task(
 
         await finalize_assistant_message(
             chat=chat,
-            audit=audit,
             conversation_id=conversation_id,
             message_id=placeholder_id,
             model_id=model_id,
@@ -170,7 +167,6 @@ async def run_turn_task(
             await asyncio.shield(
                 finalize_assistant_message(
                     chat=chat,
-                    audit=audit,
                     conversation_id=conversation_id,
                     message_id=placeholder_id,
                     model_id=model_id,
@@ -195,10 +191,9 @@ async def run_turn_task(
         emit(error_event)
         # placeholder_id may be None when the placeholder write itself failed;
         # _finalize falls back to appending a failed row so the turn still leaves a
-        # persisted + audited trace.
+        # persisted trace.
         await finalize_assistant_message(
             chat=chat,
-            audit=audit,
             conversation_id=conversation_id,
             message_id=placeholder_id,
             model_id=model_id,

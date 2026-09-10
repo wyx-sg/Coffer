@@ -12,7 +12,6 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from coffer.application.audit_service import AuditService
 from coffer.application.knowledge.ports import KnowledgeDocumentRepo
 from coffer.application.knowledge.retrieval import EmbeddingResolver, KnowledgeRetrieval
 from coffer.application.knowledge.service import KnowledgeService
@@ -32,7 +31,6 @@ class OrganizerCollaborators:
     documents: KnowledgeDocumentRepo
     retrieval: KnowledgeRetrieval
     reconciler: KnowledgeReconciler
-    audit: AuditService
     embedding_resolver: EmbeddingResolver
 
 
@@ -45,6 +43,5 @@ def collaborators_from_service(svc: KnowledgeService) -> OrganizerCollaborators:
         documents=svc._documents,
         retrieval=svc._retrieval,
         reconciler=svc._reconciler,
-        audit=svc._audit,
         embedding_resolver=svc._resolve_embedding,
     )

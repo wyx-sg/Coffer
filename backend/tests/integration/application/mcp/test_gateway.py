@@ -118,7 +118,6 @@ async def _setup(
         resource_service=resource_svc,
         supervisor=supervisor,
         preferences=prefs_repo,
-        audit=audit,
     )
     session = MCPGatewaySession(
         session_id="test-session",

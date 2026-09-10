@@ -78,13 +78,16 @@ Two facts from the code shaped the design:
    back to the chat. (This also fixes the Claude Code provider, which previously
    accepted a `model` option but never persisted one, so the CLI always chose.)
 
-5. **Channel-driven work is first-class in the audit log.** A new event type
-   records what the generic per-turn audit could not: `CHANNEL_TURN_STARTED` when
-   an inbound message drives a turn (who/when/which channel/which agent/which
-   conversation). Audit lives in the
-   channel layer because that is the only place the channel + peer context
-   exists; the existing free-form `details_json` carries the structured context
-   with no schema change.
+5. ~~**Channel-driven work is first-class in the audit log.**~~ _Withdrawn
+   2026-09-10._ A `CHANNEL_TURN_STARTED` event recorded who drove which turn on
+   which channel through which agent. It was retired with 26 other event types
+   under a rule this point does not survive: an event earns an audit row only if
+   it lands outside Coffer, is irreversible or security-sensitive, or is a
+   low-frequency configuration change invisible in current state. A turn having
+   run is none of those — the conversation and its messages already are that
+   record, and the volume was high. What still audits in the channel layer is
+   **pairing** (`channel_pairing_issued` / `channel_paired`), because that grants
+   a sender the standing right to drive turns at all.
 
 6. **Owner gate verifies sender identity, not just chat identity.** The inbound
    envelope carries a `sender_id` (Telegram `from.id`, SeaTalk `employee_code`);

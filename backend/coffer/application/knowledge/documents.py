@@ -73,7 +73,7 @@ class DocumentOps(ABC):
         source_path: str | None = None,
     ) -> Document:
         """Ingest one uploaded file: size check → convert → clean → frontmatter →
-        write ``inbox/``+``.raw/`` → reindex → audit. A re-upload is matched to an
+        write ``inbox/``+``.raw/`` → reindex. A re-upload is matched to an
         existing document by filename (spec 007 FR-062): identical bytes are a no-op, a
         changed file updates that document in place (``replace``).
 
@@ -83,7 +83,7 @@ class DocumentOps(ABC):
         ``add_document`` MUST NOT pass it — an untrusted surface must never
         populate an arbitrary server path."""
         config = await self.get_config(scope_name)
-        doc, status = await self._pipeline.ingest(
+        doc, _status = await self._pipeline.ingest(
             scope_name=scope_name,
             filename=filename,
             raw_bytes=raw_bytes,
@@ -91,45 +91,17 @@ class DocumentOps(ABC):
             replace=replace,
             source_path=source_path,
         )
-        # A byte-identical re-upload is an idempotent no-op — nothing changed, so
-        # nothing is audited (FR-007). A changed re-upload of an existing filename
-        # is an UPDATE in the audit trail (FR-016), not a second ingest.
-        if status == "unchanged":
-            return doc
-        event = (
-            AuditEventType.KB_DOCUMENT_UPDATED
-            if status == "updated"
-            else AuditEventType.KB_DOCUMENT_INGESTED
-        )
-        await self._audit.record(
-            event.value,
-            ref=ResourceRef(KIND_KNOWLEDGE, scope_name),
-            actor=actor,
-            details={
-                "document_id": doc.id,
-                "filename": filename,
-                "source_mode": doc.source_mode,
-            },
-        )
         return doc
 
     async def edit_document(
         self, *, scope_name: str, document_id: str, new_markdown: str, actor: str
     ) -> Document:
-        """Replace a document's markdown body → ``source_mode=edited`` →
-        reindex → audit ``KB_DOCUMENT_UPDATED``."""
+        """Replace a document's markdown body → ``source_mode=edited`` → reindex."""
         config = await self.get_config(scope_name)
         doc = await self._require_document(scope_name, document_id)
-        updated = await self._pipeline.edit(
+        return await self._pipeline.edit(
             scope_name=scope_name, doc=doc, new_markdown=new_markdown, config=config
         )
-        await self._audit.record(
-            AuditEventType.KB_DOCUMENT_UPDATED.value,
-            ref=ResourceRef(KIND_KNOWLEDGE, scope_name),
-            actor=actor,
-            details={"document_id": document_id, "source_mode": updated.source_mode},
-        )
-        return updated
 
     async def reindex_documents(
         self,
@@ -146,21 +118,13 @@ class DocumentOps(ABC):
         config; with ``force`` the sha no-op gate is bypassed because the chunk
         params themselves changed."""
         effective = config or await self.get_config(scope_name)
-        stats = await self._pipeline.reindex_scan(
+        return await self._pipeline.reindex_scan(
             scope_name=scope_name, config=effective, force=force
         )
-        await self._audit.record(
-            AuditEventType.KB_REINDEXED.value,
-            ref=ResourceRef(KIND_KNOWLEDGE, scope_name),
-            actor=actor,
-            details=dict(stats),
-        )
-        return stats
 
     async def reembed_document(self, *, scope_name: str, document_id: str) -> Document:
         """Retry the embedding for one document (async re-embed worker unit): clears
-        ``embed_pending`` when the provider is reachable, else leaves it set.
-        Index-only retry — no audit event (no user-visible body/provenance change)."""
+        ``embed_pending`` when the provider is reachable, else leaves it set."""
         config = await self.get_config(scope_name)
         doc = await self._require_document(scope_name, document_id)
         return await self._pipeline.reembed(scope_name=scope_name, doc=doc, config=config)
@@ -173,14 +137,7 @@ class DocumentOps(ABC):
         doc = await self._require_document(scope_name, document_id)
         if doc.source_mode == "edited":
             raise ReconversionBlocked(scope_name, document_id)
-        updated = await self._pipeline.reconvert(scope_name=scope_name, doc=doc, config=config)
-        await self._audit.record(
-            AuditEventType.KB_DOCUMENT_UPDATED.value,
-            ref=ResourceRef(KIND_KNOWLEDGE, scope_name),
-            actor=actor,
-            details={"document_id": document_id, "source_mode": updated.source_mode},
-        )
-        return updated
+        return await self._pipeline.reconvert(scope_name=scope_name, doc=doc, config=config)
 
     async def delete_document(self, *, scope_name: str, document_id: str, actor: str) -> None:
         await self.get_config(scope_name)
@@ -198,8 +155,8 @@ class DocumentOps(ABC):
     async def check_sources(self, *, scope_name: str, actor: str) -> list[SourceStatus]:
         """Classify each path-tracked document by re-hashing its external
         original vs the stored ``source_sha256`` (``unchanged``/``changed``/
-        ``missing``). Detect-only audits nothing; with ``auto_update_sources`` a
-        changed non-edited document is refreshed in place."""
+        ``missing``); with ``auto_update_sources`` a changed non-edited document
+        is refreshed in place."""
         return await source_tracking.check_sources(self, scope_name=scope_name, actor=actor)
 
     async def update_from_source(

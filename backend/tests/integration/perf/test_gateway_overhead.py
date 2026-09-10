@@ -135,7 +135,6 @@ async def test_gateway_overhead_under_50ms_median(
         resource_service=rsvc,
         supervisor=supervisor,
         preferences=prefs,
-        audit=audit,
     )
     session = MCPGatewaySession(
         session_id="bench-session",

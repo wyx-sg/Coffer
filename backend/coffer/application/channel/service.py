@@ -193,9 +193,3 @@ class ChannelService:
         if adapter is None:
             raise ChannelNotRunning(name)
         await adapter.send_text(peer.chat_id, text)
-        await self._audit.record(
-            AuditEventType.CHANNEL_NOTIFY_SENT.value,
-            ref=resource.ref,
-            actor=actor,
-            details={"chars": len(text)},
-        )

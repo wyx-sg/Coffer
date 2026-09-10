@@ -105,7 +105,8 @@ Telegram update 或 SeaTalk event 的形状。
 | ------------------------ | -------------------------------- |
 | `channel_pairing_issued` | 生成一个配对码时                 |
 | `channel_paired`         | 某个发送者认领该码并成为 peer 时 |
-| `channel_notify_sent`    | notify 把文本投递给 peer 时      |
 
 资源生命周期事件（`resource_created` … `resource_deleted`）由框架自动
-产生。对话/turn 活动由聊天平台审计；channel 层不在那里添加任何东西。
+产生。turn 活动**不**审计：一个 turn 发生过既不是不可逆的、也不是安全敏感的，
+事后更不是看不见的——会话与其消息本身就是记录。配对之所以审计，是因为它把
+「可以驱动 turn」这项权限授予了某个发送者，而这正是审计日志存在的理由。

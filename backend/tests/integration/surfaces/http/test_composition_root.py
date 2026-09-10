@@ -35,7 +35,7 @@ def test_app_mounts_all_kind_agnostic_routes(tmp_path, monkeypatch):
         assert r.status_code == 200
         assert r.json() == {"resources": []}
 
-        # /audit (token required) — lifespan emits daemon_started so entries may be non-empty
+        # /audit (token required)
         r = c.get("/api/v1/audit", headers=headers)
         assert r.status_code == 200
         assert "entries" in r.json()

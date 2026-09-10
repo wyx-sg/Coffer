@@ -16,11 +16,9 @@ from typing import Any, Literal
 import mcp.types as mcp_types
 from mcp import MCPError
 
-from coffer.application.audit_service import AuditService
 from coffer.application.mcp.ports import MCPCapabilityPreferenceRepoPort
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
-from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.capability import (
     CapabilityType,
@@ -101,7 +99,6 @@ class CapabilityDiscovery:
         resource_service: ResourceService,
         supervisor: SubprocessSupervisor,
         preferences: MCPCapabilityPreferenceRepoPort,
-        audit: AuditService,
         *,
         cache_ttl_seconds: float = _DEFAULT_CACHE_TTL_SECONDS,
         clock: Any = None,
@@ -109,7 +106,6 @@ class CapabilityDiscovery:
         self._resources = resource_service
         self._supervisor = supervisor
         self._prefs = preferences
-        self._audit = audit
         self._ttl = cache_ttl_seconds
         self._clock: Any = clock or time.monotonic
         self._caches: dict[str, _UpstreamCache] = {}
@@ -357,24 +353,10 @@ class CapabilityDiscovery:
         CODE-036: takes the already-fetched ``resource`` so the cold path does
         not re-query the same row that the caller just loaded.
         """
-        now = datetime.now(tz=UTC)
-
-        new_keys = await self._prefs.reconcile(
+        await self._prefs.reconcile(
             resource.id,
             capability_type,
             current_keys,
             default_enabled=True,
-            when=now,
+            when=datetime.now(tz=UTC),
         )
-
-        for key in new_keys:
-            await self._audit.record(
-                AuditEventType.CAPABILITY_FIRST_SEEN.value,
-                ref=resource.ref,
-                actor="system",
-                details={
-                    "capability_type": capability_type,
-                    "key": key,
-                    "default_enabled": True,
-                },
-            )

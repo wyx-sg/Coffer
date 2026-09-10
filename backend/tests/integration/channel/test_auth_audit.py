@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-from coffer.domain.audit import AuditEventType
-
 from .conftest import ChannelEnv, inbound, wait_until
 
 # -- sender-identity gate ------------------------------------------------------
@@ -46,24 +44,3 @@ async def test_legacy_peer_without_sender_id_accepts_on_chat_id(env: ChannelEnv)
 
     await env.processor.on_message(inbound("tg", "owner", "hi", sender_id="whatever"))
     await wait_until(lambda: "Hello world" in adapter.texts())
-
-
-# -- first-class channel-driven audit ------------------------------------------
-
-
-@pytest.mark.acceptance(
-    spec="009-channels", scenario="a channel-driven turn is audited with channel, peer, and agent"
-)
-async def test_channel_turn_started_is_audited(env: ChannelEnv) -> None:
-    resource, adapter = await env.paired_channel()
-
-    await env.processor.on_message(inbound("tg", "owner", "hi"))
-    await wait_until(lambda: "Hello world" in adapter.texts())
-
-    entries = await env.audit_entries(AuditEventType.CHANNEL_TURN_STARTED.value)
-    assert len(entries) == 1
-    entry = entries[0]
-    assert entry.details["channel"] == "tg"
-    assert entry.details["chat_id"] == "owner"
-    assert entry.details["agent_key"] == "builtin"
-    assert entry.details["conversation_id"] == await env.active_conversation(resource)

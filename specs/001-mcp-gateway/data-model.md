@@ -81,11 +81,8 @@ String-valued enum (use `StrEnum`):
 | `"resource_enabled"`                                        | After `set_enabled(True)` when state flipped                            |
 | `"resource_disabled"`                                       | After `set_enabled(False)` when state flipped                           |
 | `"resource_deleted"`                                        | After `delete` (includes pre-delete snapshot in `details`)              |
-| `"capability_first_seen"`                                   | When discovery sees a capability for the first time                     |
 | `"capability_enabled"`                                      | When a user enables a capability that was disabled                      |
 | `"capability_disabled"`                                     | When a user disables a capability                                       |
-| `"daemon_started"`                                          | At daemon startup post-ready                                            |
-| `"daemon_stopped"`                                          | At daemon graceful shutdown                                             |
 | `"token_rotated"`                                           | After `POST /api/v1/daemon/rotate-token`                                |
 | `"retention_updated"`                                       | When a retention policy is changed                                      |
 | `"credential_set"`                                          | After `POST /api/v1/credentials` stores a secret                        |
@@ -93,7 +90,6 @@ String-valued enum (use `StrEnum`):
 | `"credential_deleted"`                                      | After `DELETE /api/v1/credentials/{ref}` removes a secret               |
 | `"credential_migrated"`                                     | Per ref, when a legacy keychain secret migrates into the store          |
 | `"master_key_relocated"`                                    | After `PUT /api/v1/settings/credentials` moves the master key           |
-| `"keychain_set"` / `"keychain_read"` / `"keychain_deleted"` | _Legacy_ (pre-envelope-encryption); kept renderable for historical rows |
 
 ### `RetentionPolicy` (`domain/retention.py`)
 

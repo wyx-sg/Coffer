@@ -29,7 +29,6 @@ class _ConversationPort(Protocol):
         *,
         agent_key: str,
         agent_config: dict[str, Any] | None,
-        actor: str,
         channel_name: str | None = None,
         peer_chat_id: str | None = None,
     ) -> Any: ...
@@ -59,7 +58,6 @@ async def open_conversation(
     conv = await conversations.create_conversation(
         agent_key=spec.agent_key,
         agent_config=spec.agent_config,
-        actor="channel",
         channel_name=binding.name,
         peer_chat_id=peer.chat_id,
     )

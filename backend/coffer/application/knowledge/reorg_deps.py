@@ -15,7 +15,7 @@ from coffer.application.knowledge.service import KnowledgeService
 
 # Reuse the same collaborator shape — the reorg service needs exactly the same
 # fields (resolve_store, get_config, store_ref, documents, retrieval, reconciler,
-# audit, embedding_resolver). Alias to keep naming explicit.
+# embedding_resolver). Alias to keep naming explicit.
 ReorgCollaborators = OrganizerCollaborators
 
 

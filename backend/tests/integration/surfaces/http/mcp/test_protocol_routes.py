@@ -111,7 +111,6 @@ async def _build_app(
             resource_service=rsvc,
             supervisor=supervisor,
             preferences=prefs_repo,
-            audit=audit,
         )
         return MCPGatewaySession(
             session_id=session_id,

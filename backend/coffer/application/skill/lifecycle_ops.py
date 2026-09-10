@@ -143,32 +143,13 @@ async def register_from_validated(
 
 
 async def auto_bind_all(*, service: SkillService, skill: Resource, actor: str) -> None:
-    from coffer.application.skill.follow_ops import audit_autobind_skipped
-
     for a in await service._rs.list(kind="agent"):
         if not a.enabled:
             continue
         # Per-agent follow policy (FR-025): agents that opted out of the
-        # master library, or excluded this skill, are skipped — audibly, so
-        # "imported but not delivered to agent X" is observable.
+        # master library, or excluded this skill, are skipped.
         follow, exclusions = service._resolve_agent_skill_policy(a)
-        if not follow:
-            await audit_autobind_skipped(
-                service=service,
-                skill_name=skill.name,
-                agent_name=a.name,
-                reason="not_following",
-                actor=actor,
-            )
-            continue
-        if skill.name in exclusions:
-            await audit_autobind_skipped(
-                service=service,
-                skill_name=skill.name,
-                agent_name=a.name,
-                reason="excluded",
-                actor=actor,
-            )
+        if not follow or skill.name in exclusions:
             continue
         try:
             await service.enable_for(
@@ -177,15 +158,8 @@ async def auto_bind_all(*, service: SkillService, skill: Resource, actor: str) -
         except (CofferError, OSError) as e:
             # A per-agent failure (TargetConflict, config validation, OSError)
             # must not abort auto-bind for the rest — but it must not be silent
-            # either: log + audit so the user can re-enable later.
+            # either: log it so the user can re-enable later.
             logger.warning("auto-bind of skill %r to agent %r skipped: %s", skill.name, a.name, e)
-            await audit_autobind_skipped(
-                service=service,
-                skill_name=skill.name,
-                agent_name=a.name,
-                reason=str(e),
-                actor=actor,
-            )
 
 
 async def relink_agent_skills(*, service: SkillService, agent_name: str, actor: str) -> None:

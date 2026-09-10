@@ -21,7 +21,6 @@ from coffer.application.skill.kind import make_skill_kind
 from coffer.application.skill.service import SkillService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
-from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ScopeInvalidError
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.workspace_errors import SkillOutOfScope
@@ -139,15 +138,13 @@ async def _enabled_bound_names(skill_svc: SkillService, agent: Resource) -> set[
     spec="005-skill-manager", scenario="enable follow-all and deliver every master skill"
 )
 async def test_enable_follow_delivers_every_master_skill(tmp_path):
-    skill_svc, agent_svc, audit, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
     agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
     await agent_svc.update_skill_policy(name="a1", follow_all_skills=False, actor="cli")
     for n in ("s1", "s2", "s3"):
         await _import_skill(skill_svc, tmp_path, n)
     # Not following — imports were not delivered.
     assert not any((skill_dir / n).exists() for n in ("s1", "s2", "s3"))
-    skips = await audit.query(event_type=AuditEventType.SKILL_AUTOBIND_SKIPPED.value)
-    assert {e.details["reason"] for e in skips} == {"not_following"}
 
     await agent_svc.update_skill_policy(name="a1", follow_all_skills=True, actor="cli")
     for n in ("s1", "s2", "s3"):
@@ -217,7 +214,7 @@ async def test_exclude_removes_link_and_never_redelivers(tmp_path):
     spec="005-skill-manager", scenario="disable follow-all preserving current bindings"
 )
 async def test_disable_follow_preserves_bindings(tmp_path):
-    skill_svc, agent_svc, audit, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
     agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
     await _import_skill(skill_svc, tmp_path, "s1")
     await _import_skill(skill_svc, tmp_path, "s2")
@@ -230,8 +227,6 @@ async def test_disable_follow_preserves_bindings(tmp_path):
     # A later import is no longer auto-delivered to this agent.
     await _import_skill(skill_svc, tmp_path, "s3")
     assert not (skill_dir / "s3").exists()
-    skips = await audit.query(event_type=AuditEventType.SKILL_AUTOBIND_SKIPPED.value)
-    assert any(e.details["agent"] == "a1" and e.details["reason"] == "not_following" for e in skips)
     assert await _enabled_bound_names(skill_svc, agent) == {"s1", "s2"}
     await engine.dispose()
 
@@ -241,7 +236,7 @@ async def test_disable_follow_preserves_bindings(tmp_path):
 
 @pytest.mark.asyncio
 async def test_autobind_skips_excluded_skill_on_import(tmp_path):
-    skill_svc, agent_svc, audit, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
     _, skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
     await agent_svc.update_skill_policy(name="a1", skill_exclusions=["banned"], actor="cli")
 
@@ -249,16 +244,14 @@ async def test_autobind_skips_excluded_skill_on_import(tmp_path):
     await _import_skill(skill_svc, tmp_path, "welcome")
     assert not (skill_dir / "banned").exists()
     assert (skill_dir / "welcome").is_symlink()
-    skips = await audit.query(event_type=AuditEventType.SKILL_AUTOBIND_SKIPPED.value)
-    assert [(e.details["agent"], e.details["reason"]) for e in skips] == [("a1", "excluded")]
     await engine.dispose()
 
 
 @pytest.mark.asyncio
 async def test_apply_follow_tolerates_target_conflict(tmp_path):
-    """An occupied target path skips that one skill (audited) — the rest of
-    the reconciliation still delivers."""
-    skill_svc, agent_svc, audit, engine = await _setup(tmp_path)
+    """An occupied target path skips that one skill — the rest of the
+    reconciliation still delivers."""
+    skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
     agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
     await agent_svc.update_skill_policy(name="a1", follow_all_skills=False, actor="cli")
     await _import_skill(skill_svc, tmp_path, "blocked")
@@ -272,15 +265,6 @@ async def test_apply_follow_tolerates_target_conflict(tmp_path):
     assert (skill_dir / "smooth").is_symlink()
     assert (foreign / "mine.txt").read_text(encoding="utf-8") == "user data"  # never clobbered
     assert await _enabled_bound_names(skill_svc, agent) == {"smooth"}
-    skips = await audit.query(event_type=AuditEventType.SKILL_AUTOBIND_SKIPPED.value)
-    conflict_reasons = [
-        e.details["reason"]
-        for e in skips
-        if e.resource_name == "blocked"
-        and e.details["agent"] == "a1"
-        and e.details["reason"] != "not_following"  # earlier follow-off import skips
-    ]
-    assert conflict_reasons and "refusing to overwrite" in conflict_reasons[0]
     await engine.dispose()
 
 

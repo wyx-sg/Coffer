@@ -2,7 +2,7 @@
 
 Split out of ``InboundProcessor`` (Task 8.5, behavior-preserving) to keep
 that module under the file-size limit. ``TurnDriver`` owns the turn
-lifecycle only — ensure-conversation, audit, typing, ``start_turn``,
+lifecycle only — ensure-conversation, typing, ``start_turn``,
 rendering the reply — plus the drain loop that feeds it from a session's
 queue. Owner-gating, pairing, command dispatch, and the session/queue
 registry itself stay in ``inbound``.
@@ -20,7 +20,6 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from coffer.application.audit_service import AuditService
 from coffer.application.channel.conversation_ops import (
     ensure_conversation,
     explain_conversation_error,
@@ -32,12 +31,10 @@ from coffer.application.channel.ports import (
     ChannelThreadConversationRepoPort,
 )
 from coffer.application.channel.turn_render import TurnRenderer
-from coffer.domain.audit import AuditEventType
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.errors import TurnInProgress
 from coffer.domain.errors import CofferError
-from coffer.domain.resource import ResourceRef
 
 __all__ = ["QUEUE_MAX", "ConversationPort", "Session", "TurnDriver", "TurnPort"]
 
@@ -72,7 +69,6 @@ class ConversationPort(Protocol):
         *,
         agent_key: str,
         agent_config: dict[str, Any] | None,
-        actor: str,
         channel_name: str | None = None,
         peer_chat_id: str | None = None,
     ) -> Any: ...
@@ -123,7 +119,6 @@ class TurnDriver:
         threads: ChannelThreadConversationRepoPort,
         conversations: ConversationPort,
         turns: TurnPort,
-        audit: AuditService,
         safe_send: SafeSend,
         session: SessionAccessor,
     ) -> None:
@@ -131,7 +126,6 @@ class TurnDriver:
         self._threads = threads
         self._conversations = conversations
         self._turns = turns
-        self._audit = audit
         self._safe_send = safe_send
         self._session = session
 
@@ -184,22 +178,6 @@ class TurnDriver:
                 chat_kind=chat_kind,
             )
             return
-        # A channel message driving a turn is first-class in the audit log:
-        # who (the peer), through which channel, drives which agent.
-        with contextlib.suppress(Exception):
-            conv = await self._conversations.get_conversation(conversation_id)
-            await self._audit.record(
-                AuditEventType.CHANNEL_TURN_STARTED.value,
-                ref=ResourceRef(kind="channel", name=binding.name),
-                actor=peer.display_name or "channel",
-                details={
-                    "channel": binding.name,
-                    "chat_id": peer.chat_id,
-                    "display_name": peer.display_name,
-                    "agent_key": conv.agent_key,
-                    "conversation_id": conversation_id,
-                },
-            )
         if adapter.capabilities.supports_typing:
             with contextlib.suppress(Exception):
                 await adapter.send_typing(peer.chat_id)

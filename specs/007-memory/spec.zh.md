@@ -293,7 +293,7 @@ Entries 与 Documents 是两个 tab、两套计数，恰恰因为它们来路不
 
 - **Given** 一个跑在 git 项目某分支内的 MCP 客户端，
 - **When** 它带正文调 `coffer__set_handoff`，之后（可能作为另一个 agent）调 `coffer__resume`，
-- **Then** `set_handoff` 在项目 scope 的 `handoff/` lane 下写入一个按 `(项目 × 分支)` 的 Markdown 文件（frontmatter `branch`/`updated_at` + 自由正文）—— 覆盖该分支此前的现场并记录一条 `handoff_set` 审计 —— 而 `resume` 返回 `found=true` 及保存的分支、正文、`updated_at` 与新鲜度 `note`；handoff 从不被 `coffer__search` 返回。
+- **Then** `set_handoff` 在项目 scope 的 `handoff/` lane 下写入一个按 `(项目 × 分支)` 的 Markdown 文件（frontmatter `branch`/`updated_at` + 自由正文）—— 覆盖该分支此前的现场 —— 而 `resume` 返回 `found=true` 及保存的分支、正文、`updated_at` 与新鲜度 `note`；handoff 从不被 `coffer__search` 返回。
 
 ### Scenario: resume reports no handoff for a fresh branch
 
@@ -305,7 +305,7 @@ Entries 与 Documents 是两个 tab、两套计数，恰恰因为它们来路不
 
 - **Given** 一个知识 scope 的 `knowledge/inbox/` 里有两条新写入的条目，且已配置内部模型，
 - **When** 调用 `POST /api/v1/knowledge/{scope}/organize`（或 `coffer knowledge organize <scope>`），
-- **Then** 内部 LLM organizer 排空 inbox（无剩余项），至少存在一个持有合并内容的 `knowledge/<topic>.md` 主题文档，`knowledge/INDEX.md` 列出该主题，记录一条 `memory_organized` 审计，随后的搜索返回主题文档（而非已空的 inbox）中的内容。
+- **Then** 内部 LLM organizer 排空 inbox（无剩余项），至少存在一个持有合并内容的 `knowledge/<topic>.md` 主题文档，`knowledge/INDEX.md` 列出该主题，随后的搜索返回主题文档（而非已空的 inbox）中的内容。
 
 ### Scenario: organizing merges a note into an existing topic without clobbering it
 
@@ -329,7 +329,7 @@ Entries 与 Documents 是两个 tab、两套计数，恰恰因为它们来路不
 
 - **Given** 一个知识 scope 有两份重叠的主题文档（同一主题，其一含额外细节），且已配置内部模型，
 - **When** `POST /api/v1/knowledge/{scope}/reorg`（或 `coffer knowledge reorg <scope>`）运行，内部 agentic 循环读取两份文档、把合并内容写入其一并取代另一份，
-- **Then** 单一主题文档持有合并后的内容，冗余文档不再出现在搜索或 `INDEX.md` 中，随后的搜索返回合并内容，并记录一条 `memory_reorganized` 审计。
+- **Then** 单一主题文档持有合并后的内容，冗余文档不再出现在搜索或 `INDEX.md` 中，随后的搜索返回合并内容。
 
 ### Scenario: reorg never destroys content — a superseded topic stays recoverable
 
@@ -407,7 +407,7 @@ Entries 与 Documents 是两个 tab、两套计数，恰恰因为它们来路不
 
 - **Given** 存在一个知识 scope，
 - **When** 用户上传一个非 Markdown 文件（如 `.pdf`、`.docx`、`.csv`、`.html`），
-- **Then** Coffer 把它转换为 `inbox/<doc-id>.md`（带 YAML frontmatter），把原件保留在 `.raw/<doc-id>.<ext>`，插入一行 `documents`（`kind="knowledge"`、`lane="inbox"`、`source_mode="converted"`），把它切块进 FTS5，并记录审计 `KB_DOCUMENT_INGESTED`。
+- **Then** Coffer 把它转换为 `inbox/<doc-id>.md`（带 YAML frontmatter），把原件保留在 `.raw/<doc-id>.<ext>`，插入一行 `documents`（`kind="knowledge"`、`lane="inbox"`、`source_mode="converted"`），并把它切块进 FTS5。
 
 ### Scenario: list documents in a knowledge base
 
@@ -527,13 +527,13 @@ Entries 与 Documents 是两个 tab、两套计数，恰恰因为它们来路不
 
 - **Given** 存在一个知识 scope，
 - **When** 客户端以 Markdown 内容调 `coffer__write(text, filename, scope?)`，
-- **Then** Coffer 像处理人工上传一样摄取它（`inbox` lane 下一个新的 ULID id 文档，写入 `inbox/` 与 `.raw/`，建索引），以 agent 为 actor 记录审计 `KB_DOCUMENT_INGESTED`，该文档可被搜索。
+- **Then** Coffer 像处理人工上传一样摄取它（`inbox` lane 下一个新的 ULID id 文档，写入 `inbox/` 与 `.raw/`，建索引），该文档可被搜索。
 
 ### Scenario: agent edits a document via MCP
 
 - **Given** 存在一份已转换的文档，
 - **When** 客户端调 `coffer__write(text, id, scope?)` 指向该文档，
-- **Then** 正文被替换，`source_mode` 变为 `edited`，该 scope 被重建索引，以 agent 为 actor 记录审计 `KB_DOCUMENT_UPDATED`。
+- **Then** 正文被替换，`source_mode` 变为 `edited`，该 scope 被重建索引。
 
 ### Scenario: agent deletes a document via MCP
 
@@ -545,13 +545,13 @@ Entries 与 Documents 是两个 tab、两套计数，恰恰因为它们来路不
 
 - **Given** 一份从 `report.md` 摄取的文档，
 - **When** 用户带 `replace=true` 重新上传变更后的 `report.md`，
-- **Then** **同一个** doc id 被就地更新（`.raw/` 与 Markdown 被覆盖、只保留最新原件、`source_mode` 重置为 `converted`），不产生第二个文档，并记录审计 `KB_DOCUMENT_UPDATED`。
+- **Then** **同一个** doc id 被就地更新（`.raw/` 与 Markdown 被覆盖、只保留最新原件、`source_mode` 重置为 `converted`），且不产生第二个文档。
 
 ### Scenario: re-upload of an identical file is a no-op
 
 - **Given** 一份从 `report.md` 摄取的文档，
 - **When** 用户重新上传字节完全相同的 `report.md`，
-- **Then** 这是幂等 no-op：返回既有文档，不产生第二个文档，不记录 `KB_DOCUMENT_UPDATED` 审计。
+- **Then** 这是幂等 no-op：返回既有文档，且不产生第二个文档。
 
 ### Scenario: KB metrics report counts and disk usage
 
@@ -575,7 +575,7 @@ Entries 与 Documents 是两个 tab、两套计数，恰恰因为它们来路不
 
 - **Given** 一份已转换文档，其外部 `source_path` 原件在磁盘上已变更，
 - **When** 用户对该文档运行 `update-source`，
-- **Then** Coffer 从被跟踪文件就地重新摄取它（同一 ULID id，`source_mode` 保持 `converted`），新内容可搜索、旧内容消失，并审计 `KB_DOCUMENT_UPDATED`。
+- **Then** Coffer 从被跟踪文件就地重新摄取它（同一 ULID id，`source_mode` 保持 `converted`），新内容可搜索、旧内容消失。
 
 ### Scenario: update from source refuses an edited document
 
@@ -587,7 +587,7 @@ Entries 与 Documents 是两个 tab、两套计数，恰恰因为它们来路不
 
 - **Given** 一个启用 `auto_update_sources` 的 scope，且某文档的外部原件已变更，
 - **When** 用户运行 `check-sources`，
-- **Then** 变更文档被就地自动刷新（报告 `updated`）并审计 `KB_DOCUMENT_UPDATED`，而手工编辑过的变更文档会被跳过（报告 `edited`）。
+- **Then** 变更文档被就地自动刷新（报告 `updated`），而手工编辑过的变更文档会被跳过（报告 `edited`）。
 
 ### Scenario: test an embedding model
 
@@ -641,7 +641,7 @@ Entries 与 Documents 是两个 tab、两套计数，恰恰因为它们来路不
 **工作现场 handoff（连续性）**
 
 - **FR-023**：系统必须提供按 **(项目 scope × git 分支)** 建键的**工作现场 handoff** lane：每分支一个文件，位于 `~/.coffer/knowledge/project-<ULID>/handoff/<branch-slug>.md`，含 YAML frontmatter（`branch`、`updated_at`）加自由 Markdown 正文。分支从 agent 上报的 cwd 解析。handoff **仅限项目级** —— 不存在全局 handoff。
-- **FR-024**：`coffer__set_handoff(body)` 必须**覆盖**当前分支的 handoff 文件（每分支一个现场）、设置 `updated_at`，并记录一条 `handoff_set` 审计。正文以文件即真相的方式存在磁盘上，且必须**不**被 `coffer__search` 返回（它在检索 glob 之外）。
+- **FR-024**：`coffer__set_handoff(body)` 必须**覆盖**当前分支的 handoff 文件（每分支一个现场）并设置 `updated_at`。正文以文件即真相的方式存在磁盘上，且必须**不**被 `coffer__search` 返回（它在检索 glob 之外）。
 - **FR-025**：`coffer__resume()` 必须返回当前分支保存的 handoff —— `found=true` 连同 `branch`、`body`、`updated_at` 与标注现场可能已陈旧的新鲜度 `note` —— 或在该分支没有 handoff、或 cwd 不在 git 项目内时返回 `found=false`。它必须永不因缺失 handoff 而报错，也必须不编造内容。
 - **FR-026**：当 agent 的 cwd 不解析到 git 项目时，`coffer__set_handoff` 必须被拒绝，`coffer__resume` 必须返回 `found=false`。
 
@@ -650,12 +650,12 @@ Entries 与 Documents 是两个 tab、两套计数，恰恰因为它们来路不
 - **FR-027**：系统必须提供一个**内部 organizer**，用 Coffer 的**内部 LLM 连接**（标记为 internal-default 的连接；Settings → LLM Connections，spec 011）以**每条一次性补全**的方式，把一个 scope 的 `knowledge/inbox/` 排空成少量连贯的**主题文档**（`knowledge/<topic-slug>.md`）—— 它绝非面向 agent 的工具。触发方式为显式调用（`POST /api/v1/knowledge/{scope}/organize`、`coffer knowledge organize <scope>`）与空闲自动触发（FR-035）。条目顺序处理，单条的 LLM/解析失败必须不中断整轮。
 - **FR-028**：对每条 inbox 条目，organizer 必须（a）经共享检索引擎取回至多 top-K（K=3）最相关的**既有主题文档**（此步不调 LLM）作为合并候选，（b）做**一次 LLM 调用**，或把该条目合并进最合适的候选 —— **保留全部既有内容与人的编辑**、整合新信息、去掉完全重复 —— 或在没有合适候选时创建新主题，（c）把返回的完整文档正文写入 `knowledge/<topic-slug>.md`。它必须是**增量合并，绝非从零重生成**，且必须不硬删既有主题文档。
 - **FR-029**：inbox 条目必须**只在**其内容成功写入主题文档**之后**才被删除。畸形或无法解析的 LLM 响应必须导致该条目被**跳过** —— 留在 inbox，不写出也不写坏任何主题文档 —— 且整轮继续；结果报告跳过数。对空 inbox 调 `organize` 是 no-op（`status="empty"`）；未配置内部连接时是干净的 no-op（`status="no_model"`）而非错误。
-- **FR-030**：排空之后，organizer 必须由所有主题文档的 frontmatter 重新生成该 scope 的 `knowledge/INDEX.md` 目录、协调索引（丢掉被排空的 inbox 行、（重新）索引新建/更新的主题文档），并记录一条 `memory_organized` 审计（仅 scope + 计数，不含条目内容）。检索必须返回整理后的主题文档内容，且必须不返回 `INDEX.md`。
+- **FR-030**：排空之后，organizer 必须由所有主题文档的 frontmatter 重新生成该 scope 的 `knowledge/INDEX.md` 目录、协调索引（丢掉被排空的 inbox 行、（重新）索引新建/更新的主题文档）。检索必须返回整理后的主题文档内容，且必须不返回 `INDEX.md`。
 - **FR-031**：organizer 必须在 scope 根维护一份**非阻塞的整理变更日志**（`consolidation-log.md`，只追加、人类可读：每条合并/新建的主题一行，带时间戳与来源 inbox 条目）。它可供审计、从不设卡，且**不参与检索**（在 `knowledge/` lane 之外）与同步镜像（本机局部，与 `INDEX.md` 一样；主题文档本身作为真相源**参与**同步）。
 - **FR-032**：协调器必须用共享 Markdown 分块器（`infrastructure/knowledge/chunking.chunk_markdown` —— 按标题小节切分、保持围栏代码/表格原子、把结构块打包到固定窗口）把文件正文切成**段落粒度、感知结构的块**，使多小节主题文档返回**最相关的段落**而非整篇正文。短的单段条目仍切成一块：这只改变**粒度**，绝不改变检索*包含或排除什么*。
-- **FR-033**：系统必须提供一个**内部 agentic 重整流程**（`POST /api/v1/knowledge/{scope}/reorg`、`coffer knowledge reorg <scope>`；仅显式触发），由内部 LLM 连接驱动一个有界的 **langgraph `create_react_agent` 循环**处理该 scope 的主题文档 —— 合并重复、拆分过长。其固定工具面是对主题文档的 **list / read / write / supersede**，且**绝不面向 agent**。langchain/langgraph 代码必须限制在 `infrastructure.chat`（importlinter Contract 9）；`application/knowledge` 只经注入的端口触达它。未配置内部连接时是干净的 no-op（`status="no_model"`）；没有主题文档的 scope 同样是 no-op（`status="empty"`）。流程结束后重新生成 `INDEX.md`、协调索引，并记录一条 `memory_reorganized` 审计。
+- **FR-033**：系统必须提供一个**内部 agentic 重整流程**（`POST /api/v1/knowledge/{scope}/reorg`、`coffer knowledge reorg <scope>`；仅显式触发），由内部 LLM 连接驱动一个有界的 **langgraph `create_react_agent` 循环**处理该 scope 的主题文档 —— 合并重复、拆分过长。其固定工具面是对主题文档的 **list / read / write / supersede**，且**绝不面向 agent**。langchain/langgraph 代码必须限制在 `infrastructure.llm`（importlinter Contract 9a）；`application/knowledge` 只经注入的端口触达它。未配置内部连接时是干净的 no-op（`status="no_model"`）；没有主题文档的 scope 同样是 no-op（`status="empty"`）。流程结束后重新生成 `INDEX.md` 并协调索引。
 - **FR-034**：reorg 流程必须**非破坏且增量**。任何移除或替换既有主题文档内容的变更，都必须先把当前版本**归档**到 scope 根的 `superseded/` 墓碑（`superseded/<slug>-<timestamp>.md`）：覆盖式 `write` 先归档旧版，`supersede` 则把文档**移动**过去。墓碑**不参与检索**，但作为可恢复历史**参与同步**。主题文档写入必须保持**原子**，且每次 write/supersede 都追加进 `consolidation-log.md`。这是数据不丢失的保证：没有任何字节能在未被可恢复归档的情况下离开 `knowledge/` lane。
-- **FR-035**：系统必须提供一个**空闲自动整理触发**，在 scope 空闲时于后台自动执行 `organize`（FR-027）—— 在没有 per-agent 断连信号的情况下近似「会话结束」。每次知识写入都（重新）武装一个**防抖**定时器；空闲延迟内不再有写入后，organizer 作为后台任务对变更的 scope 运行。它必须**保守且非阻塞**：（a）**默认开启**，由环境变量提供关闭开关；（b）它必须永不阻塞或破坏 daemon 关停 —— 待触发的定时器被取消，未触发的 inbox 原样留下（不丢东西：检索本就覆盖 inbox，且 `organize` 幂等）；（c）后台流程失败必须被抑制并记日志；（d）未配置内部连接时是干净的 no-op。它不引入**任何新的 REST/CLI 面**，并复用 `memory_organized` 审计。
+- **FR-035**：系统必须提供一个**空闲自动整理触发**，在 scope 空闲时于后台自动执行 `organize`（FR-027）—— 在没有 per-agent 断连信号的情况下近似「会话结束」。每次知识写入都（重新）武装一个**防抖**定时器；空闲延迟内不再有写入后，organizer 作为后台任务对变更的 scope 运行。它必须**保守且非阻塞**：（a）**默认开启**，由环境变量提供关闭开关；（b）它必须永不阻塞或破坏 daemon 关停 —— 待触发的定时器被取消，未触发的 inbox 原样留下（不丢东西：检索本就覆盖 inbox，且 `organize` 幂等）；（c）后台流程失败必须被抑制并记日志；（d）未配置内部连接时是干净的 no-op。它不引入**任何新的 REST/CLI 面**。
 - **FR-036**：系统必须提供**流程性 `rules` lane** —— 每个 scope 一份 `rules/rules.md` —— 存放「要这样 / 不要那样」的行为规则。文件较小时该 lane 保持单文件；一旦任一 `rules/*.md` 超过 **100 条规则**，organizer 通过一次性 LLM 调用按主题分类并把它们重分布到按类别的 `rules/<slug>.md`（可递归应用）。新规则继续追加到 `rules/rules.md`；读取面串联**全部 `rules/*.md`**。该 lane 由 **organizer 的分类写入，绝不由 agent 显式指定**：`organize` 期间每条条目的那次 LLM 调用可以额外把某条 inbox 条目分类为**规则**，该条目被**追加**到 `rules/rules.md`（追加成功后才排空 inbox 条目）而不是并入主题文档，结果/审计报告 `rules_appended` 计数。`rules/` lane 位于 scope 根，因此天然**不参与检索** —— 规则是常驻指令，不是检索命中。它**按需通过自己的读取面读取**，且**没有任何东西把它推进 agent 会话**：系统必须只读暴露已存规则 —— `GET /api/v1/knowledge/{scope}/rules` 与 `coffer knowledge rules <scope>` 返回规则文本（没有规则时为空/`null`，绝不报错）—— 而这次读取是该 lane 离开磁盘的唯一途径。该 lane 是真相源且参与同步。
 
 **Lane 分类法**
@@ -716,10 +716,10 @@ hook 投递这条 lane（`GET /api/v1/agents/{name}/session-context?cwd=` →
 - **FR-063** *(原 006 FR-010a)*：文档列举必须支持可选的**不区分大小写标题过滤 `q`**，在分页**之前**于服务端应用；`total` 反映过滤后的数量。
 - **FR-064** *(原 006 FR-011/FR-011b)*：关键词索引必须使用 FTS5 **trigram** 分词器，使 CJK 与子串查询能命中 —— `unicode61` 不切分 CJK 文本，因此像 `向量检索` 这样的查询会返回空；没有任何 ≥ 3 字符 token 的查询回退到有界的子串（LIKE）扫描而非返回空。grep 响应携带 `truncated` 标志，在存在超过 `max_matches` 的匹配、或服务端超时截断扫描时为真（超时的 grep 返回零命中且 `truncated=true`，并杀掉 `rg` 进程）。`hybrid` 必须同时跑 keyword 与 vector 搜索并以**倒数排名融合**合并：每个段落的融合分为 `Σ 1/(K + rank)`，`K = 60`、`rank` 为其在该列表中的 0 起始位置；段落按 chunk 身份 `(document_id, position)` 去重，因此同时出现在两个列表的段落累加两份贡献并胜过单列表命中。
 - **FR-065** *(原 006 FR-014)*：chunk 参数必须可按 scope 修改；修改会重新切块并重建索引。embedding 模型在全局层面可修改；修改会让每个列出向量模式的 scope 重新嵌入。这些字段没有不可变锁。
-- **FR-066** *(原 006 FR-015/FR-016)*：每个摄取文档必须携带 `source_mode`：`converted`（Markdown 由原件派生，可重新转换）或 `edited`（禁止重新转换）。所有写入路径 —— 重新上传、编辑 API、agent `coffer__write`、外部编辑、重建索引扫描 —— 必须汇入**同一个幂等重建索引例程**，在磁盘 `content_sha256` 漂移时于读取路径上惰性触发：未变则 no-op；已变则删除旧的 chunks/FTS5/vec 行、重新切块、（启用向量时）重新嵌入、更新 `documents` 行并审计 `KB_DOCUMENT_UPDATED`。文档由人与 agent 共管：双方都可添加、编辑与删除，且每次 agent 写入都以 agent 为 actor 记入审计。
+- **FR-066** *(原 006 FR-015/FR-016)*：每个摄取文档必须携带 `source_mode`：`converted`（Markdown 由原件派生，可重新转换）或 `edited`（禁止重新转换）。所有写入路径 —— 重新上传、编辑 API、agent `coffer__write`、外部编辑、重建索引扫描 —— 必须汇入**同一个幂等重建索引例程**，在磁盘 `content_sha256` 漂移时于读取路径上惰性触发：未变则 no-op；已变则删除旧的 chunks/FTS5/vec 行、重新切块、（启用向量时）重新嵌入并更新 `documents` 行。文档由人与 agent 共管：双方都可添加、编辑与删除。只有**删除**会审计（`kb_document_deleted`）—— 摄取与更新的结果都落在磁盘上，重跑这个例程什么都不会变，因此文件本身就是记录。
 - **FR-067** *(原 006 FR-021)*：**基于路径**的摄取（CLI，以及 Web UI 的原生文件选择器）必须把外部原件的**绝对路径**记入文档自由形式的 `metadata` 的 `source_path` —— 无需 schema 迁移，它搭在既有 JSON 上。字节上传与 agent 的 `coffer__write` 必须**不**设置或推断 `source_path`（不可信面绝不能填入任意服务端路径）。`source_path` 是本机局部的。
 - **FR-068** *(原 006 FR-022)*：`check-sources` 必须对每个被路径跟踪的文档重新做 sha256 —— 分块流式读取，使多 GB 原件永不整体读进内存 —— 并与存储的 `source_sha256` 比对，归类为 `unchanged`、`changed` 或 `missing`。检测**仅按需**（没有文件系统 watcher）；纯检测不改动、不审计。
-- **FR-069** *(原 006 FR-023)*：`update-source` 必须从文档的 `source_path` 就地重新摄取 —— 复用 `replace=true` 的重新摄取路径，因此稳定 ULID 得以保留，该 scope 被重新切块与重建索引（经 `KB_DOCUMENT_UPDATED` 审计）。`source_mode == edited` 的文档必须被拒绝，使手工编辑永不被覆盖；源文件消失或未被跟踪则经 `IngestRejected` 报告。
+- **FR-069** *(原 006 FR-023)*：`update-source` 必须从文档的 `source_path` 就地重新摄取 —— 复用 `replace=true` 的重新摄取路径，因此稳定 ULID 得以保留，该 scope 被重新切块与重建索引。`source_mode == edited` 的文档必须被拒绝，使手工编辑永不被覆盖；源文件消失或未被跟踪则经 `IngestRejected` 报告。
 - **FR-070** *(原 006 FR-024)*：按 scope 的 `auto_update_sources` 开关（默认 **false**）决定 `check-sources` 行为：为 false 时检测只归类；为 true 时每个 `source_mode != edited` 的 `changed` 文档被就地自动刷新（报告 `updated`），而手工编辑过的 `changed` 文档被跳过（报告 `edited`）。切换该开关必须不触发重新切块或重新嵌入 —— 它不是触发重建索引的字段。
 - **FR-071** *(原 006 FR-025)*：当嵌入因 embedding provider 不可用（`EngineUnavailable`）而降级时，文档必须仅以关键词建索引，其重试状态必须记录在专用的持久化 `embed_pending` 标志上 —— 与 `content_sha256` 解耦，后者必须始终是真实的正文哈希。scope 必须在指标中以 `documents_degraded` 暴露此类文档的数量，且该计数由持久化标志计算，因此它反映**任何**一次读取中观察到的降级。下一次协调对正文未变的待重试文档必须**只**重试嵌入 —— 在内存中重新切块、只 upsert 向量，成功后清除 `embed_pending`。
 

@@ -172,7 +172,6 @@ async def test_secret_value_never_in_db_or_logs(
         resource_service=rsvc,
         supervisor=supervisor,
         preferences=prefs,
-        audit=audit,
     )
     session = MCPGatewaySession(
         session_id="leak-session",

@@ -280,7 +280,6 @@ async def handoff(tmp_path: pathlib.Path, monkeypatch):
         scope=scope,
         git_branch=git_branch,
         scope_dir=paths.scope_dir,
-        audit=audit,
         now=lambda: datetime(2026, 6, 20, 12, 0, tzinfo=UTC),
     )
 

@@ -129,7 +129,6 @@ def _build_app_sync(tmp_path: Path, token: str, port: int) -> FastAPI:
             resource_service=rsvc2,
             supervisor=supervisor,
             preferences=prefs,
-            audit=audit2,
         )
         return MCPGatewaySession(
             session_id=session_id,

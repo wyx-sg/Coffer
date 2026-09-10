@@ -55,7 +55,6 @@ from coffer.surfaces.http.turn_dependencies import (
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-    from coffer.application.audit_service import AuditService
     from coffer.application.mcp.gateway import MCPGatewaySession
     from coffer.domain.knowledge.index import KnowledgeIndex
 
@@ -134,7 +133,6 @@ def build_substrate(
 
 
 def wire_chat(
-    audit: AuditService,
     sm: object,
     mcp_session_factory: Callable[[str], Any],
     credential_store: Any,
@@ -181,9 +179,8 @@ def wire_chat(
         conversations=conv_repo,
         messages=msg_repo,
         registry=registry,
-        audit=audit,
     )
-    orchestrator = TurnOrchestrator(chat_service=chat_svc, registry=registry, audit=audit)
+    orchestrator = TurnOrchestrator(chat_service=chat_svc, registry=registry)
 
     # 6. Startup sweep: flip any lingering ``status='streaming'`` rows to
     #    ``'failed'`` (recover from a prior daemon crash).

@@ -69,7 +69,6 @@ def _make_organizer(mem, llm: _ScriptedLlm, models: _Models) -> OrganizerService
         llm=llm,
         models=models,
         credential_resolver=lambda ref: "key",
-        audit=mem.audit,
         now=lambda: datetime(2026, 6, 21, 12, 0, tzinfo=UTC),
         embedding_resolver=svc._resolve_embedding,
     )

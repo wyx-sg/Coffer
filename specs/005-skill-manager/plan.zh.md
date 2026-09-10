@@ -157,7 +157,7 @@ follow-master-library 策略。各层新增模块：
 - **前端**：`AgentSkillsTab` v2——follow 开关与排除模式下的逐 skill 切换、带 adopt/删除的未托管 skill 区块、foreign-link 与降级 binding 徽标。
 
 新增 audit 事件：`skill_adopted`、`skill_unmanaged_deleted`、
-`skill_autobind_skipped`、`skill_relinked`。无 schema 变更——扫描在请求时
+`skill_relinked`。无 schema 变更——扫描在请求时
 派生，follow 策略存于 agent 资源的 config（spec 004）。
 
 ## 留给后续规范的开放项

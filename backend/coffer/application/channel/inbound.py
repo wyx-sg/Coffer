@@ -100,7 +100,6 @@ class InboundProcessor:
             threads=threads,
             conversations=conversations,
             turns=turns,
-            audit=audit,
             safe_send=self._safe_send,
             session=self._session,
         )

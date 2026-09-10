@@ -203,7 +203,7 @@ def register_knowledge_builtin_tools(
         body = args.get("body") or args.get("text")
         if not isinstance(body, str) or not body.strip():
             raise ValueError("handoff 'body' must be a non-empty string")
-        res = await handoff_service.set_handoff(cwd=_cwd(args), body=body, actor="agent")
+        res = await handoff_service.set_handoff(cwd=_cwd(args), body=body)
         return {"status": "saved", "branch": res.branch, "scope": res.scope_name}
 
     async def resume(args: dict[str, Any]) -> dict[str, Any]:

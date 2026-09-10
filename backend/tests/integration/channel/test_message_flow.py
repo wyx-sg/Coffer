@@ -152,7 +152,7 @@ async def test_dangling_active_conversation_is_recreated_on_next_message(
     assert old_conversation is not None
 
     # The user deletes the conversation from the web UI.
-    await env.chat.delete_conversation(old_conversation, actor="user")
+    await env.chat.delete_conversation(old_conversation)
 
     await env.processor.on_message(inbound("tg", "owner", "second"))
     await wait_until(lambda: len(adapter.texts()) >= 2)

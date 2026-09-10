@@ -98,7 +98,6 @@ def wire_mcp_kind(
         resource_service=resource_svc,
         supervisor=process_supervisor,
         preferences=prefs_repo,
-        audit=audit,
     )
 
     # 5. Build the per-session MCPGatewaySession factory
@@ -121,7 +120,6 @@ def wire_mcp_kind(
             resource_service=resource_svc,
             supervisor=supervisor,
             preferences=prefs_repo,
-            audit=audit,
         )
         return MCPGatewaySession(
             session_id=session_id,
