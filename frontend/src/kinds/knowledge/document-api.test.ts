@@ -20,7 +20,6 @@ import {
   reconvertDocument,
   reembedDocuments,
   reindexScope,
-  searchDocuments,
   updateScopeConfig,
   type RetrievalMode,
 } from "./api";
@@ -233,38 +232,6 @@ describe("reindexScope", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${BASE}/knowledge/designs/reindex`);
     expect(init?.method).toBe("POST");
-  });
-});
-
-describe("searchDocuments", () => {
-  test("POSTs query + top_k (no mode) and returns the SearchResponse", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      okJson({
-        passages: [
-          { text: "alpha bravo", document_id: "d1", title: "a.md", score: 0.7, position: 0 },
-        ],
-      }),
-    );
-
-    const out = await searchDocuments("designs", "alpha", { topK: 3 });
-    expect(out.passages).toHaveLength(1);
-    expect(out.passages[0].text).toContain("alpha");
-
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${BASE}/knowledge/designs/search`);
-    expect(init?.method).toBe("POST");
-    // "One query → one answer": the request carries no mode.
-    expect(JSON.parse(init!.body as string)).toEqual({ query: "alpha", top_k: 3 });
-  });
-
-  test("defaults top_k to 5 and never sends mode", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({ passages: [] }));
-
-    await searchDocuments("designs", "anything");
-    expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toEqual({
-      query: "anything",
-      top_k: 5,
-    });
   });
 });
 

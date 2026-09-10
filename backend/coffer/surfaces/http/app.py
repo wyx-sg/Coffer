@@ -3,7 +3,7 @@
 For the lifecycle-managed daemon process, `coffer.infrastructure.daemon.entry`
 acquires the port + token before uvicorn binds. The lifespan here reads
 daemon.json back to set the auth token + port, runs Alembic migrations,
-wires services, and starts the retention worker.
+wires services, and starts the background workers.
 
 In-process tests can call `create_app()` directly and override
 `set_active_token(...)` manually if they want authenticated calls.
@@ -64,9 +64,8 @@ from coffer.surfaces.http.app_mcp_composition import (
 )
 from coffer.surfaces.http.async_batch_wiring import start_async_batches, stop_async_batches
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.auto_organize_wiring import start_auto_organize, stop_auto_organize
 from coffer.surfaces.http.channel_wiring import wire_channel_kind
-from coffer.surfaces.http.consolidate_wiring import run_store_consolidation
+from coffer.surfaces.http.consolidate_wiring import run_lane_migration, run_store_consolidation
 from coffer.surfaces.http.credential_composition import (
     init_credential_store,
     make_credential_resolver,
@@ -83,7 +82,6 @@ from coffer.surfaces.http.dependencies import (
     set_resource_service,
     set_retention_service,
 )
-from coffer.surfaces.http.knowledge.organize_state import get_organizer_service
 from coffer.surfaces.http.knowledge_wiring import (
     run_knowledge_reindex_sweep,
     wire_knowledge_kind,
@@ -92,9 +90,7 @@ from coffer.surfaces.http.mcp.protocol_routes import (
     shutdown_all_sessions,
     start_session_reaper,
 )
-from coffer.surfaces.http.merge_wiring import wire_merge
 from coffer.surfaces.http.migrations_runner import run_migrations
-from coffer.surfaces.http.organize_wiring import wire_organize
 from coffer.surfaces.http.provider_wiring import (
     run_provider_projection_sweep,
     wire_provider_kind,
@@ -103,6 +99,7 @@ from coffer.surfaces.http.removed_agent_notice import report_removed_agent_lefto
 from coffer.surfaces.http.reorg_wiring import wire_reorg
 from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.sync_wiring import start_sync
+from coffer.surfaces.http.tidy_wiring import start_tidy, stop_tidy
 from coffer.surfaces.http.wiring import build_substrate, wire_chat
 
 
@@ -201,8 +198,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         embedding_config_svc, credential_store
     )
 
-    # The one knowledge kind: entries + documents over three scopes. Registers
-    # the eight built-in knowledge tools into `builtin_tools`.
+    # The one knowledge kind: notes + documents over three scopes. Registers
+    # the six built-in knowledge tools into `builtin_tools`.
     knowledge_service = wire_knowledge_kind(
         app,
         resource_svc,
@@ -228,15 +225,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # its upstreams; shutdown disposes it first (on_dispose deregisters; idempotent).
     app.state.mcp_session_supervisors = session_supervisors
 
-    # Internal-LLM knowledge consumers: the consolidation organizer
-    # (FR-027..031), the agentic reorg (FR-033/034), and the AI-assisted
-    # same-project store merge (FR-056-059, AFTER reorg so its post-merge pass
-    # can reach it). One place, so the composition root keeps a single
-    # internal-LLM call site.
+    # The one internal-LLM knowledge consumer: the tidy pass over a scope's
+    # notes. Built here so the composition root keeps a single internal-LLM
+    # call site; `start_tidy` further down decides when it fires.
     _credential_resolver = make_credential_resolver(credential_store)
-    wire_organize(knowledge_service, get_provider_service(), _credential_resolver)
     wire_reorg(knowledge_service, get_provider_service(), _credential_resolver)
-    wire_merge(knowledge_service, get_provider_service(), _credential_resolver)
 
     # Wire the channel kind (spec channels) AFTER wire_chat: the inbound processor
     # drives turns through the chat service handles wire_chat published.
@@ -252,8 +245,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # own, so re-derive the projection the registry implies (best-effort).
     await run_provider_projection_sweep(app)
 
-    # Boot knowledge heal (best-effort, idempotent): collapse worktree-fragmented
-    # scopes, then reindex so what was written is searchable (FR-043).
+    # Boot knowledge heals (best-effort, idempotent): bring the file tree to the
+    # two-lane layout FIRST — everything below addresses a scope by the new
+    # directory names — then collapse worktree-fragmented scopes, then reindex so
+    # what was written is searchable (FR-043).
+    await run_lane_migration()
     await run_store_consolidation(resources=resource_svc, sm=sm, substrate=substrate)
     await run_knowledge_reindex_sweep(app, resource_svc, _resolve_embedding)  # type: ignore[arg-type]
 
@@ -282,8 +278,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.retention_worker = worker
     app.state.retention_worker_task = worker_task
 
-    # Auto organize → 固化 pipeline (007 FR-035): default-ON.
-    start_auto_organize(app, knowledge_service, get_organizer_service())
+    # The notes tidy pass: on idle after a write, and on a periodic sweep.
+    start_tidy(app, knowledge_service)
     await start_async_batches(  # document re-embed — off the request path
         app,
         knowledge_service=knowledge_service,
@@ -314,7 +310,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         daemon_routes.set_daemon_phase("draining")
         worker.stop()
-        await stop_auto_organize(app)
+        await stop_tidy(app)
         await stop_async_batches(app)
         # Stop channel adapters first so no new turns start mid-teardown.
         # Order matters: cancel the reconciler task BEFORE dispose() so an

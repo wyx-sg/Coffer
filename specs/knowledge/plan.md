@@ -16,6 +16,190 @@
 **Spec**: [./spec.md](./spec.md)
 **Status**: Accepted (redesign — in development)
 
+---
+
+# 2026-09-11 Redesign — Two Lanes
+
+**Status**: design approved, implementation not started. Everything below
+supersedes the corresponding parts of the historical plan that follows it.
+
+## Why
+
+A knowledge scope currently keeps seven lanes on disk and the detail page shows
+five of them as equal-weight tabs — Entries, Documents, Rules, Handoff,
+Changelog. Those are *storage lanes*, not categories a person recognises, and
+the mismatch shows:
+
+- Two directories are both called an inbox. `knowledge/inbox/` holds freshly
+  written entries; `inbox/` holds ingested documents. The UI calls the first
+  "Entries" and the second "Documents", so the shared name explains nothing and
+  the different names explain the wrong thing.
+- The Entries tab flattens two unlike things into one list: raw items an agent
+  just wrote, and the topic documents the organizer merged them into.
+- The Rules lane lost its delivery channel on 2026-09-10 (FR-049/050/052/055).
+  Rules are still written and stored; nothing reads them.
+- Changelog is an audit trail of the organizer, not content — and the organizer
+  can only be triggered from the CLI, so the page shows the by-product of a pass
+  it offers no way to run.
+
+There are only two kinds of material a person actually distinguishes: what
+someone wrote, and what someone uploaded.
+
+## On-disk layout
+
+```text
+~/.coffer/knowledge/<scope>/
+├── notes/       # what an agent or the user wrote (coffer__write lands here)
+├── docs/        # uploaded documents, normalized to markdown
+├── .raw/        # the uploaded originals (hidden)
+└── .history/    # note revisions the tidy pass replaced (hidden)
+```
+
+Two lanes. `knowledge/inbox/` and its topic-document gradient are gone: a note
+is a note whether it was just written or has been tidied since.
+
+`.history/` sits at the scope root beside `.raw/` rather than inside `notes/`.
+Nesting it in the lane would oblige the lane scan, the reindex and every future
+reader of `notes/` to remember to skip it; as a sibling it is simply another
+hidden archive under the one rule that already governs `.raw/` — ripgrep skips
+hidden entries, so `coffer__grep` never returns an original or a replaced
+revision beside the live file.
+
+## Migration
+
+Destructive, by explicit instruction — no `.retired/` holding pen:
+
+| Now                                              | After                     |
+| ------------------------------------------------ | ------------------------- |
+| `knowledge/inbox/*.md` + `knowledge/*.md`        | flattened into `notes/`   |
+| `inbox/`                                         | `docs/`                   |
+| `.raw/`                                          | unchanged                 |
+| `rules/`, `handoff/`, `superseded/`              | **deleted**               |
+| `consolidation-log.md`, `knowledge/INDEX.md`     | **deleted**               |
+
+`documents.kind` changes its two values from `knowledge` / `inbox` to `notes` /
+`docs` in one migration. No load-time shim survives it: the data is corrected in
+the database and the compatibility branch is removed in the same change.
+
+## The periodic tidy
+
+`reorg.py` already does the work the user wants — a bounded agentic loop that
+consolidates duplicate documents and splits over-long ones — but only fires on
+an explicit CLI/REST trigger. It is kept and re-aimed at `notes/`.
+
+Two passes with two triggers collapse into one. `POST /{scope}/organize` and
+`POST /{scope}/reorg` named the organizer and the reorg respectively; with the
+organizer gone there is one pass, so it keeps one name — `organize` — on both
+the route and the CLI, and `/reorg` is removed.
+
+`organizer.py` and `organizer_prompt.py` are deleted. Their job was to drain
+`knowledge/inbox/` into topic documents; with one flat lane that gradient no
+longer exists.
+
+`NotesTidyTrigger` replaces the old idle-debounced auto-organizer and arms the
+pass two ways, because they cover different gaps:
+
+- **On idle.** Each write re-arms one coalescing timer; after a quiet spell the
+  scopes that changed are tidied. This is the existing mechanism, re-pointed.
+- **On an interval.** A periodic sweep over every scope, modelled on the
+  sibling `RetentionWorker` — one catch-up pass at boot, then every few hours,
+  exceptions logged without killing the loop. It catches what the idle timer
+  structurally cannot: files edited in the user's own editor, a daemon
+  restarted before its timer fired, and scopes nothing has written to lately.
+
+Both paths call the same entry point and take the store's write lock, so a
+sweep and a just-fired idle timer serialize rather than race. With no internal
+model configured the pass no-ops. The detail page also gets a manual **Tidy**
+button.
+
+Force: the pass may merge duplicates and rewrite notes into topic documents.
+Before any overwrite or merge it moves the prior revision into `.history/`, so
+an unattended rewrite is always recoverable.
+
+Each pass writes to Coffer's existing audit log. The per-scope
+`consolidation-log.md` is not replaced — one log, and no page has to carry a tab
+for it.
+
+## Surfaces
+
+- **MCP: 8 tools → 6.** `search`, `grep`, `read`, `list`, `write`, `delete`.
+  `set_handoff` and `resume` retire with the handoff lane.
+- **CLI.** `coffer knowledge rules` / `handoff` / `consolidation-log` / `merge`
+  are removed. `organize` stays as the manual trigger for the tidy pass.
+- **HTTP.** `lane_routes.py` and `merge_routes.py` are removed.
+
+## UI
+
+**List page.** The Scope column goes — the Name column already shows `global`,
+a project's absolute path, or a collection's name, so the badge restates what
+the row has said. The Entries column becomes Notes. The AI-merge action goes with
+`merge`. The New-collection dialog drops the vector-retrieval switch: which index
+a scope carries is an implementation detail, not a question to put to the user at
+creation time.
+
+**Detail page.** Two tabs, Documents and Notes. One filter box above the tree
+that matches filenames as you type — client-side, no button, no request. Server
+retrieval stays where it belongs: `coffer__search` for agents, `coffer knowledge
+recall` for the CLI.
+
+The header keeps the title, the rename pencil and the project path; **Upload**
+and **Tidy** are the two buttons, with Settings / Check sources / Reindex behind
+an overflow menu. All six badges go — chunk count, byte size, Grep, Keyword are
+internal mechanics, and the entry/document counts are already the tree headers.
+The degraded-documents warning survives, shown only when there is one. The
+per-lane intro blurb and the count that repeats the tree header go too.
+
+## Deleted
+
+| Module                                                        | LOC   |
+| ------------------------------------------------------------- | ----: |
+| `organizer.py` + `organizer_prompt.py` (+ deps/ports)         | ~530  |
+| `merge.py` + `merge_prompt.py` + `merge_routes.py` + CLI      | ~560  |
+| `rules_split.py` + `rules_files.py`                           | ~290  |
+| `handoff.py` + `handoff_files.py`                             | ~190  |
+| `lane_reads.py` + `lane_deletes.py` + `lane_routes.py`        | ~270  |
+| `knowledge_lane_cmd.py` (less the retained `organize`)        |  ~100 |
+| **Backend total**                                             | ~1900 |
+| Rules / Handoff / Changelog lanes, `KnowledgeListLane`, merge dialog, search bar | ~600 (frontend) |
+
+Against that, one new worker of roughly 60 lines.
+
+`merge` (FR-056…058) is deleted on the maintainer's delegation. The
+fragmentation it heals — one repository split across several `project-<ULID>`
+scopes — was caused by worktrees hashing to distinct ULIDs, and that root cause
+was fixed in the worktree-aware `git_root` change. The residue is healed
+automatically at every daemon start by `consolidate.py`. A second, manual path
+over the same problem that also drags in LLM judgment and no-resurrection
+identity aliases is an abstraction the project no longer pays for.
+
+## Deliberately kept
+
+- **`consolidate.py`.** Despite the name it is not part of the tidy pass: it is
+  the one-time startup heal for duplicate per-project scopes. Untouched.
+- **Vector retrieval.** Removing the create-dialog switch removes a *question*,
+  not the capability. New collections keep keyword + grep + vector; the
+  embedding model stays installation-wide.
+- **`coffer__search`.** The UI filtering on filenames is a UI decision. Agent-
+  facing retrieval is unchanged.
+
+## Accepted risks
+
+The tidy pass runs unattended, on a timer, with an LLM rewriting text the user
+and their agents wrote. `.history/` is the whole safety net; there is no
+review step and no diff to approve before a pass lands.
+
+## Documentation to update in the same change
+
+- `spec.md` / `spec.zh.md` — drop FR-056…058, the rules-lane FRs and the handoff
+  FRs; rewrite the lane layout; add the periodic-tidy FRs.
+- `.specify/memory/architecture.md` — the `knowledge` kind row.
+- `.specify/memory/roadmap.md` — the 007 row.
+- `docs/decisions/Files as Truth`, `One Shared Knowledge Store` — rewritten in place, not superseded by a
+  new ADR (repo convention: this directory records the design in force, git
+  history is the archive).
+
+---
+
 ## Summary
 
 Memory is the **memory face** of one unified knowledge substrate shared with the knowledge base (the Knowledge Base spec). Each memory scope is a Resource of kind `memory`. Facts are per-fact markdown files (YAML frontmatter + body) plus a regenerated `MEMORY.md` index under `~/.coffer/memory/`. **Files are the source of truth; SQLite (`documents` + FTS5 + sqlite-vec) is a rebuildable index.** There are two scopes: global (sentinel ULID) and per-project (project ULID resolved from the agent's working directory).

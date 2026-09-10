@@ -33,7 +33,6 @@ from coffer.surfaces.http.knowledge.dependencies import (
     get_project_root_repo,
     get_scope_label_repo,
 )
-from coffer.surfaces.http.knowledge.organize_state import get_organizer_service
 from coffer.surfaces.http.knowledge.reorg_state import get_reorg_service
 from coffer.surfaces.http.knowledge.schemas import (
     KnowledgeConfigPatch,
@@ -41,8 +40,6 @@ from coffer.surfaces.http.knowledge.schemas import (
     RecallHit,
     RecallRequest,
     RecallResponse,
-    ReorgResponse,
-    RulesOut,
     ScopeCreate,
     ScopeKind,
     ScopeLabelPatch,
@@ -261,53 +258,28 @@ async def recall(
     )
 
 
-# --- organize / reorg / rules -----------------------------------------------
+# --- the tidy pass ----------------------------------------------------------
 
 
 @router.post("/{name}/organize", response_model=OrganizeResponse)
 async def organize(
     name: str,
     k_svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
-    organizer: object = Depends(get_organizer_service),
+    tidy: object = Depends(get_reorg_service),
 ) -> OrganizeResponse:
-    """Drain the inbox into topic docs / the rules lane (explicit trigger)."""
+    """Tidy a scope's notes now, instead of waiting for the background trigger.
+
+    There is one pass and one name for it. The same service runs on idle after a
+    write and on the periodic sweep; this endpoint only says "now", so a person
+    watching the page never has to wonder which of two buttons reshapes what
+    they wrote."""
     await _ensure_auto(k_svc, name)
-    result = await organizer.organize(scope_name=name)  # type: ignore[attr-defined]
+    result = await tidy.reorg(scope_name=name)  # type: ignore[attr-defined]
     return OrganizeResponse(
         status=result.status,
-        items_processed=result.items_processed,
-        topics_created=result.topics_created,
-        topics_updated=result.topics_updated,
-        rules_appended=result.rules_appended,
-        skipped=result.skipped,
-        model=result.model,
-    )
-
-
-@router.get("/{name}/rules", response_model=RulesOut)
-async def get_rules(
-    name: str,
-    k_svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
-) -> RulesOut:
-    """Return ``rules/rules.md`` text; ``text=None`` when no rules exist yet."""
-    await _ensure_auto(k_svc, name)
-    return RulesOut(text=await k_svc.get_rules(scope_name=name))
-
-
-@router.post("/{name}/reorg", response_model=ReorgResponse)
-async def reorg(
-    name: str,
-    k_svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
-    reorg_svc: object = Depends(get_reorg_service),
-) -> ReorgResponse:
-    """Agentic reorg loop over topic docs (explicit trigger; no auto-fire)."""
-    await _ensure_auto(k_svc, name)
-    result = await reorg_svc.reorg(scope_name=name)  # type: ignore[attr-defined]
-    return ReorgResponse(
-        status=result.status,
-        topics_before=result.topics_before,
-        topics_after=result.topics_after,
-        topics_written=result.topics_written,
-        topics_superseded=result.topics_superseded,
+        notes_before=result.notes_before,
+        notes_after=result.notes_after,
+        notes_written=result.notes_written,
+        notes_archived=result.notes_archived,
         model=result.model,
     )

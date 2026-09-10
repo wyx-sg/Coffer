@@ -17,6 +17,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.domain.knowledge.document import KIND_KNOWLEDGE
 from coffer.domain.knowledge.scope import KnowledgeScope
 from coffer.infrastructure.knowledge import paths
+from coffer.infrastructure.knowledge.paths import note_path, notes_dir
 from coffer.infrastructure.knowledge_scope.project_root_repo import ProjectRootRepo
 from coffer.infrastructure.knowledge_scope.scope_fs import project_ulid
 from coffer.infrastructure.knowledge_scope.store_label_repo import StoreLabelRepo
@@ -101,8 +102,8 @@ async def _provision_legacy(resources, roots, labels, project_root):  # type: ig
     )
     legacy = await legacy_scope.resolve(scope=KnowledgeScope.PROJECT, cwd=str(project_root))
     legacy_dir = paths.scope_dir(project_scope_name(legacy.project_id))
-    (legacy_dir / "knowledge").mkdir(parents=True, exist_ok=True)
-    (legacy_dir / "knowledge" / "fact.md").write_text("remembered\n", encoding="utf-8")
+    notes_dir(legacy_dir).mkdir(parents=True, exist_ok=True)
+    note_path(legacy_dir, "fact").write_text("remembered\n", encoding="utf-8")
     await labels.set(project_scope_name(legacy.project_id), "我的项目")
     return legacy.project_id
 
@@ -119,7 +120,7 @@ async def test_legacy_store_adopted_under_portable_id(wired) -> None:  # type: i
     assert resolved.project_id == PORTABLE
     new_name = project_scope_name(PORTABLE)
 
-    merged = paths.scope_dir(project_scope_name(PORTABLE)) / "knowledge" / "fact.md"
+    merged = note_path(paths.scope_dir(project_scope_name(PORTABLE)), "fact")
     assert merged.read_text() == "remembered\n"
     assert await roots.get(new_name) == str(project_root)
     assert await labels.get(new_name) == "我的项目"
@@ -143,7 +144,7 @@ async def test_surviving_legacy_store_merges_even_when_portable_exists(wired) ->
         "sync",
         allow_lifecycle_kind=True,
     )
-    portable_dir = paths.scope_dir(project_scope_name(PORTABLE)) / "knowledge"
+    portable_dir = notes_dir(paths.scope_dir(project_scope_name(PORTABLE)))
     portable_dir.mkdir(parents=True, exist_ok=True)
     (portable_dir / "fact-from-a.md").write_text("from A\n", encoding="utf-8")
 

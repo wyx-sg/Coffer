@@ -27,7 +27,7 @@ The surfaces are described below using a consistent template: **What it is · Wh
 | `/resources/mcp_server`           | MCP capability preferences and invocation logs.                   |
 | `/agents`                         | Agent registry, config files, workspace facets.                    |
 | `/skills`                         | Skill master store and per-agent bindings.                        |
-| `/knowledge/{scope}`              | One knowledge scope: `entries`, `documents`, retrieval, lanes, reindex. |
+| `/knowledge/{scope}`              | One knowledge scope: `entries`, `documents`, retrieval, organize, reindex. |
 | `/channels`                       | Channel bindings (Telegram, SeaTalk), pairing.                    |
 | `/agent-providers`, `/models`     | The registered agent providers with their model catalogues; connection introspection. |
 | `/credentials`, `/settings`       | Encrypted credential store; settings incl. `/settings/credentials` (master-key storage) and `/embedding` config. |

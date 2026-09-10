@@ -97,15 +97,18 @@ The full set of audited event types (defined as `AuditEventType` in `domain/audi
 | `skill_drift_remediated`                    | When on-disk drift from the managed skill is repaired    |
 | `skill_adopted` / `skill_unmanaged_deleted` | When an unmanaged skill is adopted / a stray is deleted  |
 
-**Knowledge** — only the destructive pair:
+**Knowledge** — what destroys or rewrites content:
 
-| Event                 | Trigger                                      |
-| --------------------- | -------------------------------------------- |
-| `kb_document_deleted` | When an ingested document is deleted          |
-| `memory_deleted`      | When an entry is deleted                      |
-| `memory_cleared`      | When a knowledge scope's entries are cleared   |
+| Event                 | Trigger                                             |
+| --------------------- | --------------------------------------------------- |
+| `kb_document_deleted` | When an ingested document is deleted                 |
+| `memory_deleted`      | When a note is deleted                               |
+| `memory_cleared`      | When a knowledge scope's notes are cleared           |
+| `knowledge_tidied`    | When a tidy pass rewrote or archived at least one note |
 
 The `kb_*` and `memory_*` prefixes are historical: they were the wire values before the two kinds merged into `knowledge`, and they are kept verbatim so existing audit rows and queries stay valid.
+
+`knowledge_tidied` is the exception to the rule that recomputation is not audited (below). The tidy pass runs unattended, on a timer, and an LLM rewrites text the user and their agents wrote — that is a change to content, not a recomputation of a derived index, and the prior revision it archived into `.history/` is the only way back. Its `details` carry the note counts before and after, how many notes were written and archived, and the model that did it. A pass that wrote and archived nothing records nothing, so the interval sweep does not bury the passes that mattered.
 
 **Channel:**
 
@@ -134,9 +137,9 @@ Twenty-seven event types were retired in 2026-09 for meeting none of these. The 
 
 - **Runtime telemetry** (`daemon_started`, `chat_turn_completed`, `channel_turn_started`, `sync_completed`, …) — that the daemon ran or a turn completed belongs in a log line, not in a durable record of changes.
 - **Facts a table already holds** (`capability_first_seen`) — `mcp_capability_preferences.first_seen_at` *is* that event, stored where it can be queried.
-- **Idempotent recomputation** (`kb_reindexed`, `memory_organized`, `memory_reorganized`, `kb_document_ingested`, `memory_added`, …) — running them again changes nothing, and the result is on disk. The file is the record.
+- **Idempotent recomputation** (`kb_reindexed`, `kb_document_ingested`, `memory_added`, …) — running them again changes nothing, and the result is on disk. The file is the record.
 - **Detection that changed nothing** (`skill_drift_detected`, `skill_autobind_skipped`) — noticing is not doing. The *remediation* is audited; the noticing is not.
-- **Low-value session state** (`conversation_created`, `conversation_archived`, `handoff_set`) — recoverable, visible in the thing itself, and high-volume.
+- **Low-value session state** (`conversation_created`, `conversation_archived`, …) — recoverable, visible in the thing itself, and high-volume.
 
 The largest single win was removing `journal_append`, which had accounted for **98.5%** of all audit rows (4,318 of 4,384) while recording only a character count — the content it described was already sitting in a Markdown file.
 

@@ -2,10 +2,10 @@
 
 > 中文版: [quickstart.zh.md](./quickstart.zh.md)
 
-> **Historical — 2026-09-10.** The Knowledge Base and Memory specs merged into
-> one **Knowledge Layer** on this date. [`spec.md`](./spec.md) is the
+> **Historical — 2026-09-10.** Spec knowledge (Knowledge Base) and spec knowledge (Memory)
+> merged into one **Knowledge Layer** on this date. [`spec.md`](./spec.md) is the
 > authority for the merged model — one `knowledge` kind, three scopes, one
-> storage root `~/.coffer/knowledge/<scope>/`, eight `coffer__*` tools. This
+> storage root `~/.coffer/knowledge/<scope>/`, six `coffer__*` tools. This
 > document records the design as it stood before that merge; where it says
 > "memory face", "`memory` kind", `~/.coffer/memory/` or `/api/v1/memory_stores`,
 > read the merged equivalents in `spec.md`. The commands and tool names below
@@ -17,16 +17,17 @@ Memory is the **memory face** of Coffer's unified knowledge substrate. Facts are
 
 ## Through an MCP client (the primary surface)
 
-Eight built-in tools appear (no store reference needed — scope is resolved from the agent's working directory):
+Six built-in tools appear (no store reference needed — scope is resolved from the agent's working directory):
 
-- `coffer__search(query, scope?, top_k?)` — ranked search over a scope's written entries AND its ingested documents at once.
+- `coffer__search(query, scope?, top_k?)` — ranked search over a scope's notes AND its uploaded documents at once.
 - `coffer__grep(pattern, scope?, max_matches?)` — literal/regex match over every Markdown file in a scope.
-- `coffer__read(id, scope?)` — read one item (entry or document) in full.
+- `coffer__read(id, scope?)` — read one item (note or document) in full.
 - `coffer__list(scope?, all?, limit?)` — browse one scope's contents, or `all=true` for the catalogue of every scope.
-- `coffer__write(text, title?, description?, filename?, id?, scope?)` — record an entry, store a document (`filename`), or rewrite an existing item (`id`).
-- `coffer__delete(id, scope?)` — delete one entry or document.
-- `coffer__set_handoff(body)` — save the current working state for this project + branch.
-- `coffer__resume()` — return the saved working-state handoff for this project + branch.
+- `coffer__write(text, title?, description?, filename?, id?, scope?)` — record a note, store a document (`filename`), or rewrite an existing item (`id`).
+- `coffer__delete(id, scope?)` — delete one note or document.
+
+A write lands in the scope's `notes/` lane directly — there is no inbox to drain
+and no handoff lane, so nothing has to be filed anywhere before it can be found.
 
 ```text
 # Inside a git project, the agent records a project fact:
@@ -74,32 +75,33 @@ coffer knowledge clear project-01J… --yes
 
 `--json` works on every read command above. There is no `--mode` flag: retrieval mode is an internal engine detail ([Retrieval Mode Is Internal](../../docs/decisions/retrieval-mode-is-internal.md)) — the engine resolves the scope's own strategy (`hybrid` when the scope lists vector, else `keyword`) and falls back to `keyword` internally, unflagged, when no embedding provider is configured. `coffer knowledge grep` is real — ripgrep over the Markdown files, no index, no tokenizer, so it works where FTS5 cannot (e.g. CJK).
 
-### Merging duplicate project scopes (AI-assisted)
+### Tidying the notes lane
 
-Multi-machine sync can leave two `project-<ulid>` scopes for the SAME project
-(no origin remote, a pre-portable-identity scope, a renamed remote). Scan for
-them, then merge the confirmed pair — additive, nothing is ever lost, and the
-merged-away identity keeps resolving to the survivor (FR-056–059):
+A scope's notes are tidied on a schedule: a background worker runs one catch-up
+pass at daemon boot and then on an interval, merging duplicate notes and
+rewriting them into topic documents. Before any overwrite or merge it copies the
+prior revision into the hidden `.history/`, so an unattended rewrite is
+always recoverable. With no internal model configured (Settings → LLM
+connections) the pass is a no-op.
+
+To run one by hand:
 
 ```bash
-coffer knowledge merge-scan               # deterministic + internal-engine proposals
-coffer knowledge merge project-01H… project-01J…          # source → target
-coffer knowledge merge project-01H… project-01J… --no-organize   # skip the post-merge reorg
+coffer knowledge organize project-01J…    # one tidy pass over that scope's notes/
 ```
 
-The web-UI equivalent is **Memory → Find duplicates (AI)**. Without an
-internal engine (Settings → LLM connections) the scan still reports pairs it
-can prove by matching git remotes.
+The web-UI equivalent is the **Tidy** button in the scope's header. Each pass
+records a row in Coffer's audit log — there is no per-scope changelog file.
 
 ## Web UI
 
-1. Sidebar → **Memory**. The page shows a table of all memory stores (the global store plus one per project — auto-provisioned, so there is no "New store" action).
-2. Click a store row to open its per-store detail page.
-3. The entry list is the main view, with a recall box at the top. There is no mode selector — retrieval mode is an internal engine detail (ADR retrieval-mode-is-internal).
-4. Click a fact to expand a **read-only** render (the UI does not edit fact content in-app). Each fact and its containing folder offer **open in external editor** and **reveal in file manager** (real OS actions, performed by the local daemon); which editor opens is the global preferred-editor preference (see spec ui-shell). Correct a fact by opening it in your own editor — the next recall picks up the change via lazy reindex-on-read.
-5. The header shows fact count and on-disk size; a kebab-menu offers "Clear scope". To add or delete facts, use `coffer knowledge remember` / `coffer knowledge forget` (or the REST API).
+1. Sidebar → **Memory**. The page shows a table of all scopes (the global scope plus one per project — auto-provisioned — and any named collections). The Notes column counts what has been written into each.
+2. Click a row to open the scope's detail page.
+3. The detail page has **two tabs, Documents and Notes**, with one filter box above the tree that matches filenames as you type — client-side, no button, no request. Server retrieval lives where it belongs: `coffer__search` for agents, `coffer knowledge recall` for the CLI.
+4. Click an item to expand a **read-only** render (the UI does not edit note text in-app). Each file and its containing folder offer **open in external editor** and **reveal in file manager** (real OS actions, performed by the local daemon); which editor opens is the global preferred-editor preference (see spec ui-shell). Correct a note by opening it in your own editor — the next search picks up the change via lazy reindex-on-read.
+5. The header keeps the title, the rename pencil and the project path. **Upload** and **Tidy** are the two buttons; Settings / Check sources / Reindex sit behind an overflow menu. A warning appears only when a document is degraded.
 
-Every write — agent (MCP), CLI, or REST — reindexes and audits; the web UI itself is a read-only viewer. There is no derived `MEMORY.md`: the markdown files under `knowledge/` are the source of truth (ADR files-as-truth-sqlite-retrieval).
+Every write — agent (MCP), CLI, or REST — reindexes and audits; the web UI writes only by uploading a document or running a tidy pass. There is no derived `MEMORY.md` and no `INDEX.md`: the markdown files under `notes/` and `docs/` are the source of truth (Files as Truth).
 
 ## Optional: vector recall
 
@@ -110,7 +112,7 @@ coffer credentials set embed-key      # the key the embedding config refers to
 coffer knowledge configure project-01J… --enable-vector
 ```
 
-`coffer knowledge configure <name>` PATCHes the scope's config; the other knobs are `--max-entry-chars`, `--chunk-size`, `--chunk-overlap`, and `--auto-update-sources/--no-auto-update-sources`. Enabling vector re-indexes the scope's existing content. A new named collection can be born vector-enabled: `coffer knowledge create <name> --enable-vector`.
+`coffer knowledge configure <name>` PATCHes the scope's config; the other knobs are `--max-entry-chars`, `--chunk-size`, `--chunk-overlap`, and `--auto-update-sources/--no-auto-update-sources`. Enabling vector re-indexes the scope's existing content. A new named collection is born vector-enabled and the create-collection dialog no longer asks: which index a scope carries is an implementation detail, not a question to put to the user at creation time.
 
 For bilingual content, a local provider (`fastembed` with `bge-m3`) or a cloud model that embeds Chinese well is recommended. The embedding model is mutable — changing it re-embeds every scope that lists a vector mode. With no embedding config, a vector-enabled scope falls back to keyword internally, with no per-query flag.
 
@@ -118,15 +120,21 @@ For bilingual content, a local provider (`fastembed` with `bge-m3`) or a cloud m
 
 ```
 ~/.coffer/
-├── coffer.db                              # SQLite — rebuildable index (documents, chunks, FTS5, vec, audit)
+├── coffer.db                                  # SQLite — rebuildable index (documents, chunks, FTS5, vec, audit)
 └── memory/
     ├── global/
-    │   └── prefers-tabs.md                # per-fact file = truth
+    │   ├── notes/                             # what someone wrote (coffer__write lands here)
+    │   │   ├── prefers-tabs.md                # per-note file = truth
+    │   │   └── .history/                      # pre-rewrite copies kept by the tidy pass (hidden)
+    │   ├── docs/                              # uploaded documents, normalized to markdown
+    │   └── .raw/                              # the uploaded originals (hidden)
     └── projects/<project-ulid>/
-        └── deploy-via-make-release.md
+        ├── notes/deploy-via-make-release.md
+        ├── docs/
+        └── .raw/
 ```
 
-The markdown files are the source of truth; `coffer.db` can be rebuilt from them at any time.
+Two lanes: `notes/` for anything a person or an agent wrote, `docs/` for anything uploaded. `.history/` and `.raw/` are hidden on purpose — ripgrep skips them, so `coffer__grep` never returns an archived revision or an original alongside the live file. The markdown files are the source of truth; `coffer.db` can be rebuilt from them at any time.
 
 ## Limits
 

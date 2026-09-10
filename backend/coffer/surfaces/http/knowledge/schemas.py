@@ -1,4 +1,4 @@
-"""Wire shapes for the one ``knowledge`` kind — scopes, entries, recall, lanes.
+"""Wire shapes for the one ``knowledge`` kind — scopes, entries, recall, tidy.
 
 The document-side shapes live in ``document_schemas.py``; the split is purely
 the file-size budget. One scope model replaces the two pre-merge ones
@@ -123,9 +123,9 @@ class ScopeOut(BaseModel):
     description: str | None = None
     config: KnowledgeConfig
     enabled: bool
-    #: Entries written into the ``knowledge/`` lane.
+    #: Notes an agent or the user wrote, under ``notes/``.
     entry_count: int = 0
-    #: Documents ingested into ``inbox/``.
+    #: Documents ingested into ``docs/``.
     document_count: int = 0
     created_at: datetime
     updated_at: datetime
@@ -232,88 +232,25 @@ class RecallResponse(BaseModel):
     hits: list[RecallHit]
 
 
-# --- organize ---------------------------------------------------------------
+# --- the tidy pass ----------------------------------------------------------
 
 
-OrganizeStatus = Literal["organized", "no_model", "empty"]
+TidyStatus = Literal["reorganized", "no_model", "empty"]
 
 
 class OrganizeResponse(BaseModel):
-    """Result of an explicit ``organize`` run (inbox → topic docs).
+    """Result of one tidy pass over a scope's ``notes/`` lane.
+
+    Everything the pass has to report is a count of note files: how many it
+    found, how many it rewrote, and how many prior revisions it moved aside into
+    ``.history/`` so an unattended rewrite stays recoverable.
 
     ``status="no_model"`` (no internal model configured) and ``status="empty"``
-    (nothing to organize) are clean no-ops, not errors."""
+    (nothing to tidy) are clean no-ops, not errors."""
 
-    status: OrganizeStatus
-    items_processed: int
-    topics_created: int
-    topics_updated: int
-    rules_appended: int
-    skipped: int
-    model: str | None = None
-
-
-# --- rules ------------------------------------------------------------------
-
-
-class RulesOut(BaseModel):
-    """The rules text for a scope (read-only surface).
-
-    ``text`` is ``None`` when no rules have been classified for this scope yet.
-    The field is always present in the response (required, nullable)."""
-
-    text: str | None
-
-
-# --- handoff lane -----------------------------------------------------------
-
-
-class HandoffSceneOut(BaseModel):
-    """One per-branch ``handoff/<slug>.md`` scene (read-only)."""
-
-    branch: str
-    text: str
-    updated_at: datetime
-    path: str
-    folder_path: str
-
-
-class HandoffOut(BaseModel):
-    """The scope's handoff lane — one scene per branch."""
-
-    scenes: list[HandoffSceneOut]
-
-
-# --- consolidation log ------------------------------------------------------
-
-
-class ConsolidationLogOut(BaseModel):
-    """The scope-root ``consolidation-log.md`` changelog (read-only).
-
-    ``text`` is ``None`` when the scope has no changelog yet; ``path`` /
-    ``folder_path`` always point at where it would live so the UI can still
-    reveal-in-file-manager."""
-
-    text: str | None
-    path: str
-    folder_path: str
-
-
-# --- reorg ------------------------------------------------------------------
-
-
-ReorgStatus = Literal["reorganized", "no_model", "empty"]
-
-
-class ReorgResponse(BaseModel):
-    """Result of an explicit ``reorg`` run (topic-doc consolidation).
-
-    ``status="no_model"`` (no internal model configured) and ``status="empty"``
-    (no topic docs to reorganize) are clean no-ops, not errors."""
-
-    status: ReorgStatus
-    topics_before: int
-    topics_after: int
-    topics_written: int
-    topics_superseded: int
+    status: TidyStatus
+    notes_before: int
+    notes_after: int
+    notes_written: int
+    notes_archived: int
     model: str | None = None

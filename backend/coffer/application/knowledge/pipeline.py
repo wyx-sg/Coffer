@@ -2,15 +2,14 @@
 
 Split out of the service so the orchestration stays thin. The pipeline owns the
 multi-step write paths (ingest / edit / reconvert / reembed / reindex_scan /
-delete / cleanup): any-format upload → Markdown in the scope's ``inbox/`` →
+delete / cleanup): any-format upload → Markdown in the scope's ``docs/`` →
 index. Filesystem work runs on worker threads; index/embedding work goes
 through the shared ``KnowledgeRetrieval`` + ``Reindexer``.
 
-The scope's entry lanes (``knowledge/``, ``rules/``, ``handoff/``) belong to
-``sync.KnowledgeReconciler``, not here. Both write ``documents`` rows under the
-same ``(kind, resource_name)``, so each prunes only the rows whose file lives
-in the lane it just scanned — otherwise one scanner would delete the other's
-index."""
+The scope's other lane, ``notes/``, belongs to ``sync.KnowledgeReconciler``,
+not here. Both write ``documents`` rows under the same
+``(kind, resource_name)``, so each prunes only the rows whose file lives in the
+lane it just scanned — otherwise one scanner would delete the other's index."""
 
 from __future__ import annotations
 
@@ -245,7 +244,7 @@ class IngestPipeline:
                 paths = await asyncio.to_thread(lambda: sorted(docs_dir.glob("*.md")))
             # One batched row lookup keyed by id (reused by the vanished-file
             # prune). Only rows whose file lives in THIS lane are ours: the
-            # entry lanes are reconciled separately into the same store.
+            # notes lane is reconciled separately into the same store.
             store = self._store_ref(scope_name)
             known = [
                 d

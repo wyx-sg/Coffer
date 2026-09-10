@@ -841,7 +841,7 @@
   },
   "knowledge": {
     "title": "Knowledge",
-    "subtitle": "One local knowledge store per scope — what your agents write and what you ingest — searchable through the MCP gateway. The global and per-project scopes are created automatically.",
+    "subtitle": "One local knowledge store per scope — what your agents write and what you upload — searchable through the MCP gateway. The global and per-project scopes are created automatically.",
     "add": "New collection",
     "empty": "No knowledge scopes yet. Create a collection, or let the global and per-project scopes appear as your agents work.",
     "loadFailed": "Failed to load knowledge scopes",
@@ -855,41 +855,13 @@
       "placeholder": "e.g. My research notes",
       "clear": "Clear name"
     },
-    "merge": {
-      "action": "Find duplicates (AI)",
-      "title": "Merge duplicate project scopes",
-      "description": "Coffer's internal engine judges whether two project scopes describe the same project. Merging is additive — colliding files keep both copies, and nothing is ever lost.",
-      "scanning": "Scanning scopes…",
-      "noCandidates": "No merge candidates found.",
-      "noModelHint": "No internal engine is configured, so only provable duplicates (matching git remotes) are shown. Configure one under Settings → LLM connections to judge the rest.",
-      "judgedByRemote": "Proved by matching origin remote",
-      "judgedByEngine": "Judged by the internal engine",
-      "entryCount": "{{count}} entries",
-      "swap": "Swap direction",
-      "merge": "Merge",
-      "merging": "Merging…",
-      "truncated": "Too many pairs for one scan — merge some and re-run.",
-      "confidence": {
-        "certain": "certain",
-        "high": "high",
-        "medium": "medium",
-        "low": "low"
-      }
-    },
-    "modes": {
-      "grep": "Grep",
-      "keyword": "Keyword",
-      "vector": "Vector",
-      "hybrid": "Hybrid"
-    },
     "sourceMode": {
       "converted": "Converted",
       "edited": "Edited"
     },
     "cols": {
       "name": "Name",
-      "scope": "Scope",
-      "entries": "Entries",
+      "notes": "Notes",
       "documents": "Documents",
       "description": "Description"
     },
@@ -910,35 +882,22 @@
     "detail": {
       "back": "Back to knowledge",
       "tabs": {
-        "entries": "Entries",
         "documents": "Documents",
-        "rules": "Rules",
-        "handoff": "Handoff",
-        "changelog": "Changelog"
+        "notes": "Notes"
       },
-      "entries": "Entries",
-      "emptyEntries": "No entries yet.",
-      "selectEntry": "Select an entry on the left to preview it.",
+      "emptyEntries": "No notes yet.",
+      "selectEntry": "Select a note on the left to preview it.",
       "untitled": "(untitled)",
       "documents": "Documents",
       "emptyDocuments": "No documents yet. Upload a file of any format to populate this scope.",
       "selectDocument": "Select a document on the left to preview it.",
-      "recall": "Recall",
-      "recallPlaceholder": "Recall entries from this scope…",
-      "search": "Search",
-      "searchPlaceholder": "Search this scope's documents…",
       "noMatches": "No matches.",
-      "entryBadge": "{{count}} entries",
-      "docBadge": "{{count}} documents",
-      "chunkBadge": "{{count}} chunks",
       "degradedBadge": "{{count}} documents pending vector embed (embedding service unavailable; indexed by keyword)",
-      "clearAll": "Clear all entries",
-      "clearTitle": "Clear all entries?",
-      "clearConfirm": "Clear every entry in {{scope}}? Its ingested documents are untouched. This cannot be undone.",
-      "deleteEntryTitle": "Delete entry?",
-      "deleteEntryConfirm": "Delete entry {{name}}? This cannot be undone.",
-      "deleteTitle": "Delete file?",
-      "deleteConfirm": "Delete {{name}}? This cannot be undone.",
+      "clearAll": "Clear all notes",
+      "clearTitle": "Clear all notes?",
+      "clearConfirm": "Clear every note in {{scope}}? Its uploaded documents are untouched. This cannot be undone.",
+      "deleteEntryTitle": "Delete note?",
+      "deleteEntryConfirm": "Delete note {{name}}? This cannot be undone.",
       "deleteDocConfirm": "Delete document {{title}}? This cannot be undone.",
       "reindex": "Reindex",
       "settings": "Settings",
@@ -968,7 +927,12 @@
           "edited": "Locally edited",
           "updated": "Auto-updated"
         }
-      }
+      },
+      "notes": "Notes",
+      "filterPlaceholder": "Filter by name…",
+      "tidy": "Tidy",
+      "tidyDone": "Tidy pass finished.",
+      "moreActions": "More actions"
     },
     "settings": {
       "title": "Knowledge scope settings",
@@ -979,34 +943,9 @@
       "autoUpdateSources": "Auto-update from source",
       "autoUpdateSourcesHint": "When a document's external source file changes, re-ingest it automatically on the next source check (locally edited documents are always skipped)."
     },
-    "lanes": {
-      "rules": "Rules",
-      "handoff": "Branches",
-      "changelog": "Changelog",
-      "intro": {
-        "entries": "What the agent wrote — one file each. Correct them in your editor or delete.",
-        "documents": "Files you ingested, converted to Markdown on disk. Upload any format from the header.",
-        "rules": "Long-lived rules that shape the agent's behavior, injected at session start.",
-        "handoff": "Per-branch handoff notes so work can continue on another machine or session.",
-        "changelog": "History of knowledge consolidation and edits."
-      }
-    },
-    "rules": {
-      "empty": "No rules yet — agents curate them as your project's conventions emerge.",
-      "select": "Select the rules file on the left to read it."
-    },
-    "handoff": {
-      "empty": "No handoff notes yet — agents leave a scene per branch as they pause work.",
-      "select": "Select a branch on the left to read its handoff note.",
-      "updatedAt": "Updated {{time}}"
-    },
-    "changelog": {
-      "empty": "No changelog yet — it records each knowledge consolidation.",
-      "select": "Select the changelog on the left to read it."
-    },
     "welcome": {
       "title": "One place for everything your agents know",
-      "body": "A global scope, one per project, plus any collection you make — holding both the entries agents write and the documents you ingest. Keyword and grep work out of the box, vector search is one toggle away, and everything stays on your machine.",
+      "body": "A global scope, one per project, plus any collection you make — holding both the notes agents write and the documents you upload. Everything stays on your machine as plain Markdown.",
       "featureEntries": {
         "title": "What agents write",
         "body": "Agents store and recall what they learn across sessions, through Coffer's built-in MCP tools."
@@ -1020,7 +959,7 @@
         "body": "Everything is plain Markdown on your machine; the index rebuilds from the files."
       }
     },
-    "deleteScopeConfirm": "Delete knowledge scope \"{{name}}\"? Its entries, documents and index are removed. This cannot be undone."
+    "deleteScopeConfirm": "Delete knowledge scope \"{{name}}\"? Its notes, documents and index are removed. This cannot be undone."
   },
   "channels": {
     "title": "Channels",

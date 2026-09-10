@@ -8,7 +8,7 @@ All Coffer state lives on the user's machine. The daemon is the single writer. E
 
 Coffer is a local-first developer tool: the user's accumulated AI assets — registered MCP servers, capability preferences, audit history, knowledge, chat conversations, channels, and sync state — must never depend on a cloud service to be readable or writable. That constraint demands a persistence layer that is self-contained, zero-configuration, and trivially backed up.
 
-The answer is two layers. A single SQLite file at `~/.coffer/coffer.db` is the system of record for all control-plane state. Bulk user content — ingested documents and the entries agents write — lives as markdown files on the local filesystem (the source of truth); SQLite carries a rebuildable retrieval index over it (ADR files-as-truth-sqlite-retrieval). There is no separate database server to install, no connection pool to tune, no network hop between the daemon and its storage. The user's data is their file.
+The answer is two layers. A single SQLite file at `~/.coffer/coffer.db` is the system of record for all control-plane state. Bulk user content — ingested documents and the notes agents write — lives as markdown files on the local filesystem (the source of truth); SQLite carries a rebuildable retrieval index over it (Files as Truth). There is no separate database server to install, no connection pool to tune, no network hop between the daemon and its storage. The user's data is their file.
 
 ## Why SQLite, not Postgres
 
@@ -57,7 +57,7 @@ Schema evolution is managed by Alembic, configured in `backend/alembic.ini` with
 | `0002`   | `20260521_0002_mcp_tables.py`        | `mcp_capability_preferences`, `mcp_invocations` |
 | `0003`   | `20260522_0003_mcp_server_health.py` | `mcp_server_health`                             |
 
-Later revisions add the skill, knowledge, embedding-config, chat, channel and credentials tables (plus index and data-fix revisions); a later revision drops the sync tables again when continuous sync is withdrawn ([Vault Export and Import](/reference/adr/vault-export-import)). On first daemon startup, `alembic upgrade head` runs before the HTTP server accepts connections. Because Alembic migrations are bundled as data files inside the PyInstaller daemon binary, end-user installs also get correct schema creation on first launch — no separate migration step.
+Later revisions add the skill, knowledge, embedding-config, chat, channel and credentials tables (plus index and data-fix revisions); a later revision drops the sync tables again when continuous sync is withdrawn ([Vault Export and Import-vault-export-import](/reference/adr/Vault Export and Import-vault-export-import)). On first daemon startup, `alembic upgrade head` runs before the HTTP server accepts connections. Because Alembic migrations are bundled as data files inside the PyInstaller daemon binary, end-user installs also get correct schema creation on first launch — no separate migration step.
 
 ## Table map
 
@@ -83,14 +83,14 @@ The tables that exist after applying all revisions, grouped by domain:
 
 | Table              | Purpose                                                                                                                                                              |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `credentials`      | Envelope-encrypted secret store: each secret is Fernet-encrypted under a master key before it reaches SQLite. Plaintext never lands on disk. See [Security](/architecture/security) and [Envelope-Encrypted Credentials](/reference/adr/envelope-encrypted-credential-store). |
+| `credentials`      | Envelope-encrypted secret store: each secret is Fernet-encrypted under a master key before it reaches SQLite. Plaintext never lands on disk. See [Security](/architecture/security) and Envelope-Encrypted Credentials. |
 | `embedding_config` | The active embedding provider/model configuration used by the retrieval index.                                                                                      |
 
 **Knowledge substrate:**
 
 | Table           | Purpose                                                                                                                            |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `documents`     | One row per knowledge item — an ingested document or a written entry — mirroring the markdown file on disk.                      |
+| `documents`     | One row per knowledge item — an ingested document or a written note — mirroring the markdown file on disk.                      |
 | `chunks`        | Per-document chunk rows that the retrieval pipeline produces from the markdown.                                                  |
 | `documents_fts` | FTS5 virtual table backing keyword search over chunk text.                                                                       |
 | _sqlite-vec_    | A per-scope `vec0` virtual table (created lazily, named by kind + dimensions) holding chunk embeddings for vector search.         |
@@ -122,9 +122,9 @@ The tables that exist after applying all revisions, grouped by domain:
 | ---------------------- | ------------------------------------------------------------ |
 | `skill_agent_bindings` | Records which skills are bound to which agent workspaces.     |
 
-**Export / import:** no tables. Export and import are one-shot operations over the live vault; there is no configuration to persist, no last-run state, no machine registry and no tombstone ledger ([Vault Export and Import](/reference/adr/vault-export-import)).
+**Export / import:** no tables. Export and import are one-shot operations over the live vault; there is no configuration to persist, no last-run state, no machine registry and no tombstone ledger ([Vault Export and Import-vault-export-import](/reference/adr/Vault Export and Import-vault-export-import)).
 
-## Files as truth, SQLite as a rebuildable index (ADR files-as-truth-sqlite-retrieval)
+## Files as truth, SQLite as a rebuildable index (Files as Truth)
 
 The control-plane tables above are the system of record for their rows. The **knowledge substrate** is different: the markdown files under `~/.coffer/knowledge/` are the source of truth, and the SQLite retrieval index (the `documents` / `chunks` / `documents_fts` FTS5 tables plus the per-scope sqlite-vec virtual tables) is a **fully rebuildable** projection of those files.
 
@@ -147,12 +147,12 @@ The full set of files Coffer writes:
 | `~/.coffer/coffer.db`      | SQLite database (WAL mode) — the system of record      |
 | `~/.coffer/daemon.json`    | Daemon PID, port, and bearer token (mode `0600`)       |
 | `~/.coffer/master.key`     | Credential-store master key (file-default; opt-in keychain). See [Security](/architecture/security). |
-| `~/.coffer/knowledge/`     | One directory per scope — entries, ingested documents, rules, handoff and the hidden `.raw/` originals, all as markdown; the source of truth indexed by SQLite |
+| `~/.coffer/knowledge/`     | One directory per scope — `notes/` and `docs/` as markdown, plus the hidden `.raw/` originals and `.history/` note revisions; the source of truth indexed by SQLite |
 | `~/.coffer/logs/`          | Structured JSON log files from `structlog`             |
 | `~/.coffer/bin/`           | `coffer-mcp-shim`, `coffer-daemon` and the runtime helper binaries, deployed by the daemon on a frozen start |
 | `~/.coffer/upstream-pids/` | Per-upstream subprocess PID files for session tracking |
 
-Keeping everything under one parent directory makes backup simple, migration unambiguous, and clean-uninstall complete. The daemon's detect-or-spawn protocol (ADR daemon-detect-or-spawn) also benefits: every process that needs to find the daemon reads `~/.coffer/daemon.json` — there is no registry, no environment variable, and no platform-specific service directory to probe.
+Keeping everything under one parent directory makes backup simple, migration unambiguous, and clean-uninstall complete. The daemon's detect-or-spawn protocol (Detect-or-Spawn) also benefits: every process that needs to find the daemon reads `~/.coffer/daemon.json` — there is no registry, no environment variable, and no platform-specific service directory to probe.
 
 ## Retention defaults
 

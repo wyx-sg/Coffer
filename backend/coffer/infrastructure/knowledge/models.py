@@ -37,13 +37,11 @@ class DocumentModel(Base):
     resource_name: Mapped[str] = mapped_column(String, nullable=False)
     project_id: Mapped[str] = mapped_column(String, nullable=False)
     path: Mapped[str] = mapped_column(String, nullable=False)
-    #: Which of a scope's two writers owns this row — the entry reconciler
-    #: (``knowledge``) or the ingest scan (``inbox``). Stored rather than
-    #: derived: entries sit at ``<scope>/knowledge/inbox/`` and ingested
-    #: documents at ``<scope>/inbox/``, so matching on the path catches both.
-    lane: Mapped[str] = mapped_column(
-        String, nullable=False, default="inbox", server_default="inbox"
-    )
+    #: Which of a scope's two lanes owns this row — ``notes`` (what an agent or
+    #: the user wrote) or ``docs`` (a file ingested and converted). Stored
+    #: rather than derived from the path so a row keeps its answer even while a
+    #: layout migration is mid-flight and the path still names the old lane.
+    lane: Mapped[str] = mapped_column(String, nullable=False, default="docs", server_default="docs")
     title: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     metadata_json: Mapped[str] = mapped_column("metadata", Text, nullable=False, default="{}")

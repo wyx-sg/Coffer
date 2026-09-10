@@ -1,20 +1,16 @@
 // frontend/src/kinds/knowledge/KnowledgeDetailPage.tsx
 //
-// Detail surface for ONE knowledge scope — the single page the two former
-// detail pages (memory store / knowledge base) collapse into. A back link +
-// header (scope badge, both lanes' counts, settings / check-sources / reindex /
-// upload), then a Tabs shell over the scope's material:
+// Detail surface for ONE knowledge scope. A back link + header, then a Tabs
+// shell over the only two kinds of material a person distinguishes:
 //
-//   Entries    — what an agent wrote with `coffer__write` (`<scope>/knowledge/`)
-//   Documents  — files someone ingested and Coffer converted (`<scope>/inbox/`)
-//   Rules      — the single curated rules doc
-//   Handoff    — per-branch scene notes
-//   Changelog  — the consolidation log (a view, not a lane)
+//   Documents — what someone uploaded (`<scope>/docs/`)
+//   Notes     — what an agent or the user wrote (`<scope>/notes/`)
 //
-// Entries and documents are separate lanes with separate counts; each owns its
-// own retrieval bar. Every body renders through the unified file preview —
-// never a hand-styled <pre>. The UI is read-only for humans (correct a file in
-// your own editor, or delete it); agents author entries over the MCP gateway.
+// Each lane filters its own list client-side by filename as you type; server
+// retrieval belongs to the agents (`coffer__search`) and the CLI, not here.
+// Every body renders through the unified file preview — never a hand-styled
+// <pre>. The UI is read-only for humans (correct a file in your own editor, or
+// delete it); agents author notes over the MCP gateway.
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -29,9 +25,6 @@ import { KnowledgeRenameDialog } from "./KnowledgeRenameDialog";
 import { KnowledgeSettingsDialog } from "./KnowledgeSettingsDialog";
 import { KnowledgeEntriesLane } from "./KnowledgeEntriesLane";
 import { KnowledgeDocumentsLane } from "./KnowledgeDocumentsLane";
-import { KnowledgeRulesLane } from "./KnowledgeRulesLane";
-import { KnowledgeHandoffLane } from "./KnowledgeHandoffLane";
-import { KnowledgeChangelogLane } from "./KnowledgeChangelogLane";
 import { SourceCheckDialog } from "./SourceCheckDialog";
 import { useKnowledgeDocuments } from "./useKnowledgeDocuments";
 
@@ -64,21 +57,28 @@ export function KnowledgeDetailPage() {
       // The edited-refusal (and any other failure) surfaces as a toast.
       onError: (e) => toast.error(translateApiError(t, e)),
     });
+  const onTidy = () =>
+    docs.tidy.mutate(undefined, {
+      onSuccess: () => toast.success(t("knowledge.detail.tidyDone")),
+      onError: (e) => toast.error(translateApiError(t, e)),
+    });
 
   return (
     <div className="space-y-6 p-6">
       <KnowledgeDetailHeader
         scope={scope}
         scopeResource={scopeQuery.data}
-        metrics={metricsQuery.data}
+        degradedDocuments={metricsQuery.data?.documents_degraded ?? 0}
         isReindexPending={docs.reindex.isPending}
         isUploadPending={docs.ingest.isPending}
+        isTidyPending={docs.tidy.isPending}
         checkingSources={docs.checkSources.isPending}
         onRename={() => setRenameOpen(true)}
         onOpenSettings={() => docs.setShowSettings(true)}
         onCheckSources={onCheckSources}
         onReindex={() => docs.reindex.mutate()}
         onUpload={docs.handlePickFile}
+        onTidy={onTidy}
       />
 
       {metricsQuery.error ? (
@@ -87,29 +87,17 @@ export function KnowledgeDetailPage() {
         </p>
       ) : null}
 
-      <Tabs defaultValue="entries">
+      <Tabs defaultValue="documents">
         <TabsList>
-          <TabsTrigger value="entries">{t("knowledge.detail.tabs.entries")}</TabsTrigger>
           <TabsTrigger value="documents">{t("knowledge.detail.tabs.documents")}</TabsTrigger>
-          <TabsTrigger value="rules">{t("knowledge.detail.tabs.rules")}</TabsTrigger>
-          <TabsTrigger value="handoff">{t("knowledge.detail.tabs.handoff")}</TabsTrigger>
-          <TabsTrigger value="changelog">{t("knowledge.detail.tabs.changelog")}</TabsTrigger>
+          <TabsTrigger value="notes">{t("knowledge.detail.tabs.notes")}</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="entries" className="pt-4">
-          <KnowledgeEntriesLane scope={scope} scopeResource={scopeQuery.data} />
-        </TabsContent>
         <TabsContent value="documents" className="pt-4">
           <KnowledgeDocumentsLane docs={docs} />
         </TabsContent>
-        <TabsContent value="rules" className="pt-4">
-          <KnowledgeRulesLane scope={scope} />
-        </TabsContent>
-        <TabsContent value="handoff" className="pt-4">
-          <KnowledgeHandoffLane scope={scope} />
-        </TabsContent>
-        <TabsContent value="changelog" className="pt-4">
-          <KnowledgeChangelogLane scope={scope} />
+        <TabsContent value="notes" className="pt-4">
+          <KnowledgeEntriesLane scope={scope} scopeResource={scopeQuery.data} />
         </TabsContent>
       </Tabs>
 

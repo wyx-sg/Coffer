@@ -35,9 +35,9 @@ def atomic_write_bytes(path: Path, data: bytes) -> None:
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     # The temp name carries a per-call uniquifier (uuid) on top of the pid so two
-    # concurrent writes to the SAME path (e.g. a fact update racing an organizer
-    # INDEX.md rewrite within one process) never collide on the temp file and
-    # spuriously fail each other's os.replace.
+    # concurrent writes to the SAME path (e.g. an agent writing a note while the
+    # tidy pass rewrites it within one process) never collide on the temp file
+    # and spuriously fail each other's os.replace.
     tmp = path.with_name(f".{path.name}.{os.getpid()}.{uuid4().hex}.tmp")
     try:
         with open(tmp, "wb") as f:

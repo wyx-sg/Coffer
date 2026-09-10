@@ -2,7 +2,7 @@
 
 The first and last steps of an ingest, kept out of ``pipeline.py`` so that
 module stays under the project's file-size ceiling: convert the bytes to
-Markdown, then write the normalized ``inbox/<doc-id>.md`` alongside the
+Markdown, then write the normalized ``docs/<doc-id>.md`` alongside the
 untouched original in ``.raw/`` (which is what makes a later re-conversion
 possible).
 """
@@ -59,7 +59,7 @@ async def write_ingested_files(
     updated_at: datetime,
     source_path: str | None = None,
 ) -> None:
-    """Write ``.raw/<doc-id>.<ext>`` and the normalized ``inbox/<doc-id>.md``."""
+    """Write ``.raw/<doc-id>.<ext>`` and the normalized ``docs/<doc-id>.md``."""
     await asyncio.to_thread(
         atomic_write_bytes, paths.raw_path(scope_name, doc_id, prepared.extension), raw_bytes
     )

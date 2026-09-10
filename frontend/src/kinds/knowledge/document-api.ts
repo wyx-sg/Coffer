@@ -6,7 +6,7 @@
 // source of truth); external retrieval is "one query → one answer" (the backend
 // auto-selects the strategy).
 //
-// Documents live in `<scope>/inbox/` and are a DIFFERENT lane from the entries
+// Documents live in `<scope>/docs/` and are a DIFFERENT lane from the notes
 // an agent wrote — these reads never return entries, and `document_count` never
 // includes them. api.ts re-exports everything here.
 
@@ -20,7 +20,6 @@ import type {
   ReembedBatchRequest,
   ReembedBatchResponse,
   ReindexResult,
-  SearchResponse,
   SourceCheckResponse,
 } from "./document-types";
 
@@ -128,24 +127,6 @@ export async function checkSources(scope: string): Promise<SourceCheckResponse> 
   });
   await checkOk(r);
   return (await r.json()) as SourceCheckResponse;
-}
-
-export async function searchDocuments(
-  scope: string,
-  query: string,
-  opts: { topK?: number } = {},
-): Promise<SearchResponse> {
-  // External retrieval is "one query → one answer": the backend auto-selects
-  // the strategy, so the request carries no `mode` and the response no longer
-  // returns `mode`/`fallback`.
-  const body: Record<string, unknown> = { query, top_k: opts.topK ?? 5 };
-  const r = await fetch(`${scopeBase(scope)}/search`, {
-    method: "POST",
-    headers: { ...headers(), "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  await checkOk(r);
-  return (await r.json()) as SearchResponse;
 }
 
 export async function grepDocuments(

@@ -1,8 +1,16 @@
 """Ripgrep wrapper for the ``grep`` retrieval mode (no index).
 
-Runs ``rg`` over a store's ``docs/`` directory, bounded by a max-match cap and a
-wall-clock timeout. Falls back to ``EngineUnavailable`` if the ``rg`` binary is
-absent. Output is parsed from ``--json`` so paths/line numbers are exact.
+Runs ``rg`` over a scope's whole directory — both the ``notes/`` and ``docs/``
+lanes — bounded by a max-match cap and a wall-clock timeout. Falls back to
+``EngineUnavailable`` if the ``rg`` binary is absent. Output is parsed from
+``--json`` so paths/line numbers are exact.
+
+The scope's two archives are dot-prefixed (``.raw/`` originals, ``.history/``
+superseded revisions) and this search passes ``--no-hidden`` so they stay out of
+the results: a grep must never answer with an ingested original next to the
+Markdown converted from it, or with a revision the tidy pass already replaced.
+That is ripgrep's default, but the flag is explicit because a user's
+``$RIPGREP_CONFIG_PATH`` could otherwise turn ``--hidden`` on underneath us.
 """
 
 from __future__ import annotations
@@ -30,6 +38,8 @@ class RipgrepGrep:
 
     async def grep(
         self,
+        # Named for the retrieval port it implements; the value is the scope
+        # root, so both lanes are searched.
         docs_dir: str,
         pattern: str,
         *,
@@ -45,6 +55,8 @@ class RipgrepGrep:
         args = [
             rg,
             "--json",
+            # The hidden archives are not results — see the module docstring.
+            "--no-hidden",
             "--max-count",
             # One extra per file so a "more matches exist" overflow is visible.
             str(cap + 1),

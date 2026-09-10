@@ -27,7 +27,7 @@ Coffer 的每个接口面都是通向同一底层守护进程的入口点。守�
 | `/resources/mcp_server`           | MCP 能力偏好与调用日志。                                           |
 | `/agents`                         | Agent 注册表、配置文件、工作区切面。                               |
 | `/skills`                         | 技能主存储与各 agent 的绑定。                                      |
-| `/knowledge/{scope}`              | 单个知识作用域：`entries`、`documents`、检索、车道、重建索引。      |
+| `/knowledge/{scope}`              | 单个知识作用域：`entries`、`documents`、检索、整理、重建索引。      |
 | `/channels`                       | 通道绑定（Telegram、SeaTalk）、配对。                             |
 | `/agent-providers`、`/models`     | 已注册的 agent provider 及其模型目录；连接自省。                  |
 | `/credentials`、`/settings`       | 加密凭据存储；设置含 `/settings/credentials`（主密钥存储）与 `/embedding` 配置。 |

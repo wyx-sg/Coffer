@@ -3,26 +3,34 @@
 > 中文版: [spec.zh.md](./spec.zh.md)
 
 **Feature Branch**: `feature/kb-memory-redesign`
-**Created**: 2026-05-22 (as *Memory*) · **Merged with the Knowledge Base spec**: 2026-09-10
+**Created**: 2026-05-22 (as *Memory*) · **Merged with spec knowledge (Knowledge Base)**: 2026-09-10
 **Status**: Accepted — shipped
 **Folder name**: this spec lives at `specs/knowledge/`, which is **historical**. The directory name is the spec id used by every inbound link and by `scripts/audit_acceptance.py` (which keys acceptance markers on it), so it was deliberately left alone when the feature was renamed. Read `knowledge` as "the Knowledge Layer spec".
 
-**Input**: Coffer stores one thing — **knowledge** — and serves it to every agent the user runs. Knowledge arrives two ways: an agent **writes** it (a fact, a decision, a preference worth surviving the session) or a human **ingests** it (a file in any format, converted to Markdown). It is held as per-item Markdown files on disk, the **sole source of truth**; SQLite (`documents`, `chunks`, FTS5, sqlite-vec) is a derived, rebuildable index ([Files as Truth](../../docs/decisions/files-as-truth-sqlite-retrieval.md)). One resource kind, `knowledge`, with three scopes (`global`, `project-<ULID>`, and named collections), a fixed set of lanes per scope, one retrieval engine whose mode is internal ([Retrieval Mode Is Internal](../../docs/decisions/retrieval-mode-is-internal.md)), and eight `coffer__*` MCP tools. Coffer keeps its own canonical format and never writes into an agent's native memory files ([Memory via MCP](../../docs/decisions/memory-via-mcp-not-native-projection.md)); knowledge reaches a session only when the agent **asks for it** over MCP — nothing is pushed in.
+**Input**: Coffer stores one thing — **knowledge** — and serves it to every agent the user runs. Knowledge arrives two ways: an agent **writes** it (a fact, a decision, a preference worth surviving the session) or a human **ingests** it (a file in any format, converted to Markdown). It is held as per-item Markdown files on disk, the **sole source of truth**; SQLite (`documents`, `chunks`, FTS5, sqlite-vec) is a derived, rebuildable index ([Files as Truth](../../docs/decisions/files-as-truth-sqlite-retrieval.md)). One resource kind, `knowledge`, with three scopes (`global`, `project-<ULID>`, and named collections), **two lanes** per scope — `notes/` for what someone wrote and `docs/` for what someone uploaded — one retrieval engine whose mode is internal ([Retrieval Mode Is Internal](../../docs/decisions/retrieval-mode-is-internal.md)), and six `coffer__*` MCP tools. Coffer keeps its own canonical format and never writes into an agent's native memory files ([Memory via MCP](../../docs/decisions/memory-via-mcp-not-native-projection.md)); knowledge reaches a session only when the agent **asks for it** over MCP — nothing is pushed in.
 
 ## Why this is one layer (the 2026-09-10 merge)
 
-This spec used to be one of two. The Knowledge Base spec owned a `knowledge_base` kind (upload files → Markdown → search) and the Memory spec owned a `memory` kind (agents remember facts → recall). They were described as **two faces of one substrate**, and that was literally true in the code: `documents`, `chunks`, the FTS5 index and the sqlite-vec index were shared from the start (Knowledge Base FR-009), and `infrastructure/knowledge/paths.py` already owned both on-disk layouts. The split existed only in the facade.
+This spec used to be one of two. Spec knowledge owned a `knowledge_base` kind (upload files → Markdown → search) and spec knowledge owned a `memory` kind (agents remember facts → recall). They were described as **two faces of one substrate**, and that was literally true in the code: `documents`, `chunks`, the FTS5 index and the sqlite-vec index were shared from the start (006 FR-009), and `infrastructure/knowledge/paths.py` already owned both on-disk layouts. The split existed only in the facade.
 
 It was not earning its keep:
 
 - **The knowledge base was an empty shell.** It was created 2026-06-22 and still held zero documents two and a half months later. Every one of the 78 rows in `documents` was `kind='memory'`. Its embedding config was never set.
-- **Memory already had a `knowledge/` lane.** The `organize` pass existed precisely to turn raw notes into topic documents under it. Knowledge was already first-class *inside* memory.
+- **Memory already held written knowledge as documents.** A consolidation pass existed precisely to turn raw notes into topic documents. Knowledge was already first-class *inside* memory.
 - **The tool surface made callers guess.** An agent had to decide "is this memory or is this knowledge?" before it could choose between `coffer__recall` and `coffer__search_knowledge` — a distinction that means nothing to the caller and that the substrate did not honour anyway.
 - **The retrieval tools' error rate was the symptom.** `coffer__grep_knowledge` failed 9 invocations out of 12 (ripgrep pointed at a directory that did not exist), `coffer__read_document` 3 of 3, and `coffer__search_knowledge` 3 of 12 — while `coffer__list_knowledge_bases` succeeded 4 of 4. Searching an empty knowledge base fails; listing it does not.
 
-So the two kinds became one kind, the twelve tools became eight, and the two REST/CLI/UI surfaces became one each. What survives from the Knowledge Base spec is everything that was actually about *ingesting files*: any-format conversion, chunking, source tracking, reindexing. What survives from the Memory spec is everything that was about *agents writing and continuing work*: entries, the organizer, rules, handoff, scope merge.
+So the two kinds became one kind, the twelve tools became six, and the two REST/CLI/UI surfaces became one each. What survives from 006 is everything that was actually about *ingesting files*: any-format conversion, chunking, source tracking, reindexing. What survives from 007 is everything that was about *agents writing*: notes, and the pass that tidies them.
 
 **Existing data was cleared** by migration `0051`, and the reason is worth stating plainly rather than burying. `memory:global` and `knowledge_base:global` both existed, and `resources` is keyed by `(kind, name)` — converting both would collide, and any automatic rename would have been a guess about which one the user meant. Every `documents` row was a memory-side index over the **journal lane**, which the preceding change removed along with transcript distillation; the index pointed at files that no longer exist. Re-accumulation happens by explicit `coffer__write` and by file ingestion, which is exactly what files-as-truth already assumes: the index is derived, never the system of record.
+
+## Two lanes (the 2026-09-11 redesign)
+
+The merge left one kind but seven storage lanes, and the detail page showed five of them as equal-weight tabs. Those were storage lanes, not categories anyone recognises. Two directories were both called an inbox. The rules lane had lost its delivery channel on 2026-09-10 and nothing read it any more. The changelog tab showed the by-product of a pass the page offered no way to run.
+
+There are only two kinds of material a person actually distinguishes: **what someone wrote** and **what someone uploaded**. So a scope now holds exactly two lanes — `notes/` and `docs/` — plus two hidden ones that exist for safety rather than for reading: `.history/` (pre-rewrite copies) and `.raw/` (uploaded originals). The `rules`, `handoff`, `superseded` and consolidation-log lanes are gone, along with the `knowledge/inbox/` → topic-document gradient: a note is a note whether it was just written or has been tidied since.
+
+What replaced the organizer is a **periodic tidy** (FR-033–FR-035): a bounded agentic pass over `notes/` that merges duplicates and rewrites notes into topic documents, archives every prior revision before touching it, and runs on a timer rather than only when someone reaches for the CLI.
 
 ## User Scenarios & Testing
 
@@ -32,7 +40,7 @@ The developer works on a project with Claude Code in the morning and Codex in th
 
 **Why this priority**: This is the core. A per-agent silo that drifts across agents is the problem being solved; without a single shared source of truth there is no feature.
 
-**Independent Test**: From a fresh install, run an MCP client in a git project, call `coffer__write` with a project fact, then from a second MCP client (different agent identity) in the same project call `coffer__search` and observe the fact returned. Confirm the fact exists as a per-item Markdown file under the project scope's `knowledge/inbox/` lane.
+**Independent Test**: From a fresh install, run an MCP client in a git project, call `coffer__write` with a project fact, then from a second MCP client (different agent identity) in the same project call `coffer__search` and observe the fact returned. Confirm the fact exists as a per-item Markdown file under the project scope's `notes/` lane.
 
 **Covering scenarios**:
 
@@ -47,7 +55,7 @@ The developer works on a project with Claude Code in the morning and Codex in th
 
 ### User Story 2 — Three scopes: global, project, and named collections (Priority: P1)
 
-Some knowledge is about the developer everywhere ("prefers tabs over spaces"); some is about one repo ("this service's API base path is `/api/v2`"); and some belongs in a collection the developer made on purpose ("`design-notes`", holding the PDFs and ADRs of a design review). All three are the same kind of thing with the same lanes and the same retrieval — only the **name** says which is which.
+Some knowledge is about the developer everywhere ("prefers tabs over spaces"); some is about one repo ("this service's API base path is `/api/v2`"); and some belongs in a collection the developer made on purpose ("`design-notes`", holding the PDFs and ADRs of a design review). All three are the same kind of thing with the same two lanes and the same retrieval — only the **name** says which is which.
 
 `global` and `project-<ULID>` **auto-provision** on first use, because an agent that wants to write something should not have to ask permission first. A named collection **does not**: it exists because someone decided it should, and silently conjuring one from a typo would be worse than an error.
 
@@ -68,11 +76,11 @@ Some knowledge is about the developer everywhere ("prefers tabs over spaces"); s
 
 ### User Story 3 — Build a scope from arbitrary files (Priority: P1)
 
-A developer has design notes, ADRs, internal wikis, PDFs of papers, a spreadsheet, and some HTML pages. They drop them all into a scope regardless of format. Coffer converts each to clean Markdown under the scope's `inbox/` lane, keeps the original in the hidden `.raw/` lane for provenance, and indexes the result so an agent can retrieve from it — through the same `coffer__search` that returns the agent's own written entries.
+A developer has design notes, ADRs, internal wikis, PDFs of papers, a spreadsheet, and some HTML pages. They drop them all into a scope regardless of format. Coffer converts each to clean Markdown under the scope's `docs/` lane, keeps the original in the hidden `.raw/` lane for provenance, and indexes the result so an agent can retrieve from it — through the same `coffer__search` that returns the agent's own notes.
 
 **Why this priority**: Ingestion is half of what the layer holds. Without it, the only knowledge Coffer has is what an agent happened to type.
 
-**Independent Test**: Create a scope `design-notes`, ingest a `.md`, a `.pdf`, a `.docx`, and a `.csv`; observe each become a Markdown file under `~/.coffer/knowledge/design-notes/inbox/`, the original under `.raw/`, and a row in `documents` with `lane='inbox'`.
+**Independent Test**: Create a scope `design-notes`, ingest a `.md`, a `.pdf`, a `.docx`, and a `.csv`; observe each become a Markdown file under `~/.coffer/knowledge/design-notes/docs/`, the original under `.raw/`, and a row in `documents` with `lane='docs'`.
 
 **Covering scenarios**: ingest converts any format to markdown; list documents in a knowledge base; filter documents by title; delete a single document; delete a knowledge base cleans up files and index; re-upload of an updated file updates the document in place; re-upload of an identical file is a no-op.
 
@@ -94,11 +102,11 @@ Crucially, **retrieval spans both lanes**. A search over a scope returns the ent
 
 ### User Story 5 — Agent reads AND writes through the MCP gateway (Priority: P1)
 
-The developer's coding agent connects to Coffer's MCP endpoint and gets **eight** built-in tools: `coffer__search`, `coffer__grep`, `coffer__read`, `coffer__list`, `coffer__write`, `coffer__delete`, `coffer__set_handoff`, `coffer__resume`. Every one of the first six takes an optional `scope`, defaulting to the cwd's project scope and falling back to `global` outside a project. `coffer__write` files an entry from `text`, stores a Markdown document when given a `filename`, and rewrites either in place when given an `id` — the caller never has to know which lane a thing lives in. Every agent write is audited (F01) with the agent as actor and funnels through the same service paths the REST surface uses.
+The developer's coding agent connects to Coffer's MCP endpoint and gets **six** built-in tools: `coffer__search`, `coffer__grep`, `coffer__read`, `coffer__list`, `coffer__write`, `coffer__delete`. Every one of them takes an optional `scope`, defaulting to the cwd's project scope and falling back to `global` outside a project. `coffer__write` files a note from `text`, stores a Markdown document when given a `filename`, and rewrites either in place when given an `id` — the caller never has to know which lane a thing lives in. Every agent write is audited (F01) with the agent as actor and funnels through the same service paths the REST surface uses.
 
-**Why this priority**: Agent-side retrieval is what makes the layer useful during coding; agent-side writing makes it a living store rather than a static vault. Eight tools that read as verbs are what removed the "is this memory or knowledge?" guess.
+**Why this priority**: Agent-side retrieval is what makes the layer useful during coding; agent-side writing makes it a living store rather than a static vault. Six tools that read as verbs are what removed the "is this memory or knowledge?" guess.
 
-**Independent Test**: With a populated scope, an MCP client sees exactly the eight tools; calling `coffer__write` with `text` creates a searchable entry, calling it with `filename` creates a searchable document, and `coffer__read` returns either by id.
+**Independent Test**: With a populated scope, an MCP client sees exactly the six tools; calling `coffer__write` with `text` creates a searchable note, calling it with `filename` creates a searchable document, and `coffer__read` returns either by id.
 
 **Covering scenarios**: built-in KB tools appear in client tool list; built-in memory tools appear in client tool list; agent searches a knowledge base; agent greps a knowledge base; agent reads a document; agent adds a document via MCP; agent edits a document via MCP; agent deletes a document via MCP.
 
@@ -116,55 +124,29 @@ The developer wants to see and correct what has piled up: browse a scope's lanes
 
 ---
 
-### User Story 7 — Inspect, name, reset, and consolidate scopes (Priority: P3)
+### User Story 7 — Inspect, name, and reset scopes (Priority: P3)
 
-The developer wants to know how much has accumulated per scope, to give a scope a readable name when its originating folder is unknown, to clear a scope without deleting it, and — when the same repository ended up with two project scopes — to merge them without losing anything.
+The developer wants to know how much has accumulated per scope, to give a scope a readable name when its originating folder is unknown, and to clear a scope without deleting it.
 
 **Why this priority**: Hygiene; not blocking the core flow.
 
-**Independent Test**: View per-scope metrics (entry count, document count, chunk count, disk bytes). Rename a scope whose folder is unknown and confirm the chosen name shows in the list and survives a reload. Clear a project scope; confirm every entry is gone but the scope remains. Run a merge scan across project scopes and merge a proposed pair.
+**Independent Test**: View per-scope metrics (entry count, document count, chunk count, disk bytes). Rename a scope whose folder is unknown and confirm the chosen name shows in the list and survives a reload. Clear a project scope; confirm every note is gone but the scope remains.
 
-**Covering scenarios**: clear a memory scope; user renames a memory store; KB metrics report counts and disk usage; degraded embed surfaces documents_degraded and retries without re-chunking; test an embedding model; merge scan proposes same-project stores; merge scan degrades cleanly without an internal engine; merging two stores consolidates additively and retires the source; a merged identity resolves to the surviving store.
-
----
-
-### User Story 8 — Continue the same work across agents and machines (Priority: P2)
-
-The developer pauses mid-task with Claude Code — at a known step, with specific next steps and files in flight — and later resumes from a different agent (Codex) or a second machine. Before pausing the agent calls `coffer__set_handoff` with the current working state ("现场"): what it was doing, what's next, which files are open, and any unresolved questions. Coffer keys that scene by **(project × git branch)** and writes it into the project scope's `handoff/` lane. When work resumes, `coffer__resume` returns the saved scene for the current branch (annotated with how stale it may be) — or reports that none exists for a fresh branch.
-
-**Why this priority**: Continuity is the north star, but it builds on the shared core (Stories 1–2): a handoff is an additive working lane, not a prerequisite for search. Branch-keying means parallel branches and worktrees keep independent scenes and never clobber each other; there is no global handoff (a global "current task" is meaningless), so a cwd outside any git project has nothing to resume.
-
-**Independent Test**: From an MCP client inside a git project on branch `work`, call `coffer__set_handoff` with a body, then from a second client (different agent identity) in the same project + branch call `coffer__resume` and observe the same body with the branch and a freshness annotation. On a fresh branch, `coffer__resume` reports `found=false`.
-
-**Covering scenarios**: agent saves and resumes a working-state handoff; resume reports no handoff for a fresh branch.
+**Covering scenarios**: clear a memory scope; user renames a memory store; KB metrics report counts and disk usage; degraded embed surfaces documents_degraded and retries without re-chunking; test an embedding model.
 
 ---
 
-### User Story 9 — Rules accumulate in a lane of their own (Priority: P2)
+### User Story 8 — Read the whole scope, both lanes (Priority: P2)
 
-The developer has accumulated behavioural rules (global "always run the verify step before pushing", project "this repo deploys via `make release`") and wants them kept as rules — a readable list of standing instructions — rather than dissolved into topic prose. The organizer recognises a rule-shaped note and **appends** it to the scope's `rules/` lane instead of merging it into a topic document. The lane sits at the scope root, outside retrieval, and is read **on demand** through its own surface: `GET /api/v1/knowledge/{scope}/rules` or `coffer knowledge rules <scope>`. Coffer never writes into the agent's own memory or instruction files ([Memory via MCP](../../docs/decisions/memory-via-mcp-not-native-projection.md)).
+The developer opens a scope in Coffer and wants to see what it holds: the **Notes** an agent or they themselves wrote, and the **Documents** someone ingested. The Knowledge detail page presents exactly those two tabs. Each is a tree plus content, **read-only**, rendered through the unified file preview, offering open-in-editor / reveal / copy-path on the underlying file. A single filter box above the tree narrows the tree by filename as the user types — entirely client-side, no button and no request, because server-side retrieval already has its surfaces (`coffer__search` for agents, `coffer knowledge recall` for the CLI).
 
-**Why this priority**: procedural knowledge has a different shape from topical knowledge — a rule is a standing instruction, not a search hit — so it earns a lane that retrieval leaves alone. It is P2 because it builds on the organizer and the shared core: the lane stores rules that the ordinary write path already produced.
+Notes and Documents are separate tabs with separate counts precisely because they have different provenance and different curation gestures — but the tabs are a *presentation* split, not a storage or retrieval one. `coffer__search` still crosses them.
 
-**What this story no longer covers — and the cost.** Rules used to arrive **ambiently**. Coffer installed a `coffer-hook` SessionStart hook into each managed agent; on every session start (and resume/clear/compact) the hook called `GET /api/v1/agents/{name}/session-context?cwd=<cwd>` and injected the scope's rules, two Coffer-seeded built-in rules, and a title-only index of the project's knowledge as `additionalContext`. That entire delivery channel is **removed** — FR-049, FR-050, FR-052 and FR-055 are deleted, along with the `coffer-hook` binary, the hook install/uninstall surface, the `session-context` route and the bundle assembler. Nothing pushes anything into an agent session any more. See "Delivery — removed" under Functional Requirements for the full statement of what that costs.
+**Why this priority**: a scope's two lanes hold everything the layer knows, and the page is how a person checks what accumulated and corrects it. It is P2 because it is a read-only projection over lanes the other stories already populate; it adds visibility, never a new write path.
 
-**Independent Test**: Write a rule-shaped note through the ordinary write path, run `organize`, and confirm it lands appended in `rules/rules.md` rather than merged into a topic document, with `rules_appended` counted in the result. Then read it back with `coffer knowledge rules <scope>` and over `GET /api/v1/knowledge/{scope}/rules`, and confirm a scope with no rules returns empty rather than an error.
+**Independent Test**: Populate a project scope with a written note and an ingested document. Open the detail page and confirm two tabs, each read-only, each rendered via the unified file preview, each offering open / reveal / copy-path. Type into the filter box and confirm the tree narrows with no network request. Confirm the header carries **Upload** and **Tidy** and nothing else, with Settings / Check sources / Reindex behind an overflow menu.
 
-**Covering scenarios**: the organizer routes a rule-shaped note into the rules lane; the rules read surface returns the stored rules.
-
----
-
-### User Story 10 — Read the whole scope, lane by lane (Priority: P2)
-
-The developer opens a scope in Coffer and wants to see **everything it holds**, not one flat list: the **Entries** an agent wrote, the **Documents** someone ingested, the procedural **Rules**, the per-branch **Handoff** scenes, and the organizer's **Changelog**. The Knowledge detail page presents exactly those five tabs. Each gets a shape-fit view: Entries and Documents are trees plus content, Rules is a single document, Handoff is a per-branch list, Changelog is an append-only log. Every view is **read-only**, renders through the unified file preview, and offers open-in-editor / reveal / copy-path on the underlying file.
-
-Entries and Documents are separate tabs with separate counts precisely because they have different provenance and different curation gestures — but the tabs are a *presentation* split, not a storage or retrieval one. `coffer__search` still crosses them.
-
-**Why this priority**: a flat list hides most of what a scope holds — rules live outside retrieval and handoff scenes are working state — so the procedural and continuity knowledge would be invisible even though it is all on disk. It is P2 because it is a read-only projection over lanes the other stories already populate; it adds visibility, never a new write path.
-
-**Independent Test**: Populate a project scope with an entry, an ingested document, a rule, a handoff scene, and an organizer run that writes a changelog. Open the detail page and confirm five tabs, each read-only, each rendered via the unified file preview, each offering open / reveal / copy-path.
-
-**Covering scenarios**: handoff scenes are listed per branch for a store; the consolidation changelog is readable for a store; the organizer drains the inbox into a topic document; organizing merges a note into an existing topic without clobbering it; organize is a no-op when no internal model is configured; the reorg pass consolidates duplicate topic documents; reorg never destroys content — a superseded topic stays recoverable; reorg is a no-op when no internal model is configured; memory is auto-organized after the store goes idle.
+**Covering scenarios**: the reorg pass consolidates duplicate topic documents; reorg never destroys content — a superseded topic stays recoverable; reorg is a no-op when no internal model is configured; the tidy worker runs on boot and on an interval; a topic document recalls at passage granularity.
 
 ---
 
@@ -177,14 +159,12 @@ Entries and Documents are separate tabs with separate counts precisely because t
 - **Empty conversion**: a file converting to empty/whitespace-only Markdown is rejected with `IngestRejected("empty")`. A **PDF** that converts empty is rejected as `IngestRejected("scanned_pdf")` (same 415) so the UI can say "looks scanned/image-only — run OCR" instead of something generic.
 - **Oversized file**: a file over `max_document_bytes` (default 25 MB) is rejected at the API boundary before any conversion runs.
 - **Re-upload, identical bytes**: an idempotent no-op — the existing document is returned, nothing re-written or re-audited.
-- **Re-upload, changed bytes, same filename**: updates the **same document in place** (ULID reused, `inbox/` + `.raw/` overwritten keeping only the latest original, `source_mode` reset to `converted`) — but only with `replace=true`; without it the upload is rejected (`duplicate`) so the overwrite is always explicit.
+- **Re-upload, changed bytes, same filename**: updates the **same document in place** (ULID reused, `docs/` + `.raw/` overwritten keeping only the latest original, `source_mode` reset to `converted`) — but only with `replace=true`; without it the upload is rejected (`duplicate`) so the overwrite is always explicit.
 - **Re-conversion after edit**: re-converting a document whose `source_mode == edited` is rejected; re-uploading a changed source with `replace=true` updates it in place and resets it to `converted`.
 - **Direct disk edit**: the next read lazily scans for deltas by content hash and reindexes, so out-of-band edits are picked up with no watcher. Reindexing unchanged content is a no-op.
 - **Empty or over-long entry text**: rejected at the API boundary (`max_entry_chars`, default 8192, hard ceiling 32768); nothing written.
-- **Resume on a fresh branch**: `coffer__resume` returns `found=false` rather than erroring; nothing is fabricated.
-- **Handoff outside a git project**: no project scope and no branch, so `coffer__resume` returns `found=false` and `coffer__set_handoff` is rejected (there is no global handoff).
-- **An agent that never asks for the rules**: nothing happens. With the session-start delivery channel removed, an agent that does not call `coffer__recall` / `coffer__search` (or read `GET /api/v1/knowledge/{scope}/rules`) simply never sees the lane. This is the accepted consequence, not a bug — see "Delivery — removed".
-- **Grep and the ingested originals**: `.raw/` is dot-prefixed so ripgrep skips it. Without that, every ingested document produced two grep hits — the Markdown and the original it was converted from.
+- **Grep and the hidden lanes**: `.raw/` and `.history/` are dot-prefixed so ripgrep skips them. Without that, every ingested document produced two grep hits — the Markdown and the original it was converted from — and every tidied note would produce one hit per archived revision alongside the live file.
+- **An agent that never asks**: nothing happens. Nothing is pushed into an agent session; an agent that does not call `coffer__search` / `coffer__grep` / `coffer__read` simply never sees what the scope holds. This is the accepted consequence, not a bug — see "Delivery — removed".
 - **Tracked source moved/deleted**: `check-sources` reports it `missing` and never crashes. `source_path` is machine-local, so a `missing` result on another machine is expected and benign.
 - **Concurrent searches**: multiple searches against one scope run independently; no per-scope lock degrades read latency.
 
@@ -205,7 +185,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="k
 
 - **Given** an MCP client running inside a git project,
 - **When** it calls `coffer__write` with `text` and no `scope`,
-- **Then** a per-item Markdown file (YAML frontmatter `title`/`description`/`metadata.actor`/`origin_session_id` + body) is written under the project scope's `knowledge/inbox/` lane, the file is indexed into `documents` with `lane='knowledge'`, and an audit entry is recorded.
+- **Then** a per-item Markdown file (YAML frontmatter `title`/`description`/`metadata.actor`/`origin_session_id` + body) is written under the project scope's `notes/` lane, the file is indexed into `documents` with `lane='notes'`, and an audit entry is recorded.
 
 ### Scenario: agent recalls a project fact
 
@@ -223,7 +203,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="k
 
 - **Given** an MCP client running inside a git project,
 - **When** it calls `coffer__write` with `text`,
-- **Then** the item is written as a Markdown file under the project scope's `knowledge/inbox/` lane (never at the scope root), it is indexed into `documents` under the `knowledge` lane, and a subsequent `coffer__search` returns it.
+- **Then** the item is written as a Markdown file under the project scope's `notes/` lane (never at the scope root), it is indexed into `documents` under the `notes` lane, and a subsequent `coffer__search` returns it.
 
 ### Scenario: remember at global scope
 
@@ -247,7 +227,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="k
 
 - **Given** a knowledge scope,
 - **When** the user adds an entry via the Coffer UI or CLI,
-- **Then** the canonical Markdown is written under the scope's `knowledge/inbox/` lane with `metadata.actor = "user"`, the row is indexed under the `knowledge` lane, and an audit entry is recorded.
+- **Then** the canonical Markdown is written under the scope's `notes/` lane with `metadata.actor = "user"`, the row is indexed under the `notes` lane, and an audit entry is recorded.
 
 ### Scenario: user corrects a fact out-of-band
 
@@ -271,7 +251,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="k
 
 - **Given** a knowledge scope with entries,
 - **When** the user clears it,
-- **Then** every item under the `knowledge/` lane is removed and its index rows dropped, but the scope Resource is preserved.
+- **Then** every item under the `notes/` lane is removed and its index rows dropped, but the scope Resource is preserved.
 
 ### Scenario: user renames a memory store
 
@@ -283,7 +263,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="k
 
 - **Given** an MCP client connects to Coffer's gateway,
 - **When** the client lists tools,
-- **Then** `coffer__search`, `coffer__write`, `coffer__list`, `coffer__set_handoff`, and `coffer__resume` appear alongside other built-in and upstream tools.
+- **Then** `coffer__search`, `coffer__grep`, `coffer__read`, `coffer__list`, `coffer__write`, and `coffer__delete` appear alongside other built-in and upstream tools.
 
 ### Scenario: vector recall falls back when embedding is unconfigured
 
@@ -291,52 +271,9 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="k
 - **When** the engine resolves to a vector strategy but no embedder is available,
 - **Then** the call runs a keyword search instead and returns results with no error; the degradation is NOT surfaced as a query-time response flag.
 
-### Scenario: agent saves and resumes a working-state handoff
-
-- **Given** an MCP client running inside a git project on a branch,
-- **When** it calls `coffer__set_handoff` with a body and later (possibly as a different agent) calls `coffer__resume`,
-- **Then** `set_handoff` writes a per-`(project × branch)` Markdown file (frontmatter `branch`/`updated_at` + freeform body) under the project scope's `handoff/` lane — overwriting any prior scene for that branch — and `resume` returns `found=true` with the saved branch, body, `updated_at`, and a freshness `note`; the handoff is never returned by `coffer__search`.
-
-### Scenario: resume reports no handoff for a fresh branch
-
-- **Given** an MCP client in a git project on a branch with no saved handoff (or a cwd outside any git project),
-- **When** it calls `coffer__resume`,
-- **Then** the call returns `found=false` (never an error and nothing fabricated).
-
-### Scenario: the organizer drains the inbox into a topic document
-
-- **Given** a knowledge scope with two freshly-written entries in its
-  `knowledge/inbox/` and an internal model configured,
-- **When** `POST /api/v1/knowledge/{scope}/organize` (or `coffer knowledge
-  organize <scope>`) is called,
-- **Then** the internal LLM organizer drains the inbox (no items remain), at
-  least one `knowledge/<topic>.md` topic document exists holding the merged
-  content, `knowledge/INDEX.md` lists that topic,
-  entry is recorded, and a subsequent search returns content from the topic
-  document (not the now-empty inbox).
-
-### Scenario: organizing merges a note into an existing topic without clobbering it
-
-- **Given** a knowledge scope that already has a hand-edited topic document
-  containing content X plus a new related item in its `knowledge/inbox/`,
-- **When** `organize` is called and the organizer merges the new item into that
-  topic,
-- **Then** the topic document still contains the original content X alongside
-  the newly integrated information, the inbox item has been removed, and the
-  consolidation changelog (`consolidation-log.md`) records the merge — the
-  organizer never regenerates from scratch and never clobbers a human edit.
-
-### Scenario: organize is a no-op when no internal model is configured
-
-- **Given** a knowledge scope with items in its `knowledge/inbox/` but no internal
-  model configured,
-- **When** `organize` is called,
-- **Then** the call returns `status="no_model"`, the inbox is left untouched, no
-  topic document is written, and no error is raised.
-
 ### Scenario: a topic document recalls at passage granularity
 
-- **Given** an organized knowledge scope whose `knowledge/` lane holds a topic
+- **Given** a tidied knowledge scope whose `notes/` lane holds a topic
   document with two distinct heading sections, each describing a different
   subject, indexed for retrieval,
 - **When** `coffer__search` is queried with terms that occur only in the second
@@ -348,128 +285,58 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="k
 
 ### Scenario: the reorg pass consolidates duplicate topic documents
 
-- **Given** a knowledge scope with two overlapping topic documents (both about the
-  same subject, one carrying extra detail) and an internal model configured,
-- **When** `POST /api/v1/knowledge/{scope}/reorg` (or `coffer knowledge reorg <scope>`)
-  runs and the internal agentic loop reads both documents, writes the merged
-  content into one, and supersedes the now-redundant other,
-- **Then** a single topic document holds the combined content, the redundant
-  document no longer appears in search or `INDEX.md`, a subsequent search
-  returns the merged content.
+- **Given** a knowledge scope whose `notes/` lane holds two overlapping notes
+  (both about the same subject, one carrying extra detail) and an internal
+  model configured,
+- **When** the tidy pass runs — from the background worker, the detail page's
+  **Tidy** button, `POST /api/v1/knowledge/{scope}/organize` or
+  `coffer knowledge organize <scope>` — and the internal agentic loop reads both
+  notes, writes the merged content into one, and removes the now-redundant other,
+- **Then** a single note holds the combined content, the redundant note no longer
+  appears in search, a subsequent search returns the merged content, and the pass
+  is recorded in Coffer's audit log.
 
 ### Scenario: reorg never destroys content — a superseded topic stays recoverable
 
-- **Given** a knowledge scope with a topic document holding content X (possibly a
+- **Given** a knowledge scope with a note holding content X (possibly a
   human edit),
-- **When** the reorg loop overwrites or supersedes that document,
-- **Then** the prior content X is first archived to the scope's `superseded/`
-  tombstone (so it is **recoverable**, never hard-deleted), the tombstone is
-  **excluded from retrieval** (it lives outside the `knowledge/` lane), and the
-  consolidation changelog records the supersession — the loop is an incremental
-  edit, never a from-scratch regeneration.
+- **When** the tidy pass overwrites that note or merges it away,
+- **Then** the prior content X is first copied into `.history/` (so it is
+  **recoverable**, never hard-deleted), the archive is **excluded from
+  retrieval and from grep** (`.history/` is dot-prefixed), and the pass is
+  recorded in Coffer's audit log — the loop is an incremental edit, never a
+  from-scratch regeneration.
 
 ### Scenario: reorg is a no-op when no internal model is configured
 
-- **Given** a knowledge scope with topic documents but no internal model configured,
-- **When** `reorg` is called,
-- **Then** the call returns `status="no_model"`, no topic document is written,
-  superseded, or archived, and no error is raised.
+- **Given** a knowledge scope with notes but no internal model configured,
+- **When** the tidy pass is triggered,
+- **Then** it returns `status="no_model"`, no note is written, merged, or
+  archived, and no error is raised.
 
-### Scenario: memory is auto-organized after the store goes idle
+### Scenario: the tidy worker runs on boot and on an interval
 
-- **Given** the auto-organize trigger is enabled, an internal model is
-  configured, and an item is freshly written into a scope's `knowledge/inbox/`,
-- **When** the scope goes idle (no further knowledge writes) for the conservative
-  debounce delay,
-- **Then** the organizer runs **automatically in the background** — with no
-  explicit `organize` call — draining the inbox into a topic document, and the
-  background pass never blocks: cancelling the pending trigger (e.g. at daemon
-  shutdown) before it fires simply leaves the inbox intact for a later pass.
+- **Given** an internal model is configured and a scope's `notes/` lane holds
+  material worth tidying,
+- **When** the daemon starts and then keeps running,
+- **Then** a catch-up tidy pass runs once at boot and further passes run on the
+  configured interval with no explicit trigger; a failing pass is logged and
+  never kills the loop or blocks daemon shutdown, and with no internal model
+  configured the worker no-ops rather than erroring.
 
-### Scenario: the organizer routes a rule-shaped note into the rules lane
+### Scenario: the two-lane migration flattens the old lanes
 
-- **Given** a knowledge scope with an internal model configured and two freshly
-  written inbox items — one a behavioural rule ("always run the verify step
-  before pushing") and one an ordinary fact,
-- **When** `organize` runs and the organizer classifies the first item as a rule
-  and the second as ordinary knowledge,
-- **Then** the rule is appended to the scope's procedural `rules/rules.md` lane
-  (not written into a `knowledge/<topic>.md` doc), the ordinary fact becomes a
-  topic document, both inbox items are drained, and search does NOT surface the
-  rule (the `rules/` lane sits outside the retrieval glob, like `handoff/` and
-  `superseded/`).
-
-### Scenario: the rules read surface returns the stored rules
-
-- **Given** a knowledge scope whose `rules/rules.md` holds one or more rules,
-- **When** `GET /api/v1/knowledge/{scope}/rules` (or `coffer knowledge rules <scope>`)
-  is called,
-- **Then** the response returns the rules text verbatim (the only surface the
-  lane leaves disk through), and a scope with no rules returns an
-  empty/`null` body rather than an error.
-
-### Scenario: handoff scenes are listed per branch for a store
-
-- **Given** a knowledge scope whose `handoff/` lane holds one or more per-branch
-  scene files,
-- **When** `GET /api/v1/knowledge/{scope}/handoff` is called (addressed by
-  scope name, not cwd),
-- **Then** the response lists one scene **per branch**, each carrying its
-  `branch`, `text`, `updated_at`, absolute on-disk `path`, and `folder_path`; a
-  scope with no handoff scenes returns an **empty list with HTTP 200** (never a
-  404).
-
-### Scenario: the consolidation changelog is readable for a store
-
-- **Given** a knowledge scope whose organizer has written a `consolidation-log.md`
-  at the scope root,
-- **When** `GET /api/v1/knowledge/{scope}/consolidation-log` is called
-  (addressed by scope name, not cwd),
-- **Then** the response returns the changelog `text` with its absolute on-disk
-  `path` and `folder_path`; a scope with no changelog returns `text = null` with
-  HTTP 200 (never a 404).
-
-### Scenario: merge scan proposes same-project stores
-
-- **Given** two per-project scopes that describe the same project — one pair
-  provably (both roots locally readable and normalizing to the same origin
-  remote) and one pair only plausibly (labels/paths/content align but no
-  common remote is provable),
-- **When** the user runs the merge scan with an internal engine configured,
-- **Then** the provable pair is proposed with `confidence="certain"` and
-  `judged_by="remote"` without consulting the engine, the plausible pair is
-  proposed with the engine's verdict (`judged_by="engine"`, a confidence and
-  a reason), and each proposal suggests the surviving scope per the direction
-  heuristic — and nothing is mutated by the scan.
-
-### Scenario: merge scan degrades cleanly without an internal engine
-
-- **Given** per-project scopes including a provably-same pair, and no
-  internal engine configured,
-- **When** the user runs the merge scan,
-- **Then** the response reports `engine="no_model"` and still carries the
-  deterministic (`judged_by="remote"`) proposals; engine-tier pairs are
-  simply absent — no error.
-
-### Scenario: merging two stores consolidates additively and retires the source
-
-- **Given** two per-project scopes each holding entries (with at least one
-  colliding lane filename),
-- **When** the user merges the source into the target,
-- **Then** every source lane file lands under the target (the filename
-  collision keeping both copies), the source's label and root mapping move to a
-  target that lacked its own, the target's retrieval returns the merged
-  entries, the source scope (resource, index rows, on-disk dir) is retired, and
-  a `memory_stores_merged` audit entry is recorded.
-
-### Scenario: a merged identity resolves to the surviving store
-
-- **Given** scope `project-X` was merged into `project-Y` (so `X` is listed
-  in `Y`'s `merged_identities`),
-- **When** an agent writes an entry from a checkout whose computed project
-  identity is `X`,
-- **Then** the entry is written to `project-Y` and no new `project-X` scope is
-  provisioned.
+- **Given** an installation whose scopes still carry the pre-redesign layout —
+  items in `knowledge/inbox/` and `knowledge/*.md`, ingested documents in
+  `inbox/`, plus `rules/`, `handoff/`, `superseded/`, `consolidation-log.md`
+  and `knowledge/INDEX.md`,
+- **When** the upgrade runs,
+- **Then** the written items are flattened into `notes/`, `inbox/` becomes
+  `docs/`, `.raw/` is untouched, the rules / handoff / superseded lanes and both
+  log files are **deleted outright** (destructive by decision, with no holding
+  pen), and one Alembic migration rewrites `documents.lane` from
+  `knowledge`/`inbox` to `notes`/`docs` — leaving no load-time compatibility
+  shim behind.
 
 ### Scenario: create a knowledge base
 
@@ -481,13 +348,13 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="k
 
 - **Given** a knowledge scope exists,
 - **When** the user uploads a non-Markdown file (e.g. `.pdf`, `.docx`, `.csv`, `.html`),
-- **Then** Coffer converts it to Markdown at `inbox/<doc-id>.md` (with YAML frontmatter), preserves the original at `.raw/<doc-id>.<ext>`, inserts a `documents` row (`kind="knowledge"`, `lane="inbox"`, `source_mode="converted"`) and chunks it into FTS5.
+- **Then** Coffer converts it to Markdown at `docs/<doc-id>.md` (with YAML frontmatter), preserves the original at `.raw/<doc-id>.<ext>`, inserts a `documents` row (`kind="knowledge"`, `lane="docs"`, `source_mode="converted"`) and chunks it into FTS5.
 
 ### Scenario: list documents in a knowledge base
 
 - **Given** documents have been ingested,
 - **When** the user lists documents,
-- **Then** they see one row per ingested document with stable doc ids, titles, original filenames, and timestamps, paginated — and **only** documents: the listing is lane-scoped, so the entries an agent wrote into the same scope are not mixed in.
+- **Then** they see one row per ingested document with stable doc ids, titles, original filenames, and timestamps, paginated — and **only** documents: the listing is lane-scoped, so the notes an agent wrote into the same scope are not mixed in.
 
 ### Scenario: filter documents by title
 
@@ -511,7 +378,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="k
 
 - **Given** documents are on disk,
 - **When** the user greps the scope with a pattern,
-- **Then** Coffer runs ripgrep over the scope directory (bounded by max-matches and a timeout) and returns `{path, line_number, line}` hits with no index involved. The hidden `.raw/` lane is skipped, so an ingested document yields one hit for its Markdown rather than two.
+- **Then** Coffer runs ripgrep over the scope directory (bounded by max-matches and a timeout) and returns `{path, line_number, line}` hits with no index involved. The hidden `.raw/` and `.history/` lanes are skipped, so an ingested document yields one hit for its Markdown rather than two, and a tidied note yields one hit for its live version rather than one per archived revision.
 
 ### Scenario: vector search returns ranked passages
 
@@ -565,7 +432,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="k
 
 - **Given** a scope has documents,
 - **When** the user deletes one document by id,
-- **Then** the `inbox/<doc-id>.md` and `.raw/<doc-id>.<ext>` files are removed, its chunks/FTS5/vec rows are deleted, the `documents` row is removed, audit `KB_DOCUMENT_DELETED` is recorded, and search no longer returns it.
+- **Then** the `docs/<doc-id>.md` and `.raw/<doc-id>.<ext>` files are removed, its chunks/FTS5/vec rows are deleted, the `documents` row is removed, audit `KB_DOCUMENT_DELETED` is recorded, and search no longer returns it.
 
 ### Scenario: delete a knowledge base cleans up files and index
 
@@ -577,7 +444,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="k
 
 - **Given** an MCP client connects to Coffer's gateway,
 - **When** it lists tools,
-- **Then** the eight knowledge tools are present — `coffer__search`, `coffer__grep`, `coffer__read`, `coffer__list`, `coffer__write`, `coffer__delete`, `coffer__set_handoff`, `coffer__resume` — with no separate document-vs-memory families, and each of the first six accepting an optional `scope`.
+- **Then** the six knowledge tools are present — `coffer__search`, `coffer__grep`, `coffer__read`, `coffer__list`, `coffer__write`, `coffer__delete` — with no separate document-vs-memory families, and each accepting an optional `scope`.
 
 ### Scenario: agent searches a knowledge base
 
@@ -601,7 +468,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="k
 
 - **Given** a knowledge scope exists,
 - **When** the client calls `coffer__write(text, filename, scope?)` with Markdown content,
-- **Then** Coffer ingests it like a human upload (a new ULID-id document under the `inbox` lane, `inbox/` + `.raw/` written, indexed), and the document is searchable.
+- **Then** Coffer ingests it like a human upload (a new ULID-id document under the `docs` lane, `docs/` + `.raw/` written, indexed), and the document is searchable.
 
 ### Scenario: agent edits a document via MCP
 
@@ -676,22 +543,22 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="k
 
 ### Functional Requirements
 
-> **Numbering.** `FR-001`–`FR-059` keep the numbers they had while this was the *Memory* spec — they are cited from code comments, other specs and ADRs, so renumbering them would break more than it tidied. The requirements folded in from the Knowledge Base spec are renumbered into a fresh block, `FR-060`–`FR-075`, each noting the Knowledge Base number it came from. Gaps in the sequence are requirements retired by earlier changes (notably transcript distillation and the `journal` lane).
+> **Numbering.** `FR-001`–`FR-059` keep the numbers they had while this was the *Memory* spec — they are cited from code comments, other specs and ADRs, so renumbering them would break more than it tidied. The requirements folded in from spec knowledge (Knowledge Base) are renumbered into a fresh block, `FR-060`–`FR-075`, each noting the 006 number it came from; `FR-076` is the two-lane migration. Gaps in the sequence are requirements retired by earlier changes — transcript distillation and the `journal` lane, then the 2026-09-11 two-lane redesign, which retired the handoff lane (`FR-023`–`FR-026`), the inbox-draining organizer and its catalogue and changelog (`FR-027`–`FR-031`), the procedural `rules` lane (`FR-036`) and the cross-scope AI merge (`FR-056`–`FR-059`). Surviving requirements are never renumbered, so the gaps stay.
 
 **Storage & scope**
 
-- **FR-001**: System MUST store every written item as a per-item Markdown file (YAML frontmatter `title`/`description`/`metadata.actor`/`origin_session_id` + body) under a scope's **`knowledge/` lane** — freshly-written items in `knowledge/inbox/`, organized topic documents at `knowledge/<topic>.md` plus an `INDEX.md` maintained by the consolidation organizer. The Markdown files are the **sole source of truth**; SQLite is a rebuildable index. No derived index file is generated for retrieval.
+- **FR-001**: System MUST store every written item as a per-item Markdown file (YAML frontmatter `title`/`description`/`metadata.actor`/`origin_session_id` + body) under a scope's **`notes/` lane** — one flat lane, whether the file was just written or has since been rewritten by the tidy pass (FR-033). The Markdown files are the **sole source of truth**; SQLite is a rebuildable index. No derived index file and no catalogue file is generated for retrieval.
 - **FR-002**: System MUST support **one resource kind `knowledge`** with **three scopes**, discriminated by the resource name and nothing else: `global`, `project-<ULID>`, and any other name (a **named collection**). `global` and `project-<ULID>` MUST auto-provision on first use; a named collection MUST NOT — an unknown name is a 404, so a typo cannot conjure an empty scope. The scope kind is *derived* from the name (`domain/knowledge/scope.scope_kind_of`), never stored, so the two can never disagree.
-- **FR-002a**: System MUST store every scope under one root, `~/.coffer/knowledge/<scope>/`, with a fixed lane layout: `knowledge/` (written entries + topic docs, with `knowledge/inbox/` for fresh ones), `inbox/` (ingested documents as normalized Markdown), `rules/`, `handoff/`, `superseded/`, and `.raw/` (ingested originals). `.raw/` MUST be dot-prefixed: grep runs over the whole scope directory and ripgrep skips hidden entries, so an ingested original never returns as a second hit alongside the Markdown converted from it. Path construction MUST live in exactly one module (`infrastructure/knowledge/paths.py`) and every name that becomes a path segment MUST pass a traversal guard.
-- **FR-003**: `coffer__write` (and a user add) MUST append an entry to the scope's `knowledge/inbox/` with no LLM at write time; organization into topic documents is asynchronous (FR-027) and never blocks the write or retrieval.
+- **FR-002a**: System MUST store every scope under one root, `~/.coffer/knowledge/<scope>/`, with **exactly two visible lanes and nothing else**: `notes/` (everything an agent or the user wrote) and `docs/` (ingested documents as normalized Markdown). Two hidden lanes exist for safety rather than for reading: `.history/` (pre-rewrite copies kept by the tidy pass, FR-034) and `.raw/` (ingested originals). Both MUST be dot-prefixed: grep runs over the whole scope directory and ripgrep skips hidden entries, so an ingested original never returns as a second hit alongside the Markdown converted from it, and an archived revision never returns alongside the live note. There MUST be no `knowledge/`, `inbox/`, `rules/`, `handoff/` or `superseded/` lane and no scope-root catalogue or log file. Path construction MUST live in exactly one module (`infrastructure/knowledge/paths.py`) and every name that becomes a path segment MUST pass a traversal guard.
+- **FR-003**: `coffer__write` (and a user add) MUST land the item **directly in the scope's `notes/` lane** with no LLM at write time and no intermediate inbox. The item is retrievable immediately; there is no later promotion into a separate topic-document lane. The tidy pass (FR-033) may merge and rewrite notes afterwards, in place, and MUST never block a write or a read.
 - **FR-004**: System MUST resolve the per-project scope from the agent's reported launch cwd at session handshake: the daemon computes the git-root and resolves — lazily provisioning if absent — the scope for that project's ULID.
-- **FR-004a** (spec vault-export-import sync amendment): the project ULID MUST be **machine-portable** — derived from the normalized `origin` remote URL when the repo has one (ssh/https/scp-like forms of the same repository normalize identically), falling back to the absolute-git-root-path hash for repos without a remote. The same repository therefore resolves to the same scope on every synced machine, whatever its checkout path. A scope provisioned under the legacy path-derived id is adopted **once** on first resolve: its files move to the portable id's dir, the resource is re-registered under the new name, and the root mapping and display label carry over.
+- **FR-004a** (spec vault-export-import amendment): the project ULID MUST be **machine-portable** — derived from the normalized `origin` remote URL when the repo has one (ssh/https/scp-like forms of the same repository normalize identically), falling back to the absolute-git-root-path hash for repos without a remote. The same repository therefore resolves to the same scope on every synced machine, whatever its checkout path. A scope provisioned under the legacy path-derived id is adopted **once** on first resolve: its files move to the portable id's dir, the resource is re-registered under the new name, and the root mapping and display label carry over.
 
 **Entry lifecycle**
 
 - **FR-005**: Agents and users MUST be able to write an entry directly (no LLM at write time). Entry text MUST be at least 1 char and at most `max_entry_chars` (per-scope default 8192, hard ceiling 32768); empty or over-long text is rejected at the API boundary with nothing persisted. The per-scope default bounds ordinary agent writes; a trusted bulk import of the user's own notes may go up to the ceiling so a long note is never silently truncated.
 - **FR-006**: Users and agents MUST be able to list entries (per scope), get one by id, edit its text, delete one, and clear a scope. Clearing preserves the scope Resource. The Coffer UI renders entry content read-only and does not edit it in-app; humans curate through the REST/CLI write surface or their own external editor.
-- **FR-007**: Every entry carries `metadata.actor` (`agent` | `user`); the writer sets it. There is **no free-form `type` field** — `Lane` is the single classification axis (FR-048), determined by internal routing (the organizer), never supplied by the writer.
+- **FR-007**: Every note carries `metadata.actor` (`agent` | `user`); the writer sets it. There is **no free-form `type` field** — `Lane` is the single classification axis (FR-048), determined by how the item arrived (written vs. ingested), never supplied by the writer.
 
 **Retrieval**
 
@@ -702,64 +569,48 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="k
 
 **Agent integration via MCP**
 
-- **FR-015**: Coffer's MCP gateway MUST expose **eight** built-in knowledge tools under the reserved `coffer__` prefix:
-  - `coffer__search(query, scope?, top_k?)` — ranked snippets across both lanes (replaces `coffer__recall` and `coffer__search_knowledge`)
-  - `coffer__grep(pattern, scope?, max_matches?)` — literal/regex file+line matches (replaces `coffer__grep_knowledge`)
-  - `coffer__read(id, scope?)` — one item in full, entry or document, resolved automatically (replaces `coffer__read_document`)
-  - `coffer__list(scope?, all?, limit?)` — a scope's contents, or the catalogue of every scope (replaces `coffer__list_memory` and `coffer__list_knowledge_bases`)
-  - `coffer__write(text, title?, description?, filename?, id?, scope?)` — files an entry from `text`, stores a document when given `filename`, rewrites either in place when given `id` (replaces `coffer__remember`, `coffer__add_document` and `coffer__edit_document`)
-  - `coffer__delete(id, scope?)` — removes one entry or document (replaces `coffer__delete_document`)
-  - `coffer__set_handoff(body)` and `coffer__resume()` — unchanged
-  Each of the first six MUST take an optional `scope`, defaulting to the cwd's project scope and falling back to `global` outside a project. No tool takes a retrieval `mode`. The caller MUST never have to decide whether something is "memory" or "knowledge" before choosing a tool — that guess is what the twelve-tool surface forced and what eight verbs removed.
+- **FR-015**: Coffer's MCP gateway MUST expose **six** built-in knowledge tools under the reserved `coffer__` prefix:
+  - `coffer__search(query, scope?, top_k?)` — ranked snippets across both lanes
+  - `coffer__grep(pattern, scope?, max_matches?)` — literal/regex file+line matches
+  - `coffer__read(id, scope?)` — one item in full, note or document, resolved automatically
+  - `coffer__list(scope?, all?, limit?)` — a scope's contents, or the catalogue of every scope
+  - `coffer__write(text, title?, description?, filename?, id?, scope?)` — files a note from `text`, stores a document when given `filename`, rewrites either in place when given `id`
+  - `coffer__delete(id, scope?)` — removes one note or document
+  Each MUST take an optional `scope`, defaulting to the cwd's project scope and falling back to `global` outside a project. No tool takes a retrieval `mode`. The caller MUST never have to decide whether something is "memory" or "knowledge" before choosing a tool. There MUST be no `coffer__set_handoff` and no `coffer__resume`: they retired with the handoff lane.
 - **FR-016**: Built-in tool invocations MUST share the existing invocation-logging surface (one `mcp_invocations` row: tool name + who/when/duration/outcome only — no arguments or returned content). The document-level effect of a write tool is additionally recorded in the F01 audit trail with the agent as actor.
 
-**Working-state handoff (continuity)**
+**Consolidation — the periodic tidy**
 
-- **FR-023**: The system MUST provide a **working-state handoff** lane keyed by **(project scope × git branch)**: one file per branch under `~/.coffer/knowledge/project-<ULID>/handoff/<branch-slug>.md`, with YAML frontmatter (`branch`, `updated_at`) plus a freeform Markdown body. The branch is resolved from the agent's reported cwd. Handoff is **per-project only** — there is no global handoff.
-- **FR-024**: `coffer__set_handoff(body)` MUST **overwrite** the current branch's handoff file (one scene per branch), and set `updated_at`. The body is files-as-truth on disk and MUST NOT be returned by `coffer__search` (it lives outside the retrieval glob).
-- **FR-025**: `coffer__resume()` MUST return the current branch's saved handoff — `found=true` with `branch`, `body`, `updated_at`, and a freshness `note` annotating that the scene may be stale — or `found=false` when no handoff exists for the branch or the cwd is not inside a git project. It MUST never error on a missing handoff and MUST NOT fabricate content.
-- **FR-026**: When the agent's cwd does not resolve to a git project, `coffer__set_handoff` MUST be rejected and `coffer__resume` MUST return `found=false`.
-
-**Consolidation — the internal organizer**
-
-- **FR-027**: The system MUST provide an **internal organizer** that drains a scope's `knowledge/inbox/` into a small set of coherent **topic documents** (`knowledge/<topic-slug>.md`) using Coffer's **internal LLM connection** (the connection marked internal-default; Model providers, spec provider-switching) via a **one-shot completion per item** — never an agent-facing tool. It is triggered explicitly (`POST /api/v1/knowledge/{scope}/organize`, `coffer knowledge organize <scope>`) and automatically on idle (FR-035). Items process sequentially, and one item's LLM/parse failure MUST NOT abort the run.
-- **FR-028**: For each inbox item the organizer MUST (a) retrieve up to the top-K (K=3) most-relevant **existing topic docs** via the shared retrieval engine (no LLM on this step) as merge candidates, (b) make **one LLM call** that either MERGES the item into the best-fitting candidate — **preserving all existing content and human edits**, integrating the new information, removing exact duplicates — or CREATES a new topic when none fits, and (c) write the returned full document body to `knowledge/<topic-slug>.md`. It MUST be an **incremental merge, never a from-scratch regeneration**, and MUST NOT hard-delete an existing topic doc.
-- **FR-029**: An inbox item MUST be **deleted only after** its content is successfully written into a topic doc. A malformed or unparseable LLM response MUST cause that item to be **skipped** — left in the inbox, no topic doc written or corrupted — and the run continues; the result reports the skipped count. `organize` on an empty inbox is a no-op (`status="empty"`); with no internal connection configured it is a clean no-op (`status="no_model"`) rather than an error.
-- **FR-030**: After draining, the organizer MUST regenerate the scope's `knowledge/INDEX.md` catalogue from all topic docs' frontmatter, reconcile the index (dropping the drained inbox rows and (re)indexing the new/updated topic docs). Retrieval MUST surface organized topic-doc content and MUST NOT surface `INDEX.md`.
-- **FR-031**: The organizer MUST keep a **non-blocking consolidation changelog** at the scope root (`consolidation-log.md`, append-only, human-readable: one line per merged/created topic with the timestamp and the source inbox item). It is auditable, never a gate, and is **excluded from retrieval** (it lives outside the `knowledge/` lane) and from the sync mirror (machine-local, like `INDEX.md`; topic docs themselves DO sync as source-of-truth).
-- **FR-032**: The reconciler MUST chunk a file's body into **passage-granular, structure-aware chunks** using the shared Markdown chunker (`infrastructure/knowledge/chunking.chunk_markdown` — splits on heading sections, keeps fenced code / tables atomic, packs structural blocks up to a fixed window), so a multi-section topic document surfaces the **most relevant passage** rather than its entire body. A short single-passage item still chunks to one passage: this changes **granularity**, never *what* retrieval includes or excludes.
-- **FR-033**: The system MUST provide an **internal agentic reorganization pass** (`POST /api/v1/knowledge/{scope}/reorg`, `coffer knowledge reorg <scope>`; explicit trigger only) running a bounded **langgraph `create_react_agent` loop** driven by the internal LLM connection over the scope's topic documents — consolidating duplicates and splitting over-long ones. Its fixed tool surface is **list / read / write / supersede** over topic docs, and it is **never agent-facing**. langchain/langgraph code MUST stay confined to `infrastructure.llm` (importlinter Contract 9a); `application/knowledge` reaches it only through an injected port. With no internal connection it is a clean no-op (`status="no_model"`); a scope with no topic documents is likewise a no-op (`status="empty"`). Afterwards the pass regenerates `INDEX.md` and reconciles the index.
-- **FR-034**: The reorg pass MUST be **non-destructive and incremental**. Every mutation that removes or replaces existing topic-doc content MUST first **archive the current version** to the scope-root `superseded/` tombstone (`superseded/<slug>-<timestamp>.md`): a `write` that overwrites archives the prior version first, and a `supersede` **moves** the document there. The tombstone is **excluded from retrieval** and **DOES sync** as recoverable history. Topic-doc writes remain **atomic**, and every write/supersede is appended to `consolidation-log.md`. This is the data-loss guarantee: no byte leaves the `knowledge/` lane without first being recoverably archived.
-- **FR-035**: The system MUST provide an **auto idle organize trigger** that fires `organize` (FR-027) automatically in the background when a scope goes idle — approximating "session end" without a per-agent disconnect signal. Each knowledge write (re)arms a single **debounced** timer; after the idle delay elapses with no further writes the organizer runs for the changed scope(s) as a background task. It MUST be **conservative and non-blocking**: (a) **default-ON**, controlled by an environment off-switch; (b) it MUST NEVER block or break daemon shutdown — a pending timer is cancelled and the un-fired inbox left intact (nothing is lost: retrieval already covers the inbox and `organize` is idempotent); (c) a background-pass failure MUST be suppressed + logged; (d) with no internal connection it is a clean no-op. It introduces **no new REST/CLI surface**.
-- **FR-036**: The system MUST provide a **procedural `rules` lane** — `rules/rules.md` per scope — holding "do this / don't do that" behavioural rules. The lane stays a single file while small; once any `rules/*.md` exceeds **100 rules**, the organizer classifies its rules by topic via a one-shot LLM call and redistributes them into per-category `rules/<slug>.md` files (applied recursively). New rules keep appending to `rules/rules.md`; the read surface concatenates **every `rules/*.md`**. The lane is **agent-written via the organizer's classification, never an explicit agent parameter**: during `organize` the per-item LLM call MAY classify an inbox item as a **rule**, which is **appended** to `rules/rules.md` (the inbox item drained only after the append succeeds) instead of merged into a topic document, and the result/audit reports a `rules_appended` count. The `rules/` lane sits at the scope ROOT so it is **excluded from retrieval** for free — a rule is a standing instruction, not a search hit. It is read **on demand through its own surface**, and **nothing pushes it into an agent session**: the system MUST expose the stored rules read-only over `GET /api/v1/knowledge/{scope}/rules` and `coffer knowledge rules <scope>`, returning the rules text (empty/`null` when there are none, never an error), and that read is the only way the lane leaves disk. The lane is source-of-truth and DOES sync.
+- **FR-032**: The reconciler MUST chunk a file's body into **passage-granular, structure-aware chunks** using the shared Markdown chunker (`infrastructure/knowledge/chunking.chunk_markdown` — splits on heading sections, keeps fenced code / tables atomic, packs structural blocks up to a fixed window), so a multi-section note surfaces the **most relevant passage** rather than its entire body. A short single-passage item still chunks to one passage: this changes **granularity**, never *what* retrieval includes or excludes.
+- **FR-033**: The system MUST provide a **periodic tidy** over a scope's `notes/` lane: a **bounded agentic pass** driven by Coffer's internal LLM connection (the connection marked internal-default; Model providers, spec provider-switching) that **merges duplicate notes and rewrites notes into coherent topic documents**, in place, within the one flat lane. Its fixed tool surface is list / read / write / delete over `notes/`, and it is **never agent-facing**; langchain/langgraph code MUST stay confined to `infrastructure.llm` (importlinter Contract 9a), reached from `application/knowledge` only through an injected port. With no internal connection configured the pass MUST be a clean no-op (`status="no_model"`); a scope with no notes is likewise a no-op (`status="empty"`). Afterwards the pass reconciles the index. Every pass MUST be recorded in Coffer's **existing audit log** — there is no per-scope changelog file.
+- **FR-034**: The tidy pass MUST be **recoverable**. Before any overwrite or merge it MUST first copy the prior revision of the affected note into **`.history/`**, so an unattended rewrite is always retrievable. `.history/` is dot-prefixed and therefore **excluded from retrieval and from grep**; it is recoverable history, not content. Note writes remain **atomic**. This is the data-loss guarantee, and it is the whole safety net: the pass runs unattended, with no review step and no diff to approve before it lands (see Assumptions).
+- **FR-035**: The tidy MUST run from a **background worker** rather than only on an explicit trigger: one catch-up pass shortly after daemon start, then further passes on an interval, following the shape of the existing retention worker. It MUST be non-blocking and non-fatal — a failing pass is logged and never kills the loop, and a pending pass MUST NEVER block or break daemon shutdown (nothing is lost: retrieval already covers untidied notes and the pass is idempotent). With no internal connection it is a clean no-op. The same pass MUST also be triggerable **manually**, from the detail page's **Tidy** button and from `coffer knowledge organize <scope>` (and its REST equivalent). It introduces no other REST/CLI surface.
 
 **Lane taxonomy**
 
-- **FR-048**: The free-form `type` field is **retired** — `Lane` (`knowledge` / `rules` / `handoff`) is the **single classification axis** for written items. The system MUST NOT carry a `type` field on the entry entity, in file frontmatter (`metadata.type`), in the `documents.metadata` JSON, in the `coffer__write` tool schema, or in the REST/CLI write surface. An item's lane is determined by **internal routing** (the organizer), never supplied by the writer.
+- **FR-048**: The free-form `type` field is **retired** — `Lane` (`notes` / `docs`) is the **single classification axis**, and it has exactly those two values. The system MUST NOT carry a `type` field on the note entity, in file frontmatter (`metadata.type`), in the `documents.metadata` JSON, in the `coffer__write` tool schema, or in the REST/CLI write surface. An item's lane follows from **how it arrived** — written or ingested — and is never supplied by the writer.
 
 **Delivery — removed**
 
-The rules lane has an **ingest** half and no **delivery** half. Knowledge still
-goes in — an agent writes, the organizer classifies, rules land in `rules/*.md`
-and sync — but nothing carries it back out to a session on its own.
+The layer has an **ingest** half and no **delivery** half. Knowledge still goes
+in — an agent writes, the tidy pass consolidates, the files sync — but nothing
+carries it back out to a session on its own.
 
-Until 2026-09-10 it did. **FR-049** delivered the lane through a Coffer-installed
-`coffer-hook` SessionStart hook (`GET /api/v1/agents/{name}/session-context?cwd=`
-→ `additionalContext`, never a native file write); **FR-050** added two
-Coffer-seeded built-in rules to that bundle (call `coffer__resume()` to continue
-prior work; prefer Coffer's shared knowledge tools over the agent's native
-memory); **FR-052** offered an opt-in per-agent `disable_native_memory`
+Until 2026-09-10 it did. **FR-049** delivered a session-start bundle through a
+Coffer-installed `coffer-hook` SessionStart hook
+(`GET /api/v1/agents/{name}/session-context?cwd=` → `additionalContext`, never a
+native file write); **FR-050** added two Coffer-seeded built-in rules to that
+bundle; **FR-052** offered an opt-in per-agent `disable_native_memory`
 cleanliness switch; **FR-055** appended a title-only project-knowledge index so
 an agent started knowing what the project held. All four are **deleted**, along
 with the binary, the hook install/uninstall surface, the `session-context` route,
 the bundle assembler and the digest renderer.
 
 **The cost, stated plainly.** This removes the delivery half of cross-agent
-memory. An agent must now call `coffer__recall` / `coffer__search` itself; it
-will **not** be told what the project knows unless it asks, and the rules the
-user accumulated sit on disk until something goes looking for them. Search
-discipline — the exact thing ambient injection existed to not depend on — is
-now load-bearing.
+memory. An agent must now call `coffer__search` itself; it will **not** be told
+what the project knows unless it asks, and what the user accumulated sits on disk
+until something goes looking for it. Search discipline — the exact thing ambient
+injection existed to not depend on — is now load-bearing.
 
 **Why that is accepted.** The hook shipped, but it was never actually installed
 on this user's machine, so the injection path had never run in practice. What
@@ -771,59 +622,54 @@ not an oversight.
 
 **Surfaces**
 
-- **FR-017**: Users MUST be able to perform full knowledge CRUD through (a) a REST API under **`/api/v1/knowledge`**, with the scope as a path segment and `entries` / `documents` as sub-resources, and (b) the **`coffer knowledge`** CLI group — one group of 31 subcommands replacing the former `coffer memory` and `coffer kb`. User writes set `metadata.actor = "user"`, write the canonical Markdown, reindex, and audit. The web UI surfaces content **read-only**; humans curate in their own external editor (picked up by lazy reindex-on-read, FR-010) or via REST/CLI. The read-only viewer MUST render content at a comfortable reading **max-width** (centered), and detail-page lists MUST be single **scrollable** lists with no in-UI pager (the UI fetches one page at the max `limit`; the APIs stay paginated by `limit`/`offset`). Scope names on these surfaces are validated per FR-002: a well-formed `global` or `project-<26-char ULID>` lazily provisions; any other name must already exist or the request is a 404.
+- **FR-017**: Users MUST be able to perform full knowledge CRUD through (a) a REST API under **`/api/v1/knowledge`**, with the scope as a path segment and `entries` / `documents` as sub-resources, and (b) the **`coffer knowledge`** CLI group, replacing the former `coffer memory` and `coffer kb`. The group MUST NOT carry `rules`, `handoff`, `consolidation-log`, `merge-scan` or `merge` subcommands — those lanes and that pass no longer exist; `organize` survives as the manual trigger for the tidy pass (FR-035). User writes set `metadata.actor = "user"`, write the canonical Markdown, reindex, and audit. The web UI surfaces content **read-only**; humans curate in their own external editor (picked up by lazy reindex-on-read, FR-010) or via REST/CLI. The read-only viewer MUST render content at a comfortable reading **max-width** (centered), and detail-page lists MUST be single **scrollable** lists with no in-UI pager (the UI fetches one page at the max `limit`; the APIs stay paginated by `limit`/`offset`). Scope names on these surfaces are validated per FR-002: a well-formed `global` or `project-<26-char ULID>` lazily provisions; any other name must already exist or the request is a 404.
 - **FR-017a**: Surfaces MUST present a per-project scope by a **human-readable identity derived from its `project_root`** — the root directory's basename as the primary label and the absolute root path as a secondary detail — never only the opaque `project-<ULID>` name. When the root is unknown the surface falls back to the scope name; `global` and named collections are already readable. This is a **display** concern; the underlying name stays `project-<ULID>`.
 - **FR-017c**: A user MUST be able to set a **display label** for any scope, taking precedence over the FR-017a derivation. Setting an empty / whitespace label clears it. The label is display metadata: it does not change the scope name or `project_id`, and is set via `PATCH /api/v1/knowledge/{scope}/label`. Labels are stored in the machine-local `knowledge_scope_labels` table (renamed from `memory_store_labels` by migration 0051, its key column `store_name` → `scope_name`).
-- **FR-017d**: `PATCH /api/v1/knowledge/{scope}` MUST **merge** the submitted fields into the scope's existing config (`exclude_unset`), not replace it. A caller that sends only `chunk_size` must not silently reset `retrieval_modes`. (This reverses the Knowledge Base spec's earlier "the backend replaces, not deep-merges" position, which the merged implementation does not follow.)
+- **FR-017d**: `PATCH /api/v1/knowledge/{scope}` MUST **merge** the submitted fields into the scope's existing config (`exclude_unset`), not replace it. A caller that sends only `chunk_size` must not silently reset `retrieval_modes`. (This reverses spec knowledge's earlier "the backend replaces, not deep-merges" position, which the merged implementation does not follow.)
 - **FR-017e**: There MUST be **no** `DELETE /api/v1/knowledge/{scope}`. Deleting a scope goes through the kind-agnostic Resource framework (`DELETE /api/v1/resources/knowledge/{name}`), which cascades documents, chunks, index rows and the on-disk directory. Scope lifecycle is a Resource concern; the knowledge router owns only what is specific to knowledge.
 - **FR-021**: The read-only viewer MUST offer, for both a file and its containing folder, affordances to (a) **open in external editor** and (b) **reveal in file manager / Finder**, performed through the loopback daemon's filesystem-action endpoints (spec agent-registry FR-039) since the daemon is on the user's own machine ([Daemon Proxies File Actions](../../docs/decisions/daemon-proxies-os-file-actions.md)). There is no copy-path fallback. Which editor opens is the global preferred-editor preference (ui-shell).
 - **FR-022**: Read responses MUST surface the on-disk truth: entry and document read endpoints MUST include each file's absolute `.md` path and its containing folder's absolute path, and the scope read endpoint MUST include the scope's absolute on-disk directory.
-- **FR-053**: The Knowledge detail page MUST present a scope as **five tabs** — **Entries**, **Documents**, **Rules**, **Handoff**, **Changelog**. Each gets a shape-fit view: Entries and Documents are trees plus content, Rules is a single document, Handoff is a per-branch list, Changelog is an append-only log. All views are **read-only**, render via the **unified file preview** (no hand-styled `<pre>`), and offer **open in external editor / reveal in file manager / copy path** on the underlying file. The Entries/Documents split is presentational (FR-008a): retrieval still crosses both.
+- **FR-053**: The Knowledge detail page MUST present a scope as **two tabs** — **Documents** and **Notes** — and no others. Each is a tree plus content, **read-only**, rendered via the **unified file preview** (no hand-styled `<pre>`), offering **open in external editor / reveal in file manager / copy path** on the underlying file. The Documents/Notes split is presentational (FR-008a): retrieval still crosses both. Above the tree the page MUST offer **one filename filter box** that narrows the tree as the user types — **client-side only**: no button, no server request, no server-side search on this page (agents use `coffer__search`, the CLI uses `coffer knowledge recall`). The page header MUST carry the title, the rename pencil and the project path, with **Upload** and **Tidy** (FR-035) as its **only two buttons**; Settings, Check sources and Reindex MUST sit behind an overflow menu. The header MUST NOT carry the former badge row (chunk count, byte size, Grep, Keyword, and the note/document counts the tree headers already show); the **degraded-documents warning survives and MUST be shown only when there is one**. Per-lane intro blurbs and any count that repeats a tree header MUST NOT appear.
+- **FR-053b**: The Knowledge **list page** MUST NOT carry a Scope column — the Name column already shows `global`, a project's absolute path, or a collection's name, so the badge only restates the row. The entries column is labelled **Notes**. There MUST be no AI-merge action. The **create-collection dialog MUST NOT ask about vector retrieval**: a new collection is created with vector enabled, and which index a scope carries stays an implementation detail rather than a question put to the user at creation time.
 - **FR-053a**: The web UI MUST route the layer at **`/knowledge`** and **`/knowledge/:scope`**, and MUST keep the pre-merge URLs working as redirects: `/memory` and `/knowledge-bases` → `/knowledge`; `/memory/:name` and `/knowledge-bases/:name` → the corresponding `/knowledge/:scope`. Bookmarks predate the merge; breaking them would be a gratuitous cost.
-- **FR-054**: The system MUST expose read endpoints for the lanes the UI needs: `GET /api/v1/knowledge/{scope}/handoff` (scenes per branch, each with `branch` and `updated_at`) and `GET /api/v1/knowledge/{scope}/consolidation-log` (`null` when absent). These are **read-only**, **addressed by scope name** (not cwd), and MUST return **HTTP 200 with empty lists / `null`** for an empty scope, never a 404. (Rules already has `GET /api/v1/knowledge/{scope}/rules`, FR-036.)
+- **FR-054**: The only lane read endpoints the system exposes are the **two the detail page needs** — the listing and read behind each of the two tabs (FR-017's `entries` and `documents` sub-resources). They are **read-only**, **addressed by scope name** (not cwd), and MUST return **HTTP 200 with an empty list** for an empty scope, never a 404. `GET /api/v1/knowledge/{scope}/handoff`, `…/rules` and `…/consolidation-log` MUST NOT exist.
 
-**Scope consolidation — AI-assisted**
+**Ingestion & conversion** *(folded in from spec knowledge)*
 
-- **FR-056**: The system MUST provide an explicit **merge scan** — `POST /api/v1/knowledge/merge_scan` and `coffer knowledge merge-scan` — examining every pair of per-project scopes and returning merge proposals. A pair whose locally-readable roots normalize to the **same non-empty origin remote** (FR-004a normalization) is proposed deterministically (`confidence="certain"`, `judged_by="remote"`) with no LLM involved; every other pair is judged by the **internal engine** via one one-shot completion returning a strict JSON verdict `{same_project, confidence, reason}` — a malformed response skips the pair, never errors. With no internal engine the scan returns `engine="no_model"` and the deterministic proposals only. The engine tier is bounded (at most 50 judged pairs per scan, `truncated=true` when capped; evidence samples size-capped). Each proposal carries a suggested direction: the scope with a locally-resolvable root survives, then the higher item count, then the lexically smaller name. Scanning never mutates anything.
-- **FR-057**: The system MUST provide an explicit **merge execution** — `POST /api/v1/knowledge/merge` with `{source, target}` and `coffer knowledge merge <source> <target>` — consolidating two per-project scopes additively: derived files skipped, any collision keeping both copies (suffixed) — knowledge is gained, never lost. The source's display label and `project_root` mapping move to the target when the target lacks its own. The target is force-reconciled, the source scope is retired (resource delete cascading documents/index/dir), and one `memory_stores_merged` audit entry (names + counts only) is recorded. `source` and `target` MUST be distinct, existing, **per-project** scopes — `global` and named collections are never mergeable; violations are 4xx with no side effects. Merge execution serializes with resolve-time adoption on the same lock; writes do not hold that lock, so the merge re-sweeps the source immediately before retirement (the file merge is content-idempotent).
-- **FR-058**: A merge MUST leave a **no-resurrection alias**: the surviving scope's config gains `merged_identities` (a system-managed list of project ULIDs, default empty) holding the source's ULID plus the source's own aliases (transitive across chained merges). The scope resolver MUST consult the aliases **only when the computed identity's scope does not exist** and resolve to the aliased survivor instead of re-provisioning an empty duplicate. Exactly one live scope holds a given alias, and the boot consolidation pass MUST honour the aliases the same way. Because the alias lives in `config_json`, it syncs with the resource so the redirect holds on every machine.
-- **FR-059**: Merge execution MUST accept `organize` (default `true`): after a successful merge, when the internal engine is configured, the FR-033 reorg pass runs on the target and its outcome is reported as `reorg_status` (`"reorganized"`, `"no_model"`, `"empty"`, `"skipped"`, or `"error: …"`). A failed or unavailable organize step never fails the merge itself.
-
-**Ingestion & conversion** *(folded in from the Knowledge Base spec)*
-
-- **FR-060** *(was Knowledge Base FR-004/FR-005)*: Users and agents MUST be able to add a file of any supported format; the system MUST detect format, convert to Markdown via a pluggable `MarkdownConverter` port, clean the output, prepend YAML frontmatter, write `inbox/` + `.raw/`, and index it. Conversion MUST dispatch through a per-format converter registry confined to `infrastructure/`: Markdown/text/source files pass through unchanged, `csv` has a dedicated converter, and everything else (pdf / docx / pptx / xlsx / xls / html / epub / …) goes through the default MarkItDown engine (`markitdown[docx,pdf,pptx,xls,xlsx]`). Formats MarkItDown has no converter for (legacy binary `.doc`/`.ppt`, `.rtf`, `.odt`) are rejected as `unsupported_type`, not advertised. A higher-fidelity engine for a format is a new converter in the registry, not a substrate change.
-- **FR-061** *(was Knowledge Base FR-006)*: The system MUST reject files over `max_document_bytes` (default 25 MB, configurable per scope), files of unsupported type, and files whose conversion yields empty Markdown — a PDF converting empty is rejected specifically as `scanned_pdf` so the UI can say something actionable.
-- **FR-062** *(was Knowledge Base FR-007)*: Each ingested document MUST be identified by a **stable ULID** minted at first ingest (not a content hash). The system MUST compute `source_sha256` of the original (kept in `metadata` as provenance) and match a re-upload to an existing document by `original_filename` within the scope: a **byte-identical** re-upload is an idempotent no-op; a **changed** re-upload of a filename already present updates the **same document in place** (reusing the id) only when `replace=true`, otherwise it is rejected (`duplicate`); a **new** filename is a new document. The same file ingested into two scopes yields two independent documents — documents are not deduplicated across scopes.
-- **FR-063** *(was Knowledge Base FR-010a)*: Listing documents MUST support an optional **case-insensitive title filter `q`**, applied server-side BEFORE pagination; `total` reflects the filtered count.
-- **FR-064** *(was Knowledge Base FR-011/FR-011b)*: The keyword index MUST use an FTS5 **trigram** tokenizer so CJK and substring queries match — `unicode61` does not segment CJK text, so a query like `向量检索` returned nothing; a query with no token of ≥ 3 characters falls back to a bounded substring (LIKE) scan rather than returning empty. Grep responses carry a `truncated` flag, true when matches beyond `max_matches` exist OR the server-side timeout cut the scan short (a timed-out grep returns no hits with `truncated=true`, and the `rg` process is killed). `hybrid` MUST run BOTH keyword and vector searches and fuse them by **reciprocal rank fusion**: each passage's fused score is `Σ 1/(K + rank)` with `K = 60` and `rank` the 0-based position in that list; passages are deduped by chunk identity `(document_id, position)` so a passage in both lists sums both contributions and outranks single-list hits.
-- **FR-065** *(was Knowledge Base FR-014)*: Chunk parameters MUST be mutable per scope; changing them re-chunks and re-indexes. The embedding model is mutable installation-wide; changing it re-embeds every scope that lists a vector mode. There is NO immutability lock on these fields.
-- **FR-066** *(was Knowledge Base FR-015/FR-016)*: Each ingested document MUST carry a `source_mode` of `converted` (Markdown derived from the original, re-convertible) or `edited` (re-conversion blocked). All write paths — re-upload, edit API, agent `coffer__write`, external edit, reindex scan — MUST funnel through **one idempotent re-index routine**, invoked lazily on read when the on-disk `content_sha256` has drifted: unchanged is a no-op; changed deletes old chunks/FTS5/vec rows, re-chunks, re-embeds (if vector is enabled) and updates the `documents` row. Documents are co-managed: both humans and agents may add, edit and delete. Only a **delete** is audited (`kb_document_deleted`) — an ingest or an update leaves its result on disk, and re-running the routine changes nothing, so the file is the record.
-- **FR-067** *(was Knowledge Base FR-021)*: A **path-based** ingest (the CLI, and a native file picker in the web UI) MUST record the external original's **absolute path** in the document's free-form `metadata` as `source_path` — no schema migration; it rides the existing JSON. A byte-upload and an agent `coffer__write` MUST NOT set or infer `source_path` (an untrusted surface must never populate an arbitrary server path). `source_path` is machine-local.
-- **FR-068** *(was Knowledge Base FR-022)*: `check-sources` MUST classify each path-tracked document by re-hashing the external file with sha256 — streamed in chunks so a multi-GB original is never read fully into memory — and comparing to the stored `source_sha256`: `unchanged`, `changed`, or `missing`. Detection is **on-demand only** (no filesystem watcher); detect-only changes nothing and audits nothing.
-- **FR-069** *(was Knowledge Base FR-023)*: `update-source` MUST re-ingest a document from its `source_path` in place — replaying the `replace=true` re-ingest path, so the stable ULID is preserved and the scope re-chunked/re-indexed. A document whose `source_mode == edited` MUST be refused so hand edits are never clobbered; a vanished or untracked source is reported via `IngestRejected`.
-- **FR-070** *(was Knowledge Base FR-024)*: A per-scope `auto_update_sources` flag (default **false**) governs `check-sources`: when false, detection only classifies; when true, each `changed` document whose `source_mode != edited` is auto-refreshed in place (reported `updated`), while a `changed` hand-edited document is skipped (reported `edited`). Toggling the flag MUST NOT re-chunk or re-embed — it is not a reindex-triggering field.
-- **FR-071** *(was Knowledge Base FR-025)*: When an embed degrades because the embedding provider is unavailable (`EngineUnavailable`), the document MUST be indexed keyword-only and its retry state tracked on a dedicated persisted `embed_pending` flag — decoupled from `content_sha256`, which MUST always carry the real body hash. The scope MUST surface the count of such documents as `documents_degraded` in its metrics, computed from the persisted flag so it reflects a degrade observed during **any** read. The next reconcile MUST retry **only** the embed for a still-pending document whose body is unchanged — re-chunking in memory and upserting only the vectors, clearing `embed_pending` on success.
+- **FR-060** *(was 006 FR-004/FR-005)*: Users and agents MUST be able to add a file of any supported format; the system MUST detect format, convert to Markdown via a pluggable `MarkdownConverter` port, clean the output, prepend YAML frontmatter, write `docs/` + `.raw/`, and index it. Conversion MUST dispatch through a per-format converter registry confined to `infrastructure/`: Markdown/text/source files pass through unchanged, `csv` has a dedicated converter, and everything else (pdf / docx / pptx / xlsx / xls / html / epub / …) goes through the default MarkItDown engine (`markitdown[docx,pdf,pptx,xls,xlsx]`). Formats MarkItDown has no converter for (legacy binary `.doc`/`.ppt`, `.rtf`, `.odt`) are rejected as `unsupported_type`, not advertised. A higher-fidelity engine for a format is a new converter in the registry, not a substrate change.
+- **FR-061** *(was 006 FR-006)*: The system MUST reject files over `max_document_bytes` (default 25 MB, configurable per scope), files of unsupported type, and files whose conversion yields empty Markdown — a PDF converting empty is rejected specifically as `scanned_pdf` so the UI can say something actionable.
+- **FR-062** *(was 006 FR-007)*: Each ingested document MUST be identified by a **stable ULID** minted at first ingest (not a content hash). The system MUST compute `source_sha256` of the original (kept in `metadata` as provenance) and match a re-upload to an existing document by `original_filename` within the scope: a **byte-identical** re-upload is an idempotent no-op; a **changed** re-upload of a filename already present updates the **same document in place** (reusing the id) only when `replace=true`, otherwise it is rejected (`duplicate`); a **new** filename is a new document. The same file ingested into two scopes yields two independent documents — documents are not deduplicated across scopes.
+- **FR-063** *(was 006 FR-010a)*: Listing documents MUST support an optional **case-insensitive title filter `q`**, applied server-side BEFORE pagination; `total` reflects the filtered count.
+- **FR-064** *(was 006 FR-011/FR-011b)*: The keyword index MUST use an FTS5 **trigram** tokenizer so CJK and substring queries match — `unicode61` does not segment CJK text, so a query like `向量检索` returned nothing; a query with no token of ≥ 3 characters falls back to a bounded substring (LIKE) scan rather than returning empty. Grep responses carry a `truncated` flag, true when matches beyond `max_matches` exist OR the server-side timeout cut the scan short (a timed-out grep returns no hits with `truncated=true`, and the `rg` process is killed). `hybrid` MUST run BOTH keyword and vector searches and fuse them by **reciprocal rank fusion**: each passage's fused score is `Σ 1/(K + rank)` with `K = 60` and `rank` the 0-based position in that list; passages are deduped by chunk identity `(document_id, position)` so a passage in both lists sums both contributions and outranks single-list hits.
+- **FR-065** *(was 006 FR-014)*: Chunk parameters MUST be mutable per scope; changing them re-chunks and re-indexes. The embedding model is mutable installation-wide; changing it re-embeds every scope that lists a vector mode. There is NO immutability lock on these fields.
+- **FR-066** *(was 006 FR-015/FR-016)*: Each ingested document MUST carry a `source_mode` of `converted` (Markdown derived from the original, re-convertible) or `edited` (re-conversion blocked). All write paths — re-upload, edit API, agent `coffer__write`, external edit, reindex scan — MUST funnel through **one idempotent re-index routine**, invoked lazily on read when the on-disk `content_sha256` has drifted: unchanged is a no-op; changed deletes old chunks/FTS5/vec rows, re-chunks, re-embeds (if vector is enabled) and updates the `documents` row. Documents are co-managed: both humans and agents may add, edit and delete. Only a **delete** is audited (`kb_document_deleted`) — an ingest or an update leaves its result on disk, and re-running the routine changes nothing, so the file is the record.
+- **FR-067** *(was 006 FR-021)*: A **path-based** ingest (the CLI, and a native file picker in the web UI) MUST record the external original's **absolute path** in the document's free-form `metadata` as `source_path` — no schema migration; it rides the existing JSON. A byte-upload and an agent `coffer__write` MUST NOT set or infer `source_path` (an untrusted surface must never populate an arbitrary server path). `source_path` is machine-local.
+- **FR-068** *(was 006 FR-022)*: `check-sources` MUST classify each path-tracked document by re-hashing the external file with sha256 — streamed in chunks so a multi-GB original is never read fully into memory — and comparing to the stored `source_sha256`: `unchanged`, `changed`, or `missing`. Detection is **on-demand only** (no filesystem watcher); detect-only changes nothing and audits nothing.
+- **FR-069** *(was 006 FR-023)*: `update-source` MUST re-ingest a document from its `source_path` in place — replaying the `replace=true` re-ingest path, so the stable ULID is preserved and the scope re-chunked/re-indexed. A document whose `source_mode == edited` MUST be refused so hand edits are never clobbered; a vanished or untracked source is reported via `IngestRejected`.
+- **FR-070** *(was 006 FR-024)*: A per-scope `auto_update_sources` flag (default **false**) governs `check-sources`: when false, detection only classifies; when true, each `changed` document whose `source_mode != edited` is auto-refreshed in place (reported `updated`), while a `changed` hand-edited document is skipped (reported `edited`). Toggling the flag MUST NOT re-chunk or re-embed — it is not a reindex-triggering field.
+- **FR-071** *(was 006 FR-025)*: When an embed degrades because the embedding provider is unavailable (`EngineUnavailable`), the document MUST be indexed keyword-only and its retry state tracked on a dedicated persisted `embed_pending` flag — decoupled from `content_sha256`, which MUST always carry the real body hash. The scope MUST surface the count of such documents as `documents_degraded` in its metrics, computed from the persisted flag so it reflects a degrade observed during **any** read. The next reconcile MUST retry **only** the embed for a still-pending document whose body is unchanged — re-chunking in memory and upserting only the vectors, clearing `embed_pending` on success.
 
 **The merged model itself** *(new with the 2026-09-10 merge)*
 
 - **FR-072**: One resource kind `knowledge` MUST replace the former `memory` and `knowledge_base` kinds across every surface: the Resource framework, REST, CLI, the web UI, and the MCP tool list. No surface may reintroduce a "which kind is this?" question.
-- **FR-073**: The `documents` table MUST carry a stored **lane discriminator** `documents.lane` (`knowledge` for an entry a writer filed, `inbox` for an ingested document), with an index on `(kind, resource_name, lane)`. It MUST be **stored, not derived from the path**, because the paths genuinely overlap: an entry lives at `<scope>/knowledge/inbox/<id>.md` and an ingested document at `<scope>/inbox/<id>.md`, and the storage root is itself `~/.coffer/knowledge/`, so no path predicate separates them — and anchoring on the scope directory would push knowledge-lane layout into the kind-agnostic repository that serves every kind. `entry_count` and `document_count` MUST be lane-scoped; retrieval MUST NOT be (FR-008a). The lane is an internal storage concern and is **not** exposed on the wire: the endpoint a caller used already implies it, so putting it on the document payload would only invite a client to filter on it.
-- **FR-074**: The per-scope config (`KnowledgeConfig`) MUST be the union of what the two former configs actually used — `retrieval_modes`, `default_mode`, `max_entry_chars`, `chunk_size`, `chunk_overlap`, `max_document_bytes`, `auto_update_sources`, `merged_identities` — and MUST carry **no embedding fields at all**. Both former configs had them (`embedding_*` flat on memory, a nested `embedding` block on the knowledge base) and by the time of the merge **neither was read**: embedding resolves through the installation-wide config, and a scope opts into vector search purely by listing the retrieval mode. Dead fields are dropped rather than carried across. Enabling `vector` MUST also enable `hybrid` and make it the default unless the caller chose one explicitly.
-- **FR-075**: Migration `0051` MUST merge the two kinds into `knowledge`, **clear** the derived index rather than convert it, and rename the two machine-local side tables (`memory_store_project_roots` → `knowledge_scope_project_roots`, `memory_store_labels` → `knowledge_scope_labels`, key column `store_name` → `scope_name`). Migration `0052` MUST add `documents.lane` and its index, backfilling on the entry lane's distinctive `knowledge/inbox/` nesting (matching a bare `knowledge/` segment would be wrong — the storage root contains it). Clearing rather than converting is required, not merely convenient: `memory:global` and `knowledge_base:global` both existed and `resources` is keyed by `(kind, name)`, so converting both would collide and any automatic rename would be a guess; and every `documents` row indexed the journal lane removed one revision earlier, so the index pointed at files that no longer exist. Both migrations MUST be guarded so a database missing any of these still upgrades.
+- **FR-073**: The `documents` table MUST carry a stored **lane discriminator** `documents.lane` with exactly two values — **`notes`** for an item a writer filed and **`docs`** for an ingested document — with an index on `(kind, resource_name, lane)`. It MUST be **stored, not derived from the path**: anchoring on the scope directory would push knowledge-lane layout into the kind-agnostic repository that serves every kind. `entry_count` and `document_count` MUST be lane-scoped; retrieval MUST NOT be (FR-008a). The lane is an internal storage concern and is **not** exposed on the wire: the endpoint a caller used already implies it, so putting it on the document payload would only invite a client to filter on it.
+- **FR-074**: The per-scope config (`KnowledgeConfig`) MUST hold `retrieval_modes`, `default_mode`, `max_entry_chars`, `chunk_size`, `chunk_overlap`, `max_document_bytes` and `auto_update_sources`, and MUST carry **no embedding fields at all** and **no `merged_identities`** (that field existed only for the retired cross-scope merge alias). Both former configs had them (`embedding_*` flat on memory, a nested `embedding` block on the knowledge base) and by the time of the merge **neither was read**: embedding resolves through the installation-wide config, and a scope opts into vector search purely by listing the retrieval mode. Dead fields are dropped rather than carried across. Enabling `vector` MUST also enable `hybrid` and make it the default unless the caller chose one explicitly.
+- **FR-075**: Migration `0051` MUST merge the two kinds into `knowledge`, **clear** the derived index rather than convert it, and rename the two machine-local side tables (`memory_store_project_roots` → `knowledge_scope_project_roots`, `memory_store_labels` → `knowledge_scope_labels`, key column `store_name` → `scope_name`). Migration `0052` MUST add `documents.lane` and its index, backfilling on the entry lane's then-distinctive `knowledge/inbox/` nesting (matching a bare `knowledge/` segment would have been wrong — the storage root contains it); FR-076 later rewrites those values. Clearing rather than converting is required, not merely convenient: `memory:global` and `knowledge_base:global` both existed and `resources` is keyed by `(kind, name)`, so converting both would collide and any automatic rename would be a guess; and every `documents` row indexed the journal lane removed one revision earlier, so the index pointed at files that no longer exist. Both migrations MUST be guarded so a database missing any of these still upgrades.
+
+- **FR-076**: The move to two lanes MUST be migrated, **destructively and by explicit decision — with no holding pen**. On disk, per scope: `knowledge/inbox/*.md` and `knowledge/*.md` flatten into `notes/`; `inbox/` becomes `docs/`; `.raw/` is unchanged; and `rules/`, `handoff/`, `superseded/`, `consolidation-log.md` and `knowledge/INDEX.md` are **deleted outright** — nothing is moved to a `.retired/` staging area, because those lanes either had no reader left (rules) or held a by-product rather than content (the log and the catalogue). In the database, **one Alembic migration** MUST rewrite `documents.lane` from `knowledge`/`inbox` to `notes`/`docs`. The data MUST be corrected in the database and the compatibility branch removed in the **same change**: **no load-time shim may survive the migration**, and no surface may keep accepting or emitting the old lane names. The migration MUST be guarded so a database missing any of these still upgrades.
 
 **Substrate isolation & migration**
 
 - **FR-018**: The retrieval/index engine (FTS5, sqlite-vec, embedding providers, converters) MUST be confined to infrastructure. Domain and application layers MUST NOT import index/engine types directly; interaction is via the shared retrieval port. mem0, chroma, and LlamaIndex MUST NOT be imported anywhere.
-- **FR-019**: Legacy on-disk engine directories (chroma/LlamaIndex) from pre-release builds are abandoned in place — nothing reads them — rather than deleted. Legacy per-item files at a scope root from pre-lane builds are likewise abandoned in place: lazy reindex-on-read reconciles the `knowledge/` lane, so stale index rows are reconciled away on the next read.
+- **FR-019**: Legacy on-disk engine directories (chroma/LlamaIndex) from pre-release builds are abandoned in place — nothing reads them — rather than deleted. Legacy per-item files at a scope root from pre-lane builds are likewise abandoned in place: lazy reindex-on-read reconciles the `notes/` lane, so stale index rows are reconciled away on the next read.
 
 ### Key Entities
 
-- **Knowledge Scope** (a resource of kind `knowledge`): one of `global`, `project-<ULID>`, or a named collection — the kind derived from the name. Config = `retrieval_modes`, `default_mode`, `max_entry_chars`, `chunk_size`, `chunk_overlap`, `max_document_bytes`, `auto_update_sources`, `merged_identities`. No embedding fields.
-- **Document** (one Markdown file = one `documents` row, `kind="knowledge"`): id (stable ULID), scope resource name, `lane` (`knowledge` | `inbox`), on-disk path, title, description, `content_sha256` (always the real body hash), `embed_pending` (index-derived retry flag, not file-truth), `source_mode`, `project_id`, per-writer `metadata` (ingest: `original_filename`, `original_format`, `source_sha256`, `converted_at`, `conversion_engine`, optional `source_path`; entry: `actor`, `origin_session_id`), timestamps.
+- **Knowledge Scope** (a resource of kind `knowledge`): one of `global`, `project-<ULID>`, or a named collection — the kind derived from the name. Config = `retrieval_modes`, `default_mode`, `max_entry_chars`, `chunk_size`, `chunk_overlap`, `max_document_bytes`, `auto_update_sources`. No embedding fields.
+- **Document** (one Markdown file = one `documents` row, `kind="knowledge"`): id (stable ULID), scope resource name, `lane` (`notes` | `docs`), on-disk path, title, description, `content_sha256` (always the real body hash), `embed_pending` (index-derived retry flag, not file-truth), `source_mode`, `project_id`, per-writer `metadata` (ingest: `original_filename`, `original_format`, `source_sha256`, `converted_at`, `conversion_engine`, optional `source_path`; entry: `actor`, `origin_session_id`), timestamps.
 - **Chunk** (`chunks` row): position within a document. The chunk text is stored once inside the FTS5 index, not duplicated into a base table; it stays rebuildable from the Markdown files.
 - **Passage** (retrieval result, not persisted): passage text, source id, title, score, position.
 - **Grep hit** (retrieval result, not persisted): path, line number, line.
-- **Handoff scene** (one file per `(project scope × branch)`): branch, body, `updated_at`.
 
 ## Success Criteria
 
@@ -837,7 +683,7 @@ not an oversight.
 - **SC-006**: Every Acceptance Scenario is covered by at least one test marked `acceptance(spec="knowledge", scenario="…")`; `make verify-acceptance` reports zero uncovered scenarios and zero orphaned markers.
 - **SC-007**: Substrate isolation is enforced by importlinter: no module under `coffer.application.*` or `coffer.domain.*` imports the index engine, `markitdown`, `sqlite_vec` or an embedding-provider SDK, and `mem0`/`chroma`/`llama_index` are imported nowhere.
 - **SC-008**: Deleting a scope removes 100% of its on-disk footprint and 100% of its SQLite rows.
-- **SC-009**: An MCP client sees exactly eight knowledge tools, and none of them requires the caller to classify an item as "memory" or "knowledge" before choosing.
+- **SC-009**: An MCP client sees exactly six knowledge tools, and none of them requires the caller to classify an item as "memory" or "knowledge" before choosing.
 - **SC-010**: `make verify` passes locally and in CI.
 
 ## Assumptions
@@ -848,12 +694,13 @@ not an oversight.
 - Keyword + grep are zero-config and offline; vector retrieval reaches a configured embedding provider, which MAY be a third-party API.
 - `ripgrep` is available on supported platforms (macOS arm64, Linux); sqlite-vec loads as a SQLite extension on those platforms.
 - Single-user concurrency is small.
+- **Accepted risk:** the tidy pass runs unattended, on a timer, with an LLM rewriting text the user and their agents wrote. `.history/` (FR-034) is the whole safety net; there is no review step and no diff to approve before a pass lands.
 
 ## Notes for reviewers
 
-- **This spec is the merge of the Knowledge Base and Memory specs.** The Knowledge Base spec directory was deleted when its surviving content landed here. Its acceptance-scenario headings were carried over verbatim so their existing test markers keep matching; only the `spec=` argument changed to `"knowledge"`.
+- **This spec is the merge of 006 and 007.** `specs/006-knowledge-base/` was deleted when its surviving content landed here. Its acceptance-scenario headings were carried over verbatim so their existing test markers keep matching; only the `spec=` argument changed from `"006-knowledge-base"` to `"knowledge"`.
 - **The directory name is historical.** `specs/knowledge/` is the spec id that `scripts/audit_acceptance.py` keys on and that every inbound link uses. Renaming it would break both for no gain.
 - **Retrieval mode stays internal** ([Retrieval Mode Is Internal](../../docs/decisions/retrieval-mode-is-internal.md)). Nothing here re-opens that.
-- **The co-managed-documents decision and the per-project-KB-scope-plus-soft-delete decision were deleted**, absorbed into this spec: co-management is simply how the one knowledge kind works, and per-project scope is now the scope model itself. Recoverable soft-delete for documents remains unbuilt — deletion is a hard delete with an F01 audit trail; the `superseded/` tombstone (FR-034) covers only the organizer's own rewrites.
+- **The co-managed-documents decision and the per-project-KB-scope-plus-soft-delete decision were deleted**, absorbed into this spec: co-management is simply how the one knowledge kind works, and per-project scope is now the scope model itself. Recoverable soft-delete for documents remains unbuilt — deletion is a hard delete with an F01 audit trail; `.history/` (FR-034) covers only the tidy pass's own rewrites.
 - **Embedding default**: vector is opt-in; the zero-config default is `keyword` + `grep` (offline, language-agnostic). For bilingual corpora a local `bge-m3` or a cloud provider is recommended.
 - **Deferred**: reranking / HyDE / multi-query / LLM synthesis on retrieval; recoverable soft-delete for documents; an in-app Markdown editor (the viewer stays read-only with external-editor affordances); image OCR by default; a filesystem watcher on by default.

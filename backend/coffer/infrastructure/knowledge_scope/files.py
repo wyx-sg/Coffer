@@ -1,9 +1,14 @@
-"""Per-entry markdown file I/O for a knowledge scope (the source of truth).
+"""Per-note markdown file I/O for a knowledge scope (the source of truth).
 
-The ONLY module that reads/writes the per-entry ``<slug>.md`` files and scans a
-scope's ``knowledge/`` lane for deltas (the lazy reindex-on-read input).
-Frontmatter parse/render is delegated to the shared
+The ONLY module that reads/writes the per-note ``<slug>.md`` files as indexable
+entries and scans a scope's ``notes/`` lane for deltas (the lazy
+reindex-on-read input). Frontmatter parse/render is delegated to the shared
 ``infrastructure.knowledge.frontmatter`` (the PyYAML owner).
+
+A write lands directly in ``notes/``: there is no staging area to drain and no
+second lane to be promoted into, so the scan is one flat directory. It skips
+hidden entries, which is what keeps the ``.history/`` archive from re-entering
+the index as a duplicate of the note it supersedes.
 """
 
 from __future__ import annotations
@@ -19,12 +24,7 @@ from coffer.infrastructure.knowledge.frontmatter import (
     split_frontmatter,
 )
 from coffer.infrastructure.knowledge.fs import atomic_write_text
-from coffer.infrastructure.knowledge.paths import inbox_dir, knowledge_dir
-
-#: ``INDEX.md`` is the (PR2b) human review index; never treated as a fact.
-_LANE_INDEX_NAME = "INDEX.md"
-#: Legacy derived index from pre-lane builds; left on disk, never read.
-_LEGACY_INDEX_NAME = "MEMORY.md"
+from coffer.infrastructure.knowledge.paths import notes_dir
 
 
 @dataclass(frozen=True)
@@ -124,51 +124,46 @@ def delete_fact_file(path: Path) -> bool:
     return False
 
 
-def scan_scope_dir(store_dir: Path) -> DirScan:
-    """Read every per-item ``*.md`` file in the store's ``knowledge/`` lane,
-    recursively (the inbox + any organized topic docs), keyed by fact id.
+def _is_hidden(path: Path, root: Path) -> bool:
+    """Whether any path component below ``root`` is dot-prefixed.
 
-    Excludes the ``INDEX.md`` review index. The lane may not exist yet (a store
-    with no remembered items) → an empty scan, never an error. Legacy per-item
-    files at the store ROOT are deliberately NOT scanned — they are abandoned in
-    place by the lane redesign (see ``legacy_root_facts``)."""
+    ``pathlib`` globs match dot-prefixed names (the shell's do not), so the
+    hidden archives have to be filtered here explicitly: without this, every
+    ``.history/`` revision would index alongside the note that replaced it, and
+    the atomic writer's own temp files would race the scan."""
+    return any(part.startswith(".") for part in path.relative_to(root).parts)
+
+
+def scan_scope_dir(store_dir: Path) -> DirScan:
+    """Read every ``*.md`` note in the store's ``notes/`` lane, keyed by fact id.
+
+    Recurses, but never into a hidden directory — the lane itself is flat, and
+    the ``.history/`` archive is a sibling of it rather than a child precisely so
+    an archived revision is never a second row for the same note. The lane may
+    not exist yet (a scope nobody has written to) → an empty scan, never an
+    error. Legacy per-item files at the store ROOT are deliberately NOT scanned
+    — they are abandoned in place (see ``legacy_root_facts``)."""
     files: dict[str, FactFile] = {}
-    lane = knowledge_dir(store_dir)
+    lane = notes_dir(store_dir)
     if not lane.exists():
         return DirScan(files=files)
     for path in sorted(lane.rglob("*.md")):
-        if path.name == _LANE_INDEX_NAME:
+        if _is_hidden(path, lane):
             continue
         ff = read_fact_file(path)
         files[ff.fact.id] = ff
     return DirScan(files=files)
 
 
-def list_inbox_items(store_dir: Path) -> list[FactFile]:
-    """Read + parse every freshly-remembered item in ``knowledge/inbox/``.
-
-    The organizer drains these into topic docs. The inbox may not exist yet (no
-    remembered items) → an empty list, never an error. Sorted by path for a
-    deterministic processing order."""
-    box = inbox_dir(store_dir)
-    if not box.exists():
-        return []
-    return [read_fact_file(p) for p in sorted(box.glob("*.md"))]
-
-
 def legacy_root_facts(store_dir: Path) -> list[Path]:
     """Per-item ``*.md`` files left at the store ROOT by pre-lane builds.
 
-    The lane redesign moved memory under ``knowledge/`` — these stale files are
-    abandoned in place (not read, not deleted). Used only to emit an FR-019 log
-    line. ``MEMORY.md`` (the removed derived index) is excluded."""
+    Everything a scope holds now lives in a lane directory, so a loose markdown
+    file at the root is stale by definition. They are abandoned in place (not
+    read, not deleted) and reported only as an FR-019 log line."""
     if not store_dir.exists():
         return []
-    return [
-        p
-        for p in sorted(store_dir.glob("*.md"))
-        if p.name not in {_LEGACY_INDEX_NAME, _LANE_INDEX_NAME}
-    ]
+    return [p for p in sorted(store_dir.glob("*.md")) if not p.name.startswith(".")]
 
 
 def _first_line(body: str) -> str:

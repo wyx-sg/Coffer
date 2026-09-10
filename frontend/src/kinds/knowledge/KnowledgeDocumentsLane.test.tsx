@@ -1,12 +1,12 @@
 // frontend/src/kinds/knowledge/KnowledgeDocumentsLane.test.tsx
 //
-// Exercises the DOCUMENTS lane of the merged knowledge detail surface: the
-// retrieval bar (one input + Search; "one query → one answer", no mode picker /
-// grep / fallback), the document tree fetched in one request, and the tree →
+// Exercises the DOCUMENTS lane of the knowledge detail surface: the
+// CLIENT-SIDE filter box (matches filenames as you type — no request, no
+// button), the document tree fetched in one request, and the tree →
 // READ-ONLY preview flow (select a doc on the left; the right pane renders the
 // Markdown with FileActions + reconvert / delete, no in-app editing). The
-// header actions that drive this lane — Upload, Check sources, Settings — live
-// on the page, so the whole page is rendered and the Documents tab selected.
+// header actions that drive this lane — Upload, and Check sources / Settings
+// behind the overflow menu — live on the page, so the whole page is rendered.
 // The `./api` module is mocked so the component renders without a backend.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -29,13 +29,10 @@ vi.mock("./api", async (importOriginal) => ({
   reindexScope: vi.fn(),
   checkSources: vi.fn(),
   updateFromSource: vi.fn(),
-  searchDocuments: vi.fn(),
   updateScopeConfig: vi.fn(),
+  tidyScope: vi.fn(),
   listEntries: vi.fn(),
   getEntry: vi.fn(),
-  getKnowledgeRules: vi.fn(),
-  getKnowledgeHandoff: vi.fn(),
-  getConsolidationLog: vi.fn(),
 }));
 const api = await import("./api");
 
@@ -80,7 +77,7 @@ const SCOPE: ScopeOut = {
   updated_at: "2026-05-29T00:00:00Z",
 };
 
-// Entries and documents are separate lanes with separate counts — the fixture
+// Notes and documents are separate lanes with separate counts — the fixture
 // keeps them distinct so no assertion can pass by summing them.
 const metrics = (over: Partial<ScopeMetrics> = {}): ScopeMetrics => ({
   entry_count: 0,
@@ -96,7 +93,7 @@ function seedBaseQueries() {
   vi.mocked(api.listDocuments).mockResolvedValue({ documents: [DOC], total: 1 });
   vi.mocked(api.getScopeMetrics).mockResolvedValue(metrics());
   vi.mocked(api.getScope).mockResolvedValue(SCOPE);
-  // The Entries tab is the default one; stub its read so the page mounts.
+  // The Notes lane mounts on its own tab; stub its read so the page mounts.
   vi.mocked(api.listEntries).mockResolvedValue({ entries: [], total: 0 });
 }
 
@@ -113,26 +110,22 @@ function renderPage() {
   );
 }
 
-// Radix Tabs triggers activate on focus/mousedown (automatic activation), which
-// `fireEvent.click` alone doesn't dispatch in jsdom; fire mousedown + click so
-// the switch registers (a real browser/e2e fires the full sequence).
-async function openDocumentsTab() {
-  const tab = await screen.findByRole("tab", { name: "Documents" });
-  fireEvent.mouseDown(tab);
-  fireEvent.click(tab);
-  return tab;
+/** The documents lane's tree; Documents is the default tab. */
+async function documentsTree() {
+  await screen.findByRole("tab", { name: "Documents" });
+  return await screen.findByRole("complementary");
 }
 
-/** The documents lane's tree; the only <aside> once the tab is active. */
-async function documentsTree() {
-  await openDocumentsTab();
-  return await screen.findByRole("complementary");
+/** Open the header's overflow (⋯) menu, where Settings / Check sources / Reindex live. */
+async function openOverflow() {
+  fireEvent.click(await screen.findByRole("button", { name: /more actions/i }));
+  return await screen.findByRole("menu");
 }
 
 afterEach(() => vi.clearAllMocks());
 
 describe("Knowledge documents lane", () => {
-  test("renders a back link, metric badges, and the document tree", async () => {
+  test("renders a back link and the document tree", async () => {
     seedBaseQueries();
     renderPage();
     expect(await screen.findByRole("button", { name: /back to knowledge/i })).toBeVisible();
@@ -142,17 +135,6 @@ describe("Knowledge documents lane", () => {
     expect(screen.queryByText(/pending vector embed/i)).toBeNull();
   });
 
-  test("the header reports entries and documents as two separate counts", async () => {
-    seedBaseQueries();
-    vi.mocked(api.getScopeMetrics).mockResolvedValue(
-      metrics({ entry_count: 4, document_count: 7 }),
-    );
-    renderPage();
-    // Never one summed "11 items": each lane keeps its own badge.
-    expect(await screen.findByText("4 entries")).toBeVisible();
-    expect(screen.getByText("7 documents")).toBeVisible();
-  });
-
   test("shows a degraded-embed notice when documents_degraded > 0", async () => {
     seedBaseQueries();
     vi.mocked(api.getScopeMetrics).mockResolvedValue(metrics({ documents_degraded: 2 }));
@@ -160,7 +142,7 @@ describe("Knowledge documents lane", () => {
     expect(await screen.findByText(/pending vector embed/i)).toBeVisible();
   });
 
-  test("searching filters the tree to the hit doc and highlights the query in the viewer", async () => {
+  test("the filter box narrows the tree client-side, with no request", async () => {
     seedBaseQueries();
     vi.mocked(api.listDocuments).mockResolvedValue({
       documents: [
@@ -169,51 +151,35 @@ describe("Knowledge documents lane", () => {
       ],
       total: 2,
     });
-    vi.mocked(api.searchDocuments).mockResolvedValue({
-      passages: [
-        { text: "make release", document_id: "d1", title: "Deploys", score: 0.9, position: 0 },
-      ],
-    });
-    vi.mocked(api.getDocument).mockResolvedValue({
-      ...DOC,
-      id: "d1",
-      title: "Deploys",
-      markdown: "make a release build",
-    });
     renderPage();
 
     const tree = await documentsTree();
     await within(tree).findByText("Deploys");
     expect(within(tree).getByText("Runbook")).toBeInTheDocument();
 
-    fireEvent.change(await screen.findByPlaceholderText(/search this scope's documents/i), {
-      target: { value: "release" },
+    const listCallsBefore = vi.mocked(api.listDocuments).mock.calls.length;
+    fireEvent.change(screen.getByPlaceholderText(/filter by name/i), {
+      target: { value: "run" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /^search$/i }));
 
-    await waitFor(() =>
-      expect(api.searchDocuments).toHaveBeenCalledWith("designs", "release", { topK: 5 }),
-    );
-    // The tree filters to the hit doc; the non-hit drops out.
-    await waitFor(() => expect(within(tree).queryByText("Runbook")).not.toBeInTheDocument());
-    expect(within(tree).getByText("Deploys")).toBeInTheDocument();
-    // The top hit auto-opens with the query pre-seeded into the find widget.
-    expect(await screen.findByPlaceholderText(/find/i)).toHaveValue("release");
+    expect(within(tree).queryByText("Deploys")).not.toBeInTheDocument();
+    expect(within(tree).getByText("Runbook")).toBeInTheDocument();
+    // Purely local: nothing is refetched and no retrieval button exists.
+    expect(vi.mocked(api.listDocuments).mock.calls).toHaveLength(listCallsBefore);
+    expect(screen.queryByRole("button", { name: /^search$/i })).not.toBeInTheDocument();
   });
 
-  test("a search with no hits shows the no-matches label and an empty tree", async () => {
+  test("a filter matching nothing shows the no-matches label and an empty tree", async () => {
     seedBaseQueries();
-    vi.mocked(api.searchDocuments).mockResolvedValue({ passages: [] });
     renderPage();
     const tree = await documentsTree();
     await within(tree).findByText("Deploys");
 
-    fireEvent.change(await screen.findByPlaceholderText(/search this scope's documents/i), {
+    fireEvent.change(screen.getByPlaceholderText(/filter by name/i), {
       target: { value: "zzz" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /^search$/i }));
 
-    expect(await within(tree).findByText(/no matches/i)).toBeInTheDocument();
+    expect(within(tree).getByText(/no matches/i)).toBeInTheDocument();
     expect(within(tree).queryByText("Deploys")).not.toBeInTheDocument();
   });
 
@@ -222,8 +188,8 @@ describe("Knowledge documents lane", () => {
     vi.mocked(api.getDocument).mockResolvedValue({
       ...DOC,
       markdown: "# Deploys\n\nbody",
-      path: "/abs/knowledge/designs/inbox/deploys.md",
-      folder_path: "/abs/knowledge/designs/inbox",
+      path: "/abs/knowledge/designs/docs/deploys.md",
+      folder_path: "/abs/knowledge/designs/docs",
     });
     renderPage();
 
@@ -310,10 +276,10 @@ describe("Knowledge documents lane", () => {
       ],
     });
     renderPage();
-    const checkBtn = await screen.findByRole("button", { name: /check sources/i });
-    // The button is disabled until the scope query resolves.
-    await waitFor(() => expect(checkBtn).not.toBeDisabled());
-    fireEvent.click(checkBtn);
+    // Check sources lives behind the header's overflow menu now.
+    await documentsTree();
+    const menu = await openOverflow();
+    fireEvent.click(within(menu).getByRole("menuitem", { name: /check sources/i }));
     await waitFor(() => expect(api.checkSources).toHaveBeenCalledWith("designs"));
     // The report dialog opens with the changed row + its Update action.
     expect(await screen.findByText(/source files/i)).toBeVisible();
@@ -348,9 +314,9 @@ describe("Knowledge documents lane", () => {
     vi.mocked(api.updateFromSource).mockResolvedValue(DOC);
     renderPage();
 
-    const checkBtn = await screen.findByRole("button", { name: /check sources/i });
-    await waitFor(() => expect(checkBtn).not.toBeDisabled());
-    fireEvent.click(checkBtn);
+    await documentsTree();
+    const menu = await openOverflow();
+    fireEvent.click(within(menu).getByRole("menuitem", { name: /check sources/i }));
     const updateBtn = await screen.findByRole("button", { name: /update from source/i });
     fireEvent.click(updateBtn);
 
@@ -364,8 +330,8 @@ describe("Knowledge documents lane", () => {
     vi.mocked(api.getDocument).mockResolvedValue({
       ...DOC,
       markdown: "# Deploys\n\nbody",
-      path: "/abs/knowledge/designs/inbox/deploys.md",
-      folder_path: "/abs/knowledge/designs/inbox",
+      path: "/abs/knowledge/designs/docs/deploys.md",
+      folder_path: "/abs/knowledge/designs/docs",
     });
     renderPage();
 
@@ -381,9 +347,9 @@ describe("Knowledge documents lane", () => {
     vi.mocked(api.updateScopeConfig).mockResolvedValue(SCOPE);
     renderPage();
 
-    const settingsBtn = await screen.findByRole("button", { name: /^settings$/i });
-    await waitFor(() => expect(settingsBtn).not.toBeDisabled());
-    fireEvent.click(settingsBtn);
+    await documentsTree();
+    const menu = await openOverflow();
+    fireEvent.click(within(menu).getByRole("menuitem", { name: /^settings$/i }));
     const dialog = await screen.findByRole("dialog");
     // Flip the auto-update switch on, then save.
     fireEvent.click(within(dialog).getByLabelText(/auto-update from source/i));

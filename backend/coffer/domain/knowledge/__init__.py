@@ -15,7 +15,6 @@ from coffer.domain.knowledge.document import KIND_KNOWLEDGE, Document
 from coffer.domain.knowledge.embedder import EmbeddingConfig, EmbeddingProvider
 from coffer.domain.knowledge.entry import Actor, KnowledgeEntry
 from coffer.domain.knowledge.index import KnowledgeIndex
-from coffer.domain.knowledge.lane import Lane
 from coffer.domain.knowledge.retrieval import (
     GrepHit,
     MemoryHit,
@@ -47,7 +46,6 @@ __all__ = [
     "KnowledgeEntry",
     "KnowledgeIndex",
     "KnowledgeScope",
-    "Lane",
     "MarkdownConverter",
     "MemoryHit",
     "Passage",

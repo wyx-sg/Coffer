@@ -28,12 +28,14 @@ KIND_KNOWLEDGE = "knowledge"
 DOCUMENT_SCAN_LIMIT = 100_000
 
 
-#: Which writer owns an indexed row. ``ENTRY`` is what an agent wrote through
-#: ``coffer__write``; ``INGEST`` is a file converted into the scope.
-DocumentLane = Literal["knowledge", "inbox"]
+#: Which of a scope's two lanes owns an indexed row, and the name of the
+#: directory it lives in. ``notes`` is what an agent or the user wrote through
+#: ``coffer__write``; ``docs`` is a file ingested into the scope and converted.
+#: This is the single classification axis — there is nothing else to be.
+DocumentLane = Literal["notes", "docs"]
 
-LANE_ENTRY: DocumentLane = "knowledge"
-LANE_INGEST: DocumentLane = "inbox"
+LANE_NOTES: DocumentLane = "notes"
+LANE_DOCS: DocumentLane = "docs"
 
 
 @dataclass(frozen=True)
@@ -49,12 +51,12 @@ class Document:
       so its on-disk drift can later be detected).
     - memory keys: ``type``, ``actor``, ``origin_session_id``.
 
-    ``lane`` says which of a scope's two writers owns the row. Both the entry
-    reconciler and the ingest scan index into this table under one
-    ``(kind, resource_name)``, and the path alone cannot separate them: entries
-    live at ``<scope>/knowledge/inbox/<id>.md`` and ingested documents at
-    ``<scope>/inbox/<id>.md``, so a match on ``inbox/`` catches both. The row
-    carries its own answer instead.
+    ``lane`` says which of a scope's two writers owns the row: ``notes`` for
+    what a writer filed through ``coffer__write``, ``docs`` for a file ingested
+    and converted. Both index into this table under one
+    ``(kind, resource_name)``, so the discriminator is stored rather than
+    derived — deriving it from ``path`` would push the scope's directory layout
+    into the kind-agnostic repository, which serves every kind.
     """
 
     id: str

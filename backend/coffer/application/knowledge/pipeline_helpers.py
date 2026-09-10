@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Protocol
 
 from coffer.domain.errors import IngestRejected
-from coffer.domain.knowledge.document import KIND_KNOWLEDGE, LANE_INGEST, Document
+from coffer.domain.knowledge.document import KIND_KNOWLEDGE, LANE_DOCS, Document
 from coffer.domain.knowledge.retrieval import StoreRef
 from coffer.domain.knowledge.scope_config import KnowledgeConfig
 from coffer.infrastructure.knowledge.chunking import chunk_markdown
@@ -241,7 +241,7 @@ def document_from_frontmatter(
         kind=KIND_KNOWLEDGE,
         resource_name=store.resource_name,
         project_id=store.project_id,
-        lane=LANE_INGEST,
+        lane=LANE_DOCS,
         path=str(path),
         title=str(frontmatter.get("title", "") or doc_id),
         description=None,
@@ -283,7 +283,7 @@ def build_ingested_document(
         kind=KIND_KNOWLEDGE,
         resource_name=store.resource_name,
         project_id=store.project_id,
-        lane=LANE_INGEST,
+        lane=LANE_DOCS,
         path=str(path),
         title=prepared.title,
         description=None,

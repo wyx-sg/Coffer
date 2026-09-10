@@ -12,8 +12,6 @@ from coffer.surfaces.cli import (
     daemon_cmd,
     knowledge_cmd,
     knowledge_document_cmd,  # noqa: F401 — registers the document subcommands
-    knowledge_lane_cmd,  # noqa: F401 — registers organize/reorg/rules/handoff/log
-    knowledge_merge_cmd,  # noqa: F401 — registers `merge-scan`/`merge`
     knowledge_source_cmd,  # noqa: F401 — registers `check-sources`/`update-source`
     open_cmd,
     provider_cmd,

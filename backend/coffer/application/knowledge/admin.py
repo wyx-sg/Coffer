@@ -88,11 +88,11 @@ async def reindex_scope(
     config: KnowledgeConfig | None = None,
     embedding_resolver: EmbeddingResolver = no_embedding,
 ) -> None:
-    """Force-rebuild a scope's entry index under ``config`` (defaults to the
+    """Force-rebuild a scope's note index under ``config`` (defaults to the
     stored config). Called by the kind's ``on_update_config`` hook so toggling
-    vector re-embeds entries written before the change — the sha no-op gate
-    would otherwise leave the new vec table empty forever. Embedding is
-    global. The ingestion lane is rebuilt separately by the caller."""
+    vector re-embeds notes written before the change — the sha no-op gate would
+    otherwise leave the new vec table empty forever. Embedding is global. The
+    ``docs/`` lane is rebuilt separately by the caller."""
     cfg = config if config is not None else await get_config(scope_name)
     resolved = await resolved_for(scope_name)
     ref = store_ref(scope_name, resolved.project_id)
@@ -114,8 +114,8 @@ async def cleanup_scope(
 
     Runs under the reconciler's per-scope lock so a concurrent recall's
     reconcile cannot scan the dir mid-teardown and re-insert rows for the
-    deleted scope. The rmtree takes the whole scope dir, so the ingestion
-    lane's files go with the entry lanes."""
+    deleted scope. The rmtree takes the whole scope dir, so ``docs/`` and the
+    hidden ``.raw/`` / ``.history/`` archives go with ``notes/``."""
     config = await get_config(scope_name)
     resolved = await resolved_for(scope_name)
     async with reconciler.lock_for(scope_name):

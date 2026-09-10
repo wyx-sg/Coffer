@@ -8,8 +8,8 @@
 //   project-<ULID>  — resolved from the cwd's git root; auto-provisions
 //   any other name  — a collection the user created deliberately (never auto)
 //
-// A scope holds two lanes: ENTRIES an agent wrote (`<scope>/knowledge/`) and
-// DOCUMENTS someone ingested (`<scope>/inbox/`). The counts are separate on
+// A scope holds two lanes: NOTES an agent or the user wrote (`<scope>/notes/`)
+// and DOCUMENTS someone uploaded (`<scope>/docs/`). The counts are separate on
 // purpose — never sum or conflate them.
 //
 // The knowledge routes are not in the mcp-gateway OpenAPI contract that
@@ -148,9 +148,9 @@ export interface ScopeOut {
   enabled: boolean;
   /** Absolute on-disk directory holding this scope's markdown. */
   scope_dir?: string;
-  /** Entries written into the `knowledge/` lane. */
+  /** Notes written into the `notes/` lane. */
   entry_count?: number;
-  /** Documents ingested into `inbox/` — a DIFFERENT lane, never summed. */
+  /** Documents uploaded into `docs/` — a DIFFERENT lane, never summed. */
   document_count?: number;
   created_at: string;
   updated_at: string;
@@ -198,52 +198,13 @@ export interface EntryInput {
   description?: string | null;
 }
 
-export interface RecallHit {
-  id: string;
-  text: string;
-  score: number;
-  source: string;
-  time: string;
+// --- tidy -------------------------------------------------------------------
+
+/**
+ * Result of a manual tidy pass. Only `status` is consumed by the UI (the pass
+ * reports its own numbers to Coffer's audit log), so the shape stays open to
+ * whatever counters the backend adds.
+ */
+export interface TidyOut {
+  status: string;
 }
-
-export interface RecallResponse {
-  // External retrieval is "one query → one answer": the backend auto-selects
-  // the strategy, so the response carries only ranked hits — no `mode`,
-  // no `fallback`.
-  hits: RecallHit[];
-}
-
-// --- lane read views --------------------------------------------------------
-// Beyond entries and documents a scope carries curated lanes: Rules (a single
-// doc), Handoff (per-branch scene notes) and the consolidation Changelog. All
-// are agent-authored and rendered through the unified file preview.
-
-/** Rules lane: a single curated doc; `text` is null when the scope has none. */
-export interface RulesOut {
-  text: string | null;
-}
-
-/** One handoff scene note (`handoff/<branch-slug>.md`). */
-export interface HandoffSceneOut {
-  branch: string;
-  text: string;
-  /** ISO date-time the scene was last written. */
-  updated_at: string;
-  path: string;
-  folder_path: string;
-}
-
-/** Handoff lane: per-branch scene notes; empty scope → `scenes:[]`. */
-export interface HandoffOut {
-  scenes: HandoffSceneOut[];
-}
-
-/** Changelog lane: the consolidation log; `text` is null when absent. */
-export interface ConsolidationLogOut {
-  text: string | null;
-  path: string;
-  folder_path: string;
-}
-
-// AI-assisted scope merge wire types live in ./merge-types (250-line limit).
-export * from "./merge-types";

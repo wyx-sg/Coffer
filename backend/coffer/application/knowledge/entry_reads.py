@@ -1,4 +1,4 @@
-"""The entry read paths of ``KnowledgeService``.
+"""The note read paths of ``KnowledgeService``.
 
 A mixin, not a second service — it lives in its own module only so
 ``service.py`` stays under the project's 400-line ceiling. Every attribute
@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 from abc import ABC, abstractmethod
 
-from coffer.application.knowledge import session_context
 from coffer.application.knowledge.ports import DocumentRepoPort
 from coffer.application.knowledge.queries import (
     find_entry_scope as _find_entry_scope_in,
@@ -21,7 +20,7 @@ from coffer.application.knowledge.queries import (
 )
 from coffer.application.knowledge.scope import ScopeResolver
 from coffer.application.knowledge.stores import scope_name_for
-from coffer.domain.knowledge.document import KIND_KNOWLEDGE, LANE_INGEST
+from coffer.domain.knowledge.document import KIND_KNOWLEDGE, LANE_DOCS
 from coffer.domain.knowledge.entry import KnowledgeEntry
 from coffer.domain.knowledge.scope import ResolvedScope
 from coffer.domain.knowledge.scope_config import KnowledgeConfig
@@ -29,7 +28,7 @@ from coffer.infrastructure.knowledge_scope.files import FactFile, scan_scope_dir
 
 
 class EntryReads(ABC):
-    """List / fetch / count the entries in one knowledge scope."""
+    """List / fetch / count the notes in one knowledge scope."""
 
     # Supplied by ``KnowledgeService.__init__``.
     _documents: DocumentRepoPort
@@ -84,31 +83,25 @@ class EntryReads(ABC):
         return await asyncio.to_thread(_find_entry_scope_in, scopes, fact_id, scope_name_for)
 
     async def fact_count(self, *, scope_name: str) -> int:
-        """Knowledge-lane fact count."""
+        """How many notes the scope holds."""
         sd = (await self._resolved_for_scope(scope_name)).store_dir
         return len((await asyncio.to_thread(scan_scope_dir, sd)).files)
 
     async def metrics(self, *, scope_name: str) -> dict[str, object]:
-        """One scope's numbers: entries, ingested documents, disk, modes."""
+        """One scope's numbers: notes, ingested documents, disk, modes."""
         config = await self.get_config(scope_name)
         resolved = await self._resolved_for_scope(scope_name)
         stats = await scope_metrics(resolved.store_dir, config)
-        # Entries and ingested documents share one table under one
+        # Notes and ingested documents share one table under one
         # ``(kind, scope)``, so every document number is lane-scoped or it
-        # silently counts the entries too.
+        # silently counts the notes too.
         stats["document_count"] = await self._documents.count_documents(
-            KIND_KNOWLEDGE, scope_name, lane=LANE_INGEST
+            KIND_KNOWLEDGE, scope_name, lane=LANE_DOCS
         )
         stats["chunk_count"] = await self._documents.count_chunks(
-            KIND_KNOWLEDGE, scope_name, lane=LANE_INGEST
+            KIND_KNOWLEDGE, scope_name, lane=LANE_DOCS
         )
         stats["documents_degraded"] = await self._documents.count_pending_embeds(
-            KIND_KNOWLEDGE, scope_name, lane=LANE_INGEST
+            KIND_KNOWLEDGE, scope_name, lane=LANE_DOCS
         )
         return stats
-
-    async def get_rules(self, *, scope_name: str) -> str | None:
-        """Return the rules/rules.md text, or ``None`` if no rules exist yet."""
-        return await session_context.get_rules(
-            scope_name=scope_name, resolved_scope=self.resolved_scope
-        )

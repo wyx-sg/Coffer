@@ -1,12 +1,12 @@
 // frontend/src/kinds/knowledge/document-types.ts
 //
-// Wire types for the DOCUMENT lane of a knowledge scope: files someone ingested
-// (any format, normalized to Markdown on disk) under `<scope>/inbox/`. Split
+// Wire types for the DOCUMENT lane of a knowledge scope: files someone uploaded
+// (any format, normalized to Markdown on disk) under `<scope>/docs/`. Split
 // from types.ts for the file-size budget; api.ts re-exports both so call sites
 // see one surface.
 //
-// Documents are a different lane from entries: `document_count` counts only
-// these, and a documents read never returns entries. Do not conflate them.
+// Documents are a different lane from notes: `document_count` counts only
+// these, and a documents read never returns notes. Do not conflate them.
 
 import type { RetrievalMode } from "./types";
 
@@ -73,13 +73,6 @@ export interface Passage {
   title: string;
   score: number;
   position: number;
-}
-
-export interface SearchResponse {
-  // External retrieval is "one query → one answer": the backend auto-selects
-  // the strategy, so the response carries only ranked passages — no `mode`,
-  // no `fallback`.
-  passages: Passage[];
 }
 
 export interface ReindexResult {

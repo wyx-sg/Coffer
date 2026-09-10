@@ -841,7 +841,7 @@
   },
   "knowledge": {
     "title": "知识",
-    "subtitle": "按作用域组织的本地知识库——既包含 agent 写下的内容，也包含你摄入的文档，均可通过 MCP 网关检索。全局与每个项目的作用域会自动创建。",
+    "subtitle": "按作用域组织的本地知识库——既包含 agent 写下的内容，也包含你上传的文档，均可通过 MCP 网关检索。全局与每个项目的作用域会自动创建。",
     "add": "新建集合",
     "empty": "还没有知识作用域。可以先创建一个集合，或等待全局与项目作用域随 agent 工作自动出现。",
     "loadFailed": "加载知识作用域失败",
@@ -855,41 +855,13 @@
       "placeholder": "例如：我的研究笔记",
       "clear": "清除名字"
     },
-    "merge": {
-      "action": "查找重复（AI）",
-      "title": "合并重复的项目作用域",
-      "description": "Coffer 的内部引擎会判断两个项目作用域是否描述同一个项目。合并是增量式的——同名文件两份都保留，任何内容都不会丢失。",
-      "scanning": "正在扫描作用域…",
-      "noCandidates": "未发现可合并的作用域。",
-      "noModelHint": "未配置内部引擎，因此只显示可证明的重复（git remote 一致）。到 设置 → LLM 连接 配置后即可判断其余组合。",
-      "judgedByRemote": "由 origin remote 一致证明",
-      "judgedByEngine": "由内部引擎判断",
-      "entryCount": "{{count}} 条条目",
-      "swap": "交换方向",
-      "merge": "合并",
-      "merging": "合并中…",
-      "truncated": "一次扫描的组合太多——先合并一部分再重新扫描。",
-      "confidence": {
-        "certain": "确定",
-        "high": "高",
-        "medium": "中",
-        "low": "低"
-      }
-    },
-    "modes": {
-      "grep": "Grep",
-      "keyword": "关键词",
-      "vector": "向量",
-      "hybrid": "混合"
-    },
     "sourceMode": {
       "converted": "已转换",
       "edited": "已编辑"
     },
     "cols": {
       "name": "名称",
-      "scope": "作用域",
-      "entries": "条目数",
+      "notes": "笔记数",
       "documents": "文档数",
       "description": "描述"
     },
@@ -910,35 +882,22 @@
     "detail": {
       "back": "返回知识",
       "tabs": {
-        "entries": "条目",
         "documents": "文档",
-        "rules": "规则",
-        "handoff": "交接",
-        "changelog": "变更记录"
+        "notes": "笔记"
       },
-      "entries": "条目",
-      "emptyEntries": "还没有条目。",
-      "selectEntry": "在左侧选择一条条目以预览。",
+      "emptyEntries": "还没有笔记。",
+      "selectEntry": "在左侧选择一条笔记以预览。",
       "untitled": "（无标题）",
       "documents": "文档",
       "emptyDocuments": "还没有文档。上传任意格式的文件以填充该作用域。",
       "selectDocument": "在左侧选择一个文档以预览。",
-      "recall": "回忆",
-      "recallPlaceholder": "从该作用域回忆条目…",
-      "search": "检索",
-      "searchPlaceholder": "在该作用域的文档中检索…",
       "noMatches": "没有匹配。",
-      "entryBadge": "{{count}} 条条目",
-      "docBadge": "{{count}} 个文档",
-      "chunkBadge": "{{count}} 个分块",
       "degradedBadge": "{{count}} 个文档的向量待嵌入（嵌入服务暂不可用，已按关键词索引）",
-      "clearAll": "清空全部条目",
-      "clearTitle": "清空全部条目？",
-      "clearConfirm": "清空 {{scope}} 中的全部条目？已摄入的文档不受影响。此操作不可撤销。",
-      "deleteEntryTitle": "删除条目？",
-      "deleteEntryConfirm": "删除条目 {{name}}？此操作不可撤销。",
-      "deleteTitle": "删除文件？",
-      "deleteConfirm": "删除 {{name}}？此操作不可撤销。",
+      "clearAll": "清空全部笔记",
+      "clearTitle": "清空全部笔记？",
+      "clearConfirm": "清空 {{scope}} 中的全部笔记？已上传的文档不受影响。此操作不可撤销。",
+      "deleteEntryTitle": "删除笔记？",
+      "deleteEntryConfirm": "删除笔记 {{name}}？此操作不可撤销。",
       "deleteDocConfirm": "删除文档 {{title}}？此操作不可撤销。",
       "reindex": "重建索引",
       "settings": "设置",
@@ -968,7 +927,12 @@
           "edited": "已本地编辑",
           "updated": "已自动更新"
         }
-      }
+      },
+      "notes": "笔记",
+      "filterPlaceholder": "按名称筛选…",
+      "tidy": "整理",
+      "tidyDone": "整理已完成。",
+      "moreActions": "更多操作"
     },
     "settings": {
       "title": "知识作用域设置",
@@ -979,34 +943,9 @@
       "autoUpdateSources": "源文件变更时自动更新",
       "autoUpdateSourcesHint": "当文档的外部源文件发生变更时，在下次检查源文件时自动重新摄入（本地编辑过的文档始终会被跳过）。"
     },
-    "lanes": {
-      "rules": "规则",
-      "handoff": "分支",
-      "changelog": "变更记录",
-      "intro": {
-        "entries": "Agent 写下的内容，每条一个文件；可在编辑器中订正或删除。",
-        "documents": "你摄入的文件，已在磁盘上转换为 Markdown。可在页头上传任意格式。",
-        "rules": "影响 Agent 行为的长期规则，会在会话开始时注入。",
-        "handoff": "按分支保存的现场交接笔记，方便换机器或换会话继续。",
-        "changelog": "知识整理与编辑的历史记录。"
-      }
-    },
-    "rules": {
-      "empty": "还没有规则——随着项目约定逐渐成形，agent 会整理它们。",
-      "select": "在左侧选择规则文件以阅读。"
-    },
-    "handoff": {
-      "empty": "还没有交接记录——agent 在暂停某分支的工作时会留下一份现场记录。",
-      "select": "在左侧选择一个分支以阅读其交接记录。",
-      "updatedAt": "更新于 {{time}}"
-    },
-    "changelog": {
-      "empty": "还没有变更记录——它会记录每一次知识整合。",
-      "select": "在左侧选择变更记录以阅读。"
-    },
     "welcome": {
       "title": "把 agent 知道的一切放在一处",
-      "body": "一个全局作用域、每个项目一个，外加你自建的集合——既保存 agent 写下的条目，也保存你摄入的文档。关键词与 grep 开箱即用，向量检索一键开启，所有数据都留在你的机器上。",
+      "body": "一个全局作用域、每个项目一个，外加你自建的集合——既保存 agent 写下的笔记，也保存你上传的文档。所有内容都以纯 Markdown 留在你的机器上。",
       "featureEntries": {
         "title": "Agent 写下的",
         "body": "agent 通过 Coffer 内置的 MCP 工具跨会话记录并回忆所学。"
@@ -1020,7 +959,7 @@
         "body": "所有内容都是机器上的纯 Markdown 文件；索引可从中重建。"
       }
     },
-    "deleteScopeConfirm": "删除知识作用域「{{name}}」？其中的条目、文档与索引都会被移除，此操作不可撤销。"
+    "deleteScopeConfirm": "删除知识作用域「{{name}}」？其中的笔记、文档与索引都会被移除，此操作不可撤销。"
   },
   "channels": {
     "title": "消息渠道",

@@ -28,7 +28,7 @@ from coffer.domain.knowledge.scope import ResolvedScope
 from coffer.domain.knowledge.scope_config import KnowledgeConfig
 from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.knowledge.ids import new_ulid, slugify
-from coffer.infrastructure.knowledge.paths import inbox_item_path
+from coffer.infrastructure.knowledge.paths import note_path
 from coffer.infrastructure.knowledge_scope.files import (
     FactFile,
     delete_fact_file,
@@ -134,9 +134,14 @@ async def write_and_index(
 
 
 def default_fact_path(store_dir: Path, fact: KnowledgeEntry) -> Path:
-    """The canonical on-disk path for a freshly-remembered item:
-    ``<store_dir>/knowledge/inbox/<slug>-<id-tail>.md``."""
-    return inbox_item_path(store_dir, f"{slugify(fact.title)}-{fact.id[-8:].lower()}")
+    """The canonical on-disk path for a freshly-written note:
+    ``<store_dir>/notes/<slug>-<id-tail>.md``.
+
+    A write lands in the lane it will live in for good. There is no staging
+    area a later pass promotes out of: the tidy pass merges and rewrites notes
+    where they are, so a note's path never depends on how recently it was
+    written."""
+    return note_path(store_dir, f"{slugify(fact.title)}-{fact.id[-8:].lower()}")
 
 
 async def delete_one(
@@ -157,9 +162,13 @@ async def clear_store(
     store_ref: StoreRef,
     files: dict[str, FactFile],
 ) -> int:
-    """Remove every memory item under the store's ``knowledge/`` lane + their
-    index rows; the store Resource (and ``handoff/``) is preserved. Returns the
-    number of items cleared."""
+    """Remove every note under the store's ``notes/`` lane + their index rows.
+
+    The store's Resource survives, and so do the other things under the scope
+    dir — the ingested ``docs/`` and their ``.raw/`` originals, and the
+    ``.history/`` revisions the tidy pass archived. Clearing the notes is not a
+    request to throw away what was uploaded, or the only copy of what a note
+    used to say. Returns the number of notes cleared."""
     for fact_id, ff in files.items():
         await asyncio.to_thread(delete_fact_file, ff.path)
         await reconciler.remove_one(store=store_ref, fact_id=fact_id)

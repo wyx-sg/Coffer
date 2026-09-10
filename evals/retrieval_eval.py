@@ -19,7 +19,7 @@ from pathlib import Path
 import coffer.infrastructure.knowledge  # noqa: F401 — registers ORM + FTS5 DDL
 from coffer.domain.knowledge.document import (
     KIND_KNOWLEDGE,
-    LANE_INGEST,
+    LANE_DOCS,
     WORKSPACE_GLOBAL_PROJECT_ID,
     Document,
 )
@@ -45,7 +45,7 @@ def _doc(doc_id: str, title: str) -> Document:
         resource_name=_RESOURCE,
         project_id=WORKSPACE_GLOBAL_PROJECT_ID,
         path=f"inbox/{doc_id}.md",
-        lane=LANE_INGEST,
+        lane=LANE_DOCS,
         title=title,
         content_sha256="x",
         source_mode="converted",

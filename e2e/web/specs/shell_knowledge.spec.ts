@@ -2,14 +2,16 @@
 //
 // The one /knowledge surface end-to-end. `memory` and `knowledge_base` used to
 // be two resource kinds with two surfaces and two e2e specs; they are one kind
-// now — a SCOPE holds both the entries an agent wrote and the documents someone
-// ingested — so the walks live together here.
+// now — a SCOPE holds both the notes an agent wrote and the documents someone
+// uploaded — so the walks live together here.
 //
-// Entries (spec knowledge §User Story 5): cold-start → /knowledge → write an entry
-// into the global scope → list → clear the scope. Documents (spec knowledge): create
-// a named collection through the UI dialog, ingest a document via the REST API
-// (file-picker dialogs are not automatable portably), then drive SEARCH and the
-// document list through the real UI.
+// Notes (spec knowledge §User Story 5): cold-start → /knowledge → write a note into
+// the global scope → list → clear the scope. Documents (spec knowledge): create a
+// named collection through the UI dialog, ingest a document via the REST API
+// (file-picker dialogs are not automatable portably), then drive the document
+// list and its client-side filter through the real UI. Ranked retrieval is no
+// longer a page control — it is the agents' `coffer__search` — so it is pinned
+// on the REST route the gateway calls.
 //
 // State is provisioned via the daemon's REST API so the tests stay robust
 // against UI churn, but the page render is exercised against the real DOM. The
@@ -25,9 +27,14 @@ import { beforeEachInjectToken, readDaemonToken } from "./_helpers";
 
 beforeEachInjectToken();
 
-/** Open a scope's Documents tab (Entries is the default tab). */
+/** Open a scope's Documents tab (the default one, but pinned explicitly). */
 async function openDocumentsTab(page: Page) {
   await page.getByRole("tab", { name: "Documents" }).click();
+}
+
+/** Open a scope's Notes tab. */
+async function openNotesTab(page: Page) {
+  await page.getByRole("tab", { name: "Notes" }).click();
 }
 
 acceptance("knowledge", "clear a memory scope", async ({ page }) => {
@@ -80,7 +87,7 @@ acceptance("knowledge", "clear a memory scope", async ({ page }) => {
   expect(scopeResp.status).toBe(200);
 });
 
-// Knowledge §User Story 5 — an entry is added (entries are agent-authored: the
+// Spec knowledge §User Story 5 — an entry is added (entries are agent-authored: the
 // agent writes over the MCP gateway / API, the wire behind the UI & CLI). This
 // pins that a written entry surfaces in the read-only UI and that the viewer
 // hands the file off to an external editor (open/reveal, daemon-backed on the
@@ -106,8 +113,9 @@ acceptance("knowledge", "user adds a fact", async ({ page }) => {
     await page.goto("/knowledge");
     await page.getByText("global", { exact: true }).first().click();
 
-    // Entries is the default tab: the entry shows in the tree; select it and
-    // confirm the body renders.
+    // The note shows in the Notes tab's tree; select it and confirm the body
+    // renders.
+    await openNotesTab(page);
     await page.getByText("e2e-entry", { exact: true }).first().click();
     await expect(page.getByText(entryText).first()).toBeVisible();
 
@@ -165,13 +173,26 @@ acceptance("knowledge", "keyword search returns ranked passages", async ({ page 
     expect(ingest.status).toBe(201);
 
     // 3. Drive the Documents lane through the UI. The document row shows the
-    //    markdown title ("Deploys"), not the source filename.
+    //    markdown title ("Deploys"), not the source filename, and the lane's
+    //    filter box narrows the list client-side as you type.
     await row.click();
     await openDocumentsTab(page);
     await expect(page.getByText("Deploys", { exact: true })).toBeVisible();
-    await page.getByPlaceholder("Search this scope's documents…").fill("release");
-    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await page.getByPlaceholder("Filter by name…").fill("depl");
+    await page.getByText("Deploys", { exact: true }).first().click();
     await expect(page.getByText(/make release/).first()).toBeVisible();
+
+    // 4. Ranked keyword retrieval is the agents' surface now — pin it on the
+    //    REST route the MCP gateway calls, not on a page control.
+    const search = await fetch(`${apiBase}/knowledge/${scopeName}/search`, {
+      method: "POST",
+      headers: { "X-Coffer-Token": token, "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "release", top_k: 5 }),
+    });
+    expect(search.status).toBe(200);
+    const ranked = (await search.json()) as { passages: { text: string }[] };
+    expect(ranked.passages.length).toBeGreaterThanOrEqual(1);
+    expect(ranked.passages[0].text).toContain("release");
   } finally {
     // Clean up even on assertion failure so reruns against a reused daemon
     // stay isolated.

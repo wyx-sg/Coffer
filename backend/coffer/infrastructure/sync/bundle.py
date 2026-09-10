@@ -3,7 +3,7 @@
 Layout::
 
     manifest.json                  # bundle schema version + creation time
-    knowledge/ memory/ skills/     # mirrors of the live file-backed trees
+    knowledge/ skills/             # mirrors of the live file-backed trees
     resources/<kind>/<name>.yaml   # one deterministic file per config resource
     state/<area>/...yaml           # module-owned shared state
     credentials/<ref>.enc          # Fernet ciphertext, opt-in; never the key
@@ -33,13 +33,6 @@ _MANIFEST = "manifest.json"
 _RESOURCES = "resources"
 _CREDENTIALS = "credentials"
 _STATE = "state"
-
-#: Files *derived* from the source-of-truth files. They are regenerated on
-#: whichever machine needs them, so carrying them would only make two vaults
-#: differ in ways neither user authored: the legacy ``MEMORY.md`` index, the
-#: organizer's ``INDEX.md``, and the per-machine ``consolidation-log.md``. The
-#: topic docs they are derived FROM do travel.
-DERIVED_INDEX_NAMES = frozenset({"MEMORY.md", "INDEX.md", "consolidation-log.md"})
 
 #: Bundle subdirectories an export owns wholesale. ``open_for_write`` clears
 #: them so an export is a snapshot of this vault, never a merge with an older
@@ -87,9 +80,14 @@ class Bundle:
     # --- live trees <-> bundle ---------------------------------------------
 
     def mirror_trees_out(self) -> None:
+        # Nothing is filtered: with the derived indexes gone, every file under a
+        # mirrored root is source of truth — the two note/doc lanes plus the
+        # ``.raw/`` originals a re-conversion needs and the ``.history/``
+        # revisions that make an unattended rewrite recoverable on the other
+        # machine too.
         self._root.mkdir(parents=True, exist_ok=True)
         for subdir, live_root in self._trees:
-            _mirror_tree(live_root, self._root / subdir, exclude=DERIVED_INDEX_NAMES)
+            _mirror_tree(live_root, self._root / subdir)
 
     def mirror_trees_in(self) -> None:
         # ``delete_missing=False``: import never deletes, so a note this vault
@@ -97,7 +95,7 @@ class Bundle:
         for subdir, live_root in self._trees:
             tree = self._root / subdir
             if tree.exists():
-                _mirror_tree(tree, live_root, exclude=DERIVED_INDEX_NAMES, delete_missing=False)
+                _mirror_tree(tree, live_root, delete_missing=False)
 
     def tree_counts(self) -> list[tuple[str, int]]:
         counts: list[tuple[str, int]] = []

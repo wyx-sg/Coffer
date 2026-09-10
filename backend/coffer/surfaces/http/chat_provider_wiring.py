@@ -34,9 +34,9 @@ def build_agent_provider_registry(
 
     ``credential_resolver`` is what lets voice be transcribed: with it, a turn
     carrying audio reaches the user's ``internal_default`` connection — the same
-    one that runs knowledge merge, organize and reorg. Without it (and without
-    such a connection) audio is handed to the agent untouched and nothing leaves
-    the machine. That is the default.
+    one that runs the knowledge tidy pass. Without it (and without such a
+    connection) audio is handed to the agent untouched and nothing leaves the
+    machine. That is the default.
     """
     registry = AgentProviderRegistry()
 

@@ -18,7 +18,7 @@ _MTIME = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
 _STORE = StoreRef(
     kind=KIND_KNOWLEDGE, resource_name="notes", project_id="notes", docs_dir="/k/notes"
 )
-_PATH = Path("/k/notes/inbox/d1.md")
+_PATH = Path("/k/notes/docs/d1.md")
 
 
 def test_document_from_frontmatter_omits_absent_source_path() -> None:

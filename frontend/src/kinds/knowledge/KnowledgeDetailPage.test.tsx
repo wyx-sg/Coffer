@@ -1,13 +1,14 @@
 // frontend/src/kinds/knowledge/KnowledgeDetailPage.test.tsx
 //
-// Exercises the merged knowledge-scope detail surface: the metrics header and
-// the Tabs shell — Entries / Documents / Rules / Handoff plus the consolidation
-// Changelog view. Entries is the default tab: the entry list → a READ-ONLY
-// preview (select an entry on the left; the right pane renders the Markdown
-// with FileActions + delete, no in-app editing), with its own recall box ("one
-// query → one answer"; no mode toggle / fallback) filtering it. Switching tabs
-// lazily renders each lane. The Documents lane has its own test file. The
-// `./api` module is mocked so the component renders without a backend.
+// Exercises the knowledge-scope detail surface after the two-lane redesign:
+// a Tabs shell with EXACTLY two tabs — Documents and Notes — over a header
+// that carries Upload + Tidy and hides Settings / Check sources / Reindex
+// behind the overflow menu. The Notes lane is a list → a READ-ONLY preview
+// (select a note on the left; the right pane renders the Markdown with
+// FileActions + delete, no in-app editing) narrowed by a CLIENT-SIDE filter
+// box that matches filenames as you type — no request, no button. The
+// Documents lane has its own test file. The `./api` module is mocked so the
+// component renders without a backend.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -24,13 +25,10 @@ vi.mock("./api", async (importOriginal) => ({
   getEntry: vi.fn(),
   getScope: vi.fn(),
   getScopeMetrics: vi.fn(),
-  getKnowledgeRules: vi.fn(),
-  getKnowledgeHandoff: vi.fn(),
-  getConsolidationLog: vi.fn(),
   addEntry: vi.fn(),
   deleteEntry: vi.fn(),
   clearEntries: vi.fn(),
-  recall: vi.fn(),
+  tidyScope: vi.fn(),
   listDocuments: vi.fn(),
   getDocument: vi.fn(),
 }));
@@ -44,8 +42,8 @@ const ENTRY = {
   description: "indentation",
   text: "uses tabs over spaces",
   actor: "user" as const,
-  path: "/abs/knowledge/global/knowledge/tabs-f1.md",
-  folder_path: "/abs/knowledge/global/knowledge",
+  path: "/abs/knowledge/global/notes/tabs-f1.md",
+  folder_path: "/abs/knowledge/global/notes",
   created_at: "2026-05-29T00:00:00Z",
   updated_at: "2026-05-29T00:00:00Z",
 };
@@ -73,6 +71,13 @@ async function selectTab(name: string) {
   return tab;
 }
 
+/** Open the Notes tab and return its tree (the lane's <aside>). */
+async function openNotes() {
+  await selectTab("Notes");
+  const panel = await screen.findByRole("tabpanel");
+  return within(panel).getByRole("complementary");
+}
+
 const CONFIG: KnowledgeConfigOut = {
   retrieval_modes: ["grep", "keyword"],
   default_mode: "keyword",
@@ -84,12 +89,12 @@ const CONFIG: KnowledgeConfigOut = {
 };
 
 // Both lanes report their own count; the metrics fixture keeps them distinct so
-// a test can never pass by summing entries and documents into one number.
-const metrics = (entries: number) => ({
+// a test can never pass by summing notes and documents into one number.
+const metrics = (entries: number, degraded = 0) => ({
   entry_count: entries,
   document_count: 0,
   chunk_count: 0,
-  documents_degraded: 0,
+  documents_degraded: degraded,
   indexed_modes: ["grep", "keyword"] as ("grep" | "keyword")[],
   disk_bytes: 50,
 });
@@ -98,18 +103,10 @@ function stubLists() {
   vi.mocked(api.listEntries).mockResolvedValue({ entries: [ENTRY], total: 1 });
   vi.mocked(api.getEntry).mockResolvedValue(ENTRY);
   vi.mocked(api.getScopeMetrics).mockResolvedValue(metrics(1));
-  // The page always mounts the documents hook (the header's Upload / Reindex /
-  // Check-sources actions drive it), so its list read is stubbed even though
-  // the Documents lane has its own test file.
+  // The page always mounts the documents hook (the header's Upload / Tidy /
+  // overflow actions drive it), so its list read is stubbed even though the
+  // Documents lane has its own test file.
   vi.mocked(api.listDocuments).mockResolvedValue({ documents: [], total: 0 });
-  // Lane reads default to empty/null so the lanes render without a backend.
-  vi.mocked(api.getKnowledgeRules).mockResolvedValue({ text: null });
-  vi.mocked(api.getKnowledgeHandoff).mockResolvedValue({ scenes: [] });
-  vi.mocked(api.getConsolidationLog).mockResolvedValue({
-    text: null,
-    path: "/p/consolidation-log.md",
-    folder_path: "/p",
-  });
   vi.mocked(api.getScope).mockResolvedValue({
     ref: "knowledge:global",
     kind: "knowledge",
@@ -127,151 +124,177 @@ function stubLists() {
 
 afterEach(() => vi.clearAllMocks());
 
-describe("KnowledgeDetailPage", () => {
-  test("Entries tab lists entries in the tree and renders the selected one", async () => {
+describe("KnowledgeDetailPage — the two-lane shell", () => {
+  test("has exactly two tabs, Documents and Notes", async () => {
     stubLists();
     renderPage();
-    const tree = screen.getByRole("complementary");
+    expect(await screen.findByRole("tab", { name: "Documents" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Notes" })).toBeInTheDocument();
+    expect(screen.getAllByRole("tab")).toHaveLength(2);
+  });
+
+  test("the retired lanes have no tab left", async () => {
+    stubLists();
+    renderPage();
+    await screen.findByRole("tab", { name: "Documents" });
+    for (const gone of ["Rules", "Handoff", "Changelog", "Entries"]) {
+      expect(screen.queryByRole("tab", { name: gone })).not.toBeInTheDocument();
+    }
+  });
+
+  test("Notes tab lists notes in the tree and renders the selected one", async () => {
+    stubLists();
+    renderPage();
+    const tree = await openNotes();
     fireEvent.click(await within(tree).findByText("tabs"));
     expect(await screen.findByText("uses tabs over spaces")).toBeInTheDocument();
   });
+});
 
-  test("renders every lane tab plus the changelog view", async () => {
-    stubLists();
-    renderPage();
-    expect(await screen.findByRole("tab", { name: "Entries" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Documents" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Rules" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Handoff" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Changelog" })).toBeInTheDocument();
-  });
+describe("KnowledgeDetailPage — the client-side filter", () => {
+  const spaces = {
+    ...ENTRY,
+    id: "f2",
+    title: "spaces",
+    text: "spaces are fine",
+    path: "/abs/knowledge/global/notes/spaces-f2.md",
+  };
 
-  test("switching to the Rules tab shows the rules lane (empty-state)", async () => {
-    stubLists();
-    renderPage();
-    await selectTab("Rules");
-    expect(await screen.findByText(/no rules yet/i)).toBeInTheDocument();
-    await waitFor(() => expect(api.getKnowledgeRules).toHaveBeenCalledWith("global"));
-  });
-
-  test("switching to the Handoff tab shows the branch list", async () => {
-    stubLists();
-    vi.mocked(api.getKnowledgeHandoff).mockResolvedValue({
-      scenes: [
-        {
-          branch: "feat/x",
-          text: "wip",
-          updated_at: "2026-06-22T00:00:00Z",
-          path: "/p/feat-x.md",
-          folder_path: "/p",
-        },
-      ],
-    });
-    renderPage();
-    await selectTab("Handoff");
-    expect(await screen.findByText("feat/x")).toBeInTheDocument();
-  });
-
-  test("switching to the Changelog tab shows the consolidation log", async () => {
-    stubLists();
-    vi.mocked(api.getConsolidationLog).mockResolvedValue({
-      text: "merged 3 entries",
-      path: "/p/consolidation-log.md",
-      folder_path: "/p",
-    });
-    renderPage();
-    await selectTab("Changelog");
-    // The log is one row in the shared file-tree lane; select it to preview.
-    // The row is the only button in the panel (vs. the list-header label text).
-    const panel = await screen.findByRole("tabpanel");
-    fireEvent.click(within(panel).getByRole("button", { name: /^Changelog$/ }));
-    expect(await screen.findByText("merged 3 entries")).toBeInTheDocument();
-  });
-
-  test("recall (one query → one answer; no mode in the call) renders hits", async () => {
-    stubLists();
-    vi.mocked(api.recall).mockResolvedValue({
-      hits: [{ id: "f1", text: "uses tabs over spaces", score: 0.9, source: "global", time: "t" }],
-    });
-
-    renderPage();
-    const input = await screen.findByPlaceholderText(/recall entries/i);
-    fireEvent.change(input, { target: { value: "tabs" } });
-    fireEvent.click(screen.getByRole("button", { name: /^recall$/i }));
-
-    await waitFor(() => expect(api.recall).toHaveBeenCalledWith("global", "tabs", { topK: 5 }));
-  });
-
-  test("recall filters the Entries tree to the hit entry and highlights the query", async () => {
-    const spaces = { ...ENTRY, id: "f2", title: "spaces", text: "spaces are fine" };
+  test("typing narrows the note list without any server request", async () => {
     stubLists();
     vi.mocked(api.listEntries).mockResolvedValue({ entries: [ENTRY, spaces], total: 2 });
     vi.mocked(api.getScopeMetrics).mockResolvedValue(metrics(2));
-    vi.mocked(api.recall).mockResolvedValue({
-      hits: [{ id: "f1", text: "uses tabs", score: 0.9, source: "global:/x.md", time: "t" }],
-    });
-    vi.mocked(api.getEntry).mockResolvedValue(ENTRY);
 
     renderPage();
-    const tree = screen.getByRole("complementary");
+    const tree = await openNotes();
     await within(tree).findByText("tabs");
     expect(within(tree).getByText("spaces")).toBeInTheDocument();
 
-    fireEvent.change(await screen.findByPlaceholderText(/recall entries/i), {
-      target: { value: "tabs" },
+    const listCallsBefore = vi.mocked(api.listEntries).mock.calls.length;
+    fireEvent.change(screen.getAllByPlaceholderText(/filter by name/i)[0], {
+      target: { value: "spa" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /^recall$/i }));
 
-    await waitFor(() => expect(api.getEntry).toHaveBeenCalledWith("global", "f1"));
-    await waitFor(() => expect(within(tree).queryByText("spaces")).not.toBeInTheDocument());
-    expect(within(tree).getByText("tabs")).toBeInTheDocument();
-    expect(await screen.findByPlaceholderText(/find/i)).toHaveValue("tabs");
+    expect(within(tree).queryByText("tabs")).not.toBeInTheDocument();
+    expect(within(tree).getByText("spaces")).toBeInTheDocument();
+    // Purely local: no refetch, and there is no retrieval mutation to call.
+    expect(vi.mocked(api.listEntries).mock.calls).toHaveLength(listCallsBefore);
+    expect(api.getEntry).not.toHaveBeenCalled();
   });
 
-  test("clearing the recall box restores the full entry list", async () => {
-    const spaces = { ...ENTRY, id: "f2", title: "spaces", text: "spaces are fine" };
+  test("the filter matches the on-disk filename as well as the title", async () => {
     stubLists();
     vi.mocked(api.listEntries).mockResolvedValue({ entries: [ENTRY, spaces], total: 2 });
-    vi.mocked(api.getScopeMetrics).mockResolvedValue(metrics(2));
-    vi.mocked(api.recall).mockResolvedValue({
-      hits: [{ id: "f1", text: "uses tabs", score: 0.9, source: "global:/x.md", time: "t" }],
-    });
-    vi.mocked(api.getEntry).mockResolvedValue(ENTRY);
 
     renderPage();
-    const tree = screen.getByRole("complementary");
-    await within(tree).findByText("spaces");
-    fireEvent.change(await screen.findByPlaceholderText(/recall entries/i), {
-      target: { value: "tabs" },
+    const tree = await openNotes();
+    await within(tree).findByText("tabs");
+    // "tabs-f1.md" is the basename of the first note only.
+    fireEvent.change(screen.getAllByPlaceholderText(/filter by name/i)[0], {
+      target: { value: "f1.md" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /^recall$/i }));
-    await waitFor(() => expect(within(tree).queryByText("spaces")).not.toBeInTheDocument());
-
-    fireEvent.click(screen.getByRole("button", { name: /^clear$/i }));
-    expect(await within(tree).findByText("spaces")).toBeInTheDocument();
+    expect(within(tree).getByText("tabs")).toBeInTheDocument();
+    expect(within(tree).queryByText("spaces")).not.toBeInTheDocument();
   });
 
-  test("a recall with no hits shows the no-matches label and an empty tree", async () => {
+  test("clearing the filter restores the full note list", async () => {
     stubLists();
-    vi.mocked(api.recall).mockResolvedValue({ hits: [] });
+    vi.mocked(api.listEntries).mockResolvedValue({ entries: [ENTRY, spaces], total: 2 });
 
     renderPage();
-    const tree = screen.getByRole("complementary");
+    const tree = await openNotes();
+    await within(tree).findByText("spaces");
+    const box = screen.getAllByPlaceholderText(/filter by name/i)[0];
+    fireEvent.change(box, { target: { value: "tabs" } });
+    expect(within(tree).queryByText("spaces")).not.toBeInTheDocument();
+
+    fireEvent.change(box, { target: { value: "" } });
+    expect(within(tree).getByText("spaces")).toBeInTheDocument();
+  });
+
+  test("a filter matching nothing shows the no-matches label and an empty tree", async () => {
+    stubLists();
+    renderPage();
+    const tree = await openNotes();
     await within(tree).findByText("tabs");
 
-    fireEvent.change(await screen.findByPlaceholderText(/recall entries/i), {
+    fireEvent.change(screen.getAllByPlaceholderText(/filter by name/i)[0], {
       target: { value: "zzz" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /^recall$/i }));
-
-    expect(await within(tree).findByText(/no matches/i)).toBeInTheDocument();
+    expect(within(tree).getByText(/no matches/i)).toBeInTheDocument();
     expect(within(tree).queryByText("tabs")).not.toBeInTheDocument();
   });
 
-  test("a selected entry renders READ-ONLY: no Edit/Save controls", async () => {
+  test("there is no retrieval button next to the filter box", async () => {
     stubLists();
     renderPage();
-    const tree = screen.getByRole("complementary");
+    await openNotes();
+    expect(screen.queryByRole("button", { name: /^recall$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^search$/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("KnowledgeDetailPage — the header", () => {
+  test("Tidy triggers the manual tidy pass", async () => {
+    stubLists();
+    vi.mocked(api.tidyScope).mockResolvedValue({ status: "ok" });
+
+    renderPage();
+    const btn = await screen.findByRole("button", { name: /^tidy$/i });
+    await waitFor(() => expect(btn).toBeEnabled());
+    fireEvent.click(btn);
+    await waitFor(() => expect(api.tidyScope).toHaveBeenCalledWith("global"));
+  });
+
+  test("Settings / Check sources / Reindex live behind the overflow menu", async () => {
+    stubLists();
+    renderPage();
+    await screen.findByRole("button", { name: /^upload$/i });
+    // Not on the header itself…
+    expect(screen.queryByRole("button", { name: /^settings$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /check sources/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^reindex$/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /more actions/i }));
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getByRole("menuitem", { name: /^settings$/i })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: /check sources/i })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: /^reindex$/i })).toBeInTheDocument();
+  });
+
+  test("shows no metrics badges — only the degraded warning, and only when there is one", async () => {
+    stubLists();
+    renderPage();
+    await screen.findByRole("button", { name: /^upload$/i });
+    // Chunk counts, byte sizes, index modes and the two lane counts are gone.
+    expect(screen.queryByText(/chunk/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\d+ B$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/pending vector embed/i)).not.toBeInTheDocument();
+  });
+
+  test("renders the degraded-documents warning when the count is above zero", async () => {
+    stubLists();
+    vi.mocked(api.getScopeMetrics).mockResolvedValue(metrics(1, 3));
+    renderPage();
+    expect(await screen.findByText(/pending vector embed/i)).toBeInTheDocument();
+  });
+
+  test("surfaces a localized error when the metrics query fails", async () => {
+    stubLists();
+    vi.mocked(api.getScopeMetrics).mockRejectedValue(new ApiError("RESOURCE_NOT_FOUND", "nope"));
+
+    renderPage();
+    // Both the page header and the documents lane surface the failure.
+    const alerts = await screen.findAllByRole("alert");
+    expect(alerts.some((a) => /resource not found/i.test(a.textContent ?? ""))).toBe(true);
+  });
+});
+
+describe("KnowledgeDetailPage — the Notes lane", () => {
+  test("a selected note renders READ-ONLY: no Edit/Save controls", async () => {
+    stubLists();
+    renderPage();
+    const tree = await openNotes();
     fireEvent.click(await within(tree).findByText("tabs"));
     expect(await screen.findByText("uses tabs over spaces")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
@@ -284,7 +307,7 @@ describe("KnowledgeDetailPage", () => {
   acceptance("knowledge", "read-only viewer offers open/reveal affordances", async () => {
     stubLists();
     renderPage();
-    const tree = screen.getByRole("complementary");
+    const tree = await openNotes();
     fireEvent.click(await within(tree).findByText("tabs"));
     await screen.findByText("uses tabs over spaces");
     expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
@@ -292,12 +315,12 @@ describe("KnowledgeDetailPage", () => {
     expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
   });
 
-  test("deleting a selected entry calls delete after confirming in the dialog", async () => {
+  test("deleting a selected note calls delete after confirming in the dialog", async () => {
     stubLists();
     vi.mocked(api.deleteEntry).mockResolvedValue(undefined);
 
     renderPage();
-    const tree = screen.getByRole("complementary");
+    const tree = await openNotes();
     fireEvent.click(await within(tree).findByText("tabs"));
     fireEvent.click(await screen.findByRole("button", { name: /^delete$/i }));
     const dialog = await screen.findByRole("dialog");
@@ -306,12 +329,12 @@ describe("KnowledgeDetailPage", () => {
     await waitFor(() => expect(api.deleteEntry).toHaveBeenCalledWith("global", "f1"));
   });
 
-  test("does NOT delete an entry when the confirm dialog is cancelled", async () => {
+  test("does NOT delete a note when the confirm dialog is cancelled", async () => {
     stubLists();
     vi.mocked(api.deleteEntry).mockResolvedValue(undefined);
 
     renderPage();
-    const tree = screen.getByRole("complementary");
+    const tree = await openNotes();
     fireEvent.click(await within(tree).findByText("tabs"));
     fireEvent.click(await screen.findByRole("button", { name: /^delete$/i }));
     const dialog = await screen.findByRole("dialog");
@@ -319,30 +342,22 @@ describe("KnowledgeDetailPage", () => {
     expect(api.deleteEntry).not.toHaveBeenCalled();
   });
 
-  test("surfaces a localized error when the metrics query fails", async () => {
-    stubLists();
-    vi.mocked(api.getScopeMetrics).mockRejectedValue(new ApiError("RESOURCE_NOT_FOUND", "nope"));
-
-    renderPage();
-    expect(await screen.findByRole("alert")).toHaveTextContent(/resource not found/i);
-  });
-
-  test("Entries tab renders every entry in one scrollable list (no in-UI pager)", async () => {
+  test("renders every note in one scrollable list (no in-UI pager)", async () => {
     // The list is fetched in ONE request at the API max page size and rendered
     // as a single scrollable list — no page-based pager.
     stubLists();
     const entries = Array.from({ length: 120 }, (_, i) => ({
       ...ENTRY,
       id: `f${i}`,
-      title: `entry-${i}`,
+      title: `note-${i}`,
     }));
     vi.mocked(api.listEntries).mockResolvedValue({ entries, total: 120 });
     vi.mocked(api.getScopeMetrics).mockResolvedValue(metrics(120));
 
     renderPage();
-    const tree = screen.getByRole("complementary");
-    expect(await within(tree).findByText("entry-0")).toBeVisible();
-    expect(within(tree).getByText("entry-119")).toBeInTheDocument();
+    const tree = await openNotes();
+    expect(await within(tree).findByText("note-0")).toBeVisible();
+    expect(within(tree).getByText("note-119")).toBeInTheDocument();
     await waitFor(() => expect(api.listEntries).toHaveBeenCalledWith("global", 200, 0));
     expect(within(tree).queryByRole("button", { name: /next/i })).toBeNull();
   });
@@ -352,6 +367,7 @@ describe("KnowledgeDetailPage", () => {
     vi.mocked(api.clearEntries).mockResolvedValue(1);
 
     renderPage();
+    await openNotes();
     const btn = await screen.findByRole("button", { name: /clear all/i });
     await waitFor(() => expect(btn).toBeEnabled());
     fireEvent.click(btn);

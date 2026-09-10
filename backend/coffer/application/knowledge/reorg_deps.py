@@ -1,24 +1,53 @@
-"""The memory substrate the reorg service is built from (spec knowledge).
+"""The knowledge substrate the tidy pass is built from.
 
-Kept out of the service file (budget) and separated so each service has a
-clear dependency manifest. Reuses ``OrganizerCollaborators`` directly since the
-reorg service needs exactly the same field set.
+Kept out of ``reorg.py`` for the file-size budget, and out of ``service.py`` so
+the service never has to import the pass it is a collaborator of.
+``reorg_collaborators_from_service`` projects a live ``KnowledgeService`` onto
+the plain (LLM-free) collaborators the pass needs; the composition root then
+injects the agentic port and the model selector on top.
 """
 
 from __future__ import annotations
 
-from coffer.application.knowledge.organizer_deps import (
-    OrganizerCollaborators,
-    collaborators_from_service,
-)
-from coffer.application.knowledge.service import KnowledgeService
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 
-# Reuse the same collaborator shape — the reorg service needs exactly the same
-# fields (resolve_store, get_config, store_ref, documents, retrieval, reconciler,
-# embedding_resolver). Alias to keep naming explicit.
-ReorgCollaborators = OrganizerCollaborators
+from coffer.application.audit_service import AuditService
+from coffer.application.knowledge.ports import KnowledgeDocumentRepo
+from coffer.application.knowledge.retrieval import EmbeddingResolver, KnowledgeRetrieval
+from coffer.application.knowledge.service import KnowledgeService
+from coffer.application.knowledge.sync import KnowledgeReconciler
+from coffer.domain.knowledge.retrieval import StoreRef
+from coffer.domain.knowledge.scope import ResolvedScope
+from coffer.domain.knowledge.scope_config import KnowledgeConfig
+
+
+@dataclass(frozen=True)
+class ReorgCollaborators:
+    """The plain collaborators the tidy pass is composed from (no LLM here)."""
+
+    resolve_store: Callable[[str], Awaitable[ResolvedScope]]
+    get_config: Callable[[str], Awaitable[KnowledgeConfig]]
+    store_ref: Callable[[str, str], StoreRef]
+    documents: KnowledgeDocumentRepo
+    retrieval: KnowledgeRetrieval
+    reconciler: KnowledgeReconciler
+    audit: AuditService
+    embedding_resolver: EmbeddingResolver
 
 
 def reorg_collaborators_from_service(svc: KnowledgeService) -> ReorgCollaborators:
-    """Project a live ``KnowledgeService`` onto the reorg's collaborators."""
-    return collaborators_from_service(svc)
+    """Project a live ``KnowledgeService`` onto the tidy pass's collaborators."""
+    return ReorgCollaborators(
+        resolve_store=svc.resolved_scope,
+        get_config=svc.get_config,
+        store_ref=svc._recall.store_ref,
+        documents=svc._documents,
+        retrieval=svc._retrieval,
+        reconciler=svc._reconciler,
+        audit=svc._audit,
+        embedding_resolver=svc._resolve_embedding,
+    )
+
+
+__all__ = ["ReorgCollaborators", "reorg_collaborators_from_service"]

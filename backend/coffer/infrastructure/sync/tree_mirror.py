@@ -12,26 +12,25 @@ import pathlib
 import shutil
 
 
-def _tree_files(root: pathlib.Path, exclude: frozenset[str]) -> dict[pathlib.Path, pathlib.Path]:
-    """rel-path -> absolute path for every file under ``root``, skipping any
-    path with an excluded basename component."""
+def _tree_files(root: pathlib.Path) -> dict[pathlib.Path, pathlib.Path]:
+    """rel-path -> absolute path for every file under ``root``.
+
+    Everything counts, hidden entries included: a knowledge scope keeps its
+    ingested originals in ``.raw/`` and the revisions a tidy pass replaced in
+    ``.history/``, and both are source of truth the other machine wants."""
     if not root.exists():
         return {}
     out: dict[pathlib.Path, pathlib.Path] = {}
     for path in root.rglob("*"):
         if not path.is_file():
             continue
-        rel = path.relative_to(root)
-        if any(part in exclude for part in rel.parts):
-            continue
-        out[rel] = path
+        out[path.relative_to(root)] = path
     return out
 
 
 def _mirror_tree(
     src: pathlib.Path,
     dst: pathlib.Path,
-    exclude: frozenset[str] = frozenset(),
     *,
     delete_missing: bool = True,
 ) -> None:
@@ -44,8 +43,8 @@ def _mirror_tree(
     one machine, never an assertion about what should exist here).
     """
     dst.mkdir(parents=True, exist_ok=True)
-    src_files = _tree_files(src, exclude)
-    dst_files = _tree_files(dst, exclude)
+    src_files = _tree_files(src)
+    dst_files = _tree_files(dst)
     for rel, src_path in src_files.items():
         target = dst_files.get(rel)
         if target is not None and target.read_bytes() == src_path.read_bytes():

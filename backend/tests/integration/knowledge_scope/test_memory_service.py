@@ -31,15 +31,13 @@ async def test_remember_project_fact_writes_file_and_index(mem) -> None:
         actor="agent",
     )
     store = _project_store(mem)
-    # The per-item file exists under the knowledge/ lane's inbox with frontmatter.
+    # The per-item file exists under the notes/ lane with frontmatter.
     store_dir = paths.scope_dir(project_scope_name(project_ulid_from(mem)))
-    inbox_files = list(paths.inbox_dir(store_dir).glob("*.md"))
-    assert len(inbox_files) == 1
-    text = inbox_files[0].read_text()
+    notes = list(paths.notes_dir(store_dir).glob("*.md"))
+    assert len(notes) == 1
+    text = notes[0].read_text()
     assert "title: deploy-via-make" in text
     assert "actor: agent" in text
-    # No derived MEMORY.md index is generated.
-    assert not (store_dir / "MEMORY.md").exists()
     # Indexed into documents (kind=memory).
     assert await mem.documents.count_documents(KIND_KNOWLEDGE, store) == 1
     assert fact.id
@@ -163,7 +161,7 @@ async def test_forget_removes_fact(mem) -> None:
     assert await mem.documents.count_documents(KIND_KNOWLEDGE, store) == 0
     assert (await mem.service.recall(cwd=mem.project_cwd, query="walrus", top_k=5))[0] == []
     store_dir = paths.scope_dir(project_scope_name(project_ulid_from(mem)))
-    assert list(paths.inbox_dir(store_dir).glob("*.md")) == []
+    assert list(paths.notes_dir(store_dir).glob("*.md")) == []
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="user adds a fact")
@@ -235,9 +233,8 @@ async def test_clear_scope_keeps_resource(mem) -> None:
     assert total == 0
     # Store Resource still exists.
     assert GLOBAL_SCOPE_NAME in [r.name for r in await mem.resources.list(kind=KIND_KNOWLEDGE)]
-    # The knowledge lane is emptied; no derived MEMORY.md index exists.
-    assert list(paths.inbox_dir(paths.scope_dir("global")).glob("*.md")) == []
-    assert not (paths.scope_dir("global") / "MEMORY.md").exists()
+    # The notes lane is emptied on disk too, not just in the index.
+    assert list(paths.notes_dir(paths.scope_dir("global")).glob("*.md")) == []
 
 
 async def test_metrics(mem) -> None:
@@ -356,7 +353,7 @@ async def test_lazy_reindex_picks_up_out_of_band_edit(mem) -> None:
         actor="agent",
     )
     store_dir = paths.scope_dir(project_scope_name(project_ulid_from(mem)))
-    fact_file = next(iter(paths.inbox_dir(store_dir).glob("*.md")))
+    fact_file = next(iter(paths.notes_dir(store_dir).glob("*.md")))
     # Edit the body directly on disk (frontmatter preserved).
     text = fact_file.read_text()
     fact_file.write_text(text.replace("original narwhal content", "edited platypus content"))
@@ -367,9 +364,9 @@ async def test_lazy_reindex_picks_up_out_of_band_edit(mem) -> None:
 
 
 async def test_grep_recall_ignores_legacy_root_facts(mem) -> None:
-    """A pre-lane fact abandoned at the store ROOT (not under knowledge/) must NOT
+    """A pre-lane fact abandoned at the store ROOT (not under notes/) must NOT
     surface via recall in any mode — grep runs over the whole store dir, so the
-    knowledge/-lane filter must exclude it, staying consistent with keyword/vector
+    notes/-lane filter must exclude it, staying consistent with keyword/vector
     (whose reconciler indexes only the lane)."""
     await mem.service.add_fact(
         scope=KnowledgeScope.PROJECT,

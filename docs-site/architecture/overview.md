@@ -82,7 +82,7 @@ Every persistent artifact lives in one directory:
 ├── coffer.db            # SQLite: control-plane state + rebuildable retrieval index
 ├── master.key           # Fernet master key (0600; keychain opt-in moves it out)
 ├── knowledge/           # knowledge files-as-truth, one dir per scope:
-│                        #   <scope>/{knowledge,inbox,rules,handoff,superseded,.raw}/
+│                        #   <scope>/{notes,docs,.raw,.history}/
 ├── skills/              # canonical master skill store
 ├── bin/                 # co-located coffer binaries (daemon/shim/CLI)
 ├── logs/

@@ -15,8 +15,6 @@ from fastapi import APIRouter
 # Import for side effects: each module registers its routes on ``routes.router``.
 from coffer.surfaces.http.knowledge import document_routes as _document_routes  # noqa: F401
 from coffer.surfaces.http.knowledge import entry_routes as _entry_routes  # noqa: F401
-from coffer.surfaces.http.knowledge import lane_routes as _lane_routes  # noqa: F401
-from coffer.surfaces.http.knowledge import merge_routes as _merge_routes  # noqa: F401
 from coffer.surfaces.http.knowledge.embed_routes import router as _embed_router
 from coffer.surfaces.http.knowledge.routes import router as _routes_router
 

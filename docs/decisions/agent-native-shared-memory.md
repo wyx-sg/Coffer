@@ -1,18 +1,18 @@
-# One Shared Knowledge Store Across Agents
+# One Shared Knowledge Store: One Shared Knowledge Store Across Agents
 
 > 中文版: [agent-native-shared-memory.zh.md](./agent-native-shared-memory.zh.md)
 
-**Status**: Partially superseded by [Memory via MCP](memory-via-mcp-not-native-projection.md) (2026-06-18) — the native-projection half of the decision below was removed; Coffer never writes an agent's own native memory files. The shared-store half stands, and is what this ADR records. Re-expressed in knowledge-layer vocabulary 2026-09-10 (see Revision history).
-**Date**: 2026-06-09 (revised 2026-09-10; see Revision history)
+**Status**: Partially superseded by [Memory via MCP](memory-via-mcp-not-native-projection.md) (2026-06-18) — the native-projection half of the decision below was removed; Coffer never writes an agent's own native memory files. The shared-store half stands, and is what this ADR records. Re-expressed in knowledge-layer vocabulary 2026-09-10 and narrowed to two lanes 2026-09-11 (see Revision history).
+**Date**: 2026-06-09 (revised 2026-09-11; see Revision history)
 **Deciders**: Yuxing Wu
 **Related**: spec `knowledge` (the Knowledge Layer spec), [Files as Truth](files-as-truth-sqlite-retrieval.md), [Everything Is a Resource Kind](everything-is-a-resource-kind.md), [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md), [Memory via MCP](memory-via-mcp-not-native-projection.md)
 
 ## Context
 
-The first memory design (on the mem0 memory engine) treated each store as a
-private silo queried over MCP. In practice a developer runs more than one coding
-agent (Claude Code, Codex, …) over the same project. Each agent has its own
-native memory location — Claude Code's auto-memory directory, Codex's `memories`, and so on. The same
+The first memory design (on the mem0 memory engine) treated each store as a private silo queried
+over MCP. In practice a developer runs more than one coding agent (Claude Code,
+Codex, …) over the same project. Each agent has its own native memory location —
+Claude Code's auto-memory directory, Codex's `memories`, and so on. The same
 project fact ("we use squash-merge", "the API base URL is X") then gets written
 once per agent and **drifts**: each copy is edited independently and the agents
 disagree about the project.
@@ -43,27 +43,28 @@ does not write into any agent's native memory files either.**
 Concrete shape, as it stands today:
 
 - **One resource kind: `knowledge`.** One storage root,
-  `~/.coffer/knowledge/<scope>/`, with lanes `knowledge/` (entries an agent
-  wrote), `inbox/` (ingested documents), `rules/`, `handoff/`, `superseded/`,
-  and a hidden `.raw/` holding the originals of ingested documents. Files are
-  truth; SQLite is a rebuildable index over them (ADR files-as-truth-sqlite-retrieval).
+  `~/.coffer/knowledge/<scope>/`, with two lanes — `notes/` (what an agent or
+  the user wrote) and `docs/` (uploaded documents, normalized to markdown) —
+  plus a hidden `.history/` holding pre-rewrite copies and a hidden
+  `.raw/` holding the uploaded originals. Files are truth; SQLite is a
+  rebuildable index over them (Files as Truth).
 - **Three scopes, read from the resource name.** `global` (cross-project) and
   `project-<ULID>` (resolved from the cwd's git root) both auto-provision on
   first use; any other name is a collection the user created deliberately and
   never auto-provisions, because silently minting a scope from a typo would be
   worse than an error. This is the two-layer scope of the original decision,
   plus a third, deliberate layer for corpora that belong to neither.
-- **Canonical format.** An entry is a `.md` file with YAML frontmatter
+- **Canonical format.** A note is a `.md` file with YAML frontmatter
   (`name`, `description`, `metadata.type`, `origin_session_id`) plus a markdown
-  body, under `<scope>/knowledge/`. An ingested document is normalized markdown
-  under `<scope>/inbox/`, with its original retained in `<scope>/.raw/` so it
+  body, under `<scope>/notes/`. An uploaded document is normalized markdown
+  under `<scope>/docs/`, with its original retained in `<scope>/.raw/` so it
   can be re-converted later. Both lanes index into the same `documents` /
   `chunks` / FTS5 / sqlite-vec substrate, and retrieval spans both.
-- **One tool surface, the same for every agent.** Eight MCP tools —
+- **One tool surface, the same for every agent.** Six MCP tools —
   `coffer__search`, `coffer__grep`, `coffer__read`, `coffer__list`,
-  `coffer__write`, `coffer__delete`, `coffer__set_handoff`, `coffer__resume`.
-  Each takes an optional `scope`, defaulting to the project scope resolved from
-  the shim's reported cwd and falling back to `global`. The caller never has to
+  `coffer__write`, `coffer__delete`. Each takes an optional `scope`, defaulting
+  to the project scope resolved from the shim's reported cwd and falling back to
+  `global`. The caller never has to
   decide which store a fact belongs to before it can search for it. **Adding a
   new agent adds no knowledge-layer code at all** — the tools are already
   agent-agnostic.
@@ -71,10 +72,11 @@ Concrete shape, as it stands today:
   2026-09-10._ The gap named in Context — native memory loads for free, MCP does
   not — was to be closed by a SessionStart shell hook that injected the `rules`
   lane as runtime context. That mechanism shipped and was never installed on any
-  agent, so it is removed (spec agent-registry FR-043…FR-048). The gap is therefore **open
-  again**: nothing pushes knowledge into a session, and an agent reaches the
-  shared store only by calling `coffer__recall` / `coffer__search` itself. The
-  rest of this ADR stands; this bullet does not.
+  agent, so it is removed (spec agent-registry FR-043…FR-048); the `rules` lane it was to
+  deliver was itself deleted on 2026-09-11, once it was clear nothing read it.
+  The gap is therefore **open again**: nothing pushes knowledge into a session,
+  and an agent reaches the shared store only by calling `coffer__search` itself.
+  The rest of this ADR stands; this bullet does not.
 - **Import, never project.** _Withdrawn 2026-09-10._ Coffer could read an
   agent's own accumulated native memory and let the user adopt it inward, once.
   That too shipped unused and is removed (spec agent-registry FR-040/FR-041). The
@@ -118,8 +120,7 @@ decision itself.
 
 - **Retrieval is deliberate, not automatic.** An agent sees a fact only when it
   calls `coffer__search`. Since the session-start injection was removed
-  (2026-09-10) *nothing* is ambient — not even the rules lane, which is now read
-  on demand through its own endpoint. This is the full cost of not writing the
+  (2026-09-10) *nothing* is ambient. This is the full cost of not writing the
   agent's files, and it is accepted knowingly: the ambient path had never
   actually run.
 - **Facts in an agent's own native store stay there.** They do not migrate on
@@ -127,6 +128,13 @@ decision itself.
   them across.
 - **Coffer's tools are the only write path.** An agent that cannot speak MCP
   cannot contribute to the shared store.
+- **What an agent wrote may later be rewritten.** The periodic tidy
+  (2026-09-11) merges duplicate notes and rewrites them into topic documents,
+  unattended and on a timer. One shared store makes that worth doing — the
+  duplicates it heals are the same fact written by several agents — but a note
+  an agent wrote is not a fixed artefact. `.history/` keeps the prior
+  revision and is the whole safety net; there is no review step before a pass
+  lands.
 
 ## Alternatives Considered
 
@@ -135,7 +143,7 @@ exists to remove.
 
 **Native projection per agent (the original mechanism here).** Symlink where
 the format already matches, a managed block where it does not, and disable the
-agent's own native memory so copies cannot diverge. Superseded by [Memory via MCP](memory-via-mcp-not-native-projection.md):
+agent's own native memory so copies cannot diverge. Superseded by Memory via MCP:
 Coffer would be mutating and disabling another tool's configuration, and every
 supported agent would owe a hand-maintained adapter tracking a format that
 changes upstream.
@@ -172,3 +180,22 @@ second thing to keep in sync for no gain.
   `knowledge_base` merged); store names became the three scopes; the twelve
   `coffer__*` memory/KB tools became eight. The decision — one shared store, not
   one per agent — is unchanged; only the vocabulary it is written in has moved.
+- **2026-09-11** — **Two lanes, six tools.** The store shared across agents keeps
+  exactly two lanes: `notes/`, everything an agent or the user wrote, with
+  `coffer__write` landing directly in it, and `docs/`, uploaded documents
+  normalized to markdown — plus the hidden `.history/` and `.raw/`. The
+  `knowledge/inbox/` gradient, `rules/`, `handoff/` and `superseded/` are
+  deleted, destructively and without a holding pen. The tool surface drops from
+  eight to six: `coffer__set_handoff` and `coffer__resume` retire with the
+  handoff lane, so continuity across sessions and agents is now carried by
+  ordinary notes rather than a lane of its own. The `rules` lane goes outright —
+  its delivery channel was already removed on 2026-09-10 and nothing read it —
+  which closes the last thread of the withdrawn ambient-delivery bullet above.
+  `notes/` is instead kept readable by a periodic tidy that merges duplicates
+  and rewrites notes into topic documents, keeping the prior revision in
+  `.history/` (see [Files as Truth](files-as-truth-sqlite-retrieval.md)'s
+  revision history). The AI-assisted merge of duplicate per-project scopes is
+  deleted with it: worktree-aware `git_root` removed the cause, and the residue
+  is healed at every daemon start, so a manual second path over the same problem
+  is not worth its abstraction. The decision itself — one shared store, reached
+  over MCP, never written into an agent's own memory files — is untouched.

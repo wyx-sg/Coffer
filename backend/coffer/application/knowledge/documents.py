@@ -30,7 +30,7 @@ from coffer.application.knowledge.ports import DocumentRepoPort
 from coffer.application.knowledge.retrieval import EmbeddingResolver, KnowledgeRetrieval
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import DocumentNotFound, ReconversionBlocked
-from coffer.domain.knowledge.document import KIND_KNOWLEDGE, LANE_INGEST, Document
+from coffer.domain.knowledge.document import KIND_KNOWLEDGE, LANE_DOCS, Document
 from coffer.domain.knowledge.retrieval import (
     GrepResult,
     RetrievalMode,
@@ -73,7 +73,7 @@ class DocumentOps(ABC):
         source_path: str | None = None,
     ) -> Document:
         """Ingest one uploaded file: size check → convert → clean → frontmatter →
-        write ``inbox/``+``.raw/`` → reindex. A re-upload is matched to an
+        write ``docs/``+``.raw/`` → reindex. A re-upload is matched to an
         existing document by filename (spec knowledge FR-062): identical bytes are a no-op, a
         changed file updates that document in place (``replace``).
 
@@ -111,7 +111,7 @@ class DocumentOps(ABC):
         config: KnowledgeConfig | None = None,
         force: bool = False,
     ) -> dict[str, int]:
-        """Rescan ``inbox/`` and re-index every changed file from the markdown
+        """Rescan ``docs/`` and re-index every changed file from the markdown
         (reconstructs all SQLite state from the files).
 
         ``config`` lets the ``on_update_config`` hook pass a not-yet-persisted
@@ -180,7 +180,7 @@ class DocumentOps(ABC):
         rather than the transient per-scan count, so it stays observable without
         plumbing the scan count through every read path.
 
-        Out-of-band edits to ``inbox/<doc-id>.md`` (no filesystem watcher) funnel
+        Out-of-band edits to ``docs/<doc-id>.md`` (no filesystem watcher) funnel
         through the SAME idempotent reindex routine (``content_sha256`` no-op gate
         + file-vanished pruning). An unchanged corpus is detected by a cheap
         stat-only fingerprint and skips the full O(N) read+parse scan entirely."""
@@ -199,10 +199,10 @@ class DocumentOps(ABC):
         # ``q`` is a case-insensitive title substring filter applied server-side
         # BEFORE limit/offset, so ``total`` reflects the filtered count.
         docs = await self._documents.list_documents(
-            KIND_KNOWLEDGE, scope_name, limit=limit, offset=offset, q=q, lane=LANE_INGEST
+            KIND_KNOWLEDGE, scope_name, limit=limit, offset=offset, q=q, lane=LANE_DOCS
         )
         total = await self._documents.count_documents(
-            KIND_KNOWLEDGE, scope_name, q=q, lane=LANE_INGEST
+            KIND_KNOWLEDGE, scope_name, q=q, lane=LANE_DOCS
         )
         return docs, total
 
@@ -213,7 +213,7 @@ class DocumentOps(ABC):
 
     async def chunk_counts(self, *, scope_name: str) -> dict[str, int]:
         """Per-document chunk counts for the scope (the wire ``chunk_count``)."""
-        return await self._documents.chunk_counts(KIND_KNOWLEDGE, scope_name, lane=LANE_INGEST)
+        return await self._documents.chunk_counts(KIND_KNOWLEDGE, scope_name, lane=LANE_DOCS)
 
     def doc_paths(self, *, scope_name: str, document_id: str) -> tuple[str, str]:
         """Absolute markdown path + its containing folder for an INGESTED document.
@@ -221,11 +221,11 @@ class DocumentOps(ABC):
         The in-app viewer is read-only; surfaces hand these to
         open-in-external-editor / reveal through the loopback daemon.
 
-        Only valid for an id in the ingest lane: the path is derived as
-        ``inbox/<id>.md`` unconditionally, so calling it with an *entry* id
-        returns a path that does not exist (the entry lives under
-        ``knowledge/inbox/``). Callers that may hold either kind of id must
-        test first — ``builtin_tools.is_document()`` does exactly that."""
+        Only valid for an id in the ``docs/`` lane: the path is derived as
+        ``docs/<id>.md`` unconditionally, so calling it with a *note* id returns
+        a path that does not exist (a note lives under ``notes/``). Callers that
+        may hold either kind of id must test first —
+        ``builtin_tools.is_document()`` does exactly that."""
         path = self._paths.doc_path(scope_name, document_id)
         return str(path), str(path.parent)
 
@@ -276,7 +276,7 @@ class DocumentOps(ABC):
 
     async def document_count(self, *, scope_name: str) -> int:
         """Cheap indexed document count for the list path (no ``du_bytes`` walk)."""
-        return await self._documents.count_documents(KIND_KNOWLEDGE, scope_name, lane=LANE_INGEST)
+        return await self._documents.count_documents(KIND_KNOWLEDGE, scope_name, lane=LANE_DOCS)
 
     # ----- internals -----
 

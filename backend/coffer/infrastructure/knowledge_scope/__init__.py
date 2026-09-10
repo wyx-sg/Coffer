@@ -2,9 +2,9 @@
 
 The index/retrieval engine lives in the shared substrate
 ``coffer.infrastructure.knowledge``; this package keeps the scope-specific
-on-disk concerns — the per-entry / topic / rules / handoff file I/O, the
-``knowledge/`` lane delta scan, git-root → project-ULID resolution, and the two
-machine-local side tables (``knowledge_scope_project_roots`` /
+on-disk concerns — the per-note file I/O and the ``notes/`` lane delta scan, the
+one-time migration to the two-lane layout, git-root → project-ULID resolution,
+and the two machine-local side tables (``knowledge_scope_project_roots`` /
 ``knowledge_scope_labels``).
 """
 

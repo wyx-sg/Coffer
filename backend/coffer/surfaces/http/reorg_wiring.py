@@ -1,11 +1,13 @@
-"""Composition-root helper that wires the knowledge reorg service.
+"""Composition-root helper that wires the notes tidy pass.
 
-Mirrors ``organize_wiring.py``: ``LangchainAgenticReorg`` (the langgraph loop
-adapter) and a ``ProviderService`` wrapper are injected here, at a surfaces
-composition root (cross-kind imports allowed). The reorg's
-``application/knowledge`` code reaches the loop only through the kind-local
-``AgenticReorgPort`` (Contract 9 keeps langgraph in ``infrastructure.chat``;
-Contract 5e keeps the knowledge kind off ``infrastructure.chat``).
+``LangchainAgenticReorg`` (the langgraph loop adapter) and a ``ProviderService``
+wrapper are injected here, at a surfaces composition root (cross-kind imports
+allowed). The pass's ``application/knowledge`` code reaches the loop only
+through the kind-local ``AgenticReorgPort`` (Contract 9 keeps langgraph in
+``infrastructure.chat``; Contract 5e keeps the knowledge kind off
+``infrastructure.chat``).
+
+This builds the service; ``tidy_wiring.py`` decides when it runs.
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ from coffer.surfaces.http.knowledge.reorg_state import set_reorg_service
 
 class _ModelSelector:
     """ModelSelectorPort adapter: resolves Coffer's internal-engine connection
-    (the ``internal_default`` provider) for the reorg loop."""
+    (the ``internal_default`` provider) for the tidy loop."""
 
     def __init__(self, provider_svc: ProviderService) -> None:
         self._svc = provider_svc
@@ -38,12 +40,12 @@ def wire_reorg(
     provider_svc: ProviderService,
     credential_resolver: Callable[[str], str],
 ) -> ReorgService:
-    """Construct and register the knowledge ReorgService.
+    """Construct and register the knowledge ReorgService — the tidy pass.
 
     Must be called AFTER ``wire_knowledge_kind`` (needs a live ``KnowledgeService``)
     and ``wire_provider_kind`` (needs a live ``ProviderService``). Exposes the
-    service via ``set_reorg_service`` so the ``reorg`` route reaches it through
-    ``get_reorg_service``.
+    service via ``set_reorg_service`` so both the ``organize`` route and the
+    background trigger reach the SAME instance through ``get_reorg_service``.
     """
     deps = reorg_collaborators_from_service(knowledge_service)
     svc = ReorgService(
@@ -53,6 +55,7 @@ def wire_reorg(
         documents=deps.documents,
         retrieval=deps.retrieval,
         reconciler=deps.reconciler,
+        audit=deps.audit,
         agent=LangchainAgenticReorg(),
         models=_ModelSelector(provider_svc),
         credential_resolver=credential_resolver,

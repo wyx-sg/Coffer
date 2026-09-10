@@ -4,8 +4,9 @@ Registered on the shared ``knowledge`` router (imported from ``routes``) so a
 scope's entries and its ingested documents live under one path tree. Split out
 only to keep each module under the project's file-size ceiling.
 
-Entries are per-item markdown files under the scope's ``knowledge/`` lane. No
-LLM at write time: a write is a file plus an index row plus an audit event.
+Entries are per-item markdown files under the scope's ``notes/`` lane. No LLM at
+write time: a write is a file plus an index row plus an audit event — the tidy
+pass reshapes them later, never on the request path.
 """
 
 from __future__ import annotations
