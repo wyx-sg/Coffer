@@ -39,6 +39,7 @@ from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.resource import Kind
 from coffer.infrastructure.daemon.orphan_sweep import startup_sweep
 from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
+from coffer.infrastructure.logging.files import prune_log_dir
 from coffer.infrastructure.logging.setup import configure_logging
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -265,7 +266,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Frozen builds only; no-op from source (FR-026, see binary_deploy).
     await asyncio.to_thread(deploy_frozen_sidecars)
 
-    worker = RetentionWorker(retention_svc)
+    worker = RetentionWorker(retention_svc, prune_logs=prune_log_dir)
     worker_task = asyncio.create_task(worker.run())
     app.state.retention_worker = worker
     app.state.retention_worker_task = worker_task

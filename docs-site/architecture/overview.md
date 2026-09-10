@@ -86,7 +86,9 @@ Every persistent artifact lives in one directory:
 ├── skills/              # canonical master skill store
 ├── bin/                 # co-located coffer binaries (daemon/shim/CLI)
 ├── logs/
-│   └── daemon.log       # structured JSON logs from the daemon
+│   ├── daemon.log       # structured JSON logs from the daemon
+│   ├── upstream/        # one file per upstream MCP server's stderr
+│   └── shim-*.log       # one per shim process; pruned after 7 days
 └── upstream-pids/       # PID files for upstream subprocesses (swept on restart)
 ```
 

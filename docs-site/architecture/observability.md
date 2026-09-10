@@ -29,6 +29,24 @@ A `contextvar` carries the `trace_id` through the full async call stack for a re
 
 Log files are in `~/.coffer/logs/`. Rotation is handled by Python's `logging.handlers.RotatingFileHandler` (size-based: 10 MB per file, 3 backup files kept). Logs are subject to the same `~/.coffer/` backup footprint as the database.
 
+### What lands where
+
+| File | Holds |
+| ---- | ----- |
+| `daemon.log` | Coffer's own structured records. Bounded by the rotating handler. |
+| `upstream/<server>.log` | One upstream MCP server's stderr, plus one rolled-aside `.log.1`. |
+| `shim-<pid>-<ts>.log` | One shim process's diagnostics. Created lazily — a run that logs nothing leaves no file. |
+
+**Upstreams get their own files because they used to drown the daemon's.** The MCP SDK writes each stdio server's stderr to the daemon's own stderr, which lands in `daemon.log`; upstreams are chatty and Coffer is not. A measured daemon log held 4,277 lines of which **62** were Coffer's — all one error type — and rotation had carried everything older away inside two months.
+
+**Every audited event is also logged.** `AuditService.record` emits an INFO line for each entry it writes, so the operations the audit table considers worth recording are legible to whoever is tailing a log rather than querying SQLite. The `details` payload is deliberately *not* logged: the audit table applies each kind's redactor before storing it, and re-deriving that in the logger would duplicate the one place that knows which fields carry secrets.
+
+### Retention
+
+Log files age out on the same cadence as the audit and invocation tables — the retention worker prunes `shim-*.log` and rolled-aside `upstream/*.log.1` older than 7 days. `daemon.log` and its rotations are deliberately excluded: the handler holds an open descriptor, and deleting a file underneath it would break logging until the next restart.
+
+This exists because nothing deleted anything before: 2,137 shim logs (40 MB) had accumulated over three months, one per process start, with no rotation and no prune.
+
 Log lines never contain secret material. Secrets live only as ciphertext in the credential store, and their plaintext is never passed as a log field — so no scrub processor is needed or present. The structlog pipeline is: `merge_contextvars`, `add_log_level`, `TimeStamper`, `_add_trace_id`, `JSONRenderer`.
 
 ## Trace correlation

@@ -14,6 +14,7 @@ from typing import Any, Final
 import structlog
 
 from coffer.infrastructure.logging.eval_capture import install_eval_capture_handler
+from coffer.infrastructure.logging.files import log_dir
 
 _TRACE_ID: ContextVar[str | None] = ContextVar("coffer_trace_id", default=None)
 _SENTINEL: Final = "-"
@@ -35,15 +36,8 @@ def _add_trace_id(
 
 
 def _log_dir() -> Path:
-    """Return the directory for coffer log files.
-
-    Respects COFFER_LOG_DIR env var so tests can redirect output without
-    touching the user's ~/.coffer/logs/.
-    """
-    custom = os.environ.get("COFFER_LOG_DIR")
-    if custom:
-        return Path(custom)
-    return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "logs"
+    """Return the directory for coffer log files (see ``logging.files``)."""
+    return log_dir()
 
 
 def _attach_file_handler() -> None:

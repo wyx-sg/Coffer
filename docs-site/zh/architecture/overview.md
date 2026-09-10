@@ -86,7 +86,9 @@ flowchart TD
 ├── skills/              # 主技能存储（canonical）
 ├── bin/                 # 同处一地的 coffer 二进制（daemon/shim/CLI）
 ├── logs/
-│   └── daemon.log       # 守护进程的结构化 JSON 日志
+│   ├── daemon.log       # 守护进程的结构化 JSON 日志
+│   ├── upstream/        # 每个上游 MCP server 的 stderr 各一个文件
+│   └── shim-*.log       # 每个 shim 进程一个；7 天后清理
 └── upstream-pids/       # 上游子进程的 PID 文件（守护进程重启时清理）
 ```
 

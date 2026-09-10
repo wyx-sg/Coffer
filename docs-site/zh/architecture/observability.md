@@ -29,6 +29,24 @@ daemon 使用配置为 JSON 输出的 `structlog`，将日志写入 `~/.coffer/l
 
 日志文件位于 `~/.coffer/logs/`。轮换由 Python 的 `logging.handlers.RotatingFileHandler` 处理（按大小轮换：每个文件最大 10 MB，保留 3 个备份文件）。日志与数据库一样，都在 `~/.coffer/` 的备份范围内。
 
+### 什么写到哪里
+
+| 文件 | 内容 |
+| ---- | ---- |
+| `daemon.log` | Coffer 自己的结构化记录。由轮换 handler 界定大小。 |
+| `upstream/<server>.log` | 单个上游 MCP server 的 stderr，外加一个滚存的 `.log.1`。 |
+| `shim-<pid>-<ts>.log` | 单个 shim 进程的诊断信息。惰性创建——一次什么都没记的运行不留下文件。 |
+
+**上游之所以要有自己的文件，是因为它们过去把 daemon 自己的日志淹没了。** MCP SDK 把每个 stdio server 的 stderr 写到 daemon 自己的 stderr，也就落进 `daemon.log`；上游话很多，而 Coffer 话很少。实测一份 daemon 日志共 4,277 行，其中只有 **62** 行是 Coffer 自己的——而且全是同一种错误——更早的内容在两个月内就被轮换带走了。
+
+**每一个被审计的事件同时也会被记入日志。** `AuditService.record` 为它写入的每一条条目发出一行 INFO，因此审计表认为值得记录的那些操作，对于正在 tail 日志（而不是查 SQLite）的人也是可读的。`details` 载荷刻意**不**进日志：审计表在存储前会应用各 kind 自己的 redactor，在 logger 里重新推导一遍等于复制那个唯一知道哪些字段含密钥的地方。
+
+### 保留
+
+日志文件与审计表、调用表按同一节奏老化——保留 worker 会清除超过 7 天的 `shim-*.log` 与滚存的 `upstream/*.log.1`。`daemon.log` 及其轮换文件刻意排除在外：handler 持有它们的打开描述符，在它底下删文件会让日志一直坏到下次重启。
+
+之所以要有这一段，是因为此前什么都不会被删：三个月里积了 2,137 个 shim 日志（40 MB），每次进程启动一个，既不轮换也不清理。
+
 日志行永远不包含密钥材料。密钥只以密文形式存于凭据存储中，其明文从不作为日志字段传递——因此不需要也不存在任何清理处理器。structlog 管道依次为：`merge_contextvars`、`add_log_level`、`TimeStamper`、`_add_trace_id`、`JSONRenderer`。
 
 ## 链路追踪关联
