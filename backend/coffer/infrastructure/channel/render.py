@@ -1,9 +1,15 @@
-"""Outbound rendering: markdown → Telegram-safe HTML, plus chunking.
+"""Outbound rendering: one markdown subset → each platform's own text format,
+plus chunking.
 
 Telegram MarkdownV2 is an escaping minefield; the proven pattern (research.md)
 is rendering a small markdown subset to HTML ``parse_mode`` and retrying as
 plain text if the platform rejects it. Only tags Telegram documents are
 emitted: b / i / code / pre / a.
+
+SeaTalk has its own markdown (``format: 1``) — bold, italic, inline code, code
+fences, ordered/unordered lists — with neither headings nor links, and a
+literal marker character is escaped with a DOUBLE backslash. Its renderer
+lives beside Telegram's so both read from the same regex vocabulary.
 """
 
 from __future__ import annotations
@@ -53,6 +59,59 @@ def _inline(text: str) -> str:
     text = _ITALIC.sub(lambda m: f"<i>{m.group(1) or m.group(2)}</i>", text)
     for i, span in enumerate(spans):
         text = text.replace(f"\x00{i}\x00", f"<code>{span}</code>")
+    return text
+
+
+# SeaTalk's own markdown: the characters that start formatting there, so any
+# one of them left over after the supported constructs are lifted out must be
+# escaped (with a DOUBLE backslash) to survive as a literal.
+_SEATALK_MARKER = re.compile(r"[*_`~]")
+_BARE_URL = re.compile(r"https?://\S+")
+# `*` / `+` bullets → the `-` form; a bullet needs trailing whitespace, so
+# **bold** at line start is never mistaken for one.
+_ALT_BULLET = re.compile(r"^([ \t]*)[*+]([ \t]+)", re.MULTILINE)
+
+
+def markdown_to_seatalk(markdown: str) -> str:
+    """Render the same markdown subset to SeaTalk markdown (``format: 1``).
+
+    Bold, italic, inline code, fenced code and lists pass through as SeaTalk's
+    own syntax; headings become bold and links become ``label (url)`` because
+    SeaTalk supports neither. Tables are left as written — they render in a
+    text message but NOT inside a card's description, which is why selection
+    cards stay short prompts.
+    """
+    out: list[str] = []
+    last = 0
+    for match in _CODE_FENCE.finditer(markdown):
+        out.append(_seatalk_inline(markdown[last : match.start()]))
+        out.append("```\n" + match.group(1).strip("\n") + "\n```")
+        last = match.end()
+    out.append(_seatalk_inline(markdown[last:]))
+    return "".join(out).strip()
+
+
+def _seatalk_inline(text: str) -> str:
+    """Lift every supported construct out, escape what is left, put them back."""
+    spans: list[str] = []
+
+    def stash(rendered: str) -> str:
+        spans.append(rendered)
+        return f"\x00{len(spans) - 1}\x00"
+
+    text = _INLINE_CODE.sub(lambda m: stash(f"`{m.group(1)}`"), text)
+    # Links first: they carry a URL the bare-URL rule would otherwise swallow.
+    text = _LINK.sub(lambda m: stash(f"{m.group(1)} ({m.group(2)})"), text)
+    text = _BARE_URL.sub(lambda m: stash(m.group(0)), text)
+    text = _HEADING.sub(lambda m: stash(f"**{m.group(1)}**"), text)
+    text = _ALT_BULLET.sub(lambda m: f"{m.group(1)}-{m.group(2)}", text)
+    text = _BOLD.sub(lambda m: stash(f"**{m.group(1)}**"), text)
+    text = _ITALIC.sub(lambda m: stash(f"*{m.group(1) or m.group(2)}*"), text)
+    # A double backslash is SeaTalk's escape, so `snake_case` survives as typed
+    # instead of being read as half an italic run.
+    text = _SEATALK_MARKER.sub(lambda m: "\\\\" + m.group(0), text)
+    for i, span in enumerate(spans):
+        text = text.replace(f"\x00{i}\x00", span)
     return text
 
 

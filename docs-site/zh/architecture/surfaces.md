@@ -66,8 +66,8 @@ REST API 是规范接口——CLI 和 Web UI 都调用它。
 **它是什么。** 命令行管理接口。通过 REST API 可用的每个管理操作也可以作为 `coffer` 子命令使用，按 kind 与跨切面关注点分组：
 
 - **各 kind 分组：** `coffer mcp`、`coffer agent`、`coffer skill`、`coffer knowledge`、`coffer channel`。
-- **跨切面分组：** `coffer credentials`、`coffer sync`、`coffer chat`、`coffer model`。
-- **与 kind 无关 / 运维分组：** `coffer resource`、`coffer audit`、`coffer retention`、`coffer daemon`。重建单个知识作用域的索引是 `coffer knowledge reindex`。
+- **跨切面分组：** `coffer credentials`、`coffer sync`、`coffer provider`、`coffer scope`。
+- **与 kind 无关 / 运维分组：** `coffer resource`、`coffer audit`、`coffer retention`、`coffer daemon`、`coffer open`。重建单个知识作用域的索引是 `coffer knowledge reindex`。
 
 典型命令读作 `coffer mcp add`、`coffer mcp tool enable/disable`、`coffer audit`、`coffer daemon start/stop/status`。CLI 是 Coffer 用于脚本化工作流、基于 dotfile 的配置和没有浏览器的远程（无头）机器的主要接口。每个子命令都支持 `--json` 输出，以便机器可读集成。
 

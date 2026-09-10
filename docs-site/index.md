@@ -56,8 +56,9 @@ claude mcp add coffer coffer-mcp-shim
 coffer knowledge create handbook
 coffer skill import ./my-skill
 
-# Chat with Coffer's built-in agent from the terminal.
-coffer chat -m "what MCP servers and knowledge scopes do I have?"
+# Reach your agents from your phone — pair a channel, then chat over IM.
+coffer channel add work --type telegram --credential-ref telegram.token
+coffer channel pairing-code work
 ```
 
 [Read the full guide →](/guide/getting-started)

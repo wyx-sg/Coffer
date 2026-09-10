@@ -183,6 +183,7 @@ class FakeChannelAdapter:
         self,
         *,
         supports_edit: bool = True,
+        supports_live_text: bool | None = None,
         supports_typing: bool = True,
         max_message_chars: int = 4096,
         supports_buttons: bool = False,
@@ -194,6 +195,9 @@ class FakeChannelAdapter:
     ) -> None:
         self._caps = ChannelCapabilities(
             supports_edit=supports_edit,
+            # A transport that can edit has a live surface by definition; one
+            # that cannot may still stream (SeaTalk) — a test says so explicitly.
+            supports_live_text=supports_edit if supports_live_text is None else supports_live_text,
             supports_typing=supports_typing,
             max_message_chars=max_message_chars,
             supports_buttons=supports_buttons,
@@ -236,6 +240,13 @@ class FakeChannelAdapter:
         # so a test can assert the fetch happened (or, on a non-fetching
         # transport, that it never did).
         self.fetch_thread_calls: list[tuple[str, str]] = []
+        # FR-037: every live-text handle the core opened this session, and the
+        # switch that makes the transport refuse to open one.
+        self.live_handles: list[FakeLiveText] = []
+        self.live_text_unavailable = False
+        # When True the live surface IS the reply (SeaTalk's stream): closing it
+        # finishes the message in place and leaves the caller nothing to send.
+        self.live_text_finalizes = False
         self._next_id = 0
 
     @property
@@ -272,6 +283,15 @@ class FakeChannelAdapter:
         if buttons:
             self.cards.append((chat_id, markdown, list(buttons)))
         return SentMessage(message_id=self._new_id())
+
+    async def open_live_text(
+        self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
+    ) -> FakeLiveText | None:
+        if not self._caps.supports_live_text or self.live_text_unavailable:
+            return None
+        handle = FakeLiveText(self, chat_id, thread_id=thread_id, chat_kind=chat_kind)
+        self.live_handles.append(handle)
+        return handle
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None:
         self.edits.append((chat_id, message_id, text))
@@ -315,6 +335,51 @@ class FakeChannelAdapter:
         await self.callbacks.on_callback(
             InboundCallback(channel=channel, chat_id=chat_id, sender_id=sender_id, data=value)
         )
+
+
+class FakeLiveText:
+    """The fake's live surface (FR-037), shaped like Telegram's: the first
+    update sends a message, later ones edit it, and closing deletes it and hands
+    the whole final text back for the ordinary send path."""
+
+    def __init__(
+        self,
+        adapter: FakeChannelAdapter,
+        chat_id: str,
+        *,
+        thread_id: str = "",
+        chat_kind: str = "direct",
+    ) -> None:
+        self._adapter = adapter
+        self._chat_id = chat_id
+        self._thread_id = thread_id
+        self._chat_kind = chat_kind
+        self.message_id = ""
+        self.closed = False
+        self.final = ""
+        self.snapshots: list[str] = []
+
+    async def update(self, text: str) -> None:
+        self.snapshots.append(text)
+        if not self.message_id:
+            sent = await self._adapter.send_text(
+                self._chat_id, text, thread_id=self._thread_id, chat_kind=self._chat_kind
+            )
+            self.message_id = sent.message_id
+            return
+        if self._adapter.live_text_finalizes:
+            return  # a stream re-renders its own message — no new chat traffic
+        await self._adapter.edit_text(self._chat_id, self.message_id, text)
+
+    async def close(self, text: str) -> str:
+        self.closed = True
+        self.final = text
+        if self._adapter.live_text_finalizes:
+            # A stream cannot be deleted: it finishes carrying the final text.
+            return ""
+        if self.message_id:
+            await self._adapter.delete_message(self._chat_id, self.message_id)
+        return text
 
 
 class FakeModelSuggestions:

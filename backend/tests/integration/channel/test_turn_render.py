@@ -1,8 +1,11 @@
 """TurnRenderer progress strategy is picked from capabilities, never the type.
 
-supports_edit → one editable progress message, deleted when the turn ends;
-without it the renderer sends no tool-progress traffic at all. Every turn ends
-with a compact completion summary (FR-015), capability-agnostic.
+supports_live_text → ONE surface the renderer keeps updating for the whole turn:
+Telegram's is a message it edits (deleted when the turn ends, the final reply
+sent after it); SeaTalk's is a stream that finishes as the reply itself. A
+transport with neither sends no interim traffic at all. Every turn that ends
+abnormally closes with a compact completion summary (FR-015),
+capability-agnostic.
 """
 
 from __future__ import annotations
@@ -21,8 +24,8 @@ from .conftest import FakeChannelAdapter, wait_until
 
 def _ticking(step: float = 2.0, start: float = 0.0) -> Callable[[], float]:
     """A monotonic clock that advances ``step`` on every call. With ``step`` above
-    ``_EDIT_INTERVAL_SECONDS`` (1.5) each consecutive status render passes the edit
-    throttle, so streaming edits are deterministic in a test."""
+    ``_UPDATE_INTERVAL_SECONDS`` (1.5) each consecutive status render passes the
+    throttle, so live updates are deterministic in a test."""
     box = [start]
 
     def now() -> float:
@@ -504,12 +507,18 @@ async def test_typing_heartbeat_re_sends_on_a_supports_typing_only_dm() -> None:
 
 @pytest.mark.acceptance(
     spec="009-channels",
-    scenario="a supports_typing-only group turn posts no interim status message",
+    scenario="a transport with no live-text surface posts no interim status message",
 )
-async def test_no_interim_signal_on_a_supports_typing_only_group_turn() -> None:
-    # SeaTalk in a group: no edit, no delete, and single_chat_typing is DM-only —
-    # so a group/thread turn gets NO interim signal, only the final chunked reply.
-    adapter = FakeChannelAdapter(supports_edit=False, supports_typing=True, supports_groups=True)
+async def test_no_interim_signal_without_a_live_text_surface_in_a_group() -> None:
+    # A transport that can neither edit nor stream, in a group where the DM-only
+    # typing signal does not apply either: NO interim signal at all, only the
+    # final chunked reply. (SeaTalk left this shape behind — it streams now.)
+    adapter = FakeChannelAdapter(
+        supports_edit=False,
+        supports_live_text=False,
+        supports_typing=True,
+        supports_groups=True,
+    )
     queue: asyncio.Queue[Any] = asyncio.Queue()
 
     async def send(text: str) -> None:
@@ -535,9 +544,102 @@ async def test_no_interim_signal_on_a_supports_typing_only_group_turn() -> None:
     queue.put_nowait(None)
     await renderer.consume(queue)
 
-    # No heartbeat (group), no editable status message, no edits/deletes — just
-    # the single final reply into the originating group/thread.
+    # No heartbeat (group), no live surface, no edits/deletes — just the single
+    # final reply into the originating group/thread.
     assert adapter.typing == []
     assert adapter.edits == []
     assert adapter.deleted == []
     assert adapter.sent == [("gid-1", "found 3 cats")]
+
+
+# ---------------------------------------------------------------------------
+# FR-037: a transport that cannot edit but CAN stream (SeaTalk)
+# ---------------------------------------------------------------------------
+
+
+def _streaming_adapter(**kwargs: Any) -> FakeChannelAdapter:
+    """SeaTalk-shaped: no edit, no delete — but one message that grows in place
+    and, once finished, IS the reply."""
+    adapter = FakeChannelAdapter(supports_edit=False, supports_live_text=True, **kwargs)
+    adapter.live_text_finalizes = True
+    return adapter
+
+
+@pytest.mark.acceptance(
+    spec="009-channels",
+    scenario="a reply grows in place on a transport that streams but cannot edit",
+)
+async def test_streaming_transport_grows_one_message_instead_of_sending_fragments() -> None:
+    adapter = _streaming_adapter(supports_groups=True)
+
+    async def send(text: str) -> None:
+        await adapter.send_text("gid-1", text, thread_id="t1", chat_kind="group")
+
+    renderer = TurnRenderer(
+        channel="st",
+        adapter=adapter,
+        chat_id="gid-1",
+        conversation_id="c1",
+        send=send,
+        now=_ticking(),
+        thread_id="t1",
+        chat_kind="group",
+    )
+    queue: asyncio.Queue[Any] = asyncio.Queue()
+    for event in [
+        ToolCall(tool_use_id="t1", tool_name="search", tool_input={"q": "cats"}),
+        TextDelta(text="I found "),
+        TextDelta(text="three "),
+        TextDelta(text="cats."),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]:
+        queue.put_nowait(event)
+    queue.put_nowait(None)
+    await renderer.consume(queue)
+
+    [live] = adapter.live_handles
+    # The tool line opens the surface, then every later snapshot carries the FULL
+    # accumulated reply — the platform re-renders the latest text, never a delta.
+    assert live.snapshots[0] == "⏳ search · cats"
+    assert live.snapshots[1:] == ["I found", "I found three", "I found three cats."]
+    assert live.closed and live.final == "I found three cats."
+    # Exactly ONE message reached the chat (the stream's own), routed into the
+    # originating group thread — no fragments, and no duplicate final send.
+    assert adapter.sent == [("gid-1", "⏳ search · cats")]
+    assert adapter.sent_routed == [("gid-1", "⏳ search · cats", "t1", "group")]
+    assert adapter.edits == [] and adapter.deleted == []  # it can do neither
+
+
+async def test_streaming_transport_delivers_an_interrupted_reply_in_place() -> None:
+    # The stream is the message: an abnormal ending still closes it with the
+    # final body, and only the fact summary follows as its own message.
+    adapter = _streaming_adapter()
+
+    await _render(
+        adapter,
+        [
+            TextDelta(text="partial"),
+            TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="interrupted"),
+        ],
+        now=_ticking(),
+    )
+
+    [live] = adapter.live_handles
+    assert live.final == "partial\n\n⏹ Stopped."
+    texts = adapter.texts()
+    assert texts[0] == "partial"  # the stream's own message, opened while streaming
+    assert texts[1].startswith("⏹ stopped · 0 tools ·")  # the summary follows it
+
+
+async def test_a_transport_that_refuses_a_live_surface_is_asked_once_and_degrades() -> None:
+    # open_live_text may answer None (nothing available right now). The turn then
+    # behaves exactly as a transport without the capability: no interim traffic,
+    # one final reply — and the transport is not re-asked on every event.
+    adapter = FakeChannelAdapter(supports_edit=False, supports_live_text=True)
+    adapter.live_text_unavailable = True
+
+    await _render(adapter, _TOOL_TURN, now=_ticking())
+
+    assert adapter.live_handles == []
+    assert adapter.sent == [("owner", "found 3 cats")]
+    assert adapter.edits == [] and adapter.deleted == []

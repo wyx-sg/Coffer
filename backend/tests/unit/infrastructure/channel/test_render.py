@@ -1,8 +1,14 @@
-"""Outbound rendering: markdown → Telegram HTML, plus chunking."""
+"""Outbound rendering: markdown → Telegram HTML / SeaTalk markdown, plus chunking."""
 
 from __future__ import annotations
 
-from coffer.infrastructure.channel.render import chunk_text, markdown_to_telegram_html
+import pytest
+
+from coffer.infrastructure.channel.render import (
+    chunk_text,
+    markdown_to_seatalk,
+    markdown_to_telegram_html,
+)
 
 
 class TestMarkdownToTelegramHtml:
@@ -72,6 +78,58 @@ class TestMarkdownToTelegramHtml:
 
     def test_empty_input_renders_empty(self):
         assert markdown_to_telegram_html("") == ""
+
+
+class TestMarkdownToSeatalk:
+    """SeaTalk has its own markdown (``format: 1``): bold, italic, inline code,
+    fences and lists are native; headings and links are not; a literal marker
+    character is escaped with a DOUBLE backslash."""
+
+    def test_plain_text_passes_through(self):
+        assert markdown_to_seatalk("hello world") == "hello world"
+
+    def test_bold_and_inline_code_are_native(self):
+        assert markdown_to_seatalk("**bold** and `code`") == "**bold** and `code`"
+
+    @pytest.mark.acceptance(
+        spec="009-channels", scenario="seatalk markdown escapes a literal marker character"
+    )
+    def test_stray_markers_are_escaped_with_a_double_backslash(self):
+        # `snake_case` must survive as typed instead of being read as markup.
+        assert markdown_to_seatalk("run some_var now") == "run some\\\\_var now"
+        assert markdown_to_seatalk("5*6 = 30") == "5\\\\*6 = 30"
+        assert markdown_to_seatalk("a ~~b~~ c") == "a \\\\~\\\\~b\\\\~\\\\~ c"
+
+    def test_code_span_content_is_never_escaped(self):
+        assert markdown_to_seatalk("`a_b`") == "`a_b`"
+
+    def test_code_fence_is_kept_as_a_fence(self):
+        assert markdown_to_seatalk("```python\nx = a_b\n```") == "```\nx = a_b\n```"
+
+    def test_heading_becomes_bold(self):
+        assert markdown_to_seatalk("## Title\nbody") == "**Title**\nbody"
+
+    def test_link_becomes_label_and_url(self):
+        rendered = markdown_to_seatalk("see [docs](https://example.com/a_b)")
+        assert rendered == "see docs (https://example.com/a_b)"
+
+    def test_bare_url_keeps_its_underscores(self):
+        assert markdown_to_seatalk("go to https://e.com/a_b now") == "go to https://e.com/a_b now"
+
+    def test_star_and_plus_bullets_become_the_dash_form(self):
+        assert markdown_to_seatalk("* one\n+ two\n- three") == "- one\n- two\n- three"
+
+    def test_ordered_and_indented_lists_are_left_alone(self):
+        assert markdown_to_seatalk("1. one\n2. two") == "1. one\n2. two"
+        assert markdown_to_seatalk("- one\n    - nested") == "- one\n    - nested"
+
+    def test_underscore_italic_becomes_the_asterisk_form(self):
+        # SeaTalk's underscore italic needs surrounding spaces; the asterisk form
+        # does not, so normalise to the one that always renders.
+        assert markdown_to_seatalk("an _em_ word") == "an *em* word"
+
+    def test_empty_input_renders_empty(self):
+        assert markdown_to_seatalk("") == ""
 
 
 class TestChunkText:

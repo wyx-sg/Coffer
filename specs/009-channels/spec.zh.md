@@ -78,10 +78,9 @@ turn 启动。
 已配对的 owner 给 bot 发一条文本消息。channel 把它路由进该 peer 的长生命
 周期对话 —— 首次接触时用 channel 配置的默认 agent 创建 —— agent 的回复
 回到 IM 聊天，按该平台渲染（Telegram HTML、SeaTalk Markdown），过长时
-分块 (chunk)。在 Telegram 上，bot 会在 turn 运行期间展示进度，并把工具
-活动流式写进一条可编辑的状态消息；在无法编辑消息的 SeaTalk 上，bot 用
-typing indicator 表示已收到，并发送完成后的回复。同一段对话连同完整历史
-都记在 vault 里。
+分块 (chunk)。bot 在 turn 运行期间通过让**同一条**消息就地生长来展示进度
+——Telegram 编辑它的状态消息，SeaTalk 流式重渲染一条消息——于是答案不再
+以一串碎片的形式抵达。同一段对话连同完整历史都记在 vault 里。
 
 **Why this priority**: 这就是产品本身：vault 里的 agent，从用户本就常驻的
 IM 应用里即可触达。
@@ -268,12 +267,13 @@ agent 的 turn-started 审计记录；观察干净成功不发完成摘要、而
   校验）。channel 层只通过聊天平台的接缝触达 agent：conversation
   service、turn orchestrator。
 - **FR-005**: 回复按 channel 能力渲染：Telegram 把 markdown 转成 Telegram
-  HTML（带纯文本回退），按段落边界以 4000 字符分块，并把工具进度以节流
-  方式流式写入一条可编辑的状态消息，每行从调用的输入描述它在做什么
-  （如 `⏳ Bash · list the desktop`、`✅ Read · wedding.json`）；SeaTalk 发送
-  markdown，按 4096 字节
-  分块，用 typing indicator 表示进行中。能力由 adapter 声明，内核不做
-  特判。
+  HTML（带纯文本回退），按段落边界以 4000 字符分块；SeaTalk 把同一份 markdown
+  转成 SeaTalk 自己的 markdown（`format: 1` —— 粗体、斜体、行内 code、code
+  fence、有序与无序列表；标题转粗体、链接转 `label (url)`，因为二者都不被支持，
+  而作为字面量的标记字符用**双反斜杠**转义），按 4096 字节分块。两者都把一个 turn
+  的进度流式写进**同一个**就地生长的界面（FR-037），其中每行从调用的输入描述它在
+  做什么（如 `⏳ Bash · list the desktop`、`✅ Read · wedding.json`）。能力由
+  adapter 声明，内核不做特判。
 - **FR-006**: `/new`、`/stop`、`/status`、`/help` 命令在任何已配对的聊天里
   可用。`/stop` 与 `/new` 即使在 turn 运行中也立即生效；其他消息排队
   （FIFO，上限 10）并按序运行。
@@ -414,8 +414,10 @@ status / notify`。
   携带发送者身份（`sender_id`）。`InboundCallback` 是一次选择卡片按钮点选（携带一个
   不透明的 `data` 值而非文本，FR-018）；出站文本 MAY 携带 `ChoiceButton`，支持按钮的
   传输把它渲染成选择卡片。
-- **ChannelCapabilities** — adapter 声明自己能做什么（编辑消息、经
-  `supports_buttons` 的交互按钮、typing indicator）；内核据此选择渲染策略。
+- **ChannelCapabilities** — adapter 声明自己能做什么（经 `supports_live_text`
+  的可持续更新界面、经 `supports_edit` 的改写已投递消息——二者相互独立，见
+  FR-037——经 `supports_buttons` 的交互按钮、typing indicator）；内核据此选择
+  渲染策略。
 - **PairingCode** — 内存态、一次性、按 channel；从不持久化。
 
 ## Success Criteria
@@ -709,13 +711,48 @@ Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制
 - **Then** 打字提示在该 turn 期间被周期性重发（一个短暂动作，无聊天噪声），并在 turn
   结束时停止
 
-### Scenario: a supports_typing-only group turn posts no interim status message
+### Scenario: a transport with no live-text surface posts no interim status message
 
-- **Given** 一个在能显示打字但不能编辑或删除（SeaTalk）的 adapter 上、群组/线程中的
-  已配对 channel
+- **Given** 一个在既不能编辑也不能流式的 adapter 上、群组/线程中的已配对 channel
+  （那里也用不上只对私聊生效的打字信号）
 - **When** 一个 turn 运行
-- **Then** 不发任何中途信号（没有打字心跳，也没有可编辑状态消息）——只有最终分块回复
-  落在发起的群组/线程里
+- **Then** 完全不发任何中途信号——只有最终分块回复落在发起的群组/线程里
+
+### Scenario: a reply grows in place on a transport that streams but cannot edit
+
+- **Given** 一个在不能编辑或删除消息、但能流式一条消息（SeaTalk）的 adapter 上、
+  群组/线程中的已配对 channel
+- **When** 一个 turn 先跑工具再写回复
+- **Then** 聊天里只出现**一条**消息并就地生长——先是工具进度，随后是累积中的回复——
+  且它带着最终回复结束，于是没有任何内容被发两遍，答案也不再一段段蹦出来
+
+### Scenario: each seatalk stream update carries the full reply so far
+
+- **Given** 一个正在流式回复的 SeaTalk channel
+- **When** 回复文本以增量到达
+- **Then** stream 只被打开一次，每次更新都携带**全量**累积文本（绝不是增量）并带一个
+  单调递增的序号，且只有最后一次更新结束该 stream
+
+### Scenario: a terminated seatalk stream is never reused
+
+- **Given** 一个已被平台终止的 SeaTalk stream（出错，或间隔超过 30 秒上限）
+- **When** 该 turn 继续产出文本并结束
+- **Then** 之后没有任何请求再指名那个 stream id，也不会另开一个替代 stream，回复改由
+  普通发送路径投递
+
+### Scenario: a reply past the stream budget finishes the stream and sends the rest
+
+- **Given** 一条超出单个 stream 承载上限（4096 字符）的 SeaTalk 回复
+- **When** 该 turn 结束
+- **Then** stream 在预算处按段落边界结束，余下部分以普通分块消息投递
+
+### Scenario: seatalk markdown escapes a literal marker character
+
+- **Given** 一条正文里含有并非标记语法的 SeaTalk 格式字符的回复（如 `snake_case`
+  中间的下划线）
+- **When** 它为 SeaTalk 渲染
+- **Then** 该字符用**双反斜杠**转义从而原样保留，而真正的粗体/斜体/code/列表标记
+  仍按 SeaTalk markdown 保留
 
 ### Scenario: a group member who is not the paired sender is ignored
 
@@ -1154,18 +1191,38 @@ Coffer-hosted channel 与它们并不冗余——它是通往统一、本地、�
   在干净完成时标记完成（出错/被打断的 turn 只保留收到标记）。不支持 reaction 的 transport
   （SeaTalk）改用它的 typing/working 信号作为收到与进度的提示。全部尽力而为——一次失败的
   ack 绝不打断 turn。
-- **FR-037**: 长回复按平台的最佳机制流式呈现，该机制由 adapter 的能力（而非其类型）
-  决定。可编辑（`supports_edit`）的平台（Telegram）把回复文本流式写入**同一条**节流
-  的可编辑状态消息，仅在一个 turn 运行到足够长时才打开它——要么是工具活动打开它（先显示
-  工具进度行，随后回复文本到达时接管同一条消息），要么在纯文本 turn 中由回复本身在跑过
-  节流间隔后打开它。一个在该间隔内就结束的回复根本不打开状态消息（没有 create→delete→
-  resend 抖动）——它的最终发送就够了。中途编辑是**纯文本**并裁剪到单条上限，因此过长或
-  半成品 markdown 的预览既不会撑破平台解析器也不会超上限；结束时删除该消息，最终回复以
-  HTML 渲染并按段落分块到平台上限发送。仅
-  支持打字提示（`supports_typing`）的平台（SeaTalk）无法流式，因此在私聊中于 turn 期间
-  维持周期性打字心跳（一个短暂动作，零聊天噪声）并发送最终分块回复；SeaTalk 群组/线程
-  的 turn 完全没有中途信号（它既不能编辑、删除也没有群组打字接口）——最终分块回复就是
-  完成信号。全部尽力而为——一次失败的编辑或心跳绝不打断 turn。
+- **FR-037**: 回复就地生长，用平台各自具备的 live-text 机制——该机制由 adapter
+  声明的能力（而非其类型）决定。内核真正要问的能力是 `supports_live_text`（「有没有
+  一个我能在 turn 运行期间持续更新的界面？」），而**不是** `supports_edit`（「一条
+  已投递的消息能否被改写？」）。Telegram 用编辑同一条状态消息回答「有」；SeaTalk 则
+  用它的消息**流式**（streaming）API（`init_stream` / `update_stream`）回答「有」——
+  尽管它依然完全不能编辑任何消息。这个标志的含义之所以要改，是因为把策略挂在
+  `supports_edit` 上，等于悄悄剥夺了 SeaTalk 本就支持的实时体验：它的回复只能在 turn
+  结束后以若干条分块消息、一段一段地蹦出来。`supports_edit` 现在只表示它字面的意思
+  ——在 SeaTalk 上 `edit_text` 仍然抛错——两个标志各自独立声明。
+  一个 turn 只保留**一个** live 界面，且仅在这个 turn 运行到足够长时才打开它：要么由
+  工具活动打开（先显示工具进度行，随后回复文本到达时接管同一个界面），要么在纯文本
+  turn 中由回复本身在跑过更新间隔后打开。一个在该间隔内就结束的回复根本不打开界面
+  （没有 create→delete→resend 抖动）——它的最终发送就够了。中途快照是**纯文本**并
+  裁剪到单条上限，因此过长或半成品 markdown 的预览既不会撑破平台解析器也不会超上限。
+  界面如何**收尾**则是 transport 自己的事：Telegram 的状态消息只是脚手架——收尾时删除
+  它，最终回复以 HTML 渲染并按段落分块发送；而 SeaTalk 的 stream **本身就是**那条回复
+  ——它带着按 SeaTalk markdown 渲染的最终文本结束，于是没有任何内容被发两遍。完全没有
+  live 界面的 transport 则不发任何中途信号，最终回复就是它的全部信号。
+  SeaTalk 的流式约束属于契约，而非实现细节：每次更新携带的都是**全量**累积文本，绝不是
+  增量（客户端渲染最新快照）；两次更新的间隔必须小于 30 秒，否则平台会终止该 stream，
+  因此最后一份快照会在这个窗口内以 keep-alive 重发；单个 stream 最多承载 4096 个字符，
+  超出预算的回复会在上限处按段落边界结束该 stream，余下部分以普通分块消息发送（回复
+  的长度在它结束之前无从得知，若因为「可能」超长就干脆不流式，等于为了罕见情形剥夺
+  每一个 turn 的实时回复）；以及，一个已经结束的 stream——正常完成、超时或出错——永不
+  复用，因为平台会拒绝任何之后再指名它 id 的请求：该界面就地判定失效，不会另开一个
+  替代 stream，改由普通发送路径完整投递这条回复（平台留下的那条半截消息就停在原处
+  ——看得出是残留，但用户仍能拿到完整答案）。低于 3.67 的客户端只会在 stream 关闭时看到那条完成后的消息。
+  能显示打字但**没有 reaction 可用来确认收到**的 transport（SeaTalk）另外在私聊中
+  维持周期性打字心跳（一个短暂动作，零聊天噪声），覆盖第一次 live 更新落地之前的那段
+  窗口。这个判据是「用什么确认收到」，不是「能不能编辑」：支持 reaction 的 transport
+  （Telegram）已经用 👀 确认过了（FR-036），因此 `supports_edit` 现在不再决定任何行为。
+  全部尽力而为——一次失败的更新、收尾或心跳绝不打断 turn。
 - **FR-038**: Telegram album 是一个 turn。共享同一 `media_group_id` 的消息被去抖成携带
   它们全部附件的单个 turn，而非每张图一个 turn。
 - **FR-039**: 入站事件被去重。一个被重投的平台事件（相同 message id）只被处理一次。

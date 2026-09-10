@@ -2,7 +2,7 @@
 
 Coffer is a local-first **AI agent vault** — one secure, shared interface for every AI agent on your machine.
 
-Coffer is a daemon + CLI + a web UI the daemon serves itself. It started as a unified **MCP gateway** — aggregating upstream MCP servers and re-exposing them to MCP clients (Claude Code, Codex) through one namespaced surface — and grew into a vault that also manages your **skills**, shared **knowledge**, registered **agents**, and **chat**, reachable over **channels** and carried to another machine by **export and import**. Configure once; every agent sees the same vault. All state lives on your machine — no cloud accounts, no vendor lock-in.
+Coffer is a daemon + CLI + a web UI the daemon serves itself. It started as a unified **MCP gateway** — aggregating upstream MCP servers and re-exposing them to MCP clients (Claude Code, Codex) through one namespaced surface — and grew into a vault that also manages your **skills**, shared **knowledge**, and registered **agents**, reachable over **channels** and carried to another machine by **export and import**. Configure once; every agent sees the same vault. All state lives on your machine — no cloud accounts, no vendor lock-in.
 
 ## Why Coffer?
 
@@ -18,8 +18,8 @@ Coffer is the single source of truth instead. Register a tool, deliver a skill, 
 | [Agents](/guide/agents)                  | Detect and register Claude Code / Codex; edit their config, deliver skills, install Coffer's MCP server. |
 | [Skills](/guide/skills)                  | One master skill library, delivered into the agents you choose.                                          |
 | [Knowledge](/guide/knowledge)            | One store, shared by every agent: the entries they write and the documents you ingest, under one search. |
-| [Chat](/guide/chat)                      | Talk to Coffer's built-in agent, or drive Claude Code / Codex.                                           |
-| [Channels](/guide/channels)              | Reach your agents from Telegram or SeaTalk.                                                              |
+| [Model providers](/guide/web-ui)         | The vendor endpoints Coffer holds keys for, and the connection its own engine runs on.                   |
+| [Channels](/guide/channels)              | Reach your agents from Telegram or SeaTalk — the way you actually talk to them.                          |
 
 Plus two cross-cutting capabilities: an [encrypted credential store](/guide/credentials) and [vault export and import](/guide/sync).
 

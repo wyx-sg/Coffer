@@ -2,7 +2,7 @@
 
 Coffer 是一个本地优先 (local-first) 的 **AI agent 保险库** —— 为你机器上的每个 AI agent 提供一个安全、共享的统一接口。
 
-Coffer 是一个守护进程 (daemon) + CLI + 一个由守护进程自己提供的 Web UI。它起初是一个统一的 **MCP 网关** —— 把上游 MCP 服务器聚合起来,再通过一个带命名空间的接口重新暴露给 MCP 客户端(Claude Code、Codex)—— 并成长为一个还管理你的**技能**、共享**知识**、已注册**agents** 与**对话**的保险库,可通过**渠道**触达,并由**导出与导入**带到另一台机器。配置一次,每个 agent 看到的都是同一个保险库。所有状态都保存在你自己的机器上 —— 没有云账号,没有厂商锁定。
+Coffer 是一个守护进程 (daemon) + CLI + 一个由守护进程自己提供的 Web UI。它起初是一个统一的 **MCP 网关** —— 把上游 MCP 服务器聚合起来,再通过一个带命名空间的接口重新暴露给 MCP 客户端(Claude Code、Codex)—— 并成长为一个还管理你的**技能**、共享**知识**与已注册 **agents** 的保险库,可通过**渠道**触达,并由**导出与导入**带到另一台机器。配置一次,每个 agent 看到的都是同一个保险库。所有状态都保存在你自己的机器上 —— 没有云账号,没有厂商锁定。
 
 ## 为什么选择 Coffer?
 
@@ -18,8 +18,8 @@ Coffer 转而成为唯一事实来源。在 Coffer 里**只配置一次** ——
 | [Agents](/zh/guide/agents)              | 检测并注册 Claude Code / Codex;编辑其配置、投递技能、安装 Coffer 的 MCP 服务器。 |
 | [技能](/zh/guide/skills)                | 一份主技能库,投递给你选定的 agent。                                              |
 | [知识](/zh/guide/knowledge)             | 每个 agent 共享的一处存储:它们写下的条目与你摄取的文档,同在一次检索之下。       |
-| [对话](/zh/guide/chat)                  | 与 Coffer 内置 agent 对话,或驱动 Claude Code / Codex。                           |
-| [渠道](/zh/guide/channels)              | 从 Telegram 或 SeaTalk 触达你的 agent。                                          |
+| [模型 provider](/zh/guide/web-ui)       | Coffer 为之持有密钥的厂商端点，以及它自己的引擎跑在哪条连接上。                   |
+| [渠道](/zh/guide/channels)              | 从 Telegram 或 SeaTalk 触达你的 agent —— 你实际上就是这样跟它们说话的。          |
 
 外加两项横切能力:[加密凭证库](/zh/guide/credentials)和[保险库导出与导入](/zh/guide/sync)。
 

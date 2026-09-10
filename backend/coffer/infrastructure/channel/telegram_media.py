@@ -6,23 +6,28 @@ I/O.
 
 from __future__ import annotations
 
+import logging
 import os
 import pathlib
-from collections.abc import Sequence
+import uuid
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
 import httpx
 
-from coffer.domain.channel.envelopes import ChoiceButton, SentMessage
+from coffer.domain.channel.envelopes import ChoiceButton, InboundAttachment, SentMessage
 from coffer.domain.channel.errors import ChannelSendFailed
 
 __all__ = [
     "COMMANDS",
     "default_media_dir",
+    "download_attachments",
     "inline_keyboard",
     "media_specs",
     "upload_media",
 ]
+
+_logger = logging.getLogger(__name__)
 
 COMMANDS = [
     {"command": "new", "description": "Start a fresh conversation"},
@@ -118,3 +123,57 @@ async def upload_media(
         )
     result = payload.get("result") or {}
     return SentMessage(message_id=str(result.get("message_id", "")))
+
+
+async def download_attachments(
+    client: httpx.AsyncClient,
+    call: Callable[..., Awaitable[Any]],
+    file_base: str,
+    media_dir: pathlib.Path,
+    name: str,
+    message: dict[str, Any],
+) -> tuple[InboundAttachment, ...]:
+    """Download each attachment on ``message`` to ``media_dir``. Best-effort: a
+    download that fails is skipped (logged), never wedging the message — the
+    text/caption still drives a turn."""
+    out: list[InboundAttachment] = []
+    for file_id, mime, filename in media_specs(message):
+        try:
+            data = await _download_file(client, call, file_base, file_id)
+        except Exception:
+            _logger.warning(
+                "telegram.media.download_failed", extra={"channel": name}, exc_info=True
+            )
+            continue
+        if data is None:
+            continue
+        out.append(
+            InboundAttachment(
+                path=_save_media(media_dir, data, filename), mime=mime, filename=filename
+            )
+        )
+    return tuple(out)
+
+
+async def _download_file(
+    client: httpx.AsyncClient,
+    call: Callable[..., Awaitable[Any]],
+    file_base: str,
+    file_id: str,
+) -> bytes | None:
+    """``getFile`` → download the bytes from the file endpoint."""
+    info = await call("getFile", file_id=file_id)
+    file_path = info.get("file_path") if isinstance(info, dict) else None
+    if not file_path:
+        return None
+    response = await client.get(f"{file_base}/{file_path}")
+    response.raise_for_status()
+    return response.content
+
+
+def _save_media(media_dir: pathlib.Path, data: bytes, filename: str) -> str:
+    """Write bytes under the media dir with a unique name; return the path."""
+    media_dir.mkdir(parents=True, exist_ok=True)
+    path = media_dir / f"{uuid.uuid4().hex}{pathlib.Path(filename).suffix}"
+    path.write_bytes(data)
+    return str(path)

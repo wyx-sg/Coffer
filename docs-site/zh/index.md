@@ -56,8 +56,9 @@ claude mcp add coffer coffer-mcp-shim
 coffer knowledge create handbook
 coffer skill import ./my-skill
 
-# 在终端里与 Coffer 内置 agent 对话。
-coffer chat -m "我有哪些 MCP 服务器和知识作用域?"
+# 从手机触达你的 agent —— 配对一个渠道，然后用 IM 对话。
+coffer channel add work --type telegram --credential-ref telegram.token
+coffer channel pairing-code work
 ```
 
 [阅读完整指南 →](/zh/guide/getting-started)

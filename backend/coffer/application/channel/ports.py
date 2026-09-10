@@ -34,6 +34,40 @@ class AdapterCallbacks:
     on_callback: Callable[[InboundCallback], Awaitable[None]] | None = None
 
 
+class LiveText(Protocol):
+    """A surface the core can keep updating while a turn runs (FR-037).
+
+    One handle == one message that grows in place. ``text`` is ALWAYS the full
+    accumulated snapshot, never a delta: the transport underneath may render
+    the latest snapshot (SeaTalk streaming) or rewrite the message with it
+    (Telegram edit), and neither can reconstruct a text from fragments.
+
+    The handle is terminal after ``close``: a finished/failed surface is never
+    reused (a SeaTalk stream id that ended is rejected by the platform), and a
+    handle that gave up simply hands its text back so the ordinary send path
+    delivers the reply.
+    """
+
+    async def update(self, text: str) -> None:
+        """Show ``text`` (the full accumulated reply so far) on the surface.
+
+        Best-effort and self-throttling: the caller may offer a new snapshot as
+        often as it likes. A failure is swallowed and latches the handle dead —
+        the turn must never break because a progress update did not land."""
+        ...
+
+    async def close(self, text: str) -> str:
+        """Finish the surface with the final ``text``, returning whatever the
+        caller must STILL send through the ordinary send path ("" when the
+        surface delivered all of it).
+
+        Telegram returns ``text`` unchanged — its status message is deleted and
+        the final reply is sent rendered and chunked. SeaTalk finishes its
+        stream with the text (that streamed message IS the reply) and returns
+        only the overflow past the platform's per-stream budget."""
+        ...
+
+
 class ChannelAdapter(Protocol):
     """One live transport binding for one channel resource.
 
@@ -69,6 +103,16 @@ class ChannelAdapter(Protocol):
         ``thread_id``, when non-empty, threads the message where the
         transport supports it; transports without thread support ignore it.
         """
+        ...
+
+    async def open_live_text(
+        self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
+    ) -> LiveText | None:
+        """Open a surface the core can keep updating for this turn (FR-037), or
+        ``None`` when this transport has none — the caller then falls back to
+        sending the finished reply. Only called when the transport declares
+        ``capabilities.supports_live_text``; the mechanism (edit vs streaming)
+        is the adapter's business."""
         ...
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None: ...
