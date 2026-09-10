@@ -38,7 +38,9 @@ coffer sync import ~/coffer-bundle
 
 ## 哪些会随行
 
-**在 bundle 里:**知识的 Markdown 树(条目与摄取的文档一并)、技能主库、你的配置资源(MCP 服务器、agent、技能、渠道)、各模块自有的共享状态(渠道配对、知识作用域标签、引擎设置),以及 —— 仅在带 `--with-credentials` 时 —— **仅以 Fernet 密文形式**的凭证。
+**在 bundle 里:**知识的 Markdown 树(条目与摄取的文档一并)、技能主库、你的配置资源(MCP 服务器、agent、技能、渠道)、各模块自有的共享状态(渠道配对、知识作用域标签、引擎设置、MCP 能力偏好,以及 agent 插件清单),以及 —— 仅在带 `--with-credentials` 时 —— **仅以 Fernet 密文形式**的凭证。
+
+插件清单是**一份列表,不是一个安装器**。它记录这台机器上每个 agent 装了哪些插件,落在 `state/agent-plugins/<agent>.yaml`。导入时它只把这份列表存下来;不安装任何东西,也不碰任何 agent 的配置。到了新机器上,打开这个文件,用各家自己的 CLI 装上。Coffer 刻意不写别人的私有插件格式 —— 何况就算想写,它也没有 install 这条路径。
 
 **机器本地(永不导出):**日志、可重建的 `coffer.db` 索引、`daemon.json`、PID 文件、端口分配、聊天历史与审计日志。
 
