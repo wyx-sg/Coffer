@@ -36,9 +36,10 @@ acceptance(
     await page.goto("/");
 
     // The sidebar lists Coffer's operational surfaces — and only those.
-    // No dead "soon" entries for unbuilt features. RESOURCES carries one entry
-    // per resource kind with a list UI, which is why Model providers and
-    // Channels are in this list rather than under Settings and AGENTS.
+    // No dead "soon" entries for unbuilt features, and no entry outliving its
+    // feature. RESOURCES carries one entry per resource kind with a list UI,
+    // which is why Model providers and Channels are in this list rather than
+    // under Settings and AGENTS.
     for (const label of [
       /Agents/i,
       /MCP servers/i,
@@ -46,7 +47,6 @@ acceptance(
       /Knowledge/i,
       /Model providers/i,
       /Channels/i,
-      /Audit log/i,
       /Settings/i,
     ]) {
       await expect(
@@ -57,6 +57,10 @@ acceptance(
     await expect(page.getByText(/^Agents$/i).first()).toBeVisible();
     await expect(page.getByText(/^Resources$/i).first()).toBeVisible();
     await expect(page.getByText(/^System$/i).first()).toBeVisible();
+
+    // The audit log is deliberately NOT here — its reader is an agent calling
+    // coffer__diagnose, not a person browsing rows.
+    await expect(page.getByRole("link", { name: /Audit log/i })).toHaveCount(0);
 
     // The first-content surface is the resources page (redirected from /).
     // No generic "unexpected error" card.
