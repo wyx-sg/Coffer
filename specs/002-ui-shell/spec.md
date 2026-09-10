@@ -18,24 +18,43 @@ NOT a resource kind, so they live in their own group, not under Resources.
 
 **The sidebar shows only what Coffer can do today.** It does not list dead "not yet implemented" placeholders: a sidebar full of "soon" entries reads as an unfinished scaffold, not a product.
 
-Today the sidebar's four shipped surfaces are:
+Today the sidebar's shipped surfaces are:
 
 ```
  AGENTS
-  Agents           /agents        — the consumers (Bot icon)
+  Agents           /agents            — the consumers (Bot icon)
  RESOURCES
-  MCP servers      /mcp-servers   — resource kinds with a list UI (today: mcp_server)
+  MCP servers      /mcp-servers       — the aggregated upstream servers
+  Skills           /skills            — what Coffer delivers to agents
+  Knowledge        /knowledge         — one page per knowledge scope
+  Model providers  /model-providers   — credentialed vendor endpoints
+  Channels         /channels          — the IM transports agents answer on
  SYSTEM
-  Audit log        /audit         — who did what, when
+  Audit log        /audit             — who did what, when
   Settings         /settings
 ```
 
+**RESOURCES holds one entry per resource kind that has a list UI, and that
+correspondence is the rule** — five kinds (`mcp_server`, `skill`, `knowledge`,
+`provider`, `channel`), five entries. Two had drifted out of it and were
+returned in 2026-09: **Model providers** was the only kind filed under Settings
+(as "LLM connections"), and its old name described a page rather than the thing
+it manages — a `provider` is `{protocol, base_url, credential_ref}`, a vendor
+endpoint and its key; the model is not stored there and is chosen at the point
+of use. **Channels** sat under AGENTS, but a channel is a credentialed
+transport the vault owns, not a consumer of the vault; it belongs beside the
+other assets rather than beside the agents that happen to answer on it.
+
+That leaves AGENTS holding a single entry. The asymmetry is deliberate: agents
+are the one thing in the product that *uses* the vault rather than living in
+it, and collapsing the group would lose that distinction to save one line.
+
 The app's index (`/`) redirects to `/agents`, so a first-time visitor lands on
-the Agents surface. It is grouped into **Agents** (the consumers), **Resources** (resource kinds), and **System** (cross-cutting tooling: the Audit log and Settings) so the navigation stays stable as Coffer grows. Agents live at `/agents` (list) and `/agents/:name` (detail) and do not appear in the `/mcp-servers` kind browser. (`/resources` is kept as a legacy redirect to `/mcp-servers` for old bookmarks.) The agent detail page is a simple **Overview + Config files** detail page: an Overview tab summarising the agent's registered config and a Config files tab that surfaces its known config files read-only, with no create / edit / delete / enable.
+the Agents surface. It is grouped into **Agents** (the consumers), **Resources** (the resource kinds), and **System** (cross-cutting tooling: the Audit log and Settings) so the navigation stays stable as Coffer grows. Agents live at `/agents` (list) and `/agents/:name` (detail) and do not appear in the `/mcp-servers` kind browser. (`/resources` is kept as a legacy redirect to `/mcp-servers` for old bookmarks.) The agent detail page is a simple **Overview + Config files** detail page: an Overview tab summarising the agent's registered config and a Config files tab that surfaces its known config files read-only, with no create / edit / delete / enable.
 
-All list surfaces (agents, MCP servers, the audit log) use one shared, searchable, filterable, paginated table: a row click opens that item's detail page, and row actions are compact icons. Cards are reserved for welcome / empty states only.
+All list surfaces (agents, MCP servers, skills, knowledge, model providers, channels, the audit log) use one shared, searchable, filterable, paginated table: a row click opens that item's detail page, and row actions are compact icons. Cards are reserved for welcome / empty states only.
 
-Future groups and items — Chat, Channels, Skills, Knowledge, Memory, and **Observability** (system health / metrics, a surface distinct from the audit log) — are planned but not shown today; they appear in the sidebar only as each feature ships.
+**Observability** (system health / metrics, a surface distinct from the audit log) is planned but not shown today; it appears in the sidebar only once it ships. The reverse rule holds too — an entry is removed when its feature is, which is how Chat and Machines left.
 
 The sidebar collapses to an icon-only rail and back; the choice persists across sessions (localStorage).
 

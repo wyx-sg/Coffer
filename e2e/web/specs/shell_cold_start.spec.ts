@@ -36,13 +36,25 @@ acceptance(
     await page.goto("/");
 
     // The sidebar lists Coffer's operational surfaces — and only those.
-    // No dead "soon" entries for unbuilt features.
-    for (const label of [/MCP servers/i, /Audit log/i, /Settings/i]) {
+    // No dead "soon" entries for unbuilt features. RESOURCES carries one entry
+    // per resource kind with a list UI, which is why Model providers and
+    // Channels are in this list rather than under Settings and AGENTS.
+    for (const label of [
+      /Agents/i,
+      /MCP servers/i,
+      /Skills/i,
+      /Knowledge/i,
+      /Model providers/i,
+      /Channels/i,
+      /Audit log/i,
+      /Settings/i,
+    ]) {
       await expect(
         page.getByRole("link", { name: label }).first(),
       ).toBeVisible();
     }
-    // Grouped under Resources / System headings.
+    // Grouped under Agents / Resources / System headings.
+    await expect(page.getByText(/^Agents$/i).first()).toBeVisible();
     await expect(page.getByText(/^Resources$/i).first()).toBeVisible();
     await expect(page.getByText(/^System$/i).first()).toBeVisible();
 

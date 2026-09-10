@@ -18,19 +18,35 @@
 
 ```
  AGENTS
-  Agents           /agents        — 消费者（Bot 图标）
+  Agents           /agents            — 消费者（Bot 图标）
  RESOURCES
-  MCP servers      /mcp-servers   — 带列表 UI 的 resource kind（今天：mcp_server）
+  MCP servers      /mcp-servers       — 被聚合的上游 server
+  Skills           /skills            — Coffer 投递给 agent 的东西
+  Knowledge        /knowledge         — 每个知识 scope 一页
+  Model providers  /model-providers   — 带凭据的厂商端点
+  Channels         /channels          — agent 应答所在的 IM 传输
  SYSTEM
-  Audit log        /audit         — 谁在什么时候做了什么
+  Audit log        /audit             — 谁在什么时候做了什么
   Settings         /settings
 ```
 
+**RESOURCES 里每个带列表 UI 的 resource kind 恰好一项，这个对应关系就是规则** ——
+五个 kind（`mcp_server`、`skill`、`knowledge`、`provider`、`channel`），五个入口。
+其中两个曾经漂出了这条规则，2026-09 被放回：**Model providers** 是唯一一个被塞在
+Settings 下的 kind（当时叫「LLM connections」），而那个旧名字描述的是一个页面而不是
+它所管理的东西——一个 `provider` 是 `{protocol, base_url, credential_ref}`，即厂商端点
+加密钥；模型既不存在那里，也不在那里选，而是在使用现场选。**Channels** 曾在 AGENTS 组
+下，但一个 channel 是金库拥有的、带凭据的传输，不是金库的消费者；它该和其他资产并列，
+而不是和恰好在它上面应答的 agent 并列。
+
+于是 AGENTS 组只剩一项。这个不对称是有意的：agent 是这个产品里唯一**使用**金库、
+而不是住在金库里的东西，为省一行而合并掉这个分组会丢掉这个区分。
+
 应用的 index (`/`) 重定向到 `/agents`，因此首次访问者落在 Agents 界面。它分组为 **Agents**（消费者）、**Resources**（resource kind）与 **System**（横切工具：Audit log 与 Settings），这样导航在 Coffer 成长时保持稳定。agent 住在 `/agents`（列表）与 `/agents/:name`（详情），不出现在 `/mcp-servers` 的 kind 浏览器里。（`/resources` 保留为指向 `/mcp-servers` 的 legacy 重定向，兼容旧书签。）agent 详情页是一个简单的 **Overview + Config files** 详情页：一个 Overview tab 汇总 agent 已注册的配置，一个 Config files tab 只读地呈现其已知配置文件，没有创建 / 编辑 / 删除 / 启用。
 
-所有列表界面（agents、MCP servers、审计日志）共用同一个可搜索、可过滤、可分页的表格：点击一行打开该项的详情页，行内操作是紧凑的图标。卡片只保留给欢迎 / 空态。
+所有列表界面（agents、MCP servers、skills、knowledge、model providers、channels、审计日志）共用同一个可搜索、可过滤、可分页的表格：点击一行打开该项的详情页，行内操作是紧凑的图标。卡片只保留给欢迎 / 空态。
 
-未来的分组与入口——Chat、Channels、Skills、Knowledge、Memory 以及 **Observability**（系统健康 / 指标，一个与审计日志不同的界面）——已规划但今天不展示；它们只在各自功能上线时才进入侧栏。
+**Observability**（系统健康 / 指标，一个与审计日志不同的界面）已规划但今天不展示；它只在自己上线时才进入侧栏。反过来这条规则同样成立——一个入口在它的功能被删掉时也要被删掉，Chat 与 Machines 就是这样离开的。
 
 侧栏可折叠到只剩图标的轨道再展开；选择跨会话持久化（localStorage）。
 

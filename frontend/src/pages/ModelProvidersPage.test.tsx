@@ -1,10 +1,10 @@
-// pages/settings/LlmConnectionsPage.test.tsx
+// pages/ModelProvidersPage.test.tsx
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { acceptance } from "@/test/acceptance";
-import { LlmConnectionsPage } from "./LlmConnectionsPage";
+import { ModelProvidersPage } from "./ModelProvidersPage";
 import type { Provider } from "@/lib/api/providers";
 
 vi.mock("@/lib/api/providers", async (orig) => {
@@ -24,7 +24,7 @@ vi.mock("@/lib/api/providers", async (orig) => {
 
 // The Embedding card makes its own network calls; stub it — this page test
 // covers the connection library + internal-engine selection only.
-vi.mock("./EmbeddingSettings", () => ({
+vi.mock("./settings/EmbeddingSettings", () => ({
   EmbeddingSettings: () => <div data-testid="embedding-settings" />,
 }));
 
@@ -80,13 +80,13 @@ function renderPage() {
   return render(
     <MemoryRouter>
       <QueryClientProvider client={qc}>
-        <LlmConnectionsPage />
+        <ModelProvidersPage />
       </QueryClientProvider>
     </MemoryRouter>,
   );
 }
 
-describe("LlmConnectionsPage", () => {
+describe("ModelProvidersPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     detectResult = "openai";

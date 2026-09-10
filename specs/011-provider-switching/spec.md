@@ -133,7 +133,7 @@ chat broke because projection writes `wire_api = "chat"`, which `codex-cli`
   model/connection happens on the Agent page, not per conversation.
 - **D5 — Internal-engine selection is a separate control.** "Which connection
   Coffer's internal engine uses" (`internal_default`) moves OUT of the
-  connection card into its own dropdown selector on the LLM connections page.
+  connection card into its own dropdown selector on the Model providers page.
   Connection cards drop the internal-engine badge/star and gain an **edit**
   action (add / edit / delete via one dialog).
 - **D6 — Connection dialog gains «测试连接» + «拉取模型».** The add/edit dialog
@@ -608,8 +608,9 @@ and `internal_default`.
 
 - `frontend/src/lib/api/providers.ts` — hand-written client + TS types (`types.ts`
   codegen covers only the 001 gateway spec; do NOT expect generated types here).
-- A unified **Settings → LLM Connections** page (route `/settings/llm-connections`)
-  is the connection library: a `DataTable` (reuse the shared component; see
+- A **Model providers** page (route `/model-providers`, in the sidebar's
+  RESOURCES group — `provider` is a resource kind with a list UI, so spec 002's
+  IA rule puts it there) is the connection library: a `DataTable` (reuse the shared component; see
   SkillsPage / MCP page) with columns name / wire_format / base_url / model /
   active / internal, header action create, and row actions switch /
   set-internal-default / delete, PLUS the Embedding card. The page shows ONLY
@@ -618,9 +619,9 @@ and `internal_default`.
   and the PATCH API, not the web page.
 - Per-agent connection + model selection lives on the **agent detail page
   (Overview tab)**, filtered to that agent's wire, reusing the activate API. The
-  LLM Connections page does not bind agents.
-- The old `/settings/models` and `/settings/providers` routes redirect to
-  `/settings/llm-connections`.
+  Model providers page does not bind agents.
+- The old `/settings/models`, `/settings/providers` and
+  `/settings/llm-connections` routes redirect to `/model-providers`.
 - Add `vi.mock` for any new hook in page + table tests.
 
 > **Amendment 2026-06-23 (provider presets).** The add-connection form no longer

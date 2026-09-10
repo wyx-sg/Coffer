@@ -36,13 +36,13 @@ interface NavGroup {
 /**
  * Sidebar navigation — a role-based information architecture (see ADR-007):
  *
- * - **Agents** — the consumers: the agents you use (Claude Code, Codex) and
- *   the Channels they communicate over. Agents are NOT vault assets, so they
- *   are not under Resources.
- * - **Resources** — the assets agents draw on, modelled as kind-agnostic
- *   resource kinds (MCP servers, skills, and knowledge — one kind covering
- *   both what agents write and what people ingest), surfaced through the kind
- *   registry.
+ * - **Agents** — the consumers: the agents you use (Claude Code, Codex).
+ *   Agents are NOT vault assets, so they are not under Resources. The group
+ *   holds one entry, and that asymmetry is accepted.
+ * - **Resources** — the assets agents draw on, one entry per resource kind
+ *   that has a list UI: MCP servers, skills, knowledge, model providers, and
+ *   channels. A channel is a credentialed transport the vault owns, so it
+ *   belongs here rather than beside the agents that happen to answer on it.
  * - **System** — cross-cutting tooling: the Audit log (who did what, when),
  *   Observability (system health/metrics — a distinct future surface), and
  *   Settings.
@@ -54,17 +54,19 @@ interface NavGroup {
 const NAV_GROUPS: NavGroup[] = [
   {
     labelKey: "nav.group.agents",
-    items: [
-      { to: "/agents", labelKey: "nav.agents", icon: Bot, end: true },
-      { to: "/channels", labelKey: "nav.channels", icon: Radio, end: true },
-    ],
+    items: [{ to: "/agents", labelKey: "nav.agents", icon: Bot, end: true }],
   },
   {
+    // One entry per resource kind with a list UI — mcp_server, skill,
+    // knowledge, provider, channel. Keeping that one-to-one is the whole rule;
+    // Model providers and Channels were the two that had drifted out of it.
     labelKey: "nav.group.resources",
     items: [
       { to: "/mcp-servers", labelKey: "nav.mcpServers", icon: Server, end: true },
       { to: "/skills", labelKey: "nav.skills", icon: Sparkles, end: true },
       { to: "/knowledge", labelKey: "nav.knowledge", icon: Library, end: true },
+      { to: "/model-providers", labelKey: "nav.modelProviders", icon: Boxes, end: true },
+      { to: "/channels", labelKey: "nav.channels", icon: Radio, end: true },
     ],
   },
   {

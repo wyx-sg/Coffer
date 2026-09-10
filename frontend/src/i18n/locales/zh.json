@@ -73,7 +73,8 @@
     "expand": "展开侧边栏",
     "agents": "Agent",
     "channels": "渠道",
-    "audit": "审计日志"
+    "audit": "审计日志",
+    "modelProviders": "模型 provider"
   },
   "resources": {
     "title": "MCP 服务器",
@@ -352,7 +353,6 @@
       "data": "数据",
       "security": "安全",
       "about": "关于",
-      "llmConnections": "LLM 连接",
       "sync": "同步"
     },
     "general": {

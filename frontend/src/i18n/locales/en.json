@@ -73,7 +73,8 @@
     "expand": "Expand sidebar",
     "agents": "Agents",
     "channels": "Channels",
-    "audit": "Audit log"
+    "audit": "Audit log",
+    "modelProviders": "Model providers"
   },
   "resources": {
     "title": "MCP servers",
@@ -352,7 +353,6 @@
       "data": "Data",
       "security": "Security",
       "about": "About",
-      "llmConnections": "LLM Connections",
       "sync": "Sync"
     },
     "general": {

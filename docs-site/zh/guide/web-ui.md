@@ -6,7 +6,7 @@ MCP 服务器；浏览审计日志与调用日志；调整设置 —— 全程�
 ## Web UI 是什么
 
 Web UI 是一个建立在守护进程 REST API 之上的 React/Vite 单页应用，是日常 MCP 网关
-管理工作的主要可视化界面。侧边栏分为两组：
+管理工作的主要可视化界面。侧边栏分为三组：
 
 ```
 AGENTS
@@ -15,10 +15,15 @@ RESOURCES
   MCP servers      管理已注册的服务器
   Skills           管理 Coffer 可交付给 agent 的技能
   Knowledge        每个知识作用域一个页面:条目、文档、规则、现场
+  Model providers  厂商端点及其密钥
+  Channels         agent 应答所在的 IM 传输
 SYSTEM
-  Observability    审计日志与调用日志
+  Audit log        谁在什么时候做了什么
   Settings
 ```
+
+RESOURCES 里每个带列表 UI 的 resource kind 恰好一项——五个 kind，五个入口。
+AGENTS 只有一项，因为 agent 是**使用**金库、而不是住在金库里的那个东西。
 
 **守护进程自己提供 Web UI**，在它自己的 loopback origin 上以静态文件的形式发布，
 因此页面与 REST API 同源。没有额外要装的东西，也没有第二个服务器要起：守护进程在跑，
@@ -159,16 +164,36 @@ agent 头部的 **Install Coffer MCP** 开关会将 Coffer 自身的 `coffer` MC
 
 旧的 `/memory`、`/memory/:name`、`/knowledge-bases` 和 `/knowledge-bases/:name` URL 会重定向到此处。
 
-### Observability
+### Model providers
 
-打开 `/observability` 查看审计日志 —— 以口语化活动描述（如"Enabled demo-fs"）
-记录每一个生命周期事件。可按时间范围和 actor 过滤；点击任意行展开原始日志 JSON。
-旧版 `/audit` URL 会重定向到此处。
+打开 `/model-providers` 查看 Coffer 为之持有密钥的厂商端点。一个 provider 是
+`{protocol, base_url, credential_ref}`——端点加它的密钥。**模型**既不存在这里，
+也不在这里选：agent 的模型在它自己的详情页上选，Coffer 内部引擎的模型在本页下方选。
+把某个 provider 标记为 **internal default**，它就成了跑知识 merge、organize、reorg
+与语音转写的那条连接。embedding 配置是同一页底部的一张卡片。
+
+这个界面过去在 Settings 下叫「LLM connections」。它挪出来是因为 `provider` 和其他
+resource kind 没有区别；它改名是因为旧名字描述的是一个页面，而不是它管理的东西。
+
+### Channels
+
+打开 `/channels` 查看 agent 应答所在的 IM 传输——Telegram 与 SeaTalk。每个 channel
+用自己的凭据注册、通过一次性配对码与你配对、并绑定一个默认 agent。它过去在 AGENTS
+组下；一个 channel 是金库拥有的、带凭据的传输，因此它属于其他资源那一组。
+
+### Audit log
+
+打开 `/audit` 查看每一个生命周期事件（新增 server、启用工具、读取凭据），以口语化的
+活动描述呈现。可按时间范围与 actor 过滤；点击任意行展开原始 JSON。旧版
+`/observability` URL 会重定向到此处。
+
+这份日志的事件类型是刻意保持少的——它记录落在 Coffer 之外的变更、不可撤销的动作，
+以及低频的配置变更。它不记录守护进程启动过，也不记录某个 turn 完成过。
 
 ### Settings
 
-打开 `/settings` 可访问 **Data**（retention 策略、手动清理）和
-**About**（版本、许可证、源代码）。没有"Daemon"标签，也没有 daemon 状态面板 ——
+打开 `/settings` 可访问 **General**、**Data**（retention 策略、手动清理）、
+**Sync**（金库导出与导入）、**Security** 与 **About**（版本、许可证、源代码）。没有"Daemon"标签，也没有 daemon 状态面板 ——
 守护进程是实现细节，只有在出现问题时才会通过离线横幅呈现给用户。
 
 ### 语言
