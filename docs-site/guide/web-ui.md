@@ -137,10 +137,11 @@ The agent detail page has four tabs:
   badge, and the one write available is **Adopt** — pulling the entry into Coffer as a
   managed resource. Coffer does not edit another tool's private config, so there is no
   remove and no enable/disable toggle here.
-- **Config files** — open any of the agent's curated config files in an editor. Saving
-  validates the file's format (malformed JSON/TOML is rejected and the file left unchanged),
-  writes atomically with a `.bak` backup, and offers a find/replace box that scrolls to the
-  match.
+- **Config files** — open any of the agent's curated config files and edit it in place.
+  Saving validates the file's format (malformed JSON/TOML is rejected and the file left
+  unchanged), then writes atomically, keeping the previous contents as a `.bak` beside the
+  file. A file that changed on disk mid-edit refuses the save and offers a reload, so a
+  concurrent edit in your own editor is never silently overwritten.
 
 An **Install Coffer MCP** toggle in the agent header writes (or removes) Coffer's own
 `coffer` MCP-server entry into the agent's config, with a live status indicator.
@@ -157,7 +158,10 @@ skill; or remove one. Enabling or disabling a skill for a specific agent happens
 On the skill detail page, switch between tabs:
 
 - **Overview** — metadata: source, version hash, master path, and timestamps.
-- **Files** — a read-only file tree and content viewer of the skill's master folder.
+- **Files** — the skill's master folder as a file tree, with an editor for each text file.
+  The master folder is the source of truth and FOLDER-delivered skills are symlinked to it,
+  so an edit reaches every agent without re-delivery. Binary files, and files too large to
+  load whole, stay read-only — saving a partial read would truncate the file on disk.
 
 ### Knowledge
 

@@ -1,11 +1,14 @@
 // frontend/src/components/agents/AgentConfigFilesEditor.test.tsx
-// The config viewer is READ-ONLY: a selected file opens in a read-only preview
-// (no editable textarea, no Save, no find/replace) with a FileActions bar that
-// takes the file to the user's own editor. Directory-backed config keys expand
-// into child files that open read-only, and a Coffer memory-projection block
-// renders an info annotation. There is no in-app create/delete/save flow.
+// A selected file opens as a preview with an Edit button — reading is the
+// default so a pane opened to LOOK at an agent's real configuration cannot be
+// changed by a stray keystroke — plus a FileActions bar that takes the file to
+// the user's own editor instead. Directory-backed config keys expand into child
+// files that open the same way, and a Coffer memory-projection block renders an
+// info annotation.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { PropsWithChildren, ReactNode } from "react";
 import { AgentConfigFilesEditor } from "./AgentConfigFilesEditor";
 import en from "@/i18n/locales/en.json";
 import zh from "@/i18n/locales/zh.json";
@@ -20,6 +23,15 @@ const { useAgentConfigFiles, useAgentConfigFile, useAgentConfigChild } =
 const filesMock = vi.mocked(useAgentConfigFiles);
 const fileMock = vi.mocked(useAgentConfigFile);
 const childMock = vi.mocked(useAgentConfigChild);
+
+// Saving goes through a react-query mutation, so the tree needs a client.
+function renderEditor(ui: ReactNode) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const Wrapper = ({ children }: PropsWithChildren) => (
+    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+  );
+  return render(ui, { wrapper: Wrapper });
+}
 
 const FILES = [
   {
@@ -96,13 +108,13 @@ function openSettings() {
   fireEvent.click(screen.getByText("User settings"));
 }
 
-describe("AgentConfigFilesEditor (read-only)", () => {
-  test("opens a file as a read-only preview (no textarea, Save, or find/replace)", () => {
+describe("AgentConfigFilesEditor", () => {
+  test("opens a file as a preview with an Edit button, not a textarea", () => {
     stubFiles();
     stubFile('{"theme": "dark"}');
     stubChild(undefined);
 
-    render(<AgentConfigFilesEditor name="cc" />);
+    renderEditor(<AgentConfigFilesEditor name="cc" />);
     openSettings();
 
     // Content is shown in a read-only CodeMirror editor, never an editable field.
@@ -111,7 +123,11 @@ describe("AgentConfigFilesEditor (read-only)", () => {
     expect(content?.getAttribute("contenteditable")).toBe("false");
     expect(document.querySelector("textarea")).toBeNull();
     expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /find ?\/ ?replace/i })).not.toBeInTheDocument();
+    // Editing is opt-in: the affordance is there, the textarea is not.
+    expect(screen.getByRole("button", { name: /^edit$/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+    expect(screen.getByRole("textbox")).toHaveValue('{"theme": "dark"}');
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeInTheDocument();
   });
 
   test("renders the FileActions bar for the selected file (open/reveal on the web)", () => {
@@ -119,7 +135,7 @@ describe("AgentConfigFilesEditor (read-only)", () => {
     stubFile('{"theme": "dark"}');
     stubChild(undefined);
 
-    render(<AgentConfigFilesEditor name="cc" />);
+    renderEditor(<AgentConfigFilesEditor name="cc" />);
     openSettings();
 
     // FileActions offers real open/reveal on both surfaces (daemon-backed on web):
@@ -128,7 +144,7 @@ describe("AgentConfigFilesEditor (read-only)", () => {
     expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
   });
 
-  test("hides not-yet-created allowlisted files from the read-only viewer", () => {
+  test("hides not-yet-created allowlisted files from the tree", () => {
     filesMock.mockReturnValue({
       data: [
         ...FILES,
@@ -148,7 +164,7 @@ describe("AgentConfigFilesEditor (read-only)", () => {
     } as unknown as ReturnType<typeof useAgentConfigFiles>);
     stubChild(undefined);
 
-    render(<AgentConfigFilesEditor name="cc" />);
+    renderEditor(<AgentConfigFilesEditor name="cc" />);
 
     // exists=false → not surfaced in the viewer at all (the list API still
     // returns it for the REST/CLI write path; the UI just doesn't show it).
@@ -161,7 +177,7 @@ describe("AgentConfigFilesEditor (read-only)", () => {
     stubFile("{}");
     stubChild(undefined);
 
-    render(<AgentConfigFilesEditor name="cc" />);
+    renderEditor(<AgentConfigFilesEditor name="cc" />);
 
     // Children hidden until the directory is expanded.
     expect(screen.queryByText("alpha.md")).not.toBeInTheDocument();
@@ -173,7 +189,7 @@ describe("AgentConfigFilesEditor (read-only)", () => {
     expect(screen.getByText(/this is a directory/i)).toBeInTheDocument();
   });
 
-  test("selecting a child loads its content read-only with its own FileActions", () => {
+  test("selecting a child loads its content with its own FileActions", () => {
     stubDirFiles();
     stubFile("{}");
     stubChild({
@@ -185,7 +201,7 @@ describe("AgentConfigFilesEditor (read-only)", () => {
       folder_path: "/home/u/.claude/memories",
     });
 
-    render(<AgentConfigFilesEditor name="cc" />);
+    renderEditor(<AgentConfigFilesEditor name="cc" />);
     fireEvent.click(screen.getByText("Memory directory"));
     fireEvent.click(screen.getByText("alpha.md"));
 
@@ -199,7 +215,7 @@ describe("AgentConfigFilesEditor (read-only)", () => {
     stubFile("# CLAUDE.md", { memory_block: true });
     stubChild(undefined);
 
-    render(<AgentConfigFilesEditor name="cc" />);
+    renderEditor(<AgentConfigFilesEditor name="cc" />);
     openSettings();
 
     expect(screen.getByText(/legacy Coffer memory block/i)).toBeInTheDocument();

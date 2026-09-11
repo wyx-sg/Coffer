@@ -214,6 +214,7 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /skills/verify:
@@ -578,7 +579,7 @@ components:
     SkillFileContentOut:
       type: object
       required:
-        [path, abs_path, folder_abs_path, content, truncated, binary, size]
+        [path, abs_path, folder_abs_path, content, truncated, binary, size, fingerprint]
       properties:
         path:
           type: string
@@ -586,9 +587,9 @@ components:
         abs_path:
           type: string
           description: >-
-            Resolved absolute path of the file on disk. The in-app viewer is
-            read-only; this path backs open-in-external-editor /
-            reveal-in-file-manager.
+            Resolved absolute path of the file on disk. Backs
+            open-in-external-editor / reveal-in-file-manager alongside the
+            in-app editor.
         folder_abs_path:
           type: string
           description: Absolute path of the file's containing folder (its parent directory).
@@ -604,6 +605,13 @@ components:
         size:
           type: integer
           description: True byte size of the file on disk.
+        fingerprint:
+          type: string
+          description: >-
+            sha256 hex digest of the file's RAW on-disk bytes — not of
+            `content`, which is truncated past the read cap and empty for a
+            binary file. Echo it back as `expected_fingerprint` on a write to
+            make that write conditional.
     SkillFileWriteRequest:
       type: object
       required: [path, content]
@@ -620,6 +628,14 @@ components:
           description: >-
             Full new UTF-8 contents. Rejected (400) if it exceeds the file-size
             cap or the target is an existing binary file.
+        expected_fingerprint:
+          type: [string, "null"]
+          description: >-
+            The `fingerprint` from the read that seeded this edit. When supplied
+            and it no longer matches the bytes on disk, the write is rejected
+            (409, `SKILL_FILE_STALE`) and the file is left byte-identical — the
+            master folder is also edited directly by the user, so a lost-update
+            race is routine. Omit for an unconditional last-writer-wins write.
 
   responses:
     Unauthorized:

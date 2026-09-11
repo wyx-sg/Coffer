@@ -5,7 +5,7 @@
 **Feature Branch**: `feature/agent-registry`
 **Created**: 2026-05-22
 **Status**: Accepted
-**Input**: 用户描述：「管理 Coffer 已知的本地安装 AI agent，让后续功能（skills、memory、knowledge base）能向它们投递资产。每个 agent 都是 kind-agnostic Resource 框架（由 spec mcp-gateway 引入）下 kind 为 `agent` 的一种 Resource。v1 支持两种 agent 类型：Claude Code 与 OpenAI Codex——每种都同时涵盖其 CLI 与桌面/IDE 形态，因为它们共享同一份磁盘配置。除注册 agent 外，用户还能查看（只读）每个 agent 的已知配置文件并在外部编辑器中打开它们，并一键把 Coffer 自己的 MCP server 安装到某个 agent 上。」
+**Input**: 用户描述：「管理 Coffer 已知的本地安装 AI agent，让后续功能（skills、memory、knowledge base）能向它们投递资产。每个 agent 都是 kind-agnostic Resource 框架（由 spec mcp-gateway 引入）下 kind 为 `agent` 的一种 Resource。v1 支持两种 agent 类型：Claude Code 与 OpenAI Codex——每种都同时涵盖其 CLI 与桌面/IDE 形态，因为它们共享同一份磁盘配置。除注册 agent 外，用户还能查看并编辑每个 agent 的已知配置文件，也可以在外部编辑器中打开它们，并一键把 Coffer 自己的 MCP server 安装到某个 agent 上。」
 
 > **关于 agent 类型的说明。** 受支持的产品：**Claude Code**（`claude_code`，`~/.claude/`）与 **OpenAI Codex**（`codex`，`~/.codex/`）。每个都同时覆盖其 CLI *与* app/IDE 形态，因为它们读取同一个共享配置目录。每类型的行为存放在能力清单（`AGENT_DESCRIPTORS`）中——新增一个产品是一个枚举值 + 一条描述符记录（配置文件 allowlist、MCP 注入形态等）。独立的 **Claude Desktop** 聊天应用（有它自己的 `~/Library/Application Support/Claude/` 配置）不在范围内。
 
@@ -112,11 +112,11 @@
 
 ### User Story 7 —— 查看一个 agent 的配置文件并在外部编辑器中打开它们（优先级 P2）
 
-agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的配置文件（例如 Claude Code 的 `settings.json`、Codex 的 `config.toml`），无需离开应用去翻找 dotfile。Coffer 展示该 agent 类型的一组精选已知配置文件，让用户打开其中一个，在**只读**查看器中读取当前内容。对每个文件，Coffer 提供「在外部编辑器中打开」「在文件管理器中显示」等操作，让用户在自己的编辑器里做任何编辑。Coffer 不就地编辑配置文件内容；程序化写入路径（REST/CLI）保留校验 + 原子写入 + `.bak` 兜底。
+agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的配置文件（例如 Claude Code 的 `settings.json`、Codex 的 `config.toml`），无需离开应用去翻找 dotfile。Coffer 展示该 agent 类型的一组精选已知配置文件，让用户打开其中一个、读取当前内容并**就地编辑**。保存时先按格式校验，再以原子方式写入并保留 `.bak`，所以一次坏编辑既会被提前拒绝、也仍可恢复。由于这些文件同时也会在 Coffer 之外被编辑，保存会带上编辑起点那份内容的指纹；一旦文件在此期间被改过，保存会被拒绝而不是覆盖上去（FR-036）。对每个文件，Coffer 同样提供「在外部编辑器中打开」「在文件管理器中显示」，留给那些更适合在真正的编辑器里做的改动。
 
 **为什么是这个优先级**：手工定位 agent 配置意味着要记住每个文件在哪、用什么格式。把这组精选文件集中到一处呈现、一眼可见、一键进入用户自己的编辑器——是让 registry 超越「记账」、真正变得有用的第一个功能。
 
-**独立可测**：注册一个 `claude_code` agent；列出其配置文件；在只读查看器中打开 `settings.json`，观察响应给出该文件的 `path` 与其所在文件夹的 `folder_path`（支撑 打开/显示）；打开一个尚未创建的文件（如 `CLAUDE.md`），观察它读为空内容且未被创建。
+**独立可测**：注册一个 `claude_code` agent；列出其配置文件；打开 `settings.json`，观察响应给出该文件的 `path`、所在文件夹的 `folder_path`（支撑 打开/显示）以及内容 `fingerprint`；编辑并保存它，观察新内容能读回；打开一个尚未创建的文件（如 `CLAUDE.md`），观察它读为空内容且未被创建。
 
 **代表性场景**：
 
@@ -202,7 +202,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 ### User Story 12 —— 管理目录型配置条目（优先级 P2）
 
-有些 agent 配置不是单个文件而是一个 prose 文件目录——Claude Code 的 `agents/` 目录下每个个人 subagent 一个 Markdown 文件。用户在配置文件 tab 展开这样的条目，看到其中的文件，在只读查看器中打开某个（带对该子文件及其文件夹的「在外部编辑器中打开」「显示」）。新建、写入与删除单个文件通过 REST API / `coffer agent` CLI 以程序化方式提供——校验、原子写入与 `.bak` 兜底与单文件条目完全一致。allowlist 还新增 Codex 的 `hooks.json`；把 `memory` key 改名为 `instructions`（CLAUDE.md / AGENTS.md 是人写的指令，不是 agent 自写的记忆）。
+有些 agent 配置不是单个文件而是一个 prose 文件目录——Claude Code 的 `agents/` 目录下每个个人 subagent 一个 Markdown 文件。用户在配置文件 tab 展开这样的条目，看到其中的文件，打开其中某个进行查看与编辑（带对该子文件及其文件夹的「在外部编辑器中打开」「显示」）。新建、写入与删除单个文件通过 REST API / `coffer agent` CLI 以程序化方式提供——校验、原子写入与 `.bak` 兜底与单文件条目完全一致。allowlist 还新增 Codex 的 `hooks.json`；把 `memory` key 改名为 `instructions`（CLAUDE.md / AGENTS.md 是人写的指令，不是 agent 自写的记忆）。
 
 **为什么是这个优先级**：subagent 定义正是 hub 模型希望「先可见、后可收编」的那类可共享 prose；今天它们完全不可见。
 
@@ -236,7 +236,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - **对与既有资源等价的条目请求收编**：Coffer 报告匹配（`matches_resource`），并提议移除多余的直连条目，而非创建重复资源。
 - **插件已配置但缓存目录缺失**：以 `cache_present=false` 列出，让用户看到漂移；Coffer 不尝试修复（重装——与其他一切插件写操作一样——属于 agent 自己的工具链）。
 - **agent 自身进程在 Coffer 读与写之间改写了配置文件**：写入因指纹不匹配被拒绝为过期（409）；用户重新读取后重试。Coffer 每次写入保留的 `.bak` 在相反方向的竞争中保证旧内容可恢复。
-- **指令文件包含 spec knowledge 的记忆投影受管块**：只读查看器标注该区块由记忆功能管理；任何编辑都发生在用户的外部编辑器中。
+- **指令文件包含 spec knowledge 的记忆投影受管块**：编辑器标注该区块由记忆功能管理，让用户知道对它的改动可能被改写。
 - **`~/.codex/auth.json` 及其他凭据/状态文件**：永不进入任何 allowlist 或列表；插件与 MCP 解析也绝不读取它们。
 
 ## Acceptance Scenarios
@@ -299,7 +299,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 ### Scenario: open a managed file via the daemon (web open/reveal)
 
-- **Given** daemon 正在运行，只读查看器正在显示一个受管文件，
+- **Given** daemon 正在运行，编辑器正在显示一个受管文件，
 - **When** Web 界面请求 daemon 打开一个已存在的绝对路径（可选带首选编辑器）或在文件管理器中显示它，
 - **Then** daemon 为该路径启动 OS 应用 / 文件管理器并返回成功；相对路径或不存在的路径被拒绝，且不启动任何进程。
 
@@ -374,13 +374,13 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 ### Scenario: save a config file with valid content
 
 - **Given** 一个 `settings.json` 已存在的已注册 `claude_code` agent，
-- **When** 用户通过 REST API 或 `coffer agent` CLI 向该配置文件 key 写入新的、格式良好的内容（应用内 UI 是只读的），
+- **When** 用户通过应用内编辑器、REST API 或 `coffer agent` CLI 向该配置文件 key 写入新的、格式良好的内容，
 - **Then** Coffer 按文件格式校验内容，原子写入并保留上一版本的 `.bak`，写一条 `agent_config_file_written` audit 条目，下次读取即可读回新内容。
 
 ### Scenario: reject malformed config-file content
 
 - **Given** 一个 `settings.json`（`json` 文件）已存在的已注册 agent，
-- **When** 用户通过 REST API 或 `coffer agent` CLI 向该 key 写入畸形内容（如非法 JSON）（应用内 UI 是只读的），
+- **When** 用户通过应用内编辑器、REST API 或 `coffer agent` CLI 向该 key 写入畸形内容（如非法 JSON），
 - **Then** Coffer 以 `unprocessable_entity`（422）响应，磁盘文件保持不变，不写 `.bak`，也不写任何写入 audit 条目。
 
 ### Scenario: report Coffer-MCP install status
@@ -470,13 +470,13 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 ### Scenario: create a file inside a directory entry
 
 - **Given** 一个带 `agents/` 目录条目的已注册 `claude_code` agent，
-- **When** 用户通过 REST API 或 `coffer agent` CLI 向条目内一个新 `.md` 文件路径写入内容（应用内 UI 是只读的），
+- **When** 用户通过应用内编辑器、REST API 或 `coffer agent` CLI 向条目内一个新 `.md` 文件路径写入内容，
 - **Then** 文件经原子写入机制创建，写一条 `agent_config_file_written` audit 条目，下次列出包含它。
 
 ### Scenario: delete a file inside a directory entry
 
 - **Given** 一个含文件的目录条目，
-- **When** 用户通过 REST API 或 `coffer agent` CLI 删除该文件（应用内 UI 是只读的），
+- **When** 用户通过 REST API 或 `coffer agent` CLI 删除该文件，
 - **Then** 文件被移除且其先前内容保留为 `.bak`，写一条 `agent_config_file_deleted` audit 条目，下次列出不再显示它。
 
 ### Scenario: reject directory file paths outside the entry
@@ -524,9 +524,9 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 **配置文件**
 
 - **FR-013**：每个受支持 agent 类型 MUST 定义一份精选的配置文件 allowlist（在其能力清单记录中），每个条目携带稳定的 `key`、一个显示名、一个解析后的绝对路径与一个 `format`（`json`、`toml`、`markdown` 或 `text`）。Claude Code → `settings.json`、`settings.local.json`、`~/.claude.json`、`CLAUDE.md`（key 为 `instructions`）与 `agents/` 目录条目（FR-034）；Codex → `config.toml`、`AGENTS.md`（key 为 `instructions`）与 `hooks.json`。Claude Code/Codex 原 `memory` key 改名为 `instructions`——那些文件是人写的指令，区别于 agent 自写的记忆（spec knowledge 的领域）。
-- **FR-014**: 用户 MUST 能列出一个 agent 的配置文件，并对每个文件给出其 key、显示名、路径、所在文件夹的绝对路径（`folder_path`）、格式与存在性（文件存在时附带大小与修改时间）。`path`/`folder_path` 这一对支撑只读 UI 的「在外部编辑器中打开 / 在文件管理器中显示」（FR-038）。
+- **FR-014**: 用户 MUST 能列出一个 agent 的配置文件，并对每个文件给出其 key、显示名、路径、所在文件夹的绝对路径（`folder_path`）、格式与存在性（文件存在时附带大小与修改时间）。`path`/`folder_path` 这一对支撑 UI 的「在外部编辑器中打开 / 在文件管理器中显示」（FR-038）。
 - **FR-015**: 用户 MUST 能读取任一 allowlist 内配置文件的内容。不存在的文件读为空内容、`exists=false`，且读取不会创建它。
-- **FR-016**: 系统 MUST 通过 REST API 与 `coffer agent` CLI 为任一 allowlist 内配置文件的内容暴露一个程序化写入（保存）；应用内 UI 是只读的，不写入配置文件内容。写入前 MUST 按文件的 `format` 校验内容；畸形的 `json`/`toml` MUST 被拒绝（`unprocessable_entity`，422）且磁盘文件保持不变。`markdown`/`text` 文件接受任意内容。
+- **FR-016**: 系统 MUST 为任一 allowlist 内配置文件的内容暴露一个写入（保存），同时服务于应用内编辑器、REST API 与 `coffer agent` CLI —— 三者共用同一个端点。写入前 MUST 按文件的 `format` 校验内容；畸形的 `json`/`toml` MUST 被拒绝（`unprocessable_entity`，422）且磁盘文件保持不变。`markdown`/`text` 文件接受任意内容。
 - **FR-017**: 写入 MUST 是原子的（临时文件 + rename），并 MUST 保留上一版本内容的 `.bak` 副本，使错误编辑可恢复；每次成功写入 MUST 写一条 `agent_config_file_written` audit 条目。Coffer-MCP 安装/卸载操作（FR-022）复用同一套原子写入 + `.bak` 机制。
 - **FR-018**: 配置文件的读取与写入 MUST 只能通过 allowlist 内的 `key` 寻址（绝不接受调用方提供的路径）；未知 key 返回 `not_found`（404）且不做任何文件系统访问。
 
@@ -555,9 +555,9 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 **目录型配置条目（工作区增补）**
 
 - **FR-034**: 配置文件 allowlist 条目 MAY 是**目录条目**（`kind=directory`）：解析到一个目录并列出其文件（条目相对路径、大小、修改时间），而非携带内容。Claude Code 的目录条目是 `agents/`（每个个人 subagent 一个 Markdown 文件，允许嵌套路径）。目录缺失时以 `exists=false`、零文件列出；读取绝不创建它。
-- **FR-035**: 用户 MUST 能读取目录条目内的单个文件；该读取对 UI 的只读查看器可用。单个文件的写入（写即创建）与删除是程序化的，通过 REST API 与 `coffer agent` CLI 提供。子路径在任何文件系统访问之前于服务端校验：MUST 解析在条目目录之内（无 `..`、无绝对路径、无 symlink 逃逸）且带 `.md` 扩展名。写入复用 FR-017 机制；删除把先前内容保留为 `.bak`。审计为 `agent_config_file_written` / `agent_config_file_deleted`。
+- **FR-035**: 用户 MUST 能读取目录条目内的单个文件；该读取支撑 UI 的编辑器。单个文件的写入（写即创建）与删除通过应用内编辑器、REST API 与 `coffer agent` CLI 提供。子路径在任何文件系统访问之前于服务端校验：MUST 解析在条目目录之内（无 `..`、无绝对路径、无 symlink 逃逸）且带 `.md` 扩展名。写入复用 FR-017 机制；删除把先前内容保留为 `.bak`。审计为 `agent_config_file_written` / `agent_config_file_deleted`。
 - **FR-036**: 配置文件读取（单文件与目录子文件）MUST 返回内容指纹；写入 MUST 带回该指纹，且当磁盘内容自读取后已变化时以 `conflict`（409）拒绝、文件保持不变。
-- **FR-037**: 当指令文件包含由另一个功能定义的受管块——spec knowledge 的记忆投影块——时，只读查看器 MUST 标注该区块由那个功能拥有。每个块使用其各自独有的标记并被独立改写；标记格式由定义它的功能拥有。
+- **FR-037**: 当指令文件包含由另一个功能定义的受管块——spec knowledge 的记忆投影块——时，编辑器 MUST 标注该区块由那个功能拥有。每个块使用其各自独有的标记并被独立改写；标记格式由定义它的功能拥有。
 
 **不再提供：原生记忆（已删除）**
 
@@ -601,7 +601,7 @@ registry 一度伸进 coding agent 自己的原生逐项目记忆——区别于
 - **Agent**：一个 kind 为 `agent` 的 Resource。代表一份本地安装的 AI agent。Config: `type`（受支持的 enum）、`config_dir`（可选的绝对路径覆盖；默认回退到该类型的标准位置）。skill 投递到 `<config_dir>/skills`。标识为 `agent:<name>`。`agent` kind 不声明 `scope`：非 null 值在校验阶段被拒绝（422）——agent resource 正是其他 kind 的 scope 所指向的对象，而它自己绝不是某个 scope 的目标（[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.zh.md)）。
 - **Agent Type**：一个 enum 值，标识一个已知 agent 产品（`claude_code`、`codex`）。每个值映射到**能力清单**（`AGENT_DESCRIPTORS`）中的一条记录，携带其默认 `config_dir`、显示名、用于发现的安装标记、精选的**配置文件 allowlist**、**MCP 注入形态**，以及其 provider 投影 facet。两个受支持产品都携带全部 facet；一个做不到的产品，本身就不值得加入（FR-003a）。
 - **Agent Candidate（候选项）**：一个被发现的、已安装但尚未注册的 agent——`type`、`display_name`、`config_dir`（该类型的默认配置目录）、`default_skill_dir` 与 `suggested_name`。在扫描时派生，从不存储；用户确认某个候选项即可注册它。
-- **Config File（配置文件）**：属于某个 agent 类型、在 allowlist 内的精选文件，以稳定的 `key` 标识。携带显示名、解析后的绝对路径、其所在文件夹的绝对路径（`folder_path`）、`format`（`json` / `toml` / `markdown` / `text`），以及（存在时）大小与修改时间。在 UI 中只读呈现（查看其内容、在外部编辑器中打开该文件 / 其文件夹）；按 key 读取并程序化写入（REST/CLI），绝不按任意路径。不持久化到 SQLite——磁盘上的文件即为事实来源。
+- **Config File（配置文件）**：属于某个 agent 类型、在 allowlist 内的精选文件，以稳定的 `key` 标识。携带显示名、解析后的绝对路径、其所在文件夹的绝对路径（`folder_path`）、`format`（`json` / `toml` / `markdown` / `text`），以及（存在时）大小与修改时间。在 UI 中呈现，可读可编辑（也可在外部编辑器中打开该文件 / 其文件夹）；按 key 读取与写入（应用内编辑器、REST、CLI），绝不按任意路径。不持久化到 SQLite——磁盘上的文件即为事实来源。
 - **Coffer MCP Install Status（安装状态）**：某个 agent 的派生（非存储）状态：其 MCP 配置文件中是否存在 `coffer` MCP-server 条目。
 - **Agent MCP Entry（agent MCP 条目）**：agent 自己文件中所配置的一个 MCP server 的派生（绝不存储）视图——名称、来源文件、传输方式、`enabled`（Codex）、`is_coffer`、`matches_resource`。文件是事实来源；Coffer 读取与收编条目但不保留副本，且只在收编的移除步骤中才编辑条目。
 - **Agent Plugin（agent 插件）**：一个已安装插件的派生（绝不存储）视图——id（`<name>@<marketplace>`）、marketplace、启用状态、`cache_present`，外加从插件安装目录尽力读取的清单信息。所有输入都是只读的：Coffer 上报的启用状态就是各 agent 文档化配置面所声明的那个，Coffer 绝不把它写回去。
@@ -616,7 +616,7 @@ registry 一度伸进 coding agent 自己的原生逐项目记忆——区别于
 - **SC-003**：本 spec 中每一个 Acceptance Scenario 至少被一个带 `acceptance(spec="agent-registry", scenario="…")` 标记的测试覆盖；`make verify-acceptance` 报告零未覆盖 scenario。
 - **SC-004**：完整 `make verify` 套件在本地与 CI 中通过；`make verify-all`（额外包含 e2e）在 macOS 与 Linux 上通过。
 - **SC-005**：任何 `config_dir` 值都不允许写到该目录之外（path-traversal 检查），由一个专门的安全测试验证。
-- **SC-006**：用户能在 Coffer 中只读打开 agent 的 `settings.json`（Claude Code）或 `config.toml`（Codex），并从 Web UI 在其外部编辑器中打开它；程序化保存（REST/CLI）仍会校验内容（畸形的保存会被拒绝且文件保持不变），并在成功保存时保留上一版本的 `.bak`。
+- **SC-006**：用户能在 Coffer 中打开 agent 的 `settings.json`（Claude Code）或 `config.toml`（Codex）并编辑保存，也可以改在外部编辑器中打开它；每一次保存都会校验内容（畸形的保存会被拒绝且文件保持不变）、保留上一版本的 `.bak`，并在文件自读取以来已在磁盘上变动时拒绝写入。
 - **SC-007**：用户能一键把 Coffer 的 MCP 安装到一个新注册的 agent，重启该 agent 后它能列出 Coffer 聚合的工具；重复安装绝不产生重复条目，卸载将其移除。
 - **SC-008**：MCP tab 恰好列出 agent 真实配置文件中存在的条目；收编一条直连条目即完成完整回路——资源已注册、网关在服务它、直连条目已消失——只需一次用户操作加至多一次确认。
 - **SC-009**：插件列表什么都不写：一次列出前后，agent 配置目录下的每个文件——包括 agent 的内部插件状态文件——逐字节一致。
@@ -627,7 +627,7 @@ registry 一度伸进 coding agent 自己的原生逐项目记忆——区别于
 - 用户在自己的机器上运行 Coffer；不存在多租户或远程访问需求。
 - 两种 agent 类型已在能力清单（`AGENT_DESCRIPTORS`）中接线——`claude_code` 与 `codex`——每种都是一个 `AgentType` 枚举值加一条记录（安装标记、配置文件 allowlist、MCP 注入形态，以及它的各 facet）。再增加一个产品也是同样的一条记录变更，外加当其 wire 协议是新的时一个 chat-provider 适配器；一个 Coffer 无法在真实安装上实操其 facet 的产品不会被加入（FR-003a）。
 - 每个受支持 agent 的 CLI 与 app/IDE 形态读取同一个共享配置目录（`~/.claude/` 与 `~/.codex/`），因此 Coffer 对每个 agent 管理一份配置集合。
-- 配置文件以原始文本方式只读呈现，供用户查看；编辑发生在用户的外部编辑器中（从查看器打开），而程序化写入路径（REST/CLI）保留校验 + 原子写入 + `.bak` 兜底。只读查看器加上「在外部编辑器中打开」是长尾需求的兜底入口；反复出现的结构化需求按工作区增补「毕业」为 facet（MCP 条目、插件）。凭据/状态文件 `~/.codex/auth.json` 被有意排除在 allowlist 之外。
+- 配置文件以原始文本呈现，用户可就地读取与编辑；无论从哪个界面保存，都带校验 + 原子写入 + `.bak` 兜底。「在外部编辑器中打开」作为长尾需求的兜底入口保留在旁；反复出现的结构化需求按工作区增补「毕业」为 facet（MCP 条目、插件）。凭据/状态文件 `~/.codex/auth.json` 被有意排除在 allowlist 之外。
 - agent 的内部状态文件（`~/.claude.json` 中 `mcpServers` 映射之外的部分、`~/.claude/plugins/*.json`、Codex 的 `[marketplaces.*]` / `[hooks.state.*]` / `[projects.*]` 表）在需要时作为输入读取，工作区 facet 绝不写入它们；唯一的写目标是按各厂商文档核实过的文档化配置面。实际情况（已在真实机器上验证）：Claude Code 的 user 级 MCP server 存在于 `~/.claude.json` 的 `mcpServers`，也可能出现在 `settings.json` 的 `mcpServers`——两处都解析。
 - 工作区 facet 遵循收编 → 主库 → 投递原则：在 agent 工作区发现的可共享内容收编进 Coffer 的中枢（此处是 MCP 网关；skill 主库经由 spec skill-manager 的配套增补），而非作为各 agent 的一次性配置来管理。中枢本身的跨机器共享属于未来 spec（需修宪）；这些 facet 的设计保证其状态在那一天到来时可直接序列化为声明式清单。
 - agent 把自己的 skill 库存放在本地文件系统的 `<config_dir>/skills` 之下。仅 Web 形态的 agent（例如 claude.ai）超出 v1 范围，需要后续 spec 通过 API 同步加入。

@@ -26,6 +26,14 @@ export interface ConfigFileListOut {
   items: ConfigFileInfo[];
 }
 
+/** Body of a config-file save. `expected_fingerprint` makes the write
+ *  conditional: the daemon refuses it with 409 CONFIG_FILE_STALE when the file
+ *  changed on disk since the read that produced the fingerprint. */
+export interface ConfigFileWrite {
+  content: string;
+  expected_fingerprint?: string | null;
+}
+
 export interface ConfigFileContent {
   key: string;
   format: ConfigFileFormat;
@@ -145,6 +153,11 @@ export async function call<T>(
 // also constrains names server-side).
 export const enc = encodeURIComponent;
 
+// A directory-entry child is addressed by a POSIX relpath, so each SEGMENT is
+// encoded but the separators are kept — `enc` would escape the slashes and the
+// daemon would see one flat name instead of a path.
+const childPath = (relpath: string) => relpath.split("/").map(encodeURIComponent).join("/");
+
 export const agentsApi = {
   list: () => call<AgentListOut>("GET", "/agents"),
   register: (body: AgentCreate) => call<AgentOut>("POST", "/agents", body),
@@ -154,13 +167,15 @@ export const agentsApi = {
   // Read-only discovery: installed-but-unregistered agents the user can add.
   candidates: () => call<AgentCandidatesOut>("GET", "/agents/candidates"),
 
-  // Config files are read-only in the UI: viewing happens in-app, editing in the
-  // user's own editor (the write endpoint still exists server-side, but the UI
-  // no longer calls it).
+  // Config files are read AND written in-app. A write carries the fingerprint
+  // from the read that seeded the editor, so a file changed underneath the
+  // editor is refused (409) rather than overwritten.
   listConfigFiles: (name: string) =>
     call<ConfigFileListOut>("GET", `/agents/${enc(name)}/config-files`),
   readConfigFile: (name: string, key: string) =>
     call<ConfigFileContent>("GET", `/agents/${enc(name)}/config-files/${enc(key)}`),
+  writeConfigFile: (name: string, key: string, body: ConfigFileWrite) =>
+    call<ConfigFileInfo>("PUT", `/agents/${enc(name)}/config-files/${enc(key)}`, body),
 
   mcpStatus: (name: string) => call<McpInstallStatus>("GET", `/agents/${enc(name)}/mcp-install`),
   mcpInstall: (name: string) => call<McpInstallStatus>("POST", `/agents/${enc(name)}/mcp-install`),
@@ -179,14 +194,20 @@ export const agentsApi = {
       body,
     ),
 
-  // Config-file child (per-file inside a directory-backed config key) — read-only.
+  // Config-file child (per-file inside a directory-backed config key).
   readConfigChild: (name: string, key: string, relpath: string) => {
-    const encodedRelpath = relpath.split("/").map(encodeURIComponent).join("/");
+    const encodedRelpath = childPath(relpath);
     return call<ConfigFileContent>(
       "GET",
       `/agents/${enc(name)}/config-files/${enc(key)}/files/${encodedRelpath}`,
     );
   },
+  writeConfigChild: (name: string, key: string, relpath: string, body: ConfigFileWrite) =>
+    call<ConfigFileInfo>(
+      "PUT",
+      `/agents/${enc(name)}/config-files/${enc(key)}/files/${childPath(relpath)}`,
+      body,
+    ),
 
   // Unmanaged skills (specs agent-registry/skill-manager workspace amendment)
   unmanagedSkills: (name: string) =>

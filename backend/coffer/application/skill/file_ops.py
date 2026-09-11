@@ -2,7 +2,8 @@
 
 A skill's canonical master folder lives at ``~/.coffer/skills/<name>/`` and is
 Coffer-owned (see ``infrastructure/skill/master_store.py``). Surfaces show that
-folder as a file tree and let the user read individual files, read-only.
+folder as a file tree, let the user read individual files, and let them save an
+edited file back (``write_skill_file``).
 
 This is a "helper module beside ``service.py``" (like ``verify_ops.py``):
 free functions, no class state. They are pure-ish reads of
@@ -19,6 +20,7 @@ each entry), so a cyclic symlink cannot send the recursion into a loop.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import pathlib
 from dataclasses import dataclass, field
@@ -35,6 +37,10 @@ MAX_FILE_BYTES = 256 * 1024
 # limit raise ``RecursionError`` and 500 the request. The deepest level is
 # marked ``truncated=True`` so the surface can signal the tree was clipped.
 MAX_TREE_DEPTH = 64
+
+# Chunk size for the streaming content fingerprint. Bounded so hashing a large
+# file never pulls the whole thing into memory.
+_HASH_CHUNK_BYTES = 64 * 1024
 
 
 @dataclass
@@ -57,13 +63,21 @@ class FileNode:
 
 @dataclass(frozen=True)
 class FileContent:
-    """A single skill file's contents (read-only)."""
+    """A single skill file's contents, plus the fingerprint that guards a write.
+
+    ``fingerprint`` digests the file's RAW BYTES on disk, never the ``content``
+    field: ``content`` is truncated past ``MAX_FILE_BYTES`` and empty for a
+    binary file, so hashing it would make an oversized file's fingerprint fail
+    to round-trip through an unchanged read → write. Hashing the bytes also
+    means an edit past the truncation point is still detected as a conflict.
+    """
 
     path: str
     content: str
     truncated: bool
     binary: bool
     size: int
+    fingerprint: str = ""
 
 
 def build_file_tree(master_folder: pathlib.Path) -> FileNode:
@@ -125,6 +139,21 @@ def _build_children(directory: pathlib.Path, root: pathlib.Path, *, depth: int) 
     return children
 
 
+def _fingerprint(path: pathlib.Path) -> str:
+    """sha256 hex digest of a file's full on-disk bytes.
+
+    Streamed in fixed chunks rather than read whole: a skill's master folder is
+    capped at 50 MB in total, but one file inside it can still be far larger
+    than the 256 KiB the viewer reads, and the digest must cover all of it for
+    the staleness check to mean anything.
+    """
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(_HASH_CHUNK_BYTES), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def read_skill_file(master_folder: pathlib.Path, relpath: str) -> FileContent:
     """Read a single file under ``master_folder``.
 
@@ -159,9 +188,14 @@ def read_skill_file(master_folder: pathlib.Path, relpath: str) -> FileContent:
     chunk = read[:MAX_FILE_BYTES] if truncated else read
 
     rel = candidate.relative_to(root).as_posix()
+    # Hashed from the file itself, so every branch below (binary, truncated,
+    # plain text) hands back a fingerprint the caller can write back with.
+    fp = _fingerprint(candidate)
 
     if b"\x00" in chunk:
-        return FileContent(path=rel, content="", truncated=truncated, binary=True, size=size)
+        return FileContent(
+            path=rel, content="", truncated=truncated, binary=True, size=size, fingerprint=fp
+        )
     try:
         text = chunk.decode("utf-8")
     except UnicodeDecodeError:
@@ -171,9 +205,15 @@ def read_skill_file(master_folder: pathlib.Path, relpath: str) -> FileContent:
             # valid prefix and drop the dangling bytes rather than mislabel a
             # large text file as binary.
             text = chunk.decode("utf-8", errors="ignore")
-            return FileContent(path=rel, content=text, truncated=True, binary=False, size=size)
-        return FileContent(path=rel, content="", truncated=truncated, binary=True, size=size)
-    return FileContent(path=rel, content=text, truncated=truncated, binary=False, size=size)
+            return FileContent(
+                path=rel, content=text, truncated=True, binary=False, size=size, fingerprint=fp
+            )
+        return FileContent(
+            path=rel, content="", truncated=truncated, binary=True, size=size, fingerprint=fp
+        )
+    return FileContent(
+        path=rel, content=text, truncated=truncated, binary=False, size=size, fingerprint=fp
+    )
 
 
 def write_skill_file(master_folder: pathlib.Path, relpath: str, content: str) -> FileContent:
@@ -185,7 +225,14 @@ def write_skill_file(master_folder: pathlib.Path, relpath: str, content: str) ->
     files, not a create-file or create-directory affordance. The write is
     atomic (temp file + ``os.replace``) so a failure can't leave a half-written
     file, and it preserves the existing UTF-8 text contract: a binary file is
-    rejected rather than clobbered with text.
+    rejected rather than clobbered with text. The re-read result carries the
+    NEW ``fingerprint``, so an editor that keeps the buffer open can issue its
+    next write without a round-trip through the read endpoint.
+
+    This function does no staleness check of its own — the optimistic
+    ``expected_fingerprint`` comparison lives one layer up, in
+    ``content_ops.write_skill_file``, beside the existence check and the audit
+    record, so it happens before anything here touches the filesystem.
 
     Raises:
         ValueError: ``relpath`` resolves outside the master folder, the content

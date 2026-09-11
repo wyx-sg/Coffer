@@ -1,16 +1,21 @@
-"""HTTP coverage for the read-only skill file viewer (spec skill-manager).
+"""HTTP coverage for the skill file viewer + editor (spec skill-manager).
 
 Boots the app exactly like ``test_skill_routes.py``: a temp ``HOME`` so the
 master store lands under ``tmp_path/.coffer/skills`` and a temp SQLite DB.
-Imports a skill with a nested folder, then exercises the two new endpoints:
+Imports a skill with a nested folder, then exercises the endpoints:
 
 - ``GET /skills/{name}/files`` — tree shape
 - ``GET /skills/{name}/files/content`` — single-file read, path-escape
-  rejection, binary detection, oversize truncation.
+  rejection, binary detection, oversize truncation, content fingerprint.
+- ``PUT /skills/{name}/files/content`` — save, guards, and the optimistic
+  ``expected_fingerprint`` concurrency check (FR-028). The master folder is
+  also the user's own working copy, so the stale case is exercised by mutating
+  the file on disk behind the API — exactly what an external editor does.
 """
 
 from __future__ import annotations
 
+import hashlib
 import pathlib
 import textwrap
 
@@ -210,11 +215,14 @@ def test_binary_file_returns_binary_true(tmp_path, monkeypatch):
         assert body["binary"] is True
         assert body["content"] == ""
         assert body["size"] == len(b"\x00\x01\x02PNG\x00")
+        # Fingerprint is of the raw bytes, so a binary file (empty `content`)
+        # still gets a usable one.
+        assert body["fingerprint"] == hashlib.sha256(b"\x00\x01\x02PNG\x00").hexdigest()
 
 
 @pytest.mark.acceptance(
     spec="skill-manager",
-    scenario="programmatically overwrite a skill file via the write API",
+    scenario="edit and save a skill file",
 )
 def test_write_skill_file_roundtrip(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59760)
@@ -224,23 +232,134 @@ def test_write_skill_file_roundtrip(tmp_path, monkeypatch):
     with _client(app) as c:
         _import(c, src)
 
+        # An editor first reads the file; the read hands back the fingerprint
+        # that makes the eventual save conditional.
+        r = c.get(
+            "/api/v1/skills/edit-skill/files/content",
+            params={"path": "scripts/run.py"},
+        )
+        assert r.status_code == 200, r.text
+        read_fp = r.json()["fingerprint"]
+        # sha256 of the RAW BYTES on disk, not of the returned text.
+        assert read_fp == hashlib.sha256(b"print('hi')\n").hexdigest()
+
         new_body = "print('edited')\n"
         r = c.put(
             "/api/v1/skills/edit-skill/files/content",
-            json={"path": "scripts/run.py", "content": new_body},
+            json={
+                "path": "scripts/run.py",
+                "content": new_body,
+                "expected_fingerprint": read_fp,
+            },
         )
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["content"] == new_body
         assert body["binary"] is False
         assert body["size"] == len(new_body)
+        # The write response carries the NEW fingerprint, so a still-open
+        # editor can save again without re-reading.
+        assert body["fingerprint"] == hashlib.sha256(new_body.encode()).hexdigest()
+        assert body["fingerprint"] != read_fp
 
-        # The change is persisted — a fresh read returns the new content.
+        # The change is persisted — a fresh read returns the new content and
+        # the same fingerprint the write reported.
         r = c.get(
             "/api/v1/skills/edit-skill/files/content",
             params={"path": "scripts/run.py"},
         )
         assert r.json()["content"] == new_body
+        assert r.json()["fingerprint"] == body["fingerprint"]
+
+        # A second save using that returned fingerprint round-trips too.
+        r = c.put(
+            "/api/v1/skills/edit-skill/files/content",
+            json={
+                "path": "scripts/run.py",
+                "content": "print('again')\n",
+                "expected_fingerprint": body["fingerprint"],
+            },
+        )
+        assert r.status_code == 200, r.text
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="reject a stale save of a skill file",
+)
+def test_write_skill_file_rejects_stale_fingerprint(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59790)
+    src = tmp_path / "src"
+    _write_nested_skill_folder(src, name="stale-skill")
+    master = tmp_path / ".coffer" / "skills" / "stale-skill"
+
+    with _client(app) as c:
+        _import(c, src)
+
+        r = c.get(
+            "/api/v1/skills/stale-skill/files/content",
+            params={"path": "scripts/run.py"},
+        )
+        stale_fp = r.json()["fingerprint"]
+
+        # The user edits the same file in their own editor while the in-app
+        # buffer still holds the content from the read above.
+        external = "print('from my editor')\n"
+        (master / "scripts" / "run.py").write_text(external, encoding="utf-8")
+
+        r = c.put(
+            "/api/v1/skills/stale-skill/files/content",
+            json={
+                "path": "scripts/run.py",
+                "content": "print('from the app')\n",
+                "expected_fingerprint": stale_fp,
+            },
+        )
+        assert r.status_code == 409, r.text
+        assert r.json()["error"]["code"] == "SKILL_FILE_STALE"
+
+        # The refusal left the external edit byte-identical on disk.
+        assert (master / "scripts" / "run.py").read_text(encoding="utf-8") == external
+
+        # Re-reading yields the current fingerprint, and the retry succeeds.
+        r = c.get(
+            "/api/v1/skills/stale-skill/files/content",
+            params={"path": "scripts/run.py"},
+        )
+        fresh_fp = r.json()["fingerprint"]
+        assert fresh_fp != stale_fp
+        r = c.put(
+            "/api/v1/skills/stale-skill/files/content",
+            json={
+                "path": "scripts/run.py",
+                "content": "print('merged')\n",
+                "expected_fingerprint": fresh_fp,
+            },
+        )
+        assert r.status_code == 200, r.text
+        assert (master / "scripts" / "run.py").read_text(encoding="utf-8") == "print('merged')\n"
+
+
+def test_write_without_fingerprint_is_unconditional(tmp_path, monkeypatch):
+    """Programmatic clients that never read first keep working (FR-028)."""
+    app = _app(tmp_path, monkeypatch, 59800)
+    src = tmp_path / "src"
+    _write_nested_skill_folder(src, name="uncond-skill")
+    master = tmp_path / ".coffer" / "skills" / "uncond-skill"
+
+    with _client(app) as c:
+        _import(c, src)
+
+        # Change the file behind the API — with no expected_fingerprint the
+        # write must still land (last writer wins).
+        (master / "scripts" / "run.py").write_text("print('drift')\n", encoding="utf-8")
+
+        r = c.put(
+            "/api/v1/skills/uncond-skill/files/content",
+            json={"path": "scripts/run.py", "content": "print('cli')\n"},
+        )
+        assert r.status_code == 200, r.text
+        assert (master / "scripts" / "run.py").read_text(encoding="utf-8") == "print('cli')\n"
 
 
 def test_write_skill_file_rejects_missing_and_escape(tmp_path, monkeypatch):
@@ -318,3 +437,7 @@ def test_oversize_file_is_truncated(tmp_path, monkeypatch):
         # Content is capped at the byte limit; size reports the true length.
         assert len(body["content"]) == MAX_FILE_BYTES
         assert body["size"] == len(big)
+        # The fingerprint digests the WHOLE file, not the truncated content —
+        # otherwise an edit past the cap would slip through the stale check.
+        assert body["fingerprint"] == hashlib.sha256(big.encode()).hexdigest()
+        assert body["fingerprint"] != hashlib.sha256(body["content"].encode()).hexdigest()

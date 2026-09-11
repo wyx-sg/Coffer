@@ -1,11 +1,32 @@
 // frontend/src/components/agents/ConfigEditorPane.test.tsx
-// The right-hand pane is READ-ONLY: it previews the file's content (no
-// editable textarea, no Save, no find/replace), shows the path plus an
-// optional one-line description, and renders the FileActions bar so the user
-// can open the file in their own editor (daemon-backed open/reveal).
-import { describe, expect, test } from "vitest";
-import { render, screen } from "@testing-library/react";
+// The right-hand pane reads by default and edits behind an explicit Edit: no
+// textarea until the user asks for one, so a pane opened to LOOK at an agent's
+// real configuration cannot be changed by a stray keystroke. It also shows the
+// path plus an optional one-line description, and renders the FileActions bar
+// so the user can open the file in their own editor instead (daemon-backed
+// open/reveal).
+import { describe, expect, test, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { ConfigEditorPane, type ConfigEditorPaneProps } from "./ConfigEditorPane";
+
+type Draft = ConfigEditorPaneProps["draft"];
+
+function draftStub(overrides: Partial<Draft> = {}): Draft {
+  return {
+    value: "{}",
+    dirty: false,
+    editing: false,
+    setDraft: vi.fn(),
+    startEditing: vi.fn(),
+    cancel: vi.fn(),
+    save: vi.fn(),
+    saving: false,
+    error: null,
+    conflict: false,
+    discardAndReload: vi.fn(async () => {}),
+    ...overrides,
+  } as Draft;
+}
 
 function baseProps(overrides: Partial<ConfigEditorPaneProps> = {}): ConfigEditorPaneProps {
   return {
@@ -16,12 +37,14 @@ function baseProps(overrides: Partial<ConfigEditorPaneProps> = {}): ConfigEditor
     content: "{}",
     loading: false,
     memoryBlock: false,
+    draft: draftStub(),
+    readOnlyMissing: false,
     ...overrides,
   };
 }
 
 describe("ConfigEditorPane", () => {
-  test("renders the content read-only (no textarea, Save, or find/replace)", () => {
+  test("previews the content until the user asks to edit", () => {
     render(<ConfigEditorPane {...baseProps({ content: '{"theme":"dark"}' })} />);
     // The content shows in a read-only CodeMirror editor (contenteditable=false),
     // never an editable field. Syntax highlighting splits tokens across spans, so
@@ -31,7 +54,69 @@ describe("ConfigEditorPane", () => {
     expect(content?.getAttribute("contenteditable")).toBe("false");
     expect(document.querySelector("textarea")).toBeNull();
     expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /find ?\/ ?replace/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^edit$/i })).toBeInTheDocument();
+  });
+
+  test("Edit swaps the preview for a textarea with Save and Cancel", () => {
+    const startEditing = vi.fn();
+    const { rerender } = render(
+      <ConfigEditorPane {...baseProps({ draft: draftStub({ startEditing }) })} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+    expect(startEditing).toHaveBeenCalled();
+
+    rerender(<ConfigEditorPane {...baseProps({ draft: draftStub({ editing: true }) })} />);
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^cancel$/i })).toBeInTheDocument();
+  });
+
+  test("Save stays disabled until the draft actually differs", () => {
+    render(
+      <ConfigEditorPane {...baseProps({ draft: draftStub({ editing: true, dirty: false }) })} />,
+    );
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
+  });
+
+  test("a stale conflict keeps the draft and offers a reload", () => {
+    const discardAndReload = vi.fn(async () => {});
+    render(
+      <ConfigEditorPane
+        {...baseProps({
+          draft: draftStub({
+            editing: true,
+            dirty: true,
+            value: "my unsaved edit",
+            error: new Error("stale"),
+            conflict: true,
+            discardAndReload,
+          }),
+        })}
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(/changed on disk/i);
+    // The point of the conflict path: what the user typed is still on screen.
+    expect(screen.getByRole("textbox")).toHaveValue("my unsaved edit");
+    fireEvent.click(screen.getByRole("button", { name: /discard my edits/i }));
+    expect(discardAndReload).toHaveBeenCalled();
+  });
+
+  test("a format error is shown against the editor, with no reload offer", () => {
+    render(
+      <ConfigEditorPane
+        {...baseProps({
+          draft: draftStub({ editing: true, dirty: true, error: new Error("bad json") }),
+        })}
+      />,
+    );
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /discard my edits/i })).not.toBeInTheDocument();
+  });
+
+  test("a not-yet-created file cannot be edited", () => {
+    render(<ConfigEditorPane {...baseProps({ readOnlyMissing: true })} />);
+    expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/not created yet/i)).toBeInTheDocument();
   });
 
   test("renders the FileActions bar (daemon-backed open/reveal on the web)", () => {

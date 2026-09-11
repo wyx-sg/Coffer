@@ -93,6 +93,25 @@ class ConfigFileStale(CofferError):  # noqa: N818
         self.key = key
 
 
+class SkillFileStale(CofferError):  # noqa: N818
+    """A skill master-folder file changed on disk since it was read; re-read and
+    retry. Maps to 409.
+
+    The master folder is deliberately also the user's own working copy — they
+    edit it in their external editor while the in-app editor holds a buffer —
+    so a lost-update race is routine, not exotic. The same optimistic check as
+    ``ConfigFileStale`` turns it into a refusal the user can act on.
+    """
+
+    code = "SKILL_FILE_STALE"
+
+    def __init__(self, relpath: str) -> None:
+        super().__init__(
+            f"skill file {relpath!r} changed on disk since last read; re-read and retry"
+        )
+        self.relpath = relpath
+
+
 class UnmanagedSkillNotFound(CofferError):  # noqa: N818
     """An unmanaged skill name does not correspond to any discovered skill. Maps to 404."""
 
