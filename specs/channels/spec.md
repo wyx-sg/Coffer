@@ -1519,12 +1519,25 @@ capabilities the official personal bridges lack.
   fragment at a time. `supports_edit` now means only what it literally says —
   `edit_text` still raises on SeaTalk — and the two flags are set
   independently.
-  A turn keeps exactly ONE live surface, opened once the turn runs long enough
-  to warrant it: either tool activity opens it (tool-progress lines show first,
-  then the reply text takes the same surface over as it arrives) or, on a
-  text-only turn, the reply itself opens it once it has run past the update
-  interval. A reply that finishes within that interval opens none (no
-  create → delete → resend flicker) — its final send is enough. Interim
+  A turn keeps exactly ONE live surface. WHEN it opens depends on whether that
+  surface becomes the reply or is scaffolding thrown away at the end, which the
+  adapter declares as `live_text_persists`. Where it persists (SeaTalk: the
+  streamed message IS the answer), the surface opens the moment the turn starts
+  and says so — an acknowledgement the user can see, because the wait between a
+  message and an answer is otherwise the whole of what they get, and on a long
+  turn it reads as the bot having missed them. That acknowledgement costs no
+  extra message: the reply is the same one, rewritten in place. Where the
+  surface is scaffolding (Telegram: a status message deleted before the real
+  reply is sent), it opens only once the turn has run past the update interval —
+  either tool activity opens it or the reply text does — so a reply that
+  finishes sooner opens none, avoiding a create → delete → resend flicker, and
+  its 👀 receipt reaction already says the message was heard.
+  The cadence of updates belongs to the TRANSPORT, which alone knows its own
+  limits: the core offers every snapshot and each surface buffers to what it can
+  sustain (SeaTalk ~200 ms, the interval its own guidance gives for a typewriter
+  effect; Telegram far slower, since it edits a real message). The core adding a
+  throttle of its own on top hid that buffer completely and made a stream arrive
+  a paragraph at a time. Interim
   snapshots are PLAIN and clipped to the platform's per-message limit, so a
   long or half-written-markdown preview never breaks a platform parser or
   exceeds the cap.

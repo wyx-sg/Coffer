@@ -201,6 +201,7 @@ class FakeChannelAdapter:
         *,
         supports_edit: bool = True,
         supports_live_text: bool | None = None,
+        live_text_persists: bool = False,
         supports_typing: bool = True,
         max_message_chars: int = 4096,
         supports_buttons: bool = False,
@@ -216,6 +217,7 @@ class FakeChannelAdapter:
             # A transport that can edit has a live surface by definition; one
             # that cannot may still stream (SeaTalk) — a test says so explicitly.
             supports_live_text=supports_edit if supports_live_text is None else supports_live_text,
+            live_text_persists=live_text_persists,
             supports_typing=supports_typing,
             max_message_chars=max_message_chars,
             supports_buttons=supports_buttons,

@@ -26,9 +26,14 @@ from .conftest import (
 )
 
 
-def _live_ticking(step: float = 1.0):  # type: ignore[no-untyped-def]
+def _live_ticking(step: float = 2.0):  # type: ignore[no-untyped-def]
     """A clock that advances past the live surface's buffer on every read, so a
-    test drives updates deterministically instead of sleeping."""
+    test drives updates deterministically instead of sleeping.
+
+    The step must clear the LARGEST buffer any surface uses — Telegram's is
+    1.5 s, because it edits a real message and its flood limits are tighter than
+    a streaming endpoint's.
+    """
     box = [0.0]
 
     def now() -> float:
