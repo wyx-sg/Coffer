@@ -60,12 +60,19 @@ TELEGRAM_UPDATE_INTERVAL = 1.5
 #: SeaTalk terminates a stream that goes 30 s without an update. Re-send the
 #: last snapshot well inside that window so a long tool run does not kill the
 #: stream (a killed stream cannot be resumed — its id is rejected forever).
-_STREAM_KEEPALIVE_SECONDS = 20.0
+#:
+#: 10 s, not 20. The margin matters more than it looks: the stream is now opened
+#: when the TURN starts rather than when the first text arrives, so the gap the
+#: keep-alive has to cover is the agent's whole thinking time, and a tick that
+#: slips — a slow request, a busy loop — used to leave only 10 s of headroom
+#: before the platform killed the stream. Three ticks per window instead of one
+#: and a half means a single missed tick is survivable.
+_STREAM_KEEPALIVE_SECONDS = 10.0
 
 #: How many keep-alive ticks a surface may spend with no new content before it
-#: gives up (~10 minutes) — the bound that keeps an abandoned turn from holding
-#: a stream open forever.
-_KEEPALIVE_MAX_TICKS = 30
+#: gives up (~10 minutes at the tick above) — the bound that keeps an abandoned
+#: turn from holding a stream open forever.
+_KEEPALIVE_MAX_TICKS = 60
 
 #: How much of a reply one SeaTalk stream may carry. The platform caps a stream
 #: at 4096 characters; this budget is in UTF-8 BYTES (CJK is 3 bytes/char) and
@@ -95,6 +102,12 @@ class LiveTextSurface:
         self._snapshot = ""
         self._opened = False
         self._dead = False
+        #: Diagnosis only — how many platform writes this surface has made, and
+        #: when it opened. A refusal is a bare code; these say whether it came
+        #: after a long silence (the platform timed the stream out) or after a
+        #: burst (it is refusing the pace).
+        self._writes = 0
+        self._opened_at: float | None = None
         self._keepalive: asyncio.Task[None] | None = None
 
     @property
@@ -113,6 +126,8 @@ class LiveTextSurface:
         if not await self._attempt(text):
             return
         self._opened = True
+        if self._opened_at is None:
+            self._opened_at = now
         self._snapshot = text
         self._start_keepalive()
 
@@ -154,12 +169,26 @@ class LiveTextSurface:
         At most one of these per surface: the ``_dead`` latch below means a
         failed surface is never written to again, so this cannot spam a turn.
         """
+        self._writes += 1
         try:
             await self._write(text)
         except Exception:
             _logger.warning(
                 "channel.live_text.failed",
-                extra={"surface": type(self).__name__, "opened": self._opened},
+                extra={
+                    "surface": type(self).__name__,
+                    "opened": self._opened,
+                    # Which write, and how far into the surface's life. A refusal
+                    # on the first update after a long silence means the platform
+                    # timed the stream out; one after many rapid writes means it
+                    # is refusing the pace. The bare error code says neither.
+                    "writes": self._writes,
+                    "seconds_open": (
+                        None if self._opened_at is None else round(self._now() - self._opened_at, 1)
+                    ),
+                    "since_last_write": round(self._now() - self._last_write, 1),
+                    "chars": len(text),
+                },
                 exc_info=True,
             )
             self._dead = True
