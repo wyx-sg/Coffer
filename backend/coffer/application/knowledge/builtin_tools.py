@@ -22,6 +22,7 @@ from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
 from coffer.application.knowledge.scope import GLOBAL_SCOPE_NAME
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.application.knowledge.stores import scope_name_for
+from coffer.domain.knowledge.errors import DocumentNotFound, MemoryNotFound
 from coffer.domain.knowledge.scope import KnowledgeScope, scope_kind_of
 
 _MAX_TOP_K = 20
@@ -159,18 +160,33 @@ def register_knowledge_builtin_tools(
         result = await knowledge_service.grep(
             scope_name=scope_name, pattern=pattern, max_matches=max_matches
         )
+        hits = list(result.hits)
+        truncated = result.truncated
+        # An implicit scope spans project + global, matching search — two
+        # retrieval tools disagreeing about scope is the hardest kind of gap to
+        # notice. An EXPLICIT scope is taken literally, and ``global`` never
+        # greps itself twice.
+        if explicit_scope(args) is None and scope_name != GLOBAL_SCOPE_NAME:
+            room = max_matches - len(hits)
+            if room > 0:
+                await ensure_writable_scope(knowledge_service, GLOBAL_SCOPE_NAME)
+                extra = await knowledge_service.grep(
+                    scope_name=GLOBAL_SCOPE_NAME, pattern=pattern, max_matches=room
+                )
+                hits.extend(extra.hits)
+                truncated = truncated or extra.truncated
+            else:
+                # The project alone filled the budget, so global went unread.
+                truncated = True
         return {
             "scope": scope_name,
             "hits": [
-                {"path": h.path, "line_number": h.line_number, "line": h.line} for h in result.hits
+                {"path": h.path, "line_number": h.line_number, "line": h.line} for h in hits
             ],
-            "truncated": result.truncated,
+            "truncated": truncated,
         }
 
-    async def read(args: dict[str, Any]) -> dict[str, Any]:
-        item_id = str(args["id"])
-        scope_name = await resolve_scope_arg(knowledge_service, args)
-        await ensure_writable_scope(knowledge_service, scope_name)
+    async def _read_in(scope_name: str, item_id: str) -> dict[str, Any]:
         if not is_document(knowledge_service, scope_name, item_id):
             entry, path = await knowledge_service.get_fact_with_path(
                 scope_name=scope_name, fact_id=item_id
@@ -196,6 +212,22 @@ def register_knowledge_builtin_tools(
             "source_mode": doc.source_mode,
             "text": markdown,
         }
+
+    async def read(args: dict[str, Any]) -> dict[str, Any]:
+        item_id = str(args["id"])
+        scope_name = await resolve_scope_arg(knowledge_service, args)
+        await ensure_writable_scope(knowledge_service, scope_name)
+        try:
+            return await _read_in(scope_name, item_id)
+        except (MemoryNotFound, DocumentNotFound):
+            # An implicit scope was SEARCHED across project + global, so an id
+            # search handed back may live in global. Read spans the same way,
+            # or "pass an id to coffer__read" is false for half the hits. An
+            # EXPLICIT scope is taken literally and never falls back.
+            if explicit_scope(args) is not None or scope_name == GLOBAL_SCOPE_NAME:
+                raise
+            await ensure_writable_scope(knowledge_service, GLOBAL_SCOPE_NAME)
+            return await _read_in(GLOBAL_SCOPE_NAME, item_id)
 
     registry.register(
         BuiltinTool(
@@ -231,7 +263,9 @@ def register_knowledge_builtin_tools(
                 "file in a knowledge scope, returning matching lines with their "
                 "file and line number. Use this when you need exact matches — an "
                 "identifier, a path, a CJK phrase a tokenizer would split — and "
-                "coffer__search when you want relevance."
+                "coffer__search when you want relevance. Omitting 'scope' greps "
+                "the cwd's project and global together — the same span search "
+                "uses."
             ),
             input_schema={
                 "type": "object",
@@ -259,7 +293,9 @@ def register_knowledge_builtin_tools(
                 "not the snippet a search returned. Works for either kind of "
                 "item: an ingested document or an entry someone wrote, resolved "
                 "automatically, so you can hand it any id coffer__search or "
-                "coffer__list gave you."
+                "coffer__list gave you. Omitting 'scope' reads the cwd's project "
+                "and falls back to global — the same span search uses, so an id "
+                "from a global hit reads straight back."
             ),
             input_schema={
                 "type": "object",

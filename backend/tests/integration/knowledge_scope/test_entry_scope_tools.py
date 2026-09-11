@@ -14,6 +14,7 @@ from coffer.application.builtin_tools import COFFER_TOOL_PREFIX, BuiltinToolRegi
 from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
 from coffer.application.knowledge.document_tools import register_document_builtin_tools
 from coffer.domain.knowledge.document import KIND_KNOWLEDGE, LANE_NOTES
+from coffer.domain.knowledge.errors import MemoryNotFound
 from coffer.domain.knowledge.scope import project_scope_name
 from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.knowledge_scope.scope_fs import project_ulid
@@ -96,6 +97,69 @@ async def test_search_spans_project_and_global_by_default(mem) -> None:
     assert len(out["hits"]) >= 2
     sources = {h["source"].split(":")[0] for h in out["hits"]}
     assert {"global", "project"} <= sources
+
+
+async def test_read_falls_back_to_global_for_a_global_hit(mem) -> None:
+    """search's implicit scope spans project + global, so an id it hands back
+    may live in global. read must span the same way — otherwise the search
+    tool's own "pass an id to coffer__read" is false for half its hits."""
+    reg = _registry(mem)
+    await _tool(reg, "write").handler(
+        {"text": "global fact about numbats", "scope": "global", "title": "numbat"}
+    )
+    hits = (
+        await _tool(reg, "search").handler(
+            {"query": "numbats", "cwd": mem.project_cwd, "top_k": 10}
+        )
+    )["hits"]
+    global_hit = next(h for h in hits if h["source"].startswith("global:"))
+
+    out = await _tool(reg, "read").handler({"id": global_hit["id"], "cwd": mem.project_cwd})
+
+    assert out["scope"] == "global"
+    assert "numbats" in out["text"]
+
+
+async def test_read_with_an_explicit_scope_does_not_fall_back(mem) -> None:
+    """An explicit scope is taken literally: not in that scope means not found."""
+    reg = _registry(mem)
+    written = await _tool(reg, "write").handler(
+        {"text": "global fact about bilbies", "scope": "global", "title": "bilby"}
+    )
+    project_scope = (
+        await _tool(reg, "write").handler({"text": "seed", "cwd": mem.project_cwd})
+    )["scope"]
+    with pytest.raises(MemoryNotFound):
+        await _tool(reg, "read").handler({"id": written["id"], "scope": project_scope})
+
+
+async def test_grep_spans_project_and_global_by_default(mem) -> None:
+    """grep must span what search spans. Otherwise grepping an exact identifier
+    from inside a project misses global entirely — and two retrieval tools
+    disagreeing about scope is the hardest kind of gap to notice."""
+    reg = _registry(mem)
+    await _tool(reg, "write").handler({"text": "quoll in the project", "cwd": mem.project_cwd})
+    await _tool(reg, "write").handler({"text": "quoll in the global", "scope": "global"})
+
+    out = await _tool(reg, "grep").handler({"pattern": "quoll", "cwd": mem.project_cwd})
+
+    paths_seen = " ".join(h["path"] for h in out["hits"])
+    assert "/global/" in paths_seen
+    assert "/project-" in paths_seen
+
+
+async def test_grep_with_an_explicit_scope_stays_in_it(mem) -> None:
+    """An explicit scope is taken literally, never folded with global."""
+    reg = _registry(mem)
+    project_scope = (
+        await _tool(reg, "write").handler({"text": "dunnart here", "cwd": mem.project_cwd})
+    )["scope"]
+    await _tool(reg, "write").handler({"text": "dunnart there", "scope": "global"})
+
+    out = await _tool(reg, "grep").handler({"pattern": "dunnart", "scope": project_scope})
+
+    assert out["hits"]
+    assert all("/global/" not in h["path"] for h in out["hits"])
 
 
 async def test_the_pre_merge_tool_names_are_gone(mem) -> None:
