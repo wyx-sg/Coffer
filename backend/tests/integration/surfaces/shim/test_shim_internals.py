@@ -814,6 +814,16 @@ async def test_spawn_daemon_frozen_uses_sibling_binary(
     from coffer.surfaces.shim import bootstrap as shim_main
 
     fake_exe = tmp_path / "coffer-mcp-shim"
+    # The sibling must EXIST for daemon_spawn_command() to take the branch this
+    # test is named after: it probes sibling → PATH → macOS bundle, and without
+    # a file here the probe fell through to whatever `coffer-daemon` the test
+    # host happened to have on PATH. On CI that is nothing, so the last-resort
+    # fallback returned the same path and the test passed for the wrong reason;
+    # on a developer machine with Coffer installed it returned
+    # ~/.coffer/bin/coffer-daemon and the test failed. Creating the file pins
+    # the first branch, and pinning which() keeps the host out of it either way.
+    (tmp_path / "coffer-daemon").write_text("#!/bin/sh\n")
+    monkeypatch.setattr("coffer.infrastructure.daemon.spawn.shutil.which", lambda _n: None)
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "executable", str(fake_exe))
     monkeypatch.setattr(sys, "platform", "linux")
