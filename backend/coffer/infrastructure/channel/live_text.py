@@ -212,11 +212,30 @@ class SeaTalkLiveText(LiveTextSurface):
     """SeaTalk's live surface: ``init_stream`` once, then ``update_stream`` with
     the full snapshot each time, finishing with ``finish: true``.
 
-    Platform contract (published docs, 2026-09-09): every update carries the
-    whole accumulated text (never a delta), updates must not be more than 30 s
-    apart, a stream carries at most 4096 characters, and once a stream ends
-    (finished, timed out, or errored) any request naming its id is rejected.
-    Older clients (< 3.67) simply see the finished message when it closes.
+    Platform contract, re-read from the published docs on 2026-09-11 after the
+    first implementation was refused live with ``code=102``:
+
+    * ``init_stream`` takes the target AND a mandatory ``message`` — it posts a
+      real placeholder message to the chat and returns the ``stream_id``. A body
+      carrying only the target is rejected, which is what happened.
+    * ``update_stream`` ALSO takes the target. ``stream_id`` alone does not
+      identify the destination, and omitting it is refused the same way.
+    * ``message`` is shaped differently either side: ``init`` names the kind
+      (``tag``), every ``update`` carries only the content object, because the
+      kind was fixed when the stream opened.
+    * Every update carries the whole accumulated text, never a delta — the
+      client renders the latest snapshot it has.
+    * ``seq`` starts at 1 on the first ``update_stream`` and increments by one;
+      ``init_stream`` consumes none.
+    * Updates must be less than 30 s apart, total content is capped at 4096
+      characters, and once a stream ends (finished, timed out, errored) any
+      request naming its id is rejected.
+    * ``format`` is 1 for Markdown and 2 for plain text. Interim snapshots go
+      out as 2: a reply cut mid-word can end inside an unclosed ``*`` or ``_``,
+      and asking the client to parse that renders noise.
+    * Streaming needs no permission of its own — it rides the same Send Message
+      grant as an ordinary reply. Older clients (< 3.67) simply see the finished
+      message when the stream closes.
     """
 
     def __init__(
@@ -243,44 +262,63 @@ class SeaTalkLiveText(LiveTextSurface):
         key = "group_id" if self._surface == "group_chat" else "employee_code"
         return {key: self._chat_id}
 
-    def _message(self, text: str) -> dict[str, Any]:
-        message: dict[str, Any] = {"tag": "text", "text": {"format": 1, "content": text}}
+    def _content(self, text: str, *, markdown: bool) -> dict[str, Any]:
+        """The ``text`` object both endpoints carry. ``format`` 2 is plain."""
+        return {"format": 1 if markdown else 2, "content": text}
+
+    async def _open(self, text: str) -> None:
+        """``init_stream``: post the opening message and keep its stream id.
+
+        The opening message is the first snapshot rather than a "Thinking…"
+        placeholder — it is a real message either way, so it may as well carry
+        what we already have. It consumes no ``seq``.
+        """
+        message: dict[str, Any] = {
+            "tag": "text",
+            "text": self._content(text, markdown=False),
+        }
         if self._thread_id:
-            # Same verified placement as an ordinary send: thread_id goes INSIDE
-            # the message body (a top-level one is ignored).
+            # Same verified placement as an ordinary send, and as the docs'
+            # own sample: thread_id goes INSIDE the message body.
             message["thread_id"] = self._thread_id
-        return message
+        result = await self._post(
+            f"/messaging/v2/{self._surface}/init_stream",
+            {**self._target(), "message": message},
+        )
+        stream_id = str((result or {}).get("stream_id", "")) if isinstance(result, dict) else ""
+        if not stream_id:
+            raise ChannelSendFailed(self._name, "init_stream returned no stream_id")
+        self._stream_id = stream_id
 
     async def _write(self, text: str) -> None:
+        # Interim snapshots are clipped to the stream budget and sent as plain
+        # text; the caller's markdown is rendered once, in the final snapshot.
+        clipped = _clip_tail_bytes(text, _STREAM_BYTE_BUDGET)
         if not self._stream_id:
-            payload = {**self._target()}
-            if self._thread_id:
-                payload["thread_id"] = self._thread_id
-            result = await self._post(f"/messaging/v2/{self._surface}/init_stream", payload)
-            stream_id = str((result or {}).get("stream_id", "")) if isinstance(result, dict) else ""
-            if not stream_id:
-                raise ChannelSendFailed(self._name, "init_stream returned no stream_id")
-            self._stream_id = stream_id
-        # Interim snapshots go out as plain text clipped to the stream budget —
-        # partial markdown mid-stream would render as noise.
-        await self._update(_clip_tail_bytes(text, _STREAM_BYTE_BUDGET), finish=False)
+            await self._open(clipped)
+            return
+        await self._update(clipped, finish=False, markdown=False)
 
     async def _finish(self, text: str) -> str:
         head, remainder = _split_for_stream(text or self._snapshot)
         # The streamed message IS the SeaTalk reply (nothing can delete it), so
         # the final snapshot is markdown-rendered like any other SeaTalk send.
-        await self._update(markdown_to_seatalk(head), finish=True)
+        await self._update(markdown_to_seatalk(head), finish=True, markdown=True)
         return remainder
 
-    async def _update(self, text: str, *, finish: bool) -> None:
+    async def _update(self, text: str, *, finish: bool, markdown: bool) -> None:
         self._seq += 1  # the platform requires a monotonic seq, starting at 1
         await self._post(
             f"/messaging/v2/{self._surface}/update_stream",
             {
+                # The target is mandatory here too: a stream_id alone does not
+                # tell the platform which chat to update.
+                **self._target(),
                 "stream_id": self._stream_id,
                 "seq": self._seq,
-                "message": self._message(text),
                 "finish": finish,
+                # No `tag` on an update — the kind was fixed by init_stream.
+                "message": {"text": self._content(text, markdown=markdown)},
             },
         )
 
