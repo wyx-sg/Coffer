@@ -344,6 +344,33 @@ Coffer 仍不写下任何属于自己的模型名。
 读取、不编写——在有激活连接时改为向连接读取）。**仍不在范围内：** 读取选择器清单时 introspect
 端点；Coffer 仍不拿任何模型 id 去比对自己写死的名单。
 
+## 修订 2026-09-11d — `wire_api` 只剩一个合法值
+
+> 状态：Draft。**Supersede D7 的「`wire_api ∈ {chat, responses}` 可选」。** 起因是在验证另一项
+> 改动时顺手检查了本机安装的 Codex。
+
+**缺陷。** `AgentConfig` 接受 `wire_api = "chat"`，而 `ProviderProjector` 会把它写进
+`[model_providers.coffer]`。Codex 0.139.0 并不是忽略这个值——它**拒绝加载 `config.toml`**
+（`wire_api = "chat" is no longer supported`，并指名 `responses` 是修法），于是被 Coffer 投影的
+那个 agent 的 CLI 根本起不来。而 Coffer 全程不吭声：这个值在 `PATCH /api/v1/agents/{name}` 被
+接受、被存下、被写进一个 Coffer 从不回读的文件，故障最终表现为「agent 坏了」，而不是「某项设置
+填错了」。D7 其实已经知道 `chat` 被废弃——codex-cli 0.130 先动手时，它把默认值改成了
+`responses`——但仍然把另一个值留作可选。
+
+- **L1 —— `responses` 是唯一接受的值**，在 `AgentConfig` 上强制，于是 `chat` 在用户设置它的那一刻
+  就是一个看得见的 422。已对本机安装的 CLI 实测：其他任何拼写都会被 Codex 自己的解析器拒绝
+  （`unknown variant, expected \`responses\``），而 `chat` 有一条专属报错。这是故障仍然可读的
+  唯一边界；越过它之后，Coffer 写的是一个只有 Codex 会读的文件。
+- **L2 —— 不采用「投影时映射」的修法。** 在写出时把 `chat` 改写成 `responses`，会让存储的值、
+  以及每一个报告它的 `AgentOut`，都在说一件与 Coffer 实际投影不符的事。一项设置不该对自己撒谎。
+- **L3 —— migration 0061 修掉已经带着这个值的行。** 按房规一次性完成：不留 load-time 垫片。
+  revision 0037 在 `wire_api` 还挂在**连接**上时做过同样的翻转；0040 随后把该字段移到 agent 上，
+  而 agent 的 PATCH 路径一直接受 `chat` 直到这次改动，所以那些行从未被覆盖。选择翻转而不是剥除，
+  是为了保住这项设置**本来想表达**的意思——使用 Codex 的 Responses API——也就是它现在唯一能说的话。
+
+**附注（不是决策）：** 只剩一个合法值意味着这个逐 agent 覆盖项只可能等于它自己的默认值，实际已经
+是摆设。退役该字段是另一次改动——它在公开 API 与 OpenAPI 契约上——这里**刻意不做**。
+
 ## 范围
 
 ### 在范围内

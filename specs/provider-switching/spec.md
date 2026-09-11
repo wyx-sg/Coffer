@@ -593,6 +593,46 @@ now read from the connection when one is active). **Still NOT in scope:**
 endpoint introspection on a picker read, and Coffer still validates no model id
 against a list of its own.
 
+## Amendment 2026-09-11d — `wire_api` has one legal value left
+
+> Status: Draft. **Supersedes D7's "`wire_api ∈ {chat, responses}`, selectable".**
+> Recorded after checking the installed Codex while validating an unrelated
+> change.
+
+**The defect.** `AgentConfig` accepted `wire_api = "chat"` and
+`ProviderProjector` wrote it into `[model_providers.coffer]`. Codex 0.139.0
+does not merely ignore that value — it **refuses to load `config.toml`**
+(`wire_api = "chat" is no longer supported`, naming `responses` as the fix), so
+the agent Coffer projected into has a CLI that will not start. Nothing in
+Coffer said so: the value was accepted at `PATCH /api/v1/agents/{name}`, stored,
+and projected into a file Coffer never reads back, where the failure surfaces as
+the agent being broken rather than as a setting being wrong. D7 already knew
+`chat` was dropped — it made `responses` the DEFAULT when codex-cli 0.130 went
+first — but left the other value selectable.
+
+- **L1 — `responses` is the only accepted value**, enforced in `AgentConfig`, so
+  `chat` is a 422 the user sees at the moment they set it. Verified against the
+  installed CLI: every other spelling is rejected by Codex's own parser
+  (`unknown variant, expected `responses``), and `chat` gets a message of its
+  own. This is the one boundary where the failure is still legible; past it,
+  Coffer is writing a file only Codex reads.
+- **L2 — Not fixed by mapping at projection time.** Rewriting `chat` to
+  `responses` on the way out would leave the stored value, and every `AgentOut`
+  reporting it, saying something that is not what Coffer projects. A setting
+  should not lie about itself.
+- **L3 — Migration 0061 flips the rows that already carry it.** One-shot, per
+  the house rule: no load-time shim. Revision 0037 did the same flip when
+  `wire_api` lived on the CONNECTION; 0040 then moved the field onto the agent,
+  and the agent PATCH path accepted `chat` right up to this change, so those
+  rows were never covered. Flipping rather than stripping keeps what the setting
+  MEANT to express — use Codex's Responses API — as the one thing it can now
+  say.
+
+**Note, not a decision:** with a single legal value the per-agent override can
+only ever hold its own default, which makes it vestigial. Retiring the field is
+a separate change — it is on the public API and the OpenAPI contract — and is
+deliberately NOT done here.
+
 ## Scope
 
 ### In scope

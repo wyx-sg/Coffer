@@ -167,6 +167,13 @@ def test_agent_patch_model_binding(tmp_path, monkeypatch):
         assert ok.json()["wire_api"] == "responses"
         bad = c.patch("/api/v1/agents/cur", json={"wire_api": "garbage"})
         assert bad.status_code != 200  # validated, not silently persisted
+        # "chat" is refused like any other unknown value. It used to be the
+        # other half of this setting; Codex 0.139.0 will not load a config.toml
+        # carrying it, so accepting it here would hand the user a CLI that does
+        # not start and no way to see why.
+        dead = c.patch("/api/v1/agents/cur", json={"wire_api": "chat"})
+        assert dead.status_code != 200, dead.text
+        assert c.get("/api/v1/agents/cur").json()["wire_api"] == "responses"
 
 
 def test_agent_candidates_get(tmp_path, monkeypatch):
