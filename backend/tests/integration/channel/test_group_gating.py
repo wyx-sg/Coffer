@@ -385,3 +385,42 @@ async def test_dm_turn_still_types_at_the_direct_endpoint(env: ChannelEnv) -> No
     await wait_until(lambda: "Hello world" in adapter.texts())
 
     assert adapter.typing_routed[0] == ("owner", "direct", "")
+
+
+async def test_the_group_reply_mentions_the_sender_the_transport_named(env: ChannelEnv) -> None:
+    """End to end through the pipeline the mention id travels: the adapter puts
+    it on the envelope, the queued turn carries it, and the renderer opens the
+    reply with it. The DM below is the same pipeline with nobody to mention."""
+    resource = await env.register_channel("st")
+    adapter = env.bind(
+        resource,
+        FakeChannelAdapter(
+            supports_edit=False,
+            supports_live_text=False,
+            supports_groups=True,
+            mention_template='<mention-tag target="seatalk://user?id={user_id}"/>',
+        ),
+    )
+    await env.pair(resource, "owner", sender_id="owner-1")
+
+    await env.processor.on_message(
+        inbound(
+            "st",
+            "grp-1",
+            "@bot hello",
+            chat_kind="group",
+            addressed=True,
+            sender_id="owner-1",
+            sender_mention_id="st-42",
+            thread_id="th-1",
+        )
+    )
+    await wait_until(lambda: any("Hello world" in text for text in adapter.texts()))
+
+    assert adapter.texts()[-1] == ('<mention-tag target="seatalk://user?id=st-42"/> Hello world')
+
+    # The same channel in a DM: the pipeline is identical and the reply is bare.
+    await env.processor.on_message(
+        inbound("st", "owner", "hello", sender_id="owner-1", sender_mention_id="st-42")
+    )
+    await wait_until(lambda: adapter.texts()[-1] == "Hello world")

@@ -19,6 +19,7 @@ from coffer.application.channel.ports import AdapterCallbacks
 from coffer.domain.channel.envelopes import InboundLifecycle
 from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.infrastructure.channel.live_text import SeaTalkLiveText
+from coffer.infrastructure.channel.seatalk_send import SEATALK_MENTION_TEMPLATE
 
 from .conftest import FakeSeaTalk, RecordingCallbacks, make_seatalk_adapter, wait_until
 
@@ -1758,3 +1759,150 @@ async def test_a_silent_stream_is_kept_alive_inside_the_30_second_limit(
     assert [b["seq"] for b in bodies] == list(range(1, len(bodies) + 1))
     assert bodies[-1]["finish"] is True
     assert leftover == ""
+
+
+# -- FR-070: @mentioning the asker in a group reply ---------------------------
+
+
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="a cross-organisation sender is still identified for a mention",
+)
+async def test_group_mention_keeps_the_seatalk_id_when_employee_code_and_email_are_empty(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """The event docs warn that ``employee_code`` and ``email`` arrive EMPTY for
+    a sender outside the bot's organisation — ``seatalk_id`` is the only id such
+    a message carries. Coffer used to keep the two that can be blank and discard
+    the one that cannot, which threw away exactly the id a mention needs."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()
+    envelope = _group_mention_envelope(plain_text="@bot hi", username="bot")
+    envelope["event"]["message"]["sender"] = {
+        "seatalk_id": "st-outsider",
+        "employee_code": "",
+        "email": "",
+        "sender_type": 1,
+    }
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(envelope)
+    finally:
+        await adapter.stop()
+
+    [msg] = recorder.messages
+    assert msg.sender_mention_id == "st-outsider"
+    # …while the two ids the owner gate and the display name use stay empty,
+    # which is what the gate is entitled to refuse on.
+    assert msg.sender_id == ""
+    assert msg.sender_display == "st-outsider"
+
+
+async def test_group_mention_carries_the_seatalk_id_alongside_the_employee_code(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    # The ordinary case: both are present and they are DIFFERENT values, which
+    # is why the mention id cannot ride on ``sender_id``.
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(_group_mention_envelope(plain_text="@bot hi", username="bot"))
+    finally:
+        await adapter.stop()
+
+    [msg] = recorder.messages
+    assert (msg.sender_id, msg.sender_mention_id) == ("emp-2", "st-1")
+
+
+async def test_a_dm_carries_no_mention_id(fake_seatalk: FakeSeaTalk) -> None:
+    """Nothing to disambiguate in a 1:1 chat, so nothing is carried for it."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(
+            {
+                "event_type": "message_from_bot_subscriber",
+                "timestamp": 1718000000,
+                "event": {
+                    "employee_code": "emp-1",
+                    "email": "yu@example.com",
+                    "seatalk_id": "st-1",
+                    "message": {
+                        "tag": "text",
+                        "message_id": "pm-9",
+                        "text": {"content": "hello"},
+                    },
+                },
+            }
+        )
+    finally:
+        await adapter.stop()
+
+    [msg] = recorder.messages
+    assert msg.sender_mention_id == ""
+
+
+def test_the_mention_template_matches_the_documented_tag() -> None:
+    """The shape of the tag, pinned to the send-message docs' own sample:
+    ``<mention-tag target="seatalk://user?id=0"/>``, self-closing and carrying
+    no visible text of its own."""
+    assert (
+        SEATALK_MENTION_TEMPLATE.replace("{user_id}", "0")
+        == '<mention-tag target="seatalk://user?id=0"/>'
+    )
+
+
+async def test_a_group_send_delivers_the_mention_tag_verbatim_as_markdown(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """The tag is markdown — it must reach the wire as ``format: 1`` AND survive
+    the SeaTalk markdown renderer byte for byte. That renderer escapes every
+    leftover formatting marker with a backslash, so a tag it decided to touch
+    would arrive as visible source rather than as a name."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    mention = SEATALK_MENTION_TEMPLATE.replace("{user_id}", "st-77")
+    try:
+        await adapter.send_text(
+            "gid-1", f"{mention} the **answer**", thread_id="t1", chat_kind="group"
+        )
+    finally:
+        await adapter.stop()
+
+    [(body, _auth)] = fake_seatalk.group_chat_calls
+    assert body["group_id"] == "gid-1"
+    assert body["message"]["text"] == {
+        "format": 1,
+        "content": '<mention-tag target="seatalk://user?id=st-77"/> the **answer**',
+    }
+
+
+async def test_a_stream_carries_the_mention_only_in_its_finished_snapshot(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """The interim snapshots are ``format: 2`` (plain) by design, and a mention
+    tag in one would be shown to the reader as its own literal source. The
+    renderer therefore puts it only on the body it closes the stream with —
+    the one snapshot sent as ``format: 1``."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    mention = SEATALK_MENTION_TEMPLATE.replace("{user_id}", "st-77")
+    live = _live(adapter, "gid-1", chat_kind="group", thread_id="t1")
+    try:
+        await live.update("I found")
+        await live.update("I found three")
+        leftover = await live.close(f"{mention} I found three cats.")
+    finally:
+        await adapter.stop()
+
+    assert leftover == ""
+    # The opening message and every interim update are plain, and clean.
+    opening = fake_seatalk.init_stream_calls[0][1]["message"]["text"]
+    assert opening["format"] == 2 and "mention-tag" not in opening["content"]
+    bodies = [body["message"]["text"] for _surface, body in fake_seatalk.update_stream_calls]
+    interim = [t for t in bodies if t["format"] == 2]
+    assert interim and all("mention-tag" not in t["content"] for t in interim)
+    # Only the finished snapshot is markdown, and only it carries the mention.
+    final = bodies[-1]
+    assert final["format"] == 1
+    assert final["content"] == '<mention-tag target="seatalk://user?id=st-77"/> I found three cats.'

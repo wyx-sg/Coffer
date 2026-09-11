@@ -15,7 +15,29 @@ from coffer.domain.channel.envelopes import ChoiceButton, SentMessage
 from coffer.infrastructure.channel.render import chunk_text, markdown_to_seatalk
 from coffer.infrastructure.channel.seatalk_parse import interactive_card, split_to_byte_limit
 
-__all__ = ["send_text_pieces"]
+__all__ = ["SEATALK_MENTION_TEMPLATE", "send_text_pieces"]
+
+#: FR-070: how SeaTalk spells an @mention inside message content, read from the
+#: "Send Message to Group Chat" formatted-text sample:
+#: ``"Kindly note there's **no meeting** today <mention-tag
+#: target=\"seatalk://user?id=0\"/>."`` The tag is self-closing and carries no
+#: visible text of its own — the client renders the mentioned person's name — so
+#: Coffer needs only an id to build one, never a display name.
+#:
+#: WHICH id: the ``seatalk_id``, NOT the ``employee_code``. This is an
+#: INFERENCE, and the evidence is worth naming because nothing states it
+#: outright: "Event: New Mentioned Message From Group Chat" maps each entry of
+#: ``mentioned_list`` as ``{username, seatalk_id}``, and documents "Mention all"
+#: as ``seatalk_id: "0"`` — the very ``0`` the send sample above targets. The
+#: inbound id space and the outbound one therefore line up. It also happens to
+#: be the only id that survives the cross-organisation case: the same event doc
+#: warns that a sender's ``employee_code`` and ``email`` arrive EMPTY when they
+#: are not in the bot's organisation, while ``seatalk_id`` is always present.
+#:
+#: It is MARKDOWN — it reaches the reader as a name only in a ``format: 1``
+#: message. In a ``format: 2`` (plain) one it shows as this literal string, so
+#: only sends that render rich may carry it (see ``TurnRenderer._with_mention``).
+SEATALK_MENTION_TEMPLATE = '<mention-tag target="seatalk://user?id={user_id}"/>'
 
 #: ``(chat_id, message, thread_id, chat_kind) -> platform result`` — the
 #: adapter's own group/single-chat router.

@@ -306,7 +306,9 @@ class InboundProcessor:
         # It rides on EVERY turn, not just the first: ``/agent`` can swap the
         # agent mid-conversation and a resumed session would otherwise lose it.
         # The inbound platform_message_id rides along so the turn can react on it
-        # (FR-036 receipt/completion ack) where the transport supports reactions.
+        # (FR-036 receipt/completion ack) where the transport supports reactions,
+        # and the sender's mention id so a group reply opens by @mentioning
+        # whoever asked (FR-070).
         origin = format_origin(msg, platform=binding.channel_type)
         session.queue.append(
             (
@@ -315,6 +317,7 @@ class InboundProcessor:
                 msg.thread_id,
                 msg.chat_kind,
                 msg.platform_message_id,
+                msg.sender_mention_id,
             )
         )
         if session.drain_task is None or session.drain_task.done():

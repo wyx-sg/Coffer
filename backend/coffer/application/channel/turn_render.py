@@ -26,6 +26,7 @@ from typing import Any
 from coffer.application.channel.ports import ChannelAdapter, LiveText
 from coffer.application.channel.turn_media import deliver_media
 from coffer.application.channel.turn_progress import _describe_tool, _progress_line
+from coffer.application.channel.turn_text import clip_stream_preview, mention_prefix
 from coffer.domain.chat.events import (
     TextDelta,
     ToolCall,
@@ -66,17 +67,6 @@ _PROGRESS_MAX_LINES = 8
 _TYPING_HEARTBEAT_SECONDS = 3.0
 
 
-def _clip_stream_preview(text: str, limit: int) -> str:
-    """FR-037: clip the accumulating reply to the platform's per-message limit for
-    an interim live update — a snapshot longer than the cap would be rejected.
-    Keep the TAIL (the most recent words) behind a leading ellipsis, so the user
-    watches the answer's latest text grow."""
-    if len(text) <= limit:
-        return text
-    marker = "…"
-    return marker + text[-(limit - len(marker)) :]
-
-
 @dataclass
 class _Progress:
     lines: dict[str, str] = field(default_factory=dict)  # tool_use_id -> line
@@ -111,6 +101,10 @@ class TurnRenderer:
     # tells a transport whose group/DM send paths differ which one to use.
     thread_id: str = ""
     chat_kind: str = "direct"
+    # FR-070: the id of whoever asked, as the platform addresses them in a
+    # mention (SeaTalk's ``seatalk_id``). Used in a GROUP only, and only where
+    # the transport declares a ``mention_template``; "" everywhere else.
+    mention_user_id: str = ""
     # FR-037: typing-heartbeat cadence (injectable so a test can drive it fast).
     heartbeat_seconds: float = _TYPING_HEARTBEAT_SECONDS
 
@@ -256,7 +250,7 @@ class TurnRenderer:
         text = "".join(parts).strip()
         if not text:
             return
-        preview = _clip_stream_preview(text, self.adapter.capabilities.max_message_chars)
+        preview = clip_stream_preview(text, self.adapter.capabilities.max_message_chars)
         await self._render_status(progress, preview)
 
     async def _render_status(self, progress: _Progress, text: str) -> None:
@@ -346,10 +340,36 @@ class TurnRenderer:
         """Close the live surface with the final ``body`` and send whatever it
         could not deliver itself. A surface that finishes the reply in place
         (SeaTalk's stream IS the message) leaves nothing to send; one that is
-        only scaffolding (Telegram's status message) hands it all back."""
-        leftover = await self._close_live(progress, body)
+        only scaffolding (Telegram's status message) hands it all back.
+
+        The @mention is added HERE, to the body, exactly once: whichever of the
+        two delivers the head carries it, and the overflow the stream hands back
+        does not repeat it."""
+        leftover = await self._close_live(progress, self._with_mention(body))
         if leftover:
             await self.send(leftover)
+
+    def _with_mention(self, body: str) -> str:
+        """FR-070: open the final reply by @mentioning whoever asked.
+
+        Three conditions, each ruling out a case where a mention would be wrong
+        or unreadable:
+
+        * a GROUP — in a 1:1 chat there is nobody to disambiguate, and a bot
+          that @s you in your own DM is only shouting;
+        * a transport that spells mentions from an id alone, and an id to spell;
+        * this path, which is the only one whose text the platform renders as
+          RICH content. Interim live snapshots are sent as PLAIN text (SeaTalk
+          ``format: 2``) precisely because half-written markdown breaks a
+          parser — and a mention tag in one would reach the reader as its own
+          literal source, which is worse than no mention at all. So the tag goes
+          on the final snapshot (``format: 1``) or on the ordinary send, never
+          on the way there.
+        """
+        if self.chat_kind != "group" or not body:
+            return body
+        prefix = mention_prefix(self.adapter.capabilities.mention_template, self.mention_user_id)
+        return f"{prefix} {body}" if prefix else body
 
     async def _close_live(self, progress: _Progress, body: str) -> str:
         live, progress.live = progress.live, None
