@@ -780,3 +780,12 @@ async def test_an_upload_says_what_it_is_uploading(tmp_path) -> None:  # type: i
 
     assert "upload_photo" in adapter.typing_actions
     assert "upload_document" in adapter.typing_actions
+
+
+def test_the_typing_heartbeat_outpaces_the_indicator_it_refreshes() -> None:
+    """SeaTalk shows the cue for four seconds. A heartbeat slower than that
+    leaves it dark between beats, and a cue that blinks reads as something
+    going wrong rather than as something working."""
+    from coffer.application.channel.turn_render import _TYPING_HEARTBEAT_SECONDS
+
+    assert _TYPING_HEARTBEAT_SECONDS < 4.0
