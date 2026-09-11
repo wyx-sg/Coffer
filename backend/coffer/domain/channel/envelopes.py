@@ -90,6 +90,13 @@ class ChannelCapabilities:
     # A surface the core can keep updating during a turn — by edit (Telegram)
     # or by streaming (SeaTalk). Drives the FR-037 progress/reply strategy.
     supports_live_text: bool = False
+    # Whether that surface BECOMES the reply, or is scaffolding thrown away at
+    # the end. SeaTalk's stream persists — the message it opened is the answer,
+    # grown in place — so opening it early costs nothing and is worth doing the
+    # moment a turn starts, as an acknowledgement the user can see. Telegram's
+    # is a status message the renderer deletes before sending the real reply, so
+    # opening it early would post something only to remove it again.
+    live_text_persists: bool = False
     supports_media: bool = False  # outbound file/photo upload (send_media)
     supports_groups: bool = False  # group-chat send path exists
     supports_history_fetch: bool = False  # can fetch recent/thread messages for context
