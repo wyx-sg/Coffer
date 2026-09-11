@@ -25,6 +25,12 @@ shaped to prevent:
   that set. An EMPTY set means "not curated yet" and offers everything — Coffer
   must work out of the box for someone who never opens the screen.
 
+  With an LLM connection ACTIVE for the agent, they answer from somewhere else
+  entirely. The agent's turns then go to that endpoint, not to the account its
+  own catalogue describes, so its models are the wrong list: offering them can
+  only produce ids the endpoint rejects. The connection's own curated set is
+  the answer instead, and the agent is not consulted at all.
+
 Neither is a validator. A model NAME typed anywhere is passed to the CLI
 verbatim: it accepts aliases the catalogue never carries and models newer than
 the installed binary, and Coffer does not own that namespace.
@@ -34,6 +40,7 @@ from __future__ import annotations
 
 import logging
 import pathlib
+from collections.abc import Iterable
 from typing import Protocol
 
 from coffer.domain.agent.config import AgentConfig
@@ -64,6 +71,28 @@ class ModelDiscoveryPort(Protocol):
     ) -> list[AgentModel]: ...
 
 
+class ActiveProviderModelsPort(Protocol):
+    """The curated model set of the LLM connection Coffer has ACTIVATED for an
+    agent type — the provider kind narrowed to the one question this service
+    asks of it, so the agent side never imports it.
+
+    Three answers, and the difference between the last two is the whole point:
+
+      * ``None`` — no active connection is compatible with this agent type. The
+        agent runs on its own login and its own catalogue is the truth.
+      * ``[]`` — a connection is active but curates nothing ("no restriction"):
+        Coffer knows which endpoint the turns go to, not what it serves.
+      * ``[ids]`` — exactly the ids ticked on that connection's detail page, in
+        that order.
+
+    Best-effort by contract, like ``ModelDiscoveryPort``: an unparseable row is
+    an ordinary state of the world, and a read-only picker lookup must not fail
+    because of one, so an implementation MUST answer rather than raise.
+    """
+
+    async def curated_models(self, agent_key: str) -> list[str] | None: ...
+
+
 class AgentLister(Protocol):
     """The agent registry, narrowed to the one call this service needs
     (the same port ``ProviderService`` takes as ``agents``)."""
@@ -71,37 +100,72 @@ class AgentLister(Protocol):
     async def list(self) -> list[Resource]: ...
 
 
+def _deduped(found: Iterable[AgentModel]) -> list[AgentModel]:
+    """In the order given, deduped by ``id`` — first occurrence wins, so the
+    source that carries the better label leads."""
+    models: list[AgentModel] = []
+    seen: set[str] = set()
+    for model in found:
+        if model.id in seen:
+            continue
+        seen.add(model.id)
+        models.append(model)
+    return models
+
+
 class AgentModelCatalogueService:
     """The deduped view of whatever discovery reports for one agent type."""
 
-    def __init__(self, *, agents: AgentLister, discovery: ModelDiscoveryPort) -> None:
+    def __init__(
+        self,
+        *,
+        agents: AgentLister,
+        discovery: ModelDiscoveryPort,
+        provider_models: ActiveProviderModelsPort | None = None,
+    ) -> None:
         self._agents = agents
         self._discovery = discovery
+        # ``None`` means no provider layer is wired into this composition (a CLI
+        # one-off, a test): every agent then looks like one on its own login.
+        self._provider_models = provider_models
 
     async def catalogue(self, agent_key: str) -> list[AgentModel]:
         """Every model ``agent_key`` can be put on, in the order discovery
         returned them, deduped by ``id`` (first occurrence wins, so the source
-        that carries the better label leads)."""
+        that carries the better label leads).
+
+        Always the AGENT's own answer, even while a connection is active: this
+        is the full truth the detail page renders for ticking, and what a picker
+        does with it is ``offered()``'s business.
+        """
         config_dir = await self._config_dir(agent_key)
-        models: list[AgentModel] = []
-        seen: set[str] = set()
-        for found in await self._discover(agent_key, config_dir):
-            if found.id in seen:
-                continue
-            seen.add(found.id)
-            models.append(found)
-        return models
+        return _deduped(await self._discover(agent_key, config_dir))
 
     async def offered(self, agent_key: str) -> list[AgentModel]:
-        """What a PICKER should show: the catalogue narrowed to the models the
-        user curated, in catalogue order.
+        """What a PICKER should show.
 
-        An empty curated set means "not curated yet" and offers the whole
-        catalogue. A curated id the catalogue no longer carries — a model the
-        last CLI upgrade dropped, or one the retirement table now rules out — is
-        simply not offered; the catalogue is the truth about what exists and
+        An ACTIVE connection answers outright: its curated ids ARE the list, in
+        the user's order, and neither the agent's catalogue nor the per-agent
+        selection over it is consulted. Both describe the account the agent logs
+        into itself, and an active connection means the turns do not go there —
+        mixing the two could only offer ids the endpoint rejects. A connection
+        that curates nothing falls through: Coffer knows where the turns go, not
+        what that endpoint serves, and it will not ask over the network from a
+        read that happens on every card render and every turn (CODE-034). The
+        user closes that gap by curating the connection's model set.
+
+        Otherwise: the agent's catalogue narrowed to the models the user ticked,
+        in catalogue order. An empty set means "not curated yet" and offers the
+        whole catalogue. A curated id the catalogue no longer carries — a model
+        the last CLI upgrade dropped, or one the retirement table now rules out —
+        is simply not offered; the catalogue is the truth about what exists and
         curation only narrows it.
         """
+        endpoint_models = await self._connection_models(agent_key)
+        if endpoint_models:
+            # No label: the id is the user's own text, and the only thing that
+            # could describe it is the endpoint, which this must not ask.
+            return _deduped(AgentModel(id=model_id) for model_id in endpoint_models)
         models = await self.catalogue(agent_key)
         chosen = set(await self.selection(agent_key))
         if not chosen:
@@ -133,6 +197,18 @@ class AgentModelCatalogueService:
         return None if agent is None else agent.name
 
     # --- internals -----------------------------------------------------------
+
+    async def _connection_models(self, agent_key: str) -> list[str]:
+        """The active compatible connection's curated ids, or ``[]`` when there
+        is no such connection (or it restricts nothing). Belt-and-braces around
+        the port's never-raise contract."""
+        if self._provider_models is None:
+            return []
+        try:
+            return list(await self._provider_models.curated_models(agent_key) or [])
+        except Exception:
+            _log.debug("agent.provider_models.failed", exc_info=True)
+            return []
 
     async def _agent(self, agent_key: str) -> Resource | None:
         """The first ENABLED agent resource of this type, or ``None``.

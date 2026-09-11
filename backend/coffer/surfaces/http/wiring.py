@@ -25,6 +25,7 @@ from coffer.application.knowledge.retrieval import (
 from coffer.application.providers.ports import ModelIntrospectionService
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.knowledge.embedder import EmbeddingConfig
+from coffer.domain.provider.config import ProviderConfig
 from coffer.infrastructure.agent.claude_binary_models import ClaudeBinaryModelDiscovery
 from coffer.infrastructure.agent.codex_rpc_models import CodexRpcModelDiscovery
 from coffer.infrastructure.agent.model_discovery import (
@@ -43,6 +44,7 @@ from coffer.infrastructure.providers.provider_introspector import ProviderIntros
 from coffer.surfaces.http.chat_provider_wiring import build_agent_provider_registry
 from coffer.surfaces.http.dependencies import (
     get_agent_service,
+    get_provider_service,
     set_agent_registry,
     set_chat_service,
     set_turn_orchestrator,
@@ -132,6 +134,37 @@ def build_substrate(
     return documents, retrieval, reindexer
 
 
+class _ActiveProviderModels:
+    """``ActiveProviderModelsPort`` over the provider kind — the composition-root
+    half of the catalogue's provider question.
+
+    Resolves ``ProviderService`` lazily per call, so activating, re-targeting or
+    curating a connection takes effect on the next card render with no rewiring.
+
+    Matches the connection the same way the turn machinery does when it injects a
+    key (``resolve_active_key_for_agent``): the first one flagged ``is_active``
+    whose ``compatible_agents`` includes this agent type. An agent with no such
+    connection runs on its own login, which is what ``None`` says.
+    """
+
+    async def curated_models(self, agent_key: str) -> list[str] | None:
+        try:
+            resources = await get_provider_service().list()
+        except Exception:
+            # Nothing is wired yet, or the provider kind is unhappy: a catalogue
+            # read degrades to "no active provider", never to an error.
+            _log.debug("agent.catalogue.provider_lookup_failed", exc_info=True)
+            return None
+        for resource in resources:
+            try:
+                cfg = ProviderConfig.model_validate(resource.config)
+            except ValueError:
+                continue
+            if cfg.is_active and agent_key in cfg.resolved_compatible_agents():
+                return list(cfg.models)
+        return None
+
+
 def wire_chat(
     sm: object,
     mcp_session_factory: Callable[[str], Any],
@@ -203,9 +236,14 @@ def wire_chat(
 
     # 8. The model catalogue — one list of models per managed agent, shared by
     #    the web picker, the channel /model card, and the note each turn tells
-    #    the agent about the model it is on. Coffer names no model itself: every
-    #    entry is read back from the agent, from three sources whose ORDER here
-    #    is the order the picker shows.
+    #    the agent about the model it is on. Coffer names no model itself; it
+    #    asks the two parties that know.
+    #    First the ACTIVE provider for the agent type (``_ActiveProviderModels``
+    #    below): when the user has pointed the agent at an endpoint of their own
+    #    and ticked which of its models to use, those ids ARE the catalogue —
+    #    the agent's built-in names are not served there.
+    #    Otherwise the agent itself, from three sources whose ORDER here is the
+    #    order the picker shows.
     #      1. the Claude Code executable — its versioned catalog, which is the
     #         only place the Opus 5 / Opus 4.8 distinction is written down (its
     #         tier aliases are deliberately NOT offered: each one resolves to a
@@ -224,6 +262,7 @@ def wire_chat(
                 NativeConfigModelDiscovery(),
             ]
         ),
+        provider_models=_ActiveProviderModels(),
     )
 
     # 9. Register dependency providers.

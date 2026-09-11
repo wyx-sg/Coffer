@@ -524,6 +524,75 @@ a curation control rather than a read-only list). **Still NOT in scope:**
 deriving account entitlement locally — it is not derivable — and Coffer still
 writes down no model name of its own.
 
+## Amendment 2026-09-11c — An active connection answers what a picker offers
+
+> Status: Draft. **Nuances 2026-09-11b**: that amendment made a picker show the
+> models the ACCOUNT can run; this one says whose account. Recorded after a live
+> session where the `/model` card offered `claude-opus-5` to an agent Coffer had
+> pointed at a gateway that does not serve it.
+
+**The defect.** `AgentModelCatalogueService` is the one catalogue behind every
+surface that offers a model choice, and it only ever asked the AGENT. It knew
+nothing about the connection Coffer had activated for that agent. So with an
+openai-compatible gateway routed to `claude_code`, the card offered Claude's own
+model names, none of which that endpoint serves; tapping one passed the id
+straight through to the SDK, which sent it to `ANTHROPIC_BASE_URL` and failed
+the turn. Both narrowing rules that existed — the retirement table and the
+per-agent curated set — describe the account the AGENT logs into itself, which
+is not where those turns were going.
+
+- **K1 — An active connection's curated set IS what a picker offers.** When a
+  connection is `is_active`, compatible with the agent type and carries a
+  curated model set, `offered()` / `suggest()` answer with those ids, in the
+  user's order, consulting neither the agent's catalogue nor the per-agent
+  selection over it. `catalogue()` is unchanged and still reports the agent's
+  own models: it is the full truth the detail page renders for ticking, and what
+  a picker does with it is `offered()`'s business.
+- **K2 — An active connection that curates nothing changes nothing.** Coffer
+  knows where the turns go, not what that endpoint serves, and deliberately does
+  not ask: this read happens on every card render and every turn, so
+  introspection would put a network round trip on the daemon's event loop
+  (CODE-034). The agent's own answer stands; curating the connection's set is
+  how the user makes it accurate.
+- **K3 — No active compatible connection means the agent's own login**, and
+  2026-09-11b's rules apply unchanged. A provider row Coffer cannot parse
+  degrades to this case rather than failing the read.
+- **K4 — Codex additionally gets the list in ITS OWN picker.** Projecting a
+  curated connection into Codex writes a Coffer-owned catalogue file next to its
+  `config.toml` and points `model_catalog_json` at it. That key REPLACES Codex's
+  built-in model list (verified against Codex 0.139.0: with a one-model
+  catalogue, `model/list` returns exactly that model), which is what is wanted —
+  the built-in names are not served by the endpoint the agent now calls.
+  De-projection drops the pointer and retires the file, so Codex's own models
+  come back. The pointer is dropped iff it names the Coffer-owned file, the same
+  ownership discipline `apiKeyHelper` already uses. An uncurated connection
+  writes no catalogue, for K2's reason.
+  - The file is a **wire contract with another program**: every field Codex's
+    parser requires is emitted, pinned by a test. A malformed one does not fail
+    loudly — Codex warns and falls back to its built-in list, so the projection
+    silently does not take effect.
+  - Values Coffer cannot derive for a third-party endpoint each take the least
+    committal value, with the cost of being wrong recorded beside them. One has
+    a real consequence: `base_instructions` is where Codex keeps its ENTIRE
+    agent system prompt, and Coffer writes it empty — Codex then sends no
+    `instructions` field. It still sends its permissions, skills and environment
+    developer messages and the full tool set, so the agent works, but without
+    Codex's persona prompt. Copying that prompt into a Coffer-written file would
+    pin one Codex version's prompt and silently override every later one; Coffer
+    does not author another product's system prompt.
+  - Claude Code has no equivalent. The only thing shaped like one,
+    `additionalModelOptionsCache` in `~/.claude.json`, is Claude Code's own
+    CACHE of a field from its API response, refreshed and overwritten from
+    there; it is not a contract and anything written into it is clobbered. So
+    for `claude_code` the Coffer-side surfaces stay the only places the model is
+    chosen.
+
+**Nuances:** 2026-09-11b (the per-agent curated set — still the answer whenever
+the agent is on its own login) and H1 (the catalogue is read, never authored —
+now read from the connection when one is active). **Still NOT in scope:**
+endpoint introspection on a picker read, and Coffer still validates no model id
+against a list of its own.
+
 ## Scope
 
 ### In scope
