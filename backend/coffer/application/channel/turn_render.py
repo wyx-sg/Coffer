@@ -55,10 +55,15 @@ _UPDATE_INTERVAL_SECONDS = 1.5
 _ACK_TEXT = "\u23f3 Got it \u2014 working on this\u2026"
 _PROGRESS_MAX_LINES = 8
 #: FR-037: cadence for re-sending the typing indicator on a supports_typing-only
-#: transport (SeaTalk). Its typing signal expires within seconds, so a long turn
-#: needs a periodic re-send to keep the "working…" hint alive before the first
-#: live update lands.
-_TYPING_HEARTBEAT_SECONDS = 8.0
+#: transport (SeaTalk). Its typing signal expires, so a long turn needs a
+#: periodic re-send to keep the "working…" hint alive before the first live
+#: update lands.
+#:
+#: SeaTalk displays the indicator for FOUR seconds. Re-sending every eight left
+#: it dark half the time — a cue that blinks on and off reads as something
+#: going wrong, not as something working. Three seconds keeps it continuous
+#: with a margin, and costs 20 calls a minute against a 300/min limit.
+_TYPING_HEARTBEAT_SECONDS = 3.0
 
 
 def _clip_stream_preview(text: str, limit: int) -> str:

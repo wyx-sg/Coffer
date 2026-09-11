@@ -24,8 +24,12 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from coffer.domain.channel.errors import ChannelSendFailed
-from coffer.infrastructure.channel.render import chunk_text, markdown_to_seatalk
-from coffer.infrastructure.channel.seatalk_parse import split_to_byte_limit
+from coffer.infrastructure.channel.render import markdown_to_seatalk
+from coffer.infrastructure.channel.seatalk_stream_text import (
+    _STREAM_BYTE_BUDGET,
+    _clip_tail_bytes,
+    _split_for_stream,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -73,12 +77,6 @@ _STREAM_KEEPALIVE_SECONDS = 10.0
 #: gives up (~10 minutes at the tick above) — the bound that keeps an abandoned
 #: turn from holding a stream open forever.
 _KEEPALIVE_MAX_TICKS = 60
-
-#: How much of a reply one SeaTalk stream may carry. The platform caps a stream
-#: at 4096 characters; this budget is in UTF-8 BYTES (CJK is 3 bytes/char) and
-#: leaves headroom for the markdown escaping the final snapshot adds. Anything
-#: past it is handed back to the caller and sent as ordinary chunked messages.
-_STREAM_BYTE_BUDGET = 3600
 
 
 class LiveTextSurface:
@@ -374,28 +372,3 @@ class SeaTalkLiveText(LiveTextSurface):
                 "message": {"text": self._content(text, markdown=markdown)},
             },
         )
-
-
-def _clip_tail_bytes(text: str, budget: int) -> str:
-    """Keep the TAIL of ``text`` within ``budget`` UTF-8 bytes, behind a leading
-    ellipsis — an interim snapshot shows the newest words, not the oldest."""
-    if len(text.encode("utf-8")) <= budget:
-        return text
-    return "…" + split_to_byte_limit(text, budget)[-1]
-
-
-def _split_for_stream(text: str) -> tuple[str, str]:
-    """``(head, remainder)``: the most a stream may carry, and the rest.
-
-    A reply's length is unknown until it ends, so a stream that overruns the
-    platform's per-stream cap finishes at the limit and the remainder is handed
-    back to be sent as ordinary chunked messages — the alternative (refusing to
-    stream anything that *might* grow too long) would withhold the live reply
-    from every turn to serve the rare one.
-    """
-    if len(text.encode("utf-8")) <= _STREAM_BYTE_BUDGET:
-        return text, ""
-    chunks = chunk_text(text, _STREAM_BYTE_BUDGET)  # paragraph-aware first
-    pieces = split_to_byte_limit(chunks[0], _STREAM_BYTE_BUDGET)  # then byte-safe
-    rest = [part for part in ["".join(pieces[1:]), *chunks[1:]] if part]
-    return pieces[0], "\n\n".join(rest)
