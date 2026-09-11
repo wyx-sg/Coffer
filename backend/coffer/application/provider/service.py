@@ -15,12 +15,11 @@ that holds the write lock (mirrors ``mcp_entry_service``).
 from __future__ import annotations
 
 import asyncio
-import pathlib
 from collections.abc import Awaitable, Callable
 from typing import Protocol as _Protocol
 
 from coffer.application.audit_service import AuditService
-from coffer.application.provider.projector import ProviderProjector
+from coffer.application.provider.projector import ProjectionConfigStore, ProviderProjector
 from coffer.application.provider.results import ActivateResult, DeactivateResult
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.types import AgentType
@@ -54,11 +53,6 @@ class _CredentialStore(_Protocol):
     def delete(self, ref: str) -> None: ...
 
 
-class _ConfigFileStore(_Protocol):
-    def read_text(self, path: pathlib.Path) -> str | None: ...
-    def write_text_atomic(self, path: pathlib.Path, text: str) -> None: ...
-
-
 class _AgentLister(_Protocol):
     async def list(self) -> list[Resource]: ...
 
@@ -69,7 +63,9 @@ class ProviderService:
         *,
         resources: ResourceService,
         credentials: _CredentialStore,
-        config_store: _ConfigFileStore,
+        # Handed straight to the projector, so it is annotated with the
+        # projector's own port rather than a second copy of it here.
+        config_store: ProjectionConfigStore,
         agents: _AgentLister,
         audit: AuditService,
         resolve_internal_model: Callable[[], Awaitable[str | None]] | None = None,

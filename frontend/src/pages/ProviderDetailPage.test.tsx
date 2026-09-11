@@ -1,10 +1,12 @@
 // pages/ProviderDetailPage.test.tsx
 //
-// The connection detail page: a read-only Configuration card (which NEVER
-// renders a secret — only whether one is stored) and the Models card, where the
-// endpoint is introspected and the curated set is written back with PATCH
-// {models: [...]}. An empty set reads as "no restriction"; an endpoint that
-// cannot list its models says so and leaves the current selection intact.
+// The connection detail page: two tabs over one header. Overview holds the
+// read-only Configuration card (which NEVER renders a secret — only whether one
+// is stored); Models holds the table where the endpoint is introspected and the
+// curated set is written back with PATCH {models: [...]}, one Switch per model
+// id, searchable and filterable by offered/not. An empty set reads as "no
+// restriction"; an endpoint that cannot list its models says so and leaves the
+// current selection intact.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -94,6 +96,22 @@ function fetchYields(models: string[], message = "") {
 
 const fetchButton = () => screen.getByRole("button", { name: /fetch models/i });
 
+/** The page opens on Overview, so every model assertion goes through the tab.
+ *  Radix's TabsTrigger switches on mousedown, which fireEvent.click never sends. */
+async function openModelsTab() {
+  fireEvent.mouseDown(await screen.findByRole("tab", { name: "Models" }));
+}
+
+/** The row's offered/not-offered Switch, named as the table labels it. */
+const switchFor = (model: string) => screen.getByRole("switch", { name: `Status: ${model}` });
+
+/** Open the status filter dropdown and pick an option. The models table renders
+ *  that combobox in DataTable's toolbar, ahead of the pagination page-size one. */
+function selectStatus(optionName: string) {
+  fireEvent.click(screen.getAllByRole("combobox")[0]);
+  fireEvent.click(screen.getByRole("option", { name: optionName }));
+}
+
 describe("ProviderDetailPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -122,21 +140,36 @@ describe("ProviderDetailPage", () => {
     expect(await screen.findByText("No key stored")).toBeInTheDocument();
   });
 
+  test("the body is split into Overview and Models, opening on Overview", async () => {
+    apiMock.get.mockResolvedValue(makeProvider());
+    renderPage();
+    await screen.findByRole("heading", { name: "acme" });
+
+    // Configuration belongs to Overview, so it is what the page opens on; the
+    // models surface stays behind its tab until asked for.
+    expect(screen.getByText("Configuration")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /fetch models/i })).not.toBeInTheDocument();
+
+    await openModelsTab();
+    expect(fetchButton()).toBeInTheDocument();
+  });
+
   test("an empty model selection reads as unrestricted", async () => {
     apiMock.get.mockResolvedValue(makeProvider({ models: [] }));
     renderPage();
+    await openModelsTab();
 
     expect(await screen.findByText(/no restriction/i)).toBeInTheDocument();
-    // Nothing curated and nothing fetched yet — the list invites a fetch.
+    // Nothing curated and nothing fetched yet — the table invites a fetch.
     expect(screen.getByText(/no models yet/i)).toBeInTheDocument();
   });
 
-  test("fetching models lists them as checkboxes and ticking one writes the selection", async () => {
+  test("fetching models lists them as rows and flipping one on writes the selection", async () => {
     apiMock.get.mockResolvedValue(makeProvider({ models: [] }));
     apiMock.update.mockResolvedValue(makeProvider({ models: ["gpt-5"] }));
     fetchYields(["gpt-5", "gpt-5-codex"]);
     renderPage();
-    await screen.findByRole("heading", { name: "acme" });
+    await openModelsTab();
 
     fireEvent.click(fetchButton());
     expect(listMutate).toHaveBeenCalledWith(
@@ -148,25 +181,26 @@ describe("ProviderDetailPage", () => {
       expect.anything(),
     );
 
-    const box = await screen.findByRole("checkbox", { name: "gpt-5" });
-    expect(box).not.toBeChecked();
-    fireEvent.click(box);
+    const toggle = await screen.findByRole("switch", { name: "Status: gpt-5" });
+    expect(toggle).not.toBeChecked();
+    fireEvent.click(toggle);
 
     await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
     expect(apiMock.update).toHaveBeenCalledWith("acme", { models: ["gpt-5"] });
   });
 
-  test("unticking removes just that model; clearing writes the empty (unrestricted) set", async () => {
+  test("flipping one off removes just that model; clearing writes the empty (unrestricted) set", async () => {
     apiMock.get.mockResolvedValue(makeProvider({ models: ["gpt-5", "gpt-5-codex"] }));
     apiMock.update.mockResolvedValue(makeProvider({ models: ["gpt-5-codex"] }));
     renderPage();
+    await openModelsTab();
 
     // The curated set renders without a fetch — it is the connection's own state.
-    const box = await screen.findByRole("checkbox", { name: "gpt-5" });
-    expect(box).toBeChecked();
+    const toggle = await screen.findByRole("switch", { name: "Status: gpt-5" });
+    expect(toggle).toBeChecked();
     expect(screen.getByText(/2 model\(s\) picked/i)).toBeInTheDocument();
 
-    fireEvent.click(box);
+    fireEvent.click(toggle);
     await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
     expect(apiMock.update).toHaveBeenCalledWith("acme", { models: ["gpt-5-codex"] });
 
@@ -175,16 +209,54 @@ describe("ProviderDetailPage", () => {
     expect(apiMock.update).toHaveBeenLastCalledWith("acme", { models: [] });
   });
 
+  test("the search box narrows the table to the matching model ids", async () => {
+    apiMock.get.mockResolvedValue(makeProvider({ models: [] }));
+    fetchYields(["gpt-5", "gpt-5-codex", "claude-opus-4"]);
+    renderPage();
+    await openModelsTab();
+    fireEvent.click(fetchButton());
+    await screen.findByText("claude-opus-4");
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Search models…" }), {
+      target: { value: "codex" },
+    });
+    expect(screen.getByText("gpt-5-codex")).toBeInTheDocument();
+    expect(screen.queryByText("claude-opus-4")).not.toBeInTheDocument();
+
+    // Rows exist; the search is what hid them — so say that, not "no models yet".
+    fireEvent.change(screen.getByRole("textbox", { name: "Search models…" }), {
+      target: { value: "gemini" },
+    });
+    expect(screen.getByText(/no models match/i)).toBeInTheDocument();
+  });
+
+  test("the status filter separates the offered models from the rest", async () => {
+    apiMock.get.mockResolvedValue(makeProvider({ models: ["gpt-5"] }));
+    fetchYields(["gpt-5", "gpt-5-codex"]);
+    renderPage();
+    await openModelsTab();
+    fireEvent.click(fetchButton());
+    await screen.findByText("gpt-5-codex");
+
+    selectStatus("Enabled");
+    expect(screen.getByText("gpt-5")).toBeInTheDocument();
+    expect(screen.queryByText("gpt-5-codex")).not.toBeInTheDocument();
+
+    selectStatus("Disabled");
+    expect(screen.getByText("gpt-5-codex")).toBeInTheDocument();
+    expect(screen.queryByText("gpt-5")).not.toBeInTheDocument();
+  });
+
   test("an endpoint that cannot list models says so and leaves the selection intact", async () => {
     apiMock.get.mockResolvedValue(makeProvider({ models: ["hand-typed-model"] }));
     // The probe failed (the hook is left holding the error).
     listState = { error: new ApiError("INTERNAL_ERROR", "endpoint refused") };
     renderPage();
-    await screen.findByRole("heading", { name: "acme" });
+    await openModelsTab();
 
-    expect(screen.getByText(/could not list this endpoint's models/i)).toBeInTheDocument();
+    expect(await screen.findByText(/could not list this endpoint's models/i)).toBeInTheDocument();
     // The curated list the user built earlier survives the failed fetch.
-    expect(screen.getByRole("checkbox", { name: "hand-typed-model" })).toBeChecked();
+    expect(switchFor("hand-typed-model")).toBeChecked();
     expect(apiMock.update).not.toHaveBeenCalled();
   });
 
@@ -192,7 +264,7 @@ describe("ProviderDetailPage", () => {
     apiMock.get.mockResolvedValue(makeProvider({ models: [] }));
     fetchYields([], "this endpoint does not expose a model list");
     renderPage();
-    await screen.findByRole("heading", { name: "acme" });
+    await openModelsTab();
 
     fireEvent.click(fetchButton());
     expect(
@@ -238,8 +310,8 @@ describe("ProviderDetailPage", () => {
   test("a missing connection shows a not-found card with a way back", async () => {
     apiMock.get.mockRejectedValue(new ApiError("RESOURCE_NOT_FOUND", "no such connection"));
     renderPage();
-    expect(await screen.findByText("Connection not found")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /back to llm connections/i }));
+    expect(await screen.findByText("Model provider not found")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /back to model providers/i }));
     expect(navigateMock).toHaveBeenCalledWith("/model-providers");
   });
 });

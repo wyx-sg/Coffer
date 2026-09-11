@@ -44,7 +44,6 @@ describe("SettingsLayout", () => {
     // Models / Providers / Embedding tabs it replaced are long gone too.
     expect(screen.queryByRole("link", { name: /^Models$/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /^Providers$/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /LLM Connections/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Model providers/ })).not.toBeInTheDocument();
   });
 

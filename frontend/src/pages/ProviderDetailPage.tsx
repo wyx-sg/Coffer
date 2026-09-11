@@ -1,8 +1,9 @@
 // frontend/src/pages/ProviderDetailPage.tsx
 // Per-connection detail page (mirrors McpServerDetailPage): a back link, a
-// header carrying the name + state badges + Edit/Delete, then the body —
-// Configuration (read-only; the Edit dialog owns every change) and Models (which
-// of the endpoint's models this connection offers at all).
+// header carrying the name + state badges + Edit/Delete, then the body in two
+// tabs (as on the agent detail page) — Overview, the read-only Configuration
+// card the Edit dialog owns every change of, and Models, the table deciding
+// which of the endpoint's models this connection offers at all.
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -10,10 +11,11 @@ import { ArrowLeft } from "lucide-react";
 
 import { ProviderConfigCard } from "@/components/settings/ProviderConfigCard";
 import { ProviderDetailHeader } from "@/components/settings/ProviderDetailHeader";
-import { ProviderModelsCard } from "@/components/settings/ProviderModelsCard";
+import { ProviderModelsTable } from "@/components/settings/ProviderModelsTable";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translateApiError } from "@/lib/api/errors";
 import { useDeleteProvider, useProvider } from "@/lib/hooks/useProviders";
 
@@ -74,8 +76,20 @@ export function ProviderDetailPage() {
         onDeleteClick={() => setDeleteOpen(true)}
       />
 
-      <ProviderConfigCard provider={provider} />
-      <ProviderModelsCard provider={provider} />
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">{t("settings.connections.detail.tabOverview")}</TabsTrigger>
+          <TabsTrigger value="models">{t("settings.connections.detail.models")}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="pt-6">
+          <ProviderConfigCard provider={provider} />
+        </TabsContent>
+
+        <TabsContent value="models" className="pt-6">
+          <ProviderModelsTable provider={provider} />
+        </TabsContent>
+      </Tabs>
 
       <ConfirmDialog
         open={deleteOpen}

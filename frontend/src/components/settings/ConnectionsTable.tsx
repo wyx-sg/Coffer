@@ -2,8 +2,8 @@
 //
 // The LLM-connection library rendered via the shared DataTable (mirrors
 // SkillsTable / AgentTable), replacing the hand-rolled card list this surface
-// used to be: search over name + endpoint + description, filters on connection
-// type and enabled state, a per-row enable Switch, bulk enable/disable/delete,
+// used to be: search over name + endpoint + description, filters on vendor and
+// enabled state, a per-row enable Switch, bulk enable/disable/delete,
 // and pagination — all from DataTable. A row click opens the connection's detail
 // page, where the endpoint is edited and its model set curated; the row itself
 // carries only what a table row should.
@@ -18,7 +18,7 @@ import {
   ConnectionStatusCell,
   ConnectionsBulkActions,
 } from "@/components/settings/ConnectionsTableActions";
-import { AGENT_LABEL_KEY } from "@/components/settings/connectionPresets";
+import { AGENT_LABEL_KEY, PRESETS, vendorOf } from "@/components/settings/connectionPresets";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { Provider } from "@/lib/api/providers";
 import { useDeleteProvider } from "@/lib/hooks/useProviders";
@@ -29,6 +29,11 @@ export function ConnectionsTable({ providers }: { providers: Provider[] }) {
   const del = useDeleteProvider();
   // Styled confirmation dialog (no native window.confirm). `null` = closed.
   const [deleteTarget, setDeleteTarget] = useState<Provider | null>(null);
+
+  // A preset's label is the vendor's own brand name, identical in every locale;
+  // only the Custom fallback is a word we have to translate.
+  const vendorLabel = (id: string, label: string) =>
+    id === "custom" ? t("settings.connections.customProvider") : label;
 
   const columns: Column<Provider>[] = [
     {
@@ -53,10 +58,15 @@ export function ConnectionsTable({ providers }: { providers: Provider[] }) {
       ),
     },
     {
-      key: "protocol",
-      header: t("settings.connections.wireFormat"),
+      key: "vendor",
+      header: t("settings.connections.provider"),
       className: "whitespace-nowrap",
-      cell: (p) => <span className="text-muted-foreground">{p.protocol}</span>,
+      cell: (p) => {
+        const vendor = vendorOf(p.base_url);
+        return (
+          <span className="text-muted-foreground">{vendorLabel(vendor.id, vendor.label)}</span>
+        );
+      },
     },
     {
       key: "base_url",
@@ -105,16 +115,13 @@ export function ConnectionsTable({ providers }: { providers: Provider[] }) {
 
   const filters: FilterDef<Provider>[] = [
     {
-      key: "protocol",
-      label: t("settings.connections.wireFormat"),
-      allLabel: t("settings.connections.allProtocols"),
-      accessor: (p) => p.protocol,
-      options: [
-        { value: "anthropic", label: "anthropic" },
-        { value: "openai", label: "openai" },
-        { value: "ollama", label: "ollama" },
-        { value: "unknown", label: "unknown" },
-      ],
+      key: "vendor",
+      label: t("settings.connections.provider"),
+      allLabel: t("settings.connections.allVendors"),
+      accessor: (p) => vendorOf(p.base_url).id,
+      // The presets ARE the vendor vocabulary, Custom included — deriving the
+      // options from them keeps the filter in step with the add-connection form.
+      options: PRESETS.map((p) => ({ value: p.id, label: vendorLabel(p.id, p.label) })),
     },
     {
       key: "status",

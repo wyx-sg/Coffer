@@ -96,9 +96,9 @@ anthropic`，Codex 注入 `resolve_active_key(OPENAI)`），所以把这种连�
 wire」解耦，并按**连接**解析密钥。
 
 - **F1 — 连接上的 `compatible_agents`。** 连接显式携带 `compatible_agents ⊆ {claude_code, codex}`
-  （`null` ⇒ wire 默认：anthropic → `[claude_code]`、openai → `[codex]`、ollama → `[]`、unknown →
-  两者）。添加/编辑对话框按 wire 预填复选框，用户可改（把 openai 网关路由给 Claude Code）。JSON 载荷
-  ——无需 DB 迁移。
+  （`null` ⇒ wire 默认：所有带凭据的 wire 都是两者，ollama 为 `[]`——它仅供内部使用）。添加/编辑
+  对话框同样按此预填复选框——默认全部勾选——由用户收窄（或把 openai 网关路由给 Claude Code）。
+  JSON 载荷——无需 DB 迁移。
 - **F2 — 投射 writer 按 AGENT 类型选，不按 protocol。** 兼容 `claude_code` 的连接写 Claude 的
   `settings.json`（anthropic 形态）；兼容 `codex` 写 Codex 的 `config.toml`。`protocol` 现仅用于模型
   自省与是否需要 key。
@@ -300,6 +300,50 @@ id 去比对自己写死的名单。
 内置登录面板从只读列表变成策展控件）。**仍不在范围内：** 在本机推导账号权限——它推导不出来；
 Coffer 仍不写下任何属于自己的模型名。
 
+## 修订 2026-09-11c — 有激活连接时，由它回答「选择器该提供什么」
+
+> 状态：Draft。**细化 2026-09-11b**：那一条让选择器只展示**账号**跑得动的模型，这一条回答的是
+> 「谁的账号」。起因是一次实际使用：Coffer 已经把 agent 指向了某个网关，频道里的 `/model` 卡片
+> 却仍在提供该网关根本不提供的 `claude-opus-5`。
+
+**缺陷。** `AgentModelCatalogueService` 是所有「提供模型选择」界面共用的唯一清单，但它只问 agent，
+对 Coffer 已经为该 agent 激活的连接一无所知。于是把 openai 兼容网关路由给 `claude_code` 之后，
+卡片给出的是 Claude 自己的模型名，而那个端点一个都不提供；点下去 id 被原样透传给 SDK，发往
+`ANTHROPIC_BASE_URL`，这一轮直接失败。此前已有的两条收窄规则——退役表与逐 agent 的策展集合——
+描述的都是 **agent 自己登录的那个账号**，而这些请求根本没发往那里。
+
+- **K1 —— 激活连接的策展集合「就是」选择器提供的内容。** 当一条连接 `is_active`、与该 agent 类型
+  兼容、且带有策展模型集合时，`offered()` / `suggest()` 直接以那些 id 作答，按用户的顺序，既不看
+  agent 的 catalogue，也不看其上的逐 agent 勾选。`catalogue()` 不变，仍然报告 agent 自己的模型：
+  它是详情页用于勾选的完整事实，而选择器如何使用它是 `offered()` 的事。
+- **K2 —— 激活但未策展则什么都不变。** Coffer 知道请求发往哪里，但不知道那个端点提供什么，并且
+  刻意不问：这次读取发生在每次渲染卡片、每一轮对话时，introspect 会把一次网络往返放到 daemon 的
+  事件循环上（CODE-034）。此时仍以 agent 自己的答案为准；用户想要准确，就去这条连接上策展模型集合。
+- **K3 —— 没有兼容的激活连接即「agent 自己的登录」**，2026-09-11b 的规则原样适用。一条 Coffer
+  解析不了的 provider 行会退化到这种情况，而不是让读取失败。
+- **K4 —— Codex 还会把这份清单送进它「自己的」选择器。** 把一条已策展的连接投影给 Codex 时，
+  Coffer 会在它的 `config.toml` 旁写一份 Coffer 所有的 catalogue 文件，并让 `model_catalog_json`
+  指向它。这个键会**替换** Codex 的内置模型列表（已对 Codex 0.139.0 实测：写入单模型 catalogue 后
+  `model/list` 只返回该模型），而这正是想要的效果——agent 现在调用的端点并不提供那些内置模型。
+  取消投影时指针被删除、文件被退役，Codex 自己的模型随即回归。指针**仅在**它指向 Coffer 所有的
+  那个文件名时才会被删除，与 `apiKeyHelper` 采用同一套归属判定。未策展的连接不写 catalogue，
+  理由见 K2。
+  - 该文件是**与另一个程序之间的接口契约**：Codex 解析器要求的每个字段都会写出，并由测试钉住。
+    写坏了并不会大声失败——Codex 会告警并回落到内置列表，也就是投影**静默失效**。
+  - 那些 Coffer 无从推导的字段一律取「主张最少」的值，并在旁边记下猜错的代价。其中一个有真实
+    后果：`base_instructions` 是 Codex 存放它**整个 agent 系统提示词**的地方，而 Coffer 写空——
+    Codex 于是不发送 `instructions` 字段。它仍会发送权限、skills、环境这几条 developer 消息和
+    完整工具集，agent 能正常工作，但少了 Codex 的人格提示词。另一种做法（把 OpenAI 的提示词抄进
+    Coffer 写的文件里）会把某一个 Codex 版本的提示词钉死，并静默覆盖之后的每一个版本；Coffer
+    不替另一个产品编写系统提示词。
+  - Claude Code 没有对应能力。唯一形似的 `~/.claude.json` 里的 `additionalModelOptionsCache`
+    是 Claude Code 对自己 API 响应中某字段的**缓存**，会被刷新覆盖；它不是对外契约，写进去的东西
+    会被冲掉。所以对 `claude_code` 而言，Coffer 这一侧的界面仍是仅有的选择入口。
+
+**细化：** 2026-09-11b（逐 agent 的策展集合——在 agent 使用自己登录时依然是答案）与 H1（清单只
+读取、不编写——在有激活连接时改为向连接读取）。**仍不在范围内：** 读取选择器清单时 introspect
+端点；Coffer 仍不拿任何模型 id 去比对自己写死的名单。
+
 ## 范围
 
 ### 在范围内
@@ -472,10 +516,26 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 
 > **修订 2026-06-23（提供方预设）。** 添加连接的表单不再从 base_url + 密钥自动探测
 > `protocol`，改为提供**提供方预设**选择（OpenAI / Anthropic / Google Gemini /
-> DeepSeek / Moonshot / OpenRouter / Ollama），选中即填入接入地址与协议；另有
+> DeepSeek / OpenRouter / Ollama），选中即填入接入地址与协议；另有
 > **自定义**选项，会显示手动协议选择器，用于任意其他 OpenAI/Anthropic 兼容端点。
 > 存储的数据模型不变（`protocol` 仍是 `ProviderConfig` 字段），仅创建时的选择方式改变。
 > `detect-protocol` 探测端点保留供其他调用方使用，但表单不再使用它。
+
+> **修订 2026-09-11（界面说清它管的是什么）。** 该页不再把这些东西叫「LLM 连接」——
+> 在 UI 中它们就是**模型提供商**，也就是侧栏与 spec ui-shell 早已使用的名字。由此带来
+> 四点界面变化，都不触及存储模型与 API：
+>
+> - 列表第二列及其筛选改为**厂商**（OpenAI、Anthropic……），而非 wire protocol。厂商不
+>   存储，而是拿 `base_url` 去匹配预设列表**推导**出来——匹配不上任何预设的端点显示为
+>   自定义；用户改掉某个预设的接入地址后同样会退回自定义。protocol 仍显示在详情页，
+>   在那里它回答的是「这个端点怎么调」，而不是用来给列表分类。
+> - **名称**列仍显示用户自己起的名字：它是路由与 CLI 寻址用的唯一 id，改成厂商名会把
+>   同一厂商的两把 key 折叠成一行。
+> - 详情页正文拆为**概览**与**模型**两个 tab，与 agent、MCP server 详情页一致。模型
+>   tab 是一个 `DataTable`——每个模型 id 一行，行内开关控制是否提供，另有搜索与状态
+>   筛选——因为「精选某个真实端点的模型」本来就是一个列表，而 Coffer 的每个列表都是
+>   这张表。空选择仍然表示**不限制**。
+> - **Moonshot (Kimi)** 预设已移除。
 
 ## Acceptance Scenarios
 

@@ -166,7 +166,7 @@ describe("AgentOverviewTab", () => {
       ],
     });
     render(<AgentOverviewTab agent={agent} />);
-    const options = openSelectOptions(/connection/i);
+    const options = openSelectOptions(/provider/i);
     expect(options).toContain("official");
     expect(options).toContain("kimi");
     expect(options).not.toContain("gpt");
@@ -195,7 +195,7 @@ describe("AgentOverviewTab", () => {
         opts?.onSuccess?.({ models: ["agnes-2.0", "agnes-1.5-flash"] }),
     });
     render(<AgentOverviewTab agent={agent} />);
-    openSelectOptions(/connection/i);
+    openSelectOptions(/provider/i);
     fireEvent.click(screen.getByRole("option", { name: "agnes" }));
     // Nothing is projected on a mere pick …
     expect(activateMutate).not.toHaveBeenCalled();
@@ -214,7 +214,7 @@ describe("AgentOverviewTab", () => {
         opts?.onSuccess?.({ models: ["agnes-2.0"] }),
     });
     const { rerender } = render(<AgentOverviewTab agent={agent} />);
-    openSelectOptions(/connection/i);
+    openSelectOptions(/provider/i);
     fireEvent.click(screen.getByRole("option", { name: "agnes" }));
     expect(confirmBtn()).toBeDisabled();
     passingTest();
@@ -231,7 +231,7 @@ describe("AgentOverviewTab", () => {
         opts?.onSuccess?.({ models: ["agnes-2.0"] }),
     });
     const { rerender } = render(<AgentOverviewTab agent={agent} />);
-    openSelectOptions(/connection/i);
+    openSelectOptions(/provider/i);
     fireEvent.click(screen.getByRole("option", { name: "agnes" }));
     useTestMock.mockReturnValue({
       mutate: testMutate,
@@ -253,7 +253,7 @@ describe("AgentOverviewTab", () => {
         opts?.onSuccess?.({ models: ["agnes-2.0", "agnes-1.5-flash"] }),
     });
     const { rerender } = render(<AgentOverviewTab agent={agent} />);
-    openSelectOptions(/connection/i);
+    openSelectOptions(/provider/i);
     fireEvent.click(screen.getByRole("option", { name: "agnes" }));
     fireEvent.click(testBtn());
     // Test probes the drafted connection + staged model (test-connection needs a model).
@@ -283,7 +283,7 @@ describe("AgentOverviewTab", () => {
     });
     const { rerender } = render(<AgentOverviewTab agent={codex} />);
     expect(screen.queryByRole("combobox", { name: /fast model/i })).not.toBeInTheDocument();
-    openSelectOptions(/connection/i);
+    openSelectOptions(/provider/i);
     fireEvent.click(screen.getByRole("option", { name: "agnes" }));
     fireEvent.click(testBtn());
     passingTest();
@@ -299,7 +299,7 @@ describe("AgentOverviewTab", () => {
   test("switching to built-in confirms without a test", () => {
     useProvidersMock.mockReturnValue({ data: [makeConn({ name: "official", is_active: true })] });
     render(<AgentOverviewTab agent={agent} />);
-    openSelectOptions(/connection/i);
+    openSelectOptions(/provider/i);
     fireEvent.click(screen.getByRole("option", { name: /built-in/i }));
     // Built-in needs no endpoint test — confirm is enabled straight away.
     expect(confirmBtn()).toBeEnabled();
@@ -342,7 +342,7 @@ describe("AgentOverviewTab", () => {
   test("picking a connection brings the model slots back, enabled", () => {
     useProvidersMock.mockReturnValue({ data: [agnes()] });
     render(<AgentOverviewTab agent={agent} />);
-    openSelectOptions(/connection/i);
+    openSelectOptions(/provider/i);
     fireEvent.click(screen.getByRole("option", { name: "agnes" }));
     expect(screen.getByRole("combobox", { name: /^model$/i })).toBeEnabled();
     expect(screen.getByRole("combobox", { name: /fast model/i })).toBeEnabled();
@@ -377,7 +377,7 @@ describe("AgentOverviewTab", () => {
       ],
     });
     render(<AgentOverviewTab agent={agent} />);
-    openSelectOptions(/connection/i);
+    openSelectOptions(/provider/i);
     fireEvent.click(screen.getByRole("option", { name: "agnes" }));
 
     expect(listMutate).not.toHaveBeenCalled();
@@ -408,7 +408,7 @@ describe("AgentOverviewTab", () => {
     render(<AgentOverviewTab agent={agent} />);
     // No dead-end empty state: the connection dropdown always renders and
     // defaults to the built-in login (spec: built-in is the baseline).
-    const combobox = screen.getByRole("combobox", { name: /connection/i });
+    const combobox = screen.getByRole("combobox", { name: /provider/i });
     expect(combobox).toHaveTextContent(/built-in/i);
   });
 });

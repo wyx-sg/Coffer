@@ -14,7 +14,12 @@ projects into none: it is internal-only, used by Coffer's own engine):
   ``ANTHROPIC_MODEL`` / ``ANTHROPIC_SMALL_FAST_MODEL``.
 - Codex → ``~/.codex/config.toml`` (TOML): top-level ``model`` +
   ``model_provider`` plus a ``[model_providers.coffer]`` table whose ``env_key``
-  names the env var Codex reads the key from (also never written here).
+  names the env var Codex reads the key from (also never written here), and —
+  when the connection curates a model set — ``model_catalog_json`` pointing at a
+  Coffer-owned catalogue file so Codex's OWN model picker lists the endpoint's
+  models rather than OpenAI's. The catalogue's CONTENT is built here
+  (``codex_model_catalog_json``); writing and deleting the file is the
+  application layer's job, like every other projection write.
 
 Both write ONLY Coffer-managed keys, merging into the user's existing file so
 unrelated content is preserved.
@@ -23,7 +28,8 @@ unrelated content is preserved.
 from __future__ import annotations
 
 import json
-from collections.abc import MutableMapping
+import pathlib
+from collections.abc import MutableMapping, Sequence
 from dataclasses import dataclass
 
 import tomlkit
@@ -40,6 +46,26 @@ CODEX_PROVIDER_ID = "coffer"
 #: The env var Codex reads the API key from (``model_providers.coffer.env_key``).
 #: The raw key is materialized into this var at runtime, never written to disk.
 CODEX_ENV_KEY = "COFFER_PROVIDER_KEY"
+
+#: Filename of the model catalogue Coffer writes next to an agent's
+#: ``config.toml``, and what ``model_catalog_json`` is pointed at. The name also
+#: doubles as the OWNERSHIP MARKER: de-projection drops ``model_catalog_json``
+#: iff the path it holds ends in this filename, exactly as it drops
+#: ``apiKeyHelper`` iff it starts with ``MANAGED_API_KEY_HELPER_PREFIX``. So a
+#: catalogue the user wrote themselves is never removed, while one Coffer wrote
+#: always is — including one written into a relocated config dir, since the match
+#: is on the name, not on a path this module would have to re-derive.
+CODEX_MODEL_CATALOG_FILENAME = "coffer-model-catalog.json"
+
+#: Codex's TOML key that points at a model catalogue file.
+CODEX_MODEL_CATALOG_KEY = "model_catalog_json"
+
+#: How much of a TOOL RESULT Codex keeps before truncating it. NOT a context
+#: window: Codex's own built-in catalogue pairs ``{"mode": "tokens", "limit":
+#: 10000}`` with a ``context_window`` of 272000, so this bound describes Codex's
+#: harness rather than the endpoint — which is why Coffer can mirror the built-in
+#: value here instead of guessing one for a third-party endpoint.
+CODEX_CATALOG_TRUNCATION_LIMIT = 10_000
 
 #: Prefix of every Coffer-managed ``apiKeyHelper`` — both the per-connection form
 #: (``coffer provider key --connection <name>``) and the legacy wire form
@@ -149,6 +175,113 @@ def apply_anthropic_settings(
     return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
 
 
+def codex_model_catalog_path(config_dir: pathlib.Path) -> pathlib.Path:
+    """Where Coffer's catalogue lives for an agent whose config dir is
+    ``config_dir`` — next to that agent's ``config.toml``, under the
+    Coffer-owned filename. ``model_catalog_json`` must be absolute, so the
+    caller must hand in an absolute config dir (``AgentConfig`` guarantees it)."""
+    return config_dir / CODEX_MODEL_CATALOG_FILENAME
+
+
+def codex_model_catalog_json(models: Sequence[str]) -> str | None:
+    """The ``model_catalog_json`` document for a connection's curated models — or
+    ``None`` when there is nothing honest to write.
+
+    ``model_catalog_json`` REPLACES Codex's built-in model list; it does not add
+    to it (verified against Codex 0.139.0: with a one-model catalogue, ``model/
+    list`` returns exactly that model). So a catalogue may only be written when
+    the user has curated a model set on the connection (``ProviderConfig.models``
+    — the ids ticked on its detail page). An EMPTY set means "no restriction",
+    and Coffer does not know what a third-party endpoint serves without a network
+    call it does not make here: a catalogue built from a guess would replace
+    Codex's own picker with that guess. ``None`` therefore means "write no
+    catalogue, and remove any stale one".
+
+    Every field emitted below is REQUIRED by Codex's parser — this file is a wire
+    contract with another program. Omitting one does not merely lose the
+    catalogue: Codex reports ``failed to parse model_catalog_json`` and falls back
+    to its built-in list, so the projection silently does not take effect.
+    """
+    if not models:
+        return None
+    entries: list[dict[str, object]] = [
+        {
+            "slug": model,
+            # The id IS the display name. Coffer authors no model names of its own
+            # (the 2026-09-09 amendment: catalogues are read back from agents and
+            # endpoints, never written down here), and the id is what the user
+            # ticked, so it is what they will recognise in Codex's picker.
+            # Prettifying it would mean maintaining a vendor-label table that goes
+            # stale the moment an endpoint adds a model.
+            "display_name": model,
+            # Codex's built-ins are ordered by ascending priority with the
+            # preferred model at 0 (gpt-5.5→0, gpt-5.4→2, … gpt-5.2→10), so the
+            # curated order is reproduced by the index. Ordering only.
+            "priority": index,
+            # The catalogue exists to put these models in Codex's picker.
+            "visibility": "list",
+            # The user curated these ids for an API endpoint, so they are
+            # API-usable by construction — not a guess.
+            "supported_in_api": True,
+            # --- values Coffer CANNOT derive for a third-party endpoint --------
+            # Coffer knows an endpoint's base URL and the ids the user ticked.
+            # Nothing below is discoverable from that, so each takes the value
+            # that claims the LEAST, and the cost of each being wrong is noted.
+            #
+            # No reasoning-effort presets claimed: Codex then sends no
+            # ``reasoning`` field at all (verified on a captured request). Claiming
+            # presets an endpoint does not implement would put an unknown
+            # parameter on every request — a hard 400 on a strict gateway. Cost of
+            # being conservative: a model that does support effort levels cannot
+            # be driven at a chosen effort from Codex.
+            "supported_reasoning_levels": [],
+            # Same argument for the two other request-shaping capabilities:
+            # unsupported => the parameter is never sent.
+            "supports_reasoning_summaries": False,
+            "support_verbosity": False,
+            # Sequential tool calls work everywhere; parallel ones are an opt-in
+            # capability. Cost of being conservative: a capable model runs its
+            # tool calls one at a time, i.e. slower, never broken.
+            "supports_parallel_tool_calls": False,
+            # No experimental tools assumed.
+            "experimental_supported_tools": [],
+            # The enum's least-committal value. Codex's own models opt into
+            # "shell_command"; on 0.139.0 both values produced an identical tool
+            # set on the wire, so this is the safe default rather than a bet on
+            # what a third-party model was trained to drive.
+            "shell_type": "default",
+            # Harness-level tool-output bound, not an endpoint property — see
+            # CODEX_CATALOG_TRUNCATION_LIMIT.
+            "truncation_policy": {"mode": "tokens", "limit": CODEX_CATALOG_TRUNCATION_LIMIT},
+            # Codex's own catalogue puts its ENTIRE agent system prompt here, and
+            # the field is required. Empty means Codex sends no ``instructions``
+            # (verified on a captured request) — it still sends its permissions,
+            # skills and environment developer messages and the full tool set, so
+            # the agent works, but without Codex's persona prompt. The
+            # alternative, copying OpenAI's prompt into a Coffer-written file,
+            # would pin one Codex version's prompt and silently override every
+            # later one; Coffer does not author another product's system prompt.
+            "base_instructions": "",
+        }
+        for index, model in enumerate(models)
+    ]
+    return json.dumps({"models": entries}, indent=2, ensure_ascii=False) + "\n"
+
+
+def _pop_managed_catalog(doc: MutableMapping[str, object]) -> None:
+    """Drop ``model_catalog_json`` iff it points at a COFFER-owned catalogue —
+    the same ownership discipline ``remove_anthropic_settings`` applies to
+    ``apiKeyHelper``. A user's own catalogue (any other filename) is left alone.
+    Compared as a POSIX basename: Coffer only ever writes posix paths here, and
+    parsing the value as a native path would make a pure transform
+    platform-dependent."""
+    value = doc.get(CODEX_MODEL_CATALOG_KEY)
+    if isinstance(value, str) and pathlib.PurePosixPath(value).name == (
+        CODEX_MODEL_CATALOG_FILENAME
+    ):
+        doc.pop(CODEX_MODEL_CATALOG_KEY, None)
+
+
 def apply_codex_provider(
     text: str,
     *,
@@ -158,6 +291,7 @@ def apply_codex_provider(
     display_name: str,
     provider_id: str = CODEX_PROVIDER_ID,
     env_key: str = CODEX_ENV_KEY,
+    catalog_path: pathlib.Path | None = None,
 ) -> str:
     """Return new ``config.toml`` text with Coffer's openai provider block.
 
@@ -165,6 +299,12 @@ def apply_codex_provider(
     unrelated keys preserved). Sets top-level ``model`` + ``model_provider`` and
     the ``[model_providers.<provider_id>]`` table. When ``model`` is ``None`` (an
     unbound agent) the top-level ``model`` is omitted so Codex uses its default.
+
+    ``catalog_path`` points ``model_catalog_json`` at the Coffer-owned catalogue
+    (see :func:`codex_model_catalog_json`) so Codex's OWN model picker offers the
+    endpoint's models instead of OpenAI's. ``None`` means this connection curates
+    no model set: Codex's built-in list is left alone, and a catalogue pointer
+    Coffer wrote earlier is dropped.
     """
     doc = tomlkit.parse(text) if text.strip() else tomlkit.document()
     if model:
@@ -172,6 +312,14 @@ def apply_codex_provider(
     else:
         doc.pop("model", None)
     doc["model_provider"] = provider_id
+    if catalog_path is None:
+        _pop_managed_catalog(doc)
+    else:
+        if not catalog_path.is_absolute():
+            # Codex resolves this key as an absolute path; a relative one would
+            # silently resolve against whatever cwd the agent was started in.
+            raise ValueError(f"{CODEX_MODEL_CATALOG_KEY} must be absolute, got {catalog_path}")
+        doc[CODEX_MODEL_CATALOG_KEY] = str(catalog_path)
     # Recreate `model_providers` if absent OR if a hand-edit left a non-table
     # value there (indexing into a scalar would raise).
     if not isinstance(doc.get("model_providers"), MutableMapping):
@@ -210,11 +358,14 @@ def remove_codex_provider(text: str, *, provider_id: str = CODEX_PROVIDER_ID) ->
     Codex falls back to its OWN default provider/model ("use built-in"). The
     ``[model_providers.<provider_id>]`` table is always removed; ``model_provider``
     and the top-level ``model`` are cleared ONLY when ``model_provider`` currently
-    points at Coffer (a user-selected provider is left untouched). Unrelated keys
-    are preserved."""
+    points at Coffer (a user-selected provider is left untouched). A
+    ``model_catalog_json`` pointing at the Coffer-owned catalogue is dropped too,
+    so Codex's own model list comes back; one pointing anywhere else is the user's
+    and stays. Unrelated keys are preserved."""
     if not text.strip():
         return ""
     doc = tomlkit.parse(text)
+    _pop_managed_catalog(doc)
     providers = doc.get("model_providers")
     if isinstance(providers, MutableMapping):
         providers.pop(provider_id, None)
