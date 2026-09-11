@@ -3,8 +3,10 @@
 > 中文版: [spec.zh.md](./spec.zh.md)
 
 Move one Coffer vault to another of the user's own machines by exporting it to
-a directory and importing that directory back. No transport medium, no remote,
-no background replication. Background and alternatives in
+a directory and importing that directory back, and keep a recoverable copy by
+pushing those exports to a git remote the user owns. One-way backup only: no
+convergence, no merging, no arbitration between machines. Background and
+alternatives in
 [Vault Export and Import](../../docs/decisions/vault-export-import.md).
 
 ## Why
@@ -14,10 +16,15 @@ their laptop already knows. Today each machine is an island: knowledge,
 registered resources, and credentials have to be rebuilt by hand.
 
 This feature writes the vault to a directory the user picks, and reads one
-back. Getting that directory to the other machine — `scp`, a USB drive, their
-own git repo — is the user's business and outside this spec. Because the export
-is ordinary local file output, it needs no exception to the constitution's
-local-first principle.
+back. Because the export is ordinary local file output, it needs no exception
+to the constitution's local-first principle.
+
+Two failures that moving a directory by hand does not survive: the disk dies,
+and something is deleted but only noticed a week later. The first needs a copy
+beyond this machine; the second needs history deep enough to reach past the
+mistake. So the vault can also be backed up, on a timer, to a git repository
+the user owns — a bounded exception to the local-first principle (constitution
+0.5.0), because the remote is a backup and never a system of record.
 
 ## What exports
 
@@ -64,6 +71,19 @@ is **never** written into an export.
 
 - **Export** — write local vault state into a bundle directory (files mirrored,
   resources serialized, ciphertext dumped when requested).
+- **Backup remote** — at most one git repository, owned by the user, that
+  Coffer pushes exports to. Configured with a URL, a branch, a push credential
+  reference, an interval, and whether exports carry credential ciphertext.
+  Disabled until the user configures it.
+- **Backup working tree** — the directory the timer exports into, which is also
+  a git working tree (`~/.coffer/knowledge`-style local state, not a second
+  vault). Default `~/.coffer/sync`; an existing repository there is adopted
+  with its history intact rather than re-initialized.
+- **Backup run** — one export into the working tree, a commit if the result
+  differs from the last one, then a push. Commit and push are separate
+  outcomes: a run can commit successfully and fail to push.
+- **Restore** — fetch the backup remote, optionally move the working tree to an
+  earlier revision, then run an ordinary import from it.
 - **Import** — apply a bundle back into the local vault (files mirrored back +
   reindex, resources reconciled into SQLite, ciphertext imported).
 - **Import reconciliation** — reconciling registry rows is not enough: some
@@ -141,6 +161,50 @@ key was going to hold the plaintext either way — that is what exporting it
 means — and the alternative was the daemon executing a native dialog binary on
 the user's behalf to avoid a hop that never left `127.0.0.1`.
 
+## Backup
+
+At most one backup remote exists, and it is off until the user sets it. Once
+set, a worker runs a backup on an interval — immediately on daemon start, then
+every `interval` (default one hour) — and the user can trigger one by hand.
+
+A run exports into the working tree using the same serializer and the same
+rules as any other export, then:
+
+- If the export is byte-identical to what the tree already holds, the run makes
+  **no commit**. Determinism is what makes this reliable: an unchanged vault
+  produces an unchanged bundle, so the backup history records changes and not
+  ticks.
+- Otherwise it commits, with a message naming the counts per area.
+- Then it pushes to the configured branch.
+
+**A commit is never rolled back because a push failed.** The local history is
+the first layer of recovery, and the next run pushes whatever is outstanding.
+A run that cannot authenticate, cannot reach the network, or is rejected by the
+remote records the failure and surfaces it; it never kills the worker and never
+blocks the next run.
+
+Whether a backup carries credential ciphertext is fixed when the remote is
+configured, not per run — the same opt-in the `--with-credentials` flag
+expresses for a manual export. The master key is never pushed under any
+setting.
+
+The push credential is resolved from the credential store at push time. It is
+never written into the repository's git config, never passed as a command-line
+argument, and is scrubbed from any error text before that text is recorded.
+
+### Restore
+
+Restore is always explicit; nothing is ever imported automatically. It fetches
+the remote (cloning first if the working tree does not exist yet), optionally
+moves to an earlier revision, and then runs the ordinary import — with the
+import semantics already specified above, including never deleting anything the
+bundle does not contain.
+
+Because a backup mirrors deletions as faithfully as it mirrors additions, the
+bundle at the remote's tip cannot return something deleted last week. Restoring
+that means naming a revision or a date, which resolves to the last commit at or
+before it.
+
 ## Scope
 
 Resource `scope` (a list of agent names,
@@ -154,8 +218,11 @@ for every agent on this machine is registered and visible, just not activated.
 | Surface | Operation |
 | --- | --- |
 | CLI | `coffer sync export <dir> [--with-credentials]` · `coffer sync import <dir>` · `coffer sync key export <file>` / `coffer sync key import <file>` |
+| CLI (backup) | `coffer sync remote set <url> [--branch] [--interval] [--with-credentials]` · `coffer sync remote show` · `coffer sync remote clear` · `coffer sync push` · `coffer sync restore [--at <rev\|date>] [--from <url>]` · `coffer sync status` |
 | HTTP | `POST /api/v1/sync/export` · `POST /api/v1/sync/import` · `GET /api/v1/sync/key/fingerprint` · `POST /api/v1/sync/key/export` · `POST /api/v1/sync/key/import` |
+| HTTP (backup) | `GET\|PUT\|DELETE /api/v1/sync/remote` · `POST /api/v1/sync/push` · `POST /api/v1/sync/restore` · `GET /api/v1/sync/status` |
 | UI | Settings → Sync: an export button and an import button, each opening the daemon-hosted native **directory** picker (spec agent-registry FR-042), plus the master-key card — which uses the browser's own download / `<input type="file">`, not a daemon dialog |
+| UI (backup) | Settings → Sync: a backup card shaped like the retention-policy card — enable, remote URL, branch, interval, whether credentials ride along, last-run status with its error, and a button to back up now |
 
 Both operations report a summary: counts per area, the resources that failed,
 and the bundle path.
@@ -246,11 +313,80 @@ and the bundle path.
 - **Then** the server is registered and visible, and the gateway does not
   expose its tools to any session on this machine.
 
+### Scenario: configure a backup remote
+
+- **Given** a vault with no backup configured,
+- **When** the user runs `coffer sync remote set <url> --with-credentials`,
+- **Then** the remote, branch, interval and credential opt-in are stored, the
+  backup is enabled, the command prints what a push will contain, and
+  `coffer sync status` reports the remote with no run yet.
+
+### Scenario: an unchanged vault makes no backup commit
+
+- **Given** a configured backup whose last run is already committed,
+- **When** a backup run happens and nothing in the vault has changed,
+- **Then** the export is written, no commit is created, the run is recorded as
+  successful, and the repository history is unchanged.
+
+### Scenario: a changed vault is committed and pushed
+
+- **Given** a configured backup and a vault with a new knowledge document,
+- **When** a backup run happens,
+- **Then** the working tree holds the new export, one commit is created naming
+  the counts per area, the commit is pushed to the configured branch, and the
+  run's status and commit are recorded.
+
+### Scenario: a failed push keeps the commit
+
+- **Given** a configured backup whose remote is unreachable,
+- **When** a backup run happens on a changed vault,
+- **Then** the commit exists locally, the run is recorded as failed with the
+  reason, the worker keeps running, and the next successful run pushes the
+  outstanding commit without re-exporting it as a second commit.
+
+### Scenario: restore a resource deleted last week
+
+- **Given** a backup whose history contains a skill that was later deleted
+  locally and mirrored as a deletion,
+- **When** the user runs `coffer sync restore --at <date before the deletion>`,
+- **Then** the working tree moves to the last commit at or before that date,
+  the import runs from it, the skill is registered again, and everything the
+  vault gained since then is left untouched.
+
+### Scenario: restore onto a machine with no working tree
+
+- **Given** a machine whose vault has no backup working tree,
+- **When** the user runs `coffer sync restore --from <url>`,
+- **Then** the repository is cloned, the bundle is imported, and resources
+  whose credentials cannot be decrypted are reported as `credentials_locked`
+  rather than failing the restore.
+
+### Scenario: the push credential never reaches the repository
+
+- **Given** a configured backup with a push credential,
+- **When** a backup run pushes,
+- **Then** the credential is not present in the repository's git config, not in
+  the git process's command-line arguments, and not in any recorded error text
+  or audit payload.
+
+### Scenario: credentials ride along only when the remote says so
+
+- **Given** a backup remote configured without the credential opt-in,
+- **When** a backup run happens,
+- **Then** the pushed bundle has no `credentials/` directory, and turning the
+  opt-in on makes the next run include the ciphertext — while the master key is
+  absent from the bundle in both cases.
+
 ## Out of scope
 
-- **Getting the bundle between machines.** `scp`, a USB drive, or the user's
-  own git repository — Coffer writes and reads a directory and does not
-  transport it.
+- **Getting a bundle between machines by hand.** `scp` or a USB drive remains
+  the user's business; Coffer transports a bundle only to the one backup remote
+  it was configured with.
+- **More than one backup remote.** One is enough to survive a dead disk; a
+  second is a fan-out problem with no matching failure.
+- **Automatic restore.** Coffer never imports from the remote on its own, at
+  daemon start or otherwise. A restore overwrites local state and is always a
+  human decision.
 - **Continuous convergence.** Two machines can drift apart, and Coffer will not
   notice or reconcile that; the fix is a manual re-export
   ([Vault Export and Import](../../docs/decisions/vault-export-import.md)).

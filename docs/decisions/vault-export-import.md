@@ -4,7 +4,7 @@
 
 - **Status:** Accepted
 - **Spec:** [vault-export-import](../../specs/vault-export-import/spec.md)
-- **Constitution:** Principle I (0.4.0 — export is ordinary local file output, no exception required)
+- **Constitution:** Principle I (0.4.0 — export is ordinary local file output, no exception required; 0.5.0 — pushing exports to a user-owned backup remote is a bounded exception)
 
 ## Context
 
@@ -73,6 +73,39 @@ spawn the affected resources — it never silently fails decryption.
 Credentials are omitted from an export by default and included only with an
 explicit flag, because an export directory is easy to leave somewhere careless.
 
+### A backup remote is a destination for exports, not a second vault
+
+Export and import move a vault between machines the user still has. They do
+nothing for the two failures that actually destroy data: the disk dies, or
+something is deleted and noticed a week later. Both need a copy beyond the
+machine's own blast radius, and the second needs history.
+
+So Coffer can hold **one backup remote**: a git repository the user owns.
+A worker exports on a timer into a git working tree, commits when the export
+differs from the last one, and pushes. Restore is an explicit command that
+fetches, optionally checks out an earlier point in history, and runs the
+ordinary import.
+
+Three properties keep this from becoming the sync engine that was withdrawn:
+
+- **One-way.** Coffer pushes; it never pulls to merge. Nothing arbitrates
+  between two machines, because nothing is trying to converge them.
+- **The remote is not a system of record.** The local vault is authoritative;
+  the remote is a copy that is read only when a human asks for it.
+- **The bundle format is unchanged.** A backup is an ordinary export that
+  happens to live in a git tree, so the serializer, the path portability rules
+  and the credential handling are the ones already specified here.
+
+Commit happens before push and is not rolled back when the push fails: the
+local git history is itself the first layer of recovery, and a failed push
+retries on the next tick with nothing lost. A push that cannot authenticate or
+reach the network is recorded and surfaced, never fatal to the worker.
+
+Because an automatic backup mirrors deletions as faithfully as additions, the
+copy at `HEAD` cannot answer "restore what I deleted last week" — only the
+history can. That is why restore takes a revision or a date, and why the
+timer-driven commit is what makes the feature work at all.
+
 ### Import is last-writer-wins, and never deletes
 
 The importing vault takes the export's version of everything the export
@@ -101,15 +134,24 @@ one machine, not an assertion about what should exist everywhere.
 
 ## Consequences
 
-- A `sync/` slice remains across the layers, but holds only serialization,
-  path portability, the file-tree mirror, credential ciphertext handling, and
-  the two operations. No `sync_config`/`sync_state`/tombstone/machine tables,
-  no git subprocess, no worker, no file watcher.
-- No network egress: export and import touch the local filesystem only.
+- A `sync/` slice remains across the layers, holding serialization, path
+  portability, the file-tree mirror, credential ciphertext handling, the two
+  operations, and — for the backup remote — one `sync_remotes` config row, a
+  `GitMirror` port with a single subprocess adapter behind it, and a timer
+  worker shaped like `RetentionWorker`. Still no `sync_state`/tombstone/machine
+  tables and no file watcher: those belonged to convergence, which is still
+  not built.
+- Export and import touch the local filesystem only. The backup worker is the
+  one path that reaches the network, and only to a remote the user configured.
 - Determinism of the resource serializer stays load-bearing — an export is
   meant to be diffable by the user — and stays unit-tested.
 - Carrying credentials is a deliberate two-step act: the ciphertext flag on the
   export, plus the out-of-band key bootstrap.
 - Two machines can drift apart, and Coffer will not notice or reconcile that.
   Keeping them aligned is a manual re-export, which is the trade this ADR
-  accepts.
+  accepts. A backup remote does not change this: two machines backing up to
+  one repository overwrite each other's snapshots, and the older one is
+  recoverable only from history.
+- The backup remote needs a push credential, which becomes one more secret in
+  the credential store — resolved at push time, never written into
+  `.git/config` and never passed on a command line.

@@ -23,6 +23,17 @@ one back, so a user can move their vault between their own machines. That is
 ordinary local file output under the user's control: it creates no second
 system of record, and nothing is replicated to a vendor-controlled service.
 
+**Exception — user-owned backup remote.** Coffer may push exports to a git
+remote the user owns, so that a disk failure or an accidental deletion is
+recoverable. The exception is bounded by four conditions, all of which must
+hold: the remote is a **backup only** and never a system of record — the local
+vault stays authoritative and a restore is an explicit user act; replication is
+**one-way** — Coffer pushes and never merges, so no convergence machinery is
+authorised; secrets travel **as ciphertext only** and the master key never
+leaves the machine except through the out-of-band key transfer; and the feature
+is **off by default**, enabled by the user against a repository they own. A
+hosted endpoint Coffer itself operates remains outside this exception.
+
 ### II. Spec-as-Truth (Spec-Driven Development)
 
 Specifications under `specs/` are the canonical product contract. Every PR
@@ -95,7 +106,27 @@ Architectural Constraints, or to a Quality Gate requires:
 constitutional principles or constraints it affects, and explain why the
 change respects (or formally amends) them.
 
-**Version**: 0.4.0
+**Version**: 0.5.0
+
+> **0.5.0 amendment (spec vault-export-import — backup remote).** Added the
+> *user-owned backup remote* exception to Principle I. Motivation: export and
+> import answer "move my vault to another machine", but they do not answer
+> "my disk died" or "I deleted that skill last week" — both need a copy that
+> lives somewhere the machine's own failure cannot reach, and a history deep
+> enough to reach back past the moment of the mistake. Current behaviour: an
+> export is local file output only; carrying it anywhere is the user's
+> business. Proposed behaviour: Coffer may commit exports to a git repository
+> and push them to a remote the user owns, on a timer, with restore as an
+> explicit command. Downstream impact: spec vault-export-import gains a backup
+> remote, a scheduled push worker and a restore path; `sync_remotes` config and
+> a git adapter join the sync slice. **This does not restore the 0.3.0
+> exception**: that one authorised continuous convergence between machines, and
+> the machinery 0.4.0 removed with it — machine identity, tombstones with TTL,
+> conflict arbitration, quarantine-and-retry — stays removed and unauthorised.
+> Backup is one-way, so none of it is needed. Alternatives considered:
+> committing to a local git repository only and leaving the push to the user —
+> rejected, because a local-only copy does not survive the disk failure the
+> feature exists to survive. Decision recorded by the project owner.
 
 > **0.4.0 amendment (spec vault-export-import scope reduction).** Removed the
 > *user-controlled sync medium* exception from Principle I and reverted the
