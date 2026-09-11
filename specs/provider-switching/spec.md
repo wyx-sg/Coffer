@@ -797,6 +797,27 @@ and `internal_default`.
 > `detect-protocol` probe endpoint stays for other callers but is no longer used
 > by the form.
 
+> **Amendment 2026-09-11 (the surface says what it manages).** The page stopped
+> calling these things "LLM connections" — in the UI they are **model providers**,
+> the name the sidebar and spec ui-shell already used. Four consequences for the
+> surface, none of them touching the stored model or the API:
+>
+> - The list's second column and its filter are the **vendor** (OpenAI,
+>   Anthropic, …), not the wire protocol. The vendor is DERIVED from `base_url`
+>   by matching it against the preset list rather than stored — an endpoint that
+>   matches no preset reads as Custom, which is also what happens if a user edits
+>   a preset's base URL. The protocol stays visible on the detail page, where it
+>   answers a question (how is this endpoint called) rather than sorting a list.
+> - The **name** column keeps showing the user's own name for the provider: it is
+>   the unique id the routes and CLI address, and renaming it to the vendor would
+>   collapse two keys on the same vendor into one row.
+> - The detail page splits its body into **Overview** and **Models** tabs, like
+>   agent and MCP-server detail. The Models tab is a `DataTable` — one row per
+>   model id with a per-row enable Switch, plus search and a status filter —
+>   because a curated set of a real endpoint's models is a list, and every other
+>   list in Coffer is that table. Empty selection still means NO RESTRICTION.
+> - The **Moonshot (Kimi)** preset is gone.
+
 ## Acceptance Scenarios
 
 Per `agents/sdd.md`, every scenario in this section is referenced by at least

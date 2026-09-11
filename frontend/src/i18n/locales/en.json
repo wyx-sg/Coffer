@@ -422,11 +422,12 @@
       "fastModel": "Fast model (optional)",
       "secret": "API key",
       "searchPlaceholder": "Search model providers…",
-      "allProtocols": "All types",
+      "allVendors": "All vendors",
       "internalEngine": "Coffer engine",
       "bulkDeleteConfirm": "Delete {{count}} model provider(s)? Their stored credentials are removed too.",
       "detail": {
         "back": "Back to model providers",
+        "tabOverview": "Overview",
         "notFound": "Model provider not found",
         "configuration": "Configuration",
         "keyStored": "Stored",
@@ -439,7 +440,11 @@
         "restricted": "{{count}} model(s) picked — agents see only these.",
         "fetchFailed": "Could not list this endpoint's models ({{error}}). Your current selection is unchanged.",
         "noModelsYet": "No models yet — fetch this endpoint's models, or leave it unrestricted.",
-        "clearSelection": "Clear selection (no restriction)"
+        "clearSelection": "Clear selection (no restriction)",
+        "modelId": "Model",
+        "modelSearchPlaceholder": "Search models…",
+        "modelOffered": "Offered",
+        "noModelsMatch": "No models match your search."
       }
     },
     "internalEngine": {

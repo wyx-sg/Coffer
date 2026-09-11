@@ -38,6 +38,27 @@ export const PRESETS: Preset[] = [
   { id: "custom", label: "Custom", protocol: "", baseUrl: "" },
 ];
 
+// Which vendor a saved connection belongs to. Nothing stores a vendor: the
+// presets only seed the form, so the endpoint is the only evidence left of who
+// the user picked — we recover the vendor by matching the saved base URL back
+// against PRESETS. The consequence is that editing a preset's endpoint (a proxy
+// in front of OpenAI, say) makes the connection read as Custom, which is honest:
+// from Coffer's side it is no longer the vendor's own endpoint.
+//
+// `custom` is returned with an empty label because the only label for it lives in
+// i18n — the caller renders `settings.connections.customProvider`.
+export function vendorOf(baseUrl: string): { id: string; label: string } {
+  const wanted = normaliseEndpoint(baseUrl);
+  const hit = PRESETS.find((p) => p.baseUrl !== "" && normaliseEndpoint(p.baseUrl) === wanted);
+  return hit ? { id: hit.id, label: hit.label } : { id: "custom", label: "" };
+}
+
+// Endpoints differ only cosmetically between what a preset carries and what the
+// user (or the backend) stored — case and a trailing slash carry no meaning here.
+function normaliseEndpoint(url: string): string {
+  return url.trim().toLowerCase().replace(/\/+$/, "");
+}
+
 // The agents a connection projects into BY DEFAULT, mirroring the backend
 // (`_DEFAULT_COMPATIBLE`). The form pre-fills the checkboxes from this. Every
 // wire offers both agents: the protocol decides model introspection and whether

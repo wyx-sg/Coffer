@@ -422,11 +422,12 @@
       "fastModel": "快速模型（可选）",
       "secret": "API Key",
       "searchPlaceholder": "搜索模型提供商…",
-      "allProtocols": "全部类型",
+      "allVendors": "全部厂商",
       "internalEngine": "Coffer 引擎",
       "bulkDeleteConfirm": "删除选中的 {{count}} 个模型提供商？它们保存的凭据也会一并删除。",
       "detail": {
         "back": "返回模型提供商",
+        "tabOverview": "概览",
         "notFound": "未找到该模型提供商",
         "configuration": "配置",
         "keyStored": "已保存",
@@ -439,7 +440,11 @@
         "restricted": "已选择 {{count}} 个模型——Agent 只会看到这些。",
         "fetchFailed": "无法列出该接入地址的模型（{{error}}）。当前选择保持不变。",
         "noModelsYet": "暂无模型——可拉取该接入地址的模型，或保持不限制。",
-        "clearSelection": "清除选择（不限制）"
+        "clearSelection": "清除选择（不限制）",
+        "modelId": "模型",
+        "modelSearchPlaceholder": "搜索模型…",
+        "modelOffered": "已提供",
+        "noModelsMatch": "没有匹配的模型。"
       }
     },
     "internalEngine": {

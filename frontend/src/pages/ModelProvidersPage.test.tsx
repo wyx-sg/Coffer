@@ -138,8 +138,8 @@ describe("ModelProvidersPage", () => {
 
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: /Add model provider/i }));
-    // Scope to the dialog: the table toolbar carries a "Protocol" filter
-    // with the same label.
+    // Scope to the dialog: the table toolbar carries a "Vendor" filter with the
+    // same label as the form's preset picker.
     const form = within(screen.getByRole("dialog"));
     fireEvent.change(form.getByLabelText("Name"), { target: { value: "myconn" } });
     // Pick the "Custom" provider → a protocol picker appears.
@@ -157,43 +157,41 @@ describe("ModelProvidersPage", () => {
     });
   });
 
-  acceptance(
-    "provider-switching",
-    "create an ollama connection without a credential",
-    async () => {
-      apiMock.list.mockResolvedValue({ providers: [] });
-      apiMock.create.mockResolvedValue(
-        makeProvider({
-          name: "local-llm",
-          protocol: "ollama",
-          credential_ref: null,
-          internal_default: false,
-        }),
-      );
-
-      renderPage();
-      // open the add dialog
-      fireEvent.click(await screen.findByRole("button", { name: /Add model provider/i }));
-
-      fireEvent.change(screen.getByLabelText("Name"), { target: { value: "local-llm" } });
-      // The Ollama preset fills the protocol + endpoint and is keyless.
-      fireEvent.change(screen.getByLabelText("Vendor"), { target: { value: "ollama" } });
-      expect(screen.queryByLabelText("API key")).not.toBeInTheDocument();
-
-      fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
-      await waitFor(() => expect(apiMock.create).toHaveBeenCalledTimes(1));
-      const body = apiMock.create.mock.calls[0][0];
-      expect(body).toMatchObject({
+  acceptance("provider-switching", "create an ollama connection without a credential", async () => {
+    apiMock.list.mockResolvedValue({ providers: [] });
+    apiMock.create.mockResolvedValue(
+      makeProvider({
         name: "local-llm",
         protocol: "ollama",
-        base_url: "http://localhost:11434",
-      });
-      // NEITHER secret_value nor credential_ref is sent for ollama.
-      expect(body.secret_value).toBeUndefined();
-      expect(body.credential_ref).toBeUndefined();
-    },
-  );
+        credential_ref: null,
+        internal_default: false,
+      }),
+    );
+
+    renderPage();
+    // open the add dialog
+    fireEvent.click(await screen.findByRole("button", { name: /Add model provider/i }));
+
+    // Scope to the dialog — the toolbar's vendor filter shares the "Vendor" label.
+    const form = within(screen.getByRole("dialog"));
+    fireEvent.change(form.getByLabelText("Name"), { target: { value: "local-llm" } });
+    // The Ollama preset fills the protocol + endpoint and is keyless.
+    fireEvent.change(form.getByLabelText("Vendor"), { target: { value: "ollama" } });
+    expect(form.queryByLabelText("API key")).not.toBeInTheDocument();
+
+    fireEvent.click(form.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(apiMock.create).toHaveBeenCalledTimes(1));
+    const body = apiMock.create.mock.calls[0][0];
+    expect(body).toMatchObject({
+      name: "local-llm",
+      protocol: "ollama",
+      base_url: "http://localhost:11434",
+    });
+    // NEITHER secret_value nor credential_ref is sent for ollama.
+    expect(body.secret_value).toBeUndefined();
+    expect(body.credential_ref).toBeUndefined();
+  });
 
   test("holds only the connection library — no engine or embedding card", async () => {
     // Coffer's own engine + embedding config moved to Settings → Engine: they
@@ -232,24 +230,46 @@ describe("ModelProvidersPage", () => {
     expect(screen.queryByText("agnes")).not.toBeInTheDocument();
   });
 
-  test("the type and status filters narrow the rows", async () => {
+  test("the vendor and status filters narrow the rows", async () => {
     apiMock.list.mockResolvedValue({
       providers: [
-        makeProvider({ name: "official", protocol: "anthropic", enabled: true }),
-        makeProvider({ name: "agnes", protocol: "openai", enabled: false }),
+        // A private gateway is no vendor's own endpoint → Custom; only the second
+        // row sits on OpenAI's, so filtering by vendor has to split the two.
+        makeProvider({ name: "official", base_url: "https://gw/anthropic", enabled: true }),
+        makeProvider({
+          name: "agnes",
+          protocol: "openai",
+          base_url: "https://api.openai.com/v1",
+          enabled: false,
+        }),
       ],
     });
     renderPage();
     await screen.findByText("official");
 
-    selectFilter("Protocol", "openai");
+    selectFilter("Vendor", "OpenAI");
     expect(screen.getByText("agnes")).toBeInTheDocument();
     expect(screen.queryByText("official")).not.toBeInTheDocument();
 
-    selectFilter("Protocol", "All types");
+    selectFilter("Vendor", "All vendors");
     selectFilter("Status", "Enabled");
     expect(screen.getByText("official")).toBeInTheDocument();
     expect(screen.queryByText("agnes")).not.toBeInTheDocument();
+  });
+
+  test("the vendor column falls back to Custom for an unrecognised endpoint", async () => {
+    apiMock.list.mockResolvedValue({
+      providers: [
+        makeProvider({ name: "agnes", base_url: "https://apihub.agnes-ai.com/v1" }),
+        // A trailing slash and upper case are cosmetic — still OpenAI's endpoint.
+        makeProvider({ name: "official", base_url: "https://API.openai.com/v1/" }),
+      ],
+    });
+    renderPage();
+    await screen.findByText("agnes");
+
+    expect(within(rowFor("agnes")).getByText("Custom")).toBeInTheDocument();
+    expect(within(rowFor("official")).getByText("OpenAI")).toBeInTheDocument();
   });
 
   test("the status switch toggles the connection without navigating", async () => {
