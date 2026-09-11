@@ -12,11 +12,49 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+from fastapi import Request
+from fastapi.responses import JSONResponse
 
+from coffer.application.channel.ports import AdapterCallbacks
+from coffer.domain.channel.envelopes import InboundLifecycle
 from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.infrastructure.channel.live_text import SeaTalkLiveText
 
 from .conftest import FakeSeaTalk, RecordingCallbacks, make_seatalk_adapter, wait_until
+
+
+class LifecycleRecorder(RecordingCallbacks):
+    """``RecordingCallbacks`` plus the ``on_lifecycle`` hook. Kept here rather
+    than in the shared conftest because SeaTalk is the only adapter that emits
+    standing changes so far."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lifecycle: list[InboundLifecycle] = []
+
+    async def on_lifecycle(self, event: InboundLifecycle) -> None:
+        self.lifecycle.append(event)
+
+    def as_callbacks(self) -> AdapterCallbacks:
+        return AdapterCallbacks(
+            on_message=self.on_message,
+            on_callback=self.on_callback,
+            on_lifecycle=self.on_lifecycle,
+        )
+
+
+def _route_dm_thread(fake: FakeSeaTalk) -> list[dict[str, Any]]:
+    """Same for the single-chat thread read (SeaTalk app v3.62.1+), so a DM
+    thread fetch is distinguishable from the group one the fake already serves."""
+    calls: list[dict[str, Any]] = []
+
+    async def handler(request: Request) -> JSONResponse:
+        calls.append(dict(request.query_params))
+        return JSONResponse(content={"code": 0, "thread_messages": []})
+
+    fake.app.get("/messaging/v2/single_chat/get_thread_by_thread_id")(handler)
+    return calls
+
 
 # -- outbound -----------------------------------------------------------------
 
@@ -106,7 +144,7 @@ async def test_edit_and_delete_are_unsupported_capabilities(fake_seatalk: FakeSe
 async def test_send_typing_posts_typing_endpoint(fake_seatalk: FakeSeaTalk) -> None:
     adapter = make_seatalk_adapter(fake_seatalk)
     try:
-        await adapter.send_typing("emp-1")
+        await adapter.send_typing("emp-1")  # chat_kind defaults to "direct"
     finally:
         await adapter.stop()
     assert fake_seatalk.typing_calls == [{"employee_code": "emp-1"}]
@@ -140,7 +178,19 @@ async def test_send_typing_in_a_group_without_a_thread_omits_it(
     assert fake_seatalk.group_typing_calls == [{"group_id": "gid-1"}]
 
 
-# -- inbound (events fed by the daemon's ingest route) --------------------------
+async def test_typing_in_a_too_large_group_is_a_silent_no_op(fake_seatalk: FakeSeaTalk) -> None:
+    """Code 7003 ("Group chat too large") means the group has more than 200
+    members and typing can NEVER be triggered there — a permanent property of
+    that group, not a transient fault. It must not raise and must not retry."""
+    fake_seatalk.group_typing_code = 7003
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        await adapter.send_typing("gid-1", chat_kind="group")
+    finally:
+        await adapter.stop()
+    # Attempted once: a ~4s indicator is not worth a retry, and this one can
+    # never succeed however often it is asked for.
+    assert fake_seatalk.group_typing_calls == [{"group_id": "gid-1"}]
 
 
 async def test_handle_event_normalizes_subscriber_text_message(
@@ -173,6 +223,53 @@ async def test_handle_event_normalizes_subscriber_text_message(
     assert msg.sender_id == "emp-1"  # 1:1 DM: sender is the employee_code
     assert msg.platform_message_id == "pm-1"
     assert msg.timestamp == datetime.fromtimestamp(1718000000, tz=UTC)
+
+
+async def test_handle_event_dm_surfaces_the_quoted_message_id(fake_seatalk: FakeSeaTalk) -> None:
+    """A reply that quotes an earlier message carries only the quoted id. The
+    adapter hands that id to the turn and stops there — resolving the quoted
+    BODY is get_message_by_message_id, an agent-invoked lookup, not transport."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(
+            {
+                "event_type": "message_from_bot_subscriber",
+                "timestamp": 1718000000,
+                "event": {
+                    "employee_code": "emp-1",
+                    "email": "yu@example.com",
+                    "message": {
+                        "tag": "text",
+                        "message_id": "pm-2",
+                        "quoted_message_id": "pm-1",
+                        "text": {"content": "about this"},
+                    },
+                },
+            }
+        )
+    finally:
+        await adapter.stop()
+    [msg] = recorder.messages
+    assert msg.quoted_message_id == "pm-1"
+    assert msg.platform_message_id == "pm-2"  # the quote is not the message itself
+
+
+async def test_handle_event_without_a_quote_leaves_the_id_empty(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(
+            _subscriber_text_envelope(event_id="ev-1", message_id="pm-1", text="hi")
+        )
+        await adapter.handle_event(_group_mention_envelope(plain_text="@Bot hi", username="Bot"))
+    finally:
+        await adapter.stop()
+    assert [m.quoted_message_id for m in recorder.messages] == ["", ""]
 
 
 async def test_handle_event_image_message_yields_empty_text(fake_seatalk: FakeSeaTalk) -> None:
@@ -456,11 +553,14 @@ async def test_send_text_with_buttons_emits_interactive_card(fake_seatalk: FakeS
     # A button is an ELEMENT, not a sibling of `elements`. Emitting a `buttons`
     # array alongside them is the shape SeaTalk does not render.
     assert "buttons" not in card
+    # SeaTalk renders at most 5 bare buttons per card, which a 6-agent selection
+    # exceeds — buttons ship inside button_group elements (up to 3 each), the
+    # buttons themselves bare rather than individually wrapped.
     assert card["elements"] == [
         {"element_type": "description", "description": {"format": 1, "text": "Pick a model:"}},
         {
-            "element_type": "button",
-            "button": {"button_type": "callback", "text": "opus", "value": "model:opus"},
+            "element_type": "button_group",
+            "button_group": [{"button_type": "callback", "text": "opus", "value": "model:opus"}],
         },
     ]
 
@@ -1065,7 +1165,12 @@ async def test_handle_event_nested_forwarded_record_recurses(
 
 
 def _group_mention_envelope(
-    *, plain_text: str, username: str, thread_id: str = "", group_id: str = "gid-1"
+    *,
+    plain_text: str,
+    username: str,
+    thread_id: str = "",
+    group_id: str = "gid-1",
+    quoted_message_id: str = "",
 ) -> dict[str, Any]:
     return {
         "event_type": "new_mentioned_message_received_from_group_chat",
@@ -1075,6 +1180,7 @@ def _group_mention_envelope(
             "message": {
                 "message_id": "gm-1",
                 "thread_id": thread_id,
+                "quoted_message_id": quoted_message_id,
                 "sender": {
                     "seatalk_id": "st-1",
                     "employee_code": "emp-2",
@@ -1140,6 +1246,30 @@ async def test_handle_event_group_mention_in_thread_sets_thread_id(
     assert msg.addressed is True
     assert msg.text == "hi"
     assert msg.thread_id == "t-9"
+
+
+async def test_handle_event_group_mention_surfaces_the_quoted_message_id(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """Same as the DM path: an @mention quoting an earlier group message hands
+    the turn the quoted id. The docs warn a message has DIFFERENT message_ids
+    for different apps, so the id is only resolvable by this same bot."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(
+            _group_mention_envelope(
+                plain_text="@Bot what about this",
+                username="Bot",
+                quoted_message_id="gm-0",
+            )
+        )
+    finally:
+        await adapter.stop()
+    [msg] = recorder.messages
+    assert msg.quoted_message_id == "gm-0"
+    assert msg.platform_message_id == "gm-1"
 
 
 async def test_handle_event_group_forwarded_record_flattens_into_text(
@@ -1235,6 +1365,121 @@ async def test_handle_event_ignores_bot_added_to_group_chat(fake_seatalk: FakeSe
     finally:
         await adapter.stop()
     assert recorder.messages == []
+
+
+def _removed_envelope(*, event_id: str) -> dict[str, Any]:
+    return {
+        "event_id": event_id,
+        "event_type": "bot_removed_from_group_chat",
+        "timestamp": 1718000000,
+        "event": {
+            "group_id": "gid-1",
+            "remover": {
+                "seatalk_id": "st-9",
+                "employee_code": "emp-9",
+                "email": "remover@shopee.com",
+            },
+        },
+    }
+
+
+def _external_envelope(*, event_id: str) -> dict[str, Any]:
+    return {
+        "event_id": event_id,
+        "event_type": "group_chat_converted_to_external_group",
+        "timestamp": 1718000000,
+        "event": {"group_id": "gid-1"},
+    }
+
+
+async def test_bot_removed_from_group_reaches_on_lifecycle(fake_seatalk: FakeSeaTalk) -> None:
+    """Removal is a change in what the binding IS, not a turn: every later send
+    to this group would fail, so the core has to hear about it — but nothing
+    about it belongs on the message path."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = LifecycleRecorder()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(_removed_envelope(event_id="ev-r1"))
+    finally:
+        await adapter.stop()
+    [event] = recorder.lifecycle
+    assert (event.channel, event.chat_id, event.kind) == ("st", "gid-1", "removed_from_group")
+    # The remover is named the way sender_display is everywhere else: email first.
+    assert event.actor_display == "remover@shopee.com"
+    assert recorder.messages == []
+    assert recorder.callbacks == []
+
+
+async def test_group_converted_to_external_reaches_on_lifecycle(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """People outside the organisation can read what lands here from now on.
+    SeaTalk names nobody in this event, so actor_display stays empty."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = LifecycleRecorder()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(_external_envelope(event_id="ev-x1"))
+    finally:
+        await adapter.stop()
+    [event] = recorder.lifecycle
+    assert (event.chat_id, event.kind, event.actor_display) == (
+        "gid-1",
+        "group_became_external",
+        "",
+    )
+    assert recorder.messages == []
+
+
+async def test_redelivered_lifecycle_event_fires_once(fake_seatalk: FakeSeaTalk) -> None:
+    """FR-039 covers these like every other event — a retried callback must not
+    report the same removal twice."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = LifecycleRecorder()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        env = _removed_envelope(event_id="ev-r1")
+        await adapter.handle_event(env)
+        await adapter.handle_event(dict(env))  # a byte-for-byte redelivery
+        await adapter.handle_event(_external_envelope(event_id="ev-x1"))
+    finally:
+        await adapter.stop()
+    assert [e.kind for e in recorder.lifecycle] == ["removed_from_group", "group_became_external"]
+
+
+async def test_lifecycle_events_are_dropped_without_an_on_lifecycle_hook(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """``on_lifecycle`` is optional: a consumer that never set it must not blow
+    up, and the event must not leak onto the message path instead."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()  # as_callbacks() leaves on_lifecycle=None
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(_removed_envelope(event_id="ev-r1"))
+        await adapter.handle_event(_external_envelope(event_id="ev-x1"))
+    finally:
+        await adapter.stop()
+    assert recorder.messages == []
+    assert recorder.callbacks == []
+
+
+async def test_fetch_thread_in_a_dm_reads_the_single_chat_endpoint(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """Threads are no longer group-only (SeaTalk app v3.62.1+ threads DMs too),
+    so chat_kind picks the read endpoint — and a DM's chat_id IS the peer's
+    employee_code, which is why the same argument feeds both."""
+    dm_thread = _route_dm_thread(fake_seatalk)
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        fetched = await adapter.fetch_thread("emp-1", "t1", limit=20, chat_kind="direct")
+    finally:
+        await adapter.stop()
+    assert fetched == ([], ())
+    assert dm_thread == [{"employee_code": "emp-1", "thread_id": "t1", "page_size": "20"}]
+    assert fake_seatalk.thread_calls == []  # the group endpoint stayed untouched
 
 
 async def test_fetch_thread_degrades_to_empty_list_on_error(

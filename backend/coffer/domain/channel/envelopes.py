@@ -44,6 +44,14 @@ class InboundMessage:
     addressed: bool = True  # DMs always; group only when @mentioned / reply-to-bot
     mentions_others: bool = False  # group message @-mentions a non-bot user (FR-035)
     thread_id: str = ""  # non-empty when the message is inside a thread/topic
+    # The message this one quotes/replies-to; "" when it quotes nothing. SeaTalk
+    # delivers it on BOTH the DM (``message_from_bot_subscriber``) and the
+    # group-@mention event, so it is envelope-level rather than group-only.
+    # Coffer surfaces the id and deliberately does NOT resolve the quoted body
+    # itself: that lookup (``get_message_by_message_id``) is an agent-invoked MCP
+    # tool, so the transport's job ends at telling the agent that a quote exists
+    # and what its id is — the agent fetches the body only when it needs it.
+    quoted_message_id: str = ""
     attachments: tuple[InboundAttachment, ...] = ()  # photos/files/voice, if any
 
 
@@ -121,6 +129,28 @@ class InboundCallback:
     chat_kind: str = "direct"  # "direct" | "group" — mirrors InboundMessage so a
     # group card tap owner-gates and replies in the group, not a DM (FR-034)
     thread_id: str = ""  # non-empty when the card sits inside a thread/topic
+
+
+@dataclass(frozen=True)
+class InboundLifecycle:
+    """A non-message platform event about the bot's own standing in a chat.
+
+    Deliberately NOT an ``InboundMessage``/``InboundCallback``: those two both
+    start or steer a turn, while these never do — they change what the binding
+    IS (the bot was removed from the group; the group became external, so people
+    from other organisations can now read what lands there). Routing them
+    through the message path would force every consumer above the adapter to
+    filter them back out before doing anything.
+
+    ``kind`` is a closed string set rather than an enum, matching how
+    ``chat_kind`` is already modelled in this module.
+    """
+
+    channel: str  # channel resource name
+    chat_id: str  # the group the event is about
+    kind: str  # "removed_from_group" | "group_became_external"
+    actor_display: str = ""  # best-effort human name of who did it (SeaTalk's
+    # ``remover`` on a removal); "" when the platform says nothing about who
 
 
 @dataclass(frozen=True)

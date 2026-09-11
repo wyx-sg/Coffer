@@ -43,11 +43,16 @@ PAGE_PREFIX = "page"
 
 #: The most buttons any card carries, navigation included.
 #:
-#: SeaTalk's true ceiling is undocumented: we know 2 buttons are accepted and
-#: 29 are refused, and nothing in between. Six is what Coffer already ships
-#: (the ``MAX_MODEL_PICKS`` bound this pagination replaces), so holding the
-#: total at six means pagination adds no new risk of a refused card — it only
-#: makes the rest of the list reachable.
+#: SeaTalk's ceilings are documented (read 2026-09-11): a card takes at most 5
+#: bare ``button`` elements, OR up to 3 ``button_group`` elements of 1-3 buttons
+#: each — which is why the SeaTalk adapter emits rows rather than bare buttons,
+#: and why six buttons are legal where six bare ones would not be. Six is
+#: therefore a choice, not a guess: two of the three allowed rows, leaving the
+#: third as headroom, and enough for Prev/Next plus four choices. It is also
+#: what Coffer already shipped (the ``MAX_MODEL_PICKS`` bound this pagination
+#: replaces), so pagination adds no new risk of a refused card — it only makes
+#: the rest of the list reachable. Telegram has no comparable ceiling, so the
+#: tighter platform sets the number for both.
 MAX_CARD_BUTTONS = 6
 
 #: Choices per page. Prev and Next consume button slots of their own, so a

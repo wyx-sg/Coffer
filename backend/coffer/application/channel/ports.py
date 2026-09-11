@@ -18,6 +18,7 @@ from coffer.domain.channel.envelopes import (
     ChoiceButton,
     InboundAttachment,
     InboundCallback,
+    InboundLifecycle,
     InboundMessage,
     SentMessage,
 )
@@ -32,6 +33,11 @@ class AdapterCallbacks:
     # A selection-card button tap (ADR channel-adapter-framework). ``None`` for
     # transports/tests that never emit one; adapters skip the callback when unset.
     on_callback: Callable[[InboundCallback], Awaitable[None]] | None = None
+    # A non-message event about the bot's own standing in a chat (removed from a
+    # group, group turned external). Optional exactly like ``on_callback``:
+    # transports and test fakes that never emit one leave it unset, and adapters
+    # skip the call when it is ``None``.
+    on_lifecycle: Callable[[InboundLifecycle], Awaitable[None]] | None = None
 
 
 class LiveText(Protocol):
@@ -308,15 +314,19 @@ class ModelSuggestionPort(Protocol):
 
 
 class ContextFetchPort(Protocol):
-    """Best-effort thread-context reader for a group @mention: when the
-    @mention landed inside a thread, the thread's own messages ground the
-    turn. Group-main @mentions fetch nothing (reading all group chatter is
-    undesirable — the group-chat-history permission is intentionally not
-    granted). Platforms without a history-fetch API (Telegram's Bot API)
-    satisfy this by always returning ``([], ())``."""
+    """Best-effort thread-context reader: when a turn lands inside a thread,
+    that thread's own messages ground it.
+
+    Threads are no longer a group-@mention-only affair — SeaTalk exposes a DM
+    thread endpoint too (``single_chat/get_thread_by_thread_id``, app v3.62.1+),
+    so a DM thread fetches its own context exactly like a group one; ``chat_kind``
+    is what picks the endpoint. Group-MAIN chatter is still never fetched
+    (reading a whole group is undesirable — the group-chat-history permission is
+    intentionally not granted). Platforms without a history-fetch API (Telegram's
+    Bot API) satisfy this by always returning ``([], ())``."""
 
     async def fetch_thread(
-        self, chat_id: str, thread_id: str, *, limit: int = 50
+        self, chat_id: str, thread_id: str, *, limit: int = 50, chat_kind: str = "group"
     ) -> tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]:
         """Return the thread's ``(text items, downloaded attachments)``: the
         flattened text of each thread message plus the images/files those

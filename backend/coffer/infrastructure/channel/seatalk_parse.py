@@ -14,6 +14,10 @@ from coffer.domain.channel.envelopes import ChoiceButton
 from coffer.domain.channel.rich_content import ForwardedItem, flatten_forwarded
 
 __all__ = [
+    "CARD_BUTTONS_PER_GROUP",
+    "CARD_BUTTON_GROUPS_MAX",
+    "CARD_DESCRIPTION_MAX_CHARS",
+    "CARD_TITLE_MAX_CHARS",
     "collect_forwarded_items",
     "flatten_combined_forwarded",
     "interactive_card",
@@ -22,6 +26,34 @@ __all__ = [
     "split_to_byte_limit",
     "strip_group_mentions",
 ]
+
+#: Per-card element ceilings, read from SeaTalk's published card docs
+#: (``open.seatalk.io/docs/interactive-msg_build-a-card``, 2026-09-11). The card
+#: is refused whole when any of them is exceeded, so the two length caps are
+#: enforced by truncation here rather than left to chance: a body long enough to
+#: break the card is the one case where the user most needs the card to arrive.
+#:
+#: The full set, for the elements Coffer emits: ``title`` ≤3 per card, text
+#: 1-120 characters; ``description`` ≤5 per card, text 1-1000 characters;
+#: ``button`` ≤5 per card (callback and redirect counted together);
+#: ``button_group`` ≤3 per card, each holding 1-3 buttons rendered on one line;
+#: ``image`` ≤3 per card.
+CARD_TITLE_MAX_CHARS = 120
+CARD_DESCRIPTION_MAX_CHARS = 1000
+
+#: Buttons per ``button_group`` row, and the rows a card may hold. Grouping is
+#: what lifts the practical button ceiling above five: 3 rows x 3 buttons is nine
+#: tappable choices, where nine bare ``button`` elements would be refused.
+#:
+#: Nothing here enforces the row count, because the only honest way to enforce it
+#: is to drop choices the caller asked for — worse than a refused card, which the
+#: command handler already falls back from to a plain-text list. The invariant
+#: lives at the caller instead: ``selection_cards.MAX_CARD_BUTTONS`` (6) paginates
+#: every list down to two rows, well under the three allowed. A future caller that
+#: hands over more than nine buttons gets a refused card and that fallback — the
+#: derived ceiling is written down here so the arithmetic is checkable.
+CARD_BUTTONS_PER_GROUP = 3
+CARD_BUTTON_GROUPS_MAX = 3
 
 
 def mentions_others(mentioned_list: Sequence[Any] | None) -> bool:
@@ -145,6 +177,13 @@ def strip_group_mentions(plain_text: str, mentioned_list: Sequence[Any] | None) 
     return text.strip()
 
 
+def _clamp(text: str, limit: int) -> str:
+    """``text`` cut to ``limit`` characters, the last one spent on an ellipsis
+    so a truncated field reads as truncated rather than as a sentence that
+    simply stops."""
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
 def interactive_card(
     text: str, buttons: Sequence[ChoiceButton], *, title: str = ""
 ) -> dict[str, Any]:
@@ -160,6 +199,19 @@ def interactive_card(
     card never worked. Verified against SeaTalk's published card format
     2026-09-09.
 
+    **The element ceilings are documented, not guessed** (read 2026-09-11 from
+    ``open.seatalk.io/docs/interactive-msg_build-a-card``): ≤3 ``title`` of
+    1-120 characters, ≤5 ``description`` of 1-1000 characters, ≤5 bare
+    ``button``, ≤3 ``button_group`` of 1-3 buttons each, ≤3 ``image``. Exceeding
+    any of them costs the whole card, so this helper truncates the two text
+    fields and emits buttons as ``button_group`` rows instead of bare buttons —
+    the rows are what make more than five choices legal at all, and they render
+    on one line each, which reads better than a column of full-width buttons.
+    Buttons inside a row are BARE button objects, not ``element_type`` pairs.
+
+    No ``default``/language-code wrapper: multi-language card content is a Send
+    Service Notice API feature, and a bot card sent in that shape is refused.
+
     A ``title`` renders as SeaTalk's own title element above the body, which is
     what makes a card scannable at a glance in a busy chat — without it the
     subject has to be crammed into the first line of the description, competing
@@ -168,13 +220,25 @@ def interactive_card(
     ``format: 1`` selects SeaTalk's markdown for the description body."""
     elements: list[dict[str, Any]] = []
     if title:
-        elements.append({"element_type": "title", "title": {"text": title}})
-    elements.append({"element_type": "description", "description": {"format": 1, "text": text}})
+        elements.append(
+            {"element_type": "title", "title": {"text": _clamp(title, CARD_TITLE_MAX_CHARS)}}
+        )
+    elements.append(
+        {
+            "element_type": "description",
+            "description": {"format": 1, "text": _clamp(text, CARD_DESCRIPTION_MAX_CHARS)},
+        }
+    )
     elements.extend(
         {
-            "element_type": "button",
-            "button": {"button_type": "callback", "text": b.label, "value": b.value},
+            "element_type": "button_group",
+            "button_group": [
+                {"button_type": "callback", "text": b.label, "value": b.value} for b in row
+            ],
         }
-        for b in buttons
+        for row in (
+            buttons[start : start + CARD_BUTTONS_PER_GROUP]
+            for start in range(0, len(buttons), CARD_BUTTONS_PER_GROUP)
+        )
     )
     return {"tag": "interactive_message", "interactive_message": {"elements": elements}}

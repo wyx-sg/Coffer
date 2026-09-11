@@ -1,12 +1,16 @@
-"""SeaTalk Open API transport: app-access-token caching and the one
-authenticated request path (token refresh on code 100, 429/rate-limit backoff,
-non-JSON gateway handling).
+"""SeaTalk Open API transport: app-access-token caching, the one authenticated
+request path (token refresh on code 100, 429/rate-limit backoff, non-JSON
+gateway handling), and the single/group send shapes that path is called with.
 
 Split out of ``seatalk.py`` (mirroring ``seatalk_parse.py`` / ``seatalk_media.py``)
 so the adapter module holds only the event-normalization and send-routing
-surface. The adapter keeps thin ``_ensure_token``/``_post``/``_get`` delegators
-over one :class:`SeaTalkTransport` instance, preserving every call site (and
-test seam) unchanged.
+surface. The adapter holds one :class:`SeaTalkTransport` instance and reaches
+it directly for the token and the send seam, keeping only the thin ``_post`` /
+``_get`` delegators the remaining call sites (and their test seams) use.
+
+Which endpoint a chat_kind maps to lives HERE rather than in the adapter: every
+SeaTalk surface comes in a single-chat/group-chat pair keyed on the same
+``chat_kind``, so one module owning both halves keeps the pairing visible.
 """
 
 from __future__ import annotations
@@ -89,6 +93,36 @@ class SeaTalkTransport:
         self._token = token
         self._token_expires_at = time.monotonic() + ttl - _TOKEN_SLACK_SECONDS
         return token
+
+    # -- endpoint shapes ------------------------------------------------------
+
+    async def send(
+        self, chat_id: str, message: dict[str, Any], thread_id: str, chat_kind: str
+    ) -> Any:
+        """Route one already-built ``message`` payload to the group or
+        single-chat endpoint, so every caller (text chunks, cards, media)
+        shares one routing decision.
+
+        ``thread_id`` goes INSIDE the message body on BOTH endpoints (FR-026):
+        verified live that a top-level thread_id is ignored (the reply falls to
+        the group main chat), while ``message.thread_id`` threads it and roots
+        a new thread when none exists yet.
+        """
+        if thread_id:
+            message = {**message, "thread_id": thread_id}
+        if chat_kind == "group":
+            return await self.request(
+                "POST",
+                "/messaging/v2/group_chat",
+                json={"group_id": chat_id, "message": message},
+            )
+        return await self.request(
+            "POST",
+            "/messaging/v2/single_chat",
+            json={"employee_code": chat_id, "message": message},
+        )
+
+    # -- the one authenticated call -------------------------------------------
 
     async def request(
         self,
