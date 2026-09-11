@@ -38,30 +38,17 @@ from coffer.infrastructure.channel.seatalk_media import (
     send_outbound_media,
 )
 from coffer.infrastructure.channel.seatalk_parse import (
+    dedup_key,
     flatten_combined_forwarded,
     mentions_others,
     strip_group_mentions,
 )
-from coffer.infrastructure.channel.seatalk_send import send_text_pieces
+from coffer.infrastructure.channel.seatalk_send import SEATALK_MENTION_TEMPLATE, send_text_pieces
 from coffer.infrastructure.channel.seatalk_transport import SeaTalkTransport
 from coffer.infrastructure.channel.seatalk_typing import send_typing
 
 _CHUNK_LIMIT = 3500  # paragraph-chunking budget, in characters
 _BYTE_LIMIT = 3900  # SeaTalk caps content at 4096 BYTES; stay clear of it
-
-
-def _dedup_key(envelope: dict[str, Any], event: dict[str, Any]) -> str:
-    """The event's unique id for FR-039 de-dup: the top-level ``event_id``, else
-    the message id (on ``message`` for messages, top-level for a card click)."""
-    event_id = str(envelope.get("event_id") or "")
-    if event_id:
-        return event_id
-    message = event.get("message")
-    if isinstance(message, dict):
-        message_id = str(message.get("message_id") or "")
-        if message_id:
-            return message_id
-    return str(event.get("message_id") or "")
 
 
 class SeaTalkAdapter:
@@ -105,6 +92,9 @@ class SeaTalkAdapter:
             supports_media=True,
             supports_groups=True,
             supports_history_fetch=True,
+            # FR-070: SeaTalk mentions from a bare id, so a group reply can open
+            # by @mentioning whoever asked without resolving a display name.
+            mention_template=SEATALK_MENTION_TEMPLATE,
         )
 
     # -- lifecycle ---------------------------------------------------------
@@ -130,8 +120,8 @@ class SeaTalkAdapter:
         # double-deliver — drop an event whose id (or message id) we already
         # processed so a redelivery never drives the same turn twice. The
         # verification handshake never reaches here (the listener answers it).
-        dedup_key = _dedup_key(envelope, event)
-        if dedup_key and not self._seen.add(dedup_key):
+        key = dedup_key(envelope, event)
+        if key and not self._seen.add(key):
             return
         if event_type == "message_from_bot_subscriber":
             message = event.get("message") or {}
@@ -195,6 +185,12 @@ class SeaTalkAdapter:
                         int(envelope.get("timestamp", 0) or 0), tz=UTC
                     ),
                     sender_id=str(sender.get("employee_code", "")),
+                    # FR-070: the id an outbound @mention points at, kept apart
+                    # from sender_id because they are different values here —
+                    # and because the docs warn employee_code and email arrive
+                    # EMPTY for a sender outside the bot's organisation, which
+                    # leaves seatalk_id as the only id such a message carries.
+                    sender_mention_id=str(sender.get("seatalk_id", "")),
                     chat_kind="group",
                     addressed=True,
                     # FR-035: >1 distinct @mentioned username ⇒ a non-bot user

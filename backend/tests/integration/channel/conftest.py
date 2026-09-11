@@ -107,6 +107,7 @@ def inbound(
     mentions_others: bool = False,
     platform_message_id: str = "pm-1",
     ephemeral_id: str = "",
+    sender_mention_id: str = "",
 ) -> InboundMessage:
     return InboundMessage(
         channel=channel,
@@ -117,6 +118,7 @@ def inbound(
         ephemeral_id=ephemeral_id,
         timestamp=datetime.now(tz=UTC),
         sender_id=sender_id,
+        sender_mention_id=sender_mention_id,
         thread_id=thread_id,
         chat_kind=chat_kind,
         chat_title=chat_title,
@@ -213,6 +215,7 @@ class FakeChannelAdapter:
         supports_history_fetch: bool = False,
         supports_reactions: bool = False,
         set_reaction_fails: bool = False,
+        mention_template: str = "",
     ) -> None:
         self._caps = ChannelCapabilities(
             supports_edit=supports_edit,
@@ -228,6 +231,10 @@ class FakeChannelAdapter:
             supports_groups=supports_groups,
             supports_history_fetch=supports_history_fetch,
             supports_reactions=supports_reactions,
+            # FR-070: how this transport spells an @mention, if it can at all.
+            # Shaped like SeaTalk's tag in the tests that set it; "" is the
+            # Telegram-shaped default, where a reply carries no mention.
+            mention_template=mention_template,
             # Typing is two endpoints, not one (SeaTalk: single_chat_typing /
             # group_chat_typing): a fake may hold the DM one alone, exactly like
             # a transport that never gained the group call.

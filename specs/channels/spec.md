@@ -1406,6 +1406,32 @@ produce it on its own.
 - **When** the turn replies,
 - **Then** the reply is delivered as a platform-level reply to that message.
 
+### Scenario: a group reply @mentions whoever asked
+
+- **Given** an addressed message in a group from a member the transport named,
+- **When** the turn replies,
+- **Then** the reply opens with the platform's mention markup for that member.
+
+### Scenario: a direct reply carries no mention
+
+- **Given** the same channel answering in a 1:1 chat,
+- **When** the turn replies,
+- **Then** the reply carries no mention — there is nobody to disambiguate.
+
+### Scenario: the mention rides the final snapshot, never an interim one
+
+- **Given** a group turn streaming its reply into a live surface, whose interim
+  snapshots are sent as plain text and whose final one is sent as rich text,
+- **When** the turn finishes,
+- **Then** only the final snapshot carries the mention markup.
+
+### Scenario: a cross-organisation sender is still identified for a mention
+
+- **Given** a group @mention from a sender outside the bot's organisation, whose
+  organisation-scoped identifiers arrive empty,
+- **When** the transport normalizes the message,
+- **Then** the platform id the mention needs is kept, not discarded with them.
+
 
 ## Channels as a management plane (north star)
 
@@ -1861,6 +1887,20 @@ API server a user reaches is not guaranteed to be new enough.
   platform offers button semantics beyond a label — a disabled state, an intent
   colour — the card uses them, so the option already taken is shown disabled
   rather than re-offered.
+- **FR-070**: A group answer names who it is for. In a group, the bot's reply
+  MUST open by @mentioning the member whose message drove the turn, using the
+  platform's own mention markup — so the answer notifies the person waiting for
+  it and a busy room can see at a glance which of them it belongs to. In a
+  direct chat it MUST NOT: a 1:1 conversation has nobody to disambiguate, and an
+  @ there is only shouting. Three constraints bound it. The mention is built
+  from the id the PLATFORM addresses a member by, which is not always the id the
+  owner gate matches (SeaTalk gates on `employee_code` and mentions
+  `seatalk_id`, and `employee_code` arrives empty for a sender outside the bot's
+  organisation) — so the transport carries both. It may appear only where the
+  message is rendered in the platform's rich format, never in a snapshot sent as
+  plain text, where the markup would reach the reader as its own literal source.
+  And it degrades silently: no id, or a transport that cannot mention from an id
+  alone, yields an ordinary unmentioned reply — never a broken tag.
 
 ## Deliberately out of scope
 

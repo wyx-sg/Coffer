@@ -19,6 +19,7 @@ __all__ = [
     "CARD_DESCRIPTION_MAX_CHARS",
     "CARD_TITLE_MAX_CHARS",
     "collect_forwarded_items",
+    "dedup_key",
     "flatten_combined_forwarded",
     "interactive_card",
     "mentions_others",
@@ -242,3 +243,17 @@ def interactive_card(
         )
     )
     return {"tag": "interactive_message", "interactive_message": {"elements": elements}}
+
+
+def dedup_key(envelope: dict[str, Any], event: dict[str, Any]) -> str:
+    """The event's unique id for FR-039 de-dup: the top-level ``event_id``, else
+    the message id (on ``message`` for messages, top-level for a card click)."""
+    event_id = str(envelope.get("event_id") or "")
+    if event_id:
+        return event_id
+    message = event.get("message")
+    if isinstance(message, dict):
+        message_id = str(message.get("message_id") or "")
+        if message_id:
+            return message_id
+    return str(event.get("message_id") or "")

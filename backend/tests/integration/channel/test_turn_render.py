@@ -789,3 +789,145 @@ def test_the_typing_heartbeat_outpaces_the_indicator_it_refreshes() -> None:
     from coffer.application.channel.turn_render import _TYPING_HEARTBEAT_SECONDS
 
     assert _TYPING_HEARTBEAT_SECONDS < 4.0
+
+
+# ---------------------------------------------------------------------------
+# FR-070: a group reply opens by @mentioning whoever asked
+# ---------------------------------------------------------------------------
+
+#: The fake's mention spelling, shaped like SeaTalk's real one so a test reads
+#: the way the wire does. The transport's own template lives in the adapter
+#: (``seatalk_send.SEATALK_MENTION_TEMPLATE``) and is asserted against the real
+#: wire body in the SeaTalk adapter tests.
+_MENTION = '<mention-tag target="seatalk://user?id={user_id}"/>'
+
+
+async def _group_reply(
+    adapter: FakeChannelAdapter,
+    *,
+    mention_user_id: str,
+    chat_kind: str = "group",
+    events: list[Any] | None = None,
+) -> None:
+    async def send(text: str) -> None:
+        await adapter.send_text("gid-1", text, thread_id="t1", chat_kind=chat_kind)
+
+    renderer = TurnRenderer(
+        channel="st",
+        adapter=adapter,
+        chat_id="gid-1",
+        conversation_id="c1",
+        send=send,
+        now=_ticking(),
+        thread_id="t1",
+        chat_kind=chat_kind,
+        mention_user_id=mention_user_id,
+    )
+    queue: asyncio.Queue[Any] = asyncio.Queue()
+    for event in events or [
+        TextDelta(text="the answer"),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]:
+        queue.put_nowait(event)
+    queue.put_nowait(None)
+    await renderer.consume(queue)
+
+
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="a group reply @mentions whoever asked",
+)
+async def test_a_group_reply_opens_with_a_mention_of_the_asker() -> None:
+    # No live surface here (supports_live_text off): the ordinary group send is
+    # the whole reply, and it is the other place a mention may appear.
+    adapter = FakeChannelAdapter(
+        supports_edit=False,
+        supports_live_text=False,
+        supports_groups=True,
+        mention_template=_MENTION,
+    )
+
+    await _group_reply(adapter, mention_user_id="st-77")
+
+    assert adapter.texts() == ['<mention-tag target="seatalk://user?id=st-77"/> the answer']
+
+
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="a direct reply carries no mention",
+)
+async def test_a_dm_reply_never_mentions_the_sender() -> None:
+    """A 1:1 chat has nobody to disambiguate — an @ there is only shouting."""
+    adapter = FakeChannelAdapter(
+        supports_edit=False,
+        supports_live_text=False,
+        mention_template=_MENTION,
+    )
+
+    await _group_reply(adapter, mention_user_id="st-77", chat_kind="direct")
+
+    assert adapter.texts() == ["the answer"]
+
+
+async def test_a_sender_with_no_mention_id_gets_a_clean_reply() -> None:
+    """A bot or system-account sender carries no id to point a mention at, and a
+    transport that cannot mention declares no template. Either way the reply is
+    the reply — never a half-built tag, never a failure."""
+    mentionable = FakeChannelAdapter(
+        supports_edit=False,
+        supports_live_text=False,
+        supports_groups=True,
+        mention_template=_MENTION,
+    )
+    await _group_reply(mentionable, mention_user_id="")
+    assert mentionable.texts() == ["the answer"]
+
+    # And the mirror case: an id, but a transport with no mention spelling.
+    speechless = FakeChannelAdapter(
+        supports_edit=False, supports_live_text=False, supports_groups=True
+    )
+    await _group_reply(speechless, mention_user_id="st-77")
+    assert speechless.texts() == ["the answer"]
+
+
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="the mention rides the final snapshot, never an interim one",
+)
+async def test_the_mention_lands_on_the_final_snapshot_and_on_no_interim_one() -> None:
+    """Interim snapshots go out as PLAIN text on the transport that streams
+    (SeaTalk ``format: 2``), where a mention tag would be shown as its own
+    literal source rather than as a name — worse than no mention at all. Only
+    the finished snapshot is rendered rich, so only it may carry one."""
+    adapter = _streaming_adapter(supports_groups=True, mention_template=_MENTION)
+
+    await _group_reply(
+        adapter,
+        mention_user_id="st-77",
+        events=[
+            TextDelta(text="I found "),
+            TextDelta(text="three "),
+            TextDelta(text="cats."),
+            TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+        ],
+    )
+
+    [live] = adapter.live_handles
+    assert live.final == '<mention-tag target="seatalk://user?id=st-77"/> I found three cats.'
+    # Every snapshot on the way there — the acknowledgement and each growing
+    # preview — stays clean.
+    assert all("mention-tag" not in snapshot for snapshot in live.snapshots)
+    # The stream IS the reply, so nothing is sent a second time.
+    assert adapter.texts() == ["⏳ Got it — working on this…"]
+
+
+def test_a_mention_is_never_built_from_an_id_that_is_not_one() -> None:
+    """An id that could break the markup it goes inside is dropped rather than
+    interpolated: the reader would see raw tag source, and Coffer would have put
+    attacker-shaped text inside its own markup."""
+    from coffer.application.channel.turn_text import mention_prefix
+
+    assert mention_prefix(_MENTION, "st-77") == '<mention-tag target="seatalk://user?id=st-77"/>'
+    assert mention_prefix(_MENTION, '"/><b>x') == ""
+    assert mention_prefix(_MENTION, "") == ""
+    assert mention_prefix("", "st-77") == ""

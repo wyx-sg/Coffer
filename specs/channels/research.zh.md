@@ -124,6 +124,36 @@ NousResearch hermes-agent 文档与源码、SeaTalk 官方 `cs-bot` 仓库与开
     对应的 SeaTalk 权限没有授予 Coffer 的 app，所以「最近的群主聊天」上下文从不
     被读取；@mention 消息本身加上它自己的线程（如果有）就是整个上下文窗口。
 
+- **SeaTalk 出站 @mention（2026-09-12 从文档读得）：** 这两半信息本仓库此前**一条都
+  没有**，而一个没被记下来的 SeaTalk 线上细节，已经在另一个端点上让这个项目付出过
+  好几天的排查代价——所以两半都写在这里，哪怕其中一半是推断。
+  - **标记本身。**「Send Message to Group Chat」给出的富文本样例是
+    `"content":"Kindly note there's **no meeting** today <mention-tag
+    target=\"seatalk://user?id=0\"/>."`——一个 mention 就是放在消息 content 里的
+    自闭合 `<mention-tag target="seatalk://user?id=ID"/>`。它自身不携带任何可见文本
+    （客户端渲染出被 @ 者的名字），所以构造它只需要一个 id，不需要显示名查询。
+  - **它是 markdown，这一点框定了它能出现在哪里。** 只有在 `format: 1` 的消息里，
+    这个标签才会以名字的形态抵达读者；在 `format: 2`（纯文本）的消息里它会显示为那串
+    字面源码。Coffer 的流式 surface 刻意把每个**中间**快照以 `format: 2` 发出
+    （写到一半的 markdown 会把解析器搞坏），只有**最终**快照才是 `format: 1`——所以
+    mention 只能随最终快照或一次普通发送出去，绝不能随中间更新出去。
+  - **用哪个 id——这是推断，以及它所依据的证据。** 是 `seatalk_id`，**不是**
+    `employee_code`。没有任何一句话直说这件事。真正指向它的是：「Event: New
+    Mentioned Message From Group Chat」把 `mentioned_list` 的每一项写成
+    `{username, seatalk_id}`，并把「Mention all」记为 `seatalk_id: "0"`——正是上面
+    发送样例所指向的那个 `0`，于是入站与出站的 id 空间对上了。
+  - **该事件上的 `sender` 是 `{seatalk_id, employee_code, email, sender_type}`，
+    而只有第一个总是存在。** 文档警告：当发送者不在 bot 所属组织内时，
+    `employee_code` 与 `email` 会是**空**。Coffer 此前留下了 `employee_code`
+    （作为 `sender_id`，供 owner gate 使用）与 `email or seatalk_id`
+    （作为 `sender_display`），却**丢掉**了 `seatalk_id`——丢掉的正是 mention 所需
+    的那个 id，也是跨组织发送者唯一携带的 id。现在它作为独立的 envelope 字段被带上，
+    刻意不并入 `sender_id`——后者是 owner gate 用另一个值去比对的。
+  - 这个 mention 能原样穿过 Coffer 的 SeaTalk markdown 渲染器：标签里不含该渲染器
+    会转义的那四个字符（星号、下划线、反引号、波浪线），`seatalk://` 也不会被它的
+    裸 URL 规则命中——后者只认 `http`/`https`。这一点在适配器测试里是对着线上 body
+    断言的，而不是听天由命。
+
 - **两条值得记录的平台限制：**
   - SeaTalk 根本不会把 emoji 表情回应或非 @ 的群主聊天消息投递给 bot——两者都没有
     对应的事件，所以「读取最近的群主聊天历史」不只是尚未实现，而是在 SeaTalk 没有

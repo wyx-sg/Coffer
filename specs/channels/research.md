@@ -136,6 +136,44 @@ building group/@mention/thread/forward support (feature/channel-group-mention-ri
     recent-group-main context is never read; the @mention message plus its
     own thread (if any) is the whole context window.
 
+- **SeaTalk @mentions, outbound (read from the docs 2026-09-12):** the repo had
+  NO record of either half of this, and an unrecorded SeaTalk wire detail has
+  already cost this project a multi-day debugging round on another endpoint, so
+  both halves are written down here even though one of them is an inference.
+  - **The markup.** "Send Message to Group Chat" gives the formatted-text
+    sample `"content":"Kindly note there's **no meeting** today <mention-tag
+    target=\"seatalk://user?id=0\"/>."` — a mention is a self-closing
+    `<mention-tag target="seatalk://user?id=ID"/>` placed inside the message
+    content. It carries no visible text of its own (the client renders the
+    mentioned person's name), so building one needs an id and nothing else — no
+    display-name lookup.
+  - **It is markdown, which bounds where it may go.** The tag reaches the reader
+    as a name only in a `format: 1` message; in a `format: 2` (plain) one it
+    shows as that literal string. Coffer's streaming surface sends every INTERIM
+    snapshot as `format: 2` on purpose (half-written markdown breaks a parser)
+    and only the FINAL one as `format: 1` — so a mention may ride the finished
+    snapshot or an ordinary send, never an interim update.
+  - **WHICH id — an inference, and the evidence it rests on.** It is the
+    `seatalk_id`, NOT the `employee_code`. Nothing says so outright. What says
+    it: "Event: New Mentioned Message From Group Chat" maps each
+    `mentioned_list` entry as `{username, seatalk_id}` and documents "Mention
+    all" as `seatalk_id: "0"` — the same `0` the send sample above targets, so
+    the inbound and outbound id spaces line up.
+  - **`sender` on that event is `{seatalk_id, employee_code, email,
+    sender_type}`, and only the first is always there.** The docs warn that
+    `employee_code` and `email` are EMPTY when the sender is not in the bot's
+    organisation. Coffer kept `employee_code` (as `sender_id`, for the owner
+    gate) and `email or seatalk_id` (as `sender_display`) and DISCARDED the
+    `seatalk_id` — throwing away the one id a mention needs, and the only id a
+    cross-organisation sender carries at all. It is now carried as its own
+    envelope field, deliberately not folded into `sender_id`, which the owner
+    gate matches against a different value.
+  - The mention survives Coffer's SeaTalk markdown renderer untouched: the tag
+    holds none of the four characters that renderer escapes (asterisk,
+    underscore, backtick, tilde), and `seatalk://` is not matched by its
+    bare-URL rule, which only looks for `http`/`https`. That is asserted on the
+    wire body in the adapter tests rather than left to chance.
+
 - **Two platform limits worth recording:**
   - SeaTalk does not deliver emoji reactions or non-@ group-main messages to
     a bot at all — there is no event for either, so "read recent group-main

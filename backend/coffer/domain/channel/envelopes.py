@@ -36,6 +36,15 @@ class InboundMessage:
     timestamp: datetime
     sender_id: str = ""  # stable per-sender id for the owner gate (Telegram
     # from.id, SeaTalk employee_code); "" when the transport has none
+    # The id this sender is ADDRESSED by — what an outbound @mention points at
+    # (FR-070). Deliberately NOT ``sender_id``: the two are different values on
+    # SeaTalk, where the owner gate matches ``employee_code`` while a mention
+    # must carry ``seatalk_id``, and the docs warn that ``employee_code`` and
+    # ``email`` arrive EMPTY for a sender outside the bot's organisation while
+    # ``seatalk_id`` is always present. "" when the transport has no such id, or
+    # spells mentions in a way that needs more than one (Telegram needs a
+    # display name too) — the reply then simply carries no mention.
+    sender_mention_id: str = ""
     chat_kind: str = "direct"  # "direct" | "group"
     chat_title: str = ""  # group/channel display name where the platform supplies
     # one for free (Telegram ``chat.title``); "" when it does not (SeaTalk's group
@@ -106,6 +115,14 @@ class ChannelCapabilities:
     supports_reactions: bool = False  # emoji reaction on a message (set_reaction),
     # used for the FR-036 receipt (👀) + completion (✅) ack; transports without
     # it fall back to the typing/working signal for the same receipt cue
+    # FR-070: how this transport spells an @mention, with ``{user_id}`` standing
+    # in for the id being addressed — e.g. ``"<x target=\"y?id={user_id}\"/>"``.
+    # The core substitutes and prefixes; it never learns the shape. A transport
+    # that cannot mention, or whose mention needs more than an id (Telegram's
+    # carries a display name), declares none and its replies carry none. The
+    # markup is the platform's RICH text, so only a send that renders as such
+    # may carry it — see ``TurnRenderer._with_mention``.
+    mention_template: str = ""
 
 
 @dataclass(frozen=True)

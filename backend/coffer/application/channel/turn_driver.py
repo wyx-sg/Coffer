@@ -48,8 +48,9 @@ QUEUE_MAX = 10
 #: kind ("direct" | "group") so the eventual reply is routed back to the same
 #: place the message came from, and the user's inbound platform_message_id — the
 #: message the receipt/completion reaction targets on a supports_reactions
-#: transport (FR-036); "" when the transport supplied none.
-_QueuedInbound = tuple[str, tuple[Attachment, ...], str, str, str]
+#: transport (FR-036); "" when the transport supplied none — and the asker's
+#: mention id, which the group reply opens by @mentioning (FR-070).
+_QueuedInbound = tuple[str, tuple[Attachment, ...], str, str, str, str]
 
 #: Sends one reply back through a channel binding, matching
 #: ``InboundProcessor._safe_send``'s signature (buttons omitted — turn
@@ -132,7 +133,14 @@ class TurnDriver:
     async def drain(self, binding: ChannelBinding, chat_id: str, thread_id: str) -> None:
         session = self._session(binding.name, chat_id, thread_id)
         while session.queue:
-            user_text, attachments, item_thread_id, chat_kind, reply_to = session.queue.popleft()
+            (
+                user_text,
+                attachments,
+                item_thread_id,
+                chat_kind,
+                reply_to,
+                mention_user_id,
+            ) = session.queue.popleft()
             peer = await self._peers.get_by_chat(binding.resource_id, chat_id)
             if peer is None:
                 break
@@ -145,6 +153,7 @@ class TurnDriver:
                     thread_id=item_thread_id,
                     chat_kind=chat_kind,
                     reply_to_message_id=reply_to,
+                    mention_user_id=mention_user_id,
                 )
             except asyncio.CancelledError:
                 raise
@@ -161,6 +170,7 @@ class TurnDriver:
         thread_id: str = "",
         chat_kind: str = "direct",
         reply_to_message_id: str = "",
+        mention_user_id: str = "",
     ) -> None:
         adapter = binding.adapter
         try:
@@ -229,6 +239,7 @@ class TurnDriver:
             send=_send,
             thread_id=thread_id,
             chat_kind=chat_kind,
+            mention_user_id=mention_user_id,
         )
         # Track the live turn so /stop and unbind can target it even after /new
         # rebinds the peer to a fresh conversation mid-turn.
