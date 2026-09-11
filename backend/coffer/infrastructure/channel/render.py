@@ -8,7 +8,7 @@ emitted: b / i / code / pre / a.
 
 SeaTalk has its own markdown (``format: 1``) — bold, italic, inline code, code
 fences, ordered/unordered lists — with neither headings nor links, and a
-literal marker character is escaped with a DOUBLE backslash. Its renderer
+literal marker character is escaped with a SINGLE backslash. Its renderer
 lives beside Telegram's so both read from the same regex vocabulary.
 """
 
@@ -64,7 +64,9 @@ def _inline(text: str) -> str:
 
 # SeaTalk's own markdown: the characters that start formatting there, so any
 # one of them left over after the supported constructs are lifted out must be
-# escaped (with a DOUBLE backslash) to survive as a literal.
+# escaped (with a SINGLE backslash) to survive as a literal. Angle brackets are
+# deliberately absent: a live probe confirmed `<` and `>` reach the chat as
+# written, so escaping them would only add visible noise.
 _SEATALK_MARKER = re.compile(r"[*_`~]")
 _BARE_URL = re.compile(r"https?://\S+")
 # `*` / `+` bullets → the `-` form; a bullet needs trailing whitespace, so
@@ -107,9 +109,10 @@ def _seatalk_inline(text: str) -> str:
     text = _ALT_BULLET.sub(lambda m: f"{m.group(1)}-{m.group(2)}", text)
     text = _BOLD.sub(lambda m: stash(f"**{m.group(1)}**"), text)
     text = _ITALIC.sub(lambda m: stash(f"*{m.group(1) or m.group(2)}*"), text)
-    # A double backslash is SeaTalk's escape, so `snake_case` survives as typed
-    # instead of being read as half an italic run.
-    text = _SEATALK_MARKER.sub(lambda m: "\\\\" + m.group(0), text)
+    # One backslash is SeaTalk's escape, so `snake_case` survives as typed
+    # instead of being read as half an italic run. Two would be one escape too
+    # many: SeaTalk consumes the first and shows the second as literal text.
+    text = _SEATALK_MARKER.sub(lambda m: "\\" + m.group(0), text)
     for i, span in enumerate(spans):
         text = text.replace(f"\x00{i}\x00", span)
     return text

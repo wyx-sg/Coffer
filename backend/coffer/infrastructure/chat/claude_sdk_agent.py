@@ -36,7 +36,7 @@ from coffer.domain.chat.events import (
 )
 from coffer.domain.chat.message import Message
 from coffer.infrastructure.chat.adapter_support import ParseState, SessionSink, last_user_text
-from coffer.infrastructure.chat.claude_sdk_mapping import map_sdk_message
+from coffer.infrastructure.chat.claude_sdk_mapping import ClaudeParseState, map_sdk_message
 from coffer.infrastructure.chat.document_extract import (
     DocumentExtractor,
     extract_document_attachments,
@@ -230,6 +230,18 @@ class ClaudeSdkAgentAdapter:
             resume=resume,
             permission_mode="bypassPermissions",
             model=self._extra.get("model"),
+            # Without this the SDK only yields whole ``AssistantMessage``s, so the
+            # entire reply arrives as one delta at the end of the turn and a chat
+            # channel's live surface has nothing to grow. With it the reply's text
+            # increments stream as they are written; ``claude_sdk_mapping`` folds
+            # them and the final message into one non-duplicating sequence.
+            # It reaches the CLI as ``--include-partial-messages``, which the CLI
+            # rejects outright ("error: unknown option", exit 1) if it predates
+            # the flag — so a too-old CLI fails the turn at connect rather than
+            # degrading to whole messages. The SDK ships and prefers its own
+            # bundled CLI over anything on PATH, so that bites only an install
+            # whose bundled binary is missing and whose PATH ``claude`` is stale.
+            include_partial_messages=True,
         )
         if self._env is not None:
             opts.env = self._env
@@ -293,7 +305,7 @@ class ClaudeSdkAgentAdapter:
             yield TurnError(code="empty_prompt", message="no user message to send")
             return
 
-        state = ParseState(session_id=self._resume)
+        state = ClaudeParseState(session_id=self._resume)
         queue: asyncio.Queue[Any] = asyncio.Queue()
         yield TurnStarted()
 
@@ -313,7 +325,7 @@ class ClaudeSdkAgentAdapter:
                 extra={"resume": self._resume},
                 exc_info=True,
             )
-            state = ParseState(session_id=None)
+            state = ClaudeParseState(session_id=None)
             try:
                 session = await self._connect(content, resume=None)
             except Exception as exc2:
@@ -372,6 +384,7 @@ class ClaudeSdkAgentAdapter:
 
 
 __all__ = [
+    "ClaudeParseState",
     "ClaudeSdkAgentAdapter",
     "ClaudeSdkClientSession",
     "ClaudeSdkSession",

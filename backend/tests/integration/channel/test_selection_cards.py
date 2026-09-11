@@ -7,9 +7,35 @@ performs. Text-only channels keep today's behavior (covered in test_routing).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from typing import Any
+
 import pytest
 
+from coffer.application.channel.selection_cards import MAX_MODEL_PICKS
+from coffer.domain.channel.envelopes import ChoiceButton
+from coffer.domain.channel.errors import ChannelSendFailed
+
 from .conftest import ChannelEnv, FakeChannelAdapter, Resource, inbound, tap_event, wait_until
+
+
+def _refuse_cards(adapter: FakeChannelAdapter) -> None:
+    """Make the transport answer a CARD send the way SeaTalk answered the
+    29-button ``/model`` card: an outright rejection. Plain text still works."""
+    real = adapter.send_text
+
+    async def send_text(
+        chat_id: str,
+        markdown: str,
+        *,
+        buttons: Sequence[ChoiceButton] | None = None,
+        **kw: Any,
+    ) -> Any:
+        if buttons:
+            raise ChannelSendFailed("tg", "/messaging/v2/single_chat: code=102", api_rejected=True)
+        return await real(chat_id, markdown, buttons=buttons, **kw)
+
+    adapter.send_text = send_text  # type: ignore[method-assign]
 
 
 async def _card_channel(
@@ -84,6 +110,50 @@ async def test_model_no_arg_falls_back_to_text_without_suggestions(env: ChannelE
 
     assert adapter.cards == []
     assert any("Model:" in t for t in adapter.texts())
+
+
+async def test_a_long_catalogue_becomes_a_handful_of_quick_picks(env: ChannelEnv) -> None:
+    """The suggestion port hands over the agent's whole model catalogue; the
+    card carries a bounded handful of it, not all 29 buttons."""
+    env.model_suggestions.add("builtin", [f"model-{i}" for i in range(29)])
+    _resource, adapter = await _card_channel(env)
+
+    await env.processor.on_message(inbound("tg", "owner", "/model"))
+
+    [(_chat, text, buttons)] = adapter.cards
+    assert len(buttons) == MAX_MODEL_PICKS
+    assert "/model <name>" in text  # the rest of the catalogue stays reachable
+
+
+# -- a card the platform refuses degrades to text, never to silence -------------
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a refused selection card falls back to the text reply"
+)
+async def test_a_refused_model_card_falls_back_to_the_text_reply(env: ChannelEnv) -> None:
+    """SeaTalk refused a `/model` card outright and the command ended in
+    silence — the user saw nothing at all. A refused card must degrade to the
+    plain-text answer the handler already has."""
+    env.model_suggestions.add("builtin", ["claude-opus-4-8"])
+    _resource, adapter = await _card_channel(env)
+    _refuse_cards(adapter)
+
+    await env.processor.on_message(inbound("tg", "owner", "/model"))
+
+    assert adapter.cards == []
+    assert any("Model:" in t for t in adapter.texts())
+
+
+async def test_a_refused_agent_card_falls_back_to_the_text_reply(env: ChannelEnv) -> None:
+    env.add_agent("codex")
+    _resource, adapter = await _card_channel(env)
+    _refuse_cards(adapter)
+
+    await env.processor.on_message(inbound("tg", "owner", "/agent"))
+
+    assert adapter.cards == []
+    assert any("Available:" in t for t in adapter.texts())
 
 
 async def test_model_card_tap_sets_next_turn_model(env: ChannelEnv) -> None:

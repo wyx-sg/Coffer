@@ -1380,7 +1380,7 @@ async def test_stream_finish_renders_seatalk_markdown(fake_seatalk: FakeSeaTalk)
 
     contents = [body["message"]["text"]["content"] for _s, body in fake_seatalk.update_stream_calls]
     assert contents[0] == "## Result"  # interim: plain, exactly as it arrived
-    assert contents[-1] == "**Result**\n\nthe file is some\\\\_name.py"
+    assert contents[-1] == "**Result**\n\nthe file is some\\_name.py"
 
 
 async def test_group_stream_uses_the_group_surface_and_threads_the_message(

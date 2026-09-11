@@ -23,6 +23,13 @@ from coffer.domain.channel.envelopes import ChoiceButton
 #: card rather than sent as a button that errors on tap.
 CALLBACK_MAX_BYTES = 64
 
+#: How many model buttons a card may carry. The model catalogue is the whole
+#: list of models an agent can run — 29 for claude_code — and a card built from
+#: all of them is both unreadable on a phone and refused outright by SeaTalk
+#: (``/messaging/v2/single_chat: code=102``), leaving the user with nothing.
+#: A quick-pick card is a handful; ``/model <name>`` still reaches the rest.
+MAX_MODEL_PICKS = 6
+
 
 def callback_fits(value: str) -> bool:
     return len(value.encode("utf-8")) <= CALLBACK_MAX_BYTES
@@ -64,11 +71,34 @@ def agent_card(*, current: str, choices: Sequence[tuple[str, str]]) -> Selection
     )
 
 
+def _model_quick_picks(current: str | None, picks: Sequence[str]) -> list[str]:
+    """At most ``MAX_MODEL_PICKS`` ids, the one in effect always among them.
+
+    The current model leads so a refreshed card always has a tick to show —
+    dropping it off the end of a long catalogue would leave the card claiming
+    nothing is selected. The remaining slots follow ``picks`` in catalogue
+    order, which for ``claude_code`` starts with the short aliases (``sonnet``,
+    ``opus``, ``haiku``, …) — exactly the ones worth a button.
+    """
+    chosen: list[str] = []
+    for candidate in ([current] if current else []) + list(picks):
+        if len(chosen) >= MAX_MODEL_PICKS:
+            break
+        if candidate in chosen or not callback_fits(f"model:{candidate}"):
+            continue
+        chosen.append(candidate)
+    return chosen
+
+
 def model_card(*, current: str | None, picks: Sequence[str]) -> SelectionCard:
     """Pick the model the agent's CLI runs next turn.
 
     ``current`` is ``None`` when no model is pinned, in which case the body says
     the CLI's own default is in effect and no option carries the tick.
+
+    ``picks`` is the agent's whole model catalogue; only a bounded handful of it
+    becomes buttons (see ``MAX_MODEL_PICKS``). The body's ``/model <name>`` hint
+    is what keeps that honest — it is how the rest of the catalogue is reached.
     """
     shown = current or "(CLI default)"
     return SelectionCard(
@@ -76,7 +106,6 @@ def model_card(*, current: str | None, picks: Sequence[str]) -> SelectionCard:
         text=f"Current model: {shown}\nTap a quick-pick (or send /model <name>):",
         buttons=[
             ChoiceButton(label=_tick(m, m == current), value=f"model:{m}")
-            for m in picks
-            if callback_fits(f"model:{m}")
+            for m in _model_quick_picks(current, picks)
         ],
     )

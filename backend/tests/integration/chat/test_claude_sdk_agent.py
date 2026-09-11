@@ -22,6 +22,7 @@ from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
     ResultMessage,
+    StreamEvent,
     SystemMessage,
     UserMessage,
 )
@@ -45,8 +46,8 @@ from coffer.domain.chat.events import (
     TurnStarted,
 )
 from coffer.domain.chat.message import Message, Role, TextBlock
-from coffer.infrastructure.chat.adapter_support import ParseState
 from coffer.infrastructure.chat.claude_sdk_agent import (
+    ClaudeParseState,
     ClaudeSdkAgentAdapter,
     map_sdk_message,
 )
@@ -306,7 +307,10 @@ def _basic_messages() -> list[Any]:
 
 
 def test_map_sdk_message_full_sequence_has_one_terminal():
-    state = ParseState()
+    # No StreamEvents in this stream (case c: an older CLI that does not support
+    # partial messages, or a turn with no text increments) — each finished text
+    # block is emitted whole, exactly as before partial messages were enabled.
+    state = ClaudeParseState()
     events = []
     for msg in _basic_messages():
         events.extend(map_sdk_message(msg, state))
@@ -332,7 +336,7 @@ def test_map_sdk_message_full_sequence_has_one_terminal():
 
 
 def test_map_sdk_message_error_result_is_turn_error():
-    state = ParseState()
+    state = ClaudeParseState()
     msg = ResultMessage(
         subtype="error_during_execution",
         duration_ms=1,
@@ -351,7 +355,7 @@ def test_map_sdk_message_error_result_is_turn_error():
 
 
 def test_map_sdk_message_tool_result_error_maps_to_error_field():
-    state = ParseState()
+    state = ClaudeParseState()
     state.tool_names["tu_9"] = "Bash"
     msg = UserMessage(
         content=[SdkToolResultBlock(tool_use_id="tu_9", content="bad", is_error=True)]
@@ -362,6 +366,243 @@ def test_map_sdk_message_tool_result_error_maps_to_error_field():
     assert isinstance(result, ToolResult)
     assert result.output is None
     assert result.error == "bad"
+
+
+# ---------------------------------------------------------------------------
+# Partial messages — incremental text without doubling the reply
+# ---------------------------------------------------------------------------
+
+
+def _text_delta(text: str, *, index: int = 0, parent: str | None = None) -> StreamEvent:
+    """A raw ``content_block_delta`` carrying one text increment."""
+    return StreamEvent(
+        uuid="evt",
+        session_id="sess-1",
+        event={
+            "type": "content_block_delta",
+            "index": index,
+            "delta": {"type": "text_delta", "text": text},
+        },
+        parent_tool_use_id=parent,
+    )
+
+
+def _raw(event: dict[str, Any]) -> StreamEvent:
+    return StreamEvent(uuid="evt", session_id="sess-1", event=event)
+
+
+def _map_all(messages: list[Any], state: ClaudeParseState | None = None) -> list[Any]:
+    state = state or ClaudeParseState()
+    out: list[Any] = []
+    for msg in messages:
+        out.extend(map_sdk_message(msg, state))
+    return out
+
+
+def _joined(events: list[Any]) -> str:
+    """What a consumer builds — both turn_render and turn_runner concatenate."""
+    return "".join(e.text for e in events if isinstance(e, TextDelta))
+
+
+def test_stream_deltas_arrive_one_by_one_and_the_final_block_adds_nothing():
+    # (a) The deltas cover the finished block exactly: the block itself must emit
+    # nothing, or every reply would be sent twice.
+    events = _map_all(
+        [
+            _text_delta("Hello"),
+            _text_delta(", "),
+            _text_delta("world."),
+            AssistantMessage(content=[SdkTextBlock(text="Hello, world.")], model="claude"),
+        ]
+    )
+
+    assert [e.text for e in events if isinstance(e, TextDelta)] == ["Hello", ", ", "world."]
+    assert _joined(events) == "Hello, world."
+
+
+def test_a_late_stream_delta_is_recovered_from_the_final_block():
+    # (b) The deltas are a strict prefix of the finished block (a dropped or late
+    # event): only the missing remainder is emitted.
+    events = _map_all(
+        [
+            _text_delta("Hello, "),
+            AssistantMessage(content=[SdkTextBlock(text="Hello, world.")], model="claude"),
+        ]
+    )
+
+    assert [e.text for e in events if isinstance(e, TextDelta)] == ["Hello, ", "world."]
+    assert _joined(events) == "Hello, world."
+
+
+def test_a_final_block_disagreeing_with_the_stream_is_not_sent_again():
+    # Defensive: if the finished block is not an extension of what streamed, the
+    # reader has already seen the streamed text — emitting the block on top of it
+    # would duplicate the reply.
+    events = _map_all(
+        [
+            _text_delta("Hello, world."),
+            AssistantMessage(content=[SdkTextBlock(text="Something else")], model="claude"),
+        ]
+    )
+
+    assert _joined(events) == "Hello, world."
+
+
+def test_the_accumulator_resets_between_assistant_messages():
+    # (d) A turn with tool use between two assistant messages: message 2 must be
+    # measured against its own deltas, not message 1's text.
+    events = _map_all(
+        [
+            _text_delta("Let me "),
+            _text_delta("check."),
+            AssistantMessage(
+                content=[
+                    SdkTextBlock(text="Let me check."),
+                    SdkToolUseBlock(id="tu_1", name="Bash", input={"command": "ls"}),
+                ],
+                model="claude",
+            ),
+            UserMessage(
+                content=[SdkToolResultBlock(tool_use_id="tu_1", content="file.txt", is_error=False)]
+            ),
+            _text_delta("There is "),
+            _text_delta("one file."),
+            AssistantMessage(content=[SdkTextBlock(text="There is one file.")], model="claude"),
+        ]
+    )
+
+    assert _joined(events) == "Let me check.There is one file."
+    calls = [e for e in events if isinstance(e, ToolCall)]
+    assert len(calls) == 1
+    assert (calls[0].tool_use_id, calls[0].tool_name) == ("tu_1", "Bash")
+    assert calls[0].tool_input == {"command": "ls"}
+    results = [e for e in events if isinstance(e, ToolResult)]
+    assert len(results) == 1
+    assert results[0].tool_name == "Bash"
+
+
+def test_each_text_block_is_matched_against_its_own_streamed_run():
+    # One message may hold text, a tool call, then more text. Each run of stream
+    # events opens its own accumulator entry, so the second text block subtracts
+    # the second entry rather than the first's text.
+    events = _map_all(
+        [
+            _text_delta("First.", index=0),
+            _text_delta("Second.", index=2),
+            AssistantMessage(
+                content=[
+                    SdkTextBlock(text="First."),
+                    SdkToolUseBlock(id="tu_2", name="Read", input={"path": "/tmp/x"}),
+                    SdkTextBlock(text="Second. And a tail."),
+                ],
+                model="claude",
+            ),
+        ]
+    )
+
+    assert _joined(events) == "First.Second. And a tail."
+    assert [e.tool_name for e in events if isinstance(e, ToolCall)] == ["Read"]
+
+
+def test_a_block_the_sdk_parser_dropped_does_not_double_the_reply():
+    # The SDK's message parser has no fallback case: a content block whose type
+    # it does not recognise (``redacted_thinking``, or anything Anthropic adds
+    # later) is silently dropped instead of appended. The finished message then
+    # holds FEWER blocks than the raw stream had indices — here text streamed at
+    # raw indices 0 and 2, but the parsed content is only two blocks long. Matching
+    # a text block by its position in the parsed content would look index 2 up as
+    # index 1, find nothing streamed there, and emit the whole block on top of what
+    # the reader already saw. Text blocks keep their relative ORDER either way, so
+    # that is what the accumulator matches on.
+    events = _map_all(
+        [
+            _text_delta("First.", index=0),
+            # index 1 is the redacted_thinking block the parser will drop — it
+            # produces no text delta of its own.
+            _text_delta("Second.", index=2),
+            AssistantMessage(
+                content=[SdkTextBlock(text="First."), SdkTextBlock(text="Second.")],
+                model="claude",
+            ),
+        ]
+    )
+
+    assert _joined(events) == "First.Second."
+
+
+def test_non_text_stream_events_emit_nothing():
+    state = ClaudeParseState()
+    noise = [
+        _raw({"type": "message_start", "message": {"id": "msg_1"}}),
+        _raw({"type": "content_block_start", "index": 0, "content_block": {"type": "text"}}),
+        _raw(
+            {
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "thinking_delta", "thinking": "hmm"},
+            }
+        ),
+        _raw(
+            {
+                "type": "content_block_delta",
+                "index": 1,
+                "delta": {"type": "input_json_delta", "partial_json": '{"a":'},
+            }
+        ),
+        _raw({"type": "content_block_stop", "index": 0}),
+        _raw({"type": "message_delta", "delta": {"stop_reason": "end_turn"}}),
+        _raw({"type": "message_stop"}),
+        # A sub-agent's text is not this message's text.
+        _text_delta("subagent chatter", parent="tu_parent"),
+    ]
+    assert _map_all(noise, state) == []
+    # None of it reached the accumulator, so a finished block still emits whole.
+    assert state.stream_text == []
+    assert (
+        _joined(
+            _map_all([AssistantMessage(content=[SdkTextBlock(text="hi")], model="claude")], state)
+        )
+        == "hi"
+    )
+
+
+@pytest.mark.asyncio
+async def test_adapter_asks_the_sdk_for_partial_messages():
+    # Without this the SDK yields only whole AssistantMessages and a channel's
+    # live surface has nothing to grow — the whole reply lands at once.
+    factory = _Factory(_basic_messages())
+    adapter = _adapter(factory)
+    await _collect(adapter, _user_turn("hi"))
+    assert factory.last_options is not None
+    assert factory.last_options.include_partial_messages is True
+
+
+@pytest.mark.asyncio
+async def test_a_streamed_turn_reaches_a_consumer_exactly_once():
+    messages = [
+        SystemMessage(subtype="init", data={"session_id": "sess-1"}),
+        _text_delta("One "),
+        _text_delta("moment."),
+        AssistantMessage(content=[SdkTextBlock(text="One moment.")], model="claude"),
+        ResultMessage(
+            subtype="success",
+            duration_ms=1,
+            duration_api_ms=1,
+            is_error=False,
+            num_turns=1,
+            session_id="sess-1",
+            usage={"input_tokens": 3, "output_tokens": 2},
+            total_cost_usd=0.0,
+        ),
+    ]
+    factory = _Factory(messages)
+    adapter = _adapter(factory)
+    events = await _collect(adapter, _user_turn("hello"))
+
+    deltas = [e.text for e in events if isinstance(e, TextDelta)]
+    assert deltas == ["One ", "moment."]  # streamed, not one lump at the end
+    assert "".join(deltas) == "One moment."  # and the reply is not doubled
+    assert isinstance(events[-1], TurnDone)
 
 
 # ---------------------------------------------------------------------------
