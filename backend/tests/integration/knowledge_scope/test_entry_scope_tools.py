@@ -126,9 +126,9 @@ async def test_read_with_an_explicit_scope_does_not_fall_back(mem) -> None:
     written = await _tool(reg, "write").handler(
         {"text": "global fact about bilbies", "scope": "global", "title": "bilby"}
     )
-    project_scope = (
-        await _tool(reg, "write").handler({"text": "seed", "cwd": mem.project_cwd})
-    )["scope"]
+    project_scope = (await _tool(reg, "write").handler({"text": "seed", "cwd": mem.project_cwd}))[
+        "scope"
+    ]
     with pytest.raises(MemoryNotFound):
         await _tool(reg, "read").handler({"id": written["id"], "scope": project_scope})
 

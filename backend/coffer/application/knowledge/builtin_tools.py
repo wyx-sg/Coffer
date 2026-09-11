@@ -180,9 +180,7 @@ def register_knowledge_builtin_tools(
                 truncated = True
         return {
             "scope": scope_name,
-            "hits": [
-                {"path": h.path, "line_number": h.line_number, "line": h.line} for h in hits
-            ],
+            "hits": [{"path": h.path, "line_number": h.line_number, "line": h.line} for h in hits],
             "truncated": truncated,
         }
 
