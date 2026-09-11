@@ -609,6 +609,15 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - **When** 用户激活 profile B，
 - **Then** profile B 变为活跃，profile A 变为非活跃（单进程 daemon 对 clear-then-set 串行化，切换操作不会交错）。
 
+### Scenario: switch a wire back to the agent built-in login
+
+- **Given** 一条 anthropic connection 处于活跃并已投影进 Claude Code，
+- **When** 用户把该 wire 切回内建登录（`POST /providers/use-builtin/{wire}`），
+- **Then** Coffer 托管的密钥被从 agent 的原生配置中移除，使其回落到自己的登录，且该
+  connection 不再活跃；该操作幂等（无活跃项时为 no-op）。参见
+  [Provider Switching](../../docs/decisions/provider-switching.md) 修订 D1/D3
+  （connection 是可选的覆盖项）。
+
 ### Scenario: activate a profile whose wire matches no registered agent records active but projects nothing
 
 - **Given** 无已注册的 Codex agent，且存在一条 openai profile，
@@ -800,6 +809,30 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 
 - **FR-025**：`ProviderConfig` 必须携带 `models: list[str]`——该连接向下游**提供**的模型 id 集合。**空**列表必须表示不限制（endpoint 提供的所有模型），必须是默认值，也必须是修订 0059 之前创建的每条连接的取值。该字段绝不可被当作「选中的模型」读取：选择仍在使用处（E1/E3）。id 只校验形状——非空白、按序去重、至多 200 个且每个至多 200 字符——并且绝不可与 Coffer 自己写死的模型名单比对。
 - **FR-026**：`ProviderCreate.models`（`null` ⇒ 空）与 `ProviderPatch.models` 必须承载该集合；`ProviderOut.models` 必须返回它。`PATCH` 必须像 `compatible_agents` 一样整值替换——`null` 保持不变，`[]` 清除限制——且不得为此新增路由。对它的修改必须搭乘 provider 更新本就发出的 `resource_updated` 审计事件。
+
+### 关键实体
+
+- **ProviderProfile**：kind 为 `provider` 的一个 Resource，标识符为
+  `provider:<name>`。持有 wire format、base URL、可选的 credential ref（ollama
+  没有）、它向下游提供的策展 `models` 集合（空 = 不限制）、按 wire 的 `is_active`
+  状态，以及全局 `internal_default` 标志。绝不持有原始 secret，也绝不持有某个被选中
+  的模型。
+- **`apply_anthropic_settings` / `apply_codex_provider`**：`domain/provider/projection.py`
+  中的纯函数，直接返回新的原生配置 TEXT。类比 `domain/agent/mcp_install.py` 的
+  `apply_install`。没有 `ProjectionPatch` dataclass，也没有 `build_patch()` 函数。
+- **`ProviderService._project`**：`application/provider/service.py` 中的私有方法，调用
+  上述纯投影函数并执行文件写入。
+- **`ProjectionTarget` / `target_for(wire)`**：`domain/provider/projection.py` 中的
+  helper，把 `wire_format` 映射到目标配置文件描述符；对 `ollama` 返回 `None`（仅内部
+  使用，不投影）。
+- **`ProviderService.resolve_active_key(wire)`**：只接受一个 `wire_format` 字符串；该
+  方法上没有按名字解析的路径。
+- **`ProviderService.set_internal_default(name)`**：先清掉其他所有 connection 的
+  `internal_default` 再设置目标；发出 `provider_internal_default_set`。
+- **`ProviderService.resolve_internal_connection()`**：返回 internal-default connection
+  的 `ProviderConfig`，或 `None`（⇒ 内部引擎干净地成为 no-op）。
+  `build_chat_model(connection, ...)` 据此构建内部引擎的 chat model，按 `wire_format`
+  分派。
 
 ## 成功标准
 
