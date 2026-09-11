@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import pathlib
 import tomllib
 
 import pytest
@@ -16,6 +17,8 @@ from coffer.domain.provider.projection import (
     anthropic_api_key_helper,
     apply_anthropic_settings,
     apply_codex_provider,
+    codex_model_catalog_json,
+    codex_model_catalog_path,
     remove_anthropic_settings,
     remove_codex_provider,
     target_for,
@@ -195,3 +198,174 @@ def test_per_connection_api_key_helper_is_written_and_removed() -> None:
 @pytest.mark.parametrize("agent_type", list(AgentType))
 def test_every_supported_agent_is_a_projection_target(agent_type: AgentType) -> None:
     assert target_for_agent(agent_type) is not None
+
+
+# --- Codex model catalogue (``model_catalog_json``) -----------------------------
+
+# The catalogue file is a WIRE CONTRACT with another program: Codex's parser
+# rejects the document if any of these is missing, and then falls back to its
+# built-in model list — so the projection silently does not take effect. Verified
+# against Codex 0.139.0.
+_REQUIRED_CATALOG_FIELDS = {
+    "slug",
+    "display_name",
+    "supported_reasoning_levels",
+    "shell_type",
+    "visibility",
+    "supported_in_api",
+    "priority",
+    "base_instructions",
+    "supports_reasoning_summaries",
+    "support_verbosity",
+    "truncation_policy",
+    "supports_parallel_tool_calls",
+    "experimental_supported_tools",
+}
+
+
+def test_catalog_emits_exactly_the_fields_codex_requires() -> None:
+    text = codex_model_catalog_json(["m-one", "m-two"])
+    assert text is not None
+    doc = json.loads(text)
+    assert set(doc) == {"models"}
+    for entry in doc["models"]:
+        assert set(entry) == _REQUIRED_CATALOG_FIELDS
+
+
+def test_catalog_describes_each_curated_model_in_curated_order() -> None:
+    text = codex_model_catalog_json(["fast", "pro"])
+    assert text is not None
+    models = json.loads(text)["models"]
+    assert [m["slug"] for m in models] == ["fast", "pro"]
+    # The id is the display name — Coffer authors no model labels of its own.
+    assert [m["display_name"] for m in models] == ["fast", "pro"]
+    # Codex orders by ascending priority, so the curated order is the index.
+    assert [m["priority"] for m in models] == [0, 1]
+
+
+def test_catalog_claims_only_what_coffer_can_know() -> None:
+    text = codex_model_catalog_json(["m"])
+    assert text is not None
+    entry = json.loads(text)["models"][0]
+    assert entry["visibility"] == "list"  # the point is to appear in the picker
+    assert entry["supported_in_api"] is True  # curated for an API endpoint
+    # Capabilities Coffer cannot derive for a third-party endpoint claim nothing,
+    # so Codex sends no reasoning/verbosity/parallel-tool parameters for them.
+    assert entry["supported_reasoning_levels"] == []
+    assert entry["supports_reasoning_summaries"] is False
+    assert entry["support_verbosity"] is False
+    assert entry["supports_parallel_tool_calls"] is False
+    assert entry["experimental_supported_tools"] == []
+    assert entry["shell_type"] == "default"
+    assert entry["base_instructions"] == ""
+    # Tool-output truncation is a property of Codex's harness, not the endpoint,
+    # so it mirrors the built-in catalogue rather than guessing a context window.
+    assert entry["truncation_policy"] == {"mode": "tokens", "limit": 10000}
+
+
+def test_no_catalog_without_a_curated_model_set() -> None:
+    # An empty set means "no restriction". A catalogue REPLACES Codex's built-in
+    # list, so writing one here would replace it with a guess.
+    assert codex_model_catalog_json([]) is None
+
+
+def test_catalog_path_sits_next_to_config_toml() -> None:
+    assert codex_model_catalog_path(pathlib.Path("/home/u/.codex")) == pathlib.Path(
+        "/home/u/.codex/coffer-model-catalog.json"
+    )
+
+
+def test_codex_points_at_an_absolute_catalog_path() -> None:
+    out = apply_codex_provider(
+        "",
+        base_url="u",
+        model="m",
+        wire_api="responses",
+        display_name="x",
+        catalog_path=pathlib.Path("/home/u/.codex/coffer-model-catalog.json"),
+    )
+    value = tomllib.loads(out)["model_catalog_json"]
+    assert value == "/home/u/.codex/coffer-model-catalog.json"
+    assert pathlib.PurePosixPath(value).is_absolute()
+
+
+def test_codex_rejects_a_relative_catalog_path() -> None:
+    # Codex resolves the key as an absolute path; a relative one would resolve
+    # against whatever cwd the agent happened to start in.
+    with pytest.raises(ValueError, match="must be absolute"):
+        apply_codex_provider(
+            "",
+            base_url="u",
+            model="m",
+            wire_api="responses",
+            display_name="x",
+            catalog_path=pathlib.Path(".codex/coffer-model-catalog.json"),
+        )
+
+
+def test_codex_drops_a_stale_coffer_catalog_when_the_set_is_cleared() -> None:
+    projected = apply_codex_provider(
+        "",
+        base_url="u",
+        model="m",
+        wire_api="responses",
+        display_name="x",
+        catalog_path=pathlib.Path("/home/u/.codex/coffer-model-catalog.json"),
+    )
+    cleared = apply_codex_provider(
+        projected, base_url="u", model="m", wire_api="responses", display_name="x"
+    )
+    assert "model_catalog_json" not in tomllib.loads(cleared)
+
+
+def test_codex_keeps_a_user_owned_catalog_when_it_curates_nothing() -> None:
+    out = apply_codex_provider(
+        'model_catalog_json = "/home/u/my-models.json"\n',
+        base_url="u",
+        model="m",
+        wire_api="responses",
+        display_name="x",
+    )
+    assert tomllib.loads(out)["model_catalog_json"] == "/home/u/my-models.json"
+
+
+def test_remove_codex_drops_the_coffer_catalog() -> None:
+    text = apply_codex_provider(
+        "",
+        base_url="u",
+        model="m",
+        wire_api="responses",
+        display_name="x",
+        catalog_path=pathlib.Path("/home/u/.codex/coffer-model-catalog.json"),
+    )
+    # Gone → Codex's own model list is what its picker shows again.
+    assert "model_catalog_json" not in tomllib.loads(remove_codex_provider(text))
+
+
+def test_remove_codex_keeps_a_user_owned_catalog() -> None:
+    # Matched by the Coffer-owned filename, exactly as ``apiKeyHelper`` is matched
+    # by its managed prefix: a catalogue the user wrote is never removed.
+    doc = tomllib.loads(
+        remove_codex_provider('model_catalog_json = "/home/u/catalog.json"\napproval = "never"\n')
+    )
+    assert doc["model_catalog_json"] == "/home/u/catalog.json"
+    assert doc["approval"] == "never"
+
+
+def test_catalog_projection_preserves_comments_and_ordering() -> None:
+    original = '# my codex config\napproval_policy = "never"\nsandbox_mode = "read-only"\n'
+    out = apply_codex_provider(
+        original,
+        base_url="u",
+        model="m",
+        wire_api="responses",
+        display_name="x",
+        catalog_path=pathlib.Path("/home/u/.codex/coffer-model-catalog.json"),
+    )
+    assert out.startswith(
+        '# my codex config\napproval_policy = "never"\nsandbox_mode = "read-only"'
+    )
+    reverted = remove_codex_provider(out)
+    # Round-trip leaves the user's file as it was, down to the comment (tomlkit's
+    # re-serialisation leaves the blank line the removed table stood on).
+    assert reverted.strip() == original.strip()

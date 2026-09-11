@@ -77,13 +77,19 @@ def test_cloud_protocol_requires_credential() -> None:
 
 
 def test_compatible_agents_defaults_by_protocol() -> None:
-    # Unset → effective set defaults from the wire the endpoint speaks.
+    # Unset → a credentialed endpoint is offered to every agent; the protocol
+    # decides introspection and key handling, not who may be driven by it.
     anthropic = ProviderConfig(protocol="anthropic", base_url="x", credential_ref="r")  # type: ignore[arg-type]
     assert anthropic.compatible_agents is None
-    assert anthropic.resolved_compatible_agents() == [AgentType.CLAUDE_CODE]
+    assert anthropic.resolved_compatible_agents() == [
+        AgentType.CLAUDE_CODE,
+        AgentType.CODEX,
+    ]
     openai = ProviderConfig(protocol="openai", base_url="x", credential_ref="r")  # type: ignore[arg-type]
-    # openai-wire defaults to the openai-speaking agent.
-    assert openai.resolved_compatible_agents() == [AgentType.CODEX]
+    assert openai.resolved_compatible_agents() == [
+        AgentType.CLAUDE_CODE,
+        AgentType.CODEX,
+    ]
     # unknown is offered to every agent; the user narrows it via checkboxes.
     unknown = ProviderConfig(protocol="unknown", base_url="x", credential_ref="r")  # type: ignore[arg-type]
     assert unknown.resolved_compatible_agents() == [

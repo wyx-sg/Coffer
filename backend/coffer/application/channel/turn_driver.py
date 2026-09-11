@@ -180,7 +180,7 @@ class TurnDriver:
             return
         if adapter.capabilities.supports_typing:
             with contextlib.suppress(Exception):
-                await adapter.send_typing(peer.chat_id)
+                await adapter.send_typing(peer.chat_id, thread_id=thread_id, chat_kind=chat_kind)
         # FR-036: an immediate receipt ack (👀) on the user's message where the
         # transport supports reactions (Telegram); SeaTalk has none and leans on
         # the typing signal above. Best-effort — a failed ack never breaks the turn.

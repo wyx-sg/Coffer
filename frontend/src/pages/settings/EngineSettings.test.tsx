@@ -129,7 +129,7 @@ describe("EngineSettings", () => {
       await screen.findByText("Internal engine");
 
       // the internal-engine section's connection dropdown sets "b" as the default
-      openSelect(/connection/i);
+      openSelect(/provider/i);
       fireEvent.click(screen.getByRole("option", { name: "b" }));
       await waitFor(() => expect(apiMock.setInternalDefault).toHaveBeenCalledWith("b"));
     },
@@ -153,9 +153,9 @@ describe("EngineSettings", () => {
 
       renderPage();
       // The connection dropdown shows A as the current internal default.
-      expect(await screen.findByRole("combobox", { name: /connection/i })).toHaveTextContent("A");
+      expect(await screen.findByRole("combobox", { name: /provider/i })).toHaveTextContent("A");
       // Selecting B clears A on the backend (single-internal-default invariant).
-      openSelect(/connection/i);
+      openSelect(/provider/i);
       fireEvent.click(screen.getByRole("option", { name: "B" }));
       await waitFor(() => expect(apiMock.setInternalDefault).toHaveBeenCalledWith("B"));
     },

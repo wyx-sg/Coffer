@@ -86,7 +86,9 @@ official docs (the doc site requires a developer login).
   `button_type: "callback"` buttons carrying a custom `value`; taps come back
   as `interactive_message_click` events with the `value`, `message_id`, and
   `employee_code`.
-- **Typing indicator**: `single_chat_typing` endpoint exists.
+- **Typing indicator**: `single_chat_typing` for a DM — and
+  `group_chat_typing` for a group, which this line's omission once led us to
+  believe did not exist. See the typing section below.
 - **Org approval**: a self-built app's scopes (Send Message to Bot User,
   etc.) require organization admin approval; outbound IP allowlist is
   optional and should stay empty for machines with dynamic IPs.
@@ -193,6 +195,24 @@ Source: Send Streaming Messages, open.seatalk.io (login required).
   optional, but the group-chat request sample is annotated "thread_id required".
   Whether a group-MAIN stream (an @mention outside a thread) is accepted without
   one is unverified.
+
+### Typing indicator, both surfaces (2026-09-11)
+
+Two endpoints, not one — `messaging/v2/single_chat_typing` takes
+`employee_code`, `messaging/v2/group_chat_typing` takes `group_id` plus an
+OPTIONAL `thread_id`. Coffer suppressed the group cue for a while on the belief
+that no group endpoint existed; it does.
+
+- The indicator shows for 4 s, so it is re-sent on a heartbeat while a turn
+  runs. Rate limit 300/min.
+- In a group, pass the thread the turn is answering in and the cue appears
+  there; omit it and it shows in the main channel. To type against an unthreaded
+  root message, pass that message's id as `thread_id` — the root must be less
+  than 7 days old.
+- Requires SeaTalk 3.55 or later.
+- Error 7003 — "group chat too large" — means over 200 members, where the
+  platform has no indicator at all. Nothing to do about it; the turn's live
+  surface carries the progress instead.
 
 ## Decisions taken from research
 
