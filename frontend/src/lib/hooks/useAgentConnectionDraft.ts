@@ -10,7 +10,9 @@
 //
 // On the built-in login there is nothing to bind — `agent.model` is only read
 // when projecting a connection — so instead of two dead model slots the panel
-// shows the agent's own model catalogue read-only; `builtinModels` carries it.
+// shows the agent's own model catalogue, with the user's curation over it.
+// `AgentModelSelection` owns that entirely, catalogue fetch included, so this
+// hook carries nothing for it beyond `draftIsBuiltin`.
 //
 // Where the model options come from depends on the draft connection. A
 // connection with a CURATED set (`models` non-empty, chosen on its detail page)
@@ -23,7 +25,6 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { AgentOut, AgentPatch } from "@/lib/api/agents";
 import { WIRE_BY_AGENT } from "@/lib/api/providers";
-import { useAgentModels } from "@/lib/hooks/useAgentModels";
 import { usePatchAgent } from "@/lib/hooks/useAgents";
 import { useListProviderModels, useTestConnection } from "@/lib/hooks/useModelIntrospection";
 import { useActivateProvider, useProviders, useUseBuiltinProvider } from "@/lib/hooks/useProviders";
@@ -40,7 +41,6 @@ export function useAgentConnectionDraft(agent: AgentOut) {
   const patchAgent = usePatchAgent();
   const list = useListProviderModels();
   const test = useTestConnection();
-  const catalogue = useAgentModels(agent.type);
 
   // Filter by the connection's explicit compatible-agents set (not its wire), so
   // a connection the user routed to this agent type shows up even if its endpoint
@@ -192,9 +192,6 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     dirty,
     canConfirm,
     busy,
-    /** The agent's own model catalogue — shown read-only on the built-in login,
-     * where the model is picked per conversation rather than bound here. */
-    builtinModels: catalogue.data ?? [],
     testPending: test.isPending,
     testResult: test.data ?? null,
     introspect,

@@ -229,3 +229,38 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-11](../../s
   against a model name Coffer writes down. Carried by the existing create/patch
   (a patch replaces the whole value; `[]` clears it); no new route, and no audit
   event of its own — it rides `resource_updated`.
+
+## Amendment 2026-09-11b — the agent curates which of its own catalogue it offers
+
+Authoritative design: the [spec provider-switching Amendment 2026-09-11b](../../specs/provider-switching/spec.md)
+(K1–K4).
+
+- **D11 — Two tables in the CLI binary, not one.** The catalog Coffer reads is
+  cumulative: it names every model the installed release has heard of. The
+  bundle carries a second table naming the ones that are gone — a `remappedTo`
+  tier for models the CLI silently reroutes, and per-provider retirement dates
+  for the rest — and Coffer now applies the CLI's own predicate over it, using
+  the `firstParty` column only (the others describe deployments Coffer does not
+  configure). Read the same way as the catalog: located structurally, and a
+  landmark that stops matching costs the FILTER, never a model wrongly hidden.
+  The clock is injected so the rule is testable without a test that expires.
+- **D12 — Beyond that, entitlement is the user's answer, not a derivable one.**
+  On a current install the catalog lists nineteen models of which this account
+  can run nine, and no field separates them: same price tier, same capabilities,
+  same knowledge cutoff on both sides of the line, and no version-number rule
+  holds. The CLI's own filter runs over a SERVER-provided account config with no
+  local copy. So `AgentConfig.models` records which of the catalogue the user
+  ticked — EMPTY meaning not curated, the whole catalogue offered, which is the
+  default and what migration 0060 gives every existing agent. Hardcoding the
+  nine was rejected: Claude Code ships models every few weeks, and a user whose
+  new model never appeared would have no way to find out why.
+- **D13 — Curation narrows offers, never validation, and never the catalogue
+  route.** Every PICKER (the web picker, the channel `/model` card via
+  `ModelSuggestionPort.suggest`, the per-turn note) gets the curated set;
+  `GET …/models` keeps returning the whole filtered catalogue, because the
+  curation screen renders that list and ticks the selection against it. Nothing
+  validates a model NAME against either — the CLI accepts names outside the
+  catalogue entirely, so `/model <name>` stays raw passthrough. The set is
+  addressed by agent TYPE (`GET|PUT …/models/selection`), like the catalogue and
+  like the `/model` card, and stored on the same agent resource that supplies
+  the config dir.

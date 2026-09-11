@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0059"
+HEAD_REVISION = "0060"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -1447,3 +1447,77 @@ def test_migration_0059_gives_every_connection_an_empty_models_set(tmp_path, mon
     # Downgrade removes the key entirely — the older config model forbids it.
     command.downgrade(cfg, "0058")
     assert "models" not in _provider_rows()["legacy"]
+
+
+def test_migration_0060_gives_every_agent_an_empty_models_set(tmp_path, monkeypatch):
+    """0060 backfills the curated ``models`` set onto every ``kind='agent'``
+    row. Existing agents must come out UNCURATED — they were registered when
+    every model the CLI reported was on offer — which is the empty list, and an
+    empty list is what keeps offering all of them. A row that already carries a
+    curated set is left alone, unrelated keys survive, a re-run is a no-op, and
+    the downgrade strips the key again (the pre-0060 ``AgentConfig`` forbids
+    it)."""
+    db_path = tmp_path / "agent_curated_models.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    command.upgrade(cfg, "0059")
+    seeded = {
+        "claude-code": {
+            "type": "claude_code",
+            "config_dir": "/home/u/.claude",
+            "model": "claude-opus-5",
+        },
+        "already-curated": {
+            "type": "codex",
+            "config_dir": "/home/u/.codex",
+            "models": ["gpt-5-codex"],
+        },
+    }
+    conn = sqlite3.connect(str(db_path))
+    try:
+        for name, config in seeded.items():
+            conn.execute(
+                "INSERT INTO resources (kind, name, config_json, enabled, created_at, updated_at)"
+                " VALUES (?, ?, ?, 1, ?, ?)",
+                (
+                    "agent",
+                    name,
+                    json.dumps(config),
+                    "2026-09-01T00:00:00+00:00",
+                    "2026-09-01T00:00:00+00:00",
+                ),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    def _agent_rows() -> dict[str, dict]:
+        c = sqlite3.connect(str(db_path))
+        try:
+            return {
+                name: json.loads(raw)
+                for name, raw in c.execute(
+                    "SELECT name, config_json FROM resources WHERE kind = 'agent'"
+                ).fetchall()
+            }
+        finally:
+            c.close()
+
+    command.upgrade(cfg, "0060")
+    rows = _agent_rows()
+    assert rows["claude-code"]["models"] == []
+    # Untouched keys survive; only ``models`` is added.
+    assert rows["claude-code"]["config_dir"] == "/home/u/.claude"
+    assert rows["claude-code"]["model"] == "claude-opus-5"
+    # A row that already answered the question keeps its answer.
+    assert rows["already-curated"] == seeded["already-curated"]
+
+    # Idempotent: re-running matches no row and changes nothing.
+    command.stamp(cfg, "0059")
+    command.upgrade(cfg, "0060")
+    assert _agent_rows() == rows
+
+    # Downgrade removes the key entirely — the older config model forbids it.
+    command.downgrade(cfg, "0059")
+    assert "models" not in _agent_rows()["claude-code"]

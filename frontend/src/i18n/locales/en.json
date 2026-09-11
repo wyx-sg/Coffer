@@ -605,6 +605,12 @@
       "customLabel": "Custom model id",
       "customPlaceholder": "Enter a model id"
     },
+    "models": {
+      "curateHint": "The list below is everything this agent's CLI knows about, including models your account may not be able to run — nothing on this machine can tell which. Tick the ones that work and only those are offered. Tick none and all of them are.",
+      "noneChosen": "Nothing ticked — all {{total}} models are offered.",
+      "chosenCount": "{{chosen}} of {{total}} models offered.",
+      "saveFailed": "Could not save the model selection."
+    },
     "status": "Status",
     "searchPlaceholder": "Search agents…",
     "allTypes": "All types",

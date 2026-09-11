@@ -441,6 +441,89 @@ model) and H3 (the picker's union — its connection term is now the curated set
 when one exists). **Still NOT in scope:** proxy / hot-switch / protocol
 conversion; and Coffer still validates no model id against a list of its own.
 
+## Amendment 2026-09-11b — The agent curates which of its own catalogue it offers
+
+> Status: Draft. **Narrows H1's catalogue at the point of OFFER; it does not
+> change what the catalogue is.** Recorded after a design pass with the user.
+> Cross-ref [ADR provider-switching](../../docs/decisions/provider-switching.md).
+
+**Why.** H1 made the catalogue the agent's own answer, which was right and
+remains right — but that answer is CUMULATIVE and ACCOUNT-BLIND. Claude Code's
+embedded catalog runs to nineteen models on a current install, of which this
+user's account can actually run nine. The other ten fail the moment they are
+picked, and the picker gives no hint which is which.
+
+Whether the ten can be excluded automatically was investigated and they cannot.
+Every field of all nineteen entries was compared against the known-good nine:
+`pricing` does not separate them (`claude-opus-4-5` and `claude-opus-4-6` are
+both `tier_5_25`, one dead and one alive), nor do `capabilities` (the working
+`claude-haiku-4-5` carries only `context_management` while the unavailable
+`claude-mythos-5-1` carries the full set), nor `knowledge_cutoff`, nor the
+context window, nor any version-number rule (opus keeps four versions, sonnet
+two). The CLI's own filter runs over `e.config.models` — a SERVER-provided
+account config, with `modelAccessCache` in `~/.claude.json` empty on this
+machine. **Which models an account may run is an account fact, not a local
+one.** A list hardcoded in Coffer would be wrong within a month, because Claude
+Code ships new models every few weeks and the user would have no way to tell why
+a new one never appeared. So Coffer shows the catalogue and the user ticks it.
+
+- **K1 — Drop the models the binary itself says are dead.** The Claude Code
+  bundle carries a second table beside the catalog, pairing a model id with its
+  per-provider retirement dates and, for models the CLI silently reroutes, the
+  tier it is `remappedTo`. Coffer applies the CLI's own predicate over it: a
+  model is gone when it carries a `remappedTo` or when its **`firstParty`**
+  retirement date is past. Only `firstParty` — the other columns (bedrock,
+  vertex, foundry, …) describe deployments Coffer does not configure and carry
+  different dates. Read exactly like the catalog: located structurally, and if
+  the anchor ever stops matching the source returns the catalogue **unfiltered**
+  rather than a filter built from half a table. This shrinks the list the user
+  has to curate, costs nothing, and updates itself on every CLI upgrade.
+- **K2 — `models: list[str]` on the agent: which of the catalogue its pickers
+  offer.** Stored on `AgentConfig` in the agent's resource row. **EMPTY means
+  NOT CURATED** — the whole (K1-filtered) catalogue is offered, exactly as
+  before this amendment — which is the default, what every agent registered
+  before revision 0060 carries, and what Coffer must do for someone who never
+  opens the screen. It never means "no models".
+- **K3 — The catalogue route stays whole; the selection is separate
+  information.** `GET /api/v1/agent-providers/{agent_key}/models` keeps
+  returning the full K1-filtered catalogue: the curation screen renders that
+  list and ticks the selection against it, so a narrowed catalogue would make an
+  un-ticked model impossible to tick back on. `GET|PUT
+  …/models/selection` carries the curated set. Keyed by agent TYPE, like the
+  catalogue itself and like the `/model` card, which knows nothing else; the
+  set is stored on the first enabled agent resource of that type — the same one
+  that supplies the config dir, so catalogue and curation can never come from
+  two different agents.
+- **K4 — Curation narrows OFFERS, never validation.** Anything that asks "what
+  models can this agent be put on" for a PICKER gets the curated set: the web
+  picker, the channel `/model` card
+  (`ModelSuggestionPort.suggest`), and the per-turn note H5 appends. Nothing
+  VALIDATES a model name against it, or against the catalogue — the CLI accepts
+  names outside the catalogue entirely (tier aliases, and models newer than the
+  installed binary), so `/model <name>` stays raw passthrough and a bad name
+  surfaces as the CLI's own error. Ids are stored verbatim, shape-checked only
+  (non-blank, deduplicated preserving order, a sane cap), and a curated id the
+  catalogue no longer carries is simply not offered.
+- **Wire.** `AgentModelSelectionOut.models: list[str]` on `GET`/`PUT`
+  `/api/v1/agent-providers/{agent_key}/models/selection`;
+  `AgentModelSelectionIn.models: list[str]` replaces the set wholesale, `[]`
+  clears it. `PUT` is 404 when no agent of that type is registered — the set
+  lives in an agent's config row, so without one there is nowhere to put it.
+  Contract: [`specs/channels/contracts/api.openapi.yaml`](../channels/contracts/api.openapi.yaml),
+  where the agent-provider routes already live.
+- **Audit.** No new event: the curated set is ordinary agent config, so a change
+  rides the `resource_updated` event `ResourceService.update_config` already
+  emits.
+- **Migration 0060** writes `models: []` into every existing `kind='agent'` row,
+  so each agent states its own answer — uncurated — rather than leaning on a
+  reader's default. One-shot, per the house rule: no load-time shim.
+
+**Nuances:** H1 (the catalogue is still the agent's own answer, now minus what
+the agent says is retired) and H4 (the Agent page's built-in-login panel is now
+a curation control rather than a read-only list). **Still NOT in scope:**
+deriving account entitlement locally — it is not derivable — and Coffer still
+writes down no model name of its own.
+
 ## Scope
 
 ### In scope
@@ -458,6 +541,11 @@ conversion; and Coffer still validates no model id against a list of its own.
 - The connection's curated `models` set (the 2026-09-11 amendment): stored on
   `ProviderConfig`, carried by create + patch, backfilled empty by revision 0059,
   and applied by every model picker that offers that connection's models.
+- The agent's curated `models` set and the retirement filter (the 2026-09-11b
+  amendment): stored on `AgentConfig`, carried by
+  `GET|PUT /api/v1/agent-providers/{agent_key}/models/selection`, backfilled
+  empty by revision 0060, and applied by every picker that offers the AGENT's
+  own catalogue — while the catalogue route itself stays whole.
 - Retire the standalone `ModelConfig` registry (model CRUD REST + `coffer model`
   CLI), folding internal-engine model selection into the connection. The
   provider introspection routes (`list-models`, `test-connection`) are KEPT.

@@ -605,6 +605,12 @@
       "customLabel": "自定义模型 id",
       "customPlaceholder": "输入模型 id"
     },
+    "models": {
+      "curateHint": "下面是该 agent 的 CLI 所知的全部模型，其中可能包含你的账号无法运行的型号——本机没有任何信息能区分它们。勾选可用的，就只提供这些；一个都不勾，就全部提供。",
+      "noneChosen": "未勾选任何模型——全部 {{total}} 个模型都会提供。",
+      "chosenCount": "已提供 {{total}} 个模型中的 {{chosen}} 个。",
+      "saveFailed": "保存模型选择失败。"
+    },
     "status": "状态",
     "searchPlaceholder": "搜索 Agent…",
     "allTypes": "全部类型",
