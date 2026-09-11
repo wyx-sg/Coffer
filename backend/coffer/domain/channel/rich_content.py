@@ -84,6 +84,12 @@ def format_origin(msg: InboundMessage, *, platform: str) -> str:
     ]
     if msg.thread_id:
         lines.append(f"thread: {msg.thread_id}")
+    # Without this line "接着上面那条说" points at nothing the agent can see — the
+    # quote is a platform-side link the message text never spells out. The id is
+    # also the handle a platform tool call takes to fetch the quoted body, which
+    # is why the id (not a resolved body) is what the origin block carries.
+    if msg.quoted_message_id:
+        lines.append(f"quoted message: {msg.quoted_message_id}")
     # The display name is what a human recognises; the sender id (SeaTalk
     # employee_code, Telegram from.id) is what a platform tool call takes and is
     # the identity that does not change under a rename. In a DM the id happens to

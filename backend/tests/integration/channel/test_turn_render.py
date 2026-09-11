@@ -502,7 +502,86 @@ async def test_typing_heartbeat_re_sends_on_a_supports_typing_only_dm() -> None:
     await task
 
     assert len(adapter.typing) > 1  # the indicator was re-sent periodically
+    assert adapter.typing_routed[0] == ("owner", "direct", "")  # DM endpoint, no thread
     assert adapter.sent[-1] == ("owner", "done")  # and the final reply still lands
+
+
+async def test_typing_heartbeat_re_sends_in_a_group_thread_when_group_typing_is_supported() -> None:
+    """A group turn beats too on a transport that holds the group typing
+    endpoint (SeaTalk's ``group_chat_typing``): with no reactions to ack with,
+    this is the ONLY acknowledgement between the @mention and the first live
+    update, and it must land in the thread the turn came from."""
+    adapter = FakeChannelAdapter(
+        supports_edit=False,
+        supports_live_text=False,
+        supports_typing=True,
+        supports_groups=True,
+    )
+    queue: asyncio.Queue[Any] = asyncio.Queue()
+
+    async def send(text: str) -> None:
+        await adapter.send_text("gid-1", text, thread_id="th-1", chat_kind="group")
+
+    renderer = TurnRenderer(
+        channel="st",
+        adapter=adapter,
+        chat_id="gid-1",
+        conversation_id="c1",
+        send=send,
+        now=_clock(0.0),
+        thread_id="th-1",
+        chat_kind="group",
+        heartbeat_seconds=0.01,
+    )
+    task = asyncio.create_task(renderer.consume(queue))
+    await wait_until(
+        lambda: len(adapter.typing) > 1,
+        message="expected the group typing heartbeat to re-send more than once",
+    )
+    queue.put_nowait(TextDelta(text="done"))
+    queue.put_nowait(TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"))
+    queue.put_nowait(None)
+    await task
+
+    # Routed at the group endpoint, in the originating thread — a DM-shaped
+    # ping here would just be a failed call the suppression swallows.
+    assert set(adapter.typing_routed) == {("gid-1", "group", "th-1")}
+
+
+async def test_no_typing_heartbeat_on_a_transport_that_reacts() -> None:
+    """FR-036: a transport with reactions (Telegram) already acked the user's
+    message with 👀 — the heartbeat is gated on the RECEIPT mechanism, so it
+    stays off there even in a group where group typing is available."""
+    adapter = FakeChannelAdapter(
+        supports_typing=True,
+        supports_reactions=True,
+        supports_groups=True,
+    )
+    queue: asyncio.Queue[Any] = asyncio.Queue()
+
+    async def send(text: str) -> None:
+        await adapter.send_text("gid-1", text, thread_id="th-1", chat_kind="group")
+
+    renderer = TurnRenderer(
+        channel="tg",
+        adapter=adapter,
+        chat_id="gid-1",
+        conversation_id="c1",
+        send=send,
+        now=_clock(0.0),
+        thread_id="th-1",
+        chat_kind="group",
+        heartbeat_seconds=0.001,
+    )
+    for event in [
+        TextDelta(text="done"),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]:
+        queue.put_nowait(event)
+    queue.put_nowait(None)
+    await renderer.consume(queue)
+
+    assert adapter.typing == []
 
 
 @pytest.mark.acceptance(
@@ -510,8 +589,8 @@ async def test_typing_heartbeat_re_sends_on_a_supports_typing_only_dm() -> None:
     scenario="a transport with no live-text surface posts no interim status message",
 )
 async def test_no_interim_signal_without_a_live_text_surface_in_a_group() -> None:
-    # A transport that can neither edit nor stream, in a group where the DM-only
-    # typing signal does not apply either: NO interim signal at all, only the
+    # A transport that can neither edit nor stream, in a group whose typing
+    # endpoint it does not hold either: NO interim signal at all, only the
     # final chunked reply. (SeaTalk left this shape behind — it streams now.)
     adapter = FakeChannelAdapter(
         supports_edit=False,

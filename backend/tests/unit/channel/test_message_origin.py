@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
 
+import pytest
+
 from coffer.domain.channel.envelopes import InboundMessage
 from coffer.domain.channel.rich_content import format_origin
 
@@ -76,6 +78,34 @@ def test_sender_id_alone_still_names_the_sender():
 def test_no_sender_at_all_omits_the_line():
     out = format_origin(_msg(sender_display="", sender_id=""), platform="telegram")
     assert "from:" not in out
+
+
+@pytest.mark.acceptance(spec="channels", scenario="a quoted message is named in the turn's origin")
+def test_quoted_message_id_is_surfaced_after_the_thread_line():
+    """A quote is a platform-side link the message text never spells out: without
+    this line "接着上面那条说" refers to nothing the agent can see. The id is what a
+    platform tool call takes to fetch the quoted body — Coffer does not resolve
+    it here."""
+    out = format_origin(
+        _msg(chat_kind="group", chat_title="Test", thread_id="t7", quoted_message_id="mq-9"),
+        platform="seatalk",
+    )
+    lines = out.splitlines()
+    assert lines.index("quoted message: mq-9") == lines.index("thread: t7") + 1
+
+
+def test_quoted_message_id_rides_a_dm_without_a_thread():
+    # SeaTalk carries the quote on the DM event too, so the line must not depend
+    # on a thread being present — it simply follows whatever came before it.
+    out = format_origin(_msg(quoted_message_id="mq-1"), platform="seatalk")
+    lines = out.splitlines()
+    assert "thread:" not in out
+    assert lines[3] == "quoted message: mq-1"
+
+
+def test_origin_omits_the_quote_line_when_nothing_is_quoted():
+    out = format_origin(_msg(chat_kind="group", thread_id="t7"), platform="seatalk")
+    assert "quoted message:" not in out
 
 
 def test_sender_id_cannot_forge_extra_origin_lines():

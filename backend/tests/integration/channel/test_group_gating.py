@@ -338,3 +338,50 @@ async def test_dm_still_pairs_and_drives_a_turn(env: ChannelEnv) -> None:
     await env.processor.on_message(inbound("tg", "owner", "hi"))
     await wait_until(lambda: "Hello world" in adapter.texts())
     assert ("owner", "Hello world") in adapter.sent
+
+
+# ---------------------------------------------------------------------------
+# FR-037: the turn's first typing receipt is routed by chat kind
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a group turn is acknowledged by typing in the group"
+)
+async def test_group_turn_types_into_the_group_thread_not_the_dm_endpoint(
+    env: ChannelEnv,
+) -> None:
+    """A transport that holds the group typing endpoint (SeaTalk) and has no
+    reactions gets its only pre-surface acknowledgement from typing — so the
+    ping must carry the group's chat kind and the thread it came from."""
+    resource = await env.register_channel("st")
+    adapter = env.bind(
+        resource,
+        FakeChannelAdapter(supports_typing=True, supports_groups=True),
+    )
+    await env.pair(resource, "owner", sender_id="owner-1")
+
+    await env.processor.on_message(
+        inbound(
+            "st",
+            "grp-1",
+            "@bot hello",
+            chat_kind="group",
+            addressed=True,
+            sender_id="owner-1",
+            thread_id="th-1",
+        )
+    )
+    await wait_until(lambda: "Hello world" in adapter.texts())
+
+    assert adapter.typing_routed[0] == ("grp-1", "group", "th-1")
+
+
+async def test_dm_turn_still_types_at_the_direct_endpoint(env: ChannelEnv) -> None:
+    """DM regression: the DM receipt is unchanged and carries no thread."""
+    _resource, adapter = await env.paired_channel("tg", "owner")
+
+    await env.processor.on_message(inbound("tg", "owner", "hi"))
+    await wait_until(lambda: "Hello world" in adapter.texts())
+
+    assert adapter.typing_routed[0] == ("owner", "direct", "")
