@@ -50,11 +50,15 @@ def test_channel_capabilities_carries_strategy_fields():
     assert caps.supports_live_text is False  # default off; transports opt in
     assert caps.supports_media is False  # default off; media-capable transports opt in
     assert caps.supports_reactions is False  # default off; reaction-capable transports opt in
+    # Narrower than supports_edit: SeaTalk can rewrite a delivered interactive
+    # card while being unable to rewrite a text message.
+    assert caps.supports_card_update is False  # default off; transports opt in
     assert {f.name for f in fields(ChannelCapabilities)} == {
         "supports_edit",
         "supports_typing",
         "max_message_chars",
         "supports_buttons",
+        "supports_card_update",
         "supports_live_text",
         "supports_media",
         "supports_groups",

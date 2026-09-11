@@ -298,7 +298,13 @@ status / notify`。
   改），此后的消息与 `/new` 都用所选 agent，直到再次切换。未知 key 被拒绝并
   列出合法 keys；不为任何 agent 增加 channel 侧代码。在 `supports_buttons` 的
   传输上（FR-018），`/agent` 无参时把候选渲染成一张交互式选择卡片而非文本列表；
-  点选某个按钮执行同一次切换。
+  点选某个按钮执行同一次切换。卡片在支持标题元素的传输上（SeaTalk；Telegram 则取为
+  加粗首行）带一个**标题元素**，使其主题一眼可辨而不必挤占正文。点按生效之后，声明
+  `supports_card_update` 的传输 MUST **就地改写这张卡片**，把勾标移到新的选择上 ——
+  一张仍在推荐用户刚刚选过的选项的卡片，只会诱发一次什么都不做的再点按。改写是尽力
+  而为：切换本身已经完成并在会话中确认过，因此传输不具备该能力、或平台拒绝这次改写
+  （SeaTalk 的更新只作用于交互卡片、只在 7 天内、且只允许原发送 bot），都不会影响
+  用户所依赖的任何结果。
 - **FR-014**: owner gate 校验发送者身份，而非只看会话身份。每条 inbound 信封
   携带 `sender_id`（Telegram `from.id`、SeaTalk `employee_code`）；pairing 把它
   记到 peer，一条 inbound 消息只有在 `chat_id` 匹配且（当 peer 有已存
@@ -641,6 +647,14 @@ Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制
 - **When** owner 发 `/agent`（渲染为选择卡片）并点选第二个 agent 的按钮
 - **Then** 一个 pin 到第二个 agent 的新会话变为活跃，如同 owner 键入了
   `/agent <second>`
+
+### Scenario: a tapped selection card is rewritten with the new choice
+
+- **Given** 一个已配对的 channel，其传输声明 `supports_card_update`，正显示一张 `/agent`
+  选择卡片
+- **When** 属主点按另一个 agent 的按钮
+- **Then** 该卡片被就地改写，勾标移到刚选中的 agent 上；在不具备该能力的传输上不发生任何改写
+  而切换照常成功；平台拒绝这次改写时，切换及其确认消息也都完好无损
 
 ### Scenario: a non-owner selection-card tap is ignored
 
@@ -1291,6 +1305,16 @@ Web 端 Chat 页面是它们的另一个客户端；那个页面已被删除（�
   审计日志，使「哪个 agent 做了什么、由谁驱动」事后可查（channel 专属字段见 FR-030）。
 
 ## Deliberately out of scope
+
+**Coffer 没有采用的两项 SeaTalk 卡片能力。** 平台的卡片格式还提供 `redirect` 按钮
+（带 `mobile_link` / `desktop_link`）与按语言分版的卡片正文
+（`{"default": …, "zh-Hans": …}`）。两者都未采用。redirect 按钮需要一个可去之处，
+而 Coffer 的 Web UI 绑在 loopback 上——从属主手机点过去什么也到不了。按语言分版的卡片
+前提是 Coffer 的 channel 文案存在多个语言版本；后端目前只有英文，而且这张卡片会成为
+整段会话里唯一被翻译的界面——其余每一行都来自 agent，用的是属主当时写下的那种语言。
+之所以写在这里而不是默默略过，是因为发现它们的那次调研，正是卡片这部分工作得以成立的
+前提。
+
 
 **Web 端 Chat 页面。** Agent Chat 规范交付过一个 Web 端两栏聊天页面——会话列表、消息线程、
 输入框、模型选择器、待处理队列管理——以及 `/api/v1/chat` 下为它服务的一套 REST/SSE

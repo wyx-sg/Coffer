@@ -30,6 +30,7 @@ from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.infrastructure.channel.live_text import TelegramLiveText
 from coffer.infrastructure.channel.render import chunk_text, markdown_to_telegram_html
 from coffer.infrastructure.channel.telegram_album import AlbumBuffer
+from coffer.infrastructure.channel.telegram_cards import edit_card
 from coffer.infrastructure.channel.telegram_media import (
     COMMANDS,
     default_media_dir,
@@ -88,6 +89,7 @@ class TelegramAdapter:
             supports_typing=True,
             max_message_chars=_CHUNK_LIMIT,
             supports_buttons=True,
+            supports_card_update=True,  # editMessageText rewrites text + keyboard
             supports_media=True,
             supports_groups=True,
             supports_reactions=True,
@@ -242,11 +244,17 @@ class TelegramAdapter:
         markdown: str,
         *,
         buttons: Sequence[ChoiceButton] | None = None,
+        title: str = "",
         thread_id: str = "",
         chat_kind: str = "direct",
     ) -> SentMessage:
         # chat_kind is unused: a Telegram chat_id addresses a DM and a group alike.
         del chat_kind
+        # Telegram has no card title element — an inline keyboard hangs off an
+        # ordinary message — so the title becomes the body's first line in bold
+        # rather than being dropped. Same information, the platform's own shape.
+        if title and buttons:
+            markdown = f"**{title}**\n{markdown}"
         chunks = list(chunk_text(markdown, self.capabilities.max_message_chars))
         last: SentMessage | None = None
         for i, chunk in enumerate(chunks):
@@ -255,6 +263,19 @@ class TelegramAdapter:
             kb = buttons if (buttons and i == len(chunks) - 1) else None
             last = await self._send_chunk(chat_id, chunk, kb, thread_id=thread_id)
         return last if last is not None else SentMessage(message_id="")
+
+    async def update_card(
+        self,
+        chat_id: str,
+        message_id: str,
+        markdown: str,
+        buttons: Sequence[ChoiceButton],
+        *,
+        title: str = "",
+        chat_kind: str = "direct",
+    ) -> None:
+        del chat_kind  # a Telegram chat_id addresses a DM and a group alike
+        await edit_card(self._call, chat_id, message_id, markdown, buttons, title=title)
 
     async def send_media(
         self,

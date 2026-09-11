@@ -146,13 +146,19 @@ def tap_event(
     sender_id: str = "",
     chat_kind: str = "direct",
     thread_id: str = "",
+    platform_message_id: str = "",
 ) -> InboundCallback:
-    """A selection-card button tap, for driving ``processor.on_callback``."""
+    """A selection-card button tap, for driving ``processor.on_callback``.
+
+    ``platform_message_id`` is the card that was tapped; supply it to exercise
+    the in-place card refresh.
+    """
     return InboundCallback(
         channel=channel,
         chat_id=chat_id,
         sender_id=sender_id,
         data=data,
+        platform_message_id=platform_message_id,
         chat_kind=chat_kind,
         thread_id=thread_id,
     )
@@ -187,6 +193,7 @@ class FakeChannelAdapter:
         supports_typing: bool = True,
         max_message_chars: int = 4096,
         supports_buttons: bool = False,
+        supports_card_update: bool = False,
         supports_media: bool = True,
         supports_groups: bool = False,
         supports_history_fetch: bool = False,
@@ -201,6 +208,7 @@ class FakeChannelAdapter:
             supports_typing=supports_typing,
             max_message_chars=max_message_chars,
             supports_buttons=supports_buttons,
+            supports_card_update=supports_card_update,
             supports_media=supports_media,
             supports_groups=supports_groups,
             supports_history_fetch=supports_history_fetch,
@@ -219,6 +227,11 @@ class FakeChannelAdapter:
         self.sent_routed: list[tuple[str, str, str, str]] = []
         # (chat_id, text, buttons) for sends that carried a selection card.
         self.cards: list[tuple[str, str, list[ChoiceButton]]] = []
+        # The card title each of those sends carried, positionally aligned with
+        # ``cards`` so existing 3-tuple assertions stay untouched.
+        self.card_titles: list[str] = []
+        # (chat_id, message_id, text, buttons, title) for every update_card.
+        self.card_updates: list[tuple[str, str, str, list[ChoiceButton], str]] = []
         self.edits: list[tuple[str, str, str]] = []  # (chat_id, message_id, text)
         self.deleted: list[tuple[str, str]] = []  # (chat_id, message_id)
         self.typing: list[str] = []  # chat_ids
@@ -275,6 +288,7 @@ class FakeChannelAdapter:
         markdown: str,
         *,
         buttons: Sequence[ChoiceButton] | None = None,
+        title: str = "",
         thread_id: str = "",
         chat_kind: str = "direct",
     ) -> SentMessage:
@@ -282,7 +296,20 @@ class FakeChannelAdapter:
         self.sent_routed.append((chat_id, markdown, thread_id, chat_kind))
         if buttons:
             self.cards.append((chat_id, markdown, list(buttons)))
+            self.card_titles.append(title)
         return SentMessage(message_id=self._new_id())
+
+    async def update_card(
+        self,
+        chat_id: str,
+        message_id: str,
+        markdown: str,
+        buttons: Sequence[ChoiceButton],
+        *,
+        title: str = "",
+        chat_kind: str = "direct",
+    ) -> None:
+        self.card_updates.append((chat_id, message_id, markdown, list(buttons), title))
 
     async def open_live_text(
         self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
