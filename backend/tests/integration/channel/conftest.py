@@ -45,6 +45,7 @@ from coffer.domain.channel.envelopes import (
     ChoiceButton,
     InboundAttachment,
     InboundCallback,
+    InboundLifecycle,
     InboundMessage,
     SentMessage,
 )
@@ -164,6 +165,16 @@ def tap_event(
     )
 
 
+def lifecycle_event(
+    channel: str, chat_id: str, kind: str, *, actor_display: str = ""
+) -> InboundLifecycle:
+    """A non-message platform event about the bot's standing in a chat, for
+    driving ``processor.on_lifecycle``."""
+    return InboundLifecycle(
+        channel=channel, chat_id=chat_id, kind=kind, actor_display=actor_display
+    )
+
+
 # ---------------------------------------------------------------------------
 # Fakes at the non-local boundaries (IM platform, credential store, child process)
 # ---------------------------------------------------------------------------
@@ -190,6 +201,7 @@ class FakeChannelAdapter:
         *,
         supports_edit: bool = True,
         supports_live_text: bool | None = None,
+        live_text_persists: bool = False,
         supports_typing: bool = True,
         max_message_chars: int = 4096,
         supports_buttons: bool = False,
@@ -205,6 +217,7 @@ class FakeChannelAdapter:
             # A transport that can edit has a live surface by definition; one
             # that cannot may still stream (SeaTalk) — a test says so explicitly.
             supports_live_text=supports_edit if supports_live_text is None else supports_live_text,
+            live_text_persists=live_text_persists,
             supports_typing=supports_typing,
             max_message_chars=max_message_chars,
             supports_buttons=supports_buttons,
@@ -213,6 +226,9 @@ class FakeChannelAdapter:
             supports_groups=supports_groups,
             supports_history_fetch=supports_history_fetch,
             supports_reactions=supports_reactions,
+            # Typing is two endpoints, not one (SeaTalk: single_chat_typing /
+            # group_chat_typing): a fake may hold the DM one alone, exactly like
+            # a transport that never gained the group call.
         )
         # When True, ``set_reaction`` raises — proves the best-effort suppression
         # at the call sites (a failed ack must never break the turn) (FR-036).
@@ -235,6 +251,10 @@ class FakeChannelAdapter:
         self.edits: list[tuple[str, str, str]] = []  # (chat_id, message_id, text)
         self.deleted: list[tuple[str, str]] = []  # (chat_id, message_id)
         self.typing: list[str] = []  # chat_ids
+        # (chat_id, chat_kind, thread_id) for every send_typing call — the full
+        # routing detail, kept separate so existing ``.typing`` assertions stay
+        # a plain list of chat ids (mirrors ``sent_routed``).
+        self.typing_routed: list[tuple[str, str, str]] = []
         # (chat_id, message_id, emoji) for every set_reaction call (FR-036).
         self.reactions: list[tuple[str, str, str]] = []
         # (chat_id, path, caption, as_photo) for each uploaded file.
@@ -253,6 +273,10 @@ class FakeChannelAdapter:
         # so a test can assert the fetch happened (or, on a non-fetching
         # transport, that it never did).
         self.fetch_thread_calls: list[tuple[str, str]] = []
+        # The ``chat_kind`` each of those fetches carried, positionally aligned
+        # with ``fetch_thread_calls`` — a DM thread reads a different endpoint
+        # from a group one, so the kind the core passed is worth asserting.
+        self.fetch_thread_kinds: list[str] = []
         # FR-037: every live-text handle the core opened this session, and the
         # switch that makes the transport refuse to open one.
         self.live_handles: list[FakeLiveText] = []
@@ -330,6 +354,7 @@ class FakeChannelAdapter:
         self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
     ) -> None:
         self.typing.append(chat_id)
+        self.typing_routed.append((chat_id, chat_kind, thread_id))
 
     async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
         self.reactions.append((chat_id, message_id, emoji))
@@ -351,9 +376,10 @@ class FakeChannelAdapter:
         return SentMessage(message_id=self._new_id())
 
     async def fetch_thread(
-        self, chat_id: str, thread_id: str, *, limit: int = 50
+        self, chat_id: str, thread_id: str, *, limit: int = 50, chat_kind: str = "group"
     ) -> tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]:
         self.fetch_thread_calls.append((chat_id, thread_id))
+        self.fetch_thread_kinds.append(chat_kind)
         return list(self.thread_items), self.thread_attachments
 
     async def tap(

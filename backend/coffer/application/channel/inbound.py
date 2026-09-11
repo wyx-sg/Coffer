@@ -7,8 +7,9 @@ The chat platform is reached only through its public seams (conversation
 service + turn orchestrator), exactly like the web UI: agents cannot tell a
 channel turn from a UI turn, and a new agent provider is reachable from every
 channel with no code here changing. Slash-command handling lives in
-``commands``, conversation creation in ``conversation_ops``, and running a
-queued turn end-to-end in ``turn_driver``.
+``commands``, conversation creation in ``conversation_ops``, running a
+queued turn end-to-end in ``turn_driver``, and the two inbound callbacks that
+never drive a turn (a card tap, a chat-lifecycle event) in ``inbound_events``.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from typing import cast
 
 from coffer.application.audit_service import AuditService
 from coffer.application.channel.commands import HELP_TEXT, ChannelCommands
+from coffer.application.channel.inbound_events import InboundEvents
 from coffer.application.channel.pairing import PairingManager
 from coffer.application.channel.ports import (
     AgentCatalogPort,
@@ -44,7 +46,12 @@ from coffer.application.channel.turn_driver import (
     Session as _Session,
 )
 from coffer.domain.audit import AuditEventType
-from coffer.domain.channel.envelopes import ChoiceButton, InboundCallback, InboundMessage
+from coffer.domain.channel.envelopes import (
+    ChoiceButton,
+    InboundCallback,
+    InboundLifecycle,
+    InboundMessage,
+)
 from coffer.domain.channel.rich_content import flatten_context, format_origin
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.resource import ResourceRef
@@ -103,6 +110,12 @@ class InboundProcessor:
             safe_send=self._safe_send,
             session=self._session,
         )
+        self._events = InboundEvents(
+            peers=peers,
+            commands=self._commands,
+            safe_send=self._safe_send,
+            stop_chat_sessions=self._stop_chat_sessions,
+        )
 
     # -- runtime registry ------------------------------------------------
 
@@ -114,9 +127,20 @@ class InboundProcessor:
         # A channel can have many live sessions (its DM, each group, each
         # thread within a group) — unbinding it must stop every one of them,
         # not just a single legacy session.
-        keys = [key for key in self._sessions if key[0] == name]
+        self._stop_sessions([key for key in self._sessions if key[0] == name])
+
+    def _stop_chat_sessions(self, channel: str, chat_id: str) -> None:
+        """Stop ONE chat's live sessions (a group's main chat and each of its
+        threads) — for when the bot loses that chat while its channel lives on."""
+        self._stop_sessions(
+            [key for key in self._sessions if key[0] == channel and key[1] == chat_id]
+        )
+
+    def _stop_sessions(self, keys: Sequence[tuple[str, str, str]]) -> None:
         for key in keys:
-            session = self._sessions.pop(key)
+            session = self._sessions.pop(key, None)
+            if session is None:
+                continue
             if session.drain_task is not None:
                 session.drain_task.cancel()
             # Cancelling the drain task only stops the renderer; the
@@ -216,22 +240,27 @@ class InboundProcessor:
         is_command = text.startswith("/") and not attachments
         if (
             not is_command
-            and msg.chat_kind == "group"
             and msg.thread_id
             and msg.thread_id != msg.platform_message_id
             and binding.adapter.capabilities.supports_history_fetch
         ):
-            # Ground the turn in the thread's own conversation. A group-main
-            # @mention roots a fresh thread at itself (thread_id == this
-            # message's id) — nothing else is in it yet, so skip the fetch and
-            # avoid echoing the @mention back into its own context. Reading all
-            # group-main chatter is undesirable and that permission is not
-            # granted anyway; platforms with no history-fetch API (Telegram)
-            # never reach here at all. The thread's own images/files download
+            # Ground the turn in the thread's own conversation — in a DM just as
+            # much as in a group: a thread is a thread, and SeaTalk exposes a DM
+            # thread endpoint too (app v3.62.1+), so ``chat_kind`` only picks
+            # which one the adapter calls. What stays group-only is what is NOT
+            # fetched: reading all group-MAIN chatter is undesirable and that
+            # permission is not granted anyway, so only the thread a message
+            # actually landed in is ever read. A message that roots a fresh
+            # thread at itself (thread_id == this message's id) holds nothing
+            # else yet — skip the fetch rather than echo it back into its own
+            # context. Platforms with no history-fetch API (Telegram) never
+            # reach here at all. The thread's own images/files download
             # alongside its text (FR-029) so a picture in the thread reaches the
             # vision agent, not a dead file link.
             fetcher = cast(ContextFetchPort, binding.adapter)
-            items, thread_atts = await fetcher.fetch_thread(msg.chat_id, msg.thread_id)
+            items, thread_atts = await fetcher.fetch_thread(
+                msg.chat_id, msg.thread_id, chat_kind=msg.chat_kind
+            )
             ctx = flatten_context(items, title="Thread messages")
             if ctx:
                 text = f"{ctx}\n\n{text}" if text else ctx
@@ -299,49 +328,19 @@ class InboundProcessor:
             )
 
     async def on_callback(self, cb: InboundCallback) -> None:
-        """A selection-card button tap. Owner-gated exactly like ``on_message``
-        (an intruder in a paired group must not flip the owner's agent/model by
-        tapping), then routed to the same switch the text command performs. A
-        tap never pairs — an unpaired/foreign chat is ignored silently."""
+        """A selection-card button tap (handled in ``inbound_events``)."""
         binding = self._bindings.get(cb.channel)
         if binding is None:
             return
-        if cb.chat_kind == "group":
-            # A group card is shared, exactly like a group @mention: prove the
-            # tapper is the channel owner (never fall through on an empty
-            # sender_id) and route the refusal back into the group/thread, not a
-            # DM. A tap never bootstraps a group peer row — only the owner's
-            # first @mention does — so an unrecorded group is ignored silently.
-            owner = await self._peers.owner_sender_id(binding.resource_id)
-            if owner is None:
-                return
-            if not cb.sender_id or cb.sender_id != owner:
-                await self._safe_send(
-                    binding,
-                    cb.chat_id,
-                    "🚫 Not authorized — only this channel's owner can use me here.",
-                    thread_id=cb.thread_id,
-                    chat_kind="group",
-                )
-                return
-            peer = await self._peers.get_by_chat(binding.resource_id, cb.chat_id)
-            if peer is None:
-                return
-        else:
-            peer = await self._peers.get_by_chat(binding.resource_id, cb.chat_id)
-            if peer is None:
-                return
-            if peer.sender_id is not None and cb.sender_id and peer.sender_id != cb.sender_id:
-                return
-        await self._commands.dispatch_callback(
-            binding,
-            peer,
-            cb.data,
-            self._safe_send,
-            chat_kind=cb.chat_kind,
-            thread_id=cb.thread_id,
-            card_message_id=cb.platform_message_id,
-        )
+        await self._events.on_callback(binding, cb)
+
+    async def on_lifecycle(self, event: InboundLifecycle) -> None:
+        """The bot's standing in a chat changed — removed from a group, or the
+        group turned external (handled in ``inbound_events``, never a turn)."""
+        binding = self._bindings.get(event.channel)
+        if binding is None:
+            return
+        await self._events.on_lifecycle(binding, event)
 
     # -- pairing -----------------------------------------------------------
 

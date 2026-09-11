@@ -502,7 +502,86 @@ async def test_typing_heartbeat_re_sends_on_a_supports_typing_only_dm() -> None:
     await task
 
     assert len(adapter.typing) > 1  # the indicator was re-sent periodically
+    assert adapter.typing_routed[0] == ("owner", "direct", "")  # DM endpoint, no thread
     assert adapter.sent[-1] == ("owner", "done")  # and the final reply still lands
+
+
+async def test_typing_heartbeat_re_sends_in_a_group_thread_when_group_typing_is_supported() -> None:
+    """A group turn beats too on a transport that holds the group typing
+    endpoint (SeaTalk's ``group_chat_typing``): with no reactions to ack with,
+    this is the ONLY acknowledgement between the @mention and the first live
+    update, and it must land in the thread the turn came from."""
+    adapter = FakeChannelAdapter(
+        supports_edit=False,
+        supports_live_text=False,
+        supports_typing=True,
+        supports_groups=True,
+    )
+    queue: asyncio.Queue[Any] = asyncio.Queue()
+
+    async def send(text: str) -> None:
+        await adapter.send_text("gid-1", text, thread_id="th-1", chat_kind="group")
+
+    renderer = TurnRenderer(
+        channel="st",
+        adapter=adapter,
+        chat_id="gid-1",
+        conversation_id="c1",
+        send=send,
+        now=_clock(0.0),
+        thread_id="th-1",
+        chat_kind="group",
+        heartbeat_seconds=0.01,
+    )
+    task = asyncio.create_task(renderer.consume(queue))
+    await wait_until(
+        lambda: len(adapter.typing) > 1,
+        message="expected the group typing heartbeat to re-send more than once",
+    )
+    queue.put_nowait(TextDelta(text="done"))
+    queue.put_nowait(TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"))
+    queue.put_nowait(None)
+    await task
+
+    # Routed at the group endpoint, in the originating thread — a DM-shaped
+    # ping here would just be a failed call the suppression swallows.
+    assert set(adapter.typing_routed) == {("gid-1", "group", "th-1")}
+
+
+async def test_no_typing_heartbeat_on_a_transport_that_reacts() -> None:
+    """FR-036: a transport with reactions (Telegram) already acked the user's
+    message with 👀 — the heartbeat is gated on the RECEIPT mechanism, so it
+    stays off there even in a group where group typing is available."""
+    adapter = FakeChannelAdapter(
+        supports_typing=True,
+        supports_reactions=True,
+        supports_groups=True,
+    )
+    queue: asyncio.Queue[Any] = asyncio.Queue()
+
+    async def send(text: str) -> None:
+        await adapter.send_text("gid-1", text, thread_id="th-1", chat_kind="group")
+
+    renderer = TurnRenderer(
+        channel="tg",
+        adapter=adapter,
+        chat_id="gid-1",
+        conversation_id="c1",
+        send=send,
+        now=_clock(0.0),
+        thread_id="th-1",
+        chat_kind="group",
+        heartbeat_seconds=0.001,
+    )
+    for event in [
+        TextDelta(text="done"),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]:
+        queue.put_nowait(event)
+    queue.put_nowait(None)
+    await renderer.consume(queue)
+
+    assert adapter.typing == []
 
 
 @pytest.mark.acceptance(
@@ -510,8 +589,8 @@ async def test_typing_heartbeat_re_sends_on_a_supports_typing_only_dm() -> None:
     scenario="a transport with no live-text surface posts no interim status message",
 )
 async def test_no_interim_signal_without_a_live_text_surface_in_a_group() -> None:
-    # A transport that can neither edit nor stream, in a group where the DM-only
-    # typing signal does not apply either: NO interim signal at all, only the
+    # A transport that can neither edit nor stream, in a group whose typing
+    # endpoint it does not hold either: NO interim signal at all, only the
     # final chunked reply. (SeaTalk left this shape behind — it streams now.)
     adapter = FakeChannelAdapter(
         supports_edit=False,
@@ -560,6 +639,7 @@ async def test_no_interim_signal_without_a_live_text_surface_in_a_group() -> Non
 def _streaming_adapter(**kwargs: Any) -> FakeChannelAdapter:
     """SeaTalk-shaped: no edit, no delete — but one message that grows in place
     and, once finished, IS the reply."""
+    kwargs.setdefault("live_text_persists", True)
     adapter = FakeChannelAdapter(supports_edit=False, supports_live_text=True, **kwargs)
     adapter.live_text_finalizes = True
     return adapter
@@ -600,13 +680,18 @@ async def test_streaming_transport_grows_one_message_instead_of_sending_fragment
     [live] = adapter.live_handles
     # The tool line opens the surface, then every later snapshot carries the FULL
     # accumulated reply — the platform re-renders the latest text, never a delta.
-    assert live.snapshots[0] == "⏳ search · cats"
-    assert live.snapshots[1:] == ["I found", "I found three", "I found three cats."]
+    # The surface opens the moment the turn starts, with the acknowledgement —
+    # the reply grows out of that same message.
+    assert live.snapshots[0] == "⏳ Got it — working on this…"
+    assert live.snapshots[1] == "⏳ search · cats"
+    assert live.snapshots[2:] == ["I found", "I found three", "I found three cats."]
     assert live.closed and live.final == "I found three cats."
     # Exactly ONE message reached the chat (the stream's own), routed into the
     # originating group thread — no fragments, and no duplicate final send.
-    assert adapter.sent == [("gid-1", "⏳ search · cats")]
-    assert adapter.sent_routed == [("gid-1", "⏳ search · cats", "t1", "group")]
+    # The ONE message the turn ever posts is the stream's opening one — the
+    # acknowledgement — which every later snapshot rewrites in place.
+    assert adapter.sent == [("gid-1", "⏳ Got it — working on this…")]
+    assert adapter.sent_routed == [("gid-1", "⏳ Got it — working on this…", "t1", "group")]
     assert adapter.edits == [] and adapter.deleted == []  # it can do neither
 
 
@@ -627,7 +712,7 @@ async def test_streaming_transport_delivers_an_interrupted_reply_in_place() -> N
     [live] = adapter.live_handles
     assert live.final == "partial\n\n⏹ Stopped."
     texts = adapter.texts()
-    assert texts[0] == "partial"  # the stream's own message, opened while streaming
+    assert texts[0] == "⏳ Got it — working on this…"  # opened at once, then grown
     assert texts[1].startswith("⏹ stopped · 0 tools ·")  # the summary follows it
 
 
@@ -643,3 +728,35 @@ async def test_a_transport_that_refuses_a_live_surface_is_asked_once_and_degrade
     assert adapter.live_handles == []
     assert adapter.sent == [("owner", "found 3 cats")]
     assert adapter.edits == [] and adapter.deleted == []
+
+
+async def test_a_persisting_surface_acknowledges_before_the_turn_produces_anything() -> None:
+    """The wait between a message and an answer is all the user sees otherwise,
+    and on a long turn it reads as the bot having missed them. Where the surface
+    BECOMES the reply, opening it at once costs nothing: the acknowledgement is
+    the same message the answer grows out of, never a second one."""
+    adapter = _streaming_adapter()
+
+    await _render(adapter, [TextDelta(text="the answer")], now=_ticking())
+
+    [live] = adapter.live_handles
+    assert live.snapshots[0] == "⏳ Got it — working on this…"
+    assert live.final == "the answer"  # replaced in place by the reply
+    # The stream's opening message is the ONLY message: the reply is that same
+    # one, grown — never an acknowledgement followed by a second answer.
+    assert adapter.texts() == ["⏳ Got it — working on this…"]
+
+
+async def test_a_scaffolding_surface_is_not_opened_before_there_is_something_to_show() -> None:
+    """Telegram's live surface is a status message the renderer DELETES before
+    sending the real reply. Opening it to acknowledge would post something only
+    to take it away again, so no acknowledgement is offered there — its 👀
+    receipt reaction already says the message was heard."""
+    adapter = FakeChannelAdapter(supports_edit=True)  # live_text_persists stays False
+
+    # A clock that never advances: the reply lands well inside the window below
+    # which a scaffolding surface is not worth opening.
+    await _render(adapter, [TextDelta(text="quick")])
+
+    assert adapter.live_handles == []  # nothing opened for a reply this fast
+    assert adapter.sent == [("owner", "quick")]

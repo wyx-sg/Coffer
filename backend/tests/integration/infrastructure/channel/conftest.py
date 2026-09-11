@@ -142,6 +142,9 @@ class FakeSeaTalk:
         self.group_chat_calls: list[tuple[dict[str, Any], str]] = []  # (body, Authorization)
         self.typing_calls: list[dict[str, Any]] = []
         self.group_typing_calls: list[dict[str, Any]] = []
+        # The platform answer for group typing. 7003 ("Group chat too large")
+        # is the >200-member case where the cue can never be triggered.
+        self.group_typing_code = 0
         self.scripted: list[tuple[int, dict[str, Any]]] = []  # popped per single/group_chat call
         self.html_error_sends = 0  # answer single_chat with a non-JSON HTML body N times
         self._next_message_id = 0
@@ -213,7 +216,7 @@ class FakeSeaTalk:
 
     async def _group_typing(self, request: Request) -> JSONResponse:
         self.group_typing_calls.append(await request.json())
-        return JSONResponse({"code": 0})
+        return JSONResponse({"code": self.group_typing_code})
 
     async def _typing(self, request: Request) -> JSONResponse:
         self.typing_calls.append(await request.json())

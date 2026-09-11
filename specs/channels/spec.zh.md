@@ -343,6 +343,15 @@ status / notify`。
   那是 API 文档处于登录态不可达时猜出来的结构——因此一张 SeaTalk 选择卡片要么渲染
   不出按钮，要么被平台直接拒收。
 
+  每类元素的数量上限同样在文档处于登录态时无从得知，只能靠试探逼近：已知 2 个按钮
+  被接受、29 个被拒收，中间没有任何确证，于是卡片就凭着这段空白把按钮数封在了六个。
+  现在公布出来的上限是：一张卡片最多 **3 个标题、5 个描述、5 个按钮、3 个按钮组和
+  3 张图片**，标题最多 120 字符、描述最多 1000 字符——这就使得那张六按钮的卡片，正好
+  比裸按钮的上限多出一个。因此按钮不再各占一个 element，而是排进**按钮组**（一个
+  element 容纳同一行上最多三个按钮）：六个按钮占掉三个组位中的两个，按公布的规则合法，
+  读起来是两行而不是六层高的一摞。标题与描述文本也被夹到各自文档规定的长度，于是过长
+  的正文降级成一张被截断的卡片，而不是一张被拒收的卡片。
+
   平台拒收一张卡片并不等于命令到此为止：handler 回退到它本来就有的纯文本答复，
   于是被拒的卡片降级成一条能用的消息，而不是让用户什么也收不到。该拒收会被记日志，
   以便事后可诊断。
@@ -893,6 +902,13 @@ Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制
 - **When** owner 以外的人在群聊里 @mention bot
 - **Then** bot 回复该发送者未获授权，且不启动任何 turn
 
+### Scenario: an empty sender_id in a group cannot bypass the owner gate
+
+- **Given** 一个已知 owner 的已配对 channel 和一个群聊
+- **When** 一条被寻址的群消息到达，却带不出可解析的 `sender_id`（传输没能供出一个）
+- **Then** bot 像拒绝一个非 owner 发送者那样拒绝它——不启动任何 turn，也不创建
+  peer 行
+
 ### Scenario: require_mention on drops an un-addressed group message
 
 - **Given** 一个 `require_mention` 打开（默认）的已配对 channel
@@ -916,6 +932,13 @@ Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制
 - **Given** 一个 `ignore_other_mentions` 关闭（默认）的已配对 channel
 - **When** 一条群消息在 @ bot 的同时也 @ 了另一个用户
 - **Then** turn 仍然运行——额外的人类 @mention 不会抑制它
+
+### Scenario: a group slash-command reply routes to the group/thread
+
+- **Given** 一个已配对的 channel，以及一个 owner 在其中发过消息的群聊/线程
+- **When** owner 在那个群/线程里发出一条斜杠命令（例如 `/status`）
+- **Then** 该命令的回复以与触发消息相同的 `chat_kind`/`thread_id` 路由，而不是退回
+  私聊的默认值
 
 ### Scenario: the owner @mentions the bot inside a thread
 
@@ -1141,6 +1164,38 @@ Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制
 - **When** 该 turn 结束
 - **Then** assistant 消息记下这个 turn 的 token 用量
 
+### Scenario: a group turn is acknowledged by typing in the group
+
+- **Given** 一个在会打字、且没有 reaction 的 adapter
+  （SeaTalk）上的已配对群
+- **When** owner 在该群的某个线程里 @mention bot
+- **Then** 打字提示被发往群打字端点，携带该群的 id 与该线程的 id——而不是发往私聊端点
+
+### Scenario: a quoted message is named in the turn's origin
+
+- **Given** 一个已配对 channel，其入站消息引用了一条更早的消息
+- **When** 该 turn 被构建
+- **Then** origin 块写明被引用消息的 id，且传输不发起任何取回被引用消息内容的调用
+
+### Scenario: a DM thread grounds its turn in the thread's own messages
+
+- **Given** 一个在支持历史拉取的 adapter 上的已配对私聊，以及一条到达于既有线程内
+  的消息
+- **When** 该 turn 被构建
+- **Then** 该线程自身的消息经私聊线程端点拉取并折入这个 turn，与群线程的做法完全一致
+
+### Scenario: being removed from a group stops that group's sessions
+
+- **Given** 一个带有 live 会话的已配对群
+- **When** 平台报告 bot 已被移出该群
+- **Then** 该 chat 的会话被停止，且不向该群回发任何内容
+
+### Scenario: a group turning external is announced in the group
+
+- **Given** 一个 bot 仍身在其中的已配对群
+- **When** 平台报告该群已被转为外部群
+- **Then** 向该群发出一条警告，且该 channel 继续正常工作
+
 
 ## Channels as a management plane（北极星）
 
@@ -1260,10 +1315,19 @@ Coffer-hosted channel 与它们并不冗余——它是通往统一、本地、�
   `supports_edit` 上，等于悄悄剥夺了 SeaTalk 本就支持的实时体验：它的回复只能在 turn
   结束后以若干条分块消息、一段一段地蹦出来。`supports_edit` 现在只表示它字面的意思
   ——在 SeaTalk 上 `edit_text` 仍然抛错——两个标志各自独立声明。
-  一个 turn 只保留**一个** live 界面，且仅在这个 turn 运行到足够长时才打开它：要么由
-  工具活动打开（先显示工具进度行，随后回复文本到达时接管同一个界面），要么在纯文本
-  turn 中由回复本身在跑过更新间隔后打开。一个在该间隔内就结束的回复根本不打开界面
-  （没有 create→delete→resend 抖动）——它的最终发送就够了。中途快照是**纯文本**并
+  一个 turn 只保留**一个** live 界面。它**何时**打开，取决于这个界面究竟会变成回复本身，
+  还是只是收尾时丢弃的脚手架——由 adapter 以 `live_text_persists` 声明。会留存的（SeaTalk：
+  被流式出来的那条消息**就是**答案），在 turn 一开始就打开并说明自己已收到——这是用户
+  看得见的致意，因为否则从发出消息到拿到答案之间的这段等待就是他们得到的全部，在长
+  turn 上会被读成机器人根本没收到。这条致意不额外占一条消息：回复就是同一条，就地改写。
+  而只是脚手架的（Telegram：一条在真正回复发出前被删掉的状态消息），仍然只在 turn 跑
+  过更新间隔后才打开——要么由工具活动打开，要么由回复文本打开——于是更早结束的回复
+  根本不打开界面，避免 create→delete→resend 抖动，何况它的 👀 回执反应已经表明消息被
+  收到了。
+  更新的**节奏归 transport 所有**，因为只有它知道自己的限速：内核把每一份快照都递过去，
+  各个界面按自己能承受的频率做缓冲（SeaTalk 约 200 毫秒，正是它自己的文档为打字机效果
+  给出的间隔；Telegram 则慢得多，因为它编辑的是一条真实消息）。内核若在上面再加一层
+  节流，会把这层缓冲完全盖住，让流式变成一段一段地蹦出来。中途快照是**纯文本**并
   裁剪到单条上限，因此过长或半成品 markdown 的预览既不会撑破平台解析器也不会超上限。
   界面如何**收尾**则是 transport 自己的事：Telegram 的状态消息只是脚手架——收尾时删除
   它，最终回复以 HTML 渲染并按段落分块发送；而 SeaTalk 的 stream **本身就是**那条回复
@@ -1278,14 +1342,42 @@ Coffer-hosted channel 与它们并不冗余——它是通往统一、本地、�
   复用，因为平台会拒绝任何之后再指名它 id 的请求：该界面就地判定失效，不会另开一个
   替代 stream，改由普通发送路径完整投递这条回复（平台留下的那条半截消息就停在原处
   ——看得出是残留，但用户仍能拿到完整答案）。低于 3.67 的客户端只会在 stream 关闭时看到那条完成后的消息。
-  能显示打字但**没有 reaction 可用来确认收到**的 transport（SeaTalk）另外在私聊中
-  维持周期性打字心跳（一个短暂动作，零聊天噪声），覆盖第一次 live 更新落地之前的那段
-  窗口。这个判据是「用什么确认收到」，不是「能不能编辑」：支持 reaction 的 transport
+  能显示打字但**没有 reaction 可用来确认收到**的 transport（SeaTalk）另外维持一条
+  周期性打字心跳（一个短暂动作，零聊天噪声），覆盖第一次 live 更新落地之前的那段
+  窗口。它在 turn 所在的地方都跑，私聊与群线程一视同仁：SeaTalk 在
+  直聊端点之外原来还有第二个打字端点（`group_chat_typing`，按线程作用域），此前这条
+  心跳只限私聊，纯粹是因为相信不存在这样的端点。
+  这个判据是「用什么确认收到」，不是「能不能编辑」：支持 reaction 的 transport
   （Telegram）已经用 👀 确认过了（FR-036），因此 `supports_edit` 现在不再决定任何行为。
   全部尽力而为——一次失败的更新、收尾或心跳绝不打断 turn。
 - **FR-038**: Telegram album 是一个 turn。共享同一 `media_group_id` 的消息被去抖成携带
   它们全部附件的单个 turn，而非每张图一个 turn。
 - **FR-039**: 入站事件被去重。一个被重投的平台事件（相同 message id）只被处理一次。
+- **FR-056**: 被引用的消息只被点名，不被解析。用户以引用方式回复时，SeaTalk 的两类
+  入站消息事件都携带 `quoted_message_id`；信封保留它，origin 块（FR-042）写明它，于是
+  一个读到「如我上面所说」的 agent 能判断那个*上面*指的是某个具体的东西，而不是只能从
+  可见文本里猜。传输刻意在这个 id 处止步。取回被引用消息的正文是一次有文档的调用
+  （`get_message_by_message_id`），而平台自己的 MCP server 早已把它作为一个工具暴露
+  出来——这使它成为一次由 agent 自行按需发起的查询，而不是无论有没有人要都得在每个
+  turn 上做一遍的传输工作。这个 id 的作用域限于本 bot：平台刻意对不同 app 给同一条
+  消息不同的 id，因此它是一个句柄，而非一个持久标识符。
+- **FR-057**: 线程在私聊里同样为它的 turn 提供地基，而不只是在群里。FR-029 的线程
+  上下文拉取，写于 SeaTalk 只有群聊才有线程的时候；如今与 bot 的私聊也能开线程，平台
+  在群那个端点之外，把私聊线程放在了它自己的端点下
+  （`single_chat/get_thread_by_thread_id`，以 employee code 为键）。adapter 按会话种类
+  分流，其上的一切都没变——同样的展平、同样的媒体下载、同样在任何失败时降级为空。它
+  消除掉的那处不对称是真实而不可见的：一个私聊线程本就已经被原地回复（FR-026），可驱动
+  那条回复的 turn 却看不见该线程里的其他任何东西。群*主聊天区*的闲聊仍然从不拉取——那
+  依旧是不想要的，权限也依旧没有获批。
+- **FR-058**: bot 自己在一个群里的身份状态被跟踪。有两个平台事件改变的是一条绑定
+  **是什么**，而不是驱动一个 turn——`bot_removed_from_group_chat`（被踢，或该群被解散）
+  与 `group_chat_converted_to_external_group`——它们到达一条与消息、卡片点选分开的
+  生命周期回调，于是后两者的任何消费方都不必再把它们过滤掉。被移除会停掉该 chat 的
+  每一个 live 会话；不回发任何内容，因为 bot 已经不在那里、发不出去了。转为外部群意味着
+  其他组织的人从此可以读到一个 owner 配对过的会话，这是一次与安全相关的变化，因此它被
+  公告在那个群里，而不是只写进日志——owner 按定义就在场，而这个群是唯一能让这条警告
+  有上下文的地方。两者都像其他每个事件一样去重（FR-039）：一次被重投的移除绝不能触发
+  两遍。
 
 ### E. Turn 平台
 
@@ -1363,6 +1455,17 @@ Web 端 Chat 页面是它们的另一个客户端；那个页面已被删除（�
 整段会话里唯一被翻译的界面——其余每一行都来自 agent，用的是属主当时写下的那种语言。
 之所以写在这里而不是默默略过，是因为发现它们的那次调研，正是卡片这部分工作得以成立的
 前提。
+
+**SeaTalk 的 WebSocket 事件投递。** 平台现在提供了第二种接收事件的方式：bot 不再验证
+一个公网 callback URL，而是与 SeaTalk 保持一条长连的 WebSocket，只需要出网连通性。
+对一个 local-first 的金库来说，这显然是那个对的传输——它会把属主今天必须自己搭起来的
+隧道（cloudflared/ngrok）、终结这条隧道的监听进程，以及那套只因为 callback 从公网可达
+才存在的签名校验，统统删掉。它没有被采用，理由有两条，而且都不在本项目的掌控之内。
+其一，线路协议（wire protocol）完全没有文档——公开材料只讲了怎么调用一个厂商 SDK；
+其二，那个 SDK（Go 与 Python）从一个内部企业 GitLab 分发，在公共 PyPI 上根本不存在。
+Coffer 是 MIT、受 OSS 约束，因此它既不能依赖这个 SDK，也不能去重新实现一个无人公开的
+协议。写在这里而不是留作一次沉默的省略：一旦该协议被公开、或该 SDK 上了 PyPI，这就会
+成为首选的入站路径，隧道也随之变成可选。
 
 
 **Web 端 Chat 页面。** Agent Chat 规范交付过一个 Web 端两栏聊天页面——会话列表、消息线程、

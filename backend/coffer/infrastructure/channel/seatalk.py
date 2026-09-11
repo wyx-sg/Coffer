@@ -1,13 +1,13 @@
 """SeaTalk transport: callback events in (via the listener), Open APIs out.
 
-No SDK — token caching plus three POST endpoints. Inbound events arrive
-through the daemon's events-ingest route (the callback listener forwards
-them); this adapter only normalizes them, it owns no poll loop.
+No SDK: ``seatalk_transport`` owns the token cache and the Open API request
+shapes; this module normalizes inbound events, which arrive through the
+daemon's events-ingest route (the callback listener forwards them) — it owns
+no poll loop.
 """
 
 from __future__ import annotations
 
-import logging
 import pathlib
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -22,6 +22,7 @@ from coffer.domain.channel.envelopes import (
     ChoiceButton,
     InboundAttachment,
     InboundCallback,
+    InboundLifecycle,
     InboundMessage,
     SentMessage,
 )
@@ -45,16 +46,13 @@ from coffer.infrastructure.channel.seatalk_parse import (
 from coffer.infrastructure.channel.seatalk_transport import SeaTalkTransport
 from coffer.infrastructure.channel.seatalk_typing import send_typing
 
-_logger = logging.getLogger(__name__)
-
 _CHUNK_LIMIT = 3500  # paragraph-chunking budget, in characters
 _BYTE_LIMIT = 3900  # SeaTalk caps content at 4096 BYTES; stay clear of it
 
 
 def _dedup_key(envelope: dict[str, Any], event: dict[str, Any]) -> str:
-    """The event's unique id for FR-039 de-dup: the top-level ``event_id``,
-    falling back to the message id (on ``message`` for delivered messages, at
-    the event level for an interactive_message_click)."""
+    """The event's unique id for FR-039 de-dup: the top-level ``event_id``, else
+    the message id (on ``message`` for messages, top-level for a card click)."""
     event_id = str(envelope.get("event_id") or "")
     if event_id:
         return event_id
@@ -85,6 +83,9 @@ class SeaTalkAdapter:
         self._callbacks: AdapterCallbacks | None = None
         self._seen = SeenIds()  # FR-039: drop redelivered events
         self._transport = SeaTalkTransport(channel_name, app_id, app_secret, base_url, self._client)
+        # One chat_kind-routed send seam for every outbound payload — text
+        # chunks, cards, media (``send_outbound_media`` takes it as a callable).
+        self._send = self._transport.send
 
     @property
     def capabilities(self) -> ChannelCapabilities:
@@ -92,6 +93,10 @@ class SeaTalkAdapter:
             supports_edit=False,  # no API rewrites a delivered SeaTalk message
             # FR-037: but a message CAN grow in place — init_stream/update_stream.
             supports_live_text=True,
+            live_text_persists=True,  # the streamed message IS the reply
+            # Both chat kinds: single_chat_typing and group_chat_typing. The
+            # group one silently no-ops above 200 members (code 7003), so this
+            # promises an attempt, never a delivered receipt.
             supports_typing=True,
             max_message_chars=_CHUNK_LIMIT,
             supports_buttons=True,
@@ -149,8 +154,14 @@ class SeaTalkAdapter:
                     # SeaTalk DMs are 1:1, so the sender is the employee_code.
                     sender_id=str(event.get("employee_code", "")),
                     thread_id=str(message.get("thread_id", "")),
+                    # Hand the turn the id and stop: the quoted BODY comes from
+                    # GET /messaging/v2/get_message_by_message_id, an agent-invoked
+                    # lookup (SeaTalk's MCP server exposes it under that name), not
+                    # transport work. The docs warn one message carries DIFFERENT
+                    # message_ids per app — only this bot can resolve this one.
+                    quoted_message_id=str(message.get("quoted_message_id") or ""),
                     attachments=await media_attachments(
-                        self._client, self._media_dir, self._ensure_token, message
+                        self._client, self._media_dir, self._transport.ensure_token, message
                     ),
                 )
             )
@@ -192,30 +203,41 @@ class SeaTalkAdapter:
                         (message.get("text") or {}).get("mentioned_list")
                     ),
                     thread_id=reply_thread_id,
+                    quoted_message_id=str(message.get("quoted_message_id") or ""),
                     attachments=await media_attachments(
-                        self._client, self._media_dir, self._ensure_token, message
+                        self._client, self._media_dir, self._transport.ensure_token, message
                     ),
                 )
             )
+        elif event_type == "bot_removed_from_group_chat":
+            # Not a turn — a change in what the binding IS: every later send
+            # to this group would fail. The remover is named the way
+            # sender_display is everywhere here (email, else seatalk_id).
+            remover = event.get("remover") or {}
+            actor = str(remover.get("email", "") or remover.get("seatalk_id", ""))
+            await self._lifecycle(str(event.get("group_id", "")), "removed_from_group", actor)
+        elif event_type == "group_chat_converted_to_external_group":
+            # Readers outside the organisation can now see what lands here.
+            # SeaTalk names nobody in this event, so actor_display stays "".
+            await self._lifecycle(str(event.get("group_id", "")), "group_became_external")
         elif event_type in (
             "new_message_received_from_thread",
             "bot_added_to_group_chat",
             "user_enter_chatroom_with_bot",
         ):
-            # A thread @mention already arrives as
-            # new_mentioned_message_received_from_group_chat with thread_id
-            # set; non-@ thread chatter and group-membership events must never
-            # start a turn.
+            # What stays dropped, for one reason: nothing above the adapter acts
+            # on it. A thread @mention already arrives as
+            # new_mentioned_message_received_from_group_chat with thread_id set,
+            # so non-@ thread chatter is noise; being ADDED to a group (unlike
+            # being removed) changes nothing — the user creates the binding.
             return
         elif event_type == "interactive_message_click" and self._callbacks.on_callback is not None:
             # A selection-card button tap; the custom ``value`` we set on the
-            # button comes back here (research.md). A group card tap arrives with
-            # a ``group_id`` (mirroring the group @mention event), a DM tap
-            # without one — derive the chat_kind from that so the core routes the
-            # reply back into the group/thread and owner-gates on the right peer
-            # (FR-034). DMs are 1:1 so the sender IS the employee_code; a group
-            # tap carries the tapper under ``sender`` (like the @mention event),
-            # falling back to a top-level employee_code.
+            # button comes back here (research.md). A group card tap carries a
+            # ``group_id`` and a DM tap does not — derive chat_kind from that so
+            # the core replies into the group/thread and owner-gates on the right
+            # peer (FR-034). DMs are 1:1 so the sender IS the employee_code; a
+            # group tap names the tapper under ``sender``, like the @mention.
             group_id = str(event.get("group_id", ""))
             sender = event.get("sender") or {}
             sender_id = str(sender.get("employee_code", "") or event.get("employee_code", ""))
@@ -230,6 +252,15 @@ class SeaTalkAdapter:
                     thread_id=str(event.get("thread_id", "")),
                 )
             )
+
+    async def _lifecycle(self, chat_id: str, kind: str, actor: str = "") -> None:
+        """Report a standing change — only when the core asked to hear them."""
+        callbacks = self._callbacks
+        if callbacks is None or callbacks.on_lifecycle is None:
+            return
+        await callbacks.on_lifecycle(
+            InboundLifecycle(channel=self._name, chat_id=chat_id, kind=kind, actor_display=actor)
+        )
 
     # -- outbound ------------------------------------------------------------
 
@@ -278,15 +309,6 @@ class SeaTalkAdapter:
             self._post, chat_id, name=self._name, thread_id=thread_id, chat_kind=chat_kind
         )
 
-    async def _send(
-        self, chat_id: str, message: dict[str, Any], thread_id: str, chat_kind: str
-    ) -> Any:
-        """Route one already-built ``message`` payload to the group or
-        single-chat endpoint, sharing the chunk loop above across both."""
-        if chat_kind == "group":
-            return await self._send_group_chat(chat_id, message, thread_id)
-        return await self._send_single_chat(chat_id, message, thread_id)
-
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None:
         # supports_edit stays literally false: no SeaTalk API rewrites a
         # delivered TEXT message. Live progress goes through open_live_text, and
@@ -330,12 +352,11 @@ class SeaTalkAdapter:
         thread_id: str = "",
         chat_kind: str = "direct",
     ) -> SentMessage:
-        """Upload a local file through the same single/group_chat endpoints
-        send_text uses (via ``send_outbound_media``): an image (by extension) as
-        a SeaTalk ``image`` message, else a ``file`` message (base64 content),
-        routed through ``_send`` so it lands in the same chat_kind + thread the
-        turn came from (FR-031). ``as_photo`` is unused — SeaTalk picks
-        preview-vs-attachment from the tag."""
+        """Upload a local file through the endpoints send_text uses (via
+        ``send_outbound_media``): an image (by extension) as a SeaTalk ``image``
+        message, else a ``file`` message (base64 content), routed through
+        ``_send`` into the same chat_kind + thread the turn came from (FR-031).
+        ``as_photo`` is unused — SeaTalk picks preview-vs-attachment by tag."""
         del as_photo
         message_id = await send_outbound_media(
             self._send, chat_id, path, caption=caption, thread_id=thread_id, chat_kind=chat_kind
@@ -345,49 +366,28 @@ class SeaTalkAdapter:
     # -- context fetch (ContextFetchPort) -------------------------------------
 
     async def fetch_thread(
-        self, chat_id: str, thread_id: str, *, limit: int = 50
+        self, chat_id: str, thread_id: str, *, limit: int = 50, chat_kind: str = "group"
     ) -> tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]:
-        """The thread's own messages, when the @mention landed inside a thread.
+        """The thread's own messages, when the message landed inside a thread.
 
-        Delegates to ``seatalk_history`` so this file stays inside the size cap;
-        see there for the degrade-to-empty contract.
+        Threads are no longer group-only (SeaTalk app v3.62.1+ has them in DMs),
+        so ``chat_kind`` picks the read endpoint — the group @mention is just the
+        common case. Delegates to ``seatalk_history`` so this file stays inside
+        the size cap; see there for the degrade-to-empty contract.
         """
         return await fetch_thread_context(
             self._get,
             self._client,
             self._media_dir,
-            self._ensure_token,
+            self._transport.ensure_token,
             chat_id,
             thread_id,
             limit=limit,
             channel=self._name,
+            chat_kind=chat_kind,
         )
 
     # -- transport -------------------------------------------------------------
-
-    async def _send_single_chat(
-        self, employee_code: str, message: dict[str, Any], thread_id: str = ""
-    ) -> Any:
-        # FR-026: thread the reply by carrying thread_id on the message body.
-        if thread_id:
-            message = {**message, "thread_id": thread_id}
-        return await self._post(
-            "/messaging/v2/single_chat",
-            {"employee_code": employee_code, "message": message},
-        )
-
-    async def _send_group_chat(self, group_id: str, message: dict[str, Any], thread_id: str) -> Any:
-        # thread_id goes INSIDE the message body, like _send_single_chat: verified
-        # live that a top-level thread_id is ignored (reply falls to group main),
-        # while message.thread_id threads it and roots a new thread when none exists.
-        if thread_id:
-            message = {**message, "thread_id": thread_id}
-        return await self._post(
-            "/messaging/v2/group_chat", {"group_id": group_id, "message": message}
-        )
-
-    async def _ensure_token(self) -> str:
-        return await self._transport.ensure_token()
 
     async def _post(self, path: str, body: dict[str, Any], *, retries: int = 3) -> Any:
         return await self._transport.request("POST", path, json=body, retries=retries)

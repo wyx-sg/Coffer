@@ -178,6 +178,11 @@ class ChannelRuntime:
                 AdapterCallbacks(
                     on_message=self._processor.on_message,
                     on_callback=self._processor.on_callback,
+                    # Non-message events about the bot's own standing in a chat
+                    # (removed from a group, group turned external): wired here
+                    # so a transport that emits them reaches the processor, and
+                    # simply unused by one that does not.
+                    on_lifecycle=self._processor.on_lifecycle,
                 )
             )
         except Exception:

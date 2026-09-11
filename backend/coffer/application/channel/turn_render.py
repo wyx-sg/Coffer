@@ -25,6 +25,7 @@ from typing import Any
 
 from coffer.application.channel.ports import ChannelAdapter, LiveText
 from coffer.application.channel.turn_media import deliver_media
+from coffer.application.channel.turn_progress import _describe_tool, _progress_line
 from coffer.domain.chat.events import (
     TextDelta,
     ToolCall,
@@ -33,69 +34,31 @@ from coffer.domain.chat.events import (
     TurnError,
 )
 
-#: How often the renderer offers the live surface a new snapshot. The surface
-#: has its own (much smaller) transport-level buffer; this is the cadence a
-#: reader actually sees.
+#: How long a turn must run before it is worth opening a live surface at all,
+#: on a transport whose surface is scaffolding (Telegram): a reply that lands
+#: sooner is better served by its own message than by a create-then-delete.
+#:
+#: NOT a cadence. The renderer used to throttle every snapshot by this as well,
+#: which stacked on top of the surface's own buffer and hid it completely — the
+#: reader saw one update every 1.5 s, so a stream opened on its first token and
+#: then jumped a paragraph at a time. Rate limiting belongs to the transport
+#: that knows its own limits, and each surface now carries its own interval.
 _logger = logging.getLogger(__name__)
 
 _UPDATE_INTERVAL_SECONDS = 1.5
+
+#: What a turn says before it has anything to say, on a transport whose live
+#: surface becomes the reply. The wait between a message and an answer is the
+#: whole of what the user sees otherwise, and on a long turn it reads as the bot
+#: having missed the message. This is replaced by the reply itself the moment
+#: there is one — the same message, rewritten in place, never a second one.
+_ACK_TEXT = "\u23f3 Got it \u2014 working on this\u2026"
 _PROGRESS_MAX_LINES = 8
-_DESC_MAX_CHARS = 48
 #: FR-037: cadence for re-sending the typing indicator on a supports_typing-only
 #: transport (SeaTalk). Its typing signal expires within seconds, so a long turn
 #: needs a periodic re-send to keep the "working…" hint alive before the first
 #: live update lands.
 _TYPING_HEARTBEAT_SECONDS = 8.0
-
-
-def _clip(text: str, limit: int = _DESC_MAX_CHARS) -> str:
-    """Collapse whitespace and cap length so a descriptor stays one tidy line."""
-    text = " ".join(text.split())
-    return text if len(text) <= limit else text[: limit - 1] + "…"
-
-
-def _basename(path: str) -> str:
-    return path.rstrip("/").rsplit("/", 1)[-1] if path else ""
-
-
-def _host(url: str) -> str:
-    return url.split("://", 1)[-1].split("/", 1)[0]
-
-
-def _describe_tool(tool_name: str, tool_input: object) -> str:
-    """A short human descriptor of what a tool call is doing, drawn from its
-    input — so channel progress reads '⏳ Bash · list the desktop' instead of a
-    bare '⏳ Bash'. Best-effort and defensive: unknown tools or odd inputs fall
-    back to the first string argument, or to nothing."""
-    if not isinstance(tool_input, dict):
-        return ""
-
-    def field_str(key: str) -> str:
-        value = tool_input.get(key)
-        return value if isinstance(value, str) else ""
-
-    name = tool_name.lower()
-    if name in ("bash", "shell", "exec"):
-        return field_str("description") or field_str("command")
-    if name in ("read", "write", "edit", "multiedit", "notebookedit"):
-        return _basename(field_str("file_path"))
-    if name in ("grep", "glob"):
-        return field_str("pattern")
-    if name == "task":
-        return field_str("description")
-    if name == "webfetch":
-        return _host(field_str("url"))
-    if name == "websearch":
-        return field_str("query")
-    for value in tool_input.values():
-        if isinstance(value, str) and value:
-            return value
-    return ""
-
-
-def _progress_line(mark: str, tool_name: str, descriptor: str) -> str:
-    descriptor = _clip(descriptor)
-    return f"{mark} {tool_name} · {descriptor}" if descriptor else f"{mark} {tool_name}"
 
 
 def _clip_stream_preview(text: str, limit: int) -> str:
@@ -118,7 +81,6 @@ class _Progress:
     # from being asked on every event.
     live: LiveText | None = None
     live_tried: bool = False
-    last_update: float = 0.0
     # FR-037: once reply text starts streaming it takes over the single live
     # surface from the tool-progress lines, and a late tool event must not
     # overwrite it back to tool lines.
@@ -168,6 +130,7 @@ class TurnRenderer:
         error: TurnError | None = None
         started = self.now()
         progress.started = started
+        await self._acknowledge(progress)
         tool_ids: set[str] = set()
         tokens: int | None = None
         while True:
@@ -299,12 +262,26 @@ class TurnRenderer:
         if progress.live is None:
             await self._open_live(progress, text)
             return
-        now = self.now()
-        if now - progress.last_update < _UPDATE_INTERVAL_SECONDS:
-            return
-        progress.last_update = now
+        # No throttle here: ``update`` is a no-op inside the surface's own
+        # interval and when the snapshot has not changed, so offering every
+        # snapshot lets the transport render at the cadence it can sustain.
         with contextlib.suppress(Exception):
             await progress.live.update(text)
+
+    async def _acknowledge(self, progress: _Progress) -> None:
+        """Open the live surface immediately, so the turn is visibly received.
+
+        Only where that surface PERSISTS. SeaTalk's stream opens by posting a
+        real message and grows it in place, so the acknowledgement costs nothing
+        extra — it becomes the reply. Telegram's live surface is scaffolding the
+        renderer deletes before sending the real answer, so opening it up front
+        would post something only to take it away again; there the ordinary lazy
+        open still applies, and the 👀 receipt reaction already says "heard".
+        """
+        caps = self.adapter.capabilities
+        if not (caps.supports_live_text and caps.live_text_persists):
+            return
+        await self._open_live(progress, _ACK_TEXT)
 
     async def _open_live(self, progress: _Progress, text: str) -> None:
         if progress.live_tried or not self.adapter.capabilities.supports_live_text:
@@ -323,7 +300,6 @@ class TurnRenderer:
             return
         if progress.live is None:
             return
-        progress.last_update = self.now()
         with contextlib.suppress(Exception):
             await progress.live.update(text)
 

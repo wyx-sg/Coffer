@@ -397,6 +397,20 @@ status / notify`.
   the API docs were login-gated, so a SeaTalk selection card would have
   rendered without its buttons or been refused outright.
 
+  The per-element ceilings were likewise unknown while the docs were gated, and
+  were approximated from probing: two buttons were known to be accepted and
+  twenty-nine to be refused, with nothing established in between, so the card
+  was capped at six buttons on the strength of that gap. The published limits
+  are a card of at most **3 titles, 5 descriptions, 5 buttons, 3 button groups
+  and 3 images**, with a title of at most 120 characters and a description of at
+  most 1000 — which makes the six-button card one over the bare-button ceiling.
+  Buttons are therefore laid out in **button groups** (an element holding up to
+  three buttons on one line) instead of one element each: six buttons occupy two
+  of the three group slots, are legal by the published rules, and read as two
+  rows rather than a six-high stack. Title and description text are clamped to
+  their documented lengths, so a long body degrades to a truncated card instead
+  of a refused one.
+
   A card the platform refuses is not the end of the command: the handler falls
   back to the plain-text answer it already has, so a rejected card degrades to a
   working message instead of leaving the user with silence. The rejection is
@@ -1309,6 +1323,41 @@ produce it on its own.
 - **When** the turn ends,
 - **Then** the assistant message records the turn's token usage.
 
+### Scenario: a group turn is acknowledged by typing in the group
+
+- **Given** a paired group on an adapter that can type and has no reactions
+  (SeaTalk)
+- **When** the owner @mentions the bot in a thread of that group
+- **Then** the typing indicator is sent to the group typing endpoint carrying
+  that group's id and that thread's id — not to the direct-chat endpoint
+
+### Scenario: a quoted message is named in the turn's origin
+
+- **Given** a paired channel whose inbound message quotes an earlier message
+- **When** the turn is built
+- **Then** the origin block names the quoted message's id, and the transport
+  makes no call to fetch the quoted message's content
+
+### Scenario: a DM thread grounds its turn in the thread's own messages
+
+- **Given** a paired direct chat on an adapter that supports history fetch, and a
+  message arriving inside an existing thread
+- **When** the turn is built
+- **Then** the thread's own messages are fetched through the direct-chat thread
+  endpoint and folded into the turn, exactly as a group thread's are
+
+### Scenario: being removed from a group stops that group's sessions
+
+- **Given** a paired group with a live session
+- **When** the platform reports the bot was removed from that group
+- **Then** that chat's sessions are stopped and nothing is sent back to the group
+
+### Scenario: a group turning external is announced in the group
+
+- **Given** a paired group the bot is still a member of
+- **When** the platform reports the group was converted to an external group
+- **Then** one warning is sent into that group, and the channel keeps working
+
 
 ## Channels as a management plane (north star)
 
@@ -1470,12 +1519,25 @@ capabilities the official personal bridges lack.
   fragment at a time. `supports_edit` now means only what it literally says —
   `edit_text` still raises on SeaTalk — and the two flags are set
   independently.
-  A turn keeps exactly ONE live surface, opened once the turn runs long enough
-  to warrant it: either tool activity opens it (tool-progress lines show first,
-  then the reply text takes the same surface over as it arrives) or, on a
-  text-only turn, the reply itself opens it once it has run past the update
-  interval. A reply that finishes within that interval opens none (no
-  create → delete → resend flicker) — its final send is enough. Interim
+  A turn keeps exactly ONE live surface. WHEN it opens depends on whether that
+  surface becomes the reply or is scaffolding thrown away at the end, which the
+  adapter declares as `live_text_persists`. Where it persists (SeaTalk: the
+  streamed message IS the answer), the surface opens the moment the turn starts
+  and says so — an acknowledgement the user can see, because the wait between a
+  message and an answer is otherwise the whole of what they get, and on a long
+  turn it reads as the bot having missed them. That acknowledgement costs no
+  extra message: the reply is the same one, rewritten in place. Where the
+  surface is scaffolding (Telegram: a status message deleted before the real
+  reply is sent), it opens only once the turn has run past the update interval —
+  either tool activity opens it or the reply text does — so a reply that
+  finishes sooner opens none, avoiding a create → delete → resend flicker, and
+  its 👀 receipt reaction already says the message was heard.
+  The cadence of updates belongs to the TRANSPORT, which alone knows its own
+  limits: the core offers every snapshot and each surface buffers to what it can
+  sustain (SeaTalk ~200 ms, the interval its own guidance gives for a typewriter
+  effect; Telegram far slower, since it edits a real message). The core adding a
+  throttle of its own on top hid that buffer completely and made a stream arrive
+  a paragraph at a time. Interim
   snapshots are PLAIN and clipped to the platform's per-message limit, so a
   long or half-written-markdown preview never breaks a platform parser or
   exceeds the cap.
@@ -1501,9 +1563,13 @@ capabilities the official personal bridges lack.
   visibly stale, but the user still gets the whole answer). Clients older than
   3.67 simply see the finished message when the stream closes.
   A transport that can show typing but has **no reaction** to ack with
-  (SeaTalk) additionally keeps a periodic typing heartbeat alive on a DM (an
-  ephemeral action, zero chat clutter), covering the window before the first
-  live update lands. The gate is the receipt mechanism, not editing: a
+  (SeaTalk) additionally keeps a periodic typing heartbeat alive (an ephemeral
+  action, zero chat clutter), covering the window before the first live update
+  lands. It runs wherever the turn is, DM or group thread alike: SeaTalk turned
+  out to have a second typing endpoint (`group_chat_typing`, thread-scoped)
+  beside the direct-chat one, and the heartbeat was DM-only purely on the belief
+  that no such endpoint existed. The gate is the receipt mechanism, not editing:
+  a
   reaction-capable transport (Telegram) already acked receipt with 👀 (FR-036),
   so `supports_edit` selects nothing at all any more. All best-effort — a
   failed update, close, or heartbeat never breaks the turn.
@@ -1512,6 +1578,42 @@ capabilities the official personal bridges lack.
   per photo.
 - **FR-039**: Inbound events are de-duplicated. A redelivered platform event
   (same message id) is processed once.
+- **FR-056**: A quoted message is surfaced, not resolved. Both SeaTalk inbound
+  message events carry a `quoted_message_id` when the user replied by quoting;
+  the envelope keeps it and the origin block (FR-042) names it, so an agent
+  reading "as I said above" can tell that *above* refers to something specific
+  instead of guessing from the visible text. The transport deliberately stops
+  at the id. Fetching the quoted body is a single documented call
+  (`get_message_by_message_id`) that the platform's own MCP server already
+  exposes as a tool, which makes it an on-demand lookup the agent performs for
+  itself — not transport work that must happen on every turn whether or not
+  anyone needs it. The id is scoped to this bot: the platform deliberately
+  gives one message different ids to different apps, so it is a handle, not a
+  durable identifier.
+- **FR-057**: A thread grounds its turn in a DM too, not only in a group.
+  FR-029's thread-context fetch was written when SeaTalk threaded group chats
+  alone; direct chats with a bot now thread as well, and the platform exposes
+  the DM thread under its own endpoint (`single_chat/get_thread_by_thread_id`,
+  keyed by employee code) alongside the group one. The adapter routes on chat
+  kind and everything above it is unchanged — same flatten, same media
+  download, same degrade-to-empty on any failure. The asymmetry this removes
+  was real and invisible: a DM thread was already replied to in place (FR-026)
+  yet the turn driving that reply could not see anything else in the thread.
+  Group-*main* chatter is still never fetched — that stays undesirable, and the
+  permission is still not granted.
+- **FR-058**: The bot's own standing in a group is tracked. Two platform events
+  change what a binding *is* rather than driving a turn —
+  `bot_removed_from_group_chat` (kicked, or the group was disbanded) and
+  `group_chat_converted_to_external_group` — and they arrive on a lifecycle
+  callback kept separate from messages and card taps, so no consumer of those
+  has to filter them out. Removal stops every live session for that chat;
+  nothing is sent back, because the bot is no longer there to send it.
+  Conversion to an external group means people from other organisations may now
+  read a chat the owner paired, which is a security-relevant change and so is
+  announced in the group itself rather than only written to a log — the owner
+  is by definition present, and the group is the one place the warning is in
+  context. Both are de-duplicated like every other event (FR-039): a redelivered
+  removal must not fire twice.
 
 ### E. The turn platform
 
@@ -1622,6 +1724,21 @@ in a conversation whose every other line comes from the agent in whatever
 language the owner wrote in. Both are recorded here rather than silently
 skipped, because the research that found them is what made the card work
 possible at all.
+
+**SeaTalk's WebSocket event delivery.** The platform now offers a second way to
+receive events: instead of verifying a public callback URL, a bot holds a
+persistent WebSocket to SeaTalk and needs outbound connectivity only. For a
+local-first vault that is the obviously right transport — it would delete the
+tunnel (cloudflared/ngrok) the owner must stand up today, the listener process
+that terminates it, and the signature verification that exists only because the
+callback is reachable from the internet. It is not adopted, for two reasons that
+are both outside this project's control. The wire protocol is not documented at
+all — the published material covers only how to call a vendor SDK — and that SDK
+(Go and Python) is distributed from an internal corporate GitLab, absent from
+public PyPI. Coffer is MIT and OSS-bound, so it can neither depend on the SDK
+nor reimplement a protocol nobody has published. Recorded here rather than left
+as a silent omission: if the protocol is published or the SDK reaches PyPI, this
+becomes the preferred inbound path and the tunnel becomes optional.
 
 
 **The web Chat page.** The Agent Chat spec shipped a two-column chat page in the web UI —

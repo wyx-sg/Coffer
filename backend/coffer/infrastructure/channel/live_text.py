@@ -29,9 +29,21 @@ from coffer.infrastructure.channel.seatalk_parse import split_to_byte_limit
 _logger = logging.getLogger(__name__)
 
 #: Transport-level buffer: never call the platform more often than this, however
-#: eagerly the core offers new snapshots (the core has its own, coarser cadence).
-#: SeaTalk's guidance is ~200 ms — do not update per token.
+#: eagerly the core offers new snapshots. This is now the ONLY throttle on the
+#: path — the core used to add a 1.5 s one of its own, which hid this entirely
+#: and made a stream arrive a paragraph at a time.
+#:
+#: SeaTalk's guidance is ~200 ms, and it is what produces the typewriter effect:
+#: the client animates between successive snapshots, so a snapshot five times a
+#: second reads as text being typed. Updating per token instead would be one
+#: request per character, which the platform explicitly warns against.
 MIN_UPDATE_INTERVAL = 0.2
+
+#: Telegram edits a real message to show progress, and its flood limits are far
+#: tighter than a streaming endpoint's — roughly one edit a second before it
+#: starts refusing them. It keeps the cadence the core used to impose on
+#: everyone.
+TELEGRAM_UPDATE_INTERVAL = 1.5
 
 #: SeaTalk terminates a stream that goes 30 s without an update. Re-send the
 #: last snapshot well inside that window so a long tool run does not kill the
@@ -179,7 +191,7 @@ class TelegramLiveText(LiveTextSurface):
         thread_id: str = "",
         now: Callable[[], float] = time.monotonic,
     ) -> None:
-        super().__init__(now=now)
+        super().__init__(now=now, min_interval=TELEGRAM_UPDATE_INTERVAL)
         self._call = call
         self._chat_id = chat_id
         self._thread_id = thread_id

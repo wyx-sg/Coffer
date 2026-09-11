@@ -44,6 +44,14 @@ class InboundMessage:
     addressed: bool = True  # DMs always; group only when @mentioned / reply-to-bot
     mentions_others: bool = False  # group message @-mentions a non-bot user (FR-035)
     thread_id: str = ""  # non-empty when the message is inside a thread/topic
+    # The message this one quotes/replies-to; "" when it quotes nothing. SeaTalk
+    # delivers it on BOTH the DM (``message_from_bot_subscriber``) and the
+    # group-@mention event, so it is envelope-level rather than group-only.
+    # Coffer surfaces the id and deliberately does NOT resolve the quoted body
+    # itself: that lookup (``get_message_by_message_id``) is an agent-invoked MCP
+    # tool, so the transport's job ends at telling the agent that a quote exists
+    # and what its id is — the agent fetches the body only when it needs it.
+    quoted_message_id: str = ""
     attachments: tuple[InboundAttachment, ...] = ()  # photos/files/voice, if any
 
 
@@ -82,6 +90,13 @@ class ChannelCapabilities:
     # A surface the core can keep updating during a turn — by edit (Telegram)
     # or by streaming (SeaTalk). Drives the FR-037 progress/reply strategy.
     supports_live_text: bool = False
+    # Whether that surface BECOMES the reply, or is scaffolding thrown away at
+    # the end. SeaTalk's stream persists — the message it opened is the answer,
+    # grown in place — so opening it early costs nothing and is worth doing the
+    # moment a turn starts, as an acknowledgement the user can see. Telegram's
+    # is a status message the renderer deletes before sending the real reply, so
+    # opening it early would post something only to remove it again.
+    live_text_persists: bool = False
     supports_media: bool = False  # outbound file/photo upload (send_media)
     supports_groups: bool = False  # group-chat send path exists
     supports_history_fetch: bool = False  # can fetch recent/thread messages for context
@@ -121,6 +136,28 @@ class InboundCallback:
     chat_kind: str = "direct"  # "direct" | "group" — mirrors InboundMessage so a
     # group card tap owner-gates and replies in the group, not a DM (FR-034)
     thread_id: str = ""  # non-empty when the card sits inside a thread/topic
+
+
+@dataclass(frozen=True)
+class InboundLifecycle:
+    """A non-message platform event about the bot's own standing in a chat.
+
+    Deliberately NOT an ``InboundMessage``/``InboundCallback``: those two both
+    start or steer a turn, while these never do — they change what the binding
+    IS (the bot was removed from the group; the group became external, so people
+    from other organisations can now read what lands there). Routing them
+    through the message path would force every consumer above the adapter to
+    filter them back out before doing anything.
+
+    ``kind`` is a closed string set rather than an enum, matching how
+    ``chat_kind`` is already modelled in this module.
+    """
+
+    channel: str  # channel resource name
+    chat_id: str  # the group the event is about
+    kind: str  # "removed_from_group" | "group_became_external"
+    actor_display: str = ""  # best-effort human name of who did it (SeaTalk's
+    # ``remover`` on a removal); "" when the platform says nothing about who
 
 
 @dataclass(frozen=True)
