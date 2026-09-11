@@ -64,12 +64,21 @@ class ChannelCapabilities:
       message in place while being unable to edit anything. The core asks for
       a live-text handle (``open_live_text``) and never branches on which
       mechanism is underneath.
+    * ``supports_card_update`` is narrower than either: can an already-delivered
+      *selection card* be rewritten? SeaTalk answers yes here while answering no
+      to ``supports_edit`` — its update API applies to interactive cards only,
+      never to a text message. Without it a card keeps offering the option the
+      user already took.
     """
 
     supports_edit: bool  # can rewrite an already-delivered message (edit_text)
     supports_typing: bool  # typing indicator ack
     max_message_chars: int  # outbound chunk budget
     supports_buttons: bool = False  # interactive selection cards (ADR channel-adapter-framework)
+    # An already-delivered selection card can be rewritten in place, so a card
+    # stops advertising the option the user just took. Narrower than
+    # supports_edit: SeaTalk can update a card but not a text message.
+    supports_card_update: bool = False
     # A surface the core can keep updating during a turn — by edit (Telegram)
     # or by streaming (SeaTalk). Drives the FR-037 progress/reply strategy.
     supports_live_text: bool = False

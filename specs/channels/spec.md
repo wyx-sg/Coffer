@@ -336,7 +336,16 @@ status / notify`.
   again. An unknown key is rejected with the valid keys listed; no channel-side
   code is added per agent. On a transport that `supports_buttons` (FR-018),
   `/agent` with no argument renders the choices as an interactive selection card
-  instead of a text list; tapping a button performs the same switch.
+  instead of a text list; tapping a button performs the same switch. The card
+  carries a **title element** where the transport has one (SeaTalk; Telegram
+  takes it as a bold first line) so its subject is scannable without crowding
+  the body. After a tap lands, a transport that `supports_card_update` MUST
+  **rewrite the card in place** so its tick moves to the new choice — a card
+  left advertising the option the user just took invites a second tap that does
+  nothing. The rewrite is best-effort: the switch is already done and confirmed
+  in chat, so a transport without the capability, or a rewrite the platform
+  refuses (SeaTalk updates only interactive cards, only within 7 days, only for
+  the sending bot), changes nothing the user relies on.
 - **FR-014**: The owner gate verifies sender identity, not only chat identity.
   Every inbound envelope carries a `sender_id` (Telegram `from.id`, SeaTalk
   `employee_code`); pairing records it on the peer, and an inbound message is
@@ -730,6 +739,16 @@ produce it on its own.
   second agent's button
 - **Then** a fresh conversation pinned to the second agent becomes active, as if
   the owner had typed `/agent <second>`
+
+### Scenario: a tapped selection card is rewritten with the new choice
+
+- **Given** a paired channel on a transport that `supports_card_update`, showing
+  an `/agent` selection card
+- **When** the owner taps a different agent's button
+- **Then** the card is rewritten in place with the tick moved to the agent just
+  chosen; on a transport without the capability nothing is rewritten and the
+  switch still succeeds, and a rewrite the platform refuses leaves the switch
+  and its confirmation intact
 
 ### Scenario: a non-owner selection-card tap is ignored
 
@@ -1527,6 +1546,19 @@ one document instead of two.
   the channel-specific fields).
 
 ## Deliberately out of scope
+
+**Two SeaTalk card capabilities Coffer does not use.** The platform's card format
+also offers `redirect` buttons (with `mobile_link` / `desktop_link`) and
+per-language card bodies (`{"default": …, "zh-Hans": …}`). Neither is adopted.
+A redirect button needs somewhere to send the user, and Coffer's web UI binds to
+loopback — a link from the owner's phone reaches nothing. Per-language cards
+need Coffer's channel copy to exist in more than one language; it is
+English-only in the backend, and the card would be the only translated surface
+in a conversation whose every other line comes from the agent in whatever
+language the owner wrote in. Both are recorded here rather than silently
+skipped, because the research that found them is what made the card work
+possible at all.
+
 
 **The web Chat page.** The Agent Chat spec shipped a two-column chat page in the web UI —
 conversation list, message thread, composer, model picker, pending-queue

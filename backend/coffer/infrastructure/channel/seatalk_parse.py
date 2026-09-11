@@ -145,7 +145,9 @@ def strip_group_mentions(plain_text: str, mentioned_list: Sequence[Any] | None) 
     return text.strip()
 
 
-def interactive_card(text: str, buttons: Sequence[ChoiceButton]) -> dict[str, Any]:
+def interactive_card(
+    text: str, buttons: Sequence[ChoiceButton], *, title: str = ""
+) -> dict[str, Any]:
     """A SeaTalk ``interactive_message`` card: a markdown body + callback buttons
     each carrying our custom ``value``. A tap returns the value in an
     ``interactive_message_click`` event.
@@ -158,10 +160,16 @@ def interactive_card(text: str, buttons: Sequence[ChoiceButton]) -> dict[str, An
     card never worked. Verified against SeaTalk's published card format
     2026-09-09.
 
+    A ``title`` renders as SeaTalk's own title element above the body, which is
+    what makes a card scannable at a glance in a busy chat — without it the
+    subject has to be crammed into the first line of the description, competing
+    with the content. Omitted when empty rather than sent blank.
+
     ``format: 1`` selects SeaTalk's markdown for the description body."""
-    elements: list[dict[str, Any]] = [
-        {"element_type": "description", "description": {"format": 1, "text": text}}
-    ]
+    elements: list[dict[str, Any]] = []
+    if title:
+        elements.append({"element_type": "title", "title": {"text": title}})
+    elements.append({"element_type": "description", "description": {"format": 1, "text": text}})
     elements.extend(
         {
             "element_type": "button",

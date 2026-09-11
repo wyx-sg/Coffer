@@ -12,6 +12,7 @@ from collections.abc import Sequence
 from dataclasses import replace
 from typing import Any, Protocol
 
+from coffer.application.channel.card_refresh import refresh_selection_card
 from coffer.application.channel.conversation_ops import (
     ensure_conversation,
     explain_conversation_error,
@@ -24,6 +25,7 @@ from coffer.application.channel.ports import (
     ChannelThreadConversationRepoPort,
     ModelSuggestionPort,
 )
+from coffer.application.channel.selection_cards import agent_card, model_card
 from coffer.domain.channel.envelopes import ChoiceButton
 from coffer.domain.errors import CofferError
 
@@ -37,20 +39,13 @@ HELP_TEXT = (
     "/help — this list"
 )
 
-# Telegram caps inline-button callback_data at 64 bytes; skip any option whose
-# encoded value would exceed it (SeaTalk is more generous, so this is the floor).
-_CALLBACK_MAX_BYTES = 64
-
-
-def _callback_fits(value: str) -> bool:
-    return len(value.encode("utf-8")) <= _CALLBACK_MAX_BYTES
-
 
 class SafeSend(Protocol):
     """Owner-gated send supplied by the processor: ``(binding, chat_id, text)``
     plus optional selection-card ``buttons`` (rendered only where the transport
-    ``supports_buttons``; ignored otherwise) and the routing pair
-    ``chat_kind``/``thread_id`` (default to a DM reply when omitted)."""
+    ``supports_buttons``; ignored otherwise), the card ``title`` that heads
+    them, and the routing pair ``chat_kind``/``thread_id`` (default to a DM
+    reply when omitted)."""
 
     async def __call__(
         self,
@@ -59,6 +54,7 @@ class SafeSend(Protocol):
         text: str,
         *,
         buttons: Sequence[ChoiceButton] | None = None,
+        title: str = "",
         chat_kind: str = "direct",
         thread_id: str = "",
     ) -> None: ...
@@ -174,20 +170,14 @@ class ChannelCommands:
             row = await self._threads.get(binding.resource_id, peer.chat_id, thread_id)
             current = (row.preferred_agent if row is not None else None) or binding.default_agent
             if binding.adapter.capabilities.supports_buttons:
-                buttons = [
-                    ChoiceButton(
-                        label=name + (" ✓" if key == current else ""),
-                        value=f"agent:{key}",
-                    )
-                    for key, name in self._agents.agent_choices()
-                    if _callback_fits(f"agent:{key}")
-                ]
-                if buttons:
+                card = agent_card(current=current, choices=self._agents.agent_choices())
+                if card.buttons:
                     await send(
                         binding,
                         peer.chat_id,
-                        f"Current agent: {current}\nTap to switch:",
-                        buttons=buttons,
+                        card.text,
+                        buttons=card.buttons,
+                        title=card.title,
                         chat_kind=chat_kind,
                         thread_id=thread_id,
                     )
@@ -274,20 +264,14 @@ class ChannelCommands:
                     row.preferred_agent if row is not None else None
                 ) or binding.default_agent
                 picks = await self._model_suggestions.suggest(agent_key)
-                buttons = [
-                    ChoiceButton(
-                        label=m + (" ✓" if m == cfg.model else ""),
-                        value=f"model:{m}",
-                    )
-                    for m in picks
-                    if _callback_fits(f"model:{m}")
-                ]
-                if buttons:
+                card = model_card(current=cfg.model, picks=picks)
+                if card.buttons:
                     await send(
                         binding,
                         peer.chat_id,
-                        f"Current model: {current}\nTap a quick-pick (or send /model <name>):",
-                        buttons=buttons,
+                        card.text,
+                        buttons=card.buttons,
+                        title=card.title,
                         chat_kind=chat_kind,
                         thread_id=thread_id,
                     )
@@ -352,11 +336,17 @@ class ChannelCommands:
         *,
         chat_kind: str = "direct",
         thread_id: str = "",
+        card_message_id: str = "",
     ) -> None:
         """Route a selection-card tap (``data`` = the tapped ``ChoiceButton.value``)
         to the same switch the text command performs (the processor owner-gated it).
         ``chat_kind``/``thread_id`` route the confirmation back into a group tap's
-        own group/thread, not a DM (FR-034)."""
+        own group/thread, not a DM (FR-034).
+
+        ``card_message_id`` is the card that was tapped. After the switch lands,
+        the card is rewritten so it shows the new choice — otherwise it sits in
+        the chat still offering the option the user just took, which is the one
+        thing a selection card must never do."""
         kind, _, value = data.partition(":")
         if kind == "agent":
             if value not in self._agents.agent_keys():
@@ -375,6 +365,11 @@ class ChannelCommands:
             await self.apply_model(
                 binding, peer, value, send, chat_kind=chat_kind, thread_id=thread_id
             )
+        else:
+            return
+        await refresh_selection_card(
+            self, binding, peer, card_message_id, kind, chat_kind=chat_kind, thread_id=thread_id
+        )
 
     async def _open_and_report(
         self,

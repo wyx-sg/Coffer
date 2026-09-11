@@ -29,14 +29,14 @@ from coffer.domain.channel.envelopes import (
 from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.infrastructure.channel.live_text import SeaTalkLiveText
+from coffer.infrastructure.channel.seatalk_cards import update_interactive_card
+from coffer.infrastructure.channel.seatalk_history import fetch_thread_context
 from coffer.infrastructure.channel.seatalk_media import (
     default_media_dir,
     media_attachments,
     send_outbound_media,
-    thread_media_attachments,
 )
 from coffer.infrastructure.channel.seatalk_parse import (
-    collect_forwarded_items,
     flatten_combined_forwarded,
     interactive_card,
     mentions_others,
@@ -95,6 +95,8 @@ class SeaTalkAdapter:
             supports_typing=True,
             max_message_chars=_CHUNK_LIMIT,
             supports_buttons=True,
+            # Update Message covers interactive cards (never text — see supports_edit).
+            supports_card_update=True,
             supports_media=True,
             supports_groups=True,
             supports_history_fetch=True,
@@ -237,6 +239,7 @@ class SeaTalkAdapter:
         markdown: str,
         *,
         buttons: Sequence[ChoiceButton] | None = None,
+        title: str = "",
         thread_id: str = "",
         chat_kind: str = "direct",
     ) -> SentMessage:
@@ -247,7 +250,7 @@ class SeaTalkAdapter:
             # (A card description renders SeaTalk markdown but NOT tables.)
             result = await self._send(
                 chat_id,
-                interactive_card(markdown_to_seatalk(markdown), buttons),
+                interactive_card(markdown_to_seatalk(markdown), buttons, title=title),
                 thread_id,
                 chat_kind,
             )
@@ -286,8 +289,22 @@ class SeaTalkAdapter:
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None:
         # supports_edit stays literally false: no SeaTalk API rewrites a
-        # delivered message. Live progress goes through open_live_text instead.
+        # delivered TEXT message. Live progress goes through open_live_text, and
+        # a delivered CARD is rewritable through update_card below.
         raise ChannelSendFailed(self._name, "seatalk cannot edit messages")
+
+    async def update_card(
+        self,
+        chat_id: str,
+        message_id: str,
+        markdown: str,
+        buttons: Sequence[ChoiceButton],
+        *,
+        title: str = "",
+        chat_kind: str = "direct",
+    ) -> None:
+        del chat_kind  # the message id identifies the message; no chat routing
+        await update_interactive_card(self._post, message_id, markdown, buttons, title=title)
 
     async def delete_message(self, chat_id: str, message_id: str) -> None:
         raise ChannelSendFailed(self._name, "seatalk cannot delete messages")
@@ -331,31 +348,20 @@ class SeaTalkAdapter:
     async def fetch_thread(
         self, chat_id: str, thread_id: str, *, limit: int = 50
     ) -> tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]:
-        """The thread's own messages, when the @mention landed inside a thread:
-        their flattened text AND the images/files they carry, downloaded
-        (FR-029) so a picture in the thread reaches the vision agent instead of
-        a dead auth-gated file link. Degrades to ``([], ())`` on ANY error so a
-        transient failure never breaks the turn (which still runs on the
-        @mention alone). Group-main @mentions fetch no history — that permission
-        is intentionally not granted."""
-        try:
-            payload = await self._get(
-                "/messaging/v2/group_chat/get_thread_by_thread_id",
-                {"group_id": chat_id, "thread_id": thread_id, "page_size": limit},
-            )
-        except Exception:
-            _logger.warning(
-                "seatalk.fetch_thread.failed", extra={"channel": self._name}, exc_info=True
-            )
-            return [], ()
-        messages = payload.get("thread_messages") or [] if isinstance(payload, dict) else []
-        # Recurse: a forwarded record in the thread flattens to its leaves for
-        # text, and its images/files download alongside the direct ones.
-        return (
-            collect_forwarded_items(messages),
-            await thread_media_attachments(
-                self._client, self._media_dir, self._ensure_token, messages
-            ),
+        """The thread's own messages, when the @mention landed inside a thread.
+
+        Delegates to ``seatalk_history`` so this file stays inside the size cap;
+        see there for the degrade-to-empty contract.
+        """
+        return await fetch_thread_context(
+            self._get,
+            self._client,
+            self._media_dir,
+            self._ensure_token,
+            chat_id,
+            thread_id,
+            limit=limit,
+            channel=self._name,
         )
 
     # -- transport -------------------------------------------------------------
