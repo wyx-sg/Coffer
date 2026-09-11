@@ -29,12 +29,6 @@ export const PRESETS: Preset[] = [
   },
   { id: "deepseek", label: "DeepSeek", protocol: "openai", baseUrl: "https://api.deepseek.com" },
   {
-    id: "moonshot",
-    label: "Moonshot (Kimi)",
-    protocol: "openai",
-    baseUrl: "https://api.moonshot.cn/v1",
-  },
-  {
     id: "openrouter",
     label: "OpenRouter",
     protocol: "openai",
@@ -45,19 +39,18 @@ export const PRESETS: Preset[] = [
 ];
 
 // The agents a connection projects into BY DEFAULT, mirroring the backend
-// (`_DEFAULT_COMPATIBLE`). The form pre-fills the checkboxes from this; ollama is
-// internal-only (projects into no agent).
+// (`_DEFAULT_COMPATIBLE`). The form pre-fills the checkboxes from this. Every
+// wire offers both agents: the protocol decides model introspection and whether
+// a key is needed, not who may be driven by the endpoint (an openai gateway
+// driving Claude Code is a first-class case), so the default is the widest set
+// and the user narrows it. ollama is the exception — internal-only, it projects
+// into no agent.
 export function defaultCompatibleAgents(protocol: Protocol | ""): AgentType[] {
   switch (protocol) {
-    case "anthropic":
-      return ["claude_code"];
-    case "openai":
-      return ["codex"];
-    case "unknown":
-    case "": // custom, before a wire is picked
-      return ["claude_code", "codex"];
-    default: // ollama
+    case "ollama":
       return [];
+    default:
+      return ["claude_code", "codex"];
   }
 }
 

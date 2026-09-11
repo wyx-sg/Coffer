@@ -137,14 +137,14 @@ describe("ModelProvidersPage", () => {
     apiMock.create.mockResolvedValue(makeProvider({ name: "myconn", protocol: "openai" }));
 
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: /Add connection/i }));
-    // Scope to the dialog: the table toolbar carries a "Connection type" filter
+    fireEvent.click(await screen.findByRole("button", { name: /Add model provider/i }));
+    // Scope to the dialog: the table toolbar carries a "Protocol" filter
     // with the same label.
     const form = within(screen.getByRole("dialog"));
     fireEvent.change(form.getByLabelText("Name"), { target: { value: "myconn" } });
     // Pick the "Custom" provider → a protocol picker appears.
-    fireEvent.change(form.getByLabelText("Provider"), { target: { value: "custom" } });
-    fireEvent.change(form.getByLabelText("Connection type"), { target: { value: "openai" } });
+    fireEvent.change(form.getByLabelText("Vendor"), { target: { value: "custom" } });
+    fireEvent.change(form.getByLabelText("Protocol"), { target: { value: "openai" } });
     fireEvent.change(form.getByLabelText("Base URL"), { target: { value: "https://gw/v1" } });
     fireEvent.change(form.getByLabelText("API key"), { target: { value: "sk-x" } });
     fireEvent.click(form.getByRole("button", { name: "Save" }));
@@ -173,11 +173,11 @@ describe("ModelProvidersPage", () => {
 
       renderPage();
       // open the add dialog
-      fireEvent.click(await screen.findByRole("button", { name: /Add connection/i }));
+      fireEvent.click(await screen.findByRole("button", { name: /Add model provider/i }));
 
       fireEvent.change(screen.getByLabelText("Name"), { target: { value: "local-llm" } });
       // The Ollama preset fills the protocol + endpoint and is keyless.
-      fireEvent.change(screen.getByLabelText("Provider"), { target: { value: "ollama" } });
+      fireEvent.change(screen.getByLabelText("Vendor"), { target: { value: "ollama" } });
       expect(screen.queryByLabelText("API key")).not.toBeInTheDocument();
 
       fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -242,11 +242,11 @@ describe("ModelProvidersPage", () => {
     renderPage();
     await screen.findByText("official");
 
-    selectFilter("Connection type", "openai");
+    selectFilter("Protocol", "openai");
     expect(screen.getByText("agnes")).toBeInTheDocument();
     expect(screen.queryByText("official")).not.toBeInTheDocument();
 
-    selectFilter("Connection type", "All types");
+    selectFilter("Protocol", "All types");
     selectFilter("Status", "Enabled");
     expect(screen.getByText("official")).toBeInTheDocument();
     expect(screen.queryByText("agnes")).not.toBeInTheDocument();

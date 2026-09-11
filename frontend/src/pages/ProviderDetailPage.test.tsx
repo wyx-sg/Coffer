@@ -238,8 +238,8 @@ describe("ProviderDetailPage", () => {
   test("a missing connection shows a not-found card with a way back", async () => {
     apiMock.get.mockRejectedValue(new ApiError("RESOURCE_NOT_FOUND", "no such connection"));
     renderPage();
-    expect(await screen.findByText("Connection not found")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /back to llm connections/i }));
+    expect(await screen.findByText("Model provider not found")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /back to model providers/i }));
     expect(navigateMock).toHaveBeenCalledWith("/model-providers");
   });
 });

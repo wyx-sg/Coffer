@@ -225,10 +225,10 @@ connection projects into* from *the wire its endpoint speaks*, and resolves keys
 per CONNECTION.
 
 - **F1 — `compatible_agents` on the connection.** A connection carries an explicit
-  `compatible_agents ⊆ {claude_code, codex}` (`null` ⇒ the wire default:
-  anthropic → `[claude_code]`, openai → `[codex]`, ollama → `[]`, unknown → both).
-  The add/edit dialog pre-fills checkboxes from the wire but the user may override
-  (route an openai gateway to Claude Code). JSON payload — no DB migration.
+  `compatible_agents ⊆ {claude_code, codex}` (`null` ⇒ the wire default: both
+  agents for every credentialed wire, `[]` for ollama, which is internal-only).
+  The add/edit dialog pre-fills the checkboxes the same way — every box ticked —
+  and the user narrows it (or routes an openai gateway to Claude Code). JSON payload — no DB migration.
 - **F2 — Projection writer chosen by AGENT type, not protocol.** A connection
   compatible with `claude_code` writes Claude's `settings.json` (anthropic shape);
   with `codex`, Codex's `config.toml`. `protocol` now drives only model
@@ -789,8 +789,8 @@ and `internal_default`.
 
 > **Amendment 2026-06-23 (provider presets).** The add-connection form no longer
 > auto-detects the `protocol` from base_url + key. Instead it offers a **provider
-> preset** picker (OpenAI / Anthropic / Google Gemini / DeepSeek / Moonshot /
-> OpenRouter / Ollama) that fills the endpoint + protocol, plus a **Custom**
+> preset** picker (OpenAI / Anthropic / Google Gemini / DeepSeek / OpenRouter /
+> Ollama) that fills the endpoint + protocol, plus a **Custom**
 > option that reveals a manual protocol selector for any other OpenAI-/Anthropic-
 > compatible endpoint. The stored data model is unchanged (`protocol` is still a
 > `ProviderConfig` field); only how it is chosen at create time changed. The

@@ -96,9 +96,9 @@ anthropic`，Codex 注入 `resolve_active_key(OPENAI)`），所以把这种连�
 wire」解耦，并按**连接**解析密钥。
 
 - **F1 — 连接上的 `compatible_agents`。** 连接显式携带 `compatible_agents ⊆ {claude_code, codex}`
-  （`null` ⇒ wire 默认：anthropic → `[claude_code]`、openai → `[codex]`、ollama → `[]`、unknown →
-  两者）。添加/编辑对话框按 wire 预填复选框，用户可改（把 openai 网关路由给 Claude Code）。JSON 载荷
-  ——无需 DB 迁移。
+  （`null` ⇒ wire 默认：所有带凭据的 wire 都是两者，ollama 为 `[]`——它仅供内部使用）。添加/编辑
+  对话框同样按此预填复选框——默认全部勾选——由用户收窄（或把 openai 网关路由给 Claude Code）。
+  JSON 载荷——无需 DB 迁移。
 - **F2 — 投射 writer 按 AGENT 类型选，不按 protocol。** 兼容 `claude_code` 的连接写 Claude 的
   `settings.json`（anthropic 形态）；兼容 `codex` 写 Codex 的 `config.toml`。`protocol` 现仅用于模型
   自省与是否需要 key。
@@ -472,7 +472,7 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 
 > **修订 2026-06-23（提供方预设）。** 添加连接的表单不再从 base_url + 密钥自动探测
 > `protocol`，改为提供**提供方预设**选择（OpenAI / Anthropic / Google Gemini /
-> DeepSeek / Moonshot / OpenRouter / Ollama），选中即填入接入地址与协议；另有
+> DeepSeek / OpenRouter / Ollama），选中即填入接入地址与协议；另有
 > **自定义**选项，会显示手动协议选择器，用于任意其他 OpenAI/Anthropic 兼容端点。
 > 存储的数据模型不变（`protocol` 仍是 `ProviderConfig` 字段），仅创建时的选择方式改变。
 > `detect-protocol` 探测端点保留供其他调用方使用，但表单不再使用它。

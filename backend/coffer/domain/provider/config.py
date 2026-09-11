@@ -45,11 +45,13 @@ _KNOWN_AGENTS: frozenset[str] = frozenset({_CLAUDE_CODE, _CODEX})
 
 # Effective agent set when ``compatible_agents`` is unset, by the wire the
 # endpoint speaks. ``protocol`` no longer fixes the projection target (the user's
-# explicit ``compatible_agents`` does); these are only the defaults the create
-# form pre-fills. ollama is internal-only — no key, projects into no agent.
+# explicit ``compatible_agents`` does), so a credentialed endpoint defaults to
+# the widest set — both agents — and the user narrows it from there; the create
+# form pre-fills the same way. ollama is internal-only — no key, projects into
+# no agent.
 _DEFAULT_COMPATIBLE: dict[str, list[str]] = {
-    "anthropic": [_CLAUDE_CODE],
-    "openai": [_CODEX],
+    "anthropic": [_CLAUDE_CODE, _CODEX],
+    "openai": [_CLAUDE_CODE, _CODEX],
     "ollama": [],
     "unknown": [_CLAUDE_CODE, _CODEX],
 }
