@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from dataclasses import replace
 from typing import Any, Protocol
 
-from coffer.application.channel.card_refresh import refresh_selection_card
+from coffer.application.channel.card_delivery import deliver_card, refresh_selection_card
 from coffer.application.channel.conversation_ops import (
     ensure_conversation,
     explain_conversation_error,
@@ -170,17 +170,12 @@ class ChannelCommands:
             row = await self._threads.get(binding.resource_id, peer.chat_id, thread_id)
             current = (row.preferred_agent if row is not None else None) or binding.default_agent
             if binding.adapter.capabilities.supports_buttons:
+                # A card the platform refuses must not end the command in
+                # silence — fall through to the plain-text answer below.
                 card = agent_card(current=current, choices=self._agents.agent_choices())
-                if card.buttons:
-                    await send(
-                        binding,
-                        peer.chat_id,
-                        card.text,
-                        buttons=card.buttons,
-                        title=card.title,
-                        chat_kind=chat_kind,
-                        thread_id=thread_id,
-                    )
+                if await deliver_card(
+                    binding, peer, card, chat_kind=chat_kind, thread_id=thread_id
+                ):
                     return
             await send(
                 binding,
@@ -265,16 +260,10 @@ class ChannelCommands:
                 ) or binding.default_agent
                 picks = await self._model_suggestions.suggest(agent_key)
                 card = model_card(current=cfg.model, picks=picks)
-                if card.buttons:
-                    await send(
-                        binding,
-                        peer.chat_id,
-                        card.text,
-                        buttons=card.buttons,
-                        title=card.title,
-                        chat_kind=chat_kind,
-                        thread_id=thread_id,
-                    )
+                # Same fallback as /agent: a refused card degrades to text.
+                if await deliver_card(
+                    binding, peer, card, chat_kind=chat_kind, thread_id=thread_id
+                ):
                     return
             await send(
                 binding,

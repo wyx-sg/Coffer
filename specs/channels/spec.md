@@ -302,7 +302,8 @@ clean success sends no completion summary while a failed turn does.
   own markdown (`format: 1` — bold, italic, inline code, fences, ordered and
   unordered lists; headings become bold and links become `label (url)`, neither
   being supported there, and a literal marker character is escaped with a
-  DOUBLE backslash) with 4096-byte chunking. Both stream a turn's progress into
+  SINGLE backslash — two would be one escape too many, SeaTalk consuming the
+  first and rendering the second as literal text) with 4096-byte chunking. Both stream a turn's progress into
   ONE surface that grows in place (FR-037), its lines describing each call from
   its input (e.g. `⏳ Bash · list the desktop`, `✅ Read · wedding.json`).
   Capabilities are declared by the adapter, not special-cased in the core.
@@ -369,9 +370,14 @@ status / notify`.
   invalid builtin model is rejected against the registry; a bad bridged model
   string surfaces as the CLI's own error relayed to the chat. On a transport
   that `supports_buttons` (FR-018), `/model` with no argument renders best-effort
-  quick-picks — the managed agent's active provider profile model/fast_model
-  (ADR provider-switching) — as a selection card (free-text `/model <name>` still works); with
-  no suggestions it falls back to the text report.
+  quick-picks as a selection card. They come from the agent's model catalogue —
+  the same list the web picker offers — but **bounded to a handful of buttons**:
+  that catalogue runs to 29 models for `claude_code`, and a card that long is
+  unreadable on a phone and refused outright by SeaTalk. The model currently in
+  effect is always among them, so a refreshed card always has a tick to show;
+  the remaining slots follow catalogue order. Free-text `/model <name>` reaches
+  every other model and the card's body says so — that hint is what makes a
+  bounded card honest. With no suggestions it falls back to the text report.
 - **FR-018**: On a transport that declares the `supports_buttons` capability,
   the core MAY render a command's choice list as an **interactive selection
   card** (Telegram inline keyboard, SeaTalk interactive message). A button tap
@@ -389,6 +395,11 @@ status / notify`.
   beside it. Coffer emitted the latter until 2026-09-10, a shape guessed while
   the API docs were login-gated, so a SeaTalk selection card would have
   rendered without its buttons or been refused outright.
+
+  A card the platform refuses is not the end of the command: the handler falls
+  back to the plain-text answer it already has, so a rejected card degrades to a
+  working message instead of leaving the user with silence. The rejection is
+  logged so it stays diagnosable.
 - **FR-019**: A channel-originated turn tells the agent it is bridged to a chat
   channel, not a terminal: the agent receives a short system-prompt note carrying
   the channel name and mobile-chat guidance — keep replies concise, and it cannot
@@ -873,8 +884,15 @@ produce it on its own.
 - **Given** a reply whose prose contains a SeaTalk formatting character that is
   not markup (e.g. an underscore inside `snake_case`)
 - **When** it is rendered for SeaTalk
-- **Then** that character is escaped with a DOUBLE backslash so it survives as
+- **Then** that character is escaped with a SINGLE backslash so it survives as
   typed, while genuine bold/italic/code/list markup is left as SeaTalk markdown
+
+### Scenario: a refused selection card falls back to the text reply
+
+- **Given** a button-capable transport that refuses the selection card outright
+- **When** the owner sends `/agent` or `/model`
+- **Then** the command answers with its plain-text report instead and the
+  refusal is logged — silence is the one outcome a command must never produce
 
 ### Scenario: a group member who is not the paired sender is ignored
 
@@ -1500,6 +1518,13 @@ one document instead of two.
   continues the same session. Claude Code is driven through the Claude Agent SDK
   and Codex through `codex app-server` (JSON-RPC 2.0 over stdio, NDJSON-framed);
   both run with full permissions — owner pairing (FR-005) is the security gate.
+  Both MUST emit the reply as text increments *as it is written*, not as one
+  block at the end of the turn — otherwise the live surface of FR-037 has
+  nothing to grow and a channel reply lands all at once after a long silence.
+  The Claude Agent SDK does this only when asked (`include_partial_messages`),
+  and it then delivers BOTH the increments and the finished assistant message,
+  so the adapter MUST subtract what it already emitted and send the reply
+  exactly once.
 - **FR-048**: System MUST persist conversations and their messages in SQLite as
   the system of record; they are not Resources of the kind-agnostic Resource
   framework. A message MUST store its role and an ordered list of content blocks

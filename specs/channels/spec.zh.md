@@ -270,7 +270,8 @@ agent 的 turn-started 审计记录；观察干净成功不发完成摘要、而
   HTML（带纯文本回退），按段落边界以 4000 字符分块；SeaTalk 把同一份 markdown
   转成 SeaTalk 自己的 markdown（`format: 1` —— 粗体、斜体、行内 code、code
   fence、有序与无序列表；标题转粗体、链接转 `label (url)`，因为二者都不被支持，
-  而作为字面量的标记字符用**双反斜杠**转义），按 4096 字节分块。两者都把一个 turn
+  而作为字面量的标记字符用**单反斜杠**转义——两个就多转了一次，SeaTalk 会吃掉第一个、
+  把第二个当字面量渲染出来），按 4096 字节分块。两者都把一个 turn
   的进度流式写进**同一个**就地生长的界面（FR-037），其中每行从调用的输入描述它在
   做什么（如 `⏳ Bash · list the desktop`、`✅ Read · wedding.json`）。能力由
   adapter 声明，内核不做特判。
@@ -320,9 +321,13 @@ status / notify`。
   覆盖，对桥接 agent 则存原始上游 model 串透传给 CLI。model 切换在同会话下条 turn
   生效（model 每 turn 重读，不同于 agent 与工作目录）。非法 builtin model 对
   registry 校验被拒；坏的桥接 model 串会以 CLI 自己的错误回传到 chat。在
-  `supports_buttons` 的传输上（FR-018），`/model` 无参时把尽力而为的快捷选项
-  —— 受管 agent 的 active provider profile 的 model/fast_model（ADR: provider-switching）——
-  渲染成选择卡片（自由文本 `/model <name>` 仍可用）；没有建议时回退到文本报告。
+  `supports_buttons` 的传输上（FR-018），`/model` 无参时把尽力而为的快捷选项渲染成
+  选择卡片。选项取自该 agent 的 model catalogue（与网页 picker 同一份列表），但
+  **按钮数被限制在一小把**：`claude_code` 的 catalogue 有 29 个 model，这么长的卡片
+  在手机上根本读不了，SeaTalk 也会直接拒收。当前生效的 model 总在其中，因此刷新后的
+  卡片总有一个勾标可显示；其余名额按 catalogue 顺序填充。自由文本 `/model <name>`
+  仍可触达其余全部 model，卡片正文也这么写着——正是这句提示让一张有上限的卡片仍然
+  诚实。没有建议时回退到文本报告。
 - **FR-018**: 在声明了 `supports_buttons` 能力的传输上，内核 MAY 把一个命令的
   候选列表渲染成一张**交互式选择卡片**（Telegram inline keyboard、SeaTalk
   interactive message）。按钮点选作为一个规范化回调到达，携带一个不透明的值；
@@ -336,6 +341,10 @@ status / notify`。
   而不是与之并列的一个 `buttons` 数组。Coffer 在 2026-09-10 之前发出的是后者——
   那是 API 文档处于登录态不可达时猜出来的结构——因此一张 SeaTalk 选择卡片要么渲染
   不出按钮，要么被平台直接拒收。
+
+  平台拒收一张卡片并不等于命令到此为止：handler 回退到它本来就有的纯文本答复，
+  于是被拒的卡片降级成一条能用的消息，而不是让用户什么也收不到。该拒收会被记日志，
+  以便事后可诊断。
 - **FR-019**: 一个 channel 发起的 turn 会告诉 agent 它是被桥接到聊天 channel、
   而非终端：agent 收到一条简短的 system-prompt 注记，携带 channel 名与移动聊天
   指引——回复要简短，且它无法点击用户电脑上的权限/确认弹窗（用户可能不在电脑旁）。
@@ -765,8 +774,15 @@ Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制
 - **Given** 一条正文里含有并非标记语法的 SeaTalk 格式字符的回复（如 `snake_case`
   中间的下划线）
 - **When** 它为 SeaTalk 渲染
-- **Then** 该字符用**双反斜杠**转义从而原样保留，而真正的粗体/斜体/code/列表标记
+- **Then** 该字符用**单反斜杠**转义从而原样保留，而真正的粗体/斜体/code/列表标记
   仍按 SeaTalk markdown 保留
+
+### Scenario: a refused selection card falls back to the text reply
+
+- **Given** 一个支持按钮、但会直接拒收选择卡片的传输
+- **When** owner 发 `/agent` 或 `/model`
+- **Then** 该命令改以纯文本报告作答，并把这次拒收记入日志——
+  "什么也不回"是一个命令绝不能产生的结果
 
 ### Scenario: a group member who is not the paired sender is ignored
 
@@ -1274,7 +1290,11 @@ Web 端 Chat 页面是它们的另一个客户端；那个页面已被删除（�
   JSON 输出映射为平台的 turn 事件，并持久化上游 session id，使下一个 turn 接着
   同一个 session 跑。Claude Code 走 Claude Agent SDK，Codex 走 `codex app-server`
   （stdio 上的 JSON-RPC 2.0，NDJSON 分帧）；两者都以完整权限运行——owner 配对
-  （FR-005）才是安全闸门。
+  （FR-005）才是安全闸门。两者都必须在回复**写出的同时**以文本增量发出，而不是在
+  turn 结束时整块给出——否则 FR-037 的实时面板没有东西可以生长，channel 里的回复
+  会在长时间静默后一次性落地。Claude Agent SDK 只在被要求时才这么做
+  （`include_partial_messages`），而且开启后它会同时给出增量和最终那条完整的
+  assistant 消息，所以适配器必须扣掉已经发过的部分，让回复只发一次。
 - **FR-048**: 系统必须把会话及其消息持久化在 SQLite 里作为事实来源；它们不建模为
   kind-agnostic Resource 框架里的 Resource。一条消息必须存下它的 role 和一个有序的
   content block 列表，类型为 `text`、`tool_use`、`tool_result` 和 `attachment`

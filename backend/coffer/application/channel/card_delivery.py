@@ -1,15 +1,21 @@
-"""Rewrite a selection card after the user taps it.
+"""A selection card's life in the chat: put it there, then keep it honest.
 
 A "helper module beside ``commands.py``" like ``content_ops.py`` is to the skill
-service: free functions taking the ``ChannelCommands`` instance, kept out of
-that file so it stays inside the component size cap.
+service: free functions doing the card's I/O against the binding's adapter, kept
+out of that file so it stays inside the component size cap.
 
-Why this exists at all: before it, tapping a card switched the agent (or model)
-and posted a confirmation, but left the card itself untouched — still showing
-the old choice ticked and still offering the option the user had just taken.
-Tapping it again was a no-op the card actively invited. SeaTalk's Update Message
-and Telegram's ``editMessageText`` both let the card be rewritten in place, so
-it is.
+Why the rewrite half exists: before it, tapping a card switched the agent (or
+model) and posted a confirmation, but left the card itself untouched — still
+showing the old choice ticked and still offering the option the user had just
+taken. Tapping it again was a no-op the card actively invited. SeaTalk's Update
+Message and Telegram's ``editMessageText`` both let the card be rewritten in
+place, so it is.
+
+Why the delivery half exists: a card is a richer payload than text and a
+platform can refuse it outright — SeaTalk answered ``code=102`` to a ``/model``
+card built from a 29-model catalogue. The refusal used to end the command in
+silence. ``deliver_card`` reports whether the card landed so the caller can fall
+back to the plain-text answer it already has.
 """
 
 from __future__ import annotations
@@ -25,6 +31,42 @@ if TYPE_CHECKING:
     from coffer.application.channel.commands import ChannelCommands
 
 _logger = logging.getLogger(__name__)
+
+
+async def deliver_card(
+    binding: ChannelBinding,
+    peer: ChannelPeer,
+    card: SelectionCard,
+    *,
+    chat_kind: str,
+    thread_id: str,
+) -> bool:
+    """Send ``card``, reporting whether the user actually got it.
+
+    ``False`` means the caller must still answer some other way: either the card
+    has nothing tappable on it, or the platform refused it. Silence is the one
+    outcome a command must never produce, so the refusal is logged here and
+    handled there rather than raised.
+    """
+    if not card.buttons:
+        return False
+    try:
+        await binding.adapter.send_text(
+            peer.chat_id,
+            card.text,
+            buttons=card.buttons,
+            title=card.title,
+            thread_id=thread_id,
+            chat_kind=chat_kind,
+        )
+    except Exception:
+        _logger.warning(
+            "channel.card.rejected",
+            extra={"channel": binding.name, "card": card.title, "buttons": len(card.buttons)},
+            exc_info=True,
+        )
+        return False
+    return True
 
 
 async def refresh_selection_card(

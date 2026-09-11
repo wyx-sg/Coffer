@@ -83,7 +83,7 @@ class TestMarkdownToTelegramHtml:
 class TestMarkdownToSeatalk:
     """SeaTalk has its own markdown (``format: 1``): bold, italic, inline code,
     fences and lists are native; headings and links are not; a literal marker
-    character is escaped with a DOUBLE backslash."""
+    character is escaped with a SINGLE backslash."""
 
     def test_plain_text_passes_through(self):
         assert markdown_to_seatalk("hello world") == "hello world"
@@ -94,11 +94,19 @@ class TestMarkdownToSeatalk:
     @pytest.mark.acceptance(
         spec="channels", scenario="seatalk markdown escapes a literal marker character"
     )
-    def test_stray_markers_are_escaped_with_a_double_backslash(self):
+    def test_stray_markers_are_escaped_with_a_single_backslash(self):
         # `snake_case` must survive as typed instead of being read as markup.
-        assert markdown_to_seatalk("run some_var now") == "run some\\\\_var now"
-        assert markdown_to_seatalk("5*6 = 30") == "5\\\\*6 = 30"
-        assert markdown_to_seatalk("a ~~b~~ c") == "a \\\\~\\\\~b\\\\~\\\\~ c"
+        # One backslash, never two: SeaTalk eats the first and renders the
+        # second, which is how `claude_code` reached a real chat as
+        # `claude\_code`.
+        assert markdown_to_seatalk("run some_var now") == "run some\\_var now"
+        assert markdown_to_seatalk("5*6 = 30") == "5\\*6 = 30"
+        assert markdown_to_seatalk("a ~~b~~ c") == "a \\~\\~b\\~\\~ c"
+
+    def test_angle_brackets_are_left_alone(self):
+        # Verified by live probe: SeaTalk delivers them as written, so the
+        # `/model <name>` hint on a selection card needs no escaping.
+        assert markdown_to_seatalk("send /model <name>") == "send /model <name>"
 
     def test_code_span_content_is_never_escaped(self):
         assert markdown_to_seatalk("`a_b`") == "`a_b`"
