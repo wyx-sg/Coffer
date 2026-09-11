@@ -201,8 +201,10 @@ async def test_routes_require_the_token(client) -> None:  # type: ignore[no-unty
 
 async def test_withdrawn_continuous_sync_routes_are_gone(client) -> None:  # type: ignore[no-untyped-def]
     # Vault export/import withdrew continuous sync; its surface must not linger.
+    # ``/status`` came back for the backup remote (spec ## Backup) and is
+    # covered in test_sync_backup_routes.py — it reports one machine's last
+    # backup run, not the convergence state this test was written about.
     assert (await client.get("/api/v1/sync/config")).status_code == 404
-    assert (await client.get("/api/v1/sync/status")).status_code == 404
     assert (await client.post("/api/v1/sync/run", json={})).status_code == 404
     assert (await client.get("/api/v1/sync/machines")).status_code == 404
     assert (await client.get("/api/v1/sync/overrides")).status_code == 404

@@ -98,7 +98,7 @@ from coffer.surfaces.http.provider_wiring import (
 from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
 from coffer.surfaces.http.reorg_wiring import wire_reorg
 from coffer.surfaces.http.routing import include_all_routers
-from coffer.surfaces.http.sync_wiring import start_sync
+from coffer.surfaces.http.sync_wiring import start_backup_worker, start_sync, stop_backup_worker
 from coffer.surfaces.http.tidy_wiring import start_tidy, stop_tidy
 from coffer.surfaces.http.wiring import build_substrate, wire_chat
 
@@ -285,9 +285,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         knowledge_service=knowledge_service,
     )
 
-    # Vault export/import (spec vault-export-import). Nothing runs in the background: the
-    # service only acts when the user exports or imports a bundle.
-    start_sync(app, resource_svc, audit, db_path, get_master_key_manager())
+    # Vault export/import (spec vault-export-import). Export and import act
+    # only when the user asks; the backup half runs on a timer beside the
+    # retention worker, re-reading its interval from the configured remote.
+    start_backup_worker(
+        app,
+        start_sync(
+            app, resource_svc, audit, db_path, get_master_key_manager(), sm, credential_store
+        ),
+    )
 
     # Channel adapter reconciler (spec channels). Started after the daemon token is
     # published so the callback listener can be spawned with valid loopback
@@ -310,6 +316,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         daemon_routes.set_daemon_phase("draining")
         worker.stop()
+        await stop_backup_worker(app)
         await stop_tidy(app)
         await stop_async_batches(app)
         # Stop channel adapters first so no new turns start mid-teardown.
