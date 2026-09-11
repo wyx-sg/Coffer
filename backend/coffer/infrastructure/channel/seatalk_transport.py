@@ -26,6 +26,26 @@ _TOKEN_SLACK_SECONDS = 60
 _RATE_BACKOFF = (1.0, 3.0, 9.0)
 
 
+def _detail(payload: Any) -> str:
+    """The platform's own words about a rejection, ready to append to an error.
+
+    A bare ``code=102`` says a request was refused but not what about it was
+    wrong, and that number covers everything from an over-long card to a
+    malformed body — two real failures we chased separately because the
+    envelope's message never left this function. SeaTalk spells the reason out
+    under one of several key names depending on the endpoint, so try each and
+    fall back to the whole envelope minus the fields already reported.
+    """
+    if not isinstance(payload, dict):
+        return ""
+    for key in ("message", "msg", "error_msg", "error_message", "error", "detail"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return f" {key}={value.strip()!r}"
+    rest = {k: v for k, v in payload.items() if k not in ("code", "request_id")}
+    return f" payload={rest!r}" if rest else ""
+
+
 class SeaTalkTransport:
     """Token caching + one authenticated Open API call for one channel."""
 
@@ -120,4 +140,9 @@ class SeaTalkTransport:
                 )
                 await asyncio.sleep(delay)
                 continue
-            raise ChannelSendFailed(self._name, f"{path}: code={code} http={response.status_code}")
+            raise ChannelSendFailed(
+                self._name,
+                f"{path}: code={code} http={response.status_code}{_detail(payload)}",
+                api_rejected=True,
+                status=response.status_code,
+            )

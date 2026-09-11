@@ -17,12 +17,20 @@ vi.mock("@/lib/hooks/useModelIntrospection", () => ({
   useTestConnection: vi.fn(),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({ usePatchAgent: vi.fn() }));
-vi.mock("@/lib/hooks/useAgentModels", () => ({ useAgentModels: vi.fn() }));
+vi.mock("@/lib/hooks/useAgentModels", () => ({
+  useAgentModels: vi.fn(),
+  useAgentModelSelection: vi.fn(),
+  useSetAgentModelSelection: vi.fn(),
+}));
 
 import { useActivateProvider, useProviders, useUseBuiltinProvider } from "@/lib/hooks/useProviders";
 import { useListProviderModels, useTestConnection } from "@/lib/hooks/useModelIntrospection";
 import { usePatchAgent } from "@/lib/hooks/useAgents";
-import { useAgentModels } from "@/lib/hooks/useAgentModels";
+import {
+  useAgentModels,
+  useAgentModelSelection,
+  useSetAgentModelSelection,
+} from "@/lib/hooks/useAgentModels";
 import type { AgentModel } from "@/lib/api/agentModels";
 
 const useProvidersMock = useProviders as unknown as ReturnType<typeof vi.fn>;
@@ -32,6 +40,9 @@ const useListMock = useListProviderModels as unknown as ReturnType<typeof vi.fn>
 const useTestMock = useTestConnection as unknown as ReturnType<typeof vi.fn>;
 const usePatchAgentMock = usePatchAgent as unknown as ReturnType<typeof vi.fn>;
 const useAgentModelsMock = useAgentModels as unknown as ReturnType<typeof vi.fn>;
+const useSelectionMock = useAgentModelSelection as unknown as ReturnType<typeof vi.fn>;
+const useSetSelectionMock = useSetAgentModelSelection as unknown as ReturnType<typeof vi.fn>;
+const saveSelectionMutate = vi.fn();
 
 /** The daemon-served catalogue for claude_code: concrete, version-bearing ids
  * read back from the agent — one with a display name, one without. */
@@ -132,6 +143,10 @@ beforeEach(() => {
   });
   usePatchAgentMock.mockReturnValue({ mutate: patchAgentMutate, isPending: false });
   useAgentModelsMock.mockReturnValue({ data: CATALOGUE });
+  // Uncurated by default — the out-of-the-box state, where every model is on
+  // offer and nothing is ticked.
+  useSelectionMock.mockReturnValue({ data: [] });
+  useSetSelectionMock.mockReturnValue({ mutate: saveSelectionMutate, isPending: false });
   useProvidersMock.mockReturnValue({ data: [] });
 });
 
@@ -310,16 +325,17 @@ describe("AgentOverviewTab", () => {
     expect(screen.queryByRole("combobox", { name: /fast model/i })).not.toBeInTheDocument();
   });
 
-  test("the built-in login shows a read-only catalogue instead of dead model slots", () => {
+  test("the built-in login curates the catalogue instead of showing dead model slots", () => {
     // Nothing reads `agent.model` on the built-in login, so offering two model
-    // dropdowns there would be a control that writes a field nobody reads. Show
-    // what the agent can run on, and say where the choice really happens.
+    // dropdowns there would be a control that writes a field nobody reads.
+    // Show what the agent reports instead — with a tick beside each model the
+    // user says their account can actually run.
     useProvidersMock.mockReturnValue({ data: [] });
     render(<AgentOverviewTab agent={agent} />);
     expect(screen.queryByRole("combobox", { name: /^model$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: /fast model/i })).not.toBeInTheDocument();
-    expect(screen.getByText("claude-opus-5")).toBeInTheDocument();
-    expect(screen.getByText("claude-fable-5-1")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "claude-opus-5" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "claude-fable-5-1" })).toBeInTheDocument();
     expect(screen.getByText(/chosen per conversation/i)).toBeInTheDocument();
   });
 

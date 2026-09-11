@@ -79,7 +79,9 @@ NousResearch hermes-agent 文档与源码、SeaTalk 官方 `cs-bot` 仓库与开
   `button_type: "callback"` 并携带自定义 `value`；点按以
   `interactive_message_click` 事件回传，带 `value`、`message_id` 与
   `employee_code`。
-- **Typing indicator**：存在 `single_chat_typing` 端点。
+- **Typing indicator**：单聊是 `single_chat_typing`——群聊还有
+  `group_chat_typing`，这一行当初的漏写曾让我们以为群聊没有这个端点。
+  详见下方的输入中提示一节。
 - **组织审批**：自建 app 的 scope（Send Message to Bot User 等）需要组织
   管理员审批；出站 IP allowlist 是可选项，动态 IP 的机器应保持留空。
 
@@ -161,3 +163,50 @@ NousResearch hermes-agent 文档与源码、SeaTalk 官方 `cs-bot` 仓库与开
 - **单 track 的 channel 管理面模型。** Coffer 的 channel 管理面只管理 Coffer 自己 host 的东西——即 **Coffer-hosted channel**(SeaTalk 永远,加上官方桥接覆盖不到的 agent/用例的 Telegram),这是"一个 bot 控所有 agent"的护城河,管理方式与管理 MCP server、memory、skill 一致。**Externally-hosted channel——agent 原生网关(OpenClaw/Hermes 独立)与官方集成(Claude/Codex/Cursor-in-Slack、Claude Code 官方插件)——是非目标(non-goal):** Coffer 既不代理也不代管(叠网关与其运行时冲突;把 token 交给外部进程配置等于作废 vault;官方云端集成没有本地凭据可托管)。用户走那个工具自己的流程即可,Coffer 文档给指引。(早先设想过第二条"管理外部 channel"的 track,作为过度设计/YAGNI 已删。)
 
 - **北极星。** 一个已配对的 bot 驱动任意 managed agent,可**按会话、按 thread** 切换(每个 thread 是独立会话,FR-032)。
+
+## SeaTalk 流式消息（2026-09-11 重新查阅）
+
+FR-037 的 SeaTalk 流式实现当初是照着这份文档写的，但从未对着真实 API 验证过，
+这里也没有留下任何摘要——于是一个缺了两个必填字段的请求体就这么发了出去，
+单元测试钉住的是我们臆想的形状，而平台对每一次开流都只回一个光秃秃的
+`code=102`。写下这一节，是为了让下一个读代码的人能对照契约本身，
+而不是对照我们对它的记忆。
+
+来源：Send Streaming Messages，open.seatalk.io（需登录）。
+
+- **两个端点都要带目标。** `init_stream` 与 `update_stream` 都需要
+  `employee_code`（单聊）或 `group_id`（群聊）。光有 `stream_id` 不足以
+  确定发往哪个会话。
+- **`init_stream` 的 `message` 是必填的。** 它会向会话真实投递一条占位消息并
+  返回 `stream_id`。该 message 用 `tag` 指明类型：`"text"` 或
+  `"interactive_message"`——也就是说流式载体可以是**卡片**，不限于文本。
+- **`update_stream` 的 message 只带内容** —— `text` 或 `interactive_message`，
+  没有 `tag`。类型在开流时就已经定死。
+- `seq` 从第一次 `update_stream` 起算 1，每次加一；`init_stream` 不占用序号。
+- 每次更新都携带**全量累积内容**，绝不是增量；客户端渲染它收到的最新快照。
+- `format` 为 `1` 表示 Markdown（默认），`2` 表示纯文本。
+- `thread_id` 与 `quoted_message_id` 放在 message **内部**，与普通发送已验证的
+  位置一致。`quoted_message_id` 仅群聊可用。
+- **不需要额外权限。** 流式复用与普通回复相同的 Send Message to Bot User /
+  Send Message to Group Chat 授权；应用需具备 bot 能力且状态为 Online。
+- 限制：相邻 `update_stream` 间隔不得超过 30 秒，否则流被终止；总长 4096 字符；
+  流一旦结束（完成、超时、出错），任何引用该 `stream_id` 的请求都会被拒。
+  文档建议按约每 200 毫秒一次做缓冲，而不是每个 token 调一次。
+- 3.67 以下版本的接收方只会在流关闭后看到最终那一条消息。
+- 文档未解决的疑问：参数表把 `thread_id` 标为可选，但群聊请求示例的注释写着
+  「thread_id required」。群主频道（线程之外的 @ 提及）不带 `thread_id` 开流
+  是否被接受，尚未验证。
+
+### 输入中提示，两种会话都有（2026-09-11）
+
+是两个端点而不是一个 —— `messaging/v2/single_chat_typing` 收 `employee_code`，
+`messaging/v2/group_chat_typing` 收 `group_id` 加**可选**的 `thread_id`。
+Coffer 曾因「群聊没有这个端点」的判断而屏蔽了群内提示；实际上是有的。
+
+- 提示只显示 4 秒，所以一次 turn 运行期间要按心跳重发。限频 300/分钟。
+- 群聊里传入本次 turn 所回复的 thread，提示就出现在那里；不传则显示在主频道。
+  若要对一条未开线程的根消息显示输入中，把该消息的 id 作为 `thread_id` 传入 ——
+  根消息必须在 7 天以内。
+- 需要 SeaTalk 3.55 及以上。
+- 错误码 7003「群聊过大」指成员超过 200 人，此时平台根本不提供该提示。
+  无解，进度改由本次 turn 的流式载体承担。

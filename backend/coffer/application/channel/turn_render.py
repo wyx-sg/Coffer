@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -35,6 +36,8 @@ from coffer.domain.chat.events import (
 #: How often the renderer offers the live surface a new snapshot. The surface
 #: has its own (much smaller) transport-level buffer; this is the cadence a
 #: reader actually sees.
+_logger = logging.getLogger(__name__)
+
 _UPDATE_INTERVAL_SECONDS = 1.5
 _PROGRESS_MAX_LINES = 8
 _DESC_MAX_CHARS = 48
@@ -238,8 +241,9 @@ class TurnRenderer:
         # chat clutter), which expires within seconds, so re-send it on a
         # heartbeat while the turn runs. It covers the window BEFORE the live
         # surface opens (a turn that answers instantly opens none at all).
-        # DM ONLY: single_chat_typing targets a DM and there is no group typing
-        # endpoint, so a group/thread turn leans on its live surface alone.
+        # Groups get it too: SeaTalk has a group_chat_typing endpoint taking the
+        # thread, so the cue appears where the reply will. (This was DM-only on
+        # the belief that no such endpoint existed.)
         #
         # Gated on the RECEIPT mechanism, not on editing: a transport that can
         # react (Telegram, 👀 per FR-036) already told the sender it was heard,
@@ -248,7 +252,7 @@ class TurnRenderer:
         # transports while meaning something else entirely — the exact
         # confusion this capability split exists to remove.
         caps = self.adapter.capabilities
-        if caps.supports_typing and not caps.supports_reactions and self.chat_kind == "direct":
+        if caps.supports_typing and not caps.supports_reactions:
             return asyncio.create_task(self._typing_heartbeat())
         return None
 
@@ -257,7 +261,9 @@ class TurnRenderer:
             await asyncio.sleep(self.heartbeat_seconds)
             # Best-effort: a failed heartbeat must never break the turn.
             with contextlib.suppress(Exception):
-                await self.adapter.send_typing(self.chat_id)
+                await self.adapter.send_typing(
+                    self.chat_id, thread_id=self.thread_id, chat_kind=self.chat_kind
+                )
 
     async def _update_progress(self, progress: _Progress) -> None:
         # Once reply text is streaming it owns the live surface (FR-037) — a
@@ -304,10 +310,17 @@ class TurnRenderer:
         if progress.live_tried or not self.adapter.capabilities.supports_live_text:
             return
         progress.live_tried = True  # ask once per turn, whatever the answer
-        with contextlib.suppress(Exception):
+        try:
             progress.live = await self.adapter.open_live_text(
                 self.chat_id, thread_id=self.thread_id, chat_kind=self.chat_kind
             )
+        except Exception:
+            # Swallowed so a transport that cannot stream still answers, but
+            # logged: the degraded result — a reply delivered in one piece —
+            # looks exactly like a turn that never tried to stream, and
+            # without this the difference cannot be seen from outside.
+            _logger.warning("channel.live_text.open_failed", exc_info=True)
+            return
         if progress.live is None:
             return
         progress.last_update = self.now()

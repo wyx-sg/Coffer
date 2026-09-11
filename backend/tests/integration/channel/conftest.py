@@ -326,7 +326,9 @@ class FakeChannelAdapter:
     async def delete_message(self, chat_id: str, message_id: str) -> None:
         self.deleted.append((chat_id, message_id))
 
-    async def send_typing(self, chat_id: str) -> None:
+    async def send_typing(
+        self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
+    ) -> None:
         self.typing.append(chat_id)
 
     async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:

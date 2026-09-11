@@ -110,6 +110,34 @@ async def test_send_typing_posts_typing_endpoint(fake_seatalk: FakeSeaTalk) -> N
     finally:
         await adapter.stop()
     assert fake_seatalk.typing_calls == [{"employee_code": "emp-1"}]
+    assert fake_seatalk.group_typing_calls == []
+
+
+async def test_send_typing_in_a_group_thread_uses_the_group_endpoint(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """A group has its own typing endpoint, and it takes the thread — so the
+    cue appears where the reply will, not in the group's main channel."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        await adapter.send_typing("gid-1", thread_id="t1", chat_kind="group")
+    finally:
+        await adapter.stop()
+    assert fake_seatalk.group_typing_calls == [{"group_id": "gid-1", "thread_id": "t1"}]
+    assert fake_seatalk.typing_calls == []  # never the DM endpoint
+
+
+async def test_send_typing_in_a_group_without_a_thread_omits_it(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """An @mention outside a thread types in the group's main channel. thread_id
+    is optional there, and sending an empty one would name no thread at all."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        await adapter.send_typing("gid-1", chat_kind="group")
+    finally:
+        await adapter.stop()
+    assert fake_seatalk.group_typing_calls == [{"group_id": "gid-1"}]
 
 
 # -- inbound (events fed by the daemon's ingest route) --------------------------
@@ -1262,21 +1290,29 @@ async def test_stream_opens_once_and_updates_carry_full_snapshots(
     finally:
         await adapter.stop()
 
-    # ONE init_stream for the whole turn, on the single-chat surface.
+    # ONE init_stream for the whole turn, on the single-chat surface. It posts a
+    # real message, so it carries one — a body with only the target is refused
+    # (code=102), which is how this shipped broken.
     assert [surface for surface, _ in fake_seatalk.init_stream_calls] == ["single_chat"]
-    assert fake_seatalk.init_stream_calls[0][1] == {"employee_code": "emp-1"}
+    assert fake_seatalk.init_stream_calls[0][1] == {
+        "employee_code": "emp-1",
+        "message": {"tag": "text", "text": {"format": 2, "content": "I found"}},
+    }
     bodies = [body for _surface, body in fake_seatalk.update_stream_calls]
-    # seq starts at 1 and only ever increases…
-    assert [b["seq"] for b in bodies] == [1, 2, 3]
+    # An update names its target too: a stream_id alone does not say which chat.
+    assert all(b["employee_code"] == "emp-1" for b in bodies)
+    # seq starts at 1 on the first UPDATE — init_stream consumes none…
+    assert [b["seq"] for b in bodies] == [1, 2]
     assert {b["stream_id"] for b in bodies} == {"s1"}
     # …each update carries the FULL accumulated text, never a delta…
     assert [b["message"]["text"]["content"] for b in bodies] == [
-        "I found",
         "I found three",
         "I found three cats.",
     ]
+    # …an update never re-states the kind, which init_stream fixed…
+    assert all("tag" not in b["message"] for b in bodies)
     # …and only the last one finishes the stream.
-    assert [b["finish"] for b in bodies] == [False, False, True]
+    assert [b["finish"] for b in bodies] == [False, True]
     assert leftover == ""  # the streamed message IS the reply
 
 
@@ -1293,8 +1329,11 @@ async def test_stream_updates_are_buffered_not_sent_per_token(fake_seatalk: Fake
     finally:
         await adapter.stop()
 
+    # The first snapshot opens the stream (init_stream carries it); the next two
+    # fall inside the buffer and are dropped, so only the finish updates.
+    assert fake_seatalk.init_stream_calls[0][1]["message"]["text"]["content"] == "I"
     contents = [body["message"]["text"]["content"] for _s, body in fake_seatalk.update_stream_calls]
-    assert contents == ["I", "I found cats."]  # one buffered update, then the finish
+    assert contents == ["I found cats."]
 
 
 @pytest.mark.acceptance(
@@ -1378,9 +1417,12 @@ async def test_stream_finish_renders_seatalk_markdown(fake_seatalk: FakeSeaTalk)
     finally:
         await adapter.stop()
 
-    contents = [body["message"]["text"]["content"] for _s, body in fake_seatalk.update_stream_calls]
-    assert contents[0] == "## Result"  # interim: plain, exactly as it arrived
-    assert contents[-1] == "**Result**\n\nthe file is some\\_name.py"
+    # The interim snapshot opens the stream, plain and exactly as it arrived —
+    # format 2, so a reply cut mid-word cannot be parsed as half a markdown run.
+    opening = fake_seatalk.init_stream_calls[0][1]["message"]["text"]
+    assert opening == {"format": 2, "content": "## Result"}
+    final = fake_seatalk.update_stream_calls[-1][1]["message"]["text"]
+    assert final == {"format": 1, "content": "**Result**\n\nthe file is some\\_name.py"}
 
 
 async def test_group_stream_uses_the_group_surface_and_threads_the_message(
@@ -1395,14 +1437,22 @@ async def test_group_stream_uses_the_group_surface_and_threads_the_message(
         await adapter.stop()
 
     assert [surface for surface, _ in fake_seatalk.init_stream_calls] == ["group_chat"]
-    assert fake_seatalk.init_stream_calls[0][1] == {"group_id": "gid-1", "thread_id": "t1"}
-    assert [surface for surface, _ in fake_seatalk.update_stream_calls] == [
-        "group_chat",
-        "group_chat",
-    ]
-    # thread_id rides INSIDE the message body, the placement verified for sends.
+    # thread_id rides INSIDE the message body — the placement verified for sends
+    # and the one the platform's own sample uses.
+    assert fake_seatalk.init_stream_calls[0][1] == {
+        "group_id": "gid-1",
+        "message": {
+            "tag": "text",
+            "text": {"format": 2, "content": "working"},
+            "thread_id": "t1",
+        },
+    }
+    assert [surface for surface, _ in fake_seatalk.update_stream_calls] == ["group_chat"]
+    # A group update names the group, and nothing else: the stream is already
+    # bound to its thread, so an update carries no thread_id of its own.
     assert all(
-        body["message"]["thread_id"] == "t1" for _s, body in fake_seatalk.update_stream_calls
+        body["group_id"] == "gid-1" and "thread_id" not in body["message"]
+        for _s, body in fake_seatalk.update_stream_calls
     )
     assert fake_seatalk.single_chat_calls == []  # a group stream never hits single_chat
 

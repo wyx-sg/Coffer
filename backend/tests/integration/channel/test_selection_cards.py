@@ -12,7 +12,11 @@ from typing import Any
 
 import pytest
 
-from coffer.application.channel.selection_cards import MAX_MODEL_PICKS
+from coffer.application.channel.selection_cards import (
+    MAX_CARD_BUTTONS,
+    PAGE_SIZE,
+    is_page_turn,
+)
 from coffer.domain.channel.envelopes import ChoiceButton
 from coffer.domain.channel.errors import ChannelSendFailed
 
@@ -112,17 +116,19 @@ async def test_model_no_arg_falls_back_to_text_without_suggestions(env: ChannelE
     assert any("Model:" in t for t in adapter.texts())
 
 
-async def test_a_long_catalogue_becomes_a_handful_of_quick_picks(env: ChannelEnv) -> None:
+async def test_a_long_catalogue_becomes_a_paged_card(env: ChannelEnv) -> None:
     """The suggestion port hands over the agent's whole model catalogue; the
-    card carries a bounded handful of it, not all 29 buttons."""
+    card carries one bounded page of it plus a way to reach the next."""
     env.model_suggestions.add("builtin", [f"model-{i}" for i in range(29)])
     _resource, adapter = await _card_channel(env)
 
     await env.processor.on_message(inbound("tg", "owner", "/model"))
 
     [(_chat, text, buttons)] = adapter.cards
-    assert len(buttons) == MAX_MODEL_PICKS
-    assert "/model <name>" in text  # the rest of the catalogue stays reachable
+    assert len(buttons) <= MAX_CARD_BUTTONS
+    assert [b.value for b in buttons if is_page_turn(b.value)] == ["page:model:1"]
+    assert "Page 1/" in text
+    assert "/model <name>" in text  # a model you can name is still one message away
 
 
 # -- a card the platform refuses degrades to text, never to silence -------------
@@ -348,3 +354,226 @@ async def test_a_failed_card_rewrite_does_not_break_the_switch(env: ChannelEnv) 
     )
 
     await wait_until(lambda: any("codex" in text for _chat, text in adapter.sent))
+
+
+# -- Prev/Next turns the page inside the one card (FR-043) -----------------------
+
+
+CATALOGUE = [f"model-{i}" for i in range(29)]
+
+
+async def _model_card_channel(env: ChannelEnv) -> tuple[Resource, FakeChannelAdapter]:
+    """A button-capable channel showing a `/model` card over a 29-model
+    catalogue — the card SeaTalk refused outright before it was bounded."""
+    env.model_suggestions.add("builtin", CATALOGUE)
+    resource, adapter = await _card_channel(env)
+    await env.processor.on_message(inbound("tg", "owner", "/model"))
+    return resource, adapter
+
+
+def _page_values(buttons: Sequence[ChoiceButton]) -> list[str]:
+    return [b.value for b in buttons if not is_page_turn(b.value)]
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a long selection card is browsed page by page in place"
+)
+async def test_next_rewrites_the_same_card_with_the_following_page(env: ChannelEnv) -> None:
+    """The whole point: the rest of the catalogue arrives in the message that is
+    already in the chat, not as a second card the user has to scroll to."""
+    _resource, adapter = await _model_card_channel(env)
+    sent_before = len(adapter.cards)
+
+    await env.processor.on_callback(
+        tap_event("tg", "owner", "page:model:1", platform_message_id="card-1")
+    )
+
+    await wait_until(lambda: len(adapter.card_updates) == 1)
+    chat_id, message_id, text, buttons, title = adapter.card_updates[0]
+    assert (chat_id, message_id, title) == ("owner", "card-1", "Model")
+    assert _page_values(buttons) == [f"model:model-{i}" for i in range(PAGE_SIZE, 2 * PAGE_SIZE)]
+    assert "Page 2/" in text
+    assert len(adapter.cards) == sent_before, "a page turn must not post a second card"
+
+
+async def test_prev_and_next_walk_the_whole_catalogue(env: ChannelEnv) -> None:
+    _resource, adapter = await _model_card_channel(env)
+
+    await env.processor.on_callback(
+        tap_event("tg", "owner", "page:model:1", platform_message_id="card-1")
+    )
+    await wait_until(lambda: len(adapter.card_updates) == 1)
+    await env.processor.on_callback(
+        tap_event("tg", "owner", "page:model:0", platform_message_id="card-1")
+    )
+    await wait_until(lambda: len(adapter.card_updates) == 2)
+
+    _chat, _mid, text, buttons, _title = adapter.card_updates[-1]
+    assert _page_values(buttons) == [f"model:model-{i}" for i in range(PAGE_SIZE)]
+    assert "Page 1/" in text
+    # Back on the first page there is nothing before it to offer.
+    assert [b.value for b in buttons if is_page_turn(b.value)] == ["page:model:1"]
+
+
+async def test_the_last_page_offers_no_next(env: ChannelEnv) -> None:
+    _resource, adapter = await _model_card_channel(env)
+    last = (len(CATALOGUE) + PAGE_SIZE - 1) // PAGE_SIZE - 1
+
+    await env.processor.on_callback(
+        tap_event("tg", "owner", f"page:model:{last}", platform_message_id="card-1")
+    )
+
+    await wait_until(lambda: len(adapter.card_updates) == 1)
+    _chat, _mid, _text, buttons, _title = adapter.card_updates[0]
+    assert _page_values(buttons), "the last page is never empty"
+    assert [b.value for b in buttons if is_page_turn(b.value)] == [f"page:model:{last - 1}"]
+
+
+async def test_a_page_turn_changes_no_model(env: ChannelEnv) -> None:
+    """Navigation is not selection. Tapping Next must leave the next turn's
+    model exactly as it was — an unpinned conversation stays unpinned."""
+    resource, adapter = await _model_card_channel(env)
+
+    await env.processor.on_callback(
+        tap_event("tg", "owner", "page:model:2", platform_message_id="card-1")
+    )
+    await wait_until(lambda: len(adapter.card_updates) == 1)
+
+    cfg = await env.chat.get_agent_config(await env.active_conversation(resource))
+    assert cfg.model is None
+    assert not any("Model set to" in t for t in adapter.texts())
+
+
+async def test_a_page_turn_changes_no_agent(env: ChannelEnv) -> None:
+    """The same rule on the other card — pagination is not a model special case."""
+    for i in range(20):
+        env.add_agent(f"agent{i}")
+    resource, adapter = await _card_channel(env)
+
+    await env.processor.on_callback(
+        tap_event("tg", "owner", "page:agent:1", platform_message_id="card-1")
+    )
+    await wait_until(lambda: len(adapter.card_updates) == 1)
+
+    assert await env.thread_preferred_agent(resource) is None
+    assert not any("Switched to agent" in t for t in adapter.texts())
+    _chat, _mid, _text, buttons, title = adapter.card_updates[0]
+    assert title == "Agent"
+    assert [b.value for b in buttons if is_page_turn(b.value)] == ["page:agent:0", "page:agent:2"]
+
+
+async def test_the_tick_travels_to_the_page_holding_the_current_model(env: ChannelEnv) -> None:
+    """A pinned model that lives on page 4 opens the card there, and paging away
+    leaves the body saying what is still in effect — a card with no tick on it
+    must never read as a card claiming nothing is selected."""
+    env.model_suggestions.add("builtin", CATALOGUE)
+    resource, adapter = await _card_channel(env)
+    await env.processor.on_callback(tap_event("tg", "owner", "model:model-20"))
+    await wait_until(lambda: cfg_model(env, resource))
+    adapter.cards.clear()
+
+    await env.processor.on_message(inbound("tg", "owner", "/model"))
+
+    [(_chat, text, buttons)] = adapter.cards
+    assert f"Page {20 // PAGE_SIZE + 1}/" in text
+    assert [b.value for b in buttons if b.label.endswith("✓")] == ["model:model-20"]
+
+    await env.processor.on_callback(
+        tap_event("tg", "owner", "page:model:0", platform_message_id="card-1")
+    )
+    await wait_until(lambda: len(adapter.card_updates) >= 1)
+    _c, _m, off_page_text, off_page_buttons, _t = adapter.card_updates[-1]
+    assert [b for b in off_page_buttons if b.label.endswith("✓")] == []
+    assert "Current model: model-20" in off_page_text
+    assert f"page {20 // PAGE_SIZE + 1}" in off_page_text
+
+
+def cfg_model(env: ChannelEnv, resource: Resource) -> Any:
+    """Await-free probe for ``wait_until`` — the config read is itself async, so
+    hand back the coroutine and let ``wait_until`` await it."""
+
+    async def _read() -> bool:
+        cfg = await env.chat.get_agent_config(await env.active_conversation(resource))
+        return cfg.model == "model-20"
+
+    return _read()
+
+
+# -- a page turn that cannot happen in place degrades, never goes silent ---------
+
+
+async def test_a_failed_page_turn_posts_the_page_as_a_fresh_card(env: ChannelEnv) -> None:
+    """The card may have aged past SeaTalk's 7-day update window, or we may be
+    rate-limited. Unlike the cosmetic refresh, the user ASKED for this page, so
+    it arrives as a new card rather than not at all."""
+    _resource, adapter = await _model_card_channel(env)
+    sent_before = len(adapter.cards)
+
+    async def boom(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("update rejected")
+
+    adapter.update_card = boom  # type: ignore[method-assign]
+
+    await env.processor.on_callback(
+        tap_event("tg", "owner", "page:model:1", platform_message_id="card-1")
+    )
+
+    await wait_until(lambda: len(adapter.cards) == sent_before + 1)
+    _chat, text, buttons = adapter.cards[-1]
+    assert _page_values(buttons) == [f"model:model-{i}" for i in range(PAGE_SIZE, 2 * PAGE_SIZE)]
+    assert "Page 2/" in text
+
+
+async def test_a_page_turn_on_a_transport_that_cannot_update_still_shows_the_page(
+    env: ChannelEnv,
+) -> None:
+    """``supports_card_update`` off: there is nothing to rewrite, so the page is
+    posted instead of dropped."""
+    env.model_suggestions.add("builtin", CATALOGUE)
+    resource = await env.register_channel("tg")
+    adapter = env.bind(resource, FakeChannelAdapter(supports_buttons=True))
+    await env.pair(resource, "owner")
+    await env.processor.on_message(inbound("tg", "owner", "/model"))
+
+    await env.processor.on_callback(
+        tap_event("tg", "owner", "page:model:1", platform_message_id="card-1")
+    )
+
+    await wait_until(lambda: len(adapter.cards) == 2)
+    assert adapter.card_updates == []
+    assert "Page 2/" in adapter.cards[-1][1]
+
+
+async def test_a_page_turn_refused_every_way_still_answers_in_text(env: ChannelEnv) -> None:
+    """Rewrite refused AND a fresh card refused: the page goes out as plain
+    text. Silence is the one outcome a tap must never produce."""
+    _resource, adapter = await _model_card_channel(env)
+
+    async def boom(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("update rejected")
+
+    adapter.update_card = boom  # type: ignore[method-assign]
+    _refuse_cards(adapter)
+
+    await env.processor.on_callback(
+        tap_event("tg", "owner", "page:model:1", platform_message_id="card-1")
+    )
+
+    await wait_until(lambda: any("Page 2/" in t for t in adapter.texts()))
+    reply = next(t for t in adapter.texts() if "Page 2/" in t)
+    assert f"model-{PAGE_SIZE}" in reply
+    assert "page:model" not in reply, "there is nothing to tap on a text message"
+
+
+async def test_a_malformed_navigation_tap_changes_nothing(env: ChannelEnv) -> None:
+    """A value that only looks like navigation must not fall through to the
+    code path that applies a choice."""
+    env.add_agent("codex")
+    resource, adapter = await _card_channel(env)
+
+    await env.processor.on_callback(
+        tap_event("tg", "owner", "page:ghost:1", platform_message_id="card-1")
+    )
+
+    assert await env.thread_preferred_agent(resource) is None
+    assert adapter.card_updates == []

@@ -48,6 +48,12 @@ Pydantic v2 `BaseModel`. The kind-specific config schema registered with `Resour
 | ------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `type`              | `AgentType`    | required; enum value                                                                                                                |
 | `config_dir`        | `Path \| None` | optional absolute-path override; defaults to `type.default_config_dir()` at read time                                               |
+| `models`            | `list[str]`    | curated set: which of the agent's own model catalogue its pickers offer. EMPTY = not curated ⇒ the whole catalogue (spec provider-switching amendment 2026-09-11b, K2); backfilled by migration `0060` |
+
+The per-agent model BINDING fields (`model`, `fast_model`, `wire_api`) are owned
+by [spec provider-switching](../provider-switching/spec.md) (amendment
+2026-06-22b, E3) and documented there; `models` above is a different thing — the
+set a picker OFFERS, never the model the agent runs.
 
 Skills are delivered to `<config_dir>/skills`; the config-file allowlist resolves against `config_dir`. Only one agent may exist per resolved `config_dir`. The agent record carries no skill-delivery policy of its own: which skills reach it is decided entirely by each skill's `enabled` flag and its agent scope (spec skill-manager, [ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.md)) — the `follow_all_skills` / `skill_exclusions` fields this table once carried are gone, stripped from stored configs by migration `0058`.
 

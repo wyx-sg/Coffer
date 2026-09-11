@@ -86,7 +86,9 @@ official docs (the doc site requires a developer login).
   `button_type: "callback"` buttons carrying a custom `value`; taps come back
   as `interactive_message_click` events with the `value`, `message_id`, and
   `employee_code`.
-- **Typing indicator**: `single_chat_typing` endpoint exists.
+- **Typing indicator**: `single_chat_typing` for a DM — and
+  `group_chat_typing` for a group, which this line's omission once led us to
+  believe did not exist. See the typing section below.
 - **Org approval**: a self-built app's scopes (Send Message to Bot User,
   etc.) require organization admin approval; outbound IP allowlist is
   optional and should stay empty for machines with dynamic IPs.
@@ -151,6 +153,66 @@ building group/@mention/thread/forward support (feature/channel-group-mention-ri
     mention in the same message; and only `entities` on a plain text message
     is parsed for a mention — `caption_entities` on a captioned photo/file is
     not yet parsed, so an @mention inside a media caption is not recognized.
+
+## SeaTalk streaming messages (re-read 2026-09-11)
+
+The first implementation of FR-037's SeaTalk surface was written from these docs
+but never verified against the live API, and no summary of them was recorded
+here — so a payload missing two mandatory fields shipped, its unit tests pinned
+the invented shape, and the platform refused every stream with a bare
+`code=102`. This section exists so the next reader can check the code against
+the contract instead of against our memory of it.
+
+Source: Send Streaming Messages, open.seatalk.io (login required).
+
+- **Both endpoints take the target.** `init_stream` and `update_stream` each
+  need `employee_code` (1-on-1) or `group_id` (group). A `stream_id` alone does
+  not identify the destination.
+- **`init_stream` takes a mandatory `message`.** It posts a real placeholder
+  message to the chat and returns `stream_id`. The message names the kind:
+  `tag` is `"text"` or `"interactive_message"` — so a stream can be a CARD, not
+  only text.
+- **`update_stream`'s message carries content only** — `text` or
+  `interactive_message`, no `tag`. The kind was fixed when the stream opened.
+- `seq` starts at 1 on the first `update_stream` and increments by one.
+  `init_stream` consumes none.
+- Every update carries the WHOLE accumulated content, never a delta; the client
+  renders the latest snapshot it received.
+- `format` is `1` for Markdown (the default) and `2` for plain text.
+- `thread_id` and `quoted_message_id` go INSIDE the message object, matching the
+  placement already verified for ordinary sends. `quoted_message_id` is group
+  only.
+- **No extra permission.** Streaming rides the same Send Message to Bot User /
+  Send Message to Group Chat grant as an ordinary reply; the app needs the bot
+  capability and Online status.
+- Limits: consecutive `update_stream` calls less than 30 s apart or the stream
+  is terminated; 4096 characters total; once terminated (finished, timed out,
+  errored) any request naming that `stream_id` is rejected. The docs advise
+  buffering to roughly one call per 200 ms rather than per token.
+- Recipients on SeaTalk older than 3.67 see only the final message once the
+  stream closes.
+- Open question, not resolved by the docs: the parameter table marks `thread_id`
+  optional, but the group-chat request sample is annotated "thread_id required".
+  Whether a group-MAIN stream (an @mention outside a thread) is accepted without
+  one is unverified.
+
+### Typing indicator, both surfaces (2026-09-11)
+
+Two endpoints, not one — `messaging/v2/single_chat_typing` takes
+`employee_code`, `messaging/v2/group_chat_typing` takes `group_id` plus an
+OPTIONAL `thread_id`. Coffer suppressed the group cue for a while on the belief
+that no group endpoint existed; it does.
+
+- The indicator shows for 4 s, so it is re-sent on a heartbeat while a turn
+  runs. Rate limit 300/min.
+- In a group, pass the thread the turn is answering in and the cue appears
+  there; omit it and it shows in the main channel. To type against an unthreaded
+  root message, pass that message's id as `thread_id` — the root must be less
+  than 7 days old.
+- Requires SeaTalk 3.55 or later.
+- Error 7003 — "group chat too large" — means over 200 members, where the
+  platform has no indicator at all. Nothing to do about it; the turn's live
+  surface carries the progress instead.
 
 ## Decisions taken from research
 

@@ -38,7 +38,12 @@ from coffer.infrastructure.channel.telegram_media import (
     inline_keyboard,
     upload_media,
 )
-from coffer.infrastructure.channel.telegram_parse import build_inbound_message, is_group
+from coffer.infrastructure.channel.telegram_parse import (
+    build_inbound_message,
+    is_group,
+    thread_target,
+)
+from coffer.infrastructure.channel.telegram_transport import call
 
 _logger = logging.getLogger(__name__)
 
@@ -343,8 +348,15 @@ class TelegramAdapter:
     async def delete_message(self, chat_id: str, message_id: str) -> None:
         await self._call("deleteMessage", chat_id=chat_id, message_id=message_id)
 
-    async def send_typing(self, chat_id: str) -> None:
-        await self._call("sendChatAction", chat_id=chat_id, action="typing")
+    async def send_typing(
+        self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
+    ) -> None:
+        # Telegram addresses a group by the same chat_id as a DM, so only the
+        # thread needs naming — the action then shows in the forum topic the
+        # turn is answering in rather than the group's General.
+        await self._call(
+            "sendChatAction", chat_id=chat_id, action="typing", **thread_target(thread_id)
+        )
 
     async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
         # FR-036: react on the user's message (👀 receipt / ✅ completion, both in
@@ -366,30 +378,4 @@ class TelegramAdapter:
     # -- transport -------------------------------------------------------------
 
     async def _call(self, method: str, **params: Any) -> Any:
-        try:
-            response = await self._client.post(f"{self._base}/{method}", json=params)
-        except httpx.HTTPError as e:
-            raise ChannelSendFailed(self._name, type(e).__name__) from e
-        try:
-            payload = response.json()
-        except ValueError as e:
-            # A gateway 502/503 returns an HTML page, not the Bot API JSON
-            # envelope — json() raises (a JSONDecodeError is NOT an
-            # httpx.HTTPError), so surface it as the channel error contract.
-            raise ChannelSendFailed(
-                self._name,
-                f"{method}: non-JSON response ({response.status_code})",
-                api_rejected=True,
-                status=response.status_code,
-            ) from e
-        if not isinstance(payload, dict) or not payload.get("ok", False):
-            description = ""
-            if isinstance(payload, dict):
-                description = str(payload.get("description", ""))
-            raise ChannelSendFailed(
-                self._name,
-                f"{method}: {description or response.status_code}",
-                api_rejected=True,
-                status=response.status_code,
-            )
-        return payload.get("result")
+        return await call(self._client, self._base, self._name, method, **params)

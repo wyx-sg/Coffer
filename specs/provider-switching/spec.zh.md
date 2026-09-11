@@ -244,6 +244,62 @@ D4 的固定下拉 / 禁止自由输入规则不变。**仍不在范围：** pro
 策展集合时改为该集合）。**仍不在范围内：** proxy / hot-switch / 协议转换；Coffer 仍不拿任何模型
 id 去比对自己写死的名单。
 
+## 修订 2026-09-11b — agent 自己策展「从自己的清单里提供哪些模型」
+
+> 状态：Draft。**在「提供」这一步收窄 H1 的清单，不改变清单本身是什么。**
+> 与用户完成一轮设计讨论后记录。交叉引用
+> [ADR provider-switching](../../docs/decisions/provider-switching.md)。
+
+**为什么。** H1 让清单成为 agent 自己的答案，这一条是对的、现在仍然是对的——但那个答案是
+**累积的**，而且**对账号无感**。在当前安装上，Claude Code 内嵌的目录有十九个模型，而这位用户的
+账号实际只能跑其中九个。另外十个一选就失败，选择器却完全看不出谁是谁。
+
+是否可以自动排除这十个，已经查过：不行。十九条目的每一个字段都与已知可用的九个做过对比：
+`pricing` 分不开（`claude-opus-4-5` 和 `claude-opus-4-6` 同为 `tier_5_25`，一个死一个活），
+`capabilities` 也分不开（能用的 `claude-haiku-4-5` 只有 `context_management`，不能用的
+`claude-mythos-5-1` 反而字段齐全），`knowledge_cutoff` 不行，上下文窗口不行，任何版本号规则也不行
+（opus 保留四个版本，sonnet 保留两个）。CLI 自己的过滤跑在 `e.config.models` 上——那是**服务端下发
+的账号配置**，而本机 `~/.claude.json` 里的 `modelAccessCache` 是空的。**一个账号能跑哪些模型是账号
+事实，不是本机事实。** 把名单写死在 Coffer 里，一个月内就会过时：Claude Code 每隔几周就发新模型，
+而用户完全无从知道为什么新模型一直不出现。所以 Coffer 展示清单，由用户勾选。
+
+- **K1 — 二进制自己说已经死掉的模型，直接去掉。** Claude Code 的 bundle 在目录旁边还带着第二张表，
+  把模型 id 与各 provider 的退役日期对应起来，并为那些会被 CLI 静默改道的模型记下它 `remappedTo`
+  的档位。Coffer 套用 CLI 自己的判定：带 `remappedTo`，或 **`firstParty`** 退役日期已过，即视为
+  已消失。只用 `firstParty`——其余各列（bedrock、vertex、foundry……）描述的是 Coffer 不配置的部署，
+  日期也不同。读法与目录完全一致：按结构定位；一旦锚点不再匹配，该来源返回**未过滤的**清单，而不是
+  用半张表拼出来的过滤器。这缩短了用户需要策展的列表，不花任何代价，并随每次 CLI 升级自动更新。
+- **K2 — agent 上的 `models: list[str]`：清单里哪些会被选择器提供。** 存在 agent resource 行的
+  `AgentConfig` 上。**空 = 尚未策展**——整份（经 K1 过滤的）清单都会被提供，与本次修订之前完全一致
+  ——这是默认值，是修订 0060 之前注册的每个 agent 所携带的值，也是 Coffer 对一个从不打开这个页面的
+  用户必须做到的事。它**绝不**表示「没有模型」。
+- **K3 — 清单路由保持完整，策展集合是另一份信息。**
+  `GET /api/v1/agent-providers/{agent_key}/models` 仍返回经 K1 过滤的完整清单：策展界面渲染的
+  就是这份清单，并把策展集合作为勾选叠在上面；如果清单本身被收窄，取消勾选的模型就再也勾不回来了。
+  `GET|PUT …/models/selection` 承载策展集合。与清单本身、以及只知道 agent 类型的 `/model` 卡片
+  一致，按 agent **类型**寻址；集合存在该类型下第一个已启用的 agent resource 上——与提供 config dir
+  的是同一个，因此清单与其策展永远不会来自两个不同的 agent。
+- **K4 — 策展收窄的是「提供」，绝不是「校验」。** 凡是为了**选择器**去问「这个 agent 能被切到哪些
+  模型」的地方，拿到的都是策展集合：网页选择器、channel 的 `/model` 卡片
+  （`ModelSuggestionPort.suggest`）、以及 H5 每轮追加的那条说明。没有任何地方拿它——或拿清单——去
+  **校验**模型名：CLI 接受清单之外的名字（档位别名，以及比已安装二进制更新的模型），所以
+  `/model <名字>` 仍是原样透传，坏名字由 CLI 自己报错。id 原样存储，只校验形状（非空、去重且保序、
+  合理上限）；清单里已经没有的策展 id，只是不再被提供而已。
+- **接口。** `GET`/`PUT` `/api/v1/agent-providers/{agent_key}/models/selection` 上的
+  `AgentModelSelectionOut.models: list[str]`；`AgentModelSelectionIn.models: list[str]` 整体替换
+  该集合，`[]` 表示清空。当该类型下没有已注册的 agent 时 `PUT` 返回 404——集合存在 agent 的 config
+  行里，没有 agent 就无处安放。契约见
+  [`specs/channels/contracts/api.openapi.yaml`](../channels/contracts/api.openapi.yaml)，
+  agent-provider 的路由本来就在那里。
+- **审计。** 不新增事件：策展集合是普通的 agent 配置，一次修改搭
+  `ResourceService.update_config` 已经发出的 `resource_updated` 事件即可。
+- **迁移 0060** 为每一条既有 `kind='agent'` 行写入 `models: []`，让每个 agent 自己陈述答案——尚未
+  策展——而不是依赖读取方的默认值。按房规一次性完成：不留 load-time 垫片。
+
+**细化：** H1（清单仍然是 agent 自己的答案，只是减去了 agent 自己说已退役的部分）与 H4（Agent 页
+内置登录面板从只读列表变成策展控件）。**仍不在范围内：** 在本机推导账号权限——它推导不出来；
+Coffer 仍不写下任何属于自己的模型名。
+
 ## 范围
 
 ### 在范围内
@@ -251,6 +307,7 @@ id 去比对自己写死的名单。
 - 后端 `provider` resource Kind（通过 ResourceService 实现 CRUD，自动审计 + 自动进入导出/导入）；凭证处理（将 secret 存入 Fernet vault，只保留 ref）；投影服务（将原生配置写入匹配 agent）；切换/激活操作；`PROVIDER_SWITCHED` 审计事件；导出/导入接入（注册 kind）；Claude `apiKeyHelper` 使用的密钥解析。
 - 内部引擎 connection 选择：全局 `internal_default` 标志、`set_internal_default(name)` + `resolve_internal_connection()`、`provider_internal_default_set` 审计事件，供 Coffer 内部 LLM 引擎（memory organizer / reorg / distill）消费。
 - 连接的策展 `models` 集合（2026-09-11 修订）：存在 `ProviderConfig` 上，由 create + patch 承载，由修订 0059 回填为空，并由每个提供该连接模型的选择器落地。
+- agent 的策展 `models` 集合与退役过滤（2026-09-11b 修订）：存在 `AgentConfig` 上，由 `GET|PUT /api/v1/agent-providers/{agent_key}/models/selection` 承载，由修订 0060 回填为空，并由每个提供 **agent 自身**清单的选择器落地——而清单路由本身保持完整。
 - 退役独立的 `ModelConfig` 注册表（model CRUD REST + `coffer model` CLI），将内部引擎的模型选择折叠进 connection。provider 的 introspection 路由（`list-models`、`test-connection`）保留。
 - CLI：`coffer provider list|add|show|edit|remove|switch|key|internal-default`
 - HTTP API：`/api/v1/providers`（list / create / get / patch / delete）以及 `/api/v1/providers/{name}/activate` 和 `/api/v1/providers/{name}/internal-default`
