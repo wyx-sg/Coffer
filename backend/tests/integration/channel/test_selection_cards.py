@@ -15,9 +15,12 @@ from .conftest import ChannelEnv, FakeChannelAdapter, Resource, inbound, tap_eve
 async def _card_channel(
     env: ChannelEnv, *, sender_id: str | None = None
 ) -> tuple[Resource, FakeChannelAdapter]:
-    """A paired channel whose adapter advertises button support."""
+    """A paired channel whose adapter advertises button support, and can rewrite
+    a delivered card (both Telegram and SeaTalk can)."""
     resource = await env.register_channel("tg")
-    adapter = env.bind(resource, FakeChannelAdapter(supports_buttons=True))
+    adapter = env.bind(
+        resource, FakeChannelAdapter(supports_buttons=True, supports_card_update=True)
+    )
     await env.pair(resource, "owner", sender_id=sender_id)
     return resource, adapter
 
@@ -210,3 +213,68 @@ async def test_dm_card_tap_still_replies_in_the_dm(env: ChannelEnv) -> None:
     match = next(r for r in adapter.sent_routed if "Switched to agent" in r[1])
     chat_id, _text, thread_id, chat_kind = match
     assert (chat_id, thread_id, chat_kind) == ("owner", "", "direct")
+
+
+# -- the tapped card is rewritten, not left lying --------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a tapped selection card is rewritten with the new choice"
+)
+async def test_tapping_a_card_rewrites_it_with_the_new_choice(env: ChannelEnv) -> None:
+    """A card that keeps offering the option the user just took is worse than no
+    card: tapping it again looks like it should do something and does nothing.
+    After the switch lands, the card is rewritten with the tick moved."""
+    env.add_agent("codex")
+    _resource, adapter = await _card_channel(env)
+    adapter.card_updates.clear()
+
+    await env.processor.on_callback(
+        tap_event("tg", "owner", "agent:codex", platform_message_id="card-1")
+    )
+
+    await wait_until(lambda: len(adapter.card_updates) == 1)
+    chat_id, message_id, text, buttons, title = adapter.card_updates[0]
+    assert (chat_id, message_id) == ("owner", "card-1")
+    assert title == "Agent"
+    assert "codex" in text
+    # Exactly one option is ticked, and it is the one just chosen (buttons carry
+    # the display name; the value carries the key).
+    ticked = [b.value for b in buttons if b.label.endswith("✓")]
+    assert ticked == ["agent:codex"], f"the tick should follow the switch, got {ticked}"
+
+
+async def test_a_card_is_not_rewritten_when_the_transport_cannot(env: ChannelEnv) -> None:
+    """``supports_card_update`` is the gate: a transport without it must not be
+    called, and the switch still succeeds."""
+    env.add_agent("codex")
+    resource = await env.register_channel("tg")
+    # supports_card_update defaults off — the transport simply cannot.
+    adapter = env.bind(resource, FakeChannelAdapter(supports_buttons=True))
+    await env.pair(resource, "owner")
+
+    await env.processor.on_callback(
+        tap_event("tg", "owner", "agent:codex", platform_message_id="card-1")
+    )
+
+    await wait_until(lambda: any("codex" in text for _chat, text in adapter.sent))
+    assert adapter.card_updates == []
+
+
+async def test_a_failed_card_rewrite_does_not_break_the_switch(env: ChannelEnv) -> None:
+    """Cosmetic by design: the card may have aged past SeaTalk's 7-day update
+    window, or the platform may rate-limit us. The switch already happened and
+    was confirmed in chat, so a failed rewrite is logged and dropped."""
+    env.add_agent("codex")
+    _resource, adapter = await _card_channel(env)
+
+    async def boom(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("update rejected")
+
+    adapter.update_card = boom  # type: ignore[method-assign]
+
+    await env.processor.on_callback(
+        tap_event("tg", "owner", "agent:codex", platform_message_id="card-1")
+    )
+
+    await wait_until(lambda: any("codex" in text for _chat, text in adapter.sent))

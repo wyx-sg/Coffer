@@ -90,12 +90,18 @@ class ChannelAdapter(Protocol):
         markdown: str,
         *,
         buttons: Sequence[ChoiceButton] | None = None,
+        title: str = "",
         thread_id: str = "",
         chat_kind: str = "direct",
     ) -> SentMessage:
         """Send markdown text. When ``buttons`` is given AND the transport
         ``supports_buttons``, render them as an interactive selection card;
         otherwise the text is sent plain (buttons ignored).
+
+        ``title`` heads that card where the transport has a title element, so
+        the subject is scannable without being crammed into the body's first
+        line. It applies only to a card: a transport without card titles, or a
+        send with no buttons, ignores it.
 
         ``chat_kind`` distinguishes a group ``chat_id`` from a direct one —
         transports whose group/DM APIs differ (SeaTalk) route on it; a
@@ -116,6 +122,25 @@ class ChannelAdapter(Protocol):
         ...
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None: ...
+
+    async def update_card(
+        self,
+        chat_id: str,
+        message_id: str,
+        markdown: str,
+        buttons: Sequence[ChoiceButton],
+        *,
+        title: str = "",
+        chat_kind: str = "direct",
+    ) -> None:
+        """Rewrite an already-delivered selection card in place.
+
+        Called after a tap so the card reflects what the user just chose rather
+        than still offering it. Only called when the transport declares
+        ``capabilities.supports_card_update``; a transport without it raises.
+        A failure here is cosmetic — the switch itself already happened — so the
+        caller logs and moves on rather than surfacing an error."""
+        ...
 
     async def delete_message(self, chat_id: str, message_id: str) -> None: ...
 

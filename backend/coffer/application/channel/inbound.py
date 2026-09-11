@@ -340,6 +340,7 @@ class InboundProcessor:
             self._safe_send,
             chat_kind=cb.chat_kind,
             thread_id=cb.thread_id,
+            card_message_id=cb.platform_message_id,
         )
 
     # -- pairing -----------------------------------------------------------
@@ -388,12 +389,12 @@ class InboundProcessor:
         text: str,
         *,
         buttons: Sequence[ChoiceButton] | None = None,
+        title: str = "",
         thread_id: str = "",
         chat_kind: str = "direct",
     ) -> None:
+        kw = {"buttons": buttons, "title": title, "thread_id": thread_id, "chat_kind": chat_kind}
         try:
-            await binding.adapter.send_text(
-                chat_id, text, buttons=buttons, thread_id=thread_id, chat_kind=chat_kind
-            )
+            await binding.adapter.send_text(chat_id, text, **kw)  # type: ignore[arg-type]
         except Exception:
             _logger.exception("channel.send.failed", extra={"channel": binding.name})
