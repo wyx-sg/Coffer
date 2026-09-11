@@ -210,6 +210,16 @@ class GitMirror:
             return True
         raise GitMirrorError(self._failure(("diff",), diff, None))
 
+    async def staged_paths(self) -> list[str]:
+        """Repository-relative paths of everything currently staged.
+
+        ``stage_all`` answers "is there a diff at all"; this answers "a diff in
+        what", which is how the caller tells a real change from an export that
+        only restamped ``manifest.json``.
+        """
+        out = await self._git("diff", "--cached", "--name-only")
+        return [line for line in out.stdout.splitlines() if line.strip()]
+
     async def commit(self, message: str) -> str:
         await self._git(
             "-c",

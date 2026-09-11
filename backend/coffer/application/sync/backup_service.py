@@ -52,6 +52,11 @@ _logger = logging.getLogger(__name__)
 #: one ``push`` call and is never written anywhere.
 _TOKEN_KEY = "token"
 
+#: A staged diff confined to these paths is not a change worth committing.
+#: ``manifest.json`` carries the bundle's creation time, which every export
+#: restamps — see ``BackupService._commit_if_changed``.
+_MANIFEST_ONLY = frozenset({"manifest.json"})
+
 
 class BackupRemoteRepoPort(Protocol):
     """Storage for the single backup remote and its last run.
@@ -159,10 +164,18 @@ class BackupService:
     async def _commit_if_changed(mirror: GitMirrorPort, summary: ExportSummary) -> str | None:
         """Commit only when the export differs from what the tree already held.
 
-        Determinism is what makes this reliable: an unchanged vault exports
-        byte-identically, so the backup history records changes and not ticks.
+        Determinism is what makes this reliable — but it stops one file short.
+        ``manifest.json`` carries the bundle's creation time, so every export
+        rewrites it even when the vault has not changed, and a diff that
+        touches nothing else is a restamped manifest rather than a change to
+        back up. Committing it anyway would put an entry in the history for
+        every tick, which is exactly what ``restore --at <date>`` has to see
+        through.
         """
         if not await mirror.stage_all():
+            return None
+        staged = set(await mirror.staged_paths())
+        if staged <= _MANIFEST_ONLY:
             return None
         return await mirror.commit(_commit_message(summary))
 

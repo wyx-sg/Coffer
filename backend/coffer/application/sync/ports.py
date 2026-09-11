@@ -158,6 +158,10 @@ class GitMirrorPort(Protocol):
     async def stage_all(self) -> bool:
         """Stage everything; True when the staged tree differs from ``HEAD``."""
 
+    async def staged_paths(self) -> list[str]:
+        """Repository-relative paths of what is staged, so a caller can tell a
+        real change from one that only restamped the bundle's manifest."""
+
     async def commit(self, message: str) -> str:
         """Commit what is staged and return the short sha."""
 

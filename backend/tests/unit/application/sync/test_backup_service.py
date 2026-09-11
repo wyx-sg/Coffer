@@ -42,6 +42,9 @@ class _FakeMirror:
     ) -> None:
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self._staged = staged
+        # What a staged export touched. The default stands for a real change;
+        # a test that wants "only the manifest was restamped" sets it.
+        self.staged_files: list[str] = ["resources/mcp_server/thing.yaml"]
         self._unpushed = unpushed
         self._push_error = push_error
         self._head: str | None = _HEAD
@@ -60,6 +63,10 @@ class _FakeMirror:
     async def stage_all(self) -> bool:
         self.calls.append(("stage_all", {}))
         return self._staged
+
+    async def staged_paths(self) -> list[str]:
+        self.calls.append(("staged_paths", {}))
+        return list(self.staged_files)
 
     async def commit(self, message: str) -> str:
         self.calls.append(("commit", {"message": message}))
@@ -246,6 +253,22 @@ async def test_an_unchanged_export_makes_no_commit() -> None:
     assert run.status is BackupRunStatus.NO_CHANGE
     assert run.commit is None
     assert rig.remotes.runs == [run]
+
+
+async def test_a_restamped_manifest_alone_is_not_a_change() -> None:
+    """Every export rewrites manifest.json's creation time, so a diff that
+    touches nothing else means the vault stood still. Committing it would put
+    an entry in the history for every tick — see the integration test that
+    proves this against real git."""
+    rig = _rig(remote=_remote(), staged=True, unpushed=False)
+    rig.mirror.staged_files = ["manifest.json"]
+
+    run = await rig.service.run_once()
+
+    assert "commit" not in rig.mirror.names
+    assert "push" not in rig.mirror.names
+    assert run.status is BackupRunStatus.NO_CHANGE
+
 
 
 @pytest.mark.acceptance(

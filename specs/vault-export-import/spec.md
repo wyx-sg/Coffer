@@ -170,10 +170,13 @@ every `interval` (default one hour) — and the user can trigger one by hand.
 A run exports into the working tree using the same serializer and the same
 rules as any other export, then:
 
-- If the export is byte-identical to what the tree already holds, the run makes
-  **no commit**. Determinism is what makes this reliable: an unchanged vault
+- If the export matches what the tree already holds, the run makes **no
+  commit**. Determinism is what makes this reliable: an unchanged vault
   produces an unchanged bundle, so the backup history records changes and not
-  ticks.
+  ticks. `manifest.json` is the one exception the determinism rule above
+  already names — every export restamps its creation time — so a staged diff
+  that touches nothing else is a restamped manifest, not a change, and does
+  not earn a commit.
 - Otherwise it commits, with a message naming the counts per area.
 - Then it pushes to the configured branch.
 
