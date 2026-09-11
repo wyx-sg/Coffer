@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from dataclasses import replace
 from typing import Any, Protocol
 
-from coffer.application.channel.card_delivery import deliver_card, refresh_selection_card
+from coffer.application.channel.card_delivery import deliver_card, dispatch_card_tap
 from coffer.application.channel.conversation_ops import (
     ensure_conversation,
     explain_conversation_error,
@@ -332,32 +332,21 @@ class ChannelCommands:
         ``chat_kind``/``thread_id`` route the confirmation back into a group tap's
         own group/thread, not a DM (FR-034).
 
-        ``card_message_id`` is the card that was tapped. After the switch lands,
-        the card is rewritten so it shows the new choice — otherwise it sits in
-        the chat still offering the option the user just took, which is the one
-        thing a selection card must never do."""
-        kind, _, value = data.partition(":")
-        if kind == "agent":
-            if value not in self._agents.agent_keys():
-                await send(
-                    binding,
-                    peer.chat_id,
-                    f"Unknown agent '{value}'.",
-                    chat_kind=chat_kind,
-                    thread_id=thread_id,
-                )
-                return
-            await self.apply_agent(
-                binding, peer, value, send, chat_kind=chat_kind, thread_id=thread_id
-            )
-        elif kind == "model" and value:
-            await self.apply_model(
-                binding, peer, value, send, chat_kind=chat_kind, thread_id=thread_id
-            )
-        else:
-            return
-        await refresh_selection_card(
-            self, binding, peer, card_message_id, kind, chat_kind=chat_kind, thread_id=thread_id
+        ``card_message_id`` is the card that was tapped: the message a Prev/Next
+        turn rewrites, and the one rewritten after a switch lands so it shows
+        the new choice — otherwise it sits in the chat still offering the option
+        the user just took, which is the one thing a selection card must never
+        do. The routing itself lives in ``card_delivery`` beside the rendering
+        it drives."""
+        await dispatch_card_tap(
+            self,
+            binding,
+            peer,
+            data,
+            send,
+            chat_kind=chat_kind,
+            thread_id=thread_id,
+            card_message_id=card_message_id,
         )
 
     async def _open_and_report(

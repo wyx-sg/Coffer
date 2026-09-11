@@ -369,15 +369,16 @@ status / notify`.
   (the model is re-read each turn, unlike the agent and working directory). An
   invalid builtin model is rejected against the registry; a bad bridged model
   string surfaces as the CLI's own error relayed to the chat. On a transport
-  that `supports_buttons` (FR-018), `/model` with no argument renders best-effort
-  quick-picks as a selection card. They come from the agent's model catalogue —
-  the same list the web picker offers — but **bounded to a handful of buttons**:
-  that catalogue runs to 29 models for `claude_code`, and a card that long is
-  unreadable on a phone and refused outright by SeaTalk. The model currently in
-  effect is always among them, so a refreshed card always has a tick to show;
-  the remaining slots follow catalogue order. Free-text `/model <name>` reaches
-  every other model and the card's body says so — that hint is what makes a
-  bounded card honest. With no suggestions it falls back to the text report.
+  that `supports_buttons` (FR-018), `/model` with no argument renders the choices
+  as a selection card. They come from the agent's model catalogue — the same list
+  the web picker offers — and the **whole** catalogue is offered, one **page** at
+  a time (FR-018): that catalogue runs to 29 models for `claude_code`, and a card
+  that long is unreadable on a phone and refused outright by SeaTalk, so the card
+  is a window onto the list rather than the list. It opens on the page holding the
+  model currently in effect, so a freshly rendered card always has its tick in
+  view. Free-text `/model <name>` still reaches a model the user can already
+  name — including one the catalogue does not list — and the card's body says so.
+  With no suggestions it falls back to the text report.
 - **FR-018**: On a transport that declares the `supports_buttons` capability,
   the core MAY render a command's choice list as an **interactive selection
   card** (Telegram inline keyboard, SeaTalk interactive message). A button tap
@@ -400,6 +401,33 @@ status / notify`.
   back to the plain-text answer it already has, so a rejected card degrades to a
   working message instead of leaving the user with silence. The rejection is
   logged so it stays diagnosable.
+
+  A card carries a **bounded number of buttons** — six, navigation included.
+  SeaTalk's true ceiling is undocumented (two are accepted, twenty-nine are
+  refused), so the bound is the largest count Coffer has shipped rather than a
+  guess at the limit. A choice list longer than that bound is **paginated**: the
+  card shows four choices plus `← Prev` / `Next →`, and a navigation tap
+  **rewrites the same message** at the next window through the same
+  `supports_card_update` path an applied choice uses. One rule serves both
+  cards — `/agent`'s two choices are under the bound and render with no
+  navigation chrome at all.
+
+  A navigation payload lives in its own callback namespace (`page:<kind>:<index>`),
+  disjoint from the `agent:` / `model:` values a choice carries and fixed-size
+  well inside the 64-byte callback budget. The separation is what guarantees the
+  invariant: **a page turn changes nothing.** It re-reads what is in effect and
+  re-renders; it can never be mistaken for a choice, and a malformed navigation
+  value is dropped rather than allowed to fall through to the switch. Because the
+  page in view may not hold the option in effect, the card's body always names
+  what is in effect and which page it is on, so a page showing no tick never
+  reads as a card claiming nothing is selected.
+
+  Unlike the cosmetic rewrite after a choice, a page turn is something the user
+  asked to see, so it degrades rather than dropping: where the message cannot be
+  rewritten in place — no `supports_card_update`, or an update the platform
+  refused because the card aged past SeaTalk's 7-day window or we were
+  rate-limited — the requested page is posted as a fresh card, and as plain text
+  if that is refused too.
 - **FR-019**: A channel-originated turn tells the agent it is bridged to a chat
   channel, not a terminal: the agent receives a short system-prompt note carrying
   the channel name and mobile-chat guidance — keep replies concise, and it cannot
@@ -760,6 +788,17 @@ produce it on its own.
   chosen; on a transport without the capability nothing is rewritten and the
   switch still succeeds, and a rewrite the platform refuses leaves the switch
   and its confirmation intact
+
+### Scenario: a long selection card is browsed page by page in place
+
+- **Given** a paired channel on a button-capable transport showing a `/model`
+  card built from a catalogue far longer than one card can carry
+- **When** the owner taps `Next →`
+- **Then** the same card message is rewritten with the following page of models
+  — no second card is posted, no model is switched, and the body still names the
+  model in effect and the page it is on; the last page offers no `Next →`, and a
+  page turn the platform will not apply in place arrives as a fresh card (or as
+  plain text) rather than as silence
 
 ### Scenario: a non-owner selection-card tap is ignored
 
