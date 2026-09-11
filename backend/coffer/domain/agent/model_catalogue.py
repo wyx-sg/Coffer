@@ -18,16 +18,16 @@ from dataclasses import dataclass
 class AgentModel:
     """One selectable model for a managed agent.
 
-    ``source`` says what kind of entry this is, and matches the wire contract's
-    enum: ``"alias"`` for a moving pointer the CLI accepts (it resolves to the
-    newest model in a tier, so it never names a version), ``"discovered"`` for a
-    concrete, version-bearing model the agent told us about.
+    Every entry is a concrete model the agent itself reported. The CLIs' tier
+    ALIASES (``sonnet``, ``opus``, ``best``, ``sonnet[1m]``, …) are deliberately
+    not entries: each resolves to a model already listed, so carrying them made
+    the picker a list of duplicates. They stay typeable — the CLI validates
+    whatever ``--model`` is given — they are just not offered.
     """
 
     id: str
     label: str = ""
     description: str = ""
-    source: str = "alias"
 
 
 __all__ = ["AgentModel"]

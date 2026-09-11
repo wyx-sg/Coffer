@@ -33,11 +33,11 @@ const useTestMock = useTestConnection as unknown as ReturnType<typeof vi.fn>;
 const usePatchAgentMock = usePatchAgent as unknown as ReturnType<typeof vi.fn>;
 const useAgentModelsMock = useAgentModels as unknown as ReturnType<typeof vi.fn>;
 
-/** The daemon-served catalogue for claude_code: curated aliases, then an id
- * discovered from the agent's own config. */
+/** The daemon-served catalogue for claude_code: concrete, version-bearing ids
+ * read back from the agent — one with a display name, one without. */
 const CATALOGUE: AgentModel[] = [
-  { id: "opus", label: "Opus", description: "", source: "alias" },
-  { id: "fable", label: "", description: "", source: "discovered" },
+  { id: "claude-opus-5", label: "Opus 5", description: "" },
+  { id: "claude-fable-5-1", label: "", description: "" },
 ];
 
 const activateMutate = vi.fn();
@@ -318,8 +318,8 @@ describe("AgentOverviewTab", () => {
     render(<AgentOverviewTab agent={agent} />);
     expect(screen.queryByRole("combobox", { name: /^model$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: /fast model/i })).not.toBeInTheDocument();
-    expect(screen.getByText("opus")).toBeInTheDocument();
-    expect(screen.getByText("fable")).toBeInTheDocument();
+    expect(screen.getByText("claude-opus-5")).toBeInTheDocument();
+    expect(screen.getByText("claude-fable-5-1")).toBeInTheDocument();
     expect(screen.getByText(/chosen per conversation/i)).toBeInTheDocument();
   });
 

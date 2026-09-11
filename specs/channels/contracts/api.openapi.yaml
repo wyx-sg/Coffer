@@ -200,17 +200,18 @@ components:
 
     AgentModelOut:
       type: object
-      required: [id, source]
+      required: [id]
       properties:
         id:
           type: string
+          description: >-
+            The id passed verbatim to the agent's CLI. Concrete models only —
+            tier aliases (`sonnet`, `opus`, `best`, `sonnet[1m]`, …) are not
+            listed, since each resolves to a model already in the list.
         label:
           type: string
         description:
           type: string
-        source:
-          type: string
-          description: Where the entry came from — a curated alias, or the agent's own config.
 
     AgentModelsOut:
       type: object

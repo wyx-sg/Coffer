@@ -4,12 +4,25 @@ compiled binary.
 WHY this exists at all. The CLI has no ``list models`` command and no local API
 that answers "what can I run?", so the only machine-readable copy of that answer
 on this machine is the one the CLI itself was built with. It ships as a single
-bun-compiled executable that embeds a hand-maintained catalog (marked in the
-bundle by a literal comment) plus the alias array its ``--model`` flag accepts.
-Coffer reads both rather than writing the names down, because a written-down
-list goes stale and — more importantly — an alias like the newest-Opus pointer
-cannot tell the user WHICH Opus they are about to run. The catalog carries the
-version in every display name; that is the whole point of reading it.
+bun-compiled executable that embeds a hand-maintained catalog, marked in the
+bundle by a literal comment. Coffer reads that rather than writing the names
+down, because a written-down list goes stale and — more importantly — cannot
+tell two releases of the same tier apart. The catalog carries the version in
+every display name; that is the whole point of reading it.
+
+WHY ONLY the catalog. The bundle also carries the tier-alias array the
+``--model`` flag accepts (``sonnet``, ``opus``, ``best``, ``sonnet[1m]``,
+``opusplan``, …), and this source used to emit those alongside the catalog. It
+no longer does. Every alias resolves to a model the catalog already lists, so
+emitting both padded the picker with nine label-less entries sitting next to the
+real models they point at. The CLI itself treats them as pointers, not models —
+it strips a trailing ``[1m]`` before comparing two model names, so ``sonnet[1m]``
+and ``sonnet`` are the same model to it, differing only in a context-window
+flag. Nothing becomes unreachable: ``/model <name>`` and the agent's own config
+still accept any alias string, and the CLI validates it. The cost, accepted
+knowingly: ``best`` and ``opusplan`` are routing BEHAVIOURS rather than single
+models, so after this they can only be set by typing the name, not by picking
+one from a list. That is a decision, not an oversight.
 
 WHAT this costs when it breaks. The bundle's shapes are an implementation
 detail of a release we do not control. If a future CLI renames the marker or
@@ -37,10 +50,8 @@ _AGENT_KEY = "claude_code"
 #: only stable landmark in a minified 200 MB bundle.
 _MARKER = b"Hand-maintained baked-in model catalog"
 
-#: How much of the bundle to keep around the marker. The alias arrays sit a
-#: little BEFORE the marker and the catalog entries a fair way after it, so the
-#: window is asymmetric. Both are generous multiples of what was observed.
-_BEFORE = 16 * 1024
+#: How much of the bundle to keep from the marker on. The catalog entries run a
+#: fair way past it; this is a generous multiple of what was observed.
 _AFTER = 128 * 1024
 
 #: Streaming scan block size — the bundle is far too large to read whole.
@@ -52,19 +63,6 @@ _ENTRY_RE = re.compile(
     rb'\{id:"(claude-[^"]+)",family:"[^"]+",display_name:"([^"]+)"'
     rb'(?:,knowledge_cutoff:"([^"]*)")?'
 )
-
-#: The alias array, located STRUCTURALLY so no alias is ever written down here.
-#: The bundle declares the id array first and the alias array immediately after
-#: it in the same statement; variable names are minified and change every
-#: release, so the anchor is "an array whose every member carries the vendor
-#: prefix, then the next array literal that is assigned to something".
-_ALIAS_RE = re.compile(
-    rb'\[(?:"claude-[^"]*"\s*,\s*)+"claude-[^"]*"\]'
-    rb"\s*[,;]\s*(?:var\s+)?[A-Za-z_$][A-Za-z0-9_$]*\s*=\s*"
-    rb'\[((?:"[^"]*"\s*,\s*)*"[^"]*")\]'
-)
-
-_STRING_RE = re.compile(rb'"([^"]*)"')
 
 
 class ClaudeBinaryModelDiscovery:
@@ -82,7 +80,7 @@ class ClaudeBinaryModelDiscovery:
     async def discover(
         self, *, agent_key: str, config_dir: pathlib.Path | None
     ) -> list[AgentModel]:
-        """The aliases the CLI accepts, then its versioned catalog.
+        """The CLI's versioned catalog.
 
         ``config_dir`` is unused: this reads the executable on PATH, which is
         the same one Coffer will spawn regardless of where the user's config
@@ -129,14 +127,12 @@ class ClaudeBinaryModelDiscovery:
         window = self._read_window(path)
         if window is None:
             return []
-        before, after = window
-        return self._aliases(before) + self._catalog(after)
+        return self._catalog(window)
 
     @staticmethod
-    def _read_window(path: pathlib.Path) -> tuple[bytes, bytes] | None:
-        """Stream the bundle looking for the marker, then re-read the slice
-        around it. Returns ``(bytes before the marker, bytes from the marker
-        on)``, or ``None`` if the marker is absent."""
+    def _read_window(path: pathlib.Path) -> bytes | None:
+        """Stream the bundle looking for the marker, then re-read the slice that
+        starts at it. ``None`` if the marker is absent."""
         overlap = len(_MARKER) - 1
         try:
             with path.open("rb") as fh:
@@ -149,31 +145,13 @@ class ClaudeBinaryModelDiscovery:
                     buf = tail + block
                     hit = buf.find(_MARKER)
                     if hit >= 0:
-                        at = consumed - len(tail) + hit
-                        start = max(0, at - _BEFORE)
-                        fh.seek(start)
-                        slab = fh.read((at - start) + _AFTER)
-                        return slab[: at - start], slab[at - start :]
+                        fh.seek(consumed - len(tail) + hit)
+                        return fh.read(_AFTER)
                     consumed += len(block)
                     tail = buf[-overlap:] if overlap else b""
         except OSError:
             _log.debug("agent.model_discovery.binary_unreadable path=%s", path, exc_info=True)
             return None
-
-    @staticmethod
-    def _aliases(before: bytes) -> list[AgentModel]:
-        """The tier aliases, in the order the bundle lists them. They carry no
-        labels there and none are invented here: the id IS the word the CLI
-        accepts on ``--model``, which is also the word the user recognises."""
-        match = _ALIAS_RE.search(before)
-        if match is None:
-            return []
-        out: list[AgentModel] = []
-        for raw in _STRING_RE.findall(match.group(1)):
-            alias = raw.decode("utf-8", "replace").strip()
-            if alias:
-                out.append(AgentModel(id=alias, source="alias"))
-        return out
 
     @staticmethod
     def _catalog(after: bytes) -> list[AgentModel]:
@@ -199,7 +177,6 @@ class ClaudeBinaryModelDiscovery:
                     # The only per-model prose the bundle carries. Rendered as a
                     # sentence because a bare date reads as noise in a picker.
                     description=f"Knowledge cutoff {known_to}" if known_to else "",
-                    source="discovered",
                 )
             )
         out.reverse()

@@ -5,10 +5,10 @@
 // frontend used to carry: the backend is the single source of truth, and it in
 // turn writes down no model of its own — every entry is read back from the
 // installed agent. So a newly released model reaches the UI with no release of
-// anything. The list mixes the CLI's own tier aliases with the concrete,
-// version-bearing models it reported, tagged by `source` so the UI can say
-// where each came from; the order the backend returns is meaningful (aliases
-// first) and must be preserved.
+// anything. Concrete, version-bearing models only — the CLIs' tier aliases
+// (`sonnet`, `opus`, `best`, `sonnet[1m]`, …) are not listed, since each
+// resolves to a model already in the list. The order the backend returns is
+// meaningful (newest first) and must be preserved.
 
 import { getCofferBaseUrl, getCofferToken } from "../auth";
 import { ApiError } from "./errors";
@@ -17,18 +17,11 @@ import { ApiError } from "./errors";
 // Types
 // ---------------------------------------------------------------------------
 
-/** Where an id came from: `"alias"` = a tier alias the CLI accepts, which
- * always resolves to the newest model in that tier and so names no version;
- * `"discovered"` = a concrete, version-bearing model the agent reported. Kept a
- * plain string — the backend may add sources the frontend has no branch for. */
-export type AgentModelSource = string;
-
 export interface AgentModel {
   /** The id passed VERBATIM to the agent's CLI — never a display name. */
   id: string;
   label: string;
   description: string;
-  source: AgentModelSource;
 }
 
 export interface AgentModelsOut {

@@ -1,9 +1,11 @@
 """Unit tests for ``ClaudeBinaryModelDiscovery``.
 
 The real Claude Code executable is ~200 MB and is not installed on CI, so every
-test here writes a tiny byte-string fixture in the exact shape the bundle uses
-(the marker comment, a couple of catalog entries, and the two array literals the
-alias anchor keys off) and points the adapter at it with a stubbed PATH lookup.
+test here writes a tiny byte-string fixture in the exact shape the bundle uses —
+the tier-alias arrays, the marker comment, then a couple of catalog entries —
+and points the adapter at it with a stubbed PATH lookup. The alias arrays are
+kept in the fixture on purpose: they are what the bundle really carries, and one
+test exists solely to prove they do NOT reach the picker.
 
 The point of the failure tests: this source reads an implementation detail of a
 release Coffer does not control, so it MUST degrade to an empty list on every
@@ -22,7 +24,8 @@ from coffer.infrastructure.agent.claude_binary_models import ClaudeBinaryModelDi
 _MARKER = b"Hand-maintained baked-in model catalog"
 
 #: The id array followed by the alias array, exactly as the bundle emits them:
-#: minified variable names, one statement, no whitespace.
+#: minified variable names, one statement, no whitespace. Present in the fixture
+#: because it is present in the bundle — never because anything reads it.
 _ARRAYS = (
     b'var jVt=["claude-3-5-haiku","claude-opus-4-8","claude-opus-5"],'
     b'jP=["sonnet","opus","fable","opus[1m]","opusplan"],'
@@ -65,26 +68,30 @@ def discovery(
     return ClaudeBinaryModelDiscovery()
 
 
-async def test_aliases_lead_then_the_catalog_newest_first(
+async def test_the_catalog_is_returned_newest_first(
     discovery: ClaudeBinaryModelDiscovery, tmp_path: pathlib.Path
 ) -> None:
     _bundle(tmp_path / "claude")
 
     models = await discovery.discover(agent_key="claude_code", config_dir=None)
 
-    assert [m.id for m in models] == [
-        # The alias array, verbatim and in bundle order.
-        "sonnet",
-        "opus",
-        "fable",
-        "opus[1m]",
-        "opusplan",
-        # Then the catalog, reversed out of its oldest-first order.
-        "claude-opus-5",
-        "claude-3-5-haiku",
-    ]
-    assert [m.source for m in models[:5]] == ["alias"] * 5
-    assert [m.source for m in models[5:]] == ["discovered"] * 2
+    # The catalog, reversed out of its oldest-first order. Nothing else.
+    assert [m.id for m in models] == ["claude-opus-5", "claude-3-5-haiku"]
+
+
+async def test_the_tier_aliases_are_not_offered(
+    discovery: ClaudeBinaryModelDiscovery, tmp_path: pathlib.Path
+) -> None:
+    """The bundle carries ``sonnet``/``opus``/``opus[1m]``/``opusplan`` and this
+    source used to emit them, which put label-less duplicates in the picker next
+    to the real models they resolve to. Every id returned now names a concrete,
+    version-bearing model."""
+    _bundle(tmp_path / "claude")
+
+    ids = [m.id for m in await discovery.discover(agent_key="claude_code", config_dir=None)]
+
+    assert not {"sonnet", "opus", "fable", "opus[1m]", "opusplan"} & set(ids)
+    assert all(i.startswith("claude-") for i in ids)
 
 
 async def test_versioned_labels_and_the_knowledge_cutoff_survive(
@@ -103,20 +110,6 @@ async def test_versioned_labels_and_the_knowledge_cutoff_survive(
     assert models["claude-3-5-haiku"].description == ""
 
 
-async def test_aliases_are_never_written_down_here(
-    discovery: ClaudeBinaryModelDiscovery, tmp_path: pathlib.Path
-) -> None:
-    """Renaming every alias in the bundle renames them in the output — proof the
-    anchor is structural and no alias is hardcoded in the adapter."""
-    (tmp_path / "claude").write_bytes(
-        b'var a=["claude-x-1","claude-x-2"],b=["tier-one","tier-two"];' + _MARKER
-    )
-
-    models = await discovery.discover(agent_key="claude_code", config_dir=None)
-
-    assert [m.id for m in models] == ["tier-one", "tier-two"]
-
-
 async def test_the_scan_is_cached_until_the_binary_changes(
     discovery: ClaudeBinaryModelDiscovery, tmp_path: pathlib.Path
 ) -> None:
@@ -133,7 +126,7 @@ async def test_the_scan_is_cached_until_the_binary_changes(
     # A genuine upgrade changes size (and mtime) → rescanned.
     _bundle(binary, catalog=b'models:[{id:"claude-opus-9",family:"opus",display_name:"Opus 9"}]')
     reread = await discovery.discover(agent_key="claude_code", config_dir=None)
-    assert [m.id for m in reread if m.source == "discovered"] == ["claude-opus-9"]
+    assert [m.id for m in reread] == ["claude-opus-9"]
 
 
 async def test_marker_far_into_the_file_is_still_found(
@@ -146,10 +139,7 @@ async def test_marker_far_into_the_file_is_still_found(
 
     models = await discovery.discover(agent_key="claude_code", config_dir=None)
 
-    assert [m.id for m in models if m.source == "discovered"] == [
-        "claude-opus-5",
-        "claude-3-5-haiku",
-    ]
+    assert [m.id for m in models] == ["claude-opus-5", "claude-3-5-haiku"]
 
 
 async def test_no_binary_on_path_is_empty(discovery: ClaudeBinaryModelDiscovery) -> None:

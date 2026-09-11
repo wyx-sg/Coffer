@@ -65,8 +65,8 @@ async def test_the_catalogue_is_whatever_discovery_reports(tmp_path: pathlib.Pat
     both come from the agent."""
     discovery = _FakeDiscovery(
         [
-            AgentModel("opus", source="alias"),
-            AgentModel("claude-opus-9", "Opus 9", "Knowledge cutoff May 2026", source="discovered"),
+            AgentModel("claude-opus-8", "Opus 4.8"),
+            AgentModel("claude-opus-9", "Opus 9", "Knowledge cutoff May 2026"),
         ]
     )
     svc = AgentModelCatalogueService(
@@ -75,10 +75,7 @@ async def test_the_catalogue_is_whatever_discovery_reports(tmp_path: pathlib.Pat
 
     models = await svc.catalogue("claude_code")
 
-    assert [(m.id, m.source) for m in models] == [
-        ("opus", "alias"),
-        ("claude-opus-9", "discovered"),
-    ]
+    assert [m.id for m in models] == ["claude-opus-8", "claude-opus-9"]
     assert models[1].label == "Opus 9"
     assert discovery.seen == [tmp_path]
 
@@ -87,7 +84,7 @@ async def test_discovery_still_runs_without_a_registered_agent() -> None:
     """The CLI can be installed without being registered as a managed agent, and
     the sources that read the binary answer either way — so discovery is asked
     with ``config_dir=None`` rather than skipped."""
-    discovery = _FakeDiscovery([AgentModel("from-the-binary", source="alias")])
+    discovery = _FakeDiscovery([AgentModel("from-the-binary")])
     svc = AgentModelCatalogueService(agents=_FakeAgents([]), discovery=discovery)
 
     assert await svc.suggest("claude_code") == ["from-the-binary"]
@@ -97,9 +94,9 @@ async def test_discovery_still_runs_without_a_registered_agent() -> None:
 async def test_duplicate_ids_collapse_and_the_first_source_wins(tmp_path: pathlib.Path) -> None:
     discovery = _FakeDiscovery(
         [
-            AgentModel("dup", "From the binary", source="discovered"),
-            AgentModel("dup", "From the config", source="discovered"),
-            AgentModel("other", source="discovered"),
+            AgentModel("dup", "From the binary"),
+            AgentModel("dup", "From the config"),
+            AgentModel("other"),
         ]
     )
     svc = AgentModelCatalogueService(
