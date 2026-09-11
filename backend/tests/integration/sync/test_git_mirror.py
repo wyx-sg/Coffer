@@ -165,6 +165,10 @@ async def test_resolve_revision_accepts_a_date(
     assert (await mirror.resolve_revision(first)).startswith(first[:7])
 
 
+@pytest.mark.acceptance(
+    spec="vault-export-import",
+    scenario="the push credential never reaches the repository",
+)
 @pytest.mark.asyncio
 async def test_the_token_never_lands_in_git_config(
     worktree: pathlib.Path, remote: pathlib.Path

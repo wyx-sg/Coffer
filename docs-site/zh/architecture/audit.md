@@ -76,6 +76,7 @@ Coffer 的方案刻意保持精简：一对本地数据库表，而非时序数�
 | `credential_migrated`                                       | 逐 ref，遗留 keychain 密钥迁入存储时           |
 | `master_key_relocated`                                      | 主密钥在文件与 keychain 存储之间移动之后       |
 | `master_key_exported` / `master_key_imported`               | 主密钥带外传输到 / 自另一台机器                |
+| `vault_backed_up`                                           | 每次备份运行后记录状态与提交 —— 从不记录推送凭据，也不记录 git 原始报错文本 |
 
 **Agent 工作区** —— 这里每一条写的都是 Coffer 并不拥有的文件：
 
