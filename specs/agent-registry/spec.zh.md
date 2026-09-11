@@ -146,17 +146,18 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 ---
 
-### User Story 9 —— 查看 agent 真实的 MCP server（优先级 P2）
+### User Story 9 —— 查看并管理 agent 真实的 MCP server（优先级 P2）
 
-如今 agent 的 MCP 服务器 tab 只能回答「Coffer 自己的 shim 装没装」。用户想看到的是自己的 agent **实际**配置了什么：agent 自己配置文件里的每一条 MCP server 条目——Claude Code 从 `~/.claude.json` 的 `mcpServers` 与 `settings.json` 的 `mcpServers` 双源解析，Codex 从 `config.toml` 的 `[mcp_servers.*]` 解析。每条目显示传输方式（stdio 命令或 HTTP URL）、来源文件，以及（仅 Codex——其格式定义了逐条目开关）启用状态。这份列表是**只读**的：Coffer 呈现的是那些绕过了自己网关的 MCP server，而它在这些条目上提供的唯一写操作是「收编」（User Story 10）。就地编辑条目——移除它、翻转 Codex 的 `enabled` 开关——属于 agent 自己的界面，那里本来就做得到；Coffer 再做一遍，只意味着亲手改写另一个工具的私有配置格式，却没有给用户带来任何新能力。Coffer 自己的 `coffer` 条目特殊呈现，由既有的安装/卸载动作管理。
+如今 agent 的 MCP 服务器 tab 只能回答「Coffer 自己的 shim 装没装」。用户想看到的是自己的 agent **实际**配置了什么：agent 自己配置文件里的每一条 MCP server 条目——Claude Code 从 `~/.claude.json` 的 `mcpServers` 与 `settings.json` 的 `mcpServers` 双源解析，Codex 从 `config.toml` 的 `[mcp_servers.*]` 解析。每条目显示传输方式（stdio 命令或 HTTP URL）、来源文件，以及（仅 Codex——其格式定义了逐条目开关）启用状态。在同一张表里，用户还可以**删除**一条条目——已经在 Coffer 里有等价物的重复条目，或本来就不该在那儿的条目——写入走的是收编在这些文件上已经在用的那套原子写 + `.bak` 机制。Coffer 不提供的是就地编辑：翻转 Codex 的 `enabled` 开关属于 agent 自己的界面，那里本来就做得到，而 `claude_code` 的格式根本没有逐条目开关。Coffer 自己的 `coffer` 条目特殊呈现，由既有的安装/卸载动作管理。
 
 **为什么是这个优先级**：当前 tab 对每个 agent 显示同一份 Coffer 全局列表，具有误导性。呈现 agent 的真实配置是收编的前提——用户得先看见某个 server 在 hub 之外，才谈得上把它收进来。
 
-**独立可测**：注册一个 `config.toml` 带若干 `[mcp_servers.*]` 条目的 `codex` agent；打开 MCP tab；观察恰好这些条目连同传输方式、来源文件与启用标志被列出；并观察列出之后该 agent 的 `config.toml` 逐字节未变。
+**独立可测**：注册一个 `config.toml` 带若干 `[mcp_servers.*]` 条目的 `codex` agent；打开 MCP tab；观察恰好这些条目连同传输方式与来源文件被列出；删除其中一条，观察它从文件中消失，且保留了改动前内容的 `.bak`。
 
 **代表性场景**：
 
 - list an agent's real MCP entries
+- remove a direct MCP entry
 - degrade to read-only when MCP config is unparseable
 
 ---
@@ -425,6 +426,12 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - **When** 用户列出该 agent 的 MCP 条目，
 - **Then** Coffer 报告一个指明文件与解析错误的解析失败状态而非让请求失败，并在该文件恢复可解析之前拒绝对它的条目级写操作。
 
+### Scenario: remove a direct MCP entry
+
+- **Given** 已注册 agent 有一条直连（非 Coffer）MCP 条目，
+- **When** 用户删除该条目（`claude_code` 时携带来源文件），
+- **Then** 该条目仅从其来源文件中被删除，采用原子写入并保留改动前内容的 `.bak`，记录一条 `agent_mcp_entry_removed` 审计，且下一次列出不再出现它。
+
 ### Scenario: adopt a direct MCP entry into Coffer
 
 - **Given** 一个已注册 agent 带一条名称与既有资源不冲突的直连 stdio MCP 条目，
@@ -540,11 +547,12 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 **Agent MCP 条目（工作区增补）**
 
 - **FR-025**: 系统 MUST 解析并列出 agent 自己文件中配置的 MCP server 条目——`claude_code` 从 `~/.claude.json` 的 `mcpServers` 与 `settings.json` 的 `mcpServers` 双源解析（每条标注来源文件）；`codex` 从 `config.toml` 的 `[mcp_servers.*]` 解析。每条目携带名称、来源、传输方式（stdio 命令或 HTTP URL）、格式定义了的 `enabled` 标志（Codex）、标记 Coffer 自身网关条目的 `is_coffer`，以及在存在等价已注册 `mcp_server` 资源时给出其名称的 `matches_resource`。条目在读取时派生，绝不存储。
-- **FR-028**: 用户 MUST 能把直连 MCP 条目收编进 Coffer。收编 (a) 经标准资源流程（schema 校验 + 审计）把条目注册为 `mcp_server` 资源，(b) 验证资源可读回，再 (c) 把该条目从其来源文件中移除（`claude_code` 在两个文件同名时由调用方消歧，使用 FR-017 的原子写入 + `.bak` 机制）——严格按此顺序。任何失败都中止操作、回滚已创建的资源、保持 agent 配置逐字节不变；成功时审计为 `agent_mcp_entry_adopted`。与既有资源的名称冲突以 `conflict`（409）拒绝并附建议替代名；与既有资源等价的条目经 `matches_resource` 报告，让用户改为移除重复条目。`coffer` 条目永不可收编。
+- **FR-026**: 用户 MUST 能删除一条直连 MCP 条目。删除只改动该条目的来源文件（`claude_code` 在两个文件同名时由调用方消歧），复用 FR-017 的原子写入 + `.bak` 机制，并记录一条 `agent_mcp_entry_removed` 审计。`coffer` 条目不能经此操作删除——它由 FR-019/FR-021 管理。
+- **FR-028**: 用户 MUST 能把直连 MCP 条目收编进 Coffer。收编 (a) 经标准资源流程（schema 校验 + 审计）把条目注册为 `mcp_server` 资源，(b) 验证资源可读回，再 (c) 按 FR-026 移除来源条目——严格按此顺序。任何失败都中止操作、回滚已创建的资源、保持 agent 配置逐字节不变；成功时审计为 `agent_mcp_entry_adopted`。与既有资源的名称冲突以 `conflict`（409）拒绝并附建议替代名；与既有资源等价的条目经 `matches_resource` 报告，让用户改为移除重复条目。`coffer` 条目永不可收编。
 - **FR-029**: 收编 MUST NOT 把密钥值持久化进资源配置。当条目的环境变量在疑似密钥的 key（`TOKEN`、`KEY`、`SECRET`、`PASSWORD` 等模式）下携带值时，收编请求 MUST 为每个被标记的 key 提供 keychain 映射，否则以列出未解决 key 的响应拒绝。映射的值经 daemon 存入 OS keychain（遵循凭据不变量）；资源配置只携带引用。
 - **FR-030**: 当某个 agent 配置文件无法解析时，受影响的 facet MUST 降级为明确的解析错误状态（文件路径 + 解析器报错）而不拖垮整个视图，且在该文件恢复可解析之前 MUST 拒绝对它的条目级写操作。
 
-**不再提供：编辑 agent 自己的 MCP 条目。** Coffer 一度提供独立的移除（`agent_mcp_entry_removed`）与仅限 Codex 的 `enabled` 切换。两者都已删除；只保留列出（FR-025）、收编（FR-028/FR-029）与解析错误降级（FR-030）。留下的是只有 Coffer 才提供的那一半：把绕过其网关的 MCP server 呈现出来，并把它连同密钥一起映射进 vault 收编进 hub。删掉的那一半 agent 自己的界面本来就在做——而它执行的是本 spec 里最脆弱的动作：亲手改写另一个工具的私有配置格式。对 `claude_code` 而言，那个切换从来只会返回 422：该格式根本没有逐条目开关。收编仍然会移除它所收编的来源条目；这次写入自始至终归收编所有，任何环节失败时都会与整个操作一起回滚。
+**不再提供：切换 Codex 条目的 `enabled` 开关。** Coffer 一度在列表旁提供逐条目的启用切换。它已被删除。对 `claude_code` 而言那从来只会返回 422——该格式根本没有逐条目开关；对 `codex` 而言，它重复了 agent 自己界面本就拥有的一个开关，代价是就地亲手改写另一个工具的私有配置格式。删除（FR-026）与收编（FR-028）留了下来，因为它们是只有 Coffer 才有理由做的写入：把一个 server 从 agent 的私有配置里拿掉，以及把它连同密钥一起映射进 vault 收编进 hub。两者都自始至终拥有自己的那次写入，任何环节失败都会回滚。
 
 **插件（工作区增补）**
 

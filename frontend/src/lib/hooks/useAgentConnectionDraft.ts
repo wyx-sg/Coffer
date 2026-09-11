@@ -11,6 +11,14 @@
 // On the built-in login there is nothing to bind — `agent.model` is only read
 // when projecting a connection — so instead of two dead model slots the panel
 // shows the agent's own model catalogue read-only; `builtinModels` carries it.
+//
+// Where the model options come from depends on the draft connection. A
+// connection with a CURATED set (`models` non-empty, chosen on its detail page)
+// IS the catalogue: those ids are the only options and the endpoint is never
+// introspected. With an empty `models` — "no restriction" — the options come
+// from live introspection of the endpoint, as they always have. Either way the
+// staged model(s) are seeded first, so a model already bound to the agent never
+// vanishes from the list.
 import { useEffect, useMemo, useState } from "react";
 
 import type { AgentOut, AgentPatch } from "@/lib/api/agents";
@@ -72,19 +80,25 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     [compatible, draftConn],
   );
 
+  // A curated set on the draft connection replaces introspection as the source
+  // of the options; empty means "no restriction" and leaves that to `fetched`.
+  const curated = draftConnObj?.models ?? [];
+
   const models = useMemo(() => {
     const out: string[] = [];
     // Seed the staged model(s) so they show before the dropdown is opened
-    // (introspect populates the rest on open).
+    // (the catalogue populates the rest on open).
     for (const m of [draftModel, draftFast]) if (m && !out.includes(m)) out.push(m);
-    for (const m of fetched) if (!out.includes(m)) out.push(m);
+    for (const m of curated.length > 0 ? curated : fetched) if (!out.includes(m)) out.push(m);
     return out;
-  }, [draftModel, draftFast, fetched]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftModel, draftFast, fetched, draftConnObj]);
 
   // Introspect the DRAFT connection's endpoint using its OWN wire (how to call it),
   // which can differ from the agent's (an openai gateway routed to Claude Code).
+  // A curated connection needs no probe — its list IS the catalogue.
   const introspect = () => {
-    if (!draftConnObj) return;
+    if (!draftConnObj || curated.length > 0) return;
     list.mutate(
       {
         provider: draftConnObj.protocol,
@@ -105,7 +119,15 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     const conn = compatible.find((p) => p.name === name);
     if (!conn) return;
     // Stage (do NOT apply) a default model so the user has something to test:
-    // default both slots to the endpoint's first model.
+    // default both slots to the first model. A curated connection answers that
+    // from its own list; only an unrestricted one is introspected.
+    const pinned = conn.models ?? [];
+    if (pinned.length > 0) {
+      setFetched([]);
+      setDraftModel(pinned[0]);
+      if (wire === "anthropic") setDraftFast(pinned[0]);
+      return;
+    }
     list.mutate(
       { provider: conn.protocol, base_url: conn.base_url, credential_ref: conn.credential_ref },
       {

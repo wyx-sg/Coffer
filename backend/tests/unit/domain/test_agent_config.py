@@ -71,18 +71,17 @@ def test_unknown_type_rejected():
         AgentConfig.model_validate({"type": "nonesuch"})
 
 
-def test_follow_defaults_and_roundtrip() -> None:
-    cfg = AgentConfig(type=AgentType.CODEX)
-    assert cfg.follow_all_skills is True  # preserves pre-amendment auto-bind trust mode
-    assert cfg.skill_exclusions == []
-    cfg2 = AgentConfig.model_validate(
-        {"type": "codex", "follow_all_skills": False, "skill_exclusions": ["frontend-slides"]}
-    )
-    assert cfg2.follow_all_skills is False
-    assert cfg2.skill_exclusions == ["frontend-slides"]
+def test_retired_follow_policy_keys_are_rejected() -> None:
+    """The agent carries no skill-delivery policy any more (delivery is decided
+    on the skill: ``enabled`` + ``scope``). ``extra="forbid"`` means a stored
+    row still carrying either key fails to load — migration 0058 strips them,
+    and no load-time shim tolerates them."""
+    for key, value in (("follow_all_skills", False), ("skill_exclusions", ["x"])):
+        with pytest.raises(ValidationError):
+            AgentConfig.model_validate({"type": "codex", key: value})
 
 
-def test_follow_fields_survive_model_dump() -> None:
-    cfg = AgentConfig.model_validate({"type": "codex", "skill_exclusions": ["a"]})
-    dumped = cfg.model_dump()
-    assert dumped["follow_all_skills"] is True and dumped["skill_exclusions"] == ["a"]
+def test_dump_carries_no_delivery_policy() -> None:
+    dumped = AgentConfig(type=AgentType.CODEX).model_dump()
+    assert "follow_all_skills" not in dumped
+    assert "skill_exclusions" not in dumped

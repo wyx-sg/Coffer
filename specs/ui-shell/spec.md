@@ -79,20 +79,31 @@ A developer opens the web UI for the first time. They have never registered a se
 
 ### User Story 2 — Day-to-day MCP work feels polished, not bare (Priority: P1)
 
-A developer who already uses Coffer for MCP gateway aggregation wants the routine flows — registering a server, watching its health, browsing tools, toggling capabilities, viewing invocations — to look and feel like a real product, not a scaffold. Headings are typographically distinct; spacing is consistent; per-server pages have a primary "what is this server doing?" view before the per-tool toggles; empty / error / loading states are first-class. The Tools, Resources, and Prompts tabs are uniform — each carries the same search box, status filter, and per-row enable toggle, and keeps that chrome even when the upstream exposes none of that kind (the empty state renders inside the table, not as a bare card). The server list carries a search box, a status filter, and a client-side pager so a large vault stays navigable. The Invocations tab lists each call; expanding a row reveals its raw log — the invocation's full underlying JSON record, pretty-printed in a monospace, scrollable block — pretty-printed in a monospace, scrollable block.
+A developer who already uses Coffer for MCP gateway aggregation wants the routine flows — registering a server, watching its health, browsing tools, toggling capabilities — to look and feel like a real product, not a scaffold. Headings are typographically distinct; spacing is consistent; per-server pages have a primary "what is this server doing?" view before the per-tool toggles; empty / error / loading states are first-class. The Tools, Resources, and Prompts tabs are uniform — each carries the same search box, status filter, and per-row enable toggle, and keeps that chrome even when the upstream exposes none of that kind (the empty state renders inside the table, not as a bare card). The server list carries a search box, a status filter, and a client-side pager so a large vault stays navigable.
+
+There is no **Invocations** tab, and the Overview no longer carries a "Last
+invocation" row. The tab shipped — a filtered, paged table of every call the
+gateway proxied, each row expanding to that call's raw JSON record — and it has
+the same problem the audit log's page had, one story down: the traffic on it is
+not the user's. Every row is an agent calling a tool through the gateway, and a
+person who wants to know why one of those calls failed asks that agent rather
+than reading the gateway's table over its shoulder.
+
+The record is untouched. The gateway still writes every call to the invocation
+log, and both `GET /api/v1/resources/mcp_server/{name}/invocations` and
+`coffer mcp invocations` still read it back — for an agent that can call the
+route, and for scripting. What goes is the page.
 
 "Add MCP server" is a modal where the user pastes the standard `mcpServers` JSON (one or many servers at once) — the same block every MCP server's README provides. A review step lets them confirm which `env` values are secrets; those are lifted into the encrypted credential store (only their refs kept in the config) rather than stored as plaintext in the config.
 
 **Why this priority**: The MCP Gateway spec delivered the backend correctness but the UI shipped as bare tailwind defaults. The user-visible bar for "the MCP gateway is done" is the UI passing a real user (not a Playwright fixture).
 
-**Independent Test**: Walk the MCP flows end-to-end in a real browser: open `/mcp-servers` (welcome or list), click "Add MCP server", fill the form, submit, land on the detail page, switch through the Overview / Tools / Resources / Prompts / Invocations tabs, toggle a tool, return to the list, switch language between English and 中文. Every step shows polished content; no view dead-ends in a generic error.
+**Independent Test**: Walk the MCP flows end-to-end in a real browser: open `/mcp-servers` (welcome or list), click "Add MCP server", fill the form, submit, land on the detail page, switch through the Overview / Tools / Resources / Prompts tabs, toggle a tool, return to the list, switch language between English and 中文. Every step shows polished content; no view dead-ends in a generic error.
 
 **Representative scenarios** (full list under `## Acceptance Scenarios`):
 
 - MCP server registration round-trip via JSON import
 - capability toggle uses the redesigned tab layout
-- invocations table renders the redesigned empty + populated states
-- invocation log row expands to its raw log JSON
 - language switcher round-trips correctly
 
 ---
@@ -228,23 +239,6 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - **When** the user types a partial name in the capability search box on the Tools tab
 - **Then** only matching tools remain visible and non-matching tools are hidden
 
-### Scenario: invocations table renders the redesigned empty + populated states
-
-- **Given** a registered server with no invocations
-- **When** the user opens the server's Invocations tab on its detail page
-- **Then** the empty state shows "No invocations yet" with a hint about how to trigger one
-- **Given** the same server with at least one invocation in the DB
-- **When** the Invocations tab loads
-- **Then** the table renders timestamp / type / capability / status / latency columns
-- **And** the status filter dropdown is operable
-- **And** clicking (or pressing Enter/Space on) a row expands it to that invocation's raw log — its full underlying JSON record, pretty-printed in a monospace, scrollable block
-
-### Scenario: invocation status filter dropdown exposes selectable options
-
-- **Given** a registered server
-- **When** the user opens the Invocations tab and clicks the status filter combobox
-- **Then** at least the "All" option renders inside the dropdown portal
-
 ### Scenario: settings layout uses the redesigned tabbed sidebar
 
 - **Given** the user navigates to `/settings`
@@ -303,6 +297,6 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - Every scenario above has at least one covering test (unit, integration, or e2e) and the `audit_acceptance` script passes 002 alongside 001.
 - A first-time user can register an MCP server and reach a working gateway in-app; pointing an MCP client at the shim is documented in the project README.
 - The sidebar shows only operational surfaces (Agents, MCP servers, Skills, Knowledge, Model providers, Channels, Settings), grouped by role; no feature appears as a dead "soon" entry.
-- The audit log has no page: neither `/audit` nor the legacy `/observability` URL resolves, and no sidebar entry points at either. An agent reads the log through `coffer__diagnose`; scripts read it through the REST route and `coffer audit`. MCP invocation log rows still expand to the row's raw log JSON. Observability (system health / metrics) is a reserved future surface, not the audit log.
+- The audit log has no page: neither `/audit` nor the legacy `/observability` URL resolves, and no sidebar entry points at either. An agent reads the log through `coffer__diagnose`; scripts read it through the REST route and `coffer audit`. The MCP invocation log has no page either, and for the same reason — every row in it is an agent calling a tool, not a person — so it keeps its REST route and `coffer mcp invocations` and loses its tab. Observability (system health / metrics) is a reserved future surface, not the audit log.
 - Settings groups data controls (retention and prune) under a Data tab; the daemon is never surfaced as a user-facing concept, and no tab exposes a shutdown or token-rotation control.
 - `make verify` + `make verify-e2e` are green.

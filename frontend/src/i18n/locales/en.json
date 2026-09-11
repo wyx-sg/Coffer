@@ -29,9 +29,7 @@
     "disabled": "Disabled",
     "saving": "Saving…",
     "deleting": "Deleting…",
-    "retry": "Retry",
     "clear": "Clear",
-    "rawLog": "Raw log",
     "done": "Done",
     "moreActions": "More actions",
     "showPassword": "Show",
@@ -145,8 +143,7 @@
         "overview": "Overview",
         "tools": "Tools",
         "resources": "Resources",
-        "prompts": "Prompts",
-        "invocations": "Invocations"
+        "prompts": "Prompts"
       },
       "overview": {
         "config": "Configuration",
@@ -156,7 +153,6 @@
         "tools": "Tools",
         "resources": "Resources",
         "prompts": "Prompts",
-        "lastInvocation": "Last invocation",
         "rawConfig": "Raw config JSON"
       },
       "edit": "Edit"
@@ -175,30 +171,6 @@
       "header": {
         "name": "Name",
         "enabled": "Enabled"
-      }
-    },
-    "invocations": {
-      "filter": "All statuses",
-      "empty": "No invocations yet.",
-      "noMatches": "No invocations match your filters.",
-      "emptyHint": "Capabilities called by any connected MCP client will appear here.",
-      "loading": "Loading invocations…",
-      "loadFailed": "Failed to load invocations",
-      "searchPlaceholder": "Search invocations",
-      "filterSearch": "Search",
-      "filterStatus": "Status",
-      "header": {
-        "time": "Time",
-        "type": "Type",
-        "key": "Key",
-        "duration": "Duration",
-        "status": "Status"
-      },
-      "status": {
-        "ok": "OK",
-        "error": "Error",
-        "timeout": "Timeout",
-        "denied": "Denied"
       }
     },
     "health": {
@@ -258,9 +230,6 @@
   "audit": {
     "filter": {
       "actor": "Actor",
-      "all": "All",
-      "from": "From",
-      "to": "To",
       "search": "Search",
       "searchPlaceholder": "Search activity"
     },
@@ -272,23 +241,14 @@
       "user": "User",
       "agent": "Agent",
       "channel": "Channel"
-    },
-    "timeRange": {
-      "1h": "Last 1 hour",
-      "6h": "Last 6 hours",
-      "24h": "Last 24 hours",
-      "7d": "Last 7 days",
-      "30d": "Last 30 days",
-      "all": "All time",
-      "custom": "Custom range…"
-    },
-    "applyRange": "Apply"
+    }
   },
   "settings": {
     "title": "Settings",
     "subtitle": "Your data and app preferences.",
     "tabs": {
       "general": "General",
+      "engine": "Engine",
       "data": "Data",
       "security": "Security",
       "about": "About",
@@ -460,7 +420,27 @@
       "baseUrl": "Base URL",
       "model": "Model",
       "fastModel": "Fast model (optional)",
-      "secret": "API key"
+      "secret": "API key",
+      "searchPlaceholder": "Search connections…",
+      "allProtocols": "All types",
+      "internalEngine": "Coffer engine",
+      "bulkDeleteConfirm": "Delete {{count}} connection(s)? Their stored credentials are removed too.",
+      "detail": {
+        "back": "Back to LLM connections",
+        "notFound": "Connection not found",
+        "configuration": "Configuration",
+        "keyStored": "Stored",
+        "keyNone": "No key stored",
+        "created": "Created",
+        "updated": "Updated",
+        "models": "Models",
+        "modelsHint": "Pick which of this endpoint's models this connection offers. The agent's model picker is then limited to your picks.",
+        "unrestricted": "No restriction — every model this endpoint offers is available.",
+        "restricted": "{{count}} model(s) picked — agents see only these.",
+        "fetchFailed": "Could not list this endpoint's models ({{error}}). Your current selection is unchanged.",
+        "noModelsYet": "No models yet — fetch this endpoint's models, or leave it unrestricted.",
+        "clearSelection": "Clear selection (no restriction)"
+      }
     },
     "internalEngine": {
       "title": "Internal engine",
@@ -476,9 +456,7 @@
       "title": "Daemon offline",
       "body": "The coffer daemon stopped responding. Capability lists, tool calls, and registrations will fail until it restarts.",
       "notReadyTitle": "Daemon not running",
-      "notReadyBody": "Coffer's background service isn't reachable yet. It usually starts on its own — click Retry, and if the problem continues, restart Coffer.",
-      "retry": "Retry",
-      "retrying": "Retrying…",
+      "notReadyBody": "Coffer's background service isn't reachable yet. It usually starts on its own and this notice clears itself once it does; if the problem continues, restart Coffer.",
       "webRestartHint": "The browser can't restart it — run this in your terminal:"
     }
   },
@@ -648,9 +626,6 @@
         "directTitle": "Direct servers",
         "openServersPage": "Open the MCP servers page",
         "gatewayManagedHint": "Coffer serves its MCP servers to this agent through the gateway. Manage them on the MCP servers page.",
-        "source": "Source",
-        "transport": "Transport",
-        "enabled": "Enabled",
         "adopt": "Adopt into Coffer",
         "adoptTitle": "Adopt MCP server",
         "adoptSecretsHint": "Likely secrets detected — provide a keychain reference for each key; secret values are stored only in the system keychain.",
@@ -659,6 +634,8 @@
         "parseError": "Failed to parse config — this file is read-only",
         "empty": "No direct MCP servers",
         "adoptSuccess": "Adopted {{name}} — now served to all agents via the gateway",
+        "deleteConfirm": "Delete this entry from the agent's config file? A .bak backup will be written.",
+        "bulkDeleteConfirm": "Delete the {{count}} selected server(s)? A .bak backup is written for each.",
         "searchPlaceholder": "Search servers"
       }
     },
@@ -726,24 +703,13 @@
     },
     "cofferSkills": "Coffer skills",
     "bulkInstallMcp": "Install Coffer MCP",
-    "bulkInstallSkills": "Install skills",
-    "installSkillsDialog": {
-      "title": "Install skills to {{count}} agent(s)",
-      "subtitle": "Checked skills are installed (bound) to every selected agent.",
-      "empty": "No skills available to install.",
-      "install": "Install ({{count}})"
-    },
     "cofferManaged": "Managed by Coffer",
     "skillsTab": {
-      "empty": "No Coffer-managed skills on this agent yet — use Install skills to add some.",
-      "toggleAria": "Toggle skill {{name}} on this agent",
+      "empty": "No skill is delivered to this agent yet — enable a skill and put this agent in its scope on the Skills page.",
       "degradedBadge": "Copied",
-      "degradedTooltip": "Symlinks aren't available on this filesystem, so Coffer delivered a copy. The agent won't see edits to the master skill until you re-enable it.",
-      "follow": "Follow master library",
-      "followHint": "While on, every skill in the master library is delivered to this agent automatically; newly registered skills appear as soon as they land.",
-      "followingManagedHint": "While following the master library, Coffer delivers every skill automatically. Manage the master library on the Skills page.",
+      "degradedTooltip": "Symlinks aren't available on this filesystem, so Coffer delivered a copy. The agent won't see edits to the master skill until it is delivered again.",
+      "managedHint": "Coffer delivers these skills. Which ones reach this agent is decided on the Skills page, by each skill's enable state and its agent scope.",
       "openSkillsPage": "Open the Skills page",
-      "excludeHint": "While following, switching a skill off adds it to this agent's exclusion list.",
       "unmanagedTitle": "Unmanaged skills",
       "adopt": "Adopt",
       "adoptDisabledInvalid": "SKILL.md is invalid — cannot adopt",
@@ -754,6 +720,8 @@
       "locationSkills": "skills directory",
       "locationAgentsDir": "~/.agents/skills",
       "adoptSuccess": "Adopted into the master library: {{name}}",
+      "openFolder": "Open folder",
+      "openFolderFailed": "Couldn't open that folder.",
       "unmanagedNoMatch": "No unmanaged skills match your search."
     },
     "mcpTab": {
@@ -1084,7 +1052,6 @@
     "deleteConfirm": "Delete channel “{{name}}”? Its adapter stops and the pairing is removed."
   },
   "scope": {
-    "title": "Activation scope",
     "subtitle": "Which agents this is active for — every agent, or only the ones you select. Out of scope it stays registered, just not exposed or delivered.",
     "everyAgent": "Every agent",
     "selectedAgents": "Selected agents",

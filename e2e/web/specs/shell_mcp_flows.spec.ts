@@ -1,10 +1,9 @@
 // e2e/web/specs/shell_mcp_flows.spec.ts
 //
-// UI Shell §User Story 3 — day-to-day MCP work, tested through the
-// redesigned UI. Three scenarios in one walk: registration round-trip,
-// capability toggle round-trip, invocations empty-state. The 001-spec
-// tests already cover the backend correctness; here we pin the new
-// look-and-feel: welcome-card → add → detail → tabs.
+// Spec ui-shell §User Story 3 — day-to-day MCP work, tested through the
+// redesigned UI: registration round-trip and capability toggle
+// round-trip. The 001-spec tests already cover the backend correctness;
+// here we pin the new look-and-feel: welcome-card → add → detail → tabs.
 
 import { expect } from "@playwright/test";
 import * as path from "node:path";
@@ -158,33 +157,6 @@ acceptance(
 
 acceptance(
   "ui-shell",
-  "invocations table renders the redesigned empty + populated states",
-  async ({ page }) => {
-    const name = generateUniqueName("e2e002inv");
-    try {
-      await registerFakeServer(name);
-      await page.goto(`/mcp-servers/mcp_server/${name}`);
-      await page.getByRole("tab", { name: "Invocations" }).click();
-      // Empty state — the server is registered but never invoked, so the
-      // table renders the literal "No invocations yet" copy. We bind to
-      // that exact assertion rather than a permissive .or(table) match,
-      // so a regression where the empty-state disappears can't pass.
-      await expect(page.getByText(/no invocations yet/i)).toBeVisible({
-        timeout: 10_000,
-      });
-      // Status filter is operable. Scope to the status combobox by its
-      // accessible name — the redesigned DataTable also renders a "Per page"
-      // page-size combobox, so a bare getByRole("combobox") is ambiguous.
-      const filter = page.getByRole("combobox", { name: /status/i });
-      await expect(filter).toBeVisible();
-    } finally {
-      await deregisterMcpServer(name);
-    }
-  },
-);
-
-acceptance(
-  "ui-shell",
   "resource capability toggle works via the Resources tab",
   async ({ page }) => {
     const name = generateUniqueName("e2e002res");
@@ -310,34 +282,6 @@ acceptance(
           .or(page.getByText(new RegExp(name)))
           .first(),
       ).toBeVisible({ timeout: 10_000 });
-    } finally {
-      await deregisterMcpServer(name);
-    }
-  },
-);
-
-acceptance(
-  "ui-shell",
-  "invocation status filter dropdown exposes selectable options",
-  async ({ page }) => {
-    const name = generateUniqueName("e2e002flt");
-    try {
-      await registerFakeServer(name);
-      await page.goto(`/mcp-servers/mcp_server/${name}`);
-      await page.getByRole("tab", { name: "Invocations" }).click();
-
-      // The status filter combobox is visible
-      const filter = page.getByRole("combobox").first();
-      await expect(filter).toBeVisible({ timeout: 10_000 });
-
-      // Open the dropdown by clicking the trigger
-      await filter.click();
-
-      // At least one SelectItem option renders — verify "All" is present
-      // (this ensures the <SelectContent> mounts and the portal renders)
-      await expect(
-        page.getByRole("option", { name: /all/i }).first(),
-      ).toBeVisible({ timeout: 5_000 });
     } finally {
       await deregisterMcpServer(name);
     }

@@ -7,7 +7,8 @@
 // entry and one plugin, then walk the detail page's tabs and assert each
 // workspace facet renders real (file-derived) data:
 //   - MCP servers tab shows the seeded direct entry,
-//   - Skills tab shows the follow-master-library switch.
+//   - Skills tab shows the "Managed by Coffer" pointer at the Skills page
+//     (delivery is decided there, on each skill's enable state + scope).
 //
 // The seed still carries a `[plugins."…"]` table even though the Plugins tab
 // was removed: it keeps the fixture a realistic Codex config, and the MCP
@@ -64,7 +65,7 @@ async function deleteAgentByApi(name: string): Promise<void> {
   }
 }
 
-test("agent workspace tabs render MCP entries and the follow switch", async ({
+test("agent workspace tabs render MCP entries and the Skills-page pointer", async ({
   page,
 }) => {
   const { token, port } = readDaemonToken();
@@ -101,11 +102,11 @@ test("agent workspace tabs render MCP entries and the follow switch", async ({
       timeout: 10_000,
     });
 
-    // Skills tab — the follow-master-library switch is present (on by
-    // default for a newly registered agent).
+    // Skills tab — the tab manages nothing; it points at the Skills page,
+    // where a skill's enable state + scope decide who it reaches.
     await page.getByRole("tab", { name: /^skills$/i }).click();
     await expect(
-      page.getByRole("switch", { name: /follow master library/i }),
+      page.getByRole("button", { name: /open the skills page/i }),
     ).toBeVisible({ timeout: 10_000 });
   } finally {
     await deleteAgentByApi(name);

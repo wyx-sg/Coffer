@@ -4,17 +4,12 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft } from "lucide-react";
-import { ScopeCard } from "@/components/ScopeCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useResource } from "@/lib/hooks/useResources";
-import {
-  useDeleteResource,
-  useEnableResource,
-  useDisableResource,
-} from "@/lib/hooks/useResourceMutations";
+import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
 import { useMcpCapabilities } from "@/lib/hooks/useMcpCapabilities";
-import { useMcpServerStatus } from "@/lib/hooks/useMcpInvocations";
+import { useMcpServerStatus } from "@/lib/hooks/useMcpServerStatus";
 import { getApiClient } from "@/lib/api/client";
 import type { components } from "@/lib/api/types";
 import { type HealthState } from "./HealthBadge";
@@ -39,8 +34,6 @@ export function McpServerDetailPage() {
     error: capsError,
   } = useMcpCapabilities(name, !isPending && !error);
   const { data: serverStatus } = useMcpServerStatus(name);
-  const enable = useEnableResource();
-  const disable = useDisableResource();
   const del = useDeleteResource();
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -140,13 +133,7 @@ export function McpServerDetailPage() {
         healthState={healthState}
         testResult={testResult}
         isTestPending={runTest.isPending}
-        isEnablePending={enable.isPending}
-        isDisablePending={disable.isPending}
         onTestConnection={() => runTest.mutate()}
-        onToggleEnabled={(checked) => {
-          const m = checked ? enable : disable;
-          m.mutate({ kind: "mcp_server", name });
-        }}
         onDeleteClick={() => setDeleteOpen(true)}
       />
 
@@ -158,8 +145,6 @@ export function McpServerDetailPage() {
           })}
         </div>
       ) : null}
-
-      <ScopeCard kind="mcp_server" name={name} />
 
       <McpServerDetailTabs
         serverName={name}

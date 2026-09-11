@@ -23,57 +23,48 @@ Coffer:
 1. Reads `SKILL.md`, validates frontmatter (`name`, `description` required).
 2. Copies the folder to `~/.coffer/skills/my-skill/` (the canonical master).
 3. Registers a Resource of kind `skill`.
-4. Auto-enables the skill for every registered agent (trust mode).
+4. Registers it unscoped and enabled, so it is active for every agent.
 5. Creates a directory symlink (POSIX) or junction (Windows) in each agent's
    `config_dir/skills` folder pointing back to the master.
 
 After this, **all your agents see the skill** through their normal
 `config_dir/skills` folder.
 
-## Enable / disable per agent
+## Decide which agents get a skill
 
-After import, every registered agent is enabled by default. To
-restrict a skill to one agent:
+A skill reaches an agent iff the skill is **enabled** and that agent is in the
+skill's **scope**. Those two are the only controls; there is no per-agent
+follow flag and no per-binding switch.
 
-```bash
-coffer skill disable my-skill --agent codex
-coffer skill list --json | jq '.items[] | select(.name=="my-skill") | .bindings'
-```
-
-To re-enable:
+Scope is the framework's own per-agent activation axis ([ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.md)),
+so a skill uses the same commands every scoped kind does — unscoped means every
+agent:
 
 ```bash
-coffer skill enable my-skill --agent codex
+coffer scope show skill:my-skill
+coffer scope set skill:my-skill --agents codex        # only codex
+coffer scope set skill:my-skill --no-agents           # dormant: no agent
+coffer scope clear skill:my-skill                     # back to every agent
 ```
+
+Disabling the skill itself takes it away from every agent at once, and
+re-enabling gives it back to whatever its scope grants:
+
+```bash
+coffer resource disable skill:my-skill
+coffer resource enable skill:my-skill
+coffer skill list --json | jq '.items[] | select(.name=="my-skill") | {enabled, scope, bindings}'
+```
+
+Either change reconciles immediately: a delivered copy that falls out of scope,
+or belongs to a skill you just disabled, is reclaimed. In the web UI the same
+two controls are the Skill list table's enable switch and the skill detail
+page's activation-scope control.
 
 If something else already exists at the target path (a regular file or a
 non-Coffer symlink), the operation refuses unless you pass `--force`. Forced
 operations back up the existing target to `<path>.coffer-backup-<timestamp>`
 before linking.
-
-## Follow the master library
-
-By default every agent **follows** the master library: every skill you import
-is delivered automatically, and newly registered skills appear
-without further action. Turn it off (or back on) per agent:
-
-```bash
-coffer agent follow codex --off
-coffer agent follow codex --on
-```
-
-While following, disabling a single skill adds it to the agent's **exclusion
-list** instead of touching bindings; set the list explicitly with repeatable
-`--exclude` flags (the list is replaced as a whole):
-
-```bash
-coffer agent follow codex --on --exclude my-skill --exclude another-skill
-```
-
-Turning follow off preserves the currently delivered skills as explicit
-per-skill bindings, so nothing disappears — you just switch to manual
-`enable`/`disable` curation. The same switch lives on the agent's Skills tab
-in the web UI.
 
 ## Adopt skills Coffer doesn't manage yet
 

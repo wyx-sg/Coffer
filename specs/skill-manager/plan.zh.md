@@ -1,8 +1,8 @@
-# 实施计划：Skill Manager
+# 实施计划：005 —— Skill Manager
 
 > English: [plan.md](./plan.md)
 
-**Branch**: `feature/skill-manager`（基于 spec agent-registry，已在 PR #25 中交付）
+**Branch**: `feature/skill-manager`（基于 spec agent-registry-agent-registry，已在 PR #25 中交付）
 **Date**: 2026-05-22
 **Spec**: [./spec.md](./spec.md)
 **Status**: Draft
@@ -147,18 +147,20 @@ frontend/src/i18n/locales/{en,zh}.json     # skill 文案追加
 
 ## Workspace 修订（在 `feature/agent-workspace` 上交付）
 
-spec.md 的 workspace 修订（FR-022..FR-026）新增了未托管 skill 扫描与
-follow-master-library 策略。各层新增模块：
+spec.md 的 workspace 修订（FR-022..FR-026）新增了未托管 skill 扫描，以及当时那套
+挂在 agent 上的 follow-master-library 策略。该策略已被删除：投递如今就是 skill 自身
+的 `enabled` 与其 agent scope 取交集，再无其他（[ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.md)）。
+各层新增模块：
 
 - **Domain**：`skill/scan.py`（纯函数 `classify`，把扫描条目分类为 `UnmanagedSkill` 结果——托管链接与点条目被排除，foreign link 被标记且永不可 adopt）；`agent/scan.py`（属 spec agent-registry 的目录树：按 agent 类型的 `scan_locations`——放在那里是因为它依赖 `AgentType`，而 `domain/skill` 不得 import 它，Contract 5c）。
 - **Infrastructure**：`skill/workspace_scan.py`（把扫描位置的文件系统遍历成 `ScanEntry` 值）。
-- **Application**：`skill/unmanaged_ops.py`（未托管的 list/adopt/delete，FR-022..FR-024）、`skill/follow_ops.py`（FR-025 follow 调和：开关/排除项/skill 集合变化时触发）、以及 `skill/binding_ops.py`（逐 agent 启用/禁用从 `service.py` 拆出以满足文件大小上限）——全部为 `lifecycle_ops.py` 风格的自由函数。
-- **Surfaces**：`http/agent_unmanaged_skill_routes.py`（`/agents/{name}/unmanaged-skills*`）；CLI `coffer skill unmanaged|adopt|rm-unmanaged`（位于 `skill_cmd.py`）与 `coffer agent follow --on/--off --exclude`（位于 `agent_workspace_cmd.py`；策略字段经由 spec agent-registry 的 `PATCH /agents/{name}`）。
-- **前端**：`AgentSkillsTab` v2——follow 开关与排除模式下的逐 skill 切换、带 adopt/删除的未托管 skill 区块、foreign-link 与降级 binding 徽标。
+- **Application**：`skill/unmanaged_ops.py`（未托管的 list/adopt/delete，FR-022..FR-024）、`skill/delivery_ops.py`（把某个 agent 已投递的集合调和到 `enabled` ∩ scope，任一侧变化即重跑）、以及 `skill/binding_ops.py`（内部的建链/断链原语，从 `service.py` 拆出以满足文件大小上限）——全部为 `lifecycle_ops.py` 风格的自由函数。
+- **Surfaces**：`http/agent_unmanaged_skill_routes.py`（`/agents/{name}/unmanaged-skills*`）；CLI `coffer skill unmanaged|adopt|rm-unmanaged`（位于 `skill_cmd.py`）；投递由框架自己的 `coffer scope show|set|clear skill:<name>` 以及资源的启用/禁用路由来控制。
+- **前端**：`AgentSkillsTab`——指向 Skill 页面的入口，加上一份「当前投递到该 agent」的只读列表；以及带打开文件夹/adopt/删除的未托管 skill 区块、foreign-link 与降级 binding 徽标。投递本身在 skill 一侧控制：Skill 列表页的启用开关与 skill 详情页的启用范围控件。
 
 新增 audit 事件：`skill_adopted`、`skill_unmanaged_deleted`、
-`skill_relinked`。无 schema 变更——扫描在请求时
-派生，follow 策略存于 agent 资源的 config（spec agent-registry）。
+`skill_relinked`。扫描在请求时派生；投递状态以簿记形式存在 binding 行里，而决定它的
+两个输入——`enabled` 与 `scope`——都是 skill 上普通的资源框架字段。
 
 ## 留给后续规范的开放项
 

@@ -21,48 +21,40 @@ Coffer 会：
 1. 读取 `SKILL.md`，校验 frontmatter（`name`、`description` 必填）。
 2. 把文件夹拷到 `~/.coffer/skills/my-skill/`（规范 master）。
 3. 注册一个 kind 为 `skill` 的 Resource。
-4. 为每个已注册的 agent 自动启用该 skill（trust 模式）。
+4. 以「已启用、未设置 scope」注册，因此对所有 agent 生效。
 5. 在每个 agent 的 `config_dir/skills` 文件夹下创建一个指向 master 的目录 symlink（POSIX）或 junction（Windows）。
 
 之后，**所有 agent** 都能在它们自己的 `config_dir/skills` 文件夹下看到这个 skill。
 
-## 按 agent 启用 / 禁用
+## 决定哪些 agent 收到某个 skill
 
-import 之后，所有已注册的 agent 默认都被启用。若想把某个 skill 限制到只对一个 agent 可见：
+一个 skill 送达某个 agent，当且仅当该 skill 处于**启用**状态，且该 agent 在这个
+skill 的**启用范围（scope）**内。控制项只有这两个：既没有按 agent 的 follow 开关，
+也没有 per-binding 的开关。
+
+scope 是框架自己那条按 agent 的激活轴（[ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.md)），
+所以 skill 用的就是所有支持 scope 的 kind 共用的那组命令——未设置 scope 即对所有
+agent 生效：
 
 ```bash
-coffer skill disable my-skill --agent codex
-coffer skill list --json | jq '.items[] | select(.name=="my-skill") | .bindings'
+coffer scope show skill:my-skill
+coffer scope set skill:my-skill --agents codex        # 只给 codex
+coffer scope set skill:my-skill --no-agents           # 休眠：谁也不给
+coffer scope clear skill:my-skill                     # 回到所有 agent
 ```
 
-重新启用：
+禁用 skill 本身则一次性把它从所有 agent 收回，重新启用后按 scope 授予的范围还回去：
 
 ```bash
-coffer skill enable my-skill --agent codex
+coffer resource disable skill:my-skill
+coffer resource enable skill:my-skill
+coffer skill list --json | jq '.items[] | select(.name=="my-skill") | {enabled, scope, bindings}'
 ```
+
+任一侧的改动都会立即调谐：已投递但掉出 scope 的副本、或属于刚被禁用的 skill 的副本，
+都会被回收。Web UI 里对应的就是 Skill 列表页的启用开关与 skill 详情页的启用范围控件。
 
 如果目标位置已经有别的东西（普通文件或非 Coffer 的 symlink），操作会被拒绝，除非加 `--force`。`--force` 会先把既有目标备份到 `<path>.coffer-backup-<timestamp>`，再创建 link。
-
-## Follow 主库
-
-默认情况下，每个 agent 都 **follow** 主库：你导入的每个 skill 会被自动
-投递，新注册的 skill 无需任何额外操作即会出现。可按 agent 关闭（或重新打开）：
-
-```bash
-coffer agent follow codex --off
-coffer agent follow codex --on
-```
-
-following 期间，禁用单个 skill 会把它加入该 agent 的**排除列表**而不是改动
-binding；用可重复的 `--exclude` 显式设置整个列表（列表整体替换）：
-
-```bash
-coffer agent follow codex --on --exclude my-skill --exclude another-skill
-```
-
-关闭 follow 会把当前已投递的 skill 保留为显式的逐 skill binding，所以什么都
-不会消失——你只是切换到手工 `enable`/`disable` 管理。Web UI 中 agent 的
-Skills 标签页上有同一个开关。
 
 ## Adopt Coffer 尚未管理的 skill
 

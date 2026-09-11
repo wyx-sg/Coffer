@@ -7,14 +7,21 @@
 //      file inside the size cap.
 //
 //   B. Direct servers — the agent's own MCP entries read from its config
-//      files (specs agent-registry/skill-manager workspace amendment). The listing is read-only and
-//      the one write is adopt-into-Coffer: each row shows source/transport, the
-//      entry's enabled state as a plain badge (null for claude_code, whose
-//      config format has no per-entry flag), and an Adopt action. Coffer no
-//      longer edits another tool's private config, so there is no delete and no
-//      toggle; entries that duplicate an existing Coffer resource just get an
-//      inline hint. Config files that failed to parse are surfaced in a banner;
-//      their entries can't be listed, so the banner is the only signal.
+//      files (specs agent-registry/005 workspace amendment). Name, description, and two
+//      actions: adopt the entry into Coffer, or delete it from the agent's own
+//      config file (behind a confirm — the daemon writes a .bak).
+//
+//      The description IS the transport: an MCP config entry carries no
+//      description field in either format, and the command line (or URL) is the
+//      only text on it that says what the server actually is. `source` and
+//      `enabled` stay on the wire type — the CLI prints them, and adopt/delete
+//      still carry `source` — but neither earns a column: `enabled` is not
+//      editable here, and `source` only ever disambiguates the one case where
+//      it can, `claude_code` carrying the SAME entry name in both of its config
+//      files. So it renders as a badge beside the name for duplicated names
+//      only. Entries that duplicate an existing Coffer resource get an inline
+//      hint. Config files that failed to parse are surfaced in a banner; their
+//      entries can't be listed, so the banner is the only signal.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -26,19 +33,36 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { translateApiError } from "@/lib/api/errors";
 import type { McpEntryOut } from "@/lib/api/agents";
-import { useAgentMcpEntries } from "@/lib/hooks/useAgents";
+import { useAgentMcpEntries, useRemoveMcpEntry } from "@/lib/hooks/useAgents";
 
 export function AgentMcpServersTab({ agentName }: { agentName: string }) {
   const { t } = useTranslation();
   const entries = useAgentMcpEntries(agentName);
+  const removeEntry = useRemoveMcpEntry(agentName);
   const [adoptTarget, setAdoptTarget] = useState<McpEntryOut | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<McpEntryOut | null>(null);
 
   // The `coffer` entry IS the gateway hookup — it's section A's concern, so
   // the direct list only shows the agent's other (non-Coffer) servers.
   const directEntries = (entries.data?.items ?? []).filter((e) => !e.is_coffer);
   const parseErrors = entries.data?.parse_errors ?? [];
+  // Entry names are unique per file, not across files: only `claude_code` can
+  // list the same name twice (~/.claude.json and settings.json). Badge the
+  // source on exactly those rows, so the user can tell which is which before
+  // adopting or deleting one — and nowhere else.
+  const duplicated = new Set(
+    directEntries.map((e) => e.name).filter((n, i, all) => all.indexOf(n) !== i),
+  );
 
   const directColumns: Column<McpEntryOut>[] = [
     {
@@ -47,7 +71,10 @@ export function AgentMcpServersTab({ agentName }: { agentName: string }) {
       className: "whitespace-nowrap",
       cell: (e) => (
         <div className="space-y-1">
-          <span className="font-medium">{e.name}</span>
+          <span className="flex items-center gap-2">
+            <span className="font-medium">{e.name}</span>
+            {duplicated.has(e.name) && <Badge variant="secondary">{e.source}</Badge>}
+          </span>
           {e.matches_resource !== null && (
             <p className="text-xs text-muted-foreground">
               {t("agents.workspace.mcp.alreadyInCoffer", { name: e.matches_resource })}
@@ -57,18 +84,12 @@ export function AgentMcpServersTab({ agentName }: { agentName: string }) {
       ),
     },
     {
-      key: "source",
-      header: t("agents.workspace.mcp.source"),
-      className: "whitespace-nowrap",
-      cell: (e) => <Badge variant="secondary">{e.source}</Badge>,
-    },
-    {
-      key: "transport",
-      header: t("agents.workspace.mcp.transport"),
+      key: "description",
+      header: t("resources.cols.description"),
       cell: (e) => (
         <span className="flex items-center gap-2">
           <Badge variant="outline">{e.transport}</Badge>
-          <span className="line-clamp-1 max-w-xs font-mono text-xs text-muted-foreground">
+          <span className="line-clamp-1 max-w-md font-mono text-xs text-muted-foreground">
             {e.transport === "stdio"
               ? [e.command, ...e.args].filter(Boolean).join(" ")
               : (e.url ?? "")}
@@ -77,29 +98,21 @@ export function AgentMcpServersTab({ agentName }: { agentName: string }) {
       ),
     },
     {
-      key: "enabled",
-      header: t("agents.workspace.mcp.enabled"),
-      className: "whitespace-nowrap",
-      // Read-only: `enabled` is null when the agent's config format has no
-      // per-entry enable flag (claude_code). Flipping it would mean writing the
-      // agent's own config, which Coffer no longer does.
-      cell: (e) =>
-        e.enabled === null ? (
-          <span className="text-muted-foreground">—</span>
-        ) : (
-          <Badge variant={e.enabled ? "secondary" : "outline"}>
-            {e.enabled ? t("common.enabled") : t("common.disabled")}
-          </Badge>
-        ),
-    },
-    {
       key: "actions",
       header: "",
       className: "text-right",
       cell: (e) => (
-        <span className="flex justify-end">
+        <span className="flex justify-end gap-2">
           <Button size="sm" variant="outline" onClick={() => setAdoptTarget(e)}>
             {t("agents.workspace.mcp.adopt")}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => setDeleteTarget(e)}
+          >
+            {t("common.delete")}
           </Button>
         </span>
       ),
@@ -174,6 +187,40 @@ export function AgentMcpServersTab({ agentName }: { agentName: string }) {
           }}
         />
       )}
+
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {t("common.delete")}: {deleteTarget?.name}
+            </DialogTitle>
+            <DialogDescription>{t("agents.workspace.mcp.deleteConfirm")}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={removeEntry.isPending}
+              onClick={() => {
+                if (!deleteTarget) return;
+                removeEntry.mutate(
+                  { entry: deleteTarget.name, source: deleteTarget.source },
+                  { onSuccess: () => setDeleteTarget(null) },
+                );
+              }}
+            >
+              {t("common.delete")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

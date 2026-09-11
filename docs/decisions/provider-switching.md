@@ -1,4 +1,4 @@
-# Provider Switching
+# ADR provider-switching: Provider Switching
 
 **Status**: Proposed
 **Date**: 2026-06-21
@@ -207,3 +207,25 @@ Authoritative design: the [spec provider-switching Amendment 2026-06-22](../../s
   the Anthropic Messages wire, so the endpoint must present it (native or via a
   translating proxy) — verified against Claude Code's published gateway docs.
   See spec provider-switching Amendment 2026-06-22b (E1–E5).
+
+## Amendment 2026-09-11 — the connection curates WHICH models it offers
+
+Authoritative design: the [spec provider-switching Amendment 2026-09-11](../../specs/provider-switching/spec.md)
+(J1–J3).
+
+- **D10 — `models` on the connection: the offered set, not a chosen model.** D9
+  stands — no model the connection *runs* is stored on it, and every point of use
+  still makes the choice. What the connection now records is which of its
+  endpoint's models are on the menu at all: `models: list[str]`, EMPTY meaning no
+  restriction (the endpoint's whole catalogue), which is the default and what
+  every pre-existing connection gets from migration 0059. It is a middle state
+  the design lacked — a gateway account serves dozens of models and its owner
+  intends to use two or three, and neither "one model fixed on the connection"
+  (too early a choice) nor "everything the endpoint serves" (too many) says so.
+  Curated on the connection's detail page from live introspection; applied by
+  every downstream picker that offers this connection's models, narrowing the
+  connection term of the 2026-09-09 amendment's union while leaving the agent's
+  own catalogue untouched. Ids stay opaque — shape validation only, never a check
+  against a model name Coffer writes down. Carried by the existing create/patch
+  (a patch replaces the whole value; `[]` clears it); no new route, and no audit
+  event of its own — it rides `resource_updated`.

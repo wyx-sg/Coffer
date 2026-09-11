@@ -166,6 +166,49 @@ def test_list_mcp_entries(tmp_path, monkeypatch):
         assert PLAIN_VALUE not in r.text
 
 
+@pytest.mark.acceptance(spec="agent-registry", scenario="remove a direct MCP entry")
+def test_remove_mcp_entry(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59810)
+    with _client(app) as c:
+        _register_codex(c, tmp_path)
+        config = tmp_path / ".codex" / "config.toml"
+
+        r = c.delete("/api/v1/agents/cx/mcp-entries/fetcher")
+        assert r.status_code == 204, r.text
+        data = tomllib.loads(config.read_text(encoding="utf-8"))
+        assert "fetcher" not in data["mcp_servers"]
+        # Atomic write preserved the prior content in a .bak.
+        bak = tmp_path / ".codex" / "config.toml.bak"
+        assert bak.exists()
+        assert "fetcher" in bak.read_text(encoding="utf-8")
+
+        r = c.get("/api/v1/agents/cx/mcp-entries")
+        assert "fetcher" not in [e["name"] for e in r.json()["items"]]
+
+
+def test_concurrent_removals_from_one_file_do_not_clobber_each_other(tmp_path, monkeypatch):
+    """Two deletes against the SAME config file must both land.
+
+    The web UI deletes a whole selection at once and fans the requests out
+    concurrently, so a removal that computed its new text from a snapshot read
+    before the other request's write would silently restore the entry the other
+    one had just removed.
+    """
+    app = _app(tmp_path, monkeypatch, 59818)
+    with _client(app) as c:
+        _register_codex(c, tmp_path)
+        config = tmp_path / ".codex" / "config.toml"
+        before = tomllib.loads(config.read_text(encoding="utf-8"))["mcp_servers"]
+        assert {"fetcher", "search"} <= set(before)
+
+        for entry in ("fetcher", "search"):
+            assert c.delete(f"/api/v1/agents/cx/mcp-entries/{entry}").status_code == 204
+
+        after = tomllib.loads(config.read_text(encoding="utf-8"))["mcp_servers"]
+        assert "fetcher" not in after
+        assert "search" not in after
+
+
 @pytest.mark.acceptance(
     spec="agent-registry", scenario="degrade to read-only when MCP config is unparseable"
 )
@@ -309,32 +352,26 @@ def test_mcp_entries_unknown_agent_404(tmp_path, monkeypatch):
 
 
 def test_mcp_entries_unknown_entry_404(tmp_path, monkeypatch):
-    """Locating an entry that is not there is a 404, reached through adopt —
-    the only route that still names one entry."""
     app = _app(tmp_path, monkeypatch, 59900)
     with _client(app) as c:
         _register_codex(c, tmp_path)
-        r = c.post("/api/v1/agents/cx/mcp-entries/nope/adopt", json={})
+        r = c.delete("/api/v1/agents/cx/mcp-entries/nope")
         assert r.status_code == 404
         assert r.json()["error"]["code"] == "MCP_ENTRY_NOT_FOUND"
 
 
 def test_mcp_entry_source_ambiguous_without_source_param(tmp_path, monkeypatch):
-    """An entry present in two config files cannot be addressed without naming
-    the file; naming it resolves. Exercised through adopt, which is the route
-    that still locates one entry — and which then removes it from the file it
-    was adopted out of."""
     app = _app(tmp_path, monkeypatch, 59910)
     with _client(app) as c:
         _register_claude(c, tmp_path)
         # "dup" lives in BOTH ~/.claude.json and settings.json.
-        r = c.post("/api/v1/agents/cc/mcp-entries/dup/adopt", json={})
+        r = c.delete("/api/v1/agents/cc/mcp-entries/dup")
         assert r.status_code == 422
         assert r.json()["error"]["code"] == "MCP_ENTRY_SOURCE_AMBIGUOUS"
 
         # Naming the source disambiguates.
-        r = c.post("/api/v1/agents/cc/mcp-entries/dup/adopt", json={"source": "settings"})
-        assert r.status_code == 201, r.text
+        r = c.delete("/api/v1/agents/cc/mcp-entries/dup", params={"source": "settings"})
+        assert r.status_code == 204, r.text
         settings = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
         assert "dup" not in settings["mcpServers"]
         global_cfg = json.loads((tmp_path / ".claude.json").read_text(encoding="utf-8"))

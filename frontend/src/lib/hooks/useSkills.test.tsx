@@ -7,14 +7,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
-import {
-  useSkills,
-  useImportSkill,
-  useEnableSkill,
-  useDisableSkill,
-  useRemoveSkill,
-  useVerifySkills,
-} from "./useSkills";
+import { useSkills, useImportSkill, useRemoveSkill, useVerifySkills } from "./useSkills";
 
 function wrapper() {
   const qc = new QueryClient({
@@ -40,6 +33,7 @@ const SAMPLE_SKILL = {
   description: "test",
   source: { type: "local_import", original_path: "/tmp/hello" },
   enabled: true,
+  scope: null,
   version_hash: "abc",
   master_path: "/tmp/master/hello",
   last_synced_from_source_at: null,
@@ -94,61 +88,6 @@ describe("useImportSkill", () => {
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({
       path: "/tmp/hello",
     });
-  });
-});
-
-describe("useEnableSkill", () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  test("POSTs to /skills/{name}/enable with the agent body", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(200, {
-        agent_name: "cur",
-        enabled: true,
-        last_linked_at: null,
-        last_link_path: null,
-        link_mode: "symlink",
-      }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-    const { result } = renderHook(() => useEnableSkill(), { wrapper: wrapper() });
-    await result.current.mutateAsync({
-      name: "hello",
-      body: { agent_name: "cur" },
-    });
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/skills\/hello\/enable$/);
-    expect((init as RequestInit).method).toBe("POST");
-    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
-      agent_name: "cur",
-    });
-  });
-});
-
-describe("useDisableSkill", () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  test("POSTs to /skills/{name}/disable", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(200, {
-        agent_name: "cur",
-        enabled: false,
-        last_linked_at: null,
-        last_link_path: null,
-        link_mode: null,
-      }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-    const { result } = renderHook(() => useDisableSkill(), {
-      wrapper: wrapper(),
-    });
-    await result.current.mutateAsync({
-      name: "hello",
-      body: { agent_name: "cur" },
-    });
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/skills\/hello\/disable$/);
-    expect((init as RequestInit).method).toBe("POST");
   });
 });
 

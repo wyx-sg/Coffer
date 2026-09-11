@@ -11,8 +11,7 @@ Covers:
   3. list annotates matches_resource (stdio command+args equivalence)
   4. remove requires source when the name is ambiguous; targeted remove only
      touches the chosen file
-  5. coffer entry is protected from remove and toggle
-  6. toggle writes the codex enabled flag + audits; claude toggle is rejected
+  5. coffer entry is protected from remove
   7. adopt happy path: register BEFORE file write, secret moved to keychain +
      credential_refs (never plain env), audit recorded
   8. adopt with unmapped secret-like key → AdoptSecretUnresolved, no side effects
@@ -39,6 +38,8 @@ from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.workspace_errors import (
     AdoptSecretUnresolved,
+    McpEntryProtected,
+    McpEntrySourceAmbiguous,
 )
 
 pytestmark = pytest.mark.asyncio
@@ -357,6 +358,86 @@ async def test_list_annotates_matches_resource(svc, store, rs):
 
 # ---------------------------------------------------------------------------
 # 4. remove: ambiguity requires source; targeted remove touches one file only
+# ---------------------------------------------------------------------------
+
+
+async def test_remove_requires_source_when_ambiguous(svc, store):
+    dup_global = '{"mcpServers": {"dup": {"command": "a"}}}'
+    dup_settings = '{"mcpServers": {"dup": {"command": "b"}}}'
+    store._files[_CLAUDE_GLOBAL] = dup_global
+    store._files[_CLAUDE_SETTINGS] = dup_settings
+
+    with pytest.raises(McpEntrySourceAmbiguous):
+        await svc.remove_entry("cc", "dup")
+    assert store._writes == []  # nothing touched
+
+    await svc.remove_entry("cc", "dup", source="settings")
+
+    # settings rewritten without the entry; global untouched.
+    assert "dup" not in store._files[_CLAUDE_SETTINGS]
+    assert store._files[_CLAUDE_GLOBAL] == dup_global
+    assert [p for p, _ in store._writes] == [_CLAUDE_SETTINGS]
+
+
+async def test_remove_reads_the_file_again_just_before_writing(svc, store):
+    """A removal must not compute its new text from a pre-await snapshot.
+
+    ``_locate`` awaits, so by the time ``remove_entry`` writes, another
+    in-flight removal against the SAME file may already have landed — which is
+    exactly what the UI's bulk delete produces, since it fans its requests out
+    concurrently. Writing the stale snapshot minus one entry would silently put
+    the other request's entry back. Simulated here by mutating the file between
+    the locate-time read and the write.
+    """
+    store._files[_CLAUDE_GLOBAL] = '{"mcpServers": {"a": {"command": "x"}, "b": {"command": "y"}}}'
+
+    original_read = store.read_text
+    seen: list[pathlib.Path] = []
+
+    def read_then_drop_b(path: pathlib.Path) -> str | None:
+        text = original_read(path)
+        seen.append(path)
+        if path == _CLAUDE_GLOBAL and len(seen) == 1:
+            # A concurrent removal of "b" lands right after the locate-time read.
+            store._files[path] = '{"mcpServers": {"a": {"command": "x"}}}'
+        return text
+
+    store.read_text = read_then_drop_b  # type: ignore[method-assign]
+    await svc.remove_entry("cc", "a", source="global")
+    store.read_text = original_read  # type: ignore[method-assign]
+
+    # "a" is gone because we removed it, and "b" stays gone because the write
+    # was computed from the CURRENT file rather than the stale snapshot.
+    final = store._files[_CLAUDE_GLOBAL]
+    assert '"a"' not in final
+    assert '"b"' not in final
+
+
+async def test_remove_audits_with_source(svc, store, audit_svc):
+    store._files[_CLAUDE_GLOBAL] = _CLAUDE_GLOBAL_JSON
+
+    await svc.remove_entry("cc", "alpha", actor="cli")
+
+    entries = await audit_svc.query(event_type=AuditEventType.AGENT_MCP_ENTRY_REMOVED.value)
+    assert len(entries) == 1
+    assert entries[0].details == {"entry": "alpha", "source": "global"}
+
+
+# ---------------------------------------------------------------------------
+# 5. coffer entry is protected
+# ---------------------------------------------------------------------------
+
+
+async def test_remove_coffer_protected(svc, store):
+    store._files[_CLAUDE_GLOBAL] = _CLAUDE_GLOBAL_JSON
+
+    with pytest.raises(McpEntryProtected):
+        await svc.remove_entry("cc", "coffer")
+    assert store._writes == []
+
+
+# ---------------------------------------------------------------------------
+# 7. adopt happy path
 # ---------------------------------------------------------------------------
 
 

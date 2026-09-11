@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0057"
+HEAD_REVISION = "0059"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -113,7 +113,10 @@ HEAD_REVISION = "0057"
 # DATA-only: it DELETEs ``audit_log`` rows whose ``event_type`` is not one of
 # the 39 the enum still has (the simplification cut 27, and the retired rows
 # outlived the code that wrote them) — no DDL, table/column set unchanged, and
-# its downgrade is a no-op because deleted rows cannot be invented back.
+# its downgrade is a no-op because deleted rows cannot be invented back. 0057 is
+# DATA-only: it writes an empty ``models`` list into every ``kind='provider'``
+# ``config_json`` (the curated set a connection offers downstream; empty = no
+# restriction) — no DDL, table/column set unchanged.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",
@@ -1292,3 +1295,155 @@ def test_migration_0017_rekeys_chunk_ids_per_store(tmp_path, monkeypatch):
         assert {r[0] for r in conn.execute("SELECT id FROM chunks")} == expected
     finally:
         conn.close()
+
+
+def test_migration_0058_strips_the_retired_agent_follow_policy(tmp_path, monkeypatch):
+    """0058 removes ``follow_all_skills`` / ``skill_exclusions`` from every
+    stored agent config. ``AgentConfig`` declares ``extra="forbid"`` and there
+    is no load-time shim, so a row that kept either key would fail to validate
+    on the very next read. Untouched keys survive, a row that never carried the
+    policy is left byte-identical, and a re-run is a no-op."""
+    db_path = tmp_path / "follow.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    command.upgrade(cfg, "0055")
+    seeded = {
+        "follower": {
+            "type": "claude_code",
+            "config_dir": "/data/claude",
+            "follow_all_skills": True,
+            "skill_exclusions": [],
+        },
+        "picky": {
+            "type": "codex",
+            "follow_all_skills": False,
+            "skill_exclusions": ["frontend-slides"],
+            "model": "gpt-5",
+        },
+        "clean": {"type": "codex", "config_dir": "/data/codex"},
+    }
+    conn = sqlite3.connect(str(db_path))
+    try:
+        for name, config in seeded.items():
+            conn.execute(
+                "INSERT INTO resources (kind, name, config_json, enabled, created_at, updated_at)"
+                " VALUES (?, ?, ?, 1, ?, ?)",
+                (
+                    "agent",
+                    name,
+                    json.dumps(config),
+                    "2026-09-01T00:00:00+00:00",
+                    "2026-09-01T00:00:00+00:00",
+                ),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    command.upgrade(cfg, "0058")
+
+    def _agent_rows() -> dict[str, dict]:
+        c = sqlite3.connect(str(db_path))
+        try:
+            return {
+                name: json.loads(raw)
+                for name, raw in c.execute(
+                    "SELECT name, config_json FROM resources WHERE kind = 'agent'"
+                ).fetchall()
+            }
+        finally:
+            c.close()
+
+    rows = _agent_rows()
+    for name in seeded:
+        assert "follow_all_skills" not in rows[name]
+        assert "skill_exclusions" not in rows[name]
+    # Everything else survives untouched.
+    assert rows["follower"]["config_dir"] == "/data/claude"
+    assert rows["picky"] == {"type": "codex", "model": "gpt-5"}
+    assert rows["clean"] == seeded["clean"]
+
+    # Idempotent: re-running matches no row and changes nothing.
+    command.stamp(cfg, "0055")
+    command.upgrade(cfg, "0058")
+    assert _agent_rows() == rows
+
+
+def test_migration_0059_gives_every_connection_an_empty_models_set(tmp_path, monkeypatch):
+    """0059 backfills the curated ``models`` set onto every ``kind='provider'``
+    row. Existing connections must come out UNRESTRICTED — they were created
+    when the endpoint's whole catalogue was on offer — which is the empty list.
+    A row that already carries a curated set is left alone, unrelated keys
+    survive, a re-run is a no-op, and the downgrade strips the key again (the
+    pre-0059 ``ProviderConfig`` forbids it)."""
+    db_path = tmp_path / "curated_models.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    command.upgrade(cfg, "0058")
+    seeded = {
+        "legacy": {
+            "protocol": "anthropic",
+            "base_url": "https://gw/anthropic",
+            "credential_ref": "provider/legacy/key",
+            "compatible_agents": ["claude_code"],
+            "is_active": True,
+            "internal_default": False,
+        },
+        "already-curated": {
+            "protocol": "openai",
+            "base_url": "https://gw/v1",
+            "credential_ref": "provider/already/key",
+            "models": ["gpt-5"],
+            "is_active": False,
+            "internal_default": False,
+        },
+    }
+    conn = sqlite3.connect(str(db_path))
+    try:
+        for name, config in seeded.items():
+            conn.execute(
+                "INSERT INTO resources (kind, name, config_json, enabled, created_at, updated_at)"
+                " VALUES (?, ?, ?, 1, ?, ?)",
+                (
+                    "provider",
+                    name,
+                    json.dumps(config),
+                    "2026-09-01T00:00:00+00:00",
+                    "2026-09-01T00:00:00+00:00",
+                ),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    def _provider_rows() -> dict[str, dict]:
+        c = sqlite3.connect(str(db_path))
+        try:
+            return {
+                name: json.loads(raw)
+                for name, raw in c.execute(
+                    "SELECT name, config_json FROM resources WHERE kind = 'provider'"
+                ).fetchall()
+            }
+        finally:
+            c.close()
+
+    command.upgrade(cfg, "0059")
+    rows = _provider_rows()
+    assert rows["legacy"]["models"] == []
+    # Untouched keys survive; only ``models`` is added.
+    assert rows["legacy"]["compatible_agents"] == ["claude_code"]
+    assert rows["legacy"]["is_active"] is True
+    # A row that already answered the question keeps its answer.
+    assert rows["already-curated"] == seeded["already-curated"]
+
+    # Idempotent: re-running matches no row and changes nothing.
+    command.stamp(cfg, "0058")
+    command.upgrade(cfg, "0059")
+    assert _provider_rows() == rows
+
+    # Downgrade removes the key entirely — the older config model forbids it.
+    command.downgrade(cfg, "0058")
+    assert "models" not in _provider_rows()["legacy"]

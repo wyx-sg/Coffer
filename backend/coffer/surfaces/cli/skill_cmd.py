@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json as _json
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -12,6 +13,18 @@ from coffer.surfaces.cli import _client as _cli_client
 
 app = typer.Typer(help="Manage skills (AgentSkills standard)")
 _console = Console()
+
+
+def _scope_label(skill: dict[str, Any]) -> str:
+    """Render the delivery rule: a skill reaches an agent iff it is enabled and
+    the agent is in its scope. ``coffer scope set skill:<name>`` edits the
+    scope; ``coffer resource enable/disable skill:<name>`` flips the flag."""
+    if not skill["enabled"]:
+        return "disabled"
+    scope: list[str] | None = skill["scope"]
+    if scope is None:
+        return "every agent"
+    return ", ".join(scope) if scope else "no agent"
 
 
 @app.command("list")
@@ -28,16 +41,15 @@ def list_cmd(
         typer.echo(_json.dumps(items, indent=2))
         return
     table = Table(title="Skills")
-    for col in ("Name", "Source", "Bindings", "Hash"):
+    for col in ("Name", "Source", "Scope", "Delivered to", "Hash"):
         table.add_column(col)
     for it in items:
-        bindings = ", ".join(
-            f"{b['agent_name']}{'+' if b['enabled'] else '-'}" for b in it["bindings"]
-        )
+        delivered = ", ".join(b["agent_name"] for b in it["bindings"])
         table.add_row(
             it["name"],
             it["source"]["type"],
-            bindings or "—",
+            _scope_label(it),
+            delivered or "—",
             it["version_hash"][:12],
         )
     _console.print(table)
@@ -82,45 +94,11 @@ def show(
     typer.echo(f"source:      {data['source']['type']}")
     typer.echo(f"master:      {data['master_path']}")
     typer.echo(f"hash:        {data['version_hash']}")
+    typer.echo(f"scope:       {_scope_label(data)}")
     if data["bindings"]:
-        typer.echo("bindings:")
+        typer.echo("delivered to:")
         for b in data["bindings"]:
-            typer.echo(f"  - {b['agent_name']}: {'enabled' if b['enabled'] else 'disabled'}")
-
-
-@app.command("enable")
-def enable(
-    name: str = typer.Argument(...),
-    agent: str = typer.Option(..., "--agent", "-a", help="Agent name."),
-    force: bool = typer.Option(False, "--force", "-f"),
-) -> None:
-    """Enable a skill for one agent (creates a directory symlink)."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post(
-            f"/skills/{name}/enable",
-            json={"agent_name": agent, "force": force},
-        )
-        if r.status_code >= 400:
-            typer.echo(r.json().get("error", {}).get("message", str(r.text)), err=True)
-            raise typer.Exit(2)
-    data = r.json()
-    typer.echo(f"enabled: skill:{name} for agent:{agent} ({data['link_mode']})")
-
-
-@app.command("disable")
-def disable(
-    name: str = typer.Argument(...),
-    agent: str = typer.Option(..., "--agent", "-a"),
-) -> None:
-    """Disable a skill for one agent (removes the symlink)."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post(f"/skills/{name}/disable", json={"agent_name": agent})
-        if r.status_code >= 400:
-            typer.echo(r.json().get("error", {}).get("message", str(r.text)), err=True)
-            raise typer.Exit(2)
-    typer.echo(f"disabled: skill:{name} for agent:{agent}")
+            typer.echo(f"  - {b['agent_name']} ({b['link_mode'] or 'unknown'})")
 
 
 @app.command("rm")

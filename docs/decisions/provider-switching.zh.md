@@ -1,4 +1,4 @@
-# Provider Switching
+# ADR provider-switching：Provider Switching
 
 **Status**: Proposed
 **Date**: 2026-06-21
@@ -130,3 +130,19 @@ Codex 需要在启动前在 shell 中设置 `COFFER_PROVIDER_KEY`。这是永不
   `model`/`fast_model`，用户在 Agent 页重选。为何 Claude Code 即便跑非 Anthropic 模型也需
   anthropic-wire endpoint：它只说 Anthropic Messages wire，endpoint 必须呈现它（原生或经翻译
   代理）——已对照 Claude Code 官方 gateway 文档核实。见 spec provider-switching Amendment 2026-06-22b（E1–E5）。
+
+## 修订 2026-09-11 — 连接自己策展「提供哪些模型」
+
+权威设计见 [spec provider-switching 修订 2026-09-11](../../specs/provider-switching/spec.zh.md)（J1–J3）。
+
+- **D10 — 连接上的 `models`：是「提供」集合，不是选中的模型。** D9 成立——连接上不存它
+  *运行*的模型，选择依然发生在每个使用处。连接现在记录的是：它的 endpoint 的哪些模型
+  才在菜单上：`models: list[str]`，**空表示不限制**（endpoint 的完整目录），这是默认值，
+  也是每条既有连接经迁移 0059 得到的取值。这是设计里原本缺失的中间态——一个网关账号服务
+  几十个模型，而它的主人只打算用其中两三个，而「一个模型钉死在连接上」（选得太早）与
+  「endpoint 提供的一切」（太多）都表达不了这一点。在连接详情页依据实时 introspection 策展；
+  由下游每个提供该连接模型的选择器落地，收窄 2026-09-09 修订并集里的**连接**项，agent 自身
+  清单项不受影响。id 依旧不透明——只校验形状，绝不与 Coffer 写死的模型名比对。由既有
+  create/patch 承载（patch 整值替换，`[]` 清除）；不新增路由，也不新增审计事件——它搭乘
+  `resource_updated`。
+

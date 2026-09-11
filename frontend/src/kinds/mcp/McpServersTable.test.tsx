@@ -32,7 +32,7 @@ vi.mock("@/lib/hooks/useResourceMutations", () => {
 const { useDeleteResource } = await import("@/lib/hooks/useResourceMutations");
 const useDeleteResourceMock = vi.mocked(useDeleteResource);
 
-vi.mock("@/lib/hooks/useMcpInvocations", () => ({
+vi.mock("@/lib/hooks/useMcpServerStatus", () => ({
   useMcpServerStatus: vi.fn(() => ({ data: "healthy" })),
   useMcpServerRunner: vi.fn(() => ({ data: { missingRunner: null } })),
 }));

@@ -128,7 +128,7 @@ async def register_from_validated(
             service._store.delete(name)
             raise
         audit_event = event
-        # Auto-bind for every enabled, following agent (FR-025).
+        # Deliver to every agent the new skill's own state grants (FR-012a).
         # On overwrite the skill is already bound; skip auto-bind to avoid
         # disturbing existing bindings.
         await auto_bind_all(service=service, skill=r, actor=actor)
@@ -143,13 +143,17 @@ async def register_from_validated(
 
 
 async def auto_bind_all(*, service: SkillService, skill: Resource, actor: str) -> None:
+    """Deliver a freshly imported skill to the agents its own state grants.
+
+    The delivery predicate (FR-012a): a disabled skill goes nowhere, and an
+    enabled one goes exactly to the agents its scope names. A DISABLED AGENT is
+    skipped regardless — the predicate decides which agents a skill is *for*,
+    not whether Coffer may write into an agent the user has switched off.
+    """
+    if not skill.enabled:
+        return
     for a in await service._rs.list(kind="agent"):
-        if not a.enabled:
-            continue
-        # Per-agent follow policy (FR-025): agents that opted out of the
-        # master library, or excluded this skill, are skipped.
-        follow, exclusions = service._resolve_agent_skill_policy(a)
-        if not follow or skill.name in exclusions:
+        if not a.enabled or not agent_in_scope(skill.scope, a.name):
             continue
         try:
             await service.enable_for(
@@ -173,11 +177,12 @@ async def relink_agent_skills(*, service: SkillService, agent_name: str, actor: 
     orphaned the old links and left the new dir empty while verify reported
     no drift.
 
-    Scope is a hard grant: a config_dir change must not resurrect a link that
-    scope no longer grants. A skill that has fallen out of this agent's scope
-    has its old link torn down like any other, but the new-location link is
-    NOT recreated — the binding row is left untouched (not deleted); reclaim
-    (disabling the row) is ``apply_follow_for_agent``'s job, not this hook's.
+    ADR per-agent-resource-scope hard grant: a config_dir change must not resurrect a link the
+    delivery predicate no longer grants. A skill that has been disabled, or has
+    fallen out of this agent's scope, has its old link torn down like any
+    other, but the new-location link is NOT recreated — the binding row is left
+    untouched (not deleted); reclaim (spending the row) is
+    ``apply_scope_for_agent``'s job, not this hook's.
     """
     try:
         agent = await service._rs.get(ResourceRef("agent", agent_name))
@@ -198,10 +203,11 @@ async def relink_agent_skills(*, service: SkillService, agent_name: str, actor: 
                 service._sync.remove_directory_link(old_path, link_mode=b.link_mode)
         if not b.enabled:
             continue
-        if not agent_in_scope(skill.scope, agent_name):
-            # Out of scope at the new location — do not resurrect the link.
-            # The row keeps its (now stale) enabled/last_link_path until a
-            # follow run reclaims it; we only refuse to recreate here.
+        if not (skill.enabled and agent_in_scope(skill.scope, agent_name)):
+            # The predicate no longer grants this delivery — do not resurrect
+            # the link. The row keeps its (now stale) enabled/last_link_path
+            # until a reconciliation run reclaims it; we only refuse to
+            # recreate here.
             continue
         master = service._store.paths_for(skill.name).folder
         try:

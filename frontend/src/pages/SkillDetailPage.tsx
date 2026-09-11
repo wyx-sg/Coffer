@@ -7,7 +7,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Trash2 } from "lucide-react";
 
-import { ScopeCard } from "@/components/ScopeCard";
+import { ScopeControl } from "@/components/ScopeControl";
 import { SkillOverview } from "@/components/skills/SkillDetailTabs";
 import { SkillFileTree } from "@/components/skills/SkillFileTree";
 import { Button } from "@/components/ui/button";
@@ -97,6 +97,7 @@ export function SkillDetailPage() {
                 origins (e.g. git import) land. */}
           </div>
           <div className="flex items-center gap-2">
+            <ScopeControl kind="skill" name={skill.name} enabled={skill.enabled} />
             <Button
               variant="outline"
               size="sm"
@@ -111,8 +112,6 @@ export function SkillDetailPage() {
           <p className="max-w-prose text-sm text-muted-foreground">{skill.description}</p>
         ) : null}
       </div>
-
-      <ScopeCard kind="skill" name={skill.name} />
 
       <Tabs defaultValue="overview">
         <TabsList>

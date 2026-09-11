@@ -38,6 +38,7 @@ def _provider_out(resource: Resource) -> ProviderOut:
         base_url=cfg.base_url,
         credential_ref=cfg.credential_ref,
         compatible_agents=[AgentType(a) for a in cfg.resolved_compatible_agents()],
+        models=cfg.models,
         is_active=cfg.is_active,
         internal_default=cfg.internal_default,
         enabled=resource.enabled,
@@ -70,6 +71,7 @@ async def create_provider(
         secret_value=body.secret_value,
         credential_ref=body.credential_ref,
         compatible_agents=body.compatible_agents,
+        models=body.models,
         description=body.description,
         actor=actor,
     )
@@ -121,6 +123,7 @@ async def update_provider(
         base_url=body.base_url,
         secret_value=body.secret_value,
         compatible_agents=body.compatible_agents,
+        models=body.models,
         description=body.description,
         actor=actor,
     )

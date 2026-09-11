@@ -7,9 +7,11 @@ door. An installation without the agent quarantines the doc (retried every
 run; self-heals once the agent is installed), instead of creating a registry
 row pointing at a dead directory.
 
-Hook: one agent-config field drives an on-disk side-effect that the registry
-upsert alone does not perform — ``follow_all_skills`` (skill delivery, FR-025).
-After every import it is re-applied idempotently from the converged rows.
+Hook: importing resources changes which skills each agent should be holding —
+an imported skill row carries its own ``enabled`` flag and ``scope``, and the
+registry upsert alone performs no on-disk delivery. After every import each
+agent's delivered set is reconciled idempotently against the delivery predicate
+(FR-012a) from the converged rows.
 """
 
 from __future__ import annotations
@@ -64,11 +66,11 @@ class AgentSideEffectsReconcile:
         self,
         agents: AgentService,
         config_file_store: _ConfigFileStore,
-        on_skill_policy_changed: Callable[[str], Awaitable[list[str]]] | None = None,
+        reconcile_skill_delivery: Callable[[str], Awaitable[list[str]]] | None = None,
     ) -> None:
         self._agents = agents
         self._store = config_file_store
-        self._on_skill_policy_changed = on_skill_policy_changed
+        self._reconcile_skill_delivery = reconcile_skill_delivery
 
     async def reconcile(self) -> list[str]:
         errors: list[str] = []
@@ -83,11 +85,11 @@ class AgentSideEffectsReconcile:
             if not cfg.resolved_config_dir().is_dir():
                 errors.append(f"{row.name}: config dir missing on this machine; skipped")
                 continue
-            if self._on_skill_policy_changed is not None:
+            if self._reconcile_skill_delivery is not None:
                 try:
-                    # Re-run delivery reconciliation for the row's follow
-                    # policy; per-skill failures come back as strings.
-                    for failure in await self._on_skill_policy_changed(row.name):
+                    # Re-run delivery reconciliation against the predicate;
+                    # per-skill failures come back as strings.
+                    for failure in await self._reconcile_skill_delivery(row.name):
                         errors.append(f"{row.name} (skill delivery): {failure}")
                 except Exception as e:
                     errors.append(f"{row.name} (skill delivery): {e}")

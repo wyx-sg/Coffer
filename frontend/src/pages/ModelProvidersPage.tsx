@@ -1,54 +1,43 @@
 // pages/ModelProvidersPage.tsx — the model-provider surface (spec provider-switching).
 //
 // A provider here is a credentialed endpoint: `{protocol, base_url,
-// credential_ref}`. The MODEL is not stored on it and not chosen here — that
-// happens at the point of use (the per-agent binding on Agent detail →
-// Overview, the internal-engine selector below). Hence the name: this page
-// manages vendor endpoints and their keys.
+// credential_ref}`. Which MODEL an agent runs on is still chosen at the point of
+// use (the per-agent binding on Agent detail → Overview) — this page manages
+// vendor endpoints and their keys; the connection's own CURATED model set (which
+// of the endpoint's models are offered at all) lives on its detail page.
 //
 // It lives under RESOURCES rather than Settings because `provider` is a
 // resource kind like any other, and spec ui-shell's rule is that RESOURCES holds
 // the kinds with a list UI. It was the only one of the five filed elsewhere.
-// The Embedding card stays at the bottom.
+//
+// The page is now nothing but that connection library, rendered through the
+// shared DataTable like every other list surface (ConnectionsTable): the page
+// itself owns only the header + the add dialog. Editing a connection moved to
+// its detail page. Coffer's own engine (which connection + model its memory
+// organizer runs on) and its own embedding model live in Settings → Engine:
+// both configure Coffer itself rather than being a resource served to agents.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Boxes, Plus } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { ConnectionCard } from "@/components/settings/ConnectionCard";
+import { ConnectionsTable } from "@/components/settings/ConnectionsTable";
 import { ProviderForm } from "@/components/settings/ProviderForm";
-import {
-  useProviders,
-  useCreateProvider,
-  useUpdateProvider,
-  useDeleteProvider,
-} from "@/lib/hooks/useProviders";
+import { useProviders, useCreateProvider } from "@/lib/hooks/useProviders";
 import { translateApiError } from "@/lib/api/errors";
-import type { Provider } from "@/lib/api/providers";
-import { EmbeddingSettings } from "./settings/EmbeddingSettings";
-import { InternalEngineSettings } from "./settings/InternalEngineSettings";
 
 export function ModelProvidersPage() {
   const { t } = useTranslation();
   const { data: providers = [], isPending, error } = useProviders();
   const createProvider = useCreateProvider();
-  const updateProvider = useUpdateProvider();
-  const deleteProvider = useDeleteProvider();
 
   const [adding, setAdding] = useState(false);
-  const [editTarget, setEditTarget] = useState<Provider | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Provider | null>(null);
 
   const closeAdd = () => {
     setAdding(false);
     createProvider.reset();
-  };
-
-  const closeEdit = () => {
-    setEditTarget(null);
-    updateProvider.reset();
   };
 
   if (isPending) {
@@ -68,43 +57,19 @@ export function ModelProvidersPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Boxes className="size-5 text-primary" strokeWidth={1.5} />
-              {t("settings.connections.title")}
-            </CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {t("settings.connections.subtitle")}
-            </p>
-          </div>
-          <Button size="sm" onClick={() => setAdding(true)}>
+      <PageHeader
+        icon={Boxes}
+        title={t("settings.connections.title")}
+        subtitle={t("settings.connections.subtitle")}
+        actions={
+          <Button onClick={() => setAdding(true)}>
             <Plus className="mr-1.5 size-4" />
             {t("settings.connections.add")}
           </Button>
-        </CardHeader>
-        <CardContent>
-          {providers.length === 0 ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">
-              {t("settings.connections.empty")}
-            </div>
-          ) : (
-            <ul className="space-y-2">
-              {providers.map((p) => (
-                <li key={p.name}>
-                  <ConnectionCard
-                    provider={p}
-                    deletePending={deleteProvider.isPending}
-                    onEdit={(prov) => setEditTarget(prov)}
-                    onDelete={(prov) => setDeleteTarget(prov)}
-                  />
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+        }
+      />
+
+      <ConnectionsTable providers={providers} />
 
       <Dialog open={adding} onOpenChange={(open) => !open && closeAdd()}>
         <DialogContent className="max-w-md">
@@ -122,50 +87,6 @@ export function ModelProvidersPage() {
           />
         </DialogContent>
       </Dialog>
-
-      <Dialog open={editTarget !== null} onOpenChange={(open) => !open && closeEdit()}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t("settings.connections.editTitle")}</DialogTitle>
-          </DialogHeader>
-          {editTarget && (
-            <ProviderForm
-              initial={editTarget}
-              submitError={updateProvider.error}
-              pending={updateProvider.isPending}
-              onCancel={closeEdit}
-              onSubmit={() => {}}
-              onUpdate={async (patch) => {
-                await updateProvider.mutateAsync({ name: editTarget.name, patch });
-                closeEdit();
-              }}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <ConfirmDialog
-        open={deleteTarget !== null}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title={t("settings.connections.deleteTitle")}
-        description={t("settings.connections.deleteConfirm", { name: deleteTarget?.name ?? "" })}
-        confirmLabel={deleteProvider.isPending ? t("common.deleting") : t("common.delete")}
-        pending={deleteProvider.isPending}
-        onConfirm={() => {
-          if (deleteTarget) {
-            deleteProvider.mutate(deleteTarget.name, { onSuccess: () => setDeleteTarget(null) });
-          }
-        }}
-      />
-
-      {/* The internal-engine selection: which connection (endpoint + key) and
-          which model Coffer's own LLM engine runs on. A separate section, not a
-          per-card flag — model lives apart from the connection (spec provider-switching). */}
-      <InternalEngineSettings providers={providers} />
-
-      {/* Embedding is its own separate config (own shape with dimensions) — its
-          own boxed card at the bottom, parallel to the connections card above. */}
-      <EmbeddingSettings />
     </div>
   );
 }

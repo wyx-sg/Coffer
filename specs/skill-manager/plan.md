@@ -1,6 +1,6 @@
-# Implementation Plan: Skill Manager
+# Implementation Plan: 005 — Skill Manager
 
-**Branch**: `feature/skill-manager` (builds on spec agent-registry, delivered in PR #25)
+**Branch**: `feature/skill-manager` (builds on spec agent-registry-agent-registry, delivered in PR #25)
 **Date**: 2026-05-22
 **Spec**: [./spec.md](./spec.md)
 **Status**: Draft
@@ -146,18 +146,21 @@ frontend/src/i18n/locales/{en,zh}.json     # skill strings appended
 ## Workspace amendment (delivered on `feature/agent-workspace`)
 
 The spec.md workspace amendment (FR-022..FR-026) added the unmanaged-skill
-scan and the follow-master-library policy. New modules per layer:
+scan and, at the time, a follow-master-library policy on the agent. That policy
+is gone: delivery is now the skill's own `enabled` flag intersected with its
+agent scope, and nothing else ([ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.md)).
+New modules per layer:
 
 - **Domain**: `skill/scan.py` (pure `classify` of scan entries into `UnmanagedSkill` results — managed links and dot-entries excluded, foreign links flagged and never adoptable); `agent/scan.py` (spec agent-registry's tree: `scan_locations` per agent type — kept there because it depends on `AgentType`, which `domain/skill` must not import, Contract 5c).
 - **Infrastructure**: `skill/workspace_scan.py` (filesystem walk of the scan locations into `ScanEntry` values).
-- **Application**: `skill/unmanaged_ops.py` (list/adopt/delete unmanaged, FR-022..FR-024), `skill/follow_ops.py` (FR-025 follow reconciliation on flag/exclusion/skill-set changes), and `skill/binding_ops.py` (per-agent enable/disable split out of `service.py` for the file-size cap) — all free functions in the `lifecycle_ops.py` style.
-- **Surfaces**: `http/agent_unmanaged_skill_routes.py` (`/agents/{name}/unmanaged-skills*`); CLI `coffer skill unmanaged|adopt|rm-unmanaged` (in `skill_cmd.py`) and `coffer agent follow --on/--off --exclude` (in `agent_workspace_cmd.py`; the policy fields ride spec agent-registry's `PATCH /agents/{name}`).
-- **Frontend**: `AgentSkillsTab` v2 — follow switch with exclusion-mode per-skill toggles, unmanaged-skills section with adopt/delete, foreign-link and degraded-binding badges.
+- **Application**: `skill/unmanaged_ops.py` (list/adopt/delete unmanaged, FR-022..FR-024), `skill/delivery_ops.py` (reconciles one agent's delivered set against `enabled` ∩ scope, re-run whenever either side changes), and `skill/binding_ops.py` (the internal link/unlink primitives, split out of `service.py` for the file-size cap) — all free functions in the `lifecycle_ops.py` style.
+- **Surfaces**: `http/agent_unmanaged_skill_routes.py` (`/agents/{name}/unmanaged-skills*`); CLI `coffer skill unmanaged|adopt|rm-unmanaged` (in `skill_cmd.py`); delivery is steered with the framework's own `coffer scope show|set|clear skill:<name>` plus the resource enable/disable routes.
+- **Frontend**: `AgentSkillsTab` — a pointer to the Skill page plus a read-only list of what is currently delivered to this agent, and the unmanaged-skills section with open-folder/adopt/delete, foreign-link and degraded-binding badges. Delivery itself is steered on the skill: the Skill list table's enable switch and the skill detail page's scope control.
 
 New audit events: `skill_adopted`, `skill_unmanaged_deleted`,
-`skill_relinked`. No schema change — the scan is
-derived at request time and the follow policy lives on the agent resource's
-config (spec agent-registry).
+`skill_relinked`. The scan is derived at request time; delivery state lives in
+the binding rows as bookkeeping, and the two inputs that decide it — `enabled`
+and `scope` — are ordinary resource-framework fields on the skill.
 
 ## Open items deferred to future specs
 

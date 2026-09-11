@@ -1,4 +1,4 @@
-# Data Model —— Skill Manager
+# Data Model —— 005 Skill Manager
 
 > English: [data-model.md](./data-model.md)
 
@@ -46,16 +46,17 @@ frontmatter 的 `description` 持久化在 skill kind 自己的 config 字段 `S
 
 ### `BindingState` (`domain/skill/binding.py`)
 
-普通 dataclass；`skill_agent_bindings` 一行在内存中的表达。
+普通 dataclass；`skill_agent_bindings` 一行在内存中的表达。这一行是内部的投递
+记账——它记录该 agent 当前持有一份已投递副本——不是面向用户的维度。
 
 | 字段                | 类型               | 说明                                                                                                        |
 | ------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------- |
 | `skill_resource_id` | `int`              | 外键                                                                                                        |
 | `agent_resource_id` | `int`              | 外键                                                                                                        |
-| `enabled`           | `bool`             |                                                                                                             |
+| `enabled`           | `bool`             | 仍存在于表与本 dataclass 中；仅内部使用——它标记一份存活的已投递副本，任何 surface 都不暴露它                |
 | `last_linked_at`    | `datetime \| None` | 上次成功 link 的时间                                                                                        |
 | `last_link_path`    | `str \| None`      | 上次创建 link 的绝对路径                                                                                    |
-| `link_mode`         | `LinkMode \| None` | `symlink`、`junction` 或 `copy_fallback`；与 `SkillBindingOut.link_mode` 对应，UI 据此标记 degraded binding |
+| `link_mode`         | `LinkMode \| None` | `symlink`、`junction` 或 `copy_fallback`；与 `SkillBindingOut.link_mode` 对应，UI 据此标记 degraded 投递    |
 
 ### `DriftKind` (`domain/skill/drift.py`)
 
@@ -63,8 +64,8 @@ frontmatter 的 `description` 持久化在 skill kind 自己的 config 字段 `S
 
 | 值                      | 含义                                | 建议处置                     |
 | ----------------------- | ----------------------------------- | ---------------------------- |
-| `missing_link`          | binding 已启用但磁盘目标缺失        | 重新启用以重建 link          |
-| `tampered_link`         | symlink 指向的不是 Coffer 的 master | 先禁用再启用，或用 `--force` |
+| `missing_link`          | 记录有已投递副本但磁盘目标缺失      | 执行 opt-in 修复以重建 link  |
+| `tampered_link`         | symlink 指向的不是 Coffer 的 master | 执行 opt-in 修复（先备份再重建） |
 | `replaced_with_regular` | 路径是普通文件/目录，而非 link      | 同上                         |
 | `missing_master`        | binding 指向的 master 文件夹已不在  | 重新导入                     |
 | `orphan_master`         | 磁盘上有 master 但 DB 无记录        | 收编或移除                   |
@@ -97,17 +98,44 @@ frontmatter 的 `description` 持久化在 skill kind 自己的 config 字段 `S
 | `reason`       | `str \| None` | 不合法时的失败原因                                                         |
 | `foreign_link` | `bool`        | 指向主库之外的 symlink——呈现给用户但永不可 adopt                           |
 
-### Follow 策略（存于 agent 资源的 config，spec agent-registry）—— workspace 修订
+### 投递判定（完全由 skill 资源拥有）—— workspace 修订
 
-逐 agent 的 skill 投递策略（FR-025）：`follow_all_skills: bool`（默认
-`True`，保持修订前的 trust mode）加 `skill_exclusions: list[str]`。字段位于
-`AgentConfig`（spec agent-registry 的 schema，经 `PATCH /agents/{name}` / `coffer agent
-follow` 更新）；本 spec 负责其投递语义。following 期间，agent 的有效 skill
-集合是整个主库减去其排除项；binding 仍是持久的投递记录。
-`application/skill/follow_ops.py` 在开关翻转、skill 注册或移除、排除列表
-变化时调和投递；关闭开关会把当前已投递的 skill 保留为显式的逐 skill
-binding。策略通过注入的 `agent_skill_policy_resolver` 读取，skill 代码绝不
+投递恰好只有一对输入，二者都在 `skill` 资源自身上：框架级的 `enabled` 标志与
+框架级的 `scope`
+（[ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.zh.md)）。
+
+```
+delivered(skill, agent)  ⟺  skill.enabled AND agent_in_scope(skill.scope, agent)
+```
+
+agent 资源**不**携带任何 skill 投递策略：`follow_all_skills` 与
+`skill_exclusions` 已从 `AgentConfig`（spec agent-registry 的 schema）中移除，迁移
+`0058` 会从每一条已存储的 agent 行里剥掉这两个键。没有 load-time 垫片，也没有
+向后兼容的默认值——已存储的行就是不再有它们。
+
+`application/skill/delivery_ops.py` 持有调和器
+`apply_scope_for_agent(agent_name)`（由 `apply_follow_for_agent` 更名而来，
+原先位于 `follow_ops.py`）。它计算
+
+```
+wanted = {s.name for s in skills if s.enabled and agent_in_scope(s.scope, agent_name)}
+```
+
+然后投递 `wanted - bound`、收回 `bound - wanted`；其中 `bound` 是
+`skill_agent_bindings` 行表明该 agent 当前持有已投递副本的那些 skill。它在以下
+时机运行：一个 skill 被启用或禁用、一个 skill 的 scope 被编辑、一个 skill 被
+导入、一个 skill 被移除、一个 agent 被注册、一个 agent 的 `config_dir` 变更，
+以及同步的 post-import 钩子。skill 的启停与 scope 编辑经 kind 钩子
+`on_enabled_changed` 与 `on_scope_changed` 抵达调和器，因此 skill 代码依然绝不
 import agent-kind 代码（Contract 5c）。
+
+**Wire 结构。** `SkillOut` 新增 `scope`（`list[str] | None`，始终输出，位置紧
+跟在 `enabled` 之后）——即这个 skill 被投递到的 agent 名字，`null` 表示每个
+agent，`[]` 表示没有 agent。`SkillBindingOut` 去掉 `enabled`：它现在只带
+`agent_name`、`last_linked_at`、`last_link_path` 与 `link_mode`，而这一行本身
+存在就意味着「该 agent 当前持有一份已投递副本」。按 `(skill, agent)` 的
+`POST /skills/{name}/enable` 与 `/disable` 两条路由（及其
+`SkillEnableRequest` / `SkillDisableRequest` 请求体）已被移除。
 
 ## SQLite schema 增量
 
@@ -119,13 +147,13 @@ import agent-kind 代码（Contract 5c）。
 | ------------------- | ---------------------------------------- | ---------------------------------------------------------------- |
 | `skill_resource_id` | `int`                                    | FK → `resources(id)` ON DELETE CASCADE                           |
 | `agent_resource_id` | `int`                                    | FK → `resources(id)` ON DELETE CASCADE                           |
-| `enabled`           | `bool`                                   | not null, default `0`                                            |
+| `enabled`           | `bool`                                   | not null, default `0`；内部记账——`1` 表示该 agent 当前持有一份已投递副本 |
 | `last_linked_at`    | `timestamp`                              | nullable                                                         |
 | `last_link_path`    | `text`                                   | nullable                                                         |
 | `link_mode`         | `text`                                   | nullable；非空时取 `symlink` / `junction` / `copy_fallback` 之一 |
 | 主键                | `(skill_resource_id, agent_resource_id)` |                                                                  |
 
-索引：`idx_bindings_agent`，列 `(agent_resource_id, enabled)`，支持「某 agent 启用了哪些 skill」查询。
+索引：`idx_bindings_agent`，列 `(agent_resource_id, enabled)`，支持「某 agent 当前持有哪些 skill」查询。
 
 ### 复用已有表
 
@@ -140,8 +168,8 @@ import agent-kind 代码（Contract 5c）。
 | ---------------------- | ------------------------------------------------- |
 | `skill_imported`       | 本地导入成功                                      |
 | `skill_updated`        | 就地文件编辑改动了 skill 内容（details 含前后哈希） |
-| `skill_bound`          | 按 agent 启用 binding（创建 symlink）             |
-| `skill_unbound`        | 按 agent 禁用 binding（移除 symlink）             |
+| `skill_bound`          | 向某 agent 投递了一份副本（创建 symlink）         |
+| `skill_unbound`        | 从某 agent 收回了一份已投递副本（移除 symlink）   |
 
 workspace 修订新增：
 
@@ -149,7 +177,7 @@ workspace 修订新增：
 | ------------------------- | --------------------------------------------------------------------------- |
 | `skill_adopted`           | 一个未托管 skill 文件夹被 adopt 进主库（FR-023）                            |
 | `skill_unmanaged_deleted` | 一个未托管 skill 文件夹被从 agent workspace 中删除（FR-024）                |
-| `skill_relinked`          | 某个已启用 binding 的托管链接在新投递路径上被重建（如 `config_dir` 变更后） |
+| `skill_relinked`          | 某份已投递副本的托管链接在新投递路径上被重建（如 `config_dir` 变更后） |
 
 skill **删除** 没有专门的事件——删除一个 skill 走 `ResourceService.delete`，
 它发出通用的 `resource_deleted` 事件（`details` 含删除前快照），与任何其他
@@ -207,23 +235,24 @@ resolver 解析目标目录（契约 5：服务永不导入 descriptor）。
 
 | 方法                                                           | 用途                                                                                                     |
 | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `import_local(path, actor) -> Resource`                        | 读 SKILL.md，校验，拷到 master，注册 Resource，写审计，返回。自动为每个已注册 agent 绑定（trust 模式）。 |
-| `enable_for(skill_ref, agent_ref, force=False, actor) -> None` | upsert binding，创建 symlink（FAT32 上 copy fallback）。                                                 |
-| `disable_for(skill_ref, agent_ref, actor) -> None`             | 标记 binding 为 disabled，移除 link。                                                                    |
-| `verify() -> DriftReport`                                      | 遍历每条已启用 binding，按 `DriftKind` 分类 drift。                                                      |
+| `import_local(path, actor) -> Resource`                        | 读 SKILL.md，校验，拷到 master，注册 Resource，写审计，返回，随后调和，让这个 skill 落到其 scope 授予的每一处。 |
+| `enable_for(skill_ref, agent_ref, force=False, actor) -> None` | 由 `apply_scope_for_agent` 驱动的内部投递原语：upsert 投递行，创建 symlink（FAT32 上 copy fallback）。   |
+| `disable_for(skill_ref, agent_ref, actor) -> None`             | 由 `apply_scope_for_agent` 驱动的内部收回原语：移除 link，清除投递行。                                   |
+| `apply_scope_for_agent(agent_name, actor) -> list[str]`        | 按投递判定调和单个 agent（见上文「投递判定」）。                                                         |
+| `verify() -> DriftReport`                                      | 遍历每一份已投递副本，按 `DriftKind` 分类 drift。                                                        |
 | `remove(ref, actor) -> None`                                   | 级联清理 symlink、删除 master，委派 `ResourceService.delete`。                                           |
 | `cleanup_bindings_for_agent(agent_ref) -> None`                | 由 spec agent-registry 的 `agent.on_delete` 钩子调用；移除该 agent 的所有 binding 与 symlink。                      |
 
 workspace 修订的新增能力（以自由函数实现于 `unmanaged_ops.py` /
-`follow_ops.py`；逐 agent 启用/禁用流程拆分到 `binding_ops.py` 以满足文件
+`delivery_ops.py`；投递/收回原语拆分到 `binding_ops.py` 以满足文件
 大小上限——风格同 `lifecycle_ops.py`，概念上都是 skill 子包私有）：
 
 | 方法                                                                   | 用途                                                                                                                                                               |
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `list_unmanaged(agent_name) -> list[UnmanagedView]`                    | FR-022 对 agent skill 位置的只读扫描（见上文「未托管 skill」）。                                                                                                   |
-| `adopt_unmanaged(agent_name, skill_name, location, actor) -> Resource` | FR-023：校验 → 移动到 `~/.coffer/skills/<name>/` → 注册 → 把托管链接投递到 `<config_dir>/skills/<name>` → 为该 agent 记录已启用的 binding；audit `skill_adopted`。 |
+| `adopt_unmanaged(agent_name, skill_name, location, actor) -> Resource` | FR-023：校验 → 移动到 `~/.coffer/skills/<name>/` → 注册 → 把托管链接投递到 `<config_dir>/skills/<name>` → 为该 agent 记录这次投递；audit `skill_adopted`。 |
 | `delete_unmanaged(agent_name, skill_name, location, actor) -> None`    | FR-024：仅从磁盘删除该文件夹；audit `skill_unmanaged_deleted`。                                                                                                    |
-| follow 调和（`follow_ops.py`）                                         | FR-025：在开关/排除项/skill 集合变化时调和投递；关闭开关时把已投递的 skill 保留为显式 binding。                                                                    |
+| 投递调和（`delivery_ops.py`）                                          | FR-025：`apply_scope_for_agent` —— 按 `skill.enabled AND agent_in_scope(skill.scope, agent)` 重算该 agent 应有的集合，投递缺失的部分、收回不再需要的部分。        |
 
 ### 文件查看器（`application/skill/file_ops.py`）
 

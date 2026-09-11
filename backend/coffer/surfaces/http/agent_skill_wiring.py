@@ -59,7 +59,7 @@ def wire_agent_and_skill_kinds(
     builtin_tools: BuiltinToolRegistry | None = None,
     credential_store: Any = None,
 ) -> None:
-    """Wire the agent + skill kinds (specs agent-registry, skill-manager) into a running app.
+    """Wire the agent + skill kinds (specs agent-registry, 005) into a running app.
 
     Mirrors the `wire_mcp_kind` pattern. Both kinds are wired in lockstep so
     the cross-kind on_delete hook (deleting an agent cascades into skill
@@ -70,10 +70,11 @@ def wire_agent_and_skill_kinds(
     master_store.ensure_root()
     sync_engine = SyncEngine()
 
-    # Cross-kind resolvers: skill service needs the agent's effective
-    # skill_dir, scan locations (FR-022) and follow policy (FR-025) but
-    # cannot import agent-kind code itself (Contract 5) — only this
-    # composition root may bridge the two kinds.
+    # Cross-kind resolvers: the skill service needs the agent's effective
+    # skill_dir and its scan locations (FR-022) but cannot import agent-kind
+    # code itself (Contract 5) — only this composition root may bridge the two
+    # kinds. Delivery itself needs nothing from the agent's config: the whole
+    # rule lives on the skill resource (``enabled`` + ``scope``).
 
     def _agent_skill_dir(r: Resource):  # type: ignore[no-untyped-def]
         cfg = AgentConfig.model_validate(r.config)
@@ -82,10 +83,6 @@ def wire_agent_and_skill_kinds(
     def _agent_scan_locations(r: Resource) -> list[pathlib.Path]:
         cfg = AgentConfig.model_validate(r.config)
         return scan_locations(cfg.type, cfg.resolved_config_dir())
-
-    def _agent_skill_policy(r: Resource) -> tuple[bool, list[str]]:
-        cfg = AgentConfig.model_validate(r.config)
-        return (cfg.follow_all_skills, cfg.skill_exclusions)
 
     skill_svc = SkillService(
         resource_service=resource_svc,
@@ -96,10 +93,9 @@ def wire_agent_and_skill_kinds(
         agent_skill_dir_resolver=_agent_skill_dir,
         workspace_scan=WorkspaceScan(),
         agent_scan_locations_resolver=_agent_scan_locations,
-        agent_skill_policy_resolver=_agent_skill_policy,
     )
 
-    # Agent kind (spec agent-registry). Detection is discovery-only (no
+    # Agent kind (spec agent-registry-agent-registry). Detection is discovery-only (no
     # auto-registration): AutoDetectService reports installed-but-unregistered
     # agents as candidates the user confirms on the Agents page.
     #
@@ -108,25 +104,23 @@ def wire_agent_and_skill_kinds(
     async def _agent_on_config_dir_changed(agent_name: str) -> None:
         await skill_svc.relink_for_agent(agent_name)
 
-    # `on_skill_policy_changed` reconciles deliveries with the agent's
-    # follow-master-library policy (FR-025) after registration or a policy
-    # update (flag flip / exclusion edit).
-    async def _agent_on_skill_policy_changed(agent_name: str) -> None:
-        await skill_svc.apply_follow_for_agent(agent_name, actor="system")
+    # A newly registered agent gets everything the delivery predicate grants
+    # it right now (FR-012a).
+    async def _agent_reconcile_skill_delivery(agent_name: str) -> None:
+        await skill_svc.apply_scope_for_agent(agent_name, actor="system")
 
     # actor="sync": delivery failures surface in the run's errors (retried on
     # every import) instead of growing the audit log unboundedly. Reused below
-    # both by the sync post-import hook AND the skill kind's on_scope_changed
-    # hook — same reconciliation, two different triggers.
+    # by the sync post-import hook AND by both skill-kind hooks — one
+    # reconciliation, several triggers.
     async def _sync_skill_reconcile(agent_name: str) -> list[str]:
-        return await skill_svc.apply_follow_for_agent(agent_name, actor="sync")
+        return await skill_svc.apply_scope_for_agent(agent_name, actor="sync")
 
-    # `on_scope_changed` for the SKILL kind (ADR per-agent-resource-scope): the `agent` kind
-    # carries no scope of its own, so only a skill's edit triggers this. A
-    # skill's scope edit can gain or lose any agent, so every registered
-    # agent's delivery is re-reconciled — the same per-agent reconciliation
-    # the sync post-import hook uses (``_sync_skill_reconcile`` above).
-    async def _skill_on_scope_changed(ref: ResourceRef) -> None:
+    # The SKILL kind's two post-write hooks (ADR per-agent-resource-scope). The `agent` kind carries
+    # no scope of its own, so only a skill's own edit triggers these — and
+    # either half of the predicate (``enabled`` or ``scope``) can gain or lose
+    # any agent, so every registered agent's delivery is re-reconciled.
+    async def _skill_delivery_changed(ref: ResourceRef) -> None:
         for row in await resource_svc.list(kind="agent"):
             await _sync_skill_reconcile(row.name)
 
@@ -137,7 +131,7 @@ def wire_agent_and_skill_kinds(
         resource_service=resource_svc,
         audit=audit,
         on_config_dir_changed=_agent_on_config_dir_changed,
-        on_skill_policy_changed=_agent_on_skill_policy_changed,
+        reconcile_skill_delivery=_agent_reconcile_skill_delivery,
         config_file_store=config_file_store,
     )
     auto_detect_svc = AutoDetectService(agent_service=agent_svc)
@@ -182,9 +176,20 @@ def wire_agent_and_skill_kinds(
         # implementation would race the row delete and find nothing to clean.
         await skill_svc.cleanup_bindings_for_agent(ref)
 
-    agent_kind = make_agent_kind(on_delete=_agent_on_delete)
+    async def _agent_enabled_changed(ref: ResourceRef) -> None:
+        # Disabling an agent reclaims its delivered skills; enabling it puts
+        # back whatever the skills' own ``enabled`` + ``scope`` grant. Same
+        # per-agent reconciliation both ways, so the reclaim is reversible.
+        await skill_svc.apply_scope_for_agent(agent_name=ref.name, actor="system")
+
+    agent_kind = make_agent_kind(
+        on_delete=_agent_on_delete,
+        on_enabled_changed=_agent_enabled_changed,
+    )
     skill_kind = make_skill_kind(
-        skill_svc.cleanup_bindings_for_skill, on_scope_changed=_skill_on_scope_changed
+        skill_svc.cleanup_bindings_for_skill,
+        on_scope_changed=_skill_delivery_changed,
+        on_enabled_changed=_skill_delivery_changed,
     )
 
     app.state.kinds["agent"] = agent_kind
@@ -208,7 +213,7 @@ def wire_agent_and_skill_kinds(
         AgentSideEffectsReconcile(
             agent_svc,
             config_file_store,
-            on_skill_policy_changed=_sync_skill_reconcile,
+            reconcile_skill_delivery=_sync_skill_reconcile,
         )
     )
 

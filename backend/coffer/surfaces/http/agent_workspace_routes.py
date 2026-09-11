@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 from pydantic import BaseModel, Field
 
 from coffer.application.agent.mcp_entry_service import ParseErrorInfo
@@ -166,6 +166,21 @@ async def list_mcp_entries(
         items=[_entry_out(e) for e in view.items],
         parse_errors=[_parse_error_out(p) for p in view.parse_errors],
     )
+
+
+@router.delete(
+    "/{name}/mcp-entries/{entry}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def delete_mcp_entry(
+    name: str,
+    entry: str,
+    source: str | None = None,
+    svc: Any = Depends(get_agent_mcp_entry_service),  # noqa: B008
+    actor: str = Depends(_actor),
+) -> None:
+    await svc.remove_entry(name, entry, source=source, actor=actor)
 
 
 @router.post(

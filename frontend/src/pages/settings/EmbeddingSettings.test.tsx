@@ -127,22 +127,22 @@ describe("EmbeddingSettings", () => {
 });
 
 describe("legacy /settings/embedding redirect", () => {
-  test("redirects the old embedding route to Model providers", async () => {
-    // Embedding config has no page of its own — it is a card on the
-    // model-provider surface, which now lives in the sidebar rather than under
-    // Settings. This mirrors the redirect declared in router.tsx.
+  test("redirects the old embedding route to the Engine tab", async () => {
+    // Embedding config has no page of its own — it is one of the two cards on
+    // Settings → Engine, alongside the internal-engine selection. This mirrors
+    // the redirect declared in router.tsx.
     const router = createMemoryRouter(
       [
-        { path: "/model-providers", element: <div>model providers page</div> },
+        { path: "/settings/engine", element: <div>engine settings</div> },
         {
           path: "/settings/embedding",
-          element: <Navigate to="/model-providers" replace />,
+          element: <Navigate to="/settings/engine" replace />,
         },
       ],
       { initialEntries: ["/settings/embedding"] },
     );
     render(<RouterProvider router={router} />);
-    await waitFor(() => expect(screen.getByText("model providers page")).toBeInTheDocument());
-    expect(router.state.location.pathname).toBe("/model-providers");
+    await waitFor(() => expect(screen.getByText("engine settings")).toBeInTheDocument());
+    expect(router.state.location.pathname).toBe("/settings/engine");
   });
 });

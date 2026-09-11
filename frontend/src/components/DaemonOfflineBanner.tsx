@@ -1,10 +1,8 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { ApiError } from "@/lib/api/errors";
 import { useDaemonStatus } from "@/lib/hooks/useDaemon";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 
 /**
  * Shown above every page when /api/v1/daemon/status fails. Two flavours:
@@ -15,26 +13,16 @@ import { Button } from "@/components/ui/button";
  *     error, because the user's next action is usually "start the daemon".
  *   - Other errors: original "daemon offline" treatment.
  *
- * Recovery affordance: a Retry button that re-checks status once the user has
- * brought the daemon back up, plus the terminal command that does so. Keeping
+ * Recovery affordance: the terminal command that brings the daemon back. There
+ * is no Retry button — the browser cannot restart the daemon, and the status
+ * query polls every 30s, so the banner clears itself once the daemon returns;
+ * a button that only shortened that wait was one more thing to explain. Keeping
  * this opinionated avoids the "generic unexpected error on every page" symptom
  * we hit pre-redesign whenever ~/.coffer/daemon.json was absent.
  */
 export function DaemonOfflineBanner() {
   const { t } = useTranslation();
   const { error, isError } = useDaemonStatus();
-  const qc = useQueryClient();
-
-  // Recovery: a *soft* retry that refetches the daemon status (and every
-  // cached query) in place. NOT window.location.reload() — a hard reload
-  // navigates to the page host (the Vite dev server, or the daemon-served
-  // bundle); if that host is itself down the browser shows ERR_CONNECTION_REFUSED
-  // and the whole app goes blank. Refetching recovers when the daemon returns
-  // and otherwise just leaves the banner up.
-  const reload = useMutation({
-    mutationFn: () => qc.invalidateQueries(),
-  });
-
   if (!isError) return null;
 
   const code = error instanceof ApiError ? error.code : "DAEMON_OFFLINE";
@@ -62,24 +50,8 @@ export function DaemonOfflineBanner() {
             {!isAuthGap && error instanceof Error ? ` (${error.message})` : null}
           </p>
           <div className="space-y-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => reload.mutate()}
-              disabled={reload.isPending}
-              data-testid="daemon-banner-reload"
-            >
-              {reload.isPending ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  {t("daemon.offline.retrying")}
-                </>
-              ) : (
-                t("daemon.offline.retry")
-              )}
-            </Button>
-            {/* The browser can't kill/respawn the daemon — Retry only re-checks
-                the connection. Tell the user how to actually bring it back. */}
+            {/* The browser can't kill/respawn the daemon. Tell the user how to
+                actually bring it back; the 30s status poll clears the banner. */}
             <p className="text-xs text-foreground/60">
               {t("daemon.offline.webRestartHint")}{" "}
               <code className="rounded bg-muted px-1 py-0.5 font-mono">coffer daemon start</code>

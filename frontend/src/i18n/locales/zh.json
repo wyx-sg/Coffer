@@ -29,9 +29,7 @@
     "disabled": "已禁用",
     "saving": "保存中…",
     "deleting": "删除中…",
-    "retry": "重试",
     "clear": "清除",
-    "rawLog": "原始日志",
     "done": "完成",
     "moreActions": "更多操作",
     "showPassword": "显示",
@@ -145,8 +143,7 @@
         "overview": "概览",
         "tools": "工具",
         "resources": "资源",
-        "prompts": "提示词",
-        "invocations": "调用记录"
+        "prompts": "提示词"
       },
       "overview": {
         "config": "配置",
@@ -156,7 +153,6 @@
         "tools": "工具",
         "resources": "资源",
         "prompts": "提示词",
-        "lastInvocation": "最近调用",
         "rawConfig": "原始配置 JSON"
       },
       "edit": "编辑"
@@ -175,30 +171,6 @@
       "header": {
         "name": "名称",
         "enabled": "已启用"
-      }
-    },
-    "invocations": {
-      "filter": "全部状态",
-      "empty": "暂无调用记录。",
-      "noMatches": "没有调用记录匹配当前筛选条件。",
-      "emptyHint": "已对接 MCP 客户端发起的能力调用将出现在此处。",
-      "loading": "加载调用记录中…",
-      "loadFailed": "加载调用记录失败",
-      "searchPlaceholder": "搜索调用记录",
-      "filterSearch": "搜索",
-      "filterStatus": "状态",
-      "header": {
-        "time": "时间",
-        "type": "类型",
-        "key": "键名",
-        "duration": "耗时",
-        "status": "状态"
-      },
-      "status": {
-        "ok": "成功",
-        "error": "失败",
-        "timeout": "超时",
-        "denied": "已拒绝"
       }
     },
     "health": {
@@ -258,9 +230,6 @@
   "audit": {
     "filter": {
       "actor": "操作者",
-      "all": "全部",
-      "from": "起始",
-      "to": "结束",
       "search": "搜索",
       "searchPlaceholder": "搜索活动"
     },
@@ -272,23 +241,14 @@
       "user": "用户",
       "agent": "智能体",
       "channel": "渠道"
-    },
-    "timeRange": {
-      "1h": "最近 1 小时",
-      "6h": "最近 6 小时",
-      "24h": "最近 24 小时",
-      "7d": "最近 7 天",
-      "30d": "最近 30 天",
-      "all": "全部时间",
-      "custom": "自定义范围…"
-    },
-    "applyRange": "应用"
+    }
   },
   "settings": {
     "title": "设置",
     "subtitle": "你的数据与应用设置。",
     "tabs": {
       "general": "通用",
+      "engine": "内部引擎",
       "data": "数据",
       "security": "安全",
       "about": "关于",
@@ -460,7 +420,27 @@
       "baseUrl": "Base URL",
       "model": "模型",
       "fastModel": "快速模型（可选）",
-      "secret": "API Key"
+      "secret": "API Key",
+      "searchPlaceholder": "搜索连接…",
+      "allProtocols": "全部类型",
+      "internalEngine": "Coffer 引擎",
+      "bulkDeleteConfirm": "删除选中的 {{count}} 个连接？它们保存的凭据也会一并删除。",
+      "detail": {
+        "back": "返回 LLM 连接",
+        "notFound": "未找到该连接",
+        "configuration": "配置",
+        "keyStored": "已保存",
+        "keyNone": "未保存密钥",
+        "created": "创建时间",
+        "updated": "更新时间",
+        "models": "模型",
+        "modelsHint": "选择此连接对外提供该接入地址的哪些模型。选定后，Agent 的模型下拉只会出现这些模型。",
+        "unrestricted": "未限制——该接入地址提供的所有模型都可用。",
+        "restricted": "已选择 {{count}} 个模型——Agent 只会看到这些。",
+        "fetchFailed": "无法列出该接入地址的模型（{{error}}）。当前选择保持不变。",
+        "noModelsYet": "暂无模型——可拉取该接入地址的模型，或保持不限制。",
+        "clearSelection": "清除选择（不限制）"
+      }
     },
     "internalEngine": {
       "title": "内部引擎",
@@ -476,9 +456,7 @@
       "title": "守护进程离线",
       "body": "Coffer 守护进程停止响应。能力列表、工具调用和注册操作将一直失败，直到它重新启动。",
       "notReadyTitle": "守护进程未启动",
-      "notReadyBody": "Coffer 的后台服务暂时还连不上。它通常会自动启动——请点「重试」；若问题仍未解决，请重启 Coffer。",
-      "retry": "重试",
-      "retrying": "重试中…",
+      "notReadyBody": "Coffer 的后台服务暂时还连不上。它通常会自动启动，连上后这条提示会自行消失；若问题仍未解决，请重启 Coffer。",
       "webRestartHint": "浏览器无法重启它——请在终端运行："
     }
   },
@@ -648,9 +626,6 @@
         "directTitle": "直连 server",
         "openServersPage": "打开 MCP 服务器页面",
         "gatewayManagedHint": "Coffer 通过网关把它管理的 MCP 服务器提供给该 agent；请在 MCP 服务器页面管理。",
-        "source": "来源",
-        "transport": "传输方式",
-        "enabled": "启用",
         "adopt": "收编进 Coffer",
         "adoptTitle": "收编 MCP server",
         "adoptSecretsHint": "检测到疑似密钥，请为每个键提供 keychain 引用；密钥值只进系统钥匙串。",
@@ -659,6 +634,8 @@
         "parseError": "配置解析失败，该文件降级只读",
         "empty": "没有直连 MCP server",
         "adoptSuccess": "已收编 {{name}}，现经网关服务于所有 agent",
+        "deleteConfirm": "确认从该 Agent 的配置文件中删除该条目？将写入 .bak 备份。",
+        "bulkDeleteConfirm": "确认删除选中的 {{count}} 个 server？每个都会写入 .bak 备份。",
         "searchPlaceholder": "搜索 server"
       }
     },
@@ -726,24 +703,13 @@
     },
     "cofferSkills": "Coffer Skill",
     "bulkInstallMcp": "安装 Coffer MCP",
-    "bulkInstallSkills": "安装 Skill",
-    "installSkillsDialog": {
-      "title": "为 {{count}} 个 Agent 安装 Skill",
-      "subtitle": "勾选的 Skill 会被安装（绑定）到每个选中的 Agent。",
-      "empty": "暂无可安装的 Skill。",
-      "install": "安装（{{count}}）"
-    },
     "cofferManaged": "由 Coffer 管理",
     "skillsTab": {
-      "empty": "该 Agent 暂无 Coffer 管理的 Skill —— 点击“安装 Skill”来添加。",
-      "toggleAria": "在该 Agent 上启用/停用 Skill {{name}}",
+      "empty": "暂无投递到该 Agent 的 Skill —— 请到 Skill 页面启用某个 Skill 并把该 Agent 纳入它的范围。",
       "degradedBadge": "已复制",
-      "degradedTooltip": "当前文件系统不支持符号链接，Coffer 改为下发了一份副本。在重新启用之前，Agent 不会看到主 Skill 的后续修改。",
-      "follow": "跟随主库",
-      "followHint": "开启后主库全部 Skill 自动投递到此 Agent，新 Skill 注册即出现。",
-      "followingManagedHint": "跟随主库时，Coffer 会自动投递全部 Skill；请在 Skill 页面管理主库。",
+      "degradedTooltip": "当前文件系统不支持符号链接，Coffer 改为下发了一份副本。在重新投递之前，Agent 不会看到主 Skill 的后续修改。",
+      "managedHint": "这些 Skill 由 Coffer 投递。哪些 Skill 能到达该 Agent，由 Skill 页面上每个 Skill 的启用状态及其 Agent 范围决定。",
       "openSkillsPage": "打开 Skill 页面",
-      "excludeHint": "跟随模式下关闭开关＝将该 Skill 加入排除列表。",
       "unmanagedTitle": "非托管 Skill",
       "adopt": "纳入托管",
       "adoptDisabledInvalid": "SKILL.md 无效，无法纳入",
@@ -754,6 +720,8 @@
       "locationSkills": "skills 目录",
       "locationAgentsDir": "~/.agents/skills",
       "adoptSuccess": "已纳入主库：{{name}}",
+      "openFolder": "打开文件夹",
+      "openFolderFailed": "无法打开该文件夹。",
       "unmanagedNoMatch": "没有匹配的非托管 Skill。"
     },
     "mcpTab": {
@@ -1084,7 +1052,6 @@
     "deleteConfirm": "确定删除渠道“{{name}}”？其适配器将停止，配对关系也会被移除。"
   },
   "scope": {
-    "title": "启用范围",
     "subtitle": "这项资源对哪些 agent 生效——所有 agent，或只对你选中的那些。不在范围内时它依然保持注册，只是不会被暴露或分发。",
     "everyAgent": "所有 agent",
     "selectedAgents": "指定 agent",

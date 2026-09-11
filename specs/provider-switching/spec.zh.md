@@ -201,12 +201,50 @@ id，而这些 id 该 agent 一个都用不了。
 **Supersede：** D4 的精选内置清单（现在改为后端的模型清单）及其二选一的选项规则（现在是 H3 的并集）。
 D4 的固定下拉 / 禁止自由输入规则不变。**仍不在范围：** proxy / 热切换 / 协议转换。
 
+## 修订 2026-09-11 — 连接自己策展「提供哪些模型」
+
+> 状态：Draft。**这是对 E1/E3「模型不存在连接上」的细化，而非推翻。** 与用户做过一轮设计
+> 讨论后记录。交叉引用 [ADR provider-switching](../../docs/decisions/provider-switching.md)。
+
+**为什么。** E3 把模型移到使用处，2026-09-09 修订又把选择器的选项做成「一切可用之物」的并集。
+两者都对，但合在一起，用户拿到的是一份自己没挑过的菜单：一个网关账号常常服务几十个模型，
+而它的主人只打算用其中两三个。没有任何东西收窄过这份清单，因为设计里只有两种状态——
+「一个模型、钉死在连接上」（选得太早）和「endpoint 提供的所有模型」（太多）。中间那种状态
+——*这个 endpoint 的哪些模型是我真的会用的*——属于账号本身，是稳定的，也正是连接这个位置
+该记录的东西。
+
+- **J1 —— 连接上的 `models: list[str]`：是**提供**集合，不是选中的模型。** 连接依然不存它
+  *运行*的模型：E1/E3 成立，选择仍发生在每个使用处（按 agent 的绑定、内部引擎选择器、频道
+  `/model` 卡片）。`models` 只说明这个选择能从哪些 id 里挑。**空表示不限制**——即 endpoint
+  的完整目录——这是默认值，是修订 0059 之前创建的每条连接的取值，因此对不做策展的人来说，
+  这次升级什么都没变。
+- **J2 —— 在连接详情页策展，由下游每个选择器落地。** 用户在连接本身上，从实时 introspection
+  （`POST /api/v1/models/list-models`）里勾选。下游任何提供该连接模型的选择器，非空时就只提供
+  这份策展集合，为空时提供 endpoint 的全部。这收窄的是 H3 并集里的**连接**那一项；agent 自身
+  清单那一项不受影响——策展集合绝不会藏起 agent 用自己内置登录就能用的模型。
+- **J3 —— id 依旧不透明；Coffer 依旧不写死任何模型名。** 策展集合只校验**形状**（id 非空白、
+  按序去重、有合理上限），并原样透传给厂商。Coffer 绝不拿 id 去比对自己的名单——2026-09-09
+  修订的规则不变；endpoint 不再提供的某个 id 只是一条过期菜单项，不是配置错误。
+- **接口形状。** `ProviderOut.models: list[str]`；`ProviderCreate.models: list[str] | None`
+  （`null` ⇒ 空）；`ProviderPatch.models: list[str] | None`，与 `compatible_agents` 一样是
+  **整值替换**（`null` 保持不变，`[]` 清除限制）。不新增路由——create 与 patch 承载它。
+- **审计。** 不新增事件：策展集合就是普通的连接配置，因此对它的修改搭乘
+  `ResourceService.update_config` 已经发出的 `resource_updated` 事件，其 `before`/`after`
+  详情原样携带 config（provider kind 不声明 redactor，因为它的 config 不含 secret）。
+- **迁移 0059** 为每一条既有 `kind='provider'` 行写入 `models: []`，让每条连接自己陈述答案
+  ——不限制——而不是依赖读取方的默认值。按房规一次性完成：不留 load-time 垫片。
+
+**细化：** E1/E3（模型离开连接——对**选中的**模型依然成立）与 H3（选择器并集——其连接项在存在
+策展集合时改为该集合）。**仍不在范围内：** proxy / hot-switch / 协议转换；Coffer 仍不拿任何模型
+id 去比对自己写死的名单。
+
 ## 范围
 
 ### 在范围内
 
 - 后端 `provider` resource Kind（通过 ResourceService 实现 CRUD，自动审计 + 自动进入导出/导入）；凭证处理（将 secret 存入 Fernet vault，只保留 ref）；投影服务（将原生配置写入匹配 agent）；切换/激活操作；`PROVIDER_SWITCHED` 审计事件；导出/导入接入（注册 kind）；Claude `apiKeyHelper` 使用的密钥解析。
 - 内部引擎 connection 选择：全局 `internal_default` 标志、`set_internal_default(name)` + `resolve_internal_connection()`、`provider_internal_default_set` 审计事件，供 Coffer 内部 LLM 引擎（memory organizer / reorg / distill）消费。
+- 连接的策展 `models` 集合（2026-09-11 修订）：存在 `ProviderConfig` 上，由 create + patch 承载，由修订 0059 回填为空，并由每个提供该连接模型的选择器落地。
 - 退役独立的 `ModelConfig` 注册表（model CRUD REST + `coffer model` CLI），将内部引擎的模型选择折叠进 connection。provider 的 introspection 路由（`list-models`、`test-connection`）保留。
 - CLI：`coffer provider list|add|show|edit|remove|switch|key|internal-default`
 - HTTP API：`/api/v1/providers`（list / create / get / patch / delete）以及 `/api/v1/providers/{name}/activate` 和 `/api/v1/providers/{name}/internal-default`
@@ -238,6 +276,11 @@ Resource `name` = profile 名称（在 kind 内唯一，经 `validate_name` 校�
 | `wire_api` | `"chat" \| "responses"` | 可选，默认 `"chat"`。仅 openai/Codex（`[model_providers.*].wire_api`）。 |
 | `is_active` | `bool` | 每种 `wire_format` 最多一条活跃。ollama 从不投影，故 ollama connection 始终非活跃。导入时若某 wire 有多条活跃，则确定性归一化（保留最近更新的）。 |
 | `internal_default` | `bool` | 全局最多一条 connection 为内部引擎默认。导入时若 >1，则归一化（保留最近更新的）。 |
+
+> 本表记录的是**最初**的形状。修订 E1 移除了 `model` / `fast_model` / `wire_api`，并把
+> `wire_format` 变成探测出的 `protocol`；2026-06-23 修订新增 `compatible_agents`；
+> 2026-09-11 修订新增策展的 `models` 集合（空 = 不限制）。当前字段清单见
+> [data-model.md](./data-model.md)。
 
 - `audit_redactor`：config 中不含 secret（只有 `credential_ref`），审计可原样展示 config。需双重确认 `config` 或 `details` 中无 secret 泄露。
 
@@ -337,7 +380,7 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - `GET  /api/v1/providers` → 列出所有 profile（`{ "providers": [ ProviderOut, ... ] }`）
 - `POST /api/v1/providers` → 创建（见下方凭证来源规则）
 - `GET  /api/v1/providers/{name}` → 获取单条 profile
-- `PATCH /api/v1/providers/{name}` → 更新可变字段（`base_url`、`model`、`fast_model`、`wire_api`、`secret_value`）；`wire_format` 和 `credential_ref` 不可变；`secret_value` 可轮换存储的 secret
+- `PATCH /api/v1/providers/{name}` → 更新可变字段（`base_url`、`compatible_agents`、`models`、`secret_value`）；`wire_format`/`protocol` 和 `credential_ref` 不可变；`secret_value` 可轮换存储的 secret；`models` 为整值替换（`[]` 清除策展集合）
 - `DELETE /api/v1/providers/{name}` → 删除；删除自有 secret 前通过 `find_credential_citations` 守卫
 - `POST /api/v1/providers/{name}/activate` → 切换；返回 `{activated, projected:[agent...], skipped:[agent...]}`
 - `POST /api/v1/providers/{name}/internal-default` → 设置内部引擎默认；返回更新后的 `ProviderOut`
@@ -554,6 +597,22 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
   （无自由输入「Custom…」项）；当有连接覆盖该 agent 时，下拉在该清单和当前取值之外**追加**该连接
   introspect 出的模型，绝不读连接存储的 `model` 字段（TypeScript 验收测试；并集规则见 2026-09-09 修订）。
 
+### Scenario: curate which of a connection's models are offered downstream
+
+- **Given** 一条以 `models: ["opus", "sonnet", "opus"]` 创建的 LLM 连接，
+- **When** 读回它，再 patch 为 `models: ["haiku"]`，然后再 patch 一个无关字段，
+- **Then** 创建响应、`GET /api/v1/providers/{name}` 和列表路由都返回
+  `["opus", "sonnet"]`（原样存储、去重、保持用户选择的顺序）；patch **整体替换**为
+  `["haiku"]`；无关的 patch 不影响它；这次修改可在更新本就发出的 `resource_updated`
+  审计条目里看到——没有属于它自己的审计事件。
+
+### Scenario: a connection with no curated models offers every model the endpoint serves
+
+- **Given** 一条创建时不带 `models` 的连接（默认值，也是修订 0059 之前创建的每条连接的取值），
+- **When** 读回它，再策展为 `models: ["opus"]`，然后 patch 为 `models: []`，
+- **Then** 创建时与 `[]` patch 之后它都返回 `[]`——不限制、即 endpoint 的完整目录——
+  `[]` 清除了策展集合。
+
 ## 需求
 
 ### 功能需求
@@ -613,6 +672,11 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - **FR-022**：`POST /api/v1/providers/{name}/internal-default` 必须将所命名的 connection 设为内部引擎默认（应用 FR-021），发出 `provider_internal_default_set` 审计事件，并返回更新后的 `ProviderOut`。
 - **FR-023**：`resolve_internal_connection()` 必须返回 `internal_default` connection 的 `ProviderConfig`，或在无 connection 被标记时返回 `None`。为 `None` 时，内部引擎（memory organizer / reorg / distill）必须是干净的 no-op 而非报错。
 - **FR-024**：独立的 `ModelConfig` 注册表（model CRUD REST + `coffer model` CLI）必须退役。内部引擎必须通过 `build_chat_model(connection, ...)`（按 `wire_format` 分派）从内部默认 connection 构建其 chat model。provider introspection 路由（`POST /api/v1/models/list-models`、`/api/v1/models/test-connection`）必须保留。
+
+**策展模型集合**
+
+- **FR-025**：`ProviderConfig` 必须携带 `models: list[str]`——该连接向下游**提供**的模型 id 集合。**空**列表必须表示不限制（endpoint 提供的所有模型），必须是默认值，也必须是修订 0059 之前创建的每条连接的取值。该字段绝不可被当作「选中的模型」读取：选择仍在使用处（E1/E3）。id 只校验形状——非空白、按序去重、至多 200 个且每个至多 200 字符——并且绝不可与 Coffer 自己写死的模型名单比对。
+- **FR-026**：`ProviderCreate.models`（`null` ⇒ 空）与 `ProviderPatch.models` 必须承载该集合；`ProviderOut.models` 必须返回它。`PATCH` 必须像 `compatible_agents` 一样整值替换——`null` 保持不变，`[]` 清除限制——且不得为此新增路由。对它的修改必须搭乘 provider 更新本就发出的 `resource_updated` 审计事件。
 
 ## 成功标准
 

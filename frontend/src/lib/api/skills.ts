@@ -14,9 +14,11 @@ export type SkillSource = LocalImportSource;
 
 export type LinkMode = "symlink" | "junction" | "copy_fallback";
 
+/** One agent currently holding a delivered copy of this skill. Delivery
+ *  bookkeeping surfaced read-only: a row here simply means "delivered". Who
+ *  gets a row is decided by `SkillOut.enabled` + `SkillOut.scope`. */
 export interface SkillBindingOut {
   agent_name: string;
-  enabled: boolean;
   last_linked_at: string | null;
   last_link_path: string | null;
   link_mode: LinkMode | null;
@@ -26,7 +28,10 @@ export interface SkillOut {
   name: string;
   description: string;
   source: SkillSource;
+  /** The two halves of the delivery predicate: a skill reaches an agent iff
+   *  `enabled` and the agent is in `scope` (null = every agent, [] = none). */
   enabled: boolean;
+  scope: string[] | null;
   version_hash: string;
   master_path: string;
   last_synced_from_source_at: string | null;
@@ -42,15 +47,6 @@ export interface SkillListOut {
 export interface SkillImportRequest {
   path: string;
   overwrite?: boolean;
-}
-
-export interface SkillEnableRequest {
-  agent_name: string;
-  force?: boolean;
-}
-
-export interface SkillDisableRequest {
-  agent_name: string;
 }
 
 export interface DriftEntryOut {
@@ -151,10 +147,6 @@ export const skillsApi = {
   importLocal: (body: SkillImportRequest) => call<SkillOut>("POST", "/skills/import", body),
   get: (name: string) => call<SkillOut>("GET", `/skills/${enc(name)}`),
   remove: (name: string) => call<void>("DELETE", `/skills/${enc(name)}`),
-  enable: (name: string, body: SkillEnableRequest) =>
-    call<SkillBindingOut>("POST", `/skills/${enc(name)}/enable`, body),
-  disable: (name: string, body: SkillDisableRequest) =>
-    call<SkillBindingOut>("POST", `/skills/${enc(name)}/disable`, body),
   verify: () => call<DriftReportOut>("POST", "/skills/verify"),
   repair: () => call<RepairReportOut>("POST", "/skills/repair"),
   filesTree: (name: string) => call<SkillFileTreeOut>("GET", `/skills/${enc(name)}/files`),

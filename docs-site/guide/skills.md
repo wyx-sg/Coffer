@@ -16,21 +16,23 @@ coffer skill show my-skill                                          # metadata +
 - `import` takes a point-in-time copy; `fetch` records the Git source so you can refresh it later with `coffer skill update <name>`.
 - The master copy lives at `~/.coffer/skills/<name>/`.
 
-## Deliver a skill to an agent
+## Decide which agents get a skill
 
-Enabling a skill for an agent creates a symlink from the agent's `skills/` directory to the master copy:
+A skill reaches an agent iff the skill is **enabled** and that agent is in the skill's **scope**. An imported skill starts enabled and unscoped, so it goes to every agent; narrow it with the same scope commands every scoped resource uses:
 
 ```bash
-coffer skill enable my-skill --agent claude-code     # deliver it (symlink)
-coffer skill disable my-skill --agent claude-code    # remove the link
-coffer skill verify                                  # report drift; non-zero exit if any
+coffer scope set skill:my-skill --agents claude-code   # only this agent
+coffer scope clear skill:my-skill                      # back to every agent
+coffer resource disable skill:my-skill                 # take it away from all of them
+coffer skill verify                                    # report drift; non-zero exit if any
 ```
 
-- Coffer never auto-remediates. `verify` reports missing, tampered, or orphaned links; you fix them explicitly (re-enable, or `coffer skill update`).
-- `coffer skill rm <name>` removes a skill and tears down all of its bindings.
+- Delivery is a symlink from the agent's `skills/` directory to the master copy, created and reclaimed for you whenever either input changes.
+- Coffer never auto-remediates drift. `verify` reports missing, tampered, or orphaned links; you fix them explicitly (`coffer skill update`, or re-apply the scope).
+- `coffer skill rm <name>` removes a skill and tears down all of its links.
 
 ## In the app
 
-The **Skills** page lists your master library; import via a file picker or a Git URL, and open a skill to see its metadata and browse its master folder, editing any text file in place. Per-agent delivery lives on each agent's **Skills** tab — toggle a skill on or off for that agent. See [Agents](/guide/agents).
+The **Skills** page lists your master library; import via a file picker or a Git URL, and open a skill to see its metadata and browse its master folder, editing any text file in place. Delivery is set on the skill itself — the list table's enable switch, and the activation-scope control on the skill's page. Each agent's **Skills** tab shows what it currently receives, read-only. See [Agents](/guide/agents).
 
 [Knowledge →](/guide/knowledge)

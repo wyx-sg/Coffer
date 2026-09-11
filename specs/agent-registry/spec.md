@@ -144,17 +144,18 @@ The user wants their agent (Claude Code, Codex) to actually use Coffer. From the
 
 ---
 
-### User Story 9 — See the agent's real MCP servers (Priority: P2)
+### User Story 9 — See and manage the agent's real MCP servers (Priority: P2)
 
-The agent's MCP servers tab today can only say whether Coffer's own shim is installed. The user wants to see what their agent **actually** has configured: every MCP server entry in the agent's own config files — for Claude Code from both `~/.claude.json` `mcpServers` and `settings.json` `mcpServers`, for Codex from `config.toml` `[mcp_servers.*]`. Each entry shows its transport (stdio command or HTTP URL), which file it came from, and (Codex only — the format defines a per-entry flag) its enabled state. The listing is **read-only**: Coffer surfaces what bypasses its gateway, and the one write it offers on these entries is adoption (Story 10). Editing an entry in place — removing it, flipping a Codex `enabled` flag — belongs to the agent's own UI, which already does it; Coffer duplicating it would mean hand-writing another tool's private config format for no capability the user did not already have. Coffer's own `coffer` entry is rendered specially and managed by the existing install/uninstall actions.
+The agent's MCP servers tab today can only say whether Coffer's own shim is installed. The user wants to see what their agent **actually** has configured: every MCP server entry in the agent's own config files — for Claude Code from both `~/.claude.json` `mcpServers` and `settings.json` `mcpServers`, for Codex from `config.toml` `[mcp_servers.*]`. Each entry shows its transport (stdio command or HTTP URL), which file it came from, and (Codex only — the format defines a per-entry flag) its enabled state. From the same table the user can **remove** an entry — one that duplicates something already in Coffer, or one that simply should not be there — written through the same atomic + `.bak` machinery adoption already uses on these files. What Coffer does not offer is editing an entry in place: flipping a Codex `enabled` flag belongs to the agent's own UI, which already does it, and `claude_code`'s format has no per-entry flag at all. Coffer's own `coffer` entry is rendered specially and managed by the existing install/uninstall actions.
 
 **Why this priority**: The current tab shows the same Coffer-global list for every agent, which is misleading. Showing the agent's real configuration is the prerequisite for adoption — the user cannot pull a server into the hub without first seeing that it is outside it.
 
-**Independent Test**: Register a `codex` agent whose `config.toml` carries several `[mcp_servers.*]` entries; open the MCP tab; observe exactly those entries with transports, source files, and enabled flags, and observe that the agent's `config.toml` is byte-identical after the listing.
+**Independent Test**: Register a `codex` agent whose `config.toml` carries several `[mcp_servers.*]` entries; open the MCP tab; observe exactly those entries with transports and source files; remove one and observe it gone from the file, with a `.bak` of the prior content kept.
 
 **Covering scenarios**:
 
 - list an agent's real MCP entries
+- remove a direct MCP entry
 - degrade to read-only when MCP config is unparseable
 
 ---
@@ -229,7 +230,7 @@ Some agent configuration is a directory of prose files, not a single file — Cl
 - **`coffer-mcp-shim` binary cannot be resolved**: Install rejected with a clear error naming the missing binary; nothing is written to the agent's config.
 - **Folder browse outside the home directory**: The daemon-backed folder browser lists subdirectories of any readable directory the user navigates to; it never returns file contents. An unreadable or non-existent path returns an error, not a partial listing.
 - **Agent config file fails to parse**: The affected facet (MCP entries, plugins) shows an explicit parse-error state and degrades to read-only; other facets and tabs are unaffected. Write operations against the broken file are rejected until it parses again.
-- **Same MCP entry name in both Claude Code source files**: Both entries are listed, each labelled with its source file; an adopt request carries the source so the right one is adopted and removed.
+- **Same MCP entry name in both Claude Code source files**: Both entries are listed, each labelled with its source file; a remove or adopt request carries the source so the right one is acted on.
 - **Coffer's own `coffer` MCP entry**: Never adoptable, never listed as a plain direct entry — it is the gateway's install state, managed by Story 8's install/uninstall.
 - **Adoption requested for an entry equivalent to an existing resource**: Coffer reports the match (`matches_resource`) and offers removing the redundant direct entry instead of creating a duplicate resource.
 - **Plugin configured but cache directory missing**: Listed with `cache_present=false` so the user sees the drift; Coffer does not attempt repair (reinstalling — like every other plugin write — is the agent's own tooling).
@@ -423,6 +424,12 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** the user lists the agent's MCP entries,
 - **Then** Coffer reports a parse-error state naming the file and the parser error instead of failing the request, and rejects entry-level writes against that file until it parses again.
 
+### Scenario: remove a direct MCP entry
+
+- **Given** a registered agent with a direct (non-Coffer) MCP entry,
+- **When** the user removes that entry (carrying the source file for a `claude_code` agent),
+- **Then** the entry is deleted from exactly its source file via an atomic write with a `.bak` of the prior content, an `agent_mcp_entry_removed` audit entry is recorded, and the next listing no longer shows it.
+
 ### Scenario: adopt a direct MCP entry into Coffer
 
 - **Given** a registered agent with a direct stdio MCP entry whose name collides with no existing resource,
@@ -538,11 +545,12 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 **Agent MCP entries (workspace amendment)**
 
 - **FR-025**: System MUST parse and list the MCP server entries configured in the agent's own files — for `claude_code` from both `~/.claude.json` `mcpServers` and `settings.json` `mcpServers` (each entry labelled with its source file); for `codex` from `config.toml` `[mcp_servers.*]`. Each entry carries name, source, transport (stdio command or HTTP URL), the `enabled` flag where the format defines one (Codex), `is_coffer` for Coffer's own gateway entry, and `matches_resource` naming an equivalent registered `mcp_server` resource when one exists. Entries are derived at read time, never stored.
-- **FR-028**: Users MUST be able to adopt a direct MCP entry into Coffer. Adoption (a) registers the entry as an `mcp_server` resource through the standard resource flow (schema validation + audit), (b) verifies the resource reads back, then (c) removes the entry from its source file — disambiguated by the caller for `claude_code` when both files carry the name, using the FR-017 atomic-write + `.bak` machinery — strictly in that order. Any failure stops the operation, rolls back a created resource, and leaves the agent's config byte-identical; audited as `agent_mcp_entry_adopted` on success. A name collision with an existing resource is rejected with `conflict` (409) carrying a suggested alternative; an entry equivalent to an existing resource is reported via `matches_resource` so the user can remove the duplicate instead. The `coffer` entry is never adoptable.
+- **FR-026**: Users MUST be able to remove a direct MCP entry. Removal edits only the entry's source file (disambiguated by the caller for `claude_code` when both files carry the name), reuses the FR-017 atomic-write + `.bak` machinery, and records an `agent_mcp_entry_removed` audit entry. The `coffer` entry is not removable through this operation — it is managed by FR-019/FR-021.
+- **FR-028**: Users MUST be able to adopt a direct MCP entry into Coffer. Adoption (a) registers the entry as an `mcp_server` resource through the standard resource flow (schema validation + audit), (b) verifies the resource reads back, then (c) removes the source entry per FR-026 — strictly in that order. Any failure stops the operation, rolls back a created resource, and leaves the agent's config byte-identical; audited as `agent_mcp_entry_adopted` on success. A name collision with an existing resource is rejected with `conflict` (409) carrying a suggested alternative; an entry equivalent to an existing resource is reported via `matches_resource` so the user can remove the duplicate instead. The `coffer` entry is never adoptable.
 - **FR-029**: Adoption MUST NOT persist secret values into resource config. When an entry's environment carries values under secret-like keys (`TOKEN`, `KEY`, `SECRET`, `PASSWORD` patterns), the adopt request MUST supply a keychain mapping for each flagged key or be rejected with the unresolved keys listed. Mapped values are stored in the OS keychain through the daemon (per the credentials invariant); the resource config carries references only.
 - **FR-030**: When an agent config file cannot be parsed, the affected facet MUST degrade to an explicit parse-error state (file path + parser error) without failing the surrounding view, and entry-level writes against that file MUST be rejected until it parses again.
 
-**Not provided: editing the agent's own MCP entries.** Coffer once offered a standalone remove (`agent_mcp_entry_removed`) and a Codex-only `enabled` toggle. Both are gone; only the listing (FR-025), adoption (FR-028/FR-029), and the parse-error degradation (FR-030) remain. What remains is the half only Coffer offers: surfacing the MCP servers that bypass its gateway, and pulling one into the hub with its secrets mapped into the vault. What went was the half the agent's own UI already does — while performing the most fragile action in this spec, hand-writing another tool's private config format. For `claude_code` the toggle was never anything but a 422: that format has no per-entry flag. Adoption still removes the source entry it adopted; it owns that write end-to-end, and rolls it back with the rest of the operation when anything fails.
+**Not provided: toggling a Codex entry's `enabled` flag.** Coffer once offered a per-entry enable toggle beside the listing. It is gone. For `claude_code` it was never anything but a 422 — that format has no per-entry flag — and for `codex` it duplicated a switch the agent's own UI already owns while hand-writing another tool's private config format in place. Removal (FR-026) and adoption (FR-028) stay because they are the writes Coffer alone has a reason to make: taking a server out of the agent's private config, and pulling one into the hub with its secrets mapped into the vault. Each owns its write end-to-end and rolls it back when anything fails.
 
 **Plugins (workspace amendment)**
 

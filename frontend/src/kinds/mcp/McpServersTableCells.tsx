@@ -26,7 +26,7 @@ import {
 } from "@/lib/hooks/useResourceMutations";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 import { resourcesApi } from "@/lib/api/resources";
-import { useMcpServerRunner, useMcpServerStatus } from "@/lib/hooks/useMcpInvocations";
+import { useMcpServerRunner, useMcpServerStatus } from "@/lib/hooks/useMcpServerStatus";
 import { HealthBadge } from "./HealthBadge";
 import { McpServerDeleteDialog } from "./McpServerDeleteDialog";
 

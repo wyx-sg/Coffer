@@ -9,9 +9,14 @@ import {
   type ProviderPatch,
   type Protocol,
 } from "@/lib/api/providers";
+import { resourcesApi } from "@/lib/api/resources";
 import { useToast } from "@/components/ui/toast";
 
 const PROVIDERS_KEY = ["providers"] as const;
+/** A connection is a resource of this kind — enable/disable goes through the
+ *  kind-agnostic resource endpoints. */
+const PROVIDER_KIND = "provider";
+export const providerKey = (name: string) => ["providers", name] as const;
 
 /** Shared onError → toast handler — a failed mutation must never be silent. */
 function useProviderToastError() {
@@ -25,6 +30,40 @@ export function useProviders() {
     queryKey: PROVIDERS_KEY,
     queryFn: async () => (await providersApi.list()).providers,
   });
+}
+
+/** One connection, for its detail page. The key extends PROVIDERS_KEY so the
+ *  list-level invalidation every mutation already does refreshes it too. */
+export function useProvider(name: string) {
+  return useQuery({
+    queryKey: providerKey(name),
+    queryFn: () => providersApi.get(name),
+    enabled: name !== "",
+  });
+}
+
+/** One half of useSetProviderEnabled: the kind-agnostic resource enable/disable
+ *  call, invalidating the providers queries (which the connection surfaces read)
+ *  rather than the resource list. */
+function useProviderResourceToggle(mutate: (kind: string, name: string) => Promise<void>) {
+  const qc = useQueryClient();
+  const onError = useProviderToastError();
+  return useMutation({
+    mutationFn: (name: string) => mutate(PROVIDER_KIND, name),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: PROVIDERS_KEY });
+    },
+    onError,
+  });
+}
+
+/** The connection's own enable flag, as the list table's status switch and the
+ *  bulk enable/disable actions drive it. */
+export function useSetProviderEnabled() {
+  return {
+    enable: useProviderResourceToggle(resourcesApi.enable),
+    disable: useProviderResourceToggle(resourcesApi.disable),
+  };
 }
 
 export function useCreateProvider() {

@@ -547,3 +547,69 @@ async def test_internal_engine_model_overlay(tmp_path, monkeypatch):
         resolved = await get_provider_service().resolve_internal_connection()
         assert resolved is not None
         assert resolved.model == "picked-model"
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="curate which of a connection's models are offered downstream",
+)
+def test_curated_models_round_trip(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59890)
+    with _client(app) as c:
+        r = c.post(
+            "/api/v1/providers",
+            json=_anthropic_body(name="curated", models=["opus", "sonnet", "opus"]),
+        )
+        assert r.status_code == 201, r.text
+        # Stored verbatim (opaque ids), deduped, in the order the user chose.
+        assert r.json()["models"] == ["opus", "sonnet"]
+        # Survives a re-read and the list route.
+        assert c.get("/api/v1/providers/curated").json()["models"] == ["opus", "sonnet"]
+        listed = {p["name"]: p["models"] for p in c.get("/api/v1/providers").json()["providers"]}
+        assert listed["curated"] == ["opus", "sonnet"]
+
+        # PATCH replaces the whole set (like compatible_agents) — no merging.
+        r = c.patch("/api/v1/providers/curated", json={"models": ["haiku"]})
+        assert r.status_code == 200, r.text
+        assert r.json()["models"] == ["haiku"]
+
+        # An unrelated PATCH leaves the curated set alone.
+        r = c.patch("/api/v1/providers/curated", json={"base_url": "https://gw/anthropic/v2"})
+        assert r.json()["models"] == ["haiku"]
+
+        # The change rides the resource_updated event a provider update already
+        # emits — no event of its own.
+        events = c.get("/api/v1/audit", params={"event_type": "resource_updated"}).json()["entries"]
+        curated = [e for e in events if e["resource_name"] == "curated"]
+        assert curated and curated[0]["details"]["after"]["models"] == ["haiku"]
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a connection with no curated models offers every model the endpoint serves",
+)
+def test_uncurated_connection_is_unrestricted(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59900)
+    with _client(app) as c:
+        # Created without ``models`` — the default, and what every connection
+        # made before this field existed carries.
+        r = c.post("/api/v1/providers", json=_anthropic_body(name="open"))
+        assert r.status_code == 201, r.text
+        assert r.json()["models"] == []
+
+        # Curating then clearing with [] returns it to unrestricted.
+        c.patch("/api/v1/providers/open", json={"models": ["opus"]})
+        r = c.patch("/api/v1/providers/open", json={"models": []})
+        assert r.status_code == 200, r.text
+        assert r.json()["models"] == []
+        assert c.get("/api/v1/providers/open").json()["models"] == []
+
+
+def test_reject_malformed_curated_models(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59910)
+    with _client(app) as c:
+        r = c.post("/api/v1/providers", json=_anthropic_body(name="bad", models=["  "]))
+        assert r.status_code == 422, r.text
+        # A model id Coffer has never heard of is NOT malformed — ids are opaque.
+        r = c.post("/api/v1/providers", json=_anthropic_body(name="ok", models=["who-knows-1"]))
+        assert r.status_code == 201, r.text

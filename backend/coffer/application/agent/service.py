@@ -15,7 +15,7 @@ import contextlib
 import os
 import pathlib
 import sys
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable
 
 from coffer.application.agent.config_file_service import ConfigFileStorePort
 from coffer.application.audit_service import AuditService
@@ -123,7 +123,7 @@ class AgentService:
         resource_service: ResourceService,
         audit: AuditService,
         on_config_dir_changed: Callable[[str], Awaitable[None]] | None = None,
-        on_skill_policy_changed: Callable[[str], Awaitable[None]] | None = None,
+        reconcile_skill_delivery: Callable[[str], Awaitable[None]] | None = None,
         config_file_store: ConfigFileStorePort | None = None,
     ) -> None:
         self._rs = resource_service
@@ -136,11 +136,11 @@ class AgentService:
         # - on_config_dir_changed: re-deliver an agent's skills after its
         #   config dir moves, so the old links aren't orphaned and the new
         #   dir isn't left empty.
-        # - on_skill_policy_changed: reconcile deliveries with the agent's
-        #   follow-master-library policy (FR-025) after registration or a
-        #   policy update.
+        # - reconcile_skill_delivery: bring a newly registered agent's
+        #   delivered set in line with the delivery predicate (FR-012a) —
+        #   every enabled skill whose scope names this agent.
         self._on_config_dir_changed = on_config_dir_changed
-        self._on_skill_policy_changed = on_skill_policy_changed
+        self._reconcile_skill_delivery = reconcile_skill_delivery
 
     async def register(
         self,
@@ -184,10 +184,11 @@ class AgentService:
             actor=actor,
             allow_lifecycle_kind=True,  # CODE-REG: config dir detected/validated above
         )
-        # New agents default to follow-all (FR-025): deliver the whole master
-        # library now. Per-skill failures are tolerated inside the hook.
-        if self._on_skill_policy_changed is not None:
-            await self._on_skill_policy_changed(name)
+        # Deliver everything this agent is granted right now (FR-012a): every
+        # enabled skill whose scope names it. Per-skill failures are tolerated
+        # inside the hook.
+        if self._reconcile_skill_delivery is not None:
+            await self._reconcile_skill_delivery(name)
         return registered
 
     @staticmethod
@@ -233,7 +234,7 @@ class AgentService:
         # the redundant re-validate that used to live below.
         try:
             # Merge over a dump of the CURRENT config so unrelated fields
-            # (e.g. the FR-025 follow policy) can never be silently reset —
+            # (e.g. the per-agent model binding) can never be silently reset —
             # field enumeration here once dropped them when new fields landed.
             new_cfg = AgentConfig.model_validate(cfg.model_dump() | {"config_dir": new_config_dir})
         except Exception as e:  # pydantic ValidationError
@@ -257,51 +258,6 @@ class AgentService:
         # falsely reports no drift.
         if dir_changed and self._on_config_dir_changed is not None:
             await self._on_config_dir_changed(name)
-        return updated
-
-    async def update_skill_policy(
-        self,
-        *,
-        name: str,
-        follow_all_skills: bool | None = None,
-        # Sequence (not list) — the bare `list` name resolves to this class's
-        # `list()` method inside the class body, so it isn't valid as a type.
-        skill_exclusions: Sequence[str] | None = None,
-        actor: str = "api",
-    ) -> Resource:
-        """Update the agent's follow-master-library policy (FR-025).
-
-        ``None`` fields are left unchanged; both ``None`` is a no-op (the
-        current resource is returned without an update or audit row). After a
-        real update the on-skill-policy-changed hook reconciles deliveries
-        (deliver newly wanted skills / remove newly excluded ones — disabling
-        the flag preserves current bindings inside the hook).
-        """
-        existing = await self.get(name)
-        if follow_all_skills is None and skill_exclusions is None:
-            return existing
-        cfg = AgentConfig.model_validate(existing.config)
-        overrides: dict[str, object] = {}
-        if follow_all_skills is not None:
-            overrides["follow_all_skills"] = follow_all_skills
-        if skill_exclusions is not None:
-            overrides["skill_exclusions"] = list(skill_exclusions)
-        try:
-            # Merge over a full dump (see update_config_dir) so future
-            # AgentConfig fields survive policy updates untouched.
-            new_cfg = AgentConfig.model_validate(cfg.model_dump() | overrides)
-        except Exception as e:  # pydantic ValidationError
-            raise ConfigValidationError(str(e)) from e
-        updated = await self._rs.update_config(
-            ResourceRef("agent", name),
-            new_config=new_cfg.model_dump(mode="json"),
-            actor=actor,
-            allow_lifecycle_kind=True,  # CODE-REG: value-level policy change only
-        )
-        # Reconcile AFTER the row is updated so the hook resolves the new
-        # policy via the injected resolver.
-        if self._on_skill_policy_changed is not None:
-            await self._on_skill_policy_changed(name)
         return updated
 
     async def set_model_binding(

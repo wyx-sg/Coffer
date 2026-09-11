@@ -4,6 +4,10 @@
 // (endpoint + key) with the model chosen here. Both live apart from the chat
 // agents: the connection is the global `internal_default`, the model is a
 // separate singleton. Replaces the per-card star toggle that used to set it.
+//
+// It is Coffer's own configuration, not a resource served to agents, so it sits
+// under Settings → Engine and reads the connection list itself rather than
+// taking it from a resource page above.
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Cpu } from "lucide-react";
@@ -17,17 +21,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Provider } from "@/lib/api/providers";
-import { useSetInternalDefaultProvider } from "@/lib/hooks/useProviders";
+import { translateApiError } from "@/lib/api/errors";
+import { useProviders, useSetInternalDefaultProvider } from "@/lib/hooks/useProviders";
 import { useInternalEngineConfig, useSetInternalEngineModel } from "@/lib/hooks/useInternalEngine";
 import { useListProviderModels } from "@/lib/hooks/useModelIntrospection";
 
-interface Props {
-  providers: Provider[];
-}
-
-export function InternalEngineSettings({ providers }: Props) {
+export function InternalEngineSettings() {
   const { t } = useTranslation();
+  const { data: providers = [], isPending, error } = useProviders();
   const selected = providers.find((p) => p.internal_default) ?? null;
   const setInternalDefault = useSetInternalDefaultProvider();
   const { data: config } = useInternalEngineConfig();
@@ -67,6 +68,21 @@ export function InternalEngineSettings({ providers }: Props) {
   // Show the saved model even when the endpoint can't list it.
   const options =
     currentModel && !models.includes(currentModel) ? [currentModel, ...models] : models;
+
+  if (isPending) {
+    return (
+      <Card>
+        <CardContent className="py-6">{t("common.loading")}</CardContent>
+      </Card>
+    );
+  }
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="py-6 text-destructive">{translateApiError(t, error)}</CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>

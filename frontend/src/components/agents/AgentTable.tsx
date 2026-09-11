@@ -34,14 +34,15 @@ export function AgentTable({ agents }: { agents: AgentOut[] }) {
   // Styled confirmation dialog (no native window.confirm). `null` = closed.
   const [deletingName, setDeletingName] = useState<string | null>(null);
 
-  // Coffer-managed skills currently installed (enabled binding) per agent.
-  // Build the per-agent counts once (single pass over skills × bindings) rather
-  // than re-scanning the whole skills list for every agent row on each render.
+  // Coffer-managed skills currently delivered per agent. A binding row IS a
+  // live delivery (the wire drops spent rows), so every row counts. Build the
+  // per-agent counts once (single pass over skills × bindings) rather than
+  // re-scanning the whole skills list for every agent row on each render.
   const cofferSkillCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const s of skills.data ?? []) {
       for (const b of s.bindings) {
-        if (b.enabled) counts.set(b.agent_name, (counts.get(b.agent_name) ?? 0) + 1);
+        counts.set(b.agent_name, (counts.get(b.agent_name) ?? 0) + 1);
       }
     }
     return counts;

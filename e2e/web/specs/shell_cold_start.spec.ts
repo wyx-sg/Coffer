@@ -87,8 +87,9 @@ acceptance(
 
     const banner = page.getByTestId("daemon-banner");
     await expect(banner).toBeVisible({ timeout: 10_000 });
-    // The recovery affordance is the Reload control (no raw CLI command).
-    await expect(banner.getByTestId("daemon-banner-reload")).toBeVisible();
+    // The recovery affordance is the restart command — the browser cannot
+    // restart the daemon, and the status poll clears the banner on its own.
+    await expect(banner.getByText("coffer daemon start")).toBeVisible();
   },
 );
 
@@ -99,7 +100,7 @@ acceptance(
     // Point the FE at a base URL that won't resolve to a daemon. That
     // mirrors what a real user sees when the daemon hasn't been started
     // yet: the status query errors out and DaemonOfflineBanner shows its
-    // "daemon not running" panel with a Reload recovery affordance.
+    // "daemon not running" panel with the restart command to run.
     await page.addInitScript(() => {
       (
         window as unknown as { __COFFER_BASE_URL__: string }
@@ -111,8 +112,8 @@ acceptance(
 
     const banner = page.getByTestId("daemon-banner");
     await expect(banner).toBeVisible({ timeout: 10_000 });
-    // A concrete recovery affordance (Reload) appears (not a generic "error").
-    await expect(banner.getByTestId("daemon-banner-reload")).toBeVisible();
+    // A concrete recovery affordance appears (not a generic "error").
+    await expect(banner.getByText("coffer daemon start")).toBeVisible();
     // Sidebar must still be reachable so the user can orient.
     await expect(
       page.getByRole("link", { name: /MCP servers/i }).first(),

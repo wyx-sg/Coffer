@@ -153,3 +153,18 @@ class Kind:
         ]
         | None
     ) = None
+    # Optional post-write hook for ``ResourceService.set_enabled``, the exact
+    # mirror of ``on_scope_changed``: same signature, same sync-or-async
+    # convention, and likewise invoked AFTER persistence + audit so a hook that
+    # re-reads the resource sees the new ``enabled`` value. A kind whose
+    # ``enabled`` flag has an on-disk consequence rather than a read-time one
+    # wires it here — `skill` uses it so disabling a skill reclaims its
+    # delivered copies and re-enabling redelivers them. (`mcp_server` needs no
+    # hook: its gateway filters on ``enabled`` at read time.)
+    on_enabled_changed: (
+        Callable[
+            [ResourceRef],
+            Awaitable[None] | None,
+        ]
+        | None
+    ) = None

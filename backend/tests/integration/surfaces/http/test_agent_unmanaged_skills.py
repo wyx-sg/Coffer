@@ -1,5 +1,5 @@
-"""HTTP coverage for /api/v1/agents/{name}/unmanaged-skills and
-follow-policy fields on PATCH /api/v1/agents/{name} (spec skill-manager FR-022/023/025).
+"""HTTP coverage for /api/v1/agents/{name}/unmanaged-skills (spec skill-manager
+FR-022/023).
 """
 
 from __future__ import annotations
@@ -219,52 +219,3 @@ def test_delete_unknown_skill_404(tmp_path, monkeypatch):
         )
         assert r.status_code == 404, r.text
         assert r.json()["error"]["code"] == "UNMANAGED_SKILL_NOT_FOUND"
-
-
-# ---------------------------------------------------------------------------
-# PATCH /api/v1/agents/{name} — follow-policy fields
-# ---------------------------------------------------------------------------
-
-
-def test_patch_follow_all_skills_false(tmp_path, monkeypatch):
-    """PATCH with follow_all_skills=false is persisted and reflected in AgentOut."""
-    app = _app(tmp_path, monkeypatch, 60050)
-    with _client(app) as c:
-        name = _register_agent(c, tmp_path)
-
-        # Default should be true after registration.
-        r = c.get(f"/api/v1/agents/{name}")
-        assert r.status_code == 200, r.text
-        assert r.json()["follow_all_skills"] is True
-
-        # Disable follow.
-        r = c.patch(f"/api/v1/agents/{name}", json={"follow_all_skills": False})
-        assert r.status_code == 200, r.text
-        body = r.json()
-        assert body["follow_all_skills"] is False
-        # skill_exclusions unchanged.
-        assert body["skill_exclusions"] == []
-
-        # Verify GET returns updated value.
-        r = c.get(f"/api/v1/agents/{name}")
-        assert r.status_code == 200, r.text
-        assert r.json()["follow_all_skills"] is False
-
-
-def test_patch_skill_exclusions_roundtrip(tmp_path, monkeypatch):
-    """PATCH with skill_exclusions list is persisted and reflected in AgentOut."""
-    app = _app(tmp_path, monkeypatch, 60060)
-    with _client(app) as c:
-        name = _register_agent(c, tmp_path)
-
-        r = c.patch(f"/api/v1/agents/{name}", json={"skill_exclusions": ["x", "y"]})
-        assert r.status_code == 200, r.text
-        body = r.json()
-        assert body["skill_exclusions"] == ["x", "y"]
-        # follow_all_skills should be untouched (still true).
-        assert body["follow_all_skills"] is True
-
-        # Round-trip via GET.
-        r = c.get(f"/api/v1/agents/{name}")
-        assert r.status_code == 200, r.text
-        assert r.json()["skill_exclusions"] == ["x", "y"]

@@ -269,12 +269,21 @@ class ResourceService:
         return updated
 
     async def set_enabled(self, ref: ResourceRef, enabled: bool, actor: str) -> Resource:
+        kind_def = self._require_kind(ref.kind)
         before = await self.get(ref)
         if before.enabled == enabled:
-            return before  # idempotent — no audit
+            return before  # idempotent — no audit, no hook
         updated = await self._repo.set_enabled(ref, enabled)
         event = AuditEventType.RESOURCE_ENABLED if enabled else AuditEventType.RESOURCE_DISABLED
         await self._audit.record(event.value, ref=ref, actor=actor)
+        # Kind-level reconciliation, exactly as ``update_scope`` fires
+        # ``on_scope_changed``: AFTER persistence + audit, so a hook re-reading
+        # the resource sees the flag that triggered it. Fired only on a real
+        # transition (the idempotent early return above skips it).
+        if kind_def.on_enabled_changed is not None:
+            hook_result = kind_def.on_enabled_changed(ref)
+            if inspect.isawaitable(hook_result):
+                await hook_result
         return updated
 
     async def update_scope(

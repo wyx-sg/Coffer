@@ -59,8 +59,6 @@ export interface AgentOut {
   description: string | null;
   created_at: string;
   updated_at: string;
-  follow_all_skills?: boolean;
-  skill_exclusions?: string[];
   /** Per-agent model binding (spec provider-switching amendment 2026-06-22b). The model the
    * agent projects — null = unbound (falls back to the active connection). */
   model?: string | null;
@@ -84,8 +82,6 @@ export interface AgentCreate {
 export interface AgentPatch {
   config_dir?: string | null;
   description?: string | null;
-  follow_all_skills?: boolean;
-  skill_exclusions?: string[];
   // Per-agent model binding (E3); explicit null fast_model clears the fast slot.
   model?: string | null;
   fast_model?: string | null;
@@ -185,8 +181,15 @@ export const agentsApi = {
   // Session-start hook (rules injection): install/uninstall/status. A 422 with
   // code HOOK_INSTALL_UNSUPPORTED means the agent type has no hook support.
 
-  // MCP entries (specs agent-registry/skill-manager workspace amendment)
+  // MCP entries (specs agent-registry/005 workspace amendment)
   mcpEntries: (name: string) => call<McpEntriesResponse>("GET", `/agents/${enc(name)}/mcp-entries`),
+  // Deletes the entry from the agent's own config file (a .bak is written by
+  // the daemon). `source` names which config file the entry came from — an
+  // entry name can repeat across sources.
+  removeMcpEntry: (name: string, entry: string, source?: string) => {
+    const qs = source ? `?source=${encodeURIComponent(source)}` : "";
+    return call<void>("DELETE", `/agents/${enc(name)}/mcp-entries/${enc(entry)}${qs}`);
+  },
   adoptMcpEntry: (name: string, entry: string, body: AdoptMcpEntryBody) =>
     call<{ kind: string; name: string }>(
       "POST",
@@ -209,7 +212,7 @@ export const agentsApi = {
       body,
     ),
 
-  // Unmanaged skills (specs agent-registry/skill-manager workspace amendment)
+  // Unmanaged skills (specs agent-registry/005 workspace amendment)
   unmanagedSkills: (name: string) =>
     call<UnmanagedSkillsResponse>("GET", `/agents/${enc(name)}/unmanaged-skills`),
   adoptUnmanagedSkill: (name: string, skill: string, location: string) =>

@@ -95,61 +95,6 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /skills/{name}/enable:
-    parameters:
-      - in: path
-        name: name
-        required: true
-        schema: { type: string }
-    post:
-      tags: [skills]
-      operationId: enableSkillForAgent
-      summary: Enable a skill for one agent (creates a directory symlink)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/SkillEnableRequest" }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SkillBindingOut" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "409":
-          description: >
-            Target path already exists and is not a Coffer-managed link
-            (TARGET_CONFLICT).
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ErrorOut" }
-
-  /skills/{name}/disable:
-    parameters:
-      - in: path
-        name: name
-        required: true
-        schema: { type: string }
-    post:
-      tags: [skills]
-      operationId: disableSkillForAgent
-      summary: Disable a skill for one agent (removes the symlink)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/SkillDisableRequest" }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SkillBindingOut" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
   /skills/{name}/files:
     parameters:
       - in: path
@@ -385,21 +330,6 @@ components:
             description: "Replace an existing skill of the same name instead of rejecting.",
           }
 
-    SkillEnableRequest:
-      type: object
-      required: [agent_name]
-      additionalProperties: false
-      properties:
-        agent_name: { type: string }
-        force: { type: boolean, default: false }
-
-    SkillDisableRequest:
-      type: object
-      required: [agent_name]
-      additionalProperties: false
-      properties:
-        agent_name: { type: string }
-
     SkillSource:
       $ref: "#/components/schemas/LocalImportSource"
 
@@ -418,6 +348,7 @@ components:
           description,
           source,
           enabled,
+          scope,
           version_hash,
           master_path,
           created_at,
@@ -429,6 +360,13 @@ components:
         description: { type: string }
         source: { $ref: "#/components/schemas/SkillSource" }
         enabled: { type: boolean }
+        scope:
+          type: array
+          items: { type: string }
+          nullable: true
+          description: >-
+            Agent names this skill is delivered to (null = every agent,
+            [] = no agent).
         version_hash: { type: string }
         master_path: { type: string }
         last_synced_from_source_at:
@@ -441,10 +379,13 @@ components:
 
     SkillBindingOut:
       type: object
-      required: [agent_name, enabled]
+      required: [agent_name]
+      description: >-
+        Internal delivery bookkeeping, not a user-facing toggle: a row means
+        this agent currently holds a delivered copy of the skill. Delivery is
+        decided by the skill's own enabled flag and scope.
       properties:
         agent_name: { type: string }
-        enabled: { type: boolean }
         last_linked_at: { type: string, format: date-time, nullable: true }
         last_link_path: { type: string, nullable: true }
         link_mode:

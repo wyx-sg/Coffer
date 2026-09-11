@@ -35,6 +35,7 @@ class AuditEventType(StrEnum):
     AGENT_MCP_UNINSTALLED = "agent_mcp_uninstalled"
     # agent workspace (specs agent-registry/005 amendment)
     AGENT_CONFIG_FILE_DELETED = "agent_config_file_deleted"
+    AGENT_MCP_ENTRY_REMOVED = "agent_mcp_entry_removed"
     AGENT_MCP_ENTRY_ADOPTED = "agent_mcp_entry_adopted"
     # spec skill-manager
     SKILL_IMPORTED = "skill_imported"

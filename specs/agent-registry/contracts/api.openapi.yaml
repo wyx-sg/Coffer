@@ -329,6 +329,42 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /agents/{name}/mcp-entries/{entry}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+      - in: path
+        name: entry
+        required: true
+        schema: { type: string }
+        description: MCP entry name as it appears in the agent's config file.
+    delete:
+      tags: [agents]
+      operationId: deleteAgentMcpEntry
+      summary: Remove one MCP entry from the agent's config file
+      description: |
+        Edits only the entry's source file with the atomic-write + `.bak`
+        machinery and records an `agent_mcp_entry_removed` audit entry
+        (FR-026). When the same name exists in several files (claude_code),
+        the `source` query parameter disambiguates; omitting it then is
+        rejected with 422 (`MCP_ENTRY_SOURCE_AMBIGUOUS`). The `coffer` entry
+        is not removable here (422, `MCP_ENTRY_PROTECTED`) — it is managed by
+        the `/mcp-install` operations.
+      parameters:
+        - in: query
+          name: source
+          required: false
+          schema: { type: string }
+          description: Config-file key the entry lives in, when ambiguous.
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
   /agents/{name}/mcp-entries/{entry}/adopt:
     parameters:
       - in: path
@@ -530,7 +566,7 @@ paths:
       summary: List GUI editors installed on this machine
       description: |
         Enumerate common GUI code editors detected as installed, for the
-        preferred-editor picker in Settings (spec ui-shell). Detection is
+        preferred-editor picker in Settings (spec ui-shell-ui-shell). Detection is
         per-OS: macOS returns app-bundle names (for `open -a`), Linux/Windows
         return commands found on PATH. The returned `value` is exactly what
         `/fs/open`'s `with` field accepts. The chosen preference itself stays
@@ -617,17 +653,6 @@ components:
       properties:
         config_dir: { type: string }
         description: { type: string, nullable: true }
-        follow_all_skills:
-          type: boolean
-          description: >-
-            Follow-master-library policy flag (spec skill-manager FR-025). Fields absent
-            from the PATCH body are preserved unchanged.
-        skill_exclusions:
-          type: array
-          items: { type: string }
-          description: >-
-            Skill names excluded from delivery while following. Replaces the
-            whole list when present.
         model: { type: string, nullable: true, description: "Per-agent model binding (spec provider-switching amendment 2026-06-22b) → ANTHROPIC_MODEL / Codex model." }
         fast_model: { type: string, nullable: true, description: "Fast slot → ANTHROPIC_SMALL_FAST_MODEL (anthropic only). Explicit null clears it." }
         wire_api: { type: string, nullable: true, description: "Codex chat/responses choice for this agent's binding." }
@@ -639,8 +664,6 @@ components:
           name,
           type,
           config_dir,
-          follow_all_skills,
-          skill_exclusions,
           model,
           fast_model,
           wire_api,
@@ -656,13 +679,6 @@ components:
             description: "Resolved config directory (the type's standard location unless overridden) — where the agent's config files live and skills are delivered under <config_dir>/skills.",
           }
         description: { type: string, nullable: true }
-        follow_all_skills:
-          type: boolean
-          description: "Follow-master-library policy flag (spec skill-manager FR-025). Defaults to true for newly registered agents."
-        skill_exclusions:
-          type: array
-          items: { type: string }
-          description: "Skill names excluded from delivery while following."
         model: { type: string, nullable: true, description: "Per-agent model binding (null = unbound, falls back to the active connection during rollout)." }
         fast_model: { type: string, nullable: true }
         wire_api: { type: string, nullable: true }

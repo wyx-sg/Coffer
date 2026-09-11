@@ -52,11 +52,6 @@ AgentSkillDirResolver = Callable[[Resource], pathlib.Path]
 # coffer.domain.agent.scan.scan_locations — same Contract 5 seam as above.
 AgentScanLocationsResolver = Callable[[Resource], list[pathlib.Path]]
 
-# Resolver for an agent's follow policy (FR-025): returns
-# ``(follow_all_skills, skill_exclusions)``. Built at the composition root
-# from AgentConfig — same Contract 5 seam as above.
-AgentSkillPolicyResolver = Callable[[Resource], tuple[bool, list[str]]]
-
 
 class SkillService:
     """Skill-kind lifecycle on top of the kind-agnostic Resource framework."""
@@ -73,7 +68,6 @@ class SkillService:
         size_limit_bytes: int = 50 * 1024 * 1024,
         workspace_scan: WorkspaceScanPort | None = None,
         agent_scan_locations_resolver: AgentScanLocationsResolver | None = None,
-        agent_skill_policy_resolver: AgentSkillPolicyResolver | None = None,
         rmtree: Callable[[pathlib.Path], None] = shutil.rmtree,
     ) -> None:
         self._rs = resource_service
@@ -88,9 +82,6 @@ class SkillService:
         # them; the unmanaged_* methods guard against missing config.
         self._workspace_scan = workspace_scan
         self._resolve_agent_scan_locations = agent_scan_locations_resolver
-        # Follow-policy resolver (FR-025). Optional: an unwired context falls
-        # back to (True, []) — the pre-amendment trust-mode auto-bind.
-        self._agent_skill_policy_resolver = agent_skill_policy_resolver
         self._rmtree = rmtree
 
     # ---------- imports ----------
@@ -124,8 +115,12 @@ class SkillService:
         force: bool = False,
         actor: str = "api",
     ) -> BindingState:
-        """Deliver a skill to an agent (link + binding row). Delegates to
-        ``binding_ops`` to keep this module under the size limit."""
+        """Deliver a skill to an agent (link + binding row).
+
+        INTERNAL primitive driven by ``apply_scope_for_agent``, not a
+        user-facing operation: a delivery the predicate does not grant would be
+        reclaimed by the very next reconciliation. Delegates to ``binding_ops``
+        to keep this module under the size limit."""
         from coffer.application.skill.binding_ops import enable_skill_for_agent
 
         return await enable_skill_for_agent(
@@ -135,35 +130,31 @@ class SkillService:
     async def disable_for(
         self, *, skill_name: str, agent_name: str, actor: str = "api"
     ) -> BindingState:
-        """Remove a skill's link for an agent and disable the binding row."""
+        """Reclaim a delivered copy: remove the link and spend the binding row.
+
+        INTERNAL primitive, like ``enable_for``. Delivery is decided by the
+        skill's ``enabled`` flag and ``scope``; no surface calls this directly,
+        because the very next reconciliation would undo a hand-made decision.
+        """
         from coffer.application.skill.binding_ops import disable_skill_for_agent
 
         return await disable_skill_for_agent(
             service=self, skill_name=skill_name, agent_name=agent_name, actor=actor
         )
 
-    # ---------- follow-master-library (FR-025) ----------
+    # ---------- delivery reconciliation (FR-012a / FR-025) ----------
 
-    def _resolve_agent_skill_policy(self, agent: Resource) -> tuple[bool, list[str]]:
-        """(follow_all_skills, skill_exclusions) for an agent resource.
+    async def apply_scope_for_agent(self, agent_name: str, *, actor: str = "system") -> list[str]:
+        """Reconcile one agent's delivered set against the delivery predicate.
 
-        Unwired contexts default to ``(True, [])`` — the pre-amendment
-        trust-mode auto-bind behavior.
+        Wired as the skill kind's ``on_scope_changed`` / ``on_enabled_changed``
+        hooks (per registered agent), and invoked after an agent registers and
+        by the sync post-import hook. Returns per-skill delivery failures; see
+        ``delivery_ops`` for semantics.
         """
-        if self._agent_skill_policy_resolver is None:
-            return (True, [])
-        return self._agent_skill_policy_resolver(agent)
+        from coffer.application.skill.delivery_ops import apply_scope_for_agent
 
-    async def apply_follow_for_agent(self, agent_name: str, *, actor: str = "system") -> list[str]:
-        """Reconcile an agent's deliveries with its follow policy.
-
-        Wired as the agent kind's on-skill-policy-changed hook (and invoked
-        after registration and by the sync post-import hook). Returns per-skill
-        delivery failures; see ``follow_ops`` for semantics.
-        """
-        from coffer.application.skill.follow_ops import apply_follow_for_agent
-
-        return await apply_follow_for_agent(service=self, agent_name=agent_name, actor=actor)
+        return await apply_scope_for_agent(service=self, agent_name=agent_name, actor=actor)
 
     async def verify(self) -> DriftReport:
         from coffer.application.skill.verify_ops import verify_drift

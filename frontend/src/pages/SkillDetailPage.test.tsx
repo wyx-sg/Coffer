@@ -4,7 +4,7 @@
 // tabs — Overview, Files. We mock the skill hooks so the page doesn't depend
 // on a running daemon.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { SkillDetailPage } from "./SkillDetailPage";
@@ -17,14 +17,19 @@ vi.mock("@/lib/hooks/useSkills", () => ({
   useSkillFileContent: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
 }));
 
-// ScopeCard mounts on this page and pulls its own data through
-// hand-written fetch hooks — stub them so the card renders without a daemon.
+// The header's ScopeControl pulls its scope through hand-written fetch hooks
+// and drives enable/disable — stub both so it renders without a daemon.
+const { disableMutate } = vi.hoisted(() => ({ disableMutate: vi.fn() }));
 vi.mock("@/lib/hooks/useScope", () => ({
   useResourceScope: vi.fn(() => ({ data: { scope: null, supports_scope: true } })),
   useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({
   useAgents: vi.fn(() => ({ data: [] })),
+}));
+vi.mock("@/lib/hooks/useResourceMutations", () => ({
+  useEnableResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useDisableResource: vi.fn(() => ({ mutate: disableMutate, isPending: false })),
 }));
 
 const skillHooks = await import("@/lib/hooks/useSkills");
@@ -35,6 +40,7 @@ const LOCAL_SKILL: SkillOut = {
   description: "a greeting",
   source: { type: "local_import", original_path: "/tmp/hello" },
   enabled: true,
+  scope: null,
   version_hash: "deadbeefcafe1234",
   master_path: "/master/hello",
   last_synced_from_source_at: null,
@@ -88,10 +94,23 @@ describe("SkillDetailPage", () => {
     expect(screen.queryByRole("button", { name: /^update$/i })).not.toBeInTheDocument();
   });
 
-  test("mounts the ScopeCard for the skill", () => {
+  test("mounts the scope control in the header, not a separate scope card", () => {
     mockSkill(LOCAL_SKILL);
     renderAt();
-    expect(screen.getByTestId("scope-card")).toBeInTheDocument();
+    expect(screen.getByTestId("scope-control")).toBeInTheDocument();
+    expect(screen.queryByTestId("scope-card")).not.toBeInTheDocument();
+    // scope is null on this skill, so "Every agent" is the live segment.
+    expect(screen.getByRole("button", { name: /every agent/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  test("the scope control's Disabled segment takes the skill out of service", () => {
+    mockSkill(LOCAL_SKILL);
+    renderAt();
+    fireEvent.click(screen.getByRole("button", { name: /^disabled$/i }));
+    expect(disableMutate).toHaveBeenCalledWith({ kind: "skill", name: "hello" });
   });
 
   test("shows the load-failed card when the skill fails to load", () => {
