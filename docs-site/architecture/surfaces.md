@@ -117,11 +117,11 @@ Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `co
 
 **Transport.** Browser HTTP/REST to `http://127.0.0.1:<port>/api/v1/`, from a page loaded at `http://127.0.0.1:<port>/`.
 
-**How the token reaches the page.** `coffer open` (**FR-025**) reads the port and token from `~/.coffer/daemon.json`, calls an authenticated endpoint to mint a single-use, short-lived code, and opens the browser at the daemon's origin with that code in the URL **fragment**. The page exchanges the code for the API token and keeps the token in `localStorage`. The token itself never appears in a URL, so it never lands in browser history.
+**How the token reaches the page.** The daemon injects its live API token into the `index.html` it serves, as a `window.__COFFER_TOKEN__` global in the document head (**FR-025**) — on the bare `/` and on every client-side route served through the SPA fallback alike, `no-store` and without validators so a cached copy can never carry a restarted daemon's dead token. Any page the daemon serves is therefore authenticated by the act of being served; the token appears in no URL and in no browser storage. `coffer open` (**FR-025**) carries no credential — it reads the daemon's real port from `~/.coffer/daemon.json`, which moves between restarts, and opens the browser there.
 
 **Lifecycle.** The Web UI session is the lifetime of the browser tab. Closing the tab does not affect the daemon. The UI includes a daemon-offline banner that detects when the daemon is unreachable and displays the `coffer daemon start` command as a copyable affordance; the banner disappears automatically when the daemon comes back online.
 
-**Security boundary.** `X-Coffer-Token` on every REST API call. CORS is same-origin by default; the Vite dev origins are added only under `COFFER_DEV_CORS`. Because the daemon binds to loopback and the token is never transmitted to a remote origin, the trust model is equivalent to the CLI: local user account only.
+**Security boundary.** `X-Coffer-Token` on every REST API call. CORS is same-origin by default; the Vite dev origins are added only under `COFFER_DEV_CORS`. Because the served page now carries the token, the daemon also refuses any request whose `Host` header is not a loopback authority (**FR-027**), which is what closes DNS rebinding — a browser treats a rebound `evil.com` as same-origin, but still sends `Host: evil.com`. Because the daemon binds to loopback and the token is never transmitted to a remote origin, the trust model is equivalent to the CLI: local user account only.
 
 ---
 

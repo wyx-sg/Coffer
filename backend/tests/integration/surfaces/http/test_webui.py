@@ -1,11 +1,15 @@
-"""The daemon serving the built web UI (spec mcp-gateway FR-024).
+"""The daemon serving the built web UI (spec mcp-gateway FR-024/FR-025).
 
-The load-bearing property is that mounting a SPA at ``/`` must not swallow the
-API. Everything else here is about degrading quietly when no UI was built.
+Two load-bearing properties. Mounting a SPA at ``/`` must not swallow the API.
+And every route that ends at ``index.html`` must carry the daemon's live token,
+uncacheable — that document is how the browser gets authenticated, and a cached
+copy would hand a restarted daemon's browser the previous daemon's dead token.
+Everything else here is about degrading quietly when no UI was built.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -13,6 +17,15 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from coffer.surfaces.http import webui
+from coffer.surfaces.http.auth import set_active_token
+
+
+@pytest.fixture(autouse=True)
+def _live_token() -> Iterator[None]:
+    """A daemon with a published token, as every served page assumes."""
+    set_active_token("live-daemon-token")
+    yield
+    set_active_token(None)
 
 
 def _built_ui(tmp_path: Path) -> Path:
@@ -132,3 +145,90 @@ def test_daemon_surfaces_404_rather_than_returning_the_spa(
     r = client.get(route)
     assert r.status_code == 404
     assert "<!doctype html>" not in r.text.lower()
+
+
+# ---------------------------------------------------------------------------
+# The token the served document carries (spec mcp-gateway FR-025)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway",
+    scenario="a page served by the daemon is authenticated by the daemon",
+)
+@pytest.mark.parametrize("route", ["/", "/index.html", "/agents", "/mcp-servers/foo"])
+def test_every_route_that_serves_index_carries_the_live_token(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, route: str
+) -> None:
+    """A bookmark, a typed URL and a reload must all land authenticated.
+
+    The user's failing page was `/agents` — a client-side route served through
+    the SPA fallback — so covering only `/` would fix nothing.
+    """
+    client = TestClient(_app(monkeypatch, _built_ui(tmp_path)))
+    r = client.get(route)
+    assert r.status_code == 200
+    assert 'window.__COFFER_TOKEN__="live-daemon-token"' in r.text
+
+
+def test_the_served_index_is_never_cached(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """It holds a per-daemon secret, so a cached copy is a stale credential.
+
+    No validators either: an ETag or Last-Modified would let the browser
+    revalidate its way back to the previous daemon's token, which is the exact
+    failure the injection exists to end.
+    """
+    client = TestClient(_app(monkeypatch, _built_ui(tmp_path)))
+    r = client.get("/agents")
+    assert r.headers["cache-control"] == "no-store"
+    assert "etag" not in r.headers
+    assert "last-modified" not in r.headers
+
+
+def test_hashed_assets_keep_their_normal_caching(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Only index.html is special; /assets/* is content-hashed and cacheable."""
+    client = TestClient(_app(monkeypatch, _built_ui(tmp_path)))
+    r = client.get("/assets/app.js")
+    assert r.status_code == 200
+    assert r.headers.get("cache-control") != "no-store"
+    assert "etag" in r.headers
+
+
+def test_the_injected_token_follows_a_rotation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Read per request from the same variable `require_token` compares against.
+
+    `POST /daemon/rotate-token` republishes that one variable, so the value the
+    page is handed cannot drift from the value the API accepts.
+    """
+    client = TestClient(_app(monkeypatch, _built_ui(tmp_path)))
+    set_active_token("rotated-token")
+    assert 'window.__COFFER_TOKEN__="rotated-token"' in client.get("/").text
+
+
+def test_no_token_script_before_the_daemon_publishes_one(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """During startup there is no token; serve the page rather than a blank."""
+    client = TestClient(_app(monkeypatch, _built_ui(tmp_path)))
+    set_active_token(None)
+    r = client.get("/")
+    assert r.status_code == 200
+    assert "__COFFER_TOKEN__" not in r.text
+
+
+def test_the_token_script_goes_first_inside_head(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """It must run before the bundle does, or the first query goes out bare."""
+    dist = _built_ui(tmp_path)
+    (dist / "index.html").write_text(
+        "<!doctype html><html><head><title>Coffer</title></head>"
+        '<body><script src="/assets/app.js"></script></body></html>'
+    )
+    client = TestClient(_app(monkeypatch, dist))
+    body = client.get("/").text
+    assert body.index("__COFFER_TOKEN__") < body.index("/assets/app.js")

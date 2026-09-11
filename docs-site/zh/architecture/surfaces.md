@@ -117,11 +117,11 @@ REST API 是规范接口——CLI 和 Web UI 都调用它。
 
 **传输方式。** 页面从 `http://127.0.0.1:<port>/` 加载，再以浏览器 HTTP/REST 调用 `http://127.0.0.1:<port>/api/v1/`。
 
-**token 如何到达页面。** `coffer open`（**FR-025**）从 `~/.coffer/daemon.json` 读取端口与 token，调用一个需要鉴权的端点签发一个一次性、短时效的 code，然后在守护进程的 origin 上打开浏览器，并把该 code 放在 URL 的 **fragment** 里。页面用该 code 换取 API token，并把 token 保存在 `localStorage` 中。token 本身绝不出现在 URL 里，因此也绝不会进入浏览器历史记录。
+**token 如何到达页面。** 守护进程把自己的实时 API token 注入到它提供的 `index.html` 中，以文档 head 里的 `window.__COFFER_TOKEN__` 全局变量形式（**FR-025**）—— 裸 `/` 与经 SPA 回退提供的每一条客户端路由一视同仁，并以 `no-store` 且不带校验器的方式提供，因此一份缓存副本绝无可能携带重启后已失效的 token。于是，任何由守护进程提供的页面，凭「被提供」这件事本身即已鉴权；token 不出现在任何 URL，也不进入任何浏览器存储。`coffer open`（**FR-025**）不携带任何凭据 —— 它从 `~/.coffer/daemon.json` 读取守护进程真实的端口（该端口会随重启变动），并在那里打开浏览器。
 
 **生命周期。** Web UI 会话是浏览器标签页的生命周期。关闭标签页不会影响守护进程。UI 包含一个守护进程离线横幅，用于检测守护进程何时不可访问，并将 `coffer daemon start` 命令显示为可复制的操作建议；当守护进程重新上线时，横幅自动消失。
 
-**安全边界。** 每个 REST API 调用都携带 `X-Coffer-Token`。CORS 默认即为同源；仅在 `COFFER_DEV_CORS` 打开时才加入 Vite 开发服务器来源。由于守护进程绑定到 loopback 且 token 从不传输到远程来源，信任模型与 CLI 相同：仅限本地用户账号。
+**安全边界。** 每个 REST API 调用都携带 `X-Coffer-Token`。CORS 默认即为同源；仅在 `COFFER_DEV_CORS` 打开时才加入 Vite 开发服务器来源。由于被提供的页面现在携带 token，守护进程还会拒绝任何 `Host` 请求头不指向 loopback 权威的请求（**FR-027**），正是这一条堵住了 DNS rebinding —— 浏览器会把被重绑定的 `evil.com` 视为同源，但它发出的仍然是 `Host: evil.com`。由于守护进程绑定到 loopback 且 token 从不传输到远程来源，信任模型与 CLI 相同：仅限本地用户账号。
 
 ---
 

@@ -50,8 +50,11 @@ src/i18n/locales/{en,zh}.json    — 挂在顶层 "x" 键下
 | --- | --- |
 | 服务端数据（任何来自 daemon 的） | TanStack Query，经 `useX` hook |
 | 临时 UI 状态（展开/折叠、草稿输入） | 组件内本地 `useState` |
-| 需跨刷新存活的用户偏好 | `localStorage`，经 `src/lib/preferences.ts` / `auth.ts` |
+| 需跨刷新存活的用户偏好 | `localStorage`，经 `src/lib/preferences.ts` |
 | **可寻址**的应用状态（当前打开哪个会话/资源） | **URL**（路由参数），不是 `useState` |
+
+API token 刻意不在这张表里：它读自 `window.__COFFER_TOKEN__`，由提供该页面的一方
+注入（`src/lib/auth.ts`）。持久化它会让它活得比铸造它的 daemon 更久。
 
 最后一行很关键：任何用户期望在刷新、深链、后退后仍存在的东西，必须是路由参数
 （`/chat/:id`、`/agents/:name`），而非本地状态。「当前选中哪一项」是导航，不是 UI 状态。

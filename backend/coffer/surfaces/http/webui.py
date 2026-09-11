@@ -18,18 +18,30 @@ Two layouts have to resolve:
 
 The mount is installed LAST so every API route is matched first; only paths no
 router claimed fall through to static files.
+
+**The served ``index.html`` carries the daemon's live API token.** Serving the
+page is itself a channel to the browser, and it is the only one that survives a
+daemon restart: the token is minted fresh on every start, so anything the page
+persisted from a previous daemon is dead. Injecting it into the document the
+daemon is already sending means a bookmark, a typed URL, or a plain reload is
+authenticated with no user action and nothing stored. What makes that safe is
+:mod:`coffer.surfaces.http.host_guard` — without the ``Host`` check a
+DNS-rebound page could simply fetch ``/`` and read the token out of it.
 """
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
 from fastapi import FastAPI
 from starlette.exceptions import HTTPException
-from starlette.responses import Response
+from starlette.responses import HTMLResponse, Response
 from starlette.staticfiles import StaticFiles
 from starlette.types import Scope
+
+from coffer.surfaces.http.auth import get_active_token
 
 
 def resolve_webui_dir() -> Path | None:
@@ -72,6 +84,47 @@ def _is_daemon_surface(path: str) -> bool:
     return path.split("/", 1)[0] in _RESERVED_ROOTS
 
 
+# The paths StaticFiles resolves to the SPA document itself. "." is what
+# ``get_path`` produces for a bare "/" request.
+_INDEX_PATHS: frozenset[str] = frozenset({"", ".", "index.html"})
+
+_TOKEN_SCRIPT = "<script>window.__COFFER_TOKEN__={value};</script>"
+
+
+def _token_script() -> str:
+    """The injected global, or "" before the daemon has published a token.
+
+    The value comes from :func:`coffer.surfaces.http.auth.get_active_token` —
+    the same module-level token :func:`~coffer.surfaces.http.auth.require_token`
+    compares against, read per request rather than captured at mount time. A
+    rotation through ``/daemon/rotate-token`` republishes that one variable, so
+    the injected value and the accepted value cannot drift apart.
+    """
+    token = get_active_token()
+    if token is None:
+        return ""
+    # json.dumps gives a correctly quoted+escaped JS string literal. It does not
+    # escape "/", so a "</script>" inside the value would still close the
+    # element early; neutralise it, even though a urlsafe token can never hold
+    # one, because the cost of being wrong here is the whole vault.
+    value = json.dumps(token).replace("</", "<\\/")
+    return _TOKEN_SCRIPT.format(value=value)
+
+
+def _with_token(html: str) -> str:
+    """Put the token script first inside ``<head>`` so it runs before the bundle."""
+    script = _token_script()
+    if not script:
+        return html
+    lowered = html.lower()
+    head = lowered.find("<head")
+    if head >= 0:
+        close = html.find(">", head)
+        if close >= 0:
+            return html[: close + 1] + script + html[close + 1 :]
+    return script + html
+
+
 class _SpaStaticFiles(StaticFiles):
     """StaticFiles that falls back to ``index.html`` for client-side routes.
 
@@ -79,9 +132,31 @@ class _SpaStaticFiles(StaticFiles):
     ``/mcp-servers`` requests that path from the daemon, which has no such
     file on disk. Serving ``index.html`` lets the router take over once the
     bundle boots.
+
+    Every route that ends at ``index.html`` — the bare ``/`` and every deep
+    link alike — goes through :meth:`_index_response`, because the token the
+    document carries is what authenticates the page. A fix that covered only
+    ``/`` would leave a browser reopened on ``/agents`` exactly as stranded as
+    before.
     """
 
+    def __init__(self, *, directory: str, html: bool = False) -> None:
+        super().__init__(directory=directory, html=html)
+        #: Kept as our own attribute: StaticFiles types ``directory`` as optional.
+        self._index_path = Path(directory) / "index.html"
+
+    def _index_response(self) -> Response:
+        html_text = self._index_path.read_text(encoding="utf-8")
+        # `no-store`, and no ETag or Last-Modified to revalidate against. The
+        # document now holds a per-daemon secret, so a cached copy would hand a
+        # restarted daemon's browser the previous daemon's dead token — which is
+        # the precise failure this injection exists to end. Hashed files under
+        # /assets are untouched by this and keep StaticFiles' normal caching.
+        return HTMLResponse(_with_token(html_text), headers={"Cache-Control": "no-store"})
+
     async def get_response(self, path: str, scope: Scope) -> Response:
+        if path in _INDEX_PATHS:
+            return self._index_response()
         try:
             return await super().get_response(path, scope)
         except HTTPException as exc:
@@ -90,7 +165,7 @@ class _SpaStaticFiles(StaticFiles):
                 raise
             if _is_daemon_surface(path):
                 raise
-            return await super().get_response("index.html", scope)
+            return self._index_response()
 
 
 def install(app: FastAPI) -> None:

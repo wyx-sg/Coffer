@@ -47,6 +47,9 @@ _STATUS: dict[str, int] = {
     "UNKNOWN_PRUNABLE_TABLE": 404,
     "UNAUTHENTICATED": 401,
     "DAEMON_NOT_READY": 503,
+    # Emitted by the host_guard middleware, not by a CofferError: a request
+    # whose Host header does not name this daemon's loopback authority.
+    "HOST_NOT_LOOPBACK": 421,
     "BAD_REQUEST": 400,
     "NOT_FOUND": 404,
     "FORBIDDEN": 403,

@@ -88,6 +88,7 @@ section that future readers most often want — don't skip it.>
 | [`capability-state-model`](capability-state-model.zh.md) | MCP 能力状态 —— 偏好持久化于 DB，列表实时查询上游 | Accepted |
 | [`session-subprocess-model`](session-subprocess-model.zh.md) | 每个下游客户端会话一套独立的上游子进程 | Accepted |
 | [`daemon-detect-or-spawn`](daemon-detect-or-spawn.zh.md) | Daemon 探测或拉起模式 | Accepted |
+| [`daemon-serves-the-token-in-the-page`](daemon-serves-the-token-in-the-page.zh.md) | 由 daemon 把 token 放进它提供的页面里，并以 Host 请求头把守 | Accepted |
 | [`everything-is-a-resource-kind`](everything-is-a-resource-kind.zh.md) | 信息架构 —— 一切皆 resource kind | Amended（2026-05-30、2026-06-11） |
 | [`distribution-pyinstaller`](distribution-pyinstaller.zh.md) | 分发 —— 用 PyInstaller 打包 daemon、shim 与 CLI | Accepted |
 | [`cross-platform-skill-delivery`](cross-platform-skill-delivery.zh.md) | 跨平台 skill 投递 —— Symlink / Junction / Copy-Fallback | Accepted |

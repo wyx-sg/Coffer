@@ -106,14 +106,22 @@ daemon 配置 CORS 以拒绝浏览器上下文中的跨域请求。由于 HTTP A
 
 Web UI 是一个浏览器页面，因此它需要拿到 CLI 与 shim 直接从 `daemon.json` 读取的那个 API token。把 token 放进 query string 是最省事的做法，而这恰恰是 Coffer **不**做的：query string 和路径会进入浏览器历史记录、会话恢复存储，以及任何跨设备同步历史的机制——那会瓦解 FR-012 / FR-013 的 loopback + token 安全姿态。
 
-取而代之，`coffer open` 执行一次 code 交换（**FR-025**）：
+由于页面本来就是 daemon 提供的，它改为**在响应正文里**交付 token（**FR-025**）：它提供的 `index.html` 在 head 中携带 `window.__COFFER_TOKEN__`，取值来自请求头校验所比对的同一个进程内 token，因此注入的值不可能与被接受的值漂移开。正文既不进历史记录，也不进会话恢复存储，更不会出现在截图或粘贴出去的 bug 报告里 —— 那正是 URL 不可用、而这条路可用的原因。
 
-1. `coffer open` 从 `~/.coffer/daemon.json`（权限 `0600`）读取端口与 token。
-2. 调用一个需要鉴权的端点，签发一个**一次性、短时效的 code** —— 有效期约一分钟。
-3. 在 daemon 自己的 origin 上打开浏览器，并把该 code 放在 URL 的 **fragment** 里；浏览器不会把 fragment 发给服务端，它也是 URL 中最不容易被留存的部分。
-4. 页面把 code 回传，换得 API token 并存入 `localStorage`；该 code 在首次使用后即作废。
+有两条性质是承重的：
 
-于是 token 从不出现在 URL 中。code 会出现，但它是一次性的，且在任何人翻看那条历史记录之前早已过期，因此它留在那里是无害的。
+- **每一条解析到该文档的路由都会拿到它** —— 裸 `/` 与经 SPA 回退提供的每一条客户端路由一视同仁 —— 因此书签、手敲地址、刷新或深链接都无需任何用户动作即已鉴权。
+- **它以 `Cache-Control: no-store` 提供，不带 ETag 与 Last-Modified。** 该文档现在携带一份每个 daemon 各自的密钥，而 daemon 每次启动都会铸造新 token；一份缓存或再验证得到的副本会把失效 token 交给浏览器。`/assets` 下带内容哈希的文件保持正常缓存。页面同样不持久化任何东西，理由相同。
+
+因此 `coffer open` 不再携带任何凭据。它从 `~/.coffer/daemon.json`（权限 `0600`）读取 daemon 真实的端口 —— 端口会随重启变动 —— 并在那里打开浏览器。
+
+## Host 请求头校验（DNS rebinding）
+
+绑定 loopback 挡得住远程主机访问 daemon，却挡不住**浏览器**：攻击者 origin 上的页面，其域名解析到 `127.0.0.1`，在浏览器看来仍与那个攻击者 origin 同源 —— CORS 因此根本不介入，页面能读到响应正文。在 daemon 的 HTML 还没有秘密时这什么也换不到；而 token 一旦进入文档，一次 `fetch("/")` 就能把整个保险库端走。
+
+所以 daemon 拒绝任何 `Host` 请求头不指向 loopback 权威的请求 —— `127.0.0.1`、`localhost` 或 `::1`，带不带端口皆可 —— 以错误码 `HOST_NOT_LOOPBACK` 返回 `421`（**FR-027**）。rebinding 不会改变 `Host` 请求头：浏览器发送的是它所取用 URL 里的域名，因此被重绑定的请求仍然写着攻击者自己的主机名，在抵达任何路由之前就被拒绝。`COFFER_ALLOWED_HOSTS` 可以追加权威；后端测试套件设置了它，因为它在进程内驱动应用，而真实部署中没有任何东西需要它。
+
+该校验覆盖 daemon 端口上的每一个面。它不覆盖独立的 `coffer-callback` 监听器 —— 那是另一个端口上的另一个进程，也是隧道唯一会指向的东西。该监听器以按频道的签名校验入站流量，再经 loopback 转发给 daemon，因此公网回调不受影响。
 
 ## 出站 HTTP：真实路径与计划中的加固
 

@@ -83,14 +83,11 @@ Instead of a per-file `.sha256` sidecar file, the release publishes **one aggreg
 
 The daemon serves the built web UI itself, as static files, at its own loopback origin (**FR-024**). The UI and the REST API are therefore **same-origin**: the page is fetched from `http://127.0.0.1:<port>/` and calls `http://127.0.0.1:<port>/api/v1/`. There is no native window, no tray icon, and no build-time branching in the frontend for "am I inside a desktop shell".
 
-`coffer open` is the entry point (**FR-025**):
+Because the daemon serves the document, the response body is a channel to the browser, and that is where the credential travels (**FR-025**): the daemon injects its live API token into the `index.html` it serves, as a `window.__COFFER_TOKEN__` global in the head. Every route that resolves to that document gets it — the bare `/` and every client-side route served through the SPA fallback — and the document is served `Cache-Control: no-store` with no ETag or Last-Modified, because a cached copy would hand a restarted daemon's browser the previous daemon's dead token. Hashed files under `/assets` keep normal caching.
 
-1. It reads the daemon's port and API token from `~/.coffer/daemon.json` (mode `0600`).
-2. It calls an authenticated endpoint to mint a **single-use, short-lived code** — valid for about a minute.
-3. It opens the browser at the daemon's origin with that code in the URL **fragment**.
-4. The page exchanges the code for the API token and keeps the token in `localStorage`.
+`coffer open` therefore carries no credential at all. What it still does is read the daemon's real port from `~/.coffer/daemon.json` (mode `0600`) — the port moves between restarts — and open the browser at that origin, spawning a daemon first if none is running.
 
-The token itself never appears in a URL. Putting it there would write it into browser history, which contradicts the loopback-plus-token posture of spec mcp-gateway (FR-012 / FR-013). The exchange code is single-use and expires within about a minute, so its presence in history is inert.
+The token never appears in a URL, and the page persists nothing. Putting it in a URL would write it into browser history, which contradicts the loopback-plus-token posture of spec mcp-gateway (FR-012 / FR-013); persisting it would outlive the daemon that minted it, which was the previous design's failure. What makes serving it in the body safe is the `Host` check (**FR-027**) — see [Security](/architecture/security).
 
 Because the UI is same-origin with the API, CORS is **same-origin by default**. The Vite dev-server origins remain available behind the existing `COFFER_DEV_CORS` opt-in for frontend development. See [Security](/architecture/security) for the full posture.
 
@@ -125,4 +122,4 @@ xattr -d com.apple.quarantine ~/coffer/coffer ~/coffer/coffer-daemon ~/coffer/co
 ## See also
 
 - [Distribution — PyInstaller-bundled daemon, shim and CLI](/reference/adr/distribution-pyinstaller) — decision record, rejected alternatives, and revision history
-- [MCP Gateway spec reference](/reference/specs/mcp-gateway/spec) — FR-022 single-tier archive, FR-023 aggregated `SHA256SUMS`, FR-024 daemon-served web UI, FR-025 `coffer open`, FR-026 frozen-start binary deployment
+- [MCP Gateway spec reference](/reference/specs/mcp-gateway/spec) — FR-022 single-tier archive, FR-023 aggregated `SHA256SUMS`, FR-024 daemon-served web UI, FR-025 the token injected into the served page, FR-026 frozen-start binary deployment, FR-027 the loopback-`Host` requirement

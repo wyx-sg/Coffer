@@ -149,7 +149,8 @@ Coffer 自己的 `coffer__*` 工具——包括 `search_tools`——恒定列出
 **Covering scenarios**:
 
 - release tag produces the CLI archive and SHA256SUMS
-- coffer open lands an authenticated browser session
+- a page served by the daemon is authenticated by the daemon
+- a rebound page is refused before it can read the token
 - a frozen daemon deploys its sibling binaries on start
 
 #### 为什么 Coffer 不再发布桌面外壳
@@ -409,12 +410,18 @@ null 值在校验阶段被拒绝（422）。
 - **Then** 该 release 只包含一个下载层级 —— 面向 macOS arm64 的 `coffer-cli-<triple>.tar.gz`，内含 `coffer`、`coffer-daemon`、`coffer-mcp-shim` 以及运行期辅助二进制 —— 不含任何桌面安装包,
 - **And** 该 release 包含单一一份聚合的 `SHA256SUMS`，覆盖每一个制品。
 
-### Scenario: coffer open lands an authenticated browser session
+### Scenario: a page served by the daemon is authenticated by the daemon
 
-- **Given** daemon 正在运行，且 `~/.coffer/daemon.json` 记录了它的端口,
-- **When** 用户运行 `coffer open`,
-- **Then** CLI 通过一个需鉴权的端点铸造一个一次性、短时效的 code，并在 daemon 自己的 origin 上打开浏览器，把该 code 放在 URL 的 **fragment** 里,
-- **And** 页面用该 code 换取 API token，把 token 存进 `localStorage`，并以已鉴权状态渲染 UI —— API token 从不出现在任何 URL 中，且同一个 code 的第二次兑换会被拒绝。
+- **Given** daemon 在浏览器上次加载 UI 之后重启过，因而铸造了新的 token、端口也可能变了,
+- **When** 浏览器打开由 daemon 提供的任意页面 —— 裸 `/`、`/agents` 这样的客户端路由、一个书签，或者只是刷新一次 —— 无论是经由 `coffer open` 到达还是手敲地址,
+- **Then** 被提供的 `index.html` 以 `window.__COFFER_TOKEN__` 携带该 daemon 的实时 token，UI 无需任何用户动作即以已鉴权状态渲染，且该 token 不出现在任何 URL、也不进入任何浏览器存储,
+- **And** 该文档以 `no-store` 且不带校验器的方式提供，因此浏览器绝无可能通过再验证回到上一个 daemon 的 token。
+
+### Scenario: a rebound page is refused before it can read the token
+
+- **Given** 一个由攻击者控制的 origin 上的页面，其域名解析到 `127.0.0.1`，浏览器因而视之为与 daemon 同源,
+- **When** 它请求 daemon 的任意 URL，包括 `/`,
+- **Then** daemon 以 `421 HOST_NOT_LOOPBACK` 拒绝该请求，因为 `Host` 请求头仍然写着攻击者的域名 —— 而同一个请求若发往 `127.0.0.1`、`localhost` 或 `::1` 则照常被提供。
 
 ### Scenario: a frozen daemon deploys its sibling binaries on start
 
@@ -468,9 +475,10 @@ null 值在校验阶段被拒绝（422）。
 - **FR-022**: 发布流水线 MUST 为每个 `v*` tag 产出**仅 macOS arm64** 的单一下载层级：一份 `coffer-cli-<triple>.tar.gz` 归档，内含 `coffer`（管理 CLI）、`coffer-daemon`、`coffer-mcp-shim`，以及 daemon 在运行期拉起的辅助二进制（`coffer-callback`）。这些二进制 MUST 在归档内保持同目录共处，使冻结态的 detect-or-spawn 解析（[Detect-or-Spawn](../../docs/decisions/daemon-detect-or-spawn.zh.md)）能在 `coffer` 旁边找到 `coffer-daemon`。macOS x64（Intel）、Linux 与 Windows 刻意不构建 —— 这几条腿从未端到端验证过。这份归档独自承载「无需系统 Python」的承诺（SC-011）；不存在第二个桌面层级。其背后的打包决策见 [PyInstaller Distribution](../../docs/decisions/distribution-pyinstaller.zh.md)。
 - **FR-023**: 发布流水线 MUST 产出单一一份聚合的 `SHA256SUMS`（在 CI 中生成，并在 release job 中跨 matrix leg 拼接），覆盖每一个制品，使下载者无需只凭 GitHub Release 页面就能校验完整性。
 - **FR-024**: daemon MUST 自己以静态文件的形式，在它自己的 loopback origin 上提供构建好的 Web UI，使 UI 与管理 API 同源 (same-origin)。因此跨域访问 MUST 默认关闭；Vite dev server 的 origin 仅在既有的 `COFFER_DEV_CORS` opt-in 之下仍可访问。
-- **FR-025**: `coffer open` MUST 读取 `~/.coffer/daemon.json`，通过一个需鉴权的管理端点铸造一个**一次性、短时效**的鉴权 code（有效期约一分钟），并在 daemon 自己的 origin 上打开用户浏览器，把该 code 放在 URL 的 **fragment** 里。页面 MUST 用该 code 换取 API token，并把 token 保存在 `localStorage` 中。API token MUST NOT 在任何环节出现在 URL 里 —— URL 会落进浏览器历史，而那与 FR-012 / FR-013 的「仅 loopback + token」姿态相抵触。code 则可以出现在那里，因为它是一次性的，等到有人回头翻历史时它早已过期。
+- **FR-025**: daemon MUST 在它自己提供的 `index.html` 里把 API token 交给浏览器 —— 以注入到文档 head 中的 `window.__COFFER_TOKEN__` 全局变量形式，其取值来自 FR-013 的请求头校验所比对的同一个进程内 token，因此两者不可能漂移。它 MUST 对**每一条**解析到该文档的路由都这么做 —— 裸 `/` 与经 SPA 回退提供的每一条客户端路由一视同仁 —— 并且 MUST 以 `Cache-Control: no-store` 提供、不带 ETag 与 Last-Modified，因为该文档现在携带了一份每个 daemon 各自的密钥，而一份缓存副本会把上一个 daemon 已失效的 token 交给重启后的浏览器。页面 MUST NOT 持久化该 token：存下来的 token 会活得比铸造它的 daemon 更久，而 daemon 每次启动都会铸造一个新的。API token MUST NOT 在任何环节出现在 URL 里 —— URL 会落进浏览器历史，而那与 FR-012 / FR-013 的「仅 loopback + token」姿态相抵触；响应正文则不受这些影响。因此 `coffer open` MUST NOT 自带任何凭据：它从 `~/.coffer/daemon.json` 读取 daemon 真实的端口（该端口会随重启变动），并在那个 origin 上打开浏览器。
 - **FR-026**: 当 daemon 检测到自己以冻结构建运行时，它 MUST 在启动时把同目录的二进制 —— `coffer-mcp-shim`、`coffer-callback` —— 幂等地部署到 `~/.coffer/bin/`。复制 MUST 是原子的（同目录临时文件、先设可执行位、再 rename 覆盖目标），使崩溃或正在并发执行的二进制永远不会观察到被截断的文件；是否过期 MUST 由三个信号判定 —— 字节大小、源比目标更新的 mtime、以及一个版本哨兵 —— 使同样大小的跨版本升级也能被检出。源码安装 MUST NOT 做这件事：`pip install` 已经把 console script 装到 `PATH` 上了（FR-018）。这件事归 daemon 所有，因为运行期正是它在拉起 `coffer-callback`。
 
+- **FR-027**: daemon MUST 拒绝任何 `Host` 请求头未指向 loopback 权威的请求 —— `127.0.0.1`、`localhost` 或 `::1`，带不带端口皆可 —— 以错误码 `HOST_NOT_LOOPBACK` 返回 `421`，而不是照常提供服务。这正是 FR-025 得以安全的前提：绑定 loopback（FR-012）挡得住远程主机，却挡不住**浏览器** —— 攻击者把自己页面的域名重解析到 `127.0.0.1`（DNS rebinding），浏览器便视之为同源，CORS 因此不生效。而 rebinding 不会改变 `Host` 请求头，所以被重绑定的请求仍然写着攻击者自己的域名，在它能从被提供的文档里读到 token 之前就被拒绝。该规则 MUST 覆盖 daemon 暴露的每一个面。它不涉及独立的 `coffer-callback` 监听器 —— 那是另一个端口上的另一个进程，也是隧道唯一会指向的东西。
 **缺失启动器**
 
 - **FR-019**: 一个 stdio server 的启动器命令在本机无法解析时（导入来的 server 引用了 `uvx` 而本机没装 `uv`），MUST 在 server 状态中明确显示「本机未安装 `<runner>`」，而不是一个没有原因的「异常」，并由 UI 指出应当安装哪个命令。Coffer MUST NOT 代为安装。价值全部来自检测——把一个没有信息量的失败变成可行动的失败；而让一个常驻 daemon 去跑包管理器，会把 Coffer 的职责从「管理配置」扩到「往用户机器上装软件」，那张刻意保持极小的 runner→formula 映射表在 pip、cargo、go 被要求加入后守不住这条线，何况它只在 macOS 上生效过。

@@ -37,14 +37,23 @@ server to run: if the daemon is up, the UI is up.
 coffer open
 ```
 
-`coffer open` reads the daemon's address and token from `~/.coffer/daemon.json`, asks the
-daemon for a **single-use, short-lived code**, and opens your browser at the daemon's own
-address with that code in the URL fragment. The page trades the code for the API token and
-keeps the token in `localStorage`, so subsequent visits to `http://127.0.0.1:<port>/` just
-work.
+`coffer open` reads the daemon's real port from `~/.coffer/daemon.json` — the daemon binds
+the first free port in its range, so the address moves between restarts — and opens your
+browser there. It hands over no credential, because it does not need to: the daemon injects
+its current API token into the `index.html` it serves, so **any** page the daemon serves is
+already signed in. A bookmark, a typed address, a reload, or a deep link like
+`http://127.0.0.1:<port>/agents` all work the same way, including after the daemon has been
+restarted and minted a new token.
 
-The token itself is never put in a URL — that would write it into your browser history. The
-exchange code is single-use and expires in about a minute, so it is harmless there.
+The token is never put in a URL — that would write it into your browser history — and it is
+never stored in the browser either. A stored token would outlive the daemon that minted it,
+which is exactly how a reload used to end in "not authenticated" with no way out but
+re-running `coffer open`.
+
+For that page-served token to be safe, the daemon answers only requests addressed to its own
+loopback address: a request whose `Host` header says anything else is refused with
+`421`. That is what stops a malicious web page from re-pointing its own hostname at
+`127.0.0.1` and reading the token out of the served page.
 
 If the daemon is not running, start it first:
 
