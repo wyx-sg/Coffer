@@ -52,7 +52,6 @@ async def test_claude_json_inside_the_config_dir(tmp_path: pathlib.Path) -> None
     assert [m.id for m in models] == ["claude-fable-5-1[1m]", "claude-opus-4-9"]
     assert models[0].label == "Fable"
     assert models[0].description.startswith("Fable 5.1")
-    assert {m.source for m in models} == {"discovered"}
 
 
 async def test_claude_json_beside_the_config_dir(tmp_path: pathlib.Path) -> None:
@@ -135,7 +134,7 @@ model = "o3"
     models = await NativeConfigModelDiscovery().discover(agent_key="codex", config_dir=config_dir)
 
     assert [m.id for m in models] == ["gpt-5-codex", "gpt-5-mini", "o3"]
-    assert all(m.source == "discovered" and m.label == "" for m in models)
+    assert all(m.label == "" for m in models)
 
 
 async def test_codex_missing_and_corrupt_config_return_empty(tmp_path: pathlib.Path) -> None:
@@ -192,8 +191,8 @@ class _Exploding:
 async def test_chain_concatenates_in_source_order(tmp_path: pathlib.Path) -> None:
     """The picker's order IS the source order — that is the composite's whole
     job, so it is asserted rather than assumed."""
-    first = _Source([AgentModel("a", source="alias"), AgentModel("b", source="discovered")])
-    second = _Source([AgentModel("c", source="discovered")])
+    first = _Source([AgentModel("a"), AgentModel("b")])
+    second = _Source([AgentModel("c")])
 
     models = await ChainedModelDiscovery([first, second]).discover(
         agent_key="claude_code", config_dir=tmp_path
@@ -206,9 +205,9 @@ async def test_chain_concatenates_in_source_order(tmp_path: pathlib.Path) -> Non
 async def test_chain_keeps_duplicates_for_the_service_to_dedupe(tmp_path: pathlib.Path) -> None:
     """Dedupe belongs to the catalogue service (it owns "first wins"), so the
     composite must NOT quietly drop the second copy here."""
-    dup = AgentModel("same", "From the binary", source="discovered")
+    dup = AgentModel("same", "From the binary")
     models = await ChainedModelDiscovery(
-        [_Source([dup]), _Source([AgentModel("same", "From the config", source="discovered")])]
+        [_Source([dup]), _Source([AgentModel("same", "From the config")])]
     ).discover(agent_key="claude_code", config_dir=tmp_path)
 
     assert [(m.id, m.label) for m in models] == [
@@ -218,7 +217,7 @@ async def test_chain_keeps_duplicates_for_the_service_to_dedupe(tmp_path: pathli
 
 
 async def test_chain_survives_a_source_that_raises(tmp_path: pathlib.Path) -> None:
-    survivor = _Source([AgentModel("kept", source="alias")])
+    survivor = _Source([AgentModel("kept")])
 
     models = await ChainedModelDiscovery([_Exploding(), survivor]).discover(
         agent_key="codex", config_dir=tmp_path

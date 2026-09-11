@@ -71,8 +71,8 @@ def channel_system_context(channel_name: str) -> str:
 
 
 #: How many ids the per-turn model note names before deferring to the picker.
-#: Discovery leads with the tier aliases and the newest releases, so the head of
-#: the list is the part worth spending prompt on.
+#: Discovery leads with the newest releases, so the head of the list is the part
+#: worth spending prompt on.
 _MODELS_IN_NOTE = 12
 
 
@@ -83,7 +83,7 @@ def model_system_context(current: str | None, available: Sequence[str]) -> str:
     confidently named the wrong model. This note is authoritative, so it says so.
     It rides on every turn, hence the tight wording.
     """
-    # The catalogue is now read from the CLI itself and runs to ~30 ids. All of
+    # The catalogue is now read from the CLI itself and runs to ~20 ids. All of
     # them on every turn is prompt weight the agent gains nothing from — it only
     # needs enough to answer "what could I be switched to", so name the leading
     # few and point at the picker for the rest.

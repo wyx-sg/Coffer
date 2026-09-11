@@ -180,7 +180,6 @@ class CodexRpcModelDiscovery:
                     id=ident.strip(),
                     label=label.strip() if isinstance(label, str) else "",
                     description=description.strip() if isinstance(description, str) else "",
-                    source="discovered",
                 )
             )
         return out

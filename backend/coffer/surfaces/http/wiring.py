@@ -206,9 +206,10 @@ def wire_chat(
     #    the agent about the model it is on. Coffer names no model itself: every
     #    entry is read back from the agent, from three sources whose ORDER here
     #    is the order the picker shows.
-    #      1. the Claude Code executable — its tier aliases, then its versioned
-    #         catalog, which is the only place the Opus 5 / Opus 4.8 distinction
-    #         is written down;
+    #      1. the Claude Code executable — its versioned catalog, which is the
+    #         only place the Opus 5 / Opus 4.8 distinction is written down (its
+    #         tier aliases are deliberately NOT offered: each one resolves to a
+    #         model already in that catalog);
     #      2. Codex's own model/list RPC, driven over the same app-server
     #         transport a turn uses;
     #      3. each CLI's config file, for the local choices only it knows about.

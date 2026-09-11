@@ -138,9 +138,9 @@ async def test_model_list_becomes_the_catalogue() -> None:
 
     models = await CodexRpcModelDiscovery(make).discover(agent_key="codex", config_dir=None)
 
-    assert [(m.id, m.label, m.description, m.source) for m in models] == [
-        ("gpt-x", "GPT-X", "about gpt-x", "discovered"),
-        ("gpt-y", "GPT-Y", "about gpt-y", "discovered"),
+    assert [(m.id, m.label, m.description) for m in models] == [
+        ("gpt-x", "GPT-X", "about gpt-x"),
+        ("gpt-y", "GPT-Y", "about gpt-y"),
     ]
     # The handshake the app-server protocol requires ran before the list call.
     assert [method for method, _ in peer.requests] == ["initialize", "model/list"]

@@ -160,11 +160,17 @@ id，而这些 id 该 agent 一个都用不了。
   `GET /api/v1/agent-providers/{agent_key}/models` 返回某个 agent 可以被切到的模型。每一项——id、
   显示名、描述——都是从**已安装的 agent 那里读回来的**，绝不写进 Coffer：写在这里的清单会在 CLI
   下一次发版时过期，而且分不清同一档位的两个版本。共有三个来源，它们的顺序就是选择器的顺序：
-  Claude Code 可执行文件内嵌的模型目录（先是它的档位**别名**，再是带版本的模型——那是唯一写着
-  各版本显示名的地方）；Codex 自己的 `model/list` app-server RPC；以及各 CLI 的原生配置，用于
-  只有它才知道的本地选择（Claude Code 在 `~/.claude.json` 里发布
-  `additionalModelOptionsCache`；Codex 的 `config.toml` 里写着它配置的模型）。每一项带
-  `id`（原样传给 CLI）、`label`、`description` 和 `source ∈ {alias, discovered}`。每个来源都
+  Claude Code 可执行文件内嵌的带版本模型目录——那是唯一写着各版本显示名的地方；Codex 自己的
+  `model/list` app-server RPC；以及各 CLI 的原生配置，用于只有它才知道的本地选择
+  （Claude Code 在 `~/.claude.json` 里发布 `additionalModelOptionsCache`；Codex 的
+  `config.toml` 里写着它配置的模型）。清单**只列真实模型**：CLI 的档位**别名**（`sonnet`、
+  `opus`、`haiku`、`fable`、`best`、`sonnet[1m]`、`opus[1m]`、`fable[1m]`、`opusplan`）
+  不再列出，因为每个别名都解析到清单里已经有的模型——Claude Code 自己在比较两个模型名之前就会
+  把结尾的 `[1m]` 去掉——两者都列只会让选择器多出九个没有标签的重复项，紧挨着它们所指向的真实
+  模型。这不会让任何东西变得不可达：凡是可以手输模型名的地方（`/model <名字>`、agent 自己的
+  配置）仍然接受别名，由 CLI 负责校验。已知并接受的代价：`best` 和 `opusplan` 是**路由行为**
+  而非单个模型，因此今后只能手输名字来设置，不能从列表里点选。每一项带
+  `id`（原样传给 CLI）、`label` 和 `description`。每个来源都
   各自静默降级——CLI 没装、bundle 结构变了、agent 没登录或卡住，代价只是少了这个来源本来会补上的
   模型，仅此而已。未知的 `agent_key` 返回 404。契约见
   [`specs/provider-switching/contracts/api.openapi.yaml`](contracts/api.openapi.yaml)。

@@ -111,7 +111,6 @@ class NativeConfigModelDiscovery:
             id=value,
             label=label if isinstance(label, str) else "",
             description=description if isinstance(description, str) else "",
-            source="discovered",
         )
 
     # --- codex ---------------------------------------------------------------
@@ -126,7 +125,7 @@ class NativeConfigModelDiscovery:
         found: list[AgentModel] = []
         top = data.get("model")
         if isinstance(top, str) and top.strip():
-            found.append(AgentModel(id=top, source="discovered"))
+            found.append(AgentModel(id=top))
         profiles = data.get("profiles")
         if isinstance(profiles, dict):
             for profile in profiles.values():
@@ -134,7 +133,7 @@ class NativeConfigModelDiscovery:
                     continue
                 model = profile.get("model")
                 if isinstance(model, str) and model.strip():
-                    found.append(AgentModel(id=model, source="discovered"))
+                    found.append(AgentModel(id=model))
         return found
 
     # --- IO ------------------------------------------------------------------

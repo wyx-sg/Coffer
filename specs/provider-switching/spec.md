@@ -317,13 +317,23 @@ agent could use.
   installed agent, never written into Coffer, because a list written down here
   goes stale on the next CLI release and cannot tell one release of a tier from
   the next. Three sources answer, and their order is the order of the picker:
-  the Claude Code executable's embedded catalog (its tier **aliases** first,
-  then its versioned models, which is the only place the per-release display
-  names exist); Codex's own `model/list` app-server RPC; and each CLI's native
-  config for the local choices only it knows about (Claude Code publishes
-  `additionalModelOptionsCache` in `~/.claude.json`; Codex's `config.toml` names
-  its configured models). Each entry carries `id` (passed verbatim to the CLI),
-  `label`, `description` and `source ∈ {alias, discovered}`. Every source
+  the Claude Code executable's embedded catalog of versioned models, which is
+  the only place the per-release display names exist; Codex's own `model/list`
+  app-server RPC; and each CLI's native config for the local choices only it
+  knows about (Claude Code publishes `additionalModelOptionsCache` in
+  `~/.claude.json`; Codex's `config.toml` names its configured models). The
+  catalogue lists **real models only**: the CLIs' tier **aliases** (`sonnet`,
+  `opus`, `haiku`, `fable`, `best`, `sonnet[1m]`, `opus[1m]`, `fable[1m]`,
+  `opusplan`) are not offered, because each resolves to a model the list already
+  carries — Claude Code itself strips a trailing `[1m]` before comparing two
+  model names — so listing both padded the picker with nine label-less
+  duplicates sitting beside the models they point at. Nothing becomes
+  unreachable: an alias is still accepted wherever a model name is typed
+  (`/model <name>`, the agent's own config) and the CLI validates it. Accepted
+  cost: `best` and `opusplan` are routing BEHAVIOURS rather than single models,
+  so they can only be set by typing the name, not by picking one from a list.
+  Each entry carries `id` (passed verbatim to the CLI), `label` and
+  `description`. Every source
   degrades to nothing on its own — a missing CLI, a changed bundle layout, an
   unauthenticated or wedged agent costs the models that source would have added
   and nothing else. An unknown `agent_key` is a 404. Contract:

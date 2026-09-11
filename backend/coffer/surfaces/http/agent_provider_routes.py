@@ -42,7 +42,6 @@ class AgentModelOut(BaseModel):
     id: str
     label: str
     description: str = ""
-    source: str
 
 
 class AgentModelsOut(BaseModel):
@@ -80,8 +79,12 @@ async def list_agent_models(
     registry: AgentProviderRegistry = Depends(get_agent_registry),  # noqa: B008
     catalogue: AgentModelCatalogueService = Depends(get_agent_model_catalogue),  # noqa: B008
 ) -> AgentModelsOut:
-    """The models this agent can be put on: Coffer's curated aliases plus
-    anything its own config advertises.
+    """The models this agent can be put on, as the agent itself reports them.
+
+    Concrete models only. The CLIs' tier aliases (``sonnet``, ``opus``,
+    ``best``, ``sonnet[1m]``, …) are not listed: each resolves to a model that
+    already appears here, so listing both filled the picker with label-less
+    duplicates. An alias can still be TYPED wherever a model name is accepted.
 
     An unregistered ``agent_key`` is a 404 raised here rather than the domain's
     ``UnknownAgent`` — that error means "no provider for this turn" and is
@@ -92,8 +95,5 @@ async def list_agent_models(
         raise HTTPException(status_code=404, detail=f"unknown agent: {agent_key!r}")
     models = await catalogue.catalogue(agent_key)
     return AgentModelsOut(
-        models=[
-            AgentModelOut(id=m.id, label=m.label, description=m.description, source=m.source)
-            for m in models
-        ]
+        models=[AgentModelOut(id=m.id, label=m.label, description=m.description) for m in models]
     )
