@@ -210,3 +210,12 @@ def build_inbound_message(
         thread_id=str(message.get("message_thread_id") or ""),
         attachments=attachments,
     )
+
+
+def thread_target(thread_id: str) -> dict[str, Any]:
+    """``message_thread_id`` for a forum topic, or nothing.
+
+    An empty ``thread_id`` is not a topic id: Telegram rejects the parameter
+    outright rather than reading it as "the General topic", so it is left out.
+    """
+    return {"message_thread_id": int(thread_id)} if thread_id else {}

@@ -7,7 +7,6 @@ them); this adapter only normalizes them, it owns no poll loop.
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import pathlib
 from collections.abc import Sequence
@@ -44,6 +43,7 @@ from coffer.infrastructure.channel.seatalk_parse import (
     strip_group_mentions,
 )
 from coffer.infrastructure.channel.seatalk_transport import SeaTalkTransport
+from coffer.infrastructure.channel.seatalk_typing import send_typing
 
 _logger = logging.getLogger(__name__)
 
@@ -315,11 +315,10 @@ class SeaTalkAdapter:
         # typing signal for the same receipt cue); the Protocol still needs it.
         raise ChannelSendFailed(self._name, "seatalk cannot set reactions")
 
-    async def send_typing(self, chat_id: str) -> None:
-        with contextlib.suppress(Exception):
-            await self._post(
-                "/messaging/v2/single_chat_typing", {"employee_code": chat_id}, retries=0
-            )
+    async def send_typing(
+        self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
+    ) -> None:
+        await send_typing(self._post, chat_id, thread_id, chat_kind)
 
     async def send_media(
         self,
