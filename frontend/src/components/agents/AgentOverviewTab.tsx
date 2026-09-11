@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import type { AgentOut } from "@/lib/api/agents";
 import { BUILTIN, useAgentConnectionDraft } from "@/lib/hooks/useAgentConnectionDraft";
+import { AgentModelSelection } from "@/components/agents/AgentModelSelection";
 
 export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
@@ -63,33 +64,13 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
               </Select>
             </div>
 
-            {/* Built-in login: no binding to make here. Show what the agent can
-                run on, and say where the choice actually happens. */}
+            {/* Built-in login: no binding to make here. The agent's own
+                catalogue is shown instead — and because that catalogue names
+                models this account may not be entitled to run, with nothing
+                local able to tell which, the user ticks the ones that work. */}
             {c.draftIsBuiltin ? (
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label>{t("agents.connection.builtinModelsTitle")}</Label>
-                {c.builtinModels.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    {t("agents.connection.builtinModelsEmpty")}
-                  </p>
-                ) : (
-                  <ul className="flex flex-wrap gap-1.5">
-                    {c.builtinModels.map((m) => (
-                      <li
-                        key={m.id}
-                        className="rounded-sm border border-border px-1.5 py-0.5 text-xs"
-                      >
-                        <span className="font-mono">{m.id}</span>
-                        {m.label && m.label !== m.id && (
-                          <span className="ml-1.5 text-muted-foreground">{m.label}</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  {t("agents.connection.builtinModelsHint")}
-                </p>
+              <div className="sm:col-span-2">
+                <AgentModelSelection agentType={agent.type} />
               </div>
             ) : (
               <>

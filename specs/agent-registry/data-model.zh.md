@@ -44,6 +44,12 @@ Pydantic v2 `BaseModel`。注册到 `ResourceService` 的 kind 专属 config sch
 | ------------------- | -------------- | ---------------------------------------------------------------------------------------------------- |
 | `type`              | `AgentType`    | 必填；enum 值                                                                                        |
 | `config_dir`        | `Path \| None` | 可选的绝对路径覆盖；读取时默认回退到 `type.default_config_dir()`                                     |
+| `models`            | `list[str]`    | 策展集合：agent 自身模型清单里，哪些会被选择器提供。**空 = 尚未策展** ⇒ 提供整份清单（spec provider-switching 修订 2026-09-11b，K2）；由 migration `0060` 回填 |
+
+按 agent 的模型**绑定**字段（`model`、`fast_model`、`wire_api`）归
+[spec provider-switching](../provider-switching/spec.zh.md)（修订 2026-06-22b，E3）
+所有并在那里记录；上表的 `models` 是另一回事——它是选择器**提供**的集合，从来不是
+agent 实际运行的模型。
 
 skill 投递到 `<config_dir>/skills`；配置文件 allowlist 基于 `config_dir` 解析。每个解析后的 `config_dir` 至多只能有一个 agent。agent 记录本身不携带任何 skill 投递策略：哪些 skill 送达它，完全由每个 skill 自身的 `enabled` 开关与其 agent scope 决定（spec skill-manager、[ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.md)）——本表曾经携带的 `follow_all_skills` / `skill_exclusions` 两个字段已删除，并由 migration `0058` 从已存储的配置里剥离。
 
