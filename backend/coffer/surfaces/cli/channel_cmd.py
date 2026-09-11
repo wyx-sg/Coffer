@@ -122,6 +122,9 @@ def pair(
     body = r.json()
     typer.echo(f"pairing code: {body['code']}")
     typer.echo(f"expires at:   {body['expires_at']}")
+    if body.get("pair_url"):
+        # FR-066: opening the link pairs in one tap; the code still works typed.
+        typer.echo(f"pair link:    {body['pair_url']}")
     typer.echo("Send this code to the bot from the account that should own the channel.")
 
 
@@ -158,6 +161,10 @@ def status(
         )
         if callback.get("public_callback_url"):
             typer.echo(f"register: {callback['public_callback_url']}")
+    for diagnostic in body.get("diagnostics") or []:
+        # FR-060: a setting that reads correctly here and does nothing in the
+        # chat is worth interrupting for.
+        typer.echo(f"warning:  {diagnostic['message']}")
 
 
 @app.command("notify")

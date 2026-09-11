@@ -188,7 +188,11 @@ def agent_card(
     ``choices`` is ``(key, display name)``; ``current`` is the key in effect.
     """
     options = [
-        ChoiceButton(label=_tick(name, key == current), value=f"agent:{key}")
+        ChoiceButton(
+            label=_tick(name, key == current),
+            value=f"agent:{key}",
+            selected=key == current,
+        )
         for key, name in choices
         if callback_fits(f"agent:{key}")
     ]
@@ -218,7 +222,11 @@ def model_card(
     """
     shown = current or "(CLI default)"
     options = [
-        ChoiceButton(label=_tick(name, name == current), value=f"model:{name}")
+        ChoiceButton(
+            label=_tick(name, name == current),
+            value=f"model:{name}",
+            selected=name == current,
+        )
         for name in dict.fromkeys(picks)
         if callback_fits(f"model:{name}")
     ]

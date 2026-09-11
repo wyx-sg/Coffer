@@ -106,6 +106,7 @@ def inbound(
     addressed: bool = True,
     mentions_others: bool = False,
     platform_message_id: str = "pm-1",
+    ephemeral_id: str = "",
 ) -> InboundMessage:
     return InboundMessage(
         channel=channel,
@@ -113,6 +114,7 @@ def inbound(
         sender_display=sender_display,
         text=text,
         platform_message_id=platform_message_id,
+        ephemeral_id=ephemeral_id,
         timestamp=datetime.now(tz=UTC),
         sender_id=sender_id,
         thread_id=thread_id,
@@ -241,6 +243,14 @@ class FakeChannelAdapter:
         # full routing detail, kept separate so every existing ``.sent``/
         # ``.texts()`` assertion above stays a plain 2-tuple.
         self.sent_routed: list[tuple[str, str, str, str]] = []
+        # FR-068: the reply target of each send_text, positionally aligned with
+        # ``sent`` ("" when the send answered nothing in particular).
+        self.sent_reply_targets: list[str] = []
+        #: The EphemeralTarget of each send_text, positionally aligned with
+        #: ``sent`` (None when the answer was said out loud).
+        self.sent_ephemeral: list[Any] = []
+        # FR-067/chat action: what each send_typing claimed to be doing.
+        self.typing_actions: list[str] = []
         # (chat_id, text, buttons) for sends that carried a selection card.
         self.cards: list[tuple[str, str, list[ChoiceButton]]] = []
         # The card title each of those sends carried, positionally aligned with
@@ -315,9 +325,16 @@ class FakeChannelAdapter:
         title: str = "",
         thread_id: str = "",
         chat_kind: str = "direct",
+        reply_to_message_id: str = "",
+        ephemeral: Any = None,
     ) -> SentMessage:
+        # FR-064: which sends were addressed to one member of the group only.
+        self.sent_ephemeral.append(ephemeral)
         self.sent.append((chat_id, markdown))
         self.sent_routed.append((chat_id, markdown, thread_id, chat_kind))
+        # FR-068: what each send pointed back at, so a test can assert a group
+        # reply is attached to the message it answers.
+        self.sent_reply_targets.append(reply_to_message_id)
         if buttons:
             self.cards.append((chat_id, markdown, list(buttons)))
             self.card_titles.append(title)
@@ -351,8 +368,14 @@ class FakeChannelAdapter:
         self.deleted.append((chat_id, message_id))
 
     async def send_typing(
-        self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
+        self,
+        chat_id: str,
+        *,
+        thread_id: str = "",
+        chat_kind: str = "direct",
+        action: str = "typing",
     ) -> None:
+        self.typing_actions.append(action)
         self.typing.append(chat_id)
         self.typing_routed.append((chat_id, chat_kind, thread_id))
 

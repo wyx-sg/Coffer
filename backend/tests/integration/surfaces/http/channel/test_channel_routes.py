@@ -197,6 +197,7 @@ async def test_status_telegram_defaults(ctx: _Ctx) -> None:
         "pending_pairing": False,
         "peer": None,
         "callback": None,  # telegram needs no callback ingress
+        "diagnostics": [],  # nothing contradicts the configuration
     }
 
 

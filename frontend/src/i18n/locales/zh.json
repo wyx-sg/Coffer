@@ -1046,6 +1046,7 @@
       "generating": "生成中…",
       "copy": "复制",
       "copied": "已复制",
+      "openLink": "打开配对链接",
       "expires": "{{time}} 过期（仅可使用一次）。"
     },
     "callback": {

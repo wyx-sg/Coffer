@@ -235,3 +235,61 @@ describe("ChannelDetailPage", () => {
     expect(notify.mutate).toHaveBeenCalledWith("ping");
   });
 });
+
+describe("ChannelDetailPage — platform diagnostics and pairing link", () => {
+  test("reports a configuration the platform will not honour", () => {
+    // FR-060: privacy mode makes "act on unaddressed group messages" a setting
+    // that reads correctly in Coffer and does nothing in the chat.
+    stubResource();
+    stubStatus({
+      diagnostics: [
+        {
+          code: "telegram_privacy_mode",
+          message: "Disable privacy mode in BotFather (/setprivacy), then re-add the bot.",
+        },
+      ],
+    });
+    stubPairing();
+    renderPage();
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Disable privacy mode in BotFather");
+  });
+
+  test("shows no alert when nothing contradicts the configuration", () => {
+    stubResource();
+    stubStatus({ diagnostics: [] });
+    stubPairing();
+    renderPage();
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  test("offers the pairing link alongside the code", () => {
+    // FR-066: one tap instead of transcribing eight characters on a phone.
+    stubResource();
+    stubStatus();
+    stubPairing({
+      code: "ABCD2345",
+      expires_at: "2026-06-12T10:00:00Z",
+      pair_url: "https://t.me/cofferbot?start=ABCD2345",
+    });
+    renderPage();
+
+    expect(screen.getByText("ABCD2345")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /pairing link/i })).toHaveAttribute(
+      "href",
+      "https://t.me/cofferbot?start=ABCD2345",
+    );
+  });
+
+  test("shows only the code when the platform has no pairing link", () => {
+    stubResource();
+    stubStatus();
+    stubPairing({ code: "ABCD2345", expires_at: "2026-06-12T10:00:00Z" });
+    renderPage();
+
+    expect(screen.getByText("ABCD2345")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /pairing link/i })).not.toBeInTheDocument();
+  });
+});

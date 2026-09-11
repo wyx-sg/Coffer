@@ -37,6 +37,10 @@ def get_channel_service() -> ChannelService:
 class PairingCodeOut(BaseModel):
     code: str
     expires_at: datetime
+    # FR-066: a link that carries the code, so the owner pairs by opening it.
+    # "" when the platform has no such link or the bot's username is unknown —
+    # the typed code always works.
+    pair_url: str = ""
 
 
 class ChannelPeerOut(BaseModel):
@@ -61,6 +65,11 @@ class CallbackTestOut(BaseModel):
     detail: str
 
 
+class ChannelDiagnosticOut(BaseModel):
+    code: str
+    message: str
+
+
 class ChannelStatusOut(BaseModel):
     name: str
     channel_type: str
@@ -69,6 +78,7 @@ class ChannelStatusOut(BaseModel):
     pending_pairing: bool
     peer: ChannelPeerOut | None
     callback: CallbackInfoOut | None
+    diagnostics: list[ChannelDiagnosticOut] = []
 
 
 class NotifyIn(BaseModel):
@@ -85,8 +95,8 @@ class EventAcceptedOut(BaseModel):
 
 @router.post("/{name}/pairing-code", response_model=PairingCodeOut)
 async def issue_pairing_code(name: str, actor: str = Depends(get_actor)) -> PairingCodeOut:
-    code, expires_at = await get_channel_service().issue_pairing_code(name, actor=actor)
-    return PairingCodeOut(code=code, expires_at=expires_at)
+    code, expires_at, pair_url = await get_channel_service().issue_pairing_code(name, actor=actor)
+    return PairingCodeOut(code=code, expires_at=expires_at, pair_url=pair_url)
 
 
 @router.get("/{name}/status", response_model=ChannelStatusOut)
@@ -123,6 +133,9 @@ async def channel_status(name: str) -> ChannelStatusOut:
         pending_pairing=status.pending_pairing,
         peer=peer,
         callback=callback,
+        diagnostics=[
+            ChannelDiagnosticOut(code=d.code, message=d.message) for d in status.diagnostics
+        ],
     )
 
 

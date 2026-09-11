@@ -44,6 +44,9 @@ class _Runtime:
     def is_running(self, name: str) -> bool:
         return False
 
+    def adapter(self, name: str) -> None:
+        return None  # nothing started, so there is no identity to diagnose
+
     def tunnel_running(self, name: str) -> bool:
         return False
 

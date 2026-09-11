@@ -23,8 +23,13 @@ from typing import cast
 
 from coffer.application.audit_service import AuditService
 from coffer.application.channel.commands import HELP_TEXT, ChannelCommands
+from coffer.application.channel.ephemeral import (
+    private_send,
+    safe_send,
+    target_for_command,
+)
 from coffer.application.channel.inbound_events import InboundEvents
-from coffer.application.channel.pairing import PairingManager
+from coffer.application.channel.pairing import PairingManager, claim_pairing
 from coffer.application.channel.ports import (
     AgentCatalogPort,
     ChannelBinding,
@@ -45,29 +50,19 @@ from coffer.application.channel.turn_driver import (
 from coffer.application.channel.turn_driver import (
     Session as _Session,
 )
-from coffer.domain.audit import AuditEventType
+from coffer.application.channel.turn_media import attachment_note
 from coffer.domain.channel.envelopes import (
-    ChoiceButton,
     InboundCallback,
     InboundLifecycle,
     InboundMessage,
+    InboundStop,
 )
 from coffer.domain.channel.rich_content import flatten_context, format_origin
 from coffer.domain.chat.attachment import Attachment
-from coffer.domain.resource import ResourceRef
 
 __all__ = ["ChannelBinding", "InboundProcessor"]
 
 _logger = logging.getLogger(__name__)
-
-
-def _attachment_note(attachments: Sequence[Attachment]) -> str:
-    """A short stand-in text for a media message with no caption, so the persisted
-    user turn is not blank (the bytes reach the agent out-of-band)."""
-    names = ", ".join(a.filename for a in attachments)
-    kind = "image" if all(a.is_image for a in attachments) else "file"
-    plural = "s" if len(attachments) != 1 else ""
-    return f"(sent {len(attachments)} {kind}{plural}: {names})"
 
 
 class InboundProcessor:
@@ -107,13 +102,13 @@ class InboundProcessor:
             threads=threads,
             conversations=conversations,
             turns=turns,
-            safe_send=self._safe_send,
+            safe_send=safe_send,
             session=self._session,
         )
         self._events = InboundEvents(
             peers=peers,
             commands=self._commands,
-            safe_send=self._safe_send,
+            safe_send=safe_send,
             stop_chat_sessions=self._stop_chat_sessions,
         )
 
@@ -194,7 +189,7 @@ class InboundProcessor:
                 # would let any member without a resolvable sender_id drive
                 # turns on the owner's agent. Refuse whenever ownership can't
                 # be proven, not just when it is provably wrong.
-                await self._safe_send(
+                await safe_send(
                     binding,
                     msg.chat_id,
                     "🚫 Not authorized — only this channel's owner can use me here.",
@@ -272,7 +267,7 @@ class InboundProcessor:
             # An empty envelope with nothing downloadable (a sticker, a location,
             # a media type the transport does not extract) — and no thread
             # history/images to ground a turn on either.
-            await self._safe_send(
+            await safe_send(
                 binding,
                 peer.chat_id,
                 "⚠️ Unsupported message — send text, a photo, or a file.",
@@ -286,14 +281,15 @@ class InboundProcessor:
                 peer,
                 text,
                 self._session(binding.name, peer.chat_id, msg.thread_id),
-                self._safe_send,
+                # FR-064: a command answer is the asker's business, not the room's.
+                private_send(safe_send, target_for_command(msg, text)),
                 chat_kind=msg.chat_kind,
                 thread_id=msg.thread_id,
             )
             return
         session = self._session(msg.channel, peer.chat_id, msg.thread_id)
         if len(session.queue) >= _QUEUE_MAX:
-            await self._safe_send(
+            await safe_send(
                 binding,
                 peer.chat_id,
                 "⚠️ Busy — message dropped, try again.",
@@ -314,7 +310,7 @@ class InboundProcessor:
         origin = format_origin(msg, platform=binding.channel_type)
         session.queue.append(
             (
-                f"{origin}\n\n{text or _attachment_note(attachments)}",
+                f"{origin}\n\n{text or attachment_note(attachments)}",
                 attachments,
                 msg.thread_id,
                 msg.chat_kind,
@@ -342,32 +338,31 @@ class InboundProcessor:
             return
         await self._events.on_lifecycle(binding, event)
 
+    async def on_stop(self, event: InboundStop) -> None:
+        """The user pressed the platform's own stop control (FR-063)."""
+        binding = self._bindings.get(event.channel)
+        if binding is None:
+            return
+        await self._events.on_stop(
+            binding, event, session=self._session(event.channel, event.chat_id, event.thread_id)
+        )
+
     # -- pairing -----------------------------------------------------------
 
     async def _maybe_pair(self, binding: ChannelBinding, msg: InboundMessage) -> None:
-        # Non-text content arrives as an empty envelope; never let it burn a
-        # pairing attempt (a stranger's sticker must not invalidate the code).
-        if not msg.text.strip():
-            return
-        if not self._pairing.try_claim(binding.name, msg.text):
-            _logger.debug("channel.inbound.ignored", extra={"channel": binding.name})
-            return
-        peer = ChannelPeer(
-            resource_id=binding.resource_id,
+        peer = await claim_pairing(
+            binding,
+            text=msg.text,
             chat_id=msg.chat_id,
-            display_name=msg.sender_display,
-            paired_at=datetime.now(tz=UTC),
-            active_conversation_id=None,
-            sender_id=msg.sender_id or None,
+            sender_display=msg.sender_display,
+            sender_id=msg.sender_id,
+            pairing=self._pairing,
+            peers=self._peers,
+            audit=self._audit,
         )
-        await self._peers.upsert(peer)
-        await self._audit.record(
-            AuditEventType.CHANNEL_PAIRED.value,
-            ref=ResourceRef(kind="channel", name=binding.name),
-            actor="channel",
-            details={"chat_id": msg.chat_id, "display_name": msg.sender_display},
-        )
-        await self._safe_send(
+        if peer is None:
+            return
+        await safe_send(
             binding,
             msg.chat_id,
             f"✅ Paired. This chat now controls Coffer channel '{binding.name}'.\n\n{HELP_TEXT}",
@@ -380,20 +375,3 @@ class InboundProcessor:
         if key not in self._sessions:
             self._sessions[key] = _Session()
         return self._sessions[key]
-
-    async def _safe_send(
-        self,
-        binding: ChannelBinding,
-        chat_id: str,
-        text: str,
-        *,
-        buttons: Sequence[ChoiceButton] | None = None,
-        title: str = "",
-        thread_id: str = "",
-        chat_kind: str = "direct",
-    ) -> None:
-        kw = {"buttons": buttons, "title": title, "thread_id": thread_id, "chat_kind": chat_kind}
-        try:
-            await binding.adapter.send_text(chat_id, text, **kw)  # type: ignore[arg-type]
-        except Exception:
-            _logger.exception("channel.send.failed", extra={"channel": binding.name})

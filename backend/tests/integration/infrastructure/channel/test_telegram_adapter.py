@@ -12,9 +12,12 @@ import pathlib
 
 import pytest
 
+from coffer.domain.channel.envelopes import ChoiceButton, EphemeralTarget
 from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.infrastructure.channel.live_text import TelegramLiveText
 from coffer.infrastructure.channel.telegram import TelegramAdapter
+from coffer.infrastructure.channel.telegram_draft import TelegramDraftLiveText
+from coffer.infrastructure.channel.telegram_profile import BotIdentity
 
 from .conftest import (
     FakeSeaTalk,
@@ -224,10 +227,12 @@ async def test_poll_loop_dispatches_and_commits_offset_after_dispatch(
     finally:
         await adapter.stop()
 
-    # setMyCommands registered the command menu before polling began.
-    assert fake_telegram.calls[0][0] == "setMyCommands"
-    registered = {c["command"] for c in fake_telegram.calls[0][1]["commands"]}
-    assert registered >= {"new", "stop", "status", "help"}
+    # getMe comes first and IS awaited: parsing a group message needs the bot's
+    # own id, so the poll must not start before the identity is known.
+    assert fake_telegram.calls[0][0] == "getMe"
+    # The command menu is still registered, just off the startup path.
+    registered = {c["command"] for c in fake_telegram.calls_for("setMyCommands")[0]["commands"]}
+    assert registered >= {"new", "agent", "model", "stop", "status", "help"}
 
     msg = recorder.messages[0]
     assert (msg.channel, msg.chat_id, msg.text) == ("tg", "555", "hello")
@@ -497,7 +502,12 @@ async def test_callback_query_routes_to_on_callback_and_acks(
     assert (cb.channel, cb.chat_id, cb.sender_id, cb.data) == ("tg", "555", "4242", "model:opus")
     assert cb.callback_id == "cbq-1"
     assert cb.platform_message_id == "77"
-    assert fake_telegram.calls_for("answerCallbackQuery")[0] == {"callback_query_id": "cbq-1"}
+    # The ack carries the choice back as an instant bubble, not just a spinner
+    # dismissal, so a tap is acknowledged before the card rewrite lands.
+    assert fake_telegram.calls_for("answerCallbackQuery")[0] == {
+        "callback_query_id": "cbq-1",
+        "text": "✓ opus",
+    }
     # The poll must subscribe to callback_query, else Telegram never delivers taps.
     assert "callback_query" in fake_telegram.calls_for("getUpdates")[0]["allowed_updates"]
     # A tap whose card sits in a private chat routes as a direct reply.
@@ -584,8 +594,7 @@ async def _start_bot_adapter(fake: FakeTelegram, recorder: RecordingCallbacks) -
     doesn't clobber it, and before any await lets the poll task run."""
     adapter = make_telegram_adapter(fake)
     await adapter.start(recorder.as_callbacks())
-    adapter._bot_id = _BOT_ID
-    adapter._bot_username = _BOT_USERNAME
+    adapter._identity = BotIdentity(bot_id=_BOT_ID, username=_BOT_USERNAME)
     return adapter
 
 
@@ -797,3 +806,461 @@ async def test_live_text_stops_writing_once_the_platform_rejects_an_update(
     assert fake_telegram.calls_for("editMessageText") == []
     assert fake_telegram.calls_for("deleteMessage") == []  # nothing to delete
     assert leftover == "one two three"  # the reply still owes the user its text
+
+
+# -- Bot API 10.x parity: profile, reply routing, media coverage ---------------
+
+
+async def test_start_registers_the_full_command_menu(fake_telegram: FakeTelegram) -> None:
+    """FR-065: the menu the platform shows lists every command that exists."""
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    try:
+        # Registration runs off the startup path, so the reconciler is not held
+        # up by calls nothing depends on — wait for it rather than racing it.
+        await wait_until(lambda: len(fake_telegram.calls_for("setMyCommands")) == 1)
+        await wait_until(lambda: bool(fake_telegram.calls_for("setChatMenuButton")))
+        registered = fake_telegram.calls_for("setMyCommands")
+        assert len(registered) == 1
+        names = {entry["command"] for entry in registered[0]["commands"]}
+        assert names == {"new", "agent", "model", "stop", "status", "help"}
+        assert fake_telegram.calls_for("setChatMenuButton")[0]["menu_button"] == {
+            "type": "commands"
+        }
+    finally:
+        await adapter.stop()
+
+
+async def test_start_probes_identity_including_privacy_mode(
+    fake_telegram: FakeTelegram,
+) -> None:
+    """FR-059/FR-060: privacy mode is read at start-up, not assumed."""
+    fake_telegram.results["getMe"] = {
+        "id": 4242,
+        "username": "cofferbot",
+        "can_read_all_group_messages": False,
+    }
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    try:
+        assert adapter.identity == BotIdentity(
+            bot_id=4242, username="cofferbot", reads_all_group_messages=False
+        )
+    finally:
+        await adapter.stop()
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a group reply is attached to the message it answers"
+)
+async def test_group_reply_carries_reply_parameters(fake_telegram: FakeTelegram) -> None:
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    try:
+        await adapter.send_text("555", "here you go", chat_kind="group", reply_to_message_id="31")
+    finally:
+        await adapter.stop()
+    sent = fake_telegram.calls_for("sendMessage")[0]
+    assert sent["reply_parameters"] == {
+        "message_id": 31,
+        "allow_sending_without_reply": True,
+    }
+
+
+async def test_a_send_without_a_reply_target_carries_no_reply_parameters(
+    fake_telegram: FakeTelegram,
+) -> None:
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    try:
+        await adapter.send_text("555", "plain")
+    finally:
+        await adapter.stop()
+    assert "reply_parameters" not in fake_telegram.calls_for("sendMessage")[0]
+
+
+async def test_only_the_first_chunk_answers_the_user_message(
+    fake_telegram: FakeTelegram,
+) -> None:
+    # A reply pointer on every chunk would make one answer look like five.
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    try:
+        await adapter.send_text(
+            "555", "\n\n".join("x" * 3000 for _ in range(3)), reply_to_message_id="9"
+        )
+    finally:
+        await adapter.stop()
+    sends = fake_telegram.calls_for("sendMessage")
+    assert len(sends) >= 2
+    assert "reply_parameters" in sends[0]
+    assert all("reply_parameters" not in send for send in sends[1:])
+
+
+async def test_typing_action_can_say_what_is_being_uploaded(
+    fake_telegram: FakeTelegram,
+) -> None:
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    try:
+        await adapter.send_typing("555", action="upload_document")
+    finally:
+        await adapter.stop()
+    assert fake_telegram.calls_for("sendChatAction")[0]["action"] == "upload_document"
+
+
+@pytest.mark.acceptance(spec="channels", scenario="an oversized inbound file tells the user")
+async def test_oversized_attachment_is_reported_in_the_turn_text(
+    fake_telegram: FakeTelegram, tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    recorder = RecordingCallbacks()
+    adapter = make_telegram_adapter(fake_telegram, media_dir=tmp_path / "media")
+    await adapter.start(recorder.as_callbacks())
+    await fake_telegram.update_batches.put(
+        [
+            {
+                "update_id": 90,
+                "message": {
+                    "message_id": 9000,
+                    "date": 1718000000,
+                    "chat": {"id": 555},
+                    "from": {"id": 4242, "first_name": "Yu"},
+                    "caption": "have a look",
+                    "document": {
+                        "file_id": "huge",
+                        "file_name": "dump.sql",
+                        "file_size": 30 * 1024 * 1024,
+                    },
+                },
+            }
+        ]
+    )
+    try:
+        await wait_until(lambda: len(recorder.messages) == 1)
+    finally:
+        await adapter.stop()
+    text = recorder.messages[0].text
+    assert "have a look" in text
+    assert "dump.sql" in text and "did not reach the agent" in text
+
+
+async def test_a_removal_reaches_the_lifecycle_callback(fake_telegram: FakeTelegram) -> None:
+    """FR-058: a removal must arrive, which means it must be subscribed to —
+    Telegram withholds my_chat_member unless it is named in allowed_updates."""
+    recorder = RecordingCallbacks()
+    adapter = await _start_bot_adapter(fake_telegram, recorder)
+    await fake_telegram.update_batches.put(
+        [
+            {
+                "update_id": 70,
+                "my_chat_member": {
+                    "chat": {"id": -100123, "type": "supergroup"},
+                    "new_chat_member": {
+                        "user": {"id": _BOT_ID, "is_bot": True},
+                        "status": "kicked",
+                    },
+                },
+            }
+        ]
+    )
+    try:
+        await wait_until(lambda: len(recorder.lifecycles) == 1)
+    finally:
+        await adapter.stop()
+    event = recorder.lifecycles[0]
+    assert (event.channel, event.chat_id, event.kind) == ("tg", "-100123", "removed_from_group")
+    assert "my_chat_member" in fake_telegram.calls_for("getUpdates")[0]["allowed_updates"]
+
+
+# -- rich messages (FR-061) ---------------------------------------------------
+
+
+@pytest.mark.acceptance(spec="channels", scenario="a rich reply keeps its markdown structure")
+async def test_a_rich_reply_keeps_headings_lists_and_tables(fake_telegram: FakeTelegram) -> None:
+    fake_telegram.supports_rich = True
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    body = "## Results\n\n- one\n- two\n\n| a | b |\n|---|---|\n| 1 | 2 |"
+    try:
+        await adapter.send_text("555", body)
+    finally:
+        await adapter.stop()
+    assert not fake_telegram.calls_for("sendMessage")
+    sent = fake_telegram.calls_for("sendRichMessage")[0]
+    # The structure the HTML subset destroyed — heading, bullets, table — is
+    # handed to the platform exactly as the agent wrote it.
+    assert sent["rich_message"]["markdown"] == body
+
+
+async def test_a_platform_without_rich_messages_still_delivers_the_reply(
+    fake_telegram: FakeTelegram,
+) -> None:
+    adapter = make_telegram_adapter(fake_telegram)  # fake defaults to pre-10.1
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    try:
+        await adapter.send_text("555", "## Results\n\n- one")
+    finally:
+        await adapter.stop()
+    assert len(fake_telegram.calls_for("sendRichMessage")) == 1  # tried once
+    assert "Results" in fake_telegram.calls_for("sendMessage")[0]["text"]
+
+
+async def test_an_unsupported_rich_send_is_tried_only_once(fake_telegram: FakeTelegram) -> None:
+    """FR-059: latched off for the process, not retried before every reply."""
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    try:
+        await adapter.send_text("555", "first")
+        await adapter.send_text("555", "second")
+        await adapter.send_text("555", "third")
+    finally:
+        await adapter.stop()
+    assert len(fake_telegram.calls_for("sendRichMessage")) == 1
+    assert len(fake_telegram.calls_for("sendMessage")) == 3
+
+
+async def test_the_chunk_budget_drops_when_rich_messages_latch_off(
+    fake_telegram: FakeTelegram,
+) -> None:
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    assert adapter.capabilities.max_message_chars == 32000
+    try:
+        await adapter.send_text("555", "hello")
+    finally:
+        await adapter.stop()
+    # A 32k chunk would be refused by an ordinary sendMessage, so the budget
+    # must follow the feature down.
+    assert adapter.capabilities.max_message_chars == 4000
+
+
+async def test_a_rejected_rich_message_does_not_latch_the_feature_off(
+    fake_telegram: FakeTelegram,
+) -> None:
+    # "can't parse entities" is about THIS message, not about the server's
+    # abilities — disabling rich messages over one bad table would be wrong.
+    fake_telegram.supports_rich = True
+    fake_telegram.reject_all_sends = 1
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    try:
+        await adapter.send_text("555", "bad | table")
+        await adapter.send_text("555", "fine")
+    finally:
+        await adapter.stop()
+    assert len(fake_telegram.calls_for("sendRichMessage")) == 2
+    assert adapter.capabilities.max_message_chars == 32000
+
+
+async def test_a_rich_send_carries_buttons_and_the_reply_pointer(
+    fake_telegram: FakeTelegram,
+) -> None:
+    fake_telegram.supports_rich = True
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    try:
+        await adapter.send_text(
+            "555",
+            "pick one",
+            buttons=[ChoiceButton(label="Codex", value="agent:codex")],
+            title="Agent",
+            chat_kind="group",
+            reply_to_message_id="31",
+        )
+    finally:
+        await adapter.stop()
+    sent = fake_telegram.calls_for("sendRichMessage")[0]
+    assert sent["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "agent:codex"
+    assert sent["reply_parameters"]["message_id"] == 31
+    # A rich message has real headings, so the title is one rather than a bold line.
+    assert sent["rich_message"]["markdown"].startswith("## Agent")
+
+
+# -- streamed drafts and the platform stop control (FR-062 / FR-063) ----------
+
+
+async def test_a_live_reply_streams_as_a_draft(fake_telegram: FakeTelegram) -> None:
+    fake_telegram.supports_drafts = True
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    surface = await adapter.open_live_text("555")
+    assert isinstance(surface, TelegramDraftLiveText)
+    try:
+        await surface.update("thinking")
+        remainder = await surface.close("the whole answer")
+    finally:
+        await adapter.stop()
+    drafts = fake_telegram.calls_for("sendMessageDraft")
+    assert [d["text"] for d in drafts] == ["thinking"]
+    assert drafts[0]["draft_id"] == surface.draft_id
+    # A draft is a preview, never the reply: the caller still sends the real
+    # message, and there is nothing to clean up.
+    assert remainder == "the whole answer"
+    assert not fake_telegram.calls_for("deleteMessage")
+
+
+async def test_a_streamed_draft_advertises_the_stop_control(
+    fake_telegram: FakeTelegram,
+) -> None:
+    fake_telegram.supports_drafts = True
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    surface = await adapter.open_live_text("555", thread_id="8")
+    try:
+        await surface.update("partial")
+    finally:
+        await adapter.stop()
+    draft = fake_telegram.calls_for("sendMessageDraft")[0]
+    assert draft["can_stop"] is True
+    # The finished reply is sent straight after, so a kept draft would leave the
+    # user reading the answer twice.
+    assert draft["keep_on_stop"] is False
+    assert draft["message_thread_id"] == 8
+
+
+async def test_drafts_fall_back_to_the_edited_message_surface(
+    fake_telegram: FakeTelegram,
+) -> None:
+    adapter = make_telegram_adapter(fake_telegram)  # fake defaults to pre-10.1
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    first = await adapter.open_live_text("555")
+    try:
+        await first.update("partial")  # latches drafts off
+        second = await adapter.open_live_text("555")
+        await second.update("partial")
+    finally:
+        await adapter.stop()
+    # The next turn must not pay for another doomed round trip (FR-059).
+    assert isinstance(second, TelegramLiveText)
+    assert len(fake_telegram.calls_for("sendMessageDraft")) == 1
+    # The edit surface opens by sending the message it will then rewrite.
+    assert fake_telegram.calls_for("sendMessage")[0]["text"] == "partial"
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a stop pressed on the platform's own control ends the turn"
+)
+async def test_the_stop_control_reaches_the_stop_callback(fake_telegram: FakeTelegram) -> None:
+    recorder = RecordingCallbacks()
+    adapter = await _start_bot_adapter(fake_telegram, recorder)
+    await fake_telegram.update_batches.put(
+        [
+            {
+                "update_id": 80,
+                "stopped_message_generation": {
+                    "chat": {"id": -100123, "type": "supergroup"},
+                    "message_thread_id": 8,
+                    "draft_id": 4242,
+                },
+            }
+        ]
+    )
+    try:
+        await wait_until(lambda: len(recorder.stops) == 1)
+    finally:
+        await adapter.stop()
+    stop = recorder.stops[0]
+    assert (stop.channel, stop.chat_id, stop.thread_id, stop.chat_kind) == (
+        "tg",
+        "-100123",
+        "8",
+        "group",
+    )
+    assert (
+        "stopped_message_generation" in fake_telegram.calls_for("getUpdates")[0]["allowed_updates"]
+    )
+
+
+# -- ephemeral group answers (FR-064) -----------------------------------------
+
+
+async def test_an_ephemeral_answer_is_addressed_to_one_member(
+    fake_telegram: FakeTelegram,
+) -> None:
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    try:
+        await adapter.send_text(
+            "-100123",
+            "Conversation: conv-1",
+            chat_kind="group",
+            thread_id="8",
+            ephemeral=EphemeralTarget(receiver_id="4242", ephemeral_message_id="77"),
+        )
+    finally:
+        await adapter.stop()
+    sent = fake_telegram.calls_for("sendMessage")[0]
+    assert sent["ephemeral_message_parameters"] == {"receiver_user_id": 4242}
+    assert sent["reply_parameters"]["ephemeral_message_id"] == 77
+    assert sent["message_thread_id"] == 8
+    # A private answer is a command's reply: one message, not a rich chunked one.
+    assert not fake_telegram.calls_for("sendRichMessage")
+
+
+async def test_a_refused_ephemeral_answer_still_reaches_the_group(
+    fake_telegram: FakeTelegram,
+) -> None:
+    # The worst case must be the noise Coffer already made, never a missing
+    # answer, so a refusal falls through to an ordinary send.
+    fake_telegram.reject_all_sends = 1
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    try:
+        await adapter.send_text(
+            "-100123",
+            "Conversation: conv-1",
+            chat_kind="group",
+            ephemeral=EphemeralTarget(receiver_id="4242", ephemeral_message_id="77"),
+        )
+    finally:
+        await adapter.stop()
+    sends = fake_telegram.calls_for("sendMessage")
+    assert len(sends) == 2
+    assert "ephemeral_message_parameters" not in sends[1]
+    assert "conv-1" in sends[1]["text"]
+
+
+async def test_an_ordinary_reply_is_never_ephemeral(fake_telegram: FakeTelegram) -> None:
+    # The agent's actual reply is the conversation the group is having.
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    try:
+        await adapter.send_text("-100123", "here is the answer", chat_kind="group")
+    finally:
+        await adapter.stop()
+    assert "ephemeral_message_parameters" not in fake_telegram.calls_for("sendMessage")[0]
+
+
+async def test_a_group_turn_keeps_the_edit_based_surface(fake_telegram: FakeTelegram) -> None:
+    """sendMessageDraft addresses "the target private chat" and has no group
+    form, so a group turn would spend a refused round trip per snapshot and
+    show no progress at all."""
+    fake_telegram.supports_drafts = True
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    surface = await adapter.open_live_text("-100123", chat_kind="group", thread_id="8")
+    try:
+        await surface.update("partial")
+    finally:
+        await adapter.stop()
+    assert isinstance(surface, TelegramLiveText)
+    assert not fake_telegram.calls_for("sendMessageDraft")
+
+
+async def test_a_long_snapshot_keeps_the_draft_alive(fake_telegram: FakeTelegram) -> None:
+    """A live snapshot is the whole reply so far, so it outgrows the draft's
+    4096-character budget on any long answer. Sending it anyway is refused and
+    latches the surface dead — the one thing a progress indicator must not do."""
+    fake_telegram.supports_drafts = True
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    surface = await adapter.open_live_text("555")
+    try:
+        await surface.update("x" * 9000)
+    finally:
+        await adapter.stop()
+    sent = fake_telegram.calls_for("sendMessageDraft")[0]["text"]
+    assert len(sent) == 4096
+    # The tail is what the reader is watching, not the head they have seen.
+    assert sent.startswith("…") and sent.endswith("x")

@@ -17,7 +17,12 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from coffer.application.channel.ports import AdapterCallbacks
-from coffer.domain.channel.envelopes import InboundCallback, InboundMessage
+from coffer.domain.channel.envelopes import (
+    InboundCallback,
+    InboundLifecycle,
+    InboundMessage,
+    InboundStop,
+)
 from coffer.infrastructure.channel.seatalk import SeaTalkAdapter
 from coffer.infrastructure.channel.telegram import TelegramAdapter
 
@@ -41,6 +46,8 @@ class RecordingCallbacks:
     def __init__(self) -> None:
         self.messages: list[InboundMessage] = []
         self.callbacks: list[InboundCallback] = []
+        self.lifecycles: list[InboundLifecycle] = []
+        self.stops: list[InboundStop] = []
 
     async def on_message(self, message: InboundMessage) -> None:
         self.messages.append(message)
@@ -48,8 +55,19 @@ class RecordingCallbacks:
     async def on_callback(self, callback: InboundCallback) -> None:
         self.callbacks.append(callback)
 
+    async def on_lifecycle(self, event: InboundLifecycle) -> None:
+        self.lifecycles.append(event)
+
+    async def on_stop(self, stop: InboundStop) -> None:
+        self.stops.append(stop)
+
     def as_callbacks(self) -> AdapterCallbacks:
-        return AdapterCallbacks(on_message=self.on_message, on_callback=self.on_callback)
+        return AdapterCallbacks(
+            on_message=self.on_message,
+            on_callback=self.on_callback,
+            on_lifecycle=self.on_lifecycle,
+            on_stop=self.on_stop,
+        )
 
 
 class FakeTelegram:
@@ -64,6 +82,18 @@ class FakeTelegram:
         self.fail_get_updates = 0  # answer getUpdates with HTTP 500 N times
         self.bad_payload_get_updates = False  # answer getUpdates ok:true with a non-list result
         self.html_error_sends = 0  # answer sendMessage with a non-JSON HTML body N times
+        #: Canned ``result`` per method for the ones with no bespoke branch
+        #: below (getMe, getMyDescription, …) — consulted before the {} default.
+        self.results: dict[str, Any] = {}
+        #: Whether this server knows Bot API 10.1's sendRichMessage. Defaults to
+        #: NO so the adapter's fallback (FR-059) is what most tests exercise —
+        #: an older Bot API server is a real deployment, and the fallback is the
+        #: path that must never lose a reply. Tests of the rich path flip it on.
+        self.supports_rich = False
+        #: Whether this server knows Bot API 10.1's sendMessageDraft. Same
+        #: default and same reason as supports_rich: the fallback (an edited
+        #: message) is a real deployment and must keep working.
+        self.supports_drafts = False
         self._next_message_id = 100
         self.file_bytes = b"FAKE-IMAGE-BYTES"  # served for any file download
         self.app = FastAPI()
@@ -95,7 +125,17 @@ class FakeTelegram:
             except TimeoutError:
                 batch = []
             return JSONResponse(content={"ok": True, "result": batch})
-        if method == "sendMessage":
+        if method == "sendMessageDraft" and not self.supports_drafts:
+            return JSONResponse(
+                status_code=404, content={"ok": False, "description": "Not Found: method not found"}
+            )
+        if method == "sendRichMessage" and not self.supports_rich:
+            # How a Bot API server older than 10.1 answers: it has never heard
+            # of the method, which is what latches the feature off.
+            return JSONResponse(
+                status_code=404, content={"ok": False, "description": "Not Found: method not found"}
+            )
+        if method in ("sendMessage", "sendRichMessage"):
             if self.html_error_sends > 0:
                 # A gateway returns a 502 HTML page, not the Bot API JSON
                 # envelope — response.json() would raise JSONDecodeError.
@@ -126,6 +166,8 @@ class FakeTelegram:
                     "result": {"file_id": file_id, "file_path": f"downloads/{file_id}.bin"},
                 }
             )
+        if method in self.results:
+            return JSONResponse(content={"ok": True, "result": self.results[method]})
         return JSONResponse(content={"ok": True, "result": {}})
 
     def calls_for(self, method: str) -> list[dict[str, Any]]:
@@ -253,10 +295,17 @@ class FakeSeaTalk:
         return JSONResponse(content=self.thread_response)
 
 
-def make_telegram_adapter(fake: FakeTelegram, *, poll_timeout: int = 1) -> TelegramAdapter:
+def make_telegram_adapter(
+    fake: FakeTelegram, *, poll_timeout: int = 1, media_dir: Any = None
+) -> TelegramAdapter:
     client = httpx.AsyncClient(transport=httpx.ASGITransport(app=fake.app), base_url="http://fake")
     return TelegramAdapter(
-        "tg", "BOT_TOKEN", client=client, base_url="http://fake", poll_timeout=poll_timeout
+        "tg",
+        "BOT_TOKEN",
+        client=client,
+        base_url="http://fake",
+        poll_timeout=poll_timeout,
+        media_dir=media_dir,
     )
 
 

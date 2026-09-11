@@ -85,6 +85,17 @@ export function ChannelStatusCard({ status }: { status: ChannelStatus | undefine
                 {t("channels.status.pendingPairing")}
               </p>
             ) : null}
+            {(status.diagnostics ?? []).map((diagnostic) => (
+              // FR-060: a setting that reads correctly here and does nothing in
+              // the chat — the one case worth interrupting the status list for.
+              <p
+                key={diagnostic.code}
+                role="alert"
+                className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive"
+              >
+                {diagnostic.message}
+              </p>
+            ))}
           </>
         )}
       </CardContent>
@@ -142,6 +153,18 @@ export function ChannelPairingCard({
                 {copied ? t("channels.pairing.copied") : t("channels.pairing.copy")}
               </Button>
             </div>
+            {code.pair_url ? (
+              // FR-066: opening the link pairs in one tap; the code above still
+              // works typed, for anyone reading it off another screen.
+              <a
+                href={code.pair_url}
+                target="_blank"
+                rel="noreferrer"
+                className="block break-all text-xs text-primary underline"
+              >
+                {t("channels.pairing.openLink")}
+              </a>
+            ) : null}
             <p className="text-xs text-muted-foreground">
               {t("channels.pairing.expires", {
                 time: new Date(code.expires_at).toLocaleTimeString(),

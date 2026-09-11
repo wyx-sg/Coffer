@@ -1046,6 +1046,7 @@
       "generating": "Generating…",
       "copy": "Copy",
       "copied": "Copied",
+      "openLink": "Open the pairing link",
       "expires": "Expires at {{time}} (single use)."
     },
     "callback": {

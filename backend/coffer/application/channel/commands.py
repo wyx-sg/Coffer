@@ -26,18 +26,13 @@ from coffer.application.channel.ports import (
     ModelSuggestionPort,
 )
 from coffer.application.channel.selection_cards import agent_card, model_card
-from coffer.domain.channel.envelopes import ChoiceButton
+from coffer.domain.channel.commands import help_text
+from coffer.domain.channel.envelopes import ChoiceButton, EphemeralTarget
 from coffer.domain.errors import CofferError
 
-HELP_TEXT = (
-    "Coffer channel commands:\n"
-    "/new — start a fresh conversation\n"
-    "/agent [key] — show or switch the agent (opens a fresh conversation)\n"
-    "/model [name] — show or switch the model (next turn)\n"
-    "/stop — interrupt the running turn\n"
-    "/status — active conversation, agent, and turn state\n"
-    "/help — this list"
-)
+#: FR-065: rendered from the one roster the platform's command menu also reads,
+#: so the help text can never offer a command the menu omits.
+HELP_TEXT = help_text()
 
 
 class SafeSend(Protocol):
@@ -57,6 +52,8 @@ class SafeSend(Protocol):
         title: str = "",
         chat_kind: str = "direct",
         thread_id: str = "",
+        reply_to_message_id: str = "",
+        ephemeral: EphemeralTarget | None = None,
     ) -> None: ...
 
 
@@ -110,26 +107,9 @@ class ChannelCommands:
                 binding, peer, text, send, chat_kind=chat_kind, thread_id=thread_id
             )
         elif command == "/stop":
-            # The turn that is actually draining wins over the thread's bound
-            # conversation: after ``/new`` rebinds the thread, a turn can still be
-            # running on the previous conversation. Stopping the bound (idle)
-            # conversation would claim "Stopping…" while the real turn runs on.
-            row = await self._threads.get(binding.resource_id, peer.chat_id, thread_id)
-            bound = row.active_conversation_id if row is not None else None
-            target = session.running_conversation_id or bound
-            if target is not None:
-                self._turns.interrupt_turn(target)
-                await send(
-                    binding, peer.chat_id, "⏹ Stopping…", chat_kind=chat_kind, thread_id=thread_id
-                )
-            else:
-                await send(
-                    binding,
-                    peer.chat_id,
-                    "Nothing is running.",
-                    chat_kind=chat_kind,
-                    thread_id=thread_id,
-                )
+            await self.interrupt(
+                binding, peer, session, send, chat_kind=chat_kind, thread_id=thread_id
+            )
         elif command == "/status":
             running = session.drain_task is not None and not session.drain_task.done()
             row = await self._threads.get(binding.resource_id, peer.chat_id, thread_id)
@@ -148,6 +128,44 @@ class ChannelCommands:
                 binding,
                 peer.chat_id,
                 f"Unknown command {command}. /help",
+                chat_kind=chat_kind,
+                thread_id=thread_id,
+            )
+
+    async def interrupt(
+        self,
+        binding: ChannelBinding,
+        peer: ChannelPeer,
+        session: Any,
+        send: SafeSend,
+        *,
+        chat_kind: str = "direct",
+        thread_id: str = "",
+    ) -> None:
+        """Stop the turn running for this ``(chat, thread)``.
+
+        Shared by the typed ``/stop`` and the platform's own stop control
+        (FR-063) so both take exactly one path: same cancellation, same queue
+        pause (FR-051), same thing said back to the user.
+
+        The turn that is actually draining wins over the thread's bound
+        conversation: after ``/new`` rebinds the thread, a turn can still be
+        running on the previous conversation, and stopping the bound (idle) one
+        would claim "Stopping…" while the real turn ran on.
+        """
+        row = await self._threads.get(binding.resource_id, peer.chat_id, thread_id)
+        bound = row.active_conversation_id if row is not None else None
+        target = session.running_conversation_id or bound
+        if target is not None:
+            self._turns.interrupt_turn(target)
+            await send(
+                binding, peer.chat_id, "⏹ Stopping…", chat_kind=chat_kind, thread_id=thread_id
+            )
+        else:
+            await send(
+                binding,
+                peer.chat_id,
+                "Nothing is running.",
                 chat_kind=chat_kind,
                 thread_id=thread_id,
             )

@@ -9,11 +9,14 @@ prose — including a legitimate markdown image the agent wrote only to
 
 from __future__ import annotations
 
+import contextlib
 import os
 import pathlib
 import re
+from collections.abc import Sequence
 
 from coffer.application.channel.ports import ChannelAdapter
+from coffer.domain.chat.attachment import Attachment
 
 #: A line-anchored ``MEDIA:/abs/path`` sentinel, with an optional ``| caption``
 #: after a pipe. Unlike markdown image syntax this never collides with prose.
@@ -25,6 +28,15 @@ _MEDIA_MARKER = re.compile(
 _MEDIA_MAX_BYTES = 50 * 1024 * 1024  # Telegram sendDocument caps at 50 MB
 _PHOTO_MAX_BYTES = 10 * 1024 * 1024  # sendPhoto caps at 10 MB — larger images go as documents
 _IMAGE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp"})
+
+
+def attachment_note(attachments: Sequence[Attachment]) -> str:
+    """A short stand-in text for a media message with no caption, so the persisted
+    user turn is not blank (the bytes reach the agent out-of-band)."""
+    names = ", ".join(a.filename for a in attachments)
+    kind = "image" if all(a.is_image for a in attachments) else "file"
+    plural = "s" if len(attachments) != 1 else ""
+    return f"(sent {len(attachments)} {kind}{plural}: {names})"
 
 
 def _is_image_path(path: str) -> bool:
@@ -80,6 +92,13 @@ async def deliver_media(
             as_photo = (
                 _is_image_path(path) and pathlib.Path(path).stat().st_size <= _PHOTO_MAX_BYTES
             )
+            if adapter.capabilities.supports_typing:
+                # An upload of any size shows a busy signal; saying WHAT it is
+                # busy with beats claiming to type while a file goes up.
+                with contextlib.suppress(Exception):
+                    await adapter.send_typing(
+                        chat_id, action="upload_photo" if as_photo else "upload_document"
+                    )
             await adapter.send_media(
                 chat_id,
                 path,

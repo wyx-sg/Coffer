@@ -23,7 +23,9 @@ from coffer.domain.channel.envelopes import InboundAttachment
 __all__ = ["AlbumBuffer", "FlushCallback"]
 
 # ``(representative_message, all_attachments) -> awaitable`` — emits the turn.
-FlushCallback = Callable[[dict[str, Any], tuple[InboundAttachment, ...]], Awaitable[None]]
+FlushCallback = Callable[
+    [dict[str, Any], tuple[InboundAttachment, ...], tuple[str, ...]], Awaitable[None]
+]
 
 
 @dataclass
@@ -33,6 +35,9 @@ class _Album:
 
     message: dict[str, Any]
     attachments: list[InboundAttachment] = field(default_factory=list)
+    #: FR-067 notes about items that could not be downloaded, accumulated
+    #: across the album so one unfetchable photo is still reported.
+    notes: list[str] = field(default_factory=list)
 
 
 class AlbumBuffer:
@@ -55,6 +60,7 @@ class AlbumBuffer:
         group_id: str,
         message: dict[str, Any],
         attachments: tuple[InboundAttachment, ...],
+        notes: tuple[str, ...] = (),
     ) -> None:
         """Append one album item's attachments and (re)arm its debounce timer."""
         album = self._albums.get(group_id)
@@ -66,6 +72,7 @@ class AlbumBuffer:
             # actually carries it as the text source for the flushed turn.
             album.message = message
         album.attachments.extend(attachments)
+        album.notes.extend(notes)
         self._rearm(group_id)
 
     def _rearm(self, group_id: str) -> None:
@@ -80,7 +87,9 @@ class AlbumBuffer:
         album = self._albums.pop(group_id, None)
         if album is None:
             return
-        task = asyncio.ensure_future(self._on_flush(album.message, tuple(album.attachments)))
+        task = asyncio.ensure_future(
+            self._on_flush(album.message, tuple(album.attachments), tuple(album.notes))
+        )
         self._tasks.add(task)
         task.add_done_callback(lambda _t: self._tasks.discard(task))
 

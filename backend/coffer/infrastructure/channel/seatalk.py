@@ -20,6 +20,7 @@ from coffer.domain.channel.dedup import SeenIds
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
     ChoiceButton,
+    EphemeralTarget,
     InboundAttachment,
     InboundCallback,
     InboundLifecycle,
@@ -38,11 +39,10 @@ from coffer.infrastructure.channel.seatalk_media import (
 )
 from coffer.infrastructure.channel.seatalk_parse import (
     flatten_combined_forwarded,
-    interactive_card,
     mentions_others,
-    split_to_byte_limit,
     strip_group_mentions,
 )
+from coffer.infrastructure.channel.seatalk_send import send_text_pieces
 from coffer.infrastructure.channel.seatalk_transport import SeaTalkTransport
 from coffer.infrastructure.channel.seatalk_typing import send_typing
 
@@ -273,32 +273,24 @@ class SeaTalkAdapter:
         title: str = "",
         thread_id: str = "",
         chat_kind: str = "direct",
+        reply_to_message_id: str = "",
+        ephemeral: EphemeralTarget | None = None,
     ) -> SentMessage:
-        from coffer.infrastructure.channel.render import chunk_text, markdown_to_seatalk
-
-        if buttons:
-            # Selection prompts are short — one interactive card, no chunking.
-            # (A card description renders SeaTalk markdown but NOT tables.)
-            result = await self._send(
-                chat_id,
-                interactive_card(markdown_to_seatalk(markdown), buttons, title=title),
-                thread_id,
-                chat_kind,
-            )
-            return SentMessage(message_id=str(result.get("message_id", "")))
-        last = ""
-        for chunk in chunk_text(markdown, self.capabilities.max_message_chars):
-            # Render before the byte split so escaping cannot push a piece past
-            # the platform's byte cap.
-            for piece in split_to_byte_limit(markdown_to_seatalk(chunk), _BYTE_LIMIT):
-                result = await self._send(
-                    chat_id,
-                    {"tag": "text", "text": {"format": 1, "content": piece}},
-                    thread_id,
-                    chat_kind,
-                )
-                last = str(result.get("message_id", ""))
-        return SentMessage(message_id=last)
+        # SeaTalk has no reply primitive — a message cannot point at another —
+        # so the reply target is accepted and ignored (FR-068); nor can it show
+        # a group message to one member only (FR-064).
+        del reply_to_message_id, ephemeral
+        return await send_text_pieces(
+            self._send,
+            chat_id,
+            markdown,
+            char_limit=self.capabilities.max_message_chars,
+            byte_limit=_BYTE_LIMIT,
+            buttons=buttons,
+            title=title,
+            thread_id=thread_id,
+            chat_kind=chat_kind,
+        )
 
     async def open_live_text(
         self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
@@ -338,8 +330,16 @@ class SeaTalkAdapter:
         raise ChannelSendFailed(self._name, "seatalk cannot set reactions")
 
     async def send_typing(
-        self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
+        self,
+        chat_id: str,
+        *,
+        thread_id: str = "",
+        chat_kind: str = "direct",
+        action: str = "typing",
     ) -> None:
+        # SeaTalk has one busy signal; what the bot is busy doing is not
+        # expressible, so the action is accepted and ignored.
+        del action
         await send_typing(self._post, chat_id, thread_id, chat_kind)
 
     async def send_media(

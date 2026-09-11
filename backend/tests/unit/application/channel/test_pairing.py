@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from coffer.application.channel.pairing import PairingManager
+from coffer.application.channel.pairing import PairingManager, start_link
 
 ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 START = datetime(2026, 6, 12, 9, 0, 0, tzinfo=UTC)
@@ -135,3 +135,49 @@ def test_reissue_resets_attempt_budget(manager: PairingManager):
     assert manager.try_claim("ch", "WRONGGGG") is False
     assert manager.pending("ch") is True
     assert manager.try_claim("ch", code) is True
+
+
+# -- deep-link pairing (FR-066) ----------------------------------------------
+
+
+def test_start_link_carries_the_code() -> None:
+    assert start_link("cofferbot", "ABC12345") == "https://t.me/cofferbot?start=ABC12345"
+
+
+def test_start_link_is_empty_without_a_username() -> None:
+    # Nothing to build a link from — the typed code stays the only way in.
+    assert start_link("", "ABC12345") == ""
+
+
+def test_a_start_payload_claims_the_code() -> None:
+    manager = PairingManager()
+    code, _ = manager.issue("tg")
+    assert manager.try_claim("tg", f"/start {code}") is True
+    # Single use holds for the link form exactly as for the typed one.
+    assert manager.try_claim("tg", f"/start {code}") is False
+
+
+def test_a_start_payload_addressed_to_the_bot_claims_the_code() -> None:
+    manager = PairingManager()
+    code, _ = manager.issue("tg")
+    assert manager.try_claim("tg", f"/start@cofferbot {code}") is True
+
+
+def test_a_lowercase_start_payload_claims_the_code() -> None:
+    manager = PairingManager()
+    code, _ = manager.issue("tg")
+    assert manager.try_claim("tg", f"/start {code.lower()}") is True
+
+
+def test_a_wrong_start_payload_burns_an_attempt() -> None:
+    manager = PairingManager(max_attempts=1)
+    code, _ = manager.issue("tg")
+    assert manager.try_claim("tg", "/start WRONGONE") is False
+    # The budget is shared: one wrong link exhausts it and kills the code.
+    assert manager.try_claim("tg", code) is False
+
+
+def test_a_bare_start_is_not_a_claim() -> None:
+    manager = PairingManager()
+    manager.issue("tg")
+    assert manager.try_claim("tg", "/start") is False
