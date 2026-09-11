@@ -430,7 +430,7 @@ scope 决定哪个 agent 能看到某个 server 的工具。
 - **FR-010**：收回一份已投递副本必须移除目标 link，不动 master。
 - **FR-011**：投递必须报告、绝不覆盖：当目标路径上已经存在不是 Coffer 托管链接的东西时，该 skill 被报告为冲突、既有目标原封不动，投递的其余部分照常进行。（在重新建链前先备份目标的做法只存在于 FR-029 的显式 opt-in drift 修复中。）
 - **FR-012**：当符号链接/目录 junction 不可用（如 FAT32、网络共享）时，系统可降级为复制模式；绑定记录 `link_mode=copy_fallback`（enable 事件审计为 `mode: copy_fallback`），UI 必须呈现该降级状态（Agent 的 Skills 标签页对此类绑定显示 "已复制" 警示徽标）。
-- **FR-012a**（[ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.zh.md)）：当且仅当该 skill 资源已启用**且**该 agent 在这个 skill 的 scope 内时，这个 skill 才必须被投递给该 agent——即 `skill.enabled AND agent_in_scope(skill.scope, agent)`。没有别的标志为投递把关：既不是 FR-008 的投递记账，也不是 agent 资源上的任何字段。调和过程中发现一份该判定不再授予的已投递副本，必须按 FR-010 收回它（移除链接、清除投递记录）；发现一份该判定现在授予、而该 agent 尚未持有的副本，必须投递它。
+- **FR-012a**（[ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.zh.md)）：当且仅当该 skill 资源已启用**且**该 agent 在这个 skill 的 scope 内时，这个 skill 才必须被投递给该 agent——即 `skill.enabled AND agent_in_scope(skill.scope, agent)`。没有别的标志决定一个 skill 是**给**哪些 agent 的：既不是 FR-008 的投递记账，也不是 agent 资源上的任何字段。被**禁用的 agent** 是另一回事，它根本不会被写入——判定说的是一个 skill 属于哪些 agent，而被用户关掉的 agent 是 Coffer 压根不去碰的；它已持有的副本会被收回，重新启用后再调和回来。调和过程中发现一份该判定不再授予的已投递副本，必须按 FR-010 收回它（移除链接、清除投递记录）；发现一份该判定现在授予、而该 agent 尚未持有的副本，必须投递它。
 
 **Drift**
 
@@ -446,7 +446,7 @@ scope 决定哪个 agent 能看到某个 server 的工具。
 
 **投递调和（工作区增补）**
 
-- **FR-025**：系统必须仅依据 FR-012a 的判定，按 agent 调和投递。一次调和把该 agent 应有的集合算作 `{s.name for s in skills if s.enabled and agent_in_scope(s.scope, agent_name)}`，投递其中该 agent 尚未持有的每一个 skill，并收回每一份不再需要的已持有副本。它必须在以下时机运行：一个 skill 被启用或禁用、一个 skill 的 scope 被编辑、一个 skill 被导入、一个 skill 被移除、一个 agent 被注册、一个 agent 的 `config_dir` 变更，以及一次同步导入之后的 post-import 钩子。目标路径冲突遵循 FR-011（报告、绝不覆盖）。agent 资源不携带任何形式的 skill 投递策略——没有跟随标志、没有排除列表、没有按 agent 的退出开关；唯一的输入是 skill 的 `enabled` 标志与它的 `scope`。
+- **FR-025**：系统必须仅依据 FR-012a 的判定，按 agent 调和投递。一次调和把该 agent 应有的集合算作 `{s.name for s in skills if s.enabled and agent_in_scope(s.scope, agent_name)}`，投递其中该 agent 尚未持有的每一个 skill，并收回每一份不再需要的已持有副本。它必须在以下时机运行：一个 skill 被启用或禁用、一个 skill 的 scope 被编辑、一个 skill 被导入、一个 skill 被移除、一个 agent 被注册、一个 agent 被启用或禁用、一个 agent 的 `config_dir` 变更，以及一次同步导入之后的 post-import 钩子。被禁用的 agent 应有集合为空，因此同一次调和会收回它的副本，并在它重新启用时把副本还回去。目标路径冲突遵循 FR-011（报告、绝不覆盖）。agent 资源不携带任何形式的 skill 投递策略——没有跟随标志、没有排除列表、没有按 agent 的退出开关；唯一的输入是 skill 的 `enabled` 标志与它的 `scope`。
 - **FR-026**：非托管 skill 操作必须可通过 REST API、`coffer agent skill …` / `coffer skill …` CLI（读取支持 `--json`）、以及 Web UI 中该 agent 的 Skills tab 完成。投递本身不是这个 surface 上的操作：它由 skill 资源的 `enabled` 标志与 `scope`，经通用的资源启停与 scope surface 控制。
 
 **生命周期**

@@ -10,15 +10,31 @@ interface EnableDisableInput {
   name: string;
 }
 
+/** Some kinds are read through their OWN query key rather than the generic
+ *  resource list — `useSkill` reads ["skills", name], `useProvider` reads
+ *  ["providers", name]. Invalidating only ["resources"] leaves those surfaces
+ *  rendering the pre-toggle state (the skill detail page's activation control
+ *  would keep showing "enabled" after a successful disable), so a toggle
+ *  refreshes the kind's own key too. */
+const KIND_QUERY_KEY: Record<string, string> = {
+  skill: "skills",
+  provider: "providers",
+  agent: "agents",
+};
+
+function invalidateFor(qc: ReturnType<typeof useQueryClient>, kind: string): void {
+  void qc.invalidateQueries({ queryKey: ["resources"] });
+  const own = KIND_QUERY_KEY[kind];
+  if (own) void qc.invalidateQueries({ queryKey: [own] });
+}
+
 export function useEnableResource() {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
     mutationFn: ({ kind, name }: EnableDisableInput) => resourcesApi.enable(kind, name),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["resources"] });
-    },
+    onSuccess: (_data, { kind }) => invalidateFor(qc, kind),
     onError: (error) => toast.error(translateApiError(t, error)),
   });
 }
@@ -29,9 +45,7 @@ export function useDisableResource() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: ({ kind, name }: EnableDisableInput) => resourcesApi.disable(kind, name),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["resources"] });
-    },
+    onSuccess: (_data, { kind }) => invalidateFor(qc, kind),
     onError: (error) => toast.error(translateApiError(t, error)),
   });
 }
@@ -42,9 +56,7 @@ export function useDeleteResource() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: ({ kind, name }: EnableDisableInput) => resourcesApi.remove(kind, name),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["resources"] });
-    },
+    onSuccess: (_data, { kind }) => invalidateFor(qc, kind),
     onError: (error) => toast.error(translateApiError(t, error)),
   });
 }

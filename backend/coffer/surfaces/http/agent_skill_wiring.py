@@ -176,7 +176,16 @@ def wire_agent_and_skill_kinds(
         # implementation would race the row delete and find nothing to clean.
         await skill_svc.cleanup_bindings_for_agent(ref)
 
-    agent_kind = make_agent_kind(on_delete=_agent_on_delete)
+    async def _agent_enabled_changed(ref: ResourceRef) -> None:
+        # Disabling an agent reclaims its delivered skills; enabling it puts
+        # back whatever the skills' own ``enabled`` + ``scope`` grant. Same
+        # per-agent reconciliation both ways, so the reclaim is reversible.
+        await skill_svc.apply_scope_for_agent(agent_name=ref.name, actor="system")
+
+    agent_kind = make_agent_kind(
+        on_delete=_agent_on_delete,
+        on_enabled_changed=_agent_enabled_changed,
+    )
     skill_kind = make_skill_kind(
         skill_svc.cleanup_bindings_for_skill,
         on_scope_changed=_skill_delivery_changed,

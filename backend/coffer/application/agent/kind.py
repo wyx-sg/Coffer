@@ -14,9 +14,13 @@ from coffer.domain.resource import Kind, ResourceRef
 
 # Sync or async — ResourceService awaits the result if it's an Awaitable.
 OnDeleteHook = Callable[[ResourceRef], Awaitable[None] | None]
+OnEnabledChangedHook = Callable[[ResourceRef], Awaitable[None] | None]
 
 
-def make_agent_kind(on_delete: OnDeleteHook | None = None) -> Kind:
+def make_agent_kind(
+    on_delete: OnDeleteHook | None = None,
+    on_enabled_changed: OnEnabledChangedHook | None = None,
+) -> Kind:
     """Construct the `agent` Kind.
 
     `on_delete` (if provided) is invoked by ResourceService BEFORE the
@@ -24,6 +28,11 @@ def make_agent_kind(on_delete: OnDeleteHook | None = None) -> Kind:
     awaited (so symlink + binding-row cleanup completes before the agent
     row vanishes); sync hooks run inline. The skill module supplies the
     callback at the composition root.
+
+    `on_enabled_changed` re-runs skill delivery for this agent. Coffer does not
+    write into an agent the user has switched off, so disabling one reclaims its
+    delivered skills and enabling it puts back whatever the skills' own state
+    grants — without it the reclaim would be a one-way door.
 
     The kind declares no activation scope (ADR per-agent-resource-scope): scope names the agents a
     resource is active for, so an agent scoping itself is meaningless. A
@@ -34,6 +43,7 @@ def make_agent_kind(on_delete: OnDeleteHook | None = None) -> Kind:
         display_name="Agent",
         config_schema=AgentConfig,
         on_delete=on_delete,
+        on_enabled_changed=on_enabled_changed,
         # An agent row is created from detection/validation of an on-disk config
         # dir by AgentService; the generic POST /resources path must not create
         # an undetected, folder-less agent (CODE-REG).

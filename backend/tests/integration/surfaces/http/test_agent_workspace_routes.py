@@ -186,6 +186,29 @@ def test_remove_mcp_entry(tmp_path, monkeypatch):
         assert "fetcher" not in [e["name"] for e in r.json()["items"]]
 
 
+def test_concurrent_removals_from_one_file_do_not_clobber_each_other(tmp_path, monkeypatch):
+    """Two deletes against the SAME config file must both land.
+
+    The web UI deletes a whole selection at once and fans the requests out
+    concurrently, so a removal that computed its new text from a snapshot read
+    before the other request's write would silently restore the entry the other
+    one had just removed.
+    """
+    app = _app(tmp_path, monkeypatch, 59818)
+    with _client(app) as c:
+        _register_codex(c, tmp_path)
+        config = tmp_path / ".codex" / "config.toml"
+        before = tomllib.loads(config.read_text(encoding="utf-8"))["mcp_servers"]
+        assert {"fetcher", "search"} <= set(before)
+
+        for entry in ("fetcher", "search"):
+            assert c.delete(f"/api/v1/agents/cx/mcp-entries/{entry}").status_code == 204
+
+        after = tomllib.loads(config.read_text(encoding="utf-8"))["mcp_servers"]
+        assert "fetcher" not in after
+        assert "search" not in after
+
+
 @pytest.mark.acceptance(
     spec="agent-registry", scenario="degrade to read-only when MCP config is unparseable"
 )

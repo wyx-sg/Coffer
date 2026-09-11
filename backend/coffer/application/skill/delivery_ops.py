@@ -62,7 +62,15 @@ async def apply_scope_for_agent(*, service: SkillService, agent_name: str, actor
         for b in await service._bindings.list_for_agent(agent.id)
         if b.enabled and (name := names_by_id.get(b.skill_resource_id)) is not None
     }
-    wanted = {s.name for s in skills if s.enabled and agent_in_scope(s.scope, agent_name)}
+    # A disabled agent wants nothing: the predicate decides which agents a skill
+    # is FOR, but an agent the user switched off is one Coffer does not write
+    # into at all. Everything already delivered is reclaimed below, and
+    # re-enabling the agent runs this again and puts it back.
+    wanted = (
+        {s.name for s in skills if s.enabled and agent_in_scope(s.scope, agent_name)}
+        if agent.enabled
+        else set()
+    )
 
     failures: list[str] = []
     for name in sorted(wanted - bound):

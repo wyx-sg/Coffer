@@ -105,7 +105,15 @@ async def _setup(tmp_path: pathlib.Path, *, reconcile_hooks: bool = True):
     async def _agent_on_delete(ref):
         await skill_svc.cleanup_bindings_for_agent(ref)
 
-    placeholder_kinds["agent"] = make_agent_kind(on_delete=_agent_on_delete)
+    async def _agent_enabled_changed(ref):
+        # Mirrors the composition root: toggling an agent re-runs ITS delivery,
+        # so disabling reclaims and re-enabling puts back.
+        await _reconcile(ref.name)
+
+    placeholder_kinds["agent"] = make_agent_kind(
+        on_delete=_agent_on_delete,
+        on_enabled_changed=_agent_enabled_changed if reconcile_hooks else None,
+    )
     placeholder_kinds["skill"] = make_skill_kind(
         skill_svc.cleanup_bindings_for_skill,
         on_scope_changed=_skill_delivery_changed if reconcile_hooks else None,
@@ -228,6 +236,40 @@ async def test_disabling_a_skill_reclaims_every_copy(tmp_path):
     assert await _delivered_names(skill_svc, a2) == set()
     # The master folder is untouched — a disable is not a removal.
     assert (skill_svc._store.paths_for("everywhere").folder / "SKILL.md").exists()
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_a_disabled_agent_is_never_written_into(tmp_path):
+    """An agent the user switched off is one Coffer does not deliver into.
+
+    The delivery predicate decides which agents a skill is FOR; the agent's own
+    enabled flag decides whether Coffer touches its config dir at all. Both a
+    fresh import and a reconciliation run must respect it, and the reclaim must
+    be reversible — otherwise disabling an agent would be a one-way door.
+    """
+    skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
+    live, live_dir = await _register_agent(agent_svc, tmp_path, name="live")
+    off, off_dir = await _register_agent(agent_svc, tmp_path, name="off")
+    await skill_svc._rs.set_enabled(ResourceRef("agent", "off"), False, actor="cli")
+
+    # Import after the agent was switched off: only the live agent gets it.
+    await _import_skill(skill_svc, tmp_path, "fresh")
+    assert (live_dir / "fresh").is_symlink()
+    assert not (off_dir / "fresh").exists()
+    assert await _delivered_names(skill_svc, off) == set()
+
+    # Re-enabling the agent reconciles it back.
+    await skill_svc._rs.set_enabled(ResourceRef("agent", "off"), True, actor="cli")
+    assert (off_dir / "fresh").is_symlink()
+    assert await _delivered_names(skill_svc, off) == {"fresh"}
+
+    # And switching it off again reclaims what it holds.
+    await skill_svc._rs.set_enabled(ResourceRef("agent", "off"), False, actor="cli")
+    assert not (off_dir / "fresh").exists()
+    assert await _delivered_names(skill_svc, off) == set()
+    assert (live_dir / "fresh").is_symlink()  # the live agent is untouched throughout
+    assert await _delivered_names(skill_svc, live) == {"fresh"}
     await engine.dispose()
 
 

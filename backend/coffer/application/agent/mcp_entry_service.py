@@ -246,9 +246,17 @@ class AgentMcpEntryService:
     ) -> None:
         """Remove ``entry`` from the agent config file that contains it."""
         cfg = await self._config_for(name)
-        spec, text, _parsed = await self._locate(name, entry, source)
+        spec, _text, _parsed = await self._locate(name, entry, source)
+        # Re-read immediately before the write, as ``adopt`` does: ``_locate``
+        # awaits, so the text it returned can be stale by the time we get here.
+        # The web UI deletes a whole selection at once and fans the requests out
+        # concurrently, which puts several removals against ONE file in flight
+        # together — computing each new text from its own pre-await snapshot
+        # would let the last writer silently restore the entries the others
+        # just removed.
+        current = self._store.read_text(spec.path) or ""
         new_text = remove_entry_text(
-            spec.format, text, entry, container_key=_container_key(cfg.type)
+            spec.format, current, entry, container_key=_container_key(cfg.type)
         )
         self._store.write_text_atomic(spec.path, new_text)
         await self._audit.record(

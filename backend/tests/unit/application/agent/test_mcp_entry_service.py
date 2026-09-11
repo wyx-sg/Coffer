@@ -379,6 +379,40 @@ async def test_remove_requires_source_when_ambiguous(svc, store):
     assert [p for p, _ in store._writes] == [_CLAUDE_SETTINGS]
 
 
+async def test_remove_reads_the_file_again_just_before_writing(svc, store):
+    """A removal must not compute its new text from a pre-await snapshot.
+
+    ``_locate`` awaits, so by the time ``remove_entry`` writes, another
+    in-flight removal against the SAME file may already have landed — which is
+    exactly what the UI's bulk delete produces, since it fans its requests out
+    concurrently. Writing the stale snapshot minus one entry would silently put
+    the other request's entry back. Simulated here by mutating the file between
+    the locate-time read and the write.
+    """
+    store._files[_CLAUDE_GLOBAL] = '{"mcpServers": {"a": {"command": "x"}, "b": {"command": "y"}}}'
+
+    original_read = store.read_text
+    seen: list[pathlib.Path] = []
+
+    def read_then_drop_b(path: pathlib.Path) -> str | None:
+        text = original_read(path)
+        seen.append(path)
+        if path == _CLAUDE_GLOBAL and len(seen) == 1:
+            # A concurrent removal of "b" lands right after the locate-time read.
+            store._files[path] = '{"mcpServers": {"a": {"command": "x"}}}'
+        return text
+
+    store.read_text = read_then_drop_b  # type: ignore[method-assign]
+    await svc.remove_entry("cc", "a", source="global")
+    store.read_text = original_read  # type: ignore[method-assign]
+
+    # "a" is gone because we removed it, and "b" stays gone because the write
+    # was computed from the CURRENT file rather than the stale snapshot.
+    final = store._files[_CLAUDE_GLOBAL]
+    assert '"a"' not in final
+    assert '"b"' not in final
+
+
 async def test_remove_audits_with_source(svc, store, audit_svc):
     store._files[_CLAUDE_GLOBAL] = _CLAUDE_GLOBAL_JSON
 

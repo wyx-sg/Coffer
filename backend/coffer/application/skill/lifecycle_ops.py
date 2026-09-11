@@ -145,13 +145,15 @@ async def register_from_validated(
 async def auto_bind_all(*, service: SkillService, skill: Resource, actor: str) -> None:
     """Deliver a freshly imported skill to the agents its own state grants.
 
-    The delivery predicate (FR-012a) and nothing else: a disabled skill goes
-    nowhere, and an enabled one goes exactly to the agents its scope names.
+    The delivery predicate (FR-012a): a disabled skill goes nowhere, and an
+    enabled one goes exactly to the agents its scope names. A DISABLED AGENT is
+    skipped regardless — the predicate decides which agents a skill is *for*,
+    not whether Coffer may write into an agent the user has switched off.
     """
     if not skill.enabled:
         return
     for a in await service._rs.list(kind="agent"):
-        if not agent_in_scope(skill.scope, a.name):
+        if not a.enabled or not agent_in_scope(skill.scope, a.name):
             continue
         try:
             await service.enable_for(

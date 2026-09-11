@@ -65,6 +65,27 @@ describe("useEnableResource", () => {
     );
   });
 
+  test("also invalidates the kind's own query key, so kind-owned surfaces refresh", async () => {
+    // The skill detail page reads ["skills", name], not the generic resource
+    // list — invalidating only ["resources"] left its activation control
+    // rendering the pre-toggle state after a successful disable.
+    const postMock = vi.fn().mockResolvedValue({ data: {}, error: undefined });
+    getApiClientMock.mockReturnValue({ POST: postMock } as unknown as ReturnType<
+      typeof getApiClient
+    >);
+
+    const { qc, wrapper } = makeWrapper();
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+    const { result } = renderHook(() => useEnableResource(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({ kind: "skill", name: "writing" });
+    });
+
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalled());
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["skills"] }));
+  });
+
   test("surfaces ApiError when POST fails so translateApiError can resolve the code", async () => {
     getApiClientMock.mockReturnValue({
       POST: vi.fn().mockResolvedValue({
