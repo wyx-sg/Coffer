@@ -189,6 +189,18 @@ Source: Send Streaming Messages, open.seatalk.io (login required).
   is terminated; 4096 characters total; once terminated (finished, timed out,
   errored) any request naming that `stream_id` is rejected. The docs advise
   buffering to roughly one call per 200 ms rather than per token.
+  - **The typewriter effect is update frequency, and nothing else.** The docs
+    say the client "renders progress by displaying the latest snapshot
+    received" — it REPLACES the text rather than animating towards it. Measured
+    against the real Claude SDK, text deltas arrive about every 25 ms carrying
+    ~4 characters, so buffering at the suggested 200 ms folds roughly eight of
+    them into one visible jump of ~30 characters: a sentence at a time, which
+    reads as chunks rather than typing. Coffer buffers at 100 ms instead
+    (`COFFER_SEATALK_STREAM_INTERVAL` retunes it without a rebuild). No rate
+    limit is published for `update_stream` at all — only the advice to buffer
+    "approximately every 200 ms" — so this spends an undocumented allowance on a
+    visibly better reply, and a platform that pushes back answers 429/code=101,
+    which the transport backs off from and logs.
 - Recipients on SeaTalk older than 3.67 see only the final message once the
   stream closes.
 - Open question, not resolved by the docs: the parameter table marks `thread_id`

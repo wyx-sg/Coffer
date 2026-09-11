@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -29,15 +30,26 @@ from coffer.infrastructure.channel.seatalk_parse import split_to_byte_limit
 _logger = logging.getLogger(__name__)
 
 #: Transport-level buffer: never call the platform more often than this, however
-#: eagerly the core offers new snapshots. This is now the ONLY throttle on the
-#: path — the core used to add a 1.5 s one of its own, which hid this entirely
-#: and made a stream arrive a paragraph at a time.
+#: eagerly the core offers new snapshots. This is the ONLY throttle on the path —
+#: the core used to add a 1.5 s one of its own, which hid this entirely and made
+#: a stream arrive a paragraph at a time.
 #:
-#: SeaTalk's guidance is ~200 ms, and it is what produces the typewriter effect:
-#: the client animates between successive snapshots, so a snapshot five times a
-#: second reads as text being typed. Updating per token instead would be one
-#: request per character, which the platform explicitly warns against.
-MIN_UPDATE_INTERVAL = 0.2
+#: It is what decides how the reply READS, because the client "renders progress
+#: by displaying the latest snapshot received" — it replaces the text, it does
+#: not animate towards it. So the typewriter effect is made of update frequency
+#: and nothing else.
+#:
+#: Measured against the real SDK: text deltas arrive about every 25 ms carrying
+#: ~4 characters each. Buffering at SeaTalk's suggested 200 ms therefore folds
+#: roughly eight of them into one visible jump of ~30 characters — a sentence at
+#: a time, which is what a reader reported. Halving it halves the jump.
+#:
+#: 100 ms is a judgement, not a documented figure. SeaTalk publishes no rate
+#: limit for ``update_stream`` at all — only the advice to buffer "approximately
+#: every 200 ms" — so this trades an undocumented allowance for a visibly better
+#: reply. If the platform does push back, it answers 429/code=101, the transport
+#: backs off, and the refusal is logged; it cannot fail silently.
+MIN_UPDATE_INTERVAL = float(os.environ.get("COFFER_SEATALK_STREAM_INTERVAL", "0.1"))
 
 #: Telegram edits a real message to show progress, and its flood limits are far
 #: tighter than a streaming endpoint's — roughly one edit a second before it
