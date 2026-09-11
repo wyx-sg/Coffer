@@ -655,7 +655,7 @@ components:
         description: { type: string, nullable: true }
         model: { type: string, nullable: true, description: "Per-agent model binding (spec provider-switching amendment 2026-06-22b) → ANTHROPIC_MODEL / Codex model." }
         fast_model: { type: string, nullable: true, description: "Fast slot → ANTHROPIC_SMALL_FAST_MODEL (anthropic only). Explicit null clears it." }
-        wire_api: { type: string, nullable: true, description: "Codex chat/responses choice for this agent's binding." }
+        wire_api: { type: string, nullable: true, description: "Codex wire for this agent's binding. Only \"responses\" is accepted — Codex refuses to load a config carrying the retired \"chat\"." }
 
     AgentOut:
       type: object

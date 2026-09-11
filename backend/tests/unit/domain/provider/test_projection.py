@@ -65,7 +65,7 @@ def test_codex_sets_provider_block_and_preserves_others() -> None:
         'approval_policy = "never"\n',
         base_url="https://gw/v1",
         model="gpt-x",
-        wire_api="chat",
+        wire_api="responses",
         display_name="Coffer (acme)",
     )
     doc = tomllib.loads(out)
@@ -74,14 +74,18 @@ def test_codex_sets_provider_block_and_preserves_others() -> None:
     assert doc["model_provider"] == CODEX_PROVIDER_ID
     block = doc["model_providers"][CODEX_PROVIDER_ID]
     assert block["base_url"] == "https://gw/v1"
-    assert block["wire_api"] == "chat"
+    assert block["wire_api"] == "responses"
     assert block["env_key"] == CODEX_ENV_KEY
     assert block["name"] == "Coffer (acme)"
 
 
 def test_codex_handles_empty_and_is_idempotent() -> None:
-    first = apply_codex_provider("", base_url="u", model="m", wire_api="chat", display_name="x")
-    second = apply_codex_provider(first, base_url="u", model="m", wire_api="chat", display_name="x")
+    first = apply_codex_provider(
+        "", base_url="u", model="m", wire_api="responses", display_name="x"
+    )
+    second = apply_codex_provider(
+        first, base_url="u", model="m", wire_api="responses", display_name="x"
+    )
     assert tomllib.loads(first) == tomllib.loads(second)
 
 

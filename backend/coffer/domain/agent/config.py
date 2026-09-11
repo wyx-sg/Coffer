@@ -26,6 +26,13 @@ from coffer.domain.agent.types import AgentType
 _MAX_MODELS = 200
 _MAX_MODEL_ID_LEN = 200
 
+#: The only value Codex accepts for a provider block's ``wire_api``. Its
+#: parser rejects every other spelling outright ("unknown variant, expected
+#: `responses`"), and the retired ``chat`` gets a message of its own naming
+#: this as the fix. Kept as a constant so the validator and the projection
+#: default cannot drift apart.
+_CODEX_WIRE_API = "responses"
+
 
 class AgentConfig(BaseModel):
     """Resource.config payload when kind == 'agent'."""
@@ -67,8 +74,9 @@ class AgentConfig(BaseModel):
     # models newer than the installed binary), and Coffer does not own that
     # namespace.
     models: list[str] = Field(default_factory=list)
-    # Validated against the allowed Codex wire-api values (see _validate_wire_api)
-    # so a bad value is a 422 at PATCH time, not a corrupt projected Codex config.
+    # Validated against the one Codex wire-api value that still exists (see
+    # _validate_wire_api) so a bad value is a 422 at PATCH time, not a Codex
+    # config that fails to load.
     wire_api: str | None = None
 
     @field_validator("models")
@@ -93,8 +101,25 @@ class AgentConfig(BaseModel):
     @field_validator("wire_api")
     @classmethod
     def _validate_wire_api(cls, v: str | None) -> str | None:
-        if v is not None and v not in ("chat", "responses"):
-            raise ValueError("wire_api must be 'chat' or 'responses'")
+        """``responses`` is the only wire Codex still speaks.
+
+        ``chat`` was the other half of this choice and is now refused outright:
+        Codex 0.139.0 answers ``wire_api = "chat" is no longer supported`` and
+        FAILS TO LOAD config.toml at all, so an agent projected with it cannot
+        start — not a degraded turn, a dead CLI. Rejecting the value here is the
+        only place that failure is still the user's to see: past this boundary it
+        is written into a file Coffer does not read back, where it surfaces as
+        the agent being broken rather than as a setting being wrong.
+
+        Coffer does not otherwise police what a CLI accepts, but this one is
+        already outside the CLI's own vocabulary — Codex's error names
+        ``responses`` as the fix, and its parser rejects every other spelling
+        (``unknown variant, expected `responses```).
+        """
+        if v is not None and v != _CODEX_WIRE_API:
+            raise ValueError(
+                f"wire_api must be {_CODEX_WIRE_API!r} — Codex no longer supports any other value"
+            )
         return v
 
     @field_validator("config_dir")
