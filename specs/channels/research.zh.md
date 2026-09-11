@@ -79,7 +79,9 @@ NousResearch hermes-agent 文档与源码、SeaTalk 官方 `cs-bot` 仓库与开
   `button_type: "callback"` 并携带自定义 `value`；点按以
   `interactive_message_click` 事件回传，带 `value`、`message_id` 与
   `employee_code`。
-- **Typing indicator**：存在 `single_chat_typing` 端点。
+- **Typing indicator**：单聊是 `single_chat_typing`——群聊还有
+  `group_chat_typing`，这一行当初的漏写曾让我们以为群聊没有这个端点。
+  详见下方的输入中提示一节。
 - **组织审批**：自建 app 的 scope（Send Message to Bot User 等）需要组织
   管理员审批；出站 IP allowlist 是可选项，动态 IP 的机器应保持留空。
 
@@ -194,3 +196,17 @@ FR-037 的 SeaTalk 流式实现当初是照着这份文档写的，但从未对�
 - 文档未解决的疑问：参数表把 `thread_id` 标为可选，但群聊请求示例的注释写着
   「thread_id required」。群主频道（线程之外的 @ 提及）不带 `thread_id` 开流
   是否被接受，尚未验证。
+
+### 输入中提示，两种会话都有（2026-09-11）
+
+是两个端点而不是一个 —— `messaging/v2/single_chat_typing` 收 `employee_code`，
+`messaging/v2/group_chat_typing` 收 `group_id` 加**可选**的 `thread_id`。
+Coffer 曾因「群聊没有这个端点」的判断而屏蔽了群内提示；实际上是有的。
+
+- 提示只显示 4 秒，所以一次 turn 运行期间要按心跳重发。限频 300/分钟。
+- 群聊里传入本次 turn 所回复的 thread，提示就出现在那里；不传则显示在主频道。
+  若要对一条未开线程的根消息显示输入中，把该消息的 id 作为 `thread_id` 传入 ——
+  根消息必须在 7 天以内。
+- 需要 SeaTalk 3.55 及以上。
+- 错误码 7003「群聊过大」指成员超过 200 人，此时平台根本不提供该提示。
+  无解，进度改由本次 turn 的流式载体承担。

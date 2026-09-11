@@ -241,8 +241,9 @@ class TurnRenderer:
         # chat clutter), which expires within seconds, so re-send it on a
         # heartbeat while the turn runs. It covers the window BEFORE the live
         # surface opens (a turn that answers instantly opens none at all).
-        # DM ONLY: single_chat_typing targets a DM and there is no group typing
-        # endpoint, so a group/thread turn leans on its live surface alone.
+        # Groups get it too: SeaTalk has a group_chat_typing endpoint taking the
+        # thread, so the cue appears where the reply will. (This was DM-only on
+        # the belief that no such endpoint existed.)
         #
         # Gated on the RECEIPT mechanism, not on editing: a transport that can
         # react (Telegram, 👀 per FR-036) already told the sender it was heard,
@@ -251,7 +252,7 @@ class TurnRenderer:
         # transports while meaning something else entirely — the exact
         # confusion this capability split exists to remove.
         caps = self.adapter.capabilities
-        if caps.supports_typing and not caps.supports_reactions and self.chat_kind == "direct":
+        if caps.supports_typing and not caps.supports_reactions:
             return asyncio.create_task(self._typing_heartbeat())
         return None
 
@@ -260,7 +261,9 @@ class TurnRenderer:
             await asyncio.sleep(self.heartbeat_seconds)
             # Best-effort: a failed heartbeat must never break the turn.
             with contextlib.suppress(Exception):
-                await self.adapter.send_typing(self.chat_id)
+                await self.adapter.send_typing(
+                    self.chat_id, thread_id=self.thread_id, chat_kind=self.chat_kind
+                )
 
     async def _update_progress(self, progress: _Progress) -> None:
         # Once reply text is streaming it owns the live surface (FR-037) — a

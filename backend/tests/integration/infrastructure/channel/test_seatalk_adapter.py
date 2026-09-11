@@ -110,6 +110,34 @@ async def test_send_typing_posts_typing_endpoint(fake_seatalk: FakeSeaTalk) -> N
     finally:
         await adapter.stop()
     assert fake_seatalk.typing_calls == [{"employee_code": "emp-1"}]
+    assert fake_seatalk.group_typing_calls == []
+
+
+async def test_send_typing_in_a_group_thread_uses_the_group_endpoint(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """A group has its own typing endpoint, and it takes the thread — so the
+    cue appears where the reply will, not in the group's main channel."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        await adapter.send_typing("gid-1", thread_id="t1", chat_kind="group")
+    finally:
+        await adapter.stop()
+    assert fake_seatalk.group_typing_calls == [{"group_id": "gid-1", "thread_id": "t1"}]
+    assert fake_seatalk.typing_calls == []  # never the DM endpoint
+
+
+async def test_send_typing_in_a_group_without_a_thread_omits_it(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """An @mention outside a thread types in the group's main channel. thread_id
+    is optional there, and sending an empty one would name no thread at all."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        await adapter.send_typing("gid-1", chat_kind="group")
+    finally:
+        await adapter.stop()
+    assert fake_seatalk.group_typing_calls == [{"group_id": "gid-1"}]
 
 
 # -- inbound (events fed by the daemon's ingest route) --------------------------

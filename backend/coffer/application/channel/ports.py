@@ -144,7 +144,9 @@ class ChannelAdapter(Protocol):
 
     async def delete_message(self, chat_id: str, message_id: str) -> None: ...
 
-    async def send_typing(self, chat_id: str) -> None: ...
+    async def send_typing(
+        self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
+    ) -> None: ...
 
     async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
         """Set an emoji reaction on ``message_id`` (FR-036: 👀 on receipt, ✅ on
