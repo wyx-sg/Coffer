@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -24,6 +25,8 @@ from typing import Any
 from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.infrastructure.channel.render import chunk_text, markdown_to_seatalk
 from coffer.infrastructure.channel.seatalk_parse import split_to_byte_limit
+
+_logger = logging.getLogger(__name__)
 
 #: Transport-level buffer: never call the platform more often than this, however
 #: eagerly the core offers new snapshots (the core has its own, coarser cadence).
@@ -115,10 +118,26 @@ class LiveTextSurface:
 
     async def _attempt(self, text: str) -> bool:
         """One guarded platform write: any failure latches the surface dead so a
-        terminated stream / deleted message is never written to again."""
+        terminated stream / deleted message is never written to again.
+
+        The failure is LOGGED as well as swallowed. A live surface that cannot
+        open — the platform refuses the stream endpoint, the app lacks the
+        scope, a rate limit — degrades to an ordinary un-streamed reply, which
+        is correct behaviour but indistinguishable from "streaming was never
+        attempted". Without this line the difference is invisible from the
+        outside, and the only symptom is a reply that arrives all at once.
+
+        At most one of these per surface: the ``_dead`` latch below means a
+        failed surface is never written to again, so this cannot spam a turn.
+        """
         try:
             await self._write(text)
         except Exception:
+            _logger.warning(
+                "channel.live_text.failed",
+                extra={"surface": type(self).__name__, "opened": self._opened},
+                exc_info=True,
+            )
             self._dead = True
             self._stop_keepalive()
             return False

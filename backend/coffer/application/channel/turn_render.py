@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -35,6 +36,8 @@ from coffer.domain.chat.events import (
 #: How often the renderer offers the live surface a new snapshot. The surface
 #: has its own (much smaller) transport-level buffer; this is the cadence a
 #: reader actually sees.
+_logger = logging.getLogger(__name__)
+
 _UPDATE_INTERVAL_SECONDS = 1.5
 _PROGRESS_MAX_LINES = 8
 _DESC_MAX_CHARS = 48
@@ -304,10 +307,17 @@ class TurnRenderer:
         if progress.live_tried or not self.adapter.capabilities.supports_live_text:
             return
         progress.live_tried = True  # ask once per turn, whatever the answer
-        with contextlib.suppress(Exception):
+        try:
             progress.live = await self.adapter.open_live_text(
                 self.chat_id, thread_id=self.thread_id, chat_kind=self.chat_kind
             )
+        except Exception:
+            # Swallowed so a transport that cannot stream still answers, but
+            # logged: the degraded result — a reply delivered in one piece —
+            # looks exactly like a turn that never tried to stream, and
+            # without this the difference cannot be seen from outside.
+            _logger.warning("channel.live_text.open_failed", exc_info=True)
+            return
         if progress.live is None:
             return
         progress.last_update = self.now()
