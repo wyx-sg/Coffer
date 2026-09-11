@@ -1819,12 +1819,21 @@ API server a user reaches is not guaranteed to be new enough.
   does not stop anything is worse than none, so the button is only advertised
   on a transport where the route is wired.
 - **FR-064**: Chatter that is not the answer stays private in a group. Command
-  output, selection cards, and errors are addressed to one member, not to the
-  room. Where the platform can deliver a message only that member's client
-  shows (Telegram ephemeral messages), Coffer uses it for those surfaces; the
-  agent's actual reply is always an ordinary message the group can see. This is
-  the group-noise half of FR-024: that requirement stops the bot from *acting*
-  on everything, this one stops it from *saying* everything out loud.
+  output and errors are addressed to one member, not to the room. Where the
+  platform can deliver a message only that member's client shows (Telegram
+  ephemeral messages), Coffer uses it for those; the agent's actual reply is
+  always an ordinary message the group can see. This is the group-noise half of
+  FR-024: that requirement stops the bot from *acting* on everything, this one
+  stops it from *saying* everything out loud.
+  **Selection cards are deliberately excluded.** A card is the one surface that
+  must be *rewritten* after it is used (FR-018), and a privately-delivered
+  message is rewritten through a different address space — Telegram edits an
+  ordinary card by `chat_id` + `message_id` and an ephemeral one by `chat_id` +
+  `receiver_user_id` + `ephemeral_message_id`, and documents that edit as not
+  guaranteed to reach the user. A card that cannot be reliably rewritten keeps
+  offering the option already taken, which is precisely what FR-018 exists to
+  prevent, so a card stays an ordinary message until the rewrite is as reliable
+  as the send.
 - **FR-065**: The bot introduces itself. Its command menu is registered with
   the platform from Coffer's own command roster, and its prose profile
   (description, short description) is **filled in when empty**, so a user
@@ -1850,12 +1859,28 @@ API server a user reaches is not guaranteed to be new enough.
   so a busy room can tell which question each answer belongs to.
 - **FR-069**: Selection cards speak the platform's button vocabulary. Where the
   platform offers button semantics beyond a label — a disabled state, an intent
-  colour, a copy-to-clipboard action — the card uses them: the option already
-  taken is shown disabled rather than re-offered, and a command or snippet the
-  agent wants the user to run is offered as a copy button rather than as text to
-  select by hand.
+  colour — the card uses them, so the option already taken is shown disabled
+  rather than re-offered.
 
 ## Deliberately out of scope
+
+**A copy-to-clipboard button.** Telegram's inline buttons can carry `copy_text`,
+which would let an agent hand over a command as something tappable rather than
+as text to select by hand. It is not adopted, because the button is the easy
+half: a `ChoiceButton` is only ever built by the agent and model cards, so an
+agent has no way to *ask* for one. Giving it that way means a second
+agent-facing sentinel beside `MEDIA:` — a feature with its own parsing, its own
+false-positive risk on ordinary prose, and its own spec — not a field on an
+existing button. Recorded here so the button is not mistaken for an oversight.
+
+**Privately-delivered selection cards.** See FR-064: the card is the one surface
+that must be rewritten after use, and an ephemeral message is rewritten through
+a different address space with delivery the platform does not guarantee. The
+work this would need is the ephemeral edit family
+(`editEphemeralMessageText` / `editEphemeralMessageReplyMarkup`) plus a way to
+carry an `ephemeral_message_id` on a delivered card, and it would still leave
+the rewrite less reliable than the send. Worth revisiting only if the platform
+makes that edit as reliable as an ordinary one.
 
 **Two SeaTalk card capabilities Coffer does not use.** The platform's card format
 also offers `redirect` buttons (with `mobile_link` / `desktop_link`) and
