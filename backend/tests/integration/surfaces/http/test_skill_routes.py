@@ -94,12 +94,12 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
         assert r.json()["entries"] == []
 
         # the per-(skill, agent) enable/disable routes are gone — delivery is
-        # driven by the skill's own scope + enabled flag
-        assert c.post("/api/v1/skills/hello-world/disable", json={"agent_name": "cur"}).status_code
-        assert (
-            c.post("/api/v1/skills/hello-world/enable", json={"agent_name": "cur"}).status_code
-            == 405
-        )
+        # driven by the skill's own scope + enabled flag. Assert only that
+        # nothing is reachable there: an unrouted path answers 404 or 405
+        # depending on the Starlette version, and which one is not the point.
+        for gone in ("enable", "disable"):
+            r = c.post(f"/api/v1/skills/hello-world/{gone}", json={"agent_name": "cur"})
+            assert r.status_code in (404, 405), f"{gone} still routes: {r.status_code}"
 
         # scope the skill away from the agent — the copy is reclaimed
         r = c.put("/api/v1/resources/skill/hello-world/scope", json={"scope": []})
