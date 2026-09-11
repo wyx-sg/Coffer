@@ -55,6 +55,13 @@
     },
     "backTo": "Back to {{label}}"
   },
+  "files": {
+    "conflict": "This file changed on disk since you opened it, so the save was refused. Your edits are still here — copy them somewhere safe, then reload to take the version on disk.",
+    "discardAndReload": "Discard my edits and reload",
+    "readOnlyBinary": "Binary file — read-only",
+    "readOnlyTruncated": "Too large to load in full — read-only, so a save cannot truncate it",
+    "readOnlyMissing": "Not created yet — read-only"
+  },
   "nav": {
     "aria": {
       "primary": "Primary navigation"
@@ -820,7 +827,8 @@
       "binary": "Binary file ({{size}} bytes)",
       "truncated": "Content truncated — showing the start of the file.",
       "saved": "Saved.",
-      "truncatedReadonly": "This file is too large to edit here."
+      "truncatedReadonly": "This file is too large to edit here.",
+      "editorLabel": "Contents of {{path}}"
     },
     "welcome": {
       "title": "Manage your skills",

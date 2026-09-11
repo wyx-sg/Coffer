@@ -1,15 +1,14 @@
 // frontend/src/components/agents/AgentConfigFilesEditor.tsx — spec agent-registry.
-// Two-pane, READ-ONLY config viewer for one agent: a left "tree" of the curated
-// config files (the allowlist — credential and machine-state files are
-// deliberately excluded), and a right pane that previews the selected file's
-// on-disk content. Editing happens in the user's own editor, not in-app: the
-// right pane carries a FileActions bar (open-in-editor / reveal)
-// instead of a textarea + Save, and the managed-block notice (FR-037) is a
-// read-only annotation rather than an editor warning.
+// Two-pane config editor for one agent: a left "tree" of the curated config
+// files (the allowlist — credential and machine-state files are deliberately
+// excluded), and a right pane showing the selected file's on-disk content,
+// editable behind an explicit Edit. The right pane also carries a FileActions
+// bar (open-in-editor / reveal) for the edits that want a real editor, and the
+// managed-block notice (FR-037) warns that the block may be rewritten.
 //
 // Directory-backed config keys (kind === "directory", e.g. a memory dir)
 // render as expandable nodes whose children come from the list response; a
-// child opens read-only in the same right pane.
+// child opens in the same right pane.
 //
 // Composition only: state + data plumbing live in useConfigEditorState; the
 // presentation lives in ConfigFileTree (left pane) and ConfigEditorPane (right
@@ -77,7 +76,7 @@ export function AgentConfigFilesEditor({ name }: { name: string }) {
         )}
       </div>
 
-      {/* Right: read-only view of the selected file (or directory hint). */}
+      {/* Right: the selected file (or directory hint). */}
       <div className="min-w-0">
         {s.selectedKey && s.isDirSelected ? (
           <div className="flex h-80 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
@@ -97,6 +96,8 @@ export function AgentConfigFilesEditor({ name }: { name: string }) {
             content={s.activeContent?.content ?? ""}
             loading={s.activeQuery.isPending}
             memoryBlock={s.memoryBlock}
+            draft={s.draft}
+            readOnlyMissing={s.readOnlyMissing}
           />
         ) : (
           <div className="flex h-80 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">

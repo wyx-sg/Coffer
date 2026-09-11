@@ -31,6 +31,6 @@ coffer skill verify                                  # 报告漂移;有则非零
 
 ## 在应用里
 
-**Skills** 页列出你的主库;通过文件选择器或 Git URL 导入,打开一个技能可查看其元数据与只读文件树。按 agent 的投递在每个 agent 的 **Skills** 标签页 —— 为该 agent 开关某个技能。参见 [Agents](/zh/guide/agents)。
+**Skills** 页列出你的主库;通过文件选择器或 Git URL 导入,打开一个技能可查看其元数据、浏览它的 master 文件夹，并就地编辑其中任意文本文件。按 agent 的投递在每个 agent 的 **Skills** 标签页 —— 为该 agent 开关某个技能。参见 [Agents](/zh/guide/agents)。
 
 [知识 →](/zh/guide/knowledge)

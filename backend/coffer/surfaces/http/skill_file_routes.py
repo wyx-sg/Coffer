@@ -51,11 +51,20 @@ class SkillFileContentOut(BaseModel):
     truncated: bool
     binary: bool
     size: int
+    # sha256 of the file's raw on-disk bytes — NOT of ``content``, which is
+    # truncated past the read cap and empty for a binary file. Echo it back as
+    # ``expected_fingerprint`` on a write to make that write conditional.
+    fingerprint: str
 
 
 class SkillFileWriteRequest(BaseModel):
     path: str = Field(min_length=1)  # POSIX, relative to the master folder root
     content: str  # full new file contents (UTF-8)
+    # The fingerprint from the read that seeded this edit. Supplied → the write
+    # is rejected with 409 SKILL_FILE_STALE if the file changed underneath it
+    # (the user's own editor also writes this folder). Omitted → unconditional,
+    # which is what programmatic clients have always done.
+    expected_fingerprint: str | None = None
 
 
 # ---------- helpers ----------
@@ -65,8 +74,9 @@ def _abs_paths(root: pathlib.Path, relpath: str) -> tuple[str, str]:
     """Resolve an entry's absolute path and its containing-folder path.
 
     ``relpath`` is POSIX-relative to the master folder ``root`` (``""`` for the
-    root node itself). Returns ``(abs_path, folder_abs_path)`` as strings; the
-    UI viewer is read-only and uses these for open-in-editor / reveal.
+    root node itself). Returns ``(abs_path, folder_abs_path)`` as strings, which
+    back the viewer's open-in-external-editor / reveal-in-file-manager actions
+    alongside in-app editing.
     """
     target = root if relpath == "" else root / relpath
     return str(target), str(target.parent)
@@ -96,6 +106,7 @@ def _content_out(result: file_ops.FileContent, root: pathlib.Path) -> SkillFileC
         truncated=result.truncated,
         binary=result.binary,
         size=result.size,
+        fingerprint=result.fingerprint,
     )
 
 
@@ -151,11 +162,21 @@ async def write_skill_file(
     svc: SkillService = Depends(get_skill_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> SkillFileContentOut:
-    """Overwrite one existing text file in the skill's master folder."""
+    """Overwrite one existing text file in the skill's master folder.
+
+    A body carrying ``expected_fingerprint`` makes the write conditional:
+    ``SkillFileStale`` propagates to the shared error handler as 409
+    ``SKILL_FILE_STALE`` with the file left untouched.
+    """
     name = _validate_skill_name(name)
     try:
         result = await content_ops.write_skill_file(
-            svc, name=name, relpath=body.path, content=body.content, actor=actor
+            svc,
+            name=name,
+            relpath=body.path,
+            content=body.content,
+            expected_fingerprint=body.expected_fingerprint,
+            actor=actor,
         )
     except ValueError as exc:
         # Path escapes the folder, content too large, or a binary target.

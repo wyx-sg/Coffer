@@ -1,15 +1,18 @@
 // frontend/src/components/agents/ConfigEditorPane.tsx — spec agent-registry.
-// Right pane of the agent config viewer: path/format header, the external-file
-// action bar (open-in-editor / reveal), an optional read-only
-// managed-block annotation, and a read-only preview of the file's content.
-// Config files are edited in the user's own editor, not in-app — this pane
-// never mutates. Extracted from AgentConfigFilesEditor to keep that file inside
-// the component size cap; all state stays in the parent.
+// Right pane of the agent config editor: path/format header, the external-file
+// action bar (open-in-editor / reveal), an optional managed-block annotation,
+// and the file's content — readable by default and editable behind an explicit
+// Edit (shared <FileEditor>). Opening it in the user's own editor stays
+// alongside for the edits that want a real editor. Extracted from
+// AgentConfigFilesEditor to keep that file inside the component size cap; all
+// state stays in the parent.
 import { useTranslation } from "react-i18next";
 import { Info } from "lucide-react";
 
 import { FileActions } from "@/components/FileActions";
+import { FileEditor } from "@/components/FileEditor";
 import { CodeView } from "@/components/preview/CodeView";
+import type { useFileDraft } from "@/lib/hooks/useFileDraft";
 
 export interface ConfigEditorPaneProps {
   /** Full path shown in the header (file path, or path/relpath for a child). */
@@ -27,6 +30,10 @@ export interface ConfigEditorPaneProps {
   loading: boolean;
   /** True when the file carries a Coffer memory-projection block. */
   memoryBlock: boolean;
+  /** Draft/save state for this file, owned by the parent's editor state. */
+  draft: ReturnType<typeof useFileDraft>;
+  /** Set when the file exists only as an empty read (`exists: false`). */
+  readOnlyMissing: boolean;
 }
 
 export function ConfigEditorPane(props: ConfigEditorPaneProps) {
@@ -54,16 +61,32 @@ export function ConfigEditorPane(props: ConfigEditorPaneProps) {
         </div>
       ) : null}
 
-      {/* Preview grows with content but is capped at 60vh and scrolls inside
-          (both axes) — same as the knowledge-base doc viewer, so it never
-          exceeds the window and adapts to the window size. */}
-      <CodeView
-        value={props.loading ? "" : props.content}
-        filename={props.filePath}
-        maxHeight="60vh"
+      <FileEditor
+        value={props.loading ? "" : props.draft.value}
+        onChange={props.draft.setDraft}
+        editing={props.draft.editing}
+        dirty={props.draft.dirty}
+        saving={props.draft.saving}
+        error={props.draft.error}
+        conflict={props.draft.conflict}
+        onEdit={props.draft.startEditing}
+        onCancel={props.draft.cancel}
+        onSave={props.draft.save}
+        onDiscardAndReload={() => void props.draft.discardAndReload()}
+        readOnlyReason={props.readOnlyMissing ? t("files.readOnlyMissing") : null}
         ariaLabel={t("agents.config.editorLabel", { key: props.editorKey })}
-        className="bg-muted/30"
-      />
+      >
+        {/* Preview grows with content but is capped at 60vh and scrolls inside
+            (both axes) — same as the knowledge-base doc viewer, so it never
+            exceeds the window and adapts to the window size. */}
+        <CodeView
+          value={props.loading ? "" : props.content}
+          filename={props.filePath}
+          maxHeight="60vh"
+          ariaLabel={t("agents.config.editorLabel", { key: props.editorKey })}
+          className="bg-muted/30"
+        />
+      </FileEditor>
     </div>
   );
 }

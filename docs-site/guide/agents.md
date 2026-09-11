@@ -67,7 +67,7 @@ The **Agents** page in the [Web UI](/guide/web-ui) covers the same flow without 
 
 1. Open **Agents** and click **Detect** to scan for installed agents. The detect dialog lists what was found; confirm an agent to register it.
 2. The agent detail page has four tabs — **Overview**, **Skills**, **MCP servers**, and **Config files**.
-3. On the **Config files** tab, open any curated config file in the editor. The editor validates format on save, writes atomically with a `.bak` backup, and includes a **find/replace** box that scrolls to the match.
+3. On the **Config files** tab, open any curated config file and edit it in place. Saving validates the file's format first — malformed JSON or TOML is rejected and the file on disk is left untouched — then writes atomically, keeping the previous contents next to the file as `.bak`. If the file changed on disk while you were editing, the save is refused rather than applied over the top, and you are offered a reload.
 4. Use the **Install Coffer MCP** toggle in the header to add or remove the `coffer` entry, with a live status indicator.
 5. On the **Skills** tab, toggle each skill on or off for this agent, or use **Install skills** to bind more. The **MCP servers** tab shows the gateway install status alongside the agent's own direct MCP entries; those are read-only apart from **Adopt**, which brings an entry into Coffer as a managed resource — Coffer does not remove or disable entries in another tool's config.
 

@@ -1,15 +1,23 @@
 // frontend/src/components/skills/SkillFileViewer.tsx
-// Right pane of the skill Files tab: shows the selected file's contents
-// READ-ONLY. Markdown (.md) renders via the shared <Markdown> component; other
-// text files show as raw <pre>. Editing happens in the user's own editor — the
-// <FileActions> bar opens / reveals the file. Binary
-// and truncated files render the same read-only way.
+// Right pane of the skill Files tab. Reads by default — markdown (.md) renders
+// via the shared <Markdown> component, other text files show as raw <pre> —
+// and edits behind an explicit Edit, through the same <FileEditor> the agent
+// config pane uses. The master folder is the source of truth and
+// FOLDER-delivered skills are symlinked to it, so a saved edit reaches every
+// agent without re-delivery. The <FileActions> bar still opens / reveals the
+// file for edits that want a real editor.
+//
+// Binary files, and files the read truncated, stay read-only: saving a partial
+// read would cut the file short on disk.
 import { useTranslation } from "react-i18next";
 
 import { FileActions } from "@/components/FileActions";
+import { FileEditor } from "@/components/FileEditor";
 import { CodeView } from "@/components/preview/CodeView";
 import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
+import { skillsApi } from "@/lib/api/skills";
 import { translateApiError } from "@/lib/api/errors";
+import { useFileDraft } from "@/lib/hooks/useFileDraft";
 import { useSkillFileContent } from "@/lib/hooks/useSkills";
 
 function isMarkdown(path: string): boolean {
@@ -19,6 +27,19 @@ function isMarkdown(path: string): boolean {
 export function SkillFileViewer({ name, path }: { name: string; path: string }) {
   const { t } = useTranslation();
   const content = useSkillFileContent(name, path);
+  const draft = useFileDraft({
+    loaded: content.data?.content,
+    fingerprint: content.data?.fingerprint,
+    save: async (text, expectedFingerprint) => {
+      const saved = await skillsApi.writeFileContent(name, {
+        path,
+        content: text,
+        expected_fingerprint: expectedFingerprint,
+      });
+      return saved.fingerprint;
+    },
+    reload: () => content.refetch(),
+  });
 
   if (content.isPending) {
     return <p className="text-sm text-muted-foreground">{t("common.loading")}</p>;
@@ -61,16 +82,32 @@ export function SkillFileViewer({ name, path }: { name: string; path: string }) 
     <div className="space-y-2">
       {header}
 
-      {/* Preview grows with content but is capped at 60vh and scrolls inside
-          (both axes) — same as the knowledge-base doc viewer, so it never
-          exceeds the window and adapts to the window size. */}
-      {isMarkdown(path) ? (
-        <FindableMarkdown className="max-h-[60vh] overflow-auto rounded border bg-background p-3">
-          {text}
-        </FindableMarkdown>
-      ) : (
-        <CodeView value={text} filename={path} maxHeight="60vh" className="bg-background" />
-      )}
+      <FileEditor
+        value={draft.value}
+        onChange={draft.setDraft}
+        editing={draft.editing}
+        dirty={draft.dirty}
+        saving={draft.saving}
+        error={draft.error}
+        conflict={draft.conflict}
+        onEdit={draft.startEditing}
+        onCancel={draft.cancel}
+        onSave={draft.save}
+        onDiscardAndReload={() => void draft.discardAndReload()}
+        readOnlyReason={truncated ? t("files.readOnlyTruncated") : null}
+        ariaLabel={t("skills.files.editorLabel", { path })}
+      >
+        {/* Preview grows with content but is capped at 60vh and scrolls inside
+            (both axes) — same as the knowledge-base doc viewer, so it never
+            exceeds the window and adapts to the window size. */}
+        {isMarkdown(path) ? (
+          <FindableMarkdown className="max-h-[60vh] overflow-auto rounded border bg-background p-3">
+            {text}
+          </FindableMarkdown>
+        ) : (
+          <CodeView value={text} filename={path} maxHeight="60vh" className="bg-background" />
+        )}
+      </FileEditor>
       {truncated ? (
         <p className="text-xs text-muted-foreground">
           {t("skills.files.truncated")} {t("skills.files.truncatedReadonly")}

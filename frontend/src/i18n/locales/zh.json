@@ -55,6 +55,13 @@
     },
     "backTo": "返回 {{label}}"
   },
+  "files": {
+    "conflict": "这个文件自你打开以来在磁盘上被改过，保存已被拒绝。你的修改还在 —— 先把它们复制到别处，再重新载入磁盘上的版本。",
+    "discardAndReload": "丢弃我的修改并重新载入",
+    "readOnlyBinary": "二进制文件 —— 只读",
+    "readOnlyTruncated": "过大无法整份载入 —— 保持只读，以免保存时把文件截断",
+    "readOnlyMissing": "尚未创建 —— 只读"
+  },
   "nav": {
     "aria": {
       "primary": "主导航"
@@ -820,7 +827,8 @@
       "binary": "二进制文件（{{size}} 字节）",
       "truncated": "内容已截断——仅显示文件开头部分。",
       "saved": "已保存。",
-      "truncatedReadonly": "该文件过大，暂不支持在此编辑。"
+      "truncatedReadonly": "该文件过大，暂不支持在此编辑。",
+      "editorLabel": "{{path}} 的内容"
     },
     "welcome": {
       "title": "管理你的 Skill",

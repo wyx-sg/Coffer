@@ -86,6 +86,16 @@ export interface SkillFileTreeOut {
   root: SkillFileNode;
 }
 
+/** Body of a skill-file save. `expected_fingerprint` makes the write
+ *  conditional: the daemon refuses it with 409 SKILL_FILE_STALE when the file
+ *  changed on disk since the read that produced the fingerprint. The master
+ *  folder is also the user's own working copy, so that race is routine. */
+export interface SkillFileWrite {
+  path: string;
+  content: string;
+  expected_fingerprint?: string | null;
+}
+
 export interface SkillFileContentOut {
   path: string;
   /** Absolute on-disk path of the file (handed to FileActions). */
@@ -96,6 +106,10 @@ export interface SkillFileContentOut {
   truncated: boolean;
   binary: boolean;
   size: number;
+  /** sha256 of the file's RAW on-disk bytes — not of `content`, which is
+   *  truncated past the read cap and empty for a binary file. Echo it back on a
+   *  save to make that save conditional. */
+  fingerprint: string;
 }
 
 async function call<T>(
@@ -146,4 +160,6 @@ export const skillsApi = {
   filesTree: (name: string) => call<SkillFileTreeOut>("GET", `/skills/${enc(name)}/files`),
   fileContent: (name: string, path: string) =>
     call<SkillFileContentOut>("GET", `/skills/${enc(name)}/files/content?path=${enc(path)}`),
+  writeFileContent: (name: string, body: SkillFileWrite) =>
+    call<SkillFileContentOut>("PUT", `/skills/${enc(name)}/files/content`, body),
 };

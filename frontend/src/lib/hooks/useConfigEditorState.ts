@@ -1,18 +1,20 @@
 // frontend/src/lib/hooks/useConfigEditorState.ts — spec agent-registry.
-// All state + data plumbing for the read-only agent config viewer, extracted
-// from AgentConfigFilesEditor.tsx so the component stays inside the size cap.
-// Config files are viewed in-app and edited in the user's own editor, so this
-// hook only owns the selection (file / directory / child) and the read queries
-// that back the right-pane preview — no draft, save, fingerprint, or dialog
-// state.
+// All state + data plumbing for the agent config editor, extracted from
+// AgentConfigFilesEditor.tsx so the component stays inside the size cap. It
+// owns the selection (file / directory / child), the read queries behind the
+// right pane, and the draft/save state for the selected file — the last of
+// which it delegates to the shared useFileDraft, since the skill master-file
+// editor needs exactly the same behaviour.
 import { useState } from "react";
 
 import type { ConfigFileInfo } from "@/lib/api/agents";
+import { agentsApi } from "@/lib/api/agents";
 import {
   useAgentConfigChild,
   useAgentConfigFile,
   useAgentConfigFiles,
 } from "@/lib/hooks/useAgents";
+import { useFileDraft } from "@/lib/hooks/useFileDraft";
 
 // Surface only config entries that actually exist on disk: a single file the
 // agent has not created yet (`exists === false`) or a directory with no files
@@ -48,6 +50,27 @@ export function useConfigEditorState(name: string) {
   const activeContent = activeQuery.data;
   const memoryBlock = activeContent?.memory_block === true;
 
+  // A file the agent has not created yet reads as empty with `exists: false`.
+  // Saving one would create it from the UI, which the allowlist deliberately
+  // does not do here — the write path creates children of a directory entry,
+  // not top-level files.
+  const readOnlyMissing = !selectedChild && activeContent?.exists === false;
+
+  const draft = useFileDraft({
+    loaded: activeContent?.content,
+    fingerprint: activeContent?.fingerprint,
+    save: async (content, expectedFingerprint) => {
+      const key = selectedKey as string;
+      const body = { content, expected_fingerprint: expectedFingerprint };
+      if (selectedChild) await agentsApi.writeConfigChild(name, key, selectedChild, body);
+      else await agentsApi.writeConfigFile(name, key, body);
+      // Neither write returns the new content fingerprint (both answer with the
+      // file's metadata), so the next save re-reads for it via the reload below.
+      return undefined;
+    },
+    reload: () => activeQuery.refetch(),
+  });
+
   function selectFile(key: string) {
     setSelectedKey(key);
     setSelectedChild(null);
@@ -78,5 +101,7 @@ export function useConfigEditorState(name: string) {
     activeQuery,
     activeContent,
     memoryBlock,
+    readOnlyMissing,
+    draft,
   };
 }
