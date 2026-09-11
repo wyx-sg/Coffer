@@ -17,6 +17,27 @@ from coffer.domain.channel.rich_content import ForwardedItem, flatten_forwarded,
 __all__ = ["addressed_and_text", "build_inbound_message", "is_group", "prepend_context"]
 
 
+def _utf16_span(text: str, offset: int, length: int) -> str:
+    """The substring Telegram's ``(offset, length)`` names.
+
+    Entity offsets are counted in UTF-16 code units, not Python code points.
+    The two agree for BMP text and diverge the moment a message contains an
+    emoji (one code point, two units) — which used to slice the @mention token
+    at the wrong place, so the bot missed being addressed in any message
+    carrying one. Slicing the UTF-16-LE encoding makes the two agree again.
+    """
+    units = text.encode("utf-16-le")
+    return units[2 * offset : 2 * (offset + length)].decode("utf-16-le", errors="ignore")
+
+
+def _utf16_cut(text: str, offset: int, length: int) -> tuple[str, str]:
+    """``text`` split around the UTF-16 span at ``(offset, length)``."""
+    units = text.encode("utf-16-le")
+    before = units[: 2 * offset].decode("utf-16-le", errors="ignore")
+    after = units[2 * (offset + length) :].decode("utf-16-le", errors="ignore")
+    return before, after
+
+
 def is_group(message: dict[str, Any]) -> bool:
     """A group or supergroup chat — not a private DM or a channel post."""
     chat = message.get("chat") or {}
@@ -42,9 +63,8 @@ def _mention_span(
 ) -> tuple[int, int] | None:
     """The ``(offset, length)`` of the entity naming the bot, if any.
 
-    Offsets are consulted against ``text`` as plain Python code-point indices
-    (Telegram's own offsets are UTF-16 code units; this is a known, accepted
-    simplification for non-surrogate-pair text).
+    Offsets are UTF-16 code units, resolved against ``text`` by
+    :func:`_utf16_span` so an emoji earlier in the message cannot shift them.
     """
     entities = message.get("entities") or []
     for ent in entities:
@@ -59,7 +79,7 @@ def _mention_span(
             if bot_id is not None and isinstance(user, dict) and user.get("id") == bot_id:
                 return offset, length
         elif etype == "mention" and bot_username:
-            token = text[offset : offset + length]
+            token = _utf16_span(text, offset, length)
             if token.casefold() == f"@{bot_username}".casefold():
                 return offset, length
     return None
@@ -84,7 +104,7 @@ def _mentions_other(
             offset, length = ent.get("offset"), ent.get("length")
             if not isinstance(offset, int) or not isinstance(length, int):
                 continue
-            token = text[offset : offset + length]
+            token = _utf16_span(text, offset, length)
             if not (bot_username and token.casefold() == f"@{bot_username}".casefold()):
                 return True
     return False
@@ -109,10 +129,10 @@ def addressed_and_text(
 
 
 def _strip_span(text: str, offset: int, length: int) -> str:
-    """Remove ``text[offset:offset+length]``, collapsing the single space
-    seam it can leave behind (e.g. ``"hey @bot run"`` → ``"hey run"``, not
-    ``"hey  run"``)."""
-    before, after = text[:offset], text[offset + length :]
+    """Remove the UTF-16 span at ``(offset, length)``, collapsing the single
+    space seam it can leave behind (e.g. ``"hey @bot run"`` → ``"hey run"``,
+    not ``"hey  run"``)."""
+    before, after = _utf16_cut(text, offset, length)
     if before.endswith(" ") and after.startswith(" "):
         after = after[1:]
     return (before + after).strip()
@@ -173,6 +193,7 @@ def build_inbound_message(
     channel: str,
     bot_id: int | None,
     bot_username: str | None,
+    notes: tuple[str, ...] = (),
 ) -> InboundMessage:
     """Normalize a Telegram message dict into an ``InboundMessage``.
 
@@ -192,6 +213,11 @@ def build_inbound_message(
             message, raw_text, bot_id=bot_id, bot_username=bot_username
         )
     text = prepend_context(message, raw)
+    if notes:
+        # FR-067: an attachment that could not be fetched is stated in the turn
+        # text, so the answer can acknowledge it instead of ignoring a file the
+        # user watched themselves send.
+        text = "\n".join([text, *notes]).strip()
     sender = message.get("from") or {}
     return InboundMessage(
         channel=channel,
@@ -209,6 +235,9 @@ def build_inbound_message(
         mentions_others=mentions_other,
         thread_id=str(message.get("message_thread_id") or ""),
         attachments=attachments,
+        # FR-064: present when the user sent an ephemeral command, and the
+        # handle that lets the bot answer them privately in the group.
+        ephemeral_id=str(message.get("ephemeral_message_id") or ""),
     )
 
 

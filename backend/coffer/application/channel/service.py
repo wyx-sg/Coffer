@@ -17,7 +17,7 @@ import httpx
 
 from coffer.application.audit_service import AuditService
 from coffer.application.channel.callback_probe import CallbackTestResult, probe_seatalk_callback
-from coffer.application.channel.pairing import PairingManager
+from coffer.application.channel.pairing import PairingManager, start_link
 from coffer.application.channel.ports import (
     ChannelPeer,
     ChannelPeerRepoPort,
@@ -50,6 +50,19 @@ class CallbackInfo:
 
 
 @dataclass(frozen=True)
+class ChannelDiagnostic:
+    """Something about the channel that looks configured but will not work.
+
+    FR-060: the failure mode this exists for is a setting that reads correctly
+    in Coffer and does nothing in the chat. A diagnostic always names the fix —
+    reporting a problem the user cannot act on is just noise.
+    """
+
+    code: str  # stable identifier, so the UI can style or link it
+    message: str  # what is wrong and what to do about it
+
+
+@dataclass(frozen=True)
 class ChannelStatus:
     name: str
     channel_type: str
@@ -58,6 +71,9 @@ class ChannelStatus:
     pending_pairing: bool
     peer: ChannelPeer | None
     callback: CallbackInfo | None
+    # FR-041/FR-060: contradictions between the configuration and what the
+    # platform actually permits. Empty is the healthy case.
+    diagnostics: tuple[ChannelDiagnostic, ...] = ()
 
 
 class ChannelService:
@@ -87,8 +103,15 @@ class ChannelService:
     async def _channel(self, name: str) -> Resource:
         return await self._resources.get(ResourceRef(kind="channel", name=name))
 
-    async def issue_pairing_code(self, name: str, *, actor: str) -> tuple[str, datetime]:
-        """Generate a pairing code for the channel (replacing any pending one)."""
+    async def issue_pairing_code(self, name: str, *, actor: str) -> tuple[str, datetime, str]:
+        """Generate a pairing code for the channel (replacing any pending one).
+
+        Returns the code, its expiry, and — where the platform has a
+        parameterised start link and the bot's username is known — a link that
+        carries the code (FR-066), so the owner pairs by opening it instead of
+        transcribing eight characters on a phone. The link is "" when there is
+        none; the typed code always works.
+        """
         resource = await self._channel(name)
         code, expires_at = self._pairing.issue(name)
         await self._audit.record(
@@ -97,7 +120,40 @@ class ChannelService:
             actor=actor,
             details={"expires_at": expires_at.isoformat()},
         )
-        return code, expires_at
+        return code, expires_at, self._pair_link(name, code)
+
+    def _pair_link(self, name: str, code: str) -> str:
+        """The one-tap pairing link, or "" when this channel cannot make one."""
+        username = getattr(self._runtime.adapter(name), "identity", None)
+        return start_link(getattr(username, "username", None) or "", code)
+
+    def _diagnostics(self, name: str, resource: Resource) -> tuple[ChannelDiagnostic, ...]:
+        """What is configured here that the platform will not actually honour.
+
+        FR-060: a Telegram bot runs with privacy mode ON by default, which
+        withholds ordinary group messages from it entirely. A channel told to
+        act on unaddressed group messages under that setting looks correct in
+        Coffer and does nothing in the chat — the one failure mode where saying
+        nothing is worse than any amount of noise.
+        """
+        adapter = self._runtime.adapter(name)
+        identity = getattr(adapter, "identity", None)
+        if identity is None or getattr(identity, "reads_all_group_messages", None) is not False:
+            # No adapter running, not a transport that reports this, or the
+            # answer is unknown — an unknown state is never a finding.
+            return ()
+        if resource.config.get("require_mention", True):
+            return ()  # the bot only ever acts when addressed, which it can see
+        return (
+            ChannelDiagnostic(
+                code="telegram_privacy_mode",
+                message=(
+                    "This channel is set to act on unaddressed group messages, but the bot "
+                    "runs with privacy mode ON and cannot see them. Disable privacy mode in "
+                    "BotFather (/setprivacy), then remove and re-add the bot to the group."
+                ),
+            ),
+        )
 
     async def status(self, name: str) -> ChannelStatus:
         resource = await self._channel(name)
@@ -120,6 +176,7 @@ class ChannelService:
                 tunnel_running=self._runtime.tunnel_running(name),
             )
         return ChannelStatus(
+            diagnostics=self._diagnostics(name, resource),
             name=name,
             channel_type=channel_type,
             enabled=resource.enabled,

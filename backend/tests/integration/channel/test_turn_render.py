@@ -760,3 +760,23 @@ async def test_a_scaffolding_surface_is_not_opened_before_there_is_something_to_
 
     assert adapter.live_handles == []  # nothing opened for a reply this fast
     assert adapter.sent == [("owner", "quick")]
+
+
+async def test_an_upload_says_what_it_is_uploading(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    # Claiming to type while a file goes up is the wrong busy signal.
+    img = tmp_path / "chart.png"
+    img.write_bytes(b"PNG-bytes")
+    doc = tmp_path / "report.pdf"
+    doc.write_bytes(b"%PDF-1.4")
+    adapter = FakeChannelAdapter(supports_edit=False)
+
+    await _render(
+        adapter,
+        [
+            TextDelta(text=f"MEDIA:{img}\n\nMEDIA:{doc}"),
+            TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+        ],
+    )
+
+    assert "upload_photo" in adapter.typing_actions
+    assert "upload_document" in adapter.typing_actions

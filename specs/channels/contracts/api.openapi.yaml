@@ -311,6 +311,12 @@ components:
       type: object
       required: [code, expires_at]
       properties:
+        pair_url:
+          type: string
+          description: >-
+            A link carrying the code, so the owner pairs by opening it rather
+            than transcribing it. Empty when the platform has no such link or
+            the bot's username is unknown; the typed code always works.
         code:
           type: string
           description: 8-character code from an unambiguous alphabet
@@ -342,6 +348,24 @@ components:
           allOf:
             - $ref: '#/components/schemas/CallbackInfoOut'
           description: Present for seatalk channels only
+        diagnostics:
+          type: array
+          description: >-
+            Contradictions between the channel's configuration and what the
+            platform actually permits. Empty is the healthy case.
+          items:
+            $ref: '#/components/schemas/ChannelDiagnosticOut'
+
+    ChannelDiagnosticOut:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Stable identifier, so a UI can style or link the finding
+        message:
+          type: string
+          description: What is wrong and what to do about it
 
     ChannelPeerOut:
       type: object

@@ -1358,6 +1358,54 @@ produce it on its own.
 - **When** the platform reports the group was converted to an external group
 - **Then** one warning is sent into that group, and the channel keeps working
 
+### Scenario: a rich reply keeps its markdown structure
+
+- **Given** a transport whose platform renders rich text,
+- **When** a turn's reply contains a heading, a list, and a table,
+- **Then** the reply is delivered in the platform's rich format with that
+  structure intact, and a platform that rejects it falls back to the plain
+  renderer without losing the reply.
+
+### Scenario: a stop pressed on the platform's own control ends the turn
+
+- **Given** a running turn whose live surface advertises a stop control,
+- **When** the platform reports that the user stopped the generation,
+- **Then** the turn is interrupted and the pending queue is paused, exactly as
+  a typed `/stop` would.
+
+### Scenario: privacy mode is reported when it contradicts the configuration
+
+- **Given** a channel configured to act on unaddressed group messages,
+- **When** its bot cannot read group messages,
+- **Then** the channel's health reports the contradiction and names the fix.
+
+### Scenario: an oversized inbound file tells the user
+
+- **Given** a message carrying a file larger than the platform lets a bot
+  download,
+- **When** the message drives a turn,
+- **Then** the user is told the file could not be fetched, rather than the file
+  being silently dropped.
+
+### Scenario: the command menu matches the commands that exist
+
+- **Given** the channel command roster,
+- **When** the transport registers its command menu,
+- **Then** every command the channel handles is registered.
+
+### Scenario: pairing by link claims the code
+
+- **Given** an issued pairing code delivered as a start link,
+- **When** the owner opens the link,
+- **Then** the channel pairs to that sender, and the code is spent exactly as a
+  typed one is.
+
+### Scenario: a group reply is attached to the message it answers
+
+- **Given** an addressed message in a group,
+- **When** the turn replies,
+- **Then** the reply is delivered as a platform-level reply to that message.
+
 
 ## Channels as a management plane (north star)
 
@@ -1613,7 +1661,12 @@ capabilities the official personal bridges lack.
   announced in the group itself rather than only written to a log — the owner
   is by definition present, and the group is the one place the warning is in
   context. Both are de-duplicated like every other event (FR-039): a redelivered
-  removal must not fire twice.
+  removal must not fire twice. Telegram reports the same departure as a change
+  to the bot's own membership (`my_chat_member`, which the platform withholds
+  unless it is named in the subscribed update types) rather than as a dedicated
+  event; it normalises to the same lifecycle envelope, so the rule is one rule
+  and not one per platform. Being *added* is deliberately not an event: anyone
+  can add a bot to a group, and pairing (FR-005) is the gate.
 
 ### E. The turn platform
 
@@ -1710,6 +1763,97 @@ one document instead of two.
   actor, the agent, the conversation, and the turn's token usage, so "which
   agent did what, driven by whom" is answerable after the fact (see FR-030 for
   the channel-specific fields).
+
+
+### F. Telegram platform parity (Bot API 10.x)
+
+Telegram's Bot API 10.1–10.3 (June–August 2026) added a family of surfaces
+built for exactly this shape of bot: a message that streams while an agent
+generates it, a stop control the platform draws itself, structured rich text,
+and a group reply only one member can see. Coffer had hand-built approximations
+of the first three — an edited message standing in for a stream, a typed
+`/stop`, a five-tag HTML subset standing in for markdown — and had no answer at
+all for the fourth. These requirements move each one onto the platform's own
+mechanism while keeping the hand-built path as the fallback, because the Bot
+API server a user reaches is not guaranteed to be new enough.
+
+- **FR-059**: Platform capability is probed, never assumed. On start the
+  transport reads what the platform says about itself (`getMe`) and keeps the
+  fields that change what it may do — the bot's identity, and whether privacy
+  mode leaves it able to read group messages. A capability introduced after the
+  Bot API server the user actually reaches (rich messages, message drafts,
+  ephemeral messages) is attempted once and **latched off for the process** on
+  the platform's own rejection, falling back to the mechanism it replaced. A
+  Coffer running against an older Bot API server therefore degrades in
+  formatting and liveness, never in delivery.
+- **FR-060**: Group readability is diagnosed, not silently broken. Telegram bots
+  run with privacy mode ON by default, which withholds ordinary group messages
+  from the bot entirely. A channel configured to act on unaddressed group
+  messages (`require_mention = false`, FR-035) but whose bot cannot read them is
+  a configuration that looks correct in Coffer and does nothing in the chat.
+  The channel's health surface (FR-041) MUST report this state and name the fix
+  (disable privacy mode in BotFather, then re-add the bot to the group).
+- **FR-061**: A reply renders in the platform's own rich format where it has
+  one. An agent answers in markdown — headings, lists, tables, block quotes,
+  fenced code. Telegram rich messages carry all of those natively, so the
+  reply is sent as one rather than being flattened into the HTML subset (which
+  demotes a heading to bold, a bullet to a glyph, and passes a table through as
+  raw pipes). The existing renderer stays as the fallback FR-059 selects.
+- **FR-062**: A live reply uses the platform's own streaming surface **where
+  there is one for that chat**. Where the platform can stream a partial message
+  while it is generated, the live-text handle (FR-037) drives that instead of
+  rewriting a delivered message: no status message to delete, no rewrite of an
+  already-delivered message, and no edit-rate ceiling on how often progress may
+  show. A streaming surface that the platform offers only in some chats (a
+  Telegram message draft addresses a private chat and has no group form) is
+  used only there; everywhere else the transport keeps the mechanism it had,
+  rather than spending a refused call per snapshot to show nothing. A snapshot
+  past whatever the surface may carry is clipped to its tail — the newest words
+  are the ones being watched — because a refused snapshot would kill the
+  progress indicator mid-reply.
+- **FR-063**: The platform's own stop control ends the turn. A streamed draft
+  may advertise a stop button the platform draws; when the user presses it the
+  platform reports the stopped draft, and Coffer MUST route that to the same
+  interrupt path as `/stop` — same turn cancellation, same queue pause
+  (FR-051), same user-visible outcome. A stop control the user can see but that
+  does not stop anything is worse than none, so the button is only advertised
+  on a transport where the route is wired.
+- **FR-064**: Chatter that is not the answer stays private in a group. Command
+  output, selection cards, and errors are addressed to one member, not to the
+  room. Where the platform can deliver a message only that member's client
+  shows (Telegram ephemeral messages), Coffer uses it for those surfaces; the
+  agent's actual reply is always an ordinary message the group can see. This is
+  the group-noise half of FR-024: that requirement stops the bot from *acting*
+  on everything, this one stops it from *saying* everything out loud.
+- **FR-065**: The bot introduces itself. Its command menu is registered with
+  the platform from Coffer's own command roster, and its prose profile
+  (description, short description) is **filled in when empty**, so a user
+  opening the bot for the first time sees what it is and what it accepts
+  instead of an empty chat. The registered menu MUST list every command the
+  channel actually handles — a command the help text offers but the menu omits
+  is a drift bug, not a design choice. Copy the owner already wrote, and the
+  bot's name, are their branding decision and MUST NOT be overwritten.
+- **FR-066**: Pairing is one tap. Where the platform supports a parameterised
+  start link, the pairing code (FR-005) is issued as a link that carries it, so
+  the owner pairs by opening the link instead of transcribing eight characters
+  on a phone. The typed code keeps working — the link is an additional way in,
+  and the same single-use, TTL-bounded, attempt-bounded gate applies to both.
+- **FR-067**: Every inbound media type drives a turn, or says why it cannot.
+  Whatever the platform can attach to a message — photos, documents, voice,
+  audio, video, animations, stickers, round video notes — is downloaded and
+  becomes an `Attachment` (FR-020). Where a platform caps what a bot may
+  download, a file over that cap MUST produce a message telling the user, not a
+  silent no-op: the failure mode being fixed is a user who sent a file and got
+  an answer that never mentions it.
+- **FR-068**: A reply is attached to what it answers. In a group, the bot's
+  reply MUST be sent as a platform-level reply to the message that triggered it,
+  so a busy room can tell which question each answer belongs to.
+- **FR-069**: Selection cards speak the platform's button vocabulary. Where the
+  platform offers button semantics beyond a label — a disabled state, an intent
+  colour, a copy-to-clipboard action — the card uses them: the option already
+  taken is shown disabled rather than re-offered, and a command or snippet the
+  agent wants the user to run is offered as a copy button rather than as text to
+  select by hand.
 
 ## Deliberately out of scope
 

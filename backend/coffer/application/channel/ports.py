@@ -16,10 +16,12 @@ from typing import Any, Protocol, runtime_checkable
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
     ChoiceButton,
+    EphemeralTarget,
     InboundAttachment,
     InboundCallback,
     InboundLifecycle,
     InboundMessage,
+    InboundStop,
     SentMessage,
 )
 from coffer.domain.channel.rich_content import ForwardedItem
@@ -34,10 +36,12 @@ class AdapterCallbacks:
     # transports/tests that never emit one; adapters skip the callback when unset.
     on_callback: Callable[[InboundCallback], Awaitable[None]] | None = None
     # A non-message event about the bot's own standing in a chat (removed from a
-    # group, group turned external). Optional exactly like ``on_callback``:
-    # transports and test fakes that never emit one leave it unset, and adapters
-    # skip the call when it is ``None``.
+    # group, group turned external), and the platform's own stop control being
+    # pressed (FR-063). Both optional exactly like ``on_callback``: transports
+    # and test fakes that never emit one leave it unset, and adapters skip the
+    # call when it is ``None``.
     on_lifecycle: Callable[[InboundLifecycle], Awaitable[None]] | None = None
+    on_stop: Callable[[InboundStop], Awaitable[None]] | None = None
 
 
 class LiveText(Protocol):
@@ -99,6 +103,8 @@ class ChannelAdapter(Protocol):
         title: str = "",
         thread_id: str = "",
         chat_kind: str = "direct",
+        reply_to_message_id: str = "",
+        ephemeral: EphemeralTarget | None = None,
     ) -> SentMessage:
         """Send markdown text. When ``buttons`` is given AND the transport
         ``supports_buttons``, render them as an interactive selection card;
@@ -109,11 +115,14 @@ class ChannelAdapter(Protocol):
         line. It applies only to a card: a transport without card titles, or a
         send with no buttons, ignores it.
 
-        ``chat_kind`` distinguishes a group ``chat_id`` from a direct one —
-        transports whose group/DM APIs differ (SeaTalk) route on it; a
-        transport with one unified send path (Telegram) ignores it.
-        ``thread_id``, when non-empty, threads the message where the
-        transport supports it; transports without thread support ignore it.
+        The four routing arguments are all requests a transport may ignore when
+        its platform has no such primitive: ``chat_kind`` distinguishes a group
+        ``chat_id`` from a direct one (SeaTalk's group/DM APIs differ; Telegram
+        has one path), ``thread_id`` threads the message, ``reply_to_message_id``
+        attaches it as a platform-level reply so a busy group can tell which
+        question an answer belongs to (FR-068), and ``ephemeral`` asks for it to
+        be shown only to that member (FR-064) — never a guarantee, since a
+        platform that refuses delivers an ordinary message instead.
         """
         ...
 
@@ -151,8 +160,16 @@ class ChannelAdapter(Protocol):
     async def delete_message(self, chat_id: str, message_id: str) -> None: ...
 
     async def send_typing(
-        self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
-    ) -> None: ...
+        self,
+        chat_id: str,
+        *,
+        thread_id: str = "",
+        chat_kind: str = "direct",
+        action: str = "typing",
+    ) -> None:
+        """Show that the bot is busy; ``action`` names what with ("upload_photo"
+        / "upload_document") where the transport distinguishes."""
+        ...
 
     async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
         """Set an emoji reaction on ``message_id`` (FR-036: 👀 on receipt, ✅ on

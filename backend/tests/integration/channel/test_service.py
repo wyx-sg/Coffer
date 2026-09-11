@@ -59,7 +59,10 @@ async def test_register_with_dangling_credential_ref_persists_nothing(env: Chann
 async def test_issue_pairing_code_returns_code_with_expiry_and_audits(env: ChannelEnv) -> None:
     await env.register_channel("tg")
 
-    code, expires_at = await env.service.issue_pairing_code("tg", actor="cli")
+    code, expires_at, pair_url = await env.service.issue_pairing_code("tg", actor="cli")
+    # No adapter is running, so there is no bot username to build a link from —
+    # the typed code is the only way in and must still be issued.
+    assert pair_url == ""
     assert len(code) == 8
     # The documented unambiguous alphabet (no 0/O/1/I).
     assert set(code) <= set("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")

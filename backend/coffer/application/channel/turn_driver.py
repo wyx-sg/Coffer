@@ -210,8 +210,15 @@ class TurnDriver:
         session = self._session(binding.name, peer.chat_id, thread_id)
 
         async def _send(message: str) -> None:
+            # FR-068: the turn's own replies point back at the message that
+            # drove them (the helper drops the pointer outside a group).
             await self._safe_send(
-                binding, peer.chat_id, message, thread_id=thread_id, chat_kind=chat_kind
+                binding,
+                peer.chat_id,
+                message,
+                thread_id=thread_id,
+                chat_kind=chat_kind,
+                reply_to_message_id=reply_to_message_id,
             )
 
         renderer = TurnRenderer(

@@ -20,30 +20,42 @@ from coffer.domain.channel.dedup import SeenIds
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
     ChoiceButton,
+    EphemeralTarget,
     InboundAttachment,
-    InboundCallback,
     InboundMessage,
     SentMessage,
 )
-from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.infrastructure.channel.live_text import TelegramLiveText
-from coffer.infrastructure.channel.render import chunk_text, markdown_to_telegram_html
 from coffer.infrastructure.channel.telegram_album import AlbumBuffer
 from coffer.infrastructure.channel.telegram_cards import edit_card
+from coffer.infrastructure.channel.telegram_draft import TelegramDraftLiveText
+from coffer.infrastructure.channel.telegram_features import FeatureSet
 from coffer.infrastructure.channel.telegram_media import (
-    COMMANDS,
+    FetchedMedia,
     default_media_dir,
     download_attachments,
-    inline_keyboard,
     upload_media,
 )
 from coffer.infrastructure.channel.telegram_parse import (
     build_inbound_message,
-    is_group,
     thread_target,
 )
+from coffer.infrastructure.channel.telegram_poll import poll_updates
+from coffer.infrastructure.channel.telegram_profile import (
+    BotIdentity,
+    probe_identity,
+    register_profile,
+)
+from coffer.infrastructure.channel.telegram_rich import RICH_MESSAGE_LIMIT
+from coffer.infrastructure.channel.telegram_send import send_text_chunks
 from coffer.infrastructure.channel.telegram_transport import call
+from coffer.infrastructure.channel.telegram_updates import (
+    callback_from_query,
+    lifecycle_from_update,
+    stop_from_update,
+    tap_ack,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -82,9 +94,20 @@ class TelegramAdapter:
         # FR-038: debounce album items sharing a media_group_id into one turn.
         self._albums = AlbumBuffer(_ALBUM_DEBOUNCE_SECONDS, self._flush_album)
         self._task: asyncio.Task[None] | None = None
-        # Populated from getMe() in start(); stays None if that call fails.
-        self._bot_id: int | None = None
-        self._bot_username: str | None = None
+        self._profile_task: asyncio.Task[None] | None = None
+        # FR-059: what getMe said about this bot, filled in start(). Defaults
+        # are the "could not introspect" state, never a guess.
+        self._identity = BotIdentity()
+        # FR-059: Bot API 10.x capabilities, each live until the platform
+        # itself refuses it. Per-adapter: two channels may point at different
+        # Bot API servers.
+        self._features = FeatureSet()
+
+    @property
+    def identity(self) -> BotIdentity:
+        """What ``getMe`` reported (FR-059). Read by the channel health surface
+        to diagnose a privacy-mode/configuration contradiction (FR-060)."""
+        return self._identity
 
     @property
     def capabilities(self) -> ChannelCapabilities:
@@ -92,7 +115,12 @@ class TelegramAdapter:
             supports_edit=True,
             supports_live_text=True,  # FR-037: the edit IS its live surface
             supports_typing=True,
-            max_message_chars=_CHUNK_LIMIT,
+            # FR-061: a rich message carries 32k characters against an ordinary
+            # message's 4k, so the chunk budget follows whether the platform
+            # still accepts them — and drops back the moment it does not.
+            max_message_chars=(
+                RICH_MESSAGE_LIMIT if self._features.rich_messages.available else _CHUNK_LIMIT
+            ),
             supports_buttons=True,
             supports_card_update=True,  # editMessageText rewrites text + keyboard
             supports_media=True,
@@ -104,18 +132,27 @@ class TelegramAdapter:
 
     async def start(self, callbacks: AdapterCallbacks) -> None:
         self._callbacks = callbacks
-        with contextlib.suppress(Exception):
-            await self._call("setMyCommands", commands=COMMANDS)
-        with contextlib.suppress(Exception):
-            me = await self._call("getMe")
-            if isinstance(me, dict):
-                self._bot_id = int(me["id"]) if "id" in me else None
-                self._bot_username = str(me["username"]) if me.get("username") else None
+        # FR-059: probe, never assume — identity for @mention matching, and the
+        # privacy-mode flag the health surface reports on (FR-060). Awaited,
+        # because parsing a group message needs the bot's own id.
+        self._identity = await probe_identity(self._call)
+        # FR-065: register the command menu and fill an empty profile. NOT
+        # awaited: it is up to six best-effort calls that nothing depends on,
+        # and the reconciler is waiting on start() — against an unreachable API
+        # they would hold up the channel for a minute to change nothing.
+        self._profile_task = asyncio.create_task(
+            register_profile(self._call), name=f"telegram-profile:{self._name}"
+        )
         self._task = asyncio.create_task(self._poll_loop(), name=f"telegram-poll:{self._name}")
 
     async def stop(self) -> None:
         # FR-038: drop pending album timers/flush tasks so none leak past stop.
         self._albums.cancel_all()
+        if self._profile_task is not None:
+            self._profile_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._profile_task
+            self._profile_task = None
         if self._task is not None:
             self._task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -126,45 +163,9 @@ class TelegramAdapter:
     # -- inbound -------------------------------------------------------------
 
     async def _poll_loop(self) -> None:
-        offset: int | None = None
-        failures = 0
-        while True:
-            try:
-                params: dict[str, Any] = {
-                    "timeout": self._poll_timeout,
-                    "allowed_updates": ["message", "callback_query"],
-                }
-                if offset is not None:
-                    params["offset"] = offset
-                updates = await self._call("getUpdates", **params)
-                if not isinstance(updates, list):
-                    # A failure too: the old no-delay retry here spun the event loop.
-                    raise ChannelSendFailed(self._name, "getUpdates: non-list result")
-                failures = 0
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                delay = _BACKOFF_LADDER[min(failures, len(_BACKOFF_LADDER) - 1)]
-                failures += 1
-                _logger.warning(
-                    "telegram.poll.retry", extra={"channel": self._name, "delay": delay}
-                )
-                await asyncio.sleep(delay)
-                continue
-            for update in updates:
-                if not isinstance(update, dict) or "update_id" not in update:
-                    # Malformed element: skip without touching the offset —
-                    # never let one bad update kill the poll task.
-                    _logger.warning("telegram.poll.bad_update", extra={"channel": self._name})
-                    continue
-                try:
-                    await self._dispatch(update)
-                except asyncio.CancelledError:
-                    raise
-                except Exception:
-                    _logger.exception("telegram.dispatch.failed", extra={"channel": self._name})
-                # Commit only after dispatch: a crash re-delivers; no poison-update wedge.
-                offset = int(update["update_id"]) + 1
+        await poll_updates(
+            self._call, self._dispatch, channel=self._name, timeout=self._poll_timeout
+        )
 
     async def _dispatch(self, update: dict[str, Any]) -> None:
         if self._callbacks is None:
@@ -176,40 +177,61 @@ class TelegramAdapter:
             return
         message = update.get("message")
         if isinstance(message, dict):
-            attachments = await self._download_attachments(message)
+            fetched = await self._download_attachments(message)
             media_group_id = message.get("media_group_id")
             if media_group_id:
                 # FR-038: an album arrives as separate updates sharing a media_group_id
                 # — buffer them and flush ONE turn (FR-039 dedup still runs per-update).
-                self._albums.add(str(media_group_id), message, attachments)
+                self._albums.add(str(media_group_id), message, fetched.attachments, fetched.notes)
                 return
-            await self._callbacks.on_message(self._build_inbound(message, attachments))
+            await self._callbacks.on_message(
+                self._build_inbound(message, fetched.attachments, fetched.notes)
+            )
             return
         query = update.get("callback_query")
         if isinstance(query, dict):
             await self._dispatch_callback(query)
+            return
+        # FR-063: the user pressed the stop control on a streamed draft.
+        stopped = stop_from_update(update, channel=self._name)
+        if stopped is not None:
+            if self._callbacks.on_stop is not None:
+                await self._callbacks.on_stop(stopped)
+            return
+        # The bot was removed from a chat (FR-058) — the same event SeaTalk
+        # reports directly, arriving here as a membership transition.
+        lifecycle = lifecycle_from_update(update, channel=self._name, bot_id=self._identity.bot_id)
+        if lifecycle is not None and self._callbacks.on_lifecycle is not None:
+            await self._callbacks.on_lifecycle(lifecycle)
 
     def _build_inbound(
-        self, message: dict[str, Any], attachments: tuple[InboundAttachment, ...]
+        self,
+        message: dict[str, Any],
+        attachments: tuple[InboundAttachment, ...],
+        notes: tuple[str, ...] = (),
     ) -> InboundMessage:
         return build_inbound_message(
             message,
             attachments,
             channel=self._name,
-            bot_id=self._bot_id,
-            bot_username=self._bot_username,
+            bot_id=self._identity.bot_id,
+            bot_username=self._identity.username,
+            notes=notes,
         )
 
     async def _flush_album(
-        self, message: dict[str, Any], attachments: tuple[InboundAttachment, ...]
+        self,
+        message: dict[str, Any],
+        attachments: tuple[InboundAttachment, ...],
+        notes: tuple[str, ...],
     ) -> None:
         """FR-038: emit ONE InboundMessage for a debounced album — all its
         attachments and the caption from whichever item carried it."""
         if self._callbacks is None:
             return
-        await self._callbacks.on_message(self._build_inbound(message, attachments))
+        await self._callbacks.on_message(self._build_inbound(message, attachments, notes))
 
-    async def _download_attachments(self, message: dict[str, Any]) -> tuple[InboundAttachment, ...]:
+    async def _download_attachments(self, message: dict[str, Any]) -> FetchedMedia:
         return await download_attachments(
             self._client, self._call, self._file_base, self._media_dir, self._name, message
         )
@@ -217,29 +239,19 @@ class TelegramAdapter:
     async def _dispatch_callback(self, query: dict[str, Any]) -> None:
         if self._callbacks is None:
             return
-        sender = query.get("from") or {}
-        card = query.get("message") or {}
         query_id = str(query.get("id") or "")
-        # A card tapped in a (super)group replies back into that group/thread, not a
-        # DM — derive chat_kind/thread_id from the card's own message (FR-034).
-        group = is_group(card)
         if self._callbacks.on_callback is not None:
-            await self._callbacks.on_callback(
-                InboundCallback(
-                    channel=self._name,
-                    chat_id=str(card.get("chat", {}).get("id", "")),
-                    sender_id=str(sender.get("id") or ""),
-                    data=str(query.get("data") or ""),
-                    callback_id=query_id,
-                    platform_message_id=str(card.get("message_id", "")),
-                    chat_kind="group" if group else "direct",
-                    thread_id=str(card.get("message_thread_id") or ""),
-                )
-            )
-        # Dismiss the button's loading spinner (best-effort; the tap is already handled).
+            await self._callbacks.on_callback(callback_from_query(query, channel=self._name))
+        # Dismiss the button's loading spinner AND say what was taken, so the
+        # tap has immediate feedback even before the card rewrite lands
+        # (best-effort; the tap itself is already handled).
         if query_id:
             with contextlib.suppress(Exception):
-                await self._call("answerCallbackQuery", callback_query_id=query_id)
+                await self._call(
+                    "answerCallbackQuery",
+                    callback_query_id=query_id,
+                    text=tap_ack(str(query.get("data") or "")),
+                )
 
     # -- outbound ------------------------------------------------------------
 
@@ -252,22 +264,25 @@ class TelegramAdapter:
         title: str = "",
         thread_id: str = "",
         chat_kind: str = "direct",
+        reply_to_message_id: str = "",
+        ephemeral: EphemeralTarget | None = None,
     ) -> SentMessage:
         # chat_kind is unused: a Telegram chat_id addresses a DM and a group alike.
         del chat_kind
-        # Telegram has no card title element — an inline keyboard hangs off an
-        # ordinary message — so the title becomes the body's first line in bold
-        # rather than being dropped. Same information, the platform's own shape.
-        if title and buttons:
-            markdown = f"**{title}**\n{markdown}"
-        chunks = list(chunk_text(markdown, self.capabilities.max_message_chars))
-        last: SentMessage | None = None
-        for i, chunk in enumerate(chunks):
-            # The inline keyboard rides on the final chunk so it sits under the
-            # whole (possibly chunked) message.
-            kb = buttons if (buttons and i == len(chunks) - 1) else None
-            last = await self._send_chunk(chat_id, chunk, kb, thread_id=thread_id)
-        return last if last is not None else SentMessage(message_id="")
+        return await send_text_chunks(
+            self._call,
+            chat_id,
+            markdown,
+            limit=_CHUNK_LIMIT,
+            buttons=buttons,
+            title=title,
+            thread_id=thread_id,
+            reply_to_message_id=reply_to_message_id,
+            channel=self._name,
+            rich=self._features.rich_messages,
+            ephemeral=ephemeral,
+            ephemeral_feature=self._features.ephemeral_messages,
+        )
 
     async def update_card(
         self,
@@ -306,40 +321,32 @@ class TelegramAdapter:
             thread_id=thread_id,
         )
 
-    async def _send_chunk(
-        self,
-        chat_id: str,
-        chunk: str,
-        buttons: Sequence[ChoiceButton] | None = None,
-        *,
-        thread_id: str = "",
-    ) -> SentMessage:
-        markup = inline_keyboard(buttons) if buttons else None
-        extra: dict[str, Any] = {"reply_markup": markup} if markup is not None else {}
-        if thread_id:
-            extra["message_thread_id"] = int(thread_id)
-        try:
-            sent = await self._call(
-                "sendMessage",
-                chat_id=chat_id,
-                text=markdown_to_telegram_html(chunk),
-                parse_mode="HTML",
-                **extra,
-            )
-        except ChannelSendFailed as e:
-            # Retry as plain text only when the platform rejected formatting (400 = bad
-            # entities). A transport error may mean the send got through already — retrying
-            # would duplicate; a 429 needs backoff, not an instant resend.
-            if not (e.api_rejected and e.status == 400):
-                raise
-            sent = await self._call("sendMessage", chat_id=chat_id, text=chunk, **extra)
-        return SentMessage(message_id=str(sent.get("message_id", "")))
-
     async def open_live_text(
         self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
-    ) -> TelegramLiveText:
-        """FR-037: Telegram's live surface is one message it keeps editing."""
-        del chat_kind  # a Telegram chat_id addresses a DM and a group alike
+    ) -> TelegramLiveText | TelegramDraftLiveText:
+        """FR-037/FR-062: a surface the reply grows on.
+
+        A message draft is the platform's own answer to this and is preferred
+        where it exists: nothing is delivered, so nothing has to be deleted
+        afterwards, and it carries the stop control FR-063 routes back here.
+
+        Two things send a turn back to the older mechanism — one sent message,
+        rewritten in place. A Bot API server that has never heard of drafts is
+        the obvious one. The other is a group: ``sendMessageDraft`` addresses
+        "the target private chat" and has no group form, so a group turn would
+        spend a refused round trip per snapshot and show no progress at all.
+        Keeping the stop control out of groups is a second reason to prefer the
+        DM-only split: the stop update names no sender, so a button any member
+        could press is a button Coffer could not owner-gate.
+        """
+        if chat_kind != "group" and self._features.message_drafts.available:
+            return TelegramDraftLiveText(
+                self._call,
+                chat_id,
+                channel=self._name,
+                feature=self._features.message_drafts,
+                thread_id=thread_id,
+            )
         return TelegramLiveText(self._call, chat_id, thread_id=thread_id)
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None:
@@ -349,13 +356,23 @@ class TelegramAdapter:
         await self._call("deleteMessage", chat_id=chat_id, message_id=message_id)
 
     async def send_typing(
-        self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
+        self,
+        chat_id: str,
+        *,
+        thread_id: str = "",
+        chat_kind: str = "direct",
+        action: str = "typing",
     ) -> None:
-        # Telegram addresses a group by the same chat_id as a DM, so only the
-        # thread needs naming — the action then shows in the forum topic the
-        # turn is answering in rather than the group's General.
+        """Show what the bot is busy doing. ``action`` lets an upload say so
+        ("upload_photo" / "upload_document") instead of claiming to type.
+
+        Telegram addresses a group by the same chat_id as a DM, so only the
+        thread needs naming — the action then shows in the forum topic the turn
+        is answering in rather than the group's General.
+        """
+        del chat_kind
         await self._call(
-            "sendChatAction", chat_id=chat_id, action="typing", **thread_target(thread_id)
+            "sendChatAction", chat_id=chat_id, action=action, **thread_target(thread_id)
         )
 
     async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:

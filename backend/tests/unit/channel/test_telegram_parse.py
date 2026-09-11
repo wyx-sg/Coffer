@@ -2,6 +2,7 @@
 detection, @mention/reply addressing, and forwarded/quoted-reply framing."""
 
 from coffer.infrastructure.channel.telegram_parse import (
+    _mentions_other,
     addressed_and_text,
     build_inbound_message,
     is_group,
@@ -256,3 +257,74 @@ def test_mentions_others_false_in_a_dm():
         entities=[{"type": "mention", "offset": 0, "length": len("@someoneelse")}],
     )
     assert _build(message).mentions_others is False
+
+
+# -- UTF-16 entity offsets ----------------------------------------------------
+
+
+def _mention_message(text: str, offset: int, length: int) -> dict:
+    return {
+        "chat": {"id": 1, "type": "supergroup"},
+        "text": text,
+        "entities": [{"type": "mention", "offset": offset, "length": length}],
+    }
+
+
+def test_mention_after_an_emoji_is_still_matched() -> None:
+    # "🚀" is ONE code point but TWO UTF-16 units, which is how Telegram counts.
+    # Reading the offset as a code-point index sliced the token one char short
+    # and the bot silently missed being addressed.
+    text = "🚀 @mybot deploy"
+    offset = len("🚀 ".encode("utf-16-le")) // 2
+    addressed, stripped = addressed_and_text(
+        _mention_message(text, offset, len("@mybot")),
+        text,
+        bot_id=1,
+        bot_username="mybot",
+    )
+    assert addressed is True
+    assert stripped == "🚀 deploy"
+
+
+def test_mention_of_another_user_after_an_emoji_is_seen_as_other() -> None:
+    text = "🎉 @someone look"
+    offset = len("🎉 ".encode("utf-16-le")) // 2
+    message = _mention_message(text, offset, len("@someone"))
+    addressed, _ = addressed_and_text(message, text, bot_id=1, bot_username="mybot")
+    assert addressed is False
+    assert _mentions_other(message, text, bot_id=1, bot_username="mybot") is True
+
+
+def test_mention_without_astral_characters_is_unchanged() -> None:
+    text = "@mybot status"
+    addressed, stripped = addressed_and_text(
+        _mention_message(text, 0, len("@mybot")), text, bot_id=1, bot_username="mybot"
+    )
+    assert (addressed, stripped) == (True, "status")
+
+
+# -- unfetchable attachment notes (FR-067) ------------------------------------
+
+
+def test_notes_are_appended_to_the_turn_text() -> None:
+    built = build_inbound_message(
+        {"chat": {"id": 7, "type": "private"}, "text": "have a look", "date": 1718000000},
+        (),
+        channel="tg",
+        bot_id=None,
+        bot_username=None,
+        notes=("[attachment 'dump.sql' is too large]",),
+    )
+    assert built.text == "have a look\n[attachment 'dump.sql' is too large]"
+
+
+def test_a_note_alone_still_gives_the_turn_text() -> None:
+    built = build_inbound_message(
+        {"chat": {"id": 7, "type": "private"}, "date": 1718000000},
+        (),
+        channel="tg",
+        bot_id=None,
+        bot_username=None,
+        notes=("[attachment 'clip.mov' is too large]",),
+    )
+    assert built.text == "[attachment 'clip.mov' is too large]"

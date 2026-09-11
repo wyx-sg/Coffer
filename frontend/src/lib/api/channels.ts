@@ -42,6 +42,17 @@ export interface CallbackTestResult {
   detail: string;
 }
 
+/**
+ * Something configured on the channel that the platform will not actually
+ * honour. Empty is the healthy case; a diagnostic always names its fix.
+ */
+export interface ChannelDiagnostic {
+  /** Stable identifier, so the UI can style or link the finding. */
+  code: string;
+  /** What is wrong and what to do about it. */
+  message: string;
+}
+
 export interface ChannelStatus {
   name: string;
   channel_type: ChannelType;
@@ -52,11 +63,18 @@ export interface ChannelStatus {
   pending_pairing?: boolean;
   peer: ChannelPeer | null;
   callback: CallbackInfo | null;
+  /** Contradictions between the configuration and what the platform permits. */
+  diagnostics?: ChannelDiagnostic[];
 }
 
 export interface PairingCode {
   code: string;
   expires_at: string;
+  /**
+   * A link carrying the code, so the owner pairs by opening it rather than
+   * transcribing it. Empty when the platform has no such link.
+   */
+  pair_url?: string;
 }
 
 export interface NotifyOut {

@@ -53,6 +53,9 @@ class InboundMessage:
     # and what its id is — the agent fetches the body only when it needs it.
     quoted_message_id: str = ""
     attachments: tuple[InboundAttachment, ...] = ()  # photos/files/voice, if any
+    ephemeral_id: str = ""  # set when the message itself was ephemeral (only the
+    # sender and the bot can see it); it is the handle that lets the bot answer
+    # privately in a group without being an administrator (FR-064)
 
 
 @dataclass(frozen=True)
@@ -116,6 +119,11 @@ class ChoiceButton:
 
     label: str  # human text shown on the button
     value: str  # callback payload routed back through InboundCallback.data
+    # FR-069: this option is the one already in effect. A transport whose
+    # buttons have states shows it disabled and marked rather than re-offering
+    # something tapping cannot change; one whose buttons are plain labels
+    # ignores it and relies on the tick in the label instead.
+    selected: bool = False
 
 
 @dataclass(frozen=True)
@@ -158,6 +166,37 @@ class InboundLifecycle:
     kind: str  # "removed_from_group" | "group_became_external"
     actor_display: str = ""  # best-effort human name of who did it (SeaTalk's
     # ``remover`` on a removal); "" when the platform says nothing about who
+
+
+@dataclass(frozen=True)
+class EphemeralTarget:
+    """Where a group answer meant for one member is delivered (FR-064).
+
+    A platform will only let an ordinary bot answer privately when it can point
+    at the interaction that prompted it, and only for a short window after —
+    hence the handle alongside the recipient. Exactly one handle is set.
+    """
+
+    receiver_id: str  # the member whose client shows the message
+    ephemeral_message_id: str = ""  # the ephemeral message being answered
+    callback_id: str = ""  # the card tap being answered
+
+
+@dataclass(frozen=True)
+class InboundStop:
+    """The user stopped the reply from the platform's own control (FR-063).
+
+    Telegram draws a stop button on a streamed draft; pressing it reports the
+    stopped draft rather than sending a message. It must reach the same
+    interrupt path a typed ``/stop`` does — a stop control the user can see but
+    that does not stop anything is worse than none at all.
+    """
+
+    channel: str  # channel resource name
+    chat_id: str  # the chat whose reply was stopped
+    thread_id: str = ""  # the thread it was being generated in, if any
+    chat_kind: str = "direct"  # "direct" | "group" — so the acknowledgement
+    # routes back the way every other reply to this chat does
 
 
 @dataclass(frozen=True)
