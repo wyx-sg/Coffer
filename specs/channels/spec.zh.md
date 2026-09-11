@@ -893,6 +893,13 @@ Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制
 - **When** owner 以外的人在群聊里 @mention bot
 - **Then** bot 回复该发送者未获授权，且不启动任何 turn
 
+### Scenario: an empty sender_id in a group cannot bypass the owner gate
+
+- **Given** 一个已知 owner 的已配对 channel 和一个群聊
+- **When** 一条被寻址的群消息到达，却带不出可解析的 `sender_id`（传输没能供出一个）
+- **Then** bot 像拒绝一个非 owner 发送者那样拒绝它——不启动任何 turn，也不创建
+  peer 行
+
 ### Scenario: require_mention on drops an un-addressed group message
 
 - **Given** 一个 `require_mention` 打开（默认）的已配对 channel
@@ -916,6 +923,13 @@ Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制
 - **Given** 一个 `ignore_other_mentions` 关闭（默认）的已配对 channel
 - **When** 一条群消息在 @ bot 的同时也 @ 了另一个用户
 - **Then** turn 仍然运行——额外的人类 @mention 不会抑制它
+
+### Scenario: a group slash-command reply routes to the group/thread
+
+- **Given** 一个已配对的 channel，以及一个 owner 在其中发过消息的群聊/线程
+- **When** owner 在那个群/线程里发出一条斜杠命令（例如 `/status`）
+- **Then** 该命令的回复以与触发消息相同的 `chat_kind`/`thread_id` 路由，而不是退回
+  私聊的默认值
 
 ### Scenario: the owner @mentions the bot inside a thread
 
