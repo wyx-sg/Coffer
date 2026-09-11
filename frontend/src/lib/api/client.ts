@@ -12,7 +12,7 @@ export function getApiClient(): ReturnType<typeof createClient<paths>> {
   });
   // Read the token fresh on every request via middleware rather than
   // capturing it at client-creation time. A token that arrives after the
-  // first request (e.g. injected post-mount, or set via setCofferToken) is
+  // first request (e.g. injected post-mount by a test or the dev plugin) is
   // then picked up automatically — no resetApiClient() / page reload needed.
   client.use({
     onRequest({ request }) {

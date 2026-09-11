@@ -90,6 +90,7 @@ section that future readers most often want — don't skip it.>
 | [`capability-state-model`](capability-state-model.md) | MCP Capability State — Preferences in DB, List Live-Queried From Upstream | Accepted |
 | [`session-subprocess-model`](session-subprocess-model.md) | One Upstream Subprocess Set Per Downstream Client Session | Accepted |
 | [`daemon-detect-or-spawn`](daemon-detect-or-spawn.md) | Daemon Detect-or-Spawn Pattern | Accepted |
+| [`daemon-serves-the-token-in-the-page`](daemon-serves-the-token-in-the-page.md) | The Daemon Serves Its Token in the Page, Guarded by the Host Header | Accepted |
 | [`everything-is-a-resource-kind`](everything-is-a-resource-kind.md) | Information Architecture — Everything Is a Resource Kind | Amended (2026-05-30, 2026-06-11) |
 | [`distribution-pyinstaller`](distribution-pyinstaller.md) | Distribution — PyInstaller-Bundled Daemon, Shim, and CLI | Accepted |
 | [`cross-platform-skill-delivery`](cross-platform-skill-delivery.md) | Cross-Platform Skill Delivery — Symlink / Junction / Copy-Fallback | Accepted |

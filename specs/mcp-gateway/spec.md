@@ -153,7 +153,8 @@ A user who is not working from a Git clone downloads one archive, extracts it, s
 **Covering scenarios**:
 
 - release tag produces the CLI archive and SHA256SUMS
-- coffer open lands an authenticated browser session
+- a page served by the daemon is authenticated by the daemon
+- a rebound page is refused before it can read the token
 - a frozen daemon deploys its sibling binaries on start
 
 #### Why Coffer ships no desktop shell
@@ -422,12 +423,18 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **Then** the release contains exactly one download tier — `coffer-cli-<triple>.tar.gz` for macOS arm64, holding `coffer`, `coffer-daemon`, `coffer-mcp-shim` and the runtime helper binaries — and no desktop bundle,
 - **And** the release contains a single aggregated `SHA256SUMS` file covering every artifact.
 
-### Scenario: coffer open lands an authenticated browser session
+### Scenario: a page served by the daemon is authenticated by the daemon
 
-- **Given** the daemon is running and `~/.coffer/daemon.json` records its port,
-- **When** the user runs `coffer open`,
-- **Then** the CLI mints a single-use, short-lived code through an authenticated endpoint and opens the browser at the daemon's own origin with that code in the URL fragment,
-- **And** the page exchanges the code for the API token, keeps the token in `localStorage`, and renders the UI authenticated — the API token never appearing in any URL, and a second exchange of the same code being rejected.
+- **Given** a daemon that has restarted since the browser last loaded the UI, and therefore minted a new token on a possibly different port,
+- **When** the browser opens any page the daemon serves — the bare `/`, a client-side route such as `/agents`, a bookmark, or a plain reload — whether it got there through `coffer open` or by typing the address,
+- **Then** the served `index.html` carries that daemon's live token as `window.__COFFER_TOKEN__`, the UI renders authenticated with no user action, and the token appears in no URL and in no browser storage,
+- **And** the document is served `no-store` with no validators, so the browser can never revalidate its way back to a previous daemon's token.
+
+### Scenario: a rebound page is refused before it can read the token
+
+- **Given** a page on an attacker-controlled origin whose hostname resolves to `127.0.0.1`, which the browser therefore treats as same-origin with the daemon,
+- **When** it fetches any daemon URL, including `/`,
+- **Then** the daemon refuses the request with `421 HOST_NOT_LOOPBACK` because the `Host` header still names the attacker's hostname — while the same request addressed to `127.0.0.1`, `localhost` or `::1` is served normally.
 
 ### Scenario: a frozen daemon deploys its sibling binaries on start
 
@@ -481,9 +488,10 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **FR-022**: The release pipeline MUST produce, per `v*` tag, a single download tier for **macOS arm64 only**: a `coffer-cli-<triple>.tar.gz` archive containing `coffer` (the management CLI), `coffer-daemon`, `coffer-mcp-shim`, and the runtime helper binary the daemon spawns (`coffer-callback`). The binaries MUST stay co-located inside the archive so the frozen detect-or-spawn resolution ([Detect-or-Spawn](../../docs/decisions/daemon-detect-or-spawn.md)) finds `coffer-daemon` next to `coffer`. macOS x64 (Intel), Linux and Windows are deliberately not built — those legs were never validated end to end. This archive carries the "no system Python required" promise on its own (SC-011); there is no second, desktop tier. The packaging decision behind it is [PyInstaller Distribution](../../docs/decisions/distribution-pyinstaller.md).
 - **FR-023**: The release pipeline MUST produce one aggregated `SHA256SUMS` file — generated in CI and concatenated across matrix legs in the release job — covering every artifact, so downloaders can verify integrity without trusting the GitHub Release UI alone.
 - **FR-024**: The daemon MUST serve the built web UI itself, as static files, at its own loopback origin, so the UI is same-origin with the management API. Cross-origin access MUST therefore be off by default; the Vite dev-server origins stay reachable only behind the existing `COFFER_DEV_CORS` opt-in.
-- **FR-025**: `coffer open` MUST read `~/.coffer/daemon.json`, mint a **single-use, short-lived** authentication code (roughly a minute of validity) through an authenticated management endpoint, and open the user's browser at the daemon's own origin with that code in the URL **fragment**. The page MUST exchange the code for the API token and hold the token in `localStorage`. The API token MUST NOT appear in a URL at any point — a URL lands in browser history, which would contradict the loopback-plus-token posture of FR-012 / FR-013. The code may appear there, because it is single-use and already expired by the time anyone reads that history back.
+- **FR-025**: The daemon MUST hand the browser its API token in the `index.html` it serves, as a `window.__COFFER_TOKEN__` global injected into the document head, sourced from the same in-process token FR-013's header check compares against so the two cannot drift. It MUST do so for **every** route that resolves to that document — the bare `/` and every client-side route served through the SPA fallback alike — and MUST serve it `Cache-Control: no-store` with no ETag or Last-Modified, because the document now carries a per-daemon secret and a cached copy would hand a restarted daemon's browser the previous daemon's dead token. The page MUST NOT persist the token: a stored token outlives the daemon that minted it, and the daemon mints a new one on every start. The API token MUST NOT appear in a URL at any point — a URL lands in browser history, which would contradict the loopback-plus-token posture of FR-012 / FR-013; the response body is subject to none of that. `coffer open` MUST therefore carry no credential of its own: it reads the daemon's real port from `~/.coffer/daemon.json` (which moves between restarts) and opens the browser at that origin.
 - **FR-026**: When the daemon detects that it is running as a frozen build, it MUST idempotently deploy its sibling binaries — `coffer-mcp-shim`, `coffer-callback` — into `~/.coffer/bin/` at startup. The copy MUST be atomic (temp sibling in the same directory, executable bit set, then rename over the target) so that a crash or a concurrently executing binary never observes a truncated file, and staleness MUST be decided by three signals — byte size, source-newer-than-target mtime, and a version sentinel — so that a same-size cross-version upgrade is still detected. A source install MUST NOT do any of this: `pip install` already puts the console scripts on `PATH` (FR-018). The daemon owns the deployment because it is the process that spawns `coffer-callback` at runtime.
 
+- **FR-027**: The daemon MUST refuse any request whose `Host` header does not name a loopback authority — `127.0.0.1`, `localhost` or `::1`, with or without a port — answering `421` with error code `HOST_NOT_LOOPBACK` instead of serving it. This is what makes FR-025 safe: binding to loopback (FR-012) stops a remote host, but not a **browser** on a page whose hostname an attacker re-resolves to `127.0.0.1` — DNS rebinding, which the browser then treats as same-origin, so CORS does not apply. Rebinding does not change the `Host` header, so a rebound request still names the attacker's own hostname and is refused before it can read a token out of the served document. The rule MUST hold for every surface the daemon exposes. It does not reach the separate `coffer-callback` listener, which is a different process on a different port and is the only thing a tunnel is ever pointed at.
 **Missing launcher**
 
 - **FR-019**: A stdio server whose launcher command does not resolve on this machine (an imported server referencing e.g. `uvx` where `uv` is not installed) MUST be surfaced as such — `missing <runner>` in the server status — instead of a bare "failing" with no cause, and the UI MUST name the command to install. Coffer MUST NOT install it. Detection turns an uninformative failure into an actionable one, which is the whole of the value here; running a package manager from a long-lived daemon would widen Coffer's remit from managing configuration to installing software on the user's machine, a line the deliberately-minimal runner→formula map could not hold once pip, cargo, and go were asked for — and it only ever worked on macOS.

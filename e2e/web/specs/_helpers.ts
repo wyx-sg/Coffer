@@ -26,15 +26,19 @@ export function readDaemonToken(): DaemonInfo {
 }
 
 /**
- * Register a `test.beforeEach` that injects the daemon token into
- * localStorage before every navigation.  Must be called at the top level
- * of each spec file (not inside a describe block).
+ * Register a `test.beforeEach` that puts the daemon token on the page's
+ * `window.__COFFER_TOKEN__` before every navigation.  Must be called at the
+ * top level of each spec file (not inside a describe block).
+ *
+ * A page the daemon serves already carries this global — the daemon injects it
+ * into its index.html — so this is belt-and-braces for specs that navigate
+ * somewhere else first. It is the same global either way; nothing is stored.
  */
 export function beforeEachInjectToken(): void {
   test.beforeEach(async ({ context }) => {
     const { token } = readDaemonToken();
     await context.addInitScript((tok: string) => {
-      window.localStorage.setItem("coffer.token", tok);
+      (window as unknown as { __COFFER_TOKEN__?: string }).__COFFER_TOKEN__ = tok;
     }, token);
   });
 }

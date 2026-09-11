@@ -50,7 +50,7 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyResourceRepo,
 )
-from coffer.surfaces.http import cors, daemon_routes, webui
+from coffer.surfaces.http import cors, daemon_routes, host_guard, webui
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_skill_wiring import wire_agent_and_skill_kinds
 from coffer.surfaces.http.app_embedding_composition import (
@@ -379,6 +379,10 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     # wire_channel_kind overwrites it with the runtime-evicting on_delete).
     app.state.kinds.setdefault("channel", make_channel_kind())
     cors.install(app)
+    # AFTER cors so it wraps it: Starlette runs the last-added middleware
+    # outermost, and a request for an authority this daemon does not answer for
+    # should be refused before anything else looks at it.
+    host_guard.install(app)
     err_handlers.register(app)
     include_all_routers(app)
     # LAST: the SPA mount claims "/", so every API route must already be

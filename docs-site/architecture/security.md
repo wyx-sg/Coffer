@@ -106,14 +106,22 @@ In production the daemon serves the built web UI itself, so the UI and the API s
 
 The web UI is a browser page, so it needs the API token that the CLI and shim read straight out of `daemon.json`. Handing it over in a query string would be the obvious shortcut and is exactly what Coffer does **not** do: query strings and paths land in browser history, in the session-restore store, and in anything that syncs history across devices — which would undo the loopback-plus-token posture of FR-012 / FR-013.
 
-Instead, `coffer open` performs a code exchange (**FR-025**):
+The daemon serves the page itself, so it hands the token over **in the response body** instead (**FR-025**): the `index.html` it serves carries `window.__COFFER_TOKEN__` in its head, sourced from the same in-process token the header check compares against, so the injected value cannot drift from the accepted one. A body reaches neither history, nor the session-restore store, nor a screenshot, nor a pasted bug report, which is what made the URL unusable and makes this usable.
 
-1. `coffer open` reads the port and token from `~/.coffer/daemon.json` (mode `0600`).
-2. It calls an authenticated endpoint to mint a **single-use, short-lived code** — valid for about a minute.
-3. It opens the browser at the daemon's own origin with that code in the URL **fragment**, which browsers do not send to the server and which is the least persistent part of a URL.
-4. The page posts the code back, receives the API token, and stores it in `localStorage`; the code is burned on first use.
+Two properties are load-bearing:
 
-The token therefore never appears in a URL. The code does, but it is single-use and already expired long before anyone reads that history entry, so its presence there is inert.
+- **Every route that resolves to that document gets it** — the bare `/` and every client-side route served through the SPA fallback — so a bookmark, a typed address, a reload or a deep link is authenticated with no user action.
+- **It is served `Cache-Control: no-store`, with no ETag and no Last-Modified.** The document now carries a per-daemon secret, and the daemon mints a new token on every start; a cached or revalidated copy would hand the browser a dead token. Hashed files under `/assets` keep normal caching. The page persists nothing, for the same reason.
+
+`coffer open` therefore carries no credential. It reads the daemon's real port from `~/.coffer/daemon.json` (mode `0600`) — the port moves between restarts — and opens the browser there.
+
+## Host-header validation (DNS rebinding)
+
+Binding to loopback stops a remote host from reaching the daemon. It does not stop a **browser**: a page on an attacker's origin whose hostname resolves to `127.0.0.1` is, as far as the browser is concerned, still same-origin with that attacker's origin — so CORS never applies and the page can read the response body. That bought nothing while the daemon's HTML held no secret; with the token in the document, a single `fetch("/")` would take the whole vault.
+
+So the daemon refuses any request whose `Host` header is not a loopback authority — `127.0.0.1`, `localhost` or `::1`, with or without a port — answering `421` with error code `HOST_NOT_LOOPBACK` (**FR-027**). Rebinding does not change the `Host` header: the browser sends the hostname from the URL it fetched, so a rebound request still names the attacker's own host and is refused before it reaches any route. `COFFER_ALLOWED_HOSTS` can add authorities; the backend test suite sets it because it drives the app in-process, and nothing in a real deployment needs it.
+
+The check covers every surface on the daemon's port. It does not cover the separate `coffer-callback` listener, which is a different process on a different port — and the only thing a tunnel is ever pointed at. That listener authenticates inbound traffic by per-channel signature and forwards to the daemon over loopback, so public callbacks are unaffected.
 
 ## Outbound HTTP: real paths and planned hardening
 

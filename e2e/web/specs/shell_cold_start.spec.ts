@@ -133,7 +133,7 @@ acceptance(
     // themselves, this is a fast check.
     const { token, port } = readDaemonToken();
     await context.addInitScript((tok: string) => {
-      window.localStorage.setItem("coffer.token", tok);
+      (window as unknown as { __COFFER_TOKEN__?: string }).__COFFER_TOKEN__ = tok;
     }, token);
 
     // Defensive: delete any leftover servers via the API.

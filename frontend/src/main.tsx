@@ -5,19 +5,14 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import App from "./App";
 import { queryClient } from "./lib/queryClient";
 import { registerFrontendKinds } from "./kinds";
-import { consumeSignInCode } from "./lib/webSession";
 import "./i18n"; // Side-effect import; initialises i18next before render
 import "./index.css";
 import "highlight.js/styles/github.css"; // Code-block syntax theme (chat markdown)
 
-async function bootstrap(): Promise<void> {
-  // `coffer open` launches this page with a one-time code in the fragment.
-  // Redeem it for the API token BEFORE the first render, so the very first
-  // query already carries credentials. A missing or stale code is not an
-  // error — the app falls through to the stored token, or renders its
-  // unauthenticated state.
-  await consumeSignInCode(window.location, (url) => window.history.replaceState(null, "", url));
-
+function bootstrap(): void {
+  // No credential step: whoever served this document already put the running
+  // daemon's token on `window.__COFFER_TOKEN__` (see lib/auth.ts), so the very
+  // first query carries credentials.
   registerFrontendKinds();
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
@@ -29,4 +24,4 @@ async function bootstrap(): Promise<void> {
   );
 }
 
-void bootstrap();
+bootstrap();

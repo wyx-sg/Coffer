@@ -57,8 +57,12 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
 | --------------------------------------------------------------- | ------------------------------------------------------- |
 | Server data (anything from the daemon)                          | TanStack Query, via a `useX` hook                       |
 | Ephemeral UI state (open/collapsed, draft input)                | local `useState` in the component                       |
-| User preference that must survive reload                        | `localStorage` via `src/lib/preferences.ts` / `auth.ts` |
+| User preference that must survive reload                        | `localStorage` via `src/lib/preferences.ts`             |
 | **Addressable** app state (which conversation/resource is open) | the **URL** (router param), not `useState`              |
+
+The API token is deliberately not in that table: it is read from
+`window.__COFFER_TOKEN__`, injected into the served page by whoever served it
+(`src/lib/auth.ts`). Persisting it would outlive the daemon that minted it.
 
 The last row matters: anything a user would expect to survive a refresh, deep-link,
 or back-button MUST be a route param (`/chat/:id`, `/agents/:name`), not local

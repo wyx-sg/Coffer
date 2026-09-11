@@ -8,7 +8,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fsApi } from "./fs";
 import { ApiError } from "./errors";
-import { setCofferToken } from "../auth";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -17,13 +16,17 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
+// The token reaches the page as an injected global (see lib/auth.ts); these
+// tests set it the same way the daemon's served index.html does.
+const w = window as unknown as Record<string, unknown>;
+
 describe("fsApi.browse", () => {
   beforeEach(() => {
-    setCofferToken("secret-token");
+    w.__COFFER_TOKEN__ = "secret-token";
   });
   afterEach(() => {
     vi.unstubAllGlobals();
-    setCofferToken(null);
+    delete w.__COFFER_TOKEN__;
   });
 
   test("GETs /fs/browse with no query when path is omitted, sending auth headers", async () => {
@@ -64,7 +67,7 @@ describe("fsApi.browse", () => {
   });
 
   test("sends an empty token header when no token is set", async () => {
-    setCofferToken(null);
+    delete w.__COFFER_TOKEN__;
     const fetchMock = vi
       .fn()
       .mockResolvedValue(jsonResponse(200, { path: "/", parent: null, entries: [] }));

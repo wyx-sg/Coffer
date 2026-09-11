@@ -148,21 +148,6 @@ class TokenRotationOut(BaseModel):
     token: str = Field(description="New token; clients must re-read daemon.json")
 
 
-class WebCodeOut(BaseModel):
-    """A single-use code that a browser can trade for the API token."""
-
-    code: str
-    expires_in_seconds: int
-
-
-class WebSessionIn(BaseModel):
-    code: str = Field(description="Single-use code from POST /daemon/web-code")
-
-
-class WebSessionOut(BaseModel):
-    token: str = Field(description="API token for X-Coffer-Token")
-
-
 # --- MCP capability views ---
 
 

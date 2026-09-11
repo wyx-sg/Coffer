@@ -20,3 +20,12 @@ from pathlib import Path
 
 _TEST_LOG_DIR = Path(tempfile.gettempdir()) / "coffer-test-logs"
 os.environ.setdefault("COFFER_LOG_DIR", str(_TEST_LOG_DIR))
+
+# Accept any Host header across the suite. The loopback-Host guard
+# (``coffer.surfaces.http.host_guard``) exists to stop a DNS-rebound *browser*
+# page from reading the daemon's responses; these tests drive the ASGI app
+# in-process over httpx/TestClient, where there is no network, no browser and
+# therefore no rebinding — but where the transports do send made-up
+# authorities like ``testserver``. The guard's own tests clear this variable
+# and assert both directions for real.
+os.environ.setdefault("COFFER_ALLOWED_HOSTS", "*")

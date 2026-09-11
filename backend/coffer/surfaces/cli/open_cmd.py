@@ -1,14 +1,15 @@
-"""``coffer open`` — open the web UI in a browser, already signed in.
+"""``coffer open`` — open the web UI in a browser.
 
-The daemon serves the UI at its own loopback origin (spec mcp-gateway FR-024), but a
-browser opened at that origin has no API token. This command bridges that: it
-holds the token already (via ``~/.coffer/daemon.json``), so it mints a
-single-use code and hands it to the browser in the URL **fragment**.
+The daemon serves the UI at its own loopback origin (spec mcp-gateway FR-024)
+and injects its live API token into the ``index.html`` it serves (FR-025), so a
+browser that lands on that origin is authenticated by the act of loading the
+page. There is nothing for this command to hand over.
 
-The fragment matters. A query string is sent to the server and shows up in
-access logs and referrers; a fragment never leaves the browser. Either way it
-is only ever the short-lived single-use code — never the token, which would
-land in shell history and browser history for as long as the daemon lives.
+What is left is the part a human cannot do reliably: the port. The daemon binds
+the first free port in its range and records it in ``~/.coffer/daemon.json``, so
+the origin moves between restarts. This command reads the real one — and
+detect-or-spawn starts a daemon if none is running — which is why it still
+earns its place.
 """
 
 from __future__ import annotations
@@ -19,7 +20,6 @@ import webbrowser
 import typer
 
 from coffer.surfaces.cli import _client as _cli_client
-from coffer.surfaces.cli._options import ExitCode
 
 app = typer.Typer(help="Open Coffer's web UI in your browser.")
 
@@ -34,19 +34,15 @@ def open_web_ui(
         help="Print the URL instead of launching a browser.",
     ),
 ) -> None:
-    """Mint a one-time sign-in code and open the UI (detect-or-spawn auto-spawns)."""
+    """Open the UI at the running daemon's origin (detect-or-spawn auto-spawns)."""
     if ctx.invoked_subcommand is not None:
         return
 
+    # client_or_exit is how detect-or-spawn is reached; the client itself is
+    # not needed here, so close it rather than leaking its connection pool.
     client, info = _cli_client.client_or_exit()
-    with client:
-        response = client.post("/daemon/web-code")
-        if response.status_code != 200:
-            typer.echo(f"could not mint a sign-in code: HTTP {response.status_code}", err=True)
-            raise typer.Exit(ExitCode.GENERIC)
-        code = response.json()["code"]
-
-    url = f"http://127.0.0.1:{info.port}/#code={code}"
+    client.close()
+    url = f"http://127.0.0.1:{info.port}/"
 
     if output_json:
         typer.echo(_json.dumps({"url": url, "port": info.port}, indent=2))
@@ -57,7 +53,7 @@ def open_web_ui(
         return
 
     if webbrowser.open(url):
-        typer.echo(f"opened {url.split('#')[0]} in your browser")
+        typer.echo(f"opened {url} in your browser")
     else:
         # No browser this process can drive (headless box, SSH session). The
         # URL still works — say so rather than failing.

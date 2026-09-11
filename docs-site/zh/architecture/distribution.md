@@ -83,14 +83,11 @@ v0 阶段明确考虑并否决了两个替代方案：
 
 daemon 在自己的 loopback origin 上，以静态文件的形式提供构建好的 Web UI（**FR-024**）。因此 UI 与 REST API 是**同源**的：页面从 `http://127.0.0.1:<port>/` 取得，并调用 `http://127.0.0.1:<port>/api/v1/`。没有原生窗口，没有托盘图标，前端也不再有「我是否在桌面外壳里」这类构建期分支。
 
-入口是 `coffer open`（**FR-025**）：
+既然文档是 daemon 提供的，响应正文本身就是通往浏览器的通道，凭据也就走这条路（**FR-025**）：daemon 把自己的实时 API token 注入到它提供的 `index.html` 中，以 head 里的 `window.__COFFER_TOKEN__` 全局变量形式。每一条解析到该文档的路由都会拿到它 —— 裸 `/` 与经 SPA 回退提供的每一条客户端路由一视同仁 —— 并且该文档以 `Cache-Control: no-store` 提供、不带 ETag 与 Last-Modified，因为一份缓存副本会把上一个 daemon 已失效的 token 交给重启后的浏览器。`/assets` 下带内容哈希的文件保持正常缓存。
 
-1. 从 `~/.coffer/daemon.json`（权限 `0600`）读取 daemon 的端口与 API token。
-2. 调用一个需要鉴权的端点，签发一个**一次性、短时效的 code** —— 有效期约一分钟。
-3. 在 daemon 的 origin 上打开浏览器，并把该 code 放在 URL 的 **fragment** 里。
-4. 页面用该 code 换取 API token，并把 token 保存在 `localStorage` 中。
+因此 `coffer open` 不再携带任何凭据。它仍然要做的，是从 `~/.coffer/daemon.json`（权限 `0600`）读取 daemon 真实的端口 —— 端口会随重启变动 —— 并在那个 origin 上打开浏览器；若没有 daemon 在跑，先拉起一个。
 
-token 本身绝不出现在 URL 里。放进 URL 会把它写入浏览器历史记录，这与 spec mcp-gateway（FR-012 / FR-013）的 loopback + token 安全姿态相冲突。而交换用的 code 是一次性的，且约一分钟即过期，因此它出现在历史记录里是无害的。
+token 绝不出现在 URL 里，页面也不持久化任何东西。放进 URL 会把它写入浏览器历史记录，这与 spec mcp-gateway（FR-012 / FR-013）的 loopback + token 安全姿态相冲突；而持久化则会让它活得比铸造它的 daemon 更久 —— 那正是上一版设计的故障所在。让「随正文下发」得以安全的，是 `Host` 校验（**FR-027**）—— 见[安全](/zh/architecture/security)。
 
 由于 UI 与 API 同源，CORS **默认即为同源**。Vite 开发服务器的 origin 仍然保留在既有的 `COFFER_DEV_CORS` 开关之后，供前端开发使用。完整安全姿态见[安全](/zh/architecture/security)。
 
@@ -125,4 +122,4 @@ xattr -d com.apple.quarantine ~/coffer/coffer ~/coffer/coffer-daemon ~/coffer/co
 ## 参见
 
 - [分发——PyInstaller 打包的 daemon、shim 与 CLI](/zh/reference/adr/distribution-pyinstaller) — 决策记录、被否决的替代方案和修订历史
-- [MCP Gateway 规范参考](/zh/reference/specs/mcp-gateway/spec) — FR-022 单层级压缩包、FR-023 聚合 `SHA256SUMS`、FR-024 daemon 提供 Web UI、FR-025 `coffer open`、FR-026 frozen 启动时的二进制部署
+- [MCP Gateway 规范参考](/zh/reference/specs/mcp-gateway/spec) — FR-022 单层级压缩包、FR-023 聚合 `SHA256SUMS`、FR-024 daemon 提供 Web UI、FR-025 随页面下发的 token、FR-026 frozen 启动时的二进制部署、FR-027 loopback `Host` 要求
