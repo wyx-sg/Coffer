@@ -146,3 +146,45 @@ async def test_a_group_new_still_answers_the_room(env: ChannelEnv) -> None:
     )
 
     assert adapter.sent_ephemeral[-1] is None
+
+
+async def test_a_group_selection_card_is_not_delivered_privately(env: ChannelEnv) -> None:
+    """FR-064 excludes cards on purpose.
+
+    A card is the one surface that must be REWRITTEN after it is used (FR-018),
+    and Telegram rewrites an ephemeral message through a different address space
+    (`receiver_user_id` + `ephemeral_message_id`) with an edit it documents as
+    not guaranteed to arrive. A card that cannot be reliably rewritten keeps
+    offering the option already taken — exactly what FR-018 prevents — so it
+    stays an ordinary message even though the command that produced it is
+    private.
+    """
+    resource = await env.register_channel("tg")
+    adapter = env.bind(resource, FakeChannelAdapter(supports_buttons=True))
+    await env.pair(resource, "-100group", sender_id="4242")
+
+    await env.processor.on_message(
+        inbound("tg", "-100group", "/agent", chat_kind="group", sender_id="4242", ephemeral_id="77")
+    )
+
+    assert adapter.cards, "the card path must be the one exercised here"
+    # The card is the command's ONLY send, and it went out visible. Asserting
+    # the whole list rather than its tail is what makes this fail if the card
+    # ever starts carrying an ephemeral target — a tail check would still pass
+    # if a visible send were appended after a private one.
+    assert adapter.sent_ephemeral == [None]
+
+
+async def test_a_group_command_falling_back_to_text_is_still_private(
+    env: ChannelEnv,
+) -> None:
+    # The card is the exception, not the command: a transport with no buttons
+    # answers /agent in text, and that text is the asker's business.
+    _resource, adapter = await env.paired_channel(chat_id="-100group", sender_id="4242")
+
+    await env.processor.on_message(
+        inbound("tg", "-100group", "/agent", chat_kind="group", sender_id="4242", ephemeral_id="77")
+    )
+
+    assert not adapter.cards  # no button support, so the text path ran
+    assert adapter.sent_ephemeral[-1] is not None
