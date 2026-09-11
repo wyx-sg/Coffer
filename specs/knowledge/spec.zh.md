@@ -530,7 +530,7 @@ Notes 与文档分成两个 tab、各自计数，正是因为它们出处不同�
 
 - **FR-008**：检索必须在整个 scope 上使用同一套引擎：`grep`（对 scope 文件跑 ripgrep；对 FTS5 无法分词的内容如 CJK 至关重要）、`keyword`（FTS5 BM25 + trigram 分词器，默认）、`vector`（sqlite-vec 配合全局 embedding provider）、`hybrid`（keyword + vector 的倒数排名融合）。这些模式是**内部细节**（[Retrieval Mode Is Internal](../../docs/decisions/retrieval-mode-is-internal.md)）—— 任何外部面都不接受 `mode`；引擎自动解析该 scope 的默认策略（scope 列出 vector 则 `hybrid`，否则 `keyword`）。当解析出的策略需要向量但没有可用 embedder 时，检索必须在内部回退到 `keyword` —— 从不阻塞，也从不暴露逐次查询的 `fallback` 标志。
 - **FR-008a**：检索必须横跨一个 scope 的**两个 lane**。一次搜索同时返回 agent 写入的条目与人摄取的文档，一起排名。按 lane 限定的读（文档列举、`entry_count`/`document_count`）只服务于呈现与维护；它们不得分割检索。统一搜索正是两个 kind 合并的理由，把它在下一层重新拆开会让这次改动落空。
-- **FR-009**：`coffer__search` 默认必须横跨当前项目 scope 与 `global`（显式 `scope` 收窄到其一）。跨 scope 结果以倒数排名融合合并 —— 各 scope 的分数不可比，因此每条命中保留自己的分数，只有合并后的顺序来自融合。结果携带 id、正文、分数、来源与时间。`top_k` 默认 5，调用方可指定 1–20。
+- **FR-009**：三个检索工具 —— `coffer__search`、`coffer__grep` 与 `coffer__read` —— 默认必须横跨当前项目 scope 与 `global`（显式 `scope` 收窄到其一，且一律按字面理解）。`search` 与 `grep` 同时查询两个 store；`read` 先在项目 scope 解析，解析不到再回落 `global`。三者必须一致：`search` 从 global store 返回的 id 必须能直接读回，`grep` 拿到的 pattern 也不能仅仅因为 agent 的 cwd 在某个项目里就漏掉 global。跨 scope 结果以倒数排名融合合并 —— 各 scope 的分数不可比，因此每条命中保留自己的分数，只有合并后的顺序来自融合。结果携带 id、正文、分数、来源与时间。`top_k` 默认 5，调用方可指定 1–20。
 - **FR-010**：这一层必须使用**读时惰性重建索引**：读或搜索先按内容哈希扫描差异（新增/变更/删除的文件）并在服务前协调索引，因此带外编辑 —— 人在自己编辑器里的修正，或任何直接的磁盘编辑 —— 无需文件系统 watcher 也立即可见。正是它让 UI 得以保持只读查看器（FR-017），而维护发生在用户自己的编辑器里。
 
 **经 MCP 的 agent 集成**
@@ -542,7 +542,7 @@ Notes 与文档分成两个 tab、各自计数，正是因为它们出处不同�
   - `coffer__list(scope?, all?, limit?)` —— 一个 scope 的内容，或全部 scope 的目录
   - `coffer__write(text, title?, description?, filename?, id?, scope?)` —— 从 `text` 归档一条 note，给 `filename` 则存文档，给 `id` 则就地重写两者之一
   - `coffer__delete(id, scope?)` —— 删除一条 note 或一份文档
-  六个都必须接受可选的 `scope`，默认取 cwd 所在项目的 scope，在项目之外回退到 `global`。没有任何工具接受检索 `mode`。调用方必须永远不需要先把一样东西归类为「memory」还是「knowledge」才能选工具。必须不存在 `coffer__set_handoff` 与 `coffer__resume`：它们随 handoff lane 一同退役。
+  六个都必须接受可选的 `scope`，默认取 cwd 所在项目的 scope，在项目之外回退到 `global`；三个检索工具在隐式 scope 下还会额外横跨 `global`（FR-009）。没有任何工具接受检索 `mode`。调用方必须永远不需要先把一样东西归类为「memory」还是「knowledge」才能选工具。必须不存在 `coffer__set_handoff` 与 `coffer__resume`：它们随 handoff lane 一同退役。
 - **FR-016**：内置工具调用必须共用既有的调用日志面（一行 `mcp_invocations`：工具名 + 谁/何时/耗时/结果，不含参数或返回内容）。写工具在文档层面的效果另以 agent 为 actor 记入 F01 审计。
 
 **整理 —— 定期整理流程**
