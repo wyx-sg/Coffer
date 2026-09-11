@@ -3,17 +3,18 @@
 // The MCP-servers tab has two sections:
 //   A. "Via Coffer gateway" — install status + a link to the standalone MCP
 //      servers page (the exposed servers are managed there, not re-listed here).
-//   B. "Direct servers" — the agent's own MCP entries with source/transport,
-//      a read-only enabled badge where the agent's format has one (codex-style
-//      entries carry enabled: true/false; claude entries carry null), and the
-//      one write: adopt into Coffer. Removing and toggling an entry are gone —
-//      Coffer no longer edits another tool's private config — so the listing
-//      offers neither. The `coffer` entry itself is hidden here (it IS the
-//      gateway hookup), duplicate-of-Coffer entries get an inline hint, and
-//      unparseable config files surface as a banner.
+//   B. "Direct servers" — name, description (the transport badge + the command
+//      line or URL, the only descriptive text an MCP config entry has) and two
+//      actions: adopt into Coffer, and delete (confirm -> DELETE with the
+//      entry's source). The wire type still carries `enabled` and `source` for
+//      the CLI, but neither is a column: `source` shows as a badge only when
+//      two rows share a name, which only `claude_code` can do. The `coffer` entry itself
+//      is hidden here (it IS the gateway hookup), duplicate-of-Coffer entries
+//      get an inline hint (informational only), and unparseable config files
+//      surface as a banner.
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -26,6 +27,7 @@ vi.mock("@/lib/api/agents", () => ({
   agentsApi: {
     mcpStatus: vi.fn(),
     mcpEntries: vi.fn(),
+    removeMcpEntry: vi.fn(),
     adoptMcpEntry: vi.fn(),
   },
 }));
@@ -64,7 +66,8 @@ const CLAUDE_ENTRY: McpEntryOut = {
   enabled: null,
 };
 
-// codex-style entry: enabled is a real boolean → Switch rendered.
+// codex-style entry: enabled is a real boolean on the wire (the table shows
+// no enabled column either way).
 const CODEX_ENTRY: McpEntryOut = {
   ...ENTRY_BASE,
   name: "fetcher",
@@ -81,6 +84,7 @@ function stub(entries: Partial<McpEntriesResponse> = {}) {
     parse_errors: [],
     ...entries,
   });
+  api.removeMcpEntry.mockResolvedValue(undefined);
 }
 
 function renderTab() {
@@ -112,7 +116,7 @@ describe("AgentMcpServersTab", () => {
     ).not.toHaveLength(0);
   });
 
-  test("direct entries render source + transport; coffer entry hidden; enabled shown read-only", async () => {
+  test("direct entries render name + description; coffer entry hidden; no source or enabled column", async () => {
     stub();
     renderTab();
 
@@ -121,19 +125,41 @@ describe("AgentMcpServersTab", () => {
     // The coffer entry is the gateway hookup — not listed as a direct server.
     expect(screen.queryByText("coffer")).not.toBeInTheDocument();
 
-    // Source + transport badges and the command/url snippet.
-    expect(screen.getByText("global")).toBeInTheDocument();
-    expect(screen.getByText("config")).toBeInTheDocument();
+    // The description column: transport badge + the command line or the URL.
     expect(screen.getByText("npx -y gh-mcp")).toBeInTheDocument();
     expect(screen.getByText("https://example.com/mcp")).toBeInTheDocument();
 
-    // The enabled state is reported, never offered as a control: the codex-style
-    // entry (enabled !== null) shows a badge, the claude one (null) a dash.
+    // Source stays on the wire (adopt/delete carry it) but has no column, and
+    // no badge either while every row's name is unique.
+    expect(screen.queryByRole("columnheader", { name: /^source$/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("global")).not.toBeInTheDocument();
+    expect(screen.queryByText("config")).not.toBeInTheDocument();
+
+    // The enabled flag stays on the wire for the CLI, but the table drops it:
+    // no header, no per-row badge or dash, no Switch.
+    expect(screen.queryByRole("columnheader", { name: /^enabled$/i })).not.toBeInTheDocument();
     expect(screen.queryAllByRole("switch")).toHaveLength(0);
     const codexRow = screen.getByText("fetcher").closest("tr") as HTMLElement;
-    expect(within(codexRow).getByText("Enabled")).toBeInTheDocument();
+    expect(within(codexRow).queryByText("Enabled")).not.toBeInTheDocument();
     const claudeRow = screen.getByText("github").closest("tr") as HTMLElement;
-    expect(within(claudeRow).getByText("—")).toBeInTheDocument();
+    expect(within(claudeRow).queryByText("—")).not.toBeInTheDocument();
+  });
+
+  test("a name carried by two config files badges each row with its source", async () => {
+    // Only claude_code can do this: the same entry name in ~/.claude.json and
+    // in settings.json. Without the badge the two rows are indistinguishable,
+    // and adopt/delete act on different files.
+    stub({
+      items: [
+        { ...CLAUDE_ENTRY, source: "global" },
+        { ...CLAUDE_ENTRY, source: "settings" },
+      ],
+    });
+    renderTab();
+
+    expect(await screen.findAllByText("github")).toHaveLength(2);
+    expect(screen.getByText("global")).toBeInTheDocument();
+    expect(screen.getByText("settings")).toBeInTheDocument();
   });
 
   test("the direct-servers search filters rows by name", async () => {
@@ -153,15 +179,47 @@ describe("AgentMcpServersTab", () => {
     expect(screen.queryByText("fetcher")).not.toBeInTheDocument();
   });
 
-  test("offers no remove or toggle affordance — adopt is the only write", async () => {
+  test("every direct entry offers both writes: adopt and delete", async () => {
     stub();
     renderTab();
     await screen.findByText("github");
 
+    // Toggling an entry is gone; adopt + delete are the two per-row actions.
     expect(screen.queryAllByRole("switch")).toHaveLength(0);
-    expect(screen.queryByRole("button", { name: /^remove/i })).not.toBeInTheDocument();
-    // Every direct entry still offers Adopt into Coffer.
     expect(screen.getAllByRole("button", { name: "Adopt into Coffer" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Delete" })).toHaveLength(2);
+  });
+
+  test("delete flows through the confirm dialog and passes the entry's source", async () => {
+    stub();
+    renderTab();
+    await screen.findByText("github");
+
+    // Rows render in items order → the first Delete belongs to "github".
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByText(
+        /delete this entry from the agent's config file\? a \.bak backup will be written\./i,
+      ),
+    ).toBeInTheDocument();
+
+    // Nothing is written until the confirm button is pressed.
+    expect(api.removeMcpEntry).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(api.removeMcpEntry).toHaveBeenCalledWith("cc", "github", "global"));
+  });
+
+  test("cancelling the delete dialog writes nothing", async () => {
+    stub();
+    renderTab();
+    await screen.findByText("github");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(api.removeMcpEntry).not.toHaveBeenCalled();
   });
 
   test("parse_errors render the degraded-config banner", async () => {
@@ -175,15 +233,16 @@ describe("AgentMcpServersTab", () => {
     expect(screen.getByText(/settings: bad json/)).toBeInTheDocument();
   });
 
-  test("matches_resource renders the duplicate hint, with no remove shortcut", async () => {
+  test("matches_resource renders the duplicate hint as plain text, with no inline shortcut", async () => {
     stub({
       items: [{ ...CODEX_ENTRY, matches_resource: "fetcher" }],
     });
     renderTab();
     expect(await screen.findByText(/already in coffer as fetcher/i)).toBeInTheDocument();
-    // The hint is informational now — dropping the duplicate is the user's job,
-    // in their own tool.
-    expect(screen.queryByRole("button", { name: /remove/i })).not.toBeInTheDocument();
+    // The hint is informational — the row's own Delete button is the only way
+    // to drop the duplicate, so there is no extra inline shortcut.
+    expect(screen.getAllByRole("button", { name: "Delete" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /duplicate/i })).not.toBeInTheDocument();
   });
 
   test("en and zh locales carry the same agents.workspace.mcp keys", () => {

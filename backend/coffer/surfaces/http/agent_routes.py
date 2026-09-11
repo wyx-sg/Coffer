@@ -40,12 +40,11 @@ class AgentCreate(BaseModel):
 
 class AgentPatch(BaseModel):
     # FR-006: agents have no enable/disable concept — only config_dir,
-    # description, and follow policy are updatable. (No `enabled` field by design.)
+    # description, and the model binding are updatable. (No `enabled` field by
+    # design.) Which skills reach this agent is decided on each skill resource
+    # (`enabled` + `scope`), never here.
     config_dir: str | None = None
     description: str | None = None
-    # FR-025: follow-master-library policy fields.
-    follow_all_skills: bool | None = None
-    skill_exclusions: list[str] | None = None
     # Slice 6: opt-in native write-side memory disable. Toggling drives the
     # on-disk transform (Claude settings.json / Codex config.toml) in lockstep.
     # spec provider-switching amendment 2026-06-22b (E3): per-agent model binding. Explicit null
@@ -63,9 +62,6 @@ class AgentOut(BaseModel):
     # override or the type's standard location (~/.claude, ~/.codex).
     config_dir: str
     description: str | None
-    # FR-025: follow-master-library policy fields.
-    follow_all_skills: bool
-    skill_exclusions: list[str]
     # Slice 6: whether the agent's native write-side memory is disabled.
     # spec provider-switching amendment 2026-06-22b (E3): per-agent model binding (None = unbound,
     # falls back to the active connection's model during rollout).
@@ -101,8 +97,6 @@ def _to_out(r: Resource) -> AgentOut:
         type=cfg.type,
         config_dir=str(cfg.resolved_config_dir()),
         description=r.description,
-        follow_all_skills=cfg.follow_all_skills,
-        skill_exclusions=list(cfg.skill_exclusions),
         model=cfg.model,
         fast_model=cfg.fast_model,
         wire_api=cfg.wire_api,
@@ -187,13 +181,6 @@ async def update_agent(
             new_config_dir=body.config_dir if "config_dir" in sent else current.config_dir,
             actor=actor,
             description=body.description if "description" in sent else r.description,
-        )
-    if "follow_all_skills" in sent or "skill_exclusions" in sent:
-        r = await svc.update_skill_policy(
-            name=name,
-            follow_all_skills=body.follow_all_skills if "follow_all_skills" in sent else None,
-            skill_exclusions=body.skill_exclusions if "skill_exclusions" in sent else None,
-            actor=actor,
         )
     if "model" in sent or "fast_model" in sent or "wire_api" in sent:
         # Per-agent model binding (E3). An explicit null fast_model clears the

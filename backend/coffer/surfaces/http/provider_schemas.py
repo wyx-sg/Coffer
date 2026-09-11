@@ -3,6 +3,8 @@
 ``ProviderOut`` NEVER carries the secret — only its ``credential_ref``. A
 connection is a credentialed endpoint ``{protocol, base_url, credential_ref}``;
 the model lives apart from it (spec provider-switching E3) and is chosen at the point of use.
+``models`` is the curated set the connection OFFERS to that choice — empty means
+no restriction (every model the endpoint serves).
 """
 
 from __future__ import annotations
@@ -19,7 +21,9 @@ class ProviderCreate(BaseModel):
     """Create an LLM connection. For ``anthropic`` / ``openai`` / ``unknown``
     supply EXACTLY one of ``secret_value`` / ``credential_ref``; an ``ollama``
     connection has no key, so supply neither. ``compatible_agents`` overrides the
-    wire default for which agents the connection projects into (``None`` ⇒ default)."""
+    wire default for which agents the connection projects into (``None`` ⇒ default).
+    ``models`` curates which of the endpoint's models this connection offers
+    downstream (``None`` ⇒ empty ⇒ no restriction)."""
 
     name: str = Field(min_length=1, max_length=64)
     protocol: Protocol
@@ -27,16 +31,20 @@ class ProviderCreate(BaseModel):
     credential_ref: str | None = None
     secret_value: str | None = Field(default=None, max_length=8192)
     compatible_agents: list[AgentType] | None = None
+    models: list[str] | None = None
     description: str | None = None
 
 
 class ProviderPatch(BaseModel):
     """Partial update. ``protocol`` / ``credential_ref`` are immutable;
-    ``compatible_agents`` is mutable (re-target then re-activate to re-project)."""
+    ``compatible_agents`` is mutable (re-target then re-activate to re-project).
+    ``models`` replaces the curated set as a whole, like ``compatible_agents``:
+    ``None`` leaves it alone, ``[]`` clears the restriction."""
 
     base_url: str | None = None
     secret_value: str | None = Field(default=None, max_length=8192)
     compatible_agents: list[AgentType] | None = None
+    models: list[str] | None = None
     description: str | None = None
 
 
@@ -46,7 +54,9 @@ class ProviderOut(BaseModel):
     ``credential_ref`` is ``None`` for ``ollama`` connections (no key).
     ``compatible_agents`` is the EFFECTIVE (resolved) set of agents this
     connection projects into — the explicit override or the wire default — so the
-    UI can filter agents without re-deriving the default. ``internal_default``
+    UI can filter agents without re-deriving the default. ``models`` is the
+    curated set of model ids this connection offers to every downstream picker;
+    EMPTY means no restriction — the endpoint's whole catalogue. ``internal_default``
     marks the connection Coffer's internal engine uses (at most one globally);
     ``is_active`` marks the one currently projected — a connection may be both.
     """
@@ -56,6 +66,7 @@ class ProviderOut(BaseModel):
     base_url: str
     credential_ref: str | None
     compatible_agents: list[AgentType]
+    models: list[str]
     is_active: bool
     internal_default: bool
     enabled: bool

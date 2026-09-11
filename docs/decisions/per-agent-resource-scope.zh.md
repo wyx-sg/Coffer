@@ -18,7 +18,7 @@
 事——网关把每个 server 的工具暴露给每个 agent，放错地方的 server 要么失败、要么
 制造噪音。
 
-skill 本来就有按 agent 的分发策略（消费侧的 follow 开关加排除项）。按 agent 的
+skill 本来就有自己那套按 agent 的分发策略（消费侧的 follow 开关加排除项）。按 agent 的
 MCP scoping 此前作为某个 kind 自己的特性被尝试过一次，并在 2026-06-20 的简化中
 被撤销，因为把 allowlist 和会话身份塞在单个 kind 内部，其代价大于它在那里带来的
 回报。两个 kind 用两种不同方式解决同一个问题，这个信号说明应该把它提到框架层去
@@ -58,7 +58,7 @@ MCP scoping 此前作为某个 kind 自己的特性被尝试过一次，并在 2
    | Kind | Scope | 执行接缝 |
    | --- | --- | --- |
    | `mcp_server` | agent | 网关按会话身份过滤该 server 的工具。 |
-   | `skill` | agent | 分发时用 scope 与既有的按 agent follow 策略取交集；已分发但不在 scope 内的副本会被回收。 |
+   | `skill` | agent | 分发时取 skill 自身 `enabled` 与 scope 的交集；已分发但被禁用或不在 scope 内的副本会被回收。 |
    | `agent`、`channel`、`knowledge` | 无 | 非 null 的 scope 在校验阶段被拒绝。 |
 
 4. **shim 自报的 `--agent` 身份。** shim 安装时把
@@ -68,10 +68,18 @@ MCP scoping 此前作为某个 kind 自己的特性被尝试过一次，并在 2
    验证——在单用户、仅 loopback 的姿态下这是可接受的。spec 会明确陈述这条边界，
    而不是暗示一种实际并不存在的更强隔离。
 
-5. **skill 的 scope ∩ follow 策略。** follow 是 agent 侧的意图（「把 skill 发给
-   我」）；scope 是资源侧的授予（「这个 skill 可以在这里跑」）。分发取二者的
-   交集——既在 scope 内*又*被 follow，再减去手动排除项。scope 是硬性授予，
-   压过手动绑定：不在 scope 内的 skill 即便此前是手工分发的也会被回收。
+5. **skill 的分发就是 `enabled` ∩ scope，再无其他。** 本决策最初保留了 agent 侧
+   的 follow 策略并与 scope 取交集，于是分发是 follow ∩ scope 再减去按 agent 的
+   排除项，之上还压着一个 per-binding 的 enable 开关。同一个问题被三套机制回答，
+   而 `mcp_server` 只用一套就回答了。follow 开关及其排除列表已被删除；binding 行
+   如今只是记录「已分发副本」的簿记，不再是开关。一个 skill 送达某 agent 当且仅当
+   该 skill 处于 `enabled` 且该 agent 在它的 scope 内；任一侧改变都会立即调谐——
+   禁用一个 skill，或把某个 agent 移出它的 scope，即便副本是手工放上去的也会被回收。
+
+   代价是：不再有 agent 侧那个「这个 agent 什么都不要」的单一开关。要排除某个
+   agent，就得把它从每个 skill 的 scope 里摘掉——而把某个 agent 从一个 MCP server
+   排除，一直以来就是这么做的。按 skill 排除的能力一点没少，只是表达在 skill 上，
+   而不是表达在 agent 上。
 
 6. **知识永不 scope。** `knowledge` kind 不声明 scope，并拒绝非 null 值——它永远
    对所有 agent 共享。（它自己的 `global` / `project-<ULID>` / 具名集合这条轴是

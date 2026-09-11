@@ -9,9 +9,9 @@ vi.mock("@/lib/api/client", () => ({
   getApiClient: vi.fn(),
 }));
 
-// ScopeCard mounts on this page and pulls its own data through
-// hand-written fetch hooks (not the generated client above) — stub them so
-// the card renders without a real daemon.
+// The header's ScopeControl pulls its scope through hand-written fetch hooks
+// (not the generated client above) — stub them so the control renders without
+// a real daemon.
 vi.mock("@/lib/hooks/useScope", () => ({
   useResourceScope: vi.fn(() => ({ data: { scope: null, supports_scope: true } })),
   useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
@@ -78,7 +78,7 @@ describe("McpServerDetailPage", () => {
     });
   });
 
-  test("enable switch fires disable mutation when enabled", async () => {
+  test("the scope control's Disabled segment fires the disable mutation", async () => {
     const postMock = vi.fn().mockResolvedValue({ data: {}, error: undefined });
     const getMock = vi.fn().mockResolvedValue({
       data: stdioResource,
@@ -95,10 +95,13 @@ describe("McpServerDetailPage", () => {
       expect(screen.getByText("fs")).toBeInTheDocument();
     });
 
-    // Resource is enabled=true; aria-label reflects current state ("Enabled").
-    // Click it to disable.
-    const toggle = screen.getByRole("switch", { name: /^enabled$/i });
-    fireEvent.click(toggle);
+    // Resource is enabled=true, scope is null, so "Every agent" is the live
+    // segment. Clicking "Disabled" takes the resource out of service.
+    expect(screen.getByRole("button", { name: /every agent/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^disabled$/i }));
 
     await waitFor(() => {
       expect(postMock).toHaveBeenCalledWith(
@@ -343,7 +346,7 @@ describe("McpServerDetailPage", () => {
     });
   });
 
-  test("mounts the ScopeCard for the resource", async () => {
+  test("mounts the scope control in the header", async () => {
     const getMock = vi.fn().mockResolvedValue({
       data: stdioResource,
       error: undefined,
@@ -358,6 +361,9 @@ describe("McpServerDetailPage", () => {
     await waitFor(() => {
       expect(screen.getByText("fs")).toBeInTheDocument();
     });
-    expect(screen.getByTestId("scope-card")).toBeInTheDocument();
+    expect(screen.getByTestId("scope-control")).toBeInTheDocument();
+    // The scope card that used to sit below the header is gone — enable/disable
+    // and scope now live in the one control.
+    expect(screen.queryByTestId("scope-card")).not.toBeInTheDocument();
   });
 });

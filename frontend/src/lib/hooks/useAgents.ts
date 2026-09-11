@@ -120,6 +120,17 @@ export function useAgentMcpEntries(name: string) {
   });
 }
 
+export function useRemoveMcpEntry(agentName: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ entry, source }: { entry: string; source?: string }) =>
+      agentsApi.removeMcpEntry(agentName, entry, source),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["agents", agentName, "mcp-entries"] });
+    },
+  });
+}
+
 export function useAdoptMcpEntry(agentName: string) {
   const qc = useQueryClient();
   return useMutation({

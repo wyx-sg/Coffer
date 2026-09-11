@@ -3,7 +3,7 @@
 **Feature Branch**: `feature/skill-manager`
 **Created**: 2026-05-22
 **Status**: Accepted
-**Input**: User description: "Coffer manages portable AI skills using the open AgentSkills standard (agentskills.io). One canonical store lives at `~/.coffer/skills/`; per-agent visibility is a directory symlink/junction into the `skills/` subfolder of each agent's config directory. Users can import skills from local paths then enable or disable each skill per registered agent. v1 supports Claude Code and Codex CLI as sync targets (each registered as a Resource of kind `agent` per spec agent-registry)."
+**Input**: User description: "Coffer manages portable AI skills using the open AgentSkills standard (agentskills.io). One canonical store lives at `~/.coffer/skills/`; per-agent visibility is a directory symlink/junction into the `skills/` subfolder of each agent's config directory. Users can import skills from local paths; each skill's own `enabled` flag and `scope` decide which registered agents it is delivered to. v1 supports Claude Code and Codex CLI as sync targets (each registered as a Resource of kind `agent` per spec agent-registry-agent-registry)."
 
 ## User Scenarios & Testing
 
@@ -26,20 +26,20 @@ A developer already has skills in `~/.claude/skills/` (or elsewhere on disk). Th
 ---
 
 
-### User Story 3 — Enable a skill for a specific agent (Priority: P1)
+### User Story 3 — Choose which agents a skill reaches (Priority: P1)
 
-The developer wants this skill available in Claude Code but not in Codex. They enable per agent, and Coffer creates a directory symlink into the `skills/` subfolder of that agent's config directory.
+The developer wants this skill available in Claude Code but not in Codex. They set the skill's **scope** to `["claude_code"]`, and Coffer delivers it there — a directory symlink into the `skills/` subfolder of that agent's config directory — and nowhere else. Narrowing the scope later reclaims the copies the excluded agents were holding.
 
-**Why this priority**: This is the core "unify management" value. Without per-agent enable, Coffer has no advantage over copying files manually.
+**Why this priority**: This is the core "unify management" value. Without a per-agent delivery grant, Coffer has no advantage over copying files manually.
 
-**Independent Test**: Register a Claude Code agent (per spec agent-registry); import a skill; enable for that agent; verify a directory symlink appears at `<config_dir>/skills/<skill-name>` pointing to `~/.coffer/skills/<skill-name>/`.
+**Independent Test**: Register a Claude Code agent (per spec agent-registry); import a skill scoped to that agent; verify a directory symlink appears at `<config_dir>/skills/<skill-name>` pointing to `~/.coffer/skills/<skill-name>/`.
 
 **Covering scenarios**:
 
-- enable a skill for a registered agent
-- disable a skill for an agent (link removed, master untouched)
-- enable for multiple agents (multiple links to one master)
-- refuse to overwrite an existing non-Coffer file at the target without `--force`
+- deliver a skill to a registered agent
+- reclaim a skill from an agent (link removed, master untouched)
+- deliver one skill to multiple agents (multiple links to one master)
+- refuse to overwrite a non-Coffer target
 
 ---
 
@@ -64,16 +64,16 @@ Files in agents' `config_dir/skills` folders can be tampered with (deleted, repl
 
 ### User Story 6 — Manage skills through the web UI (Priority: P2)
 
-The user opens Coffer, sees the Skills page rendered as a data table (search, filter, pagination, row multi-select for bulk actions), can import via file picker and browse the list. The Skills page manages the skill resource itself, not its per-agent bindings: clicking a skill opens a detail view with an Overview metadata tab and a Files tab (file tree + a read-only file viewer that renders Markdown and shows other text files raw). The viewer does not edit content; to change a file the user opens it (or its containing folder) in their own external editor or file manager — every file and folder offers "open in external editor" and "reveal in file manager" affordances, performed by the local daemon. Per-agent enable/disable lives on the agent detail page — the agent's "Skills" tab lists the skills bound to that agent with per-binding toggles.
+The user opens Coffer, sees the Skills page rendered as a data table (search, filter, pagination, row multi-select for bulk actions), can import via file picker and browse the list. The Skills page manages the skill resource itself, not its per-agent bindings: clicking a skill opens a detail view with an Overview metadata tab and a Files tab (file tree + a read-only file viewer that renders Markdown and shows other text files raw). The viewer does not edit content; to change a file the user opens it (or its containing folder) in their own external editor or file manager — every file and folder offers "open in external editor" and "reveal in file manager" affordances, performed by the local daemon. The delivery decision is made on the skill — its `enabled` switch and its scope — so the agent detail page reports rather than decides: the agent's "Skills" tab lists the skills currently delivered to that agent, read-only with respect to delivery.
 
 **Why this priority**: Non-CLI users need a visual surface for daily management.
 
-**Independent Test**: Open the web UI → Skills → import a folder via picker → see it listed in the table → open the agent detail page → its Skills tab → toggle the skill enabled for that agent → confirm the symlink exists on disk.
+**Independent Test**: Open the web UI → Skills → import a folder via picker → see it listed in the table → open the skill and set its scope to one agent → confirm the symlink exists on disk and the agent's Skills tab lists the skill as delivered.
 
 **Covering scenarios**:
 
 - import a skill via the web UI file picker
-- toggle per-agent enable via the web UI toggle
+- set a skill's scope via the web UI and see the delivered set follow
 - surface drift count via a UI notification
 
 ---
@@ -108,13 +108,13 @@ When the developer removes a skill, every per-agent symlink is removed and the c
 
 ### User Story 9 — Audit skill lifecycle (Priority: P3)
 
-Every import, enable, disable, and remove is auditable.
+Every import, delivery, reclaim, and remove is auditable.
 
 **Independent Test**: Perform a representative sequence; view audit log; one row per change with actor, target, and event type.
 
 **Covering scenarios**:
 
-- audit import, enable, disable, remove
+- audit import, delivery, reclaim, remove
 
 ---
 
@@ -136,21 +136,23 @@ Agents accumulate skills Coffer never delivered — hand-copied folders, skills 
 
 ---
 
-### User Story 11 — Follow the master library (Priority: P2)
+### User Story 11 — One rule decides where a skill lands (Priority: P2)
 
-Per-skill bindings are precise but chatty: every new skill must be enabled agent by agent. The user flips a per-agent **"follow the master library"** switch; from then on, every skill in the master store is delivered to that agent automatically — new skills appear on registration, removed skills disappear — with a per-agent exclusion list for the rare opt-outs. Per-skill bindings remain the mode for agents that don't follow. Turning follow off keeps the currently delivered set as explicit bindings, so nothing vanishes by surprise.
+The user should not have to configure delivery twice. A skill's own two fields settle it: `enabled` says whether the skill is live at all, and `scope` says which agents it reaches. A freshly imported skill has no scope, so it reaches every registered agent with no per-agent setup — "configure once, share everything", the filesystem counterpart of the MCP gateway's one-entry-serves-all model. When a skill only belongs in one place, the user narrows its scope and Coffer reclaims the copies the excluded agents were holding. When a skill should reach nobody for a while, the user disables it and every delivered copy is reclaimed; re-enabling redelivers it wherever the scope still grants it.
 
-**Why this priority**: This is "configure once, share everything" for skills — the filesystem counterpart of the MCP gateway's one-entry-serves-all model.
+**The trade-off, stated plainly**: there is no longer a single per-agent "this agent gets nothing" switch. To exclude one agent from everything, remove it from each skill's scope — which is exactly how `mcp_server` resources already work. Per-agent exclusion of a specific skill is unchanged in power; it just moves from the agent side to the skill side.
 
-**Independent Test**: Enable follow for an agent with three master skills; verify three links exist; register a fourth skill; verify its link appears without further action; exclude one skill; verify its link is removed while the rest stay.
+**Why this priority**: One delivery rule instead of three overlapping ones is what makes the delivered set predictable from what the user can see on the skill.
+
+**Independent Test**: Register two agents and import three unscoped skills; verify six links exist; scope one skill to a single agent; verify the other agent's copy is reclaimed; scope a second skill to `[]`; verify both its copies are reclaimed; disable a third skill and verify its copies go, then re-enable it and verify they come back.
 
 **Covering scenarios**:
 
-- enable follow-all and deliver every master skill
-- auto-deliver new skills to following agents
-- auto-remove deleted skills from following agents
-- exclude a skill from a following agent
-- disable follow-all preserving current bindings
+- a skill with no scope reaches every registered agent
+- a skill scoped to no agent reaches nobody
+- import delivers a skill only where its scope grants it
+- disabling a skill reclaims every delivered copy
+- re-enabling a skill redelivers it
 
 ---
 
@@ -161,44 +163,53 @@ Per-skill bindings are precise but chatty: every new skill must be enabled agent
 - **Symlink/junction creation fails on Windows (FAT32 or network share)**: Falls back to copy mode for that target with an audit flag `degraded=true`; UI shows a warning chip.
 - **User edits `SKILL.md` in an external editor from inside an agent's `config_dir/skills` folder**: Coffer's UI never edits file content; the user makes the change in their own editor (reached via Coffer's "open in external editor" / "reveal in file manager" affordances or directly). Because the agent's path is a symlink to master, the external edit lands in master and is visible to all other agents on next read; no drift is detected.
 - **User deletes a Coffer-managed file from inside an agent's `config_dir/skills` folder**: Master is affected (same reason); next `verify` flags any other agents whose links no longer resolve consistently.
-- **Removing an agent (per spec agent-registry) while it has skill bindings**: The agent-registry spec defines the agent kind's `on_delete` seam; the skill-manager spec supplies the `cleanup_bindings_for_agent` callback at the composition root, so removing an agent first cleans up that agent's bindings and any associated symlinks before the agent row is deleted.
+- **Removing an agent (per spec agent-registry) while it has skill bindings**: Spec agent-registry defines the agent kind's `on_delete` seam; the 005-skill-manager spec supplies the `cleanup_bindings_for_agent` callback at the composition root, so removing an agent first cleans up that agent's bindings and any associated symlinks before the agent row is deleted.
 - **Agent's `config_dir` is moved or removed externally**: The next sync operation surfaces the failure; `verify` reports the affected bindings; user remediates by updating the agent's `config_dir` or removing the agent.
 - **`~/.agents/skills` is shared with other tools**: The scan lists what it finds and classifies only Coffer's own links as managed; everything else is unmanaged. Deletion is always an explicit user action — Coffer never garbage-collects another tool's skills.
 - **Unmanaged entry is a symlink pointing outside the master store**: Listed as unmanaged-but-not-adoptable (adopting would move someone else's source of truth); the user can follow the link's target manually or delete the link.
 - **Unmanaged skill without a valid SKILL.md**: Listed with `valid=false` and the reason; it can be deleted but not adopted until it validates.
-- **Follow-all enabled while a target path holds a non-Coffer folder of the same name**: That skill is reported as a conflict (same rule as FR-011) instead of being overwritten; the rest of the master store is delivered normally.
+- **A skill is delivered while a target path holds a non-Coffer folder of the same name**: That skill is reported as a conflict (same rule as FR-011) instead of being overwritten; the rest of the master store is delivered normally.
 - **Per-agent delivery target**: Coffer delivers a managed skill in exactly one way — the master skill folder is symlinked (copy fallback) into `<config_dir>/skills/<name>`. Each agent's skill subpath comes from the capability manifest, so adding a future agent's delivery target is data, not a new branch.
 
-## Skill delivery scope ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md))
+## Skill delivery scope ([ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.md))
 
 A `skill` resource carries a framework-level `scope` — a list of agent names,
-or `None` for "every agent". Scope is a resource-side GRANT ("this skill may
-run here"); the existing per-agent **follow policy** (FR-025) is agent-side
-INTENT ("deliver skills to me"). Delivery is the INTERSECTION of both, minus
-manual exclusions:
+or `None` for "every agent". Together with the resource's own `enabled` flag it
+is the WHOLE delivery rule:
 
-- **Per-skill bindings** (User Story 3 / FR-009) deliver a skill to an agent
-  only when that agent is ALSO within the skill's scope (`agent_in_scope` for
-  the binding's agent). A binding request for an agent the skill's scope
-  excludes is rejected the same way an invalid delivery target is rejected
-  today.
-- **Follow-all delivery** (FR-025) computes a following agent's effective
-  set as the master store minus exclusions, further filtered to skills whose
-  scope includes that agent — an out-of-scope skill is never auto-delivered
-  to a following agent, exclusion list or not.
-- **Scope is a hard grant — it overrides manual bindings.** Editing a
-  skill's scope to exclude an agent it was PREVIOUSLY delivered to reclaims
-  that delivery on the next reconcile: the symlink is removed and the
-  binding is marked disabled/removed, exactly like a follow-policy-driven
-  removal (FR-010), even for a binding that was created manually (not
-  through follow). A skill re-entering scope does not auto-redeliver on its
-  own — a following agent picks it back up on the next follow reconcile; an
-  explicit per-skill binding must be re-enabled by the user.
-- Reconcile is the enforcement seam — including the per-import reconcile hook
-  that runs after an import (spec vault-export-import). After a scope edit, a new/removed
-  skill, or a follow-policy change, each affected agent's delivered set is
-  recomputed as `scope ∩ follow-or-binding`, and any now-out-of-scope
-  delivered copy is reclaimed.
+```
+delivered(skill, agent)  ⟺  skill.enabled AND agent_in_scope(skill.scope, agent)
+```
+
+Nothing else gates delivery. This is the same shape `mcp_server` already uses,
+where scope alone decides which agent sees a server's tools.
+
+- **The three scope states.** `None` — every registered agent receives the
+  skill (the default for a fresh import). `["claude_code"]` — only the named
+  agents receive it; names that are not registered yet are legal and simply
+  never match. `[]` — no agent receives it, while the skill stays in the
+  library, exported and visible.
+- **`enabled` is the on/off switch, and it is real.** Disabling a skill
+  reclaims every delivered copy — each symlink is removed, the master folder
+  untouched. Re-enabling redelivers it to every agent its scope still grants.
+- **Scope is a hard grant.** Narrowing a skill's scope to exclude an agent it
+  was previously delivered to reclaims that delivery on the next reconcile,
+  even if the copy got there some other way; widening the scope delivers it.
+  There is no per-agent state that can hold a copy against the skill's scope,
+  and none that can keep a copy away from an agent the scope grants.
+- **Reconcile is the enforcement seam** — including the post-import reconcile
+  hook (spec vault-export-import). It runs whenever the answer to the predicate can have
+  changed: a skill is enabled or disabled, a skill's scope is edited, a skill
+  is imported, a skill is removed, an agent is registered, an agent's
+  `config_dir` changes, and after a sync import. Each run recomputes the
+  agent's wanted set, delivers what is missing, and reclaims what is no longer
+  wanted.
+- **The trade-off, stated plainly.** There is no longer a single per-agent
+  "this agent gets nothing" switch. To exclude one agent from everything,
+  remove it from each skill's scope — which is exactly how `mcp_server`
+  resources already work. Per-agent exclusion of a specific skill is unchanged
+  in power; it just moves from the agent side to the skill side. The agent
+  resource carries no skill-delivery policy at all.
 
 ## Acceptance Scenarios
 
@@ -240,29 +251,29 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **When** the folder is validated,
 - **Then** validation succeeds and the parsed frontmatter retains `license` and a normalized `allowed-tools` list (rather than discarding them).
 
-### Scenario: enable a skill for a registered agent
+### Scenario: deliver a skill to a registered agent
 
-- **Given** an agent `claude_code` is registered (per spec agent-registry) and a skill `my-skill` is imported,
-- **When** the user enables `my-skill` for `claude_code`,
-- **Then** a directory symlink (or junction on Windows) is created at `<config_dir>/skills/my-skill` pointing to `~/.coffer/skills/my-skill/`, and a `skill_agent_bindings` row records the link.
+- **Given** an agent `claude_code` is registered (per spec agent-registry) and an enabled skill `my-skill` is imported whose scope grants `claude_code`,
+- **When** the delivery reconcile for that skill runs,
+- **Then** a directory symlink (or junction on Windows) is created at `<config_dir>/skills/my-skill` pointing to `~/.coffer/skills/my-skill/`, and a `skill_agent_bindings` row records that the agent holds a delivered copy.
 
-### Scenario: disable a skill for an agent
+### Scenario: reclaim a skill from an agent
 
-- **Given** a skill is enabled for an agent and the target symlink exists,
-- **When** the user disables it for that agent,
-- **Then** the symlink is removed, the binding is marked disabled, and the master folder is unchanged.
+- **Given** a skill is delivered to an agent and the target symlink exists,
+- **When** the skill stops being delivered to that agent (its scope no longer grants the agent, or the skill is disabled),
+- **Then** the symlink is removed, the delivery record for that agent is cleared, and the master folder is unchanged.
 
-### Scenario: enable for multiple agents
+### Scenario: deliver one skill to multiple agents
 
 - **Given** two agents are registered,
-- **When** the user enables one skill for both,
+- **When** an enabled skill whose scope grants both is reconciled,
 - **Then** two symlinks (one per agent) exist, both pointing to the same master folder.
 
 ### Scenario: refuse to overwrite a non-Coffer target
 
 - **Given** the user has placed a regular file or directory at the would-be link path,
-- **When** the user enables a skill for that agent,
-- **Then** the operation is rejected; with `--force`, the existing target is backed up to `<path>.coffer-backup-<ts>` and the link is created.
+- **When** a skill is delivered to that agent,
+- **Then** the conflict is reported and the existing target is left untouched; the rest of the delivery proceeds.
 
 ### Scenario: detect drift in agent skill directories
 
@@ -354,41 +365,41 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **When** the user lists unmanaged skills,
 - **Then** neither the managed links nor the `.system` entry appear in the result.
 
-### Scenario: enable follow-all and deliver every master skill
+### Scenario: a skill with no scope reaches every registered agent
 
-- **Given** a registered agent not yet following, and three skills in the master store,
-- **When** the user enables the agent's follow-master-library switch,
-- **Then** the sync engine delivers all three skills to the agent (links + binding rows) and the agent's effective set equals the master store minus its (empty) exclusion list.
+- **Given** two registered agents and an enabled skill whose scope is unset (`None`),
+- **When** the delivery reconcile runs for each agent,
+- **Then** both agents hold a delivered copy, and registering a third agent delivers the skill there too with no further user action.
 
-### Scenario: auto-deliver new skills to following agents
+### Scenario: a skill scoped to no agent reaches nobody
 
-- **Given** an agent with follow enabled,
-- **When** a new skill is registered in the master store (import or adoption),
-- **Then** the daemon delivers it to that agent without further user action.
+- **Given** two registered agents each holding a delivered copy of an enabled skill,
+- **When** the user sets the skill's scope to `[]`,
+- **Then** both delivered copies are reclaimed, the skill remains in the library (still listed, still exported), and no agent receives it until its scope grants one again.
 
-### Scenario: auto-remove deleted skills from following agents
+### Scenario: import delivers a skill only where its scope grants it
 
-- **Given** an agent with follow enabled and a delivered skill,
-- **When** that skill is removed from the master store,
-- **Then** the agent's link and binding are cleaned up as part of the removal.
+- **Given** two registered agents, `claude_code` and `codex`,
+- **When** the user imports a skill scoped to `["claude_code"]`,
+- **Then** the post-import reconcile delivers it to `claude_code` only, and `codex` receives nothing.
 
-### Scenario: exclude a skill from a following agent
+### Scenario: disabling a skill reclaims every delivered copy
 
-- **Given** an agent with follow enabled and a delivered skill,
-- **When** the user excludes that skill for this agent,
-- **Then** its link and binding are removed, the skill joins the agent's exclusion list, and later master changes never re-deliver it until the exclusion is lifted.
+- **Given** an enabled skill delivered to two agents,
+- **When** the user disables the skill resource,
+- **Then** both symlinks are removed and both delivery records are cleared, while the skill's scope and its master folder are unchanged.
 
-### Scenario: disable follow-all preserving current bindings
+### Scenario: re-enabling a skill redelivers it
 
-- **Given** an agent with follow enabled and several delivered skills,
-- **When** the user disables the follow switch,
-- **Then** every currently delivered skill remains as an explicit per-skill binding with its link intact, and subsequent master-store additions are no longer auto-delivered.
+- **Given** a disabled skill with no delivered copies and a scope granting two agents,
+- **When** the user re-enables the skill resource,
+- **Then** it is redelivered to both agents — links re-created, delivery records restored — with no per-agent action.
 
-### Scenario: delivery is the intersection of scope and follow policy; an out-of-scope copy is reclaimed
+### Scenario: scoping a skill away from an agent reclaims the delivered copy
 
-- **Given** an agent following the master library with a skill currently delivered to it, and that skill's scope currently includes this agent,
+- **Given** an enabled skill currently delivered to an agent whose name its scope includes,
 - **When** the user edits the skill's scope to exclude this agent and the next reconcile runs,
-- **Then** the delivered symlink is removed and the binding is reclaimed even though the agent still follows the master library and never excluded the skill itself — delivery equals scope ∩ follow policy, and scope's exclusion wins.
+- **Then** the delivered symlink is removed and the delivery record is cleared — scope is a hard grant, and no per-agent state can hold the copy against it.
 
 ### Scenario: opt-in repair re-delivers repairable drift from master
 
@@ -417,12 +428,12 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 
 **Per-agent delivery**
 
-- **FR-008**: Each `(skill, agent)` binding is tracked in a `skill_agent_bindings` table recording whether the binding is enabled and the last successful link path.
-- **FR-009**: Enabling a binding MUST create a directory symlink (POSIX) or directory junction (Windows) at `<config_dir>/skills/<skill-name>` pointing to `~/.coffer/skills/<skill-name>/`.
-- **FR-010**: Disabling a binding MUST remove the target link without touching the master folder.
-- **FR-011**: Enabling MUST refuse to overwrite an existing non-Coffer target without `--force`; `--force` backs up the existing target before creating the link.
+- **FR-008**: Each `(skill, agent)` binding is internal delivery bookkeeping, tracked in a `skill_agent_bindings` table: a row records that this agent currently holds a delivered copy, plus the last successful link path, the link mode, and when it was last linked. It is not a user-facing axis and no surface exposes it as a toggle.
+- **FR-009**: Delivering a skill to an agent MUST create a directory symlink (POSIX) or directory junction (Windows) at `<config_dir>/skills/<skill-name>` pointing to `~/.coffer/skills/<skill-name>/`.
+- **FR-010**: Reclaiming a delivered copy MUST remove the target link without touching the master folder.
+- **FR-011**: Delivery MUST report, never overwrite: when the target path already holds something that is not a Coffer-managed link, that skill is reported as a conflict and the existing target is left exactly as it was, while the rest of the delivery proceeds. (Backing a target up before relinking exists only inside the explicit opt-in drift repair of FR-029.)
 - **FR-012**: When symlinks/directory junctions are unavailable (e.g., FAT32, network share), System MAY fall back to copy mode for that target; the binding records `link_mode=copy_fallback` (audited as `mode: copy_fallback` on the enable event) and the UI MUST surface the degradation (the agent Skills tab shows a "Copied" warning chip on such bindings).
-- **FR-012a** ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)): Skill delivery to an agent MUST additionally require the skill to be in scope for that agent (`agent_in_scope(scope, agent)`), whether delivery is a per-skill binding (FR-009) or follow-all (FR-025). A reconcile that finds a delivered binding now out of scope MUST reclaim it (remove the link, disable/remove the binding) exactly as FR-010 reclaims a disabled binding — scope is a hard grant that overrides a previously-manual binding.
+- **FR-012a** ([ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.md)): A skill MUST be delivered to an agent if and only if the skill resource is enabled AND the agent is within the skill's scope — `skill.enabled AND agent_in_scope(skill.scope, agent)`. No other flag gates delivery: neither the delivery bookkeeping of FR-008 nor any field on the agent resource. A reconcile that finds a delivered copy the predicate no longer grants MUST reclaim it (remove the link, clear the delivery record) per FR-010, and MUST deliver a copy the predicate now grants but the agent does not hold.
 
 **Drift**
 
@@ -436,10 +447,10 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **FR-023**: Users MUST be able to adopt a valid unmanaged skill. Adoption validates the folder per FR-004, moves it to `~/.coffer/skills/<name>/`, registers the `skill` resource, delivers the managed link (FR-009), and records an enabled binding for that agent — in that order, with any failure before registration leaving the original folder unmoved and unchanged (after registration the master copy is authoritative; a delivery failure is surfaced and retried via the binding, never rolled back). The managed link is always delivered to the agent's canonical delivery location `<config_dir>/skills/<name>`: adopting from `<config_dir>/skills` replaces the original path in place, while adopting from `~/.agents/skills` consolidates — the original folder there is removed and the link lands in `<config_dir>/skills` (Codex reads both locations, so the agent keeps seeing the skill). Name collisions are rejected with `conflict` (409); invalid folders and symlinks pointing outside the master store are rejected with `unprocessable_entity` (422). Audited as an adoption event.
 - **FR-024**: Users MUST be able to delete an unmanaged entry as an explicit, confirmed action. Deletion removes only that entry from disk, never master content or bindings, and is audited.
 
-**Follow the master library (workspace amendment)**
+**Delivery reconciliation (workspace amendment)**
 
-- **FR-025**: Each agent MUST carry a follow-master-library flag and a per-agent skill exclusion list (stored on the agent resource's config, spec agent-registry). While following, the agent's effective skill set is the entire master store minus its exclusions; the sync engine MUST reconcile deliveries when the flag changes, when a skill is registered or removed, and when the exclusion list changes. Conflicts at target paths follow FR-011 (report, never overwrite). Disabling the flag MUST preserve the currently delivered skills as explicit per-skill bindings. The flag defaults to enabled for newly registered agents, matching the pre-amendment auto-bind behavior.
-- **FR-026**: Unmanaged-skill and follow operations MUST be available through the REST API, the `coffer agent skill …` / `coffer skill …` CLI (with `--json` on reads), and the agent's Skills tab in the web UI.
+- **FR-025**: The system MUST reconcile deliveries per agent from the FR-012a predicate alone. A reconcile computes the agent's wanted set as `{s.name for s in skills if s.enabled and agent_in_scope(s.scope, agent_name)}`, delivers every wanted skill the agent does not hold, and reclaims every held copy that is no longer wanted. It MUST run on: a skill being enabled or disabled, a skill's scope being edited, a skill being imported, a skill being removed, an agent being registered, an agent's `config_dir` changing, and the post-import hook after a sync import. Conflicts at target paths follow FR-011 (report, never overwrite). The agent resource carries no skill-delivery policy of any kind — no follow flag, no exclusion list, no per-agent opt-out; the only inputs are the skill's `enabled` flag and its `scope`.
+- **FR-026**: Unmanaged-skill operations MUST be available through the REST API, the `coffer agent skill …` / `coffer skill …` CLI (with `--json` on reads), and the agent's Skills tab in the web UI. Delivery itself is not an operation on this surface: it is controlled by the skill resource's `enabled` flag and `scope` through the generic resource enable/disable and scope surfaces.
 
 **Lifecycle**
 
@@ -448,7 +459,7 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 
 **Surfaces**
 
-- **FR-019**: Every management operation MUST be available through (a) the REST API, (b) the `coffer skill ...` CLI with `--json`, and (c) the Skills page in the web UI.
+- **FR-019**: Every management operation MUST be available through (a) the REST API, (b) the `coffer skill ...` CLI with `--json`, and (c) the Skills page in the web UI. Per-(skill, agent) enable/disable is not among them: the `POST /skills/{name}/enable` and `POST /skills/{name}/disable` routes and the `coffer skill enable|disable` CLI commands are REMOVED. Delivery is driven by the skill's `enabled` flag and `scope` through the generic resource surfaces — `coffer scope set skill:<name> --agents …` and `coffer resource enable|disable skill:<name>`.
 - **FR-021**: System MUST expose a **read-only** view of a skill's master folder: a recursive file tree (name, folder-relative path, absolute on-disk path, type, size, children) and the contents of an individual file (with its absolute on-disk path and containing folder's absolute path). Markdown files render as formatted Markdown; other text files show raw. Every file read MUST also return a content fingerprint (FR-028) so an in-app edit of that file can be saved conditionally. Reads MUST be contained to the master folder — any path that resolves outside it (`..` traversal, absolute path, or escaping symlink) MUST be rejected. File reads MUST be size-capped (truncating with a `truncated` flag) and MUST flag non-UTF-8 / NUL-containing files as binary with empty content. No symlink-following out of the folder.
 - **FR-006**: The in-app file viewer MUST offer, at both file and containing-folder granularity, affordances to (a) open the target in the user's preferred external editor (the global preference is specced in ui-shell; default = the OS default application) and (b) reveal the target in the OS file manager (Finder / Explorer). Open and reveal perform the real OS action through the daemon filesystem-action endpoints (spec agent-registry FR-039), since the loopback daemon is on the user's own machine (ADR daemon-proxies-os-file-actions). There is no copy-path fallback. These affordances sit alongside in-app editing (FR-028): the user saves small edits in Coffer and reaches for their own editor for anything larger.
 - **FR-028**: System MUST provide a write that overwrites an **existing text file** in the master folder, under the same containment guard and size cap as FR-021; it MUST refuse to create new files/directories here, to write outside the folder, or to overwrite a binary file with text. The write MUST be atomic with no symlink-following out of the folder. The in-app editor and programmatic clients (REST/CLI) share this one endpoint. Because the master folder is also a folder the user edits in their own editor, file reads MUST return a **content fingerprint** (a digest of the file's raw on-disk bytes — not of the possibly-truncated text returned, so an oversized file's fingerprint still round-trips and an edit past the truncation point is still detected), and a write MAY carry that fingerprint back: when it no longer matches the bytes on disk the write MUST be rejected with `conflict` (409) and the file left byte-identical, so the user re-reads and reapplies rather than silently losing the other edit. A write that omits the fingerprint stays unconditional (last writer wins), which is what a programmatic client that never read the file first needs.
@@ -456,16 +467,15 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 
 **Observability**
 
-- **FR-020**: System MUST record an audit entry for every import, enable, disable, remove, and drift remediation event.
+- **FR-020**: System MUST record an audit entry for every import, delivery, reclaim, remove, and drift remediation event.
 
 ### Key Entities
 
-- **Skill**: A Resource of kind `skill`, identified by `skill:<name>` (name from SKILL.md frontmatter). Holds source provenance, content hash, and metadata; the content folder lives on disk at `~/.coffer/skills/<name>/`. Carries a framework-level `scope` (a list of agent names, or `None` for every agent) whose intersection with the per-agent follow policy determines delivery ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md); see "Skill delivery scope").
+- **Skill**: A Resource of kind `skill`, identified by `skill:<name>` (name from SKILL.md frontmatter). Holds source provenance, content hash, and metadata; the content folder lives on disk at `~/.coffer/skills/<name>/`. Carries a framework-level `scope` (a list of agent names, or `None` for every agent) which, together with the resource's own `enabled` flag, determines delivery outright (ADR per-agent-resource-scope; see "Skill delivery scope").
 - **Skill Source**: A record capturing where the skill came from. For local imports, it includes the original path for informational purposes only.
-- **Skill–Agent Binding**: A row joining one skill Resource and one agent Resource (kind `agent`, per spec agent-registry), with an `enabled` flag and last-link-path metadata. Symlink existence on disk is the live representation; binding state is the persistent representation.
+- **Skill–Agent Binding**: Internal delivery bookkeeping, not a user-facing toggle. A row joining one skill Resource and one agent Resource (kind `agent`, per spec agent-registry) records that this agent currently holds a delivered copy, with last-link-path, link-mode and last-linked-at metadata. Symlink existence on disk is the live representation; the row is the persistent record of what was delivered.
 - **Drift Report**: An ephemeral structure produced by `verify` listing each binding whose on-disk target disagrees with the binding state, categorized by drift type with a suggested remedy.
 - **Unmanaged Skill**: A derived (never stored) view of a skill-shaped entry found in an agent's skill locations that Coffer does not manage — name, path, location, `valid` flag. The filesystem is the source of truth; adoption or deletion are the only mutations.
-- **Follow Policy**: Per-agent state (flag + exclusion list, stored on the agent resource's config per spec agent-registry) declaring that the agent receives the entire master store. Bindings remain the persistent delivery record; the policy drives the sync engine's reconciliation.
 
 ## Success Criteria
 
@@ -478,18 +488,18 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **SC-006**: Every Acceptance Scenario in this spec is covered by at least one test marked `acceptance(spec="skill-manager", scenario="…")`, and `make verify-acceptance` reports zero uncovered scenarios.
 - **SC-007**: The full `make verify` suite passes locally and in CI; `make verify-all` (adding e2e) passes on macOS and Linux; Windows tests pass for both junction mode and copy-fallback mode.
 - **SC-008**: No SKILL.md content ever leaves the user's machine; verified by an automated network-egress scan during integration tests.
-- **SC-009**: With follow enabled, a newly registered skill is delivered to the following agent within 5 seconds, with no user action beyond the registration itself.
+- **SC-009**: A newly imported skill is delivered within 5 seconds to every agent its scope grants, with no user action beyond the import itself.
 - **SC-010**: On a machine with a mix of managed links and hand-placed skills, the unmanaged scan lists exactly the hand-placed entries — zero managed links, zero `.system` entries — verified by integration tests over a constructed fixture tree.
 
 ## Assumptions
 
-- Spec agent-registry has shipped (PR #25); the agent kind, its CRUD, audit, and `on_delete` hook are available.
-- The kind-agnostic Resource framework, audit log, and `<kind>:<name>` identity scheme defined by spec mcp-gateway are in place.
-- The application shell from spec ui-shell — sidebar IA, layout, routing skeleton, and design system — is in place; the Skills page is a feature surface that renders within that shell and fills the `/skills` nav slot ui-shell reserved as a placeholder.
+- Spec agent-registry-agent-registry has shipped (PR #25); the agent kind, its CRUD, audit, and `on_delete` hook are available.
+- The kind-agnostic Resource framework, audit log, and `<kind>:<name>` identity scheme defined by spec mcp-gateway-mcp-gateway are in place.
+- The application shell from spec ui-shell-ui-shell — sidebar IA, layout, routing skeleton, and design system — is in place; the Skills page is a feature surface that renders within that shell and fills the `/skills` nav slot 002-ui-shell reserved as a placeholder.
 - Skills follow the open AgentSkills standard (`SKILL.md` with `name`/`description` frontmatter at minimum) as published at agentskills.io, validated against the standard's exact constraints (`name` ≤64 chars, `description` ≤1024 chars) with the optional `license` and experimental `allowed-tools` fields recognized; non-conforming folders are out of scope.
 - Local-imported skills are point-in-time copies; the source path is recorded for traceability, not for sync.
 - Windows users have directory-junction support on their filesystem; FAT32 and network shares fall back to copy mode.
 - Delivery stays at `<config_dir>/skills` for both agent types. Codex additionally reads `~/.agents/skills` (its newer standard location) and treats `<config_dir>/skills` as a backward-compatible legacy location — the unmanaged scan covers both; migrating Coffer's delivery target is a recorded decision deferred to a future change.
-- The follow-master-library flag and exclusion list live on the agent resource's config (spec agent-registry's schema); this spec owns their delivery semantics.
+- The agent resource carries no skill-delivery policy at all. Delivery lives entirely on the skill resource — its `enabled` flag and its `scope` — and this spec owns those semantics.
 - A browse-and-install skill catalog (discovery) was prototyped then withdrawn (simplification, 2026-06-20) for lack of a content ecosystem; an install catalog remains possible future work.
 - v2 will explore: a remote catalog index, agent-to-agent skill recommendations, and project-local skills (`.claude/skills/` in repo).

@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DaemonOfflineBanner } from "./DaemonOfflineBanner";
 
@@ -36,46 +36,15 @@ describe("DaemonOfflineBanner", () => {
     expect(screen.getByText(/ECONNREFUSED/)).toBeInTheDocument();
   });
 
-  test("shows a Retry button plus a terminal restart hint", () => {
+  test("surfaces the terminal restart command and no Retry button", () => {
     useDaemonStatusMock.mockReturnValue({
       isError: true,
       error: new Error("nope"),
     } as never);
     render(wrap(<DaemonOfflineBanner />));
-    // Retry (soft re-check) is the in-app affordance; the browser can't restart
-    // the daemon, so the actual recovery command is surfaced as a hint.
-    expect(screen.getByTestId("daemon-banner-reload")).toBeInTheDocument();
+    // The browser cannot restart the daemon, so the only affordance is the
+    // command that does; the 30s status poll clears the banner by itself.
     expect(screen.getByText("coffer daemon start")).toBeInTheDocument();
-  });
-
-  test("Retry refetches in place — it does NOT hard-reload the page", async () => {
-    useDaemonStatusMock.mockReturnValue({
-      isError: true,
-      error: new Error("Failed to fetch"),
-    } as never);
-
-    // A hard window.location.reload() would navigate to the page host and blank
-    // the app if that host (Vite dev server / daemon-served bundle) is itself
-    // down. Assert we DON'T call it, and instead refetch in place.
-    const reloadSpy = vi.fn();
-    Object.defineProperty(window, "location", {
-      configurable: true,
-      value: { ...window.location, reload: reloadSpy },
-    });
-
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const invalidateSpy = vi.spyOn(qc, "invalidateQueries").mockResolvedValue();
-    render(
-      <QueryClientProvider client={qc}>
-        <DaemonOfflineBanner />
-      </QueryClientProvider>,
-    );
-
-    const retryBtn = screen.getByTestId("daemon-banner-reload");
-    expect(retryBtn).toHaveTextContent("Retry");
-
-    fireEvent.click(retryBtn);
-    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith());
-    expect(reloadSpy).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button")).toBeNull();
   });
 });

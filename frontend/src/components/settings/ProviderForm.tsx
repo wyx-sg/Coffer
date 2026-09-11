@@ -24,7 +24,12 @@ import {
   type ProviderCreate,
   type ProviderPatch,
 } from "@/lib/api/providers";
-import { PRESETS, SELECTABLE_AGENTS, defaultCompatibleAgents } from "./connectionPresets";
+import {
+  AGENT_LABEL_KEY,
+  PRESETS,
+  SELECTABLE_AGENTS,
+  defaultCompatibleAgents,
+} from "./connectionPresets";
 
 interface Props {
   /** Present → edit an existing connection (name + protocol locked, secret optional). */
@@ -36,11 +41,6 @@ interface Props {
   onUpdate?: (patch: ProviderPatch) => Promise<void> | void;
   onCancel: () => void;
 }
-
-const AGENT_LABEL_KEY: Record<AgentType, string> = {
-  claude_code: "settings.connections.agentClaudeCode",
-  codex: "settings.connections.agentCodex",
-};
 
 export function ProviderForm({
   initial,

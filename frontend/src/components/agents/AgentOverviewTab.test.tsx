@@ -66,6 +66,8 @@ function makeConn(over: Partial<Provider> = {}): Provider {
     credential_ref: "ref",
     is_active: true,
     internal_default: false,
+    // No curated model set by default — the picker introspects the endpoint.
+    models: [] as string[],
     enabled: true,
     description: null,
     created_at: "",
@@ -328,6 +330,61 @@ describe("AgentOverviewTab", () => {
     fireEvent.click(screen.getByRole("option", { name: "agnes" }));
     expect(screen.getByRole("combobox", { name: /^model$/i })).toBeEnabled();
     expect(screen.getByRole("combobox", { name: /fast model/i })).toBeEnabled();
+  });
+
+  // --- the connection's curated model set narrows the picker (spec provider-switching) ----
+  // `models` on a connection is the set the user curated on its detail page.
+  // Non-empty ⇒ it IS the catalogue (no endpoint introspection at all); empty
+  // ⇒ "no restriction", and the options come from introspection as before.
+
+  test("a curated connection supplies the model options and is never introspected", () => {
+    const listMutate = vi.fn();
+    useListMock.mockReturnValue({ mutate: listMutate });
+    useProvidersMock.mockReturnValue({
+      data: [agnes({ is_active: true, models: ["agnes-2.0", "agnes-1.5-flash"] })],
+    });
+    render(<AgentOverviewTab agent={agent} />);
+
+    const options = openSelectOptions(/^model$/i);
+    expect(options).toEqual(["agnes-2.0", "agnes-1.5-flash"]);
+    // The endpoint is never probed for its catalogue — the curated list is it.
+    expect(listMutate).not.toHaveBeenCalled();
+  });
+
+  test("picking a curated connection stages its first model without introspecting", () => {
+    const listMutate = vi.fn();
+    useListMock.mockReturnValue({ mutate: listMutate });
+    useProvidersMock.mockReturnValue({
+      data: [
+        makeConn({ name: "official", is_active: true }),
+        agnes({ models: ["agnes-2.0", "agnes-1.5-flash"] }),
+      ],
+    });
+    render(<AgentOverviewTab agent={agent} />);
+    openSelectOptions(/connection/i);
+    fireEvent.click(screen.getByRole("option", { name: "agnes" }));
+
+    expect(listMutate).not.toHaveBeenCalled();
+    // The staged model came from the curated list, so Test is ready to run.
+    fireEvent.click(testBtn());
+    expect(testMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "agnes-2.0", provider: "openai" }),
+    );
+  });
+
+  test("an EMPTY curated set keeps today's behaviour: introspect the endpoint", () => {
+    const listMutate = vi.fn(
+      (_p: unknown, opts?: { onSuccess?: (r: { models: string[] }) => void }) =>
+        opts?.onSuccess?.({ models: ["agnes-2.0", "agnes-1.5-flash"] }),
+    );
+    useListMock.mockReturnValue({ mutate: listMutate });
+    useProvidersMock.mockReturnValue({ data: [agnes({ is_active: true, models: [] })] });
+    render(<AgentOverviewTab agent={agent} />);
+
+    const options = openSelectOptions(/^model$/i);
+    expect(options).toContain("agnes-2.0");
+    expect(options).toContain("agnes-1.5-flash");
+    expect(listMutate).toHaveBeenCalled();
   });
 
   test("with no compatible connection, still defaults to the built-in connection", () => {

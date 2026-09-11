@@ -2,17 +2,21 @@
 //
 // The skills list rendered via the shared DataTable (mirrors AgentTable): rows
 // navigate to the skill detail page on click, search covers name + description,
-// a source filter narrows by origin, and each row carries Verify + Delete
-// icon+text actions (the delete opens a styled confirmation dialog — no
-// window.confirm). Multi-select adds a bulk Verify + bulk Delete bar. The
-// per-row + bulk action UI lives in SkillsTableActions.tsx.
+// a status filter narrows to enabled/disabled, each row carries an
+// enable/disable Switch and a Delete icon+text action (the delete opens a
+// styled confirmation dialog — no window.confirm). Multi-select adds a bulk
+// Verify + bulk Delete bar — Verify is a library-wide maintenance action, so it
+// lives only there. The per-row + bulk action UI lives in SkillsTableActions.tsx.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
-import { SkillRowActions, SkillsBulkActions } from "@/components/skills/SkillsTableActions";
-import { SkillVerifyDialog } from "@/components/skills/SkillVerifyDialog";
+import {
+  SkillRowActions,
+  SkillStatusCell,
+  SkillsBulkActions,
+} from "@/components/skills/SkillsTableActions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -31,9 +35,6 @@ export function SkillsTable({ skills }: { skills: SkillOut[] }) {
   const remove = useRemoveSkill();
   // Styled confirmation dialog (no native window.confirm). `null` = closed.
   const [deletingName, setDeletingName] = useState<string | null>(null);
-  // Verify dialog is hoisted to the table level (not rendered inside the row)
-  // so closing it can't fall through to the row's navigate-to-detail click.
-  const [verifyingName, setVerifyingName] = useState<string | null>(null);
 
   const columns: Column<SkillOut>[] = [
     {
@@ -56,6 +57,12 @@ export function SkillsTable({ skills }: { skills: SkillOut[] }) {
         ),
     },
     {
+      key: "status",
+      header: t("resources.cols.status"),
+      className: "text-right",
+      cell: (s) => <SkillStatusCell skill={s} />,
+    },
+    {
       key: "actions",
       header: "",
       className: "text-right",
@@ -63,15 +70,26 @@ export function SkillsTable({ skills }: { skills: SkillOut[] }) {
         <SkillRowActions
           skill={s}
           deleteDisabled={remove.isPending}
-          onVerify={() => setVerifyingName(s.name)}
           onDelete={() => setDeletingName(s.name)}
         />
       ),
     },
   ];
 
-  // Source filter intentionally hidden alongside the source column (see above).
-  const filters: FilterDef<SkillOut>[] = [];
+  // Source filter intentionally hidden alongside the source column (see above);
+  // the status filter mirrors the agent detail page's Skills tab.
+  const filters: FilterDef<SkillOut>[] = [
+    {
+      key: "status",
+      label: t("resources.cols.status"),
+      allLabel: t("resources.status.all"),
+      accessor: (s) => (s.enabled ? "enabled" : "disabled"),
+      options: [
+        { value: "enabled", label: t("common.enabled") },
+        { value: "disabled", label: t("common.disabled") },
+      ],
+    },
+  ];
 
   return (
     <>
@@ -123,12 +141,6 @@ export function SkillsTable({ skills }: { skills: SkillOut[] }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <SkillVerifyDialog
-        open={verifyingName !== null}
-        skillNames={verifyingName ? [verifyingName] : undefined}
-        onOpenChange={(o) => !o && setVerifyingName(null)}
-      />
     </>
   );
 }

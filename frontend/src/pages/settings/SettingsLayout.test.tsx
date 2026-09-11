@@ -1,8 +1,8 @@
 // frontend/src/pages/settings/SettingsLayout.test.tsx
 //
 // Direct-render tests for the settings tab-strip + pane-swap behaviour.
-// Settings renders General + Data + Sync + Security + About; the daemon is
-// never a tab.
+// Settings renders General + Engine + Data + Sync + Security + About; the
+// daemon is never a tab.
 
 import { describe, expect, test } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
@@ -23,8 +23,11 @@ function wrap(route = "/settings/data") {
 }
 
 describe("SettingsLayout", () => {
-  test("renders the Data, Security, and About tabs but not App / Daemon", () => {
+  test("renders the Engine, Data, Security, and About tabs but not App / Daemon", () => {
     render(wrap());
+    // Engine holds Coffer's own internal-LLM + embedding config — internal
+    // configuration, so Settings rather than the model-provider resource page.
+    expect(screen.getByRole("link", { name: /Engine/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Data/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Security/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /About/ })).toBeInTheDocument();
@@ -41,7 +44,6 @@ describe("SettingsLayout", () => {
     // Models / Providers / Embedding tabs it replaced are long gone too.
     expect(screen.queryByRole("link", { name: /^Models$/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /^Providers$/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Embedding/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /LLM Connections/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Model providers/ })).not.toBeInTheDocument();
   });

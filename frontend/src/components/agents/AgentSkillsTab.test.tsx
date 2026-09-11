@@ -1,20 +1,16 @@
 // frontend/src/components/agents/AgentSkillsTab.test.tsx
 //
-// The Skills tab's "Managed by Coffer" section lists every skill that has a
-// binding for THIS agent, each with an enable/disable Switch reflecting the
-// binding's enabled state. (AgentInstallSkillsDialog also reads useSkills, so
-// the single mock below covers both.)
-//
-// Skill Manager FR-025 additions covered here:
-//   - the "Follow master library" switch reflects agent.follow_all_skills and
-//     PATCHes the agent on toggle
-//   - while following, the managed table is replaced by a link to the Skills
-//     page (the reconciler delivers everything automatically)
-//   - while NOT following, the managed table's per-skill switch keeps the old
-//     binding behaviour
+// The Skills tab mirrors the MCP servers tab: it manages nothing, because
+// delivery has one control and it lives on the skill (enabled + scope), not on
+// the agent. Covered here:
+//   - the "Managed by Coffer" pointer row renders and navigates to /skills
+//   - the read-only table lists ONLY the skills bound to this agent, with the
+//     copy_fallback "Copied" badge, and a row click opens the skill detail page
+//   - none of the retired controls survive: no follow switch, no Install
+//     button, no per-row toggle, no status filter, no selection checkboxes
 //   - the unmanaged-skills section: hidden when empty, rows with location /
 //     foreign-link badges and invalid reasons, adopt (disabled w/ hint when
-//     invalid or foreign) and delete-with-confirm actions
+//     invalid or foreign), open-folder and delete-with-confirm actions
 //   - en/zh key parity for agents.skillsTab
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -22,14 +18,13 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { AgentSkillsTab } from "./AgentSkillsTab";
+import { ToastProvider } from "@/components/ui/toast";
 import type { AgentOut, UnmanagedSkillOut } from "@/lib/api/agents";
 import type { LinkMode } from "@/lib/api/skills";
 import en from "@/i18n/locales/en.json";
 import zh from "@/i18n/locales/zh.json";
 
 const useSkillsMock = vi.fn();
-const enableMutate = vi.fn();
-const disableMutate = vi.fn();
 const navigateMock = vi.fn();
 
 vi.mock("react-router-dom", async (importOriginal) => ({
@@ -46,14 +41,13 @@ function mockBinding(linkMode: LinkMode | null) {
         bindings: [
           {
             agent_name: "cc",
-            enabled: true,
             last_linked_at: null,
             last_link_path: null,
             link_mode: linkMode,
           },
         ],
       },
-      // A skill not bound to this agent must NOT appear in the section.
+      // A skill not delivered to this agent must NOT appear in the table.
       { name: "other", description: "", bindings: [] },
     ],
     isPending: false,
@@ -63,15 +57,18 @@ function mockBinding(linkMode: LinkMode | null) {
 
 vi.mock("@/lib/hooks/useSkills", () => ({
   useSkills: () => useSkillsMock(),
-  useEnableSkill: () => ({ mutate: enableMutate, isPending: false }),
-  useDisableSkill: () => ({ mutate: disableMutate, isPending: false }),
 }));
 
-// usePatchAgent / useUnmanagedSkills / adopt / delete run as REAL react-query
-// hooks against this mocked wire layer.
+// The open-folder action goes through useFsActions → fsApi.open (the loopback
+// daemon); mock the wire layer, like the agents API below.
+vi.mock("@/lib/api/fs", () => ({
+  fsApi: { open: vi.fn(), reveal: vi.fn() },
+}));
+
+// useUnmanagedSkills / adopt / delete run as REAL react-query hooks against
+// this mocked wire layer.
 vi.mock("@/lib/api/agents", () => ({
   agentsApi: {
-    patch: vi.fn(),
     unmanagedSkills: vi.fn(),
     adoptUnmanagedSkill: vi.fn(),
     deleteUnmanagedSkill: vi.fn(),
@@ -81,6 +78,9 @@ vi.mock("@/lib/api/agents", () => ({
 const { agentsApi } = await import("@/lib/api/agents");
 const api = vi.mocked(agentsApi);
 
+const { fsApi } = await import("@/lib/api/fs");
+const fs = vi.mocked(fsApi);
+
 const AGENT: AgentOut = {
   name: "cc",
   type: "claude_code",
@@ -88,11 +88,7 @@ const AGENT: AgentOut = {
   description: null,
   created_at: "",
   updated_at: "",
-  follow_all_skills: false,
-  skill_exclusions: [],
 };
-
-const FOLLOW_AGENT: AgentOut = { ...AGENT, follow_all_skills: true };
 
 const UNMANAGED_GOOD: UnmanagedSkillOut = {
   name: "good",
@@ -124,45 +120,42 @@ const UNMANAGED_FOREIGN: UnmanagedSkillOut = {
 function stub(unmanaged: UnmanagedSkillOut[] = []) {
   useSkillsMock.mockReturnValue(mockBinding(null));
   api.unmanagedSkills.mockResolvedValue({ items: unmanaged });
-  api.patch.mockResolvedValue(AGENT);
   api.adoptUnmanagedSkill.mockResolvedValue({ name: "good" });
   api.deleteUnmanagedSkill.mockResolvedValue(undefined);
+  fs.open.mockResolvedValue(undefined);
 }
 
 afterEach(() => vi.clearAllMocks());
 
 function renderTab(agent: AgentOut = AGENT) {
-  // AgentInstallSkillsDialog + AgentSkillsBulkActions now run via useBulkMutate,
-  // which reads the QueryClient — provide one even though no bulk op fires here.
+  // The unmanaged section's bulk actions run via useBulkMutate, which reads the
+  // QueryClient — provide one.
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // ToastProvider is mounted so failure toasts (e.g. a failed open-folder)
+  // actually render instead of hitting useToast's no-op fallback.
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
-        <AgentSkillsTab agent={agent} />
-      </MemoryRouter>
+      <ToastProvider>
+        <MemoryRouter>
+          <AgentSkillsTab agent={agent} />
+        </MemoryRouter>
+      </ToastProvider>
     </QueryClientProvider>,
   );
 }
 
-/** The per-skill binding switch for the "hello" fixture skill. */
-const helloSwitch = () =>
-  screen.getByRole("switch", { name: en.agents.skillsTab.toggleAria.replace("{{name}}", "hello") });
-const followSwitch = () => screen.getByRole("switch", { name: en.agents.skillsTab.follow });
-
 describe("AgentSkillsTab", () => {
-  test("lists the skill bound to this agent with a toggle switch", () => {
+  test("lists only the skills delivered to this agent", () => {
     stub();
     renderTab();
 
     expect(screen.getByText("hello")).toBeInTheDocument();
     expect(screen.queryByText("other")).not.toBeInTheDocument();
-
-    expect(helloSwitch()).toBeChecked();
   });
 
-  test("shows a degraded warning chip when the binding fell back to a copy", () => {
+  test("shows a degraded warning chip when the delivery fell back to a copy", () => {
     // FR-012: when symlink/junction delivery isn't available Coffer copies the
-    // skill instead; the UI MUST surface that the binding is degraded.
+    // skill instead; the UI MUST surface that the delivery is degraded.
     stub();
     useSkillsMock.mockReturnValue(mockBinding("copy_fallback"));
     renderTab();
@@ -171,7 +164,7 @@ describe("AgentSkillsTab", () => {
     expect(screen.getByTestId("skill-degraded-badge")).toBeInTheDocument();
   });
 
-  test("does NOT show the degraded chip for a normal symlink binding", () => {
+  test("does NOT show the degraded chip for a normal symlink delivery", () => {
     stub();
     useSkillsMock.mockReturnValue(mockBinding("symlink"));
     renderTab();
@@ -180,66 +173,53 @@ describe("AgentSkillsTab", () => {
     expect(screen.queryByTestId("skill-degraded-badge")).not.toBeInTheDocument();
   });
 
-  describe("follow master library", () => {
-    test("switch reflects follow_all_skills=false and PATCHes true on toggle", async () => {
-      stub();
-      renderTab(AGENT);
+  test("the managed header points at the Skills page and navigates there", () => {
+    stub();
+    renderTab();
 
-      const sw = followSwitch();
-      expect(sw).not.toBeChecked();
-      fireEvent.click(sw);
-      await waitFor(() =>
-        expect(api.patch).toHaveBeenCalledWith("cc", { follow_all_skills: true }),
-      );
+    const header = screen.getByTestId("skills-managed-header");
+    expect(within(header).getByText(en.agents.cofferManaged)).toBeInTheDocument();
+    expect(within(header).getByText(en.agents.skillsTab.managedHint)).toBeInTheDocument();
+
+    fireEvent.click(
+      within(header).getByRole("button", { name: en.agents.skillsTab.openSkillsPage }),
+    );
+    expect(navigateMock).toHaveBeenCalledWith("/skills");
+  });
+
+  test("a row click opens the skill detail page with a back link to this agent", () => {
+    stub();
+    renderTab();
+
+    fireEvent.click(screen.getByText("hello"));
+    expect(navigateMock).toHaveBeenCalledWith("/skills/hello", {
+      state: { backTo: "/agents/cc", backLabel: "cc" },
     });
+  });
 
-    test("switch reflects follow_all_skills=true and PATCHes false on toggle", async () => {
-      stub();
-      renderTab(FOLLOW_AGENT);
+  test("carries no delivery control: no follow switch, install button or per-row toggle", () => {
+    stub();
+    renderTab();
 
-      const sw = followSwitch();
-      expect(sw).toBeChecked();
-      fireEvent.click(sw);
-      await waitFor(() =>
-        expect(api.patch).toHaveBeenCalledWith("cc", { follow_all_skills: false }),
-      );
-    });
+    // Delivery is decided on the skill (enabled + scope), so the tab holds no
+    // switch at all — not the retired follow switch, not a per-row binding one.
+    expect(screen.queryAllByRole("switch")).toHaveLength(0);
+    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: /install/i })).not.toBeInTheDocument();
+    // No status filter either — a listed row IS a delivered row.
+    expect(
+      screen.queryByRole("combobox", { name: en.resources.cols.status }),
+    ).not.toBeInTheDocument();
+    // The search box stays.
+    expect(screen.getByPlaceholderText(en.skills.searchPlaceholder)).toBeInTheDocument();
+  });
 
-    test("treats missing follow_all_skills as not following", () => {
-      stub();
-      const legacy = { ...AGENT };
-      delete legacy.follow_all_skills;
-      delete legacy.skill_exclusions;
-      renderTab(legacy);
-      expect(followSwitch()).not.toBeChecked();
-    });
+  test("empty state points at the Skills page when nothing is delivered", () => {
+    stub();
+    useSkillsMock.mockReturnValue({ data: [], isPending: false, error: null });
+    renderTab();
 
-    test("in follow mode, the managed table is replaced by a link to the Skills page", () => {
-      stub();
-      renderTab(FOLLOW_AGENT);
-
-      // No per-skill managed table/switches while following — the reconciler
-      // delivers everything automatically.
-      expect(
-        screen.queryByRole("switch", {
-          name: en.agents.skillsTab.toggleAria.replace("{{name}}", "hello"),
-        }),
-      ).not.toBeInTheDocument();
-      expect(screen.queryByText("hello")).not.toBeInTheDocument();
-
-      // Instead, a card links to the standalone Skills page (like Memory / MCP).
-      fireEvent.click(screen.getByRole("button", { name: en.agents.skillsTab.openSkillsPage }));
-      expect(navigateMock).toHaveBeenCalledWith("/skills");
-    });
-
-    test("when NOT following, the per-skill switch keeps the old binding behaviour", () => {
-      stub();
-      renderTab(AGENT);
-
-      fireEvent.click(helloSwitch()); // enabled → disable
-      expect(disableMutate).toHaveBeenCalledWith({ name: "hello", body: { agent_name: "cc" } });
-      expect(api.patch).not.toHaveBeenCalled();
-    });
+    expect(screen.getByText(en.agents.skillsTab.empty)).toBeInTheDocument();
   });
 
   describe("unmanaged skills", () => {
@@ -293,6 +273,31 @@ describe("AgentSkillsTab", () => {
       expect(
         within(section).getByTitle(en.agents.skillsTab.adoptDisabledForeign),
       ).toBeInTheDocument();
+    });
+
+    test("open folder asks the daemon to open the skill's path with the OS default", async () => {
+      stub([UNMANAGED_GOOD]);
+      renderTab();
+
+      const section = await screen.findByTestId("unmanaged-skills");
+      fireEvent.click(
+        within(section).getByRole("button", { name: en.agents.skillsTab.openFolder }),
+      );
+      // Empty `withApp` → no `with` on the wire, so the OS picks the handler
+      // (the file manager, for a directory).
+      await waitFor(() => expect(fs.open).toHaveBeenCalledWith("/x/skills/good", undefined));
+    });
+
+    test("a failed open surfaces an error toast", async () => {
+      stub([UNMANAGED_GOOD]);
+      fs.open.mockRejectedValue(new Error("nope"));
+      renderTab();
+
+      const section = await screen.findByTestId("unmanaged-skills");
+      fireEvent.click(
+        within(section).getByRole("button", { name: en.agents.skillsTab.openFolder }),
+      );
+      expect(await screen.findByText(en.agents.skillsTab.openFolderFailed)).toBeInTheDocument();
     });
 
     test("adopt calls the API with the skill name and location", async () => {
@@ -366,9 +371,7 @@ describe("AgentSkillsTab", () => {
     const zhKeys = Object.keys(zh.agents.skillsTab).sort();
     expect(zhKeys).toEqual(enKeys);
     for (const key of [
-      "follow",
-      "followHint",
-      "excludeHint",
+      "managedHint",
       "unmanagedTitle",
       "adopt",
       "adoptDisabledInvalid",
@@ -378,6 +381,9 @@ describe("AgentSkillsTab", () => {
       "locationSkills",
       "locationAgentsDir",
       "adoptSuccess",
+      "openFolder",
+      "openFolderFailed",
+      "openSkillsPage",
     ]) {
       expect(enKeys).toContain(key);
     }

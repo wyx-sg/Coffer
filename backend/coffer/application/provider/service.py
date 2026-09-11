@@ -36,6 +36,7 @@ KIND = "provider"
 # AFTER ``ProviderService.list`` would resolve ``list`` to that method (class-scope
 # shadowing under PEP 563), so name the type here where ``list`` is the builtin.
 _AgentTypes = list[AgentType]
+_ModelIds = list[str]
 
 # Maps a back-compat wire (the ``use-builtin/{wire}`` route, the legacy
 # ``--wire`` key helper) to the agent it stands for. Activation, de-projection
@@ -115,6 +116,7 @@ class ProviderService:
         secret_value: str | None = None,
         credential_ref: str | None = None,
         compatible_agents: _AgentTypes | None = None,
+        models: _ModelIds | None = None,
         description: str | None = None,
         actor: str = "api",
     ) -> Resource:
@@ -124,7 +126,8 @@ class ProviderService:
         connection has no key — supply neither. ``compatible_agents`` overrides
         the wire default for which agents the connection projects into (``None``
         ⇒ the default). The model lives apart from the connection (spec provider-switching E3)
-        and is chosen at the point of use."""
+        and is chosen at the point of use; ``models`` only curates WHICH of the
+        endpoint's models that choice is offered (``None``/empty ⇒ all of them)."""
         ref: str | None
         minted = False
         if protocol is Protocol.OLLAMA:
@@ -147,6 +150,7 @@ class ProviderService:
             compatible_agents=(
                 [a.value for a in compatible_agents] if compatible_agents is not None else None
             ),
+            models=list(models or []),
             is_active=False,
         )
         try:
@@ -173,6 +177,7 @@ class ProviderService:
         base_url: str | None = None,
         secret_value: str | None = None,
         compatible_agents: _AgentTypes | None = None,
+        models: _ModelIds | None = None,
         description: str | None = None,
         actor: str = "api",
     ) -> Resource:
@@ -180,14 +185,17 @@ class ProviderService:
         (identity); change them by recreating. ``secret_value`` rotates the
         secret stored under the profile's existing ref. ``compatible_agents``
         re-targets which agents the connection projects into (it is mutable,
-        unlike the wire). The model is not stored on the connection (spec provider-switching
-        E3). Re-activate afterwards to re-project under the new targets."""
+        unlike the wire). ``models`` replaces the curated offered set as a whole
+        (``[]`` clears the restriction). No CHOSEN model is stored on the
+        connection (spec provider-switching E3). Re-activate to re-project under new targets."""
         current = await self.get(name)
         config = dict(current.config)
         if base_url is not None:
             config["base_url"] = base_url
         if compatible_agents is not None:
             config["compatible_agents"] = [a.value for a in compatible_agents]
+        if models is not None:
+            config["models"] = list(models)
         # Re-validate so a bad edit is rejected before the rotation / DB write.
         validated = ProviderConfig.model_validate(config).model_dump(mode="json")
         if secret_value is not None:

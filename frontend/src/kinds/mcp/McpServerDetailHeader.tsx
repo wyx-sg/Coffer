@@ -1,8 +1,8 @@
 // frontend/src/kinds/mcp/McpServerDetailHeader.tsx
 import { useTranslation } from "react-i18next";
 import { Activity } from "lucide-react";
+import { ScopeControl } from "@/components/ScopeControl";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { Trash2 } from "lucide-react";
 import { HealthBadge, type HealthState } from "./HealthBadge";
 import { EditMcpServerDialog } from "./EditMcpServerDialog";
@@ -22,10 +22,7 @@ interface Props {
   healthState: HealthState;
   testResult: TestResult | null;
   isTestPending: boolean;
-  isEnablePending: boolean;
-  isDisablePending: boolean;
   onTestConnection: () => void;
-  onToggleEnabled: (checked: boolean) => void;
   onDeleteClick: () => void;
 }
 
@@ -34,10 +31,7 @@ export function McpServerDetailHeader({
   healthState,
   testResult,
   isTestPending,
-  isEnablePending,
-  isDisablePending,
   onTestConnection,
-  onToggleEnabled,
   onDeleteClick,
 }: Props) {
   const { t } = useTranslation();
@@ -69,17 +63,7 @@ export function McpServerDetailHeader({
           >
             <Trash2 className="mr-1.5 size-3.5" /> {t("common.delete")}
           </Button>
-          <div className="flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3">
-            <Switch
-              checked={resource.enabled}
-              onCheckedChange={onToggleEnabled}
-              disabled={isEnablePending || isDisablePending}
-              aria-label={resource.enabled ? t("common.enabled") : t("common.disabled")}
-            />
-            <span className="text-sm font-medium">
-              {resource.enabled ? t("common.enabled") : t("common.disabled")}
-            </span>
-          </div>
+          <ScopeControl kind="mcp_server" name={resource.name} enabled={resource.enabled} />
         </div>
       </div>
       {resource.description ? (

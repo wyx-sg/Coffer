@@ -399,43 +399,6 @@ def test_agent_detect_lists_candidates_marker_present(agent_cli_daemon):
 
 
 # ---------------------------------------------------------------------------
-# agent follow
-# ---------------------------------------------------------------------------
-
-
-def test_agent_follow_off_with_exclusions(agent_cli_daemon):
-    """`follow --off --exclude x` PATCHes the policy; `show --json` reflects it."""
-    config_dir = agent_cli_daemon / "cfg"
-    config_dir.mkdir()
-    _runner.invoke(
-        cli_app, ["agent", "add", "codex", "--name", "cur", "--config-dir", str(config_dir)]
-    )
-
-    r = _runner.invoke(
-        cli_app, ["agent", "follow", "cur", "--off", "--exclude", "x", "--exclude", "y"]
-    )
-    assert r.exit_code == 0, r.output
-    assert "follow_all_skills=off" in r.output
-
-    show = _runner.invoke(cli_app, ["agent", "show", "cur", "--json"])
-    data = json.loads(show.output)
-    assert data["follow_all_skills"] is False
-    assert data["skill_exclusions"] == ["x", "y"]
-
-    # `--on` without --exclude leaves the exclusion list untouched.
-    r = _runner.invoke(cli_app, ["agent", "follow", "cur", "--on"])
-    assert r.exit_code == 0, r.output
-    data = json.loads(_runner.invoke(cli_app, ["agent", "show", "cur", "--json"]).output)
-    assert data["follow_all_skills"] is True
-    assert data["skill_exclusions"] == ["x", "y"]
-
-
-def test_agent_follow_not_found(agent_cli_daemon):
-    r = _runner.invoke(cli_app, ["agent", "follow", "ghost", "--off"])
-    assert r.exit_code == 4
-
-
-# ---------------------------------------------------------------------------
 # agent mcp entries / plugin (workspace, via the full app)
 # ---------------------------------------------------------------------------
 
@@ -556,6 +519,23 @@ def test_mcp_entries_list_json_and_table(workspace_cli):
     r = _runner.invoke(cli_app, ["agent", "mcp", "entries", "cx"])
     assert r.exit_code == 0, r.output
     assert "fetcher" in r.output
+
+
+def test_mcp_remove_entry_force_and_prompt(workspace_cli):
+    # Without --force the prompt aborts and the entry survives.
+    r = _runner.invoke(cli_app, ["agent", "mcp", "remove-entry", "cx", "fetcher"], input="n\n")
+    assert r.exit_code == 1
+    body = json.loads(
+        _extract_json(_runner.invoke(cli_app, ["agent", "mcp", "entries", "cx", "--json"]).output)
+    )
+    assert "fetcher" in [e["name"] for e in body["items"]]
+
+    r = _runner.invoke(cli_app, ["agent", "mcp", "remove-entry", "cx", "fetcher", "--force"])
+    assert r.exit_code == 0, r.output
+    body = json.loads(
+        _extract_json(_runner.invoke(cli_app, ["agent", "mcp", "entries", "cx", "--json"]).output)
+    )
+    assert "fetcher" not in [e["name"] for e in body["items"]]
 
 
 def test_mcp_adopt_with_secret(workspace_cli):

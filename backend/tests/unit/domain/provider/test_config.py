@@ -144,3 +144,67 @@ def test_extra_field_forbidden() -> None:
             credential_ref="r",
             bogus=1,
         )
+
+
+def test_models_defaults_to_unrestricted() -> None:
+    # No curated set ⇒ empty ⇒ every model the endpoint serves is on offer.
+    c = ProviderConfig(
+        protocol="openai",  # type: ignore[arg-type]
+        base_url="x",
+        credential_ref="r",
+    )
+    assert c.models == []
+
+
+def test_models_are_opaque_strings_kept_in_order() -> None:
+    # Coffer writes down no model name of its own: whatever the user curated is
+    # stored verbatim, in the order they chose, and never checked against a list.
+    c = ProviderConfig(
+        protocol="unknown",  # type: ignore[arg-type]
+        base_url="x",
+        credential_ref="r",
+        models=["agnes-2.0", "not-a-real-model", "gpt-5"],
+    )
+    assert c.models == ["agnes-2.0", "not-a-real-model", "gpt-5"]
+
+
+def test_models_dedupe_and_strip() -> None:
+    c = ProviderConfig(
+        protocol="openai",  # type: ignore[arg-type]
+        base_url="x",
+        credential_ref="r",
+        models=["gpt-5", " gpt-5 ", "o3"],
+    )
+    assert c.models == ["gpt-5", "o3"]
+
+
+def test_blank_model_id_rejected() -> None:
+    with pytest.raises(ValidationError):
+        ProviderConfig(
+            protocol="openai",  # type: ignore[arg-type]
+            base_url="x",
+            credential_ref="r",
+            models=["gpt-5", "   "],
+        )
+
+
+def test_absurd_model_ids_rejected() -> None:
+    for models in (["m" * 201], [f"m{i}" for i in range(201)]):
+        with pytest.raises(ValidationError):
+            ProviderConfig(
+                protocol="openai",  # type: ignore[arg-type]
+                base_url="x",
+                credential_ref="r",
+                models=models,
+            )
+
+
+def test_ollama_may_curate_models() -> None:
+    # ollama projects into no agent, but the internal engine still picks a model
+    # from it — so curating that endpoint's list is meaningful.
+    c = ProviderConfig(
+        protocol="ollama",  # type: ignore[arg-type]
+        base_url="http://localhost:11434",
+        models=["qwen3:8b"],
+    )
+    assert c.models == ["qwen3:8b"]

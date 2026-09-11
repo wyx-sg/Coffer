@@ -5,7 +5,7 @@ info:
   description: |
     Provider registry endpoints. Merged into the main Coffer Management API at
     runtime; this document scopes only the provider-specific routes added by
-    the provider-switching spec.
+    the 011-provider-switching spec.
 
     All routes use the same `X-Coffer-Token` authentication from
     `specs/mcp-gateway/contracts/api.openapi.yaml`.
@@ -281,7 +281,7 @@ paths:
         native config (the inverse of activate) and clears `is_active` on the
         wire's active connection, so the agent runs on its OWN built-in
         model/login. A Coffer LLM connection is an optional override, not a
-        prerequisite (ADR provider-switching, amendment D1/D3).
+        prerequisite (ADR provider-switching amendment D1/D3).
 
         Idempotent — a no-op when nothing is active for the wire. Emits a
         `PROVIDER_SWITCHED` audit event `{from, to: null, protocol, agents}`
@@ -304,7 +304,7 @@ paths:
         The single, global model Coffer's internal LLM engine (memory organizer,
         reorg, distill) runs on. The engine takes its endpoint +
         key from the `internal_default` connection but its MODEL from this
-        singleton (ADR provider-switching, amendment E3). `model` is `null` until one is chosen.
+        singleton (ADR provider-switching amendment E3). `model` is `null` until one is chosen.
       responses:
         "200":
           description: OK
@@ -494,6 +494,7 @@ components:
         - base_url
         - credential_ref
         - compatible_agents
+        - models
         - is_active
         - internal_default
         - created_at
@@ -526,6 +527,15 @@ components:
             The EFFECTIVE (resolved) agents this connection projects into — the
             explicit override or the wire default. The projection writer is chosen
             by agent type, not protocol; the Agent Overview picker filters on this.
+        models:
+          type: array
+          items: { type: string }
+          description: >-
+            The curated set of model ids this connection OFFERS downstream — which
+            of the endpoint's models the user intends to use. EMPTY means no
+            restriction (every model the endpoint serves), which is the default.
+            Not a chosen model: the choice still happens at the point of use
+            (spec provider-switching E3). Ids are opaque and passed verbatim to the vendor.
         is_active:
           type: boolean
           description: >-
@@ -583,6 +593,16 @@ components:
             Override the wire default for which agents the connection projects
             into (e.g. an openai gateway routed to claude_code). Null ⇒ the wire
             default. ollama must not declare any (it projects into no agent).
+        models:
+          type: array
+          nullable: true
+          items: { type: string }
+          description: >-
+            Curate which of the endpoint's models this connection offers
+            downstream. Null ⇒ empty ⇒ no restriction. Ids are opaque strings
+            (non-blank, deduplicated preserving order, at most 200 of at most
+            200 characters); they are never checked against a list of model
+            names Coffer writes down.
 
     ProviderPatchRequest:
       type: object
@@ -590,7 +610,8 @@ components:
       description: >-
         All fields optional. `protocol` and `credential_ref` are immutable
         and cannot be patched. `compatible_agents` is mutable (re-target then
-        re-activate to re-project). The model is not on the connection (spec provider-switching E3).
+        re-activate to re-project). No CHOSEN model is on the connection (spec provider-switching
+        E3); `models` only curates which of the endpoint's models it offers.
       properties:
         base_url:
           type: string
@@ -608,6 +629,14 @@ components:
           description: >-
             Re-target which agents the connection projects into. Null ⇒ leave
             unchanged.
+        models:
+          type: array
+          nullable: true
+          items: { type: string }
+          description: >-
+            Replace the curated offered set as a whole (no merging), exactly like
+            `compatible_agents`. Null ⇒ leave unchanged; `[]` clears the
+            restriction, so every model the endpoint serves is offered again.
 
     AgentType:
       type: string

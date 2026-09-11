@@ -90,11 +90,14 @@ describe("AgentDetailPage", () => {
   });
 
   // `agent` declares no scope (ADR per-agent-resource-scope) — it is not a resource other agents
-  // draw on, so there is no activation scope to edit.
-  test("mounts no ScopeCard for the agent", () => {
+  // draw on, so there is no activation scope to edit. The page mounts no
+  // ScopeControl at all: an agent's own enable/disable is not a header concern
+  // here, so not even the control's no-scope enable/disable fallback appears.
+  test("mounts no scope control for the agent", () => {
     mockAgentLoaded();
     renderAt();
-    expect(screen.queryByTestId("scope-card")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("scope-control")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /every agent/i })).not.toBeInTheDocument();
   });
 
   test("clicking Edit opens the edit form in a modal dialog", () => {

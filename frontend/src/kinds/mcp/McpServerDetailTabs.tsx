@@ -6,9 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CodeView } from "@/components/preview/CodeView";
 import { CapabilityList } from "./CapabilityList";
-import { InvocationsTable } from "./InvocationsTable";
-import { useMcpInvocations } from "@/lib/hooks/useMcpInvocations";
-import { formatDateTime } from "@/lib/utils";
 import type { components } from "@/lib/api/types";
 
 type CapabilityListOut = components["schemas"]["CapabilityListOut"];
@@ -55,10 +52,6 @@ export function McpServerDetailTabs({
 }: Props) {
   const { t } = useTranslation();
   const overview = extractOverview(config);
-  // Last invocation timestamp — limit=1 is the cheapest read. We don't
-  // care about the loading state; while pending the row reads "—".
-  const { data: invocations } = useMcpInvocations({ serverName, limit: 1 });
-  const lastInvocationAt = invocations?.invocations?.[0]?.timestamp ?? null;
 
   return (
     <Tabs defaultValue="overview">
@@ -68,7 +61,6 @@ export function McpServerDetailTabs({
           <TabsTrigger value="tools">{t("mcp.server.tabs.tools")}</TabsTrigger>
           <TabsTrigger value="resources">{t("mcp.server.tabs.resources")}</TabsTrigger>
           <TabsTrigger value="prompts">{t("mcp.server.tabs.prompts")}</TabsTrigger>
-          <TabsTrigger value="invocations">{t("mcp.server.tabs.invocations")}</TabsTrigger>
         </TabsList>
         <Button
           size="sm"
@@ -114,9 +106,6 @@ export function McpServerDetailTabs({
 
               <dt className="text-muted-foreground">{t("mcp.server.overview.prompts")}</dt>
               <dd>{capsError ? "—" : (capabilities?.prompts?.length ?? 0)}</dd>
-
-              <dt className="text-muted-foreground">{t("mcp.server.overview.lastInvocation")}</dt>
-              <dd>{lastInvocationAt ? formatDateTime(lastInvocationAt) : "—"}</dd>
             </dl>
 
             <details className="mt-4">
@@ -158,9 +147,6 @@ export function McpServerDetailTabs({
           prompts={capabilities?.prompts}
           error={capsError}
         />
-      </TabsContent>
-      <TabsContent value="invocations" className="pt-6">
-        <InvocationsTable serverName={serverName} />
       </TabsContent>
     </Tabs>
   );

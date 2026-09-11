@@ -1,8 +1,9 @@
 // frontend/src/components/skills/SkillsTableActions.tsx
 // Row + bulk actions for SkillsTable, kept out of SkillsTable.tsx so that file
-// stays within its size budget. Per row: Verify (drift dialog scoped to the one
-// skill) + Delete (styled confirm). Bulk: Verify the selected skills + Delete
-// them all (styled confirm → parallel removes).
+// stays within its size budget. Per row: an enable/disable Switch (the skill's
+// own enabled flag, not a per-agent binding) + Delete (styled confirm). Bulk:
+// Verify the selected skills — the library-wide drift check — + Delete them all
+// (styled confirm → parallel removes).
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BadgeCheck, Trash2 } from "lucide-react";
@@ -17,24 +18,43 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import { skillsApi, type SkillOut } from "@/lib/api/skills";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
+import { useSetSkillEnabled } from "@/lib/hooks/useSkills";
 
 const DESTRUCTIVE =
   "text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive";
 
-/** The two per-row icon+text actions: Verify (scoped) + Delete (confirm). The
- *  dialogs they open are rendered at the table level (hoisted out of the
- *  clickable row) so closing one can't fall through to the row's navigation —
- *  these buttons just signal the parent via onVerify/onDelete. */
+/** Per-row enable/disable toggle for the skill itself; stops propagation so it
+ *  doesn't trigger the row's navigate-to-detail click. */
+export function SkillStatusCell({ skill }: { skill: SkillOut }) {
+  const { t } = useTranslation();
+  const { enable, disable } = useSetSkillEnabled();
+
+  return (
+    <Switch
+      checked={skill.enabled}
+      onClick={(e) => e.stopPropagation()}
+      onCheckedChange={(checked) =>
+        (checked ? enable : disable).mutate({ kind: "skill", name: skill.name })
+      }
+      disabled={enable.isPending || disable.isPending}
+      aria-label={`${t("resources.cols.status")}: ${skill.name}`}
+    />
+  );
+}
+
+/** The per-row action: Delete (confirm). The dialog it opens is rendered at the
+ *  table level (hoisted out of the clickable row) so closing it can't fall
+ *  through to the row's navigation — this button just signals the parent via
+ *  onDelete. */
 export function SkillRowActions({
   skill,
-  onVerify,
   onDelete,
   deleteDisabled,
 }: {
   skill: SkillOut;
-  onVerify: () => void;
   onDelete: () => void;
   deleteDisabled: boolean;
 }) {
@@ -42,17 +62,6 @@ export function SkillRowActions({
 
   return (
     <div className="flex items-center justify-end gap-2">
-      <Button
-        size="sm"
-        variant="ghost"
-        className="text-muted-foreground hover:text-foreground"
-        onClick={(e) => {
-          e.stopPropagation();
-          onVerify();
-        }}
-      >
-        <BadgeCheck className="mr-1.5 size-3.5" /> {t("skills.verify")}
-      </Button>
       <Button
         size="sm"
         variant="ghost"

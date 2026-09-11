@@ -85,6 +85,7 @@ The full set of audited event types (defined as `AuditEventType` in `domain/audi
 | --------------------------------------------------------- | ----------------------------------------------------------------------- |
 | `agent_config_file_written` / `agent_config_file_deleted`  | When an agent config file is written / deleted                          |
 | `agent_mcp_installed` / `agent_mcp_uninstalled`            | When Coffer's MCP entry is installed into / removed from an agent       |
+| `agent_mcp_entry_removed`                                  | When an MCP entry is deleted from an agent's own config file             |
 | `agent_mcp_entry_adopted`                                  | When an MCP entry found in an agent's own config is adopted into Coffer  |
 
 **Skill:**

@@ -377,6 +377,60 @@ either/or option rule (now the union in H3). D4's fixed-dropdown / no-free-text
 rule is unchanged. **Still NOT in scope:** proxy / hot-switch / protocol
 conversion.
 
+## Amendment 2026-09-11 — The connection curates WHICH models it offers
+
+> Status: Draft. **Nuances E1/E3's "no model on the connection" — it does not
+> reverse it.** Recorded after a design pass with the user. Cross-ref
+> [ADR provider-switching](../../docs/decisions/provider-switching.md).
+
+**Why.** E3 moved the model to the point of use, and the 2026-09-09 amendment
+made the picker's options a union of everything on offer. Both are right, and
+together they hand the user a menu they did not choose: a gateway account
+frequently serves dozens of models, of which its owner intends to use two or
+three. Nothing narrowed that list, because the only two states the design had
+were "one model, fixed on the connection" (too early a choice) and "every model
+the endpoint serves" (too many). The middle state — *which* of this endpoint's
+models do I actually use — belongs to the account, is stable, and is exactly
+what the connection is the right place to record.
+
+- **J1 — `models: list[str]` on the connection: the OFFERED set, not a chosen
+  model.** The connection still stores no model it *runs*: E1/E3 stand, and every
+  point of use (the per-agent binding, the internal-engine selector, the channel
+  `/model` card) still makes the choice. `models` only says which ids that choice
+  is offered. **EMPTY means no restriction** — the endpoint's whole catalogue —
+  which is the default, what every connection created before revision 0059
+  carries, and therefore an upgrade that changes nothing for anyone who does not
+  curate.
+- **J2 — Curated on the connection's detail page, applied by every picker
+  downstream.** The user picks from the live introspection
+  (`POST /api/v1/models/list-models`) on the connection itself. A picker
+  downstream that offers this connection's models then offers exactly the
+  curated set when it is non-empty, and everything the endpoint serves when it
+  is empty. This narrows the H3 union's *connection* term; the agent's own
+  catalogue term is untouched — a curated set never hides a model the agent can
+  reach on its own built-in login.
+- **J3 — Ids stay opaque; Coffer still writes down no model name.** The curated
+  set is validated for SHAPE only (non-blank ids, deduplicated preserving order,
+  a sane cap) and passed verbatim to the vendor. Coffer never checks an id
+  against a list of its own — the 2026-09-09 amendment's rule is unchanged, and
+  an id the endpoint stops serving is a stale menu entry, not a config error.
+- **Wire.** `ProviderOut.models: list[str]`; `ProviderCreate.models: list[str] |
+  None` (`null` ⇒ empty); `ProviderPatch.models: list[str] | None`, a
+  whole-value replace exactly like `compatible_agents` (`null` leaves it alone,
+  `[]` clears the restriction). No new route — create and patch carry it.
+- **Audit.** No new event: the curated set is ordinary connection config, so a
+  change to it rides the `resource_updated` event `ResourceService.update_config`
+  already emits, whose `before`/`after` details carry the config verbatim (the
+  provider kind declares no redactor because its config holds no secret).
+- **Migration 0059** writes `models: []` into every existing `kind='provider'`
+  row, so each connection states its own answer — unrestricted — rather than
+  leaning on a reader's default. One-shot, per the house rule: no load-time shim.
+
+**Nuances:** E1/E3 (the model leaves the connection — still true of the CHOSEN
+model) and H3 (the picker's union — its connection term is now the curated set
+when one exists). **Still NOT in scope:** proxy / hot-switch / protocol
+conversion; and Coffer still validates no model id against a list of its own.
+
 ## Scope
 
 ### In scope
@@ -391,6 +445,9 @@ conversion.
   `set_internal_default(name)` + `resolve_internal_connection()`, the
   `provider_internal_default_set` audit event, consumed by Coffer's internal
   LLM engine (memory organizer / reorg / distill).
+- The connection's curated `models` set (the 2026-09-11 amendment): stored on
+  `ProviderConfig`, carried by create + patch, backfilled empty by revision 0059,
+  and applied by every model picker that offers that connection's models.
 - Retire the standalone `ModelConfig` registry (model CRUD REST + `coffer model`
   CLI), folding internal-engine model selection into the connection. The
   provider introspection routes (`list-models`, `test-connection`) are KEPT.
@@ -435,6 +492,12 @@ Resource `name` = the profile name (unique within kind; validated by
 | `wire_api` | `"chat" \| "responses"` | Optional, default `"chat"`. openai/Codex only (`[model_providers.*].wire_api`). |
 | `is_active` | `bool` | At most one active per `wire_format`. ollama is never projected, so an ollama connection is always inactive. On import, if >1 active for a wire, normalise deterministically (keep most-recently-updated). |
 | `internal_default` | `bool` | At most one connection globally is the internal-engine default. On import, if >1, normalise (keep most-recently-updated). |
+
+> This table records the ORIGINAL shape. Amendment E1 removed `model` /
+> `fast_model` / `wire_api` and turned `wire_format` into a detected `protocol`;
+> the 2026-06-23 amendment added `compatible_agents`; the 2026-09-11 amendment
+> added the curated `models` set (empty = unrestricted). The current field list
+> is [data-model.md](./data-model.md).
 
 - `audit_redactor`: config holds NO secret (only `credential_ref`); audit shows
   config as-is. Double-check that no secret leaks via `config` or `details`.
@@ -573,9 +636,10 @@ Full spec in [contracts/api.openapi.yaml](./contracts/api.openapi.yaml).
 - `GET  /api/v1/providers` → list profiles (`{ "providers": [ ProviderOut, ... ] }`)
 - `POST /api/v1/providers` → create (see credential-source rules below)
 - `GET  /api/v1/providers/{name}` → one profile
-- `PATCH /api/v1/providers/{name}` → update mutable fields (`base_url`, `model`,
-  `fast_model`, `wire_api`, `secret_value`); `wire_format` and `credential_ref`
-  are immutable; `secret_value` rotates the stored secret
+- `PATCH /api/v1/providers/{name}` → update mutable fields (`base_url`,
+  `compatible_agents`, `models`, `secret_value`); `wire_format`/`protocol` and
+  `credential_ref` are immutable; `secret_value` rotates the stored secret;
+  `models` is a whole-value replace (`[]` clears the curated set)
 - `DELETE /api/v1/providers/{name}` → delete; guard via
   `find_credential_citations` before removing an owned secret
 - `POST /api/v1/providers/{name}/activate` → switch; returns
@@ -879,6 +943,26 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
   value, never reading the connection's stored `model` field (TypeScript
   acceptance test; union per the 2026-09-09 amendment).
 
+### Scenario: curate which of a connection's models are offered downstream
+
+- **Given** an LLM connection created with `models: ["opus", "sonnet", "opus"]`,
+- **When** it is read back, then patched with `models: ["haiku"]`, then patched
+  on an unrelated field,
+- **Then** the create response, `GET /api/v1/providers/{name}` and the list route
+  all report `["opus", "sonnet"]` (stored verbatim, deduplicated, in the order
+  chosen); the patch REPLACES the whole set with `["haiku"]`; the unrelated patch
+  leaves it alone; and the change is visible in the `resource_updated` audit
+  entry the update already emits — no audit event of its own.
+
+### Scenario: a connection with no curated models offers every model the endpoint serves
+
+- **Given** a connection created without `models` (the default, and what every
+  connection made before revision 0059 carries),
+- **When** it is read back, then curated with `models: ["opus"]`, then patched
+  with `models: []`,
+- **Then** it reports `[]` — no restriction, the endpoint's whole catalogue — both
+  at creation and after the `[]` patch, which clears the curated set.
+
 ## Requirements
 
 ### Functional Requirements
@@ -1008,12 +1092,29 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
   (`POST /api/v1/models/list-models`, `/api/v1/models/test-connection`) MUST be
   retained.
 
+**Curated model set**
+
+- **FR-025**: `ProviderConfig` MUST carry `models: list[str]` — the set of model
+  ids the connection OFFERS downstream. An EMPTY list MUST mean no restriction
+  (every model the endpoint serves), MUST be the default, and MUST be what every
+  connection created before revision 0059 holds. The field MUST NOT be read as a
+  chosen model: the choice stays at the point of use (E1/E3). Ids MUST be
+  validated for shape only — non-blank, deduplicated preserving order, at most
+  200 ids of at most 200 characters — and MUST NEVER be checked against a list of
+  model names Coffer writes down.
+- **FR-026**: `ProviderCreate.models` (`null` ⇒ empty) and `ProviderPatch.models`
+  MUST carry the set; `ProviderOut.models` MUST return it. A `PATCH` MUST replace
+  the whole value like `compatible_agents` — `null` leaves it unchanged, `[]`
+  clears the restriction — and MUST NOT require a route of its own. A change MUST
+  ride the `resource_updated` audit event provider updates already emit.
+
 ### Key Entities
 
 - **ProviderProfile**: A Resource of kind `provider`, identified by
   `provider:<name>`. Holds wire format, base URL, optional credential ref
-  (absent for ollama), model(s), per-wire `is_active` state, and the global
-  `internal_default` flag. Never holds the raw secret.
+  (absent for ollama), the curated `models` set it offers downstream (empty =
+  unrestricted), per-wire `is_active` state, and the global `internal_default`
+  flag. Never holds the raw secret, and never a chosen model.
 - **`apply_anthropic_settings` / `apply_codex_provider`**: Pure functions in
   `domain/provider/projection.py` that return the new native-config TEXT directly.
   Analogous to `domain/agent/mcp_install.py`'s `apply_install`. No `ProjectionPatch`

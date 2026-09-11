@@ -18,8 +18,8 @@ make sense to a coding CLI, a skill written against Claude Code's frontmatter.
 The vault had no general way to say so — the gateway exposed every server's
 tools to every agent, and out-of-place servers failed or added noise.
 
-Skills already had a per-agent delivery policy (a consumer-side follow flag
-plus exclusions). Per-agent MCP scoping had been tried once before as a
+Skills already had a per-agent delivery policy of their own (a consumer-side
+follow flag plus exclusions). Per-agent MCP scoping had been tried once before as a
 kind-specific feature and reverted in the 2026-06-20 simplification, because
 carrying an allowlist and a session identity inside one kind cost more than it
 returned there. Two kinds solving the same problem two different ways is the
@@ -65,7 +65,7 @@ enforcement point.
    | Kind | Scope | Enforcement seam |
    | --- | --- | --- |
    | `mcp_server` | agent | The gateway filters the server's tools by the session's identity. |
-   | `skill` | agent | Delivery filters by scope intersected with the existing per-agent follow policy; out-of-scope delivered copies are reconciled away. |
+   | `skill` | agent | Delivery filters by the skill's own `enabled` flag intersected with scope; out-of-scope or disabled delivered copies are reconciled away. |
    | `agent`, `channel`, `knowledge` | none | A non-null scope is rejected at validation. |
 
 4. **Shim self-reported `--agent` identity.** The shim install writes
@@ -77,11 +77,22 @@ enforcement point.
    posture. The spec states this boundary explicitly rather than implying
    stronger isolation than exists.
 
-5. **Skill scope ∩ follow policy.** Follow is agent-side intent ("deliver
-   skills to me"); scope is resource-side grant ("this skill may run here").
-   Delivery is the intersection — scoped-in *and* followed, minus manual
-   exclusions. Scope is a hard grant that overrides manual bindings: an
-   out-of-scope skill is reclaimed even if it was previously delivered by hand.
+5. **Skill delivery is `enabled` ∩ scope, and nothing else.** This decision
+   originally kept the agent-side follow policy and intersected it with scope,
+   so delivery was follow ∩ scope minus per-agent exclusions, on top of a
+   per-binding enable flag. That was three mechanisms answering one question,
+   while `mcp_server` answered it with one. The follow flag and its exclusion
+   list are gone; a binding row is now bookkeeping that records a delivered
+   copy, not a switch. A skill reaches an agent iff the skill is `enabled` and
+   the agent is in its scope, and a change to either is reconciled immediately —
+   disabling a skill, or dropping an agent from its scope, reclaims the
+   delivered copy even when it was placed by hand.
+
+   What that costs: there is no longer a single agent-side "this agent gets
+   nothing" switch. Excluding one agent means removing it from each skill's
+   scope — which is exactly what excluding an agent from an MCP server has
+   always meant. Per-skill exclusion keeps its full power; it is expressed on
+   the skill rather than on the agent.
 
 6. **Knowledge never scopes.** The `knowledge` kind declares no scope and
    rejects a non-null value — always shared across every agent. (Its own

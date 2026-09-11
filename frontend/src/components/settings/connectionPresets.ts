@@ -63,3 +63,11 @@ export function defaultCompatibleAgents(protocol: Protocol | ""): AgentType[] {
 
 // The agents a user can tick a connection as compatible with.
 export const SELECTABLE_AGENTS: AgentType[] = ["claude_code", "codex"];
+
+// One display label per agent type, shared by every surface that renders the
+// compatible-agents set (the form's checkboxes, the list table's chips, the
+// detail page's configuration card).
+export const AGENT_LABEL_KEY: Record<AgentType, string> = {
+  claude_code: "settings.connections.agentClaudeCode",
+  codex: "settings.connections.agentCodex",
+};

@@ -1,4 +1,4 @@
-# Data Model — Skill Manager
+# Data Model — 005 Skill Manager
 
 Entities, fields, relationships, and SQLite additions for the skill manager.
 Depends on the agent kind from spec agent-registry and the kind-agnostic Resource
@@ -59,16 +59,18 @@ for parity with other kinds, but it is not re-synced afterwards
 
 ### `BindingState` (`domain/skill/binding.py`)
 
-Plain dataclass; in-memory representation of one row from `skill_agent_bindings`.
+Plain dataclass; in-memory representation of one row from
+`skill_agent_bindings`. The row is internal delivery bookkeeping — it records
+that this agent currently holds a delivered copy — not a user-facing axis.
 
 | Field               | Type               | Notes                                                                                                                 |
 | ------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
 | `skill_resource_id` | `int`              | FK                                                                                                                    |
 | `agent_resource_id` | `int`              | FK                                                                                                                    |
-| `enabled`           | `bool`             |                                                                                                                       |
+| `enabled`           | `bool`             | still present in the table and in this dataclass; internal only — it marks a live delivered copy and no surface exposes it |
 | `last_linked_at`    | `datetime \| None` | last successful link op                                                                                               |
 | `last_link_path`    | `str \| None`      | absolute path where the link was created                                                                              |
-| `link_mode`         | `LinkMode \| None` | `symlink`, `junction`, or `copy_fallback`; mirrors `SkillBindingOut.link_mode` and lets the UI flag degraded bindings |
+| `link_mode`         | `LinkMode \| None` | `symlink`, `junction`, or `copy_fallback`; mirrors `SkillBindingOut.link_mode` and lets the UI flag degraded deliveries |
 
 ### `DriftKind` (`domain/skill/drift.py`)
 
@@ -76,8 +78,8 @@ String-valued enum.
 
 | Value                   | Meaning                                       | Suggested remedy                      |
 | ----------------------- | --------------------------------------------- | ------------------------------------- |
-| `missing_link`          | binding enabled but no target on disk         | re-enable to re-link                  |
-| `tampered_link`         | symlink target is not Coffer's master         | disable + re-enable, or use `--force` |
+| `missing_link`          | a delivered copy is recorded but no target on disk | run the opt-in repair to re-link |
+| `tampered_link`         | symlink target is not Coffer's master         | run the opt-in repair (backs up, then re-links) |
 | `replaced_with_regular` | path is a regular file/dir instead of a link  | same as above                         |
 | `missing_master`        | binding refers to a master folder that's gone | re-import                             |
 | `orphan_master`         | master folder on disk has no DB record        | adopt or remove                       |
@@ -114,20 +116,47 @@ Surfaced fields (`UnmanagedView` in `application/skill/unmanaged_ops.py`):
 | `reason`       | `str \| None` | validation failure reason when invalid                                    |
 | `foreign_link` | `bool`        | symlink targeting outside the master store — surfaced, never adoptable    |
 
-### Follow Policy (stored on the agent resource's config, spec agent-registry) — workspace amendment
+### Delivery predicate (owned entirely by the skill resource) — workspace amendment
 
-Per-agent skill-delivery policy (FR-025): `follow_all_skills: bool` (default
-`True`, preserving the pre-amendment trust mode) plus `skill_exclusions:
-list[str]`. The fields live on `AgentConfig` (spec agent-registry's schema, updatable via
-`PATCH /agents/{name}` / `coffer agent follow`); this spec owns their delivery
-semantics. While following, the agent's effective skill set is the entire
-master store minus its exclusions; bindings remain the persistent delivery
-record. `application/skill/follow_ops.py` reconciles deliveries when the flag
-flips, when a skill is registered or removed, and when the exclusion list
-changes; disabling the flag preserves the currently delivered skills as
-explicit per-skill bindings. The policy is read through an injected
-`agent_skill_policy_resolver` so skill code never imports agent-kind code
-(Contract 5c).
+Delivery has exactly one input pair, both on the `skill` resource itself: the
+framework-level `enabled` flag and the framework-level `scope`
+([ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.md)).
+
+```
+delivered(skill, agent)  ⟺  skill.enabled AND agent_in_scope(skill.scope, agent)
+```
+
+The agent resource carries **no** skill-delivery policy: `follow_all_skills`
+and `skill_exclusions` are gone from `AgentConfig` (spec agent-registry's schema), and
+migration `0058` strips both keys from every stored agent row. There is no
+load-time shim and no back-compat default — a stored row simply no longer has
+them.
+
+`application/skill/delivery_ops.py` holds the reconciler,
+`apply_scope_for_agent(agent_name)` (renamed from `apply_follow_for_agent`,
+which lived in `follow_ops.py`). It computes
+
+```
+wanted = {s.name for s in skills if s.enabled and agent_in_scope(s.scope, agent_name)}
+```
+
+then delivers `wanted - bound` and reclaims `bound - wanted`, where `bound` is
+the set of skills whose `skill_agent_bindings` row says this agent currently
+holds a delivered copy. It runs on: a skill being enabled or disabled, a
+skill's scope being edited, a skill being imported, a skill being removed, an
+agent being registered, an agent's `config_dir` changing, and the sync
+post-import hook. The skill/agent enable and scope edits reach it through the
+kind hooks `on_enabled_changed` and `on_scope_changed`, so skill code still
+never imports agent-kind code (Contract 5c).
+
+**Wire shapes.** `SkillOut` gains `scope` (`list[str] | None`, always emitted,
+placed right after `enabled`) — the agent names this skill is delivered to,
+`null` meaning every agent and `[]` meaning none. `SkillBindingOut` loses
+`enabled`: it now carries only `agent_name`, `last_linked_at`,
+`last_link_path`, and `link_mode`, and a row present at all means "this agent
+currently holds a delivered copy". The per-`(skill, agent)`
+`POST /skills/{name}/enable` and `/disable` routes (and their
+`SkillEnableRequest` / `SkillDisableRequest` bodies) are removed.
 
 ## SQLite schema additions
 
@@ -139,13 +168,13 @@ Migration `20260526_0005_skill_tables.py` (revision `0005`, down_revision `0004`
 | ------------------- | ---------------------------------------- | ---------------------------------------------------------------------- |
 | `skill_resource_id` | `int`                                    | FK → `resources(id)` ON DELETE CASCADE                                 |
 | `agent_resource_id` | `int`                                    | FK → `resources(id)` ON DELETE CASCADE                                 |
-| `enabled`           | `bool`                                   | not null, default `0`                                                  |
+| `enabled`           | `bool`                                   | not null, default `0`; internal bookkeeping — `1` means this agent currently holds a delivered copy |
 | `last_linked_at`    | `timestamp`                              | nullable                                                               |
 | `last_link_path`    | `text`                                   | nullable                                                               |
 | `link_mode`         | `text`                                   | nullable; one of `symlink`, `junction`, `copy_fallback` when populated |
 | primary key         | `(skill_resource_id, agent_resource_id)` |                                                                        |
 
-Index: `idx_bindings_agent` on `(agent_resource_id, enabled)` — supports "which skills are enabled for this agent" queries.
+Index: `idx_bindings_agent` on `(agent_resource_id, enabled)` — supports "which skills does this agent currently hold" queries.
 
 ### Reuse of existing tables
 
@@ -160,8 +189,8 @@ Add to `AuditEventType`:
 | ---------------------- | -------------------------------------------------------------------------- |
 | `skill_imported`       | Local-path import succeeds                                                 |
 | `skill_updated`        | In-place file edit changes skill content (with before/after hashes)        |
-| `skill_bound`          | Per-agent binding enabled (symlink created)                                |
-| `skill_unbound`        | Per-agent binding disabled (symlink removed)                               |
+| `skill_bound`          | A copy was delivered to an agent (symlink created)                         |
+| `skill_unbound`        | A delivered copy was reclaimed from an agent (symlink removed)             |
 
 The workspace amendment adds:
 
@@ -169,7 +198,7 @@ The workspace amendment adds:
 | ------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `skill_adopted`           | An unmanaged skill folder was adopted into the master store (FR-023)                                       |
 | `skill_unmanaged_deleted` | An unmanaged skill folder was deleted from an agent's workspace (FR-024)                                   |
-| `skill_relinked`          | An enabled binding's managed link was re-created at a new delivery path (e.g. after a `config_dir` change) |
+| `skill_relinked`          | A delivered copy's managed link was re-created at a new delivery path (e.g. after a `config_dir` change) |
 
 Skill **removal** has no dedicated event — deleting a skill goes through
 `ResourceService.delete`, which emits the generic `resource_deleted` event
@@ -234,16 +263,17 @@ The link points at the master folder, so the agent reads the canonical
 
 | Method                                                         | Purpose                                                                                                                        |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `import_local(path, actor) -> Resource`                        | Read SKILL.md, validate, copy to master, register Resource, audit, return. Auto-binds for every registered agent (trust mode). |
-| `enable_for(skill_ref, agent_ref, force=False, actor) -> None` | Upsert binding, create symlink (or copy fallback on FAT32).                                                                    |
-| `disable_for(skill_ref, agent_ref, actor) -> None`             | Mark binding disabled, remove link.                                                                                            |
-| `verify() -> DriftReport`                                      | Walk every enabled binding; classify drift per `DriftKind`.                                                                    |
+| `import_local(path, actor) -> Resource`                        | Read SKILL.md, validate, copy to master, register Resource, audit, return, then reconcile so the skill lands wherever its scope grants it. |
+| `enable_for(skill_ref, agent_ref, force=False, actor) -> None` | INTERNAL delivery primitive driven by `apply_scope_for_agent`: upsert the delivery row, create the symlink (or copy fallback on FAT32).                                                                   |
+| `disable_for(skill_ref, agent_ref, actor) -> None`             | INTERNAL reclaim primitive driven by `apply_scope_for_agent`: remove the link, clear the delivery row.                                                                                           |
+| `apply_scope_for_agent(agent_name, actor) -> list[str]`        | Reconcile one agent against the delivery predicate (see "Delivery predicate" above). |
+| `verify() -> DriftReport`                                      | Walk every delivered copy; classify drift per `DriftKind`.                                                                   |
 | `remove(ref, actor) -> None`                                   | Cascade-cleanup symlinks, delete master, delegate to `ResourceService.delete`.                                                 |
 | `cleanup_bindings_for_agent(agent_ref) -> None`                | Called by spec agent-registry's `agent.on_delete` hook; removes all bindings + symlinks for that agent.                                   |
 
 Workspace-amendment additions (implemented as free functions in
-`unmanaged_ops.py` / `follow_ops.py`, with `binding_ops.py` split out of
-`service.py` for the per-agent enable/disable flow — all conceptually private
+`unmanaged_ops.py` / `delivery_ops.py`, with `binding_ops.py` split out of
+`service.py` for the deliver/reclaim primitives — all conceptually private
 to the skill subpackage, same style as `lifecycle_ops.py`):
 
 | Method                                                                 | Purpose                                                                                                                                                                          |
@@ -251,7 +281,7 @@ to the skill subpackage, same style as `lifecycle_ops.py`):
 | `list_unmanaged(agent_name) -> list[UnmanagedView]`                    | FR-022 read-only scan over the agent's skill locations (see Unmanaged Skill above).                                                                                              |
 | `adopt_unmanaged(agent_name, skill_name, location, actor) -> Resource` | FR-023: validate → move to `~/.coffer/skills/<name>/` → register → deliver the managed link to `<config_dir>/skills/<name>` → record an enabled binding; audits `skill_adopted`. |
 | `delete_unmanaged(agent_name, skill_name, location, actor) -> None`    | FR-024: delete only that folder from disk; audits `skill_unmanaged_deleted`.                                                                                                     |
-| follow reconciliation (`follow_ops.py`)                                | FR-025: reconcile deliveries on flag/exclusion changes and on skill register/remove; disabling preserves delivered skills as explicit bindings.                                  |
+| delivery reconciliation (`delivery_ops.py`)                            | FR-025: `apply_scope_for_agent` — recompute the agent's wanted set from `skill.enabled AND agent_in_scope(skill.scope, agent)`, deliver what is missing, reclaim what is no longer wanted.                                 |
 
 ### File viewer (`application/skill/file_ops.py`)
 

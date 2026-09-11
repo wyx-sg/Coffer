@@ -2,11 +2,11 @@
 //
 // The skill-manager spec §User Story 6 — the desktop /skills surface.
 //
-// TEST21-014: walk through cold-start → /skills → import a local skill →
-// enable for an agent → disable → remove. State is provisioned via the
-// daemon's REST API (not by clicking through forms) so the test stays
-// robust against UI churn, but the table + delete control are exercised
-// against the real DOM.
+// TEST21-014: walk through cold-start → /skills → import a local skill (which
+// delivers it to the in-scope agent) → disable the skill (which reclaims the
+// delivered copy) → remove. State is provisioned via the daemon's REST API
+// (not by clicking through forms) so the test stays robust against UI churn,
+// but the table + delete control are exercised against the real DOM.
 
 import { expect } from "@playwright/test";
 import { acceptance } from "./_acceptance";
@@ -102,12 +102,13 @@ acceptance(
       );
       expect(importResp.status).toBe(201);
       const imported = (await importResp.json()) as {
-        bindings: Array<{ agent_name: string; enabled: boolean }>;
+        bindings: Array<{ agent_name: string }>;
       };
-      expect(
-        imported.bindings.some((b) => b.agent_name === agentName && b.enabled),
-      ).toBe(true);
-      // The agent-side symlink exists on disk after a successful enable.
+      // A binding row IS a live delivery — the wire reports no other kind.
+      expect(imported.bindings.some((b) => b.agent_name === agentName)).toBe(
+        true,
+      );
+      // The agent-side symlink exists on disk after a successful delivery.
       expect(fs.existsSync(deliveredSkill)).toBe(true);
 
       // 4. Reload + the page lists the skill name + binding cell.
@@ -118,9 +119,11 @@ acceptance(
         timeout: 10_000,
       });
 
-      // 5. Disable the binding via the API; the symlink disappears.
+      // 5. Disable the SKILL via the API — delivery is decided on the skill
+      //    (enabled + scope), so disabling it reclaims every copy and the
+      //    symlink disappears.
       const disableResp = await fetch(
-        `http://127.0.0.1:${port}/api/v1/skills/${skillName}/disable`,
+        `http://127.0.0.1:${port}/api/v1/resources/skill/${skillName}/disable`,
         {
           method: "POST",
           headers: {
@@ -128,7 +131,6 @@ acceptance(
             "X-Coffer-Token": token,
             "X-Coffer-Actor": "e2e",
           },
-          body: JSON.stringify({ agent_name: agentName }),
         },
       );
       expect(disableResp.status).toBe(200);

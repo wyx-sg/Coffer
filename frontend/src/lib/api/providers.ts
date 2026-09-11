@@ -40,6 +40,10 @@ export interface Provider {
   is_active: boolean;
   /** ≤1 globally — the connection Coffer's internal engine uses. */
   internal_default: boolean;
+  /** The curated model set offered for this connection. EMPTY = no restriction:
+   * every model the endpoint serves is offered. Non-empty narrows the agent's
+   * model picker to exactly these ids. */
+  models: string[];
   enabled: boolean;
   description?: string | null;
   created_at: string;
@@ -58,6 +62,8 @@ export interface ProviderCreate {
   secret_value?: string | null;
   /** Override the wire default for which agents the connection projects into. */
   compatible_agents?: AgentType[] | null;
+  /** Curated model set; omit or `[]` for "no restriction". */
+  models?: string[] | null;
   description?: string | null;
 }
 
@@ -65,6 +71,8 @@ export interface ProviderPatch {
   base_url?: string | null;
   secret_value?: string | null;
   compatible_agents?: AgentType[] | null;
+  /** Whole-value replace of the curated model set; `[]` clears the restriction. */
+  models?: string[] | null;
   description?: string | null;
 }
 
@@ -110,7 +118,10 @@ async function call<T>(
   const data = await r.json().catch(() => null);
   if (!r.ok) {
     const err = data?.error;
-    throw new ApiError(err?.code ?? "INTERNAL_ERROR", err?.message ?? `request failed: ${r.status}`);
+    throw new ApiError(
+      err?.code ?? "INTERNAL_ERROR",
+      err?.message ?? `request failed: ${r.status}`,
+    );
   }
   return data as T;
 }
@@ -122,9 +133,12 @@ async function call<T>(
 export const providersApi = {
   list: () => call<ProviderListOut>("GET", "/providers"),
 
+  get: (name: string) => call<Provider>("GET", `/providers/${name}`),
+
   create: (body: ProviderCreate) => call<Provider>("POST", "/providers", body),
 
-  update: (name: string, body: ProviderPatch) => call<Provider>("PATCH", `/providers/${name}`, body),
+  update: (name: string, body: ProviderPatch) =>
+    call<Provider>("PATCH", `/providers/${name}`, body),
 
   remove: (name: string) => call<void>("DELETE", `/providers/${name}`),
 

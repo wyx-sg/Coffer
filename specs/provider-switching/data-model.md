@@ -23,15 +23,23 @@ Resource row. It MUST NOT hold the raw secret.
 > held as plain strings so this domain module stays free of the agent kind (the
 > application layer hydrates them into `AgentType` at the projection seam).
 
+> **Amendment 2026-09-11 (J1–J3):** a `models: list[str]` field records WHICH of
+> the endpoint's models the connection offers downstream. It stores no CHOSEN
+> model — E1/E3 stand — only the menu the point-of-use pickers may choose from.
+> EMPTY means no restriction, which is the default and what every connection
+> created before revision 0059 carries.
+
 | Field | Type | Constraints / Notes |
 |---|---|---|
 | `protocol` | `Protocol` | DETECTED, not user-entered; `"anthropic"`, `"openai"`, `"ollama"`, or `"unknown"`. Probed from the endpoint on create/edit; a compatibility hint, not a projection gate. `ollama` is internal-only. `unknown` ⇒ offered to all agents (user decides). |
 | `base_url` | `str` | Required; upstream LLM endpoint URL. |
 | `credential_ref` | `str \| None` | Optional; required for anthropic/openai (Fernet vault ref matching `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`); absent for ollama (no API key). |
+| `models` | `list[str]` | The curated set of model ids this connection OFFERS downstream (FR-025). Default `[]` = no restriction (the endpoint's whole catalogue). Ids are opaque strings passed verbatim to the vendor — validated for shape only (non-blank, deduplicated preserving order, ≤200 ids of ≤200 chars), never against a list Coffer writes down. Not a chosen model: the choice still happens at the point of use. |
 | `is_active` | `bool` | At most one `True` per `protocol` at any time (FR-011); always `False` for ollama. |
 | `internal_default` | `bool` | At most one `True` globally (FR-021); the connection Coffer's internal engine uses (its MODEL is chosen by the internal-default selector, not stored here). On import, if >1, normalise (keep most-recently-updated). |
 
-Model selection is NOT on the connection. The model(s) projected for an agent come
+Model selection is NOT on the connection — `models` curates the menu, it does not
+make the choice. The model(s) projected for an agent come
 from that agent's binding (Agent page dual slots → `ANTHROPIC_MODEL` +
 `ANTHROPIC_SMALL_FAST_MODEL`); the Codex `wire_api` likewise moves to the Codex
 binding. **Migration (option A): existing connections drop `model`/`fast_model`/

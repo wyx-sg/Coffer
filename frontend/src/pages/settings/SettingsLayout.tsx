@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
+  Cpu,
   Database,
   Info,
   RefreshCw,
@@ -22,6 +23,13 @@ const GENERAL_ITEM: Item = {
   to: "/settings/general",
   labelKey: "settings.tabs.general",
   icon: SlidersHorizontal,
+};
+// Coffer's own engine — the internal LLM connection/model and the embedding
+// model. Internal configuration, not a resource an agent is served.
+const ENGINE_ITEM: Item = {
+  to: "/settings/engine",
+  labelKey: "settings.tabs.engine",
+  icon: Cpu,
 };
 const DATA_ITEM: Item = {
   to: "/settings/data",
@@ -48,6 +56,7 @@ export function SettingsLayout() {
   const { t } = useTranslation();
   const items: Item[] = [
     GENERAL_ITEM,
+    ENGINE_ITEM,
     DATA_ITEM,
     SYNC_ITEM,
     SECURITY_ITEM,

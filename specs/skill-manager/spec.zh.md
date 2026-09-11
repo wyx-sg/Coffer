@@ -5,7 +5,7 @@
 **Feature Branch**: `feature/skill-manager`
 **Created**: 2026-05-22
 **Status**: Accepted
-**Input**: 用户描述：「Coffer 用开放的 AgentSkills 标准（agentskills.io）管理可移植的 AI skill。一份规范副本放在 `~/.coffer/skills/` 下；每个 agent 的可见性通过指向其配置目录下 `skills/` 子文件夹的目录 symlink/junction 实现。用户可以从本地路径导入 skill，然后按 agent 启用或禁用每个 skill。v1 支持 Claude Code 与 Codex CLI 作为同步目标（每个 agent 是 spec agent-registry 中 kind 为 `agent` 的 Resource）。」
+**Input**: 用户描述：「Coffer 用开放的 AgentSkills 标准（agentskills.io）管理可移植的 AI skill。一份规范副本放在 `~/.coffer/skills/` 下；每个 agent 的可见性通过指向其配置目录下 `skills/` 子文件夹的目录 symlink/junction 实现。用户可以从本地路径导入 skill；每个 skill 自己的 `enabled` 标志与 `scope` 决定它被投递给哪些已注册 agent。v1 支持 Claude Code 与 Codex CLI 作为同步目标（每个 agent 是 spec agent-registry-agent-registry 中 kind 为 `agent` 的 Resource）。」
 
 ## 用户场景与测试
 
@@ -28,20 +28,20 @@
 ---
 
 
-### User Story 3 —— 把 skill 对特定 agent 启用（优先级 P1）
+### User Story 3 —— 决定一个 skill 能到达哪些 agent（优先级 P1）
 
-开发者希望某个 skill 在 Claude Code 中可用，但在 Codex 中不要。他按 agent 启用后，Coffer 在该 agent 配置目录的 `skills/` 子文件夹下创建目录 symlink。
+开发者希望某个 skill 在 Claude Code 中可用，但在 Codex 中不要。他把该 skill 的 **scope** 设为 `["claude_code"]`，Coffer 就只把它投递到那里——在该 agent 配置目录的 `skills/` 子文件夹下创建目录 symlink——别处一份都没有。之后收窄 scope 会把被排除 agent 手上的副本收回。
 
-**为什么是这个优先级**：这是「统一管理」的核心价值。没有按 agent 的启停，Coffer 与手工拷贝文件没本质区别。
+**为什么是这个优先级**：这是「统一管理」的核心价值。没有按 agent 的投递授予，Coffer 与手工拷贝文件没本质区别。
 
-**独立可测**：注册一个 Claude Code agent（按 spec agent-registry）；导入一个 skill；为该 agent 启用；验证 `<config_dir>/skills/<skill-name>` 下出现指向 `~/.coffer/skills/<skill-name>/` 的目录 symlink。
+**独立可测**：注册一个 Claude Code agent（按 spec agent-registry）；导入一个 scope 指向该 agent 的 skill；验证 `<config_dir>/skills/<skill-name>` 下出现指向 `~/.coffer/skills/<skill-name>/` 的目录 symlink。
 
 **代表性场景**：
 
-- 为已注册 agent 启用一个 skill
-- 为某 agent 禁用一个 skill（symlink 移除，master 不动）
-- 同一个 skill 为多个 agent 启用（一份 master，多份 symlink）
-- 目标路径已存在非 Coffer 文件时拒绝覆盖，除非加 `--force`
+- deliver a skill to a registered agent（把一个 skill 投递给已注册 agent）
+- reclaim a skill from an agent（从某 agent 收回一个 skill：symlink 移除，master 不动）
+- deliver one skill to multiple agents（把同一个 skill 投递给多个 agent：一份 master，多份 symlink）
+- refuse to overwrite a non-Coffer target（拒绝覆盖非 Coffer 目标）
 
 ---
 
@@ -66,16 +66,16 @@ agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换�
 
 ### User Story 6 —— 在 Web UI 中管理 skill（优先级 P2）
 
-用户打开 Coffer，看到以数据表呈现的 Skills 页（搜索、筛选、分页、行多选以执行批量操作），可以通过文件选择器导入并浏览列表。Skills 页只管理 skill 资源本身，不管理它的按 agent binding：点击某个 skill 打开详情视图，其中有一个 Overview 元信息 tab 与一个 Files tab（文件树 + 一个只读文件查看器：渲染 Markdown，其他文本文件以原文显示）。该查看器不编辑内容；要修改文件，用户在自己的外部编辑器或文件管理器中打开该文件（或其所在文件夹）——每个文件与文件夹都提供「在外部编辑器中打开」「在文件管理器中显示」操作（由本地 daemon 执行）。按 agent 的启用/禁用在 agent 详情页上进行——该 agent 的「Skills」tab 列出绑定到该 agent 的 skill，并带每条 binding 的开关。
+用户打开 Coffer，看到以数据表呈现的 Skills 页（搜索、筛选、分页、行多选以执行批量操作），可以通过文件选择器导入并浏览列表。Skills 页只管理 skill 资源本身，不管理它的按 agent binding：点击某个 skill 打开详情视图，其中有一个 Overview 元信息 tab 与一个 Files tab（文件树 + 一个只读文件查看器：渲染 Markdown，其他文本文件以原文显示）。该查看器不编辑内容；要修改文件，用户在自己的外部编辑器或文件管理器中打开该文件（或其所在文件夹）——每个文件与文件夹都提供「在外部编辑器中打开」「在文件管理器中显示」操作（由本地 daemon 执行）。投递的决定做在 skill 这一侧——它的 `enabled` 开关与它的 scope——因此 agent 详情页只汇报、不决定：该 agent 的「Skills」tab 列出当前已投递给它的 skill，就投递而言是只读的。
 
 **为什么是这个优先级**：非 CLI 用户需要一个可视化日常管理面板。
 
-**独立可测**：打开 Web UI → Skills → 用文件选择器导入一个文件夹 → 在表格中看到它 → 打开 agent 详情页 → 它的 Skills tab → 把该 skill 对该 agent 切到 enabled → 验证 symlink 已落盘。
+**独立可测**：打开 Web UI → Skills → 用文件选择器导入一个文件夹 → 在表格中看到它 → 打开该 skill 并把它的 scope 设为某一个 agent → 验证 symlink 已落盘，且该 agent 的 Skills tab 把这个 skill 列为已投递。
 
 **代表性场景**：
 
 - 通过 Web UI 文件选择器导入 skill
-- 通过 Web UI 切换控件按 agent 启停
+- 在 Web UI 中设置 skill 的 scope，并看到已投递集合随之变化
 - 通过 UI 通知呈现 drift 数
 
 ---
@@ -110,13 +110,13 @@ agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换�
 
 ### User Story 9 —— 审计 skill 全生命周期（优先级 P3）
 
-每一次导入、启用、禁用、移除都可审计。
+每一次导入、投递、收回、移除都可审计。
 
 **独立可测**：跑一遍代表性操作序列；查看审计日志；每个变更一行，含 actor、target、event type。
 
 **代表性场景**：
 
-- 审计导入、启用、禁用、移除
+- 审计导入、投递、收回、移除
 
 ---
 
@@ -138,21 +138,23 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 
 ---
 
-### User Story 11 —— 跟随主库（优先级 P2）
+### User Story 11 —— 一条规则决定 skill 落在哪里（优先级 P2）
 
-逐 skill binding 精确但繁琐：每个新 skill 都要逐个 agent 启用。用户打开某 agent 的**「跟随主库」**开关；从此主库中的每个 skill 都自动投递到该 agent——新 skill 注册即出现、被删除的 skill 即消失——并配一份按 agent 的排除列表应对少数不想要的。不跟随的 agent 维持逐 skill binding 模式。关闭跟随时，当前已投递的集合保留为显式 binding，不会有任何东西凭空消失。
+用户不该把投递配置两遍。skill 自己的两个字段就能定下来：`enabled` 决定这个 skill 是否生效，`scope` 决定它到达哪些 agent。刚导入的 skill 没有 scope，因此无需任何按 agent 的设置就到达每个已注册 agent——这就是「配置一次、共享全部」，是 MCP 网关「一个条目服务全部」模型在文件系统侧的对应物。当某个 skill 只属于一处时，用户收窄它的 scope，Coffer 就把被排除 agent 手上的副本收回。当某个 skill 暂时不该到达任何地方时，用户把它禁用，每一份已投递副本都被收回；重新启用会把它重新投递到 scope 仍然授予的每个 agent。
 
-**为什么是这个优先级**：这是 skill 版的「配置一次、共享全部」——MCP 网关「一个条目服务全部」模型在文件系统侧的对应物。
+**必须直说的取舍**：现在不再有一个按 agent 的「这个 agent 什么都不要」总开关。要让某一个 agent 被排除在全部之外，就把它从每个 skill 的 scope 里去掉——`mcp_server` 资源本来就是这么工作的。把某个特定 skill 排除在某个 agent 之外的能力没有任何削弱；它只是从 agent 一侧移到了 skill 一侧。
 
-**独立可测**：对一个 agent 在主库有三个 skill 时开启跟随；验证三条链接存在；注册第四个 skill；验证其链接无需额外操作即出现；排除一个 skill；验证其链接被移除而其余保留。
+**为什么是这个优先级**：用一条投递规则取代三条互相重叠的规则，才能让「投递集合」从用户在 skill 上看得见的东西直接推出来。
+
+**独立可测**：注册两个 agent 并导入三个没有 scope 的 skill；验证存在六条链接；把其中一个 skill 的 scope 收窄到单个 agent；验证另一个 agent 的副本被收回；把第二个 skill 的 scope 设为 `[]`；验证它的两份副本都被收回；禁用第三个 skill 并验证其副本消失，再重新启用并验证它们回来。
 
 **代表性场景**：
 
-- enable follow-all and deliver every master skill
-- auto-deliver new skills to following agents
-- auto-remove deleted skills from following agents
-- exclude a skill from a following agent
-- disable follow-all preserving current bindings
+- a skill with no scope reaches every registered agent
+- a skill scoped to no agent reaches nobody
+- import delivers a skill only where its scope grants it
+- disabling a skill reclaims every delivered copy
+- re-enabling a skill redelivers it
 
 ---
 
@@ -163,39 +165,48 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - **Windows 下 symlink/junction 创建失败（FAT32 或网络共享）**：该目标降级为复制模式，审计带 `degraded=true`；UI 显示警告标记。
 - **用户在外部编辑器中、从某 agent 的 `config_dir/skills` 文件夹内编辑 SKILL.md**：Coffer 的 UI 从不编辑文件内容；用户在自己的编辑器中改动（可经 Coffer 的「在外部编辑器中打开」/「在文件管理器中显示」操作进入，或直接打开）。由于 agent 路径是指向 master 的 symlink，该外部编辑实际落在 master 上，其他 agent 下次读取时即可见；不会被识别为 drift。
 - **用户从某 agent 的 `config_dir/skills` 文件夹内删除一个由 Coffer 管理的文件**：同样会作用到 master；下次 `verify` 会标记其他 agent 上对应 link 是否仍能一致解析。
-- **移除一个还带 skill binding 的 agent（spec agent-registry）**：spec agent-registry 定义了 agent kind 的 `on_delete` 接缝；the skill-manager spec 在组装根处提供 `cleanup_bindings_for_agent` 回调，先清掉该 agent 的所有 binding 与 symlink，再删掉 agent 行本身。
+- **移除一个还带 skill binding 的 agent（spec agent-registry）**：spec agent-registry 定义了 agent kind 的 `on_delete` 接缝；the 005-skill-manager spec 在组装根处提供 `cleanup_bindings_for_agent` 回调，先清掉该 agent 的所有 binding 与 symlink，再删掉 agent 行本身。
 - **agent 的 `config_dir` 在外部被移走或删除**：下一次同步操作会暴露失败；`verify` 报告受影响的 binding；用户通过更新 agent 的 `config_dir` 或移除该 agent 来处置。
 - **`~/.agents/skills` 与其他工具共用**：扫描列出所见内容，只把 Coffer 自己的链接归为托管；其余一律算非托管。删除永远是用户的显式动作——Coffer 绝不替别的工具做垃圾回收。
 - **非托管条目是指向主库之外的 symlink**：列为非托管但不可收编（收编会搬走别人的事实来源）；用户可手动处理链接目标，或删除该链接。
 - **非托管 skill 没有合法 SKILL.md**：以 `valid=false` 及原因列出；可删除，但在通过校验之前不可收编。
-- **开启跟随时目标路径已存在同名的非 Coffer 文件夹**：该 skill 报告为冲突（与 FR-011 同规则）而不被覆盖；主库其余部分照常投递。
+- **投递某个 skill 时目标路径已存在同名的非 Coffer 文件夹**：该 skill 报告为冲突（与 FR-011 同规则）而不被覆盖；主库其余部分照常投递。
 - **各 agent 的交付目标**：Coffer 只有一种交付方式——把 master skill 文件夹符号链接（失败则复制）进 `<config_dir>/skills/<name>`。每个 agent 的 skill 子路径来自能力清单，因此将来新增 agent 的交付目标是数据而非新分支。
 
-## Skill delivery scope（[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.zh.md)）
+## Skill delivery scope（[ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.zh.md)）
 
 `skill` resource 携带一个框架级的 `scope`——一个 agent 名列表，或 `None`
-表示「对每个 agent 生效」。scope 是资源侧的**授予**（「这个 skill 可以在这里
-运行」）；既有的按 agent follow policy（FR-025）则是 agent 侧的**意图**（「把
-skill 投递给我」）。投递是二者的**交集**，再减去手动排除项：
+表示「对每个 agent 生效」。它连同该资源自己的 `enabled` 标志，就是投递规则的
+**全部**：
 
-- **逐 skill binding**（User Story 3 / FR-009）只在该 agent**同时**处于该
-  skill 的 scope 授予范围内时才投递（该 binding 的 agent 满足
-  `agent_in_scope`）。一个被 skill scope 排除的 agent 的 binding 请求，会像
-  今天拒绝一个非法投递目标一样被拒绝。
-- **Follow-all 投递**（FR-025）计算一个跟随中的 agent 的有效集合时，先取主库
-  减去排除列表，再进一步过滤为 scope 包含该 agent 的那些 skill——一个不在
-  scope 内的 skill 永远不会被自动投递给跟随中的 agent，无论排除列表里有没有
-  它。
-- **Scope 是硬性授予——它凌驾于手动 binding 之上。** 把一个 skill 的 scope
-  编辑为排除某个此前曾向其投递过的 agent，会在下一次调和时收回该投递：链接被
-  移除，binding 被标为禁用/移除，与 follow-policy 驱动的移除（FR-010）完全
-  一样——即便这个 binding 是手动创建（不经 follow）的。skill 重新进入 scope
-  不会自动重新投递——跟随中的 agent 会在下一次 follow 调和时重新拿到它；显式
-  的逐 skill binding 必须由用户重新启用。
-- 调和是执行把关点——包括导入之后运行的按导入调和钩子（spec vault-export-import）。在一次
-  scope 编辑、一个 skill 的新增/移除，或一次 follow policy 变化之后，每个受
-  影响 agent 的已投递集合都被重新计算为 `scope ∩ follow-or-binding`，任何现
-  在不在 scope 内的已投递副本都会被收回。
+```
+delivered(skill, agent)  ⟺  skill.enabled AND agent_in_scope(skill.scope, agent)
+```
+
+再没有别的东西为投递把关。这与 `mcp_server` 已有的形状一致——那里也是仅由
+scope 决定哪个 agent 能看到某个 server 的工具。
+
+- **scope 的三种状态。** `None`——每个已注册 agent 都收到这个 skill（新导入
+  的默认值）。`["claude_code"]`——只有列出的 agent 收到；尚未注册的名字是合法
+  的，只是永远匹配不上。`[]`——没有任何 agent 收到，而这个 skill 仍留在库中，
+  照常导出、照常可见。
+- **`enabled` 是开关，而且是真开关。** 禁用一个 skill 会收回它的每一份已投递
+  副本——逐条移除 symlink，master 文件夹不动。重新启用会把它重新投递到 scope
+  仍然授予的每个 agent。
+- **scope 是硬性授予。** 把一个 skill 的 scope 收窄为排除某个此前曾向其投递过
+  的 agent，会在下一次调和时收回该投递，无论那份副本当初是怎么到那里的；放宽
+  scope 则会投递它。不存在任何按 agent 的状态能违背 skill 的 scope 保住一份
+  副本，也不存在任何按 agent 的状态能把副本挡在 scope 已授予的 agent 之外。
+- **调和是执行把关点**——包括导入之后运行的按导入调和钩子（spec vault-export-import）。只要
+  上述判定的答案可能发生变化，它就会运行：一个 skill 被启用或禁用、一个 skill
+  的 scope 被编辑、一个 skill 被导入、一个 skill 被移除、一个 agent 被注册、
+  一个 agent 的 `config_dir` 变更，以及一次同步导入之后。每次运行都重新计算该
+  agent 应有的集合，投递缺失的部分，收回不再需要的部分。
+- **必须直说的取舍。** 现在不再有一个按 agent 的「这个 agent 什么都不要」总
+  开关。要让某一个 agent 被排除在全部之外，就把它从每个 skill 的 scope 里去
+  掉——`mcp_server` 资源本来就是这么工作的。把某个特定 skill 排除在某个 agent
+  之外的能力没有任何削弱；它只是从 agent 一侧移到了 skill 一侧。agent 资源不
+  再携带任何 skill 投递策略。
 
 ## Acceptance Scenarios
 
@@ -237,29 +248,29 @@ skill 投递给我」）。投递是二者的**交集**，再减去手动排除�
 - **When** 校验该文件夹，
 - **Then** 校验通过，且解析出的 frontmatter 保留 `license` 与归一化后的 `allowed-tools` 列表（而非丢弃）。
 
-### Scenario: 把 skill 对已注册 agent 启用
+### Scenario: deliver a skill to a registered agent（把一个 skill 投递给已注册 agent）
 
-- **Given** agent `claude_code` 已按 spec agent-registry 注册，且 skill `my-skill` 已被导入，
-- **When** 用户为 `claude_code` 启用 `my-skill`，
-- **Then** 在 `<config_dir>/skills/my-skill` 处创建一个指向 `~/.coffer/skills/my-skill/` 的目录 symlink（Windows 上是 junction），同时写入一行 `skill_agent_bindings` 记录该 link。
+- **Given** agent `claude_code` 已按 spec agent-registry 注册，且一个 scope 授予 `claude_code` 的已启用 skill `my-skill` 已被导入，
+- **When** 该 skill 的投递调和运行，
+- **Then** 在 `<config_dir>/skills/my-skill` 处创建一个指向 `~/.coffer/skills/my-skill/` 的目录 symlink（Windows 上是 junction），同时写入一行 `skill_agent_bindings` 记录该 agent 持有一份已投递副本。
 
-### Scenario: 把 skill 对某 agent 禁用
+### Scenario: reclaim a skill from an agent（从某 agent 收回一个 skill）
 
-- **Given** 某 skill 已对某 agent 启用，且目标 symlink 已存在，
-- **When** 用户对该 agent 禁用该 skill，
-- **Then** symlink 被移除，binding 被标记为 disabled，master 文件夹不变。
+- **Given** 某 skill 已投递给某 agent，且目标 symlink 已存在，
+- **When** 该 skill 不再投递给这个 agent（其 scope 不再授予该 agent，或该 skill 被禁用），
+- **Then** symlink 被移除，该 agent 的投递记录被清除，master 文件夹不变。
 
-### Scenario: 对多个 agent 启用
+### Scenario: deliver one skill to multiple agents（把同一个 skill 投递给多个 agent）
 
 - **Given** 两个 agent 已注册，
-- **When** 用户为它们都启用同一个 skill，
+- **When** 一个 scope 同时授予二者的已启用 skill 被调和，
 - **Then** 两条 symlink（每个 agent 各一条）同时存在，都指向同一份 master。
 
-### Scenario: 拒绝覆盖非 Coffer 目标
+### Scenario: refuse to overwrite a non-Coffer target（拒绝覆盖非 Coffer 目标）
 
 - **Given** 用户已在目标 link 路径上放了一个普通文件或目录，
-- **When** 用户为该 agent 启用某 skill，
-- **Then** 操作被拒绝；若加 `--force`，已有目标被备份到 `<path>.coffer-backup-<ts>`，然后再创建 link。
+- **When** 某个 skill 被投递给该 agent，
+- **Then** 该冲突被报告，已有目标保持原样不动；投递的其余部分照常进行。
 
 ### Scenario: 检测 agent skill 目录中的 drift
 
@@ -351,41 +362,41 @@ skill 投递给我」）。投递是二者的**交集**，再减去手动排除�
 - **When** 用户列出非托管 skill，
 - **Then** 托管链接与 `.system` 条目都不出现在结果中。
 
-### Scenario: enable follow-all and deliver every master skill（开启跟随并投递主库全部 skill）
+### Scenario: a skill with no scope reaches every registered agent（没有 scope 的 skill 到达每个已注册 agent）
 
-- **Given** 一个尚未跟随的已注册 agent，主库中有三个 skill，
-- **When** 用户开启该 agent 的跟随主库开关，
-- **Then** 同步引擎把三个 skill 全部投递给该 agent（链接 + binding 行），该 agent 的有效集合等于主库减去其（空的）排除列表。
+- **Given** 两个已注册 agent，以及一个 scope 未设置（`None`）的已启用 skill，
+- **When** 对每个 agent 运行投递调和，
+- **Then** 两个 agent 都持有一份已投递副本；此后再注册第三个 agent，也会无需任何进一步用户操作地把该 skill 投递过去。
 
-### Scenario: auto-deliver new skills to following agents（向跟随中的 agent 自动投递新 skill）
+### Scenario: a skill scoped to no agent reaches nobody（scope 为空的 skill 谁也到不了）
 
-- **Given** 一个已开启跟随的 agent，
-- **When** 主库注册一个新 skill（导入或收编），
-- **Then** daemon 无需用户进一步操作即把它投递给该 agent。
+- **Given** 两个已注册 agent，各自持有某个已启用 skill 的一份已投递副本，
+- **When** 用户把该 skill 的 scope 设为 `[]`，
+- **Then** 两份已投递副本都被收回，该 skill 仍留在库中（照常列出、照常导出），在其 scope 重新授予某个 agent 之前没有任何 agent 收到它。
 
-### Scenario: auto-remove deleted skills from following agents（从跟随中的 agent 自动移除已删除 skill）
+### Scenario: import delivers a skill only where its scope grants it（导入只把 skill 投递到其 scope 授予之处）
 
-- **Given** 一个已开启跟随、且有一个已投递 skill 的 agent，
-- **When** 该 skill 从主库被移除，
-- **Then** 该 agent 的链接与 binding 作为移除的一部分被清理。
+- **Given** 两个已注册 agent：`claude_code` 与 `codex`，
+- **When** 用户导入一个 scope 为 `["claude_code"]` 的 skill，
+- **Then** 导入后的调和只把它投递给 `claude_code`，`codex` 什么也没收到。
 
-### Scenario: exclude a skill from a following agent（在跟随中的 agent 上排除一个 skill）
+### Scenario: disabling a skill reclaims every delivered copy（禁用一个 skill 收回它的每一份已投递副本）
 
-- **Given** 一个已开启跟随、且有一个已投递 skill 的 agent，
-- **When** 用户为该 agent 排除该 skill，
-- **Then** 其链接与 binding 被移除，该 skill 进入该 agent 的排除列表，且后续主库变化在排除解除之前绝不重新投递它。
+- **Given** 一个已投递给两个 agent 的已启用 skill，
+- **When** 用户禁用该 skill 资源，
+- **Then** 两条 symlink 都被移除、两条投递记录都被清除，而该 skill 的 scope 与其 master 文件夹保持不变。
 
-### Scenario: disable follow-all preserving current bindings（关闭跟随并保留现有 binding）
+### Scenario: re-enabling a skill redelivers it（重新启用一个 skill 会把它重新投递）
 
-- **Given** 一个已开启跟随、且有若干已投递 skill 的 agent，
-- **When** 用户关闭跟随开关，
-- **Then** 每个当前已投递的 skill 都保留为显式逐 skill binding 且链接完好，后续主库新增不再自动投递。
+- **Given** 一个已禁用、当前没有任何已投递副本、且 scope 授予两个 agent 的 skill，
+- **When** 用户重新启用该 skill 资源，
+- **Then** 它被重新投递给两个 agent——链接重建、投递记录恢复——无需任何按 agent 的操作。
 
-### Scenario: delivery is the intersection of scope and follow policy; an out-of-scope copy is reclaimed
+### Scenario: scoping a skill away from an agent reclaims the delivered copy（把 skill 移出某 agent 的 scope 会收回已投递副本）
 
-- **Given** 一个跟随主库、且当前有一个 skill 已投递给它的 agent，该 skill 的 scope 当前包含这个 agent，
+- **Given** 一个已启用、当前已投递给某个 agent 且 scope 中包含该 agent 名字的 skill，
 - **When** 用户把这个 skill 的 scope 编辑为排除这个 agent，下一次调和运行，
-- **Then** 已投递的 symlink 被移除、binding 被收回——即便这个 agent 仍然跟随主库，也从未把这个 skill 加入自己的排除列表——投递等于 scope ∩ follow policy，scope 的排除项胜出。
+- **Then** 已投递的 symlink 被移除、投递记录被清除——scope 是硬性授予，没有任何按 agent 的状态能违背它保住这份副本。
 
 ### Scenario: opt-in repair re-delivers repairable drift from master
 
@@ -414,12 +425,12 @@ skill 投递给我」）。投递是二者的**交集**，再减去手动排除�
 
 **按 agent 投递**
 
-- **FR-008**：每对 `(skill, agent)` binding 记录在 `skill_agent_bindings` 表，包含 enabled 与 last successful link path。
-- **FR-009**：启用一个 binding 必须在 `<config_dir>/skills/<skill-name>` 创建一个指向 `~/.coffer/skills/<skill-name>/` 的目录 symlink（POSIX）或目录 junction（Windows）。
-- **FR-010**：禁用一个 binding 必须移除目标 link，不动 master。
-- **FR-011**：启用时若目标位置已存在非 Coffer 目标，未加 `--force` 则拒绝；`--force` 在创建 link 前先备份既有目标。
+- **FR-008**：每对 `(skill, agent)` binding 都是内部的投递记账，存在 `skill_agent_bindings` 表：一行表示该 agent 当前持有一份已投递副本，并附上次成功的 link path、link mode 与上次 link 的时间。它不是面向用户的维度，任何 surface 都不把它作为开关暴露。
+- **FR-009**：把一个 skill 投递给某 agent 必须在 `<config_dir>/skills/<skill-name>` 创建一个指向 `~/.coffer/skills/<skill-name>/` 的目录 symlink（POSIX）或目录 junction（Windows）。
+- **FR-010**：收回一份已投递副本必须移除目标 link，不动 master。
+- **FR-011**：投递必须报告、绝不覆盖：当目标路径上已经存在不是 Coffer 托管链接的东西时，该 skill 被报告为冲突、既有目标原封不动，投递的其余部分照常进行。（在重新建链前先备份目标的做法只存在于 FR-029 的显式 opt-in drift 修复中。）
 - **FR-012**：当符号链接/目录 junction 不可用（如 FAT32、网络共享）时，系统可降级为复制模式；绑定记录 `link_mode=copy_fallback`（enable 事件审计为 `mode: copy_fallback`），UI 必须呈现该降级状态（Agent 的 Skills 标签页对此类绑定显示 "已复制" 警示徽标）。
-- **FR-012a**（[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.zh.md)）：向某个 agent 投递 skill 必须额外要求该 skill 对该 agent 处于 scope 内（`agent_in_scope(scope, agent)`），无论投递是逐 skill binding（FR-009）还是 follow-all（FR-025）。调和过程中发现一个已投递的 binding 现在不在 scope 内，必须收回它（移除链接、禁用/移除 binding），与 FR-010 收回一个被禁用的 binding 完全一样——scope 是凌驾于此前手动 binding 之上的硬性授予。
+- **FR-012a**（[ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.zh.md)）：当且仅当该 skill 资源已启用**且**该 agent 在这个 skill 的 scope 内时，这个 skill 才必须被投递给该 agent——即 `skill.enabled AND agent_in_scope(skill.scope, agent)`。没有别的标志为投递把关：既不是 FR-008 的投递记账，也不是 agent 资源上的任何字段。调和过程中发现一份该判定不再授予的已投递副本，必须按 FR-010 收回它（移除链接、清除投递记录）；发现一份该判定现在授予、而该 agent 尚未持有的副本，必须投递它。
 
 **Drift**
 
@@ -433,10 +444,10 @@ skill 投递给我」）。投递是二者的**交集**，再减去手动排除�
 - **FR-023**：用户必须能收编一个合法的非托管 skill。收编按 FR-004 校验文件夹、搬到 `~/.coffer/skills/<name>/`、注册 `skill` 资源、投递托管链接（FR-009）、并为该 agent 记录一条启用的 binding——按此顺序，注册之前的任何失败都让原文件夹不被搬动、不被改变（注册之后主库副本即为权威；投递失败会如实暴露并经 binding 重试，绝不回滚资源）。托管链接始终投递到该 agent 的规范投递位置 `<config_dir>/skills/<name>`：从 `<config_dir>/skills` 收编时原路径就地替换；从 `~/.agents/skills` 收编时则做归并——该处原文件夹被移除、链接落在 `<config_dir>/skills`（Codex 两个位置都读取，agent 仍然可见该 skill）。重名以 `conflict`（409）拒绝；不合法文件夹与指向主库之外的 symlink 以 `unprocessable_entity`（422）拒绝。以收编事件审计。
 - **FR-024**：用户必须能以显式、经确认的动作删除一个非托管条目。删除只从磁盘移除该条目，绝不动主库内容或 binding，并写入审计。
 
-**跟随主库（工作区增补）**
+**投递调和（工作区增补）**
 
-- **FR-025**：每个 agent 必须携带一个跟随主库标志与一份按 agent 的 skill 排除列表（存于 agent 资源的 config，spec agent-registry）。跟随期间，agent 的有效 skill 集合是整个主库减去其排除项；同步引擎必须在标志变化、skill 注册或移除、以及排除列表变化时执行对账投递。目标路径冲突遵循 FR-011（报告、绝不覆盖）。关闭标志必须把当前已投递的 skill 保留为显式逐 skill binding。该标志对新注册的 agent 默认开启，与增补前的自动绑定行为一致。
-- **FR-026**：非托管 skill 与跟随操作必须可通过 REST API、`coffer agent skill …` / `coffer skill …` CLI（读取支持 `--json`）、以及 Web UI 中该 agent 的 Skills tab 完成。
+- **FR-025**：系统必须仅依据 FR-012a 的判定，按 agent 调和投递。一次调和把该 agent 应有的集合算作 `{s.name for s in skills if s.enabled and agent_in_scope(s.scope, agent_name)}`，投递其中该 agent 尚未持有的每一个 skill，并收回每一份不再需要的已持有副本。它必须在以下时机运行：一个 skill 被启用或禁用、一个 skill 的 scope 被编辑、一个 skill 被导入、一个 skill 被移除、一个 agent 被注册、一个 agent 的 `config_dir` 变更，以及一次同步导入之后的 post-import 钩子。目标路径冲突遵循 FR-011（报告、绝不覆盖）。agent 资源不携带任何形式的 skill 投递策略——没有跟随标志、没有排除列表、没有按 agent 的退出开关；唯一的输入是 skill 的 `enabled` 标志与它的 `scope`。
+- **FR-026**：非托管 skill 操作必须可通过 REST API、`coffer agent skill …` / `coffer skill …` CLI（读取支持 `--json`）、以及 Web UI 中该 agent 的 Skills tab 完成。投递本身不是这个 surface 上的操作：它由 skill 资源的 `enabled` 标志与 `scope`，经通用的资源启停与 scope surface 控制。
 
 **生命周期**
 
@@ -445,7 +456,7 @@ skill 投递给我」）。投递是二者的**交集**，再减去手动排除�
 
 **Surface**
 
-- **FR-019**：每一项管理操作必须可通过（a）REST API、（b）`coffer skill ...` CLI（含 `--json`）、（c）Web UI 的 Skills 页 三种 surface 完成。
+- **FR-019**：每一项管理操作必须可通过（a）REST API、（b）`coffer skill ...` CLI（含 `--json`）、（c）Web UI 的 Skills 页 三种 surface 完成。按 `(skill, agent)` 的启用/禁用不在其列：`POST /skills/{name}/enable` 与 `POST /skills/{name}/disable` 两条 REST 路由，以及 `coffer skill enable|disable` CLI 命令，均已**移除**。投递由 skill 的 `enabled` 标志与 `scope` 经通用资源 surface 驱动——`coffer scope set skill:<name> --agents …` 与 `coffer resource enable|disable skill:<name>`。
 - **FR-021**：系统必须提供 skill master 文件夹的**只读**视图：一棵递归文件树（name、相对路径、磁盘绝对路径、type、size、children）以及单个文件的内容（含其磁盘绝对路径与所在文件夹的绝对路径）。Markdown 文件渲染为格式化 Markdown，其他文本文件以原文显示。每次文件读取还必须返回内容指纹（FR-028），以便该文件的应用内编辑可以有条件地保存。读取必须限制在 master 文件夹内——任何解析后位于其外的路径（`..` 穿越、绝对路径或越界 symlink）必须被拒绝。文件读取必须做大小上限（超限时截断并带 `truncated` 标记），并把非 UTF-8 / 含 NUL 字节的文件标记为 binary 且内容为空。不跟随越界 symlink。
 - **FR-006**：应用内文件查看器必须在文件与所在文件夹两种粒度上提供以下操作：（a）在用户首选的外部编辑器中打开目标（该全局首选项在 ui-shell 中定义；默认为操作系统默认应用），（b）在操作系统文件管理器（Finder / 资源管理器）中显示目标。打开与显示通过 daemon 的文件系统动作端点（spec agent-registry FR-039）执行真正的操作系统动作,因为环回 daemon 就在用户自己的机器上（ADR: daemon-proxies-os-file-actions）。没有 copy-path 回退。这些操作与应用内编辑（FR-028）并存：用户在 Coffer 内保存小改动，遇到更大的改动再转向自己的编辑器。
 - **FR-028**：系统必须提供写入，在与 FR-021 相同的限制与大小上限下**覆盖 master 文件夹中已存在的文本文件**；必须拒绝在此创建新文件/目录、写到文件夹之外、或用文本覆盖二进制文件。写入必须是原子的，且不跟随越界 symlink。应用内编辑器与编程客户端（REST/CLI）共用这一个端点。由于 master 文件夹同时也是用户在自己编辑器里编辑的文件夹，文件读取必须返回**内容指纹**（对文件磁盘原始字节取摘要——而非对可能被截断的返回文本，这样超大文件的指纹仍能原样回传，且截断点之后的修改同样能被发现）；写入可以带回该指纹：当它与磁盘上的字节不再匹配时，写入必须以 `conflict`（409）拒绝并保持文件逐字节不变，使用户重新读取并重新应用，而不是悄悄丢掉对方的修改。省略指纹的写入仍为无条件写入（后写者胜），这正是从未先读取文件的编程客户端所需要的。
@@ -453,16 +464,15 @@ skill 投递给我」）。投递是二者的**交集**，再减去手动排除�
 
 **可观测**
 
-- **FR-020**：系统必须为每一次导入、启用、禁用、移除与 drift 修复事件写入一条审计记录。
+- **FR-020**：系统必须为每一次导入、投递、收回、移除与 drift 修复事件写入一条审计记录。
 
 ### Key Entities
 
-- **Skill**：kind 为 `skill` 的 Resource，按 `skill:<name>`（name 来自 SKILL.md frontmatter）标识。承载源 provenance、内容哈希、元数据；内容文件夹位于 `~/.coffer/skills/<name>/`。携带一个框架级 `scope`（一个 agent 名列表，或 `None` 表示对每个 agent 生效），它与按 agent follow policy 的交集决定投递（[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.zh.md)；见「Skill delivery scope」）。
+- **Skill**：kind 为 `skill` 的 Resource，按 `skill:<name>`（name 来自 SKILL.md frontmatter）标识。承载源 provenance、内容哈希、元数据；内容文件夹位于 `~/.coffer/skills/<name>/`。携带一个框架级 `scope`（一个 agent 名列表，或 `None` 表示对每个 agent 生效），它连同该资源自己的 `enabled` 标志直接决定投递（ADR per-agent-resource-scope；见「Skill delivery scope」）。
 - **Skill Source**：记录 skill 来源的结构。本地导入仅含原始路径作 provenance 用。
-- **Skill–Agent Binding**：连接一个 skill Resource 与一个 agent Resource（kind `agent`，按 spec agent-registry）的一行；带 `enabled` 标志与最近 link path。磁盘上的 symlink 是 live 表达；binding 是持久化表达。
+- **Skill–Agent Binding**：内部的投递记账，不是面向用户的开关。连接一个 skill Resource 与一个 agent Resource（kind `agent`，按 spec agent-registry）的一行，记录该 agent 当前持有一份已投递副本，并附最近 link path、link mode 与最近 link 时间。磁盘上的 symlink 是 live 表达；这一行是「投递了什么」的持久化记录。
 - **Drift Report**：`verify` 返回的瞬时结构，列出每条与磁盘不一致的 binding，附 drift 类型与建议处置方式。
 - **Unmanaged Skill（非托管 skill）**：在 agent skill 位置发现的、Coffer 不管理的 skill 形条目的派生（绝不存储）视图——名称、路径、位置、`valid` 标志。文件系统是事实来源；收编或删除是仅有的两种变更。
-- **Follow Policy（跟随策略）**：按 agent 的状态（标志 + 排除列表，按 spec agent-registry 存于 agent 资源 config），声明该 agent 接收整个主库。binding 仍是持久化的投递记录；策略驱动同步引擎的对账。
 
 ## Success Criteria
 
@@ -475,18 +485,18 @@ skill 投递给我」）。投递是二者的**交集**，再减去手动排除�
 - **SC-006**：本规范每一个 Acceptance Scenario 都至少被一个带 `acceptance(spec="skill-manager", scenario="…")` 的测试覆盖，`make verify-acceptance` 报告 0 个未覆盖 scenario。
 - **SC-007**：全套 `make verify` 在本地与 CI 通过；`make verify-all`（含 e2e）在 macOS 与 Linux 通过；Windows 在 junction 模式与 copy-fallback 模式下分别通过。
 - **SC-008**：SKILL.md 内容永不离开用户机器；由集成测试中的网络出站扫描自动验证。
-- **SC-009**：开启跟随后，新注册的 skill 在 5 秒内投递到跟随中的 agent，除注册本身外无需任何用户操作。
+- **SC-009**：新导入的 skill 在 5 秒内投递到其 scope 授予的每个 agent，除导入本身外无需任何用户操作。
 - **SC-010**：在托管链接与手工放置 skill 混杂的机器上，非托管扫描恰好列出手工放置的条目——零托管链接、零 `.system` 条目——由基于构造 fixture 树的集成测试验证。
 
 ## Assumptions
 
-- spec agent-registry 已上线（PR #25）；agent kind 及其 CRUD、审计、`on_delete` 钩子均已可用。
-- spec mcp-gateway 引入的 kind-agnostic Resource 框架、审计日志与 `<kind>:<name>` 标识方案已就位。
-- spec ui-shell 的应用外壳——侧栏 IA、布局、路由骨架、设计系统——已就位；Skills 页是渲染在该外壳之上的功能 surface，填上 ui-shell 预留的 `/skills` 导航位。
+- spec agent-registry-agent-registry 已上线（PR #25）；agent kind 及其 CRUD、审计、`on_delete` 钩子均已可用。
+- spec mcp-gateway-mcp-gateway 引入的 kind-agnostic Resource 框架、审计日志与 `<kind>:<name>` 标识方案已就位。
+- spec ui-shell-ui-shell 的应用外壳——侧栏 IA、布局、路由骨架、设计系统——已就位；Skills 页是渲染在该外壳之上的功能 surface，填上 002-ui-shell 预留的 `/skills` 导航位。
 - skill 遵循开放 AgentSkills 标准（SKILL.md 至少含 `name`/`description` frontmatter，见 agentskills.io），并按标准的精确约束校验（`name` ≤64 字符、`description` ≤1024 字符），同时识别可选的 `license` 与实验性 `allowed-tools` 字段；不符合规范的文件夹不在本规范处理之列。
 - 本地导入的 skill 是时间点拷贝；原路径仅用于追溯，不用于同步。
 - Windows 用户的文件系统支持目录 junction；FAT32 与网络共享降级为 copy 模式。
 - 两种 agent 类型的投递位置维持 `<config_dir>/skills`。Codex 还会读取 `~/.agents/skills`（其较新的标准位置），并把 `<config_dir>/skills` 视为向后兼容的 legacy 位置——非托管扫描覆盖两处；迁移 Coffer 的投递目标是一项已记录、延后到未来变更的决策。
-- 跟随主库标志与排除列表存于 agent 资源的 config（spec agent-registry 的 schema）；其投递语义由本 spec 拥有。
+- agent 资源不携带任何 skill 投递策略。投递完全落在 skill 资源上——它的 `enabled` 标志与它的 `scope`——这些语义由本 spec 拥有。
 - 浏览即装 skill 目录（发现机制）已原型化后撤回（简化，2026-06-20），原因是缺乏可供浏览的内容生态；安装目录作为未来工作仍有可能落地。
 - v2 将探索：远程目录索引、agent 间的 skill 推荐、项目级 skill（仓库内 `.claude/skills/`）。

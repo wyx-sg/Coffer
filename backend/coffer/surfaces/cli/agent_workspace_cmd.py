@@ -1,7 +1,7 @@
 """coffer agent workspace subcommands (spec agent-registry/005 amendment).
 
-MCP entries, plugins, directory config-file children, and the follow-policy
-verb. Kept out of ``agent_cmd.py`` to respect the 400-line backend file cap;
+MCP entries, plugins, and directory config-file children. Kept out of
+``agent_cmd.py`` to respect the 400-line backend file cap;
 ``agent_cmd`` calls :func:`attach` to register everything on its existing
 typers, so the user-facing tree stays ``coffer agent mcp/config/plugin/...``.
 """
@@ -43,7 +43,7 @@ def _tristate(value: bool | None) -> str:
     return "✓" if value else "✗"
 
 
-# --- coffer agent mcp entries / adopt ----------------------------------------
+# --- coffer agent mcp entries / remove-entry / adopt -------------------------
 
 
 def mcp_entries(
@@ -75,6 +75,27 @@ def mcp_entries(
             it["matches_resource"] or "",
         )
     _console.print(table)
+
+
+def mcp_remove_entry(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Agent name"),
+    entry: str = typer.Argument(..., help="MCP entry name"),
+    source: str | None = typer.Option(
+        None, "--source", help="Config-file key when the entry exists in several files."
+    ),
+    force: bool = typer.Option(False, "--force", "-f"),
+) -> None:
+    """Remove one MCP entry from the agent's config file (a .bak is kept)."""
+    if not force and not typer.confirm(f"Really remove MCP entry {entry!r} from agent:{name}?"):
+        raise typer.Exit(1)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        params = {"source": source} if source is not None else None
+        r = c.delete(f"/agents/{name}/mcp-entries/{entry}", params=params)
+        _not_found_exit(r)
+        _cli_client.check(r, verbose=_verbose(ctx))
+    typer.echo(f"removed: mcp entry {entry} from agent:{name}")
 
 
 def mcp_adopt(
@@ -248,39 +269,12 @@ def config_rm(
     typer.echo(f"removed: {key}/{relpath}")
 
 
-# --- coffer agent follow -------------------------------------------------------
-
-
-def follow(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
-    on: bool = typer.Option(
-        ..., "--on/--off", help="Follow (or stop following) the master skill library."
-    ),
-    exclude: list[str] = typer.Option(  # noqa: B008 — typer option declaration
-        [],
-        "--exclude",
-        help="Skill name to exclude (repeatable; replaces the exclusion list).",
-    ),
-) -> None:
-    """Set the agent's follow-master-library policy (FR-025)."""
-    body: dict[str, Any] = {"follow_all_skills": on}
-    if exclude:
-        body["skill_exclusions"] = list(exclude)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.patch(f"/agents/{name}", json=body)
-        _not_found_exit(r)
-        _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(f"updated: agent:{name} follow_all_skills={'on' if on else 'off'}")
-
-
 def attach(agent_app: typer.Typer, *, config_app: typer.Typer, mcp_app: typer.Typer) -> None:
     """Register the workspace commands on agent_cmd's existing typers."""
     mcp_app.command("entries")(mcp_entries)
+    mcp_app.command("remove-entry")(mcp_remove_entry)
     mcp_app.command("adopt")(mcp_adopt)
     config_app.command("files")(config_files)
     config_app.command("write")(config_write)
     config_app.command("rm")(config_rm)
     agent_app.add_typer(plugin_app, name="plugin")
-    agent_app.command("follow")(follow)

@@ -176,11 +176,11 @@ async def test_import_rejects_path_escape_symlink(tmp_path):
     await engine.dispose()
 
 
-# ----- enable / disable -----
+# ----- delivery / reclaim -----
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="skill-manager", scenario="enable a skill for a registered agent")
+@pytest.mark.acceptance(spec="skill-manager", scenario="deliver a skill to a registered agent")
 async def test_enable_creates_link(tmp_path):
     skill_svc, agent_svc, _, _, engine = await _setup(tmp_path)
     _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
@@ -195,7 +195,7 @@ async def test_enable_creates_link(tmp_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="skill-manager", scenario="disable a skill for an agent")
+@pytest.mark.acceptance(spec="skill-manager", scenario="reclaim a skill from an agent")
 async def test_disable_removes_link_keeps_master(tmp_path):
     skill_svc, agent_svc, _, store, engine = await _setup(tmp_path)
     _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
@@ -211,7 +211,7 @@ async def test_disable_removes_link_keeps_master(tmp_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="skill-manager", scenario="enable for multiple agents")
+@pytest.mark.acceptance(spec="skill-manager", scenario="deliver one skill to multiple agents")
 async def test_enable_for_two_agents(tmp_path):
     skill_svc, agent_svc, _, _, engine = await _setup(tmp_path)
     _, sd1 = await _register_agent(agent_svc, tmp_path, name="cur1")

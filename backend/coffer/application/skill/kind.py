@@ -19,11 +19,13 @@ from coffer.domain.skill.config import SkillConfig
 AsyncOnDelete = Callable[[ResourceRef], Awaitable[None]]
 # Sync or async — ResourceService awaits the result if it's an Awaitable.
 OnScopeChangedHook = Callable[[ResourceRef], Awaitable[None] | None]
+OnEnabledChangedHook = Callable[[ResourceRef], Awaitable[None] | None]
 
 
 def make_skill_kind(
     cleanup_bindings_for_skill: AsyncOnDelete,
     on_scope_changed: OnScopeChangedHook | None = None,
+    on_enabled_changed: OnEnabledChangedHook | None = None,
 ) -> Kind:
     async def _on_delete(ref: ResourceRef) -> None:
         # Awaited by ResourceService.delete BEFORE the row is removed, so
@@ -41,11 +43,16 @@ def make_skill_kind(
         # ~/.coffer/skills/. Only SkillService (which creates that folder) may
         # register it; the generic POST /resources path is rejected (CODE-REG).
         generic_create_allowed=False,
-        # Scope (ADR per-agent-resource-scope): delivery is scope ∩ the follow policy.
+        # ADR per-agent-resource-scope: scope is one half of the whole delivery rule —
+        # ``enabled AND agent_in_scope(scope, agent)``.
         supports_scope=True,
-        # Scope / Task 11 Fix 2: a skill's scope edit re-runs delivery
-        # reconciliation for every agent (the composition root supplies the
-        # callback — reruns the same reconciliation the sync post-import hook
-        # uses, ``apply_follow_for_agent``, per registered agent).
+        # A skill's scope edit re-runs delivery reconciliation for every agent
+        # (the composition root supplies the callback — the same
+        # reconciliation the sync post-import hook uses,
+        # ``apply_scope_for_agent``, per registered agent).
         on_scope_changed=on_scope_changed,
+        # The other half: a skill's ``enabled`` flag is a real delivery switch,
+        # so disabling reclaims every delivered copy and re-enabling
+        # redelivers. Same callback, same per-agent reconciliation.
+        on_enabled_changed=on_enabled_changed,
     )

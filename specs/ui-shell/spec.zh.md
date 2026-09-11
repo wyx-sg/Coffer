@@ -71,20 +71,28 @@ Settings 下的 kind（当时叫「LLM connections」），而那个旧名字描
 
 ### User Story 2 — 日常 MCP 操作有产品质感，不再像脚手架 (Priority: P1)
 
-已经在用 Coffer 做 MCP gateway 聚合的开发者希望日常流程——注册服务器、看健康、浏览工具、切换能力、看 invocation——看起来、用起来像一个真正的产品，而不是一坨脚手架。标题在字体上有区分；间距统一；每台服务器页面在 per-tool 开关之前先有一个"这台服务器在干嘛"的总览视图；空 / 错 / 加载态都是一等公民。Tools、Resources、Prompts 三个 tab 保持统一——各自带相同的搜索框、状态过滤和逐行启用开关，即使上游没有该类型的任何条目也保留这套外壳（空态渲染在表格内部，而不是一张光秃秃的卡片）。服务器列表带搜索框、状态过滤、客户端分页，让一个大 vault 也能浏览。Invocations tab 列出每一次调用；展开一行可看它的原始日志——该次 invocation 完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现。
+已经在用 Coffer 做 MCP gateway 聚合的开发者希望日常流程——注册服务器、看健康、浏览工具、切换能力——看起来、用起来像一个真正的产品，而不是一坨脚手架。标题在字体上有区分；间距统一；每台服务器页面在 per-tool 开关之前先有一个"这台服务器在干嘛"的总览视图；空 / 错 / 加载态都是一等公民。Tools、Resources、Prompts 三个 tab 保持统一——各自带相同的搜索框、状态过滤和逐行启用开关，即使上游没有该类型的任何条目也保留这套外壳（空态渲染在表格内部，而不是一张光秃秃的卡片）。服务器列表带搜索框、状态过滤、客户端分页，让一个大 vault 也能浏览。
+
+没有 **Invocations** tab，Overview 上也不再有"Last invocation"那一行。这个 tab
+曾经上线过——一张带过滤、分页的表格，列出 gateway 代理过的每一次调用，每一行都能
+展开成该次调用的原始 JSON 记录——而它和下一个故事里审计日志那个页面的毛病是同一个：
+上面的流量不是用户的。每一行都是某个 agent 在通过 gateway 调一个工具；人想知道某次
+调用为什么失败时，是去问那个 agent，而不是趴在 gateway 肩膀上读它的表格。
+
+记录本身没有任何变化。gateway 依然把每一次调用写进 invocation 日志，
+`GET /api/v1/resources/mcp_server/{name}/invocations` 与 `coffer mcp invocations`
+依然能读回来——给能调这个路由的 agent，也给脚本。消失的是那个页面。
 
 "Add MCP server" 是一个对话框，用户把标准的 `mcpServers` JSON 块粘进去（一次一台或多台都行）——就是每台 MCP server README 给的那块。Review 一步让他们确认哪些 `env` 是 secret；这些值会被提到加密凭据存储（config 里只保留它们的 ref），而不是以明文写在 config 里。
 
 **Why this priority**: spec mcp-gateway 把后端正确性交付了，但 UI 是裸 tailwind 默认值。"MCP gateway 完成了"的用户可见标杆是：UI 能在真人手里走通（不是只能在 Playwright fixture 里跑）。
 
-**Independent Test**: 在真实浏览器里把 MCP 流程走一遍：开 `/mcp-servers`（欢迎或列表），点 "Add MCP server"，填表，提交，落到详情页，依次切 Overview / Tools / Resources / Prompts / Invocations tabs，切换一个工具，回到列表，把语言在英文与 中文 之间切换。每一步都呈现打磨过的内容；没有任何视图死在一个 generic error。
+**Independent Test**: 在真实浏览器里把 MCP 流程走一遍：开 `/mcp-servers`（欢迎或列表），点 "Add MCP server"，填表，提交，落到详情页，依次切 Overview / Tools / Resources / Prompts tabs，切换一个工具，回到列表，把语言在英文与 中文 之间切换。每一步都呈现打磨过的内容；没有任何视图死在一个 generic error。
 
 **Representative scenarios** (完整 Given/When/Then 见 `## Acceptance Scenarios`):
 
 - MCP server registration round-trip via JSON import
 - capability toggle uses the redesigned tab layout
-- invocations table renders the redesigned empty + populated states
-- invocation log row expands to its raw log JSON
 - language switcher round-trips correctly
 
 ---
@@ -215,23 +223,6 @@ REST 路由与 `coffer audit` 保留，供脚本使用。消失的是那个页�
 - **When** 用户在 Tools tab 的能力搜索框输入部分名字
 - **Then** 只有匹配的工具仍然可见，不匹配的工具被隐藏
 
-### Scenario: invocations table renders the redesigned empty + populated states
-
-- **Given** 一台已注册的服务器，没有 invocation
-- **When** 用户在其详情页打开 Invocations tab
-- **Then** 空态显示 "No invocations yet" 以及如何触发一次的提示
-- **Given** 同一台服务器，DB 中至少有一条 invocation
-- **When** Invocations tab 加载
-- **Then** 表格渲染 timestamp / type / capability / status / latency 列
-- **And** 状态过滤下拉可操作
-- **And** 点任意一行（或在其上按 Enter/Space）展开它的原始日志——该次 invocation 完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现
-
-### Scenario: invocation status filter dropdown exposes selectable options
-
-- **Given** 一台已注册的服务器
-- **When** 用户在 Invocations tab 点开状态过滤 combobox
-- **Then** 下拉 portal 中至少渲染出 "All" 选项
-
 ### Scenario: settings layout uses the redesigned tabbed sidebar
 
 - **Given** 用户访问 `/settings`
@@ -290,6 +281,6 @@ REST 路由与 `coffer audit` 保留，供脚本使用。消失的是那个页�
 - 上面每一条 scenario 至少有一条覆盖测试（unit / integration / e2e），并且 `audit_acceptance` 同时通过 001 与 002。
 - 首次用户能在 app 内注册一台 MCP 服务器并到达一个能工作的 gateway；把 MCP 客户端指向 shim 这一步在项目 README 中记录。
 - 侧栏只展示运营界面（Agents、MCP servers、Skills、Knowledge、Model providers、Channels、Settings），按角色分组；没有任何功能以"敬请期待"的死占位项出现。
-- 审计日志没有页面：`/audit` 与 legacy `/observability` 都不再解析，侧栏也没有任何入口指向它们。agent 通过 `coffer__diagnose` 读这份日志，脚本通过 REST 路由与 `coffer audit` 读。MCP invocation 日志的每一行仍能展开为该行的原始日志 JSON。Observability（系统健康 / 指标）是预留的未来界面，不是审计日志。
+- 审计日志没有页面：`/audit` 与 legacy `/observability` 都不再解析，侧栏也没有任何入口指向它们。agent 通过 `coffer__diagnose` 读这份日志，脚本通过 REST 路由与 `coffer audit` 读。MCP invocation 日志同样没有页面，理由也一样——它里面的每一行都是某个 agent 在调工具，不是人——所以它保留 REST 路由与 `coffer mcp invocations`，丢掉那个 tab。Observability（系统健康 / 指标）是预留的未来界面，不是审计日志。
 - Settings 把数据控件（retention 与 prune）归到 Data tab；daemon 永不作为用户可见概念出现，任何 tab 都不暴露 shutdown 或 token-rotation。
 - `make verify` + `make verify-e2e` 绿。

@@ -1,11 +1,22 @@
 // pages/ModelProvidersPage.test.tsx
+//
+// The connection library is now a DataTable like every other list surface:
+// search + filters + selection + pagination, a per-row enable Switch, bulk
+// enable/disable/delete, and a row click that opens the connection's detail
+// page (where editing and the model curation live — no per-row pencil).
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { acceptance } from "@/test/acceptance";
 import { ModelProvidersPage } from "./ModelProvidersPage";
 import type { Provider } from "@/lib/api/providers";
+
+const navigateMock = vi.fn();
+vi.mock("react-router-dom", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-router-dom")>();
+  return { ...actual, useNavigate: () => navigateMock };
+});
 
 vi.mock("@/lib/api/providers", async (orig) => {
   const actual = await orig<typeof import("@/lib/api/providers")>();
@@ -13,6 +24,7 @@ vi.mock("@/lib/api/providers", async (orig) => {
     ...actual,
     providersApi: {
       list: vi.fn(),
+      get: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       remove: vi.fn(),
@@ -22,10 +34,10 @@ vi.mock("@/lib/api/providers", async (orig) => {
   };
 });
 
-// The Embedding card makes its own network calls; stub it — this page test
-// covers the connection library + internal-engine selection only.
-vi.mock("./settings/EmbeddingSettings", () => ({
-  EmbeddingSettings: () => <div data-testid="embedding-settings" />,
+// The row Switch + the bulk enable/disable go through the kind-agnostic
+// resource endpoints; stub them so no request leaves the test.
+vi.mock("@/lib/api/resources", () => ({
+  resourcesApi: { enable: vi.fn(), disable: vi.fn(), remove: vi.fn() },
 }));
 
 // The dialog's introspection (detect / test / fetch) hits the network; stub the
@@ -42,15 +54,10 @@ vi.mock("@/lib/hooks/useModelIntrospection", () => ({
   useTestEmbedding: () => ({ isPending: false, mutate: vi.fn(), data: undefined }),
 }));
 
-// The internal-engine section reads/writes its own singleton config (network);
-// stub the hooks — this page test asserts the connection-selection wiring only.
-vi.mock("@/lib/hooks/useInternalEngine", () => ({
-  useInternalEngineConfig: () => ({ data: { model: null, updated_at: null } }),
-  useSetInternalEngineModel: () => ({ isPending: false, mutate: vi.fn() }),
-}));
-
 const { providersApi } = await import("@/lib/api/providers");
+const { resourcesApi } = await import("@/lib/api/resources");
 const apiMock = providersApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
+const resourceMock = resourcesApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
 const makeProvider = (overrides?: Partial<Provider>): Provider => ({
   name: "acme",
@@ -60,18 +67,13 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => ({
   compatible_agents: ["claude_code"],
   is_active: false,
   internal_default: false,
+  models: [],
   enabled: true,
   description: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
   ...overrides,
 });
-
-// Radix Select: open via keyboard (jsdom has no pointer layout) then read/click
-// the rendered options.
-function openSelect(triggerName: RegExp) {
-  fireEvent.keyDown(screen.getByRole("combobox", { name: triggerName }), { key: "ArrowDown" });
-}
 
 function renderPage() {
   const qc = new QueryClient({
@@ -86,10 +88,21 @@ function renderPage() {
   );
 }
 
+/** The <tr> carrying the named connection. */
+const rowFor = (name: string) => screen.getByText(name).closest("tr") as HTMLElement;
+
+/** Pick an option in one of the toolbar's filter dropdowns. */
+function selectFilter(filterLabel: string, optionName: string) {
+  fireEvent.click(screen.getByRole("combobox", { name: filterLabel }));
+  fireEvent.click(screen.getByRole("option", { name: optionName }));
+}
+
 describe("ModelProvidersPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     detectResult = "openai";
+    resourceMock.enable.mockResolvedValue(undefined);
+    resourceMock.disable.mockResolvedValue(undefined);
   });
 
   acceptance(
@@ -110,6 +123,8 @@ describe("ModelProvidersPage", () => {
       expect(screen.getByText("agnes")).toBeInTheDocument();
       expect(screen.getByText("Claude Code")).toBeInTheDocument();
       expect(screen.getByText("Codex")).toBeInTheDocument();
+      // …and their endpoints, in the base_url column.
+      expect(screen.getAllByText("https://gw/anthropic").length).toBeGreaterThan(0);
 
       // No per-row "Switch" — activation is per-agent, on the Agent Overview tab.
       expect(screen.queryByRole("button", { name: "Switch" })).not.toBeInTheDocument();
@@ -123,13 +138,16 @@ describe("ModelProvidersPage", () => {
 
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: /Add connection/i }));
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "myconn" } });
+    // Scope to the dialog: the table toolbar carries a "Connection type" filter
+    // with the same label.
+    const form = within(screen.getByRole("dialog"));
+    fireEvent.change(form.getByLabelText("Name"), { target: { value: "myconn" } });
     // Pick the "Custom" provider → a protocol picker appears.
-    fireEvent.change(screen.getByLabelText("Provider"), { target: { value: "custom" } });
-    fireEvent.change(screen.getByLabelText("Connection type"), { target: { value: "openai" } });
-    fireEvent.change(screen.getByLabelText("Base URL"), { target: { value: "https://gw/v1" } });
-    fireEvent.change(screen.getByLabelText("API key"), { target: { value: "sk-x" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.change(form.getByLabelText("Provider"), { target: { value: "custom" } });
+    fireEvent.change(form.getByLabelText("Connection type"), { target: { value: "openai" } });
+    fireEvent.change(form.getByLabelText("Base URL"), { target: { value: "https://gw/v1" } });
+    fireEvent.change(form.getByLabelText("API key"), { target: { value: "sk-x" } });
+    fireEvent.click(form.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(apiMock.create).toHaveBeenCalledTimes(1));
     expect(apiMock.create.mock.calls[0][0]).toMatchObject({
@@ -177,90 +195,148 @@ describe("ModelProvidersPage", () => {
     },
   );
 
-  acceptance(
-    "provider-switching",
-    "set a connection as the internal engine default",
-    async () => {
-      apiMock.list.mockResolvedValue({
-        providers: [
-          makeProvider({ name: "a", internal_default: false }),
-          makeProvider({ name: "b", internal_default: false }),
-        ],
-      });
-      apiMock.setInternalDefault.mockResolvedValue(
-        makeProvider({ name: "b", internal_default: true }),
-      );
-
-      renderPage();
-      await screen.findByText("b");
-
-      // the internal-engine section's connection dropdown sets "b" as the default
-      openSelect(/connection/i);
-      fireEvent.click(screen.getByRole("option", { name: "b" }));
-      await waitFor(() => expect(apiMock.setInternalDefault).toHaveBeenCalledWith("b"));
-    },
-  );
-
-  acceptance(
-    "provider-switching",
-    "setting a new internal default clears the previous one",
-    async () => {
-      // A is the internal default; the dropdown reflects A as selected and lets
-      // the operator switch to B, which the backend makes exclusive.
-      apiMock.list.mockResolvedValue({
-        providers: [
-          makeProvider({ name: "A", internal_default: true }),
-          makeProvider({ name: "B", internal_default: false }),
-        ],
-      });
-      apiMock.setInternalDefault.mockResolvedValue(
-        makeProvider({ name: "B", internal_default: true }),
-      );
-
-      renderPage();
-      // The connection dropdown shows A as the current internal default.
-      expect(await screen.findByRole("combobox", { name: /connection/i })).toHaveTextContent("A");
-      // Selecting B clears A on the backend (single-internal-default invariant).
-      openSelect(/connection/i);
-      fireEvent.click(screen.getByRole("option", { name: "B" }));
-      await waitFor(() => expect(apiMock.setInternalDefault).toHaveBeenCalledWith("B"));
-    },
-  );
-
-  test("edits a connection via the card pencil action (name + protocol locked)", async () => {
+  test("holds only the connection library — no engine or embedding card", async () => {
+    // Coffer's own engine + embedding config moved to Settings → Engine: they
+    // configure Coffer itself, not a resource served to agents.
     apiMock.list.mockResolvedValue({ providers: [makeProvider({ name: "acme" })] });
-    apiMock.update.mockResolvedValue(makeProvider({ name: "acme", base_url: "https://gw/v2" }));
+    renderPage();
+    await screen.findByText("acme");
+    expect(screen.queryByText("Internal engine")).not.toBeInTheDocument();
+    expect(screen.queryByText("Embedding")).not.toBeInTheDocument();
+  });
 
+  test("the row carries no edit action — editing lives on the detail page", async () => {
+    apiMock.list.mockResolvedValue({ providers: [makeProvider({ name: "acme" })] });
+    renderPage();
+    await screen.findByText("acme");
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+  });
+
+  test("search narrows the rows over name, endpoint and description", async () => {
+    apiMock.list.mockResolvedValue({
+      providers: [
+        makeProvider({ name: "official" }),
+        makeProvider({ name: "agnes", base_url: "https://apihub.agnes-ai.com/v1" }),
+      ],
+    });
+    renderPage();
+    await screen.findByText("official");
+
+    const search = screen.getByRole("textbox");
+    fireEvent.change(search, { target: { value: "apihub" } });
+    expect(screen.getByText("agnes")).toBeInTheDocument();
+    expect(screen.queryByText("official")).not.toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: "offic" } });
+    expect(screen.getByText("official")).toBeInTheDocument();
+    expect(screen.queryByText("agnes")).not.toBeInTheDocument();
+  });
+
+  test("the type and status filters narrow the rows", async () => {
+    apiMock.list.mockResolvedValue({
+      providers: [
+        makeProvider({ name: "official", protocol: "anthropic", enabled: true }),
+        makeProvider({ name: "agnes", protocol: "openai", enabled: false }),
+      ],
+    });
+    renderPage();
+    await screen.findByText("official");
+
+    selectFilter("Connection type", "openai");
+    expect(screen.getByText("agnes")).toBeInTheDocument();
+    expect(screen.queryByText("official")).not.toBeInTheDocument();
+
+    selectFilter("Connection type", "All types");
+    selectFilter("Status", "Enabled");
+    expect(screen.getByText("official")).toBeInTheDocument();
+    expect(screen.queryByText("agnes")).not.toBeInTheDocument();
+  });
+
+  test("the status switch toggles the connection without navigating", async () => {
+    apiMock.list.mockResolvedValue({
+      providers: [
+        makeProvider({ name: "official", enabled: true }),
+        makeProvider({ name: "agnes", enabled: false }),
+      ],
+    });
+    renderPage();
+    await screen.findByText("official");
+
+    const on = within(rowFor("official")).getByRole("switch");
+    const off = within(rowFor("agnes")).getByRole("switch");
+    expect(on).toBeChecked();
+    expect(off).not.toBeChecked();
+
+    fireEvent.click(on);
+    await waitFor(() => expect(resourceMock.disable).toHaveBeenCalledWith("provider", "official"));
+    fireEvent.click(off);
+    await waitFor(() => expect(resourceMock.enable).toHaveBeenCalledWith("provider", "agnes"));
+    // The switch must not fall through to the row's navigation.
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  test("clicking a row opens the connection detail page", async () => {
+    apiMock.list.mockResolvedValue({ providers: [makeProvider({ name: "acme" })] });
     renderPage();
     await screen.findByText("acme");
 
-    // open the edit dialog from the card
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-
-    // name is fixed (resource id); the protocol is shown read-only (no detect/edit)
-    expect((screen.getByLabelText("Name") as HTMLInputElement).disabled).toBe(true);
-    expect(screen.queryByRole("button", { name: "Detect type" })).not.toBeInTheDocument();
-    // the secret is optional in edit mode (no value re-entry required)
-    expect((screen.getByLabelText("API key") as HTMLInputElement).required).toBe(false);
-    // no model field on the connection dialog — the model lives on the agent (E3)
-    expect(screen.queryByLabelText("Model ID")).not.toBeInTheDocument();
-
-    // change the base URL and save → PATCH only the editable fields
-    fireEvent.change(screen.getByLabelText("Base URL"), { target: { value: "https://gw/v2" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
-    await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-    expect(apiMock.update).toHaveBeenCalledWith(
-      "acme",
-      expect.objectContaining({ base_url: "https://gw/v2" }),
-    );
-    // no fresh secret typed → secret_value omitted
-    expect(apiMock.update.mock.calls[0][1].secret_value).toBeUndefined();
+    fireEvent.click(screen.getByText("https://gw/anthropic"));
+    expect(navigateMock).toHaveBeenCalledWith("/model-providers/acme");
   });
 
-  test("renders the embedding card at the bottom", async () => {
-    apiMock.list.mockResolvedValue({ providers: [] });
+  test("bulk enable / disable fan out over the selection", async () => {
+    apiMock.list.mockResolvedValue({
+      providers: [
+        makeProvider({ name: "official", enabled: false }),
+        makeProvider({ name: "agnes", enabled: false }),
+      ],
+    });
     renderPage();
-    expect(await screen.findByTestId("embedding-settings")).toBeInTheDocument();
+    await screen.findByText("official");
+
+    // The head checkbox selects the whole page.
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Enable" }));
+    await waitFor(() => expect(resourceMock.enable).toHaveBeenCalledTimes(2));
+    expect(resourceMock.enable.mock.calls.map((c) => c[1]).sort()).toEqual(["agnes", "official"]);
+
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Disable" }));
+    await waitFor(() => expect(resourceMock.disable).toHaveBeenCalledTimes(2));
+  });
+
+  test("bulk delete confirms first, then removes every selected connection", async () => {
+    apiMock.list.mockResolvedValue({
+      providers: [makeProvider({ name: "official" }), makeProvider({ name: "agnes" })],
+    });
+    apiMock.remove.mockResolvedValue(undefined);
+    renderPage();
+    await screen.findByText("official");
+
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    // Styled confirm — nothing is removed until it is confirmed.
+    const dialog = screen.getByRole("dialog");
+    expect(apiMock.remove).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(apiMock.remove).toHaveBeenCalledTimes(2));
+    expect(apiMock.remove.mock.calls.map((c) => c[0]).sort()).toEqual(["agnes", "official"]);
+  });
+
+  test("the per-row delete action confirms then removes that one connection", async () => {
+    apiMock.list.mockResolvedValue({
+      providers: [makeProvider({ name: "official" }), makeProvider({ name: "agnes" })],
+    });
+    apiMock.remove.mockResolvedValue(undefined);
+    renderPage();
+    await screen.findByText("official");
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete: agnes" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(apiMock.remove).toHaveBeenCalledTimes(1));
+    expect(apiMock.remove).toHaveBeenCalledWith("agnes");
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 });

@@ -18,8 +18,10 @@ import type { SkillOut } from "@/lib/api/skills";
 vi.mock("@/lib/hooks/useSkills", () => ({
   useSkills: vi.fn(),
   useImportSkill: vi.fn(),
-  useEnableSkill: vi.fn(),
-  useDisableSkill: vi.fn(),
+  useSetSkillEnabled: () => ({
+    enable: { mutate: vi.fn(), isPending: false },
+    disable: { mutate: vi.fn(), isPending: false },
+  }),
   useRemoveSkill: vi.fn(),
   useVerifySkills: vi.fn(),
   useRepairSkillDrift: vi.fn(),
@@ -46,6 +48,7 @@ const SAMPLE: SkillOut[] = [
     description: "h",
     source: { type: "local_import", original_path: "/tmp/h" },
     enabled: true,
+    scope: null,
     version_hash: "x",
     master_path: "/master/hello",
     last_synced_from_source_at: null,

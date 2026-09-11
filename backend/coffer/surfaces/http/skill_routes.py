@@ -31,21 +31,18 @@ class SkillImportRequest(BaseModel):
     overwrite: bool = False
 
 
-class SkillEnableRequest(BaseModel):
-    agent_name: str = Field(min_length=1)
-    force: bool = False
-
-
-class SkillDisableRequest(BaseModel):
-    agent_name: str = Field(min_length=1)
-
-
 # ---------- response schemas ----------
 
 
 class SkillBindingOut(BaseModel):
+    """One agent currently holding a delivered copy of this skill.
+
+    Internal delivery bookkeeping surfaced read-only: there is no per-binding
+    toggle any more, so a row here simply means "delivered". Which agents get a
+    row is decided by ``SkillOut.enabled`` + ``SkillOut.scope``.
+    """
+
     agent_name: str
-    enabled: bool
     last_linked_at: datetime | None = None
     last_link_path: str | None = None
     link_mode: LinkMode | None = None
@@ -55,7 +52,10 @@ class SkillOut(BaseModel):
     name: str
     description: str
     source: dict[str, Any]
+    # The two halves of the delivery predicate: a skill reaches an agent iff
+    # ``enabled`` and the agent is in ``scope`` (None = every agent, [] = none).
     enabled: bool
+    scope: list[str] | None
     version_hash: str
     master_path: str
     last_synced_from_source_at: datetime | None
@@ -135,9 +135,9 @@ async def _to_skill_out(
     bindings_by_skill: dict[int, list[BindingState]] | None = None,
 ) -> SkillOut:
     cfg = SkillConfig.model_validate(r.config)
-    # Single-skill handlers (get / import / enable / disable)
-    # take the per-skill round-trip — list handlers prebuild the map once
-    # via ``svc.bindings_grouped_by_skill()`` to collapse N queries into 1.
+    # Single-skill handlers (get / import) take the per-skill round-trip —
+    # list handlers prebuild the map once via
+    # ``svc.bindings_grouped_by_skill()`` to collapse N queries into 1.
     if bindings_by_skill is not None:
         bindings = bindings_by_skill.get(r.id, [])
     else:
@@ -147,20 +147,23 @@ async def _to_skill_out(
         description=cfg.skill_md_description,
         source=cfg.source.model_dump(mode="json"),
         enabled=r.enabled,
+        scope=r.scope,
         version_hash=cfg.version_hash,
         master_path=svc.master_path(r.name),
         last_synced_from_source_at=cfg.last_synced_from_source_at,
         created_at=r.created_at,
         updated_at=r.updated_at,
+        # Only live deliveries: a spent binding row (reclaimed copy) is
+        # bookkeeping, not something the agent holds.
         bindings=[
             SkillBindingOut(
                 agent_name=agents_by_id.get(b.agent_resource_id, str(b.agent_resource_id)),
-                enabled=b.enabled,
                 last_linked_at=b.last_linked_at,
                 last_link_path=b.last_link_path,
                 link_mode=b.link_mode,
             )
             for b in bindings
+            if b.enabled
         ],
     )
 
@@ -212,47 +215,6 @@ async def delete_skill(
     name = _validate_skill_name(name)
     await svc.remove(name=name, actor=actor)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-@router.post("/{name}/enable", response_model=SkillBindingOut)
-async def enable_skill_for_agent(
-    name: str,
-    body: SkillEnableRequest,
-    svc: SkillService = Depends(get_skill_service),  # noqa: B008
-    actor: str = Depends(_actor),
-) -> SkillBindingOut:
-    name = _validate_skill_name(name)
-    b = await svc.enable_for(
-        skill_name=name,
-        agent_name=body.agent_name,
-        force=body.force,
-        actor=actor,
-    )
-    return SkillBindingOut(
-        agent_name=body.agent_name,
-        enabled=b.enabled,
-        last_linked_at=b.last_linked_at,
-        last_link_path=b.last_link_path,
-        link_mode=b.link_mode,
-    )
-
-
-@router.post("/{name}/disable", response_model=SkillBindingOut)
-async def disable_skill_for_agent(
-    name: str,
-    body: SkillDisableRequest,
-    svc: SkillService = Depends(get_skill_service),  # noqa: B008
-    actor: str = Depends(_actor),
-) -> SkillBindingOut:
-    name = _validate_skill_name(name)
-    b = await svc.disable_for(skill_name=name, agent_name=body.agent_name, actor=actor)
-    return SkillBindingOut(
-        agent_name=body.agent_name,
-        enabled=b.enabled,
-        last_linked_at=b.last_linked_at,
-        last_link_path=b.last_link_path,
-        link_mode=b.link_mode,
-    )
 
 
 @router.post("/verify", response_model=DriftReportOut)

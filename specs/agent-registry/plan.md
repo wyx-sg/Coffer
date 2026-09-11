@@ -1,6 +1,6 @@
-# Implementation Plan: Agent Registry
+# Implementation Plan: 004 — Agent Registry
 
-**Feature Branch**: `feature/agent-registry`
+**Feature Branch**: `feature/004-agent-registry`
 **Date**: 2026-05-22
 **Spec**: [./spec.md](./spec.md)
 **Status**: Draft
@@ -14,7 +14,7 @@ On top of the registry, the feature adds two capabilities:
 1. **Config-file read-only view + open externally** — each agent type exposes a curated allowlist of its own config files (Claude Code: `settings.json`, `settings.local.json`, `~/.claude.json`, `CLAUDE.md`; Codex: `config.toml`, `AGENTS.md`). The UI renders them read-only and offers open-in-external-editor / reveal-in-file-manager for each file and its containing folder (the `path`/`folder_path` pair). Programmatic save (REST/CLI) validates per format, writes atomically, and keeps a `.bak`. The same atomic-write + `.bak` machinery also backs the Coffer-MCP install/uninstall.
 2. **One-click Coffer-MCP install** — write/remove a `coffer` stdio MCP-server entry (pointing at `coffer-mcp-shim`) into the agent's MCP config, with status/idempotency.
 
-The kind exposes an `on_delete` hook that the skill-manager spec wires for skill-binding cleanup. Ships with REST routes, CLI subcommands, and a web Agents page.
+The kind exposes an `on_delete` hook that the 005-skill-manager spec wires for skill-binding cleanup. Ships with REST routes, CLI subcommands, and a web Agents page.
 
 This spec lays the second consumer of the kind-agnostic Resource framework introduced in spec mcp-gateway, validating the framework's portability.
 
@@ -164,16 +164,16 @@ and its containing folder.
 
 The spec.md workspace amendment (FR-025..FR-037) turned the agent detail page
 into a workspace. It has since been trimmed back to what only Coffer offers:
-MCP-entry listing + adoption, a read-only plugin listing with no UI, and the
-read-only config-file viewer. Entry remove/toggle and plugin toggle/uninstall
-are gone (FR-026/FR-027/FR-032/FR-033). New modules per layer:
+MCP-entry listing, removal + adoption, a read-only plugin listing with no UI,
+and the read-only config-file viewer. The Codex entry toggle and plugin
+toggle/uninstall are gone (FR-027/FR-032/FR-033). New modules per layer:
 
-- **Domain**: `agent/mcp_entries.py` (parse MCP entries + secret-key detection + adopt transport mapping + the removal step adoption owns), `agent/plugin_state.py` (Codex/Claude plugin + marketplace parsing, read-only), `agent/scan.py` (per-type skill scan locations for spec skill-manager's unmanaged scan), and `config_files.py` v2 (`ConfigFileKind` directory entries, `instructions` rename, `subagents`/`hooks` entries, `validate_child_relpath`).
-- **Application**: `agent/mcp_entry_service.py` (list/adopt with keychain-routed secrets and registration-first rollback), `agent/plugin_service.py` (list + cache handling + best-effort manifest detail), `config_file_service.py` v2 (directory children read/write/delete, content fingerprints with `ConfigFileStale` → 409, memory-block notice).
-- **Surfaces**: `http/agent_workspace_routes.py` (`/agents/{name}/mcp-entries*`, `/agents/{name}/plugins*`), `agent_config_routes.py` v2 (`/config-files/{key}/files/{relpath}` GET/PUT/DELETE + fingerprint fields), `agent_routes.py` (AgentPatch/AgentOut follow-policy fields); CLI `cli/agent_workspace_cmd.py` attached onto `agent_cmd.py`'s typers (`coffer agent mcp entries|adopt`, `coffer agent plugin list`, `coffer agent config files|write|rm`, `coffer agent follow`).
-- **Frontend**: agent detail tabs `AgentMcpServersTab` (gateway + direct entries, adopt dialog) and `AgentConfigFilesEditor` (read-only viewer over single files and directory children — content rendered read-only with open-in-external-editor / reveal for the file and its folder, plus the memory-block notice; programmatic write/create/delete stays on REST/CLI). The plugin listing has no UI — it is REST + CLI only.
+- **Domain**: `agent/mcp_entries.py` (parse MCP entries + secret-key detection + adopt transport mapping + entry removal), `agent/plugin_state.py` (Codex/Claude plugin + marketplace parsing, read-only), `agent/scan.py` (per-type skill scan locations for spec skill-manager's unmanaged scan), and `config_files.py` v2 (`ConfigFileKind` directory entries, `instructions` rename, `subagents`/`hooks` entries, `validate_child_relpath`).
+- **Application**: `agent/mcp_entry_service.py` (list/remove/adopt with keychain-routed secrets and registration-first rollback), `agent/plugin_service.py` (list + cache handling + best-effort manifest detail), `config_file_service.py` v2 (directory children read/write/delete, content fingerprints with `ConfigFileStale` → 409, memory-block notice).
+- **Surfaces**: `http/agent_workspace_routes.py` (`/agents/{name}/mcp-entries*`, `/agents/{name}/plugins*`), `agent_config_routes.py` v2 (`/config-files/{key}/files/{relpath}` GET/PUT/DELETE + fingerprint fields), CLI `cli/agent_workspace_cmd.py` attached onto `agent_cmd.py`'s typers (`coffer agent mcp entries|remove-entry|adopt`, `coffer agent plugin list`, `coffer agent config files|write|rm`).
+- **Frontend**: agent detail tabs `AgentMcpServersTab` (gateway + direct entries, delete confirm, adopt dialog) and `AgentConfigFilesEditor` (read-only viewer over single files and directory children — content rendered read-only with open-in-external-editor / reveal for the file and its folder, plus the memory-block notice; programmatic write/create/delete stays on REST/CLI). The plugin listing has no UI — it is REST + CLI only.
 
-New audit events: `agent_config_file_deleted`, `agent_mcp_entry_adopted`.
+New audit events: `agent_config_file_deleted`, `agent_mcp_entry_removed`, `agent_mcp_entry_adopted`.
 No storage changes — every workspace facet is derived from the agent's own
 files at read time.
 

@@ -14,10 +14,12 @@ import { ResourceDetailPage } from "./pages/ResourceDetailPage";
 import { SettingsLayout } from "./pages/settings/SettingsLayout";
 import { GeneralSettings } from "./pages/settings/GeneralSettings";
 import { DataSettings } from "./pages/settings/DataSettings";
+import { EngineSettings } from "./pages/settings/EngineSettings";
 import { SecuritySettings } from "./pages/settings/SecuritySettings";
 import { SyncSettings } from "./pages/settings/SyncSettings";
 import { AboutPage } from "./pages/settings/AboutPage";
 import { ModelProvidersPage } from "./pages/ModelProvidersPage";
+import { ProviderDetailPage } from "./pages/ProviderDetailPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
 export const router = createBrowserRouter([
@@ -40,6 +42,7 @@ export const router = createBrowserRouter([
       { path: "knowledge", element: <KnowledgePage /> },
       { path: "knowledge/:scope", element: <KnowledgeDetailPage /> },
       { path: "model-providers", element: <ModelProvidersPage /> },
+      { path: "model-providers/:name", element: <ProviderDetailPage /> },
       // Legacy routes — `memory` and `knowledge_base` were two resource kinds
       // with two surfaces before they merged into the one Knowledge kind. Keep
       // old bookmarks and links working by redirecting to the merged paths.
@@ -56,6 +59,7 @@ export const router = createBrowserRouter([
             element: <Navigate to="/settings/general" replace />,
           },
           { path: "general", element: <GeneralSettings /> },
+          { path: "engine", element: <EngineSettings /> },
           // Legacy routes — this surface used to live under Settings as
           // "LLM connections" (and before that as separate Models/Providers
           // pages). It is now /model-providers under RESOURCES. Keep old
@@ -64,9 +68,9 @@ export const router = createBrowserRouter([
           { path: "models", element: <Navigate to="/model-providers" replace /> },
           { path: "providers", element: <Navigate to="/model-providers" replace /> },
           { path: "data", element: <DataSettings /> },
-          // Legacy route — embedding/chunking config merged into the LLM
-          // Connections page. Keep old bookmarks and links working by redirecting.
-          { path: "embedding", element: <Navigate to="/model-providers" replace /> },
+          // Legacy route — embedding/chunking config is now one of the two
+          // cards on the Engine tab. Keep old bookmarks working by redirecting.
+          { path: "embedding", element: <Navigate to="/settings/engine" replace /> },
           { path: "sync", element: <SyncSettings /> },
           { path: "security", element: <SecuritySettings /> },
           { path: "about", element: <AboutPage /> },

@@ -1,4 +1,4 @@
-# Data Model — Agent Registry
+# Data Model — 004 Agent Registry
 
 Entities, fields, relationships, and storage notes for the agent registry.
 Builds on the kind-agnostic Resource framework from spec mcp-gateway — agents are rows
@@ -48,10 +48,8 @@ Pydantic v2 `BaseModel`. The kind-specific config schema registered with `Resour
 | ------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `type`              | `AgentType`    | required; enum value                                                                                                                |
 | `config_dir`        | `Path \| None` | optional absolute-path override; defaults to `type.default_config_dir()` at read time                                               |
-| `follow_all_skills` | `bool`         | follow-master-library policy flag (spec skill-manager FR-025); defaults to `True`, preserving the pre-amendment trust-mode auto-bind behavior |
-| `skill_exclusions`  | `list[str]`    | skill names excluded from delivery while following; default `[]`                                                                    |
 
-Skills are delivered to `<config_dir>/skills`; the config-file allowlist resolves against `config_dir`. Only one agent may exist per resolved `config_dir`. The two policy fields are _stored_ here (this spec's schema) but their delivery semantics are owned by spec skill-manager (`SkillService` follow reconciliation); they surface on `AgentOut` and are updatable via `PATCH /agents/{name}`.
+Skills are delivered to `<config_dir>/skills`; the config-file allowlist resolves against `config_dir`. Only one agent may exist per resolved `config_dir`. The agent record carries no skill-delivery policy of its own: which skills reach it is decided entirely by each skill's `enabled` flag and its agent scope (spec skill-manager, [ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.md)) — the `follow_all_skills` / `skill_exclusions` fields this table once carried are gone, stripped from stored configs by migration `0058`.
 
 Validators:
 
@@ -172,17 +170,6 @@ share the same atomic-write + `.bak` machinery.
 generic `resources` table (kind-agnostic Resource framework from spec mcp-gateway), and
 discovery is read-only with no suppression list to persist. The head migration
 revision therefore stays at **0004**; spec agent-registry adds no Alembic migration.
-
-Later revisions do rewrite the agent rows' `config_json` — as *data*
-migrations, not schema ones. `0005` maps the retired `skill_dir` override onto
-`config_dir`; `0056` strips `disable_native_memory` and `auto_detected`, whose
-fields were removed from `AgentConfig`. Because `AgentConfig` is
-`extra="forbid"`, a key left behind by a removal is not inert — it makes the
-row unloadable and `GET /agents` answers 422. **Removing a field from
-`AgentConfig` therefore requires a migration that strips it at rest, in the
-same change.** The model carries no load-time tolerance for dead keys: the
-migration runs at daemon startup before anything reads a row, so a permanent
-shim would only ever mask the missing migration.
 
 **Config files and Coffer-MCP install state are NOT persisted in SQLite** — the
 agent's on-disk config files are the source of truth. Install status is derived
@@ -417,7 +404,7 @@ Discovery is read-only and is **not** run on startup — no agent is ever
 auto-registered. The user runs discovery on demand and confirms which
 candidates to add.
 
-The `on_delete_hook` is bound to a callable supplied by the skill module (the skill-manager spec), so that removing an agent triggers `SkillService.cleanup_bindings_for_agent(...)` synchronously before the resource row is deleted — once the skill-manager spec wires the callback. This spec only exposes the hook seam.
+The `on_delete_hook` is bound to a callable supplied by the skill module (the 005-skill-manager spec), so that removing an agent triggers `SkillService.cleanup_bindings_for_agent(...)` synchronously before the resource row is deleted — once the 005-skill-manager spec wires the callback. Spec agent-registry only exposes the hook seam.
 
 ## Constraints summary
 

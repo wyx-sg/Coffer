@@ -239,29 +239,6 @@ def test_skill_show_not_found(skill_cli_daemon):
 
 
 # ---------------------------------------------------------------------------
-# skill enable / disable
-# ---------------------------------------------------------------------------
-
-
-def test_skill_enable_then_disable(skill_cli_daemon):
-    """enable creates a link, disable removes it."""
-    skills_dir = _register_agent(skill_cli_daemon, "cur")
-    src = skill_cli_daemon / "src"
-    _write_skill_folder(src, name="ed-1")
-    _runner.invoke(cli_app, ["skill", "import", str(src)])
-    # Import auto-binds; explicit enable is still a valid (idempotent) verb.
-    r = _runner.invoke(cli_app, ["skill", "enable", "ed-1", "--agent", "cur"])
-    assert r.exit_code == 0, r.output
-    # Skills land at <config_dir>/skills/<skill>.
-    link = skills_dir / "ed-1"
-    assert link.exists()
-
-    r = _runner.invoke(cli_app, ["skill", "disable", "ed-1", "--agent", "cur"])
-    assert r.exit_code == 0, r.output
-    assert not link.exists()
-
-
-# ---------------------------------------------------------------------------
 # skill verify
 # ---------------------------------------------------------------------------
 

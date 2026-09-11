@@ -1,8 +1,8 @@
-# 实施计划：Agent Registry
+# 实施计划：004 —— Agent Registry
 
 > English: [plan.md](./plan.md)
 
-**Feature Branch**: `feature/agent-registry`
+**Feature Branch**: `feature/004-agent-registry`
 **Date**: 2026-05-22
 **Spec**: [./spec.md](./spec.md)
 **Status**: Draft
@@ -16,7 +16,7 @@
 1. **配置文件只读查看 + 在外部打开** —— 每个 agent 类型暴露一份精选的自有配置文件 allowlist（Claude Code：`settings.json`、`settings.local.json`、`~/.claude.json`、`CLAUDE.md`；Codex：`config.toml`、`AGENTS.md`）。UI 以只读方式渲染它们，并为每个文件及其所在文件夹提供「在外部编辑器中打开 / 在文件管理器中显示」（`path`/`folder_path` 这一对）。程序化保存（REST/CLI）按格式校验、原子写入并保留 `.bak`。同一套原子写入 + `.bak` 机制也支撑 Coffer-MCP 的安装/卸载。
 2. **一键安装 Coffer-MCP** —— 把一个 `coffer` stdio MCP-server 条目（指向 `coffer-mcp-shim`）写入/移除到 agent 的 MCP 配置，带状态查询与幂等性。
 
-该 kind 暴露一个 `on_delete` 钩子，由 the skill-manager spec 接入用于 skill binding 的级联清理。同时交付 REST 路由、CLI 子命令与 Web Agents 页面。
+该 kind 暴露一个 `on_delete` 钩子，由 the 005-skill-manager spec 接入用于 skill binding 的级联清理。同时交付 REST 路由、CLI 子命令与 Web Agents 页面。
 
 本 spec 是 spec mcp-gateway 中引入的 kind-agnostic Resource 框架的第二个消费者，用以验证该框架的可复用性。
 
@@ -116,7 +116,7 @@ Config files tab 在**只读**查看器中呈现其已知配置文件，带格�
 ### Phase 0 —— Research（已在对话中关闭）
 
 - 备选方案：在 Resource 框架之外另设独立 `agents` 表 → 否决（丧失 audit/CRUD/UI 统一性；agent-as-peer 也没有未来扩展空间）。
-- 备选方案：把 agent 合入 the skill-manager spec → 重新评估后否决（按 spec 体量切分更清晰；一份 PR 同时交付两者）。
+- 备选方案：把 agent 合入 the 005-skill-manager spec → 重新评估后否决（按 spec 体量切分更清晰；一份 PR 同时交付两者）。
 - 发现（discovery）启发式：已知标记目录（即该类型的 `default_config_dir`）存在即把该类型作为候选项呈现。后续 spec 可能加入「PATH 上有命令」类型的检测。
 
 > 基础 registry（类型/config/service/发现（discovery），REST/CLI/Web UI CRUD）已在本分支
@@ -163,16 +163,16 @@ Config files tab 在**只读**查看器中呈现其已知配置文件，带格�
 ## Workspace 修订（在 `feature/agent-workspace` 上交付）
 
 spec.md 的 workspace 修订（FR-025..FR-037）把 agent 详情页变成了一个
-workspace。此后它被收窄回只有 Coffer 才提供的那部分：MCP 条目的列出 + 收编、
-一份没有 UI 的只读插件列表，以及只读的配置文件查看器。条目的移除/开关与插件的
-开关/卸载都已删除（FR-026/FR-027/FR-032/FR-033）。各层模块：
+workspace。此后它被收窄回只有 Coffer 才提供的那部分：MCP 条目的列出、删除 +
+收编，一份没有 UI 的只读插件列表，以及只读的配置文件查看器。Codex 条目的启用
+开关与插件的开关/卸载都已删除（FR-027/FR-032/FR-033）。各层模块：
 
-- **Domain**：`agent/mcp_entries.py`（MCP 条目的解析 + 密钥键检测 + adopt 传输映射 + 收编自带的那步移除）、`agent/plugin_state.py`（Codex/Claude plugin + marketplace 解析，只读）、`agent/scan.py`（按类型的 skill 扫描位置，供 spec skill-manager 的未托管扫描使用）以及 `config_files.py` v2（`ConfigFileKind` 目录条目、`instructions` 更名、`subagents`/`hooks` 条目、`validate_child_relpath`）。
-- **Application**：`agent/mcp_entry_service.py`（list/adopt，密钥经 keychain 路由、注册优先并可回滚）、`agent/plugin_service.py`（list + 缓存处理 + 尽力读取的清单信息）、`config_file_service.py` v2（目录子文件读/写/删、内容指纹与 `ConfigFileStale` → 409、memory-block 提示）。
-- **Surfaces**：`http/agent_workspace_routes.py`（`/agents/{name}/mcp-entries*`、`/agents/{name}/plugins*`）、`agent_config_routes.py` v2（`/config-files/{key}/files/{relpath}` GET/PUT/DELETE + 指纹字段）、`agent_routes.py`（AgentPatch/AgentOut 的 follow 策略字段）；CLI `cli/agent_workspace_cmd.py` 挂接到 `agent_cmd.py` 的既有 typer 上（`coffer agent mcp entries|adopt`、`coffer agent plugin list`、`coffer agent config files|write|rm`、`coffer agent follow`）。
-- **前端**：agent 详情标签页 `AgentMcpServersTab`（gateway + 直连条目、adopt 对话框）与 `AgentConfigFilesEditor`（覆盖单文件与目录子文件的只读查看器——内容只读渲染，为文件及其文件夹提供 在外部编辑器中打开 / 显示，外加 memory-block 提示；程序化写入/创建/删除仍走 REST/CLI）。插件列表没有 UI——只经 REST 与 CLI 提供。
+- **Domain**：`agent/mcp_entries.py`（MCP 条目的解析 + 密钥键检测 + adopt 传输映射 + 条目删除）、`agent/plugin_state.py`（Codex/Claude plugin + marketplace 解析，只读）、`agent/scan.py`（按类型的 skill 扫描位置，供 spec skill-manager 的未托管扫描使用）以及 `config_files.py` v2（`ConfigFileKind` 目录条目、`instructions` 更名、`subagents`/`hooks` 条目、`validate_child_relpath`）。
+- **Application**：`agent/mcp_entry_service.py`（list/remove/adopt，密钥经 keychain 路由、注册优先并可回滚）、`agent/plugin_service.py`（list + 缓存处理 + 尽力读取的清单信息）、`config_file_service.py` v2（目录子文件读/写/删、内容指纹与 `ConfigFileStale` → 409、memory-block 提示）。
+- **Surfaces**：`http/agent_workspace_routes.py`（`/agents/{name}/mcp-entries*`、`/agents/{name}/plugins*`）、`agent_config_routes.py` v2（`/config-files/{key}/files/{relpath}` GET/PUT/DELETE + 指纹字段）、CLI `cli/agent_workspace_cmd.py` 挂接到 `agent_cmd.py` 的既有 typer 上（`coffer agent mcp entries|remove-entry|adopt`、`coffer agent plugin list`、`coffer agent config files|write|rm`）。
+- **前端**：agent 详情标签页 `AgentMcpServersTab`（gateway + 直连条目、删除确认、adopt 对话框）与 `AgentConfigFilesEditor`（覆盖单文件与目录子文件的只读查看器——内容只读渲染，为文件及其文件夹提供 在外部编辑器中打开 / 显示，外加 memory-block 提示；程序化写入/创建/删除仍走 REST/CLI）。插件列表没有 UI——只经 REST 与 CLI 提供。
 
-新增 audit 事件：`agent_config_file_deleted`、`agent_mcp_entry_adopted`。
+新增 audit 事件：`agent_config_file_deleted`、`agent_mcp_entry_removed`、`agent_mcp_entry_adopted`。
 无存储变更——每个 workspace 面都在读取时从 agent 自己的文件派生。
 
 ## 延期至后续 spec 的开放项

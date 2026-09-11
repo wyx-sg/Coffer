@@ -1,4 +1,4 @@
-# Data Model —— Agent Registry
+# Data Model —— 004 Agent Registry
 
 > English: [data-model.md](./data-model.md)
 
@@ -44,10 +44,8 @@ Pydantic v2 `BaseModel`。注册到 `ResourceService` 的 kind 专属 config sch
 | ------------------- | -------------- | ---------------------------------------------------------------------------------------------------- |
 | `type`              | `AgentType`    | 必填；enum 值                                                                                        |
 | `config_dir`        | `Path \| None` | 可选的绝对路径覆盖；读取时默认回退到 `type.default_config_dir()`                                     |
-| `follow_all_skills` | `bool`         | follow-master-library 策略开关（spec skill-manager FR-025）；默认 `True`，保持修订前 trust-mode 自动绑定的行为 |
-| `skill_exclusions`  | `list[str]`    | following 期间排除投递的 skill 名称列表；默认 `[]`                                                   |
 
-skill 投递到 `<config_dir>/skills`；配置文件 allowlist 基于 `config_dir` 解析。每个解析后的 `config_dir` 至多只能有一个 agent。两个策略字段*存储*在这里（本 spec 的 schema），但其投递语义由 spec skill-manager 负责（`SkillService` 的 follow 调和）；它们出现在 `AgentOut` 上，并可通过 `PATCH /agents/{name}` 更新。
+skill 投递到 `<config_dir>/skills`；配置文件 allowlist 基于 `config_dir` 解析。每个解析后的 `config_dir` 至多只能有一个 agent。agent 记录本身不携带任何 skill 投递策略：哪些 skill 送达它，完全由每个 skill 自身的 `enabled` 开关与其 agent scope 决定（spec skill-manager、[ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.md)）——本表曾经携带的 `follow_all_skills` / `skill_exclusions` 两个字段已删除，并由 migration `0058` 从已存储的配置里剥离。
 
 校验器：
 
@@ -157,14 +155,6 @@ MCP 配置在不同 agent 间沿**两条相互独立的轴**变化，由 `McpInj
 的 kind-agnostic Resource 框架）中的行，而发现（discovery）是只读的，也没有抑制
 列表需要持久化。因此 head 迁移版本号保持在 **0004**；spec agent-registry 不新增任何 Alembic
 迁移。
-
-后续版本确实会改写 agent 行的 `config_json`——但那是*数据*迁移，不是 schema
-迁移。`0005` 把退役的 `skill_dir` override 映射到 `config_dir`；`0056` 剥掉
-`disable_native_memory` 与 `auto_detected`——这两个字段已从 `AgentConfig` 移除。
-由于 `AgentConfig` 是 `extra="forbid"`，被删字段遗留下来的键并非无害：它会让整行
-无法加载，`GET /agents` 直接 422。**因此从 `AgentConfig` 删字段，必须在同一次改动
-里配一条把它在库中剥掉的迁移。** 模型不为死键保留任何 load-time 容错：迁移在
-daemon 启动时、任何读取之前就已跑完，永久垫片只会掩盖缺失的迁移。
 
 **配置文件与 Coffer-MCP 安装状态不持久化到 SQLite**——agent 磁盘上的配置文件即
 为事实来源。安装状态通过按需读取相关配置文件派生得出。
@@ -378,7 +368,7 @@ application 层接口；具体实现位于 `infrastructure/agent/config_file_sto
 发现（discovery）是只读的，且**不**在启动时运行——绝不自动注册任何 agent。用户
 按需运行发现，并确认要添加哪些候选项。
 
-`on_delete_hook` 绑定到由 skill 模块（the skill-manager spec）提供的可调用对象，使得移除 agent 时——一旦 the skill-manager spec 装配该回调——在删除资源行之前同步触发 `SkillService.cleanup_bindings_for_agent(...)`。spec agent-registry 只暴露该钩子接缝。
+`on_delete_hook` 绑定到由 skill 模块（the 005-skill-manager spec）提供的可调用对象，使得移除 agent 时——一旦 the 005-skill-manager spec 装配该回调——在删除资源行之前同步触发 `SkillService.cleanup_bindings_for_agent(...)`。spec agent-registry 只暴露该钩子接缝。
 
 ## 约束小结
 
