@@ -15,6 +15,11 @@ def test_audit_event_type_values():
     assert AuditEventType.RETENTION_UPDATED.value == "retention_updated"
 
 
+def test_agent_plugin_event_values():
+    assert AuditEventType.AGENT_PLUGIN_TOGGLED.value == "agent_plugin_toggled"
+    assert AuditEventType.AGENT_PLUGIN_UNINSTALLED.value == "agent_plugin_uninstalled"
+
+
 def test_audit_event_type_is_strenum():
     """StrEnum members compare equal to their string value."""
     assert AuditEventType.RESOURCE_CREATED == "resource_created"

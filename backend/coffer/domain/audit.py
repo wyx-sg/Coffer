@@ -39,6 +39,8 @@ class AuditEventType(StrEnum):
     AGENT_CONFIG_FILE_DELETED = "agent_config_file_deleted"
     AGENT_MCP_ENTRY_REMOVED = "agent_mcp_entry_removed"
     AGENT_MCP_ENTRY_ADOPTED = "agent_mcp_entry_adopted"
+    AGENT_PLUGIN_TOGGLED = "agent_plugin_toggled"
+    AGENT_PLUGIN_UNINSTALLED = "agent_plugin_uninstalled"
     # spec skill-manager
     SKILL_IMPORTED = "skill_imported"
     SKILL_UPDATED = "skill_updated"

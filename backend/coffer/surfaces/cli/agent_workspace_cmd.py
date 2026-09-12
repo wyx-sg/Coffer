@@ -186,6 +186,53 @@ def plugin_list(
         typer.echo(f"marketplace: {m['name']}" + (f" ({src})" if src else ""))
 
 
+def _plugin_set_enabled(ctx: typer.Context, name: str, plugin_id: str, enabled: bool) -> None:
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.patch(f"/agents/{name}/plugins/{plugin_id}", json={"enabled": enabled})
+        _not_found_exit(r)
+        _cli_client.check(r, verbose=_verbose(ctx))
+    typer.echo(f"{'enabled' if enabled else 'disabled'}: plugin {plugin_id} (agent:{name})")
+
+
+@plugin_app.command("enable")
+def plugin_enable(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Agent name"),
+    plugin_id: str = typer.Argument(..., help="Plugin id (name@marketplace)"),
+) -> None:
+    """Enable a plugin in the agent's config."""
+    _plugin_set_enabled(ctx, name, plugin_id, True)
+
+
+@plugin_app.command("disable")
+def plugin_disable(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Agent name"),
+    plugin_id: str = typer.Argument(..., help="Plugin id (name@marketplace)"),
+) -> None:
+    """Disable a plugin in the agent's config."""
+    _plugin_set_enabled(ctx, name, plugin_id, False)
+
+
+@plugin_app.command("uninstall")
+def plugin_uninstall(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Agent name"),
+    plugin_id: str = typer.Argument(..., help="Plugin id (name@marketplace)"),
+    force: bool = typer.Option(False, "--force", "-f"),
+) -> None:
+    """Uninstall a plugin (Codex edits its config; Claude Code shells out to its own CLI)."""
+    if not force and not typer.confirm(f"Really uninstall plugin {plugin_id!r} from agent:{name}?"):
+        raise typer.Exit(1)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.delete(f"/agents/{name}/plugins/{plugin_id}")
+        _not_found_exit(r)
+        _cli_client.check(r, verbose=_verbose(ctx))
+    typer.echo(f"uninstalled: plugin {plugin_id} from agent:{name}")
+
+
 # --- coffer agent config files / write / rm -----------------------------------
 
 

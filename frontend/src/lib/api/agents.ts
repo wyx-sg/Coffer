@@ -100,19 +100,23 @@ export interface AgentCandidatesOut {
   candidates: AgentCandidate[];
 }
 
-// Agent workspace wire types (MCP entries / unmanaged skills) live in
+// Agent workspace wire types (MCP entries / plugins / unmanaged skills) live in
 // agents-workspace.ts for the file-size budget; re-exported so existing
 // `from "@/lib/api/agents"` import paths keep working.
 export type {
   AdoptMcpEntryBody,
+  MarketplaceOut,
   McpEntriesResponse,
   McpEntryOut,
+  PluginOut,
+  PluginsResponse,
   UnmanagedSkillOut,
   UnmanagedSkillsResponse,
 } from "./agents-workspace";
 import type {
   AdoptMcpEntryBody,
   McpEntriesResponse,
+  PluginsResponse,
   UnmanagedSkillsResponse,
 } from "./agents-workspace";
 
@@ -196,6 +200,15 @@ export const agentsApi = {
       `/agents/${enc(name)}/mcp-entries/${enc(entry)}/adopt`,
       body,
     ),
+
+  // Plugins (spec agent-registry, workspace amendment). Enable/disable
+  // writes the agent's documented config surface; uninstall drops the entry
+  // (Codex) or delegates to the agent's own CLI (Claude Code).
+  plugins: (name: string) => call<PluginsResponse>("GET", `/agents/${enc(name)}/plugins`),
+  togglePlugin: (name: string, id: string, enabled: boolean) =>
+    call<void>("PATCH", `/agents/${enc(name)}/plugins/${encodeURIComponent(id)}`, { enabled }),
+  uninstallPlugin: (name: string, id: string) =>
+    call<void>("DELETE", `/agents/${enc(name)}/plugins/${encodeURIComponent(id)}`),
 
   // Config-file child (per-file inside a directory-backed config key).
   readConfigChild: (name: string, key: string, relpath: string) => {
