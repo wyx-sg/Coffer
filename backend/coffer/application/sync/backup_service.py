@@ -257,6 +257,17 @@ class BackupService:
         remote = await self._remotes.get()
         if remote is None and from_url is None:
             raise BackupRemoteInvalid("no backup remote is configured; name a url to restore from")
+        if remote is not None and from_url is not None and from_url != remote.url:
+            # The working tree belongs to the configured remote. Pulling a
+            # different repository's history into it leaves the next backup run
+            # facing an unrelated history it can neither diff nor fast-forward,
+            # so the backup would stay broken until someone emptied the tree by
+            # hand. `--from` is for a machine that has no remote yet.
+            raise BackupRemoteInvalid(
+                "this machine already backs up to "
+                f"{remote.url}; restore from it without --from, or clear the "
+                "remote first to restore from somewhere else"
+            )
         url = from_url or (remote.url if remote else "")
         branch = remote.branch if remote else DEFAULT_BRANCH
         worktree = Path(remote.worktree_path if remote else DEFAULT_WORKTREE).expanduser()

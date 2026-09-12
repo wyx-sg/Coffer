@@ -20,6 +20,7 @@ from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.sync.backup_service import BackupService
 from coffer.domain.audit import AuditEntry, AuditEventType
 from coffer.domain.sync.backup import BackupRemote, BackupRun, BackupRunStatus
+from coffer.domain.sync.errors import BackupRemoteInvalid
 from coffer.domain.sync.models import AreaCount, ExportSummary, ImportSummary
 from coffer.infrastructure.sync.git_mirror import GitMirrorError
 
@@ -420,14 +421,15 @@ async def test_restore_clones_when_there_is_no_working_tree() -> None:
     assert summary.path == str(Path("~/.coffer/sync").expanduser())
 
 
-async def test_a_restore_from_another_url_is_not_offered_the_stored_token() -> None:
+async def test_a_restore_with_no_remote_configured_uses_no_token() -> None:
     """The stored credential belongs to the stored remote.
 
-    A restore that names a different url is talking to a different host. Handing
-    it the token that backs up the vault would turn any url a user can be talked
-    into typing into a way to collect that token.
+    With nothing configured there is no credential to offer, and the url the
+    user named must not be able to collect one. This is the belt to the
+    refusal's braces: even if the two urls could ever coexist, the token is
+    scoped to the url it was stored for.
     """
-    rig = _rig(remote=_remote(credential_ref=_TOKEN_REF))
+    rig = _rig(remote=None)
 
     await rig.service.restore(from_url="https://elsewhere.invalid/other.git")
 
@@ -441,3 +443,18 @@ async def test_a_restore_from_the_configured_url_still_authenticates() -> None:
     await rig.service.restore(from_url="https://example.invalid/vault.git")
 
     assert rig.mirror.payload("fetch")["token"] == _TOKEN
+
+
+async def test_restoring_another_repository_over_a_configured_one_is_refused() -> None:
+    """The working tree belongs to the configured remote.
+
+    Pulling an unrelated history into it would leave the next backup run unable
+    to diff or fast-forward, so the backup stays broken until someone empties
+    the tree by hand. Better to say so than to half-do it.
+    """
+    rig = _rig(remote=_remote())
+
+    with pytest.raises(BackupRemoteInvalid):
+        await rig.service.restore(from_url="https://elsewhere.invalid/other.git")
+
+    assert rig.mirror.names == []
