@@ -89,9 +89,14 @@ export function KnowledgeDetailPage() {
                 <p className="truncate text-sm text-muted-foreground">{file.data.path}</p>
                 <FileActions filePath={file.data.file_path} />
               </div>
+              {/* `overflow-auto` is what keeps a wide table or an unbreakable
+                  code span inside this pane: without it the content has no
+                  scroll container, so it stretches the grid column and the
+                  whole page scrolls sideways. Same treatment as the skill
+                  file viewer. */}
               <KnowledgePreviewBody
                 text={file.data.body}
-                className="max-h-[60vh]"
+                className="max-h-[70vh] overflow-auto p-4"
               />
             </>
           )}

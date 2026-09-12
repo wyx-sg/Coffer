@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import sqlalchemy.exc
-from sqlalchemy import select, update
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from coffer.domain.audit import AuditEntry
@@ -197,6 +197,7 @@ def _audit_to_domain(row: AuditLogModel) -> AuditEntry:
         id=row.id,
         timestamp=ts,
         event_type=row.event_type,
+        resource_id=row.resource_id,
         resource_kind=row.resource_kind,
         resource_name=row.resource_name,
         actor=row.actor,
@@ -218,6 +219,7 @@ class SqlAlchemyAuditRepo:
             row = AuditLogModel(
                 timestamp=entry.timestamp,
                 event_type=entry.event_type,
+                resource_id=entry.resource_id,
                 resource_kind=entry.resource_kind,
                 resource_name=entry.resource_name,
                 actor=entry.actor,
@@ -226,37 +228,33 @@ class SqlAlchemyAuditRepo:
             session.add(row)
             await session.commit()
 
-    async def repoint(self, kind: str, old_name: str, new_name: str) -> int:
-        """Bulk-move every row recorded against ``(kind, old_name)`` onto
-        ``new_name``; returns the number of rows moved."""
-        async with self._sm() as session:
-            stmt = (
-                update(AuditLogModel)
-                .where(
-                    AuditLogModel.resource_kind == kind,
-                    AuditLogModel.resource_name == old_name,
-                )
-                .values(resource_name=new_name)
-            )
-            result = await session.execute(stmt)
-            await session.commit()
-            return int(result.rowcount or 0)
-
     async def query(
         self,
         *,
         kind: str | None = None,
         name: str | None = None,
+        resource_id: int | None = None,
         event_type: str | None = None,
         since: datetime | None = None,
         limit: int = 50,
     ) -> list[AuditEntry]:
         async with self._sm() as session:
             stmt = select(AuditLogModel).order_by(AuditLogModel.timestamp.desc())
-            if kind is not None:
-                stmt = stmt.where(AuditLogModel.resource_kind == kind)
-            if name is not None:
-                stmt = stmt.where(AuditLogModel.resource_name == name)
+            if resource_id is not None:
+                # Match the resource by id OR by the label it carries, so a
+                # renamed resource's whole trail comes back — including the rows
+                # written under its old name, and the rows written before the id
+                # column existed.
+                label = and_(
+                    AuditLogModel.resource_kind == kind,
+                    AuditLogModel.resource_name == name,
+                )
+                stmt = stmt.where(or_(AuditLogModel.resource_id == resource_id, label))
+            else:
+                if kind is not None:
+                    stmt = stmt.where(AuditLogModel.resource_kind == kind)
+                if name is not None:
+                    stmt = stmt.where(AuditLogModel.resource_name == name)
             if event_type is not None:
                 stmt = stmt.where(AuditLogModel.event_type == event_type)
             if since is not None:

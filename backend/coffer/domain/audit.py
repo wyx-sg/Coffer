@@ -75,7 +75,14 @@ class AuditEntry:
     id: int | None
     timestamp: datetime
     event_type: str
-    resource_kind: str | None
-    resource_name: str | None
     actor: str
+    #: The resource this happened TO, by its stable row id. It is what makes a
+    #: trail survive a rename: the kind+name below are the LABEL the resource
+    #: carried AT THE TIME, so old rows keep saying what was true then instead
+    #: of being rewritten to the new name. All three are ``None`` for an event
+    #: that names no resource, and the id is ``None`` for rows written before
+    #: the column existed.
+    resource_id: int | None = None
+    resource_kind: str | None = None
+    resource_name: str | None = None
     details: dict[str, Any] = field(default_factory=dict)

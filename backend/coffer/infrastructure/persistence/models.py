@@ -53,6 +53,8 @@ class AuditLogModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     event_type: Mapped[str] = mapped_column(String, nullable=False)
+    #: The resource's stable row id; kind+name are the label it carried then.
+    resource_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     resource_kind: Mapped[str | None] = mapped_column(String, nullable=True)
     resource_name: Mapped[str | None] = mapped_column(String, nullable=True)
     actor: Mapped[str] = mapped_column(String, nullable=False)
@@ -60,6 +62,7 @@ class AuditLogModel(Base):
 
     __table_args__ = (
         Index("idx_audit_resource", "resource_kind", "resource_name", "timestamp"),
+        Index("idx_audit_resource_id", "resource_id", "timestamp"),
         Index("idx_audit_time", "timestamp"),
         Index("idx_audit_eventtype", "event_type", "timestamp"),
     )

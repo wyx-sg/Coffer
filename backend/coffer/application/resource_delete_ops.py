@@ -8,6 +8,7 @@ function that takes the ``ResourceService`` instance and reaches into its
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -40,11 +41,17 @@ async def release_orphaned_credentials(
     released: list[str] = []
     for cred_ref in dict.fromkeys(_extract_credential_refs(kind_def, config).values()):
         try:
-            if not service._credentials.exists(cred_ref):
+            # Off the loop thread: the store is a blocking SQLite writer, and
+            # calling it inline competes with the connection this coroutine is
+            # already holding — the delete then fails with "database is locked",
+            # gets swallowed by the except below, and the credential silently
+            # lingers. Every other credential write in the codebase already
+            # goes through a thread for exactly this reason.
+            if not await asyncio.to_thread(service._credentials.exists, cred_ref):
                 continue
             if await service.find_credential_citations(cred_ref):
                 continue
-            service._credentials.delete(cred_ref)
+            await asyncio.to_thread(service._credentials.delete, cred_ref)
             await service._audit.record(
                 AuditEventType.CREDENTIAL_DELETED.value,
                 actor=actor,

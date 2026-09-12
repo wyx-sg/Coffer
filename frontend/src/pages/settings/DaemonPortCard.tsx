@@ -6,10 +6,13 @@
 // first free one in a small range, so a bookmark dies the moment the port
 // drifts.
 //
-// Explicit Save rather than the auto-save every other settings card uses. A
-// half-typed port is a valid number the instant the user pauses ("80" on the
-// way to "8080"), and this setting decides whether the daemon can bind at all
-// on its next start — so the commit has to be deliberate.
+// Auto-save, like every other settings card: a Save button here taught the
+// page two rules at once, and made the controls above it — which save the
+// moment you change them — read as unsaved. The switch writes on toggle (each
+// position is a complete answer); the number field writes when you leave it,
+// because a half-typed port is a valid number the instant you pause ("80" on
+// the way to "8080") and this setting decides whether the daemon can bind at
+// all on its next start.
 //
 // There is no "restart now" button on purpose: this page is served BY the
 // daemon, so restarting it from the browser would kill the server answering
@@ -70,9 +73,16 @@ export function DaemonPortCard() {
   const toggle = (checked: boolean) => {
     setFixed(checked);
     setRangeError(false);
+    if (!checked) {
+      update.mutate(null, { onSuccess: announce });
+      return;
+    }
     // Turning it on defaults to the port that is already serving this page —
-    // the one setting guaranteed not to break the address shown above.
-    if (checked && effectivePort !== null) setPortText(String(effectivePort));
+    // the one setting guaranteed not to break the address shown above, so it
+    // is safe to write straight away.
+    if (effectivePort === null) return;
+    setPortText(String(effectivePort));
+    update.mutate(effectivePort, { onSuccess: announce });
   };
 
   // A restart-pending save gets the persistent note below instead of a toast
@@ -81,17 +91,17 @@ export function DaemonPortCard() {
     if (!result.restart_required) toast.success(t("settings.daemonPort.saved"));
   };
 
-  const save = () => {
+  // The number field commits when the user leaves it (or presses Enter), never
+  // per keystroke: on the way to 8123 the field reads 8, 81 and 812, each a
+  // number the daemon would happily bind to.
+  const commitPort = () => {
     setRangeError(false);
-    if (!fixed) {
-      update.mutate(null, { onSuccess: announce });
-      return;
-    }
     const port = Number(portText.trim());
     if (!Number.isInteger(port) || port < MIN_PORT || port > MAX_PORT) {
       setRangeError(true);
       return;
     }
+    if (port === configuredPort) return;
     update.mutate(port, { onSuccess: announce });
   };
 
@@ -150,13 +160,13 @@ export function DaemonPortCard() {
               value={portText}
               disabled={update.isPending}
               onChange={(e) => setPortText(e.target.value)}
+              onBlur={commitPort}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitPort();
+              }}
             />
           </div>
         )}
-
-        <Button onClick={save} disabled={update.isPending || effectivePort === null}>
-          {update.isPending ? t("settings.daemonPort.saving") : t("settings.daemonPort.save")}
-        </Button>
 
         {rangeError && (
           <p className="text-xs text-destructive" role="alert">

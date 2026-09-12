@@ -97,10 +97,12 @@ async def rename_provider(
     """Rename a connection.
 
     WHY this is its own route and not ``PATCH /{name}``: PATCH edits a
-    connection's CONFIG, while the name is its IDENTITY. Renaming repoints the
-    owned vault ref, the audit trail and the projected agent config in one
-    operation, and a name another connection already uses answers 409 rather
-    than being silently merged into that connection the way a patch field would.
+    connection's CONFIG, while the name is what other things call it by. The
+    rename moves the row and rewrites the projected agent config (the one place
+    the name really is written out — into another tool's file), and a name
+    another connection already uses answers 409 rather than being silently
+    merged into that connection the way a patch field would. It does not touch
+    the vault or the audit trail: neither keys off the name any more.
     Renaming to the current name is a no-op. 404 when the connection is absent.
     """
     return _provider_out(await svc.rename(name, body.new_name, actor=actor))
@@ -148,6 +150,7 @@ async def update_provider(
     """Partially update a provider profile."""
     resource = await svc.update(
         name,
+        protocol=body.protocol,
         base_url=body.base_url,
         secret_value=body.secret_value,
         compatible_agents=body.compatible_agents,

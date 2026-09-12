@@ -31,11 +31,11 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, RefreshCw } from "lucide-react";
 
-import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
-import { ModalitySelect } from "@/components/settings/ModalitySelect";
+import { DataTable, type FilterDef } from "@/components/DataTable";
+import { ProviderModelsBulkActions } from "@/components/settings/ProviderModelsBulkActions";
+import { useProviderModelColumns } from "@/components/settings/ProviderModelsColumns";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
 import { MODALITIES, type Modality, type Provider, type ProviderModel } from "@/lib/api/providers";
 import { useEndpointModels } from "@/lib/hooks/useModelIntrospection";
@@ -54,10 +54,20 @@ export function ProviderModelsTable({ provider }: { provider: Provider }) {
 
   const selected = provider.models ?? [];
   const fetched = endpoint.data?.models ?? [];
-  const isSelected = (id: string) => selected.some((m) => m.id === id);
+  // An empty curated set is NOT "nothing chosen" — it means no restriction, so
+  // every model the endpoint offers is available. Rendering those switches off
+  // said the opposite of what the state means, so the whole table reads as on
+  // until the user actually narrows it.
+  const unrestricted = selected.length === 0;
+  // Two different questions, deliberately not one predicate: `isCurated` asks
+  // whether the curated list names this id (it builds the row set), while
+  // `isOn` asks what the switch should show — and under no restriction every
+  // offered model is on without being named.
+  const isCurated = (id: string) => selected.some((m) => m.id === id);
+  const isOn = (id: string) => unrestricted || isCurated(id);
   // The rows: what the endpoint offers, plus anything already curated that it no
   // longer lists (so a stale pick stays visible AND untoggleable-away).
-  const rows: ProviderModel[] = [...selected, ...fetched.filter((m) => !isSelected(m.id))];
+  const rows: ProviderModel[] = [...selected, ...fetched.filter((m) => !isCurated(m.id))];
 
   // What the row shows: the STORED modality once curated, else the user's
   // un-committed correction, else the value introspection guessed.
@@ -67,15 +77,50 @@ export function ProviderModelsTable({ provider }: { provider: Provider }) {
   const write = (models: ProviderModel[]) =>
     update.mutate({ name: provider.name, patch: { models } });
 
-  const toggle = (row: ProviderModel) =>
+  /** The explicit list equivalent to what is on screen right now. */
+  const materialised = () =>
+    unrestricted ? fetched.map((m) => ({ id: m.id, modality: modalityOf(m) })) : selected;
+
+  // Narrowing away from "no restriction" writes the explicit list it was
+  // standing for, minus the row. It does NOT collapse back to the empty set
+  // when a later tick happens to cover everything again: that would discard
+  // the types the user corrected on those rows. "Clear selection" is the one
+  // deliberate way back to no restriction.
+  const toggle = (row: ProviderModel) => {
+    const base = materialised();
     write(
-      isSelected(row.id)
-        ? selected.filter((m) => m.id !== row.id)
-        : [...selected, { id: row.id, modality: modalityOf(row) }],
+      base.some((m) => m.id === row.id)
+        ? base.filter((m) => m.id !== row.id)
+        : [...base, { id: row.id, modality: modalityOf(row) }],
     );
+  };
+
+  /** Bulk switch: turn every row in `rowsToSet` on or off in one write. */
+  const setMany = (rowsToSet: ProviderModel[], on: boolean) => {
+    const base = materialised();
+    const ids = new Set(rowsToSet.map((r) => r.id));
+    write(
+      on
+        ? [
+            ...base,
+            ...rowsToSet
+              .filter((r) => !base.some((m) => m.id === r.id))
+              .map((r) => ({ id: r.id, modality: modalityOf(r) })),
+          ]
+        : base.filter((m) => !ids.has(m.id)),
+    );
+  };
 
   const setModality = (row: ProviderModel, modality: Modality) => {
-    if (!isSelected(row.id)) {
+    if (unrestricted) {
+      // Every row is on, so a correction has somewhere to go immediately: write
+      // the list "no restriction" was standing for, with this row corrected.
+      write(materialised().map((m) => (m.id === row.id ? { ...m, modality } : m)));
+      return;
+    }
+    if (!isCurated(row.id)) {
+      // An explicit list that does not name this row: the correction has
+      // nowhere to be stored until the row is switched on, so hold it here.
       setPending((p) => ({ ...p, [row.id]: modality }));
       return;
     }
@@ -86,45 +131,20 @@ export function ProviderModelsTable({ provider }: { provider: Provider }) {
   const fetchFailed = endpoint.error != null;
   const modalityLabel = (m: Modality) => t(`settings.connections.detail.modalities.${m}`);
 
-  const columns: Column<ProviderModel>[] = [
-    {
-      key: "model",
-      header: t("settings.connections.detail.modelId"),
-      cell: (m) => <span className="font-mono text-xs">{m.id}</span>,
-    },
-    {
-      key: "modality",
-      header: t("settings.connections.detail.modality"),
-      cell: (m) => (
-        <ModalitySelect
-          value={modalityOf(m)}
-          onChange={(v) => setModality(m, v)}
-          disabled={update.isPending}
-          label={m.id}
-        />
-      ),
-    },
-    {
-      key: "status",
-      header: t("resources.cols.status"),
-      className: "text-right",
-      cell: (m) => (
-        <Switch
-          checked={isSelected(m.id)}
-          onCheckedChange={() => toggle(m)}
-          disabled={update.isPending}
-          aria-label={`${t("resources.cols.status")}: ${m.id}`}
-        />
-      ),
-    },
-  ];
+  const columns = useProviderModelColumns({
+    modalityOf,
+    isOn,
+    toggle,
+    setModality,
+    pending: update.isPending,
+  });
 
   const filters: FilterDef<ProviderModel>[] = [
     {
       key: "status",
       label: t("resources.cols.status"),
       allLabel: t("resources.status.all"),
-      accessor: (m) => (isSelected(m.id) ? "enabled" : "disabled"),
+      accessor: (m) => (isOn(m.id) ? "enabled" : "disabled"),
       options: [
         { value: "enabled", label: t("common.enabled") },
         { value: "disabled", label: t("common.disabled") },
@@ -164,15 +184,6 @@ export function ProviderModelsTable({ provider }: { provider: Provider }) {
         ) : null}
       </div>
 
-      <div
-        className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground"
-        role="status"
-      >
-        {selected.length === 0
-          ? t("settings.connections.detail.unrestricted")
-          : t("settings.connections.detail.restricted", { count: selected.length })}
-      </div>
-
       {fetchFailed ? (
         <p className="text-sm text-destructive">
           {t("settings.connections.detail.fetchFailed", {
@@ -192,6 +203,15 @@ export function ProviderModelsTable({ provider }: { provider: Provider }) {
           placeholder: t("settings.connections.detail.modelSearchPlaceholder"),
         }}
         filters={filters}
+        selection={{
+          ariaSelectAll: t("common.bulk.selectAll"),
+          ariaSelectRow: (m) => `${t("common.bulk.selectRow")}: ${m.id}`,
+          bulkLabel: (count) => t("common.bulk.selected", { count }),
+          clearLabel: t("common.clear"),
+          renderBulkActions: ({ selectedRows, clear }) => (
+            <ProviderModelsBulkActions rows={selectedRows} onApply={setMany} onDone={clear} />
+          ),
+        }}
         // DataTable takes ONE empty message, so pick the one that is true: the
         // probe is still running; nothing is curated and the endpoint listed
         // nothing; or the rows exist and the search/filter is what hid them.

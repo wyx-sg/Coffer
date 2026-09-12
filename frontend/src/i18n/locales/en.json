@@ -454,7 +454,6 @@
       "secret": "API key",
       "searchPlaceholder": "Search model providers…",
       "allVendors": "All vendors",
-      "internalEngine": "Coffer engine",
       "bulkDeleteConfirm": "Delete {{count}} model provider(s)? Their stored credentials are removed too.",
       "detail": {
         "back": "Back to model providers",
@@ -467,8 +466,6 @@
         "updated": "Updated",
         "models": "Models",
         "modelsHint": "Pick which of this endpoint's models this provider offers, and what kind each one is. Every picker downstream is then limited to your picks of the kind it needs — a chat model dropdown never offers an embedding model.",
-        "unrestricted": "No restriction — every model this endpoint offers is available.",
-        "restricted": "{{count}} model(s) picked — agents see only these.",
         "fetchFailed": "Could not list this endpoint's models ({{error}}). Your current selection is unchanged.",
         "loadingModels": "Listing this endpoint's models…",
         "retryFetch": "Retry",
@@ -918,11 +915,11 @@
   },
   "knowledge": {
     "title": "Knowledge",
-    "subtitle": "One local knowledge store per scope — what your agents write and what you upload — searchable through the MCP gateway. The global and per-project scopes are created automatically.",
+    "subtitle": "Markdown files the agents and you both edit — one folder per collection, read with coffer__list and coffer__grep. A collection exists because you made one, and only the agents you authorize can see it.",
     "add": "New collection",
-    "empty": "No knowledge scopes yet. Create a collection, or let the global and per-project scopes appear as your agents work.",
-    "loadFailed": "Failed to load knowledge scopes",
-    "searchPlaceholder": "Search knowledge scopes…",
+    "empty": "No collections yet. Make one, then drop a markdown file into its folder — or let an agent write the first one.",
+    "loadFailed": "Failed to load collections",
+    "searchPlaceholder": "Search collections…",
     "cols": {
       "name": "Name",
       "description": "Description",

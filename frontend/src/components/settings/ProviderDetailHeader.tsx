@@ -12,7 +12,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Check, Cpu, Pencil, Trash2 } from "lucide-react";
+import { Check, Pencil, Trash2 } from "lucide-react";
 
 import { ScopeControl } from "@/components/ScopeControl";
 import { ProviderForm } from "@/components/settings/ProviderForm";
@@ -43,13 +43,11 @@ export function ProviderDetailHeader({
     rename.reset();
   };
 
-  /** Save the edit dialog. A changed NAME goes first and on its own route: it is
-   *  the connection's identity, so the daemon repoints the vault entry, the
-   *  audit trail and the projected agent config in one operation, and a name
-   *  already taken must fail BEFORE any of this dialog's other edits land. The
-   *  patch then addresses the connection by whatever name it now has, and the
-   *  page follows it — this route IS the name, so staying put would leave the
-   *  user on a URL that 404s. */
+  /** Save the edit dialog. A changed NAME goes first and on its own route: a
+   *  name is a label, not config, and one already taken must fail BEFORE any of
+   *  this dialog's other edits land. The patch then addresses the connection by
+   *  whatever name it now has, and the page follows it — this route IS the
+   *  name, so staying put would leave the user on a URL that 404s. */
   const save = async (
     patch: Parameters<typeof update.mutateAsync>[0]["patch"],
     next: string | null,
@@ -77,12 +75,6 @@ export function ProviderDetailHeader({
             <Badge className="gap-1">
               <Check className="size-3" />
               {t("settings.connections.active")}
-            </Badge>
-          ) : null}
-          {provider.internal_default ? (
-            <Badge variant="outline" className="gap-1">
-              <Cpu className="size-3" />
-              {t("settings.connections.internalEngine")}
             </Badge>
           ) : null}
         </div>
