@@ -272,8 +272,6 @@
       "useFixed": "Use a fixed port",
       "useFixedHint": "Off, the daemon takes the first free port in a small range, so the address above can change when it restarts. On, it always binds the port you choose, and refuses to start when something else already holds it.",
       "port": "Port",
-      "save": "Save",
-      "saving": "Saving…",
       "saved": "Port setting saved.",
       "rangeError": "Enter a port between {{min}} and {{max}}.",
       "restartTitle": "Takes effect at the next daemon start",

@@ -6,10 +6,11 @@
 // first free one in a small range, so a bookmark dies the moment the port
 // drifts.
 //
-// Explicit Save rather than the auto-save every other settings card uses. A
-// half-typed port is a valid number the instant the user pauses ("80" on the
-// way to "8080"), and this setting decides whether the daemon can bind at all
-// on its next start — so the commit has to be deliberate.
+// Auto-saving, like every other settings card — but on blur (and Enter), never
+// on keystroke. A half-typed port is a valid number the moment the user pauses
+// ("80" on the way to "8080"), and this setting decides whether the daemon can
+// bind at all on its next start; leaving the field is the signal that the
+// number is finished. Same commit-on-blur the editor field above it uses.
 //
 // There is no "restart now" button on purpose: this page is served BY the
 // daemon, so restarting it from the browser would kill the server answering
@@ -41,7 +42,7 @@ export function DaemonPortCard() {
   // in flight right after a save), so it wins where both have an answer.
   const settings = update.data ?? query.data;
   const effectivePort = settings?.effective_port ?? null;
-  const configuredPort = query.data?.configured_port ?? null;
+  const configuredPort = settings?.configured_port ?? null;
 
   const [fixed, setFixed] = useState(false);
   const [portText, setPortText] = useState("");
@@ -67,31 +68,38 @@ export function DaemonPortCard() {
     });
   };
 
-  const toggle = (checked: boolean) => {
-    setFixed(checked);
-    setRangeError(false);
-    // Turning it on defaults to the port that is already serving this page —
-    // the one setting guaranteed not to break the address shown above.
-    if (checked && effectivePort !== null) setPortText(String(effectivePort));
-  };
-
   // A restart-pending save gets the persistent note below instead of a toast
   // that vanishes before it has been read.
   const announce = (result: { restart_required: boolean }) => {
     if (!result.restart_required) toast.success(t("settings.daemonPort.saved"));
   };
 
-  const save = () => {
+  const toggle = (checked: boolean) => {
+    setFixed(checked);
     setRangeError(false);
-    if (!fixed) {
+    if (!checked) {
       update.mutate(null, { onSuccess: announce });
       return;
     }
+    // Turning it on defaults to the port that is already serving this page —
+    // the one value guaranteed not to break the address shown above, which is
+    // what makes the toggle safe to act on by itself.
+    if (effectivePort === null) return;
+    setPortText(String(effectivePort));
+    update.mutate(effectivePort, { onSuccess: announce });
+  };
+
+  // Committed when the user leaves the field or presses Enter. Re-sending an
+  // unchanged port would make every stray blur a write, and each one an audit
+  // row, so a value equal to what is already stored is simply not sent.
+  const commitPort = () => {
+    setRangeError(false);
     const port = Number(portText.trim());
     if (!Number.isInteger(port) || port < MIN_PORT || port > MAX_PORT) {
       setRangeError(true);
       return;
     }
+    if (port === configuredPort) return;
     update.mutate(port, { onSuccess: announce });
   };
 
@@ -150,13 +158,13 @@ export function DaemonPortCard() {
               value={portText}
               disabled={update.isPending}
               onChange={(e) => setPortText(e.target.value)}
+              onBlur={commitPort}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitPort();
+              }}
             />
           </div>
         )}
-
-        <Button onClick={save} disabled={update.isPending || effectivePort === null}>
-          {update.isPending ? t("settings.daemonPort.saving") : t("settings.daemonPort.save")}
-        </Button>
 
         {rangeError && (
           <p className="text-xs text-destructive" role="alert">
