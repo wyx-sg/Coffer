@@ -18,8 +18,35 @@ import os
 import tempfile
 from pathlib import Path
 
+import pytest
+
 _TEST_LOG_DIR = Path(tempfile.gettempdir()) / "coffer-test-logs"
 os.environ.setdefault("COFFER_LOG_DIR", str(_TEST_LOG_DIR))
+
+# Same reason, and a far worse failure mode: ``paths.knowledge_root()`` falls
+# back to ``$HOME/.coffer/knowledge`` when ``COFFER_KNOWLEDGE_ROOT`` is unset,
+# so any test that boots the app without pinning it runs the knowledge
+# migration over the developer's REAL vault — moving their files, not just
+# writing a log line. Pinned at import time so no test can reach the live tree
+# by forgetting a fixture; a test that wants its own tree overrides it per-test
+# with monkeypatch, which takes precedence over this default.
+_TEST_KNOWLEDGE_ROOT = Path(tempfile.gettempdir()) / "coffer-test-knowledge"
+os.environ.setdefault("COFFER_KNOWLEDGE_ROOT", str(_TEST_KNOWLEDGE_ROOT))
+
+
+@pytest.fixture(autouse=True)
+def _isolated_knowledge_root(tmp_path, monkeypatch):
+    """Give every test its own knowledge tree.
+
+    The import-time default above is the safety net — it keeps a forgotten
+    fixture off the developer's real vault. This is the isolation: the tree is
+    shared state on disk, and the migration registers a Resource for every
+    collection directory it finds, so one test's leftover folder would show up
+    in another test's resource list. A test that wants a specific path (a
+    migration walk, say) overrides it with its own monkeypatch, which wins.
+    """
+    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge-root"))
+
 
 # Accept any Host header across the suite. The loopback-Host guard
 # (``coffer.surfaces.http.host_guard``) exists to stop a DNS-rebound *browser*

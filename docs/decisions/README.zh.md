@@ -92,7 +92,8 @@ section that future readers most often want — don't skip it.>
 | [`everything-is-a-resource-kind`](everything-is-a-resource-kind.zh.md) | 信息架构 —— 一切皆 resource kind | Amended（2026-05-30、2026-06-11） |
 | [`distribution-pyinstaller`](distribution-pyinstaller.zh.md) | 分发 —— 用 PyInstaller 打包 daemon、shim 与 CLI | Accepted |
 | [`cross-platform-skill-delivery`](cross-platform-skill-delivery.zh.md) | 跨平台 skill 投递 —— Symlink / Junction / Copy-Fallback | Accepted |
-| [`files-as-truth-sqlite-retrieval`](files-as-truth-sqlite-retrieval.zh.md) | 检索栈 —— markdown 文件即事实源，SQLite FTS5 + sqlite-vec，可配置 embedding | Accepted |
+| [`files-as-truth-sqlite-retrieval`](files-as-truth-sqlite-retrieval.zh.md) | 检索栈 —— markdown 文件即事实源，SQLite FTS5 + sqlite-vec，可配置 embedding | 已被 [Knowledge Is Plain Files](knowledge-is-plain-files.zh.md) 取代 |
+| [`knowledge-is-plain-files`](knowledge-is-plain-files.zh.md) | 知识层是一个文件目录，不是一个索引 | Accepted |
 | [`agent-native-shared-memory`](agent-native-shared-memory.zh.md) | 跨 agent 共享的单一知识 store | Accepted —— 投影那一半被 [Memory via MCP](memory-via-mcp-not-native-projection.zh.md) 取代 |
 | [`channel-adapter-framework`](channel-adapter-framework.zh.md) | Channel Adapter 框架 | Accepted |
 | [`envelope-encrypted-credential-store`](envelope-encrypted-credential-store.zh.md) | 信封加密的凭据存储 | Accepted |
@@ -108,7 +109,7 @@ section that future readers most often want — don't skip it.>
 | [`consume-official-mcp-registry`](consume-official-mcp-registry.zh.md) | 消费官方 MCP Registry 做服务器发现 | Reverted（2026-06-20） |
 | [`provider-switching`](provider-switching.zh.md) | Provider Switching | Proposed |
 | [`daemon-proxies-os-file-actions`](daemon-proxies-os-file-actions.zh.md) | 本地 daemon 代理 OS 文件动作 | Accepted |
-| [`retrieval-mode-is-internal`](retrieval-mode-is-internal.zh.md) | 检索 mode 是引擎内部细节；外部界面只暴露「查询→答案」 | Accepted |
+| [`retrieval-mode-is-internal`](retrieval-mode-is-internal.zh.md) | 检索 mode 是引擎内部细节；外部界面只暴露「查询→答案」 | 已被 [Knowledge Is Plain Files](knowledge-is-plain-files.zh.md) 取代 |
 | [`channel-media`](channel-media.zh.md) | Channel 媒体 —— DB 只存引用，发送时按 agent 物化 | Accepted —— 其中 v1「推迟持久化附件块」的决定被 [Persisted Attachment Reference](persisted-attachment-reference.zh.md) 取代 |
 | [`persisted-attachment-reference`](persisted-attachment-reference.zh.md) | 把 channel 附件持久化为引用块，从历史重新物化 | Accepted |
 | [`per-agent-resource-scope`](per-agent-resource-scope.zh.md) | 按 agent 的资源 scope | Accepted |

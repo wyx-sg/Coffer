@@ -48,11 +48,9 @@ class AuditEventType(StrEnum):
     SKILL_DRIFT_REMEDIATED = "skill_drift_remediated"
     SKILL_ADOPTED = "skill_adopted"
     SKILL_UNMANAGED_DELETED = "skill_unmanaged_deleted"
-    # spec knowledge-knowledge-base
-    KB_DOCUMENT_DELETED = "kb_document_deleted"
-    # memory kind (spec knowledge)
-    MEMORY_DELETED = "memory_deleted"
-    MEMORY_CLEARED = "memory_cleared"
+    # spec knowledge
+    KNOWLEDGE_WRITTEN = "knowledge_written"
+    KNOWLEDGE_DELETED = "knowledge_deleted"
     KNOWLEDGE_TIDIED = "knowledge_tidied"
     # spec channels
     CHANNEL_PAIRING_ISSUED = "channel_pairing_issued"

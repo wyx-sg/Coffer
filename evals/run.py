@@ -1,6 +1,6 @@
 """Eval runner: run the suites, print a scorecard, gate on regression vs baseline.
 
-    python -m evals.run                  # retrieval only (local, deterministic)
+    python -m evals.run                  # tool-search only (local, deterministic)
     python -m evals.run --routing        # + tool-routing (needs a local LLM)
     python -m evals.run --update-baseline # record current scores as the baseline
 
@@ -11,18 +11,22 @@ so the same command works as an on-demand gate.
 from __future__ import annotations
 
 import argparse
-import asyncio
 import json
 import sys
 
 from evals._io import BASELINES
-from evals.retrieval_eval import run_retrieval_eval
 from evals.routing_eval import run_routing_eval
 from evals.tool_search_eval import run_tool_search_eval
 
-# Per-suite regression tolerance. Retrieval is deterministic (tight); routing
+# Per-suite regression tolerance. Tool search is deterministic (tight); routing
 # rides on a small LLM so it gets more slack.
-_TOLERANCE = {"retrieval": 0.01, "routing": 0.10, "tool_search": 0.05}
+#
+# The retrieval suite is gone with the engine it measured: knowledge retrieval
+# is now ripgrep over markdown files (ADR knowledge-is-plain-files), and scoring
+# recall@k for ripgrep would measure ripgrep, not Coffer. What replaces it as a
+# question — does an agent reading the catalogue open the right file? — needs a
+# model, so it does not belong in the deterministic gate.
+_TOLERANCE = {"routing": 0.10, "tool_search": 0.05}
 
 
 def _baseline_path(suite: str):
@@ -84,10 +88,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--top-k", type=int, default=3)
     args = parser.parse_args(argv)
 
-    reports: list[dict] = [
-        asyncio.run(run_retrieval_eval(top_k=args.top_k)),
-        run_tool_search_eval(top_k=args.top_k),
-    ]
+    reports: list[dict] = [run_tool_search_eval(top_k=args.top_k)]
 
     if args.routing:
         routing = run_routing_eval()

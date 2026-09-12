@@ -4,6 +4,9 @@ from httpx import ASGITransport, AsyncClient
 
 from coffer.application.audit_service import AuditService
 from coffer.application.retention_service import RetentionService
+from coffer.infrastructure.mcp import (
+    persistence as _mcp_persistence,  # noqa: F401 — registers the mcp_invocations model
+)
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,

@@ -140,8 +140,6 @@ class DaemonStatusOut(BaseModel):
     # Whether sqlite-vec's vec0 loadable extension is available in THIS daemon
     # process. False in a frozen build that failed to bundle the native lib —
     # vector retrieval would silently degrade to keyword-only. The bundle smoke
-    # test asserts this is True against the frozen binary.
-    vec_available: bool = False
 
 
 class TokenRotationOut(BaseModel):

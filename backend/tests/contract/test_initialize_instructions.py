@@ -62,18 +62,12 @@ def test_instructions_only_name_tools_that_exist() -> None:
     from coffer.application.builtin_tools import BuiltinToolRegistry
     from coffer.application.diagnostics import register_diagnostics_builtin_tools
     from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
-    from coffer.application.knowledge.document_tools import register_document_builtin_tools
     from coffer.application.mcp.gateway_instructions import NAMED_TOOLS
     from coffer.application.skill.builtin_tools import register_skill_builtin_tools
 
     registry = BuiltinToolRegistry()
     register_knowledge_builtin_tools(
         registry,
-        knowledge_service=None,  # type: ignore[arg-type]
-    )
-    register_document_builtin_tools(
-        registry,
-        resources=None,  # type: ignore[arg-type]
         knowledge_service=None,  # type: ignore[arg-type]
     )
     register_skill_builtin_tools(

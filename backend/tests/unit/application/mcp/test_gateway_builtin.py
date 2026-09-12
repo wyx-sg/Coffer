@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 
 from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
 from coffer.application.mcp.gateway_builtin import dispatch_builtin_tool
-from coffer.domain.errors import MemoryStoreNotFound
+from coffer.domain.knowledge.errors import CollectionNotFound
 from coffer.domain.mcp.capability import MCPInvocation
 
 _SENTINEL = "COFFER_LEAK_SENTINEL_xyz789"
@@ -61,7 +61,7 @@ async def test_downstream_exception_logs_class_name_only() -> None:
 
 async def test_coffer_error_keeps_its_message() -> None:
     async def _coffer_boom(_args: dict) -> dict:
-        raise MemoryStoreNotFound("project-X")
+        raise CollectionNotFound("shopee")
 
     invocations = _RecordingInvocations()
     result = await dispatch_builtin_tool(
@@ -73,11 +73,11 @@ async def test_coffer_error_keeps_its_message() -> None:
         clock=_clock,
     )
     assert result["isError"] is True
-    assert "project-X" in result["content"][0]["text"]
+    assert "shopee" in result["content"][0]["text"]
     (row,) = invocations.rows
     assert row.status == "error"
-    assert "MemoryStoreNotFound" in (row.error_message or "")
-    assert "project-X" in (row.error_message or "")
+    assert "CollectionNotFound" in (row.error_message or "")
+    assert "shopee" in (row.error_message or "")
 
 
 async def test_success_path_wraps_result_as_mcp_call_tool_result() -> None:

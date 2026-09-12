@@ -105,6 +105,15 @@ _STATUS: dict[str, int] = {
     # provider switching (spec provider-switching)
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": 422,
     "NO_ACTIVE_PROVIDER": 404,
+    # knowledge (spec knowledge). A collection an agent is not authorized for
+    # is NOT FOUND rather than FORBIDDEN: telling an unauthorized caller that
+    # the name exists is itself a disclosure, and the layer treats "not visible
+    # to you" and "not there" as the same answer.
+    "KNOWLEDGE_COLLECTION_NOT_FOUND": 404,
+    "KNOWLEDGE_COLLECTION_EXISTS": 409,
+    "KNOWLEDGE_FILE_NOT_FOUND": 404,
+    "KNOWLEDGE_PATH_UNSAFE": 400,
+    "KNOWLEDGE_ERROR": 400,
 }
 
 # Map raw HTTP status codes back to envelope codes when a surface raises a
@@ -138,20 +147,12 @@ def error_response(code: str, message: str, details: dict[str, Any] | None = Non
 
 
 def _status_for(exc: errors.CofferError) -> int:
-    """HTTP status for a domain error.
+    """HTTP status for a domain error — every code maps 1:1 via `_STATUS`.
 
-    Most codes map 1:1 via `_STATUS`. `IngestRejected` is the exception: its
-    status depends on the rejection `reason` (a too-large upload is 413, a
-    duplicate is 409, everything else is a plain 400).
+    The one exception this function used to carry was ``IngestRejected``, whose
+    status depended on why an upload was refused. Nothing uploads any more, so
+    the special case went with it.
     """
-    if isinstance(exc, errors.IngestRejected):
-        return {
-            "too_large": 413,
-            "duplicate": 409,
-            "unsupported_type": 415,
-            "empty": 415,
-            "scanned_pdf": 415,
-        }.get(exc.reason, 400)
     return _STATUS.get(exc.code, 500)
 
 

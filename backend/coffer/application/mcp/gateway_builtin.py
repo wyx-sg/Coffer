@@ -141,30 +141,48 @@ async def _log(
         _logger.debug("mcp.gateway.builtin_invocation_log_failed", exc_info=True)
 
 
-def inject_session_cwd(
+#: The session-scoped values a built-in tool may opt into, named after the
+#: input-schema property that declares the opt-in. Kept a fixed list rather
+#: than "everything the session knows" so a tool cannot acquire an injected
+#: argument by accident.
+SESSION_CONTEXT_PROPERTIES = ("cwd", "agent")
+
+
+def inject_session_context(
     builtin: BuiltinToolRegistry,
     prefixed_name: str,
     params: dict[str, Any],
+    *,
     session_cwd: str | None,
+    session_agent: str | None,
 ) -> dict[str, Any]:
-    """Thread the session's launch cwd into a built-in tool call.
+    """Thread what the session knows about its caller into a built-in call.
 
-    Generic: a tool opts in by declaring a ``cwd`` property in its input
-    schema (the memory tools do). The gateway never special-cases the memory
-    kind (Contract 5/6). A client-supplied ``cwd`` is left untouched. When
-    the session never reported a cwd, NOTHING is injected — scope resolution
-    then rejects project scope / serves global only, which is correct; the
-    daemon's own cwd would silently scope agent memory to whatever project
-    the daemon happens to run in."""
+    Generic: a tool opts in by declaring a ``cwd`` or an ``agent`` property in
+    its input schema. The gateway never special-cases a kind (Contract 5/6) —
+    it only matches property names, so a new kind gets this for free and this
+    module stays free of any kind's vocabulary.
+
+    A client-supplied value is left untouched, and a value the session never
+    learned is NOT invented. That silence matters in both directions: the
+    daemon's own cwd would scope an agent's work to whatever project the daemon
+    happens to run in, and a guessed agent identity would hand a caller the
+    collections of an agent it is not."""
     tool = builtin.get(prefixed_name)
     if tool is None:
         return params
     props = tool.input_schema.get("properties", {})
-    if not isinstance(props, dict) or "cwd" not in props:
+    if not isinstance(props, dict):
+        return params
+    session_values = {"cwd": session_cwd, "agent": session_agent}
+    declared = [p for p in SESSION_CONTEXT_PROPERTIES if p in props]
+    if not declared:
         return params
     args = dict(params.get("arguments") or {})
-    if not args.get("cwd") and session_cwd:
-        args["cwd"] = session_cwd
+    for prop in declared:
+        value = session_values[prop]
+        if value and not args.get(prop):
+            args[prop] = value
     return {**params, "arguments": args}
 
 

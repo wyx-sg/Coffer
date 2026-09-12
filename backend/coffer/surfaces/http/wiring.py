@@ -1,11 +1,9 @@
-"""Shared-substrate + chat wiring for the FastAPI composition root.
+"""Chat wiring for the FastAPI composition root.
 
 Extracted from `app.py` so that file stays under the project's 400-LOC ceiling.
-``build_substrate`` constructs the shared knowledge substrate ONCE per process
-(unified ``DocumentRepo``, the ``SqliteKnowledgeIndex`` factory, the cached
-``make_embedder`` factory bound to the encrypted credential store, ripgrep, the
-retrieval facade + reindexer); the knowledge kind's own wiring
-(``knowledge_wiring.py``) takes it and builds the one service over it.
+The knowledge substrate this module used to build is gone with the index: the
+knowledge kind now needs nothing but a directory, so it wires itself
+(``knowledge_wiring.py``).
 """
 
 from __future__ import annotations
@@ -18,13 +16,8 @@ from typing import TYPE_CHECKING, Any
 from coffer.application.agent.model_catalogue import AgentModelCatalogueService
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
-from coffer.application.knowledge.reindex import Reindexer
-from coffer.application.knowledge.retrieval import (
-    KnowledgeRetrieval,
-)
 from coffer.application.providers.ports import ModelIntrospectionService
 from coffer.domain.errors import CredentialMissing
-from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.provider.modality import Modality
 from coffer.infrastructure.agent.claude_binary_models import ClaudeBinaryModelDiscovery
@@ -35,12 +28,6 @@ from coffer.infrastructure.agent.model_discovery import (
 )
 from coffer.infrastructure.chat.codex_app_server import default_app_server_session
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
-from coffer.infrastructure.knowledge.embeddings import make_embedder
-from coffer.infrastructure.knowledge.grep import RipgrepGrep
-from coffer.infrastructure.knowledge.repository import DocumentRepo
-from coffer.infrastructure.knowledge.sqlite_index import SqliteKnowledgeIndex
-from coffer.infrastructure.knowledge.vec_index import VecIndex
 from coffer.infrastructure.providers.provider_introspector import ProviderIntrospector
 from coffer.surfaces.http.chat_provider_wiring import build_agent_provider_registry
 from coffer.surfaces.http.dependencies import (
@@ -59,7 +46,6 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from coffer.application.mcp.gateway import MCPGatewaySession
-    from coffer.domain.knowledge.index import KnowledgeIndex
 
 
 _log = logging.getLogger(__name__)
@@ -75,64 +61,6 @@ def _sqlite_path(sm: async_sessionmaker[AsyncSession]) -> str | None:
     if not database or database == ":memory:":
         return None
     return str(database)
-
-
-def build_substrate(
-    sm: async_sessionmaker[AsyncSession],
-    credential_store: Any | None = None,
-) -> tuple[DocumentRepo, KnowledgeRetrieval, Reindexer]:
-    """Construct the shared knowledge substrate over one session maker.
-
-    The ``index_factory`` always attaches a ``VecIndex`` (maintenance mode when
-    no width is given) so delete paths reach the vector rows; ``make_embedder``
-    is bound to the encrypted credential store so cloud providers authenticate
-    via stored creds. Call once per process and share across kinds.
-
-    ``credential_store`` is the EncryptedCredentialStore in production; tests
-    that exercise no cloud embedder may omit it (falls back to the OS keychain
-    adapter, which resolves nothing unless seeded).
-    """
-    documents = DocumentRepo(sm)
-    creds = credential_store if credential_store is not None else KeyringAdapter()
-    db_path = _sqlite_path(sm)
-
-    def index_factory(kind: str, resource_name: str, *, dimensions: int | None) -> KnowledgeIndex:
-        # Per-store vector table (named by kind+resource_name): isolates stores
-        # so differing widths coexist and a scoped KNN never leaks across
-        # stores. The vec index is ALWAYS attached (maintenance mode when no
-        # width is given) so delete paths — which know no embedding width —
-        # still reach the store's vector rows.
-        vec: VecIndex | None = None
-        if db_path is not None:
-            vec = VecIndex(db_path, dimensions, kind=kind, resource_name=resource_name)
-        return SqliteKnowledgeIndex(sm, kind=kind, resource_name=resource_name, vec=vec)
-
-    # One embedder per config: rebuilding per call leaked an AsyncOpenAI
-    # (httpx pool) every vector query/write. Keyed by the config's fields
-    # (pydantic models are not hashable).
-    embedder_cache: dict[tuple[object, ...], object] = {}
-
-    def embedder_factory(config: EmbeddingConfig) -> object:
-        key = (
-            config.provider,
-            config.model,
-            config.base_url,
-            config.credential_ref,
-            config.dimensions,
-        )
-        embedder = embedder_cache.get(key)
-        if embedder is None:
-            embedder = make_embedder(config, resolve_credential=creds.get)
-            embedder_cache[key] = embedder
-        return embedder
-
-    retrieval = KnowledgeRetrieval(
-        index_factory=index_factory,
-        grep=RipgrepGrep(),
-        embedder_factory=embedder_factory,  # type: ignore[arg-type]
-    )
-    reindexer = Reindexer(embedder_factory=embedder_factory)  # type: ignore[arg-type]
-    return documents, retrieval, reindexer
 
 
 class _ActiveProviderModels:

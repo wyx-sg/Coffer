@@ -245,34 +245,32 @@ def test_daemon_spec_ships_migrations_directory() -> None:
     )
 
 
-def test_daemon_spec_collects_sqlite_vec_data_files() -> None:
-    """The daemon spec MUST call collect_data_files('sqlite_vec'). sqlite-vec
-    ships its loadable native extension (vec0.dylib / vec0.so / vec0.dll) as
-    *package data*, not a Python submodule — collect_submodules() alone never
-    captures it. Without this, a frozen build loses the vec0 extension and
-    vector retrieval silently degrades to keyword-only (VecIndex.available()
-    swallows the load failure)."""
+def test_daemon_spec_ships_no_vector_engine() -> None:
+    """The daemon spec MUST NOT bundle sqlite-vec.
+
+    It used to, so the frozen build could load the vec0 extension behind vector
+    retrieval. There is no vector retrieval and no index at all any more (ADR
+    knowledge-is-plain-files), and the package is gone from the dependency set —
+    so collecting it would bundle a native extension nothing can load."""
     tree = _parse_spec(_REPO / "backend" / "coffer-daemon.spec")
-    data_pkgs = _collect_data_files_args(tree)
-    assert "sqlite_vec" in data_pkgs, (
-        "daemon spec must call collect_data_files('sqlite_vec') so the frozen "
-        "build ships sqlite-vec's loadable vec0 extension; without it vector "
-        "retrieval silently degrades to keyword-only in packaged builds"
-    )
+    assert "sqlite_vec" not in _collect_data_files_args(tree)
+    assert "sqlite_vec" not in _collect_submodules_args(tree)
 
 
-def test_daemon_spec_includes_kb_memory_chat_hidden_imports() -> None:
+def test_daemon_spec_includes_attachment_and_chat_hidden_imports() -> None:
     """The hidden-imports list predates the knowledge base, memory and
-    agent-chat features, whose runtime deps are imported LAZILY
-    (inside functions) so PyInstaller's static analysis misses them. Declare
-    them explicitly so a frozen daemon can convert documents, embed, run the
-    vector index, and drive the built-in chat agent.
+    channel-attachment and agent-chat features, whose runtime deps are imported
+    LAZILY (inside functions) so PyInstaller's static analysis misses them.
+    Declare them explicitly so a frozen daemon can extract an inbound
+    attachment and drive the built-in chat agent.
 
     Each of these is a real lazy importer in the codebase:
-      * sqlite_vec  — infrastructure/knowledge/vec_index.py
-      * markitdown  — infrastructure/knowledge/converters/markitdown_converter.py
-      * openai      — infrastructure/knowledge/embeddings.py
-      * langgraph / langchain — infrastructure/chat/*
+      * markitdown  — infrastructure/chat/document_extract.py (spec channels FR-030)
+      * openai      — infrastructure/providers/*
+      * langgraph / langchain — infrastructure/llm/*, infrastructure/chat/*
+
+    The knowledge layer declares nothing here: it is a directory of markdown
+    files with no converter, no index and no embedding client to bundle.
 
     MarkItDown goes one level deeper: it imports its format backends lazily
     *inside* each converter. PyInstaller's graph may trace them transitively, but
@@ -283,15 +281,15 @@ def test_daemon_spec_includes_kb_memory_chat_hidden_imports() -> None:
     """
     tree = _parse_spec(_REPO / "backend" / "coffer-daemon.spec")
     submodules = _collect_submodules_args(tree)
-    for pkg in ("sqlite_vec", "markitdown", "openai", "langgraph", "langchain"):
+    for pkg in ("markitdown", "openai", "langgraph", "langchain"):
         assert pkg in submodules, (
             f"daemon spec must collect_submodules({pkg!r}) — it is imported "
-            "lazily by knowledge/chat code and PyInstaller misses it statically"
+            "lazily by chat/provider code and PyInstaller misses it statically"
         )
     for pkg in ("pdfminer", "pdfplumber", "pptx", "mammoth", "openpyxl", "xlrd"):
         assert pkg in submodules, (
             f"daemon spec must collect_submodules({pkg!r}) — MarkItDown imports it "
-            "lazily to read a format the KB converter advertises"
+            "lazily to read a format an inbound attachment may arrive in"
         )
 
 

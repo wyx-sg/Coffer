@@ -1,145 +1,102 @@
 // frontend/src/kinds/knowledge/KnowledgeDetailPage.tsx
 //
-// Detail surface for ONE knowledge scope. A back link + header, then a Tabs
-// shell over the only two kinds of material a person distinguishes:
+// Detail surface for ONE collection: a tree on the left, the selected file on
+// the right, read-only. There are no tabs, because there are no lanes — what
+// someone wrote and what someone put there are the same kind of thing and live
+// in the same folder (ADR knowledge-is-plain-files).
 //
-//   Documents — what someone uploaded (`<scope>/docs/`)
-//   Notes     — what an agent or the user wrote (`<scope>/notes/`)
+// Read-only is deliberate and load-bearing. Correcting a file happens in the
+// user's own editor, reached from the FileActions bar; with no index behind the
+// files, that edit is live on the very next read with nothing to reconcile
+// (spec knowledge FR-061).
 //
-// Each lane filters its own list client-side by filename as you type; server
-// retrieval belongs to the agents (`coffer__search`) and the CLI, not here.
-// Every body renders through the unified file preview — never a hand-styled
-// <pre>. The UI is read-only for humans (correct a file in your own editor, or
-// delete it); agents author notes over the MCP gateway.
+// The filter box narrows the tree by title/filename as you type, entirely
+// client-side. Server-side retrieval has its own surfaces — `coffer__grep` for
+// agents, `coffer knowledge grep` for the CLI — and duplicating it here would
+// be a second search with different rules.
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
 
-import { translateApiError } from "@/lib/api/errors";
+import { FileActions } from "@/components/FileActions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getScope, getScopeMetrics } from "./api";
-import { KnowledgeDetailHeader } from "./KnowledgeDetailHeader";
-import { KnowledgeRenameDialog } from "./KnowledgeRenameDialog";
-import { KnowledgeSettingsDialog } from "./KnowledgeSettingsDialog";
-import { KnowledgeEntriesLane } from "./KnowledgeEntriesLane";
-import { KnowledgeDocumentsLane } from "./KnowledgeDocumentsLane";
-import { SourceCheckDialog } from "./SourceCheckDialog";
-import { useKnowledgeDocuments } from "./useKnowledgeDocuments";
+import { translateApiError } from "@/lib/api/errors";
+import { KnowledgePreviewBody } from "./KnowledgePreviewBody";
+import { KnowledgeTreeLevel } from "./KnowledgeTreeLevel";
+import { useKnowledgeFile, useTidyCollection } from "./useKnowledge";
 
 export function KnowledgeDetailPage() {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const scope = useParams<{ scope: string }>().scope ?? "";
-  const docs = useKnowledgeDocuments(scope);
+  const collection = useParams<{ scope: string }>().scope ?? "";
 
-  const [renameOpen, setRenameOpen] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [filter, setFilter] = useState("");
 
-  const metricsQuery = useQuery({
-    queryKey: ["knowledge-metrics", scope],
-    queryFn: () => getScopeMetrics(scope),
-    enabled: Boolean(scope),
-  });
-  const scopeQuery = useQuery({
-    queryKey: ["knowledge-scope", scope],
-    queryFn: () => getScope(scope),
-    enabled: Boolean(scope),
-  });
+  const file = useKnowledgeFile(selected);
+  const tidy = useTidyCollection(collection);
 
-  const onCheckSources = () =>
-    docs.checkSources.mutate(undefined, {
-      onError: (e) => toast.error(translateApiError(t, e)),
-    });
-  const onUpdateFromSource = (id: string) =>
-    docs.updateFromSource.mutate(id, {
-      onSuccess: () => toast.success(t("knowledge.detail.sourceCheck.updated")),
-      // The edited-refusal (and any other failure) surfaces as a toast.
-      onError: (e) => toast.error(translateApiError(t, e)),
-    });
   const onTidy = () =>
-    docs.tidy.mutate(undefined, {
+    tidy.mutate(undefined, {
       onSuccess: () => toast.success(t("knowledge.detail.tidyDone")),
       onError: (e) => toast.error(translateApiError(t, e)),
     });
 
   return (
     <div className="space-y-6 p-6">
-      <KnowledgeDetailHeader
-        scope={scope}
-        scopeResource={scopeQuery.data}
-        degradedDocuments={metricsQuery.data?.documents_degraded ?? 0}
-        isReindexPending={docs.reindex.isPending}
-        isUploadPending={docs.ingest.isPending}
-        isTidyPending={docs.tidy.isPending}
-        checkingSources={docs.checkSources.isPending}
-        onRename={() => setRenameOpen(true)}
-        onOpenSettings={() => docs.setShowSettings(true)}
-        onCheckSources={onCheckSources}
-        onReindex={() => docs.reindex.mutate()}
-        onUpload={docs.handlePickFile}
-        onTidy={onTidy}
-      />
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold">{collection}</h1>
+        <Button type="button" variant="outline" size="sm" onClick={onTidy} disabled={tidy.isPending}>
+          {t("knowledge.detail.tidy")}
+        </Button>
+      </header>
 
-      {metricsQuery.error ? (
-        <p className="text-sm text-destructive" role="alert">
-          {translateApiError(t, metricsQuery.error)}
-        </p>
-      ) : null}
+      <div className="grid gap-6 lg:grid-cols-[minmax(16rem,22rem)_1fr]">
+        <div className="space-y-2">
+          <Input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder={t("knowledge.detail.filterPlaceholder")}
+            aria-label={t("knowledge.detail.filterPlaceholder")}
+          />
+          <nav aria-label={t("knowledge.detail.treeLabel")} className="rounded-md border p-2">
+            <KnowledgeTreeLevel
+              path={collection}
+              depth={0}
+              selectedPath={selected}
+              filter={filter}
+              onSelect={setSelected}
+            />
+          </nav>
+        </div>
 
-      <Tabs defaultValue="documents">
-        <TabsList>
-          <TabsTrigger value="documents">{t("knowledge.detail.tabs.documents")}</TabsTrigger>
-          <TabsTrigger value="notes">{t("knowledge.detail.tabs.notes")}</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="documents" className="pt-4">
-          <KnowledgeDocumentsLane docs={docs} />
-        </TabsContent>
-        <TabsContent value="notes" className="pt-4">
-          <KnowledgeEntriesLane scope={scope} scopeResource={scopeQuery.data} />
-        </TabsContent>
-      </Tabs>
-
-      <input
-        ref={docs.fileInputRef}
-        type="file"
-        className="hidden"
-        onChange={docs.handleFileChange}
-      />
-
-      {docs.showSettings && scopeQuery.data ? (
-        <KnowledgeSettingsDialog
-          open
-          onOpenChange={(o) => {
-            if (!o) docs.updateConfig.reset();
-            docs.setShowSettings(o);
-          }}
-          config={scopeQuery.data.config}
-          error={docs.updateConfig.error}
-          isPending={docs.updateConfig.isPending}
-          onSubmit={(patch) => docs.updateConfig.mutate(patch)}
-        />
-      ) : null}
-
-      {docs.sourceReport ? (
-        <SourceCheckDialog
-          open
-          onOpenChange={(o) => {
-            if (!o) docs.setSourceReport(null);
-          }}
-          report={docs.sourceReport}
-          updatingId={docs.updateFromSource.isPending ? docs.updateFromSource.variables : null}
-          onUpdate={onUpdateFromSource}
-        />
-      ) : null}
-
-      <KnowledgeRenameDialog
-        open={renameOpen}
-        onOpenChange={setRenameOpen}
-        scope={scope}
-        currentLabel={scopeQuery.data?.label ?? null}
-      />
+        <section className="min-w-0 rounded-md border">
+          {selected === null ? (
+            <p className="p-6 text-sm text-muted-foreground">
+              {t("knowledge.detail.selectAFile")}
+            </p>
+          ) : file.isPending ? (
+            <p className="p-6 text-sm text-muted-foreground">{t("common.loading")}</p>
+          ) : file.error ? (
+            <p className="p-6 text-sm text-destructive" role="alert">
+              {translateApiError(t, file.error)}
+            </p>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-3 border-b px-4 py-2">
+                <p className="truncate text-sm text-muted-foreground">{file.data.path}</p>
+                <FileActions filePath={file.data.file_path} />
+              </div>
+              <KnowledgePreviewBody
+                text={file.data.body}
+                className="max-h-[60vh]"
+              />
+            </>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

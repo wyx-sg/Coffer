@@ -1,13 +1,5 @@
-"""Infrastructure for the shared knowledge substrate (KB + memory).
+"""Knowledge infrastructure: the filesystem, and ripgrep over it.
 
-The only layer that imports external engines (markitdown, sqlite-vec, openai,
-fastembed) and the ripgrep binary. Importing this package registers the unified
-``documents`` / ``chunks`` ORM models on ``Base.metadata``.
+No index, no converters, no embedding client — a directory and a search
+binary are the whole substrate (ADR knowledge-is-plain-files).
 """
-
-from coffer.infrastructure.knowledge import (
-    ddl,
-    models,
-)
-
-__all__ = ["ddl", "models"]

@@ -1,30 +1,28 @@
 // frontend/src/pages/KnowledgePage.tsx — the one Knowledge surface.
-// `memory` and `knowledge_base` used to be two pages; a scope is a scope
-// whether it holds notes an agent wrote or documents someone uploaded, so
-// this lists all three kinds of scope in one table. `global` and
-// `project-<ULID>` auto-provision; the "New collection" action creates a NAMED
-// collection (the only kind a person creates by hand).
+// It lists collections: the top-level folders under `~/.coffer/knowledge/`.
+// Every one of them exists because somebody made it — nothing auto-provisions
+// a collection, so an empty list means the vault is genuinely empty rather
+// than merely untouched (spec knowledge FR-010).
 //
-// Loads from the DEDICATED `/knowledge` endpoint rather than the generic
-// `/resources` list: only the former carries the two per-lane counts the table
-// needs.
+// Loads from the DEDICATED `/knowledge/collections` endpoint rather than the
+// generic `/resources` list: only the former carries the file counts and the
+// README descriptions, both of which are read off disk.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Library, Plus } from "lucide-react";
 
-import { KnowledgeAddDialog } from "@/components/knowledge/KnowledgeAddDialog";
+import { KnowledgeCreateDialog } from "@/components/knowledge/KnowledgeCreateDialog";
 import { KnowledgeWelcomePanel } from "@/components/knowledge/KnowledgeWelcomePanel";
 import { KnowledgeTable } from "@/components/knowledge/KnowledgeTable";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useKnowledgeScopes } from "@/lib/hooks/useKnowledgeScopes";
+import { useKnowledgeCollections } from "@/kinds/knowledge/useKnowledge";
 import { translateApiError } from "@/lib/api/errors";
 
 export function KnowledgePage() {
   const { t } = useTranslation();
-  // Shared hook: caches the scope ARRAY under ["knowledge-scopes"].
-  const { data, isPending, error, refetch } = useKnowledgeScopes();
+  const { data, isPending, error, refetch } = useKnowledgeCollections();
   const items = data ?? [];
   const hasItems = items.length > 0;
   const [showAdd, setShowAdd] = useState(false);
@@ -46,7 +44,7 @@ export function KnowledgePage() {
         }
       />
 
-      <KnowledgeAddDialog
+      <KnowledgeCreateDialog
         open={showAdd}
         onOpenChange={setShowAdd}
         onCreated={() => void refetch()}

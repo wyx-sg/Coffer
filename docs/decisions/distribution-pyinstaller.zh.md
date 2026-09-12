@@ -40,15 +40,17 @@ CI 发布任务产出单一下载层级。**
   显式钉住。隐藏导入清单记录于 `specs/mcp-gateway/research.md`。
 - Alembic 迁移作为数据文件随 daemon 二进制一同打包，以便首次启动时对全新
   DB 跑 `upgrade head`。
-- sqlite-vec 的可加载原生扩展（`vec0.dylib`/`.so`/`.dll`）同样作为数据文件
-  打包（`collect_data_files("sqlite_vec")`）—— 它是包数据而非 Python 子模块，
-  仅靠 `collect_submodules` 会遗漏。一旦缺失，冻结构建就丢掉 vec0 扩展，向量
-  检索会静默降级为仅关键词（`VecIndex.available()` 吞掉了加载失败）。知识库、
-  知识层与对话这几份 spec 引入的 KB/记忆/对话依赖（`sqlite_vec`、`markitdown`、
-  `openai`、`langgraph`、`langchain`）都是惰性导入，出于同样原因钉进
-  `hiddenimports`。
-  bundle 冒烟测试（`scripts/smoke_test_bundle.sh`）会探测
-  `coffer-daemon --check-vec`，使丢失扩展的构建直接失败，而不是悄悄发布。
+- **惰性导入的依赖必须钉进 `hiddenimports`**，因为 PyInstaller 的静态分析看不到
+  发生在函数内部的 import —— `markitdown`（入站 channel 文档抽取，spec channels
+  FR-030）、`openai`、`langgraph`、`langchain`。包*数据*还需要额外的
+  `collect_data_files`，因为 `collect_submodules` 只够得到 Python 模块。
+  **2026-09-12 修订：** 本条原本讲的是 sqlite-vec —— 它的
+  `vec0.dylib`/`.so`/`.dll` 作为数据文件打包，bundle 冒烟测试会探测
+  `coffer-daemon --check-vec`，使丢失该扩展的构建直接失败，而不是把向量检索
+  静默降级为仅关键词。知识层已经没有向量索引
+  （[Knowledge Is Plain Files](knowledge-is-plain-files.md)），所以这个探测已经
+  移除。`backend/coffer-daemon.spec` 里仍留着的那几行 `sqlite_vec` 收集已经不
+  服务于任何东西，属于待清理的残留。
 - shim 二进制刻意排除 daemon 端的重依赖（FastAPI、uvicorn、SQLAlchemy、
   Alembic、structlog）以保持体积可控 —— shim 只通过 loopback HTTP 与
   daemon 通信，所需仅是 `httpx`。

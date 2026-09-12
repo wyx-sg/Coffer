@@ -1,20 +1,14 @@
-"""On-disk layout for the knowledge substrate.
+"""On-disk layout for the knowledge layer — the sole owner of path construction.
 
-Sole owner of path construction. One layout, one root:
-``~/.coffer/knowledge/<scope>/`` — where ``<scope>`` is the resource name
-(``global``, ``project-<ULID>``, or a named collection). Inside a scope dir:
+One root, one rule: ``~/.coffer/knowledge/<collection>/…``. A collection is a
+top-level subdirectory; below it the human nests whatever they like and the
+system assigns none of it any meaning (spec knowledge FR-004). The only
+directory Coffer itself creates inside a collection is ``.history/``, holding
+the revisions the tidy pass superseded — dot-prefixed so ripgrep skips it and
+the catalogue walks past it (FR-005, FR-052).
 
-- ``notes/``     what an agent or the user wrote (one markdown file each)
-- ``docs/``      ingested documents (the normalized Markdown)
-- ``.raw/``      the ingested originals (hidden, so grep skips them)
-- ``.history/``  pre-rewrite copies kept by the tidy pass (hidden, likewise)
-
-Two content lanes and two hidden archives, nothing else. The archives are
-dot-prefixed so ripgrep skips them: ``coffer__grep`` must never return an
-ingested original, or a superseded revision, alongside the live file.
-
-``$COFFER_KNOWLEDGE_ROOT`` overrides the root for tests. Every name that
-becomes a path segment goes through a traversal guard.
+``$COFFER_KNOWLEDGE_ROOT`` overrides the root for tests. Every segment that
+becomes a path component goes through the traversal guard here (FR-006).
 """
 
 from __future__ import annotations
@@ -22,157 +16,110 @@ from __future__ import annotations
 import os
 import pathlib
 import re
+from datetime import UTC, datetime
 
-# Names that would resolve to a parent dir or the root itself are unsafe for
-# rmtree / write targets. Surfaces already constrain resource names; this is
-# defense-in-depth for any caller that bypasses the surface validator.
+from coffer.domain.knowledge.errors import UnsafeKnowledgePath
+
+HISTORY_DIR_NAME = ".history"
+README_NAME = "README.md"
+
 _DOTS_ONLY = re.compile(r"^\.+$")
-_SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9._-]+$")
-
-
-def _expand_home() -> pathlib.Path:
-    return pathlib.Path(os.environ.get("HOME", "~")).expanduser()
-
-
-def _guard(root: pathlib.Path, name: str, label: str) -> pathlib.Path:
-    """Resolve ``root / name`` and refuse traversal / all-dot names."""
-    if not name or _DOTS_ONLY.fullmatch(name) or not _SAFE_SEGMENT.fullmatch(name):
-        raise ValueError(f"invalid {label} name: {name!r}")
-    candidate = root / name
-    if not candidate.resolve().is_relative_to(root.resolve()):
-        raise ValueError(f"{label} name {name!r} escapes {label} root")
-    return candidate
-
-
-def _safe_segment(value: str, label: str) -> str:
-    """Refuse a value that isn't a single safe path segment.
-
-    Root-escape is already blocked downstream, but a slash-containing value
-    (e.g. an ``ext`` derived from an upload filename) would create nested
-    subdirs *inside* the root. Constrain to one segment as defense-in-depth.
-    """
-    if not value or _DOTS_ONLY.fullmatch(value) or not _SAFE_SEGMENT.fullmatch(value):
-        raise ValueError(f"invalid {label}: {value!r}")
-    return value
-
-
-def _child(parent: pathlib.Path, name: str, label: str) -> pathlib.Path:
-    """A fixed-name subdirectory of a scope dir, traversal-checked."""
-    candidate = (parent / name).resolve()
-    if not candidate.is_relative_to(parent.resolve()):
-        raise ValueError(f"{label} dir escapes the scope dir")
-    return parent / name
-
-
-def _leaf(parent: pathlib.Path, slug: str, label: str) -> pathlib.Path:
-    """``<parent>/<slug>.md``, with ``slug`` guarded as one safe segment."""
-    _safe_segment(slug, label)
-    candidate = (parent / f"{slug}.md").resolve()
-    if not candidate.is_relative_to(parent.resolve()):
-        raise ValueError(f"{label} {slug!r} escapes {parent}")
-    return parent / f"{slug}.md"
-
-
-# --- the one root + the scope dir -------------------------------------------
+_SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9._\- 一-鿿]+$")
 
 
 def knowledge_root() -> pathlib.Path:
-    """``~/.coffer/knowledge/`` (override via ``$COFFER_KNOWLEDGE_ROOT``)."""
+    """The one directory the layer lives in."""
     override = os.environ.get("COFFER_KNOWLEDGE_ROOT")
     if override:
-        return pathlib.Path(override).expanduser()
-    return _expand_home() / ".coffer" / "knowledge"
+        return pathlib.Path(override)
+    home = pathlib.Path(os.environ.get("HOME", "~")).expanduser()
+    return home / ".coffer" / "knowledge"
 
 
-def scope_dir(scope_name: str) -> pathlib.Path:
-    """``~/.coffer/knowledge/<scope>/`` for a scope's resource name."""
-    return _guard(knowledge_root(), scope_name, "knowledge scope")
+def check_segment(segment: str, relpath: str) -> None:
+    """Refuse a path component that is hidden, all dots, or otherwise unsafe."""
+    if not segment:
+        raise UnsafeKnowledgePath(relpath, "empty path segment")
+    if _DOTS_ONLY.fullmatch(segment):
+        raise UnsafeKnowledgePath(relpath, "traversal segment")
+    if segment.startswith("."):
+        raise UnsafeKnowledgePath(relpath, "hidden entries are not addressable")
+    if not _SAFE_SEGMENT.fullmatch(segment):
+        raise UnsafeKnowledgePath(relpath, f"unsafe segment {segment!r}")
 
 
-# --- the two content lanes --------------------------------------------------
+def split(relpath: str) -> list[str]:
+    """The segments of a knowledge-root-relative path, each guarded."""
+    cleaned = (relpath or "").strip().strip("/")
+    if not cleaned:
+        return []
+    segments = [s for s in cleaned.split("/") if s]
+    for segment in segments:
+        check_segment(segment, relpath)
+    return segments
 
 
-def docs_dir(scope_name: str) -> pathlib.Path:
-    """``<scope>/docs/`` — the normalized Markdown of ingested documents."""
-    return scope_dir(scope_name) / "docs"
+def resolve(relpath: str) -> pathlib.Path:
+    """Absolute path for a knowledge-root-relative path, traversal-checked.
 
-
-def doc_path(scope_name: str, doc_id: str) -> pathlib.Path:
-    """Path of the normalized markdown ``docs/<doc-id>.md``."""
-    return _leaf(docs_dir(scope_name), doc_id, "doc id")
-
-
-def notes_dir(store_dir: pathlib.Path) -> pathlib.Path:
-    """The ``notes/`` lane — everything an agent or the user wrote.
-
-    A write lands here directly. There is no staging inbox and no later
-    promotion into a separate topic-doc lane: the tidy pass merges and rewrites
-    notes in place, so a note is a note however recently it was written.
+    The guard runs on the segments *and* on the resolved result: a symlink
+    inside the root could otherwise point out of it.
     """
-    return _child(store_dir, "notes", "notes")
+    root = knowledge_root()
+    candidate = root.joinpath(*split(relpath))
+    root_resolved = root.resolve() if root.exists() else root
+    if candidate.exists() and not candidate.resolve().is_relative_to(root_resolved):
+        raise UnsafeKnowledgePath(relpath, "escapes the knowledge root")
+    return candidate
 
 
-def note_path(store_dir: pathlib.Path, slug: str) -> pathlib.Path:
-    """Path of one note ``<store_dir>/notes/<slug>.md``."""
-    return _leaf(notes_dir(store_dir), slug, "note slug")
+def collection_dir(name: str) -> pathlib.Path:
+    """The directory of one collection."""
+    segments = split(name)
+    if len(segments) != 1:
+        raise UnsafeKnowledgePath(name, "a collection name is one path segment")
+    return knowledge_root() / segments[0]
 
 
-# --- the hidden archives ----------------------------------------------------
+def collection_of(relpath: str) -> str:
+    """The collection a relative path belongs to."""
+    segments = split(relpath)
+    if not segments:
+        raise UnsafeKnowledgePath(relpath, "no collection in path")
+    return segments[0]
 
 
-def raw_dir(scope_name: str) -> pathlib.Path:
-    """``<scope>/.raw/`` — the ingested originals, kept for re-conversion.
+def relative_of(path: pathlib.Path) -> str:
+    """The knowledge-root-relative form of an absolute path."""
+    root = knowledge_root()
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return str(path)
 
-    Dot-prefixed deliberately: grep runs over the whole scope dir, and ripgrep
-    skips hidden entries, so an original never shows up as a second hit
-    alongside the Markdown that was converted from it.
+
+def readme_path(collection: str) -> pathlib.Path:
+    return collection_dir(collection) / README_NAME
+
+
+def history_dir(collection: str) -> pathlib.Path:
+    """Where a collection keeps the revisions tidy replaced."""
+    return collection_dir(collection) / HISTORY_DIR_NAME
+
+
+def history_path(relpath: str, *, now: datetime | None = None) -> pathlib.Path:
+    """Archive destination for the current contents of ``relpath``.
+
+    The file's position inside the collection is flattened into the archived
+    name, so two same-named files in different folders never collide and the
+    original location stays readable to whoever goes looking.
     """
-    return scope_dir(scope_name) / ".raw"
-
-
-def raw_path(scope_name: str, doc_id: str, ext: str) -> pathlib.Path:
-    """Path of the original upload ``.raw/<doc-id>.<ext>``."""
-    _safe_segment(doc_id, "doc id")
-    d = raw_dir(scope_name)
-    bare_ext = ext.lstrip(".")
-    if bare_ext:
-        # A slashed/traversing ext (from an upload filename) would otherwise nest
-        # subdirs inside .raw/; constrain it to a single safe segment.
-        _safe_segment(bare_ext, "raw extension")
-    clean_ext = ext if ext.startswith(".") else f".{ext}" if ext else ""
-    candidate = (d / f"{doc_id}{clean_ext}").resolve()
-    if not candidate.is_relative_to(d.resolve()):
-        raise ValueError(f"raw file for {doc_id!r}{clean_ext!r} escapes the raw dir")
-    return d / f"{doc_id}{clean_ext}"
-
-
-def history_dir(store_dir: pathlib.Path) -> pathlib.Path:
-    """``<store>/.history/`` — the note revisions the tidy pass replaced.
-
-    The tidy pass runs unattended and lets an LLM merge and rewrite notes, so
-    every overwrite archives the prior revision here first. Hidden, and a
-    sibling of ``.raw/`` rather than a child of ``notes/``, so the lane scan
-    and grep both pass it by without needing to know it exists.
-    """
-    return _child(store_dir, ".history", "history")
-
-
-def history_path(store_dir: pathlib.Path, name: str) -> pathlib.Path:
-    """``<store>/.history/<name>.md``, guarded as a single safe segment."""
-    return _leaf(history_dir(store_dir), name, "history name")
-
-
-# --- generic ----------------------------------------------------------------
-
-
-def fact_path(store_dir: pathlib.Path, slug: str) -> pathlib.Path:
-    """Path of a per-note markdown file ``<store_dir>/<slug>.md``.
-
-    Takes the lane dir as an argument rather than deriving it, so the file I/O
-    layer can address a note by the directory it already resolved.
-    """
-    _safe_segment(slug, "fact slug")
-    candidate = (store_dir / f"{slug}.md").resolve()
-    if not candidate.is_relative_to(store_dir.resolve()):
-        raise ValueError(f"fact slug {slug!r} escapes the store dir")
-    return store_dir / f"{slug}.md"
+    segments = split(relpath)
+    if len(segments) < 2:
+        raise UnsafeKnowledgePath(relpath, "not a file inside a collection")
+    collection, rest = segments[0], segments[1:]
+    stamp = (now or datetime.now(UTC)).strftime("%Y%m%dT%H%M%S%f")
+    flattened = "__".join(rest)
+    if flattened.endswith(".md"):
+        flattened = flattened[: -len(".md")]
+    return history_dir(collection) / f"{flattened}.{stamp}.md"

@@ -1,8 +1,8 @@
 name: evals
 
 # The eval flywheel's PR gate (ADR close-the-eval-flywheel). Runs the DETERMINISTIC, model-free
-# suites (retrieval-keyword + tool-search) and fails on relative regression vs
-# the committed baseline — so a prompt / ranker / retrieval / catalogue change
+# suite (tool-search) and fails on relative regression vs
+# the committed baseline — so a prompt / ranker / catalogue change
 # can't silently degrade Coffer's non-deterministic behaviour. The model-bearing
 # routing suite needs a local LLM and stays on-demand (`make eval-routing`), out
 # of CI. Path-filtered: only runs when a surface that affects eval scores moves.

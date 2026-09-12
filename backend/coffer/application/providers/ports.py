@@ -57,11 +57,6 @@ class ProviderIntrospectionPort(Protocol):
     ) -> None:
         """Raise on failure (any exception); return None on success."""
 
-    async def test_embedding(
-        self, *, provider: str, model: str, base_url: str | None, api_key: str | None
-    ) -> int:
-        """Return the embedding dimension; raise on failure."""
-
     async def detect_protocol(self, *, base_url: str | None, api_key: str | None) -> str:
         """Classify the endpoint's wire as 'anthropic'/'openai'/'ollama'/'unknown'.
 
@@ -131,26 +126,6 @@ class ModelIntrospectionService:
         except Exception as e:
             return TestResult(ok=False, message=str(e))
         return TestResult(ok=True, message="connection ok")
-
-    async def test_embedding(
-        self,
-        *,
-        provider: str,
-        model: str,
-        base_url: str | None,
-        credential_ref: str | None,
-        secret_value: str | None = None,
-    ) -> TestResult:
-        try:
-            key = self._key_for(provider, credential_ref, secret_value)
-            dim = await self._port.test_embedding(
-                provider=provider, model=model, base_url=base_url, api_key=key
-            )
-        except Exception as e:
-            return TestResult(ok=False, message=str(e))
-        return TestResult(
-            ok=True, message=f"returned {dim}-dimensional embeddings", detail={"dimensions": dim}
-        )
 
     async def detect_protocol(
         self,

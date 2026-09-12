@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0065"
+HEAD_REVISION = "0066"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -130,12 +130,6 @@ EXPECTED_TABLES = {
     "mcp_server_health",
     "skill_agent_bindings",
     "credentials",
-    "documents",
-    "chunks",
-    "documents_fts",
-    "knowledge_scope_project_roots",
-    "knowledge_scope_labels",
-    "embedding_config",
     "conversations",
     "chat_messages",
     "channel_peers",
@@ -147,9 +141,16 @@ EXPECTED_TABLES = {
 # (0052 renames them on the way up and back on the way down), so every stepwise
 # assertion under 0052 compares against this set instead. ``sync_remotes`` comes
 # out too: 0062 created it, so nothing below 0052 has ever seen it.
-PRE_MERGE_TABLES = (
-    EXPECTED_TABLES - {"knowledge_scope_project_roots", "knowledge_scope_labels", "sync_remotes"}
-) | {"memory_store_project_roots", "memory_store_labels"}
+PRE_MERGE_TABLES = (EXPECTED_TABLES - {"sync_remotes"}) | {
+    # 0066 drops these at head; every revision below it still has them, and
+    # 0066's downgrade recreates them empty so those revisions can drop them.
+    "documents",
+    "chunks",
+    "documents_fts",
+    "embedding_config",
+    "memory_store_project_roots",
+    "memory_store_labels",
+}
 
 
 # The four sync-only tables 0049 DROPs (continuous multi-machine sync withdrawn
@@ -978,7 +979,8 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     assert "memory_projection_bindings" not in _user_tables(db_path)
 
     # 0007 -> 0006: memory reuses the unified substrate, so 0007 owns no table;
-    # the unified schema stays present.
+    # the unified schema stays present. It is present down here at all because
+    # 0066's downgrade recreated it empty on the way past head.
     command.downgrade(cfg, "0006")
     assert {"documents", "chunks", "documents_fts"} <= _user_tables(db_path)
 
@@ -1102,14 +1104,16 @@ def test_db_stamped_by_pre_redesign_branch_is_repaired(tmp_path, monkeypatch):
     command.upgrade(cfg, "head")
 
     tables = _user_tables(db_path)
-    assert {"documents", "chunks", "documents_fts"} <= tables
+    # The repair itself (0010) still ran; 0066 then dropped what it repaired,
+    # so what head proves is that the legacy tables did not survive either.
+    assert not ({"documents", "chunks", "documents_fts"} & tables)
     assert "kb_documents" not in tables
     assert "memory_records" not in tables
     assert _alembic_version(db_path) == HEAD_REVISION
 
     # And the repair is idempotent for fresh DBs: a second upgrade is a no-op.
     command.upgrade(cfg, "head")
-    assert {"documents", "chunks", "documents_fts"} <= _user_tables(db_path)
+    assert not ({"documents", "chunks", "documents_fts"} & _user_tables(db_path))
 
 
 def _seed_retention(db_path: pathlib.Path, table_name: str, retention_days: int | None) -> None:

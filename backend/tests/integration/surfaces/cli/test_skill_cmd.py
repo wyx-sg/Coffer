@@ -164,12 +164,16 @@ def _register_agent(home: pathlib.Path, name: str) -> pathlib.Path:
 
 
 @pytest.mark.acceptance(spec="skill-manager", scenario="desktop and CLI cover every operation")
-def test_skill_list_empty_json(skill_cli_daemon):
-    """`skill list --json` is an empty JSON array when no skills exist."""
+def test_skill_list_json_lists_only_coffers_own_seeded_skill(skill_cli_daemon):
+    """`skill list --json` before the user imports anything.
+
+    It is not empty: Coffer seeds its own knowledge skill at boot (spec
+    knowledge FR-042). What this pins is that nothing else is there.
+    """
     result = _runner.invoke(cli_app, ["skill", "list", "--json"])
     assert result.exit_code == 0, result.output
     items = json.loads(_extract_json(result.output))
-    assert items == []
+    assert [i["name"] for i in items] == ["coffer-knowledge"]
 
 
 def test_skill_list_table_default(skill_cli_daemon):

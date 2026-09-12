@@ -17,10 +17,10 @@ from httpx import ASGITransport, AsyncClient
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.audit_service import AuditService
 from coffer.application.knowledge.kind import make_knowledge_kind
+from coffer.application.knowledge.service import KIND_KNOWLEDGE
 from coffer.application.mcp.kind import make_mcp_kind
 from coffer.application.resource_service import ResourceService
 from coffer.application.skill.kind import make_skill_kind
-from coffer.domain.knowledge.document import KIND_KNOWLEDGE
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -39,10 +39,10 @@ from coffer.surfaces.http.resource_routes import router as resource_router
 async def _client(tmp_path):
     """Wire a real app with the production mcp_server/knowledge/agent/skill Kinds.
 
-    mcp_server and knowledge are the two ends of the spectrum (supports_scope
-    True vs False); skill is a lifecycle kind (generic_create_allowed=False)
-    that DOES support scope, proving update_scope is not gated on that flag;
-    agent is a lifecycle kind that does NOT.
+    mcp_server and agent are the two ends of the spectrum (supports_scope
+    True vs False); skill and knowledge are lifecycle kinds
+    (generic_create_allowed=False) that DO support scope, proving update_scope
+    is not gated on that flag.
     """
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
@@ -94,8 +94,14 @@ async def test_get_scope_returns_null_and_supports_scope_for_mcp_server(tmp_path
 async def test_get_scope_reports_kinds_without_scope(tmp_path):
     c, engine, svc = await _client(tmp_path)
     async with c:
-        await svc.register(kind=KIND_KNOWLEDGE, name="notes", config={}, actor="cli")
-        r = await c.get(f"/api/v1/resources/{KIND_KNOWLEDGE}/notes/scope")
+        await svc.register(
+            kind="agent",
+            name="claude",
+            config={"type": "claude_code"},
+            actor="agent-service",
+            allow_lifecycle_kind=True,
+        )
+        r = await c.get("/api/v1/resources/agent/claude/scope")
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["scope"] is None
@@ -155,16 +161,24 @@ async def test_put_empty_scope_is_dormant_and_null_clears(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_put_scope_on_knowledge_kind_returns_422_scope_invalid(tmp_path):
+async def test_put_scope_on_knowledge_kind_narrows_the_collection(tmp_path):
+    """A collection IS a Resource so that it can be authorized (spec knowledge
+    FR-012): per-agent scope is the only reason the kind is in the framework."""
     c, engine, svc = await _client(tmp_path)
     async with c:
-        await svc.register(kind=KIND_KNOWLEDGE, name="notes", config={}, actor="cli")
+        await svc.register(
+            kind=KIND_KNOWLEDGE,
+            name="shopee",
+            config={},
+            actor="cli",
+            allow_lifecycle_kind=True,
+        )
         r = await c.put(
-            f"/api/v1/resources/{KIND_KNOWLEDGE}/notes/scope",
+            f"/api/v1/resources/{KIND_KNOWLEDGE}/shopee/scope",
             json={"scope": ["claude-code"]},
         )
-        assert r.status_code == 422, r.text
-        assert r.json()["error"]["code"] == "SCOPE_INVALID"
+        assert r.status_code == 200, r.text
+        assert r.json()["scope"] == ["claude-code"]
     await engine.dispose()
 
 

@@ -59,7 +59,8 @@ MCP scoping 此前作为某个 kind 自己的特性被尝试过一次，并在 2
    | --- | --- | --- |
    | `mcp_server` | agent | 网关按会话身份过滤该 server 的工具。 |
    | `skill` | agent | 分发时取 skill 自身 `enabled` 与 scope 的交集；已分发但被禁用或不在 scope 内的副本会被回收。 |
-   | `agent`、`channel`、`knowledge` | 无 | 非 null 的 scope 在校验阶段被拒绝。 |
+   | `knowledge` | agent | 内置知识工具按会话身份过滤：一个会话能 list、grep、读、写哪些 collection。 |
+   | `agent`、`channel` | 无 | 非 null 的 scope 在校验阶段被拒绝。 |
 
 4. **shim 自报的 `--agent` 身份。** shim 安装时把
    `coffer-mcp-shim --agent <name>` 写入 agent 的配置；shim 在握手时连同既有的
@@ -81,11 +82,16 @@ MCP scoping 此前作为某个 kind 自己的特性被尝试过一次，并在 2
    排除，一直以来就是这么做的。按 skill 排除的能力一点没少，只是表达在 skill 上，
    而不是表达在 agent 上。
 
-6. **知识永不 scope。** `knowledge` kind 不声明 scope，并拒绝非 null 值——它永远
-   对所有 agent 共享。（它自己的 `global` / `project-<ULID>` / 具名集合这条轴是
-   知识层对*内容*的 scope，与本框架字段无关；后者管的是*哪个 agent 能看见某个
-   资源*。）聊天历史、审计日志、运行时状态与仅本机
-   的设置保持机器本地（此处是重申边界，不是新决策）。
+6. **知识 collection 是要 scope 的——2026-09-12 修订。** 本 ADR 最初写的是
+   `knowledge` kind 不声明 scope，因为当时的 collection 只是对*内容*的三种存储
+   scope 之一（`global` / `project-<ULID>` / 具名集合），而不是谁刻意划出的边界。
+   在这一层精简为纯文件之后，collection 是它**唯一**的边界，而授权正是它之所以
+   是 Resource 的全部理由：该 kind 声明 `supports_scope`，agent 只能 list、grep、
+   读、写为它激活的那些 collection
+   （[Knowledge Is Plain Files](knowledge-is-plain-files.md)，spec knowledge
+   FR-010…FR-012）。执行点只在 MCP 工具面，所以它防的是误召回，而不是一个同时
+   握有 shell 工具的 agent 有意的文件系统访问（FR-014）。聊天历史、审计日志、
+   运行时状态与仅本机的设置保持机器本地（此处是重申边界，不是新决策）。
 
 ## 已考虑的备选方案
 

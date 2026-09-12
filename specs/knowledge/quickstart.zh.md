@@ -1,143 +1,179 @@
-# Quickstart —— Memory（跨 agent 共享记忆）
+# 快速上手 — 知识层
 
 > English: [quickstart.md](./quickstart.md)
 
-> **历史文档 —— 2026-09-10。** spec knowledge（Knowledge Base）与 spec knowledge（Memory）
-> 于当日合并为统一的 **Knowledge Layer（知识层）**。合并后的模型以
-> [`spec.md`](./spec.md) 为准 —— 一个 `knowledge` kind、三种 scope、单一存储根
-> `~/.coffer/knowledge/<scope>/`、六个 `coffer__*` 工具。本文档记录的是合并之前
-> 的设计；凡出现「memory 面」「`memory` kind」`~/.coffer/memory/` 或
-> `/api/v1/memory_stores` 之处，请以 `spec.md` 中合并后的对应物为准。下文的命令与
-> 工具名已更新到合并后的 surface，照抄即可运行。目录名 `specs/knowledge/` 同样是
-> 历史遗留：它是所有入链与验收审计所依赖的 spec id。
+知识就是 `~/.coffer/knowledge/<collection>/` 下的一个 Markdown 文件目录。agent
+靠读一份即时生成的目录再 grep 找到需要的东西，就像它导航一个代码库；你靠打开
+文件夹找到。没有索引，所以你们中一方写下的东西，另一方立刻就能看到。见
+[`spec.md`](./spec.md) 与
+[Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)。
 
-memory 是 Coffer 统一知识底座的 **memory 面**。事实是 markdown 文件（真相源），跨所有 agent 共享 —— **只经 MCP 读写**（Coffer 保留自己的规范化格式，不触碰各 agent 的原生记忆文件）。写入时不调 LLM；agent 直接写一条干净的事实。
+## 先建一个 collection
 
-## 通过 MCP 客户端（主要 surface）
+没有任何东西会自动开通。一个 **collection** 既是一个顶层文件夹，*也是*一个
+`knowledge` Resource——你有意创建它，而这正是它能被逐 agent 授权的前提。
 
-出现六个内置工具（无需 store 引用 —— 作用域由 agent 的工作目录解析）：
-
-- `coffer__search(query, scope?, top_k?)` —— 一次检索同时覆盖某作用域的 notes 与上传的文档，返回排序结果。
-- `coffer__grep(pattern, scope?, max_matches?)` —— 对作用域内每个 Markdown 文件做字面/正则匹配。
-- `coffer__read(id, scope?)` —— 按 id 读取整条（note 或文档）全文。
-- `coffer__list(scope?, all?, limit?)` —— 浏览单个作用域的内容，或 `all=true` 列出所有作用域的目录。
-- `coffer__write(text, title?, description?, filename?, id?, scope?)` —— 写一条 note、存一个文档（`filename`）、或改写已有条目（`id`）。
-- `coffer__delete(id, scope?)` —— 删除一条 note 或文档。
-
-写入直接落进该作用域的 `notes/` lane —— 没有 inbox 要排空，也没有交接 lane，所以
-任何内容都不必先被归档到某处才能被找到。
-
-```text
-# 在一个 git 项目内，agent 记下一条项目事实：
-coffer__write(text="This repo deploys via `make release`, never git push --tags.",
-              title="Release process")
-
-# 一条到处可用的个人偏好：
-coffer__write(text="Prefers tabs over spaces.", title="Indentation", scope="global")
-
-# 之后 —— 也许是另一个 agent —— 来检索：
-coffer__search(query="how do we deploy?")
+```bash
+coffer knowledge create shopee -d "Internal systems — services, data plane, the chains between them."
+coffer knowledge collections
 ```
 
-`search` 在每次调用时惰性重建该作用域目录的索引，因此另一个 agent（经 MCP）、用户在 Coffer UI、或直接在磁盘上所做的编辑会即时可见。
+`create` 会建目录、注册 Resource，并把 `--description` 写进这个 collection 的
+`README.md`。目录对一个 collection 的一句话描述永远取自该 README 的首段，所以
+以后改描述就是改那个文件。
+
+只有被授权的 agent 才看得见一个 collection：
+
+```bash
+coffer scope set knowledge:shopee --agents claude_code
+coffer scope show knowledge:shopee
+coffer scope clear knowledge:shopee          # 恢复为所有 agent
+```
+
+删除 collection 走 Resource 框架，而不是某条知识路由——生命周期、审计与级联
+都与其它资源完全一致：
+
+```bash
+coffer resource delete knowledge:shopee
+```
+
+## 经 MCP 客户端（主要界面）
+
+五个内置工具。没有 scope 参数、没有模式、没有 `top_k`：一次调用覆盖该 agent
+被授权的每一个 collection。
+
+- `coffer__list(path?)` —— 目录，**一次一层**。不带参数时列出你可读的每个
+  collection，各带描述与文件数。带路径时返回该目录的直接子目录与文件，每个
+  文件带 `title` 和 `description`。
+- `coffer__grep(pattern, collection?, max_matches?)` —— 对文件跑 ripgrep，
+  字面或正则，返回文件、行号与命中行。不分词，所以中文和别的文本一样能命中。
+- `coffer__read(path)` —— 完整读一个文件，外加它的绝对路径。
+- `coffer__write(title, description, body, directory | path)` —— 在
+  `directory` 下创建文件（文件名由 `title` slug 化而来），或替换 `path` 处的
+  文件。二者恰选其一。
+- `coffer__delete(path)` —— 从磁盘删除一个文件。
+
+**没有 `coffer__search`**：背后没有带排序的索引，它只会是 `grep` 的第二个名字。
+
+动作是「先看目录再 grep」——下钻决定*读哪个文件*，grep 定位*哪一行*：
+
+```text
+coffer__list()                              # → shopee（48 篇）、coffer（4 篇）
+coffer__list(path="shopee")                 # → account/、gateway-routing.md、…
+coffer__list(path="shopee/account")         # → 标题 + 描述
+coffer__read(path="shopee/account/session-ownership.md")
+
+coffer__grep(pattern="account.session")     # 已经知道字面串的时候
+coffer__grep(pattern="部署流程", collection="shopee")
+
+coffer__write(title="Release process",
+              description="How this repo cuts a release, and what not to do.",
+              body="Deploys via `make release`, never `git push --tags`.",
+              directory="coffer")
+```
+
+agent 之所以知道这一层存在，是因为 Coffer 通过它常规的 skill 通道投递了
+`coffer-knowledge` skill——没有 hook、没有会话注入，也不往 agent 自己的记忆
+文件里写任何东西。
 
 ## CLI
 
-CLI 用**名字**以位置参数寻址作用域 —— `global`、`project-<ulid>` 或具名集合（`global` 与每项目作用域自动置备；`coffer knowledge list` 显示已有哪些）。没有 `--scope` 这类 flag。
+八条命令，全都是 daemon 之上的薄 HTTP 外壳。路径相对于知识根目录。
 
 ```bash
-# 看有哪些作用域（一个 global + 每项目一个 + 任意具名集合），再查看其中一个。
-coffer knowledge list
-coffer knowledge describe global
+# 浏览。
+coffer knowledge collections                       # 每个 collection
+coffer knowledge ls shopee                         # 一层：文件夹 + 文件
+coffer knowledge ls shopee/account --json
+coffer knowledge read shopee/account/session-ownership.md
 
-# 向某作用域写一条条目（actor=user）。
-coffer knowledge remember project-01J… "API base path is /api/v2."
-coffer knowledge remember global "Prefers tabs over spaces."
+# 直接搜文件本身。没有索引；这就是搜索。
+coffer knowledge grep "account.session"
+coffer knowledge grep "部署流程" --in shopee        # 中文很好用——不需要分词器
+coffer knowledge grep "make release" --json
 
-# 列出条目 / 取单条。
-coffer knowledge entries project-01J…
-coffer knowledge entries global --json
-coffer knowledge get global <entry-id>
+# 写入。--in（在这里新建）与 --path（替换这个）恰选其一。
+coffer knowledge write -t "Release process" \
+  -d "How this repo cuts a release, and what not to do." \
+  -b "Deploys via \`make release\`, never \`git push --tags\`." \
+  --in coffer
+coffer knowledge write -t "Release process" -d "…" -b "…" --path coffer/release-process.md
 
-# 从某作用域检索。
-coffer knowledge recall project-01J… "deployment"
-coffer knowledge recall project-01J… "deployment" --top-k 3 --json
-coffer knowledge search project-01J… "deployment"     # 段落检索，文档也覆盖
-coffer knowledge grep global "部署流程"                 # 对 Markdown 文件做精确/regex 匹配 —— 对 CJK 极好用
-
-# 编辑、删除、清空一个作用域（作用域保留）。
-coffer knowledge edit-entry global <entry-id> "API base path is /api/v3."
-coffer knowledge forget global <entry-id>
-coffer knowledge clear project-01J… --yes
+# 删一个文件。
+coffer knowledge delete coffer/release-process.md
 ```
 
-`--json` 在上面每个读命令上都可用。没有 `--mode` flag：检索模式是引擎内部细节（[Retrieval Mode Is Internal](../../docs/decisions/retrieval-mode-is-internal.zh.md)）—— 引擎自行解析该作用域的策略（作用域列了 vector 就是 `hybrid`，否则 `keyword`），未配置 embedding provider 时内部静默回退到 `keyword`，不带逐查询标注。`coffer knowledge grep` 是真实服务的 —— ripgrep 扫 Markdown 文件，无索引、无分词器，所以在 FTS5 失效的地方（如 CJK）也能用。
+`--json` 在 `collections`、`ls`、`read`、`grep` 上都可用。
 
-### 整理 notes lane
+## 用你自己的工具整理
 
-一个作用域的 notes 会被定期整理：后台 worker 在 daemon 启动时跑一趟补齐，之后按
-间隔执行，合并重复的 note 并把它们重写成主题文档。任何覆盖或合并之前，先把旧版本
-复制进隐藏的 `.history/`，因此无人值守的重写始终可以捞回来。未配置内部模型
-（设置 → LLM 连接）时这趟整理空转。
+文件系统就是摄入界面。从 Finder 把一篇 Markdown 丢进某个 collection、在编辑器里
+改掉一行错的、删掉一篇过时的——每一次改动对下一次调用都是即时生效的，不需要
+导入、不需要重建索引、也没有任何东西要对账，因为文件**就是**知识。
 
-手动跑一趟：
+你手工添加的文件应当带上 Coffer 写的那套 frontmatter，否则它在目录里的标题与
+描述会是空的：
+
+```markdown
+---
+title: Session ownership
+description: Which service owns a login session, and what reads it.
+actor: user
+created_at: '2026-09-12T04:18:33Z'
+updated_at: '2026-09-12T04:18:33Z'
+---
+
+Login state is owned by `account.session`.
+```
+
+没有上传端点，也没有格式转换。一份 PDF 在有人把它变成 Markdown 之前，不是知识。
+
+## 整理（tidy）
+
+针对单个 collection 的一趟有界 agentic 流程：它合并重复内容、把它们重写成连贯
+的文档，动手之前先把每个旧版本复制进隐藏的 `.history/`。没有配置内部模型
+（设置 → LLM 连接）时，它是干净的 no-op。
 
 ```bash
-coffer knowledge organize project-01J…    # 对该作用域的 notes/ 跑一趟整理
+coffer knowledge organize shopee
 ```
 
-Web UI 对应作用域 header 上的**「整理」**按钮。每趟整理在 Coffer 的审计日志里记一行
-—— 不再有 per-scope 的变更记录文件。
+Web UI 里对应的是 **Tidy** 按钮。后台 worker 也可以按间隔跑这趟流程，但它
+**默认关闭**且是安装级的——请到设置 → 引擎里有意打开，因为它会在没有 diff
+可审的情况下改写你和你的 agent 共同管理的文件。每一趟都记进 Coffer 的审计日志。
 
 ## Web UI
 
-1. 侧栏 → **Memory**。页面以表格列出所有作用域（global 加每项目一个 —— 自动置备 —— 以及任意具名集合）。「Notes」列统计各作用域写下了多少条。
-2. 点一行进入该作用域的详情页。
-3. 详情页是**两个 tab：文档与 Notes**，树上方一个过滤框，输入即按文件名匹配 —— 纯本地，无按钮，不发请求。服务端检索留在它该在的地方：agent 走 `coffer__search`，命令行走 `coffer knowledge recall`。
-4. 点一条展开 **只读** 渲染（UI 不在应用内编辑 note 正文）。每个文件及其所在文件夹提供 **在外部编辑器中打开** 与 **在文件管理器中显示**（由本地 daemon 执行的真实 OS 动作）；打开哪个编辑器由全局首选编辑器偏好决定（见 spec ui-shell）。要纠正一条 note，就在自己的编辑器里打开它 —— 下一次检索经 lazy reindex-on-read 拾取改动。
-5. header 保留标题、重命名铅笔和项目路径。**「上传」**与**「整理」**是仅有的两个按钮；设置 / 检查源文件 / 重建索引收进溢出菜单。只有真的出现降级文档时才显示警告。
-
-每次写入 —— agent（MCP）、CLI 或 REST —— 都会重建索引并审计；Web UI 只在上传文档或跑一趟整理时写入。不存在派生的 `MEMORY.md`，也没有 `INDEX.md`：`notes/` 与 `docs/` 下的 markdown 文件就是真相源（Files as Truth）。
-
-## 可选：vector recall
-
-默认检索是 keyword + grep —— 零配置、离线、语言无关。embedding 是**全安装级**配置的，不挂在单个作用域上：在 Web UI 里配一次（**设置 → 引擎 → Embedding**，即 `PUT /api/v1/embedding/config`），CLI 没有对应命令。那张卡片就是两个选择器——先选模型提供商，再选它的一个 `embedding` 类型的模型——与它上方的内部引擎卡片同一形状；没有「添加模型」表单，也没有 key 字段。该配置**命名一条连接**——你已经配好的某条 LLM 连接——外加它上面的一个模型；协议、base URL 与 API key 都从那条连接解析，所以 embedding 设置里既没有 `base_url`、也没有 `credential_ref`，更不持有自己的 key。作用域只需在自己的 retrieval modes 里列上 `vector` 来选择加入：
-
-```bash
-# key 已经在连接上；先去「模型 provider」加一条连接
-coffer knowledge configure project-01J… --enable-vector
-```
-
-命名一条不存在的连接、一条 `anthropic` 连接（没有 embedding API）、一条做了策展但其中没有 modality 为 `embedding` 的条目的连接，或该连接并未策展的某个模型，都会以 422 被拒绝并说明是哪一种。完全不做策展的连接表示不限制，你填的模型 id 会被直接采信。`POST /api/v1/embedding/test` 接收 `{connection, model}`，报告向量维度且不持久化任何东西。未命名连接时该配置不生效，检索退化为 keyword/grep。
-
-`coffer knowledge configure <name>` 对作用域配置做 PATCH；其余旋钮有 `--max-entry-chars`、`--chunk-size`、`--chunk-overlap`、`--auto-update-sources/--no-auto-update-sources`。启用 vector 会对作用域里已有的内容重建索引。新建的具名集合天生就带 vector，创建对话框不再询问：一个作用域带哪种索引是实现细节，不该在创建时拿去问用户。
-
-双语内容推荐本地连接（Ollama 配 `bge-m3`）或对中文嵌入好的云端模型。embedding 模型可变 —— 改它会重嵌每一个列了 vector 模式的作用域。未配置 embedding 时，启用了 vector 的作用域会在内部回退到 keyword，不带逐查询标注。
+1. 侧边栏 → **知识**。一棵树，没有 tab：先是各个 collection，再是你在里面
+   嵌套的任何东西。
+2. 点一个文件看到**只读**渲染。UI 没有编辑器；文件及其所在文件夹各自提供
+   **在外部编辑器打开**与**在文件管理器中显示**（由本机 daemon 执行的真实
+   系统操作；打开哪个编辑器取决于全局首选编辑器设置，见 spec ui-shell）。
+   你的修改立刻生效——没有任何东西需要对账。
 
 ## 文件在哪
 
-```
+```text
 ~/.coffer/
-├── coffer.db                                  # SQLite —— 可重建索引（documents、chunks、FTS5、vec、audit）
-└── memory/
-    ├── global/
-    │   ├── notes/                             # 谁写下的内容（coffer__write 落这里）
-    │   │   ├── prefers-tabs.md                # 每条 note 一个文件 = 真相
-    │   │   └── .history/                      # 整理覆盖前的旧版本（隐藏）
-    │   ├── docs/                              # 上传的文档，统一转成 markdown
-    │   └── .raw/                              # 上传的原件（隐藏）
-    └── projects/<project-ulid>/
-        ├── notes/deploy-via-make-release.md
-        ├── docs/
-        └── .raw/
+├── coffer.db                       # 完全没有知识相关的表——每个 collection 只有 resources 里的一行
+└── knowledge/
+    ├── shopee/
+    │   ├── README.md               # 首段 = 这个 collection 的描述
+    │   ├── account/
+    │   │   └── session-ownership.md
+    │   ├── gateway-routing.md
+    │   └── .history/               # tidy 替换掉的旧版本（隐藏）
+    └── coffer/
+        ├── README.md
+        └── release-process.md
 ```
 
-两条 lane：`notes/` 放人或 agent 写下的一切，`docs/` 放上传进来的一切。`.history/`
-与 `.raw/` 刻意隐藏 —— ripgrep 会跳过它们，所以 `coffer__grep` 永远不会在正文旁边
-又返回一个归档旧版或一份原件。markdown 文件是真相源；`coffer.db` 随时可从它们重建。
+`.history/` 以点开头是刻意的：ripgrep 跳过隐藏条目，所以归档的旧版本绝不会跟
+活文件一起返回。
 
-## Limits
+## 上限
 
-- 条目文本：1–8192 字符（每个作用域可经 `--max-entry-chars` 配置到 32 768）。
-- search `top_k`：1–20（默认 5）。
-- 作用域：`global`、某个 `project-<ulid>` 作用域，或具名集合 —— 工具调用时省略则按 agent 的 cwd 解析（不在项目内则回落到 `global`）。
+- `grep` 命中数：1–500，默认 200。响应会标记 `truncated`。
+- 文件名：标题的 slug，最长 80 字符，CJK 原样保留；重名时追加 `-2`、`-3`、…。
+- 目录规模：没有硬上限，但设计假设目录塞得进 agent 的上下文——到几百篇文件
+  都很从容。

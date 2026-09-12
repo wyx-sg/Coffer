@@ -1,17 +1,10 @@
 """Wire contract for the one ``knowledge`` kind.
 
-The pre-merge version of this module diffed the live app against the OpenAPI
-yamls of the two specs that have since merged — the knowledge base's and
-memory's. Those contracts describe a world with two kinds and two route trees,
-which no longer exists; until the merged spec lands they cannot be the oracle. So the oracle
-here is an explicit table instead: the routes, the enums and the built-in tool
-set are written down, and the app must match them.
-
-That still catches the drift class the yaml check existed for — a route quietly
-renamed or dropped, an enum that grew a value the wire never learned about, a
-seventh built-in tool appearing without anyone deciding on it. **When the merged
-``knowledge`` OpenAPI contract is written, restore the yaml-driven check** (the
-component→model coverage assertions) on top of this one.
+The oracle is an explicit table: the routes, the wire models and the built-in
+tool set are written down here, and the app must match them. That catches the
+drift class this module exists for — a route quietly renamed or dropped, a
+sixth built-in tool appearing without anyone deciding on it, a field slipping
+back onto a payload the layer no longer has anything to put in.
 """
 
 from __future__ import annotations
@@ -20,169 +13,98 @@ import pytest
 
 from coffer.surfaces.http.knowledge import schemas
 
-# Every route the knowledge kind serves, as (method, path). The scope name is
-# always the first path segment after the prefix: one tree, one addressing rule.
+#: Every route the knowledge kind serves, as (method, path). Six gestures and a
+#: manual tidy trigger; deleting a collection goes through the kind-agnostic
+#: Resource route, so it is deliberately absent (spec knowledge FR-060).
 _EXPECTED_ROUTES = {
-    # scopes
-    ("GET", "/api/v1/knowledge"),
-    ("POST", "/api/v1/knowledge"),
-    ("GET", "/api/v1/knowledge/{name}"),
-    ("PATCH", "/api/v1/knowledge/{name}"),
-    ("PATCH", "/api/v1/knowledge/{name}/label"),
-    ("GET", "/api/v1/knowledge/{name}/metrics"),
-    # entries
-    ("POST", "/api/v1/knowledge/{name}/entries"),
-    ("GET", "/api/v1/knowledge/{name}/entries"),
-    ("DELETE", "/api/v1/knowledge/{name}/entries"),
-    ("GET", "/api/v1/knowledge/{name}/entries/{entry_id}"),
-    ("PATCH", "/api/v1/knowledge/{name}/entries/{entry_id}"),
-    ("DELETE", "/api/v1/knowledge/{name}/entries/{entry_id}"),
-    # documents
-    ("POST", "/api/v1/knowledge/{name}/documents"),
-    ("GET", "/api/v1/knowledge/{name}/documents"),
-    ("GET", "/api/v1/knowledge/{name}/documents/status"),
-    ("POST", "/api/v1/knowledge/{name}/documents/reembed-batch"),
-    ("GET", "/api/v1/knowledge/{name}/documents/{document_id}"),
-    ("PUT", "/api/v1/knowledge/{name}/documents/{document_id}"),
-    ("DELETE", "/api/v1/knowledge/{name}/documents/{document_id}"),
-    ("POST", "/api/v1/knowledge/{name}/documents/{document_id}/reconvert"),
-    ("POST", "/api/v1/knowledge/{name}/documents/{document_id}/update-source"),
-    # retrieval + maintenance
-    ("POST", "/api/v1/knowledge/{name}/recall"),
-    ("POST", "/api/v1/knowledge/{name}/search"),
-    ("POST", "/api/v1/knowledge/{name}/grep"),
-    ("POST", "/api/v1/knowledge/{name}/reindex"),
-    ("POST", "/api/v1/knowledge/{name}/check-sources"),
-    # the tidy pass — one pass, one manual trigger
-    ("POST", "/api/v1/knowledge/{name}/organize"),
+    ("GET", "/api/v1/knowledge/collections"),
+    ("POST", "/api/v1/knowledge/collections"),
+    ("GET", "/api/v1/knowledge/tree"),
+    ("GET", "/api/v1/knowledge/file"),
+    ("PUT", "/api/v1/knowledge/file"),
+    ("DELETE", "/api/v1/knowledge/file"),
+    ("GET", "/api/v1/knowledge/grep"),
+    ("POST", "/api/v1/knowledge/collections/{name}/tidy"),
 }
 
-#: The six built-in MCP tools, unprefixed (the gateway adds ``coffer__``).
-#: They replace the twelve the two pre-merge kinds registered between them;
-#: ``set_handoff`` and ``resume`` retired with the handoff lane.
-_EXPECTED_TOOLS = {
-    "search",
-    "grep",
-    "read",
-    "list",
-    "write",
-    "delete",
-}
+#: Exactly five, and none of them is ``search``: with no ranked index behind it
+#: that would be a second name for ``grep`` (FR-024, FR-040).
+_EXPECTED_BUILTIN_TOOLS = {"list", "grep", "read", "write", "delete"}
 
 
-@pytest.fixture(scope="module")
-def app_routes() -> set[tuple[str, str]]:
-    """Every (method, path) the app publishes.
+def _knowledge_routes(app) -> set[tuple[str, str]]:  # type: ignore[no-untyped-def]
+    """Every knowledge route the app DECLARES, read from its OpenAPI schema.
 
-    Read from the generated OpenAPI document rather than by walking
-    ``app.routes``: since FastAPI 0.141 ``include_router`` stores an opaque
-    wrapper instead of copying the sub-router's routes up, so a direct walk
-    sees nothing for any router that was included. The schema is what the app
-    actually serves, and it is stable across that implementation detail.
+    Read from the schema rather than by walking ``app.routes``: FastAPI 0.141
+    stopped flattening an included router's routes into that list (they sit
+    behind an opaque wrapper object), so introspecting it silently found
+    nothing. The schema is the wire contract anyway, which is what this module
+    is about.
     """
-    from coffer.surfaces.http.app import create_app
-
-    schema = create_app().openapi()
+    schema = app.openapi()
     return {
         (method.upper(), path)
-        for path, operations in schema["paths"].items()
+        for path, operations in schema.get("paths", {}).items()
+        if path.startswith("/api/v1/knowledge")
         for method in operations
+        if method.upper() not in {"HEAD", "OPTIONS", "PARAMETERS"}
     }
 
 
-def test_every_knowledge_route_is_declared(app_routes) -> None:
-    """The app serves exactly the routes above — no more, no fewer."""
-    live = {(m, p) for m, p in app_routes if p.startswith("/api/v1/knowledge")}
-    assert live == _EXPECTED_ROUTES, (
-        f"undeclared routes: {sorted(live - _EXPECTED_ROUTES)}; "
-        f"missing routes: {sorted(_EXPECTED_ROUTES - live)}"
-    )
+def test_every_knowledge_route_is_declared(app_with_knowledge) -> None:  # type: ignore[no-untyped-def]
+    assert _knowledge_routes(app_with_knowledge) == _EXPECTED_ROUTES
 
 
-def test_no_pre_merge_route_trees_remain(app_routes) -> None:
-    """``/memory_stores`` and ``/knowledge_bases`` are gone, not aliased."""
-    stale = {(m, p) for m, p in app_routes if "memory_stores" in p or "knowledge_bases" in p}
-    assert not stale, f"pre-merge route tree still mounted: {sorted(stale)}"
+def test_builtin_tool_set_is_the_five(builtin_registry) -> None:  # type: ignore[no-untyped-def]
+    assert {t.name for t in builtin_registry.list()} == _EXPECTED_BUILTIN_TOOLS
 
 
-def test_builtin_tool_set_is_the_six() -> None:
+def test_every_builtin_tool_describes_itself(builtin_registry) -> None:  # type: ignore[no-untyped-def]
+    for tool in builtin_registry.list():
+        assert tool.description.strip(), f"{tool.name} has no description"
+        assert tool.input_schema.get("type") == "object"
+
+
+def test_no_builtin_tool_takes_a_scope_or_a_mode(builtin_registry) -> None:  # type: ignore[no-untyped-def]
+    """Both axes are gone: there are no retrieval modes, and a caller never
+    names a scope — it sees every collection it is authorized for (FR-012)."""
+    for tool in builtin_registry.list():
+        properties = set(tool.input_schema.get("properties", {}))
+        assert not properties & {"scope", "mode", "top_k", "cwd"}, tool.name
+
+
+def test_a_write_payload_requires_a_description() -> None:
+    """With no ranked index the catalogue is the retrieval surface, so a file
+    that fails to describe itself is unfindable (FR-003)."""
+    with pytest.raises(ValueError):
+        schemas.FileWrite(title="t", description="", body="b", directory="shopee")
+
+
+def test_collection_config_carries_nothing() -> None:
+    """A collection has no settings at all, and unknown keys are refused rather
+    than quietly stored (FR-081)."""
+    from coffer.domain.knowledge.config import KnowledgeConfig
+
+    assert KnowledgeConfig().model_dump() == {}
+    with pytest.raises(ValueError):
+        KnowledgeConfig(retrieval_modes=["keyword"])  # type: ignore[call-arg]
+
+
+@pytest.fixture
+def app_with_knowledge(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
+    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
+    from coffer.surfaces.http.app import create_app
+
+    return create_app()
+
+
+@pytest.fixture
+def builtin_registry():  # type: ignore[no-untyped-def]
     from coffer.application.builtin_tools import BuiltinToolRegistry
     from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
-    from coffer.application.knowledge.document_tools import register_document_builtin_tools
 
     registry = BuiltinToolRegistry()
-    register_knowledge_builtin_tools(
-        registry,
-        knowledge_service=None,  # type: ignore[arg-type]
-    )
-    register_document_builtin_tools(
-        registry,
-        resources=None,  # type: ignore[arg-type]
-        knowledge_service=None,  # type: ignore[arg-type]
-    )
-    assert {t.name for t in registry.list()} == _EXPECTED_TOOLS
-
-
-def test_every_builtin_tool_describes_itself() -> None:
-    """The description is what an agent reads to choose a tool, so it has to say
-    something. A one-liner that only restates the name is not a description."""
-    from coffer.application.builtin_tools import BuiltinToolRegistry
-    from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
-    from coffer.application.knowledge.document_tools import register_document_builtin_tools
-
-    registry = BuiltinToolRegistry()
-    register_knowledge_builtin_tools(
-        registry,
-        knowledge_service=None,  # type: ignore[arg-type]
-    )
-    register_document_builtin_tools(
-        registry,
-        resources=None,  # type: ignore[arg-type]
-        knowledge_service=None,  # type: ignore[arg-type]
-    )
-    for tool in registry.list():
-        assert len(tool.description) >= 80, f"{tool.name} needs a real description"
-        assert tool.input_schema["type"] == "object"
-
-
-def test_retrieval_mode_enum_values_match_the_domain() -> None:
-    """Enum VALUES are the drift class a field-coverage check waves through.
-
-    The config patch is what carries the enum on the wire — both as the list a
-    scope indexes with and as the single default mode."""
-    from coffer.domain.knowledge.retrieval import RETRIEVAL_MODES
-
-    props = schemas.KnowledgeConfigPatch.model_json_schema()["properties"]
-    modes_enum = props["retrieval_modes"]["anyOf"][0]["items"]["enum"]
-    default_enum = props["default_mode"]["anyOf"][0]["enum"]
-    assert set(modes_enum) == set(RETRIEVAL_MODES)
-    assert set(default_enum) == set(RETRIEVAL_MODES)
-
-
-def test_scope_kind_enum_covers_the_three_scopes() -> None:
-    """A scope is one of exactly three things, and the wire says which."""
-    schema = schemas.ScopeOut.model_json_schema()
-    assert set(schema["properties"]["scope"]["enum"]) == {"global", "project", "named"}
-
-
-def test_recall_scope_enum_is_project_global_both() -> None:
-    schema = schemas.RecallRequest.model_json_schema()
-    assert set(schema["properties"]["scope"]["enum"]) == {"global", "project", "both"}
-
-
-def test_scope_config_carries_no_embedding_fields() -> None:
-    """Embedding is installation-wide. Both pre-merge faces exposed dead
-    per-scope embedding fields; a re-introduction would be a regression."""
-    from coffer.domain.knowledge.scope_config import KnowledgeConfig
-
-    fields = set(KnowledgeConfig.model_fields)
-    assert not {f for f in fields if f.startswith("embedding")}
-    assert "enabled_modes" not in fields  # renamed to retrieval_modes
-
-
-def test_create_rejects_the_auto_provisioned_scope_names() -> None:
-    """``global`` / ``project-*`` are provisioned on first use; creating one by
-    hand would let a typo masquerade as an auto-scope."""
-    for name in ("global", "project-01J0000000000000000000000A"):
-        with pytest.raises(ValueError):
-            schemas.ScopeCreate(name=name)
+    register_knowledge_builtin_tools(registry, knowledge_service=None)  # type: ignore[arg-type]
+    return registry

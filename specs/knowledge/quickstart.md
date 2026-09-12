@@ -1,145 +1,195 @@
-# Quickstart — Memory (Shared Agent Memory)
+# Quickstart — Knowledge Layer
 
 > 中文版: [quickstart.zh.md](./quickstart.zh.md)
 
-> **Historical — 2026-09-10.** Spec knowledge (Knowledge Base) and spec knowledge (Memory)
-> merged into one **Knowledge Layer** on this date. [`spec.md`](./spec.md) is the
-> authority for the merged model — one `knowledge` kind, three scopes, one
-> storage root `~/.coffer/knowledge/<scope>/`, six `coffer__*` tools. This
-> document records the design as it stood before that merge; where it says
-> "memory face", "`memory` kind", `~/.coffer/memory/` or `/api/v1/memory_stores`,
-> read the merged equivalents in `spec.md`. The commands and tool names below
-> have been updated to the merged surface, so they are runnable as written. The
-> folder name `specs/knowledge/` is likewise historical: it is the spec id every
-> inbound link and the acceptance audit key on.
+Knowledge is a directory of Markdown files under
+`~/.coffer/knowledge/<collection>/`. An agent finds what it needs by reading a
+generated catalogue and grepping, the way it navigates a codebase; you find it
+by opening a folder. There is no index, so what one of you writes the other
+sees immediately. See [`spec.md`](./spec.md) and
+[Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md).
 
-Memory is the **memory face** of Coffer's unified knowledge substrate. Facts are markdown files (the source of truth) shared across every agent — read and written **only over MCP** (Coffer keeps its own canonical format and does not touch agents' native memory files). No LLM runs at write time; the agent writes a clean fact.
+## Make a collection first
+
+Nothing auto-provisions. A **collection** is a top-level folder *and* one
+`knowledge` Resource — you create it deliberately, and that is what makes it
+something you can authorize per agent.
+
+```bash
+coffer knowledge create shopee -d "Internal systems — services, data plane, the chains between them."
+coffer knowledge collections
+```
+
+`create` writes the directory, registers the Resource, and puts the
+`--description` into the collection's `README.md`. The catalogue's one-line
+description of a collection is always that README's first paragraph, so you can
+change it later by editing the file.
+
+Only the agents a collection is scoped to can see it:
+
+```bash
+coffer scope set knowledge:shopee --agents claude_code
+coffer scope show knowledge:shopee
+coffer scope clear knowledge:shopee          # back to every agent
+```
+
+Deleting a collection goes through the Resource framework, not a knowledge
+route — same lifecycle, audit and cascade as any other resource:
+
+```bash
+coffer resource delete knowledge:shopee
+```
 
 ## Through an MCP client (the primary surface)
 
-Six built-in tools appear (no store reference needed — scope is resolved from the agent's working directory):
+Five built-in tools. No scope argument, no mode, no `top_k`: a call spans every
+collection the agent is authorized for.
 
-- `coffer__search(query, scope?, top_k?)` — ranked search over a scope's notes AND its uploaded documents at once.
-- `coffer__grep(pattern, scope?, max_matches?)` — literal/regex match over every Markdown file in a scope.
-- `coffer__read(id, scope?)` — read one item (note or document) in full.
-- `coffer__list(scope?, all?, limit?)` — browse one scope's contents, or `all=true` for the catalogue of every scope.
-- `coffer__write(text, title?, description?, filename?, id?, scope?)` — record a note, store a document (`filename`), or rewrite an existing item (`id`).
-- `coffer__delete(id, scope?)` — delete one note or document.
+- `coffer__list(path?)` — the catalogue, **one level at a time**. With no
+  argument it names every collection you may read, each with its description
+  and file count. With a path it returns that directory's immediate
+  subdirectories and files, each file with its `title` and `description`.
+- `coffer__grep(pattern, collection?, max_matches?)` — ripgrep over the files,
+  literal or regex, returning file, line number and matching line. No
+  tokenizer, so CJK matches like anything else.
+- `coffer__read(path)` — one file in full, plus its absolute path.
+- `coffer__write(title, description, body, directory | path)` — create a file
+  in `directory` (the name is slugified from `title`), or replace the file at
+  `path`. Exactly one of the two.
+- `coffer__delete(path)` — remove a file from disk.
 
-A write lands in the scope's `notes/` lane directly — there is no inbox to drain
-and no handoff lane, so nothing has to be filed anywhere before it can be found.
+There is **no `coffer__search`**: with no ranked index behind it, it would be a
+second name for `grep`.
+
+The motion is catalogue-then-grep — descend to choose *which file*, grep to find
+*which line*:
 
 ```text
-# Inside a git project, the agent records a project fact:
-coffer__write(text="This repo deploys via `make release`, never git push --tags.",
-              title="Release process")
+coffer__list()                              # → shopee (48 files), coffer (4 files)
+coffer__list(path="shopee")                 # → account/, gateway-routing.md, …
+coffer__list(path="shopee/account")         # → titles + descriptions
+coffer__read(path="shopee/account/session-ownership.md")
 
-# A personal preference, available everywhere:
-coffer__write(text="Prefers tabs over spaces.", title="Indentation", scope="global")
+coffer__grep(pattern="account.session")     # when you know the literal string
+coffer__grep(pattern="部署流程", collection="shopee")
 
-# Later — possibly a different agent — searches:
-coffer__search(query="how do we deploy?")
+coffer__write(title="Release process",
+              description="How this repo cuts a release, and what not to do.",
+              body="Deploys via `make release`, never `git push --tags`.",
+              directory="coffer")
 ```
 
-`search` lazily reindexes the scope directory on every call, so edits made by another agent (over MCP), by the user in the Coffer UI, or directly on disk are visible immediately.
+Agents learn the layer exists from the `coffer-knowledge` skill Coffer delivers
+through its normal skill channel — no hook, no session injection, nothing
+written into an agent's own memory files.
 
 ## CLI
 
-The CLI addresses scopes by NAME as a positional argument — `global`, `project-<ulid>`, or a named collection (`global` and per-project scopes are auto-provisioned; `coffer knowledge list` shows what exists). There are no `--scope` flags.
+Eight commands, all thin HTTP shells over the daemon. Paths are relative to the
+knowledge root.
 
 ```bash
-# See the scopes (one global + one per project + any named collections), then inspect one.
-coffer knowledge list
-coffer knowledge describe global
+# Browse.
+coffer knowledge collections                       # every collection
+coffer knowledge ls shopee                         # one level: folders + files
+coffer knowledge ls shopee/account --json
+coffer knowledge read shopee/account/session-ownership.md
 
-# Write an entry into a scope (actor=user).
-coffer knowledge remember project-01J… "API base path is /api/v2."
-coffer knowledge remember global "Prefers tabs over spaces."
+# Search the files themselves. There is no index; this is the search.
+coffer knowledge grep "account.session"
+coffer knowledge grep "部署流程" --in shopee        # great for CJK — no tokenizer
+coffer knowledge grep "make release" --json
 
-# List entries / get one.
-coffer knowledge entries project-01J…
-coffer knowledge entries global --json
-coffer knowledge get global <entry-id>
+# Write. Exactly one of --in (create here) or --path (replace this).
+coffer knowledge write -t "Release process" \
+  -d "How this repo cuts a release, and what not to do." \
+  -b "Deploys via \`make release\`, never \`git push --tags\`." \
+  --in coffer
+coffer knowledge write -t "Release process" -d "…" -b "…" --path coffer/release-process.md
 
-# Retrieve from a scope.
-coffer knowledge recall project-01J… "deployment"
-coffer knowledge recall project-01J… "deployment" --top-k 3 --json
-coffer knowledge search project-01J… "deployment"     # passage search, documents included
-coffer knowledge grep global "部署流程"                 # exact/regex over the Markdown files — great for CJK
-
-# Edit, delete, clear a scope (scope preserved).
-coffer knowledge edit-entry global <entry-id> "API base path is /api/v3."
-coffer knowledge forget global <entry-id>
-coffer knowledge clear project-01J… --yes
+# Delete one file.
+coffer knowledge delete coffer/release-process.md
 ```
 
-`--json` works on every read command above. There is no `--mode` flag: retrieval mode is an internal engine detail ([Retrieval Mode Is Internal](../../docs/decisions/retrieval-mode-is-internal.md)) — the engine resolves the scope's own strategy (`hybrid` when the scope lists vector, else `keyword`) and falls back to `keyword` internally, unflagged, when no embedding provider is configured. `coffer knowledge grep` is real — ripgrep over the Markdown files, no index, no tokenizer, so it works where FTS5 cannot (e.g. CJK).
+`--json` works on `collections`, `ls`, `read` and `grep`.
 
-### Tidying the notes lane
+## Curate in your own tools
 
-A scope's notes are tidied on a schedule: a background worker runs one catch-up
-pass at daemon boot and then on an interval, merging duplicate notes and
-rewriting them into topic documents. Before any overwrite or merge it copies the
-prior revision into the hidden `.history/`, so an unattended rewrite is
-always recoverable. With no internal model configured (Settings → LLM
-connections) the pass is a no-op.
+The filesystem is the ingestion surface. Drop a Markdown file into a collection
+from Finder, fix a wrong line in your editor, delete one that went stale —
+every change is live for the next call with no import, no reindex and nothing
+to reconcile, because the file **is** the knowledge.
 
-To run one by hand:
+A file you add by hand should carry the same frontmatter Coffer writes, or it
+will show up in the catalogue with an empty title and description:
+
+```markdown
+---
+title: Session ownership
+description: Which service owns a login session, and what reads it.
+actor: user
+created_at: '2026-09-12T04:18:33Z'
+updated_at: '2026-09-12T04:18:33Z'
+---
+
+Login state is owned by `account.session`.
+```
+
+There is no upload endpoint and no format conversion. A PDF is not knowledge
+until someone turns it into Markdown.
+
+## Tidy
+
+A bounded agentic pass over one collection: it merges duplicates and rewrites
+them into coherent documents, copying every prior revision into the hidden
+`.history/` first. With no internal model configured (Settings → LLM
+connections) it is a clean no-op.
 
 ```bash
-coffer knowledge organize project-01J…    # one tidy pass over that scope's notes/
+coffer knowledge organize shopee
 ```
 
-The web-UI equivalent is the **Tidy** button in the scope's header. Each pass
-records a row in Coffer's audit log — there is no per-scope changelog file.
+The web-UI equivalent is the **Tidy** button. A background worker can also run
+the pass on an interval, but it is **off by default** and installation-wide —
+turn it on deliberately in Settings → Engine, because it rewrites files you and
+your agents manage together with no diff to approve. Each pass is recorded in
+Coffer's audit log.
 
 ## Web UI
 
-1. Sidebar → **Memory**. The page shows a table of all scopes (the global scope plus one per project — auto-provisioned — and any named collections). The Notes column counts what has been written into each.
-2. Click a row to open the scope's detail page.
-3. The detail page has **two tabs, Documents and Notes**, with one filter box above the tree that matches filenames as you type — client-side, no button, no request. Server retrieval lives where it belongs: `coffer__search` for agents, `coffer knowledge recall` for the CLI.
-4. Click an item to expand a **read-only** render (the UI does not edit note text in-app). Each file and its containing folder offer **open in external editor** and **reveal in file manager** (real OS actions, performed by the local daemon); which editor opens is the global preferred-editor preference (see spec ui-shell). Correct a note by opening it in your own editor — the next search picks up the change via lazy reindex-on-read.
-5. The header keeps the title, the rename pencil and the project path. **Upload** and **Tidy** are the two buttons; Settings / Check sources / Reindex sit behind an overflow menu. A warning appears only when a document is degraded.
-
-Every write — agent (MCP), CLI, or REST — reindexes and audits; the web UI writes only by uploading a document or running a tidy pass. There is no derived `MEMORY.md` and no `INDEX.md`: the markdown files under `notes/` and `docs/` are the source of truth (Files as Truth).
-
-## Optional: vector recall
-
-Default retrieval is keyword + grep — zero config, offline, language-agnostic. Embedding is configured **installation-wide**, not per scope: set it once in the web UI (**Settings → Engine → Embedding**, i.e. `PUT /api/v1/embedding/config`); there is no CLI for it. That card is two pickers — a model provider, then one of its `embedding`-type models — the same shape as the internal-engine card above it; there is no add-a-model form and no key field. The config **names a connection** — one of the LLM connections you already configured — plus a model on it; the protocol, base URL and API key are resolved from that connection, so the embedding settings hold no `base_url`, no `credential_ref` and no key of their own. A scope then opts in by listing `vector` in its retrieval modes:
-
-```bash
-# the connection already holds the key; add one on Model providers first
-coffer knowledge configure project-01J… --enable-vector
-```
-
-Naming a connection that does not exist, an `anthropic` connection (no embedding API), a connection that curates models but none of modality `embedding`, or a model the connection does not curate is refused with a 422 that says which. A connection curating no models at all is unrestricted, so the model id you type is taken at its word. `POST /api/v1/embedding/test` takes `{connection, model}` and reports the vector dimension without persisting anything. With no connection named, the config is inactive and retrieval degrades to keyword/grep.
-
-`coffer knowledge configure <name>` PATCHes the scope's config; the other knobs are `--max-entry-chars`, `--chunk-size`, `--chunk-overlap`, and `--auto-update-sources/--no-auto-update-sources`. Enabling vector re-indexes the scope's existing content. A new named collection is born vector-enabled and the create-collection dialog no longer asks: which index a scope carries is an implementation detail, not a question to put to the user at creation time.
-
-For bilingual content, a local connection (Ollama with `bge-m3`) or a cloud model that embeds Chinese well is recommended. The embedding model is mutable — changing it re-embeds every scope that lists a vector mode. With no embedding config, a vector-enabled scope falls back to keyword internally, with no per-query flag.
+1. Sidebar → **Knowledge**. One tree, no tabs: the collections, then whatever
+   you nested inside them.
+2. Click a file to see it rendered **read-only**. The UI has no editor; the
+   file and its containing folder each offer **open in external editor** and
+   **reveal in file manager** (real OS actions performed by the local daemon;
+   which editor opens is the global preferred-editor preference, spec
+   ui-shell). Your edit takes effect immediately — there is nothing to
+   reconcile.
 
 ## Where files live
 
-```
+```text
 ~/.coffer/
-├── coffer.db                                  # SQLite — rebuildable index (documents, chunks, FTS5, vec, audit)
-└── memory/
-    ├── global/
-    │   ├── notes/                             # what someone wrote (coffer__write lands here)
-    │   │   ├── prefers-tabs.md                # per-note file = truth
-    │   │   └── .history/                      # pre-rewrite copies kept by the tidy pass (hidden)
-    │   ├── docs/                              # uploaded documents, normalized to markdown
-    │   └── .raw/                              # the uploaded originals (hidden)
-    └── projects/<project-ulid>/
-        ├── notes/deploy-via-make-release.md
-        ├── docs/
-        └── .raw/
+├── coffer.db                       # no knowledge tables at all — just the resources row per collection
+└── knowledge/
+    ├── shopee/
+    │   ├── README.md               # first paragraph = the collection's description
+    │   ├── account/
+    │   │   └── session-ownership.md
+    │   ├── gateway-routing.md
+    │   └── .history/               # revisions the tidy pass replaced (hidden)
+    └── coffer/
+        ├── README.md
+        └── release-process.md
 ```
 
-Two lanes: `notes/` for anything a person or an agent wrote, `docs/` for anything uploaded. `.history/` and `.raw/` are hidden on purpose — ripgrep skips them, so `coffer__grep` never returns an archived revision or an original alongside the live file. The markdown files are the source of truth; `coffer.db` can be rebuilt from them at any time.
+`.history/` is dot-prefixed on purpose: ripgrep skips hidden entries, so an
+archived revision never comes back beside the live file.
 
 ## Limits
 
-- Entry text: 1–8192 chars (configurable per scope up to 32 768, via `--max-entry-chars`).
-- Search `top_k`: 1–20 (default 5).
-- Scope: `global`, a `project-<ulid>` scope, or a named collection — omitted on a tool call, it resolves from the agent's cwd (falling back to `global` outside a project).
+- `grep` matches: 1–500, default 200. The response flags `truncated`.
+- File names: a slug of the title, up to 80 characters, CJK kept as-is; a
+  collision appends `-2`, `-3`, ….
+- Catalogue size: no hard limit, but the design assumes a catalogue that fits
+  in an agent's context — comfortable into the hundreds of files.

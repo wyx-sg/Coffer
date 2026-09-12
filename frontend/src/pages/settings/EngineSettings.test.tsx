@@ -1,7 +1,7 @@
 // frontend/src/pages/settings/EngineSettings.test.tsx
 //
 // Settings → Engine holds Coffer's own two engine configs: the internal LLM
-// connection + model, and the embedding model. Both moved here off the
+// connection + model. It moved here off the
 // model-provider page, which is now purely the connection library agents draw
 // from — internal configuration is not a resource.
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -36,26 +36,6 @@ vi.mock("@/lib/hooks/useInternalEngine", () => ({
 vi.mock("@/lib/hooks/useModelIntrospection", () => ({
   useListProviderModels: () => ({ isPending: false, mutate: vi.fn(), data: undefined }),
   useTestEmbedding: () => ({ isPending: false, mutate: vi.fn(), reset: vi.fn(), data: undefined }),
-}));
-
-// The embedding card owns its own config query; stub the hooks so the real
-// card renders without a daemon behind it.
-vi.mock("@/lib/hooks/useEmbeddingConfig", () => ({
-  useEmbeddingConfig: () => ({
-    data: {
-      enabled: false,
-      connection: null,
-      model: null,
-      dimensions: 768,
-      default_chunk_size: 512,
-      default_chunk_overlap: 64,
-      updated_at: null,
-    },
-    isPending: false,
-    error: null,
-  }),
-  useUpdateEmbeddingConfig: () => ({ mutate: vi.fn(), isPending: false, error: null }),
-  useEmbeddingModels: () => ({ options: [], probing: false }),
 }));
 
 const { providersApi } = await import("@/lib/api/providers");
@@ -104,11 +84,13 @@ describe("EngineSettings", () => {
     vi.clearAllMocks();
   });
 
-  test("/settings/engine renders the internal-engine and embedding cards", async () => {
+  test("/settings/engine renders the internal-engine card and nothing else", async () => {
     apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
     renderPage();
     expect(await screen.findByText("Internal engine")).toBeInTheDocument();
-    expect(screen.getByText("Embedding")).toBeInTheDocument();
+    // The embedding card went with vector retrieval: there is no index left
+    // for an embedding model to feed (ADR knowledge-is-plain-files).
+    expect(screen.queryByText("Embedding")).not.toBeInTheDocument();
   });
 
   acceptance(

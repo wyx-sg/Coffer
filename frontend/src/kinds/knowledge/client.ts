@@ -1,10 +1,9 @@
 // frontend/src/kinds/knowledge/client.ts
 //
 // The shared fetch plumbing for the `knowledge` kind: auth headers, the typed
-// error-envelope check, and the `/api/v1/knowledge[/<scope>]` URL builders.
-// Both api.ts (scopes, entries, lanes) and document-api.ts (the document lane)
-// import from here rather than from each other, so the two halves of the kind's
-// API surface never form an import cycle.
+// error-envelope check, and the `/api/v1/knowledge/*` URL builder. api.ts is
+// the only importer today; it stays split out so the module keeps one concern
+// (transport) and the request functions keep the other (routes + shapes).
 
 import { getCofferBaseUrl, getCofferToken } from "@/lib/auth";
 import { ApiError } from "@/lib/api/errors";
@@ -12,7 +11,7 @@ import { ApiError } from "@/lib/api/errors";
 export function headers(extra: HeadersInit = {}): HeadersInit {
   return {
     "X-Coffer-Token": getCofferToken() ?? "",
-    "X-Coffer-Actor": "user",
+    "X-Coffer-Actor": "ui",
     ...extra,
   };
 }
@@ -36,8 +35,5 @@ export async function checkOk(r: Response): Promise<Response> {
 
 export const enc = encodeURIComponent;
 
-/** `/api/v1/knowledge` — the collection root (list / create / merge). */
+/** `/api/v1/knowledge` — the root every knowledge route hangs off. */
 export const knowledgeRoot = (): string => `${getCofferBaseUrl()}/knowledge`;
-
-/** `/api/v1/knowledge/<scope>` — one scope, whatever material it holds. */
-export const scopeBase = (scope: string): string => `${knowledgeRoot()}/${enc(scope)}`;

@@ -1,16 +1,13 @@
-"""Ripgrep wrapper for the ``grep`` retrieval mode (no index).
+"""Ripgrep over the knowledge directory — the whole of literal retrieval.
 
-Runs ``rg`` over a scope's whole directory — both the ``notes/`` and ``docs/``
-lanes — bounded by a max-match cap and a wall-clock timeout. Falls back to
-``EngineUnavailable`` if the ``rg`` binary is absent. Output is parsed from
-``--json`` so paths/line numbers are exact.
+There is no index behind this (spec knowledge FR-001), so ``rg`` is not a
+fallback mode but the mechanism: it matches bytes, which means CJK matches
+without a tokenizer, and it reads the files themselves, which means a human's
+edit needs no import step to be findable.
 
-The scope's two archives are dot-prefixed (``.raw/`` originals, ``.history/``
-superseded revisions) and this search passes ``--no-hidden`` so they stay out of
-the results: a grep must never answer with an ingested original next to the
-Markdown converted from it, or with a revision the tidy pass already replaced.
-That is ripgrep's default, but the flag is explicit because a user's
-``$RIPGREP_CONFIG_PATH`` could otherwise turn ``--hidden`` on underneath us.
+``--no-hidden`` is passed explicitly even though it is ripgrep's default,
+because a user's ``$RIPGREP_CONFIG_PATH`` could otherwise turn ``--hidden`` on
+underneath us and start answering with the revisions in ``.history/`` (FR-052).
 """
 
 from __future__ import annotations
@@ -18,11 +15,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import pathlib
 import shutil
-from pathlib import Path
 
 from coffer.domain.errors import EngineUnavailable, GrepPatternInvalid
-from coffer.domain.knowledge.retrieval import GrepHit, GrepResult
+from coffer.domain.knowledge.entry import GrepMatch, GrepOutcome
+from coffer.infrastructure.knowledge import paths
 
 DEFAULT_MAX_MATCHES = 200
 DEFAULT_TIMEOUT_S = 5.0
@@ -30,40 +28,37 @@ DEFAULT_TIMEOUT_S = 5.0
 _logger = logging.getLogger(__name__)
 
 
-class RipgrepGrep:
-    """Implements the grep port via the ``rg`` binary."""
+class RipgrepSearch:
+    """Runs ``rg`` across a set of collection directories."""
 
     def __init__(self, *, timeout_s: float = DEFAULT_TIMEOUT_S) -> None:
         self._timeout = timeout_s
 
     async def grep(
         self,
-        # Named for the retrieval port it implements; the value is the scope
-        # root, so both lanes are searched.
-        docs_dir: str,
+        roots: list[pathlib.Path],
         pattern: str,
         *,
         max_matches: int = DEFAULT_MAX_MATCHES,
-    ) -> GrepResult:
+    ) -> GrepOutcome:
         rg = shutil.which("rg")
         if rg is None:
             raise EngineUnavailable("ripgrep", "the 'rg' binary is not on PATH")
-        root = Path(docs_dir)
-        if not root.exists():
-            return GrepResult()
+        present = [r for r in roots if r.exists()]
+        if not present:
+            return GrepOutcome()
         cap = max(1, max_matches)
         args = [
             rg,
             "--json",
-            # The hidden archives are not results — see the module docstring.
             "--no-hidden",
             "--max-count",
-            # One extra per file so a "more matches exist" overflow is visible.
+            # One past the cap per file, so "more exist" is visible.
             str(cap + 1),
             "--no-heading",
             "--",
             pattern,
-            str(root),
+            *(str(r) for r in present),
         ]
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -76,27 +71,23 @@ class RipgrepGrep:
         try:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=self._timeout)
         except TimeoutError:
-            # Kill the still-running rg (it would otherwise leak) and report
-            # the truncation — a timeout is not "no matches".
+            # Kill the still-running rg — it would otherwise leak — and report
+            # truncation, because a timeout is not "no matches".
             proc.kill()
             await proc.wait()
-            _logger.warning(
-                "knowledge.grep.timeout",
-                extra={"docs_dir": docs_dir, "timeout_s": self._timeout},
-            )
-            return GrepResult(truncated=True)
-        # rg exits 0 on matches, 1 on no matches, 2 on error (e.g. an invalid
-        # regex). An error must surface, not masquerade as "no matches".
+            _logger.warning("knowledge.grep.timeout", extra={"timeout_s": self._timeout})
+            return GrepOutcome(truncated=True)
+        # rg exits 0 on matches, 1 on none, 2 on error (an invalid regex, say).
+        # An error must surface rather than masquerade as "no matches".
         if proc.returncode == 2:
             detail = stderr.decode("utf-8", errors="replace").strip().splitlines()
             raise GrepPatternInvalid(pattern, detail[0] if detail else "ripgrep error")
-        hits = _parse(stdout.decode("utf-8", errors="replace"), cap + 1)
-        truncated = len(hits) > cap
-        return GrepResult(hits=tuple(hits[:cap]), truncated=truncated)
+        matches = _parse(stdout.decode("utf-8", errors="replace"), cap + 1)
+        return GrepOutcome(matches=tuple(matches[:cap]), truncated=len(matches) > cap)
 
 
-def _parse(output: str, cap: int) -> list[GrepHit]:
-    hits: list[GrepHit] = []
+def _parse(output: str, cap: int) -> list[GrepMatch]:
+    matches: list[GrepMatch] = []
     for raw in output.splitlines():
         if not raw.strip():
             continue
@@ -107,10 +98,14 @@ def _parse(output: str, cap: int) -> list[GrepHit]:
         if event.get("type") != "match":
             continue
         data = event.get("data", {})
-        path = str(data.get("path", {}).get("text", ""))
-        line_number = int(data.get("line_number", 0))
-        line = str(data.get("lines", {}).get("text", "")).rstrip("\n")
-        hits.append(GrepHit(path=path, line_number=line_number, line=line))
-        if len(hits) >= cap:
+        absolute = pathlib.Path(str(data.get("path", {}).get("text", "")))
+        matches.append(
+            GrepMatch(
+                path=paths.relative_of(absolute),
+                line_number=int(data.get("line_number", 0)),
+                line=str(data.get("lines", {}).get("text", "")).rstrip("\n"),
+            )
+        )
+        if len(matches) >= cap:
             break
-    return hits
+    return matches

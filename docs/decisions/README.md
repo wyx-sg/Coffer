@@ -94,7 +94,8 @@ section that future readers most often want — don't skip it.>
 | [`everything-is-a-resource-kind`](everything-is-a-resource-kind.md) | Information Architecture — Everything Is a Resource Kind | Amended (2026-05-30, 2026-06-11) |
 | [`distribution-pyinstaller`](distribution-pyinstaller.md) | Distribution — PyInstaller-Bundled Daemon, Shim, and CLI | Accepted |
 | [`cross-platform-skill-delivery`](cross-platform-skill-delivery.md) | Cross-Platform Skill Delivery — Symlink / Junction / Copy-Fallback | Accepted |
-| [`files-as-truth-sqlite-retrieval`](files-as-truth-sqlite-retrieval.md) | Retrieval Stack — Markdown Files as Truth, SQLite FTS5 + sqlite-vec, Configurable Embeddings | Accepted |
+| [`files-as-truth-sqlite-retrieval`](files-as-truth-sqlite-retrieval.md) | Retrieval Stack — Markdown Files as Truth, SQLite FTS5 + sqlite-vec, Configurable Embeddings | Superseded by [Knowledge Is Plain Files](knowledge-is-plain-files.md) |
+| [`knowledge-is-plain-files`](knowledge-is-plain-files.md) | The knowledge layer is a directory of files, not an index | Accepted |
 | [`agent-native-shared-memory`](agent-native-shared-memory.md) | One Shared Knowledge Store Across Agents | Accepted — projection half superseded by [Memory via MCP](memory-via-mcp-not-native-projection.md) |
 | [`channel-adapter-framework`](channel-adapter-framework.md) | Channel Adapter Framework | Accepted |
 | [`envelope-encrypted-credential-store`](envelope-encrypted-credential-store.md) | Envelope-Encrypted Credential Store | Accepted |
@@ -110,7 +111,7 @@ section that future readers most often want — don't skip it.>
 | [`consume-official-mcp-registry`](consume-official-mcp-registry.md) | Consume the official MCP Registry for server discovery | Reverted (2026-06-20) |
 | [`provider-switching`](provider-switching.md) | Provider Switching | Proposed |
 | [`daemon-proxies-os-file-actions`](daemon-proxies-os-file-actions.md) | Local Daemon Proxies OS File Actions | Accepted |
-| [`retrieval-mode-is-internal`](retrieval-mode-is-internal.md) | Retrieval mode is an internal engine detail; external surfaces expose query→answer | Accepted |
+| [`retrieval-mode-is-internal`](retrieval-mode-is-internal.md) | Retrieval mode is an internal engine detail; external surfaces expose query→answer | Superseded by [Knowledge Is Plain Files](knowledge-is-plain-files.md) |
 | [`channel-media`](channel-media.md) | Channel media — reference in the DB, materialise per agent at send | Accepted — the v1 "defer a persisted attachment block" decision is superseded by [Persisted Attachment Reference](persisted-attachment-reference.md) |
 | [`persisted-attachment-reference`](persisted-attachment-reference.md) | Persist channel attachments as a reference block, re-materialise from history | Accepted |
 | [`per-agent-resource-scope`](per-agent-resource-scope.md) | Per-Agent Resource Scope | Accepted |

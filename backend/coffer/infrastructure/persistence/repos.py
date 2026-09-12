@@ -11,14 +11,12 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from coffer.domain.audit import AuditEntry
-from coffer.domain.embedding_config import SINGLETON_ID, GlobalEmbeddingConfig
 from coffer.domain.errors import ResourceAlreadyExists, ResourceNotFound
 from coffer.domain.internal_engine_config import GlobalInternalEngineConfig
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.scope import Scope
 from coffer.infrastructure.persistence.models import (
     AuditLogModel,
-    EmbeddingConfigModel,
     InternalEngineConfigModel,
     ResourceModel,
 )
@@ -268,59 +266,6 @@ class SqlAlchemyAuditRepo:
             return [_audit_to_domain(r) for r in rows]
 
 
-def _embedding_to_domain(row: EmbeddingConfigModel) -> GlobalEmbeddingConfig:
-    return GlobalEmbeddingConfig(
-        enabled=bool(row.enabled),
-        connection=row.connection,
-        model=row.model,
-        dimensions=row.dimensions,
-        default_chunk_size=row.default_chunk_size,
-        default_chunk_overlap=row.default_chunk_overlap,
-        updated_at=row.updated_at.replace(tzinfo=UTC) if row.updated_at else datetime.now(tz=UTC),
-    )
-
-
-class SqlAlchemyEmbeddingConfigRepo:
-    """Concrete repo for the singleton ``embedding_config`` row."""
-
-    def __init__(self, sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
-        self._sm = sm
-
-    async def get(self) -> GlobalEmbeddingConfig | None:
-        async with self._sm() as session:
-            stmt = select(EmbeddingConfigModel).where(EmbeddingConfigModel.id == SINGLETON_ID)
-            row = (await session.execute(stmt)).scalar_one_or_none()
-            return _embedding_to_domain(row) if row is not None else None
-
-    async def set(
-        self,
-        *,
-        enabled: bool,
-        connection: str | None,
-        model: str | None,
-        dimensions: int,
-        default_chunk_size: int,
-        default_chunk_overlap: int,
-    ) -> GlobalEmbeddingConfig:
-        async with self._sm() as session:
-            stmt = select(EmbeddingConfigModel).where(EmbeddingConfigModel.id == SINGLETON_ID)
-            row = (await session.execute(stmt)).scalar_one_or_none()
-            now = datetime.now(tz=UTC)
-            if row is None:
-                row = EmbeddingConfigModel(id=SINGLETON_ID, updated_at=now)
-                session.add(row)
-            row.enabled = enabled
-            row.connection = connection
-            row.model = model
-            row.dimensions = dimensions
-            row.default_chunk_size = default_chunk_size
-            row.default_chunk_overlap = default_chunk_overlap
-            row.updated_at = now
-            await session.commit()
-            await session.refresh(row)
-            return _embedding_to_domain(row)
-
-
 class SqlAlchemyInternalEngineConfigRepo:
     """Concrete repo for the singleton ``internal_engine_config`` row."""
 
@@ -334,9 +279,15 @@ class SqlAlchemyInternalEngineConfigRepo:
             if row is None:
                 return None
             updated = row.updated_at.replace(tzinfo=UTC) if row.updated_at else datetime.now(tz=UTC)
-            return GlobalInternalEngineConfig(model=row.model, updated_at=updated)
+            return GlobalInternalEngineConfig(
+                model=row.model,
+                updated_at=updated,
+                auto_tidy_enabled=bool(row.auto_tidy_enabled),
+            )
 
-    async def set(self, *, model: str | None) -> GlobalInternalEngineConfig:
+    async def set(
+        self, *, model: str | None, auto_tidy_enabled: bool | None = None
+    ) -> GlobalInternalEngineConfig:
         async with self._sm() as session:
             stmt = select(InternalEngineConfigModel).where(InternalEngineConfigModel.id == 1)
             row = (await session.execute(stmt)).scalar_one_or_none()
@@ -345,7 +296,13 @@ class SqlAlchemyInternalEngineConfigRepo:
                 row = InternalEngineConfigModel(id=1, updated_at=now)
                 session.add(row)
             row.model = model
+            if auto_tidy_enabled is not None:
+                row.auto_tidy_enabled = auto_tidy_enabled
             row.updated_at = now
             await session.commit()
             await session.refresh(row)
-            return GlobalInternalEngineConfig(model=row.model, updated_at=now)
+            return GlobalInternalEngineConfig(
+                model=row.model,
+                updated_at=now,
+                auto_tidy_enabled=bool(row.auto_tidy_enabled),
+            )

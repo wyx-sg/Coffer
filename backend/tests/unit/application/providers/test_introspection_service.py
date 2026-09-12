@@ -32,12 +32,6 @@ class _FakePort:
         if self.fail:
             raise self.fail
 
-    async def test_embedding(self, *, provider, model, base_url, api_key):  # type: ignore[no-untyped-def]
-        self.seen_key = api_key
-        if self.fail:
-            raise self.fail
-        return self.dim
-
 
 def _svc(port: ProviderIntrospectionPort, secrets=None):  # type: ignore[no-untyped-def]
     secrets = secrets or {"ref-x": "sk-secret"}
@@ -81,14 +75,6 @@ async def test_test_connection_ok_and_fail() -> None:
     )
     assert bad.ok is False
     assert "401" in bad.message
-
-
-async def test_test_embedding_reports_dimension() -> None:
-    res = await _svc(_FakePort(dim=1536)).test_embedding(
-        provider="openai", model="text-embedding-3-small", base_url=None, credential_ref="ref-x"
-    )
-    assert res.ok is True
-    assert res.detail["dimensions"] == 1536
 
 
 async def test_list_models_prefers_inline_secret() -> None:

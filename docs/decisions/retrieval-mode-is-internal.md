@@ -1,6 +1,6 @@
 # Retrieval mode is an internal engine detail; external surfaces expose query→answer.
 
-**Status**: Accepted
+**Status**: Superseded by [Knowledge Is Plain Files](knowledge-is-plain-files.md) (2026-09-12) — with no ranked index there are no retrieval modes left to keep internal, and the `search` tool this ADR shaped is gone. Kept as the record of the design in force until that date.
 **Date**: 2026-06-21 (revised 2026-09-10; see Revision history)
 **Spec**: [specs/knowledge/spec.md](../../specs/knowledge/spec.md)
 

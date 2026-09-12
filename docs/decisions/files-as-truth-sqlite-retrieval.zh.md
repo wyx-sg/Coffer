@@ -2,7 +2,7 @@
 
 > English: [files-as-truth-sqlite-retrieval.md](./files-as-truth-sqlite-retrieval.md)
 
-**Status**: Accepted
+**Status**: 已被 [Knowledge Is Plain Files](knowledge-is-plain-files.md) 取代（2026-09-12）——知识层成了一个没有任何派生索引的文件目录，所以本 ADR 决定的 FTS5 / sqlite-vec / embedding 这一整套已被移除。唯一存活下来的那一半是「markdown 文件是唯一真相」，由取代它的那份 ADR 承接。本文保留，作为那个日期之前生效设计的记录。
 **Date**: 2026-06-09（2026-09-11 修订；见修订历史）
 **Deciders**: Yuxing Wu
 **Supersedes**: LlamaIndex RAG 引擎与 mem0 memory 引擎这两项决策 —— 两份 ADR 均已作为废弃文档移除

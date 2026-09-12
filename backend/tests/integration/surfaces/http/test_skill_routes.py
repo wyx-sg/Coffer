@@ -65,10 +65,11 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
         )
         assert r.status_code == 201, r.text
 
-        # list skills — empty
+        # list skills — only Coffer's own seeded knowledge skill, which is
+        # there before the user imports anything (spec knowledge FR-042).
         r = c.get("/api/v1/skills")
         assert r.status_code == 200
-        assert r.json()["items"] == []
+        assert [i["name"] for i in r.json()["items"]] == ["coffer-knowledge"]
 
         # import
         r = c.post("/api/v1/skills/import", json={"path": str(src)})

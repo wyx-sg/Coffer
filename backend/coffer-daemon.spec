@@ -24,16 +24,17 @@ hidden = (
     # that fails to trace them still ships a working daemon.
     + collect_submodules("tomlkit")
     + collect_submodules("yaml")
-    # Knowledge-layer and turn-platform deps. These are imported LAZILY
-    # (inside functions) so the daemon ships even when an extra is missing —
-    # which is exactly why PyInstaller's static analysis cannot trace them.
-    # Declare them explicitly so a frozen build can convert documents, embed,
-    # run the sqlite-vec vector index, and drive the built-in chat agent.
-    #   sqlite_vec — knowledge/vec_index.py (also needs its data files below)
-    #   markitdown — knowledge/converters/markitdown_converter.py
-    #   openai     — knowledge/embeddings.py
-    #   langgraph / langchain — chat/*
-    + collect_submodules("sqlite_vec")
+    # Turn-platform deps. These are imported LAZILY (inside functions) so the
+    # daemon ships even when an extra is missing — which is exactly why
+    # PyInstaller's static analysis cannot trace them. Declare them explicitly
+    # so a frozen build can extract inbound attachments and drive the built-in
+    # chat agent.
+    #   markitdown — chat/document_extract.py (channel attachments, FR-030)
+    #   openai     — providers/*
+    #   langgraph / langchain — llm/*, chat/*
+    # The knowledge layer declares nothing here: it is a directory of markdown
+    # files with no converter, no index and no embedding client to bundle
+    # (ADR knowledge-is-plain-files).
     + collect_submodules("markitdown")
     # MarkItDown imports its format backends lazily *inside* each converter.
     # PyInstaller's import graph MAY trace them transitively (the converter
@@ -68,12 +69,6 @@ datas = (
         ),
     ]
     + collect_data_files("mcp", include_py_files=False)
-    # sqlite-vec ships its loadable native extension (vec0.dylib / vec0.so /
-    # vec0.dll) as PACKAGE DATA, not a Python submodule — collect_submodules
-    # above never captures it. Without this the frozen daemon cannot load the
-    # vec0 extension and vector retrieval silently degrades to keyword-only
-    # (VecIndex.available() swallows the load failure).
-    + collect_data_files("sqlite_vec")
 )
 
 # The built web UI. The daemon serves this at its own loopback origin, so a
