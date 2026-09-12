@@ -3,7 +3,9 @@
 // The daemon-port card (spec mcp-gateway FR-028). Like the backup card's test
 // this one drives the real hooks against a stubbed `fetch`, because what
 // matters is the wire: which body each save sends, and which saves never leave
-// the browser at all.
+// the browser at all. The card auto-saves, so the acts under test are the ones
+// a user performs — flipping the switch, and leaving the port field — not a
+// Save button.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -80,7 +82,8 @@ async function renderLoaded() {
 const requests = (method: string) => calls.filter((c) => c.method === method);
 const fixedSwitch = () => screen.getByLabelText(/use a fixed port/i);
 const portInput = () => screen.getByLabelText(/^port$/i);
-const saveButton = () => screen.getByRole("button", { name: /^save$/i });
+/** Leaving the field is what commits it — the same signal the editor field uses. */
+const leavePortField = () => fireEvent.blur(portInput());
 
 beforeEach(() => {
   calls = [];
@@ -101,15 +104,18 @@ describe("DaemonPortCard", () => {
     expect(screen.getByTestId("daemon-address")).toHaveTextContent("http://127.0.0.1:8003");
   });
 
-  test("automatic selection hides the port field until the switch goes on", async () => {
+  test("the switch reveals the port field and saves the port already serving", async () => {
     await renderLoaded();
     expect(fixedSwitch()).not.toBeChecked();
     expect(screen.queryByLabelText(/^port$/i)).not.toBeInTheDocument();
 
     fireEvent.click(fixedSwitch());
-    // Seeded with the port already serving this page — the one value that
-    // cannot break the address shown above.
+    // Seeded with — and committed as — the port already serving this page: the
+    // one value that cannot break the address shown above, which is what lets
+    // the toggle stand on its own with no Save to press.
     expect(portInput()).toHaveValue(8003);
+    await waitFor(() => expect(requests("PUT")).toHaveLength(1));
+    expect(requests("PUT")[0].body).toEqual({ port: 8003 });
   });
 
   test("a configured port opens with the switch on and that port in the field", async () => {
@@ -119,53 +125,73 @@ describe("DaemonPortCard", () => {
     expect(portInput()).toHaveValue(8123);
   });
 
-  test("saving a fixed port PUTs it", async () => {
+  test("leaving the port field PUTs the new port", async () => {
+    settings = { configured_port: 8003, effective_port: 8003, restart_required: false };
     await renderLoaded();
-    fireEvent.click(fixedSwitch());
     fireEvent.change(portInput(), { target: { value: "8123" } });
-    fireEvent.click(saveButton());
+    leavePortField();
 
     await waitFor(() => expect(requests("PUT")).toHaveLength(1));
     expect(requests("PUT")[0].body).toEqual({ port: 8123 });
+  });
+
+  test("Enter commits without waiting for the field to lose focus", async () => {
+    settings = { configured_port: 8003, effective_port: 8003, restart_required: false };
+    await renderLoaded();
+    fireEvent.change(portInput(), { target: { value: "8123" } });
+    fireEvent.keyDown(portInput(), { key: "Enter" });
+
+    await waitFor(() => expect(requests("PUT")).toHaveLength(1));
+    expect(requests("PUT")[0].body).toEqual({ port: 8123 });
+  });
+
+  test("leaving the field unchanged writes nothing", async () => {
+    settings = { configured_port: 8123, effective_port: 8123, restart_required: false };
+    await renderLoaded();
+    leavePortField();
+    leavePortField();
+
+    // Auto-save must not turn a stray focus change into a write — every one
+    // would be another audit row saying nothing happened.
+    expect(requests("PUT")).toHaveLength(0);
   });
 
   test("turning the switch off saves null — back to automatic selection", async () => {
     settings = { configured_port: 8123, effective_port: 8123, restart_required: false };
     await renderLoaded();
     fireEvent.click(fixedSwitch());
-    fireEvent.click(saveButton());
 
     await waitFor(() => expect(requests("PUT")).toHaveLength(1));
     expect(requests("PUT")[0].body).toEqual({ port: null });
   });
 
   test("an out-of-range port never leaves the browser", async () => {
+    settings = { configured_port: 8003, effective_port: 8003, restart_required: false };
     await renderLoaded();
-    fireEvent.click(fixedSwitch());
     fireEvent.change(portInput(), { target: { value: "80" } });
-    fireEvent.click(saveButton());
+    leavePortField();
 
     expect(await screen.findByText(/between 1024 and 65535/i)).toBeInTheDocument();
     expect(requests("PUT")).toHaveLength(0);
   });
 
   test("a port the daemon rejects is surfaced as it came back", async () => {
-    putStatus = { status: 400, code: "VALIDATION_ERROR", message: "port must be 1024-65535" };
+    settings = { configured_port: 8003, effective_port: 8003, restart_required: false };
     await renderLoaded();
-    fireEvent.click(fixedSwitch());
+    putStatus = { status: 400, code: "VALIDATION_ERROR", message: "port must be 1024-65535" };
     fireEvent.change(portInput(), { target: { value: "9999" } });
-    fireEvent.click(saveButton());
+    leavePortField();
 
     expect(await screen.findByText(/port must be 1024-65535/i)).toBeInTheDocument();
   });
 
   test("a restart-pending save leaves a persistent note naming the command", async () => {
+    settings = { configured_port: 8003, effective_port: 8003, restart_required: false };
     await renderLoaded();
     expect(screen.queryByTestId("daemon-restart-note")).not.toBeInTheDocument();
 
-    fireEvent.click(fixedSwitch());
     fireEvent.change(portInput(), { target: { value: "8123" } });
-    fireEvent.click(saveButton());
+    leavePortField();
 
     const note = await screen.findByTestId("daemon-restart-note");
     expect(note).toHaveTextContent("coffer daemon restart");
@@ -175,10 +201,8 @@ describe("DaemonPortCard", () => {
   });
 
   test("a save that needs no restart leaves no note", async () => {
-    settings = { configured_port: null, effective_port: 8003, restart_required: false };
     await renderLoaded();
-    fireEvent.click(fixedSwitch());
-    fireEvent.click(saveButton()); // 8003 — the port already being served
+    fireEvent.click(fixedSwitch()); // commits 8003 — the port already being served
 
     await waitFor(() => expect(requests("PUT")).toHaveLength(1));
     expect(screen.queryByTestId("daemon-restart-note")).not.toBeInTheDocument();
