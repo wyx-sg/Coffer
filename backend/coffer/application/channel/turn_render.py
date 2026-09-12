@@ -26,7 +26,7 @@ from typing import Any
 from coffer.application.channel.ports import ChannelAdapter, LiveText
 from coffer.application.channel.turn_media import deliver_media
 from coffer.application.channel.turn_progress import _describe_tool, _progress_line
-from coffer.application.channel.turn_text import clip_stream_preview, mention_prefix
+from coffer.application.channel.turn_text import clip_stream_preview, with_mention
 from coffer.domain.chat.events import (
     TextDelta,
     ToolCall,
@@ -102,9 +102,11 @@ class TurnRenderer:
     thread_id: str = ""
     chat_kind: str = "direct"
     # FR-070: the id of whoever asked, as the platform addresses them in a
-    # mention (SeaTalk's ``seatalk_id``). Used in a GROUP only, and only where
-    # the transport declares a ``mention_template``; "" everywhere else.
+    # mention (SeaTalk's ``seatalk_id``), and their email as the fallback for a
+    # platform that also mentions by address. Used in a GROUP only, and only
+    # where the transport declares the matching template; "" everywhere else.
     mention_user_id: str = ""
+    mention_user_email: str = ""
     # FR-037: typing-heartbeat cadence (injectable so a test can drive it fast).
     heartbeat_seconds: float = _TYPING_HEARTBEAT_SECONDS
 
@@ -259,13 +261,27 @@ class TurnRenderer:
         # A transport that has none (or refuses to open one) simply gets no
         # interim traffic — its final reply is the whole signal.
         if progress.live is None:
+            # Raw: ``_open_live`` prefixes the mention itself, so passing an
+            # already-prefixed snapshot here is the one way to mention twice.
             await self._open_live(progress, text)
             return
-        # No throttle here: ``update`` is a no-op inside the surface's own
-        # interval and when the snapshot has not changed, so offering every
-        # snapshot lets the transport render at the cadence it can sustain.
+        await self._live_update(progress.live, text)
+
+    async def _live_update(self, live: LiveText, text: str) -> None:
+        """Hand ONE snapshot to the live surface, @mentioned (FR-070).
+
+        Every snapshot the surface is given passes through here — the
+        acknowledgement, each tool-progress redraw, each growing preview — so the
+        mention is applied in exactly one place and the message carries it from
+        the moment it is created. ``_deliver`` is the only other prefix site (the
+        body that closes the surface, or the ordinary send when there is none).
+
+        No throttle: ``update`` is a no-op inside the surface's own interval and
+        when the snapshot has not changed, so offering every snapshot lets the
+        transport render at the cadence it can sustain.
+        """
         with contextlib.suppress(Exception):
-            await progress.live.update(text)
+            await live.update(self._with_mention(text))
 
     async def _acknowledge(self, progress: _Progress) -> None:
         """Open the live surface immediately, so the turn is visibly received.
@@ -285,6 +301,8 @@ class TurnRenderer:
     async def _open_live(self, progress: _Progress, text: str) -> None:
         if progress.live_tried or not self.adapter.capabilities.supports_live_text:
             return
+        # Reached from ``_acknowledge`` and, lazily, from ``_render_status``;
+        # both hand raw text, and the mention is added once, below.
         progress.live_tried = True  # ask once per turn, whatever the answer
         try:
             progress.live = await self.adapter.open_live_text(
@@ -299,8 +317,7 @@ class TurnRenderer:
             return
         if progress.live is None:
             return
-        with contextlib.suppress(Exception):
-            await progress.live.update(text)
+        await self._live_update(progress.live, text)
 
     async def _finish(
         self,
@@ -350,26 +367,18 @@ class TurnRenderer:
             await self.send(leftover)
 
     def _with_mention(self, body: str) -> str:
-        """FR-070: open the final reply by @mentioning whoever asked.
-
-        Three conditions, each ruling out a case where a mention would be wrong
-        or unreadable:
-
-        * a GROUP — in a 1:1 chat there is nobody to disambiguate, and a bot
-          that @s you in your own DM is only shouting;
-        * a transport that spells mentions from an id alone, and an id to spell;
-        * this path, which is the only one whose text the platform renders as
-          RICH content. Interim live snapshots are sent as PLAIN text (SeaTalk
-          ``format: 2``) precisely because half-written markdown breaks a
-          parser — and a mention tag in one would reach the reader as its own
-          literal source, which is worse than no mention at all. So the tag goes
-          on the final snapshot (``format: 1``) or on the ordinary send, never
-          on the way there.
+        """FR-070: open the reply by @mentioning whoever asked — on EVERY
+        snapshot of it, for the reason written out in ``turn_text.with_mention``.
         """
-        if self.chat_kind != "group" or not body:
-            return body
-        prefix = mention_prefix(self.adapter.capabilities.mention_template, self.mention_user_id)
-        return f"{prefix} {body}" if prefix else body
+        caps = self.adapter.capabilities
+        return with_mention(
+            body,
+            chat_kind=self.chat_kind,
+            id_template=caps.mention_template,
+            user_id=self.mention_user_id,
+            email_template=caps.mention_email_template,
+            user_email=self.mention_user_email,
+        )
 
     async def _close_live(self, progress: _Progress, body: str) -> str:
         live, progress.live = progress.live, None

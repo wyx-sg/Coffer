@@ -53,9 +53,11 @@ def test_channel_capabilities_carries_strategy_fields():
     # Narrower than supports_edit: SeaTalk can rewrite a delivered interactive
     # card while being unable to rewrite a text message.
     assert caps.supports_card_update is False  # default off; transports opt in
-    # FR-070: the only non-boolean strategy field — how the transport spells an
-    # @mention. Empty by default, which is what makes a reply carry none.
+    # FR-070: the only non-boolean strategy fields — how the transport spells an
+    # @mention, by id and (where it has a second form) by address. Both empty by
+    # default, which is what makes a reply carry none.
     assert caps.mention_template == ""
+    assert caps.mention_email_template == ""
     assert {f.name for f in fields(ChannelCapabilities)} == {
         "supports_edit",
         "supports_typing",
@@ -69,6 +71,7 @@ def test_channel_capabilities_carries_strategy_fields():
         "supports_history_fetch",
         "supports_reactions",
         "mention_template",
+        "mention_email_template",
     }
 
 

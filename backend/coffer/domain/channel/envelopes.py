@@ -45,6 +45,11 @@ class InboundMessage:
     # spells mentions in a way that needs more than one (Telegram needs a
     # display name too) — the reply then simply carries no mention.
     sender_mention_id: str = ""
+    # The same thing by ADDRESS, for a platform that documents a second mention
+    # form (SeaTalk: ``?email=``). Only a fallback: it is precisely the field the
+    # docs warn arrives empty for a sender outside the bot's organisation, so the
+    # id above is what a mention is normally built from.
+    sender_mention_email: str = ""
     chat_kind: str = "direct"  # "direct" | "group"
     chat_title: str = ""  # group/channel display name where the platform supplies
     # one for free (Telegram ``chat.title``); "" when it does not (SeaTalk's group
@@ -120,9 +125,13 @@ class ChannelCapabilities:
     # The core substitutes and prefixes; it never learns the shape. A transport
     # that cannot mention, or whose mention needs more than an id (Telegram's
     # carries a display name), declares none and its replies carry none. The
-    # markup is the platform's RICH text, so only a send that renders as such
-    # may carry it — see ``TurnRenderer._with_mention``.
+    # markup is the platform's RICH text, so every snapshot that may carry it is
+    # sent as such — see ``turn_text.with_mention``.
     mention_template: str = ""
+    # The same, for a transport that documents a second mention form keyed on the
+    # member's EMAIL address (SeaTalk does). Used only when no id is available:
+    # ``{user_id}`` stands in for the address, so one literal replace serves both.
+    mention_email_template: str = ""
 
 
 @dataclass(frozen=True)

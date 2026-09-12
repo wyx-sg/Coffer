@@ -6,9 +6,17 @@ import pytest
 
 from coffer.infrastructure.channel.render import (
     chunk_text,
+    escape_seatalk_literal,
     markdown_to_seatalk,
     markdown_to_telegram_html,
+    split_leading_mention,
 )
+
+#: The two documented SeaTalk mention forms, each built with a target the marker
+#: escaper WOULD mangle if it were allowed near them: an id holding `_`, and an
+#: address holding `_` the way ordinary work addresses do.
+_MENTION_BY_ID = '<mention-tag target="seatalk://user?id=abc_def"/>'
+_MENTION_BY_EMAIL = '<mention-tag target="seatalk://user?email=first_last@example.com"/>'
 
 
 class TestMarkdownToTelegramHtml:
@@ -138,6 +146,74 @@ class TestMarkdownToSeatalk:
 
     def test_empty_input_renders_empty(self):
         assert markdown_to_seatalk("") == ""
+
+    @pytest.mark.acceptance(
+        spec="channels",
+        scenario="a mention target survives the markdown escaper unchanged",
+    )
+    def test_a_mention_tag_is_never_escaped_whatever_its_target_holds(self):
+        # An id with an underscore used to arrive as
+        # `...id=abc\_def..."/>` — visible tag source instead of a name. The
+        # email form of the tag makes it the normal case, not the edge one, so
+        # the renderer lifts the tag out of the escaping pass entirely.
+        assert markdown_to_seatalk(f"{_MENTION_BY_ID} hi") == f"{_MENTION_BY_ID} hi"
+        assert markdown_to_seatalk(f"{_MENTION_BY_EMAIL} hi") == f"{_MENTION_BY_EMAIL} hi"
+        # And the text around it is still escaped as it always was.
+        assert (
+            markdown_to_seatalk(f"{_MENTION_BY_ID} run some_var")
+            == f"{_MENTION_BY_ID} run some\\_var"
+        )
+
+
+class TestEscapeSeaTalkLiteral:
+    """An in-flight stream snapshot: a reply clipped mid-word, which has to reach
+    the chat AS WRITTEN inside a ``format: 1`` message (that message carries the
+    @mention, and a mention is only a name in a rich one)."""
+
+    @pytest.mark.acceptance(
+        spec="channels",
+        scenario="an interim snapshot reaches the chat as written, not as markup",
+    )
+    def test_partial_markup_is_escaped_rather_than_left_to_the_parser(self):
+        # A reply cut mid-word can end inside an unclosed run. Escaped, the
+        # reader sees the characters; unescaped, the client renders noise.
+        assert escape_seatalk_literal("I found **bo") == "I found \\*\\*bo"
+        assert escape_seatalk_literal("an _em") == "an \\_em"
+        assert escape_seatalk_literal("a `cod") == "a \\`cod"
+
+    def test_one_backslash_per_marker_never_two(self):
+        # Two would be one escape too many: SeaTalk eats the first and shows the
+        # second, which is how `claude_code` once reached a real chat as
+        # `claude\_code`.
+        escaped = escape_seatalk_literal("some_var")
+        assert escaped == "some\\_var"
+        assert "\\\\" not in escaped
+
+    def test_a_mention_tag_passes_through_untouched(self):
+        assert escape_seatalk_literal(f"{_MENTION_BY_ID} **bo") == f"{_MENTION_BY_ID} \\*\\*bo"
+        assert escape_seatalk_literal(_MENTION_BY_EMAIL) == _MENTION_BY_EMAIL
+
+    def test_text_with_nothing_to_escape_is_unchanged(self):
+        assert escape_seatalk_literal("⏳ Got it — working on this…") == (
+            "⏳ Got it — working on this…"
+        )
+
+
+class TestSplitLeadingMention:
+    """Shortening a snapshot from the front must not eat the mention the message
+    is notifying on, so the prefix comes off first and goes back on after."""
+
+    def test_the_prefix_includes_the_space_that_follows_it(self):
+        prefix, rest = split_leading_mention(f"{_MENTION_BY_ID} the answer")
+        assert prefix == f"{_MENTION_BY_ID} "
+        assert rest == "the answer"
+        assert prefix + rest == f"{_MENTION_BY_ID} the answer"
+
+    def test_text_without_a_mention_is_all_body(self):
+        assert split_leading_mention("the answer") == ("", "the answer")
+        # A tag that is not at the head is body: only an opening mention is the
+        # one the platform notifies on.
+        assert split_leading_mention(f"hi {_MENTION_BY_ID}") == ("", f"hi {_MENTION_BY_ID}")
 
 
 class TestChunkText:
