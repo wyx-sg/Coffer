@@ -31,11 +31,11 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, RefreshCw } from "lucide-react";
 
-import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
-import { ModalitySelect } from "@/components/settings/ModalitySelect";
+import { DataTable, type FilterDef } from "@/components/DataTable";
+import { ProviderModelsBulkActions } from "@/components/settings/ProviderModelsBulkActions";
+import { useProviderModelColumns } from "@/components/settings/ProviderModelsColumns";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
 import { MODALITIES, type Modality, type Provider, type ProviderModel } from "@/lib/api/providers";
 import { useEndpointModels } from "@/lib/hooks/useModelIntrospection";
@@ -131,38 +131,13 @@ export function ProviderModelsTable({ provider }: { provider: Provider }) {
   const fetchFailed = endpoint.error != null;
   const modalityLabel = (m: Modality) => t(`settings.connections.detail.modalities.${m}`);
 
-  const columns: Column<ProviderModel>[] = [
-    {
-      key: "model",
-      header: t("settings.connections.detail.modelId"),
-      cell: (m) => <span className="font-mono text-xs">{m.id}</span>,
-    },
-    {
-      key: "modality",
-      header: t("settings.connections.detail.modality"),
-      cell: (m) => (
-        <ModalitySelect
-          value={modalityOf(m)}
-          onChange={(v) => setModality(m, v)}
-          disabled={update.isPending}
-          label={m.id}
-        />
-      ),
-    },
-    {
-      key: "status",
-      header: t("resources.cols.status"),
-      className: "text-right",
-      cell: (m) => (
-        <Switch
-          checked={isOn(m.id)}
-          onCheckedChange={() => toggle(m)}
-          disabled={update.isPending}
-          aria-label={`${t("resources.cols.status")}: ${m.id}`}
-        />
-      ),
-    },
-  ];
+  const columns = useProviderModelColumns({
+    modalityOf,
+    isOn,
+    toggle,
+    setModality,
+    pending: update.isPending,
+  });
 
   const filters: FilterDef<ProviderModel>[] = [
     {
@@ -234,28 +209,7 @@ export function ProviderModelsTable({ provider }: { provider: Provider }) {
           bulkLabel: (count) => t("common.bulk.selected", { count }),
           clearLabel: t("common.clear"),
           renderBulkActions: ({ selectedRows, clear }) => (
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setMany(selectedRows, true);
-                  clear();
-                }}
-              >
-                {t("common.bulk.enable")}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setMany(selectedRows, false);
-                  clear();
-                }}
-              >
-                {t("common.bulk.disable")}
-              </Button>
-            </div>
+            <ProviderModelsBulkActions rows={selectedRows} onApply={setMany} onDone={clear} />
           ),
         }}
         // DataTable takes ONE empty message, so pick the one that is true: the

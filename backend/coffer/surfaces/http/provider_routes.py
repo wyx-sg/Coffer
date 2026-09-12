@@ -148,6 +148,7 @@ async def update_provider(
     """Partially update a provider profile."""
     resource = await svc.update(
         name,
+        protocol=body.protocol,
         base_url=body.base_url,
         secret_value=body.secret_value,
         compatible_agents=body.compatible_agents,

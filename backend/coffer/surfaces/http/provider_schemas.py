@@ -53,11 +53,13 @@ class ProviderCreate(BaseModel):
 
 
 class ProviderPatch(BaseModel):
-    """Partial update. ``protocol`` / ``credential_ref`` are immutable;
-    ``compatible_agents`` is mutable (re-target then re-activate to re-project).
-    ``models`` replaces the curated set as a whole, like ``compatible_agents``:
-    ``None`` leaves it alone, ``[]`` clears the restriction."""
+    """Partial update. ``credential_ref`` is immutable (it is the vault address
+    the connection owns); ``protocol`` is not — the probe that guessed the wire
+    can be wrong, and nothing keys off it. ``compatible_agents`` is mutable
+    (re-target then re-activate to re-project). ``models`` replaces the curated
+    set as a whole: ``None`` leaves it alone, ``[]`` clears the restriction."""
 
+    protocol: Protocol | None = None
     base_url: str | None = None
     secret_value: str | None = Field(default=None, max_length=8192)
     compatible_agents: list[AgentType] | None = None

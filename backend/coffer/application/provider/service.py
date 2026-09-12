@@ -22,6 +22,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.provider.projector import ProjectionConfigStore, ProviderProjector
 from coffer.application.provider.rename_ops import rename as _rename_op
 from coffer.application.provider.results import ActivateResult, DeactivateResult
+from coffer.application.provider.update_ops import update as _update_op
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
@@ -171,6 +172,7 @@ class ProviderService:
         self,
         name: str,
         *,
+        protocol: Protocol | None = None,
         base_url: str | None = None,
         secret_value: str | None = None,
         compatible_agents: _AgentTypes | None = None,
@@ -178,30 +180,17 @@ class ProviderService:
         description: str | None = None,
         actor: str = "api",
     ) -> Resource:
-        """Partial update. ``protocol`` / ``credential_ref`` are immutable
-        (identity); change them by recreating. ``secret_value`` rotates the
-        secret stored under the profile's existing ref. ``compatible_agents``
-        re-targets which agents the connection projects into (it is mutable,
-        unlike the wire). ``models`` replaces the curated offered set as a whole
-        (``[]`` clears the restriction). No CHOSEN model is stored on the
-        connection (spec provider-switching E3). Re-activate to re-project under new targets."""
-        current = await self.get(name)
-        config = dict(current.config)
-        if base_url is not None:
-            config["base_url"] = base_url
-        if compatible_agents is not None:
-            config["compatible_agents"] = [a.value for a in compatible_agents]
-        if models is not None:
-            config["models"] = [m.model_dump(mode="json") for m in models]
-        # Re-validate so a bad edit is rejected before the rotation / DB write.
-        validated = ProviderConfig.model_validate(config).model_dump(mode="json")
-        if secret_value is not None:
-            ref = config.get("credential_ref")
-            if not ref:
-                raise ProviderCredentialSourceInvalid()
-            await asyncio.to_thread(self._credentials.set, str(ref), secret_value)
-        return await self._resources.update_config(
-            self._ref(name), validated, actor, description=description
+        """Partial update; see ``update_ops`` for what may move and what may not."""
+        return await _update_op(
+            self,
+            name,
+            protocol=protocol,
+            base_url=base_url,
+            secret_value=secret_value,
+            compatible_agents=compatible_agents,
+            models=models,
+            description=description,
+            actor=actor,
         )
 
     async def delete(self, name: str, *, actor: str = "api") -> None:

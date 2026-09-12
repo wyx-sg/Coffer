@@ -125,6 +125,28 @@ def test_update_profile(tmp_path, monkeypatch):
         assert r.json()["base_url"] == "https://gw/anthropic/v2"
 
 
+def test_patch_can_correct_the_wire(tmp_path, monkeypatch):
+    """The wire is a property of the endpoint, not the connection's identity.
+
+    Nothing keys off it — projection targets come from ``compatible_agents`` —
+    so a probe that guessed wrong is corrected in place rather than by deleting
+    the connection and re-entering its key. ``credential_ref`` stays immutable:
+    that one IS an address.
+    """
+    app = _app(tmp_path, monkeypatch, 59755)
+    with _client(app) as c:
+        c.post("/api/v1/providers", json=_anthropic_body())
+        r = c.patch("/api/v1/providers/acme", json={"protocol": "openai"})
+        assert r.status_code == 200, r.text
+        assert r.json()["protocol"] == "openai"
+
+        # The one rule the wire still carries: an ollama connection holds no
+        # key, so switching a keyed one to it is refused rather than silently
+        # orphaning the secret.
+        bad = c.patch("/api/v1/providers/acme", json={"protocol": "ollama"})
+        assert bad.status_code == 422, bad.text
+
+
 @pytest.mark.acceptance(spec="provider-switching", scenario="list provider profiles")
 def test_list_profiles(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59760)

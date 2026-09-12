@@ -105,6 +105,8 @@ export interface ProviderCreate {
 }
 
 export interface ProviderPatch {
+  /** The wire the endpoint speaks; correctable when the probe guessed wrong. */
+  protocol?: Protocol;
   base_url?: string | null;
   secret_value?: string | null;
   compatible_agents?: AgentType[] | null;
