@@ -16,6 +16,7 @@ const testMock = vi.mocked(testChannelCallback);
 afterEach(() => vi.clearAllMocks());
 
 const withUrl: CallbackInfo = {
+  delivery: "webhook",
   port: 8787,
   path: "/seatalk/st",
   listener_running: true,
@@ -23,9 +24,12 @@ const withUrl: CallbackInfo = {
   public_callback_url: "https://x.trycloudflare.com/seatalk/st",
   tunnel_managed: false,
   tunnel_running: false,
+  websocket_state: null,
+  websocket_error: null,
 };
 
 const withoutUrl: CallbackInfo = {
+  delivery: "webhook",
   port: 8787,
   path: "/seatalk/st",
   listener_running: true,
@@ -33,6 +37,25 @@ const withoutUrl: CallbackInfo = {
   public_callback_url: null,
   tunnel_managed: false,
   tunnel_running: false,
+  websocket_state: null,
+  websocket_error: null,
+};
+
+/**
+ * Websocket delivery's wire shape: the webhook-only fields report their
+ * absent/false values rather than pretending a listener or URL exists.
+ */
+const websocket: CallbackInfo = {
+  delivery: "websocket",
+  port: 8787,
+  path: "/seatalk/st",
+  listener_running: false,
+  public_base_url: null,
+  public_callback_url: null,
+  tunnel_managed: false,
+  tunnel_running: false,
+  websocket_state: "connected",
+  websocket_error: null,
 };
 
 test("shows the composed public callback URL with a copy button", () => {
@@ -57,6 +80,44 @@ test("shows the managed-tunnel row only when a tunnel is managed", () => {
     />,
   );
   expect(screen.getByText(/^Tunnel$|^隧道$/)).toBeInTheDocument();
+});
+
+describe("websocket delivery", () => {
+  test("shows the connection state instead of the callback URL and its rows", () => {
+    render(<ChannelCallbackCard name="st" callback={websocket} />);
+
+    expect(screen.getByText(/^Connected$/)).toBeInTheDocument();
+    // No URL to register, nothing to probe, no listener or tunnel to report.
+    expect(screen.queryByText(/^https:\/\//)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /test reachability/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Listener$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Local listener$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Tunnel$/)).not.toBeInTheDocument();
+  });
+
+  test("a kicked connection reads as another process holding it, with the error text", () => {
+    render(
+      <ChannelCallbackCard
+        name="st"
+        callback={{
+          ...websocket,
+          websocket_state: "kicked",
+          websocket_error: "kicked: registered elsewhere",
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/another process holds this bot's connection/i)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("kicked: registered elsewhere");
+  });
+
+  test("a missing SDK reads as a missing SDK, not as a generic failure", () => {
+    render(
+      <ChannelCallbackCard name="st" callback={{ ...websocket, websocket_state: "sdk_missing" }} />,
+    );
+
+    expect(screen.getByText(/SDK not found/i)).toBeInTheDocument();
+  });
 });
 
 describe("reachability test button", () => {

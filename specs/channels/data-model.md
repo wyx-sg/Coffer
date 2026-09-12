@@ -20,11 +20,12 @@ ChannelConfig (discriminator: channel_type)
 │   └── bot_token_ref: str            # credential-store ref, probed at register
 └── SeaTalkChannelConfig
     ├── channel_type: "seatalk"
-    ├── app_id: str
-    ├── app_secret_ref: str            # credential-store ref
-    ├── signing_secret_ref: str        # credential-store ref
-    ├── public_base_url: str | None    # tunnel public base URL (https://host)
-    └── tunnel_token_ref: str | None   # cloudflared token ref (managed tunnel)
+    ├── delivery: "webhook" | "websocket" = "webhook"  # inbound transport (FR-071)
+    ├── app_id: str                     # required on both
+    ├── app_secret_ref: str             # credential-store ref; required on both
+    ├── signing_secret_ref: str | None  # webhook: required — websocket: forbidden
+    ├── public_base_url: str | None     # webhook only: tunnel public base URL (https://host)
+    └── tunnel_token_ref: str | None    # webhook only: cloudflared token ref (managed tunnel)
 ```
 
 Validation rules:
@@ -53,6 +54,35 @@ Validation rules:
   off every stored channel config in one direction only, with no load-time shim
   (house rule) — `_CommonChannelFields` forbids extra keys, so a row still
   carrying them would fail to validate on load.
+- `delivery` decides which of the SeaTalk fields are legal, and one
+  `model_validator(mode="after")` holds the whole rule so the allowed and the
+  forbidden combination can never drift apart (FR-071):
+
+  | field                | `delivery: "webhook"`               | `delivery: "websocket"` |
+  | -------------------- | ----------------------------------- | ----------------------- |
+  | `app_id`             | required                            | required                |
+  | `app_secret_ref`     | required                            | required                |
+  | `signing_secret_ref` | **required**                        | **forbidden**           |
+  | `public_base_url`    | optional                            | **forbidden**           |
+  | `tunnel_token_ref`   | optional (managed tunnel when set)  | **forbidden**           |
+
+  The forbidden half is what makes the config readable: a websocket channel has
+  no request body to sign, no public URL to describe, and no tunnel to supervise,
+  so a stored value for any of the three would claim a runtime arrangement that
+  does not exist. Each message names the field and the delivery method it
+  conflicts with, in the style of the other cross-field validators, because the
+  user reaches this error by switching an existing channel's transport — the one
+  moment they are holding both sets of fields at once.
+- **No migration accompanies `delivery`.** Every channel stored before the field
+  existed is a webhook channel — that was the only transport — and the field's
+  default is `webhook`, so an absent value already means exactly what those rows
+  already are. Nothing is reinterpreted, no value changes meaning, and there is
+  no row whose behaviour depends on being rewritten; a migration here would write
+  `webhook` on top of rows that already behave as `webhook`. (Contrast migration
+  `0067` above, which had to *remove* keys the model no longer accepts: a new
+  field with a default that matches the stored reality is the opposite case.)
+  This is also why no load-time shim appears anywhere — there is no old shape to
+  translate.
 - Channel turns run in the Coffer-managed default workspace `~/.coffer/workspace`
   (created on first use).
 

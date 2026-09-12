@@ -1,20 +1,74 @@
 // frontend/src/kinds/channel/ChannelCallbackCard.tsx
-// SeaTalk-only detail card: the public callback URL to register on the SeaTalk
-// Open Platform (composed once the owner records their tunnel's base URL), a
-// reachability self-test, the local listener address, and the tunnel hint.
+// SeaTalk-only detail card, one shape per delivery method. On webhook: the
+// public callback URL to register on the SeaTalk Open Platform (composed once
+// the owner records their tunnel's base URL), a reachability self-test, the
+// local listener address and the tunnel hint. On websocket there is no URL to
+// register, no listener and no tunnel — only the connection Coffer holds, so
+// the card reports that state instead.
 // Split out of ChannelDetailCards to keep each within the size budget.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, Webhook } from "lucide-react";
+import { Copy, PlugZap, Webhook } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import type { CallbackInfo, CallbackTestResult } from "@/lib/api/channels";
+import type { CallbackInfo, CallbackTestResult, WebSocketState } from "@/lib/api/channels";
 import { testChannelCallback } from "@/lib/api/channels";
 import { translateApiError } from "@/lib/api/errors";
 import { StatusRow } from "./ChannelDetailCards";
+
+/** A live socket is the only healthy state; everything else wants attention. */
+const UNHEALTHY: WebSocketState[] = ["kicked", "sdk_missing", "error"];
+
+/**
+ * Websocket delivery's whole status: the connection state and, when there is
+ * one, the last error verbatim. No callback URL, listener or tunnel row —
+ * nothing on this transport has any.
+ */
+function WebSocketCard({ callback }: { callback: CallbackInfo }) {
+  const { t } = useTranslation();
+  const state = callback.websocket_state;
+
+  return (
+    <Card className="paper-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 font-serif text-lg">
+          <PlugZap className="size-4 text-primary" aria-hidden />
+          {t("channels.callback.websocketTitle")}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <StatusRow
+          label={t("channels.callback.connection")}
+          value={
+            <Badge
+              variant={
+                state === "connected"
+                  ? "default"
+                  : state !== null && UNHEALTHY.includes(state)
+                    ? "destructive"
+                    : "outline"
+              }
+            >
+              {t(`channels.callback.websocketState.${state ?? "unknown"}`)}
+            </Badge>
+          }
+        />
+        {callback.websocket_error ? (
+          <p
+            role="alert"
+            className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive"
+          >
+            {callback.websocket_error}
+          </p>
+        ) : null}
+        <p className="pt-1 text-xs text-muted-foreground">{t("channels.callback.websocketHint")}</p>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function ChannelCallbackCard({ name, callback }: { name: string; callback: CallbackInfo }) {
   const { t } = useTranslation();
@@ -39,6 +93,10 @@ export function ChannelCallbackCard({ name, callback }: { name: string; callback
       .catch((e) => setTestResult({ ok: false, detail: translateApiError(t, e) }))
       .finally(() => setTesting(false));
   };
+
+  // After the hooks, never before: the card's shape switches with the channel's
+  // delivery method, and a conditional hook would break on that switch.
+  if (callback.delivery === "websocket") return <WebSocketCard callback={callback} />;
 
   return (
     <Card className="paper-card">

@@ -9,6 +9,8 @@ import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
+import type { ChannelDelivery } from "@/lib/api/channels";
+import { ChannelDeliveryField } from "./ChannelDeliveryField";
 
 /** Every input the edit form can show, across both channel types. */
 export interface ChannelEditDraft {
@@ -22,19 +24,26 @@ export interface ChannelEditDraft {
 
 export function EditChannelSecretFields({
   channelType,
+  delivery,
+  onDeliveryChange,
   draft,
   onChange,
 }: {
   channelType: string;
+  /** The SeaTalk channel's inbound transport (ignored for telegram). */
+  delivery: ChannelDelivery;
+  onDeliveryChange: (delivery: ChannelDelivery) => void;
   draft: ChannelEditDraft;
   onChange: (patch: Partial<ChannelEditDraft>) => void;
 }) {
   const { t } = useTranslation();
+  const webhook = delivery === "webhook";
 
   return (
     <>
       {channelType === "seatalk" ? (
         <>
+          <ChannelDeliveryField delivery={delivery} onChange={onDeliveryChange} />
           <div className="space-y-2">
             <Label htmlFor="edit-channel-app-id">{t("channels.dialog.appId")}</Label>
             <Input
@@ -44,6 +53,11 @@ export function EditChannelSecretFields({
               autoComplete="off"
             />
           </div>
+        </>
+      ) : null}
+
+      {channelType === "seatalk" && webhook ? (
+        <>
           <div className="space-y-2">
             <Label htmlFor="edit-channel-public-base-url">
               {t("channels.dialog.publicBaseUrl")}
@@ -97,19 +111,22 @@ export function EditChannelSecretFields({
               placeholder={t("channels.edit.rotatePlaceholder")}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="edit-channel-signing-secret">
-              {t("channels.edit.newSigningSecret")}
-            </Label>
-            <PasswordInput
-              id="edit-channel-signing-secret"
-              value={draft.signingSecret}
-              onChange={(e) => onChange({ signingSecret: e.target.value })}
-              autoComplete="off"
-              placeholder={t("channels.edit.rotatePlaceholder")}
-            />
-            <p className="text-xs text-muted-foreground">{t("channels.edit.rotateHint")}</p>
-          </div>
+          {/* Webhook-only: websocket delivery verifies no signature. */}
+          {webhook ? (
+            <div className="space-y-2">
+              <Label htmlFor="edit-channel-signing-secret">
+                {t("channels.edit.newSigningSecret")}
+              </Label>
+              <PasswordInput
+                id="edit-channel-signing-secret"
+                value={draft.signingSecret}
+                onChange={(e) => onChange({ signingSecret: e.target.value })}
+                autoComplete="off"
+                placeholder={t("channels.edit.rotatePlaceholder")}
+              />
+            </div>
+          ) : null}
+          <p className="text-xs text-muted-foreground">{t("channels.edit.rotateHint")}</p>
         </>
       )}
     </>

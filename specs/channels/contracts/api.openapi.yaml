@@ -250,13 +250,46 @@ components:
 
     CallbackInfoOut:
       type: object
-      required: [port, path, listener_running]
+      description: >-
+        How a SeaTalk channel receives events. Covers both delivery methods; on
+        websocket delivery the webhook-only fields report their absent/false
+        values (there is no port, path, public URL, listener or tunnel on that
+        path) and websocket_state carries the health answer.
+      required: [port, path, listener_running, delivery]
       properties:
         port: { type: integer }
         path:
           type: string
           description: The path to append to the tunnel URL
         listener_running: { type: boolean }
+        delivery:
+          type: string
+          enum: [webhook, websocket]
+          description: >-
+            Which inbound transport this channel uses. webhook = SeaTalk POSTs to
+            a public callback URL; websocket = the bot holds one outbound
+            connection and needs no public URL.
+        public_base_url:
+          type: string
+          nullable: true
+        public_callback_url:
+          type: string
+          nullable: true
+        tunnel_managed:
+          type: boolean
+          description: Coffer supervises a cloudflared child for this channel
+        tunnel_running: { type: boolean }
+        websocket_state:
+          type: string
+          nullable: true
+          enum: [connecting, connected, kicked, sdk_missing, error]
+          description: >-
+            State of the held WebSocket connection; null on webhook delivery and
+            on a websocket channel with no connection yet.
+        websocket_error:
+          type: string
+          nullable: true
+          description: The last connection error, verbatim, so the owner can act on it
 
     NotifyIn:
       type: object

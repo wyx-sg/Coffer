@@ -223,6 +223,7 @@ async def test_status_reports_runtime_pairing_and_callback_details(ctx: _Ctx) ->
     assert body["peer"]["display_name"] == "Yu"
     assert body["peer"]["active_conversation_id"] == "conv-9"
     assert body["callback"] == {
+        "delivery": "webhook",
         "port": 8787,
         "path": "/seatalk/st",
         "listener_running": True,
@@ -230,6 +231,8 @@ async def test_status_reports_runtime_pairing_and_callback_details(ctx: _Ctx) ->
         "public_callback_url": None,
         "tunnel_managed": False,
         "tunnel_running": False,
+        "websocket_state": None,
+        "websocket_error": None,
     }
 
 

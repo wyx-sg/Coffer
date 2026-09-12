@@ -116,3 +116,4 @@ section that future readers most often want — don't skip it.>
 | [`persisted-attachment-reference`](persisted-attachment-reference.md) | Persist channel attachments as a reference block, re-materialise from history | Accepted |
 | [`per-agent-resource-scope`](per-agent-resource-scope.md) | Per-Agent Resource Scope | Accepted |
 | [`budget-driven-tool-tiering`](budget-driven-tool-tiering.md) | Budget-Driven Tool Tiering at the Gateway | Accepted |
+| [`seatalk-websocket-inbound`](seatalk-websocket-inbound.md) | SeaTalk Inbound Over WebSocket, With an Operator-Supplied SDK | Accepted |

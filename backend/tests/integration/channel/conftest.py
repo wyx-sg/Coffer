@@ -508,6 +508,50 @@ class StubListenerController:
         self.ensure_stopped_calls += 1
 
 
+class StubWebSocketController:
+    """Recording ``WebSocketControllerPort`` (no SDK, no socket, no thread).
+
+    The real connector's threading is pinned in ``test_seatalk_ws.py`` against
+    the fake SDK; what the runtime needs from it here is only the converge
+    contract — who is wanted, with which materialized credentials.
+    """
+
+    def __init__(self, *, fail: bool = False) -> None:
+        self.started: dict[str, tuple[str, str]] = {}
+        self.stopped: list[str] = []
+        self.disposed = 0
+        self._fail = fail
+        self._states: dict[str, tuple[str, str | None]] = {}
+
+    def running(self, name: str) -> bool:
+        return name in self.started
+
+    def active(self) -> set[str]:
+        return set(self.started)
+
+    def state(self, name: str) -> tuple[str, str | None] | None:
+        return self._states.get(name)
+
+    def set_state(self, name: str, state: str, error: str | None = None) -> None:
+        self._states[name] = (state, error)
+
+    async def ensure_running(self, name: str, app_id: str, app_secret: str) -> None:
+        if self._fail:
+            raise RuntimeError("the SeaTalk SDK is missing")
+        self.started[name] = (app_id, app_secret)
+        self._states.setdefault(name, ("connecting", None))
+
+    async def ensure_stopped(self, name: str) -> None:
+        self.stopped.append(name)
+        self.started.pop(name, None)
+        self._states.pop(name, None)
+
+    async def dispose(self) -> None:
+        self.disposed += 1
+        for name in list(self.started):
+            await self.ensure_stopped(name)
+
+
 class ScriptedAgentProvider:
     """``AgentProvider`` whose adapter a test swaps in before sending."""
 
@@ -566,6 +610,7 @@ class ChannelEnv:
     runtime: ChannelRuntime
     service: ChannelService
     listener: StubListenerController
+    websockets: StubWebSocketController
     created_adapters: list[FakeChannelAdapter] = field(default_factory=list)
 
     def add_agent(self, agent_key: str, reply: str = "from-other") -> ScriptedAgentProvider:
@@ -703,12 +748,14 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         return resolver.materialize(refs)
 
     listener = StubListenerController()
+    websockets = StubWebSocketController()
     runtime = ChannelRuntime(
         resources=resources,
         adapter_factory=adapter_factory,
         processor=processor,
         pairing=pairing,
         listener=listener,
+        websockets=websockets,
         materialize=materialize,
         interval_seconds=0.05,
     )
@@ -738,6 +785,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         runtime=runtime,
         service=service,
         listener=listener,
+        websockets=websockets,
         created_adapters=created_adapters,
     )
 

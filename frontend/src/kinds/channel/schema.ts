@@ -6,7 +6,7 @@
 // secrets never live in the config — only `*_ref` references do.
 import { z } from "zod";
 
-import type { ChannelType } from "@/lib/api/channels";
+import type { ChannelDelivery, ChannelType } from "@/lib/api/channels";
 
 /**
  * The agent a newly-created channel routes to by default. This is a chat
@@ -25,7 +25,10 @@ const channelNameSchema = z
   .max(64)
   .regex(/^[a-zA-Z0-9_-]+$/, "letters, digits, dash, underscore only");
 
-export const addChannelFormSchema = z.discriminatedUnion("channel_type", [
+/** The inbound transport a new SeaTalk channel is created on. */
+export const DEFAULT_DELIVERY: ChannelDelivery = "webhook";
+
+const addChannelFormUnion = z.discriminatedUnion("channel_type", [
   z.object({
     channel_type: z.literal("telegram"),
     name: channelNameSchema,
@@ -34,9 +37,14 @@ export const addChannelFormSchema = z.discriminatedUnion("channel_type", [
   z.object({
     channel_type: z.literal("seatalk"),
     name: channelNameSchema,
+    // Which transport SeaTalk delivers events on. Webhook is the default: it
+    // is the method that works without the operator-supplied official SDK.
+    delivery: z.enum(["webhook", "websocket"]).default(DEFAULT_DELIVERY),
     app_id: z.string().min(1, "app id required"),
     app_secret: z.string().min(1, "app secret required"),
-    signing_secret: z.string().min(1, "signing secret required"),
+    // Required on webhook (it verifies every request's signature), forbidden on
+    // websocket (the register handshake authenticates) — enforced below.
+    signing_secret: z.string().optional(),
     // Optional: the tunnel's public base URL (https://host). The full SeaTalk
     // callback URL is composed from this on the channel detail page.
     public_base_url: z.string().optional(),
@@ -45,6 +53,27 @@ export const addChannelFormSchema = z.discriminatedUnion("channel_type", [
     tunnel_token: z.string().optional(),
   }),
 ]);
+
+/**
+ * The add-channel form. The cross-field rule sits on the union (a refinement
+ * cannot live inside a discriminated-union member) and mirrors the backend's
+ * `SeaTalkChannelConfig` validator field for field, so a submit never fails on
+ * something the form could have told the user first.
+ */
+export const addChannelFormSchema = addChannelFormUnion.superRefine((values, ctx) => {
+  if (values.channel_type !== "seatalk") return;
+  const reject = (path: string, message: string) =>
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+  if (values.delivery === "webhook") {
+    if (!values.signing_secret) reject("signing_secret", "signing secret required");
+    return;
+  }
+  // Websocket owns no signature, no public URL and no tunnel — a config field
+  // that decides nothing would be a lie about the system.
+  for (const field of ["signing_secret", "public_base_url", "tunnel_token"] as const) {
+    if (values[field]?.trim()) reject(field, "not allowed for websocket delivery");
+  }
+});
 
 export type AddChannelFormValues = z.output<typeof addChannelFormSchema>;
 
@@ -82,6 +111,21 @@ export function planChannel(values: AddChannelFormValues): ChannelPlan {
     };
   }
   const appSecretRef = channelSecretRef(values.name, "app-secret");
+  if (values.delivery === "websocket") {
+    // No signing secret, no public URL, no tunnel: the bot dials out and the
+    // register handshake (app id + app secret) authenticates the connection.
+    return {
+      name: values.name,
+      config: {
+        channel_type: "seatalk" satisfies ChannelType,
+        delivery: "websocket" satisfies ChannelDelivery,
+        app_id: values.app_id,
+        app_secret_ref: appSecretRef,
+        default_agent: DEFAULT_AGENT,
+      },
+      secrets: [{ ref: appSecretRef, value: values.app_secret }],
+    };
+  }
   const signingSecretRef = channelSecretRef(values.name, "signing-secret");
   const tunnelToken = values.tunnel_token?.trim();
   const tunnelTokenRef = channelSecretRef(values.name, "tunnel-token");
@@ -89,6 +133,7 @@ export function planChannel(values: AddChannelFormValues): ChannelPlan {
     name: values.name,
     config: {
       channel_type: "seatalk" satisfies ChannelType,
+      delivery: "webhook" satisfies ChannelDelivery,
       app_id: values.app_id,
       app_secret_ref: appSecretRef,
       signing_secret_ref: signingSecretRef,
@@ -98,7 +143,8 @@ export function planChannel(values: AddChannelFormValues): ChannelPlan {
     },
     secrets: [
       { ref: appSecretRef, value: values.app_secret },
-      { ref: signingSecretRef, value: values.signing_secret },
+      // The refinement above guarantees a signing secret on webhook delivery.
+      { ref: signingSecretRef, value: values.signing_secret ?? "" },
       ...(tunnelToken ? [{ ref: tunnelTokenRef, value: tunnelToken }] : []),
     ],
   };
@@ -116,6 +162,8 @@ export interface ChannelEditValues {
   bot_token?: string;
   /** SeaTalk app id (mutable config — not a secret). */
   app_id?: string;
+  /** SeaTalk inbound transport; undefined keeps whatever the config says. */
+  delivery?: ChannelDelivery;
   /** New SeaTalk app secret; blank leaves the stored credential untouched. */
   app_secret?: string;
   /** New SeaTalk signing secret; blank leaves the stored credential untouched. */
@@ -140,8 +188,7 @@ export interface ChannelEditInput {
  * while applying the mutable changes (bound agent, SeaTalk app id).
  *
  * Pure (no network), mirroring planChannel: the config is fully assembled
- * before any side effect runs. A blank secret value yields no credential
- * write — the existing value stays.
+ * before any side effect runs. A blank secret value writes no credential.
  */
 export function planChannelEdit(input: ChannelEditInput): ChannelPlan {
   const { config, values } = input;
@@ -158,17 +205,33 @@ export function planChannelEdit(input: ChannelEditInput): ChannelPlan {
     }
   } else if (config.channel_type === "seatalk") {
     if (values.app_id !== undefined) nextConfig.app_id = values.app_id;
+    const appSecretRef = config.app_secret_ref;
+    if (values.app_secret && typeof appSecretRef === "string") {
+      secrets.push({ ref: appSecretRef, value: values.app_secret });
+    }
+    const delivery = values.delivery ?? (config.delivery === "websocket" ? "websocket" : "webhook");
+    nextConfig.delivery = delivery;
+    if (delivery === "websocket") {
+      // The backend rejects a websocket config still carrying a webhook field,
+      // so the switch drops them. Credential VALUES stay; only the refs go.
+      delete nextConfig.signing_secret_ref;
+      delete nextConfig.public_base_url;
+      delete nextConfig.tunnel_token_ref;
+      return { name: input.name, config: nextConfig, secrets };
+    }
     if (values.public_base_url !== undefined) {
       // Blank clears the stored URL (backend normalizes "" → null).
       nextConfig.public_base_url = values.public_base_url.trim() || null;
     }
-    const appSecretRef = config.app_secret_ref;
-    const signingSecretRef = config.signing_secret_ref;
-    if (values.app_secret && typeof appSecretRef === "string") {
-      secrets.push({ ref: appSecretRef, value: values.app_secret });
-    }
-    if (values.signing_secret && typeof signingSecretRef === "string") {
-      secrets.push({ ref: signingSecretRef, value: values.signing_secret });
+    if (values.signing_secret) {
+      // Reuse the channel's ref, or mint the canonical one — the latter is the
+      // switch back to webhook, where the reference was dropped.
+      const ref =
+        typeof config.signing_secret_ref === "string" && config.signing_secret_ref
+          ? config.signing_secret_ref
+          : channelSecretRef(input.name, "signing-secret");
+      nextConfig.signing_secret_ref = ref;
+      secrets.push({ ref, value: values.signing_secret });
     }
     if (values.tunnel_token?.trim()) {
       // Reuse the existing ref, or mint one the first time a token is set

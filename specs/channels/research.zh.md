@@ -57,10 +57,20 @@ NousResearch hermes-agent 文档与源码、SeaTalk 官方 `cs-bot` 仓库与开
 已对照官方 `seatalk-io/cs-bot` 仓库与官方文档镜像核实（文档站需要开发者
 登录）。
 
-- **入站只有 webhook。** 没有轮询或 websocket。事件以 `POST` JSON 到达：
+- **入站有两种投递方式，一个 bot 同一时刻只用一种。** 没有轮询。要么由平台把每个事件
+  POST 到一个公网 callback URL，要么由 bot 持有一条出网 WebSocket、平台把事件顺着它推
+  下来（**WebSocket Event Callback**，文档比这份调研的其余部分出得晚，已在 spec channels
+  FR-071 中采纳）。两种方式下事件体是同一个：
   `{event_id, event_type, timestamp, app_id, event}`。单聊消息是
   `event_type: "message_from_bot_subscriber"`；发送者由 `employee_code`
   标识。
+- **WebSocket 这条路只有一个客户端：SeaTalk 自己的 SDK。** 线路协议没有公开——材料只讲
+  怎么调 SDK——而 `seatalk-oapi-sdk-py` 从一个内部企业门户分发，在公共 PyPI 上不存在，
+  也没有任何公开许可。这个 SDK 是同步、基于线程的（裸 socket、自带帧格式、一个 ping
+  线程），连接时用 `app_id` + `app_secret` 注册，提供一个通用事件回调、其载荷就是上面
+  那个原始事件 dict，按 `callback_id` 做 ack，并且**不会重连**。一个 app 只许一条连接：
+  新的注册会把上一个持有者踢掉，并作为一次 kick 报出来。这正是 FR-072 形状的由来——一个
+  由 operator 提供的可选依赖，而监督与退避写在我们这边。
 - **Callback URL**：http 或 https，必须公网可达（内网 IP 通不过校验）。
   隧道可用。保存时 SeaTalk 会 POST 一条包含 `event.seatalk_challenge` 的
   `event_verification`；服务端必须在 5 秒内回显
@@ -195,8 +205,8 @@ NousResearch hermes-agent 文档与源码、SeaTalk 官方 `cs-bot` 仓库与开
 | 决策          | 选择                                                    | 理由                                                                                                     |
 | ------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | Telegram 传输 | 用裸 httpx 做 long polling                              | local-first、无需 ingress；用到的 API 面只有 7 个小方法 —— 引入 SDK 毫无收益，还要多一条 import 限界契约 |
-| SeaTalk 传输  | webhook → 独立监听器进程 + 用户自行运行的隧道           | webhook 是唯一选项；章程要求公网可达 surface 必须是独立进程、只服务带签名的回调路径                      |
-| SeaTalk SDK   | 不用（裸 httpx）                                        | 官方仓库本身就是一个薄 httpx 等价物；token 缓存约 20 行                                                  |
+| SeaTalk 传输  | webhook → 独立监听器进程 + 一条隧道（用户自行运行或 Coffer 监督）；websocket → daemon 内一条出网连接 | 章程要求公网可达 surface 必须是独立进程、只服务带签名的回调路径，webhook 这条路正是如此；websocket 这条路什么都不暴露，因此不需要自己的进程（FR-071） |
+| SeaTalk SDK   | 出站不用（裸 httpx）；websocket 入站用官方 SDK，由 operator 放在 `~/.coffer/vendor`，绝不 vendor 也绝不声明为依赖 | 发送一侧官方仓库就是个薄 httpx 等价物、token 缓存约 20 行；websocket 入站没有替代——协议没公开——而一个 MIT 仓库既不能再分发那个 SDK，也不能依赖一个 PyPI 上不存在的东西（FR-072） |
 | 配对参数      | 8 字符、排除 `0O1I`、1 h TTL、有界猜测次数、fail closed | 与两个先例一致，并对齐 Hermes 事故后的加固                                                               |
 | Telegram 渲染 | markdown → HTML，被拒收时用纯文本重试                   | OpenClaw 验证过的路线；MarkdownV2 的转义是著名的 bug 农场                                                |
 | 进度体验      | 一条可编辑状态消息、节流；先确认；最终回复单独发        | 两个先例皆如此；在 SeaTalk 上经能力标志自然降级                                                          |
