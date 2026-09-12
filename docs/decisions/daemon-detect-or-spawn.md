@@ -167,14 +167,24 @@ goes in and survives shutdown, `daemon.json` comes out and is unlinked on exit.
   it stays the default: a machine whose 8000 is permanently taken must not be
   one where Coffer cannot start.
 
-  Two drift causes were fixed outright while in here. The bind socket now sets
-  `SO_REUSEADDR`, without which a `stop` immediately followed by a `start` could
-  fail on a port still in `TIME_WAIT` and drift to the next one; on macOS/BSD
-  that option admits `TIME_WAIT` only and never a live `LISTEN`, so CODE-041's
-  anti-theft property is unaffected. And a fixed-port bind retries briefly
-  before giving up, for the same restart case. `coffer daemon restart` — which
-  this ADR has referenced since 2026-06-13 without it ever existing — was added,
-  since a port change is applied by restarting.
+  Restart is the operation the fixed path has to get right, since it is how a
+  port change is applied, so its bind sets `SO_REUSEADDR` (a `stop` immediately
+  followed by a `start` otherwise fails on a port whose previously-accepted
+  connections are still in `TIME_WAIT`) and retries briefly for the moment where
+  the outgoing daemon has not quite let go. `coffer daemon restart` — which this
+  ADR has referenced since 2026-06-13 without it ever existing — was added.
+
+  `SO_REUSEADDR` is deliberately **not** set on the scan path, and the reason is
+  worth recording because only CI found it. On Linux the option additionally
+  permits two sockets to bind the same address and port whenever neither is
+  `LISTEN`ing — and a Coffer daemon is bound-but-not-listening for its entire
+  boot window, since uvicorn calls `listen` later on the fd it is handed.
+  Setting it there dissolved CODE-041 outright: a second `acquire()` bound the
+  very port the first was still holding, which is the case the CODE-041 test
+  pins. macOS and the BSDs refuse that bind, so the local suite stayed green and
+  the Linux CI run was the first thing to see it. The fixed path keeps the
+  option because its bind is serialised by the spawn lock and its failure mode
+  without it — a restart that cannot rebind — is certain rather than theoretical.
 
 - **2026-09-09** — Orphan self-eviction. The spawn guard is one-sided: it probes
   only the single port `daemon.json` records, so it cannot see a daemon alive on

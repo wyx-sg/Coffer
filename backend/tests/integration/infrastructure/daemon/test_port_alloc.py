@@ -102,15 +102,45 @@ def test_bind_fixed_socket_never_falls_back():
     assert raised.value.port == 58060
 
 
-def test_sockets_set_so_reuseaddr():
-    """Without SO_REUSEADDR a stop-then-start could fail to rebind a port still
-    in TIME_WAIT — and in the scan path that failure is invisible: it simply
-    drifts to the next port, which is the bookmark breakage FR-028 exists to end."""
-    for sock in (bind_free_socket(start=58070, end=58079), bind_fixed_socket(58080)):
+def test_fixed_bind_sets_so_reuseaddr_and_the_scan_does_not():
+    """The option belongs to the fixed path only, and the split is load-bearing.
+
+    A restart must be able to rebind a port whose old connections are still in
+    TIME_WAIT, so the fixed path sets it. The scan path must not: on Linux
+    SO_REUSEADDR also permits two sockets to bind the same port while neither
+    is LISTENing, which is the whole of a daemon's boot window — setting it
+    there let a second acquire() bind the port the first was still holding,
+    dissolving CODE-041. macOS/BSD refuse that bind, so only CI caught it.
+    """
+    scanned = bind_free_socket(start=58070, end=58079)
+    try:
+        assert scanned.getsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR) == 0
+    finally:
+        scanned.close()
+
+    fixed = bind_fixed_socket(58080)
+    try:
+        assert fixed.getsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR) != 0
+    finally:
+        fixed.close()
+
+
+def test_a_held_scan_port_cannot_be_bound_again():
+    """CODE-041, pinned at the socket level: while acquire() holds a scanned
+    port, nothing else may take it — not even another socket of ours setting
+    SO_REUSEADDR, which is exactly what Linux would otherwise allow."""
+    held = bind_free_socket(start=58090, end=58099)
+    try:
+        port = held.getsockname()[1]
+        other = socket.socket()
+        other.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            assert sock.getsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR) != 0
+            with pytest.raises(OSError):
+                other.bind(("127.0.0.1", port))
         finally:
-            sock.close()
+            other.close()
+    finally:
+        held.close()
 
 
 def test_conflict_message_names_a_coffer_daemon_squatter(monkeypatch):

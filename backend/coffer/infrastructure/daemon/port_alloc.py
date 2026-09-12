@@ -111,19 +111,26 @@ def fixed_port_conflict_message(
     return "\n".join(lines)
 
 
-def _new_socket() -> socket.socket:
-    """A loopback TCP socket with ``SO_REUSEADDR`` set.
+def _new_socket(*, reuse_addr: bool) -> socket.socket:
+    """A loopback TCP socket, optionally with ``SO_REUSEADDR``.
 
-    Without it, a ``coffer daemon stop`` immediately followed by a start could
-    fail to rebind a port still in ``TIME_WAIT`` — and in the scan path that
-    failure is invisible: it simply drifts to the next port, which is exactly
-    what breaks the user's bookmark. On macOS/BSD (and Linux) ``SO_REUSEADDR``
-    admits only a port in ``TIME_WAIT``, never one with a live ``LISTEN``, so
-    CODE-041's guarantee that nothing can bind out from under us is untouched
-    — stealing a live listener needs ``SO_REUSEPORT``, which we never set.
+    ``SO_REUSEADDR`` is what lets a ``stop`` immediately followed by a ``start``
+    rebind a port whose previously-accepted connections are still in
+    ``TIME_WAIT`` — the classic "Address already in use" on server restart. The
+    fixed-port path needs it, because there a failed rebind is a failed restart.
+
+    The scan path must NOT have it, and the reason is a platform difference CI
+    proved rather than a theoretical one. On Linux, ``SO_REUSEADDR`` also lets
+    two sockets bind the *same* address and port as long as neither is
+    ``LISTEN``ing — and a Coffer daemon spends its whole boot window bound but
+    not yet listening (uvicorn calls ``listen`` later, from the fd we hand it).
+    Setting the option there therefore dissolves CODE-041's guarantee that
+    holding the socket holds the port: a second ``acquire()`` bound the very
+    port the first was holding. macOS/BSD refuse that bind and hid it locally.
     """
     sock = socket.socket()
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    if reuse_addr:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     return sock
 
 
@@ -156,7 +163,7 @@ def bind_free_socket(start: int = 8000, end: int = 8009) -> socket.socket:
     path that guarantees it.
     """
     for port in range(start, end + 1):
-        s = _new_socket()
+        s = _new_socket(reuse_addr=False)
         try:
             s.bind(("127.0.0.1", port))
         except OSError:
@@ -179,15 +186,17 @@ def bind_fixed_socket(port: int, *, attempts: int = 4, delay: float = 0.3) -> so
     behaviour the setting exists to end, so the daemon refuses to start instead
     and the user is told what holds the port.
 
-    The bounded retry is for one specific, benign case — a restart, where the
-    outgoing daemon may still be releasing the socket as the incoming one binds.
-    A second of patience there is the difference between "restart works" and
-    "restart fails and the user must run it twice"; it is far too short to mask
-    a port that is genuinely someone else's.
+    Restart is the case this path has to get right, so it gets both halves of
+    the treatment: ``SO_REUSEADDR`` (see :func:`_new_socket`) for a port whose
+    old connections are still in ``TIME_WAIT``, and a bounded retry for the
+    moment where the outgoing daemon has not quite let go. A second of patience
+    is the difference between "restart works" and "restart fails and the user
+    must run it twice"; it is far too short to mask a port that is genuinely
+    someone else's.
     """
     last_error: OSError | None = None
     for attempt in range(attempts):
-        s = _new_socket()
+        s = _new_socket(reuse_addr=True)
         try:
             s.bind(("127.0.0.1", port))
         except OSError as exc:
