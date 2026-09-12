@@ -11,6 +11,8 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli import agent_native_memory_cmd as _native_memory
+from coffer.surfaces.cli import agent_transcript_cmd as _transcripts
 from coffer.surfaces.cli import agent_workspace_cmd as _workspace
 
 app = typer.Typer(help="Manage registered AI agents")
@@ -344,3 +346,11 @@ def mcp_uninstall(
 # Implemented in agent_workspace_cmd.py to keep this file under the size cap.
 
 _workspace.attach(app, config_app=config_app, mcp_app=mcp_app)
+
+# --- native-memory read command (agent_native_memory_cmd.py, same reason) ---
+
+_native_memory.attach(app)
+
+# --- transcript browse command (agent_transcript_cmd.py, same reason) ------
+
+_transcripts.attach(app)

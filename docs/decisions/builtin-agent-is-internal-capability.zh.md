@@ -47,10 +47,12 @@ IM 没有持久使用场景，还悄悄重新打开了那次重定位自己想�
   席位，走同一套 `ConversationPort` / `TurnPort` 接缝。"聊天"命名的是
   会话集合——无论由谁驱动——所以名字仍贴切。
 
-  _2026-09-10 取代：_ 这个观测席位从未被使用，Chat 页面随已退役的 Agent Chat 规范一并删除。
-  这里点名的 `ConversationPort` / `TurnPort` 接缝作为 spec channels FR-043…FR-055
-  存活下来；消失的只是接口面。前两条——只面向受管 agent、注册表里没有 `builtin`
-  ——仍然成立，现在正是 agent provider 列表所返回的内容。
+  _2026-09-10 修订，2026-09-12 再修订：_ 页面在 10 日因未被使用而删除，12 日又恢复，
+  因此这里描述的观测席位依然成立——而且被拓宽了，因为这个页面还能中断并接手它所旁观的
+  东西（[Chat 是单属主的实时镜像](chat-single-owner-live-mirror.zh.md)）。这里点名的
+  `ConversationPort` / `TurnPort` 接缝落在 spec channels FR-043…FR-055，页面本身落在
+  FR-072…FR-078。前两条——只面向受管 agent、注册表里没有 `builtin`——仍然成立，
+  现在正是 agent provider 列表所返回的内容。
 
 ### 2. "内置 agent"概念离开 UI
 

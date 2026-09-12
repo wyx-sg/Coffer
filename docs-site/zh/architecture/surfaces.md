@@ -29,7 +29,8 @@ Coffer 的每个接口面都是通向同一底层守护进程的入口点。守�
 | `/skills`                         | 技能主存储与各 agent 的绑定。                                      |
 | `/knowledge/{scope}`              | 单个知识作用域：`entries`、`documents`、检索、整理、重建索引。      |
 | `/channels`                       | 通道绑定（Telegram、SeaTalk）、配对。                             |
-| `/agent-providers`、`/models`     | 已注册的 agent provider；连接的模型自省。                          |
+| `/chat`                           | 会话、会话里的消息，以及 Web 端 Chat 页面驱动的回合接口面：发完即返回的 `POST .../messages`、SSE 的 `GET .../events`、`PUT .../pending`、`POST .../interrupt`。 |
+| `/agent-providers`、`/models`     | 已注册的 agent provider 及其模型目录；连接自省。                  |
 | `/credentials`、`/settings`       | 加密凭据存储；设置含 `/settings/credentials`（主密钥存储）与 `/embedding` 配置。 |
 | `/sync`                           | 仓库导出 / 导入运行与主密钥传递。                                 |
 | `/fs`                             | 用于配置选择器的文件系统浏览辅助。                                |
@@ -111,7 +112,7 @@ REST API 是规范接口——CLI 和 Web UI 都调用它。
 
 ## Web UI
 
-**它是什么。** 基于浏览器的管理界面，由 [ui-shell 规约](/zh/reference/specs/ui-shell/spec) 规定。Web UI 提供与每个 CLI 管理操作等价的可视化操作：通过 JSON 导入注册 MCP 服务器、浏览服务器健康状态和能力列表、开/关工具/资源/提示、查看审计日志和调用历史，以及配置保留策略。信息架构反映了资源 kind 模型：侧边栏显示 `Agents`（agent 与触达它们的 Channels）、`Resources`（已上线的 kind——MCP 服务器、Skills、Knowledge），以及 `System`（审计日志与设置）。不显示任何「即将推出」的占位符——一个 kind 只有真正可用后才会出现，也不会有哪一项活得比它的功能久。
+**它是什么。** 基于浏览器的管理界面，由 [ui-shell 规约](/zh/reference/specs/ui-shell/spec) 规定。Web UI 提供与每个 CLI 管理操作等价的可视化操作：通过 JSON 导入注册 MCP 服务器、浏览服务器健康状态和能力列表、开/关工具/资源/提示、查看审计日志和调用历史，以及配置保留策略。信息架构反映了资源 kind 模型：侧边栏显示 `Agents`（`Chat`——对着同一批会话的两栏页面，不论它们由哪个接口面打开——与 agent 注册表）、`Resources`（每个有列表界面的资源 kind 一项：MCP 服务器、Skills、Knowledge、模型 provider、Channels），以及 `System`（设置）。不显示任何「即将推出」的占位符——一个 kind 只有真正可用后才会出现，也不会有哪一项活得比它的功能久。
 
 **所在进程。** 浏览器进程，由守护进程提供页面。在生产环境中，守护进程在自己的 loopback origin 上以静态文件的形式提供构建好的前端（**FR-024**）——因此页面与 API 同源。在开发模式下，Vite 开发服务器运行在 `http://localhost:5173`，跨源访问守护进程需要打开 `COFFER_DEV_CORS` 开关。所有数据都从守护进程的 REST API 获取。
 

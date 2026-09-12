@@ -40,7 +40,8 @@ Messages from anyone else are ignored silently.
 
 Send any message — it lands in a conversation with the channel's default
 agent (a Coffer-managed agent such as Claude Code or Codex) and the
-reply comes back to Telegram.
+reply comes back to Telegram. The same conversation is visible on the Chat
+page.
 
 > Per [Built-in Agent Is Internal](../../docs/decisions/builtin-agent-is-internal-capability.md),
 > channels route to managed agents only; the built-in "Coffer Assistant" is no
@@ -193,5 +194,5 @@ pairing). It stays disabled until the channel is paired.
   `coffer channel status` and on the Channels page.
 - **Re-pair** by issuing a new code and sending it from the new account — the
   old binding is replaced.
-- **Delete** the channel to remove everything; past conversations stay in the
-  conversation store until the retention policy prunes them.
+- **Delete** the channel to remove everything; past conversations stay in Chat
+  history until the retention policy prunes them.

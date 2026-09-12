@@ -400,9 +400,10 @@ status / notify`.
   string surfaces as the CLI's own error relayed to the chat. On a transport
   that `supports_buttons` (FR-018), `/model` with no argument renders the choices
   as a selection card. They come from the agent's model catalogue — read back
-  from the installed CLI, the one list Coffer has of what that agent can run —
-  in **full**, because nothing curates it: neither the agent nor the channel
-  narrows what the card may offer. It is shown one **page** at a time
+  from the installed CLI, the one list Coffer has of what that agent can run, and
+  the same list the web Chat page's picker offers — in **full**, because nothing
+  curates it: neither the agent nor the channel narrows what the card may offer.
+  It is shown one **page** at a time
   (FR-018): that catalogue runs to 29 models for `claude_code`, and a card
   that long is unreadable on a phone and refused outright by SeaTalk, so the card
   is a window onto the list rather than the list. It opens on the page holding the
@@ -1292,6 +1293,13 @@ produce it on its own.
   re-materialised from the last user message in history — the single source of
   truth
 
+### Scenario: the message API exposes an attachment block without leaking the path
+
+- **Given** a user message with an attachment reference
+- **When** the client reads the conversation's messages
+- **Then** the content block has `type=attachment` with `filename` and `mime`,
+  and no `path` field is present on the wire
+
 ### Scenario: the media dir prune deletes stale files and keeps fresh ones
 
 - **Given** the channel-media dir with one file older than 30 days and one recent
@@ -1401,6 +1409,14 @@ produce it on its own.
 - **Then** it is accepted and enqueued rather than rejected, and runs as its own
   turn after the current one ends.
 
+### Scenario: editing a queued message re-queues it at the tail
+
+- **Given** one or more messages queued behind a streaming turn, shown one per
+  row,
+- **When** a queued message is edited,
+- **Then** it leaves the queue and returns to the draft surface to be amended,
+  and re-sending it enqueues it at the tail of the pending queue.
+
 ### Scenario: a queued message runs after the current turn
 
 - **Given** a message queued behind a running turn,
@@ -1429,12 +1445,28 @@ produce it on its own.
 - **Then** the assistant reply is there — the message store, not the live
   stream, is the system of record.
 
+### Scenario: a conversation the owner named keeps its name
+
+- **Given** a conversation the owner has renamed,
+- **When** its first user message arrives,
+- **Then** the conversation keeps the name the owner gave it, and only a
+  conversation still under its placeholder title is named from its first
+  message.
+
 ### Scenario: manage conversations
 
 - **Given** a running daemon,
 - **When** conversations are created, renamed, and deleted,
 - **Then** each operation persists and the listing reflects it; a deleted
   conversation and its messages are removed.
+
+### Scenario: archive and restore a conversation
+
+- **Given** a conversation in the active listing,
+- **When** it is archived,
+- **Then** it leaves the default (active) listing, appears in the archived
+  listing, and is not destroyed; unarchiving returns it to the active listing.
+  Archiving a conversation that does not exist is rejected.
 
 ### Scenario: skills are reachable as tools
 
@@ -1447,6 +1479,15 @@ produce it on its own.
 - **Given** a conversation whose model has been set,
 - **When** a turn completes,
 - **Then** the assistant message records the model that produced it.
+
+### Scenario: chat runs on the built-in model when no connection
+
+- **Given** a running daemon with no Coffer LLM connection configured for the
+  agent,
+- **When** the Chat page is opened,
+- **Then** the draft surface is available with no blocking empty state, and a
+  sent turn runs on the agent's own built-in model and login — a Coffer
+  connection is an optional override, not a prerequisite.
 
 ### Scenario: token usage is recorded on the assistant message
 
@@ -1864,10 +1905,10 @@ capabilities the official personal bridges lack.
 Folded in from the retired Agent Chat spec. These requirements describe the machinery
 *underneath* every channel turn — the registry, the adapters, the conversation
 store, and the turn lifecycle. They lived in their own spec while a web Chat
-page was their other client; that page was removed (see **Deliberately out of
-scope** below), leaving channels as the platform's only surface. Keeping the
-description here means the whole path — IM message → turn → reply — reads in
-one document instead of two.
+page was their other client. That page is a live surface again (section G
+below), but the description stays here: one platform, one document, so the
+whole path — IM message → turn → reply, and that same turn watched from the
+browser — reads in one place instead of two.
 
 - **FR-043**: A turn MUST reach an agent only through an **agent-provider
   registry**: a turn is run, a conversation is initialised, and a conversation's
@@ -1884,7 +1925,8 @@ one document instead of two.
 - **FR-045**: The platform MUST expose its registered agents — each with a
   stable key, a display name, and a current availability flag — over the REST
   API, so the channel editor offers only agents that exist, and marks the ones
-  whose CLI is absent on this host.
+  whose CLI is absent on this host. It MUST likewise expose, per agent, the
+  models that agent can be put on.
 - **FR-046**: An agent is addressed for a turn through an **agent adapter** that
   is self-contained: given only the conversation history, it yields a stream of
   typed turn events. The adapter carries its own model, tools, and
@@ -1914,7 +1956,10 @@ one document instead of two.
   framework. A message MUST store its role and an ordered list of content blocks
   of types `text`, `tool_use`, `tool_result`, and `attachment` (FR-033);
   assistant messages MUST also store token usage and the model that produced
-  them when the agent reports one.
+  them when the agent reports one. A conversation opens under a placeholder
+  title, which System MUST replace with the text of its first user message
+  (truncated); once the owner has named a conversation themselves, System MUST
+  NOT overwrite that name — an explicit rename outranks the generated one.
 - **FR-049**: Conversations MUST follow a two-stage, retention-managed
   lifecycle, both windows configurable under Settings → Data: the retention
   worker auto-archives a conversation with no new message for the auto-archive
@@ -2081,6 +2126,71 @@ API server a user reaches is not guaranteed to be new enough.
     cannot mention from an id alone, yields an ordinary unmentioned reply — never
     a broken tag.
 
+### G. The web Chat page
+
+The turn platform has a second surface: a **Chat page** in the web UI, onto
+exactly the conversations the channels drive. It shipped with the Agent Chat
+spec, was removed on 2026-09-10 as unused, and is restored on 2026-09-12,
+because the thing it does that no channel can is let the owner watch, steer and
+continue from a desktop a conversation they are driving from their phone. The
+decision it rests on is recorded in
+[Chat Is a Single-Owner Live Mirror](../../docs/decisions/chat-single-owner-live-mirror.md).
+
+- **FR-072**: The web UI MUST carry a **Chat page**: two columns, the
+  conversation list on the left and the selected conversation's message thread
+  with its draft surface on the right. The list MUST show every conversation in
+  the vault whatever opened it — a conversation an IM channel created is listed,
+  readable, watchable, and continuable from the page, and carries a badge naming
+  the channel it is also reachable on. There is no web-only conversation kind:
+  the page and the channel are two windows onto one timeline, driven by one
+  owner, and an agent cannot tell which window a turn arrived through.
+- **FR-073**: The conversation list MUST support create, rename, archive,
+  unarchive, and delete. Archiving takes a conversation out of the default
+  (active) listing and into the archived listing **without destroying it**;
+  unarchiving returns it to the active listing. Deleting removes the
+  conversation and its messages and cancels any turn in flight on it — deletion
+  is the destructive one, archiving is not. An operation naming a conversation
+  that does not exist MUST be rejected.
+- **FR-074**: Sending from the page MUST be **fire-and-return**:
+  `POST .../messages` accepts the message, starts or enqueues its turn, and
+  returns immediately (202) carrying none of the turn's output. Turn output is
+  consumed from exactly one place — `GET .../events`, an SSE subscription — so
+  "the turn I started" and "the turn my phone started" travel the same code and
+  the sender is never a special case. On attach the subscription MUST replay the
+  in-flight turn's events from that turn's beginning and then follow live
+  (FR-053), so a client that arrives mid-turn misses nothing; with no turn in
+  flight it MUST hold open and deliver the next turn whenever it begins, from
+  whichever surface begins it.
+- **FR-075**: The draft surface MUST NOT lock while a turn runs. A message sent
+  during a turn joins the pending queue (FR-050) and is shown as its own row,
+  one row per queued message, in queue order. A queued row MUST be removable,
+  and MUST be editable by pulling it back out of the queue into the draft
+  surface to amend — re-sending it then enqueues it at the **tail**, because it
+  is a new send and whatever was queued behind it was queued first. `PUT
+  .../pending` replaces the queue wholesale, and the resulting queue MUST ride
+  the event stream (FR-052) so a second tab, and the phone, render the same rows.
+- **FR-076**: The page MUST be able to interrupt the turn it is watching —
+  whichever surface started it — via `POST .../interrupt`, with the semantics of
+  FR-051: the turn stops with its partial output kept and persisted, and the
+  pending queue is **paused** rather than auto-advanced into the turn that was
+  just stopped.
+- **FR-077**: The message thread MUST render a turn's tool calls as their own
+  cards rather than as prose: each card names the tool, shows what it was called
+  with, and shows the result once one arrives, so a reader can see what the agent
+  *did* and not only what it said. Text and tool-call blocks appear in the order
+  the turn emitted them, and a card whose result has not arrived yet reads as
+  still running.
+- **FR-078**: The page MUST let the owner read and set the conversation's agent
+  configuration — which agent it runs on and which model that agent is put on —
+  over `GET|PATCH .../agent-config`, persisting the model while preserving the
+  conversation's working directory and upstream session id, and reverting to the
+  agent's own default when it is cleared. A missing Coffer LLM connection MUST
+  NOT block the page: with none configured the draft surface still accepts a
+  message and the turn runs on the agent's own built-in model and login, because
+  a Coffer connection is an optional override, not a prerequisite (see the
+  2026-06-22 amendment of
+  [Provider Switching](../../docs/decisions/provider-switching.md)).
+
 ## Deliberately out of scope
 
 **A copy-to-clipboard button.** Telegram's inline buttons can carry `copy_text`,
@@ -2113,28 +2223,23 @@ language the owner wrote in. Both are recorded here rather than silently
 skipped, because the research that found them is what made the card work
 possible at all.
 
-**The web Chat page.** The Agent Chat spec shipped a two-column chat page in the web UI —
-conversation list, message thread, composer, model picker, pending-queue
-management — and a REST/SSE surface under `/api/v1/chat` to serve it. Both are
-removed. The page was never used as a chat interface: every conversation in the
-vault was created by a channel, and the "single-owner live mirror"
-responsibility — watch from the desktop a conversation you are driving from your
-phone — was never exercised either, which the conversation records would show if
-it had been. The honest counterweight, recorded because it argues the other way:
-driving an agent from a phone while watching on a desktop is a reasonable thing
-to want, and the feature simply never got used. It was removed anyway, because a
-6,000-line surface that has never run is a liability, not an option.
+**An agent registry under the chat prefix.** The agent-registry listing and the
+per-agent model catalogue once answered at `/api/v1/chat/agents` and
+`/chat/agents/{key}/models`, and they moved to `GET /api/v1/agent-providers` and
+`/agent-providers/{key}/models` when the page came down. They stay there now the
+page is back. Neither was ever about a conversation — the channel editor calls
+the first to list bindable agents, the agent detail page calls the second to
+offer a model — and a page that happens to need them does not make them chat
+routes. The Chat page reads them from where they live.
 
-What survives is everything underneath it (FR-043…FR-055) plus the two read
-routes the rest of the product still asks for — the agent registry listing and
-the per-agent model catalogue — which moved from `/api/v1/chat/agents` to
-`/api/v1/agent-providers`, since neither was ever about a conversation. The
-conversation store keeps its full API surface even where only the retention
-worker now calls parts of it, because the store is the platform's, not the
-page's.
-
-The two decision records behind the page — **chat as the Vault Console** and
-**chat as a single-owner live mirror** — are removed with it.
+**Chat as "the Vault Console".** An earlier positioning made this page a seat
+for talking to the vault itself, and for approving an agent's tool calls one by
+one. Neither returns with it. The built-in model is an internal `coffer__*`
+capability rather than a chat persona
+([Built-in Agent Is Internal](../../docs/decisions/builtin-agent-is-internal-capability.md)),
+and tool approval is gone outright, owner pairing being the gate
+([Remove Tool Approval](../../docs/decisions/remove-tool-approval.md)). Section
+G restores the live mirror and only the live mirror.
 
 ## Assumptions
 

@@ -11,14 +11,20 @@ from fastapi import FastAPI
 
 from coffer.surfaces.http import daemon_routes
 from coffer.surfaces.http.agent_config_routes import router as agent_config_router
+from coffer.surfaces.http.agent_native_memory_routes import (
+    router as agent_native_memory_router,
+)
 from coffer.surfaces.http.agent_provider_routes import router as agent_provider_router
 from coffer.surfaces.http.agent_routes import router as agent_router
+from coffer.surfaces.http.agent_transcript_routes import router as agent_transcript_router
 from coffer.surfaces.http.agent_unmanaged_skill_routes import (
     router as agent_unmanaged_skill_router,
 )
 from coffer.surfaces.http.agent_workspace_routes import router as agent_workspace_router
 from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.channel_routes import router as channel_router
+from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
+from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
 from coffer.surfaces.http.credential_routes import router as credential_router
 from coffer.surfaces.http.fs_routes import router as fs_router
 from coffer.surfaces.http.internal_engine_routes import router as internal_engine_router
@@ -52,6 +58,8 @@ def include_all_routers(app: FastAPI) -> None:
         agent_router,
         agent_config_router,
         agent_workspace_router,
+        agent_native_memory_router,
+        agent_transcript_router,
         agent_unmanaged_skill_router,
         fs_router,
         skill_router,
@@ -65,6 +73,8 @@ def include_all_routers(app: FastAPI) -> None:
         # the turn platform's own surfaces (spec channels's agents run on it)
         agent_provider_router,
         model_router,
+        chat_conversation_router,  # the web Chat page's own REST surface
+        chat_turn_router,  # … and its turn/SSE half
         channel_router,  # spec channels
         provider_router,  # spec provider-switching
     ):

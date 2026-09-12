@@ -191,19 +191,34 @@ MCP 客户端（Claude Code、Codex）期望通过 stdio 与 MCP 服务器通信
 
 ## Agent 回合全链路
 
-回合驱动的全链路与网关调用不同：它不是把单个 JSON-RPC 调用转发给上游，而是运行一个多步的 **agent 回合**，在生成回复前可能先调用 Coffer 自己的若干网关工具。此路径由 [channels 规约](/zh/reference/specs/channels/spec)（FR-043…FR-055）规定。
+回合驱动的全链路与网关调用不同：它不是把单个 JSON-RPC 调用转发给上游，而是运行一个多步的 **agent 回合**，在生成回复前可能先调用 Coffer 自己的若干网关工具。此路径由 [channels 规约](/zh/reference/specs/channels/spec)规定（turn 平台：FR-043…FR-055；同样架在它上面的 Web 端 Chat 页面：FR-072…FR-078）。
 
-1. **回合开始。** 某个 channel 送进一条用户消息。`TurnOrchestrator`（`application/chat/turn_orchestrator.py`）创建或恢复会话，持久化用户回合，并开始流式输出。每个会话同时只跑一个回合；回合进行中到达的消息会入队，而不是被拒绝。
+1. **回合开始。** 某个 channel 送进一条用户消息，或者 Web 端 Chat 页面发来一条。`TurnOrchestrator`（`application/chat/turn_orchestrator.py`）创建或恢复会话，持久化用户回合，并开始流式输出。每个会话同时只跑一个回合；回合进行中到达的消息会入队，而不是被拒绝。
 
 2. **Agent 适配器。** 编排器向 **agent provider 注册表**要到会话上记的那个 agent，把历史交给它。适配器是自足的——它自带模型、工具与配置。已发布的适配器驱动外部编码 agent 子进程：Claude Code 走 Claude Agent SDK（`infrastructure/chat/claude_sdk_agent.py`），Codex 走 `codex app-server`（`infrastructure/chat/codex_agent.py`）。两者都把工具的行分隔 JSON 输出映射为平台的类型化回合事件，并持久化上游 session id，使下一个回合接着同一个 session 跑。Coffer 自己的聚合 MCP 能力通过网关工具 provider（`infrastructure/chat/gateway_tool_provider.py`）到达 agent。
 
 3. **流式返回。** 随着运行推进，回合事件发布到每会话的进程内事件总线；中途接入的订阅者会被重放它错过的事件。`interrupt_turn` 停止进行中的回合并保留其部分输出，完成时持久化最终的 assistant 回合。回合本身作为脱离任务运行，因此即使发起它的订阅者离开，它仍会跑完。
 
-**CLI-agent 变体。** 对话 agent 也可以不用进程内 LangGraph agent，而是通过 `infrastructure/chat/cli_agent.py` 和 `infrastructure/chat/cli_providers.py` 驱动一个**外部编码 agent 子进程**（Claude Code 或 Codex）。编排器接缝完全相同——相同的回合持久化、相同的流式契约——只是模型循环运行在外部 CLI 进程中，而非进程内。
+### Chat 的 REST/SSE 接口面
+
+Web 端 Chat 页面是同一道接缝的第二个客户端，挂在 `/api/v1/chat` 下——这些路由存在，是为了让浏览器能旁观并接手属主正用手机驱动的那段会话（[Chat 是单属主的实时镜像](/zh/reference/adr/chat-single-owner-live-mirror)）：
+
+| 路由 | 作用 |
+| --- | --- |
+| `GET` / `POST /conversations`、`GET` / `PATCH` / `DELETE /conversations/{id}` | 列出、打开、重命名、删除会话。 |
+| `POST /conversations/{id}/archive`、`.../unarchive` | 把会话移出活跃列表再移回来，不销毁它。 |
+| `GET` / `PATCH /conversations/{id}/agent-config` | 读取与设置会话跑在哪个 agent、哪个模型上。 |
+| `GET /conversations/{id}/messages` | 已持久化的消息历史，含工具调用块。 |
+| `POST /conversations/{id}/messages` | **发完即返回**（`202`）：启动或让回合入队，不携带它的任何输出。 |
+| `GET /conversations/{id}/events` | **SSE 订阅**：从进行中回合的开头重放，然后转实时；回合之间保持打开，并在下一个回合开始时把它送出来，不论谁发起。 |
+| `PUT /conversations/{id}/pending` | 整体替换待处理队列。 |
+| `POST /conversations/{id}/interrupt` | 停止运行中的回合并挂起队列。 |
+
+因为发送与消费是两条路由，「我发起的回合」与「我手机发起的回合」走同一段代码——发送方不是特例——而总线的重放覆盖了订阅接入之前已经流过的事件。
 
 ## Channel 入站全链路
 
-消息 channel（Telegram、SeaTalk）是用户触达 agent 的方式。每一种都把用户消息送入上面那个 **`TurnOrchestrator` 接缝**；一旦消息到达编排器，下游就不再知道它来自哪个平台。入站传输因平台而异（按 [Channel Adapter Framework](/zh/reference/adr/channel-adapter-framework)）：
+消息 channel（Telegram、SeaTalk）是用户离开电脑时触达 agent 的方式。每一种都把用户消息送入上面那个 **`TurnOrchestrator` 接缝**；一旦消息到达编排器，下游就不再知道它来自哪个平台。入站传输因平台而异（按 [Channel Adapter Framework](/zh/reference/adr/channel-adapter-framework)）：
 
 - **SeaTalk（webhook）。** SeaTalk 只通过公开 webhook 投递事件。一个独立的**回调监听器进程**（`coffer-callback`，在任何 SeaTalk channel 启用期间由守护进程启动）在 loopback 端口上提供 `POST /seatalk/{channel}`。它应答平台的验证挑战，校验请求签名（`sha256(body + signing_secret)`），归一化事件，并转发给守护进程——再由守护进程送入编排器。
 
@@ -224,4 +239,4 @@ MCP 客户端（Claude Code、Codex）期望通过 stdio 与 MCP 服务器通信
 
 ---
 
-**参见：** [MCP 网关规约](/zh/reference/specs/mcp-gateway/spec)，[会话子进程模型](/zh/reference/adr/session-subprocess-model)，[Channels 规约](/zh/reference/specs/channels/spec)，[Channel 适配器框架](/zh/reference/adr/channel-adapter-framework)，[文件即事实，SQLite 检索](/zh/reference/adr/files-as-truth-sqlite-retrieval)
+**参见：** [MCP 网关规约](/zh/reference/specs/mcp-gateway/spec)，[会话子进程模型](/zh/reference/adr/session-subprocess-model)，[Channels 规约](/zh/reference/specs/channels/spec)，[Channel 适配器框架](/zh/reference/adr/channel-adapter-framework)，[Chat 是单属主的实时镜像](/zh/reference/adr/chat-single-owner-live-mirror)，[文件即事实，SQLite 检索](/zh/reference/adr/files-as-truth-sqlite-retrieval)

@@ -39,3 +39,35 @@ def get_agent_plugin_service() -> Any:
     if _agent_plugin_service is None:
         raise RuntimeError("agent plugin service not initialised")
     return _agent_plugin_service
+
+
+_agent_native_memory_service: Any | None = None
+
+
+def set_agent_native_memory_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _agent_native_memory_service
+    _agent_native_memory_service = svc
+
+
+def get_agent_native_memory_service() -> Any:
+    """FastAPI Depends() target — actual type is AgentNativeMemoryService."""
+    if _agent_native_memory_service is None:
+        raise RuntimeError("agent native-memory service not initialised")
+    return _agent_native_memory_service
+
+
+_agent_transcript_service: Any | None = None
+
+
+def set_agent_transcript_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _agent_transcript_service
+    _agent_transcript_service = svc
+
+
+def get_agent_transcript_service() -> Any:
+    """FastAPI Depends() target — actual type is AgentTranscriptService."""
+    if _agent_transcript_service is None:
+        raise RuntimeError("agent transcript service not initialised")
+    return _agent_transcript_service

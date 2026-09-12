@@ -107,6 +107,7 @@ section that future readers most often want — don't skip it.>
 | [`memory-via-mcp-not-native-projection`](memory-via-mcp-not-native-projection.zh.md) | 记忆经 MCP 访问，而非原生投射 | Accepted |
 | [`skill-content-trust-layer`](skill-content-trust-layer.zh.md) | Skill 内容信任层（启发式扫描，警告而非拦截） | Reverted（2026-06-20） |
 | [`consume-official-mcp-registry`](consume-official-mcp-registry.zh.md) | 消费官方 MCP Registry 做服务器发现 | Reverted（2026-06-20） |
+| [`chat-single-owner-live-mirror`](chat-single-owner-live-mirror.zh.md) | Chat 是单属主的实时镜像 | Accepted |
 | [`provider-switching`](provider-switching.zh.md) | Provider Switching | Proposed |
 | [`daemon-proxies-os-file-actions`](daemon-proxies-os-file-actions.zh.md) | 本地 daemon 代理 OS 文件动作 | Accepted |
 | [`retrieval-mode-is-internal`](retrieval-mode-is-internal.zh.md) | 检索 mode 是引擎内部细节；外部界面只暴露「查询→答案」 | 已被 [Knowledge Is Plain Files](knowledge-is-plain-files.zh.md) 取代 |

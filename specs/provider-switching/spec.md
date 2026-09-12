@@ -313,10 +313,13 @@ agent could use.
 - **H1 — The catalogue is a backend surface, per agent, and Coffer names no
   model in it.**
   `AgentModelCatalogueService` answers, per agent, which models that agent can
-  be put on. (It was first exposed over HTTP as `GET
-  /api/v1/agent-providers/{agent_key}/models`; that route is gone with the
-  2026-09-12 withdrawal below, and the catalogue is read only through an
-  internal port now — the `/model` card is its one reader.) Every entry — id,
+  be put on, and `GET /api/v1/agent-providers/{agent_key}/models` is that answer
+  on the wire. The route SURVIVES the 2026-09-12 withdrawal below: what that
+  withdrawal takes away is the CURATING, never the catalogue itself — a surface
+  that has to offer a model still has to be told what there is to offer. It has
+  three readers. The web Chat page's model picker asks it per conversation, the
+  agent detail page asks it to say what that agent can be put on, and the
+  channel `/model` card reads the same service in-process. Every entry — id,
   display name, description — is read back from the
   installed agent, never written into Coffer, because a list written down here
   goes stale on the next CLI release and cannot tell one release of a tier from
@@ -340,8 +343,9 @@ agent could use.
   `description`. Every source
   degrades to nothing on its own — a missing CLI, a changed bundle layout, an
   unauthenticated or wedged agent costs the models that source would have added
-  and nothing else. An `agent_key` no provider answers for yields no catalogue
-  at all.
+  and nothing else. An unknown `agent_key` is a 404. Contract:
+  [`specs/channels/contracts/api.openapi.yaml`](../channels/contracts/api.openapi.yaml),
+  where the agent-provider routes live.
 - **H2 — Single source of truth.** The frontend constant is deleted; the
   channel `/model` card reads the same catalogue. The list is owned in one
   place — and owned by the agents themselves — so a newly released model reaches
@@ -356,11 +360,11 @@ agent could use.
   Those slots bind a CONNECTION's model (E3/E4): `agent.model` is read only when
   Coffer projects a connection. So on the built-in login the panel shows no
   picker and no list — only a line saying where the model is chosen instead (per
-  conversation, with `/model` in a chat), so the absence is explained rather than
-  looking broken. (Superseded twice: 2026-09-11b made the panel a curation
-  control, and its 2026-09-12 withdrawal removed the control altogether —
-  curation moved to the channel and was then removed from there too, so nothing
-  curates an agent's models any more.)
+  conversation in the Chat page's model picker, or with `/model` in a channel),
+  so the absence is explained rather than looking broken. (Superseded twice:
+  2026-09-11b made the panel a curation control, and its 2026-09-12 withdrawal
+  removed the control altogether — curation moved to the channel and was then
+  removed from there too, so nothing curates an agent's models any more.)
 - **H5 — Coffer tells the agent which model it is on.** The system-prompt append
   Coffer adds on every turn now states which model Coffer put the agent on — or
   that Coffer set no override — and which ids are available. The motivating
@@ -503,15 +507,16 @@ is offered and fails when it is picked.
   by **revision 0063** with no load-time shim (house rule). The answer then moved
   to the CHANNEL and was withdrawn there too (revision 0067): no resource curates
   models, and every surface offers the whole K1-filtered catalogue.
-- **K3 — There is no model question left to ask an agent over HTTP.** `GET|PUT
-  …/models/selection` went first, along with `AgentModelSelectionIn` /
-  `AgentModelSelectionOut`: there was no second question to ask of an agent any
-  more. `GET /api/v1/agent-providers/{agent_key}/models` followed it on
-  2026-09-12, once the channel dialogs that were its last reader stopped asking.
-  The full K1-filtered catalogue is still assembled — keyed by agent TYPE,
-  answered from the first enabled agent resource of that type — but only behind
-  the internal port the `/model` card reads. What remains under
-  `/api/v1/agent-providers` is the registry listing alone.
+- **K3 — One model question is left to ask an agent over HTTP, and the catalogue
+  route is it.** `GET|PUT …/models/selection` is **removed** along with
+  `AgentModelSelectionIn` / `AgentModelSelectionOut`: there is no second question
+  to ask of an agent any more. `GET /api/v1/agent-providers/{agent_key}/models`
+  STAYS, and still returns the full K1-filtered catalogue — keyed by agent TYPE,
+  answered from the first enabled agent resource of that type. It outlived the
+  channel dialogs that read it through the middle of 2026-09: the web Chat page's
+  model picker and the agent detail page are its readers now, and the channel
+  `/model` card reads the same catalogue in-process. What the route never answers
+  again is what a surface may OFFER — only what the agent can run.
 - **K4 — Narrowing an OFFER was the surface's job, and no surface narrows now.**
   "What can this agent be put on" has one answer — `offered()` / `suggest()`
   return the agent's catalogue (or an active connection's curated set, amendment
@@ -520,10 +525,12 @@ is offered and fails when it is picked.
   everywhere — the CLI accepts names outside the catalogue entirely (tier
   aliases, models newer than the installed binary), so a bad name surfaces as the
   CLI's own error.
-- **Wire.** Nothing left: `AgentModelsOut` went with the route on 2026-09-12, and
-  `/api/v1/agent-providers` is back to its registry listing. Contract:
+- **Wire.** `AgentModelsOut` / `AgentModelOut` stay on
+  `GET /api/v1/agent-providers/{agent_key}/models`; only the selection pair left.
+  Under `/api/v1/agent-providers` there are two routes, then: the registry
+  listing and the per-agent catalogue. Contract:
   [`specs/channels/contracts/api.openapi.yaml`](../channels/contracts/api.openapi.yaml),
-  where the agent-provider route lives.
+  where the agent-provider routes live.
 - **Audit.** Nothing to record: there is no per-agent curated set to change.
 - **Migration 0060** wrote `models: []` into every `kind='agent'` row;
   **migration 0063** takes the key back off every one of them, because
@@ -1072,9 +1079,10 @@ and `internal_default`.
 > fed it are gone, and the branch renders one muted line saying the model is
 > chosen per conversation — in the chat picker, or with `/model <id>` in a
 > channel. The non-built-in branch is untouched: a connection still binds its
-> model / fast-model dropdowns from its own models. The catalogue endpoint is
-> gone as well: no web surface asks an agent for its models any more, and the
-> card that still needs the list reads it in-process.
+> model / fast-model dropdowns from its own models. The catalogue endpoint STAYS:
+> the Chat page's per-conversation picker reads it, the agent detail page reads it
+> to say what the agent can be put on, and the channel `/model` card reads the
+> same catalogue in-process.
 
 > **Amendment 2026-09-12 (the surface, after A1–A3).** The edit dialog's Name
 > field is editable and submits a rename ahead of the patch, with the detail
@@ -1320,12 +1328,12 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
 
 - **Given** an agent whose model binding is being edited,
 - **When** the model picker is opened,
-- **Then** it offers a fixed dropdown with no free-text "Custom…" entry, built
-  from the draft connection's own models — its curated set where it has one,
-  otherwise what introspecting its endpoint reports — together with the value
-  already staged, never reading the connection's stored `model` field
-  (TypeScript acceptance test; an active connection answers what a picker
-  offers, amendment 2026-09-11c).
+- **Then** it offers a fixed dropdown of the agent's model catalogue
+  (`GET /api/v1/agent-providers/{agent_key}/models`) with no free-text "Custom…"
+  entry; and when a connection overrides the agent the dropdown offers that
+  connection's introspected models IN ADDITION to the catalogue and the current
+  value, never reading the connection's stored `model` field (TypeScript
+  acceptance test; union per the 2026-09-09 amendment).
 
 ### Scenario: curate which of a connection's models are offered downstream
 

@@ -39,7 +39,8 @@ coffer channel pair my-telegram        # prints an 8-character code
 ### 4. 聊天
 
 随便发一条消息 —— 它会落进一段与 channel 默认 agent（Coffer 受管 agent，
-如 Claude Code 或 Codex）的对话，回复回到 Telegram。
+如 Claude Code 或 Codex）的对话，回复回到 Telegram。同一段对话在 Chat
+页面也可见。
 
 > 按 [Built-in Agent Is Internal](../../docs/decisions/builtin-agent-is-internal-capability.zh.md)，
 > channel 只路由到受管 agent；内置「Coffer Assistant」不再是聊天目标。
@@ -174,4 +175,4 @@ UI：渠道详情页有一张 **Send test message** 卡片——输入一行文�
   **enable** 恢复。adapter 状态显示在 `coffer channel status` 与
   Channels 页面上。
 - **重新配对**：签发一个新码并从新账号发送 —— 旧的绑定会被替换。
-- **Delete** 该 channel 可移除一切；过往对话仍留在会话存储里，直到留存策略清理它们。
+- **Delete** 该 channel 可移除一切；过往对话仍留在 Chat 历史里，直到留存策略清理它们。

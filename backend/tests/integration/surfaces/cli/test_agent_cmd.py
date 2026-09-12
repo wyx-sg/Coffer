@@ -565,3 +565,53 @@ def test_mcp_adopt_bad_secret_syntax_exit2(workspace_cli):
         cli_app, ["agent", "mcp", "adopt", "cx", "fetcher", "--secret", "MISSING_EQUALS"]
     )
     assert r.exit_code == 2, r.output
+
+
+def test_plugin_list_enable_disable(workspace_cli):
+    """`agent plugin list` shows both plugins; enable/disable flip the config."""
+    r = _runner.invoke(cli_app, ["agent", "plugin", "list", "cx", "--json"])
+    assert r.exit_code == 0, r.output
+    body = json.loads(_extract_json(r.output))
+    by_id = {p["id"]: p for p in body["items"]}
+    assert by_id["p1@m1"]["enabled"] is True
+    assert by_id["p2@m1"]["enabled"] is False
+
+    r = _runner.invoke(cli_app, ["agent", "plugin", "disable", "cx", "p1@m1"])
+    assert r.exit_code == 0, r.output
+    assert "disabled: plugin p1@m1" in r.output
+
+    r = _runner.invoke(cli_app, ["agent", "plugin", "enable", "cx", "p2@m1"])
+    assert r.exit_code == 0, r.output
+    assert "enabled: plugin p2@m1" in r.output
+
+    body = json.loads(
+        _extract_json(_runner.invoke(cli_app, ["agent", "plugin", "list", "cx", "--json"]).output)
+    )
+    by_id = {p["id"]: p for p in body["items"]}
+    assert by_id["p1@m1"]["enabled"] is False
+    assert by_id["p2@m1"]["enabled"] is True
+
+
+def test_plugin_enable_unknown_id_exit4(workspace_cli):
+    r = _runner.invoke(cli_app, ["agent", "plugin", "enable", "cx", "ghost@m1"])
+    assert r.exit_code == 4, r.output
+    assert "plugin not found" in r.output
+
+
+def test_plugin_uninstall_force_and_prompt(workspace_cli):
+    tmp_path, _keyring = workspace_cli
+    cache_dir = tmp_path / ".codex" / "plugins" / "cache" / "m1" / "p1"
+
+    # Without --force the prompt aborts and the plugin survives.
+    r = _runner.invoke(cli_app, ["agent", "plugin", "uninstall", "cx", "p1@m1"], input="n\n")
+    assert r.exit_code == 1
+    assert cache_dir.is_dir()
+
+    r = _runner.invoke(cli_app, ["agent", "plugin", "uninstall", "cx", "p1@m1", "--force"])
+    assert r.exit_code == 0, r.output
+    assert "uninstalled: plugin p1@m1" in r.output
+    body = json.loads(
+        _extract_json(_runner.invoke(cli_app, ["agent", "plugin", "list", "cx", "--json"]).output)
+    )
+    assert [p["id"] for p in body["items"]] == ["p2@m1"]
+    assert not cache_dir.exists()

@@ -30,7 +30,7 @@ coffer channel status mybot                                  # adapter state + p
 coffer channel notify mybot "deploy finished"        # push a message to your paired account
 ```
 
-In a paired chat, the in-chat commands `/new`, `/stop`, `/status`, and `/help` control the conversation.
+In a paired chat, the in-chat commands `/new`, `/stop`, `/status`, and `/help` control the conversation. Channel conversations also appear on the app's **Chat** page.
 
 The **Channels** page in the app does the same without the terminal: add a channel (store its secret and register in one step), pair, toggle it on or off, and send a test message from the channel detail page.
 

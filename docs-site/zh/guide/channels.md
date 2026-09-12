@@ -30,7 +30,7 @@ coffer channel status mybot                                  # 适配器状态 +
 coffer channel notify mybot "部署完成"        # 向你已配对的账号推送一条消息
 ```
 
-在已配对的聊天里,聊天内命令 `/new`、`/stop`、`/status`、`/help` 控制对话。
+在已配对的聊天里,聊天内命令 `/new`、`/stop`、`/status`、`/help` 控制对话。渠道对话也会出现在应用的 **Chat** 页。
 
 应用里的 **Channels** 页做同样的事而无需终端:添加一个渠道(一步内存密钥并注册)、配对、开关、并从渠道详情页发送一条测试消息。
 

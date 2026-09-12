@@ -5,7 +5,7 @@
 // matters is the wire: which body each save sends, and which saves never leave
 // the browser at all.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import type { DaemonPortSettings } from "@/lib/api/daemonSettings";
@@ -75,6 +75,13 @@ function renderCard() {
 async function renderLoaded() {
   renderCard();
   await waitFor(() => expect(screen.getByTestId("daemon-address")).not.toHaveTextContent("—"));
+  // The address paints as soon as the query resolves, but the switch and the
+  // port field are seeded by an effect that runs after that commit. Waiting on
+  // the address alone can land between the two, and a click arriving there
+  // reads the pre-seed state — the switch reads as off with a configured port,
+  // and a save then sends that port instead of null. Flush the pending effects
+  // so every test starts from the seeded form.
+  await act(async () => {});
 }
 
 const requests = (method: string) => calls.filter((c) => c.method === method);
