@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 from typing import Protocol as _Protocol
+from uuid import uuid4
 
 from coffer.application.audit_service import AuditService
 from coffer.application.provider.projector import ProjectionConfigStore, ProviderProjector
@@ -84,10 +85,18 @@ class ProviderService:
     # --- helpers -------------------------------------------------------------
 
     @staticmethod
-    def _owned_ref(name: str) -> str:
-        """The credential ref this service mints when a profile is created with
-        an inline secret (``provider/<name>/key``)."""
-        return f"provider/{name}/key"
+    def _mint_ref() -> str:
+        """A fresh vault address for a profile created with an inline secret.
+
+        Deliberately opaque rather than ``provider/<name>/key``: a ref is an
+        ADDRESS, and deriving it from the connection's name made the name a key
+        — renaming then had to move the secret, in an order chosen so a live
+        agent never saw a missing one. Nothing reads the ref's shape; ownership
+        is decided by citation (``release_orphaned_credentials``), not by the
+        ref matching the name. Refs already minted under the old shape keep
+        working untouched: they are just strings this config happens to hold.
+        """
+        return f"provider/{uuid4().hex}/key"
 
     def _ref(self, name: str) -> ResourceRef:
         return ResourceRef(KIND, name)
@@ -137,7 +146,7 @@ class ProviderService:
                 raise ProviderCredentialSourceInvalid()
             ref = credential_ref
             if secret_value is not None:
-                ref = self._owned_ref(name)
+                ref = self._mint_ref()
                 await asyncio.to_thread(self._credentials.set, ref, secret_value)
                 minted = True
         config = ProviderConfig(
@@ -194,15 +203,16 @@ class ProviderService:
         )
 
     async def delete(self, name: str, *, actor: str = "api") -> None:
-        """Delete a profile; if it owns its credential (``provider/<name>/key``)
-        and nothing else cites it, remove the vault entry too."""
-        resource = await self.get(name)
-        cfg = self._cfg(resource)
+        """Delete a profile.
+
+        The credential goes with it when nothing else cites it — but that is
+        ``ResourceService.delete``'s job, not this one's: the kind declares a
+        ``credential_ref_extractor``, so the generic path already releases the
+        cited ref by citation count. This used to repeat that check here by
+        asking whether the ref matched ``provider/<name>/key``, which only ever
+        worked for refs whose shape spelled the name out.
+        """
         await self._resources.delete(self._ref(name), actor)
-        owned = self._owned_ref(name)
-        citers = await self._resources.find_credential_citations(owned)
-        if cfg.credential_ref == owned and not citers:
-            await asyncio.to_thread(self._credentials.delete, owned)
 
     async def rename(self, name: str, new_name: str, *, actor: str = "api") -> Resource:
         """Rename a connection; see ``rename_ops`` for the order of operations."""
