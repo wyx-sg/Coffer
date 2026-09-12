@@ -40,6 +40,16 @@ def test_open_darwin_default(tmp_path, monkeypatch, captured):
     assert captured == [["open", "-t", path]]
 
 
+def test_open_darwin_directory_goes_to_the_file_manager(tmp_path, monkeypatch, captured):
+    # A directory has no "text" to open: `open -t <dir>` hands the folder to the
+    # default text editor, which refuses it ("cannot open files in the folder
+    # format"). Plain `open <dir>` is the Finder, which is what opening a
+    # skill's folder means.
+    monkeypatch.setattr("sys.platform", "darwin")
+    FsOpenService().open(str(tmp_path))
+    assert captured == [["open", str(tmp_path)]]
+
+
 def test_open_darwin_with_editor(tmp_path, monkeypatch, captured):
     monkeypatch.setattr("sys.platform", "darwin")
     path = _file(tmp_path)

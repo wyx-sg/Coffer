@@ -761,9 +761,6 @@
     "bulkInstallMcp": "安装 Coffer MCP",
     "cofferManaged": "由 Coffer 管理",
     "skillsTab": {
-      "empty": "暂无投递到该 Agent 的 Skill —— 请到 Skill 页面启用某个 Skill 并把该 Agent 纳入它的范围。",
-      "degradedBadge": "已复制",
-      "degradedTooltip": "当前文件系统不支持符号链接，Coffer 改为下发了一份副本。在重新投递之前，Agent 不会看到主 Skill 的后续修改。",
       "managedHint": "这些 Skill 由 Coffer 投递。哪些 Skill 能到达该 Agent，由 Skill 页面上每个 Skill 的启用状态及其 Agent 范围决定。",
       "openSkillsPage": "打开 Skill 页面",
       "unmanagedTitle": "非托管 Skill",
@@ -786,6 +783,8 @@
     }
   },
   "skills": {
+    "degradedBadge": "已复制",
+    "degradedTooltip": "当前文件系统不支持符号链接，Coffer 向至少一个 Agent 下发了副本。在重新投递之前，这些 Agent 不会看到主 Skill 的后续修改。",
     "title": "Skill",
     "subtitle": "Coffer 管理的 AgentSkills 标准目录，会下发到所有已注册的 Agent。",
     "empty": "尚无 Skill。导入本地文件夹以开始使用。",

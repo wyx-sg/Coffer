@@ -7,6 +7,11 @@
 // styled confirmation dialog — no window.confirm). Multi-select adds a bulk
 // Verify + bulk Delete bar — Verify is a library-wide maintenance action, so it
 // lives only there. The per-row + bulk action UI lives in SkillsTableActions.tsx.
+//
+// The name cell also carries the copy_fallback "Copied" chip (FR-012): when a
+// delivery had to fall back to a copy, the UI must say so, and this list is the
+// only place the whole library is in view — the agent's Skills tab no longer
+// repeats it.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -17,6 +22,7 @@ import {
   SkillStatusCell,
   SkillsBulkActions,
 } from "@/components/skills/SkillsTableActions";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -40,7 +46,21 @@ export function SkillsTable({ skills }: { skills: SkillOut[] }) {
     {
       key: "name",
       header: t("skills.name"),
-      cell: (s) => <span className="font-medium">{s.name}</span>,
+      cell: (s) => (
+        <span className="flex items-center gap-2">
+          <span className="font-medium">{s.name}</span>
+          {s.bindings.some((b) => b.link_mode === "copy_fallback") && (
+            <Badge
+              variant="outline"
+              data-testid="skill-degraded-badge"
+              className="border-amber-500/50 text-amber-600 dark:text-amber-400"
+              title={t("skills.degradedTooltip")}
+            >
+              {t("skills.degradedBadge")}
+            </Badge>
+          )}
+        </span>
+      ),
     },
     // Source column intentionally hidden — every skill is local_import today, so
     // it carries no signal. The source field stays in the model (skills.source /

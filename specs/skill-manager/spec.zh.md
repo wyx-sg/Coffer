@@ -66,11 +66,11 @@ agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换�
 
 ### User Story 6 —— 在 Web UI 中管理 skill（优先级 P2）
 
-用户打开 Coffer，看到以数据表呈现的 Skills 页（搜索、筛选、分页、行多选以执行批量操作），可以通过文件选择器导入并浏览列表。Skills 页只管理 skill 资源本身，不管理它的按 agent binding：点击某个 skill 打开详情视图，其中有一个 Overview 元信息 tab 与一个 Files tab（文件树 + 一个只读文件查看器：渲染 Markdown，其他文本文件以原文显示）。该查看器不编辑内容；要修改文件，用户在自己的外部编辑器或文件管理器中打开该文件（或其所在文件夹）——每个文件与文件夹都提供「在外部编辑器中打开」「在文件管理器中显示」操作（由本地 daemon 执行）。投递的决定做在 skill 这一侧——它的 `enabled` 开关与它的 scope——因此 agent 详情页只汇报、不决定：该 agent 的「Skills」tab 列出当前已投递给它的 skill，就投递而言是只读的。
+用户打开 Coffer，看到以数据表呈现的 Skills 页（搜索、筛选、分页、行多选以执行批量操作），可以通过文件选择器导入并浏览列表。Skills 页只管理 skill 资源本身，不管理它的按 agent binding：点击某个 skill 打开详情视图，其中有一个 Overview 元信息 tab 与一个 Files tab（文件树 + 一个只读文件查看器：渲染 Markdown，其他文本文件以原文显示）。该查看器不编辑内容；要修改文件，用户在自己的外部编辑器或文件管理器中打开该文件（或其所在文件夹）——每个文件与文件夹都提供「在外部编辑器中打开」「在文件管理器中显示」操作（由本地 daemon 执行）。投递的决定做在 skill 这一侧——它的 `enabled` 开关与它的 scope——因此 agent 详情页不决定任何投递：该 agent 的「Skills」tab 指向 Skill 页面（整个 skill 库、投递状态与「已复制」降级徽标都在那里），本身只承载在该 agent 磁盘上发现的非托管 skill——那些在 UI 别处看不到。
 
 **为什么是这个优先级**：非 CLI 用户需要一个可视化日常管理面板。
 
-**独立可测**：打开 Web UI → Skills → 用文件选择器导入一个文件夹 → 在表格中看到它 → 打开该 skill 并把它的 scope 设为某一个 agent → 验证 symlink 已落盘，且该 agent 的 Skills tab 把这个 skill 列为已投递。
+**独立可测**：打开 Web UI → Skills → 用文件选择器导入一个文件夹 → 在表格中看到它 → 打开该 skill 并把它的 scope 设为某一个 agent → 验证 symlink 已落盘。
 
 **代表性场景**：
 
@@ -429,7 +429,7 @@ scope 决定哪个 agent 能看到某个 server 的工具。
 - **FR-009**：把一个 skill 投递给某 agent 必须在 `<config_dir>/skills/<skill-name>` 创建一个指向 `~/.coffer/skills/<skill-name>/` 的目录 symlink（POSIX）或目录 junction（Windows）。
 - **FR-010**：收回一份已投递副本必须移除目标 link，不动 master。
 - **FR-011**：投递必须报告、绝不覆盖：当目标路径上已经存在不是 Coffer 托管链接的东西时，该 skill 被报告为冲突、既有目标原封不动，投递的其余部分照常进行。（在重新建链前先备份目标的做法只存在于 FR-029 的显式 opt-in drift 修复中。）
-- **FR-012**：当符号链接/目录 junction 不可用（如 FAT32、网络共享）时，系统可降级为复制模式；绑定记录 `link_mode=copy_fallback`（enable 事件审计为 `mode: copy_fallback`），UI 必须呈现该降级状态（Agent 的 Skills 标签页对此类绑定显示 "已复制" 警示徽标）。
+- **FR-012**：当符号链接/目录 junction 不可用（如 FAT32、网络共享）时，系统可降级为复制模式；绑定记录 `link_mode=copy_fallback`（enable 事件审计为 `mode: copy_fallback`），UI 必须呈现该降级状态（Skill 页面对存在此类绑定的 skill 显示 "已复制" 警示徽标）。
 - **FR-012a**（[ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.zh.md)）：当且仅当该 skill 资源已启用**且**该 agent 在这个 skill 的 scope 内时，这个 skill 才必须被投递给该 agent——即 `skill.enabled AND agent_in_scope(skill.scope, agent)`。没有别的标志决定一个 skill 是**给**哪些 agent 的：既不是 FR-008 的投递记账，也不是 agent 资源上的任何字段。被**禁用的 agent** 是另一回事，它根本不会被写入——判定说的是一个 skill 属于哪些 agent，而被用户关掉的 agent 是 Coffer 压根不去碰的；它已持有的副本会被收回，重新启用后再调和回来。调和过程中发现一份该判定不再授予的已投递副本，必须按 FR-010 收回它（移除链接、清除投递记录）；发现一份该判定现在授予、而该 agent 尚未持有的副本，必须投递它。
 
 **Drift**

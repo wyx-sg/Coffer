@@ -761,9 +761,6 @@
     "bulkInstallMcp": "Install Coffer MCP",
     "cofferManaged": "Managed by Coffer",
     "skillsTab": {
-      "empty": "No skill is delivered to this agent yet — enable a skill and put this agent in its scope on the Skills page.",
-      "degradedBadge": "Copied",
-      "degradedTooltip": "Symlinks aren't available on this filesystem, so Coffer delivered a copy. The agent won't see edits to the master skill until it is delivered again.",
       "managedHint": "Coffer delivers these skills. Which ones reach this agent is decided on the Skills page, by each skill's enable state and its agent scope.",
       "openSkillsPage": "Open the Skills page",
       "unmanagedTitle": "Unmanaged skills",
@@ -786,6 +783,8 @@
     }
   },
   "skills": {
+    "degradedBadge": "Copied",
+    "degradedTooltip": "Symlinks aren't available on this filesystem, so Coffer delivered a copy to at least one agent. Those agents won't see edits to the master skill until it is delivered again.",
     "title": "Skills",
     "subtitle": "AgentSkills-standard folders Coffer manages and delivers to your registered agents.",
     "empty": "No skills yet. Import a local folder to get started.",
