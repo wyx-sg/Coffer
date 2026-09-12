@@ -109,12 +109,27 @@ owns its lifecycle.
   only guards `daemon.json`) nor the upstream sweep, so displaced daemons
   otherwise accumulate across app launches. On reaching serving — i.e. after
   `live_daemon()` found nobody live and we bound the port — the daemon reaps any
-  other process running its own executable (`orphan_sweep.reap_stale_daemons`,
-  excluding itself, its PyInstaller bootloader parent, and all ancestors).
-  **Frozen builds only:** a source run's executable is the Python interpreter,
-  which must not be matched. This is distinct from the version-skew case above —
-  a *responding* older daemon is left for the user to restart, but a
-  *non-responding* displaced one is cleaned up automatically.
+  other process running its own executable **against its own vault**
+  (`orphan_sweep.reap_stale_daemons`, excluding itself, its PyInstaller
+  bootloader parent, and all ancestors). **Frozen builds only:** a source run's
+  executable is the Python interpreter, which must not be matched. This is
+  distinct from the version-skew case above — a *responding* older daemon is
+  left for the user to restart, but a *non-responding* displaced one is cleaned
+  up automatically.
+
+  The vault half was added on 2026-09-12, after the executable name alone proved
+  to be no evidence of ownership. Every vault runs a binary called
+  `coffer-daemon`, so `scripts/smoke_test_bundle.sh` — which starts a freshly
+  built `dist/coffer-daemon` under a throwaway `HOME` precisely so it touches
+  nothing real — had its daemon reap the maintainer's live one, taking
+  `daemon.json`, the `coffer-callback` child and the cloudflared tunnel with it.
+  A daemon's vault is in neither its executable path nor its command line (every
+  vault runs the same binary with no arguments), so the candidate's own `HOME`
+  is read from its environment and compared with ours; a candidate whose
+  environment cannot be read is never reaped, and nor is anything when our own
+  `HOME` is unusable. "Not provably ours" must mean "leave it alone": a wrong
+  kill costs someone a running daemon, while a missed one costs a port that the
+  next start names in its error.
 
 ## Alternatives Considered
 

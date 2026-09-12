@@ -93,11 +93,22 @@ daemon 必须**比任一单一入口活得更久**：用户期望某个 MCP 客�
   `GET /api/v1/daemon/status`（卡死、崩溃中、或 spawn 竞争的失败者），既不会被
   `release()`（只守护 `daemon.json`）终止，也不在上游扫描范围内，于是被顶替的旧
   daemon 会跨 App 启动不断累积。当新 daemon 进入 serving——即 `live_daemon()` 判定
-  无人存活、我们绑定了端口之后——它会回收其它运行同一可执行文件的进程
-  （`orphan_sweep.reap_stale_daemons`，排除自身、其 PyInstaller bootloader 父进程及
-  所有祖先）。**仅限冻结构建**：源码运行的可执行文件是 Python 解释器，绝不能匹配。
-  这与上面的版本偏移情形不同——*仍在应答*的旧版 daemon 留给用户手动重启，而
-  *不再应答*的被顶替 daemon 则自动清理。
+  无人存活、我们绑定了端口之后——它会回收其它运行同一可执行文件、**且服务同一个
+  vault** 的进程（`orphan_sweep.reap_stale_daemons`，排除自身、其 PyInstaller
+  bootloader 父进程及所有祖先）。**仅限冻结构建**：源码运行的可执行文件是 Python
+  解释器，绝不能匹配。这与上面的版本偏移情形不同——*仍在应答*的旧版 daemon 留给
+  用户手动重启，而*不再应答*的被顶替 daemon 则自动清理。
+
+  「同一个 vault」这一条是 2026-09-12 补上的，因为事实证明可执行文件名根本不能作为
+  归属的证据。每个 vault 跑的都是叫 `coffer-daemon` 的二进制，于是
+  `scripts/smoke_test_bundle.sh`——它在一次性 `HOME` 下启动刚构建出的
+  `dist/coffer-daemon`，本意恰恰是不碰任何真实状态——反而让自己的 daemon 回收掉了
+  维护者正在运行的那个，连同 `daemon.json`、`coffer-callback` 子进程和 cloudflared
+  隧道一起带走。一个 daemon 服务哪个 vault，既不在它的可执行文件路径里、也不在它的
+  命令行里（每个 vault 都是同一个二进制、不带参数），所以只能从候选进程自己的环境里
+  读出 `HOME` 与我们的比对；环境读不到的候选一律不回收，我们自己的 `HOME` 不可用时
+  同样什么都不回收。「无法证明是我们的」就必须等于「别碰它」：错杀的代价是别人一个
+  正在运行的 daemon，漏杀的代价不过是下次启动会在报错里点名的一个端口。
 
 ## 备选方案
 
