@@ -1015,6 +1015,12 @@ Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制
 - **Then** adapter 收到一个带该引用 path/mime 的 `Attachment`，从历史里最后一条用户
   消息重新物化——单一事实来源
 
+### Scenario: the message API exposes an attachment block without leaking the path
+
+- **Given** 一条带附件引用的用户消息
+- **When** 客户端读取该会话的消息
+- **Then** 内容块为 `type=attachment`，带 `filename` 与 `mime`，线上不出现 `path` 字段
+
 ### Scenario: the media dir prune deletes stale files and keeps fresh ones
 
 - **Given** 媒体目录里有一个超过 30 天的文件和一个较新的文件
@@ -1116,6 +1122,12 @@ Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制
 - **When** 同一段会话上又发来一条消息
 - **Then** 它被接受并入队而不是被拒绝，并在当前 turn 结束后作为自己的 turn 运行
 
+### Scenario: editing a queued message re-queues it at the tail
+
+- **Given** 一个流式 turn 后面排着一条或多条消息，一条一行
+- **When** 编辑其中一条排队消息
+- **Then** 这条消息离开队列、回到草稿区供修改，重发后被排到待处理队列的尾部
+
 ### Scenario: a queued message runs after the current turn
 
 - **Given** 一条消息排在运行中的 turn 后面
@@ -1147,6 +1159,13 @@ Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制
 - **When** 创建、重命名、删除会话
 - **Then** 每个操作都持久化，列表随之反映；被删除的会话及其消息被移除
 
+### Scenario: archive and restore a conversation
+
+- **Given** 一段在活跃列表里的会话
+- **When** 它被归档
+- **Then** 它离开默认的（活跃）列表、出现在已归档列表里，且没有被销毁；取消归档会把它
+  放回活跃列表。归档一段不存在的会话会被拒绝
+
 ### Scenario: skills are reachable as tools
 
 - **Given** 一个存有 skill 的 vault
@@ -1158,6 +1177,13 @@ Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制
 - **Given** 一段已设定模型的会话
 - **When** 一个 turn 完成
 - **Then** assistant 消息记下产出它的那个模型
+
+### Scenario: chat runs on the built-in model when no connection
+
+- **Given** 一个运行中的守护进程，且该 agent 没有配置任何 Coffer LLM 连接
+- **When** 打开 Chat 页面
+- **Then** 草稿区可用、没有挡路的空状态，发出的 turn 跑在 agent 自带的模型与登录上——
+  Coffer 的连接是可选的覆盖项，不是前置条件
 
 ### Scenario: token usage is recorded on the assistant message
 
@@ -1484,10 +1510,9 @@ Coffer-hosted channel 与它们并不冗余——它是通往统一、本地、�
 
 自已退役的 Agent Chat 规范并入。这些需求描述的是**每个 channel turn 底下**那层机制——
 注册表、适配器、会话存储与 turn 生命周期。它们原本独占一个 spec，是因为当时
-Web 端 Chat 页面是它们的另一个客户端；那个页面已被删除（见下方
-**Deliberately out of scope**），于是 channels 成了这层平台唯一的接口面。
-把描述放在这里，是为了让「IM 消息 → turn → 回复」这条完整链路在一份文档里读完，
-而不是跨两个 spec。
+Web 端 Chat 页面是它们的另一个客户端。那个页面又回来了（见下方 G 节），但描述仍留在
+这里：一层平台，一份文档，好让「IM 消息 → turn → 回复」以及「同一个 turn 在浏览器里
+被看着」这条完整链路在一处读完，而不是跨两个 spec。
 
 - **FR-043**: 一个 turn 触达 agent 只能经由 **agent provider 注册表**：跑 turn、
   初始化会话、拆除会话的 agent 状态，都是拿会话上记的那个 agent 名字去问注册表。
@@ -1646,6 +1671,48 @@ markdown——第四项则完全没有对应。下列要求把每一项迁到平
   自己的规则（非空范围之外的默认模型在发请求之前就被拒绝；取消勾选被钉住的模型会同时取消钉住），
   并且在重新绑定 `default_agent` 时必须把两者清空——那些 id 属于上一个 agent。
 
+### G. Web 端 Chat 页面
+
+Turn 平台有第二个接口面：Web UI 里的一个 **Chat 页面**，对着的正是 channel 驱动的那些
+会话。它随 Agent Chat 规范交付，2026-09-10 因未被使用而删除，2026-09-12 又恢复——因为
+它能做而任何 channel 都做不到的那件事，是让属主在电脑上旁观、接手并继续一段正用手机
+驱动的会话。它所依据的决策记在
+[Chat 是单属主实时镜像](../../docs/decisions/chat-single-owner-live-mirror.zh.md)。
+
+- **FR-072**: Web UI 必须承载一个 **Chat 页面**：两栏，左边是会话列表，右边是所选会话的
+  消息线程与它的草稿区。列表必须列出库里的每一段会话，不论它由什么打开——由 IM channel
+  创建的会话同样被列出、可读、可实时旁观、可从页面继续，并带一个标明它同时可从哪个
+  channel 触达的徽标。不存在「只属于 Web 的会话」这种类别：页面与 channel 是同一条时间线
+  上的两扇窗，由同一个属主驱动，agent 无从分辨一个 turn 从哪扇窗进来。
+- **FR-073**: 会话列表必须支持新建、重命名、归档、取消归档与删除。归档把一段会话移出默认
+  的（活跃）列表、放进已归档列表，**但不销毁它**；取消归档把它放回活跃列表。删除会移除
+  该会话及其消息，并取消其上进行中的 turn——有破坏性的是删除，归档没有。指向一段不存在
+  的会话的操作必须被拒绝。
+- **FR-074**: 从页面发送必须是**发完即返回**：`POST .../messages` 接下消息、启动或让它入队，
+  然后立刻返回（202），不携带这个 turn 的任何输出。Turn 输出只从一个地方消费——
+  `GET .../events` 这条 SSE 订阅——于是「我发起的 turn」与「我手机发起的 turn」走同一段代码，
+  发送方从来不是特例。接入时该订阅必须从当前 turn 的开头重放它的事件，然后转为实时跟随
+  （FR-053），因此中途接入的客户端不会漏掉任何东西；没有 turn 在跑时，它必须保持打开，
+  并在下一个 turn 开始时把它送出来——不论这个 turn 由哪个接口面发起。
+- **FR-075**: 有 turn 在跑时草稿区**不得**锁定。turn 期间发出的消息加入待处理队列（FR-050），
+  并按队列顺序各自显示为一行，一条消息一行。队列中的一行必须可移除，也必须可编辑——编辑
+  的做法是把它从队列里取出、放回草稿区去改；改完重发则把它排到队列**尾部**，因为这是一次
+  新的发送，而排在它后面的那些是先入队的。`PUT .../pending` 整体替换队列，替换后的队列
+  必须走事件流（FR-052），好让第二个标签页、以及手机，渲染出同一份行。
+- **FR-076**: 页面必须能中断它正在旁观的那个 turn——不论由哪个接口面发起——走
+  `POST .../interrupt`，语义即 FR-051：turn 停止并保留、持久化其部分输出，待处理队列被
+  **挂起**，而不是自动推进到刚被停掉的那个 turn 里去。
+- **FR-077**: 消息线程必须把一个 turn 的工具调用渲染成各自的卡片，而不是揉进正文：每张卡片
+  点名工具、显示它被传入了什么、并在结果到达后显示结果，好让读者看见 agent **做**了什么，
+  而不只是它说了什么。文本块与工具调用块按 turn 发出它们的顺序排列，结果尚未到达的卡片
+  读起来就是还在跑。
+- **FR-078**: 页面必须让属主经 `GET|PATCH .../agent-config` 读取与设置会话的 agent 配置——
+  它跑在哪个 agent 上、那个 agent 被放在哪个模型上——持久化模型的同时保住会话的工作目录与
+  上游 session id，清空则回落到 agent 自己的默认。缺少 Coffer 的 LLM 连接**不得**挡住这个
+  页面：一个都没配时，草稿区照样接受消息，turn 跑在 agent 自带的模型与登录上，因为 Coffer
+  的连接是可选的覆盖项，不是前置条件（见
+  [Provider Switching](../../docs/decisions/provider-switching.zh.md) 的 2026-06-22 修订）。
+
 ## Deliberately out of scope
 
 **复制到剪贴板按钮。** Telegram 的 inline 按钮可以带 `copy_text`，那样 agent 就能把一条
@@ -1682,21 +1749,19 @@ Coffer 是 MIT、受 OSS 约束，因此它既不能依赖这个 SDK，也不能
 成为首选的入站路径，隧道也随之变成可选。
 
 
-**Web 端 Chat 页面。** Agent Chat 规范交付过一个 Web 端两栏聊天页面——会话列表、消息线程、
-输入框、模型选择器、待处理队列管理——以及 `/api/v1/chat` 下为它服务的一套 REST/SSE
-接口。两者都被删除。这个页面从未被当作聊天界面用过：库里每一条会话都由 channel 创建；
-「单属主实时镜像」这一职责——在电脑上旁观你正用手机驱动的那段会话——同样
-从未被行使，若行使过，会话记录里会有痕迹。如实记录反面事实：手机发消息、电脑看实况
-是个合理的需求，这个功能只是从来没用起来。仍然删除，因为一个从未跑过的六千行接口面
-是负债，不是选项。
+**挂在 chat 前缀下的 agent 注册表。** agent 注册表列表与按 agent 的模型清单曾经答在
+`/api/v1/chat/agents` 与 `/chat/agents/{key}/models`，页面被撤下时它们搬去了
+`GET /api/v1/agent-providers` 与 `/agent-providers/{key}/models`。页面回来了，它们仍留在
+那里。这两者从来就与「会话」无关——channel 编辑器调第一条来列可绑定的 agent，agent 详情页
+调第二条来提供模型——一个页面恰好要用它们，并不能把它们变成 chat 路由。Chat 页面就从它们
+所在的地方读。
 
-存活下来的是它底下的全部（FR-043…FR-055），加上产品其余部分仍然要用的两条读路由
-——agent 注册表列表与按 agent 的模型清单——它们从 `/api/v1/chat/agents` 移到了
-`/api/v1/agent-providers`，因为这两者从来就与「会话」无关。会话存储保留其完整 API
-面，即使其中一部分现在只有保留 worker 在调用——这个存储属于平台，不属于那个页面。
-
-这个页面背后的两条决策记录——**chat 作为 Vault Console** 与 **chat 是单属主实时镜像**
-——随页面一并删除。
+**Chat 作为「Vault Console」。** 更早的一次定位，把这个页面做成「对金库说话」的席位，
+以及逐条审批 agent 工具调用的席位。两者都不随它回来。内置模型是内部的 `coffer__*` 能力，
+而不是一个聊天人格（[Built-in Agent Is Internal](../../docs/decisions/builtin-agent-is-internal-capability.zh.md)），
+工具审批则被整体删除，属主配对才是那道门
+（[Remove Tool Approval](../../docs/decisions/remove-tool-approval.zh.md)）。G 节恢复的是
+实时镜像，也只有实时镜像。
 
 ## Assumptions
 

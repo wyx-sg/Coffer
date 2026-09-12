@@ -109,6 +109,7 @@ section that future readers most often want — don't skip it.>
 | [`memory-via-mcp-not-native-projection`](memory-via-mcp-not-native-projection.md) | Memory via MCP, not native projection | Accepted |
 | [`skill-content-trust-layer`](skill-content-trust-layer.md) | Skill Content Trust Layer (Heuristic Scan, Warn-Don't-Block) | Reverted (2026-06-20) |
 | [`consume-official-mcp-registry`](consume-official-mcp-registry.md) | Consume the official MCP Registry for server discovery | Reverted (2026-06-20) |
+| [`chat-single-owner-live-mirror`](chat-single-owner-live-mirror.md) | Chat Is a Single-Owner Live Mirror | Accepted |
 | [`provider-switching`](provider-switching.md) | Provider Switching | Proposed |
 | [`daemon-proxies-os-file-actions`](daemon-proxies-os-file-actions.md) | Local Daemon Proxies OS File Actions | Accepted |
 | [`retrieval-mode-is-internal`](retrieval-mode-is-internal.md) | Retrieval mode is an internal engine detail; external surfaces expose query→answer | Superseded by [Knowledge Is Plain Files](knowledge-is-plain-files.md) |
