@@ -29,7 +29,6 @@ import logging
 from typing import TYPE_CHECKING
 
 from coffer.application.channel.conversation_ops import ensure_conversation
-from coffer.application.channel.conversation_spec import narrow_to_allowed
 from coffer.application.channel.ports import ChannelBinding, ChannelPeer
 from coffer.application.channel.selection_cards import (
     SelectionCard,
@@ -283,7 +282,5 @@ async def _current_card(
         commands._conversations, commands._threads, binding, peer, thread_id
     )
     cfg = await commands._conversations.get_agent_config(conversation_id)
-    # The channel's allowed range wins over what the agent offers (FR-071): a
-    # card must never show a pick that ``/model`` would then refuse.
-    picks = narrow_to_allowed(await commands._model_suggestions.suggest(agent_key), binding.models)
+    picks = await commands._model_suggestions.suggest(agent_key)
     return model_card(current=cfg.model, picks=picks, page=page)

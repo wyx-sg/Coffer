@@ -97,9 +97,10 @@ async def list_agent_models(
     already appears here, so listing both filled the picker with label-less
     duplicates. An alias can still be TYPED wherever a model name is accepted.
 
-    Nothing narrows this list. It is what the agent itself can be put on, which
-    is the only question the agent resource answers; a surface with an audience
-    of its own — a channel's allowed range — curates over it on its own side.
+    Nothing narrows this list, on either side. It is what the agent itself can be
+    put on, which is the only question the agent resource answers, and no
+    surface curates over it any more — the chat page's picker and a channel's
+    ``/model`` card both offer the whole of it.
 
     An unregistered ``agent_key`` is a 404.
     """

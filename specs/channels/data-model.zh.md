@@ -13,9 +13,7 @@ ChannelConfig (discriminator: channel_type)
 │   ├── default_agent: str = "claude_code"  # chat provider key；必须是已注册的 agent
 │   ├── default_agent_config: dict | None
 │   ├── require_mention: bool = True        # 群聊准入（FR-035）
-│   ├── ignore_other_mentions: bool = False # 群聊准入（FR-035）
-│   ├── default_model: str | None = None    # 本 channel 新会话开局所用模型（FR-071）
-│   └── models: list[str] = []              # 允许范围；为空 = 不限制（FR-071）
+│   └── ignore_other_mentions: bool = False # 群聊准入（FR-035）
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"
 │   └── bot_token_ref: str            # credential-store ref, probed at register
@@ -43,12 +41,12 @@ ChannelConfig (discriminator: channel_type)
   退役了旧的 `builtin` 伪 agent）：未注册的 agent 会被当场拒绝，而
   不是在首个 turn 才静默失败。仅当 registry 为空时跳过校验，以免 registry 配错时
   阻断所有 channel 写入。`default_agent_config` 仍是透传。
-- `default_model` 与 `models` 是 channel 自己的模型策展（FR-071），也是**唯一**的
-  策展：agent 资源不再带任何模型勾选。模型 id 是不透明的（原样交给 agent 的 CLI），
-  因此 `models` 只做形状校验（非空、按序去重、至多 200 项、每项至多 200 字符），
-  绝不对照 agent 的 catalogue 校验 —— 后者随每次 CLI 升级而变。当 `models` 非空而
-  `default_model` 不在其中时会被拒绝：channel 不应把会话开在一个它随后又拒绝的模型上。
-  空白的 `default_model` 归一为 `None`（未设置）。
+- channel 不带任何模型策展。它曾短暂拥有自己的 `default_model` 与 `models` 允许范围，
+  两者都已移除：channel 只绑定一个 agent、别无其他——新会话跑在所绑定 agent 自己的 CLI
+  默认模型上，`/model` 卡片提供该 agent 的整份 catalogue，且不拒绝任何 id。迁移
+  `20260912_0067_drop_channel_model_curation.py` 单向地把这两个键从每一条既有 channel
+  config 里剥掉，不留 load-time 垫片（房规）——`_CommonChannelFields` 禁止多余键，
+  仍带着它们的行在加载时会校验失败。
 - channel 的 turn 运行在 Coffer 托管的默认工作目录 `~/.coffer/workspace`
   （首次使用时创建）。
 

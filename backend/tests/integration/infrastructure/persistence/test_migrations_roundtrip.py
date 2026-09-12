@@ -119,7 +119,11 @@ HEAD_REVISION = "0067"
 # restriction) — no DDL, table/column set unchanged. 0062 CREATEs
 # ``sync_remotes``, the single-row backup-remote config (spec
 # vault-export-import ``## Backup``); present at head, dropped by its own
-# downgrade, and absent from every revision below it.
+# downgrade, and absent from every revision below it. 0067 is DATA-only: it
+# strips ``default_model`` + ``models`` from every ``kind='channel'``
+# ``config_json`` (a channel curates no models — the bound agent's CLI default
+# opens a conversation and ``/model`` offers that agent's whole catalogue) — no
+# DDL, table/column set unchanged at head.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",

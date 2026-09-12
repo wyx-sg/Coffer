@@ -17,11 +17,11 @@ shaped to prevent:
 * ``catalogue()`` — everything the installed agent reports. It is the full
   truth, and it is what the agent detail page renders. Nothing narrows it.
 * ``offered()`` / ``suggest()`` — what a PICKER should show. Usually the same
-  list: the agent's catalogue is what the agent itself can run, and nothing on
-  the AGENT narrows it. Curation for a given audience belongs to the surface
-  that has one — a channel carries its own allowed range and applies it to its
-  own ``/model`` card — not to the agent, which answers only "what can this
-  agent be put on".
+  list: the agent's catalogue is what the agent itself can run, and nothing
+  narrows it — not the agent, and not the surface doing the asking. Curation
+  lived on the agent once and on the channel after that; migration 0067 took the
+  last of it away, so the web picker and a channel's ``/model`` card both offer
+  the whole list.
 
   With an LLM connection ACTIVE for the agent, they answer from somewhere else
   entirely. The agent's turns then go to that endpoint, not to the account its
@@ -152,10 +152,9 @@ class AgentModelCatalogueService:
         every card render and every turn (CODE-034). The user closes that gap by
         curating the connection's model set.
 
-        Otherwise: the agent's whole catalogue. Nothing on the agent narrows it
-        — a surface that wants a narrower menu owns that curation itself (a
-        channel's allowed range, FR-071 of spec channels), because the audience
-        is the surface's, not the agent's.
+        Otherwise: the agent's whole catalogue. Nothing narrows it — the
+        catalogue is simply what the agent can be put on, and no surface that
+        routes to the agent gets to say otherwise.
         """
         endpoint_models = await self._connection_models(agent_key)
         if endpoint_models:
@@ -166,9 +165,8 @@ class AgentModelCatalogueService:
 
     async def suggest(self, agent_key: str) -> list[str]:
         """The plain-id list — satisfies the channel ``ModelSuggestionPort``, so
-        a ``/model`` card starts from exactly what the web picker offers. The
-        channel then applies its own allowed range over it (FR-071); this
-        service knows nothing of channels."""
+        a ``/model`` card offers exactly what the web picker does. Nothing sits
+        between the two: this is the whole menu a channel presents."""
         return [m.id for m in await self.offered(agent_key)]
 
     # --- internals -----------------------------------------------------------

@@ -2,10 +2,10 @@
 // agent's model catalogue (/agent-providers/{key}/models).
 //
 // The catalogue is what the agent can actually run on its own login. It is
-// server-owned rather than a frontend constant, so the chat model picker and
-// the channel's model fields both read it here instead of hardcoding tiers that
-// drift. Nothing narrows it — a surface that must offer less (a channel's
-// allowed range, spec channels FR-071) applies its own range over this list.
+// server-owned rather than a frontend constant, so the chat page's model picker
+// reads it here instead of hardcoding tiers that drift. Nothing narrows it, on
+// either side: no surface curates over this list, so what the agent reports is
+// what the picker offers.
 import { useQuery } from "@tanstack/react-query";
 
 import { agentModelsApi, type AgentModel } from "@/lib/api/agentModels";

@@ -149,10 +149,9 @@ paths:
           description: >
             The concrete models the installed agent itself reported, minus the
             ones its own retirement table says are gone. The order is
-            meaningful (newest first). Nothing narrows it: the agent answers
-            only "what can this agent be put on", and a surface with an
-            audience of its own — a channel's allowed range — curates over it
-            on its own side.
+            meaningful (newest first). Nothing narrows it, on either side: the
+            agent answers only "what can this agent be put on", and no surface
+            curates over it — the chat page's picker offers the whole list.
           content:
             application/json:
               schema:
