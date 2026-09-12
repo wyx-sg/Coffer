@@ -210,6 +210,19 @@ class GitMirror:
             return True
         raise GitMirrorError(self._failure(("diff",), diff, None))
 
+    async def discard_staged(self) -> None:
+        """Return the working tree and index to ``HEAD``.
+
+        ``reset --hard`` is the right tool and not an overreach: the caller only
+        reaches this after establishing that the staged diff is confined to a
+        file whose content carries no information (the bundle manifest's
+        timestamp), so there is nothing here to lose. Leaving it staged instead
+        would make the next ``checkout`` fail with "your local changes would be
+        overwritten" — and that checkout is how a restore reaches an earlier
+        revision.
+        """
+        await self._git("reset", "--hard", "HEAD")
+
     async def staged_paths(self) -> list[str]:
         """Repository-relative paths of everything currently staged.
 

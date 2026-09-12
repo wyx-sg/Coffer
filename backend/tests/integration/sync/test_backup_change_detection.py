@@ -161,3 +161,35 @@ async def test_the_idle_run_leaves_the_remote_where_it_was(rig) -> None:
     await service.run_once()
 
     assert _commits(bare) == before
+
+
+@pytest.mark.asyncio
+async def test_an_idle_run_leaves_a_tree_a_restore_can_still_move(rig) -> None:
+    """The recovery path has to survive the runs that happen most.
+
+    An idle run stages the restamped manifest and then declines to commit it.
+    If it left that staged, git would refuse the next checkout ("your local
+    changes would be overwritten"), and `restore --at` — the whole reason the
+    history exists — would fail on any vault that had been quiet for an hour.
+    """
+    service, export, worktree, _bare = rig
+
+    await service.run_once()  # first real commit
+    export.payload = "edited\n"
+    await service.run_once()  # a second, so there is history to move back to
+    await service.run_once()  # the idle run that stages only the manifest
+
+    first = subprocess.run(
+        ["git", "-C", str(worktree), "rev-list", "--max-parents=0", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    moved = subprocess.run(
+        ["git", "-C", str(worktree), "checkout", "--detach", first],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert moved.returncode == 0, moved.stderr

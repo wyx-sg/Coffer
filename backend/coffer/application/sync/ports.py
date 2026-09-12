@@ -162,6 +162,13 @@ class GitMirrorPort(Protocol):
         """Repository-relative paths of what is staged, so a caller can tell a
         real change from one that only restamped the bundle's manifest."""
 
+    async def discard_staged(self) -> None:
+        """Return the working tree and index to ``HEAD``.
+
+        Called when a staged diff turns out not to be worth committing: an
+        index left dirty makes git refuse the next ``checkout``, which is the
+        operation a restore-from-history depends on."""
+
     async def commit(self, message: str) -> str:
         """Commit what is staged and return the short sha."""
 

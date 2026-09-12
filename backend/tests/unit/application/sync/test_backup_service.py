@@ -68,6 +68,9 @@ class _FakeMirror:
         self.calls.append(("staged_paths", {}))
         return list(self.staged_files)
 
+    async def discard_staged(self) -> None:
+        self.calls.append(("discard_staged", {}))
+
     async def commit(self, message: str) -> str:
         self.calls.append(("commit", {"message": message}))
         return self.sha
@@ -267,8 +270,10 @@ async def test_a_restamped_manifest_alone_is_not_a_change() -> None:
 
     assert "commit" not in rig.mirror.names
     assert "push" not in rig.mirror.names
+    # And nothing is left staged: a dirty index would make git refuse the
+    # checkout that restore-from-history depends on.
+    assert "discard_staged" in rig.mirror.names
     assert run.status is BackupRunStatus.NO_CHANGE
-
 
 
 @pytest.mark.acceptance(
@@ -413,3 +418,26 @@ async def test_restore_clones_when_there_is_no_working_tree() -> None:
     assert "ensure_repo" not in rig.mirror.names
     assert rig.sync.imports == [str(Path("~/.coffer/sync").expanduser())]
     assert summary.path == str(Path("~/.coffer/sync").expanduser())
+
+
+async def test_a_restore_from_another_url_is_not_offered_the_stored_token() -> None:
+    """The stored credential belongs to the stored remote.
+
+    A restore that names a different url is talking to a different host. Handing
+    it the token that backs up the vault would turn any url a user can be talked
+    into typing into a way to collect that token.
+    """
+    rig = _rig(remote=_remote(credential_ref=_TOKEN_REF))
+
+    await rig.service.restore(from_url="https://elsewhere.invalid/other.git")
+
+    assert rig.store.reads == []
+    assert rig.mirror.payload("fetch")["token"] is None
+
+
+async def test_a_restore_from_the_configured_url_still_authenticates() -> None:
+    rig = _rig(remote=_remote(credential_ref=_TOKEN_REF))
+
+    await rig.service.restore(from_url="https://example.invalid/vault.git")
+
+    assert rig.mirror.payload("fetch")["token"] == _TOKEN

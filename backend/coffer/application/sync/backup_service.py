@@ -23,6 +23,7 @@ has to decide what is survivable.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -113,6 +114,12 @@ class BackupService:
         self._mirror_factory = mirror_factory
         self._credentials = credentials
         self._audit = audit
+        # A backup and a restore both drive the same git working tree, and the
+        # worker's tick does not ask whether a human is mid-restore. Without
+        # this, a tick landing during a restore exports the current vault into
+        # a tree checked out at an earlier revision, and commits the difference
+        # onto a detached HEAD that the restore then orphans.
+        self._lock = asyncio.Lock()
 
     async def configure(self, remote: BackupRemote) -> None:
         await self._remotes.set(remote)
@@ -139,7 +146,8 @@ class BackupService:
             # Not a run: nothing was exported and no history moved, so there is
             # no outcome to record and nothing to audit.
             return BackupRun(status=BackupRunStatus.NO_CHANGE, ran_at=datetime.now(tz=UTC))
-        return await self._run(remote)
+        async with self._lock:
+            return await self._run(remote)
 
     async def _run(self, remote: BackupRemote) -> BackupRun:
         ran_at = datetime.now(tz=UTC)
@@ -176,6 +184,12 @@ class BackupService:
             return None
         staged = set(await mirror.staged_paths())
         if staged <= _MANIFEST_ONLY:
+            # Leave nothing staged. A dirty index makes git refuse the checkout
+            # a restore-from-history needs, and an idle vault is the common
+            # case — so not cleaning up here would break recovery for exactly
+            # the runs that happen most.
+            if await mirror.head() is not None:
+                await mirror.discard_staged()
             return None
         return await mirror.commit(_commit_message(summary))
 
@@ -236,6 +250,10 @@ class BackupService:
         for (something deleted and noticed a week later) cannot be served by
         the tip: a backup mirrors deletions as faithfully as additions.
         """
+        async with self._lock:
+            return await self._restore(at=at, from_url=from_url)
+
+    async def _restore(self, *, at: str | None, from_url: str | None) -> ImportSummary:
         remote = await self._remotes.get()
         if remote is None and from_url is None:
             raise BackupRemoteInvalid("no backup remote is configured; name a url to restore from")
@@ -243,7 +261,11 @@ class BackupService:
         branch = remote.branch if remote else DEFAULT_BRANCH
         worktree = Path(remote.worktree_path if remote else DEFAULT_WORKTREE).expanduser()
         mirror = self._mirror_factory(worktree)
-        token = self._token(remote) if remote else None
+        # The stored credential belongs to the stored remote. A restore that
+        # names a different url is talking to a different host, and handing it
+        # this token would let any url the user can be talked into typing
+        # collect the one that backs up their vault.
+        token = self._token(remote) if remote is not None and url == remote.url else None
         await self._open_worktree(mirror, url=url, branch=branch, token=token, cloning=from_url)
         await mirror.fetch(token=token)
         try:
