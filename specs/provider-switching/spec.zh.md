@@ -383,8 +383,9 @@ Coffer 仍不写下任何属于自己的模型名。
 **A1 — 名字可编辑，而改名是一次完整操作。** 名字是用户手里唯一的把手，却恰恰是编辑
 对话框拒绝修改的那一个字段。它同时也是**身份**：连接自有的 vault 条目是
 `provider/<name>/key`，审计行记在 `provider:<name>` 名下，名字还被原样写进 Coffer 投影
-出去的 agent 配置里（Claude Code 的 `apiKeyHelper` → `coffer provider key --connection
-<name>`，Codex provider 的 `display_name`）。所以改名**必须**把这四处一起搬走——这也是
+出去的 agent 配置里（Claude Code 的 `apiKeyHelper` →
+`coffer provider key --connection <name>`，Codex provider 的 `display_name`）。
+所以改名**必须**把这四处一起搬走——这也是
 它是 `POST /api/v1/providers/{name}/rename` 而不是又一个 `PATCH` 字段的原因：patch 改的
 是连接的设置，而撞上另一条连接已占用的名字必须是 409，而不是一次把两条连接悄悄合并的
 编辑。
