@@ -271,10 +271,8 @@ class SqlAlchemyAuditRepo:
 def _embedding_to_domain(row: EmbeddingConfigModel) -> GlobalEmbeddingConfig:
     return GlobalEmbeddingConfig(
         enabled=bool(row.enabled),
-        provider=row.provider,
+        connection=row.connection,
         model=row.model,
-        base_url=row.base_url,
-        credential_ref=row.credential_ref,
         dimensions=row.dimensions,
         default_chunk_size=row.default_chunk_size,
         default_chunk_overlap=row.default_chunk_overlap,
@@ -298,10 +296,8 @@ class SqlAlchemyEmbeddingConfigRepo:
         self,
         *,
         enabled: bool,
-        provider: str | None,
+        connection: str | None,
         model: str | None,
-        base_url: str | None,
-        credential_ref: str | None,
         dimensions: int,
         default_chunk_size: int,
         default_chunk_overlap: int,
@@ -314,10 +310,8 @@ class SqlAlchemyEmbeddingConfigRepo:
                 row = EmbeddingConfigModel(id=SINGLETON_ID, updated_at=now)
                 session.add(row)
             row.enabled = enabled
-            row.provider = provider
+            row.connection = connection
             row.model = model
-            row.base_url = base_url
-            row.credential_ref = credential_ref
             row.dimensions = dimensions
             row.default_chunk_size = default_chunk_size
             row.default_chunk_overlap = default_chunk_overlap

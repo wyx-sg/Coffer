@@ -141,10 +141,11 @@ class EmbeddingConfigModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    provider: Mapped[str | None] = mapped_column(String, nullable=True)
+    # The NAME of the ``provider`` resource this config embeds through; the wire,
+    # base URL and key are read from that connection at use time rather than
+    # restated here (spec knowledge FR-077).
+    connection: Mapped[str | None] = mapped_column(String, nullable=True)
     model: Mapped[str | None] = mapped_column(String, nullable=True)
-    base_url: Mapped[str | None] = mapped_column(String, nullable=True)
-    credential_ref: Mapped[str | None] = mapped_column(String, nullable=True)
     dimensions: Mapped[int] = mapped_column(Integer, nullable=False, default=768)
     default_chunk_size: Mapped[int] = mapped_column(Integer, nullable=False, default=512)
     default_chunk_overlap: Mapped[int] = mapped_column(Integer, nullable=False, default=64)

@@ -6,16 +6,22 @@
 // read-only Configuration card (which NEVER renders a secret — only whether one
 // is stored); Models holds the table that introspects the endpoint AS IT OPENS —
 // no fetch button — and writes the curated set back with PATCH {models: [...]},
-// one Switch per model id, searchable and filterable by offered/not. An empty
-// set reads as "no restriction"; an endpoint that cannot list its models says
-// so, offers a retry, and leaves the current selection intact.
+// one row per model carrying its id, WHAT KIND of model it is, and the offered
+// Switch; searchable, and filterable by offered/not and by kind. An empty set
+// reads as "no restriction"; an endpoint that cannot list its models says so,
+// offers a retry, and leaves the current selection intact.
+//
+// A curated entry is `{id, modality}`, not a bare id: introspection GUESSES the
+// modality from the id and the user corrects it in the row's Type picker — on an
+// already-offered row that correction is a PATCH of its own, on a row that is
+// not offered yet it is held until the Switch carries it into the curated set.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ProviderDetailPage } from "./ProviderDetailPage";
 import { ApiError } from "@/lib/api/errors";
-import type { Provider } from "@/lib/api/providers";
+import type { Provider, ProviderModel } from "@/lib/api/providers";
 import { acceptance } from "@/test/acceptance";
 
 const navigateMock = vi.fn();
@@ -45,7 +51,7 @@ vi.mock("@/lib/api/providers", async (orig) => {
 // result from the test rather than letting it reach a daemon.
 const refetch = vi.fn();
 let endpointState: {
-  data?: { models: string[]; message: string };
+  data?: { models: ProviderModel[]; message: string };
   error?: unknown;
   isPending?: boolean;
   isFetching?: boolean;
@@ -120,8 +126,13 @@ function renderPage() {
   );
 }
 
-/** The endpoint answered with these ids, as the on-open probe would resolve. */
-function endpointServes(models: string[], message = "") {
+/** Plain chat entries — the common case, spelled once instead of per fixture. */
+const chat = (...ids: string[]): ProviderModel[] =>
+  ids.map((id) => ({ id, modality: "text" }) as ProviderModel);
+
+/** The endpoint answered with these models, as the on-open probe would resolve.
+ *  Each entry carries the modality introspection INFERRED from the id. */
+function endpointServes(models: ProviderModel[], message = "") {
   endpointState = { data: { models, message } };
 }
 
@@ -134,12 +145,26 @@ async function openModelsTab() {
 /** The row's offered/not-offered Switch, named as the table labels it. */
 const switchFor = (model: string) => screen.getByRole("switch", { name: `Status: ${model}` });
 
-/** Open the status filter dropdown and pick an option. The models table renders
- *  that combobox in DataTable's toolbar, ahead of the pagination page-size one. */
-function selectStatus(optionName: string) {
-  fireEvent.click(screen.getAllByRole("combobox")[0]);
+/** The row's modality picker, named as ModalitySelect labels it. Every query
+ *  here goes by accessible name: the toolbar's own filters are comboboxes too,
+ *  and so is one picker per row. */
+const typePickerFor = (model: string) => screen.getByRole("combobox", { name: `Type: ${model}` });
+
+/** Radix Select has no pointer layout under jsdom, so open it from the keyboard
+ *  and then click the option by its label. */
+function chooseOption(trigger: HTMLElement, optionName: string) {
+  fireEvent.keyDown(trigger, { key: "ArrowDown" });
   fireEvent.click(screen.getByRole("option", { name: optionName }));
 }
+
+/** Correct what kind of model a row is. */
+const setModality = (model: string, kind: string) => chooseOption(typePickerFor(model), kind);
+
+/** The toolbar's two filters, each named by its column header. */
+const selectStatus = (optionName: string) =>
+  chooseOption(screen.getByRole("combobox", { name: "Status" }), optionName);
+const selectType = (optionName: string) =>
+  chooseOption(screen.getByRole("combobox", { name: "Type" }), optionName);
 
 describe("ProviderDetailPage", () => {
   beforeEach(() => {
@@ -213,8 +238,8 @@ describe("ProviderDetailPage", () => {
 
   test("the models the endpoint serves are listed on open and flipping one on writes the selection", async () => {
     apiMock.get.mockResolvedValue(makeProvider({ models: [] }));
-    apiMock.update.mockResolvedValue(makeProvider({ models: ["gpt-5"] }));
-    endpointServes(["gpt-5", "gpt-5-codex"]);
+    apiMock.update.mockResolvedValue(makeProvider({ models: chat("gpt-5") }));
+    endpointServes(chat("gpt-5", "gpt-5-codex"));
     renderPage();
     await openModelsTab();
 
@@ -223,12 +248,15 @@ describe("ProviderDetailPage", () => {
     fireEvent.click(toggle);
 
     await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-    expect(apiMock.update).toHaveBeenCalledWith("acme", { models: ["gpt-5"] });
+    // The curated entry carries the kind the row is showing, not a bare id.
+    expect(apiMock.update).toHaveBeenCalledWith("acme", {
+      models: [{ id: "gpt-5", modality: "text" }],
+    });
   });
 
   test("flipping one off removes just that model; clearing writes the empty (unrestricted) set", async () => {
-    apiMock.get.mockResolvedValue(makeProvider({ models: ["gpt-5", "gpt-5-codex"] }));
-    apiMock.update.mockResolvedValue(makeProvider({ models: ["gpt-5-codex"] }));
+    apiMock.get.mockResolvedValue(makeProvider({ models: chat("gpt-5", "gpt-5-codex") }));
+    apiMock.update.mockResolvedValue(makeProvider({ models: chat("gpt-5-codex") }));
     renderPage();
     await openModelsTab();
 
@@ -239,7 +267,9 @@ describe("ProviderDetailPage", () => {
 
     fireEvent.click(toggle);
     await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-    expect(apiMock.update).toHaveBeenCalledWith("acme", { models: ["gpt-5-codex"] });
+    expect(apiMock.update).toHaveBeenCalledWith("acme", {
+      models: [{ id: "gpt-5-codex", modality: "text" }],
+    });
 
     fireEvent.click(screen.getByRole("button", { name: /clear selection/i }));
     await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(2));
@@ -248,7 +278,7 @@ describe("ProviderDetailPage", () => {
 
   test("the search box narrows the table to the matching model ids", async () => {
     apiMock.get.mockResolvedValue(makeProvider({ models: [] }));
-    endpointServes(["gpt-5", "gpt-5-codex", "claude-opus-4"]);
+    endpointServes(chat("gpt-5", "gpt-5-codex", "claude-opus-4"));
     renderPage();
     await openModelsTab();
     await screen.findByText("claude-opus-4");
@@ -267,8 +297,8 @@ describe("ProviderDetailPage", () => {
   });
 
   test("the status filter separates the offered models from the rest", async () => {
-    apiMock.get.mockResolvedValue(makeProvider({ models: ["gpt-5"] }));
-    endpointServes(["gpt-5", "gpt-5-codex"]);
+    apiMock.get.mockResolvedValue(makeProvider({ models: chat("gpt-5") }));
+    endpointServes(chat("gpt-5", "gpt-5-codex"));
     renderPage();
     await openModelsTab();
     await screen.findByText("gpt-5-codex");
@@ -284,9 +314,102 @@ describe("ProviderDetailPage", () => {
 
   acceptance(
     "provider-switching",
+    "curate an embedding model alongside chat models on one connection",
+    async () => {
+      // The probe answers with a modality per id — its GUESS, which the row
+      // shows as the pre-filled value of the Type picker.
+      apiMock.get.mockResolvedValue(makeProvider({ models: chat("gpt-4o") }));
+      apiMock.update.mockResolvedValue(makeProvider());
+      endpointServes([
+        { id: "gpt-4o", modality: "text" },
+        { id: "text-embedding-3-large", modality: "embedding" },
+      ]);
+      renderPage();
+      await openModelsTab();
+      await screen.findByText("text-embedding-3-large");
+
+      expect(typePickerFor("gpt-4o")).toHaveTextContent("Text / chat");
+      expect(typePickerFor("text-embedding-3-large")).toHaveTextContent("Embedding");
+
+      // Offering it stores the inferred kind beside the chat model already
+      // curated — one connection, two kinds of model.
+      fireEvent.click(switchFor("text-embedding-3-large"));
+      await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
+      expect(apiMock.update).toHaveBeenCalledWith("acme", {
+        models: [
+          { id: "gpt-4o", modality: "text" },
+          { id: "text-embedding-3-large", modality: "embedding" },
+        ],
+      });
+    },
+  );
+
+  test("correcting an offered row's type patches the whole curated set with it", async () => {
+    // Introspection guessed `text` for an embedding model and the user already
+    // offered it — the correction belongs in the stored set straight away.
+    apiMock.get.mockResolvedValue(makeProvider({ models: chat("gpt-5", "house-embeddings-v2") }));
+    apiMock.update.mockResolvedValue(makeProvider());
+    renderPage();
+    await openModelsTab();
+    await screen.findByText("house-embeddings-v2");
+
+    setModality("house-embeddings-v2", "Embedding");
+
+    await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
+    // The whole set is rewritten, so the untouched row keeps its own kind.
+    expect(apiMock.update).toHaveBeenCalledWith("acme", {
+      models: [
+        { id: "gpt-5", modality: "text" },
+        { id: "house-embeddings-v2", modality: "embedding" },
+      ],
+    });
+  });
+
+  test("a type picked before the switch is the one the curated entry is stored with", async () => {
+    apiMock.get.mockResolvedValue(makeProvider({ models: [] }));
+    apiMock.update.mockResolvedValue(makeProvider());
+    // Nothing in the id says "embedding", so the guess is wrong — and this row
+    // is not offered yet, so there is nothing to patch the correction into.
+    endpointServes(chat("house-embeddings-v2"));
+    renderPage();
+    await openModelsTab();
+    await screen.findByText("house-embeddings-v2");
+
+    setModality("house-embeddings-v2", "Embedding");
+    expect(typePickerFor("house-embeddings-v2")).toHaveTextContent("Embedding");
+    // Held locally: a row that is not offered has nowhere to be written.
+    expect(apiMock.update).not.toHaveBeenCalled();
+
+    fireEvent.click(switchFor("house-embeddings-v2"));
+    await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
+    expect(apiMock.update).toHaveBeenCalledWith("acme", {
+      models: [{ id: "house-embeddings-v2", modality: "embedding" }],
+    });
+  });
+
+  test("the type filter separates the models by kind", async () => {
+    apiMock.get.mockResolvedValue(makeProvider({ models: [] }));
+    endpointServes([
+      { id: "gpt-5", modality: "text" },
+      { id: "text-embedding-3-large", modality: "embedding" },
+    ]);
+    renderPage();
+    await openModelsTab();
+    await screen.findByText("text-embedding-3-large");
+
+    selectType("Embedding");
+    expect(screen.getByText("text-embedding-3-large")).toBeInTheDocument();
+    expect(screen.queryByText("gpt-5")).not.toBeInTheDocument();
+
+    selectType("All types");
+    expect(screen.getByText("gpt-5")).toBeInTheDocument();
+  });
+
+  acceptance(
+    "provider-switching",
     "a failed model introspection says so and offers a retry",
     async () => {
-      apiMock.get.mockResolvedValue(makeProvider({ models: ["hand-typed-model"] }));
+      apiMock.get.mockResolvedValue(makeProvider({ models: chat("hand-typed-model") }));
       // The probe failed (the query is left holding the error).
       endpointState = { error: new ApiError("INTERNAL_ERROR", "endpoint refused") };
       renderPage();
@@ -305,7 +428,7 @@ describe("ProviderDetailPage", () => {
 
   test("an endpoint that lists nothing surfaces the probe's message", async () => {
     apiMock.get.mockResolvedValue(makeProvider({ models: [] }));
-    endpointServes([], "this endpoint does not expose a model list");
+    endpointServes(chat(), "this endpoint does not expose a model list");
     renderPage();
     await openModelsTab();
 

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Response, status
 
 from coffer.application.provider.service import ProviderService
 from coffer.domain.agent.types import AgentType
-from coffer.domain.provider.config import Protocol, ProviderConfig
+from coffer.domain.provider.config import CuratedModel, Protocol, ProviderConfig
 from coffer.domain.resource import Resource
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor, get_provider_service
@@ -19,6 +19,7 @@ from coffer.surfaces.http.provider_schemas import (
     DeactivateOut,
     ProviderCreate,
     ProviderListOut,
+    ProviderModel,
     ProviderOut,
     ProviderPatch,
     ProviderRename,
@@ -31,6 +32,13 @@ router = APIRouter(
 )
 
 
+def _curated(models: list[ProviderModel] | None) -> list[CuratedModel] | None:
+    """Wire entries → the domain's curated set (``None`` leaves the set alone)."""
+    if models is None:
+        return None
+    return [CuratedModel(id=m.id, modality=m.modality) for m in models]
+
+
 def _provider_out(resource: Resource) -> ProviderOut:
     cfg = ProviderConfig.model_validate(resource.config)
     return ProviderOut(
@@ -39,7 +47,7 @@ def _provider_out(resource: Resource) -> ProviderOut:
         base_url=cfg.base_url,
         credential_ref=cfg.credential_ref,
         compatible_agents=[AgentType(a) for a in cfg.resolved_compatible_agents()],
-        models=cfg.models,
+        models=[ProviderModel(id=m.id, modality=m.modality) for m in cfg.models],
         is_active=cfg.is_active,
         internal_default=cfg.internal_default,
         enabled=resource.enabled,
@@ -72,7 +80,7 @@ async def create_provider(
         secret_value=body.secret_value,
         credential_ref=body.credential_ref,
         compatible_agents=body.compatible_agents,
-        models=body.models,
+        models=_curated(body.models),
         description=body.description,
         actor=actor,
     )
@@ -143,7 +151,7 @@ async def update_provider(
         base_url=body.base_url,
         secret_value=body.secret_value,
         compatible_agents=body.compatible_agents,
-        models=body.models,
+        models=_curated(body.models),
         description=body.description,
         actor=actor,
     )

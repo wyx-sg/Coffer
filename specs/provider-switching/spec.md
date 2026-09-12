@@ -394,7 +394,9 @@ conversion.
 ## Amendment 2026-09-11 — The connection curates WHICH models it offers
 
 > Status: Draft. **Nuances E1/E3's "no model on the connection" — it does not
-> reverse it.** Recorded after a design pass with the user. Cross-ref
+> reverse it.** **Refined 2026-09-12b:** each curated entry became a
+> `{id, modality}` object; every `list[str]` below reads as that list of objects.
+> Recorded after a design pass with the user. Cross-ref
 > [ADR provider-switching](../../docs/decisions/provider-switching.md).
 
 **Why.** E3 moved the model to the point of use, and the 2026-09-09 amendment
@@ -690,6 +692,71 @@ opens, once per visit, with the table saying it is loading while it does.
   could not. `provider` declares no per-agent scope, so the control renders its
   two-segment Disabled/Enabled fallback — and it is now the single place that
   state is both shown and changed.
+
+## Amendment 2026-09-12b — A curated model says WHICH KIND of model it is
+
+> Status: Draft. **Refines J1's `models: list[str]`** into a list of objects; the
+> curated set's meaning (the OFFERED set, empty = no restriction) is unchanged.
+
+**Why.** A provider endpoint serves more than chat models. The same base URL and
+the same key answer for embedding, image, video and audio models, and the
+curated set said nothing about which was which — so every id the user curated
+was offered to every surface that asked, and an embedding model could be picked
+as an agent's chat model. A curated entry now says which KIND of model it is, so
+a picker asks for the kind it needs instead of offering every id to every
+surface.
+
+- **L1 — `models: list[CuratedModel]`, where `CuratedModel = {id, modality}`.**
+  `Modality` is a `StrEnum` with five values — `text` (the default),
+  `embedding`, `image`, `video`, `audio`. The id keeps every property J3 gave it:
+  opaque, verbatim to the vendor, validated for shape only. The modality is
+  Coffer's own note about the id, not something the vendor told it.
+- **L2 — The STORED modality is the truth; nothing infers one at read time.**
+  Coffer infers a modality in exactly two places, both a convenience the user can
+  correct from the connection editor: the one-shot Alembic migration that
+  converts stored plain-string entries, and endpoint introspection
+  (`POST /api/v1/models/list-models`), which returns an inferred modality
+  alongside each discovered id so the editor pre-fills a sensible value. There is
+  **no load-time shim** — reading a stored row never re-derives a modality, per
+  the house rule that a migration is one-shot.
+- **L3 — One inference rule, used in both places.** Lowercase the id, then: an id
+  containing `embed` → `embedding`; containing `dall`, `image`, `imagen` or
+  `flux`, or carrying a token `sd` / `sd<digits>` → `image`; containing `video`
+  or `sora`, or a token `veo` / `veo<digits>` → `video`; containing `whisper` or
+  `audio`, or a token `tts` / `tts<digits>` → `audio`; everything else → `text`.
+  The long names match as substrings; the short ones (`sd`, `veo`, `tts`) match
+  as whole tokens (the id split on non-alphanumerics), so an unrelated id is not
+  mis-tagged.
+- **L4 — Every CHAT model picker narrows the curated set to `text`.** The active
+  connection's curated ids feeding `AgentModelCatalogueService.offered()` /
+  `suggest()` — the web picker, the channel `/model` card, the turn-time note —
+  and the Codex model catalogue Coffer projects into the agent's native config,
+  all take the `text` entries and nothing else. An `embedding` / `image` /
+  `video` / `audio` entry can never surface as a chat model. A connection that
+  curates nothing still means no restriction, exactly as before.
+- **Wire.** `ProviderOut.models`, `ProviderCreateRequest.models`,
+  `ProviderPatchRequest.models` and `ProviderModelsOut.models` all become arrays
+  of `{id, modality}` objects (a new `ProviderModel` component schema; `modality`
+  is an enum defaulting to `text`). Empty still means unrestricted, and the patch
+  semantics are unchanged: `null` leaves the set alone, `[]` clears the
+  restriction.
+- **L5 — The surface: the Models tab grows a TYPE column.** Each row of the
+  connection detail page's Models table now reads model id · type · offered,
+  where the type is a five-value Select pre-filled from what introspection
+  guessed and corrected in place — the answer to "a provider should serve image,
+  video and embedding models too" is that one column, not a second table. A
+  correction on an already-offered row PATCHes the curated set immediately; one
+  made on a row that is not offered yet is held on the surface and travels into
+  the entry when its Switch is turned on. A Type filter sits beside the existing
+  Offered filter. Downstream, every chat picker that reads the set — the agent
+  Overview panel's model / fast-model dropdowns and the internal-engine card's
+  model dropdown — offers `text` entries only, and treats a connection that
+  curates SOMETHING but nothing `text` as offering no chat model rather than
+  falling back to the endpoint's whole catalogue (what the daemon does).
+
+**Refines:** J1/J2 (the curated set and the pickers that read it). **Unchanged:**
+J3 — Coffer still writes down no model NAME and validates no id against a list of
+its own; the modality is a kind, not a name.
 
 ## Scope
 
@@ -1310,6 +1377,30 @@ fill the table, each with its own offered/not-offered switch — there is no
 **Then** the failure is stated on the surface with a retry control, and the
 connection's existing curated selection is left exactly as it was.
 
+### Scenario: curate an embedding model alongside chat models on one connection
+
+- **Given** a connection whose endpoint serves chat and embedding models alike,
+- **When** it is created with
+  `models: [{"id": "gpt-4o"}, {"id": "text-embedding-3-large", "modality": "embedding"}]`,
+  read back, and its endpoint introspected via `POST /api/v1/models/list-models`,
+- **Then** the stored set keeps both entries with their modalities — `gpt-4o` as
+  `text` (the default) and `text-embedding-3-large` as `embedding` — every read
+  returns the modality that was STORED rather than one re-derived at read time,
+  and the introspection response carries an inferred modality beside each
+  discovered id so the editor can pre-fill it (an id containing `embed` comes
+  back as `embedding`, an unrelated id as `text`).
+
+### Scenario: a non-text curated model never reaches a chat model picker
+
+- **Given** an active connection curating one `text` model and one `embedding`
+  model,
+- **When** the agent's model picker is offered its options
+  (`AgentModelCatalogueService.offered()` / `suggest()`, the channel `/model`
+  card) and the Codex catalogue is projected into the agent's native config,
+- **Then** only the `text` entry appears in any of them — the `embedding` entry
+  is offered nowhere as a chat model — while a connection that curates nothing
+  still means no restriction.
+
 ## Requirements
 
 ### Functional Requirements
@@ -1441,8 +1532,10 @@ connection's existing curated selection is left exactly as it was.
 
 **Curated model set**
 
-- **FR-025**: `ProviderConfig` MUST carry `models: list[str]` — the set of model
-  ids the connection OFFERS downstream. An EMPTY list MUST mean no restriction
+- **FR-025**: `ProviderConfig` MUST carry `models` — the set of model
+  ids the connection OFFERS downstream (a `list[str]` as first written; **refined
+  by FR-029** into a list of `{id, modality}` objects). An EMPTY list MUST mean no
+  restriction
   (every model the endpoint serves), MUST be the default, and MUST be what every
   connection created before revision 0059 holds. The field MUST NOT be read as a
   chosen model: the choice stays at the point of use (E1/E3). Ids MUST be
@@ -1476,6 +1569,41 @@ connection's existing curated selection is left exactly as it was.
   empty probe MUST leave the curated `models` selection unchanged, and the
   empty-means-unrestricted semantics of FR-025 MUST be unaffected.
 
+**Model modality**
+
+- **FR-029**: `ProviderConfig.models` MUST be a list of OBJECTS, not of strings:
+  each entry is a `CuratedModel` of `{id: str, modality: Modality}`, where
+  `Modality` is a `StrEnum` over `text` (the default), `embedding`, `image`,
+  `video` and `audio`. The id keeps every property FR-025 gives it (opaque,
+  verbatim to the vendor, shape-validated only, deduplicated preserving order,
+  empty list = no restriction). The **stored** modality is the truth: Coffer MUST
+  infer a modality in exactly two places — the one-shot Alembic migration that
+  converts stored plain-string entries, and endpoint introspection (FR-030) —
+  both correctable by the user from the connection editor. There MUST be **no
+  load-time shim**: reading a stored row MUST NOT re-derive a modality. The
+  inference rule, identical in both places, operates on the lowercased id: one
+  containing `embed` → `embedding`; containing `dall`, `image`, `imagen` or
+  `flux`, or carrying a token `sd` / `sd<digits>` → `image`; containing `video`
+  or `sora`, or a token `veo` / `veo<digits>` → `video`; containing `whisper` or
+  `audio`, or a token `tts` / `tts<digits>` → `audio`; everything else → `text`.
+  The long names MUST match as substrings and the short ones (`sd`, `veo`, `tts`)
+  as whole tokens (the id split on non-alphanumerics), so an unrelated id is not
+  mis-tagged.
+- **FR-030**: `POST /api/v1/models/list-models` MUST return an inferred modality
+  alongside each discovered id (by the FR-029 rule), so the connection editor
+  pre-fills a sensible value the user can correct; the value it returns is a
+  suggestion, never a stored fact. Every CHAT model picker MUST narrow the active
+  connection's curated set to modality `text` — the ids fed to
+  `AgentModelCatalogueService.offered()` / `suggest()` (the web picker, the
+  channel `/model` card, the turn-time note) and the Codex model catalogue Coffer
+  projects into the agent's native config. An `embedding`, `image`, `video` or
+  `audio` entry MUST NEVER surface as a chat model. A connection curating nothing
+  MUST still mean no restriction. `ProviderOut.models`,
+  `ProviderCreateRequest.models`, `ProviderPatchRequest.models` and
+  `ProviderModelsOut.models` MUST all carry `{id, modality}` objects; patch
+  semantics are unchanged (`null` leaves the set alone, `[]` clears the
+  restriction).
+
 ### Key Entities
 
 - **ProviderProfile**: A Resource of kind `provider`, identified by
@@ -1483,6 +1611,11 @@ connection's existing curated selection is left exactly as it was.
   (absent for ollama), the curated `models` set it offers downstream (empty =
   unrestricted), per-wire `is_active` state, and the global `internal_default`
   flag. Never holds the raw secret, and never a chosen model.
+- **`CuratedModel` / `Modality`**: One curated entry, `{id, modality}`, and the
+  `StrEnum` over `text` / `embedding` / `image` / `video` / `audio` it carries
+  (FR-029). The modality is Coffer's own note about an opaque id — stored, never
+  re-derived at read time — and it is what narrows a connection's curated set to
+  the chat models a picker may offer.
 - **`apply_anthropic_settings` / `apply_codex_provider`**: Pure functions in
   `domain/provider/projection.py` that return the new native-config TEXT directly.
   Analogous to `domain/agent/mcp_install.py`'s `apply_install`. No `ProjectionPatch`

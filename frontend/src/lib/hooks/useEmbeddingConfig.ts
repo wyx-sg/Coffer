@@ -3,17 +3,27 @@
 // The single GLOBAL embedding configuration (no longer per knowledge base /
 // memory store). GET/PUT /api/v1/embedding/config. Hand-written fetch (the
 // generated client only covers spec mcp-gateway), mirroring the kb/memory api helpers.
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getCofferBaseUrl, getCofferToken } from "@/lib/auth";
 import { ApiError } from "@/lib/api/errors";
+import { modelIds, type Provider } from "@/lib/api/providers";
+import { useListProviderModels } from "@/lib/hooks/useModelIntrospection";
 
+/**
+ * The installation-wide embedding setting (knowledge FR-077): it NAMES a
+ * connection rather than restating one. `connection` is the name of a configured
+ * model provider and `model` one of the `embedding`-modality models it offers —
+ * the same "pick a provider, then pick a model" shape the internal engine has.
+ * The wire, base URL and API key live on that connection and are resolved from
+ * it at use time, so they are neither sent nor returned here, and there is no
+ * `secret_value`: the embedding settings own no key of their own.
+ */
 export interface EmbeddingConfigOut {
   enabled: boolean;
-  provider: string | null;
+  connection: string | null;
   model: string | null;
-  base_url: string | null;
-  credential_ref: string | null;
   dimensions: number;
   default_chunk_size: number;
   default_chunk_overlap: number;
@@ -22,13 +32,8 @@ export interface EmbeddingConfigOut {
 
 export interface EmbeddingConfigUpdate {
   enabled: boolean;
-  provider: string | null;
+  connection: string | null;
   model: string | null;
-  base_url: string | null;
-  credential_ref: string | null;
-  /** Raw API key the user typed — stored into the vault and reused as the
-   * credential_ref. Omit/null to keep the existing stored key. */
-  secret_value?: string | null;
   dimensions: number;
   default_chunk_size: number;
   default_chunk_overlap: number;
@@ -79,4 +84,54 @@ export function useUpdateEmbeddingConfig() {
     mutationFn: updateEmbeddingConfig,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["embedding-config"] }),
   });
+}
+
+/**
+ * The embedding models a connection offers to the global embedding setting.
+ *
+ * A connection that curates models IS the catalogue — its `embedding`-modality
+ * entries and nothing else, so a chat model can never be picked as the
+ * embedder, and a connection that curates only chat models offers nothing here
+ * (which is exactly what the daemon refuses to save). A connection curating
+ * NOTHING means "no restriction", so the endpoint is probed and its own list,
+ * narrowed the same way, is what the picker shows.
+ */
+export function useEmbeddingModels(connection: Provider | null) {
+  const list = useListProviderModels();
+  const [fetched, setFetched] = useState<string[]>([]);
+  const curated = connection?.models ?? [];
+  const restricted = curated.length > 0;
+
+  // `stale` guards against a slower earlier probe landing after a newer one when
+  // the connection is switched rapidly.
+  useEffect(() => {
+    if (!connection || restricted) {
+      setFetched([]);
+      return;
+    }
+    let stale = false;
+    list.mutate(
+      {
+        provider: connection.protocol,
+        base_url: connection.base_url,
+        credential_ref: connection.credential_ref,
+      },
+      {
+        onSuccess: (r) => {
+          if (!stale) setFetched(modelIds(r.models, "embedding"));
+        },
+      },
+    );
+    return () => {
+      stale = true;
+    };
+    // list identity is stable across renders; re-probe only on connection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connection?.name, connection?.base_url, connection?.credential_ref, restricted]);
+
+  return {
+    options: restricted ? modelIds(curated, "embedding") : fetched,
+    /** True while the endpoint is being probed (unrestricted connections only). */
+    probing: list.isPending,
+  };
 }

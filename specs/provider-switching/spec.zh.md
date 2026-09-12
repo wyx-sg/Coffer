@@ -212,7 +212,9 @@ D4 的固定下拉 / 禁止自由输入规则不变。**仍不在范围：** pro
 
 ## 修订 2026-09-11 — 连接自己策展「提供哪些模型」
 
-> 状态：Draft。**这是对 E1/E3「模型不存在连接上」的细化，而非推翻。** 与用户做过一轮设计
+> 状态：Draft。**这是对 E1/E3「模型不存在连接上」的细化，而非推翻。**
+> **2026-09-12b 再细化：** 每条策展条目变成 `{id, modality}` 对象；下文每处 `list[str]`
+> 都读作这份对象列表。与用户做过一轮设计
 > 讨论后记录。交叉引用 [ADR provider-switching](../../docs/decisions/provider-switching.md)。
 
 **为什么。** E3 把模型移到使用处，2026-09-09 修订又把选择器的选项做成「一切可用之物」的并集。
@@ -416,6 +418,53 @@ Coffer 仍不写下任何属于自己的模型名。
 - 详情页头部改用共享的 `ScopeControl`，取代只读的启用/停用徽章：此前列表能停用一条连接，
   而它自己的页面不能。`provider` 不声明按 agent 的 scope，因此该控件渲染为两段式
   停用/启用降级形态——并且现在它是这一状态**唯一**被展示和被修改的地方。
+
+## 修订 2026-09-12b —— 策展条目要说明它是哪一类模型
+
+> 状态：Draft。**把 J1 的 `models: list[str]` 细化为对象列表**；策展集合的含义（提供集合、
+> 空 = 不限制）不变。
+
+**为什么。** 一个 provider endpoint 提供的不只是 chat 模型。同一个 base URL、同一把 key 也
+回答 embedding、image、video 与 audio 模型，而策展集合没有说明哪个是哪个——于是用户策展的
+每个 id 都被提供给了每一个来问的面，一个 embedding 模型可以被选成某个 agent 的 chat 模型。
+现在策展条目会说明它是**哪一类**模型，于是选择器只要它需要的那一类，而不是把每个 id 都端给
+每一个面。
+
+- **L1 —— `models: list[CuratedModel]`，其中 `CuratedModel = {id, modality}`。**
+  `Modality` 是一个 `StrEnum`，共五个取值——`text`（默认）、`embedding`、`image`、`video`、
+  `audio`。id 保留 J3 给它的一切性质：不透明、原样透传给厂商、只校验形状。modality 是
+  Coffer 自己对这个 id 的标注，不是厂商告诉它的。
+- **L2 —— **存储的** modality 就是真相；读取时不推断。** Coffer 只在两处推断 modality，
+  且两处都是用户可在连接编辑器里改正的便利：把已存的纯字符串条目转换过来的那一条一次性
+  Alembic 迁移，以及 endpoint introspection（`POST /api/v1/models/list-models`）——后者在
+  每个发现的 id 旁返回一个推断出的 modality，让编辑器预填一个合理值。**不留 load-time
+  垫片**：读取已存的行绝不重新推导 modality，这符合「迁移是一次性的」这条房规。
+- **L3 —— 一条推断规则，两处共用。** 先把 id 转小写，然后：含 `embed` → `embedding`；
+  含 `dall`、`image`、`imagen` 或 `flux`，或带有 `sd` / `sd<数字>` 词元 → `image`；
+  含 `video` 或 `sora`，或带有 `veo` / `veo<数字>` 词元 → `video`；含 `whisper` 或
+  `audio`，或带有 `tts` / `tts<数字>` 词元 → `audio`；其余 → `text`。长名按子串匹配；
+  短名（`sd`、`veo`、`tts`）按完整词元匹配（id 以非字母数字切分），以免误标无关的 id。
+- **L4 —— 每一个 CHAT 模型选择器都把策展集合收窄到 `text`。** 喂给
+  `AgentModelCatalogueService.offered()` / `suggest()` 的激活连接策展 id（Web 选择器、
+  频道 `/model` 卡片、回合内提示），以及 Coffer 投影进 agent 原生配置的 Codex 模型清单，
+  一律只取 `text` 条目。`embedding` / `image` / `video` / `audio` 条目绝不会作为 chat
+  模型出现。不做任何策展的连接仍然表示不限制，与此前完全一致。
+- **接口形状。** `ProviderOut.models`、`ProviderCreateRequest.models`、
+  `ProviderPatchRequest.models` 与 `ProviderModelsOut.models` 全部变为 `{id, modality}`
+  对象数组（新增 `ProviderModel` component schema；`modality` 是默认值为 `text` 的枚举）。
+  空依然表示不限制，patch 语义不变：`null` 保持集合不动，`[]` 清除限制。
+- **L5 —— 界面：Models 标签页多出一列「类型」。** 连接详情页的模型表每一行现在读作
+  模型 id · 类型 · 是否提供，其中类型是一个五选一的 Select，由 introspection 的猜测
+  预填、就地改正——「provider 也应该支持图片、视频、embedding 模型」的答案就是这一列，
+  而不是再开一张表。已经勾选提供的行上改类型会立刻 PATCH 策展集合；尚未勾选的行上改
+  类型先留在界面上，等该行的开关被打开时一并写进条目。「类型」筛选器与既有的「是否提供」
+  筛选器并排。下游每一个读这个集合的 chat 选择器——agent Overview 面板的模型 /
+  fast-model 下拉框、内部引擎卡片的模型下拉框——只提供 `text` 条目；对于做了策展但其中
+  没有 `text` 条目的连接，视为不提供任何 chat 模型，而不是回退到 endpoint 的完整清单
+  （与 daemon 的行为一致）。
+
+**细化：** J1/J2（策展集合与读取它的选择器）。**不变：** J3——Coffer 依旧不写死任何模型
+**名字**，也不拿 id 去比对自己的名单；modality 是类别，不是名字。
 
 ## 范围
 
@@ -864,6 +913,25 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - **When** 打开模型 tab，
 - **Then** 失败在界面上被说明并附带重试控件，且该连接已有的策展选择原封不动。
 
+### Scenario: curate an embedding model alongside chat models on one connection
+
+- **Given** 一条端点同时提供 chat 与 embedding 模型的连接，
+- **When** 以
+  `models: [{"id": "gpt-4o"}, {"id": "text-embedding-3-large", "modality": "embedding"}]`
+  创建它、读回，并通过 `POST /api/v1/models/list-models` 探测其端点，
+- **Then** 存储的集合保留两条条目及其 modality——`gpt-4o` 为 `text`（默认值）、
+  `text-embedding-3-large` 为 `embedding`——每次读取返回的都是**存储的** modality 而非读取
+  时重新推导的值；探测响应在每个发现的 id 旁携带推断出的 modality 供编辑器预填（含 `embed`
+  的 id 回来是 `embedding`，无关的 id 是 `text`）。
+
+### Scenario: a non-text curated model never reaches a chat model picker
+
+- **Given** 一条激活的连接，策展了一个 `text` 模型和一个 `embedding` 模型，
+- **When** 向 agent 的模型选择器提供选项（`AgentModelCatalogueService.offered()` /
+  `suggest()`、频道 `/model` 卡片），并把 Codex 清单投影进 agent 的原生配置，
+- **Then** 三处都只出现那个 `text` 条目——`embedding` 条目不会在任何地方作为 chat 模型被
+  提供——而不做任何策展的连接仍然表示不限制。
+
 ## 需求
 
 ### 功能需求
@@ -926,7 +994,7 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 
 **策展模型集合**
 
-- **FR-025**：`ProviderConfig` 必须携带 `models: list[str]`——该连接向下游**提供**的模型 id 集合。**空**列表必须表示不限制（endpoint 提供的所有模型），必须是默认值，也必须是修订 0059 之前创建的每条连接的取值。该字段绝不可被当作「选中的模型」读取：选择仍在使用处（E1/E3）。id 只校验形状——非空白、按序去重、至多 200 个且每个至多 200 字符——并且绝不可与 Coffer 自己写死的模型名单比对。
+- **FR-025**：`ProviderConfig` 必须携带 `models`——该连接向下游**提供**的模型 id 集合（最初写作 `list[str]`；**已由 FR-029 细化**为 `{id, modality}` 对象列表）。**空**列表必须表示不限制（endpoint 提供的所有模型），必须是默认值，也必须是修订 0059 之前创建的每条连接的取值。该字段绝不可被当作「选中的模型」读取：选择仍在使用处（E1/E3）。id 只校验形状——非空白、按序去重、至多 200 个且每个至多 200 字符——并且绝不可与 Coffer 自己写死的模型名单比对。
 - **FR-026**：`ProviderCreate.models`（`null` ⇒ 空）与 `ProviderPatch.models` 必须承载该集合；`ProviderOut.models` 必须返回它。`PATCH` 必须像 `compatible_agents` 一样整值替换——`null` 保持不变，`[]` 清除限制——且不得为此新增路由。对它的修改必须搭乘 provider 更新本就发出的 `resource_updated` 审计事件。
 
 **改名**
@@ -947,6 +1015,30 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
   为空时**必须**保持已策展的 `models` 选择不变，且 FR-025 的「空 = 不限制」语义**不得**
   受影响。
 
+**模型 modality**
+
+- **FR-029**：`ProviderConfig.models` **必须**是**对象**列表而非字符串列表：每个条目是一个
+  `CuratedModel`，形如 `{id: str, modality: Modality}`，其中 `Modality` 是一个 `StrEnum`，
+  取值为 `text`（默认）、`embedding`、`image`、`video`、`audio`。id 保留 FR-025 赋予它的
+  一切性质（不透明、原样透传给厂商、只校验形状、按序去重、空列表 = 不限制）。**存储的**
+  modality 就是真相：Coffer **必须**只在两处推断 modality——把已存的纯字符串条目转换过来的
+  那一条一次性 Alembic 迁移，以及 endpoint introspection（FR-030）——两处都可由用户在连接
+  编辑器里改正。**不得**存在 load-time 垫片：读取已存的行**不得**重新推导 modality。两处
+  共用的推断规则作用于小写化后的 id：含 `embed` → `embedding`；含 `dall`、`image`、
+  `imagen` 或 `flux`，或带有 `sd` / `sd<数字>` 词元 → `image`；含 `video` 或 `sora`，或带有
+  `veo` / `veo<数字>` 词元 → `video`；含 `whisper` 或 `audio`，或带有 `tts` / `tts<数字>`
+  词元 → `audio`；其余 → `text`。长名**必须**按子串匹配，短名（`sd`、`veo`、`tts`）**必须**
+  按完整词元匹配（id 以非字母数字切分），以免误标无关的 id。
+- **FR-030**：`POST /api/v1/models/list-models` **必须**在每个发现的 id 旁返回一个推断出的
+  modality（按 FR-029 的规则），让连接编辑器预填一个用户可改正的合理值；它返回的是建议，
+  绝不是已存事实。每一个 CHAT 模型选择器**必须**把激活连接的策展集合收窄到 modality 为
+  `text` 的条目——喂给 `AgentModelCatalogueService.offered()` / `suggest()` 的 id（Web 选择器、
+  频道 `/model` 卡片、回合内提示），以及 Coffer 投影进 agent 原生配置的 Codex 模型清单。
+  `embedding`、`image`、`video` 或 `audio` 条目**绝不可**作为 chat 模型出现。不做任何策展的
+  连接**必须**仍然表示不限制。`ProviderOut.models`、`ProviderCreateRequest.models`、
+  `ProviderPatchRequest.models` 与 `ProviderModelsOut.models` **必须**全部承载
+  `{id, modality}` 对象；patch 语义不变（`null` 保持集合不动，`[]` 清除限制）。
+
 ### 关键实体
 
 - **ProviderProfile**：kind 为 `provider` 的一个 Resource，标识符为
@@ -954,6 +1046,10 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
   没有）、它向下游提供的策展 `models` 集合（空 = 不限制）、按 wire 的 `is_active`
   状态，以及全局 `internal_default` 标志。绝不持有原始 secret，也绝不持有某个被选中
   的模型。
+- **`CuratedModel` / `Modality`**：一条策展条目 `{id, modality}`，以及它携带的、取值为
+  `text` / `embedding` / `image` / `video` / `audio` 的 `StrEnum`（FR-029）。modality 是
+  Coffer 自己对一个不透明 id 的标注——存储下来，读取时绝不重新推导——也正是它把一条连接的
+  策展集合收窄成选择器可以提供的 chat 模型。
 - **`apply_anthropic_settings` / `apply_codex_provider`**：`domain/provider/projection.py`
   中的纯函数，直接返回新的原生配置 TEXT。类比 `domain/agent/mcp_install.py` 的
   `apply_install`。没有 `ProjectionPatch` dataclass，也没有 `build_patch()` 函数。

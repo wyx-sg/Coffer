@@ -101,16 +101,18 @@ Web UI 对应作用域 header 上的**「整理」**按钮。每趟整理在 Cof
 
 ## 可选：vector recall
 
-默认检索是 keyword + grep —— 零配置、离线、语言无关。embedding provider 是**全安装级**的，不挂在单个作用域上：在 Web UI 里配一次（**模型 provider → Embedding**，即 `PUT /api/v1/embedding/config`），CLI 没有对应命令。作用域只需在自己的 retrieval modes 里列上 `vector` 来选择加入：
+默认检索是 keyword + grep —— 零配置、离线、语言无关。embedding 是**全安装级**配置的，不挂在单个作用域上：在 Web UI 里配一次（**设置 → 引擎 → Embedding**，即 `PUT /api/v1/embedding/config`），CLI 没有对应命令。那张卡片就是两个选择器——先选模型提供商，再选它的一个 `embedding` 类型的模型——与它上方的内部引擎卡片同一形状；没有「添加模型」表单，也没有 key 字段。该配置**命名一条连接**——你已经配好的某条 LLM 连接——外加它上面的一个模型；协议、base URL 与 API key 都从那条连接解析，所以 embedding 设置里既没有 `base_url`、也没有 `credential_ref`，更不持有自己的 key。作用域只需在自己的 retrieval modes 里列上 `vector` 来选择加入：
 
 ```bash
-coffer credentials set embed-key      # embedding 配置引用的那把 key
+# key 已经在连接上；先去「模型 provider」加一条连接
 coffer knowledge configure project-01J… --enable-vector
 ```
 
+命名一条不存在的连接、一条 `anthropic` 连接（没有 embedding API）、一条做了策展但其中没有 modality 为 `embedding` 的条目的连接，或该连接并未策展的某个模型，都会以 422 被拒绝并说明是哪一种。完全不做策展的连接表示不限制，你填的模型 id 会被直接采信。`POST /api/v1/embedding/test` 接收 `{connection, model}`，报告向量维度且不持久化任何东西。未命名连接时该配置不生效，检索退化为 keyword/grep。
+
 `coffer knowledge configure <name>` 对作用域配置做 PATCH；其余旋钮有 `--max-entry-chars`、`--chunk-size`、`--chunk-overlap`、`--auto-update-sources/--no-auto-update-sources`。启用 vector 会对作用域里已有的内容重建索引。新建的具名集合天生就带 vector，创建对话框不再询问：一个作用域带哪种索引是实现细节，不该在创建时拿去问用户。
 
-双语内容推荐本地 provider（`fastembed` 配 `bge-m3`）或对中文嵌入好的云端模型。embedding 模型可变 —— 改它会重嵌每一个列了 vector 模式的作用域。未配置 embedding 时，启用了 vector 的作用域会在内部回退到 keyword，不带逐查询标注。
+双语内容推荐本地连接（Ollama 配 `bge-m3`）或对中文嵌入好的云端模型。embedding 模型可变 —— 改它会重嵌每一个列了 vector 模式的作用域。未配置 embedding 时，启用了 vector 的作用域会在内部回退到 keyword，不带逐查询标注。
 
 ## 文件在哪
 

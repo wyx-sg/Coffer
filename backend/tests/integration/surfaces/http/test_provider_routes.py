@@ -559,30 +559,47 @@ def test_curated_models_round_trip(tmp_path, monkeypatch):
     with _client(app) as c:
         r = c.post(
             "/api/v1/providers",
-            json=_anthropic_body(name="curated", models=["opus", "sonnet", "opus"]),
+            json=_anthropic_body(
+                name="curated",
+                models=[
+                    {"id": "opus"},
+                    {"id": "sonnet", "modality": "text"},
+                    {"id": "opus"},
+                    {"id": "embed-1", "modality": "embedding"},
+                ],
+            ),
         )
         assert r.status_code == 201, r.text
-        # Stored verbatim (opaque ids), deduped, in the order the user chose.
-        assert r.json()["models"] == ["opus", "sonnet"]
+        # Stored verbatim (opaque ids), deduped, in the order the user chose,
+        # each keeping the kind it was sent as — an entry that named none is
+        # ``text``, the kind every curated set held before modalities existed.
+        curated_set = [
+            {"id": "opus", "modality": "text"},
+            {"id": "sonnet", "modality": "text"},
+            {"id": "embed-1", "modality": "embedding"},
+        ]
+        assert r.json()["models"] == curated_set
         # Survives a re-read and the list route.
-        assert c.get("/api/v1/providers/curated").json()["models"] == ["opus", "sonnet"]
+        assert c.get("/api/v1/providers/curated").json()["models"] == curated_set
         listed = {p["name"]: p["models"] for p in c.get("/api/v1/providers").json()["providers"]}
-        assert listed["curated"] == ["opus", "sonnet"]
+        assert listed["curated"] == curated_set
 
         # PATCH replaces the whole set (like compatible_agents) — no merging.
-        r = c.patch("/api/v1/providers/curated", json={"models": ["haiku"]})
+        r = c.patch("/api/v1/providers/curated", json={"models": [{"id": "haiku"}]})
         assert r.status_code == 200, r.text
-        assert r.json()["models"] == ["haiku"]
+        assert r.json()["models"] == [{"id": "haiku", "modality": "text"}]
 
         # An unrelated PATCH leaves the curated set alone.
         r = c.patch("/api/v1/providers/curated", json={"base_url": "https://gw/anthropic/v2"})
-        assert r.json()["models"] == ["haiku"]
+        assert r.json()["models"] == [{"id": "haiku", "modality": "text"}]
 
         # The change rides the resource_updated event a provider update already
         # emits — no event of its own.
         events = c.get("/api/v1/audit", params={"event_type": "resource_updated"}).json()["entries"]
         curated = [e for e in events if e["resource_name"] == "curated"]
-        assert curated and curated[0]["details"]["after"]["models"] == ["haiku"]
+        assert curated and curated[0]["details"]["after"]["models"] == [
+            {"id": "haiku", "modality": "text"}
+        ]
 
 
 @pytest.mark.acceptance(
@@ -599,7 +616,9 @@ def test_uncurated_connection_is_unrestricted(tmp_path, monkeypatch):
         assert r.json()["models"] == []
 
         # Curating then clearing with [] returns it to unrestricted.
-        c.patch("/api/v1/providers/open", json={"models": ["opus"]})
+        r = c.patch("/api/v1/providers/open", json={"models": [{"id": "opus"}]})
+        assert r.status_code == 200, r.text
+        assert r.json()["models"] == [{"id": "opus", "modality": "text"}]
         r = c.patch("/api/v1/providers/open", json={"models": []})
         assert r.status_code == 200, r.text
         assert r.json()["models"] == []
@@ -609,10 +628,19 @@ def test_uncurated_connection_is_unrestricted(tmp_path, monkeypatch):
 def test_reject_malformed_curated_models(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59910)
     with _client(app) as c:
-        r = c.post("/api/v1/providers", json=_anthropic_body(name="bad", models=["  "]))
+        r = c.post("/api/v1/providers", json=_anthropic_body(name="bad", models=[{"id": "  "}]))
+        assert r.status_code == 422, r.text
+        # A modality Coffer does not serve is malformed — unlike an id, the set
+        # of kinds is Coffer's own and closed.
+        r = c.post(
+            "/api/v1/providers",
+            json=_anthropic_body(name="odd", models=[{"id": "x", "modality": "hologram"}]),
+        )
         assert r.status_code == 422, r.text
         # A model id Coffer has never heard of is NOT malformed — ids are opaque.
-        r = c.post("/api/v1/providers", json=_anthropic_body(name="ok", models=["who-knows-1"]))
+        r = c.post(
+            "/api/v1/providers", json=_anthropic_body(name="ok", models=[{"id": "who-knows-1"}])
+        )
         assert r.status_code == 201, r.text
 
 

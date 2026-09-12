@@ -26,6 +26,7 @@ from coffer.application.providers.ports import ModelIntrospectionService
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.domain.provider.config import ProviderConfig
+from coffer.domain.provider.modality import Modality
 from coffer.infrastructure.agent.claude_binary_models import ClaudeBinaryModelDiscovery
 from coffer.infrastructure.agent.codex_rpc_models import CodexRpcModelDiscovery
 from coffer.infrastructure.agent.model_discovery import (
@@ -145,6 +146,10 @@ class _ActiveProviderModels:
     key (``resolve_active_key_for_agent``): the first one flagged ``is_active``
     whose ``compatible_agents`` includes this agent type. An agent with no such
     connection runs on its own login, which is what ``None`` says.
+
+    Narrowed to ``text``: the question is what a CHAT picker may offer, and the
+    same endpoint's embedding, image, video and speech models would be rejected
+    by every turn that tried them (spec provider-switching FR-030).
     """
 
     async def curated_models(self, agent_key: str) -> list[str] | None:
@@ -161,7 +166,7 @@ class _ActiveProviderModels:
             except ValueError:
                 continue
             if cfg.is_active and agent_key in cfg.resolved_compatible_agents():
-                return list(cfg.models)
+                return cfg.model_ids(Modality.TEXT)
         return None
 
 

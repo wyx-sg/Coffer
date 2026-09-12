@@ -315,31 +315,23 @@
     },
     "embedding": {
       "title": "Embedding",
-      "description": "One global embedding model powers vector search across every knowledge base and memory store. Turn it off to use keyword and grep only.",
+      "description": "One global embedding model powers vector search across every knowledge base and memory store. Pick a model provider and one of its embedding models; the endpoint and API key come from that provider. Turn it off to use keyword and grep only.",
       "enabled": "Enable vector embedding",
       "enabledHint": "When off, all stores fall back to keyword/grep.",
-      "add": "Add model",
-      "addTitle": "Add embedding model",
-      "editTitle": "Edit embedding model",
-      "edit": "Edit",
       "empty": "No embedding model configured — vector retrieval falls back to keyword/grep.",
       "changeModelTitle": "Change embedding model?",
       "changeModelConfirm": "Changing the embedding model re-embeds all content in every knowledge base and memory store, which may take a while. Continue?",
       "changeModelConfirmLabel": "Change & re-embed",
-      "provider": "Provider",
-      "model": "Model",
+      "model": "Embedding model",
       "dimensions": "Dimensions",
-      "dimensionsFixed": "Set automatically from the selected model.",
-      "baseUrl": "Base URL (optional)",
-      "secret": "API key",
-      "secretPlaceholder": "Paste the provider API key",
-      "secretKeepBlank": "Leave blank to keep the current key",
-      "credential": "Credential reference",
-      "credentialHint": "Credential store entry name (not the key itself)",
       "chunkingTitle": "Chunking defaults",
       "chunkingHint": "Default chunk size/overlap for NEW knowledge bases. Each knowledge base can override these in its settings.",
       "chunkSize": "Chunk size",
-      "chunkOverlap": "Chunk overlap"
+      "chunkOverlap": "Chunk overlap",
+      "connection": "Embedding provider",
+      "connectionPlaceholder": "Select a model provider",
+      "modelPlaceholder": "Select a model",
+      "noEmbeddingModels": "This provider offers no embedding model. Add one on its Models tab with the type “Embedding”, or pick another provider."
     },
     "security": {
       "masterKey": {
@@ -473,7 +465,7 @@
         "created": "Created",
         "updated": "Updated",
         "models": "Models",
-        "modelsHint": "Pick which of this endpoint's models this provider offers. The agent's model picker is then limited to your picks.",
+        "modelsHint": "Pick which of this endpoint's models this provider offers, and what kind each one is. Every picker downstream is then limited to your picks of the kind it needs — a chat model dropdown never offers an embedding model.",
         "unrestricted": "No restriction — every model this endpoint offers is available.",
         "restricted": "{{count}} model(s) picked — agents see only these.",
         "fetchFailed": "Could not list this endpoint's models ({{error}}). Your current selection is unchanged.",
@@ -484,7 +476,16 @@
         "modelId": "Model",
         "modelSearchPlaceholder": "Search models…",
         "modelOffered": "Offered",
-        "noModelsMatch": "No models match your search."
+        "noModelsMatch": "No models match your search.",
+        "modality": "Type",
+        "allModalities": "All types",
+        "modalities": {
+          "text": "Text / chat",
+          "embedding": "Embedding",
+          "image": "Image",
+          "video": "Video",
+          "audio": "Audio"
+        }
       }
     },
     "internalEngine": {

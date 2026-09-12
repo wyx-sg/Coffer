@@ -472,13 +472,49 @@ components:
           nullable: true
           description: Inline secret, to fetch before the connection is saved.
 
+    Modality:
+      type: string
+      enum: [text, embedding, image, video, audio]
+      default: text
+      description: >-
+        Which KIND of model an id names. A provider endpoint serves more than
+        chat models — embedding, image, video and audio models live on the same
+        endpoint — so a curated entry says which it is and a picker asks for the
+        kind it needs (spec provider-switching FR-029).
+
+    ProviderModel:
+      type: object
+      required: [id]
+      additionalProperties: false
+      description: >-
+        One curated model on a connection: an opaque vendor id plus the modality
+        Coffer stores for it. The STORED modality is the truth — Coffer infers
+        one only in the one-shot migration over plain-string entries and in
+        endpoint introspection, both correctable from the connection editor, and
+        never in a load-time shim.
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: >-
+            Opaque model id, passed verbatim to the vendor and never checked
+            against a list of model names Coffer writes down.
+        modality:
+          $ref: "#/components/schemas/Modality"
+
     ProviderModelsOut:
       type: object
       required: [models]
       properties:
         models:
           type: array
-          items: { type: string }
+          items: { $ref: "#/components/schemas/ProviderModel" }
+          description: >-
+            The ids the endpoint reported, each with an INFERRED modality (spec
+            provider-switching FR-030) so the connection editor can pre-fill a
+            sensible value. The inference is a suggestion the user may correct —
+            what is stored on the connection is the truth, never re-derived.
         message: { type: string, default: "" }
 
     TestConnectionIn:
@@ -577,13 +613,16 @@ components:
             by agent type, not protocol; the Agent Overview picker filters on this.
         models:
           type: array
-          items: { type: string }
+          items: { $ref: "#/components/schemas/ProviderModel" }
           description: >-
-            The curated set of model ids this connection OFFERS downstream — which
-            of the endpoint's models the user intends to use. EMPTY means no
+            The curated set of models this connection OFFERS downstream — which
+            of the endpoint's models the user intends to use, each with the
+            modality saying WHICH KIND of model it is. EMPTY means no
             restriction (every model the endpoint serves), which is the default.
             Not a chosen model: the choice still happens at the point of use
             (spec provider-switching E3). Ids are opaque and passed verbatim to the vendor.
+            The modality returned here is the STORED one — nothing re-derives it
+            on read.
         is_active:
           type: boolean
           description: >-
@@ -644,13 +683,14 @@ components:
         models:
           type: array
           nullable: true
-          items: { type: string }
+          items: { $ref: "#/components/schemas/ProviderModel" }
           description: >-
             Curate which of the endpoint's models this connection offers
-            downstream. Null ⇒ empty ⇒ no restriction. Ids are opaque strings
-            (non-blank, deduplicated preserving order, at most 200 of at most
-            200 characters); they are never checked against a list of model
-            names Coffer writes down.
+            downstream, each entry naming its modality. Null ⇒ empty ⇒ no
+            restriction. Ids are opaque strings (non-blank, deduplicated
+            preserving order, at most 200 of at most 200 characters); they are
+            never checked against a list of model names Coffer writes down. An
+            omitted `modality` stores `text`.
 
     ProviderPatchRequest:
       type: object
@@ -680,11 +720,13 @@ components:
         models:
           type: array
           nullable: true
-          items: { type: string }
+          items: { $ref: "#/components/schemas/ProviderModel" }
           description: >-
             Replace the curated offered set as a whole (no merging), exactly like
             `compatible_agents`. Null ⇒ leave unchanged; `[]` clears the
             restriction, so every model the endpoint serves is offered again.
+            Each entry carries its own modality; an omitted `modality` stores
+            `text`.
 
     ProviderRenameRequest:
       type: object

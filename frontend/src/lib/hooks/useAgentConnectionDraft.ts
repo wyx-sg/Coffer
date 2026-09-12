@@ -21,10 +21,14 @@
 // from live introspection of the endpoint, as they always have. Either way the
 // staged model(s) are seeded first, so a model already bound to the agent never
 // vanishes from the list.
+//
+// Both sources are narrowed to modality `text` (spec provider-switching FR-030):
+// this is a CHAT binding, so an endpoint's embedding / image / video / audio
+// models are never offered as the model an agent runs on.
 import { useEffect, useMemo, useState } from "react";
 
 import type { AgentOut, AgentPatch } from "@/lib/api/agents";
-import { WIRE_BY_AGENT } from "@/lib/api/providers";
+import { modelIds, WIRE_BY_AGENT } from "@/lib/api/providers";
 import { usePatchAgent } from "@/lib/hooks/useAgents";
 import { useListProviderModels, useTestConnection } from "@/lib/hooks/useModelIntrospection";
 import { useActivateProvider, useProviders, useUseBuiltinProvider } from "@/lib/hooks/useProviders";
@@ -82,14 +86,19 @@ export function useAgentConnectionDraft(agent: AgentOut) {
 
   // A curated set on the draft connection replaces introspection as the source
   // of the options; empty means "no restriction" and leaves that to `fetched`.
-  const curated = draftConnObj?.models ?? [];
+  // Whether the connection is RESTRICTED is asked of the whole curated set, and
+  // the options are its `text` entries only — so a connection curating nothing
+  // but embedding models offers no chat model at all, rather than falling back
+  // to the endpoint's full catalogue (the same rule the daemon applies).
+  const restricted = (draftConnObj?.models ?? []).length > 0;
+  const curated = modelIds(draftConnObj?.models ?? [], "text");
 
   const models = useMemo(() => {
     const out: string[] = [];
     // Seed the staged model(s) so they show before the dropdown is opened
     // (the catalogue populates the rest on open).
     for (const m of [draftModel, draftFast]) if (m && !out.includes(m)) out.push(m);
-    for (const m of curated.length > 0 ? curated : fetched) if (!out.includes(m)) out.push(m);
+    for (const m of restricted ? curated : fetched) if (!out.includes(m)) out.push(m);
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftModel, draftFast, fetched, draftConnObj]);
@@ -98,14 +107,14 @@ export function useAgentConnectionDraft(agent: AgentOut) {
   // which can differ from the agent's (an openai gateway routed to Claude Code).
   // A curated connection needs no probe — its list IS the catalogue.
   const introspect = () => {
-    if (!draftConnObj || curated.length > 0) return;
+    if (!draftConnObj || restricted) return;
     list.mutate(
       {
         provider: draftConnObj.protocol,
         base_url: draftConnObj.base_url,
         credential_ref: draftConnObj.credential_ref,
       },
-      { onSuccess: (r) => setFetched(r.models) },
+      { onSuccess: (r) => setFetched(modelIds(r.models, "text")) },
     );
   };
 
@@ -121,19 +130,20 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     // Stage (do NOT apply) a default model so the user has something to test:
     // default both slots to the first model. A curated connection answers that
     // from its own list; only an unrestricted one is introspected.
-    const pinned = conn.models ?? [];
-    if (pinned.length > 0) {
+    if ((conn.models ?? []).length > 0) {
+      const pinned = modelIds(conn.models ?? [], "text");
       setFetched([]);
-      setDraftModel(pinned[0]);
-      if (wire === "anthropic") setDraftFast(pinned[0]);
+      setDraftModel(pinned[0] ?? "");
+      if (wire === "anthropic") setDraftFast(pinned[0] ?? "");
       return;
     }
     list.mutate(
       { provider: conn.protocol, base_url: conn.base_url, credential_ref: conn.credential_ref },
       {
         onSuccess: (r) => {
-          setFetched(r.models);
-          const def = r.models[0] ?? "";
+          const ids = modelIds(r.models, "text");
+          setFetched(ids);
+          const def = ids[0] ?? "";
           setDraftModel(def);
           if (wire === "anthropic") setDraftFast(def);
         },

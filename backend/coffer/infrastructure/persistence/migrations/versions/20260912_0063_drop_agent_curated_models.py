@@ -18,7 +18,7 @@ The key name is inlined rather than imported — a migration must mean the same
 thing forever, and importing the model would make this revision's behaviour
 drift as the model evolves.
 
-Revision ID: 0062
+Revision ID: 0063
 Revises: 0061
 Create Date: 2026-09-12
 """
@@ -31,8 +31,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0062"
-down_revision: str | None = "0061"
+revision: str = "0063"
+down_revision: str | None = "0062"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
