@@ -191,17 +191,34 @@ The daemon adds no wrapper or extra fields to the upstream's success result. The
 
 ## Agent-turn lifecycle
 
-A turn drives a different lifecycle from a gateway call: instead of forwarding a single JSON-RPC call to an upstream, it runs a multi-step **agent turn** that may itself call several of Coffer's own gateway tools before producing a reply. This path is specified by [spec channels](/reference/specs/channels/spec) (FR-043…FR-055).
+A turn drives a different lifecycle from a gateway call: instead of forwarding a single JSON-RPC call to an upstream, it runs a multi-step **agent turn** that may itself call several of Coffer's own gateway tools before producing a reply. This path is specified by [spec channels](/reference/specs/channels/spec) (the turn platform, FR-043…FR-055; the web Chat page that also rides it, FR-072…FR-078).
 
-1. **Turn start.** A channel delivers a user message. The `TurnOrchestrator` (`application/chat/turn_orchestrator.py`) creates or resumes the conversation, persists the user turn, and starts streaming. Only one turn runs per conversation at a time; a message arriving during a turn is enqueued rather than rejected.
+1. **Turn start.** A channel delivers a user message, or the web Chat page posts one. The `TurnOrchestrator` (`application/chat/turn_orchestrator.py`) creates or resumes the conversation, persists the user turn, and starts streaming. Only one turn runs per conversation at a time; a message arriving during a turn is enqueued rather than rejected.
 
 2. **The agent adapter.** The orchestrator asks the **agent-provider registry** for the agent named on the conversation and hands it the history. The adapter is self-contained — it carries its own model, tools, and configuration. The shipped adapters drive an external coding-agent subprocess: Claude Code through the Claude Agent SDK (`infrastructure/chat/claude_sdk_agent.py`), Codex through `codex app-server` (`infrastructure/chat/codex_agent.py`). Each maps the tool's line-delimited JSON output onto the platform's typed turn events, and persists the upstream session id so the next turn continues the same session. Coffer's own aggregated MCP capabilities reach the agent through the gateway tool provider (`infrastructure/chat/gateway_tool_provider.py`).
 
 3. **Streaming back.** Turn events publish to a per-conversation in-process bus as the run progresses; a subscriber that attaches mid-turn is replayed the events it missed. `interrupt_turn` stops an in-flight turn, keeping its partial output, and the final assistant turn is persisted on completion. The turn itself runs as a detached task, so it completes even if the subscriber that started it goes away.
 
+### The chat REST/SSE surface
+
+The web Chat page is the second client of that same seam, under `/api/v1/chat` — the routes exist so a browser can watch and steer a conversation the owner is driving from their phone ([Chat Is a Single-Owner Live Mirror](/reference/adr/chat-single-owner-live-mirror)):
+
+| Route | What it does |
+| --- | --- |
+| `GET` / `POST /conversations`, `GET` / `PATCH` / `DELETE /conversations/{id}` | List, open, rename, and delete conversations. |
+| `POST /conversations/{id}/archive`, `.../unarchive` | Move a conversation out of the active listing and back, without destroying it. |
+| `GET` / `PATCH /conversations/{id}/agent-config` | Read and set the agent the conversation runs on and the model it runs with. |
+| `GET /conversations/{id}/messages` | The persisted message history, tool-call blocks included. |
+| `POST /conversations/{id}/messages` | **Fire-and-return** (`202`): starts or enqueues the turn and carries none of its output. |
+| `GET /conversations/{id}/events` | The **SSE subscription**: replays the in-flight turn from its start, then streams live; holds open between turns and delivers the next one whoever starts it. |
+| `PUT /conversations/{id}/pending` | Replaces the pending queue. |
+| `POST /conversations/{id}/interrupt` | Stops the running turn and pauses the queue. |
+
+Because sending and consuming are separate routes, "the turn I started" and "the turn my phone started" travel one code path — the sender is not a special case, and the bus's replay covers the events that streamed before the subscription attached.
+
 ## Channel-inbound lifecycle
 
-Messaging channels (Telegram, SeaTalk) are how a user reaches an agent. Each delivers user messages into the **`TurnOrchestrator` seam** described above; once a message reaches the orchestrator, nothing downstream knows which platform it came from. The inbound transport differs per platform (per [Channel Adapter Framework](/reference/adr/channel-adapter-framework)):
+Messaging channels (Telegram, SeaTalk) are how a user reaches an agent away from the desktop. Each delivers user messages into the **`TurnOrchestrator` seam** described above; once a message reaches the orchestrator, nothing downstream knows which platform it came from. The inbound transport differs per platform (per [Channel Adapter Framework](/reference/adr/channel-adapter-framework)):
 
 - **SeaTalk (webhook).** SeaTalk delivers events only by public webhook. A separate **callback-listener process** (`coffer-callback`, spawned by the daemon while any SeaTalk channel is enabled) serves `POST /seatalk/{channel}` on a loopback port. It answers the platform's verification challenge, verifies the request signature (`sha256(body + signing_secret)`), normalises the event, and forwards it to the daemon — which feeds it into the orchestrator.
 
@@ -222,4 +239,4 @@ The engine picks among these from the scope's configuration — callers never na
 
 ---
 
-**See also:** [MCP Gateway spec](/reference/specs/mcp-gateway/spec), [Session subprocess model](/reference/adr/session-subprocess-model), [Channels spec](/reference/specs/channels/spec), [Channel adapter framework](/reference/adr/channel-adapter-framework), [Files as truth, SQLite retrieval](/reference/adr/files-as-truth-sqlite-retrieval)
+**See also:** [MCP Gateway spec](/reference/specs/mcp-gateway/spec), [Session subprocess model](/reference/adr/session-subprocess-model), [Channels spec](/reference/specs/channels/spec), [Channel adapter framework](/reference/adr/channel-adapter-framework), [Chat is a single-owner live mirror](/reference/adr/chat-single-owner-live-mirror), [Files as truth, SQLite retrieval](/reference/adr/files-as-truth-sqlite-retrieval)

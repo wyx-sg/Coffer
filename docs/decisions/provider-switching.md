@@ -265,9 +265,11 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-11b](../../
 - **D13 — An agent answers one question, and nothing narrows the answer.**
   `offered()` / `suggest()` return the whole filtered catalogue (or an active
   connection's curated set), with nothing on the agent and nothing on the channel
-  narrowing either — there is no `…/models/selection` route any more, and the
-  `…/models` route that served the catalogue over HTTP is gone too, its last
-  reader being the channel dialogs that no longer ask. The channel `/model` card
-  reads the catalogue in-process, pages through all of it and refuses no id.
-  Nothing validates a model NAME against a catalogue — the CLI accepts names
-  outside it entirely, so a model name stays raw passthrough everywhere.
+  narrowing either — there is no `…/models/selection` route any more. The
+  `…/models` route that serves the catalogue over HTTP stays, because the one
+  question an agent does answer still has to be asked: the web Chat page's model
+  picker asks it per conversation and the agent detail page asks it to say what
+  the agent can be put on. The channel `/model` card reads the same catalogue
+  in-process, pages through all of it and refuses no id. Nothing validates a
+  model NAME against a catalogue — the CLI accepts names outside it entirely, so
+  a model name stays raw passthrough everywhere.

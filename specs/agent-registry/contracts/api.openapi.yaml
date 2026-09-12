@@ -430,8 +430,11 @@ paths:
         inventory is read-only from `installed_plugins.json` /
         `known_marketplaces.json`, with enabled state from `settings.json`
         `enabledPlugins`. Parse failures degrade to `parse_errors` (FR-030).
-        Read-only: nothing here is written back, and there is no web UI on this
-        route — enable/disable and uninstall belong to the agent's own tooling.
+        Backs the agent detail page's Plugins tab: the listing's
+        `can_uninstall` says whether in-app uninstall can run for this agent
+        right now (the capability allows it and, for CLI-strategy agents, the
+        agent's own plugin CLI is on PATH), so the UI shows the uninstall
+        affordance on capability rather than on agent type.
       responses:
         "200":
           description: OK
@@ -440,6 +443,62 @@ paths:
               schema: { $ref: "#/components/schemas/PluginsOut" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{name}/plugins/{plugin_id}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+      - in: path
+        name: plugin_id
+        required: true
+        schema: { type: string }
+        description: "Plugin identifier as the listing reports it (`<name>@<marketplace>`)."
+    patch:
+      tags: [agents]
+      operationId: setAgentPluginEnabled
+      summary: Enable or disable one of the agent's plugins
+      description: |
+        Writes the enabled flag to the agent's own documented write surface —
+        `settings.json` `enabledPlugins` for `claude_code` (created when
+        missing), `config.toml` `[plugins.*]` for `codex` — with the atomic
+        write + `.bak` machinery, and records an `agent_plugin_toggled` audit
+        entry. Agent types whose plugin capability does not allow toggling are
+        rejected with 422 (`PLUGIN_TOGGLE_UNSUPPORTED`); an id that matches no
+        installed plugin is 404 (`PLUGIN_NOT_FOUND`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PluginPatch" }
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [agents]
+      operationId: uninstallAgentPlugin
+      summary: Uninstall one of the agent's plugins
+      description: |
+        Dispatches on the agent's plugin capability. CLI-strategy agents
+        (`claude_code`) delegate to the agent's own `claude plugin uninstall`
+        — Coffer never hand-writes that agent's internal inventory — while the
+        rest edit their documented config surface directly and remove the
+        plugin's cache directory (`codex`). Audited as
+        `agent_plugin_uninstalled`. Agent types whose capability does not allow
+        uninstall, and CLI-strategy agents whose CLI is not on PATH, are
+        rejected with 422 (`PLUGIN_UNINSTALL_UNSUPPORTED`); a CLI invocation
+        that ran and failed is 422 (`PLUGIN_UNINSTALL_FAILED`). An id that
+        matches no installed plugin is 404 (`PLUGIN_NOT_FOUND`).
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /agents/{name}/mcp-install:
     parameters:
@@ -488,6 +547,94 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/McpInstallStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{name}/native-memory:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: listAgentNativeMemory
+      summary: List the agent's OWN native per-project memory stores
+      description: |
+        Read-only scan of the memory the coding agent itself writes —
+        `claude_code`'s `<config_dir>/projects/<slug>/memory`, `codex`'s
+        global `memories/MEMORY.md` sliced by routed cwd. Coffer never writes
+        these: the agent detail page's Memory tab only opens or reveals the
+        directory. Stores come back most populated first. An agent type with
+        no native memory layout — and one whose projects directory is absent —
+        returns an empty list; an unknown agent name is 404.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NativeMemoryListOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{name}/transcripts:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: listAgentTranscripts
+      summary: List the agent's own local conversation transcripts
+      description: |
+        Read-only browse over the `.jsonl` transcripts the agent itself wrote:
+        title, project, message count, start and last-activity times, plus the
+        source path so a row can offer open-in-editor / reveal. Nothing is
+        written and no message text crosses the wire. Searches title + project
+        path (`q`), filters to an exact `project`, and sorts by `sort`/`order`;
+        paged by `limit`/`offset` against the matched `total`. Backed by the
+        reader's mtime-aware cache, so an agent with thousands of past
+        sessions stays responsive. An agent type with no known transcript
+        layout is the caller's request going wrong and comes back as 400
+        (`BAD_REQUEST`).
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+        - in: query
+          name: offset
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
+        - in: query
+          name: q
+          required: false
+          schema: { type: string, nullable: true }
+          description: Search title or project path.
+        - in: query
+          name: project
+          required: false
+          schema: { type: string, nullable: true }
+          description: Filter to this exact `project_path`.
+        - in: query
+          name: sort
+          required: false
+          schema:
+            type: string
+            enum: [started_at, last_activity_at, message_count]
+            default: last_activity_at
+        - in: query
+          name: order
+          required: false
+          schema: { type: string, enum: [asc, desc], default: desc }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TranscriptSessionListOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
@@ -1020,6 +1167,101 @@ components:
         parse_errors:
           type: array
           items: { $ref: "#/components/schemas/ParseError" }
+        can_uninstall:
+          type: boolean
+          default: false
+          description: >-
+            Whether in-app uninstall is available for this agent right now —
+            the plugin capability allows it AND, for CLI-strategy agents
+            (`claude_code`), the agent's plugin CLI is on PATH. The UI shows
+            the uninstall affordance on this, not on agent type.
+
+    PluginPatch:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+          description: Desired enabled state for the plugin.
+
+    NativeMemoryStore:
+      type: object
+      required: [project, path, memory_dir, item_count]
+      description: >-
+        One native per-project memory store the agent itself owns. `memory_dir`
+        is the store's real identity; `project` / `path` are a best-effort
+        label for it.
+      properties:
+        project:
+          type: string
+          description: >-
+            Display label for the project — the project directory's basename
+            when the real path is known, else decoded from the on-disk slug.
+        path:
+          type: string
+          nullable: true
+          description: >-
+            Absolute project directory, when it could be resolved; null when
+            the lossy slug encoding could not be decoded to an existing dir.
+        memory_dir:
+          type: string
+          description: Absolute path of the store's memory directory.
+        item_count:
+          type: integer
+          description: Number of memory items found in the store.
+
+    NativeMemoryListOut:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/NativeMemoryStore" }
+          description: Stores, most populated first.
+
+    TranscriptSession:
+      type: object
+      required: [session_id, message_count, source_path]
+      description: One transcript session as the list shows it — no message text.
+      properties:
+        session_id: { type: string }
+        title:
+          type: string
+          nullable: true
+          description: First-message-derived title, when the transcript records one.
+        project_path:
+          type: string
+          nullable: true
+          description: Absolute cwd the session ran in, when recorded.
+        message_count: { type: integer }
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_activity_at:
+          type: string
+          format: date-time
+          nullable: true
+        source_path:
+          type: string
+          description: >-
+            Absolute path of the `.jsonl` file, so the row can open/reveal it.
+
+    TranscriptSessionListOut:
+      type: object
+      required: [sessions, total, limit, offset]
+      properties:
+        sessions:
+          type: array
+          items: { $ref: "#/components/schemas/TranscriptSession" }
+          description: One page of sessions.
+        total:
+          type: integer
+          description: >-
+            Sessions matching the search/filter, so the UI can page and show
+            "N of total".
+        limit: { type: integer }
+        offset: { type: integer }
 
     McpInstallStatus:
       type: object

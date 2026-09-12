@@ -143,6 +143,37 @@ export function useAdoptMcpEntry(agentName: string) {
   });
 }
 
+// --- Plugins (spec agent-registry, workspace amendment) ---
+
+export function useAgentPlugins(name: string) {
+  return useQuery({
+    queryKey: ["agents", name, "plugins"],
+    queryFn: () => agentsApi.plugins(name),
+    enabled: !!name,
+  });
+}
+
+export function useTogglePlugin(agentName: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      agentsApi.togglePlugin(agentName, id, enabled),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["agents", agentName, "plugins"] });
+    },
+  });
+}
+
+export function useUninstallPlugin(agentName: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }: { id: string }) => agentsApi.uninstallPlugin(agentName, id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["agents", agentName, "plugins"] });
+    },
+  });
+}
+
 // --- Config-file children (specs agent-registry/skill-manager workspace amendment) — read-only ---
 
 export function useAgentConfigChild(name: string, key: string, relpath: string) {

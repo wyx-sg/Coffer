@@ -58,11 +58,14 @@ capabilities.** Three moves.
   `ConversationPort` / `TurnPort` seams. "Chat" names the set
   of conversations — whoever drove them — so the name still fits.
 
-  _Superseded 2026-09-10:_ the observation seat was never used and the Chat
-  page is removed with the retired Agent Chat spec. The `ConversationPort` / `TurnPort` seams
-  named here survive as spec channels FR-043…FR-055; only the surface is gone. The
-  first two bullets — managed agents only, no `builtin` in the registry — still
-  hold, and are now what the agent-provider listing returns.
+  _Amended 2026-09-10, then 2026-09-12:_ the page was removed on the 10th as
+  unused and restored on the 12th, so the observation seat described here stands
+  — widened, since the page also interrupts and continues what it watches
+  ([Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md)). The
+  `ConversationPort` / `TurnPort` seams named here live in spec channels
+  FR-043…FR-055, with the page itself at FR-072…FR-078. The first two bullets —
+  managed agents only, no `builtin` in the registry — still hold, and are now
+  what the agent-provider listing returns.
 
 ### 2. The "built-in agent" concept leaves the UI
 

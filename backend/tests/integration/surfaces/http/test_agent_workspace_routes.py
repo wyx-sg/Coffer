@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import pathlib
 import tomllib
+import types
 
 import pytest
 from starlette.testclient import TestClient
@@ -419,3 +420,145 @@ def test_plugin_cache_missing_flagged(tmp_path, monkeypatch):
         # p2 has no cache dir on disk — reported, not repaired.
         assert by_id["p2@m1"]["cache_present"] is False
         assert not (tmp_path / ".codex" / "plugins" / "cache" / "m1" / "p2").exists()
+
+
+@pytest.mark.acceptance(spec="agent-registry", scenario="toggle a plugin's enabled state")
+def test_toggle_claude_plugin_writes_settings_only(tmp_path, monkeypatch):
+    """Claude's enabled state lives in settings.json; the internal install
+    inventory is byte-identical afterwards — Coffer never writes it."""
+    app = _app(tmp_path, monkeypatch, 59930)
+    with _client(app) as c:
+        _register_claude(c, tmp_path)
+        installed = tmp_path / ".claude" / "plugins" / "installed_plugins.json"
+        installed_before = installed.read_bytes()
+
+        r = c.patch("/api/v1/agents/cc/plugins/q1@mk", json={"enabled": False})
+        assert r.status_code == 204, r.text
+
+        settings = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
+        assert settings["enabledPlugins"]["q1@mk"] is False
+        assert installed.read_bytes() == installed_before
+
+        r = c.get("/api/v1/agents/cc/plugins")
+        by_id = {p["id"]: p for p in r.json()["items"]}
+        assert by_id["q1@mk"]["enabled"] is False
+
+
+def test_toggle_codex_plugin_writes_config(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59935)
+    with _client(app) as c:
+        _register_codex(c, tmp_path)
+
+        r = c.patch("/api/v1/agents/cx/plugins/p2@m1", json={"enabled": True})
+        assert r.status_code == 204, r.text
+        data = tomllib.loads((tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8"))
+        assert data["plugins"]["p2@m1"]["enabled"] is True
+        # The sibling plugin and the MCP entries survive the round-trip.
+        assert data["plugins"]["p1@m1"]["enabled"] is True
+        assert "fetcher" in data["mcp_servers"]
+
+
+def test_toggle_unknown_codex_plugin_404(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59937)
+    with _client(app) as c:
+        _register_codex(c, tmp_path)
+        before = (tmp_path / ".codex" / "config.toml").read_bytes()
+
+        r = c.patch("/api/v1/agents/cx/plugins/ghost@m1", json={"enabled": False})
+        assert r.status_code == 404, r.text
+        assert r.json()["error"]["code"] == "PLUGIN_NOT_FOUND"
+        assert (tmp_path / ".codex" / "config.toml").read_bytes() == before
+
+
+@pytest.mark.acceptance(spec="agent-registry", scenario="uninstall a Codex plugin")
+def test_uninstall_codex_plugin(tmp_path, monkeypatch):
+    """Codex uninstall drops the config entry and deletes the cache dir."""
+    app = _app(tmp_path, monkeypatch, 59940)
+    with _client(app) as c:
+        _register_codex(c, tmp_path)
+        cache_dir = tmp_path / ".codex" / "plugins" / "cache" / "m1" / "p1"
+        assert cache_dir.is_dir()
+
+        r = c.delete("/api/v1/agents/cx/plugins/p1@m1")
+        assert r.status_code == 204, r.text
+        data = tomllib.loads((tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8"))
+        assert "p1@m1" not in data.get("plugins", {})
+        assert not cache_dir.exists()
+
+        r = c.get("/api/v1/agents/cx/plugins")
+        assert [p["id"] for p in r.json()["items"]] == ["p2@m1"]
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="uninstall a Claude Code plugin via its CLI"
+)
+def test_uninstall_claude_plugin_via_cli(tmp_path, monkeypatch):
+    """Claude uninstall shells out to `claude plugin uninstall`; Coffer writes
+    neither the internal inventory nor settings.json itself."""
+    app = _app(tmp_path, monkeypatch, 59950)
+    with _client(app) as c:
+        _register_claude(c, tmp_path)
+        installed = tmp_path / ".claude" / "plugins" / "installed_plugins.json"
+        settings = tmp_path / ".claude" / "settings.json"
+        installed_before, settings_before = installed.read_bytes(), settings.read_bytes()
+
+        calls: list[list[str]] = []
+        monkeypatch.setattr("shutil.which", lambda _exe: "/usr/bin/claude")
+        monkeypatch.setattr(
+            "subprocess.run",
+            lambda argv, **k: (
+                calls.append(argv),
+                types.SimpleNamespace(returncode=0, stdout="", stderr=""),
+            )[1],
+        )
+
+        r = c.delete("/api/v1/agents/cc/plugins/q1@mk")
+        assert r.status_code == 204, r.text
+        assert calls == [["claude", "plugin", "uninstall", "q1@mk"]]
+        assert installed.read_bytes() == installed_before
+        assert settings.read_bytes() == settings_before
+
+
+def test_claude_plugin_cli_failure_is_422(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59952)
+    with _client(app) as c:
+        _register_claude(c, tmp_path)
+        monkeypatch.setattr("shutil.which", lambda _exe: "/usr/bin/claude")
+        monkeypatch.setattr(
+            "subprocess.run",
+            lambda *a, **k: types.SimpleNamespace(returncode=1, stdout="", stderr="no such plugin"),
+        )
+
+        r = c.delete("/api/v1/agents/cc/plugins/q1@mk")
+        assert r.status_code == 422, r.text
+        assert r.json()["error"]["code"] == "PLUGIN_UNINSTALL_FAILED"
+        assert "no such plugin" in r.json()["error"]["message"]
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="reject Claude uninstall when its CLI is unavailable"
+)
+def test_reject_claude_uninstall_no_cli(tmp_path, monkeypatch):
+    """No `claude` on PATH → uninstall refuses, and the listing hides the
+    affordance rather than offering a button that cannot work."""
+    app = _app(tmp_path, monkeypatch, 59955)
+    with _client(app) as c:
+        _register_claude(c, tmp_path)
+        settings = tmp_path / ".claude" / "settings.json"
+        before = settings.read_bytes()
+
+        monkeypatch.setattr("shutil.which", lambda _exe: None)
+
+        r = c.delete("/api/v1/agents/cc/plugins/q1@mk")
+        assert r.status_code == 422, r.text
+        assert r.json()["error"]["code"] == "PLUGIN_UNINSTALL_UNSUPPORTED"
+        assert settings.read_bytes() == before
+        assert c.get("/api/v1/agents/cc/plugins").json()["can_uninstall"] is False
+
+
+def test_codex_listing_reports_uninstall_available(tmp_path, monkeypatch):
+    """Codex edits its own documented config, so uninstall needs no CLI."""
+    app = _app(tmp_path, monkeypatch, 59957)
+    with _client(app) as c:
+        _register_codex(c, tmp_path)
+        assert c.get("/api/v1/agents/cx/plugins").json()["can_uninstall"] is True

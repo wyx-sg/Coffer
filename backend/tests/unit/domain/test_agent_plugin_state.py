@@ -3,7 +3,7 @@ import json
 import pytest
 
 from coffer.domain.agent import plugin_state as ps
-from coffer.domain.workspace_errors import AgentConfigParseError
+from coffer.domain.workspace_errors import AgentConfigParseError, PluginNotFound
 
 CODEX_TOML = """
 [marketplaces.openai-curated]
@@ -52,6 +52,23 @@ def test_parse_codex_enabled_defaults_true() -> None:
 def test_parse_codex_parse_error() -> None:
     with pytest.raises(AgentConfigParseError):
         ps.parse_codex("[plugins\nbroken")
+
+
+def test_toggle_codex_plugin() -> None:
+    out = ps.set_codex_enabled(CODEX_TOML, "superpowers@openai-curated", True)
+    plugins, _ = ps.parse_codex(out)
+    assert {p.id: p.enabled for p in plugins}["superpowers@openai-curated"] is True
+    assert "source_type" in out  # sibling content survives the round-trip
+    with pytest.raises(PluginNotFound):
+        ps.set_codex_enabled(CODEX_TOML, "ghost@x", True)
+
+
+def test_remove_codex_plugin_entry() -> None:
+    out = ps.remove_codex_entry(CODEX_TOML, "gmail@openai-curated")
+    plugins, _ = ps.parse_codex(out)
+    assert "gmail@openai-curated" not in {p.id for p in plugins}
+    with pytest.raises(PluginNotFound):
+        ps.remove_codex_entry(CODEX_TOML, "ghost@x")
 
 
 def test_parse_claude_plugins() -> None:
@@ -124,3 +141,17 @@ def test_parse_claude_surfaces_version_and_install_path() -> None:
     # Settings-only orphan → not installed, no path.
     assert by_id["orphan@m"].installed is False
     assert by_id["orphan@m"].install_path is None
+
+
+def test_toggle_claude_plugin_writes_settings_only() -> None:
+    out = ps.set_claude_enabled(CLAUDE_SETTINGS, "warp@claude-code-warp", True)
+    assert json.loads(out)["enabledPlugins"]["warp@claude-code-warp"] is True
+    out2 = ps.set_claude_enabled("{}", "new@mkt", False)
+    assert json.loads(out2)["enabledPlugins"]["new@mkt"] is False
+    out3 = ps.set_claude_enabled("", "new@mkt", True)  # settings.json may not exist yet
+    assert json.loads(out3)["enabledPlugins"]["new@mkt"] is True
+
+
+def test_toggle_claude_tolerates_non_dict_enabled_map() -> None:
+    out = ps.set_claude_enabled('{"enabledPlugins": ["broken"]}', "x@m", True)
+    assert json.loads(out)["enabledPlugins"] == {"x@m": True}

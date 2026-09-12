@@ -157,9 +157,12 @@ exist or you may not have access"。用户既没机会选一个该 endpoint 支�
 id，而这些 id 该 agent 一个都用不了。
 
 - **H1 — 模型清单是后端的一个接口，按 agent 提供，且 Coffer 自己不写死任何模型名。**
-  `AgentModelCatalogueService` 按 agent 回答该 agent 可以被切到的模型。（它最初以 `GET
-  /api/v1/agent-providers/{agent_key}/models` 暴露在 HTTP 上；该路由随下文 2026-09-12 的撤回
-  一同移除，清单如今只通过内部端口读取——`/model` 卡片是它唯一的读者。）每一项——id、
+  `AgentModelCatalogueService` 按 agent 回答该 agent 可以被切到的模型，而
+  `GET /api/v1/agent-providers/{agent_key}/models` 就是这个答案在线路上的样子。该路由**保留**，
+  没有随下文 2026-09-12 的撤回一同消失：那次撤回拿走的是**策展**，而不是清单本身——一个必须
+  「提供」模型的面，仍然需要有人告诉它有什么可提供。它有三个读者：网页 Chat 页面的模型选择器
+  按会话问它；agent 详情页问它来说明这个 agent 可以被切到哪些模型；channel 的 `/model` 卡片
+  则在进程内读同一个服务。每一项——id、
   显示名、描述——都是从**已安装的 agent 那里读回来的**，绝不写进 Coffer：写在这里的清单会在 CLI
   下一次发版时过期，而且分不清同一档位的两个版本。共有三个来源，它们的顺序就是选择器的顺序：
   Claude Code 可执行文件内嵌的带版本模型目录——那是唯一写着各版本显示名的地方；Codex 自己的
@@ -174,7 +177,9 @@ id，而这些 id 该 agent 一个都用不了。
   而非单个模型，因此今后只能手输名字来设置，不能从列表里点选。每一项带
   `id`（原样传给 CLI）、`label` 和 `description`。每个来源都
   各自静默降级——CLI 没装、bundle 结构变了、agent 没登录或卡住，代价只是少了这个来源本来会补上的
-  模型，仅此而已。没有任何 provider 认领的 `agent_key` 根本拿不到清单。
+  模型，仅此而已。未知的 `agent_key` 返回 404。契约见
+  [`specs/channels/contracts/api.openapi.yaml`](../channels/contracts/api.openapi.yaml)，
+  agent-provider 的路由就在那里。
 - **H2 — 单一事实来源。** 前端常量被删除；channel 的 `/model` 卡片读同一份清单。清单只在一处维护，
   而且由 agent 自己拥有，因此新发布的模型完全不需要 Coffer 发版就能到达每个界面。
 - **H3 — 选项是并集，不是二选一。** 聊天选择器的选项 = agent 的模型清单（H1）∪ 当前生效连接
@@ -183,7 +188,7 @@ id，而这些 id 该 agent 一个都用不了。
   自己的模型藏起来。
 - **H4 — Agent 页在内置登录下不提供任何模型控件。** 这些槽位绑的是**连接**的模型（E3/E4）：
   只有当 Coffer 投影了一条连接时才会读 `agent.model`。因此内置登录下既没有选择器也没有清单，
-  只留一句话说明模型在别处选：聊天里的模型选择器，或聊天中的 `/model`——
+  只留一句话说明模型在别处选：Chat 页面里按会话选的模型选择器，或频道里的 `/model`——
   让「这里什么都没有」有解释，而不是看起来像坏了。（两次被取代：2026-09-11b 曾把这个面板变成
   策展控件，其 2026-09-12 的撤回又把控件整个去掉——策展先是搬到了 channel 上，随后在那边也被
   移除，于是再没有任何东西策展 agent 的模型。）
@@ -284,20 +289,22 @@ id 去比对自己写死的名单。
   页面的那个人」。该字段、它的形状校验、以及修订 0060 的回填现已全部移除，由**修订 0063** 剥除，
   不留 load-time 垫片（房规）。答案随后搬到了 **channel** 上，又在那边被撤回（修订 0067）：
   没有任何资源策展模型，每个面提供的都是经 K1 过滤的整份清单。
-- **K3 — 关于模型，已经没有任何问题要通过 HTTP 问一个 agent 了。**
+- **K3 — 关于模型，通过 HTTP 问一个 agent 的问题只剩一个，就是这条清单路由。**
   `GET|PUT …/models/selection` 连同 `AgentModelSelectionIn` / `AgentModelSelectionOut`
-  最先**移除**：对一个 agent 已经没有第二个问题可问了。
-  `GET /api/v1/agent-providers/{agent_key}/models` 在 2026-09-12 随之移除——channel 的对话框是
-  它最后一个读者，而它们不再问了。经 K1 过滤的完整清单仍然照旧装配（仍按 agent **类型**寻址，
-  仍由该类型下第一个已启用的 agent resource 作答），但只存在于 `/model` 卡片所读的那个内部端口后面。
-  `/api/v1/agent-providers` 下剩下的只有注册表列表本身。
+  已**移除**：对一个 agent 已经没有第二个问题可问了。
+  `GET /api/v1/agent-providers/{agent_key}/models` **保留**，仍返回经 K1 过滤的完整清单——仍按
+  agent **类型**寻址，仍由该类型下第一个已启用的 agent resource 作答。它活过了 2026-09 中旬
+  一度读它的那些 channel 对话框：现在的读者是网页 Chat 页面的模型选择器与 agent 详情页，而
+  channel 的 `/model` 卡片在进程内读同一份清单。这条路由不再回答的，是「某个面可以**提供**
+  什么」——它只回答「这个 agent 能跑什么」。
 - **K4 — 收窄「提供」曾是「面」的职责，而现在没有任何面在收窄。**「这个 agent 能被切到哪些模型」
   只有一个答案——`offered()` / `suggest()` 返回 agent 的清单（或激活连接的策展集合，见 2026-09-11c
   修订）——而每个面都把这个答案整份提供出去：channel 的 `/model` 卡片只是分页翻阅它，不拒绝任何 id。
   任何地方模型名都仍是原样透传——CLI 接受清单之外的名字（档位别名，以及比已安装二进制更新的模型），
   坏名字由 CLI 自己报错。
-- **接口。** 什么都不剩：`AgentModelsOut` 随路由在 2026-09-12 一同移除，
-  `/api/v1/agent-providers` 回到只有注册表列表。契约见
+- **接口。** `AgentModelsOut` / `AgentModelOut` 仍留在
+  `GET /api/v1/agent-providers/{agent_key}/models` 上；走掉的只有 selection 那一对。于是
+  `/api/v1/agent-providers` 下有两条路由：注册表列表，与按 agent 的模型清单。契约见
   [`specs/channels/contracts/api.openapi.yaml`](../channels/contracts/api.openapi.yaml)，
   agent-provider 的路由就在那里。
 - **审计。** 无可记录：已经没有逐 agent 的策展集合会被改动。
@@ -670,8 +677,8 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 > 模型控件：`AgentModelSelection` 面板以及支撑它的 `GET|PUT …/models/selection` 客户端代码都已删除，
 > 该分支只渲染一行灰字，说明模型按会话选择——在聊天的模型选择器里，或在频道里用 `/model <id>`。
 > 非内置分支原样保留：选了连接，仍然由连接自己的模型填那两个模型 / 快速模型下拉框。
-> catalogue 接口也已移除：网页上再没有任何界面向 agent 问它的模型清单，唯一还需要这份列表的卡片
-> 在进程内直接读它。
+> catalogue 接口**保留**：Chat 页面按会话的选择器读它，agent 详情页读它来说明这个 agent 可以被
+> 切到哪些模型，而 channel 的 `/model` 卡片在进程内读同一份清单。
 
 > **修订 2026-09-12（A1–A3 之后的界面）。** 编辑对话框的「名称」字段可编辑，提交时先发
 > 改名、再发 patch，详情页随后跟到新 URL（路由本身就是名字）。模型 tab 没有拉取按钮——
@@ -866,9 +873,9 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 
 - **Given** 一个绑定到无覆盖连接的 agent 的会话，
 - **When** 打开模型选择器，
-- **Then** 它给出一个固定下拉（无自由输入「Custom…」项），选项来自草稿连接自己的模型——有策展集合时
-  就是该集合，否则是 introspect 其 endpoint 得到的结果——再加上已暂存的取值，绝不读连接存储的
-  `model` 字段（TypeScript 验收测试；「激活连接回答选择器提供什么」见 2026-09-11c 修订）。
+- **Then** 它给出该 agent 模型清单（`GET /api/v1/agent-providers/{agent_key}/models`）的固定下拉
+  （无自由输入「Custom…」项）；当有连接覆盖该 agent 时，下拉在该清单和当前取值之外**追加**该连接
+  introspect 出的模型，绝不读连接存储的 `model` 字段（TypeScript 验收测试；并集规则见 2026-09-09 修订）。
 
 ### Scenario: curate which of a connection's models are offered downstream
 

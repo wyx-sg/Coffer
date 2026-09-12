@@ -21,13 +21,16 @@ neither writes anything back.
 
 from __future__ import annotations
 
+import json
 from collections.abc import MutableMapping
 from dataclasses import dataclass
 from typing import Any
 
+import tomlkit
+
 from coffer.domain.agent.mcp_entries import _parse_json, _parse_toml
 from coffer.domain.errors import ConfigFileFormatInvalid
-from coffer.domain.workspace_errors import AgentConfigParseError
+from coffer.domain.workspace_errors import AgentConfigParseError, PluginNotFound
 
 # ---------------------------------------------------------------------------
 # Value objects
@@ -80,6 +83,11 @@ def _split_id(plugin_id: str) -> tuple[str, str]:
     return plugin_id, ""
 
 
+# ---------------------------------------------------------------------------
+# Codex
+# ---------------------------------------------------------------------------
+
+
 def parse_codex(text: str) -> tuple[list[PluginInfo], list[MarketplaceInfo]]:
     """Parse plugin state from a Codex ``config.toml`` text.
 
@@ -117,6 +125,53 @@ def parse_codex(text: str) -> tuple[list[PluginInfo], list[MarketplaceInfo]]:
             )
 
     return plugins, marketplaces
+
+
+def set_codex_enabled(text: str, plugin_id: str, enabled: bool) -> str:
+    """Return new TOML text with the named Codex plugin's ``enabled`` flag set.
+
+    Raises ``PluginNotFound`` if the plugin does not exist or its entry is not a
+    table.  Raises ``AgentConfigParseError`` on malformed TOML.
+    """
+    try:
+        doc = _parse_toml(text)
+    except ConfigFileFormatInvalid as e:
+        raise AgentConfigParseError("<config>", str(e)) from e
+
+    plugins = doc.get("plugins")
+    if not isinstance(plugins, MutableMapping) or plugin_id not in plugins:
+        raise PluginNotFound(plugin_id)
+    entry = plugins[plugin_id]
+    if not isinstance(entry, MutableMapping):
+        raise PluginNotFound(plugin_id)
+
+    doc["plugins"][plugin_id]["enabled"] = enabled
+    return tomlkit.dumps(doc)
+
+
+def remove_codex_entry(text: str, plugin_id: str) -> str:
+    """Return new TOML text with the named Codex plugin entry removed.
+
+    Raises ``PluginNotFound`` if the plugin does not exist.
+    Raises ``AgentConfigParseError`` on malformed TOML.
+    If the ``plugins`` table becomes empty it is left in place (not pruned).
+    """
+    try:
+        doc = _parse_toml(text)
+    except ConfigFileFormatInvalid as e:
+        raise AgentConfigParseError("<config>", str(e)) from e
+
+    plugins = doc.get("plugins")
+    if not isinstance(plugins, MutableMapping) or plugin_id not in plugins:
+        raise PluginNotFound(plugin_id)
+
+    del doc["plugins"][plugin_id]
+    return tomlkit.dumps(doc)
+
+
+# ---------------------------------------------------------------------------
+# Claude Code
+# ---------------------------------------------------------------------------
 
 
 def _safe_parse_json(text: str | None) -> dict[str, Any]:
@@ -219,3 +274,26 @@ def parse_claude(
         )
 
     return plugins, marketplaces
+
+
+def set_claude_enabled(settings_text: str, plugin_id: str, enabled: bool) -> str:
+    """Return new ``settings.json`` text with the named plugin's enabled flag set.
+
+    This is the **only** write operation for Claude Code plugins — Coffer must
+    never write the internal ``installed_plugins.json`` or
+    ``known_marketplaces.json`` files.
+
+    ``settings_text`` may be empty or ``None``-equivalent (e.g., the file does
+    not exist yet); in that case an empty settings object is assumed.
+
+    Raises ``AgentConfigParseError`` on malformed JSON.
+    """
+    data = _safe_parse_json(settings_text)
+    enabled_map = data.get("enabledPlugins")
+    # A hand-edit may have left a non-object here — replace it, mirroring the
+    # tolerance of the read path and mcp_install's mcpServers guard.
+    if not isinstance(enabled_map, dict):
+        enabled_map = {}
+        data["enabledPlugins"] = enabled_map
+    enabled_map[plugin_id] = enabled
+    return json.dumps(data, indent=2, ensure_ascii=False) + "\n"

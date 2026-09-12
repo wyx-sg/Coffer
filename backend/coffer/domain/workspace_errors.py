@@ -73,6 +73,37 @@ class PluginNotFound(CofferError):  # noqa: N818
         self.plugin_id = plugin_id
 
 
+class PluginUninstallUnsupported(CofferError):  # noqa: N818
+    """The agent type requires its own tooling to uninstall plugins. Maps to 422."""
+
+    code = "PLUGIN_UNINSTALL_UNSUPPORTED"
+
+    def __init__(self, agent_type: str) -> None:
+        super().__init__(f"{agent_type} plugins must be uninstalled with the agent's own tooling")
+        self.agent_type = agent_type
+
+
+class PluginToggleUnsupported(CofferError):  # noqa: N818
+    """The agent type does not support enabling/disabling plugins via Coffer. Maps to 422."""
+
+    code = "PLUGIN_TOGGLE_UNSUPPORTED"
+
+    def __init__(self, agent_type: str) -> None:
+        super().__init__(f"{agent_type} plugins cannot be toggled through Coffer")
+        self.agent_type = agent_type
+
+
+class PluginUninstallFailed(CofferError):  # noqa: N818
+    """A CLI-mediated uninstall (e.g. ``claude plugin uninstall``) failed. Maps to 422."""
+
+    code = "PLUGIN_UNINSTALL_FAILED"
+
+    def __init__(self, plugin_id: str, reason: str) -> None:
+        super().__init__(f"failed to uninstall {plugin_id}: {reason}")
+        self.plugin_id = plugin_id
+        self.reason = reason
+
+
 class McpInstallUnsupported(CofferError):  # noqa: N818
     """The agent type does not declare an MCP injection target. Maps to 422."""
 

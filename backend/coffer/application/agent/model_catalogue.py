@@ -17,11 +17,11 @@ shaped to prevent:
 * ``catalogue()`` — everything the installed agent reports. It is the full
   truth, and it is what the agent detail page renders. Nothing narrows it.
 * ``offered()`` / ``suggest()`` — what a PICKER should show. Usually the same
-  list: the agent's catalogue is what the agent itself can run, and nothing on
-  the AGENT narrows it. Curation for a given audience belongs to the surface
-  that has one — a channel carries its own allowed range and applies it to its
-  own ``/model`` card — not to the agent, which answers only "what can this
-  agent be put on".
+  list: the agent's catalogue is what the agent itself can run, and nothing
+  narrows it — not the agent, and not the surface doing the asking. Curation
+  lived on the agent once and on the channel after that; migration 0067 took the
+  last of it away, so the web picker and a channel's ``/model`` card both offer
+  the whole list.
 
   With an LLM connection ACTIVE for the agent, they answer from somewhere else
   entirely. The agent's turns then go to that endpoint, not to the account its

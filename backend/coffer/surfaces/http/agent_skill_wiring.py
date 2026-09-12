@@ -16,10 +16,12 @@ from coffer.application.agent.config_file_service import AgentConfigFileService
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.mcp_entry_service import AgentMcpEntryService
 from coffer.application.agent.mcp_service import AgentMcpService
+from coffer.application.agent.native_memory_service import AgentNativeMemoryService
 from coffer.application.agent.plugin_service import AgentPluginService
 from coffer.application.agent.plugin_sync_state import AgentPluginSyncState
 from coffer.application.agent.service import AgentService
 from coffer.application.agent.sync_reconcile import AgentImportGate, AgentSideEffectsReconcile
+from coffer.application.agent.transcript_service import AgentTranscriptService
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.resource_service import ResourceService
@@ -30,7 +32,10 @@ from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.scan import scan_locations
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
+from coffer.infrastructure.agent.native_memory_store import FileNativeMemoryScanner
 from coffer.infrastructure.agent.plugin_bundle import FsPluginDetailReader
+from coffer.infrastructure.agent.plugin_cli import ClaudePluginCli
+from coffer.infrastructure.agent.transcript_reader import FileTranscriptReader
 from coffer.infrastructure.skill.master_store import MasterStore
 from coffer.infrastructure.skill.persistence import SkillBindingRepo
 from coffer.infrastructure.skill.sync_engine import SyncEngine
@@ -44,7 +49,9 @@ from coffer.surfaces.http.dependencies import (
 )
 from coffer.surfaces.http.workspace_dependencies import (
     set_agent_mcp_entry_service,
+    set_agent_native_memory_service,
     set_agent_plugin_service,
+    set_agent_transcript_service,
 )
 
 if TYPE_CHECKING:
@@ -156,6 +163,23 @@ def wire_agent_and_skill_kinds(
         audit=audit,
         store=config_file_store,
         detail_reader=FsPluginDetailReader(),
+        cli_runner=ClaudePluginCli(),
+    )
+
+    # Read-only listing of the agent's OWN native per-project memory stores
+    # (Claude Code's projects/<slug>/memory, Codex's global memories/MEMORY.md).
+    # Coffer never writes them — the UI only opens/reveals the directory.
+    agent_native_memory_svc = AgentNativeMemoryService(
+        agent_service=agent_svc,
+        scanner=FileNativeMemoryScanner(),
+    )
+
+    # Read-only browse over the agent's own conversation transcripts. The reader
+    # is a singleton on purpose: its mtime-aware cache is what keeps listing an
+    # agent with thousands of past sessions responsive.
+    agent_transcript_svc = AgentTranscriptService(
+        reader=FileTranscriptReader(),
+        agent_service=agent_svc,
     )
 
     # The plugin inventory travels in an export bundle. Codex on a new machine
@@ -222,7 +246,9 @@ def wire_agent_and_skill_kinds(
     set_agent_config_file_service(agent_config_file_svc)
     set_agent_mcp_service(agent_mcp_svc)
     set_agent_mcp_entry_service(agent_mcp_entry_svc)
+    set_agent_native_memory_service(agent_native_memory_svc)
     set_agent_plugin_service(agent_plugin_svc)
+    set_agent_transcript_service(agent_transcript_svc)
     set_skill_service(skill_svc)
 
     if builtin_tools is not None:

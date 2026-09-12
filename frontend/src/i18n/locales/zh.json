@@ -79,6 +79,7 @@
     "agents": "Agent",
     "channels": "渠道",
     "audit": "审计日志",
+    "chat": "聊天",
     "modelProviders": "模型提供商"
   },
   "resources": {
@@ -549,6 +550,11 @@
     "INTERNAL_ERROR": "发生意外错误",
     "INVALID_PREFIX": "无效的前缀",
     "KB_NOT_FOUND": "未找到知识库",
+    "KNOWLEDGE_COLLECTION_EXISTS": "同名知识集合已存在",
+    "KNOWLEDGE_COLLECTION_NOT_FOUND": "未找到该知识集合",
+    "KNOWLEDGE_ERROR": "知识层拒绝了该操作",
+    "KNOWLEDGE_FILE_NOT_FOUND": "未找到该知识文件",
+    "KNOWLEDGE_PATH_UNSAFE": "该路径不在知识集合范围内",
     "MASTER_KEY_FILE_INVALID": "这不是一个有效的主密钥",
     "MASTER_KEY_MISSING": "主密钥缺失，Coffer 无法解密已存储的密钥",
     "MCP_ENTRY_NOT_FOUND": "未找到该 MCP 条目",
@@ -562,6 +568,9 @@
     "NOT_FOUND": "未找到。",
     "NO_ACTIVE_PROVIDER": "当前没有启用的模型 provider",
     "PLUGIN_NOT_FOUND": "未找到该插件",
+    "PLUGIN_TOGGLE_UNSUPPORTED": "该插件无法在此启用或停用",
+    "PLUGIN_UNINSTALL_FAILED": "卸载失败",
+    "PLUGIN_UNINSTALL_UNSUPPORTED": "该插件不支持卸载",
     "PRIVILEGED_PATH": "该路径受保护，无法在此使用",
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": "已保存的凭据与内联密钥，二者必须且只能提供一个",
     "RECONVERSION_BLOCKED": "重建索引正在进行中",
@@ -669,6 +678,9 @@
       "config": "配置文件",
       "skills": "Skill",
       "mcpServers": "MCP 服务器",
+      "plugins": "插件",
+      "memory": "记忆",
+      "conversations": "对话记录",
       "mcp": {
         "gatewayTitle": "经 Coffer 网关",
         "directTitle": "直连 server",
@@ -685,7 +697,49 @@
         "deleteConfirm": "确认从该 Agent 的配置文件中删除该条目？将写入 .bak 备份。",
         "bulkDeleteConfirm": "确认删除选中的 {{count}} 个 server？每个都会写入 .bak 备份。",
         "searchPlaceholder": "搜索 server"
+      },
+      "pluginsTab": {
+        "enabled": "启用",
+        "cacheMissing": "缓存缺失",
+        "uninstall": "卸载",
+        "uninstallConfirm": "确认卸载该插件？配置条目与缓存目录都会被移除。",
+        "bulkUninstallConfirm": "确认卸载选中的 {{count}} 个插件？配置条目与缓存目录都会被移除。",
+        "claudeUninstallHint": "完全卸载请使用 claude plugin 命令",
+        "empty": "没有已安装的插件",
+        "parseError": "配置解析失败，该文件降级只读",
+        "marketplace": "Marketplace",
+        "searchPlaceholder": "搜索插件",
+        "version": "版本",
+        "author": "作者",
+        "bundledSkills": "附带 Skill",
+        "bundledCommands": "附带命令",
+        "bundledMcp": "附带 MCP server",
+        "noDetail": "该插件暂无更多信息。"
       }
+    },
+    "agentOwn": "Agent 自有（不经 Coffer）",
+    "memoryTab": {
+      "accessViaGateway": "该 agent 通过 MCP 网关访问 Coffer 的知识；请在知识页面管理集合。",
+      "notInstalled": "该 agent 尚未安装 Coffer MCP —— 安装后才能通过网关访问 Coffer 的知识。",
+      "openMemoryPage": "打开知识页面",
+      "nativeHint": "该 agent 自己的原生记忆库（不经 Coffer 管理），只读。",
+      "nativeEmpty": "该 agent 没有原生记忆库。",
+      "searchPlaceholder": "搜索项目或路径…",
+      "colProject": "项目",
+      "colPath": "路径",
+      "colItems": "条目数"
+    },
+    "conversationsTab": {
+      "title": "对话历史",
+      "subtitle": "该 agent 的本地对话记录。",
+      "empty": "该 agent 暂无对话记录。",
+      "colTitle": "标题",
+      "colProject": "项目",
+      "colMessages": "消息数",
+      "colStarted": "开始时间",
+      "colLastActivity": "最后聊天时间",
+      "searchPlaceholder": "搜索标题或项目…",
+      "sortBy": "按{{field}}排序"
     },
     "configDirOverride": "配置目录（可选）",
     "configDirPlaceholder": "留空则使用默认目录（~/.claude）",
@@ -908,6 +962,114 @@
     "delete": {
       "title": "删除集合",
       "description": "删除「{{name}}」及其中的所有文件？此操作不可撤销。"
+    }
+  },
+  "chat": {
+    "title": "对话",
+    "thinking": "思考中…",
+    "emptyState": {
+      "title": "尚未配置连接",
+      "body": "请先添加一个 LLM 连接，再开始对话。",
+      "cta": "前往设置 → LLM 连接"
+    },
+    "message": {
+      "failed": "该回复未完成。",
+      "tokens": "输入 {{prompt}} · 输出 {{completion}}"
+    },
+    "modelBar": {
+      "model": "模型",
+      "noModel": "未选择模型",
+      "noModels": "尚无模型",
+      "selectAria": "选择模型"
+    },
+    "history": {
+      "title": "对话列表",
+      "new": "新对话",
+      "empty": "暂无对话",
+      "search": "搜索对话",
+      "noMatches": "没有匹配的对话",
+      "ariaLabel": "对话历史",
+      "rename": "重命名",
+      "renameAria": "重命名对话",
+      "delete": "删除",
+      "collapse": "折叠历史面板",
+      "expand": "展开历史面板",
+      "restore": "恢复",
+      "archive": "归档",
+      "viewArchived": "查看归档",
+      "backToActive": "返回活跃",
+      "archivedTitle": "已归档",
+      "archivedEmpty": "没有已归档的对话",
+      "filterLabel": "筛选对话",
+      "filterActive": "活跃",
+      "filterArchived": "归档",
+      "viaChannel": "来自 {{channel}}"
+    },
+    "thread": {
+      "empty": "发送消息开始对话。",
+      "selectOrCreate": "选择一个对话或新建一个。",
+      "notFoundTitle": "未找到该对话",
+      "notFoundBody": "它可能已被删除，或者链接已失效。",
+      "notFoundCta": "开始新对话"
+    },
+    "archivedThread": {
+      "notice": "该对话已归档。",
+      "restore": "恢复以继续对话",
+      "restoring": "恢复中…"
+    },
+    "composer": {
+      "placeholder": "输入消息…（Enter 发送，Shift+Enter 换行）",
+      "ariaLabel": "消息输入框",
+      "send": "发送",
+      "stop": "停止",
+      "streaming": "回复正在生成中 —— 你的下一条消息将进入队列。"
+    },
+    "queue": {
+      "label": "队列中：",
+      "edit": "编辑排队消息",
+      "remove": "从队列移除"
+    },
+    "toolCard": {
+      "unknown": "未知工具",
+      "running": "运行中",
+      "done": "完成",
+      "error": "错误",
+      "input": "输入",
+      "result": "结果",
+      "errorLabel": "错误",
+      "toggleAria": "切换工具调用 {{name}}"
+    },
+    "newConversation": {
+      "agent": "Agent",
+      "model": "模型",
+      "noModels": "尚无模型 —— 请先到「设置 → LLM 连接」添加一个连接。",
+      "unavailable": "不可用",
+      "workdir": "工作目录",
+      "workdirPlaceholder": "/你的/项目/路径",
+      "recent": "最近的目录"
+    },
+    "modelPicker": {
+      "label": "Agent 模型",
+      "placeholder": "模型（可选）",
+      "inheritNoModel": "默认"
+    },
+    "draft": {
+      "guide": "给 {{agent}} 发消息，开始新对话。",
+      "workdirNeeded": "在上方填写工作目录后，即可与 {{agent}} 对话。",
+      "noAgentTitle": "没有可用的受管 agent",
+      "noAgentBody": "聊天需要连接 Coffer 受管的 agent。请安装或配置 Claude Code 或 Codex，然后在「Agent」页面注册。",
+      "noConnectionTitle": "尚未配置连接",
+      "noConnectionBody": "该 agent 还没有启用的 LLM 连接。请先添加一个，再开始对话。",
+      "noConnectionCta": "前往设置 → LLM 连接"
+    },
+    "delete": {
+      "title": "删除此对话？",
+      "body": "此对话及其所有消息将被永久删除。"
+    },
+    "archive": {
+      "title": "归档此对话？",
+      "body": "它将被移入归档，你可以随时恢复。",
+      "confirm": "归档"
     }
   },
   "channels": {

@@ -18,6 +18,10 @@ dependencies = [
     # release is verified.
     "fastapi>=0.141.1,<0.142",
     "uvicorn[standard]>=0.52.4",
+    # The web Chat page streams a turn over SSE; `surfaces/http/chat/turn_routes`
+    # imports EventSourceResponse directly, so it is declared here rather than
+    # relied on arriving transitively through `mcp` (same reasoning as httpx2).
+    "sse-starlette>=3.4",
     "watchfiles>=1.0,<2.0",
     "pydantic>=2.13.5",
     "sqlalchemy[asyncio]>=2.0,<3.0",
