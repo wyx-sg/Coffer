@@ -80,12 +80,19 @@ function scopePath(kind: string, name: string): string {
   return `/resources/${encodeURIComponent(kind)}/${encodeURIComponent(name)}/scope`;
 }
 
-/** Current activation scope for one resource, plus whether its kind supports scope. */
-export function useResourceScope(kind: string, name: string) {
+/**
+ * Current activation scope for one resource, plus whether its kind supports
+ * scope.
+ *
+ * `enabled: false` turns the query off for callers that already hold the
+ * answer — the list payloads (`ResourceOut.scope`, `SkillOut.scope`) carry it,
+ * so a table rendering one ScopeControl per row must not pay one GET per row.
+ */
+export function useResourceScope(kind: string, name: string, enabled = true) {
   return useQuery({
     queryKey: resourceScopeKey(kind, name),
     queryFn: () => getJson<ResourceScope>(scopePath(kind, name)),
-    enabled: name.length > 0,
+    enabled: enabled && name.length > 0,
   });
 }
 
@@ -104,6 +111,12 @@ export function useUpdateResourceScope(kind: string, name: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: resourceScopeKey(kind, name) });
       void qc.invalidateQueries({ queryKey: ["agents"] });
+      // The list payloads carry `scope`, and the list tables now render the
+      // control from that field rather than from this query — so a write here
+      // has to refresh them too, or a row would keep showing its pre-write
+      // reach. ["skills"] mirrors useResourceMutations' kind-own-key rule.
+      void qc.invalidateQueries({ queryKey: ["resources"] });
+      if (kind === "skill") void qc.invalidateQueries({ queryKey: ["skills"] });
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });

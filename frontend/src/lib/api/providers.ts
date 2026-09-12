@@ -140,6 +140,13 @@ export const providersApi = {
   update: (name: string, body: ProviderPatch) =>
     call<Provider>("PATCH", `/providers/${name}`, body),
 
+  /** Rename a connection. Its own route rather than a PATCH field because the
+   * name is the connection's IDENTITY, not one of its settings: the daemon has
+   * to repoint the vault entry, the audit trail and the projected agent config
+   * in one operation, and a name already in use is a 409 rather than a merge. */
+  rename: (name: string, newName: string) =>
+    call<Provider>("POST", `/providers/${name}/rename`, { new_name: newName }),
+
   remove: (name: string) => call<void>("DELETE", `/providers/${name}`),
 
   activate: (name: string) => call<ActivateOut>("POST", `/providers/${name}/activate`),

@@ -159,24 +159,6 @@ class MCPToolView(BaseModel):
     enabled: bool
 
 
-class ToolTieringServerOut(BaseModel):
-    server: str
-    total: int
-    listed: int
-
-
-class ToolTieringOut(BaseModel):
-    """Tool tiering: how much of the aggregated catalogue agents currently see."""
-
-    enabled: bool
-    budget: int
-    window_days: int
-    total: int
-    listed: int
-    hidden: int
-    servers: list[ToolTieringServerOut] = Field(default_factory=list)
-
-
 class MCPResourceView(BaseModel):
     prefixed_uri: str
     original_uri: str

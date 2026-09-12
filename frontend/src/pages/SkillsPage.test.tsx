@@ -18,10 +18,6 @@ import type { SkillOut } from "@/lib/api/skills";
 vi.mock("@/lib/hooks/useSkills", () => ({
   useSkills: vi.fn(),
   useImportSkill: vi.fn(),
-  useSetSkillEnabled: () => ({
-    enable: { mutate: vi.fn(), isPending: false },
-    disable: { mutate: vi.fn(), isPending: false },
-  }),
   useRemoveSkill: vi.fn(),
   useVerifySkills: vi.fn(),
   useRepairSkillDrift: vi.fn(),

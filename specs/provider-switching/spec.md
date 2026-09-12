@@ -348,11 +348,15 @@ agent could use.
   free-text stands — the picker remains a fixed dropdown, and the current value
   is always selectable. A connection therefore adds ids to the picker instead of
   hiding the agent's own.
-- **H4 — The Agent page's model slots stay read-only on the built-in login.**
+- **H4 — The Agent page offers NO model control on the built-in login.**
   Those slots bind a CONNECTION's model (E3/E4): `agent.model` is read only when
-  Coffer projects a connection. They now render the catalogue plus a hint that
-  the built-in login's model is chosen per conversation, so the read-only state
-  is explained rather than looking broken.
+  Coffer projects a connection. So on the built-in login the panel shows no
+  picker and no list — only a line saying where the model is chosen instead (per
+  conversation in the chat picker, `/model` in a channel, or that channel's own
+  default model), so the absence is explained rather than looking broken.
+  (Superseded twice: 2026-09-11b made the panel a curation control, and its
+  2026-09-12 withdrawal removed the control altogether — curation belongs to the
+  channel, [channels](../channels/spec.md) FR-071.)
 - **H5 — Coffer tells the agent which model it is on.** The system-prompt append
   Coffer adds on every turn now states which model Coffer put the agent on — or
   that Coffer set no override — and which ids are available. The motivating
@@ -443,8 +447,11 @@ conversion; and Coffer still validates no model id against a list of its own.
 
 ## Amendment 2026-09-11b — The agent curates which of its own catalogue it offers
 
-> Status: Draft. **Narrows H1's catalogue at the point of OFFER; it does not
-> change what the catalogue is.** Recorded after a design pass with the user.
+> Status: **Partly withdrawn 2026-09-12.** K1 (the retirement filter) stands. The
+> PER-AGENT curated set K2–K4 introduced is **withdrawn**: curation belongs to
+> the surface that has an audience, and it now lives on the CHANNEL
+> ([spec channels](../channels/spec.md) FR-071). The bullets below are rewritten
+> to say what remains.
 > Cross-ref [ADR provider-switching](../../docs/decisions/provider-switching.md).
 
 **Why.** H1 made the catalogue the agent's own answer, which was right and
@@ -465,7 +472,8 @@ account config, with `modelAccessCache` in `~/.claude.json` empty on this
 machine. **Which models an account may run is an account fact, not a local
 one.** A list hardcoded in Coffer would be wrong within a month, because Claude
 Code ships new models every few weeks and the user would have no way to tell why
-a new one never appeared. So Coffer shows the catalogue and the user ticks it.
+a new one never appeared. So Coffer shows the catalogue and the user ticks it —
+on the CHANNEL since the 2026-09-12 withdrawal below, not on the agent.
 
 - **K1 — Drop the models the binary itself says are dead.** The Claude Code
   bundle carries a second table beside the catalog, pairing a model id with its
@@ -478,49 +486,43 @@ a new one never appeared. So Coffer shows the catalogue and the user ticks it.
   the anchor ever stops matching the source returns the catalogue **unfiltered**
   rather than a filter built from half a table. This shrinks the list the user
   has to curate, costs nothing, and updates itself on every CLI upgrade.
-- **K2 — `models: list[str]` on the agent: which of the catalogue its pickers
-  offer.** Stored on `AgentConfig` in the agent's resource row. **EMPTY means
-  NOT CURATED** — the whole (K1-filtered) catalogue is offered, exactly as
-  before this amendment — which is the default, what every agent registered
-  before revision 0060 carries, and what Coffer must do for someone who never
-  opens the screen. It never means "no models".
-- **K3 — The catalogue route stays whole; the selection is separate
-  information.** `GET /api/v1/agent-providers/{agent_key}/models` keeps
-  returning the full K1-filtered catalogue: the curation screen renders that
-  list and ticks the selection against it, so a narrowed catalogue would make an
-  un-ticked model impossible to tick back on. `GET|PUT
-  …/models/selection` carries the curated set. Keyed by agent TYPE, like the
-  catalogue itself and like the `/model` card, which knows nothing else; the
-  set is stored on the first enabled agent resource of that type — the same one
-  that supplies the config dir, so catalogue and curation can never come from
-  two different agents.
-- **K4 — Curation narrows OFFERS, never validation.** Anything that asks "what
-  models can this agent be put on" for a PICKER gets the curated set: the web
-  picker, the channel `/model` card
-  (`ModelSuggestionPort.suggest`), and the per-turn note H5 appends. Nothing
-  VALIDATES a model name against it, or against the catalogue — the CLI accepts
-  names outside the catalogue entirely (tier aliases, and models newer than the
-  installed binary), so `/model <name>` stays raw passthrough and a bad name
-  surfaces as the CLI's own error. Ids are stored verbatim, shape-checked only
-  (non-blank, deduplicated preserving order, a sane cap), and a curated id the
-  catalogue no longer carries is simply not offered.
-- **Wire.** `AgentModelSelectionOut.models: list[str]` on `GET`/`PUT`
-  `/api/v1/agent-providers/{agent_key}/models/selection`;
-  `AgentModelSelectionIn.models: list[str]` replaces the set wholesale, `[]`
-  clears it. `PUT` is 404 when no agent of that type is registered — the set
-  lives in an agent's config row, so without one there is nowhere to put it.
-  Contract: [`specs/channels/contracts/api.openapi.yaml`](../channels/contracts/api.openapi.yaml),
+- **K2 — WITHDRAWN: `models: list[str]` on the agent.** The ticked set was
+  stored on `AgentConfig` and narrowed every picker that asked about that agent.
+  The premise was right — a cumulative, account-blind catalogue needs the user's
+  answer — but the PLACE was wrong: an agent has no audience, and curating it
+  narrowed a chat on a phone and a person opening the agent page at once. The
+  field, its shape validator and revision 0060's backfill are all gone, stripped
+  by **revision 0062** with no load-time shim (house rule). Where the answer
+  lives now: `default_model` + `models` on the CHANNEL (channels FR-071).
+- **K3 — The catalogue route stays whole, and is now the ONLY one.**
+  `GET /api/v1/agent-providers/{agent_key}/models` still returns the full
+  K1-filtered catalogue, which is what the agent page renders. `GET|PUT
+  …/models/selection` is **removed** along with `AgentModelSelectionIn` /
+  `AgentModelSelectionOut`: there is no second question to ask of an agent any
+  more. Still keyed by agent TYPE, still answered from the first enabled agent
+  resource of that type.
+- **K4 — Narrowing an OFFER is the surface's job, never validation.** "What can
+  this agent be put on" has one answer — `offered()` / `suggest()` return the
+  agent's catalogue (or an active connection's curated set, amendment
+  2026-09-11c). A surface that must offer less applies its own range over that
+  list: the channel `/model` card does, and it also REFUSES a `/model <id>`
+  outside its range. Everywhere else a model name stays raw passthrough — the
+  CLI accepts names outside the catalogue entirely (tier aliases, models newer
+  than the installed binary), so a bad name surfaces as the CLI's own error.
+- **Wire.** Only `AgentModelsOut` remains on
+  `GET /api/v1/agent-providers/{agent_key}/models`. Contract:
+  [`specs/channels/contracts/api.openapi.yaml`](../channels/contracts/api.openapi.yaml),
   where the agent-provider routes already live.
-- **Audit.** No new event: the curated set is ordinary agent config, so a change
-  rides the `resource_updated` event `ResourceService.update_config` already
-  emits.
-- **Migration 0060** writes `models: []` into every existing `kind='agent'` row,
-  so each agent states its own answer — uncurated — rather than leaning on a
-  reader's default. One-shot, per the house rule: no load-time shim.
+- **Audit.** Nothing to record: there is no per-agent curated set to change.
+- **Migration 0060** wrote `models: []` into every `kind='agent'` row;
+  **migration 0062** takes the key back off every one of them, because
+  `AgentConfig` forbids extra keys and a row still carrying it would fail to
+  validate on load.
 
 **Nuances:** H1 (the catalogue is still the agent's own answer, now minus what
-the agent says is retired) and H4 (the Agent page's built-in-login panel is now
-a curation control rather than a read-only list). **Still NOT in scope:**
+the agent says is retired) and H4 (the Agent page's built-in login now offers no
+model control at all — not a picker, not a tick list — just a line saying where
+the model is chosen). **Still NOT in scope:**
 deriving account entitlement locally — it is not derivable — and Coffer still
 writes down no model name of its own.
 
@@ -538,24 +540,24 @@ openai-compatible gateway routed to `claude_code`, the card offered Claude's own
 model names, none of which that endpoint serves; tapping one passed the id
 straight through to the SDK, which sent it to `ANTHROPIC_BASE_URL` and failed
 the turn. Both narrowing rules that existed — the retirement table and the
-per-agent curated set — describe the account the AGENT logs into itself, which
-is not where those turns were going.
+per-agent curated set (since withdrawn, see 2026-09-11b) — describe the account
+the AGENT logs into itself, which is not where those turns were going.
 
 - **K1 — An active connection's curated set IS what a picker offers.** When a
   connection is `is_active`, compatible with the agent type and carries a
   curated model set, `offered()` / `suggest()` answer with those ids, in the
-  user's order, consulting neither the agent's catalogue nor the per-agent
-  selection over it. `catalogue()` is unchanged and still reports the agent's
-  own models: it is the full truth the detail page renders for ticking, and what
-  a picker does with it is `offered()`'s business.
+  user's order, without consulting the agent's catalogue. `catalogue()` is
+  unchanged and still reports the agent's own models: it is the full truth the
+  detail page renders, and what a picker does with it is `offered()`'s
+  business.
 - **K2 — An active connection that curates nothing changes nothing.** Coffer
   knows where the turns go, not what that endpoint serves, and deliberately does
   not ask: this read happens on every card render and every turn, so
   introspection would put a network round trip on the daemon's event loop
   (CODE-034). The agent's own answer stands; curating the connection's set is
   how the user makes it accurate.
-- **K3 — No active compatible connection means the agent's own login**, and
-  2026-09-11b's rules apply unchanged. A provider row Coffer cannot parse
+- **K3 — No active compatible connection means the agent's own login**, and the
+  catalogue (minus 2026-09-11b's K1 retirement filter) is the answer. A provider row Coffer cannot parse
   degrades to this case rather than failing the read.
 - **K4 — Codex additionally gets the list in ITS OWN picker.** Projecting a
   curated connection into Codex writes a Coffer-owned catalogue file next to its
@@ -587,9 +589,9 @@ is not where those turns were going.
     for `claude_code` the Coffer-side surfaces stay the only places the model is
     chosen.
 
-**Nuances:** 2026-09-11b (the per-agent curated set — still the answer whenever
-the agent is on its own login) and H1 (the catalogue is read, never authored —
-now read from the connection when one is active). **Still NOT in scope:**
+**Nuances:** 2026-09-11b's K1 retirement filter (still applied whenever the
+agent is on its own login) and H1 (the catalogue is read, never authored — now
+read from the connection when one is active). **Still NOT in scope:**
 endpoint introspection on a picker read, and Coffer still validates no model id
 against a list of its own.
 
@@ -633,6 +635,62 @@ only ever hold its own default, which makes it vestigial. Retiring the field is
 a separate change — it is on the public API and the OpenAPI contract — and is
 deliberately NOT done here.
 
+## Amendment 2026-09-12 — A connection can be renamed; its models list themselves
+
+> Status: Draft. Adds a rename operation; **supersedes the "name is immutable"
+> assumption** the edit dialog encoded, and the Models tab's manual fetch.
+
+**A1 — The name is editable, and renaming is one operation.** A connection's
+name is the only handle the user has on it, and it was the one field the edit
+dialog refused to change. It is also its IDENTITY: the vault entry it owns is
+`provider/<name>/key`, its audit rows are filed under `provider:<name>`, and the
+name is written verbatim into the agent config Coffer projects (Claude Code's
+`apiKeyHelper` → `coffer provider key --connection <name>`, Codex's provider
+`display_name`). A rename therefore MUST move all four together, which is why it
+is `POST /api/v1/providers/{name}/rename` and not another `PATCH` field: a patch
+edits a connection's settings, and a name that another connection already holds
+must be a 409 rather than an edit that silently merges two connections.
+
+- The owned vault entry moves with the name — written under the new ref before
+  the row moves, the old one removed after, so no step can leave the connection
+  pointing at a secret that is not there. A ref that ANOTHER resource also cites
+  stays where it is: renaming it would break that other citer.
+- The audit trail follows the resource. The log says what happened to a
+  connection, and after a rename that is still the same connection, so stranding
+  its history under a name that no longer resolves would lose it; the rename
+  itself is recorded as `resource_renamed` with the old and new names, so
+  nothing is erased.
+- An ACTIVE connection is re-projected under the new name, so an agent Coffer
+  put on it keeps resolving its key instead of calling the shim with a
+  connection that no longer exists.
+- Renaming to the current name is a no-op, not an error.
+
+**A2 — The Models tab introspects on open; there is no "Fetch models" button.**
+Which models an endpoint serves is a fact about the endpoint, exactly like the
+tool list of an MCP server — and Coffer lists those the moment you open the
+server. Making the user press a button first meant the common case (open the
+tab, see nothing, wonder whether the endpoint offers nothing or was never
+asked) was indistinguishable from an empty endpoint. So the tab probes as it
+opens, once per visit, with the table saying it is loading while it does.
+
+- A failed probe MUST be visible and retryable: the table names the failure and
+  offers a retry. Silence is not an acceptable outcome of an automatic fetch.
+- A failed or empty probe still MUST leave the curated selection alone, and the
+  EMPTY-selection semantics are unchanged: empty means no restriction — every
+  model the endpoint serves.
+
+**A3 — Two surface corrections that follow from what each page is for.**
+
+- The internal-engine badge is gone from the model-providers LIST row. That page
+  manages providers; which one Coffer's own engine happens to run on is a fact
+  about the engine, and it is stated where it is set (the internal-engine
+  settings panel) and on the connection's own detail header.
+- The detail header now carries the shared `ScopeControl` instead of a read-only
+  enabled/disabled badge: the list could disable a connection and its own page
+  could not. `provider` declares no per-agent scope, so the control renders its
+  two-segment Disabled/Enabled fallback — and it is now the single place that
+  state is both shown and changed.
+
 ## Scope
 
 ### In scope
@@ -650,11 +708,11 @@ deliberately NOT done here.
 - The connection's curated `models` set (the 2026-09-11 amendment): stored on
   `ProviderConfig`, carried by create + patch, backfilled empty by revision 0059,
   and applied by every model picker that offers that connection's models.
-- The agent's curated `models` set and the retirement filter (the 2026-09-11b
-  amendment): stored on `AgentConfig`, carried by
-  `GET|PUT /api/v1/agent-providers/{agent_key}/models/selection`, backfilled
-  empty by revision 0060, and applied by every picker that offers the AGENT's
-  own catalogue — while the catalogue route itself stays whole.
+- The retirement filter (the 2026-09-11b amendment): the agent's own catalogue
+  minus the models the installed binary's own retirement table calls dead. The
+  per-agent curated `models` set that amendment also introduced is WITHDRAWN —
+  model curation lives on the channel now (channels FR-071), the field is gone
+  and revision 0062 strips it from stored rows.
 - Retire the standalone `ModelConfig` registry (model CRUD REST + `coffer model`
   CLI), folding internal-engine model selection into the connection. The
   provider introspection routes (`list-models`, `test-connection`) are KEPT.
@@ -847,6 +905,10 @@ Full spec in [contracts/api.openapi.yaml](./contracts/api.openapi.yaml).
   `compatible_agents`, `models`, `secret_value`); `wire_format`/`protocol` and
   `credential_ref` are immutable; `secret_value` rotates the stored secret;
   `models` is a whole-value replace (`[]` clears the curated set)
+- `POST /api/v1/providers/{name}/rename` (`{new_name}`) → rename; moves the
+  owned vault entry, repoints the audit trail and re-projects an active
+  connection in one operation. 409 when another connection already holds the
+  name, 404 when this one is absent, no-op when the name is unchanged
 - `DELETE /api/v1/providers/{name}` → delete; guard via
   `find_credential_citations` before removing an owned secret
 - `POST /api/v1/providers/{name}/activate` → switch; returns
@@ -926,6 +988,23 @@ and `internal_default`.
 >   because a curated set of a real endpoint's models is a list, and every other
 >   list in Coffer is that table. Empty selection still means NO RESTRICTION.
 > - The **Moonshot (Kimi)** preset is gone.
+
+> **Amendment 2026-09-11b (the surface, after the 2026-09-12 withdrawal).** The
+> Agent page's Overview tab has no model control on the built-in login: the
+> `AgentModelSelection` panel and the `GET|PUT …/models/selection` client that
+> fed it are gone, and the branch renders one muted line saying the model is
+> chosen per conversation — in the chat picker, with `/model <id>` in a channel,
+> or by that channel's own default model. The non-built-in branch is untouched:
+> a connection still binds its model / fast-model dropdowns. The catalogue
+> endpoint stays, and the channel dialogs are what read it now
+> ([channels](../channels/spec.md) FR-071).
+
+> **Amendment 2026-09-12 (the surface, after A1–A3).** The edit dialog's Name
+> field is editable and submits a rename ahead of the patch, with the detail
+> page following the new URL (the route IS the name). The Models tab has no
+> fetch button — it probes on open and offers a retry when that fails. The list
+> row carries no internal-engine badge, and the detail header's read-only
+> enabled/disabled badge is replaced by the shared `ScopeControl`.
 
 ## Acceptance Scenarios
 
@@ -1191,6 +1270,46 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
 - **Then** it reports `[]` — no restriction, the endpoint's whole catalogue — both
   at creation and after the `[]` patch, which clears the curated set.
 
+### Scenario: rename a connection and keep its credential, audit trail and projection
+
+**Given** an active connection `acme` with an inline secret, projected into a
+registered Claude Code agent,
+**When** `POST /api/v1/providers/acme/rename {"new_name": "acme-eu"}` is called,
+**Then** the connection answers at `acme-eu` and no longer at `acme`, its
+`credential_ref` is `provider/acme-eu/key` with the secret readable there and the
+old ref gone, the agent's projected `apiKeyHelper` names `acme-eu`, and the audit
+rows recorded under the old name are returned when querying the new one.
+
+### Scenario: reject a rename onto a name another connection already uses
+
+**Given** two connections `acme` and `taken`,
+**When** `acme` is renamed to `taken`,
+**Then** the response is 409 `RESOURCE_ALREADY_EXISTS` and both connections still
+resolve under their original names with their credentials intact.
+
+### Scenario: an agent bound to a renamed connection still resolves its key
+
+**Given** a Claude Code agent running on connection `acme`,
+**When** `acme` is renamed,
+**Then** `GET /api/v1/providers/<new name>/key` returns the same secret, the
+connection the projected config names is the new one, and the connection is
+still active and still compatible with that agent.
+
+### Scenario: the models table lists the endpoint's models when it opens
+
+**Given** a connection whose endpoint serves a model list,
+**When** the Models tab of its detail page is opened,
+**Then** the endpoint is introspected without any user action and its model ids
+fill the table, each with its own offered/not-offered switch — there is no
+"Fetch models" button.
+
+### Scenario: a failed model introspection says so and offers a retry
+
+**Given** a connection whose endpoint refuses the model-list probe,
+**When** the Models tab is opened,
+**Then** the failure is stated on the surface with a retry control, and the
+connection's existing curated selection is left exactly as it was.
+
 ## Requirements
 
 ### Functional Requirements
@@ -1335,6 +1454,27 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
   the whole value like `compatible_agents` — `null` leaves it unchanged, `[]`
   clears the restriction — and MUST NOT require a route of its own. A change MUST
   ride the `resource_updated` audit event provider updates already emit.
+
+**Rename**
+
+- **FR-027**: A connection MUST be renamable through a route of its own
+  (`POST /api/v1/providers/{name}/rename`), NOT a `ProviderPatch` field. The
+  operation MUST move, together: the resource row, the vault entry the
+  connection owns (`provider/<name>/key` — unless another resource also cites
+  that ref, in which case it MUST be left alone), the `audit_log` rows filed
+  under `provider:<old>`, and — when the connection is active — the projection
+  in every compatible agent's native config. It MUST record a `resource_renamed`
+  audit event naming both names. A name another connection already holds MUST be
+  refused with `RESOURCE_ALREADY_EXISTS` (409) BEFORE anything is written; an
+  absent connection MUST be a 404; renaming to the current name MUST be a no-op.
+
+**Model introspection on the connection detail page**
+
+- **FR-028**: The Models tab MUST introspect the endpoint when it opens, without
+  a user action, and MUST show that it is doing so. A probe that FAILS MUST say
+  so on the surface and offer a retry — it MUST NOT fail silently. A failed or
+  empty probe MUST leave the curated `models` selection unchanged, and the
+  empty-means-unrestricted semantics of FR-025 MUST be unaffected.
 
 ### Key Entities
 

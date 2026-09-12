@@ -17,21 +17,10 @@ vi.mock("@/lib/hooks/useModelIntrospection", () => ({
   useTestConnection: vi.fn(),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({ usePatchAgent: vi.fn() }));
-vi.mock("@/lib/hooks/useAgentModels", () => ({
-  useAgentModels: vi.fn(),
-  useAgentModelSelection: vi.fn(),
-  useSetAgentModelSelection: vi.fn(),
-}));
 
 import { useActivateProvider, useProviders, useUseBuiltinProvider } from "@/lib/hooks/useProviders";
 import { useListProviderModels, useTestConnection } from "@/lib/hooks/useModelIntrospection";
 import { usePatchAgent } from "@/lib/hooks/useAgents";
-import {
-  useAgentModels,
-  useAgentModelSelection,
-  useSetAgentModelSelection,
-} from "@/lib/hooks/useAgentModels";
-import type { AgentModel } from "@/lib/api/agentModels";
 
 const useProvidersMock = useProviders as unknown as ReturnType<typeof vi.fn>;
 const useActivateMock = useActivateProvider as unknown as ReturnType<typeof vi.fn>;
@@ -39,17 +28,6 @@ const useUseBuiltinMock = useUseBuiltinProvider as unknown as ReturnType<typeof 
 const useListMock = useListProviderModels as unknown as ReturnType<typeof vi.fn>;
 const useTestMock = useTestConnection as unknown as ReturnType<typeof vi.fn>;
 const usePatchAgentMock = usePatchAgent as unknown as ReturnType<typeof vi.fn>;
-const useAgentModelsMock = useAgentModels as unknown as ReturnType<typeof vi.fn>;
-const useSelectionMock = useAgentModelSelection as unknown as ReturnType<typeof vi.fn>;
-const useSetSelectionMock = useSetAgentModelSelection as unknown as ReturnType<typeof vi.fn>;
-const saveSelectionMutate = vi.fn();
-
-/** The daemon-served catalogue for claude_code: concrete, version-bearing ids
- * read back from the agent — one with a display name, one without. */
-const CATALOGUE: AgentModel[] = [
-  { id: "claude-opus-5", label: "Opus 5", description: "" },
-  { id: "claude-fable-5-1", label: "", description: "" },
-];
 
 const activateMutate = vi.fn();
 const useBuiltinMutate = vi.fn();
@@ -142,11 +120,6 @@ beforeEach(() => {
     data: undefined,
   });
   usePatchAgentMock.mockReturnValue({ mutate: patchAgentMutate, isPending: false });
-  useAgentModelsMock.mockReturnValue({ data: CATALOGUE });
-  // Uncurated by default — the out-of-the-box state, where every model is on
-  // offer and nothing is ticked.
-  useSelectionMock.mockReturnValue({ data: [] });
-  useSetSelectionMock.mockReturnValue({ mutate: saveSelectionMutate, isPending: false });
   useProvidersMock.mockReturnValue({ data: [] });
 });
 
@@ -325,17 +298,19 @@ describe("AgentOverviewTab", () => {
     expect(screen.queryByRole("combobox", { name: /fast model/i })).not.toBeInTheDocument();
   });
 
-  test("the built-in login curates the catalogue instead of showing dead model slots", () => {
-    // Nothing reads `agent.model` on the built-in login, so offering two model
-    // dropdowns there would be a control that writes a field nobody reads.
-    // Show what the agent reports instead — with a tick beside each model the
-    // user says their account can actually run.
+  test("the built-in login offers NO model control at all, only where to choose one", () => {
+    // Nothing reads `agent.model` on the built-in login, so a model dropdown
+    // there would write a field nobody reads — and curating a model list on an
+    // AGENT is equally wrong: an agent has no audience. A channel does, and it
+    // carries its own default model and allowed range (spec channels FR-071).
+    // So this branch offers no control whatsoever, just the sentence saying
+    // where the choice happens.
     useProvidersMock.mockReturnValue({ data: [] });
     render(<AgentOverviewTab agent={agent} />);
     expect(screen.queryByRole("combobox", { name: /^model$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: /fast model/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: "claude-opus-5" })).toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: "claude-fable-5-1" })).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
     expect(screen.getByText(/chosen per conversation/i)).toBeInTheDocument();
   });
 

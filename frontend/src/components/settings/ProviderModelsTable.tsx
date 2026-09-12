@@ -1,9 +1,12 @@
 // frontend/src/components/settings/ProviderModelsTable.tsx
 //
 // The "Models" tab of the connection detail page: WHICH of this endpoint's
-// models the connection offers. "Fetch models" introspects the endpoint (the
-// same /models/list-models call ProviderModelField uses); flipping a row's
-// Switch PATCHes the whole selection back as `models`.
+// models the connection offers. The endpoint is introspected when the tab
+// OPENS — the same /models/list-models probe, now a query instead of a button
+// press, because an MCP server's tools are listed the moment you look at it and
+// a provider's models are the same kind of thing: what the remote side offers,
+// not something the user should have to ask for. Flipping a row's Switch PATCHes
+// the whole selection back as `models`.
 //
 // EMPTY selection = NO RESTRICTION — every model the endpoint serves is offered.
 // A non-empty one narrows the agent's model picker to exactly those ids
@@ -13,8 +16,9 @@
 //
 // An endpoint that cannot list its models (empty result, or a failed probe) is
 // reported as such and LEAVES the current selection alone: a curated list the
-// user built earlier must survive a later fetch that fails.
-import { useState } from "react";
+// user built earlier must survive a probe that fails. A failure is never silent
+// — it names itself and offers a retry, because an automatic fetch that quietly
+// yields nothing is indistinguishable from an endpoint with nothing to offer.
 import { useTranslation } from "react-i18next";
 import { Loader2, RefreshCw } from "lucide-react";
 
@@ -24,16 +28,16 @@ import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
 import type { Provider } from "@/lib/api/providers";
-import { useListProviderModels } from "@/lib/hooks/useModelIntrospection";
+import { useEndpointModels } from "@/lib/hooks/useModelIntrospection";
 import { useUpdateProvider } from "@/lib/hooks/useProviders";
 
 export function ProviderModelsTable({ provider }: { provider: Provider }) {
   const { t } = useTranslation();
-  const list = useListProviderModels();
+  const endpoint = useEndpointModels(provider.name, probe(provider));
   const update = useUpdateProvider();
-  const [fetched, setFetched] = useState<string[]>([]);
 
   const selected = provider.models ?? [];
+  const fetched = endpoint.data?.models ?? [];
   // The rows: what the endpoint offers, plus anything already curated that it no
   // longer lists (so a stale pick stays visible AND untoggleable-away).
   const rows = [...selected, ...fetched.filter((m) => !selected.includes(m))];
@@ -43,8 +47,8 @@ export function ProviderModelsTable({ provider }: { provider: Provider }) {
   const toggle = (model: string) =>
     write(selected.includes(model) ? selected.filter((m) => m !== model) : [...selected, model]);
 
-  const listMsg = list.data?.message;
-  const fetchFailed = list.error != null;
+  const listMsg = endpoint.data?.message;
+  const fetchFailed = endpoint.error != null;
 
   const columns: Column<string>[] = [
     {
@@ -82,25 +86,27 @@ export function ProviderModelsTable({ provider }: { provider: Provider }) {
 
   return (
     <Card className="space-y-3 p-4">
-      {/* The hint and the fetch trigger sit above the table; the tab label
-          already carries the title this card used to repeat. */}
+      {/* The hint sits above the table; the tab label already carries the title
+          this card used to repeat. The right-hand slot is now a STATUS, not a
+          trigger: the probe is in flight, or it failed and can be retried. */}
       <div className="flex flex-row items-start justify-between gap-3">
         <p className="max-w-prose text-sm text-muted-foreground">
           {t("settings.connections.detail.modelsHint")}
         </p>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => list.mutate(probe(provider), { onSuccess: (r) => setFetched(r.models) })}
-          disabled={list.isPending}
-        >
-          {list.isPending ? (
-            <Loader2 className="mr-1.5 size-3.5 animate-spin" />
-          ) : (
+        {endpoint.isFetching ? (
+          <span
+            className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground"
+            role="status"
+          >
+            <Loader2 className="size-3.5 animate-spin" />
+            {t("settings.connections.detail.loadingModels")}
+          </span>
+        ) : fetchFailed ? (
+          <Button size="sm" variant="outline" onClick={() => void endpoint.refetch()}>
             <RefreshCw className="mr-1.5 size-3.5" />
-          )}
-          {t("settings.models.fetchModels")}
-        </Button>
+            {t("settings.connections.detail.retryFetch")}
+          </Button>
+        ) : null}
       </div>
 
       <div
@@ -115,7 +121,7 @@ export function ProviderModelsTable({ provider }: { provider: Provider }) {
       {fetchFailed ? (
         <p className="text-sm text-destructive">
           {t("settings.connections.detail.fetchFailed", {
-            error: translateApiError(t, list.error),
+            error: translateApiError(t, endpoint.error),
           })}
         </p>
       ) : listMsg && fetched.length === 0 ? (
@@ -131,13 +137,15 @@ export function ProviderModelsTable({ provider }: { provider: Provider }) {
           placeholder: t("settings.connections.detail.modelSearchPlaceholder"),
         }}
         filters={filters}
-        // DataTable takes ONE empty message, so pick the one that is true: with
-        // nothing curated and nothing fetched there is nothing to find yet;
-        // otherwise the rows exist and the search/filter is what hid them.
+        // DataTable takes ONE empty message, so pick the one that is true: the
+        // probe is still running; nothing is curated and the endpoint listed
+        // nothing; or the rows exist and the search/filter is what hid them.
         emptyMessage={
-          rows.length === 0
-            ? t("settings.connections.detail.noModelsYet")
-            : t("settings.connections.detail.noModelsMatch")
+          endpoint.isPending
+            ? t("settings.connections.detail.loadingModels")
+            : rows.length === 0
+              ? t("settings.connections.detail.noModelsYet")
+              : t("settings.connections.detail.noModelsMatch")
         }
       />
 

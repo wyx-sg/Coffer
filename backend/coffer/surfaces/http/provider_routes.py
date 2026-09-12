@@ -21,6 +21,7 @@ from coffer.surfaces.http.provider_schemas import (
     ProviderListOut,
     ProviderOut,
     ProviderPatch,
+    ProviderRename,
 )
 
 router = APIRouter(
@@ -76,6 +77,25 @@ async def create_provider(
         actor=actor,
     )
     return _provider_out(resource)
+
+
+@router.post("/{name}/rename", response_model=ProviderOut)
+async def rename_provider(
+    name: str,
+    body: ProviderRename,
+    svc: ProviderService = Depends(get_provider_service),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> ProviderOut:
+    """Rename a connection.
+
+    WHY this is its own route and not ``PATCH /{name}``: PATCH edits a
+    connection's CONFIG, while the name is its IDENTITY. Renaming repoints the
+    owned vault ref, the audit trail and the projected agent config in one
+    operation, and a name another connection already uses answers 409 rather
+    than being silently merged into that connection the way a patch field would.
+    Renaming to the current name is a no-op. 404 when the connection is absent.
+    """
+    return _provider_out(await svc.rename(name, body.new_name, actor=actor))
 
 
 @router.get("/active-key/{wire}", response_model=ActiveKeyOut)

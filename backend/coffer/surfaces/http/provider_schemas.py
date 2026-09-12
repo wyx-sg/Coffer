@@ -48,6 +48,18 @@ class ProviderPatch(BaseModel):
     description: str | None = None
 
 
+class ProviderRename(BaseModel):
+    """Move a connection to a new name.
+
+    Separate from ``ProviderPatch`` because the name is the connection's
+    IDENTITY, not part of its config: the vault ref it owns, its audit trail and
+    the agent config it is projected into all spell the name out, so changing it
+    is an operation of its own rather than another optional patch field.
+    """
+
+    new_name: str = Field(min_length=1, max_length=64)
+
+
 class ProviderOut(BaseModel):
     """An LLM connection as returned by the API (no secret).
 

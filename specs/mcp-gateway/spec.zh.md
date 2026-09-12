@@ -119,8 +119,9 @@ Coffer 自己的 `coffer__*` 工具——包括 `search_tools`——恒定列出
 未列出**不等于**被禁用：`tools/call` 校验的是能力偏好，从不校验是否在列表中，
 因此未列出的工具路由与此前完全一致，而 `coffer__search_tools` 检索的仍是**完整**
 目录。分层是 fail-open 的——`COFFER_TOOL_TIERING=off`，或使用统计查询的任何失败，
-都会列出全部。`GET /api/v1/mcp/tiering` 报告当前切分情况，MCP 服务器页面在确有
-工具未列出时会提示。
+都会列出全部。切分情况不在管理页面上报告：「为什么 agent 看不到工具 X」是在
+agent 会话内部提出的问题，而下文的 `initialize` instructions 已经回答了它；管理
+界面上再复述一遍，只是多出一个要持续维持正确、且读者并非提问者的界面。
 
 #### `initialize` instructions
 

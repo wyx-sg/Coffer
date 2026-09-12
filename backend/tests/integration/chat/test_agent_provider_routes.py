@@ -26,13 +26,12 @@ from fastapi.testclient import TestClient
 
 from coffer.application.agent.model_catalogue import AgentModelCatalogueService
 from coffer.application.chat.registry import AgentProviderRegistry
-from coffer.domain.agent.config import AgentConfig
 from coffer.domain.resource import Resource
 from coffer.infrastructure.agent.model_discovery import NativeConfigModelDiscovery
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_provider_routes import router as agent_provider_router
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.dependencies import get_agent_registry, get_agent_service
+from coffer.surfaces.http.dependencies import get_agent_registry
 from coffer.surfaces.http.turn_dependencies import get_agent_model_catalogue
 from tests.unit.chat.conftest import FakeAgentProvider
 
@@ -55,30 +54,11 @@ def _agent_resource(config_dir: pathlib.Path, *, agent_type: str = "claude_code"
         kind="agent",
         name=agent_type,
         description=None,
-        config={"type": agent_type, "config_dir": str(config_dir), "models": []},
+        config={"type": agent_type, "config_dir": str(config_dir)},
         enabled=True,
         created_at=_NOW,
         updated_at=_NOW,
     )
-
-
-class _FakeAgentService:
-    """Just the one write the selection route makes, over the same rows the
-    catalogue service reads — so a PUT is visible to the next GET."""
-
-    def __init__(self, agents: _FakeAgents) -> None:
-        self._agents = agents
-
-    async def set_offered_models(
-        self, *, name: str, model_ids: list[str], actor: str = "api"
-    ) -> Resource:
-        for resource in await self._agents.list():
-            if resource.name == name:
-                resource.config = AgentConfig.model_validate(
-                    resource.config | {"models": model_ids}
-                ).model_dump(mode="json")
-                return resource
-        raise AssertionError(f"no such agent: {name}")
 
 
 def _build_app(agents: _FakeAgents) -> FastAPI:
@@ -92,7 +72,6 @@ def _build_app(agents: _FakeAgents) -> FastAPI:
     app.include_router(agent_provider_router)
     app.dependency_overrides[get_agent_registry] = lambda: registry
     app.dependency_overrides[get_agent_model_catalogue] = lambda: catalogue
-    app.dependency_overrides[get_agent_service] = lambda: _FakeAgentService(agents)
     return app
 
 
@@ -170,12 +149,11 @@ def test_discovered_models_from_the_agents_own_config(tmp_path: pathlib.Path) ->
     ]
 
 
-# --- the curated selection ---------------------------------------------------
+# --- the retired per-agent selection -----------------------------------------
 #
-# The catalogue route above answers "what does this agent report"; these answer
-# "which of those does the user actually want offered". They are separate
-# information on purpose — the screen renders the catalogue with ticks against
-# it, so narrowing the catalogue would make a model impossible to tick back on.
+# Model curation lives on the CHANNEL now (spec channels FR-071), not on the
+# agent. The agent answers one question — what can this agent be put on — and
+# these pin that the second question no longer has a route to ask it from.
 
 
 def _claude_json(tmp_path: pathlib.Path, *ids: str) -> pathlib.Path:
@@ -189,102 +167,37 @@ def _claude_json(tmp_path: pathlib.Path, *ids: str) -> pathlib.Path:
     return config_dir
 
 
-def test_an_untouched_agent_has_curated_nothing(tmp_path: pathlib.Path) -> None:
+def test_the_selection_route_is_gone(tmp_path: pathlib.Path) -> None:
+    """Neither verb answers any more: FastAPI has no such path at all, so both
+    are 404 even with an agent of that type registered."""
     config_dir = _claude_json(tmp_path, "claude-opus-5", "claude-mythos-5")
     set_active_token(_TOKEN)
 
     with TestClient(_build_app(_FakeAgents([_agent_resource(config_dir)]))) as client:
-        resp = client.get("/api/v1/agent-providers/claude_code/models/selection", headers=_HEADERS)
-
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["models"] == []
-
-
-def test_a_selection_round_trips_and_leaves_the_catalogue_whole(
-    tmp_path: pathlib.Path,
-) -> None:
-    config_dir = _claude_json(tmp_path, "claude-opus-5", "claude-mythos-5")
-    set_active_token(_TOKEN)
-
-    with TestClient(_build_app(_FakeAgents([_agent_resource(config_dir)]))) as client:
+        got = client.get("/api/v1/agent-providers/claude_code/models/selection", headers=_HEADERS)
         put = client.put(
             "/api/v1/agent-providers/claude_code/models/selection",
             headers=_HEADERS,
             json={"models": ["claude-opus-5"]},
         )
-        got = client.get("/api/v1/agent-providers/claude_code/models/selection", headers=_HEADERS)
-        catalogue = client.get("/api/v1/agent-providers/claude_code/models", headers=_HEADERS)
 
-    assert put.status_code == 200, put.text
-    assert put.json()["models"] == ["claude-opus-5"]
-    assert got.json()["models"] == ["claude-opus-5"]
-    # The catalogue route still shows BOTH — the unticked one has to stay
-    # visible or it could never be ticked again.
-    assert [m["id"] for m in catalogue.json()["models"]] == [
-        "claude-opus-5",
-        "claude-mythos-5",
-    ]
+    assert got.status_code == 404, got.text
+    assert put.status_code == 404, put.text
 
 
-def test_an_empty_selection_clears_the_curation(tmp_path: pathlib.Path) -> None:
-    """``[]`` is "not curated", which restores the whole catalogue to every
-    picker — it is never "offer nothing"."""
+def test_the_catalogue_is_never_narrowed_by_anything_on_the_agent(
+    tmp_path: pathlib.Path,
+) -> None:
+    """What the CLI reports is what the route answers. There is no stored
+    ticked set left to subtract, so both models come back."""
     config_dir = _claude_json(tmp_path, "claude-opus-5", "claude-mythos-5")
     set_active_token(_TOKEN)
 
     with TestClient(_build_app(_FakeAgents([_agent_resource(config_dir)]))) as client:
-        client.put(
-            "/api/v1/agent-providers/claude_code/models/selection",
-            headers=_HEADERS,
-            json={"models": ["claude-opus-5"]},
-        )
-        cleared = client.put(
-            "/api/v1/agent-providers/claude_code/models/selection",
-            headers=_HEADERS,
-            json={"models": []},
-        )
-
-    assert cleared.status_code == 200, cleared.text
-    assert cleared.json()["models"] == []
-
-
-def test_a_model_outside_the_catalogue_may_still_be_curated(tmp_path: pathlib.Path) -> None:
-    """Ids are stored verbatim. The catalogue moves on every CLI upgrade, so an
-    id it does not currently carry is a stale menu entry, not a config error."""
-    config_dir = _claude_json(tmp_path, "claude-opus-5")
-    set_active_token(_TOKEN)
-
-    with TestClient(_build_app(_FakeAgents([_agent_resource(config_dir)]))) as client:
-        resp = client.put(
-            "/api/v1/agent-providers/claude_code/models/selection",
-            headers=_HEADERS,
-            json={"models": ["claude-opus-5", "some-model-from-next-year"]},
-        )
+        resp = client.get("/api/v1/agent-providers/claude_code/models", headers=_HEADERS)
 
     assert resp.status_code == 200, resp.text
-    assert resp.json()["models"] == ["claude-opus-5", "some-model-from-next-year"]
-
-
-def test_curating_with_no_registered_agent_is_404(client_no_agents: TestClient) -> None:
-    """The set lives in an agent's config row; without one there is nowhere to
-    put it. Reading is still a 200 with an empty answer."""
-    put = client_no_agents.put(
-        "/api/v1/agent-providers/claude_code/models/selection",
-        headers=_HEADERS,
-        json={"models": ["claude-opus-5"]},
-    )
-    get = client_no_agents.get(
-        "/api/v1/agent-providers/claude_code/models/selection", headers=_HEADERS
-    )
-
-    assert put.status_code == 404, put.text
-    assert get.status_code == 200
-    assert get.json()["models"] == []
-
-
-def test_selection_on_an_unknown_agent_key_is_404(client_no_agents: TestClient) -> None:
-    resp = client_no_agents.get(
-        "/api/v1/agent-providers/no-such-agent/models/selection", headers=_HEADERS
-    )
-
-    assert resp.status_code == 404, resp.text
+    assert [m["id"] for m in resp.json()["models"]] == [
+        "claude-opus-5",
+        "claude-mythos-5",
+    ]

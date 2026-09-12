@@ -20,6 +20,7 @@ from typing import Protocol as _Protocol
 
 from coffer.application.audit_service import AuditService
 from coffer.application.provider.projector import ProjectionConfigStore, ProviderProjector
+from coffer.application.provider.rename_ops import rename as _rename_op
 from coffer.application.provider.results import ActivateResult, DeactivateResult
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.types import AgentType
@@ -210,10 +211,13 @@ class ProviderService:
         cfg = self._cfg(resource)
         await self._resources.delete(self._ref(name), actor)
         owned = self._owned_ref(name)
-        if cfg.credential_ref == owned and not await self._resources.find_credential_citations(
-            owned
-        ):
+        citers = await self._resources.find_credential_citations(owned)
+        if cfg.credential_ref == owned and not citers:
             await asyncio.to_thread(self._credentials.delete, owned)
+
+    async def rename(self, name: str, new_name: str, *, actor: str = "api") -> Resource:
+        """Rename a connection; see ``rename_ops`` for the order of operations."""
+        return await _rename_op(self, name, new_name, actor=actor)
 
     # --- switch + key resolution --------------------------------------------
 

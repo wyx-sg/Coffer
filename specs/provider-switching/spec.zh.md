@@ -180,9 +180,12 @@ id，而这些 id 该 agent 一个都用不了。
   introspect 出的模型（`POST /models/list-models`）∪ 该对话当前的取值。D4 禁止自由输入这一条**保持
   不变**——选择器仍是固定下拉，且当前值始终可选。于是连接是往选择器里**增加** id，而不是把 agent
   自己的模型藏起来。
-- **H4 — Agent 页的模型槽位在内置登录下保持只读。** 这些槽位绑的是**连接**的模型（E3/E4）：
-  只有当 Coffer 投影了一条连接时才会读 `agent.model`。它们现在展示这份模型清单，并附一句提示说明
-  内置登录的模型是按对话选择的——让只读状态有解释，而不是看起来像坏了。
+- **H4 — Agent 页在内置登录下不提供任何模型控件。** 这些槽位绑的是**连接**的模型（E3/E4）：
+  只有当 Coffer 投影了一条连接时才会读 `agent.model`。因此内置登录下既没有选择器也没有清单，
+  只留一句话说明模型在别处选：聊天里的模型选择器、频道里的 `/model`，或该频道自己的默认模型——
+  让「这里什么都没有」有解释，而不是看起来像坏了。（两次被取代：2026-09-11b 曾把这个面板变成
+  策展控件，其 2026-09-12 的撤回又把控件整个去掉——策展属于 channel，见
+  [channels](../channels/spec.md) FR-071。）
 - **H5 — Coffer 会告诉 agent 它跑在哪个模型上。** Coffer 每轮追加的 system prompt 现在会说明
   Coffer 把 agent 切到了哪个模型——或者说明 Coffer 没有设置任何覆盖——以及有哪些 id 可用。触发这条的
   事件：在一次真实的 channel 会话里被问到时，agent 很自信地报出了一个它并没有在跑的模型，因为它的
@@ -246,9 +249,10 @@ id 去比对自己写死的名单。
 
 ## 修订 2026-09-11b — agent 自己策展「从自己的清单里提供哪些模型」
 
-> 状态：Draft。**在「提供」这一步收窄 H1 的清单，不改变清单本身是什么。**
-> 与用户完成一轮设计讨论后记录。交叉引用
-> [ADR provider-switching](../../docs/decisions/provider-switching.md)。
+> 状态：**2026-09-12 部分撤回。** K1（退役过滤）保留。本条引入的**逐 agent** 策展集合
+> K2–K4 **已撤回**：策展属于「有受众的那个面」，现在它落在 **channel** 上
+> （见 [spec channels](../channels/spec.zh.md) FR-071）。下面的条目已改写为「还剩下什么」。
+> 交叉引用 [ADR provider-switching](../../docs/decisions/provider-switching.md)。
 
 **为什么。** H1 让清单成为 agent 自己的答案，这一条是对的、现在仍然是对的——但那个答案是
 **累积的**，而且**对账号无感**。在当前安装上，Claude Code 内嵌的目录有十九个模型，而这位用户的
@@ -261,7 +265,8 @@ id 去比对自己写死的名单。
 （opus 保留四个版本，sonnet 保留两个）。CLI 自己的过滤跑在 `e.config.models` 上——那是**服务端下发
 的账号配置**，而本机 `~/.claude.json` 里的 `modelAccessCache` 是空的。**一个账号能跑哪些模型是账号
 事实，不是本机事实。** 把名单写死在 Coffer 里，一个月内就会过时：Claude Code 每隔几周就发新模型，
-而用户完全无从知道为什么新模型一直不出现。所以 Coffer 展示清单，由用户勾选。
+而用户完全无从知道为什么新模型一直不出现。所以 Coffer 展示清单，由用户勾选——自下面 2026-09-12
+的撤回起，勾选发生在 **channel** 上，而不在 agent 上。
 
 - **K1 — 二进制自己说已经死掉的模型，直接去掉。** Claude Code 的 bundle 在目录旁边还带着第二张表，
   把模型 id 与各 provider 的退役日期对应起来，并为那些会被 CLI 静默改道的模型记下它 `remappedTo`
@@ -269,35 +274,32 @@ id 去比对自己写死的名单。
   已消失。只用 `firstParty`——其余各列（bedrock、vertex、foundry……）描述的是 Coffer 不配置的部署，
   日期也不同。读法与目录完全一致：按结构定位；一旦锚点不再匹配，该来源返回**未过滤的**清单，而不是
   用半张表拼出来的过滤器。这缩短了用户需要策展的列表，不花任何代价，并随每次 CLI 升级自动更新。
-- **K2 — agent 上的 `models: list[str]`：清单里哪些会被选择器提供。** 存在 agent resource 行的
-  `AgentConfig` 上。**空 = 尚未策展**——整份（经 K1 过滤的）清单都会被提供，与本次修订之前完全一致
-  ——这是默认值，是修订 0060 之前注册的每个 agent 所携带的值，也是 Coffer 对一个从不打开这个页面的
-  用户必须做到的事。它**绝不**表示「没有模型」。
-- **K3 — 清单路由保持完整，策展集合是另一份信息。**
-  `GET /api/v1/agent-providers/{agent_key}/models` 仍返回经 K1 过滤的完整清单：策展界面渲染的
-  就是这份清单，并把策展集合作为勾选叠在上面；如果清单本身被收窄，取消勾选的模型就再也勾不回来了。
-  `GET|PUT …/models/selection` 承载策展集合。与清单本身、以及只知道 agent 类型的 `/model` 卡片
-  一致，按 agent **类型**寻址；集合存在该类型下第一个已启用的 agent resource 上——与提供 config dir
-  的是同一个，因此清单与其策展永远不会来自两个不同的 agent。
-- **K4 — 策展收窄的是「提供」，绝不是「校验」。** 凡是为了**选择器**去问「这个 agent 能被切到哪些
-  模型」的地方，拿到的都是策展集合：网页选择器、channel 的 `/model` 卡片
-  （`ModelSuggestionPort.suggest`）、以及 H5 每轮追加的那条说明。没有任何地方拿它——或拿清单——去
-  **校验**模型名：CLI 接受清单之外的名字（档位别名，以及比已安装二进制更新的模型），所以
-  `/model <名字>` 仍是原样透传，坏名字由 CLI 自己报错。id 原样存储，只校验形状（非空、去重且保序、
-  合理上限）；清单里已经没有的策展 id，只是不再被提供而已。
-- **接口。** `GET`/`PUT` `/api/v1/agent-providers/{agent_key}/models/selection` 上的
-  `AgentModelSelectionOut.models: list[str]`；`AgentModelSelectionIn.models: list[str]` 整体替换
-  该集合，`[]` 表示清空。当该类型下没有已注册的 agent 时 `PUT` 返回 404——集合存在 agent 的 config
-  行里，没有 agent 就无处安放。契约见
+- **K2 — 已撤回：agent 上的 `models: list[str]`。** 那个勾选集合存在 `AgentConfig` 上，并收窄
+  每一个问到这个 agent 的选择器。前提是对的——一份累积且对账号无感的清单确实需要用户来回答——但
+  **放置的位置**错了：agent 没有受众，在它身上策展会同时收窄「手机上的一个聊天」和「打开 agent
+  页面的那个人」。该字段、它的形状校验、以及修订 0060 的回填现已全部移除，由**修订 0062** 剥除，
+  不留 load-time 垫片（房规）。答案现在住在哪里：channel 上的 `default_model` + `models`
+  （channels FR-071）。
+- **K3 — 清单路由保持完整，而且现在是唯一的一个。**
+  `GET /api/v1/agent-providers/{agent_key}/models` 仍返回经 K1 过滤的完整清单，agent 页渲染的
+  就是它。`GET|PUT …/models/selection` 连同 `AgentModelSelectionIn` / `AgentModelSelectionOut`
+  一并**移除**：对一个 agent 已经没有第二个问题可问了。仍按 agent **类型**寻址，仍由该类型下第一个
+  已启用的 agent resource 作答。
+- **K4 — 收窄「提供」是「面」的职责，永远不是校验。**「这个 agent 能被切到哪些模型」只有一个答案
+  ——`offered()` / `suggest()` 返回 agent 的清单（或激活连接的策展集合，见 2026-09-11c 修订）。
+  需要少提供一些的那个面，自己把范围叠在这份列表上：channel 的 `/model` 卡片就是这么做的，而且它
+  还会**拒绝**范围之外的 `/model <id>`。其余任何地方模型名都仍是原样透传——CLI 接受清单之外的名字
+  （档位别名，以及比已安装二进制更新的模型），坏名字由 CLI 自己报错。
+- **接口。** `GET /api/v1/agent-providers/{agent_key}/models` 上只剩 `AgentModelsOut`。契约见
   [`specs/channels/contracts/api.openapi.yaml`](../channels/contracts/api.openapi.yaml)，
   agent-provider 的路由本来就在那里。
-- **审计。** 不新增事件：策展集合是普通的 agent 配置，一次修改搭
-  `ResourceService.update_config` 已经发出的 `resource_updated` 事件即可。
-- **迁移 0060** 为每一条既有 `kind='agent'` 行写入 `models: []`，让每个 agent 自己陈述答案——尚未
-  策展——而不是依赖读取方的默认值。按房规一次性完成：不留 load-time 垫片。
+- **审计。** 无可记录：已经没有逐 agent 的策展集合会被改动。
+- **迁移 0060** 曾为每一条 `kind='agent'` 行写入 `models: []`；**迁移 0062** 再把这个键从每一行
+  上取下来——`AgentConfig` 禁止多余键，仍带着它的行在加载时会校验失败。
 
 **细化：** H1（清单仍然是 agent 自己的答案，只是减去了 agent 自己说已退役的部分）与 H4（Agent 页
-内置登录面板从只读列表变成策展控件）。**仍不在范围内：** 在本机推导账号权限——它推导不出来；
+在内置登录下不再提供任何模型控件——既无选择器也无勾选清单，只留一句话说明模型在哪里选）。
+**仍不在范围内：** 在本机推导账号权限——它推导不出来；
 Coffer 仍不写下任何属于自己的模型名。
 
 ## 修订 2026-09-11c — 有激活连接时，由它回答「选择器该提供什么」
@@ -309,17 +311,17 @@ Coffer 仍不写下任何属于自己的模型名。
 **缺陷。** `AgentModelCatalogueService` 是所有「提供模型选择」界面共用的唯一清单，但它只问 agent，
 对 Coffer 已经为该 agent 激活的连接一无所知。于是把 openai 兼容网关路由给 `claude_code` 之后，
 卡片给出的是 Claude 自己的模型名，而那个端点一个都不提供；点下去 id 被原样透传给 SDK，发往
-`ANTHROPIC_BASE_URL`，这一轮直接失败。此前已有的两条收窄规则——退役表与逐 agent 的策展集合——
+`ANTHROPIC_BASE_URL`，这一轮直接失败。此前已有的两条收窄规则——退役表与逐 agent 的策展集合（后者已撤回，见 2026-09-11b）——
 描述的都是 **agent 自己登录的那个账号**，而这些请求根本没发往那里。
 
 - **K1 —— 激活连接的策展集合「就是」选择器提供的内容。** 当一条连接 `is_active`、与该 agent 类型
-  兼容、且带有策展模型集合时，`offered()` / `suggest()` 直接以那些 id 作答，按用户的顺序，既不看
-  agent 的 catalogue，也不看其上的逐 agent 勾选。`catalogue()` 不变，仍然报告 agent 自己的模型：
-  它是详情页用于勾选的完整事实，而选择器如何使用它是 `offered()` 的事。
+  兼容、且带有策展模型集合时，`offered()` / `suggest()` 直接以那些 id 作答，按用户的顺序，不看
+  agent 的 catalogue。`catalogue()` 不变，仍然报告 agent 自己的模型：它是详情页呈现的完整事实，
+  而选择器如何使用它是 `offered()` 的事。
 - **K2 —— 激活但未策展则什么都不变。** Coffer 知道请求发往哪里，但不知道那个端点提供什么，并且
   刻意不问：这次读取发生在每次渲染卡片、每一轮对话时，introspect 会把一次网络往返放到 daemon 的
   事件循环上（CODE-034）。此时仍以 agent 自己的答案为准；用户想要准确，就去这条连接上策展模型集合。
-- **K3 —— 没有兼容的激活连接即「agent 自己的登录」**，2026-09-11b 的规则原样适用。一条 Coffer
+- **K3 —— 没有兼容的激活连接即「agent 自己的登录」**，答案就是清单（减去 2026-09-11b K1 的退役过滤）。一条 Coffer
   解析不了的 provider 行会退化到这种情况，而不是让读取失败。
 - **K4 —— Codex 还会把这份清单送进它「自己的」选择器。** 把一条已策展的连接投影给 Codex 时，
   Coffer 会在它的 `config.toml` 旁写一份 Coffer 所有的 catalogue 文件，并让 `model_catalog_json`
@@ -340,7 +342,7 @@ Coffer 仍不写下任何属于自己的模型名。
     是 Claude Code 对自己 API 响应中某字段的**缓存**，会被刷新覆盖；它不是对外契约，写进去的东西
     会被冲掉。所以对 `claude_code` 而言，Coffer 这一侧的界面仍是仅有的选择入口。
 
-**细化：** 2026-09-11b（逐 agent 的策展集合——在 agent 使用自己登录时依然是答案）与 H1（清单只
+**细化：** 2026-09-11b 的 K1 退役过滤（在 agent 使用自己登录时仍然适用）与 H1（清单只
 读取、不编写——在有激活连接时改为向连接读取）。**仍不在范围内：** 读取选择器清单时 introspect
 端点；Coffer 仍不拿任何模型 id 去比对自己写死的名单。
 
@@ -371,6 +373,50 @@ Coffer 仍不写下任何属于自己的模型名。
 **附注（不是决策）：** 只剩一个合法值意味着这个逐 agent 覆盖项只可能等于它自己的默认值，实际已经
 是摆设。退役该字段是另一次改动——它在公开 API 与 OpenAPI 契约上——这里**刻意不做**。
 
+## 修订 2026-09-12 — 连接可以改名；模型自己列出来
+
+> 状态：草案。新增改名操作；**推翻编辑对话框所隐含的「名字不可变」假设**，也推翻
+> 模型 tab 里的手动拉取。
+
+**A1 — 名字可编辑，而改名是一次完整操作。** 名字是用户手里唯一的把手，却恰恰是编辑
+对话框拒绝修改的那一个字段。它同时也是**身份**：连接自有的 vault 条目是
+`provider/<name>/key`，审计行记在 `provider:<name>` 名下，名字还被原样写进 Coffer 投影
+出去的 agent 配置里（Claude Code 的 `apiKeyHelper` → `coffer provider key --connection
+<name>`，Codex provider 的 `display_name`）。所以改名**必须**把这四处一起搬走——这也是
+它是 `POST /api/v1/providers/{name}/rename` 而不是又一个 `PATCH` 字段的原因：patch 改的
+是连接的设置，而撞上另一条连接已占用的名字必须是 409，而不是一次把两条连接悄悄合并的
+编辑。
+
+- 自有的 vault 条目随名字迁移——先按新 ref 写入，行迁移之后再删旧的，任何一步失败都不
+  会让连接指向一个不存在的 secret。若**另一个**资源也引用了同一个 ref，则保持原样：改
+  它会弄坏那个引用方。
+- 审计轨迹跟着资源走。日志记的是「这条连接发生了什么」，改名之后它仍然是同一条连接，
+  把历史留在一个已经解析不到的名字底下就等于丢了它；改名本身记为 `resource_renamed`，
+  同时写下新旧两个名字，所以什么都没被抹掉。
+- **激活中**的连接会按新名字重新投影，这样 Coffer 放上去的 agent 仍能解析到密钥，而不
+  是拿一个已经不存在的连接名去调 shim。
+- 改成当前名字是 no-op，不是错误。
+
+**A2 — 模型 tab 打开即探测；没有「拉取模型」按钮。** 一个端点提供哪些模型，是关于端点
+的事实，和 MCP server 的工具清单完全同类——而 Coffer 打开 server 的那一刻就把工具列出来
+了。先让用户按一次按钮，意味着最常见的情形（打开 tab、什么都没有、猜不出到底是端点没有
+模型还是压根没问过）与「端点确实空」无法区分。所以 tab 打开时就探测，每次访问一次，探测
+期间表格会说明自己正在加载。
+
+- 探测失败**必须**可见且可重试：表格点名失败原因，并提供重试。自动拉取之后保持沉默是不
+  可接受的结果。
+- 探测失败或返回为空，**必须**保持已策展的选择不变；FR-025 的「空 = 不限制」语义不受
+  影响——空仍然表示端点提供的所有模型都可用。
+
+**A3 — 两处界面订正，都来自「这个页面是干什么的」。**
+
+- 模型提供商**列表**行上的「Coffer 引擎」徽章移除。那个页面管理的是提供商；Coffer 自己
+  的引擎恰好跑在哪一条上，是关于引擎的事实，它应当在被设置的地方（内部引擎设置面板）以
+  及该连接自己的详情页头部陈述。
+- 详情页头部改用共享的 `ScopeControl`，取代只读的启用/停用徽章：此前列表能停用一条连接，
+  而它自己的页面不能。`provider` 不声明按 agent 的 scope，因此该控件渲染为两段式
+  停用/启用降级形态——并且现在它是这一状态**唯一**被展示和被修改的地方。
+
 ## 范围
 
 ### 在范围内
@@ -378,7 +424,7 @@ Coffer 仍不写下任何属于自己的模型名。
 - 后端 `provider` resource Kind（通过 ResourceService 实现 CRUD，自动审计 + 自动进入导出/导入）；凭证处理（将 secret 存入 Fernet vault，只保留 ref）；投影服务（将原生配置写入匹配 agent）；切换/激活操作；`PROVIDER_SWITCHED` 审计事件；导出/导入接入（注册 kind）；Claude `apiKeyHelper` 使用的密钥解析。
 - 内部引擎 connection 选择：全局 `internal_default` 标志、`set_internal_default(name)` + `resolve_internal_connection()`、`provider_internal_default_set` 审计事件，供 Coffer 内部 LLM 引擎（memory organizer / reorg / distill）消费。
 - 连接的策展 `models` 集合（2026-09-11 修订）：存在 `ProviderConfig` 上，由 create + patch 承载，由修订 0059 回填为空，并由每个提供该连接模型的选择器落地。
-- agent 的策展 `models` 集合与退役过滤（2026-09-11b 修订）：存在 `AgentConfig` 上，由 `GET|PUT /api/v1/agent-providers/{agent_key}/models/selection` 承载，由修订 0060 回填为空，并由每个提供 **agent 自身**清单的选择器落地——而清单路由本身保持完整。
+- 退役过滤（2026-09-11b 修订）：agent 自己的清单，减去已安装二进制自己的退役表说已经死掉的模型。该修订同时引入的逐 agent 策展 `models` 集合已**撤回**——模型策展现在住在 channel 上（channels FR-071），字段已移除，修订 0062 把它从既有行里剥掉。
 - 退役独立的 `ModelConfig` 注册表（model CRUD REST + `coffer model` CLI），将内部引擎的模型选择折叠进 connection。provider 的 introspection 路由（`list-models`、`test-connection`）保留。
 - CLI：`coffer provider list|add|show|edit|remove|switch|key|internal-default`
 - HTTP API：`/api/v1/providers`（list / create / get / patch / delete）以及 `/api/v1/providers/{name}/activate` 和 `/api/v1/providers/{name}/internal-default`
@@ -515,6 +561,7 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - `POST /api/v1/providers` → 创建（见下方凭证来源规则）
 - `GET  /api/v1/providers/{name}` → 获取单条 profile
 - `PATCH /api/v1/providers/{name}` → 更新可变字段（`base_url`、`compatible_agents`、`models`、`secret_value`）；`wire_format`/`protocol` 和 `credential_ref` 不可变；`secret_value` 可轮换存储的 secret；`models` 为整值替换（`[]` 清除策展集合）
+- `POST /api/v1/providers/{name}/rename`（`{new_name}`）→ 改名；在一次操作中迁移自有 vault 条目、重指审计轨迹，并对激活中的连接重新投影。名字已被另一条连接占用时 409，本连接不存在时 404，名字未变时为 no-op
 - `DELETE /api/v1/providers/{name}` → 删除；删除自有 secret 前通过 `find_credential_citations` 守卫
 - `POST /api/v1/providers/{name}/activate` → 切换；返回 `{activated, projected:[agent...], skipped:[agent...]}`
 - `POST /api/v1/providers/{name}/internal-default` → 设置内部引擎默认；返回更新后的 `ProviderOut`
@@ -563,6 +610,17 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 >   筛选——因为「精选某个真实端点的模型」本来就是一个列表，而 Coffer 的每个列表都是
 >   这张表。空选择仍然表示**不限制**。
 > - **Moonshot (Kimi)** 预设已移除。
+
+> **修订 2026-09-11b（2026-09-12 撤回之后的界面）。** Agent 页的「概览」标签在内置登录下没有任何
+> 模型控件：`AgentModelSelection` 面板以及支撑它的 `GET|PUT …/models/selection` 客户端代码都已删除，
+> 该分支只渲染一行灰字，说明模型按会话选择——在聊天的模型选择器里、在频道里用 `/model <id>`，
+> 或由该频道自己的默认模型决定。非内置分支原样保留：选了连接，仍然是那两个模型 / 快速模型下拉框。
+> catalogue 接口保留，现在读它的是 channel 的对话框（[channels](../channels/spec.md) FR-071）。
+
+> **修订 2026-09-12（A1–A3 之后的界面）。** 编辑对话框的「名称」字段可编辑，提交时先发
+> 改名、再发 patch，详情页随后跟到新 URL（路由本身就是名字）。模型 tab 没有拉取按钮——
+> 打开即探测，失败时提供重试。列表行不再有「Coffer 引擎」徽章，详情页头部只读的启用/
+> 停用徽章由共享的 `ScopeControl` 取代。
 
 ## Acceptance Scenarios
 
@@ -772,6 +830,40 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - **Then** 创建时与 `[]` patch 之后它都返回 `[]`——不限制、即 endpoint 的完整目录——
   `[]` 清除了策展集合。
 
+### Scenario: rename a connection and keep its credential, audit trail and projection
+
+- **Given** 一条激活中的连接 `acme`，带内联 secret，并已投影进一个已注册的 Claude Code agent，
+- **When** 调用 `POST /api/v1/providers/acme/rename {"new_name": "acme-eu"}`，
+- **Then** 连接在 `acme-eu` 下响应、在 `acme` 下不再响应，其 `credential_ref` 为
+  `provider/acme-eu/key` 且 secret 可在该处读到、旧 ref 已消失，agent 被投影的
+  `apiKeyHelper` 指向 `acme-eu`，并且以新名字查询时能拿到记在旧名字下的审计行。
+
+### Scenario: reject a rename onto a name another connection already uses
+
+- **Given** 两条连接 `acme` 与 `taken`，
+- **When** 把 `acme` 改名为 `taken`，
+- **Then** 响应为 409 `RESOURCE_ALREADY_EXISTS`，两条连接仍以各自原名解析、凭据完好。
+
+### Scenario: an agent bound to a renamed connection still resolves its key
+
+- **Given** 一个跑在连接 `acme` 上的 Claude Code agent，
+- **When** `acme` 被改名，
+- **Then** `GET /api/v1/providers/<新名字>/key` 返回同一个 secret，被投影的配置里指向的
+  连接是新名字，且该连接仍处于激活状态、仍与该 agent 兼容。
+
+### Scenario: the models table lists the endpoint's models when it opens
+
+- **Given** 一条端点能列出模型清单的连接，
+- **When** 打开其详情页的模型 tab，
+- **Then** 无需任何用户操作即完成探测，端点的模型 id 填满表格、每行各有自己的提供/不提供
+  开关——不存在「拉取模型」按钮。
+
+### Scenario: a failed model introspection says so and offers a retry
+
+- **Given** 一条端点会拒绝模型列表探测的连接，
+- **When** 打开模型 tab，
+- **Then** 失败在界面上被说明并附带重试控件，且该连接已有的策展选择原封不动。
+
 ## 需求
 
 ### 功能需求
@@ -836,6 +928,24 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 
 - **FR-025**：`ProviderConfig` 必须携带 `models: list[str]`——该连接向下游**提供**的模型 id 集合。**空**列表必须表示不限制（endpoint 提供的所有模型），必须是默认值，也必须是修订 0059 之前创建的每条连接的取值。该字段绝不可被当作「选中的模型」读取：选择仍在使用处（E1/E3）。id 只校验形状——非空白、按序去重、至多 200 个且每个至多 200 字符——并且绝不可与 Coffer 自己写死的模型名单比对。
 - **FR-026**：`ProviderCreate.models`（`null` ⇒ 空）与 `ProviderPatch.models` 必须承载该集合；`ProviderOut.models` 必须返回它。`PATCH` 必须像 `compatible_agents` 一样整值替换——`null` 保持不变，`[]` 清除限制——且不得为此新增路由。对它的修改必须搭乘 provider 更新本就发出的 `resource_updated` 审计事件。
+
+**改名**
+
+- **FR-027**：连接**必须**可以通过它自己的路由（`POST /api/v1/providers/{name}/rename`）
+  改名，而**不是**通过 `ProviderPatch` 的某个字段。该操作**必须**一起迁移：资源行、连接
+  自有的 vault 条目（`provider/<name>/key`——除非另有资源也引用该 ref，此时**必须**保持
+  原样）、记在 `provider:<old>` 名下的 `audit_log` 行，以及——当连接处于激活状态时——它在
+  每个兼容 agent 原生配置中的投影。**必须**记录一条同时写明新旧名字的 `resource_renamed`
+  审计事件。名字已被另一条连接占用时，**必须**在写入任何内容**之前**以
+  `RESOURCE_ALREADY_EXISTS`（409）拒绝；连接不存在时**必须**为 404；改成当前名字**必须**
+  是 no-op。
+
+**连接详情页的模型探测**
+
+- **FR-028**：模型 tab **必须**在打开时自动探测端点，无需用户操作，并**必须**展示它正在
+  探测。探测**失败**时**必须**在界面上说明并提供重试——**不得**静默失败。探测失败或返回
+  为空时**必须**保持已策展的 `models` 选择不变，且 FR-025 的「空 = 不限制」语义**不得**
+  受影响。
 
 ### 关键实体
 

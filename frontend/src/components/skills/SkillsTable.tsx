@@ -2,9 +2,9 @@
 //
 // The skills list rendered via the shared DataTable (mirrors AgentTable): rows
 // navigate to the skill detail page on click, search covers name + description,
-// a status filter narrows to enabled/disabled, each row carries an
-// enable/disable Switch and a Delete icon+text action (the delete opens a
-// styled confirmation dialog — no window.confirm). Multi-select adds a bulk
+// a status filter narrows by reach, each row carries the three-state
+// ScopeControl and a Delete icon+text action (the delete opens a styled
+// confirmation dialog — no window.confirm). Multi-select adds a bulk
 // Verify + bulk Delete bar — Verify is a library-wide maintenance action, so it
 // lives only there. The per-row + bulk action UI lives in SkillsTableActions.tsx.
 //
@@ -96,17 +96,21 @@ export function SkillsTable({ skills }: { skills: SkillOut[] }) {
     },
   ];
 
-  // Source filter intentionally hidden alongside the source column (see above);
-  // the status filter mirrors the agent detail page's Skills tab.
+  // Source filter intentionally hidden alongside the source column (see above).
+  // The status filter follows the status column: since the column stopped being
+  // on/off, "enabled" alone would no longer name a state the user can see, so
+  // the filter offers the control's own three — disabled beats scope, and an
+  // enabled skill is either unscoped (every agent) or scoped (selected).
   const filters: FilterDef<SkillOut>[] = [
     {
       key: "status",
       label: t("resources.cols.status"),
       allLabel: t("resources.status.all"),
-      accessor: (s) => (s.enabled ? "enabled" : "disabled"),
+      accessor: (s) => (!s.enabled ? "disabled" : s.scope === null ? "every" : "selected"),
       options: [
-        { value: "enabled", label: t("common.enabled") },
         { value: "disabled", label: t("common.disabled") },
+        { value: "every", label: t("scope.everyAgent") },
+        { value: "selected", label: t("scope.selectedAgents") },
       ],
     },
   ];

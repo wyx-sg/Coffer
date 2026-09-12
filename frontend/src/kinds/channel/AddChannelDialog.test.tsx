@@ -6,7 +6,7 @@
 // the just-written secrets back so nothing orphaned stays behind. Channels
 // carry no activation scope (ADR per-agent-resource-scope) and no machine affinity, so registration
 // is the whole flow — there is no follow-up bind.
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -16,9 +16,13 @@ import { acceptance } from "@/test/acceptance";
 import { mockApiClient, type ApiClientMock } from "@/test/mockApiClient";
 
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+// The model fields read the bound agent's catalogue (spec channels FR-071).
+vi.mock("@/lib/api/agentModels", () => ({ agentModelsApi: { list: vi.fn() } }));
 
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
+const { agentModelsApi } = await import("@/lib/api/agentModels");
+const listModelsMock = vi.mocked(agentModelsApi.list);
 
 function installApi(api: ApiClientMock) {
   getApiClientMock.mockReturnValue(api as unknown as ReturnType<typeof getApiClient>);
@@ -46,6 +50,15 @@ function fillTelegram() {
 function submit() {
   fireEvent.click(screen.getByRole("button", { name: /^add channel$/i }));
 }
+
+beforeEach(() => {
+  listModelsMock.mockResolvedValue({
+    models: [
+      { id: "claude-opus-5", label: "Opus 5", description: "" },
+      { id: "claude-haiku-4-5", label: "Haiku 4.5", description: "" },
+    ],
+  });
+});
 
 afterEach(() => vi.clearAllMocks());
 
@@ -146,5 +159,51 @@ describe("AddChannelDialog", () => {
     });
     // The translated error surfaces in the dialog.
     expect(await screen.findByRole("alert")).toHaveTextContent(/configuration is invalid/i);
+  });
+
+  test("the channel's default model and allowed range reach the registered config", async () => {
+    // Curation is the CHANNEL's, not the agent's (spec channels FR-071): a
+    // channel has an audience and an agent does not.
+    const api = installApi(mockApiClient());
+    renderDialog();
+    fillTelegram();
+
+    await waitFor(() => expect(screen.getAllByRole("checkbox")).toHaveLength(2));
+    fireEvent.click(screen.getByRole("checkbox", { name: "claude-opus-5" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "claude-haiku-4-5" }));
+    const trigger = screen.getByRole("combobox", { name: /default model/i });
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    fireEvent.click(screen.getByRole("option", { name: "claude-haiku-4-5" }));
+    submit();
+
+    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
+    expect(api.POST.mock.calls[1][1]).toEqual({
+      body: {
+        kind: "channel",
+        name: "tg",
+        config: {
+          channel_type: "telegram",
+          bot_token_ref: "channel/tg/bot-token",
+          default_agent: "claude_code",
+          default_model: "claude-haiku-4-5",
+          models: ["claude-opus-5", "claude-haiku-4-5"],
+        },
+      },
+    });
+  });
+
+  test("an unconfigured channel registers neither curation key", async () => {
+    // Nothing ticked = no restriction, and the stored config says nothing
+    // rather than carrying an empty list.
+    const api = installApi(mockApiClient());
+    renderDialog();
+    fillTelegram();
+    submit();
+
+    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
+    const config = (api.POST.mock.calls[1][1] as { body: { config: Record<string, unknown> } }).body
+      .config;
+    expect(config).not.toHaveProperty("models");
+    expect(config).not.toHaveProperty("default_model");
   });
 });

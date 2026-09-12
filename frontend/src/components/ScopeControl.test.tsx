@@ -205,6 +205,25 @@ describe("ScopeControl", () => {
     expect(mutate).not.toHaveBeenCalled();
   });
 
+  test("a pre-fetched scope is used verbatim and switches the query off", () => {
+    // The list tables pass the scope they already have; the control must not
+    // add a GET per row. `enabled` is the hook's third argument.
+    seed({ scope: null });
+    render(<ScopeControl kind="skill" name="writing" enabled scope={["codex"]} />);
+
+    expect(vi.mocked(scopeHooks.useResourceScope)).toHaveBeenCalledWith("skill", "writing", false);
+    expect(segment(/selected agents/i)).toHaveAttribute("aria-pressed", "true");
+    expect(segment(/every agent/i)).toHaveAttribute("aria-pressed", "false");
+    openList();
+    expect(within(screen.getByTestId("scope-agent-codex")).getByRole("checkbox")).toBeChecked();
+  });
+
+  test("a pre-fetched null scope still means every agent", () => {
+    seed({ scope: ["claude"] });
+    render(<ScopeControl kind="skill" name="writing" enabled scope={null} />);
+    expect(segment(/every agent/i)).toHaveAttribute("aria-pressed", "true");
+  });
+
   test("every segment goes inert while a write is in flight", () => {
     seed({ scope: null });
     vi.mocked(scopeHooks.useUpdateResourceScope).mockReturnValue({

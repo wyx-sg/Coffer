@@ -4,7 +4,7 @@
 // connection, so the model forms offer a fetched dropdown (with manual
 // fallback) and a Test button — DevPilot-style. Hand-written fetch, mirroring
 // useEmbeddingConfig.
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { getCofferBaseUrl, getCofferToken } from "@/lib/auth";
 import { ApiError } from "@/lib/api/errors";
@@ -60,6 +60,42 @@ export function useListProviderModels() {
         credential_ref: p.credential_ref ?? null,
         secret_value: p.secret_value ?? null,
       }),
+  });
+}
+
+/** The model ids an endpoint itself serves, as a QUERY rather than the mutation
+ *  above: a surface whose whole job is to show that list (the connection detail
+ *  page) should have it on open, not behind a button, and a query is what gives
+ *  it the loading / error / refetch states that makes a failed probe visible and
+ *  retryable.
+ *
+ *  The key deliberately does NOT extend ``["providers", name]``: every
+ *  connection mutation invalidates that subtree, so ticking one model on would
+ *  re-probe the remote endpoint — a network round trip per click. This list
+ *  changes when the ENDPOINT changes, not when our curation does.
+ *
+ *  `retry: false` because a wrong key or an unreachable endpoint is a real
+ *  answer the user must see, not a blip worth three silent attempts. */
+export const endpointModelsKey = (name: string) => ["endpointModels", name] as const;
+
+export function useEndpointModels(name: string, probe: ProviderProbe) {
+  return useQuery({
+    queryKey: endpointModelsKey(name),
+    queryFn: () =>
+      post<{ models: string[]; message: string }>("/models/list-models", {
+        provider: probe.provider,
+        base_url: probe.base_url ?? null,
+        credential_ref: probe.credential_ref ?? null,
+        secret_value: probe.secret_value ?? null,
+      }),
+    enabled: name !== "",
+    retry: false,
+    refetchOnWindowFocus: false,
+    // The tab this renders in unmounts when the user switches away, so without a
+    // stale window every flick back to it would re-probe the vendor. Once per
+    // visit to the page is what "listed when you open it" means; the Retry
+    // button is there for when the user wants it asked again.
+    staleTime: 5 * 60 * 1000,
   });
 }
 

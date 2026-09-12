@@ -213,10 +213,6 @@
       "credentialHint": "凭证值会加密存入 Coffer 本地数据库；移除凭证会删除对应的存储条目。",
       "errRenameNeedsValue": "重命名「{{name}}」需要重新输入密钥值。"
     },
-    "tiering": {
-      "summary": "agent 当前可见 {{listed}}/{{total}} 个工具，另有 {{hidden}} 个仅可经 coffer__search_tools 触达。",
-      "hint": "它们仍可按名调用。设 COFFER_TOOL_TIERING=off 可列出全部工具。"
-    },
     "timeouts": {
       "legend": "超时（秒）",
       "spawn": "启动",
@@ -453,6 +449,7 @@
       "deleteConfirm": "删除模型提供商「{{name}}」？其保存的凭据也会一并删除。",
       "name": "名称",
       "provider": "厂商",
+      "renameHint": "重命名会连同已保存的密钥、历史记录以及该提供商驱动的 Agent 配置一起迁移。",
       "customProvider": "自定义",
       "wireFormat": "协议",
       "detectType": "检测类型",
@@ -480,7 +477,9 @@
         "unrestricted": "未限制——该接入地址提供的所有模型都可用。",
         "restricted": "已选择 {{count}} 个模型——Agent 只会看到这些。",
         "fetchFailed": "无法列出该接入地址的模型（{{error}}）。当前选择保持不变。",
-        "noModelsYet": "暂无模型——可拉取该接入地址的模型，或保持不限制。",
+        "loadingModels": "正在列出该接入地址的模型…",
+        "retryFetch": "重试",
+        "noModelsYet": "该接入地址没有返回任何模型。保持选择为空，它提供的所有模型就都可用。",
         "clearSelection": "清除选择（不限制）",
         "modelId": "模型",
         "modelSearchPlaceholder": "搜索模型…",
@@ -640,9 +639,7 @@
       "label": "提供商",
       "model": "模型",
       "fastModel": "快速模型",
-      "builtinModelsTitle": "可用模型",
-      "builtinModelsEmpty": "该 agent 暂无可用的模型清单。",
-      "builtinModelsHint": "使用内置登录时，模型按会话选择——在聊天的模型选择器里选，或在聊天频道中使用 /model <id>。",
+      "builtinModelsHint": "使用内置登录时，这里没有模型可绑定——模型按会话选择：在聊天的模型选择器里选、在聊天频道中使用 /model <id>，或由该频道自己的默认模型决定。",
       "builtin": "使用内置（agent 自带登录）",
       "none": "没有兼容的模型提供商",
       "empty": "该 agent 还没有模型提供商。",
@@ -652,12 +649,6 @@
       "customModel": "自定义…",
       "customLabel": "自定义模型 id",
       "customPlaceholder": "输入模型 id"
-    },
-    "models": {
-      "curateHint": "下面是该 agent 的 CLI 所知的全部模型，其中可能包含你的账号无法运行的型号——本机没有任何信息能区分它们。勾选可用的，就只提供这些；一个都不勾，就全部提供。",
-      "noneChosen": "未勾选任何模型——全部 {{total}} 个模型都会提供。",
-      "chosenCount": "已提供 {{total}} 个模型中的 {{chosen}} 个。",
-      "saveFailed": "保存模型选择失败。"
     },
     "status": "状态",
     "searchPlaceholder": "搜索 Agent…",
@@ -1059,6 +1050,18 @@
       "rotateHint": "存入 Coffer 凭据库；沿用现有引用。",
       "save": "保存修改",
       "saved": "渠道 {{name}} 已更新"
+    },
+    "models": {
+      "defaultLabel": "默认模型",
+      "defaultHint": "本频道的新会话从这个模型开始。不指定则沿用 agent 自己的默认模型。",
+      "defaultNone": "不指定——沿用 agent 的默认模型",
+      "rangeLabel": "可选范围",
+      "rangeHint": "勾选本频道可以使用的模型：/model 卡片只提供这些，范围之外的 /model <id> 会被拒绝。下面是所绑定 agent 的 CLI 所知的全部模型，其中可能包含你的账号无法运行的型号——本机没有任何信息能区分它们，所以由你来定。",
+      "unrestricted": "未限制——该 agent 提供的所有模型都可用。",
+      "chosenCount": "已允许 {{total}} 个模型中的 {{chosen}} 个。",
+      "empty": "该 agent 暂无可用的模型清单。",
+      "loadFailed": "无法加载该 agent 的模型清单。",
+      "outOfRange": "默认模型必须在可选范围之内。"
     },
     "test": {
       "send": "发送测试消息",

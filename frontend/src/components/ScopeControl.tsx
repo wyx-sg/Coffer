@@ -1,6 +1,6 @@
 // frontend/src/components/ScopeControl.tsx
 //
-// ScopeControl: the single header control that answers "who does this resource
+// ScopeControl: the single control that answers "who does this resource
 // reach?" — it owns both the resource's `enabled` flag and its per-agent
 // activation scope (ADR per-agent-resource-scope). It replaces the old pair of controls (an enable
 // Switch in the page header + a separate "Activation scope" card further down),
@@ -35,6 +35,16 @@
 // Kinds that declare no scope (agent, channel, knowledge_base, memory) still
 // need enable/disable — this control now owns it — so they fall back to a
 // two-segment Disabled/Enabled group.
+//
+// The control also sits in the status column of the skills and MCP-servers
+// LISTS, one instance per row, because a resource's reach is no longer a plain
+// on/off the user can read off a Switch. Mounting the per-resource scope query
+// once per row would turn one list render into one GET per row, so the list
+// callers pass `scope` straight from the payload they already fetched
+// (`SkillOut.scope` / `ResourceOut.scope`) and the query stays off: the list
+// costs zero extra requests. Passing `scope` also asserts "this kind supports
+// scope", which is true of the only two kinds whose lists mount it. The detail
+// pages pass nothing and keep fetching, since they render one resource.
 import { ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -44,7 +54,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useDisableResource, useEnableResource } from "@/lib/hooks/useResourceMutations";
-import { useResourceScope, useUpdateResourceScope } from "@/lib/hooks/useScope";
+import {
+  useResourceScope,
+  useUpdateResourceScope,
+  type ResourceScope,
+  type Scope,
+} from "@/lib/hooks/useScope";
 
 const GROUP_CLASS = "flex items-center gap-1 rounded-md border border-border p-0.5";
 
@@ -52,11 +67,19 @@ interface Props {
   kind: string;
   name: string;
   enabled: boolean;
+  /** Pre-fetched scope from a list payload (`null` = every agent). Omit it to
+   *  let the control fetch its own; `undefined` is "not supplied", never a
+   *  value. */
+  scope?: Scope | null;
 }
 
-export function ScopeControl({ kind, name, enabled }: Props) {
+export function ScopeControl({ kind, name, enabled, scope: presetScope }: Props) {
   const { t } = useTranslation();
-  const { data: scopeData } = useResourceScope(kind, name);
+  const prefetched = presetScope !== undefined;
+  const { data: fetchedScope } = useResourceScope(kind, name, !prefetched);
+  const scopeData: ResourceScope | undefined = prefetched
+    ? { scope: presetScope, supports_scope: true }
+    : fetchedScope;
   const { data: agentsData } = useAgents();
   const update = useUpdateResourceScope(kind, name);
   const enable = useEnableResource();

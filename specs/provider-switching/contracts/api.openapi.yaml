@@ -139,6 +139,54 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /providers/{name}/rename:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+        description: Current connection name.
+
+    post:
+      tags: [providers]
+      operationId: renameProvider
+      summary: Rename a connection
+      description: |
+        Moves a connection to a new name. This is NOT `PATCH /providers/{name}`:
+        PATCH edits a connection's CONFIG, while the name is its IDENTITY, and
+        three other places spell that identity out. A rename repoints all of
+        them in one operation:
+
+        - the `resources` row (unique on kind + name);
+        - the Fernet vault entry `provider/<name>/key`, when the connection
+          OWNS it and no other resource cites it (a shared or user-supplied
+          `credential_ref` is left alone);
+        - the `audit_log` rows recorded against the old name, so the history
+          stays reachable through the same `kind` + `name` filter;
+        - the projected native agent config of an ACTIVE connection — Claude
+          Code's `apiKeyHelper` (`coffer provider key --connection <name>`) and
+          Codex's `display_name` — so the agent keeps resolving a key.
+
+        Renaming to the current name is an idempotent no-op. A name another
+        connection already uses is rejected with 409 `RESOURCE_ALREADY_EXISTS`
+        and nothing is moved. Emits a `RESOURCE_RENAMED` audit event with
+        details `{from, to}` and returns the updated `ProviderOut`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProviderRenameRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
   /providers/{name}/activate:
     parameters:
       - in: path
@@ -637,6 +685,23 @@ components:
             Replace the curated offered set as a whole (no merging), exactly like
             `compatible_agents`. Null ⇒ leave unchanged; `[]` clears the
             restriction, so every model the endpoint serves is offered again.
+
+    ProviderRenameRequest:
+      type: object
+      additionalProperties: false
+      required: [new_name]
+      description: >-
+        The connection's new name. Sent to a dedicated route rather than as a
+        `ProviderPatch` field because the name is the connection's identity,
+        not part of its config.
+      properties:
+        new_name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: >-
+            The name to move the connection to. Must not already be used by
+            another connection (409). Equal to the current name ⇒ no-op.
 
     AgentType:
       type: string

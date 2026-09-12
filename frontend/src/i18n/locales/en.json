@@ -213,10 +213,6 @@
       "credentialHint": "Credential values are encrypted into Coffer's local database. Removing a credential deletes its stored entry.",
       "errRenameNeedsValue": "Re-enter the secret value for \"{{name}}\" to rename it."
     },
-    "tiering": {
-      "summary": "Agents see {{listed}} of {{total}} tools; {{hidden}} are reachable only through coffer__search_tools.",
-      "hint": "They stay callable by name. Set COFFER_TOOL_TIERING=off to list every tool."
-    },
     "timeouts": {
       "legend": "Timeouts (seconds)",
       "spawn": "Spawn",
@@ -453,6 +449,7 @@
       "deleteConfirm": "Delete model provider \"{{name}}\"? Its stored credential is removed too.",
       "name": "Name",
       "provider": "Vendor",
+      "renameHint": "Renaming moves the stored key, the history and any agent this provider drives with it.",
       "customProvider": "Custom",
       "wireFormat": "Protocol",
       "detectType": "Detect type",
@@ -480,7 +477,9 @@
         "unrestricted": "No restriction — every model this endpoint offers is available.",
         "restricted": "{{count}} model(s) picked — agents see only these.",
         "fetchFailed": "Could not list this endpoint's models ({{error}}). Your current selection is unchanged.",
-        "noModelsYet": "No models yet — fetch this endpoint's models, or leave it unrestricted.",
+        "loadingModels": "Listing this endpoint's models…",
+        "retryFetch": "Retry",
+        "noModelsYet": "This endpoint listed no models. Leave the selection empty and every model it offers stays available.",
         "clearSelection": "Clear selection (no restriction)",
         "modelId": "Model",
         "modelSearchPlaceholder": "Search models…",
@@ -640,9 +639,7 @@
       "label": "Provider",
       "model": "Model",
       "fastModel": "Fast model",
-      "builtinModelsTitle": "Available models",
-      "builtinModelsEmpty": "No model catalogue available for this agent.",
-      "builtinModelsHint": "On the built-in login the model is chosen per conversation — in the chat model picker, or with /model <id> in a chat channel.",
+      "builtinModelsHint": "On the built-in login there is no model to bind here — it is chosen per conversation: in the chat model picker, with /model <id> in a chat channel, or by that channel's own default model.",
       "builtin": "Use built-in (agent's own login)",
       "none": "No compatible provider",
       "empty": "No provider for this agent yet.",
@@ -652,12 +649,6 @@
       "customModel": "Custom…",
       "customLabel": "Custom model id",
       "customPlaceholder": "Enter a model id"
-    },
-    "models": {
-      "curateHint": "The list below is everything this agent's CLI knows about, including models your account may not be able to run — nothing on this machine can tell which. Tick the ones that work and only those are offered. Tick none and all of them are.",
-      "noneChosen": "Nothing ticked — all {{total}} models are offered.",
-      "chosenCount": "{{chosen}} of {{total}} models offered.",
-      "saveFailed": "Could not save the model selection."
     },
     "status": "Status",
     "searchPlaceholder": "Search agents…",
@@ -1059,6 +1050,18 @@
       "rotateHint": "Stored in Coffer's credential store; the existing reference is reused.",
       "save": "Save changes",
       "saved": "Channel {{name}} updated"
+    },
+    "models": {
+      "defaultLabel": "Default model",
+      "defaultHint": "A new conversation on this channel opens on this model. Leave it unpinned and the agent's own default applies.",
+      "defaultNone": "Not pinned — use the agent's default",
+      "rangeLabel": "Allowed models",
+      "rangeHint": "Tick the models this channel may use: the /model card offers exactly these, and a /model <id> outside them is refused. The list is everything the bound agent's CLI knows about, including models your account may not be able to run — nothing on this machine can tell which, so you say.",
+      "unrestricted": "No restriction — every model this agent offers is available.",
+      "chosenCount": "{{chosen}} of {{total}} models allowed.",
+      "empty": "No model catalogue available for this agent.",
+      "loadFailed": "Could not load this agent's model catalogue.",
+      "outOfRange": "The default model must be one of the allowed models."
     },
     "test": {
       "send": "Send test message",
