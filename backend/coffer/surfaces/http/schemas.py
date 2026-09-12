@@ -312,6 +312,32 @@ class CredentialSettingsIn(BaseModel):
     master_key_storage: Literal["file", "keychain"]
 
 
+# --- Daemon port (spec mcp-gateway FR-028) ---
+
+
+class DaemonPortSettingsOut(BaseModel):
+    """The daemon's port setting, and the port this daemon actually bound."""
+
+    configured_port: int | None = Field(
+        description="Fixed port the user set; null = pick the first free port in the range."
+    )
+    effective_port: int = Field(description="Port this daemon is serving on right now.")
+    restart_required: bool = Field(
+        description=(
+            "A fixed port is configured that this daemon is not serving on — "
+            "the setting only takes effect at the next start."
+        )
+    )
+
+
+class DaemonPortSettingsIn(BaseModel):
+    """Request body to fix the daemon's port, or to clear the setting."""
+
+    # Optional with a null default so an empty body means "back to automatic",
+    # the same thing an explicit null means — there is no third state to encode.
+    port: int | None = None
+
+
 # --- Embedding config (global) ---
 
 

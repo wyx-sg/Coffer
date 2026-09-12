@@ -31,7 +31,10 @@ On first launch Coffer:
 
 1. Allocates a free port in the 8000–8009 range and writes
    `~/.coffer/daemon.json` (mode `0600`) so the CLI and the shim can find
-   each other.
+   each other. If you would rather the address never moved — so a browser
+   bookmark to Coffer's UI keeps working — fix the port once with
+   `coffer daemon port set 8000` (or Settings → General); from then on Coffer
+   binds that port or refuses to start, and says what is holding it.
 2. Initialises the SQLite database under `~/.coffer/coffer.db`.
 3. Seeds default retention policies (audit: 365 days, invocations: 30 days).
 
@@ -163,6 +166,7 @@ by ref.)
 | `CREDENTIAL_LOCKED` error                         | OS keychain is locked         | Unlock the keychain (macOS: log in to GUI; Linux: unlock GNOME-keyring / KWallet). |
 | Disabled tool still appears in client             | Client cached the tool list   | Restart the client, or look for a "reload MCP servers" option.                     |
 | `no free port in 8000-8009 range`                 | Ten ports busy                | Kill the other process and restart `coffer daemon`.                                |
+| `port <n> is configured as Coffer's fixed daemon port` | Something else holds the port you fixed | The message names the process. Free it, `coffer daemon port set <other>`, or `coffer daemon port clear`. |
 
 ## Where things live
 
@@ -176,6 +180,7 @@ by ref.)
 ├── skills/                # system of record: managed skill folders
 ├── master.key             # Fernet key that decrypts the credential ciphertext
 ├── daemon.json            # daemon discovery: pid + port + token (mode 0600)
+├── daemon-config.json     # daemon settings read BEFORE the DB opens: the fixed port (mode 0600)
 ├── logs/
 │   ├── daemon.log         # structured JSON, one line per event
 │   └── upstream-<name>.log

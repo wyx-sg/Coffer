@@ -31,7 +31,10 @@ def test_cli_covers_every_visual_operation():
     operation name the UI exposes is present in the help output.
     """
     expected_subcommands: dict[str, list[str]] = {
-        "daemon": ["start", "stop", "status", "rotate-token"],
+        # "port" and "restart" back the Settings card for the fixed daemon port:
+        # the card changes the setting, and names `coffer daemon restart` as the
+        # way to apply it (the page cannot restart the daemon serving it).
+        "daemon": ["start", "stop", "restart", "status", "rotate-token", "port"],
         "resource": ["list", "show", "enable", "disable", "delete"],
         "audit": ["list"],
         "retention": ["list", "set", "prune-now"],

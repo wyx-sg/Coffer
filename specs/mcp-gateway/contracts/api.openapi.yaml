@@ -575,6 +575,36 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /settings/daemon:
+    get:
+      tags: [daemon]
+      operationId: getDaemonPortSettings
+      summary: Report the daemon's fixed port and the port it is serving on.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DaemonPortSettingsOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    put:
+      tags: [daemon]
+      operationId: putDaemonPortSettings
+      summary: Fix the daemon's listening port, or clear it (null) for automatic selection.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DaemonPortSettingsIn" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DaemonPortSettingsOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
 components:
   securitySchemes:
     cofferToken:
@@ -661,6 +691,35 @@ components:
         master_key_storage:
           type: string
           enum: [file, keychain]
+
+    DaemonPortSettingsOut:
+      type: object
+      required: [configured_port, effective_port, restart_required]
+      properties:
+        configured_port:
+          type: integer
+          nullable: true
+          minimum: 1024
+          maximum: 65535
+          description: Fixed port the user set; null = pick the first free port in the range.
+        effective_port:
+          type: integer
+          description: Port this daemon is serving on right now.
+        restart_required:
+          type: boolean
+          description: >
+            A fixed port is configured that this daemon is not serving on — the
+            setting only takes effect at the next start.
+
+    DaemonPortSettingsIn:
+      type: object
+      properties:
+        port:
+          type: integer
+          nullable: true
+          minimum: 1024
+          maximum: 65535
+          description: Port to bind at the next start; null clears the setting.
 
     CapabilityKeyBody:
       type: object

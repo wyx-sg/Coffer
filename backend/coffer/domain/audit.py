@@ -59,6 +59,8 @@ class AuditEventType(StrEnum):
     MASTER_KEY_EXPORTED = "master_key_exported"
     MASTER_KEY_IMPORTED = "master_key_imported"
     VAULT_BACKED_UP = "vault_backed_up"
+    # spec mcp-gateway FR-028
+    DAEMON_PORT_SET = "daemon_port_set"
     # spec provider-switching
     PROVIDER_SWITCHED = "provider_switched"
     PROVIDER_INTERNAL_DEFAULT_SET = "provider_internal_default_set"

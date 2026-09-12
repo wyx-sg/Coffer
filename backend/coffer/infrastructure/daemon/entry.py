@@ -27,6 +27,7 @@ from collections.abc import Callable
 import uvicorn
 
 from coffer.infrastructure.daemon import bootstrap
+from coffer.infrastructure.daemon.port_alloc import PortInUse
 
 _logger = logging.getLogger(__name__)
 
@@ -178,7 +179,16 @@ def main() -> None:
     # socket AND the spawn lock — release_lock frees the lock only once we are
     # serving (passed to _run_server as on_started), so a racing auto-spawn
     # can't bind a second port during the boot window and orphan a daemon.
-    info, sock, release_lock = bootstrap.acquire_or_existing()
+    try:
+        info, sock, release_lock = bootstrap.acquire_or_existing()
+    except PortInUse as exc:
+        # The user fixed this port precisely so it would not move, so there is
+        # nothing sensible to fall back to. Say what holds it and stop. stderr
+        # is the daemon log when we were spawned detached, and the terminal
+        # when the user ran us directly; `coffer daemon start` makes the same
+        # diagnosis itself so the common path shows this without opening a log.
+        print(str(exc), file=sys.stderr)
+        raise SystemExit(2) from None
     if sock is None:
         _logger.info(
             "daemon already running (pid=%s, port=%s); exiting",

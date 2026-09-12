@@ -32,13 +32,14 @@ from pathlib import Path
 
 import httpx
 
+from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.daemon.pid_lock import (
     DaemonInfo,
     pid_is_coffer_daemon,
     read,
     write,
 )
-from coffer.infrastructure.daemon.port_alloc import bind_free_socket
+from coffer.infrastructure.daemon.port_alloc import bind_fixed_socket, bind_free_socket
 
 _DAEMON_JSON_VERSION = 1
 
@@ -205,10 +206,43 @@ def superseded_by() -> DaemonInfo | None:
     return info if pid_is_coffer_daemon(info.pid) else None
 
 
-def _port_range() -> tuple[int, int]:
-    start = int(os.environ.get("COFFER_PORT_RANGE_START", "8000"))
-    end = int(os.environ.get("COFFER_PORT_RANGE_END", "8009"))
-    return start, end
+#: The scan range used when the user has fixed no port and the environment
+#: names none. 8000 first, because that is the port every surface's
+#: documentation and every existing bookmark already says.
+_DEFAULT_PORT_RANGE = (8000, 8009)
+
+
+def _env_port_range() -> tuple[int, int] | None:
+    """An explicit range from the environment, or ``None``.
+
+    This is the test harness's hook — every test that starts a real daemon
+    pins its own disjoint range here so concurrent tests cannot collide — and
+    it deliberately outranks the user's fixed port, so a test run is hermetic
+    on a machine whose vault has one configured.
+    """
+    start = os.environ.get("COFFER_PORT_RANGE_START")
+    end = os.environ.get("COFFER_PORT_RANGE_END")
+    if start is None and end is None:
+        return None
+    return int(start or _DEFAULT_PORT_RANGE[0]), int(end or _DEFAULT_PORT_RANGE[1])
+
+
+def _bind_port() -> socket.socket:
+    """Bind the daemon's listening socket, honouring the user's fixed port.
+
+    Precedence: the environment's explicit range (tests), then the fixed port
+    the user configured (spec mcp-gateway FR-028), then the default scan. The
+    fixed path raises :class:`~coffer.infrastructure.daemon.port_alloc.PortInUse`
+    rather than falling back — the entrypoint turns that into a refusal to
+    start, which is the whole point of fixing a port.
+    """
+    env_range = _env_port_range()
+    if env_range is not None:
+        return bind_free_socket(start=env_range[0], end=env_range[1])
+    fixed = daemon_config.read_fixed_port()
+    if fixed is not None:
+        return bind_fixed_socket(fixed)
+    return bind_free_socket(start=_DEFAULT_PORT_RANGE[0], end=_DEFAULT_PORT_RANGE[1])
 
 
 def acquire() -> tuple[DaemonInfo, socket.socket]:
@@ -224,8 +258,7 @@ def acquire() -> tuple[DaemonInfo, socket.socket]:
     lock-free primitive (and is called by ``acquire_or_existing`` while the
     lock is held).
     """
-    start, end = _port_range()
-    sock = bind_free_socket(start=start, end=end)
+    sock = _bind_port()
     port = sock.getsockname()[1]
     token = secrets.token_urlsafe(32)
     info = DaemonInfo(

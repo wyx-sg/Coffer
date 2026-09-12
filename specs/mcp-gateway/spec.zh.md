@@ -169,7 +169,7 @@ Coffer 的 UI 曾经被包在一个 Tauri 桌面外壳里：它监管 daemon、�
 - **Duplicate registration**: 同一 kind 下注册重名的服务器会被拒绝并给出明确错误；不可能产生部分写入。
 - **Tool-name collision across servers**: 通过 `<server>__<tool>` 命名空间阻止；客户端永远看不到冲突。
 - **Tools-only upstream**: 只实现 `tools`、对 `resources/list` 或 `prompts/list` 返回 JSON-RPC `-32601`（METHOD_NOT_FOUND）的上游，被视为没有 resources / 没有 prompts。单服务器能力视图与聚合列表会返回该服务器的 tools，并将 resources/prompts 置为空集（HTTP 200），而不是报错——因此对于仅支持 tools 的服务器，管理端 / Web-UI 的能力视图依然可用。
-- **Daemon port conflict**: daemon 默认端口被占用时，会在一小段范围内挑选下一个空闲端口，把所选端口写入它的 discovery 文件；shim、CLI 都会读这个文件。
+- **Daemon port conflict**: daemon 默认端口被占用。未配置固定端口时，它会在一小段范围内挑选下一个空闲端口，把所选端口写入它的 discovery 文件；shim、CLI 都会读这个文件。已配置固定端口时（FR-028），它转而拒绝启动，并指明是哪个进程占着该端口。
 - **Daemon crash**: 正在运行的 shim 会话会给它们的 MCP 客户端返回干净的错误而不是挂起；监管者 (supervisor) 可以检测崩溃并重启 daemon。
 - **Concurrent clients**: 多个 MCP 客户端（例如 Claude Code 和 Codex 同时）可同时连接而互不干扰；每个客户端都拿到独立的上游子进程集合。
 
@@ -387,9 +387,21 @@ null 值在校验阶段被拒绝（422）。
 
 ### Scenario: daemon port conflict falls back to the next free port
 
-- **Given** daemon 默认端口已被另一个进程占用,
+- **Given** 未配置固定端口，且 daemon 默认端口已被另一个进程占用,
 - **When** daemon 启动,
 - **Then** 它在支持的端口范围内选择下一个空闲端口，把所选端口写入 `~/.coffer/daemon.json`，并使每个 Coffer 入口（shim、CLI）都无需手动配置就连上该端口。
+
+### Scenario: a fixed daemon port survives restarts
+
+- **Given** 用户已固定 daemon 端口（`coffer daemon port set <n>`，或 Settings 页面）,
+- **When** daemon 被停止后重新启动 —— 由用户、由 CLI，或由继承不到任何 shell profile 的 MCP shim 自动拉起,
+- **Then** 它每次都绑定同一个端口并记入 `~/.coffer/daemon.json`，因此指向 Coffer UI 的浏览器书签始终有效。
+
+### Scenario: a fixed port that is taken refuses to start and says what holds it
+
+- **Given** 固定的 daemon 端口已被另一个进程监听,
+- **When** daemon 启动,
+- **Then** 它拒绝启动而不是改绑另一个端口，并在消息中指明占用该端口的进程，以及能解决问题的命令 —— 结束该进程、`coffer daemon port set <other>`，或用 `coffer daemon port clear` 回到自动选择。
 
 ### Scenario: a missing stdio launcher is named in the server status
 
@@ -479,6 +491,8 @@ null 值在校验阶段被拒绝（422）。
 - **FR-026**: 当 daemon 检测到自己以冻结构建运行时，它 MUST 在启动时把同目录的二进制 —— `coffer-mcp-shim`、`coffer-callback` —— 幂等地部署到 `~/.coffer/bin/`。复制 MUST 是原子的（同目录临时文件、先设可执行位、再 rename 覆盖目标），使崩溃或正在并发执行的二进制永远不会观察到被截断的文件；是否过期 MUST 由三个信号判定 —— 字节大小、源比目标更新的 mtime、以及一个版本哨兵 —— 使同样大小的跨版本升级也能被检出。源码安装 MUST NOT 做这件事：`pip install` 已经把 console script 装到 `PATH` 上了（FR-018）。这件事归 daemon 所有，因为运行期正是它在拉起 `coffer-callback`。
 
 - **FR-027**: daemon MUST 拒绝任何 `Host` 请求头未指向 loopback 权威的请求 —— `127.0.0.1`、`localhost` 或 `::1`，带不带端口皆可 —— 以错误码 `HOST_NOT_LOOPBACK` 返回 `421`，而不是照常提供服务。这正是 FR-025 得以安全的前提：绑定 loopback（FR-012）挡得住远程主机，却挡不住**浏览器** —— 攻击者把自己页面的域名重解析到 `127.0.0.1`（DNS rebinding），浏览器便视之为同源，CORS 因此不生效。而 rebinding 不会改变 `Host` 请求头，所以被重绑定的请求仍然写着攻击者自己的域名，在它能从被提供的文档里读到 token 之前就被拒绝。该规则 MUST 覆盖 daemon 暴露的每一个面。它不涉及独立的 `coffer-callback` 监听器 —— 那是另一个端口上的另一个进程，也是隧道唯一会指向的东西。
+- **FR-028**: daemon 的监听端口 MUST 可以设成一条持久化的、由用户掌握的设置，好让指向 Coffer UI 的浏览器书签跨重启依然有效。该设置 MUST 存放在 daemon **绑定端口之前**就能读到的文件里 —— `~/.coffer/daemon-config.json`，权限 `0600` —— 因为端口是在打开数据库、跑 migration 之前选定的，任何基于数据库的设置都承载不了它。它 MUST NOT 是环境变量：daemon 由第一个需要它的入口（CLI、MCP shim）以 detached 子进程拉起，继承的是那个调用方的环境，而 shell profile 到不了那里，从 GUI 启动的 agent 更是从未读过它。配置了端口时，daemon MUST 精确绑定该端口，MUST NOT 回退到别的端口 —— 悄悄漂移正是这条设置要终结的行为。绑不上时，daemon MUST 拒绝启动，并 MUST 说明是哪个进程占着该端口、以及解决它的确切命令。未配置端口时，daemon MUST 保持原有行为：在一小段范围内选第一个空闲端口。用户 MUST 能从 CLI、REST API 和 Settings 页面读取并修改该设置；其中 CLI MUST 在没有 daemon 运行时也能用，因为「daemon 绑不上端口」恰恰就是这条设置必须能被修好的那个状态。改动在下次启动时生效，因此 CLI MUST 提供 `coffer daemon restart`，让应用改动只需一条命令。
+
 **缺失启动器**
 
 - **FR-019**: 一个 stdio server 的启动器命令在本机无法解析时（导入来的 server 引用了 `uvx` 而本机没装 `uv`），MUST 在 server 状态中明确显示「本机未安装 `<runner>`」，而不是一个没有原因的「异常」，并由 UI 指出应当安装哪个命令。Coffer MUST NOT 代为安装。价值全部来自检测——把一个没有信息量的失败变成可行动的失败；而让一个常驻 daemon 去跑包管理器，会把 Coffer 的职责从「管理配置」扩到「往用户机器上装软件」，那张刻意保持极小的 runner→formula 映射表在 pip、cargo、go 被要求加入后守不住这条线，何况它只在 macOS 上生效过。

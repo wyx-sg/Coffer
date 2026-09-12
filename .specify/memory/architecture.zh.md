@@ -159,14 +159,17 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
 ## 进程 (Processes)
 
 - **`coffer-daemon`** — 长生命周期的 FastAPI 服务，监听
-  `127.0.0.1:<auto-port>`。持有全部状态；唯一的 SQLite 写入者。
+  `127.0.0.1:<port>` —— 端口取用户在 `~/.coffer/daemon-config.json` 里固定的那个，
+  未固定则取 8000–8009 中第一个空闲端口。持有全部状态；唯一的 SQLite 写入者。
 - **Stdio shim** — 短生命周期；其生命周期绑定到单个 MCP 客户端进程。
 - **Callback listener** — daemon 拉起的子进程，只在
   `127.0.0.1:<callback-port>` 上服务带签名的 channel 回调路径；在任何
   SeaTalk channel 处于启用状态时运行 (spec channels，[Channel Adapter Framework](../../docs/decisions/channel-adapter-framework.md))。
 
 两者通过 `~/.coffer/daemon.json` 发现 daemon (PID + 端口 + token，权限位
-`0600`)。见
+`0600`) —— 那是运行态，启动时写入、退出时删除。与它成对的
+`~/.coffer/daemon-config.json` 存放 daemon 必须在**绑定端口之前**、因而也在任何
+数据库存在之前就读到的设置：目前是那个可选的固定端口。见
 [Detect-or-Spawn](../../docs/decisions/daemon-detect-or-spawn.md)。
 
 ## 持久化 (Persistence)
