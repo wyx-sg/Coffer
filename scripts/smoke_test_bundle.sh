@@ -93,6 +93,12 @@ echo "==> smoke-testing daemon: $DAEMON"
 # ---------------------------------------------------------------------------
 # Isolated sandbox — use a temp dir as HOME so we don't read/write the
 # developer's real ~/.coffer state during the test.
+#
+# The isolation is only as good as what the daemon itself scopes to HOME. It
+# was once not enough: the daemon's startup reaper matched sibling daemons by
+# executable name alone, so the daemon started here terminated the developer's
+# live one. It now requires the same vault (orphan_sweep.reap_stale_daemons),
+# which is what makes this script safe to run on a working machine.
 # ---------------------------------------------------------------------------
 
 SMOKE_HOME="$(mktemp -d -t coffer-smoke-XXXXXX)"
