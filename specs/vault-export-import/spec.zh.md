@@ -145,6 +145,11 @@
 推送凭据在推送时从凭据库解析。它绝不写入该仓库的 git 配置，绝不作为命令行参数
 传递，并在任何错误文本被记录之前从中抹除。
 
+远端以**引用**而非值来指认这个凭据：密钥先被放进凭据库
+（`coffer credentials set <ref> <secret>`），远端只记下这个 ref。因此每一个
+展示远端的表面——CLI、HTTP、UI——都可以原样展示而无需脱敏，重新配置远端也不必
+重新输入一遍 token。
+
 ### 恢复
 
 恢复永远是显式的；任何东西都不会被自动导入。它会拉取远端（工作树尚不存在时先
@@ -167,7 +172,7 @@ agent 都不在 scope 内的资源，仍会被注册、仍然可见，只是不�
 | 表面 | 操作 |
 | --- | --- |
 | CLI | `coffer sync export <dir> [--with-credentials]` · `coffer sync import <dir>` · `coffer sync key export <file>` / `coffer sync key import <file>` |
-| CLI（备份） | `coffer sync remote set <url> [--branch] [--interval] [--with-credentials]` · `coffer sync remote show` · `coffer sync remote clear` · `coffer sync push` · `coffer sync restore [--at <rev\|日期>] [--from <url>]` · `coffer sync status` |
+| CLI（备份） | `coffer sync remote set <url> [--branch] [--interval] [--with-credentials] [--credential-ref]` · `coffer sync remote show` · `coffer sync remote clear` · `coffer sync push` · `coffer sync restore [--at <rev\|日期>] [--from <url>]` · `coffer sync status` |
 | HTTP | `POST /api/v1/sync/export` · `POST /api/v1/sync/import` · `GET /api/v1/sync/key/fingerprint` · `POST /api/v1/sync/key/export` · `POST /api/v1/sync/key/import` |
 | HTTP（备份） | `GET\|PUT\|DELETE /api/v1/sync/remote` · `POST /api/v1/sync/push` · `POST /api/v1/sync/restore` · `GET /api/v1/sync/status` |
 | UI | 设置 → Sync：一个导出按钮和一个导入按钮，各自打开由守护进程托管的原生**目录**选择器（spec agent-registry FR-042），外加主密钥卡片——后者用浏览器自己的下载与 `<input type="file">`，不走守护进程对话框 |

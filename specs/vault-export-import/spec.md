@@ -195,6 +195,12 @@ The push credential is resolved from the credential store at push time. It is
 never written into the repository's git config, never passed as a command-line
 argument, and is scrubbed from any error text before that text is recorded.
 
+The remote names that credential by *reference*, never by value: the secret is
+put into the credential store first (`coffer credentials set <ref> <secret>`)
+and the remote records only the ref. So every surface that shows a remote —
+CLI, HTTP, UI — can show it whole without redacting anything, and a remote can
+be reconfigured without re-entering the token.
+
 ### Restore
 
 Restore is always explicit; nothing is ever imported automatically. It fetches
@@ -221,7 +227,7 @@ for every agent on this machine is registered and visible, just not activated.
 | Surface | Operation |
 | --- | --- |
 | CLI | `coffer sync export <dir> [--with-credentials]` · `coffer sync import <dir>` · `coffer sync key export <file>` / `coffer sync key import <file>` |
-| CLI (backup) | `coffer sync remote set <url> [--branch] [--interval] [--with-credentials]` · `coffer sync remote show` · `coffer sync remote clear` · `coffer sync push` · `coffer sync restore [--at <rev\|date>] [--from <url>]` · `coffer sync status` |
+| CLI (backup) | `coffer sync remote set <url> [--branch] [--interval] [--with-credentials] [--credential-ref]` · `coffer sync remote show` · `coffer sync remote clear` · `coffer sync push` · `coffer sync restore [--at <rev\|date>] [--from <url>]` · `coffer sync status` |
 | HTTP | `POST /api/v1/sync/export` · `POST /api/v1/sync/import` · `GET /api/v1/sync/key/fingerprint` · `POST /api/v1/sync/key/export` · `POST /api/v1/sync/key/import` |
 | HTTP (backup) | `GET\|PUT\|DELETE /api/v1/sync/remote` · `POST /api/v1/sync/push` · `POST /api/v1/sync/restore` · `GET /api/v1/sync/status` |
 | UI | Settings → Sync: an export button and an import button, each opening the daemon-hosted native **directory** picker (spec agent-registry FR-042), plus the master-key card — which uses the browser's own download / `<input type="file">`, not a daemon dialog |

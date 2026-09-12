@@ -177,10 +177,15 @@ def test_key_export_then_import(sync_cli):  # type: ignore[no-untyped-def]
 def test_withdrawn_continuous_sync_commands_are_gone(sync_cli):  # type: ignore[no-untyped-def]
     # Vault export/import withdrew continuous sync; typer must not still offer
     # its verbs.
+    #
+    # ``sync status`` is deliberately absent from this list: the backup half of
+    # the spec reintroduced the word for a different thing — the one backup
+    # remote and its last run, not a convergence state between machines
+    # (spec vault-export-import ``## Surfaces``). It is covered by
+    # test_sync_backup_cmd.py.
     for argv in (
         ["sync", "init", "git@example.com:me/vault.git"],
         ["sync", "run"],
-        ["sync", "status"],
         ["sync", "config"],
         ["sync", "machines"],
         ["sync", "resolve", "--ours"],
