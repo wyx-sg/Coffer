@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Response, status
 
 from coffer.application.provider.service import ProviderService
 from coffer.domain.agent.types import AgentType
-from coffer.domain.provider.config import Protocol, ProviderConfig
+from coffer.domain.provider.config import CuratedModel, Protocol, ProviderConfig
 from coffer.domain.resource import Resource
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor, get_provider_service
@@ -19,8 +19,10 @@ from coffer.surfaces.http.provider_schemas import (
     DeactivateOut,
     ProviderCreate,
     ProviderListOut,
+    ProviderModel,
     ProviderOut,
     ProviderPatch,
+    ProviderRename,
 )
 
 router = APIRouter(
@@ -28,6 +30,13 @@ router = APIRouter(
     tags=["providers"],
     dependencies=[Depends(require_token)],
 )
+
+
+def _curated(models: list[ProviderModel] | None) -> list[CuratedModel] | None:
+    """Wire entries → the domain's curated set (``None`` leaves the set alone)."""
+    if models is None:
+        return None
+    return [CuratedModel(id=m.id, modality=m.modality) for m in models]
 
 
 def _provider_out(resource: Resource) -> ProviderOut:
@@ -38,7 +47,7 @@ def _provider_out(resource: Resource) -> ProviderOut:
         base_url=cfg.base_url,
         credential_ref=cfg.credential_ref,
         compatible_agents=[AgentType(a) for a in cfg.resolved_compatible_agents()],
-        models=cfg.models,
+        models=[ProviderModel(id=m.id, modality=m.modality) for m in cfg.models],
         is_active=cfg.is_active,
         internal_default=cfg.internal_default,
         enabled=resource.enabled,
@@ -71,11 +80,30 @@ async def create_provider(
         secret_value=body.secret_value,
         credential_ref=body.credential_ref,
         compatible_agents=body.compatible_agents,
-        models=body.models,
+        models=_curated(body.models),
         description=body.description,
         actor=actor,
     )
     return _provider_out(resource)
+
+
+@router.post("/{name}/rename", response_model=ProviderOut)
+async def rename_provider(
+    name: str,
+    body: ProviderRename,
+    svc: ProviderService = Depends(get_provider_service),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> ProviderOut:
+    """Rename a connection.
+
+    WHY this is its own route and not ``PATCH /{name}``: PATCH edits a
+    connection's CONFIG, while the name is its IDENTITY. Renaming repoints the
+    owned vault ref, the audit trail and the projected agent config in one
+    operation, and a name another connection already uses answers 409 rather
+    than being silently merged into that connection the way a patch field would.
+    Renaming to the current name is a no-op. 404 when the connection is absent.
+    """
+    return _provider_out(await svc.rename(name, body.new_name, actor=actor))
 
 
 @router.get("/active-key/{wire}", response_model=ActiveKeyOut)
@@ -123,7 +151,7 @@ async def update_provider(
         base_url=body.base_url,
         secret_value=body.secret_value,
         compatible_agents=body.compatible_agents,
-        models=body.models,
+        models=_curated(body.models),
         description=body.description,
         actor=actor,
     )

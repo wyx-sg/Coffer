@@ -76,6 +76,13 @@ info:
     scope for this contract); a scope opts into semantic search purely by
     listing `vector` (or `hybrid`) in `retrieval_modes`.
 
+    That installation-wide config **names a connection** (spec knowledge FR-077)
+    — one of the configured `provider` resources — plus a model on it. It holds
+    no `provider` enum, no `base_url` and no `credential_ref`: the protocol, base
+    URL and credential are resolved from the named connection at use time, and
+    the settings mint no vault entry of their own. With no connection named the
+    config is inactive and retrieval degrades to keyword/grep.
+
     ## Deleting a scope
 
     There is deliberately **no** `DELETE /api/v1/knowledge/{name}`. Scope
@@ -1093,8 +1100,10 @@ components:
 
         **There are no embedding fields.** Both faces carried their own and by
         the time they were merged neither was read. Embedding resolves through
-        the installation-wide config; the dead fields were dropped rather than
-        carried across.
+        the installation-wide config — which itself names a connection and a
+        model on it, resolving protocol, base URL and credential from that
+        connection (spec knowledge FR-077); the dead fields were dropped rather
+        than carried across.
 
         Changing a retrieval or chunking field re-indexes the scope — safe
         because the files on disk are the truth and the index is always

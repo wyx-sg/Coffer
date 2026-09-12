@@ -6,8 +6,14 @@
 // them enter any OpenAI-/Anthropic-compatible endpoint and pick the protocol by
 // hand. The COMPATIBLE-AGENTS checkboxes decide which agents the connection
 // projects into — pre-filled from the wire but editable, so an openai gateway can
-// be routed to Claude Code. In edit mode (`initial` set) name + protocol are
-// fixed and the secret is optional — left blank, the stored key is kept.
+// be routed to Claude Code. In edit mode (`initial` set) the protocol is fixed
+// and the secret is optional — left blank, the stored key is kept.
+//
+// The NAME is editable in edit mode, but it does NOT travel in the PATCH body:
+// it is the connection's identity, not one of its settings, so it leaves as its
+// own rename call — `onUpdate` hands the caller the new name alongside the
+// patch and the caller sequences the two. That ordering is what makes a name
+// collision fail before anything else has been written.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -32,13 +38,15 @@ import {
 } from "./connectionPresets";
 
 interface Props {
-  /** Present → edit an existing connection (name + protocol locked, secret optional). */
+  /** Present → edit an existing connection (protocol locked, secret optional). */
   initial?: Provider;
   submitError?: unknown;
   pending: boolean;
   onSubmit: (values: ProviderCreate) => Promise<void> | void;
-  /** Required when `initial` is set; receives the PATCH body. */
-  onUpdate?: (patch: ProviderPatch) => Promise<void> | void;
+  /** Required when `initial` is set. Receives the PATCH body plus, when the user
+   *  changed it, the new NAME — which is a separate rename call, not a patch
+   *  field. `null` means the name is unchanged. */
+  onUpdate?: (patch: ProviderPatch, newName: string | null) => Promise<void> | void;
   onCancel: () => void;
 }
 
@@ -95,7 +103,8 @@ export function ProviderForm({
           const patch: ProviderPatch = { base_url: baseUrl };
           if (needsCredential && secret) patch.secret_value = secret;
           if (showCompatible) patch.compatible_agents = compatible;
-          await onUpdate?.(patch);
+          const renamed = name.trim();
+          await onUpdate?.(patch, renamed && renamed !== initial.name ? renamed : null);
           return;
         }
         if (!protocol) return; // guard: a custom connection still needs a protocol
@@ -107,13 +116,10 @@ export function ProviderForm({
     >
       <div className="space-y-1.5">
         <Label htmlFor="p-name">{t("settings.connections.name")}</Label>
-        <Input
-          id="p-name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-          disabled={isEdit}
-        />
+        <Input id="p-name" value={name} onChange={(e) => setName(e.target.value)} required />
+        {isEdit ? (
+          <p className="text-xs text-muted-foreground">{t("settings.connections.renameHint")}</p>
+        ) : null}
       </div>
 
       {/* Provider preset (create only). Edit mode shows the locked protocol. */}

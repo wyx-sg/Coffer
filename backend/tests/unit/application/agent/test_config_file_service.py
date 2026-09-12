@@ -153,6 +153,12 @@ class FakeAuditRepo:
     async def insert(self, entry) -> None:
         self._entries.append(entry)
 
+    async def repoint(self, kind, old_name, new_name) -> int:
+        moved = [e for e in self._entries if e.resource_name == old_name]
+        for e in moved:
+            e.resource_name = new_name
+        return len(moved)
+
     async def query(
         self,
         *,

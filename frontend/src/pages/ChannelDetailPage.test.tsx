@@ -20,7 +20,12 @@ vi.mock("@/lib/hooks/useChannels", () => ({
   useUpdateChannel: vi.fn(),
   useNotifyChannel: vi.fn(),
 }));
-vi.mock("@/lib/hooks/useAgentProviders", () => ({ useAgentProviders: vi.fn(() => ({ data: [] })) }));
+vi.mock("@/lib/hooks/useAgentProviders", () => ({
+  useAgentProviders: vi.fn(() => ({ data: [] })),
+}));
+// The edit dialog's model fields (spec channels FR-071) read the bound agent's
+// catalogue; this page mocks its data hooks rather than providing a query client.
+vi.mock("@/lib/hooks/useAgentModels", () => ({ useAgentModels: vi.fn(() => ({ data: [] })) }));
 vi.mock("@/lib/hooks/useResourceMutations", () => ({
   useEnableResource: vi.fn(),
   useDisableResource: vi.fn(),

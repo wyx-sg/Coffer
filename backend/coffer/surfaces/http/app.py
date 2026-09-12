@@ -157,9 +157,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     retention_svc = build_retention_service(sm, audit=audit)
     await retention_svc.initialize_defaults()
     # Also registers the engine-settings synced state area (spec vault-export-import slice 7).
-    embedding_config_svc, internal_engine_config_svc = build_config_services(
-        app, sm, audit, credential_store
-    )
+    embedding_config_svc, internal_engine_config_svc = build_config_services(app, sm, audit)
 
     set_resource_service(resource_svc)
     set_audit_service(audit)
@@ -237,9 +235,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # One-time move of legacy OS-keychain secrets into the encrypted store
     # (best-effort; see credential_composition for the mechanics).
-    await run_legacy_keychain_migration(
-        app.state.kinds, sm, credential_store, audit, embedding_config_svc
-    )
+    await run_legacy_keychain_migration(app.state.kinds, sm, credential_store, audit)
 
     # Boot projection heal: the agents' native config files are not Coffer's to
     # own, so re-derive the projection the registry implies (best-effort).

@@ -12,6 +12,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from coffer.domain.provider.modality import Modality, infer_modality
+
 #: Providers Coffer treats as machine-local; their base URL is loopback, so the
 #: SSRF guard (which blocks loopback) is intentionally skipped for them.
 LOCAL_PROVIDERS = frozenset({"ollama", "lmstudio", "local"})
@@ -25,8 +27,21 @@ class TestResult:
 
 
 @dataclass(frozen=True)
+class DiscoveredModel:
+    """One id an endpoint reported, with the modality INFERRED from its name.
+
+    The guess is for pre-filling the connection editor's model table only —
+    the endpoint says what it serves, never what kind each one is, and the user
+    corrects a wrong guess. Once curated, the stored modality is the truth.
+    """
+
+    id: str
+    modality: Modality
+
+
+@dataclass(frozen=True)
 class ModelList:
-    models: list[str]
+    models: list[DiscoveredModel]
     message: str = ""
 
 
@@ -97,7 +112,7 @@ class ModelIntrospectionService:
             return ModelList(models=[], message=str(e))
         if not models:
             return ModelList(models=[], message="no models returned; enter a model id manually")
-        return ModelList(models=models)
+        return ModelList(models=[DiscoveredModel(id=m, modality=infer_modality(m)) for m in models])
 
     async def test_connection(
         self,

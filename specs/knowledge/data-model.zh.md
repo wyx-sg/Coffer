@@ -35,7 +35,43 @@ Pydantic v2 `BaseModel`。当 `kind == "memory"` 时存于 `Resource.config`。�
 
 embedding 模型 **可变** —— 改它会重嵌整个 store（文件是真相）。没有不可变锁。
 
-与 spec knowledge 的形状差异是刻意的：007 把 embedding 字段保持**扁平**，让 memory 表单保持轻薄；006 则把它们嵌套在一个 `EmbeddingConfig` 对象里。自全局 embedding 重设计起，扁平字段已是遗留字段——为兼容性在 wire 上继续接受但被忽略；索引与 recall 都解析**全局** embedding 配置。同理，007 recall 响应里的 `fallback` 是**布尔值** —— recall 跨多个 store，单一的回退模式字符串没有良定义；而 006 的单 store 搜索报告一个可空的模式枚举（`fallback: "keyword" | null`）。
+与 spec knowledge 的形状差异是刻意的：007 把 embedding 字段保持**扁平**，让 memory 表单保持轻薄；006 则把它们嵌套在一个 `EmbeddingConfig` 对象里。自全局 embedding 重设计起，扁平字段已是遗留字段——为兼容性在 wire 上继续接受但被忽略；索引与 recall 都解析**全局** embedding 配置（见下文 `GlobalEmbeddingConfig`）。同理，007 recall 响应里的 `fallback` 是**布尔值** —— recall 跨多个 store，单一的回退模式字符串没有良定义；而 006 的单 store 搜索报告一个可空的模式枚举（`fallback: "keyword" | null`）。
+
+### `GlobalEmbeddingConfig`（`domain/embedding_config.py`，表 `embedding_config`）
+
+全安装级 embedding 设置——一条单例行。它**命名一条连接**，而不是再复述一遍 provider
+（FR-077）：协议、base URL 与凭据都在 `provider` 资源上，使用时从它解析；这与内部引擎设置
+已经在用的「先选 provider、再选模型」是同一形状。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `enabled` | `bool` | 全安装级 embedding 是否开启。 |
+| `connection` | `str \| None` | 一条已配置 LLM 连接（`provider` 资源）的**名字**。为空 ⇒ 配置不生效。 |
+| `model` | `str \| None` | 该连接上的 embedding 模型 id。连接做了策展时，必须匹配其某个 `embedding` 模型。 |
+| `dimensions` | `int` | 向量宽度；决定 `vec_chunks` 表。 |
+| `default_chunk_size` | `int` | scope 未覆盖时的默认 chunk 大小。 |
+| `default_chunk_overlap` | `int` | 默认 chunk 重叠。 |
+| `updated_at` | `datetime` | 最后一次写入。 |
+
+`provider`（旧的协议名枚举）、`base_url` 与 `credential_ref` 已从行里和 wire 上**消失**，
+更新请求也不再携带 `secret_value`：key 属于连接，embedding 设置不再铸造 `embedding/key`
+vault 条目。
+
+`is_active()` 是 `enabled and connection and model`。未命名连接的配置不生效，因此检索退化为
+keyword/grep，与未配置的安装完全一致。
+
+解析把连接的 `protocol` 映射到 embedding 客户端——`openai` → openai 兼容，`ollama` → ollama，
+`unknown` → 按 openai 兼容处理（未分类的网关几乎总是它）；`anthropic` 不提供任何 embedding
+API，会被拒绝。连接的 `base_url` 与 `credential_ref` 原样使用。
+
+以下情形在选择时以 **HTTP 422**（`CONFIG_INVALID`，与应用里其他配置拒绝同一个状态码）拒绝：命名了不存在的连接、协议不提供 embedding 的连接、
+做了策展但其中没有 modality 为 `embedding` 的条目的连接，或该连接策展里无一匹配的模型。
+完全不做策展的连接会被接受（空 = 不限制），并按用户填写的模型 id 取信。
+
+**迁移：** 一条 Alembic 修订改写这条单例行——已有配置按 `base_url` 匹配到对应连接，匹配不上
+再按 `credential_ref` 匹配；两者都匹配不上时，该行保留它的维度与 chunk 默认值，但留空
+connection 且 `enabled = 0`，而不是凭空造一条连接。一次性完成：旧列在同一条修订里删除，
+不留任何 load-time 垫片去读它们。
 
 ### `MemoryFact` (`domain/memory/fact.py`)
 

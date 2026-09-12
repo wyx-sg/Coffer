@@ -26,7 +26,8 @@ from coffer.application.provider.kind import make_provider_kind
 from coffer.application.provider.service import ProviderService
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.types import AgentType
-from coffer.domain.provider.config import Protocol
+from coffer.domain.provider.config import CuratedModel, Protocol
+from coffer.domain.provider.modality import Modality
 from coffer.domain.resource import Resource
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.agent.model_discovery import NativeConfigModelDiscovery
@@ -44,8 +45,15 @@ _NOW = dt.datetime(2026, 9, 11, tzinfo=dt.UTC)
 #: What the CLI's own login can run, as Claude Code caches it on disk.
 _CLI_MODELS = ["claude-opus-5", "claude-sonnet-5"]
 
-#: What the user ticked on the gateway's detail page.
+#: What the user ticked on the gateway's detail page. Both are CHAT models —
+#: the second's name notwithstanding, because a curated entry's modality is
+#: STORED, never read back out of its id.
 _GATEWAY_MODELS = ["agnes-2.5-pro-beta", "agnes-video-2.5"]
+
+
+def _text(*ids: str) -> list[CuratedModel]:
+    """Curated chat entries — the kind a set holds unless a test says otherwise."""
+    return [CuratedModel(id=i) for i in ids]
 
 
 class _DictStore:
@@ -137,7 +145,7 @@ async def env(tmp_path: pathlib.Path) -> AsyncIterator[_Env]:
 
 
 async def _gateway(
-    env: _Env, *, models: list[str], agents: list[AgentType], name: str = "agnes"
+    env: _Env, *, models: list[CuratedModel], agents: list[AgentType], name: str = "agnes"
 ) -> None:
     await env.providers.create(
         name,
@@ -157,7 +165,7 @@ async def test_without_a_provider_the_agent_s_own_models_are_offered(env: _Env) 
 async def test_an_activated_gateway_s_curated_models_replace_the_agent_s(env: _Env) -> None:
     """Every turn now goes to the gateway, so its ids are the only ones that can
     succeed — and the CLI's own names must be gone from the card."""
-    await _gateway(env, models=_GATEWAY_MODELS, agents=[AgentType.CLAUDE_CODE])
+    await _gateway(env, models=_text(*_GATEWAY_MODELS), agents=[AgentType.CLAUDE_CODE])
 
     assert await env.catalogue.suggest("claude_code") == _GATEWAY_MODELS
 
@@ -177,7 +185,35 @@ async def test_an_activated_gateway_that_restricts_nothing_leaves_discovery_alon
 async def test_a_gateway_activated_for_another_agent_does_not_leak(env: _Env) -> None:
     """Activation is per agent type. A connection routed at Codex says nothing
     about what Claude Code — still on its own login — can run."""
-    await _gateway(env, models=["gpt-6-codex"], agents=[AgentType.CODEX])
+    await _gateway(env, models=_text("gpt-6-codex"), agents=[AgentType.CODEX])
 
     assert await env.catalogue.suggest("claude_code") == _CLI_MODELS
     assert await env.catalogue.suggest("codex") == ["gpt-6-codex"]
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a non-text curated model never reaches a chat model picker",
+)
+async def test_only_the_text_models_of_a_mixed_connection_are_offered(env: _Env) -> None:
+    """One endpoint, one key, three kinds of model. A chat picker may offer only
+    the chat one: an embedding or image id handed to a turn could only be
+    rejected by the very endpoint that was asked for it, so the narrowing has to
+    happen before the card is rendered — not after the turn fails."""
+    await _gateway(
+        env,
+        models=[
+            CuratedModel(id="agnes-2.5-pro-beta"),
+            CuratedModel(id="agnes-embed-1", modality=Modality.EMBEDDING),
+            CuratedModel(id="agnes-canvas-1", modality=Modality.IMAGE),
+        ],
+        agents=[AgentType.CLAUDE_CODE],
+    )
+
+    # The web model picker …
+    assert [m.id for m in await env.catalogue.offered("claude_code")] == ["agnes-2.5-pro-beta"]
+    # … and the channel ``/model`` card, which starts from the same answer.
+    assert await env.catalogue.suggest("claude_code") == ["agnes-2.5-pro-beta"]
+    # The agent's own catalogue is untouched by curation — it describes the
+    # login, and narrowing is the picker's business (``offered``), not its.
+    assert [m.id for m in await env.catalogue.catalogue("claude_code")] == _CLI_MODELS

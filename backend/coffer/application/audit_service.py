@@ -65,6 +65,18 @@ class AuditService:
             },
         )
 
+    async def repoint(self, kind: str, old_name: str, new_name: str) -> int:
+        """Move this resource's whole audit trail onto ``new_name``.
+
+        The log records what happened to a RESOURCE, and a renamed resource is
+        still the same one under a new name — so the trail follows it rather
+        than being stranded under a name that no longer resolves anything (the
+        audit query filters by kind + name). The rename itself is recorded as
+        its own event, so the old name is not lost, only the rows' pointer
+        moves. Returns the number of rows moved.
+        """
+        return await self._repo.repoint(kind, old_name, new_name)
+
     async def query(
         self,
         *,

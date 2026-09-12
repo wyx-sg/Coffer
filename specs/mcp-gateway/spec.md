@@ -120,8 +120,10 @@ Unlisted is **not** disabled: `tools/call` gates on the capability preference,
 never on list membership, so an unlisted tool routes exactly as before, and
 `coffer__search_tools` keeps ranking the **full** catalogue. Tiering fails open
 — `COFFER_TOOL_TIERING=off`, or any failure of the usage query, lists
-everything. `GET /api/v1/mcp/tiering` reports the current split, and the MCP
-servers page surfaces it when tools are unlisted.
+everything. The split is not reported on a management page: "why can't the
+agent see tool X" is a question asked inside an agent session, which the
+`initialize` instructions below already answer, and a UI notice restating it
+was one more surface to keep true for a reader who was not the one asking.
 
 #### `initialize` instructions
 

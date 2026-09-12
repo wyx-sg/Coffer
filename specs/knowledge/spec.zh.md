@@ -94,7 +94,7 @@
 
 **为什么是这个优先级**：检索就是产品。内部模式覆盖了从离线零配置到语义搜索的全谱，而外部面始终是「一次查询 → 一个答案」。
 
-**独立可测**：在同时含一条写入条目与一个摄取文档的 scope 上跑一次 `coffer__search`，观察两个 lane 的命中。在没有 embedding 配置的情况下跑 grep。配置 embedding provider、给 scope 启用 `vector` 后再搜；移除配置再搜，结果仍返回且无报错。
+**独立可测**：在同时含一条写入条目与一个摄取文档的 scope 上跑一次 `coffer__search`，观察两个 lane 的命中。在没有 embedding 配置的情况下跑 grep。配置全安装级 embedding（命名一条连接、选它的一个 embedding 模型）、给 scope 启用 `vector` 后再搜；移除配置再搜，结果仍返回且无报错。
 
 **代表性场景**：关键词搜索返回排名段落；关键词搜索命中 CJK（中文）内容；grep 返回文件/行匹配；向量搜索返回排名段落；embedding 未配置时 vector 回退 keyword；hybrid 通过 RRF 融合 keyword 与 vector；主题文档以段落粒度被召回。
 
@@ -132,7 +132,7 @@
 
 **独立可测**：查看每个 scope 的指标（条目数、文档数、chunk 数、磁盘字节）。给来源文件夹未知的 scope 重命名，确认所选名字出现在列表中并在刷新后仍在。清空一个 project scope；确认条目全部消失但 scope 仍在。
 
-**代表性场景**：清空一个知识 scope；用户重命名一个 scope；KB 指标报告计数与磁盘占用；降级的嵌入暴露 documents_degraded 并在不重新 chunk 的前提下重试；测试一个 embedding 模型。
+**代表性场景**：清空一个知识 scope；用户重命名一个 scope；KB 指标报告计数与磁盘占用；降级的嵌入暴露 documents_degraded 并在不重新 chunk 的前提下重试；测试一个 embedding 模型；全局 embedding 模型从一条连接里选。
 
 ---
 
@@ -499,9 +499,21 @@ Notes 与文档分成两个 tab、各自计数，正是因为它们出处不同�
 
 ### Scenario: test an embedding model
 
-- **Given** 一个 embedding provider、模型 id，以及（必要时）凭据引用，
-- **When** 用户测试该 embedding 模型，
-- **Then** Coffer 请求一次嵌入并报告成功及返回的向量维度，或给出人类可读的失败信息，且不持久化任何东西。
+- **Given** 一条已配置 LLM 连接的名字与一个 embedding 模型 id，
+- **When** 用户测试该 embedding 模型（`POST /api/v1/embedding/test`，请求体 `{connection, model}`），
+- **Then** Coffer 从被命名的连接解析出协议、base URL 与凭据，请求一次嵌入并报告成功及返回的向量维度，或给出人类可读的失败信息，且不持久化任何东西。
+
+### Scenario: the global embedding model is chosen from a connection
+
+- **Given** 一条已配置的 `openai` 连接（策展了一个 `embedding` 模型与一个 chat 模型）、一条
+  `anthropic` 连接，以及一个没有任何连接持有的名字，
+- **When** 保存全安装级 embedding 配置，指向该 openai 连接及其 embedding 模型，随后依次改为
+  指向（a）那个不存在的名字、（b）该 anthropic 连接、（c）该 openai 连接并未策展的某个模型，
+- **Then** 第一次保存被接受，存下来的配置只携带 `{enabled, connection, model, dimensions,
+  default_chunk_size, default_chunk_overlap, updated_at}`——没有 `provider`、`base_url`、
+  `credential_ref`，也不铸造 `embedding/key` vault 条目——且嵌入在使用时从被命名的连接解析
+  协议、base URL 与凭据；（a）（b）（c）各自以 HTTP 422 与说明原因的消息被拒绝；未命名任何
+  连接的配置不生效，因此检索退化为 keyword/grep，与未配置的安装完全一致。
 
 > **推迟到后续测试工作**（随 e2e 基础设施落地；`make verify-acceptance` 不对其设卡）：按 scope 的 Knowledge 列表视图、只读查看器的「在外部编辑器中打开 / 显示」端到端验证、带运行中 daemon 的 `coffer knowledge …` 端到端、以及经 HTTP 路由的按 scope 指标。
 
@@ -509,7 +521,7 @@ Notes 与文档分成两个 tab、各自计数，正是因为它们出处不同�
 
 ### Functional Requirements
 
-> **编号说明。** `FR-001`–`FR-059` 保留它们还叫 *Memory* 规范时的编号 —— 代码注释、其他规范与 ADR 都在引用它们，重新编号带来的破坏大于整洁。从 spec knowledge（Knowledge Base）折叠进来的需求另起一段编号 `FR-060`–`FR-075`，每条标注它来自 006 的哪个编号；`FR-076` 是两 lane 迁移。序列中的空缺是被更早改动退役的需求 —— transcript distillation 与 `journal` lane，以及 2026-09-11 的两 lane 重新设计：它退役了 handoff lane（`FR-023`–`FR-026`）、排空 inbox 的 organizer 及其目录与变更日志（`FR-027`–`FR-031`）、流程性 `rules` lane（`FR-036`）与跨 scope 的 AI 合并（`FR-056`–`FR-059`）。存活的需求从不重新编号，所以空缺就留着。
+> **编号说明。** `FR-001`–`FR-059` 保留它们还叫 *Memory* 规范时的编号 —— 代码注释、其他规范与 ADR 都在引用它们，重新编号带来的破坏大于整洁。从 spec knowledge（Knowledge Base）折叠进来的需求另起一段编号 `FR-060`–`FR-075`，每条标注它来自 006 的哪个编号；`FR-076` 是两 lane 迁移，`FR-077` 是全安装级 embedding 配置。序列中的空缺是被更早改动退役的需求 —— transcript distillation 与 `journal` lane，以及 2026-09-11 的两 lane 重新设计：它退役了 handoff lane（`FR-023`–`FR-026`）、排空 inbox 的 organizer 及其目录与变更日志（`FR-027`–`FR-031`）、流程性 `rules` lane（`FR-036`）与跨 scope 的 AI 合并（`FR-056`–`FR-059`）。存活的需求从不重新编号，所以空缺就留着。
 
 **存储与 scope**
 
@@ -617,6 +629,43 @@ hook 投递一份会话开始包（`GET /api/v1/agents/{name}/session-context?cw
 - **FR-075**：迁移 `0051` 必须把两个 kind 合并为 `knowledge`、**清空**派生索引而不是转换它，并重命名两张本机局部的旁表（`memory_store_project_roots` → `knowledge_scope_project_roots`，`memory_store_labels` → `knowledge_scope_labels`，键列 `store_name` → `scope_name`）。迁移 `0052` 必须新增 `documents.lane` 及其索引，并按条目 lane 特有的 `knowledge/inbox/` 嵌套回填（匹配裸的 `knowledge/` 片段是错的 —— 存储根本身就包含它）。清空而非转换是必需而不只是省事：`memory:global` 与 `knowledge_base:global` 同时存在而 `resources` 以 `(kind, name)` 为键，两者都转换必然撞键、任何自动改名都是在猜；而所有 `documents` 行索引的都是上一次修订移除的 journal lane，索引指向的文件不复存在。两个迁移都必须做好防护，使缺少其中任何一项的数据库仍能升级。
 
 - **FR-076**：迁向两条 lane 必须做迁移，且**按明确决定做破坏性迁移 —— 不设缓冲区**。磁盘上，逐 scope：`knowledge/inbox/*.md` 与 `knowledge/*.md` 拍平进 `notes/`；`inbox/` 变成 `docs/`；`.raw/` 不变；`rules/`、`handoff/`、`superseded/`、`consolidation-log.md` 与 `knowledge/INDEX.md` **直接删除** —— 不搬进任何 `.retired/` 暂存区，因为那些 lane 要么已经没有读者（rules），要么装的是副产物而非内容（日志与目录）。数据库里，必须由**一条 Alembic migration** 把 `documents.lane` 由 `knowledge`/`inbox` 改写为 `notes`/`docs`。数据必须在库里改干净，兼容分支必须在**同一次改动**里删掉：**不得有任何 load-time 垫片在这次迁移后存活**，也不得有任何面继续接受或产出旧的 lane 名。该 migration 必须做好保护，使缺少其中任一项的数据库仍能升级。
+
+**全安装级 embedding**
+
+- **FR-077**：全安装级 embedding 配置（`GlobalEmbeddingConfig`，表 `embedding_config`）
+  **必须命名一条连接**，而不是再复述一遍 provider。它的字段恰好是 `enabled`、`connection`、
+  `model`、`dimensions`、`default_chunk_size`、`default_chunk_overlap` 与 `updated_at`；
+  `provider`（旧的协议名枚举）、`base_url` 与 `credential_ref` **必须**从行里和 wire 上消失，
+  更新请求也**不得**再携带 `secret_value`——key 属于连接，embedding 设置**不得**铸造
+  `embedding/key` vault 条目。`connection` 是一条已配置 LLM 连接（`provider` 资源，见 spec
+  provider-switching）的**名字**，与内部引擎设置已经在用的「先选 provider、再选模型」是同一
+  形状；协议、base URL 与凭据**必须**在使用时从该连接解析。
+  - `is_active()` **必须**是 `enabled and connection and model`。未命名连接的配置不生效，
+    因此检索退化为 keyword/grep，与未配置的安装完全一致（FR-008）。
+  - 解析**必须**把连接的 `protocol` 映射到 embedding 客户端：`openai` → openai 兼容客户端，
+    `ollama` → ollama 客户端，`unknown` → 按 openai 兼容处理（未分类的网关几乎总是它）。
+    `anthropic` 不提供任何 embedding API，**必须**被拒绝。连接的 `base_url` 与
+    `credential_ref` **必须**原样使用。
+  - 选择时**必须**以 **HTTP 422**（`CONFIG_INVALID`，与应用里其他配置拒绝同一个状态码）
+    与清晰消息拒绝以下情形：命名了一条不存在的连接；命名了
+    协议不提供 embedding 的连接（anthropic）；命名了一条做了模型策展、但其中没有任何
+    modality 为 `embedding` 的条目的连接（见 spec provider-switching FR-029）；以及命名了
+    一个该连接策展里无一匹配的模型。完全**不做**任何策展的连接**必须**被接受（空 = 不限制），
+    并按用户填写的模型 id 取信。
+  - `POST /api/v1/embedding/test` **必须**接收 `{connection, model}`，而不是
+    `{provider, model, base_url, credential_ref}`。
+  - **界面**（设置 → 引擎 → Embedding）**必须**与它上方的内部引擎卡片是同样的两个选择器：
+    先选模型提供商，再选它的一个模型——模型列表收窄到该连接策展里 modality 为 `embedding`
+    的条目；若该连接完全不做策展，则收窄到它 endpoint 报告的内容（此时由 introspection
+    推断出的 modality 负责收窄）。「添加模型」对话框以及它问过的每一个字段——provider 名字
+    枚举、base URL、API key——**必须**消失，且在连接与模型都选定之前不保存任何东西。维度
+    字段、启用开关与 chunk 默认值留在原处。422 拒绝**必须**显示在卡片上，并带上 daemon
+    自己的消息，让人看到是**哪一条**规则被违反；对已配置好的 embedder 改模型或改向量宽度，
+    在重嵌所有库之前**必须**仍然先确认。
+  - **一条 Alembic 修订**必须改写这条单例行：已有配置按 `base_url` 匹配到对应连接，匹配不上
+    再按 `credential_ref` 匹配；两者都匹配不上时，该行**必须**保留它的维度与 chunk 默认值，
+    但留空 connection 且 `enabled = 0`，而不是凭空造一条连接。一次性完成，按房规：旧列在同
+    一条修订里删除，**不得**留任何 load-time 垫片去读它们。
 
 **基底隔离与迁移**
 

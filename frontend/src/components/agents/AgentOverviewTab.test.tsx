@@ -5,7 +5,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 
 import { AgentOverviewTab } from "./AgentOverviewTab";
 import type { AgentOut } from "@/lib/api/agents";
-import type { Provider } from "@/lib/api/providers";
+import type { Provider, ProviderModel } from "@/lib/api/providers";
 
 vi.mock("@/lib/hooks/useProviders", () => ({
   useProviders: vi.fn(),
@@ -17,21 +17,10 @@ vi.mock("@/lib/hooks/useModelIntrospection", () => ({
   useTestConnection: vi.fn(),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({ usePatchAgent: vi.fn() }));
-vi.mock("@/lib/hooks/useAgentModels", () => ({
-  useAgentModels: vi.fn(),
-  useAgentModelSelection: vi.fn(),
-  useSetAgentModelSelection: vi.fn(),
-}));
 
 import { useActivateProvider, useProviders, useUseBuiltinProvider } from "@/lib/hooks/useProviders";
 import { useListProviderModels, useTestConnection } from "@/lib/hooks/useModelIntrospection";
 import { usePatchAgent } from "@/lib/hooks/useAgents";
-import {
-  useAgentModels,
-  useAgentModelSelection,
-  useSetAgentModelSelection,
-} from "@/lib/hooks/useAgentModels";
-import type { AgentModel } from "@/lib/api/agentModels";
 
 const useProvidersMock = useProviders as unknown as ReturnType<typeof vi.fn>;
 const useActivateMock = useActivateProvider as unknown as ReturnType<typeof vi.fn>;
@@ -39,17 +28,6 @@ const useUseBuiltinMock = useUseBuiltinProvider as unknown as ReturnType<typeof 
 const useListMock = useListProviderModels as unknown as ReturnType<typeof vi.fn>;
 const useTestMock = useTestConnection as unknown as ReturnType<typeof vi.fn>;
 const usePatchAgentMock = usePatchAgent as unknown as ReturnType<typeof vi.fn>;
-const useAgentModelsMock = useAgentModels as unknown as ReturnType<typeof vi.fn>;
-const useSelectionMock = useAgentModelSelection as unknown as ReturnType<typeof vi.fn>;
-const useSetSelectionMock = useSetAgentModelSelection as unknown as ReturnType<typeof vi.fn>;
-const saveSelectionMutate = vi.fn();
-
-/** The daemon-served catalogue for claude_code: concrete, version-bearing ids
- * read back from the agent — one with a display name, one without. */
-const CATALOGUE: AgentModel[] = [
-  { id: "claude-opus-5", label: "Opus 5", description: "" },
-  { id: "claude-fable-5-1", label: "", description: "" },
-];
 
 const activateMutate = vi.fn();
 const useBuiltinMutate = vi.fn();
@@ -78,7 +56,7 @@ function makeConn(over: Partial<Provider> = {}): Provider {
     is_active: true,
     internal_default: false,
     // No curated model set by default — the picker introspects the endpoint.
-    models: [] as string[],
+    models: [] as ProviderModel[],
     enabled: true,
     description: null,
     created_at: "",
@@ -115,10 +93,25 @@ function passingTest() {
   });
 }
 
+/** Curated/introspected entries for chat ids — the common `text` case. */
+function text(...ids: string[]): ProviderModel[] {
+  return ids.map((id) => ({ id, modality: "text" as const }));
+}
+
 function openSelectOptions(triggerName: RegExp): string[] {
   const trigger = screen.getByRole("combobox", { name: triggerName });
   fireEvent.keyDown(trigger, { key: "ArrowDown" });
   return screen.getAllByRole("option").map((o) => o.textContent ?? "");
+}
+
+/** Like `openSelectOptions` but tolerates an EMPTY dropdown, and closes it
+ *  again so a second picker can be inspected in the same test. */
+function peekSelectOptions(triggerName: RegExp): string[] {
+  const trigger = screen.getByRole("combobox", { name: triggerName });
+  fireEvent.keyDown(trigger, { key: "ArrowDown" });
+  const opts = screen.queryAllByRole("option").map((o) => o.textContent ?? "");
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+  return opts;
 }
 
 const confirmBtn = () => screen.getByRole("button", { name: /confirm switch/i });
@@ -131,8 +124,8 @@ beforeEach(() => {
   // The model dropdown is populated by introspecting the connection (the
   // connection no longer carries a model — spec provider-switching E3); resolve its catalogue.
   useListMock.mockReturnValue({
-    mutate: (_probe: unknown, opts?: { onSuccess?: (r: { models: string[] }) => void }) =>
-      opts?.onSuccess?.({ models: ["claude-opus-4-8", "claude-haiku-4-5"] }),
+    mutate: (_probe: unknown, opts?: { onSuccess?: (r: { models: ProviderModel[] }) => void }) =>
+      opts?.onSuccess?.({ models: text("claude-opus-4-8", "claude-haiku-4-5") }),
   });
   // Default: no test run yet.
   useTestMock.mockReturnValue({
@@ -142,11 +135,6 @@ beforeEach(() => {
     data: undefined,
   });
   usePatchAgentMock.mockReturnValue({ mutate: patchAgentMutate, isPending: false });
-  useAgentModelsMock.mockReturnValue({ data: CATALOGUE });
-  // Uncurated by default — the out-of-the-box state, where every model is on
-  // offer and nothing is ticked.
-  useSelectionMock.mockReturnValue({ data: [] });
-  useSetSelectionMock.mockReturnValue({ mutate: saveSelectionMutate, isPending: false });
   useProvidersMock.mockReturnValue({ data: [] });
 });
 
@@ -191,8 +179,8 @@ describe("AgentOverviewTab", () => {
   test("picking a connection is a draft: it stages a default model, activates nothing", () => {
     useProvidersMock.mockReturnValue({ data: [agnes()] });
     useListMock.mockReturnValue({
-      mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: string[] }) => void }) =>
-        opts?.onSuccess?.({ models: ["agnes-2.0", "agnes-1.5-flash"] }),
+      mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: ProviderModel[] }) => void }) =>
+        opts?.onSuccess?.({ models: text("agnes-2.0", "agnes-1.5-flash") }),
     });
     render(<AgentOverviewTab agent={agent} />);
     openSelectOptions(/provider/i);
@@ -210,8 +198,8 @@ describe("AgentOverviewTab", () => {
       data: [makeConn({ name: "official", is_active: true }), agnes()],
     });
     useListMock.mockReturnValue({
-      mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: string[] }) => void }) =>
-        opts?.onSuccess?.({ models: ["agnes-2.0"] }),
+      mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: ProviderModel[] }) => void }) =>
+        opts?.onSuccess?.({ models: text("agnes-2.0") }),
     });
     const { rerender } = render(<AgentOverviewTab agent={agent} />);
     openSelectOptions(/provider/i);
@@ -227,8 +215,8 @@ describe("AgentOverviewTab", () => {
       data: [makeConn({ name: "official", is_active: true }), agnes()],
     });
     useListMock.mockReturnValue({
-      mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: string[] }) => void }) =>
-        opts?.onSuccess?.({ models: ["agnes-2.0"] }),
+      mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: ProviderModel[] }) => void }) =>
+        opts?.onSuccess?.({ models: text("agnes-2.0") }),
     });
     const { rerender } = render(<AgentOverviewTab agent={agent} />);
     openSelectOptions(/provider/i);
@@ -249,8 +237,8 @@ describe("AgentOverviewTab", () => {
       data: [makeConn({ name: "official", is_active: true }), agnes()],
     });
     useListMock.mockReturnValue({
-      mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: string[] }) => void }) =>
-        opts?.onSuccess?.({ models: ["agnes-2.0", "agnes-1.5-flash"] }),
+      mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: ProviderModel[] }) => void }) =>
+        opts?.onSuccess?.({ models: text("agnes-2.0", "agnes-1.5-flash") }),
     });
     const { rerender } = render(<AgentOverviewTab agent={agent} />);
     openSelectOptions(/provider/i);
@@ -278,8 +266,8 @@ describe("AgentOverviewTab", () => {
     const codex: AgentOut = { ...agent, name: "my-codex", type: "codex" };
     useProvidersMock.mockReturnValue({ data: [agnes({ compatible_agents: ["codex"] })] });
     useListMock.mockReturnValue({
-      mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: string[] }) => void }) =>
-        opts?.onSuccess?.({ models: ["gpt-5-codex", "gpt-5"] }),
+      mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: ProviderModel[] }) => void }) =>
+        opts?.onSuccess?.({ models: text("gpt-5-codex", "gpt-5") }),
     });
     const { rerender } = render(<AgentOverviewTab agent={codex} />);
     expect(screen.queryByRole("combobox", { name: /fast model/i })).not.toBeInTheDocument();
@@ -325,17 +313,19 @@ describe("AgentOverviewTab", () => {
     expect(screen.queryByRole("combobox", { name: /fast model/i })).not.toBeInTheDocument();
   });
 
-  test("the built-in login curates the catalogue instead of showing dead model slots", () => {
-    // Nothing reads `agent.model` on the built-in login, so offering two model
-    // dropdowns there would be a control that writes a field nobody reads.
-    // Show what the agent reports instead — with a tick beside each model the
-    // user says their account can actually run.
+  test("the built-in login offers NO model control at all, only where to choose one", () => {
+    // Nothing reads `agent.model` on the built-in login, so a model dropdown
+    // there would write a field nobody reads — and curating a model list on an
+    // AGENT is equally wrong: an agent has no audience. A channel does, and it
+    // carries its own default model and allowed range (spec channels FR-071).
+    // So this branch offers no control whatsoever, just the sentence saying
+    // where the choice happens.
     useProvidersMock.mockReturnValue({ data: [] });
     render(<AgentOverviewTab agent={agent} />);
     expect(screen.queryByRole("combobox", { name: /^model$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: /fast model/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: "claude-opus-5" })).toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: "claude-fable-5-1" })).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
     expect(screen.getByText(/chosen per conversation/i)).toBeInTheDocument();
   });
 
@@ -357,7 +347,7 @@ describe("AgentOverviewTab", () => {
     const listMutate = vi.fn();
     useListMock.mockReturnValue({ mutate: listMutate });
     useProvidersMock.mockReturnValue({
-      data: [agnes({ is_active: true, models: ["agnes-2.0", "agnes-1.5-flash"] })],
+      data: [agnes({ is_active: true, models: text("agnes-2.0", "agnes-1.5-flash") })],
     });
     render(<AgentOverviewTab agent={agent} />);
 
@@ -373,7 +363,7 @@ describe("AgentOverviewTab", () => {
     useProvidersMock.mockReturnValue({
       data: [
         makeConn({ name: "official", is_active: true }),
-        agnes({ models: ["agnes-2.0", "agnes-1.5-flash"] }),
+        agnes({ models: text("agnes-2.0", "agnes-1.5-flash") }),
       ],
     });
     render(<AgentOverviewTab agent={agent} />);
@@ -390,8 +380,8 @@ describe("AgentOverviewTab", () => {
 
   test("an EMPTY curated set keeps today's behaviour: introspect the endpoint", () => {
     const listMutate = vi.fn(
-      (_p: unknown, opts?: { onSuccess?: (r: { models: string[] }) => void }) =>
-        opts?.onSuccess?.({ models: ["agnes-2.0", "agnes-1.5-flash"] }),
+      (_p: unknown, opts?: { onSuccess?: (r: { models: ProviderModel[] }) => void }) =>
+        opts?.onSuccess?.({ models: text("agnes-2.0", "agnes-1.5-flash") }),
     );
     useListMock.mockReturnValue({ mutate: listMutate });
     useProvidersMock.mockReturnValue({ data: [agnes({ is_active: true, models: [] })] });
@@ -401,6 +391,54 @@ describe("AgentOverviewTab", () => {
     expect(options).toContain("agnes-2.0");
     expect(options).toContain("agnes-1.5-flash");
     expect(listMutate).toHaveBeenCalled();
+  });
+
+  // --- the curated set is narrowed to modality `text` (spec provider-switching FR-030) ---
+  // One endpoint answers for chat AND embeddings; the agent's binding is a CHAT
+  // binding, so only `text` entries may be offered as the model it runs on.
+
+  acceptance(
+    "provider-switching",
+    "a non-text curated model never reaches a chat model picker",
+    () => {
+      const listMutate = vi.fn();
+      useListMock.mockReturnValue({ mutate: listMutate });
+      useProvidersMock.mockReturnValue({
+        data: [
+          agnes({
+            is_active: true,
+            models: [
+              { id: "agnes-2.0", modality: "text" },
+              { id: "agnes-embed-3", modality: "embedding" },
+            ],
+          }),
+        ],
+      });
+      render(<AgentOverviewTab agent={agent} />);
+
+      // Both of Claude Code's slots are chat slots: the embedding id is offered
+      // in neither, and the endpoint is still never probed.
+      expect(peekSelectOptions(/^model$/i)).toEqual(["agnes-2.0"]);
+      expect(peekSelectOptions(/fast model/i)).toEqual(["agnes-2.0"]);
+      expect(listMutate).not.toHaveBeenCalled();
+    },
+  );
+
+  test("a curated set with NO text entry offers no model and still never introspects", () => {
+    // "Restricted" is decided by the WHOLE curated set, not by its text slice —
+    // so curating only an embedding model means no chat model at all, rather
+    // than silently falling back to the endpoint's full catalogue (mirrors the
+    // daemon).
+    const listMutate = vi.fn();
+    useListMock.mockReturnValue({ mutate: listMutate });
+    useProvidersMock.mockReturnValue({
+      data: [agnes({ is_active: true, models: [{ id: "agnes-embed-3", modality: "embedding" }] })],
+    });
+    render(<AgentOverviewTab agent={agent} />);
+
+    expect(peekSelectOptions(/^model$/i)).toEqual([]);
+    expect(peekSelectOptions(/fast model/i)).toEqual([]);
+    expect(listMutate).not.toHaveBeenCalled();
   });
 
   test("with no compatible connection, still defaults to the built-in connection", () => {

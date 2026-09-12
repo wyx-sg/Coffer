@@ -20,16 +20,25 @@ Pydantic v2 `BaseModel`。这是存储在 Resource 行上的同步 `config` 字�
 > `is_active` 现按 **agent 类型**作用域（每个 agent 至多一条激活连接），不再按 protocol。该字段
 > 以纯字符串持有，使本领域模块不依赖 agent kind（由应用层在投影处再 hydrate 成 `AgentType`）。
 
-> **修订 2026-09-11（J1–J3）**：新增 `models: list[str]` 字段，记录该连接向下游**提供**
+> **修订 2026-09-11（J1–J3）**：新增 `models` 字段，记录该连接向下游**提供**
 > endpoint 的哪些模型。它不存**选中的**模型——E1/E3 依然成立——只存使用处选择器可选的菜单。
 > **空表示不限制**，这是默认值，也是修订 0059 之前创建的每条连接的取值。
+
+> **修订 2026-09-12b（L1–L4）**：每条策展条目是一个**对象**，
+> `CuratedModel = {id: str, modality: Modality}`，其中 `Modality` 是取值为 `text`（默认）、
+> `embedding`、`image`、`video`、`audio` 的 `StrEnum`——一个 provider endpoint 提供的不只是
+> chat 模型，条目现在说明它是哪一类。**存储的** modality 就是真相：它只由把纯字符串条目
+> 转换过来的那一条一次性迁移和 endpoint introspection 推断（两者都可由用户改正），
+> **绝不**由 load-time 垫片推断。每一个 chat 模型选择器都把策展集合收窄到 `text`
+> （FR-029/FR-030）。
 
 | 字段 | 类型 | 约束 / 说明 |
 |---|---|---|
 | `protocol` | `Protocol` | **探测**得出、非用户输入；`"anthropic"`、`"openai"`、`"ollama"` 或 `"unknown"`。create/edit 时探测 endpoint 得出；只是兼容性提示，不是投射门控。`ollama` 仅供内部。`unknown` ⇒ 对所有 agent 显示（用户决定）。 |
 | `base_url` | `str` | 必填；上游 LLM endpoint URL。 |
 | `credential_ref` | `str \| None` | 可选；anthropic/openai 必填（Fernet vault ref，格式 `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`）；ollama 不存在（无 API key）。 |
-| `models` | `list[str]` | 该连接向下游**提供**的模型 id 集合（FR-025）。默认 `[]` = 不限制（endpoint 的完整目录）。id 是原样透传给厂商的不透明字符串——只校验形状（非空白、按序去重、≤200 个且每个 ≤200 字符），绝不与 Coffer 自己写死的名单比对。它不是「选中的模型」：选择仍发生在使用处。 |
+| `models` | `list[CuratedModel]` | 该连接向下游**提供**的模型集合（FR-025/FR-029）。每个条目是 `{id, modality}`。默认 `[]` = 不限制（endpoint 的完整目录）。id 是原样透传给厂商的不透明字符串——只校验形状（非空白、按 id 去重且保序、≤200 个且每个 ≤200 字符），绝不与 Coffer 自己写死的名单比对。它不是「选中的模型」：选择仍发生在使用处。 |
+| `models[].modality` | `Modality` | `"text"`（默认）、`"embedding"`、`"image"`、`"video"` 或 `"audio"`——该 id 是哪一类模型（FR-029）。**存储**下来，读取时绝不重新推导：只由针对纯字符串条目的那一条一次性迁移与 endpoint introspection 推断，两者都可在连接编辑器里改正。chat 模型选择器只提供 `text` 条目（FR-030）。 |
 | `is_active` | `bool` | 同一 `protocol` 下最多一条为 `True`（FR-011）；ollama 始终为 `False`。 |
 | `internal_default` | `bool` | 全局最多一条为 `True`（FR-021）；Coffer 内部引擎使用的 connection（其**模型**由内部默认选择器选，不存这里）。导入时若 >1，则归一化（保留最近更新的）。 |
 

@@ -10,12 +10,10 @@
 // resolves to a model already in the list. The order the backend returns is
 // meaningful (newest first) and must be preserved.
 //
-// Two separate answers, deliberately: the CATALOGUE is everything the installed
-// agent reports, and the SELECTION is which of those the user ticked as actually
-// runnable on their account. The catalogue is never narrowed by the selection —
-// the curation UI renders the catalogue and ticks it, so a model that dropped
-// out of the list could never be ticked back on. An empty selection means "not
-// curated yet" and every model is offered; it never means "no models".
+// One question, one answer: "what can this agent be put on". Nothing narrows
+// it. Curation belongs to a surface with an AUDIENCE — a channel's allowed
+// range (spec channels FR-071) — not to the agent, so there is no per-agent
+// selection endpoint to call here.
 
 import { getCofferBaseUrl, getCofferToken } from "../auth";
 import { ApiError } from "./errors";
@@ -33,11 +31,6 @@ export interface AgentModel {
 
 export interface AgentModelsOut {
   models: AgentModel[];
-}
-
-export interface AgentModelSelectionOut {
-  /** The curated ids. Empty = not curated = the whole catalogue is offered. */
-  models: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -73,23 +66,4 @@ export const agentModelsApi = {
   /** The catalogue for one agent type. 404s on an unknown agent key. */
   list: (agentKey: string) =>
     send<AgentModelsOut>(`/agent-providers/${encodeURIComponent(agentKey)}/models`, "GET"),
-
-  /** Which of the catalogue this agent offers. `[]` = not curated. */
-  selection: (agentKey: string) =>
-    send<AgentModelSelectionOut>(
-      `/agent-providers/${encodeURIComponent(agentKey)}/models/selection`,
-      "GET",
-    ),
-
-  /**
-   * Replace the curated set. `[]` clears it and puts the whole catalogue back
-   * on offer. 404s when no agent of this type is registered — the set lives in
-   * that agent's config row.
-   */
-  setSelection: (agentKey: string, models: string[]) =>
-    send<AgentModelSelectionOut>(
-      `/agent-providers/${encodeURIComponent(agentKey)}/models/selection`,
-      "PUT",
-      { models },
-    ),
 };

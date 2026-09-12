@@ -20,7 +20,6 @@ from sqlalchemy import text as _sa_text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from coffer.application.credential_migration import (
-    gather_extra_credential_refs,
     migrate_legacy_keychain,
 )
 from coffer.domain.credential_errors import MasterKeyMissing
@@ -117,24 +116,21 @@ async def run_legacy_keychain_migration(
     sm: Any,
     credential_store: Any,
     audit: Any,
-    embedding_config_svc: Any,
 ) -> None:
     """One-time move of legacy OS-keychain secrets into the encrypted store.
 
     No-op once migrated.  Best-effort: failures must not block startup.
-    Non-resource owners (chat models + the global embedding config) cite
-    refs too; gathering happens inside the same guard so it can't block
-    startup either.
+    Every citer is a resource now — the global embedding config was the last
+    non-resource owner of a ref, and it reads its key from the connection it
+    names (spec knowledge FR-077).
     """
     try:
-        extra_refs = await gather_extra_credential_refs(embedding_config_svc)
         moved = await migrate_legacy_keychain(
             kinds,
             SqlAlchemyResourceRepo(sm),
             KeyringAdapter(),
             credential_store,
             audit,
-            extra_refs=extra_refs,
         )
         if moved:
             _logger.info("credential_migration.completed", extra={"moved": moved})

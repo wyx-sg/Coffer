@@ -37,11 +37,17 @@ class ResourceRepo(Protocol):
         ref: ResourceRef,
         scope: Scope | None,
     ) -> Resource | None: ...
+    # A resource's name is its identity, so moving it is its own operation:
+    # ``ResourceAlreadyExists`` when the target name is taken.
+    async def rename(self, ref: ResourceRef, new_name: str) -> Resource: ...
     async def delete(self, ref: ResourceRef) -> None: ...
 
 
 class AuditRepo(Protocol):
     async def insert(self, entry: AuditEntry) -> None: ...
+    # Move every row recorded against (kind, old_name) onto ``new_name``;
+    # returns the number of rows moved.
+    async def repoint(self, kind: str, old_name: str, new_name: str) -> int: ...
     async def query(
         self,
         *,

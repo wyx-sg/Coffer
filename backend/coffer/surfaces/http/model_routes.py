@@ -17,6 +17,7 @@ from coffer.surfaces.http.provider_schemas import (
     DetectProtocolIn,
     DetectProtocolOut,
     ListModelsIn,
+    ProviderModel,
     ProviderModelsOut,
     TestConnectionIn,
     TestResultOut,
@@ -35,14 +36,22 @@ async def list_provider_models(
     body: ListModelsIn,
     svc: ModelIntrospectionService = Depends(get_introspection_service),  # noqa: B008
 ) -> ProviderModelsOut:
-    """List the models a provider exposes (empty + message → enter manually)."""
+    """List the models a provider exposes (empty + message → enter manually).
+
+    Each id comes back with a GUESSED modality so the connection's model table
+    pre-fills a sensible kind; the user corrects it and the curated set stores
+    the answer (spec provider-switching FR-030).
+    """
     result = await svc.list_models(
         provider=body.provider,
         base_url=body.base_url,
         credential_ref=body.credential_ref,
         secret_value=body.secret_value,
     )
-    return ProviderModelsOut(models=result.models, message=result.message)
+    return ProviderModelsOut(
+        models=[ProviderModel(id=m.id, modality=m.modality) for m in result.models],
+        message=result.message,
+    )
 
 
 @router.post("/test-connection", response_model=TestResultOut)

@@ -35,6 +35,7 @@ vi.mock("@/lib/hooks/useInternalEngine", () => ({
 }));
 vi.mock("@/lib/hooks/useModelIntrospection", () => ({
   useListProviderModels: () => ({ isPending: false, mutate: vi.fn(), data: undefined }),
+  useTestEmbedding: () => ({ isPending: false, mutate: vi.fn(), reset: vi.fn(), data: undefined }),
 }));
 
 // The embedding card owns its own config query; stub the hooks so the real
@@ -43,10 +44,8 @@ vi.mock("@/lib/hooks/useEmbeddingConfig", () => ({
   useEmbeddingConfig: () => ({
     data: {
       enabled: false,
-      provider: "local",
-      model: "",
-      base_url: null,
-      credential_ref: null,
+      connection: null,
+      model: null,
       dimensions: 768,
       default_chunk_size: 512,
       default_chunk_overlap: 64,
@@ -56,6 +55,7 @@ vi.mock("@/lib/hooks/useEmbeddingConfig", () => ({
     error: null,
   }),
   useUpdateEmbeddingConfig: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  useEmbeddingModels: () => ({ options: [], probing: false }),
 }));
 
 const { providersApi } = await import("@/lib/api/providers");
@@ -129,7 +129,7 @@ describe("EngineSettings", () => {
       await screen.findByText("Internal engine");
 
       // the internal-engine section's connection dropdown sets "b" as the default
-      openSelect(/provider/i);
+      openSelect(/^model provider$/i);
       fireEvent.click(screen.getByRole("option", { name: "b" }));
       await waitFor(() => expect(apiMock.setInternalDefault).toHaveBeenCalledWith("b"));
     },
@@ -153,9 +153,9 @@ describe("EngineSettings", () => {
 
       renderPage();
       // The connection dropdown shows A as the current internal default.
-      expect(await screen.findByRole("combobox", { name: /provider/i })).toHaveTextContent("A");
+      expect(await screen.findByRole("combobox", { name: /^model provider$/i })).toHaveTextContent("A");
       // Selecting B clears A on the backend (single-internal-default invariant).
-      openSelect(/provider/i);
+      openSelect(/^model provider$/i);
       fireEvent.click(screen.getByRole("option", { name: "B" }));
       await waitFor(() => expect(apiMock.setInternalDefault).toHaveBeenCalledWith("B"));
     },

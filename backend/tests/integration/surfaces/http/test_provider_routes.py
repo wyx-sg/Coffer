@@ -559,30 +559,47 @@ def test_curated_models_round_trip(tmp_path, monkeypatch):
     with _client(app) as c:
         r = c.post(
             "/api/v1/providers",
-            json=_anthropic_body(name="curated", models=["opus", "sonnet", "opus"]),
+            json=_anthropic_body(
+                name="curated",
+                models=[
+                    {"id": "opus"},
+                    {"id": "sonnet", "modality": "text"},
+                    {"id": "opus"},
+                    {"id": "embed-1", "modality": "embedding"},
+                ],
+            ),
         )
         assert r.status_code == 201, r.text
-        # Stored verbatim (opaque ids), deduped, in the order the user chose.
-        assert r.json()["models"] == ["opus", "sonnet"]
+        # Stored verbatim (opaque ids), deduped, in the order the user chose,
+        # each keeping the kind it was sent as — an entry that named none is
+        # ``text``, the kind every curated set held before modalities existed.
+        curated_set = [
+            {"id": "opus", "modality": "text"},
+            {"id": "sonnet", "modality": "text"},
+            {"id": "embed-1", "modality": "embedding"},
+        ]
+        assert r.json()["models"] == curated_set
         # Survives a re-read and the list route.
-        assert c.get("/api/v1/providers/curated").json()["models"] == ["opus", "sonnet"]
+        assert c.get("/api/v1/providers/curated").json()["models"] == curated_set
         listed = {p["name"]: p["models"] for p in c.get("/api/v1/providers").json()["providers"]}
-        assert listed["curated"] == ["opus", "sonnet"]
+        assert listed["curated"] == curated_set
 
         # PATCH replaces the whole set (like compatible_agents) — no merging.
-        r = c.patch("/api/v1/providers/curated", json={"models": ["haiku"]})
+        r = c.patch("/api/v1/providers/curated", json={"models": [{"id": "haiku"}]})
         assert r.status_code == 200, r.text
-        assert r.json()["models"] == ["haiku"]
+        assert r.json()["models"] == [{"id": "haiku", "modality": "text"}]
 
         # An unrelated PATCH leaves the curated set alone.
         r = c.patch("/api/v1/providers/curated", json={"base_url": "https://gw/anthropic/v2"})
-        assert r.json()["models"] == ["haiku"]
+        assert r.json()["models"] == [{"id": "haiku", "modality": "text"}]
 
         # The change rides the resource_updated event a provider update already
         # emits — no event of its own.
         events = c.get("/api/v1/audit", params={"event_type": "resource_updated"}).json()["entries"]
         curated = [e for e in events if e["resource_name"] == "curated"]
-        assert curated and curated[0]["details"]["after"]["models"] == ["haiku"]
+        assert curated and curated[0]["details"]["after"]["models"] == [
+            {"id": "haiku", "modality": "text"}
+        ]
 
 
 @pytest.mark.acceptance(
@@ -599,7 +616,9 @@ def test_uncurated_connection_is_unrestricted(tmp_path, monkeypatch):
         assert r.json()["models"] == []
 
         # Curating then clearing with [] returns it to unrestricted.
-        c.patch("/api/v1/providers/open", json={"models": ["opus"]})
+        r = c.patch("/api/v1/providers/open", json={"models": [{"id": "opus"}]})
+        assert r.status_code == 200, r.text
+        assert r.json()["models"] == [{"id": "opus", "modality": "text"}]
         r = c.patch("/api/v1/providers/open", json={"models": []})
         assert r.status_code == 200, r.text
         assert r.json()["models"] == []
@@ -609,8 +628,135 @@ def test_uncurated_connection_is_unrestricted(tmp_path, monkeypatch):
 def test_reject_malformed_curated_models(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59910)
     with _client(app) as c:
-        r = c.post("/api/v1/providers", json=_anthropic_body(name="bad", models=["  "]))
+        r = c.post("/api/v1/providers", json=_anthropic_body(name="bad", models=[{"id": "  "}]))
+        assert r.status_code == 422, r.text
+        # A modality Coffer does not serve is malformed — unlike an id, the set
+        # of kinds is Coffer's own and closed.
+        r = c.post(
+            "/api/v1/providers",
+            json=_anthropic_body(name="odd", models=[{"id": "x", "modality": "hologram"}]),
+        )
         assert r.status_code == 422, r.text
         # A model id Coffer has never heard of is NOT malformed — ids are opaque.
-        r = c.post("/api/v1/providers", json=_anthropic_body(name="ok", models=["who-knows-1"]))
+        r = c.post(
+            "/api/v1/providers", json=_anthropic_body(name="ok", models=[{"id": "who-knows-1"}])
+        )
         assert r.status_code == 201, r.text
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="rename a connection and keep its credential, audit trail and projection",
+)
+def test_rename_moves_credential_audit_and_projection(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59920)
+    cfg = _agent_dir(tmp_path)
+    with _client(app) as c:
+        _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        c.post("/api/v1/providers", json=_anthropic_body(name="acme"))
+        assert c.post("/api/v1/providers/acme/activate").status_code == 200
+
+        r = c.post("/api/v1/providers/acme/rename", json={"new_name": "acme-prod"})
+        assert r.status_code == 200, r.text
+        assert r.json()["name"] == "acme-prod"
+
+        # The row moved: the old name resolves to nothing at all.
+        assert c.get("/api/v1/providers/acme").status_code == 404
+        assert c.get("/api/v1/providers/acme-prod").status_code == 200
+
+        # The owned vault entry moved with it — no secret orphaned under the
+        # old ref, which delete-time cleanup would never collect.
+        assert r.json()["credential_ref"] == "provider/acme-prod/key"
+        assert c.get("/api/v1/credentials/provider/acme-prod/key/exists").json()["present"] is True
+        assert c.get("/api/v1/credentials/provider/acme/key/exists").json()["present"] is False
+
+        # The projection names the NEW connection, so the agent's apiKeyHelper
+        # still shells out to something that exists.
+        data = json.loads((cfg / "settings.json").read_text())
+        assert data["apiKeyHelper"] == "coffer provider key --connection acme-prod"
+
+        # The audit trail followed the resource instead of being stranded under
+        # a name that no longer resolves.
+        moved = c.get("/api/v1/audit", params={"kind": "provider", "name": "acme-prod"})
+        assert moved.status_code == 200, moved.text
+        types = {e["event_type"] for e in moved.json()["entries"]}
+        assert {"resource_created", "provider_switched", "resource_renamed"} <= types
+        stale = c.get("/api/v1/audit", params={"kind": "provider", "name": "acme"})
+        assert stale.json()["entries"] == []
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="reject a rename onto a name another connection already uses",
+)
+def test_rename_onto_taken_name_is_rejected(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59930)
+    with _client(app) as c:
+        c.post("/api/v1/providers", json=_anthropic_body(name="first", secret_value="sk-first"))
+        c.post("/api/v1/providers", json=_anthropic_body(name="second", secret_value="sk-second"))
+
+        r = c.post("/api/v1/providers/first/rename", json={"new_name": "second"})
+        assert r.status_code == 409, r.text
+        assert r.json()["error"]["code"] == "RESOURCE_ALREADY_EXISTS"
+
+        # Nothing moved: both connections still resolve under their own names,
+        # each still holding its own key.
+        assert c.get("/api/v1/providers/first").json()["credential_ref"] == "provider/first/key"
+        assert c.get("/api/v1/providers/second").json()["credential_ref"] == "provider/second/key"
+        assert c.get("/api/v1/providers/first/key").json()["value"] == "sk-first"
+        assert c.get("/api/v1/providers/second/key").json()["value"] == "sk-second"
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="an agent bound to a renamed connection still resolves its key",
+)
+def test_renamed_connection_still_resolves_for_its_agent(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59940)
+    cfg = _agent_dir(tmp_path)
+    with _client(app) as c:
+        _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        c.post("/api/v1/providers", json=_anthropic_body(name="acme", secret_value="sk-the-key"))
+        c.post("/api/v1/providers/acme/activate")
+
+        assert (
+            c.post("/api/v1/providers/acme/rename", json={"new_name": "acme-2"}).status_code == 200
+        )
+
+        # The key is still resolvable — under the new name.
+        assert c.get("/api/v1/providers/acme-2/key").json()["value"] == "sk-the-key"
+
+        # And the command the agent actually shells out to resolves too: take
+        # the connection name straight out of the written settings.json rather
+        # than assuming it.
+        helper = json.loads((cfg / "settings.json").read_text())["apiKeyHelper"]
+        named = helper.rsplit("--connection ", 1)[1].strip()
+        assert named == "acme-2"
+        key = c.get(f"/api/v1/providers/{named}/key")
+        assert key.status_code == 200, key.text
+        assert key.json()["value"] == "sk-the-key"
+
+        # The agent binding is untouched — it is is_active + compatible_agents,
+        # not a stored name, so the rename never had to move it.
+        body = c.get("/api/v1/providers/acme-2").json()
+        assert body["is_active"] is True
+        assert "claude_code" in body["compatible_agents"]
+
+
+def test_rename_to_the_same_name_is_a_noop(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59950)
+    with _client(app) as c:
+        c.post("/api/v1/providers", json=_anthropic_body(name="acme"))
+        before = c.get("/api/v1/providers/acme").json()
+        r = c.post("/api/v1/providers/acme/rename", json={"new_name": "acme"})
+        assert r.status_code == 200, r.text
+        # Nothing moved — not the row (updated_at included), not the vault entry.
+        assert r.json() == before
+        assert c.get("/api/v1/credentials/provider/acme/key/exists").json()["present"] is True
+
+
+def test_rename_unknown_connection_is_404(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59960)
+    with _client(app) as c:
+        r = c.post("/api/v1/providers/nope/rename", json={"new_name": "whatever"})
+        assert r.status_code == 404, r.text

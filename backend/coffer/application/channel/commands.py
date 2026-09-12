@@ -18,6 +18,7 @@ from coffer.application.channel.conversation_ops import (
     explain_conversation_error,
     open_conversation,
 )
+from coffer.application.channel.conversation_spec import narrow_to_allowed, refuse_model
 from coffer.application.channel.ports import (
     AgentCatalogPort,
     ChannelBinding,
@@ -273,10 +274,9 @@ class ChannelCommands:
             current = cfg.model or "(CLI default)"
             if binding.adapter.capabilities.supports_buttons:
                 row = await self._threads.get(binding.resource_id, peer.chat_id, thread_id)
-                agent_key = (
-                    row.preferred_agent if row is not None else None
-                ) or binding.default_agent
-                picks = await self._model_suggestions.suggest(agent_key)
+                key = (row.preferred_agent if row is not None else None) or binding.default_agent
+                offers = await self._model_suggestions.suggest(key)
+                picks = narrow_to_allowed(offers, binding.models)
                 card = model_card(current=cfg.model, picks=picks)
                 # Same fallback as /agent: a refused card degrades to text.
                 if await deliver_card(
@@ -306,9 +306,17 @@ class ChannelCommands:
         thread_id: str = "",
     ) -> None:
         """The parametric switch: set the next-turn model on the peer's
-        conversation. Raw passthrough — we do not own the CLI's model namespace,
-        so a bad name surfaces as the CLI's own error next turn. Shared by the
-        text ``/model <name>`` path and a card tap."""
+        conversation. Shared by the text ``/model <name>`` path and a card tap.
+
+        Passthrough within the channel's allowed range (FR-071): a name inside
+        it — or ANY name when the channel curates none — reaches the CLI
+        verbatim, whose namespace we do not own, so a bad one surfaces as its
+        own error next turn. One outside a curated range is refused here naming
+        what is allowed, since the card never offered it."""
+        refusal = refuse_model(name, binding.models)
+        if refusal is not None:
+            await send(binding, peer.chat_id, refusal, chat_kind=chat_kind, thread_id=thread_id)
+            return
         try:
             conversation_id = await ensure_conversation(
                 self._conversations, self._threads, binding, peer, thread_id

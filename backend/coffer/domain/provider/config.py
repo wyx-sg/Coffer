@@ -7,6 +7,9 @@ the internal-engine selector, the chat surface), per spec provider-switching ame
 ``models`` does not change that: it is the OFFERED set — which of the endpoint's
 models the user intends to use — and narrows the menu every point-of-use picker
 shows. Empty (the default) means no restriction: everything the endpoint serves.
+Each entry carries a ``modality`` (``text`` / ``embedding`` / ``image`` /
+``video`` / ``audio``), because one endpoint serves more than chat: a picker
+asks for the kind it needs, so a chat dropdown never offers an image model.
 
 ``protocol`` is the upstream wire the endpoint speaks, detected at create time
 (``anthropic`` / ``openai`` / ``ollama`` / ``unknown``); it drives model
@@ -30,6 +33,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from coffer.domain.provider.modality import Modality
 
 # Same ref grammar the credential store accepts (slash-namespaced segments).
 _CRED_REF_PATTERN = re.compile(r"^[A-Za-z0-9_.\-]+(/[A-Za-z0-9_.\-]+)*$")
@@ -64,6 +69,22 @@ _DEFAULT_COMPATIBLE: dict[str, list[str]] = {
 #: list nor an entry is absurdly long.
 _MAX_MODELS = 200
 _MAX_MODEL_ID_LEN = 200
+
+
+class CuratedModel(BaseModel):
+    """One entry of a connection's offered set: an opaque id plus its kind.
+
+    The modality is what lets one connection serve several surfaces from a
+    single credential — a chat picker narrows to ``text``, the global embedding
+    setting to ``embedding`` — instead of every id being offered everywhere. It
+    is STORED, not derived: Coffer guesses a value only when introspection
+    discovers an id the user has not classified yet, and the user corrects it.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    modality: Modality = Modality.TEXT
 
 
 class Protocol(StrEnum):
@@ -103,12 +124,12 @@ class ProviderConfig(BaseModel):
     # Which of the endpoint's models the user actually intends to use — the
     # OFFERED set, not a chosen model. A picker that offers THIS connection's
     # models (the per-agent binding, the internal-engine selector) narrows to
-    # these ids; EMPTY (the default, and what every pre-existing connection has)
-    # means no restriction — the endpoint's whole catalogue. An agent's own model
-    # catalogue is a separate source and is never narrowed by this. Ids are
-    # opaque strings passed verbatim to the vendor; Coffer never checks them
-    # against a list of its own.
-    models: list[str] = Field(default_factory=list)
+    # these ids AND to the modality it needs; EMPTY (the default, and what every
+    # pre-existing connection has) means no restriction — the endpoint's whole
+    # catalogue. An agent's own model catalogue is a separate source and is never
+    # narrowed by this. Ids are opaque strings passed verbatim to the vendor;
+    # Coffer never checks them against a list of its own.
+    models: list[CuratedModel] = Field(default_factory=list)
     # At most one active connection per agent type (enforced by the switch op).
     # ollama never projects to an agent, so it stays inactive.
     is_active: bool = False
@@ -146,22 +167,23 @@ class ProviderConfig(BaseModel):
 
     @field_validator("models")
     @classmethod
-    def _well_formed_models(cls, v: list[str]) -> list[str]:
-        """Shape only: non-blank ids, no duplicates, sane bounds. Whether an id
-        exists upstream is the endpoint's answer, not ours — a curated set is a
-        user's intent, and an id the endpoint stops serving is a stale menu
-        entry, not a config error."""
+    def _well_formed_models(cls, v: list[CuratedModel]) -> list[CuratedModel]:
+        """Shape only: non-blank ids, no duplicate ids, sane bounds. Whether an
+        id exists upstream is the endpoint's answer, not ours — a curated set is
+        a user's intent, and an id the endpoint stops serving is a stale menu
+        entry, not a config error. Nor is the MODALITY checked against the
+        vendor: the user's answer wins over anything Coffer could guess."""
         if len(v) > _MAX_MODELS:
             raise ValueError(f"too many models: at most {_MAX_MODELS}")
-        cleaned: dict[str, None] = {}
-        for m in v:
-            model = m.strip()
+        cleaned: dict[str, CuratedModel] = {}
+        for entry in v:
+            model = entry.id.strip()
             if not model:
                 raise ValueError("model id must not be empty")
             if len(model) > _MAX_MODEL_ID_LEN:
                 raise ValueError(f"model id too long: at most {_MAX_MODEL_ID_LEN} characters")
-            cleaned.setdefault(model, None)
-        return list(cleaned)
+            cleaned.setdefault(model, CuratedModel(id=model, modality=entry.modality))
+        return list(cleaned.values())
 
     @model_validator(mode="after")
     def _credential_matches_protocol(self) -> ProviderConfig:
@@ -176,6 +198,15 @@ class ProviderConfig(BaseModel):
         elif not self.credential_ref:
             raise ValueError(f"{self.protocol.value} connection requires a credential_ref")
         return self
+
+    def model_ids(self, modality: Modality | None = None) -> list[str]:
+        """The curated ids, in the user's order, optionally of ONE modality.
+
+        The narrowing seam: a chat picker asks for ``TEXT`` and can never be
+        handed an embedding or image id, while the empty list keeps meaning "no
+        restriction" for the caller to interpret.
+        """
+        return [m.id for m in self.models if modality is None or m.modality is modality]
 
     def resolved_compatible_agents(self) -> list[str]:
         """The agent-type values this connection projects into: the explicit

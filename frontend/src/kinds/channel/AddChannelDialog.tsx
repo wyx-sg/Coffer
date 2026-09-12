@@ -16,13 +16,25 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import type { ChannelType } from "@/lib/api/channels";
 import { createChannel } from "./registerChannel";
-import { addChannelFormSchema, planChannel, type ChannelPlan } from "./schema";
+import { AddChannelSecretFields, type ChannelSecretDraft } from "./AddChannelSecretFields";
+import { ChannelModelFields } from "./ChannelModelFields";
+import { defaultModelOutOfRange } from "./modelCuration";
+import { addChannelFormSchema, planChannel, DEFAULT_AGENT, type ChannelPlan } from "./schema";
+
+/** A blank credential draft — what the form opens on and resets to. */
+const EMPTY_SECRET_DRAFT: ChannelSecretDraft = {
+  botToken: "",
+  appId: "",
+  appSecret: "",
+  signingSecret: "",
+  publicBaseUrl: "",
+  tunnelToken: "",
+};
 
 export function AddChannelDialog({
   open,
@@ -37,23 +49,21 @@ export function AddChannelDialog({
   const qc = useQueryClient();
   const [channelType, setChannelType] = useState<ChannelType>("telegram");
   const [name, setName] = useState("");
-  const [botToken, setBotToken] = useState("");
-  const [appId, setAppId] = useState("");
-  const [appSecret, setAppSecret] = useState("");
-  const [signingSecret, setSigningSecret] = useState("");
-  const [publicBaseUrl, setPublicBaseUrl] = useState("");
-  const [tunnelToken, setTunnelToken] = useState("");
+  const [secrets, setSecrets] = useState<ChannelSecretDraft>(EMPTY_SECRET_DRAFT);
+  const patchSecrets = (patch: Partial<ChannelSecretDraft>) =>
+    setSecrets((s) => ({ ...s, ...patch }));
+  // The channel's own model curation (FR-071). A new channel binds to
+  // DEFAULT_AGENT, so that is whose catalogue the fields offer.
+  const [defaultModel, setDefaultModel] = useState("");
+  const [models, setModels] = useState<string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
 
   const reset = () => {
     setChannelType("telegram");
     setName("");
-    setBotToken("");
-    setAppId("");
-    setAppSecret("");
-    setSigningSecret("");
-    setPublicBaseUrl("");
-    setTunnelToken("");
+    setSecrets(EMPTY_SECRET_DRAFT);
+    setDefaultModel("");
+    setModels([]);
     setFormError(null);
   };
 
@@ -74,17 +84,25 @@ export function AddChannelDialog({
 
   const submit = () => {
     setFormError(null);
+    // The backend refuses this pair too; saying so here keeps the round trip
+    // out of a rule the form can already see (FR-071).
+    if (defaultModelOutOfRange(defaultModel, models)) {
+      setFormError(t("channels.models.outOfRange"));
+      return;
+    }
+    const curation = { default_model: defaultModel, models };
     const parsed = addChannelFormSchema.safeParse(
       channelType === "telegram"
-        ? { channel_type: "telegram", name, bot_token: botToken }
+        ? { channel_type: "telegram", name, bot_token: secrets.botToken, ...curation }
         : {
             channel_type: "seatalk",
             name,
-            app_id: appId,
-            app_secret: appSecret,
-            signing_secret: signingSecret,
-            public_base_url: publicBaseUrl,
-            tunnel_token: tunnelToken,
+            app_id: secrets.appId,
+            app_secret: secrets.appSecret,
+            signing_secret: secrets.signingSecret,
+            public_base_url: secrets.publicBaseUrl,
+            tunnel_token: secrets.tunnelToken,
+            ...curation,
           },
     );
     if (!parsed.success) {
@@ -144,76 +162,19 @@ export function AddChannelDialog({
               placeholder="e.g. my-telegram"
             />
           </div>
-          {channelType === "telegram" ? (
-            <div className="space-y-2">
-              <Label htmlFor="channel-bot-token">{t("channels.dialog.botToken")}</Label>
-              <PasswordInput
-                id="channel-bot-token"
-                value={botToken}
-                onChange={(e) => setBotToken(e.target.value)}
-                autoComplete="off"
-              />
-              <p className="text-xs text-muted-foreground">{t("channels.dialog.telegramHint")}</p>
-            </div>
-          ) : (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="channel-app-id">{t("channels.dialog.appId")}</Label>
-                <Input
-                  id="channel-app-id"
-                  value={appId}
-                  onChange={(e) => setAppId(e.target.value)}
-                  autoComplete="off"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="channel-app-secret">{t("channels.dialog.appSecret")}</Label>
-                <PasswordInput
-                  id="channel-app-secret"
-                  value={appSecret}
-                  onChange={(e) => setAppSecret(e.target.value)}
-                  autoComplete="off"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="channel-signing-secret">{t("channels.dialog.signingSecret")}</Label>
-                <PasswordInput
-                  id="channel-signing-secret"
-                  value={signingSecret}
-                  onChange={(e) => setSigningSecret(e.target.value)}
-                  autoComplete="off"
-                />
-                <p className="text-xs text-muted-foreground">{t("channels.dialog.seatalkHint")}</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="channel-public-base-url">
-                  {t("channels.dialog.publicBaseUrl")}
-                </Label>
-                <Input
-                  id="channel-public-base-url"
-                  value={publicBaseUrl}
-                  onChange={(e) => setPublicBaseUrl(e.target.value)}
-                  placeholder="https://xxx.trycloudflare.com"
-                  autoComplete="off"
-                />
-                <p className="text-xs text-muted-foreground">
-                  {t("channels.dialog.publicBaseUrlHint")}
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="channel-tunnel-token">{t("channels.dialog.tunnelToken")}</Label>
-                <PasswordInput
-                  id="channel-tunnel-token"
-                  value={tunnelToken}
-                  onChange={(e) => setTunnelToken(e.target.value)}
-                  autoComplete="off"
-                />
-                <p className="text-xs text-muted-foreground">
-                  {t("channels.dialog.tunnelTokenHint")}
-                </p>
-              </div>
-            </>
-          )}
+          <AddChannelSecretFields
+            channelType={channelType}
+            draft={secrets}
+            onChange={patchSecrets}
+          />
+          <ChannelModelFields
+            agentKey={DEFAULT_AGENT}
+            defaultModel={defaultModel}
+            models={models}
+            onDefaultModelChange={setDefaultModel}
+            onModelsChange={setModels}
+            idPrefix="channel"
+          />
           {formError ? (
             <p className="text-sm text-destructive" role="alert">
               {formError}
