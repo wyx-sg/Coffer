@@ -1418,12 +1418,44 @@ produce it on its own.
 - **When** the turn replies,
 - **Then** the reply carries no mention — there is nobody to disambiguate.
 
-### Scenario: the mention rides the final snapshot, never an interim one
+### Scenario: a streamed group reply is created already mentioning the asker
 
-- **Given** a group turn streaming its reply into a live surface, whose interim
-  snapshots are sent as plain text and whose final one is sent as rich text,
-- **When** the turn finishes,
-- **Then** only the final snapshot carries the mention markup.
+- **Given** a group turn that opens a live surface before it has anything to say,
+- **When** the first snapshot is posted and the reply then grows in place,
+- **Then** the mention markup is in the content the message is created with, and
+  in every snapshot after it, exactly once.
+
+### Scenario: an @ notification needs the mention in the message that creates it
+
+- **Given** the transport that creates its reply as a stream and grows it,
+- **When** the reply is delivered,
+- **Then** the mention travels in the creating call, because the platform decides
+  @ notifications then and not on any later update of the same message.
+
+### Scenario: an interim snapshot reaches the chat as written, not as markup
+
+- **Given** an in-flight snapshot of a reply, clipped mid-word so it can end
+  inside an unclosed emphasis run,
+- **When** it is sent in the platform's rich format, as carrying a mention
+  requires,
+- **Then** its formatting characters are escaped — one escape each — so the
+  reader sees the text the agent has written so far.
+
+### Scenario: a mention target survives the markdown escaper unchanged
+
+- **Given** a mention whose target holds a character the platform's markdown
+  escaper would otherwise escape (an id containing an underscore, or an email
+  address),
+- **When** the reply is rendered for that platform,
+- **Then** the mention markup is delivered byte for byte, while the text around
+  it is escaped as usual.
+
+### Scenario: a sender with no id is mentioned by address instead
+
+- **Given** a group message from a member the transport named only by email, on a
+  platform that documents an address-keyed mention,
+- **When** the turn replies,
+- **Then** the reply mentions them by address; when both are known, the id is used.
 
 ### Scenario: a cross-organisation sender is still identified for a mention
 
@@ -1612,9 +1644,11 @@ capabilities the official personal bridges lack.
   effect; Telegram far slower, since it edits a real message). The core adding a
   throttle of its own on top hid that buffer completely and made a stream arrive
   a paragraph at a time. Interim
-  snapshots are PLAIN and clipped to the platform's per-message limit, so a
-  long or half-written-markdown preview never breaks a platform parser or
-  exceeds the cap.
+  snapshots are clipped to the platform's per-message limit and their formatting
+  characters are ESCAPED, so a long or half-written-markdown preview never breaks
+  a platform parser or exceeds the cap. They are escaped rather than sent as plain
+  text because the message has to be able to carry an @mention from the moment it
+  is created (FR-070), and a mention is only a name in rich text.
   How a surface *ends* is the transport's business: Telegram's status message
   is scaffolding — it is deleted and the final reply is sent HTML-rendered and
   paragraph-chunked — whereas SeaTalk's stream IS the reply, so it finishes
@@ -1887,20 +1921,35 @@ API server a user reaches is not guaranteed to be new enough.
   platform offers button semantics beyond a label — a disabled state, an intent
   colour — the card uses them, so the option already taken is shown disabled
   rather than re-offered.
-- **FR-070**: A group answer names who it is for. In a group, the bot's reply
-  MUST open by @mentioning the member whose message drove the turn, using the
-  platform's own mention markup — so the answer notifies the person waiting for
-  it and a busy room can see at a glance which of them it belongs to. In a
-  direct chat it MUST NOT: a 1:1 conversation has nobody to disambiguate, and an
-  @ there is only shouting. Three constraints bound it. The mention is built
-  from the id the PLATFORM addresses a member by, which is not always the id the
-  owner gate matches (SeaTalk gates on `employee_code` and mentions
-  `seatalk_id`, and `employee_code` arrives empty for a sender outside the bot's
-  organisation) — so the transport carries both. It may appear only where the
-  message is rendered in the platform's rich format, never in a snapshot sent as
-  plain text, where the markup would reach the reader as its own literal source.
-  And it degrades silently: no id, or a transport that cannot mention from an id
-  alone, yields an ordinary unmentioned reply — never a broken tag.
+- **FR-070**: A group answer names who it is for, and notifies them. In a group,
+  the bot's reply MUST open by @mentioning the member whose message drove the
+  turn, using the platform's own mention markup — so the answer notifies the
+  person waiting for it and a busy room can see at a glance which of them it
+  belongs to. In a direct chat it MUST NOT: a 1:1 conversation has nobody to
+  disambiguate, and an @ there is only shouting. Four constraints bound it.
+  - **The mention MUST be in the content the reply is CREATED with**, not added
+    to it later. A platform decides @ notifications at creation; a mention that
+    arrives on a later update of the same message renders as a name and notifies
+    nobody, which is the worst of both — the room sees an @ the mentioned person
+    never got. For a streamed reply that means the opening post carries it, and
+    therefore so does every snapshot in between: a mention that appeared at
+    creation, vanished for the length of the stream and returned at the end would
+    be a visible glitch.
+  - Because every snapshot then carries markup, every snapshot MUST be sent in
+    the platform's rich format. The protection that the plain format used to give
+    a reply clipped mid-word — an unclosed emphasis run the client would render
+    as noise — MUST instead come from ESCAPING the agent's partial text, leaving
+    the mention markup itself untouched.
+  - The mention is built from the id the PLATFORM addresses a member by, which is
+    not always the id the owner gate matches (SeaTalk gates on `employee_code`
+    and mentions `seatalk_id`, and `employee_code` arrives empty for a sender
+    outside the bot's organisation) — so the transport carries both. Where the
+    platform documents a second way to address a member (SeaTalk also mentions by
+    email), it is a FALLBACK for a sender whose id is missing, never the primary:
+    the id is the identifier that is always present.
+  - It degrades silently: no id and no usable fallback, or a transport that
+    cannot mention from an id alone, yields an ordinary unmentioned reply — never
+    a broken tag.
 
 ## Deliberately out of scope
 

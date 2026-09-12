@@ -19,7 +19,10 @@ from coffer.application.channel.ports import AdapterCallbacks
 from coffer.domain.channel.envelopes import InboundLifecycle
 from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.infrastructure.channel.live_text import SeaTalkLiveText
-from coffer.infrastructure.channel.seatalk_send import SEATALK_MENTION_TEMPLATE
+from coffer.infrastructure.channel.seatalk_send import (
+    SEATALK_MENTION_EMAIL_TEMPLATE,
+    SEATALK_MENTION_TEMPLATE,
+)
 
 from .conftest import FakeSeaTalk, RecordingCallbacks, make_seatalk_adapter, wait_until
 
@@ -1542,7 +1545,11 @@ async def test_stream_opens_once_and_updates_carry_full_snapshots(
     assert [surface for surface, _ in fake_seatalk.init_stream_calls] == ["single_chat"]
     assert fake_seatalk.init_stream_calls[0][1] == {
         "employee_code": "emp-1",
-        "message": {"tag": "text", "text": {"format": 2, "content": "I found"}},
+        # format 1 even for this opening snapshot: the message must be able to
+        # carry an @mention the instant it is created (FR-070), and a tag in a
+        # format-2 message shows as its own source. Partial text stays literal
+        # because it is ESCAPED, not because the format is plain.
+        "message": {"tag": "text", "text": {"format": 1, "content": "I found"}},
     }
     bodies = [body for _surface, body in fake_seatalk.update_stream_calls]
     # An update names its target too: a stream_id alone does not say which chat.
@@ -1663,10 +1670,11 @@ async def test_stream_finish_renders_seatalk_markdown(fake_seatalk: FakeSeaTalk)
     finally:
         await adapter.stop()
 
-    # The interim snapshot opens the stream, plain and exactly as it arrived —
-    # format 2, so a reply cut mid-word cannot be parsed as half a markdown run.
+    # The interim snapshot opens the stream exactly as it arrived — format 1 now,
+    # but with every marker escaped, so a reply cut mid-word still cannot be
+    # parsed as half a markdown run.
     opening = fake_seatalk.init_stream_calls[0][1]["message"]["text"]
-    assert opening == {"format": 2, "content": "## Result"}
+    assert opening == {"format": 1, "content": "## Result"}
     final = fake_seatalk.update_stream_calls[-1][1]["message"]["text"]
     assert final == {"format": 1, "content": "**Result**\n\nthe file is some\\_name.py"}
 
@@ -1689,7 +1697,7 @@ async def test_group_stream_uses_the_group_surface_and_threads_the_message(
         "group_id": "gid-1",
         "message": {
             "tag": "text",
-            "text": {"format": 2, "content": "working"},
+            "text": {"format": 1, "content": "working"},
             "thread_id": "t1",
         },
     }
@@ -1793,8 +1801,10 @@ async def test_group_mention_keeps_the_seatalk_id_when_employee_code_and_email_a
     [msg] = recorder.messages
     assert msg.sender_mention_id == "st-outsider"
     # …while the two ids the owner gate and the display name use stay empty,
-    # which is what the gate is entitled to refuse on.
+    # which is what the gate is entitled to refuse on. The address-keyed mention
+    # fallback is empty for the same reason, which is why it is only a fallback.
     assert msg.sender_id == ""
+    assert msg.sender_mention_email == ""
     assert msg.sender_display == "st-outsider"
 
 
@@ -1813,6 +1823,9 @@ async def test_group_mention_carries_the_seatalk_id_alongside_the_employee_code(
 
     [msg] = recorder.messages
     assert (msg.sender_id, msg.sender_mention_id) == ("emp-2", "st-1")
+    # The address rides along as the fallback for the case above, where the id
+    # is the only thing that arrives.
+    assert msg.sender_mention_email == msg.sender_display
 
 
 async def test_a_dm_carries_no_mention_id(fake_seatalk: FakeSeaTalk) -> None:
@@ -1847,10 +1860,21 @@ async def test_a_dm_carries_no_mention_id(fake_seatalk: FakeSeaTalk) -> None:
 def test_the_mention_template_matches_the_documented_tag() -> None:
     """The shape of the tag, pinned to the send-message docs' own sample:
     ``<mention-tag target="seatalk://user?id=0"/>``, self-closing and carrying
-    no visible text of its own."""
+    no visible text of its own.
+
+    The page documents THREE targets: by id, by email, and ``id=0`` for every
+    member of the group. Coffer builds the first two and never the third — "@All"
+    only notifies when the group has "Notify all members with @All" switched on,
+    so a bot reply built on it would be silent in most groups and a shout in the
+    rest.
+    """
     assert (
         SEATALK_MENTION_TEMPLATE.replace("{user_id}", "0")
         == '<mention-tag target="seatalk://user?id=0"/>'
+    )
+    assert (
+        SEATALK_MENTION_EMAIL_TEMPLATE.replace("{user_id}", "ada@example.com")
+        == '<mention-tag target="seatalk://user?email=ada@example.com"/>'
     )
 
 
@@ -1878,31 +1902,88 @@ async def test_a_group_send_delivers_the_mention_tag_verbatim_as_markdown(
     }
 
 
-async def test_a_stream_carries_the_mention_only_in_its_finished_snapshot(
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="an @ notification needs the mention in the message that creates it",
+)
+async def test_a_stream_carries_the_mention_from_the_message_it_is_created_as(
     fake_seatalk: FakeSeaTalk,
 ) -> None:
-    """The interim snapshots are ``format: 2`` (plain) by design, and a mention
-    tag in one would be shown to the reader as its own literal source. The
-    renderer therefore puts it only on the body it closes the stream with —
-    the one snapshot sent as ``format: 1``."""
+    """SeaTalk decides @ notifications when the message is CREATED, so the tag has
+    to be in what ``init_stream`` posts. Shipped the other way round, the tag sat
+    on the finished snapshot only: it RENDERED as a blue, tappable name — the
+    client shows the content it has — and notified nobody at all.
+
+    That makes every snapshot ``format: 1``, and the in-flight ones safe by
+    ESCAPING the partial text instead of asking for plain text."""
     adapter = make_seatalk_adapter(fake_seatalk)
     mention = SEATALK_MENTION_TEMPLATE.replace("{user_id}", "st-77")
     live = _live(adapter, "gid-1", chat_kind="group", thread_id="t1")
     try:
-        await live.update("I found")
-        await live.update("I found three")
-        leftover = await live.close(f"{mention} I found three cats.")
+        await live.update(f"{mention} I found")
+        await live.update(f"{mention} I found **bo")
+        leftover = await live.close(f"{mention} I found **bold** cats.")
     finally:
         await adapter.stop()
 
     assert leftover == ""
-    # The opening message and every interim update are plain, and clean.
+    # The message is created already mentioning the asker.
     opening = fake_seatalk.init_stream_calls[0][1]["message"]["text"]
-    assert opening["format"] == 2 and "mention-tag" not in opening["content"]
+    assert opening == {"format": 1, "content": f"{mention} I found"}
     bodies = [body["message"]["text"] for _surface, body in fake_seatalk.update_stream_calls]
-    interim = [t for t in bodies if t["format"] == 2]
-    assert interim and all("mention-tag" not in t["content"] for t in interim)
-    # Only the finished snapshot is markdown, and only it carries the mention.
-    final = bodies[-1]
-    assert final["format"] == 1
-    assert final["content"] == '<mention-tag target="seatalk://user?id=st-77"/> I found three cats.'
+    # Every snapshot is rich, and keeps the mention, so it never blinks out.
+    assert all(t["format"] == 1 and t["content"].startswith(mention) for t in bodies)
+    # The interim one is ESCAPED: a half-written bold run reaches the chat as the
+    # characters the agent has written so far, not as markup the client must
+    # guess at. One backslash per marker — two would show one of them.
+    assert bodies[0]["content"] == f"{mention} I found \\*\\*bo"
+    assert "\\\\" not in bodies[0]["content"]
+    # …while the finished one is RENDERED, bold and all, and its tag survives.
+    assert bodies[-1]["content"] == f"{mention} I found **bold** cats."
+    assert bodies[-1]["content"].count("mention-tag") == 1
+
+
+async def test_a_mention_target_with_an_underscore_is_never_escaped(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """Both documented targets can hold a character the SeaTalk markdown escaper
+    would otherwise take: an id may contain ``_`` and an address routinely does.
+    An escaped tag reaches the reader as visible source, so neither path may
+    touch it — the interim (escape-only) one or the final (render) one."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    by_id = SEATALK_MENTION_TEMPLATE.replace("{user_id}", "abc_def")
+    by_email = SEATALK_MENTION_EMAIL_TEMPLATE.replace("{user_id}", "ada_l@example.com")
+    live = _live(adapter, "gid-1", chat_kind="group", thread_id="t1")
+    try:
+        await live.update(f"{by_id} thinking")
+        await live.close(f"{by_email} done_here")
+    finally:
+        await adapter.stop()
+
+    assert fake_seatalk.init_stream_calls[0][1]["message"]["text"]["content"] == (
+        f"{by_id} thinking"
+    )
+    final = fake_seatalk.update_stream_calls[-1][1]["message"]["text"]["content"]
+    # The tag verbatim; the BODY's underscore still escaped, as it must be.
+    assert final == f"{by_email} done\\_here"
+
+
+async def test_an_interim_snapshot_past_the_budget_keeps_its_mention(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """An in-flight snapshot is clipped from the FRONT (it shows the newest
+    words), which is exactly where the mention lives. Clip the body, not the
+    tag — otherwise a long reply loses the mention halfway through the stream."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    mention = SEATALK_MENTION_TEMPLATE.replace("{user_id}", "st-77")
+    live = _live(adapter, "gid-1", chat_kind="group", thread_id="t1")
+    try:
+        await live.update(f"{mention} {'A' * 5000}")
+        await live.close(f"{mention} {'A' * 5000}")
+    finally:
+        await adapter.stop()
+
+    opening = fake_seatalk.init_stream_calls[0][1]["message"]["text"]["content"]
+    assert opening.startswith(mention)
+    assert "…" in opening  # the body was clipped, the tag kept
+    assert len(opening) <= 4096  # inside the platform's stream cap

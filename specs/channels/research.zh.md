@@ -132,11 +132,29 @@ NousResearch hermes-agent 文档与源码、SeaTalk 官方 `cs-bot` 仓库与开
     target=\"seatalk://user?id=0\"/>."`——一个 mention 就是放在消息 content 里的
     自闭合 `<mention-tag target="seatalk://user?id=ID"/>`。它自身不携带任何可见文本
     （客户端渲染出被 @ 者的名字），所以构造它只需要一个 id，不需要显示名查询。
-  - **它是 markdown，这一点框定了它能出现在哪里。** 只有在 `format: 1` 的消息里，
+  - **文档给了三种目标值，以下照抄「Send a Message with Formats」。** 本仓库此前只记下了
+    中间那一种：
+    - 按 email：`<mention-tag target="seatalk://user?email=xxxx@xxx.com"/>`
+    - 按 SeaTalk id：`<mention-tag target="seatalk://user?id=xxxxxxx"/>`
+    - @ 群里所有成员：`<mention-tag target="seatalk://user?id=0"/>`
+    - 最后一种还带一条注意事项：只有当该群打开了「Notify all members with @All」设置时，
+      @ 全体成员才真的会**通知**到人。Coffer 从不构造它——一条在多数群里静默、在其余群里
+      等于喊话的回复，不算回复。email 只作为**兜底**来构造：入站的群 @mention 事件总是
+      带着 `sender.seatalk_id`，而文档警告 `email`（以及 `employee_code`）在发送者不属于
+      bot 所在组织时会是空。
+  - **@ 通知是在消息被「创建」的那一刻决定的——这一条花掉了一轮线上排查。** mention 最初
+    只放在**最终**那个流快照上，依据就是下面那条 format 规则。在真实客户端里它渲染得完美
+    无缺——蓝色、可点、名字正确——而被 @ 的人一条通知都没收到。平台是在消息创建
+    （`init_stream`）时从内容里读出 mention 的，而不是从后续每一次 `update_stream` 里读，
+    于是标签确实在客户端显示的内容里，但通知早已在没有它的情况下被决定了。所以流式回复
+    必须把 mention 放进 `init_stream` 发出的那份内容里。
+  - **它是 markdown，这一点框定了整段流要怎么发。** 只有在 `format: 1` 的消息里，
     这个标签才会以名字的形态抵达读者；在 `format: 2`（纯文本）的消息里它会显示为那串
-    字面源码。Coffer 的流式 surface 刻意把每个**中间**快照以 `format: 2` 发出
-    （写到一半的 markdown 会把解析器搞坏），只有**最终**快照才是 `format: 1`——所以
-    mention 只能随最终快照或一次普通发送出去，绝不能随中间更新出去。
+    字面源码。中间快照过去刻意用 `format: 2`——截在词中间的回复可能结束在未闭合的 `*`
+    或 `_` 里，让客户端去解析那个只会渲染出噪音。既然 mention 现在必须从创建那一刻起
+    一直在（否则它会出现、消失、再回来），每个快照就都是 `format: 1`，半截文本改为
+    **转义**：在标记字符前加一个反斜杠，也就是 SeaTalk 自己的渲染器用的那个转义。两个
+    反斜杠会让其中一个在聊天里露出来——这个 bug 本项目已经修过一次。
   - **用哪个 id——这是推断，以及它所依据的证据。** 是 `seatalk_id`，**不是**
     `employee_code`。没有任何一句话直说这件事。真正指向它的是：「Event: New
     Mentioned Message From Group Chat」把 `mentioned_list` 的每一项写成
@@ -149,10 +167,13 @@ NousResearch hermes-agent 文档与源码、SeaTalk 官方 `cs-bot` 仓库与开
     （作为 `sender_display`），却**丢掉**了 `seatalk_id`——丢掉的正是 mention 所需
     的那个 id，也是跨组织发送者唯一携带的 id。现在它作为独立的 envelope 字段被带上，
     刻意不并入 `sender_id`——后者是 owner gate 用另一个值去比对的。
-  - 这个 mention 能原样穿过 Coffer 的 SeaTalk markdown 渲染器：标签里不含该渲染器
-    会转义的那四个字符（星号、下划线、反引号、波浪线），`seatalk://` 也不会被它的
-    裸 URL 规则命中——后者只认 `http`/`https`。这一点在适配器测试里是对着线上 body
-    断言的，而不是听天由命。
+  - **标签是被「暂存」出每一道转义之外的，而不是假定它天生安全。** 这里原本写的是：它能
+    原样穿过渲染器，因为标签里不含该渲染器会转义的那四个字符。对两种真实的目标值来说这是
+    错的：id 可以含 `_`（一个 `abc_def` 的 id 曾以 `...id=abc\_def..."/>` 抵达——是可见的
+    源码而不是名字），而标签的 email 形态更是动不动就含（`first_last@example.com`）。所以
+    渲染器在转义之前把 mention 标签取出、转义之后再放回，和它一直以来对行内代码的做法
+    一样。`seatalk://` 仍然不会被它的裸 URL 规则命中——后者只认 `http`/`https`。这些都在
+    适配器测试里对着线上 body 断言，而不是听天由命。
 
 - **两条值得记录的平台限制：**
   - SeaTalk 根本不会把 emoji 表情回应或非 @ 的群主聊天消息投递给 bot——两者都没有
@@ -214,7 +235,9 @@ FR-037 的 SeaTalk 流式实现当初是照着这份文档写的，但从未对�
   没有 `tag`。类型在开流时就已经定死。
 - `seq` 从第一次 `update_stream` 起算 1，每次加一；`init_stream` 不占用序号。
 - 每次更新都携带**全量累积内容**，绝不是增量；客户端渲染它收到的最新快照。
-- `format` 为 `1` 表示 Markdown（默认），`2` 表示纯文本。
+- `format` 为 `1` 表示 Markdown（默认），`2` 表示纯文本。Coffer 对每一个快照都用 `1`，
+  开场那个也一样，这样消息从被创建起就能携带 @mention（见上文 mention 部分）；在途的
+  快照靠转义来保持字面。
 - `thread_id` 与 `quoted_message_id` 放在 message **内部**，与普通发送已验证的
   位置一致。`quoted_message_id` 仅群聊可用。
 - **不需要额外权限。** 流式复用与普通回复相同的 Send Message to Bot User /

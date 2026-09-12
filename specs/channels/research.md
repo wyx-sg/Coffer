@@ -147,12 +147,37 @@ building group/@mention/thread/forward support (feature/channel-group-mention-ri
     content. It carries no visible text of its own (the client renders the
     mentioned person's name), so building one needs an id and nothing else — no
     display-name lookup.
-  - **It is markdown, which bounds where it may go.** The tag reaches the reader
-    as a name only in a `format: 1` message; in a `format: 2` (plain) one it
-    shows as that literal string. Coffer's streaming surface sends every INTERIM
-    snapshot as `format: 2` on purpose (half-written markdown breaks a parser)
-    and only the FINAL one as `format: 1` — so a mention may ride the finished
-    snapshot or an ordinary send, never an interim update.
+  - **THREE documented targets, quoted from "Send a Message with Formats".** The
+    repo had recorded only the middle one:
+    - by email: `<mention-tag target="seatalk://user?email=xxxx@xxx.com"/>`
+    - by SeaTalk id: `<mention-tag target="seatalk://user?id=xxxxxxx"/>`
+    - every member of the group: `<mention-tag target="seatalk://user?id=0"/>`
+    - with a caveat on the last one: mentioning all members only NOTIFIES them if
+      the group has its "Notify all members with @All" setting switched on.
+      Coffer never builds it — a reply that is silent in most groups and a shout
+      in the rest is not a reply. Email is built only as a FALLBACK: the inbound
+      group-@mention event always carries `sender.seatalk_id`, while it warns
+      that `email` (and `employee_code`) come back empty for a sender outside the
+      bot's organisation.
+  - **An @ notification is decided when the message is CREATED — this one cost a
+    live debugging round.** The mention first shipped on the FINAL stream snapshot
+    only, reasoning from the format rule below. In a real client it RENDERED
+    perfectly — blue, tappable, the right name — and the mentioned person got no
+    @ notification at all. The platform reads the mention out of the message at
+    creation (`init_stream`), not out of each `update_stream` that follows, so the
+    tag was in the content the client displays while the notification had already
+    been decided without it. A streamed reply must therefore carry the mention in
+    what `init_stream` posts.
+  - **It is markdown, which bounds HOW the rest of the stream is sent.** The tag
+    reaches the reader as a name only in a `format: 1` message; in a `format: 2`
+    (plain) one it shows as that literal string. Interim snapshots were `format:
+    2` on purpose — a reply clipped mid-word can end inside an unclosed `*` or
+    `_`, and asking the client to parse that renders noise. Since the mention now
+    has to be present from creation onwards (or it would appear, vanish, and
+    return), every snapshot is `format: 1` and the partial text is ESCAPED
+    instead: one backslash before a marker character, the escape SeaTalk's own
+    renderer uses. Two backslashes reach the chat with one of them visible — a
+    bug this project already fixed once.
   - **WHICH id — an inference, and the evidence it rests on.** It is the
     `seatalk_id`, NOT the `employee_code`. Nothing says so outright. What says
     it: "Event: New Mentioned Message From Group Chat" maps each
@@ -168,11 +193,16 @@ building group/@mention/thread/forward support (feature/channel-group-mention-ri
     cross-organisation sender carries at all. It is now carried as its own
     envelope field, deliberately not folded into `sender_id`, which the owner
     gate matches against a different value.
-  - The mention survives Coffer's SeaTalk markdown renderer untouched: the tag
-    holds none of the four characters that renderer escapes (asterisk,
-    underscore, backtick, tilde), and `seatalk://` is not matched by its
-    bare-URL rule, which only looks for `http`/`https`. That is asserted on the
-    wire body in the adapter tests rather than left to chance.
+  - **The tag is STASHED out of every escaping pass, not assumed to be safe from
+    one.** The original note here said it survives untouched because it holds
+    none of the four characters SeaTalk's renderer escapes. That was wrong for
+    two real targets: an id may contain `_` (an `abc_def` id arrived as
+    `...id=abc\_def..."/>`, visible source instead of a name), and the email form
+    of the tag contains one routinely (`first_last@example.com`). So the renderer
+    lifts mention tags out before escaping and puts them back after, the way it
+    already did for inline code. `seatalk://` is still not matched by its
+    bare-URL rule, which only looks for `http`/`https`. All of it is asserted on
+    the wire body in the adapter tests rather than left to chance.
 
 - **Two platform limits worth recording:**
   - SeaTalk does not deliver emoji reactions or non-@ group-main messages to
@@ -216,7 +246,10 @@ Source: Send Streaming Messages, open.seatalk.io (login required).
   `init_stream` consumes none.
 - Every update carries the WHOLE accumulated content, never a delta; the client
   renders the latest snapshot it received.
-- `format` is `1` for Markdown (the default) and `2` for plain text.
+- `format` is `1` for Markdown (the default) and `2` for plain text. Coffer
+  uses `1` for every snapshot, including the opening one, so the message can
+  carry an @mention from the moment it is created (see the mention notes
+  above); an in-flight snapshot is kept literal by escaping it.
 - `thread_id` and `quoted_message_id` go INSIDE the message object, matching the
   placement already verified for ordinary sends. `quoted_message_id` is group
   only.

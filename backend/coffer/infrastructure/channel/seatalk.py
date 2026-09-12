@@ -43,7 +43,11 @@ from coffer.infrastructure.channel.seatalk_parse import (
     mentions_others,
     strip_group_mentions,
 )
-from coffer.infrastructure.channel.seatalk_send import SEATALK_MENTION_TEMPLATE, send_text_pieces
+from coffer.infrastructure.channel.seatalk_send import (
+    SEATALK_MENTION_EMAIL_TEMPLATE,
+    SEATALK_MENTION_TEMPLATE,
+    send_text_pieces,
+)
 from coffer.infrastructure.channel.seatalk_transport import SeaTalkTransport
 from coffer.infrastructure.channel.seatalk_typing import send_typing
 
@@ -93,8 +97,10 @@ class SeaTalkAdapter:
             supports_groups=True,
             supports_history_fetch=True,
             # FR-070: SeaTalk mentions from a bare id, so a group reply can open
-            # by @mentioning whoever asked without resolving a display name.
+            # by @mentioning whoever asked without resolving a display name. Its
+            # documented email form is the fallback for a sender with no id.
             mention_template=SEATALK_MENTION_TEMPLATE,
+            mention_email_template=SEATALK_MENTION_EMAIL_TEMPLATE,
         )
 
     # -- lifecycle ---------------------------------------------------------
@@ -191,6 +197,8 @@ class SeaTalkAdapter:
                     # EMPTY for a sender outside the bot's organisation, which
                     # leaves seatalk_id as the only id such a message carries.
                     sender_mention_id=str(sender.get("seatalk_id", "")),
+                    # …and the address only as its fallback (see above).
+                    sender_mention_email=str(sender.get("email", "")),
                     chat_kind="group",
                     addressed=True,
                     # FR-035: >1 distinct @mentioned username ⇒ a non-bot user

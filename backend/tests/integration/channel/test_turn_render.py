@@ -800,12 +800,17 @@ def test_the_typing_heartbeat_outpaces_the_indicator_it_refreshes() -> None:
 #: (``seatalk_send.SEATALK_MENTION_TEMPLATE``) and is asserted against the real
 #: wire body in the SeaTalk adapter tests.
 _MENTION = '<mention-tag target="seatalk://user?id={user_id}"/>'
+#: Its documented sibling, keyed on the member's address — the fallback for a
+#: sender whose id is missing. The placeholder is the same so one literal
+#: replace serves both.
+_MENTION_BY_EMAIL = '<mention-tag target="seatalk://user?email={user_id}"/>'
 
 
 async def _group_reply(
     adapter: FakeChannelAdapter,
     *,
     mention_user_id: str,
+    mention_user_email: str = "",
     chat_kind: str = "group",
     events: list[Any] | None = None,
 ) -> None:
@@ -822,6 +827,7 @@ async def _group_reply(
         thread_id="t1",
         chat_kind=chat_kind,
         mention_user_id=mention_user_id,
+        mention_user_email=mention_user_email,
     )
     queue: asyncio.Queue[Any] = asyncio.Queue()
     for event in events or [
@@ -892,13 +898,15 @@ async def test_a_sender_with_no_mention_id_gets_a_clean_reply() -> None:
 
 @pytest.mark.acceptance(
     spec="channels",
-    scenario="the mention rides the final snapshot, never an interim one",
+    scenario="a streamed group reply is created already mentioning the asker",
 )
-async def test_the_mention_lands_on_the_final_snapshot_and_on_no_interim_one() -> None:
-    """Interim snapshots go out as PLAIN text on the transport that streams
-    (SeaTalk ``format: 2``), where a mention tag would be shown as its own
-    literal source rather than as a name — worse than no mention at all. Only
-    the finished snapshot is rendered rich, so only it may carry one."""
+async def test_the_mention_is_in_the_message_the_stream_is_created_as() -> None:
+    """A platform decides @ notifications when the message is CREATED. The
+    mention used to go on the finished snapshot alone, which RENDERED as a name
+    (the tag is in the content the client shows) while notifying nobody —
+    observed live. So the very first snapshot, the one that posts the message,
+    carries it; and every snapshot after it does too, or the mention would appear
+    at creation, vanish for the whole stream, and come back at the end."""
     adapter = _streaming_adapter(supports_groups=True, mention_template=_MENTION)
 
     await _group_reply(
@@ -912,13 +920,80 @@ async def test_the_mention_lands_on_the_final_snapshot_and_on_no_interim_one() -
         ],
     )
 
+    tag = '<mention-tag target="seatalk://user?id=st-77"/>'
     [live] = adapter.live_handles
-    assert live.final == '<mention-tag target="seatalk://user?id=st-77"/> I found three cats.'
-    # Every snapshot on the way there — the acknowledgement and each growing
-    # preview — stays clean.
-    assert all("mention-tag" not in snapshot for snapshot in live.snapshots)
+    # The snapshot that CREATES the message — the acknowledgement — is mentioned.
+    assert live.snapshots[0] == f"{tag} ⏳ Got it — working on this…"
+    # …as is every interim one after it, and the body that closes the stream.
+    assert live.snapshots and all(s.startswith(tag) for s in live.snapshots)
+    assert live.final == f"{tag} I found three cats."
+    # Exactly once each: no path prefixes a snapshot that is already prefixed.
+    assert all(s.count("mention-tag") == 1 for s in [*live.snapshots, live.final])
     # The stream IS the reply, so nothing is sent a second time.
-    assert adapter.texts() == ["⏳ Got it — working on this…"]
+    assert adapter.texts() == [f"{tag} ⏳ Got it — working on this…"]
+
+
+async def test_no_path_mentions_twice_when_tool_progress_opens_the_surface() -> None:
+    """``_open_live`` is reached from the acknowledgement AND lazily from the
+    status renderer. Both hand it raw text, and the mention is applied in one
+    place — the one way to get two tags in a snapshot is for a caller to prefix
+    before handing over. This drives the lazy path (no acknowledgement, because
+    the surface does not persist) through tool lines and then reply text."""
+    adapter = _streaming_adapter(
+        supports_groups=True, mention_template=_MENTION, live_text_persists=False
+    )
+
+    await _group_reply(
+        adapter,
+        mention_user_id="st-77",
+        events=[
+            ToolCall(tool_use_id="t1", tool_name="Bash", tool_input={"command": "ls"}),
+            ToolResult(tool_use_id="t1", tool_name="Bash", output={"out": "a b"}, error=None),
+            TextDelta(text="done looking."),
+            TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+        ],
+    )
+
+    [live] = adapter.live_handles
+    assert live.snapshots  # the lazy open really happened
+    assert all(s.count("mention-tag") == 1 for s in [*live.snapshots, live.final])
+
+
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="a sender with no id is mentioned by address instead",
+)
+async def test_a_sender_with_no_id_is_mentioned_by_email_where_the_platform_allows() -> None:
+    """The platform documents two mention targets. The id is primary — it is the
+    one always present on the inbound event — and the address is the fallback for
+    the case the id is missing, not a second mention."""
+    adapter = FakeChannelAdapter(
+        supports_edit=False,
+        supports_live_text=False,
+        supports_groups=True,
+        mention_template=_MENTION,
+        mention_email_template=_MENTION_BY_EMAIL,
+    )
+
+    await _group_reply(adapter, mention_user_id="", mention_user_email="ada_l@example.com")
+
+    assert adapter.texts() == [
+        '<mention-tag target="seatalk://user?email=ada_l@example.com"/> the answer'
+    ]
+
+
+async def test_the_id_wins_when_both_an_id_and_an_address_are_known() -> None:
+    adapter = FakeChannelAdapter(
+        supports_edit=False,
+        supports_live_text=False,
+        supports_groups=True,
+        mention_template=_MENTION,
+        mention_email_template=_MENTION_BY_EMAIL,
+    )
+
+    await _group_reply(adapter, mention_user_id="st-77", mention_user_email="ada_l@example.com")
+
+    assert adapter.texts() == ['<mention-tag target="seatalk://user?id=st-77"/> the answer']
 
 
 def test_a_mention_is_never_built_from_an_id_that_is_not_one() -> None:
@@ -931,3 +1006,21 @@ def test_a_mention_is_never_built_from_an_id_that_is_not_one() -> None:
     assert mention_prefix(_MENTION, '"/><b>x') == ""
     assert mention_prefix(_MENTION, "") == ""
     assert mention_prefix("", "st-77") == ""
+
+
+def test_an_address_is_held_to_the_same_bar_as_an_id() -> None:
+    """The fallback is a second way to be interpolated into Coffer's own markup,
+    so it is gated the same way: one ``@``, a dotted domain, and nothing that
+    could break out of the attribute."""
+    from coffer.application.channel.turn_text import mention_prefix
+
+    def by_email(value: str) -> str:
+        return mention_prefix("", "", email_template=_MENTION_BY_EMAIL, user_email=value)
+
+    assert by_email("ada_l@example.com") == (
+        '<mention-tag target="seatalk://user?email=ada_l@example.com"/>'
+    )
+    assert by_email('x"/><b>y@example.com') == ""
+    assert by_email("not-an-address") == ""
+    assert by_email("two@at@example.com") == ""
+    assert by_email("") == ""

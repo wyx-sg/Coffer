@@ -318,6 +318,7 @@ class InboundProcessor:
                 msg.chat_kind,
                 msg.platform_message_id,
                 msg.sender_mention_id,
+                msg.sender_mention_email,
             )
         )
         if session.drain_task is None or session.drain_task.done():

@@ -15,7 +15,7 @@ from coffer.domain.channel.envelopes import ChoiceButton, SentMessage
 from coffer.infrastructure.channel.render import chunk_text, markdown_to_seatalk
 from coffer.infrastructure.channel.seatalk_parse import interactive_card, split_to_byte_limit
 
-__all__ = ["SEATALK_MENTION_TEMPLATE", "send_text_pieces"]
+__all__ = ["SEATALK_MENTION_EMAIL_TEMPLATE", "SEATALK_MENTION_TEMPLATE", "send_text_pieces"]
 
 #: FR-070: how SeaTalk spells an @mention inside message content, read from the
 #: "Send Message to Group Chat" formatted-text sample:
@@ -36,8 +36,26 @@ __all__ = ["SEATALK_MENTION_TEMPLATE", "send_text_pieces"]
 #:
 #: It is MARKDOWN — it reaches the reader as a name only in a ``format: 1``
 #: message. In a ``format: 2`` (plain) one it shows as this literal string, so
-#: only sends that render rich may carry it (see ``TurnRenderer._with_mention``).
+#: every snapshot that carries it goes out as ``format: 1`` (see
+#: ``turn_text.with_mention`` and ``SeaTalkLiveText``).
 SEATALK_MENTION_TEMPLATE = '<mention-tag target="seatalk://user?id={user_id}"/>'
+
+#: FR-070: the SECOND documented mention form, from the same "Send a Message with
+#: Formats" page, which lists three targets — by email, by SeaTalk id, and
+#: ``id=0`` for every member of the group (that last one only notifies when the
+#: group's "Notify all members with @All" setting is on, so Coffer never sends it).
+#:
+#: A FALLBACK, never the default: ``seatalk_id`` is always present on the inbound
+#: group-@mention event, while the docs warn ``email`` and ``employee_code`` come
+#: back EMPTY for a sender outside the bot's organisation — exactly the case the
+#: id survives. ``{user_id}`` stands in for the address so both templates
+#: substitute identically.
+#:
+#: An address carries characters SeaTalk's markdown escaper would otherwise
+#: mangle (``first_last@example.com`` is ordinary, and ``_`` is one of the four
+#: markers it escapes), which is why ``render.py`` lifts mention tags out of that
+#: pass rather than trusting a tag to be marker-free.
+SEATALK_MENTION_EMAIL_TEMPLATE = '<mention-tag target="seatalk://user?email={user_id}"/>'
 
 #: ``(chat_id, message, thread_id, chat_kind) -> platform result`` — the
 #: adapter's own group/single-chat router.

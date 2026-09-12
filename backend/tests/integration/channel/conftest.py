@@ -216,6 +216,7 @@ class FakeChannelAdapter:
         supports_reactions: bool = False,
         set_reaction_fails: bool = False,
         mention_template: str = "",
+        mention_email_template: str = "",
     ) -> None:
         self._caps = ChannelCapabilities(
             supports_edit=supports_edit,
@@ -235,6 +236,9 @@ class FakeChannelAdapter:
             # Shaped like SeaTalk's tag in the tests that set it; "" is the
             # Telegram-shaped default, where a reply carries no mention.
             mention_template=mention_template,
+            # …and its second, address-keyed spelling where it has one (SeaTalk),
+            # used only when the primary id is missing.
+            mention_email_template=mention_email_template,
             # Typing is two endpoints, not one (SeaTalk: single_chat_typing /
             # group_chat_typing): a fake may hold the DM one alone, exactly like
             # a transport that never gained the group call.

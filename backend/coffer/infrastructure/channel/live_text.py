@@ -26,9 +26,8 @@ from typing import Any
 from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.infrastructure.channel.render import markdown_to_seatalk
 from coffer.infrastructure.channel.seatalk_stream_text import (
-    _STREAM_BYTE_BUDGET,
-    _clip_tail_bytes,
     _split_for_stream,
+    interim_snapshot,
 )
 
 _logger = logging.getLogger(__name__)
@@ -281,9 +280,13 @@ class SeaTalkLiveText(LiveTextSurface):
     * Updates must be less than 30 s apart, total content is capped at 4096
       characters, and once a stream ends (finished, timed out, errored) any
       request naming its id is rejected.
-    * ``format`` is 1 for Markdown and 2 for plain text. Interim snapshots go
-      out as 2: a reply cut mid-word can end inside an unclosed ``*`` or ``_``,
-      and asking the client to parse that renders noise.
+    * ``format`` is 1 for Markdown and 2 for plain text. EVERY snapshot here is
+      1, including the opening one — an @mention is markup, and the platform
+      decides @ notifications when a message is created, so the mention has to
+      be in what ``init_stream`` posts (FR-070). Interim snapshots used to go
+      out as 2 to keep a reply cut mid-word from being parsed as half a markdown
+      run; that protection now comes from ESCAPING the partial text
+      (``interim_snapshot``) instead of from asking for plain text.
     * Streaming needs no permission of its own — it rides the same Send Message
       grant as an ordinary reply. Older clients (< 3.67) simply see the finished
       message when the stream closes.
@@ -313,9 +316,13 @@ class SeaTalkLiveText(LiveTextSurface):
         key = "group_id" if self._surface == "group_chat" else "employee_code"
         return {key: self._chat_id}
 
-    def _content(self, text: str, *, markdown: bool) -> dict[str, Any]:
-        """The ``text`` object both endpoints carry. ``format`` 2 is plain."""
-        return {"format": 1 if markdown else 2, "content": text}
+    def _content(self, text: str) -> dict[str, Any]:
+        """The ``text`` object both endpoints carry. ``format: 1`` is SeaTalk
+        markdown, and every snapshot uses it — the message must be able to carry
+        an @mention from the moment it is created (FR-070), and a tag in a
+        ``format: 2`` message would reach the reader as its own literal source.
+        Partial text is kept literal by escaping it, not by dropping to plain."""
+        return {"format": 1, "content": text}
 
     async def _open(self, text: str) -> None:
         """``init_stream``: post the opening message and keep its stream id.
@@ -323,10 +330,15 @@ class SeaTalkLiveText(LiveTextSurface):
         The opening message is the first snapshot rather than a "Thinking…"
         placeholder — it is a real message either way, so it may as well carry
         what we already have. It consumes no ``seq``.
+
+        It is also where an @mention has to land: the platform decides @
+        notifications when the message is CREATED, never on a later update, so a
+        mention added only to the finished snapshot renders as a name and
+        notifies nobody. That cost a live debugging round.
         """
         message: dict[str, Any] = {
             "tag": "text",
-            "text": self._content(text, markdown=False),
+            "text": self._content(text),
         }
         if self._thread_id:
             # Same verified placement as an ordinary send, and as the docs'
@@ -342,22 +354,23 @@ class SeaTalkLiveText(LiveTextSurface):
         self._stream_id = stream_id
 
     async def _write(self, text: str) -> None:
-        # Interim snapshots are clipped to the stream budget and sent as plain
-        # text; the caller's markdown is rendered once, in the final snapshot.
-        clipped = _clip_tail_bytes(text, _STREAM_BYTE_BUDGET)
+        # An in-flight snapshot is clipped to the stream budget and escaped (its
+        # @mention kept whole at the head); the caller's markdown is RENDERED
+        # once, in the final snapshot.
+        snapshot = interim_snapshot(text)
         if not self._stream_id:
-            await self._open(clipped)
+            await self._open(snapshot)
             return
-        await self._update(clipped, finish=False, markdown=False)
+        await self._update(snapshot, finish=False)
 
     async def _finish(self, text: str) -> str:
         head, remainder = _split_for_stream(text or self._snapshot)
         # The streamed message IS the SeaTalk reply (nothing can delete it), so
         # the final snapshot is markdown-rendered like any other SeaTalk send.
-        await self._update(markdown_to_seatalk(head), finish=True, markdown=True)
+        await self._update(markdown_to_seatalk(head), finish=True)
         return remainder
 
-    async def _update(self, text: str, *, finish: bool, markdown: bool) -> None:
+    async def _update(self, text: str, *, finish: bool) -> None:
         self._seq += 1  # the platform requires a monotonic seq, starting at 1
         await self._post(
             f"/messaging/v2/{self._surface}/update_stream",
@@ -369,6 +382,6 @@ class SeaTalkLiveText(LiveTextSurface):
                 "seq": self._seq,
                 "finish": finish,
                 # No `tag` on an update — the kind was fixed by init_stream.
-                "message": {"text": self._content(text, markdown=markdown)},
+                "message": {"text": self._content(text)},
             },
         )

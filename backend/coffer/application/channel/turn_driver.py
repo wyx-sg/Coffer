@@ -49,8 +49,10 @@ QUEUE_MAX = 10
 #: place the message came from, and the user's inbound platform_message_id — the
 #: message the receipt/completion reaction targets on a supports_reactions
 #: transport (FR-036); "" when the transport supplied none — and the asker's
-#: mention id, which the group reply opens by @mentioning (FR-070).
-_QueuedInbound = tuple[str, tuple[Attachment, ...], str, str, str, str]
+#: mention id and address, which the group reply opens by @mentioning (FR-070 —
+#: the id is the primary, the address the fallback a cross-organisation sender
+#: may be the only one of).
+_QueuedInbound = tuple[str, tuple[Attachment, ...], str, str, str, str, str]
 
 #: Sends one reply back through a channel binding, matching
 #: ``InboundProcessor._safe_send``'s signature (buttons omitted — turn
@@ -140,6 +142,7 @@ class TurnDriver:
                 chat_kind,
                 reply_to,
                 mention_user_id,
+                mention_user_email,
             ) = session.queue.popleft()
             peer = await self._peers.get_by_chat(binding.resource_id, chat_id)
             if peer is None:
@@ -154,6 +157,7 @@ class TurnDriver:
                     chat_kind=chat_kind,
                     reply_to_message_id=reply_to,
                     mention_user_id=mention_user_id,
+                    mention_user_email=mention_user_email,
                 )
             except asyncio.CancelledError:
                 raise
@@ -171,6 +175,7 @@ class TurnDriver:
         chat_kind: str = "direct",
         reply_to_message_id: str = "",
         mention_user_id: str = "",
+        mention_user_email: str = "",
     ) -> None:
         adapter = binding.adapter
         try:
@@ -240,6 +245,7 @@ class TurnDriver:
             thread_id=thread_id,
             chat_kind=chat_kind,
             mention_user_id=mention_user_id,
+            mention_user_email=mention_user_email,
         )
         # Track the live turn so /stop and unbind can target it even after /new
         # rebinds the peer to a fresh conversation mid-turn.
