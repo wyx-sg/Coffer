@@ -1315,6 +1315,14 @@ produce it on its own.
 - **Then** the assistant reply is there — the message store, not the live
   stream, is the system of record.
 
+### Scenario: a conversation the owner named keeps its name
+
+- **Given** a conversation the owner has renamed,
+- **When** its first user message arrives,
+- **Then** the conversation keeps the name the owner gave it, and only a
+  conversation still under its placeholder title is named from its first
+  message.
+
 ### Scenario: manage conversations
 
 - **Given** a running daemon,
@@ -1818,7 +1826,10 @@ browser — reads in one place instead of two.
   framework. A message MUST store its role and an ordered list of content blocks
   of types `text`, `tool_use`, `tool_result`, and `attachment` (FR-033);
   assistant messages MUST also store token usage and the model that produced
-  them when the agent reports one.
+  them when the agent reports one. A conversation opens under a placeholder
+  title, which System MUST replace with the text of its first user message
+  (truncated); once the owner has named a conversation themselves, System MUST
+  NOT overwrite that name — an explicit rename outranks the generated one.
 - **FR-049**: Conversations MUST follow a two-stage, retention-managed
   lifecycle, both windows configurable under Settings → Data: the retention
   worker auto-archives a conversation with no new message for the auto-archive
