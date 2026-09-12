@@ -200,6 +200,24 @@ async def test_first_user_message_sets_title() -> None:
     assert updated.title == "Tell me about Python"
 
 
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="a conversation the owner named keeps its name",
+)
+@pytest.mark.asyncio
+async def test_first_user_message_keeps_a_title_the_owner_set() -> None:
+    """A rename outranks the auto-title: the first message must not undo it."""
+    svc, conv_repo, _, _ = make_service()
+    conv = await svc.create_conversation(agent_key="builtin")
+    await svc.rename_conversation(conv.id, new_title="Tax questions")
+    await svc.append_message(
+        conv.id, role=Role.USER, content=[TextBlock(text="Tell me about Python")]
+    )
+    updated = await conv_repo.get(conv.id)
+    assert updated is not None
+    assert updated.title == "Tax questions"
+
+
 @pytest.mark.asyncio
 async def test_first_user_message_title_truncated_at_60_chars() -> None:
     svc, conv_repo, _, _ = make_service()

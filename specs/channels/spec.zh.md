@@ -1153,6 +1153,12 @@ Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制
 - **When** 守护进程重启后读回该会话
 - **Then** assistant 回复还在——事实来源是消息存储，不是实时流
 
+### Scenario: a conversation the owner named keeps its name
+
+- **Given** 一个已被用户改过名的会话，
+- **When** 它的第一条用户消息到达，
+- **Then** 会话保留用户给的名字；只有仍处于占位标题的会话才会用第一条消息来命名。
+
 ### Scenario: manage conversations
 
 - **Given** 一个运行中的守护进程
@@ -1546,6 +1552,8 @@ Web 端 Chat 页面是它们的另一个客户端。那个页面又回来了（�
   kind-agnostic Resource 框架里的 Resource。一条消息必须存下它的 role 和一个有序的
   content block 列表，类型为 `text`、`tool_use`、`tool_result` 和 `attachment`
   （FR-033）；assistant 消息在 agent 报告时还必须存下 token 用量与产出它的模型。
+  会话创建时带一个占位标题，系统必须用它第一条用户消息的文本（截断）替换掉；而一旦
+  用户自己命名过某个会话，系统就不得再覆盖这个名字——显式改名优先于自动生成的标题。
 - **FR-049**: 会话必须遵循两段式、由保留策略管理的生命周期，两个窗口都在
   Settings → Data 下可配：保留 worker 先把超过自动归档窗口（默认 7 天）没有新消息
   的会话自动归档，再在归档若干天后（默认 30 天）删除已归档会话及其消息。任一窗口

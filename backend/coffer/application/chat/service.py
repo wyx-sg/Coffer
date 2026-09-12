@@ -279,9 +279,11 @@ class ChatService:
         """Append a new message and bump the conversation's ``updated_at``.
 
         For the first user message, the conversation title is auto-generated
-        from the message text (truncated to ``_TITLE_MAX_CHARS`` chars).
+        from the message text (truncated to ``_TITLE_MAX_CHARS`` chars) — but
+        only while the conversation still carries the placeholder title it was
+        created with. A title the owner typed is theirs, and outranks the guess.
         """
-        await self.get_conversation(conversation_id)  # existence check
+        conv = await self.get_conversation(conversation_id)  # existence check
 
         seq = await self._messages.next_seq(conversation_id)
         now = datetime.now(tz=UTC)
@@ -300,8 +302,10 @@ class ChatService:
         saved = await self._messages.append(msg)
         await self._conversations.touch(conversation_id, now)
 
-        # Auto-generate title from the first user message.
-        if role == Role.USER and seq == 0:
+        # Auto-generate title from the first user message, unless the owner has
+        # already named the conversation — renaming is an explicit act, and the
+        # first message arriving afterwards must not silently undo it.
+        if role == Role.USER and seq == 0 and conv.title == _PLACEHOLDER_TITLE:
             text = _extract_text(content)
             if text:
                 title = text[:_TITLE_MAX_CHARS]
