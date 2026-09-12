@@ -177,24 +177,28 @@ A direct MCP entry in one agent benefits that agent alone. The user clicks "Adop
 
 ---
 
-### User Story 11 — See the agent's plugins (Priority: P3)
+### User Story 11 — Manage the agent's plugins (Priority: P2)
 
-Agents with a file-backed plugin system expose that inventory to Coffer **read-only**: every installed plugin with the marketplace it came from, its enabled state, and whether its on-disk cache is present, derived from the agent's documented configuration files at read time, plus best-effort detail read from the plugin's own install directory (`installPath`) — its manifest description/version/author and the skills, commands, and MCP servers it bundles. Each agent record's `PluginCapability` (a plugin-model discriminator plus the allowlist key of the file the state is read from) lets the service dispatch on data rather than per-agent branches. Nothing is written: not the documented surface, not the internal state files. Enabling, disabling, uninstalling, installing, and marketplace management all stay with the agent's own tooling.
+Agents with a file-backed plugin system expose it through the agent's Plugins tab: every installed plugin in a single table — the marketplace it came from is a column, not a per-marketplace section — with its enabled state and whether its on-disk cache is present. Each row expands to reveal the plugin's manifest detail (description, version, author, homepage) and the skills, commands, and MCP servers it bundles, read read-only from the plugin's install directory (recorded as `installPath` in the agent's plugin inventory). Because those components belong to the plugin, they surface here rather than on the agent's Skill / MCP pages, which only list the agent's own standalone resources. The plugin facet is generalised through the capability manifest — each agent record carries a `PluginCapability` (a plugin-model discriminator, the write-surface allowlist key, and `can_toggle`/`can_uninstall` flags), so the service dispatches on data rather than per-agent branches. Each capability maps to the agent's documented configuration surface; internal state files are read, never written. Installing new plugins and managing marketplaces stay with the agent's own tooling.
 
 Per-agent plugin support:
 
-| Agent       | Plugin model                                                                                                      | Read from                                       | List | Write |
-| ----------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ---- | ----- |
-| Claude Code | `enabledPlugins` map in `settings.json` (inventory in `installed_plugins.json` / `known_marketplaces.json`)        | `settings.json` + the two inventory files       | yes  | no    |
-| Codex       | `[plugins."<name>@<marketplace>"]` tables + cache dir                                                             | `config.toml` + the cache directory             | yes  | no    |
+| Agent       | Plugin model                                                                                                      | Write surface    | List  | Toggle | Uninstall                     |
+| ----------- | ----------------------------------------------------------------------------------------------------------------- | ---------------- | ----- | ------ | ----------------------------- |
+| Claude Code | `enabledPlugins` map in `settings.json` (internal `installed_plugins.json` / `known_marketplaces.json` read-only) | `settings.json`  | yes   | yes    | yes (via `claude plugin` CLI) |
+| Codex       | `[plugins."<name>@<marketplace>"]` tables + cache dir                                                             | `config.toml`    | yes   | yes    | yes (entry + cache)           |
 
-**Why this priority**: Plugins are real, persistent agent configuration, and knowing what is installed is occasionally useful. It is not useful enough to justify writing another tool's private plugin format — see the removal note under the plugin requirements. This story has no web UI: the listing is a REST + CLI read only.
+**Why this priority**: Plugins are real, persistent agent configuration, and the tab is where the user sees all of an agent's surfaces in one place. The writes it offers are the cheap, safe ones — a toggle of the documented flag, and an uninstall that delegates to the agent's own CLI wherever the install state lives in a file Coffer must not hand-write. Installation and marketplace management are left where they already work.
 
-**Independent Test**: Register a `codex` agent with plugins configured; run `coffer agent plugin list <name> --json`; observe every plugin with its marketplace, enabled state, and `cache_present`, and observe every file under `~/.codex/` byte-identical afterwards.
+**Independent Test**: Register a `codex` agent with plugins configured; open the Plugins tab; observe the plugins with their marketplace and enabled state; disable one and observe `enabled = false` written to `config.toml`; uninstall one and observe its config entry and cache directory gone.
 
 **Covering scenarios**:
 
 - list an agent's plugins with enabled state
+- toggle a plugin's enabled state
+- uninstall a Codex plugin
+- uninstall a Claude Code plugin via its CLI (Coffer never hand-writes Claude's internal files)
+- reject Claude uninstall when its CLI is unavailable
 - flag a plugin whose cache is missing
 
 ---
@@ -466,6 +470,48 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** the user lists the agent's plugins,
 - **Then** that plugin is listed with `cache_present=false` and no repair is attempted.
 
+### Scenario: toggle a plugin's enabled state
+
+- **Given** a registered agent with an enabled plugin,
+- **When** the user disables it,
+- **Then** only the documented location is written — the Codex entry's `enabled` field, or the Claude Code `enabledPlugins` map in `settings.json` — internal plugin state files are byte-identical before and after, and an `agent_plugin_toggled` audit entry is recorded.
+
+### Scenario: uninstall a Codex plugin
+
+- **Given** a registered `codex` agent with an installed plugin,
+- **When** the user uninstalls it,
+- **Then** the `[plugins."…"]` entry is removed from `config.toml` (atomic + `.bak`), the plugin's cache directory under `~/.codex/plugins/cache/` is deleted, and an `agent_plugin_uninstalled` audit entry is recorded.
+
+### Scenario: uninstall a Claude Code plugin via its CLI
+
+- **Given** a registered `claude_code` agent with an installed plugin and the `claude` CLI on PATH,
+- **When** the user uninstalls it,
+- **Then** Coffer runs `claude plugin uninstall <id>` (it never hand-writes Claude's internal `installed_plugins.json` / `settings.json`), the request succeeds, and an `agent_plugin_uninstalled` audit entry is recorded.
+
+### Scenario: reject Claude uninstall when its CLI is unavailable
+
+- **Given** a registered `claude_code` agent whose `claude` CLI is not on PATH,
+- **When** the user attempts to uninstall a plugin,
+- **Then** the request is rejected with `unprocessable_entity` (422) and error code `PLUGIN_UNINSTALL_UNSUPPORTED`, and nothing is written — the listing also hides the in-app uninstall affordance in this case.
+
+### Scenario: the native memory scan lists an agent's own per-project stores
+
+- **Given** a registered `claude_code` agent whose `<config_dir>/projects/<slug>/memory` directory holds `.md` fact files (plus a `MEMORY.md` index),
+- **When** the user scans the agent's native memory,
+- **Then** Coffer returns one store per project with a `project` label and `path` that are the REAL project directory (recovered from the project's session-transcript `cwd`, not the lossy slug), the real `memory_dir`, and an `item_count` of `.md` files excluding `MEMORY.md` (or `1` for a store whose only content is an inline `MEMORY.md`) — read-only, deriving everything from disk and emitting no audit event. An agent type with no native memory layout, or one with no `projects/` directory, returns an empty list.
+
+### Scenario: the native memory scan lists Codex's global memory by project
+
+- **Given** a registered `codex` agent whose `<config_dir>/memories/MEMORY.md` holds `# Task Group` blocks, each with an `applies_to: cwd=…` line routing it to one or more project working directories,
+- **When** the user scans the agent's native memory,
+- **Then** Coffer parses the single global document into one store row per distinct routed cwd — `project`/`path` the cwd, `item_count` the number of Task Groups routed there, and `memory_dir` the one shared global store — read-only and emitting no audit event; with no `memories/MEMORY.md` the list is empty.
+
+### Scenario: browse an agent's transcript history with title, search, and sort
+
+- **Given** a registered agent with several local transcript sessions across more than one project,
+- **When** the agent's transcripts are listed with a search query, a project filter, and a sort key (`started_at`, `last_activity_at` or `message_count`),
+- **Then** each returned session summary carries a derived title, message count, `started_at`, `last_activity_at`, and the session file's absolute source path; only sessions whose title or project path matches the search and whose project matches the filter are returned, ordered by the requested sort key and direction, and paged by `limit`/`offset` alongside the matched total — read-only, emitting no audit event and writing nothing.
+
 ### Scenario: list a directory config entry's files
 
 - **Given** a registered `claude_code` agent whose `agents/` directory contains Markdown subagent files (possibly nested),
@@ -554,9 +600,9 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 **Plugins (workspace amendment)**
 
-- **FR-031**: System MUST list an agent's installed plugins with enabled state, grouped by marketplace. The listing is **read-only** — it writes nothing, to the documented surface or to any internal state file. For `codex` the listing derives from `config.toml` (`[plugins."<name>@<marketplace>"]`, `[marketplaces.*]`) plus presence of the documented cache directory `~/.codex/plugins/cache/<marketplace>/<plugin>/`; for `claude_code` the inventory derives from `~/.claude/plugins/installed_plugins.json` and `known_marketplaces.json`, with enabled state from `settings.json` `enabledPlugins`. A plugin configured without its cache is flagged `cache_present=false`; no repair is attempted. The listing is exposed through the REST API (`GET /api/v1/agents/{name}/plugins`) and the `coffer agent plugin list` CLI **only**: the web UI has no Plugins tab, so this route is a backend data source with no UI on top of it. Plugin installation, enable/disable, uninstall, and marketplace management are not provided by Coffer; all of them remain with the agent's own tooling.
-
-**Not provided: writing plugin state.** Coffer once offered enable/disable (`agent_plugin_toggled`) and uninstall (`agent_plugin_uninstalled`, delegating to `claude plugin uninstall` for `claude_code` and deleting the entry plus its cache directory for `codex`), carried in the manifest as `can_toggle` / `can_uninstall` / `uninstall_strategy`. All of it is gone. Those ~500 lines wrote another tool's private format and wrapped another tool's CLI: an upstream format change would have silently corrupted a user's config, whereas a read-only parse of the same files degrades, at worst, to FR-030's explicit parse-error state. And the operation they replaced is one command — typing the vendor's own `claude plugin disable …` is faster than finding Coffer's proxy of it.
+- **FR-031**: System MUST list an agent's installed plugins with their enabled state and the marketplace each came from (a column of the listing, not a grouping of it). The listing itself writes nothing — not the documented surface, not any internal state file; the writes are FR-032 and FR-033. For `codex` the listing derives from `config.toml` (`[plugins."<name>@<marketplace>"]`, `[marketplaces.*]`) plus presence of the documented cache directory `~/.codex/plugins/cache/<marketplace>/<plugin>/`; for `claude_code` the inventory derives from `~/.claude/plugins/installed_plugins.json` and `known_marketplaces.json`, with enabled state from `settings.json` `enabledPlugins`. A plugin configured without its cache is flagged `cache_present=false`; no repair is attempted.
+- **FR-032**: Users MUST be able to enable/disable a plugin. Writes touch only the documented locations — the Codex entry's `enabled` field; the Claude Code `enabledPlugins` map in `settings.json` — and MUST never write the agents' internal state files. Audited as `agent_plugin_toggled`.
+- **FR-033**: Users MUST be able to uninstall a plugin, by a per-agent strategy. For `codex` the `[plugins."…"]` entry is removed from `config.toml` and the plugin's cache directory is deleted. For `claude_code` Coffer delegates to `claude plugin uninstall <id>` — it never hand-writes Claude's internal `installed_plugins.json`; the CLI owns that state. When the `claude` CLI is not on PATH the operation is rejected with `unprocessable_entity` (422) / `PLUGIN_UNINSTALL_UNSUPPORTED` and the in-app uninstall affordance is hidden (the listing reports `can_uninstall=false`); a CLI error surfaces as `PLUGIN_UNINSTALL_FAILED` (422). Both successful paths are audited as `agent_plugin_uninstalled`. Plugin installation and marketplace management are not provided by Coffer; both remain with the agent's own tooling.
 
 **Directory config entries (workspace amendment)**
 
@@ -565,11 +611,21 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **FR-036**: Config-file reads (single files and directory children) MUST return a content fingerprint; writes MUST carry it back and are rejected with `conflict` (409) when the on-disk content changed since the read, leaving the file untouched.
 - **FR-037**: When an instructions file contains a managed block defined by another feature — the knowledge layer's memory-projection block — the editor MUST annotate that the block is owned by that feature. Each block uses its own distinct markers and is rewritten independently; the marker format is owned by the defining feature.
 
-**Not provided: native memory (removed)**
+**The agent's own native memory (workspace amendment)**
 
-The registry once reached into the coding agent's OWN native per-project memory — distinct from the `instructions` config files of FR-013 (CLAUDE.md / AGENTS.md are human-authored instructions; that was the agent's self-written memory store). FR-040 exposed a read-only scan of those stores (Claude Code's `<config_dir>/projects/<slug>/memory/`; Codex's global task-grouped `<config_dir>/memories/MEMORY.md` sliced by routed cwd) and FR-041 imported one store into the matching Coffer project memory's `knowledge/inbox/` lane, handing the facts to spec knowledge's organizer. Both are gone, with the `/api/v1/agents/{name}/native-memory*` routes, the `coffer agent native-memory` / `coffer agent import-native-memory` commands, the web Memory tab, and the decision record that introduced native-memory scanning.
+This requirement extends the registry to the coding agent's OWN native per-project memory — distinct from the `instructions` config files of FR-013 (CLAUDE.md / AGENTS.md are human-authored instructions; this is the agent's self-written memory store). Coffer only ever READS it. The scan is a listing, like the MCP-entry and plugin listings beside it, and it exists so the user can see, from the agent's page, what memory that agent has been keeping and open it on disk.
 
-The reason is use, not design: the feature shipped and was never used. The one artefact that would have shown otherwise — `memory_store_project_roots` — was populated entirely by the ordinary scope resolver, never by an import. Nothing in this spec now reads or writes an agent's native memory store.
+- **FR-040**: System MUST expose a read-only **native-memory scan** that lists an agent type's own native memory stores. Two layouts are supported. For `claude_code` the stores are per-project at `<config_dir>/projects/<slug>/memory/`: one row per project that has a `memory/` dir, with an `item_count` of `.md` fact files excluding `MEMORY.md` — or `1` when there are no fact files but `MEMORY.md` holds inline content (an older / hand-written hub doc). The `project` label and `path` are the REAL project directory, recovered from the project's session transcript `cwd` (the slug encoding is lossy — `/`, `.`, `_` all collapse to `-` — so the path cannot be reliably reconstructed from the slug; a lossy slug decode is only a last-resort fallback). For `codex` the store is a single GLOBAL task-grouped document at `<config_dir>/memories/MEMORY.md`, where each `# Task Group` block carries an `applies_to: cwd=…` line routing it to one or more project working directories; the scan parses it into one row per distinct routed cwd, with `item_count` the number of Task Groups routed there and `path` the cwd (`memory_dir` is the one shared global store for every row). An agent type with no native memory layout, an absent `projects/` dir, or an absent `memories/MEMORY.md`, all return an empty list. The scan is read-only, derives everything from disk at read time (nothing stored), and — consistent with FR-011's "workspace listings are read-only; none emits an audit event" — emits NO audit event. It never writes the agent's store.
+
+**Not provided: importing a native memory store into Coffer.** FR-041 once read a store's facts and wrote them into the matching Coffer project memory's `knowledge/inbox/` lane, handing them to an organizer. It is not restored, and the machinery is gone with it. The knowledge layer is now a directory of markdown files that the user and agents write deliberately ([Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)); a bulk copy of another tool's store into it produces material nobody chose to keep, in a place they must then curate. Reading the store, and opening it where it lives, is the whole of what this facet offers.
+
+**The agent's own chat history (workspace amendment)**
+
+An agent writes a transcript of every session to its own config directory — Claude Code's `<config_dir>/projects/**/*.jsonl`, Codex's `<config_dir>/sessions/**/*.jsonl`. The registry lists them so the user can find a past session from the agent's page and open it where it lives. This is a browse surface and nothing more: Coffer parses the files to derive a summary, and never writes them, never stores their content, and never sends them anywhere.
+
+- **FR-047**: System MUST expose a read-only listing of an agent's local transcript sessions. Each session summary carries its `session_id`, a derived `title` (the session's first user turn, secret-scrubbed), `project_path`, `message_count`, `started_at`, `last_activity_at`, and the transcript file's absolute `source_path` — the last feeding the FR-038 open / reveal affordances. The listing MUST support a case-insensitive substring search over title and project path, an exact `project` filter, sorting by `started_at`, `last_activity_at` (default) or `message_count` in either direction, and `limit`/`offset` paging alongside the matched `total`, because an agent accumulates thousands of sessions and the surface cannot load them all. Parsing is per-file and cached by modification time; a file that fails to parse is skipped rather than failing the listing. Message text is not carried on the wire and is not retained in memory. The listing derives everything from disk at read time, stores nothing, and — like the other workspace listings (FR-011) — emits no audit event.
+
+**Not provided: distilling a transcript into memory.** Coffer once read these same files to distil durable facts into the knowledge layer's journal lane. That path, its ledger, its background sweep and the lane it wrote to are gone (see spec knowledge); this listing does not resurrect them. What remains is the part that needed no model and could not corrupt anything: showing the user what sessions exist and opening one.
 
 **Not provided: lifecycle hooks and session-context injection (removed)**
 
@@ -581,13 +637,13 @@ The reason is the same as native memory's: it shipped and was never installed. `
 
 **Surfaces**
 
-- **FR-009**: Every management operation — register/list/view/update/remove, config-file list/read/write (including directory children), Coffer-MCP install/uninstall/status, MCP entry list/adopt, plugin list — MUST be available through (a) the REST API and (b) the `coffer agent ...` CLI. The Agents page in the web UI MUST expose all of these EXCEPT config-file content writes (single files and directory children) and the plugin listing: in the UI, config files and directory children are **read-only** with open-in-external-editor / reveal-in-file-manager affordances (FR-038), while the REST API and CLI keep the programmatic write/create/delete path; the plugin listing (FR-031) is REST + CLI only and has no UI. The agent detail page has four tabs — Overview, Skills, MCP servers, and Config files.
+- **FR-009**: Every management operation — register/list/view/update/remove, config-file list/read/write (including directory children), Coffer-MCP install/uninstall/status, MCP entry list/adopt, plugin list/toggle/uninstall, native-memory scan (FR-040), transcript listing (FR-047) — MUST be available through (a) the REST API and (b) the `coffer agent ...` CLI. The Agents page in the web UI MUST expose all of these EXCEPT config-file content writes (single files and directory children): in the UI, config files and directory children are **read-only** with open-in-external-editor / reveal-in-file-manager affordances (FR-038), while the REST API and CLI keep the programmatic write/create/delete path. The agent detail page has seven tabs — Overview, Skills, MCP servers, Plugins, Memory, Conversations, and Config files. Of those, only Plugins acts on the agent (enable / disable / uninstall); Memory and Conversations are read-only views of the agent's own stores, each row offering open-in-external-editor / reveal-in-file-manager.
 - **FR-010**: The CLI MUST support `--json` for machine-readable output on every read operation.
 - **FR-038**: For each config file (and each directory-entry child) the UI MUST offer **open-in-external-editor** and **reveal-in-file-manager** actions on the file, using the `path` from FR-014/FR-015. Open and reveal perform the real OS action through the daemon filesystem-action endpoints (FR-039), since the loopback daemon is always on the user's own machine (ADR daemon-proxies-os-file-actions). There is no copy-path fallback. The editor used for open-in-external-editor references the user's "preferred external editor" preference defined by spec ui-shell (not re-specified here).
 
 **Observability**
 
-- **FR-011**: System MUST record an audit entry for every lifecycle event: agent created, updated, removed; config file written/deleted (`agent_config_file_written` / `agent_config_file_deleted`); Coffer MCP installed/uninstalled; MCP entry adopted (`agent_mcp_entry_adopted`). (Agents have no enable/disable concept; discovery and all workspace listings — MCP entries, plugins, config files — are read-only and emit no audit event.)
+- **FR-011**: System MUST record an audit entry for every lifecycle event: agent created, updated, removed; config file written/deleted (`agent_config_file_written` / `agent_config_file_deleted`); Coffer MCP installed/uninstalled; MCP entry adopted (`agent_mcp_entry_adopted`); plugin toggled/uninstalled (`agent_plugin_toggled` / `agent_plugin_uninstalled`). (Agents have no enable/disable concept; discovery and all workspace listings — MCP entries, plugins, config files, native memory stores, transcript sessions — are read-only and emit no audit event.)
 - **FR-012**: System MUST expose a read-only discovery operation listing installed-but-unregistered agents as candidates, available from the REST API (`GET /api/v1/agents/candidates`), the `coffer agent detect` CLI, and the Agents page in the web UI.
 
 **Config-directory picker**
@@ -611,6 +667,8 @@ The reason is the same as native memory's: it shipped and was never installed. `
 - **Coffer MCP Install Status**: Derived (not stored) state for an agent: whether a `coffer` MCP-server entry is present in that agent's MCP config file.
 - **Agent MCP Entry**: A derived (never stored) view of one MCP server configured in the agent's own files — name, source file, transport, `enabled` (Codex), `is_coffer`, `matches_resource`. The file is the source of truth; Coffer reads and adopts entries but keeps no copy, and edits an entry only as the removal step of an adoption.
 - **Agent Plugin**: A derived (never stored) view of one installed plugin — id (`<name>@<marketplace>`), marketplace, enabled state, `cache_present`, plus best-effort manifest detail read from the plugin's install directory. Every input is read-only: the enabled state Coffer reports is the one each agent's documented config surface declares, and Coffer never writes it back.
+- **Native Memory Store**: A derived (never stored) view of one of the coding agent's OWN native memory stores — for `claude_code` a per-project directory (`<config_dir>/projects/<slug>/memory`), for `codex` one routed-cwd slice of the single global task-grouped `<config_dir>/memories/MEMORY.md`. Carries a `project` label and `path` (the REAL project cwd), the real `memory_dir`, and an `item_count`. Read-only: Coffer lists these stores and opens them, and never writes them.
+- **Transcript Session**: A derived (never stored) summary of one of the agent's own session transcript files — `session_id`, a scrubbed derived `title`, `project_path`, `message_count`, `started_at`, `last_activity_at`, and the file's absolute `source_path`. Parsed from the `.jsonl` on disk at read time and cached by modification time; message text is neither returned nor retained.
 - **Directory Config Entry**: An allowlisted config entry that resolves to a directory of files rather than a single file. Children are addressed by validated entry-relative paths; the directory on disk is the source of truth.
 
 ## Success Criteria

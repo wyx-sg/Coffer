@@ -8,11 +8,9 @@
 // workspace facet renders real (file-derived) data:
 //   - MCP servers tab shows the seeded direct entry,
 //   - Skills tab shows the "Managed by Coffer" pointer at the Skills page
-//     (delivery is decided there, on each skill's enable state + scope).
-//
-// The seed still carries a `[plugins."…"]` table even though the Plugins tab
-// was removed: it keeps the fixture a realistic Codex config, and the MCP
-// entry must parse out of a file that has plugin tables in it.
+//     (delivery is decided there, on each skill's enable state + scope),
+//   - Plugins tab shows the plugin parsed out of the same config.toml, with
+//     the "cache missing" badge its absent cache dir earns it.
 //
 // Acceptance coverage for the amendment scenarios lives in the backend
 // suites (audit already green), so this spec carries no acceptance marker.
@@ -31,9 +29,9 @@ beforeEachInjectToken();
 function mkSeededConfigDir(): string {
   const dir = path.join(os.tmpdir(), `coffer-e2e-ws-cfg-${Date.now()}`);
   fs.mkdirSync(dir, { recursive: true });
-  // Codex keeps MCP entries AND plugin state in config.toml. The plugin table
-  // is seeded for realism only — nothing surfaces it. The cache dir is absent; the
-  // row still renders (with a "cache missing" badge), which is all we assert.
+  // Codex keeps MCP entries AND plugin state in config.toml, so one seeded file
+  // feeds two tabs. The plugin's cache dir is absent; the row still renders
+  // (with a "cache missing" badge), which is all we assert.
   fs.writeFileSync(
     path.join(dir, "config.toml"),
     [
@@ -65,7 +63,7 @@ async function deleteAgentByApi(name: string): Promise<void> {
   }
 }
 
-test("agent workspace tabs render MCP entries and the Skills-page pointer", async ({
+test("agent workspace tabs render MCP entries, plugins and the Skills-page pointer", async ({
   page,
 }) => {
   const { token, port } = readDaemonToken();
@@ -108,6 +106,12 @@ test("agent workspace tabs render MCP entries and the Skills-page pointer", asyn
     await expect(
       page.getByRole("button", { name: /open the skills page/i }),
     ).toBeVisible({ timeout: 10_000 });
+
+    // Plugins tab — the plugin table parsed from the same config.toml renders.
+    await page.getByRole("tab", { name: /^plugins$/i }).click();
+    await expect(page.getByText("e2e-plugin", { exact: true })).toBeVisible({
+      timeout: 10_000,
+    });
   } finally {
     await deleteAgentByApi(name);
     try {

@@ -107,6 +107,11 @@ class PluginsOut_(BaseModel):  # noqa: N801 — avoids clashing with the service
     parse_errors: list[ParseErrorOut]
     # Whether in-app uninstall is available for this agent now (capability + CLI
     # presence for CLI-strategy agents). Drives the UI's uninstall affordance.
+    can_uninstall: bool = False
+
+
+class PluginPatch(BaseModel):
+    enabled: bool
 
 
 def _entry_out(e: McpEntry) -> McpEntryOut:
@@ -229,4 +234,34 @@ async def list_plugins(
         items=[_plugin_out(p) for p in out.items],
         marketplaces=[_marketplace_out(m) for m in out.marketplaces],
         parse_errors=[_parse_error_out(p) for p in out.parse_errors],
+        can_uninstall=out.can_uninstall,
     )
+
+
+@router.patch(
+    "/{name}/plugins/{plugin_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def patch_plugin(
+    name: str,
+    plugin_id: str,
+    body: PluginPatch,
+    svc: Any = Depends(get_agent_plugin_service),  # noqa: B008
+    actor: str = Depends(_actor),
+) -> None:
+    await svc.set_enabled(name, plugin_id, body.enabled, actor=actor)
+
+
+@router.delete(
+    "/{name}/plugins/{plugin_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def delete_plugin(
+    name: str,
+    plugin_id: str,
+    svc: Any = Depends(get_agent_plugin_service),  # noqa: B008
+    actor: str = Depends(_actor),
+) -> None:
+    await svc.uninstall(name, plugin_id, actor=actor)

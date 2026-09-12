@@ -54,30 +54,27 @@ function renderAt() {
 afterEach(() => vi.clearAllMocks());
 
 describe("AgentDetailPage", () => {
-  test("renders the header, the Overview/Skills/MCP/Config tabs, and the overview by default", () => {
+  test("renders the header, all seven workspace tabs, and the overview by default", () => {
     mockAgentLoaded();
 
     renderAt();
 
     expect(screen.getByRole("heading", { name: "cur" })).toBeInTheDocument();
 
-    // Overview, Skills, MCP servers and Config files tabs exist; the
-    // not-yet-built asset category (Subagents) does not.
+    // The seven workspace tabs. Plugins is the only one that acts on the agent;
+    // Memory and Conversations are read-only views of what it keeps on disk.
     expect(screen.getByRole("tab", { name: /overview/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /^skills$/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /mcp servers/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /^plugins$/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /^memory$/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /conversations/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /config files/i })).toBeInTheDocument();
-    expect(screen.getAllByRole("tab")).toHaveLength(4);
+    expect(screen.getAllByRole("tab")).toHaveLength(7);
+
+    // Categories that were never built keep their absence pinned.
     expect(screen.queryByRole("tab", { name: /subagents & commands/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /memory & rules/i })).not.toBeInTheDocument();
-    // Native memory (scan + import of the agent's OWN memory files) and the
-    // plugin manager are withdrawn: Coffer no longer reads or writes another
-    // tool's private stores.
-    expect(screen.queryByRole("tab", { name: /^plugins$/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: /^memory$/i })).not.toBeInTheDocument();
-    // Transcript distillation was removed with the automatic ingest half of the
-    // memory loop, and the Conversations tab went with it.
-    expect(screen.queryByRole("tab", { name: /conversations/i })).not.toBeInTheDocument();
     // The Instructions tab was removed as redundant with Config files; master-
     // instructions delivery stays available via the API/CLI.
     expect(screen.queryByRole("tab", { name: /instructions/i })).not.toBeInTheDocument();

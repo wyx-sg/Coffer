@@ -27,6 +27,7 @@ from coffer.domain.agent.mcp_injection import McpEntryStyle, McpInjectionSpec
 from coffer.domain.agent.plugin_capability import (
     PluginCapability,
     PluginModel,
+    UninstallStrategy,
 )
 from coffer.domain.agent.types import AgentType
 
@@ -94,6 +95,12 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         plugins=PluginCapability(
             model=PluginModel.CLAUDE,
             config_key="settings",
+            can_toggle=True,
+            # Claude's install inventory is an internal file Coffer never writes,
+            # so uninstall is delegated to the `claude plugin uninstall` CLI,
+            # which owns that state. Gated at runtime on `claude` being on PATH.
+            can_uninstall=True,
+            uninstall_strategy=UninstallStrategy.CLI,
         ),
     ),
     AgentType.CODEX: AgentDescriptor(
@@ -111,6 +118,8 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         plugins=PluginCapability(
             model=PluginModel.CODEX,
             config_key="config",
+            can_toggle=True,
+            can_uninstall=True,
         ),
     ),
 }
