@@ -19,11 +19,12 @@ ChannelConfig (discriminator: channel_type)
 │   └── bot_token_ref: str            # credential-store ref, probed at register
 └── SeaTalkChannelConfig
     ├── channel_type: "seatalk"
-    ├── app_id: str
-    ├── app_secret_ref: str            # credential-store ref
-    ├── signing_secret_ref: str
-    ├── public_base_url: str | None    # 隧道公网基址（https://host）
-    └── tunnel_token_ref: str | None   # cloudflared token ref（托管隧道）        # credential-store ref
+    ├── delivery: "webhook" | "websocket" = "webhook"  # 入站传输（FR-071）
+    ├── app_id: str                     # 两种投递都必需
+    ├── app_secret_ref: str             # credential-store ref；两种投递都必需
+    ├── signing_secret_ref: str | None  # webhook：必需 —— websocket：禁止
+    ├── public_base_url: str | None     # 仅 webhook：隧道公网基址（https://host）
+    └── tunnel_token_ref: str | None    # 仅 webhook：cloudflared token ref（托管隧道）
 ```
 
 校验规则：
@@ -47,6 +48,30 @@ ChannelConfig (discriminator: channel_type)
   `20260912_0067_drop_channel_model_curation.py` 单向地把这两个键从每一条既有 channel
   config 里剥掉，不留 load-time 垫片（房规）——`_CommonChannelFields` 禁止多余键，
   仍带着它们的行在加载时会校验失败。
+- `delivery` 决定 SeaTalk 那几个字段哪些合法，整条规则由一个
+  `model_validator(mode="after")` 统一持有，使「允许的组合」与「禁止的组合」永远不会
+  各自漂移（FR-071）：
+
+  | 字段                 | `delivery: "webhook"`        | `delivery: "websocket"` |
+  | -------------------- | ---------------------------- | ----------------------- |
+  | `app_id`             | 必需                         | 必需                    |
+  | `app_secret_ref`     | 必需                         | 必需                    |
+  | `signing_secret_ref` | **必需**                     | **禁止**                |
+  | `public_base_url`    | 可选                         | **禁止**                |
+  | `tunnel_token_ref`   | 可选（设了即托管隧道）       | **禁止**                |
+
+  「禁止」 这一半才是让配置可读的关键：websocket channel 没有请求体要签名、没有公网 URL
+  要描述、也没有隧道要照看，所以这三者里任何一个存下了值，都是在宣称一套并不存在的运行
+  时安排。每条错误消息点明字段名以及它与哪种投递方式冲突，风格与其余跨字段校验一致——
+  因为用户走到这个错误上，正是在切换某个既有 channel 的传输方式：那是他们唯一一刻同时
+  握着两套字段。
+- **`delivery` 不配任何迁移。** 在这个字段存在之前存下的每一条 channel 都是 webhook
+  channel——当时只有这一种传输——而字段默认值就是 `webhook`，所以「值不存在」本来就恰好
+  等于那些行实际的样子。没有任何东西被重新解释，没有任何值改变含义，也没有哪一行的行为
+  取决于被改写一次；在这里做迁移，等于把 `webhook` 写到本来就按 `webhook` 行事的行上。
+  （对比上面的迁移 `0067`：它必须**去掉**模型已不再接受的键——一个带着「与存量现状一致」
+  默认值的新字段，正好是相反的情形。）这也是为什么任何地方都没有 load-time 垫片——没有
+  旧形状需要翻译。
 - channel 的 turn 运行在 Coffer 托管的默认工作目录 `~/.coffer/workspace`
   （首次使用时创建）。
 

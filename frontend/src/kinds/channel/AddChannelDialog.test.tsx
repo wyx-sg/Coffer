@@ -117,12 +117,88 @@ describe("AddChannelDialog", () => {
         name: "st",
         config: {
           channel_type: "seatalk",
+          delivery: "webhook",
           app_id: "app-1",
           app_secret_ref: "channel/st/app-secret",
           signing_secret_ref: "channel/st/signing-secret",
           default_agent: "claude_code",
         },
       },
+    });
+  });
+
+  describe("seatalk delivery method", () => {
+    function pickSeatalk() {
+      fireEvent.click(screen.getByRole("button", { name: /seatalk/i }));
+      fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "st" } });
+      fireEvent.change(screen.getByLabelText(/app id/i), { target: { value: "app-1" } });
+      fireEvent.change(screen.getByLabelText(/app secret/i), { target: { value: "s1" } });
+    }
+
+    function pickWebsocket() {
+      fireEvent.click(screen.getByRole("button", { name: /^websocket$/i }));
+    }
+
+    test("webhook is the default, and websocket hides every webhook-only field", () => {
+      installApi(mockApiClient());
+      renderDialog();
+      pickSeatalk();
+
+      expect(screen.getByRole("button", { name: /^webhook$/i })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      expect(screen.getByLabelText(/signing secret/i)).toBeInTheDocument();
+
+      pickWebsocket();
+
+      expect(screen.queryByLabelText(/signing secret/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/public callback url/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/tunnel token/i)).not.toBeInTheDocument();
+      // The two things Coffer cannot do for the owner are stated on the spot.
+      expect(screen.getByText(/~\/\.coffer\/vendor/)).toBeInTheDocument();
+      expect(screen.getByText(/Developer Portal/)).toBeInTheDocument();
+    });
+
+    test("websocket registers with no signing secret and writes only the app secret", async () => {
+      const api = installApi(mockApiClient());
+      renderDialog();
+      pickSeatalk();
+      pickWebsocket();
+      submit();
+
+      await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
+      expect(api.POST.mock.calls.map((c) => c[0])).toEqual(["/credentials", "/resources"]);
+      expect(api.POST.mock.calls[0]).toEqual([
+        "/credentials",
+        { body: { ref: "channel/st/app-secret", value: "s1" } },
+      ]);
+      expect(api.POST.mock.calls[1][1]).toEqual({
+        body: {
+          kind: "channel",
+          name: "st",
+          config: {
+            channel_type: "seatalk",
+            delivery: "websocket",
+            app_id: "app-1",
+            app_secret_ref: "channel/st/app-secret",
+            default_agent: "claude_code",
+          },
+        },
+      });
+    });
+
+    test("switching to websocket drops a signing secret already typed", async () => {
+      const api = installApi(mockApiClient());
+      renderDialog();
+      pickSeatalk();
+      fireEvent.change(screen.getByLabelText(/signing secret/i), { target: { value: "s2" } });
+      pickWebsocket();
+      submit();
+
+      // Two writes, not three: the cleared signing secret reaches no ref.
+      await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
+      expect(api.POST.mock.calls.map((c) => c[0])).toEqual(["/credentials", "/resources"]);
     });
   });
 

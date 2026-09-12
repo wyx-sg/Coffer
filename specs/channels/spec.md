@@ -156,22 +156,46 @@ observe a clean error.
 
 ### User Story 7 — SeaTalk reaches the local daemon (Priority: P2)
 
-SeaTalk delivers events only by webhook, so Coffer ships a callback listener:
-a separate small process, spawned by the daemon while any SeaTalk channel is
-enabled, that serves only signed callback paths on a local port. The user
-points a tunnel (cloudflared, ngrok) at that port and registers the public
-URL on the SeaTalk Open Platform. The listener answers the platform's
-verification handshake, verifies every event's signature, and forwards valid
-events to the daemon over loopback. Events with a bad signature are rejected
-and never reach the daemon.
+SeaTalk delivers events two ways, and a channel picks one of them.
+
+**Webhook.** The platform POSTs each event to a public URL, so Coffer ships a
+callback listener: a separate small process, spawned by the daemon while any
+webhook-delivery SeaTalk channel is enabled, that serves only signed callback
+paths on a local port. Something has to carry the public internet to that
+loopback port — a tunnel the owner runs by hand (cloudflared, ngrok), or one
+Coffer supervises itself from a Cloudflare connector token recorded on the
+channel — and the resulting public URL is registered on the SeaTalk Open
+Platform. The listener answers the platform's verification handshake, verifies
+every event's signature, and forwards valid events to the daemon over loopback.
+Events with a bad signature are rejected and never reach the daemon.
+
+**WebSocket.** The daemon instead holds one outbound connection to SeaTalk and
+the platform pushes events down it. There is no public URL, no listener, no
+tunnel, and no signature to check: the connection authenticates itself once with
+the app's own credentials, and everything after that arrives on a socket only
+this machine opened. For a local-first vault that is the better transport — it
+deletes the entire ingress apparatus instead of managing it — and its price is
+paid elsewhere: the platform's own client library, which the operator supplies
+(FR-072), and one connection per SeaTalk app, so a second machine registering
+the same app takes the events away from the first.
+
+Both land on the same seam. An event is the same envelope whichever way it
+arrives, ingested at the same entry point, so deduplication, the owner gate,
+media download, and the turn itself are identical. The transport is a property of
+the channel, not a second path through the product.
 
 **Why this priority**: Without ingress there is no SeaTalk inbound at all.
 The separate-process shape is a constitutional requirement for
-public-reachable surfaces.
+public-reachable surfaces — which is also why the transport that exposes nothing
+needs no process of its own.
 
-**Independent Test**: Start the listener with a known signing secret, POST the
-verification challenge and see it echoed; POST a signed event and see it
-forwarded; POST a tampered event and see 401 with nothing forwarded.
+**Independent Test**: On webhook, start the listener with a known signing secret,
+POST the verification challenge and see it echoed; POST a signed event and see it
+forwarded; POST a tampered event and see 401 with nothing forwarded. On
+websocket, point a channel at a stand-in client library, push an event down the
+connection and watch the same turn start with no listener running and no public
+URL configured; take the library away and watch the channel refuse to start with
+a message naming what is missing and where it was looked for.
 
 **Covering scenarios**:
 
@@ -179,6 +203,10 @@ forwarded; POST a tampered event and see 401 with nothing forwarded.
 - a signed seatalk event reaches the channel
 - a tampered seatalk event is rejected
 - the listener runs only while a seatalk channel is enabled
+- a websocket channel receives an event with no public url
+- a websocket channel runs without the listener or a tunnel
+- the websocket connection backs off when another process takes it over
+- a websocket channel without the sdk says what is missing
 
 ---
 
@@ -280,9 +308,9 @@ clean success sends no completion summary while a failed turn does.
 ### Functional Requirements
 
 - **FR-001**: A `channel` resource kind exists with per-type configuration
-  (Telegram: bot token reference; SeaTalk: app id, app secret reference,
-  signing secret reference), a default agent key, and optional default agent
-  configuration. Secrets live in the credential store only; configuration
+  (Telegram: bot token reference; SeaTalk: app id, app secret reference, plus
+  whichever fields its chosen inbound transport requires — FR-071), a default
+  agent key, and optional default agent configuration. Secrets live in the credential store only; configuration
   carries references, which are probed at registration time.
 - **FR-002**: Channel lifecycle (register, enable, disable, update, delete)
   rides the generic resource framework, with audit on every transition.
@@ -316,8 +344,9 @@ clean success sends no completion summary while a failed turn does.
   `POST /seatalk/{channel}`: it answers `event_verification` with the echoed
   challenge, verifies `sha256(body + signing_secret)` signatures, forwards
   valid events to the daemon over loopback with the daemon token, and rejects
-  everything else. The daemon spawns it while at least one SeaTalk channel is
-  enabled and stops it otherwise.
+  everything else. The daemon spawns it while at least one SeaTalk channel on
+  **webhook** delivery is enabled and stops it otherwise; a channel on websocket
+  delivery (FR-071) needs none of this and MUST NOT bring the listener up.
 - **FR-010**: Telegram inbound uses long polling with the update offset
   committed only after dispatch; adapters reconnect with exponential backoff
   and never crash the daemon.
@@ -542,6 +571,73 @@ status / notify`.
   platform inlines it.
 - **FR-027**: Each `(channel, chat, thread)` has its own turn queue/session,
   so a DM turn, a group-main turn, and a thread turn never share state.
+- **FR-071**: A SeaTalk channel declares which inbound transport it uses, and
+  that choice decides which of its fields may exist at all. A `delivery` field
+  carries `webhook` or `websocket`; absent means `webhook`.
+  - **Webhook** is the path FR-009 describes. The channel MUST carry a
+    `signing_secret_ref`, because a signature is the only thing between the
+    public internet and the daemon. It MAY carry a `public_base_url`, so status
+    can report the URL the platform was given, and a `tunnel_token_ref`, which
+    makes the daemon run and keep alive the `cloudflared` child that terminates
+    the channel's public URL instead of leaving that to the owner. The callback
+    listener runs while any such channel is enabled.
+  - **WebSocket** reverses the direction: the daemon dials out and the platform
+    pushes events down the connection it opened, which the register handshake
+    authenticates once from `app_id` and `app_secret_ref`. Such a channel MUST
+    NOT carry a `signing_secret_ref`, a `public_base_url`, or a
+    `tunnel_token_ref` — there is no request body to sign, no public URL to
+    describe, and no tunnel to supervise, and a configuration field that decides
+    nothing is a lie about the system. A deployment whose only SeaTalk channels
+    use websocket delivery MUST leave the callback listener stopped and spawn no
+    tunnel: the point of the transport is that nothing is exposed, and a listener
+    nobody can reach is still a port nobody asked for.
+  - `app_id` and `app_secret_ref` are required on both, and everything past
+    ingress is shared: an event arrives as the same envelope and is ingested
+    through the same channel entry point, so deduplication, normalization, the
+    owner gate, media download, threading, and the turn behave identically. No
+    requirement elsewhere in this spec distinguishes the two.
+  - **The platform permits only one delivery method per bot at a time**, so the
+    two are exclusive rather than additive: Coffer implements both and each
+    channel chooses, never one bot running both. The choice therefore lives in
+    two places that must move together — `delivery` here and the bot's event
+    delivery setting on SeaTalk's Developer Portal — and switching it clears the
+    fields the other method owns. That is honest rather than lossy: the switch is
+    never free anyway, since the platform-side setting has to change in step, and
+    the portal's Re-verify on the websocket side only passes while the connection
+    is actually live.
+  - Status MUST stay truthful per transport. A websocket channel reports its
+    connection state and the last error behind it, and reports the webhook-only
+    facts (port, path, public URL, listener, tunnel) as absent rather than as
+    reassuring defaults; the public-URL reachability test stays webhook-only and
+    refuses a websocket channel, because there is no URL for it to probe.
+
+  This transport is available at all only because both of the things that once
+  ruled it out are gone. The platform has published the capability, so the
+  behaviour above is a documented contract rather than something reverse-engineered
+  from a binary; and the client library it needs is no longer a licensing problem
+  for this repository, because Coffer does not ship it (FR-072).
+- **FR-072**: The WebSocket client library is an **operator-supplied optional
+  dependency**, never a vendored one. The only client for SeaTalk's websocket
+  delivery is the platform's own SDK, distributed from an internal corporate
+  portal, absent from public PyPI, and published under no public licence — so
+  Coffer, which is MIT, MUST NOT vendor it into this repository and MUST NOT
+  declare it as a dependency. Reimplementing its wire protocol is not an
+  alternative either: none is published.
+  - Coffer looks for it at runtime in a vendor directory — `$COFFER_SEATALK_SDK_DIR`
+    when set, otherwise `~/.coffer/vendor` — prepended to the import path only
+    when that directory exists, following the same per-subsystem environment
+    override convention the rest of the vault uses. The import is attempted
+    lazily, at the moment a websocket channel starts, never at daemon import
+    time, so an installation without the SDK starts exactly as it does today.
+  - When it cannot be imported, the websocket channel MUST NOT start and MUST say
+    precisely why: the directory that was searched and the platform documentation
+    that says what to put there. Nothing crashes, the daemon stays up, every
+    webhook channel keeps running, and the reason is reported as that channel's
+    own state rather than left in a log for someone to find.
+  - An installation that never obtains the SDK is fully functional on webhook
+    delivery. That is deliberate, because it is what an outside user of this
+    project has: websocket delivery is a capability the operator can add, not a
+    floor the product is built on.
 
 ### Key Entities
 
@@ -749,6 +845,37 @@ produce it on its own.
 - **Given** a daemon with one enabled seatalk channel
 - **When** the channel is disabled
 - **Then** the listener process stops; enabling it again restarts the listener
+
+### Scenario: a websocket channel receives an event with no public url
+
+- **Given** an enabled seatalk channel on websocket delivery, carrying no signing
+  secret, no public base URL and no tunnel token
+- **When** the platform pushes a message event down the open connection
+- **Then** it is ingested through the same entry point a webhook event takes and
+  drives a turn, with no signature to verify and nothing listening for a request
+
+### Scenario: a websocket channel runs without the listener or a tunnel
+
+- **Given** a daemon whose only enabled seatalk channel uses websocket delivery
+- **When** the runtime reconciles what should be running
+- **Then** the callback listener stays stopped and no tunnel child is spawned
+- **And** adding a webhook-delivery channel starts the listener as before
+
+### Scenario: the websocket connection backs off when another process takes it over
+
+- **Given** a connected websocket channel whose SeaTalk app is then registered
+  from elsewhere, which kicks this connection — the app allows only one
+- **When** the connector observes the kick
+- **Then** it reports the kicked state and waits out a long fixed back-off before
+  registering again, rather than fighting the other holder for the connection
+
+### Scenario: a websocket channel without the sdk says what is missing
+
+- **Given** a vendor directory that holds no SeaTalk client library
+- **When** an enabled websocket-delivery channel tries to connect
+- **Then** the channel does not start and its reported state names the missing
+  library and the directory searched for it
+- **And** the daemon stays up and every webhook channel keeps working
 
 ### Scenario: disable stops the adapter and enable restarts it
 
@@ -2096,22 +2223,6 @@ language the owner wrote in. Both are recorded here rather than silently
 skipped, because the research that found them is what made the card work
 possible at all.
 
-**SeaTalk's WebSocket event delivery.** The platform now offers a second way to
-receive events: instead of verifying a public callback URL, a bot holds a
-persistent WebSocket to SeaTalk and needs outbound connectivity only. For a
-local-first vault that is the obviously right transport — it would delete the
-tunnel (cloudflared/ngrok) the owner must stand up today, the listener process
-that terminates it, and the signature verification that exists only because the
-callback is reachable from the internet. It is not adopted, for two reasons that
-are both outside this project's control. The wire protocol is not documented at
-all — the published material covers only how to call a vendor SDK — and that SDK
-(Go and Python) is distributed from an internal corporate GitLab, absent from
-public PyPI. Coffer is MIT and OSS-bound, so it can neither depend on the SDK
-nor reimplement a protocol nobody has published. Recorded here rather than left
-as a silent omission: if the protocol is published or the SDK reaches PyPI, this
-becomes the preferred inbound path and the tunnel becomes optional.
-
-
 **An agent registry under the chat prefix.** The agent-registry listing and the
 per-agent model catalogue once answered at `/api/v1/chat/agents` and
 `/chat/agents/{key}/models`, and they moved to `GET /api/v1/agent-providers` and
@@ -2135,9 +2246,15 @@ G restores the live mirror and only the live mirror.
 - The user can create a Telegram bot (BotFather) and a SeaTalk Open Platform
   app, and can obtain the SeaTalk scopes (Send Message to Bot User, etc.)
   through their organization's approval flow.
-- For SeaTalk, the user runs a tunnel (cloudflared, ngrok, or equivalent)
-  from a public URL to the local callback port; Coffer documents this in the
-  quickstart but does not manage the tunnel.
+- A SeaTalk channel on **webhook** delivery terminates its events at a loopback
+  callback listener that the public internet must nonetheless reach, so something
+  has to bridge the two: either a tunnel the owner runs by hand (cloudflared,
+  ngrok, or equivalent) or one Coffer supervises itself — recording a Cloudflare
+  connector token on the channel makes the daemon spawn and keep alive a
+  `cloudflared` child for it. On **websocket** delivery none of that exists: the
+  daemon dials out, so there is no listener, no tunnel, and no public URL
+  (FR-071). What the owner supplies there instead is the platform's own client
+  library (FR-072).
 - Channels carry text plus inbound photos and files (FR-020): media is
   downloaded and handed to the agent, while an empty message with nothing
   downloadable gets a polite "send text, a photo, or a file" reply. Outbound is

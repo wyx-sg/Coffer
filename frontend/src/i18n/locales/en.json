@@ -1125,7 +1125,13 @@
       "publicBaseUrlHint": "Optional. Your tunnel's public address (e.g. https://xxx.trycloudflare.com). Coffer composes the full callback URL from it for you to register on the SeaTalk Open Platform.",
       "tunnelToken": "Cloudflare tunnel token",
       "tunnelTokenHint": "Optional. With a cloudflared named-tunnel connector token here, Coffer starts and keeps the tunnel running while the channel is enabled (cloudflared must be installed, and the tunnel's Cloudflare ingress must point at http://127.0.0.1:8787).",
-      "created": "Channel {{name}} registered"
+      "created": "Channel {{name}} registered",
+      "delivery": "Event delivery",
+      "deliveryWebhook": "Webhook",
+      "deliveryWebsocket": "WebSocket",
+      "deliveryHint": "Webhook needs a publicly reachable URL and a signing secret. WebSocket holds one outbound connection to SeaTalk and needs neither. A bot can only use one at a time.",
+      "websocketSdkNote": "WebSocket needs SeaTalk's official Python SDK in ~/.coffer/vendor (or $COFFER_SEATALK_SDK_DIR). It is not on PyPI, so Coffer cannot ship it — the channel stays stopped until it is there.",
+      "websocketPortalNote": "Switch this bot's event delivery to WebSocket in SeaTalk's Developer Portal too. Its Re-verify only passes while Coffer is holding the connection."
     },
     "edit": {
       "title": "Edit channel",
@@ -1138,7 +1144,8 @@
       "rotatePlaceholder": "Leave blank to keep current",
       "rotateHint": "Stored in Coffer's credential store; the existing reference is reused.",
       "save": "Save changes",
-      "saved": "Channel {{name}} updated"
+      "saved": "Channel {{name}} updated",
+      "signingSecretRequired": "Webhook delivery verifies every request's signature — enter the signing secret from SeaTalk's Developer Portal."
     },
     "test": {
       "send": "Send test message",
@@ -1182,7 +1189,18 @@
       "endpoint": "Local listener",
       "listener": "Listener",
       "tunnel": "Tunnel",
-      "hint": "Point a tunnel (cloudflared, ngrok) at the local listener address. The reachability test verifies the path and handshake; whether the signing secret matches SeaTalk's is confirmed only on a real event."
+      "hint": "Point a tunnel (cloudflared, ngrok) at the local listener address. The reachability test verifies the path and handshake; whether the signing secret matches SeaTalk's is confirmed only on a real event.",
+      "websocketTitle": "SeaTalk WebSocket",
+      "connection": "Connection",
+      "websocketState": {
+        "connecting": "Connecting…",
+        "connected": "Connected",
+        "kicked": "Kicked — another process holds this bot's connection",
+        "sdk_missing": "SDK not found",
+        "error": "Error",
+        "unknown": "Unknown"
+      },
+      "websocketHint": "Coffer dials out to SeaTalk, so there is no callback URL, listener or tunnel. One connection per bot: a second Coffer registering the same app kicks this one off. Events pause while the connection is down."
     },
     "deleteTitle": "Delete channel",
     "deleteConfirm": "Delete channel “{{name}}”? Its adapter stops and the pairing is removed."

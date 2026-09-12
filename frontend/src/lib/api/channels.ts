@@ -13,6 +13,16 @@ import { ApiError } from "./errors";
 
 export type ChannelType = "telegram" | "seatalk";
 
+/**
+ * How SeaTalk events reach Coffer. `webhook` needs a publicly reachable URL and
+ * verifies a signing secret; `websocket` holds one outbound connection to the
+ * platform and needs neither. A bot uses exactly one at a time.
+ */
+export type ChannelDelivery = "webhook" | "websocket";
+
+/** Live state of a websocket-delivery channel's connection to SeaTalk. */
+export type WebSocketState = "connecting" | "connected" | "kicked" | "sdk_missing" | "error";
+
 /** The paired owner of a channel (null while unpaired). */
 export interface ChannelPeer {
   chat_id: string;
@@ -21,8 +31,15 @@ export interface ChannelPeer {
   active_conversation_id: string | null;
 }
 
-/** SeaTalk callback listener endpoint — present for seatalk channels only. */
+/**
+ * SeaTalk inbound-delivery status — present for seatalk channels only. The
+ * webhook-only fields below stay on the wire for both delivery methods, and
+ * report their absent/false values on a websocket channel rather than
+ * pretending a listener or a public URL exists.
+ */
 export interface CallbackInfo {
+  /** Which inbound transport this channel uses. */
+  delivery: ChannelDelivery;
   port: number;
   path: string;
   listener_running: boolean;
@@ -34,6 +51,10 @@ export interface CallbackInfo {
   tunnel_managed: boolean;
   /** Whether the managed cloudflared tunnel process is currently alive. */
   tunnel_running: boolean;
+  /** Connection state of the websocket connector; null on webhook delivery. */
+  websocket_state: WebSocketState | null;
+  /** Last websocket error text; null when there is none. */
+  websocket_error: string | null;
 }
 
 /** Result of the public-callback reachability self-test. */
@@ -125,7 +146,10 @@ export function notifyChannel(name: string, text: string): Promise<NotifyOut> {
   return call<NotifyOut>("POST", `/channels/${encodeURIComponent(name)}/notify`, { text });
 }
 
-/** Probe the channel's public callback URL end to end (SeaTalk only). */
+/**
+ * Probe the channel's public callback URL end to end (SeaTalk webhook delivery
+ * only — a websocket channel has no public URL and the daemon rejects it).
+ */
 export function testChannelCallback(name: string): Promise<CallbackTestResult> {
   return call<CallbackTestResult>("POST", `/channels/${encodeURIComponent(name)}/callback-test`);
 }

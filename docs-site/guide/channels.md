@@ -13,13 +13,16 @@ coffer channel pair mybot                                    # → an 8-char, si
 coffer channel status mybot                                  # adapter state + paired peer
 ```
 
-- Telegram needs `--bot-token-ref`; SeaTalk needs `--app-id --app-secret-ref --signing-secret-ref`. `--agent` (default `builtin`) chooses which agent answers.
+- Telegram needs `--bot-token-ref`; SeaTalk needs `--app-id --app-secret-ref`, plus `--signing-secret-ref` on webhook delivery or `--delivery websocket` for the outbound-connection transport. `--agent` (default `claude_code`) chooses which agent answers.
 - **Pairing is the security boundary.** Coffer is single-user: send the code to the bot from your own account to become its sole owner. Anyone else is ignored.
 
 ## Telegram vs SeaTalk
 
 - **Telegram** uses long polling — no public ingress, nothing to expose.
-- **SeaTalk** is webhook-only. Coffer runs a local callback listener (loopback `127.0.0.1:8787` by default) **only while a SeaTalk channel is enabled**. Point a tunnel (cloudflared / ngrok) at it and register `<public-url>/seatalk/<channel>`. Coffer never exposes the daemon itself and does not manage the tunnel. SeaTalk also needs an org-approved Open Platform app with the Bot capability.
+- **SeaTalk** delivers events one of two ways, and the platform lets a bot use only one at a time — so each channel picks its transport.
+  - On **webhook** delivery, SeaTalk POSTs to a public URL. Coffer runs a local callback listener (loopback `127.0.0.1:8787` by default) **only while a webhook SeaTalk channel is enabled**, and you register `<public-url>/seatalk/<channel>` on the Open Platform. The listener is loopback-only, so something has to carry the internet to it: run the tunnel yourself (cloudflared / ngrok), or record a Cloudflare connector token on the channel and Coffer supervises a `cloudflared` child for it for as long as the channel is enabled. Coffer never exposes the daemon itself.
+  - On **websocket** delivery, Coffer instead holds one outbound connection to SeaTalk: no public URL, no tunnel, no listener, no signing secret. It needs SeaTalk's own client library, which Coffer neither bundles nor depends on — put it in `~/.coffer/vendor` (or point `COFFER_SEATALK_SDK_DIR` at wherever you keep it). Without it, that one channel refuses to start and says what is missing; everything else keeps running.
+  - Either way SeaTalk needs an org-approved Open Platform app with the Bot capability, and the channel's transport must match the app's event delivery setting in the Developer Portal.
 
 ## Use it
 

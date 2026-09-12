@@ -330,6 +330,7 @@ def test_status_renders_runtime_pairing_and_callback(channel_daemon: _Daemon) ->
     assert as_json.exit_code == 0, as_json.output
     body = json.loads(as_json.output)
     assert body["callback"] == {
+        "delivery": "webhook",
         "port": 8787,
         "path": "/seatalk/st",
         "listener_running": True,
@@ -337,6 +338,8 @@ def test_status_renders_runtime_pairing_and_callback(channel_daemon: _Daemon) ->
         "public_callback_url": None,
         "tunnel_managed": False,
         "tunnel_running": False,
+        "websocket_state": None,
+        "websocket_error": None,
     }
 
 
