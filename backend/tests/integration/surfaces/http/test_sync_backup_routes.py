@@ -49,9 +49,11 @@ from coffer.surfaces.http.sync_routes import router as sync_router
 from coffer.surfaces.http.sync_routes import set_backup_service, set_sync_service
 
 _TOKEN = "test-token"
-#: A value shaped like a real push token, so "the response does not contain
-#: the secret" is a claim about a distinctive string and not about a word that
-#: could plausibly appear by accident.
+#: Stands in for a push token. Distinctive enough that "the response does not
+#: contain the secret" is a claim about a string that cannot turn up by
+#: accident, and unmistakably fake so that neither a secrets scanner nor a
+#: reviewer skimming the diff has to work out whether a real credential was
+#: committed.
 _PUSH_SECRET = "placeholder-not-a-real-secret-3f7c1a"
 _CRED_REF = "sync/backup/token"
 
