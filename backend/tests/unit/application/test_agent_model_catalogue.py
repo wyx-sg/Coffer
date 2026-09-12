@@ -24,14 +24,13 @@ def _agent(
     config_dir: str,
     *,
     enabled: bool = True,
-    models: list[str] | None = None,
 ) -> Resource:
     return Resource(
         id=1,
         kind="agent",
         name=name,
         description=None,
-        config={"type": agent_type, "config_dir": config_dir, "models": models or []},
+        config={"type": agent_type, "config_dir": config_dir},
         enabled=enabled,
         created_at=_NOW,
         updated_at=_NOW,
@@ -168,13 +167,12 @@ async def test_an_agent_nothing_can_discover_yields_an_empty_catalogue() -> None
     assert await svc.suggest("hermes") == []
 
 
-# --- curation ----------------------------------------------------------------
+# --- what a picker is offered ------------------------------------------------
 #
-# The catalogue an agent reports is cumulative and account-blind: it names models
-# this account may not be entitled to run, and nothing local separates those from
-# the ones that work. The user ticks the ones that work, and only PICKERS narrow
-# to that set — the catalogue itself stays whole, because the curation screen has
-# to render the models that are OFF as well as the ones that are on.
+# Nothing on the AGENT narrows its catalogue: the agent answers "what can this
+# agent be put on", full stop. Curation for an audience belongs to the surface
+# that has one — a channel's allowed range (spec channels FR-071) — and this
+# service knows nothing about it.
 
 _THREE = [
     AgentModel("claude-opus-5", "Opus 5"),
@@ -183,10 +181,9 @@ _THREE = [
 ]
 
 
-async def test_an_uncurated_agent_is_offered_everything(tmp_path: pathlib.Path) -> None:
-    """The out-of-the-box state. An empty set is "not curated yet", never
-    "offer nothing" — someone who never opens the screen must still get a
-    working picker."""
+async def test_an_agent_offers_its_whole_catalogue(tmp_path: pathlib.Path) -> None:
+    """The only state there is now. What a picker shows is what the agent
+    reports — a surface that wants less says so on its own side."""
     svc = AgentModelCatalogueService(
         agents=_FakeAgents([_agent("cc", "claude_code", str(tmp_path))]),
         discovery=_FakeDiscovery(list(_THREE)),
@@ -194,97 +191,39 @@ async def test_an_uncurated_agent_is_offered_everything(tmp_path: pathlib.Path) 
 
     assert [m.id for m in await svc.offered("claude_code")] == [m.id for m in _THREE]
     assert await svc.suggest("claude_code") == [m.id for m in _THREE]
-    assert await svc.selection("claude_code") == []
 
 
-async def test_a_curated_agent_offers_only_what_was_ticked(tmp_path: pathlib.Path) -> None:
-    svc = AgentModelCatalogueService(
-        agents=_FakeAgents(
-            [
-                _agent(
-                    "cc",
-                    "claude_code",
-                    str(tmp_path),
-                    models=["claude-haiku-4-5", "claude-opus-5"],
-                )
-            ]
-        ),
-        discovery=_FakeDiscovery(list(_THREE)),
-    )
+async def test_the_agent_resource_carries_no_model_curation(tmp_path: pathlib.Path) -> None:
+    """``AgentConfig`` forbids extra keys, so a stored ``models`` key would fail
+    to validate — and ``_agent()`` skipping it is not an oversight. This pins
+    the retirement: there is no per-agent ticked set to read back."""
+    from coffer.domain.agent.config import AgentConfig
 
-    # Catalogue order, not the order they were ticked in — the picker's order is
-    # discovery's (newest first), and curation only removes.
-    assert await svc.suggest("claude_code") == ["claude-opus-5", "claude-haiku-4-5"]
+    assert "models" not in AgentConfig.model_fields
 
 
-async def test_the_catalogue_itself_is_never_narrowed(tmp_path: pathlib.Path) -> None:
-    """The curation screen renders ``catalogue()`` and ticks it against
-    ``selection()``. If curation narrowed the catalogue too, a model could only
-    ever be un-ticked once — never ticked back on."""
-    svc = AgentModelCatalogueService(
-        agents=_FakeAgents([_agent("cc", "claude_code", str(tmp_path), models=["claude-opus-5"])]),
-        discovery=_FakeDiscovery(list(_THREE)),
-    )
+async def test_an_unregistered_agent_is_still_offered_what_its_cli_reports() -> None:
+    """Nothing here needs an agent ROW any more: discovery interrogates the
+    installed CLI, and there is no stored set to look up alongside it."""
+    svc = AgentModelCatalogueService(agents=_FakeAgents([]), discovery=_FakeDiscovery(list(_THREE)))
 
-    assert [m.id for m in await svc.catalogue("claude_code")] == [m.id for m in _THREE]
-    assert await svc.selection("claude_code") == ["claude-opus-5"]
+    assert await svc.suggest("claude_code") == [m.id for m in _THREE]
 
 
-async def test_a_curated_id_the_catalogue_dropped_is_simply_not_offered(
-    tmp_path: pathlib.Path,
-) -> None:
-    """A CLI upgrade rewrites the catalogue under a stored selection. The
-    catalogue is the truth about what exists; curation only narrows it."""
-    svc = AgentModelCatalogueService(
-        agents=_FakeAgents(
-            [
-                _agent(
-                    "cc",
-                    "claude_code",
-                    str(tmp_path),
-                    models=["claude-opus-5", "claude-opus-4-0"],
-                )
-            ]
-        ),
-        discovery=_FakeDiscovery(list(_THREE)),
-    )
-
-    assert await svc.suggest("claude_code") == ["claude-opus-5"]
-
-
-async def test_the_curated_set_comes_from_the_same_agent_as_the_config_dir(
-    tmp_path: pathlib.Path,
-) -> None:
-    """One resource answers for the type. A disabled agent feeds neither."""
+async def test_a_disabled_agent_does_not_answer_for_the_type(tmp_path: pathlib.Path) -> None:
+    """One resource answers for a type, and a disabled one is not it — the user
+    told Coffer to leave it alone, so its config dir must not feed discovery."""
     enabled_dir = tmp_path / "enabled"
     discovery = _FakeDiscovery(list(_THREE))
     svc = AgentModelCatalogueService(
         agents=_FakeAgents(
             [
-                _agent(
-                    "off",
-                    "claude_code",
-                    str(tmp_path / "disabled"),
-                    enabled=False,
-                    models=["claude-mythos-5"],
-                ),
-                _agent("on", "claude_code", str(enabled_dir), models=["claude-opus-5"]),
+                _agent("off", "claude_code", str(tmp_path / "disabled"), enabled=False),
+                _agent("on", "claude_code", str(enabled_dir)),
             ]
         ),
         discovery=discovery,
     )
 
-    assert await svc.suggest("claude_code") == ["claude-opus-5"]
-    assert await svc.selection_owner("claude_code") == "on"
-    assert discovery.seen == [enabled_dir]
-
-
-async def test_no_registered_agent_has_nowhere_to_hold_a_selection() -> None:
-    """The set lives in an agent's config row. Without one there is no answer to
-    read and no place for a writer to put one — and an unregistered agent is
-    still offered everything its CLI reports."""
-    svc = AgentModelCatalogueService(agents=_FakeAgents([]), discovery=_FakeDiscovery(list(_THREE)))
-
-    assert await svc.selection("claude_code") == []
-    assert await svc.selection_owner("claude_code") is None
     assert await svc.suggest("claude_code") == [m.id for m in _THREE]
+    assert discovery.seen == [enabled_dir]

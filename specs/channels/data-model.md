@@ -12,7 +12,11 @@ Channels are rows in the existing `resources` table (kind = `channel`).
 ChannelConfig (discriminator: channel_type)
 ├── common (both types, _CommonChannelFields)
 │   ├── default_agent: str = "claude_code"  # chat provider key; must name a registered agent
-│   └── default_agent_config: dict | None
+│   ├── default_agent_config: dict | None
+│   ├── require_mention: bool = True        # group gating (FR-035)
+│   ├── ignore_other_mentions: bool = False # group gating (FR-035)
+│   ├── default_model: str | None = None    # model a NEW conversation here opens on (FR-071)
+│   └── models: list[str] = []              # allowed range; EMPTY = no restriction (FR-071)
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"
 │   └── bot_token_ref: str            # credential-store ref, probed at register
@@ -43,6 +47,14 @@ Validation rules:
   Validation is skipped only when the registry is empty, so a misconfigured
   registry never blocks all channel writes. `default_agent_config` is still a
   pass-through.
+- `default_model` and `models` are the channel's own model curation (FR-071),
+  and they are the ONLY curation: the agent resource carries none. Ids are
+  opaque — they are handed to the agent's CLI verbatim — so `models` is checked
+  for shape only (non-blank, deduplicated preserving order, at most 200 entries
+  of at most 200 characters) and never against the agent's catalogue, which
+  moves with every CLI upgrade. `default_model` is rejected when it is not in a
+  non-empty `models`: a channel must not start conversations on a model it then
+  refuses. A blank `default_model` normalizes to `None` (unset).
 - Channel turns run in the Coffer-managed default workspace `~/.coffer/workspace`
   (created on first use).
 

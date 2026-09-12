@@ -94,7 +94,7 @@ Crucially, **retrieval spans both lanes**. A search over a scope returns the ent
 
 **Why this priority**: Retrieval is the product. The internal modes cover offline/zero-config use through to semantic search, while the external surface stays "one query → one answer".
 
-**Independent Test**: With a scope holding both a written entry and an ingested document, run one `coffer__search` and observe hits from both lanes. Run a grep query with no embedding config. Configure an embedding provider, enable `vector` on the scope, search again; remove the config and search again, observing results still return with no error.
+**Independent Test**: With a scope holding both a written entry and an ingested document, run one `coffer__search` and observe hits from both lanes. Run a grep query with no embedding config. Configure the installation-wide embedding config (name a connection, pick one of its embedding models), enable `vector` on the scope, search again; remove the config and search again, observing results still return with no error.
 
 **Covering scenarios**: keyword search returns ranked passages; keyword search matches CJK (Chinese) content; grep returns file/line matches; vector search returns ranked passages; vector falls back to keyword when embedding unconfigured; hybrid search fuses keyword and vector via RRF; a topic document recalls at passage granularity.
 
@@ -132,7 +132,7 @@ The developer wants to know how much has accumulated per scope, to give a scope 
 
 **Independent Test**: View per-scope metrics (entry count, document count, chunk count, disk bytes). Rename a scope whose folder is unknown and confirm the chosen name shows in the list and survives a reload. Clear a project scope; confirm every note is gone but the scope remains.
 
-**Covering scenarios**: clear a memory scope; user renames a memory store; KB metrics report counts and disk usage; degraded embed surfaces documents_degraded and retries without re-chunking; test an embedding model.
+**Covering scenarios**: clear a memory scope; user renames a memory store; KB metrics report counts and disk usage; degraded embed surfaces documents_degraded and retries without re-chunking; test an embedding model; the global embedding model is chosen from a connection.
 
 ---
 
@@ -532,10 +532,29 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="k
 
 ### Scenario: test an embedding model
 
-- **Given** an embedding provider, model id, and (where required) credential ref,
-- **When** the user tests the embedding model,
-- **Then** Coffer requests one embedding and reports success with the returned
+- **Given** the name of a configured LLM connection and an embedding model id,
+- **When** the user tests the embedding model (`POST /api/v1/embedding/test`
+  with `{connection, model}`),
+- **Then** Coffer resolves the protocol, base URL and credential from the named
+  connection, requests one embedding and reports success with the returned
   vector dimension, or a humanized failure message, without persisting anything.
+
+### Scenario: the global embedding model is chosen from a connection
+
+- **Given** a configured `openai` connection curating one `embedding` model and
+  one chat model, an `anthropic` connection, and a name no connection holds,
+- **When** the installation-wide embedding config is saved naming the openai
+  connection and its embedding model, then re-saved naming (a) the unknown name,
+  (b) the anthropic connection, and (c) a model the openai connection does not
+  curate,
+- **Then** the first save is accepted and the stored config carries only
+  `{enabled, connection, model, dimensions, default_chunk_size,
+  default_chunk_overlap, updated_at}` — no `provider`, `base_url`,
+  `credential_ref` or minted `embedding/key` vault entry — and embedding
+  resolves the protocol, base URL and credential from the named connection at
+  use time; each of (a), (b) and (c) is refused with HTTP 422 and a message
+  saying why; and a config naming no connection is inactive, so retrieval
+  degrades to keyword/grep exactly as on an unconfigured install.
 
 > **Deferred to future test work** (tests land with the e2e infrastructure; `make verify-acceptance` does not gate on them): the Knowledge list view per scope, the read-only viewer's open-in-editor / reveal affordances end-to-end, `coffer knowledge …` end-to-end with a running daemon, and per-scope metrics through the HTTP route.
 
@@ -543,7 +562,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="k
 
 ### Functional Requirements
 
-> **Numbering.** `FR-001`–`FR-059` keep the numbers they had while this was the *Memory* spec — they are cited from code comments, other specs and ADRs, so renumbering them would break more than it tidied. The requirements folded in from spec knowledge (Knowledge Base) are renumbered into a fresh block, `FR-060`–`FR-075`, each noting the 006 number it came from; `FR-076` is the two-lane migration. Gaps in the sequence are requirements retired by earlier changes — transcript distillation and the `journal` lane, then the 2026-09-11 two-lane redesign, which retired the handoff lane (`FR-023`–`FR-026`), the inbox-draining organizer and its catalogue and changelog (`FR-027`–`FR-031`), the procedural `rules` lane (`FR-036`) and the cross-scope AI merge (`FR-056`–`FR-059`). Surviving requirements are never renumbered, so the gaps stay.
+> **Numbering.** `FR-001`–`FR-059` keep the numbers they had while this was the *Memory* spec — they are cited from code comments, other specs and ADRs, so renumbering them would break more than it tidied. The requirements folded in from spec knowledge (Knowledge Base) are renumbered into a fresh block, `FR-060`–`FR-075`, each noting the 006 number it came from; `FR-076` is the two-lane migration and `FR-077` the installation-wide embedding config. Gaps in the sequence are requirements retired by earlier changes — transcript distillation and the `journal` lane, then the 2026-09-11 two-lane redesign, which retired the handoff lane (`FR-023`–`FR-026`), the inbox-draining organizer and its catalogue and changelog (`FR-027`–`FR-031`), the procedural `rules` lane (`FR-036`) and the cross-scope AI merge (`FR-056`–`FR-059`). Surviving requirements are never renumbered, so the gaps stay.
 
 **Storage & scope**
 
@@ -657,6 +676,57 @@ not an oversight.
 - **FR-075**: Migration `0051` MUST merge the two kinds into `knowledge`, **clear** the derived index rather than convert it, and rename the two machine-local side tables (`memory_store_project_roots` → `knowledge_scope_project_roots`, `memory_store_labels` → `knowledge_scope_labels`, key column `store_name` → `scope_name`). Migration `0052` MUST add `documents.lane` and its index, backfilling on the entry lane's then-distinctive `knowledge/inbox/` nesting (matching a bare `knowledge/` segment would have been wrong — the storage root contains it); FR-076 later rewrites those values. Clearing rather than converting is required, not merely convenient: `memory:global` and `knowledge_base:global` both existed and `resources` is keyed by `(kind, name)`, so converting both would collide and any automatic rename would be a guess; and every `documents` row indexed the journal lane removed one revision earlier, so the index pointed at files that no longer exist. Both migrations MUST be guarded so a database missing any of these still upgrades.
 
 - **FR-076**: The move to two lanes MUST be migrated, **destructively and by explicit decision — with no holding pen**. On disk, per scope: `knowledge/inbox/*.md` and `knowledge/*.md` flatten into `notes/`; `inbox/` becomes `docs/`; `.raw/` is unchanged; and `rules/`, `handoff/`, `superseded/`, `consolidation-log.md` and `knowledge/INDEX.md` are **deleted outright** — nothing is moved to a `.retired/` staging area, because those lanes either had no reader left (rules) or held a by-product rather than content (the log and the catalogue). In the database, **one Alembic migration** MUST rewrite `documents.lane` from `knowledge`/`inbox` to `notes`/`docs`. The data MUST be corrected in the database and the compatibility branch removed in the **same change**: **no load-time shim may survive the migration**, and no surface may keep accepting or emitting the old lane names. The migration MUST be guarded so a database missing any of these still upgrades.
+
+**Installation-wide embedding**
+
+- **FR-077**: The installation-wide embedding config (`GlobalEmbeddingConfig`,
+  table `embedding_config`) MUST **name a connection** rather than restate a
+  provider. Its fields are exactly `enabled`, `connection`, `model`,
+  `dimensions`, `default_chunk_size`, `default_chunk_overlap` and `updated_at`;
+  `provider` (the old protocol-name enum), `base_url` and `credential_ref` MUST
+  be gone from the row and from the wire, and the update request MUST NOT carry
+  a `secret_value` — the key belongs to the connection, and the embedding
+  settings MUST NOT mint an `embedding/key` vault entry. `connection` is the
+  NAME of a configured LLM connection (a `provider` resource, spec
+  provider-switching), the same "pick a provider, then pick a model" shape the
+  internal-engine setting already uses; the protocol, base URL and credential
+  MUST be resolved from that connection at use time.
+  - `is_active()` MUST be `enabled and connection and model`. A config naming no
+    connection is inactive, so retrieval degrades to keyword/grep exactly as on
+    an unconfigured install (FR-008).
+  - Resolution MUST map the connection's `protocol` to the embedding client:
+    `openai` → the openai-compatible client, `ollama` → the ollama client,
+    `unknown` → treated as openai-compatible (an unclassified gateway almost
+    always is one). `anthropic` serves no embedding API and MUST be refused. The
+    connection's `base_url` and `credential_ref` MUST be used verbatim.
+  - Selection MUST be rejected with **HTTP 422** (`CONFIG_INVALID`, the status
+    every other config rejection in the app returns) and a clear message when it
+    names a connection that does not exist; a connection whose protocol serves
+    no embeddings (anthropic); a connection that curates models but none with
+    modality `embedding` (spec provider-switching FR-029); or a model nothing
+    the connection curates matches. A connection curating NO models at all MUST
+    be accepted (empty = unrestricted) and the typed model id taken at its word.
+  - `POST /api/v1/embedding/test` MUST take `{connection, model}` instead of
+    `{provider, model, base_url, credential_ref}`.
+  - **The surface** (Settings → Engine → Embedding) MUST be the same two
+    pickers the internal-engine card above it has: a model provider, then one of
+    its models — narrowed to the `embedding`-modality entries the connection
+    curates, or, when it curates nothing at all, to what its endpoint reports
+    (introspection's inferred modality does the narrowing there). The
+    add-a-model dialog and every field it asked for — a provider-name enum, a
+    base URL, an API key — MUST be gone, and nothing is saved until both a
+    connection and a model are picked. The dimensions field, the enable switch
+    and the chunk defaults stay. A 422 rejection MUST be shown ON the card,
+    carrying the daemon's own message so the reader learns WHICH rule was
+    broken, and changing the model or the vector width of an already-configured
+    embedder MUST still be confirmed before it re-embeds every store.
+  - **One Alembic revision** MUST rewrite the singleton row: an existing config
+    is mapped onto the connection whose `base_url` — or, failing that, whose
+    `credential_ref` — matches what it had recorded; when nothing matches, the
+    row MUST keep its dimensions and chunk defaults but be left with no
+    connection and `enabled = 0` rather than inventing a connection. One-shot,
+    per the house rule: the old columns are dropped in the same revision and
+    **no load-time shim** may read them.
 
 **Substrate isolation & migration**
 

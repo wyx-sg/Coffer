@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import sqlalchemy.exc
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from coffer.domain.audit import AuditEntry
@@ -148,6 +148,31 @@ class SqlAlchemyResourceRepo:
             await session.refresh(row)
             return _to_domain(row)
 
+    async def rename(self, ref: ResourceRef, new_name: str) -> Resource:
+        """Move a row to ``new_name`` within its kind.
+
+        The (kind, name) unique constraint is the authority on collisions, so a
+        racing writer that claimed the name first surfaces as the same
+        ``ResourceAlreadyExists`` a caller's own pre-check would have raised —
+        never as a raw IntegrityError.
+        """
+        async with self._sm() as session:
+            stmt = select(ResourceModel).where(
+                ResourceModel.kind == ref.kind,
+                ResourceModel.name == ref.name,
+            )
+            row = (await session.execute(stmt)).scalar_one_or_none()
+            if row is None:
+                raise ResourceNotFound(ref.kind, ref.name)
+            row.name = new_name
+            row.updated_at = datetime.now(tz=UTC)
+            try:
+                await session.commit()
+            except sqlalchemy.exc.IntegrityError as e:
+                raise ResourceAlreadyExists(ref.kind, new_name) from e
+            await session.refresh(row)
+            return _to_domain(row)
+
     async def delete(self, ref: ResourceRef) -> None:
         async with self._sm() as session:
             stmt = select(ResourceModel).where(
@@ -203,6 +228,22 @@ class SqlAlchemyAuditRepo:
             session.add(row)
             await session.commit()
 
+    async def repoint(self, kind: str, old_name: str, new_name: str) -> int:
+        """Bulk-move every row recorded against ``(kind, old_name)`` onto
+        ``new_name``; returns the number of rows moved."""
+        async with self._sm() as session:
+            stmt = (
+                update(AuditLogModel)
+                .where(
+                    AuditLogModel.resource_kind == kind,
+                    AuditLogModel.resource_name == old_name,
+                )
+                .values(resource_name=new_name)
+            )
+            result = await session.execute(stmt)
+            await session.commit()
+            return int(result.rowcount or 0)
+
     async def query(
         self,
         *,
@@ -230,10 +271,8 @@ class SqlAlchemyAuditRepo:
 def _embedding_to_domain(row: EmbeddingConfigModel) -> GlobalEmbeddingConfig:
     return GlobalEmbeddingConfig(
         enabled=bool(row.enabled),
-        provider=row.provider,
+        connection=row.connection,
         model=row.model,
-        base_url=row.base_url,
-        credential_ref=row.credential_ref,
         dimensions=row.dimensions,
         default_chunk_size=row.default_chunk_size,
         default_chunk_overlap=row.default_chunk_overlap,
@@ -257,10 +296,8 @@ class SqlAlchemyEmbeddingConfigRepo:
         self,
         *,
         enabled: bool,
-        provider: str | None,
+        connection: str | None,
         model: str | None,
-        base_url: str | None,
-        credential_ref: str | None,
         dimensions: int,
         default_chunk_size: int,
         default_chunk_overlap: int,
@@ -273,10 +310,8 @@ class SqlAlchemyEmbeddingConfigRepo:
                 row = EmbeddingConfigModel(id=SINGLETON_ID, updated_at=now)
                 session.add(row)
             row.enabled = enabled
-            row.provider = provider
+            row.connection = connection
             row.model = model
-            row.base_url = base_url
-            row.credential_ref = credential_ref
             row.dimensions = dimensions
             row.default_chunk_size = default_chunk_size
             row.default_chunk_overlap = default_chunk_overlap

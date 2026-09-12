@@ -4,10 +4,11 @@
 // connection, so the model forms offer a fetched dropdown (with manual
 // fallback) and a Test button — DevPilot-style. Hand-written fetch, mirroring
 // useEmbeddingConfig.
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { getCofferBaseUrl, getCofferToken } from "@/lib/auth";
 import { ApiError } from "@/lib/api/errors";
+import type { ProviderModel } from "@/lib/api/providers";
 
 export interface ProviderProbe {
   provider: string;
@@ -50,16 +51,61 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return (await r.json()) as T;
 }
 
+/** What an endpoint reports it serves. Each id carries the modality Coffer
+ *  INFERRED from its name (provider-switching FR-030) — a pre-fill for the
+ *  connection's model table, never a stored fact: once an entry is curated, the
+ *  modality the user left on it is the truth. */
+export interface EndpointModelsOut {
+  models: ProviderModel[];
+  message: string;
+}
+
 /** List a provider's models. Empty list + message → user types manually. */
 export function useListProviderModels() {
   return useMutation({
     mutationFn: (p: ProviderProbe) =>
-      post<{ models: string[]; message: string }>("/models/list-models", {
+      post<EndpointModelsOut>("/models/list-models", {
         provider: p.provider,
         base_url: p.base_url ?? null,
         credential_ref: p.credential_ref ?? null,
         secret_value: p.secret_value ?? null,
       }),
+  });
+}
+
+/** The model ids an endpoint itself serves, as a QUERY rather than the mutation
+ *  above: a surface whose whole job is to show that list (the connection detail
+ *  page) should have it on open, not behind a button, and a query is what gives
+ *  it the loading / error / refetch states that makes a failed probe visible and
+ *  retryable.
+ *
+ *  The key deliberately does NOT extend ``["providers", name]``: every
+ *  connection mutation invalidates that subtree, so ticking one model on would
+ *  re-probe the remote endpoint — a network round trip per click. This list
+ *  changes when the ENDPOINT changes, not when our curation does.
+ *
+ *  `retry: false` because a wrong key or an unreachable endpoint is a real
+ *  answer the user must see, not a blip worth three silent attempts. */
+export const endpointModelsKey = (name: string) => ["endpointModels", name] as const;
+
+export function useEndpointModels(name: string, probe: ProviderProbe) {
+  return useQuery({
+    queryKey: endpointModelsKey(name),
+    queryFn: () =>
+      post<EndpointModelsOut>("/models/list-models", {
+        provider: probe.provider,
+        base_url: probe.base_url ?? null,
+        credential_ref: probe.credential_ref ?? null,
+        secret_value: probe.secret_value ?? null,
+      }),
+    enabled: name !== "",
+    retry: false,
+    refetchOnWindowFocus: false,
+    // The tab this renders in unmounts when the user switches away, so without a
+    // stale window every flick back to it would re-probe the vendor. Once per
+    // visit to the page is what "listed when you open it" means; the Retry
+    // button is there for when the user wants it asked again.
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -70,10 +116,14 @@ export function useTestConnection() {
   });
 }
 
-/** Probe an embedding provider; success reports the vector dimension. */
+/** Probe one embedding model ON A CONNECTION; success reports the vector
+ *  dimension. The wire, base URL and key are the named connection's, resolved
+ *  by the daemon (knowledge FR-077) — the same resolution saving the config
+ *  does, so a green test means the settings will save. */
 export function useTestEmbedding() {
   return useMutation({
-    mutationFn: (p: ProviderProbe) => post<TestResult>("/embedding/test", p),
+    mutationFn: (p: { connection: string; model: string }) =>
+      post<TestResult>("/embedding/test", { connection: p.connection, model: p.model }),
   });
 }
 

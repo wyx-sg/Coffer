@@ -20,7 +20,8 @@ from datetime import UTC, datetime
 
 from coffer.application.provider.projector import ProviderProjector
 from coffer.domain.agent.types import AgentType
-from coffer.domain.provider.config import Protocol, ProviderConfig
+from coffer.domain.provider.config import CuratedModel, Protocol, ProviderConfig
+from coffer.domain.provider.modality import Modality
 from coffer.domain.provider.projection import CODEX_MODEL_CATALOG_FILENAME
 from coffer.domain.resource import Resource
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
@@ -41,7 +42,12 @@ def _agent(config_dir: pathlib.Path) -> Resource:
     )
 
 
-def _connection(models: list[str]) -> ProviderConfig:
+def _text(*ids: str) -> list[CuratedModel]:
+    """Curated chat entries — what a connection holds unless a test says otherwise."""
+    return [CuratedModel(id=i) for i in ids]
+
+
+def _connection(models: list[CuratedModel]) -> ProviderConfig:
     return ProviderConfig(
         protocol=Protocol.OPENAI,
         base_url="https://gw.example/v1",
@@ -67,7 +73,7 @@ def test_activate_then_deactivate_adds_and_retires_the_catalog(tmp_path: pathlib
     projector = _projector()
 
     assert projector.project_type(
-        "agnes", _connection(["fast", "pro"]), agents, AgentType.CODEX
+        "agnes", _connection(_text("fast", "pro")), agents, AgentType.CODEX
     ) == ["cx"]
     doc = tomllib.loads((cfg / "config.toml").read_text())
     assert doc["model_catalog_json"] == str(_catalog(cfg))
@@ -99,6 +105,56 @@ def test_an_uncurated_connection_leaves_codex_own_model_list_alone(
     assert not _catalog(cfg).exists()
 
 
+def test_only_the_text_models_reach_codex_own_picker(tmp_path: pathlib.Path) -> None:
+    """The catalogue IS Codex's model picker, and one connection curates more
+    than chat models. An embedding or image id listed there could only be
+    rejected by the turn that picked it, so the projection writes the ``text``
+    entries and nothing else."""
+    cfg = tmp_path / ".codex"
+    cfg.mkdir()
+    agents = [_agent(cfg)]
+
+    _projector().project_type(
+        "agnes",
+        _connection(
+            [
+                CuratedModel(id="fast"),
+                CuratedModel(id="embed-1", modality=Modality.EMBEDDING),
+                CuratedModel(id="canvas-1", modality=Modality.IMAGE),
+                CuratedModel(id="pro"),
+            ]
+        ),
+        agents,
+        AgentType.CODEX,
+    )
+
+    models = json.loads(_catalog(cfg).read_text())["models"]
+    assert [m["slug"] for m in models] == ["fast", "pro"]
+
+
+def test_a_connection_curating_no_text_model_leaves_codex_own_list_alone(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Curating only an embedding model says nothing about which CHAT models the
+    endpoint serves, so it must read as "no restriction" — a catalogue holding
+    an embedding id would leave Codex's picker with nothing it could run."""
+    cfg = tmp_path / ".codex"
+    cfg.mkdir()
+    agents = [_agent(cfg)]
+
+    _projector().project_type(
+        "agnes",
+        _connection([CuratedModel(id="embed-1", modality=Modality.EMBEDDING)]),
+        agents,
+        AgentType.CODEX,
+    )
+
+    doc = tomllib.loads((cfg / "config.toml").read_text())
+    assert doc["model_provider"] == "coffer"  # the connection IS projected …
+    assert "model_catalog_json" not in doc  # … but Codex keeps its own models
+    assert not _catalog(cfg).exists()
+
+
 def test_clearing_the_curated_set_retires_the_catalog_on_reprojection(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -107,7 +163,7 @@ def test_clearing_the_curated_set_retires_the_catalog_on_reprojection(
     agents = [_agent(cfg)]
     projector = _projector()
 
-    projector.project_type("agnes", _connection(["fast"]), agents, AgentType.CODEX)
+    projector.project_type("agnes", _connection(_text("fast")), agents, AgentType.CODEX)
     assert _catalog(cfg).exists()
 
     # The user unticks every model: "no restriction" must restore Codex's list
@@ -123,15 +179,15 @@ def test_reprojection_rewrites_only_a_changed_catalog(tmp_path: pathlib.Path) ->
     agents = [_agent(cfg)]
     projector = _projector()
 
-    projector.project_type("agnes", _connection(["fast"]), agents, AgentType.CODEX)
+    projector.project_type("agnes", _connection(_text("fast")), agents, AgentType.CODEX)
     before = _catalog(cfg).stat().st_mtime_ns
 
     # Identical projection: the boot sweep re-derives this on every start, and
     # churning the file's mtime would hide a projection that had gone missing.
-    projector.project_type("agnes", _connection(["fast"]), agents, AgentType.CODEX)
+    projector.project_type("agnes", _connection(_text("fast")), agents, AgentType.CODEX)
     assert _catalog(cfg).stat().st_mtime_ns == before
 
-    projector.project_type("agnes", _connection(["fast", "pro"]), agents, AgentType.CODEX)
+    projector.project_type("agnes", _connection(_text("fast", "pro")), agents, AgentType.CODEX)
     models = json.loads(_catalog(cfg).read_text())["models"]
     assert [m["slug"] for m in models] == ["fast", "pro"]
 

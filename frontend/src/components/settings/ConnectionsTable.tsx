@@ -7,10 +7,16 @@
 // and pagination — all from DataTable. A row click opens the connection's detail
 // page, where the endpoint is edited and its model set curated; the row itself
 // carries only what a table row should.
+//
+// Which connection Coffer's own internal engine happens to run on is NOT one of
+// those things, so no internal-engine badge here: this page manages providers,
+// and that flag is a fact about the engine. It is set (and shown) where it
+// belongs — the internal-engine settings panel, and the connection's own detail
+// header.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Check, Cpu } from "lucide-react";
+import { Check } from "lucide-react";
 
 import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
 import {
@@ -46,12 +52,6 @@ export function ConnectionsTable({ providers }: { providers: Provider[] }) {
             <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
               <Check className="size-3" />
               {t("settings.connections.active")}
-            </span>
-          ) : null}
-          {p.internal_default ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-              <Cpu className="size-3" />
-              {t("settings.connections.internalEngine")}
             </span>
           ) : null}
         </div>

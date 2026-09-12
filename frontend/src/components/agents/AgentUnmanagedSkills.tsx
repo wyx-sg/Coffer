@@ -12,8 +12,8 @@
 // filter here: an on-disk unmanaged skill has no enable/disable state to filter
 // on, so the toolbar carries the search box alone.
 //
-// Each row can also open its folder in the OS file manager (icon-only, to keep
-// the action group narrow): Coffer doesn't manage these skills, so looking at
+// Each row can also open its folder in the OS file manager, labelled like the
+// actions beside it: Coffer doesn't manage these skills, so looking at
 // the files on disk is how the user decides whether to adopt or delete one. The
 // browser can't reach the filesystem, so that goes through the loopback daemon
 // (useFsActions → /fs/open with no `with`, i.e. the OS default handler, which
@@ -109,8 +109,6 @@ export function UnmanagedSkillsSection({ agentName }: { agentName: string }) {
             <Button
               size="sm"
               variant="outline"
-              title={t("agents.skillsTab.openFolder")}
-              aria-label={t("agents.skillsTab.openFolder")}
               onClick={() =>
                 void open(s.path, "").catch(() =>
                   toast.error(t("agents.skillsTab.openFolderFailed")),
@@ -118,6 +116,7 @@ export function UnmanagedSkillsSection({ agentName }: { agentName: string }) {
               }
             >
               <FolderOpen className="size-3.5" />
+              {t("agents.skillsTab.openFolder")}
             </Button>
             {/* Wrapper span carries the disabled-reason tooltip — the disabled
                 button itself has pointer-events:none so it can't show one. */}

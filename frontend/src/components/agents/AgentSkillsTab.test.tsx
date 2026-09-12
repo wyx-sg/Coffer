@@ -4,10 +4,10 @@
 // delivery has one control and it lives on the skill (enabled + scope), not on
 // the agent. Covered here:
 //   - the "Managed by Coffer" pointer row renders and navigates to /skills
-//   - the read-only table lists ONLY the skills bound to this agent, with the
-//     copy_fallback "Copied" badge, and a row click opens the skill detail page
+//   - the retired delivered-skills table is gone: no list of delivered skills,
+//     no search box — the Skills page the row points at is where they live
 //   - none of the retired controls survive: no follow switch, no Install
-//     button, no per-row toggle, no status filter, no selection checkboxes
+//     button, no per-row toggle, no status filter
 //   - the unmanaged-skills section: hidden when empty, rows with location /
 //     foreign-link badges and invalid reasons, adopt (disabled w/ hint when
 //     invalid or foreign), open-folder and delete-with-confirm actions
@@ -20,43 +20,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AgentSkillsTab } from "./AgentSkillsTab";
 import { ToastProvider } from "@/components/ui/toast";
 import type { AgentOut, UnmanagedSkillOut } from "@/lib/api/agents";
-import type { LinkMode } from "@/lib/api/skills";
 import en from "@/i18n/locales/en.json";
 import zh from "@/i18n/locales/zh.json";
 
-const useSkillsMock = vi.fn();
 const navigateMock = vi.fn();
 
 vi.mock("react-router-dom", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-router-dom")>()),
   useNavigate: () => navigateMock,
-}));
-
-function mockBinding(linkMode: LinkMode | null) {
-  return {
-    data: [
-      {
-        name: "hello",
-        description: "hi",
-        bindings: [
-          {
-            agent_name: "cc",
-            last_linked_at: null,
-            last_link_path: null,
-            link_mode: linkMode,
-          },
-        ],
-      },
-      // A skill not delivered to this agent must NOT appear in the table.
-      { name: "other", description: "", bindings: [] },
-    ],
-    isPending: false,
-    error: null,
-  };
-}
-
-vi.mock("@/lib/hooks/useSkills", () => ({
-  useSkills: () => useSkillsMock(),
 }));
 
 // The open-folder action goes through useFsActions → fsApi.open (the loopback
@@ -118,7 +89,6 @@ const UNMANAGED_FOREIGN: UnmanagedSkillOut = {
 };
 
 function stub(unmanaged: UnmanagedSkillOut[] = []) {
-  useSkillsMock.mockReturnValue(mockBinding(null));
   api.unmanagedSkills.mockResolvedValue({ items: unmanaged });
   api.adoptUnmanagedSkill.mockResolvedValue({ name: "good" });
   api.deleteUnmanagedSkill.mockResolvedValue(undefined);
@@ -145,32 +115,16 @@ function renderTab(agent: AgentOut = AGENT) {
 }
 
 describe("AgentSkillsTab", () => {
-  test("lists only the skills delivered to this agent", () => {
-    stub();
+  test("does not list the delivered skills — the Skills page holds them", async () => {
+    stub([]);
     renderTab();
 
-    expect(screen.getByText("hello")).toBeInTheDocument();
-    expect(screen.queryByText("other")).not.toBeInTheDocument();
-  });
-
-  test("shows a degraded warning chip when the delivery fell back to a copy", () => {
-    // FR-012: when symlink/junction delivery isn't available Coffer copies the
-    // skill instead; the UI MUST surface that the delivery is degraded.
-    stub();
-    useSkillsMock.mockReturnValue(mockBinding("copy_fallback"));
-    renderTab();
-
-    expect(screen.getByText("hello")).toBeInTheDocument();
-    expect(screen.getByTestId("skill-degraded-badge")).toBeInTheDocument();
-  });
-
-  test("does NOT show the degraded chip for a normal symlink delivery", () => {
-    stub();
-    useSkillsMock.mockReturnValue(mockBinding("symlink"));
-    renderTab();
-
-    expect(screen.getByText("hello")).toBeInTheDocument();
-    expect(screen.queryByTestId("skill-degraded-badge")).not.toBeInTheDocument();
+    // The read-only table (and its search box) is retired: it decided nothing
+    // and duplicated the Skills page this tab already links to. With the
+    // unmanaged section empty too, the tab carries no table at all.
+    await waitFor(() => expect(api.unmanagedSkills).toHaveBeenCalledWith("cc"));
+    expect(screen.queryByPlaceholderText(en.skills.searchPlaceholder)).not.toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
   test("the managed header points at the Skills page and navigates there", () => {
@@ -187,16 +141,6 @@ describe("AgentSkillsTab", () => {
     expect(navigateMock).toHaveBeenCalledWith("/skills");
   });
 
-  test("a row click opens the skill detail page with a back link to this agent", () => {
-    stub();
-    renderTab();
-
-    fireEvent.click(screen.getByText("hello"));
-    expect(navigateMock).toHaveBeenCalledWith("/skills/hello", {
-      state: { backTo: "/agents/cc", backLabel: "cc" },
-    });
-  });
-
   test("carries no delivery control: no follow switch, install button or per-row toggle", () => {
     stub();
     renderTab();
@@ -204,22 +148,11 @@ describe("AgentSkillsTab", () => {
     // Delivery is decided on the skill (enabled + scope), so the tab holds no
     // switch at all — not the retired follow switch, not a per-row binding one.
     expect(screen.queryAllByRole("switch")).toHaveLength(0);
-    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
     expect(screen.queryByRole("button", { name: /install/i })).not.toBeInTheDocument();
-    // No status filter either — a listed row IS a delivered row.
+    // No status filter either.
     expect(
       screen.queryByRole("combobox", { name: en.resources.cols.status }),
     ).not.toBeInTheDocument();
-    // The search box stays.
-    expect(screen.getByPlaceholderText(en.skills.searchPlaceholder)).toBeInTheDocument();
-  });
-
-  test("empty state points at the Skills page when nothing is delivered", () => {
-    stub();
-    useSkillsMock.mockReturnValue({ data: [], isPending: false, error: null });
-    renderTab();
-
-    expect(screen.getByText(en.agents.skillsTab.empty)).toBeInTheDocument();
   });
 
   describe("unmanaged skills", () => {

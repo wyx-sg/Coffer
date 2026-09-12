@@ -16,6 +16,8 @@ class AuditEventType(StrEnum):
     RESOURCE_ENABLED = "resource_enabled"
     RESOURCE_DISABLED = "resource_disabled"
     RESOURCE_DELETED = "resource_deleted"
+    # A resource moved to a new name: its identity, not its config, changed.
+    RESOURCE_RENAMED = "resource_renamed"
     # Per-Agent Resource Scope: framework-level machine x agent activation scope
     RESOURCE_SCOPE_UPDATED = "resource_scope_updated"
     CAPABILITY_ENABLED = "capability_enabled"

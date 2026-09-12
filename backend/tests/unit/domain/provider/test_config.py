@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import Protocol, ProviderConfig
+from coffer.domain.provider.modality import Modality
 
 
 def test_valid_config_defaults() -> None:
@@ -169,9 +170,57 @@ def test_models_are_opaque_strings_kept_in_order() -> None:
         protocol="unknown",  # type: ignore[arg-type]
         base_url="x",
         credential_ref="r",
-        models=["agnes-2.0", "not-a-real-model", "gpt-5"],
+        models=[{"id": "agnes-2.0"}, {"id": "not-a-real-model"}, {"id": "gpt-5"}],
     )
-    assert c.models == ["agnes-2.0", "not-a-real-model", "gpt-5"]
+    assert c.model_ids() == ["agnes-2.0", "not-a-real-model", "gpt-5"]
+
+
+def test_models_default_to_text_modality() -> None:
+    # The kind every curated set held before modalities existed, so an entry
+    # that says nothing keeps behaving as a chat model.
+    c = ProviderConfig(
+        protocol="openai",  # type: ignore[arg-type]
+        base_url="x",
+        credential_ref="r",
+        models=[{"id": "gpt-5"}],
+    )
+    assert c.models[0].modality is Modality.TEXT
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="curate an embedding model alongside chat models on one connection",
+)
+def test_one_connection_curates_several_modalities() -> None:
+    # One endpoint, one key, several kinds of model: the curated set says which
+    # is which, and each picker asks for the kind it serves.
+    c = ProviderConfig(
+        protocol="openai",  # type: ignore[arg-type]
+        base_url="x",
+        credential_ref="r",
+        models=[
+            {"id": "gpt-5"},
+            {"id": "text-embedding-3-large", "modality": "embedding"},
+            {"id": "dall-e-3", "modality": "image"},
+        ],
+    )
+    assert c.model_ids(Modality.TEXT) == ["gpt-5"]
+    assert c.model_ids(Modality.EMBEDDING) == ["text-embedding-3-large"]
+    assert c.model_ids(Modality.IMAGE) == ["dall-e-3"]
+    assert len(c.model_ids()) == 3
+
+
+def test_stored_modality_is_not_re_inferred_on_load() -> None:
+    # The user's answer beats any guess Coffer could make from the name: an id
+    # that LOOKS like an embedding model stays whatever it was stored as.
+    c = ProviderConfig(
+        protocol="openai",  # type: ignore[arg-type]
+        base_url="x",
+        credential_ref="r",
+        models=[{"id": "text-embedding-3-large", "modality": "text"}],
+    )
+    assert c.model_ids(Modality.TEXT) == ["text-embedding-3-large"]
+    assert c.model_ids(Modality.EMBEDDING) == []
 
 
 def test_models_dedupe_and_strip() -> None:
@@ -179,9 +228,9 @@ def test_models_dedupe_and_strip() -> None:
         protocol="openai",  # type: ignore[arg-type]
         base_url="x",
         credential_ref="r",
-        models=["gpt-5", " gpt-5 ", "o3"],
+        models=[{"id": "gpt-5"}, {"id": " gpt-5 "}, {"id": "o3"}],
     )
-    assert c.models == ["gpt-5", "o3"]
+    assert c.model_ids() == ["gpt-5", "o3"]
 
 
 def test_blank_model_id_rejected() -> None:
@@ -190,12 +239,22 @@ def test_blank_model_id_rejected() -> None:
             protocol="openai",  # type: ignore[arg-type]
             base_url="x",
             credential_ref="r",
-            models=["gpt-5", "   "],
+            models=[{"id": "gpt-5"}, {"id": "   "}],
+        )
+
+
+def test_unknown_modality_rejected() -> None:
+    with pytest.raises(ValidationError):
+        ProviderConfig(
+            protocol="openai",  # type: ignore[arg-type]
+            base_url="x",
+            credential_ref="r",
+            models=[{"id": "gpt-5", "modality": "hologram"}],
         )
 
 
 def test_absurd_model_ids_rejected() -> None:
-    for models in (["m" * 201], [f"m{i}" for i in range(201)]):
+    for models in ([{"id": "m" * 201}], [{"id": f"m{i}"} for i in range(201)]):
         with pytest.raises(ValidationError):
             ProviderConfig(
                 protocol="openai",  # type: ignore[arg-type]
@@ -211,6 +270,6 @@ def test_ollama_may_curate_models() -> None:
     c = ProviderConfig(
         protocol="ollama",  # type: ignore[arg-type]
         base_url="http://localhost:11434",
-        models=["qwen3:8b"],
+        models=[{"id": "qwen3:8b"}],
     )
-    assert c.models == ["qwen3:8b"]
+    assert c.model_ids() == ["qwen3:8b"]

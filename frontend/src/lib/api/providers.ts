@@ -18,6 +18,41 @@ export type Protocol = "anthropic" | "openai" | "ollama" | "unknown";
 export type AgentType = "claude_code" | "codex";
 
 /**
+ * What KIND of model a curated entry names (provider-switching FR-029). One
+ * endpoint serves more than chat — the same base URL and key answer for
+ * embeddings, images, video and speech — so every picker asks for the kind it
+ * needs instead of being handed every id: a chat dropdown takes `text`, the
+ * global embedding setting takes `embedding`.
+ */
+export type Modality = "text" | "embedding" | "image" | "video" | "audio";
+
+/** The five values, in the order the connection editor lists them. */
+export const MODALITIES: readonly Modality[] = [
+  "text",
+  "embedding",
+  "image",
+  "video",
+  "audio",
+] as const;
+
+/**
+ * One model on a connection: an opaque id plus its kind. The same shape is used
+ * both ways — the entries a connection curates and the ids endpoint
+ * introspection discovers (whose `modality` is Coffer's GUESS, a pre-fill the
+ * user corrects) — so a discovered model round-trips into the curated set
+ * without reshaping.
+ */
+export interface ProviderModel {
+  id: string;
+  modality: Modality;
+}
+
+/** The ids of `models`, optionally narrowed to ONE modality, order preserved. */
+export function modelIds(models: ProviderModel[], modality?: Modality): string[] {
+  return models.filter((m) => modality === undefined || m.modality === modality).map((m) => m.id);
+}
+
+/**
  * Chat agent_key → the protocol it speaks (provider-switching projection targets). Shared by
  * the chat ModelPicker and the agent Overview connection picker so both map an
  * agent to its compatible connections the same way. `ollama` is internal-only
@@ -40,10 +75,11 @@ export interface Provider {
   is_active: boolean;
   /** ≤1 globally — the connection Coffer's internal engine uses. */
   internal_default: boolean;
-  /** The curated model set offered for this connection. EMPTY = no restriction:
-   * every model the endpoint serves is offered. Non-empty narrows the agent's
-   * model picker to exactly these ids. */
-  models: string[];
+  /** The curated model set offered for this connection, each entry carrying its
+   * modality. EMPTY = no restriction: every model the endpoint serves is
+   * offered. Non-empty narrows every downstream picker to these entries OF THE
+   * MODALITY it serves — a chat dropdown never sees an embedding model. */
+  models: ProviderModel[];
   enabled: boolean;
   description?: string | null;
   created_at: string;
@@ -62,8 +98,9 @@ export interface ProviderCreate {
   secret_value?: string | null;
   /** Override the wire default for which agents the connection projects into. */
   compatible_agents?: AgentType[] | null;
-  /** Curated model set; omit or `[]` for "no restriction". */
-  models?: string[] | null;
+  /** Curated model set (`{id, modality}` entries); omit or `[]` for "no
+   * restriction". */
+  models?: ProviderModel[] | null;
   description?: string | null;
 }
 
@@ -72,7 +109,7 @@ export interface ProviderPatch {
   secret_value?: string | null;
   compatible_agents?: AgentType[] | null;
   /** Whole-value replace of the curated model set; `[]` clears the restriction. */
-  models?: string[] | null;
+  models?: ProviderModel[] | null;
   description?: string | null;
 }
 
@@ -139,6 +176,13 @@ export const providersApi = {
 
   update: (name: string, body: ProviderPatch) =>
     call<Provider>("PATCH", `/providers/${name}`, body),
+
+  /** Rename a connection. Its own route rather than a PATCH field because the
+   * name is the connection's IDENTITY, not one of its settings: the daemon has
+   * to repoint the vault entry, the audit trail and the projected agent config
+   * in one operation, and a name already in use is a 409 rather than a merge. */
+  rename: (name: string, newName: string) =>
+    call<Provider>("POST", `/providers/${name}/rename`, { new_name: newName }),
 
   remove: (name: string) => call<void>("DELETE", `/providers/${name}`),
 

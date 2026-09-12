@@ -1,13 +1,15 @@
 // frontend/src/components/skills/SkillsTableActions.tsx
 // Row + bulk actions for SkillsTable, kept out of SkillsTable.tsx so that file
-// stays within its size budget. Per row: an enable/disable Switch (the skill's
-// own enabled flag, not a per-agent binding) + Delete (styled confirm). Bulk:
-// Verify the selected skills — the library-wide drift check — + Delete them all
-// (styled confirm → parallel removes).
+// stays within its size budget. Per row: the same three-state ScopeControl the
+// detail page carries (the skill's own reach: Disabled / Every agent / Selected
+// agents) + Delete (styled confirm). Bulk: Verify the selected skills — the
+// library-wide drift check — + Delete them all (styled confirm → parallel
+// removes).
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BadgeCheck, Trash2 } from "lucide-react";
 
+import { ScopeControl } from "@/components/ScopeControl";
 import { SkillVerifyDialog } from "@/components/skills/SkillVerifyDialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,30 +20,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Switch } from "@/components/ui/switch";
 import { skillsApi, type SkillOut } from "@/lib/api/skills";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
-import { useSetSkillEnabled } from "@/lib/hooks/useSkills";
 
 const DESTRUCTIVE =
   "text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive";
 
-/** Per-row enable/disable toggle for the skill itself; stops propagation so it
- *  doesn't trigger the row's navigate-to-detail click. */
+/** Per-row reach control for the skill itself: enable/disable is only one of
+ *  its three states, so the list shows the same control the detail page does
+ *  rather than a Switch that cannot express "active for these agents".
+ *
+ *  `skill.scope` comes from the list payload, so the control never fires its
+ *  own per-resource GET — a list of N skills still costs one request.
+ *
+ *  The wrapper stops propagation so neither a segment click nor a checkbox
+ *  inside the popover (a React portal still bubbles through the React tree)
+ *  triggers the row's navigate-to-detail click. */
 export function SkillStatusCell({ skill }: { skill: SkillOut }) {
-  const { t } = useTranslation();
-  const { enable, disable } = useSetSkillEnabled();
-
   return (
-    <Switch
-      checked={skill.enabled}
-      onClick={(e) => e.stopPropagation()}
-      onCheckedChange={(checked) =>
-        (checked ? enable : disable).mutate({ kind: "skill", name: skill.name })
-      }
-      disabled={enable.isPending || disable.isPending}
-      aria-label={`${t("resources.cols.status")}: ${skill.name}`}
-    />
+    <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+      <ScopeControl kind="skill" name={skill.name} enabled={skill.enabled} scope={skill.scope} />
+    </div>
   );
 }
 

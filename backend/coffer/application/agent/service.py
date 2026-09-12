@@ -15,7 +15,7 @@ import contextlib
 import os
 import pathlib
 import sys
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable
 
 from coffer.application.agent.config_file_service import ConfigFileStorePort
 from coffer.application.audit_service import AuditService
@@ -298,45 +298,6 @@ class AgentService:
             new_config=new_cfg.model_dump(mode="json"),
             actor=actor,
             allow_lifecycle_kind=True,  # CODE-REG: value-level binding change only
-        )
-
-    async def set_offered_models(
-        self,
-        *,
-        name: str,
-        model_ids: Sequence[str],
-        actor: str = "api",
-    ) -> Resource:
-        """Persist which of this agent's catalogue its pickers offer.
-
-        Replaces the set wholesale (like ``compatible_agents`` on a connection):
-        an empty list is the "not curated" state and puts the WHOLE catalogue
-        back on offer, which is what an agent that has never seen this screen
-        has. It is never "offer nothing".
-
-        The ids are stored verbatim and unchecked against the catalogue: the
-        catalogue moves under us on every CLI upgrade, and a set that named a
-        model the current release dropped is a stale menu entry, not a config
-        error. Nothing here validates a model NAME either — the CLI accepts
-        names no catalogue carries.
-
-        ``Sequence`` rather than ``list`` because this class defines a method
-        named ``list``, which shadows the builtin in the class body where
-        annotations are resolved.
-        """
-        existing = await self.get(name)
-        cfg = AgentConfig.model_validate(existing.config)
-        try:
-            new_cfg = AgentConfig.model_validate(cfg.model_dump() | {"models": [*model_ids]})
-        except Exception as e:  # pydantic ValidationError
-            raise ConfigValidationError(str(e)) from e
-        if new_cfg.models == cfg.models:
-            return existing
-        return await self._rs.update_config(
-            ResourceRef("agent", name),
-            new_config=new_cfg.model_dump(mode="json"),
-            actor=actor,
-            allow_lifecycle_kind=True,  # CODE-REG: value-level curation change only
         )
 
     async def remove(self, *, name: str, actor: str = "api") -> None:

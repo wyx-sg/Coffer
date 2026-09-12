@@ -213,10 +213,6 @@
       "credentialHint": "Credential values are encrypted into Coffer's local database. Removing a credential deletes its stored entry.",
       "errRenameNeedsValue": "Re-enter the secret value for \"{{name}}\" to rename it."
     },
-    "tiering": {
-      "summary": "Agents see {{listed}} of {{total}} tools; {{hidden}} are reachable only through coffer__search_tools.",
-      "hint": "They stay callable by name. Set COFFER_TOOL_TIERING=off to list every tool."
-    },
     "timeouts": {
       "legend": "Timeouts (seconds)",
       "spawn": "Spawn",
@@ -317,31 +313,23 @@
     },
     "embedding": {
       "title": "Embedding",
-      "description": "One global embedding model powers vector search across every knowledge base and memory store. Turn it off to use keyword and grep only.",
+      "description": "One global embedding model powers vector search across every knowledge base and memory store. Pick a model provider and one of its embedding models; the endpoint and API key come from that provider. Turn it off to use keyword and grep only.",
       "enabled": "Enable vector embedding",
       "enabledHint": "When off, all stores fall back to keyword/grep.",
-      "add": "Add model",
-      "addTitle": "Add embedding model",
-      "editTitle": "Edit embedding model",
-      "edit": "Edit",
       "empty": "No embedding model configured — vector retrieval falls back to keyword/grep.",
       "changeModelTitle": "Change embedding model?",
       "changeModelConfirm": "Changing the embedding model re-embeds all content in every knowledge base and memory store, which may take a while. Continue?",
       "changeModelConfirmLabel": "Change & re-embed",
-      "provider": "Provider",
-      "model": "Model",
+      "model": "Embedding model",
       "dimensions": "Dimensions",
-      "dimensionsFixed": "Set automatically from the selected model.",
-      "baseUrl": "Base URL (optional)",
-      "secret": "API key",
-      "secretPlaceholder": "Paste the provider API key",
-      "secretKeepBlank": "Leave blank to keep the current key",
-      "credential": "Credential reference",
-      "credentialHint": "Credential store entry name (not the key itself)",
       "chunkingTitle": "Chunking defaults",
       "chunkingHint": "Default chunk size/overlap for NEW knowledge bases. Each knowledge base can override these in its settings.",
       "chunkSize": "Chunk size",
-      "chunkOverlap": "Chunk overlap"
+      "chunkOverlap": "Chunk overlap",
+      "connection": "Embedding provider",
+      "connectionPlaceholder": "Select a model provider",
+      "modelPlaceholder": "Select a model",
+      "noEmbeddingModels": "This provider offers no embedding model. Add one on its Models tab with the type “Embedding”, or pick another provider."
     },
     "security": {
       "masterKey": {
@@ -451,6 +439,7 @@
       "deleteConfirm": "Delete model provider \"{{name}}\"? Its stored credential is removed too.",
       "name": "Name",
       "provider": "Vendor",
+      "renameHint": "Renaming moves the stored key, the history and any agent this provider drives with it.",
       "customProvider": "Custom",
       "wireFormat": "Protocol",
       "detectType": "Detect type",
@@ -474,16 +463,27 @@
         "created": "Created",
         "updated": "Updated",
         "models": "Models",
-        "modelsHint": "Pick which of this endpoint's models this provider offers. The agent's model picker is then limited to your picks.",
+        "modelsHint": "Pick which of this endpoint's models this provider offers, and what kind each one is. Every picker downstream is then limited to your picks of the kind it needs — a chat model dropdown never offers an embedding model.",
         "unrestricted": "No restriction — every model this endpoint offers is available.",
         "restricted": "{{count}} model(s) picked — agents see only these.",
         "fetchFailed": "Could not list this endpoint's models ({{error}}). Your current selection is unchanged.",
-        "noModelsYet": "No models yet — fetch this endpoint's models, or leave it unrestricted.",
+        "loadingModels": "Listing this endpoint's models…",
+        "retryFetch": "Retry",
+        "noModelsYet": "This endpoint listed no models. Leave the selection empty and every model it offers stays available.",
         "clearSelection": "Clear selection (no restriction)",
         "modelId": "Model",
         "modelSearchPlaceholder": "Search models…",
         "modelOffered": "Offered",
-        "noModelsMatch": "No models match your search."
+        "noModelsMatch": "No models match your search.",
+        "modality": "Type",
+        "allModalities": "All types",
+        "modalities": {
+          "text": "Text / chat",
+          "embedding": "Embedding",
+          "image": "Image",
+          "video": "Video",
+          "audio": "Audio"
+        }
       }
     },
     "internalEngine": {
@@ -638,9 +638,7 @@
       "label": "Provider",
       "model": "Model",
       "fastModel": "Fast model",
-      "builtinModelsTitle": "Available models",
-      "builtinModelsEmpty": "No model catalogue available for this agent.",
-      "builtinModelsHint": "On the built-in login the model is chosen per conversation — in the chat model picker, or with /model <id> in a chat channel.",
+      "builtinModelsHint": "On the built-in login there is no model to bind here — it is chosen per conversation: in the chat model picker, with /model <id> in a chat channel, or by that channel's own default model.",
       "builtin": "Use built-in (agent's own login)",
       "none": "No compatible provider",
       "empty": "No provider for this agent yet.",
@@ -650,12 +648,6 @@
       "customModel": "Custom…",
       "customLabel": "Custom model id",
       "customPlaceholder": "Enter a model id"
-    },
-    "models": {
-      "curateHint": "The list below is everything this agent's CLI knows about, including models your account may not be able to run — nothing on this machine can tell which. Tick the ones that work and only those are offered. Tick none and all of them are.",
-      "noneChosen": "Nothing ticked — all {{total}} models are offered.",
-      "chosenCount": "{{chosen}} of {{total}} models offered.",
-      "saveFailed": "Could not save the model selection."
     },
     "status": "Status",
     "searchPlaceholder": "Search agents…",
@@ -759,9 +751,6 @@
     "bulkInstallMcp": "Install Coffer MCP",
     "cofferManaged": "Managed by Coffer",
     "skillsTab": {
-      "empty": "No skill is delivered to this agent yet — enable a skill and put this agent in its scope on the Skills page.",
-      "degradedBadge": "Copied",
-      "degradedTooltip": "Symlinks aren't available on this filesystem, so Coffer delivered a copy. The agent won't see edits to the master skill until it is delivered again.",
       "managedHint": "Coffer delivers these skills. Which ones reach this agent is decided on the Skills page, by each skill's enable state and its agent scope.",
       "openSkillsPage": "Open the Skills page",
       "unmanagedTitle": "Unmanaged skills",
@@ -784,6 +773,8 @@
     }
   },
   "skills": {
+    "degradedBadge": "Copied",
+    "degradedTooltip": "Symlinks aren't available on this filesystem, so Coffer delivered a copy to at least one agent. Those agents won't see edits to the master skill until it is delivered again.",
     "title": "Skills",
     "subtitle": "AgentSkills-standard folders Coffer manages and delivers to your registered agents.",
     "empty": "No skills yet. Import a local folder to get started.",
@@ -1058,6 +1049,18 @@
       "rotateHint": "Stored in Coffer's credential store; the existing reference is reused.",
       "save": "Save changes",
       "saved": "Channel {{name}} updated"
+    },
+    "models": {
+      "defaultLabel": "Default model",
+      "defaultHint": "A new conversation on this channel opens on this model. Leave it unpinned and the agent's own default applies.",
+      "defaultNone": "Not pinned — use the agent's default",
+      "rangeLabel": "Allowed models",
+      "rangeHint": "Tick the models this channel may use: the /model card offers exactly these, and a /model <id> outside them is refused. The list is everything the bound agent's CLI knows about, including models your account may not be able to run — nothing on this machine can tell which, so you say.",
+      "unrestricted": "No restriction — every model this agent offers is available.",
+      "chosenCount": "{{chosen}} of {{total}} models allowed.",
+      "empty": "No model catalogue available for this agent.",
+      "loadFailed": "Could not load this agent's model catalogue.",
+      "outOfRange": "The default model must be one of the allowed models."
     },
     "test": {
       "send": "Send test message",

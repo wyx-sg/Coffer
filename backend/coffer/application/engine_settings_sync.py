@@ -3,7 +3,10 @@
 The embedding configuration and the internal-engine model choice are
 installation-wide singletons that should match across machines: vector
 indexes rebuild per machine and only converge when both embed with the same
-model. Secrets stay refs (the ciphertext syncs separately).
+model. The embedding doc carries the NAME of the connection it embeds through
+(spec knowledge FR-077), so no endpoint or secret ref travels with it — the
+connection resources sync on their own, and a machine that lacks the named one
+reports the import error rather than embedding through a guess.
 """
 
 from __future__ import annotations
@@ -54,10 +57,8 @@ class EngineSettingsSyncState:
                     "embedding",
                     {
                         "enabled": emb.enabled,
-                        "provider": emb.provider,
+                        "connection": emb.connection,
                         "model": emb.model,
-                        "base_url": emb.base_url,
-                        "credential_ref": emb.credential_ref,
                         "dimensions": emb.dimensions,
                         "default_chunk_size": emb.default_chunk_size,
                         "default_chunk_overlap": emb.default_chunk_overlap,
@@ -94,19 +95,15 @@ class EngineSettingsSyncState:
             return int(raw) if isinstance(raw, int) else fallback
 
         enabled = bool(doc.get("enabled", False))
-        provider = str(doc["provider"]) if doc.get("provider") else None
+        connection = str(doc["connection"]) if doc.get("connection") else None
         model = str(doc["model"]) if doc.get("model") else None
-        base_url = str(doc["base_url"]) if doc.get("base_url") else None
-        credential_ref = str(doc["credential_ref"]) if doc.get("credential_ref") else None
         dimensions = _int("dimensions", current.dimensions)
         chunk_size = _int("default_chunk_size", current.default_chunk_size)
         chunk_overlap = _int("default_chunk_overlap", current.default_chunk_overlap)
         if (
             current.enabled == enabled
-            and current.provider == provider
+            and current.connection == connection
             and current.model == model
-            and current.base_url == base_url
-            and current.credential_ref == credential_ref
             and current.dimensions == dimensions
             and current.default_chunk_size == chunk_size
             and current.default_chunk_overlap == chunk_overlap
@@ -114,10 +111,8 @@ class EngineSettingsSyncState:
             return
         await self._embedding.update(
             enabled=enabled,
-            provider=provider,
+            connection=connection,
             model=model,
-            base_url=base_url,
-            credential_ref=credential_ref,
             dimensions=dimensions,
             default_chunk_size=chunk_size,
             default_chunk_overlap=chunk_overlap,

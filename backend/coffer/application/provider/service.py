@@ -20,12 +20,13 @@ from typing import Protocol as _Protocol
 
 from coffer.application.audit_service import AuditService
 from coffer.application.provider.projector import ProjectionConfigStore, ProviderProjector
+from coffer.application.provider.rename_ops import rename as _rename_op
 from coffer.application.provider.results import ActivateResult, DeactivateResult
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.credential_errors import CredentialMissing
-from coffer.domain.provider.config import Protocol, ProviderConfig, ResolvedConnection
+from coffer.domain.provider.config import CuratedModel, Protocol, ProviderConfig, ResolvedConnection
 from coffer.domain.provider.errors import NoActiveProvider, ProviderCredentialSourceInvalid
 from coffer.domain.resource import Resource, ResourceRef
 
@@ -35,7 +36,7 @@ KIND = "provider"
 # AFTER ``ProviderService.list`` would resolve ``list`` to that method (class-scope
 # shadowing under PEP 563), so name the type here where ``list`` is the builtin.
 _AgentTypes = list[AgentType]
-_ModelIds = list[str]
+_CuratedModels = list[CuratedModel]
 
 # Maps a back-compat wire (the ``use-builtin/{wire}`` route, the legacy
 # ``--wire`` key helper) to the agent it stands for. Activation, de-projection
@@ -112,7 +113,7 @@ class ProviderService:
         secret_value: str | None = None,
         credential_ref: str | None = None,
         compatible_agents: _AgentTypes | None = None,
-        models: _ModelIds | None = None,
+        models: _CuratedModels | None = None,
         description: str | None = None,
         actor: str = "api",
     ) -> Resource:
@@ -173,7 +174,7 @@ class ProviderService:
         base_url: str | None = None,
         secret_value: str | None = None,
         compatible_agents: _AgentTypes | None = None,
-        models: _ModelIds | None = None,
+        models: _CuratedModels | None = None,
         description: str | None = None,
         actor: str = "api",
     ) -> Resource:
@@ -191,7 +192,7 @@ class ProviderService:
         if compatible_agents is not None:
             config["compatible_agents"] = [a.value for a in compatible_agents]
         if models is not None:
-            config["models"] = list(models)
+            config["models"] = [m.model_dump(mode="json") for m in models]
         # Re-validate so a bad edit is rejected before the rotation / DB write.
         validated = ProviderConfig.model_validate(config).model_dump(mode="json")
         if secret_value is not None:
@@ -210,10 +211,13 @@ class ProviderService:
         cfg = self._cfg(resource)
         await self._resources.delete(self._ref(name), actor)
         owned = self._owned_ref(name)
-        if cfg.credential_ref == owned and not await self._resources.find_credential_citations(
-            owned
-        ):
+        citers = await self._resources.find_credential_citations(owned)
+        if cfg.credential_ref == owned and not citers:
             await asyncio.to_thread(self._credentials.delete, owned)
+
+    async def rename(self, name: str, new_name: str, *, actor: str = "api") -> Resource:
+        """Rename a connection; see ``rename_ops`` for the order of operations."""
+        return await _rename_op(self, name, new_name, actor=actor)
 
     # --- switch + key resolution --------------------------------------------
 

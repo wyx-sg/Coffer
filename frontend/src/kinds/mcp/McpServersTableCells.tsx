@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Power, PowerOff, Trash2 } from "lucide-react";
 
+import { ScopeControl } from "@/components/ScopeControl";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,13 +18,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Switch } from "@/components/ui/switch";
 import type { ResourceOut } from "@/lib/components/kindRegistry";
-import {
-  useEnableResource,
-  useDisableResource,
-  useDeleteResource,
-} from "@/lib/hooks/useResourceMutations";
+import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 import { resourcesApi } from "@/lib/api/resources";
 import { useMcpServerRunner, useMcpServerStatus } from "@/lib/hooks/useMcpServerStatus";
@@ -57,21 +53,26 @@ export function ServerHealthCell({ name }: { name: string }) {
   return status ? <HealthBadge state={status} /> : <span className="text-muted-foreground">—</span>;
 }
 
-/** Enable/disable toggle; stops propagation so it doesn't trigger row click. */
+/** Per-row reach control, the same three-state ScopeControl the detail header
+ *  carries: a server is no longer merely on or off, it can be exposed to a
+ *  chosen set of agents, which a Switch cannot say.
+ *
+ *  `resource.scope` rides the list payload, so the control skips its own
+ *  per-resource GET — the list still costs one request, not one per row.
+ *
+ *  The wrapper stops propagation for the whole control, popover included (a
+ *  React portal still bubbles through the React tree), so no click inside it
+ *  navigates the row. */
 export function ServerStatusCell({ resource }: { resource: ResourceOut }) {
-  const { t } = useTranslation();
-  const enable = useEnableResource();
-  const disable = useDisableResource();
   return (
-    <Switch
-      checked={resource.enabled}
-      onClick={(e) => e.stopPropagation()}
-      onCheckedChange={(checked) =>
-        (checked ? enable : disable).mutate({ kind: resource.kind, name: resource.name })
-      }
-      disabled={enable.isPending || disable.isPending}
-      aria-label={resource.enabled ? t("common.enabled") : t("common.disabled")}
-    />
+    <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+      <ScopeControl
+        kind={resource.kind}
+        name={resource.name}
+        enabled={resource.enabled}
+        scope={resource.scope ?? null}
+      />
+    </div>
   );
 }
 

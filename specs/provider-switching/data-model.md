@@ -23,18 +23,28 @@ Resource row. It MUST NOT hold the raw secret.
 > held as plain strings so this domain module stays free of the agent kind (the
 > application layer hydrates them into `AgentType` at the projection seam).
 
-> **Amendment 2026-09-11 (J1–J3):** a `models: list[str]` field records WHICH of
+> **Amendment 2026-09-11 (J1–J3):** a `models` field records WHICH of
 > the endpoint's models the connection offers downstream. It stores no CHOSEN
 > model — E1/E3 stand — only the menu the point-of-use pickers may choose from.
 > EMPTY means no restriction, which is the default and what every connection
 > created before revision 0059 carries.
+
+> **Amendment 2026-09-12b (L1–L4):** each curated entry is an OBJECT,
+> `CuratedModel = {id: str, modality: Modality}`, where `Modality` is a `StrEnum`
+> over `text` (default), `embedding`, `image`, `video` and `audio` — a provider
+> endpoint serves more than chat models, and the entry now says which kind it is.
+> The **stored** modality is the truth: it is inferred only by the one-shot
+> migration that converts plain-string entries and by endpoint introspection
+> (both user-correctable), and **never** by a load-time shim. Every chat model
+> picker narrows the curated set to `text` (FR-029/FR-030).
 
 | Field | Type | Constraints / Notes |
 |---|---|---|
 | `protocol` | `Protocol` | DETECTED, not user-entered; `"anthropic"`, `"openai"`, `"ollama"`, or `"unknown"`. Probed from the endpoint on create/edit; a compatibility hint, not a projection gate. `ollama` is internal-only. `unknown` ⇒ offered to all agents (user decides). |
 | `base_url` | `str` | Required; upstream LLM endpoint URL. |
 | `credential_ref` | `str \| None` | Optional; required for anthropic/openai (Fernet vault ref matching `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`); absent for ollama (no API key). |
-| `models` | `list[str]` | The curated set of model ids this connection OFFERS downstream (FR-025). Default `[]` = no restriction (the endpoint's whole catalogue). Ids are opaque strings passed verbatim to the vendor — validated for shape only (non-blank, deduplicated preserving order, ≤200 ids of ≤200 chars), never against a list Coffer writes down. Not a chosen model: the choice still happens at the point of use. |
+| `models` | `list[CuratedModel]` | The curated set of models this connection OFFERS downstream (FR-025/FR-029). Each entry is `{id, modality}`. Default `[]` = no restriction (the endpoint's whole catalogue). Ids are opaque strings passed verbatim to the vendor — validated for shape only (non-blank, deduplicated by id preserving order, ≤200 ids of ≤200 chars), never against a list Coffer writes down. Not a chosen model: the choice still happens at the point of use. |
+| `models[].modality` | `Modality` | `"text"` (default), `"embedding"`, `"image"`, `"video"` or `"audio"` — which KIND of model the id is (FR-029). STORED, never re-derived at read time: inferred only by the one-shot migration over plain-string entries and by endpoint introspection, both correctable from the connection editor. Chat model pickers offer only the `text` entries (FR-030). |
 | `is_active` | `bool` | At most one `True` per `protocol` at any time (FR-011); always `False` for ollama. |
 | `internal_default` | `bool` | At most one `True` globally (FR-021); the connection Coffer's internal engine uses (its MODEL is chosen by the internal-default selector, not stored here). On import, if >1, normalise (keep most-recently-updated). |
 

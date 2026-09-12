@@ -68,8 +68,12 @@ async def test_provider_round_trips_through_a_bundle(tmp_path):  # type: ignore[
         "base_url": "https://gw/v1",
         "credential_ref": "provider/acme/key",
         "compatible_agents": None,
-        # The curated set the connection offers downstream rides along with it.
-        "models": ["gpt-5", "o3"],
+        # The curated set the connection offers downstream rides along with it,
+        # each entry keeping the modality that says which picker may offer it.
+        "models": [
+            {"id": "gpt-5", "modality": "text"},
+            {"id": "text-embedding-3-large", "modality": "embedding"},
+        ],
         "is_active": True,
         "internal_default": False,
     }
@@ -83,4 +87,7 @@ async def test_provider_round_trips_through_a_bundle(tmp_path):  # type: ignore[
 
     got = await res_b.get(ResourceRef("provider", "acme"))
     assert got.config == config
-    assert got.config["models"] == ["gpt-5", "o3"]
+    assert got.config["models"] == [
+        {"id": "gpt-5", "modality": "text"},
+        {"id": "text-embedding-3-large", "modality": "embedding"},
+    ]

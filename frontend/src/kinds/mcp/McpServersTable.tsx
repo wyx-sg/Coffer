@@ -1,10 +1,11 @@
 // frontend/src/kinds/mcp/McpServersTable.tsx
 //
 // The MCP servers list rendered via the shared DataTable (matching the
-// Agents/Skills tables): name + transport + health + description + an
-// enable/disable Switch + a delete action, with row multi-select driving bulk
-// enable/disable/delete. A row click opens the server's detail page; the inline
-// controls stop propagation so they don't trigger it.
+// Agents/Skills tables): name + transport + health + description + the
+// three-state reach control (ScopeControl, as on the detail header) + a delete
+// action, with row multi-select driving bulk enable/disable/delete. A row click
+// opens the server's detail page; the inline controls stop propagation so they
+// don't trigger it.
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -73,15 +74,22 @@ export function McpServersTable({ resources }: { resources: ResourceOut[] }) {
     },
   ];
 
+  // The status filter tracks the status column: now that the column shows reach
+  // rather than on/off, a bare "enabled" would no longer match anything the
+  // user can see, so the filter offers the control's own three states —
+  // disabled beats scope, and an enabled server is either unscoped (every
+  // agent) or scoped (selected).
   const filters: FilterDef<ResourceOut>[] = [
     {
       key: "status",
       label: t("resources.cols.status"),
       allLabel: t("resources.status.all"),
-      accessor: (r) => (r.enabled ? "enabled" : "disabled"),
+      accessor: (r) =>
+        !r.enabled ? "disabled" : (r.scope ?? null) === null ? "every" : "selected",
       options: [
-        { value: "enabled", label: t("common.enabled") },
         { value: "disabled", label: t("common.disabled") },
+        { value: "every", label: t("scope.everyAgent") },
+        { value: "selected", label: t("scope.selectedAgents") },
       ],
     },
   ];

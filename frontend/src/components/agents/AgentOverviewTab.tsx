@@ -5,9 +5,12 @@
 // 2026-06-23c). The draft → test → confirm state machine lives in
 // useAgentConnectionDraft; this file is presentation only. Claude Code exposes two
 // model slots (primary + fast); Codex one. Those slots belong to a connection: on
-// the built-in login nothing reads `agent.model`, so the panel shows the agent's
-// own model catalogue read-only instead of offering controls that write a field
-// nobody reads.
+// the built-in login nothing reads `agent.model`, so the panel offers NO model
+// control there at all — not a picker, not a tick list — rather than writing a
+// field nobody reads. Curating models is a CHANNEL's job now (its own default
+// model + allowed range, spec channels FR-071), because a channel has an
+// audience and an agent does not; all the built-in branch carries is one line
+// saying where the choice actually happens.
 import { useTranslation } from "react-i18next";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 
@@ -23,7 +26,6 @@ import {
 } from "@/components/ui/select";
 import type { AgentOut } from "@/lib/api/agents";
 import { BUILTIN, useAgentConnectionDraft } from "@/lib/hooks/useAgentConnectionDraft";
-import { AgentModelSelection } from "@/components/agents/AgentModelSelection";
 
 export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
@@ -64,14 +66,14 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
               </Select>
             </div>
 
-            {/* Built-in login: no binding to make here. The agent's own
-                catalogue is shown instead — and because that catalogue names
-                models this account may not be entitled to run, with nothing
-                local able to tell which, the user ticks the ones that work. */}
+            {/* Built-in login: no binding to make here, and nothing to curate
+                either — the model is chosen where the conversation is (the chat
+                picker, `/model`, or a channel's own default model). So the
+                branch offers no control at all, just that sentence. */}
             {c.draftIsBuiltin ? (
-              <div className="sm:col-span-2">
-                <AgentModelSelection agentType={agent.type} />
-              </div>
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                {t("agents.connection.builtinModelsHint")}
+              </p>
             ) : (
               <>
                 <div className="space-y-1.5">

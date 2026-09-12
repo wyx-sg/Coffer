@@ -156,7 +156,7 @@ spec.md 的 workspace 修订（FR-022..FR-026）新增了未托管 skill 扫描�
 - **Infrastructure**：`skill/workspace_scan.py`（把扫描位置的文件系统遍历成 `ScanEntry` 值）。
 - **Application**：`skill/unmanaged_ops.py`（未托管的 list/adopt/delete，FR-022..FR-024）、`skill/delivery_ops.py`（把某个 agent 已投递的集合调和到 `enabled` ∩ scope，任一侧变化即重跑）、以及 `skill/binding_ops.py`（内部的建链/断链原语，从 `service.py` 拆出以满足文件大小上限）——全部为 `lifecycle_ops.py` 风格的自由函数。
 - **Surfaces**：`http/agent_unmanaged_skill_routes.py`（`/agents/{name}/unmanaged-skills*`）；CLI `coffer skill unmanaged|adopt|rm-unmanaged`（位于 `skill_cmd.py`）；投递由框架自己的 `coffer scope show|set|clear skill:<name>` 以及资源的启用/禁用路由来控制。
-- **前端**：`AgentSkillsTab`——指向 Skill 页面的入口，加上一份「当前投递到该 agent」的只读列表；以及带打开文件夹/adopt/删除的未托管 skill 区块、foreign-link 与降级 binding 徽标。投递本身在 skill 一侧控制：Skill 列表页的启用开关与 skill 详情页的启用范围控件。
+- **前端**：`AgentSkillsTab`——指向 Skill 页面的入口（skill 库与降级 binding 徽标都在那一页），以及带打开文件夹/adopt/删除和 foreign-link 徽标的未托管 skill 区块。投递本身在 skill 一侧控制：Skill 列表页的启用开关与 skill 详情页的启用范围控件。
 
 新增 audit 事件：`skill_adopted`、`skill_unmanaged_deleted`、
 `skill_relinked`。扫描在请求时派生；投递状态以簿记形式存在 binding 行里，而决定它的

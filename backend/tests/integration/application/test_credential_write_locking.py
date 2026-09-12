@@ -113,6 +113,9 @@ class _AuditRepo:
     async def insert(self, entry) -> None:
         pass
 
+    async def repoint(self, kind, old_name, new_name) -> int:
+        return 0
+
     async def query(self, **_) -> list:
         return []
 

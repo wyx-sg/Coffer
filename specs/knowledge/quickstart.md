@@ -105,16 +105,18 @@ Every write — agent (MCP), CLI, or REST — reindexes and audits; the web UI w
 
 ## Optional: vector recall
 
-Default retrieval is keyword + grep — zero config, offline, language-agnostic. The embedding provider is **installation-wide**, not per scope: set it once in the web UI (**Model providers → Embedding**, i.e. `PUT /api/v1/embedding/config`); there is no CLI for it. A scope then opts in by listing `vector` in its retrieval modes:
+Default retrieval is keyword + grep — zero config, offline, language-agnostic. Embedding is configured **installation-wide**, not per scope: set it once in the web UI (**Settings → Engine → Embedding**, i.e. `PUT /api/v1/embedding/config`); there is no CLI for it. That card is two pickers — a model provider, then one of its `embedding`-type models — the same shape as the internal-engine card above it; there is no add-a-model form and no key field. The config **names a connection** — one of the LLM connections you already configured — plus a model on it; the protocol, base URL and API key are resolved from that connection, so the embedding settings hold no `base_url`, no `credential_ref` and no key of their own. A scope then opts in by listing `vector` in its retrieval modes:
 
 ```bash
-coffer credentials set embed-key      # the key the embedding config refers to
+# the connection already holds the key; add one on Model providers first
 coffer knowledge configure project-01J… --enable-vector
 ```
 
+Naming a connection that does not exist, an `anthropic` connection (no embedding API), a connection that curates models but none of modality `embedding`, or a model the connection does not curate is refused with a 422 that says which. A connection curating no models at all is unrestricted, so the model id you type is taken at its word. `POST /api/v1/embedding/test` takes `{connection, model}` and reports the vector dimension without persisting anything. With no connection named, the config is inactive and retrieval degrades to keyword/grep.
+
 `coffer knowledge configure <name>` PATCHes the scope's config; the other knobs are `--max-entry-chars`, `--chunk-size`, `--chunk-overlap`, and `--auto-update-sources/--no-auto-update-sources`. Enabling vector re-indexes the scope's existing content. A new named collection is born vector-enabled and the create-collection dialog no longer asks: which index a scope carries is an implementation detail, not a question to put to the user at creation time.
 
-For bilingual content, a local provider (`fastembed` with `bge-m3`) or a cloud model that embeds Chinese well is recommended. The embedding model is mutable — changing it re-embeds every scope that lists a vector mode. With no embedding config, a vector-enabled scope falls back to keyword internally, with no per-query flag.
+For bilingual content, a local connection (Ollama with `bge-m3`) or a cloud model that embeds Chinese well is recommended. The embedding model is mutable — changing it re-embeds every scope that lists a vector mode. With no embedding config, a vector-enabled scope falls back to keyword internally, with no per-query flag.
 
 ## Where files live
 

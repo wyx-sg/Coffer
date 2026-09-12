@@ -155,7 +155,7 @@ New modules per layer:
 - **Infrastructure**: `skill/workspace_scan.py` (filesystem walk of the scan locations into `ScanEntry` values).
 - **Application**: `skill/unmanaged_ops.py` (list/adopt/delete unmanaged, FR-022..FR-024), `skill/delivery_ops.py` (reconciles one agent's delivered set against `enabled` ∩ scope, re-run whenever either side changes), and `skill/binding_ops.py` (the internal link/unlink primitives, split out of `service.py` for the file-size cap) — all free functions in the `lifecycle_ops.py` style.
 - **Surfaces**: `http/agent_unmanaged_skill_routes.py` (`/agents/{name}/unmanaged-skills*`); CLI `coffer skill unmanaged|adopt|rm-unmanaged` (in `skill_cmd.py`); delivery is steered with the framework's own `coffer scope show|set|clear skill:<name>` plus the resource enable/disable routes.
-- **Frontend**: `AgentSkillsTab` — a pointer to the Skill page plus a read-only list of what is currently delivered to this agent, and the unmanaged-skills section with open-folder/adopt/delete, foreign-link and degraded-binding badges. Delivery itself is steered on the skill: the Skill list table's enable switch and the skill detail page's scope control.
+- **Frontend**: `AgentSkillsTab` — a pointer to the Skill page (which carries the library and the degraded-binding badge) plus the unmanaged-skills section with open-folder/adopt/delete and foreign-link badges. Delivery itself is steered on the skill: the Skill list table's enable switch and the skill detail page's scope control.
 
 New audit events: `skill_adopted`, `skill_unmanaged_deleted`,
 `skill_relinked`. The scan is derived at request time; delivery state lives in

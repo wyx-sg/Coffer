@@ -37,7 +37,54 @@ mints those aliases any more.
 
 The embedding model is **mutable** — changing it re-embeds the store (files are truth). No immutability lock.
 
-The shape difference vs spec knowledge is deliberate: 007 keeps the embedding fields **flat** so the memory surface stays a thin form, while 006 nests them in an `EmbeddingConfig` object. Since the global-embedding redesign the flat fields are legacy — accepted on the wire for compatibility but ignored; indexing and recall both resolve the **global** embedding config. Likewise the recall response's `fallback` is a **boolean** in 007 — recall spans multiple stores, so a single fallback-mode string is ill-defined — whereas 006's single-store search reports a nullable mode enum (`fallback: "keyword" | null`).
+The shape difference vs spec knowledge is deliberate: 007 keeps the embedding fields **flat** so the memory surface stays a thin form, while 006 nests them in an `EmbeddingConfig` object. Since the global-embedding redesign the flat fields are legacy — accepted on the wire for compatibility but ignored; indexing and recall both resolve the **global** embedding config (`GlobalEmbeddingConfig`, below). Likewise the recall response's `fallback` is a **boolean** in 007 — recall spans multiple stores, so a single fallback-mode string is ill-defined — whereas 006's single-store search reports a nullable mode enum (`fallback: "keyword" | null`).
+
+### `GlobalEmbeddingConfig` (`domain/embedding_config.py`, table `embedding_config`)
+
+The installation-wide embedding settings — a singleton row. It **names a
+connection** instead of restating a provider (FR-077): the protocol, base URL and
+credential live on the `provider` resource and are resolved from it at use time,
+which is the same "pick a provider, then pick a model" shape the internal-engine
+setting already uses.
+
+| Field                  | Type          | Notes                                                                                                      |
+| ---------------------- | ------------- | ---------------------------------------------------------------------------------------------------------- |
+| `enabled`              | `bool`        | Whether installation-wide embedding is on at all.                                                           |
+| `connection`           | `str \| None` | NAME of a configured LLM connection (a `provider` resource). Empty ⇒ the config is inactive.                |
+| `model`                | `str \| None` | The embedding model id on that connection. Must match one of its curated `embedding` models when it curates any. |
+| `dimensions`           | `int`         | Vector width; drives the `vec_chunks` table.                                                                |
+| `default_chunk_size`   | `int`         | Default chunk size for a scope that does not override it.                                                   |
+| `default_chunk_overlap`| `int`         | Default chunk overlap.                                                                                      |
+| `updated_at`           | `datetime`    | Last write.                                                                                                 |
+
+`provider` (the old protocol-name enum), `base_url` and `credential_ref` are
+**gone** from the row and from the wire, and the update request carries no
+`secret_value`: the key belongs to the connection, and the embedding settings no
+longer mint an `embedding/key` vault entry.
+
+`is_active()` is `enabled and connection and model`. A config naming no
+connection is inactive, so retrieval degrades to keyword/grep exactly as on an
+unconfigured install.
+
+Resolution maps the connection's `protocol` to the embedding client — `openai` →
+openai-compatible, `ollama` → ollama, `unknown` → treated as openai-compatible
+(that is what an unclassified gateway almost always is); `anthropic` serves no
+embedding API and is refused. The connection's `base_url` and `credential_ref`
+are used verbatim.
+
+Selection is refused with **HTTP 422** (`CONFIG_INVALID`, the status every other
+config rejection in the app returns) when it names a connection that does not
+exist, one whose protocol serves no embeddings, one that curates models but none
+with modality `embedding`, or a model nothing the connection curates matches. A
+connection curating no models at all is accepted (empty = unrestricted) and the
+typed model id taken at its word.
+
+**Migration:** one Alembic revision rewrites the singleton row — an existing
+config is mapped onto the connection whose `base_url` (or, failing that,
+`credential_ref`) matches what it had recorded; when nothing matches, the row
+keeps its dimensions and chunk defaults but is left with no connection and
+`enabled = 0` rather than inventing a connection. One-shot: the old columns are
+dropped in the same revision and no load-time shim reads them.
 
 ### `MemoryFact` (`domain/memory/fact.py`)
 

@@ -67,7 +67,10 @@ markdown 文件成为唯一事实源，所有派生的索引/元数据经由 SQL
   OpenAI / OpenRouter / Voyage / Jina / Gemini / Azure / DashScope
   以及本地 Ollama / LM Studio，另有一个可选的进程内 `local` provider
   （fastembed）做零服务端、离线 embedding。embedding 模型是**可变的** ——
-  改它会对语料重新 embed（文件即事实），因此没有不可变锁。
+  改它会对语料重新 embed（文件即事实），因此没有不可变锁。*形态已被取代、
+  实质未变：* 现在它是一份全安装唯一的配置，指名一个 LLM 连接加它的一个
+  `embedding` modality 模型（spec knowledge FR-077），端点与密钥只在
+  Connections 页面填一次，不再逐语料重述。
 - **可插拔的 `MarkdownConverter` 端口**（`can_handle(format)` +
   `convert(bytes) -> (markdown, metadata)`），限定在 infrastructure 内，按格式
   分发。默认引擎是 **MarkItDown**（覆盖面广、面向 LLM、MIT）；可按格式接上
