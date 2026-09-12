@@ -12,7 +12,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Check, Cpu, Pencil, Trash2 } from "lucide-react";
+import { Check, Pencil, Trash2 } from "lucide-react";
 
 import { ScopeControl } from "@/components/ScopeControl";
 import { ProviderForm } from "@/components/settings/ProviderForm";
@@ -77,12 +77,6 @@ export function ProviderDetailHeader({
             <Badge className="gap-1">
               <Check className="size-3" />
               {t("settings.connections.active")}
-            </Badge>
-          ) : null}
-          {provider.internal_default ? (
-            <Badge variant="outline" className="gap-1">
-              <Cpu className="size-3" />
-              {t("settings.connections.internalEngine")}
             </Badge>
           ) : null}
         </div>

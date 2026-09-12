@@ -454,7 +454,6 @@
       "secret": "API Key",
       "searchPlaceholder": "搜索模型提供商…",
       "allVendors": "全部厂商",
-      "internalEngine": "Coffer 引擎",
       "bulkDeleteConfirm": "删除选中的 {{count}} 个模型提供商？它们保存的凭据也会一并删除。",
       "detail": {
         "back": "返回模型提供商",

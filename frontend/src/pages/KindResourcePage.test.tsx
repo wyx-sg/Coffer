@@ -105,7 +105,7 @@ describe("KindResourcePage", () => {
     } as unknown as ReturnType<typeof hooks.useResources>);
 
     renderPage();
-    expect(screen.getByText(/no knowledge scopes yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/no collections yet/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /new collection/i })).toBeInTheDocument();
   });
 });

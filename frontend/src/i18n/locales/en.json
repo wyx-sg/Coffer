@@ -454,7 +454,6 @@
       "secret": "API key",
       "searchPlaceholder": "Search model providers…",
       "allVendors": "All vendors",
-      "internalEngine": "Coffer engine",
       "bulkDeleteConfirm": "Delete {{count}} model provider(s)? Their stored credentials are removed too.",
       "detail": {
         "back": "Back to model providers",
