@@ -97,6 +97,11 @@ _STATUS: dict[str, int] = {
     "SYNC_BUNDLE_INVALID": 422,
     "SYNC_SERIALIZATION_INVALID": 422,
     "MASTER_KEY_FILE_INVALID": 422,
+    # vault backup (spec vault-export-import ## Backup). A bad remote is the
+    # caller's configuration (422); a git invocation that failed is the remote
+    # or the network refusing us, which is an upstream failure (502).
+    "BACKUP_REMOTE_INVALID": 422,
+    "GIT_MIRROR_FAILED": 502,
     # provider switching (spec provider-switching)
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": 422,
     "NO_ACTIVE_PROVIDER": 404,

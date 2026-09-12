@@ -392,7 +392,32 @@
       "importKey": "Import key",
       "keyExported": "Key downloaded as {{name}}",
       "keyImported": "Key imported — this machine now decrypts credentials brought with a bundle.",
-      "keyFileEmpty": "That file is empty — pick the key file exported from the other machine."
+      "keyFileEmpty": "That file is empty — pick the key file exported from the other machine.",
+      "backup": {
+        "title": "Backup to a git remote",
+        "description": "Push this vault's exports to one git repository you own, on a timer. It is a backup, never a second source of truth: Coffer pushes, and only restores when you ask it to.",
+        "enabled": "Back up automatically",
+        "url": "Repository URL",
+        "branch": "Branch",
+        "interval": "Every (seconds)",
+        "credentialRef": "Push credential",
+        "credentialRefHint": "The name of an entry in Coffer's credential store — not the secret itself. The daemon resolves it when it pushes, so the credential never reaches this page, the repository's git config, or any error text.",
+        "includeCredentials": "Include credentials",
+        "includeCredentialsHint": "Credentials travel as encrypted ciphertext; the master key is never pushed under any setting. This is fixed for the remote, not chosen per backup.",
+        "pushNow": "Back up now",
+        "pushing": "Backing up…",
+        "worktree": "Working tree: {{path}}",
+        "lastRun": "Last backup: {{status}} · {{when}}",
+        "commit": "Commit {{commit}}",
+        "never": "unknown",
+        "noRunYet": "No backup has run yet.",
+        "runStatus": {
+          "ok": "pushed",
+          "no_change": "nothing changed",
+          "push_failed": "push failed",
+          "export_failed": "export failed"
+        }
+      }
     },
     "connections": {
       "title": "Model providers",
@@ -476,6 +501,7 @@
     "AGENT_CONFIG_DIR_REGISTERED": "An agent for this config directory is already registered.",
     "AGENT_CONFIG_PARSE_ERROR": "The agent's config file couldn't be parsed",
     "AGENT_CONFIG_REJECTED": "The agent configuration was rejected",
+    "BACKUP_REMOTE_INVALID": "That backup remote cannot be used as given — check the URL, the branch, and that the interval is a positive number of seconds.",
     "BAD_REQUEST": "The request was rejected as malformed.",
     "CHANNEL_NOT_PAIRED": "This channel has no paired peer yet",
     "CHANNEL_NOT_RUNNING": "The channel adapter is not running",
@@ -498,8 +524,9 @@
     "FS_PATH_NOT_BROWSABLE": "That path can't be browsed",
     "FS_PATH_NOT_OPENABLE": "That path cannot be opened on this machine",
     "GENERIC_CREATE_NOT_ALLOWED": "This kind can't be created directly",
-    "HOST_NOT_LOOPBACK": "Coffer only answers requests addressed to its own loopback address.",
+    "GIT_MIRROR_FAILED": "Git could not complete that backup operation. The commit is safe locally; check the remote URL, the branch, and the push credential.",
     "GREP_PATTERN_INVALID": "Invalid grep pattern",
+    "HOST_NOT_LOOPBACK": "Coffer only answers requests addressed to its own loopback address.",
     "INGEST_REJECTED": "The document was rejected during ingestion",
     "INGEST_REJECTED_scanned_pdf": "This PDF appears to be scanned or image-only — no text could be extracted. Run OCR (or convert it to a text-based PDF) and re-upload.",
     "INGEST_REJECTED_unsupported_type": "This file type isn't supported. Convert it to PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), HTML, EPUB, CSV, or a text/Markdown file and re-upload. Legacy .doc/.ppt: save as .docx/.pptx first.",

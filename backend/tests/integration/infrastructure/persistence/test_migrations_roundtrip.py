@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0061"
+HEAD_REVISION = "0062"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -116,7 +116,10 @@ HEAD_REVISION = "0061"
 # its downgrade is a no-op because deleted rows cannot be invented back. 0057 is
 # DATA-only: it writes an empty ``models`` list into every ``kind='provider'``
 # ``config_json`` (the curated set a connection offers downstream; empty = no
-# restriction) — no DDL, table/column set unchanged.
+# restriction) — no DDL, table/column set unchanged. 0062 CREATEs
+# ``sync_remotes``, the single-row backup-remote config (spec
+# vault-export-import ``## Backup``); present at head, dropped by its own
+# downgrade, and absent from every revision below it.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",
@@ -137,13 +140,15 @@ EXPECTED_TABLES = {
     "chat_messages",
     "channel_peers",
     "channel_thread_conversations",
+    "sync_remotes",
 }
 
 # Below revision 0052 the two side tables still carry their pre-merge names
 # (0052 renames them on the way up and back on the way down), so every stepwise
-# assertion under 0052 compares against this set instead.
+# assertion under 0052 compares against this set instead. ``sync_remotes`` comes
+# out too: 0062 created it, so nothing below 0052 has ever seen it.
 PRE_MERGE_TABLES = (
-    EXPECTED_TABLES - {"knowledge_scope_project_roots", "knowledge_scope_labels"}
+    EXPECTED_TABLES - {"knowledge_scope_project_roots", "knowledge_scope_labels", "sync_remotes"}
 ) | {"memory_store_project_roots", "memory_store_labels"}
 
 
@@ -807,7 +812,11 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         with sqlite3.connect(db_path) as conn:
             return {r[1] for r in conn.execute("PRAGMA table_info(sync_config)")}
 
+    # 0062 adds sync_remotes (the one backup remote) — present at head, and
+    # dropped by its own downgrade on the way to 0049.
+    assert "sync_remotes" in _user_tables(db_path)
     command.downgrade(cfg, "0049")
+    assert "sync_remotes" not in _user_tables(db_path)
     assert "distilled_sessions" in _user_tables(db_path)
     command.downgrade(cfg, "0048")
     assert _user_tables(db_path) >= SYNC_TABLES

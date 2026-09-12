@@ -53,3 +53,13 @@ class MasterKeyFileInvalid(CofferError):  # noqa: N818
         super().__init__(f"master key file invalid ({reason}): {path}")
         self.path = path
         self.reason = reason
+
+
+class BackupRemoteInvalid(CofferError):  # noqa: N818
+    """The backup remote's configuration cannot be used as given. Maps to 422."""
+
+    code = "BACKUP_REMOTE_INVALID"
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"backup remote invalid: {reason}")
+        self.reason = reason

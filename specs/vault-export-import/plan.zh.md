@@ -30,8 +30,20 @@ surfaces/
   cli/sync_cmd.py                         `coffer sync` group
 ```
 
-没有 `git_repo.py`、没有 `worker.py`、没有 `config_service.py`、也没有
-`persistence.py`——因为没有远程、没有后台循环、也没有 sync 表。
+备份远端（spec `## 备份`，章程 0.5.0）在这幅图上只增加四样东西，别无其他：
+
+```
+domain/sync/backup.py                    BackupRemote、BackupRun、redact（纯）
+application/sync/ports.py                + GitMirrorPort
+application/sync/backup_service.py       configure / run_once / restore
+application/sync/backup_worker.py        定时器，形状照搬 RetentionWorker
+infrastructure/sync/git_mirror.py        唯一执行 git 的地方
+infrastructure/persistence/
+  sync_remote_repo.py                    那一行 sync_remotes
+```
+
+没有墓碑表、没有机器身份、没有文件监听、没有冲突仲裁——那些属于收敛，
+而收敛仍未建造。
 
 ## 构建顺序（TDD，每步可独立提交）
 
@@ -59,6 +71,32 @@ surfaces/
    移除。
 9. **docs** —— architecture.md 的横切行、roadmap 状态、docs-site 的 guide 与
    architecture 页面、中文 companion；用验收标记把 `spec.md` 中每个场景与一个测试关联。
+
+## 构建顺序——备份远端
+
+每一步都是一个带自己测试、可独立提交的块。
+
+1. **domain/sync/backup.py** —— `BackupRemote` 及其校验、`BackupRun` 与
+   `BackupRunStatus`、以及 `redact`。单测：默认值与 spec 一致、非法的
+   interval/url/branch 被拒、脱敏能去掉每一处出现。
+2. **`sync_remotes` 表** —— 模型、migration、`SqlAlchemySyncRemoteRepo`。
+   「只有一行」是一条检查约束（`id = 1`），不是靠约定记住的规矩。集成测试：
+   set/get 每个字段都能往返、set 两次仍只有一行、记录过的运行能读回来。
+3. **`GitMirrorPort` + `GitMirror`** —— init 或接管、暂存、提交、推送、拉取、
+   clone、解析修订号或日期、detach 与回到分支。集成测试跑在一个真实的本地
+   裸仓库上，因而完全不涉及网络。其中两条测试专为钉死安全规则而存在：token
+   绝不进入 `.git/config`，失败的推送其消息里不含任何密钥。
+4. **`BackupService`** —— 一次运行：导出进工作树、只在导出结果发生变化时提交、
+   推送、记录。用假 mirror 的单测覆盖四种结果，包括「推送失败保留提交、下一次
+   运行把它推上去而不再产生第二次提交」。
+5. **`BackupWorker`** —— 启动时补跑一次，之后按配置的间隔；一次运行内部抛出的
+   异常绝不终结循环。
+6. **HTTP** —— `/sync/remote`、`/sync/push`、`/sync/restore`、`/sync/status`，
+   每条都有显式的响应模型。有一条测试断言远端的负载里只带凭据**引用**。
+7. **CLI** —— `coffer sync remote set|show|clear`、`push`、`restore`、`status`。
+   `remote set` 在启用之前先打印一次推送会包含什么。
+8. **UI** —— 设置 → Sync 里的一张备份卡，形状照搬保留策略卡：自动保存、上次
+   运行状态，以及一个「立即备份」按钮。
 
 ## 已遵守的关键约束
 

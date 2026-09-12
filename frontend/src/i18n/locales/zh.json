@@ -392,7 +392,32 @@
       "importKey": "导入 key",
       "keyExported": "key 已下载为 {{name}}",
       "keyImported": "key 已导入——本机现在可以解密随 bundle 带来的凭据。",
-      "keyFileEmpty": "该文件为空——请选择从另一台机器导出的 key 文件。"
+      "keyFileEmpty": "该文件为空——请选择从另一台机器导出的 key 文件。",
+      "backup": {
+        "title": "备份到 git 远端",
+        "description": "按固定间隔把本 vault 的导出推送到一个你自己的 git 仓库。它只是备份，不是第二份事实来源：Coffer 只负责推送，恢复必须由你主动触发。",
+        "enabled": "自动备份",
+        "url": "仓库 URL",
+        "branch": "分支",
+        "interval": "间隔（秒）",
+        "credentialRef": "推送凭据",
+        "credentialRefHint": "这里填的是 Coffer 凭据库中的条目名称，不是密钥本身。守护进程只在推送那一刻解析它，所以密钥不会出现在本页面、仓库的 git config，或任何错误文本里。",
+        "includeCredentials": "包含凭据",
+        "includeCredentialsHint": "凭据以密文形式随行；无论如何设置，master key 都不会被推送。该开关属于远端配置，不是每次备份单独选择。",
+        "pushNow": "立即备份",
+        "pushing": "备份中…",
+        "worktree": "工作区：{{path}}",
+        "lastRun": "上次备份：{{status}} · {{when}}",
+        "commit": "提交 {{commit}}",
+        "never": "未知",
+        "noRunYet": "尚未执行过备份。",
+        "runStatus": {
+          "ok": "已推送",
+          "no_change": "没有变化",
+          "push_failed": "推送失败",
+          "export_failed": "导出失败"
+        }
+      }
     },
     "connections": {
       "title": "模型提供商",
@@ -476,6 +501,7 @@
     "AGENT_CONFIG_DIR_REGISTERED": "该配置目录已经注册过一个 agent 了。",
     "AGENT_CONFIG_PARSE_ERROR": "无法解析该 agent 的配置文件",
     "AGENT_CONFIG_REJECTED": "该 agent 配置被拒绝",
+    "BACKUP_REMOTE_INVALID": "该备份远端配置无法使用——请检查 URL、分支，以及间隔是否为正整数秒。",
     "BAD_REQUEST": "请求格式有误，已被拒绝。",
     "CHANNEL_NOT_PAIRED": "该渠道还没有配对的账号",
     "CHANNEL_NOT_RUNNING": "渠道适配器未在运行",
@@ -498,8 +524,9 @@
     "FS_PATH_NOT_BROWSABLE": "该路径无法浏览",
     "FS_PATH_NOT_OPENABLE": "该路径在这台机器上无法打开",
     "GENERIC_CREATE_NOT_ALLOWED": "该类型不支持直接创建",
-    "HOST_NOT_LOOPBACK": "Coffer 只响应发往它自己 loopback 地址的请求。",
+    "GIT_MIRROR_FAILED": "git 未能完成该备份操作。提交已安全保存在本地；请检查远端 URL、分支和推送凭据。",
     "GREP_PATTERN_INVALID": "无效的 grep 模式",
+    "HOST_NOT_LOOPBACK": "Coffer 只响应发往它自己 loopback 地址的请求。",
     "INGEST_REJECTED": "文档在摄入过程中被拒绝",
     "INGEST_REJECTED_scanned_pdf": "该 PDF 似乎是扫描件或纯图片——无法提取文本。请先运行 OCR（或将其转换为基于文本的 PDF）后重新上传。",
     "INGEST_REJECTED_unsupported_type": "暂不支持此文件类型。请转换为 PDF、Word（.docx）、PowerPoint（.pptx）、Excel（.xlsx）、HTML、EPUB、CSV 或纯文本/Markdown 后重新上传；旧版 .doc/.ppt 请先另存为 .docx/.pptx。",

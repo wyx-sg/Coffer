@@ -82,6 +82,42 @@ class RetentionPolicyModel(Base):
     )
 
 
+class SyncRemoteModel(Base):
+    """The one backup remote (spec vault-export-import ``## Backup``).
+
+    Single row by construction: ``id`` is pinned to 1 by a check constraint, so
+    "at most one backup remote" is a schema fact rather than a convention the
+    application has to remember. ``credential_ref`` holds a reference into the
+    credential store — never a secret, so this row is safe to read into an API
+    response or a log line without redaction.
+
+    The ``last_*`` columns describe the most recent run rather than a history:
+    what a user needs from the last run is whether it worked and what to do
+    next, and the git history on the remote is the real record of what changed.
+    """
+
+    __tablename__ = "sync_remotes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    url: Mapped[str] = mapped_column(String, nullable=False)
+    branch: Mapped[str] = mapped_column(String, nullable=False, default="main")
+    credential_ref: Mapped[str | None] = mapped_column(String, nullable=True)
+    include_credentials: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    interval_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=3600)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    worktree_path: Mapped[str] = mapped_column(String, nullable=False, default="~/.coffer/sync")
+    last_run_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    last_status: Mapped[str | None] = mapped_column(String, nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String, nullable=True)
+    last_commit: Mapped[str | None] = mapped_column(String, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("id = 1", name="ck_sync_remote_single_row"),
+        CheckConstraint("interval_seconds > 0", name="ck_sync_remote_interval_positive"),
+    )
+
+
 class CredentialModel(Base):
     """Fernet-encrypted secret values. Plaintext NEVER lands in this table —
     only ciphertext produced by EncryptedCredentialStore. Timestamps are ISO-8601

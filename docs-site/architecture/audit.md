@@ -78,6 +78,7 @@ The full set of audited event types (defined as `AuditEventType` in `domain/audi
 | `credential_migrated`                                       | Per ref, when a legacy keychain secret is migrated into the store |
 | `master_key_relocated`                                      | After the master key moves between file and keychain storage      |
 | `master_key_exported` / `master_key_imported`               | Out-of-band master-key transfer to / from another machine         |
+| `vault_backed_up`                                           | After each backup run, with its status and commit — never the push credential and never git's raw error text |
 
 **Agent workspace** — every one of these writes a file Coffer does not own:
 

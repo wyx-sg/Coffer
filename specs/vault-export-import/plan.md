@@ -31,8 +31,21 @@ surfaces/
   cli/sync_cmd.py                         `coffer sync` group
 ```
 
-No `git_repo.py`, no `worker.py`, no `config_service.py`, no
-`persistence.py` — there is no remote, no background loop, and no sync table.
+The backup remote (spec `## Backup`, constitution 0.5.0) adds exactly four
+things to that picture, and nothing else:
+
+```
+domain/sync/backup.py                    BackupRemote, BackupRun, redact (pure)
+application/sync/ports.py                + GitMirrorPort
+application/sync/backup_service.py       configure / run_once / restore
+application/sync/backup_worker.py        the timer, shaped like RetentionWorker
+infrastructure/sync/git_mirror.py        the one place that runs git
+infrastructure/persistence/
+  sync_remote_repo.py                    the single sync_remotes row
+```
+
+No tombstone table, no machine identity, no file watcher, no conflict
+arbitration — those belonged to convergence, which is still not built.
 
 ## Build order (TDD, each a committable chunk)
 
@@ -67,6 +80,36 @@ No `git_repo.py`, no `worker.py`, no `config_service.py`, no
 9. **docs** — architecture.md cross-cutting row, roadmap status, docs-site
    guide + architecture pages, bilingual companions; acceptance markers tie each
    `spec.md` scenario to a test.
+
+## Build order — the backup remote
+
+Each step is a committable chunk with its own tests.
+
+1. **domain/sync/backup.py** — `BackupRemote` with its validation, `BackupRun`
+   and `BackupRunStatus`, and `redact`. Unit tests: defaults match the spec,
+   invalid interval/url/branch refused, redaction removes every occurrence.
+2. **`sync_remotes` table** — model, migration, `SqlAlchemySyncRemoteRepo`. The
+   single-row rule is a check constraint (`id = 1`), not a convention.
+   Integration test: set/get round-trips every field, setting twice keeps one
+   row, a recorded run reads back.
+3. **`GitMirrorPort` + `GitMirror`** — init or adopt, stage, commit, push,
+   fetch, clone, resolve a revision or a date, detach and return. Integration
+   tests run against a real local bare repository, so no network is involved.
+   Two of them exist only to pin the security rule: the token never reaches
+   `.git/config`, and a failed push's message carries no secret.
+4. **`BackupService`** — the run: export into the working tree, commit only
+   when the export differs, push, record. Unit tests with a fake mirror cover
+   the four outcomes, including that a failed push keeps its commit and the
+   next run pushes it without committing again.
+5. **`BackupWorker`** — catch-up run on start, then the configured interval; an
+   exception inside a run never ends the loop.
+6. **HTTP** — `/sync/remote`, `/sync/push`, `/sync/restore`, `/sync/status`,
+   each with an explicit response model. A test asserts the remote's payload
+   carries only the credential *reference*.
+7. **CLI** — `coffer sync remote set|show|clear`, `push`, `restore`, `status`.
+   `remote set` prints what a push will contain before it is enabled.
+8. **UI** — a backup card in Settings → Sync, shaped like the retention card:
+   auto-save, last-run status, and a "back up now" button.
 
 ## Key constraints honored
 
