@@ -79,6 +79,7 @@
     "agents": "Agent",
     "channels": "渠道",
     "audit": "审计日志",
+    "chat": "聊天",
     "modelProviders": "模型提供商"
   },
   "resources": {
@@ -908,6 +909,114 @@
     "delete": {
       "title": "删除集合",
       "description": "删除「{{name}}」及其中的所有文件？此操作不可撤销。"
+    }
+  },
+  "chat": {
+    "title": "对话",
+    "thinking": "思考中…",
+    "emptyState": {
+      "title": "尚未配置连接",
+      "body": "请先添加一个 LLM 连接，再开始对话。",
+      "cta": "前往设置 → LLM 连接"
+    },
+    "message": {
+      "failed": "该回复未完成。",
+      "tokens": "输入 {{prompt}} · 输出 {{completion}}"
+    },
+    "modelBar": {
+      "model": "模型",
+      "noModel": "未选择模型",
+      "noModels": "尚无模型",
+      "selectAria": "选择模型"
+    },
+    "history": {
+      "title": "对话列表",
+      "new": "新对话",
+      "empty": "暂无对话",
+      "search": "搜索对话",
+      "noMatches": "没有匹配的对话",
+      "ariaLabel": "对话历史",
+      "rename": "重命名",
+      "renameAria": "重命名对话",
+      "delete": "删除",
+      "collapse": "折叠历史面板",
+      "expand": "展开历史面板",
+      "restore": "恢复",
+      "archive": "归档",
+      "viewArchived": "查看归档",
+      "backToActive": "返回活跃",
+      "archivedTitle": "已归档",
+      "archivedEmpty": "没有已归档的对话",
+      "filterLabel": "筛选对话",
+      "filterActive": "活跃",
+      "filterArchived": "归档",
+      "viaChannel": "来自 {{channel}}"
+    },
+    "thread": {
+      "empty": "发送消息开始对话。",
+      "selectOrCreate": "选择一个对话或新建一个。",
+      "notFoundTitle": "未找到该对话",
+      "notFoundBody": "它可能已被删除，或者链接已失效。",
+      "notFoundCta": "开始新对话"
+    },
+    "archivedThread": {
+      "notice": "该对话已归档。",
+      "restore": "恢复以继续对话",
+      "restoring": "恢复中…"
+    },
+    "composer": {
+      "placeholder": "输入消息…（Enter 发送，Shift+Enter 换行）",
+      "ariaLabel": "消息输入框",
+      "send": "发送",
+      "stop": "停止",
+      "streaming": "回复正在生成中 —— 你的下一条消息将进入队列。"
+    },
+    "queue": {
+      "label": "队列中：",
+      "edit": "编辑排队消息",
+      "remove": "从队列移除"
+    },
+    "toolCard": {
+      "unknown": "未知工具",
+      "running": "运行中",
+      "done": "完成",
+      "error": "错误",
+      "input": "输入",
+      "result": "结果",
+      "errorLabel": "错误",
+      "toggleAria": "切换工具调用 {{name}}"
+    },
+    "newConversation": {
+      "agent": "Agent",
+      "model": "模型",
+      "noModels": "尚无模型 —— 请先到「设置 → LLM 连接」添加一个连接。",
+      "unavailable": "不可用",
+      "workdir": "工作目录",
+      "workdirPlaceholder": "/你的/项目/路径",
+      "recent": "最近的目录"
+    },
+    "modelPicker": {
+      "label": "Agent 模型",
+      "placeholder": "模型（可选）",
+      "inheritNoModel": "默认"
+    },
+    "draft": {
+      "guide": "给 {{agent}} 发消息，开始新对话。",
+      "workdirNeeded": "在上方填写工作目录后，即可与 {{agent}} 对话。",
+      "noAgentTitle": "没有可用的受管 agent",
+      "noAgentBody": "聊天需要连接 Coffer 受管的 agent。请安装或配置 Claude Code 或 Codex，然后在「Agent」页面注册。",
+      "noConnectionTitle": "尚未配置连接",
+      "noConnectionBody": "该 agent 还没有启用的 LLM 连接。请先添加一个，再开始对话。",
+      "noConnectionCta": "前往设置 → LLM 连接"
+    },
+    "delete": {
+      "title": "删除此对话？",
+      "body": "此对话及其所有消息将被永久删除。"
+    },
+    "archive": {
+      "title": "归档此对话？",
+      "body": "它将被移入归档，你可以随时恢复。",
+      "confirm": "归档"
     }
   },
   "channels": {
