@@ -29,7 +29,7 @@ Coffer 的每个接口面都是通向同一底层守护进程的入口点。守�
 | `/skills`                         | 技能主存储与各 agent 的绑定。                                      |
 | `/knowledge/{scope}`              | 单个知识作用域：`entries`、`documents`、检索、整理、重建索引。      |
 | `/channels`                       | 通道绑定（Telegram、SeaTalk）、配对。                             |
-| `/agent-providers`、`/models`     | 已注册的 agent provider 及其模型目录；连接自省。                  |
+| `/agent-providers`、`/models`     | 已注册的 agent provider；连接的模型自省。                          |
 | `/credentials`、`/settings`       | 加密凭据存储；设置含 `/settings/credentials`（主密钥存储）与 `/embedding` 配置。 |
 | `/sync`                           | 仓库导出 / 导入运行与主密钥传递。                                 |
 | `/fs`                             | 用于配置选择器的文件系统浏览辅助。                                |

@@ -29,7 +29,7 @@ The surfaces are described below using a consistent template: **What it is · Wh
 | `/skills`                         | Skill master store and per-agent bindings.                        |
 | `/knowledge/{scope}`              | One knowledge scope: `entries`, `documents`, retrieval, organize, reindex. |
 | `/channels`                       | Channel bindings (Telegram, SeaTalk), pairing.                    |
-| `/agent-providers`, `/models`     | The registered agent providers with their model catalogues; connection introspection. |
+| `/agent-providers`, `/models`     | The registered agent providers; connection model introspection.     |
 | `/credentials`, `/settings`       | Encrypted credential store; settings incl. `/settings/credentials` (master-key storage) and `/embedding` config. |
 | `/sync`                           | Vault export / import runs and the master-key transfer.           |
 | `/fs`                             | Filesystem browse helper for config pickers.                      |

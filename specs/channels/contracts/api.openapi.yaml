@@ -131,33 +131,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/AgentProviderListOut'
 
-  /api/v1/agent-providers/{agent_key}/models:
-    get:
-      summary: List the models an agent can be put on
-      operationId: listAgentModels
-      tags: [agent-providers]
-      parameters:
-        - name: agent_key
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: >
-            The concrete models the installed agent itself reported, minus the
-            ones its own retirement table says are gone. The order is
-            meaningful (newest first). Nothing narrows it: the agent answers
-            only "what can this agent be put on", and a surface with an
-            audience of its own — a channel's allowed range — curates over it
-            on its own side.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AgentModelsOut'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
 components:
   securitySchemes:
     bearerAuth:
@@ -201,30 +174,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AgentProviderOut'
-
-    AgentModelOut:
-      type: object
-      required: [id]
-      properties:
-        id:
-          type: string
-          description: >-
-            The id passed verbatim to the agent's CLI. Concrete models only —
-            tier aliases (`sonnet`, `opus`, `best`, `sonnet[1m]`, …) are not
-            listed, since each resolves to a model already in the list.
-        label:
-          type: string
-        description:
-          type: string
-
-    AgentModelsOut:
-      type: object
-      required: [models]
-      properties:
-        models:
-          type: array
-          items:
-            $ref: '#/components/schemas/AgentModelOut'
 
     PairingCodeOut:
       type: object

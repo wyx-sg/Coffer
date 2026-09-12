@@ -11,8 +11,8 @@
 // On the built-in login there is nothing to bind — `agent.model` is only read
 // when projecting a connection — so the panel offers NO model control at all
 // there, only a line saying where the model is chosen instead (per
-// conversation, or a channel's own default model, spec channels FR-071). This
-// hook carries nothing for that case beyond `draftIsBuiltin`.
+// conversation, in chat with /model). This hook carries nothing for that case
+// beyond `draftIsBuiltin`.
 //
 // Where the model options come from depends on the draft connection. A
 // connection with a CURATED set (`models` non-empty, chosen on its detail page)

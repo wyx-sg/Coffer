@@ -7,10 +7,9 @@
 // model slots (primary + fast); Codex one. Those slots belong to a connection: on
 // the built-in login nothing reads `agent.model`, so the panel offers NO model
 // control there at all — not a picker, not a tick list — rather than writing a
-// field nobody reads. Curating models is a CHANNEL's job now (its own default
-// model + allowed range, spec channels FR-071), because a channel has an
-// audience and an agent does not; all the built-in branch carries is one line
-// saying where the choice actually happens.
+// field nobody reads. The model is chosen per conversation instead, in chat with
+// /model; all the built-in branch carries is one line saying where the choice
+// actually happens.
 import { useTranslation } from "react-i18next";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 

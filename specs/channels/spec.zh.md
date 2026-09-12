@@ -322,14 +322,16 @@ status / notify`。
   生效（model 每 turn 重读，不同于 agent 与工作目录）。非法 builtin model 对
   registry 校验被拒；坏的桥接 model 串会以 CLI 自己的错误回传到 chat。在
   `supports_buttons` 的传输上（FR-018），`/model` 无参时把候选渲染成选择卡片。
-  选项取自该 agent 的 model catalogue（与网页 picker 同一份列表），当本 channel 设了
-  允许范围时按该范围收窄（FR-071），否则**整份** catalogue 都可选，只是**一次一页**
+  选项取自该 agent 的 model catalogue（从已安装的 CLI 读回，也是 Coffer 掌握的
+  「这个 agent 能跑什么」的唯一一份列表），而且是**整份**——没有任何东西策展它：
+  agent 与 channel 都不收窄卡片能提供的范围。只是**一次一页**
   （FR-018）：`claude_code` 的 catalogue 有 29 个
   model，这么长的卡片在手机上根本读不了，SeaTalk 也会直接拒收，所以卡片是这份列表
   的一个窗口，而不是列表本身。卡片打开时停在当前生效 model 所在的那一页，因此新渲染
   的卡片总能看见自己的勾标。自由文本 `/model <name>` 仍然是触达一个你已经叫得出名字
-  的 model（包括 catalogue 里没有的）最快的路，卡片正文也这么写着；但在设了允许范围的
-  channel 里，它只能触达该范围内的 model（FR-071）。没有建议时回退到文本报告。
+  的 model（包括 catalogue 里没有的）最快的路，卡片正文也这么写着。没有哪个面会拒绝一个
+  id：channel 只绑定一个 agent、别无其他，所绑定的 CLI 收什么，`/model` 就能触达什么。
+  没有建议时回退到文本报告。
 - **FR-018**: 在声明了 `supports_buttons` 能力的传输上，内核 MAY 把一个命令的
   候选列表渲染成一张**交互式选择卡片**（Telegram inline keyboard、SeaTalk
   interactive message）。按钮点选作为一个规范化回调到达，携带一个不透明的值；
@@ -1499,7 +1501,7 @@ Web 端 Chat 页面是它们的另一个客户端；那个页面已被删除（�
   写入任何东西之前。channel 绑定在 peer 的第一条消息上解析的就是这个。
 - **FR-045**: 平台必须通过 REST API 暴露它注册了哪些 agent——每个带稳定 key、
   显示名和当前可用标志——好让 channel 编辑器只提供真实存在的 agent，并标出那些
-  CLI 不在本机上的。它同样必须按 agent 暴露该 agent 可以被切到的模型。
+  CLI 不在本机上的。
 - **FR-046**: 一个 agent 通过**agent 适配器**被寻址来跑一个 turn；适配器是自足的：
   只给它会话历史，它产出一串类型化的 turn 事件。适配器自带模型、工具和配置，
   编排器不得注入这些。
@@ -1627,24 +1629,6 @@ markdown——第四项则完全没有对应。下列要求把每一项迁到平
     首选：id 才是那个总是存在的标识符。
   - 并且它静默降级：没有 id 也没有可用的兜底，或传输层无法仅凭 id 做 mention，就发一条
     普通的、不带 mention 的回复——绝不发出一个破碎的标签。
-- **FR-071**: 模型归 channel 管，不归 agent 管。channel 必须带自己的 `default_model`
-  （在本 channel 上**新开**的会话所用的模型）和自己的 `models` 允许范围，并且这必须是
-  施加在它身上的**唯一**策展：agent 资源只管一个人直接打开那个 agent 时用什么，而
-  channel 是另一个地方、另一批受众。三条推论。本 channel 新开的会话在设了
-  `default_model` 时就开在它上面，抵达 agent config 的路径与 `default_agent` /
-  `default_agent_config` 相同；为 `None` 则什么都不钉，agent 的 CLI 默认生效。当允许
-  范围非空时，`/model` 卡片恰好只提供这个范围，顺序就是用户排的顺序，于是卡片绝不会
-  出现一个下一条就会被拒的选项。以及 `/model <id>` 落在非空允许范围之外时**必须**被
-  拒绝，并在消息里点名允许的 id，而不是把会话悄悄带去卡片从未提供过的地方。范围为**空**
-  意味着**未策展**——bound agent 提供的每个模型都允许——绝不是「没有模型」，于是没人
-  配过的 channel 的行为与本条要求存在之前完全一致。id 保持不透明：它原样交给 CLI，绝不
-  对照 agent 的 catalogue 校验，因为后者随每次 CLI 升级而变。**在网页界面上**，这两个字段
-  位于 channel 的新建 / 编辑对话框里，紧挨着所绑定的 agent：一个「默认模型」下拉框，永远
-  提供一个显式的「不指定」选项，选项来自所绑定 agent 的 model catalogue——一旦设了允许范围
-  就收窄到该范围，于是表单拼不出后端会拒绝的组合；以及一份覆盖同一份 catalogue 的「可选范围」
-  勾选清单，在什么都没勾时明说「未限制」，而不是读起来像「没有模型」。表单必须镜像本条要求
-  自己的规则（非空范围之外的默认模型在发请求之前就被拒绝；取消勾选被钉住的模型会同时取消钉住），
-  并且在重新绑定 `default_agent` 时必须把两者清空——那些 id 属于上一个 agent。
 
 ## Deliberately out of scope
 

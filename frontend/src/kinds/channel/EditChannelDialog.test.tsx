@@ -16,15 +16,11 @@ vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
 // (GET /agent-providers) — the same registry a turn resolves by — so it can
 // only offer real provider keys.
 vi.mock("@/lib/api/agentProviders", () => ({ agentProvidersApi: { list: vi.fn() } }));
-// The model fields read the BOUND agent's catalogue (spec channels FR-071).
-vi.mock("@/lib/api/agentModels", () => ({ agentModelsApi: { list: vi.fn() } }));
 
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
 const { agentProvidersApi } = await import("@/lib/api/agentProviders");
 const listAgentsMock = vi.mocked(agentProvidersApi.list);
-const { agentModelsApi } = await import("@/lib/api/agentModels");
-const listModelsMock = vi.mocked(agentModelsApi.list);
 
 function installApi(api: ApiClientMock) {
   getApiClientMock.mockReturnValue(api as unknown as ReturnType<typeof getApiClient>);
@@ -63,15 +59,6 @@ beforeEach(() => {
       { agent_key: "codex", display_name: "Codex", available: true },
     ],
   });
-  listModelsMock.mockImplementation(async (agentKey: string) => ({
-    models:
-      agentKey === "codex"
-        ? [{ id: "gpt-5-codex", label: "", description: "" }]
-        : [
-            { id: "claude-opus-5", label: "Opus 5", description: "" },
-            { id: "claude-haiku-4-5", label: "Haiku 4.5", description: "" },
-          ],
-  }));
 });
 
 afterEach(() => vi.clearAllMocks());
@@ -157,123 +144,5 @@ describe("EditChannelDialog", () => {
       .body.config;
     expect(patchBody.app_secret_ref).toBe("channel/st/app-secret");
     expect(patchBody.signing_secret_ref).toBe("channel/st/signing-secret");
-  });
-
-  // --- the channel's own model curation (spec channels FR-071) --------------
-
-  test("the stored default model and allowed range load, and an edit rides the PATCH", async () => {
-    const api = installApi(mockApiClient());
-    renderDialog({
-      kind: "channel",
-      name: "tg",
-      enabled: true,
-      config: {
-        channel_type: "telegram",
-        bot_token_ref: "channel/tg/bot-token",
-        default_agent: "claude_code",
-        default_model: "claude-opus-5",
-        models: ["claude-opus-5"],
-      },
-    } as unknown as typeof telegramResource);
-
-    // The stored range arrives ticked, and the pinned model is shown.
-    await waitFor(() =>
-      expect(screen.getByRole("checkbox", { name: "claude-opus-5" })).toBeChecked(),
-    );
-    expect(screen.getByRole("combobox", { name: /default model/i })).toHaveTextContent(
-      "claude-opus-5",
-    );
-
-    fireEvent.click(screen.getByRole("checkbox", { name: "claude-haiku-4-5" }));
-    save();
-
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
-    expect(api.PATCH).toHaveBeenCalledWith("/resources/{kind}/{name}", {
-      params: { path: { kind: "channel", name: "tg" } },
-      body: {
-        config: {
-          channel_type: "telegram",
-          bot_token_ref: "channel/tg/bot-token",
-          default_agent: "claude_code",
-          default_model: "claude-opus-5",
-          models: ["claude-opus-5", "claude-haiku-4-5"],
-        },
-      },
-    });
-  });
-
-  test("emptying the range lifts the restriction and leaves the pinned model alone", async () => {
-    const api = installApi(mockApiClient());
-    renderDialog({
-      kind: "channel",
-      name: "tg",
-      enabled: true,
-      config: {
-        channel_type: "telegram",
-        bot_token_ref: "channel/tg/bot-token",
-        default_agent: "claude_code",
-        default_model: "claude-opus-5",
-        models: ["claude-opus-5"],
-      },
-    } as unknown as typeof telegramResource);
-
-    await waitFor(() =>
-      expect(screen.getByRole("checkbox", { name: "claude-opus-5" })).toBeChecked(),
-    );
-    // Un-ticking the last entry removes the RANGE, not the pin: with nothing
-    // curated there is no range to be outside of, so the channel keeps opening
-    // on the model the user chose while allowing anything the agent offers.
-    fireEvent.click(screen.getByRole("checkbox", { name: "claude-opus-5" }));
-    save();
-
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
-    expect(api.PATCH).toHaveBeenCalledWith("/resources/{kind}/{name}", {
-      params: { path: { kind: "channel", name: "tg" } },
-      body: {
-        config: {
-          channel_type: "telegram",
-          bot_token_ref: "channel/tg/bot-token",
-          default_agent: "claude_code",
-          default_model: "claude-opus-5",
-        },
-      },
-    });
-  });
-
-  test("re-binding the agent drops the old agent's model ids instead of submitting them", async () => {
-    const api = installApi(mockApiClient());
-    renderDialog({
-      kind: "channel",
-      name: "tg",
-      enabled: true,
-      config: {
-        channel_type: "telegram",
-        bot_token_ref: "channel/tg/bot-token",
-        default_agent: "claude_code",
-        default_model: "claude-opus-5",
-        models: ["claude-opus-5"],
-      },
-    } as unknown as typeof telegramResource);
-
-    await waitFor(() =>
-      expect(screen.getByRole("checkbox", { name: "claude-opus-5" })).toBeChecked(),
-    );
-    const agentTrigger = screen.getByRole("combobox", { name: /default agent/i });
-    fireEvent.keyDown(agentTrigger, { key: "ArrowDown" });
-    fireEvent.click(screen.getByRole("option", { name: "Codex" }));
-    save();
-
-    // A Claude id on a Codex channel would be handed to the CLI verbatim.
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
-    expect(api.PATCH).toHaveBeenCalledWith("/resources/{kind}/{name}", {
-      params: { path: { kind: "channel", name: "tg" } },
-      body: {
-        config: {
-          channel_type: "telegram",
-          bot_token_ref: "channel/tg/bot-token",
-          default_agent: "codex",
-        },
-      },
-    });
   });
 });

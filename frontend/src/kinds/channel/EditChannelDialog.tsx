@@ -2,10 +2,10 @@
 // Modal "Edit channel" dialog. Updates a channel's mutable config: rotate the
 // platform secret(s) — the new value is written to the SAME credential ref the
 // channel already points at, so a rotation never re-pairs or re-registers —
-// and re-bind the default agent (SeaTalk also exposes its app id), plus the
-// channel's own model curation — its default model and allowed range (FR-071),
-// which live in ChannelModelFields. Apply plumbing (secrets-first write, then
-// config PATCH) lives in editChannel.ts.
+// and re-bind the default agent (SeaTalk also exposes its app id). The bound
+// agent's models all stay available; the model is switched in chat with
+// /model. Apply plumbing (secrets-first write, then config PATCH) lives in
+// editChannel.ts.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -28,20 +28,12 @@ import {
 import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
 import { useUpdateChannel } from "@/lib/hooks/useChannels";
 import type { ResourceOut } from "@/lib/components/kindRegistry";
-import { ChannelModelFields } from "./ChannelModelFields";
 import { EditChannelSecretFields, type ChannelEditDraft } from "./EditChannelSecretFields";
-import { defaultModelOutOfRange } from "./modelCuration";
 import { DEFAULT_AGENT, planChannelEdit } from "./schema";
 
 function strField(config: Record<string, unknown>, key: string): string {
   const v = config[key];
   return typeof v === "string" ? v : "";
-}
-
-/** The stored allowed range, or `[]` when the channel curates none. */
-function modelsField(config: Record<string, unknown>): string[] {
-  const v = config.models;
-  return Array.isArray(v) ? v.filter((m): m is string => typeof m === "string") : [];
 }
 
 export function EditChannelDialog({
@@ -79,8 +71,6 @@ export function EditChannelDialog({
   const [secrets, setSecrets] = useState<ChannelEditDraft>(storedSecrets);
   const patchSecrets = (patch: Partial<ChannelEditDraft>) =>
     setSecrets((s) => ({ ...s, ...patch }));
-  const [defaultModel, setDefaultModel] = useState(strField(config, "default_model"));
-  const [models, setModels] = useState<string[]>(modelsField(config));
   const [formError, setFormError] = useState<string | null>(null);
 
   // Offer the registered provider keys, plus the channel's current binding so a
@@ -95,19 +85,11 @@ export function EditChannelDialog({
   const reset = () => {
     setDefaultAgent(strField(config, "default_agent") || DEFAULT_AGENT);
     setSecrets(storedSecrets());
-    setDefaultModel(strField(config, "default_model"));
-    setModels(modelsField(config));
     setFormError(null);
   };
 
   const submit = () => {
     setFormError(null);
-    // Mirrors the backend's own rule (FR-071) so a save cannot fail on
-    // something the form is already showing.
-    if (defaultModelOutOfRange(defaultModel, models)) {
-      setFormError(t("channels.models.outOfRange"));
-      return;
-    }
     const plan = planChannelEdit({
       name: resource.name,
       config,
@@ -119,8 +101,6 @@ export function EditChannelDialog({
         signing_secret: secrets.signingSecret,
         public_base_url: channelType === "seatalk" ? secrets.publicBaseUrl : undefined,
         tunnel_token: channelType === "seatalk" ? secrets.tunnelToken : undefined,
-        default_model: defaultModel,
-        models,
       },
     });
     update.mutate(plan, {
@@ -170,17 +150,6 @@ export function EditChannelDialog({
             </Select>
             <p className="text-xs text-muted-foreground">{t("channels.edit.agentHint")}</p>
           </div>
-
-          {/* Keyed by the BOUND agent: the ids below are that agent's, and the
-              fields clear themselves when the binding changes. */}
-          <ChannelModelFields
-            agentKey={defaultAgent}
-            defaultModel={defaultModel}
-            models={models}
-            onDefaultModelChange={setDefaultModel}
-            onModelsChange={setModels}
-            idPrefix="edit-channel"
-          />
 
           <EditChannelSecretFields
             channelType={channelType}

@@ -370,17 +370,19 @@ status / notify`.
   invalid builtin model is rejected against the registry; a bad bridged model
   string surfaces as the CLI's own error relayed to the chat. On a transport
   that `supports_buttons` (FR-018), `/model` with no argument renders the choices
-  as a selection card. They come from the agent's model catalogue — the same list
-  the web picker offers — narrowed by the channel's own allowed range where it
-  has one (FR-071), and otherwise the **whole** catalogue, one **page** at
-  a time (FR-018): that catalogue runs to 29 models for `claude_code`, and a card
+  as a selection card. They come from the agent's model catalogue — read back
+  from the installed CLI, the one list Coffer has of what that agent can run —
+  in **full**, because nothing curates it: neither the agent nor the channel
+  narrows what the card may offer. It is shown one **page** at a time
+  (FR-018): that catalogue runs to 29 models for `claude_code`, and a card
   that long is unreadable on a phone and refused outright by SeaTalk, so the card
   is a window onto the list rather than the list. It opens on the page holding the
   model currently in effect, so a freshly rendered card always has its tick in
   view. Free-text `/model <name>` still reaches a model the user can already
-  name — including one the catalogue does not list — and the card's body says so;
-  within a channel that curates an allowed range, it reaches only what that range
-  allows (FR-071). With no suggestions it falls back to the text report.
+  name — including one the catalogue does not list — and the card's body says so.
+  No surface refuses an id: a channel binds an agent and nothing more, so
+  whatever the bound CLI accepts, `/model` can reach. With no suggestions it
+  falls back to the text report.
 - **FR-018**: On a transport that declares the `supports_buttons` capability,
   the core MAY render a command's choice list as an **interactive selection
   card** (Telegram inline keyboard, SeaTalk interactive message). A button tap
@@ -1755,8 +1757,7 @@ one document instead of two.
 - **FR-045**: The platform MUST expose its registered agents — each with a
   stable key, a display name, and a current availability flag — over the REST
   API, so the channel editor offers only agents that exist, and marks the ones
-  whose CLI is absent on this host. It MUST likewise expose, per agent, the
-  models that agent can be put on.
+  whose CLI is absent on this host.
 - **FR-046**: An agent is addressed for a turn through an **agent adapter** that
   is self-contained: given only the conversation history, it yields a stream of
   typed turn events. The adapter carries its own model, tools, and
@@ -1952,34 +1953,6 @@ API server a user reaches is not guaranteed to be new enough.
   - It degrades silently: no id and no usable fallback, or a transport that
     cannot mention from an id alone, yields an ordinary unmentioned reply — never
     a broken tag.
-- **FR-071**: The channel owns its models, not the agent. A channel MUST carry
-  its own `default_model` (the model a NEW conversation opened on this channel
-  starts on) and its own `models` allowed range, and these MUST be the only
-  curation applied to it: the agent resource governs what a person gets when
-  they open that agent directly, and a channel is a different place with a
-  different audience. Three consequences. A new conversation on the channel
-  opens on `default_model` when one is set, reaching the agent's config the same
-  way `default_agent` / `default_agent_config` do; `None` pins nothing and the
-  agent's CLI default applies. The `/model` card offers exactly the allowed
-  range when it is non-empty, in the order the user arranged it, so the card can
-  never show a pick the next requirement refuses. And `/model <id>` outside a
-  non-empty range MUST be refused with a message naming the allowed ids, rather
-  than silently taking the chat somewhere the card never offered. An EMPTY range
-  means NOT CURATED — every model the bound agent offers is allowed — never "no
-  models", so a channel nobody has configured behaves exactly as it did before
-  this requirement existed. Ids stay opaque: they are handed to the CLI verbatim
-  and are never validated against the agent's catalogue, which moves with every
-  CLI upgrade. **On the web surface** both fields belong to the channel's
-  add/edit dialogs, beside the bound agent: a **Default model** select
-  that always offers an explicit "not pinned" choice and draws its options from
-  the bound agent's model catalogue — narrowed to the allowed range once there
-  is one, so the form cannot assemble a pair the backend refuses — and an
-  **Allowed models** tick list over that same catalogue, which states
-  that nothing is restricted while it is empty rather than reading as "no
-  models". The form MUST mirror this requirement's own rule (a default outside a
-  non-empty range is refused before the round trip, and un-ticking the pinned
-  model unpins it) and MUST clear both when `default_agent` is re-bound, since
-  the ids named the previous agent.
 
 ## Deliberately out of scope
 

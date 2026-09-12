@@ -249,21 +249,25 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-11b](../../
   can run nine, and no field separates them: same price tier, same capabilities,
   same knowledge cutoff on both sides of the line, and no version-number rule
   holds. The CLI's own filter runs over a SERVER-provided account config with no
-  local copy. So the user ticks. **Where they tick moved (2026-09-12):** the
-  first answer was `AgentConfig.models`, and that was the wrong owner — an agent
-  has no audience, so curating it narrowed a chat on a phone and a person
-  opening the agent page at once. Curation now lives on the surface that HAS an
-  audience: a channel's `default_model` + `models` (spec channels FR-071). The
-  agent field, its routes and migration 0060's backfill are gone, stripped by
-  migration 0062. Hardcoding the nine stays rejected: Claude Code ships models
-  every few weeks, and a user whose new model never appeared would have no way
-  to find out why.
-- **D13 — An agent answers one question; narrowing it is the surface's job.**
-  `GET …/models` returns the whole filtered catalogue and `offered()` /
-  `suggest()` return the same list (or an active connection's curated set), with
-  nothing on the agent narrowing either — there is no `…/models/selection` route
-  any more. A surface that must offer less applies its own range over that list
-  and refuses what falls outside it, which is exactly what the channel `/model`
-  card does. Nothing validates a model NAME against a catalogue — the CLI
-  accepts names outside it entirely, so a model name stays raw passthrough
-  everywhere a channel range does not speak.
+  local copy. **So nobody ticks (2026-09-12):** the first answer was
+  `AgentConfig.models`, and that was the wrong owner — an agent has no audience,
+  so curating it narrowed a chat on a phone and a person opening the agent page
+  at once. Curation was moved to the surface that HAS an audience, a channel, and
+  then removed from there as well: a channel binds an agent and nothing more, and
+  a second place to tick turned out to be one more thing to keep in step with a
+  catalogue that changes on its own. The agent field, its routes and migration
+  0060's backfill are gone, stripped by migration 0063; the channel's pair went
+  with migration 0067. What remains is the honest version: the whole filtered
+  catalogue is offered, and a model this account cannot run fails when it is
+  picked. Hardcoding the nine stays rejected: Claude Code ships models every few
+  weeks, and a user whose new model never appeared would have no way to find out
+  why.
+- **D13 — An agent answers one question, and nothing narrows the answer.**
+  `offered()` / `suggest()` return the whole filtered catalogue (or an active
+  connection's curated set), with nothing on the agent and nothing on the channel
+  narrowing either — there is no `…/models/selection` route any more, and the
+  `…/models` route that served the catalogue over HTTP is gone too, its last
+  reader being the channel dialogs that no longer ask. The channel `/model` card
+  reads the catalogue in-process, pages through all of it and refuses no id.
+  Nothing validates a model NAME against a catalogue — the CLI accepts names
+  outside it entirely, so a model name stays raw passthrough everywhere.

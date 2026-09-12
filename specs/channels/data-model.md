@@ -14,9 +14,7 @@ ChannelConfig (discriminator: channel_type)
 │   ├── default_agent: str = "claude_code"  # chat provider key; must name a registered agent
 │   ├── default_agent_config: dict | None
 │   ├── require_mention: bool = True        # group gating (FR-035)
-│   ├── ignore_other_mentions: bool = False # group gating (FR-035)
-│   ├── default_model: str | None = None    # model a NEW conversation here opens on (FR-071)
-│   └── models: list[str] = []              # allowed range; EMPTY = no restriction (FR-071)
+│   └── ignore_other_mentions: bool = False # group gating (FR-035)
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"
 │   └── bot_token_ref: str            # credential-store ref, probed at register
@@ -47,14 +45,14 @@ Validation rules:
   Validation is skipped only when the registry is empty, so a misconfigured
   registry never blocks all channel writes. `default_agent_config` is still a
   pass-through.
-- `default_model` and `models` are the channel's own model curation (FR-071),
-  and they are the ONLY curation: the agent resource carries none. Ids are
-  opaque — they are handed to the agent's CLI verbatim — so `models` is checked
-  for shape only (non-blank, deduplicated preserving order, at most 200 entries
-  of at most 200 characters) and never against the agent's catalogue, which
-  moves with every CLI upgrade. `default_model` is rejected when it is not in a
-  non-empty `models`: a channel must not start conversations on a model it then
-  refuses. A blank `default_model` normalizes to `None` (unset).
+- A channel carries NO model curation. It briefly had its own `default_model`
+  and `models` allowed range; both are gone, because a channel binds an agent
+  and nothing more: a new conversation runs on the bound agent's own CLI
+  default, and the `/model` card offers that agent's whole catalogue and refuses
+  no id. Migration `20260912_0067_drop_channel_model_curation.py` takes both keys
+  off every stored channel config in one direction only, with no load-time shim
+  (house rule) — `_CommonChannelFields` forbids extra keys, so a row still
+  carrying them would fail to validate on load.
 - Channel turns run in the Coffer-managed default workspace `~/.coffer/workspace`
   (created on first use).
 

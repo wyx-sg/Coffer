@@ -213,11 +213,6 @@ class ChannelBinding:
     # Group inbound gating (FR-035), sourced from the channel config.
     require_mention: bool = True
     ignore_other_mentions: bool = False
-    # The channel's own model curation (FR-071): what a new conversation here
-    # opens on (``None`` pins nothing), and the range ``/model`` may reach
-    # (EMPTY = no restriction, every model the bound agent offers).
-    default_model: str | None = None
-    models: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

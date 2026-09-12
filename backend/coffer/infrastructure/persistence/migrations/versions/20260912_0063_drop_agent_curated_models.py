@@ -1,10 +1,10 @@
 """take the curated ``models`` set back OFF every agent
 
-Model curation moved from the AGENT to the CHANNEL (spec channels FR-071). An
-agent answers one question — what can this agent be put on — and the answer is
-its whole catalogue; who may pick from it is decided by the surface that has an
-audience, and a channel now carries its own ``default_model`` plus an allowed
-range. The per-agent ticked set 0060 introduced has no reader left: the
+Model curation moved from the AGENT to the CHANNEL when this revision was
+written, and 0067 later took it off the channel too — nothing curates models
+now. What was already true here survived both moves: an agent answers one
+question — what can this agent be put on — and the answer is its whole
+catalogue. The per-agent ticked set 0060 introduced has no reader left: the
 ``GET|PUT /api/v1/agent-providers/{agent_key}/models/selection`` routes are gone
 and ``AgentConfig`` forbids extra keys, so a row still carrying ``models`` would
 fail to validate on load.
