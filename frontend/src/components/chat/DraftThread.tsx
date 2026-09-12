@@ -1,0 +1,116 @@
+// src/components/chat/DraftThread.tsx
+// The blank "new chat" surface shown before a conversation exists (the draft).
+// Chat talks only to Coffer-managed agents (Claude Code / Codex); sending the
+// first message is what actually creates the conversation (see
+// useChatController.sendDraft). The turn runs in the Coffer-managed workspace
+// (~/.coffer/workspace) by default — there is no per-turn working-directory
+// picker. When no managed agent is available, an install/configure empty state
+// is shown instead.
+import { useTranslation } from "react-i18next";
+import { Bot, MessageSquareOff } from "lucide-react";
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { AgentProviderInfo } from "@/lib/api/agentProviders";
+import { Composer } from "./Composer";
+import { ModelPicker } from "./ModelPicker";
+
+interface Props {
+  agents: AgentProviderInfo[];
+  agentKey: string;
+  /** True when no Coffer-managed agent is available (shows an empty state). */
+  noManagedAgent?: boolean;
+  onAgentChange: (agentKey: string) => void;
+  /** The chosen per-conversation model for the new conversation (null = default). */
+  modelValue?: string | null;
+  onModelChange?: (model: string | null) => void;
+  onSend: (text: string) => void;
+  /** True while the create-then-send round-trip is in flight. */
+  creating?: boolean;
+}
+
+export function DraftThread({
+  agents,
+  agentKey,
+  noManagedAgent = false,
+  onAgentChange,
+  modelValue = null,
+  onModelChange,
+  onSend,
+  creating = false,
+}: Props) {
+  const { t } = useTranslation();
+  const agentName = agents.find((a) => a.agent_key === agentKey)?.display_name ?? agentKey;
+
+  // A Coffer LLM connection is an OPTIONAL override, not a prerequisite: chat
+  // shells out to the agent's own runtime (Claude Agent SDK / codex app-server),
+  // which runs on the agent's OWN login when nothing is projected (the provider-switching ADR
+  // amendment D1). So we never block the draft on "no connection" — the composer
+  // is always available and the turn runs on the built-in model.
+
+  // No Coffer-managed agent on PATH / registered — there is nothing to chat
+  // with, so guide the user to install or configure one.
+  if (noManagedAgent) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-12 text-center">
+        <MessageSquareOff
+          className="size-12 text-muted-foreground/40"
+          strokeWidth={1.25}
+          aria-hidden
+        />
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold">{t("chat.draft.noAgentTitle")}</h2>
+          <p className="max-w-sm text-sm text-muted-foreground">{t("chat.draft.noAgentBody")}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden">
+      {/* Top bar: the agent, chosen before the first message rather than in a modal. */}
+      <div className="flex items-center gap-3 border-b border-border bg-card/50 px-4 py-2">
+        <div className="flex items-center gap-1.5">
+          <Bot className="size-4 shrink-0 text-primary" strokeWidth={1.75} />
+          <Select value={agentKey} onValueChange={onAgentChange}>
+            <SelectTrigger
+              className="h-7 w-48 border-none bg-transparent px-1 text-sm font-medium shadow-none"
+              aria-label={t("chat.newConversation.agent")}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {agents.map((a) => (
+                <SelectItem key={a.agent_key} value={a.agent_key} disabled={!a.available}>
+                  {a.display_name}
+                  {a.available ? "" : ` (${t("chat.newConversation.unavailable")})`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {/* Model for the new conversation, beside the agent picker. Offered
+            whether or not a connection is configured — with none, it lists the
+            agent's built-in models (the provider-switching ADR, amendment D4). */}
+        <ModelPicker
+          agentKey={agentKey}
+          value={modelValue}
+          onCommit={(model) => onModelChange?.(model)}
+        />
+      </div>
+
+      <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+        <Bot className="mb-3 size-8 text-primary/70" strokeWidth={1.5} />
+        <p className="text-sm text-muted-foreground">
+          {t("chat.draft.guide", { agent: agentName })}
+        </p>
+      </div>
+      <Composer onSend={onSend} disabled={creating} />
+    </div>
+  );
+}

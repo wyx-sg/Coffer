@@ -29,6 +29,7 @@ The surfaces are described below using a consistent template: **What it is · Wh
 | `/skills`                         | Skill master store and per-agent bindings.                        |
 | `/knowledge/{scope}`              | One knowledge scope: `entries`, `documents`, retrieval, organize, reindex. |
 | `/channels`                       | Channel bindings (Telegram, SeaTalk), pairing.                    |
+| `/chat`                           | Conversations, their messages, and the turn surface the web Chat page drives: fire-and-return `POST .../messages`, SSE `GET .../events`, `PUT .../pending`, `POST .../interrupt`. |
 | `/agent-providers`, `/models`     | The registered agent providers with their model catalogues; connection introspection. |
 | `/credentials`, `/settings`       | Encrypted credential store; settings incl. `/settings/credentials` (master-key storage) and `/embedding` config. |
 | `/sync`                           | Vault export / import runs and the master-key transfer.           |
@@ -111,7 +112,7 @@ Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `co
 
 ## Web UI
 
-**What it is.** The browser-based management interface, specified in [spec ui-shell](/reference/specs/ui-shell/spec). The Web UI provides a visual equivalent of every CLI management operation: registering MCP servers via JSON import, browsing server health and capability lists, toggling tools/resources/prompts on/off, viewing the audit log and invocation history, and configuring retention policies. The information architecture reflects the resource-kind model: the sidebar shows `Agents` (agents and the Channels they are reached over), `Resources` (the shipped kinds — MCP servers, Skills, Knowledge), and `System` (Audit log and Settings). No "coming soon" placeholders appear — a kind only appears once it works, and none outlives its feature.
+**What it is.** The browser-based management interface, specified in [spec ui-shell](/reference/specs/ui-shell/spec). The Web UI provides a visual equivalent of every CLI management operation: registering MCP servers via JSON import, browsing server health and capability lists, toggling tools/resources/prompts on/off, viewing the audit log and invocation history, and configuring retention policies. The information architecture reflects the resource-kind model: the sidebar shows `Agents` (`Chat` — the two-column page onto the same conversations whichever surface opened them — and the agent registry), `Resources` (one entry per resource kind with a list UI: MCP servers, Skills, Knowledge, Model providers, Channels), and `System` (Settings). No "coming soon" placeholders appear — a kind only appears once it works, and none outlives its feature.
 
 **Which process.** A browser process, served by the daemon. In production the daemon serves the built frontend itself, as static files at its own loopback origin (**FR-024**) — so the page and the API are same-origin. In development, a Vite dev server runs at `http://localhost:5173` and reaches the daemon across origins behind the `COFFER_DEV_CORS` opt-in. All data is fetched from the daemon's REST API.
 

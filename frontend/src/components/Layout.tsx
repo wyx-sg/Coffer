@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import {
   Bot,
   Boxes,
+  MessageSquare,
   Library,
   PanelLeftClose,
   PanelLeftOpen,
@@ -35,9 +36,9 @@ interface NavGroup {
 /**
  * Sidebar navigation — a role-based information architecture (ADR everything-is-a-resource-kind):
  *
- * - **Agents** — the consumers: the agents you use (Claude Code, Codex).
- *   Agents are NOT vault assets, so they are not under Resources. The group
- *   holds one entry, and that asymmetry is accepted.
+ * - **Agents** — the consumers: the agents you use (Claude Code, Codex), and
+ *   Chat with them. Agents are NOT vault assets, so they are not under
+ *   Resources.
  * - **Resources** — the assets agents draw on, one entry per resource kind
  *   that has a list UI: MCP servers, skills, knowledge, model providers, and
  *   channels. A channel is a credentialed transport the vault owns, so it
@@ -53,7 +54,10 @@ interface NavGroup {
 const NAV_GROUPS: NavGroup[] = [
   {
     labelKey: "nav.group.agents",
-    items: [{ to: "/agents", labelKey: "nav.agents", icon: Bot, end: true }],
+    items: [
+      { to: "/chat", labelKey: "nav.chat", icon: MessageSquare },
+      { to: "/agents", labelKey: "nav.agents", icon: Bot, end: true },
+    ],
   },
   {
     // One entry per resource kind with a list UI — mcp_server, skill,
@@ -70,9 +74,7 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     labelKey: "nav.group.system",
-    items: [
-      { to: "/settings", labelKey: "nav.settings", icon: SettingsIcon },
-    ],
+    items: [{ to: "/settings", labelKey: "nav.settings", icon: SettingsIcon }],
   },
 ];
 
