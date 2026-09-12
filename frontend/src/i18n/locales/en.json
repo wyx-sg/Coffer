@@ -466,8 +466,6 @@
         "updated": "Updated",
         "models": "Models",
         "modelsHint": "Pick which of this endpoint's models this provider offers, and what kind each one is. Every picker downstream is then limited to your picks of the kind it needs — a chat model dropdown never offers an embedding model.",
-        "unrestricted": "No restriction — every model this endpoint offers is available.",
-        "restricted": "{{count}} model(s) picked — agents see only these.",
         "fetchFailed": "Could not list this endpoint's models ({{error}}). Your current selection is unchanged.",
         "loadingModels": "Listing this endpoint's models…",
         "retryFetch": "Retry",
