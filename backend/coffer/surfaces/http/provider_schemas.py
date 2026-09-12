@@ -4,7 +4,9 @@
 connection is a credentialed endpoint ``{protocol, base_url, credential_ref}``;
 the model lives apart from it (spec provider-switching E3) and is chosen at the point of use.
 ``models`` is the curated set the connection OFFERS to that choice — empty means
-no restriction (every model the endpoint serves).
+no restriction (every model the endpoint serves). Each entry names its
+``modality``, so a chat picker can ask for the ``text`` ones and the global
+embedding setting for the ``embedding`` ones.
 """
 
 from __future__ import annotations
@@ -15,6 +17,21 @@ from pydantic import BaseModel, Field
 
 from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import Protocol
+from coffer.domain.provider.modality import Modality
+
+
+class ProviderModel(BaseModel):
+    """One model on a connection: an opaque id plus what KIND of model it is.
+
+    The same shape is used both ways — the curated entries a connection stores
+    and the ids endpoint introspection discovers — so the connection editor can
+    round-trip a discovered model into the curated set without reshaping it.
+    ``modality`` defaults to ``text``, the kind every curated set held before
+    modalities existed.
+    """
+
+    id: str = Field(min_length=1, max_length=200)
+    modality: Modality = Modality.TEXT
 
 
 class ProviderCreate(BaseModel):
@@ -23,7 +40,7 @@ class ProviderCreate(BaseModel):
     connection has no key, so supply neither. ``compatible_agents`` overrides the
     wire default for which agents the connection projects into (``None`` ⇒ default).
     ``models`` curates which of the endpoint's models this connection offers
-    downstream (``None`` ⇒ empty ⇒ no restriction)."""
+    downstream, each with its modality (``None`` ⇒ empty ⇒ no restriction)."""
 
     name: str = Field(min_length=1, max_length=64)
     protocol: Protocol
@@ -31,7 +48,7 @@ class ProviderCreate(BaseModel):
     credential_ref: str | None = None
     secret_value: str | None = Field(default=None, max_length=8192)
     compatible_agents: list[AgentType] | None = None
-    models: list[str] | None = None
+    models: list[ProviderModel] | None = None
     description: str | None = None
 
 
@@ -44,8 +61,20 @@ class ProviderPatch(BaseModel):
     base_url: str | None = None
     secret_value: str | None = Field(default=None, max_length=8192)
     compatible_agents: list[AgentType] | None = None
-    models: list[str] | None = None
+    models: list[ProviderModel] | None = None
     description: str | None = None
+
+
+class ProviderRename(BaseModel):
+    """Move a connection to a new name.
+
+    Separate from ``ProviderPatch`` because the name is the connection's
+    IDENTITY, not part of its config: the vault ref it owns, its audit trail and
+    the agent config it is projected into all spell the name out, so changing it
+    is an operation of its own rather than another optional patch field.
+    """
+
+    new_name: str = Field(min_length=1, max_length=64)
 
 
 class ProviderOut(BaseModel):
@@ -55,8 +84,10 @@ class ProviderOut(BaseModel):
     ``compatible_agents`` is the EFFECTIVE (resolved) set of agents this
     connection projects into — the explicit override or the wire default — so the
     UI can filter agents without re-deriving the default. ``models`` is the
-    curated set of model ids this connection offers to every downstream picker;
-    EMPTY means no restriction — the endpoint's whole catalogue. ``internal_default``
+    curated set of models this connection offers to every downstream picker, each
+    carrying its modality; EMPTY means no restriction — the endpoint's whole
+    catalogue. A picker takes the entries of the modality it serves, so a chat
+    dropdown never offers an embedding or image model. ``internal_default``
     marks the connection Coffer's internal engine uses (at most one globally);
     ``is_active`` marks the one currently projected — a connection may be both.
     """
@@ -66,7 +97,7 @@ class ProviderOut(BaseModel):
     base_url: str
     credential_ref: str | None
     compatible_agents: list[AgentType]
-    models: list[str]
+    models: list[ProviderModel]
     is_active: bool
     internal_default: bool
     enabled: bool
@@ -148,12 +179,19 @@ class TestResultOut(BaseModel):
 
 
 class ProviderModelsOut(BaseModel):
-    models: list[str]
+    """What an endpoint reports it serves, each id tagged with the modality
+    Coffer INFERRED from its name — a pre-fill for the connection editor's
+    model table, which the user corrects. Nothing downstream reads this guess:
+    once an entry is curated, the stored modality is the truth."""
+
+    models: list[ProviderModel]
     message: str = ""
 
 
 class EmbeddingTestIn(BaseModel):
-    provider: str
-    model: str
-    credential_ref: str | None = None
-    base_url: str | None = None
+    """Probe one embedding model. The endpoint, wire and key come from the named
+    CONNECTION — the same connection the global embedding config points at — so
+    a test can never be run against settings the config does not hold."""
+
+    connection: str = Field(min_length=1)
+    model: str = Field(min_length=1)

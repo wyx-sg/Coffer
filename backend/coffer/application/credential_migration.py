@@ -1,8 +1,8 @@
 """One-time migration: legacy OS-keychain secrets -> encrypted store.
 
 Runs at every daemon startup but only touches refs that are cited by a
-registered resource (or passed in ``extra_refs`` for the non-resource
-global embedding config) AND absent from the
+registered resource (or passed in ``extra_refs``, for a citer that is not a
+resource) AND absent from the
 encrypted store, so a completed migration is a no-op (the OS keychain is
 never enumerated — refs come from each kind's credential_ref_extractor
 plus ``extra_refs``). A locked/denied keychain skips that ref; it will be
@@ -39,9 +39,12 @@ async def migrate_legacy_keychain(
 ) -> int:
     """Move every still-keychain-resident cited secret into the store.
 
-    ``extra_refs`` carries credential refs cited by non-resource owners
-    (the global embedding config) so they migrate alongside resource-cited
-    refs instead of being stranded in the OS keychain.
+    ``extra_refs`` carries credential refs cited by anything that is not a
+    resource, so they migrate alongside resource-cited refs instead of being
+    stranded in the OS keychain. Nothing passes any today — the global embedding
+    config was the last such owner and now reads its key from the connection it
+    names — but the seam is what keeps a future non-resource citer from being
+    stranded.
     """
     moved = 0
     seen: set[str] = set()
@@ -86,20 +89,3 @@ async def migrate_legacy_keychain(
     for ref in extra_refs:
         await _move(ref)
     return moved
-
-
-async def gather_extra_credential_refs(
-    embedding_config_svc: Any,
-) -> list[str]:
-    """Collect credential refs cited by non-resource owners.
-
-    LLM connections are ``provider`` resources now (their refs migrate via the
-    resource-cited loop above), so the only remaining non-resource owner is the
-    global embedding config. Its row may not exist yet, in which case its ref is
-    simply absent.
-    """
-    refs: list[str] = []
-    embedding_ref = (await embedding_config_svc.get()).credential_ref
-    if embedding_ref:
-        refs.append(embedding_ref)
-    return refs

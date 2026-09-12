@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { translateApiError } from "@/lib/api/errors";
+import { modelIds } from "@/lib/api/providers";
 import { useProviders, useSetInternalDefaultProvider } from "@/lib/hooks/useProviders";
 import { useInternalEngineConfig, useSetInternalEngineModel } from "@/lib/hooks/useInternalEngine";
 import { useListProviderModels } from "@/lib/hooks/useModelIntrospection";
@@ -34,14 +35,22 @@ export function InternalEngineSettings() {
   const { data: config } = useInternalEngineConfig();
   const setModel = useSetInternalEngineModel();
   const listModels = useListProviderModels();
-  const [models, setModels] = useState<string[]>([]);
+  const [fetched, setFetched] = useState<string[]>([]);
+
+  // The internal engine runs a CHAT model, so both sources are narrowed to
+  // modality `text` (spec provider-switching FR-030): a connection's curated set
+  // when it has one — that IS its catalogue, and an embedding or image entry is
+  // no more a chat model here than in an agent's picker — and otherwise the
+  // endpoint's own list, probed below.
+  const curated = selected?.models ?? [];
+  const restricted = curated.length > 0;
 
   // Fetch the chosen connection's models so the model dropdown is populated.
-  // `stale` guards against a slower earlier request landing after a newer one
-  // when the connection is switched rapidly.
+  // A curated connection needs no probe. `stale` guards against a slower earlier
+  // request landing after a newer one when the connection is switched rapidly.
   useEffect(() => {
-    if (!selected) {
-      setModels([]);
+    if (!selected || restricted) {
+      setFetched([]);
       return;
     }
     let stale = false;
@@ -53,7 +62,7 @@ export function InternalEngineSettings() {
       },
       {
         onSuccess: (r) => {
-          if (!stale) setModels(r.models);
+          if (!stale) setFetched(modelIds(r.models, "text"));
         },
       },
     );
@@ -62,9 +71,10 @@ export function InternalEngineSettings() {
     };
     // listModels identity is stable across renders; re-fetch only on connection.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected?.name, selected?.base_url, selected?.credential_ref]);
+  }, [selected?.name, selected?.base_url, selected?.credential_ref, restricted]);
 
   const currentModel = config?.model ?? "";
+  const models = restricted ? modelIds(curated, "text") : fetched;
   // Show the saved model even when the endpoint can't list it.
   const options =
     currentModel && !models.includes(currentModel) ? [currentModel, ...models] : models;

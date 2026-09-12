@@ -7,15 +7,51 @@ semantic search_tools (ADR builtin-agent-is-internal-capability).
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Any, cast
 
 from coffer.application.embedding_config_service import EmbeddingConfigService
+from coffer.domain.embedding_config import EmbeddingEndpoint
 from coffer.domain.knowledge.embedder import EmbeddingConfig
+from coffer.domain.provider.config import ProviderConfig
+from coffer.domain.provider.modality import Modality
 from coffer.infrastructure.knowledge.embeddings import make_embedder
 
+_log = logging.getLogger(__name__)
 
-def build_config_services(app: Any, sm: Any, audit: Any, credential_store: Any) -> tuple[Any, Any]:
+
+class _ProviderEndpoints:
+    """``EmbeddingConnectionPort`` over the provider kind — the composition-root
+    half of "which connection does the embedding config name".
+
+    Resolves ``ProviderService`` lazily per call (the provider kind is wired
+    after this builder runs, and a connection edited later must take effect
+    without rewiring). ``offered_models`` is the connection's curated
+    ``embedding``-modality ids, or ``None`` when it curates nothing at all —
+    the "no restriction" answer the caller interprets.
+    """
+
+    async def endpoint(self, name: str) -> EmbeddingEndpoint | None:
+        from coffer.surfaces.http.dependencies_agent import get_provider_service
+
+        try:
+            resource = await get_provider_service().get(name)
+            cfg = ProviderConfig.model_validate(resource.config)
+        except Exception:
+            # Absent, unparseable, or no provider layer wired (a CLI one-off, a
+            # test): all mean "no such connection" to the one caller.
+            _log.debug("embedding.connection_lookup_failed", exc_info=True)
+            return None
+        return EmbeddingEndpoint(
+            protocol=cfg.protocol.value,
+            base_url=cfg.base_url,
+            credential_ref=cfg.credential_ref,
+            offered_models=tuple(cfg.model_ids(Modality.EMBEDDING)) if cfg.models else None,
+        )
+
+
+def build_config_services(app: Any, sm: Any, audit: Any) -> tuple[Any, Any]:
     """Build the two engine-config singletons and register their synced state
     area (spec vault-export-import slice 7) before start_sync snapshots the provider list."""
     from coffer.application.engine_settings_sync import EngineSettingsSyncState
@@ -27,7 +63,7 @@ def build_config_services(app: Any, sm: Any, audit: Any, credential_store: Any) 
 
     embedding_repo = SqlAlchemyEmbeddingConfigRepo(sm)
     embedding_svc = EmbeddingConfigService(
-        repo=embedding_repo, audit=audit, credentials=credential_store
+        repo=embedding_repo, audit=audit, connections=_ProviderEndpoints()
     )
     internal_repo = SqlAlchemyInternalEngineConfigRepo(sm)
     internal_svc = InternalEngineConfigService(repo=internal_repo, audit=audit)
@@ -59,7 +95,7 @@ def build_embedding_resolvers(
     """
 
     async def _resolve_embedding() -> object:
-        return (await embedding_config_svc.get()).to_embedding_config()
+        return await embedding_config_svc.resolve()
 
     _ts_embedder_cache: dict[tuple[object, ...], object] = {}
 

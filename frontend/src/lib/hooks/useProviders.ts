@@ -89,6 +89,24 @@ export function useUpdateProvider() {
   });
 }
 
+/** Rename a connection. The old key is removed rather than invalidated: after a
+ *  rename nothing answers at `providerKey(old)`, and leaving a stale entry in
+ *  the cache would let a detail page keep rendering a connection that no longer
+ *  resolves. The caller navigates to the new name. */
+export function useRenameProvider() {
+  const qc = useQueryClient();
+  const onError = useProviderToastError();
+  return useMutation({
+    mutationFn: (vars: { name: string; newName: string }) =>
+      providersApi.rename(vars.name, vars.newName),
+    onSuccess: (_data, vars) => {
+      qc.removeQueries({ queryKey: providerKey(vars.name) });
+      qc.invalidateQueries({ queryKey: PROVIDERS_KEY });
+    },
+    onError,
+  });
+}
+
 export function useDeleteProvider() {
   const qc = useQueryClient();
   const onError = useProviderToastError();

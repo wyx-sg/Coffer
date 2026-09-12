@@ -147,70 +147,16 @@ paths:
           description: >
             The concrete models the installed agent itself reported, minus the
             ones its own retirement table says are gone. The order is
-            meaningful (newest first). NOT narrowed by the curated selection —
-            the curation screen renders this list and ticks the selection
-            against it.
+            meaningful (newest first). Nothing narrows it: the agent answers
+            only "what can this agent be put on", and a surface with an
+            audience of its own — a channel's allowed range — curates over it
+            on its own side.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AgentModelsOut'
         '404':
           $ref: '#/components/responses/NotFound'
-
-  /api/v1/agent-providers/{agent_key}/models/selection:
-    get:
-      summary: Which of the catalogue this agent's pickers offer
-      operationId: getAgentModelSelection
-      tags: [agent-providers]
-      parameters:
-        - name: agent_key
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: >
-            The model ids the user curated. EMPTY means not curated yet — every
-            model in the catalogue is offered — never "no models".
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AgentModelSelectionOut'
-        '404':
-          $ref: '#/components/responses/NotFound'
-    put:
-      summary: Replace which of the catalogue this agent's pickers offer
-      operationId: setAgentModelSelection
-      tags: [agent-providers]
-      parameters:
-        - name: agent_key
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AgentModelSelectionIn'
-      responses:
-        '200':
-          description: The stored selection after the write.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AgentModelSelectionOut'
-        '404':
-          description: >
-            Unknown agent key, or no agent of that type is registered — the
-            curated set lives in an agent's config row, so without one there is
-            nowhere to put it.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
 
 components:
   securitySchemes:
@@ -279,33 +225,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AgentModelOut'
-
-    AgentModelSelectionIn:
-      type: object
-      required: [models]
-      properties:
-        models:
-          type: array
-          items:
-            type: string
-          description: >-
-            The curated set, replacing the stored one wholesale. Ids are stored
-            verbatim and are NOT checked against the catalogue: the catalogue
-            moves on every CLI upgrade, so an id it does not currently carry is
-            a stale menu entry rather than a config error. An empty array clears
-            the curation.
-
-    AgentModelSelectionOut:
-      type: object
-      required: [models]
-      properties:
-        models:
-          type: array
-          items:
-            type: string
-          description: >-
-            The model ids this agent's pickers offer, out of the catalogue.
-            EMPTY means not curated — every model is offered.
 
     PairingCodeOut:
       type: object

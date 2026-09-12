@@ -212,6 +212,8 @@ class ChannelRuntime:
                 adapter=adapter,
                 require_mention=parsed.require_mention,
                 ignore_other_mentions=parsed.ignore_other_mentions,
+                default_model=parsed.default_model,
+                models=tuple(parsed.models),
             )
         )
         self._running[name] = _Running(adapter=adapter, config_hash=self._hash(config))

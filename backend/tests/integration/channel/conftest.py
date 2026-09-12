@@ -608,6 +608,8 @@ class ChannelEnv:
         default_agent_config: dict[str, Any] | None = None,
         require_mention: bool = True,
         ignore_other_mentions: bool = False,
+        default_model: str | None = None,
+        models: Sequence[str] = (),
     ) -> FakeChannelAdapter:
         adapter = adapter or FakeChannelAdapter()
         self.processor.bind(
@@ -620,6 +622,8 @@ class ChannelEnv:
                 adapter=adapter,
                 require_mention=require_mention,
                 ignore_other_mentions=ignore_other_mentions,
+                default_model=default_model,
+                models=tuple(models),
             )
         )
         return adapter

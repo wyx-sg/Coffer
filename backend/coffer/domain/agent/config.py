@@ -14,17 +14,9 @@ from __future__ import annotations
 
 import pathlib
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from coffer.domain.agent.types import AgentType
-
-#: Shape-only bounds for the curated ``models`` set, mirroring ``ProviderConfig``.
-#: Model ids are OPAQUE — they are passed verbatim to the agent's CLI and Coffer
-#: writes down no model name of its own — so the only checks are that an id is a
-#: non-blank string, that the list holds no duplicates, and that neither the list
-#: nor an entry is absurdly long.
-_MAX_MODELS = 200
-_MAX_MODEL_ID_LEN = 200
 
 #: The only value Codex accepts for a provider block's ``wire_api``. Its
 #: parser rejects every other spelling outright ("unknown variant, expected
@@ -55,48 +47,10 @@ class AgentConfig(BaseModel):
     # env, so it runs on its OWN default model (the connection carries none).
     model: str | None = None
     fast_model: str | None = None
-    # Which of this agent's own catalogue the user actually wants OFFERED. The
-    # catalogue is read back from the installed CLI and is cumulative — it names
-    # every model that release has heard of, including ones this ACCOUNT may not
-    # run. Which ones those are is a server-side account fact with no local copy
-    # (``modelAccessCache`` in ``~/.claude.json`` is empty on a fresh login), and
-    # no field of the catalog separates them: two models on the same price tier,
-    # with the same capabilities and the same cutoff, differ only in whether the
-    # account is entitled to them. So the user is the authority, and this is
-    # where their answer lives.
-    #
-    # EMPTY means NOT CURATED — every model in the catalogue is offered, which is
-    # exactly today's behaviour and what Coffer must do for someone who never
-    # opens the screen. It never means "no models".
-    #
-    # This narrows PICKERS only. Nothing validates a typed model name against it:
-    # the CLI accepts names this catalogue never carried (tier aliases, and
-    # models newer than the installed binary), and Coffer does not own that
-    # namespace.
-    models: list[str] = Field(default_factory=list)
     # Validated against the one Codex wire-api value that still exists (see
     # _validate_wire_api) so a bad value is a 422 at PATCH time, not a Codex
     # config that fails to load.
     wire_api: str | None = None
-
-    @field_validator("models")
-    @classmethod
-    def _well_formed_models(cls, v: list[str]) -> list[str]:
-        """Shape only: non-blank ids, no duplicates, sane bounds. Whether an id
-        is one the agent can run is the agent's answer, not ours — a curated set
-        is a statement of intent, and an id the next CLI release drops is a stale
-        menu entry, not a config error."""
-        if len(v) > _MAX_MODELS:
-            raise ValueError(f"too many models: at most {_MAX_MODELS}")
-        cleaned: dict[str, None] = {}
-        for m in v:
-            model = m.strip()
-            if not model:
-                raise ValueError("model id must not be empty")
-            if len(model) > _MAX_MODEL_ID_LEN:
-                raise ValueError(f"model id too long: at most {_MAX_MODEL_ID_LEN} characters")
-            cleaned.setdefault(model, None)
-        return list(cleaned)
 
     @field_validator("wire_api")
     @classmethod

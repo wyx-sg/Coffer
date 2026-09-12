@@ -7,6 +7,7 @@
 import { z } from "zod";
 
 import type { ChannelType } from "@/lib/api/channels";
+import { defaultModelOutOfRange, modelCurationConfig, modelCurationFields } from "./modelCuration";
 
 /**
  * The agent a newly-created channel routes to by default. This is a chat
@@ -25,26 +26,38 @@ const channelNameSchema = z
   .max(64)
   .regex(/^[a-zA-Z0-9_-]+$/, "letters, digits, dash, underscore only");
 
-export const addChannelFormSchema = z.discriminatedUnion("channel_type", [
-  z.object({
-    channel_type: z.literal("telegram"),
-    name: channelNameSchema,
-    bot_token: z.string().min(1, "bot token required"),
-  }),
-  z.object({
-    channel_type: z.literal("seatalk"),
-    name: channelNameSchema,
-    app_id: z.string().min(1, "app id required"),
-    app_secret: z.string().min(1, "app secret required"),
-    signing_secret: z.string().min(1, "signing secret required"),
-    // Optional: the tunnel's public base URL (https://host). The full SeaTalk
-    // callback URL is composed from this on the channel detail page.
-    public_base_url: z.string().optional(),
-    // Optional: a cloudflared connector token. When set, Coffer runs the
-    // named tunnel itself instead of the user running cloudflared by hand.
-    tunnel_token: z.string().optional(),
-  }),
-]);
+export const addChannelFormSchema = z
+  .discriminatedUnion("channel_type", [
+    z.object({
+      channel_type: z.literal("telegram"),
+      name: channelNameSchema,
+      bot_token: z.string().min(1, "bot token required"),
+      ...modelCurationFields,
+    }),
+    z.object({
+      channel_type: z.literal("seatalk"),
+      name: channelNameSchema,
+      app_id: z.string().min(1, "app id required"),
+      app_secret: z.string().min(1, "app secret required"),
+      signing_secret: z.string().min(1, "signing secret required"),
+      // Optional: the tunnel's public base URL (https://host). The full SeaTalk
+      // callback URL is composed from this on the channel detail page.
+      public_base_url: z.string().optional(),
+      // Optional: a cloudflared connector token. When set, Coffer runs the
+      // named tunnel itself instead of the user running cloudflared by hand.
+      tunnel_token: z.string().optional(),
+      ...modelCurationFields,
+    }),
+  ])
+  .superRefine((values, ctx) => {
+    if (defaultModelOutOfRange(values.default_model, values.models)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["default_model"],
+        message: "default model must be one of the allowed models",
+      });
+    }
+  });
 
 export type AddChannelFormValues = z.output<typeof addChannelFormSchema>;
 
@@ -77,6 +90,7 @@ export function planChannel(values: AddChannelFormValues): ChannelPlan {
         channel_type: "telegram" satisfies ChannelType,
         bot_token_ref: ref,
         default_agent: DEFAULT_AGENT,
+        ...modelCurationConfig(values.default_model, values.models),
       },
       secrets: [{ ref, value: values.bot_token }],
     };
@@ -93,6 +107,7 @@ export function planChannel(values: AddChannelFormValues): ChannelPlan {
       app_secret_ref: appSecretRef,
       signing_secret_ref: signingSecretRef,
       default_agent: DEFAULT_AGENT,
+      ...modelCurationConfig(values.default_model, values.models),
       ...(values.public_base_url?.trim() ? { public_base_url: values.public_base_url.trim() } : {}),
       ...(tunnelToken ? { tunnel_token_ref: tunnelTokenRef } : {}),
     },
@@ -124,6 +139,10 @@ export interface ChannelEditValues {
   public_base_url?: string;
   /** New cloudflared tunnel token; blank leaves the stored credential untouched. */
   tunnel_token?: string;
+  /** Model a NEW conversation opens on; blank UNPINS it (FR-071). */
+  default_model?: string;
+  /** The allowed model range; empty CLEARS the restriction (FR-071). */
+  models?: string[];
 }
 
 export interface ChannelEditInput {
@@ -150,6 +169,20 @@ export function planChannelEdit(input: ChannelEditInput): ChannelPlan {
     ...config,
     default_agent: values.default_agent,
   };
+
+  // A config PATCH REPLACES the stored config wholesale, so clearing one of
+  // these means dropping the key rather than leaving the spread-in old value
+  // behind. Absent = the backend's own default: nothing pinned, nothing
+  // restricted.
+  if (values.default_model !== undefined) {
+    const pinned = values.default_model.trim();
+    if (pinned) nextConfig.default_model = pinned;
+    else delete nextConfig.default_model;
+  }
+  if (values.models !== undefined) {
+    if (values.models.length > 0) nextConfig.models = values.models;
+    else delete nextConfig.models;
+  }
 
   if (config.channel_type === "telegram") {
     const ref = config.bot_token_ref;

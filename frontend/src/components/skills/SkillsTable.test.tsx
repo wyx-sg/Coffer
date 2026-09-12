@@ -1,11 +1,12 @@
 // frontend/src/components/skills/SkillsTable.test.tsx
 //
 // The skills list renders via the shared DataTable: rows navigate to the detail
-// page on click, each row carries an enable/disable Switch (the skill's own
-// enabled flag) + a Delete action (which opens a styled confirmation dialog —
-// no window.confirm), a status filter narrows the rows, and a checkbox column
-// enables bulk Verify / Delete. Verify is library-wide maintenance, so it lives
-// on the bulk bar only — never per row.
+// page on click, each row carries the three-state ScopeControl (the skill's
+// reach: Disabled / Every agent / Selected agents — the same control the detail
+// page mounts) + a Delete action (which opens a styled confirmation dialog — no
+// window.confirm), a status filter narrows the rows by that same reach, and a
+// checkbox column enables bulk Verify / Delete. Verify is library-wide
+// maintenance, so it lives on the bulk bar only — never per row.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
@@ -27,15 +28,31 @@ vi.mock("@/lib/hooks/useSkills", () => ({
   useRemoveSkill: vi.fn(),
   useVerifySkills: vi.fn(),
   useRepairSkillDrift: vi.fn(),
-  useSetSkillEnabled: vi.fn(),
 }));
 
-const { useRemoveSkill, useVerifySkills, useRepairSkillDrift, useSetSkillEnabled } =
+// The status cell is ScopeControl, so the row now reaches the scope/agent/
+// enable hooks. useResourceScope returns nothing on purpose — the rows must
+// render from the list payload's `scope`, and one test asserts the hook was
+// called with its query switched OFF (no GET per row).
+vi.mock("@/lib/hooks/useScope", () => ({
+  useResourceScope: vi.fn(() => ({ data: undefined })),
+  useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+}));
+vi.mock("@/lib/hooks/useAgents", () => ({
+  useAgents: vi.fn(() => ({ data: [{ name: "cc" }] })),
+}));
+vi.mock("@/lib/hooks/useResourceMutations", () => ({
+  useEnableResource: vi.fn(),
+  useDisableResource: vi.fn(),
+}));
+
+const { useRemoveSkill, useVerifySkills, useRepairSkillDrift } =
   await import("@/lib/hooks/useSkills");
+const { useResourceScope } = await import("@/lib/hooks/useScope");
+const { useEnableResource, useDisableResource } = await import("@/lib/hooks/useResourceMutations");
 const useRemoveSkillMock = vi.mocked(useRemoveSkill);
 const useVerifySkillsMock = vi.mocked(useVerifySkills);
 const useRepairSkillDriftMock = vi.mocked(useRepairSkillDrift);
-const useSetSkillEnabledMock = vi.mocked(useSetSkillEnabled);
 
 const enableMutate = vi.fn();
 const disableMutate = vi.fn();
@@ -45,10 +62,14 @@ function stubHooks(removeMutate = vi.fn()) {
     mutate: removeMutate,
     isPending: false,
   } as unknown as ReturnType<typeof useRemoveSkill>);
-  useSetSkillEnabledMock.mockReturnValue({
-    enable: { mutate: enableMutate, isPending: false },
-    disable: { mutate: disableMutate, isPending: false },
-  } as unknown as ReturnType<typeof useSetSkillEnabled>);
+  vi.mocked(useEnableResource).mockReturnValue({
+    mutate: enableMutate,
+    isPending: false,
+  } as unknown as ReturnType<typeof useEnableResource>);
+  vi.mocked(useDisableResource).mockReturnValue({
+    mutate: disableMutate,
+    isPending: false,
+  } as unknown as ReturnType<typeof useDisableResource>);
   useVerifySkillsMock.mockReturnValue({
     mutate: vi.fn(),
     reset: vi.fn(),
@@ -125,6 +146,20 @@ const SAMPLE: SkillOut[] = [
     updated_at: "2026-05-22T00:00:00Z",
     bindings: [],
   },
+  {
+    // Enabled but scoped: the state the old on/off switch could not express.
+    name: "scoped-skill",
+    description: "Only for cc",
+    source: { type: "local_import", original_path: "/tmp/scoped" },
+    enabled: true,
+    scope: ["cc"],
+    version_hash: "111222333444",
+    master_path: "/master/scoped-skill",
+    last_synced_from_source_at: null,
+    created_at: "2026-05-22T00:00:00Z",
+    updated_at: "2026-05-22T00:00:00Z",
+    bindings: [],
+  },
 ];
 
 describe("SkillsTable", () => {
@@ -165,26 +200,57 @@ describe("SkillsTable", () => {
     expect(screen.getByRole("button", { name: /verify/i })).toBeInTheDocument();
   });
 
-  test("the status switch reflects `enabled` and toggles the skill resource", () => {
+  test("the status cell is the three-state scope control, not an on/off switch", () => {
     stubHooks();
     render(<SkillsTable skills={SAMPLE} />, { wrapper: wrap(null) });
 
-    const on = within(rowFor("hello-skill")).getByRole("switch");
-    const off = within(rowFor("git-skill")).getByRole("switch");
-    expect(on).toBeChecked();
-    expect(off).not.toBeChecked();
+    expect(screen.queryByRole("switch")).toBeNull();
+    const row = within(rowFor("hello-skill"));
+    expect(row.getByTestId("scope-control")).toBeInTheDocument();
+    expect(row.getByRole("button", { name: /every agent/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    // A scoped skill lands on "Selected agents"; a disabled one on "Disabled".
+    expect(
+      within(rowFor("scoped-skill")).getByRole("button", { name: /selected agents/i }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      within(rowFor("git-skill")).getByRole("button", { name: /^disabled$/i }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
 
-    fireEvent.click(on);
+  test("each row's scope comes from the list payload — no per-row scope fetch", () => {
+    stubHooks();
+    render(<SkillsTable skills={SAMPLE} />, { wrapper: wrap(null) });
+
+    // Third argument is the query's `enabled` flag: false on every row, so a
+    // list of N skills costs one request, not N.
+    expect(vi.mocked(useResourceScope).mock.calls.length).toBeGreaterThan(0);
+    for (const call of vi.mocked(useResourceScope).mock.calls) {
+      expect(call[2]).toBe(false);
+    }
+  });
+
+  test("the scope control drives enable/disable from the list", () => {
+    stubHooks();
+    render(<SkillsTable skills={SAMPLE} />, { wrapper: wrap(null) });
+
+    fireEvent.click(within(rowFor("hello-skill")).getByRole("button", { name: /^disabled$/i }));
     expect(disableMutate).toHaveBeenCalledWith({ kind: "skill", name: "hello-skill" });
-    fireEvent.click(off);
+
+    fireEvent.click(within(rowFor("git-skill")).getByRole("button", { name: /every agent/i }));
     expect(enableMutate).toHaveBeenCalledWith({ kind: "skill", name: "git-skill" });
   });
 
-  test("clicking the status switch does not navigate to the detail page", () => {
+  test("clicking inside the scope control does not navigate to the detail page", () => {
     stubHooks();
     render(<SkillsTable skills={SAMPLE} />, { wrapper: wrap(null) });
 
-    fireEvent.click(within(rowFor("hello-skill")).getByRole("switch"));
+    fireEvent.click(within(rowFor("hello-skill")).getByRole("button", { name: /^disabled$/i }));
+    fireEvent.click(
+      within(rowFor("hello-skill")).getByRole("button", { name: /selected agents/i }),
+    );
     expect(navigateMock).not.toHaveBeenCalled();
 
     // …while the row itself still navigates.
@@ -192,7 +258,7 @@ describe("SkillsTable", () => {
     expect(navigateMock).toHaveBeenCalledWith("/skills/hello-skill");
   });
 
-  test("the status filter narrows the rows", () => {
+  test("the status filter narrows the rows by reach", () => {
     stubHooks();
     render(<SkillsTable skills={SAMPLE} />, { wrapper: wrap(null) });
 
@@ -200,9 +266,14 @@ describe("SkillsTable", () => {
     expect(screen.queryByText("hello-skill")).toBeNull();
     expect(screen.getByText("git-skill")).toBeInTheDocument();
 
-    selectStatus("Enabled");
+    selectStatus("Every agent");
     expect(screen.getByText("hello-skill")).toBeInTheDocument();
     expect(screen.queryByText("git-skill")).toBeNull();
+    expect(screen.queryByText("scoped-skill")).toBeNull();
+
+    selectStatus("Selected agents");
+    expect(screen.getByText("scoped-skill")).toBeInTheDocument();
+    expect(screen.queryByText("hello-skill")).toBeNull();
   });
 
   test("the delete action opens a styled dialog and confirming invokes remove", () => {

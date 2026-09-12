@@ -18,10 +18,6 @@ import type { SkillOut } from "@/lib/api/skills";
 vi.mock("@/lib/hooks/useSkills", () => ({
   useSkills: vi.fn(),
   useImportSkill: vi.fn(),
-  useSetSkillEnabled: () => ({
-    enable: { mutate: vi.fn(), isPending: false },
-    disable: { mutate: vi.fn(), isPending: false },
-  }),
   useRemoveSkill: vi.fn(),
   useVerifySkills: vi.fn(),
   useRepairSkillDrift: vi.fn(),
@@ -131,6 +127,48 @@ describe("SkillsPage", () => {
     stubHooks({ error: { code: "BOOM", message: "kaboom" } });
     render(<SkillsPage />, { wrapper: wrap(null) });
     expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
+  });
+
+  test("a copy_fallback delivery is badged as degraded on the row (FR-012)", () => {
+    // The agent Skills tab no longer repeats the delivered skills, so this list
+    // is where the degradation has to show.
+    stubHooks({
+      data: [
+        {
+          ...SAMPLE[0],
+          bindings: [
+            {
+              agent_name: "cc",
+              last_linked_at: null,
+              last_link_path: null,
+              link_mode: "copy_fallback",
+            },
+          ],
+        },
+      ],
+    });
+    render(<SkillsPage />, { wrapper: wrap(null) });
+    expect(screen.getByTestId("skill-degraded-badge")).toBeInTheDocument();
+  });
+
+  test("a plain symlink delivery carries no degraded badge", () => {
+    stubHooks({
+      data: [
+        {
+          ...SAMPLE[0],
+          bindings: [
+            {
+              agent_name: "cc",
+              last_linked_at: null,
+              last_link_path: null,
+              link_mode: "symlink",
+            },
+          ],
+        },
+      ],
+    });
+    render(<SkillsPage />, { wrapper: wrap(null) });
+    expect(screen.queryByTestId("skill-degraded-badge")).not.toBeInTheDocument();
   });
 
   test("the header no longer carries a Verify action (moved into the table)", () => {

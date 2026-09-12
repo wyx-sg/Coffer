@@ -76,7 +76,11 @@ Concrete shape:
   local Ollama / LM Studio through the same `.embeddings.create` call, plus an
   optional in-process `local` provider (fastembed) for zero-server offline
   embeddings. The embedding model is **mutable** — changing it re-embeds the
-  corpus (files = truth), so there is no immutability lock.
+  corpus (files = truth), so there is no immutability lock. *Superseded in
+  shape, not in substance:* the config is now one installation-wide setting
+  that NAMES an LLM connection plus one of its `embedding`-modality models
+  (spec knowledge FR-077), so the endpoint and key are typed once on the
+  Connections page instead of restated per corpus.
 - **Pluggable `MarkdownConverter` port** (`can_handle(format)` +
   `convert(bytes) -> (markdown, metadata)`), confined to infrastructure,
   dispatched by format. Default engine is **MarkItDown** (broad coverage,

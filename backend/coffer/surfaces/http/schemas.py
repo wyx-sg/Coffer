@@ -159,24 +159,6 @@ class MCPToolView(BaseModel):
     enabled: bool
 
 
-class ToolTieringServerOut(BaseModel):
-    server: str
-    total: int
-    listed: int
-
-
-class ToolTieringOut(BaseModel):
-    """Tool tiering: how much of the aggregated catalogue agents currently see."""
-
-    enabled: bool
-    budget: int
-    window_days: int
-    total: int
-    listed: int
-    hidden: int
-    servers: list[ToolTieringServerOut] = Field(default_factory=list)
-
-
 class MCPResourceView(BaseModel):
     prefixed_uri: str
     original_uri: str
@@ -342,11 +324,14 @@ class DaemonPortSettingsIn(BaseModel):
 
 
 class EmbeddingConfigOut(BaseModel):
+    """The installation-wide embedding setting: a CONNECTION and one of its
+    models, the same shape the internal-engine setting has. The wire, base URL
+    and credential are the named connection's, resolved at use time, so they are
+    neither stored nor returned here."""
+
     enabled: bool
-    provider: str | None = None
+    connection: str | None = None
     model: str | None = None
-    base_url: str | None = None
-    credential_ref: str | None = None
     dimensions: int
     default_chunk_size: int = 512
     default_chunk_overlap: int = 64
@@ -354,15 +339,13 @@ class EmbeddingConfigOut(BaseModel):
 
 
 class EmbeddingConfigUpdate(BaseModel):
+    """``connection`` names a configured LLM connection; ``model`` one of the
+    ``embedding``-modality models it offers. A connection that does not exist,
+    whose wire serves no embeddings, or that offers no such model is refused."""
+
     enabled: bool = False
-    provider: str | None = None
+    connection: str | None = None
     model: str | None = None
-    base_url: str | None = None
-    credential_ref: str | None = None
-    # A raw API key the user typed: stored into the credential vault under a
-    # fixed ref and reused as ``credential_ref``. Takes precedence over an
-    # explicit ``credential_ref``. Left null in edit mode keeps the stored key.
-    secret_value: str | None = None
     dimensions: int = Field(default=768, ge=1, le=8192)
     default_chunk_size: int = Field(default=512, ge=64, le=2048)
     default_chunk_overlap: int = Field(default=64, ge=0)

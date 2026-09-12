@@ -47,7 +47,7 @@ def _svc(port: ProviderIntrospectionPort, secrets=None):  # type: ignore[no-unty
 async def test_list_models_resolves_credential_ref() -> None:
     port = _FakePort(models=["gpt-4o", "gpt-4o-mini"])
     result = await _svc(port).list_models(provider="openai", base_url=None, credential_ref="ref-x")
-    assert result.models == ["gpt-4o", "gpt-4o-mini"]
+    assert [m.id for m in result.models] == ["gpt-4o", "gpt-4o-mini"]
     assert port.seen_key == "sk-secret"  # ref resolved server-side
 
 
@@ -101,7 +101,7 @@ async def test_list_models_prefers_inline_secret() -> None:
     result = await svc.list_models(
         provider="openai", base_url=None, credential_ref=None, secret_value="sk-inline"
     )
-    assert result.models == ["gpt-4o"]
+    assert [m.id for m in result.models] == ["gpt-4o"]
     assert port.seen_key == "sk-inline"
 
 
@@ -153,7 +153,7 @@ async def test_acceptance_inline_unsaved_secret() -> None:
         credential_ref=None,
         secret_value="sk-ant-inline",
     )
-    assert listed.models == ["claude-opus-4-6"]
+    assert [m.id for m in listed.models] == ["claude-opus-4-6"]
     assert tested.ok is True
     assert port.seen_key == "sk-ant-inline"
 

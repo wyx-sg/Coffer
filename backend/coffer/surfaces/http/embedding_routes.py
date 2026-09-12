@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 
 from coffer.application.embedding_config_service import EmbeddingConfigService
 from coffer.application.providers.ports import ModelIntrospectionService
-from coffer.domain.embedding_config import GlobalEmbeddingConfig
+from coffer.domain.embedding_config import GlobalEmbeddingConfig, embedding_provider_for
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor, get_embedding_config_service
 from coffer.surfaces.http.provider_schemas import EmbeddingTestIn, TestResultOut
@@ -24,10 +24,8 @@ router = APIRouter(
 def _to_out(cfg: GlobalEmbeddingConfig) -> EmbeddingConfigOut:
     return EmbeddingConfigOut(
         enabled=cfg.enabled,
-        provider=cfg.provider,
+        connection=cfg.connection,
         model=cfg.model,
-        base_url=cfg.base_url,
-        credential_ref=cfg.credential_ref,
         dimensions=cfg.dimensions,
         default_chunk_size=cfg.default_chunk_size,
         default_chunk_overlap=cfg.default_chunk_overlap,
@@ -50,11 +48,8 @@ async def update_config(
 ) -> EmbeddingConfigOut:
     saved = await svc.update(
         enabled=body.enabled,
-        provider=body.provider,
+        connection=body.connection,
         model=body.model,
-        base_url=body.base_url,
-        credential_ref=body.credential_ref,
-        secret_value=body.secret_value,
         dimensions=body.dimensions,
         default_chunk_size=body.default_chunk_size,
         default_chunk_overlap=body.default_chunk_overlap,
@@ -67,15 +62,20 @@ async def update_config(
 async def test_embedding(
     body: EmbeddingTestIn,
     svc: ModelIntrospectionService = Depends(get_introspection_service),  # noqa: B008
+    config: EmbeddingConfigService = Depends(get_embedding_config_service),  # noqa: B008
 ) -> TestResultOut:
-    """Probe an embedding provider; ok=true reports the returned dimension.
+    """Probe one model on a CONNECTION; ok=true reports the returned dimension.
 
-    Model listing reuses ``POST /api/v1/models/list-models`` (same providers).
+    The connection is resolved and refused the same way saving it would be, so a
+    green test means the settings can be saved. Model listing reuses
+    ``POST /api/v1/models/list-models`` against the same connection.
     """
+    endpoint = await config.endpoint_for(body.connection, body.model)
+    provider = embedding_provider_for(endpoint.protocol)
     result = await svc.test_embedding(
-        provider=body.provider,
+        provider=str(provider),
         model=body.model,
-        base_url=body.base_url,
-        credential_ref=body.credential_ref,
+        base_url=endpoint.base_url,
+        credential_ref=endpoint.credential_ref,
     )
     return TestResultOut(ok=result.ok, message=result.message, detail=result.detail)

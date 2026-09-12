@@ -3,8 +3,9 @@ turn-driver and the command router.
 
 A channel conversation's structural choice (agent) is resolved from the
 peer's sticky preference plus the channel default, then fixed at creation;
-switching opens a fresh conversation. These helpers are pure given their
-injected ports — no per-processor state.
+switching opens a fresh conversation. The model a fresh conversation opens on
+comes from the channel too (``default_model``, FR-071). These helpers are pure
+given their injected ports — no per-processor state.
 """
 
 from __future__ import annotations
@@ -54,6 +55,7 @@ async def open_conversation(
         default_agent=binding.default_agent,
         default_agent_config=binding.default_agent_config,
         preferred_agent=row.preferred_agent if row is not None else None,
+        default_model=binding.default_model,
     )
     conv = await conversations.create_conversation(
         agent_key=spec.agent_key,

@@ -20,11 +20,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from coffer.application.agent.model_catalogue import AgentModelCatalogueService
-from coffer.application.agent.service import AgentService
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import get_actor as _actor
-from coffer.surfaces.http.dependencies import get_agent_service
 from coffer.surfaces.http.turn_dependencies import (
     get_agent_model_catalogue,
     get_agent_registry,
@@ -49,23 +46,6 @@ class AgentModelOut(BaseModel):
 
 class AgentModelsOut(BaseModel):
     models: list[AgentModelOut]
-
-
-class AgentModelSelectionIn(BaseModel):
-    """The curated set, replaced wholesale. ``[]`` clears the curation."""
-
-    models: list[str]
-
-
-class AgentModelSelectionOut(BaseModel):
-    """Which of the catalogue this agent's pickers offer.
-
-    Separate from the catalogue on purpose: the UI needs BOTH to render a
-    catalogue with ticks against it. ``models`` empty means NOT CURATED — every
-    model in the catalogue is offered — never "no models".
-    """
-
-    models: list[str]
 
 
 def _known(registry: AgentProviderRegistry, agent_key: str) -> None:
@@ -117,9 +97,9 @@ async def list_agent_models(
     already appears here, so listing both filled the picker with label-less
     duplicates. An alias can still be TYPED wherever a model name is accepted.
 
-    The list is NOT narrowed by the user's curated selection: this route is what
-    the curation screen renders, so it has to show the models that are off as
-    well as the ones that are on. ``GET …/models/selection`` says which are on.
+    Nothing narrows this list. It is what the agent itself can be put on, which
+    is the only question the agent resource answers; a surface with an audience
+    of its own — a channel's allowed range — curates over it on its own side.
 
     An unregistered ``agent_key`` is a 404.
     """
@@ -128,50 +108,3 @@ async def list_agent_models(
     return AgentModelsOut(
         models=[AgentModelOut(id=m.id, label=m.label, description=m.description) for m in models]
     )
-
-
-@router.get("/{agent_key}/models/selection", response_model=AgentModelSelectionOut)
-async def get_agent_model_selection(
-    agent_key: str,
-    registry: AgentProviderRegistry = Depends(get_agent_registry),  # noqa: B008
-    catalogue: AgentModelCatalogueService = Depends(get_agent_model_catalogue),  # noqa: B008
-) -> AgentModelSelectionOut:
-    """Which models this agent's pickers offer, out of the catalogue above.
-
-    The catalogue an agent reports is CUMULATIVE — it names every model the
-    installed release has heard of, including ones this account is not entitled
-    to run. Which ones those are is a server-side account fact with no local
-    copy, and no field of the catalogue separates them, so the user says. This
-    route is their answer; the catalogue route stays the full list so the UI can
-    show what is on offer and what is not.
-
-    An empty list means NOT CURATED: every model is offered, which is how an
-    agent nobody has touched behaves.
-    """
-    _known(registry, agent_key)
-    return AgentModelSelectionOut(models=await catalogue.selection(agent_key))
-
-
-@router.put("/{agent_key}/models/selection", response_model=AgentModelSelectionOut)
-async def set_agent_model_selection(
-    agent_key: str,
-    body: AgentModelSelectionIn,
-    registry: AgentProviderRegistry = Depends(get_agent_registry),  # noqa: B008
-    catalogue: AgentModelCatalogueService = Depends(get_agent_model_catalogue),  # noqa: B008
-    agents: AgentService = Depends(get_agent_service),  # noqa: B008
-    actor: str = Depends(_actor),
-) -> AgentModelSelectionOut:
-    """Replace the curated set. ``[]`` clears it, restoring the whole catalogue.
-
-    Ids are stored verbatim and are NOT checked against the catalogue: the
-    catalogue moves on every CLI upgrade, and an id the current release dropped
-    is a stale menu entry rather than a config error. A 404 when no agent of
-    this type is registered — the set lives in that agent's config, so without
-    one there is nowhere to put it.
-    """
-    _known(registry, agent_key)
-    name = await catalogue.selection_owner(agent_key)
-    if name is None:
-        raise HTTPException(status_code=404, detail=f"no registered agent of type {agent_key!r}")
-    await agents.set_offered_models(name=name, model_ids=body.models, actor=actor)
-    return AgentModelSelectionOut(models=await catalogue.selection(agent_key))

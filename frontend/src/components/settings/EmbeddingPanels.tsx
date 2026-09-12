@@ -1,49 +1,158 @@
 // components/settings/EmbeddingPanels.tsx — presentational pieces of the global
-// Embedding settings card (spec knowledge): the configured-model summary row (or an
-// empty hint) and the chunking-defaults block that also hosts the enable
-// switch. Kept apart from EmbeddingSettings so the page stays small.
+// Embedding settings card (spec knowledge FR-077): the "pick a provider, then
+// pick a model" block — deliberately the same two Selects the internal-engine
+// card above it has, because it is the same question — and the chunking-defaults
+// block that also hosts the enable switch. Kept apart from EmbeddingSettings so
+// the page stays small; all state lives in the page.
 import type { KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Pencil } from "lucide-react";
+import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import type { TestResult } from "@/lib/hooks/useModelIntrospection";
 
-export function EmbeddingModelRow({
-  hasModel,
+export function EmbeddingModelFields({
+  connections,
+  connection,
+  onConnectionChange,
   model,
-  provider,
+  onModelChange,
+  /** The embedding models the chosen connection offers, in its own order. */
+  modelOptions,
+  /** Shown under the model Select when the connection offers no model to pick. */
+  modelsHint,
+  /** True while nothing is configured — the fallback-to-keyword/grep notice. */
+  notConfigured,
   dimensions,
-  onEdit,
+  onDimensionsChange,
+  onDimensionsCommit,
+  onTest,
+  testPending,
+  testResult,
+  disabled,
 }: {
-  hasModel: boolean;
+  connections: string[];
+  connection: string;
+  onConnectionChange: (v: string) => void;
   model: string;
-  provider: string;
+  onModelChange: (v: string) => void;
+  modelOptions: string[];
+  modelsHint?: string;
+  notConfigured?: boolean;
   dimensions: number;
-  onEdit: () => void;
+  onDimensionsChange: (v: number) => void;
+  onDimensionsCommit: () => void;
+  onTest: () => void;
+  testPending: boolean;
+  testResult: TestResult | null;
+  disabled?: boolean;
 }) {
   const { t } = useTranslation();
-  if (!hasModel) {
-    return (
-      <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
-        {t("settings.embedding.empty")}
-      </p>
-    );
-  }
+  const commitOnEnter = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") e.currentTarget.blur();
+  };
   return (
-    <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium">{model}</p>
-        <p className="text-xs text-muted-foreground">
-          {provider} · {dimensions}d
-        </p>
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-1.5">
+          <Label>{t("settings.embedding.connection")}</Label>
+          <Select
+            value={connection}
+            onValueChange={onConnectionChange}
+            disabled={disabled || connections.length === 0}
+          >
+            <SelectTrigger aria-label={t("settings.embedding.connection")}>
+              <SelectValue placeholder={t("settings.embedding.connectionPlaceholder")} />
+            </SelectTrigger>
+            <SelectContent>
+              {connections.map((name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="grid gap-1.5">
+          <Label>{t("settings.embedding.model")}</Label>
+          <Select
+            value={model}
+            onValueChange={onModelChange}
+            disabled={disabled || connection === "" || modelOptions.length === 0}
+          >
+            <SelectTrigger aria-label={t("settings.embedding.model")}>
+              <SelectValue placeholder={t("settings.embedding.modelPlaceholder")} />
+            </SelectTrigger>
+            <SelectContent>
+              {modelOptions.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {modelsHint ? <p className="text-xs text-amber-600">{modelsHint}</p> : null}
+        </div>
       </div>
-      <Button variant="secondary" size="sm" onClick={onEdit}>
-        <Pencil className="mr-1 size-3.5" />
-        {t("settings.embedding.edit")}
-      </Button>
+
+      {notConfigured ? (
+        <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+          {t("settings.embedding.empty")}
+        </p>
+      ) : null}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1">
+          <Label htmlFor="emb-dims">{t("settings.embedding.dimensions")}</Label>
+          <Input
+            id="emb-dims"
+            type="number"
+            value={dimensions}
+            disabled={disabled}
+            onChange={(e) => onDimensionsChange(Number(e.target.value) || 0)}
+            onBlur={onDimensionsCommit}
+            onKeyDown={commitOnEnter}
+          />
+        </div>
+        <div className="flex items-end gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={onTest}
+            disabled={testPending || connection === "" || model === ""}
+          >
+            {testPending && <Loader2 className="mr-1 size-3.5 animate-spin" />}
+            {t("settings.models.testConnection")}
+          </Button>
+          {testResult && (
+            <span
+              className={`flex items-center gap-1 pb-2 text-xs ${
+                testResult.ok ? "text-green-600" : "text-destructive"
+              }`}
+              role="status"
+            >
+              {testResult.ok ? (
+                <CheckCircle2 className="size-3.5" />
+              ) : (
+                <XCircle className="size-3.5" />
+              )}
+              {testResult.message}
+            </span>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

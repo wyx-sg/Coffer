@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
-import { resourcesApi } from "@/lib/api/resources";
 import { skillsApi, type RepairReportOut, type SkillImportRequest } from "@/lib/api/skills";
 import { useToast } from "@/components/ui/toast";
 
@@ -41,32 +40,6 @@ export function useImportSkill() {
     },
     onError,
   });
-}
-
-/** One half of useSetSkillEnabled: the kind-agnostic resource enable/disable
- *  call, but invalidating ["skills"] (which prefix-matches the single-skill
- *  ["skills", name] key too) instead of useResourceMutations' ["resources"] —
- *  the skills surfaces read the skills queries, not the resource list. */
-function useSkillResourceToggle(mutate: (kind: string, name: string) => Promise<void>) {
-  const qc = useQueryClient();
-  const onError = useSkillToastError();
-  return useMutation({
-    mutationFn: (vars: { kind: string; name: string }) => mutate(vars.kind, vars.name),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: SKILLS_KEY });
-    },
-    onError,
-  });
-}
-
-/** The skill's own enable flag, as the skills list table's status switch drives
- *  it. One half of the delivery predicate (the other is the skill's scope);
- *  there is no per-agent binding toggle any more. */
-export function useSetSkillEnabled() {
-  return {
-    enable: useSkillResourceToggle(resourcesApi.enable),
-    disable: useSkillResourceToggle(resourcesApi.disable),
-  };
 }
 
 export function useRemoveSkill() {
