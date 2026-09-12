@@ -42,17 +42,21 @@ Concrete choices:
   `specs/mcp-gateway/research.md`.
 - Alembic migrations ship as data files inside the daemon binary so
   first-launch can run `upgrade head` against a fresh DB.
-- sqlite-vec's loadable native extension (`vec0.dylib`/`.so`/`.dll`) ships
-  as a data file too (`collect_data_files("sqlite_vec")`) — it is package
-  data, not a Python submodule, so `collect_submodules` alone misses it.
-  Without it a frozen build loses the vec0 extension and vector retrieval
-  silently degrades to keyword-only (`VecIndex.available()` swallows the
-  load failure). The KB/memory/chat deps added by the knowledge-base,
-  knowledge and chat specs (`sqlite_vec`, `markitdown`, `openai`,
-  `langgraph`, `langchain`) are imported lazily, so they are pinned in
-  `hiddenimports` for the same reason. The bundle smoke test
-  (`scripts/smoke_test_bundle.sh`) probes `coffer-daemon --check-vec` so a
-  build that lost the extension fails instead of shipping quietly.
+- **Lazily-imported dependencies must be pinned in `hiddenimports`,** because
+  PyInstaller's static analysis cannot see an import that happens inside a
+  function — `markitdown` (inbound channel document extraction, spec channels
+  FR-030), `openai`, `langgraph`, `langchain`. Package *data* needs
+  `collect_data_files` on top, since `collect_submodules` only reaches Python
+  modules.
+  **Revised 2026-09-12:** this bullet used to be about sqlite-vec — its
+  `vec0.dylib`/`.so`/`.dll` shipped as a data file and the bundle smoke test
+  probed `coffer-daemon --check-vec`, so that a frozen build which lost the
+  extension failed loudly instead of silently degrading vector retrieval to
+  keyword-only. The knowledge layer has no vector index any more
+  ([Knowledge Is Plain Files](knowledge-is-plain-files.md)), so the probe is
+  gone. The `sqlite_vec` collection lines still sitting in
+  `backend/coffer-daemon.spec` no longer serve anything and are leftovers to
+  clear.
 - The shim binary deliberately excludes server-side heavy dependencies
   (FastAPI, uvicorn, SQLAlchemy, Alembic, structlog) to keep its size
   manageable — the shim talks to the daemon over loopback HTTP and only

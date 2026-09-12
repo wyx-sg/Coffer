@@ -14,15 +14,6 @@ from sqlalchemy.engine import Connection
 from coffer.infrastructure.channel import (
     persistence as _channel_persistence,  # noqa: F401 — channel_peers model
 )
-from coffer.infrastructure.knowledge import (  # noqa: F401 — unified documents/chunks ORM + FTS5 DDL
-    ddl as _knowledge_ddl,
-)
-from coffer.infrastructure.knowledge_scope import (
-    project_root_repo as _scope_project_roots,  # noqa: F401 — scope→project-root model
-)
-from coffer.infrastructure.knowledge_scope import (
-    store_label_repo as _scope_labels,  # noqa: F401 — scope→display-label model
-)
 from coffer.infrastructure.mcp import (
     persistence as _mcp_persistence,  # noqa: F401 — kind-specific models
 )

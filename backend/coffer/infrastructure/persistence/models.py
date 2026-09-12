@@ -131,29 +131,6 @@ class CredentialModel(Base):
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
 
 
-class EmbeddingConfigModel(Base):
-    """The single, global embedding configuration (one row, ``id`` pinned to 1).
-
-    Embedding is installation-wide, not per-resource: every KB and memory store
-    that enables vector retrieval shares this config."""
-
-    __tablename__ = "embedding_config"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    # The NAME of the ``provider`` resource this config embeds through; the wire,
-    # base URL and key are read from that connection at use time rather than
-    # restated here (spec knowledge FR-077).
-    connection: Mapped[str | None] = mapped_column(String, nullable=True)
-    model: Mapped[str | None] = mapped_column(String, nullable=True)
-    dimensions: Mapped[int] = mapped_column(Integer, nullable=False, default=768)
-    default_chunk_size: Mapped[int] = mapped_column(Integer, nullable=False, default=512)
-    default_chunk_overlap: Mapped[int] = mapped_column(Integer, nullable=False, default=64)
-    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-
-    __table_args__ = (CheckConstraint("id = 1", name="ck_embedding_config_singleton"),)
-
-
 class InternalEngineConfigModel(Base):
     """The single, global internal-engine model selection (one row, ``id`` = 1).
 
@@ -164,6 +141,8 @@ class InternalEngineConfigModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     model: Mapped[str | None] = mapped_column(String, nullable=True)
+    #: Whether the background tidy worker may run (spec knowledge FR-051).
+    auto_tidy_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 
     __table_args__ = (CheckConstraint("id = 1", name="ck_internal_engine_config_singleton"),)

@@ -1,111 +1,99 @@
-"""Knowledge built-in MCP tools — the retrieval half.
+"""The knowledge layer's five built-in MCP tools.
 
-Registered under the reserved ``coffer__`` prefix (added by the gateway). This
-module contributes ``search``, ``grep`` and ``read``; the sibling
-``document_tools`` contributes ``list``, ``write`` and ``delete``. Six tools
-over one kind, where there used to be twelve over two: an agent no longer has
-to decide whether what it is after is "memory" or "knowledge" before it can ask
-for it.
+``list``, ``grep``, ``read``, ``write``, ``delete`` — registered under the
+reserved ``coffer__`` prefix the gateway adds (spec knowledge FR-040). There is
+deliberately no ``search``: with no ranked index behind it, it would be a
+second name for ``grep``, and "is this search or grep?" is a guess an agent
+should never have to make (FR-024).
 
-Every retrieval tool takes an optional ``scope``. Omitted, it resolves from the
-agent's launch cwd (threaded in as ``cwd`` by the gateway at session handshake)
-to that project's scope, falling back to ``global`` outside a project — so the
-common case needs no argument at all.
+The motion these tools are shaped around is **catalogue, then grep**. ``list``
+walks the directory one level at a time so an agent can choose *which file*
+from titles and descriptions; ``grep`` finds *which line* once it knows where
+to look. Neither takes a scope, a mode or a ``top_k``, because none exists: a
+call spans every collection the agent is authorized for (FR-012), and that
+authorization is the only argument the layer resolves for itself — threaded in
+as ``agent`` by the gateway at session handshake, the same way ``cwd`` reaches
+the tools that declare it.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
-from coffer.application.knowledge.scope import GLOBAL_SCOPE_NAME
 from coffer.application.knowledge.service import KnowledgeService
-from coffer.application.knowledge.stores import scope_name_for
-from coffer.domain.knowledge.errors import DocumentNotFound, MemoryNotFound
-from coffer.domain.knowledge.scope import KnowledgeScope, scope_kind_of
+from coffer.domain.knowledge.entry import CatalogueLevel, KnowledgeFile
+from coffer.infrastructure.knowledge.grep import DEFAULT_MAX_MATCHES
 
-_MAX_TOP_K = 20
-_MAX_QUERY_CHARS = 4096
 _MAX_MATCHES = 500
 
-#: Shared JSON-schema fragment for the optional scope argument. Repeated in
-#: every tool's schema so the description travels with the argument.
-SCOPE_PROPERTY = {
+#: Audit actor for an agent-side write when the session reported no identity.
+_ANONYMOUS_ACTOR = "agent"
+
+Handler = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
+
+#: Shared JSON-schema fragment for the session-injected caller identity. It is
+#: declared on every knowledge tool because every one of them is authorized
+#: per agent; the gateway fills it in and a caller never needs to.
+AGENT_PROPERTY = {
     "type": "string",
-    "description": (
-        "Knowledge scope: 'global', a 'project-<id>' scope, or a named "
-        "collection. Omit to use the current project's scope (falling back to "
-        "'global' outside a project)."
-    ),
+    "description": "Calling agent's identity (session-injected; omit it).",
 }
-CWD_PROPERTY = {"type": "string", "description": "Agent launch cwd (session-injected)."}
 
 
-def _cwd(args: dict[str, Any]) -> str | None:
-    raw = args.get("cwd")
-    return str(raw) if isinstance(raw, str) and raw else None
+def _text(value: Any) -> str:
+    """A trimmed string, or empty for anything that is not usable text."""
+    return value.strip() if isinstance(value, str) else ""
 
 
-def explicit_scope(args: dict[str, Any]) -> str | None:
-    """The caller-supplied scope name, or ``None`` when it was left out."""
-    raw = args.get("scope")
-    if isinstance(raw, str) and raw.strip():
-        return raw.strip()
-    return None
+def _required(args: dict[str, Any], name: str) -> str:
+    value = _text(args.get(name))
+    if not value:
+        raise ValueError(f"{name!r} must be a non-empty string")
+    return value
 
 
-async def resolve_scope_arg(svc: KnowledgeService, args: dict[str, Any]) -> str:
-    """The scope a call operates on: the explicit one, else the cwd's project,
-    else ``global``.
+def _agent(args: dict[str, Any]) -> str | None:
+    """The session's agent identity, or ``None`` when it reported none.
 
-    Resolving the project scope provisions it, which is deliberate: an agent
-    that wants to write something should not have to ask permission first."""
-    named = explicit_scope(args)
-    if named is not None:
-        return named
-    cwd = _cwd(args)
-    if cwd is not None:
-        try:
-            resolved = await svc.resolve_scope(scope=KnowledgeScope.PROJECT, cwd=cwd)
-        except Exception:
-            # Not inside a git project (or the resolve failed): global still works.
-            return GLOBAL_SCOPE_NAME
-        return scope_name_for(resolved)
-    return GLOBAL_SCOPE_NAME
+    ``None`` means "unidentified caller", which the service answers with the
+    collections scoped to every agent — not with all of them.
+    """
+    return _text(args.get("agent")) or None
 
 
-async def ensure_writable_scope(svc: KnowledgeService, scope_name: str) -> None:
-    """Provision an auto-scope before writing to it.
-
-    A named collection is NOT provisioned here — it exists because someone
-    created it deliberately, so an unknown name must be an error rather than a
-    new empty collection conjured from a typo."""
-    if scope_kind_of(scope_name) is not KnowledgeScope.NAMED:
-        await svc.ensure_scope(scope_name)
-
-
-def is_document(svc: KnowledgeService, scope_name: str, item_id: str) -> bool:
-    """Whether an id names an ingested document rather than a written note.
-
-    Both lanes index into the same table under one ``(kind, scope)``, so the
-    index row cannot tell them apart — the file can. A document is the one with
-    a file under the scope's ``docs/``; a note lives in ``notes/``. Getting this
-    wrong would drop a row while leaving its markdown behind, and the
-    reconciler would simply put the row back."""
-    try:
-        path, _folder = svc.doc_paths(scope_name=scope_name, document_id=item_id)
-    except ValueError:
-        return False  # not a safe path segment, so not a document id
-    return Path(path).exists()
+def _level_payload(level: CatalogueLevel) -> dict[str, Any]:
+    return {
+        "path": level.path,
+        "directories": [
+            {"path": d.path, "name": d.name, "file_count": d.file_count} for d in level.directories
+        ],
+        "files": [
+            {
+                "path": f.path,
+                "title": f.title,
+                "description": f.description,
+                "actor": f.actor,
+                "updated_at": f.updated_at,
+            }
+            for f in level.files
+        ],
+    }
 
 
-def top_k_arg(args: dict[str, Any], default: int = 5) -> int:
-    try:
-        value = int(args.get("top_k", default))
-    except (TypeError, ValueError) as exc:
-        raise ValueError("'top_k' must be an integer") from exc
-    return max(1, min(_MAX_TOP_K, value))
+def _file_payload(file: KnowledgeFile) -> dict[str, Any]:
+    return {
+        "path": file.path,
+        "title": file.title,
+        "description": file.description,
+        "actor": file.actor,
+        "created_at": file.created_at,
+        "updated_at": file.updated_at,
+        "body": file.body,
+        "file_path": file.file_path,
+        "folder_path": file.folder_path,
+    }
 
 
 def register_knowledge_builtin_tools(
@@ -113,170 +101,139 @@ def register_knowledge_builtin_tools(
     *,
     knowledge_service: KnowledgeService,
 ) -> None:
-    """Wire ``search`` / ``grep`` / ``read`` into the gateway's registry."""
+    """Wire the five knowledge tools into the gateway's registry."""
 
-    async def search(args: dict[str, Any]) -> dict[str, Any]:
-        query = str(args["query"])[:_MAX_QUERY_CHARS]
-        scope_name = await resolve_scope_arg(knowledge_service, args)
-        await ensure_writable_scope(knowledge_service, scope_name)
-        # An implicit scope also folds in ``global`` — knowledge filed globally
-        # is meant to follow the user everywhere, so the default span is
-        # project + global. An EXPLICIT scope is taken literally.
-        span = "project" if explicit_scope(args) is not None else "both"
-        # One query → one answer: the surface never selects a retrieval mode;
-        # the service resolves it from the scope's ``default_mode`` and degrades
-        # vector→keyword rather than erroring.
-        hits, mode, fallback = await knowledge_service.recall_in_scope(
-            scope_name=scope_name,
-            query=query,
-            top_k=top_k_arg(args),
-            mode=None,
-            scope=span,  # type: ignore[arg-type]
-        )
-        return {
-            "scope": scope_name,
-            "mode": mode,
-            "degraded": fallback,
-            "hits": [
-                {
-                    "id": h.id,
-                    "text": h.text,
-                    "score": h.score,
-                    "source": h.source,
-                    "time": h.time.isoformat(),
-                }
-                for h in hits
-            ],
-        }
+    svc = knowledge_service
+
+    async def list_knowledge(args: dict[str, Any]) -> dict[str, Any]:
+        agent = _agent(args)
+        path = _text(args.get("path"))
+        if not path:
+            collections = await svc.list_collections(agent)
+            return {
+                "collections": [
+                    {"name": c.name, "description": c.description, "file_count": c.file_count}
+                    for c in collections
+                ]
+            }
+        return _level_payload(await svc.list_level(path, agent))
 
     async def grep(args: dict[str, Any]) -> dict[str, Any]:
-        pattern = str(args["pattern"])
-        scope_name = await resolve_scope_arg(knowledge_service, args)
-        await ensure_writable_scope(knowledge_service, scope_name)
+        pattern = _required(args, "pattern")
         try:
-            max_matches = max(1, min(_MAX_MATCHES, int(args.get("max_matches", 200))))
+            max_matches = int(args.get("max_matches", DEFAULT_MAX_MATCHES))
         except (TypeError, ValueError) as exc:
             raise ValueError("'max_matches' must be an integer") from exc
-        result = await knowledge_service.grep(
-            scope_name=scope_name, pattern=pattern, max_matches=max_matches
-        )
-        hits = list(result.hits)
-        truncated = result.truncated
-        # An implicit scope spans project + global, matching search — two
-        # retrieval tools disagreeing about scope is the hardest kind of gap to
-        # notice. An EXPLICIT scope is taken literally, and ``global`` never
-        # greps itself twice.
-        if explicit_scope(args) is None and scope_name != GLOBAL_SCOPE_NAME:
-            room = max_matches - len(hits)
-            if room > 0:
-                await ensure_writable_scope(knowledge_service, GLOBAL_SCOPE_NAME)
-                extra = await knowledge_service.grep(
-                    scope_name=GLOBAL_SCOPE_NAME, pattern=pattern, max_matches=room
-                )
-                hits.extend(extra.hits)
-                truncated = truncated or extra.truncated
-            else:
-                # The project alone filled the budget, so global went unread.
-                truncated = True
-        return {
-            "scope": scope_name,
-            "hits": [{"path": h.path, "line_number": h.line_number, "line": h.line} for h in hits],
-            "truncated": truncated,
-        }
-
-    async def _read_in(scope_name: str, item_id: str) -> dict[str, Any]:
-        if not is_document(knowledge_service, scope_name, item_id):
-            entry, path = await knowledge_service.get_fact_with_path(
-                scope_name=scope_name, fact_id=item_id
-            )
-            return {
-                "scope": scope_name,
-                "id": entry.id,
-                "type": "entry",
-                "title": entry.title,
-                "description": entry.description,
-                "path": path,
-                "text": entry.body,
-            }
-        doc, markdown = await knowledge_service.read_document(
-            scope_name=scope_name, document_id=item_id
+        outcome = await svc.grep(
+            pattern,
+            agent=_agent(args),
+            collection=_text(args.get("collection")) or None,
+            max_matches=max(1, min(_MAX_MATCHES, max_matches)),
         )
         return {
-            "scope": scope_name,
-            "id": doc.id,
-            "type": "document",
-            "title": doc.title,
-            "description": doc.description,
-            "source_mode": doc.source_mode,
-            "text": markdown,
+            "matches": [
+                {"path": m.path, "line_number": m.line_number, "line": m.line}
+                for m in outcome.matches
+            ],
+            "truncated": outcome.truncated,
         }
 
     async def read(args: dict[str, Any]) -> dict[str, Any]:
-        item_id = str(args["id"])
-        scope_name = await resolve_scope_arg(knowledge_service, args)
-        await ensure_writable_scope(knowledge_service, scope_name)
-        try:
-            return await _read_in(scope_name, item_id)
-        except (MemoryNotFound, DocumentNotFound):
-            # An implicit scope was SEARCHED across project + global, so an id
-            # search handed back may live in global. Read spans the same way,
-            # or "pass an id to coffer__read" is false for half the hits. An
-            # EXPLICIT scope is taken literally and never falls back.
-            if explicit_scope(args) is not None or scope_name == GLOBAL_SCOPE_NAME:
-                raise
-            await ensure_writable_scope(knowledge_service, GLOBAL_SCOPE_NAME)
-            return await _read_in(GLOBAL_SCOPE_NAME, item_id)
+        return _file_payload(await svc.read(_required(args, "path"), _agent(args)))
+
+    async def write(args: dict[str, Any]) -> dict[str, Any]:
+        directory = _text(args.get("directory"))
+        relpath = _text(args.get("path"))
+        if bool(directory) == bool(relpath):
+            raise ValueError(
+                "a write takes exactly one of 'directory' (create a new file "
+                "there) or 'path' (replace that file)"
+            )
+        agent = _agent(args)
+        written = await svc.write(
+            title=_required(args, "title"),
+            description=_required(args, "description"),
+            # Optional, matching the REST surface and FR-030: a file whose
+            # whole content is its title and description is a legitimate
+            # thing to write, and rejecting it would be a rule only one of
+            # the two write surfaces had.
+            body=_text(args.get("body")),
+            directory=directory or None,
+            relpath=relpath or None,
+            actor=agent or _ANONYMOUS_ACTOR,
+            agent=agent,
+        )
+        return {**_file_payload(written), "status": "replaced" if relpath else "created"}
+
+    async def delete(args: dict[str, Any]) -> dict[str, Any]:
+        path = _required(args, "path")
+        agent = _agent(args)
+        await svc.delete(path, actor=agent or _ANONYMOUS_ACTOR, agent=agent)
+        return {"deleted": True, "path": path}
 
     registry.register(
         BuiltinTool(
-            name="search",
+            name="list",
             description=(
-                "Search Coffer's knowledge for whatever is relevant to a query — "
-                "both the notes agents and the user have written down and the "
-                "documents that were ingested; they live in one place, so one "
-                "search covers both. Semantic, keyword or hybrid depending on "
-                "how the scope is configured, chosen for you. Returns ranked "
-                "snippets with the id and file each came from; pass an id to "
-                "coffer__read for the full text. Reach for this before asking "
-                "the user something they may already have told Coffer."
+                "Browse Coffer's knowledge catalogue, one level at a time. With "
+                "no arguments it names every collection you may read, with the "
+                "collection's description and how many files it holds. Pass a "
+                "path to see that directory's immediate subdirectories and "
+                "files; each file comes back with a title and a one-line "
+                "description, which is what you choose from — read the "
+                "descriptions, pick the file that answers your question, then "
+                "coffer__read it. Walk down a level at a time rather than "
+                "guessing a deep path. The catalogue is generated from the "
+                "directory itself, so it always matches what is on disk."
             ),
             input_schema={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "What you are looking for."},
-                    "scope": SCOPE_PROPERTY,
-                    "top_k": {"type": "integer", "default": 5, "minimum": 1, "maximum": 20},
-                    "cwd": CWD_PROPERTY,
+                    "path": {
+                        "type": "string",
+                        "description": (
+                            "Directory to list, relative to the knowledge root "
+                            "(e.g. 'shopee' or 'shopee/account'). Omit for the "
+                            "list of collections."
+                        ),
+                    },
+                    "agent": AGENT_PROPERTY,
                 },
-                "required": ["query"],
             },
-            handler=search,
+            handler=list_knowledge,
         )
     )
     registry.register(
         BuiltinTool(
             name="grep",
             description=(
-                "Run a literal or regular-expression search over every Markdown "
-                "file in a knowledge scope, returning matching lines with their "
-                "file and line number. Use this when you need exact matches — an "
-                "identifier, a path, a CJK phrase a tokenizer would split — and "
-                "coffer__search when you want relevance. Omitting 'scope' greps "
-                "the cwd's project and global together — the same span search "
-                "uses."
+                "Search the text of every knowledge file you may read, literally "
+                "or by regular expression, returning each matching line with its "
+                "file and line number. Use it to find which line mentions an "
+                "identifier, a path, or a CJK phrase — it matches bytes, so "
+                "nothing is stemmed or tokenized away. Matching is exact, not "
+                "conceptual: to find knowledge by topic, browse coffer__list "
+                "first and grep once you know where to look. Narrow with "
+                "'collection' when you already know which one holds it."
             ),
             input_schema={
                 "type": "object",
                 "properties": {
                     "pattern": {"type": "string", "description": "Literal text or regex."},
-                    "scope": SCOPE_PROPERTY,
+                    "collection": {
+                        "type": "string",
+                        "description": (
+                            "Restrict to one collection. Omit to search every "
+                            "collection you may read."
+                        ),
+                    },
                     "max_matches": {
                         "type": "integer",
-                        "default": 200,
+                        "default": DEFAULT_MAX_MATCHES,
                         "minimum": 1,
-                        "maximum": 500,
+                        "maximum": _MAX_MATCHES,
                     },
-                    "cwd": CWD_PROPERTY,
+                    "agent": AGENT_PROPERTY,
                 },
                 "required": ["pattern"],
             },
@@ -287,26 +244,92 @@ def register_knowledge_builtin_tools(
         BuiltinTool(
             name="read",
             description=(
-                "Read one knowledge item in full by its id — the whole Markdown, "
-                "not the snippet a search returned. Works for either kind of "
-                "item: an ingested document or an entry someone wrote, resolved "
-                "automatically, so you can hand it any id coffer__search or "
-                "coffer__list gave you. Omitting 'scope' reads the cwd's project "
-                "and falls back to global — the same span search uses, so an id "
-                "from a global hit reads straight back."
+                "Read one knowledge file in full by its path — the whole "
+                "Markdown, not a snippet. Paths come from coffer__list and from "
+                "coffer__grep matches. The response also carries the file's "
+                "absolute path, so you can point the user at it."
             ),
             input_schema={
                 "type": "object",
                 "properties": {
-                    "id": {
+                    "path": {
                         "type": "string",
-                        "description": "Document or entry id (from search / list).",
+                        "description": (
+                            "File path relative to the knowledge root, e.g. "
+                            "'shopee/account/gateway.md'."
+                        ),
                     },
-                    "scope": SCOPE_PROPERTY,
-                    "cwd": CWD_PROPERTY,
+                    "agent": AGENT_PROPERTY,
                 },
-                "required": ["id"],
+                "required": ["path"],
             },
             handler=read,
+        )
+    )
+    registry.register(
+        BuiltinTool(
+            name="write",
+            description=(
+                "Write a knowledge file. Pass 'directory' to create a new file "
+                "in that collection or folder — the file name is derived from "
+                "the title — or 'path' to replace an existing file in place. "
+                "Exactly one of the two. Write down what would otherwise have "
+                "to be rediscovered; the user reads these files in their own "
+                "editor, so write for a human."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Human-readable title; also the file name.",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": (
+                            "One line saying what this file answers. Required: "
+                            "it is what the file shows in the catalogue, and "
+                            "therefore what makes it findable at all."
+                        ),
+                    },
+                    "body": {"type": "string", "description": "The Markdown content."},
+                    "directory": {
+                        "type": "string",
+                        "description": (
+                            "Collection or folder to create the file in, e.g. "
+                            "'shopee' or 'shopee/account'."
+                        ),
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Existing file to replace, instead of 'directory'.",
+                    },
+                    "agent": AGENT_PROPERTY,
+                },
+                "required": ["title", "description"],
+            },
+            handler=write,
+        )
+    )
+    registry.register(
+        BuiltinTool(
+            name="delete",
+            description=(
+                "Delete one knowledge file by its path. The file is removed from "
+                "disk; prefer replacing it with coffer__write when the knowledge "
+                "is merely out of date."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "File path relative to the knowledge root.",
+                    },
+                    "agent": AGENT_PROPERTY,
+                },
+                "required": ["path"],
+            },
+            handler=delete,
         )
     )

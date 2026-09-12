@@ -1,68 +1,41 @@
-"""``knowledge`` Kind wiring for the composition root.
+"""The ``knowledge`` Kind for the composition root.
 
-One kind, one set of hooks — the union of what the two former faces had:
+A collection carries no config and no lifecycle beyond existing, so the kind is
+almost all default. The two fields that are not:
 
-- ``on_update_config`` re-indexes when a retrieval or chunking field changes.
-  The files are truth (ADR files-as-truth-sqlite-retrieval), so the index is
-  always rebuildable and never the thing that must be migrated.
-- ``on_delete`` is async so ``ResourceService`` awaits the on-disk teardown
-  before the Resource row is gone.
+- ``supports_scope`` is True, because per-agent authorization is the reason a
+  collection is a Resource at all (spec knowledge FR-012). Without it a
+  directory would not need the framework.
+- ``generic_create_allowed`` is False, because a collection is a directory as
+  much as a row: the generic ``POST /resources`` path would create the row with
+  no folder behind it. ``KnowledgeService.create_collection`` opts in
+  explicitly (CODE-REG), the same way the skill and agent kinds do.
 
-There is no ``credential_ref_extractor``. Both faces used to extract an
-embedding API-key ref from their config; embedding is now resolved through the
-installation-wide config, so there is no per-scope credential to probe.
+There is no ``on_update_config`` — nothing in the config can change, because
+there is nothing in the config.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
 
-from coffer.application.knowledge.service import KnowledgeService
-from coffer.domain.knowledge.document import KIND_KNOWLEDGE
-from coffer.domain.knowledge.scope_config import KnowledgeConfig
+from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
+from coffer.domain.knowledge.config import KnowledgeConfig
 from coffer.domain.resource import Kind, ResourceRef
 
 _logger = logging.getLogger(__name__)
 
-#: Config fields whose change requires re-indexing the scope — the union of the
-#: two former faces' lists, minus the embedding fields they both carried (those
-#: are gone from the config). ``auto_update_sources`` is deliberately absent:
-#: toggling it must not re-chunk.
-_REINDEX_FIELDS = ("retrieval_modes", "chunk_size", "chunk_overlap")
-
 
 def make_knowledge_kind(service: KnowledgeService) -> Kind:
-    """Construct the ``knowledge`` Kind with its lifecycle hooks."""
-
     async def _on_delete(ref: ResourceRef) -> None:
         try:
-            await service.cleanup_scope(ref.name)
+            await service.cleanup_collection(ref.name)
         except Exception:
-            # The Resource row deletion proceeds; orphaned files/rows deserve a
-            # signal rather than silent accumulation.
+            # The row deletion proceeds either way; an orphaned directory
+            # deserves a signal rather than silent accumulation.
             _logger.warning(
                 "knowledge.on_delete.cleanup_failed",
-                extra={"scope": ref.name},
-                exc_info=True,
-            )
-
-    async def _on_update_config(
-        ref: ResourceRef,
-        before: dict[str, Any],
-        after: dict[str, Any],
-    ) -> None:
-        if not any(before.get(f) != after.get(f) for f in _REINDEX_FIELDS):
-            return
-        try:
-            new_config = KnowledgeConfig.model_validate(after)
-            await service.reindex_scope(scope_name=ref.name, config=new_config)
-        except Exception:
-            # The config update itself still proceeds; a transient rebuild
-            # failure is recoverable by re-applying the config PATCH.
-            _logger.warning(
-                "knowledge.on_update_config.reindex_failed",
-                extra={"scope": ref.name},
+                extra={"collection": ref.name},
                 exc_info=True,
             )
 
@@ -71,5 +44,6 @@ def make_knowledge_kind(service: KnowledgeService) -> Kind:
         display_name="Knowledge",
         config_schema=KnowledgeConfig,
         on_delete=_on_delete,
-        on_update_config=_on_update_config,
+        generic_create_allowed=False,
+        supports_scope=True,
     )

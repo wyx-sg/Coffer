@@ -35,6 +35,7 @@ from coffer.application.binary_deploy import deploy_frozen_sidecars
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.diagnostics import register_diagnostics_builtin_tools
+from coffer.application.knowledge.skill_seed import seed_knowledge_skill
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.resource import Kind
@@ -53,19 +54,13 @@ from coffer.infrastructure.persistence.repos import (
 from coffer.surfaces.http import cors, daemon_routes, host_guard, webui
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_skill_wiring import wire_agent_and_skill_kinds
-from coffer.surfaces.http.app_embedding_composition import (
-    build_config_services,
-    build_embedding_resolvers,
-)
 from coffer.surfaces.http.app_mcp_composition import (
     build_retention_service,
     reaper_kwargs_from_env,
     wire_mcp_kind,
 )
-from coffer.surfaces.http.async_batch_wiring import start_async_batches, stop_async_batches
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.channel_wiring import wire_channel_kind
-from coffer.surfaces.http.consolidate_wiring import run_lane_migration, run_store_consolidation
 from coffer.surfaces.http.credential_composition import (
     init_credential_store,
     make_credential_resolver,
@@ -76,16 +71,14 @@ from coffer.surfaces.http.dependencies import (
     get_master_key_manager,
     get_mcp_session_factory,
     get_provider_service,
+    get_skill_service,
     set_audit_service,
-    set_embedding_config_service,
     set_internal_engine_config_service,
     set_resource_service,
     set_retention_service,
 )
-from coffer.surfaces.http.knowledge_wiring import (
-    run_knowledge_reindex_sweep,
-    wire_knowledge_kind,
-)
+from coffer.surfaces.http.engine_config_composition import build_config_services
+from coffer.surfaces.http.knowledge_wiring import wire_knowledge_kind
 from coffer.surfaces.http.mcp.protocol_routes import (
     shutdown_all_sessions,
     start_session_reaper,
@@ -96,11 +89,10 @@ from coffer.surfaces.http.provider_wiring import (
     wire_provider_kind,
 )
 from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
-from coffer.surfaces.http.reorg_wiring import wire_reorg
 from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.sync_wiring import start_backup_worker, start_sync, stop_backup_worker
-from coffer.surfaces.http.tidy_wiring import start_tidy, stop_tidy
-from coffer.surfaces.http.wiring import build_substrate, wire_chat
+from coffer.surfaces.http.tidy_wiring import start_tidy_worker, stop_tidy_worker, wire_tidy
+from coffer.surfaces.http.wiring import wire_chat
 
 
 def _db_url() -> str:
@@ -157,12 +149,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     retention_svc = build_retention_service(sm, audit=audit)
     await retention_svc.initialize_defaults()
     # Also registers the engine-settings synced state area (spec vault-export-import slice 7).
-    embedding_config_svc, internal_engine_config_svc = build_config_services(app, sm, audit)
+    internal_engine_config_svc = build_config_services(app, sm, audit)
 
     set_resource_service(resource_svc)
     set_audit_service(audit)
     set_retention_service(retention_svc)
-    set_embedding_config_service(embedding_config_svc)
     set_internal_engine_config_service(internal_engine_config_svc)
 
     # Build the shared built-in tool registry; each kind contributes its tools.
@@ -184,34 +175,20 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # active profile into each agent's native config (see provider_wiring).
     wire_provider_kind(app, resource_svc, audit, credential_store, sm)
 
-    # One substrate per process: the DocumentRepo, retrieval facade and
-    # reindexer are shared by everything that indexes markdown.
-    substrate = build_substrate(sm, credential_store)
+    # The one knowledge kind: a directory of markdown files. Registers the five
+    # built-in knowledge tools into `builtin_tools`.
+    knowledge_service = wire_knowledge_kind(app, resource_svc, audit, builtin_tools)
 
-    # Embedding is global: the knowledge kind resolves the current config at
-    # index/recall time so a Settings change applies without a daemon restart.
-    # The tool-search embedder (ADR builtin-agent-is-internal-capability)
-    # reuses it, cached per config.
-    _resolve_embedding, _tool_search_embedder = build_embedding_resolvers(
-        embedding_config_svc, credential_store
-    )
-
-    # The one knowledge kind: notes + documents over three scopes. Registers
-    # the six built-in knowledge tools into `builtin_tools`.
-    knowledge_service = wire_knowledge_kind(
-        app,
-        resource_svc,
-        audit,
-        sm,
-        builtin_tools,
-        substrate=substrate,
-        embedding_resolver=_resolve_embedding,  # type: ignore[arg-type]
-    )
+    # The layer's delivery half (spec knowledge FR-042): a skill that tells an
+    # agent this directory is here, shipped down the skill channel that already
+    # reaches every managed agent. Best-effort — a failed seed must not stop the
+    # daemon, and the tools work either way.
+    await seed_knowledge_skill(get_skill_service())
 
     # Wire up MCP-specific plumbing (after other kinds so the gateway picks
     # their built-in tools).
     process_supervisor, session_supervisors = wire_mcp_kind(
-        app, resource_svc, audit, sm, credential_store, builtin_tools, _tool_search_embedder
+        app, resource_svc, audit, sm, credential_store, builtin_tools
     )
 
     # Wire the chat feature (spec channels). Must come AFTER all other wiring so the
@@ -223,11 +200,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # its upstreams; shutdown disposes it first (on_dispose deregisters; idempotent).
     app.state.mcp_session_supervisors = session_supervisors
 
-    # The one internal-LLM knowledge consumer: the tidy pass over a scope's
-    # notes. Built here so the composition root keeps a single internal-LLM
-    # call site; `start_tidy` further down decides when it fires.
+    # The one internal-LLM knowledge consumer: the tidy pass over a collection.
+    # Built here so the composition root keeps a single internal-LLM call site;
+    # `start_tidy_worker` further down decides whether it ever fires by itself.
     _credential_resolver = make_credential_resolver(credential_store)
-    wire_reorg(knowledge_service, get_provider_service(), _credential_resolver)
+    wire_tidy(app, knowledge_service, get_provider_service(), _credential_resolver)
 
     # Wire the channel kind (spec channels) AFTER wire_chat: the inbound processor
     # drives turns through the chat service handles wire_chat published.
@@ -240,14 +217,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Boot projection heal: the agents' native config files are not Coffer's to
     # own, so re-derive the projection the registry implies (best-effort).
     await run_provider_projection_sweep(app)
-
-    # Boot knowledge heals (best-effort, idempotent): bring the file tree to the
-    # two-lane layout FIRST — everything below addresses a scope by the new
-    # directory names — then collapse worktree-fragmented scopes, then reindex so
-    # what was written is searchable (FR-043).
-    await run_lane_migration()
-    await run_store_consolidation(resources=resource_svc, sm=sm, substrate=substrate)
-    await run_knowledge_reindex_sweep(app, resource_svc, _resolve_embedding)  # type: ignore[arg-type]
 
     # CODE-020: start the batched invocation writer alongside the retention
     # worker. The repo's start() is a no-op if already started.
@@ -275,12 +244,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.retention_worker_task = worker_task
 
     # The notes tidy pass: on idle after a write, and on a periodic sweep.
-    start_tidy(app, knowledge_service)
-    await start_async_batches(  # document re-embed — off the request path
-        app,
-        knowledge_service=knowledge_service,
-    )
-
+    start_tidy_worker(app, knowledge_service)
     # Vault export/import (spec vault-export-import). Export and import act
     # only when the user asks; the backup half runs on a timer beside the
     # retention worker, re-reading its interval from the configured remote.
@@ -313,8 +277,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         daemon_routes.set_daemon_phase("draining")
         worker.stop()
         await stop_backup_worker(app)
-        await stop_tidy(app)
-        await stop_async_batches(app)
+        await stop_tidy_worker(app)
         # Stop channel adapters first so no new turns start mid-teardown.
         # Order matters: cancel the reconciler task BEFORE dispose() so an
         # in-flight tick cannot resurrect adapters dispose() just stopped;
@@ -353,7 +316,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Close per-/mcp/-session state in the protocol routes
         with contextlib.suppress(Exception):
             await shutdown_all_sessions()
-        # The knowledge service holds no long-lived handles (the substrate is
+        # The knowledge service holds no long-lived handles (the directory is
         # session-maker-bound + lazy), so only the shared engine needs disposal.
         await engine.dispose()
         set_active_token(None)

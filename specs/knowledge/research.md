@@ -1,117 +1,150 @@
-# Research — 007 Memory (Shared Agent Memory)
+# Research — Knowledge Layer
 
 > 中文版: [research.zh.md](./research.zh.md)
 
-> **Historical — 2026-09-10.** Spec knowledge (Knowledge Base) and spec knowledge (Memory)
-> merged into one **Knowledge Layer** on this date. [`spec.md`](./spec.md) is the
-> authority for the merged model — one `knowledge` kind, three scopes, one
-> storage root `~/.coffer/knowledge/<scope>/`, six `coffer__*` tools. This
-> document records the design as it stood before that merge; where it says
-> "memory face", "`memory` kind", `~/.coffer/memory/`, `/api/v1/memory_stores`
-> or `coffer memory …`, read the merged equivalents in `spec.md`. The folder
-> name `specs/knowledge/` is likewise historical: it is the spec id every
-> inbound link and the acceptance audit key on.
+The questions this layer had to answer, and what each was decided to be. Most
+of the original research — mem0 versus a shared store, the FTS5/sqlite-vec
+retrieval stack, embedding-provider selection, scope resolution from an agent's
+cwd, native projection into agents' own memory files — described machinery that
+no longer exists. What survives is recorded here; the reasoning behind the
+2026-09-12 reduction, including the audit of the live installation that
+motivated it, lives in
+[Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md).
 
-## 1. Why drop mem0 (and the per-agent silo model)
+## 1. No LLM at write time
 
-**Question**: Should memory keep using mem0 (LLM-at-write fact extraction + vector store)?
+**Question**: should a write extract facts with a model, the way mem0 does?
 
-**Decision**: **No.** Three problems drove the redesign:
+**Decision**: **No.** LLM-at-write is friction when the consumer is already a
+model that can decide what is worth remembering and write a clean note itself.
+mem0's default `llm_provider="none"` made its `add_memory` return 503 — the
+feature was unusable out of the box. A write is a plain file write. mem0,
+chroma and LlamaIndex are absent from the codebase and banned by an importlinter
+contract so they cannot return.
 
-1. **LLM-at-write is friction** when the consumer is already an LLM that can decide what to remember and write a clean fact itself. mem0's default `llm_provider="none"` made `add_memory` return 503 — the feature was unusable out of the box.
-2. **KB and memory were near-duplicate code** yet are two points on one spectrum ("markdown the agent retrieves"). They now share one substrate.
-3. **Memory was a private per-agent silo that diverges** — the same project fact ends up copied and drifting across Claude's memory dir, Codex's memories, etc.
+Still true. The one place a model touches knowledge is the tidy pass, which is
+explicit, bounded, archives every revision it replaces, and is off by default.
 
-**Replacement**: memory = a **single shared source of truth across agents**, agent-native where the format matches. mem0 / chroma / LlamaIndex are removed entirely.
+## 2. One shared store, not a per-agent silo
 
-## 2. Canonical format — per-fact markdown + `MEMORY.md`
+**Question**: where does an agent's knowledge live?
 
-**Question**: What is the on-disk truth?
+**Decision**: in **one store shared across every agent**, not in each agent's
+own memory directory. A private per-agent silo diverges: the same project fact
+ends up copied and drifting across Claude's memory dir, Codex's memories, and
+so on. Coffer keeps one copy and every agent reads and writes it over MCP.
 
-**Decision**: Per-fact markdown files with YAML frontmatter (`name`, `description`, `metadata.type`, `metadata.actor`, `origin_session_id`) + a markdown body, plus a `MEMORY.md` index (`- [name](file.md) — description`). This is **Claude Code's auto-memory format**, adopted as canonical so Claude projection is a native directory symlink. Files are the source of truth; SQLite is a rebuildable index. `MEMORY.md` is a Coffer-regenerated derived index — any writer triggers idempotent regeneration, so Claude's own `MEMORY.md` writes are harmlessly overwritten.
+Still true, and the reduction strengthened it: with no index in between, the
+human's editor and the agent's `write` reach the same bytes.
 
-**Superseded.** Every derived index is gone: `MEMORY.md` was removed with Files as Truth and `INDEX.md` with the two-lane redesign. Per-file markdown with YAML frontmatter is still the truth, and it now lives in one of two lanes — `notes/` for what someone wrote, `docs/` for what someone uploaded.
+## 3. Per-file Markdown with YAML frontmatter is the truth
 
-## 3. Two-layer scope
+**Question**: what is the on-disk format?
 
-**Question**: How do personal facts and repo facts stay separated?
+**Decision**: one Markdown file per note, with a `---`-fenced YAML frontmatter
+block carrying its metadata.
 
-**Decision**: Two scopes.
+The format survived every redesign; the field list did not. Frontmatter is now
+exactly `title`, `description`, `actor`, `created_at`, `updated_at` — there is
+no `id`, because the path is the identity, and no field describing an index,
+a lane or an external source. Every derived index is gone with it: `MEMORY.md`
+was removed with the files-as-truth redesign, `INDEX.md` with the two-lane one
+on 2026-09-11, and the database index itself on 2026-09-12. The catalogue that
+replaced them is generated by walking the directory at call time, so there is no
+second copy to keep in sync.
 
-- **Global** — `project_id = WORKSPACE_GLOBAL_PROJECT_ID` (the existing sentinel `00000000000000000000000000`; reused, not re-minted). One store under `~/.coffer/memory/global/`.
-- **Per-project** — `project_id = <project ULID>`. One store per project under `~/.coffer/memory/projects/<ulid>/`.
+## 4. Sharing is MCP-only
 
-`remember(scope=project)` → the project store; `scope=global` → the sentinel store; `recall` default → both.
+**Question**: how does the one store reach each agent?
 
-## 4. Scope resolution from the agent's cwd
+**Decision**: through Coffer's MCP gateway, and nothing else. An earlier design
+also projected canonical content into agents' native locations — a directory
+symlink for Claude Code, a marker-fenced block in `AGENTS.md` for Codex — and
+that half was removed
+([Memory via MCP](../../docs/decisions/memory-via-mcp-not-native-projection.md)):
+Coffer never writes into an agent's own memory files, disables nothing, and
+injects nothing into a session.
 
-**Question**: How does the daemon know which project a session is in?
+**What that leaves open** is delivery. Knowledge reaches a session only when the
+agent reaches for it, and the 2026-09-12 audit found that a tool's own
+description does not make a model remember the tool exists: every knowledge call
+in a month landed on the single day an agent was building the corpus. The answer
+tried is a **delivered skill** — Coffer renders one skill describing the layer
+and ships it through the channel that already delivers fifteen `coffer-*` skills
+into every managed agent, where its name and description sit in context
+natively. It is a hypothesis with evidence behind it rather than a proven fix,
+and the invocation log answers it within a week of ordinary work.
 
-**Decision**: The coffer-mcp-shim starts in the agent's cwd and **reports cwd at session handshake**. The daemon computes the git-root (same basis as Claude's project slug) and resolves — lazily provisioning if absent — the per-project memory store. If cwd is not inside a git project, `scope=project` is rejected (`ScopeUnresolved`) and `scope=global` still works. **To verify in implementation**: MCP server cwd propagation on Claude Code and Codex (design open item #1).
+## 5. Retrieval: why no index at all
 
-## 5. Sharing mechanism — hybrid (MCP + native projection)
+**Question**: what replaces FTS5 + sqlite-vec?
 
-**Question**: How is the single store actually shared into each agent?
+**Decision**: **a generated catalogue plus ripgrep, and nothing else.**
 
-**Decision**: Hybrid.
+The one capability an index offers that ripgrep cannot is conceptual recall —
+matching a query for *鉴权* against a document that says *认证*. That needs
+embeddings, and embeddings were never configured on the live installation
+(`embedding_config` was an empty table). What FTS5 adds over ripgrep once
+embeddings are gone is BM25 ordering and chunk granularity, and an agent does
+both for itself: it reads the matching lines, decides which file is relevant,
+and reads the whole file anyway. Measured on the live corpus (51 files, 1.4 MB),
+a ripgrep query returns the same answer set as FTS5 in **27 ms**, and needs no
+tokenizer to match CJK.
 
-- **MCP for all agents** — every agent reads/writes via Coffer gateway tools.
-- **Native projection** — an `AgentMemoryAdapter` (living with the agent driver, not the memory kind) lands canonical content into native locations:
-  - **Claude Code** = directory **SYMLINK** of the canonical project memory dir into `~/.claude/projects/<slug>/memory/` (native, bidirectional; keep auto-memory ON — it _is_ canonical).
-  - **Codex** = **RENDER** a marker-fenced managed block (`<!-- coffer:memory:start -->…<!-- coffer:memory:end -->`) into `<project>/AGENTS.md` (project layer) and `~/.codex/AGENTS.md` (global layer); disable Codex native `memories` so no second copy accumulates.
+There is no good middle here: either the full semantic stack, or no index. FTS5
+alone is the worst ratio of cost to capability in that range. When the corpus
+outgrows a catalogue that fits in context — roughly 40 tokens an entry, so
+hundreds of files are comfortable — the answer is a real semantic stack built
+for that need, not a re-enabling of the component that was never switched on.
 
-The projection engine dispatches on `projection_mode` (`SYMLINK` | `RENDER` | `NONE`). **Adding a new agent = one adapter, no core change.** The adapter performs all native-file mutations; the memory substrate only provides canonical files + rendered markdown, keeping memory agent-agnostic and the L1 config boundary clean.
+## 6. Ingestion: the filesystem
 
-**Migration on first projection**: if Claude's memory dir already holds real files, merge them into canonical first, then replace with a symlink — never silently overwrite. Managed-block re-render is idempotent.
+**Question**: how does a document get in?
 
-**Superseded.** Native projection was removed (Memory via MCP). Sharing is MCP-only: every agent reads and writes through Coffer's gateway tools, and Coffer never touches an agent's native memory files.
+**Decision**: someone puts a Markdown file in the directory. There is no upload
+endpoint and no format conversion. The any-format pipeline that preceded this
+converted through MarkItDown, kept the original in a `.raw/` lane for
+re-conversion and tracked external sources; on the live installation **50 of 50**
+documents carried `converter: passthrough`, and the 50 `.raw/` files were
+byte-identical to their converted counterparts. Adding knowledge by hand costs
+one file copy, which is cheaper than any upload surface could be.
 
-## 6. Retrieval — shared engine, lazy reindex-on-read
+## 7. Boundaries: one, and it exists to be authorized
 
-**Question**: How is recall implemented and kept fresh?
+**Question**: how is knowledge separated?
 
-**Decision**: The same retrieval engine as the KB: `grep` (ripgrep over files), `keyword` (SQLite FTS5 + BM25, the zero-config default), `vector` (sqlite-vec + a configurable embedding provider, opt-in). When `vector` is requested but embedding is unconfigured, fall back to `keyword` and flag it in the response — never block.
+**Decision**: by **collection**, and by nothing else. A collection is a
+top-level folder the human created deliberately, and it is a Resource so the
+framework's per-agent scope can authorize it
+([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)).
 
-Memory uses **lazy reindex-on-read**: `recall` first scans the small fact dir for deltas (by `content_sha256`) and reconciles the index before searching. This makes Claude's symlink edits and any direct-disk edits instantly visible to all agents with **no filesystem watcher**. (KB, by contrast, reindexes on Coffer-mediated edits + explicit `coffer kb reindex` + an optional off-by-default watcher.)
+The earlier `global` ÷ `project-<ULID>` ÷ collection axis tried to say "what is
+this knowledge about", which is a property of the content, and paid the full
+cost of physical structure for it: migrations, empty shells auto-provisioned by
+a read-only search, and cross-boundary fusion at query time. That retrieval had
+to fuse across scopes by reciprocal rank to be useful at all was the tell — the
+isolation was never the point. Nothing is derived from a cwd now, nothing
+auto-provisions, and an agent's reads span every collection it is authorized
+for.
 
-The **store-list** `fact_count` (KB14, see 006 research §12) reads the indexed `count_documents`, not a `scan_store_dir` of the fact files — any index-vs-disk staleness closes on the next recall/reconcile above. The per-store `/metrics` detail endpoint still scans + walks the disk for `disk_bytes`.
+Authorization is enforced at the MCP tool surface only. An agent holding shell
+or file-read tools can read anything under `~/.coffer/knowledge/` directly: the
+scope prevents mistaken retrieval, not deliberate access, and the system says so
+rather than implying an isolation it does not provide.
 
-## 7. Embedding configuration
+## 8. Atomicity
 
-**Question**: How is vector recall configured?
+File writes go through a same-directory temp file and `replace`, so a reader
+never sees a half-written file and a crash never truncates one. Decided once for
+the shared file helpers and unchanged since; the helper itself is the record.
 
-**Decision**: DevPilot-style OpenAI-compatible provider abstraction (one `AsyncOpenAI` client with swappable `base_url`): `embedding_provider`, `embedding_model`, `embedding_base_url`, `embedding_credential_ref` (keychain ref, never plaintext). Providers: OpenAI / OpenRouter / Voyage / Jina / Gemini / Azure / DashScope and local Ollama / LM Studio — all via `.embeddings.create`; plus an optional in-process `local` provider (fastembed) for zero-server offline embeddings. Default retrieval is `keyword`+`grep` (zero config, offline, language-agnostic); vector is opt-in. For bilingual content recommend local `bge-m3` or a cloud provider (English-only small models embed Chinese poorly). The embedding model is **mutable** — changing it re-embeds the store (files are truth).
+## 9. What this layer deliberately does not do
 
-## 8. Built-in MCP tools
-
-Five memory tools, namespaced under `coffer__`, agent-centric and frictionless:
-
-- `coffer__recall(query, scope?, mode?, top_k?)` → `[{id, text, score, source, time}, …]` (default both scopes; `mode` ∈ `grep` | `keyword` | `vector`).
-- `coffer__remember(text, scope?, type?)` → `{id, …}` (default `scope=project`).
-- `coffer__set_handoff(body)` → `{status, branch, scope}` (working state, per project + branch).
-- `coffer__resume()` → `{found, branch?, body?, updated_at?, note?}`.
-- `coffer__list_memory(scope?)` → facts for browse.
-
-**Superseded.** The surface is now **six** tools shared by the whole knowledge layer — `coffer__search`, `coffer__grep`, `coffer__read`, `coffer__list`, `coffer__write`, `coffer__delete` (FR-015). `coffer__set_handoff` and `coffer__resume` retired with the handoff lane; `recall`/`remember`/`list_memory` were renamed into the list above.
-
-Invocations are recorded in `mcp_invocations` the same way KB and upstream tools are: tool name + who/when/duration/outcome only — no arguments or returned content (existing privacy stance).
-
-## 9. Prior art & novelty
-
-- **Managed-block injection** into agent config files is established: **Next.js** ships `<!-- BEGIN:nextjs-agent-rules -->` into `AGENTS.md`; **claude-mem** uses `<claude-mem-context>` in `CLAUDE.md`.
-- **Multi-agent native projection of accumulated memory is novel** — every canonical-memory system (mem0/OpenMemory, Letta, Zep, Cognee, MCP memory server, MemPalace) is MCP-centric; the only native-file projectors (claude-mem, agentmemory) are Claude-only single-target. Coffer's fan-out to multiple agents' native locations is unclaimed in OSS as of mid-2026.
-
-## 10. What we are NOT doing in this spec
-
-- Reranking / HyDE / multi-query / LLM synthesis on recall (the agent synthesizes).
-- Bidirectional parsing of a proprietary agent memory format back into canonical (industry-unsolved; avoided by symlink-where-compatible + MCP elsewhere).
-- Multi-machine sync (constitutional).
-- Filesystem watcher on by default.
-- Memory categories beyond a free-form `metadata.type`.
-- Defining file-write atomicity here: memory's source-of-truth files (notes, the topic documents a tidy pass writes, and the normalized uploads under `docs/`) are written via the shared `infrastructure.knowledge.fs.atomic_write_*` helper (same-dir temp → fsync → `os.replace`), decided once in KB19 (that research lived in the now-deleted `specs/006-knowledge-base/`; the helper itself is the record).
-
-## 11. Open items to verify in implementation
-
-1. MCP shim cwd propagation on Claude Code and Codex (§4).
-2. sqlite-vec packaging/loading on macOS arm64 and Linux (vector is opt-in; keyword+grep needs no native ext).
-3. Local embedding model benchmarks for Chinese/multilingual (default stays keyword+grep).
+- Rerank, HyDE, multi-query or LLM synthesis at read time — the agent
+  synthesizes.
+- Parse a proprietary agent memory format back into canonical form
+  (industry-unsolved; avoided by sharing over MCP instead).
+- Watch the filesystem. Nothing is derived, so there is nothing to invalidate.
+- Converge across machines (constitutional; export, import and one-way backup
+  are the vault-export-import spec's).
+- Categorize beyond what a file's own `title` and `description` say.

@@ -104,15 +104,6 @@ class ProviderIntrospector:
             )
             r.raise_for_status()
 
-    async def test_embedding(
-        self, *, provider: str, model: str, base_url: str | None, api_key: str | None
-    ) -> int:
-        url = self._base_url(provider, base_url)
-        await self._guard(provider, url)
-        client = self._openai_client(url, api_key)
-        resp = await client.embeddings.create(model=model, input="test")
-        return len(resp.data[0].embedding)
-
     async def detect_protocol(self, *, base_url: str | None, api_key: str | None) -> str:
         url = (base_url or "").strip()
         if not url:

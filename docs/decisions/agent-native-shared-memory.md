@@ -2,7 +2,7 @@
 
 > 中文版: [agent-native-shared-memory.zh.md](./agent-native-shared-memory.zh.md)
 
-**Status**: Partially superseded by [Memory via MCP](memory-via-mcp-not-native-projection.md) (2026-06-18) — the native-projection half of the decision below was removed; Coffer never writes an agent's own native memory files. The shared-store half stands, and is what this ADR records. Re-expressed in knowledge-layer vocabulary 2026-09-10 and narrowed to two lanes 2026-09-11 (see Revision history).
+**Status**: Partially superseded by [Memory via MCP](memory-via-mcp-not-native-projection.md) (2026-06-18) — the native-projection half of the decision below was removed; Coffer never writes an agent's own native memory files. The shared-store half stands, and is what this ADR records. Re-expressed in knowledge-layer vocabulary 2026-09-10 and narrowed to two lanes 2026-09-11. The store's SHAPE — lanes, scopes, the tool list — is superseded by [Knowledge Is Plain Files](knowledge-is-plain-files.md) (2026-09-12); read the body below for the decision, not for the layout (see Revision history).
 **Date**: 2026-06-09 (revised 2026-09-11; see Revision history)
 **Deciders**: Yuxing Wu
 **Related**: spec `knowledge` (the Knowledge Layer spec), [Files as Truth](files-as-truth-sqlite-retrieval.md), [Everything Is a Resource Kind](everything-is-a-resource-kind.md), [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md), [Memory via MCP](memory-via-mcp-not-native-projection.md)
@@ -199,3 +199,14 @@ second thing to keep in sync for no gain.
   is healed at every daemon start, so a manual second path over the same problem
   is not worth its abstraction. The decision itself — one shared store, reached
   over MCP, never written into an agent's own memory files — is untouched.
+
+
+- **2026-09-12 — the shape below is history; the decision is not.** The layer
+  became a directory of markdown files an agent greps
+  ([Knowledge Is Plain Files](knowledge-is-plain-files.md)): one lane instead of
+  two, collections instead of three kinds of scope, five tools instead of six,
+  and no index at all. Everything this ADR says about `notes/` ÷ `docs/`,
+  `project-<ULID>` scopes, `coffer__search` and the SQLite substrate describes a
+  layout that no longer exists. What it decided — **one store, shared by every
+  agent, reached over MCP, never written into an agent's own memory files** — is
+  exactly what that redesign preserved, which is why this ADR is not retired.

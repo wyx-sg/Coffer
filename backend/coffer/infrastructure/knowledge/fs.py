@@ -1,57 +1,241 @@
-"""Atomic file writes for persisted source-of-truth files.
+"""Reading and writing the knowledge directory.
 
-Coffer's invariant is "files are truth, SQLite is a rebuildable index", so a
-persisted Markdown / raw file must never be left truncated by a crash or power
-loss mid-write. A plain ``path.write_text`` can leave a partial file if the
-process dies between the first and last byte. These helpers instead write to a
-temp file in the SAME directory, fsync it, then ``os.replace`` it into place: a
-reader always sees either the complete old file or the complete new file, never
-a partial mix.
-
-Scope: a single fsync of the file + same-filesystem ``os.replace`` gives
-ATOMICITY (no partial/corrupt file), which is the goal here. A directory fsync
-(rename-durability under power loss — guaranteeing the rename itself survives,
-not just that the bytes are on disk) is a stronger guarantee that is
-deliberately NOT in scope; it can be layered on later if a real durability need
-appears.
+Every operation here is a filesystem operation and nothing else: no index is
+updated, because there is none (spec knowledge FR-001). That is what lets a
+human's edit in their own editor and an agent's ``write`` reach the same bytes
+with nothing in between.
 """
 
 from __future__ import annotations
 
-import contextlib
 import os
-from pathlib import Path
-from uuid import uuid4
+import pathlib
+import shutil
+from datetime import UTC, datetime
+
+from coffer.domain.knowledge.entry import (
+    ACTOR_AGENT,
+    CatalogueLevel,
+    CollectionEntry,
+    DirectoryEntry,
+    FileEntry,
+    KnowledgeFile,
+)
+from coffer.domain.knowledge.errors import KnowledgeFileNotFound
+from coffer.infrastructure.knowledge import paths
+from coffer.infrastructure.knowledge.frontmatter import (
+    render_frontmatter,
+    split_frontmatter,
+)
+from coffer.infrastructure.knowledge.naming import slugify, unique_name
+
+MARKDOWN_SUFFIX = ".md"
 
 
-def atomic_write_bytes(path: Path, data: bytes) -> None:
-    """Write ``data`` to ``path`` atomically: a crash leaves either the old file
-    intact or the new file complete, never a truncated mix.
+def _visible(entry: pathlib.Path) -> bool:
+    return not entry.name.startswith(".")
 
-    The temp file is created in the SAME directory so ``os.replace`` is an atomic
-    rename on the same filesystem; the data is fsync'd before the rename so it is
-    durable. On any failure the temp file is cleaned up and the error re-raised,
-    leaving ``path`` untouched.
+
+def _is_content(name: str) -> bool:
+    """Whether a file name is knowledge rather than a folder's own description.
+
+    ``README.md`` describes the directory it sits in (FR-013). Listing it as
+    content would put a folder's blurb in the same list as the files it
+    introduces, and counting it would inflate every count by one.
     """
+    return name.endswith(MARKDOWN_SUFFIX) and not name.startswith(".") and name != paths.README_NAME
+
+
+def _now() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+def count_files(directory: pathlib.Path) -> int:
+    """Markdown files under ``directory``, recursively, skipping hidden ones."""
+    if not directory.is_dir():
+        return 0
+    total = 0
+    for _root, dirnames, filenames in os.walk(directory):
+        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        total += sum(1 for f in filenames if _is_content(f))
+    return total
+
+
+def readme_description(collection: str) -> str:
+    """A collection's one-line description: its README's first paragraph.
+
+    Deliberately read from the file rather than stored (FR-013) — the person
+    browsing the folder must be able to see and change it in place.
+    """
+    readme = paths.readme_path(collection)
+    if not readme.is_file():
+        return ""
+    _, body = split_frontmatter(readme.read_text(encoding="utf-8", errors="replace"))
+    paragraph: list[str] = []
+    for line in body.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        if not stripped:
+            if paragraph:
+                break
+            continue
+        paragraph.append(stripped)
+    return " ".join(paragraph)
+
+
+def list_collections() -> tuple[CollectionEntry, ...]:
+    """Every collection directory present on disk."""
+    root = paths.knowledge_root()
+    if not root.is_dir():
+        return ()
+    found = [d for d in sorted(root.iterdir()) if d.is_dir() and _visible(d)]
+    return tuple(
+        CollectionEntry(
+            name=d.name,
+            description=readme_description(d.name),
+            file_count=count_files(d),
+        )
+        for d in found
+    )
+
+
+def _file_entry(path: pathlib.Path) -> FileEntry:
+    text = path.read_text(encoding="utf-8", errors="replace")
+    fm, _ = split_frontmatter(text)
+    relpath = paths.relative_of(path)
+    return FileEntry(
+        path=relpath,
+        title=str(fm.get("title") or path.stem),
+        description=str(fm.get("description") or ""),
+        actor=str(fm.get("actor") or ACTOR_AGENT),
+        updated_at=str(fm.get("updated_at") or ""),
+    )
+
+
+def list_level(relpath: str) -> CatalogueLevel:
+    """One level of the catalogue: this directory's children and nothing deeper."""
+    directory = paths.resolve(relpath)
+    if not directory.is_dir():
+        raise KnowledgeFileNotFound(relpath)
+    directories: list[DirectoryEntry] = []
+    files: list[FileEntry] = []
+    for child in sorted(directory.iterdir()):
+        if not _visible(child):
+            continue
+        if child.is_dir():
+            directories.append(
+                DirectoryEntry(
+                    path=paths.relative_of(child),
+                    name=child.name,
+                    file_count=count_files(child),
+                )
+            )
+        elif _is_content(child.name):
+            files.append(_file_entry(child))
+    return CatalogueLevel(
+        path=relpath.strip("/"),
+        directories=tuple(directories),
+        files=tuple(files),
+    )
+
+
+def read_file(relpath: str) -> KnowledgeFile:
+    """A file's frontmatter and body, plus the absolute paths a surface shows."""
+    path = paths.resolve(relpath)
+    if not path.is_file():
+        raise KnowledgeFileNotFound(relpath)
+    text = path.read_text(encoding="utf-8", errors="replace")
+    fm, body = split_frontmatter(text)
+    return KnowledgeFile(
+        path=paths.relative_of(path),
+        title=str(fm.get("title") or path.stem),
+        description=str(fm.get("description") or ""),
+        actor=str(fm.get("actor") or ACTOR_AGENT),
+        created_at=str(fm.get("created_at") or ""),
+        updated_at=str(fm.get("updated_at") or ""),
+        body=body,
+        file_path=str(path),
+        folder_path=str(path.parent),
+    )
+
+
+def _atomic_write(path: pathlib.Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    # The temp name carries a per-call uniquifier (uuid) on top of the pid so two
-    # concurrent writes to the SAME path (e.g. an agent writing a note while the
-    # tidy pass rewrites it within one process) never collide on the temp file
-    # and spuriously fail each other's os.replace.
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.{uuid4().hex}.tmp")
-    try:
-        with open(tmp, "wb") as f:
-            f.write(data)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
-    except BaseException:
-        with contextlib.suppress(OSError):
-            tmp.unlink()
-        raise
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(path)
 
 
-def atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None:
-    """Encode ``text`` and write it to ``path`` atomically (see
-    :func:`atomic_write_bytes`)."""
-    atomic_write_bytes(path, text.encode(encoding))
+def write_file(
+    *,
+    directory: str,
+    title: str,
+    description: str,
+    body: str,
+    actor: str = ACTOR_AGENT,
+    relpath: str | None = None,
+) -> KnowledgeFile:
+    """Create a file under ``directory``, or replace the one at ``relpath``.
+
+    Replacing preserves ``created_at`` so the file keeps its own history even
+    though nothing but the file records it.
+    """
+    now = _now()
+    created = now
+    if relpath is not None:
+        target = paths.resolve(relpath)
+        if target.is_file():
+            existing, _ = split_frontmatter(target.read_text(encoding="utf-8", errors="replace"))
+            created = str(existing.get("created_at") or now)
+    else:
+        parent = paths.resolve(directory)
+        parent.mkdir(parents=True, exist_ok=True)
+        name = unique_name(parent, slugify(title))
+        target = parent / name
+    text = render_frontmatter(
+        {
+            "title": title,
+            "description": description,
+            "actor": actor,
+            "created_at": created,
+            "updated_at": now,
+        },
+        body,
+    )
+    _atomic_write(target, text)
+    return read_file(paths.relative_of(target))
+
+
+def delete_file(relpath: str) -> None:
+    path = paths.resolve(relpath)
+    if not path.is_file():
+        raise KnowledgeFileNotFound(relpath)
+    path.unlink()
+
+
+def archive(relpath: str) -> pathlib.Path:
+    """Copy a file's current contents into its collection's ``.history/``.
+
+    Called before tidy overwrites or merges anything: the pass runs with no
+    review step, so this copy is the entire safety net (FR-050).
+    """
+    source = paths.resolve(relpath)
+    if not source.is_file():
+        raise KnowledgeFileNotFound(relpath)
+    destination = paths.history_path(relpath)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination)
+    return destination
+
+
+def create_collection_dir(name: str) -> pathlib.Path:
+    directory = paths.collection_dir(name)
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def remove_collection_dir(name: str) -> None:
+    directory = paths.collection_dir(name)
+    if directory.is_dir():
+        shutil.rmtree(directory)

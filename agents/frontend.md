@@ -41,9 +41,8 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
 
 - **Data fetching lives in a hook file, never inline in a component.** A page or
   component calls `useX()`; it does not call `useQuery`/`useMutation` directly.
-  (Legacy debt: `src/kinds/knowledge` still inlines queries in its lane
-  components — that is the pattern to migrate AWAY from;
-  `kinds/knowledge/useKnowledgeDocuments.ts` is the shape to copy.)
+  (`kinds/knowledge/useKnowledge.ts` is the shape to copy: every query and
+  mutation for the kind in one file, key builders exported from it.)
 - **`src/kinds/<name>/` is for the kind-registry UI modules only** (the
   `KindUIModule` that the resource framework auto-renders). New plain features
   use the `pages` + `components` + `hooks` + `api` layout above, not a
@@ -83,9 +82,8 @@ extends the parent key so a prefix invalidation catches the whole subtree:
 ["agents", name, "config-files"] // a sub-resource of that agent
 ```
 
-- **Do NOT use flat hyphenated keys** (`["knowledge-documents", scope]`) — they
-  cannot be invalidated as a group. The knowledge kind currently does this; new
-  code must not.
+- **Do NOT use flat hyphenated keys** (`["knowledge-documents", path]`) — they
+  cannot be invalidated as a group.
 - Export the key builders from the hook file (`conversationKey(id)`,
   `messagesKey(id)`), don't inline string arrays at call sites.
 
@@ -94,7 +92,7 @@ extends the parent key so a prefix invalidation catches the whole subtree:
 Every request module under `src/lib/api/` resolves base URL + token through
 `src/lib/auth.ts` (`getCofferBaseUrl`, `getCofferToken`) and sends
 `X-Coffer-Token` + `X-Coffer-Actor: "ui"`. **The actor is always `"ui"`** from
-the web surface (the `"user"` in `kinds/knowledge/client.ts` is a known outlier).
+the web surface.
 
 Two request styles exist; pick by whether the spec shipped an OpenAPI contract:
 
@@ -189,10 +187,4 @@ When you work near these, migrate toward the target; don't extend the debt:
 
 1. **One `call<T>()`** in `src/lib/api/call.ts`; the four hand-written API
    modules import it instead of each owning a copy.
-2. **Hook-file data fetching everywhere** — extract the inline `useQuery`/
-   `useMutation` out of the `kinds/knowledge` lane components into hooks
-   alongside `useKnowledgeDocuments`.
-3. **Hierarchical query keys everywhere** — `["knowledge", scope, …]` replacing
-   the flat `["knowledge-entries", …]` / `["knowledge-documents", …]` keys.
-4. **Actor header `"ui"` everywhere** — fix `kinds/knowledge/client.ts`.
-5. **`onError` toast on every mutation** that can fail visibly.
+2. **`onError` toast on every mutation** that can fail visibly.

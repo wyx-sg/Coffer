@@ -66,7 +66,8 @@ enforcement point.
    | --- | --- | --- |
    | `mcp_server` | agent | The gateway filters the server's tools by the session's identity. |
    | `skill` | agent | Delivery filters by the skill's own `enabled` flag intersected with scope; out-of-scope or disabled delivered copies are reconciled away. |
-   | `agent`, `channel`, `knowledge` | none | A non-null scope is rejected at validation. |
+   | `knowledge` | agent | The built-in knowledge tools filter the collections a session may list, grep, read and write by the session's identity. |
+   | `agent`, `channel` | none | A non-null scope is rejected at validation. |
 
 4. **Shim self-reported `--agent` identity.** The shim install writes
    `coffer-mcp-shim --agent <name>` into the agent's config; the shim reports
@@ -94,11 +95,17 @@ enforcement point.
    always meant. Per-skill exclusion keeps its full power; it is expressed on
    the skill rather than on the agent.
 
-6. **Knowledge never scopes.** The `knowledge` kind declares no scope and
-   rejects a non-null value — always shared across every agent. (Its own
-   `global` / `project-<ULID>` / named-collection axis is a knowledge-layer
-   scope over *content*, unrelated to this framework field, which is about
-   *which agent may see a resource*.)
+6. **A knowledge collection scopes — revised 2026-09-12.** This ADR originally
+   said the `knowledge` kind declares no scope, because a collection was then
+   one of three storage scopes over *content* (`global` / `project-<ULID>` /
+   named collection) rather than a boundary anyone drew. With the layer reduced
+   to plain files, a collection is the **only** boundary it has, and
+   authorization is the reason it is a Resource at all: the kind declares
+   `supports_scope`, and an agent lists, greps, reads and writes only the
+   collections activated for it ([Knowledge Is Plain Files](knowledge-is-plain-files.md),
+   spec knowledge FR-010…FR-012). Enforcement sits at the MCP tool surface
+   only, so it prevents mistaken retrieval, not deliberate filesystem access by
+   an agent that also holds shell tools (FR-014).
    Chat history, audit logs, runtime state and machine-local settings stay
    machine-local (restated as a boundary, not a new decision).
 

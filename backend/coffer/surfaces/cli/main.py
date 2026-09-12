@@ -11,8 +11,6 @@ from coffer.surfaces.cli import (
     credentials_cmd,
     daemon_cmd,
     knowledge_cmd,
-    knowledge_document_cmd,  # noqa: F401 — registers the document subcommands
-    knowledge_source_cmd,  # noqa: F401 — registers `check-sources`/`update-source`
     open_cmd,
     provider_cmd,
     resource_cmd,

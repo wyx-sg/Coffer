@@ -20,7 +20,17 @@ SINGLETON_ID = 1
 
 @dataclass
 class GlobalInternalEngineConfig:
-    """The one global internal-engine model selection."""
+    """The one global internal-engine model selection, and what it may run
+    unattended.
+
+    ``auto_tidy_enabled`` lives here rather than on a collection because it
+    governs the engine, not a directory: it decides whether Coffer's own model
+    may rewrite the user's knowledge files on a timer with no review step
+    (spec knowledge FR-051). It ships **off**, so an unattended rewriter is
+    something the operator switches on rather than something they discover
+    running.
+    """
 
     model: str | None
     updated_at: datetime
+    auto_tidy_enabled: bool = False

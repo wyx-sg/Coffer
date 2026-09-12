@@ -30,10 +30,12 @@ def test_app_mounts_all_kind_agnostic_routes(tmp_path, monkeypatch):
         r = c.get("/api/v1/daemon/status")
         assert r.status_code == 200
 
-        # /resources (token required, no resources yet)
+        # /resources (token required; only Coffer's own seeded skill)
         r = c.get("/api/v1/resources", headers=headers)
         assert r.status_code == 200
-        assert r.json() == {"resources": []}
+        # Coffer seeds its own knowledge skill at boot (spec knowledge FR-042),
+        # so an install is never resource-empty; nothing the user made is here.
+        assert [x["name"] for x in r.json()["resources"]] == ["coffer-knowledge"]
 
         # /audit (token required)
         r = c.get("/api/v1/audit", headers=headers)

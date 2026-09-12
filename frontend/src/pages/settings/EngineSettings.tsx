@@ -1,19 +1,18 @@
 // frontend/src/pages/settings/EngineSettings.tsx
 //
-// Settings → Engine: how Coffer itself thinks. Two cards, both configuring
-// Coffer's own machinery rather than anything served to an agent — the LLM
-// connection + model its memory organizer runs on, and the embedding model
-// behind vector retrieval. They used to sit at the bottom of the
-// model-provider page; that page is the connection library agents draw from,
-// and internal configuration is not a resource, so it lives here instead.
-import { EmbeddingSettings } from "./EmbeddingSettings";
+// Settings → Engine: how Coffer itself thinks. One card, configuring Coffer's
+// own machinery rather than anything served to an agent — the LLM connection
+// and model its tidy pass runs on, and whether that pass may run unattended.
+//
+// The embedding card that used to sit beside it is gone with vector retrieval:
+// knowledge is a directory of files an agent greps, so there is no index for an
+// embedding model to feed (ADR knowledge-is-plain-files).
 import { InternalEngineSettings } from "./InternalEngineSettings";
 
 export function EngineSettings() {
   return (
     <div className="space-y-6">
       <InternalEngineSettings />
-      <EmbeddingSettings />
     </div>
   );
 }

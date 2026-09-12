@@ -17,7 +17,9 @@ from coffer.domain.internal_engine_config import GlobalInternalEngineConfig
 
 class InternalEngineConfigRepo(Protocol):
     async def get(self) -> GlobalInternalEngineConfig | None: ...
-    async def set(self, *, model: str | None) -> GlobalInternalEngineConfig: ...
+    async def set(
+        self, *, model: str | None, auto_tidy_enabled: bool | None = None
+    ) -> GlobalInternalEngineConfig: ...
 
 
 class InternalEngineConfigService:
@@ -33,12 +35,18 @@ class InternalEngineConfigService:
             model=None, updated_at=datetime.now(tz=UTC)
         )
 
-    async def update(self, *, model: str | None, actor: str = "api") -> GlobalInternalEngineConfig:
+    async def update(
+        self,
+        *,
+        model: str | None,
+        auto_tidy_enabled: bool | None = None,
+        actor: str = "api",
+    ) -> GlobalInternalEngineConfig:
         cleaned = model.strip() if model and model.strip() else None
-        saved = await self._repo.set(model=cleaned)
+        saved = await self._repo.set(model=cleaned, auto_tidy_enabled=auto_tidy_enabled)
         await self._audit.record(
             AuditEventType.INTERNAL_ENGINE_MODEL_SET.value,
             actor=actor,
-            details={"model": cleaned},
+            details={"model": cleaned, "auto_tidy_enabled": saved.auto_tidy_enabled},
         )
         return saved

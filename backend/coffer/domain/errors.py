@@ -240,87 +240,18 @@ class DatabaseSchemaTooNew(CofferError):  # noqa: N818
         self.db_path = db_path
 
 
-# --- knowledge_base kind (spec knowledge) -----------------------------------
+# --- knowledge layer: the errors ripgrep can raise ---------------------------
 # Canonical classes live in coffer.domain.kb_errors (split for the file-size
 # limit); re-exported here so the coffer.domain.errors.X import paths keep working.
 from coffer.domain.kb_errors import (  # noqa: E402, I001
-    DocumentNotFound as DocumentNotFound,
     EngineUnavailable as EngineUnavailable,
     GrepPatternInvalid as GrepPatternInvalid,
-    IngestRejected as IngestRejected,
-    KBNotFound as KBNotFound,
-    ReconversionBlocked as ReconversionBlocked,
 )
-
-
-# --- memory kind (spec knowledge) -------------------------------------------------
-
-
-class MemoryStoreNotFound(CofferError):  # noqa: N818
-    code = "MEMORY_STORE_NOT_FOUND"
-
-    def __init__(self, store_name: str) -> None:
-        super().__init__(f"memory store not found: {store_name!r}")
-        self.store_name = store_name
-
-
-class MemoryStoreMergeInvalid(CofferError):  # noqa: N818
-    code = "MEMORY_STORE_MERGE_INVALID"
-
-    def __init__(self, reason: str) -> None:
-        super().__init__(f"invalid memory store merge: {reason}")
-        self.reason = reason
-
-
-class MemoryNotFound(CofferError):  # noqa: N818
-    code = "MEMORY_NOT_FOUND"
-
-    def __init__(self, store_name: str, memory_id: str) -> None:
-        super().__init__(f"memory not found: {store_name}:{memory_id}")
-        self.store_name = store_name
-        self.memory_id = memory_id
-
-
-class MemoryRejected(CofferError):  # noqa: N818
-    code = "MEMORY_REJECTED"
-
-    def __init__(self, reason: str, message: str) -> None:
-        super().__init__(message)
-        self.reason = reason
-
-
-class ScopeUnresolved(CofferError):  # noqa: N818
-    """``scope=project`` was requested but the agent's cwd is not inside a git
-    project, so no project ULID can be resolved. ``scope=global`` still works."""
-
-    code = "SCOPE_UNRESOLVED"
-
-    def __init__(self, cwd: str) -> None:
-        super().__init__(
-            f"cannot resolve a project memory scope: {cwd!r} is not inside a git "
-            "project; use scope='global' instead"
-        )
-        self.cwd = cwd
-
-
-class EmbeddingUnavailable(CofferError):  # noqa: N818
-    """No embedding provider is configured / the provider failed to load.
-
-    Never raised to the user for recall: ``vector`` degrades to ``keyword`` and
-    flags the fallback. Used internally by the retrieval port to signal the
-    degrade path.
-    """
-
-    code = "EMBEDDING_UNAVAILABLE"
-
-    def __init__(self, detail: str) -> None:
-        super().__init__(f"embedding unavailable: {detail}")
-        self.detail = detail
 
 
 # agent chat (spec channels): re-exported from coffer.domain.chat.errors (split
 # for the file-size limit) so the coffer.domain.errors.X import paths keep working.
-from coffer.domain.chat.errors import (  # noqa: E402, I001
+from coffer.domain.chat.errors import (  # noqa: E402
     AgentConfigRejected as AgentConfigRejected,
     ConversationNotFound as ConversationNotFound,
     TurnInProgress as TurnInProgress,

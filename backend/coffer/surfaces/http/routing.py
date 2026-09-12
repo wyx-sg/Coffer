@@ -20,7 +20,6 @@ from coffer.surfaces.http.agent_workspace_routes import router as agent_workspac
 from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.channel_routes import router as channel_router
 from coffer.surfaces.http.credential_routes import router as credential_router
-from coffer.surfaces.http.embedding_routes import router as embedding_router
 from coffer.surfaces.http.fs_routes import router as fs_router
 from coffer.surfaces.http.internal_engine_routes import router as internal_engine_router
 from coffer.surfaces.http.knowledge import router as knowledge_router
@@ -48,7 +47,6 @@ def include_all_routers(app: FastAPI) -> None:
         credential_router,
         settings_router,
         sync_router,  # spec vault-export-import
-        embedding_router,
         internal_engine_router,  # spec provider-switching
         # agent + skill (specs agent-registry/skill-manager)
         agent_router,

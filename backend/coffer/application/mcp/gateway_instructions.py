@@ -32,7 +32,6 @@ PROTOCOL_VERSION = "2025-06-18"
 # unnoticed until an agent calls a name that no longer exists.
 NAMED_TOOLS: frozenset[str] = frozenset(
     {
-        "search",
         "grep",
         "read",
         "list",
@@ -48,10 +47,14 @@ NAMED_TOOLS: frozenset[str] = frozenset(
 _BASE = (
     "Coffer is this machine's local vault: it aggregates the user's MCP servers "
     "behind one endpoint and adds its own tools under the coffer__ prefix — "
-    "knowledge (search, grep, read, list, write, delete), skills (list_skills, "
+    "knowledge (list, grep, read, write, delete), skills (list_skills, "
     "load_skill), and diagnose, which returns Coffer's own audit and daemon "
-    "logs when something has gone wrong with Coffer itself. Search Coffer "
-    "before asking the user something they may already have told it."
+    "logs when something has gone wrong with Coffer itself. Coffer's knowledge "
+    "is a directory of markdown files: start at coffer__list to see what "
+    "collections exist, walk down a level at a time reading each entry's "
+    "description, then coffer__read the file — or coffer__grep for a literal "
+    "string. Look there before asking the user something they may already have "
+    "told it."
 )
 
 _TIERED = (

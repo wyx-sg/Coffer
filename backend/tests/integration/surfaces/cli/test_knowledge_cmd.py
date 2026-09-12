@@ -1,16 +1,10 @@
-"""Integration tests for the scope + entry half of `coffer knowledge ...`.
-
-One command group replaces the former ``memory`` and ``kb`` groups, so the two
-suites' scope-level verbs (`list` / `describe` / `create` / `configure` /
-`delete`) are covered once here, alongside the entry verbs (`remember` /
-`entries` / `get` / `edit-entry` / `forget` / `clear`), `recall` and
-`organize`. The document verbs live in ``test_knowledge_document_cmd.py``.
+"""Integration tests for `coffer knowledge ...` against the real stack.
 
 We boot the full FastAPI app (via ``create_app``) so the knowledge kind is
-wired with the production routes (real SQLite + real per-entry files under a
-temp HOME), then route ``_cli_client.client_or_exit`` to a Starlette
-``TestClient`` against that app. ``global`` and per-project scopes
-auto-provision; a named collection is created with ``create``.
+wired with its production routes — real SQLite, real markdown files under a
+temp HOME — then route ``_cli_client.client_or_exit`` at a Starlette
+``TestClient`` over that app. Nothing auto-provisions any more: every
+collection in here exists because a test created it (spec knowledge FR-010).
 """
 
 from __future__ import annotations
@@ -24,7 +18,7 @@ from starlette.testclient import TestClient
 from typer.testing import CliRunner
 
 import coffer.surfaces.cli._client as _cli_client
-from coffer.domain.knowledge.document import KIND_KNOWLEDGE
+from coffer.application.knowledge.service import KIND_KNOWLEDGE
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http.app import create_app
@@ -95,159 +89,168 @@ def knowledge_cli_daemon(tmp_path, monkeypatch):
     fake_client.__exit__(None, None, None)
 
 
-def test_list_scopes_shows_global(knowledge_cli_daemon):
-    result = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "list", "--json"])
+def _ls(path: str) -> dict:
+    result = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "ls", path, "--json"])
     assert result.exit_code == 0, result.output
-    data = json.loads(_extract_json(result.output))
-    assert any(s["name"] == "global" for s in data["scopes"])
+    return json.loads(_extract_json(result.output))
 
 
-def test_create_list_and_delete_named_collection(knowledge_cli_daemon):
-    """A named collection is created and removed through the one group (was
-    ``kb create`` / ``kb list`` / ``kb delete-kb``)."""
-    created = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "create", "designs", "--description", "d"])
+def _make_collection(name: str, description: str = "test collection") -> None:
+    created = _runner.invoke(
+        cli_app, [KIND_KNOWLEDGE, "create", name, "--description", description]
+    )
     assert created.exit_code == 0, created.output
 
-    listed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "list", "--json"])
+
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="creating a collection registers a knowledge resource"
+)
+def test_create_registers_a_resource_and_lists_it(knowledge_cli_daemon):
+    _make_collection("shopee", "Internal systems")
+
+    listed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "collections", "--json"])
     assert listed.exit_code == 0, listed.output
-    scopes = json.loads(_extract_json(listed.output))["scopes"]
-    assert any(s["name"] == "designs" and s["scope"] == "named" for s in scopes)
+    collections = json.loads(_extract_json(listed.output))["collections"]
+    assert [c["name"] for c in collections] == ["shopee"]
 
-    deleted = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "delete", "designs", "--yes"])
-    assert deleted.exit_code == 0, deleted.output
-    after = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "list", "--json"])
-    assert all(s["name"] != "designs" for s in json.loads(_extract_json(after.output))["scopes"])
-
-
-def test_remember_and_list_entries(knowledge_cli_daemon):
-    added = _runner.invoke(
-        cli_app, [KIND_KNOWLEDGE, "remember", "global", "prefers tabs", "--name", "tabs"]
-    )
-    assert added.exit_code == 0, added.output
-    assert "added entry" in added.output
-
-    listed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "entries", "global", "--json"])
-    assert listed.exit_code == 0, listed.output
-    data = json.loads(_extract_json(listed.output))
-    assert data["total"] == 1
-    assert data["entries"][0]["actor"] == "user"
+    # The description a caller gave becomes the collection's README, so the
+    # catalogue reads it back off disk rather than out of a row (FR-013).
+    assert collections[0]["description"] == "Internal systems"
 
 
-def test_describe_scope(knowledge_cli_daemon):
-    """One ``describe`` covers both former faces: the metrics payload is the
-    union, so entries and documents are reported for every scope."""
-    result = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "describe", "global", "--json"])
-    assert result.exit_code == 0, result.output
-    data = json.loads(_extract_json(result.output))
-    assert data["scope"]["name"] == "global"
-    assert data["scope"]["scope"] == "global"
-    assert "entry_count" in data["metrics"]
-    assert "document_count" in data["metrics"]
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="the catalogue lists collections with their README description"
+)
+def test_catalogue_description_comes_from_the_readme(knowledge_cli_daemon, tmp_path):
+    _make_collection("shopee", "First description")
+    readme = tmp_path / "knowledge" / "shopee" / "README.md"
+    readme.write_text("# shopee\n\nEdited by hand.\n", encoding="utf-8")
 
-    _runner.invoke(cli_app, [KIND_KNOWLEDGE, "create", "kb"])
-    named = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "describe", "kb", "--json"])
-    assert named.exit_code == 0, named.output
-    named_data = json.loads(_extract_json(named.output))
-    assert named_data["scope"]["name"] == "kb"
-    assert named_data["scope"]["scope"] == "named"
-    assert "document_count" in named_data["metrics"]
+    listed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "collections", "--json"])
+    collections = json.loads(_extract_json(listed.output))["collections"]
+    assert collections[0]["description"] == "Edited by hand."
 
 
-def test_get_edit_delete_entry(knowledge_cli_daemon):
-    added = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "remember", "global", "old", "--name", "f"])
-    assert added.exit_code == 0, added.output
-    # Recover the id from an entries --json.
-    listed = json.loads(
-        _extract_json(
-            _runner.invoke(cli_app, [KIND_KNOWLEDGE, "entries", "global", "--json"]).output
-        )
-    )
-    eid = listed["entries"][0]["id"]
-
-    got = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "get", "global", eid, "--json"])
-    assert got.exit_code == 0, got.output
-
-    edited = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "edit-entry", "global", eid, "new text"])
-    assert edited.exit_code == 0, edited.output
-
-    forgotten = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "forget", "global", eid])
-    assert forgotten.exit_code == 0, forgotten.output
-
-
-def test_clear_entries(knowledge_cli_daemon):
-    _runner.invoke(cli_app, [KIND_KNOWLEDGE, "remember", "global", "a", "--name", "a"])
-    _runner.invoke(cli_app, [KIND_KNOWLEDGE, "remember", "global", "b", "--name", "b"])
-    cleared = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "clear", "global", "--yes"])
-    assert cleared.exit_code == 0, cleared.output
-    assert "cleared 2 entry" in cleared.output
-
-
-def test_recall(knowledge_cli_daemon):
-    _runner.invoke(
-        cli_app, [KIND_KNOWLEDGE, "remember", "global", "the deploy command is make release"]
-    )
-    result = _runner.invoke(
-        cli_app, [KIND_KNOWLEDGE, "recall", "global", "deploy command", "--json"]
-    )
-    assert result.exit_code == 0, result.output
-    data = json.loads(_extract_json(result.output))
-    assert "hits" in data
-    # One query → one answer: mode / fallback are no longer surfaced.
-    assert "mode" not in data
-    assert "fallback" not in data
-
-
-def test_describe_missing_scope_exit_code_4(knowledge_cli_daemon):
-    """Both a never-provisioned project scope and an unknown named collection
-    exit 4 (was one test per former group)."""
-    missing_project = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "describe", "project-NOPE"])
-    assert missing_project.exit_code == 4, missing_project.output
-    missing_named = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "describe", "ghost"])
-    assert missing_named.exit_code == 4, missing_named.output
-
-
-def test_configure_vector_and_chunking(knowledge_cli_daemon):
-    """FR-017/FR-019: a scope's retrieval and chunking config is CLI-reachable
-    (was ``memory configure`` + ``kb set-chunking``). Embedding is
-    installation-wide, so no provider/model/dimension flags exist here."""
-    r = _runner.invoke(
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="a written note lands as a markdown file with a readable name"
+)
+def test_write_lands_as_a_readable_file(knowledge_cli_daemon, tmp_path):
+    _make_collection("shopee")
+    written = _runner.invoke(
         cli_app,
         [
             KIND_KNOWLEDGE,
-            "configure",
-            "global",
-            "--enable-vector",
-            "--max-entry-chars",
-            "4096",
-            "--chunk-size",
-            "128",
-            "--chunk-overlap",
-            "16",
+            "write",
+            "--title",
+            "Account Gateway",
+            "--description",
+            "Where account decisions are made",
+            "--body",
+            "The orchestration layer.",
+            "--in",
+            "shopee",
         ],
     )
-    assert r.exit_code == 0, r.output
-    desc = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "describe", "global", "--json"])
-    cfg = json.loads(_extract_json(desc.output))["scope"]["config"]
-    assert "vector" in cfg["retrieval_modes"]
-    assert cfg["max_entry_chars"] == 4096
-    assert cfg["chunk_size"] == 128
-    assert cfg["chunk_overlap"] == 16
-    assert "embedding_provider" not in cfg
-    assert "embedding" not in cfg
+    assert written.exit_code == 0, written.output
+    assert (tmp_path / "knowledge" / "shopee" / "account-gateway.md").is_file()
 
 
-def test_configure_without_options_exits_nonzero(knowledge_cli_daemon):
-    r = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "configure", "global"])
-    assert r.exit_code != 0
-    assert "nothing to configure" in r.output
+@pytest.mark.acceptance(spec="knowledge", scenario="read returns a file by path")
+def test_read_returns_the_body(knowledge_cli_daemon):
+    _make_collection("shopee")
+    _runner.invoke(
+        cli_app,
+        [
+            KIND_KNOWLEDGE,
+            "write",
+            "--title",
+            "Session",
+            "--description",
+            "d",
+            "--body",
+            "account.session owns login state",
+            "--in",
+            "shopee",
+        ],
+    )
+    read = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "read", "shopee/session.md"])
+    assert read.exit_code == 0, read.output
+    assert "account.session owns login state" in read.output
 
 
-def test_organize_no_model_noop(knowledge_cli_daemon):
-    """`coffer knowledge organize` against a fresh install (no internal model)
-    is a clean no-op — the CLI reports it and exits 0."""
-    _runner.invoke(cli_app, [KIND_KNOWLEDGE, "remember", "global", "an entry"])
-    result = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "organize", "global", "--json"])
-    assert result.exit_code == 0, result.output
-    data = json.loads(_extract_json(result.output))
-    assert data["status"] == "no_model"
-    assert data["model"] is None
+@pytest.mark.acceptance(spec="knowledge", scenario="grep matches CJK content")
+def test_grep_matches_cjk_without_a_tokenizer(knowledge_cli_daemon):
+    _make_collection("shopee")
+    _runner.invoke(
+        cli_app,
+        [
+            KIND_KNOWLEDGE,
+            "write",
+            "--title",
+            "Session",
+            "--description",
+            "登录态",
+            "--body",
+            "account.session 负责登录态 token",
+            "--in",
+            "shopee",
+        ],
+    )
+    found = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "grep", "登录态", "--json"])
+    assert found.exit_code == 0, found.output
+    matches = json.loads(_extract_json(found.output))["matches"]
+    assert any(m["path"] == "shopee/session.md" for m in matches)
+
+
+@pytest.mark.acceptance(spec="knowledge", scenario="delete removes the file from disk")
+def test_delete_removes_the_file(knowledge_cli_daemon, tmp_path):
+    _make_collection("shopee")
+    _runner.invoke(
+        cli_app,
+        [
+            KIND_KNOWLEDGE,
+            "write",
+            "--title",
+            "Stale",
+            "--description",
+            "d",
+            "--body",
+            "b",
+            "--in",
+            "shopee",
+        ],
+    )
+    path = tmp_path / "knowledge" / "shopee" / "stale.md"
+    assert path.is_file()
+
+    removed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "delete", "shopee/stale.md"])
+    assert removed.exit_code == 0, removed.output
+    assert not path.exists()
+
+
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="an unknown collection is an error, never auto-created"
+)
+def test_unknown_collection_is_an_error(knowledge_cli_daemon, tmp_path):
+    result = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "ls", "typo", "--json"])
+    assert result.exit_code != 0
+    assert not (tmp_path / "knowledge" / "typo").exists()
+
+
+def test_write_needs_exactly_one_target(knowledge_cli_daemon):
+    result = _runner.invoke(
+        cli_app,
+        [
+            KIND_KNOWLEDGE,
+            "write",
+            "--title",
+            "t",
+            "--description",
+            "d",
+            "--in",
+            "shopee",
+            "--path",
+            "shopee/t.md",
+        ],
+    )
+    assert result.exit_code == 2

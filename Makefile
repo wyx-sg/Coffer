@@ -29,7 +29,7 @@ help:
 	@echo "  make lint                  ruff + mypy + eslint + tsc + import-linter + file/response_model checks"
 	@echo "  make format                ruff format + prettier"
 	@echo "  make coverage              pytest --cov + vitest --coverage (no threshold gates yet)"
-	@echo "  make eval                  AI eval harness: retrieval suite (local) + baseline gate"
+	@echo "  make eval                  AI eval harness: tool-search suite (local) + baseline gate"
 	@echo "  make eval-routing          + tool-routing suite (needs a local LLM, e.g. ollama)"
 	@echo "  make eval-curate           curate captured traces into golden cases (ARGS=--dry-run)"
 	@echo "  make lock                  refresh backend/uv.lock from pyproject.toml (the install lockfile)"

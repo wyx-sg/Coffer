@@ -157,3 +157,12 @@ ADR 今天被读的理由，是「共享单一 store」这个决策本身。
   per-project scope 的 AI 辅助合并一并删除：worktree 感知的 `git_root` 已消除成因，
   残留在每次 daemon 启动时被自动愈合，在同一个问题上再留一条手动路径不值那层抽象。
   决策本身 —— 一个共享 store，经 MCP 触达，绝不写进 agent 自己的记忆文件 —— 未变。
+
+
+- **2026-09-12 —— 下文的形态已成历史，决策本身没有。** 这一层变成了一个 agent 用 grep
+  去读的 markdown 文件目录（[Knowledge Is Plain Files](knowledge-is-plain-files.zh.md)）：
+  一条 lane 而非两条，collection 而非三种 scope，五个工具而非六个，且完全没有索引。
+  本 ADR 里关于 `notes/` ÷ `docs/`、`project-<ULID>` scope、`coffer__search` 和 SQLite
+  底座的一切，描述的都是一个已经不存在的布局。而它**决定**的东西——**一个所有 agent
+  共享、经 MCP 访问、绝不写入 agent 自身记忆文件的存储**——正是那次重设计保留下来的，
+  所以这条 ADR 并未作废。

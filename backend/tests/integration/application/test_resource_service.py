@@ -2,6 +2,7 @@ import pytest
 from pydantic import BaseModel
 
 from coffer.application.audit_service import AuditService
+from coffer.application.knowledge.service import KIND_KNOWLEDGE
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import (
@@ -10,7 +11,6 @@ from coffer.domain.errors import (
     ResourceNotFound,
     UnknownKind,
 )
-from coffer.domain.knowledge.document import KIND_KNOWLEDGE
 from coffer.domain.resource import Kind, ResourceRef
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
@@ -379,12 +379,12 @@ async def test_delete_unknown_resource_raises(tmp_path):
 @pytest.mark.asyncio
 async def test_knowledge_kind_declares_no_credentials(tmp_path):
     """The knowledge kind supplies no credential extractor, so registering a
-    scope never probes the keychain.
+    collection never probes the keychain.
 
     Both former faces used to extract an embedding API-key ref from their own
-    config. Embedding is resolved installation-wide now, so there is no
-    per-scope credential to probe — and a register must not fail on a keychain
-    that holds nothing."""
+    config. Nothing about a directory of files needs a credential, so there is
+    none to probe — and a register must not fail on a keychain that holds
+    nothing."""
     from coffer.application.knowledge.kind import make_knowledge_kind
 
     class _EmptyKeyring:
@@ -407,10 +407,16 @@ async def test_knowledge_kind_declares_no_credentials(tmp_path):
             audit=audit,
             credentials=_EmptyKeyring(),
         )
-        config = {"retrieval_modes": ["grep", "keyword", "vector"], "default_mode": "keyword"}
-        await svc.register(kind=KIND_KNOWLEDGE, name="global", config=config, actor="cli")
-        stored = await svc.get(ResourceRef(KIND_KNOWLEDGE, "global"))
-        assert "hybrid" in stored.config["retrieval_modes"]
+        await svc.register(
+            kind=KIND_KNOWLEDGE,
+            name="shopee",
+            config={},
+            actor="cli",
+            allow_lifecycle_kind=True,
+        )
+        stored = await svc.get(ResourceRef(KIND_KNOWLEDGE, "shopee"))
+        # A collection carries no config at all (spec knowledge FR-081).
+        assert stored.config == {}
     finally:
         await engine.dispose()
 

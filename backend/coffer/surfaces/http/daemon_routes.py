@@ -36,28 +36,6 @@ router = APIRouter(prefix="/api/v1/daemon", tags=["daemon"])
 # daemon_routes no longer needs a circular import of app at request time.
 _DaemonPhase = Literal["starting", "ready", "draining"]
 
-_vec_available_cache: bool | None = None
-
-
-def _vec_available() -> bool:
-    """Whether sqlite-vec's vec0 extension loads in this process (cached once).
-
-    Function-local import keeps the knowledge engine out of this module's
-    import graph (Contract 6) — surfaces may reach knowledge, but only lazily.
-    Availability is fixed for a process lifetime, so we probe once.
-    """
-    global _vec_available_cache
-    if _vec_available_cache is None:
-        try:
-            from coffer.infrastructure.knowledge.vec_index import VecIndex
-
-            probe = VecIndex(":memory:", dimensions=None, kind="_probe", resource_name="_probe")
-            _vec_available_cache = bool(probe.available())
-        except Exception:
-            _vec_available_cache = False
-    return _vec_available_cache
-
-
 _DAEMON_PHASE: _DaemonPhase = "starting"
 
 
@@ -151,7 +129,6 @@ async def get_status(
         started_at=_STARTED_AT,
         port=_PORT,
         upstream_summary=upstream_summary,
-        vec_available=_vec_available(),
     )
 
 

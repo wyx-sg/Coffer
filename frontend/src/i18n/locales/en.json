@@ -869,102 +869,19 @@
     "empty": "No knowledge scopes yet. Create a collection, or let the global and per-project scopes appear as your agents work.",
     "loadFailed": "Failed to load knowledge scopes",
     "searchPlaceholder": "Search knowledge scopes…",
-    "noMatches": "No knowledge scopes match your search.",
-    "unnamedScope": "Unnamed scope",
-    "rename": {
-      "title": "Rename knowledge scope",
-      "description": "Give this scope a readable display name. This is a label only — it doesn't change the scope's id or where agents read and write.",
-      "label": "Display name",
-      "placeholder": "e.g. My research notes",
-      "clear": "Clear name"
-    },
-    "sourceMode": {
-      "converted": "Converted",
-      "edited": "Edited"
-    },
     "cols": {
       "name": "Name",
-      "notes": "Notes",
-      "documents": "Documents",
-      "description": "Description"
-    },
-    "scope": {
-      "global": "Global",
-      "project": "Project",
-      "named": "Collection",
-      "unknown": "Unknown"
-    },
-    "dialog": {
-      "title": "New knowledge collection",
-      "description": "A collection you curate yourself. The global and per-project scopes appear on their own — you never create those by hand.",
-      "name": "Name",
-      "nameHint": "Letters, digits, dash and underscore. \"global\" and names starting with \"project-\" are reserved for the automatic scopes.",
-      "descriptionField": "Description (optional)",
-      "vector": "Vector search"
+      "description": "Description",
+      "files": "Files"
     },
     "detail": {
-      "back": "Back to knowledge",
-      "tabs": {
-        "documents": "Documents",
-        "notes": "Notes"
-      },
-      "emptyEntries": "No notes yet.",
-      "selectEntry": "Select a note on the left to preview it.",
-      "untitled": "(untitled)",
-      "documents": "Documents",
-      "emptyDocuments": "No documents yet. Upload a file of any format to populate this scope.",
-      "selectDocument": "Select a document on the left to preview it.",
       "noMatches": "No matches.",
-      "degradedBadge": "{{count}} documents pending vector embed (embedding service unavailable; indexed by keyword)",
-      "clearAll": "Clear all notes",
-      "clearTitle": "Clear all notes?",
-      "clearConfirm": "Clear every note in {{scope}}? Its uploaded documents are untouched. This cannot be undone.",
-      "deleteEntryTitle": "Delete note?",
-      "deleteEntryConfirm": "Delete note {{name}}? This cannot be undone.",
-      "deleteDocConfirm": "Delete document {{title}}? This cannot be undone.",
-      "reindex": "Reindex",
-      "settings": "Settings",
-      "checkSources": "Check sources",
-      "upload": "Upload",
-      "replaceExisting": "Upload again and replace",
-      "reconvert": "Reconvert",
-      "embedStatus": {
-        "statusDone": "Embedded",
-        "statusEmbedding": "Embedding",
-        "statusQueued": "Queued",
-        "statusRunning": "Embedding",
-        "statusError": "Embed failed"
-      },
-      "sourceCheck": {
-        "title": "Source files",
-        "description": "Documents ingested from a file on disk, checked against their original source.",
-        "empty": "No documents track an external source file. Web uploads aren't tracked — only documents ingested from a path (via the CLI) have a source file to re-check.",
-        "update": "Update from source",
-        "updated": "Document updated from its source file.",
-        "missingNote": "Source file not found at that path.",
-        "editedNote": "This document was edited locally, so updating from source is blocked to avoid clobbering your changes.",
-        "status": {
-          "unchanged": "Up to date",
-          "changed": "Source changed",
-          "missing": "Source missing",
-          "edited": "Locally edited",
-          "updated": "Auto-updated"
-        }
-      },
-      "notes": "Notes",
       "filterPlaceholder": "Filter by name…",
       "tidy": "Tidy",
       "tidyDone": "Tidy pass finished.",
-      "moreActions": "More actions"
-    },
-    "settings": {
-      "title": "Knowledge scope settings",
-      "description": "Update chunking and retrieval for this scope. Reindex afterwards to apply chunking changes to existing documents.",
-      "chunkSize": "Chunk size",
-      "chunkOverlap": "Chunk overlap",
-      "vectorHint": "Add meaning-based vector retrieval for this scope (keyword + grep are always on). The embedding model is configured globally in Settings → Embedding.",
-      "autoUpdateSources": "Auto-update from source",
-      "autoUpdateSourcesHint": "When a document's external source file changes, re-ingest it automatically on the next source check (locally edited documents are always skipped)."
+      "emptyFolder": "Nothing here yet",
+      "selectAFile": "Select a file to read it",
+      "treeLabel": "Files in this collection"
     },
     "welcome": {
       "title": "One place for everything your agents know",
@@ -982,7 +899,16 @@
         "body": "Everything is plain Markdown on your machine; the index rebuilds from the files."
       }
     },
-    "deleteScopeConfirm": "Delete knowledge scope \"{{name}}\"? Its notes, documents and index are removed. This cannot be undone."
+    "create": {
+      "title": "New collection",
+      "name": "Name",
+      "description": "Description",
+      "descriptionHint": "One sentence: what belongs in here"
+    },
+    "delete": {
+      "title": "Delete collection",
+      "description": "Delete “{{name}}” and every file in it? This cannot be undone."
+    }
   },
   "channels": {
     "title": "Channels",

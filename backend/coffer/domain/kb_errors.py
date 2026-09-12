@@ -1,39 +1,18 @@
-"""Knowledge-base kind (spec knowledge) error classes.
+"""Errors raised by the knowledge layer's one external dependency: ripgrep.
 
-Split out of :mod:`coffer.domain.errors` (which re-exports them, so the
-``coffer.domain.errors.X`` import paths keep working) to keep that aggregation
-module under the file-size ceiling — mirroring how the credential and chat error
-families are organised.
+What is left here is only what survives a layer with no index: the search
+binary can be missing, and a caller's regex can be invalid. The knowledge-base
+errors this module once held — ``KBNotFound``, ``DocumentNotFound``,
+``IngestRejected``, ``ReconversionBlocked`` — went with ingestion and the
+index ([Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)).
+
+Kept in its own module, re-exported by :mod:`coffer.domain.errors`, so that
+aggregation module stays under the file-size ceiling.
 """
 
 from __future__ import annotations
 
 from coffer.domain.error_base import CofferError
-
-
-class KBNotFound(CofferError):  # noqa: N818
-    code = "KB_NOT_FOUND"
-
-    def __init__(self, kb_name: str) -> None:
-        super().__init__(f"knowledge base not found: {kb_name!r}")
-        self.kb_name = kb_name
-
-
-class DocumentNotFound(CofferError):  # noqa: N818
-    code = "DOCUMENT_NOT_FOUND"
-
-    def __init__(self, kb_name: str, document_id: str) -> None:
-        super().__init__(f"document not found: {kb_name}:{document_id}")
-        self.kb_name = kb_name
-        self.document_id = document_id
-
-
-class IngestRejected(CofferError):  # noqa: N818
-    code = "INGEST_REJECTED"
-
-    def __init__(self, reason: str, message: str) -> None:
-        super().__init__(message)
-        self.reason = reason
 
 
 class EngineUnavailable(CofferError):  # noqa: N818
@@ -47,21 +26,6 @@ class EngineUnavailable(CofferError):  # noqa: N818
         super().__init__(f"{engine} engine unavailable: {detail}")
         self.engine = engine
         self.detail = detail
-
-
-class ReconversionBlocked(CofferError):  # noqa: N818
-    """Re-converting a document whose ``source_mode == 'edited'`` is refused so
-    hand edits are not clobbered; re-uploading a new source resets it."""
-
-    code = "RECONVERSION_BLOCKED"
-
-    def __init__(self, kb_name: str, document_id: str) -> None:
-        super().__init__(
-            f"cannot re-convert edited document {kb_name}:{document_id}; "
-            "upload a new source file to reset source_mode to 'converted'"
-        )
-        self.kb_name = kb_name
-        self.document_id = document_id
 
 
 class GrepPatternInvalid(CofferError):  # noqa: N818

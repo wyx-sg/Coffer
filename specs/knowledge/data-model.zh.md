@@ -1,426 +1,183 @@
-# Data Model —— 007 Memory（跨 agent 共享记忆）
+# 数据模型 — 知识层
 
 > English: [data-model.md](./data-model.md)
 
-> **历史文档 —— 2026-09-10。** spec knowledge（Knowledge Base）与 spec knowledge（Memory）
-> 于当日合并为统一的 **Knowledge Layer（知识层）**。合并后的模型以
-> [`spec.md`](./spec.md) 为准 —— 一个 `knowledge` kind、三种 scope、单一存储根
-> `~/.coffer/knowledge/<scope>/`、六个 `coffer__*` 工具。本文档记录的是合并之前
-> 的设计；凡出现「memory 面」「`memory` kind」`~/.coffer/memory/`
-> `/api/v1/memory_stores` 或 `coffer memory …` 之处，请以 `spec.md` 中合并后的
-> 对应物为准。目录名 `specs/knowledge/` 同样是历史遗留：它是所有入链与验收审计
-> 所依赖的 spec id。
+这一层的状态就是一个目录。本文描述磁盘上的东西——目录树、frontmatter 契约、
+命名规则——外加一个 collection 仍然占用的那一行数据库记录，以及各 surface
+用来作答的内存值对象。权威是 [`spec.md`](./spec.md) 与
+[Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)。
 
-memory 面的实体、端口、统一 SQLite schema（与 knowledge base 共享）以及落盘规范化布局。
+## 没有 schema
 
-## Domain 实体 (`backend/coffer/domain/memory/`)
+**知识层不拥有任何表**（FR-081、SC-004）。Markdown 文件是唯一真相，没有任何
+东西从它们派生出来：没有 `documents` 行、没有 chunk、没有全文索引、没有
+embedding——因此没有内容哈希要比对，没有重建索引，也没有任何形式的对账
+（FR-001）。
 
-### `MemoryStoreConfig` (`domain/memory/config.py`)
+一个 collection 在数据库里的唯一存在，和其它每个 Resource 一样：kind 无关的
+`resources` 表里的一行。那一行承载 collection 的名字、它的 `enabled` 标志以及
+它的 per-agent `scope`，不承载任何关于它内容的东西。
 
-Pydantic v2 `BaseModel`。当 `kind == "memory"` 时存于 `Resource.config`。与 KB 面共享检索模式词汇与 embedding 语义；字段布局刻意不同 —— 见下文。
+## 磁盘布局
 
-| 字段                       | 类型                                       | 说明                                                                           |
-| -------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------ |
-| `retrieval_modes`          | `list[Literal["grep","keyword","vector","hybrid"]]` | 启用的模式。默认 `["grep","keyword"]`（零配置、离线）。`vector` 为可选项；`hybrid`（对 keyword+vector 做 RRF）与 KB 面共享。     |
-| `default_mode`             | `Literal["grep","keyword","vector","hybrid"]`       | 默认 `"keyword"`。                                                             |
-| `embedding_provider`       | `str \| None`                              | OpenAI 兼容 provider id（如 `openai`、`voyage`、`local`）。`vector` 必填。     |
-| `embedding_model`          | `str \| None`                              | 如 `bge-m3`（本地）或某云端模型。`vector` 必填。                               |
-| `embedding_base_url`       | `str \| None`                              | OpenAI 兼容 provider 的 base URL 覆盖。                                        |
-| `embedding_credential_ref` | `str \| None`                              | embedding API key 的 keychain ref（绝不明文）。                                |
-| `embedding_dimensions`     | `int`                                      | 默认 `768`；范围 `1–8192`。决定该 store 的 `vec_chunks` 表宽；随线上契约传输。 |
-| `max_fact_chars`           | `int`                                      | 默认 `8192`；范围 `64–32768`。可变。                                           |
-
-`merged_identities` 随跨作用域 AI 合并（FR-056…059）一起消失：它存在的唯一理由是让
-被合并掉的项目 ULID 仍解析到幸存者，而如今已没有任何东西再铸这种别名。
-
-embedding 模型 **可变** —— 改它会重嵌整个 store（文件是真相）。没有不可变锁。
-
-与 spec knowledge 的形状差异是刻意的：007 把 embedding 字段保持**扁平**，让 memory 表单保持轻薄；006 则把它们嵌套在一个 `EmbeddingConfig` 对象里。自全局 embedding 重设计起，扁平字段已是遗留字段——为兼容性在 wire 上继续接受但被忽略；索引与 recall 都解析**全局** embedding 配置（见下文 `GlobalEmbeddingConfig`）。同理，007 recall 响应里的 `fallback` 是**布尔值** —— recall 跨多个 store，单一的回退模式字符串没有良定义；而 006 的单 store 搜索报告一个可空的模式枚举（`fallback: "keyword" | null`）。
-
-### `GlobalEmbeddingConfig`（`domain/embedding_config.py`，表 `embedding_config`）
-
-全安装级 embedding 设置——一条单例行。它**命名一条连接**，而不是再复述一遍 provider
-（FR-077）：协议、base URL 与凭据都在 `provider` 资源上，使用时从它解析；这与内部引擎设置
-已经在用的「先选 provider、再选模型」是同一形状。
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `enabled` | `bool` | 全安装级 embedding 是否开启。 |
-| `connection` | `str \| None` | 一条已配置 LLM 连接（`provider` 资源）的**名字**。为空 ⇒ 配置不生效。 |
-| `model` | `str \| None` | 该连接上的 embedding 模型 id。连接做了策展时，必须匹配其某个 `embedding` 模型。 |
-| `dimensions` | `int` | 向量宽度；决定 `vec_chunks` 表。 |
-| `default_chunk_size` | `int` | scope 未覆盖时的默认 chunk 大小。 |
-| `default_chunk_overlap` | `int` | 默认 chunk 重叠。 |
-| `updated_at` | `datetime` | 最后一次写入。 |
-
-`provider`（旧的协议名枚举）、`base_url` 与 `credential_ref` 已从行里和 wire 上**消失**，
-更新请求也不再携带 `secret_value`：key 属于连接，embedding 设置不再铸造 `embedding/key`
-vault 条目。
-
-`is_active()` 是 `enabled and connection and model`。未命名连接的配置不生效，因此检索退化为
-keyword/grep，与未配置的安装完全一致。
-
-解析把连接的 `protocol` 映射到 embedding 客户端——`openai` → openai 兼容，`ollama` → ollama，
-`unknown` → 按 openai 兼容处理（未分类的网关几乎总是它）；`anthropic` 不提供任何 embedding
-API，会被拒绝。连接的 `base_url` 与 `credential_ref` 原样使用。
-
-以下情形在选择时以 **HTTP 422**（`CONFIG_INVALID`，与应用里其他配置拒绝同一个状态码）拒绝：命名了不存在的连接、协议不提供 embedding 的连接、
-做了策展但其中没有 modality 为 `embedding` 的条目的连接，或该连接策展里无一匹配的模型。
-完全不做策展的连接会被接受（空 = 不限制），并按用户填写的模型 id 取信。
-
-**迁移：** 一条 Alembic 修订改写这条单例行——已有配置按 `base_url` 匹配到对应连接，匹配不上
-再按 `credential_ref` 匹配；两者都匹配不上时，该行保留它的维度与 chunk 默认值，但留空
-connection 且 `enabled = 0`，而不是凭空造一条连接。一次性完成：旧列在同一条修订里删除，
-不留任何 load-time 垫片去读它们。
-
-### `MemoryFact` (`domain/memory/fact.py`)
-
-frozen dataclass；一个每条事实 markdown 文件（frontmatter + 正文）的内存视图。
-
-| 字段                | 类型                      | 说明                                                                       |
-| ------------------- | ------------------------- | -------------------------------------------------------------------------- |
-| `id`                | `str`                     | 文档 id（ULID）；也是 `<fact-slug>.md` 文件名的基础。                      |
-| `title`             | `str`                     | frontmatter `title`（短标题；旧 `name` key 仍兼容解析）。                |
-| `description`       | `str`                     | frontmatter `description`（一行摘要）。                                   |
-| `body`              | `str`                     | markdown 正文 = 事实文本。                                                 |
-| `actor`             | `Literal["agent","user"]` | frontmatter `metadata.actor` —— 谁写的。                                   |
-| `origin_session_id` | `str \| None`             | frontmatter `origin_session_id`。                                          |
-| `created_at`        | `datetime`                | UTC。                                                                      |
-| `updated_at`        | `datetime`                | UTC（编辑前 == created_at）。                                              |
-
-### `MemoryScope` (`domain/memory/scope.py`)
-
-```python
-class MemoryScope(StrEnum):
-    GLOBAL = "global"     # project_id = WORKSPACE_GLOBAL_PROJECT_ID
-    PROJECT = "project"   # project_id = <project ULID> resolved from cwd
-
-@dataclass(frozen=True)
-class ResolvedScope:
-    scope: MemoryScope
-    project_id: str       # ULID; sentinel for GLOBAL
-    store_dir: Path       # ~/.coffer/memory/global | projects/<ulid>
+```text
+~/.coffer/knowledge/
+├── shopee/                         # 一个 collection = 一个顶层文件夹 = 一个 Resource
+│   ├── README.md                   # 首段 = 这个 collection 的描述
+│   ├── account/                    # 人自己的归档方式；系统不赋予它任何含义
+│   │   └── session-ownership.md
+│   ├── gateway-routing.md
+│   └── .history/                   # tidy 覆盖掉的旧版本（隐藏）
+└── coffer/
+    ├── README.md
+    └── release-process.md
 ```
 
-### `MemoryHit`（`domain/knowledge/retrieval.py`，共享）
+- `~/.coffer/knowledge/` 是根目录；测试里由 `$COFFER_KNOWLEDGE_ROOT` 覆盖。
+  路径构造只存在于一个模块 `infrastructure/knowledge/paths.py`（FR-006）。
+- 一个 **collection** 既是一个顶层子目录，*也是*一个 `knowledge` Resource。
+  它由人有意创建；读取、写入或 agent 的工作目录都不会开通一个（FR-010）。
+  没有 `global`、没有 `project-<ULID>`、没有 git 根解析、也没有 scope 到项目根
+  的映射表（FR-011）。
+- collection 内部怎么嵌套是人自己的事。子目录是可选的、可任意深，对系统毫无
+  含义，系统既不要求也不创建（FR-004）。
+- **点开头的条目对目录和 grep 都不可见**（FR-005）。`.history/` 是 Coffer 自己
+  写的唯一一个（FR-052）。隐藏片段会被路径守卫**拒绝**而不只是跳过：把
+  `.history/` 里的旧版本交回去，等于用活文件已经替换掉的内容作答。
 
-frozen dataclass；recall 结果。
+### `README.md`
 
-| 字段     | 类型       | 说明                                                    |
-| -------- | ---------- | ------------------------------------------------------- |
-| `id`     | `str`      | 事实（document）id。                                    |
-| `text`   | `str`      | 事实正文 / 命中的 passage。                             |
-| `score`  | `float`    | 逐 store 的相关性分数（保留在线上契约里；见下文 RRF）。 |
-| `source` | `str`      | 来源事实文件的 `<scope>:<fact file path>`。             |
-| `time`   | `datetime` | 事实的 `updated_at`。                                   |
+collection 在自己目录下的 `README.md` 里描述自己；目录对一个 collection 的
+一句话描述就是该文件的首段，没有 README 时为空（FR-013）。它绝不存在数据库里，
+因此不会和在文件夹里翻看的人读到的东西漂移。
+`POST /api/v1/knowledge/collections` 在给了 `description` 时会写一份。
 
-跨 store 的 recall 用**倒数排名融合**（reciprocal rank fusion，k=60）合并逐 store 的命中列表：不同 store/模式的原始分数不可比（翻转后的 bm25 无上界、vector ≤ 1、grep 是平坦分数），所以 RRF 按逐 store 的名次排序 —— 每条命中保留原始分数，只有合并后的**顺序**来自融合。`grep` recall 是真实服务的：ripgrep 扫该 store 的事实文件（对 FTS5 无法分词的内容必不可少，如 CJK）。store 名会被校验（`global` | `project-<26 字符 ULID>`）：形状合法的名字会惰性 provision 对应 store；其余一律 404。
+## 文件
 
-### 端口
-
-检索与 KB 面**共享**。值对象（`StoreRef`、`Passage`、`GrepHit`、`GrepResult`、`MemoryHit`、`SearchResult`、`RetrievalMode`）在 `domain/knowledge/retrieval.py`；协议（`KnowledgeIndex`、`GrepPort`、`RetrievalPort`）在 `domain/knowledge/index.py`。具体门面是 `KnowledgeRetrieval`（`application/knowledge/retrieval.py`）：它组合 chunk 索引（`infrastructure/knowledge/sqlite_index.py` + `vec_index.py`）、ripgrep 包装器（`grep.py`）与 embedder 客户端（`embeddings.py`），并持有 keyword↔vector 的决策（包括带标注的 vector→keyword 回退）—— 两个面都不重复这段逻辑。读时惰性 reindex 的对账由 memory 侧的 `MemoryReconciler`（`application/memory/sync.py`）驱动单一 re-index 例程（`application/knowledge/reindex.py`）完成。
-
-agent 只通过 MCP 网关的六个工具读写记忆 —— `coffer__search`、`coffer__grep`、`coffer__read`、`coffer__list`、`coffer__write`、`coffer__delete`（FR-015）。`coffer__set_handoff` 与 `coffer__resume` 随交接 lane 一起退役。Coffer 从不改动 agent 的原生记忆文件（原生投影已移除 —— 见 Memory via MCP）。
-
-### Domain 错误（规范类在 `domain/errors.py`，经 `domain/knowledge/errors.py` 再导出）
-
-- `MemoryStoreNotFound` —— code `"MEMORY_STORE_NOT_FOUND"`（HTTP 404）；store 名形状非法时抛出（除 `global` / `project-<26 字符 ULID>` 之外的任何名字）。
-- `MemoryNotFound` —— code `"MEMORY_NOT_FOUND"`。
-- `MemoryRejected` —— code `"MEMORY_REJECTED"`；reason：`"empty"`、`"too_long"`。
-- `ScopeUnresolved` —— code `"SCOPE_UNRESOLVED"`；当 `scope=project` 但 cwd 不在 git 项目里时抛出。
-- `EmbeddingUnavailable` —— 对调用方不是错误：`vector` recall 降级为 `keyword` 并在结果里设置 `fallback`（绝不抛给用户）。
-
-## 统一 SQLite schema（Alembic —— 一个重设计 revision）
-
-重设计 revision **删除** `memory_records` 与所有 chroma/LlamaIndex 目录，然后创建与 KB 共享的、以 `documents` 为核心的统一 schema。没有数据迁移。
-
-下面的 schema 与 KB 重设计迁移创建的是**同一份统一 schema**（迁移归 spec knowledge 所有；这里是它的 memory 视角）。重设计 revision **删除** `memory_records` 并创建这些表。
-
-```sql
--- Shared across KB (kind='knowledge_base') and memory (kind='memory').
-CREATE TABLE documents (
-    id             TEXT NOT NULL,               -- ULID (KB + memory), minted at first write
-    kind           TEXT NOT NULL,               -- 'knowledge'（2026-09-10 起只有一个 kind）
-    resource_name  TEXT NOT NULL,               -- scope 名：'global' | 'project-<ULID>' | 用户命名的集合
-    project_id     TEXT NOT NULL,               -- WORKSPACE_GLOBAL sentinel | project ULID
-    path           TEXT NOT NULL,               -- canonical .md path on disk = truth
-    title          TEXT NOT NULL,               -- memory: frontmatter `title`
-    description    TEXT,                         -- memory: frontmatter `description`
-    metadata       TEXT NOT NULL DEFAULT '{}',   -- JSON; memory: {actor, origin_session_id}
-    content_sha256 TEXT NOT NULL,               -- for lazy-reindex delta detection
-    source_mode    TEXT NOT NULL DEFAULT 'native', -- memory: 'native'
-    lane           TEXT NOT NULL DEFAULT 'docs', -- 'notes'（谁写下的）| 'docs'（上传的文档）；迁移 0053 加入；取值由 0056 改名为 notes/docs（FR-073/FR-076）
-    created_at     TIMESTAMP NOT NULL,
-    updated_at     TIMESTAMP NOT NULL,
-    PRIMARY KEY (kind, resource_name, id)        -- composite (memory ULIDs are globally unique too)
-);
-CREATE INDEX idx_documents_kind_res_time ON documents(kind, resource_name, updated_at DESC);
-CREATE INDEX idx_documents_project ON documents(project_id);
-
-CREATE TABLE chunks (
-    id           TEXT PRIMARY KEY,              -- '<store-scope>:<doc-id>:<position>'
-    -- store-scope = 12-hex digest of (kind, resource_name); keeps ids unique across stores
-    document_id  TEXT NOT NULL,                 -- app-level cascade (not a FK; KB+memory share the table)
-    kind         TEXT NOT NULL,
-    resource_name TEXT NOT NULL,
-    position     INTEGER NOT NULL               -- memory: per-passage chunks (1 for a short note; N for a multi-section topic doc)
-);
-CREATE INDEX idx_chunks_document ON chunks(document_id);
-
--- FTS5 keyword index; the chunk text lives once inside the FTS index (not
--- duplicated into a base table), with chunk_id mapping a hit back to its row.
-CREATE VIRTUAL TABLE documents_fts USING fts5(
-    text, resource_name UNINDEXED, chunk_id UNINDEXED, tokenize='trigram'  -- CJK-capable (migration 0033)
-);
-
--- sqlite-vec virtual table (only when a vector mode is enabled); created lazily
--- per store at the configured width.
-CREATE VIRTUAL TABLE vec_chunks USING vec0(
-    chunk_id TEXT PRIMARY KEY,                  -- bare '<doc-id>:<position>' (the table itself is per-store)
-    embedding FLOAT[<dim>]
-);
-```
-
-document 删除时的级联是**应用层的**（索引的 `delete_chunks` + 仓储的 `delete_document`/`delete_resource`），不是 SQL 外键，因为 `documents` 表由两个面共享。
-
-memory 面的 `documents.metadata` 经 Pydantic 校验为 `{actor, origin_session_id}`。按工程惯例，metadata JSON 用 `model_dump(mode="json")` 构造，使 `datetime`/`AnyUrl` 值能序列化进 SQLite。
-
-### 两 lane 迁移（FR-076）
-
-一条 Alembic revision（`0056`）就地改写判别值的两个取值 —— 这是取值改名，不是 schema
-变更，所以写成两条 `UPDATE` 而不是重建表，列的 server default 随之一起改：
-
-| `documents.lane` 之前 | 之后    |
-| --------------------- | ------- |
-| `knowledge`           | `notes` |
-| `inbox`               | `docs`  |
-
-被退役的那几条 lane（`rules/`、`handoff/`、`superseded/`、整合日志与
-`knowledge/INDEX.md`）没有行要清 —— 它们本来就从不进 recall 索引。它们的文件由迁移
-的落盘那一半处理：daemon 启动时跑的一次性、幂等、尽力而为的 sweep（形状照抄同侧的
-worktree 作用域合并），把两条内容 lane 搬过去，其余删掉。
-
-两半刻意彼此独立。revision 跑完的那一刻，行里的 `path` 仍指向**旧**目录，这无害：
-落盘 sweep 之后的 lazy reindex-on-read 会按磁盘上真实存在的文件重新推导每条路径。
-若把这条 revision 锚在存储的 path 上，反而会让它依赖「daemon 是否先跑到落盘那一趟」。
-
-**不留任何 load-time 兼容垫片。** 旧的 lane 字符串在库里被改干净，读它们的每一处
-分支在同一次改动里删除：运行时没有任何东西再把 `knowledge`→`notes`、
-`inbox`→`docs` 做读时映射；没跑过这条迁移的库，就是代码已经不认识的库。
-
-### Store 展示侧表
-
-两张以 `store_name` 为主键的小侧表保存 memory store 的**展示元数据**（不属于规范的 `documents` 基底；二者互为镜像）：
-
-```sql
-CREATE TABLE memory_store_project_roots (
-    store_name   TEXT PRIMARY KEY,   -- 例如 'project-<ULID>'
-    project_root TEXT NOT NULL       -- provision 时记录的来源 git-root（FR-017a）
-);
-CREATE TABLE memory_store_labels (
-    store_name TEXT PRIMARY KEY,     -- 例如 'project-<ULID>' 或 'global'
-    label      TEXT NOT NULL         -- 用户设置的显示名（FR-017c）
-);
-```
-
-渲染 store 的可读身份时，`label` 优先于由 `project_root` 推导的 basename；清除 label 即删除其行，退回 FR-017a 的推导 / 回退名。两张表都不改变 store 名（`project-<ULID>`）或 `project_id`。
-
-**一个仓库一个 store，跨 git worktree。** 项目 ULID = `sha256(git-root 路径)`。linked worktree 有自己的 `.git` *文件*，故 `git_root`（`infrastructure/memory/scope_fs.py`）会沿该指针的 `gitdir`/`commondir` 回溯到**主**仓库 toplevel —— 一个仓库的所有 worktree（含主 checkout）解析为同一个 ULID，即同一个 store。此前"每个 worktree 各自哈希"造成的碎裂 store，在 daemon 启动时由一次性、幂等、只增不删的合并（`application/memory/consolidate.py`）修复：重解析每个 `project_root`，凡 store 名不再等于其根规范 `project-<ULID>` 者，其 lane 文件并入规范 store（同名冲突保留为 `--from-<ulid>` 兄弟文件）后退休（resource + `documents` + label + root 行）。
-
-## 落盘规范布局（真相源）
-
-```
-~/.coffer/
-└── memory/
-    ├── global/                          # project_id = WORKSPACE_GLOBAL_PROJECT_ID (00000000000000000000000000)
-    │   ├── notes/                       # agent 或用户写下的内容（coffer__write 落这里）
-    │   │   ├── <note>.md                # 每条 note 一个文件 = 真相（frontmatter + 正文）
-    │   │   └── .history/<slug>-<ts>.md  # 整理覆盖前的旧版本（隐藏）
-    │   ├── docs/<document>.md           # 上传的文档，统一转成 markdown
-    │   └── .raw/<document>.<ext>        # 上传的原件（隐藏）
-    └── projects/<project-ulid>/         # 每项目一个目录
-        ├── notes/
-        │   ├── <note>.md
-        │   └── .history/<slug>-<ts>.md
-        ├── docs/<document>.md
-        └── .raw/<document>.<ext>
-```
-
-**两条 lane**（FR-002a/FR-048）：`notes/` 是一切由人或 agent 写下的东西 —— agent 的
-`coffer__write`、一条 `coffer knowledge remember`、用户用自己编辑器扔进来的文件；
-`docs/` 是一切上传进来、统一转成 markdown 的文档。一条 note 就是一条 note，不管它
-是刚写下的还是已经被整理过；从 inbox 到主题文档的梯度不再存在，两个都叫 inbox 的
-目录也随之消失。
-
-落盘迁移与 schema 迁移（FR-076）同批执行，按明确决定做**破坏性迁移**，不设
-`.retired/` 缓冲区：
-
-| 之前                                            | 之后                |
-| ----------------------------------------------- | ------------------- |
-| `knowledge/inbox/*.md` + `knowledge/*.md`       | 拍平进 `notes/`     |
-| `inbox/`                                        | `docs/`             |
-| `.raw/`                                         | 不变                |
-| `rules/`、`handoff/`、`superseded/`             | **删除**            |
-| `consolidation-log.md`、`knowledge/INDEX.md`    | **删除**            |
-
-**没有 `MEMORY.md`**，也没有 `INDEX.md` —— 两个派生投影都已移除。检索不按 lane 切分
-（FR-008a）：`search`、`grep` 与 `recall` 一次同时覆盖 `notes/**/*.md` 与
-`docs/**/*.md`，写下的 note 与上传的文档只凭相关性竞争。两条 lane 都是真相源，DO 同步。
-
-`.history/` 与 `.raw/` 刻意加点前缀：ripgrep 默认跳过隐藏项，所以 `coffer__grep`
-永远不会在正文旁边又返回一个归档旧版或一份上传原件，二者也都不进 recall 索引。
-`.history/` **DO 同步** —— 它是可恢复的真相源历史，是无人值守重写之下唯一的
-安全网；`.raw/` 则保存 `docs/` 文件转换前逐字节一致的原件。
-
-启动时的 reindex sweep（`run_memory_reindex_sweep`）会把此前"写入磁盘却因该 store
-未被检索而未索引"的 lane 内容补索引。
-
-**定期整理**（`application/memory/reorg.py`，内部 LLM —— FR-033/034）是一个有界的
-**agentic** 循环：一个 langgraph `create_react_agent`（按 Contract 9a 关在
-`infrastructure/llm` 内，经注入的 memory 本地端口触达）驱动四个内部工具作用于
-`notes/` —— `list_topics`、`read_topic`、`write_topic`、`supersede_topic`。它合并
-重复与重叠的 note、把它们重写成主题文档，并拆分过长的那些。防丢数据的保证是一条
-不变式：**没有任何一个字节离开 `notes/` 之前不被归档** —— `write_topic` 覆盖已有
-note 前先把旧版本复制到 `.history/<slug>-<ts>.md`，`supersede_topic` 则把该
-note 移进去。循环结束后这一趟对账索引，并在 Coffer 的审计日志里记一行；per-scope
-的 `consolidation-log.md` 不再有替代物。这四个工具是由 memory 本地可调用对象构造的
-**内部 LangChain `StructuredTool`** —— 从不注册到 MCP 网关，也从不面向 agent。note
-`.md` 的 frontmatter 是 `{title, description, updated_at}` + 正文。
-
-这一趟由 **`NotesTidyWorker`**（FR-035）驱动，形状完全照抄现有 `RetentionWorker`：
-由 app lifespan 启动，开机跑一趟补齐，之后按间隔执行，异常记日志而不打死循环。未
-配置内部模型时空转（`no_model`）；没有 note 时空转（`empty`）。同一趟整理也可以手动
-触发：详情页的**「整理」**按钮，以及 `coffer knowledge organize`。
-
-`organizer.py` 与 `organizer_prompt.py` 删除：它们的职责是把 `knowledge/inbox/`
-排空成主题文档，只剩一条扁平 lane 之后这个梯度不再存在。随之删除的还有 `merge.py`、
-`merge_prompt.py`、`merge_routes.py`、`rules_split.py`、`rules_files.py`、
-`handoff.py`、`handoff_files.py`、`lane_reads.py`、`lane_deletes.py`、
-`lane_routes.py`，以及 `knowledge_lane_cmd.py`（保留的 `organize` 命令除外）。
-`consolidate.py` **不属于**整理流程，原样不动 —— 名字容易误会，它是上文那套针对重复
-per-project 作用域的一次性启动愈合。
-
-每条 note `.md` 的 frontmatter：
+每个文件都是带 `---` 围栏 YAML frontmatter 块的 Markdown，只由
+`infrastructure/knowledge/frontmatter.py` 读写（PyYAML 唯一落脚处）。
 
 ```markdown
 ---
-kind: knowledge
-title: deploy-via-make-release
-description: This repo deploys via `make release`, never git push --tags directly.
-metadata:
-  actor: agent
-origin_session_id: 01J...
-created_at: 2026-06-09T10:11:12+00:00
-updated_at: 2026-06-09T10:11:12+00:00
+title: Session ownership
+description: Which service owns a login session, and what reads it.
+actor: agent
+created_at: '2026-09-12T04:18:33Z'
+updated_at: '2026-09-12T04:18:33Z'
 ---
 
-This repo deploys via `make release`. Never run `git push --tags` directly; the
-release target tags and pushes atomically.
+Login state is owned by `account.session`.
 ```
 
-`created_at` / `updated_at` 持久化在 frontmatter 里（文件是真相源）；只有解析省略了它们的手写事实文件时，才回退用文件 mtime。
+| Key | 类型 | 说明 |
+| --- | --- | --- |
+| `title` | `str` | 人类可读。创建时也是文件名的来源。 |
+| `description` | `str` | **必填**（FR-003）。没有带排序的索引之后，目录就是检索界面，一个不描述自己的文件等于找不到。 |
+| `actor` | `agent` \| `user` | 谁最后写的。来自写入时的 `X-Coffer-Actor` 头，或工具自己的 actor。 |
+| `created_at` | ISO-8601 `str` | 替换时保留，所以文件即使只靠自己也留得住自己的历史。 |
+| `updated_at` | ISO-8601 `str` | 每次写入都更新。 |
 
-`infrastructure/memory/paths.py` 是唯一构造这些路径的模块。`infrastructure/memory/files.py` 是唯一读写每条记忆 `.md`、扫描两条 lane 找增量的模块。
+**且仅此而已**（FR-003）。没有 `id`——路径就是身份（FR-002）——也没有 `lane`、
+`source_path`、`source_sha256`、`source_format`、`source_mode`、`converter`、
+`embed_status` 或 `content_sha256`：它们描述的机制都已不存在。
 
-## 级联与完整性规则
+frontmatter 解析是退化而不是抛错：没有围栏、或围栏里 YAML 不合法的文件，得到
+空 frontmatter 加正文，这样一个手改出多余冒号的文件不会弄崩整趟目录遍历。
 
-| 动作                                             | 效果                                                                                                                                                          |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `coffer__write` / 用户新增                  | 写 `notes/<note-slug>.md` → 以 `lane='notes'` 索引进 `documents`/`chunks`/FTS5/（vec）→ 审计。                                                                   |
-| 上传文档                                    | 原件留在 `.raw/` → 写归一化后的 `docs/<document>.md` → 以 `lane='docs'` 索引 → 审计。                                                                            |
-| 用户编辑（REST/CLI/外部编辑器）             | 重写 `.md` → 单一 re-index 例程（sha256 变化 → re-chunk/-embed）→ 审计。（直接的外部编辑器编辑在下一次 lazy reindex-on-read 时生效。）MCP 经 `coffer__write(id=…)` 就地改写。 |
-| 删除单条（MCP/REST/CLI）                    | 删除 `.md` → 移除 `documents`/`chunks`/FTS5/vec 行 → 审计。`coffer__delete` 对 note 与文档都适用；删除 `docs/` 条目时连同它的 `.raw/` 原件一起删。                |
-| 清空一个 scope                              | 删除 `notes/` 与 `docs/` 下每一条（含 `.history/` 与 `.raw/`）→ 移除全部索引行 → 审计。store Resource 保留。                                                      |
-| 整理 Tidy（间隔 worker、「整理」按钮或 `coffer knowledge organize`；内部 agentic LLM） | 有界的 langgraph `create_react_agent` 循环，配 list/read/write/supersede 工具作用于 `notes/`：合并重复、把 note 重写成主题文档、拆分过长的。**每次覆盖/合并先把旧版本复制到 `.history/<slug>-<ts>.md`**（绝不硬删除）。随后对账索引并审计 `knowledge_tidied`。未配置内部模型 → no-op（`no_model`）；没有 note → no-op（`empty`）。 |
-| 删除 store Resource                         | 移除该 store 的 `documents` 行、`rmtree(store_dir)`、审计。                                                                                                     |
-| 检索 / recall                               | **读时惰性 reindex**：扫两条 lane 找增量（按 `content_sha256`）→ `reconcile` → 搜索。                                                                            |
-| 修改 embedding 模型                              | 允许 → 下次索引时对 store 重新 embedding（文件是真相）。                                                                                                      |
-| 修改 `max_fact_chars`                            | 允许。                                                                                                                                                        |
+### 命名
 
-## 单一 re-index 例程（`application/knowledge/reindex.py`，与 KB 共享）
+文件名是标题的可读 slug，而不是不透明的 id，因为没有「id → 标题」的索引之后，
+文件名正是人在 Finder 里读到、agent 在 grep 结果里读到的东西（FR-002）。规则
+归 `infrastructure/knowledge/naming.py`：
 
-```
-compute content_sha256 of the new markdown
- ├ unchanged → skip (no-op)
- └ changed   → delete old chunks/FTS5/vec rows → re-chunk → (vector) re-embed
-              → insert new → update documents row → audit *_UPDATED
-```
+- NFKC 归一化、转小写、把空白 / `_` / `/` / `\` 折成 `-`、丢掉 `A-Za-z0-9-` 与
+  CJK 之外的一切、把连续 `-` 折成一个、截到 80 字符。**保留 CJK，绝不转写**——
+  罗马化出来的名字双方都认不出。结果为空时用 `untitled`。
+- 只有在 `<slug>.md` 已被占用时，`unique_name` 才追加 `-2`、`-3`、…。
 
-memory 的所有写路径（写入、update、用户编辑、整理、惰性 reindex 扫描）都汇入这一个例程。
+### 穿越防护
 
-memory 对账器向该例程提供自己的**分块器**（见 FR-032）：共享的 `infrastructure/knowledge/chunking.chunk_markdown`，绑定固定的 memory 分块 size/overlap 常量（不是 per-store 配置），从而把一份整理过的主题文档切成**段落粒度的分块**（标题与块结构感知），使检索返回其最相关的段落。短的单段落 note 仍只切成一块。隐藏的 `.history/` 与 `.raw/` 会被扫描跳过，因此归档旧版永远不会与正文竞争。
+每个会成为路径片段的名字都过 `paths.check_segment`（FR-006）：非空、不是全点、
+不以点开头、且匹配 `[A-Za-z0-9._\- ]` 或 CJK。违反即 `UnsafeKnowledgePath`
+（`KNOWLEDGE_PATH_UNSAFE`，HTTP 400）。写入是原子的——同目录临时文件再 `replace`。
 
-当启用 vector 的 store 在 embed 时降级（embedding provider 不可用），该例程只做 keyword 索引并持久化一个**空字符串 `content_sha256`** —— 一个刻意永不匹配的哨兵值，使下一次惰性对账重试 embed，而不是把这条事实当作已是最新。
+## 值对象（`backend/coffer/domain/knowledge/entry.py`）
 
-## 新增审计事件
+它们是**一个答案的形状，绝不是一行记录的形状**：目录的某一层是在调用时遍历目录、
+读取 frontmatter 生成的（FR-020），所以它们一个都不落盘，也一个都不会陈旧。
 
-| 值                 | 何时发出                              |
-| ------------------ | ------------------------------------- |
-| `"memory_deleted"` | 一次删除（MCP/REST/CLI）成功后        |
-| `"memory_cleared"` | 清空一个 scope 后                     |
-| `"knowledge_tidied"` | 确实改写了内容的那趟整理之后          |
+| 类型 | 字段 | 是什么 |
+| --- | --- | --- |
+| `CollectionEntry` | `name`、`description`、`file_count` | 目录顶层的一个 collection。`description` 取 README 首段；`file_count` 递归计数，排除隐藏条目。 |
+| `DirectoryEntry` | `path`、`name`、`file_count` | 被列出那一层里的一个子目录。`path` 相对于根目录——把它传回去就能下钻。 |
+| `FileEntry` | `path`、`title`、`description`、`actor`、`updated_at` | 目录里呈现的一个文件：足以在不读正文的情况下判断相关性。 |
+| `CatalogueLevel` | `path`、`directories`、`files` | **一层**，绝不是整棵树（FR-021）。 |
+| `KnowledgeFile` | 五个 frontmatter 字段 + `path`、`body`、`file_path`、`folder_path` | 一个完整文件。两个绝对路径正是 UI 提供「在外部编辑器打开」与「在文件管理器中显示」所需（FR-062）。 |
+| `GrepMatch` | `path`、`line_number`、`line` | 一条 ripgrep 命中。 |
+| `GrepOutcome` | `matches`、`truncated` | 一次有界运行；`truncated` 表示 `max_matches` 是否截断了它（FR-022）。 |
 
-删除这一对之所以要审计，是因为删除之后什么也不剩。写入、编辑与重建索引则不审计：
-它们可恢复，而且结果都落在磁盘上 —— 文件本身就是记录，重跑一遍也不会改变读者需要
-靠日志才能还原的任何东西。
+常量：`ACTOR_AGENT = "agent"`、`ACTOR_USER = "user"`。
 
-整理进审计日志的理由不同。它**无人值守、按定时触发、由 LLM 重写用户和 agent 写下的
-文字**，因此审计日志是读者唯一能看到「哪一趟跑过、什么时候、作用在哪个作用域、动了
-什么」的地方 —— 过去承载这段叙事的 per-scope `consolidation-log.md` 已被删除，页面
-也不再为它单开 tab。什么都没写、也没归档的那一趟，把 notes 原样留在原地，因此什么
-也不记 —— 日志记的是「某个东西做了改动」，不是「定时器响了」。找回的路径是 `.history/`；而告诉你该去那里找的，是审计里
-的那一行。
+`surfaces/http/knowledge/schemas.py` 里的 HTTP wire 模型与它们一一对应。这种
+镜像是刻意的而非冗余：domain 类型描述磁盘上有什么，wire 模型描述客户端被承诺
+什么，于是从 wire 上拿掉一个字段绝不等于对这一层本身隐藏它。
 
-### 规则投递 —— 已删除（原 slice 6，FR-049/FR-050/FR-052/FR-055）
+## `knowledge` Resource
 
-slice 6 曾把 rules lane 交付进一个运行中的 agent：Coffer 把一个 `coffer-hook`
-SessionStart hook 装进 agent 自己的 hooks 配置，hook 调
-`GET /api/v1/agents/{name}/session-context?cwd=<cwd>`，daemon 组装一个 bundle
-（项目规则、全局规则、两条内置种子规则、一份仅标题的项目知识索引），由 hook 作为
-`additionalContext` 输出。一个 per-agent 的 `disable_native_memory` 开关随行。
+`make_knowledge_kind()` 声明 `supports_scope=True`——per-agent 授权正是一个
+collection 之所以是 Resource 的全部理由（FR-012）。agent 看见、grep、读、写的
+恰好是为它激活的那些 collection，不存在把已授权 collection 排除在默认之外的规则。
 
-**全部已删除。** 随该切片一并删除的有：`coffer-hook` 二进制及其 PyInstaller spec、
-`application/agent/hook_service.py`、`domain/agent/hook_install.py`、
-`domain/agent/context_injection.py`、`infrastructure/agent/hook_resolver.py`、
-原生记忆相关模块、`application/knowledge/rules_bundle.py`（bundle 组装器）、摘要
-渲染器、`GET /api/v1/agents/{name}/session-context` 路由、hook-install 三件套，
-以及 `contracts/session-context.openapi.yaml`。该切片定义的四个审计事件类型 ——
-`agent_hook_installed`、`agent_hook_uninstalled`、`agent_native_memory_disabled`、
-`agent_native_memory_restored` —— 已从 `AuditEventType` 移除。
+`KnowledgeConfig`（`domain/knowledge/config.py`）是**空的，且拒绝未知键**。一个
+collection 完全没有设置：没有检索模式、没有 chunk 大小、没有条目长度上限、没有
+embedding 字段、没有自动更新开关、没有显示标签（FR-081）。过去逐 scope 配置的
+每一样，配置的都是已不存在的机制。
 
-**读的一侧也没有了。** 规则 lane 本身随两 lane 重设计一起删除：`rules/` 不再存在于
-磁盘（FR-076 删掉它），`rules_split.py` 与 `rules_files.py` 删除，
-`GET /api/v1/knowledge/{scope}/rules` 与 `coffer knowledge rules <scope>` 随之消失。
-`application/knowledge/session_context.py` 只剩写后的 `notify_change` 钩子。规则如今
-就是一条 note：像别的内容一样写进 `notes/`，由检索找到。
+执行点只在 MCP 工具面。同时握有 shell 或文件读取工具的 agent 可以直接读
+`~/.coffer/knowledge/` 下的任何文件：scope 防的是误召回，不是有意访问，系统
+如实这么讲，而不是暗示一种它并不提供的隔离（FR-014）。
 
-## Lane 读端点（FR-053/FR-054）
+## 错误（`domain/knowledge/errors.py`）
 
-详情页把一个作用域呈现为**两个 tab：文档与 Notes**（FR-053），树上方一个按文件名
-过滤的输入框 —— 不发检索请求，也没有第三个 tab。服务端检索留在它该在的地方：agent
-走 `coffer__search`，命令行走 `coffer knowledge recall`。
+失败模式就是一个目录的失败模式。
 
-两个 tab 都走留下来的 lane 读端点（FR-054），**按作用域名寻址**（而非 cwd）：它们是
-对**磁盘 lane 文件的薄读投影**，不调 LLM（经解析出的作用域取 `store_dir`，经 lane
-路径助手 + infra 读取器在请求线程外读取）。空作用域返回**空列表加 HTTP 200** ——
-绝非 404。
+| 类 | code | HTTP |
+| --- | --- | --- |
+| `CollectionNotFound` | `KNOWLEDGE_COLLECTION_NOT_FOUND` | 404 |
+| `CollectionExists` | `KNOWLEDGE_COLLECTION_EXISTS` | 409 |
+| `KnowledgeFileNotFound` | `KNOWLEDGE_FILE_NOT_FOUND` | 404 |
+| `UnsafeKnowledgePath` | `KNOWLEDGE_PATH_UNSAFE` | 400 |
+| `KnowledgeError`（基类） | `KNOWLEDGE_ERROR` | 400 |
 
-| Method + path                            | 返回              | lane 来源                                    |
-| ---------------------------------------- | ----------------- | -------------------------------------------- |
-| `GET /api/v1/knowledge/{name}/entries`   | `EntryListOut`    | `notes/*.md` —— Notes tab（`lane='notes'`）。 |
-| `GET /api/v1/knowledge/{name}/documents` | `DocumentListOut` | `docs/*.md` —— 文档 tab（`lane='docs'`）。    |
+## 审计与调用记录
 
-handoff 与 consolidation-log 端点随它们的 lane 一并**删除**，`HandoffOut`、
-`HandoffSceneOut`、`ConsolidationLogOut` 同理；`lane_reads.py`、`lane_deletes.py`、
-`lane_routes.py` 一起删除。留下的两个读端点都不暴露 `.history/` 或 `.raw/` ——
-隐藏目录是整理的归档与上传的原件，不是页面内容。
+不变，仍然落库，因为它们不是知识——它们是 Coffer 自己的簿记。一次内置工具调用
+记一行 `mcp_invocations`（工具、谁、耗时、结果——绝不含参数、绝不含内容）；写入
+或删除额外记一条以 agent 为 actor 的 `audit_log` 事件（FR-041）。
 
-两个读 DTO 都携带文件的磁盘真相（绝对 `.md` `path` + 所在 `folder_path`），使每个 tab
-都能提供 FR-021 的在外部编辑器打开 / 显示 / 复制路径能力。它们的 schema 落在后端
-拥有的 OpenAPI 契约里；spec/data-model 侧只记录上面的形状。
+## 那一个安装级的 tidy 设置
 
-## 线上契约（REST）
+这一层唯一的设置并不属于这一层：`auto_tidy_enabled` 是 `internal_engine_config`
+上的一个布尔列，**默认 false**（FR-051）。它只管后台 worker 是否按间隔跑 tidy；
+手动触发从不查它。
 
-位于 `contracts/api.openapi.yaml`。路由在 `/api/v1/memory_stores` 下（list/get/metrics；note 的 add/list/get/edit/delete/clear；文档的上传/列出/读取/删除；search/grep/recall；作为手动整理入口的 `organize`）。handoff、rules、consolidation-log 与 merge 路由随各自的功能一并删除。写入端点（add/edit/delete/clear）保留 —— 它们是 agent（经 MCP）与 CLI 写 note 的途径；Web UI 只在上传文档或跑一趟整理时写入，从不在应用内编辑 note 正文。读 DTO 携带磁盘真相：`FactOut` 带 note 的绝对 `.md` `path` 及其所在文件夹的 `folder_path`，`MemoryStoreOut` 带 store 的绝对 `store_dir`，使视图能提供「在外部编辑器打开 / 显示」。kind 无关的 `/api/v1/resources/...` 对 memory store 继续可用。全应用统一错误包络：`{ "error": { "code", "message", "details" } }`。
+## migration 0066 做了什么
 
-不再有第二份 agent 作用域契约：`contracts/session-context.openapi.yaml` 已随它描述的 `GET …/session-context` 路由一起删除（见上文「规则投递 —— 已删除」）。
+`20260912_0066_knowledge_is_plain_files.py`（FR-070、FR-071）。**顺序就是全部
+要点**：文档的标题只活在 `documents.title` 里，所以磁盘重写**先**跑，读取它即将
+销毁的那些行。
+
+重写把 `<scope>/{notes,docs}/<ULID>.md` 变成 `<collection>/<标题的-slug>.md`，
+恰好带上上面那五个 frontmatter 键；`global` 落进 `shopee`，每个 `project-<ULID>`
+scope 落进 `coffer`；`.raw/`——它那 50 个文件与 lane 里的对应文件逐字节相同——
+被删除；被清空的 scope 目录被移除；每个 collection 拿到一份 `README.md`；
+`knowledge` 的 Resource 行从 scope 重新指向 collection。
+
+然后删掉十一张表，每个 drop 都加了守卫，使缺少其中任何一张的数据库仍能升级：
+`documents`、`chunks`、六张 `documents_fts*`（虚拟表的 drop 会带走它的影子表；
+后面显式的影子 drop 是为影子已被孤立的那种情况准备的）、`embedding_config`、
+`knowledge_scope_labels` 与 `knowledge_scope_project_roots`。
+
+`downgrade` 直接抛错。这条 migration 按设计就是单向的——ULID 文件名与 `.raw/`
+副本无法重建——而且**任何地方都不留兼容垫片**。重写是幂等的：再跑一次找不到
+lane 目录，什么也不做。

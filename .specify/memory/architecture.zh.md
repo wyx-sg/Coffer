@@ -46,42 +46,45 @@ coffer 中每一个由用户管理的实体都是一个**资源 (Resource)**，�
 | `mcp_server`     | [mcp-gateway](../../specs/mcp-gateway/spec.md)       | 一个已注册的上游 (upstream) MCP 服务器。承载传输配置、凭据引用以及网关 (gateway) 所需的逐服务器策略。                                                                                                                                                                                                                                    |
 | `agent`          | [agent-registry](../../specs/agent-registry/spec.md) | 一个已注册的编码 agent（如 Claude Code）。承载其配置目录以及 Coffer-MCP 的安装状态。workspace 修订还将 agent 自身的文件呈现为多个**只读**面 (facet)——MCP entries（只列出，唯一的写是 adopt 进 Coffer）、plugins（只列出）、目录型配置项（逐子文件编辑）——全部在读取时从文件派生，绝不落库。Coffer 不再为了移除、开关或卸载某个条目而写入别的工具的私有配置：plugin 的开关/卸载面与 MCP entry 的移除/开关面已删除，`agent_plugin_toggled`、`agent_plugin_uninstalled`、`agent_mcp_entry_removed` 三个审计事件也随之移除。                                                     |
 | `skill`          | [skill-manager](../../specs/skill-manager/spec.md)   | 一个主 skill 包，Coffer 可将其投递到一个或多个 agent 的 skill 目录。workspace 修订新增了未托管 skill 扫描（把手工放置的 skill adopt 进主库）。投递由 skill 自身的 `enabled` 与其 agent scope 取交集决定，任一侧变化即调谐——本行曾描述的那套 agent 侧 follow-master-library 策略已删除。                                                                                        |
-| `knowledge`      | [knowledge](../../specs/knowledge/spec.md)                 | 知识层——把 agent 所知道的一切收进一个 kind。scope 直接从资源名读出：`global` 与 `project-<ULID>`（由 cwd 的 git 根解析而来）在首次使用时自动开通，其他名字则是用户刻意创建的集合，绝不自动开通。单一存储根 `~/.coffer/knowledge/<scope>/`，下分两条 lane —— `notes/`（agent 或用户写下的内容，`coffer__write` 落这里）与 `docs/`（上传的文档，已归一为 markdown）—— 另有一个隐藏的 `.history/` 存放整理覆盖前的旧版本，以及一个隐藏的 `.raw/` 存放上传的原件。agent 经 MCP 既读也写；markdown 文件是事实，SQLite 是可重建索引。见 [Files as Truth](../../docs/decisions/files-as-truth-sqlite-retrieval.md) + [One Shared Knowledge Store](../../docs/decisions/agent-native-shared-memory.md)。 |
+| `knowledge`      | [knowledge](../../specs/knowledge/spec.md)                 | 一个 **collection**——`~/.coffer/knowledge/` 下的一个顶层文件夹，装着 markdown 文件，用户爱怎么嵌套怎么嵌套。collection 是系统唯一认得的边界，它之所以是 Resource，就是为了让框架的 per-agent scope 能授权它；没有任何东西从 cwd 推导，也没有任何东西自动开通。agent 经 MCP 读写它，人在自己的编辑器里读写它，双方触及的是同一批字节。见 [Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)。 |
 | `channel`        | [channels](../../specs/channels/spec.md)             | 一个消息 channel 绑定（Telegram、SeaTalk）。承载传输配置 + 凭据 ref 与一个默认 agent；已配对的 owner 从 IM 应用里与聊天平台的 agent 对话、应答审批提示并接收通知。薄 adapter 架在 turn 平台的接缝之上（spec channels FR-043…FR-055）（[Channel Adapter Framework](../../docs/decisions/channel-adapter-framework.md)）。                                                         |
 
-知识层就是**一个基底 (substrate)**：**落盘的 markdown 文件是事实源；SQLite 是
-可重建索引**（`coffer reindex` 据文件重建）。它一直都是同一个基底——`documents`、
-`chunks`、FTS5 与 sqlite-vec 从一开始就是共用的，分成两副的只是门面（一个
-`memory` kind 与一个 `knowledge_base` kind），直到 **2026-09-10** 两者合并成这一个
-kind。一个落库的 lane 判别字段 `documents.lane`（`notes` | `docs`）记录某条
-索引行归哪个写入方所有——note 数与文档数按 lane 分别统计——但检索刻意横跨两条
-lane，因为统一检索正是这次合并的意义所在。分类的那根轴就是人真正会区分的两件
-事：谁写下的，和谁上传的。除此之外没有别的 lane —— 早先 `knowledge/inbox/` 到主题
-文档的梯度，以及 `rules/`、`handoff/`、`superseded/`，已于 **2026-09-11** 退役；
-`coffer__set_handoff` 与 `coffer__resume` 随交接 lane 一起退役，因此这一层对外只有
-六个工具：`coffer__search`、`coffer__grep`、`coffer__read`、`coffer__list`、
-`coffer__write`、`coffer__delete`。
+知识层是**一个目录，不是一个索引**。`~/.coffer/knowledge/<collection>/` 下的
+markdown 文件就是任何东西的唯一副本：没有 `documents` 表、没有 chunk 表、没有
+FTS5 索引、也没有向量，因此没有任何东西需要对账，用户在自己编辑器里改过的文件
+下一次读取就是活的
+（[Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)，
+它取代了 Files as Truth 与 Retrieval Mode Is Internal）。
 
-`notes/` 的可读性由**定期整理**维持：一趟有界的 agentic 流程，合并重复的 note、把
-它们重写成主题文档，任何覆盖或合并之前先把旧版本复制进 `.history/`。它由一个
-形状照抄 `RetentionWorker` 的后台 worker 驱动——开机跑一趟补齐，之后按间隔执行——
-未配置 internal model 时空转，也可从 UI 或 `coffer knowledge organize` 手动触发。
-每趟整理写进 Coffer 自己的审计日志；不再有 per-scope 的变更记录文件。
+文件的**路径就是它的身份**——名字是可读的 slug，不是 ULID，因为没有索引之后，
+文件名正是 agent 在 grep 结果里读到的东西。frontmatter 只带 `title`、
+`description`、`actor` 和时间戳，别无其它；`description` 是必填的，因为目录就是
+检索界面，一个不描述自己的文件根本找不到。collection 在自己的 `README.md` 里
+描述自己，而不是在某一行数据库记录里，于是在文件夹里翻看的人看到的和目录看到
+的是同一句话。
 
-摄取把任意格式转成 markdown，藏在 infrastructure 的一个 `MarkdownConverter` 端口
-背后（默认 `markitdown[docx,pdf,pptx,xls,xlsx]`），原件留在 `.raw/` 里作出处，
-随后分块、跟踪外部来源（`check-sources` / `update-source`）并重建索引。检索模式
-——`grep`（直接扫原始文件）、`keyword`（FTS5 + `bm25()`）、`vector`（sqlite-vec）
-与 `hybrid`——是**内部引擎细节**，不是调用方要做的选择
-（[Retrieval Mode Is Internal](../../docs/decisions/retrieval-mode-is-internal.zh.md)）。
-逐 scope 的配置不带任何 embedding 字段：embedding 经安装级配置解析，一个 scope 只
-要在检索模式里列出 `vector` 就算选用了向量检索。基底与检索的决策见
-[Files as Truth](../../docs/decisions/files-as-truth-sqlite-retrieval.md) 与
-[One Shared Knowledge Store](../../docs/decisions/agent-native-shared-memory.md)；它们取代了
-LlamaIndex 与 mem0 两个引擎。agent 只经 MCP 访问该层——写进
-agent 配置文件的原生投影已由
-[Memory via MCP](../../docs/decisions/memory-via-mcp-not-native-projection.zh.md)
-退役。
+检索就是**目录加 ripgrep**。`list` 一次走一层——先是 collection，再是某个目录的
+子项，每个文件带上它的标题与描述——而目录是在调用时遍历目录树生成的，从不物化。
+`grep` 以字面或正则匹配调用方可读的每一个 collection；`read` 返回整个文件。没有
+模式、没有排序、没有分块、没有 `top_k`，也没有 `search` 工具：没有带排序的索引
+之后，它只会是 `grep` 的第二个名字。语义匹配从 embedding 转移到了「模型读目录」，
+只要目录塞得进上下文就成立——到几百篇文件都还从容。
+
+五个 MCP 工具：`coffer__list`、`coffer__grep`、`coffer__read`、`coffer__write`、
+`coffer__delete`。Coffer 还会通过既有的 skill 通道**投递一个知识 skill**
+（spec knowledge FR-042），因为这套设计背后的审计发现：只靠工具描述，agent 从不
+主动伸手够这一层——一个月里每一次知识调用都发生在语料被建起来的那一天。没有任何
+东西被注入会话，也不往任何 agent 自己的记忆里写
+（[Memory via MCP](../../docs/decisions/memory-via-mcp-not-native-projection.md)）。
+
+**tidy** 这一趟保留了下来：对单个 collection 的一次有界 agentic 改写，由
+internal-engine 连接驱动，动手之前先把每个旧版本归档进隐藏的 `.history/`。它随时
+可以手动触发（UI，以及 `coffer knowledge organize`）；按间隔跑它的后台 worker 由
+`internal_engine_config` 上一个安装级设置控制，**默认关闭**，因为一个会在无人值守
+下改写人与 agent 共享文件的东西，应该由操作者自己打开。
+
+没有摄取界面。人添加知识的方式就是把一个 markdown 文件放进目录——文件系统就是
+上传路径，下一次调用就能看见。
 
 ## 代码布局 (Code layout)
 
@@ -97,7 +100,7 @@ backend/coffer/
 │   ├── mcp/                      # MCP 特定的值对象
 │   ├── agent/                   # agent 特定的值对象 (config 等)
 │   ├── skill/                   # skill 特定的值对象
-│   ├── knowledge/               # scope、lane、entry、document、retrieval 值对象
+│   ├── knowledge/               # 目录与文件的值对象、错误
 │   └── channel/                 # channel 配置、信封、seatalk 签名
 ├── application/
 │   ├── resource_service.py       # 与 kind 无关的 CRUD；接受 kinds 字典
@@ -107,7 +110,7 @@ backend/coffer/
 │   ├── mcp/                      # MCP 特定的应用层服务
 │   ├── agent/                   # agent 服务 + make_agent_kind
 │   ├── skill/                   # skill 服务 + make_skill_kind
-│   ├── knowledge/               # knowledge 服务 + make_knowledge_kind
+│   ├── knowledge/               # 一个服务、五个工具、tidy、skill 种子
 │   ├── channel/                 # adapter 协议、配对、入站、运行时
 │   └── fs/                      # 文件系统浏览服务
 ├── infrastructure/
@@ -117,7 +120,7 @@ backend/coffer/
 │   ├── mcp/                      # 子进程、HTTP 上游客户端
 │   ├── agent/                   # agent 配置文件存储
 │   ├── skill/                   # 主存储、同步引擎
-│   ├── knowledge/               # 文件树、converter、分块、FTS5 + sqlite-vec 索引
+│   ├── knowledge/               # 路径、文件树、frontmatter、ripgrep
 │   └── channel/                 # telegram/seatalk 传输、peer 仓储、渲染
 └── surfaces/
     ├── http/                     # FastAPI app + 每个 kind 的子路由 (含 agent/skill/fs 路由)
@@ -181,12 +184,11 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
   的版本创建)，启动会以 `DB_SCHEMA_TOO_NEW` 明确报错并快速失败，而非抛出晦涩的
   Alembic 错误。
 - JSON 字段以 `TEXT` 存储，在 application 层边界由 Pydantic 校验。
-- **知识基底索引就在同一个 `coffer.db` 里：** SQLite **FTS5**
-  （常规 FTS5 表，chunk 文本在索引内部存一份，`bm25()` 关键词排序）+
-  **sqlite-vec**（对 chunk embedding 做向量 KNN）。没有独立的
-  chroma / LlamaIndex / mem0 store ——
-  `~/.coffer/knowledge/<scope>/` 下的 markdown 文件才是事实；DB（含 FTS 索引）可据其重建
-  （[Files as Truth](../../docs/decisions/files-as-truth-sqlite-retrieval.md)）。
+- **知识层完全不拥有任何表。** 一个 collection 就是与 kind 无关的 `resources`
+  表里的一行，和其它 Resource 一样，它的内容是文件。带索引的那一版用过的十一
+  张表——`documents`、`chunks`、六张 `documents_fts*`、`embedding_config` 以及两
+  张 scope 附表——已由 migration 0066 删除
+  （[Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)）。
 - 数据库文件、daemon 发现文件、日志、knowledge 文件树与每个上游的 PID 文件
   都收纳在 `~/.coffer/` 下，便于单点备份。
 
@@ -199,5 +201,5 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
 | 保留策略    | `application/retention_service.py` + `retention_policies` 表 + asyncio worker                | 每个日志类表注册为 `PrunableTable`；中央注册表强制执行 SQL allowlist。                                                                                                                                                                                                                                                                                                                                                              |
 | 错误        | `domain/errors.py` + FastAPI 全局处理器                                                      | 统一 `{error: {code, message, details}}` 信封；用 `X-Coffer-Trace` header 做关联。                                                                                                                                                                                                                                                                                                                                                  |
 | 日志        | `structlog` 以 JSON-per-line 写入 `~/.coffer/logs/`                                          | 通过 contextvar 实现按请求级别的 trace ID。                                                                                                                                                                                                                                                                                                                                                                                         |
-| Converter   | `MarkdownConverter` 端口 + 逐格式 adapter，落在 `infrastructure/`                            | 唯一 import converter 库的地方（文本/源码走 passthrough、csv 走专用转换器、其余走 MarkItDown；新引擎可按格式插拔）。any-format → markdown。                                                                                                                                                                                                                                                                                         |
+| 文档抽取    | `DocumentExtractor` 端口 + `infrastructure/chat/document_extract.py`                         | 唯一 import 转换库的地方（MarkItDown，惰性导入且为可选依赖）。它服务的是**入站 channel 附件**（spec channels FR-030）：PDF 或 docx 以抽取出的文本抵达 agent，而不是一个不透明的路径；库缺失或抽取失败时退化为文件附件。知识层不转换任何东西——文件系统就是它的摄入界面，markdown 是它持有的唯一格式（[Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)）。 |
 | 导出 / 导入 | `application/sync/` + `infrastructure/sync/` + CLI 与 HTTP 表面 | 一次性地把仓库**导出到一个目录**、并把这样一个目录**导入回来**（spec vault-export-import，[Vault Export and Import](../../docs/decisions/vault-export-import.md)）。此外还有一个**备份远端**：一个用户自己拥有的 git 仓库，由定时 worker 导出进去、在导出结果发生变化时提交、然后推送——仅单向备份，绝不合并，绝不充当事实记录方（章程 0.5.0 例外）。它带来一行 `sync_remotes` 配置、一个背后只有单一子进程适配器的 `GitMirror` 端口，以及一个形状照搬 `RetentionWorker` 的 worker；恢复是一条显式命令，可以先检出更早的修订再导入。仍然没有墓碑、没有机器注册表、没有文件监听——那些属于收敛，而收敛并未建造。导出会镜像知识与技能的文件树、把每个配置资源序列化成一个**确定性** YAML、导出各模块自有的共享状态，并在被明确要求时**仅以密文**携带凭据（主密钥带外引导）。导入按资源 bundle-wins、从不删除、逐资源报告失败，并运行每个 kind 的导入后钩子。基于 `$HOME` 的相对路径归一化让一个 bundle 可在机器之间搬运。属横切，不是 kind。资源的 `scope`——一个 agent 名字列表（[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)）——作为普通字段搭乘资源文档穿过导出与导入。 |

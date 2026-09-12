@@ -2,7 +2,7 @@
 
 > 中文版: [files-as-truth-sqlite-retrieval.zh.md](./files-as-truth-sqlite-retrieval.zh.md)
 
-**Status**: Accepted
+**Status**: Superseded by [Knowledge Is Plain Files](knowledge-is-plain-files.md) (2026-09-12) — the knowledge layer is a directory of files with no derived index, so the FTS5 / sqlite-vec / embedding stack this ADR decided is removed. Markdown files as the sole truth is the one half that survives, and the superseding ADR carries it. Kept as the record of the design in force until that date.
 **Date**: 2026-06-09 (revised 2026-09-11; see Revision history)
 **Deciders**: Yuxing Wu
 **Supersedes**: the LlamaIndex RAG engine decision and the mem0 memory engine decision — both ADRs since removed as dead docs

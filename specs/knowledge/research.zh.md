@@ -1,116 +1,125 @@
-# Research —— 007 Memory（跨 agent 共享记忆）
+# 研究 — 知识层
 
 > English: [research.md](./research.md)
 
-> **历史文档 —— 2026-09-10。** spec knowledge（Knowledge Base）与 spec knowledge（Memory）
-> 于当日合并为统一的 **Knowledge Layer（知识层）**。合并后的模型以
-> [`spec.md`](./spec.md) 为准 —— 一个 `knowledge` kind、三种 scope、单一存储根
-> `~/.coffer/knowledge/<scope>/`、六个 `coffer__*` 工具。本文档记录的是合并之前
-> 的设计；凡出现「memory 面」「`memory` kind」`~/.coffer/memory/`
-> `/api/v1/memory_stores` 或 `coffer memory …` 之处，请以 `spec.md` 中合并后的
-> 对应物为准。目录名 `specs/knowledge/` 同样是历史遗留：它是所有入链与验收审计
-> 所依赖的 spec id。
+这一层必须回答的那些问题，以及每个问题被定成了什么。原本的研究里大部分——
+mem0 与共享 store 之争、FTS5/sqlite-vec 检索栈、embedding provider 选型、由
+agent 的 cwd 解析 scope、把内容投影进 agent 自己的记忆文件——描述的都是已不
+存在的机制。存活下来的记在这里；2026-09-12 那次精简的推理（包括促成它的、对
+本机实际安装的审计）在
+[Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)。
 
-## 1. 为何放弃 mem0（与每 agent 的 silo 模型）
+## 1. 写入时不跑 LLM
 
-**问题**：memory 应继续用 mem0（写入时调 LLM 做事实抽取 + 向量库）吗？
+**问题**：写入时要不要像 mem0 那样用模型抽取事实？
 
-**决定**：**不。** 三个问题驱动了重设计：
+**决定**：**不。** 当消费方本身就是一个能判断什么值得记、并能自己写出干净笔记
+的模型时，写入时跑 LLM 就是摩擦。mem0 默认的 `llm_provider="none"` 让它的
+`add_memory` 直接返回 503——这个功能开箱即不可用。一次写入就是一次普通的文件写。
+mem0、chroma、LlamaIndex 都不在代码库里，并由一条 importlinter 契约封死，防止
+它们回来。
 
-1. **写入时调 LLM 是摩擦** —— 当消费者本身已是能自己决定记什么、并写出干净事实的 LLM 时。mem0 默认 `llm_provider="none"` 让 `add_memory` 返回 503 —— 这条 feature 开箱即不可用。
-2. **KB 与 memory 是近重复代码**，但它们是同一光谱上的两点（「agent 检索的 markdown」）。现在共用一套底座。
-3. **memory 是会漂移的每 agent 私有 silo** —— 同一条项目事实最终被复制并在 Claude 记忆目录、Codex memories 等之间漂移。
+依然成立。模型触及知识的唯一场合是 tidy：显式触发、有界、归档它替换掉的每个
+版本，且默认关闭。
 
-**替代**：memory = **跨 agent 的单一真相源**，在格式匹配处做到 agent 原生。mem0 / chroma / LlamaIndex 全部移除。
+## 2. 一个共享 store，而不是逐 agent 的孤岛
 
-## 2. 规范化格式 —— 每条事实 markdown + `MEMORY.md`
+**问题**：agent 的知识存在哪？
 
-**问题**：落盘的真相是什么？
+**决定**：存在**一个所有 agent 共享的 store** 里，而不是各自的记忆目录里。
+逐 agent 的私有孤岛会漂移：同一条项目事实会被抄进 Claude 的记忆目录、Codex 的
+memories 等等，然后各自跑偏。Coffer 只留一份，所有 agent 经 MCP 读写它。
 
-**决定**：每条事实一个 markdown 文件，带 YAML frontmatter（`name`、`description`、`metadata.type`、`metadata.actor`、`origin_session_id`）+ markdown 正文，加一个 `MEMORY.md` 索引（`- [name](file.md) — description`）。这就是 **Claude Code 的 auto-memory 格式**，采用它作为规范化格式，使 Claude 投影为原生目录 symlink。文件是真相源；SQLite 是可重建的索引。`MEMORY.md` 是 Coffer 重生的派生索引 —— 任何写入者都触发幂等重生，因此 Claude 自己对 `MEMORY.md` 的写入会被无害覆盖。
+依然成立，而且精简还强化了它：中间没有索引之后，人的编辑器和 agent 的 `write`
+触及的是同一批字节。
 
-**已被取代。** 所有派生索引都已消失：`MEMORY.md` 随 Files as Truth 移除，`INDEX.md` 随两 lane 重设计移除。真相仍是每文件一份、带 YAML frontmatter 的 markdown，只是如今落在两条 lane 之一 —— `notes/` 放谁写下的，`docs/` 放谁上传的。
+## 3. 带 YAML frontmatter 的单文件 Markdown 就是事实
 
-## 3. 两层作用域
+**问题**：磁盘格式是什么？
 
-**问题**：个人事实与 repo 事实如何分离？
+**决定**：一条笔记一个 Markdown 文件，带一个 `---` 围栏的 YAML frontmatter 块
+承载元数据。
 
-**决定**：两种作用域。
+这个格式熬过了每一次重设计；字段表没有。frontmatter 现在恰好只有 `title`、
+`description`、`actor`、`created_at`、`updated_at`——没有 `id`，因为路径就是
+身份，也没有任何描述索引、lane 或外部来源的字段。所有派生索引也随之消失：
+`MEMORY.md` 在 files-as-truth 重设计时移除，`INDEX.md` 在 2026-09-11 的两条 lane
+重设计时移除，数据库索引本身在 2026-09-12 移除。取代它们的目录是在调用时遍历
+目录生成的，因此不存在第二份需要保持同步的副本。
 
-- **Global** —— `project_id = WORKSPACE_GLOBAL_PROJECT_ID`（既有 sentinel `00000000000000000000000000`；复用、不重铸）。一个 store 在 `~/.coffer/memory/global/`。
-- **Per-project** —— `project_id = <项目 ULID>`。每项目一个 store 在 `~/.coffer/memory/projects/<ulid>/`。
+## 4. 共享只走 MCP
 
-`remember(scope=project)` → 项目 store；`scope=global` → sentinel store；`recall` 默认 → 两者。
+**问题**：这一个 store 怎么抵达每个 agent？
 
-## 4. 从 agent 的 cwd 解析作用域
+**决定**：经 Coffer 的 MCP 网关，此外别无他途。更早的设计还会把规范内容投影进
+agent 的原生位置——给 Claude Code 一个目录符号链接，给 Codex 在 `AGENTS.md` 里
+写一个带标记围栏的块——那一半已被移除
+（[Memory via MCP](../../docs/decisions/memory-via-mcp-not-native-projection.md)）：
+Coffer 绝不写入 agent 自己的记忆文件，不禁用任何东西，也不往会话里注入任何东西。
 
-**问题**：daemon 怎么知道某次会话在哪个项目里？
+**这留下的开放问题是投递。** 知识只有在 agent 主动伸手时才会抵达会话，而
+2026-09-12 的审计发现：工具自己的描述并不能让模型记住这个工具存在——一个月里
+每一次知识调用都发生在某个 agent 建语料的那一天。尝试的答案是**投递一个 skill**
+——Coffer 渲染一个描述这一层的 skill，经那条已经把十五个 `coffer-*` skill 送进
+每个受管 agent 的通道投递，它的名字与描述从此原生地待在上下文里。这是一个有
+证据支撑的假设，而不是被证明的修复；调用日志会在一周日常工作内给出答案。
 
-**决定**：coffer-mcp-shim 在 agent 的 cwd 中启动，并在 **会话握手时上报 cwd**。daemon 计算 git-root（与 Claude 项目 slug 同一依据）并解析（缺失则惰性置备）per-project 记忆 store。若 cwd 不在某个 git 项目里，`scope=project` 被拒（`ScopeUnresolved`），`scope=global` 仍可用。**实现期需验证**：Claude Code 与 Codex 上的 MCP server cwd 传播（设计 open item #1）。
+## 5. 检索：为什么干脆不要索引
 
-## 5. 共享机制 —— 混合式（MCP + 原生投影）
+**问题**：拿什么取代 FTS5 + sqlite-vec？
 
-**问题**：这个单一 store 如何真正共享进每个 agent？
+**决定**：**一份生成的目录加 ripgrep，别无其它。**
 
-**决定**：混合式。
+索引能提供而 ripgrep 不能的唯一能力是概念性召回——用*鉴权*去命中一篇写着*认证*
+的文档。那需要 embedding，而本机安装上 embedding 从未被配置过（`embedding_config`
+是空表）。去掉 embedding 之后，FTS5 相对 ripgrep 多出来的只是 BM25 排序和分块
+粒度，而这两件事 agent 自己都会做：它读命中行、判断哪个文件相关，然后反正要把
+整个文件读一遍。在本机语料上实测（51 篇、1.4 MB），一次 ripgrep 查询给出与 FTS5
+相同的答案集，耗时 **27 ms**，且不需要分词器就能命中中文。
 
-- **所有 agent 用 MCP** —— 每个 agent 经 Coffer 网关工具读写。
-- **原生投影** —— 一个 `AgentMemoryAdapter`（随 agent driver、而非 memory kind）把规范化内容落进原生位置：
-  - **Claude Code** = 把规范化项目记忆目录作为目录 **SYMLINK** 投进 `~/.claude/projects/<slug>/memory/`（原生、双向；保持 auto-memory 开启 —— 它 _就是_ 规范化内容）。
-  - **Codex** = 把一个带标记栅栏的 managed block（`<!-- coffer:memory:start -->…<!-- coffer:memory:end -->`）**RENDER** 进 `<project>/AGENTS.md`（project 层）与 `~/.codex/AGENTS.md`（global 层）；禁用 Codex 原生 `memories`，使第二份副本不累积。
+这里没有好的中间态：要么上完整的语义栈，要么不要索引。在这个区间里，只有 FTS5
+是性价比最差的一档。当语料涨到目录塞不进上下文时——每条约 40 tokens，所以几百篇
+很从容——答案是一个为那个需求而建的真正语义栈，而不是重新启用那个从未被打开过
+的部件。
 
-投影引擎按 `projection_mode`（`SYMLINK` | `RENDER` | `NONE`）分派。**新增一个 agent = 一个 adapter，不改核心。** adapter 执行所有原生文件改动；memory 底座只提供规范化文件 + 已渲染 markdown，保持 memory 与 agent 无关、L1 config 边界干净。
+## 6. 摄入：文件系统
 
-**首次投影时的迁移**：若 Claude 的记忆目录已有真实文件，先把它们合并进规范化，再替换为 symlink —— 绝不静默覆盖。managed-block 重渲染是幂等的。
+**问题**：一份文档怎么进来？
 
-**已被取代。** 原生投影已移除（Memory via MCP）。共享只走 MCP：每个 agent 经 Coffer 网关工具读写，Coffer 从不触碰 agent 的原生记忆文件。
+**决定**：由人把一个 Markdown 文件放进目录。没有上传端点，也没有格式转换。
+在此之前的任意格式流水线经 MarkItDown 转换、把原件留在 `.raw/` lane 里以便
+再转换、并追踪外部来源；而在本机安装上，**50 篇里 50 篇**都带着
+`converter: passthrough`，那 50 个 `.raw/` 文件与转换结果逐字节相同。手工添加
+知识的代价是复制一个文件，比任何上传界面都便宜。
 
-## 6. 检索 —— 共享引擎、lazy reindex-on-read
+## 7. 边界：只有一种，而且它存在就是为了被授权
 
-**问题**：recall 怎么实现、怎么保持新鲜？
+**问题**：知识靠什么隔开？
 
-**决定**：与 KB 相同的检索引擎：`grep`（ripgrep 扫文件）、`keyword`（SQLite FTS5 + BM25，零配置默认）、`vector`（sqlite-vec + 可配置 embedding provider，可选）。当请求 `vector` 但 embedding 未配置时，回退到 `keyword` 并在响应里标注 —— 绝不阻塞。
+**决定**：靠 **collection**，别无其它。一个 collection 是人有意创建的顶层文件夹，
+而它是 Resource，正是为了让框架的 per-agent scope 能授权它
+（[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)）。
 
-memory 用 **lazy reindex-on-read**：`recall` 先按 `content_sha256` 扫描这个小事实目录的增量，并在搜索前对账索引。这使 Claude 的 symlink 编辑与任何直接磁盘编辑对所有 agent 即时可见，**无需文件系统 watcher**。（相比之下 KB 在 Coffer 中介编辑 + 显式 `coffer kb reindex` + 一个默认关闭的可选 watcher 时重建索引。）
+更早的 `global` ÷ `project-<ULID>` ÷ collection 这条轴想说的是「这份知识是关于
+什么的」，而那是内容的属性，却为此付了物理结构的全额代价：migration、被只读
+检索顺手开通出来的空壳、以及查询时的跨边界融合。检索必须靠 reciprocal rank
+横跨 scope 融合才有用，这本身就是破绽——隔离从来就不是重点。现在没有任何东西
+从 cwd 推导，没有任何东西自动开通，agent 的读取覆盖它被授权的每一个 collection。
 
-**store 列表**的 `fact_count`（KB14，见 006 research §12）读取索引 `count_documents`，而非 `scan_store_dir` 扫描 fact 文件——任何索引-vs-磁盘的过期都会在上述下一次 recall/reconcile 时关闭。每个 store 的 `/metrics` 详情端点仍扫描并遍历磁盘以得到 `disk_bytes`。
+授权只在 MCP 工具面执行。握有 shell 或文件读取工具的 agent 可以直接读
+`~/.coffer/knowledge/` 下的任何东西：scope 防的是误召回，不是有意访问，系统
+如实这么讲，而不是暗示一种它并不提供的隔离。
 
-## 7. Embedding 配置
+## 8. 原子性
 
-**问题**：vector recall 怎么配置？
+文件写入走同目录临时文件再 `replace`，所以读者永远看不到写到一半的文件，崩溃
+也永远不会把文件截断。这是当初为共享文件助手一次性定下的，此后未变；那个助手
+本身就是记录。
 
-**决定**：DevPilot 风格的 OpenAI 兼容 provider 抽象（一个 `AsyncOpenAI` 客户端配可换的 `base_url`）：`embedding_provider`、`embedding_model`、`embedding_base_url`、`embedding_credential_ref`（keychain ref，绝不明文）。Provider：OpenAI / OpenRouter / Voyage / Jina / Gemini / Azure / DashScope 与本地 Ollama / LM Studio —— 全经 `.embeddings.create`；外加一个可选的进程内 `local` provider（fastembed）做零服务离线 embedding。默认检索是 `keyword`+`grep`（零配置、离线、语言无关）；vector 为可选项。双语内容推荐本地 `bge-m3` 或某云端 provider（仅英文的小模型对中文嵌入差）。embedding 模型 **可变** —— 改它会重嵌整个 store（文件是真相）。
+## 9. 这一层刻意不做的事
 
-## 8. 内置 MCP 工具
-
-五个 memory 工具，挂在 `coffer__` 下，以 agent 为中心、低摩擦：
-
-- `coffer__recall(query, scope?, mode?, top_k?)` → `[{id, text, score, source, time}, …]`（默认两个作用域；`mode` ∈ `grep` | `keyword` | `vector`）。
-- `coffer__remember(text, scope?, type?)` → `{id, …}`（默认 `scope=project`）。
-- `coffer__set_handoff(body)` → `{status, branch, scope}`（工作现场，按 project + 分支）。
-- `coffer__resume()` → `{found, branch?, body?, updated_at?, note?}`。
-- `coffer__list_memory(scope?)` → 用于浏览的事实。
-
-**已被取代。** 如今的对外面是整个知识层共用的**六个**工具 —— `coffer__search`、`coffer__grep`、`coffer__read`、`coffer__list`、`coffer__write`、`coffer__delete`（FR-015）。`coffer__set_handoff` 与 `coffer__resume` 随交接 lane 一起退役；`recall`/`remember`/`list_memory` 已改名并入上面这份清单。
-
-调用记录进 `mcp_invocations`，方式与 KB 及上游工具相同：只记工具名 + who/when/duration/outcome —— 不记参数也不记返回内容（既有隐私立场）。
-
-## 9. Prior art & novelty
-
-- **managed-block 注入** 进 agent 配置文件已是成熟做法：**Next.js** 把 `<!-- BEGIN:nextjs-agent-rules -->` 写进 `AGENTS.md`；**claude-mem** 在 `CLAUDE.md` 用 `<claude-mem-context>`。
-- **把累积记忆多 agent 原生投影是新颖的** —— 每个规范化记忆系统（mem0/OpenMemory、Letta、Zep、Cognee、MCP memory server、MemPalace）都是以 MCP 为中心；唯一的原生文件投影者（claude-mem、agentmemory）只针对 Claude 单目标。截至 2026 年中，Coffer 向多 agent 原生位置扇出在开源里无人主张。
-
-## 10. 本规范不做的事
-
-- recall 上的 reranking / HyDE / multi-query / LLM 合成（由 agent 合成）。
-- 把某专有 agent 记忆格式双向解析回规范化（业界未解；用 symlink-where-compatible + 别处 MCP 规避）。
-- 多机同步（constitutional）。
-- 默认开启文件系统 watcher。
-- 超出自由 `metadata.type` 之外的 memory 分类。
-- 在此定义文件写入原子性：memory 的真相之源文件（note、整理写出的主题文档，以及 `docs/` 下归一化后的上传件）通过共享的 `infrastructure.knowledge.fs.atomic_write_*` 辅助函数写入（同目录临时文件 → fsync → `os.replace`），在 KB19 一次性决策（该研究记录原在已删除的 `specs/006-knowledge-base/` 中；如今以该辅助函数本身为准）。
-
-## 11. 实现期需验证的 open items
-
-1. Claude Code 与 Codex 上的 MCP shim cwd 传播（§4）。
-2. sqlite-vec 在 macOS arm64 与 Linux 上的打包/加载（vector 为可选项；keyword+grep 不需原生扩展）。
-3. 中文/多语本地 embedding 模型基准（默认仍是 keyword+grep）。
+- 读取时的 rerank、HyDE、multi-query 或 LLM 综述——综述由 agent 做。
+- 把某个专有的 agent 记忆格式反解回规范格式（业界未解；改为经 MCP 共享来规避）。
+- 监听文件系统。没有任何东西是派生的，也就没有任何东西需要失效。
+- 跨机器收敛（章程约束；导出、导入与单向备份属于 vault-export-import spec）。
+- 在文件自己的 `title` 与 `description` 之外再做分类。

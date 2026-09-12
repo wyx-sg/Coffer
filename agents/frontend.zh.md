@@ -36,9 +36,8 @@ src/i18n/locales/{en,zh}.json    — 挂在顶层 "x" 键下
 ```
 
 - **数据获取写在 hook 文件里，绝不内联进组件。** 页面/组件调 `useX()`，不直接调
-  `useQuery`/`useMutation`。（历史债：`src/kinds/knowledge` 仍把
-  query 内联在各 lane 组件里——那是要迁移**离开**的模式；
-  `kinds/knowledge/useKnowledgeDocuments.ts` 才是要照抄的形态。）
+  `useQuery`/`useMutation`。（`kinds/knowledge/useKnowledge.ts` 就是要照抄的
+  形态：该 kind 的每个 query 与 mutation 都在一个文件里，key 构造函数也从这里导出。）
 - **`src/kinds/<name>/` 只用于 kind 注册表的 UI 模块**（资源框架自动渲染的
   `KindUIModule`）。新的普通功能用上面的 `pages` + `components` + `hooks` + `api`
   布局，不要新建 `kinds/<name>/` 模块。
@@ -72,8 +71,7 @@ API token 刻意不在这张表里：它读自 `window.__COFFER_TOKEN__`，由�
 ["agents", name, "config-files"] // 该 agent 的子资源
 ```
 
-- **不要用扁平连字符 key**（`["knowledge-documents", scope]`）——它们无法作为一组失效。
-  knowledge kind 现在这么写，新代码不许。
+- **不要用扁平连字符 key**（`["knowledge-documents", path]`）——它们无法作为一组失效。
 - 从 hook 文件导出 key 构造函数（`conversationKey(id)`、`messagesKey(id)`），
   不要在调用处内联字符串数组。
 
@@ -81,8 +79,7 @@ API token 刻意不在这张表里：它读自 `window.__COFFER_TOKEN__`，由�
 
 `src/lib/api/` 下每个请求模块都经 `src/lib/auth.ts`（`getCofferBaseUrl`、
 `getCofferToken`）解析 base URL + token，并发送 `X-Coffer-Token` +
-`X-Coffer-Actor: "ui"`。**actor 永远是 `"ui"`**（`kinds/knowledge/client.ts` 里的
-`"user"` 是已知离群项）。
+`X-Coffer-Actor: "ui"`。**actor 永远是 `"ui"`**。
 
 存在两种请求风格，按「该 spec 是否提供了 OpenAPI 契约」来选：
 
@@ -160,9 +157,4 @@ return useMutation({
 你在这些附近工作时，往目标态迁移；不要扩大债务：
 
 1. **唯一 `call<T>()`** 放 `src/lib/api/call.ts`；四个手写 API 模块 import 它，不再各持一份。
-2. **数据获取全部进 hook 文件**——把 `kinds/knowledge` 各 lane 组件里内联的
-   `useQuery`/`useMutation` 抽到与 `useKnowledgeDocuments` 并列的 hook 中。
-3. **query key 全部层级化**——用 `["knowledge", scope, …]` 取代扁平的
-   `["knowledge-entries", …]` / `["knowledge-documents", …]`。
-4. **actor 头全部 `"ui"`**——修 `kinds/knowledge/client.ts`。
-5. **每个可见失败的 mutation 都加 `onError` toast`**。
+2. **每个可见失败的 mutation 都加 `onError` toast`**。

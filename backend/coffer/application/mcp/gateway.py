@@ -44,7 +44,7 @@ from coffer.application.mcp.gateway_builtin import (
     append_builtin_tools,
     dispatch_builtin_tool,
     dispatch_tool_search,
-    inject_session_cwd,
+    inject_session_context,
 )
 from coffer.application.mcp.gateway_handlers import (
     handle_prompts_get,
@@ -303,7 +303,7 @@ class MCPGatewaySession:
                 embedder=embedder,
             )
         if self._builtin.is_builtin(name):
-            params = self._inject_session_cwd(name, params)
+            params = self._inject_session_context(name, params)
             return await dispatch_builtin_tool(
                 prefixed_name=name,
                 params=params,
@@ -314,8 +314,14 @@ class MCPGatewaySession:
             )
         return await self._dispatch_handler(handle_tools_call, params)
 
-    def _inject_session_cwd(self, prefixed_name: str, params: dict[str, Any]) -> dict[str, Any]:
-        return inject_session_cwd(self._builtin, prefixed_name, params, self._session_cwd)
+    def _inject_session_context(self, prefixed_name: str, params: dict[str, Any]) -> dict[str, Any]:
+        return inject_session_context(
+            self._builtin,
+            prefixed_name,
+            params,
+            session_cwd=self._session_cwd,
+            session_agent=self._session_agent,
+        )
 
     async def _dispatch_handler(
         self,

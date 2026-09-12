@@ -43,16 +43,15 @@ dependencies = [
     # comments/order on MCP install, the YAML analogue of tomlkit. pyyaml alone
     # would clobber comments.
     "ruamel.yaml>=0.18",
-    # The knowledge substrate.
-    # Converters → Markdown (MarkItDown default); FTS5 ships with SQLite; the
-    # OpenAI SDK drives the swappable-base_url embedding client; sqlite-vec is
-    # the vector index. Removed: llama-index-*, sentence-transformers, chromadb,
-    # mem0ai, pypdf (all belonged to the dropped LlamaIndex/mem0 stack).
-    # The extras pull in MarkItDown's format backends — without them every rich
-    # format the converter advertises (pdf/docx/pptx/xlsx/xls) raises
-    # MissingDependencyException at conversion time. html is built-in (no extra).
+    # Inbound channel attachments → text (spec channels FR-030). MarkItDown is
+    # here for that alone: the knowledge layer converts nothing any more (ADR
+    # knowledge-is-plain-files), so this is no longer a "knowledge substrate"
+    # dependency. The extras pull in its format backends — without them every
+    # rich format it advertises (pdf/docx/pptx/xlsx/xls) raises
+    # MissingDependencyException at extraction time. html is built-in.
+    # Removed with the index: sqlite-vec (the vector index), llama-index-*,
+    # sentence-transformers, chromadb, mem0ai, pypdf.
     "markitdown[docx,pdf,pptx,xls,xlsx]>=0.1",
-    "sqlite-vec>=0.1.1",
     "openai>=1.40",
     # Agent turns: built-in LangGraph multi-LLM agent.
     "langgraph>=1.2",
@@ -64,11 +63,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Optional in-process local embeddings (no cloud call). Vector retrieval still
-# works via any OpenAI-compatible provider without this extra.
-local-embeddings = [
-    "fastembed>=0.3",
-]
 dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
@@ -100,6 +94,11 @@ coffer-mcp-shim = "coffer.surfaces.shim.main:run"
 [tool.setuptools]
 packages = ["coffer"]
 
+[tool.setuptools.package-data]
+# The knowledge skill seeded at boot (spec knowledge FR-042) is a file, so an
+# installed wheel has to carry it alongside the modules.
+coffer = ["application/knowledge/skill_assets/**/*.md"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
@@ -125,7 +124,6 @@ pretty = true
 module = [
     "sqlite_vec.*",
     "markitdown.*",
-    "fastembed.*",
     "ruamel.*",
 ]
 ignore_missing_imports = true
@@ -166,14 +164,12 @@ forbidden_modules = ["coffer.surfaces"]
 # (Protocols in application/*); it must not import infrastructure directly.
 # Concrete infrastructure adapters are wired at composition root.
 #
-# Exception: the knowledge substrate (``coffer.infrastructure.knowledge`` +
-# ``coffer.infrastructure.knowledge_scope``) is a set of pure-ish helpers
-# (chunking, frontmatter/YAML, content ids, per-entry file I/O, path layout)
-# that the application phase composes behind the shared ``RetrievalPort`` /
-# reindex routine. The data-model frames this substrate as
-# application-composable; the heavy engines (markitdown, sqlite-vec, embedding
-# SDKs) are still injected as ports and confined to infrastructure by Contract 7
-# (engine confinement). So the application MAY import the substrate helper
+# Exception: the knowledge substrate (``coffer.infrastructure.knowledge``) is a
+# set of pure helpers — path layout, frontmatter/YAML, file I/O, and the
+# ripgrep wrapper — that the application composes directly. There is no engine
+# behind a port any more, because there is no index (ADR
+# knowledge-is-plain-files); what is left is thin enough that routing it through
+# a port would be ceremony. So the application MAY import these substrate
 # modules, but no other infrastructure.
 [[tool.importlinter.contracts]]
 name = "Application does not import infrastructure"
@@ -182,7 +178,6 @@ source_modules = ["coffer.application"]
 forbidden_modules = ["coffer.infrastructure"]
 ignore_imports = [
     "coffer.application.knowledge.* -> coffer.infrastructure.knowledge.*",
-    "coffer.application.knowledge.* -> coffer.infrastructure.knowledge_scope.*",
 ]
 
 # Contract 3: domain is pure — no imports from any other project layer, no
@@ -260,7 +255,6 @@ forbidden_modules = [
     # kind-agnostic embedding config is defined in terms of them. Only the
     # knowledge FACADE is fenced off from the other kinds.
     "coffer.application.knowledge",
-    "coffer.infrastructure.knowledge_scope",
     "coffer.surfaces.http.knowledge",
     "coffer.surfaces.cli.knowledge_cmd",
     "coffer.domain.channel",
@@ -298,7 +292,6 @@ forbidden_modules = [
     # kind-agnostic embedding config is defined in terms of them. Only the
     # knowledge FACADE is fenced off from the other kinds.
     "coffer.application.knowledge",
-    "coffer.infrastructure.knowledge_scope",
     "coffer.surfaces.http.knowledge",
     "coffer.surfaces.cli.knowledge_cmd",
     "coffer.domain.channel",
@@ -338,7 +331,6 @@ forbidden_modules = [
     # kind-agnostic embedding config is defined in terms of them. Only the
     # knowledge FACADE is fenced off from the other kinds.
     "coffer.application.knowledge",
-    "coffer.infrastructure.knowledge_scope",
     "coffer.surfaces.http.knowledge",
     "coffer.surfaces.cli.knowledge_cmd",
     "coffer.domain.channel",
@@ -360,7 +352,6 @@ source_modules = [
     "coffer.domain.knowledge",
     "coffer.application.knowledge",
     "coffer.infrastructure.knowledge",
-    "coffer.infrastructure.knowledge_scope",
     "coffer.surfaces.http.knowledge",
     "coffer.surfaces.cli.knowledge_cmd",
 ]
@@ -421,7 +412,6 @@ forbidden_modules = [
     # kind-agnostic embedding config is defined in terms of them. Only the
     # knowledge FACADE is fenced off from the other kinds.
     "coffer.application.knowledge",
-    "coffer.infrastructure.knowledge_scope",
     "coffer.surfaces.http.knowledge",
     "coffer.surfaces.cli.knowledge_cmd",
 ]
@@ -460,7 +450,6 @@ forbidden_modules = [
     # Substrate exempt (see the note in the cross-kind contracts); the facade
     # is what the kind-agnostic core must not reach into.
     "coffer.application.knowledge",
-    "coffer.infrastructure.knowledge_scope",
     "coffer.surfaces.http.knowledge",
     "coffer.domain.channel",
     "coffer.application.channel",
@@ -468,15 +457,16 @@ forbidden_modules = [
     "coffer.surfaces.http.channel_routes",
 ]
 
-# Contract 7 (REPLACES the old LlamaIndex + mem0 rules): engine confinement.
-# The knowledge-substrate engines (file→markdown converters, the sqlite-vec
-# vector index, and the OpenAI/fastembed embedding clients) may be imported
-# ONLY by the shared infrastructure substrate ``coffer.infrastructure.knowledge``.
-# Domain + application MUST NOT import them, and neither may sibling
-# infrastructure packages. ``llama_index``, ``mem0``, and ``chromadb`` are gone
-# from the codebase and are banned everywhere to prevent reintroduction.
+# Contract 7: converter confinement. ``markitdown`` has exactly one consumer —
+# ``infrastructure.chat.document_extract``, which turns an inbound channel
+# attachment into text (spec channels FR-030). It used to live in the knowledge
+# substrate; the knowledge layer converts nothing now (ADR
+# knowledge-is-plain-files), so the rule keeps it out of every other package
+# rather than granting one an exemption. The vector-index and embedding SDKs it
+# also used to fence are gone from the dependency set entirely and are banned by
+# Contract 8 instead, so a reintroduction has to be a deliberate act.
 [[tool.importlinter.contracts]]
-name = "Engine confinement: converters/sqlite-vec/embedding SDKs in infrastructure.knowledge only"
+name = "Engine confinement: the markdown converter lives in infrastructure.chat only"
 type = "forbidden"
 source_modules = [
     "coffer.domain",
@@ -484,8 +474,7 @@ source_modules = [
     "coffer.infrastructure.mcp",
     "coffer.infrastructure.agent",
     "coffer.infrastructure.skill",
-    "coffer.infrastructure.channel",
-    "coffer.infrastructure.knowledge_scope",
+    "coffer.infrastructure.knowledge",
     "coffer.infrastructure.persistence",
     "coffer.infrastructure.credentials",
     "coffer.infrastructure.daemon",
@@ -494,14 +483,11 @@ source_modules = [
 forbidden_modules = [
     "markitdown",
     "docling",
-    "sqlite_vec",
-    "openai",
-    "fastembed",
 ]
 
 # Contract 8: the dropped stacks must not return anywhere in the codebase.
 [[tool.importlinter.contracts]]
-name = "Dropped engines banned everywhere (llama_index/mem0/chromadb)"
+name = "Dropped engines banned everywhere (llama_index/mem0/chromadb/sqlite_vec)"
 type = "forbidden"
 source_modules = [
     "coffer.domain",
@@ -514,6 +500,10 @@ forbidden_modules = [
     "mem0",
     "chromadb",
     "sentence_transformers",
+    # Dropped with the knowledge index (ADR knowledge-is-plain-files): there is
+    # no vector store and nothing to embed for, so an import is a mistake.
+    "sqlite_vec",
+    "fastembed",
 ]
 
 # Contract 9a: langgraph + langchain* confined to infrastructure/llm.
@@ -532,7 +522,6 @@ source_modules = [
     "coffer.infrastructure.mcp",
     "coffer.infrastructure.channel",
     "coffer.infrastructure.knowledge",
-    "coffer.infrastructure.knowledge_scope",
     "coffer.infrastructure.persistence",
     "coffer.infrastructure.credentials",
     "coffer.infrastructure.daemon",
@@ -560,7 +549,6 @@ source_modules = [
     "coffer.infrastructure.mcp",
     "coffer.infrastructure.channel",
     "coffer.infrastructure.knowledge",
-    "coffer.infrastructure.knowledge_scope",
     "coffer.infrastructure.persistence",
     "coffer.infrastructure.credentials",
     "coffer.infrastructure.daemon",

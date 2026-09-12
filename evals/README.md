@@ -2,11 +2,11 @@
 
 The deterministic test suite proves the *plumbing* works. This harness measures
 the **non-deterministic AI behaviour** that ordinary tests can't pin: how good
-Coffer's retrieval is, and whether a model picks the right tool. It is the
-regression net for prompt/model/retrieval changes
+Coffer's tool search is, and whether a model picks the right tool. It is the
+regression net for prompt/model/catalogue changes
 ([Harness in Layers](../docs/decisions/industrial-grade-harness-in-layers.md), Layer D).
 
-Designed to be **local and low-cost**: the retrieval suite needs no model at
+Designed to be **local and low-cost**: the tool-search suite needs no model at
 all, and the routing suite talks to a **pluggable** model — a local LLM (Ollama)
 by default, or any OpenAI-compatible endpoint. The local model is a cost choice,
 not a limitation: point it at a stronger model whenever you need to.
@@ -16,7 +16,6 @@ not a limitation: point it at a stronger model whenever you need to.
 ```
 evals/
 ├── metrics.py         # pure ranking metrics: recall@k, precision@k, MRR
-├── retrieval_eval.py  # builds a real SQLite index, runs golden queries -> recall@k/MRR
 ├── tool_search_eval.py # ranks the tool catalogue with the coffer__search_tools ranker -> recall@k/MRR
 ├── routing_eval.py    # samples a pluggable model k× to pick a tool; accuracy + pass^k
 ├── run.py             # runner: scorecard + regression gate vs baselines
@@ -28,30 +27,32 @@ evals/
 ## Run it
 
 ```bash
-make eval            # retrieval + tool-search suites (local, deterministic) + baseline gate
+make eval            # tool-search suite (local, deterministic) + baseline gate
 make eval-routing    # also the tool-routing suite (needs a model endpoint; Ollama by default)
 ```
 
 Under the hood:
 
 ```bash
-python -m evals.run                    # retrieval + tool-search (no model)
+python -m evals.run                    # tool-search (no model)
 python -m evals.run --routing          # + routing
 python -m evals.run --update-baseline  # record current scores as the new floor
 ```
 
 `run.py` exits non-zero if a suite scores below `baseline - tolerance`, so the
 same command is the gate. Run it on demand (and after changing prompts, the tool
-catalog, or the retrieval stack), not on every CI push — the routing suite needs
+catalog, or the ranker), not on every CI push — the routing suite needs
 a model and is intentionally out of the core `make verify`.
 
 ## The suites
 
-**Retrieval** (`retrieval_eval.py`) — ingests `datasets/corpus.jsonl` into a
-throwaway copy of Coffer's real `SqliteKnowledgeIndex`, runs the
-`datasets/retrieval.jsonl` queries through `keyword_search`, and scores
-**recall@k** and **MRR** at the document level. Keyword/FTS mode needs no
-embedding model, so it is fully deterministic and free.
+There used to be a **Retrieval** suite here, scoring recall@k and MRR over
+Coffer's FTS5 index. It went with the index: knowledge retrieval is now ripgrep
+over markdown files ([Knowledge Is Plain Files](../docs/decisions/knowledge-is-plain-files.md)),
+and scoring recall@k for ripgrep would measure ripgrep rather than anything
+Coffer decides. The question that replaces it — does an agent reading the
+catalogue open the right file? — needs a model, so it does not belong in a
+deterministic gate.
 
 **Tool search** (`tool_search_eval.py`) — measures the `coffer__search_tools`
 ranker that lifts aggregation tool-overload (spec mcp-gateway /
@@ -128,10 +129,6 @@ dataset — the dataset ratchets up from real usage instead of staying hand-auth
 
 - **Add cases:** append lines to the relevant `datasets/*.jsonl`, then
   `make eval` (or `--update-baseline` to re-record the floor).
-- **Local vector embeddings (optional):** the retrieval suite uses keyword mode.
-  Coffer's vector path uses `fastembed` (in-process, no network) but needs a
-  Python 3.12 environment with `onnxruntime` wheels — it does **not** install on
-  3.14. On 3.12 you can extend `retrieval_eval.py` to also score `mode="vector"`.
 - **A stronger judge / more suites:** the `run.py` scorecard + baseline pattern
   generalises — add a suite that returns the same `{suite, primary, n, cases}`
   shape and it slots into the gate.

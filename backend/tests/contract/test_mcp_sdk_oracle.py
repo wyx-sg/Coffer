@@ -137,11 +137,7 @@ async def running_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 @pytest.mark.acceptance(spec="mcp-gateway", scenario="register a stdio MCP server")
 @pytest.mark.acceptance(
     spec="knowledge",
-    scenario="built-in KB tools appear in client tool list",
-)
-@pytest.mark.acceptance(
-    spec="knowledge",
-    scenario="built-in memory tools appear in client tool list",
+    scenario="the five built-in knowledge tools appear in the client tool list",
 )
 async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
     """Drive the /mcp endpoint via the mcp SDK; SDK validation is the oracle.
@@ -151,6 +147,16 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
     through its Pydantic models on parse).
     """
     port, token = running_daemon
+
+    async def _create_collection(name: str) -> None:
+        async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{port}") as http:
+            r = await http.post(
+                "/api/v1/knowledge/collections",
+                json={"name": name, "description": "oracle round-trip"},
+                headers={"X-Coffer-Token": token},
+            )
+            assert r.status_code in (201, 409), r.text
+
     mcp_url = f"http://127.0.0.1:{port}/mcp"
     headers = {"X-Coffer-Token": token}
 
@@ -183,10 +189,9 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
         assert any(n.startswith("coffer__") for n in tool_names), (
             f"no coffer__ built-in tools found in tools/list: {tool_names}"
         )
-        # And the knowledge tools specifically must be there. One kind, six
-        # tools — the retrieval half.
+        # And the knowledge tools specifically must be there. One kind, five
+        # tools — the reading half.
         expected_knowledge_tools = {
-            "coffer__search",
             "coffer__grep",
             "coffer__read",
             "coffer__list",
@@ -214,17 +219,24 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
         assert call_result.content is not None, "expected non-empty content"
 
         # 4. tools/call of a coffer__ BUILT-IN end-to-end through the daemon:
-        # write files an entry, search finds it (review gap: builtins were
-        # only ever listed, never called over the wire).
+        # write files a note, grep finds it (review gap: builtins were only
+        # ever listed, never called over the wire). The collection has to exist
+        # first — nothing auto-provisions one (spec knowledge FR-010).
+        await _create_collection("oracle")
         write_result = await session.call_tool(
             "coffer__write",
-            arguments={"text": "oracle smoke fact about axolotls", "scope": "global"},
+            arguments={
+                "title": "Axolotls",
+                "description": "an oracle smoke fact",
+                "body": "oracle smoke fact about axolotls",
+                "directory": "oracle",
+            },
         )
         assert not write_result.is_error, write_result.content
-        search_result = await session.call_tool(
-            "coffer__search",
-            arguments={"query": "axolotls", "scope": "global"},
+        grep_result = await session.call_tool(
+            "coffer__grep",
+            arguments={"pattern": "axolotls"},
         )
-        assert not search_result.is_error, search_result.content
-        search_text = "".join(getattr(item, "text", "") for item in search_result.content or [])
-        assert "axolotls" in search_text, f"search did not return the entry: {search_text!r}"
+        assert not grep_result.is_error, grep_result.content
+        grep_text = "".join(getattr(item, "text", "") for item in grep_result.content or [])
+        assert "axolotls" in grep_text, f"grep did not return the note: {grep_text!r}"

@@ -1,6 +1,6 @@
 # 检索 mode 是引擎内部细节；外部界面只暴露「查询→答案」。
 
-**Status**: Accepted
+**Status**: 已被 [Knowledge Is Plain Files](knowledge-is-plain-files.md) 取代（2026-09-12）——没有带排序的索引之后，也就没有检索模式需要藏在内部了，本 ADR 塑造的 `search` 工具也已移除。本文保留，作为那个日期之前生效设计的记录。
 **Date**: 2026-06-21（2026-09-10 修订；见修订历史）
 **Spec**: [specs/knowledge/spec.md](../../specs/knowledge/spec.md)
 
