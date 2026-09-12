@@ -173,7 +173,7 @@ These cases are tracked by integration tests, not by the acceptance audit, excep
 - **Duplicate registration**: Registering a server with an existing name in the same kind is rejected with a clear error; partial-write is impossible.
 - **Tool-name collision across servers**: Prevented by the `<server>__<tool>` namespace; never visible to clients.
 - **Tools-only upstream**: An upstream that implements only `tools` and replies with JSON-RPC `-32601` (METHOD_NOT_FOUND) for `resources/list` or `prompts/list` is treated as having no resources / no prompts. The per-server capability view and the aggregate lists return that server's tools with an empty resources/prompts set (HTTP 200), not an error — so the management / Web-UI capability view works for tools-only servers.
-- **Daemon port conflict**: The daemon's default port is taken — it picks the next free one in a small range and writes the chosen port to its discovery file; clients (shim, CLI) all read that file.
+- **Daemon port conflict**: The daemon's default port is taken. With no fixed port configured it picks the next free one in a small range and writes the chosen port to its discovery file; clients (shim, CLI) all read that file. With a fixed port configured (FR-028) it refuses to start instead, naming the process that holds the port.
 - **Daemon crash**: running shim sessions return a clean error to their MCP clients rather than hanging; a supervising surface can detect the crash and restart the daemon.
 - **Concurrent clients**: Multiple MCP clients (e.g., Claude Code + Codex at the same time) connect simultaneously without one disturbing the other; each gets an independent upstream subprocess set.
 
@@ -400,9 +400,21 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 ### Scenario: daemon port conflict falls back to the next free port
 
-- **Given** the default daemon port is already bound by another process,
+- **Given** no fixed port is configured, and the default daemon port is already bound by another process,
 - **When** the daemon starts,
 - **Then** it picks the next free port in the supported range, writes the chosen port to `~/.coffer/daemon.json`, and every Coffer surface (shim, CLI) connects to that port without manual configuration.
+
+### Scenario: a fixed daemon port survives restarts
+
+- **Given** the user has fixed the daemon's port (`coffer daemon port set <n>`, or the Settings UI),
+- **When** the daemon is stopped and started again — by the user, by the CLI, or auto-spawned by an MCP shim, which inherits no shell profile,
+- **Then** it binds that same port every time and records it in `~/.coffer/daemon.json`, so a browser bookmark to Coffer's UI keeps working.
+
+### Scenario: a fixed port that is taken refuses to start and says what holds it
+
+- **Given** a fixed daemon port that some other process is already listening on,
+- **When** the daemon starts,
+- **Then** it refuses to start rather than binding a different port, and the message names the process holding the port and the commands that resolve it — free that process, `coffer daemon port set <other>`, or `coffer daemon port clear` to return to automatic selection.
 
 ### Scenario: a missing stdio launcher is named in the server status
 
@@ -492,6 +504,8 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **FR-026**: When the daemon detects that it is running as a frozen build, it MUST idempotently deploy its sibling binaries — `coffer-mcp-shim`, `coffer-callback` — into `~/.coffer/bin/` at startup. The copy MUST be atomic (temp sibling in the same directory, executable bit set, then rename over the target) so that a crash or a concurrently executing binary never observes a truncated file, and staleness MUST be decided by three signals — byte size, source-newer-than-target mtime, and a version sentinel — so that a same-size cross-version upgrade is still detected. A source install MUST NOT do any of this: `pip install` already puts the console scripts on `PATH` (FR-018). The daemon owns the deployment because it is the process that spawns `coffer-callback` at runtime.
 
 - **FR-027**: The daemon MUST refuse any request whose `Host` header does not name a loopback authority — `127.0.0.1`, `localhost` or `::1`, with or without a port — answering `421` with error code `HOST_NOT_LOOPBACK` instead of serving it. This is what makes FR-025 safe: binding to loopback (FR-012) stops a remote host, but not a **browser** on a page whose hostname an attacker re-resolves to `127.0.0.1` — DNS rebinding, which the browser then treats as same-origin, so CORS does not apply. Rebinding does not change the `Host` header, so a rebound request still names the attacker's own hostname and is refused before it can read a token out of the served document. The rule MUST hold for every surface the daemon exposes. It does not reach the separate `coffer-callback` listener, which is a different process on a different port and is the only thing a tunnel is ever pointed at.
+- **FR-028**: The daemon's listening port MUST be settable as a persistent, user-owned setting, so a browser bookmark to Coffer's UI keeps working across restarts. The setting MUST live in a file the daemon reads **before** it binds — `~/.coffer/daemon-config.json`, mode `0600` — because the port is chosen before the database is opened and before migrations run, so no database-backed setting can carry it. It MUST NOT be an environment variable: the daemon is spawned detached by whichever surface first needs one (CLI, MCP shim), inheriting that caller's environment, which a shell profile does not reach and a GUI-launched agent never had. When a port is configured the daemon MUST bind exactly that port and MUST NOT fall back to another — silently moving is the behaviour the setting exists to stop. When it cannot be bound the daemon MUST refuse to start and MUST report which process holds the port and the exact commands that resolve it. When no port is configured the daemon MUST keep selecting the first free port in a small range. Users MUST be able to read and change the setting from the CLI, the REST API and the Settings UI; the CLI MUST work with no daemon running, because a daemon that cannot bind its port is exactly the state the setting has to be fixable from. A change takes effect at the next start, so the CLI MUST offer `coffer daemon restart` to apply it in one command.
+
 **Missing launcher**
 
 - **FR-019**: A stdio server whose launcher command does not resolve on this machine (an imported server referencing e.g. `uvx` where `uv` is not installed) MUST be surfaced as such — `missing <runner>` in the server status — instead of a bare "failing" with no cause, and the UI MUST name the command to install. Coffer MUST NOT install it. Detection turns an uninformative failure into an actionable one, which is the whole of the value here; running a package manager from a long-lived daemon would widen Coffer's remit from managing configuration to installing software on the user's machine, a line the deliberately-minimal runner→formula map could not hold once pip, cargo, and go were asked for — and it only ever worked on macOS.

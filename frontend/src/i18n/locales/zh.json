@@ -263,6 +263,22 @@
       "preferredEditorSystemDefault": "系统默认",
       "preferredEditorChoose": "选择编辑器"
     },
+    "daemonPort": {
+      "title": "网页地址",
+      "description": "Coffer 的界面由本机的守护进程提供。固定端口后，收藏的书签在重启后依然能打开。",
+      "address": "把这个地址加入书签",
+      "copy": "复制",
+      "copied": "已复制",
+      "useFixed": "使用固定端口",
+      "useFixedHint": "关闭时，守护进程会在一小段端口范围里挑第一个空闲的，重启后上面的地址可能会变。开启时，它只绑定你指定的端口；若该端口已被占用，则直接拒绝启动。",
+      "port": "端口",
+      "save": "保存",
+      "saving": "保存中…",
+      "saved": "端口设置已保存。",
+      "rangeError": "请输入 {{min}} 到 {{max}} 之间的端口。",
+      "restartTitle": "下次启动守护进程时生效",
+      "restartBody": "当前页面仍由原端口提供服务。Coffer 不会从浏览器里重启守护进程——那会让正在响应本页的服务中途断掉。准备好后，在终端里运行："
+    },
     "retention": {
       "title": "数据保留",
       "keepForever": "永久保留",

@@ -24,9 +24,10 @@ owns its lifecycle.
 
 **Detect-or-spawn pattern with daemon-as-independent-process.**
 
-- The daemon is an independent process bound to `127.0.0.1:<port>`, where
-  `<port>` is chosen at startup (default 8000; falls back to the next free
-  port if taken; small bounded range).
+- The daemon is an independent process bound to `127.0.0.1:<port>`. The port is
+  **the user's fixed port when one is configured** in `~/.coffer/daemon-config.json`
+  — bound exactly, never fallen back from — and otherwise is chosen at startup
+  (default 8000; falls back to the next free port if taken; small bounded range).
 - On startup, the daemon writes `~/.coffer/daemon.json` (mode `0600`) with
   `{pid, port, token, started_at}`.
 - The shim and the CLI both use the same `detect-or-spawn` helper:
@@ -126,12 +127,64 @@ Rejected. Then the shim breaks whenever the entry point that happened to start
 the daemon exits. The point of detect-or-spawn is that every entry point is an
 independent surface over the same long-lived state.
 
-**No discovery file — fixed port + ambient token.** Rejected. Port conflicts
-on developer machines (8000 is heavily used) and shared-secret rotation would
-both require either a configuration file or a discovery file. Choosing one
-file with everything in it is simpler than splitting state.
+**No discovery file — fixed port + ambient token.** Rejected, and still
+rejected: the token is minted per start and the pid is per process, so
+discovery state has to be written somewhere regardless, and one file holding
+all of it beats splitting it. Note what the 2026-09-12 revision does *not* do —
+it does not remove the discovery file. `daemon.json` keeps carrying pid, port
+and token exactly as before; only the *choice* of port gains an optional
+user-set input, in a separate file that is configuration rather than state. The
+two files are deliberately distinguishable at a glance: `daemon-config.json`
+goes in and survives shutdown, `daemon.json` comes out and is unlinked on exit.
 
 ## Revision history
+
+- **2026-09-12** — Optional fixed port. Port drift breaks the one thing a user
+  is entitled to treat as stable — a browser bookmark to Coffer's own UI — and
+  the range scan has no way to prefer the port the bookmark names. Self-eviction
+  (below) was measured working: an orphan told to stand down by a newer
+  `daemon.json` exits within one 30s check. It is nonetheless not a fix for
+  drift, for two structural reasons. It converges a group of daemons on **one
+  daemon**, not on **one port** — the survivor keeps whatever port it bound, so
+  a drift to 8001 persists for that daemon's whole life even once 8000 frees up.
+  And it only ever reads its own `HOME`'s `daemon.json`, while the port range is
+  machine-wide: a daemon belonging to another vault — a live test run under a
+  throwaway `HOME` is the common case, one was found holding 8001 on the
+  maintainer's machine — occupies a port no eviction can reclaim, as does any
+  unrelated process, and 8000 is heavily used.
+
+  So the port becomes a setting. `~/.coffer/daemon-config.json` (`0600`,
+  `{"version": 1, "port": <n>}`) is read by `bootstrap` *before* the bind. It is
+  a file rather than a row because the port is chosen before the database is
+  opened and before migrations run, and rather than an environment variable
+  because the daemon is spawned detached by whichever surface first needs one
+  and inherits that caller's environment — a shell profile reaches the user's
+  own terminal and nothing else, least of all a GUI-launched agent's MCP shim.
+  With a port configured the daemon binds exactly it and, if it cannot, refuses
+  to start with the holding process named and the three resolving commands
+  spelled out; falling back would reintroduce precisely the silent drift the
+  setting exists to end. With none configured the range scan is untouched, and
+  it stays the default: a machine whose 8000 is permanently taken must not be
+  one where Coffer cannot start.
+
+  Restart is the operation the fixed path has to get right, since it is how a
+  port change is applied, so its bind sets `SO_REUSEADDR` (a `stop` immediately
+  followed by a `start` otherwise fails on a port whose previously-accepted
+  connections are still in `TIME_WAIT`) and retries briefly for the moment where
+  the outgoing daemon has not quite let go. `coffer daemon restart` — which this
+  ADR has referenced since 2026-06-13 without it ever existing — was added.
+
+  `SO_REUSEADDR` is deliberately **not** set on the scan path, and the reason is
+  worth recording because only CI found it. On Linux the option additionally
+  permits two sockets to bind the same address and port whenever neither is
+  `LISTEN`ing — and a Coffer daemon is bound-but-not-listening for its entire
+  boot window, since uvicorn calls `listen` later on the fd it is handed.
+  Setting it there dissolved CODE-041 outright: a second `acquire()` bound the
+  very port the first was still holding, which is the case the CODE-041 test
+  pins. macOS and the BSDs refuse that bind, so the local suite stayed green and
+  the Linux CI run was the first thing to see it. The fixed path keeps the
+  option because its bind is serialised by the spawn lock and its failure mode
+  without it — a restart that cannot rebind — is certain rather than theoretical.
 
 - **2026-09-09** — Orphan self-eviction. The spawn guard is one-sided: it probes
   only the single port `daemon.json` records, so it cannot see a daemon alive on

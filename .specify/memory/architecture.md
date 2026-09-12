@@ -163,15 +163,19 @@ importing kind modules (Contract 6).
 
 ## Processes
 
-- **`coffer-daemon`** — long-lived FastAPI service on `127.0.0.1:<auto-port>`.
-  Owns all state; single SQLite writer.
+- **`coffer-daemon`** — long-lived FastAPI service on `127.0.0.1:<port>` — the
+  port the user fixed in `~/.coffer/daemon-config.json`, else the first free one
+  in 8000–8009. Owns all state; single SQLite writer.
 - **Stdio shim** — short-lived; lifecycle bound to one MCP client process.
 - **Callback listener** — daemon-spawned child serving only signed channel
   callback paths on `127.0.0.1:<callback-port>`; runs while any SeaTalk
   channel is enabled (spec channels, [Channel Adapter Framework](../../docs/decisions/channel-adapter-framework.md)).
 
 Both discover the daemon through `~/.coffer/daemon.json` (PID + port +
-token, mode `0600`). See [Detect-or-Spawn](../../docs/decisions/daemon-detect-or-spawn.md).
+token, mode `0600`) — runtime state, written at start and unlinked at exit.
+Its counterpart `~/.coffer/daemon-config.json` holds the settings the daemon
+must read *before* it binds, and therefore before any database exists: today,
+the optional fixed port. See [Detect-or-Spawn](../../docs/decisions/daemon-detect-or-spawn.md).
 
 ## Persistence
 

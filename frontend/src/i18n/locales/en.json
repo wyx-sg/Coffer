@@ -263,6 +263,22 @@
       "preferredEditorSystemDefault": "System default",
       "preferredEditorChoose": "Choose editor"
     },
+    "daemonPort": {
+      "title": "Web address",
+      "description": "Coffer's UI is served by the daemon on this machine. Pin its port to keep a bookmark working across restarts.",
+      "address": "Bookmark this address",
+      "copy": "Copy",
+      "copied": "Copied",
+      "useFixed": "Use a fixed port",
+      "useFixedHint": "Off, the daemon takes the first free port in a small range, so the address above can change when it restarts. On, it always binds the port you choose, and refuses to start when something else already holds it.",
+      "port": "Port",
+      "save": "Save",
+      "saving": "Saving…",
+      "saved": "Port setting saved.",
+      "rangeError": "Enter a port between {{min}} and {{max}}.",
+      "restartTitle": "Takes effect at the next daemon start",
+      "restartBody": "This page is still being served on the current port. Coffer will not restart the daemon from the browser — that would stop the server answering this page mid-request. Run this in a terminal when you are ready:"
+    },
     "retention": {
       "title": "Data retention",
       "keepForever": "Keep forever",

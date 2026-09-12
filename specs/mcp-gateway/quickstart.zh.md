@@ -26,7 +26,9 @@ coffer daemon start
 首次启动时 Coffer 会：
 
 1. 在 8000–8009 范围内挑一个空闲端口，写入 `~/.coffer/daemon.json`（mode `0600`），
-   以便 CLI 与 shim 互相发现。
+   以便 CLI 与 shim 互相发现。如果你希望这个地址永不变动 —— 好让指向 Coffer UI 的
+   浏览器书签始终有效 —— 用 `coffer daemon port set 8000`（或 Settings → General）
+   把端口固定一次；此后 Coffer 要么绑定该端口，要么拒绝启动并告诉你是谁占着它。
 2. 在 `~/.coffer/coffer.db` 初始化 SQLite。
 3. 写入默认保留策略（audit：365 天；invocations：30 天）。
 
@@ -149,6 +151,7 @@ coffer credentials set github-token "<new value>"
 | `CREDENTIAL_LOCKED` 错误                   | OS keychain 已锁     | 解锁 keychain（macOS：登录 GUI；Linux：解锁 GNOME-keyring / KWallet）。 |
 | 被禁用的工具仍在客户端中出现               | 客户端缓存了工具列表 | 重启客户端，或寻找 "reload MCP servers" 选项。                          |
 | `no free port in 8000-8009 range`          | 10 个端口都被占用    | 杀掉占用进程，再 `coffer daemon start`。                                |
+| `port <n> is configured as Coffer's fixed daemon port` | 你固定的端口被别的进程占着 | 消息里已指明该进程。结束它、`coffer daemon port set <other>`，或 `coffer daemon port clear`。 |
 
 ## Where things live
 
@@ -162,6 +165,7 @@ coffer credentials set github-token "<new value>"
 ├── skills/                # 事实源：受管 skill 目录
 ├── master.key             # 解密凭据密文的 Fernet key
 ├── daemon.json            # daemon discovery: pid + port + token (mode 0600)
+├── daemon-config.json     # daemon 在打开 DB 之前就要读的设置：固定端口 (mode 0600)
 ├── logs/
 │   ├── daemon.log         # structured JSON, one line per event
 │   └── upstream-<name>.log
