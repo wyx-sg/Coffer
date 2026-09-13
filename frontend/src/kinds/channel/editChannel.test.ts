@@ -84,6 +84,8 @@ describe("planChannelEdit", () => {
     ]);
     expect(plan.config).toEqual({
       channel_type: "seatalk",
+      // Absent in the stored config means webhook; the PATCH says so out loud.
+      delivery: "webhook",
       app_id: "app-new",
       app_secret_ref: "channel/st/app-secret",
       signing_secret_ref: "channel/st/signing-secret",
@@ -144,6 +146,96 @@ describe("planChannelEdit", () => {
       values: { default_agent: "claude-code", tunnel_token: "rotated" },
     });
     expect(plan.secrets).toEqual([{ ref: "channel/st/tunnel-token", value: "rotated" }]);
+  });
+
+  test("seatalk: switching to websocket drops the fields webhook owned", () => {
+    const plan = planChannelEdit({
+      name: "st",
+      config: {
+        channel_type: "seatalk",
+        app_id: "app-1",
+        app_secret_ref: "channel/st/app-secret",
+        signing_secret_ref: "channel/st/signing-secret",
+        tunnel_token_ref: "channel/st/tunnel-token",
+        public_base_url: "https://x.trycloudflare.com",
+        default_agent: "claude_code",
+      },
+      values: { default_agent: "claude_code", delivery: "websocket", app_id: "app-1" },
+    });
+
+    expect(plan.config).toEqual({
+      channel_type: "seatalk",
+      delivery: "websocket",
+      app_id: "app-1",
+      app_secret_ref: "channel/st/app-secret",
+      default_agent: "claude_code",
+    });
+    expect(plan.config).not.toHaveProperty("signing_secret_ref");
+    expect(plan.config).not.toHaveProperty("public_base_url");
+    expect(plan.config).not.toHaveProperty("tunnel_token_ref");
+  });
+
+  test("seatalk websocket: a stale signing secret or tunnel token is never written", () => {
+    const plan = planChannelEdit({
+      name: "st",
+      config: {
+        channel_type: "seatalk",
+        app_id: "app-1",
+        app_secret_ref: "channel/st/app-secret",
+        signing_secret_ref: "channel/st/signing-secret",
+        default_agent: "claude_code",
+      },
+      values: {
+        default_agent: "claude_code",
+        delivery: "websocket",
+        app_secret: "rotated",
+        signing_secret: "leftover",
+        tunnel_token: "leftover",
+      },
+    });
+
+    // The app secret still rotates (websocket registers with it); the webhook
+    // credentials do not, so no value reaches a ref the config no longer names.
+    expect(plan.secrets).toEqual([{ ref: "channel/st/app-secret", value: "rotated" }]);
+  });
+
+  test("seatalk: switching back to webhook re-mints the signing-secret ref", () => {
+    const plan = planChannelEdit({
+      name: "st",
+      config: {
+        channel_type: "seatalk",
+        delivery: "websocket",
+        app_id: "app-1",
+        app_secret_ref: "channel/st/app-secret",
+        default_agent: "claude_code",
+      },
+      values: {
+        default_agent: "claude_code",
+        delivery: "webhook",
+        signing_secret: "sig",
+      },
+    });
+
+    expect(plan.config.delivery).toBe("webhook");
+    expect(plan.config.signing_secret_ref).toBe("channel/st/signing-secret");
+    expect(plan.secrets).toEqual([{ ref: "channel/st/signing-secret", value: "sig" }]);
+  });
+
+  test("seatalk: an unspecified delivery keeps the stored websocket choice", () => {
+    const plan = planChannelEdit({
+      name: "st",
+      config: {
+        channel_type: "seatalk",
+        delivery: "websocket",
+        app_id: "app-1",
+        app_secret_ref: "channel/st/app-secret",
+        default_agent: "claude_code",
+      },
+      values: { default_agent: "codex" },
+    });
+
+    expect(plan.config.delivery).toBe("websocket");
+    expect(plan.config.default_agent).toBe("codex");
   });
 
   test("seatalk: only the signing secret rotates when the app secret is blank", () => {

@@ -359,36 +359,3 @@ class EventIngestAdapter(Protocol):
     daemon (the callback listener) instead of polling for them."""
 
     async def handle_event(self, envelope: dict[str, Any]) -> None: ...
-
-
-class ListenerControllerPort(Protocol):
-    """Lifecycle of the callback-listener child process."""
-
-    @property
-    def port(self) -> int: ...
-
-    def running(self) -> bool: ...
-
-    async def ensure_running(self, signing_secrets: dict[str, str]) -> None: ...
-
-    async def ensure_stopped(self) -> None: ...
-
-
-class TunnelControllerPort(Protocol):
-    """Lifecycle of per-channel cloudflared named-tunnel child processes.
-
-    One process per managed channel (each named tunnel has its own connector
-    token). ``ensure_running`` is idempotent and respawns when the token
-    changes; ``active`` reports which channels currently have a live tunnel so
-    the reconciler can stop the ones no longer desired.
-    """
-
-    def running(self, name: str) -> bool: ...
-
-    def active(self) -> set[str]: ...
-
-    async def ensure_running(self, name: str, token: str) -> None: ...
-
-    async def ensure_stopped(self, name: str) -> None: ...
-
-    async def dispose(self) -> None: ...

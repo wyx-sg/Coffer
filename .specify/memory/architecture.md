@@ -126,7 +126,7 @@ backend/coffer/
 │   ├── agent/                   # agent config-file store
 │   ├── skill/                   # master store, sync engine
 │   ├── knowledge/               # paths, file tree, frontmatter, ripgrep
-│   └── channel/                 # telegram/seatalk transports, peer repo, render
+│   └── channel/                 # telegram/seatalk transports (incl. the SeaTalk websocket connector and its operator-supplied SDK loader), cloudflared supervision, peer repo, render
 └── surfaces/
     ├── http/                     # FastAPI app + per-kind sub-routers (incl. agent/skill/fs routes)
     ├── cli/                      # Typer app + per-kind subcommand groups
@@ -164,7 +164,9 @@ importing kind modules (Contract 6).
 | MCP protocol                   | daemon                 | `/mcp` HTTP/SSE endpoint speaking MCP JSON-RPC.                                                              |
 | CLI (`coffer …`)               | short-lived child      | Calls daemon over loopback HTTP.                                                                             |
 | Stdio shim (`coffer-mcp-shim`) | per MCP-client session | `stdin/stdout ↔ daemon HTTP/SSE` forwarder; detect-or-spawn daemon.                                         |
-| Callback listener              | daemon-spawned child   | Signed channel webhooks only (`POST /seatalk/{channel}`); loopback port behind a user-run tunnel (spec channels). |
+| Callback listener              | daemon-spawned child   | Signed channel webhooks only (`POST /seatalk/{channel}`); loopback port behind a tunnel. Runs only for SeaTalk channels on **webhook** delivery (spec channels FR-071). |
+| Managed tunnel (`cloudflared`) | daemon-spawned child   | One per webhook SeaTalk channel that records a Cloudflare connector token; terminates that channel's public callback URL so the owner need not run a tunnel by hand. |
+| SeaTalk websocket connection   | thread inside daemon   | One outbound connection per SeaTalk channel on **websocket** delivery — no listening socket, no tunnel, nothing exposed; events land on the same ingest seam the listener forwards to (spec channels FR-071/FR-072). |
 
 ## Processes
 
@@ -174,10 +176,21 @@ importing kind modules (Contract 6).
 - **Stdio shim** — short-lived; lifecycle bound to one MCP client process.
 - **Callback listener** — daemon-spawned child serving only signed channel
   callback paths on `127.0.0.1:<callback-port>`; runs while any SeaTalk
-  channel is enabled (spec channels, [Channel Adapter Framework](../../docs/decisions/channel-adapter-framework.md)).
+  channel on **webhook** delivery is enabled (spec channels, [Channel Adapter Framework](../../docs/decisions/channel-adapter-framework.md)).
+- **`cloudflared`** — daemon-spawned child, one per webhook SeaTalk channel that
+  records a connector token; the token reaches it through a `0600` temp file, never
+  argv, and the spawn is recorded in the upstream-pids directory so the startup
+  orphan sweep reaps it after a crash.
+- **No process for websocket delivery.** A SeaTalk channel on websocket delivery
+  is supervised *inside* the daemon — a worker thread holding one outbound
+  connection, reconciled like a tunnel is, backing off on failure and on being
+  kicked by another registration of the same app. It needs no separate process
+  because it exposes nothing: the constitution's separate-process rule guards
+  publicly reachable surfaces, and this one is a socket only this machine opened
+  ([SeaTalk Inbound Over WebSocket](../../docs/decisions/seatalk-websocket-inbound.md)).
 
-Both discover the daemon through `~/.coffer/daemon.json` (PID + port +
-token, mode `0600`) — runtime state, written at start and unlinked at exit.
+The shim and the listener discover the daemon through `~/.coffer/daemon.json`
+(PID + port + token, mode `0600`) — runtime state, written at start and unlinked at exit.
 Its counterpart `~/.coffer/daemon-config.json` holds the settings the daemon
 must read *before* it binds, and therefore before any database exists: today,
 the optional fixed port. See [Detect-or-Spawn](../../docs/decisions/daemon-detect-or-spawn.md).

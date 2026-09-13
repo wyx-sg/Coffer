@@ -39,6 +39,7 @@ describe("planChannel", () => {
 
     expect(plan.config).toEqual({
       channel_type: "seatalk",
+      delivery: "webhook",
       app_id: "app-1",
       app_secret_ref: "channel/st/app-secret",
       signing_secret_ref: "channel/st/signing-secret",
@@ -48,5 +49,70 @@ describe("planChannel", () => {
       { ref: "channel/st/app-secret", value: "s1" },
       { ref: "channel/st/signing-secret", value: "s2" },
     ]);
+  });
+
+  test("seatalk: delivery defaults to webhook when the form omits it", () => {
+    const parsed = addChannelFormSchema.parse({
+      channel_type: "seatalk",
+      name: "st",
+      app_id: "app-1",
+      app_secret: "s1",
+      signing_secret: "s2",
+    });
+    expect(parsed.channel_type === "seatalk" && parsed.delivery).toBe("webhook");
+  });
+
+  test("seatalk websocket: no signing secret, no public URL, no tunnel ref", () => {
+    const parsed = addChannelFormSchema.parse({
+      channel_type: "seatalk",
+      name: "st",
+      delivery: "websocket",
+      app_id: "app-1",
+      app_secret: "s1",
+    });
+    const plan = planChannel(parsed);
+
+    expect(plan.config).toEqual({
+      channel_type: "seatalk",
+      delivery: "websocket",
+      app_id: "app-1",
+      app_secret_ref: "channel/st/app-secret",
+      default_agent: "claude_code",
+    });
+    // Only the app secret is written — nothing lands at the signing-secret ref.
+    expect(plan.secrets).toEqual([{ ref: "channel/st/app-secret", value: "s1" }]);
+  });
+});
+
+describe("addChannelFormSchema (the backend's cross-field rule, mirrored)", () => {
+  const seatalk = {
+    channel_type: "seatalk" as const,
+    name: "st",
+    app_id: "app-1",
+    app_secret: "s1",
+  };
+
+  test("webhook delivery requires a signing secret", () => {
+    const parsed = addChannelFormSchema.safeParse({ ...seatalk, delivery: "webhook" });
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues.map((i) => i.path.join("."))).toContain("signing_secret");
+  });
+
+  test("websocket delivery accepts app id + app secret alone", () => {
+    expect(addChannelFormSchema.safeParse({ ...seatalk, delivery: "websocket" }).success).toBe(
+      true,
+    );
+  });
+
+  test("websocket delivery forbids every webhook-only field", () => {
+    for (const field of ["signing_secret", "public_base_url", "tunnel_token"]) {
+      const parsed = addChannelFormSchema.safeParse({
+        ...seatalk,
+        delivery: "websocket",
+        [field]: "x",
+      });
+      expect(parsed.success, field).toBe(false);
+      expect(parsed.error?.issues.map((i) => i.path.join("."))).toContain(field);
+    }
   });
 });

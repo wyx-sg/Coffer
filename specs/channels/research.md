@@ -63,10 +63,24 @@ message_id`, throttled edits), final reply as its own message with
 Verified against the official `seatalk-io/cs-bot` repository and mirrored
 official docs (the doc site requires a developer login).
 
-- **Inbound is webhook-only.** No polling or websocket. Events arrive as
-  `POST` JSON: `{event_id, event_type, timestamp, app_id, event}`. Single
-  chat messages are `event_type: "message_from_bot_subscriber"`; the sender
-  is identified by `employee_code`.
+- **Inbound has two delivery methods, and a bot uses one at a time.** There is
+  no polling. Either the platform POSTs each event to a public callback URL, or
+  the bot holds one outbound WebSocket and the platform pushes events down it
+  (**WebSocket Event Callback**, documented later than the rest of this research
+  and adopted in spec channels FR-071). The event body is the same either way:
+  `{event_id, event_type, timestamp, app_id, event}`. Single chat messages are
+  `event_type: "message_from_bot_subscriber"`; the sender is identified by
+  `employee_code`.
+- **The WebSocket path has exactly one client: SeaTalk's own SDK.** The wire
+  protocol is not published — the material covers calling the SDK — and
+  `seatalk-oapi-sdk-py` is distributed from an internal corporate portal, absent
+  from public PyPI, under no public licence. The SDK is synchronous and
+  thread-based (raw sockets, its own framing, a ping thread), registers with
+  `app_id` + `app_secret` on connect, exposes a generic event handler whose
+  payload is the raw event dict above, acks by `callback_id`, and **does not
+  reconnect**. One connection per app: a new registration kicks the previous
+  holder, reported as a kick. Hence FR-072's shape — an operator-supplied
+  optional dependency, with supervision and back-off written here.
 - **Callback URL**: http or https, must be publicly reachable (intranet IPs
   fail validation). Tunnels work. On save, SeaTalk posts
   `event_verification` containing `event.seatalk_challenge`; the server must
@@ -302,8 +316,8 @@ that no group endpoint existed; it does.
 | Decision           | Choice                                                                  | Rationale                                                                                                                                 |
 | ------------------ | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | Telegram transport | long polling via raw httpx                                              | local-first, no ingress; the API surface used is 7 small methods — an SDK dependency buys nothing and adds an import-confinement contract |
-| SeaTalk transport  | webhook → separate listener process + user-run tunnel                   | webhook is the only option; the constitution requires public-reachable surfaces to be a separate process limited to signed callback paths |
-| SeaTalk SDK        | none (raw httpx)                                                        | the official repo itself is a thin httpx-equivalent; token caching is ~20 lines                                                           |
+| SeaTalk transport  | webhook → separate listener process + a tunnel (user-run or Coffer-supervised); websocket → one outbound connection inside the daemon | the constitution requires public-reachable surfaces to be a separate process limited to signed callback paths, which the webhook path is; the websocket path exposes nothing, so it needs no process of its own (FR-071) |
+| SeaTalk SDK        | none for outbound (raw httpx); for websocket inbound, the official SDK, supplied by the operator in `~/.coffer/vendor` and never vendored or declared | for sending, the official repo is a thin httpx-equivalent and token caching is ~20 lines; for websocket inbound there is no alternative — the protocol is unpublished — and an MIT repository can neither redistribute that SDK nor depend on something absent from PyPI (FR-072) |
 | Pairing parameters | 8 chars, no `0O1I`, 1 h TTL, bounded guesses, fail closed               | matches both prior arts and Hermes' post-incident hardening                                                                               |
 | Telegram rendering | markdown → HTML, plain-text retry on rejection                          | OpenClaw-proven; MarkdownV2 escaping is a known bug farm                                                                                  |
 | Progress UX        | one editable status message, throttled; ack first; final reply separate | both prior arts; degrades naturally on SeaTalk via capability flags                                                                       |

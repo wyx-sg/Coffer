@@ -136,6 +136,7 @@ acceptance("channels", "channel status reports runtime, pairing, and callback de
       active_conversation_id: "conv-1",
     },
     callback: {
+      delivery: "webhook",
       port: 8466,
       path: "/seatalk/st",
       listener_running: true,
@@ -143,6 +144,8 @@ acceptance("channels", "channel status reports runtime, pairing, and callback de
       public_callback_url: null,
       tunnel_managed: false,
       tunnel_running: false,
+      websocket_state: null,
+      websocket_error: null,
     },
   });
   stubPairing();

@@ -121,7 +121,7 @@ backend/coffer/
 │   ├── agent/                   # agent 配置文件存储
 │   ├── skill/                   # 主存储、同步引擎
 │   ├── knowledge/               # 路径、文件树、frontmatter、ripgrep
-│   └── channel/                 # telegram/seatalk 传输、peer 仓储、渲染
+│   └── channel/                 # telegram/seatalk 传输（含 SeaTalk websocket connector 与由 operator 提供的 SDK 加载器）、cloudflared 监督、peer 仓储、渲染
 └── surfaces/
     ├── http/                     # FastAPI app + 每个 kind 的子路由 (含 agent/skill/fs 路由)
     ├── cli/                      # Typer app + 每个 kind 的子命令组
@@ -157,7 +157,9 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
 | MCP protocol                   | daemon                  | `/mcp` HTTP/SSE 端点，承载 MCP JSON-RPC。                                                                              |
 | CLI (`coffer …`)               | 短生命周期子进程        | 通过 loopback HTTP 调用 daemon。                                                                                       |
 | Stdio shim (`coffer-mcp-shim`) | 每个 MCP 客户端会话一份 | `stdin/stdout ↔ daemon HTTP/SSE` 转发器；检测 daemon，否则拉起。                                                      |
-| Callback listener              | daemon 拉起的子进程     | 只服务带签名的 channel webhook (`POST /seatalk/{channel}`)；loopback 端口，公网侧由用户自行运行的隧道承接 (spec channels)。 |
+| Callback listener              | daemon 拉起的子进程     | 只服务带签名的 channel webhook (`POST /seatalk/{channel}`)；loopback 端口，公网侧由一条隧道承接。仅为使用 **webhook** 投递的 SeaTalk channel 运行 (spec channels FR-071)。 |
+| 托管隧道 (`cloudflared`)       | daemon 拉起的子进程     | 每个记录了 Cloudflare connector token 的 webhook SeaTalk channel 一个；终结该 channel 的公网回调 URL，属主无需自己跑隧道。 |
+| SeaTalk websocket 连接         | daemon 内的线程         | 每个使用 **websocket** 投递的 SeaTalk channel 一条出网连接 —— 没有监听 socket，没有隧道，什么都不暴露；事件落在监听器转发去的同一道摄入接缝上 (spec channels FR-071/FR-072)。 |
 
 ## 进程 (Processes)
 
@@ -166,10 +168,18 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
   未固定则取 8000–8009 中第一个空闲端口。持有全部状态；唯一的 SQLite 写入者。
 - **Stdio shim** — 短生命周期；其生命周期绑定到单个 MCP 客户端进程。
 - **Callback listener** — daemon 拉起的子进程，只在
-  `127.0.0.1:<callback-port>` 上服务带签名的 channel 回调路径；在任何
-  SeaTalk channel 处于启用状态时运行 (spec channels，[Channel Adapter Framework](../../docs/decisions/channel-adapter-framework.md))。
+  `127.0.0.1:<callback-port>` 上服务带签名的 channel 回调路径；在任何使用
+  **webhook** 投递的 SeaTalk channel 处于启用状态时运行 (spec channels，[Channel Adapter Framework](../../docs/decisions/channel-adapter-framework.md))。
+- **`cloudflared`** — daemon 拉起的子进程，每个记录了 connector token 的 webhook
+  SeaTalk channel 一个；token 通过一个 `0600` 临时文件交给它，绝不进 argv，而这次拉起
+  会记进 upstream-pids 目录，以便崩溃后由启动时的孤儿清扫回收它。
+- **websocket 投递没有进程。** 使用 websocket 投递的 SeaTalk channel 是在 daemon
+  **内部**被监督的——一个工作线程持有一条出网连接，像隧道那样被收敛，在失败时、以及在被
+  同一个 app 的另一次注册踢掉时退避。它不需要独立进程，因为它什么都不暴露：章程的「独立
+  进程」规则守的是公网可达的 surface，而这一条是只由本机打开的 socket
+  （[SeaTalk 入站走 WebSocket](../../docs/decisions/seatalk-websocket-inbound.zh.md)）。
 
-两者通过 `~/.coffer/daemon.json` 发现 daemon (PID + 端口 + token，权限位
+shim 与监听器通过 `~/.coffer/daemon.json` 发现 daemon (PID + 端口 + token，权限位
 `0600`) —— 那是运行态，启动时写入、退出时删除。与它成对的
 `~/.coffer/daemon-config.json` 存放 daemon 必须在**绑定端口之前**、因而也在任何
 数据库存在之前就读到的设置：目前是那个可选的固定端口。见

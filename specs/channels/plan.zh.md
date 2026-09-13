@@ -11,6 +11,13 @@ Telegram 与 SeaTalk 是头两个 adapter。一个独立的回调监听器进程
 提供 webhook ingress，遵循章程的公网 surface 规则。前端在 Agents 导航组
 里新增一个 Channels 页面。
 
+SeaTalk 后来有了第二种入站传输（FR-071）：`delivery: "websocket"` 的 channel 改为
+持有一条出网连接，因此既不需要监听器，也不需要隧道与签名。它在 daemon 内部被监督
+——一个按 channel 的 connector，按托管隧道那样的方式做收敛——并建立在平台自己的
+客户端库之上，而该库由 operator 放在 `~/.coffer/vendor`，本仓库绝不 vendor、也绝不
+声明它（FR-072，[SeaTalk 入站走 WebSocket](../../docs/decisions/seatalk-websocket-inbound.zh.md)）。
+两种传输在同一个摄入入口会合，因此 ingress 下游的一切都察觉不到差别。
+
 ## Technical Context
 
 - **进程内直接驱动平台** —— `ChatService.create_conversation`、
@@ -34,7 +41,10 @@ Telegram 与 SeaTalk 是头两个 adapter。一个独立的回调监听器进程
   显式注册的 IM 平台。✓
 - **公网可达 surface 必须是独立进程、只服务带签名的路径** —— SeaTalk
   监听器是独立进程，只服务 `POST /seatalk/{channel}` + 签名校验，绑定
-  127.0.0.1，公网 URL 由用户的隧道提供。daemon 本身保持仅 loopback。✓
+  127.0.0.1，公网 URL 由一条隧道提供——属主自己跑的那条，或 daemon 依据 channel 上
+  connector token 监督的一个 `cloudflared` 子进程。daemon 本身保持仅 loopback。使用
+  websocket 投递的 channel 根本没有可达的 surface（socket 是出网的），因此无需任何
+  进程即满足该规则。✓
 - **凭据** —— bot token、app secret、signing secret 都活在凭据存储里；
   配置只携带 ref；ref 在注册时被探测；secret 经 env 传给监听器子进程
   （沿用既定的 MCP 子进程模式），从不持久化或写日志。✓

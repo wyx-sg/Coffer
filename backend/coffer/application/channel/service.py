@@ -38,15 +38,32 @@ _logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class CallbackInfo:
+    """How this SeaTalk channel receives events, and whether that is working.
+
+    FR-071: the block covers both delivery methods, and every field that belongs
+    to the other one reports its absent value rather than a plausible-looking
+    lie. On websocket delivery there is no port, no path, no public URL, no
+    listener and no tunnel — ``websocket_state`` carries the whole truth instead.
+    """
+
     port: int
     path: str
     listener_running: bool
+    # "webhook" | "websocket" — which of the two transports this channel uses.
+    delivery: str = "webhook"
     public_base_url: str | None = None
     public_callback_url: str | None = None
     # Whether Coffer manages a cloudflared tunnel for this channel (a token is
     # configured) and whether that tunnel process is currently alive.
     tunnel_managed: bool = False
     tunnel_running: bool = False
+    # connecting | connected | kicked | sdk_missing | error — None on webhook
+    # delivery, and on a websocket channel that is not running at all.
+    websocket_state: str | None = None
+    # The last thing that went wrong on the connection, verbatim, because the
+    # two failures that matter (no SDK, another process holds the connection)
+    # are only actionable if the owner can read them.
+    websocket_error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -161,20 +178,7 @@ class ChannelService:
         channel_type = str(resource.config.get("channel_type", ""))
         callback: CallbackInfo | None = None
         if channel_type == "seatalk":
-            path = f"/seatalk/{name}"
-            base = resource.config.get("public_base_url")
-            base = base if isinstance(base, str) and base else None
-            token_ref = resource.config.get("tunnel_token_ref")
-            tunnel_managed = bool(isinstance(token_ref, str) and token_ref)
-            callback = CallbackInfo(
-                port=self._runtime.listener_port,
-                path=path,
-                listener_running=self._runtime.listener_running,
-                public_base_url=base,
-                public_callback_url=f"{base}{path}" if base else None,
-                tunnel_managed=tunnel_managed,
-                tunnel_running=self._runtime.tunnel_running(name),
-            )
+            callback = self._callback_info(name, resource)
         return ChannelStatus(
             diagnostics=self._diagnostics(name, resource),
             name=name,
@@ -184,6 +188,37 @@ class ChannelService:
             pending_pairing=self._pairing.pending(name),
             peer=peer,
             callback=callback,
+        )
+
+    def _callback_info(self, name: str, resource: Resource) -> CallbackInfo:
+        """The inbound-transport block for a SeaTalk channel (FR-071)."""
+        if str(resource.config.get("delivery") or "webhook") == "websocket":
+            state = self._runtime.websocket_state(name)
+            return CallbackInfo(
+                # Nothing listens, nothing is tunnelled and no URL exists on this
+                # path; reporting the listener's port here would invite the owner
+                # to go looking for ingress that is not part of the design.
+                port=0,
+                path="",
+                listener_running=False,
+                delivery="websocket",
+                websocket_state=state[0] if state is not None else None,
+                websocket_error=state[1] if state is not None else None,
+            )
+        path = f"/seatalk/{name}"
+        base = resource.config.get("public_base_url")
+        base = base if isinstance(base, str) and base else None
+        token_ref = resource.config.get("tunnel_token_ref")
+        tunnel_managed = bool(isinstance(token_ref, str) and token_ref)
+        return CallbackInfo(
+            port=self._runtime.listener_port,
+            path=path,
+            listener_running=self._runtime.listener_running,
+            delivery="webhook",
+            public_base_url=base,
+            public_callback_url=f"{base}{path}" if base else None,
+            tunnel_managed=tunnel_managed,
+            tunnel_running=self._runtime.tunnel_running(name),
         )
 
     async def test_callback(self, name: str) -> CallbackTestResult:
@@ -198,6 +233,17 @@ class ChannelService:
         if str(config.get("channel_type", "")) != "seatalk":
             return CallbackTestResult(
                 ok=False, detail="callback test applies to SeaTalk channels only"
+            )
+        if str(config.get("delivery") or "webhook") == "websocket":
+            # There is nothing to probe: the bot dials out, so no public URL, no
+            # listener and no tunnel exist on this path. The channel's websocket
+            # state is the health answer here.
+            return CallbackTestResult(
+                ok=False,
+                detail=(
+                    "this channel receives events over WebSocket, so there is no public "
+                    "callback URL to probe — check the connection state instead"
+                ),
             )
         base = config.get("public_base_url")
         if not (isinstance(base, str) and base):
