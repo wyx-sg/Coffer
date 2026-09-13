@@ -1,7 +1,7 @@
 """take the curated ``models`` set back OFF every agent
 
 Model curation moved from the AGENT to the CHANNEL when this revision was
-written, and 0067 later took it off the channel too — nothing curates models
+written, and 0068 later took it off the channel too — nothing curates models
 now. What was already true here survived both moves: an agent answers one
 question — what can this agent be put on — and the answer is its whole
 catalogue. The per-agent ticked set 0060 introduced has no reader left: the

@@ -257,7 +257,7 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-11b](../../
   a second place to tick turned out to be one more thing to keep in step with a
   catalogue that changes on its own. The agent field, its routes and migration
   0060's backfill are gone, stripped by migration 0063; the channel's pair went
-  with migration 0067. What remains is the honest version: the whole filtered
+  with migration 0068. What remains is the honest version: the whole filtered
   catalogue is offered, and a model this account cannot run fails when it is
   picked. Hardcoding the nine stays rejected: Claude Code ships models every few
   weeks, and a user whose new model never appeared would have no way to find out

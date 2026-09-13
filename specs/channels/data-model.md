@@ -49,7 +49,7 @@ Validation rules:
   and `models` allowed range; both are gone, because a channel binds an agent
   and nothing more: a new conversation runs on the bound agent's own CLI
   default, and the `/model` card offers that agent's whole catalogue and refuses
-  no id. Migration `20260912_0067_drop_channel_model_curation.py` takes both keys
+  no id. Migration `20260912_0068_drop_channel_model_curation.py` takes both keys
   off every stored channel config in one direction only, with no load-time shim
   (house rule) — `_CommonChannelFields` forbids extra keys, so a row still
   carrying them would fail to validate on load.

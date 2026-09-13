@@ -1,4 +1,4 @@
-"""Revision 0067: model curation comes back OFF every channel.
+"""Revision 0068: model curation comes back OFF every channel.
 
 A channel curates no models: a new conversation opens on the bound agent's own
 CLI default and ``/model`` offers that agent's whole catalogue, refusing
@@ -39,7 +39,7 @@ def _config(db_path, name: str, kind: str = "channel") -> dict[str, object]:
     return json.loads(raw)
 
 
-def test_0067_strips_both_keys_and_leaves_everything_else(tmp_path, monkeypatch):
+def test_0068_strips_both_keys_and_leaves_everything_else(tmp_path, monkeypatch):
     """Every channel row loses both keys, curated or not, and keeps the rest of
     its config. A CONNECTION's own curated set (0059) is a different field on a
     different kind and stays exactly where it is."""
@@ -76,8 +76,8 @@ def test_0067_strips_both_keys_and_leaves_everything_else(tmp_path, monkeypatch)
         )
         _seed(conn, "provider", "acme", {"protocol": "openai", "models": ["gpt-5"]})
 
-    command.upgrade(cfg, "0067")
-    assert _alembic_version(db_path) == "0067"
+    command.upgrade(cfg, "0068")
+    assert _alembic_version(db_path) == "0068"
 
     curated = _config(db_path, "tg")
     assert "default_model" not in curated
@@ -95,7 +95,7 @@ def test_0067_strips_both_keys_and_leaves_everything_else(tmp_path, monkeypatch)
     assert _config(db_path, "acme", kind="provider")["models"] == ["gpt-5"]
 
 
-def test_0067_downgrade_restores_the_uncurated_default(tmp_path, monkeypatch):
+def test_0068_downgrade_restores_the_uncurated_default(tmp_path, monkeypatch):
     """Down puts both keys back in their uncurated form — no model pinned and an
     empty (no restriction) range, which is what every reader below this revision
     treats as "the agent's default, offer everything". Which model was pinned
@@ -119,7 +119,7 @@ def test_0067_downgrade_restores_the_uncurated_default(tmp_path, monkeypatch):
             },
         )
 
-    command.upgrade(cfg, "0067")
+    command.upgrade(cfg, "0068")
     command.downgrade(cfg, "0066")
 
     assert _alembic_version(db_path) == "0066"
@@ -128,7 +128,7 @@ def test_0067_downgrade_restores_the_uncurated_default(tmp_path, monkeypatch):
     assert restored["models"] == []
 
 
-def test_0067_leaves_an_unparseable_row_alone(tmp_path, monkeypatch):
+def test_0068_leaves_an_unparseable_row_alone(tmp_path, monkeypatch):
     """A config JSON the migration cannot read is not guessed at — it is left
     exactly as found, and the upgrade still completes for every other row."""
     db_path = tmp_path / "channel_models_bad.db"
@@ -148,7 +148,7 @@ def test_0067_leaves_an_unparseable_row_alone(tmp_path, monkeypatch):
             {"channel_type": "telegram", "bot_token_ref": "a/b", "models": ["claude-opus-5"]},
         )
 
-    command.upgrade(cfg, "0067")
+    command.upgrade(cfg, "0068")
 
     with sqlite3.connect(db_path) as conn:
         (raw,) = conn.execute("SELECT config_json FROM resources WHERE name = 'broken'").fetchone()
