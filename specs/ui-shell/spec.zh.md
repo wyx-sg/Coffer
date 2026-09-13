@@ -26,6 +26,7 @@
   Model providers  /model-providers   — 带凭据的厂商端点
   Channels         /channels          — agent 应答所在的 IM 传输
  SYSTEM
+  Activity         /activity          — 改了什么、调了什么、哪里坏了
   Settings         /settings
 ```
 
@@ -41,11 +42,11 @@ Settings 下的 kind（当时叫「LLM connections」），而那个旧名字描
 于是 AGENTS 组只剩一项。这个不对称是有意的：agent 是这个产品里唯一**使用**金库、
 而不是住在金库里的东西，为省一行而合并掉这个分组会丢掉这个区分。
 
-应用的 index (`/`) 重定向到 `/agents`，因此首次访问者落在 Agents 界面。它分组为 **Agents**（消费者）、**Resources**（resource kind）与 **System**（横切工具：Settings），这样导航在 Coffer 成长时保持稳定。agent 住在 `/agents`（列表）与 `/agents/:name`（详情），不出现在 `/mcp-servers` 的 kind 浏览器里。（`/resources` 保留为指向 `/mcp-servers` 的 legacy 重定向，兼容旧书签。）agent 详情页是一个简单的 **Overview + Config files** 详情页：一个 Overview tab 汇总 agent 已注册的配置，一个 Config files tab 只读地呈现其已知配置文件，没有创建 / 编辑 / 删除 / 启用。
+应用的 index (`/`) 重定向到 `/agents`，因此首次访问者落在 Agents 界面。它分组为 **Agents**（消费者）、**Resources**（resource kind）与 **System**（横切工具：Activity 与 Settings），这样导航在 Coffer 成长时保持稳定。agent 住在 `/agents`（列表）与 `/agents/:name`（详情），不出现在 `/mcp-servers` 的 kind 浏览器里。（`/resources` 保留为指向 `/mcp-servers` 的 legacy 重定向，兼容旧书签。）agent 详情页是一个简单的 **Overview + Config files** 详情页：一个 Overview tab 汇总 agent 已注册的配置，一个 Config files tab 只读地呈现其已知配置文件，没有创建 / 编辑 / 删除 / 启用。
 
-所有列表界面（agents、MCP servers、skills、knowledge、model providers、channels）共用同一个可搜索、可过滤、可分页的表格：点击一行打开该项的详情页，行内操作是紧凑的图标。卡片只保留给欢迎 / 空态。
+所有列表界面（agents、MCP servers、skills、knowledge、model providers、channels、Activity 的每个 tab）共用同一个可搜索、可过滤、可分页的表格：点击一行打开该项的详情页，行内操作是紧凑的图标。卡片只保留给欢迎 / 空态。
 
-**Observability**（系统健康 / 指标）已规划但今天不展示；它只在自己上线时才进入侧栏。反过来这条规则同样成立——一个入口在它的功能被删掉时也要被删掉，Chat、Machines 与 Audit log 就是这样离开的。
+**Observability**（系统健康 / 指标）已规划但今天不展示；它只在自己上线时才进入侧栏。Activity 不是它：一份「发生了什么」的记录，不等于一份「系统状况如何」的度量。反过来这条规则同样成立——一个入口在它的功能被删掉时也要被删掉，Machines 就是这样离开的。
 
 侧栏可折叠到只剩图标的轨道再展开；选择跨会话持久化（localStorage）。
 
@@ -73,15 +74,13 @@ Settings 下的 kind（当时叫「LLM connections」），而那个旧名字描
 
 已经在用 Coffer 做 MCP gateway 聚合的开发者希望日常流程——注册服务器、看健康、浏览工具、切换能力——看起来、用起来像一个真正的产品，而不是一坨脚手架。标题在字体上有区分；间距统一；每台服务器页面在 per-tool 开关之前先有一个"这台服务器在干嘛"的总览视图；空 / 错 / 加载态都是一等公民。Tools、Resources、Prompts 三个 tab 保持统一——各自带相同的搜索框、状态过滤和逐行启用开关，即使上游没有该类型的任何条目也保留这套外壳（空态渲染在表格内部，而不是一张光秃秃的卡片）。服务器列表带搜索框、状态过滤、客户端分页，让一个大 vault 也能浏览。它的状态列不是一个开关：一项资源的触达范围是三态的——停用 / 所有 agent / 指定 agent——所以列表里放的就是详情页头部的那个控件，可以就地设置；状态过滤同样给出这三个状态，而不是单纯的启用／停用。技能列表出于同样的理由，做法一致。
 
-没有 **Invocations** tab，Overview 上也不再有"Last invocation"那一行。这个 tab
-曾经上线过——一张带过滤、分页的表格，列出 gateway 代理过的每一次调用，每一行都能
-展开成该次调用的原始 JSON 记录——而它和下一个故事里审计日志那个页面的毛病是同一个：
-上面的流量不是用户的。每一行都是某个 agent 在通过 gateway 调一个工具；人想知道某次
-调用为什么失败时，是去问那个 agent，而不是趴在 gateway 肩膀上读它的表格。
-
-记录本身没有任何变化。gateway 依然把每一次调用写进 invocation 日志，
-`GET /api/v1/resources/mcp_server/{name}/invocations` 与 `coffer mcp invocations`
-依然能读回来——给能调这个路由的 agent，也给脚本。消失的是那个页面。
+**Invocations** tab 列出 gateway 为这台服务器代理过的每一次调用，从新到旧，
+可按状态与时间范围过滤，每一行都能展开成该次调用的原始 JSON 记录。它曾经被删过一次，
+理由是「上面的流量不是用户的」——每一行都是某个 agent 在调一个工具，人想知道某次调用
+为什么失败时该去问那个 agent。这个理由成立，直到坏掉的正是那个 agent；那时候这张表
+就是它做过什么的唯一账本。这个 tab 读的还是 gateway 一直在写的那份记录；它和 Activity
+的 **MCP 调用** tab（User Story 3）是同一张表，只是把范围收到一台服务器，而不是另起
+一张要跟着对方一起维护的表。
 
 "Add MCP server" 是一个对话框，用户把标准的 `mcpServers` JSON 块粘进去（一次一台或多台都行）——就是每台 MCP server README 给的那块。Review 一步让他们确认哪些 `env` 是 secret；这些值会被提到加密凭据存储（config 里只保留它们的 ref），而不是以明文写在 config 里。
 
@@ -97,28 +96,54 @@ Settings 下的 kind（当时叫「LLM connections」），而那个旧名字描
 
 ---
 
-### User Story 3 —— 审计日志由 agent 来读，而不是由人来浏览 (Priority: P2)
+### User Story 3 —— 三份记录，一个页面，各一张表 (Priority: P2)
 
-审计日志曾经有一个页面：System 组下 `/audit` 处一张带过滤、分页的活动行表格。
-**它已被删除。** 实际上没人打开过它。人不会专门坐下来浏览「我的金库里改了什么」——
-人是发现有东西坏了，然后去问那个帮他的角色，而那个角色是 agent。
+Coffer 保留三份「发生了什么」的账本：**审计日志**（金库里改了什么、谁改的）、
+**MCP 调用日志**（gateway 代理过的每一次调用）、**守护进程日志**（Coffer 自己做了
+什么，包括坏在哪）。审计日志的页面被删掉，理由是没人会专门去浏览「我的金库里改了
+什么」；Invocations tab 被删掉，理由是那上面每一行都属于某个 agent。两次删除对各自
+那个界面的判断都没错，错在它们背后的需求：东西不对劲的时候，问题从来不是「改了
+什么」「调了什么」或「哪里报错了」，而是**发生了什么**；而回答它，意味着手里攥着三份
+记录，自己拿手去拼。
 
-于是这份日志保住了它的读者，丢掉了它的页面。`coffer__diagnose` 一次给 agent 两份
-记录——审计日志（改了什么、谁改的）与守护进程自己的日志（发生了什么，包括失败）——
-放在同一条从新到旧的时间线上。agent 手里本来就有这个工具，不需要知道文件路径，
-拿到的是已经对齐好的两侧，而不是两样还要自己拼起来的东西。
+于是三份有了同一个家。**Activity**（System 组下，`/activity`）是一个页面，
+每份记录一个 tab——**变更**、**MCP 调用**、**守护进程**——各自一张从新到旧的表，
+带着那份记录真正拥有的列：一行活动和它的 actor；一次调用的服务器、能力、耗时与结果；
+一条日志的级别、logger 与消息。每个 tab 都能按自由文本和时间范围过滤，外加它那份记录
+才有的那一个过滤（actor、调用状态、只看错误）；任意一行都能展开成它的原始记录，
+以等宽、可滚动的代码块美化打印。
 
-REST 路由与 `coffer audit` 保留，供脚本使用。消失的是那个页面、它那套口语化渲染，
-以及那 39 条翻译好的事件字符串——它们当初存在，是为了让中文读者不会在某一行上看到
-生的 `event_type`。现在没有任何东西再渲染一行了，而 agent 要的正是线上原值。
+三者曾短暂地被合并成一条时间线，而正是那次合并让列的问题显形：一张表只能承载三份
+记录的最小公约数，于是一个「详情」列轮流表示 actor、服务器和 logger，而一次调用的
+耗时、一条记录的级别根本无处安放。跨记录的对齐仍然是 `coffer__diagnose` 的活儿——
+它返回的就是拼好的两侧，服务于那个问「刚才发生了什么」而不是「把某一类完整给我」
+的读者。
 
-**Why this priority**：P2 —— 这是一次删除加一个工具，不是一个新界面。
+只有当前可见的那个 tab 会发请求。某份记录的路由失败时，错误渲染在它自己的 tab 里：
+一条泳道挂掉不能把另外两条一起拖下水。页面没有手动刷新控件——切 tab 或改过滤就会
+换查询并重新拉取。
 
-**Independent Test**：`/audit` 不再有路由，侧边栏也没有任何入口指向它；agent 调用
-`coffer__diagnose` 会在一个响应里拿回最近的变更与最近的日志记录。
+`GET /api/v1/audit` 与 `coffer audit` 不变。页面为另外两条泳道新增两条只读路由：
+`GET /api/v1/mcp/invocations`（跨服务器，每行点名自己属于哪台）与
+`GET /api/v1/daemon/logs`。守护进程日志那条路由把 token 依赖挂在路由自身上——
+daemon 的 router 让 `/status` 保持开放，而日志内容不是状态。
+
+事件类型重新渲染成口语化的活动行（"Enabled demo-fs"），因此它们的译文在两个 locale
+里一并回来，并像错误码那样被守住：新增一个没有译文的事件类型会让 CI 失败，而不是
+让中文读者在某一行上看到生的 `resource_enabled`。
+
+**Why this priority**：P2 —— 一个界面，覆盖三份已经存在的记录；不新采集任何数据。
+
+**Independent Test**：打开 `/activity` —— 渲染出三个 tab，每个用自己的列展示自己那份
+记录；展开一行看到它的原始记录；某个 tab 的路由不可用时错误只出现在它自己里面、
+另外两个照常工作；旧的 `/audit` 地址重定向到这里。
 
 **Representative scenarios**（完整列表见 `## Acceptance Scenarios`）：
 
+- activity gives each record its own tab
+- activity row expands to its raw record
+- a failing record shows its error inside its own tab
+- legacy /audit redirects to activity
 - an agent reads recent changes and failures in one call
 
 ---
@@ -152,6 +177,32 @@ REST 路由与 `coffer audit` 保留，供脚本使用。消失的是那个页�
 
 ## Acceptance Scenarios
 
+### Scenario: activity gives each record its own tab
+
+- **Given** Coffer 已记录过一条审计条目、一次 MCP 调用与一条守护进程日志
+- **When** 用户打开 `/activity` 并依次走过它的三个 tab
+- **Then** 每个 tab 用那份记录自己的列渲染出自己那张从新到旧的表——一行活动和 actor；一次调用的服务器、能力、耗时与结果；一条日志的级别、logger 与消息
+- **And** 一条变更读作口语化的一行，而不是生的事件码
+
+### Scenario: activity row expands to its raw record
+
+- **Given** 某个 Activity tab 至少有一行
+- **When** 用户点击（或在该行上按 Enter/Space）
+- **Then** 展开区域渲染出它的原始记录——完整的底层 JSON，以等宽、可滚动的代码块美化打印
+
+### Scenario: a failing record shows its error inside its own tab
+
+- **Given** 三条路由中的一条不可用（比如一个还没有这条路由的旧 daemon）
+- **When** 用户打开 `/activity`
+- **Then** 失败的那份记录在它自己的 tab 里渲染出可读的错误
+- **And** 另外两个 tab 照常渲染出各自的行
+
+### Scenario: legacy /audit redirects to activity
+
+- **Given** 用户跟着旧书签访问 `/audit`
+- **When** 路由解析
+- **Then** 应用重定向到 `/activity`，且不出现 "page not found" 视图
+
 ### Scenario: an agent reads recent changes and failures in one call
 
 - **Given** Coffer 已记录过审计条目并写过守护进程日志
@@ -166,7 +217,7 @@ REST 路由与 `coffer audit` 保留，供脚本使用。消失的是那个页�
 - **When** 他们在真实浏览器里访问 `http://localhost:5173/`
 - **Then** index 重定向到 `/agents`，页面在 2 秒内渲染出侧栏 + 主内容区
 - **And** 主内容显示 Agents 欢迎视图（不出现 generic error 卡片）
-- **And** 侧栏列出 Coffer 的运营界面——Agents、MCP servers、Skills、Knowledge、Model providers、Channels、Settings——分组在 "Agents"、"Resources"、"System" 标题下
+- **And** 侧栏列出 Coffer 的运营界面——Agents、MCP servers、Skills、Knowledge、Model providers、Channels、Activity、Settings——分组在 "Agents"、"Resources"、"System" 标题下
 
 ### Scenario: token-missing renders an actionable empty state
 
@@ -280,7 +331,7 @@ REST 路由与 `coffer audit` 保留，供脚本使用。消失的是那个页�
 
 - 上面每一条 scenario 至少有一条覆盖测试（unit / integration / e2e），并且 `audit_acceptance` 同时通过 001 与 002。
 - 首次用户能在 app 内注册一台 MCP 服务器并到达一个能工作的 gateway；把 MCP 客户端指向 shim 这一步在项目 README 中记录。
-- 侧栏只展示运营界面（Agents、MCP servers、Skills、Knowledge、Model providers、Channels、Settings），按角色分组；没有任何功能以"敬请期待"的死占位项出现。
-- 审计日志没有页面：`/audit` 与 legacy `/observability` 都不再解析，侧栏也没有任何入口指向它们。agent 通过 `coffer__diagnose` 读这份日志，脚本通过 REST 路由与 `coffer audit` 读。MCP invocation 日志同样没有页面，理由也一样——它里面的每一行都是某个 agent 在调工具，不是人——所以它保留 REST 路由与 `coffer mcp invocations`，丢掉那个 tab。Observability（系统健康 / 指标）是预留的未来界面，不是审计日志。
+- 侧栏只展示运营界面（Agents、MCP servers、Skills、Knowledge、Model providers、Channels、Activity、Settings），按角色分组；没有任何功能以"敬请期待"的死占位项出现。
+- Coffer 保留的三份记录——审计日志、MCP 调用日志、守护进程日志——对人经由 `/activity` 这一个页面抵达，一份记录一个 tab、一张表，对 agent 经由 `coffer__diagnose` 这一次调用抵达，它返回的是拼好的；`/audit` 与 legacy `/observability` 重定向到那里，而不是 404。脚本仍然有 `GET /api/v1/audit` / `coffer audit` 与 `coffer mcp invocations`。Observability（系统健康 / 指标）是预留的未来界面，不是这个。
 - Settings 把数据控件（retention 与 prune）归到 Data tab；daemon 永不作为用户可见概念出现，任何 tab 都不暴露 shutdown 或 token-rotation。
 - `make verify` + `make verify-e2e` 绿。

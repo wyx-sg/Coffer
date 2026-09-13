@@ -12,10 +12,12 @@ interface UseAuditArgs {
   eventType?: string;
   since?: string;
   limit?: number;
+  /** False switches the lane off entirely — no request, no discarded response. */
+  enabled?: boolean;
 }
 
 export function useAudit(args: UseAuditArgs) {
-  const { kind, name, eventType, since, limit = 50 } = args;
+  const { kind, name, eventType, since, limit = 50, enabled = true } = args;
   return useQuery({
     queryKey: ["audit", { kind, name, eventType, since, limit }],
     queryFn: async (): Promise<AuditListOut> => {
@@ -32,5 +34,6 @@ export function useAudit(args: UseAuditArgs) {
       if (!data) throw new ApiError("INTERNAL_ERROR", "empty audit response");
       return data;
     },
+    enabled,
   });
 }

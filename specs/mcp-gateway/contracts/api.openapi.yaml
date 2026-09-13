@@ -290,6 +290,39 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /mcp/invocations:
+    get:
+      tags: [mcp]
+      operationId: listAllMcpInvocations
+      summary: Every server's invocations on one timeline, newest-first.
+      parameters:
+        - in: query
+          name: name
+          required: false
+          description: Narrow to one upstream server.
+          schema: { type: string }
+        - in: query
+          name: since
+          required: false
+          schema: { type: string, format: date-time }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, default: 50, minimum: 1, maximum: 500 }
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum: [ok, error, timeout, denied]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvocationListOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /resources/mcp_server/{name}/invocations:
     parameters:
       - in: path
@@ -438,6 +471,32 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DaemonStatusOut" }
+
+  /daemon/logs:
+    get:
+      tags: [daemon]
+      operationId: listDaemonLogs
+      summary: The tail of daemon.log, newest-first.
+      parameters:
+        - in: query
+          name: since
+          required: false
+          schema: { type: string, format: date-time }
+        - in: query
+          name: errors_only
+          required: false
+          schema: { type: boolean, default: false }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, default: 100, minimum: 1, maximum: 500 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DaemonLogListOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /daemon/shutdown:
     post:
@@ -882,9 +941,19 @@ components:
     InvocationOut:
       type: object
       required:
-        [timestamp, capability_type, capability_key, duration_ms, status]
+        [
+          timestamp,
+          resource_name,
+          capability_type,
+          capability_key,
+          duration_ms,
+          status,
+        ]
       properties:
         timestamp: { type: string, format: date-time }
+        resource_name:
+          type: string
+          description: Which upstream server the call went to.
         capability_type:
           type: string
           enum: [tool, resource, prompt]
@@ -1037,3 +1106,33 @@ components:
             type: string,
             description: "New token; clients must re-read daemon.json",
           }
+
+    DaemonLogRecordOut:
+      type: object
+      required: [record]
+      properties:
+        timestamp:
+          type: string
+          nullable: true
+        level:
+          type: string
+          nullable: true
+        event:
+          type: string
+          nullable: true
+          description: structlog's `event` field — the message.
+        record:
+          type: object
+          additionalProperties: true
+          description: >-
+            The whole parsed line: a structlog record's full dict, or
+            `{"raw": "<line>"}` for a line that is not JSON (usually a
+            traceback, and usually the interesting one).
+
+    DaemonLogListOut:
+      type: object
+      required: [records]
+      properties:
+        records:
+          type: array
+          items: { $ref: "#/components/schemas/DaemonLogRecordOut" }

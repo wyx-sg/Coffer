@@ -146,6 +146,26 @@ class TokenRotationOut(BaseModel):
     token: str = Field(description="New token; clients must re-read daemon.json")
 
 
+class DaemonLogRecordOut(BaseModel):
+    """One line of ``daemon.log``, parsed where possible.
+
+    ``record`` always carries the whole thing — a structlog line's full dict,
+    or ``{"raw": <line>}`` for a line that is not JSON. The three lifted
+    fields are what a timeline renders without having to know structlog's
+    shape; they are absent on a raw line, which is why they are nullable.
+    """
+
+    timestamp: str | None = None
+    level: str | None = None
+    #: structlog's ``event`` field — the message.
+    event: str | None = None
+    record: dict[str, Any]
+
+
+class DaemonLogListOut(BaseModel):
+    records: list[DaemonLogRecordOut]
+
+
 # --- MCP capability views ---
 
 
@@ -199,6 +219,10 @@ class McpTestResultOut(BaseModel):
 
 class InvocationOut(BaseModel):
     timestamp: datetime
+    #: Which upstream server the call went to. Required, not optional: the
+    #: cross-server timeline is unreadable without it, and the per-server
+    #: route knows it too.
+    resource_name: str
     capability_type: str = Field(pattern="^(tool|resource|prompt)$")
     capability_key: str
     duration_ms: int

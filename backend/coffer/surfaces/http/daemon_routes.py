@@ -1,4 +1,4 @@
-"""/api/v1/daemon/* routes — status, shutdown, rotate-token."""
+"""/api/v1/daemon/* routes — status, logs, shutdown, rotate-token."""
 
 from __future__ import annotations
 
@@ -11,15 +11,19 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 import coffer
 from coffer.application.audit_service import AuditService
+from coffer.application.log_reader import matches_level, parse_log_line, tail_lines
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
+from coffer.infrastructure.logging.files import log_dir
 from coffer.surfaces.http.auth import require_token, set_active_token
 from coffer.surfaces.http.dependencies import get_actor, get_audit_service
 from coffer.surfaces.http.schemas import (
+    DaemonLogListOut,
+    DaemonLogRecordOut,
     DaemonStatusOut,
     TokenRotationOut,
     UpstreamSummary,
@@ -207,3 +211,57 @@ async def rotate_token(
 async def shutdown_daemon() -> Response:
     _schedule_shutdown()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# === daemon log tail ===
+
+
+def _lift(record: dict[str, Any], key: str) -> str | None:
+    """A structlog field as a string, or None when the line did not carry it."""
+    return str(record[key]) if key in record else None
+
+
+@router.get(
+    "/logs",
+    response_model=DaemonLogListOut,
+    # The router itself is unauthenticated so /status can serve as a readiness
+    # probe; log contents are not probe material, so this route carries its own
+    # token dependency.
+    dependencies=[Depends(require_token)],
+)
+async def list_daemon_logs(
+    since: datetime | None = Query(default=None),  # noqa: B008
+    errors_only: bool = Query(default=False),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> DaemonLogListOut:
+    """The tail of ``daemon.log``, newest-first — the same record ``coffer__diagnose``
+    reads, for the human looking at the Activity page instead of an agent."""
+    # The lexical prefilter below only holds while both sides are UTC: the log
+    # writes `…Z`, so a `since` carrying `+08:00` would compare as a later
+    # string than the very instant it names and cut the window at the top.
+    # Normalise here, once, rather than per line. A naive `since` is read as
+    # UTC, which is the only clock the log keeps.
+    if since is not None:
+        since = since.replace(tzinfo=UTC) if since.tzinfo is None else since.astimezone(UTC)
+    since_iso = since.isoformat() if since is not None else None
+    records: list[DaemonLogRecordOut] = []
+    for line in reversed(tail_lines(log_dir() / "daemon.log")):
+        if len(records) >= limit:
+            break
+        record = parse_log_line(line)
+        if not matches_level(record, errors_only):
+            continue
+        at = str(record.get("timestamp", ""))
+        # Cheap prefilter: ISO-8601 sorts lexically, so a string compare
+        # is enough and costs no parsing per line.
+        if since_iso is not None and at and at < since_iso:
+            break
+        records.append(
+            DaemonLogRecordOut(
+                timestamp=_lift(record, "timestamp"),
+                level=_lift(record, "level"),
+                event=_lift(record, "event"),
+                record=record,
+            )
+        )
+    return DaemonLogListOut(records=records)

@@ -30,6 +30,7 @@ Today the sidebar's shipped surfaces are:
   Model providers  /model-providers   — credentialed vendor endpoints
   Channels         /channels          — the IM transports agents answer on
  SYSTEM
+  Activity         /activity          — what changed, what was called, what broke
   Settings         /settings
 ```
 
@@ -49,11 +50,11 @@ are the one thing in the product that *uses* the vault rather than living in
 it, and collapsing the group would lose that distinction to save one line.
 
 The app's index (`/`) redirects to `/agents`, so a first-time visitor lands on
-the Agents surface. It is grouped into **Agents** (the consumers), **Resources** (the resource kinds), and **System** (cross-cutting tooling: Settings) so the navigation stays stable as Coffer grows. Agents live at `/agents` (list) and `/agents/:name` (detail) and do not appear in the `/mcp-servers` kind browser. (`/resources` is kept as a legacy redirect to `/mcp-servers` for old bookmarks.) The agent detail page is a simple **Overview + Config files** detail page: an Overview tab summarising the agent's registered config and a Config files tab that surfaces its known config files read-only, with no create / edit / delete / enable.
+the Agents surface. It is grouped into **Agents** (the consumers), **Resources** (the resource kinds), and **System** (cross-cutting tooling: Activity and Settings) so the navigation stays stable as Coffer grows. Agents live at `/agents` (list) and `/agents/:name` (detail) and do not appear in the `/mcp-servers` kind browser. (`/resources` is kept as a legacy redirect to `/mcp-servers` for old bookmarks.) The agent detail page is a simple **Overview + Config files** detail page: an Overview tab summarising the agent's registered config and a Config files tab that surfaces its known config files read-only, with no create / edit / delete / enable.
 
-All list surfaces (agents, MCP servers, skills, knowledge, model providers, channels) use one shared, searchable, filterable, paginated table: a row click opens that item's detail page, and row actions are compact icons. Cards are reserved for welcome / empty states only.
+All list surfaces (agents, MCP servers, skills, knowledge, model providers, channels, each Activity tab) use one shared, searchable, filterable, paginated table: a row click opens that item's detail page, and row actions are compact icons. Cards are reserved for welcome / empty states only.
 
-**Observability** (system health / metrics) is planned but not shown today; it appears in the sidebar only once it ships. The reverse rule holds too — an entry is removed when its feature is, which is how Chat, Machines and the Audit log left.
+**Observability** (system health / metrics) is planned but not shown today; it appears in the sidebar only once it ships. Activity is not it: a record of what happened is not a measurement of how the system is doing. The reverse rule holds too — an entry is removed when its feature is, which is how Machines left.
 
 The sidebar collapses to an icon-only rail and back; the choice persists across sessions (localStorage).
 
@@ -81,18 +82,16 @@ A developer opens the web UI for the first time. They have never registered a se
 
 A developer who already uses Coffer for MCP gateway aggregation wants the routine flows — registering a server, watching its health, browsing tools, toggling capabilities — to look and feel like a real product, not a scaffold. Headings are typographically distinct; spacing is consistent; per-server pages have a primary "what is this server doing?" view before the per-tool toggles; empty / error / loading states are first-class. The Tools, Resources, and Prompts tabs are uniform — each carries the same search box, status filter, and per-row enable toggle, and keeps that chrome even when the upstream exposes none of that kind (the empty state renders inside the table, not as a bare card). The server list carries a search box, a status filter, and a client-side pager so a large vault stays navigable. Its status column is not an on/off switch: a server's reach is three-valued — Disabled / Every agent / Selected agents — so the list carries the same control the detail header does, settable in place, and the status filter offers those same three states rather than a bare enabled/disabled. The skills list works the same way, for the same reason.
 
-There is no **Invocations** tab, and the Overview no longer carries a "Last
-invocation" row. The tab shipped — a filtered, paged table of every call the
-gateway proxied, each row expanding to that call's raw JSON record — and it has
-the same problem the audit log's page had, one story down: the traffic on it is
-not the user's. Every row is an agent calling a tool through the gateway, and a
-person who wants to know why one of those calls failed asks that agent rather
-than reading the gateway's table over its shoulder.
-
-The record is untouched. The gateway still writes every call to the invocation
-log, and both `GET /api/v1/resources/mcp_server/{name}/invocations` and
-`coffer mcp invocations` still read it back — for an agent that can call the
-route, and for scripting. What goes is the page.
+The **Invocations** tab lists every call the gateway proxied for this server,
+newest first, filterable by status and time range, each row expanding to that
+call's raw JSON record. It was removed once, on the argument that the traffic
+is not the user's — every row is an agent calling a tool, so a person who wants
+to know why a call failed asks that agent. That holds right up until the agent
+is the thing that is broken, and then this table is the only account of what it
+did. The tab reads the record the gateway always wrote; it is the same table
+Activity's **MCP calls** tab renders (User Story 3), scoped to one server
+instead of all of them, rather than a second table that would have to be kept
+in step with the first.
 
 "Add MCP server" is a modal where the user pastes the standard `mcpServers` JSON (one or many servers at once) — the same block every MCP server's README provides. A review step lets them confirm which `env` values are secrets; those are lifted into the encrypted credential store (only their refs kept in the config) rather than stored as plaintext in the config.
 
@@ -108,32 +107,65 @@ route, and for scripting. What goes is the page.
 
 ---
 
-### User Story 3 — The audit log is read by an agent, not browsed by a person (Priority: P2)
+### User Story 3 — Three records, one page, one table each (Priority: P2)
 
-The audit log had a page: a filtered, paged table of plain-language activity
-lines under System at `/audit`. **It is removed.** In practice nobody opened it.
-A person does not sit down to browse "what changed in my vault" — they notice
-something is broken and ask whoever is helping them, and that is an agent.
+Coffer keeps three accounts of what happened: the **audit log** (what changed
+in the vault, and who changed it), the **MCP invocation log** (every call the
+gateway proxied), and the **daemon log** (what Coffer itself did, including
+what broke). The audit log's page was removed because nobody browses "what
+changed in my vault"; the invocation tab was removed because every row in it
+belongs to an agent. Both were right about their own surface and wrong about
+the need behind it: when something is misbehaving the question is never "what
+changed" or "what was called" or "what errored" — it is *what happened*, and
+answering it meant holding three records and joining them by hand.
 
-So the log keeps its reader and loses its page. `coffer__diagnose` gives an
-agent both records at once — the audit log (what changed, and who changed it)
-and the daemon's own log (what happened, including the failures) — on one
-newest-first timeline. The agent already holds the tool, needs no file path,
-and gets the two sides already correlated instead of two things to join.
+So the three get one home. **Activity** (under System, at `/activity`) is one
+page carrying one tab per record — **Changes**, **MCP calls**, **Daemon** —
+each a newest-first table of its own, with the columns that record actually
+has: an activity line and its actor; a call's server, capability, duration and
+outcome; a log record's level, logger and message. Every tab filters by free
+text and time range plus the one filter its record affords (actor, call
+status, errors only), and any row expands to its raw underlying record,
+pretty-printed in a monospace, scrollable block.
 
-The REST route and `coffer audit` stay for scripting. What goes is the page,
-its plain-language rendering, and the 39 translated event strings that existed
-so a zh reader would not see a raw `event_type` on a row. Nothing renders a row
-any more, and an agent wants the wire value.
+They were briefly merged into a single timeline, which is what made the
+column problem visible: one table can only carry the three records' lowest
+common denominator, so a "detail" column meant the actor, the server and the
+logger by turns, and a call's duration and a record's level had nowhere to
+live. Correlating across the three stays `coffer__diagnose`'s job — it returns
+them already joined, for the reader who asked "what happened" rather than
+"show me all of X".
 
-**Why this priority**: P2 — this is a removal plus one tool, not a surface.
+Only the visible tab queries. A record whose route fails renders its error
+inside its own tab: one failing lane must not take the other two down with
+it. There is no manual refresh control — switching tab or changing a filter
+changes the query and refetches.
 
-**Independent Test**: `/audit` is not routed and no sidebar entry links to it;
-an agent calling `coffer__diagnose` gets recent changes and recent log records
-back in one response.
+`GET /api/v1/audit` and `coffer audit` are unchanged. The page adds two
+read-only routes for the other two lanes: `GET /api/v1/mcp/invocations`
+(cross-server, each row naming its server) and `GET /api/v1/daemon/logs`. The
+daemon-log route carries its token dependency on the route itself — the daemon
+router leaves `/status` open, and log contents are not status.
+
+Event types are rendered as plain-language activity lines again ("Enabled
+demo-fs"), so their translations return in both locales, guarded the way error
+codes are: a new event type without a string fails CI rather than showing a zh
+reader a raw `resource_enabled`.
+
+**Why this priority**: P2 — one surface over three records that already exist;
+nothing new is captured.
+
+**Independent Test**: open `/activity` — three tabs render, each showing its
+own record in its own columns; expanding a row shows its raw record; a tab
+whose route is unavailable shows that inside itself while the others still
+work; the legacy `/audit` URL redirects here.
 
 **Representative scenarios** (full list under `## Acceptance Scenarios`):
 
+- activity gives each record its own tab
+- activity row expands to its raw record
+- a failing record shows its error inside its own tab
+- legacy /audit redirects to activity
 - an agent reads recent changes and failures in one call
 
 ---
@@ -167,6 +199,32 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 
 ## Acceptance Scenarios
 
+### Scenario: activity gives each record its own tab
+
+- **Given** Coffer has recorded an audit entry, an MCP invocation and a daemon log record
+- **When** the user opens `/activity` and moves through its three tabs
+- **Then** each tab renders that record's own newest-first table with the columns that record has — an activity line and actor; a call's server, capability, duration and outcome; a log record's level, logger and message
+- **And** a change reads as a plain-language line, not a raw event code
+
+### Scenario: activity row expands to its raw record
+
+- **Given** an Activity tab has at least one row
+- **When** the user clicks (or presses Enter/Space on) that row
+- **Then** an expanded region renders its raw record — the full underlying JSON, pretty-printed in a monospace, scrollable block
+
+### Scenario: a failing record shows its error inside its own tab
+
+- **Given** one of the three routes is unavailable (an older daemon that does not serve it)
+- **When** the user opens `/activity`
+- **Then** the failing record's tab renders a readable error
+- **And** the other two tabs still render their rows
+
+### Scenario: legacy /audit redirects to activity
+
+- **Given** a user follows an old bookmark to `/audit`
+- **When** the route resolves
+- **Then** the app redirects to `/activity` and no "page not found" view is shown
+
 ### Scenario: an agent reads recent changes and failures in one call
 
 - **Given** Coffer has recorded audit entries and written daemon log records
@@ -182,7 +240,7 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - **When** they navigate to `http://localhost:5173/` in a real browser
 - **Then** the index redirects to `/agents` and the page renders the sidebar + main content area within 2 seconds
 - **And** the main content shows the Agents welcome view (no generic error card)
-- **And** the sidebar lists Coffer's operational surfaces — Agents, MCP servers, Skills, Knowledge, Model providers, Channels, Settings — grouped under "Agents", "Resources", and "System" headings
+- **And** the sidebar lists Coffer's operational surfaces — Agents, MCP servers, Skills, Knowledge, Model providers, Channels, Activity, Settings — grouped under "Agents", "Resources", and "System" headings
 
 ### Scenario: token-missing renders an actionable empty state
 
@@ -296,7 +354,7 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 
 - Every scenario above has at least one covering test (unit, integration, or e2e) and the `audit_acceptance` script passes 002 alongside 001.
 - A first-time user can register an MCP server and reach a working gateway in-app; pointing an MCP client at the shim is documented in the project README.
-- The sidebar shows only operational surfaces (Agents, MCP servers, Skills, Knowledge, Model providers, Channels, Settings), grouped by role; no feature appears as a dead "soon" entry.
-- The audit log has no page: neither `/audit` nor the legacy `/observability` URL resolves, and no sidebar entry points at either. An agent reads the log through `coffer__diagnose`; scripts read it through the REST route and `coffer audit`. The MCP invocation log has no page either, and for the same reason — every row in it is an agent calling a tool, not a person — so it keeps its REST route and `coffer mcp invocations` and loses its tab. Observability (system health / metrics) is a reserved future surface, not the audit log.
+- The sidebar shows only operational surfaces (Agents, MCP servers, Skills, Knowledge, Model providers, Channels, Activity, Settings), grouped by role; no feature appears as a dead "soon" entry.
+- The three records Coffer keeps — the audit log, the MCP invocation log and the daemon log — reach a person through one page at `/activity`, a tab and a table each, and an agent through one call to `coffer__diagnose`, which returns them joined; `/audit` and the legacy `/observability` URL redirect there rather than 404ing. Scripts keep `GET /api/v1/audit` / `coffer audit` and `coffer mcp invocations`. Observability (system health / metrics) is a reserved future surface, and is not this.
 - Settings groups data controls (retention and prune) under a Data tab; the daemon is never surfaced as a user-facing concept, and no tab exposes a shutdown or token-rotation control.
 - `make verify` + `make verify-e2e` are green.

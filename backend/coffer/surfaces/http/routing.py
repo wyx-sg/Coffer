@@ -30,6 +30,9 @@ from coffer.surfaces.http.fs_routes import router as fs_router
 from coffer.surfaces.http.internal_engine_routes import router as internal_engine_router
 from coffer.surfaces.http.knowledge import router as knowledge_router
 from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_router
+from coffer.surfaces.http.mcp.invocation_routes import (
+    aggregate_router as mcp_invocation_aggregate_router,
+)
 from coffer.surfaces.http.mcp.invocation_routes import router as mcp_invocation_router
 from coffer.surfaces.http.mcp.protocol_routes import router as mcp_protocol_router
 from coffer.surfaces.http.mcp.server_test_routes import router as mcp_server_test_router
@@ -69,6 +72,7 @@ def include_all_routers(app: FastAPI) -> None:
         mcp_capability_router,
         mcp_server_test_router,
         mcp_invocation_router,
+        mcp_invocation_aggregate_router,
         knowledge_router,  # the one knowledge kind
         # the turn platform's own surfaces (spec channels's agents run on it)
         agent_provider_router,
