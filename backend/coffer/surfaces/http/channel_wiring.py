@@ -2,7 +2,8 @@
 
 Wires the kind, the peer repo, the inbound processor (against the chat
 platform's service handles), the adapter factory, the callback-listener
-controller, and the reconciling runtime. Must run AFTER ``wire_chat``.
+controller, the SeaTalk WebSocket controller, and the reconciling runtime. Must
+run AFTER ``wire_chat``.
 """
 
 from __future__ import annotations
@@ -29,12 +30,13 @@ from coffer.infrastructure.channel.persistence import (
     ChannelThreadConversationRepo,
 )
 from coffer.infrastructure.channel.seatalk import SeaTalkAdapter
+from coffer.infrastructure.channel.seatalk_ws_controller import SeaTalkWebSocketController
 from coffer.infrastructure.channel.telegram import TelegramAdapter
 from coffer.infrastructure.channel.tunnel_spawn import TunnelController
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.surfaces.http import daemon_routes
 from coffer.surfaces.http.auth import get_active_token
-from coffer.surfaces.http.channel_routes import set_channel_service
+from coffer.surfaces.http.channel_routes import get_channel_service, set_channel_service
 from coffer.surfaces.http.turn_dependencies import (
     get_agent_model_catalogue,
     get_agent_registry,
@@ -54,6 +56,11 @@ def _daemon_info() -> tuple[str, str]:
     if token is None:
         raise RuntimeError("daemon token not published yet")
     return f"http://127.0.0.1:{daemon_routes.get_port()}", token
+
+
+async def _ingest_websocket_event(name: str, envelope: dict[str, Any]) -> None:
+    """Hand a websocket-delivered event to the same ingest the webhook route uses."""
+    await get_channel_service().ingest_event(name, envelope)
 
 
 def wire_channel_kind(
@@ -105,6 +112,12 @@ def wire_channel_kind(
         pairing=pairing,
         listener=listener,
         tunnel=TunnelController(),
+        # FR-071: websocket-delivery channels converge the same way, and their
+        # inbound events land on the same seam the webhook route uses —
+        # ``ChannelService.ingest_event``, which does not exist yet at this point
+        # in the wiring, so it is resolved at call time exactly as the daemon's
+        # URL and token are in ``_daemon_info``.
+        websockets=SeaTalkWebSocketController(ingest=_ingest_websocket_event),
         materialize=materialize,
     )
 

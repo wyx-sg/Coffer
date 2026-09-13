@@ -60,6 +60,11 @@ def register(
     signing_secret_ref: str | None = typer.Option(
         None, "--signing-secret-ref", help="Keychain ref of the SeaTalk signing secret"
     ),
+    delivery: str = typer.Option(
+        "webhook",
+        "--delivery",
+        help="SeaTalk event delivery: webhook (public callback URL) | websocket (no public URL)",
+    ),
     default_agent: str = typer.Option("claude_code", "--agent", help="Default agent key"),
     agent_config: str | None = typer.Option(
         None, "--agent-config", help="Default agent config as JSON"
@@ -80,21 +85,29 @@ def register(
             raise typer.Exit(int(ExitCode.INVALID_INPUT))
         config["bot_token_ref"] = bot_token_ref
     elif channel_type == "seatalk":
-        missing = [
-            flag
-            for flag, value in (
-                ("--app-id", app_id),
-                ("--app-secret-ref", app_secret_ref),
-                ("--signing-secret-ref", signing_secret_ref),
+        if delivery not in {"webhook", "websocket"}:
+            typer.echo("--delivery must be webhook or websocket", err=True)
+            raise typer.Exit(int(ExitCode.INVALID_INPUT))
+        required = [("--app-id", app_id), ("--app-secret-ref", app_secret_ref)]
+        if delivery == "webhook":
+            # Only webhook delivery has anything signed to verify (FR-071).
+            required.append(("--signing-secret-ref", signing_secret_ref))
+        elif signing_secret_ref is not None:
+            typer.echo(
+                "--signing-secret-ref does not apply to websocket delivery "
+                "(nothing is signed on that transport)",
+                err=True,
             )
-            if value is None
-        ]
+            raise typer.Exit(int(ExitCode.INVALID_INPUT))
+        missing = [flag for flag, value in required if value is None]
         if missing:
             typer.echo(f"missing for seatalk channels: {', '.join(missing)}", err=True)
             raise typer.Exit(int(ExitCode.INVALID_INPUT))
         config["app_id"] = app_id
         config["app_secret_ref"] = app_secret_ref
-        config["signing_secret_ref"] = signing_secret_ref
+        config["delivery"] = delivery
+        if delivery == "webhook":
+            config["signing_secret_ref"] = signing_secret_ref
     else:
         typer.echo("--type must be telegram or seatalk", err=True)
         raise typer.Exit(int(ExitCode.INVALID_INPUT))

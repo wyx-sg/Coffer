@@ -58,6 +58,90 @@ def test_tunnel_token_ref_rejects_raw_secret():
         parse_channel_config({**SEATALK_CONFIG, "tunnel_token_ref": "A" * 60})
 
 
+WEBSOCKET_CONFIG = {
+    "channel_type": "seatalk",
+    "app_id": "app-123",
+    "app_secret_ref": "channel/st/app-secret",
+    "delivery": "websocket",
+}
+
+
+def test_delivery_defaults_to_webhook():
+    """A stored config written before the field existed IS a webhook channel;
+    the default says so rather than forcing a migration to restate it."""
+    assert parse_channel_config(SEATALK_CONFIG).delivery == "webhook"
+
+
+def test_webhook_delivery_requires_a_signing_secret_ref():
+    with pytest.raises(ValidationError, match="signing_secret_ref is required"):
+        parse_channel_config({k: v for k, v in SEATALK_CONFIG.items() if k != "signing_secret_ref"})
+
+
+def test_webhook_delivery_accepts_public_url_and_tunnel_token():
+    cfg = parse_channel_config(
+        {
+            **SEATALK_CONFIG,
+            "delivery": "webhook",
+            "public_base_url": "https://x.example.com",
+            "tunnel_token_ref": "channel/st/tunnel-token",
+        }
+    )
+    assert cfg.delivery == "webhook"
+    assert cfg.public_base_url == "https://x.example.com"
+    assert cfg.tunnel_token_ref == "channel/st/tunnel-token"
+
+
+def test_websocket_delivery_needs_only_the_app_credentials():
+    cfg = parse_channel_config(WEBSOCKET_CONFIG)
+    assert cfg.delivery == "websocket"
+    assert cfg.app_id == "app-123"
+    assert cfg.app_secret_ref == "channel/st/app-secret"
+    # Nothing webhook-shaped is left behind to imply ingress that does not exist.
+    assert cfg.signing_secret_ref is None
+    assert cfg.public_base_url is None
+    assert cfg.tunnel_token_ref is None
+
+
+def test_websocket_delivery_still_requires_app_id_and_secret_ref():
+    """The register handshake authenticates with exactly these two."""
+    with pytest.raises(ValidationError):
+        parse_channel_config({k: v for k, v in WEBSOCKET_CONFIG.items() if k != "app_id"})
+    with pytest.raises(ValidationError):
+        parse_channel_config({k: v for k, v in WEBSOCKET_CONFIG.items() if k != "app_secret_ref"})
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("signing_secret_ref", "channel/st/signing-secret"),
+        ("public_base_url", "https://x.example.com"),
+        ("tunnel_token_ref", "channel/st/tunnel-token"),
+    ],
+)
+def test_websocket_delivery_forbids_every_webhook_only_field(field: str, value: str):
+    with pytest.raises(ValidationError, match=f"{field} must be empty"):
+        parse_channel_config({**WEBSOCKET_CONFIG, field: value})
+
+
+def test_websocket_rejection_names_every_offending_field_at_once():
+    with pytest.raises(ValidationError) as excinfo:
+        parse_channel_config(
+            {
+                **WEBSOCKET_CONFIG,
+                "signing_secret_ref": "channel/st/signing-secret",
+                "public_base_url": "https://x.example.com",
+                "tunnel_token_ref": "channel/st/tunnel-token",
+            }
+        )
+    message = str(excinfo.value)
+    assert "signing_secret_ref, public_base_url, tunnel_token_ref must be empty" in message
+
+
+def test_unknown_delivery_method_rejected():
+    with pytest.raises(ValidationError):
+        parse_channel_config({**WEBSOCKET_CONFIG, "delivery": "grpc"})
+
+
 def test_parse_valid_telegram_config():
     cfg = parse_channel_config(TELEGRAM_CONFIG)
     assert isinstance(cfg, TelegramChannelConfig)
@@ -203,6 +287,7 @@ def test_root_model_round_trips_seatalk_dict():
         **SEATALK_CONFIG,
         "default_agent": "claude_code",
         "default_agent_config": None,
+        "delivery": "webhook",
         "public_base_url": None,
         "tunnel_token_ref": None,
         "require_mention": True,

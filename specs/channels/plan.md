@@ -12,6 +12,16 @@ A separate callback-listener process gives SeaTalk its webhook ingress, per
 the constitution's public-surface rule. The frontend gains a Channels page in
 the Agents nav group.
 
+SeaTalk later gained a second inbound transport (FR-071): a channel on
+`delivery: "websocket"` holds one outbound connection instead, so it needs
+neither the listener nor a tunnel nor a signature. It is supervised inside the
+daemon — a per-channel connector reconciled the way the managed tunnel is — over
+the platform's own client library, which the operator supplies in
+`~/.coffer/vendor` and which this repository never vendors or declares (FR-072,
+[SeaTalk Inbound Over WebSocket](../../docs/decisions/seatalk-websocket-inbound.md)).
+Both transports meet at the same ingest entry point, so nothing downstream of
+ingress is aware of the difference.
+
 ## Technical Context
 
 - **Drives the platform in-process** — `ChatService.create_conversation`,
@@ -37,9 +47,12 @@ the Agents nav group.
   to the IM platforms the user explicitly registered. ✓
 - **Public-reachable surfaces as separate process, signed paths only** — the
   SeaTalk listener is its own process, serves only
-  `POST /seatalk/{channel}` + signature verification, binds 127.0.0.1, and
-  the user's tunnel provides the public URL. The daemon itself stays
-  loopback-only. ✓
+  `POST /seatalk/{channel}` + signature verification, binds 127.0.0.1, and the
+  public URL is provided by a tunnel — one the owner runs, or a `cloudflared`
+  child the daemon supervises from a connector token on the channel. The daemon
+  itself stays loopback-only. A channel on websocket delivery has no reachable
+  surface at all (the socket is outbound), so the rule is satisfied without a
+  process. ✓
 - **Credentials** — bot token, app secret, signing secret live in the
   credential store; config carries refs; refs are probed at registration;
   secrets reach the listener child via env (the established MCP subprocess

@@ -100,6 +100,88 @@ async def test_listener_tracks_the_enabled_seatalk_channel(env: ChannelEnv) -> N
     assert env.listener.ensure_running_calls[-1] == {"st": "signing-secret-value"}
 
 
+_WEBSOCKET_CONFIG = {
+    "channel_type": "seatalk",
+    "app_id": "app-1",
+    "app_secret_ref": "channel/st/app",
+    "delivery": "websocket",
+}
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a websocket channel runs without the listener or a tunnel"
+)
+async def test_websocket_only_deployment_keeps_the_listener_stopped(env: ChannelEnv) -> None:
+    """FR-071: websocket delivery needs no inbound HTTP surface at all.
+
+    The adapter still runs (it sends the replies), and the connection is held —
+    but nothing listens on a port and no tunnel is managed, which is the entire
+    reason the transport exists.
+    """
+    env.keyring.set("channel/st/app", "app-secret-value")
+    await env.resources.register(kind="channel", name="st", config=_WEBSOCKET_CONFIG, actor="cli")
+
+    await env.runtime.reconcile_once()
+
+    assert env.runtime.is_running("st") is True
+    assert env.listener.running() is False
+    assert env.listener.ensure_running_calls == []
+    # The connection is held instead, with the app's own materialized credentials.
+    assert env.websockets.started == {"st": ("app-1", "app-secret-value")}
+    # Nothing on this channel reports webhook ingress.
+    status = await env.service.status("st")
+    assert status.callback is not None
+    assert status.callback.delivery == "websocket"
+    assert status.callback.listener_running is False
+    assert status.callback.tunnel_managed is False
+    assert status.callback.public_callback_url is None
+    assert status.callback.websocket_state == "connecting"
+
+
+async def test_a_webhook_channel_beside_a_websocket_one_still_runs_the_listener(
+    env: ChannelEnv,
+) -> None:
+    env.keyring.set("channel/st/app", "app-secret-value")
+    env.keyring.set("channel/st/sign", "signing-secret-value")
+    await env.resources.register(kind="channel", name="hook", config=_SEATALK_CONFIG, actor="cli")
+    await env.resources.register(kind="channel", name="ws", config=_WEBSOCKET_CONFIG, actor="cli")
+
+    await env.runtime.reconcile_once()
+
+    # Only the webhook channel's secret reaches the listener; the websocket one
+    # has no signing secret to give it.
+    assert env.listener.running() is True
+    assert env.listener.ensure_running_calls[-1] == {"hook": "signing-secret-value"}
+    assert set(env.websockets.started) == {"ws"}
+
+
+async def test_deleting_a_websocket_channel_stops_its_connection(env: ChannelEnv) -> None:
+    env.keyring.set("channel/st/app", "app-secret-value")
+    resource = await env.resources.register(
+        kind="channel", name="st", config=_WEBSOCKET_CONFIG, actor="cli"
+    )
+    await env.runtime.reconcile_once()
+    assert env.websockets.running("st") is True
+
+    await env.resources.delete(resource.ref, actor="cli")
+
+    # on_delete → runtime.evict: the held connection goes with the channel.
+    assert "st" in env.websockets.stopped
+    assert env.websockets.running("st") is False
+
+
+async def test_dispose_releases_every_held_connection(env: ChannelEnv) -> None:
+    env.keyring.set("channel/st/app", "app-secret-value")
+    await env.resources.register(kind="channel", name="st", config=_WEBSOCKET_CONFIG, actor="cli")
+    await env.runtime.reconcile_once()
+    assert env.websockets.running("st") is True
+
+    await env.runtime.dispose()
+
+    assert env.websockets.disposed == 1
+    assert env.websockets.active() == set()
+
+
 async def test_telegram_only_deployment_keeps_the_listener_stopped(env: ChannelEnv) -> None:
     await env.register_channel("tg")
     await env.runtime.reconcile_once()

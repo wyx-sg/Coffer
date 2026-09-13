@@ -169,10 +169,10 @@ async def test_an_agent_nothing_can_discover_yields_an_empty_catalogue() -> None
 
 # --- what a picker is offered ------------------------------------------------
 #
-# Nothing on the AGENT narrows its catalogue: the agent answers "what can this
-# agent be put on", full stop. Curation for an audience belongs to the surface
-# that has one — a channel's allowed range (spec channels FR-071) — and this
-# service knows nothing about it.
+# Nothing narrows this catalogue: the agent answers "what can this agent be put
+# on", full stop. Curation used to live on the agent and then on the channel;
+# migration 0067 took the last of it away, so no surface narrows the list and
+# this service has nothing to know about.
 
 _THREE = [
     AgentModel("claude-opus-5", "Opus 5"),

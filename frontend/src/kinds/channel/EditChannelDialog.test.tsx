@@ -145,4 +145,93 @@ describe("EditChannelDialog", () => {
     expect(patchBody.app_secret_ref).toBe("channel/st/app-secret");
     expect(patchBody.signing_secret_ref).toBe("channel/st/signing-secret");
   });
+
+  describe("seatalk delivery method", () => {
+    const webhookChannel = {
+      kind: "channel",
+      name: "st",
+      enabled: true,
+      config: {
+        channel_type: "seatalk",
+        app_id: "app-1",
+        app_secret_ref: "channel/st/app-secret",
+        signing_secret_ref: "channel/st/signing-secret",
+        tunnel_token_ref: "channel/st/tunnel-token",
+        public_base_url: "https://x.trycloudflare.com",
+        default_agent: "claude_code",
+      },
+    } as unknown as typeof telegramResource;
+
+    const websocketChannel = {
+      kind: "channel",
+      name: "st",
+      enabled: true,
+      config: {
+        channel_type: "seatalk",
+        delivery: "websocket",
+        app_id: "app-1",
+        app_secret_ref: "channel/st/app-secret",
+        default_agent: "claude_code",
+      },
+    } as unknown as typeof telegramResource;
+
+    function patchedConfig(api: ApiClientMock): Record<string, unknown> {
+      return (api.PATCH.mock.calls[0][1] as { body: { config: Record<string, unknown> } }).body
+        .config;
+    }
+
+    test("opens on the stored method — a websocket channel shows no webhook field", () => {
+      installApi(mockApiClient());
+      renderDialog(websocketChannel);
+
+      expect(screen.getByRole("button", { name: /^websocket$/i })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      expect(screen.queryByLabelText(/new signing secret/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/public callback url/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/tunnel token/i)).not.toBeInTheDocument();
+      // The app secret stays — the register handshake needs it.
+      expect(screen.getByLabelText(/new app secret/i)).toBeInTheDocument();
+    });
+
+    test("switching to websocket clears and drops every webhook field", async () => {
+      const api = installApi(mockApiClient());
+      renderDialog(webhookChannel);
+
+      fireEvent.change(screen.getByLabelText(/new signing secret/i), { target: { value: "sig" } });
+      fireEvent.click(screen.getByRole("button", { name: /^websocket$/i }));
+      save();
+
+      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+      const config = patchedConfig(api);
+      expect(config.delivery).toBe("websocket");
+      expect(config).not.toHaveProperty("signing_secret_ref");
+      expect(config).not.toHaveProperty("public_base_url");
+      expect(config).not.toHaveProperty("tunnel_token_ref");
+      // The typed-then-hidden signing secret was cleared, so nothing is written.
+      expect(api.POST).not.toHaveBeenCalled();
+    });
+
+    test("switching back to webhook asks for the signing secret before submitting", async () => {
+      const api = installApi(mockApiClient());
+      renderDialog(websocketChannel);
+
+      fireEvent.click(screen.getByRole("button", { name: /^webhook$/i }));
+      save();
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/signing secret/i);
+      expect(api.PATCH).not.toHaveBeenCalled();
+      expect(api.POST).not.toHaveBeenCalled();
+
+      fireEvent.change(screen.getByLabelText(/new signing secret/i), { target: { value: "sig" } });
+      save();
+
+      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+      expect(api.POST).toHaveBeenCalledWith("/credentials", {
+        body: { ref: "channel/st/signing-secret", value: "sig" },
+      });
+      expect(patchedConfig(api).delivery).toBe("webhook");
+    });
+  });
 });

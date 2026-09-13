@@ -7,7 +7,7 @@ channel-specific operations from contracts/api.openapi.yaml.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
@@ -51,13 +51,25 @@ class ChannelPeerOut(BaseModel):
 
 
 class CallbackInfoOut(BaseModel):
+    """How a SeaTalk channel receives events (FR-071).
+
+    Covers both delivery methods. On ``websocket`` the webhook-only fields report
+    their absent/false values — there is no port, path, public URL, listener or
+    tunnel on that path — and ``websocket_state`` carries the health answer.
+    """
+
     port: int
     path: str
     listener_running: bool
+    delivery: Literal["webhook", "websocket"] = "webhook"
     public_base_url: str | None = None
     public_callback_url: str | None = None
     tunnel_managed: bool = False
     tunnel_running: bool = False
+    websocket_state: Literal["connecting", "connected", "kicked", "sdk_missing", "error"] | None = (
+        None
+    )
+    websocket_error: str | None = None
 
 
 class CallbackTestOut(BaseModel):
@@ -121,6 +133,9 @@ async def channel_status(name: str) -> ChannelStatusOut:
             public_callback_url=status.callback.public_callback_url,
             tunnel_managed=status.callback.tunnel_managed,
             tunnel_running=status.callback.tunnel_running,
+            delivery=status.callback.delivery,  # type: ignore[arg-type]
+            websocket_state=status.callback.websocket_state,  # type: ignore[arg-type]
+            websocket_error=status.callback.websocket_error,
         )
         if status.callback is not None
         else None

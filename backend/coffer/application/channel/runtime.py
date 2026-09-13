@@ -23,8 +23,19 @@ from coffer.application.channel.pairing import PairingManager
 from coffer.application.channel.ports import (
     AdapterCallbacks,
     ChannelAdapter,
+)
+from coffer.application.channel.runtime_supervision import (
+    FAILURE_RETRY_SECONDS,
+    Desired,
+    Latch,
+    reconcile_listener,
+    reconcile_tunnels,
+    reconcile_websockets,
+)
+from coffer.application.channel.supervision_ports import (
     ListenerControllerPort,
     TunnelControllerPort,
+    WebSocketControllerPort,
 )
 from coffer.domain.channel.config import parse_channel_config
 
@@ -34,7 +45,6 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 _DEFAULT_INTERVAL_SECONDS = 2.0
-_FAILURE_RETRY_SECONDS = 30.0
 
 AdapterFactory = Callable[[str, dict[str, object]], Awaitable[ChannelAdapter]]
 
@@ -55,6 +65,7 @@ class ChannelRuntime:
         pairing: PairingManager,
         listener: ListenerControllerPort | None = None,
         tunnel: TunnelControllerPort | None = None,
+        websockets: WebSocketControllerPort | None = None,
         materialize: Callable[[dict[str, str]], Awaitable[dict[str, str]]] | None = None,
         interval_seconds: float = _DEFAULT_INTERVAL_SECONDS,
     ) -> None:
@@ -64,14 +75,14 @@ class ChannelRuntime:
         self._pairing = pairing
         self._listener = listener
         self._tunnel = tunnel
+        self._websockets = websockets
         self._materialize = materialize
         self._interval = interval_seconds
         self._running: dict[str, _Running] = {}
         self._failed_at: dict[str, float] = {}
-        self._listener_refs: dict[str, str] | None = None
-        self._listener_failed_at: float | None = None
-        self._tunnel_refs: dict[str, str] | None = None
-        self._tunnel_failed_at: float | None = None
+        self._listener_latch: Latch[dict[str, str]] = Latch()
+        self._tunnel_latch: Latch[dict[str, str]] = Latch()
+        self._websocket_latch: Latch[dict[str, tuple[str, str]]] = Latch()
         self._stop = asyncio.Event()
 
     # -- introspection (used by ChannelService) ---------------------------
@@ -94,6 +105,17 @@ class ChannelRuntime:
     def tunnel_running(self, name: str) -> bool:
         return self._tunnel is not None and self._tunnel.running(name)
 
+    def websocket_state(self, name: str) -> tuple[str, str | None] | None:
+        """``(state, last error)`` of this channel's SeaTalk WebSocket, or None.
+
+        None covers every case where the question does not apply: a webhook
+        channel, a Telegram channel, a disabled one, or a daemon wired without a
+        websocket controller at all.
+        """
+        if self._websockets is None:
+            return None
+        return self._websockets.state(name)
+
     # -- lifecycle -----------------------------------------------------------
 
     def stop(self) -> None:
@@ -115,11 +137,15 @@ class ChannelRuntime:
         if self._listener is not None:
             with contextlib.suppress(Exception):
                 await self._listener.ensure_stopped()
-        self._listener_refs = None
+        self._listener_latch.forget()
         if self._tunnel is not None:
             with contextlib.suppress(Exception):
                 await self._tunnel.dispose()
-        self._tunnel_refs = None
+        self._tunnel_latch.forget()
+        if self._websockets is not None:
+            with contextlib.suppress(Exception):
+                await self._websockets.dispose()
+        self._websocket_latch.forget()
         self._processor.shutdown()
 
     async def evict(self, name: str) -> None:
@@ -129,9 +155,18 @@ class ChannelRuntime:
         if self._tunnel is not None:
             with contextlib.suppress(Exception):
                 await self._tunnel.ensure_stopped(name)
+        if self._websockets is not None:
+            with contextlib.suppress(Exception):
+                await self._websockets.ensure_stopped(name)
         desired = await self._enabled_channels()
+        # The eviction hook can run while the row is still visible (it fires
+        # before/inside the delete), so the table would otherwise tell the
+        # reconcilers to start back up everything we just stopped. The channel
+        # being evicted is not wanted, whatever the table still says.
+        desired.pop(name, None)
         await self._reconcile_listener(desired)
         await self._reconcile_tunnels(desired)
+        await self._reconcile_websockets(desired)
 
     # -- reconciliation ----------------------------------------------------
 
@@ -154,11 +189,12 @@ class ChannelRuntime:
                     await self._start_adapter(name, resource_id, config)
             await self._reconcile_listener(desired)
             await self._reconcile_tunnels(desired)
+            await self._reconcile_websockets(desired)
         except Exception:
             # The reconciler must outlive any single bad tick.
             _logger.exception("channel.runtime.tick_failed")
 
-    async def _enabled_channels(self) -> dict[str, tuple[int, dict[str, object]]]:
+    async def _enabled_channels(self) -> Desired:
         # A channel carries no activation scope (ADR per-agent-resource-scope): enabled means it
         # runs here, on the one machine the daemon is on. The machine-affinity
         # gate this once had went away with continuous sync (ADR vault-export-import).
@@ -167,7 +203,7 @@ class ChannelRuntime:
 
     def _may_retry(self, name: str) -> bool:
         failed = self._failed_at.get(name)
-        return failed is None or (time.monotonic() - failed) >= _FAILURE_RETRY_SECONDS
+        return failed is None or (time.monotonic() - failed) >= FAILURE_RETRY_SECONDS
 
     async def _start_adapter(self, name: str, resource_id: int, config: dict[str, object]) -> None:
         adapter: ChannelAdapter | None = None
@@ -225,90 +261,22 @@ class ChannelRuntime:
                 await entry.adapter.stop()
             _logger.info("channel.adapter.stopped", extra={"channel": name})
 
-    async def _reconcile_listener(self, desired: dict[str, tuple[int, dict[str, object]]]) -> None:
+    async def _reconcile_listener(self, desired: Desired) -> None:
         if self._listener is None or self._stop.is_set():
             return
-        materialize = self._materialize
-        refs: dict[str, str] = {}
-        if materialize is not None:
-            for name, (_rid, config) in desired.items():
-                if config.get("channel_type") == "seatalk":
-                    refs[name] = str(config.get("signing_secret_ref", ""))
-        # Touch the credential store only when the desired ref-set changed (or
-        # the listener died): a steady state must not poll the store every tick
-        # (macOS can answer with authorization prompts).
-        if refs == self._listener_refs and (not refs or self._listener.running()):
-            return
-        if (
-            refs
-            and self._listener_failed_at is not None
-            and (time.monotonic() - self._listener_failed_at) < _FAILURE_RETRY_SECONDS
-        ):
-            return
-        secrets: dict[str, str] = {}
-        for name, ref in refs.items():
-            assert materialize is not None  # refs is empty otherwise
-            try:
-                secrets[name] = (await materialize({"secret": ref}))["secret"]
-            except Exception:
-                self._listener_failed_at = time.monotonic()
-                _logger.exception("channel.listener.secret_failed", extra={"channel": name})
-                return
-        try:
-            if secrets:
-                await self._listener.ensure_running(secrets)
-            else:
-                await self._listener.ensure_stopped()
-        except Exception:
-            self._listener_failed_at = time.monotonic()
-            _logger.exception("channel.listener.reconcile_failed")
-            return
-        self._listener_failed_at = None
-        self._listener_refs = refs
+        await reconcile_listener(self._listener, self._materialize, desired, self._listener_latch)
 
-    async def _reconcile_tunnels(self, desired: dict[str, tuple[int, dict[str, object]]]) -> None:
+    async def _reconcile_tunnels(self, desired: Desired) -> None:
         if self._tunnel is None or self._stop.is_set():
             return
-        materialize = self._materialize
-        refs: dict[str, str] = {}
-        if materialize is not None:
-            for name, (_rid, config) in desired.items():
-                if config.get("channel_type") == "seatalk":
-                    ref = str(config.get("tunnel_token_ref") or "")
-                    if ref:
-                        refs[name] = ref
-        # Always stop tunnels for channels no longer managed (disabled, deleted,
-        # or token-ref cleared), even when the rest is a steady state.
-        for name in self._tunnel.active() - set(refs):
-            with contextlib.suppress(Exception):
-                await self._tunnel.ensure_stopped(name)
-        if refs == self._tunnel_refs and all(self._tunnel.running(n) for n in refs):
+        await reconcile_tunnels(self._tunnel, self._materialize, desired, self._tunnel_latch)
+
+    async def _reconcile_websockets(self, desired: Desired) -> None:
+        if self._websockets is None or self._stop.is_set():
             return
-        if (
-            refs
-            and self._tunnel_failed_at is not None
-            and (time.monotonic() - self._tunnel_failed_at) < _FAILURE_RETRY_SECONDS
-        ):
-            return
-        tokens: dict[str, str] = {}
-        for name, ref in refs.items():
-            assert materialize is not None  # refs is empty otherwise
-            try:
-                tokens[name] = (await materialize({"token": ref}))["token"]
-            except Exception:
-                self._tunnel_failed_at = time.monotonic()
-                _logger.exception("channel.tunnel.secret_failed", extra={"channel": name})
-                return
-        try:
-            for name, token in tokens.items():
-                await self._tunnel.ensure_running(name, token)
-        except Exception:
-            # cloudflared missing / spawn failure — retry on the 30s ladder.
-            self._tunnel_failed_at = time.monotonic()
-            _logger.exception("channel.tunnel.reconcile_failed")
-            return
-        self._tunnel_failed_at = None
-        self._tunnel_refs = refs
+        await reconcile_websockets(
+            self._websockets, self._materialize, desired, self._websocket_latch
+        )
 
     @staticmethod
     def _hash(config: dict[str, object]) -> str:

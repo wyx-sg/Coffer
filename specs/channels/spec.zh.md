@@ -144,20 +144,37 @@ service 上的 notify 入口）必须现在就被验证。
 
 ### User Story 7 — SeaTalk reaches the local daemon (Priority: P2)
 
-SeaTalk 只通过 webhook 投递事件，因此 Coffer 自带一个回调监听器 (callback
-listener)：一个独立的小进程，在任何 SeaTalk channel 处于启用状态时由
-daemon 拉起，只在一个本地端口上服务带签名的回调路径。用户把一条隧道
-(tunnel)（cloudflared、ngrok）指向该端口，并在 SeaTalk Open Platform 上
-登记公网 URL。监听器应答平台的验证握手，校验每个事件的签名，并把合法
-事件经 loopback 转发给 daemon。签名不合法的事件被拒绝，永远到不了
-daemon。
+SeaTalk 有两种投递事件的方式，一个 channel 从中挑一种。
+
+**Webhook。** 平台把每个事件 POST 到一个公网 URL，因此 Coffer 自带一个回调监听器
+(callback listener)：一个独立的小进程，在任何使用 webhook 投递的 SeaTalk channel
+处于启用状态时由 daemon 拉起，只在一个本地端口上服务带签名的回调路径。总得有东西
+把公网接到那个 loopback 端口上——要么是属主自己跑的一条隧道 (tunnel)（cloudflared、
+ngrok），要么是 Coffer 自己照看的那一条：channel 上记着一个 Cloudflare connector
+token 即可——得到的公网 URL 再登记到 SeaTalk Open Platform 上。监听器应答平台的验证
+握手，校验每个事件的签名，并把合法事件经 loopback 转发给 daemon。签名不合法的事件被
+拒绝，永远到不了 daemon。
+
+**WebSocket。** 改成由 daemon 持有一条到 SeaTalk 的出网长连接，平台把事件顺着这条
+连接推下来。没有公网 URL，没有监听器，没有隧道，也没有签名要校验：连接在建立时用
+app 自己的凭据认证一次，之后的一切都到达一个只由本机打开的 socket。对一个 local-first
+的金库来说这是更好的传输——它把整套 ingress 装置直接删掉，而不是去管理它——代价付在
+别处：平台自己的客户端库由 operator 提供（FR-072），以及一个 SeaTalk app 只许一条
+连接，所以第二台机器注册同一个 app 就会把事件从第一台手里抢走。
+
+两者落到同一道接缝上。事件不论从哪条路来都是同一个 envelope，在同一个入口被摄入，
+因此去重、属主门禁、媒体下载，以及 turn 本身，都完全一致。传输方式是 channel 的一个
+属性，不是产品里的第二条代码路径。
 
 **Why this priority**: 没有 ingress 就完全没有 SeaTalk 入站。「独立进程」
-这一形态是章程对公网可达 surface 的硬性要求。
+这一形态是章程对公网可达 surface 的硬性要求——这同时也说明，为什么那个什么都不暴露
+的传输根本不需要自己的进程。
 
-**Independent Test**: 用已知的签名 secret 启动监听器，POST 验证 challenge
-并看到它被回显；POST 一个签名正确的事件并看到它被转发；POST 一个被篡改
-的事件并看到 401 且什么都没被转发。
+**Independent Test**: webhook 一侧：用已知的签名 secret 启动监听器，POST 验证
+challenge 并看到它被回显；POST 一个签名正确的事件并看到它被转发；POST 一个被篡改
+的事件并看到 401 且什么都没被转发。websocket 一侧：把一个 channel 指向一个替身客户端
+库，顺着连接推一个事件，看到同样的 turn 起来，而监听器没在跑、也没有配过任何公网
+URL；再把那个库拿掉，看到 channel 拒绝启动，并说出缺的是什么、刚才去哪里找过。
 
 **Covering scenarios**:
 
@@ -165,6 +182,10 @@ daemon。
 - a signed seatalk event reaches the channel
 - a tampered seatalk event is rejected
 - the listener runs only while a seatalk channel is enabled
+- a websocket channel receives an event with no public url
+- a websocket channel runs without the listener or a tunnel
+- the websocket connection backs off when another process takes it over
+- a websocket channel without the sdk says what is missing
 
 ---
 
@@ -253,8 +274,9 @@ agent 的 turn-started 审计记录；观察干净成功不发完成摘要、而
 ### Functional Requirements
 
 - **FR-001**: 存在一个 `channel` resource kind，带按类型区分的配置
-  （Telegram：bot token 引用；SeaTalk：app id、app secret 引用、签名
-  secret 引用）、一个默认 agent key，以及可选的默认 agent 配置。secret
+  （Telegram：bot token 引用；SeaTalk：app id、app secret 引用，加上它所选入站
+  传输各自要求的字段——见 FR-071）、一个默认 agent key，以及可选的默认 agent
+  配置。secret
   只存在于凭据存储；配置里只放引用，引用在注册时被探测。
 - **FR-002**: channel 的生命周期（register、enable、disable、update、
   delete）搭乘通用资源框架，每次状态变迁都有审计。
@@ -283,8 +305,9 @@ agent 的 turn-started 审计记录；观察干净成功不发完成摘要、而
 - **FR-009**: SeaTalk 回调监听器是只服务 `POST /seatalk/{channel}` 的独立
   进程：它用回显的 challenge 应答 `event_verification`，校验
   `sha256(body + signing_secret)` 签名，把合法事件携带 daemon token 经
-  loopback 转发给 daemon，并拒绝其他一切。daemon 在至少一个 SeaTalk
-  channel 处于启用状态时拉起它，否则停止它。
+  loopback 转发给 daemon，并拒绝其他一切。daemon 在至少一个使用 **webhook**
+  投递的 SeaTalk channel 处于启用状态时拉起它，否则停止它；使用 websocket 投递
+  的 channel（FR-071）一样都不需要，也 MUST NOT 把监听器带起来。
 - **FR-010**: Telegram 入站使用 long polling，update offset 只在分发完成后
   提交；adapter 以指数退避重连，且永不让 daemon 崩溃。
 - **FR-011**: Channels 页面列出 channel、注册新 channel（secret 经凭据存储
@@ -447,6 +470,54 @@ status / notify`。
   回复的消息在平台内联该信息处贡献一段 `> sender: …` 上下文前缀。
 - **FR-027**: 每个 `(channel, chat, thread)` 都有自己的 turn 队列/会话，因此 DM turn、
   群主聊天 turn 与线程 turn 彼此永不共享状态。
+- **FR-071**: 一个 SeaTalk channel 要声明自己用哪种入站传输，而这个选择决定了它的哪些
+  字段才允许存在。`delivery` 字段取 `webhook` 或 `websocket`；缺省即 `webhook`。
+  - **Webhook** 就是 FR-009 描述的那条路。channel MUST 带 `signing_secret_ref`，
+    因为在公网与 daemon 之间唯一挡着的就是那个签名。它 MAY 带 `public_base_url`，
+    好让状态能报出当初交给平台的那个 URL；也 MAY 带 `tunnel_token_ref`，带了之后
+    daemon 就会拉起并看住那个终结本 channel 公网 URL 的 `cloudflared` 子进程，而不是
+    把这件事丢给属主。只要还有这样的 channel 处于启用状态，回调监听器就在跑。
+  - **WebSocket** 把方向反过来：由 daemon 向外拨号，平台把事件顺着它打开的这条连接
+    推下来，而注册握手用 `app_id` 与 `app_secret_ref` 在建立时认证一次。这样的 channel
+    MUST NOT 带 `signing_secret_ref`、`public_base_url` 或 `tunnel_token_ref`——没有
+    请求体要签名，没有公网 URL 要描述，也没有隧道要照看，而一个什么都决定不了的配置
+    字段就是对系统的谎言。一套部署里如果 SeaTalk channel 全都用 websocket 投递，它
+    MUST 让回调监听器保持停止、也不拉任何隧道：这个传输的全部意义就是什么都不暴露，
+    而一个谁也到不了的监听器，仍然是一个没人要过的端口。
+  - `app_id` 与 `app_secret_ref` 两种投递都必需，而 ingress 之后的一切都是共用的：
+    事件以同一个 envelope 到达，经同一个 channel 入口被摄入，因此去重、归一化、属主
+    门禁、媒体下载、线程，以及 turn，表现完全一致。本规范其余的要求没有一条区分这两者。
+  - **平台同一时刻只允许一个 bot 用一种投递方式**，所以两者是互斥而非叠加：Coffer 两种
+    都实现、每个 channel 各选一种，绝不是一个 bot 同时跑两种。因此这个选择活在必须同步
+    移动的两个地方——这里的 `delivery`，以及 SeaTalk 开发者后台上该 bot 的事件投递设置
+    ——而切换它会清掉另一种方式所拥有的那些字段。这不是有损，而是诚实：这次切换本来就
+    不是免费的，平台侧的设置必须同步改，而后台在 websocket 一侧的 Re-verify 只有在连接
+    真的活着时才会通过。
+  - 状态 MUST 按传输分别说真话。websocket channel 报自己的连接状态以及背后最近一次的
+    错误，并把只属于 webhook 的那些事实（端口、路径、公网 URL、监听器、隧道）报成「不
+    存在」，而不是报成一组让人安心的默认值；公网 URL 可达性测试仍然只属于 webhook，对
+    websocket channel 直接拒绝——它没有 URL 可探。
+
+  这个传输之所以成立，全凭当初把它排除掉的那两件事都已不在。平台公开了这项能力，所以
+  上面的行为是一份有文档的契约，而不是从一个二进制里逆出来的东西；而它需要的客户端库对
+  本仓库也不再是许可问题，因为 Coffer 根本不分发它（FR-072）。
+- **FR-072**: WebSocket 客户端库是一个**由 operator 提供的可选依赖**，绝不是被 vendor
+  进仓库的依赖。SeaTalk websocket 投递唯一的客户端就是平台自己的 SDK，它从一个内部企业
+  门户分发，在公共 PyPI 上不存在，也没有任何公开许可——因此 MIT 的 Coffer MUST NOT 把它
+  vendor 进本仓库，也 MUST NOT 把它声明为依赖。重新实现它的线路协议同样不是选项：没有
+  任何公开的协议文档。
+  - Coffer 在运行时到一个 vendor 目录里找它——设了 `$COFFER_SEATALK_SDK_DIR` 就用它，
+    否则用 `~/.coffer/vendor`——并且只在该目录存在时才把它前置到 import 路径上，沿用
+    金库其余部分同样的「按子系统给一个环境变量覆盖」的约定。import 是惰性的，发生在一个
+    websocket channel 启动的那一刻，绝不在 daemon 导入时，所以没装 SDK 的安装启动起来
+    和今天一模一样。
+  - 当它 import 不起来时，该 websocket channel MUST NOT 启动，并且 MUST 说清楚为什么：
+    刚才搜过的那个目录，以及说明该放什么进去的那篇平台文档。没有任何东西崩溃，daemon
+    照样在跑，每个 webhook channel 照样工作，而原因是作为那个 channel 自己的状态报出来
+    的，不是丢在日志里等人去翻。
+  - 一套永远拿不到 SDK 的安装，在 webhook 投递上是完全可用的。这是故意的，因为这正是本
+    项目外部用户手里的那套：websocket 投递是 operator 可以加上的一项能力，而不是产品赖以
+    站住的地基。
 
 ### Key Entities
 
@@ -644,6 +715,36 @@ Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制
 - **Given** 一个带有一个已启用 seatalk channel 的 daemon
 - **When** 该 channel 被停用
 - **Then** 监听器进程停止；再次启用会重新拉起监听器
+
+### Scenario: a websocket channel receives an event with no public url
+
+- **Given** 一个已启用、使用 websocket 投递的 seatalk channel，既没有签名 secret，
+  也没有公网 base URL，也没有隧道 token
+- **When** 平台顺着已打开的连接推下一条消息事件
+- **Then** 它经由 webhook 事件走的同一个入口被摄入并驱动一个 turn，没有签名要校验，
+  也没有任何东西在等一个请求
+
+### Scenario: a websocket channel runs without the listener or a tunnel
+
+- **Given** 一个 daemon，其唯一启用的 seatalk channel 使用 websocket 投递
+- **When** runtime 对「什么该在跑」做一次收敛
+- **Then** 回调监听器保持停止，也没有隧道子进程被拉起
+- **And** 再加一个使用 webhook 投递的 channel，监听器照旧起来
+
+### Scenario: the websocket connection backs off when another process takes it over
+
+- **Given** 一个已连接的 websocket channel，其 SeaTalk app 随后在别处被注册，把这条
+  连接踢掉了——这个 app 只许一条连接
+- **When** connector 观察到这次被踢
+- **Then** 它报出 kicked 状态，并等完一段较长的固定退避才重新注册，而不是去和另一个
+  持有者抢这条连接
+
+### Scenario: a websocket channel without the sdk says what is missing
+
+- **Given** 一个 vendor 目录，里面没有 SeaTalk 客户端库
+- **When** 一个已启用、使用 websocket 投递的 channel 试图连接
+- **Then** 该 channel 不启动，且它报出的状态点明缺的是哪个库、刚才在哪个目录找过
+- **And** daemon 照样在跑，每个 webhook channel 照样工作
 
 ### Scenario: disable stops the adapter and enable restarts it
 
@@ -1730,18 +1831,6 @@ Turn 平台有第二个接口面：Web UI 里的一个 **Chat 页面**，对着�
 之所以写在这里而不是默默略过，是因为发现它们的那次调研，正是卡片这部分工作得以成立的
 前提。
 
-**SeaTalk 的 WebSocket 事件投递。** 平台现在提供了第二种接收事件的方式：bot 不再验证
-一个公网 callback URL，而是与 SeaTalk 保持一条长连的 WebSocket，只需要出网连通性。
-对一个 local-first 的金库来说，这显然是那个对的传输——它会把属主今天必须自己搭起来的
-隧道（cloudflared/ngrok）、终结这条隧道的监听进程，以及那套只因为 callback 从公网可达
-才存在的签名校验，统统删掉。它没有被采用，理由有两条，而且都不在本项目的掌控之内。
-其一，线路协议（wire protocol）完全没有文档——公开材料只讲了怎么调用一个厂商 SDK；
-其二，那个 SDK（Go 与 Python）从一个内部企业 GitLab 分发，在公共 PyPI 上根本不存在。
-Coffer 是 MIT、受 OSS 约束，因此它既不能依赖这个 SDK，也不能去重新实现一个无人公开的
-协议。写在这里而不是留作一次沉默的省略：一旦该协议被公开、或该 SDK 上了 PyPI，这就会
-成为首选的入站路径，隧道也随之变成可选。
-
-
 **挂在 chat 前缀下的 agent 注册表。** agent 注册表列表与按 agent 的模型清单曾经答在
 `/api/v1/chat/agents` 与 `/chat/agents/{key}/models`，页面被撤下时它们搬去了
 `GET /api/v1/agent-providers` 与 `/agent-providers/{key}/models`。页面回来了，它们仍留在
@@ -1761,8 +1850,12 @@ Coffer 是 MIT、受 OSS 约束，因此它既不能依赖这个 SDK，也不能
 - 用户能创建 Telegram bot（BotFather）和 SeaTalk Open Platform app，并能
   通过其组织的审批流程获得 SeaTalk 的 scope（Send Message to Bot User
   等）。
-- 对 SeaTalk，用户自行运行一条隧道（cloudflared、ngrok 或等价物）把公网
-  URL 通到本地回调端口；Coffer 在 quickstart 中给出做法，但不管理隧道。
+- 使用 **webhook** 投递的 SeaTalk channel，其事件终结在一个 loopback 回调监听器上，
+  而公网又必须够得着它，所以总得有东西把两头接上：要么是属主自己跑的一条隧道
+  （cloudflared、ngrok 或等价物），要么是 Coffer 自己照看的那一条——在 channel 上记一个
+  Cloudflare connector token，daemon 就会为它拉起并看住一个 `cloudflared` 子进程。使用
+  **websocket** 投递时这些都不存在：daemon 向外拨号，所以没有监听器、没有隧道、也没有
+  公网 URL（FR-071）。属主在那里要提供的是另一样东西——平台自己的客户端库（FR-072）。
 - channel 承载文本以及入站的图片和文件（FR-020）：媒体被下载并交给 agent，而一条
   没有可下载内容的空消息会收到礼貌的「发文本、图片或文件」回复。出站是文本、加上
   agent 选择发送的文件（FR-021，在 `supports_media` 的传输上），以及作为富例外的

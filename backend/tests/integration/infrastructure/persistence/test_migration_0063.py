@@ -1,7 +1,8 @@
 """Revision 0063: the curated ``models`` set comes back OFF every agent.
 
-Model curation moved from the agent to the channel (spec channels FR-071), so
-0060's per-agent ticked set has no reader left — and ``AgentConfig`` forbids
+Model curation moved from the agent to the channel when this revision was
+written — 0067 later took it off the channel too — so 0060's per-agent ticked
+set has no reader left — and ``AgentConfig`` forbids
 extra keys, which means a row that kept it would fail to validate on load. This
 is the whole of the cleanup: there is no load-time shim tolerating the key.
 

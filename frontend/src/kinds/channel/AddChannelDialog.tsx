@@ -19,10 +19,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
-import type { ChannelType } from "@/lib/api/channels";
+import type { ChannelDelivery, ChannelType } from "@/lib/api/channels";
 import { createChannel } from "./registerChannel";
 import { AddChannelSecretFields, type ChannelSecretDraft } from "./AddChannelSecretFields";
-import { addChannelFormSchema, planChannel, type ChannelPlan } from "./schema";
+import { addChannelFormSchema, DEFAULT_DELIVERY, planChannel, type ChannelPlan } from "./schema";
 
 /** A blank credential draft — what the form opens on and resets to. */
 const EMPTY_SECRET_DRAFT: ChannelSecretDraft = {
@@ -46,14 +46,28 @@ export function AddChannelDialog({
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [channelType, setChannelType] = useState<ChannelType>("telegram");
+  const [delivery, setDelivery] = useState<ChannelDelivery>(DEFAULT_DELIVERY);
   const [name, setName] = useState("");
   const [secrets, setSecrets] = useState<ChannelSecretDraft>(EMPTY_SECRET_DRAFT);
   const patchSecrets = (patch: Partial<ChannelSecretDraft>) =>
     setSecrets((s) => ({ ...s, ...patch }));
   const [formError, setFormError] = useState<string | null>(null);
 
+  /**
+   * Switching transport drops what the other method owns — the config may not
+   * carry both, and a value the form no longer shows must not be submitted.
+   */
+  const changeDelivery = (next: ChannelDelivery) => {
+    setDelivery(next);
+    setFormError(null);
+    if (next === "websocket") {
+      patchSecrets({ signingSecret: "", publicBaseUrl: "", tunnelToken: "" });
+    }
+  };
+
   const reset = () => {
     setChannelType("telegram");
+    setDelivery(DEFAULT_DELIVERY);
     setName("");
     setSecrets(EMPTY_SECRET_DRAFT);
     setFormError(null);
@@ -82,6 +96,7 @@ export function AddChannelDialog({
         : {
             channel_type: "seatalk",
             name,
+            delivery,
             app_id: secrets.appId,
             app_secret: secrets.appSecret,
             signing_secret: secrets.signingSecret,
@@ -148,6 +163,8 @@ export function AddChannelDialog({
           </div>
           <AddChannelSecretFields
             channelType={channelType}
+            delivery={delivery}
+            onDeliveryChange={changeDelivery}
             draft={secrets}
             onChange={patchSecrets}
           />
