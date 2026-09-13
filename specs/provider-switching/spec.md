@@ -774,6 +774,53 @@ surface.
 J3 — Coffer still writes down no model NAME and validates no id against a list of
 its own; the modality is a kind, not a name.
 
+## Amendment 2026-09-13 — Claude Code offers its tier aliases, not its catalog
+
+> Status: Draft. **Supersedes H1's "real models only" rule for Claude Code**, and
+> **withdraws K1** (the retirement filter), whose only job was keeping dead names
+> out of a list that no longer exists.
+
+**Why.** H1 read the versioned catalog out of the Claude Code binary so a picker
+could tell Opus 5 from Opus 4.8. That catalog is cumulative and account-blind: it
+names every model the installed release has heard of, including internal families
+most accounts cannot run, and nothing on this machine says which of them a given
+account may use — D12 established exactly that, and accepted "a model this account
+cannot run fails when it is picked" as the cost. Two attempts to have someone
+curate the remainder (on the agent, then on the channel) were both removed. The
+bill came due as a plain bug report: a picker offering fourteen Claude models,
+most of them unusable. The CLI itself never asks for a versioned id — its own
+picker offers four tier aliases and resolves each against the account at turn
+time, which is precisely the knowledge Coffer does not have. Offering what it
+offers costs nothing Coffer could actually provide, and the version stays on
+screen because the alias's current target is read from the same table.
+
+- **M1 — Claude Code's catalogue IS its alias table.** The ids are the aliases the
+  CLI itself accepts (`opus`, `sonnet`, `haiku`, `fable` — whatever the table
+  holds), and each label is the display name of the model that alias resolves to
+  on a first-party account ("Opus 5"), so a release that moves an alias relabels
+  the picker on its own. Both halves come from one embedded blob: the `aliases`
+  object that follows the catalog, and the catalog entry it points at. Located
+  structurally, like everything else read out of that bundle; an anchor that stops
+  matching costs this source entirely rather than falling back to the catalog.
+- **M2 — The versioned catalog and the retirement table are no longer read.** K1
+  goes with them: an alias does not retire, and that per-provider table existed
+  only to prune the list M1 replaces. The `firstParty` date parsing and its
+  injected clock are deleted.
+- **M3 — Everything else is unchanged.** Codex still answers from its own
+  `model/list`; each CLI's native config still contributes the local choices only
+  it knows (Claude Code's `additionalModelOptionsCache` — the account's own extra
+  options, such as a 1M-context variant — and Codex's `config.toml`); an active
+  connection still answers outright (K3/H-order). A model NAME stays raw
+  passthrough everywhere: a conversation already pinned to `claude-opus-4-8` keeps
+  running on it, and any id can still be typed where a name is typed.
+- **Accepted cost.** A model that is not the current head of its family can no
+  longer be PICKED from the web picker or the channel `/model` card. It is not
+  unreachable — it stays typeable, and the account's own extra options still reach
+  the picker from `.claude.json`.
+
+**Supersedes:** H1's "the catalogue lists real models only … the CLIs' tier
+aliases are not offered", for Claude Code. **Withdraws:** K1.
+
 ## Scope
 
 ### In scope

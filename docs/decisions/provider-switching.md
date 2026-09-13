@@ -273,3 +273,26 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-11b](../../
   in-process, pages through all of it and refuses no id. Nothing validates a
   model NAME against a catalogue — the CLI accepts names outside it entirely, so
   a model name stays raw passthrough everywhere.
+
+## Amendment 2026-09-13 — the Claude Code picker offers tier aliases
+
+Authoritative design: the [spec provider-switching Amendment 2026-09-13](../../specs/provider-switching/spec.md)
+(M1–M3).
+
+- **D14 — Offer what the CLI offers, not what its binary remembers.** D12 said
+  entitlement is not locally derivable and accepted that a model this account
+  cannot run fails when it is picked. That cost turned out to be the whole
+  experience: the catalog is cumulative, so the picker filled with names — whole
+  internal families among them — that fail on use. Claude Code's own picker never
+  asks for a versioned id; it offers four tier aliases and resolves each against
+  the account at turn time. Coffer now offers exactly those, read from the
+  `aliases` table that sits beside the catalog in the same bundle, each labelled
+  with the display name of the model it currently resolves to — so the per-release
+  distinction H1 went looking for survives, in the label instead of the id.
+- **D15 — One table in the CLI binary, not two.** D11's retirement table is no
+  longer read, and its injected clock is gone with it: an alias does not retire,
+  and that table's only job was pruning the versioned list nothing offers now. The
+  failure mode is unchanged in kind — an anchor that stops matching costs this
+  source, never a wrong answer — but it now costs the whole source rather than
+  the filter, which is the safe direction when the fallback would be the list this
+  amendment exists to stop offering.
