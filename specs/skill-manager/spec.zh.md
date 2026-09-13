@@ -46,13 +46,13 @@
 ---
 
 
-### User Story 5 —— 检测并报告 drift（优先级 P2）
+### User Story 5 —— drift 会自愈，同时保留 CLI/REST 可查（优先级 P2）
 
-agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换、编辑）。开发者需要看到当前哪里和 Coffer 不一致，然后自己决定怎么处理。
+agent 的 `config_dir/skills` 文件夹可能在 daemon 不在运行时被外部篡改（删除、替换、编辑）——agent 自己的安装程序重写了它的 skills 目录、用户手动整理了文件、或从备份恢复。投递协调（FR-025）只在每次 agent/scope 变化时把每个 agent「应投递的 skill 集合」对齐好，但它从不检查一条已投递 link 在磁盘上是否健康——所以一条断掉的 link 从来没人、也没有机制去发现和修。现在 Coffer 会在 daemon 每次启动时,把能安全修复的部分(缺失或被篡改的 link)自动修好,不需要任何人注意到再去点一下。无法安全修复的情况(外部内容占用了 link 路径、master 文件夹缺失)会原样保留,并记录得足够清楚以便找到;开发者想直接看 drift,用 `coffer skill verify`(CLI)或 `POST /skills/verify`(REST)。
 
-**为什么是这个优先级**：用户对同步引擎的信任来自「不一致时能讲清楚」。
+**为什么是这个优先级**：用户对同步引擎的信任,一方面来自 drift 不会被悄悄地一直放着,另一方面来自剩下的不一致依然可见。
 
-**独立可测**：手动删除某 agent 的 `config_dir/skills` 文件夹下的一个 symlink；运行 `coffer skill verify`；观察 drift 报告把该 missing link 列出，并附建议处置方式。
+**独立可测**：手动删除某 agent 的 `config_dir/skills` 文件夹下的一个 symlink，然后重启 daemon；观察该 link 被自动重建，且这次修复写入了审计。另外，把另一个 symlink 换成一个外部目录，重启 daemon，再运行 `coffer skill verify`；观察 drift 报告依然把它列出来——外部内容,Coffer 无论自动还是手动都不会去动。
 
 **代表性场景**：
 
@@ -60,7 +60,8 @@ agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换�
 - 检测到 link 被篡改（变成普通文件，或 symlink 指向了别的目标）
 - 检测到 master 文件夹缺失
 - 检测到 orphan master（磁盘上存在 master 文件夹但 DB 中无记录）
-- 不在用户明确指令下自动修复
+- 可安全修复的 drift 会在 daemon 启动时自愈——不再等人来点一下按钮
+- 不安全的 drift（外部内容、master 缺失、orphan master）始终留给人工处理，并记录下来以便找到
 
 ---
 
@@ -76,7 +77,6 @@ agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换�
 
 - 通过 Web UI 文件选择器导入 skill
 - 在 Web UI 中设置 skill 的 scope，并看到已投递集合随之变化
-- 通过 UI 通知呈现 drift 数
 
 ---
 
@@ -275,8 +275,8 @@ scope 决定哪个 agent 能看到某个 server 的工具。
 ### Scenario: 检测 agent skill 目录中的 drift
 
 - **Given** 某 binding 存在但其磁盘目标已被删除、被替换或被重指向，
-- **When** 用户运行 `coffer skill verify`，
-- **Then** 报告按 drift 类别列出每条与建议处置方式，并以非零 exit code 退出；不做自动修复。
+- **When** 用户运行 `coffer skill verify`（CLI）或调用 `POST /skills/verify`（REST）——这项能力没有 Web UI 入口，
+- **Then** 报告按 drift 类别列出每条与建议处置方式，并以非零 exit code 退出；仅仅索要报告本身从不会修复任何东西——修复只沿着「opt-in repair re-delivers repairable drift from master」以及下面的 boot-heal 场景两条独立路径发生。
 
 ### Scenario: 移除 skill 清理所有 binding
 
@@ -404,6 +404,24 @@ scope 决定哪个 agent 能看到某个 server 的工具。
 - **When** 用户执行 opt-in 修复（`coffer skill verify --fix` / `POST /skills/repair`），
 - **Then** 缺失的链接重新创建并指向 master；被篡改的链接先备份到 `<path>.coffer-backup-<ts>`，再重新创建并指向 master；外部普通目录完全保持原样，仍在报告中列为需手动处理；missing-master 条目保持原样并报告为需手动处理；每次重新投递作为 repair 事件写入审计日志。
 
+### Scenario: skill drift 在 daemon 启动时自愈
+
+- **Given** 某 agent 的一份已投递 skill 链接在 daemon 不在运行期间缺失（被删除）或被篡改（重指向别处），
+- **When** daemon 启动，
+- **Then** 该链接被重新创建并指向 master，效果与 opt-in repair 完全一致；这次修复写入审计日志，其 actor 标明这是 boot heal 而非某个人；无论有没有东西需要修复，启动都照常完成。
+
+### Scenario: boot heal 对不安全的 drift 只留痕、不动手
+
+- **Given** 一个外部普通目录占据了某个已投递 skill 的链接路径，或者某条 binding 的 master 文件夹已不存在，
+- **When** daemon 启动，
+- **Then** 两者都不会被触碰——外部内容与缺失的 master 都原样保留——并且都被记录得足够清楚（skill、agent、drift 类别、磁盘路径、建议处置方式），让人能找到；因为 UI 上的按钮已经不在了，这条日志现在是剩余 drift 唯一的呈现面。
+
+### Scenario: boot heal 出错也不会挡住启动
+
+- **Given** boot heal 在检查或修复某条 binding 时出错（例如遇到一个读不了的文件系统），
+- **When** daemon 启动，
+- **Then** 错误被记录下来，daemon 依然正常起来——一个能把 daemon 拖垮的 boot heal，比它想修的那点 drift 更糟。
+
 ## Requirements
 
 ### Functional Requirements
@@ -434,9 +452,9 @@ scope 决定哪个 agent 能看到某个 server 的工具。
 
 **Drift**
 
-- **FR-015**：系统必须提供 `verify` 操作，对每条已启用 binding 比对其磁盘目标，并按 drift 类别（missing link、tampered link、missing master、orphan master）报告与建议处置方式。
-- **FR-016**：系统不得自动修复 drift；修复必须由用户显式触发。
-- **FR-029**：系统必须提供显式、opt-in 的 drift 修复操作（`coffer skill verify --fix`，`POST /skills/repair`），从主库重新投递可安全修复的 drift——即 missing link 与 tampered link——并且不得修改外部/用户内容（replaced-with-regular）、缺失的 master，或孤立 master；上述情况保持原样并报告为需要手动处理。每次修复写入审计。
+- **FR-015**：系统必须提供 `verify` 操作——一个只读的 CLI/REST 能力（`coffer skill verify`、`POST /skills/verify`；没有 Web UI 入口）——对每条已启用 binding 比对其磁盘目标，并按 drift 类别（missing link、tampered link、missing master、orphan master）报告与建议处置方式。仅仅索要这份报告，从不会修复任何东西。
+- **FR-016**：系统必须在 daemon 每次启动时自动修复 FR-029 认定为可安全修复的那些 drift 类别，不等人来动手——启动正是此前从未被任何机制照看过的那个点：投递协调（FR-025）只在它自己的那些触发点上，把每个 agent「应投递的 skill 集合」对齐好，但从不检查一条已投递链接的磁盘健康状况，所以一条断掉或被篡改的链接此前会一直断着，直到有人恰好手动跑了 FR-029 的修复。FR-029 认定为不可安全修复的 drift 类别，永远不会被自动修复（包括在启动时），只会被报告，等待经由 FR-029 的按需路径人工处理。
+- **FR-029**：系统必须提供一个 drift 修复：从主库重新投递可安全修复的 drift——即 missing link 与 tampered link——并且不得修改外部/用户内容（replaced-with-regular）、缺失的 master，或孤立 master；上述情况保持原样并报告为需要手动处理。这个修复会（a）按 FR-016，在每次 daemon 启动时自动运行一次，写入审计时的 actor 标明这是自动路径而非某个人，并且绝不允许把启动搞失败；也会（b）按需通过 CLI（`coffer skill verify --fix`）与 REST（`POST /skills/repair`）触发，供任何想直接触发或查看一次修复的人使用。无论自动还是按需，每次修复都写入审计。
 
 **非托管 skill（工作区增补）**
 

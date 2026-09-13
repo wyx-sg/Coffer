@@ -44,13 +44,13 @@ The developer wants this skill available in Claude Code but not in Codex. They s
 ---
 
 
-### User Story 5 — Detect and report drift (Priority: P2)
+### User Story 5 — Drift self-heals, and stays inspectable from the CLI/REST (Priority: P2)
 
-Files in agents' `config_dir/skills` folders can be tampered with (deleted, replaced, edited). The developer needs to see what's out of sync and decide what to do.
+Files in agents' `config_dir/skills` folders can be tampered with (deleted, replaced, edited) while the daemon is not running — an agent's own installer rewriting its skills directory, a user tidying files, a restore from backup. Delivery reconciliation (FR-025) keeps the delivered *set* of skills correct on every agent/scope change, but it never inspected an already-delivered link's on-disk health — so nothing ever noticed or fixed a broken one. Coffer now heals what it can safely heal — a missing or tampered link — the moment the daemon next starts, so nobody has to notice and click anything. What cannot be healed safely (foreign content occupying a link path, a missing master) is left exactly as found and logged clearly enough to find; a developer who wants to see drift directly reaches for `coffer skill verify` (CLI) or `POST /skills/verify` (REST).
 
-**Why this priority**: Trust in the sync engine depends on transparency about disagreement.
+**Why this priority**: Trust in the sync engine depends on drift not silently persisting, and on whatever disagreement does persist being visible somewhere.
 
-**Independent Test**: Manually delete a symlink in an agent's `config_dir/skills` folder; run `coffer skill verify`; observe the drift report identifies the missing link with a suggested remedy.
+**Independent Test**: Manually delete a symlink in an agent's `config_dir/skills` folder, then restart the daemon; observe the link is re-created with no user action and the repair is audited. Separately, replace a different symlink with a foreign directory, restart the daemon, and run `coffer skill verify`; observe the drift report still lists it — Coffer never touches foreign content, automatically or otherwise.
 
 **Covering scenarios**:
 
@@ -58,7 +58,8 @@ Files in agents' `config_dir/skills` folders can be tampered with (deleted, repl
 - detect tampered link (regular file or symlink to a different target)
 - detect missing master folder
 - detect orphan master (folder on disk but no DB record)
-- no automatic remediation without explicit user action
+- safely-repairable drift self-heals at daemon boot — never by waiting for a person to click a button
+- unsafe drift (foreign content, missing master, orphan master) is always left for manual action and logged for a human to find
 
 ---
 
@@ -74,7 +75,6 @@ The user opens Coffer, sees the Skills page rendered as a data table (search, fi
 
 - import a skill via the web UI file picker
 - set a skill's scope via the web UI and see the delivered set follow
-- surface drift count via a UI notification
 
 ---
 
@@ -278,8 +278,8 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 ### Scenario: detect drift in agent skill directories
 
 - **Given** a binding exists but its target on disk has been deleted, replaced, or relinked,
-- **When** the user runs `coffer skill verify`,
-- **Then** the report lists each drift type with a suggested remedy and exits with a non-zero status; no automatic remediation occurs.
+- **When** the user runs `coffer skill verify` (CLI) or calls `POST /skills/verify` (REST) — there is no web UI surface for this,
+- **Then** the report lists each drift type with a suggested remedy and exits with a non-zero status; asking for the report never itself repairs anything — repair runs only along the separate paths in "opt-in repair re-delivers repairable drift from master" and the boot-heal scenarios below.
 
 ### Scenario: remove a skill cleans up all bindings
 
@@ -407,6 +407,24 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **When** the user runs the opt-in repair (`coffer skill verify --fix` / `POST /skills/repair`),
 - **Then** the missing link is re-created pointing to master, the tampered link is backed up to `<path>.coffer-backup-<ts>` and then re-created pointing to master, the foreign regular directory is left completely untouched and still appears in the report as requiring manual action, the missing-master entry is left and reported as requiring manual action, and each re-delivery is recorded as a repair event in the audit log.
 
+### Scenario: skill drift self-heals at daemon boot
+
+- **Given** an agent's delivered skill link is missing (deleted) or tampered (repointed elsewhere) while the daemon is not running,
+- **When** the daemon starts,
+- **Then** the link is re-created pointing to master exactly as the opt-in repair would do it, the repair is recorded in the audit log with an actor identifying the boot heal rather than a person, and startup completes normally whether or not anything needed repair.
+
+### Scenario: boot heal leaves unsafe drift for a human to find
+
+- **Given** a foreign regular directory occupies a delivered skill's link path, or a binding's master folder no longer exists,
+- **When** the daemon starts,
+- **Then** neither is touched — the foreign content and the missing master are left exactly as found — and each is logged clearly enough (skill, agent, drift kind, on-disk path, suggested remedy) for a person to find, since this log line is now the only surface residual drift has.
+
+### Scenario: a boot heal failure never blocks startup
+
+- **Given** the boot heal encounters an error while inspecting or repairing a binding (e.g. a filesystem it cannot read),
+- **When** the daemon starts,
+- **Then** the error is logged and the daemon still comes up — a boot heal that can crash the daemon would be worse than the drift it exists to fix.
+
 ## Requirements
 
 ### Functional Requirements
@@ -437,9 +455,9 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 
 **Drift**
 
-- **FR-015**: System MUST provide a `verify` operation that compares each enabled binding to its on-disk target and reports drift categories (missing link, tampered link, missing master, orphan master) with suggested remedies.
-- **FR-016**: System MUST NOT automatically remediate drift; remediation requires an explicit user action.
-- **FR-029**: System MUST provide an explicit, opt-in drift repair (`coffer skill verify --fix`, `POST /skills/repair`) that re-delivers repairable drift — missing link and tampered link — from the master library, and MUST NOT modify foreign/user content (replaced-with-regular), a missing master, or an orphan master; those are left intact and reported as requiring manual action. Each repair is audited.
+- **FR-015**: System MUST provide a `verify` operation — a read-only CLI/REST facility (`coffer skill verify`, `POST /skills/verify`; there is no web UI surface for it) — that compares each enabled binding to its on-disk target and reports drift categories (missing link, tampered link, missing master, orphan master) with suggested remedies. Asking for the report never itself repairs anything.
+- **FR-016**: System MUST remediate the drift kinds FR-029 designates safely repairable automatically at daemon boot, without waiting for a person to act — boot is the point nothing else ever reconciled: delivery reconciliation (FR-025) keeps each agent's delivered *set* of skills correct on its own triggers, but never inspects an already-delivered link's on-disk health, so a broken or tampered link previously stayed broken until someone happened to run the manual repair (FR-029) by hand. Drift kinds FR-029 does not consider safely repairable are never auto-remediated, boot included, and stay reported only, for manual action via FR-029's on-demand path.
+- **FR-029**: System MUST provide a drift repair that re-delivers repairable drift — missing link and tampered link — from the master library, and MUST NOT modify foreign/user content (replaced-with-regular), a missing master, or an orphan master; those are left intact and reported as requiring manual action. This repair runs (a) automatically per FR-016, once at every daemon boot, audited with an actor that identifies the automatic path rather than a person, and never allowed to fail startup; and (b) on demand via the CLI (`coffer skill verify --fix`) and REST (`POST /skills/repair`) for anyone who wants to trigger or inspect a repair directly. Each repair, automatic or on-demand, is audited.
 
 **Unmanaged skills (workspace amendment)**
 

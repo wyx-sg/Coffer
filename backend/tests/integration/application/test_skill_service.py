@@ -762,3 +762,71 @@ async def test_repair_redelivers_repairable_drift_and_leaves_foreign(tmp_path):
     assert "s-tampered" in remediated_skill_names
 
     await engine.dispose()
+
+
+# ----- boot heal (spec-boot-heal) -----
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(spec="skill-manager", scenario="skill drift self-heals at daemon boot")
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="boot heal leaves unsafe drift for a human to find"
+)
+async def test_boot_heal_repairs_missing_link_and_leaves_foreign_dir(tmp_path):
+    """The boot heal is ``repair_drift`` run from a different trigger (daemon
+    startup instead of a person clicking "repair"): it must re-deliver a
+    missing link, leave foreign content untouched, and audit the repair with
+    an actor that names the boot heal rather than a person."""
+    from coffer.application.skill.boot_reconcile import BOOT_ACTOR, SkillDriftBootHeal
+
+    skill_svc, agent_svc, audit, store, engine = await _setup(tmp_path)
+    _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
+
+    for skill_name in ("s-missing", "s-foreign"):
+        src = tmp_path / f"src-{skill_name}"
+        _write_skill_folder(src, name=skill_name)
+        await skill_svc.import_local(path=str(src), actor="cli")
+
+    # --- induce MISSING_LINK while the daemon is "down" ---
+    link_missing = skill_dir / "s-missing"
+    assert link_missing.is_symlink()
+    link_missing.unlink()
+
+    # --- induce REPLACED_WITH_REGULAR: unsafe, must be left alone ---
+    link_foreign = skill_dir / "s-foreign"
+    assert link_foreign.is_symlink()
+    link_foreign.unlink()
+    link_foreign.mkdir()
+    foreign_sentinel = link_foreign / "precious.txt"
+    foreign_sentinel.write_text("user data — must not be touched")
+
+    heal = SkillDriftBootHeal(skill_service=skill_svc)
+    notes = await heal.heal()
+
+    # The missing link is repaired, pointing back at master.
+    master_missing = store.paths_for("s-missing").folder
+    assert link_missing.exists(), "MISSING_LINK must self-heal at boot"
+    assert link_missing.resolve() == master_missing.resolve()
+    assert any("s-missing" in n and "missing_link" in n for n in notes)
+
+    # The foreign directory is completely untouched — never auto-repaired.
+    assert link_foreign.is_dir() and not link_foreign.is_symlink()
+    assert foreign_sentinel.read_text() == "user data — must not be touched"
+    assert any("s-foreign" in n and "replaced_with_regular" in n for n in notes), (
+        "residual drift must be logged clearly enough for a human to find, now that "
+        "the only other surface (the UI button) is gone"
+    )
+
+    # A second verify pass confirms the residual drift is exactly the foreign one.
+    residual = await skill_svc.verify()
+    residual_kinds = {e.kind for e in residual.entries}
+    assert DriftKind.REPLACED_WITH_REGULAR in residual_kinds
+    assert DriftKind.MISSING_LINK not in residual_kinds
+
+    # The repair is audited with the boot heal's own actor, not a person's.
+    remediated_events = await audit.query(event_type=AuditEventType.SKILL_DRIFT_REMEDIATED.value)
+    assert len(remediated_events) == 1
+    assert remediated_events[0].resource_name == "s-missing"
+    assert remediated_events[0].actor == BOOT_ACTOR == "system"
+
+    await engine.dispose()
