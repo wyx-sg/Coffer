@@ -1,12 +1,15 @@
-"""Write local vault state into an export bundle (spec and ADR vault-export-import).
+"""Serialize local vault state into the working tree (spec and ADR vault-sync).
 
-An export is a snapshot of THIS vault at THIS moment: the bundle directory is
-cleared and rewritten, so what comes out is exactly what is here. There is no
-remote to reconcile against, so there are no tombstones, no timestamp
-arbitration, and no "not yet ingested" guards — those existed only to keep two
-live vaults convergent.
+Step 1 of a converge round. What comes out is exactly what this vault holds —
+but it is written **differentially**, never by clearing and rewriting: the
+bundle is the git working tree that gets three-way-merged, so a wholesale
+rewrite would tell the merge that every document this vault never absorbed had
+been deliberately deleted. That rule is normative (spec vault-sync "Why deletion
+is safe") and it lives in :mod:`coffer.infrastructure.sync.tree_mirror`; what
+this module owes it is an honest and *complete* account of local state, area by
+area, on every export.
 
-Credentials are omitted unless the caller explicitly asks for them, and even
+Credentials are omitted unless the remote is configured to carry them, and even
 then only Fernet ciphertext travels; the master key is never written.
 """
 
@@ -43,6 +46,7 @@ class SyncExporter:
     async def export(self, bundle: BundlePort, *, with_credentials: bool = False) -> ExportSummary:
         summary = ExportSummary(path=bundle.path, credentials_included=with_credentials)
         docs: list[dict[str, object]] = []
+        unserializable: list[str] = []
         for r in await self._resources.list():
             try:
                 config = dict(r.config)
@@ -60,8 +64,12 @@ class SyncExporter:
                         scope=r.scope,
                     )
                 )
-            except Exception as e:  # a single unserializable row is reported, not fatal
+            except Exception as e:
+                # Reported, not fatal — and its path is protected below, so a
+                # row this build cannot render is never published as a
+                # deletion the user never made.
                 summary.failures.append((f"{r.kind}:{r.name}", str(e)))
+                unserializable.append(f"{r.kind}/{r.name}")
 
         state_docs: list[tuple[str, list[tuple[str, dict[str, object]]]]] = []
         for provider in self._state_providers:
@@ -80,7 +88,9 @@ class SyncExporter:
                     blobs[ref] = blob
 
         # All filesystem IO runs off the event loop.
-        await asyncio.to_thread(self._dump, bundle, docs, state_docs, blobs)
+        await asyncio.to_thread(
+            self._dump, bundle, docs, state_docs, blobs, with_credentials, unserializable
+        )
 
         summary.areas.append(AreaCount("resources", len(docs)))
         for subdir, count in await asyncio.to_thread(bundle.tree_counts):
@@ -97,12 +107,20 @@ class SyncExporter:
         docs: list[dict[str, object]],
         state_docs: list[tuple[str, list[tuple[str, dict[str, object]]]]],
         blobs: dict[str, bytes],
+        with_credentials: bool,
+        unserializable: list[str],
     ) -> None:
         bundle.open_for_write()
         bundle.write_manifest(Manifest())
-        bundle.write_resource_docs(docs)
+        bundle.write_resource_docs(docs, unserializable=unserializable)
         for area, area_docs in state_docs:
             bundle.write_state_docs(area, area_docs)
         bundle.mirror_trees_out()
-        if blobs:
+        if with_credentials:
+            # Converged even when empty, and NOT converged when this remote
+            # does not carry credentials. Skipping an empty set would leave
+            # the vault's last deleted credential standing in the tree
+            # forever — its deletion could never be published — while
+            # converging an area this remote opted out of would publish the
+            # opting-out as a deletion of everyone else's blobs.
             bundle.write_credential_blobs(blobs)

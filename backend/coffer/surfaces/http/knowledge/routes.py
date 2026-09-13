@@ -57,7 +57,7 @@ from coffer.surfaces.http.knowledge.schemas import (
     TidyOut,
     TreeOut,
 )
-from coffer.surfaces.http.knowledge.tidy_state import get_tidy_runner
+from coffer.surfaces.http.knowledge.tidy_state import get_tidy_runner, vault_write_lock
 
 router = APIRouter(
     prefix="/api/v1/knowledge",
@@ -177,7 +177,13 @@ async def tidy(
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
     actor: str = Depends(_actor_kind),
 ) -> TidyOut:
-    result = await get_tidy_runner()(svc, name, actor=actor)
+    # The same lock the timer takes, and for the same reason: a pass and a
+    # converge round both rewrite vault content, and an export caught half-way
+    # through a rewrite is a torn snapshot git reads as a deliberate change
+    # (spec vault-sync "## Unattended rewriters"). The button had been the one
+    # way to start a pass without it.
+    async with vault_write_lock():
+        result = await get_tidy_runner()(svc, name, actor=actor)
     return TidyOut(**{"collection": name, **result})
 
 

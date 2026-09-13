@@ -28,6 +28,7 @@ from coffer.application.channel.service import ChannelService
 from coffer.application.resource_service import ResourceService
 from coffer.domain.channel.envelopes import SentMessage
 from coffer.domain.resource import ResourceRef
+from coffer.domain.scope import Scope
 from coffer.infrastructure.channel.persistence import ChannelPeerRepo
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.infrastructure.persistence.base import Base
@@ -227,7 +228,7 @@ def test_register_and_list_channels(channel_daemon: _Daemon) -> None:
 def test_register_carries_no_scope(channel_daemon: _Daemon) -> None:
     """A channel declares no activation scope (ADR per-agent-resource-scope) — registration writes
     none, and an enabled channel simply runs on this, the only, machine. The
-    withdrawn `--runs-on` flag is gone with the machine registry (ADR vault-export-import)."""
+    withdrawn `--runs-on` flag is gone with the machine registry (ADR vault-sync)."""
     r = _register_tg()
     assert r.exit_code == 0, r.output
     resource = channel_daemon.run(
@@ -255,7 +256,7 @@ def test_scope_set_on_a_channel_narrows_the_agents_it_may_drive(
     resource = channel_daemon.run(
         channel_daemon.resources.get(ResourceRef(kind="channel", name="tg"))
     )
-    assert resource.scope == ["claude_code"]
+    assert resource.scope == Scope(agents=["claude_code"], machines=None)
 
 
 def test_register_telegram_without_token_ref_exits_6(channel_daemon: _Daemon) -> None:

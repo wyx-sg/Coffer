@@ -146,5 +146,5 @@ the shared file helpers and unchanged since; the helper itself is the record.
   (industry-unsolved; avoided by sharing over MCP instead).
 - Watch the filesystem. Nothing is derived, so there is nothing to invalidate.
 - Converge across machines (constitutional; export, import and one-way backup
-  are the vault-export-import spec's).
+  are the vault-sync spec's).
 - Categorize beyond what a file's own `title` and `description` say.

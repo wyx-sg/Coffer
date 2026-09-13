@@ -111,6 +111,7 @@ async def test_get_scope_reports_kinds_without_scope(tmp_path):
 
 @pytest.mark.asyncio
 async def test_put_scope_round_trips_agent_list_and_response_carries_scope(tmp_path):
+    """Both axes ride the wire as one object, ``AND``-ed (spec vault-sync)."""
     c, engine, svc = await _client(tmp_path)
     async with c:
         await svc.register(
@@ -119,29 +120,29 @@ async def test_put_scope_round_trips_agent_list_and_response_carries_scope(tmp_p
             config={"transport": {"type": "http", "url": "http://example.com/mcp"}},
             actor="cli",
         )
-        agents = ["claude-code", "codex"]
-        r = await c.put("/api/v1/resources/mcp_server/fs/scope", json={"scope": agents})
+        scope = {"agents": ["claude-code", "codex"], "machines": ["a3f21c9e4b7d2610"]}
+        r = await c.put("/api/v1/resources/mcp_server/fs/scope", json={"scope": scope})
         assert r.status_code == 200, r.text
         body = r.json()
-        assert body["scope"] == agents
+        assert body["scope"] == scope
         assert body["ref"] == "mcp_server:fs"
 
         # Round-trip through GET too.
         get_r = await c.get("/api/v1/resources/mcp_server/fs/scope")
         assert get_r.status_code == 200
-        assert get_r.json()["scope"] == agents
+        assert get_r.json()["scope"] == scope
 
         # Full ResourceOut GET also carries scope.
         full_r = await c.get("/api/v1/resources/mcp_server/fs")
         assert full_r.status_code == 200
-        assert full_r.json()["scope"] == agents
+        assert full_r.json()["scope"] == scope
     await engine.dispose()
 
 
 @pytest.mark.asyncio
 async def test_put_empty_scope_is_dormant_and_null_clears(tmp_path):
-    """The three states are distinct on the wire: [] (dormant) is persisted
-    as an empty list, null clears back to unscoped."""
+    """The three states stay distinct on the wire: an empty list on an axis is
+    dormant, a null axis is unrestricted, and a null scope clears both."""
     c, engine, svc = await _client(tmp_path)
     async with c:
         await svc.register(
@@ -150,9 +151,16 @@ async def test_put_empty_scope_is_dormant_and_null_clears(tmp_path):
             config={"transport": {"type": "http", "url": "http://example.com/mcp"}},
             actor="cli",
         )
-        r = await c.put("/api/v1/resources/mcp_server/fs/scope", json={"scope": []})
+        dormant = {"agents": [], "machines": None}
+        r = await c.put("/api/v1/resources/mcp_server/fs/scope", json={"scope": dormant})
         assert r.status_code == 200, r.text
-        assert r.json()["scope"] == []
+        assert r.json()["scope"] == dormant
+
+        # One axis alone restricts; the other stays unrestricted.
+        by_machine = {"agents": None, "machines": ["a3f21c9e4b7d2610"]}
+        r_m = await c.put("/api/v1/resources/mcp_server/fs/scope", json={"scope": by_machine})
+        assert r_m.status_code == 200, r_m.text
+        assert r_m.json()["scope"] == by_machine
 
         r2 = await c.put("/api/v1/resources/mcp_server/fs/scope", json={"scope": None})
         assert r2.status_code == 200, r2.text
@@ -175,10 +183,10 @@ async def test_put_scope_on_knowledge_kind_narrows_the_collection(tmp_path):
         )
         r = await c.put(
             f"/api/v1/resources/{KIND_KNOWLEDGE}/shopee/scope",
-            json={"scope": ["claude-code"]},
+            json={"scope": {"agents": ["claude-code"], "machines": None}},
         )
         assert r.status_code == 200, r.text
-        assert r.json()["scope"] == ["claude-code"]
+        assert r.json()["scope"] == {"agents": ["claude-code"], "machines": None}
     await engine.dispose()
 
 
@@ -197,7 +205,7 @@ async def test_put_scope_on_agent_kind_returns_422_scope_invalid(tmp_path):
         )
         r = await c.put(
             "/api/v1/resources/agent/claude/scope",
-            json={"scope": ["claude-code"]},
+            json={"scope": {"agents": ["claude-code"], "machines": None}},
         )
         assert r.status_code == 422, r.text
         assert r.json()["error"]["code"] == "SCOPE_INVALID"
@@ -205,7 +213,7 @@ async def test_put_scope_on_agent_kind_returns_422_scope_invalid(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_put_scope_rejects_a_non_list_payload(tmp_path):
+async def test_put_scope_rejects_a_malformed_payload(tmp_path):
     c, engine, svc = await _client(tmp_path)
     async with c:
         await svc.register(
@@ -214,11 +222,18 @@ async def test_put_scope_rejects_a_non_list_payload(tmp_path):
             config={"transport": {"type": "http", "url": "http://example.com/mcp"}},
             actor="cli",
         )
+        # The pre-two-axis shape: a bare list is no longer a scope.
         r = await c.put(
             "/api/v1/resources/mcp_server/fs/scope",
-            json={"scope": {"machine-1": "*"}},
+            json={"scope": ["claude-code"]},
         )
         assert r.status_code == 422, r.text
+        # An axis that is not a list of names is refused too.
+        r2 = await c.put(
+            "/api/v1/resources/mcp_server/fs/scope",
+            json={"scope": {"agents": "claude-code"}},
+        )
+        assert r2.status_code == 422, r2.text
     await engine.dispose()
 
 
@@ -228,7 +243,7 @@ async def test_put_scope_unknown_name_returns_404(tmp_path):
     async with c:
         r = await c.put(
             "/api/v1/resources/mcp_server/nope/scope",
-            json={"scope": ["claude-code"]},
+            json={"scope": {"agents": ["claude-code"], "machines": None}},
         )
         assert r.status_code == 404, r.text
         assert r.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
@@ -260,8 +275,8 @@ async def test_put_scope_works_for_lifecycle_kind_skill(tmp_path):
         )
         r = await c.put(
             "/api/v1/resources/skill/reviewer/scope",
-            json={"scope": ["claude-code"]},
+            json={"scope": {"agents": ["claude-code"], "machines": None}},
         )
         assert r.status_code == 200, r.text
-        assert r.json()["scope"] == ["claude-code"]
+        assert r.json()["scope"] == {"agents": ["claude-code"], "machines": None}
     await engine.dispose()

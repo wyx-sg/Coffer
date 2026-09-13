@@ -40,7 +40,7 @@ const ROWS: MemoryPartitionRow[] = [
     project_root: "/Users/dev/coffer",
     fact_count: 34,
     enabled: true,
-    scope: ["claude_code"],
+    scope: { agents: ["claude_code"], machines: null },
   },
 ];
 
@@ -62,7 +62,9 @@ describe("MemoryPartitionsTable", () => {
     expect(controls).toHaveLength(ROWS.length);
     // The scoped partition shows its selected-agents segment as active.
     const coffeeRow = within(screen.getByText("coffer").closest("tr") as HTMLElement);
-    expect(coffeeRow.getByText(/selected agents/i)).toBeInTheDocument();
+    // The trigger reads "Restricted…"; which axis and which names are in the
+    // popover, because scope now has two axes (spec vault-sync).
+    expect(coffeeRow.getByText(/restricted/i)).toBeInTheDocument();
   });
 
   test("selecting rows reveals the same reach control over the whole selection", () => {
@@ -71,7 +73,7 @@ describe("MemoryPartitionsTable", () => {
 
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
     const bar = within(screen.getByTestId("bulk-reach-control"));
-    expect(bar.getByRole("button", { name: /every agent/i })).toBeInTheDocument();
+    expect(bar.getByRole("button", { name: /everywhere/i })).toBeInTheDocument();
     // No bulk delete: a partition is aggregated from the agents' own memories,
     // never user-created, so there is nothing here to remove.
     expect(screen.queryByRole("button", { name: /^delete$/i })).toBeNull();

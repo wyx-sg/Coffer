@@ -94,7 +94,7 @@ describe("AgentDetailPage", () => {
     mockAgentLoaded();
     renderAt();
     expect(screen.queryByTestId("scope-control")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /every agent/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /everywhere/i })).not.toBeInTheDocument();
   });
 
   test("clicking Edit opens the edit form in a modal dialog", () => {

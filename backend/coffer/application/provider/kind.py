@@ -12,6 +12,7 @@ from typing import Any
 
 from coffer.domain.provider.config import ProviderConfig, default_scope_for_protocol
 from coffer.domain.resource import Kind
+from coffer.domain.scope import Scope
 
 
 def _provider_credential_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
@@ -22,7 +23,7 @@ def _provider_credential_ref_extractor(config: dict[str, Any]) -> dict[str, str]
     return {}
 
 
-def _provider_default_scope(config: dict[str, Any]) -> list[str]:
+def _provider_default_scope(config: dict[str, Any]) -> Scope:
     """The scope a brand-new connection starts with: the wire's own default.
 
     Without this the framework would create the row unscoped, i.e. reaching
@@ -30,9 +31,18 @@ def _provider_default_scope(config: dict[str, Any]) -> list[str]:
     connection's own ``compatible_agents`` used to give it (an ollama
     connection reaches no agent at all). The wire is already known at create
     time, so the pre-fill is exact rather than a guess.
+
+    Only the agent axis is pre-filled. A new connection is left unrestricted on
+    the machine axis because a pre-filled machine would pin every connection to
+    whichever machine happened to create it, and a converged vault would then
+    project nothing anywhere else — the opposite of preserving the old
+    behaviour.
     """
     protocol = config.get("protocol")
-    return default_scope_for_protocol(str(protocol) if protocol is not None else "")
+    return Scope(
+        agents=default_scope_for_protocol(str(protocol) if protocol is not None else ""),
+        machines=None,
+    )
 
 
 def make_provider_kind() -> Kind:

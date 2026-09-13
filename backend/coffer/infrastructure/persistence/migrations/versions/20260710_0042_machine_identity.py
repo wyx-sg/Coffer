@@ -1,4 +1,4 @@
-"""machine identity singleton (spec vault-export-import amendment, continuous sync)
+"""machine identity singleton (spec vault-sync amendment, continuous sync)
 
 Revision ID: 0042
 Revises: 0041

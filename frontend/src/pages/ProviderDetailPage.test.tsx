@@ -78,7 +78,7 @@ const { probedFor } = vi.hoisted(() => ({ probedFor: [] as string[] }));
 // The header's ScopeControl reaches the daemon through hand-written hooks; stub
 // them. `provider` DOES declare per-agent scope (its reach replaced the old
 // `compatible_agents` config key), so the control renders the full three-segment
-// group — Disabled / Every agent / Selected agents — and it is the only place a
+// group — Disabled / Everywhere / Restricted — and it is the only place a
 // connection's reach is edited: the Edit dialog has no control of its own.
 const { enableMutate, disableMutate, updateScopeMutate } = vi.hoisted(() => ({
   enableMutate: vi.fn(),
@@ -86,10 +86,14 @@ const { enableMutate, disableMutate, updateScopeMutate } = vi.hoisted(() => ({
   updateScopeMutate: vi.fn(),
 }));
 vi.mock("@/lib/hooks/useScope", () => ({
+  UNRESTRICTED: { agents: null, machines: null },
   useResourceScope: () => ({ data: { scope: null, supports_scope: true } }),
   useUpdateResourceScope: () => ({ mutate: updateScopeMutate, isPending: false }),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: () => ({ data: [] }) }));
+vi.mock("@/lib/hooks/useMachines", () => ({
+  useMachines: vi.fn(() => ({ data: { machines: [] } })),
+}));
 vi.mock("@/lib/hooks/useResourceMutations", () => ({
   useEnableResource: () => ({ mutate: enableMutate, isPending: false }),
   useDisableResource: () => ({ mutate: disableMutate, isPending: false }),
@@ -571,10 +575,10 @@ describe("ProviderDetailPage", () => {
     renderPage();
     await screen.findByRole("heading", { name: "acme" });
 
-    // An enabled connection with an unscoped reach reads as "Every agent" — and
+    // An enabled connection with an unscoped reach reads as "Everywhere" — and
     // this control is the ONLY thing stating that state.
     const control = within(screen.getByTestId("scope-control"));
-    expect(control.getByRole("button", { name: "Every agent" })).toHaveAttribute(
+    expect(control.getByRole("button", { name: "Everywhere" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -589,7 +593,7 @@ describe("ProviderDetailPage", () => {
     await screen.findByRole("heading", { name: "acme" });
 
     const control = within(screen.getByTestId("scope-control"));
-    fireEvent.click(control.getByRole("button", { name: "Every agent" }));
+    fireEvent.click(control.getByRole("button", { name: "Everywhere" }));
     expect(enableMutate).toHaveBeenCalledWith({ kind: "provider", name: "acme" });
   });
 

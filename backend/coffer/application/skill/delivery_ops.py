@@ -6,7 +6,7 @@ conceptually private to the skill subpackage.
 
 One rule decides delivery, and nothing else does::
 
-    delivered(skill, agent) == skill.enabled and agent_in_scope(skill.scope, agent)
+    delivered(skill, agent) == skill.enabled and scope.is_active(skill.scope, agent)
 
 Both halves live on the SKILL resource, so this module needs nothing from the
 agent's config beyond its name (Contract 5c): the agent carries no
@@ -20,7 +20,6 @@ from typing import TYPE_CHECKING
 
 from coffer.domain.errors import CofferError
 from coffer.domain.resource import ResourceRef
-from coffer.domain.scope import agent_in_scope
 
 if TYPE_CHECKING:
     from coffer.application.skill.service import SkillService
@@ -67,7 +66,7 @@ async def apply_scope_for_agent(*, service: SkillService, agent_name: str, actor
     # into at all. Everything already delivered is reclaimed below, and
     # re-enabling the agent runs this again and puts it back.
     wanted = (
-        {s.name for s in skills if s.enabled and agent_in_scope(s.scope, agent_name)}
+        {s.name for s in skills if s.enabled and service._scope.is_active(s.scope, agent_name)}
         if agent.enabled
         else set()
     )

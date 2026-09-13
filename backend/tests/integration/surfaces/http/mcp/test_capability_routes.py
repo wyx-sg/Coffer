@@ -19,6 +19,7 @@ from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind, ResourceRef
+from coffer.domain.scope import Scope
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
@@ -998,7 +999,9 @@ async def test_test_endpoint_ignores_scope(
     _with_in_memory(monkeypatch)
     app, engine, rsvc, _prefs, supervisor = await _build_app(tmp_path)
 
-    await rsvc.update_scope(ResourceRef("mcp_server", "fs"), ["some-other-agent"], actor="test")
+    await rsvc.update_scope(
+        ResourceRef("mcp_server", "fs"), Scope(agents=["some-other-agent"]), actor="test"
+    )
 
     transport = ASGITransport(app=app)
     try:

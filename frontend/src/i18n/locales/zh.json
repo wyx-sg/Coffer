@@ -83,7 +83,8 @@
     "channels": "消息渠道",
     "activity": "活动",
     "chat": "聊天",
-    "modelProviders": "模型提供商"
+    "modelProviders": "模型提供商",
+    "sync": "同步"
   },
   "resources": {
     "title": "MCP 服务器",
@@ -368,8 +369,7 @@
       "engine": "内部引擎",
       "data": "数据",
       "security": "安全",
-      "about": "关于",
-      "sync": "同步"
+      "about": "关于"
     },
     "general": {
       "title": "显示",
@@ -472,61 +472,6 @@
       "fetchModels": "拉取模型",
       "testConnection": "测试连接",
       "fetchedCount": "已拉取 {{count}} 个模型——选择或手填"
-    },
-    "sync": {
-      "title": "导出 / 导入 vault",
-      "description": "把本 vault 写入你指定的目录，或从一个目录读回。把这个目录带到另一台机器——scp、U 盘、你自己的 git 仓库——由你自己决定。",
-      "withCredentials": "包含凭据",
-      "withCredentialsHint": "凭据以密文形式随行，绝不包含 master key。除非另一台机器确实需要，否则保持关闭——导出目录很容易被随手丢在某处。",
-      "exportVault": "导出 vault…",
-      "importVault": "导入 vault…",
-      "bundlePath": "Bundle 目录",
-      "bundlePathManualHint": "本机没有原生目录对话框——请手动输入路径，然后再次点击。",
-      "exported": "vault 已导出到 {{path}}",
-      "imported": "已从 {{path}} 导入 bundle",
-      "bundleFailure": "{{ref}} — {{reason}}",
-      "areas": {
-        "knowledge": "知识库",
-        "memory": "记忆",
-        "skills": "技能",
-        "resources": "资源",
-        "state": "共享状态",
-        "credentials": "凭据"
-      },
-      "masterKey": "Master key（带外）",
-      "masterKeyHint": "把本机的 key 导出到文件，通过你信任的通道带到另一台机器再导入。它绝不会被写入导出 bundle。",
-      "keyFingerprint": "Key 指纹",
-      "keyFingerprintHint": "两台机器指纹一致即为同一把 key。",
-      "exportKey": "导出 key",
-      "importKey": "导入 key",
-      "keyExported": "key 已下载为 {{name}}",
-      "keyImported": "key 已导入——本机现在可以解密随 bundle 带来的凭据。",
-      "keyFileEmpty": "该文件为空——请选择从另一台机器导出的 key 文件。",
-      "backup": {
-        "title": "备份到 git 远端",
-        "description": "按固定间隔把本 vault 的导出推送到一个你自己的 git 仓库。它只是备份，不是第二份事实来源：Coffer 只负责推送，恢复必须由你主动触发。",
-        "enabled": "自动备份",
-        "url": "仓库 URL",
-        "branch": "分支",
-        "interval": "间隔（秒）",
-        "credentialRef": "推送凭据",
-        "credentialRefHint": "这里填的是 Coffer 凭据库中的条目名称，不是密钥本身。守护进程只在推送那一刻解析它，所以密钥不会出现在本页面、仓库的 git config，或任何错误文本里。",
-        "includeCredentials": "包含凭据",
-        "includeCredentialsHint": "凭据以密文形式随行；无论如何设置，master key 都不会被推送。该开关属于远端配置，不是每次备份单独选择。",
-        "pushNow": "立即备份",
-        "pushing": "备份中…",
-        "worktree": "工作区：{{path}}",
-        "lastRun": "上次备份：{{status}} · {{when}}",
-        "commit": "提交 {{commit}}",
-        "never": "未知",
-        "noRunYet": "尚未执行过备份。",
-        "runStatus": {
-          "ok": "已推送",
-          "no_change": "没有变化",
-          "push_failed": "推送失败",
-          "export_failed": "导出失败"
-        }
-      }
     },
     "connections": {
       "title": "模型提供商",
@@ -1430,12 +1375,149 @@
     "bulkDeleteConfirm": "确定删除 {{count}} 个消息渠道？它们的适配器将停止，配对关系也会被移除。"
   },
   "scope": {
-    "subtitle": "这项资源对哪些 agent 生效——所有 agent，或只对你选中的那些。不在范围内时它依然保持注册，只是不会被暴露或分发。",
+    "subtitle": "这项资源在哪里生效：哪些 agent，以及哪些机器。两者相互独立，必须同时命中。不在范围内时它依然保持注册，只是不会被暴露或分发。",
+    "everywhere": "全部生效",
+    "restricted": "限定范围…",
+    "agentsSection": "Agent",
+    "machinesSection": "机器",
     "everyAgent": "所有 agent",
-    "selectedAgents": "指定 agent",
-    "dormant": "没有选中任何 agent——处于休眠状态。它依然保持注册，但在你至少选中一个 agent 之前不会到达任何 agent。",
+    "everyMachine": "所有机器",
+    "dormant": "某一个维度上一个都没选——处于休眠状态。它依然保持注册，但在至少选中一项之前不会到达任何地方。",
     "noAgents": "还没有注册任何 agent。",
+    "noMachines": "还没有任何机器——本 vault 尚未与远端收敛过。",
     "unknownAgent": "本机未注册",
+    "unknownMachine": "不在注册表中",
+    "thisMachine": "本机",
+    "inactiveHereMachine": "在本机未生效——它的机器作用域没有点名本机。",
+    "inactiveHereAgent": "在此未生效——它的 agent 作用域没有点名本机注册的任何 agent。",
     "bulkReach": "所选项的生效范围"
+  },
+  "sync": {
+    "title": "同步",
+    "subtitle": "把本 vault 与一个你自己的 git 仓库收敛到一致，让你用的每一台机器都持有同样的知识、技能与配置。",
+    "tabs": {
+      "status": "状态",
+      "machines": "机器"
+    },
+    "areas": {
+      "knowledge": "知识",
+      "skills": "技能",
+      "resources": "资源",
+      "state": "共享状态",
+      "credentials": "凭据",
+      "machines": "机器",
+      "other": "其他"
+    },
+    "remote": {
+      "title": "远端",
+      "description": "一个你自己的 git 仓库。每一轮先把本 vault 的内容提交下来，交给 git 与仓库里的内容做三方合并，再把差异应用回来——包括删除。这个仓库只是交汇点，不是事实来源：删掉它，任何一台机器都能重建。",
+      "enabled": "自动收敛",
+      "url": "仓库 URL",
+      "branch": "分支",
+      "interval": "间隔（秒）",
+      "credentialRef": "推送凭据",
+      "credentialRefHint": "这里填的是 Coffer 凭据库中的条目名称，不是密钥本身。守护进程只在推送那一刻解析它，所以密钥不会出现在本页面、仓库的 git config，或任何错误文本里。",
+      "includeCredentials": "包含凭据",
+      "includeCredentialsHint": "凭据以密文形式随行；无论如何设置，master key 都不会被推送。持有密文却没有 key 的机器会把这些引用标记为已锁定，而不是悄悄解密失败。",
+      "worktree": "工作区：{{path}}",
+      "convergeNow": "立即收敛",
+      "converging": "收敛中…",
+      "notConfigured": "尚未配置远端。在上方填入一个仓库，本 vault 就会开始与它收敛。"
+    },
+    "round": {
+      "title": "上一轮",
+      "none": "尚未执行过任何一轮。",
+      "status": "上一轮：{{status}}",
+      "statusLabel": {
+        "ok": "已收敛",
+        "no_change": "没有变化",
+        "conflict": "因冲突中止",
+        "awaiting_confirmation": "已暂停，等你确认",
+        "push_failed": "本地已应用，推送失败",
+        "failed": "失败",
+        "disabled": "已关闭"
+      },
+      "join": {
+        "new": "以新机器身份加入——远端持有的内容全部添加过来，本 vault 原有的内容也全部保留。",
+        "returning": "以回归机器身份重新加入——基线从它自己的描述文件恢复，所以它离线期间被删掉的东西不会复活。"
+      },
+      "applied": "已应用到本机",
+      "published": "已发布到远端",
+      "counts": "新增 {{added}} · 变更 {{modified}} · 删除 {{deleted}}",
+      "commit": "提交 {{commit}}",
+      "agentResolved": "由 agent 代为合并",
+      "agentResolvedHint": "内部模型在工作区里解决了这些路径上的冲突。如果是你自己的笔记，值得回头看一眼。",
+      "failures": "本机无法应用",
+      "failure": "{{path}} — {{reason}}",
+      "lockedRefs": "本机无法解密的凭据",
+      "lockedRefsHint": "本 vault 拿到了它们的密文，却没有能打开它的 key。请从持有 key 的那台机器导出并在下方导入。"
+    },
+    "conflict": {
+      "title": "本轮因冲突中止",
+      "body": "两台机器改动了同一个文档的同一段。什么都没有应用，也什么都没有发布——vault 和指针都停在原地。",
+      "paths": "冲突路径",
+      "resolve": "请在下面这个工作区里用你自己的 git 工具解决，下一轮会从那里继续。",
+      "worktree": "工作区：{{path}}"
+    },
+    "pending": {
+      "bodyApply": "把远端的改动应用到本机，会删掉超过删除保护阈值的文档数量。只有当你确信另一台机器真的删了这么多时才确认。",
+      "bodyPublish": "本机这一轮会把这些删除发布到远端，之后其他每一台机器都会照做。",
+      "breach": "{{area}}：{{total}} 个文档中的 {{deleted}} 个",
+      "breaches": "将要删除的内容",
+      "confirm": "确认",
+      "confirming": "确认中…",
+      "morePaths": "…另有 {{count}} 条",
+      "paths": "路径",
+      "raisedAt": "暂停于 {{when}}",
+      "rebuild": "以远端重建本机",
+      "rebuildConfirm": "这会用远端的内容替换本机 vault，并丢弃只有这台机器持有的东西。只在本机文件确实已经丢失时使用。继续？",
+      "rebuilding": "正在重建…",
+      "reinstallWarning": "如果这台机器刚刚重装过，或刚从备份恢复，诚实的答案是「拒绝」：这些文档是本机缺失，不是被删除，确认会连累其他所有机器。",
+      "reject": "拒绝",
+      "rejecting": "拒绝中…",
+      "titleApply": "本轮已暂停：远端会删掉本 vault 的很大一部分",
+      "titlePublish": "本轮已暂停：本 vault 会删掉远端的很大一部分"
+    },
+    "key": {
+      "title": "Master key",
+      "hint": "凭据只以密文同步。另一台机器只有持有同一把 key 才能解开本机发布的内容——把它导出成文件，通过你信任的通道带过去再导入。它绝不会被写进仓库。",
+      "fingerprint": "Key 指纹",
+      "fingerprintHint": "两台机器指纹一致即为同一把 key。",
+      "export": "导出 key",
+      "import": "导入 key",
+      "exported": "key 已下载为 {{name}}",
+      "imported": "key 已导入——本机现在可以解密它同步到的凭据。",
+      "importedLocked": "key 已导入，但仍有 {{count}} 个凭据引用无法用它解密。",
+      "fileEmpty": "该文件为空——请选择从另一台机器导出的 key 文件。"
+    },
+    "machines": {
+      "title": "机器",
+      "description": "所有与这个远端收敛过的 Coffer 安装。机器的标识由宿主机派生而来，所以改名不花任何代价，重装 Coffer 也不会多出一台。",
+      "empty": "还没有任何机器——本 vault 尚未与远端收敛过。",
+      "columns": {
+        "name": "名称",
+        "system": "系统",
+        "hostname": "主机名",
+        "version": "Coffer 版本",
+        "lastConverged": "最近收敛",
+        "key": "Key",
+        "agents": "Agent",
+        "actions": ""
+      },
+      "thisMachine": "本机",
+      "rename": "重命名本机",
+      "renameLabel": "机器名称",
+      "lastConvergedHint": "这是「哪一天」而不是「哪一刻」：一台在跑但空闲的机器刻意不会每轮都打时间戳。",
+      "never": "从未",
+      "keyMatches": "同一把 key",
+      "keyDiffers": "它的凭据在本机无法解密",
+      "keyUnknown": "未知——有一方还没有发布过指纹",
+      "noAgents": "无",
+      "retire": "下线",
+      "retireTitle": "下线 {{name}}？",
+      "retireBody": "它的描述文件会从注册表中移除，同时所有点名了这台机器的资源作用域也会把它剥离——否则那些资源会永远休眠在一台谁也看不见的机器上。",
+      "retired": "{{name}} 已下线；更新了 {{count}} 个资源作用域。",
+      "derivedNote": "本机的 id 保存在本地文件里，而不是从宿主机派生的，所以删掉 ~/.coffer 之后它会以一台新机器的身份重新出现，这一行需要手动下线。"
+    }
   }
 }

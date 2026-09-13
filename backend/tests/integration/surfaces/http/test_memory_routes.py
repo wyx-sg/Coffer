@@ -229,7 +229,7 @@ def test_context_scope_enforcement_does_not_leak_an_out_of_scope_partition(
     # Default scope from aggregation is {"cc"} (FR-014) — confirm "outsider"
     # is excluded, then compose context for it against the SAME cwd.
     scope = client.get(f"/api/v1/resources/memory/{partition}/scope").json()
-    assert scope["scope"] == ["cc"]
+    assert scope["scope"] == {"agents": ["cc"], "machines": None}
 
     r = client.post("/api/v1/memory/context", json={"agent": "outsider", "cwd": str(project_root)})
     assert r.status_code == 200, r.text

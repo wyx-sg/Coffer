@@ -44,7 +44,7 @@ Beyond the subprocesses above, the daemon runs a couple of in-process background
 - **Retention worker.** Prunes log-style tables (audit log, invocation log) according to the configured retention policies.
 - **Channel adapter reconciler** ([Channel Adapter Framework](/reference/adr/channel-adapter-framework)). On every tick it diffs enabled channel resources against running adapters and starts/stops/restarts to match — and starts or stops the callback listener with the SeaTalk channel set. REST/CLI/UI never start or stop adapters directly; the reconciler owns all runtime state transitions, which keeps status truthful.
 
-Vault export and import ([Vault Export and Import](/reference/adr/vault-export-import)) are deliberately **not** among them: they run only when the user asks, in the request that asked, with no worker and no background replication.
+Vault export and import ([Vault Export and Import](/reference/adr/vault-sync)) are deliberately **not** among them: they run only when the user asks, in the request that asked, with no worker and no background replication.
 
 ## Detect-or-spawn (ADR daemon-detect-or-spawn)
 

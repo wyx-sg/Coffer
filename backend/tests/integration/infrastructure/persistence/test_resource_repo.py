@@ -4,6 +4,7 @@ import pytest
 
 from coffer.domain.errors import ResourceAlreadyExists
 from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.scope import Scope
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -138,7 +139,7 @@ async def test_create_defaults_scope_to_none(tmp_path):
 async def test_scope_json_round_trip(tmp_path):
     repo, engine = await _repo(tmp_path)
     await repo.create(_make_resource())
-    scope = ["claude-code", "codex"]
+    scope = Scope(agents=["claude-code", "codex"])
     updated = await repo.update_scope(ResourceRef("fake_kind", "t"), scope)
     assert updated is not None
     assert updated.scope == scope
@@ -147,14 +148,14 @@ async def test_scope_json_round_trip(tmp_path):
     assert found is not None
     assert found.scope == scope
 
-    # The dormant scope ([]) must survive the JSON round trip distinctly
-    # from None (unscoped) — `json.dumps` vs a NULL column.
-    dormant = await repo.update_scope(ResourceRef("fake_kind", "t"), [])
+    # The dormant scope (an empty agents axis) must survive the JSON round trip
+    # distinctly from None (unscoped) — `json.dumps` vs a NULL column.
+    dormant = await repo.update_scope(ResourceRef("fake_kind", "t"), Scope(agents=[]))
     assert dormant is not None
-    assert dormant.scope == []
+    assert dormant.scope == Scope(agents=[])
     found_dormant = await repo.find(ResourceRef("fake_kind", "t"))
     assert found_dormant is not None
-    assert found_dormant.scope == []
+    assert found_dormant.scope == Scope(agents=[])
 
     cleared = await repo.update_scope(ResourceRef("fake_kind", "t"), None)
     assert cleared is not None
@@ -168,6 +169,8 @@ async def test_scope_json_round_trip(tmp_path):
 @pytest.mark.asyncio
 async def test_update_scope_missing_ref_returns_none(tmp_path):
     repo, engine = await _repo(tmp_path)
-    result = await repo.update_scope(ResourceRef("fake_kind", "nope"), ["claude-code"])
+    result = await repo.update_scope(
+        ResourceRef("fake_kind", "nope"), Scope(agents=["claude-code"])
+    )
     assert result is None
     await engine.dispose()

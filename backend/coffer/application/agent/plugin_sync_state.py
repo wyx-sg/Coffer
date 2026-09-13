@@ -1,4 +1,4 @@
-"""Agent plugin inventory as a synced state area (spec vault-export-import).
+"""Agent plugin inventory as a synced state area (spec vault-sync).
 
 **An inventory, not a replicator.** Export writes down which plugins each
 agent has on THIS machine; import stores that list in the vault and writes

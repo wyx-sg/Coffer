@@ -271,8 +271,8 @@ describe("ModelProvidersPage", () => {
 
     selectFilter("Vendor", "All vendors");
     // The status filter tracks the status COLUMN, which is reach now: an
-    // enabled connection with no scope reads as "Every agent".
-    selectFilter("Status", "Every agent");
+    // enabled connection with no scope reads as "Everywhere".
+    selectFilter("Status", "Everywhere");
     expect(screen.getByText("official")).toBeInTheDocument();
     expect(screen.queryByText("agnes")).not.toBeInTheDocument();
   });
@@ -306,7 +306,7 @@ describe("ModelProvidersPage", () => {
     expect(screen.queryByRole("switch")).toBeNull();
     const on = within(rowFor("official"));
     const off = within(rowFor("agnes"));
-    expect(on.getByRole("button", { name: /every agent/i })).toHaveAttribute(
+    expect(on.getByRole("button", { name: /everywhere/i })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -317,7 +317,7 @@ describe("ModelProvidersPage", () => {
 
     fireEvent.click(on.getByRole("button", { name: /^disabled$/i }));
     await waitFor(() => expect(resourceMock.disable).toHaveBeenCalledWith("provider", "official"));
-    fireEvent.click(off.getByRole("button", { name: /every agent/i }));
+    fireEvent.click(off.getByRole("button", { name: /everywhere/i }));
     await waitFor(() => expect(resourceMock.enable).toHaveBeenCalledWith("provider", "agnes"));
     // The control must not fall through to the row's navigation.
     expect(navigateMock).not.toHaveBeenCalled();
@@ -345,8 +345,8 @@ describe("ModelProvidersPage", () => {
     // The head checkbox selects the whole page.
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
     const bar = within(screen.getByTestId("bulk-reach-control"));
-    // "Every agent" is enable + an unscoped write, per selected row.
-    fireEvent.click(bar.getByRole("button", { name: /every agent/i }));
+    // "Everywhere" is enable + an unscoped write, per selected row.
+    fireEvent.click(bar.getByRole("button", { name: /everywhere/i }));
     await waitFor(() => expect(resourceMock.enable).toHaveBeenCalledTimes(2));
     expect(resourceMock.enable.mock.calls.map((c) => c[1]).sort()).toEqual(["agnes", "official"]);
     await waitFor(() => expect(scopeMock.put).toHaveBeenCalledTimes(2));

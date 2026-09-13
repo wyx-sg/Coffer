@@ -19,6 +19,11 @@ vi.mock("@/lib/api/scope", () => ({ scopeApi: { get: vi.fn(), put: vi.fn() } }))
 vi.mock("@/lib/hooks/useAgents", () => ({
   useAgents: vi.fn(() => ({ data: [{ name: "claude" }, { name: "codex" }] })),
 }));
+vi.mock("@/lib/hooks/useMachines", () => ({
+  useMachines: vi.fn(() => ({
+    data: { machines: [{ machine_id: "a3f21c9e4b7d2610", name: "laptop", is_self: true }] },
+  })),
+}));
 
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
@@ -65,24 +70,24 @@ describe("BulkReachActions", () => {
     await waitFor(() => expect(onDone).toHaveBeenCalled());
   });
 
-  test("Every agent enables each row and clears its scope", async () => {
+  test("Everywhere enables each row and clears its scope", async () => {
     resources.enable.mockResolvedValue(undefined);
     scope.put.mockResolvedValue(undefined);
     mount();
 
-    fireEvent.click(bar().getByRole("button", { name: /every agent/i }));
+    fireEvent.click(bar().getByRole("button", { name: /everywhere/i }));
 
     await waitFor(() => expect(scope.put).toHaveBeenCalledTimes(2));
     expect(resources.enable).toHaveBeenCalledTimes(2);
     expect(scope.put.mock.calls.every((c) => c[2] === null)).toBe(true);
   });
 
-  test("Selected agents writes the SAME staged list to every row, once", async () => {
+  test("Restricted writes the SAME staged scope to every row, once", async () => {
     resources.enable.mockResolvedValue(undefined);
     scope.put.mockResolvedValue(undefined);
     mount();
 
-    fireEvent.click(bar().getByRole("button", { name: /selected agents/i }));
+    fireEvent.click(bar().getByRole("button", { name: /restricted/i }));
     // The panel opens on an EMPTY draft: a bulk write is a new intent, not an
     // edit of whichever row happened to be first.
     expect(
@@ -95,8 +100,8 @@ describe("BulkReachActions", () => {
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
     await waitFor(() => expect(scope.put).toHaveBeenCalledTimes(2));
     expect(scope.put.mock.calls.map((c) => [c[1], c[2]])).toEqual([
-      ["writing", ["claude"]],
-      ["reviewing", ["claude"]],
+      ["writing", { agents: ["claude"], machines: null }],
+      ["reviewing", { agents: ["claude"], machines: null }],
     ]);
   });
 
@@ -104,7 +109,7 @@ describe("BulkReachActions", () => {
     resources.enable.mockResolvedValue(undefined);
     mount({ rows: [{ kind: "channel", name: "tg" }], supportsScope: false });
 
-    expect(bar().queryByRole("button", { name: /every agent/i })).toBeNull();
+    expect(bar().queryByRole("button", { name: /everywhere/i })).toBeNull();
     fireEvent.click(bar().getByRole("button", { name: /^enabled$/i }));
 
     await waitFor(() => expect(resources.enable).toHaveBeenCalledWith("channel", "tg"));
@@ -140,7 +145,7 @@ describe("BulkReachActions", () => {
     );
     mount();
 
-    fireEvent.click(bar().getByRole("button", { name: /every agent/i }));
+    fireEvent.click(bar().getByRole("button", { name: /everywhere/i }));
 
     await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
     expect(toastError.mock.calls[0][0]).toMatch(/1 succeeded, 1 failed/i);

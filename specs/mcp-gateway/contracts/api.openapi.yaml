@@ -739,6 +739,26 @@ components:
       pattern: "^[a-z][a-z0-9_]*:[a-zA-Z0-9_.-]+$"
       example: mcp_server:filesystem
 
+    ScopeOut:
+      type: object
+      description: >-
+        Where a resource is active: two independent allow-lists, AND-ed. null on
+        an axis means unrestricted; [] matches nothing, i.e. dormant. Machines
+        are named by their derived id, never their display name.
+      required: [agents, machines]
+      properties:
+        agents:
+          type: array
+          items: { type: string }
+          nullable: true
+          example: [claude-code]
+        machines:
+          type: array
+          items: { type: string }
+          nullable: true
+          example: [a3f21c9e4b7d2610]
+      nullable: true
+
     ResourceOut:
       type: object
       required: [ref, kind, name, config, enabled, created_at, updated_at]
@@ -752,13 +772,12 @@ components:
         config:
           type: object
           additionalProperties: true
-        # Framework-level per-agent activation scope: a list of agent names,
-        # null = unscoped (active for every agent). Carried on the list payload
-        # so a list view can render the reach control without one GET per row.
+        # Framework-level activation scope: two independent allow-lists,
+        # AND-ed. null = unscoped (active everywhere); an axis given [] matches
+        # nothing. Carried on the list payload so a list view can render the
+        # reach control without one GET per row.
         scope:
-          type: array
-          items: { type: string }
-          nullable: true
+          $ref: "#/components/schemas/ScopeOut"
         enabled: { type: boolean }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }

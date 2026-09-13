@@ -182,15 +182,22 @@ Coffer 的 UI 曾经被包在一个 Tauri 桌面外壳里：它监管 daemon、�
 
 ## Gateway exposure scope（[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.zh.md)）
 
-`mcp_server` resource 携带一个框架级的 `scope`——一个 agent 名列表，或
-`None` 表示「对每个 agent 生效」——网关在自己既有的把关点（按会话的能力
-列举）消费它。不引入新的中央关卡：scope 只决定**谁**能看见一台服务器，从不
-决定它**在哪里**、**是否**运行。
+`mcp_server` resource 携带一个框架级的 `scope`——两条相互独立、按 `AND` 组合
+的允许列表 `agents` 与 `machines`，某一轴为 `null` 即该轴不设限（spec
+vault-sync，「Scope gains a machine axis」）；`None` 表示「对每台机器上的每个
+agent 生效」——网关在自己既有的把关点（按会话的能力列举）消费它。不引入新的
+中央关卡：scope 决定**谁**、**在哪里**能看见一台服务器，但从不决定当已经越过
+这道关卡的调用者要用它时，这个进程**是否**被允许起来。
 
-- **按会话身份。** 网关按**会话**过滤一台服务器的能力：scope 排除了当前连接
-  会话身份的服务器，会从该会话的 `tools/list` / `resources/list` /
+- **按会话身份，外加本机。** 网关按**会话**过滤一台服务器的能力：scope 排除了
+  当前连接会话身份的服务器，会从该会话的 `tools/list` / `resources/list` /
   `prompts/list` 中隐藏，对它的任何调用都会被拒绝——就如同该服务器对这个
-  会话根本不存在一样——即便它同时对另一个不同身份的会话是可见的。
+  会话根本不存在一样——即便它同时对另一个不同身份的会话是可见的。机器轴在同
+  一个把关点被判定，用的是守护进程启动时派生出的机器 id（`ScopeEvaluator`），
+  所以不需要任何会话去上报它，也没有任何会话能冒充成别的机器。因此，一台
+  `machines` 轴排除了本机的服务器，对本机上的**每一个**会话都是隐藏的，无论
+  它的 agent 轴怎么写；与此同时它仍然是已注册的，在管理面里照常列出、照常可
+  编辑。
 - **Shim 身份握手。** Coffer-MCP 安装（spec agent-registry FR-019）会把
   `coffer-mcp-shim --agent <name>` 写入该 agent 的配置，因此每个受管 agent
   的 shim 都会在 MCP 握手时通过 `params._meta["coffer/agent"]` 上报自己已注
@@ -201,10 +208,17 @@ Coffer 的 UI 曾经被包在一个 Tauri 桌面外壳里：它监管 daemon、�
   不带 scope 的服务器——绝不包括任何带 scope 的服务器，即便碰巧有一个未识别
   的会话正是它所命名的那个 agent 在跑。因此未识别的会话看到的严格更少，绝不
   更多。
-- **scope 不是拉起的关卡。** supervisor 没有会话上下文，因此从不查阅 scope：
-  一台带 scope 的服务器与任何其他已启用服务器一样被拉起，把关发生在知道「是
-  谁在问」的那个位置。管理面同理——`POST /{name}/test` 与其余管理路由是对资
-  源的管理操作，而不是 agent 会话，不受 scope 把关。
+- **scope 不是拉起的关卡——两条轴都不是。** supervisor 从不查阅 scope：一台带
+  scope 的服务器与任何其他已启用服务器一样被拉起，把关发生在它上面一层、知道
+  「是谁在问」的那个位置。对 agent 轴这是被迫的——supervisor 没有会话上下文。
+  对机器轴这是一个选择：守护进程的机器 id 在拉起时是已知的，但在那里再关一道
+  只是把已经做过的判断重复一遍，而且这个重复永远触发不到，因为所有拉起路径都
+  在那道关卡的下游。列举的扇出只会拉起已过滤集合里的服务器；一次调用会明确点
+  名服务器，并在向 supervisor 要连接之前，在调用接缝上按两条轴重新判定一次。
+  没有任何会话能拉起一台它看不见的服务器。管理面同理——`POST /{name}/test`
+  与其余管理路由是对资源的管理操作，而不是 agent 会话，两条轴都不受 scope 把
+  关。于是，一台 scope 指向别的机器的服务器要在本机跑起来，就只剩下唯一一条
+  路：所有者自己明确地去测试它。
 - **信任边界。** 身份由 shim 进程在握手时**自行上报**，不做加密验证——在
   单用户、仅本机 loopback 的姿态下（FR-012）可以接受。任何能打开 loopback
   MCP 连接并设置 `_meta` 的本地进程都能冒充任意 agent 名；这一点被明确写
@@ -511,7 +525,7 @@ null 值在校验阶段被拒绝（422）。
 
 **Scope enforcement（[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.zh.md)）**
 
-- **FR-020**: System MUST 在网关按会话的把关点，依据 `mcp_server` 的框架级 `scope`（一个 agent 名列表）过滤其暴露：会话自报的身份把关该会话的 `tools/list` / `resources/list` / `prompts/list` 与调用路由。一台因 scope 对某会话被隐藏的服务器，对该会话而言与一个被禁用的能力无法区分。scope MUST NOT 把关拉起：supervisor 没有会话身份可供判断，因此带 scope 的服务器与任何其他已启用服务器一样被拉起。管理路由（含 `POST /{name}/test`）是对资源的管理操作而非 agent 会话，MUST NOT 受 scope 把关。
+- **FR-020**: System MUST 在网关按会话的把关点，依据 `mcp_server` 的框架级 `scope`（两条按 `AND` 组合的允许列表 `agents` 与 `machines`，某一轴为 `null` 即该轴不设限）过滤其暴露：会话自报的 agent 身份，连同守护进程启动时派生出的机器 id，共同把关该会话的 `tools/list` / `resources/list` / `prompts/list` 与调用路由。一台被任一条轴排除的服务器，对该会话而言与一个被禁用的能力无法区分；而一台 `machines` 轴排除了本机的服务器，对本机上的**每一个**会话都是隐藏的，无论它的 agent 轴怎么写。scope MUST NOT 把关拉起：supervisor 不承载任何策略，两条轴都在它上面一层生效——agent 轴是因为 supervisor 没有会话身份可供判断，机器轴是因为它要重复的那道关卡本来就绕不过去。所有拉起路径都在那道关卡的下游（列举的扇出只从已过滤集合里拉起；一次调用会在调用接缝上按两条轴重新判定），因此带 scope 的服务器与任何其他已启用服务器一样被拉起，但没有任何会话能拉起一台它看不见的服务器。管理路由（含 `POST /{name}/test`）是对资源的管理操作而非 agent 会话，两条轴都 MUST NOT 受 scope 把关——于是一台 scope 指向别的机器的服务器要在本机跑起来，就只剩所有者自己去测试它这一条路。
 - **FR-021**: System MUST 在 MCP 握手时接受自报的 agent 身份（`params._meta["coffer/agent"]`，与既有的 `coffer/cwd` key 并列），该身份由 Coffer-MCP 安装（spec agent-registry FR-019）以 `coffer-mcp-shim --agent <name>` 的形式写入受管 agent 的调用。没有上报身份的会话 MUST 被当作 `agent=None`，只能匹配完全不带 scope 的服务器。身份是自报的，不做加密验证——这是一条被明确记录的信任边界，在仅本机 loopback、单用户的姿态下（FR-012）可以接受。
 
 ### Key Entities
@@ -550,4 +564,4 @@ null 值在校验阶段被拒绝（422）。
 
 ## Deliberately out of scope
 
-- **Vault 备份与恢复。** Coffer 不再自带 `~/.coffer/` 的 `.tar.gz` 快照。spec vault-export-import 的 vault 导出已经涵盖了全部事实源——三棵文件树、资源、凭据密文与同步状态区。备份相对它多带的只有派生数据：日志表（本就按 30 天保留期滚动清理）、chat 会话行、按设计可从文件重建的索引（ADR: files-as-truth-sqlite-retrieval），以及 `distilled_sessions` 幂等台账——丢了只是重蒸一遍，不是数据丢失。而且它默认把归档写在同一台机器上，因此并没有真正回答它看起来在回答的异地容灾问题。想要逐字节拷贝的用户可以用 `cp -r ~/.coffer/`；想要迁移 vault 的用户可以用导出。
+- **Vault 备份与恢复。** Coffer 不再自带 `~/.coffer/` 的 `.tar.gz` 快照。spec vault-sync 的 vault 导出已经涵盖了全部事实源——三棵文件树、资源、凭据密文与同步状态区。备份相对它多带的只有派生数据：日志表（本就按 30 天保留期滚动清理）、chat 会话行、按设计可从文件重建的索引（ADR: files-as-truth-sqlite-retrieval），以及 `distilled_sessions` 幂等台账——丢了只是重蒸一遍，不是数据丢失。而且它默认把归档写在同一台机器上，因此并没有真正回答它看起来在回答的异地容灾问题。想要逐字节拷贝的用户可以用 `cp -r ~/.coffer/`；想要迁移 vault 的用户可以用导出。

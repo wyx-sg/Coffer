@@ -8,7 +8,7 @@ from typing import Any
 from coffer.domain.channel.config import DEFAULT_AGENT, ChannelConfigModel
 from coffer.domain.errors import ConfigValidationError
 from coffer.domain.resource import Kind, Resource, ResourceRef
-from coffer.domain.scope import Scope, agent_in_scope
+from coffer.domain.scope import Scope
 
 _REF_FIELDS = ("bot_token_ref", "app_secret_ref", "signing_secret_ref", "tunnel_token_ref")
 
@@ -37,25 +37,32 @@ def _validate_default_agent(
     instead. Skip when the registry is empty (can't validate) so a misconfigured
     registry never blocks all channel writes.
 
-    ``scope`` is the channel's per-agent scope — the agents it MAY route to
-    (ADR per-agent-resource-scope). ``None`` (the create-time state, and any channel the
-    owner never narrowed) admits every registered agent, so this is the
-    behaviour the check always had. A NON-EMPTY scope rejects a default outside
-    it here rather than letting the channel start and then refuse every turn.
+    ``scope`` is the channel's scope — its AGENT axis names the agents it MAY
+    route to (ADR per-agent-resource-scope). An unrestricted agent axis (the
+    create-time state, and any channel the owner never narrowed) admits every
+    registered agent, so this is the behaviour the check always had. A
+    NON-EMPTY one rejects a default outside it here rather than letting the
+    channel start and then refuse every turn.
 
-    ``scope == []`` is deliberately NOT a rejection: it is the vault-wide
+    An empty agent axis is deliberately NOT a rejection: it is the vault-wide
     meaning of dormant — this channel is off — and "off" must not also mean
     "frozen". A channel the owner switched off still has to accept a corrected
     bot token or tunnel token, so an edit to a dormant channel passes through
     untouched and the row simply stays dormant.
+
+    The MACHINE axis is not consulted at all. It decides where the channel
+    runs, never which agent it drives, and a channel scoped to another machine
+    has to stay editable from here — otherwise a converged vault could hold a
+    channel nobody can correct from the machine they are sitting at.
     """
     default_agent = config.get("default_agent")
     if not isinstance(default_agent, str) or not default_agent:
         return
-    if scope and not agent_in_scope(scope, default_agent):
+    routable = scope.agents if scope is not None else None
+    if routable and default_agent not in routable:
         raise ValueError(
             f"default_agent '{default_agent}' is outside this channel's scope "
-            f"(may route to: {', '.join(sorted(scope))})"
+            f"(may route to: {', '.join(sorted(routable))})"
         )
     known = agent_keys()
     if known and default_agent not in known:
@@ -75,20 +82,26 @@ def _validate_channel_scope(resource: Resource, scope: Scope | None) -> None:
     runtime then refused to start the adapter and the owner's bot went dead with
     nothing but a log line to say why (``Kind.validate_scope_for``).
 
-    ``None`` (every agent) and ``[]`` (dormant — the channel is off, the
-    universal meaning of an empty scope) are always allowed. Only a non-empty
-    narrowing has to name the default agent. The message names both sides so the
-    owner can see the two ways out: widen the scope, or change the default agent
-    first.
+    An unrestricted agent axis (every agent) and an empty one (dormant — the
+    channel is off, the universal meaning of an empty axis) are always allowed.
+    Only a non-empty narrowing has to name the default agent. The message names
+    both sides so the owner can see the two ways out: widen the scope, or
+    change the default agent first.
+
+    Only the agent axis is judged, for the same reason its neighbour on the
+    config path judges only that one: the machine axis decides where the
+    channel runs, and a scope edit made from another machine — narrowing this
+    channel to a third one, say — is a legitimate edit this must not reject.
     """
-    if not scope:
+    routable = scope.agents if scope is not None else None
+    if not routable:
         return
     # Read the same way the runtime's gate reads it, so the two cannot disagree
     # about which agent a channel with no explicit default drives.
     default_agent = str(resource.config.get("default_agent") or DEFAULT_AGENT)
-    if not agent_in_scope(scope, default_agent):
+    if default_agent not in routable:
         raise ValueError(
-            f"scope (may drive: {', '.join(sorted(scope))}) excludes this channel's "
+            f"scope (may drive: {', '.join(sorted(routable))}) excludes this channel's "
             f"default_agent '{default_agent}', which would leave it unable to drive "
             "anything. Add that agent to the scope, or change the channel's "
             "default_agent first."
@@ -190,9 +203,16 @@ def make_channel_kind(
         # drive**. Two enforcement seams: `/agent` lists, offers and accepts
         # only agents inside the scope, and ``default_agent`` is held inside it
         # on every write path — config (``on_update_config``) and scope
-        # (``validate_scope_for``) alike. ``scope == []`` is dormant: the channel
-        # routes to no agent, so the runtime does not start its adapter at all
-        # rather than letting it accept turns it would have to refuse one by
-        # one. Dormant is off, never frozen — its config stays editable.
+        # (``validate_scope_for``) alike. An empty agent axis is dormant: the
+        # channel routes to no agent, so the runtime does not start its adapter
+        # at all rather than letting it accept turns it would have to refuse one
+        # by one. Dormant is off, never frozen — its config stays editable, so
+        # neither validator judges an empty axis.
+        #
+        # The machine axis reads as it does everywhere else — where this
+        # resource is active — and for an inbound surface that is what keeps two
+        # converged machines from both answering it. Only the runtime's gate
+        # reads it (``ChannelRuntime._enabled_channels``, via a
+        # ``ScopeEvaluator``); nothing on a write path does.
         supports_scope=True,
     )

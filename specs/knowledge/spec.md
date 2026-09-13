@@ -64,7 +64,7 @@ A skill Coffer delivers tells the agent this layer is here and how to work it. I
 
 ### User Story 6 — Tidy, when the human asks for it (Priority: P3)
 
-Notes accumulate and duplicate. The developer triggers a tidy pass that merges and rewrites them, having first archived every prior revision. They may also let it run on a timer, but only after switching it on.
+Notes accumulate and duplicate. The developer triggers a tidy pass that merges and rewrites them, having first archived every prior revision. They may also let it run on a timer, but only after switching it on — and, once the vault is synced, only on the one machine named as the tidy owner.
 
 **Independent Test**: run a tidy pass over a collection holding duplicates; confirm `.history/` holds the prior revisions and that the archived copies never appear in grep results.
 
@@ -203,8 +203,11 @@ An agent needs what the vault knows about a problem it can only describe, not qu
 ### Tidy
 
 - **FR-050**: The system MUST provide a bounded agentic **tidy** pass over a collection, driven by the internal model connection, whose tool surface is the four file operations — `list`, `read`, `write`, `delete`. It MUST copy a file's prior revision into `.history/` before any overwrite or merge. With no internal connection configured it MUST be a clean no-op.
-- **FR-051**: Tidy MUST be triggerable by hand from the UI and from `coffer knowledge organize`. A background worker MAY run it on an interval, governed by one **installation-wide setting that is off by default**.
+- **FR-051**: Tidy MUST be triggerable by hand from the UI and from `coffer knowledge organize`. A background worker MAY run it on an interval, governed by one **installation-wide setting that is off by default**. That setting MUST also **name a machine**. Today it is the single `auto_tidy_enabled` boolean on the singleton `internal_engine_config` row, which the worker's enabled-check reads on every tick; it MUST gain a companion owner-machine id — a `machine_id` from the sync machine registry (spec [vault-sync](../vault-sync/spec.md)), null until an owner is chosen — so the switch reads as *on, here* rather than merely *on*.
 - **FR-052**: `.history/` MUST be dot-prefixed and therefore excluded from the catalogue and from grep.
+- **FR-053**: The tidy setting MUST be **synced state**, travelling with the vault in the `internal-engine` document that already carries it, so every machine agrees on who the owner is. A pass MUST run only on the machine the setting names and MUST be a clean no-op on every other. Without that rule two machines rewrite one corpus independently: each merges the same pair of notes into a topic document, but into a *different* one, and git merges the result cleanly — both machines agree the originals are deleted, and the two topic documents are additions at different paths — so the vault ends up holding the same knowledge twice with nothing reported as a conflict. If the owner machine is off, no tidy happens at all, which is the accepted trade for a background nicety.
+- **FR-054**: A tidy pass and a converge round MUST NOT overlap. Both write the vault, and an export taken mid-rewrite is a torn snapshot, so they MUST take the same lock. A pass MUST additionally be skipped while a conflict or a pending confirmation is outstanding, so a rewrite is never piled onto an unresolved divergence.
+- **FR-055**: Where the owner's pass deleted a file that another machine edited, the **edit MUST win**: the file survives with its edit, the deletion is dropped, and the round MUST NOT report a conflict. A fresh edit is something a person or an agent just decided; the deletion is a housekeeping judgement the next pass will simply make again.
 
 ### Surfaces
 

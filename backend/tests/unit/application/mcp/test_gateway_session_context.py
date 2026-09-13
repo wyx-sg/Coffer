@@ -13,10 +13,12 @@ import pytest
 
 from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
 from coffer.application.mcp.gateway import MCPGatewaySession
+from coffer.application.scope_evaluator import ScopeEvaluator
 
 
 def _session_with(registry: BuiltinToolRegistry) -> MCPGatewaySession:
     return MCPGatewaySession(
+        scope_evaluator=ScopeEvaluator(machine_id="test-machine"),
         session_id="s1",
         resource_service=None,  # type: ignore[arg-type]
         supervisor=None,  # type: ignore[arg-type]

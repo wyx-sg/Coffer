@@ -156,5 +156,5 @@ anywhere. Details in [`data-model.md`](./data-model.md).
 - Reranking, HyDE, multi-query or LLM synthesis at read time — the agent
   synthesizes.
 - A filesystem watcher. Nothing is derived, so there is nothing to invalidate.
-- Multi-machine convergence (constitutional; the vault-export-import spec covers
+- Multi-machine convergence (constitutional; the vault-sync spec covers
   export, import and one-way backup).

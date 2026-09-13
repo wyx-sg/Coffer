@@ -1,4 +1,4 @@
-"""Engine settings as a synced state area (spec vault-export-import slice 7).
+"""Engine settings as a synced state area (spec vault-sync slice 7).
 
 The internal-engine model choice is an installation-wide singleton that should
 match across machines: Coffer's own passes behave the same everywhere only when
@@ -48,6 +48,7 @@ class EngineSettingsSyncState:
         doc: dict[str, object] = {
             "model": internal.model,
             "auto_tidy_enabled": internal.auto_tidy_enabled,
+            "tidy_owner_machine_id": internal.tidy_owner_machine_id,
         }
         return [("internal-engine", doc)], ["internal-engine"]
 
@@ -61,9 +62,20 @@ class EngineSettingsSyncState:
                 raw = doc.get("model")
                 model = str(raw) if raw else None
                 auto_tidy = bool(doc.get("auto_tidy_enabled", current.auto_tidy_enabled))
-                if model == current.model and auto_tidy == current.auto_tidy_enabled:
+                owner = doc.get("tidy_owner_machine_id", current.tidy_owner_machine_id)
+                owner = str(owner) if isinstance(owner, str) and owner else None
+                if (
+                    model == current.model
+                    and auto_tidy == current.auto_tidy_enabled
+                    and owner == current.tidy_owner_machine_id
+                ):
                     continue
-                await self._internal.update(model=model, auto_tidy_enabled=auto_tidy, actor="sync")
+                await self._internal.update(
+                    model=model,
+                    auto_tidy_enabled=auto_tidy,
+                    tidy_owner_machine_id=owner or "",
+                    actor="sync",
+                )
             except Exception as e:
                 errors.append((path, str(e)))
         return errors

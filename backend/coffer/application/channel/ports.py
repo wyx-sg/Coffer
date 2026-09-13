@@ -25,6 +25,7 @@ from coffer.domain.channel.envelopes import (
     SentMessage,
 )
 from coffer.domain.channel.rich_content import ForwardedItem
+from coffer.domain.scope import Scope
 
 
 @dataclass(frozen=True)
@@ -213,12 +214,15 @@ class ChannelBinding:
     # Group inbound gating (FR-035), sourced from the channel config.
     require_mention: bool = True
     ignore_other_mentions: bool = False
-    # The agents this channel may drive (ADR per-agent-resource-scope), taken from the
-    # resource row's framework-level ``scope``. ``None`` — every agent — is the
-    # unscoped default and what every channel carried before scope existed.
-    # A channel scoped to no agent (``[]``) is never bound at all: the runtime
-    # treats it as dormant and does not start its adapter.
-    agent_scope: list[str] | None = None
+    # The channel's framework-level ``scope``, carried whole off the resource
+    # row (ADR per-agent-resource-scope). Its AGENT axis names the agents this
+    # channel may drive; an unrestricted axis — every agent — is the unscoped
+    # default and what every channel carried before scope existed. A channel
+    # whose agent axis is empty is never bound at all: the runtime treats it as
+    # dormant and does not start its adapter, and neither does it bind one whose
+    # MACHINE axis excludes this machine. So a binding that exists has already
+    # passed both gates, and the routing seams read only the agent axis.
+    agent_scope: Scope | None = None
 
 
 @dataclass(frozen=True)

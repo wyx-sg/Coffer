@@ -78,7 +78,7 @@ Secrets reach the listener the same way upstream MCP subprocesses get theirs: th
 
 ## Export security
 
-Vault export and import ([Vault Export and Import](/reference/adr/vault-export-import)) move vault state between machines as a **directory the user names and carries**. Its security rests on keeping the secret material out of that directory:
+Vault export and import ([Vault Export and Import](/reference/adr/vault-sync)) move vault state between machines as a **directory the user names and carries**. Its security rests on keeping the secret material out of that directory:
 
 - **No network egress at all.** Export and import touch the local filesystem only — no remote, no git subprocess, no background replication. Whatever carries the directory (`scp`, a USB drive, the user's own git repo) is outside Coffer, using the user's own tools and credentials.
 - **Credentials are opt-in.** An export omits credential material entirely unless `--with-credentials` is given, because an export directory is easy to leave somewhere careless.

@@ -7,8 +7,10 @@ it, and the inconsistent state cannot be stored at all. Driven over the real
 resource routes because the point is that the ANSWER is a 4xx the user sees,
 not a log line after a silent success.
 
-``scope == []`` is the one thing both paths always accept: it is the vault-wide
-meaning of dormant (the channel is off), and off must not also mean frozen.
+An empty agent axis is the one thing both paths always accept: it is the
+vault-wide meaning of dormant (the channel is off), and off must not also mean
+frozen. The machine axis is not judged on either path at all — narrowing a
+channel to another machine is how a converged vault hands the surface over.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.resource_service import ResourceService
 from coffer.domain.resource import ResourceRef
+from coffer.domain.scope import Scope
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import create_async_engine_with_pragmas, session_maker
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
@@ -71,7 +74,7 @@ async def client(tmp_path) -> AsyncIterator[tuple[AsyncClient, ResourceService]]
     await engine.dispose()
 
 
-async def _scope_of(svc: ResourceService, ref: ResourceRef) -> list[str] | None:
+async def _scope_of(svc: ResourceService, ref: ResourceRef) -> Scope | None:
     return (await svc.get(ref)).scope
 
 
@@ -83,7 +86,7 @@ async def test_narrowing_past_the_default_agent_is_rejected_not_silently_accepte
     c, svc = client
     # The channel's default_agent is claude_code (the config default), so this
     # narrowing would leave it able to drive nothing.
-    r = await c.put(_SCOPE_URL, json={"scope": ["codex"]})
+    r = await c.put(_SCOPE_URL, json={"scope": {"agents": ["codex"]}})
 
     assert r.status_code == 422, r.text
     assert r.json()["error"]["code"] == "SCOPE_INVALID"
@@ -97,19 +100,19 @@ async def test_narrowing_past_the_default_agent_is_rejected_not_silently_accepte
 
 async def test_a_scope_that_keeps_the_default_agent_is_accepted(client) -> None:
     c, _svc = client
-    r = await c.put(_SCOPE_URL, json={"scope": ["claude_code"]})
+    r = await c.put(_SCOPE_URL, json={"scope": {"agents": ["claude_code"]}})
 
     assert r.status_code == 200, r.text
-    assert r.json()["scope"] == ["claude_code"]
+    assert r.json()["scope"] == {"agents": ["claude_code"], "machines": None}
 
 
 async def test_the_dormant_scope_is_accepted(client) -> None:
     """``[]`` is the deliberate "off" switch, never a rejected narrowing."""
     c, _svc = client
-    r = await c.put(_SCOPE_URL, json={"scope": []})
+    r = await c.put(_SCOPE_URL, json={"scope": {"agents": []}})
 
     assert r.status_code == 200, r.text
-    assert r.json()["scope"] == []
+    assert r.json()["scope"] == {"agents": [], "machines": None}
 
 
 @pytest.mark.acceptance(
@@ -120,7 +123,7 @@ async def test_a_dormant_channels_config_stays_editable(client) -> None:
     """The owner switched the channel off, then found its bot token was wrong.
     Off must not mean frozen."""
     c, svc = client
-    assert (await c.put(_SCOPE_URL, json={"scope": []})).status_code == 200
+    assert (await c.put(_SCOPE_URL, json={"scope": {"agents": []}})).status_code == 200
 
     r = await c.patch(
         _CONFIG_URL,
@@ -130,12 +133,12 @@ async def test_a_dormant_channels_config_stays_editable(client) -> None:
     assert r.status_code == 200, r.text
     assert r.json()["config"]["bot_token_ref"] == "channel/tg/bot-v2"
     # Still dormant — an edit is not a way to accidentally switch it back on.
-    assert (await svc.get(ResourceRef("channel", "tg"))).scope == []
+    assert (await svc.get(ResourceRef("channel", "tg"))).scope == Scope(agents=[], machines=None)
 
 
 async def test_widening_the_scope_back_works(client) -> None:
     c, _svc = client
-    assert (await c.put(_SCOPE_URL, json={"scope": []})).status_code == 200
+    assert (await c.put(_SCOPE_URL, json={"scope": {"agents": []}})).status_code == 200
 
     r = await c.put(_SCOPE_URL, json={"scope": None})
 
@@ -147,7 +150,7 @@ async def test_the_config_path_still_rejects_a_default_agent_outside_the_scope(c
     """The other half of the invariant, unchanged: with a non-empty scope in
     place, an edit cannot re-bind the channel to an agent outside it."""
     c, _svc = client
-    assert (await c.put(_SCOPE_URL, json={"scope": ["claude_code"]})).status_code == 200
+    assert (await c.put(_SCOPE_URL, json={"scope": {"agents": ["claude_code"]}})).status_code == 200
 
     r = await c.patch(
         _CONFIG_URL,
@@ -163,3 +166,27 @@ async def test_the_config_path_still_rejects_a_default_agent_outside_the_scope(c
     assert r.status_code == 422, r.text
     assert r.json()["error"]["code"] == "CONFIG_INVALID"
     assert "outside this channel's scope" in r.json()["error"]["message"]
+
+
+async def test_a_machine_only_narrowing_is_not_judged_by_either_path(client) -> None:
+    """Neither write path reads the machine axis.
+
+    Handing a channel to another machine is a legitimate edit — it is how a
+    converged vault decides who answers the bot — and it says nothing about the
+    agents the channel may drive, so the ``default_agent`` invariant has nothing
+    to object to. Its config must stay editable afterwards too: a channel
+    nobody can correct from where they are sitting is the failure this avoids.
+    """
+    c, svc = client
+    r = await c.put(_SCOPE_URL, json={"scope": {"machines": ["some-other-machine"]}})
+
+    assert r.status_code == 200, r.text
+    assert (await svc.get(ResourceRef("channel", "tg"))).scope == Scope(
+        agents=None, machines=["some-other-machine"]
+    )
+
+    edit = await c.patch(
+        _CONFIG_URL,
+        json={"config": {"channel_type": "telegram", "bot_token_ref": "channel/tg/bot-v2"}},
+    )
+    assert edit.status_code == 200, edit.text

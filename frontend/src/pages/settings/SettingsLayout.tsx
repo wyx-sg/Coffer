@@ -4,7 +4,6 @@ import {
   Cpu,
   Database,
   Info,
-  RefreshCw,
   Settings,
   ShieldCheck,
   SlidersHorizontal,
@@ -36,11 +35,6 @@ const DATA_ITEM: Item = {
   labelKey: "settings.tabs.data",
   icon: Database,
 };
-const SYNC_ITEM: Item = {
-  to: "/settings/sync",
-  labelKey: "settings.tabs.sync",
-  icon: RefreshCw,
-};
 const SECURITY_ITEM: Item = {
   to: "/settings/security",
   labelKey: "settings.tabs.security",
@@ -58,8 +52,7 @@ export function SettingsLayout() {
     GENERAL_ITEM,
     ENGINE_ITEM,
     DATA_ITEM,
-    SYNC_ITEM,
-    SECURITY_ITEM,
+      SECURITY_ITEM,
     ABOUT_ITEM,
   ];
 

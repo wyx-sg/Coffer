@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import socket
 from pathlib import Path
 from typing import Any
 
@@ -133,6 +134,19 @@ def effective_port() -> int:
     return DEFAULT_PORT if fixed is None else fixed
 
 
+def _merge(**fields: Any) -> None:
+    """Write ``fields`` into the config file, keeping everything else.
+
+    Merging rather than replacing is what lets several settings share one file.
+    Keys this build does not know are preserved for the same reason: a config
+    written by a newer Coffer must survive being touched by an older one.
+    """
+    payload = dict(_read_raw() or {})
+    payload.update(fields)
+    payload["version"] = _CONFIG_VERSION
+    write_json_0600(config_path(), payload)
+
+
 def write_fixed_port(port: int | None) -> None:
     """Pin the daemon's port, or clear the setting with ``None``.
 
@@ -144,6 +158,66 @@ def write_fixed_port(port: int | None) -> None:
     """
     if port is not None:
         validate_port(port)
-    path = config_path()
-    payload: dict[str, Any] = {"version": _CONFIG_VERSION, "port": port}
-    write_json_0600(path, payload)
+    _merge(port=port)
+
+
+# --- machine identity -------------------------------------------------------
+#
+# A machine has two separate things (spec vault-sync "Identity is derived, the
+# name is a label"), and this file holds them for opposite reasons.
+#
+# ``machine_name`` is a label the user may change at any time. It lives here
+# because the daemon needs it before it has published anything, and because
+# nothing references it — a rename costs nothing.
+#
+# ``machine_id`` is a key: it names this machine's descriptor, every
+# ``scope.machines`` entry, and the registry row. It is DERIVED from the host
+# (see ``infrastructure.sync.machine_id``), and what is written here is only a
+# cache, so the daemon does not shell out to ``ioreg`` on every boot. The cache
+# is never authoritative: deleting it recomputes the same value, and a cached
+# value that disagrees with the host is the host's to win.
+
+
+def default_machine_name() -> str:
+    """This host's name, as a person would say it.
+
+    ``.local`` is mDNS's suffix rather than part of what the user calls their
+    laptop, so it is stripped; the hostname is used verbatim otherwise.
+    """
+    name = socket.gethostname().strip()
+    if name.endswith(".local"):
+        name = name[: -len(".local")]
+    return name or "coffer"
+
+
+def read_machine_name() -> str:
+    """The display name for this machine, defaulting from the hostname."""
+    payload = _read_raw()
+    if payload is not None:
+        name = payload.get("machine_name")
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+    return default_machine_name()
+
+
+def write_machine_name(name: str) -> None:
+    """Rename this machine. Free by construction: nothing references the name.
+
+    An empty name clears the setting rather than storing a blank, so the next
+    read falls back to the hostname instead of showing the user nothing.
+    """
+    _merge(machine_name=name.strip() or None)
+
+
+def read_cached_machine_id() -> str | None:
+    """The cached derived id, or None when there is nothing usable cached."""
+    payload = _read_raw()
+    if payload is None:
+        return None
+    cached = payload.get("machine_id")
+    return cached.strip() if isinstance(cached, str) and cached.strip() else None
+
+
+def write_cached_machine_id(machine_id: str) -> None:
+    """Cache a derived id. Only ever called with a value the host produced."""
+    _merge(machine_id=machine_id)

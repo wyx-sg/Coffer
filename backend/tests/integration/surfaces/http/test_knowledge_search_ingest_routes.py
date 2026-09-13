@@ -88,7 +88,10 @@ async def test_builtin_search_tool_spans_only_the_agents_collections(client) -> 
         description="d",
         body="account.session owns login state too",
     )
-    scoped = client.put("/api/v1/resources/knowledge/secret/scope", json={"scope": ["only-agent"]})
+    scoped = client.put(
+        "/api/v1/resources/knowledge/secret/scope",
+        json={"scope": {"agents": ["only-agent"], "machines": None}},
+    )
     assert scoped.status_code == 200, scoped.text
 
     knowledge_service = get_knowledge_service()

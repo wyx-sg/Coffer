@@ -711,7 +711,7 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 
 ## 导出 / 导入（复用，几乎零引擎改动）
 
-将 `provider` 建模为 ResourceService Kind，它就会自动进入导出 bundle（[Vault Export and Import](../../docs/decisions/vault-export-import.zh.md)）：
+将 `provider` 建模为 ResourceService Kind，它就会自动进入导出 bundle（[Vault Export and Import](../../docs/decisions/vault-sync.zh.md)）：
 
 - `SyncExporter` 列出所有 kind → 通过 `resource_to_doc` 将每行序列化为 `resources/provider/<name>.yaml`。
 - `SyncImporter` 按 `(kind, name)` 进行 reconcile。

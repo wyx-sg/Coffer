@@ -2,29 +2,33 @@
 //
 // The same three-way reach choice (ReachControl) applied to a whole table
 // selection, replacing the Enable / Disable pair the bulk bars used to carry.
-// Enable/Disable could not say "expose these to exactly these agents", which is
-// the state the per-row control has offered since ADR per-agent-resource-scope
-// — so the bar offered strictly less than the row it summarises.
+// Enable/Disable could not say "expose these to exactly these agents, on
+// exactly these machines", which is the state the per-row control has offered
+// since ADR per-agent-resource-scope — so the bar offered strictly less than
+// the row it summarises.
 //
 // A bulk write is a NEW INTENT, not an edit of one row's value: the control is
 // mounted with `mode={null}` (no segment reads as live, because a mixed
-// selection has no single reach) and the agent panel opens on an EMPTY draft
-// rather than on whichever row happened to be first.
+// selection has no single reach) and the restriction panel opens on an EMPTY
+// draft rather than on whichever row happened to be first. It carries no
+// "inactive here" note either — a mixed selection has no single answer.
 //
 // Every segment writes the SAME state to EVERY selected row, fanned out with
 // useBulkMutate: Promise.allSettled, so one failed row never aborts the rest,
 // then one summary toast ("N succeeded, M failed") and one invalidation burst.
 // Partial failure is therefore reported, never silent.
 //
-// "Every agent" and "Selected agents" are two writes per row (enable, then PUT
-// the scope), sequenced inside one fan-out unit so a row that fails to enable
-// is counted as failed rather than half-applied.
+// "Everywhere" and "Restricted" are two writes per row (enable, then PUT the
+// scope), sequenced inside one fan-out unit so a row that fails to enable is
+// counted as failed rather than half-applied.
 import { useTranslation } from "react-i18next";
 
 import { ReachControl, type ReachMode } from "@/components/reach/ReachControl";
 import { resourcesApi } from "@/lib/api/resources";
 import { scopeApi, type Scope } from "@/lib/api/scope";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
+import { UNRESTRICTED } from "@/lib/hooks/useScope";
+import { sameScope } from "@/lib/scope";
 
 /** The minimum a row must carry to be reachable: its resource identity. */
 export interface ReachTarget {
@@ -34,7 +38,7 @@ export interface ReachTarget {
 
 interface Props {
   rows: ReachTarget[];
-  /** `false` for a kind with no per-agent scope: the group collapses to
+  /** `false` for a kind with no scope: the group collapses to
    *  Disabled/Enabled and the segments write only the `enabled` flag. */
   supportsScope?: boolean;
   /** The kind's own list key, invalidated alongside ["resources"] and
@@ -72,12 +76,14 @@ export function BulkReachActions({ rows, supportsScope = true, invalidate = [], 
       mode={mode}
       supportsScope={supportsScope}
       busy={bulk.isPending}
-      initialAgents={[]}
+      initialScope={null}
       testId="bulk-reach-control"
       ariaLabel={t("scope.bulkReach")}
       onDisabled={goDisabled}
-      onEveryAgent={() => goEnabled(null)}
-      onSelectedAgents={(agents) => goEnabled(agents)}
+      onEverywhere={() => goEnabled(null)}
+      // Both axes left unrestricted is "everywhere" under a second name; the
+      // row control normalises it the same way.
+      onRestricted={(scope) => goEnabled(sameScope(scope, UNRESTRICTED) ? null : scope)}
     />
   );
 }

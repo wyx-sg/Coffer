@@ -1,4 +1,4 @@
-"""Agent import gate + side-effect reconciliation for sync (spec vault-export-import import
+"""Agent import gate + side-effect reconciliation for sync (spec vault-sync import
 reconciliation).
 
 Gate: an agent doc only imports where its config dir exists and its skill

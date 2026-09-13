@@ -16,6 +16,7 @@ from coffer.application.channel.agent_routing import (
     routable_keys,
 )
 from coffer.application.channel.ports import ChannelBinding
+from coffer.domain.scope import Scope
 
 
 class _Catalog:
@@ -28,7 +29,7 @@ class _Catalog:
         return [("claude_code", "Claude Code"), ("codex", "Codex")]
 
 
-def _binding(scope: list[str] | None, default_agent: str = "claude_code") -> ChannelBinding:
+def _binding(scope: Scope | None, default_agent: str = "claude_code") -> ChannelBinding:
     adapter: Any = object()
     return ChannelBinding(
         name="tg",
@@ -52,13 +53,13 @@ def test_unscoped_channel_may_drive_every_agent() -> None:
 
 
 def test_scope_narrows_keys_and_choices_identically() -> None:
-    b = _binding(["codex"])
+    b = _binding(Scope(agents=["codex"]))
     assert routable_keys(b, _Catalog()) == ["codex"]
     assert routable_choices(b, _Catalog()) == [("codex", "Codex")]
 
 
 def test_a_dormant_channel_may_drive_nothing() -> None:
-    b = _binding([])
+    b = _binding(Scope(agents=[]))
     assert routable_keys(b, _Catalog()) == []
     assert routable_choices(b, _Catalog()) == []
 
@@ -66,19 +67,29 @@ def test_a_dormant_channel_may_drive_nothing() -> None:
 def test_an_agent_scoped_in_before_it_exists_simply_never_matches() -> None:
     # Unknown names in a scope are legal by design (ADR per-agent-resource-scope); the
     # narrowing intersects with the registry rather than trusting the list.
-    b = _binding(["codex", "not-installed-yet"])
+    b = _binding(Scope(agents=["codex", "not-installed-yet"]))
     assert routable_keys(b, _Catalog()) == ["codex"]
 
 
 def test_effective_agent_keeps_an_in_scope_sticky_choice() -> None:
-    assert effective_agent(_binding(["claude_code", "codex"]), "codex") == "codex"
+    assert effective_agent(_binding(Scope(agents=["claude_code", "codex"])), "codex") == "codex"
 
 
 def test_effective_agent_drops_a_sticky_choice_the_scope_excludes() -> None:
     # Narrowing a channel after someone switched must not leave the thread
     # routing to an agent the channel may no longer reach.
-    assert effective_agent(_binding(["claude_code"]), "codex") == "claude_code"
+    assert effective_agent(_binding(Scope(agents=["claude_code"])), "codex") == "claude_code"
 
 
 def test_effective_agent_falls_back_when_nothing_is_sticky() -> None:
     assert effective_agent(_binding(None), None) == "claude_code"
+
+
+def test_the_machine_axis_does_not_narrow_routing() -> None:
+    """A binding exists only because the runtime's gate already admitted this
+    channel on this machine, so re-asking the machine question here could only
+    return the same yes — at the cost of every routing seam needing a machine
+    id. Reading it would instead make a bound channel drive nothing at all."""
+    b = _binding(Scope(agents=None, machines=["some-other-machine"]))
+    assert routable_keys(b, _Catalog()) == ["claude_code", "codex"]
+    assert effective_agent(b, "codex") == "codex"

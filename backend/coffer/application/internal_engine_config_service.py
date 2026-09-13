@@ -18,7 +18,11 @@ from coffer.domain.internal_engine_config import GlobalInternalEngineConfig
 class InternalEngineConfigRepo(Protocol):
     async def get(self) -> GlobalInternalEngineConfig | None: ...
     async def set(
-        self, *, model: str | None, auto_tidy_enabled: bool | None = None
+        self,
+        *,
+        model: str | None,
+        auto_tidy_enabled: bool | None = None,
+        tidy_owner_machine_id: str | None = None,
     ) -> GlobalInternalEngineConfig: ...
 
 
@@ -40,13 +44,22 @@ class InternalEngineConfigService:
         *,
         model: str | None,
         auto_tidy_enabled: bool | None = None,
+        tidy_owner_machine_id: str | None = None,
         actor: str = "api",
     ) -> GlobalInternalEngineConfig:
         cleaned = model.strip() if model and model.strip() else None
-        saved = await self._repo.set(model=cleaned, auto_tidy_enabled=auto_tidy_enabled)
+        saved = await self._repo.set(
+            model=cleaned,
+            auto_tidy_enabled=auto_tidy_enabled,
+            tidy_owner_machine_id=tidy_owner_machine_id,
+        )
         await self._audit.record(
             AuditEventType.INTERNAL_ENGINE_MODEL_SET.value,
             actor=actor,
-            details={"model": cleaned, "auto_tidy_enabled": saved.auto_tidy_enabled},
+            details={
+                "model": cleaned,
+                "auto_tidy_enabled": saved.auto_tidy_enabled,
+                "tidy_owner_machine_id": saved.tidy_owner_machine_id,
+            },
         )
         return saved

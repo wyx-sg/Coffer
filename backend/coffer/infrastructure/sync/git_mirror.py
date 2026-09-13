@@ -1,4 +1,4 @@
-"""Drive one git working tree for the vault backup (spec vault-export-import ``## Backup``).
+"""Drive one git working tree for the vault backup (spec vault-sync ``## Backup``).
 
 The adapter shells out to the real ``git`` binary rather than binding a library
 because the point of the backup is that what lands on the remote is an ordinary
@@ -44,6 +44,15 @@ _ASKPASS_BODY = "#!/bin/sh\nprintf '%s' \"$COFFER_GIT_TOKEN\"\n"
 _TOKEN_ENV = "COFFER_GIT_TOKEN"
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
+# Pinned onto every invocation rather than passed per command, so nothing added
+# later can be reached without them: quotepath keeps a path out of git's
+# C-quoting — a note named in Chinese otherwise comes back escaped and matches
+# no file on disk — and the identity is what a commit is authored as, the
+# user's own git config being pinned at /dev/null below.
+_QUOTEPATH = ("-c", "core.quotepath=false")
+_IDENTITY = ("-c", "user.name=Coffer", "-c", "user.email=coffer@localhost")
+_PINNED = _QUOTEPATH + _IDENTITY
+
 
 class GitMirrorError(CofferError):
     """A git invocation failed; the message is already redacted. Maps to 502."""
@@ -55,6 +64,7 @@ class _Completed(NamedTuple):
     returncode: int
     stdout: str
     stderr: str
+    stdout_bytes: bytes = b""
 
 
 @contextlib.contextmanager
@@ -102,6 +112,8 @@ def _git_env(token: str | None, askpass: str | None) -> dict[str, str]:
 class GitMirror:
     """``GitMirrorPort`` over the ``git`` binary, rooted at one working tree."""
 
+    EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
     def __init__(self, worktree: pathlib.Path, *, timeout_s: float = DEFAULT_TIMEOUT_S) -> None:
         self._worktree = pathlib.Path(worktree)
         self._timeout = timeout_s
@@ -126,15 +138,9 @@ class GitMirror:
         cwd = root or self._worktree
         with _askpass_script(token) as askpass:
             env = _git_env(token, askpass)
-            proc = await asyncio.create_subprocess_exec(
-                "git",
-                "-C",
-                str(cwd),
-                *args,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env,
-            )
+            argv = ("git", "-C", str(cwd), *_PINNED, *args)
+            pipe = asyncio.subprocess.PIPE
+            proc = await asyncio.create_subprocess_exec(*argv, stdout=pipe, stderr=pipe, env=env)
             try:
                 raw_out, raw_err = await asyncio.wait_for(proc.communicate(), timeout=self._timeout)
             except TimeoutError:
@@ -143,11 +149,9 @@ class GitMirror:
                 raise GitMirrorError(
                     f"git {args[0]} timed out after {self._timeout:.0f}s"
                 ) from None
-        done = _Completed(
-            proc.returncode or 0,
-            raw_out.decode("utf-8", errors="replace"),
-            raw_err.decode("utf-8", errors="replace"),
-        )
+        text = raw_out.decode("utf-8", errors="replace")
+        problem = raw_err.decode("utf-8", errors="replace")
+        done = _Completed(proc.returncode or 0, text, problem, raw_out)
         if check and done.returncode != 0:
             raise GitMirrorError(self._failure(args, done, token))
         return done
@@ -234,17 +238,86 @@ class GitMirror:
         return [line for line in out.stdout.splitlines() if line.strip()]
 
     async def commit(self, message: str) -> str:
-        await self._git(
-            "-c",
-            "user.name=Coffer",
-            "-c",
-            "user.email=coffer@localhost",
-            "commit",
-            "-m",
-            message,
-        )
+        await self._git("commit", "-m", message)
         out = await self._git("rev-parse", "--short", "HEAD")
         return out.stdout.strip()
+
+    async def merge(self, ref: str, *, message: str) -> list[str]:
+        """Merge ``ref`` into the current branch; return the conflicted paths.
+
+        A conflict deliberately leaves the merge in progress: a resolver may yet
+        write the files, and only the caller chooses between ``commit_merge`` and
+        ``abort_merge``. Unrelated histories merge because a machine joining a
+        remote it has never seen is that case, and the round wants the union."""
+        done = await self._git(
+            "merge", "--allow-unrelated-histories", "-m", message, ref, check=False
+        )
+        if done.returncode == 0:
+            return []
+        unmerged = await self._git("diff", "--name-only", "--diff-filter=U", "-z")
+        conflicted = [path for path in unmerged.stdout.split("\0") if path]
+        if not conflicted:
+            raise GitMirrorError(self._failure(("merge",), done, None))
+        return conflicted
+
+    async def commit_merge(self, message: str) -> str:
+        """Stage the resolved tree and conclude the merge git left in progress."""
+        await self._git("add", "-A")
+        return await self.commit(message)
+
+    async def abort_merge(self) -> None:
+        await self._git("merge", "--abort")
+
+    async def take_side(self, path: str, side: str) -> None:
+        """Resolve one conflicted path by taking ``ours`` or ``theirs`` — a git
+        operation, not a file copy, so the index is left as the merge expects."""
+        if side not in ("ours", "theirs"):
+            raise GitMirrorError(f"not a merge side: {side}")
+        await self._git("checkout", f"--{side}", "--", path)
+        await self._git("add", "--", path)
+
+    async def diff_paths(self, base: str, head: str) -> list[tuple[str, str]]:
+        """``(status, path)`` for every change between two commits.
+
+        ``--no-renames`` so a move arrives as its delete and its add: the vault
+        applies one path at a time. ``-z`` because a path may hold a newline."""
+        out = await self._git("diff", "--name-status", "--no-renames", "-z", base, head)
+        fields = [field for field in out.stdout.split("\0") if field]
+        return [(fields[i][:1], fields[i + 1]) for i in range(0, len(fields) - 1, 2)]
+
+    async def file_count(self, revision: str, prefix: str) -> int:
+        """Files a commit holds under ``prefix``, read from the tree so the share
+        the deletion guard measures against cannot move mid-round."""
+        scope = ["--", prefix] if prefix else []
+        out = await self._git("ls-tree", "-r", "--name-only", "-z", revision, *scope)
+        return sum(1 for path in out.stdout.split("\0") if path)
+
+    async def reset_hard(self, revision: str) -> None:
+        await self._git("reset", "--hard", revision)
+
+    async def tag(self, name: str, revision: str) -> None:
+        await self._git("tag", "-f", name, revision)
+
+    async def tags(self, prefix: str) -> list[str]:
+        out = await self._git("tag", "--list", f"{prefix}*", "--sort=-creatordate")
+        return [line.strip() for line in out.stdout.splitlines() if line.strip()]
+
+    async def delete_tag(self, name: str) -> None:
+        await self._git("tag", "-d", name)
+
+    async def read_file(self, revision: str, path: str) -> bytes | None:
+        """One file's bytes at a revision, or None when it is not there.
+
+        ``revision`` may be a merge stage (``:2`` ours, ``:3`` theirs), which
+        ``<revision>:<path>`` spells correctly on its own. Bytes rather than
+        text: a credential blob is ciphertext a lossy decode would corrupt."""
+        out = await self._git("show", f"{revision}:{path}", check=False)
+        return out.stdout_bytes if out.returncode == 0 else None
+
+    async def read_worktree(self, path: str) -> bytes | None:
+        """What a resolver actually wrote — the validation gate's only input."""
+        target = self._worktree / path
+        return target.read_bytes() if target.is_file() else None
 
     async def push(self, *, branch: str, token: str | None) -> None:
         await self._git("push", "origin", branch, token=token)

@@ -1,6 +1,6 @@
 """The backup remote: one user-owned git repository exports are pushed to.
 
-Spec vault-export-import ``## Backup``; constitution 0.5.0 Principle I
+Spec vault-sync ``## Backup``; constitution 0.5.0 Principle I
 exception. Pure domain — no filesystem, no git, no database. Everything here
 is about what a valid remote *is* and what one run of a backup *reports*; how
 either is carried out belongs to the application layer.

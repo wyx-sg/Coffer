@@ -40,6 +40,7 @@ from coffer.application.memory.organise import organise_partition
 from coffer.application.memory.organise_worker import OrganiseWorker
 from coffer.application.memory.recall import RecallService
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
+from coffer.application.memory.sync_state import MemoryOverrideSyncState
 from coffer.domain.agent.config import AgentConfig
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.llm.embeddings import remote_embedder
@@ -60,6 +61,7 @@ if TYPE_CHECKING:
     from coffer.application.engine_ports import EmbedderPort
     from coffer.application.provider.service import ProviderService
     from coffer.application.resource_service import ResourceService
+    from coffer.application.scope_evaluator import ScopeEvaluator
     from coffer.domain.provider.config import ResolvedConnection
     from coffer.domain.resource import Resource
 
@@ -128,15 +130,28 @@ def wire_memory_kind(
     credential_resolver: Callable[[str], str],
     sm: async_sessionmaker[Any],
     agent_service: Any,
+    scope_evaluator: ScopeEvaluator,
 ) -> tuple[MemoryService, OverrideRepository, DeliveryService]:
     """Wire the ``memory`` kind into the app; return its three services."""
     service = MemoryService(
-        resources=resource_svc, audit=audit, agent_source_resolver=_agent_source
+        resources=resource_svc,
+        audit=audit,
+        agent_source_resolver=_agent_source,
+        scope_evaluator=scope_evaluator,
     )
     set_memory_service(service)
 
     override_repo = OverrideRepository(sm)
     set_memory_override_repo(override_repo)
+
+    # The developer's decisions are the one part of this layer that syncs — the
+    # derived tree is rebuilt per machine and must not (spec vault-sync
+    # "What does not sync").
+    providers = getattr(app.state, "sync_state_providers", None)
+    if providers is None:
+        providers = []
+        app.state.sync_state_providers = providers
+    providers.append(MemoryOverrideSyncState(override_repo))
 
     recall_service = RecallService(
         memory=service,

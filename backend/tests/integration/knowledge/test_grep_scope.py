@@ -11,7 +11,9 @@ from __future__ import annotations
 import pytest
 
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
+from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.resource import Resource
+from coffer.domain.scope import Scope
 from coffer.infrastructure.knowledge import fs
 
 
@@ -37,7 +39,7 @@ class _Audit:
         self.events.append(event_type)
 
 
-def _resource(name: str, scope: list[str] | None) -> Resource:
+def _resource(name: str, scope: Scope | None) -> Resource:
     from datetime import UTC, datetime
 
     now = datetime.now(tz=UTC)
@@ -60,8 +62,14 @@ def service(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     for name in ("shopee", "personal"):
         fs.create_collection_dir(name)
         fs.write_file(directory=name, title=f"{name} note", description="d", body="登录态 body")
-    resources = _Resources([_resource("shopee", ["claude-code"]), _resource("personal", None)])
-    return KnowledgeService(resources=resources, audit=_Audit())
+    resources = _Resources(
+        [_resource("shopee", Scope(agents=["claude-code"])), _resource("personal", None)]
+    )
+    return KnowledgeService(
+        resources=resources,
+        audit=_Audit(),
+        scope_evaluator=ScopeEvaluator(machine_id="test-machine"),
+    )
 
 
 @pytest.mark.asyncio

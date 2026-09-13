@@ -83,7 +83,8 @@
     "channels": "Channels",
     "activity": "Activity",
     "chat": "Chat",
-    "modelProviders": "Model providers"
+    "modelProviders": "Model providers",
+    "sync": "Sync"
   },
   "resources": {
     "title": "MCP servers",
@@ -368,8 +369,7 @@
       "engine": "Engine",
       "data": "Data",
       "security": "Security",
-      "about": "About",
-      "sync": "Sync"
+      "about": "About"
     },
     "general": {
       "title": "Display",
@@ -472,61 +472,6 @@
       "fetchModels": "Fetch models",
       "testConnection": "Test connection",
       "fetchedCount": "{{count}} models fetched — pick one or type your own"
-    },
-    "sync": {
-      "title": "Export / import vault",
-      "description": "Write this vault into a directory you pick, or read one back. Carrying that directory to your other machine — scp, a USB drive, your own git repo — is up to you.",
-      "withCredentials": "Include credentials",
-      "withCredentialsHint": "Credentials travel as encrypted ciphertext, never the master key. Leave this off unless the other machine needs them — an export directory is easy to leave somewhere careless.",
-      "exportVault": "Export vault…",
-      "importVault": "Import vault…",
-      "bundlePath": "Bundle directory",
-      "bundlePathManualHint": "This machine has no native folder dialog — type the path, then click again.",
-      "exported": "Vault exported to {{path}}",
-      "imported": "Bundle imported from {{path}}",
-      "bundleFailure": "{{ref}} — {{reason}}",
-      "areas": {
-        "knowledge": "Knowledge",
-        "memory": "Memory",
-        "skills": "Skills",
-        "resources": "Resources",
-        "state": "Shared state",
-        "credentials": "Credentials"
-      },
-      "masterKey": "Master key (out-of-band)",
-      "masterKeyHint": "Export this machine's key to a file and move it to another machine over a channel you trust, then import it there. It is never written into an export bundle.",
-      "keyFingerprint": "Key fingerprint",
-      "keyFingerprintHint": "Matching fingerprints on two machines mean they hold the same key.",
-      "exportKey": "Export key",
-      "importKey": "Import key",
-      "keyExported": "Key downloaded as {{name}}",
-      "keyImported": "Key imported — this machine now decrypts credentials brought with a bundle.",
-      "keyFileEmpty": "That file is empty — pick the key file exported from the other machine.",
-      "backup": {
-        "title": "Backup to a git remote",
-        "description": "Push this vault's exports to one git repository you own, on a timer. It is a backup, never a second source of truth: Coffer pushes, and only restores when you ask it to.",
-        "enabled": "Back up automatically",
-        "url": "Repository URL",
-        "branch": "Branch",
-        "interval": "Every (seconds)",
-        "credentialRef": "Push credential",
-        "credentialRefHint": "The name of an entry in Coffer's credential store — not the secret itself. The daemon resolves it when it pushes, so the credential never reaches this page, the repository's git config, or any error text.",
-        "includeCredentials": "Include credentials",
-        "includeCredentialsHint": "Credentials travel as encrypted ciphertext; the master key is never pushed under any setting. This is fixed for the remote, not chosen per backup.",
-        "pushNow": "Back up now",
-        "pushing": "Backing up…",
-        "worktree": "Working tree: {{path}}",
-        "lastRun": "Last backup: {{status}} · {{when}}",
-        "commit": "Commit {{commit}}",
-        "never": "unknown",
-        "noRunYet": "No backup has run yet.",
-        "runStatus": {
-          "ok": "pushed",
-          "no_change": "nothing changed",
-          "push_failed": "push failed",
-          "export_failed": "export failed"
-        }
-      }
     },
     "connections": {
       "title": "Model providers",
@@ -1430,12 +1375,149 @@
     "bulkDeleteConfirm": "Delete {{count}} channels? Their adapters stop and their pairings are removed."
   },
   "scope": {
-    "subtitle": "Which agents this is active for — every agent, or only the ones you select. Out of scope it stays registered, just not exposed or delivered.",
+    "subtitle": "Where this is active: which agents, and which machines. The two are independent and both must match. Out of scope it stays registered, just not exposed or delivered.",
+    "everywhere": "Everywhere",
+    "restricted": "Restricted…",
+    "agentsSection": "Agents",
+    "machinesSection": "Machines",
     "everyAgent": "Every agent",
-    "selectedAgents": "Selected agents",
-    "dormant": "No agent selected — dormant. This stays registered but reaches no agent until you select at least one below.",
+    "everyMachine": "Every machine",
+    "dormant": "Nothing selected on one of the axes — dormant. This stays registered but reaches nobody until at least one entry is selected.",
     "noAgents": "No agents registered yet.",
+    "noMachines": "No machines yet — this vault has not converged with a remote.",
     "unknownAgent": "Not registered here",
+    "unknownMachine": "Not in the registry",
+    "thisMachine": "This machine",
+    "inactiveHereMachine": "Inactive on this machine — its machine scope does not name it.",
+    "inactiveHereAgent": "Inactive here — its agent scope names no agent registered on this machine.",
     "bulkReach": "Reach for the selected"
+  },
+  "sync": {
+    "title": "Sync",
+    "subtitle": "Converge this vault with a git repository you own, so every machine you work on holds the same knowledge, skills and configuration.",
+    "tabs": {
+      "status": "Status",
+      "machines": "Machines"
+    },
+    "areas": {
+      "knowledge": "Knowledge",
+      "skills": "Skills",
+      "resources": "Resources",
+      "state": "Shared state",
+      "credentials": "Credentials",
+      "machines": "Machines",
+      "other": "Other"
+    },
+    "remote": {
+      "title": "Remote",
+      "description": "One git repository you own. Each round commits what this vault holds, lets git merge it against what the repository holds, and applies the difference back — deletions included. The repository is a rendezvous, not a system of record: delete it and any machine can rebuild it.",
+      "enabled": "Converge automatically",
+      "url": "Repository URL",
+      "branch": "Branch",
+      "interval": "Every (seconds)",
+      "credentialRef": "Push credential",
+      "credentialRefHint": "The name of an entry in Coffer's credential store — not the secret itself. The daemon resolves it when it pushes, so the credential never reaches this page, the repository's git config, or any error text.",
+      "includeCredentials": "Include credentials",
+      "includeCredentialsHint": "Credentials travel as encrypted ciphertext; the master key is never pushed under any setting. A machine holding ciphertext without the key reports those references locked instead of failing quietly.",
+      "worktree": "Working tree: {{path}}",
+      "convergeNow": "Converge now",
+      "converging": "Converging…",
+      "notConfigured": "No remote configured yet. Name a repository above and this vault starts converging with it."
+    },
+    "round": {
+      "title": "Last round",
+      "none": "No round has run yet.",
+      "status": "Last round: {{status}}",
+      "statusLabel": {
+        "ok": "converged",
+        "no_change": "nothing changed",
+        "conflict": "stopped on a conflict",
+        "awaiting_confirmation": "held, waiting for you",
+        "push_failed": "applied here, push failed",
+        "failed": "failed",
+        "disabled": "turned off"
+      },
+      "join": {
+        "new": "Joined as a new machine — everything the remote held was added, and everything this vault held was kept.",
+        "returning": "Rejoined as a returning machine — its base was recovered from its own descriptor, so nothing deleted while it was away came back."
+      },
+      "applied": "Applied here",
+      "published": "Published to the remote",
+      "counts": "{{added}} added · {{modified}} changed · {{deleted}} deleted",
+      "commit": "Commit {{commit}}",
+      "agentResolved": "Merged for you by an agent",
+      "agentResolvedHint": "An internal model resolved the conflict on these paths in the working tree. Worth reading if they are your own notes.",
+      "failures": "Could not be applied here",
+      "failure": "{{path}} — {{reason}}",
+      "lockedRefs": "Credentials this machine cannot decrypt",
+      "lockedRefsHint": "This vault holds their ciphertext but not the key that opens it. Import the master key from the machine that has it, below."
+    },
+    "conflict": {
+      "title": "A conflict stopped this round",
+      "body": "Two machines changed the same lines of the same document. Nothing was applied and nothing was published — the vault and the pointer are exactly where they were.",
+      "paths": "Conflicted paths",
+      "resolve": "Resolve them with your own git tools in the working tree below, and the next round carries on from there.",
+      "worktree": "Working tree: {{path}}"
+    },
+    "pending": {
+      "bodyApply": "Applying the remote's changes here would remove more documents than the deletion guard allows. Confirm only if you know another machine really did delete this much.",
+      "bodyPublish": "This machine's own round would publish these deletions to the remote, and every other machine would then apply them.",
+      "breach": "{{area}}: {{deleted}} of {{total}} documents",
+      "breaches": "What it would remove",
+      "confirm": "Confirm",
+      "confirming": "Confirming…",
+      "morePaths": "…and {{count}} more",
+      "paths": "Paths",
+      "raisedAt": "Held {{when}}",
+      "rebuild": "Rebuild from remote",
+      "rebuildConfirm": "This replaces this machine's vault with the remote's and discards anything only this machine has. Use it when this machine's files are genuinely gone. Continue?",
+      "rebuilding": "Rebuilding…",
+      "reinstallWarning": "If this machine was just reinstalled, or restored from a backup, the honest answer is Reject: the documents are missing here, not deleted, and confirming would take the other machines down with it.",
+      "reject": "Reject",
+      "rejecting": "Rejecting…",
+      "titleApply": "A round was held: the remote would delete a large part of this vault",
+      "titlePublish": "A round was held: this vault would delete a large part of the remote"
+    },
+    "key": {
+      "title": "Master key",
+      "hint": "Credentials sync as ciphertext only. Another machine can decrypt what this one publishes only once it holds this same key — export it to a file, carry it over a channel you trust, and import it there. It is never written into the repository.",
+      "fingerprint": "Key fingerprint",
+      "fingerprintHint": "Matching fingerprints on two machines mean they hold the same key.",
+      "export": "Export key",
+      "import": "Import key",
+      "exported": "Key downloaded as {{name}}",
+      "imported": "Key imported — this machine now decrypts the credentials it syncs.",
+      "importedLocked": "Key imported, but {{count}} credential reference still cannot be decrypted with it.",
+      "fileEmpty": "That file is empty — pick the key file exported from the other machine."
+    },
+    "machines": {
+      "title": "Machines",
+      "description": "Every installation of Coffer that has converged with this remote. A machine is identified by an id derived from its host, so renaming one costs nothing and reinstalling Coffer does not create a second.",
+      "empty": "No machines yet — this vault has not converged with a remote.",
+      "columns": {
+        "name": "Name",
+        "system": "System",
+        "hostname": "Hostname",
+        "version": "Coffer version",
+        "lastConverged": "Last converged",
+        "key": "Key",
+        "agents": "Agents",
+        "actions": ""
+      },
+      "thisMachine": "This machine",
+      "rename": "Rename this machine",
+      "renameLabel": "Machine name",
+      "lastConvergedHint": "A day, not a moment: a machine that is running but idle deliberately does not stamp every round.",
+      "never": "Never",
+      "keyMatches": "Same key",
+      "keyDiffers": "Its credentials cannot be decrypted here",
+      "keyUnknown": "Unknown — one side has published no fingerprint yet",
+      "noAgents": "None",
+      "retire": "Retire",
+      "retireTitle": "Retire {{name}}?",
+      "retireBody": "Its descriptor is removed from the registry, and the machine is stripped from the scope of every resource naming it — otherwise those resources would stay dormant on a machine nobody can see.",
+      "retired": "{{name}} retired; {{count}} resource scopes updated.",
+      "derivedNote": "This machine's id is stored in a local file rather than derived from the host, so deleting ~/.coffer makes it come back as a new machine and this row has to be retired by hand."
+    }
   }
 }

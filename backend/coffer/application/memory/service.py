@@ -42,6 +42,7 @@ from coffer.application.memory.aggregate import (
     merge_duplicates,
 )
 from coffer.application.resource_service import ResourceService
+from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.memory.errors import UnreadableMemory
@@ -49,7 +50,7 @@ from coffer.domain.memory.fact import PERSONAL_TYPES, Fact
 from coffer.domain.memory.partition import GLOBAL_PARTITION, disambiguate, partition_slug
 from coffer.domain.memory.reader import MemoryReader, RawFact
 from coffer.domain.resource import ResourceRef
-from coffer.domain.scope import agent_in_scope
+from coffer.domain.scope import Scope
 from coffer.infrastructure.memory import source_state, store
 from coffer.infrastructure.memory.readers import ClaudeCodeMemoryReader, CodexMemoryReader
 
@@ -106,11 +107,13 @@ class MemoryService:
         resources: ResourceService,
         audit: AuditService,
         agent_source_resolver: AgentSourceResolver,
+        scope_evaluator: ScopeEvaluator,
         readers: Mapping[str, MemoryReader] | None = None,
     ) -> None:
         self._resources = resources
         self._audit = audit
         self._resolve_agent_source = agent_source_resolver
+        self._scope = scope_evaluator
         self._readers: Mapping[str, MemoryReader] = (
             dict(readers) if readers is not None else DEFAULT_READERS
         )
@@ -259,8 +262,13 @@ class MemoryService:
         # memory flows back to its own sources with no setup step. A
         # partition that already existed is never touched here — only a
         # brand-new registration reaches this method.
+        # The machine axis stays unrestricted: a partition is aggregated from
+        # whichever machine holds those agents, and pinning it to this one
+        # would make it dormant everywhere else for no reason.
         await self._resources.update_scope(
-            ResourceRef(KIND_MEMORY, name), sorted(agents), actor=actor
+            ResourceRef(KIND_MEMORY, name),
+            Scope(agents=sorted(agents), machines=None),
+            actor=actor,
         )
 
     async def _delete_partition(self, name: str, *, actor: str) -> None:
@@ -304,7 +312,7 @@ class MemoryService:
         """The partitions ``agent`` may see (FR-014), mirroring
         ``KnowledgeService.visible_collections``."""
         rows = await self._resources.list(kind=KIND_MEMORY, enabled=True)
-        return sorted(r.name for r in rows if agent_in_scope(r.scope, agent))
+        return sorted(r.name for r in rows if self._scope.is_active(r.scope, agent))
 
     # ----------------------------------------------------------------- #
     # Lifecycle                                                          #

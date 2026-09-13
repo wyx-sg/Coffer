@@ -35,11 +35,11 @@ from coffer.domain.mcp.namespace import (
     parse_prefixed_uri,
 )
 from coffer.domain.resource import ResourceRef
-from coffer.domain.scope import agent_in_scope
 
 if TYPE_CHECKING:
     from coffer.application.mcp.supervisor import SubprocessSupervisor
     from coffer.application.resource_service import ResourceService
+    from coffer.application.scope_evaluator import ScopeEvaluator
 
 
 # --------------------------------------------------------------------------- #
@@ -163,6 +163,7 @@ async def _invoke(
     session_id: str,
     clock: Callable[[], datetime],
     ensure_subscribed: Callable[[str], Any],
+    scope: ScopeEvaluator,
     on_evict: Callable[[str], None] | None = None,
     session_agent: str | None = None,
 ) -> Any:
@@ -174,14 +175,14 @@ async def _invoke(
 
     resource = await resources.get(ResourceRef("mcp_server", server_name))
 
-    # Per-agent scope (FR-020): tools/list already hides a server whose scope
-    # excludes this session's agent identity (gateway._enabled_mcp_servers),
+    # Activation scope (FR-020): tools/list already hides a server this
+    # session's scope excludes (gateway._enabled_mcp_servers),
     # but that is only a listing-side filter — nothing on the call-routing
     # path re-checked it, so a caller that already knows (or guesses) a
     # hidden server's namespaced tool name could invoke it directly. The
     # supervisor's spawn gate has no session context, so this check lives
     # here, at the session's invocation seam, where `_session_agent` is known.
-    if not agent_in_scope(resource.scope, session_agent):
+    if not scope.is_active(resource.scope, session_agent):
         await record_invocation(
             invocations,
             session_id=session_id,
@@ -196,7 +197,7 @@ async def _invoke(
         # Same "indistinguishable from a disabled capability" shape FR-020
         # specifies for a hidden server: ToolDisabled, not UpstreamUnavailable
         # (that stays reserved for an upstream that genuinely won't start).
-        raise ToolDisabled(f"{server_name!r} is not in scope for this agent")
+        raise ToolDisabled(f"{server_name!r} is not in scope here")
 
     try:
         await check_capability_enabled(prefs, resource.id, spec.capability_type, original)

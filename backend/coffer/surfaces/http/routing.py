@@ -56,7 +56,7 @@ def include_all_routers(app: FastAPI) -> None:
         retention_router,
         credential_router,
         settings_router,
-        sync_router,  # spec vault-export-import
+        sync_router,  # spec vault-sync
         internal_engine_router,  # spec provider-switching
         # agent + skill (specs agent-registry/skill-manager)
         agent_router,

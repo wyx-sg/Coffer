@@ -16,7 +16,7 @@ from typing import Any
 
 def build_config_services(app: Any, sm: Any, audit: Any) -> Any:
     """Build the internal-engine config service and register its synced state
-    area (spec vault-export-import slice 7) before ``start_sync`` snapshots."""
+    area (spec vault-sync slice 7) before ``start_sync`` snapshots."""
     from coffer.application.engine_settings_sync import EngineSettingsSyncState
     from coffer.application.internal_engine_config_service import InternalEngineConfigService
     from coffer.infrastructure.persistence.repos import SqlAlchemyInternalEngineConfigRepo

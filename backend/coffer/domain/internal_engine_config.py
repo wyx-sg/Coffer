@@ -29,8 +29,35 @@ class GlobalInternalEngineConfig:
     (spec knowledge FR-051). It ships **off**, so an unattended rewriter is
     something the operator switches on rather than something they discover
     running.
+
+    ``tidy_owner_machine_id`` names the single machine allowed to run that
+    rewriter once a vault spans several (spec vault-sync ``## Unattended
+    rewriters``). Without it, two machines merge the same pair of notes into two
+    *different* topic documents; git merges that cleanly — both agree the
+    sources are deleted, and the two topics are additions at different paths —
+    and the vault silently ends up holding the same knowledge twice. That is a
+    duplicate no conflict can catch, so the fix has to be that only one machine
+    ever writes.
+
+    ``None`` means "wherever this setting is read", which is the right answer
+    for a single-machine vault and the reason enabling tidy does not force a
+    choice before there is anything to choose between.
     """
 
     model: str | None
     updated_at: datetime
     auto_tidy_enabled: bool = False
+    tidy_owner_machine_id: str | None = None
+
+    def tidy_runs_on(self, machine_id: str | None) -> bool:
+        """Whether the timer may run a pass on this machine.
+
+        An owner that names a machine this vault has never heard of stops tidy
+        everywhere, which is the safe direction: no tidy costs a little
+        housekeeping, tidy on every machine costs duplicated knowledge.
+        """
+        if not self.auto_tidy_enabled:
+            return False
+        if self.tidy_owner_machine_id is None:
+            return True
+        return self.tidy_owner_machine_id == machine_id

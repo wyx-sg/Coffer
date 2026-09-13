@@ -20,6 +20,7 @@ from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
+from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.mcp.server_config import MCPServerConfig, StdioTransport
 from coffer.domain.resource import Kind
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
@@ -137,6 +138,7 @@ async def test_gateway_overhead_under_50ms_median(
         preferences=prefs,
     )
     session = MCPGatewaySession(
+        scope_evaluator=ScopeEvaluator(machine_id="test-machine"),
         session_id="bench-session",
         resource_service=rsvc,
         supervisor=supervisor,

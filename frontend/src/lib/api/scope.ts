@@ -15,11 +15,21 @@ import { ApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
 
 /**
- * A resource's activation scope: the list of agent names it is active for.
- * `null` (see `ResourceScope.scope`) means every agent; `[]` means no agent,
- * i.e. dormant.
+ * A resource's activation scope: two independent allow-lists, `AND`-ed.
+ *
+ * `null` on an axis is unrestricted; `[]` matches nothing, i.e. dormant. The
+ * whole scope being `null` (see `ResourceScope.scope`) means active
+ * everywhere, for every agent and on every machine.
+ *
+ * Machines are named by their DERIVED id (`Machine.machine_id`), never by
+ * their display name — which is why a scope editor offers them as a pick-list
+ * and never as free text: a mistyped id silently makes the resource dormant.
+ *
+ * Structurally the generated `ScopeOut`, and deliberately declared against it:
+ * this module is hand-written, so the alias is the one thing that does fail at
+ * compile time if the two axes ever drift from the API.
  */
-export type Scope = string[];
+export type Scope = NonNullable<components["schemas"]["ScopeOut"]>;
 
 /**
  * GET .../scope response: the current scope (`null` = unscoped, active for
@@ -66,7 +76,8 @@ export const scopeApi = {
     return (await r.json()) as ResourceScope;
   },
 
-  /** Replace the scope; `null` clears it back to unscoped (every agent). */
+  /** Replace the scope; `null` clears it back to unscoped — every agent, on
+   *  every machine. */
   async put(kind: string, name: string, scope: Scope | null): Promise<ResourceOut> {
     const r = await fetch(`${getCofferBaseUrl()}${scopePath(kind, name)}`, {
       method: "PUT",

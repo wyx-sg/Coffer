@@ -17,7 +17,6 @@ from coffer.application.skill.lifecycle_ops import infer_link_mode
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import TargetConflict
 from coffer.domain.resource import ResourceRef
-from coffer.domain.scope import agent_in_scope
 from coffer.domain.skill.binding import BindingState
 from coffer.domain.workspace_errors import SkillOutOfScope
 
@@ -37,7 +36,7 @@ async def enable_skill_for_agent(
     agent = await service._rs.get(ResourceRef("agent", agent_name))
     # Hard grant: scope overrides manual bindings — an agent outside
     # the skill's scope can never be bound, even with force=True.
-    if not agent_in_scope(skill.scope, agent_name):
+    if not service._scope.is_active(skill.scope, agent_name):
         raise SkillOutOfScope(skill_name, agent_name)
     target_dir = service._resolve_agent_skill_dir(agent)
     link_path = target_dir / skill_name

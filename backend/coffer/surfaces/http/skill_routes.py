@@ -15,6 +15,7 @@ from coffer.domain.skill.binding import BindingState, LinkMode
 from coffer.domain.skill.config import SkillConfig
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_skill_service
+from coffer.surfaces.http.schemas import ScopeOut
 
 router = APIRouter(
     prefix="/api/v1/skills",
@@ -53,9 +54,10 @@ class SkillOut(BaseModel):
     description: str
     source: dict[str, Any]
     # The two halves of the delivery predicate: a skill reaches an agent iff
-    # ``enabled`` and the agent is in ``scope`` (None = every agent, [] = none).
+    # ``enabled`` and this agent, on this machine, is inside ``scope``
+    # (None = everywhere; an axis given [] matches nothing).
     enabled: bool
-    scope: list[str] | None
+    scope: ScopeOut | None
     version_hash: str
     master_path: str
     last_synced_from_source_at: datetime | None
@@ -147,7 +149,7 @@ async def _to_skill_out(
         description=cfg.skill_md_description,
         source=cfg.source.model_dump(mode="json"),
         enabled=r.enabled,
-        scope=r.scope,
+        scope=ScopeOut.of(r.scope),
         version_hash=cfg.version_hash,
         master_path=svc.master_path(r.name),
         last_synced_from_source_at=cfg.last_synced_from_source_at,

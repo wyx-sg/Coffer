@@ -11,6 +11,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from coffer.domain.scope import Scope
+
 # --- Error envelope ---
 
 
@@ -27,16 +29,34 @@ class ErrorResponse(BaseModel):
 # --- Resources (kind-agnostic) ---
 
 
+class ScopeOut(BaseModel):
+    """A resource's activation scope on the wire: two independent allow-lists,
+    ``AND``-ed (ADR per-agent-resource-scope). ``null`` on an axis means
+    unrestricted; ``[]`` matches nothing, i.e. dormant. Machines are named by
+    their derived id, never their display name."""
+
+    agents: list[str] | None = Field(default=None, examples=[["claude-code"]])
+    machines: list[str] | None = Field(default=None, examples=[["a3f21c9e4b7d2610"]])
+
+    @classmethod
+    def of(cls, scope: Scope | None) -> ScopeOut | None:
+        """The wire shape of a stored scope; null stays null (unscoped)."""
+        return None if scope is None else cls(agents=scope.agents, machines=scope.machines)
+
+    def to_domain(self) -> Scope:
+        return Scope(agents=self.agents, machines=self.machines)
+
+
 class ResourceOut(BaseModel):
     ref: str = Field(examples=["mcp_server:filesystem"])
     kind: str
     name: str
     description: str | None = None
     config: dict[str, Any]
-    # Framework-level per-agent activation scope (ADR per-agent-resource-scope): a list of agent
-    # names. None = unscoped (active for every agent); only kinds whose
+    # Framework-level activation scope (ADR per-agent-resource-scope). None =
+    # unscoped (active for every agent, on every machine); only kinds whose
     # Kind.supports_scope is True may set it. See GET/PUT .../scope below.
-    scope: list[str] | None = None
+    scope: ScopeOut | None = None
     enabled: bool
     created_at: datetime
     updated_at: datetime
@@ -59,19 +79,21 @@ class ResourceListOut(BaseModel):
 
 
 class ResourceScopeOut(BaseModel):
-    """GET .../scope response: the current agent list plus whether this kind
+    """GET .../scope response: the current scope plus whether this kind
     supports scope at all (False means any non-null write is a 422)."""
 
-    scope: list[str] | None = Field(default=None, examples=[["claude-code"]])
+    scope: ScopeOut | None = None
     supports_scope: bool = False
 
 
 class ResourceScopeUpdate(BaseModel):
-    """PUT .../scope request body: the agent names this resource is active
-    for. ``scope: null`` clears back to unscoped (every agent); ``[]`` makes
-    it dormant (no agent)."""
+    """PUT .../scope request body: where this resource is active.
 
-    scope: list[str] | None = None
+    ``scope: null`` clears back to unscoped — every agent, every machine. An
+    axis given a list restricts to it, and an empty list matches nothing, so
+    ``{"agents": []}`` is dormant."""
+
+    scope: ScopeOut | None = None
 
 
 # --- Audit ---

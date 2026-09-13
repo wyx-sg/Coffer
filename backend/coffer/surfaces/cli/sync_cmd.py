@@ -1,17 +1,17 @@
-"""coffer sync ... commands (spec vault-export-import vault export/import).
+"""coffer sync ... commands (spec vault-sync).
 
-Two halves. ``export``/``import``/``key`` move a vault by hand. ``remote``,
-``push``, ``restore`` and ``status`` drive the one git remote exports are
-backed up to (spec ``## Backup``) — always through the daemon, which owns the
-git working tree and is the only thing that ever resolves the push credential.
+Configure the one git remote this vault converges with, run a round by hand,
+answer a held one, look at the fleet, and bootstrap the master key.
 
-Nothing here restores on its own: ``restore`` overwrites local state, so it is
-only ever the command the user typed (spec ``### Restore``).
+There is no ``export`` or ``import`` here. Writing a bundle to a directory and
+reading one back was a wholesale overwrite with no base, and it has no place
+beside the diff-based round. What replaces it needs no Coffer command: a new
+machine runs ``coffer sync adopt``, an offline medium is a ``file://`` remote on
+a USB drive, and handing a copy to someone else is ``git clone ~/.coffer/sync``.
 """
 
 from __future__ import annotations
 
-import pathlib
 from typing import Any
 
 import typer
@@ -19,316 +19,295 @@ from rich.console import Console
 
 from coffer.domain.sync.backup import DEFAULT_BRANCH, DEFAULT_INTERVAL_SECONDS
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli.sync_machine_cmd import key_app, machine_app
 
-app = typer.Typer(help="Export this vault, import one back, or back it up to a git remote")
-key_app = typer.Typer(help="Out-of-band master-key transfer for new machines")
-app.add_typer(key_app, name="key")
-remote_app = typer.Typer(help="The one git remote this vault is backed up to")
+app = typer.Typer(help="Keep this vault converged with a git remote you own")
+remote_app = typer.Typer(help="The one git remote this vault converges with")
 app.add_typer(remote_app, name="remote")
+app.add_typer(machine_app, name="machine")
+app.add_typer(key_app, name="key")
+
 _console = Console()
 
-#: What a bundle holds, in the order the exporter writes it. Shown when a
-#: remote is configured because a URL on its own tells the user nothing about
-#: what they just agreed to put on someone else's disk.
-_BUNDLE_AREAS: tuple[tuple[str, str], ...] = (
-    ("knowledge", "every document under ~/.coffer/knowledge"),
-    ("skills", "the master skill store"),
-    ("resources", "mcp_server, agent, skill and channel definitions"),
-    ("state", "shared state: pairings, scope labels, plugin inventory"),
-)
-
-#: Run statuses that mean the remote does not yet hold this vault.
-_FAILED_STATUSES = frozenset({"push_failed", "export_failed"})
+#: Statuses that mean the user has something to do.
+_NEEDS_ATTENTION = frozenset({"conflict", "awaiting_confirmation", "push_failed", "failed"})
 
 
 def _verbose(ctx: typer.Context) -> bool:
-    return bool((ctx.obj or {}).get("verbose", False))
+    return bool(ctx.obj and ctx.obj.get("verbose"))
 
 
-def _print_summary(payload: dict[str, Any]) -> None:
-    """Counts per area, the resources that failed, and the bundle path."""
-    _console.print(f"bundle: [bold]{payload['path']}[/bold]")
-    areas = payload.get("areas") or []
-    if areas:
-        for area in areas:
-            _console.print(f"  {area['area']}: {area['count']}")
-    else:
-        _console.print("  (nothing to report)")
-    for ref, reason in (tuple(f) for f in payload.get("failures") or []):
-        _console.print(f"  [red]failed[/red] {ref}: {reason}")
-    if payload.get("locked_refs"):
-        _console.print(f"  locked credentials: {', '.join(payload['locked_refs'])}")
-        _console.print("  (run 'coffer sync key import <path>' to unlock)")
+def _counts(label: str, counts: dict[str, Any]) -> str:
+    parts = [f"{k} {v}" for k, v in counts.items() if v]
+    return f"{label}: {', '.join(parts)}" if parts else f"{label}: nothing"
 
 
-@app.command("export")
-def export_bundle(
-    ctx: typer.Context,
-    directory: str = typer.Argument(..., help="Directory to write the export bundle into"),
-    with_credentials: bool = typer.Option(
-        False,
-        "--with-credentials",
-        help="Include credential ciphertext (never the master key)",
-    ),
-) -> None:
-    """Export this vault into a directory you can carry to another machine."""
-    verbose = _verbose(ctx)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post(
-            "/sync/export",
-            json={"path": directory, "with_credentials": with_credentials},
-        )
-        _cli_client.check(r, verbose=verbose)
-    _print_summary(r.json())
-    if with_credentials:
+def _print_round(run: dict[str, Any]) -> None:
+    status = run.get("status", "?")
+    style = "yellow" if status in _NEEDS_ATTENTION else "green"
+    _console.print(f"[{style}]{status}[/{style}]")
+
+    if run.get("join"):
+        joined = run["join"]
         _console.print(
-            "[yellow]this bundle holds credential ciphertext — move it somewhere you trust[/yellow]"
+            f"  joined this remote as a [bold]{joined}[/bold] machine"
+            + (
+                "  (its id was already in the registry, so its base came from its own descriptor)"
+                if joined == "returning"
+                else ""
+            )
         )
-
-
-@app.command("import")
-def import_bundle(
-    ctx: typer.Context,
-    directory: str = typer.Argument(..., help="Export bundle directory to import"),
-) -> None:
-    """Import an export bundle into this vault (never deletes local-only items)."""
-    verbose = _verbose(ctx)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post("/sync/import", json={"path": directory})
-        _cli_client.check(r, verbose=verbose)
-    _print_summary(r.json())
-
-
-@key_app.command("export")
-def key_export(
-    ctx: typer.Context,
-    path: str = typer.Argument(..., help="Local file to write the master key to"),
-) -> None:
-    """Export this machine's master key to a file (move it out-of-band)."""
-    verbose = _verbose(ctx)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post("/sync/key/export", json={})
-        _cli_client.check(r, verbose=verbose)
-    # The daemon hands back the material; the CLI writes the file, so the
-    # daemon never opens a path a caller named.
-    target = pathlib.Path(path).expanduser()
-    target.write_text(r.json()["material"], encoding="utf-8")
-    target.chmod(0o600)
-    _console.print(f"master key written to {target}")
-    _console.print("[yellow]move it over a channel you trust — never inside a bundle[/yellow]")
-
-
-@key_app.command("import")
-def key_import(
-    ctx: typer.Context,
-    path: str = typer.Argument(..., help="Local file holding a master key from another machine"),
-) -> None:
-    """Install a master key brought from another machine, unlocking credentials."""
-    verbose = _verbose(ctx)
-    source = pathlib.Path(path).expanduser()
-    if not source.exists():
-        _console.print(f"[red]no such file: {source}[/red]")
-        raise typer.Exit(1)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post("/sync/key/import", json={"material": source.read_text(encoding="utf-8")})
-        _cli_client.check(r, verbose=verbose)
-    locked = r.json()["locked_refs"]
-    if locked:
-        _console.print(f"key installed; still locked: {', '.join(locked)}")
-    else:
-        _console.print("key installed; all credentials unlock on this machine")
-
-
-# --- backup (spec vault-export-import ``## Backup``) ------------------------
-
-
-def _print_remote(remote: dict[str, Any]) -> None:
-    """Render the configured remote.
-
-    ``push credential`` is the *reference* the daemon resolves at push time —
-    a name in the credential store. The secret itself never crosses the API,
-    so there is nothing here to redact.
-    """
-    _console.print(f"remote: [bold]{remote['url']}[/bold]")
-    _console.print(f"  branch: {remote['branch']}")
-    _console.print(f"  interval: {remote['interval_seconds']}s")
-    _console.print(f"  worktree: {remote['worktree_path']}")
-    _console.print(f"  enabled: {'yes' if remote['enabled'] else 'no'}")
-    _console.print(f"  push credential: {remote['credential_ref'] or '(none)'}")
-
-
-def _print_push_contents(*, with_credentials: bool) -> None:
-    """Say what a push will put on the remote, area by area."""
-    _console.print("a push will contain:")
-    for area, what in _BUNDLE_AREAS:
-        _console.print(f"  {area}: {what}")
-    if with_credentials:
-        _console.print("  credentials: Fernet ciphertext (never the master key)")
-        _console.print(
-            "[yellow]credential ciphertext rides along — push only to a repository you own[/yellow]"
-        )
-    else:
-        _console.print("  credentials: not included")
-
-
-def _print_run(run: dict[str, Any] | None) -> None:
-    """Render one backup run, or say that none has happened yet."""
-    if run is None:
-        _console.print("last run: (none yet)")
-        return
-    status = run["status"]
-    colour = "red" if status in _FAILED_STATUSES else "green"
-    _console.print(f"last run: [{colour}]{status}[/{colour}]")
-    if run.get("ran_at"):
-        _console.print(f"  at: {run['ran_at']}")
+    _console.print("  " + _counts("applied here", run.get("applied") or {}))
+    _console.print("  " + _counts("published", run.get("published") or {}))
     if run.get("commit"):
-        _console.print(f"  commit: {run['commit']}")
+        _console.print(f"  commit: {run['commit'][:12]}")
+
+    for path in run.get("agent_resolved") or []:
+        _console.print(f"  [cyan]merged by agent[/cyan]: {path}  (worth a look)")
+    for path in run.get("conflicts") or []:
+        _console.print(f"  [yellow]conflict[/yellow]: {path}")
+    if run.get("conflicts"):
+        _console.print("  resolve them with your own git tools, then run 'coffer sync now'")
+    for failure in run.get("failures") or []:
+        _console.print(f"  [red]could not apply[/red] {failure['path']}: {failure['reason']}")
+    for ref in run.get("locked_refs") or []:
+        _console.print(f"  [yellow]credential locked[/yellow]: {ref}")
+    if run.get("locked_refs"):
+        _console.print("  run 'coffer sync key import <path>' to unlock them")
+
+    pending = run.get("pending")
+    if pending:
+        _print_pending(pending)
     if run.get("error"):
-        _console.print(f"  [red]error[/red]: {run['error']}")
+        _console.print(f"  [red]{run['error']}[/red]")
 
 
-@remote_app.command("set")
-def remote_set(
+def _print_pending(pending: dict[str, Any]) -> None:
+    direction = pending.get("direction")
+    if direction == "publish":
+        _console.print(
+            "  [yellow]held[/yellow]: this round would delete the following from the remote."
+        )
+        _console.print("  If this vault was just reinstalled or restored, do NOT confirm.")
+    else:
+        _console.print("  [yellow]held[/yellow]: this round would delete the following locally.")
+    for area, deleted, total in (tuple(b.values()) for b in pending.get("breaches") or []):
+        _console.print(f"    {area}: {deleted} of {total}")
+    for path in (pending.get("paths") or [])[:20]:
+        _console.print(f"    - {path}")
+    extra = len(pending.get("paths") or []) - 20
+    if extra > 0:
+        _console.print(f"    … and {extra} more")
+    _console.print("  'coffer sync confirm' to proceed, 'coffer sync reject' to discard")
+
+
+# --- rounds -----------------------------------------------------------------
+
+
+@app.command("now")
+def sync_now(ctx: typer.Context) -> None:
+    """Converge with the remote once, right now."""
+    verbose = _verbose(ctx)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post("/sync/run", json={})
+        _cli_client.check(r, verbose=verbose)
+        _print_round(r.json())
+
+
+@app.command("adopt")
+def adopt(
     ctx: typer.Context,
-    url: str = typer.Argument(..., help="Git URL of a repository you own"),
-    branch: str = typer.Option(DEFAULT_BRANCH, "--branch", help="Branch to push to"),
-    interval: int = typer.Option(
-        DEFAULT_INTERVAL_SECONDS, "--interval", help="Seconds between automatic backups"
-    ),
-    with_credentials: bool = typer.Option(
+    url: str = typer.Argument(None, help="Remote to configure first, if not already set"),
+    keep_local: bool = typer.Option(
         False,
-        "--with-credentials",
-        help="Every backup carries credential ciphertext (stored, not per-run)",
-    ),
-    credential_ref: str | None = typer.Option(
-        None,
-        "--credential-ref",
+        "--keep-local",
         help=(
-            "Credential store reference holding the push token, "
-            "e.g. sync.BACKUP_TOKEN (store it first with 'coffer credentials set')"
+            "Only for a machine that synced here before and whose recorded base is gone: "
+            "publish this vault's documents as additions instead of refusing"
         ),
     ),
 ) -> None:
-    """Configure the one backup remote, and say what a push will contain."""
+    """Join the remote. A new machine takes the union; a returning one recovers its base."""
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        # `set` names a remote; it is not a way to forget a push credential
-        # configured elsewhere, so an existing ref is carried forward unless
-        # this call names one.
-        current = c.get("/sync/remote")
-        _cli_client.check(current, verbose=verbose)
-        existing = current.json().get("remote") or {}
-        if credential_ref is not None:
-            existing = {**existing, "credential_ref": credential_ref.strip() or None}
-        r = c.put(
-            "/sync/remote",
-            json={
-                "url": url,
-                "branch": branch,
-                "interval_seconds": interval,
-                "include_credentials": with_credentials,
-                "credential_ref": existing.get("credential_ref"),
-                "enabled": True,
-            },
+        if url:
+            r = c.put("/sync/remote", json={"url": url})
+            _cli_client.check(r, verbose=verbose)
+        body = {"choice": "keep-local"} if keep_local else {}
+        r = c.post("/sync/adopt", json=body)
+        _cli_client.check(r, verbose=verbose)
+        _print_round(r.json())
+
+
+@app.command("confirm")
+def confirm(ctx: typer.Context) -> None:
+    """Accept a round the deletion guard held, and let it finish."""
+    verbose = _verbose(ctx)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post("/sync/confirm", json={})
+        _cli_client.check(r, verbose=verbose)
+        _print_round(r.json())
+
+
+@app.command("reject")
+def reject(ctx: typer.Context) -> None:
+    """Discard a held round. The vault was never touched."""
+    verbose = _verbose(ctx)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post("/sync/reject", json={})
+        _cli_client.check(r, verbose=verbose)
+    _console.print("[green]discarded[/green] — the vault is unchanged")
+
+
+@app.command("rebuild")
+def rebuild(
+    ctx: typer.Context,
+    yes: bool = typer.Option(False, "--yes", help="Skip the confirmation prompt"),
+) -> None:
+    """Rebuild this machine from the remote, discarding what only it holds.
+
+    For a machine whose vault is gone: confirming a held round would publish
+    the loss to every other machine, and rejecting would refuse the same round
+    forever. This is the third answer, and it throws away local-only documents.
+    """
+    if not yes:
+        typer.confirm(
+            "This replaces this machine's vault with the remote's, discarding "
+            "anything only this machine has. Continue?",
+            abort=True,
         )
-        _cli_client.check(r, verbose=verbose)
-    _print_remote(r.json())
-    _print_push_contents(with_credentials=with_credentials)
-
-
-@remote_app.command("show")
-def remote_show(ctx: typer.Context) -> None:
-    """Show the configured backup remote (its credential ref, never a secret)."""
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get("/sync/remote")
+        r = c.post("/sync/rebuild", json={})
         _cli_client.check(r, verbose=verbose)
-    payload = r.json()
-    if not payload["configured"]:
-        _console.print("no backup remote configured")
-        _console.print("  (run 'coffer sync remote set <url>' to configure one)")
-        return
-    remote = payload["remote"]
-    _print_remote(remote)
-    _print_push_contents(with_credentials=remote["include_credentials"])
+        _print_round(r.json())
 
 
-@remote_app.command("clear")
-def remote_clear(ctx: typer.Context) -> None:
-    """Turn backup off. The working tree and its history are left alone."""
+@app.command("rollback")
+def rollback(ctx: typer.Context) -> None:
+    """Undo the last applied round from its pre-apply snapshot."""
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.delete("/sync/remote")
+        r = c.post("/sync/rollback", json={})
         _cli_client.check(r, verbose=verbose)
-    if r.json()["cleared"]:
-        _console.print("backup remote cleared; the local working tree is untouched")
-    else:
-        _console.print("no backup remote was configured")
-
-
-@app.command("push")
-def push(ctx: typer.Context) -> None:
-    """Back the vault up now: export, commit if it changed, push."""
-    verbose = _verbose(ctx)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post("/sync/push", json={})
-        _cli_client.check(r, verbose=verbose)
-    run = r.json()
-    _print_run(run)
-    if run["status"] in _FAILED_STATUSES:
-        # The commit, if one was made, is still there — but this shell (or the
-        # script that called it) should hear that the remote is not current.
-        raise typer.Exit(1)
+        _print_round(r.json())
 
 
 @app.command("restore")
 def restore(
     ctx: typer.Context,
-    at: str | None = typer.Option(
-        None,
-        "--at",
-        help="Revision, ref, or YYYY-MM-DD date — the last commit at or before it",
-    ),
-    from_url: str | None = typer.Option(
-        None,
-        "--from",
-        help="Clone from this URL when this machine has no working tree yet",
+    at: str = typer.Option(
+        None, "--at", help="A sha, a ref, or YYYY-MM-DD — the last commit at or before it"
     ),
 ) -> None:
-    """Import the backup into this vault (never automatic, never deletes).
-
-    Without ``--at`` this restores the remote's tip, which mirrors deletions as
-    faithfully as additions — so recovering something deleted last week means
-    naming a revision or a date.
-    """
+    """Bring the vault to an earlier point in the remote's history."""
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post("/sync/restore", json={"at": at, "from_url": from_url})
+        r = c.post("/sync/restore", json={"at": at})
         _cli_client.check(r, verbose=verbose)
-    _print_summary(r.json())
+        _print_round(r.json())
 
 
 @app.command("status")
 def status(ctx: typer.Context) -> None:
-    """Report the backup remote and what its last run did."""
+    """What the remote is, and how the last round went."""
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.get("/sync/status")
         _cli_client.check(r, verbose=verbose)
-    payload = r.json()
-    if not payload["configured"]:
-        _console.print("no backup remote configured")
-        _console.print("  (run 'coffer sync remote set <url>' to configure one)")
+        payload = r.json()
+    if not payload.get("configured"):
+        _console.print("no sync remote configured — 'coffer sync remote set <url>'")
+    else:
+        _print_remote(payload["remote"])
+    _console.print(f"this machine: {payload.get('machine_id')}")
+    if not payload.get("machine_id_is_derived"):
+        _console.print(
+            "  [yellow]note[/yellow]: this id is stored locally, not derived from the host, "
+            "so deleting ~/.coffer makes this machine reappear as a new one"
+        )
+    last = payload.get("last_run")
+    if last is None:
+        _console.print("no round yet")
+    else:
+        _print_round(last)
+
+
+# --- remote -----------------------------------------------------------------
+
+
+def _print_remote(remote: dict[str, Any]) -> None:
+    _console.print(f"remote: {remote['url']}  branch {remote['branch']}")
+    _console.print(
+        f"  every {remote['interval_seconds']}s · "
+        f"credentials {'included' if remote['include_credentials'] else 'excluded'} · "
+        f"{'enabled' if remote['enabled'] else 'disabled'}"
+    )
+    if remote.get("credential_ref"):
+        _console.print(f"  push credential: {remote['credential_ref']}")
+    _console.print(f"  working tree: {remote['worktree_path']}")
+
+
+@remote_app.command("set")
+def remote_set(
+    ctx: typer.Context,
+    url: str = typer.Argument(..., help="Git remote URL you own (https, ssh, or file://)"),
+    branch: str = typer.Option(DEFAULT_BRANCH, "--branch"),
+    interval: int = typer.Option(
+        DEFAULT_INTERVAL_SECONDS, "--interval", help="Seconds between automatic rounds"
+    ),
+    with_credentials: bool = typer.Option(
+        False, "--with-credentials", help="Carry credential ciphertext (never the master key)"
+    ),
+    credential_ref: str = typer.Option(
+        None, "--credential-ref", help="Name of the push credential in the credential store"
+    ),
+) -> None:
+    """Configure the remote. It is probed before being accepted."""
+    body = {
+        "url": url,
+        "branch": branch,
+        "interval_seconds": interval,
+        "include_credentials": with_credentials,
+        "credential_ref": credential_ref,
+    }
+    verbose = _verbose(ctx)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.put("/sync/remote", json=body)
+        _cli_client.check(r, verbose=verbose)
+        _print_remote(r.json())
+
+
+@remote_app.command("show")
+def remote_show(ctx: typer.Context) -> None:
+    verbose = _verbose(ctx)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get("/sync/remote")
+        _cli_client.check(r, verbose=verbose)
+        payload = r.json()
+    if not payload.get("configured"):
+        _console.print("no sync remote configured")
         return
     _print_remote(payload["remote"])
-    _print_run(payload["last_run"])
+
+
+@remote_app.command("clear")
+def remote_clear(ctx: typer.Context) -> None:
+    """Forget the remote. The vault is left exactly as it is."""
+    verbose = _verbose(ctx)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.delete("/sync/remote")
+        _cli_client.check(r, verbose=verbose)
+        payload = r.json()
+    _console.print("[green]cleared[/green]" if payload.get("cleared") else "nothing to clear")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pathlib
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -71,10 +72,21 @@ def test_fs_browse_rejects_missing_path(tmp_path, monkeypatch):
 
 
 def _capture_spawn(monkeypatch, platform: str = "darwin") -> list[list[str]]:
-    """Pin the platform and capture launcher argv instead of spawning a process."""
+    """Pin the platform and capture launcher argv instead of spawning a process.
+
+    The stub replaces the module reference ``open_service`` holds, not ``Popen``
+    on the real ``subprocess`` module: that module is shared by the whole
+    process, and the daemon's own startup shells out through it (resolving this
+    machine's identity runs ``ioreg``), so clobbering it fails the app's
+    lifespan before a request is ever made.
+    """
     calls: list[list[str]] = []
     monkeypatch.setattr("sys.platform", platform)
-    monkeypatch.setattr(open_service.subprocess, "Popen", lambda cmd, **_: calls.append(cmd))
+    monkeypatch.setattr(
+        open_service,
+        "subprocess",
+        SimpleNamespace(Popen=lambda cmd, **_: calls.append(cmd), DEVNULL=subprocess.DEVNULL),
+    )
     return calls
 
 
@@ -171,8 +183,12 @@ def test_fs_editors_empty_when_none_installed(tmp_path, monkeypatch):
 def _stub_dialog(monkeypatch, *, returncode: int, stdout: str = "") -> None:
     """Pin macOS and stub the native dialog spawn instead of opening a real one."""
     monkeypatch.setattr("sys.platform", "darwin")
+    # Same reason as _capture_spawn: swap the module reference, never the real
+    # subprocess module, which the daemon's startup also uses.
     monkeypatch.setattr(
-        pick_service.subprocess,
-        "run",
-        lambda cmd, **_: SimpleNamespace(returncode=returncode, stdout=stdout, stderr=""),
+        pick_service,
+        "subprocess",
+        SimpleNamespace(
+            run=lambda cmd, **_: SimpleNamespace(returncode=returncode, stdout=stdout, stderr="")
+        ),
     )

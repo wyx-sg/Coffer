@@ -10,6 +10,17 @@ import { translateApiError } from "@/lib/api/errors";
 import { scopeApi, type ResourceScope, type Scope } from "@/lib/api/scope";
 import { useToast } from "@/components/ui/toast";
 
+/**
+ * Active everywhere on both axes — what "Restricted" starts from, and what a
+ * fully-relaxed selection normalises back to (`null` on the wire).
+ *
+ * The shape itself (`{agents, machines}`, `null` on an axis = unrestricted,
+ * `[]` = matches nothing) is declared once in `lib/api/scope.ts` against the
+ * generated `ScopeOut`, and re-exported here so components keep importing
+ * their scope types from the hook module.
+ */
+export const UNRESTRICTED: Scope = { agents: null, machines: null };
+
 export type { ResourceScope, Scope };
 
 export function resourceScopeKey(kind: string, name: string) {

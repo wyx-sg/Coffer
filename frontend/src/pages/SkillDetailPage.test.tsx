@@ -99,8 +99,8 @@ describe("SkillDetailPage", () => {
     renderAt();
     expect(screen.getByTestId("scope-control")).toBeInTheDocument();
     expect(screen.queryByTestId("scope-card")).not.toBeInTheDocument();
-    // scope is null on this skill, so "Every agent" is the live segment.
-    expect(screen.getByRole("button", { name: /every agent/i })).toHaveAttribute(
+    // scope is null on this skill, so "Everywhere" is the live segment.
+    expect(screen.getByRole("button", { name: /everywhere/i })).toHaveAttribute(
       "aria-pressed",
       "true",
     );

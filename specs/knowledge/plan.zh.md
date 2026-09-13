@@ -143,4 +143,4 @@ no-op（`status: no_model`）。
 - 应用内编辑器。UI 负责渲染；编辑交给用户自己的编辑器。
 - 读取时的 rerank、HyDE、multi-query 或 LLM 综述——综述由 agent 做。
 - 文件系统监听器。没有任何东西是派生的，也就没有任何东西需要失效。
-- 多机收敛（章程约束；导出、导入与单向备份由 vault-export-import spec 覆盖）。
+- 多机收敛（章程约束；导出、导入与单向备份由 vault-sync spec 覆盖）。

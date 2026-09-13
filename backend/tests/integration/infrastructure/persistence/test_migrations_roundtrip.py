@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0071"
+HEAD_REVISION = "0074"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -39,7 +39,7 @@ HEAD_REVISION = "0071"
 # encryption); 0017 adds no table — it rekeys ``chunks.id`` /
 # ``documents_fts.chunk_id`` to the per-store namespaced form (cross-store
 # chunk-id collision fix); 0018 adds no table (conversation agent-config column);
-# 0019 adds ``sync_config`` + ``sync_state`` for multi-machine sync (spec vault-export-import);
+# 0019 adds ``sync_config`` + ``sync_state`` for multi-machine sync (spec vault-sync);
 # 0023 adds ``agent_mcp_scope`` + ``agent_mcp_scope_server`` for per-agent MCP
 # server scoping (a decision since retired) — but 0030 DROPs both again
 # (per-agent scoping removed, simplification 1.6), so they are ABSENT at head
@@ -79,7 +79,7 @@ HEAD_REVISION = "0071"
 # ``channel_thread_conversations`` (spec channels FR-032: per-thread conversation
 # identity) and backfills each peer's DM row — present at head; its downgrade
 # drops it (asserted stepwise just below head). 0042 ADDs the
-# ``machine_identity`` singleton (spec vault-export-import amendment, continuous sync) — present at
+# ``machine_identity`` singleton (spec vault-sync amendment, continuous sync) — present at
 # head; its downgrade drops it. 0043 ADDs the ``sync_tombstones`` ledger and the
 # ``sync_state.quarantined_refs_json`` column (tombstone-driven deletion +
 # import quarantine) — present at head; its downgrade drops both. 0044 ADDs the
@@ -118,15 +118,26 @@ HEAD_REVISION = "0071"
 # ``config_json`` (the curated set a connection offers downstream; empty = no
 # restriction) — no DDL, table/column set unchanged. 0062 CREATEs
 # ``sync_remotes``, the single-row backup-remote config (spec
-# vault-export-import ``## Backup``); present at head, dropped by its own
+# vault-sync ``## Backup``); present at head, dropped by its own
 # downgrade, and absent from every revision below it. 0068 is DATA-only: it
 # strips ``default_model`` + ``models`` from every ``kind='channel'``
 # ``config_json`` (a channel curates no models — the bound agent's CLI default
 # opens a conversation and ``/model`` offers that agent's whole catalogue) — no
-# DDL, table/column set unchanged at head. 0070 CREATEs ``memory_overrides`` —
-# the developer's hide/pin/supersede/settle decisions about a fact, the one
-# table spec memory adds (FR-040/FR-070); present at head, dropped by its own
-# downgrade, and absent from every revision below it.
+# 0070 CREATEs ``memory_overrides`` — the developer's hide/pin/supersede/settle
+# decisions about a fact, the one table spec memory adds (FR-040/FR-070);
+# present at head, dropped by its own downgrade, and absent from every revision
+# below it. 0072 is DATA-only: it wraps every ``resources.scope_json`` agent
+# list in the two-axis object (``["a"]`` -> ``{"agents": ["a"], "machines":
+# null}``, spec vault-sync "Scope gains a machine axis") — no DDL, table/column
+# set unchanged at head. 0073 CREATEs ``sync_convergence_state`` (the single-row
+# pointer naming what this vault has provably absorbed) and ``sync_held_paths``
+# (the paths it could not apply) — both machine-local, both present at head and
+# dropped by its own downgrade — and ADDs ``sync_remotes.last_started_at`` /
+# ``last_join`` / ``last_run_json``, the columns a converge round records that a
+# backup run did not. 0074 ADDs
+# ``internal_engine_config.tidy_owner_machine_id`` (the one machine allowed to
+# run the unattended tidy pass) — column-only, table set unchanged; its
+# downgrade drops the column.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",
@@ -143,13 +154,20 @@ EXPECTED_TABLES = {
     "channel_thread_conversations",
     "sync_remotes",
     "memory_overrides",
+    "sync_convergence_state",
+    "sync_held_paths",
 }
 
 # Below revision 0052 the two side tables still carry their pre-merge names
 # (0052 renames them on the way up and back on the way down), so every stepwise
 # assertion under 0052 compares against this set instead. ``sync_remotes`` comes
-# out too: 0062 created it, so nothing below 0052 has ever seen it.
-PRE_MERGE_TABLES = (EXPECTED_TABLES - {"sync_remotes", "memory_overrides"}) | {
+# out too: 0062 created it, so nothing below 0052 has ever seen it, and so do
+# ``memory_overrides`` (0070) and ``sync_convergence_state`` /
+# ``sync_held_paths`` (0073).
+PRE_MERGE_TABLES = (
+    EXPECTED_TABLES
+    - {"sync_remotes", "memory_overrides", "sync_convergence_state", "sync_held_paths"}
+) | {
     # 0066 drops these at head; every revision below it still has them, and
     # 0066's downgrade recreates them empty so those revisions can drop them.
     "documents",
@@ -790,6 +808,150 @@ def test_0047_migrates_channel_runs_on_to_scope(tmp_path, monkeypatch):
     assert json.loads(by_name["bound"][1])["runs_on"] == "M-A"
 
 
+def test_0072_wraps_the_agent_list_in_the_two_axis_object(tmp_path, monkeypatch):
+    """0072 is a data migration (spec vault-sync, "Scope gains a machine axis"):
+    every ``resources.scope_json`` agent list becomes the two-axis object with
+    ``machines: null`` (unrestricted), so no resource's effective activation
+    changes. ``NULL`` (unscoped) stays ``NULL``, a row already carrying the
+    object shape is left alone, and the downgrade unwraps back to the bare list
+    — WIDENING, so an ``agents: null`` axis goes back to ``NULL`` (the old
+    shape's own "every agent") rather than to ``[]``, which meant the
+    opposite."""
+    db_path = tmp_path / "scope_axes.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    command.upgrade(cfg, "0071")
+
+    def _insert(name: str, scope_json: str | None) -> None:
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                "INSERT INTO resources "
+                "(kind, name, config_json, scope_json, enabled, created_at, updated_at) "
+                "VALUES ('mcp_server', ?, '{}', ?, 1, '2026-01-01', '2026-01-01')",
+                (name, scope_json),
+            )
+            conn.commit()
+
+    def _scopes() -> dict[str, object]:
+        with sqlite3.connect(db_path) as conn:
+            return {
+                name: (json.loads(raw) if raw is not None else None)
+                for name, raw in conn.execute(
+                    "SELECT name, scope_json FROM resources WHERE kind = 'mcp_server'"
+                ).fetchall()
+            }
+
+    _insert("listed", json.dumps(["claude-code", "codex"]))
+    _insert("dormant", json.dumps([]))
+    _insert("unscoped", None)
+    # Already two-axis (e.g. written by a daemon that ran this revision before a
+    # stamp rolled back): the upgrade must leave it exactly as it found it.
+    _insert("already-object", json.dumps({"agents": None, "machines": ["m-1"]}))
+
+    command.upgrade(cfg, "0072")
+    assert _alembic_version(db_path) == "0072"
+    wrapped = _scopes()
+    assert wrapped["listed"] == {"agents": ["claude-code", "codex"], "machines": None}
+    # Dormant stays dormant: an empty agent list still matches no agent.
+    assert wrapped["dormant"] == {"agents": [], "machines": None}
+    assert wrapped["unscoped"] is None
+    assert wrapped["already-object"] == {"agents": None, "machines": ["m-1"]}
+
+    # Idempotent: a re-run finds nothing left in the list shape.
+    command.stamp(cfg, "0071")
+    command.upgrade(cfg, "0072")
+    assert _scopes() == wrapped
+
+    # Downgrade unwraps to the bare agent list, widening where it must.
+    command.downgrade(cfg, "0071")
+    unwrapped = _scopes()
+    assert unwrapped["listed"] == ["claude-code", "codex"]
+    assert unwrapped["dormant"] == []
+    assert unwrapped["unscoped"] is None
+    # machines-only had no agent restriction, and the old shape says that with
+    # NULL — not with [], which would have made the resource dormant.
+    assert unwrapped["already-object"] is None
+
+
+def test_0073_adds_convergence_state_and_blanks_the_backup_run(tmp_path, monkeypatch):
+    """0073 creates the two machine-local convergence tables and the columns a
+    converge round records, and blanks the last-run values in BOTH directions:
+    a backup run's status has no counterpart among a round's, so neither
+    direction can honestly restate the other's run."""
+    db_path = tmp_path / "convergence.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    command.upgrade(cfg, "0072")
+    assert "sync_convergence_state" not in _user_tables(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "INSERT INTO sync_remotes "
+            "(id, url, branch, interval_seconds, enabled, worktree_path, "
+            "last_run_at, last_status, last_error, last_commit, updated_at) "
+            "VALUES (1, 'git@example:v.git', 'main', 3600, 1, '~/.coffer/sync', "
+            "'2026-09-01', 'export_failed', 'boom', 'abc123', '2026-09-01')"
+        )
+        conn.commit()
+
+    def _remote() -> tuple:
+        with sqlite3.connect(db_path) as conn:
+            return conn.execute(
+                "SELECT url, last_run_at, last_status, last_error, last_commit FROM sync_remotes"
+            ).fetchone()
+
+    command.upgrade(cfg, "0073")
+    assert {"sync_convergence_state", "sync_held_paths"} <= _user_tables(db_path)
+    with sqlite3.connect(db_path) as conn:
+        columns = {r[1] for r in conn.execute("PRAGMA table_info(sync_remotes)")}
+        assert {"last_started_at", "last_join", "last_run_json"} <= columns
+        # The single-row guard on the pointer table is real, not decorative.
+        conn.execute(
+            "INSERT INTO sync_convergence_state (id, pointer, pending_json, updated_at) "
+            "VALUES (1, 'deadbeef', '[]', '2026-09-13')"
+        )
+        conn.commit()
+    # Configuration survives; the backup run's verdict does not.
+    assert _remote() == ("git@example:v.git", None, None, None, None)
+
+    command.downgrade(cfg, "0072")
+    assert not ({"sync_convergence_state", "sync_held_paths"} & _user_tables(db_path))
+    with sqlite3.connect(db_path) as conn:
+        columns = {r[1] for r in conn.execute("PRAGMA table_info(sync_remotes)")}
+    assert not ({"last_started_at", "last_join", "last_run_json"} & columns)
+    assert _remote() == ("git@example:v.git", None, None, None, None)
+
+
+def test_0074_adds_the_tidy_owner_machine_column(tmp_path, monkeypatch):
+    """0074 names the one machine allowed to run the unattended tidy pass
+    (spec vault-sync "## Unattended rewriters"). Every existing row gets
+    ``NULL`` — enabling tidy before there was a fleet cannot retroactively
+    become a choice the user never made — and the downgrade drops the column."""
+    db_path = tmp_path / "tidy_owner.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    def _columns() -> set[str]:
+        with sqlite3.connect(db_path) as conn:
+            return {r[1] for r in conn.execute("PRAGMA table_info(internal_engine_config)")}
+
+    command.upgrade(cfg, "0073")
+    assert "tidy_owner_machine_id" not in _columns()
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("INSERT INTO internal_engine_config (id, updated_at) VALUES (1, '2026-09-13')")
+        conn.commit()
+
+    command.upgrade(cfg, "0074")
+    assert "tidy_owner_machine_id" in _columns()
+    with sqlite3.connect(db_path) as conn:
+        owner = conn.execute("SELECT tidy_owner_machine_id FROM internal_engine_config").fetchone()
+    assert owner == (None,)
+
+    command.downgrade(cfg, "0073")
+    assert "tidy_owner_machine_id" not in _columns()
+
+
 def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkeypatch):
     """Step the chain down one revision at a time and assert each downgrade()
     removes exactly the tables its matching upgrade() created."""
@@ -821,11 +983,28 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         with sqlite3.connect(db_path) as conn:
             return {r[1] for r in conn.execute("PRAGMA table_info(sync_config)")}
 
-    # 0070 adds memory_overrides (the developer's decisions about a fact) —
-    # present at head, dropped by its own downgrade one step below head.
+    def _internal_engine_config_columns() -> set[str]:
+        with sqlite3.connect(db_path) as conn:
+            return {r[1] for r in conn.execute("PRAGMA table_info(internal_engine_config)")}
+
+    def _sync_remotes_columns() -> set[str]:
+        with sqlite3.connect(db_path) as conn:
+            return {r[1] for r in conn.execute("PRAGMA table_info(sync_remotes)")}
+
+    # 0074 adds internal_engine_config.tidy_owner_machine_id, 0073 adds the two
+    # machine-local convergence tables plus the round-shaped sync_remotes
+    # columns, and 0070 adds memory_overrides — all present at head, all removed
+    # by their own downgrades on the way back to 0069.
+    convergence_tables = {"sync_convergence_state", "sync_held_paths"}
     assert "memory_overrides" in _user_tables(db_path)
+    assert convergence_tables <= _user_tables(db_path)
+    assert "tidy_owner_machine_id" in _internal_engine_config_columns()
+    assert {"last_started_at", "last_join", "last_run_json"} <= _sync_remotes_columns()
     command.downgrade(cfg, "0069")
     assert "memory_overrides" not in _user_tables(db_path)
+    assert not (convergence_tables & _user_tables(db_path))
+    assert "tidy_owner_machine_id" not in _internal_engine_config_columns()
+    assert not ({"last_started_at", "last_join", "last_run_json"} & _sync_remotes_columns())
 
     # 0062 adds sync_remotes (the one backup remote) — present at head, and
     # dropped by its own downgrade on the way to 0049.
@@ -926,7 +1105,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     assert "agent_mcp_scope" not in _user_tables(db_path)
     assert "agent_mcp_scope_server" not in _user_tables(db_path)
 
-    # 0022 -> 0016: drops sync_config + sync_state (spec vault-export-import); the
+    # 0022 -> 0016: drops sync_config + sync_state (spec vault-sync); the
     # intervening 0017 (chunk-id rekey), 0018 (conversation agent-config
     # column) and 0020 (conversation-retention reset) add no tables.
     command.downgrade(cfg, "0016")

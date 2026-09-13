@@ -54,7 +54,7 @@ def wire_provider_kind(
     )
     set_provider_service(provider_svc)
 
-    # Import reconciliation (spec vault-export-import): after every sync import, re-derive the
+    # Import reconciliation (spec vault-sync): after every sync import, re-derive the
     # desired projection from the converged provider rows and apply it to the
     # agents registered on THIS machine — a switch made elsewhere takes real
     # effect here. A second stateless projector over the same store suffices.

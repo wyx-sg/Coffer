@@ -30,8 +30,9 @@ coffer 中每一个由用户管理的实体都是一个**资源 (Resource)**，�
 - 审计 (audit)：每一次生命周期变更连同 actor 一起入账
 - 模式校验 (schema validation)：每个 kind 一份 Pydantic schema，分发逻辑
   与 kind 无关
-- 作用域 (scope)：可选的按 agent 激活列表，由框架统一拥有；每个 kind 自行
-  声明是否支持 scope，并各自拥有自己的执行点；已注册但不激活
+- 作用域 (scope)：可选的激活列表——agent 名字与机器 id 两份，取交集，各自
+  为 `null` 即不受限——由框架统一拥有；每个 kind 自行声明是否支持 scope，
+  并各自拥有自己的执行点；已注册但不激活
   (registered-but-inactive) 语义 ——
   [Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)
 
@@ -193,7 +194,7 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
 shim 与监听器通过 `~/.coffer/daemon.json` 发现 daemon (PID + 端口 + token，权限位
 `0600`) —— 那是运行态，启动时写入、退出时删除。与它成对的
 `~/.coffer/daemon-config.json` 存放 daemon 必须在**绑定端口之前**、因而也在任何
-数据库存在之前就读到的设置：目前是那个可选的固定端口。见
+数据库存在之前就读到的设置：目前是那个可选的固定端口，以及缓存下来的机器 id。见
 [Detect-or-Spawn](../../docs/decisions/daemon-detect-or-spawn.md)。
 
 ## 持久化 (Persistence)
@@ -223,4 +224,4 @@ shim 与监听器通过 `~/.coffer/daemon.json` 发现 daemon (PID + 端口 + to
 | 错误        | `domain/errors.py` + FastAPI 全局处理器                                                      | 统一 `{error: {code, message, details}}` 信封；用 `X-Coffer-Trace` header 做关联。                                                                                                                                                                                                                                                                                                                                                  |
 | 日志        | `structlog` 以 JSON-per-line 写入 `~/.coffer/logs/`                                          | 通过 contextvar 实现按请求级别的 trace ID。                                                                                                                                                                                                                                                                                                                                                                                         |
 | 文档抽取    | `DocumentExtractor` 端口 + `infrastructure/chat/document_extract.py`                         | 唯一 import 转换库的地方（MarkItDown，惰性导入且为可选依赖）。它服务的是**入站 channel 附件**（spec channels FR-030）：PDF 或 docx 以抽取出的文本抵达 agent，而不是一个不透明的路径；库缺失或抽取失败时退化为文件附件。知识层不转换任何东西——文件系统就是它的摄入界面，markdown 是它持有的唯一格式（[Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)）。 |
-| 导出 / 导入 | `application/sync/` + `infrastructure/sync/` + CLI 与 HTTP 表面 | 一次性地把仓库**导出到一个目录**、并把这样一个目录**导入回来**（spec vault-export-import，[Vault Export and Import](../../docs/decisions/vault-export-import.md)）。此外还有一个**备份远端**：一个用户自己拥有的 git 仓库，由定时 worker 导出进去、在导出结果发生变化时提交、然后推送——仅单向备份，绝不合并，绝不充当事实记录方（章程 0.5.0 例外）。它带来一行 `sync_remotes` 配置、一个背后只有单一子进程适配器的 `GitMirror` 端口，以及一个形状照搬 `RetentionWorker` 的 worker；恢复是一条显式命令，可以先检出更早的修订再导入。仍然没有墓碑、没有机器注册表、没有文件监听——那些属于收敛，而收敛并未建造。导出会镜像知识与技能的文件树、把每个配置资源序列化成一个**确定性** YAML、导出各模块自有的共享状态，并在被明确要求时**仅以密文**携带凭据（主密钥带外引导）。导入按资源 bundle-wins、从不删除、逐资源报告失败，并运行每个 kind 的导入后钩子。基于 `$HOME` 的相对路径归一化让一个 bundle 可在机器之间搬运。属横切，不是 kind。资源的 `scope`——一个 agent 名字列表（[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)）——作为普通字段搭乘资源文档穿过导出与导入。 |
+| 同步 (Sync) | `application/sync/` + `infrastructure/sync/` + CLI 与 HTTP 表面 | 与**一个用户自有的 git 远端**相互收敛（spec vault-sync，[Vault Sync](../../docs/decisions/vault-sync.zh.md)，章程 0.6.0）。一个形状照搬 `RetentionWorker` 的 worker 跑一轮**收敛**：把仓库差分地序列化进 git 工作树并提交为 `L`，把 `origin/<branch>` 合并进 `L` 得到 `M`，把差异 `L..M` 逐路径应用回仓库——删除也包含在内——然后推送并推进**指针**：那是只存在于本机的记录，记着本仓库确证吸收到的那个提交，也是每一次求差异的基线。应用失败的路径进入一个**重试集**，导出器不得删除它们，于是一份待处理的文档绝不会被当成删除发布出去；没有指针的机器即是在加入，注册表把新机器（指针取 git 空树，因此差异只可能是新增）与回归的机器（指针取它自己描述文件里记着的那个提交）区分开来。应用差异会写入知识与 skill 文件、把资源文档经资源服务 upsert（`${HOME}` 展开，并跑该 kind 的导入闸门）、把 `state/<area>/**` 交给其所属模块，最后重跑每个 kind 的导入后钩子。仲裁者是 git 自己的三方合并——凭据密文改按加密时间排序而不参与合并，未解决的冲突则让这一轮中止且仓库分毫未动——其上还罩着每轮一个的应用前快照 tag，以及一个双向的熔断器：超量的删除无论出现在要应用的一侧还是要发布的一侧，都停下来等确认。每台机器只写它独占的那一个 `machines/<machine_id>.yaml`，因此注册表是工作树的派生视图而不是一张被同步的表；`machine_id` 由宿主机派生、离机前先做哈希，于是重装不会留下一个幽灵。一次性的「导出到一个目录」与「把这样一个目录导入回来」两个表面**已删除**——没有基线的整体覆写，不该与基于差异的应用并存。属横切，不是 kind。资源的 `scope`——agent 名字与机器 id 取交集（[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)）——作为普通字段搭乘资源文档。 |

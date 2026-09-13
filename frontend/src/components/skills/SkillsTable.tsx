@@ -100,7 +100,7 @@ export function SkillsTable({ skills }: { skills: SkillOut[] }) {
   // The status filter follows the status column: since the column stopped being
   // on/off, "enabled" alone would no longer name a state the user can see, so
   // the filter offers the control's own three — disabled beats scope, and an
-  // enabled skill is either unscoped (every agent) or scoped (selected).
+  // enabled skill is either unscoped (everywhere) or restricted.
   const filters: FilterDef<SkillOut>[] = [
     {
       key: "status",
@@ -109,8 +109,8 @@ export function SkillsTable({ skills }: { skills: SkillOut[] }) {
       accessor: (s) => (!s.enabled ? "disabled" : s.scope === null ? "every" : "selected"),
       options: [
         { value: "disabled", label: t("common.disabled") },
-        { value: "every", label: t("scope.everyAgent") },
-        { value: "selected", label: t("scope.selectedAgents") },
+        { value: "every", label: t("scope.everywhere") },
+        { value: "selected", label: t("scope.restricted") },
       ],
     },
   ];

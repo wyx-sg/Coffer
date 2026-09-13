@@ -1,4 +1,4 @@
-"""Export/import path resolution (spec vault-export-import).
+"""Export/import path resolution (spec vault-sync).
 
 An export mirrors the file-backed trees (knowledge, skills). Their
 roots are resolved here — not imported from the kind modules — so the sync

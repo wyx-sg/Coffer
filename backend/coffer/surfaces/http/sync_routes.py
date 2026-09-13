@@ -1,209 +1,90 @@
-"""/api/v1/sync — vault export and import (spec vault-export-import, ADR: vault-export-import).
+"""/api/v1/sync — vault sync (spec vault-sync, ADR: vault-sync).
 
-Export/import is a cross-cutting service, not a resource kind, so it has its
-own routes rather than riding /resources.
+Sync is a cross-cutting service, not a resource kind, so it has its own routes
+rather than riding /resources.
 
-The master key never travels *inside* a bundle — moving it is a separate,
-deliberate act. The key-export route hands its material back to the caller
-over the token-guarded loopback API, and the caller decides where it lands (a
-browser download, a file the CLI writes); the daemon no longer writes to a
-path a caller named, because a browser has no path to give it.
+There is no export or import route. Writing a bundle to a directory and reading
+one back was a wholesale overwrite with no base — the operation that caused the
+2026-07-10 mutual deletion — and it has no place beside the diff-based round
+(spec ``## Out of scope``). What replaces it: a new machine calls ``/adopt``, an
+offline medium is a ``file://`` remote, and a hand-carried copy is a ``git
+clone`` of the working tree.
 
-The backup half of this surface (``/remote``, ``/push``, ``/restore``,
-``/status``) configures and drives the one git remote exports are pushed to
-(spec ``## Backup``). Its wire shapes carry ``credential_ref`` and never the
-push credential itself: the ref is a name in the credential store, so a remote
-can be rendered in a browser, logged, or pasted into a bug report without
-anything to redact.
+The master key never travels inside the repository — moving it is a separate,
+deliberate act. ``/key/export`` hands its material back over the token-guarded
+loopback API and the caller decides where it lands; the daemon never writes to
+a path a caller named, because a browser has no path to give it.
+
+Remote shapes carry ``credential_ref`` and never the push credential itself, so
+a remote can be rendered in a browser, logged, or pasted into a bug report with
+nothing to redact.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
 
-from coffer.application.sync.backup_service import BackupService
-from coffer.application.sync.service import SyncService
-from coffer.domain.sync.backup import (
-    DEFAULT_BRANCH,
-    DEFAULT_INTERVAL_SECONDS,
-    DEFAULT_WORKTREE,
-    BackupRemote,
-    BackupRun,
-)
-from coffer.domain.sync.models import ExportSummary, ImportSummary
+from coffer.application.sync.machines import MachineRegistry, MachineView
+from coffer.application.sync.service import ConvergeService
+from coffer.domain.sync.backup import BackupRemote
+from coffer.domain.sync.convergence import ConvergeRun
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.sync_schemas import (
+    AdoptIn,
+    BreachOut,
+    DiffCountsOut,
+    FailureOut,
+    KeyFingerprintOut,
+    KeyImportOut,
+    KeyMaterialIn,
+    KeyMaterialOut,
+    MachineListOut,
+    MachineOut,
+    MachineRemovedOut,
+    MachineRenameIn,
+    PendingConfirmationOut,
+    RestoreIn,
+    RoundOut,
+    SyncRemoteClearedOut,
+    SyncRemoteIn,
+    SyncRemoteOut,
+    SyncRemoteStateOut,
+    SyncStatusOut,
+)
 
 router = APIRouter(prefix="/api/v1/sync", tags=["sync"], dependencies=[Depends(require_token)])
 
-_SERVICE: SyncService | None = None
-_BACKUP: BackupService | None = None
+_SERVICE: ConvergeService | None = None
+_REGISTRY: MachineRegistry | None = None
 
 
-def set_sync_service(service: SyncService) -> None:
+def set_sync_service(service: ConvergeService) -> None:
     global _SERVICE
     _SERVICE = service
 
 
-def get_sync_service() -> SyncService:
+def get_sync_service() -> ConvergeService:
     if _SERVICE is None:
         raise RuntimeError("sync service not initialised")
     return _SERVICE
 
 
-def set_backup_service(service: BackupService) -> None:
-    global _BACKUP
-    _BACKUP = service
+def set_machine_registry(registry: MachineRegistry) -> None:
+    global _REGISTRY
+    _REGISTRY = registry
 
 
-def get_backup_service() -> BackupService:
-    if _BACKUP is None:
-        raise RuntimeError("backup service not initialised")
-    return _BACKUP
+def get_machine_registry() -> MachineRegistry:
+    if _REGISTRY is None:
+        raise RuntimeError("machine registry not initialised")
+    return _REGISTRY
 
 
-# --- schemas ---------------------------------------------------------------
+# --- projections -----------------------------------------------------------
 
 
-class AreaCountOut(BaseModel):
-    area: str
-    count: int
-
-
-class FailureOut(BaseModel):
-    ref: str
-    reason: str
-
-
-class ExportIn(BaseModel):
-    path: str
-    # Off by default: an export directory is easy to leave somewhere careless
-    # (spec vault-export-import "Credentials").
-    with_credentials: bool = False
-
-
-class ExportOut(BaseModel):
-    path: str
-    areas: list[AreaCountOut]
-    failures: list[FailureOut]
-    credentials_included: bool
-
-
-class ImportIn(BaseModel):
-    path: str
-
-
-class ImportOut(BaseModel):
-    path: str
-    areas: list[AreaCountOut]
-    failures: list[FailureOut]
-    locked_refs: list[str]
-
-
-class KeyMaterialIn(BaseModel):
-    material: str
-
-
-class KeyMaterialOut(BaseModel):
-    #: The Fernet key text. Crosses only the token-guarded loopback API — the
-    #: caller decides where it lands (a browser download, a file the CLI
-    #: writes), because a browser has no path to hand the daemon.
-    material: str
-
-
-class KeyImportOut(BaseModel):
-    locked_refs: list[str]
-
-
-class KeyFingerprintOut(BaseModel):
-    present: bool
-    # Short SHA-256 fingerprint of the master key (never the key itself);
-    # matching fingerprints on two machines = the same key.
-    fingerprint: str | None
-
-
-class BackupRemoteIn(BaseModel):
-    """The backup remote as the user configures it.
-
-    Every field but the URL has the spec's default, so ``PUT`` with a bare URL
-    is a complete configuration rather than a half-set one.
-    """
-
-    url: str
-    branch: str = DEFAULT_BRANCH
-    #: A name in the credential store — never the secret. The daemon resolves
-    #: it at push time and nowhere else.
-    credential_ref: str | None = None
-    include_credentials: bool = False
-    interval_seconds: int = DEFAULT_INTERVAL_SECONDS
-    enabled: bool = True
-    worktree_path: str = DEFAULT_WORKTREE
-
-
-class BackupRemoteOut(BaseModel):
-    """What the daemon reports back about the remote.
-
-    Deliberately the same fields it was given, minus nothing and plus nothing:
-    the push credential is absent because it was never stored here in the
-    first place (spec ``## Backup``).
-    """
-
-    url: str
-    branch: str
-    credential_ref: str | None
-    include_credentials: bool
-    interval_seconds: int
-    enabled: bool
-    worktree_path: str
-
-
-class BackupRemoteStateOut(BaseModel):
-    #: ``False`` on a fresh vault. Backup being off is the ordinary state, not
-    #: an error, so an unconfigured remote is a 200 with ``remote: null``.
-    configured: bool
-    remote: BackupRemoteOut | None
-
-
-class BackupRemoteClearedOut(BaseModel):
-    #: ``False`` when there was nothing to clear — delete is idempotent.
-    cleared: bool
-
-
-class BackupRunOut(BaseModel):
-    """One run's outcome. ``error`` is already redacted of any token."""
-
-    status: str
-    commit: str | None
-    error: str | None
-    ran_at: datetime | None
-
-
-class BackupStatusOut(BaseModel):
-    configured: bool
-    remote: BackupRemoteOut | None
-    last_run: BackupRunOut | None
-
-
-class RestoreIn(BaseModel):
-    #: A sha, a ref, or a ``YYYY-MM-DD`` date resolving to the last commit at
-    #: or before it — the tip cannot return something deleted last week.
-    at: str | None = None
-    #: Restore onto a machine that has no working tree yet: clone from here.
-    from_url: str | None = None
-
-
-def _areas(summary: ExportSummary | ImportSummary) -> list[AreaCountOut]:
-    return [AreaCountOut(area=a.area, count=a.count) for a in summary.areas]
-
-
-def _failures(summary: ExportSummary | ImportSummary) -> list[FailureOut]:
-    return [FailureOut(ref=ref, reason=reason) for ref, reason in summary.failures]
-
-
-def _remote_out(remote: BackupRemote) -> BackupRemoteOut:
-    return BackupRemoteOut(
+def _remote_out(remote: BackupRemote) -> SyncRemoteOut:
+    return SyncRemoteOut(
         url=remote.url,
         branch=remote.branch,
         credential_ref=remote.credential_ref,
@@ -214,50 +95,183 @@ def _remote_out(remote: BackupRemote) -> BackupRemoteOut:
     )
 
 
-def _remote_or_none(remote: BackupRemote | None) -> BackupRemoteOut | None:
-    return None if remote is None else _remote_out(remote)
+def _remote_or_none(remote: BackupRemote | None) -> SyncRemoteOut | None:
+    return _remote_out(remote) if remote is not None else None
 
 
-def _run_out(run: BackupRun) -> BackupRunOut:
-    return BackupRunOut(
-        status=str(run.status), commit=run.commit, error=run.error, ran_at=run.ran_at
+def _round_out(run: ConvergeRun) -> RoundOut:
+    pending = run.pending
+    return RoundOut(
+        status=run.status.value,
+        join=run.join.value if run.join else None,
+        applied=DiffCountsOut(**run.applied.counts()),
+        published=DiffCountsOut(**run.published.counts()),
+        commit=run.commit,
+        conflicts=list(run.conflicts),
+        agent_resolved=list(run.agent_resolved),
+        failures=[FailureOut(path=p, reason=r) for p, r in run.failures],
+        locked_refs=list(run.locked_refs),
+        pending=PendingConfirmationOut(
+            direction=pending.direction.value,
+            breaches=[BreachOut(area=a, deleted=d, total=t) for a, d, t in pending.breaches],
+            paths=list(pending.paths),
+            raised_at=pending.raised_at,
+        )
+        if pending is not None
+        else None,
+        error=run.error,
     )
 
 
-def _import_out(summary: ImportSummary) -> ImportOut:
-    return ImportOut(
-        path=summary.path,
-        areas=_areas(summary),
-        failures=_failures(summary),
-        locked_refs=summary.locked_refs,
+def _machine_out(view: MachineView) -> MachineOut:
+    d = view.descriptor
+    return MachineOut(
+        machine_id=d.machine_id,
+        name=d.name,
+        os=d.os,
+        hostname=d.hostname,
+        coffer_version=d.coffer_version,
+        last_converged_on=d.last_converged_on.isoformat() if d.last_converged_on else None,
+        key_matches=view.key_matches,
+        agents=list(d.agents),
+        is_self=view.is_self,
     )
 
 
-# --- routes ----------------------------------------------------------------
+# --- rounds ----------------------------------------------------------------
 
 
-@router.post("/export", response_model=ExportOut)
-async def export_bundle(body: ExportIn) -> ExportOut:
-    summary = await get_sync_service().export_bundle(
-        body.path, with_credentials=body.with_credentials
+@router.post("/run", response_model=RoundOut)
+async def run_round() -> RoundOut:
+    return _round_out(await get_sync_service().run_once())
+
+
+@router.post("/adopt", response_model=RoundOut)
+async def adopt(body: AdoptIn | None = None) -> RoundOut:
+    """Join the configured remote.
+
+    The same round as any other — joining is detected by the absence of a
+    pointer, not by this route, so configuring a remote on a machine that
+    forgot its pointer cannot route around the new-versus-returning
+    distinction.
+    """
+    return _round_out(
+        await get_sync_service().run_once(join_choice=(body.choice if body else None))
     )
-    return ExportOut(
-        path=summary.path,
-        areas=_areas(summary),
-        failures=_failures(summary),
-        credentials_included=summary.credentials_included,
+
+
+@router.post("/confirm", response_model=RoundOut)
+async def confirm() -> RoundOut:
+    return _round_out(await get_sync_service().confirm())
+
+
+@router.post("/reject", response_model=SyncRemoteClearedOut)
+async def reject() -> SyncRemoteClearedOut:
+    await get_sync_service().reject()
+    return SyncRemoteClearedOut(cleared=True)
+
+
+@router.post("/rebuild", response_model=RoundOut)
+async def rebuild() -> RoundOut:
+    """Rebuild this machine from the remote, discarding local-only documents.
+
+    The answer for a machine whose vault is gone. Such a machine rejoins with a
+    valid base and nothing to publish but the loss, so neither ordinary answer
+    serves it: confirming spreads the loss and rejecting refuses the same round
+    forever. Destructive on purpose.
+    """
+    return _round_out(await get_sync_service().rebuild())
+
+
+@router.post("/rollback", response_model=RoundOut)
+async def rollback() -> RoundOut:
+    return _round_out(await get_sync_service().rollback())
+
+
+@router.post("/restore", response_model=RoundOut)
+async def restore(body: RestoreIn | None = None) -> RoundOut:
+    svc = get_sync_service()
+    return _round_out(await svc.restore(at=body.at if body else None))
+
+
+# --- remote ----------------------------------------------------------------
+
+
+@router.get("/remote", response_model=SyncRemoteStateOut)
+async def get_remote() -> SyncRemoteStateOut:
+    remote = await get_sync_service().get_remote()
+    return SyncRemoteStateOut(configured=remote is not None, remote=_remote_or_none(remote))
+
+
+@router.put("/remote", response_model=SyncRemoteOut)
+async def put_remote(body: SyncRemoteIn) -> SyncRemoteOut:
+    remote = await get_sync_service().set_remote(
+        BackupRemote(
+            url=body.url,
+            branch=body.branch,
+            credential_ref=body.credential_ref,
+            include_credentials=body.include_credentials,
+            interval_seconds=body.interval_seconds,
+            enabled=body.enabled,
+            worktree_path=body.worktree_path,
+        )
+    )
+    return _remote_out(remote)
+
+
+@router.delete("/remote", response_model=SyncRemoteClearedOut)
+async def delete_remote() -> SyncRemoteClearedOut:
+    return SyncRemoteClearedOut(cleared=await get_sync_service().clear_remote())
+
+
+@router.get("/status", response_model=SyncStatusOut)
+async def status() -> SyncStatusOut:
+    svc = get_sync_service()
+    registry = get_machine_registry()
+    remote = await svc.get_remote()
+    last = await svc.last_run()
+    return SyncStatusOut(
+        configured=remote is not None,
+        remote=_remote_or_none(remote),
+        last_run=_round_out(last) if last is not None else None,
+        machine_id=registry.machine_id,
+        machine_id_is_derived=registry.identity_is_derived,
     )
 
 
-@router.post("/import", response_model=ImportOut)
-async def import_bundle(body: ImportIn) -> ImportOut:
-    return _import_out(await get_sync_service().import_bundle(body.path))
+# --- machines ---------------------------------------------------------------
+
+
+@router.get("/machines", response_model=MachineListOut)
+async def list_machines() -> MachineListOut:
+    svc = get_sync_service()
+    views = await svc.machines(get_machine_registry())
+    return MachineListOut(machines=[_machine_out(v) for v in views])
+
+
+@router.patch("/machines/self", response_model=MachineOut)
+async def rename_self(body: MachineRenameIn) -> MachineOut:
+    """Rename this machine.
+
+    Free: ``scope`` references the derived id, never the label, so nothing
+    else has to change.
+    """
+    view = await get_sync_service().rename_self(get_machine_registry(), body.name)
+    return _machine_out(view)
+
+
+@router.delete("/machines/{machine_id}", response_model=MachineRemovedOut)
+async def retire_machine(machine_id: str) -> MachineRemovedOut:
+    updated = await get_sync_service().retire_machine(get_machine_registry(), machine_id)
+    return MachineRemovedOut(removed=True, scopes_updated=updated)
+
+
+# --- master key -------------------------------------------------------------
 
 
 @router.get("/key/fingerprint", response_model=KeyFingerprintOut)
 async def key_fingerprint() -> KeyFingerprintOut:
-    fp = get_sync_service().key_fingerprint()
-    return KeyFingerprintOut(present=fp is not None, fingerprint=fp)
+    return KeyFingerprintOut(fingerprint=get_sync_service().key_fingerprint())
 
 
 @router.post("/key/export", response_model=KeyMaterialOut)
@@ -268,69 +282,3 @@ async def export_key() -> KeyMaterialOut:
 @router.post("/key/import", response_model=KeyImportOut)
 async def import_key(body: KeyMaterialIn) -> KeyImportOut:
     return KeyImportOut(locked_refs=await get_sync_service().import_key(body.material))
-
-
-# --- backup routes (spec vault-export-import ``## Backup``) -----------------
-
-
-@router.get("/remote", response_model=BackupRemoteStateOut)
-async def get_backup_remote() -> BackupRemoteStateOut:
-    """Report the configured remote — its ref, never its credential."""
-    remote = await get_backup_service().get()
-    return BackupRemoteStateOut(configured=remote is not None, remote=_remote_or_none(remote))
-
-
-@router.put("/remote", response_model=BackupRemoteOut)
-async def put_backup_remote(body: BackupRemoteIn) -> BackupRemoteOut:
-    """Configure the one backup remote, replacing any previous one.
-
-    Validation lives in the domain object: constructing ``BackupRemote``
-    raises ``BackupRemoteInvalid`` (422) for an empty URL or branch or a
-    non-positive interval, so the same rules hold for every surface.
-    """
-    remote = BackupRemote(**body.model_dump())
-    await get_backup_service().configure(remote)
-    return _remote_out(remote)
-
-
-@router.delete("/remote", response_model=BackupRemoteClearedOut)
-async def delete_backup_remote() -> BackupRemoteClearedOut:
-    """Turn backup off. The working tree and its history are left alone —
-    they are the local layer of recovery and are not ours to destroy."""
-    service = get_backup_service()
-    existed = await service.get() is not None
-    await service.clear()
-    return BackupRemoteClearedOut(cleared=existed)
-
-
-@router.post("/push", response_model=BackupRunOut)
-async def push_backup() -> BackupRunOut:
-    """Run one backup now and report what it did.
-
-    A run that could not push is a 200 carrying ``push_failed``, not an error
-    status: the commit exists locally, the next run carries it out, and the
-    caller wants the run's story rather than an exception.
-    """
-    return _run_out(await get_backup_service().run_once())
-
-
-@router.post("/restore", response_model=ImportOut)
-async def restore_backup(body: RestoreIn | None = None) -> ImportOut:
-    """Fetch the backup, optionally move to an earlier revision, then import.
-
-    Only ever reached because a user asked: nothing restores on a timer.
-    """
-    body = body or RestoreIn()
-    summary = await get_backup_service().restore(at=body.at, from_url=body.from_url)
-    return _import_out(summary)
-
-
-@router.get("/status", response_model=BackupStatusOut)
-async def backup_status() -> BackupStatusOut:
-    """The remote and its last run — the pair the CLI and the UI both render."""
-    remote, run = await get_backup_service().status()
-    return BackupStatusOut(
-        configured=remote is not None,
-        remote=_remote_or_none(remote),
-        last_run=None if run is None else _run_out(run),
-    )

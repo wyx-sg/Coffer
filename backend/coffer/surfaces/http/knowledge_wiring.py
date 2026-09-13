@@ -22,6 +22,7 @@ from coffer.application.knowledge.ingest import IngestService
 from coffer.application.knowledge.kind import make_knowledge_kind
 from coffer.application.knowledge.search import EmbedderFactory, SearchService
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
+from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.infrastructure.knowledge.converters.registry import default_registry
 from coffer.infrastructure.llm.embeddings import remote_embedder
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
@@ -100,9 +101,10 @@ def wire_knowledge_kind(
     builtin_tools: BuiltinToolRegistry,
     provider_service: ProviderService,
     credential_resolver: Callable[[str], str],
+    scope_evaluator: ScopeEvaluator,
 ) -> KnowledgeService:
     """Wire the ``knowledge`` kind into the app and return its one service."""
-    service = KnowledgeService(resources=resource_svc, audit=audit)
+    service = KnowledgeService(resources=resource_svc, audit=audit, scope_evaluator=scope_evaluator)
     set_knowledge_service(service)
 
     search_service = SearchService(

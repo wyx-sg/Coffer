@@ -1,4 +1,4 @@
-"""Domain rules for the backup remote (spec vault-export-import ``## Backup``)."""
+"""Domain rules for the backup remote (spec vault-sync ``## Backup``)."""
 
 from __future__ import annotations
 

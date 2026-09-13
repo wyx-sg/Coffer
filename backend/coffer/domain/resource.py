@@ -10,6 +10,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from coffer.domain.scope import Scope
+
 _NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_.\-]+$")
 _NAME_MAX_LEN = 64
 
@@ -63,12 +65,13 @@ class Resource:
     enabled: bool
     created_at: datetime
     updated_at: datetime
-    # Framework-level per-agent activation scope (ADR per-agent-resource-scope): a list of agent
-    # names. None means unscoped (active for every agent) — the pre-scope
+    # Framework-level activation scope (ADR per-agent-resource-scope): two
+    # independent allow-lists, agents and machines, AND-ed. None means
+    # unscoped (active for every agent, on every machine) — the pre-scope
     # default, so every existing constructor keeps working unchanged.
     # Interpreted via coffer.domain.scope; only kinds whose Kind.supports_scope
     # is True may set it (validate_scope).
-    scope: list[str] | None = None
+    scope: Scope | None = None
 
     @property
     def ref(self) -> ResourceRef:
@@ -156,7 +159,7 @@ class Kind:
     # scope depends on something outside the config — `memory` defaults to the
     # agents a partition was aggregated FROM (spec memory FR-014) — cannot use
     # this hook and sets the scope itself right after registering.
-    default_scope: Callable[[dict[str, Any]], list[str] | None] | None = None
+    default_scope: Callable[[dict[str, Any]], Scope | None] | None = None
     # Optional PRE-write hook for ``ResourceService.update_scope`` (ADR per-agent-resource-scope):
     # given the resource as it currently stands and the scope proposed for it,
     # raise ``ValueError`` to reject the edit before anything is persisted. The
@@ -176,7 +179,7 @@ class Kind:
     # only on the config one. Sync or async; the service awaits an Awaitable.
     validate_scope_for: (
         Callable[
-            [Resource, list[str] | None],
+            [Resource, Scope | None],
             Awaitable[None] | None,
         ]
         | None

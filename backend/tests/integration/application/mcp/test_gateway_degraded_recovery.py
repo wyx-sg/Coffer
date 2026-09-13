@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from coffer.application.mcp.gateway_aggregate_lists import list_tools_across
+from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.errors import UpstreamUnavailable
 
 
@@ -100,6 +101,7 @@ def _session(discovery, sink):
     from coffer.application.mcp.gateway import MCPGatewaySession
 
     session = MCPGatewaySession(
+        scope_evaluator=ScopeEvaluator(machine_id="test-machine"),
         session_id="s1",
         resource_service=None,  # type: ignore[arg-type]
         supervisor=None,  # type: ignore[arg-type]

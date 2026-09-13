@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/client";
 import { ApiError, throwApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
+import type { Scope } from "@/lib/hooks/useScope";
 
 type ResourceOut = components["schemas"]["ResourceOut"];
 
@@ -40,7 +41,7 @@ export function useResource(kind: string, name: string) {
 /** One resource's generic reach fields, as a table row needs them. */
 export interface ResourceReach {
   enabled: boolean;
-  scope: string[] | null;
+  scope: Scope | null;
 }
 
 /**

@@ -187,18 +187,25 @@ These cases are tracked by integration tests, not by the acceptance audit, excep
 
 ## Gateway exposure scope ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md))
 
-An `mcp_server` resource carries a framework-level `scope` — a list of agent
-names, or `None` for "every agent" — which the gateway consults at its own
-existing choke point, the per-session capability listing. There is no new
-central gate: scope selects *who* may see a server, never *where* or *whether*
-it runs.
+An `mcp_server` resource carries a framework-level `scope` — two independent
+allow-lists, `agents` and `machines`, `AND`-ed, each `null` meaning
+unrestricted (spec vault-sync, "Scope gains a machine axis"); `None` for
+"every agent, every machine" — which the gateway consults at its own existing
+choke point, the per-session capability listing. There is no new central gate:
+scope selects *who* may see a server and *where*, never *whether* the process
+is allowed to start once something past that gate asks for it.
 
-- **Per-session identity.** The gateway filters a server's capabilities per
-  SESSION: a server whose scope excludes the connecting session's identity is
-  hidden from that session's `tools/list` / `resources/list` / `prompts/list`,
-  and any call against it is rejected — exactly as if the server did not exist
-  for that session — even while it IS visible to a differently-identified
-  session at the same time.
+- **Per-session identity, plus this machine.** The gateway filters a server's
+  capabilities per SESSION: a server whose scope excludes the connecting
+  session's identity is hidden from that session's `tools/list` /
+  `resources/list` / `prompts/list`, and any call against it is rejected —
+  exactly as if the server did not exist for that session — even while it IS
+  visible to a differently-identified session at the same time. The machine
+  axis is tested at the same seam, against the machine id the daemon derived
+  at startup (`ScopeEvaluator`), so no session has to report it and none can
+  claim a different one. A server whose `machines` axis excludes this machine
+  is therefore hidden from *every* session here, whatever its agent axis says,
+  while remaining registered, listed in the management surface and editable.
 - **Shim identity handshake.** The Coffer-MCP install (spec agent-registry FR-019)
   writes `coffer-mcp-shim --agent <name>` into the agent's config, so every
   managed agent's shim reports its own registered agent name at MCP
@@ -211,12 +218,22 @@ it runs.
   carry no scope at all — never a scoped one, even one naming the agent that
   happens to be running unidentified. An unidentified session therefore sees
   strictly less, never more.
-- **Scope is not a spawn gate.** The supervisor has no session context, so it
-  never consults scope: a scoped server is spawned like any other enabled
-  server, and enforcement happens where the asking agent is known. The
+- **Scope is not a spawn gate — on either axis.** The supervisor never
+  consults scope: a scoped server is spawned like any other enabled server,
+  and enforcement happens one layer above it, where the asking agent is known.
+  For the agent axis that is forced — the supervisor has no session context.
+  For the machine axis it is a choice, since the daemon's machine id is known
+  at spawn time: gating there as well would duplicate a decision already made,
+  and the duplicate would be unreachable, because every spawn path runs
+  downstream of the gate. The listing fan-out spawns only servers from the
+  already-filtered set, and a call names its server explicitly and is
+  re-checked against both axes at the invocation seam before the supervisor is
+  asked for a connection. No session can start a server it may not see. The
   management surface behaves the same way — `POST /{name}/test` and the other
   management routes are administrative operations on a resource, not agent
-  sessions, and are not scope-gated.
+  sessions, and are not scope-gated on either axis. That leaves exactly one
+  way for a server scoped to another machine to run here, and it is the owner
+  deliberately testing it.
 - **Trust boundary.** Identity is SELF-REPORTED by the shim process at
   handshake, not cryptographically verified — acceptable under the
   single-user, loopback-only posture (FR-012). Any local process able to
@@ -525,7 +542,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 **Scope enforcement ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md))**
 
-- **FR-020**: System MUST filter `mcp_server` exposure by its framework-level `scope` — a list of agent names — at the gateway's per-session choke point: the session's self-reported identity gates `tools/list` / `resources/list` / `prompts/list` and call routing. A server hidden from a session by scope is indistinguishable from a disabled capability to that session. Scope MUST NOT gate spawning: the supervisor has no session identity to test, so a scoped server starts like any other enabled server. The management routes (including `POST /{name}/test`) are administrative operations rather than agent sessions and MUST NOT be scope-gated.
+- **FR-020**: System MUST filter `mcp_server` exposure by its framework-level `scope` — two `AND`-ed allow-lists, `agents` and `machines`, each `null` meaning unrestricted — at the gateway's per-session choke point: the session's self-reported agent identity and the machine id the daemon derived at startup together gate `tools/list` / `resources/list` / `prompts/list` and call routing. A server excluded by either axis is indistinguishable from a disabled capability to that session, and one whose `machines` axis excludes this machine is hidden from EVERY session here whatever its agent axis says. Scope MUST NOT gate spawning: the supervisor holds no policy, and both axes are enforced above it — the agent axis because the supervisor has no session identity to test, the machine axis because the gate it would duplicate is already unavoidable. Every spawn path runs downstream of that gate (the listing fan-out spawns only from the already-filtered set; a call is re-checked against both axes at the invocation seam), so a scoped server starts like any other enabled server but no session can start one it may not see. The management routes (including `POST /{name}/test`) are administrative operations rather than agent sessions and MUST NOT be scope-gated on either axis — so the one way a server scoped to another machine runs here is the owner testing it.
 - **FR-021**: System MUST accept a self-reported agent identity at MCP handshake (`params._meta["coffer/agent"]`, alongside the existing `coffer/cwd` key), written into a managed agent's shim invocation as `coffer-mcp-shim --agent <name>` by the Coffer-MCP install (spec agent-registry FR-019). A session with no reported identity MUST be treated as `agent=None`, matching only servers that carry no scope. Identity is self-reported, not cryptographically verified — a documented trust boundary, acceptable under the loopback-only, single-user posture (FR-012).
 
 ### Key Entities
@@ -564,4 +581,4 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 ## Deliberately out of scope
 
-- **Vault backup and restore.** Coffer does not bundle its own `.tar.gz` snapshot of `~/.coffer/`. The vault export in spec vault-export-import already captures everything that is a system of record — the three file trees, the resources, the credential ciphertext, and the sync state areas. What a backup added on top of that was derived data only: the log tables (which roll off on a 30-day retention anyway), the chat conversation rows, indexes that are rebuilt from the files by design (ADR files-as-truth-sqlite-retrieval), and the `distilled_sessions` idempotency ledger, whose loss costs a re-distill rather than any data. It also wrote its archive to the same machine by default, so it never answered the off-site question it appeared to answer. Users who want a byte-copy have `cp -r ~/.coffer/`; users who want to move a vault have the export.
+- **Vault backup and restore.** Coffer does not bundle its own `.tar.gz` snapshot of `~/.coffer/`. The vault export in spec vault-sync already captures everything that is a system of record — the three file trees, the resources, the credential ciphertext, and the sync state areas. What a backup added on top of that was derived data only: the log tables (which roll off on a 30-day retention anyway), the chat conversation rows, indexes that are rebuilt from the files by design (ADR files-as-truth-sqlite-retrieval), and the `distilled_sessions` idempotency ledger, whose loss costs a re-distill rather than any data. It also wrote its archive to the same machine by default, so it never answered the off-site question it appeared to answer. Users who want a byte-copy have `cp -r ~/.coffer/`; users who want to move a vault have the export.

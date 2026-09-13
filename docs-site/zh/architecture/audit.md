@@ -129,7 +129,7 @@ Coffer 的方案刻意保持精简：一对本地数据库表，而非时序数�
 | `provider_switched`             | 某条连接被投射进 agent 的原生配置时          |
 | `provider_internal_default_set` | 某条连接成为 Coffer 内部引擎时               |
 
-**导出 / 导入：** 导入所执行的资源写入会记录为普通的资源生命周期事件，因此一次导入带来的变更和手工做出的变更一样可追溯。不存在配置事件与冲突事件，因为既没有同步配置、也没有冲突状态（[Vault Export and Import](/zh/reference/adr/vault-export-import)）。
+**导出 / 导入：** 导入所执行的资源写入会记录为普通的资源生命周期事件，因此一次导入带来的变更和手工做出的变更一样可追溯。不存在配置事件与冲突事件，因为既没有同步配置、也没有冲突状态（[Vault Export and Import](/zh/reference/adr/vault-sync)）。
 
 ## 什么值得审计
 

@@ -1,6 +1,6 @@
 """Revision 0049: scope collapses to an agent list, sync tables are dropped.
 
-Continuous multi-machine sync is withdrawn (ADR vault-export-import — export/import
+Continuous multi-machine sync is withdrawn (ADR vault-sync — export/import
 replaces
 it) and the machine axis of ``scope`` goes with the machine registry that gave
 machine ids meaning (ADR per-agent-resource-scope). This is the database half of that removal:

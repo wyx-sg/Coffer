@@ -160,5 +160,9 @@ test("specFolderLabel: two-word non-acronym", () => {
 });
 
 test("specFolderLabel: three or more words", () => {
-  assert.equal(specFolderLabel("vault-export-import"), "Vault Export Import");
+  assert.equal(specFolderLabel("provider-switching-rules"), "Provider Switching Rules");
+});
+
+test("specFolderLabel: two-word spec folder", () => {
+  assert.equal(specFolderLabel("vault-sync"), "Vault Sync");
 });

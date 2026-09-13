@@ -103,14 +103,22 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
             assert r.status_code in (404, 405), f"{gone} still routes: {r.status_code}"
 
         # scope the skill away from the agent — the copy is reclaimed
-        r = c.put("/api/v1/resources/skill/hello-world/scope", json={"scope": []})
+        r = c.put(
+            "/api/v1/resources/skill/hello-world/scope",
+            json={"scope": {"agents": [], "machines": None}},
+        )
         assert r.status_code == 200, r.text
+        assert r.json()["scope"] == {"agents": [], "machines": None}
         assert not link.exists()
         assert c.get("/api/v1/skills/hello-world").json()["bindings"] == []
 
         # scope it back in — redelivered
-        r = c.put("/api/v1/resources/skill/hello-world/scope", json={"scope": ["cur"]})
+        r = c.put(
+            "/api/v1/resources/skill/hello-world/scope",
+            json={"scope": {"agents": ["cur"], "machines": None}},
+        )
         assert r.status_code == 200, r.text
+        assert r.json()["scope"] == {"agents": ["cur"], "machines": None}
         assert link.exists()
 
         # disabling the skill resource reclaims it; re-enabling redelivers

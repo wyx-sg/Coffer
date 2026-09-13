@@ -44,7 +44,7 @@ def make_skill_kind(
         # register it; the generic POST /resources path is rejected (CODE-REG).
         generic_create_allowed=False,
         # ADR per-agent-resource-scope: scope is one half of the whole delivery rule —
-        # ``enabled AND agent_in_scope(scope, agent)``.
+        # ``enabled AND scope.is_active(scope, agent)``.
         supports_scope=True,
         # A skill's scope edit re-runs delivery reconciliation for every agent
         # (the composition root supplies the callback — the same

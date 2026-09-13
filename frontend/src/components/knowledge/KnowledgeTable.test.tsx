@@ -28,7 +28,7 @@ vi.mock("@/lib/hooks/useResources", () => ({
     () =>
       new Map([
         ["shopee", { enabled: true, scope: null }],
-        ["personal", { enabled: true, scope: ["claude"] }],
+        ["personal", { enabled: true, scope: { agents: ["claude"], machines: null } }],
       ]),
   ),
 }));
@@ -83,12 +83,12 @@ describe("KnowledgeTable", () => {
     render(<KnowledgeTable items={ITEMS} />, { wrapper: wrap(null) });
     expect(screen.getAllByTestId("scope-control")).toHaveLength(ITEMS.length);
 
-    expect(within(rowFor("shopee")).getByRole("button", { name: /every agent/i })).toHaveAttribute(
+    expect(within(rowFor("shopee")).getByRole("button", { name: /everywhere/i })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
     expect(
-      within(rowFor("personal")).getByRole("button", { name: /selected agents \(1\)/i }),
+      within(rowFor("personal")).getByRole("button", { name: /restricted/i }),
     ).toHaveAttribute("aria-pressed", "true");
   });
 

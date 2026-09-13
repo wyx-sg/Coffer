@@ -1103,7 +1103,7 @@ For Codex, the user exports: `export COFFER_PROVIDER_KEY="$(coffer provider key 
 ## Export / import (reuse, ~zero engine change)
 
 Modeling `provider` as a ResourceService Kind puts it in the export bundle
-automatically ([Vault Export and Import](../../docs/decisions/vault-export-import.md)):
+automatically ([Vault Export and Import](../../docs/decisions/vault-sync.md)):
 
 - `SyncExporter` lists all kinds → serialises each row to
   `resources/provider/<name>.yaml` via `resource_to_doc`.

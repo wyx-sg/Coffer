@@ -138,8 +138,8 @@ export function ConnectionsTable({ providers }: { providers: Provider[] }) {
         !p.enabled ? "disabled" : (reach.get(p.name)?.scope ?? null) === null ? "every" : "selected",
       options: [
         { value: "disabled", label: t("common.disabled") },
-        { value: "every", label: t("scope.everyAgent") },
-        { value: "selected", label: t("scope.selectedAgents") },
+        { value: "every", label: t("scope.everywhere") },
+        { value: "selected", label: t("scope.restricted") },
       ],
     },
   ];

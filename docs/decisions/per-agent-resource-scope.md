@@ -3,7 +3,7 @@
 > 中文版: [per-agent-resource-scope.zh.md](./per-agent-resource-scope.zh.md)
 
 - **Status:** Accepted
-- **Spec:** [vault-export-import](../../specs/vault-export-import/spec.md) (also amends
+- **Spec:** [vault-sync](../../specs/vault-sync/spec.md) (also amends
   [mcp-gateway](../../specs/mcp-gateway/spec.md) and
   [skill-manager](../../specs/skill-manager/spec.md))
 - **Amends:** [Everything Is a Resource Kind](./everything-is-a-resource-kind.md) (resources
@@ -30,31 +30,49 @@ returned there. Two kinds solving the same problem two different ways is the
 signal to lift it into the framework instead, where the identity plumbing is
 paid for once and every kind that needs it can declare it.
 
-This ADR originally also carried a **machine** axis, added alongside continuous
-multi-machine sync. That sync is withdrawn ([Vault Export and Import](./vault-export-import.md)),
-and with it the machine registry that gave machine identities meaning, so the
-machine axis is removed and only the agent axis remains.
+This ADR originally also carried a **machine** axis. It was withdrawn in
+2026-09-09 with the continuous sync it was added alongside, because the machine
+registry that gave machine identities meaning went with it, and an axis whose
+values name nothing is not an axis. It returns with bidirectional sync
+([Vault Sync](./vault-sync.md)) for the same reason in reverse: a converged
+vault holds every machine's resources on every machine, so "not here" becomes a
+thing a resource needs to be able to say. It comes back in a different shape
+than it left — two independent axes rather than a matrix — for reasons given
+under [Alternatives considered](#alternatives-considered).
 
 ## Decision
 
-Add one framework-owned `scope` field — a list of agent names — to the resource
-model; each kind declares whether it supports scope and owns its own
-enforcement point.
+Add one framework-owned `scope` field — two `AND`-ed allow-lists, `agents` and
+`machines` — to the resource model; each kind declares whether it supports scope
+and owns its own enforcement point.
 
 1. **Framework-level `scope`.** One `scope` shape lives on the `Resource`
    entity, not inside kind config:
 
    ```
-   scope == None                       → active for every agent
-   scope == []                         → active for no agent (dormant)
-   scope == ["claude-code"]            → active only for the named agents
+   scope == None                          → active everywhere
+   scope == {agents: ["claude-code"]}     → that agent, on any machine
+   scope == {machines: ["a3f2…"]}         → that machine, for any agent
+   scope == {agents: [...], machines: [...]}  → only where both match
+   scope == {agents: []}                  → dormant (an empty list matches nothing)
    ```
 
-   - `agent_in_scope(scope, agent)` → `True` when `scope is None`, else
-     `agent` is in the list. An unidentified session (`agent=None`) matches
-     only `scope is None`.
-   - Unknown agent names in the list are legal and simply never match — an
-     agent can be scoped in before it is registered.
+   - An axis left `None` is unrestricted; an axis given a list restricts to it.
+     The two are `AND`-ed, so narrowing either one can only take activation
+     away, never grant it.
+   - `is_active(scope, agent=…, machine=…)` → `True` when every restricted axis
+     matches. An unidentified session (`agent=None` — a hand-configured shim
+     reporting no `--agent`) matches only an unrestricted agent axis, so it
+     sees strictly less, never more.
+   - `excluded_by(...)` answers *which* axis kept a resource dormant, and
+     reports the **machine** axis first. A resource dormant on this whole
+     machine is a different thing to explain than one dormant for one agent,
+     and it is the answer a user is more likely to be looking for.
+   - The machine axis is keyed by the derived `machine_id` (spec
+     [vault-sync](../../specs/vault-sync/spec.md)), never by the display name,
+     so renaming a machine costs nothing.
+   - Unknown names in either list are legal and simply never match — a resource
+     can be scoped to an agent or a machine before either has appeared.
    - A kind that declares no scope rejects a non-null value at validation (422).
      Today `agent` is the only such kind, and every other kind declares scope —
      so that rule is now the exception rather than the common case.
@@ -79,15 +97,24 @@ enforcement point.
 3. **Per-kind support and enforcement seams.** Each kind consults scope at its
    existing choke point, not at a new central gate:
 
-   | Kind | Scope | Enforcement seam |
+   The `Axes` column says which axes a kind's seam actually reads, which is not
+   automatically both: the field is framework-owned, but each kind answers the
+   question its own seam is asking.
+
+   | Kind | Axes | Enforcement seam |
    | --- | --- | --- |
-   | `mcp_server` | agent | The gateway filters the server's tools by the session's identity. |
-   | `skill` | agent | Delivery filters by the skill's own `enabled` flag intersected with scope; out-of-scope or disabled delivered copies are reconciled away. |
-   | `knowledge` | agent | The built-in knowledge tools filter the collections a session may list, grep, read and write by the session's identity. |
-   | `memory` | agent | Recall filters the partitions a session may read by that session's identity, so an aggregated partition reaches only the agents it is scoped to (spec memory FR-014). |
-   | `channel` | agent — **inverted** | A channel is consumed by no agent, so its scope names the agents the channel may **drive**. `/agent` lists, offers and accepts only those; the channel's `default_agent` is held inside the scope on every write path — config and scope alike; a channel that may drive nothing does not start. |
-   | `provider` | agent | The projection seam: the switch, the per-agent key lookup, the post-import reconcile and the boot self-heal all read scope (∩ `enabled`) to decide which agents a connection is written into. |
-   | `agent` | none | It IS the agent, so there is nothing for a per-agent scope to narrow. A non-null scope is rejected at validation. |
+   | `mcp_server` | agent + machine | The gateway filters the server's tools by the session's identity, through the evaluator, so a server scoped to another machine presents no tools here. |
+   | `skill` | agent + machine | Delivery filters by the skill's own `enabled` flag intersected with scope; out-of-scope or disabled delivered copies are reconciled away. A skill scoped to another machine is held in the vault and written to no agent here. |
+   | `knowledge` | agent + machine | The built-in knowledge tools filter the collections a session may list, grep, read and write. |
+   | `memory` | agent + machine | Recall filters the partitions a session may read, so an aggregated partition reaches only the agents it is scoped to (spec memory FR-014). |
+   | `channel` | agent — **inverted** — + machine | A channel is consumed by no agent, so its agent axis names the agents the channel may **drive**: `/agent` lists, offers and accepts only those, and a channel that may drive nothing does not start. The machine axis answers a different question — *where does this inbound surface run* — and it is the gate that stops two converged machines both answering one channel. The two read at different seams: the runtime gate reads both before starting an adapter; the routing seams read the agent axis alone, because they only ever execute on a machine that gate already admitted. |
+   | `provider` | agent **only** | The projection seam: the switch, the per-agent key lookup, the post-import reconcile and the boot self-heal read the agent axis (∩ `enabled`) to decide which agents a connection is written into. The machine axis is deliberately not read — "which agent types does this connection cover" is a statement about the connection, and it must read the same on every machine of a converged vault. |
+   | `agent` | none | It IS the agent, so there is nothing for a scope to narrow. A non-null scope is rejected at validation. |
+
+   Both write paths that can *set* a channel's scope also read the agent axis
+   alone, for a stronger reason than the routing seams have: a channel scoped
+   to another machine must stay editable from here, or a converged vault could
+   hold a channel nobody can correct.
 
 4. **Shim self-reported `--agent` identity.** The shim install writes
    `coffer-mcp-shim --agent <name>` into the agent's config; the shim reports
@@ -192,10 +219,15 @@ enforcement point.
 
 ## Alternatives considered
 
-- **Machine × agent matrix** — what this ADR previously decided. Its machine
-  axis was keyed by machine ULIDs from the sync machine registry; without
-  continuous sync there is no registry, no second machine to be inactive on,
-  and nothing for the axis to mean. Withdrawn with the sync it belonged to.
+- **Machine × agent matrix** — what this ADR decided in 2026-08 and withdrew in
+  2026-09-09. With bidirectional sync the registry it needed exists again, so
+  the objection that killed it is gone; it was not restored anyway. A matrix
+  buys exactly one thing two independent axes do not: naming a *different* agent
+  per machine on a single resource. Nothing asks for that, and the cost of
+  having it is that every read of scope has to carry both coordinates and every
+  UI has to render a grid. Two `AND`-ed lists answer the questions actually
+  asked — "only this agent", "only this machine", "only this agent here" — and
+  the empty-list dormant case reads the same on both axes.
 - **Keep per-agent scoping inside each kind** — no framework field, each kind
   rolls its own allowlist and identity handling. This is the shape that was
   tried and reverted in 2026-06. Rejected: two kinds had already diverged on
@@ -206,8 +238,15 @@ enforcement point.
 
 ## Consequences
 
-- `scope` is one nullable list on `Resource`, validated per kind, and rides
-  export/import as an ordinary field — no dedicated machinery.
+- `scope` is one nullable two-axis object on `Resource`, validated per kind, and
+  converges with the vault as an ordinary field — no dedicated machinery.
+- This machine's id is bound once into a `ScopeEvaluator` the composition root
+  builds, rather than threaded through every call site. A forgotten machine id
+  reads as "no machine", which silently makes every machine-scoped resource
+  dormant with nothing to say why; binding it once is what makes that
+  unforgettable. Where a seam deliberately reads one axis, it says so in prose
+  at the seam, because "reads only the agent axis" is otherwise indistinguishable
+  from "forgot the machine axis".
 - The gateway's tool listing becomes identity-dependent: the same server can
   present different tool sets to different agents in the same vault.
 - A hand-configured shim without `--agent` is not a privilege escalation path
@@ -238,11 +277,15 @@ enforcement point.
 - **2026-08-xx** — Accepted with a machine × agent matrix, `mcp_server` and
   `skill` scoped, and `agent` / `channel` / `knowledge` declaring none.
 - **2026-09-09** — The machine axis is withdrawn with continuous multi-machine
-  sync ([Vault Export and Import](./vault-export-import.md)); only the agent
-  axis remains.
+  sync ([Vault Sync](./vault-sync.md)); only the agent axis remains.
 - **2026-09-12** — `knowledge` reverses to scoping: with the layer reduced to
   plain files, a collection is the only boundary it has (Decision item 6).
 - **2026-09-13** — `channel` and `provider` reverse to scoping (Decision items 7
   and 8), and `memory` — which shipped with `supports_scope` but never got a row
   — is entered in the table. `agent` is now the only kind that declares no
   scope, and the ADR no longer justifies the two exclusions it used to.
+- **2026-09-14** — The machine axis returns with bidirectional sync
+  ([Vault Sync](./vault-sync.md)), as a second `AND`-ed allow-list rather than
+  the matrix it was in 2026-08. Existing rows migrate by addition: `machines`
+  unset reproduces today's behaviour exactly. The ADR keeps its name, which is
+  now narrower than its subject.
