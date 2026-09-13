@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 from coffer.application.agent.model_catalogue import AgentModelCatalogueService
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
+from coffer.application.provider.targets import projection_targets
 from coffer.application.providers.ports import ModelIntrospectionService
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.provider.config import ProviderConfig
@@ -72,8 +73,9 @@ class _ActiveProviderModels:
 
     Matches the connection the same way the turn machinery does when it injects a
     key (``resolve_active_key_for_agent``): the first one flagged ``is_active``
-    whose ``compatible_agents`` includes this agent type. An agent with no such
-    connection runs on its own login, which is what ``None`` says.
+    whose per-agent SCOPE reaches this agent type (ADR per-agent-resource-scope) — and a
+    disabled connection reaches none. An agent with no such connection runs on
+    its own login, which is what ``None`` says.
 
     Narrowed to ``text``: the question is what a CHAT picker may offer, and the
     same endpoint's embedding, image, video and speech models would be rejected
@@ -93,7 +95,9 @@ class _ActiveProviderModels:
                 cfg = ProviderConfig.model_validate(resource.config)
             except ValueError:
                 continue
-            if cfg.is_active and agent_key in cfg.resolved_compatible_agents():
+            if cfg.is_active and any(
+                t.value == agent_key for t in projection_targets(resource, cfg)
+            ):
                 return cfg.model_ids(Modality.TEXT)
         return None
 

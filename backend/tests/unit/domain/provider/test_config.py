@@ -5,8 +5,11 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from coffer.domain.agent.types import AgentType
-from coffer.domain.provider.config import Protocol, ProviderConfig
+from coffer.domain.provider.config import (
+    Protocol,
+    ProviderConfig,
+    default_scope_for_protocol,
+)
 from coffer.domain.provider.modality import Modality
 
 
@@ -77,69 +80,48 @@ def test_cloud_protocol_requires_credential() -> None:
         )
 
 
-def test_compatible_agents_defaults_by_protocol() -> None:
-    # Unset → a credentialed endpoint is offered to every agent; the protocol
-    # decides introspection and key handling, not who may be driven by it.
-    anthropic = ProviderConfig(protocol="anthropic", base_url="x", credential_ref="r")  # type: ignore[arg-type]
-    assert anthropic.compatible_agents is None
-    assert anthropic.resolved_compatible_agents() == [
-        AgentType.CLAUDE_CODE,
-        AgentType.CODEX,
-    ]
-    openai = ProviderConfig(protocol="openai", base_url="x", credential_ref="r")  # type: ignore[arg-type]
-    assert openai.resolved_compatible_agents() == [
-        AgentType.CLAUDE_CODE,
-        AgentType.CODEX,
-    ]
-    # unknown is offered to every agent; the user narrows it via checkboxes.
-    unknown = ProviderConfig(protocol="unknown", base_url="x", credential_ref="r")  # type: ignore[arg-type]
-    assert unknown.resolved_compatible_agents() == [
-        AgentType.CLAUDE_CODE,
-        AgentType.CODEX,
-    ]
-    # ollama is internal-only: it projects into no agent.
-    ollama = ProviderConfig(protocol="ollama", base_url="http://x")  # type: ignore[arg-type]
-    assert ollama.resolved_compatible_agents() == []
+def test_default_scope_by_protocol() -> None:
+    """The scope a connection is CREATED with, by wire.
+
+    This is the value the ``provider`` Kind pre-fills at registration
+    (ADR per-agent-resource-scope): it replaces the ``compatible_agents``
+    field the config used to carry, and it is a starting point only — the
+    user re-targets a connection through the framework's scope surface.
+    """
+    # A credentialed endpoint starts open to every agent; the protocol decides
+    # introspection and key handling, not who may be driven by it.
+    assert default_scope_for_protocol("anthropic") == ["claude_code", "codex"]
+    assert default_scope_for_protocol("openai") == ["claude_code", "codex"]
+    # unknown starts open too; the user narrows it.
+    assert default_scope_for_protocol("unknown") == ["claude_code", "codex"]
+    # ollama is internal-only: it starts scoped to no agent at all.
+    assert default_scope_for_protocol("ollama") == []
+    # An unrecognised wire is treated like ``unknown`` rather than crashing.
+    assert default_scope_for_protocol("martian") == ["claude_code", "codex"]
 
 
-def test_compatible_agents_explicit_overrides_default() -> None:
-    # The agnes case: an openai-wire endpoint the user routes to Claude Code.
-    c = ProviderConfig(
-        protocol="openai",  # type: ignore[arg-type]
-        base_url="x",
-        credential_ref="r",
-        compatible_agents=[AgentType.CLAUDE_CODE],
-    )
-    assert c.resolved_compatible_agents() == [AgentType.CLAUDE_CODE]
-
-
-def test_compatible_agents_dedupes_preserving_order() -> None:
-    c = ProviderConfig(
-        protocol="unknown",  # type: ignore[arg-type]
-        base_url="x",
-        credential_ref="r",
-        compatible_agents=[AgentType.CODEX, AgentType.CLAUDE_CODE, AgentType.CODEX],
-    )
-    assert c.resolved_compatible_agents() == [AgentType.CODEX, AgentType.CLAUDE_CODE]
-
-
-def test_ollama_cannot_declare_compatible_agents() -> None:
-    # ollama has no key and never projects — an explicit agent set is a mistake.
-    with pytest.raises(ValidationError):
-        ProviderConfig(
-            protocol="ollama",  # type: ignore[arg-type]
-            base_url="http://x",
-            compatible_agents=[AgentType.CLAUDE_CODE],
-        )
-
-
-def test_bogus_compatible_agent_rejected() -> None:
+def test_compatible_agents_is_no_longer_a_config_field() -> None:
+    """The axis moved to the resource's framework scope, and the migration
+    stripped the key — so a config still carrying it is rejected outright
+    rather than silently ignored (no load-time shim)."""
     with pytest.raises(ValidationError):
         ProviderConfig(
             protocol="openai",  # type: ignore[arg-type]
             base_url="x",
             credential_ref="r",
-            compatible_agents=["nope"],  # type: ignore[list-item]
+            compatible_agents=["claude_code"],  # type: ignore[call-arg]
+        )
+
+
+def test_ollama_still_refuses_a_credential() -> None:
+    """The one wire rule that survives on the config: a keyless connection
+    holds no credential ref. That it projects into no agent is now its empty
+    starting scope, enforced at the projection seam, not here."""
+    with pytest.raises(ValidationError):
+        ProviderConfig(
+            protocol="ollama",  # type: ignore[arg-type]
+            base_url="http://x",
+            credential_ref="r",
         )
 
 

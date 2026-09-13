@@ -8,7 +8,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Response, status
 
 from coffer.application.provider.service import ProviderService
-from coffer.domain.agent.types import AgentType
+from coffer.application.provider.targets import scoped_targets
 from coffer.domain.provider.config import CuratedModel, Protocol, ProviderConfig
 from coffer.domain.resource import Resource
 from coffer.surfaces.http.auth import require_token
@@ -46,7 +46,14 @@ def _provider_out(resource: Resource) -> ProviderOut:
         protocol=cfg.protocol,
         base_url=cfg.base_url,
         credential_ref=cfg.credential_ref,
-        compatible_agents=[AgentType(a) for a in cfg.resolved_compatible_agents()],
+        # Reported, never accepted: the reach comes from the resource's
+        # per-agent scope (ADR per-agent-resource-scope). This is the CONFIGURED
+        # reach, not the effective projection — ``enabled`` rides the same
+        # payload (below), so a client that wants the intersection can take it,
+        # while the management surface can still render the agent list of a
+        # connection the user has switched off. Folding ``enabled`` in here
+        # instead made those chips empty on disable, which reads as erased data.
+        compatible_agents=scoped_targets(resource, cfg),
         models=[ProviderModel(id=m.id, modality=m.modality) for m in cfg.models],
         is_active=cfg.is_active,
         internal_default=cfg.internal_default,
@@ -79,7 +86,6 @@ async def create_provider(
         base_url=body.base_url,
         secret_value=body.secret_value,
         credential_ref=body.credential_ref,
-        compatible_agents=body.compatible_agents,
         models=_curated(body.models),
         description=body.description,
         actor=actor,
@@ -153,7 +159,6 @@ async def update_provider(
         protocol=body.protocol,
         base_url=body.base_url,
         secret_value=body.secret_value,
-        compatible_agents=body.compatible_agents,
         models=_curated(body.models),
         description=body.description,
         actor=actor,

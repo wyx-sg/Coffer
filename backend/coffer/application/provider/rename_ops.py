@@ -80,5 +80,5 @@ async def _reproject(service: ProviderService, new: str, renamed: Resource) -> N
     if not cfg.is_active:
         return
     agents = await service._agents.list()
-    for agent_type in service._compat(cfg):
+    for agent_type in service._compat(renamed):
         service._projector.project_type(new, cfg, agents, agent_type)

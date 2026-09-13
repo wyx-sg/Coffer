@@ -37,7 +37,9 @@ from coffer.application.channel.supervision_ports import (
     TunnelControllerPort,
     WebSocketControllerPort,
 )
-from coffer.domain.channel.config import parse_channel_config
+from coffer.domain.channel.config import DEFAULT_AGENT, parse_channel_config
+from coffer.domain.resource import Resource
+from coffer.domain.scope import agent_in_scope
 
 if TYPE_CHECKING:
     from coffer.application.resource_service import ResourceService
@@ -79,6 +81,12 @@ class ChannelRuntime:
         self._materialize = materialize
         self._interval = interval_seconds
         self._running: dict[str, _Running] = {}
+        # The per-agent scope of each channel the last pass found live, keyed by
+        # name (ADR per-agent-resource-scope). Filled by ``_enabled_channels`` from the same
+        # rows it reads for ``Desired``, and stamped onto the binding at start —
+        # a scope edit therefore reaches `/agent` within one tick rather than
+        # waiting on a daemon restart.
+        self._scopes: dict[str, list[str] | None] = {}
         self._failed_at: dict[str, float] = {}
         self._listener_latch: Latch[dict[str, str]] = Latch()
         self._tunnel_latch: Latch[dict[str, str]] = Latch()
@@ -180,7 +188,7 @@ class ChannelRuntime:
                 if entry is None:
                     continue
                 resource = desired.get(name)
-                if resource is None or self._hash(resource[1]) != entry.config_hash:
+                if resource is None or self._binding_hash(name, resource[1]) != entry.config_hash:
                     await self._stop_adapter(name)
             for name, (resource_id, config) in desired.items():
                 if self._stop.is_set():
@@ -195,11 +203,46 @@ class ChannelRuntime:
             _logger.exception("channel.runtime.tick_failed")
 
     async def _enabled_channels(self) -> Desired:
-        # A channel carries no activation scope (ADR per-agent-resource-scope): enabled means it
-        # runs here, on the one machine the daemon is on. The machine-affinity
-        # gate this once had went away with continuous sync (ADR vault-export-import).
+        # ``enabled`` means it runs here, on the one machine the daemon is on
+        # (the machine-affinity gate this once had went away with continuous
+        # sync, ADR vault-export-import). Scope is the second gate: a channel's
+        # scope names the agents it may DRIVE (ADR per-agent-resource-scope), so a channel whose
+        # own ``default_agent`` is outside it can drive nothing and does not
+        # run. That is the loud, early failure: the adapter never starts, the
+        # management surface says the channel is not running, and no message is
+        # ever accepted only to be refused.
+        #
+        # Both write paths now hold ``default_agent`` inside a non-empty scope
+        # (the channel kind's ``on_update_config`` and ``validate_scope_for``),
+        # so the only case this gate can reach is the deliberate one:
+        # ``scope == []``, dormant, the owner switched the channel off. It stays
+        # as written rather than narrowing to that check, as defence-in-depth
+        # for a row that predates the scope-path validation and could still
+        # carry the inconsistent combination.
         rows = await self._resources.list(kind="channel")
-        return {r.name: (r.id, dict(r.config)) for r in rows if r.enabled}
+        live: list[Resource] = []
+        for r in rows:
+            if not r.enabled:
+                continue
+            # Read straight off the stored config rather than parsing it: a row
+            # this cannot read is not one ``_start_adapter`` could start either.
+            default_agent = r.config.get("default_agent") or DEFAULT_AGENT
+            if not agent_in_scope(r.scope, str(default_agent)):
+                # Named for the reachable case (dormant) rather than the
+                # defensive one, and carries the scope so the rare legacy row is
+                # still tellable apart from an ordinary ``[]``.
+                _logger.info(
+                    "channel.dormant_not_started",
+                    extra={
+                        "channel": r.name,
+                        "default_agent": default_agent,
+                        "scope": r.scope,
+                    },
+                )
+                continue
+            live.append(r)
+        self._scopes = {r.name: (list(r.scope) if r.scope is not None else None) for r in live}
+        return {r.name: (r.id, dict(r.config)) for r in live}
 
     def _may_retry(self, name: str) -> bool:
         failed = self._failed_at.get(name)
@@ -248,9 +291,12 @@ class ChannelRuntime:
                 adapter=adapter,
                 require_mention=parsed.require_mention,
                 ignore_other_mentions=parsed.ignore_other_mentions,
+                agent_scope=self._scopes.get(name),
             )
         )
-        self._running[name] = _Running(adapter=adapter, config_hash=self._hash(config))
+        self._running[name] = _Running(
+            adapter=adapter, config_hash=self._binding_hash(name, config)
+        )
         _logger.info("channel.adapter.started", extra={"channel": name})
 
     async def _stop_adapter(self, name: str) -> None:
@@ -278,6 +324,12 @@ class ChannelRuntime:
             self._websockets, self._materialize, desired, self._websocket_latch
         )
 
-    @staticmethod
-    def _hash(config: dict[str, object]) -> str:
-        return json.dumps(config, sort_keys=True, default=str)
+    def _binding_hash(self, name: str, config: dict[str, object]) -> str:
+        """What a running channel is compared against to decide whether to
+        rebuild it. Scope is part of it, not just config: the scope rides the
+        binding, so a scope edit must rebind the channel the same way a config
+        edit does — otherwise `/agent` would keep offering the old set until
+        the daemon restarted."""
+        return json.dumps(
+            {"config": config, "scope": self._scopes.get(name)}, sort_keys=True, default=str
+        )

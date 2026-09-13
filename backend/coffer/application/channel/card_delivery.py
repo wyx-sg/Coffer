@@ -29,6 +29,11 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from coffer.application.channel import document_save
+from coffer.application.channel.agent_routing import (
+    effective_agent,
+    routable_choices,
+    routable_keys,
+)
 from coffer.application.channel.conversation_ops import ensure_conversation
 from coffer.application.channel.ports import ChannelBinding, ChannelPeer
 from coffer.application.channel.selection_cards import (
@@ -124,7 +129,7 @@ async def dispatch_card_tap(
         return
     kind, _, value = data.partition(":")
     if kind == "agent":
-        if value not in commands._agents.agent_keys():
+        if value not in routable_keys(binding, commands._agents):
             await send(
                 binding,
                 peer.chat_id,
@@ -295,9 +300,11 @@ async def _current_card(
     ``page`` is ``None`` for "the page holding the current choice".
     """
     row = await commands._threads.get(binding.resource_id, peer.chat_id, thread_id)
-    agent_key = (row.preferred_agent if row is not None else None) or binding.default_agent
+    agent_key = effective_agent(binding, row.preferred_agent if row is not None else None)
     if kind == "agent":
-        return agent_card(current=agent_key, choices=commands._agents.agent_choices(), page=page)
+        return agent_card(
+            current=agent_key, choices=routable_choices(binding, commands._agents), page=page
+        )
     if kind == "collection":
         # No conversation/model state to re-read — just the same visibility
         # check `/save` itself makes (spec knowledge FR-036).

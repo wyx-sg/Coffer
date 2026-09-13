@@ -52,7 +52,6 @@ def _connection(models: list[CuratedModel]) -> ProviderConfig:
         protocol=Protocol.OPENAI,
         base_url="https://gw.example/v1",
         credential_ref="provider/agnes/key",
-        compatible_agents=["codex"],
         models=models,
     )
 

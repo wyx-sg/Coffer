@@ -15,10 +15,18 @@ Pydantic v2 `BaseModel`。这是存储在 Resource 行上的同步 `config` 字�
 > `wire_api` **移除**；手动 `wire_format` 改为**探测**出的 `protocol`。模型在使用处
 > （Agent 绑定 / 内部默认 / 聊天）现选，不在连接上。
 
-> **修订 2026-06-23（F1、F4）**：新增 `compatible_agents: list[str] | None` 字段
-> （`AgentType` 值；`null` ⇒ wire 默认），决定连接投射到哪些 agent，与 `protocol` 解耦。
-> `is_active` 现按 **agent 类型**作用域（每个 agent 至多一条激活连接），不再按 protocol。该字段
-> 以纯字符串持有，使本领域模块不依赖 agent kind（由应用层在投影处再 hydrate 成 `AgentType`）。
+> **修订 2026-06-23（F1、F4）**：连接投射到哪些 agent 与 `protocol` 解耦，`is_active` 改按
+> **agent 类型**作用域（每个 agent 至多一条激活连接），不再按 protocol。它最初以本 config 上的
+> `compatible_agents: list[str] | None` 字段（`AgentType` 值；`null` ⇒ wire 默认）承载。
+
+> **修订 2026-09-13（F1 修订）**：`compatible_agents` 已从 config **移除**。该轴改为资源行上
+> 框架级的 per-agent `scope`
+> （[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.zh.md)），
+> 由每个可 scope 的 kind 共享。那里的 `null` 表示**所有 agent**，而不是 wire 默认，因此迁移 0071
+> 把每一行的有效集合物化进 `scope` 并剥掉该键；新连接由 kind 的 `default_scope` 钩子按 wire 预填。
+> agent 名依然以纯字符串持有，使本领域模块不依赖 agent kind（由应用层在投影处
+> `application/provider/targets.py` 再 hydrate 成 `AgentType`；那里也会把被禁用或无密钥的连接
+> 归为「不触达任何 agent」）。
 
 > **修订 2026-09-11（J1–J3）**：新增 `models` 字段，记录该连接向下游**提供**
 > endpoint 的哪些模型。它不存**选中的**模型——E1/E3 依然成立——只存使用处选择器可选的菜单。

@@ -237,19 +237,25 @@ def test_register_carries_no_scope(channel_daemon: _Daemon) -> None:
     assert "runs_on" not in resource.config
 
 
-def test_scope_set_on_a_channel_returns_clean_422(channel_daemon: _Daemon) -> None:
-    """`coffer scope set channel:<name>` must surface a non-zero exit and a
-    readable message (not a traceback): the channel kind declares no scope."""
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="a channel may only route to the agents in its scope",
+)
+def test_scope_set_on_a_channel_narrows_the_agents_it_may_drive(
+    channel_daemon: _Daemon,
+) -> None:
+    """`coffer scope set channel:<name>` names the agents this channel may
+    route to (ADR per-agent-resource-scope). It is the same framework surface every scoped
+    kind shares — the channel kind no longer refuses it."""
     assert _register_tg().exit_code == 0
 
-    result = runner.invoke(app, ["scope", "set", "channel:tg", "--agents", "claude-code"])
+    result = runner.invoke(app, ["scope", "set", "channel:tg", "--agents", "claude_code"])
 
-    assert result.exit_code != 0
-    assert "does not support scope" in result.output
+    assert result.exit_code == 0, result.output
     resource = channel_daemon.run(
         channel_daemon.resources.get(ResourceRef(kind="channel", name="tg"))
     )
-    assert resource.scope is None
+    assert resource.scope == ["claude_code"]
 
 
 def test_register_telegram_without_token_ref_exits_6(channel_daemon: _Daemon) -> None:

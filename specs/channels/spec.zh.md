@@ -570,9 +570,11 @@ status / notify`。
 所在的那台机器——被禁用的渠道则在任何地方都不运行。不存在机器绑定，没有亲和性
 字段，也没有 per-machine override。
 
-`channel` kind 不声明 `scope`
-（[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.zh.md)）：非
-null 值在校验阶段被拒绝（422）。是否启动适配器，唯一的控制手段就是启用与否。
+`channel` kind 确实声明了 `scope`
+（[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.zh.md)），但它
+回答的问题与「适配器在哪台机器上跑」不同——见 FR-079。scope 命名的是这条渠道**可以
+驱动哪些 agent**；启用与否说的是它在本机到底跑不跑。两者只在一处交汇：一条什么 agent
+都驱动不了的渠道不会运行。
 
 如果用户把一个 bundle 带到第二台机器（spec vault-export-import），该渠道在那里也会被注册——配对
 状态随 bundle 的 `channel-peers` 状态区一同带过去，因此无需重新配对——而在两边
@@ -1427,6 +1429,32 @@ Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制
 - **Then** mention 所需的那个平台 id 被保留下来，而不是跟着一起被丢掉。
 
 
+### Scenario: a channel may only route to the agents in its scope
+
+- **Given** 一条已配对的渠道，其 scope 只命名了两个已注册 agent 中的一个，
+- **When** 属主发送 `/agent`，随后发送 `/agent <另一个>`，
+- **Then** 列表与选择卡片只提供 scope 内的那个 agent，而切到另一个会被拒绝——无论是键入的，
+  还是点按一张在 scope 收窄之前渲染出来的卡片。
+
+### Scenario: a channel scoped to no agent is dormant
+
+- **Given** 一条已启用的渠道，其 scope 被设为空列表，
+- **When** 渠道 runtime 进行一次收敛，
+- **Then** 它的适配器从未被启动，渠道报告为未运行，因此它不会收下任何一个之后必须拒绝的 turn。
+
+### Scenario: reject narrowing a channel's scope past its default agent
+
+- **Given** 一条正在运行的渠道，其 `default_agent` 是某个已注册 agent，
+- **When** 属主把它的 scope 收窄到一个不含该 agent 的非空集合，
+- **Then** 这次编辑被拒绝，消息同时点出 default agent 与被提议的 scope，什么都不落库，
+  渠道继续运行——收窄 scope 绝不会悄无声息地把 bot 弄下线。
+
+### Scenario: edit a dormant channel's configuration
+
+- **Given** 一条被属主用「scope 为空」关掉的渠道，
+- **When** 属主修正它配置里的某个字段，例如 bot token 的凭据引用，
+- **Then** 这次编辑被接受，渠道仍然休眠——关掉不等于冻结。
+
 
 
 ## Channels as a management plane（北极星）
@@ -1806,6 +1834,33 @@ Turn 平台有第二个接口面：Web UI 里的一个 **Chat 页面**，对着�
   页面：一个都没配时，草稿区照样接受消息，turn 跑在 agent 自带的模型与登录上，因为 Coffer
   的连接是可选的覆盖项，不是前置条件（见
   [Provider Switching](../../docs/decisions/provider-switching.zh.md) 的 2026-06-22 修订）。
+
+- **FR-079**：渠道必须承载框架级的 per-agent `scope`
+  （[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.zh.md)），
+  读法是**这条渠道可以驱动哪些 agent**。其他所有 kind 的 scope 命名的是资源被*投递给*
+  哪些 agent；而渠道不被任何 agent 消费——它是一个入站面——所以这个轴是被反转，而不是
+  照搬。这里明确写出来，因为按惯常读法理解的读者会正好读反。
+
+  - `scope = null` 必须表示所有已注册的 agent。这就是 scope 之前的行为，也是现存每一条
+    渠道所携带的值，因此渠道不需要任何数据迁移。
+  - `scope = [<agent>, …]` 必须在 `/agent` 的三个面上同时收窄：列表、选择卡片，以及对
+    所选 key 的校验（键入或点按）。三者必须读同一个收窄后的集合——卡片提供了一个紧接着
+    就被校验拒掉的 agent，正是本条要防的那个具体故障。
+  - **不变量**：渠道的 `default_agent` 必须是这条渠道可以驱动的 agent——只要 scope 非空，
+    它就必须落在 scope 之内。这条不变量必须在**两条写入路径上同时**强制，从而让不一致的
+    状态根本无法落库：编辑配置时，若它命名了当前 scope 之外的 `default_agent`，该编辑被
+    拒绝；编辑 scope 时，若被提议的非空 scope 排除了当前的 `default_agent`，该编辑同样被
+    拒绝。scope 编辑**不得**先被接受、再让渠道跑不起来——收窄可达范围却悄悄把一个活着的
+    bot 弄下线，正是本条要防的那个具体故障。每次拒绝都必须同时点出 default agent 与
+    scope，好让属主看见两条出路：放宽 scope，或者先改掉 default agent。
+  - `scope = []`（休眠）必须表示这条渠道驱动不了任何东西，并且必须尽早失败而不是逐 turn
+    失败：runtime 不会启动它的适配器，因此不会出现「先收下消息再拒绝」。管理面把它报告
+    为未运行。属主放宽 scope 即可让它回来。
+  - `scope = []` 必须在两条写入路径上都被接受。它是整个 vault 通用的「休眠」含义——这条
+    渠道是关着的——而「关着」**不得**同时意味着「冻结」：被属主刻意关掉的渠道必须仍然可
+    编辑，好让写错的 bot token 或 tunnel token 无需先重新激活就能改对。
+  - 一旦 scope 不再容许某个 thread 粘滞的 `/agent` 选择，该选择必须让位于渠道默认值，
+    这样收窄 scope 会在下一次会话就生效，而不必等设置它的人改回来。
 
 ## Deliberately out of scope
 

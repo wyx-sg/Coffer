@@ -389,13 +389,15 @@ def test_resolve_active_key(tmp_path, monkeypatch):
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="route an openai-compatible connection to Claude Code via compatible_agents",
+    scenario="route an openai-compatible connection to Claude Code with its scope",
 )
-def test_openai_connection_compatible_with_claude_code(tmp_path, monkeypatch):
+def test_openai_connection_scoped_to_claude_code(tmp_path, monkeypatch):
     # The agnes case: an openai-wire gateway the user routes to Claude Code. The
     # projection writer is chosen by AGENT type, so it writes Claude's settings.json
     # (anthropic shape) with an apiKeyHelper that names THIS connection — the key
-    # is resolved per-connection, never by a wire+active guess.
+    # is resolved per-connection, never by a wire+active guess. The routing is a
+    # scope edit through the framework's shared surface (ADR per-agent-resource-scope), not a
+    # field on the connection.
     app = _app(tmp_path, monkeypatch, 59890)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
@@ -407,11 +409,15 @@ def test_openai_connection_compatible_with_claude_code(tmp_path, monkeypatch):
                 "protocol": "openai",
                 "base_url": "https://agnes/v1",
                 "secret_value": "sk-agnes",
-                "compatible_agents": ["claude_code"],
             },
         )
         assert r.status_code == 201, r.text
-        assert r.json()["compatible_agents"] == ["claude_code"]
+        # A new connection starts on the wire default...
+        assert r.json()["compatible_agents"] == ["claude_code", "codex"]
+        scoped = c.put("/api/v1/resources/provider/agnes/scope", json={"scope": ["claude_code"]})
+        assert scoped.status_code == 200, scoped.text
+        # ...and the reported effective set follows the scope.
+        assert c.get("/api/v1/providers/agnes").json()["compatible_agents"] == ["claude_code"]
 
         act = c.post("/api/v1/providers/agnes/activate")
         assert act.status_code == 200, act.text
@@ -805,3 +811,71 @@ def test_rename_unknown_connection_is_404(tmp_path, monkeypatch):
     with _client(app) as c:
         r = c.post("/api/v1/providers/nope/rename", json={"new_name": "whatever"})
         assert r.status_code == 404, r.text
+
+
+# -- per-agent key routing reads the scope (ADR per-agent-resource-scope) ---------------------
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="per-agent key routing follows the connection's scope",
+)
+def test_the_key_a_wire_resolves_follows_the_scope(tmp_path, monkeypatch):
+    """Two connections, one per agent, told apart by their scope alone.
+
+    This is the routing the migration had to preserve bit-for-bit: before, the
+    axis was ``compatible_agents`` inside the config; now it is the resource's
+    framework scope, and the wrong answer here means an agent shelling out for
+    another agent's key.
+    """
+    app = _app(tmp_path, monkeypatch, 59920)
+    with _client(app) as c:
+        c.post("/api/v1/providers", json=_anthropic_body("for-claude", secret_value="sk-claude"))
+        c.post(
+            "/api/v1/providers",
+            json={
+                "name": "for-codex",
+                "protocol": "openai",
+                "base_url": "https://gw/openai",
+                "secret_value": "sk-codex",
+            },
+        )
+        for name, agents in (("for-claude", ["claude_code"]), ("for-codex", ["codex"])):
+            r = c.put(f"/api/v1/resources/provider/{name}/scope", json={"scope": agents})
+            assert r.status_code == 200, r.text
+        assert c.post("/api/v1/providers/for-claude/activate").status_code == 200
+        assert c.post("/api/v1/providers/for-codex/activate").status_code == 200
+
+        # anthropic stands for Claude Code, openai for Codex.
+        assert c.get("/api/v1/providers/active-key/anthropic").json()["value"] == "sk-claude"
+        assert c.get("/api/v1/providers/active-key/openai").json()["value"] == "sk-codex"
+
+
+def test_a_disabled_connection_resolves_no_key_for_its_agent(tmp_path, monkeypatch):
+    """``enabled`` is honoured at the projection seam now, so switching a
+    connection off stops it answering for its agent even while ``is_active``
+    still records that it was the one projected."""
+    app = _app(tmp_path, monkeypatch, 59930)
+    with _client(app) as c:
+        c.post("/api/v1/providers", json=_anthropic_body("acme"))
+        assert c.post("/api/v1/providers/acme/activate").status_code == 200
+        assert c.get("/api/v1/providers/active-key/anthropic").status_code == 200
+
+        r = c.post("/api/v1/resources/provider/acme/disable")
+        assert r.status_code == 200, r.text
+
+        assert c.get("/api/v1/providers/active-key/anthropic").status_code == 404
+
+
+def test_scoping_a_connection_to_no_agent_retires_its_reach(tmp_path, monkeypatch):
+    """The dormant case for a connection: ``[]`` reaches nobody, so no agent
+    resolves its key — the same "dormant" meaning every other scoped kind has."""
+    app = _app(tmp_path, monkeypatch, 59940)
+    with _client(app) as c:
+        c.post("/api/v1/providers", json=_anthropic_body("acme"))
+        assert c.post("/api/v1/providers/acme/activate").status_code == 200
+
+        assert c.put("/api/v1/resources/provider/acme/scope", json={"scope": []}).status_code == 200
+
+        assert c.get("/api/v1/providers/active-key/anthropic").status_code == 404
+        assert c.get("/api/v1/providers/acme").json()["compatible_agents"] == []

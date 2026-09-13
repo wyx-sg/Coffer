@@ -30,8 +30,9 @@ from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.dependencies import get_provider_service
+from coffer.surfaces.http.dependencies import get_provider_service, get_resource_service
 from coffer.surfaces.http.provider_routes import router as provider_router
+from coffer.surfaces.http.resource_routes import router as resource_router
 
 _runner = CliRunner()
 _TOKEN = "test-token-011-cli"
@@ -87,7 +88,12 @@ def provider_daemon(tmp_path, monkeypatch):
     app = FastAPI()
     err_handlers.register(app)
     app.include_router(provider_router)
+    # The connection's reach is a scope edit now (ADR per-agent-resource-scope), and that
+    # goes through the framework's shared resource route, so the CLI test app
+    # must serve it too.
+    app.include_router(resource_router)
     app.dependency_overrides[get_provider_service] = lambda: provider_svc
+    app.dependency_overrides[get_resource_service] = lambda: resources
     set_active_token(_TOKEN)
 
     fake_client = TestClient(
@@ -131,8 +137,10 @@ def test_cli_create_list_switch(provider_daemon):
     assert "switched to acme" in r.output
 
 
-def test_cli_key_by_connection_and_compatible(provider_daemon):
-    # An openai gateway routed to Claude Code via --compatible.
+def test_cli_key_by_connection_and_scope(provider_daemon):
+    # An openai gateway re-targeted at Claude Code. `--compatible` is gone:
+    # which agents a connection reaches is the framework's per-agent scope
+    # (ADR per-agent-resource-scope), set through the shared `coffer scope` surface.
     r = _runner.invoke(
         cli_app,
         [
@@ -145,12 +153,18 @@ def test_cli_key_by_connection_and_compatible(provider_daemon):
             "https://agnes/v1",
             "--secret",
             "sk-agnes",
-            "--compatible",
-            "claude_code",
         ],
     )
     assert r.exit_code == 0, r.output
 
+    # The wire's own default is what a new connection starts on.
+    show = _runner.invoke(cli_app, ["provider", "show", "agnes"])
+    assert json.loads(show.output)["compatible_agents"] == ["claude_code", "codex"]
+
+    narrowed = _runner.invoke(
+        cli_app, ["scope", "set", "provider:agnes", "--agents", "claude_code"]
+    )
+    assert narrowed.exit_code == 0, narrowed.output
     show = _runner.invoke(cli_app, ["provider", "show", "agnes"])
     assert json.loads(show.output)["compatible_agents"] == ["claude_code"]
 

@@ -13,13 +13,16 @@ asks for the kind it needs, so a chat dropdown never offers an image model.
 
 ``protocol`` is the upstream wire the endpoint speaks, detected at create time
 (``anthropic`` / ``openai`` / ``ollama`` / ``unknown``); it drives model
-introspection and whether a key is needed. It NO LONGER fixes which agent the
-connection projects into — that is ``compatible_agents``, an explicit per-
-connection set (Claude Code / Codex) the create form pre-fills from the wire but
-the user may override (e.g. an openai-compatible gateway routed to Claude Code).
-Activation lives in ``is_active`` (≤1 active per agent type, enforced by the
-switch op); ``internal_default`` (global, ≤1) marks the connection Coffer's
-internal engine uses.
+introspection and whether a key is needed. It does NOT fix which agent the
+connection projects into: that is the framework-level per-agent **scope** on the
+resource row (ADR per-agent-resource-scope), which the user may set to anything (e.g. an
+openai-compatible gateway routed to Claude Code). The wire only supplies the
+STARTING scope a newly created connection is given
+(``default_scope_for_protocol``), so a fresh connection behaves as it always
+did and the user narrows or widens it from there. Activation lives in
+``is_active`` (≤1 active per agent type, enforced by the switch op);
+``internal_default`` (global, ≤1) marks the connection Coffer's internal engine
+uses.
 
 The credential is referenced by ``credential_ref`` only — the raw key lives in
 the Fernet vault and is never stored here, mirroring the MCP kind. ``ollama``
@@ -46,20 +49,35 @@ _CRED_REF_PATTERN = re.compile(r"^[A-Za-z0-9_.\-]+(/[A-Za-z0-9_.\-]+)*$")
 # application layer re-hydrates these into ``AgentType`` at the projection seam.
 _CLAUDE_CODE = "claude_code"
 _CODEX = "codex"
-_KNOWN_AGENTS: frozenset[str] = frozenset({_CLAUDE_CODE, _CODEX})
 
-# Effective agent set when ``compatible_agents`` is unset, by the wire the
-# endpoint speaks. ``protocol`` no longer fixes the projection target (the user's
-# explicit ``compatible_agents`` does), so a credentialed endpoint defaults to
-# the widest set — both agents — and the user narrows it from there; the create
-# form pre-fills the same way. ollama is internal-only — no key, projects into
-# no agent.
-_DEFAULT_COMPATIBLE: dict[str, list[str]] = {
+# The scope a connection is CREATED with, by the wire the endpoint speaks. The
+# wire does not fix the projection target — the resource's scope does, and the
+# user may edit it — so a credentialed endpoint starts at the widest set (both
+# agents) and is narrowed from there. ollama is internal-only: no key, projects
+# into no agent, so it starts dormant.
+#
+# This is only a starting value. Were it absent, the framework's own default
+# for an unset scope ("every agent") would silently widen a new ollama
+# connection into both agents, which is why the provider kind supplies it
+# through ``Kind.default_scope`` instead of letting the framework default win.
+_DEFAULT_SCOPE: dict[str, list[str]] = {
     "anthropic": [_CLAUDE_CODE, _CODEX],
     "openai": [_CLAUDE_CODE, _CODEX],
     "ollama": [],
     "unknown": [_CLAUDE_CODE, _CODEX],
 }
+
+
+def default_scope_for_protocol(protocol: str) -> list[str]:
+    """The per-agent scope a connection on ``protocol`` is created with.
+
+    Agent-type VALUE strings, like every other agent reference in this module —
+    the application layer hydrates them at the projection seam so this module
+    stays independent of the agent kind. An unrecognised wire gets the widest
+    set, the same answer ``unknown`` gets.
+    """
+    return list(_DEFAULT_SCOPE.get(protocol, [_CLAUDE_CODE, _CODEX]))
+
 
 #: Shape-only bounds for the curated ``models`` set. Model ids are OPAQUE — they
 #: are passed verbatim to the vendor, and Coffer writes down no model name of its
@@ -90,10 +108,11 @@ class CuratedModel(BaseModel):
 class Protocol(StrEnum):
     """Upstream wire protocol a connection speaks (detected, not user-typed).
 
-    ``anthropic`` / ``openai`` fix the agent a connection projects into (Claude
-    Code / Codex). ``ollama`` is internal-only: it projects into NO agent and is
-    used solely by Coffer's internal LLM engine. ``unknown`` means the probe was
-    inconclusive — the connection is offered to every agent and the user decides.
+    ``anthropic`` / ``openai`` set the scope a connection STARTS with (both
+    coding agents). ``ollama`` is internal-only: it starts scoped to NO agent
+    and is used solely by Coffer's internal LLM engine. ``unknown`` means the
+    probe was inconclusive — the connection starts open to every agent and the
+    user decides.
     """
 
     ANTHROPIC = "anthropic"
@@ -114,13 +133,6 @@ class ProviderConfig(BaseModel):
     # (no key). Probed for existence at register/update time by the kind's
     # credential_ref_extractor.
     credential_ref: str | None = None
-    # The agents this connection may project into. ``None`` ⇒ the default for the
-    # wire (see ``_DEFAULT_COMPATIBLE``); an explicit list lets the user route any
-    # endpoint to any agent (the agnes case: an openai gateway → Claude Code).
-    # Empty/None for ollama (internal-only). The projection writer is then chosen
-    # by AGENT type, not by ``protocol``. Held as ``AgentType`` value strings (see
-    # ``_KNOWN_AGENTS``) to keep this module independent of the agent kind.
-    compatible_agents: list[str] | None = None
     # Which of the endpoint's models the user actually intends to use — the
     # OFFERED set, not a chosen model. A picker that offers THIS connection's
     # models (the per-agent binding, the internal-engine selector) narrows to
@@ -155,16 +167,6 @@ class ProviderConfig(BaseModel):
             )
         return v
 
-    @field_validator("compatible_agents")
-    @classmethod
-    def _known_agents(cls, v: list[str] | None) -> list[str] | None:
-        if v is None:
-            return None
-        for a in v:
-            if a not in _KNOWN_AGENTS:
-                raise ValueError(f"unknown compatible agent {a!r}: must be one of {_KNOWN_AGENTS}")
-        return v
-
     @field_validator("models")
     @classmethod
     def _well_formed_models(cls, v: list[CuratedModel]) -> list[CuratedModel]:
@@ -188,13 +190,13 @@ class ProviderConfig(BaseModel):
     @model_validator(mode="after")
     def _credential_matches_protocol(self) -> ProviderConfig:
         """anthropic/openai/unknown connections require a ``credential_ref``; an
-        ollama connection (no key) must not carry one, nor any compatible agent
-        (it is internal-only and never projects)."""
+        ollama connection (no key) must not carry one. That it projects into no
+        agent is no longer a config rule: it is the empty SCOPE such a
+        connection is created with, and a keyless connection projects nothing
+        whatever its scope says (see ``application.provider.targets``)."""
         if self.protocol is Protocol.OLLAMA:
             if self.credential_ref is not None:
                 raise ValueError("ollama connection must not carry a credential_ref")
-            if self.compatible_agents:
-                raise ValueError("ollama connection projects into no agent")
         elif not self.credential_ref:
             raise ValueError(f"{self.protocol.value} connection requires a credential_ref")
         return self
@@ -207,18 +209,6 @@ class ProviderConfig(BaseModel):
         restriction" for the caller to interpret.
         """
         return [m.id for m in self.models if modality is None or m.modality is modality]
-
-    def resolved_compatible_agents(self) -> list[str]:
-        """The agent-type values this connection projects into: the explicit
-        ``compatible_agents`` (deduped, order-preserving) or the wire default.
-        Returns ``AgentType`` value strings — the application layer hydrates them
-        into ``AgentType`` at the projection seam (keeps this module agent-free)."""
-        if self.compatible_agents is None:
-            return list(_DEFAULT_COMPATIBLE.get(self.protocol.value, []))
-        seen: dict[str, None] = {}
-        for a in self.compatible_agents:
-            seen.setdefault(a, None)
-        return list(seen)
 
 
 @dataclass(frozen=True)

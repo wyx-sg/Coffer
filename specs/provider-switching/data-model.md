@@ -16,12 +16,23 @@ Resource row. It MUST NOT hold the raw secret.
 > becomes a DETECTED `protocol`. The model lives at the point of use (Agent
 > binding / internal-default / chat), not on the connection.
 
-> **Amendment 2026-06-23 (F1, F4):** a `compatible_agents: list[str] | None`
-> field (`AgentType` values; `null` ⇒ the wire default) decides which agents the
-> connection projects into, decoupled from `protocol`. `is_active` is now scoped
-> PER AGENT TYPE (≤1 active connection per agent), not per protocol. The field is
-> held as plain strings so this domain module stays free of the agent kind (the
-> application layer hydrates them into `AgentType` at the projection seam).
+> **Amendment 2026-06-23 (F1, F4):** which agents the connection projects into
+> is decoupled from `protocol`, and `is_active` is scoped PER AGENT TYPE (≤1
+> active connection per agent), not per protocol. It was first carried as a
+> `compatible_agents: list[str] | None` field on this config (`AgentType`
+> values; `null` ⇒ the wire default).
+
+> **Amendment 2026-09-13 (F1 revised):** `compatible_agents` is REMOVED from the
+> config. The axis is the resource row's framework-level per-agent `scope`
+> ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)),
+> which every scoped kind shares. `null` there means EVERY agent, not the wire
+> default, so migration 0071 materialises each existing row's effective set into
+> `scope` and strips the key; a new connection is pre-filled from the wire by
+> the kind's `default_scope` hook. The agent names are still plain strings, so
+> this domain module stays free of the agent kind (the application layer
+> hydrates them into `AgentType` at the projection seam,
+> `application/provider/targets.py`, which also drops a disabled or keyless
+> connection to no agent at all).
 
 > **Amendment 2026-09-11 (J1–J3):** a `models` field records WHICH of
 > the endpoint's models the connection offers downstream. It stores no CHOSEN

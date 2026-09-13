@@ -7,9 +7,13 @@
   [mcp-gateway](../../specs/mcp-gateway/spec.md) and
   [skill-manager](../../specs/skill-manager/spec.md))
 - **Amends:** [Everything Is a Resource Kind](./everything-is-a-resource-kind.md) (resources
-  now carry a scope) and [Tool Retrieval](./tool-retrieval-for-overload.md) /
+  now carry a scope), [Tool Retrieval](./tool-retrieval-for-overload.md) /
   [Built-in Agent Is Internal](./builtin-agent-is-internal-capability.md)
-  (`coffer__search_tools` ranking is scope-aware)
+  (`coffer__search_tools` ranking is scope-aware), and — since the 2026-09-13
+  revision — [Provider Switching](./provider-switching.md) (a connection's
+  `compatible_agents` field is replaced by this scope) and spec
+  [channels](../../specs/channels/spec.md) (a channel's scope names the agents it
+  may drive). See [Revision history](#revision-history).
 
 ## Context
 
@@ -51,7 +55,20 @@ enforcement point.
      only `scope is None`.
    - Unknown agent names in the list are legal and simply never match — an
      agent can be scoped in before it is registered.
-   - Kinds that declare no scope reject a non-null value at validation (422).
+   - A kind that declares no scope rejects a non-null value at validation (422).
+     Today `agent` is the only such kind, and every other kind declares scope —
+     so that rule is now the exception rather than the common case.
+   - A kind may also **pre-validate a proposed scope** (`Kind.validate_scope_for`),
+     the scope path's counterpart to the config path's `on_update_config`: it is
+     handed the resource as it stands plus the scope being proposed, and raising
+     rejects the write before anything is persisted (same 422 envelope). It
+     exists because a kind that reads scope with a consequence beyond filtering
+     can have an invariant *between* its config and its scope, and enforcing
+     that on the config path alone lets the other path store the state the
+     invariant forbids. It sits beside `on_scope_changed` and deliberately fires
+     at the opposite end of the operation: this one may refuse, so it must see
+     the row unchanged; that one reconciles, so it must read the row already
+     written. Only `channel` supplies one (item 7).
 
 2. **Exported but inactive.** A scoped resource still exports and imports
    normally, and stays visible in the registry everywhere; out of scope it is
@@ -67,7 +84,10 @@ enforcement point.
    | `mcp_server` | agent | The gateway filters the server's tools by the session's identity. |
    | `skill` | agent | Delivery filters by the skill's own `enabled` flag intersected with scope; out-of-scope or disabled delivered copies are reconciled away. |
    | `knowledge` | agent | The built-in knowledge tools filter the collections a session may list, grep, read and write by the session's identity. |
-   | `agent`, `channel` | none | A non-null scope is rejected at validation. |
+   | `memory` | agent | Recall filters the partitions a session may read by that session's identity, so an aggregated partition reaches only the agents it is scoped to (spec memory FR-014). |
+   | `channel` | agent — **inverted** | A channel is consumed by no agent, so its scope names the agents the channel may **drive**. `/agent` lists, offers and accepts only those; the channel's `default_agent` is held inside the scope on every write path — config and scope alike; a channel that may drive nothing does not start. |
+   | `provider` | agent | The projection seam: the switch, the per-agent key lookup, the post-import reconcile and the boot self-heal all read scope (∩ `enabled`) to decide which agents a connection is written into. |
+   | `agent` | none | It IS the agent, so there is nothing for a per-agent scope to narrow. A non-null scope is rejected at validation. |
 
 4. **Shim self-reported `--agent` identity.** The shim install writes
    `coffer-mcp-shim --agent <name>` into the agent's config; the shim reports
@@ -109,6 +129,67 @@ enforcement point.
    Chat history, audit logs, runtime state and machine-local settings stay
    machine-local (restated as a boundary, not a new decision).
 
+7. **A channel scopes, and its scope is inverted — added 2026-09-13.** This ADR
+   originally said `channel` declares no scope, reasoning that scope names the
+   agents a resource is active FOR and a channel is not consumed by an agent.
+   The premise was right and the conclusion was wrong: a channel is the one
+   inbound surface in the vault, and the natural reading of its scope is the
+   mirror image — **the agents this channel may drive**. That is a real
+   authorization question (a SeaTalk bot in a work group should not be able to
+   drive every agent on the machine), and it had no answer at all.
+
+   Two enforcement seams, because one without the other leaves a hole:
+   `/agent` narrows its listing, its selection card and its validation to the
+   scope (one narrowed set, so a card can never offer what the next check
+   rejects), and the channel's `default_agent` is held inside the scope.
+
+   That second seam is an invariant between two fields — the config's
+   `default_agent` and the row's `scope` — and two endpoints can break it, so it
+   is enforced on **both** write paths: the config path rejects a
+   `default_agent` outside a non-empty scope (`on_update_config`), and the scope
+   path rejects a non-empty scope that excludes the current `default_agent`
+   (`validate_scope_for`, the framework hook item 1 grows for this). Enforcing
+   it on the config path alone was not a narrower rule but a broken one: a
+   narrowing accepted by the scope endpoint left a row the runtime then refuses
+   to start, and the owner's bot went dead with one log line to say why. A
+   thread's sticky `/agent` choice falls back to the channel default once the
+   scope stops admitting it.
+
+   `scope = []` is dormant, and for a channel that means the runtime does not
+   start its adapter — the loud, early failure, rather than a live bot that
+   accepts a message and then refuses it. It is therefore the one scope both
+   write paths always accept: dormant is the owner saying "off", and off must not
+   also mean frozen, so a dormant channel's config stays editable and a wrong
+   token can be corrected without reactivating the channel first. The scope rides
+   the live binding, so an edit takes effect within one reconcile tick.
+
+8. **`provider` scopes, and its own "which agents" field is withdrawn — added
+   2026-09-13.** The `provider` kind already had this axis: `compatible_agents`
+   inside its config, deciding which agents a connection projects into. It was
+   the last kind still answering the framework's question its own way — exactly
+   the divergence Decision item 3 was written to end — so the field is removed
+   and the kind declares `supports_scope`.
+
+   The migration is the interesting part, and the reason this could not be a
+   rename. The two axes disagree on what UNSET means: `compatible_agents = null`
+   meant *the wire's default* (nothing at all for a keyless ollama connection),
+   while `scope = null` means *every agent*. A rename would therefore have
+   widened every connection that had never been narrowed. So migration 0071
+   **materialises** every existing row — it computes the effective set and
+   writes it out concretely, then strips the dead key — and the framework grows
+   one small hook, `Kind.default_scope`, so a newly created connection is
+   pre-filled from its wire instead of starting out reaching everything. The hook
+   is a function of the config alone; `memory`, whose starting scope is the set
+   of agents a partition was aggregated FROM, cannot be expressed that way and
+   keeps setting its own scope right after registering.
+
+   Two flags survive side by side here, and they are not redundant: `enabled` is
+   the user's switch on the resource (a disabled connection projects nowhere and
+   resolves no key), while `is_active` records that this is the connection
+   currently *written into* the agents it reaches. The second is a claim about a
+   file on disk, which is why a boot self-check exists to catch it disagreeing
+   with reality.
+
 ## Alternatives considered
 
 - **Machine × agent matrix** — what this ADR previously decided. Its machine
@@ -134,3 +215,34 @@ enforcement point.
 - Scoping a skill out reclaims it from an agent that already has it, so scope
   edits have visible filesystem effects — audited like any other delivery
   change.
+- Scope is now the vault's ONE answer to "which agents does this reach", for
+  every kind but `agent` itself. A user who learns the control once can apply it
+  to servers, skills, collections, memory partitions, channels and connections,
+  and a kind that grows the question later declares the field rather than
+  inventing a field of its own.
+- Two kinds read scope with a consequence beyond filtering: a dormant channel
+  does not run, and a dormant connection projects into no agent. "Dormant" is
+  therefore not always merely invisible — for those two it is off. Off is still
+  only off: a dormant resource stays visible, exportable and editable.
+- Because a kind whose scope has such a consequence can pre-validate the scope
+  write (item 1), narrowing a reach can now be REFUSED rather than merely having
+  an effect the user did not intend. That is one more way a scope edit can fail,
+  and the cost is worth naming: the user occasionally has to make two edits in
+  order (change the channel's default agent, then narrow its scope) where one
+  used to be accepted. What that buys is that the only way to stop a channel is
+  to say so — `scope = []`, or disabling it — never a narrowing that looked like
+  it worked.
+
+## Revision history
+
+- **2026-08-xx** — Accepted with a machine × agent matrix, `mcp_server` and
+  `skill` scoped, and `agent` / `channel` / `knowledge` declaring none.
+- **2026-09-09** — The machine axis is withdrawn with continuous multi-machine
+  sync ([Vault Export and Import](./vault-export-import.md)); only the agent
+  axis remains.
+- **2026-09-12** — `knowledge` reverses to scoping: with the layer reduced to
+  plain files, a collection is the only boundary it has (Decision item 6).
+- **2026-09-13** — `channel` and `provider` reverse to scoping (Decision items 7
+  and 8), and `memory` — which shipped with `supports_scope` but never got a row
+  — is entered in the table. `agent` is now the only kind that declares no
+  scope, and the ADR no longer justifies the two exclusions it used to.

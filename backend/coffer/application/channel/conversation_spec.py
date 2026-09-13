@@ -15,6 +15,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from coffer.domain.scope import Scope, agent_in_scope
+
 
 @dataclass(frozen=True)
 class ConversationSpec:
@@ -29,12 +31,23 @@ def resolve_conversation_spec(
     default_agent: str,
     default_agent_config: dict[str, Any] | None,
     preferred_agent: str | None,
+    agent_scope: Scope | None = None,
 ) -> ConversationSpec:
     """Combine the peer's sticky agent preference with the channel defaults.
+
+    ``agent_scope`` is the channel's per-agent scope (ADR per-agent-resource-scope) — the
+    agents it may drive. A sticky preference outside it is dropped in favour of
+    the channel default, so narrowing a channel's scope takes effect on the very
+    next conversation instead of waiting for whoever set that preference to
+    change it back. ``None`` (unscoped) keeps every preference, which is what
+    every channel did before scope existed.
 
     An empty resulting config is normalized to ``None`` (matching the
     historical pass-through of an absent ``default_agent_config``).
     """
-    agent_key = preferred_agent or default_agent
+    if preferred_agent and agent_in_scope(agent_scope, preferred_agent):
+        agent_key = preferred_agent
+    else:
+        agent_key = default_agent
     config: dict[str, Any] = dict(default_agent_config) if default_agent_config else {}
     return ConversationSpec(agent_key=agent_key, agent_config=config or None)

@@ -224,11 +224,52 @@ connection's key — a credential mismatch. The fix decouples *which agents a
 connection projects into* from *the wire its endpoint speaks*, and resolves keys
 per CONNECTION.
 
-- **F1 — `compatible_agents` on the connection.** A connection carries an explicit
-  `compatible_agents ⊆ {claude_code, codex}` (`null` ⇒ the wire default: both
-  agents for every credentialed wire, `[]` for ollama, which is internal-only).
-  The add/edit dialog pre-fills the checkboxes the same way — every box ticked —
-  and the user narrows it (or routes an openai gateway to Claude Code). JSON payload — no DB migration.
+- **F1 — Which agents a connection projects into — revised 2026-09-13.** The
+  connection carries a "which agents" set: `⊆ {claude_code, codex}`, pre-filled
+  from the wire (both agents for every credentialed wire, `[]` for ollama, which
+  is internal-only) and narrowed by the user — that is how an openai gateway is
+  routed to Claude Code.
+
+  It was FIRST built as `compatible_agents`, a field inside the connection's own
+  config. It is now the **framework's per-agent `scope`** on the resource row
+  ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)):
+  the `provider` kind declares `supports_scope`, and `compatible_agents` is gone
+  from the config, from `ProviderCreate` and from `ProviderPatch`. Two kinds
+  answering one question two ways is what the framework field exists to end, and
+  `provider` was the last kind still answering it its own way.
+
+  The two axes disagree on what UNSET means, and that is the whole risk of the
+  move: `compatible_agents = null` meant *the wire's default* (nothing at all for
+  ollama), while framework `scope = null` means *every agent*. So:
+
+  - **Migration 0071 materialises every existing row** — it computes the
+    effective set the old field resolved to and writes it out concretely into
+    `scope`, then strips the dead key from the config. Reach is bit-for-bit
+    unchanged; the downgrade puts the value back.
+  - **A newly created connection is pre-filled from the wire**, through the
+    framework's `Kind.default_scope` hook, so it behaves exactly as it did
+    before rather than starting out reaching every agent.
+  - **`enabled` is honoured at the projection seam, and only there.** A
+    disabled connection projects into nothing and resolves no key. But the
+    *configured* reach — which agents the connection is set up to cover — is
+    reported without that narrowing, because the two answer different questions
+    and one field cannot carry both: folding `enabled` in made a disabled
+    connection's reported agent list empty, so switching a connection off looked
+    like it had erased the list and switching it back on looked like restoring
+    data that was never lost. `enabled` travels on the same payload, so a client
+    that wants the intersection takes it — and the two clients that offer a
+    connection to act on *now* (the agent's connection picker and the chat model
+    picker) MUST. `is_active` is NOT redundant with `enabled` and both are kept:
+    `enabled` is the user's switch on the resource, while
+    `is_active` records that this is the connection currently *written into* the
+    agents it reaches (at most one per agent type) — a claim about a file on
+    disk, which is why the boot self-check exists to catch it disagreeing.
+  - **`scope = []` is dormant**, the same meaning every other scoped kind gives
+    it: the connection reaches no agent, so no agent resolves its key.
+
+  Re-targeting is a scope edit (`PUT /api/v1/resources/provider/{name}/scope`,
+  `coffer scope set provider:<name> --agents …`), on the surface every scoped
+  kind shares, rather than a field only this kind had.
 - **F2 — Projection writer chosen by AGENT type, not protocol.** A connection
   compatible with `claude_code` writes Claude's `settings.json` (anthropic shape);
   with `codex`, Codex's `config.toml`. `protocol` now drives only model
@@ -247,12 +288,12 @@ per CONNECTION.
   is reverted as a unit (the single `is_active` flag is all-or-nothing).
 - **F5 — The connections page drops the per-row "switch."** Activation is
   per-agent and lives on the Agent detail → Overview tab (which filters
-  connections by `compatible_agents`). The connections page is the library:
-  add / edit / delete + show each connection's compatible agents.
+  connections by the agents they reach). The connections page is the library:
+  add / edit / delete + show each connection's reach.
 
 **Supersedes:** E5 (protocol-match compatibility filter — now the explicit
-`compatible_agents` set); Decision A / FR-011's per-protocol single-active (now
-per-agent-type). **Still NOT in scope:** proxy / hot-switch / protocol conversion.
+explicit set, which since 2026-09-13 is the resource's framework scope);
+Decision A / FR-011's per-protocol single-active (now per-agent-type). **Still NOT in scope:** proxy / hot-switch / protocol conversion.
 
 ## Amendment 2026-06-23c — Picking a connection is a draft; test then confirm to switch
 
@@ -389,7 +430,8 @@ agent could use.
   carries the user's explicit switch). The reverse drift — Coffer's keys present
   while the registry says inactive — is reported, not silently removed.
   Revision 0051 also strips the retired agent types (`cursor` / `opencode` /
-  `openclaw` / `hermes`) from connections' `compatible_agents`: revision 0048
+  `openclaw` / `hermes`) from connections' then-`compatible_agents` field
+  (materialised into the framework scope by 0071): revision 0048
   deleted those agents' own rows but left their names inside connections, which
   `ProviderConfig` rejects — so on a real install the first validation after the
   upgrade raised and a working connection became unreadable.
@@ -440,8 +482,7 @@ what the connection is the right place to record.
   an id the endpoint stops serving is a stale menu entry, not a config error.
 - **Wire.** `ProviderOut.models: list[str]`; `ProviderCreate.models: list[str] |
   None` (`null` ⇒ empty); `ProviderPatch.models: list[str] | None`, a
-  whole-value replace exactly like `compatible_agents` (`null` leaves it alone,
-  `[]` clears the restriction). No new route — create and patch carry it.
+  whole-value replace (`null` leaves it alone, `[]` clears the restriction). No new route — create and patch carry it.
 - **Audit.** No new event: the curated set is ordinary connection config, so a
   change to it rides the `resource_updated` event `ResourceService.update_config`
   already emits, whose `before`/`after` details carry the config verbatim (the
@@ -949,8 +990,10 @@ Resource `name` = the profile name (unique within kind; validated by
 
 > This table records the ORIGINAL shape. Amendment E1 removed `model` /
 > `fast_model` / `wire_api` and turned `wire_format` into a detected `protocol`;
-> the 2026-06-23 amendment added `compatible_agents`; the 2026-09-11 amendment
-> added the curated `models` set (empty = unrestricted). The current field list
+> the 2026-06-23 amendment added `compatible_agents`, which the 2026-09-13
+> amendment replaced with the resource's framework per-agent `scope` (migration
+> 0071); the 2026-09-11 amendment added the curated `models` set (empty =
+> unrestricted). The current field list
 > is [data-model.md](./data-model.md).
 
 - `audit_redactor`: config holds NO secret (only `credential_ref`); audit shows
@@ -1091,7 +1134,11 @@ Full spec in [contracts/api.openapi.yaml](./contracts/api.openapi.yaml).
 - `POST /api/v1/providers` → create (see credential-source rules below)
 - `GET  /api/v1/providers/{name}` → one profile
 - `PATCH /api/v1/providers/{name}` → update mutable fields (`base_url`,
-  `compatible_agents`, `models`, `secret_value`); `wire_format`/`protocol` and
+  `models`, `secret_value`); which agents the connection reaches is a scope edit
+  (`PUT /api/v1/resources/provider/{name}/scope`), not a patch field, and
+  `ProviderOut.compatible_agents` reports the CONFIGURED reach read-only (scope,
+  not narrowed by `enabled` — which rides the same payload);
+  `wire_format`/`protocol` and
   `credential_ref` are immutable; `secret_value` rotates the stored secret;
   `models` is a whole-value replace (`[]` clears the curated set)
 - `POST /api/v1/providers/{name}/rename` (`{new_name}`) → rename; moves the
@@ -1358,14 +1405,23 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
   NO per-row "Switch" action — activation is per-agent on the Agent Overview tab
   (TypeScript acceptance test).
 
-### Scenario: route an openai-compatible connection to Claude Code via compatible_agents
+### Scenario: route an openai-compatible connection to Claude Code with its scope
 
 - **Given** a Claude Code agent is registered and an `openai`-wire connection is
-  created with `compatible_agents = ["claude_code"]` (the agnes case),
+  created (the agnes case) and then scoped to `["claude_code"]`,
 - **When** the user activates that connection,
 - **Then** it projects into Claude Code's `settings.json` (anthropic shape) with
-  `apiKeyHelper = "coffer provider key --connection <name>"`, and
-  `GET /providers/{name}/key` returns exactly that connection's key.
+  `apiKeyHelper = "coffer provider key --connection <name>"`,
+  `GET /providers/{name}/key` returns exactly that connection's key, and the
+  reported effective agent set follows the scope.
+
+### Scenario: per-agent key routing follows the connection's scope
+
+- **Given** two activated connections told apart only by their scope — one
+  scoped to `claude_code`, one to `codex`,
+- **When** each agent's key is resolved,
+- **Then** each resolves its own connection's key; disabling a connection, or
+  scoping it to no agent, makes it resolve none.
 
 ### Scenario: list a provider's models
 
@@ -1667,8 +1723,8 @@ connection's existing curated selection is left exactly as it was.
   model names Coffer writes down.
 - **FR-026**: `ProviderCreate.models` (`null` ⇒ empty) and `ProviderPatch.models`
   MUST carry the set; `ProviderOut.models` MUST return it. A `PATCH` MUST replace
-  the whole value like `compatible_agents` — `null` leaves it unchanged, `[]`
-  clears the restriction — and MUST NOT require a route of its own. A change MUST
+  the whole value — `null` leaves it unchanged, `[]` clears the restriction —
+  and MUST NOT require a route of its own. A change MUST
   ride the `resource_updated` audit event provider updates already emit.
 
 **Rename**

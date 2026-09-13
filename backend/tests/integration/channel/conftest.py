@@ -719,6 +719,7 @@ class ChannelEnv:
         default_agent_config: dict[str, Any] | None = None,
         require_mention: bool = True,
         ignore_other_mentions: bool = False,
+        agent_scope: list[str] | None = None,
     ) -> FakeChannelAdapter:
         adapter = adapter or FakeChannelAdapter()
         self.processor.bind(
@@ -731,6 +732,7 @@ class ChannelEnv:
                 adapter=adapter,
                 require_mention=require_mention,
                 ignore_other_mentions=ignore_other_mentions,
+                agent_scope=agent_scope,
             )
         )
         return adapter

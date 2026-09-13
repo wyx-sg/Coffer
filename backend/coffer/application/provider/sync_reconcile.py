@@ -8,8 +8,8 @@ machine A converged B's REGISTRY while B's agents kept running on stale
 config. This hook re-derives the desired projection from the converged rows
 after every import and applies it idempotently: for each agent type with a
 registered (thus installed — the agent import gate guarantees it) agent, the
-active compatible connection is projected; a type with no active connection
-is de-projected (a no-op when Coffer never touched that config).
+active connection whose scope reaches it is projected; a type with no active
+connection is de-projected (a no-op when Coffer never touched that config).
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from coffer.application.provider.projector import ProviderProjector
+from coffer.application.provider.targets import projection_targets
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import ProviderConfig
@@ -69,8 +70,9 @@ class ProviderProjectionReconcile:
                 continue
             if not cfg.is_active:
                 continue
-            for value in cfg.resolved_compatible_agents():
-                agent_type = AgentType(value)
+            # The agents this connection reaches: its framework scope, minus a
+            # disabled or keyless connection, which reaches none (ADR per-agent-resource-scope).
+            for agent_type in projection_targets(row, cfg):
                 held = active.setdefault(agent_type, (row.name, cfg))
                 if held[0] != row.name:
                     # An import can transiently merge two activations;
