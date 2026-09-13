@@ -4,9 +4,9 @@
 // navigate to the skill detail page on click, search covers name + description,
 // a status filter narrows by reach, each row carries the three-state
 // ScopeControl and a Delete icon+text action (the delete opens a styled
-// confirmation dialog — no window.confirm). Multi-select adds a bulk
-// Verify + bulk Delete bar — Verify is a library-wide maintenance action, so it
-// lives only there. The per-row + bulk action UI lives in SkillsTableActions.tsx.
+// confirmation dialog — no window.confirm). Multi-select adds a bulk bar
+// carrying that same three-state reach control over the whole selection, plus
+// Delete. The per-row + bulk action UI lives in SkillsTableActions.tsx.
 //
 // The name cell also carries the copy_fallback "Copied" chip (FR-012): when a
 // delivery had to fall back to a copy, the UI must say so, and this list is the

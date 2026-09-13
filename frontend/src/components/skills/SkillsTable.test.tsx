@@ -5,8 +5,10 @@
 // reach: Disabled / Every agent / Selected agents — the same control the detail
 // page mounts) + a Delete action (which opens a styled confirmation dialog — no
 // window.confirm), a status filter narrows the rows by that same reach, and a
-// checkbox column enables bulk Verify / Delete. Verify is library-wide
-// maintenance, so it lives on the bulk bar only — never per row.
+// checkbox column enables the bulk bar: that same three-state reach control
+// applied to the whole selection, plus Delete. There is no Verify anywhere any
+// more — the drift report kept its CLI and REST surfaces, but the button was
+// never used.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
@@ -22,12 +24,8 @@ vi.mock("react-router-dom", async (importOriginal) => {
   return { ...actual, useNavigate: () => navigateMock };
 });
 
-// SkillsTable's bulk actions mount SkillVerifyDialog, which calls
-// useVerifySkills() unconditionally — stub it alongside the row hooks.
 vi.mock("@/lib/hooks/useSkills", () => ({
   useRemoveSkill: vi.fn(),
-  useVerifySkills: vi.fn(),
-  useRepairSkillDrift: vi.fn(),
 }));
 
 // The status cell is ScopeControl, so the row now reaches the scope/agent/
@@ -46,13 +44,10 @@ vi.mock("@/lib/hooks/useResourceMutations", () => ({
   useDisableResource: vi.fn(),
 }));
 
-const { useRemoveSkill, useVerifySkills, useRepairSkillDrift } =
-  await import("@/lib/hooks/useSkills");
+const { useRemoveSkill } = await import("@/lib/hooks/useSkills");
 const { useResourceScope } = await import("@/lib/hooks/useScope");
 const { useEnableResource, useDisableResource } = await import("@/lib/hooks/useResourceMutations");
 const useRemoveSkillMock = vi.mocked(useRemoveSkill);
-const useVerifySkillsMock = vi.mocked(useVerifySkills);
-const useRepairSkillDriftMock = vi.mocked(useRepairSkillDrift);
 
 const enableMutate = vi.fn();
 const disableMutate = vi.fn();
@@ -70,23 +65,6 @@ function stubHooks(removeMutate = vi.fn()) {
     mutate: disableMutate,
     isPending: false,
   } as unknown as ReturnType<typeof useDisableResource>);
-  useVerifySkillsMock.mockReturnValue({
-    mutate: vi.fn(),
-    reset: vi.fn(),
-    data: { entries: [] },
-    isPending: false,
-    isError: false,
-    error: null,
-  } as unknown as ReturnType<typeof useVerifySkills>);
-  useRepairSkillDriftMock.mockReturnValue({
-    mutate: vi.fn(),
-    reset: vi.fn(),
-    data: undefined,
-    isPending: false,
-    isError: false,
-    isSuccess: false,
-    error: null,
-  } as unknown as ReturnType<typeof useRepairSkillDrift>);
   return removeMutate;
 }
 
@@ -189,15 +167,32 @@ describe("SkillsTable", () => {
     expect(screen.getAllByRole("checkbox").length).toBeGreaterThanOrEqual(2);
   });
 
-  test("no row offers Verify; the bulk bar still does", () => {
+  test("Verify is gone from the row AND from the bulk bar", () => {
     stubHooks();
     render(<SkillsTable skills={SAMPLE} />, { wrapper: wrap(null) });
     expect(within(rowFor("hello-skill")).queryByRole("button", { name: /verify/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /verify/i })).toBeNull();
 
-    // Selecting rows reveals the bulk bar, which keeps the library-wide Verify.
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
-    expect(screen.getByRole("button", { name: /verify/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /verify/i })).toBeNull();
+  });
+
+  test("the bulk bar carries the same three-way reach control the rows do", () => {
+    stubHooks();
+    render(<SkillsTable skills={SAMPLE} />, { wrapper: wrap(null) });
+    expect(screen.queryByTestId("bulk-reach-control")).toBeNull();
+
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    const bar = within(screen.getByTestId("bulk-reach-control"));
+    // No segment claims to be live: a mixed selection has no single reach.
+    expect(bar.getByRole("button", { name: /^disabled$/i })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(bar.getByRole("button", { name: /every agent/i })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(bar.getByRole("button", { name: /selected agents/i })).toBeInTheDocument();
   });
 
   test("the status cell is the three-state scope control, not an on/off switch", () => {

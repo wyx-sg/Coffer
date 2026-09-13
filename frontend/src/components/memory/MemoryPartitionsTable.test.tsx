@@ -5,7 +5,7 @@
 // (spec memory FR-062/FR-014). ScopeControl's own hooks are mocked, mirroring
 // `kinds/mcp/McpServersTable.test.tsx` — this suite only exercises the table.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import type { PropsWithChildren } from "react";
@@ -63,5 +63,17 @@ describe("MemoryPartitionsTable", () => {
     // The scoped partition shows its selected-agents segment as active.
     const coffeeRow = within(screen.getByText("coffer").closest("tr") as HTMLElement);
     expect(coffeeRow.getByText(/selected agents/i)).toBeInTheDocument();
+  });
+
+  test("selecting rows reveals the same reach control over the whole selection", () => {
+    render(<MemoryPartitionsTable rows={ROWS} />, { wrapper: wrap(null) });
+    expect(screen.queryByTestId("bulk-reach-control")).toBeNull();
+
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    const bar = within(screen.getByTestId("bulk-reach-control"));
+    expect(bar.getByRole("button", { name: /every agent/i })).toBeInTheDocument();
+    // No bulk delete: a partition is aggregated from the agents' own memories,
+    // never user-created, so there is nothing here to remove.
+    expect(screen.queryByRole("button", { name: /^delete$/i })).toBeNull();
   });
 });

@@ -1,13 +1,14 @@
 // frontend/src/kinds/channel/ChannelsTable.test.tsx
 //
 // The channels list (spec channels, FR-041). Each row carries the platform type,
-// default agent, a live runtime-health badge (Running/Stopped), enabled state,
-// and a paired-owner cell — all fed by the per-row /channels/{name}/status
-// query, which we stub here. The health badge mirrors the MCP-server surface's
+// default agent, a live runtime-health badge (Running/Stopped), the three-way
+// reach control, a paired-owner cell and a delete action — the health and
+// paired cells fed by the per-row /channels/{name}/status query, which we stub
+// here. The health badge mirrors the MCP-server surface's
 // ServerHealthCell, so this test asserts it reflects the adapter `running`
 // state.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import type { PropsWithChildren } from "react";
@@ -18,6 +19,23 @@ import type { ResourceOut } from "@/lib/components/kindRegistry";
 
 vi.mock("@/lib/hooks/useChannels", () => ({
   useChannelStatus: vi.fn(),
+  CHANNEL_KIND: "channel",
+}));
+
+// The state column is now ScopeControl, so every row reaches the scope /
+// agents / enable hooks. `scope` rides the list payload, so useResourceScope
+// stays switched off and returns nothing.
+vi.mock("@/lib/hooks/useScope", () => ({
+  useResourceScope: vi.fn(() => ({ data: undefined })),
+  useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+}));
+vi.mock("@/lib/hooks/useAgents", () => ({
+  useAgents: vi.fn(() => ({ data: [{ name: "cc" }] })),
+}));
+vi.mock("@/lib/hooks/useResourceMutations", () => ({
+  useDeleteResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useEnableResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useDisableResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 
 const { useChannelStatus } = await import("@/lib/hooks/useChannels");
@@ -101,6 +119,41 @@ describe("ChannelsTable", () => {
     });
     render(<ChannelsTable items={[channel("tg")]} />, { wrapper: wrap(null) });
     expect(screen.getByText(/Alice/)).toBeInTheDocument();
+  });
+
+  test("the state column is the three-way reach control, not a static badge", () => {
+    stubStatuses({ tg: status("tg") });
+    render(<ChannelsTable items={[channel("tg")]} />, { wrapper: wrap(null) });
+
+    const row = within(screen.getByText("tg").closest("tr") as HTMLElement);
+    expect(row.getByTestId("scope-control")).toBeInTheDocument();
+    expect(row.getByRole("button", { name: /every agent/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  test("every row offers a labelled delete, behind a confirmation", () => {
+    stubStatuses({ tg: status("tg") });
+    render(<ChannelsTable items={[channel("tg")]} />, { wrapper: wrap(null) });
+
+    const row = within(screen.getByText("tg").closest("tr") as HTMLElement);
+    // Labelled, not a bare icon — the same affordance the other tables show.
+    const del = row.getByRole("button", { name: /delete channel: tg/i });
+    expect(del).toHaveTextContent(/delete/i);
+
+    fireEvent.click(del);
+    expect(screen.getByRole("dialog")).toHaveTextContent(/delete channel/i);
+  });
+
+  test("selecting rows reveals the shared reach control and a bulk delete", () => {
+    stubStatuses({ tg: status("tg"), st: status("st") });
+    render(<ChannelsTable items={[channel("tg"), channel("st")]} />, { wrapper: wrap(null) });
+    expect(screen.queryByTestId("bulk-reach-control")).toBeNull();
+
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    expect(screen.getByTestId("bulk-reach-control")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^delete$/i })).toBeInTheDocument();
   });
 
   test("falls back to a placeholder health cell before the status loads", () => {

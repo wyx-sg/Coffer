@@ -1,84 +1,29 @@
 // frontend/src/lib/hooks/useScope.ts
 //
-// Generic per-agent activation scope (ADR per-agent-resource-scope): any resource kind that opts in
-// (today `mcp_server` and `skill`) exposes GET/PUT
-// /resources/{kind}/{name}/scope via the framework-level resource_routes.py —
-// not a per-kind endpoint. Hand-written fetch, mirroring useSync.ts (the
-// generated client doesn't cover the /scope sub-routes yet).
+// TanStack Query bindings over `lib/api/scope.ts` for the generic per-agent
+// activation scope (ADR per-agent-resource-scope). The requests themselves live
+// in the api module, because the bulk reach bar needs them without a hook.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
-import { getCofferBaseUrl, getCofferToken } from "@/lib/auth";
-import { ApiError, translateApiError } from "@/lib/api/errors";
+import { translateApiError } from "@/lib/api/errors";
+import { scopeApi, type ResourceScope, type Scope } from "@/lib/api/scope";
 import { useToast } from "@/components/ui/toast";
-import type { components } from "@/lib/api/types";
 
-/**
- * A resource's activation scope: the list of agent names it is active for.
- * `null` (absent from this type — see `ResourceScope.scope`) means every
- * agent; `[]` means no agent, i.e. dormant.
- */
-export type Scope = string[];
-
-/**
- * GET .../scope response: the current scope (`null` = unscoped, active for
- * every agent) plus whether this kind supports scope at all
- * (`supports_scope: false` for `agent`, `channel`, `knowledge_base` and
- * `memory`, which reject a non-null value at validation).
- *
- * Field names here MUST match `ResourceScopeOut` in
- * `backend/coffer/surfaces/http/schemas.py` — these sub-routes are hand-written
- * (the generated client does not cover them), so nothing checks this at compile
- * time. `resourceScopeContract` below is the regression guard.
- */
-export interface ResourceScope {
-  scope: Scope | null;
-  supports_scope: boolean;
-}
-
-type ResourceOut = components["schemas"]["ResourceOut"];
+export type { ResourceScope, Scope };
 
 export function resourceScopeKey(kind: string, name: string) {
   return ["scope", kind, name] as const;
 }
 
-function headers(extra: HeadersInit = {}): HeadersInit {
-  return { "X-Coffer-Token": getCofferToken() ?? "", "X-Coffer-Actor": "ui", ...extra };
-}
-
-async function checkOk(r: Response): Promise<Response> {
-  if (!r.ok) {
-    const data = (await r.json().catch(() => null)) as {
-      error?: { code?: string; message?: string; details?: unknown };
-    } | null;
-    throw new ApiError(
-      data?.error?.code ?? "INTERNAL_ERROR",
-      data?.error?.message ?? `request failed: ${r.status}`,
-      data?.error?.details,
-    );
-  }
-  return r;
-}
-
-async function getJson<T>(path: string): Promise<T> {
-  const r = await fetch(`${getCofferBaseUrl()}${path}`, { headers: headers() });
-  await checkOk(r);
-  return (await r.json()) as T;
-}
-
-async function putJson<T>(path: string, body: unknown): Promise<T> {
-  const r = await fetch(`${getCofferBaseUrl()}${path}`, {
-    method: "PUT",
-    headers: { ...headers(), "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  await checkOk(r);
-  return (await r.json()) as T;
-}
-
-function scopePath(kind: string, name: string): string {
-  return `/resources/${encodeURIComponent(kind)}/${encodeURIComponent(name)}/scope`;
-}
+/** Kinds read through their OWN query key rather than the generic resource
+ *  list; a scope write has to refresh those too. Mirrors the identically-named
+ *  map in useResourceMutations.ts — keep the two in step. */
+const KIND_QUERY_KEY: Record<string, string> = {
+  skill: "skills",
+  provider: "providers",
+  agent: "agents",
+};
 
 /**
  * Current activation scope for one resource, plus whether its kind supports
@@ -91,7 +36,7 @@ function scopePath(kind: string, name: string): string {
 export function useResourceScope(kind: string, name: string, enabled = true) {
   return useQuery({
     queryKey: resourceScopeKey(kind, name),
-    queryFn: () => getJson<ResourceScope>(scopePath(kind, name)),
+    queryFn: () => scopeApi.get(kind, name),
     enabled: enabled && name.length > 0,
   });
 }
@@ -107,16 +52,17 @@ export function useUpdateResourceScope(kind: string, name: string) {
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: (scope: Scope | null) => putJson<ResourceOut>(scopePath(kind, name), { scope }),
+    mutationFn: (scope: Scope | null) => scopeApi.put(kind, name, scope),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: resourceScopeKey(kind, name) });
       void qc.invalidateQueries({ queryKey: ["agents"] });
       // The list payloads carry `scope`, and the list tables now render the
       // control from that field rather than from this query — so a write here
       // has to refresh them too, or a row would keep showing its pre-write
-      // reach. ["skills"] mirrors useResourceMutations' kind-own-key rule.
+      // reach. The kind-own keys mirror useResourceMutations' rule.
       void qc.invalidateQueries({ queryKey: ["resources"] });
-      if (kind === "skill") void qc.invalidateQueries({ queryKey: ["skills"] });
+      const own = KIND_QUERY_KEY[kind];
+      if (own) void qc.invalidateQueries({ queryKey: [own] });
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });

@@ -3,10 +3,10 @@
 // The LLM-connection library rendered via the shared DataTable (mirrors
 // SkillsTable / AgentTable), replacing the hand-rolled card list this surface
 // used to be: search over name + endpoint + description, filters on vendor and
-// enabled state, a per-row enable Switch, bulk enable/disable/delete,
-// and pagination — all from DataTable. A row click opens the connection's detail
-// page, where the endpoint is edited and its model set curated; the row itself
-// carries only what a table row should.
+// reach, the per-row three-state reach control, a bulk bar carrying that same
+// control plus delete, and pagination — all from DataTable. A row click opens
+// the connection's detail page, where the endpoint is edited and its model set
+// curated; the row itself carries only what a table row should.
 //
 // Which connection Coffer's own internal engine happens to run on is NOT one of
 // those things, so no internal-engine badge here: this page manages providers,
@@ -23,16 +23,21 @@ import {
   ConnectionRowActions,
   ConnectionStatusCell,
   ConnectionsBulkActions,
+  PROVIDER_KIND,
 } from "@/components/settings/ConnectionsTableActions";
 import { AGENT_LABEL_KEY, PRESETS, vendorOf } from "@/components/settings/connectionPresets";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { Provider } from "@/lib/api/providers";
 import { useDeleteProvider } from "@/lib/hooks/useProviders";
+import { useKindReach } from "@/lib/hooks/useResources";
 
 export function ConnectionsTable({ providers }: { providers: Provider[] }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const del = useDeleteProvider();
+  // `scope` is a generic Resource field, absent from the /providers payload, so
+  // it comes from ONE extra list request rather than one GET per row.
+  const reach = useKindReach(PROVIDER_KIND);
   // Styled confirmation dialog (no native window.confirm). `null` = closed.
   const [deleteTarget, setDeleteTarget] = useState<Provider | null>(null);
 
@@ -96,8 +101,8 @@ export function ConnectionsTable({ providers }: { providers: Provider[] }) {
     {
       key: "status",
       header: t("resources.cols.status"),
-      className: "text-right",
-      cell: (p) => <ConnectionStatusCell provider={p} />,
+      className: "whitespace-nowrap text-right",
+      cell: (p) => <ConnectionStatusCell provider={p} reach={reach.get(p.name)} />,
     },
     {
       key: "actions",
@@ -124,13 +129,17 @@ export function ConnectionsTable({ providers }: { providers: Provider[] }) {
       options: PRESETS.map((p) => ({ value: p.id, label: vendorLabel(p.id, p.label) })),
     },
     {
+      // Tracks the status column: now that it shows reach rather than on/off, a
+      // bare "enabled" would no longer name a state the user can see.
       key: "status",
       label: t("resources.cols.status"),
       allLabel: t("resources.status.all"),
-      accessor: (p) => (p.enabled ? "enabled" : "disabled"),
+      accessor: (p) =>
+        !p.enabled ? "disabled" : (reach.get(p.name)?.scope ?? null) === null ? "every" : "selected",
       options: [
-        { value: "enabled", label: t("common.enabled") },
         { value: "disabled", label: t("common.disabled") },
+        { value: "every", label: t("scope.everyAgent") },
+        { value: "selected", label: t("scope.selectedAgents") },
       ],
     },
   ];

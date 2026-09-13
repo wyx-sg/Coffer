@@ -175,12 +175,14 @@ describe("ScopeControl", () => {
   });
 
   test("a kind that declares no scope still gets a working enable/disable", () => {
+    // Every kind Coffer ships today declares scope; this is the fallback for
+    // one that does not, so the control never has to be forked for it.
     seed({ scope: null, supports_scope: false });
-    render(<ScopeControl kind="channel" name="tg" enabled />);
+    render(<ScopeControl kind="unscoped_kind" name="tg" enabled />);
     expect(screen.queryByRole("button", { name: /every agent/i })).not.toBeInTheDocument();
     expect(segment(/^enabled$/i)).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(segment(/^disabled$/i));
-    expect(disableMutate).toHaveBeenCalledWith({ kind: "channel", name: "tg" });
+    expect(disableMutate).toHaveBeenCalledWith({ kind: "unscoped_kind", name: "tg" });
     expect(mutate).not.toHaveBeenCalled();
   });
 

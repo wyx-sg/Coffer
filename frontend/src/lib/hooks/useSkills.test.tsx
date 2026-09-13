@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
-import { useSkills, useImportSkill, useRemoveSkill, useVerifySkills } from "./useSkills";
+import { useSkills, useImportSkill, useRemoveSkill } from "./useSkills";
 
 function wrapper() {
   const qc = new QueryClient({
@@ -104,22 +104,5 @@ describe("useRemoveSkill", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toMatch(/\/skills\/hello$/);
     expect((init as RequestInit).method).toBe("DELETE");
-  });
-});
-
-describe("useVerifySkills", () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  test("POSTs /skills/verify and returns the drift report", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { entries: [] }));
-    vi.stubGlobal("fetch", fetchMock);
-    const { result } = renderHook(() => useVerifySkills(), {
-      wrapper: wrapper(),
-    });
-    const report = await result.current.mutateAsync();
-    expect(report.entries).toEqual([]);
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/skills\/verify$/);
-    expect((init as RequestInit).method).toBe("POST");
   });
 });

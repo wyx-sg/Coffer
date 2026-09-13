@@ -6,18 +6,11 @@
 // under the file-size cap.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Power, PowerOff, Trash2 } from "lucide-react";
 
+import { BulkReachActions } from "@/components/reach/BulkReachActions";
 import { ScopeControl } from "@/components/ScopeControl";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { BulkDeleteButton } from "@/components/table/BulkDeleteButton";
+import { RowDeleteButton } from "@/components/table/RowDeleteButton";
 import type { ResourceOut } from "@/lib/components/kindRegistry";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
@@ -25,9 +18,6 @@ import { resourcesApi } from "@/lib/api/resources";
 import { useMcpServerRunner, useMcpServerStatus } from "@/lib/hooks/useMcpServerStatus";
 import { HealthBadge } from "./HealthBadge";
 import { McpServerDeleteDialog } from "./McpServerDeleteDialog";
-
-const DESTRUCTIVE_CLS =
-  "text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive";
 
 /** Persisted health (last /test probe or most recent invocation), else "—".
  * A stdio server whose launcher is missing on THIS machine says so, with a
@@ -76,7 +66,7 @@ export function ServerStatusCell({ resource }: { resource: ResourceOut }) {
   );
 }
 
-/** Delete action: icon+text button that opens a styled confirm dialog. */
+/** Delete action: the shared row delete button + the server's styled confirm. */
 export function ServerDeleteCell({ resource }: { resource: ResourceOut }) {
   const { t } = useTranslation();
   const del = useDeleteResource();
@@ -84,16 +74,10 @@ export function ServerDeleteCell({ resource }: { resource: ResourceOut }) {
 
   return (
     <div onClick={(e) => e.stopPropagation()}>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="text-muted-foreground hover:text-destructive"
-        aria-label={t("mcp.table.deleteAria", { name: resource.name })}
-        onClick={() => setOpen(true)}
-      >
-        <Trash2 className="mr-1.5 size-3.5" />
-        {t("common.delete")}
-      </Button>
+      <RowDeleteButton
+        ariaLabel={t("mcp.table.deleteAria", { name: resource.name })}
+        onDelete={() => setOpen(true)}
+      />
       <McpServerDeleteDialog
         name={resource.name}
         open={open}
@@ -115,7 +99,11 @@ export function ServerDeleteCell({ resource }: { resource: ResourceOut }) {
   );
 }
 
-/** Bulk enable/disable/delete over the selected rows; clears selection on done. */
+/** Bulk reach + delete over the selected rows; clears selection on done.
+ *
+ *  The reach control is the SAME three-way choice each row carries, applied to
+ *  the whole selection — an Enable/Disable pair here could not say "expose
+ *  these to exactly these agents", which is a state the rows can be in. */
 export function McpServersBulkActions({
   rows,
   onDone,
@@ -124,73 +112,25 @@ export function McpServersBulkActions({
   onDone: () => void;
 }) {
   const { t } = useTranslation();
-  const [confirmOpen, setConfirmOpen] = useState(false);
   // allSettled fan-out: one failed row never aborts the rest, and a single
   // summary toast reports "N done / M failed". A single ["resources"]
   // invalidation burst refreshes the table after the batch settles.
   const bulk = useBulkMutate({ invalidate: [["resources"]] });
 
-  const runAll = async (op: (kind: string, name: string) => Promise<unknown>) => {
-    await bulk.run(rows, (r) => op(r.kind, r.name));
-    onDone();
-  };
-
   return (
     <>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={bulk.isPending}
-        onClick={() => void runAll(resourcesApi.enable)}
-      >
-        <Power className="mr-1.5 size-3.5" />
-        {t("common.bulk.enable")}
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={bulk.isPending}
-        onClick={() => void runAll(resourcesApi.disable)}
-      >
-        <PowerOff className="mr-1.5 size-3.5" />
-        {t("common.bulk.disable")}
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        className={DESTRUCTIVE_CLS}
-        disabled={bulk.isPending}
-        onClick={() => setConfirmOpen(true)}
-      >
-        <Trash2 className="mr-1.5 size-3.5" />
-        {t("common.bulk.delete")}
-      </Button>
-
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("common.delete")}</DialogTitle>
-            <DialogDescription>{t("mcp.server.deleteConfirmBody")}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setConfirmOpen(false)}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={bulk.isPending}
-              onClick={async () => {
-                // Close + clear regardless of partial failure; the summary toast
-                // reports the outcome, so the bar never stays stuck silently.
-                await runAll(resourcesApi.remove);
-                setConfirmOpen(false);
-              }}
-            >
-              {bulk.isPending ? t("common.deleting") : t("common.delete")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <BulkReachActions rows={rows} onDone={onDone} />
+      <BulkDeleteButton
+        title={t("common.delete")}
+        description={t("mcp.server.deleteConfirmBody")}
+        pending={bulk.isPending}
+        onConfirm={async () => {
+          // Clear regardless of partial failure; the summary toast reports the
+          // outcome, so the bar never stays stuck silently.
+          await bulk.run(rows, (r) => resourcesApi.remove(r.kind, r.name));
+          onDone();
+        }}
+      />
     </>
   );
 }

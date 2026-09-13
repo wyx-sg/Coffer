@@ -2,29 +2,21 @@
 // Row + bulk actions for SkillsTable, kept out of SkillsTable.tsx so that file
 // stays within its size budget. Per row: the same three-state ScopeControl the
 // detail page carries (the skill's own reach: Disabled / Every agent / Selected
-// agents) + Delete (styled confirm). Bulk: Verify the selected skills — the
-// library-wide drift check — + Delete them all (styled confirm → parallel
-// removes).
-import { useState } from "react";
+// agents) + Delete (styled confirm). Bulk: that same reach choice applied to
+// the whole selection + Delete them all.
+//
+// There is no Verify/Repair here any more. The drift report still exists on the
+// CLI and REST — it is a real maintenance capability — but the button was never
+// used: the live audit log holds zero `skill_drift_remediated` events across
+// its whole history, so the surface was cost without a reader.
 import { useTranslation } from "react-i18next";
-import { BadgeCheck, Trash2 } from "lucide-react";
 
+import { BulkReachActions } from "@/components/reach/BulkReachActions";
 import { ScopeControl } from "@/components/ScopeControl";
-import { SkillVerifyDialog } from "@/components/skills/SkillVerifyDialog";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { BulkDeleteButton } from "@/components/table/BulkDeleteButton";
+import { RowDeleteButton } from "@/components/table/RowDeleteButton";
 import { skillsApi, type SkillOut } from "@/lib/api/skills";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
-
-const DESTRUCTIVE =
-  "text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive";
 
 /** Per-row reach control for the skill itself: enable/disable is only one of
  *  its three states, so the list shows the same control the detail page does
@@ -61,77 +53,38 @@ export function SkillRowActions({
 
   return (
     <div className="flex items-center justify-end gap-2">
-      <Button
-        size="sm"
-        variant="ghost"
-        className="text-muted-foreground hover:text-destructive"
-        aria-label={t("skills.deleteAria", { name: skill.name })}
+      <RowDeleteButton
+        ariaLabel={t("skills.deleteAria", { name: skill.name })}
         disabled={deleteDisabled}
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete();
-        }}
-      >
-        <Trash2 className="mr-1.5 size-3.5" /> {t("common.delete")}
-      </Button>
+        onDelete={onDelete}
+      />
     </div>
   );
 }
 
-/** Selection-bar actions: Verify the selected skills + Delete them all. */
+/** Selection-bar actions: the selection's reach + Delete them all. */
 export function SkillsBulkActions({ skills, onDone }: { skills: SkillOut[]; onDone: () => void }) {
   const { t } = useTranslation();
   // allSettled fan-out: one failed remove never aborts the rest; the summary
   // toast reports the outcome and we always close + clear (never stuck).
   const bulk = useBulkMutate({ invalidate: [["skills"]] });
-  const [verifyOpen, setVerifyOpen] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-
-  const deleteSelected = async () => {
-    await bulk.run(skills, (s) => skillsApi.remove(s.name));
-    setConfirmOpen(false);
-    onDone();
-  };
 
   return (
     <>
-      <Button size="sm" variant="outline" onClick={() => setVerifyOpen(true)}>
-        <BadgeCheck className="mr-1.5 size-3.5" /> {t("skills.verify")}
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        className={DESTRUCTIVE}
-        disabled={bulk.isPending}
-        onClick={() => setConfirmOpen(true)}
-      >
-        <Trash2 className="mr-1.5 size-3.5" /> {t("common.bulk.delete")}
-      </Button>
-
-      <SkillVerifyDialog
-        open={verifyOpen}
-        onOpenChange={setVerifyOpen}
-        skillNames={skills.map((s) => s.name)}
+      <BulkReachActions
+        rows={skills.map((s) => ({ kind: "skill", name: s.name }))}
+        invalidate={[["skills"]]}
+        onDone={onDone}
       />
-
-      <Dialog open={confirmOpen} onOpenChange={(o) => !o && setConfirmOpen(false)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {t("skills.removeConfirmTitle", { name: skills.map((s) => s.name).join(", ") })}
-            </DialogTitle>
-            <DialogDescription>{t("skills.removeConfirmBody")}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setConfirmOpen(false)}>
-              {t("common.cancel")}
-            </Button>
-            <Button variant="destructive" disabled={bulk.isPending} onClick={deleteSelected}>
-              {bulk.isPending ? t("common.deleting") : t("common.bulk.delete")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <BulkDeleteButton
+        title={t("skills.removeConfirmTitle", { name: skills.map((s) => s.name).join(", ") })}
+        description={t("skills.removeConfirmBody")}
+        pending={bulk.isPending}
+        onConfirm={async () => {
+          await bulk.run(skills, (s) => skillsApi.remove(s.name));
+          onDone();
+        }}
+      />
     </>
   );
 }

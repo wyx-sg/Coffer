@@ -160,6 +160,22 @@ describe("AgentOverviewTab", () => {
     expect(options).not.toContain("gpt");
   });
 
+  test("a connection the user switched off is not offered", () => {
+    // `compatible_agents` reports the CONFIGURED reach and is deliberately not
+    // narrowed by `enabled` (so a management surface can still show a disabled
+    // connection's agent list), which means this picker has to test the switch
+    // itself. It did not, so a connection the user had switched off stayed
+    // offerable here — and picking it would have projected a key from a
+    // connection the vault considers off.
+    useProvidersMock.mockReturnValue({
+      data: [makeConn({ name: "live" }), makeConn({ name: "switched-off", enabled: false })],
+    });
+    render(<AgentOverviewTab agent={agent} />);
+    const options = openSelectOptions(/provider/i);
+    expect(options).toContain("live");
+    expect(options).not.toContain("switched-off");
+  });
+
   acceptance(
     "provider-switching",
     "the agent's model picker offers a fixed list without free-form entry",

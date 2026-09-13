@@ -10,6 +10,10 @@
 // files, that edit is live on the very next read with nothing to reconcile
 // (spec knowledge FR-061).
 //
+// Reach (ScopeControl) lives in the header, as on every other scoped Resource's
+// detail page: which agents this collection is exposed to is a property of the
+// collection, not of the file open in the pane.
+//
 // The filter box narrows the tree by title/filename as you type, entirely
 // client-side. Server-side retrieval has its own surfaces — `coffer__grep` for
 // agents, `coffer knowledge grep` for the CLI — and duplicating it here would
@@ -20,10 +24,12 @@ import { useTranslation } from "react-i18next";
 
 import { FileActions } from "@/components/FileActions";
 import { KnowledgeUploadButton } from "@/components/knowledge/KnowledgeUploadButton";
+import { ScopeControl } from "@/components/ScopeControl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
+import { useResource } from "@/lib/hooks/useResources";
 import { KnowledgePreviewBody } from "./KnowledgePreviewBody";
 import { KnowledgeSearchPanel } from "./KnowledgeSearchPanel";
 import { KnowledgeTreeLevel } from "./KnowledgeTreeLevel";
@@ -39,6 +45,9 @@ export function KnowledgeDetailPage() {
 
   const file = useKnowledgeFile(selected);
   const tidy = useTidyCollection(collection);
+  // `enabled` is a generic Resource field, not on /knowledge/collections, so
+  // the reach control's required prop comes from the single-resource read.
+  const resource = useResource("knowledge", collection);
 
   // The folder an upload lands in "where the user is": the parent of the file
   // currently open, or the collection root when nothing is selected yet.
@@ -61,6 +70,13 @@ export function KnowledgeDetailPage() {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">{collection}</h1>
         <div className="flex flex-wrap items-center gap-2">
+          {/* Reach sits in the header, exactly as every other kind's detail
+              page carries it; passing no `scope` lets it fetch its own. */}
+          <ScopeControl
+            kind="knowledge"
+            name={collection}
+            enabled={resource.data?.enabled ?? true}
+          />
           <KnowledgeUploadButton collection={collection} directory={uploadDirectory} />
           <Button
             type="button"

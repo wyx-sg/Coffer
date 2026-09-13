@@ -1,9 +1,10 @@
 // pages/ModelProvidersPage.test.tsx
 //
 // The connection library is now a DataTable like every other list surface:
-// search + filters + selection + pagination, a per-row enable Switch, bulk
-// enable/disable/delete, and a row click that opens the connection's detail
-// page (where editing and the model curation live — no per-row pencil).
+// search + filters + selection + pagination, the per-row three-way reach
+// control, a bulk bar carrying that same control plus delete, and a row click
+// that opens the connection's detail page (where editing and the model
+// curation live — no per-row pencil).
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -34,10 +35,16 @@ vi.mock("@/lib/api/providers", async (orig) => {
   };
 });
 
-// The row Switch + the bulk enable/disable go through the kind-agnostic
-// resource endpoints; stub them so no request leaves the test.
+// The row reach control + the bulk bar go through the kind-agnostic resource
+// endpoints and the scope sub-route; stub both so no request leaves the test.
 vi.mock("@/lib/api/resources", () => ({
   resourcesApi: { enable: vi.fn(), disable: vi.fn(), remove: vi.fn() },
+}));
+vi.mock("@/lib/api/scope", () => ({
+  scopeApi: { get: vi.fn(), put: vi.fn() },
+}));
+vi.mock("@/lib/hooks/useAgents", () => ({
+  useAgents: vi.fn(() => ({ data: [{ name: "cc" }] })),
 }));
 
 // The dialog's introspection (detect / test / fetch) hits the network; stub the
@@ -56,8 +63,10 @@ vi.mock("@/lib/hooks/useModelIntrospection", () => ({
 
 const { providersApi } = await import("@/lib/api/providers");
 const { resourcesApi } = await import("@/lib/api/resources");
+const { scopeApi } = await import("@/lib/api/scope");
 const apiMock = providersApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 const resourceMock = resourcesApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
+const scopeMock = scopeApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
 const makeProvider = (overrides?: Partial<Provider>): Provider => ({
   name: "acme",
@@ -103,6 +112,8 @@ describe("ModelProvidersPage", () => {
     detectResult = "openai";
     resourceMock.enable.mockResolvedValue(undefined);
     resourceMock.disable.mockResolvedValue(undefined);
+    scopeMock.put.mockResolvedValue(undefined);
+    scopeMock.get.mockResolvedValue({ scope: null, supports_scope: true });
   });
 
   acceptance(
@@ -147,6 +158,8 @@ describe("ModelProvidersPage", () => {
     fireEvent.change(form.getByLabelText("Protocol"), { target: { value: "openai" } });
     fireEvent.change(form.getByLabelText("Base URL"), { target: { value: "https://gw/v1" } });
     fireEvent.change(form.getByLabelText("API key"), { target: { value: "sk-x" } });
+    // No agent checkboxes here: the dialog does not decide reach.
+    expect(form.queryAllByRole("checkbox")).toHaveLength(0);
     fireEvent.click(form.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(apiMock.create).toHaveBeenCalledTimes(1));
@@ -155,6 +168,11 @@ describe("ModelProvidersPage", () => {
       protocol: "openai",
       secret_value: "sk-x",
     });
+    // The form carries NO compatible-agents field: that key is gone from
+    // ProviderCreate (reach is the resource's per-agent scope, pre-filled from
+    // the wire server-side). Pydantic ignores unknown fields, so sending it
+    // would 200 and silently drop the user's choice — assert on the body.
+    expect(apiMock.create.mock.calls[0][0]).not.toHaveProperty("compatible_agents");
   });
 
   acceptance("provider-switching", "create an ollama connection without a credential", async () => {
@@ -252,7 +270,9 @@ describe("ModelProvidersPage", () => {
     expect(screen.queryByText("official")).not.toBeInTheDocument();
 
     selectFilter("Vendor", "All vendors");
-    selectFilter("Status", "Enabled");
+    // The status filter tracks the status COLUMN, which is reach now: an
+    // enabled connection with no scope reads as "Every agent".
+    selectFilter("Status", "Every agent");
     expect(screen.getByText("official")).toBeInTheDocument();
     expect(screen.queryByText("agnes")).not.toBeInTheDocument();
   });
@@ -272,7 +292,7 @@ describe("ModelProvidersPage", () => {
     expect(within(rowFor("official")).getByText("OpenAI")).toBeInTheDocument();
   });
 
-  test("the status switch toggles the connection without navigating", async () => {
+  test("the status cell is the three-way reach control, and it does not navigate", async () => {
     apiMock.list.mockResolvedValue({
       providers: [
         makeProvider({ name: "official", enabled: true }),
@@ -282,16 +302,24 @@ describe("ModelProvidersPage", () => {
     renderPage();
     await screen.findByText("official");
 
-    const on = within(rowFor("official")).getByRole("switch");
-    const off = within(rowFor("agnes")).getByRole("switch");
-    expect(on).toBeChecked();
-    expect(off).not.toBeChecked();
+    // A Switch could not say "offer this endpoint to exactly these agents".
+    expect(screen.queryByRole("switch")).toBeNull();
+    const on = within(rowFor("official"));
+    const off = within(rowFor("agnes"));
+    expect(on.getByRole("button", { name: /every agent/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(off.getByRole("button", { name: /^disabled$/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
 
-    fireEvent.click(on);
+    fireEvent.click(on.getByRole("button", { name: /^disabled$/i }));
     await waitFor(() => expect(resourceMock.disable).toHaveBeenCalledWith("provider", "official"));
-    fireEvent.click(off);
+    fireEvent.click(off.getByRole("button", { name: /every agent/i }));
     await waitFor(() => expect(resourceMock.enable).toHaveBeenCalledWith("provider", "agnes"));
-    // The switch must not fall through to the row's navigation.
+    // The control must not fall through to the row's navigation.
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
@@ -304,7 +332,7 @@ describe("ModelProvidersPage", () => {
     expect(navigateMock).toHaveBeenCalledWith("/model-providers/acme");
   });
 
-  test("bulk enable / disable fan out over the selection", async () => {
+  test("the bulk reach control fans the chosen state out over the selection", async () => {
     apiMock.list.mockResolvedValue({
       providers: [
         makeProvider({ name: "official", enabled: false }),
@@ -316,12 +344,18 @@ describe("ModelProvidersPage", () => {
 
     // The head checkbox selects the whole page.
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Enable" }));
+    const bar = within(screen.getByTestId("bulk-reach-control"));
+    // "Every agent" is enable + an unscoped write, per selected row.
+    fireEvent.click(bar.getByRole("button", { name: /every agent/i }));
     await waitFor(() => expect(resourceMock.enable).toHaveBeenCalledTimes(2));
     expect(resourceMock.enable.mock.calls.map((c) => c[1]).sort()).toEqual(["agnes", "official"]);
+    await waitFor(() => expect(scopeMock.put).toHaveBeenCalledTimes(2));
+    expect(scopeMock.put.mock.calls.every((c) => c[2] === null)).toBe(true);
 
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Disable" }));
+    fireEvent.click(
+      within(screen.getByTestId("bulk-reach-control")).getByRole("button", { name: /^disabled$/i }),
+    );
     await waitFor(() => expect(resourceMock.disable).toHaveBeenCalledTimes(2));
   });
 

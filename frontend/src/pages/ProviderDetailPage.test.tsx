@@ -76,15 +76,18 @@ vi.mock("@/lib/hooks/useModelIntrospection", () => ({
 const { probedFor } = vi.hoisted(() => ({ probedFor: [] as string[] }));
 
 // The header's ScopeControl reaches the daemon through hand-written hooks; stub
-// them so it renders its two-segment Disabled/Enabled fallback (`provider`
-// declares no per-agent scope).
-const { enableMutate, disableMutate } = vi.hoisted(() => ({
+// them. `provider` DOES declare per-agent scope (its reach replaced the old
+// `compatible_agents` config key), so the control renders the full three-segment
+// group — Disabled / Every agent / Selected agents — and it is the only place a
+// connection's reach is edited: the Edit dialog has no control of its own.
+const { enableMutate, disableMutate, updateScopeMutate } = vi.hoisted(() => ({
   enableMutate: vi.fn(),
   disableMutate: vi.fn(),
+  updateScopeMutate: vi.fn(),
 }));
 vi.mock("@/lib/hooks/useScope", () => ({
-  useResourceScope: () => ({ data: { scope: null, supports_scope: false } }),
-  useUpdateResourceScope: () => ({ mutate: vi.fn(), isPending: false }),
+  useResourceScope: () => ({ data: { scope: null, supports_scope: true } }),
+  useUpdateResourceScope: () => ({ mutate: updateScopeMutate, isPending: false }),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: () => ({ data: [] }) }));
 vi.mock("@/lib/hooks/useResourceMutations", () => ({
@@ -483,6 +486,26 @@ describe("ProviderDetailPage", () => {
     );
   });
 
+  test("the edit dialog patches no compatible_agents, and offers no picker for it", async () => {
+    // The key is gone from ProviderPatch — reach is the resource's scope now —
+    // and Pydantic ignores unknown fields, so sending it would 200 and discard
+    // the user's choice in silence. Assert on the BODY, not on the render.
+    apiMock.get.mockResolvedValue(makeProvider());
+    apiMock.update.mockResolvedValue(makeProvider());
+    renderPage();
+    await screen.findByRole("heading", { name: "acme" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const form = within(screen.getByRole("dialog"));
+    // No agent checkboxes in the dialog: the header's reach control owns that.
+    expect(form.queryAllByRole("checkbox")).toHaveLength(0);
+    fireEvent.change(form.getByLabelText("Base URL"), { target: { value: "https://gw/v2" } });
+    fireEvent.click(form.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
+    expect(apiMock.update.mock.calls[0][1]).not.toHaveProperty("compatible_agents");
+  });
+
   test("renaming from the edit dialog renames first, then patches under the new name", async () => {
     apiMock.get.mockResolvedValue(makeProvider());
     apiMock.rename.mockResolvedValue(makeProvider({ name: "acme-eu" }));
@@ -548,10 +571,10 @@ describe("ProviderDetailPage", () => {
     renderPage();
     await screen.findByRole("heading", { name: "acme" });
 
-    // `provider` declares no per-agent scope, so the control is the two-segment
-    // Disabled/Enabled group — and it is the ONLY thing stating that state.
+    // An enabled connection with an unscoped reach reads as "Every agent" — and
+    // this control is the ONLY thing stating that state.
     const control = within(screen.getByTestId("scope-control"));
-    expect(control.getByRole("button", { name: "Enabled" })).toHaveAttribute(
+    expect(control.getByRole("button", { name: "Every agent" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -566,7 +589,7 @@ describe("ProviderDetailPage", () => {
     await screen.findByRole("heading", { name: "acme" });
 
     const control = within(screen.getByTestId("scope-control"));
-    fireEvent.click(control.getByRole("button", { name: "Enabled" }));
+    fireEvent.click(control.getByRole("button", { name: "Every agent" }));
     expect(enableMutate).toHaveBeenCalledWith({ kind: "provider", name: "acme" });
   });
 

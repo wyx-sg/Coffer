@@ -5,8 +5,10 @@
 // — the kind-agnostic useEnableResource / useDisableResource / useDeleteResource
 // mutations (useResourceMutations.ts) invalidate it for free. The
 // channel-specific operations (status, pairing) live under a "channels" key.
-// Channels declare no scope (ADR per-agent-resource-scope) — a non-null value is rejected at
-// validation — so there is no scope binding here.
+// Channels DO declare scope (ADR per-agent-resource-scope): which agents answer
+// on a transport is per-agent, so the list row and the detail header both mount
+// the shared reach control. The scope binding itself is generic
+// (useScope.ts) — there is nothing channel-specific about it, so none here.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 

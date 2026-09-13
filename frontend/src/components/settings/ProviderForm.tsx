@@ -4,10 +4,18 @@
 // no model field. On create the user picks a PROVIDER preset (OpenAI, Anthropic,
 // Google Gemini, Ollama, …) which fills the endpoint + protocol; "Custom" lets
 // them enter any OpenAI-/Anthropic-compatible endpoint and pick the protocol by
-// hand. The COMPATIBLE-AGENTS checkboxes decide which agents the connection
-// projects into — pre-filled from the wire but editable, so an openai gateway can
-// be routed to Claude Code. In edit mode (`initial` set) the protocol is fixed
-// and the secret is optional — left blank, the stored key is kept.
+// hand. In edit mode (`initial` set) the secret is optional — left blank, the
+// stored key is kept.
+//
+// WHICH AGENTS the connection reaches is NOT a field here. It used to be a set
+// of compatible-agents checkboxes writing a `compatible_agents` config key; that
+// key is gone — the axis is now the resource's framework-level per-agent SCOPE
+// (ADR per-agent-resource-scope), owned by the shared `ScopeControl` that the
+// connection's table row and its detail header already render. Keeping a second
+// control here would either duplicate that one or, as it briefly did, send a
+// field the backend no longer reads and silently discard the user's choice. A
+// new connection starts on its wire's default scope (`Kind.default_scope`), so
+// the common case needs no input at all; the hint below says where to change it.
 //
 // The NAME is editable in edit mode, but it does NOT travel in the PATCH body:
 // it is the connection's identity, not one of its settings, so it leaves as its
@@ -24,18 +32,12 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { translateApiError } from "@/lib/api/errors";
 import {
   wireNeedsCredential,
-  type AgentType,
   type Protocol,
   type Provider,
   type ProviderCreate,
   type ProviderPatch,
 } from "@/lib/api/providers";
-import {
-  AGENT_LABEL_KEY,
-  PRESETS,
-  SELECTABLE_AGENTS,
-  defaultCompatibleAgents,
-} from "./connectionPresets";
+import { PRESETS } from "./connectionPresets";
 
 interface Props {
   /** Present → edit an existing connection (protocol locked, secret optional). */
@@ -65,34 +67,18 @@ export function ProviderForm({
   const [protocol, setProtocol] = useState<Protocol | "">(initial?.protocol ?? "openai");
   const [baseUrl, setBaseUrl] = useState(initial?.base_url ?? "https://api.openai.com/v1");
   const [secret, setSecret] = useState("");
-  const [compatible, setCompatible] = useState<AgentType[]>(
-    initial?.compatible_agents ?? defaultCompatibleAgents(initial?.protocol ?? "openai"),
-  );
 
   const isCustom = presetId === "custom";
   const needsCredential = protocol === "" || wireNeedsCredential(protocol);
-  // ollama is internal-only — it projects into no agent, so no checkboxes.
-  const showCompatible = protocol !== "ollama";
 
-  // Picking a preset fills protocol + endpoint and re-seeds the compatible agents
-  // from the new wire; custom clears the endpoint for hand entry.
+  // Picking a preset fills protocol + endpoint; custom clears the endpoint for
+  // hand entry.
   const pickPreset = (id: string) => {
     setPresetId(id);
     const preset = PRESETS.find((p) => p.id === id);
-    const nextProtocol = id === "custom" ? "openai" : (preset?.protocol ?? "openai");
-    setProtocol(nextProtocol);
+    setProtocol(id === "custom" ? "openai" : (preset?.protocol ?? "openai"));
     setBaseUrl(id === "custom" ? "" : (preset?.baseUrl ?? ""));
-    setCompatible(defaultCompatibleAgents(nextProtocol));
   };
-
-  // Changing the custom wire re-seeds the default compatible agents for it.
-  const pickCustomProtocol = (p: Protocol) => {
-    setProtocol(p);
-    setCompatible(defaultCompatibleAgents(p));
-  };
-
-  const toggleAgent = (a: AgentType) =>
-    setCompatible((prev) => (prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]));
 
   return (
     <form
@@ -103,7 +89,6 @@ export function ProviderForm({
           const patch: ProviderPatch = { base_url: baseUrl };
           if (protocol && protocol !== initial.protocol) patch.protocol = protocol;
           if (needsCredential && secret) patch.secret_value = secret;
-          if (showCompatible) patch.compatible_agents = compatible;
           const renamed = name.trim();
           await onUpdate?.(patch, renamed && renamed !== initial.name ? renamed : null);
           return;
@@ -111,7 +96,6 @@ export function ProviderForm({
         if (!protocol) return; // guard: a custom connection still needs a protocol
         const values: ProviderCreate = { name, protocol, base_url: baseUrl };
         if (needsCredential && secret) values.secret_value = secret;
-        if (showCompatible) values.compatible_agents = compatible;
         await onSubmit(values);
       }}
     >
@@ -134,7 +118,7 @@ export function ProviderForm({
             id="p-wire-edit"
             className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
             value={protocol}
-            onChange={(e) => pickCustomProtocol(e.target.value as Protocol)}
+            onChange={(e) => setProtocol(e.target.value as Protocol)}
           >
             <option value="anthropic">anthropic</option>
             <option value="openai">openai</option>
@@ -167,7 +151,7 @@ export function ProviderForm({
             id="p-wire"
             className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
             value={protocol}
-            onChange={(e) => pickCustomProtocol(e.target.value as Protocol)}
+            onChange={(e) => setProtocol(e.target.value as Protocol)}
           >
             <option value="anthropic">anthropic</option>
             <option value="openai">openai</option>
@@ -194,26 +178,10 @@ export function ProviderForm({
         </div>
       )}
 
-      {showCompatible && (
-        <div className="space-y-1.5">
-          <Label>{t("settings.connections.compatibleAgents")}</Label>
-          <div className="flex flex-wrap gap-3">
-            {SELECTABLE_AGENTS.map((a) => (
-              <label key={a} className="flex items-center gap-1.5 text-sm">
-                <input
-                  type="checkbox"
-                  checked={compatible.includes(a)}
-                  onChange={() => toggleAgent(a)}
-                />
-                {t(AGENT_LABEL_KEY[a])}
-              </label>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {t("settings.connections.compatibleAgentsHint")}
-          </p>
-        </div>
-      )}
+      {/* Reach lives on the resource's scope, not in this dialog — the row's and
+          the detail header's ScopeControl own it. Said here so the control's
+          absence reads as a pointer rather than a missing field. */}
+      <p className="text-xs text-muted-foreground">{t("settings.connections.reachHint")}</p>
 
       {submitError != null && (
         <p className="text-sm text-destructive">{translateApiError(t, submitError)}</p>

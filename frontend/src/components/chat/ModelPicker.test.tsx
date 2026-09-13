@@ -122,6 +122,24 @@ describe("ModelPicker", () => {
     },
   );
 
+  test("a connection the user switched off is not treated as active", () => {
+    // `compatible_agents` reports the CONFIGURED reach and is deliberately not
+    // narrowed by `enabled`, so the picker has to test the switch itself. Before
+    // it did, a disabled connection still counted as the agent's active one and
+    // its introspected ids replaced the agent's own catalogue.
+    useProvidersMock.mockReturnValue({
+      data: [makeConnection({ enabled: false, compatible_agents: ["claude_code"] })],
+    });
+    const mutate = introspectReturning(["agnes-2.0"]);
+    useListMock.mockReturnValue({ mutate });
+    render(<ModelPicker agentKey="claude_code" value={null} onCommit={vi.fn()} />);
+    const options = openAndReadOptions();
+    expect(options).not.toContain("agnes-2.0");
+    expect(mutate).not.toHaveBeenCalled();
+    // It falls back to the agent's own catalogue, as with no connection at all.
+    expect(options.some((o) => /Opus/.test(o))).toBe(true);
+  });
+
   test("selecting a listed (introspected) model commits it", () => {
     const onCommit = vi.fn();
     useListMock.mockReturnValue({ mutate: introspectReturning(["claude-sonnet-4-6"]) });

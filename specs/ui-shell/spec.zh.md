@@ -37,14 +37,17 @@ Settings 下的 kind（当时叫「LLM connections」），而那个旧名字描
 它所管理的东西——一个 `provider` 是 `{protocol, base_url, credential_ref}`，即厂商端点
 加密钥；模型既不存在那里，也不在那里选，而是在使用现场选。**Channels** 曾在 AGENTS 组
 下，但一个 channel 是金库拥有的、带凭据的传输，不是金库的消费者；它该和其他资产并列，
-而不是和恰好在它上面应答的 agent 并列。
+而不是和恰好在它上面应答的 agent 并列。它的名字就是**「消息渠道 / Channels」**，别无其他
+——侧栏、页头、欢迎面板、对话框都说同一组词，因为一个用户能从两处到达的界面，不该有两个名字。
 
 于是 AGENTS 组只剩一项。这个不对称是有意的：agent 是这个产品里唯一**使用**金库、
 而不是住在金库里的东西，为省一行而合并掉这个分组会丢掉这个区分。
 
 应用的 index (`/`) 重定向到 `/agents`，因此首次访问者落在 Agents 界面。它分组为 **Agents**（消费者）、**Resources**（resource kind）与 **System**（横切工具：Activity 与 Settings），这样导航在 Coffer 成长时保持稳定。agent 住在 `/agents`（列表）与 `/agents/:name`（详情），不出现在 `/mcp-servers` 的 kind 浏览器里。（`/resources` 保留为指向 `/mcp-servers` 的 legacy 重定向，兼容旧书签。）agent 详情页是一个简单的 **Overview + Config files** 详情页：一个 Overview tab 汇总 agent 已注册的配置，一个 Config files tab 只读地呈现其已知配置文件，没有创建 / 编辑 / 删除 / 启用。
 
-所有列表界面（agents、MCP servers、skills、knowledge、model providers、channels、Activity 的每个 tab）共用同一个可搜索、可过滤、可分页的表格：点击一行打开该项的详情页，行内操作是紧凑的图标。卡片只保留给欢迎 / 空态。
+所有列表界面（agents、MCP servers、skills、knowledge、model providers、消息渠道、Activity 的每个 tab）共用同一个可搜索、可过滤、可分页的表格：点击一行打开该项的详情页，行内操作是图标加文字标签——不用光秃秃的图标，那读起来会像是另一种不同的操作。卡片只保留给欢迎 / 空态。
+
+每个列表界面的状态列就是该资源的**生效范围（reach）**：那一个回答「这项资源对谁生效？」的控件——禁用 / 所有 agent / 特定 agent——每个详情页也在页头上带同一个控件。它只写一份，挂在三处（行内、详情页头、多选栏），因此三者不可能漂成三个不同的三选一。多选时把同一个选择应用到整份选区：批量写入是一次新的意图，所以它的 agent 面板从空开始，而不是从某一行的现值开始；批中失败的行会在唯一的一条汇总里被报出来，而不是被静默跳过。删除仍然是它旁边独立的按钮。
 
 **Observability**（系统健康 / 指标）已规划但今天不展示；它只在自己上线时才进入侧栏。Activity 不是它：一份「发生了什么」的记录，不等于一份「系统状况如何」的度量。反过来这条规则同样成立——一个入口在它的功能被删掉时也要被删掉，Machines 就是这样离开的。
 

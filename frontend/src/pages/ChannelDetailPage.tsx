@@ -1,5 +1,5 @@
 // frontend/src/pages/ChannelDetailPage.tsx — one channel's operating surface
-// (spec channels, User Stories 2 + 8): edit / enable-disable / delete in the header
+// (spec channels, User Stories 2 + 8): edit / reach / delete in the header
 // (mirrors McpServerDetailPage), a live status card (adapter, paired peer),
 // the pairing-code generator, a send-test-message card wired to the notify
 // capability, and — for SeaTalk — the callback endpoint to point a tunnel at.
@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Switch } from "@/components/ui/switch";
+import { ScopeControl } from "@/components/ScopeControl";
 import { ChannelCallbackCard } from "@/kinds/channel/ChannelCallbackCard";
 import {
   ChannelPairingCard,
@@ -27,11 +27,7 @@ import {
   useNotifyChannel,
   CHANNEL_KIND,
 } from "@/lib/hooks/useChannels";
-import {
-  useDeleteResource,
-  useDisableResource,
-  useEnableResource,
-} from "@/lib/hooks/useResourceMutations";
+import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
 import { useResource } from "@/lib/hooks/useResources";
 
 export function ChannelDetailPage() {
@@ -44,8 +40,6 @@ export function ChannelDetailPage() {
   const { data: status } = useChannelStatus(name, { poll: true });
   const pairing = useIssuePairingCode(name);
   const notify = useNotifyChannel(name);
-  const enable = useEnableResource();
-  const disable = useDisableResource();
   const del = useDeleteResource();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -119,20 +113,10 @@ export function ChannelDetailPage() {
           >
             <Trash2 className="mr-1.5 size-3.5" /> {t("common.delete")}
           </Button>
-          <div className="flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3">
-            <Switch
-              checked={resource.enabled}
-              onCheckedChange={(checked) => {
-                const m = checked ? enable : disable;
-                m.mutate({ kind: CHANNEL_KIND, name });
-              }}
-              disabled={enable.isPending || disable.isPending}
-              aria-label={resource.enabled ? t("common.enabled") : t("common.disabled")}
-            />
-            <span className="text-sm font-medium">
-              {resource.enabled ? t("common.enabled") : t("common.disabled")}
-            </span>
-          </div>
+          {/* The same reach control the list row and every other kind's detail
+              page carries; it fetches its own scope, since this page renders
+              one resource. */}
+          <ScopeControl kind={CHANNEL_KIND} name={name} enabled={resource.enabled} />
         </div>
       </header>
 
