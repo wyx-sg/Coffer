@@ -33,6 +33,8 @@ MARKDOWN_SUFFIX = ".md"
 
 
 def _visible(entry: pathlib.Path) -> bool:
+    """Excludes any dot-prefixed entry — ``.history/`` and ``.raw/`` included,
+    with nothing naming either specifically (FR-005, FR-035)."""
     return not entry.name.startswith(".")
 
 
@@ -51,7 +53,11 @@ def _now() -> str:
 
 
 def count_files(directory: pathlib.Path) -> int:
-    """Markdown files under ``directory``, recursively, skipping hidden ones."""
+    """Markdown files under ``directory``, recursively, skipping hidden ones.
+
+    The dot-prefix filter walks past ``.history/`` and ``.raw/`` alike, so a
+    collection's converted-document originals never inflate its count.
+    """
     if not directory.is_dir():
         return 0
     total = 0
@@ -59,6 +65,27 @@ def count_files(directory: pathlib.Path) -> int:
         dirnames[:] = [d for d in dirnames if not d.startswith(".")]
         total += sum(1 for f in filenames if _is_content(f))
     return total
+
+
+def iter_files(collection: str) -> tuple[str, ...]:
+    """Every content file in ``collection``, as knowledge-root-relative paths.
+
+    The same walk ``count_files`` does, returning what it counted. Ranked
+    retrieval needs the names rather than the number, and it must be the *same*
+    walk: a file the catalogue skips — a `README.md`, anything under a hidden
+    directory — must be a file the index never holds either, or a search would
+    answer with something no other surface admits exists.
+    """
+    directory = paths.collection_dir(collection)
+    if not directory.is_dir():
+        return ()
+    found: list[str] = []
+    for root, dirnames, filenames in os.walk(directory):
+        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        for name in filenames:
+            if _is_content(name):
+                found.append(paths.relative_of(pathlib.Path(root) / name))
+    return tuple(sorted(found))
 
 
 def readme_description(collection: str) -> str:
@@ -212,6 +239,29 @@ def delete_file(relpath: str) -> None:
     if not path.is_file():
         raise KnowledgeFileNotFound(relpath)
     path.unlink()
+
+
+def remove_raw_original(relpath: str) -> None:
+    """Remove the ``.raw/`` original behind a converted file, if any (FR-035).
+
+    ``.raw/`` mirrors a converted file's directory structure but keeps the
+    original's own extension, not ``.md`` (see ``paths.raw_path``), so the
+    match is by stem rather than by full name. A file that was hand-written
+    rather than ingested has no original — that is the common case, and it
+    stays a clean no-op rather than an error.
+    """
+    segments = paths.split(relpath)
+    if len(segments) < 2:
+        return
+    collection, rest = segments[0], segments[1:]
+    *dirs, name = rest
+    stem = pathlib.Path(name).stem
+    raw_directory = paths.raw_dir(collection).joinpath(*dirs)
+    if not raw_directory.is_dir():
+        return
+    for candidate in raw_directory.iterdir():
+        if candidate.is_file() and candidate.stem == stem:
+            candidate.unlink()
 
 
 def archive(relpath: str) -> pathlib.Path:

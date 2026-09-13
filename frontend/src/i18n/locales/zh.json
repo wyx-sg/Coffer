@@ -74,6 +74,7 @@
     "mcpServers": "MCP 服务器",
     "skills": "Skill",
     "knowledge": "知识",
+    "memory": "记忆",
     "settings": "设置",
     "language": "语言",
     "collapse": "折叠侧边栏",
@@ -660,16 +661,22 @@
     "KNOWLEDGE_ERROR": "知识层拒绝了该操作",
     "KNOWLEDGE_FILE_NOT_FOUND": "未找到该知识文件",
     "KNOWLEDGE_PATH_UNSAFE": "该路径不在知识集合范围内",
+    "KNOWLEDGE_UPLOAD_TOO_LARGE": "文件过大，无法上传。上限为 20 MB。",
     "MASTER_KEY_FILE_INVALID": "这不是一个有效的主密钥",
     "MASTER_KEY_MISSING": "主密钥缺失，Coffer 无法解密已存储的密钥",
     "MCP_ENTRY_NOT_FOUND": "未找到该 MCP 条目",
     "MCP_ENTRY_PROTECTED": "该 MCP 条目受保护，无法修改",
     "MCP_ENTRY_SOURCE_AMBIGUOUS": "该 MCP 条目的来源存在歧义，请指定具体来源",
     "MCP_INSTALL_UNSUPPORTED": "该 agent 不支持安装 Coffer 的 MCP 条目",
+    "MEMORY_DELIVERY_CONFIG_INVALID": "该 agent 的设置文件不是 Coffer 可以编辑的格式",
+    "MEMORY_DELIVERY_UNSUPPORTED": "该 agent 类型没有记忆投递 hook",
+    "MEMORY_FACT_NOT_FOUND": "未找到该记忆条目",
     "MEMORY_NOT_FOUND": "未找到记忆",
     "MEMORY_REJECTED": "记忆被拒绝（为空或过长）",
     "MEMORY_STORE_MERGE_INVALID": "这些知识作用域无法合并",
     "MEMORY_STORE_NOT_FOUND": "未找到记忆库",
+    "MEMORY_UNREADABLE": "该记忆文件无法读取",
+    "MEMORY_UNSAFE_PATH": "该路径在记忆库中不被允许",
     "NOT_FOUND": "未找到。",
     "NO_ACTIVE_PROVIDER": "当前没有启用的模型 provider",
     "PLUGIN_NOT_FOUND": "未找到该插件",
@@ -1067,6 +1074,122 @@
     "delete": {
       "title": "删除集合",
       "description": "删除「{{name}}」及其中的所有文件？此操作不可撤销。"
+    },
+    "upload": {
+      "button": "上传",
+      "uploading": "正在上传…",
+      "success": "已上传「{{title}}」。"
+    },
+    "search": {
+      "placeholder": "搜索本集合…",
+      "button": "搜索",
+      "noResults": "没有匹配的结果。",
+      "literalNotice": "以下是字面匹配结果，并非排序结果——{{reason}}。",
+      "reasonText": {
+        "noConnection": "尚未配置用于排序的内部连接",
+        "embeddingUnavailable": "向量化调用失败",
+        "noneAboveThreshold": "没有结果的相关度达到排序阈值"
+      }
+    },
+    "index": {
+      "unavailableTitle": "排序检索不可用",
+      "unavailableBody": "尚未配置内部连接，搜索将退化为对文件的字面匹配。请前往设置配置后启用排序检索。",
+      "goToSettings": "前往设置",
+      "staleTitle": "索引落后于文件",
+      "staleBody": "已为 {{total}} 个文件中的 {{indexed}} 个建立排序索引，其余文件在重建前只能按字面匹配检索。",
+      "rebuild": "重建索引",
+      "rebuilding": "正在重建…",
+      "rebuildDone": "索引已重建。"
+    }
+  },
+  "memory": {
+    "title": "记忆",
+    "subtitle": "汇总你的 Agent 已经学到的内容——读取它们自己的原生记忆（Claude Code 按项目记录的笔记、Codex 的任务分组），按项目归一化为一组事实，外加一个关于你本人（而非某个项目）的全局分区。Coffer 从不写回 Agent 自己的记忆。",
+    "sync": "同步",
+    "syncing": "同步中…",
+    "syncDone": "已同步 {{partitions}} 个分区，共 {{count}} 条事实。",
+    "syncFailures": "{{count}} 个来源解析失败——详见下方审计日志。",
+    "loadFailed": "加载分区失败",
+    "empty": "暂无分区。点击同步以读取已注册 Agent 已经掌握的内容。",
+    "searchPlaceholder": "搜索分区…",
+    "cols": {
+      "name": "分区",
+      "project": "项目",
+      "global": "全局——关于你本人，而非某个项目",
+      "facts": "事实数",
+      "reach": "触达范围"
+    },
+    "delivery": {
+      "title": "投递",
+      "subtitle": "面向你自己直接使用的 Agent，通过其自身的 hook 在会话开始时投递。「已安装」不是信号，「最近一次触发」才是。",
+      "loadFailed": "加载投递状态失败",
+      "empty": "目前没有支持会话开始投递的 Agent。",
+      "installed": "已安装",
+      "notInstalled": "未安装",
+      "neverFired": "已安装——从未触发",
+      "neverFiredHint": "{{event}} hook 已安装，但尚未运行过。用这个 Agent 开始（或重启）一次会话，确认它会触发。",
+      "lastFiredAt": "{{event}} 最近一次触发于 {{time}}。",
+      "notInstalledHint": "安装 Coffer 的 hook，以在会话开始时投递一份有预算限制的摘要。",
+      "install": "安装",
+      "remove": "移除",
+      "removeConfirmTitle": "移除 {{agent}} 的投递？",
+      "removeConfirmDescription": "只会移除 Coffer 自己标记的那一条——不会影响 {{agent}} 配置的其他任何内容。",
+      "installDone": "投递已安装。",
+      "removeDone": "投递已移除。"
+    },
+    "audit": {
+      "title": "审计日志",
+      "loadFailed": "加载审计日志失败",
+      "empty": "暂无记忆相关活动记录。",
+      "events": {
+        "memory_aggregated": "已同步",
+        "memory_organised": "已整理",
+        "memory_override_set": "已设置覆盖",
+        "memory_override_cleared": "已清除覆盖",
+        "memory_delivery_installed": "已安装投递",
+        "memory_delivery_removed": "已移除投递"
+      }
+    },
+    "factType": {
+      "user": "偏好",
+      "feedback": "反馈",
+      "project": "项目"
+    },
+    "status": {
+      "proposedSupersede": "已被取代（模型提议）",
+      "settledSupersede": "已被取代（已确认）",
+      "conflicting": "存在冲突",
+      "hiddenBadge": "已隐藏",
+      "pinnedBadge": "已置顶",
+      "proposedBadge": "模型提议"
+    },
+    "hide": "隐藏",
+    "unhide": "取消隐藏",
+    "pin": "置顶",
+    "unpin": "取消置顶",
+    "origins": {
+      "show": "查看来源",
+      "hide": "收起来源",
+      "loadFailed": "加载该事实的来源失败"
+    },
+    "supersede": {
+      "action": "标记为被……取代",
+      "pickPlaceholder": "选择取代这条事实的那一条",
+      "apply": "应用",
+      "clear": "已被 {{target}} 取代——撤销"
+    },
+    "conflicts": {
+      "title": "待处理的冲突",
+      "subtitle": "两条事实相互矛盾。选择仍然为真的一条，另一条会被标记为已取代。",
+      "keepThis": "保留这一条"
+    },
+    "detail": {
+      "organise": "整理",
+      "organiseDone": "整理已完成。",
+      "factsTitle": "事实",
+      "filterPlaceholder": "筛选事实…",
+      "factsEmpty": "该分区暂无事实。",
+      "noMatches": "没有匹配项。"
     }
   },
   "chat": {

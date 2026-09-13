@@ -149,3 +149,29 @@ class InternalEngineConfigModel(Base):
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 
     __table_args__ = (CheckConstraint("id = 1", name="ck_internal_engine_config_singleton"),)
+
+
+class MemoryOverrideModel(Base):
+    """The developer's decisions about one fact — the one non-derived state
+    the memory layer holds (spec memory FR-040, FR-070; ADR
+    ``aggregate-agent-memory-never-write-it``).
+
+    Everything else under ``~/.coffer/memory/`` is a file that aggregation can
+    delete and rebuild; a hide, a pin, a hand-picked supersession or a settled
+    conflict cannot be recomputed, so this is the one table this layer is
+    allowed to add. Keyed by ``fact_key`` (``Fact.key``) rather than a
+    surrogate id, because that key is built to survive recomputation — a
+    rebuild that renames every file must still find this row.
+    """
+
+    __tablename__ = "memory_overrides"
+
+    fact_key: Mapped[str] = mapped_column(String, primary_key=True)
+    hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    superseded_by: Mapped[str] = mapped_column(String, nullable=False, default="")
+    conflict_choice: Mapped[str] = mapped_column(String, nullable=False, default="")
+    #: Who last set this override — kept on the row itself so the decision is
+    #: attributable even before a caller wires up the shared audit log.
+    actor: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)

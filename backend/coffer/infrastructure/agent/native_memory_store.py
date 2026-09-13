@@ -8,10 +8,10 @@ and counts the memory entries inside each, never writing anything.
 
 from __future__ import annotations
 
-import json
 import pathlib
 
-from coffer.domain.agent.native_memory import ScannedStore, decode_project_slug
+from coffer.domain.agent.native_memory import ScannedStore
+from coffer.infrastructure.agent.claude_code_transcripts import cwd_from_transcripts
 from coffer.infrastructure.agent.codex_memory_store import codex_stores
 
 _INDEX_FILE = "MEMORY.md"
@@ -40,48 +40,21 @@ def _inline_memory_file(memory_dir: pathlib.Path) -> pathlib.Path | None:
     return index if has_content else None
 
 
-def _cwd_from_transcripts(project_dir: pathlib.Path) -> str | None:
-    """First ``"cwd"`` string found in the first readable sibling ``*.jsonl``."""
-    if not project_dir.is_dir():
-        return None
-    for jsonl in sorted(project_dir.glob("*.jsonl")):
-        try:
-            text = jsonl.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        for line in text.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(record, dict):
-                cwd = record.get("cwd")
-                if isinstance(cwd, str):
-                    return cwd
-        # First readable transcript only (per the contract): stop after it.
-        return None
-    return None
-
-
 def _resolve_project_path(memory_dir: pathlib.Path) -> str | None:
     """Recover the REAL absolute project path that ``memory_dir`` belongs to.
 
-    Two-step resolution:
-      1. Decode the parent dir name (the slug). If the decoded path is an
-         existing directory, use it.
-      2. Else scan the first readable sibling ``*.jsonl`` transcript (one JSON
-         object per line; bad lines skipped) for a record carrying a string
-         ``"cwd"`` and use that.
-    Returns ``None`` when neither resolves.
+    Reads the first sibling ``*.jsonl`` session transcript's recorded ``cwd``
+    (:func:`cwd_from_transcripts`) — Claude Code's own record of where the
+    session ran, and strictly more reliable than decoding the slug, since
+    the slug's ``/``-and-everything-else-to-``-`` encoding is ambiguous
+    exactly where a real path segment contains a character other than a
+    letter or digit. Returns ``None`` when no transcript records one; a mere
+    best-effort *guess* from the slug
+    (``coffer.domain.agent.native_memory.resolve_project_slug``) is left to
+    ``AgentNativeMemoryService._to_store``, the one place in this feature a
+    guess belongs.
     """
-    project_dir = memory_dir.parent
-    _, decoded = decode_project_slug(project_dir.name)
-    if decoded is not None and pathlib.Path(decoded).is_dir():
-        return decoded
-    return _cwd_from_transcripts(project_dir)
+    return cwd_from_transcripts(memory_dir.parent)
 
 
 class FileNativeMemoryScanner:
@@ -97,11 +70,11 @@ class FileNativeMemoryScanner:
         but ``MEMORY.md`` holds inline content (see :func:`_inline_memory_file`),
         since that inline doc is itself the store's one entry. ``project_path``
         is the real project directory, recovered via :func:`_resolve_project_path`
-        (the slug encoding is lossy, so the path cannot be decoded reliably — it
-        is read from a sibling session transcript's ``cwd`` when the decoded slug
-        is not a real dir), or ``None`` when it cannot be resolved. Returns ``[]``
-        when ``projects_root`` is not a directory. Non-directory entries under the
-        root are skipped. Order is unspecified (the application sorts).
+        from a sibling session transcript's ``cwd`` (the slug encoding is too
+        lossy to decode reliably on its own — see that function), or ``None``
+        when no transcript records one. Returns ``[]`` when ``projects_root``
+        is not a directory. Non-directory entries under the root are skipped.
+        Order is unspecified (the application sorts).
         """
         if not projects_root.is_dir():
             return []

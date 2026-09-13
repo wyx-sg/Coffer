@@ -14,6 +14,7 @@ from coffer.application.channel.selection_cards import (
     PAGE_SIZE,
     SelectionCard,
     agent_card,
+    collection_card,
     is_page_turn,
     model_card,
     parse_page_turn,
@@ -123,6 +124,32 @@ class TestPaging:
         assert _choices(card) == [f"agent:a{i}" for i in range(PAGE_SIZE, 2 * PAGE_SIZE)]
         assert _nav(card) == ["page:agent:0", "page:agent:2"]
 
+    def test_the_collection_card_pages_by_the_same_rule_too(self):
+        # spec knowledge FR-036: a `/save` card is a third instance of the same
+        # rule, not a special case — including its own navigation namespace.
+        choices = [f"c{i}" for i in range(20)]
+
+        card = collection_card(choices=choices, page=1)
+
+        assert _choices(card) == [f"collection:c{i}" for i in range(PAGE_SIZE, 2 * PAGE_SIZE)]
+        assert _nav(card) == ["page:collection:0", "page:collection:2"]
+
+
+class TestTheCollectionCardHasNoCurrentChoice:
+    def test_a_short_list_carries_no_navigation_and_no_tick(self):
+        # Every save is a fresh decision — nothing is ever pre-ticked.
+        card = collection_card(choices=["research", "recipes"])
+
+        assert _values(card) == ["collection:research", "collection:recipes"]
+        assert not any(b.label.endswith("✓") for b in card.buttons)
+        assert card.pages == 1
+
+    def test_a_single_collection_still_renders_as_a_card_not_a_default(self):
+        # FR-036: confirm, never guess — a lone collection is still a tap.
+        card = collection_card(choices=["only-one"])
+
+        assert _values(card) == ["collection:only-one"]
+
 
 class TestTheTickStaysHonest:
     def test_the_card_opens_on_the_page_holding_the_current_choice(self):
@@ -173,6 +200,7 @@ class TestNavigationPayloads:
     def test_navigation_is_parsed_apart_from_a_choice(self):
         assert parse_page_turn("page:model:3") == ("model", 3)
         assert parse_page_turn("page:agent:0") == ("agent", 0)
+        assert parse_page_turn("page:collection:2") == ("collection", 2)
 
     def test_a_choice_never_parses_as_navigation(self):
         # Including a model whose own id starts with the navigation word.

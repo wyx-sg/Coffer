@@ -12,7 +12,16 @@
 // kind. Only files are deleted here.
 
 import { checkOk, enc, headers, knowledgeRoot } from "./client";
-import type { CollectionListOut, CollectionOut, FileOut, TidyOut, TreeOut } from "./types";
+import type {
+  CollectionListOut,
+  CollectionOut,
+  FileOut,
+  IndexStatusOut,
+  IngestedDocumentOut,
+  SearchOut,
+  TidyOut,
+  TreeOut,
+} from "./types";
 
 // Re-export the wire types so `import { … } from "./api"` sees one surface.
 export * from "./types";
@@ -85,4 +94,65 @@ export async function tidyCollection(name: string): Promise<TidyOut> {
   });
   await checkOk(r);
   return (await r.json()) as TidyOut;
+}
+
+// --- ranked retrieval --------------------------------------------------------
+
+/**
+ * Ask a natural-language question over the files the caller may see.
+ * `collection` narrows to one; omitted, every visible collection is searched.
+ * The answer always says how it was found (`mode`) — there is no retrieval
+ * mode to request (FR-024/FR-082).
+ */
+export async function search(query: string, collection?: string | null): Promise<SearchOut> {
+  const r = await fetch(`${knowledgeRoot()}/search`, {
+    method: "POST",
+    headers: { ...headers(), "Content-Type": "application/json" },
+    body: JSON.stringify({ query, collection: collection ?? null }),
+  });
+  await checkOk(r);
+  return (await r.json()) as SearchOut;
+}
+
+/** What the disposable sidecar index holds right now. */
+export async function getIndexStatus(): Promise<IndexStatusOut> {
+  const r = await fetch(`${knowledgeRoot()}/index`, { headers: headers() });
+  await checkOk(r);
+  return (await r.json()) as IndexStatusOut;
+}
+
+/** Re-embed every visible file from scratch, discarding what is there. */
+export async function rebuildIndex(): Promise<IndexStatusOut> {
+  const r = await fetch(`${knowledgeRoot()}/index/rebuild`, {
+    method: "POST",
+    headers: headers(),
+  });
+  await checkOk(r);
+  return (await r.json()) as IndexStatusOut;
+}
+
+// --- ingestion ----------------------------------------------------------------
+
+/**
+ * Convert an uploaded document into an ordinary knowledge file. `directory` is
+ * relative to the COLLECTION root (not the knowledge root) — mirroring
+ * `IngestService.ingest`, which joins it onto `collection` itself.
+ */
+export async function uploadFile(params: {
+  collection: string;
+  directory?: string | null;
+  file: File;
+}): Promise<IngestedDocumentOut> {
+  const form = new FormData();
+  form.append("file", params.file);
+  form.append("collection", params.collection);
+  if (params.directory) form.append("directory", params.directory);
+  const r = await fetch(`${knowledgeRoot()}/upload`, {
+    method: "POST",
+    // No Content-Type: the browser sets the multipart boundary itself.
+    headers: headers(),
+    body: form,
+  });
+  await checkOk(r);
+  return (await r.json()) as IngestedDocumentOut;
 }

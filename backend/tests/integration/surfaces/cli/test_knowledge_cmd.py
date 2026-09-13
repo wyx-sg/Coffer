@@ -46,6 +46,9 @@ def knowledge_cli_daemon(tmp_path, monkeypatch):
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59800")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59809")
     monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
+    # The ranked-retrieval sidecar (spec knowledge FR-025) — pinned so a test
+    # never touches a real ~/.coffer/index.
+    monkeypatch.setenv("COFFER_INDEX_ROOT", str(tmp_path / "index"))
 
     app = create_app()
     set_active_token(_TOKEN)
@@ -254,3 +257,77 @@ def test_write_needs_exactly_one_target(knowledge_cli_daemon):
         ],
     )
     assert result.exit_code == 2
+
+
+@pytest.mark.acceptance(
+    spec="knowledge",
+    scenario="search falls back to literal matching when no internal connection is configured",
+)
+def test_cli_search_falls_back_to_literal_matching(knowledge_cli_daemon):
+    """No provider is registered in this stack, so ranking has nothing to ride
+    on — `search` still answers, from ripgrep, and says so (FR-027)."""
+    _make_collection("shopee")
+    _runner.invoke(
+        cli_app,
+        [
+            KIND_KNOWLEDGE,
+            "write",
+            "--title",
+            "Session",
+            "--description",
+            "d",
+            "--body",
+            "account.session owns login state",
+            "--in",
+            "shopee",
+        ],
+    )
+    result = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "search", "login state", "--json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(_extract_json(result.output))
+    assert data["mode"] == "literal"
+    assert data["reason"]
+    assert any(r["path"] == "shopee/session.md" for r in data["results"])
+
+
+def test_cli_upload_lands_as_a_markdown_file(knowledge_cli_daemon, tmp_path):
+    _make_collection("shopee")
+    source = tmp_path / "notes.txt"
+    source.write_text("Runbook\n\nAccount gateway owns the session cache.\n", encoding="utf-8")
+
+    result = _runner.invoke(
+        cli_app,
+        [KIND_KNOWLEDGE, "upload", str(source), "--collection", "shopee"],
+    )
+    assert result.exit_code == 0, result.output
+    path = result.output.strip()
+    assert path.startswith("shopee/") and path.endswith(".md")
+    assert (tmp_path / "knowledge" / path).is_file()
+
+
+def test_cli_upload_of_unsupported_type_is_refused(knowledge_cli_daemon, tmp_path):
+    _make_collection("shopee")
+    source = tmp_path / "binary.exe"
+    source.write_bytes(b"\x00\x01\x02")
+
+    result = _runner.invoke(
+        cli_app,
+        [KIND_KNOWLEDGE, "upload", str(source), "--collection", "shopee"],
+    )
+    assert result.exit_code != 0, result.output
+
+
+def test_cli_index_status_reports_unavailable_with_no_internal_connection(knowledge_cli_daemon):
+    """No provider is registered in this stack — ranking is off, and `index`
+    says so rather than pretending a sidecar exists (FR-025/FR-026)."""
+    result = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "index", "--json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(_extract_json(result.output))
+    assert data["available"] is False
+
+
+def test_cli_reindex_is_a_clean_no_op_with_no_internal_connection(knowledge_cli_daemon):
+    result = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "reindex", "--json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(_extract_json(result.output))
+    assert data["available"] is False

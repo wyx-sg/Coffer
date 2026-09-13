@@ -74,6 +74,7 @@
     "mcpServers": "MCP servers",
     "skills": "Skills",
     "knowledge": "Knowledge",
+    "memory": "Memory",
     "settings": "Settings",
     "language": "Language",
     "collapse": "Collapse sidebar",
@@ -660,16 +661,22 @@
     "KNOWLEDGE_ERROR": "The knowledge layer rejected that operation",
     "KNOWLEDGE_FILE_NOT_FOUND": "Knowledge file not found",
     "KNOWLEDGE_PATH_UNSAFE": "That path is outside the knowledge collection",
+    "KNOWLEDGE_UPLOAD_TOO_LARGE": "This file is too large to upload. The limit is 20 MB.",
     "MASTER_KEY_FILE_INVALID": "That is not a valid master key",
     "MASTER_KEY_MISSING": "The master key is missing — Coffer can't decrypt stored secrets",
     "MCP_ENTRY_NOT_FOUND": "MCP entry not found",
     "MCP_ENTRY_PROTECTED": "This MCP entry is protected and can't be changed",
     "MCP_ENTRY_SOURCE_AMBIGUOUS": "The MCP entry's source is ambiguous — specify which one",
     "MCP_INSTALL_UNSUPPORTED": "This agent does not support installing Coffer's MCP entry",
+    "MEMORY_DELIVERY_CONFIG_INVALID": "That agent's settings file isn't something Coffer can edit",
+    "MEMORY_DELIVERY_UNSUPPORTED": "This agent type has no memory-delivery hook",
+    "MEMORY_FACT_NOT_FOUND": "That memory fact wasn't found",
     "MEMORY_NOT_FOUND": "Memory not found",
     "MEMORY_REJECTED": "The memory was rejected (empty or too long)",
     "MEMORY_STORE_MERGE_INVALID": "Those knowledge scopes cannot be merged",
     "MEMORY_STORE_NOT_FOUND": "Memory store not found",
+    "MEMORY_UNREADABLE": "That memory file could not be read",
+    "MEMORY_UNSAFE_PATH": "That path isn't allowed in the memory store",
     "NOT_FOUND": "Not found.",
     "NO_ACTIVE_PROVIDER": "No model provider is active",
     "PLUGIN_NOT_FOUND": "Plugin not found",
@@ -1067,6 +1074,122 @@
     "delete": {
       "title": "Delete collection",
       "description": "Delete “{{name}}” and every file in it? This cannot be undone."
+    },
+    "upload": {
+      "button": "Upload",
+      "uploading": "Uploading…",
+      "success": "Uploaded “{{title}}”."
+    },
+    "search": {
+      "placeholder": "Search this collection…",
+      "button": "Search",
+      "noResults": "No results for this search.",
+      "literalNotice": "Showing literal matches, not ranked results — {{reason}}.",
+      "reasonText": {
+        "noConnection": "no internal connection is configured for ranking",
+        "embeddingUnavailable": "the embedding call failed",
+        "noneAboveThreshold": "nothing scored high enough to rank"
+      }
+    },
+    "index": {
+      "unavailableTitle": "Ranked search is unavailable",
+      "unavailableBody": "No internal connection is configured, so search falls back to a literal match over the files. Set one up in Settings to enable ranked search.",
+      "goToSettings": "Go to Settings",
+      "staleTitle": "Index is behind",
+      "staleBody": "{{indexed}} of {{total}} files are indexed for ranked search. The rest are searched literally until you rebuild.",
+      "rebuild": "Rebuild index",
+      "rebuilding": "Rebuilding…",
+      "rebuildDone": "Index rebuilt."
+    }
+  },
+  "memory": {
+    "title": "Memory",
+    "subtitle": "What your agents already learned, read from their own memory — Claude Code's per-project notes and Codex's task groups — normalised into facts by project, plus one global partition for what is about you rather than any project. Coffer never writes back into an agent's own memory.",
+    "sync": "Sync",
+    "syncing": "Syncing…",
+    "syncDone": "Synced {{count}} facts across {{partitions}} partitions.",
+    "syncFailures": "{{count}} source(s) failed to parse — see the audit log below.",
+    "loadFailed": "Failed to load partitions",
+    "empty": "No partitions yet. Sync to read what your registered agents already know.",
+    "searchPlaceholder": "Search partitions…",
+    "cols": {
+      "name": "Partition",
+      "project": "Project",
+      "global": "Global — about you, not one project",
+      "facts": "Facts",
+      "reach": "Reach"
+    },
+    "delivery": {
+      "title": "Delivery",
+      "subtitle": "Session-start delivery for an agent you drive yourself, through its own hook. Installed is not the signal — last fired is.",
+      "loadFailed": "Failed to load delivery status",
+      "empty": "No agent supports session-start delivery yet.",
+      "installed": "Installed",
+      "notInstalled": "Not installed",
+      "neverFired": "Installed — never fired",
+      "neverFiredHint": "The {{event}} hook is installed but has not run yet. Start (or restart) a session with this agent to confirm it fires.",
+      "lastFiredAt": "{{event}} last fired {{time}}.",
+      "notInstalledHint": "Install Coffer's hook to deliver a budgeted digest at session start.",
+      "install": "Install",
+      "remove": "Remove",
+      "removeConfirmTitle": "Remove delivery for {{agent}}?",
+      "removeConfirmDescription": "This only takes out Coffer's own marker-scoped entry — nothing else {{agent}} has configured is touched.",
+      "installDone": "Delivery installed.",
+      "removeDone": "Delivery removed."
+    },
+    "audit": {
+      "title": "Audit log",
+      "loadFailed": "Failed to load the audit log",
+      "empty": "No memory activity recorded yet.",
+      "events": {
+        "memory_aggregated": "Synced",
+        "memory_organised": "Organised",
+        "memory_override_set": "Override set",
+        "memory_override_cleared": "Override cleared",
+        "memory_delivery_installed": "Delivery installed",
+        "memory_delivery_removed": "Delivery removed"
+      }
+    },
+    "factType": {
+      "user": "Preference",
+      "feedback": "Feedback",
+      "project": "Project"
+    },
+    "status": {
+      "proposedSupersede": "Superseded (proposed)",
+      "settledSupersede": "Superseded (settled)",
+      "conflicting": "Conflicting",
+      "hiddenBadge": "Hidden",
+      "pinnedBadge": "Pinned",
+      "proposedBadge": "Proposed"
+    },
+    "hide": "Hide",
+    "unhide": "Unhide",
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "origins": {
+      "show": "Show origins",
+      "hide": "Hide origins",
+      "loadFailed": "Failed to load this fact's origins"
+    },
+    "supersede": {
+      "action": "Mark superseded by…",
+      "pickPlaceholder": "Pick the fact that replaces this one",
+      "apply": "Apply",
+      "clear": "Superseded by {{target}} — undo"
+    },
+    "conflicts": {
+      "title": "Conflicts to settle",
+      "subtitle": "Two facts disagree. Pick the one that is still true; the other is marked superseded.",
+      "keepThis": "Keep this one"
+    },
+    "detail": {
+      "organise": "Organise",
+      "organiseDone": "Organise pass finished.",
+      "factsTitle": "Facts",
+      "filterPlaceholder": "Filter facts…",
+      "factsEmpty": "No facts in this partition yet.",
+      "noMatches": "No matches."
     }
   },
   "chat": {

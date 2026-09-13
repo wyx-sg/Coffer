@@ -92,14 +92,16 @@ class AgentNativeMemoryService:
     @staticmethod
     def _to_store(scan: ScannedStore) -> NativeMemoryStore:
         # The real project path from the session transcript is authoritative when
-        # present (the slug encoding is lossy: a hyphenated segment or a "."/"_"
-        # in the home dir collapses to "-" and cannot be reconstructed). Only when
-        # no transcript recorded a cwd do we fall back to the FS-aware slug decode.
+        # present (the slug encoding is lossy: a hyphenated segment or any other
+        # non-alphanumeric character in the home dir collapses to "-" and cannot be
+        # told apart from a separator by string inspection alone). Only when no
+        # transcript recorded a cwd do we fall back to the FS-aware slug decode,
+        # which walks the real filesystem to disambiguate.
         if scan.project_path:
             path: str | None = scan.project_path
             label = pathlib.PurePath(scan.project_path).name or scan.project_path
         else:
-            label, path = resolve_project_slug(scan.slug, lambda p: pathlib.Path(p).is_dir())
+            label, path = resolve_project_slug(scan.slug, _list_dirs)
         return NativeMemoryStore(
             project_label=label,
             project_path=path,
@@ -107,3 +109,17 @@ class AgentNativeMemoryService:
             memory_dir=scan.memory_dir,
             item_count=scan.item_count,
         )
+
+
+def _list_dirs(path: str) -> list[str]:
+    """Real subdirectory names of ``path``, or ``[]`` if it cannot be listed.
+
+    The FS adapter ``resolve_project_slug`` needs; kept here (rather than
+    imported from infrastructure, which this layer may not import per
+    Contract 2b) since it is a two-line ``pathlib`` wrapper, not logic worth
+    routing through a port.
+    """
+    try:
+        return [entry.name for entry in pathlib.Path(path).iterdir() if entry.is_dir()]
+    except OSError:
+        return []

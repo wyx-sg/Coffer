@@ -174,6 +174,10 @@ class KnowledgeService:
     async def delete(self, relpath: str, *, actor: str, agent: str | None = None) -> None:
         collection = await self.require_visible(relpath, agent)
         fs.delete_file(relpath)
+        # A converted file's original is kept only to stand behind the
+        # Markdown that came from it (FR-035); once that file is gone the
+        # original has nothing left to justify it.
+        fs.remove_raw_original(relpath)
         await self._audit.record(
             AuditEventType.KNOWLEDGE_DELETED.value,
             ref=ResourceRef(KIND_KNOWLEDGE, collection),

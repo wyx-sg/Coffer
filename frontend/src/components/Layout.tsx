@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import {
   Bot,
   Boxes,
+  Brain,
   MessageSquare,
   Library,
   PanelLeftClose,
@@ -63,13 +64,15 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     // One entry per resource kind with a list UI — mcp_server, skill,
-    // knowledge, provider, channel. Keeping that one-to-one is the whole rule;
-    // Model providers and Channels were the two that had drifted out of it.
+    // knowledge, memory, provider, channel. Keeping that one-to-one is the
+    // whole rule; Model providers and Channels were the two that had drifted
+    // out of it.
     labelKey: "nav.group.resources",
     items: [
       { to: "/mcp-servers", labelKey: "nav.mcpServers", icon: Server, end: true },
       { to: "/skills", labelKey: "nav.skills", icon: Sparkles, end: true },
       { to: "/knowledge", labelKey: "nav.knowledge", icon: Library, end: true },
+      { to: "/memory", labelKey: "nav.memory", icon: Brain, end: true },
       { to: "/model-providers", labelKey: "nav.modelProviders", icon: Boxes, end: true },
       { to: "/channels", labelKey: "nav.channels", icon: Radio, end: true },
     ],

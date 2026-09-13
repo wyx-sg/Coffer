@@ -2,11 +2,11 @@
 
 > English: [knowledge-is-plain-files.md](./knowledge-is-plain-files.md)
 
-**Status**: Proposed
-**Date**: 2026-09-12
+**Status**: Proposed — 同日修订（见修订历史）：文档上传、转换为 Markdown 并把原件留在 `.raw/`、带排序的语义检索及其第六个工具 `coffer__search`，三项恢复。以下其余内容全部有效。
+**Date**: 2026-09-12（同日修订；见修订历史）
 **Deciders**: Yuxing Wu
 **Supersedes**: [Retrieval Stack — Markdown Files as Truth, SQLite FTS5 + sqlite-vec](files-as-truth-sqlite-retrieval.md)、[Retrieval mode is an internal engine detail](retrieval-mode-is-internal.md)
-**Related**: spec [knowledge](../../specs/knowledge/spec.md)；[Everything Is a Resource Kind](everything-is-a-resource-kind.md) 与 [Per-Agent Resource Scope](per-agent-resource-scope.md)（两者都保留）；[Memory via MCP](memory-via-mcp-not-native-projection.md)
+**Related**: spec [knowledge](../../specs/knowledge/spec.md)；[Everything Is a Resource Kind](everything-is-a-resource-kind.md) 与 [Per-Agent Resource Scope](per-agent-resource-scope.md)（两者都保留）；[Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md)
 
 ## 背景
 
@@ -168,7 +168,48 @@ collection 一个 Resource，为的是 per-agent 授权；tidy 过程及其 `.hi
   访问。它取代的那套 scope 同样如此；真正的隔离需要独立的 vault 或文件系统权限，不在
   本次范围内。
 - **投递依然由 agent 发起。** 知识只有在 agent 主动去取时才会进入会话
-  （[Memory via MCP](memory-via-mcp-not-native-projection.md)）；投递的 skill 改变的是
+  （[Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md)）；投递的 skill 改变的是
   什么促使它去取，而不是由谁发起。没有任何东西被推进会话，也不会停用或写入任何 agent
   自己的记忆。这个 skill 够不够——上面的审计显示工具描述不够——是这次决策留下的唯一
   开放问题，而调用日志不需要任何新埋点就能回答它。
+
+## 修订历史
+
+- **2026-09-12** — 初始决策，即上文正文：知识就是一个 Markdown 文件目录，agent 用
+  grep 和 read 去取；没有派生索引、没有格式转换、没有 lane、没有推导出来的 scope，
+  五个工具。
+- **2026-09-12，同一天** — **其中三项移除被撤销：文档上传；转换为 Markdown 并把原件
+  留在 `.raw/`；以及带排序的语义检索，随之而来的还有第六个 MCP 工具
+  `coffer__search`。** 这不是对那次精简的推翻。精简的论证真正立足的东西全部仍是当下
+  的答案，而且不打任何折扣：**路径就是身份**、**frontmatter 就是元数据**、**文件是
+  唯一真相**，文件名仍是人类可读的 slug，仍然**没有 lane**、**不从 cwd 推导 scope**、
+  **不自动创建**，删掉的 11 张表也仍然是删掉的。回来的是一道入口和一次排序，理由是那
+  次移除没有掂量过的。
+  - **摄入回来，是因为从用户真正所在的地方够不着文件系统。** 「往目录里放一篇
+    Markdown」这道入口，只在人坐在这台机器前时才存在——它仍然是一条完整的路径，不需要
+    导入、不需要登记。但人日常所在的入口是手机，而渠道本来就接收文档、本来就为了这一轮
+    对话把它抽取出来（spec [channels](../../specs/channels/spec.md) FR-030）；让那份
+    文档落进一个 collection、而不是随这一轮蒸发掉，正是这一层缺的那条路径。Web 上传是
+    同一道入口的另一端，这也是它值得回来的原因。
+  - **带排序的检索回来，是因为它现在是依赖，而不是便利。** 那次移除说得对：对于读得起
+    目录的 agent，读目录已经买到了排序能买到的大部分。但 spec
+    `memory` 读不起：它必须在调用方给不出确切措辞的材料上
+    回答「关于**这个**任务，我知道些什么」，而且 token 预算根本不允许把目录整个递过去。
+    那就是检索，grep 当不了。这一点本 ADR 自己就说过——上文「负面」的第一条点出了那个
+    天花板，并给出答案：*一个真正的语义栈，为那个真实需求而建，而不是重新打开一个从未
+    通电的组件*。需求比天花板先到；答案就是那一条已经给出的答案。
+  - **两条约束确保审计发现的那次失败不会重演，它们才是这次修订的核心。** 审计的根因不是
+    「索引本身错了」，而是这个索引**实际上无法被配置**，并且它是**第二份需要对账的
+    真相**。所以：**(a)** embedding 搭已经配好的 `internal_default` 内部连接，
+    **不给它任何属于自己的设置面**——本层不设 provider、model、endpoint 或 key，也没有
+    对应的设置页。`embedding_config` 之所以是空表，正是因为它要求用户再搭一个 provider；
+    再问一次只会换来同样一张空表。**(b)** 索引是一个**可丢弃的旁挂件**：在 vault 之外、
+    在 `coffer.db` 之外，落在用户随时可以删掉的单一路径上，被排除在每一次导出和备份之
+    外，并且在它缺失、为空或正在重建时，必须由字面搜索兜底给出正确答案。它不是任何一份
+    真相，所以它也无从漂移。
+  - **不为它增加任何依赖。** 不引入向量库，也不引入 embedding 模型——没有
+    `sqlite-vec`，没有 `fastembed`。向量走安装本来就有的 HTTP 客户端从内部连接取，
+    相似度在进程内算，因为这一层服务的语料是几百篇文件，为这个量级上原生索引，恰恰就是
+    那次精简判对了的过度建设。
+  - 细节见 spec [knowledge](../../specs/knowledge/spec.md)：FR-025–FR-029（带排序的
+    检索）、FR-032–FR-037（写入与摄入）、FR-080–FR-082（约束）。

@@ -94,6 +94,7 @@ class AuditService:
         kind: str | None = None,
         name: str | None = None,
         event_type: str | None = None,
+        event_prefix: str | None = None,
         since: datetime | None = None,
         limit: int = 50,
     ) -> list[AuditEntry]:
@@ -108,6 +109,7 @@ class AuditService:
             name=name,
             resource_id=resource_id,
             event_type=event_type,
+            event_prefix=event_prefix,
             since=since,
             limit=limit,
         )

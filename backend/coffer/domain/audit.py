@@ -54,6 +54,10 @@ class AuditEventType(StrEnum):
     KNOWLEDGE_WRITTEN = "knowledge_written"
     KNOWLEDGE_DELETED = "knowledge_deleted"
     KNOWLEDGE_TIDIED = "knowledge_tidied"
+    # spec memory
+    MEMORY_AGGREGATED = "memory_aggregated"
+    MEMORY_DELIVERY_INSTALLED = "memory_delivery_installed"
+    MEMORY_DELIVERY_REMOVED = "memory_delivery_removed"
     # spec channels
     CHANNEL_PAIRING_ISSUED = "channel_pairing_issued"
     CHANNEL_PAIRED = "channel_paired"

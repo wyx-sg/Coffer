@@ -137,7 +137,7 @@ async def running_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 @pytest.mark.acceptance(spec="mcp-gateway", scenario="register a stdio MCP server")
 @pytest.mark.acceptance(
     spec="knowledge",
-    scenario="the five built-in knowledge tools appear in the client tool list",
+    scenario="the six built-in knowledge tools appear in the client tool list",
 )
 async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
     """Drive the /mcp endpoint via the mcp SDK; SDK validation is the oracle.
@@ -189,12 +189,13 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
         assert any(n.startswith("coffer__") for n in tool_names), (
             f"no coffer__ built-in tools found in tools/list: {tool_names}"
         )
-        # And the knowledge tools specifically must be there. One kind, five
+        # And the knowledge tools specifically must be there. One kind, six
         # tools — the reading half.
         expected_knowledge_tools = {
             "coffer__grep",
             "coffer__read",
             "coffer__list",
+            "coffer__search",
         }
         assert expected_knowledge_tools.issubset(tool_names), (
             f"knowledge built-in tools missing from tools/list; "

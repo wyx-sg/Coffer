@@ -299,6 +299,95 @@ async def test_channel_conversation_appends_system_context(tmp_path) -> None:  #
     await engine.dispose()
 
 
+@pytest.mark.acceptance(
+    spec="memory",
+    scenario="a channel turn carries the memory context without a hook",
+)
+@pytest.mark.asyncio
+async def test_channel_conversation_appends_memory_context(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A channel-driven turn gets its memory digest through this same
+    system-prompt append — no session-start hook, no install (spec memory
+    FR-053). The provider never builds the digest itself: it calls the
+    injected composer, the same seam ``list_models`` already uses, so the
+    chat/provider layer never reaches into the memory kind directly."""
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv(channel_name="Telegram"))
+    factory, captured = _make_factory(_simple_messages())
+
+    calls: list[tuple[str, str]] = []
+
+    async def _memory(agent_key: str, cwd: str) -> str | None:
+        calls.append((agent_key, cwd))
+        return "## Coffer memory\nKnown about you (pinned first):\n- Likes tabs."
+
+    provider = ClaudeSdkProvider(
+        conversations=repo, session_factory=factory, compose_memory_context=_memory
+    )
+
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+    adapter = await provider.build_adapter(conv.id)
+    await _collect(adapter, _user_turn("hi", conv.id))
+
+    append = captured[0].system_prompt["append"]
+    assert "## Coffer memory" in append
+    assert "Likes tabs" in append
+    # Resolved lazily per turn, keyed by this agent and the conversation's cwd —
+    # never guessed or hardcoded (mirrors how ``list_models`` is called).
+    assert calls == [("claude_code", str(tmp_path))]
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_no_memory_to_deliver_appends_no_header(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """When the composer has nothing to deliver, the turn carries no memory
+    header at all — an empty ``## Coffer memory`` section would be worse than
+    saying nothing."""
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv(channel_name="Telegram"))
+    factory, captured = _make_factory(_simple_messages())
+
+    async def _memory(agent_key: str, cwd: str) -> str | None:
+        return None
+
+    provider = ClaudeSdkProvider(
+        conversations=repo, session_factory=factory, compose_memory_context=_memory
+    )
+
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+    adapter = await provider.build_adapter(conv.id)
+    await _collect(adapter, _user_turn("hi", conv.id))
+
+    assert "Coffer memory" not in captured[0].system_prompt["append"]
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_web_conversation_never_gets_memory_context(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A non-channel (web UI) turn is not the "channel-driven turn" spec memory
+    FR-053 names — even a wired composer must not be consulted for it (the
+    agent's own hook, FR-054, is the delivery path there instead)."""
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv())  # no channel_name
+    factory, captured = _make_factory(_simple_messages())
+
+    async def _memory(agent_key: str, cwd: str) -> str | None:
+        raise AssertionError("memory composer must not be called for a non-channel turn")
+
+    provider = ClaudeSdkProvider(
+        conversations=repo, session_factory=factory, compose_memory_context=_memory
+    )
+
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+    adapter = await provider.build_adapter(conv.id)
+    await _collect(adapter, _user_turn("hi", conv.id))
+
+    assert "Coffer memory" not in captured[0].system_prompt["append"]
+
+    await engine.dispose()
+
+
 @pytest.mark.asyncio
 async def test_web_conversation_gets_the_model_note_only(tmp_path) -> None:  # type: ignore[no-untyped-def]
     """A non-channel (web UI) conversation gets no channel guidance, but still

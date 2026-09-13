@@ -265,6 +265,7 @@ def _adapter(
     resume: str | None = None,
     extra: dict[str, Any] | None = None,
     document_extractor: Any = None,
+    system_context: str | None = None,
 ) -> CodexAppServerAdapter:
     return CodexAppServerAdapter(
         cwd="/tmp",
@@ -273,6 +274,7 @@ def _adapter(
         session_factory=factory,
         on_session=on_session,
         document_extractor=document_extractor,
+        system_context=system_context,
     )
 
 
@@ -373,6 +375,55 @@ async def test_resume_uses_thread_resume_with_thread_id():
     assert "thread/start" not in methods
     resume_params = next(p for m, p in server.requests if m == "thread/resume")
     assert resume_params["threadId"] == "thread-existing"
+
+
+@pytest.mark.asyncio
+async def test_system_context_rides_thread_start_as_developer_instructions():
+    """``system_context`` reaches Codex the same way the SDK adapter's does for
+    Claude — an additive append, here via ``thread/start``'s
+    ``developerInstructions`` field (never ``baseInstructions``, which would
+    replace Codex's own preset rather than add to it)."""
+    server = FakeCodexAppServer(frames=_basic_frames())
+    factory = _Factory(server)
+    adapter = _adapter(factory, system_context="You are on a chat channel.")
+    await asyncio.wait_for(_collect(adapter, _user_turn("hi")), timeout=5)
+
+    start_params = next(p for m, p in server.requests if m == "thread/start")
+    assert start_params["developerInstructions"] == "You are on a chat channel."
+    assert "baseInstructions" not in start_params
+
+
+@pytest.mark.asyncio
+async def test_system_context_rides_thread_resume_too():
+    server = FakeCodexAppServer(
+        frames=[
+            _Frame(
+                "turn/start",
+                "turn/completed",
+                {"threadId": "thread-1", "turn": {"id": "turn-1"}},
+            ),
+        ]
+    )
+    factory = _Factory(server)
+    adapter = _adapter(factory, resume="thread-existing", system_context="A memory note.")
+    await asyncio.wait_for(_collect(adapter, _user_turn("hi")), timeout=5)
+
+    resume_params = next(p for m, p in server.requests if m == "thread/resume")
+    assert resume_params["developerInstructions"] == "A memory note."
+
+
+@pytest.mark.asyncio
+async def test_no_system_context_omits_developer_instructions():
+    """No append at all — never an empty ``developerInstructions`` string —
+    when the caller passes none (mirrors the SDK adapter's own ``if
+    self._system_context:`` guard)."""
+    server = FakeCodexAppServer(frames=_basic_frames())
+    factory = _Factory(server)
+    adapter = _adapter(factory)
+    await asyncio.wait_for(_collect(adapter, _user_turn("hi")), timeout=5)
+
+    start_params = next(p for m, p in server.requests if m == "thread/start")
+    assert "developerInstructions" not in start_params
 
 
 # ---------------------------------------------------------------------------

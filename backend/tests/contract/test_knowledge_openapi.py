@@ -3,8 +3,8 @@
 The oracle is an explicit table: the routes, the wire models and the built-in
 tool set are written down here, and the app must match them. That catches the
 drift class this module exists for — a route quietly renamed or dropped, a
-sixth built-in tool appearing without anyone deciding on it, a field slipping
-back onto a payload the layer no longer has anything to put in.
+built-in tool appearing without anyone deciding on it, a field slipping back
+onto a payload the layer no longer has anything to put in.
 """
 
 from __future__ import annotations
@@ -13,9 +13,9 @@ import pytest
 
 from coffer.surfaces.http.knowledge import schemas
 
-#: Every route the knowledge kind serves, as (method, path). Six gestures and a
-#: manual tidy trigger; deleting a collection goes through the kind-agnostic
-#: Resource route, so it is deliberately absent (spec knowledge FR-060).
+#: Every route the knowledge kind serves, as (method, path). Deleting a
+#: collection goes through the kind-agnostic Resource route, so it is
+#: deliberately absent (spec knowledge FR-060).
 _EXPECTED_ROUTES = {
     ("GET", "/api/v1/knowledge/collections"),
     ("POST", "/api/v1/knowledge/collections"),
@@ -25,11 +25,17 @@ _EXPECTED_ROUTES = {
     ("DELETE", "/api/v1/knowledge/file"),
     ("GET", "/api/v1/knowledge/grep"),
     ("POST", "/api/v1/knowledge/collections/{name}/tidy"),
+    ("POST", "/api/v1/knowledge/search"),
+    ("GET", "/api/v1/knowledge/index"),
+    ("POST", "/api/v1/knowledge/index/rebuild"),
+    ("POST", "/api/v1/knowledge/upload"),
 }
 
-#: Exactly five, and none of them is ``search``: with no ranked index behind it
-#: that would be a second name for ``grep`` (FR-024, FR-040).
-_EXPECTED_BUILTIN_TOOLS = {"list", "grep", "read", "write", "delete"}
+#: Exactly six: ``search`` joins once ranked retrieval is wired (FR-024,
+#: FR-040). Upload is deliberately not among them — a document enters through
+#: a human surface (the Knowledge page, a channel, or this CLI), not an
+#: agent's tool call.
+_EXPECTED_BUILTIN_TOOLS = {"list", "grep", "read", "write", "delete", "search"}
 
 
 def _knowledge_routes(app) -> set[tuple[str, str]]:  # type: ignore[no-untyped-def]
@@ -106,5 +112,11 @@ def builtin_registry():  # type: ignore[no-untyped-def]
     from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
 
     registry = BuiltinToolRegistry()
-    register_knowledge_builtin_tools(registry, knowledge_service=None)  # type: ignore[arg-type]
+    # A non-None stand-in only so the sixth tool registers; this module tests
+    # the declared surface (names, schemas), never an invocation.
+    register_knowledge_builtin_tools(
+        registry,
+        knowledge_service=None,  # type: ignore[arg-type]
+        search_service=object(),  # type: ignore[arg-type]
+    )
     return registry

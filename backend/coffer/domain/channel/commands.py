@@ -43,6 +43,7 @@ COMMAND_ROSTER: tuple[ChannelCommand, ...] = (
     ChannelCommand("model", "[name]", "Show or switch the model (next turn)", True),
     ChannelCommand("stop", "", "Interrupt the running turn"),
     ChannelCommand("status", "", "Conversation, agent, and turn state", True),
+    ChannelCommand("save", "[collection]", "Save the document you just sent into a collection"),
     ChannelCommand("help", "", "List the commands", True),
 )
 

@@ -14,16 +14,18 @@
 // client-side. Server-side retrieval has its own surfaces — `coffer__grep` for
 // agents, `coffer knowledge grep` for the CLI — and duplicating it here would
 // be a second search with different rules.
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { FileActions } from "@/components/FileActions";
+import { KnowledgeUploadButton } from "@/components/knowledge/KnowledgeUploadButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import { KnowledgePreviewBody } from "./KnowledgePreviewBody";
+import { KnowledgeSearchPanel } from "./KnowledgeSearchPanel";
 import { KnowledgeTreeLevel } from "./KnowledgeTreeLevel";
 import { useKnowledgeFile, useTidyCollection } from "./useKnowledge";
 
@@ -38,6 +40,16 @@ export function KnowledgeDetailPage() {
   const file = useKnowledgeFile(selected);
   const tidy = useTidyCollection(collection);
 
+  // The folder an upload lands in "where the user is": the parent of the file
+  // currently open, or the collection root when nothing is selected yet.
+  // `directory` is relative to the COLLECTION root, matching `IngestService`.
+  const uploadDirectory = useMemo(() => {
+    if (!selected) return null;
+    const idx = selected.lastIndexOf("/");
+    const parent = idx === -1 ? collection : selected.slice(0, idx);
+    return parent === collection ? null : parent.slice(collection.length + 1);
+  }, [selected, collection]);
+
   const onTidy = () =>
     tidy.mutate(undefined, {
       onSuccess: () => toast.success(t("knowledge.detail.tidyDone")),
@@ -48,13 +60,23 @@ export function KnowledgeDetailPage() {
     <div className="space-y-6 p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">{collection}</h1>
-        <Button type="button" variant="outline" size="sm" onClick={onTidy} disabled={tidy.isPending}>
-          {t("knowledge.detail.tidy")}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <KnowledgeUploadButton collection={collection} directory={uploadDirectory} />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onTidy}
+            disabled={tidy.isPending}
+          >
+            {t("knowledge.detail.tidy")}
+          </Button>
+        </div>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(16rem,22rem)_1fr]">
         <div className="space-y-2">
+          <KnowledgeSearchPanel collection={collection} onSelectPath={setSelected} />
           <Input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}

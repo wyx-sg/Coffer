@@ -2,11 +2,11 @@
 
 > 中文版: [knowledge-is-plain-files.zh.md](./knowledge-is-plain-files.zh.md)
 
-**Status**: Proposed
-**Date**: 2026-09-12
+**Status**: Proposed — revised the same day (see Revision history): document upload, conversion to Markdown with the original under `.raw/`, and ranked semantic retrieval with a sixth tool `coffer__search` are reinstated. Everything else below stands.
+**Date**: 2026-09-12 (revised the same day; see Revision history)
 **Deciders**: Yuxing Wu
 **Supersedes**: [Retrieval Stack — Markdown Files as Truth, SQLite FTS5 + sqlite-vec](files-as-truth-sqlite-retrieval.md), [Retrieval mode is an internal engine detail](retrieval-mode-is-internal.md)
-**Related**: spec [knowledge](../../specs/knowledge/spec.md); [Everything Is a Resource Kind](everything-is-a-resource-kind.md) and [Per-Agent Resource Scope](per-agent-resource-scope.md), both of which survive; [Memory via MCP](memory-via-mcp-not-native-projection.md)
+**Related**: spec [knowledge](../../specs/knowledge/spec.md); [Everything Is a Resource Kind](everything-is-a-resource-kind.md) and [Per-Agent Resource Scope](per-agent-resource-scope.md), both of which survive; [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md)
 
 ## Context
 
@@ -217,9 +217,65 @@ affordance.
   separate vault or filesystem permissions, and is out of scope here.
 - **Delivery still happens at the agent's initiative.** Knowledge reaches a
   session only when the agent reaches for it
-  ([Memory via MCP](memory-via-mcp-not-native-projection.md)); the delivered
+  ([Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md)); the delivered
   skill changes what prompts that reach, not who initiates it. Nothing is pushed
   into a session and no agent's own memory is disabled or written to. Whether the
   skill is enough — the audit above shows tool descriptions were not — is the one
   open question this decision leaves, and the invocation log answers it without
   any new instrumentation.
+
+## Revision history
+
+- **2026-09-12** — Initial decision, as the body above records it: knowledge is a
+  directory of Markdown files an agent greps and reads; no derived index, no
+  conversion, no lanes, no derived scope, five tools.
+- **2026-09-12, the same day** — **Three of the removals are reversed: document
+  upload; conversion to Markdown with the original kept under `.raw/`; and ranked
+  semantic retrieval, and with it a sixth MCP tool, `coffer__search`.** This is
+  not a reversal of the reduction. Everything the reduction's argument actually
+  turned on stays the live answer, and stays unqualified: **the path is the
+  identity**, **frontmatter is the metadata**, **the files are the sole truth**,
+  file names are readable slugs, there are **no lanes**, **no cwd-derived scope**
+  and **no auto-provisioning**, and the eleven dropped tables stay dropped. What
+  returns is an entrance and a ranking, for reasons the removal did not weigh.
+  - **Ingestion returns because the filesystem is not reachable from where the
+    user is.** "Put a Markdown file in the directory" is an entrance that exists
+    only while the user is sitting at the machine — it remains a complete one,
+    with no import and no registration. But their live entrance is a phone, and a
+    channel already accepts a document and already extracts it for a turn (spec
+    [channels](../../specs/channels/spec.md) FR-030); letting that document land
+    in a collection instead of evaporating with the turn is the path this layer
+    lacked. The Web upload is the same entrance's other end, which is why it is
+    worth having back.
+  - **Ranked retrieval returns because it is now a dependency, not a
+    convenience.** The removal was right that an agent reading the catalogue buys
+    most of what ranking would — for an agent that can afford to read the
+    catalogue. Spec `memory` cannot: it must answer "what do I know that bears
+    on *this* task" against material the caller has no exact words for, under a
+    token budget that forbids handing over the catalogue at all. That is retrieval, and grep cannot be it. This ADR said as much
+    itself — the first Negative consequence above names the ceiling and answers
+    it with *a real semantic stack, built for that need rather than re-enabling a
+    component that was never switched on*. The need arrived before the ceiling
+    did; the answer is the one that bullet already gave.
+  - **Two constraints keep the audited failure from recurring, and they are the
+    heart of this revision.** The audit's root cause was not that an index is
+    wrong but that this one was unconfigurable in practice, and that it was a
+    second truth to reconcile. So: **(a)** embeddings ride the already-configured
+    `internal_default` internal connection and get **no settings surface of their
+    own** — no provider, model, endpoint or key belonging to this layer, and no
+    page for them. `embedding_config` was an empty table because it asked the user
+    to stand up a second provider, and asking a second time would earn the same
+    empty table. **(b)** The index is a **disposable sidecar**: outside the vault
+    and outside `coffer.db`, at one path the user may delete at any moment,
+    excluded from every export and backup, with a literal-search fallback that
+    must answer correctly while it is missing, empty or mid-rebuild. Nothing about
+    it is a truth, so nothing about it can drift.
+  - **Nothing is added to the dependency set for it.** No vector store and no
+    embedding model — no `sqlite-vec`, no `fastembed`. Vectors come from the
+    internal connection over the HTTP client the installation already has, and
+    similarity is computed in-process, because the corpus this serves is hundreds
+    of files and a native index for that is precisely the over-build the reduction
+    was right about.
+  - Spec [knowledge](../../specs/knowledge/spec.md) carries the detail: FR-025–
+    FR-029 (ranked retrieval), FR-032–FR-037 (writing and ingestion), FR-080–
+    FR-082 (constraints).

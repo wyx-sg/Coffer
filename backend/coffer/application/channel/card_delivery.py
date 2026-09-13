@@ -26,13 +26,15 @@ routed apart from a choice before any switch code is reached.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from coffer.application.channel import document_save
 from coffer.application.channel.conversation_ops import ensure_conversation
 from coffer.application.channel.ports import ChannelBinding, ChannelPeer
 from coffer.application.channel.selection_cards import (
     SelectionCard,
     agent_card,
+    collection_card,
     is_page_turn,
     model_card,
     parse_page_turn,
@@ -90,13 +92,20 @@ async def dispatch_card_tap(
     chat_kind: str,
     thread_id: str,
     card_message_id: str,
+    session: Any,
 ) -> None:
     """Route one owner-gated tap: a page turn, or a choice.
 
     The page question is asked FIRST and answered exhaustively. A navigation
-    value never reaches ``apply_agent``/``apply_model``, and a value that merely
-    looks like navigation (``page:`` with a kind or index we do not render) is
-    dropped rather than falling through to the code path that applies a choice.
+    value never reaches ``apply_agent``/``apply_model``/``apply_save_collection``,
+    and a value that merely looks like navigation (``page:`` with a kind or
+    index we do not render) is dropped rather than falling through to the code
+    path that applies a choice.
+
+    ``session`` is only read by the ``collection:`` branch (spec knowledge
+    FR-036): the pending document a `/save` card tap saves lives there, keyed
+    by this same ``(channel, chat, thread)``, exactly like the queue and the
+    running-turn bookkeeping every other tap ignores.
     """
     turn = parse_page_turn(data)
     if turn is not None:
@@ -131,6 +140,16 @@ async def dispatch_card_tap(
         await commands.apply_model(
             binding, peer, value, send, chat_kind=chat_kind, thread_id=thread_id
         )
+    elif kind == "collection" and value:
+        # A save is one-shot, not a toggle: nothing to re-tick, so skip the
+        # refresh every other choice falls through to below. Calls
+        # ``document_save`` directly (no method on ``commands``, unlike
+        # apply_agent/apply_model) — that module's own size budget, not this
+        # one's.
+        await document_save.apply_save_collection(
+            commands, binding, peer, value, session, send, chat_kind=chat_kind, thread_id=thread_id
+        )
+        return
     else:
         return
     await refresh_selection_card(
@@ -215,10 +234,13 @@ async def turn_card_page(
         _logger.warning("channel.card.page_failed", extra={"channel": binding.name}, exc_info=True)
         card = None
     if card is None or not card.buttons:
+        # "collection" is the card's internal namespace; the command that
+        # summons a fresh one is `/save`, not `/collection`.
+        command = "save" if kind == "collection" else kind
         await send(
             binding,
             peer.chat_id,
-            f"Could not turn the page — send /{kind} for a fresh card.",
+            f"Could not turn the page — send /{command} for a fresh card.",
             chat_kind=chat_kind,
             thread_id=thread_id,
         )
@@ -276,6 +298,11 @@ async def _current_card(
     agent_key = (row.preferred_agent if row is not None else None) or binding.default_agent
     if kind == "agent":
         return agent_card(current=agent_key, choices=commands._agents.agent_choices(), page=page)
+    if kind == "collection":
+        # No conversation/model state to re-read — just the same visibility
+        # check `/save` itself makes (spec knowledge FR-036).
+        visible = await commands._collections.visible_collections(agent_key)
+        return collection_card(choices=visible, page=page) if visible else None
     if kind != "model":
         return None
     conversation_id = await ensure_conversation(

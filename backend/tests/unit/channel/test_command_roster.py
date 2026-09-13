@@ -39,7 +39,7 @@ def test_application_help_text_is_the_rendered_roster() -> None:
 
 
 def test_names_returns_typed_forms() -> None:
-    assert names() == {"/new", "/agent", "/model", "/stop", "/status", "/help"}
+    assert names() == {"/new", "/agent", "/model", "/stop", "/status", "/save", "/help"}
 
 
 @pytest.mark.parametrize(

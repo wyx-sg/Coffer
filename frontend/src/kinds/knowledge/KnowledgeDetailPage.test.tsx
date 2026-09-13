@@ -14,12 +14,36 @@ vi.mock("./useKnowledge", () => ({
   useKnowledgeTree: vi.fn(),
   useKnowledgeFile: vi.fn(),
   useTidyCollection: vi.fn(),
+  // Mounted transitively via KnowledgeUploadButton / KnowledgeSearchPanel;
+  // this suite only exercises the tree + preview, so both get an inert default.
+  useUploadKnowledgeFile: vi.fn(),
+  useKnowledgeSearch: vi.fn(),
 }));
 
-const { useKnowledgeTree, useKnowledgeFile, useTidyCollection } = await import("./useKnowledge");
+const {
+  useKnowledgeTree,
+  useKnowledgeFile,
+  useTidyCollection,
+  useUploadKnowledgeFile,
+  useKnowledgeSearch,
+} = await import("./useKnowledge");
 const treeMock = vi.mocked(useKnowledgeTree);
 const fileMock = vi.mocked(useKnowledgeFile);
 const tidyMock = vi.mocked(useTidyCollection);
+const uploadMock = vi.mocked(useUploadKnowledgeFile);
+const searchMock = vi.mocked(useKnowledgeSearch);
+
+function stubInertDefaults() {
+  uploadMock.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof useUploadKnowledgeFile>);
+  searchMock.mockReturnValue({
+    mutate: vi.fn(),
+    data: undefined,
+    isPending: false,
+  } as unknown as ReturnType<typeof useKnowledgeSearch>);
+}
 
 function renderPage() {
   return render(
@@ -62,6 +86,7 @@ describe("KnowledgeDetailPage", () => {
         mutate: vi.fn(),
         isPending: false,
       } as unknown as ReturnType<typeof useTidyCollection>);
+      stubInertDefaults();
 
       renderPage();
       // The viewer only opens once a file is chosen, so choose one — the tree
@@ -97,6 +122,7 @@ describe("KnowledgeDetailPage", () => {
       mutate: vi.fn(),
       isPending: false,
     } as unknown as ReturnType<typeof useTidyCollection>);
+    stubInertDefaults();
 
     renderPage();
     expect(screen.getByText(/select a file/i)).toBeInTheDocument();

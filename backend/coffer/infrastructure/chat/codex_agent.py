@@ -66,7 +66,13 @@ class CodexAppServerAdapter:
     Mirrors ``ClaudeSdkAgentAdapter``: an injected ``session_factory`` seam, a
     ``run_turn`` that returns ``self._stream(...)``, best-effort logged session
     (thread id) persistence, and ``CancelledError`` cleanup that interrupts the
-    turn + closes the session and still persists the thread id.
+    turn + closes the session and still persists the thread id. ``system_context``
+    also mirrors the SDK adapter's append: it rides on ``thread/start``'s and
+    ``thread/resume``'s ``developerInstructions`` field, the app-server
+    protocol's equivalent of Claude's ``system_prompt.append`` — additive
+    alongside Codex's own base instructions, never replacing them. Composing
+    that string (channel/model/memory context) is the calling provider's job,
+    same as for Claude; this adapter only ever forwards it unchanged.
     """
 
     def __init__(
@@ -78,6 +84,7 @@ class CodexAppServerAdapter:
         session_factory: AppServerSessionFactory,
         on_session: SessionSink,
         env: dict[str, str] | None = None,
+        system_context: str | None = None,
         transcriber: Transcriber | None = None,
         document_extractor: DocumentExtractor | None = None,
     ) -> None:
@@ -87,6 +94,7 @@ class CodexAppServerAdapter:
         self._session_factory = session_factory
         self._on_session = on_session
         self._env = env
+        self._system_context = system_context
         self._transcriber = transcriber
         self._document_extractor = document_extractor
 
@@ -139,6 +147,8 @@ class CodexAppServerAdapter:
             }
             if model:
                 thread_params["model"] = model
+            if self._system_context:
+                thread_params["developerInstructions"] = self._system_context
             thread = await rpc.request("thread/resume", thread_params)
         else:
             thread_params = {
@@ -148,6 +158,12 @@ class CodexAppServerAdapter:
             }
             if model:
                 thread_params["model"] = model
+            if self._system_context:
+                # Additive, like Claude's system-prompt "append": Codex's
+                # app-server protocol carries this as a developer-role message
+                # alongside its own base instructions, never replacing them
+                # (that would be ``baseInstructions``).
+                thread_params["developerInstructions"] = self._system_context
             thread = await rpc.request("thread/start", thread_params)
         thread_id = (thread.get("thread") or {}).get("id") or self._resume or ""
 

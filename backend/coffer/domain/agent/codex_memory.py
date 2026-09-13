@@ -6,8 +6,17 @@ exactly one ``applies_to: cwd=<paths>; reuse_rule=...`` line whose ``cwd`` value
 routes the group to one or more project working directories (the value may list
 several paths joined by prose like `` and ``/`` plus ``/`` from ``, and may contain
 ``~`` or ``*``). This module is pure text logic — turning the document into one
-:class:`CodexMemoryEntry` per group; the infrastructure layer reads the file and
-groups entries by cwd into one read-only store row per project.
+:class:`CodexMemoryEntry` per group (:func:`parse_codex_memory`), plus the
+``## <heading>`` / ``- `` bullet-list shape both a group's body and the sibling
+``memory_summary.md`` profile document use (:func:`section_text`,
+:func:`section_bullets`). Two callers compose these: the agent page's
+native-memory listing (``infrastructure.agent.codex_memory_store``) groups
+entries by cwd into one read-only store row per project; memory aggregation's
+reader (``infrastructure.memory.readers.codex``) turns each group's and the
+profile's own bullets into normalised facts. Which sections count as facts,
+how a bullet gets a title, and how a fact's identity anchor is built are that
+reader's own policy (spec memory FR-020/021/022), not this module's — this
+module only knows Codex's file *format*.
 """
 
 from __future__ import annotations
@@ -64,4 +73,31 @@ def parse_codex_memory(text: str) -> list[CodexMemoryEntry]:
     return entries
 
 
-__all__ = ["CodexMemoryEntry", "parse_codex_memory"]
+def section_text(block: str, heading: str) -> str:
+    """The raw text under a ``## <heading>`` line in ``block``, up to the next
+    ``#`` or ``##`` heading (or the end of ``block``).
+
+    Shared by both a Task Group's own body (``## Reusable knowledge`` and
+    its sibling sections) and the global profile document's ``## User
+    Profile`` / ``## User preferences`` — both use the identical
+    ``## <heading>`` shape.
+    """
+    pattern = re.compile(
+        rf"^## {re.escape(heading)}[ \t]*$(?P<body>.*?)(?=^#{{1,2}} |\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    match = pattern.search(block)
+    return match.group("body") if match else ""
+
+
+def section_bullets(block: str, heading: str) -> list[str]:
+    """The ``- `` bullets directly under a ``## <heading>`` section of ``block``."""
+    bullets = []
+    for line in section_text(block, heading).splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- "):
+            bullets.append(stripped[2:].strip())
+    return bullets
+
+
+__all__ = ["CodexMemoryEntry", "parse_codex_memory", "section_bullets", "section_text"]

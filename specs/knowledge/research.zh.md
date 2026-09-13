@@ -54,7 +54,7 @@ memories 等等，然后各自跑偏。Coffer 只留一份，所有 agent 经 MC
 **决定**：经 Coffer 的 MCP 网关，此外别无他途。更早的设计还会把规范内容投影进
 agent 的原生位置——给 Claude Code 一个目录符号链接，给 Codex 在 `AGENTS.md` 里
 写一个带标记围栏的块——那一半已被移除
-（[Memory via MCP](../../docs/decisions/memory-via-mcp-not-native-projection.md)）：
+（[Aggregate Agent Memory](../../docs/decisions/aggregate-agent-memory-never-write-it.md)）：
 Coffer 绝不写入 agent 自己的记忆文件，不禁用任何东西，也不往会话里注入任何东西。
 
 **这留下的开放问题是投递。** 知识只有在 agent 主动伸手时才会抵达会话，而

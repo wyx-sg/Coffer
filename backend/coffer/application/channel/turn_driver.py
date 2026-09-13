@@ -110,6 +110,14 @@ class Session:
     # the peer while a turn keeps draining on the old conversation, so ``/stop``
     # and unbind must target the turn that is actually running.
     running_conversation_id: str | None = None
+    # The most recently received document/attachment for this (channel, chat,
+    # thread), held for a `/save` that follows (spec channels FR-036). It rides
+    # alongside the ordinary turn — an attachment still reaches the agent
+    # exactly as before; this is ONLY the channel's own memory of what a later
+    # `/save` acts on. Replaced by the next attachment that arrives here, and
+    # cleared once a save is attempted (succeeding or not — retrying the same
+    # bytes against the same failure is never useful).
+    pending_document: Attachment | None = None
 
 
 class TurnDriver:

@@ -1,19 +1,23 @@
-"""The knowledge layer's five built-in MCP tools.
+"""The knowledge layer's six built-in MCP tools.
 
-``list``, ``grep``, ``read``, ``write``, ``delete`` — registered under the
-reserved ``coffer__`` prefix the gateway adds (spec knowledge FR-040). There is
-deliberately no ``search``: with no ranked index behind it, it would be a
-second name for ``grep``, and "is this search or grep?" is a guess an agent
-should never have to make (FR-024).
+``list``, ``grep``, ``read``, ``search``, ``write``, ``delete`` — registered
+under the reserved ``coffer__`` prefix the gateway adds (spec knowledge FR-040).
 
-The motion these tools are shaped around is **catalogue, then grep**. ``list``
-walks the directory one level at a time so an agent can choose *which file*
-from titles and descriptions; ``grep`` finds *which line* once it knows where
-to look. Neither takes a scope, a mode or a ``top_k``, because none exists: a
-call spans every collection the agent is authorized for (FR-012), and that
-authorization is the only argument the layer resolves for itself — threaded in
-as ``agent`` by the gateway at session handshake, the same way ``cwd`` reaches
-the tools that declare it.
+The motion these tools are shaped around is **catalogue, then grep**, with
+``search`` for the case that motion cannot serve. ``list`` walks the directory
+one level at a time so an agent can choose *which file* from titles and
+descriptions; ``grep`` finds *which line* once it knows where to look;
+``search`` answers when the agent cannot afford the catalogue or has no exact
+words to grep for. The three are deliberately not modes of one tool — an agent
+picks by what it knows, not by a flag — and none of them takes a scope,
+because a call spans every collection the agent is authorized for (FR-012).
+That authorization is the only argument the layer resolves for itself,
+threaded in as ``agent`` by the gateway at session handshake, the same way
+``cwd`` reaches the tools that declare it.
+
+``search`` never fails for want of an index: with no internal connection
+configured it answers literally and says so (FR-027), so an agent may always
+reach for it.
 """
 
 from __future__ import annotations
@@ -22,6 +26,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
+from coffer.application.knowledge.builtin_search_tool import register_search_tool
+from coffer.application.knowledge.search import SearchService
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.knowledge.entry import CatalogueLevel, KnowledgeFile
 from coffer.infrastructure.knowledge.grep import DEFAULT_MAX_MATCHES
@@ -100,10 +106,19 @@ def register_knowledge_builtin_tools(
     registry: BuiltinToolRegistry,
     *,
     knowledge_service: KnowledgeService,
+    search_service: SearchService | None = None,
 ) -> None:
-    """Wire the five knowledge tools into the gateway's registry."""
+    """Wire the knowledge tools into the gateway's registry.
+
+    ``search_service`` is optional so a composition root that has not wired
+    ranked retrieval still gets the five file tools; when it is absent the
+    sixth is simply not advertised, rather than advertised and broken.
+    """
 
     svc = knowledge_service
+
+    if search_service is not None:
+        register_search_tool(registry, search_service=search_service)
 
     async def list_knowledge(args: dict[str, Any]) -> dict[str, Any]:
         agent = _agent(args)

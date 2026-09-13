@@ -235,6 +235,7 @@ class SqlAlchemyAuditRepo:
         name: str | None = None,
         resource_id: int | None = None,
         event_type: str | None = None,
+        event_prefix: str | None = None,
         since: datetime | None = None,
         limit: int = 50,
     ) -> list[AuditEntry]:
@@ -257,6 +258,14 @@ class SqlAlchemyAuditRepo:
                     stmt = stmt.where(AuditLogModel.resource_name == name)
             if event_type is not None:
                 stmt = stmt.where(AuditLogModel.event_type == event_type)
+            if event_prefix is not None:
+                # A feature's whole trail, not one event of it: memory's acts
+                # span two kinds (its own partitions, and the agent config a
+                # hook install writes), so "everything memory did" cannot be
+                # expressed as a kind filter. Filtering here rather than in the
+                # caller keeps the page's log complete — a client-side filter
+                # over a fixed window silently drops whatever fell outside it.
+                stmt = stmt.where(AuditLogModel.event_type.startswith(event_prefix))
             if since is not None:
                 stmt = stmt.where(AuditLogModel.timestamp >= since)
             stmt = stmt.limit(limit)

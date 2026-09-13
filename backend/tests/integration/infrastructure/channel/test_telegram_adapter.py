@@ -823,7 +823,7 @@ async def test_start_registers_the_full_command_menu(fake_telegram: FakeTelegram
         registered = fake_telegram.calls_for("setMyCommands")
         assert len(registered) == 1
         names = {entry["command"] for entry in registered[0]["commands"]}
-        assert names == {"new", "agent", "model", "stop", "status", "help"}
+        assert names == {"new", "agent", "model", "stop", "status", "save", "help"}
         assert fake_telegram.calls_for("setChatMenuButton")[0]["menu_button"] == {
             "type": "commands"
         }

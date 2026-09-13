@@ -45,13 +45,23 @@ Currently registered kinds:
 | `skill`          | [skill-manager](../../specs/skill-manager/spec.md)   | A master skill bundle Coffer can deliver into one or more agents' skill directories. The workspace amendment adds an unmanaged-skill scan (adopt hand-placed skills into the master store). Delivery is decided by the skill's own `enabled` flag intersected with its agent scope and reconciled on every change to either — the agent-side follow-master-library policy this row once described is gone.                                                                                                     |
 | `knowledge`      | [knowledge](../../specs/knowledge/spec.md)                 | One **collection** — a top-level folder under `~/.coffer/knowledge/` holding markdown files, nested however the user likes. The collection is the only boundary the system knows, and it is a Resource so the framework's per-agent scope can authorize it; nothing is derived from a cwd and nothing auto-provisions. Agents read and write it over MCP, humans in their own editor, and both reach the same bytes. See [Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md). |
 | `channel`        | [channels](../../specs/channels/spec.md)             | A messaging-channel binding (Telegram, SeaTalk). Carries transport config + credential refs and a default agent; a paired owner chats with managed agents from the IM app and receives notifications. Thin adapters over the turn-platform seams (spec channels FR-043…FR-055), which the web Chat page sits on as the second surface (spec channels FR-072…FR-078) — once a message reaches the turn orchestrator nothing downstream knows which surface it came from ([Channel Adapter Framework](../../docs/decisions/channel-adapter-framework.md), [Chat Is a Single-Owner Live Mirror](../../docs/decisions/chat-single-owner-live-mirror.md)).                                                                                              |
+| `memory`         | [memory](../../specs/memory/spec.md)                 | One **partition** of aggregated agent memory — a project, or `global`. Its facts are read out of the registered agents' own native memories, never written back; everything on disk is derived and rebuildable, and the developer's overrides are the one thing that is not. Scope decides which agents the digest reaches, defaulting to the agents it came from ([Aggregate Agent Memory](../../docs/decisions/aggregate-agent-memory-never-write-it.md)).                                                                                              |
 
-The knowledge layer is **a directory, not an index**. Markdown files under
+The knowledge layer is **a directory, not a database**. Markdown files under
 `~/.coffer/knowledge/<collection>/` are the only copy of anything: there is no
-`documents` table, no chunk table, no FTS5 index and no vectors, so nothing has
-to be reconciled and a file edited in the user's own editor is live on the very
-next read ([Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md),
+`documents` table and no chunk table, so nothing has to be reconciled and a file
+edited in the user's own editor is live on the very next read
+([Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md),
 which supersedes Files as Truth and Retrieval Mode Is Internal).
+
+Ranked retrieval sits on top of that without becoming a second truth. Vectors
+live in a **disposable sidecar** under `~/.coffer/index/` — outside the vault
+and outside `coffer.db`, excluded from export and backup, deletable at any
+moment. Embeddings come from the installation's existing `internal_default`
+connection, so the layer has no embedding setting of its own; with none
+configured, or while the sidecar is missing or rebuilding, `search` degrades to
+a literal search and says so. Nothing is added to the dependency set for it:
+similarity is computed in-process over a corpus of hundreds of files.
 
 A file's **path is its identity** — names are readable slugs, not ULIDs,
 because with no index the file name is what an agent reads in a grep result.
@@ -77,7 +87,7 @@ through the existing skill channel (spec knowledge FR-042), because the audit
 behind this design found agents never reach for the layer on a tool description
 alone — every knowledge call in a month landed on the day the corpus was built.
 Nothing is injected into a session and no agent's own memory is written to
-([Memory via MCP](../../docs/decisions/memory-via-mcp-not-native-projection.md)).
+([Aggregate Agent Memory](../../docs/decisions/aggregate-agent-memory-never-write-it.md)).
 
 A **tidy** pass survives: a bounded agentic rewrite of one collection, driven by
 the internal-engine connection, archiving each prior revision into the hidden
@@ -87,9 +97,13 @@ is governed by one installation-wide setting on `internal_engine_config`,
 **off by default**, because an unattended rewriter of files a human and an agent
 share should be something the operator switches on.
 
-There is no ingestion surface. A human adds knowledge by putting a markdown
-file in the directory — the filesystem is the upload path, and the next call
-sees it.
+Putting a Markdown file in the directory stays a complete way to add
+knowledge — no import, no registration, and the next call sees it. Ingestion is
+a second entrance, for where the filesystem is out of reach: a document uploaded
+from the Knowledge page or forwarded to a channel is converted to Markdown by
+`markitdown`, lands as an ordinary file with frontmatter, and keeps its original
+under a hidden `.raw/` at the collection root so a bad conversion can be redone.
+Upload is a human surface, not an agent tool.
 
 ## Code layout
 

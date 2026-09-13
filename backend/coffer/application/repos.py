@@ -54,6 +54,7 @@ class AuditRepo(Protocol):
         name: str | None = None,
         resource_id: int | None = None,
         event_type: str | None = None,
+        event_prefix: str | None = None,
         since: datetime | None = None,
         limit: int = 50,
     ) -> list[AuditEntry]: ...

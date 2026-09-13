@@ -95,7 +95,7 @@ section that future readers most often want — don't skip it.>
 | [`cross-platform-skill-delivery`](cross-platform-skill-delivery.zh.md) | 跨平台 skill 投递 —— Symlink / Junction / Copy-Fallback | Accepted |
 | [`files-as-truth-sqlite-retrieval`](files-as-truth-sqlite-retrieval.zh.md) | 检索栈 —— markdown 文件即事实源，SQLite FTS5 + sqlite-vec，可配置 embedding | 已被 [Knowledge Is Plain Files](knowledge-is-plain-files.zh.md) 取代 |
 | [`knowledge-is-plain-files`](knowledge-is-plain-files.zh.md) | 知识层是一个文件目录，不是一个索引 | Accepted |
-| [`agent-native-shared-memory`](agent-native-shared-memory.zh.md) | 跨 agent 共享的单一知识 store | Accepted —— 投影那一半被 [Memory via MCP](memory-via-mcp-not-native-projection.zh.md) 取代 |
+| [`agent-native-shared-memory`](agent-native-shared-memory.zh.md) | 跨 agent 共享的单一知识 store | Accepted —— 投影那一半被 [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.zh.md) 取代 |
 | [`channel-adapter-framework`](channel-adapter-framework.zh.md) | Channel Adapter 框架 | Accepted |
 | [`envelope-encrypted-credential-store`](envelope-encrypted-credential-store.zh.md) | 信封加密的凭据存储 | Accepted |
 | [`vault-export-import`](vault-export-import.zh.md) | 仓库导出与导入 | Accepted |
@@ -105,7 +105,7 @@ section that future readers most often want — don't skip it.>
 | [`channel-entrypoint-differentiation`](channel-entrypoint-differentiation.zh.md) | Channel 入口差异化层 | Accepted |
 | [`builtin-agent-is-internal-capability`](builtin-agent-is-internal-capability.zh.md) | 内置 agent 是内部能力，不是聊天人格 | Accepted |
 | [`remove-tool-approval`](remove-tool-approval.zh.md) | 移除工具审批系统；owner 配对即门禁 | Accepted |
-| [`memory-via-mcp-not-native-projection`](memory-via-mcp-not-native-projection.zh.md) | 记忆经 MCP 访问，而非原生投射 | Accepted |
+| [`aggregate-agent-memory-never-write-it`](aggregate-agent-memory-never-write-it.zh.md) | 聚合 agent 的记忆；绝不写它 | Proposed —— 改写自 *Memory via MCP, not native projection*（2026-06-18） |
 | [`skill-content-trust-layer`](skill-content-trust-layer.zh.md) | Skill 内容信任层（启发式扫描，警告而非拦截） | Reverted（2026-06-20） |
 | [`consume-official-mcp-registry`](consume-official-mcp-registry.zh.md) | 消费官方 MCP Registry 做服务器发现 | Reverted（2026-06-20） |
 | [`chat-single-owner-live-mirror`](chat-single-owner-live-mirror.zh.md) | Chat 是单属主的实时镜像 | Accepted |

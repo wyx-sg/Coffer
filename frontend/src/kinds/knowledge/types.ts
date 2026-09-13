@@ -81,3 +81,55 @@ export interface FileOut {
 export interface TidyOut {
   status: string;
 }
+
+/** `ranked` when the disposable sidecar answered; `literal` when it fell back
+ * to a ripgrep pass over the same files (FR-027) — never a third state. */
+export type KnowledgeSearchMode = "ranked" | "literal";
+
+/** One matching line quoted back from a hit, so the reader can see why it matched. */
+export interface SearchLineOut {
+  line_number: number;
+  line: string;
+}
+
+/** One file `search` is answering with. */
+export interface SearchHitOut {
+  path: string;
+  title: string;
+  description: string;
+  /** Cosine score in ranked mode; `null` when the answer came from ripgrep. */
+  score: number | null;
+  /** The section heading a ranked hit matched under; empty in literal mode. */
+  heading: string;
+  lines: SearchLineOut[];
+}
+
+/** Answer to `POST /knowledge/search` — `mode` says how it was found (FR-082). */
+export interface SearchOut {
+  mode: KnowledgeSearchMode;
+  /** Why the answer is literal rather than ranked; empty in ranked mode. */
+  reason: string;
+  results: SearchHitOut[];
+}
+
+/** What the disposable sidecar index holds right now (`GET /knowledge/index`). */
+export interface IndexStatusOut {
+  /** False when no internal connection is configured — ranking is off entirely. */
+  available: boolean;
+  files_indexed: number;
+  files_total: number;
+  /** Absolute path of the sidecar file (FR-025); not rendered, but here for parity with the wire shape. */
+  path: string;
+}
+
+/** What one successful `POST /knowledge/upload` produced. */
+export interface IngestedDocumentOut {
+  /** Path of the converted Markdown file, relative to the knowledge root. */
+  path: string;
+  title: string;
+  description: string;
+  /** Which converter produced this file. */
+  converter: string;
+  /** Absolute path of the kept original, under the collection's hidden `.raw/`. */
+  raw_path: string;
+}

@@ -1,28 +1,43 @@
 """``/api/v1/knowledge/*`` — the human's side of the knowledge directory.
 
-Six routes for six gestures: create a collection, list them, walk one level of
-the catalogue, read a file, write one, delete one — plus a manual tidy trigger.
-There is no upload, reindex, check-sources, embedding or settings route,
-because none of those exist any more (spec knowledge FR-060). Deleting a
-collection goes through the kind-agnostic Resource route, since collection
-lifecycle is a Resource concern.
+Create a collection, list them, walk one level of the catalogue, read a file,
+write one, delete one, grep, tidy — plus ranked ``search``, document
+``upload``, and the index's ``status``/``rebuild`` (spec knowledge FR-060).
+Deleting a collection goes through the kind-agnostic Resource route, since
+collection lifecycle is a Resource concern.
 
 These routes are the *user's* surface and therefore unscoped: per-agent
 authorization (FR-012) governs what an agent sees through the MCP tools, not
-what the person who owns the vault sees in their own UI.
+what the person who owns the vault sees in their own UI. ``search``,
+``upload``, ``index`` and ``index/rebuild`` follow the same rule — none of
+them takes an ``agent``.
 
-Domain errors propagate to the app-wide handler in ``surfaces/http/errors.py``.
+Domain errors propagate to the app-wide handler in ``surfaces/http/errors.py``
+— including ``UploadTooLarge`` (FR-037), which ``IngestService`` itself raises
+before doing any conversion or write. ``UnsupportedDocument`` is the one
+exception ``upload`` maps by hand: it is raised by the converter registry, a
+plain-Python layer below the domain, so it is not a ``CofferError``.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header, Query, Response, status
+from typing import Any
 
+from fastapi import APIRouter, Depends, File, Form, Header, Query, Response, UploadFile, status
+
+from coffer.application.knowledge.ingest import IngestService
+from coffer.application.knowledge.search import SearchService
 from coffer.application.knowledge.service import KnowledgeService
+from coffer.domain.knowledge.converter import UnsupportedDocument
 from coffer.domain.knowledge.entry import ACTOR_AGENT, ACTOR_USER
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import get_knowledge_service
+from coffer.surfaces.http.dependencies import (
+    get_ingest_service,
+    get_knowledge_service,
+    get_search_service,
+)
+from coffer.surfaces.http.errors import error_response
 from coffer.surfaces.http.knowledge.schemas import (
     CollectionCreate,
     CollectionListOut,
@@ -33,6 +48,12 @@ from coffer.surfaces.http.knowledge.schemas import (
     FileWrite,
     GrepMatchOut,
     GrepOut,
+    IndexStatusOut,
+    IngestedDocumentOut,
+    SearchHitOut,
+    SearchLineOut,
+    SearchOut,
+    SearchRequest,
     TidyOut,
     TreeOut,
 )
@@ -43,6 +64,13 @@ router = APIRouter(
     tags=["knowledge"],
     dependencies=[Depends(require_token)],
 )
+
+#: ``UnsupportedDocument`` is not a ``CofferError`` (it never was one), so it
+#: has no code of its own in ``surfaces/http/errors.py``'s table. Reusing the
+#: still-mapped ``INGEST_REJECTED`` (400) rather than inventing a new one —
+#: the family already has exactly one code for "this upload is refused", and
+#: ``details.doc_type`` says which type.
+_INGEST_REJECTED = "INGEST_REJECTED"
 
 
 def _actor_kind(x_coffer_actor: str | None = Header(default=None)) -> str:
@@ -151,3 +179,72 @@ async def tidy(
 ) -> TidyOut:
     result = await get_tidy_runner()(svc, name, actor=actor)
     return TidyOut(**{"collection": name, **result})
+
+
+@router.post("/search", response_model=SearchOut)
+async def search(
+    body: SearchRequest,
+    svc: SearchService = Depends(get_search_service),  # noqa: B008
+) -> SearchOut:
+    outcome = await svc.search(body.query, collection=body.collection)
+    return SearchOut(
+        mode=outcome.mode,
+        reason=outcome.reason,
+        results=[
+            SearchHitOut(
+                path=hit.path,
+                title=hit.title,
+                description=hit.description,
+                score=hit.score,
+                heading=hit.heading,
+                lines=[
+                    SearchLineOut(line_number=number, line=line) for number, line in hit.excerpt
+                ],
+            )
+            for hit in outcome.hits
+        ],
+    )
+
+
+@router.get("/index", response_model=IndexStatusOut)
+async def index_status(
+    svc: SearchService = Depends(get_search_service),  # noqa: B008
+) -> IndexStatusOut:
+    return IndexStatusOut.model_validate(await svc.status(), from_attributes=True)
+
+
+@router.post("/index/rebuild", response_model=IndexStatusOut)
+async def rebuild_index(
+    svc: SearchService = Depends(get_search_service),  # noqa: B008
+) -> IndexStatusOut:
+    return IndexStatusOut.model_validate(await svc.rebuild(), from_attributes=True)
+
+
+@router.post("/upload", response_model=IngestedDocumentOut, status_code=status.HTTP_201_CREATED)
+async def upload(
+    file: UploadFile = File(...),  # noqa: B008
+    collection: str = Form(...),
+    directory: str | None = Form(default=None),
+    svc: IngestService = Depends(get_ingest_service),  # noqa: B008
+    actor: str = Depends(_actor_kind),
+) -> Any:
+    data = await file.read()
+    try:
+        # A size ceiling and a refusal naming it (FR-037) both come from
+        # ``IngestService.ingest`` itself — it raises ``UploadTooLarge``
+        # (a ``CofferError``) before any conversion or write, so the
+        # app-wide handler maps it without help from this route.
+        doc = await svc.ingest(
+            collection=collection,
+            filename=file.filename or "upload",
+            data=data,
+            directory=directory,
+            actor=actor,
+        )
+    except UnsupportedDocument as exc:
+        return error_response(
+            _INGEST_REJECTED,
+            f"unsupported document type: {exc.doc_type!r}",
+            {"reason": "unsupported_type", "doc_type": exc.doc_type},
+        )
+    return IngestedDocumentOut.model_validate(doc, from_attributes=True)

@@ -86,6 +86,12 @@ _STATUS: dict[str, int] = {
     "MEMORY_REJECTED": 422,  # empty / too-long fact rejected at the boundary
     "SCOPE_UNRESOLVED": 400,
     "EMBEDDING_UNAVAILABLE": 503,
+    # spec memory
+    "MEMORY_FACT_NOT_FOUND": 404,
+    "MEMORY_UNSAFE_PATH": 400,
+    "MEMORY_UNREADABLE": 422,
+    "MEMORY_DELIVERY_UNSUPPORTED": 422,
+    "MEMORY_DELIVERY_CONFIG_INVALID": 422,
     # agent turns (spec channels)
     "CONVERSATION_NOT_FOUND": 404,
     "TURN_IN_PROGRESS": 409,
@@ -116,6 +122,9 @@ _STATUS: dict[str, int] = {
     "KNOWLEDGE_COLLECTION_EXISTS": 409,
     "KNOWLEDGE_FILE_NOT_FOUND": 404,
     "KNOWLEDGE_PATH_UNSAFE": 400,
+    # Ingestion (spec knowledge FR-033..FR-037): named the limit, refused
+    # before any conversion or write.
+    "KNOWLEDGE_UPLOAD_TOO_LARGE": 413,
     "KNOWLEDGE_ERROR": 400,
 }
 

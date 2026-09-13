@@ -200,7 +200,15 @@ class FakeAuditRepo:
         self._entries.append(entry)
 
     async def query(
-        self, *, kind=None, name=None, resource_id=None, event_type=None, since=None, limit=50
+        self,
+        *,
+        kind=None,
+        name=None,
+        resource_id=None,
+        event_type=None,
+        event_prefix=None,
+        since=None,
+        limit=50,
     ):
         results = self._entries
         if event_type is not None:

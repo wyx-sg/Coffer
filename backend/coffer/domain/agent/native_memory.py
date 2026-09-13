@@ -30,10 +30,13 @@ class ScannedStore(NamedTuple):
     ``project_path`` is the store's *real* project directory when the infra
     adapter could recover it (e.g. from a session transcript's ``cwd`` field);
     ``None`` when unknown, in which case the caller decodes a best-effort path
-    from ``slug``. The slug encoding is lossy (Claude Code collapses ``/``,
-    ``.``, ``_`` all to ``-``), so the decoded path is wrong whenever a path
-    segment or the home dir contained one of those characters — hence the
-    cwd-derived ``project_path`` is preferred when available.
+    from ``slug``. The slug encoding is lossy (Claude Code collapses every
+    non-alphanumeric character — ``/``, ``.``, ``_``, and so on — to ``-``),
+    so the decoded path is wrong whenever a path segment or the home dir
+    contained one of those characters — hence the cwd-derived
+    ``project_path`` is preferred when available, and :func:`resolve_project_slug`
+    (an FS-aware decode) beats the naive :func:`decode_project_slug` whenever
+    neither is.
     """
 
     slug: str
@@ -102,38 +105,94 @@ def decode_project_slug(slug: str) -> tuple[str, str | None]:
     return (segments[-1], path)
 
 
-def resolve_project_slug(slug: str, exists: Callable[[str], bool]) -> tuple[str, str | None]:
+def _encode(name: str) -> str:
+    """Claude Code's own path-component encoding, applied to one real name.
+
+    Every character that is not an ASCII letter or digit becomes ``-`` — not
+    just ``/``. A real example: the slug ``-Users-yuxing-wu`` decodes to
+    ``/Users/yuxing.wu`` — the dot in the home directory's own name was
+    encoded exactly the same way the ``/`` separators were. That means a
+    slug's dashes are not reliably separators, dots, or literal dashes
+    already in a name — the encoding is lossy, and no amount of cleverness
+    recovers it from the slug string alone.
+    """
+    return "".join(ch if ch.isalnum() and ch.isascii() else "-" for ch in name)
+
+
+def _walk(current: str, remaining: str, list_dirs: Callable[[str], list[str]]) -> str | None:
+    """Consume ``remaining`` one real subdirectory at a time, or fail.
+
+    What recovers the original path is the filesystem: a real directory's
+    name, run through :func:`_encode`, either is or is not a prefix of what
+    is left of the slug. So this walks down from ``current`` (an absolute
+    path, ``""`` standing for ``/``) and, at each level, asks every real
+    subdirectory ``list_dirs`` reports that question, rather than guessing
+    where the original separators were.
+
+    Ties are broken by preferring the longest immediate match, with
+    backtracking into the runner-up when the greedy choice turns out to be a
+    dead end — the same slug prefix can occasionally be produced by two real
+    sibling directories (e.g. ``ab-cd`` and ``ab``, when only the latter has
+    a child that finishes resolving the rest of the slug).
+    """
+    if not remaining:
+        return current or "/"
+    candidates: list[tuple[int, str]] = []
+    for name in list_dirs(current or "/"):
+        encoded = _encode(name)
+        if not encoded:
+            continue
+        if remaining == encoded or remaining.startswith(encoded + "-"):
+            candidates.append((len(encoded), name))
+    candidates.sort(key=lambda pair: -pair[0])
+    for consumed, name in candidates:
+        rest = remaining[consumed:]
+        rest = rest[1:] if rest.startswith("-") else rest
+        child = f"{current}/{name}" if current else f"/{name}"
+        result = _walk(child, rest, list_dirs)
+        if result is not None:
+            return result
+    return None
+
+
+def resolve_project_slug(
+    slug: str, list_dirs: Callable[[str], list[str]]
+) -> tuple[str, str | None]:
     """FS-aware decode of a project slug into ``(label, path)``.
 
-    The ``/`` → ``-`` encoding is ambiguous when a path segment itself contains a
-    ``-`` (``wedding-invitation`` vs ``wedding/invitation``). This walks the slug
-    left-to-right and, at each level, takes the LONGEST ``-``-joined run of
-    segments that names a directory which actually exists (per ``exists``), so
-    ``-Users-xing-wedding-invitation`` resolves to ``/Users/xing/wedding-invitation``
-    → label ``wedding-invitation``. Falls back to the lossy
-    :func:`decode_project_slug` when no prefix matches on disk (e.g. the project
-    was moved or deleted). ``exists`` is injected so this stays pure/testable.
+    Claude Code's encoding (:func:`_encode`) collapses every non-alphanumeric
+    character to ``-``, so a slug's dashes are not reliably separators, dots,
+    underscores, or literal dashes already in a name — the naive
+    :func:`decode_project_slug` gets this wrong whenever a real path segment
+    (or the home directory's own name) contains anything but a letter, digit
+    or ``/``. What disambiguates it is the filesystem itself: this walks down
+    from ``/``, and at each level asks every real subdirectory ``list_dirs``
+    reports whether its *encoded* name is a prefix of what is left of the
+    slug — consuming that many encoded characters (not a naive dash-count),
+    which is what lets a real ``yuxing.wu`` (9 characters) consume the slug's
+    ``yuxing-wu`` (9 characters, one dash where the dot was) correctly. Ties
+    prefer the longest immediate match, backtracking into the runner-up when
+    the greedy choice is a dead end (see :func:`_walk`).
+
+    Falls back to the lossy :func:`decode_project_slug` when the walk cannot
+    proceed at all — a step in the path was renamed or deleted, the project
+    no longer exists on disk, or the slug carries no usable segments. That
+    fallback is lossy in exactly the ways described above, but it is the
+    best guess available once there is nothing left on disk to check
+    against. ``list_dirs`` is injected (given an absolute path, returns the
+    names of its real subdirectories, or ``[]`` when it cannot be listed) so
+    this stays pure/testable — the concrete adapter lives in infrastructure.
     """
     if not slug.startswith("-"):
         return decode_project_slug(slug)
-    segments = [s for s in slug.split("-") if s]
-    if not segments:
+    body = slug[1:]
+    if not body:
         return decode_project_slug(slug)
-
-    acc: list[str] = []
-    i = 0
-    while i < len(segments):
-        base = "/" + "/".join(acc) if acc else ""
-        best_j, best_name, cand = -1, "", ""
-        for j in range(i, len(segments)):
-            cand = segments[i] if j == i else f"{cand}-{segments[j]}"
-            if exists(f"{base}/{cand}"):
-                best_j, best_name = j, cand
-        if best_j < 0:
-            return decode_project_slug(slug)
-        acc.append(best_name)
-        i = best_j + 1
-    return (acc[-1], "/" + "/".join(acc))
+    resolved = _walk("", body, list_dirs)
+    if resolved is None:
+        return decode_project_slug(slug)
+    label = resolved.rsplit("/", 1)[-1] or resolved
+    return (label, resolved)
 
 
 @dataclass(frozen=True)

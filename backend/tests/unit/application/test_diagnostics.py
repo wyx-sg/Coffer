@@ -26,7 +26,15 @@ class _FakeAuditRepo:
         raise AssertionError("diagnose must never write")
 
     async def query(
-        self, *, kind=None, name=None, resource_id=None, event_type=None, since=None, limit=50
+        self,
+        *,
+        kind=None,
+        name=None,
+        resource_id=None,
+        event_type=None,
+        event_prefix=None,
+        since=None,
+        limit=50,
     ):
         self.calls.append(
             {"kind": kind, "name": name, "event_type": event_type, "since": since, "limit": limit}

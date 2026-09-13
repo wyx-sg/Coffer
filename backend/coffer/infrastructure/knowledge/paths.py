@@ -3,9 +3,10 @@
 One root, one rule: ``~/.coffer/knowledge/<collection>/…``. A collection is a
 top-level subdirectory; below it the human nests whatever they like and the
 system assigns none of it any meaning (spec knowledge FR-004). The only
-directory Coffer itself creates inside a collection is ``.history/``, holding
-the revisions the tidy pass superseded — dot-prefixed so ripgrep skips it and
-the catalogue walks past it (FR-005, FR-052).
+directories Coffer itself creates inside a collection are ``.history/``,
+holding the revisions the tidy pass superseded, and ``.raw/``, holding the
+original bytes behind an uploaded document — both dot-prefixed so ripgrep
+skips them and the catalogue walks past them (FR-005, FR-035, FR-052).
 
 ``$COFFER_KNOWLEDGE_ROOT`` overrides the root for tests. Every segment that
 becomes a path component goes through the traversal guard here (FR-006).
@@ -21,6 +22,7 @@ from datetime import UTC, datetime
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
 
 HISTORY_DIR_NAME = ".history"
+RAW_DIR_NAME = ".raw"
 README_NAME = "README.md"
 
 _DOTS_ONLY = re.compile(r"^\.+$")
@@ -123,3 +125,30 @@ def history_path(relpath: str, *, now: datetime | None = None) -> pathlib.Path:
     if flattened.endswith(".md"):
         flattened = flattened[: -len(".md")]
     return history_dir(collection) / f"{flattened}.{stamp}.md"
+
+
+def raw_dir(collection: str) -> pathlib.Path:
+    """Where a collection keeps the untouched bytes behind its converted files."""
+    return collection_dir(collection) / RAW_DIR_NAME
+
+
+def raw_path(relpath: str, original_name: str) -> pathlib.Path:
+    """Where the original upload behind the converted file at ``relpath`` lives.
+
+    Unlike ``history_path``, which flattens a nested path into one archived
+    name (multiple old revisions of the same file must never collide), this
+    *mirrors* the converted file's own directory structure: there is exactly
+    one original per converted file, so nesting it the same way keeps the two
+    trees walkable side by side and needs no collision-avoiding flattening.
+    The converted file's own extension (``.md``) is replaced with the
+    original's own extension (FR-035) — the original is a ``.pdf`` or
+    ``.docx``, not a Markdown file.
+    """
+    segments = split(relpath)
+    if len(segments) < 2:
+        raise UnsafeKnowledgePath(relpath, "not a file inside a collection")
+    collection, rest = segments[0], segments[1:]
+    *dirs, name = rest
+    stem = pathlib.Path(name).stem
+    ext = pathlib.Path(original_name).suffix
+    return raw_dir(collection).joinpath(*dirs, f"{stem}{ext}")

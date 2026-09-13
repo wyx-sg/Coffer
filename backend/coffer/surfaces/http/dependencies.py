@@ -281,6 +281,88 @@ def get_knowledge_service() -> Any:
     return _knowledge_service
 
 
+_search_service: Any | None = None
+
+
+def set_search_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _search_service
+    _search_service = svc
+
+
+def get_search_service() -> Any:
+    """FastAPI Depends() target — actual type is SearchService."""
+    if _search_service is None:
+        raise RuntimeError("search service not initialised")
+    return _search_service
+
+
+_ingest_service: Any | None = None
+
+
+def set_ingest_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _ingest_service
+    _ingest_service = svc
+
+
+def get_ingest_service() -> Any:
+    """FastAPI Depends() target — actual type is IngestService."""
+    if _ingest_service is None:
+        raise RuntimeError("ingest service not initialised")
+    return _ingest_service
+
+
+# --- memory kind ---
+
+_memory_service: Any | None = None
+
+
+def set_memory_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _memory_service
+    _memory_service = svc
+
+
+def get_memory_service() -> Any:
+    """FastAPI Depends() target — actual type is MemoryService."""
+    if _memory_service is None:
+        raise RuntimeError("memory service not initialised")
+    return _memory_service
+
+
+_memory_override_repo: Any | None = None
+
+
+def set_memory_override_repo(repo: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _memory_override_repo
+    _memory_override_repo = repo
+
+
+def get_memory_override_repo() -> Any:
+    """FastAPI Depends() target — actual type is OverrideRepository."""
+    if _memory_override_repo is None:
+        raise RuntimeError("memory override repo not initialised")
+    return _memory_override_repo
+
+
+_memory_delivery_service: Any | None = None
+
+
+def set_memory_delivery_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _memory_delivery_service
+    _memory_delivery_service = svc
+
+
+def get_memory_delivery_service() -> Any:
+    """FastAPI Depends() target — actual type is DeliveryService."""
+    if _memory_delivery_service is None:
+        raise RuntimeError("memory delivery service not initialised")
+    return _memory_delivery_service
+
+
 # More providers split out for the file-size budget: knowledge.tidy_state
 # (imported there directly by the composition roots, NOT re-exported here so
 # kind-agnostic core stays clean) and chat.dependencies (re-exported at top).
