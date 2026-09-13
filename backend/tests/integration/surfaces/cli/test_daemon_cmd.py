@@ -1,9 +1,14 @@
-"""`coffer daemon port` + the fixed-port pre-flight in `coffer daemon start`.
+"""`coffer daemon port` + the port pre-flight in `coffer daemon start`.
 
 Every test runs under a throwaway ``HOME`` so nothing here can read or write
 the developer's real ``~/.coffer``. These deliberately exercise the
-no-daemon-running path: that is the state a bad fixed port causes, and the
-state the whole sub-group has to remain usable in.
+no-daemon-running path: that is the state a taken port causes, and — now that
+this CLI group is the only surface for the setting — the state the whole
+sub-group has to remain usable in.
+
+The default port is stood in for by a monkeypatched ``DEFAULT_PORT`` wherever a
+test needs to hold it, because the developer's own daemon is usually on the
+real 8000 and a test must not have to win it.
 """
 
 from __future__ import annotations
@@ -14,10 +19,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import httpx
 import pytest
 from typer.testing import CliRunner
 
+from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.surfaces.cli import daemon_cmd, daemon_port_cmd
 from coffer.surfaces.cli.main import app
@@ -61,28 +66,36 @@ def test_port_set_then_show_round_trips_without_a_daemon(home: Path) -> None:
     assert "not running" in res.output
 
 
-def test_port_clear_removes_the_fixed_port(home: Path) -> None:
+def test_port_clear_returns_to_the_default(home: Path) -> None:
+    """Clearing names the port it goes back to.
+
+    "cleared" on its own used to mean "automatic", and saying only that now
+    would leave the user with no idea which address to open.
+    """
     assert runner.invoke(app, ["daemon", "port", "set", "8123"]).exit_code == 0
 
     res = runner.invoke(app, ["daemon", "port", "clear"])
     assert res.exit_code == 0, res.output
-    assert "automatic" in res.output
+    assert str(daemon_config.DEFAULT_PORT) in res.output
+    assert "automatic" not in res.output
     assert _config(home)["port"] is None
 
     payload = json.loads(runner.invoke(app, ["daemon", "port", "show", "--json"]).stdout)
     assert payload["configured_port"] is None
 
 
-def test_port_show_reports_automatic_when_nothing_is_configured(home: Path) -> None:
+def test_port_show_reports_the_default_when_nothing_is_configured(home: Path) -> None:
+    """An unconfigured vault has an address, and `show` is where it is read."""
     res = runner.invoke(app, ["daemon", "port", "show"])
     assert res.exit_code == 0, res.output
-    assert "automatic" in res.output
+    assert f"default ({daemon_config.DEFAULT_PORT})" in res.output
+    assert "automatic" not in res.output
     assert not (home / ".coffer" / "daemon-config.json").exists()
 
 
 def test_port_show_flags_a_config_file_it_cannot_read(home: Path) -> None:
     """A hand-mangled config is reported where the user can act on it — the
-    daemon itself only warns into a log and falls back to automatic."""
+    daemon itself only warns into a log and falls back to the default port."""
     (home / ".coffer" / "daemon-config.json").write_text("{not json")
 
     res = runner.invoke(app, ["daemon", "port", "show"])
@@ -104,20 +117,26 @@ def test_port_set_rejects_an_unbindable_port_and_writes_nothing(home: Path, bad:
     assert not (home / ".coffer" / "daemon-config.json").exists()
 
 
-def test_start_refuses_when_the_fixed_port_is_held(
+def _squat_a_port() -> socket.socket:
+    """Hold an arbitrary free port the way an unrelated dev server would."""
+    squatter = socket.socket()
+    squatter.bind(("127.0.0.1", 0))
+    squatter.listen(5)
+    return squatter
+
+
+def test_start_refuses_when_the_configured_port_is_held(
     home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The pre-flight names the conflict in the terminal instead of letting the
     spawn time out into "check daemon.log"."""
-    squatter = socket.socket()
-    squatter.bind(("127.0.0.1", 0))
-    squatter.listen(5)
+    squatter = _squat_a_port()
     port = squatter.getsockname()[1]
     try:
         assert runner.invoke(app, ["daemon", "port", "set", str(port)]).exit_code == 0
 
         def _must_not_spawn(*args: Any, **kwargs: Any) -> None:
-            raise AssertionError("start must not spawn a daemon onto a held fixed port")
+            raise AssertionError("start must not spawn a daemon onto a held port")
 
         monkeypatch.setattr(daemon_cmd.subprocess, "Popen", _must_not_spawn)
 
@@ -129,6 +148,69 @@ def test_start_refuses_when_the_fixed_port_is_held(
     assert str(port) in res.output
     assert "coffer daemon port set" in res.output
     assert not (home / ".coffer" / "daemon.json").exists()
+
+
+def test_start_refuses_when_the_default_port_is_held_and_nothing_is_configured(
+    home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The common case now, and the one the old pre-flight walked straight past.
+
+    It returned early whenever no port was configured, because a start with no
+    configuration used to scan and had no single port to diagnose. A start now
+    insists on the default, so the vault where the user has changed nothing is
+    exactly the vault this check has to cover — and the diagnosis has to arrive
+    before the spawn, not as a boot timeout ten seconds later.
+    """
+    squatter = _squat_a_port()
+    monkeypatch.setattr(daemon_config, "DEFAULT_PORT", squatter.getsockname()[1])
+    try:
+        assert not (home / ".coffer" / "daemon-config.json").exists()
+
+        def _must_not_spawn(*args: Any, **kwargs: Any) -> None:
+            raise AssertionError("start must not spawn a daemon onto a held default port")
+
+        monkeypatch.setattr(daemon_cmd.subprocess, "Popen", _must_not_spawn)
+
+        res = runner.invoke(app, ["daemon", "start"])
+    finally:
+        squatter.close()
+
+    assert res.exit_code != 0
+    assert str(daemon_config.DEFAULT_PORT) in res.output
+    # Nothing is configured, so `clear` would change nothing and must not be
+    # offered; moving off the default is the way out this user has.
+    assert "coffer daemon port set" in res.output
+    assert "coffer daemon port clear" not in res.output
+    assert not (home / ".coffer" / "daemon.json").exists()
+
+
+def test_start_skips_the_pre_flight_under_the_range_override(
+    home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A test daemon scans a range of its own, so there is no port to pre-check.
+
+    Without this the pre-flight would diagnose 8000 — a port the start under
+    the override was never going to touch — and refuse to spawn every test
+    daemon on a developer's machine whose real daemon is up.
+    """
+    monkeypatch.setenv("COFFER_PORT_RANGE_START", "59680")
+    monkeypatch.setenv("COFFER_PORT_RANGE_END", "59689")
+
+    squatter = _squat_a_port()
+    monkeypatch.setattr(daemon_config, "DEFAULT_PORT", squatter.getsockname()[1])
+    spawned: list[object] = []
+
+    def _record_spawn(*args: Any, **kwargs: Any) -> Any:
+        spawned.append(args)
+        raise RuntimeError("stop here — the pre-flight let us through, which is the point")
+
+    monkeypatch.setattr(daemon_cmd.subprocess, "Popen", _record_spawn)
+    try:
+        runner.invoke(app, ["daemon", "start"])
+    finally:
+        squatter.close()
+
+    assert spawned, "the pre-flight refused a start it has no port to judge"
 
 
 def _live(monkeypatch: pytest.MonkeyPatch, port: int) -> DaemonInfo:
@@ -145,56 +227,73 @@ def _live(monkeypatch: pytest.MonkeyPatch, port: int) -> DaemonInfo:
     return info
 
 
-class _FakeClient:
-    """Records the one request the command makes, and answers the contract."""
-
-    def __init__(self, payload: dict[str, Any]) -> None:
-        self.payload = payload
-        self.calls: list[tuple[str, Any]] = []
-
-    def __enter__(self) -> _FakeClient:
-        return self
-
-    def __exit__(self, *exc: object) -> None:
-        return None
-
-    def put(self, path: str, json: Any = None) -> httpx.Response:
-        self.calls.append((path, json))
-        return httpx.Response(
-            200, json=self.payload, request=httpx.Request("PUT", f"http://d{path}")
-        )
-
-
-def test_port_set_goes_through_a_running_daemon(
+def test_port_set_writes_the_file_even_with_a_daemon_running(
     home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """With a daemon up the change is made through its API, so it is audited —
-    the direct file write is only the no-daemon fallback."""
-    info = _live(monkeypatch, 8000)
-    fake = _FakeClient({"configured_port": 8123, "effective_port": 8000, "restart_required": True})
-    monkeypatch.setattr(daemon_port_cmd._cli_client, "client_or_exit", lambda: (fake, info))
+    """The file is the only place the setting lives, so the CLI always writes it.
+
+    It used to PUT through the running daemon so the change was audited. That
+    route is gone — a setting whose whole job is to be fixable when the daemon
+    will not start cannot be served by the daemon — and the CLI writes the file
+    in every state instead of only as a fallback.
+    """
+    _live(monkeypatch, 8000)
 
     res = runner.invoke(app, ["daemon", "port", "set", "8123"])
     assert res.exit_code == 0, res.output
-    assert fake.calls == [("/settings/daemon", {"port": 8123})]
+    assert _config(home)["port"] == 8123
+    # The daemon owns its bound socket and cannot move, so the user is told
+    # the change is still owed a restart.
+    assert "8000" in res.output
     assert "coffer daemon restart" in res.output
-    # The daemon owns the file in this path; the CLI must not have written it.
-    assert not (home / ".coffer" / "daemon-config.json").exists()
 
 
-def test_port_clear_goes_through_a_running_daemon(
+def test_port_set_to_the_port_already_served_asks_for_no_restart(
     home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    del home  # only needed so nothing can touch the developer's real ~/.coffer
-    info = _live(monkeypatch, 8000)
-    fake = _FakeClient({"configured_port": None, "effective_port": 8000, "restart_required": False})
-    monkeypatch.setattr(daemon_port_cmd._cli_client, "client_or_exit", lambda: (fake, info))
+    """Nothing changes for this process, so nothing is owed.
+
+    Saying "restart" here would be false, and a restart hint the user learns to
+    disregard is worse than none at all.
+    """
+    _live(monkeypatch, 8123)
+
+    res = runner.invoke(app, ["daemon", "port", "set", "8123"])
+    assert res.exit_code == 0, res.output
+    assert _config(home)["port"] == 8123
+    assert "coffer daemon restart" not in res.output
+
+
+def test_port_clear_with_a_daemon_on_the_default_asks_for_no_restart(
+    home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Clearing returns the daemon to its default port — where it already is.
+
+    This is the case the old wording got wrong: it compared "is a port
+    configured?" rather than "will the next start bind what this one did", so
+    clearing always read as a no-op even when it moved the daemon.
+    """
+    assert runner.invoke(app, ["daemon", "port", "set", "8123"]).exit_code == 0
+    _live(monkeypatch, daemon_config.DEFAULT_PORT)
 
     res = runner.invoke(app, ["daemon", "port", "clear"])
     assert res.exit_code == 0, res.output
-    assert fake.calls == [("/settings/daemon", {"port": None})]
-    assert "automatic" in res.output
+    assert _config(home)["port"] is None
     assert "coffer daemon restart" not in res.output
+
+
+def test_port_clear_away_from_a_daemon_on_a_chosen_port_asks_for_a_restart(
+    home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The mirror image: the running daemon is on the port being cleared, so
+    the next start moves it back to the default and the user must be told."""
+    assert runner.invoke(app, ["daemon", "port", "set", "8123"]).exit_code == 0
+    _live(monkeypatch, 8123)
+
+    res = runner.invoke(app, ["daemon", "port", "clear"])
+    assert res.exit_code == 0, res.output
+    assert _config(home)["port"] is None
+    assert "coffer daemon restart" in res.output
 
 
 def test_port_show_reports_the_port_the_daemon_is_actually_on(

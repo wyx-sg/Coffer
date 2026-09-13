@@ -1,4 +1,11 @@
-"""Loopback port binding: the user's fixed port, or a bounded free-port scan."""
+"""Loopback port binding: the one port the daemon must have, or a bounded scan.
+
+:func:`bind_fixed_socket` is how the daemon binds — the port the user pinned,
+or :data:`~coffer.infrastructure.daemon.config.DEFAULT_PORT` when they pinned
+none. :func:`bind_free_socket` and :func:`allocate` are the scan, kept for the
+``COFFER_PORT_RANGE_*`` override the test suite pins so concurrent test daemons
+cannot collide on 8000. No user-facing start reaches the scan.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +16,7 @@ from dataclasses import dataclass
 
 import psutil
 
+from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.daemon.pid_lock import pid_is_coffer_daemon
 
 
@@ -29,7 +37,7 @@ class PortHolder:
 
 
 class PortInUse(Exception):  # noqa: N818
-    """Raised when the user's FIXED port is held by something else.
+    """Raised when the port the daemon must bind is held by something else.
 
     Carries the port and, when it could be identified, the process holding it,
     so every surface can print the same actionable message instead of each
@@ -73,18 +81,23 @@ def find_port_holder(port: int) -> PortHolder | None:
 def fixed_port_conflict_message(
     port: int, holder: PortHolder | None, *, note: str | None = None
 ) -> str:
-    """What the user is told when their fixed port cannot be bound.
+    """What the user is told when the daemon's port cannot be bound.
 
     One text, shared by the daemon's own refusal and by the CLI's pre-flight
     check, because the user may meet either one first. It names the holder and
-    every way out: a fixed port that fails without saying what to do next is
-    worse than the drift it replaced.
+    every way out: a port that fails without saying what to do next is worse
+    than the drift it replaced.
 
     A Coffer daemon found squatting the port gets its own line. It is never
     killed automatically — it belongs to another vault (a live test under a
     throwaway ``HOME`` is the usual source) and reaping someone else's daemon
     without being asked is not a decision a failed bind earns — but the user
     should not have to work out what that process is, so the message says.
+
+    ``coffer daemon port clear`` is offered only when the port that failed is
+    NOT the default, because that is the only case where clearing changes
+    anything: it returns the daemon to :data:`DEFAULT_PORT`. Listing it against
+    a failing 8000 would send the user to a command that does nothing.
     """
     if note is not None:
         held_by = note
@@ -93,8 +106,7 @@ def fixed_port_conflict_message(
     else:
         held_by = "could not identify the process — it belongs to another user"
     lines = [
-        f"port {port} is configured as Coffer's fixed daemon port, but something "
-        f"else is already using it.",
+        f"port {port} is the port Coffer's daemon binds, but something else is already using it.",
         f"  held by: {held_by}",
     ]
     if holder is not None and holder.is_coffer_daemon:
@@ -106,8 +118,11 @@ def fixed_port_conflict_message(
         "  fix one of:",
         "    stop that process, then    coffer daemon start",
         "    use a different port       coffer daemon port set <port>",
-        "    go back to automatic       coffer daemon port clear",
     ]
+    if port != daemon_config.DEFAULT_PORT:
+        lines.append(
+            f"    back to the default {daemon_config.DEFAULT_PORT}   coffer daemon port clear"
+        )
     return "\n".join(lines)
 
 
@@ -119,8 +134,9 @@ def _new_socket(*, reuse_addr: bool) -> socket.socket:
     ``TIME_WAIT`` — the classic "Address already in use" on server restart. The
     fixed-port path needs it, because there a failed rebind is a failed restart.
 
-    The scan path must NOT have it, and the reason is a platform difference CI
-    proved rather than a theoretical one. On Linux, ``SO_REUSEADDR`` also lets
+    The scan path (the ``COFFER_PORT_RANGE_*`` override) must NOT have it, and
+    the reason is a platform difference CI proved rather than a theoretical
+    one. On Linux, ``SO_REUSEADDR`` also lets
     two sockets bind the *same* address and port as long as neither is
     ``LISTEN``ing — and a Coffer daemon spends its whole boot window bound but
     not yet listening (uvicorn calls ``listen`` later, from the fd we hand it).
@@ -134,12 +150,16 @@ def _new_socket(*, reuse_addr: bool) -> socket.socket:
     return sock
 
 
-def allocate(start: int = 8000, end: int = 8009) -> int:
+def allocate(
+    start: int = daemon_config.DEFAULT_PORT, end: int = daemon_config.DEFAULT_PORT + 9
+) -> int:
     """Return the first available 127.0.0.1 port in [start, end] inclusive.
 
-    Note: this probe-and-close form has an inherent TOCTOU window — the port
-    can be taken between the close here and a later bind. The daemon path uses
-    :func:`bind_free_socket` instead, which keeps ownership of the port.
+    Part of the override path only (see the module docstring): a normal start
+    binds one port and refuses to move. Note also that this probe-and-close
+    form has an inherent TOCTOU window — the port can be taken between the
+    close here and a later bind — so even within that path the daemon uses
+    :func:`bind_free_socket`, which keeps ownership of the port.
     """
     sock = bind_free_socket(start, end)
     try:
@@ -148,7 +168,9 @@ def allocate(start: int = 8000, end: int = 8009) -> int:
         sock.close()
 
 
-def bind_free_socket(start: int = 8000, end: int = 8009) -> socket.socket:
+def bind_free_socket(
+    start: int = daemon_config.DEFAULT_PORT, end: int = daemon_config.DEFAULT_PORT + 9
+) -> socket.socket:
     """Bind the first free 127.0.0.1 port in [start, end] and RETURN the socket.
 
     CODE-041: the caller keeps the bound socket open and hands its fd to the
@@ -157,10 +179,11 @@ def bind_free_socket(start: int = 8000, end: int = 8009) -> socket.socket:
     ``daemon.json`` (already published with the live token) pointing at a port
     owned by an unrelated process, leaking the management token to it.
 
-    This is the path taken when the user has NOT fixed the daemon's port. It
-    moves to the next port whenever one is taken, so the port the user's
-    browser bookmark names is not guaranteed; :func:`bind_fixed_socket` is the
-    path that guarantees it.
+    This is reached ONLY through the ``COFFER_PORT_RANGE_*`` override — the
+    hook the test suite uses to give each of its daemons a disjoint range, well
+    away from the real 8000. A user's daemon never scans: it moves to the next
+    port whenever one is taken, and a port that moves is precisely what
+    :func:`bind_fixed_socket` exists to stop.
     """
     for port in range(start, end + 1):
         s = _new_socket(reuse_addr=False)
@@ -171,7 +194,7 @@ def bind_free_socket(start: int = 8000, end: int = 8009) -> socket.socket:
             continue
         return s
     raise NoFreePort(
-        f"no free port in {start}-{end} — every port in the daemon's range is "
+        f"no free port in {start}-{end} — every port in the requested range is "
         "taken. Most often these are orphaned Coffer daemons a previous spawn "
         "could not see (check for other 'coffer.infrastructure.daemon.entry' "
         "processes); a live daemon now evicts itself once another takes over "
@@ -182,9 +205,10 @@ def bind_free_socket(start: int = 8000, end: int = 8009) -> socket.socket:
 def bind_fixed_socket(port: int, *, attempts: int = 4, delay: float = 0.3) -> socket.socket:
     """Bind exactly ``127.0.0.1:port`` and RETURN the socket, or raise :class:`PortInUse`.
 
-    No fallback: a fixed port that quietly becomes a different port is the
-    behaviour the setting exists to end, so the daemon refuses to start instead
-    and the user is told what holds the port.
+    This is how every user-facing start binds, whether ``port`` came from the
+    user's setting or is :data:`DEFAULT_PORT`. No fallback: a port that quietly
+    becomes a different port is the behaviour this exists to end, so the daemon
+    refuses to start instead and the user is told what holds the port.
 
     Restart is the case this path has to get right, so it gets both halves of
     the treatment: ``SO_REUSEADDR`` (see :func:`_new_socket`) for a port whose

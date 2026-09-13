@@ -40,7 +40,7 @@ whichever fits how you work.
 
 ### Desktop app (macOS) — _from the first release_
 
-Download `Coffer-<version>.dmg` from
+Download `Coffer-unsigned-<triple>.dmg` from
 [Releases](https://github.com/wyx-sg/Coffer/releases/latest), drag Coffer to
 Applications, and open it. Nothing else is required: the app carries `coffer`,
 `coffer-daemon`, `coffer-mcp-shim` and `coffer-callback` inside it, starts the
@@ -84,7 +84,7 @@ Each `v*` tag publishes two tiers from
 
 | Platform            | File                          | What it is                        |
 | ------------------- | ----------------------------- | --------------------------------- |
-| macOS Apple silicon | `Coffer-<version>.dmg`        | The desktop app, self-contained   |
+| macOS Apple silicon | `Coffer-unsigned-<triple>.dmg` | The desktop app, self-contained   |
 | macOS Apple silicon | `coffer-cli-<triple>.tar.gz`  | The command line and its binaries |
 
 Coffer currently ships macOS (Apple Silicon) only. The archive contains `coffer`,

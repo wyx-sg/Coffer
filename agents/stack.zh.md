@@ -60,6 +60,24 @@ make dev                           # backend on :8000
 make lint / make verify-unit / make format / make verify
 ```
 
+## 桌面外壳 —— Rust / Tauri 2
+
+桌面外壳在 `desktop/`。它是**同一份 `frontend/dist` 之上的原生宿主**，不是第二个 UI：
+它把构建好的 SPA 作为本地 asset 承载、通过 IPC 提供 API token（因为 FR-025 的注入够不到
+一份没人供出的文档）、为 daemon 跑 detect-or-spawn、并常驻托盘。除此之外它什么都不负责
+——文件动作在两个宿主里都走 daemon 的 HTTP 路由，二进制部署归 daemon 的冻结启动路径
+（[桌面壳回归](../docs/decisions/desktop-shell-over-a-shared-frontend.zh.md)）。
+
+- **Rust 2021**、**Tauri 2**（`tray-icon`、`image-png`）。
+- 文件大小：每个 `.rs` 文件 **≤ 400 行**，与后端 Python 同一上限，由
+  `scripts/check_file_sizes.py` 把关。外壳刻意拆成若干小模块（`resolve`、`discovery`、
+  `spawn`、`env_path`、`sidecar`、`tray`）以守住这条线。
+- 纯决策函数——解析链路、限流、`daemon.json` 解析、`$PATH` 合并——与它们的 I/O 分离，
+  这样 `cargo test` 不需要 Tauri 运行时也不需要 socket 就能覆盖它们。
+- `cargo test` **不**属于 `make verify`，也没有任何 CI 环节带 Rust 工具链。用
+  `make desktop-test` 跑它；用 `make desktop` 构建 app（它会先为四个打包二进制跑
+  PyInstaller，所以很慢）。
+
 ## E2E — TypeScript / Playwright
 
 端到端层位于 `e2e/`。仓库主要的 TypeScript surface 是前端

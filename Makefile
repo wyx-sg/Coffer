@@ -9,6 +9,7 @@ FRONTEND := frontend
 	coverage lock \
 	eval eval-routing eval-curate \
 	bundle-binaries \
+	desktop desktop-test \
 	frontend-codegen \
 	lint format dev clean
 
@@ -33,6 +34,10 @@ help:
 	@echo "  make eval-routing          + tool-routing suite (needs a local LLM, e.g. ollama)"
 	@echo "  make eval-curate           curate captured traces into golden cases (ARGS=--dry-run)"
 	@echo "  make lock                  refresh backend/uv.lock from pyproject.toml (the install lockfile)"
+	@echo ""
+	@echo "  Desktop shell (optional; needs a Rust toolchain — not in 'make verify'):"
+	@echo "  make desktop               build the Coffer.app + .dmg (SLOW: runs PyInstaller, ~50 min)"
+	@echo "  make desktop-test          cargo test for the desktop crate"
 	@echo ""
 	@echo "  Dev:"
 	@echo "  make dev                   run backend (:8000) + frontend (:5173) in parallel"
@@ -250,8 +255,83 @@ frontend-codegen:
 bundle-binaries:
 	bash ./scripts/build_binaries.sh
 
+# --- Desktop shell (docs/decisions/desktop-shell-over-a-shared-frontend.md) ---
+#
+# Deliberately NOT a prerequisite of `verify`: the Rust toolchain is a
+# prerequisite of `make desktop` only, and no CI workflow installs one for
+# the test gates. `make desktop-test` is how anyone with a toolchain runs
+# the crate's unit tests.
+#
+# `desktop` produces an UNSIGNED, un-notarised Coffer.app + .dmg. macOS will
+# refuse a browser-downloaded copy on double-click until a Developer ID
+# exists; a locally-built one runs fine.
+#
+# The .app bundles the four frozen binaries via tauri.conf.json's
+# `externalBin`, which is why this target has to run PyInstaller first. Tauri
+# resolves each `binaries/<name>` entry to `binaries/<name>-<target-triple>`,
+# so the freshly-built binaries are staged under that suffixed name.
+desktop:
+	@echo "make desktop: this runs PyInstaller for four binaries before the"
+	@echo "  Tauri build — expect roughly 50 minutes on a laptop. The result is"
+	@echo "  UNSIGNED: macOS Gatekeeper will block a downloaded copy of it."
+	@echo ""
+	@command -v rustc >/dev/null 2>&1 || { \
+		echo "desktop: no Rust toolchain — install one from https://rustup.rs"; exit 1; \
+	}
+	@command -v npx >/dev/null 2>&1 || { \
+		echo "desktop: npx not found. The Tauri CLI is invoked as"; \
+		echo "  'npx @tauri-apps/cli' — install Node.js, or install the Rust CLI"; \
+		echo "  with 'cargo install tauri-cli --version ^2' and run 'cargo tauri build'"; \
+		echo "  from desktop/ yourself."; exit 1; \
+	}
+	@if [ ! -d $(FRONTEND)/node_modules ]; then \
+		echo "desktop: $(FRONTEND)/node_modules missing — run 'make install' first"; exit 1; \
+	fi
+# (1) The window loads frontend/dist as a local asset, so it must exist.
+# tauri.conf.json's beforeBuildCommand builds it too; doing it up front
+# fails fast on a broken frontend instead of after the PyInstaller hour.
+	npm run build --prefix $(FRONTEND)
+# (2) Freeze coffer / coffer-daemon / coffer-mcp-shim / coffer-callback.
+	$(MAKE) bundle-binaries
+# (3) Stage them where externalBin expects, under the rustc host triple
+# (the same value Tauri exposes as TAURI_ENV_TARGET_TRIPLE).
+	@set -e; \
+	TRIPLE=$$(rustc -vV | awk '/^host:/ {print $$2}'); \
+	case "$$TRIPLE" in *windows*) EXT=.exe ;; *) EXT= ;; esac; \
+	mkdir -p desktop/binaries; \
+	for b in coffer coffer-daemon coffer-mcp-shim coffer-callback; do \
+		cp "dist/$$b$$EXT" "desktop/binaries/$$b-$$TRIPLE$$EXT"; \
+		chmod +x "desktop/binaries/$$b-$$TRIPLE$$EXT"; \
+	done; \
+	echo "desktop: staged binaries for $$TRIPLE"
+# (4) Build the .app + .dmg.
+	cd desktop && npx --yes @tauri-apps/cli@^2 build
+	@echo ""
+	@echo "desktop: built (unsigned) — see desktop/target/release/bundle/"
+
+# `cargo test` needs the externalBin entries to resolve at build time, so a
+# checkout with no frozen binaries staged cannot compile the crate. Stand in
+# a placeholder for any that is missing: it is gitignored like the real ones,
+# and it announces itself loudly if it ever escapes into a bundle. A real
+# `make desktop` overwrites all four.
+desktop-test:
+	@set -e; \
+	TRIPLE=$$(rustc -vV | awk '/^host:/ {print $$2}'); \
+	case "$$TRIPLE" in *windows*) EXT=.exe ;; *) EXT= ;; esac; \
+	mkdir -p desktop/binaries; \
+	for b in coffer coffer-daemon coffer-mcp-shim coffer-callback; do \
+		f="desktop/binaries/$$b-$$TRIPLE$$EXT"; \
+		if [ ! -e "$$f" ]; then \
+			printf '#!/bin/sh\necho "%s: placeholder staged by make desktop-test; run make desktop to build the real binary" >&2\nexit 1\n' "$$b" > "$$f"; \
+			chmod +x "$$f"; \
+		fi; \
+	done
+	cd desktop && cargo test
+
 clean:
 	rm -rf .venv \
 		$(FRONTEND)/node_modules $(FRONTEND)/dist \
 		$(BACKEND)/.pytest_cache $(BACKEND)/.mypy_cache $(BACKEND)/.ruff_cache \
-		.mypy_cache .ruff_cache .pytest_cache
+		.mypy_cache .ruff_cache .pytest_cache \
+		desktop/target desktop/gen/schemas
+	@find desktop/binaries -type f ! -name .gitkeep -delete 2>/dev/null || true

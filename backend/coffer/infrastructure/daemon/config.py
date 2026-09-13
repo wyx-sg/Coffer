@@ -28,6 +28,17 @@ _logger = logging.getLogger(__name__)
 
 _CONFIG_VERSION = 1
 
+#: The port the daemon binds when the user has configured nothing — and the
+#: single place that number is written down, so bootstrap, the CLI and every
+#: message quoting it cannot drift apart.
+#:
+#: It is a fixed default rather than the head of a scan: a local service with a
+#: web UI is bookmarked and its origin keys the browser's ``localStorage``, so a
+#: port that moves silently resets the UI's own remembered state. A default the
+#: daemon refuses to start without is the trade that ADR
+#: "The Desktop Shell Returns" chose in its place.
+DEFAULT_PORT = 8000
+
 #: Ports the daemon will accept as a fixed port. The floor is not arbitrary:
 #: binding below 1024 needs privileges the daemon does not have and must not
 #: acquire, so accepting one would only trade a clear rejection now for an
@@ -65,7 +76,7 @@ def _read_raw() -> dict[str, Any] | None:
     except (OSError, json.JSONDecodeError) as exc:
         # A hand-mangled config must not stop the daemon from starting — that
         # would be unrecoverable from the UI, which needs a running daemon. Warn
-        # loudly and fall back to automatic selection; `coffer daemon port show`
+        # loudly and fall back to the default port; `coffer daemon port show`
         # reports the same problem where the user can act on it.
         _logger.warning("daemon config at %s is unreadable (%r); ignoring it", path, exc)
         return None
@@ -86,11 +97,13 @@ def config_is_readable() -> bool:
 
 
 def read_fixed_port() -> int | None:
-    """The user's fixed port, or ``None`` for automatic selection.
+    """The port the user pinned, or ``None`` to mean :data:`DEFAULT_PORT`.
 
     ``None`` also covers an absent, unreadable, or nonsensical file: every one
     of those means "no usable instruction", and the safe reading of no
-    instruction is the behaviour Coffer had before this setting existed.
+    instruction is the default port — never a different one. Callers that want
+    the number the daemon will actually bind should ask :func:`effective_port`
+    rather than substituting the default themselves.
     """
     payload = _read_raw()
     if payload is None:
@@ -108,8 +121,23 @@ def read_fixed_port() -> int | None:
         return None
 
 
+def effective_port() -> int:
+    """The port the daemon will bind at its next start.
+
+    One function so that "what port is Coffer on?" has one answer across the
+    bind itself, the CLI's ``show``, and the pre-flight that diagnoses a
+    squatted port — three places that each used to reach for the default on
+    their own and could therefore disagree.
+    """
+    fixed = read_fixed_port()
+    return DEFAULT_PORT if fixed is None else fixed
+
+
 def write_fixed_port(port: int | None) -> None:
-    """Fix the daemon's port, or clear the setting with ``None``.
+    """Pin the daemon's port, or clear the setting with ``None``.
+
+    Clearing returns the daemon to :data:`DEFAULT_PORT`; it does not return it
+    to picking a port for itself, which Coffer no longer does.
 
     Takes effect at the next daemon start — a running daemon owns its bound
     socket and cannot move without restarting.

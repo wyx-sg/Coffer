@@ -1,22 +1,26 @@
 // Where the API lives, and how this page proves it may call it.
 //
-// The daemon serves this bundle at its own loopback origin, so in production
-// the API is same-origin and the base URL is simply `<origin>/api/v1`. The
-// hardcoded :8000 default is gone with the desktop shell, which was the only
-// thing that could be served from somewhere other than the daemon.
+// Two globals answer both questions, and every host converges on them. That
+// convergence is the point: readers below never learn which host they are in,
+// so a second host is a second *supplier* rather than a second path.
 //
-// The token arrives in the page itself: whoever served this document set
-// `window.__COFFER_TOKEN__` in the head before the bundle ran — the daemon
-// injects it into the `index.html` it serves (backend `webui.py`), and the
-// Vite dev server's plugin does the same from `~/.coffer/daemon.json` because
-// :5173 is not the daemon. Either way the value is the token of the daemon
-// that is running right now.
+// Three suppliers write them:
+//
+//   - the daemon, which serves this bundle at its own loopback origin and
+//     injects `window.__COFFER_TOKEN__` into the `index.html` it serves
+//     (backend `webui.py`). No base URL: the API is same-origin.
+//   - the Vite dev server's plugin, which injects the same token plus a base
+//     URL read from `~/.coffer/daemon.json`, because :5173 is not the daemon.
+//   - the desktop shell, whose window loads this bundle as a local asset, so
+//     nobody injected anything into the document at all. `main.tsx` asks the
+//     shell over IPC and calls `setDaemonConnection` below before the first
+//     render. See docs/decisions/desktop-shell-over-a-shared-frontend.md.
 //
 // Nothing is persisted. A stored token was the whole bug: the daemon mints a
 // new one on every start, so anything kept from a previous daemon is dead, and
 // a page that trusted it got 401 on every call with no way to recover but
-// re-running `coffer open`. A page that reads the token from its own document
-// cannot go stale — a reload re-fetches the document.
+// re-running `coffer open`. Every supplier above reads from something the
+// running daemon published, so none of them can hand over a dead token.
 
 type InjectedGlobals = {
   __COFFER_BASE_URL__?: string;
@@ -44,4 +48,19 @@ export function getCofferToken(): string | null {
   // a token carries no script at all, and tests blank the global to stand in
   // for that. Either way the answer is "this page has no credential".
   return injectedGlobals().__COFFER_TOKEN__ || null;
+}
+
+/**
+ * Write the connection globals the desktop host has no document to carry.
+ *
+ * Called pre-render by `main.tsx` at launch, and again after the offline
+ * banner's Restart succeeds — the daemon mints a fresh token on every start,
+ * so the launch-time copy is revoked the moment a new daemon comes up.
+ * Callers that memoised the base URL (the openapi-fetch client) must also
+ * `resetApiClient()`; the token itself is read per-request and needs no reset.
+ */
+export function setDaemonConnection(baseUrl: string, token: string): void {
+  const w = injectedGlobals();
+  w.__COFFER_BASE_URL__ = baseUrl;
+  w.__COFFER_TOKEN__ = token;
 }

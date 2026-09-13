@@ -1,15 +1,15 @@
-"""`coffer daemon port` — show, fix, or clear the port the daemon listens on.
+"""`coffer daemon port` — show, change, or clear the port the daemon listens on.
 
-Every command here works with NO daemon running, because that is a state this
-very setting can cause: a fixed port something else has taken stops the daemon
-from starting, so a surface that needed a live daemon to change the setting
-would be unreachable exactly when it is needed.
+This is the ONLY surface for the setting, and that is deliberate. The daemon
+binds 8000 by default and refuses to start when it cannot have it, so the state
+this setting most needs to be changed from is "no daemon is running" — which
+rules out a page or a route the daemon itself would have to serve. Everything
+here therefore reads and writes `~/.coffer/daemon-config.json` directly, with
+no daemon involved and none required.
 
-When a daemon IS up, `set`/`clear` still go through it, so the change is
-audited and lands the same way it would from the UI; writing the file directly
-is the fallback, not the first choice. `show` never needs the daemon: it reads
-the config file and the published daemon.json, both of which it can see
-whatever state the daemon is in.
+A running daemon is still consulted for one thing: it owns its bound socket and
+cannot move without restarting, so when the new port is not the one it is on,
+`set`/`clear` say a restart is still owed.
 """
 
 from __future__ import annotations
@@ -20,24 +20,15 @@ import typer
 
 from coffer.infrastructure.daemon import bootstrap
 from coffer.infrastructure.daemon import config as daemon_config
-from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._options import ExitCode
 
 app = typer.Typer(help="The port the daemon listens on")
 
-#: The daemon's own settings endpoint — the same one the UI writes through, so
-#: a change made here is recorded exactly like a change made there.
-_SETTINGS_PATH = "/settings/daemon"
-
 _RESTART_HINT = "run: coffer daemon restart"
 
 
-def _verbose(ctx: typer.Context) -> bool:
-    return bool((ctx.obj or {}).get("verbose", False))
-
-
 def _validated(port: int) -> int:
-    """Reject an unbindable port before anything is written or sent.
+    """Reject an unbindable port before anything is written.
 
     Shares :mod:`coffer.infrastructure.daemon.config`'s bounds rather than
     restating them, so the CLI can never drift from what the daemon accepts.
@@ -51,35 +42,29 @@ def _validated(port: int) -> int:
 
 def _outcome(port: int | None) -> str:
     if port is None:
-        return "fixed port cleared — the daemon picks a port automatically"
+        return f"fixed port cleared — the daemon goes back to {daemon_config.DEFAULT_PORT}"
     return f"fixed port set to {port}"
 
 
-def _apply(ctx: typer.Context, port: int | None) -> None:
-    """Persist the setting through the daemon when one answers, else directly."""
-    info = bootstrap.live_daemon()
-    if info is None:
-        daemon_config.write_fixed_port(port)
-        typer.echo(_outcome(port))
-        typer.echo("daemon not running — wrote the setting directly; it applies at the next start")
-        return
+def _apply(port: int | None) -> None:
+    """Write the setting, then say whether a restart is owed.
 
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.put(_SETTINGS_PATH, json={"port": port})
-        _cli_client.check(r, verbose=_verbose(ctx))
-        payload = r.json()
+    The file is written whatever the daemon is doing — it is read at the next
+    start, and a daemon that is up has no say in the matter. What a live daemon
+    does decide is the second line: if it is already serving the port that was
+    just chosen there is nothing left to do, and saying "restart" anyway would
+    train the user to ignore the line.
+    """
+    daemon_config.write_fixed_port(port)
     typer.echo(_outcome(port))
 
-    restart_required = payload.get("restart_required")
-    if restart_required is None:
-        # Older daemon, or a response that omitted the flag: the question it
-        # answers is simply whether the daemon is already on the new port.
-        restart_required = port is not None and port != info.port
-    if restart_required:
-        running_on = payload.get("effective_port", info.port)
+    info = bootstrap.live_daemon()
+    if info is None:
+        typer.echo("daemon not running — the setting applies at the next start")
+        return
+    if daemon_config.effective_port() != info.port:
         typer.echo(
-            f"the daemon is still on port {running_on}; "
+            f"the daemon is still on port {info.port}; "
             f"the change applies at the next start — {_RESTART_HINT}"
         )
 
@@ -89,7 +74,7 @@ def show(
     ctx: typer.Context,
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
-    """Show the configured fixed port and the port the daemon is actually on."""
+    """Show the port the daemon will bind, and the port it is actually on."""
     del ctx  # read locally; no daemon call to make verbose
     configured = daemon_config.read_fixed_port()
     readable = daemon_config.config_is_readable()
@@ -110,7 +95,7 @@ def show(
         return
 
     if configured is None:
-        typer.echo("configured: automatic (no fixed port)")
+        typer.echo(f"configured: default ({daemon_config.DEFAULT_PORT})")
     else:
         typer.echo(f"configured: {configured}")
     if info is None:
@@ -121,22 +106,21 @@ def show(
     if not readable:
         typer.echo(
             f"the config file at {daemon_config.config_path()} exists but could not be read; "
-            "automatic selection is in effect"
+            f"the default port {daemon_config.DEFAULT_PORT} is in effect"
         )
-    elif configured is not None and effective is not None and configured != effective:
-        typer.echo(f"the fixed port applies at the next start — {_RESTART_HINT}")
+    elif effective is not None and daemon_config.effective_port() != effective:
+        typer.echo(f"the configured port applies at the next start — {_RESTART_HINT}")
 
 
 @app.command("set")
 def set_port(
-    ctx: typer.Context,
     port: int = typer.Argument(..., help="Port the daemon should always listen on"),
 ) -> None:
-    """Fix the daemon's port so its web UI keeps one address."""
-    _apply(ctx, _validated(port))
+    """Change the port the daemon binds, away from the default."""
+    _apply(_validated(port))
 
 
 @app.command("clear")
-def clear(ctx: typer.Context) -> None:
-    """Go back to automatic port selection."""
-    _apply(ctx, None)
+def clear() -> None:
+    """Go back to the default port."""
+    _apply(None)

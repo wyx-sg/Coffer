@@ -3,9 +3,13 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
-import { useDaemonStatus } from "./useDaemon";
+import { useDaemonOutOfDate, useDaemonStatus } from "./useDaemon";
 
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+// The skew check is a Tauri IPC call; stub it so these run in either host.
+vi.mock("@/lib/tauri", () => ({ daemonVersionMatches: vi.fn() }));
+const { daemonVersionMatches } = await import("@/lib/tauri");
+const daemonVersionMatchesMock = vi.mocked(daemonVersionMatches);
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
 
@@ -51,5 +55,29 @@ describe("useDaemonStatus", () => {
     const { result } = renderHook(() => useDaemonStatus(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect((result.current.error as Error).message).toContain("not authorized");
+  });
+});
+
+describe("useDaemonOutOfDate", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  test("stays idle until the status query has reported a version", () => {
+    const { result } = renderHook(() => useDaemonOutOfDate(undefined), { wrapper: wrapper() });
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(daemonVersionMatchesMock).not.toHaveBeenCalled();
+  });
+
+  test("reports out-of-date when the shell says the versions do not pair", async () => {
+    daemonVersionMatchesMock.mockResolvedValue(false);
+    const { result } = renderHook(() => useDaemonOutOfDate("0.1.0"), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.data).toBe(true));
+    expect(daemonVersionMatchesMock).toHaveBeenCalledWith("0.1.0");
+  });
+
+  test("reports no skew when the versions match — the browser host always lands here", async () => {
+    daemonVersionMatchesMock.mockResolvedValue(true);
+    const { result } = renderHook(() => useDaemonOutOfDate("0.1.1"), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toBe(false);
   });
 });

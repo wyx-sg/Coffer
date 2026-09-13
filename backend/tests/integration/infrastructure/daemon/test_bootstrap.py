@@ -56,9 +56,6 @@ def test_acquire_writes_daemon_json_with_0600(
         sock.close()
 
 
-@pytest.mark.acceptance(
-    spec="mcp-gateway", scenario="daemon port conflict falls back to the next free port"
-)
 def test_second_daemon_picks_free_port_and_clients_discover(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -67,9 +64,12 @@ def test_second_daemon_picks_free_port_and_clients_discover(
     one.  Each acquire() writes a daemon.json that records the chosen port,
     so a discoverer reading the file gets the right answer.
 
-    This pins the spec edge case "Daemon port conflict": the daemon must
-    fall back to the next port in its bounded range without crashing, and
-    `daemon.json` must always reflect the live port.
+    This is the ``COFFER_PORT_RANGE_*`` override path and nothing else. It
+    carried the acceptance marker for "daemon port conflict falls back to the
+    next free port" until that scenario was inverted: a real start now binds
+    one port and refuses to move, and the scenario that replaced it lives in
+    test_fixed_port.py. The test stays because the override is what keeps the
+    suite's own daemons off 8000, and fall-forward is the whole of its value.
     """
     home = tmp_path / "home"
     home.mkdir()

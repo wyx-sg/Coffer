@@ -39,7 +39,7 @@ Coffer 用两种方式跑同一个 UI，而且装了其中任意一个，两个�
 ### 桌面 app（macOS）—— _随首个 release 提供_
 
 从 [Releases](https://github.com/wyx-sg/Coffer/releases/latest) 下载
-`Coffer-<version>.dmg`，把 Coffer 拖进「应用程序」，然后打开它。不需要别的：这个 app 把
+`Coffer-unsigned-<triple>.dmg`，把 Coffer 拖进「应用程序」，然后打开它。不需要别的：这个 app 把
 `coffer`、`coffer-daemon`、`coffer-mcp-shim`、`coffer-callback` 都装在自己里面，会替你启动
 daemon，不用的时候常驻菜单栏托盘。
 
@@ -79,7 +79,7 @@ Gatekeeper 那一步。
 
 | 平台                | 文件                          | 是什么                 |
 | ------------------- | ----------------------------- | ---------------------- |
-| macOS Apple silicon | `Coffer-<version>.dmg`        | 桌面 app，自包含       |
+| macOS Apple silicon | `Coffer-unsigned-<triple>.dmg` | 桌面 app，自包含       |
 | macOS Apple silicon | `coffer-cli-<triple>.tar.gz`  | 命令行及其二进制       |
 
 Coffer 目前只发布 macOS（Apple Silicon）版本。归档内含 `coffer`、`coffer-daemon`、

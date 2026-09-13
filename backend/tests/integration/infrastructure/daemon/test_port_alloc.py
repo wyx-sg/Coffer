@@ -1,7 +1,18 @@
+"""The two ways Coffer takes a loopback port.
+
+:func:`bind_fixed_socket` is the one a user's daemon uses: exactly one port,
+and a refusal naming its holder when that port is not to be had.
+:func:`bind_free_socket` / :func:`allocate` are the scan, which survives only
+for the ``COFFER_PORT_RANGE_*`` override the test suite pins so its own daemons
+do not queue up for 8000 — so the tests below are the last thing keeping that
+path honest.
+"""
+
 import socket
 
 import pytest
 
+from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.daemon import port_alloc
 from coffer.infrastructure.daemon.port_alloc import (
     NoFreePort,
@@ -21,8 +32,9 @@ def test_picks_default_when_free():
 
 def test_bind_free_socket_returns_loopback_bound_socket():
     """CODE-041 / FR-012: bind_free_socket hands back an OPEN socket bound to
-    a loopback port in range — the daemon keeps it and passes its fd to uvicorn
-    so the port is never released between publishing daemon.json and binding."""
+    a loopback port in range — a daemon started under the range override keeps
+    it and passes its fd to uvicorn, so the port is never released between
+    publishing daemon.json and binding."""
     s = bind_free_socket(start=58030, end=58039)
     try:
         host, port = s.getsockname()
@@ -103,7 +115,7 @@ def test_bind_fixed_socket_never_falls_back():
 
 
 def test_fixed_bind_sets_so_reuseaddr_and_the_scan_does_not():
-    """The option belongs to the fixed path only, and the split is load-bearing.
+    """The option belongs to the one-port path only, and the split is load-bearing.
 
     A restart must be able to rebind a port whose old connections are still in
     TIME_WAIT, so the fixed path sets it. The scan path must not: on Linux
@@ -126,9 +138,10 @@ def test_fixed_bind_sets_so_reuseaddr_and_the_scan_does_not():
 
 
 def test_a_held_scan_port_cannot_be_bound_again():
-    """CODE-041, pinned at the socket level: while acquire() holds a scanned
-    port, nothing else may take it — not even another socket of ours setting
-    SO_REUSEADDR, which is exactly what Linux would otherwise allow."""
+    """CODE-041, pinned at the socket level: while acquire() holds a port taken
+    under the range override, nothing else may take it — not even another
+    socket of ours setting SO_REUSEADDR, which is exactly what Linux would
+    otherwise allow."""
     held = bind_free_socket(start=58090, end=58099)
     try:
         port = held.getsockname()[1]
@@ -167,6 +180,21 @@ def test_conflict_message_survives_an_unidentifiable_holder():
     """macOS will not let an unprivileged process inspect another user's
     sockets, so "who holds it" can legitimately be unknown — the way out must
     still be spelled out."""
-    message = fixed_port_conflict_message(8000, None)
+    message = fixed_port_conflict_message(daemon_config.DEFAULT_PORT, None)
     assert "could not identify" in message
-    assert "coffer daemon port clear" in message
+    assert "coffer daemon port set" in message
+
+
+def test_conflict_message_offers_clear_only_where_it_would_do_something():
+    """Clearing the setting means "go back to the default", not "go back to
+    picking a port", so it is a way out of a squatted 9000 and no way out at
+    all of a squatted 8000 — and a message that offered it anyway would send
+    the user to a command that changes nothing."""
+    holder = PortHolder(pid=4321, command="node vite")
+
+    on_a_chosen_port = fixed_port_conflict_message(9000, holder)
+    assert "coffer daemon port clear" in on_a_chosen_port
+    assert str(daemon_config.DEFAULT_PORT) in on_a_chosen_port
+
+    on_the_default = fixed_port_conflict_message(daemon_config.DEFAULT_PORT, holder)
+    assert "coffer daemon port clear" not in on_the_default

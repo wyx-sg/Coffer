@@ -132,12 +132,17 @@ that list. Both were retired in the intervening months — the SessionStart hook
 with the last of the native-config writes, voice transcription when it moved off
 the machine — so this is a strictly smaller bundle than the one that was removed.
 
-The shell still resolves the daemon through a five-step chain — its own bundle,
-then an already-running daemon named by `daemon.json`, then `~/.coffer/bin/`,
-then `$PATH`, then a message saying to install the CLI. Bundling makes step one
-the normal path rather than a dead one; the rest stay as the recovery path for a
-bundle whose sidecar is missing or unrunnable, and step two is what stops the app
-from starting a second daemon beside one the user already has.
+The shell resolves the daemon through a five-step chain: an already-running
+daemon named by `daemon.json`, then its own bundle, then `~/.coffer/bin/`, then
+`$PATH`, then a message saying to install the CLI. The liveness probe is first
+and that position is correctness rather than preference — steps two through four
+all answer *which binary would we spawn*, while step one answers *whether to
+spawn at all*. Ask them the other way round and a bundled build opens a second
+daemon beside the one the user already started from the CLI; under the fixed-port
+default that rival cannot bind, so an app that should simply have attached
+instead reports a port conflict. Bundling makes step two the normal way to find
+a binary rather than a dead one; the rest stay as the recovery path for a bundle
+whose sidecar is missing or unrunnable.
 
 **Installing the app also installs the CLI**, without the shell doing anything.
 The daemon deploys its own siblings — all four, `coffer` included — into

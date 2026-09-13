@@ -59,6 +59,29 @@ make dev                           # backend on :8000
 make lint / make verify-unit / make format / make verify
 ```
 
+## Desktop Shell — Rust / Tauri 2
+
+The desktop shell lives in `desktop/`. It is a **native host over the same
+`frontend/dist`** the daemon serves, not a second UI: it hosts the built SPA as
+a local asset, supplies the API token over IPC (because FR-025's injection
+cannot reach a document nobody served), runs detect-or-spawn for the daemon, and
+sits in the tray. It owns nothing else — file actions go through the daemon's
+HTTP routes in both hosts, and binary deployment belongs to the daemon's
+frozen-start path ([The Desktop Shell
+Returns](../docs/decisions/desktop-shell-over-a-shared-frontend.md)).
+
+- **Rust 2021**, **Tauri 2** (`tray-icon`, `image-png`).
+- File size: **≤ 400 lines** per `.rs` file, same cap as backend Python and
+  gated by `scripts/check_file_sizes.py`. The shell is deliberately split into
+  small modules (`resolve`, `discovery`, `spawn`, `env_path`, `sidecar`, `tray`)
+  to stay under it.
+- Pure decision functions — the resolution chain, the rate limit, `daemon.json`
+  parsing, the `$PATH` merge — are split from their I/O so `cargo test` covers
+  them without a Tauri runtime or a socket.
+- `cargo test` is **not** part of `make verify` and no CI leg carries a Rust
+  toolchain. Run it with `make desktop-test`; build the app with `make desktop`
+  (which runs PyInstaller for the four bundled binaries first, so it is slow).
+
 ## E2E — TypeScript / Playwright
 
 The end-to-end tier lives in `e2e/`. The primary TypeScript surface is the

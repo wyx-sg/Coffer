@@ -256,7 +256,7 @@ Rejected.
   `coffer-mcp-shim`, `coffer-callback`; `coffer-hook` and `whisper-cli` were
   retired in the interval), and macOS `.dmg` only — MSI, AppImage and deb stay
   gone, since those legs were never validated;
-  (b) the release regains a **second tier**: `Coffer-<version>.dmg` beside the
+  (b) the release regains a **second tier**: `Coffer-unsigned-<triple>.dmg` beside the
   `coffer-cli-<triple>.tar.gz`, both covered by the one aggregated `SHA256SUMS`
   (spec mcp-gateway FR-022 / FR-023). The desktop leg reuses the binaries the
   CLI leg already froze rather than running PyInstaller twice, so the second

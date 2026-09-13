@@ -3,6 +3,7 @@
 
 Limits (see agents/stack.md "Code Style"):
   * Backend Python file:    <= 400 lines
+  * Desktop shell (.rs):    <= 400 lines
   * Frontend page (.tsx):   <= 200 lines
   * Frontend component:     <= 250 lines
   * Frontend hook:          <= 300 lines
@@ -52,6 +53,10 @@ RULES: list[tuple[str, int, str]] = [
     ("frontend/src/pages/**/*.ts", 200, "frontend page"),
     # --- backend ---
     ("backend/coffer/**/*.py", 400, "backend Python"),
+    # --- desktop shell (Tauri/Rust) ---
+    # Same 400-line cap as backend Python. The shell was split across modules
+    # to stay under it; without a rule here that split was honoured by hand.
+    ("desktop/src/**/*.rs", 400, "desktop Rust"),
 ]
 
 EXCLUDED_DIR_PARTS = {

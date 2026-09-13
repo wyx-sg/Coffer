@@ -214,7 +214,7 @@ CI 发布任务产出单一下载层级。**
   `desktop/tauri.conf.json` —— 但只有**四个**二进制而非旧的五个（`coffer`、`coffer-daemon`、
   `coffer-mcp-shim`、`coffer-callback`；`coffer-hook` 与 `whisper-cli` 已在这期间退役），
   且只发 macOS `.dmg` —— MSI、AppImage、deb 仍然不做，那几条腿从未验证过；
-  (b) 发布重新长出**第二个层级**：`Coffer-<version>.dmg` 与 `coffer-cli-<triple>.tar.gz`
+  (b) 发布重新长出**第二个层级**：`Coffer-unsigned-<triple>.dmg` 与 `coffer-cli-<triple>.tar.gz`
   并列，两者都被同一份聚合 `SHA256SUMS` 覆盖（spec mcp-gateway FR-022 / FR-023）。桌面环节
   复用 CLI 环节已经冻结好的二进制，而不是再跑一遍 PyInstaller，所以第二个层级只多花一次
   Tauri 构建；

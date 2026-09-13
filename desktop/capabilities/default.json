@@ -1,0 +1,15 @@
+{
+  "$schema": "https://schema.tauri.app/config/2/capability",
+  "identifier": "default",
+  "description": "Default capability for the Coffer desktop window: core IPC (the daemon-info handshake and the restart/version commands), window show/hide/focus for close-to-tray, and the tray icon itself. No dialog or opener permissions — native file actions go to the daemon over HTTP in both hosts.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
+    "core:window:allow-unminimize",
+    "core:window:allow-close",
+    "core:tray:default"
+  ]
+}

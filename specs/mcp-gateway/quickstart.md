@@ -29,12 +29,12 @@ coffer daemon start
 
 On first launch Coffer:
 
-1. Allocates a free port in the 8000–8009 range and writes
-   `~/.coffer/daemon.json` (mode `0600`) so the CLI and the shim can find
-   each other. If you would rather the address never moved — so a browser
-   bookmark to Coffer's UI keeps working — fix the port once with
-   `coffer daemon port set 8000` (or Settings → General); from then on Coffer
-   binds that port or refuses to start, and says what is holding it.
+1. Binds port 8000 and writes `~/.coffer/daemon.json` (mode `0600`) so the CLI
+   and the shim can find each other. The address does not move between
+   restarts, so a browser bookmark to Coffer's UI keeps working. If something
+   else on your machine wants 8000, Coffer refuses to start rather than landing
+   somewhere else, and names the process holding it; `coffer daemon port set
+   <other>` moves Coffer instead.
 2. Initialises the SQLite database under `~/.coffer/coffer.db`.
 3. Seeds default retention policies (audit: 365 days, invocations: 30 days).
 
@@ -43,7 +43,7 @@ Verify the daemon is up:
 ```bash
 coffer daemon status
 # → status: ready
-# → port:   8001
+# → port:   8000
 ```
 
 ## Add your first MCP server
@@ -102,8 +102,8 @@ Restart the client.
 }
 ```
 
-(If Coffer chose a different port — see `~/.coffer/daemon.json` for the
-actual one — substitute it here.)
+(If you moved Coffer's port with `coffer daemon port set` — see
+`~/.coffer/daemon.json` for the actual one — substitute it here.)
 
 ## Verify it works
 
@@ -165,8 +165,7 @@ by ref.)
 | Server registered but capabilities empty          | Upstream failed to initialize | `~/.coffer/logs/upstream-<name>.log` has stderr from the upstream.                 |
 | `CREDENTIAL_LOCKED` error                         | OS keychain is locked         | Unlock the keychain (macOS: log in to GUI; Linux: unlock GNOME-keyring / KWallet). |
 | Disabled tool still appears in client             | Client cached the tool list   | Restart the client, or look for a "reload MCP servers" option.                     |
-| `no free port in 8000-8009 range`                 | Ten ports busy                | Kill the other process and restart `coffer daemon`.                                |
-| `port <n> is configured as Coffer's fixed daemon port` | Something else holds the port you fixed | The message names the process. Free it, `coffer daemon port set <other>`, or `coffer daemon port clear`. |
+| `port <n> is configured as Coffer's fixed daemon port` | Something else holds the port Coffer binds — 8000 by default | The message names the process. Free it, or move Coffer with `coffer daemon port set <other>`. |
 
 ## Where things live
 
