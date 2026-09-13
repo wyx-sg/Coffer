@@ -20,14 +20,28 @@ const useAgentModelsMock = useAgentModels as unknown as ReturnType<typeof vi.fn>
 /** The daemon-served catalogue per agent, read back from the installed agent
  * (`fable` is the case no frontend constant could have known about). */
 const CATALOGUE: Record<string, AgentModel[]> = {
+  // Claude Code names tier aliases and no model of its takes a reasoning effort;
+  // Codex names concrete models and every one of its does.
   claude_code: [
-    { id: "opus", label: "Opus", description: "" },
-    { id: "sonnet", label: "Sonnet", description: "" },
-    { id: "fable", label: "", description: "" },
+    { id: "opus", label: "Opus", description: "", efforts: [], default_effort: null },
+    { id: "sonnet", label: "Sonnet", description: "", efforts: [], default_effort: null },
+    { id: "fable", label: "", description: "", efforts: [], default_effort: null },
   ],
   codex: [
-    { id: "gpt-5-codex", label: "", description: "" },
-    { id: "gpt-5", label: "", description: "" },
+    {
+      id: "gpt-5-codex",
+      label: "",
+      description: "",
+      efforts: ["low", "medium", "high", "xhigh"],
+      default_effort: "xhigh",
+    },
+    {
+      id: "gpt-5",
+      label: "",
+      description: "",
+      efforts: ["low", "medium", "high"],
+      default_effort: "medium",
+    },
   ],
 };
 

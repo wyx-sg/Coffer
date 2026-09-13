@@ -821,6 +821,64 @@ screen because the alias's current target is read from the same table.
 **Supersedes:** H1's "the catalogue lists real models only … the CLIs' tier
 aliases are not offered", for Claude Code. **Withdraws:** K1.
 
+## Amendment 2026-09-13b — Codex's reasoning effort is a choice Coffer offers
+
+> Status: Draft. **Extends M1** — a catalogue is whatever the agent's own picker
+> offers — to the second field that picker carries for Codex. **Refines** the
+> per-conversation `AgentConfig` blob and the `…/models` payload.
+
+**Why.** M1 settled what the ID in a picker should be; it did not notice that for
+Codex the id is not the whole choice. `model/list` reports, per model, a
+`supportedReasoningEfforts` list — `low` / `medium` / `high` / `xhigh`, each with
+its own description — and a `defaultReasoningEffort`. Coffer read neither, so its
+picker offered a model and nothing else, while Codex's own picker offers the model
+AND the level, which is most of the choice a Codex user actually makes. On this
+machine `model/list` currently returns a SINGLE model, which makes the arithmetic
+plain: the effort was in practice the only choice left, and Coffer offered none of
+it. Nor is the difference cosmetic — the same prompt, same model, reported 53
+reasoning output tokens at `low` and 2569 at `xhigh` (~48x), from Codex's own
+token-usage notification.
+
+- **N1 — The effort travels BESIDE the id, never inside it.** `AgentModel` gains
+  `efforts: tuple[str, ...]` — the levels the agent reported, in the order it
+  reported them, empty for an agent that takes no such setting — and
+  `default_effort`, the level it would use when none is chosen; the `…/models`
+  route exposes both. Beside, because that is what Codex's protocol does: the
+  effort is its own field on a turn, so folding four levels into the name would
+  multiply one model into four entries that are the same model, under names
+  Coffer invented — exactly what J3 forbids. A reported default is kept only when
+  it is one of the offered levels; a default a picker cannot show is worse than
+  no default at all. Nothing is invented for a model that reports no efforts.
+- **N2 — Stored per conversation, next to the model.** It goes in the same
+  provider-owned `AgentConfig` blob the model already lives in — `cwd`,
+  `session_id`, `model`, now `effort` — because it is the same kind of fact: a
+  choice made for THIS conversation, owned by the provider, belonging neither to
+  the agent resource nor to the connection. `PATCH
+  /api/v1/chat/conversations/{id}/agent-config` takes `effort` alongside `model`;
+  a body that mentions one leaves the other alone, and an empty or null value
+  clears the field so the agent runs at its own default.
+- **N3 — It is applied on the TURN — `turn/start` `{threadId, input, effort}`,
+  omitted when unset.** The two other places it could go were rejected by
+  experiment, not by reading. `thread/start` ignores an effort field entirely:
+  the response keeps echoing the config default, so a thread-level setting would
+  have been a control that changes nothing while looking like it works.
+  `thread/settings/update` does exist, but is refused unless the client asks for
+  the `experimentalApi` capability in `initialize` — a dependency Coffer will not
+  take on for a field it can set honestly elsewhere. `turn/start` was verified by
+  measurement rather than by documentation (the 53-vs-2569 above), which is the
+  only evidence worth having for a field whose effect never appears in the
+  response that acknowledges it.
+- **N4 — Coffer validates no level.** Like a model name, the string is passed to
+  the CLI as given; Codex owns that namespace, so a release that renames a level
+  or adds a fifth one works the day it ships, and a level this account cannot run
+  fails where every other unusable choice fails — at the CLI. An agent that
+  reports no efforts (Claude Code) is unaffected end to end: no field is sent on
+  its turns, and the surface shows no control.
+
+**Extends:** M1 (a catalogue is what the agent's own picker offers).
+**Unchanged:** J3/M3 — Coffer writes down no model name, and now no level either;
+both stay raw passthrough.
+
 ## Scope
 
 ### In scope

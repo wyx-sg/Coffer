@@ -184,12 +184,12 @@ async def get_agent_config(
     id: str,
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
 ) -> AgentConfigOut:
-    """Read a conversation's agent config (cwd, model). 404 if not found.
+    """Read a conversation's agent config (cwd, model, effort). 404 if not found.
 
     ``session_id`` is provider-internal and deliberately not surfaced.
     """
     cfg = await svc.get_agent_config(id)  # raises ConversationNotFound -> 404
-    return AgentConfigOut(cwd=cfg.cwd, model=cfg.model)
+    return AgentConfigOut(cwd=cfg.cwd, model=cfg.model, effort=cfg.effort)
 
 
 @router.patch("/conversations/{id}/agent-config", response_model=AgentConfigOut)
@@ -198,22 +198,28 @@ async def set_agent_config(
     body: AgentConfigPatch,
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
 ) -> AgentConfigOut:
-    """Set a managed agent's own model for a conversation (ADR
+    """Set a managed agent's own model and effort for a conversation (ADR
     builtin-agent-is-internal-capability → ADR provider-switching).
 
-    Mirrors the channel ``/model`` command: read-then-``replace(cfg, model=...)``
-    so ``cwd`` and ``session_id`` are preserved. An empty/whitespace ``model``
-    clears the override (the conversation then inherits the active provider
-    profile's projected default). The registry ``model_id`` (PATCH
+    Mirrors the channel ``/model`` command: read-then-``replace`` so ``cwd`` and
+    ``session_id`` are preserved, and a body that mentions only one of the two
+    leaves the other where it was. An empty/whitespace ``model`` clears the
+    override (the conversation then inherits the active provider profile's
+    projected default); an empty/whitespace ``effort`` clears it (the agent then
+    runs at whatever its own config says). The registry ``model_id`` (PATCH
     /conversations/{id}) is unrelated and is not read by the managed-agent turn
     path.
     """
     cfg = await svc.get_agent_config(id)  # raises ConversationNotFound -> 404
+    fields: dict[str, str | None] = {}
     if "model" in body.model_fields_set:
-        new_model = (body.model or "").strip() or None
-        cfg = replace(cfg, model=new_model)
+        fields["model"] = (body.model or "").strip() or None
+    if "effort" in body.model_fields_set:
+        fields["effort"] = (body.effort or "").strip() or None
+    if fields:
+        cfg = replace(cfg, **fields)
         await svc.set_agent_config(id, cfg)
-    return AgentConfigOut(cwd=cfg.cwd, model=cfg.model)
+    return AgentConfigOut(cwd=cfg.cwd, model=cfg.model, effort=cfg.effort)
 
 
 @router.post("/conversations/{id}/archive", response_model=ConversationOut)

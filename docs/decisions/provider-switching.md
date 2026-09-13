@@ -296,3 +296,35 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-13](../../s
   source, never a wrong answer — but it now costs the whole source rather than
   the filter, which is the safe direction when the fallback would be the list this
   amendment exists to stop offering.
+
+## Amendment 2026-09-13b — the effort a Codex turn thinks at is Coffer's to offer
+
+Authoritative design: the [spec provider-switching Amendment 2026-09-13b](../../specs/provider-switching/spec.md)
+(N1–N4).
+
+- **D16 — An effort is a field beside the model, not a name inside it.** D14 made
+  the picker offer what the agent's own picker offers; for Codex that is two
+  things, not one. `model/list` reports a `supportedReasoningEfforts` list and a
+  `defaultReasoningEffort` per model, and Coffer read neither — so on a machine
+  whose `model/list` answers with a single model, the picker offered the one
+  thing that was already decided and none of the thing that wasn't. The effort now
+  rides beside the id the whole way: `AgentModel.efforts` / `.default_effort` out
+  of the `…/models` route, `AgentConfig.effort` beside `AgentConfig.model` in the
+  conversation's provider-owned blob, `effort` beside `model` on
+  `PATCH …/agent-config` (mention one, the other is left alone; empty clears).
+  Beside rather than inside because that is how the protocol takes it — a level
+  baked into the name would be four entries for one model under ids Coffer made
+  up, which J3 (ids stay opaque, never a name Coffer writes down) rules out. And nothing
+  validates the level, for the same reason nothing validates a model name: the
+  namespace is Codex's, so a fifth level works the day it ships.
+- **D17 — Per turn, because the two alternatives are a lie and a dependency.**
+  `thread/start` accepts an effort field and ignores it — the response goes on
+  echoing the config default — so a thread-level control would have looked like it
+  worked while changing nothing. `thread/settings/update` is real but gated behind
+  the `experimentalApi` capability, which Coffer will not declare to set a field it
+  can set without it. So the effort goes on `turn/start`, and was confirmed there
+  by measurement rather than by reading: the same prompt reported 53 reasoning
+  output tokens at `low` and 2569 at `xhigh`, ~48x, from Codex's own token-usage
+  notification. For a setting whose effect never shows up in the response that
+  acknowledges it, a number is the only acceptance test. An agent that reports no
+  efforts sends no field and shows no control — the path is inert, not defaulted.

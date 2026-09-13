@@ -31,6 +31,14 @@ class AgentModel:
     id: str
     label: str = ""
     description: str = ""
+    #: The reasoning-effort levels this model can be run at, in the order the
+    #: agent reported them, or empty when it takes no such setting. An effort is
+    #: not part of the model NAME — Codex's app-server carries it as its own
+    #: field on a turn — so it travels beside the id all the way down.
+    efforts: tuple[str, ...] = ()
+    #: The level the agent itself would use when none is chosen; ``None`` when
+    #: it named none (or when there are no efforts at all).
+    default_effort: str | None = None
 
 
 __all__ = ["AgentModel"]

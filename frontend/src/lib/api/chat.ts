@@ -86,17 +86,24 @@ export interface ConversationPatch {
 /**
  * A conversation's agent config (managed agents). `model` is the agent's own
  * per-conversation model, free-text and passed through to its CLI (the
- * builtin-agent-is-internal-capability and provider-switching ADRs).
- * `session_id` is provider-internal and not surfaced.
+ * builtin-agent-is-internal-capability and provider-switching ADRs). `effort`
+ * is the reasoning level that model is run at, which the agents that have one
+ * carry beside the model rather than inside its name; null for an agent (or a
+ * model) that has no such setting. `session_id` is provider-internal and not
+ * surfaced.
  */
 export interface AgentConfigOut {
   cwd: string | null;
   model: string | null;
+  effort: string | null;
 }
 
+/** A patch that names one field leaves the other alone; see `setAgentModel`. */
 export interface AgentConfigPatch {
   /** Empty/whitespace or null clears the override (inherit the provider default). */
   model?: string | null;
+  /** Empty/whitespace or null clears it (the agent then picks its own level). */
+  effort?: string | null;
 }
 
 export interface SendMessageRequest {
@@ -162,8 +169,14 @@ export const chatApi = {
   getAgentConfig: (id: string) =>
     call<AgentConfigOut>("GET", `/chat/conversations/${id}/agent-config`),
 
+  // Each setter sends its own field ALONE. Restating the other one would pin a
+  // value the user never touched — and, worse, re-send an inherited null as an
+  // explicit clear — so the two settings stay independently editable.
   setAgentModel: (id: string, model: string | null) =>
     call<AgentConfigOut>("PATCH", `/chat/conversations/${id}/agent-config`, { model }),
+
+  setAgentEffort: (id: string, effort: string | null) =>
+    call<AgentConfigOut>("PATCH", `/chat/conversations/${id}/agent-config`, { effort }),
 
   deleteConversation: (id: string) => call<void>("DELETE", `/chat/conversations/${id}`),
 

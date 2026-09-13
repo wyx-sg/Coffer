@@ -191,3 +191,27 @@ Codex 需要在启动前在 shell 中设置 `COFFER_PROVIDER_KEY`。这是永不
   别名不会退役，而那张表唯一的职责，是修剪如今已无人提供的那份带版本号的清单。失效方式的性质
   不变——锚点一旦不再匹配，代价是这个来源失效，而绝不会给出错误答案——只是现在失效的是整个来源，
   而不是过滤器；在「退回去」意味着重新提供本修订要停止提供的那份清单时，这才是安全的方向。
+
+## 修订 2026-09-13b — Codex 一个回合「想多久」，该由 Coffer 提供
+
+权威设计见 [spec provider-switching 修订 2026-09-13b](../../specs/provider-switching/spec.zh.md)（N1–N4）。
+
+- **D16 — 强度是模型旁边的一个字段，不是名字里的一截。** D14 让选择器提供「agent 自己的
+  选择器所提供的东西」；对 Codex 来说那是两样，不是一样。`model/list` 为每个模型报告一个
+  `supportedReasoningEfforts` 列表与一个 `defaultReasoningEffort`，而这两样 Coffer 都没读
+  ——于是在一台 `model/list` 只回答一个模型的机器上，选择器提供的恰恰是那个早已定下的东西，
+  而没定下的那个一点没提供。现在强度全程走在 id 旁边：`…/models` 路由上的
+  `AgentModel.efforts` / `.default_effort`，会话那份 provider 自有 blob 里与
+  `AgentConfig.model` 并列的 `AgentConfig.effort`，以及 `PATCH …/agent-config` 上与 `model`
+  并列的 `effort`（提到一个，另一个不动；空值清除）。之所以是「旁边」而不是「里面」，因为
+  协议就是这么收的：把档位烤进名字，会变成同一个模型的四条条目、四个 Coffer 自己编的 id，
+  而这被 J3（id 不透明，绝不是 Coffer 写死的名字）排除在外。档位同样不做任何校验，理由与
+  模型名不校验完全相同：命名空间归 Codex，于是新增第五档的发布，当天就能用。
+- **D17 — 落在回合上，因为另外两个落点一个是假象、一个是依赖。** `thread/start` 会收下
+  强度字段然后忽略它——响应里回显的依旧是配置默认值——所以线程级的控件会「看着生效、其实
+  什么都没变」。`thread/settings/update` 是真的存在，但被 `experimentalApi` 能力挡着，而
+  为了一个不靠它也能设置的字段去声明这个能力，Coffer 不做。于是强度落在 `turn/start` 上，
+  并且是靠**测量**而不是靠读文档确认的：同一个提示词，`low` 下报告 53 个推理输出 token，
+  `xhigh` 下 2569 个，约 48 倍，数字出自 Codex 自己的 token 用量通知。对一个「效果从不出现
+  在确认它的那个响应里」的设置来说，一个数字是唯一的验收。报告不出任何档位的 agent 不发这个
+  字段、也不显示这个控件——这条路径是**静默不启用**，而不是被塞了个默认值。

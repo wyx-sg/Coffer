@@ -343,6 +343,36 @@ async def test_adapter_streams_events_and_persists_thread_id():
 
 
 @pytest.mark.asyncio
+async def test_effort_rides_on_the_turn_not_the_thread():
+    """Codex takes the reasoning effort as a field on the TURN. ``thread/start``
+    ignores one, and the thread's own settings are behind its experimental API,
+    so the level would silently do nothing anywhere else."""
+    server = FakeCodexAppServer(frames=_basic_frames())
+    adapter = _adapter(_Factory(server), extra={"model": "gpt-5.5", "effort": "xhigh"})
+
+    await asyncio.wait_for(_collect(adapter, _user_turn("hi")), timeout=5)
+
+    turn_params = next(p for m, p in server.requests if m == "turn/start")
+    assert turn_params["effort"] == "xhigh"
+    start_params = next(p for m, p in server.requests if m == "thread/start")
+    assert start_params["model"] == "gpt-5.5"
+    assert "effort" not in start_params
+
+
+@pytest.mark.asyncio
+async def test_no_effort_chosen_sends_no_effort_at_all():
+    """An absent level must leave Codex on whatever its own config says, which
+    means sending nothing — not a guess at what its default is."""
+    server = FakeCodexAppServer(frames=_basic_frames())
+    adapter = _adapter(_Factory(server), extra={"model": "gpt-5.5", "effort": None})
+
+    await asyncio.wait_for(_collect(adapter, _user_turn("hi")), timeout=5)
+
+    turn_params = next(p for m, p in server.requests if m == "turn/start")
+    assert "effort" not in turn_params
+
+
+@pytest.mark.asyncio
 async def test_adapter_empty_prompt_is_rejected():
     server = FakeCodexAppServer(frames=[])
     factory = _Factory(server)
