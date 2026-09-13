@@ -38,7 +38,7 @@ from coffer.application.diagnostics import register_diagnostics_builtin_tools
 from coffer.application.knowledge.skill_seed import seed_knowledge_skill
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_worker import RetentionWorker
-from coffer.domain.resource import Kind
+from coffer.domain.resource import Kind, ResourceRef
 from coffer.infrastructure.daemon.orphan_sweep import startup_sweep
 from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
 from coffer.infrastructure.logging.files import log_dir, prune_log_dir
@@ -136,10 +136,22 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     credential_store = await init_credential_store(engine, db_path)
 
     audit_repo = SqlAlchemyAuditRepo(sm)
-    audit = AuditService(audit_repo)
+    resource_repo = SqlAlchemyResourceRepo(sm)
+
+    async def _resolve_resource_id(kind: str, name: str) -> int | None:
+        """The stable row id behind a ``<kind>:<name>``, for the audit trail.
+
+        Injected rather than imported so ``AuditService`` keeps its one
+        dependency: the resource side already depends on audit, and the
+        reverse import would close the loop.
+        """
+        found = await resource_repo.find(ResourceRef(kind, name))
+        return found.id if found else None
+
+    audit = AuditService(audit_repo, resolve_resource_id=_resolve_resource_id)
     resource_svc = ResourceService(
         kinds=app.state.kinds,
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=resource_repo,
         audit=audit,
         # Wired so register/update_config can probe credential_refs against
         # the encrypted store BEFORE persisting (spec edge case: missing

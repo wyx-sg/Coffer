@@ -199,13 +199,9 @@ class FakeAuditRepo:
     async def insert(self, entry) -> None:
         self._entries.append(entry)
 
-    async def repoint(self, kind, old_name, new_name) -> int:
-        moved = [e for e in self._entries if e.resource_name == old_name]
-        for e in moved:
-            e.resource_name = new_name
-        return len(moved)
-
-    async def query(self, *, kind=None, name=None, event_type=None, since=None, limit=50):
+    async def query(
+        self, *, kind=None, name=None, resource_id=None, event_type=None, since=None, limit=50
+    ):
         results = self._entries
         if event_type is not None:
             results = [e for e in results if e.event_type == event_type]

@@ -101,6 +101,7 @@ export function ProviderForm({
         e.preventDefault();
         if (isEdit) {
           const patch: ProviderPatch = { base_url: baseUrl };
+          if (protocol && protocol !== initial.protocol) patch.protocol = protocol;
           if (needsCredential && secret) patch.secret_value = secret;
           if (showCompatible) patch.compatible_agents = compatible;
           const renamed = name.trim();
@@ -122,11 +123,23 @@ export function ProviderForm({
         ) : null}
       </div>
 
-      {/* Provider preset (create only). Edit mode shows the locked protocol. */}
+      {/* Provider preset (create only). In edit mode the wire itself is
+          editable instead: the probe that guessed it can be wrong, and nothing
+          keys off it — an endpoint that turns out to speak a different wire is
+          corrected here rather than recreated. */}
       {isEdit ? (
         <div className="space-y-1.5">
-          <Label>{t("settings.connections.provider")}</Label>
-          <p className="text-sm text-muted-foreground">{initial?.protocol}</p>
+          <Label htmlFor="p-wire-edit">{t("settings.connections.wireFormat")}</Label>
+          <select
+            id="p-wire-edit"
+            className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+            value={protocol}
+            onChange={(e) => pickCustomProtocol(e.target.value as Protocol)}
+          >
+            <option value="anthropic">anthropic</option>
+            <option value="openai">openai</option>
+            <option value="ollama">ollama</option>
+          </select>
         </div>
       ) : (
         <div className="space-y-1.5">

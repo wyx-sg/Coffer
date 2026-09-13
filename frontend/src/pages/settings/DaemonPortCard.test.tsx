@@ -87,7 +87,6 @@ async function renderLoaded() {
 const requests = (method: string) => calls.filter((c) => c.method === method);
 const fixedSwitch = () => screen.getByLabelText(/use a fixed port/i);
 const portInput = () => screen.getByLabelText(/^port$/i);
-const saveButton = () => screen.getByRole("button", { name: /^save$/i });
 
 beforeEach(() => {
   calls = [];
@@ -126,21 +125,28 @@ describe("DaemonPortCard", () => {
     expect(portInput()).toHaveValue(8123);
   });
 
-  test("saving a fixed port PUTs it", async () => {
+  test("a fixed port is written when the field is committed, with no Save button", async () => {
     await renderLoaded();
-    fireEvent.click(fixedSwitch());
-    fireEvent.change(portInput(), { target: { value: "8123" } });
-    fireEvent.click(saveButton());
+    // The page has no Save button at all — everything on it saves as you
+    // change it, which is the rule the rest of Settings already follows.
+    expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
 
+    fireEvent.click(fixedSwitch());
     await waitFor(() => expect(requests("PUT")).toHaveLength(1));
-    expect(requests("PUT")[0].body).toEqual({ port: 8123 });
+
+    fireEvent.change(portInput(), { target: { value: "8123" } });
+    // Typing alone must not write — 8, 81, 812 are all valid-looking ports.
+    expect(requests("PUT")).toHaveLength(1);
+
+    fireEvent.blur(portInput());
+    await waitFor(() => expect(requests("PUT")).toHaveLength(2));
+    expect(requests("PUT")[1].body).toEqual({ port: 8123 });
   });
 
   test("turning the switch off saves null — back to automatic selection", async () => {
     settings = { configured_port: 8123, effective_port: 8123, restart_required: false };
     await renderLoaded();
     fireEvent.click(fixedSwitch());
-    fireEvent.click(saveButton());
 
     await waitFor(() => expect(requests("PUT")).toHaveLength(1));
     expect(requests("PUT")[0].body).toEqual({ port: null });
@@ -149,11 +155,14 @@ describe("DaemonPortCard", () => {
   test("an out-of-range port never leaves the browser", async () => {
     await renderLoaded();
     fireEvent.click(fixedSwitch());
+    await waitFor(() => expect(requests("PUT")).toHaveLength(1));
+
     fireEvent.change(portInput(), { target: { value: "80" } });
-    fireEvent.click(saveButton());
+    fireEvent.blur(portInput());
 
     expect(await screen.findByText(/between 1024 and 65535/i)).toBeInTheDocument();
-    expect(requests("PUT")).toHaveLength(0);
+    // Only the switch's own write; the bad port was refused in the browser.
+    expect(requests("PUT")).toHaveLength(1);
   });
 
   test("a port the daemon rejects is surfaced as it came back", async () => {
@@ -161,7 +170,7 @@ describe("DaemonPortCard", () => {
     await renderLoaded();
     fireEvent.click(fixedSwitch());
     fireEvent.change(portInput(), { target: { value: "9999" } });
-    fireEvent.click(saveButton());
+    fireEvent.blur(portInput());
 
     expect(await screen.findByText(/port must be 1024-65535/i)).toBeInTheDocument();
   });
@@ -172,7 +181,7 @@ describe("DaemonPortCard", () => {
 
     fireEvent.click(fixedSwitch());
     fireEvent.change(portInput(), { target: { value: "8123" } });
-    fireEvent.click(saveButton());
+    fireEvent.blur(portInput());
 
     const note = await screen.findByTestId("daemon-restart-note");
     expect(note).toHaveTextContent("coffer daemon restart");
@@ -184,10 +193,12 @@ describe("DaemonPortCard", () => {
   test("a save that needs no restart leaves no note", async () => {
     settings = { configured_port: null, effective_port: 8003, restart_required: false };
     await renderLoaded();
+    // Turning the switch on pins the port already being served, so it writes
+    // on its own — nothing to type, nothing to confirm.
     fireEvent.click(fixedSwitch());
-    fireEvent.click(saveButton()); // 8003 — the port already being served
 
     await waitFor(() => expect(requests("PUT")).toHaveLength(1));
+    expect(requests("PUT")[0].body).toEqual({ port: 8003 });
     expect(screen.queryByTestId("daemon-restart-note")).not.toBeInTheDocument();
   });
 });

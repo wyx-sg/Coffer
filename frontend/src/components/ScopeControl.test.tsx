@@ -50,6 +50,11 @@ function seed(opts: {
   } as unknown as ReturnType<typeof resourceHooks.useDisableResource>);
 }
 
+/** Close the agent list, which is when the staged selection is written. */
+function closeList() {
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+}
+
 /** Open the agent list, which lives behind the "Selected agents" segment. */
 function openList() {
   fireEvent.click(screen.getByRole("button", { name: /selected agents/i }));
@@ -69,12 +74,16 @@ describe("ScopeControl", () => {
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
-  test("switching every-agent -> selected PUTs an empty list and opens the list", () => {
+  test("switching every-agent -> selected opens the list and PUTs on close", () => {
     seed({ scope: null });
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
     openList();
-    expect(mutate).toHaveBeenCalledWith([]);
+    // Opening stages nothing on the server — the dormant hint is the panel
+    // describing the staged selection, not a write that already happened.
+    expect(mutate).not.toHaveBeenCalled();
     expect(screen.getByText(/dormant/i)).toBeInTheDocument();
+    closeList();
+    expect(mutate).toHaveBeenCalledWith([]);
   });
 
   test("switching selected -> every-agent PUTs null", () => {
@@ -119,6 +128,7 @@ describe("ScopeControl", () => {
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
     openList();
     fireEvent.click(screen.getByRole("checkbox", { name: "codex" }));
+    closeList();
     expect(mutate).toHaveBeenCalledWith(["claude", "codex"]);
   });
 
@@ -127,6 +137,7 @@ describe("ScopeControl", () => {
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
     openList();
     fireEvent.click(screen.getByRole("checkbox", { name: "claude" }));
+    closeList();
     expect(mutate).toHaveBeenCalledWith([]);
   });
 
@@ -152,6 +163,7 @@ describe("ScopeControl", () => {
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
     openList();
     fireEvent.click(screen.getByRole("checkbox", { name: "claude" }));
+    closeList();
     expect(mutate).toHaveBeenCalledWith(["ghost", "claude"]);
   });
 
@@ -197,10 +209,14 @@ describe("ScopeControl", () => {
     expect(mutate).toHaveBeenCalledWith(null);
   });
 
-  test("selected agents on a disabled resource enables without rewriting the scope", () => {
+  test("selected agents on a disabled resource enables on close, without rewriting the scope", () => {
     seed({ scope: ["claude"] });
     render(<ScopeControl kind="mcp_server" name="fs" enabled={false} />);
     openList();
+    // Nothing yet: a write here would refetch the list and move the row the
+    // open panel is anchored to.
+    expect(enableMutate).not.toHaveBeenCalled();
+    closeList();
     expect(enableMutate).toHaveBeenCalledWith({ kind: "mcp_server", name: "fs" });
     expect(mutate).not.toHaveBeenCalled();
   });
@@ -234,5 +250,41 @@ describe("ScopeControl", () => {
     expect(segment(/^disabled$/i)).toBeDisabled();
     expect(segment(/every agent/i)).toBeDisabled();
     expect(segment(/selected agents/i)).toBeDisabled();
+  });
+});
+
+describe("the agent selection commits when the popover closes", () => {
+  afterEach(() => vi.clearAllMocks());
+
+  test("opening the list writes nothing", () => {
+    // Clicking the segment used to PUT `[]` straight away. That refetched the
+    // resource list under an open popover, and the row it is anchored to moved
+    // — so the panel appeared under a different row.
+    seed({ scope: null });
+    render(<ScopeControl kind="mcp_server" name="fs" enabled scope={null} />);
+    openList();
+    expect(mutate).not.toHaveBeenCalled();
+  });
+
+  test("ticking an agent writes nothing until the popover closes", () => {
+    seed({ scope: [] });
+    render(<ScopeControl kind="mcp_server" name="fs" enabled scope={[]} />);
+    openList();
+    fireEvent.click(within(screen.getByTestId("scope-agent-claude")).getByRole("checkbox"));
+    fireEvent.click(within(screen.getByTestId("scope-agent-codex")).getByRole("checkbox"));
+    expect(mutate).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    // One write carrying the whole selection, not one per tick.
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(mutate).toHaveBeenCalledWith(["claude", "codex"]);
+  });
+
+  test("closing an untouched list of the same selection writes nothing", () => {
+    seed({ scope: ["claude"] });
+    render(<ScopeControl kind="mcp_server" name="fs" enabled scope={["claude"]} />);
+    openList();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    expect(mutate).not.toHaveBeenCalled();
   });
 });
