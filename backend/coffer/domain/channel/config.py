@@ -19,16 +19,7 @@ from pydantic import (
     Field,
     RootModel,
     field_validator,
-    model_validator,
 )
-
-#: Shape-only bounds for the channel's allowed model range. Model ids are
-#: OPAQUE — they are handed to the agent's CLI verbatim and Coffer writes down
-#: no model name of its own — so the only checks are that an id is a non-blank
-#: string, that the list holds no duplicates, and that neither the list nor an
-#: entry is absurdly long.
-_MAX_MODELS = 200
-_MAX_MODEL_ID_LEN = 200
 
 # A credential ref is a human-chosen path like "channel/tg/bot-token".
 # Raw secrets are longer and machine-shaped; reject the obvious cases. The
@@ -66,72 +57,16 @@ class _CommonChannelFields(BaseModel):
     # it also mentions the bot, so the bot never butts into human-aimed traffic.
     require_mention: bool = True
     ignore_other_mentions: bool = False
-    # Model curation belongs to the CHANNEL, not to the agent it routes to. The
-    # agent resource governs what a person gets when they open that agent
-    # directly; a channel is its own place with its own audience, and these two
-    # fields are how it says so.
+    # NOTE: a channel curates no models. A new conversation opens on the bound
+    # agent's own CLI default and ``/model`` offers that agent's whole
+    # catalogue, refusing nothing — the channel is a route to an agent, not a
+    # second place to narrow what that agent may run.
     #
-    # ``default_model`` is what a NEW conversation on this channel opens on.
-    # ``None`` pins nothing and the agent's CLI default applies — which is the
-    # behaviour of every channel nobody has configured.
-    default_model: str | None = Field(default=None, max_length=_MAX_MODEL_ID_LEN)
-    # ``models`` is the channel's allowed RANGE: the ``/model`` card offers
-    # exactly these, and ``/model <id>`` refuses anything else. EMPTY means NOT
-    # CURATED — every model the bound agent offers is allowed — never "no
-    # models", so an unconfigured channel behaves exactly as it did before.
-    models: list[str] = Field(default_factory=list)
     # NOTE: there is no runtime-affinity field here any more. `runs_on` (the
     # machine whose runtime started this channel's adapter) went away with
     # continuous multi-machine sync (ADR vault-export-import) — an enabled channel runs on
     # this, the only, machine. Pydantic ignores unknown keys, so a stored
     # pre-withdrawal config carrying `runs_on` still validates.
-
-    @field_validator("default_model")
-    @classmethod
-    def _clean_default_model(cls, v: str | None) -> str | None:
-        """Blank is the same as unset — a cleared text field must not pin the
-        empty string as a model name."""
-        if v is None:
-            return None
-        model = v.strip()
-        return model or None
-
-    @field_validator("models")
-    @classmethod
-    def _well_formed_models(cls, v: list[str]) -> list[str]:
-        """Shape only: non-blank ids, no duplicates, sane bounds. Whether an id
-        is one the bound agent can actually run is the agent's answer, not ours
-        — an allowed range is a statement of intent, and an id the next CLI
-        release drops is a stale menu entry, not a config error."""
-        if len(v) > _MAX_MODELS:
-            raise ValueError(f"too many models: at most {_MAX_MODELS}")
-        cleaned: dict[str, None] = {}
-        for m in v:
-            model = m.strip()
-            if not model:
-                raise ValueError("model id must not be empty")
-            if len(model) > _MAX_MODEL_ID_LEN:
-                raise ValueError(f"model id too long: at most {_MAX_MODEL_ID_LEN} characters")
-            cleaned.setdefault(model, None)
-        return list(cleaned)
-
-    @model_validator(mode="after")
-    def _default_model_within_range(self) -> _CommonChannelFields:
-        """A channel cannot start conversations on a model it then refuses.
-
-        Only checked when the range is curated: with ``models`` empty there is
-        no range to be outside of, and ``default_model`` is free text handed to
-        the CLI verbatim.
-        """
-        if self.default_model is None or not self.models:
-            return self
-        if self.default_model not in self.models:
-            raise ValueError(
-                f"default_model {self.default_model!r} is not in this channel's "
-                f"allowed models ({', '.join(self.models)}); add it there or "
-                f"clear default_model"
-            )
-        return self
 
 
 class TelegramChannelConfig(_CommonChannelFields):

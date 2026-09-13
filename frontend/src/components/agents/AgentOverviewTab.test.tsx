@@ -315,11 +315,9 @@ describe("AgentOverviewTab", () => {
 
   test("the built-in login offers NO model control at all, only where to choose one", () => {
     // Nothing reads `agent.model` on the built-in login, so a model dropdown
-    // there would write a field nobody reads — and curating a model list on an
-    // AGENT is equally wrong: an agent has no audience. A channel does, and it
-    // carries its own default model and allowed range (spec channels FR-071).
-    // So this branch offers no control whatsoever, just the sentence saying
-    // where the choice happens.
+    // there would write a field nobody reads. The model is chosen per
+    // conversation instead — in chat, with /model. So this branch offers no
+    // control whatsoever, just the sentence saying where the choice happens.
     useProvidersMock.mockReturnValue({ data: [] });
     render(<AgentOverviewTab agent={agent} />);
     expect(screen.queryByRole("combobox", { name: /^model$/i })).not.toBeInTheDocument();

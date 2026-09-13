@@ -193,8 +193,6 @@ def test_root_model_round_trips_flat_dict():
         "default_agent_config": None,
         "require_mention": True,
         "ignore_other_mentions": False,
-        "default_model": None,
-        "models": [],
     }
 
 
@@ -209,8 +207,6 @@ def test_root_model_round_trips_seatalk_dict():
         "tunnel_token_ref": None,
         "require_mention": True,
         "ignore_other_mentions": False,
-        "default_model": None,
-        "models": [],
     }
 
 
@@ -219,75 +215,3 @@ def test_root_model_applies_raw_secret_rejection():
         ChannelConfigModel.model_validate(
             {**TELEGRAM_CONFIG, "bot_token_ref": "123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}
         )
-
-
-# --- the channel's own model curation (FR-071) --------------------------------
-#
-# The agent resource carries none of this: the agent page governs what a person
-# gets when they open that agent directly, and a channel is its own place with
-# its own audience.
-
-
-def test_an_unconfigured_channel_curates_nothing():
-    """The out-of-the-box state, and the one this feature must not change: no
-    model pinned, no range, so the bound agent's whole offer stands."""
-    cfg = parse_channel_config(TELEGRAM_CONFIG)
-
-    assert cfg.default_model is None
-    assert cfg.models == []
-
-
-def test_default_model_and_models_round_trip():
-    cfg = parse_channel_config(
-        {**TELEGRAM_CONFIG, "default_model": "claude-opus-5", "models": ["claude-opus-5", "x"]}
-    )
-
-    assert cfg.default_model == "claude-opus-5"
-    assert cfg.models == ["claude-opus-5", "x"]
-
-
-def test_a_default_model_outside_the_allowed_range_is_rejected():
-    """A channel must not start conversations on a model it then refuses."""
-    with pytest.raises(ValidationError, match="not in this channel's allowed models"):
-        parse_channel_config(
-            {**TELEGRAM_CONFIG, "default_model": "claude-mythos-5", "models": ["claude-opus-5"]}
-        )
-
-
-def test_a_default_model_needs_no_range_to_be_set():
-    """An empty range is "not curated", so there is nothing to be outside of —
-    and the id is free text handed to the CLI verbatim."""
-    cfg = parse_channel_config({**TELEGRAM_CONFIG, "default_model": "some-model-from-next-year"})
-
-    assert cfg.default_model == "some-model-from-next-year"
-
-
-def test_a_blank_default_model_is_unset():
-    """A cleared text field must not pin the empty string as a model name."""
-    assert parse_channel_config({**TELEGRAM_CONFIG, "default_model": "   "}).default_model is None
-
-
-def test_models_are_deduplicated_in_order():
-    cfg = parse_channel_config({**TELEGRAM_CONFIG, "models": ["b", "a", " b ", "a"]})
-
-    assert cfg.models == ["b", "a"]
-
-
-def test_a_blank_model_id_is_rejected():
-    with pytest.raises(ValidationError, match="must not be empty"):
-        parse_channel_config({**TELEGRAM_CONFIG, "models": ["ok", "  "]})
-
-
-def test_an_absurd_range_is_rejected():
-    with pytest.raises(ValidationError, match="too many models"):
-        parse_channel_config({**TELEGRAM_CONFIG, "models": [f"m{i}" for i in range(201)]})
-
-
-def test_seatalk_carries_the_same_curation():
-    """The fields are common, not per-transport."""
-    cfg = parse_channel_config(
-        {**SEATALK_CONFIG, "default_model": "gpt-5", "models": ["gpt-5", "gpt-5-mini"]}
-    )
-
-    assert cfg.default_model == "gpt-5"
-    assert cfg.models == ["gpt-5", "gpt-5-mini"]

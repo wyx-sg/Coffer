@@ -646,7 +646,7 @@
       "label": "提供商",
       "model": "模型",
       "fastModel": "快速模型",
-      "builtinModelsHint": "使用内置登录时，这里没有模型可绑定——模型按会话选择：在聊天的模型选择器里选、在聊天频道中使用 /model <id>，或由该频道自己的默认模型决定。",
+      "builtinModelsHint": "使用内置登录时，这里没有模型可绑定——模型按会话选择：在聊天频道中使用 /model <id>。",
       "builtin": "使用内置（agent 自带登录）",
       "none": "没有兼容的模型提供商",
       "empty": "该 agent 还没有模型提供商。",
@@ -1136,18 +1136,6 @@
       "rotateHint": "存入 Coffer 凭据库；沿用现有引用。",
       "save": "保存修改",
       "saved": "渠道 {{name}} 已更新"
-    },
-    "models": {
-      "defaultLabel": "默认模型",
-      "defaultHint": "本频道的新会话从这个模型开始。不指定则沿用 agent 自己的默认模型。",
-      "defaultNone": "不指定——沿用 agent 的默认模型",
-      "rangeLabel": "可选范围",
-      "rangeHint": "勾选本频道可以使用的模型：/model 卡片只提供这些，范围之外的 /model <id> 会被拒绝。下面是所绑定 agent 的 CLI 所知的全部模型，其中可能包含你的账号无法运行的型号——本机没有任何信息能区分它们，所以由你来定。",
-      "unrestricted": "未限制——该 agent 提供的所有模型都可用。",
-      "chosenCount": "已允许 {{total}} 个模型中的 {{chosen}} 个。",
-      "empty": "该 agent 暂无可用的模型清单。",
-      "loadFailed": "无法加载该 agent 的模型清单。",
-      "outOfRange": "默认模型必须在可选范围之内。"
     },
     "test": {
       "send": "发送测试消息",
