@@ -3,7 +3,7 @@
 > English: [distribution-pyinstaller.md](./distribution-pyinstaller.md)
 
 **Status**: 已采纳 (Accepted)
-**Date**: 2026-05-20（2026-09-09 修订，见「修订历史」）
+**Date**: 2026-05-20（2026-09-09、2026-09-12 修订，见「修订历史」）
 **Deciders**: Yuxing Wu
 **Related**: spec `mcp-gateway` (FR-022, SC-009), [Session Subprocess Model](session-subprocess-model.md), [Detect-or-Spawn](daemon-detect-or-spawn.md)
 
@@ -206,3 +206,21 @@ CI 发布任务产出单一下载层级。**
   绕行方式改为在上文内联说明。
   MCP Gateway Desktop 规范退役；其中仅存的两条发布流水线需求并入
   spec mcp-gateway。
+- **2026-09-12** —— **桌面层级回归，上面的 (a) 与 (b) 被推翻。** 外壳被恢复
+  （[桌面壳回归](./desktop-shell-over-a-shared-frontend.zh.md)），因为 2026-09-09 的判断
+  称量了每次更新的成本，却没有称量「够得着」的成本：没有它，Coffer 没有 Dock 图标，
+  通往它 UI 的路径也一律从终端开头。具体地：
+  (a) 决策中 Tauri sidecar 的那一半回来了 —— `bundle.externalBin` 及其三元组后缀命名、
+  `desktop/tauri.conf.json` —— 但只有**四个**二进制而非旧的五个（`coffer`、`coffer-daemon`、
+  `coffer-mcp-shim`、`coffer-callback`；`coffer-hook` 与 `whisper-cli` 已在这期间退役），
+  且只发 macOS `.dmg` —— MSI、AppImage、deb 仍然不做，那几条腿从未验证过；
+  (b) 发布重新长出**第二个层级**：`Coffer-<version>.dmg` 与 `coffer-cli-<triple>.tar.gz`
+  并列，两者都被同一份聚合 `SHA256SUMS` 覆盖（spec mcp-gateway FR-022 / FR-023）。桌面环节
+  复用 CLI 环节已经冻结好的二进制，而不是再跑一遍 PyInstaller，所以第二个层级只多花一次
+  Tauri 构建；
+  (c) **保持不变** —— 二进制部署留在 daemon 的冻结启动路径里，外壳被明确禁止重复它
+  （spec mcp-gateway FR-026 / FR-032）。那本来就是对的归属，外壳回来并不把它要回去；
+  (d) **保持，并且代价更高。** 仍然没有公证 runbook，也没有付费 Apple Developer 账号。
+  未签名的 `.dmg` 比未签名的 CLI 归档更糟 —— macOS 会在双击时以「Coffer 已损坏」拒绝它，
+  而 `curl` 装下来的二进制根本不会被隔离 —— 所以 `xattr -dr com.apple.quarantine` 这一步
+  现在对 app 的记载和对归档一样显眼。公证从此成为那个账号所能买到的、价值最高的一件事。

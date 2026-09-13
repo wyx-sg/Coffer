@@ -120,28 +120,45 @@ removed with it. A port that is correct by default does not deserve a panel, and
 the escape hatch is better placed where a squatted port is diagnosed:
 `coffer daemon port set/clear`, which works with no daemon running.
 
-### The app is an optional layer over the CLI, until it can be signed
+### The app is a self-contained installer, and installing it installs the CLI
 
-`coffer-daemon` is **not** bundled into the `.app`. The shell resolves it in
-order: inside its own bundle, then an already-running daemon from
-`daemon.json`, then `~/.coffer/bin/`, then `$PATH`, and otherwise reports that
-the Coffer CLI must be installed first. The first step is dead today and becomes
-live the moment `externalBin` is added — the resolution order is written in its
-final form so that bundling later is a packaging change, not a code change.
+The `.app` bundles four frozen binaries as Tauri `externalBin` — `coffer`,
+`coffer-daemon`, `coffer-mcp-shim` and `coffer-callback` — and the build emits a
+`.dmg`. Download, drag to Applications, double-click: nothing else is required,
+which is what "desktop app" has to mean to be worth having.
 
-This is not the industry norm, and the departure is deliberate. Comparable
-products — Ollama, Docker Desktop, Tailscale, OrbStack — ship one self-contained
-`.app` and link a CLI *out* of it. Coffer will too, once it can be signed.
-Unsigned, the order has to invert: a `curl | sh` download carries no
-`com.apple.quarantine` attribute and runs immediately, while a browser-downloaded
-unsigned `.app` is refused on double-click with "Coffer is damaged", recoverable
-only through System Settings. Until a Developer ID account exists, the terminal
-path is the *better* first experience, so the CLI stays the documented main road
-and the app is presented as an addition for people who already have it.
+`coffer-hook` and `whisper-cli`, which the old shell also bundled, are not in
+that list. Both were retired in the intervening months — the SessionStart hook
+with the last of the native-config writes, voice transcription when it moved off
+the machine — so this is a strictly smaller bundle than the one that was removed.
 
-The immediate consequence is that `make desktop` is a minutes-long `cargo tauri
-build` rather than a PyInstaller run — which is also what keeps the shell cheap
-enough to justify at all.
+The shell still resolves the daemon through a five-step chain — its own bundle,
+then an already-running daemon named by `daemon.json`, then `~/.coffer/bin/`,
+then `$PATH`, then a message saying to install the CLI. Bundling makes step one
+the normal path rather than a dead one; the rest stay as the recovery path for a
+bundle whose sidecar is missing or unrunnable, and step two is what stops the app
+from starting a second daemon beside one the user already has.
+
+**Installing the app also installs the CLI**, without the shell doing anything.
+The daemon deploys its own siblings — all four, `coffer` included — into
+`~/.coffer/bin/` on frozen start (FR-026), so the first launch of the app leaves
+the command-line tools on disk for the user to put on `PATH`. This is the
+arrangement Ollama, Docker Desktop and Tailscale all use: one installable app,
+with the CLI linked out of it rather than installed before it.
+
+What this costs is build time. `make desktop` now runs PyInstaller for four
+binaries before it runs Tauri — on the order of an hour — where a shell without
+bundling would have taken minutes. That is the operating cost the 2026-09-09
+retirement objected to, accepted deliberately this time, and bounded by the fact
+that only a release needs the full build.
+
+It also inherits Coffer's standing macOS problem: the binaries are unsigned, so
+a browser-downloaded `.dmg` carries `com.apple.quarantine` and macOS refuses the
+app on double-click with "Coffer is damaged", recoverable only through System
+Settings. The release notes and README must carry the quarantine-clearing step
+as prominently as they already do for the CLI archive. Notarisation remains a
+documented non-goal pending a paid Apple Developer account, and it is now the
+single highest-value thing that account would buy.
 
 ## Consequences
 
@@ -165,8 +182,15 @@ enough to justify at all.
   diagnosis names the holder and the fix, but the daemon does not start until
   the user acts. This is the intended trade: a predictable origin is worth more
   than an automatic one.
+- **The release grows a second tier again, and it is nearly free.** FR-022
+  collapsed the release to one `coffer-cli-<triple>.tar.gz`; a `.dmg` joins it.
+  The expensive half — PyInstaller over four binaries — is work the release job
+  already does for the CLI archive, so the desktop tier reuses those artifacts
+  and adds only a Tauri build. The hour-long cost is a *local* `make desktop`
+  cost, not a release one.
 - **Rust re-enters the build, and its tests are not in `make verify`.** `cargo`
-  is a prerequisite for `make desktop` only; the release pipeline is untouched.
+  is a prerequisite for `make desktop` and for the release's desktop leg only;
+  no verification gate grows a toolchain.
   The cost is that `tray.rs`'s close-to-tray decision and `daemon.rs`'s
   rate-limit and port-parsing helpers — all written as pure functions precisely
   so they could be unit-tested — are covered by `cargo test` that no gate runs.
@@ -192,7 +216,11 @@ enough to justify at all.
   work for the desktop host, which reads the port from a file, and it would
   quietly keep punishing the browser host — which the shell explicitly does not
   replace — with broken bookmarks and resetting preferences.
-- **Bundling every binary now, shipping a `.dmg` as the main download.**
-  Rejected for the moment, not in principle. It is where this should end up; it
-  requires a signed, notarised app first, and until then it makes a stranger's
-  first contact with Coffer strictly worse than the terminal path.
+- **Leaving the binaries out and presenting the app as an optional layer over an
+  already-installed CLI.** Rejected. It builds in minutes instead of an hour and
+  it sidesteps Gatekeeper — a `curl | sh` download carries no quarantine
+  attribute and runs immediately, where an unsigned `.dmg` does not. But an app
+  that refuses to run until you have already used the terminal does not answer
+  the reason the shell is being restored at all, which is that reaching Coffer
+  should not require knowing what a daemon is. The quarantine step is one
+  documented command; needing the CLI first is a permanent second product.
