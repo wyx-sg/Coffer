@@ -13,7 +13,6 @@ from pathlib import Path
 import typer
 
 from coffer.infrastructure.daemon import bootstrap, port_alloc
-from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.daemon.pid_lock import pid_is_coffer_daemon
 from coffer.infrastructure.daemon.spawn import daemon_spawn_command
 from coffer.surfaces.cli import _client as _cli_client
@@ -41,25 +40,46 @@ def _wait_for_daemon_json_gone(path: Path, timeout: float = 5.0) -> bool:
     return False
 
 
-def _refuse_if_fixed_port_is_taken() -> None:
-    """Diagnose a squatted fixed port here, instead of after a boot timeout.
+def _refuse_if_the_port_is_taken() -> None:
+    """Diagnose a squatted port here, instead of after a boot timeout.
 
     Without this the user meets "daemon failed to start within 10s; check
-    daemon.log" — true, but it hides the one cause a fixed port makes likely,
-    behind a file they then have to open. Only the caller's ordering makes this
-    correct: ``live_daemon()`` is probed first, so *our own* daemon holding the
-    port stays the clean "already running" path rather than a conflict.
+    daemon.log" — true, but it hides the likeliest cause behind a file they
+    then have to open. The daemon binds one port and refuses to move, so this
+    applies to every start, not only to a start whose port the user chose.
+
+    The check is the real bind, done once and immediately let go, because that
+    is the probe that agrees with the daemon's own attempt where it matters
+    most: a port in TIME_WAIT from the daemon this ``restart`` just stopped is
+    bindable and must not be reported as a conflict, and a holder owned by
+    another user is unidentifiable but still blocks. Closing a socket that
+    never accepted anything leaves nothing behind.
+
+    It can report "free" when the port is not, and only ever errs that way. Two
+    windows do it: the ordinary TOCTOU gap between this close and the daemon's
+    own bind, and — on Linux specifically — a daemon that is bound but has not
+    yet called ``listen``, which ``SO_REUSEADDR`` lets a second socket bind
+    straight through (the platform difference CODE-041 turns on; see
+    ``port_alloc._new_socket``). Both are safe to lose. The spawn this
+    function guards goes on to take the daemon spawn lock and re-probe
+    liveness, so a missed conflict resolves as "daemon already running" rather
+    than as two daemons. What is lost is this early, actionable message — never
+    correctness — which is why the probe is allowed to be optimistic and must
+    never be made pessimistic.
+
+    Only the caller's ordering makes this correct: ``live_daemon()`` is probed
+    first, so *our own* daemon holding the port stays the clean "already
+    running" path rather than a conflict.
     """
-    port = daemon_config.read_fixed_port()
+    port = bootstrap.planned_port()
     if port is None:
-        return
-    holder = port_alloc.find_port_holder(port)
-    if holder is None:
-        # Either the port is free, or the holder is another user's process we
-        # cannot see. Let the daemon try: it fails with the same message.
-        return
-    typer.echo(port_alloc.fixed_port_conflict_message(port, holder), err=True)
-    raise typer.Exit(1)
+        return  # the range override is in play; there is no one port to check
+    try:
+        sock = port_alloc.bind_fixed_socket(port, attempts=1)
+    except port_alloc.PortInUse as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from None
+    sock.close()
 
 
 def _start_daemon() -> None:
@@ -74,7 +94,7 @@ def _start_daemon() -> None:
         typer.echo("daemon already running")
         raise typer.Exit(0)
 
-    _refuse_if_fixed_port_is_taken()
+    _refuse_if_the_port_is_taken()
 
     cmd = daemon_spawn_command()
 

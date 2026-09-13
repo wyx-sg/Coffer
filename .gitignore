@@ -83,6 +83,16 @@ release/
 release-builds/
 app-builds/
 
+# --- Rust / Tauri desktop shell ---
+desktop/target/
+# Tauri regenerates gen/schemas/ from capabilities/ on every build.
+desktop/gen/schemas/
+# The frozen binaries `make desktop` stages for `externalBin` (and the
+# placeholders `make desktop-test` stands in for them). Build artefacts —
+# never committed. The .gitkeep holds the directory shape for a fresh clone.
+desktop/binaries/*
+!desktop/binaries/.gitkeep
+
 # --- macOS ---
 .DS_Store
 .AppleDouble

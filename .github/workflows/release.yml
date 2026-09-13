@@ -31,7 +31,7 @@ jobs:
           # not shipped — those legs were never validated.
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -54,6 +54,24 @@ jobs:
           cache: npm
           cache-dependency-path: |
             frontend/package-lock.json
+
+      # --- desktop tier (docs/decisions/desktop-shell-over-a-shared-frontend.md)
+      # The .app hosts the same frontend/dist the daemon serves and bundles the
+      # same frozen binaries the CLI archive ships, so it rides along on this
+      # leg rather than getting a job of its own.
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: ${{ matrix.triple }}
+
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop/target
+          key: ${{ runner.os }}-${{ matrix.triple }}-cargo-${{ hashFiles('desktop/Cargo.toml', 'desktop/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.triple }}-cargo-
 
       - name: install backend (frozen; includes pyinstaller via dev extras)
         shell: bash
@@ -90,7 +108,8 @@ jobs:
         shell: bash
         run: bash scripts/smoke_test_bundle.sh dist
 
-      # The single download tier: every binary build_binaries.sh produced,
+      # The CLI download tier (the documented main road): every binary
+      # build_binaries.sh produced,
       # packaged into one tar.gz. The archive contains PLAIN binary names (no
       # triple suffix) so both the one-line installer and manual extraction
       # yield co-located plain-named binaries, which the frozen detect-or-spawn
@@ -119,6 +138,50 @@ jobs:
           archive="coffer-cli-${triple}.tar.gz"
           tar -czf "artifacts/$archive" -C dist "${binaries[@]}"
           echo "packaged: artifacts/$archive"
+
+      # The .app bundles the very same four binaries the archive above ships.
+      # Stage them where tauri.conf.json's `externalBin` looks: Tauri resolves
+      # each `binaries/<name>` entry to `binaries/<name>-<target-triple>`.
+      # Deliberately a copy of dist/, NOT a second PyInstaller run — freezing
+      # these takes the better part of an hour and it is already done.
+      - name: stage frozen binaries for the app bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          triple="${{ matrix.triple }}"
+          mkdir -p desktop/binaries
+          for b in coffer coffer-daemon coffer-mcp-shim coffer-callback; do
+            cp "dist/$b" "desktop/binaries/$b-$triple"
+            chmod +x "desktop/binaries/$b-$triple"
+          done
+          ls -la desktop/binaries/
+
+      # The npm-published CLI, not `cargo install tauri-cli` — the latter
+      # compiles for several minutes on every cold cache to produce a tool we
+      # invoke exactly once.
+      - name: build the desktop app
+        working-directory: desktop
+        run: npx --yes @tauri-apps/cli@^2 build --target ${{ matrix.triple }}
+
+      # NOTE: a missing bundle dir here is signal, not noise — fail rather than
+      # publish a release whose .dmg silently went missing.
+      - name: collect the .dmg
+        shell: bash
+        run: |
+          set -euo pipefail
+          triple="${{ matrix.triple }}"
+          dmg="$(find "desktop/target/$triple/release/bundle/dmg" \
+                   -maxdepth 1 -name '*.dmg' -type f | head -n 1)"
+          if [ -z "$dmg" ]; then
+            echo "error: no .dmg under desktop/target/$triple/release/bundle/dmg" >&2
+            ls -laR "desktop/target/$triple/release/bundle" >&2 || true
+            exit 1
+          fi
+          # No Developer ID exists yet, so the app is neither signed nor
+          # notarised. Say so in the filename: a downloader should know before
+          # Gatekeeper tells them.
+          cp "$dmg" "artifacts/Coffer-unsigned-${triple}.dmg"
+          echo "collected: artifacts/Coffer-unsigned-${triple}.dmg"
 
       # Generate SHA-256 checksums so downloaders can verify archive integrity
       # without trusting the GitHub Release UI alone. Cross-platform shim:
@@ -185,6 +248,8 @@ jobs:
         shell: bash
         run: |
           cat > release-notes.md <<'NOTES'
+          ### Command line
+
           Download `coffer-cli-<platform>.tar.gz` and extract it. It contains
           `coffer` (management CLI), `coffer-daemon`, `coffer-mcp-shim` and
           `coffer-callback`. Keep the binaries
@@ -194,11 +259,23 @@ jobs:
           Start the daemon and open the web UI it serves on loopback; point
           your MCP clients at the shim.
 
+          ### Desktop app
+
+          `Coffer-unsigned-<platform>.dmg` is the same web UI in a native
+          window, with a Dock icon and a tray item, and it starts the daemon
+          for you. It carries the same four binaries and deploys them into
+          `~/.coffer/bin/` on first launch, so installing the app installs the
+          CLI too.
+
           Verify downloads against `SHA256SUMS`.
 
-          > **macOS builds are unsigned** (notarisation pending) — macOS blocks
-          > downloaded binaries until the quarantine flag is cleared:
-          > `xattr -dr com.apple.quarantine <extracted-directory>`
+          > **macOS builds are unsigned and un-notarised** (a Developer ID is
+          > pending). macOS blocks downloaded binaries until the quarantine
+          > flag is cleared:
+          > `xattr -dr com.apple.quarantine <extracted-directory>`, or
+          > `xattr -dr com.apple.quarantine /Applications/Coffer.app` after
+          > dragging the app across. A binary installed with the one-line
+          > installer is never quarantined, so that path skips this step.
 
           Full install & usage guide: https://wyx-sg.github.io/Coffer/guide/install
           NOTES

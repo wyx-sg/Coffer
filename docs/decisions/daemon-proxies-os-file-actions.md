@@ -52,6 +52,14 @@ real OS actions.**
 > **2026-09-09:** this ADR originally described a second, native branch for
 > open/reveal (`tauri-plugin-opener` inside the packaged desktop shell). That shell was
 > removed and the daemon endpoints below are now the single mechanism.
+>
+> **2026-09-12:** the desktop shell is back ([The Desktop Shell
+> Returns](./desktop-shell-over-a-shared-frontend.md)) and the native branch is
+> **deliberately not**. A webview reaches a loopback HTTP route exactly as a
+> browser tab does, so the daemon endpoints already work inside the shell;
+> restoring the plugin path would buy nothing a user could perceive and would
+> cost the `isTauri()` fan-out this ADR's consolidation removed. The endpoints
+> below remain the single mechanism, now for both hosts (spec mcp-gateway FR-032).
 
 ### 1. Daemon FS-action endpoints (FR-039)
 

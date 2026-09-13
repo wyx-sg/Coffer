@@ -154,9 +154,15 @@ agent 会话内部提出的问题，而下文的 `initialize` instructions 已�
 - a rebound page is refused before it can read the token
 - a frozen daemon deploys its sibling binaries on start
 
-#### 为什么 Coffer 不再发布桌面外壳
+#### 为什么 Coffer 同时发布 Web UI 和桌面外壳
 
-Coffer 的 UI 曾经被包在一个 Tauri 桌面外壳里：它监管 daemon、常驻系统托盘、每次启动部署 shim。它已于 2026-09-09 退役，而做这个判断的依据是**每一次更新的运维成本**，不是代码行数。每一次桌面端更新都意味着一次重新构建**外加**一次重新安装，而构建出的制品还会不断偏离源码——有两次记录在案：一次在 `git fetch` 之前做的构建产出了跑着旧代码的应用；另一次是一个单独钉住的构建目录，导致 UI 缺陷报告必须先对着 `main` 复验才能采信。由 daemon 提供的 Web UI 两种失效模式都没有：重启 daemon、强制刷新浏览器，你就在当前代码上。外壳真正承重的两件事都活了下来——部署同目录二进制这件事搬进了 daemon 自己的冻结启动路径（FR-026），而它本来大概就该归 daemon 管，因为运行期正是 daemon 在拉起它们；发布形态则收敛为单一 CLI 层级（FR-022），那本来也用不上外壳。
+Coffer 的 UI 曾经被包在一个 Tauri 桌面外壳里：它监管 daemon、常驻系统托盘、每次启动部署 shim。它于 2026-09-09 因**每一次更新的运维成本**退役：每一次桌面端更新都意味着一次重新构建**外加**一次重新安装，而构建出的制品还会不断偏离源码——有两次记录在案，一次是在 `git fetch` 之前做的构建，另一次是一个单独钉住的构建目录，导致 UI 缺陷报告必须先对着 `main` 复验才能采信。
+
+**外壳于 2026-09-12 恢复**，因为那次判断称量了更新成本，却没有称量「够得着」的成本。外壳同时也是唯一让 Coffer 能被找到的东西：没有它，Coffer 只是几十个标签页里的一个 `127.0.0.1`，没有 Dock 图标、Cmd-Tab 里也没有，而通往 UI 的唯一路径以「知道 daemon 在不在跑、在哪个端口」开头。对一个正在终端里干活的 CLI 用户，这是合理的要求；对其他任何人都不是（[桌面壳回归](../../docs/decisions/desktop-shell-over-a-shared-frontend.zh.md)）。
+
+恢复后的外壳比被删掉的那个小，因为它承重的两件事都留在了搬去的地方。部署同目录二进制仍归 daemon 的冻结启动路径（FR-026）——外壳 MUST NOT 重复它，否则两个进程会抢着写 `~/.coffer/bin/`。原生文件动作仍是 daemon 的 HTTP 路由，webview 够到它们和浏览器标签页没有区别，所以外壳一件都不重新实现。剩下的就是浏览器无法自理的四件事：一个带 Dock 图标的窗口、一个常驻托盘、启动时的 detect-or-spawn，以及本地页面无从获得的凭据握手（FR-029 – FR-032）。
+
+退役时担心的失效模式被收窄而非消失：一个陈旧的 `.app` 仍可能装着陈旧的 `frontend/dist`。但它被限制在 UI 这一层，而 daemon 那一半由 FR-031 的版本偏斜检查暴露出来。两个宿主消费同一份 `frontend/dist`，所以彼此不可能漂移。
 
 ---
 
@@ -170,7 +176,7 @@ Coffer 的 UI 曾经被包在一个 Tauri 桌面外壳里：它监管 daemon、�
 - **Duplicate registration**: 同一 kind 下注册重名的服务器会被拒绝并给出明确错误；不可能产生部分写入。
 - **Tool-name collision across servers**: 通过 `<server>__<tool>` 命名空间阻止；客户端永远看不到冲突。
 - **Tools-only upstream**: 只实现 `tools`、对 `resources/list` 或 `prompts/list` 返回 JSON-RPC `-32601`（METHOD_NOT_FOUND）的上游，被视为没有 resources / 没有 prompts。单服务器能力视图与聚合列表会返回该服务器的 tools，并将 resources/prompts 置为空集（HTTP 200），而不是报错——因此对于仅支持 tools 的服务器，管理端 / Web-UI 的能力视图依然可用。
-- **Daemon port conflict**: daemon 默认端口被占用。未配置固定端口时，它会在一小段范围内挑选下一个空闲端口，把所选端口写入它的 discovery 文件；shim、CLI 都会读这个文件。已配置固定端口时（FR-028），它转而拒绝启动，并指明是哪个进程占着该端口。
+- **Daemon port conflict**: daemon 的端口被占用。它拒绝启动而不是挪窝（FR-028），并指明是哪个进程占着该端口、以及解决它的命令 —— 无论那个端口是默认的 8000 还是用户固定的某个，待遇都一样，因为「悄悄落到别处」正是固定端口要防的事。所选端口仍会写入 discovery 文件，供 shim、CLI、桌面外壳读取。
 - **Daemon crash**: 正在运行的 shim 会话会给它们的 MCP 客户端返回干净的错误而不是挂起；监管者 (supervisor) 可以检测崩溃并重启 daemon。
 - **Concurrent clients**: 多个 MCP 客户端（例如 Claude Code 和 Codex 同时）可同时连接而互不干扰；每个客户端都拿到独立的上游子进程集合。
 
@@ -386,23 +392,23 @@ null 值在校验阶段被拒绝（422）。
 - **When** MCP 客户端通过 coffer 列出工具,
 - **Then** 客户端看到的是 `<server-a>__search` 与 `<server-b>__search`，互不冲突——不会出现任何未前缀的上游原始名。
 
-### Scenario: daemon port conflict falls back to the next free port
+### Scenario: the daemon binds the same port every start
 
-- **Given** 未配置固定端口，且 daemon 默认端口已被另一个进程占用,
-- **When** daemon 启动,
-- **Then** 它在支持的端口范围内选择下一个空闲端口，把所选端口写入 `~/.coffer/daemon.json`，并使每个 Coffer 入口（shim、CLI）都无需手动配置就连上该端口。
-
-### Scenario: a fixed daemon port survives restarts
-
-- **Given** 用户已固定 daemon 端口（`coffer daemon port set <n>`，或 Settings 页面）,
+- **Given** 没有配置过端口，因此 daemon 的默认值 8000 生效,
 - **When** daemon 被停止后重新启动 —— 由用户、由 CLI，或由继承不到任何 shell profile 的 MCP shim 自动拉起,
-- **Then** 它每次都绑定同一个端口并记入 `~/.coffer/daemon.json`，因此指向 Coffer UI 的浏览器书签始终有效。
+- **Then** 它每次都绑定 8000 并记入 `~/.coffer/daemon.json`，因此指向 Coffer UI 的浏览器书签始终有效，浏览器针对该 origin 存下的东西也一样都不会丢。
 
-### Scenario: a fixed port that is taken refuses to start and says what holds it
+### Scenario: a configured daemon port survives restarts
 
-- **Given** 固定的 daemon 端口已被另一个进程监听,
+- **Given** 用户用 `coffer daemon port set <n>` 挪动过 daemon 的端口,
+- **When** daemon 以上述任一方式被停止后重新启动,
+- **Then** 它每次都绑定同一个端口并记入 `~/.coffer/daemon.json`。
+
+### Scenario: a port that is taken refuses to start and says what holds it
+
+- **Given** daemon 将要绑定的端口 —— 默认的 8000，或用户配置的那个 —— 已被另一个进程占用,
 - **When** daemon 启动,
-- **Then** 它拒绝启动而不是改绑另一个端口，并在消息中指明占用该端口的进程，以及能解决问题的命令 —— 结束该进程、`coffer daemon port set <other>`，或用 `coffer daemon port clear` 回到自动选择。
+- **Then** 它拒绝启动而不是改绑另一个端口，并在消息中指明占用该端口的进程，以及能解决问题的命令 —— 结束该进程，或 `coffer daemon port set <other>`。
 
 ### Scenario: a missing stdio launcher is named in the server status
 
@@ -485,14 +491,19 @@ null 值在校验阶段被拒绝（422）。
 **Distribution**
 
 - **FR-018**: 从源码安装（`pip install ./backend`）MUST 把 `coffer` CLI 与 `coffer-mcp-shim` stdio 入口作为 console script 装到用户的 `PATH` 上，使 daemon 与 shim 无需额外部署步骤即可使用。
-- **FR-022**: 发布流水线 MUST 为每个 `v*` tag 产出**仅 macOS arm64** 的单一下载层级：一份 `coffer-cli-<triple>.tar.gz` 归档，内含 `coffer`（管理 CLI）、`coffer-daemon`、`coffer-mcp-shim`，以及 daemon 在运行期拉起的辅助二进制（`coffer-callback`）。这些二进制 MUST 在归档内保持同目录共处，使冻结态的 detect-or-spawn 解析（[Detect-or-Spawn](../../docs/decisions/daemon-detect-or-spawn.zh.md)）能在 `coffer` 旁边找到 `coffer-daemon`。macOS x64（Intel）、Linux 与 Windows 刻意不构建 —— 这几条腿从未端到端验证过。这份归档独自承载「无需系统 Python」的承诺（SC-011）；不存在第二个桌面层级。其背后的打包决策见 [PyInstaller Distribution](../../docs/decisions/distribution-pyinstaller.zh.md)。
+- **FR-022**: 发布流水线 MUST 为每个 `v*` tag 产出**仅 macOS arm64** 的单一下载层级：一份 `coffer-cli-<triple>.tar.gz` 归档，内含 `coffer`（管理 CLI）、`coffer-daemon`、`coffer-mcp-shim`，以及 daemon 在运行期拉起的辅助二进制（`coffer-callback`）。这些二进制 MUST 在归档内保持同目录共处，使冻结态的 detect-or-spawn 解析（[Detect-or-Spawn](../../docs/decisions/daemon-detect-or-spawn.zh.md)）能在 `coffer` 旁边找到 `coffer-daemon`。macOS x64（Intel）、Linux 与 Windows 刻意不构建 —— 这几条腿从未端到端验证过。这份归档独自承载「无需系统 Python」的承诺（SC-011）。其背后的打包决策见 [PyInstaller Distribution](../../docs/decisions/distribution-pyinstaller.zh.md)。流水线还 MUST 产出**第二个桌面层级** —— 一份 macOS arm64 的 `.dmg`，内含 Tauri 外壳（FR-029）并以 Tauri `externalBin` 的形式嵌入同样那四个二进制。桌面环节 MUST 复用 CLI 环节已经构建好的产物，而不是再跑一遍 PyInstaller；冻结是昂贵的那一半，只做一次。两个层级每个 tag 都发：归档是终端安装，`.dmg` 是双击安装，谁也不替代谁。
 - **FR-023**: 发布流水线 MUST 产出单一一份聚合的 `SHA256SUMS`（在 CI 中生成，并在 release job 中跨 matrix leg 拼接），覆盖每一个制品，使下载者无需只凭 GitHub Release 页面就能校验完整性。
 - **FR-024**: daemon MUST 自己以静态文件的形式，在它自己的 loopback origin 上提供构建好的 Web UI，使 UI 与管理 API 同源 (same-origin)。因此跨域访问 MUST 默认关闭；Vite dev server 的 origin 仅在既有的 `COFFER_DEV_CORS` opt-in 之下仍可访问。
 - **FR-025**: daemon MUST 在它自己提供的 `index.html` 里把 API token 交给浏览器 —— 以注入到文档 head 中的 `window.__COFFER_TOKEN__` 全局变量形式，其取值来自 FR-013 的请求头校验所比对的同一个进程内 token，因此两者不可能漂移。它 MUST 对**每一条**解析到该文档的路由都这么做 —— 裸 `/` 与经 SPA 回退提供的每一条客户端路由一视同仁 —— 并且 MUST 以 `Cache-Control: no-store` 提供、不带 ETag 与 Last-Modified，因为该文档现在携带了一份每个 daemon 各自的密钥，而一份缓存副本会把上一个 daemon 已失效的 token 交给重启后的浏览器。页面 MUST NOT 持久化该 token：存下来的 token 会活得比铸造它的 daemon 更久，而 daemon 每次启动都会铸造一个新的。API token MUST NOT 在任何环节出现在 URL 里 —— URL 会落进浏览器历史，而那与 FR-012 / FR-013 的「仅 loopback + token」姿态相抵触；响应正文则不受这些影响。因此 `coffer open` MUST NOT 自带任何凭据：它从 `~/.coffer/daemon.json` 读取 daemon 真实的端口（该端口会随重启变动），并在那个 origin 上打开浏览器。
-- **FR-026**: 当 daemon 检测到自己以冻结构建运行时，它 MUST 在启动时把同目录的二进制 —— `coffer-mcp-shim`、`coffer-callback` —— 幂等地部署到 `~/.coffer/bin/`。复制 MUST 是原子的（同目录临时文件、先设可执行位、再 rename 覆盖目标），使崩溃或正在并发执行的二进制永远不会观察到被截断的文件；是否过期 MUST 由三个信号判定 —— 字节大小、源比目标更新的 mtime、以及一个版本哨兵 —— 使同样大小的跨版本升级也能被检出。源码安装 MUST NOT 做这件事：`pip install` 已经把 console script 装到 `PATH` 上了（FR-018）。这件事归 daemon 所有，因为运行期正是它在拉起 `coffer-callback`。
+- **FR-026**: 当 daemon 检测到自己以冻结构建运行时，它 MUST 在启动时把同目录的二进制 —— `coffer`、`coffer-daemon`、`coffer-mcp-shim`、`coffer-callback` —— 幂等地部署到 `~/.coffer/bin/`。`coffer` 在这份清单里，是为了让只装了桌面 `.dmg`（FR-022）的用户在首次启动后磁盘上就有管理 CLI；`coffer-daemon` 在其中，是为了让冻结态的 shim 能把它当同目录兄弟解析到。复制 MUST 是原子的（同目录临时文件、先设可执行位、再 rename 覆盖目标），使崩溃或正在并发执行的二进制永远不会观察到被截断的文件；是否过期 MUST 由三个信号判定 —— 字节大小、源比目标更新的 mtime、以及一个版本哨兵 —— 使同样大小的跨版本升级也能被检出。源码安装 MUST NOT 做这件事：`pip install` 已经把 console script 装到 `PATH` 上了（FR-018）。这件事归 daemon 所有，因为运行期正是它在拉起 `coffer-callback`。
 
 - **FR-027**: daemon MUST 拒绝任何 `Host` 请求头未指向 loopback 权威的请求 —— `127.0.0.1`、`localhost` 或 `::1`，带不带端口皆可 —— 以错误码 `HOST_NOT_LOOPBACK` 返回 `421`，而不是照常提供服务。这正是 FR-025 得以安全的前提：绑定 loopback（FR-012）挡得住远程主机，却挡不住**浏览器** —— 攻击者把自己页面的域名重解析到 `127.0.0.1`（DNS rebinding），浏览器便视之为同源，CORS 因此不生效。而 rebinding 不会改变 `Host` 请求头，所以被重绑定的请求仍然写着攻击者自己的域名，在它能从被提供的文档里读到 token 之前就被拒绝。该规则 MUST 覆盖 daemon 暴露的每一个面。它不涉及独立的 `coffer-callback` 监听器 —— 那是另一个端口上的另一个进程，也是隧道唯一会指向的东西。
-- **FR-028**: daemon 的监听端口 MUST 可以设成一条持久化的、由用户掌握的设置，好让指向 Coffer UI 的浏览器书签跨重启依然有效。该设置 MUST 存放在 daemon **绑定端口之前**就能读到的文件里 —— `~/.coffer/daemon-config.json`，权限 `0600` —— 因为端口是在打开数据库、跑 migration 之前选定的，任何基于数据库的设置都承载不了它。它 MUST NOT 是环境变量：daemon 由第一个需要它的入口（CLI、MCP shim）以 detached 子进程拉起，继承的是那个调用方的环境，而 shell profile 到不了那里，从 GUI 启动的 agent 更是从未读过它。配置了端口时，daemon MUST 精确绑定该端口，MUST NOT 回退到别的端口 —— 悄悄漂移正是这条设置要终结的行为。绑不上时，daemon MUST 拒绝启动，并 MUST 说明是哪个进程占着该端口、以及解决它的确切命令。未配置端口时，daemon MUST 保持原有行为：在一小段范围内选第一个空闲端口。用户 MUST 能从 CLI、REST API 和 Settings 页面读取并修改该设置；其中 CLI MUST 在没有 daemon 运行时也能用，因为「daemon 绑不上端口」恰恰就是这条设置必须能被修好的那个状态。改动在下次启动时生效，因此 CLI MUST 提供 `coffer daemon restart`，让应用改动只需一条命令。
+- **FR-028**: daemon 的监听端口 MUST **默认固定且可修改**，好让指向 Coffer UI 的浏览器书签跨重启依然有效。什么都没配置时，daemon MUST 精确绑定 `8000`，MUST NOT 去扫描替代端口；漂移的 origin 不只是坏掉一个书签，因为浏览器 `localStorage` 是按 origin 隔离的 —— 端口一变，界面语言、侧边栏状态、分页大小、首选编辑器就静默重置，而用户不会把这两件事联系起来。「固定一个默认端口并允许修改」也正是同类带 Web UI 的本地服务的做法。该设置 MUST 存放在 daemon **绑定端口之前**就能读到的文件里 —— `~/.coffer/daemon-config.json`，权限 `0600` —— 因为端口是在打开数据库、跑 migration 之前选定的，任何基于数据库的设置都承载不了它。它 MUST NOT 是环境变量：daemon 由第一个需要它的入口（CLI、MCP shim）以 detached 子进程拉起，继承的是那个调用方的环境，而 shell profile 到不了那里，从 GUI 启动的 agent 更是从未读过它。配置了端口时，daemon MUST 精确绑定该端口，MUST NOT 回退到别的端口 —— 悄悄漂移正是这条设置要终结的行为。绑不上时，daemon MUST 拒绝启动，并 MUST 说明是哪个进程占着该端口、以及解决它的确切命令。用户 MUST 能**从 CLI** 读取并修改该设置；它 MUST 在没有 daemon 运行时也能用，因为「daemon 绑不上端口」恰恰就是这条设置必须能被修好的那个状态。它 MUST NOT 有 REST 端点或设置面板：一个默认就正确的端口不配在 UI 里占位置，而退路属于诊断端口冲突的地方。改动在下次启动时生效，因此 CLI MUST 提供 `coffer daemon restart`，让应用改动只需一条命令。这条设置**刻意不在 FR-014 的审计要求之内**：它既不是资源也不是能力，而是在数据库打开之前读取的进程配置，并且拥有它的 CLI 必须在没有 daemon 运行时也能用 —— 而那恰恰是最要紧的那条路径上审计表够不到的时候。只在碰巧有 daemon 时才记录一笔，比一笔都不记更不诚实。
+
+- **FR-029**: Coffer MUST 发布一个 macOS 桌面外壳，把构建好的 Web UI **作为本地 asset** 承载，而不是作为一个从 daemon origin 加载的页面。本地承载正是「应用」区别于「加了书签的浏览器窗口」之处：daemon 应答之前 UI 就已渲染，所以一个慢的、不在的或卡住的 daemon 给出的是一屏可操作的内容而不是连接错误，而且 daemon 的端口永远不会出现在地址栏里。外壳 MUST 呈现一个被操作系统当作应用对待的窗口 —— Dock 图标、Cmd-Tab 条目 —— 以及一个至少提供「打开」「重启 daemon」「退出」的常驻托盘；关闭窗口 MUST 隐藏到托盘而非退出，从 Dock 重新激活 MUST 恢复它。外壳 MUST 以 FR-022 的 `.dmg` 形式分发，内嵌那四个冻结二进制，使安装它不以任何预先安装为前提。
+- **FR-030**: 外壳 MUST 通过一条 IPC 命令把正在运行的 daemon 的 base URL 和活 token 交给前端，且 MUST NOT 为等它而拖住首次渲染。阻塞会与 FR-029 自相矛盾：没有 daemon 在跑时，这次握手要拉起一个并轮询，等它就意味着每次重启后的启动都要对着一个空窗口耗掉那么久——而这正是「把 UI 承载在本地」所要防止的那种失败。在它完成之前发出的请求会拿到 `UNAUTHENTICATED`，离线横幅已经把它读作「daemon 尚未就绪」；因此前端 MUST 在握手落地后重新拉取这些请求，否则它们会一直停在没有别的东西会去清除的 401 上。FR-025 的注入够不到本地承载的页面 —— 没有人「供出」过那份文档 —— 所以这是唯一的通道，并且它 MUST 解析到浏览器宿主收到的同样那两个全局变量 `window.__COFFER_BASE_URL__` / `window.__COFFER_TOKEN__`，使前端多出的是第二个**供给者**而不是第二条**代码路径**。握手失败时前端 MUST 仍然渲染，并在离线横幅里呈现失败原因；一个空白窗口不是对「没有 daemon」的可接受汇报。
+- **FR-031**: 外壳 MUST 按固定顺序定位 daemon —— `~/.coffer/daemon.json` 指出的活 daemon、自己的包内、`~/.coffer/bin/`、`PATH` —— 并接管已经在跑的 daemon 而不是再起一个。存活探测 MUST 排在第一位：另外三级回答的是「spawn 哪个可执行文件」，而它回答的是「到底要不要 spawn」，顺序反过来会让打包版的 app 去和用户已经启动的 daemon 抢端口。当找不到也起不来时，它 MUST 用一个从未开过终端的用户也能照做的说法讲出来。它 MUST 提供一个「停掉正在跑的 daemon 并拉起替代者」的重启动作，对重复调用做限流，托盘和离线横幅都能触达 —— 这是浏览器宿主不可能拥有的能力，因为一个挂掉的 daemon 供不出承载该控件的页面。它 MUST 检测自身与所对话 daemon 之间的版本偏斜，因为上一次安装留下的 daemon 可能还在监听。
+- **FR-032**: 外壳 MUST NOT 重新实现任何 daemon 已经通过 HTTP 暴露的能力。原生选择文件夹、用用户的编辑器打开文件、在文件管理器中显示，都是 daemon 的路由，而 webview 够到它们和浏览器标签页没有区别；在外壳里重复它们，等于为零用户可见收益在前端重新引入一条按宿主分叉的分支。外壳 MUST NOT 往 `~/.coffer/bin/` 部署二进制 —— 那是 FR-026 的职责，两个进程写那个目录会打架。
 
 **缺失启动器**
 

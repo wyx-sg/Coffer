@@ -30,6 +30,12 @@ Coffer 的文件查看器是**只读**的(ui-shell、agent-registry、skill-mana
 
 > **2026-09-09:** 本 ADR 原先还描述了第二条原生分支(打包桌面外壳内的
 > `tauri-plugin-opener`)。该外壳已被移除,下面的 daemon 端点现在是唯一机制。
+>
+> **2026-09-12：** 桌面外壳回来了（[桌面壳回归](./desktop-shell-over-a-shared-frontend.zh.md)），
+> 而原生分支**刻意没有回来**。webview 够到一条 loopback HTTP 路由和浏览器标签页没有区别，
+> 所以下面这些 daemon 端点在外壳里本来就能用；恢复插件那条路买不到任何用户可感知的东西，
+> 却要付出本 ADR 的收敛所消除的那套 `isTauri()` 分叉。下面的端点仍是唯一机制，
+> 现在服务于两个宿主（spec mcp-gateway FR-032）。
 
 ### 1. daemon FS-动作端点(FR-039)
 

@@ -24,18 +24,48 @@ Coffer is a daemon + CLI + web UI that gives every AI agent on your machine one 
 
 Run Coffer on more than one machine? **Vault export & import** writes the whole vault to a directory you pick and reads one back on the other machine — knowledge, resources, and ciphertext-only credentials travel; the encryption key never leaves your machines.
 
-A **web UI** — served by the daemon itself at its own loopback origin — ties them together: register and configure your agents, browse and curate every kind, and manage the vault's settings from one place.
+One **UI** ties them together — register and configure your agents, browse and curate every kind, and manage the vault's settings from one place. It reaches you two ways from a single build: served by the daemon at its own loopback origin for a browser, and hosted in a **macOS desktop app** with a Dock icon and a menu-bar tray that starts the daemon for you.
 
 📖 **Documentation site:** https://wyx-sg.github.io/Coffer/
 
 ## Download & install
 
-> **No tagged release yet.** The prebuilt binaries, the one-line installer, and
-> the release archive below ship with Coffer's first tagged release and are not
-> yet published — those links will 404 until then. For now, **[install from
-> source](#install-from-source-developers)** (below) is the working path.
+> **No tagged release yet.** The desktop app, the prebuilt binaries, the one-line
+> installer and the release archive below ship with Coffer's first tagged release
+> and are not yet published — those links will 404 until then. For now, **[install
+> from source](#install-from-source-developers)** (below) is the working path.
+
+Coffer runs the same UI two ways, and installing either one gives you both. Pick
+whichever fits how you work.
+
+### Desktop app (macOS) — _from the first release_
+
+Download `Coffer-unsigned-<triple>.dmg` from
+[Releases](https://github.com/wyx-sg/Coffer/releases/latest), drag Coffer to
+Applications, and open it. Nothing else is required: the app carries `coffer`,
+`coffer-daemon`, `coffer-mcp-shim` and `coffer-callback` inside it, starts the
+daemon for you, and stays in the menu-bar tray between uses.
+
+It installs the command line too. On first launch the daemon deploys all four
+binaries into `~/.coffer/bin`, so putting that directory on your `PATH` gives you
+`coffer` and lets MCP clients resolve `coffer-mcp-shim`:
+
+```sh
+export PATH="$HOME/.coffer/bin:$PATH"   # add this to your shell profile
+```
+
+> **macOS (unsigned):** Coffer is not yet codesigned or notarised — that needs a
+> paid Apple Developer account. macOS refuses a `.dmg` downloaded in a browser
+> with _"Coffer is damaged and can't be opened"_. It is not damaged; clear the
+> quarantine flag and open it again:
+>
+> ```sh
+> xattr -dr com.apple.quarantine /Applications/Coffer.app
+> ```
 
 ### One-line CLI install (macOS) — _from the first release_
+
+Prefer to stay in the terminal, or working on a machine with no GUI:
 
 ```sh
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
@@ -44,20 +74,22 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 Installs `coffer` (management CLI), `coffer-daemon`, `coffer-mcp-shim` and the runtime helper
 binaries to `~/.coffer/bin`, and puts that directory on your `PATH`. **The daemon auto-starts on
 first use — no manual start step.** Environment overrides: `COFFER_INSTALL_DIR`,
-`COFFER_VERSION`, `COFFER_NO_MODIFY_PATH`.
+`COFFER_VERSION`, `COFFER_NO_MODIFY_PATH`. Then `coffer open` opens the UI in your browser.
+A binary installed this way is not quarantined, so there is no Gatekeeper step on this path.
 
 ### Manual download — _from the first release_
 
-Each `v*` tag publishes a single archive from
+Each `v*` tag publishes two tiers from
 [Releases](https://github.com/wyx-sg/Coffer/releases/latest):
 
-| Platform            | File                          |
-| ------------------- | ----------------------------- |
-| macOS Apple silicon | `coffer-cli-<triple>.tar.gz`  |
+| Platform            | File                          | What it is                        |
+| ------------------- | ----------------------------- | --------------------------------- |
+| macOS Apple silicon | `Coffer-unsigned-<triple>.dmg` | The desktop app, self-contained   |
+| macOS Apple silicon | `coffer-cli-<triple>.tar.gz`  | The command line and its binaries |
 
 Coffer currently ships macOS (Apple Silicon) only. The archive contains `coffer`,
-`coffer-daemon`, `coffer-mcp-shim` and the runtime helper binaries. Verify the download against
-the release's aggregated `SHA256SUMS` file, which covers every published artifact.
+`coffer-daemon`, `coffer-mcp-shim` and the runtime helper binaries. Verify either download
+against the release's aggregated `SHA256SUMS` file, which covers every published artifact.
 
 ```sh
 mkdir -p ~/.coffer/bin
@@ -70,11 +102,11 @@ coffer open                             # opens an authenticated browser session
 `coffer open` reads `~/.coffer/daemon.json` and opens your browser at the daemon's loopback
 origin, where the daemon serves the web UI itself. The frozen daemon deploys its sibling
 binaries into `~/.coffer/bin` on first start, so MCP clients can resolve `coffer-mcp-shim` from
-`PATH`.
+`PATH`. The daemon listens on port 8000 by default, so that address is stable enough to
+bookmark; `coffer daemon port set <port>` moves it if something else on your machine wants 8000.
 
-> **macOS (unsigned):** the binaries ship unsigned (codesigning and notarisation are pending), so
-> Gatekeeper quarantines them on download and macOS may refuse to run them. Clear the quarantine
-> flag on the extracted binaries: `xattr -dr com.apple.quarantine ~/.coffer/bin`
+> **macOS (unsigned):** binaries extracted from a browser-downloaded archive are quarantined too.
+> Clear the flag: `xattr -dr com.apple.quarantine ~/.coffer/bin`
 
 ### From source (developers)
 

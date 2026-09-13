@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Placeholder hardened-runtime entitlements for macOS code-signing + notarization.
+
+  Coffer is a local-first vault that spawns the bundled `coffer-daemon` and
+  `coffer-mcp-shim` PyInstaller binaries as sidecars. PyInstaller bootstraps
+  by writing the extracted runtime to a temp dir and exec'ing it, so the
+  hardened runtime needs both `disable-library-validation` (to load the
+  embedded Python runtime that wasn't signed with the same Team ID) and
+  `allow-unsigned-executable-memory` (PyInstaller's bootloader patches code
+  pages at runtime). `cs.allow-jit` is included for any V8-backed plugins
+  later (currently unused; safe to remove if it remains unused at v1.0).
+
+  This file is NOT referenced by any active workflow today — macOS signing
+  is disabled until the Apple Developer ID is provisioned (see
+  .github/workflows/release.yml comment about APPLE_* secrets and
+  docs/distribution/macos-notarization.md).
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <key>com.apple.security.network.client</key>
+    <true/>
+</dict>
+</plist>

@@ -31,9 +31,12 @@ def test_cli_covers_every_visual_operation():
     operation name the UI exposes is present in the help output.
     """
     expected_subcommands: dict[str, list[str]] = {
-        # "port" and "restart" back the Settings card for the fixed daemon port:
-        # the card changes the setting, and names `coffer daemon restart` as the
-        # way to apply it (the page cannot restart the daemon serving it).
+        # "port" has no UI counterpart to be at parity with, and deliberately
+        # so: the daemon binds 8000 and refuses to start when it cannot, so the
+        # state the setting most needs changing from is one where no page the
+        # daemon serves can be reached. It is listed here because it must not
+        # be dropped, not because a card mirrors it. "restart" is how a change
+        # takes effect, for the same reason a running daemon cannot move.
         "daemon": ["start", "stop", "restart", "status", "rotate-token", "port"],
         "resource": ["list", "show", "enable", "disable", "delete"],
         "audit": ["list"],

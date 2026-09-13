@@ -244,3 +244,31 @@ Rejected.
   now noted inline above.
   The MCP Gateway Desktop spec is retired; its two surviving
   release-pipeline requirements folded into spec mcp-gateway.
+- **2026-09-12** — **the desktop tier returns, and (a) and (b) above are
+  reversed.** The shell is restored ([The Desktop Shell
+  Returns](./desktop-shell-over-a-shared-frontend.md)) because the 2026-09-09
+  judgement priced the cost of every update and not the cost of access: without
+  it Coffer has no Dock icon and no route to its UI that does not begin in a
+  terminal. Concretely:
+  (a) the Tauri-sidecar half of the decision is back — `bundle.externalBin`
+  with the sidecar triple-suffix naming, and `desktop/tauri.conf.json` — but
+  with **four** binaries rather than the old five (`coffer`, `coffer-daemon`,
+  `coffer-mcp-shim`, `coffer-callback`; `coffer-hook` and `whisper-cli` were
+  retired in the interval), and macOS `.dmg` only — MSI, AppImage and deb stay
+  gone, since those legs were never validated;
+  (b) the release regains a **second tier**: `Coffer-unsigned-<triple>.dmg` beside the
+  `coffer-cli-<triple>.tar.gz`, both covered by the one aggregated `SHA256SUMS`
+  (spec mcp-gateway FR-022 / FR-023). The desktop leg reuses the binaries the
+  CLI leg already froze rather than running PyInstaller twice, so the second
+  tier costs a Tauri build and nothing more;
+  (c) **stands unchanged** — binary deployment stays in the daemon's
+  frozen-start path, and the shell is explicitly forbidden from duplicating it
+  (spec mcp-gateway FR-026 / FR-032). That was the right home and the shell
+  coming back does not reclaim it;
+  (d) **stands, and becomes more expensive.** There is still no notarisation
+  runbook and no paid Apple Developer account. An unsigned `.dmg` is worse than
+  an unsigned CLI archive — macOS refuses it on double-click with "Coffer is
+  damaged", where a `curl`-installed binary is never quarantined at all — so
+  the `xattr -dr com.apple.quarantine` step is now documented for the app as
+  prominently as for the archive. Notarisation is now the single highest-value
+  thing that account would buy.

@@ -544,3 +544,94 @@ def test_smoke_test_bundle_script_present_and_invokes_shim() -> None:
         f"smoke_test_bundle.sh failed (exit {result.returncode}):\n"
         f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
     )
+
+
+def test_release_workflow_publishes_the_desktop_tier() -> None:
+    """The release produces a second tier beside the CLI archive: the `.dmg`.
+
+    Restoring the desktop shell put a self-contained app back in the release
+    (spec mcp-gateway FR-022, ADR desktop-shell-over-a-shared-frontend). Every
+    invariant that tier depends on is a filename or a path, none of which any
+    other test pins, and the feedback loop for getting one wrong is a tagged
+    release — the same reason the CLI tier is pinned here.
+    """
+    text = _release_yml_text()
+
+    assert "desktop/binaries/" in text, (
+        "release.yml must stage the frozen binaries where tauri.conf.json's "
+        "externalBin looks for them"
+    )
+    assert "@tauri-apps/cli" in text, "release.yml must run the Tauri build for the desktop tier"
+    # Comments are excluded deliberately: the workflow explains in prose why it
+    # does NOT cargo-install the CLI, and matching that sentence would make this
+    # assertion fire on the very documentation that agrees with it.
+    executable = "\n".join(ln for ln in text.splitlines() if not ln.lstrip().startswith("#"))
+    assert "cargo install tauri-cli" not in executable, (
+        "the Tauri CLI must come from npm; compiling it from source on every "
+        "cold cache costs minutes to produce a tool invoked once"
+    )
+    assert ".dmg" in text, "release.yml must collect a .dmg"
+
+
+def test_desktop_tier_reuses_the_already_frozen_binaries() -> None:
+    """The desktop leg must copy out of `dist/`, not freeze a second time.
+
+    PyInstaller over four binaries is the expensive half of the release and the
+    CLI leg has already done it. A second run would roughly double the job's
+    wall clock for artifacts that are byte-identical, and — worse — could ship
+    an app whose binaries were built from a different invocation than the
+    archive's.
+    """
+    text = _release_yml_text()
+    staging = [ln for ln in text.splitlines() if "desktop/binaries/" in ln and "cp " in ln]
+    assert staging, "release.yml must copy the frozen binaries into desktop/binaries/"
+    for line in staging:
+        assert "dist/" in line, (
+            f"the desktop tier must stage out of dist/ (the CLI leg's output), not "
+            f"rebuild: {line.strip()}"
+        )
+    # Count invocations, not mentions. The workflow names the script in several
+    # comments explaining what it staged where, and once inside an `echo` that
+    # reports a missing output; none of those is a second freeze.
+    invocations = [
+        ln
+        for ln in text.splitlines()
+        if "bash scripts/build_binaries.sh" in ln
+        and not ln.lstrip().startswith("#")
+        and "echo" not in ln
+    ]
+    assert len(invocations) == 1, (
+        f"build_binaries.sh must run exactly once per release leg — a second "
+        f"invocation for the desktop tier is the duplicate freeze this guards; "
+        f"found {len(invocations)}: {invocations}"
+    )
+
+
+def test_desktop_and_backend_versions_are_the_same_string() -> None:
+    """The shell's version and the daemon's must match, exactly.
+
+    `daemon_version_matches` (desktop/src/daemon.rs) compares the Rust crate's
+    CARGO_PKG_VERSION against the version `/api/v1/daemon/status` reports, which
+    is the Python package's, by string equality. Bump one without the other and
+    every desktop launch shows "daemon out of date — restart it" permanently:
+    the restart the banner offers cannot fix a mismatch that is baked into the
+    two builds. `tauri.conf.json` carries a third copy, which names the `.dmg`.
+    """
+
+    def _version(path: Path, pattern: str) -> str:
+        match = re.search(pattern, path.read_text(encoding="utf-8"), re.MULTILINE)
+        assert match, f"no version found in {path}"
+        return match.group(1)
+
+    backend_version = _version(_REPO / "backend" / "pyproject.toml", r'^version = "([^"]+)"')
+    cargo_version = _version(_REPO / "desktop" / "Cargo.toml", r'^version = "([^"]+)"')
+    tauri_version = _version(_REPO / "desktop" / "tauri.conf.json", r'"version"\s*:\s*"([^"]+)"')
+
+    assert cargo_version == backend_version, (
+        f"desktop/Cargo.toml is {cargo_version} but backend/pyproject.toml is "
+        f"{backend_version} — the desktop app would report permanent version skew"
+    )
+    assert tauri_version == backend_version, (
+        f"desktop/tauri.conf.json is {tauri_version} but backend/pyproject.toml is "
+        f"{backend_version} — the .dmg would be named for the wrong version"
+    )

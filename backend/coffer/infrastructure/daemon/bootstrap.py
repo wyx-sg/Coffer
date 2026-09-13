@@ -59,8 +59,10 @@ def _noop_release() -> None:
 # finishing its own warm-up (migrations, MCP upstream startup) and has been
 # measured taking ~9s to answer; at the old 2s the probe timed out, the spawn
 # concluded "nobody is live", and it bound a SECOND port beside a perfectly
-# healthy daemon — the failure that filled 8000-8009 one restart at a time. A
-# generous timeout costs nothing in the common failure case: a stale daemon.json
+# healthy daemon — the failure that filled 8000-8009 one restart at a time back
+# when a start could scan, and that now surfaces as a spawn refusing the one
+# port its healthy predecessor already holds. A generous timeout costs nothing
+# in the common failure case: a stale daemon.json
 # points at a port nobody is listening on, which refuses the connection at once
 # rather than timing out.
 _LIVENESS_PROBE_TIMEOUT: float = 15.0
@@ -178,9 +180,10 @@ def superseded_by() -> DaemonInfo | None:
     the single port recorded in daemon.json — it cannot see a daemon alive on a
     different port. Whenever that probe fails while a daemon is in fact running
     (daemon.json deleted, or a serving-but-busy daemon that missed the probe
-    timeout), the spawn binds the next free port and the older daemon runs on
-    forever holding its own. Repeat and the whole 8000-8009 range is consumed,
-    after which no daemon can start at all.
+    timeout), the spawn cannot see the older daemon at all. Under the test
+    harness's range override it binds the next free port and both run on
+    forever; on a normal start it now collides with the older daemon's port and
+    refuses outright — clearer, but still not a daemon standing down.
 
     This is the other side of that guard: a daemon calls it periodically and
     stands down once it can see that it has been superseded. The conditions are
@@ -206,47 +209,67 @@ def superseded_by() -> DaemonInfo | None:
     return info if pid_is_coffer_daemon(info.pid) else None
 
 
-#: The scan range used when the user has fixed no port and the environment
-#: names none. 8000 first, because that is the port every surface's
-#: documentation and every existing bookmark already says.
-_DEFAULT_PORT_RANGE = (8000, 8009)
+#: The range the environment override falls back to when it names only one
+#: end of it. Not a default the daemon ever reaches on its own: a start with
+#: no override binds exactly one port (see :func:`_bind_port`).
+_OVERRIDE_PORT_RANGE_FALLBACK = (daemon_config.DEFAULT_PORT, daemon_config.DEFAULT_PORT + 9)
 
 
 def _env_port_range() -> tuple[int, int] | None:
     """An explicit range from the environment, or ``None``.
 
     This is the test harness's hook — every test that starts a real daemon
-    pins its own disjoint range here so concurrent tests cannot collide — and
-    it deliberately outranks the user's fixed port, so a test run is hermetic
-    on a machine whose vault has one configured.
+    pins its own disjoint range here so concurrent tests cannot collide on the
+    one port a real start now insists on — and it deliberately outranks the
+    user's setting, so a test run is hermetic on a machine whose vault has a
+    port configured.
     """
     start = os.environ.get("COFFER_PORT_RANGE_START")
     end = os.environ.get("COFFER_PORT_RANGE_END")
     if start is None and end is None:
         return None
-    return int(start or _DEFAULT_PORT_RANGE[0]), int(end or _DEFAULT_PORT_RANGE[1])
+    return (
+        int(start or _OVERRIDE_PORT_RANGE_FALLBACK[0]),
+        int(end or _OVERRIDE_PORT_RANGE_FALLBACK[1]),
+    )
 
 
 def _bind_port() -> socket.socket:
-    """Bind the daemon's listening socket, honouring the user's fixed port.
+    """Bind the daemon's listening socket: one port, or nothing.
 
-    Precedence: the environment's explicit range (tests), then the fixed port
-    the user configured (spec mcp-gateway FR-028), then the default scan. The
-    fixed path raises :class:`~coffer.infrastructure.daemon.port_alloc.PortInUse`
-    rather than falling back — the entrypoint turns that into a refusal to
-    start, which is the whole point of fixing a port.
+    Precedence: the environment's explicit range (the test harness's override,
+    the only path that still scans), otherwise the port
+    :func:`~coffer.infrastructure.daemon.config.effective_port` names — the one
+    the user pinned, or 8000 when they pinned none.
+
+    The second path raises
+    :class:`~coffer.infrastructure.daemon.port_alloc.PortInUse` rather than
+    moving elsewhere, and the entrypoint turns that into a refusal to start.
+    That refusal is the point: a daemon that relocates itself silently breaks
+    the bookmark and the origin-keyed browser state of the UI it serves, and
+    nothing shows the user why.
     """
     env_range = _env_port_range()
     if env_range is not None:
         return bind_free_socket(start=env_range[0], end=env_range[1])
-    fixed = daemon_config.read_fixed_port()
-    if fixed is not None:
-        return bind_fixed_socket(fixed)
-    return bind_free_socket(start=_DEFAULT_PORT_RANGE[0], end=_DEFAULT_PORT_RANGE[1])
+    return bind_fixed_socket(daemon_config.effective_port())
+
+
+def planned_port() -> int | None:
+    """The one port the next start will insist on, or ``None`` if it will scan.
+
+    Lets a caller diagnose a conflict *before* spawning without duplicating
+    :func:`_bind_port`'s precedence. ``None`` says the environment's range
+    override is in play — a test harness — where there is no single port to
+    check ahead of time.
+    """
+    if _env_port_range() is not None:
+        return None
+    return daemon_config.effective_port()
 
 
 def acquire() -> tuple[DaemonInfo, socket.socket]:
-    """Bind a free port + generate token, then write daemon.json.
+    """Bind the daemon's port + generate token, then write daemon.json.
 
     Returns ``(info, sock)``. CODE-041: the caller MUST keep ``sock`` open and
     pass its fd to the server (uvicorn ``fd=sock.fileno()``) so the port is

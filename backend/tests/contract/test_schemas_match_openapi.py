@@ -62,12 +62,6 @@ def openapi_components() -> dict[str, Any]:
         ("CredentialExistsOut", "CredentialExistsOut", {"present"}),
         ("CredentialSettingsOut", "CredentialSettingsOut", {"master_key_storage"}),
         ("CredentialSettingsIn", "CredentialSettingsIn", {"master_key_storage"}),
-        (
-            "DaemonPortSettingsOut",
-            "DaemonPortSettingsOut",
-            {"configured_port", "effective_port", "restart_required"},
-        ),
-        ("DaemonPortSettingsIn", "DaemonPortSettingsIn", set()),
         ("McpServerStatusOut", "McpServerStatusOut", {"status"}),
         (
             "CapabilityListOut",

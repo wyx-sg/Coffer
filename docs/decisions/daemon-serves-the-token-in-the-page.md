@@ -7,6 +7,7 @@
 - **Deciders:** Yuxing Wu
 - **Spec:** [mcp-gateway](../../specs/mcp-gateway/spec.md) FR-024 / FR-025 / FR-027
 - **Related:** [Detect-or-Spawn](./daemon-detect-or-spawn.md) (the daemon's port moves between restarts, which is the other half of why a browser could not find its way back)
+- **Amended by:** [The Desktop Shell Returns](./desktop-shell-over-a-shared-frontend.md) (2026-09-12) — a third case now exists; the decision below is unchanged for browsers
 
 ## Context
 
@@ -91,8 +92,18 @@ browser at that origin.
   is unaffected; it authenticates inbound traffic by per-channel signature and
   forwards to the daemon over loopback.
 - **A browser that is not served by the daemon has no token.** That is the Vite
-  dev server, which already injects the same global from `daemon.json`. There is
-  no third case.
+  dev server, which already injects the same global from `daemon.json`.
+
+  **Amended 2026-09-12:** there is now a third case. The restored desktop shell
+  hosts the page as a local asset, so nobody served that document and this
+  injection cannot reach it; the shell supplies the same two globals over an IPC
+  command before first render instead ([The Desktop Shell
+  Returns](./desktop-shell-over-a-shared-frontend.md), spec mcp-gateway FR-030).
+  Nothing above changes: injection remains how browsers are credentialed, and
+  the `Host` guard that makes it safe is untouched. What the third case shows is
+  that the invariant was never "the daemon serves the token" but "whoever hosts
+  the document supplies it" — and the frontend reads one pair of globals either
+  way, so it gained a supplier and not a branch.
 
 ## Alternatives considered
 

@@ -7,6 +7,7 @@
 - **决策者：** Yuxing Wu
 - **规范：** [mcp-gateway](../../specs/mcp-gateway/spec.zh.md) FR-024 / FR-025 / FR-027
 - **相关：** [Detect-or-Spawn](./daemon-detect-or-spawn.zh.md)（daemon 的端口会随重启变动，这是浏览器找不回自己的另一半原因）
+- **被修订于：** [桌面壳回归](./desktop-shell-over-a-shared-frontend.zh.md)（2026-09-12）—— 现在存在第三种情况；下文的决策对浏览器而言不变
 
 ## 背景
 
@@ -74,7 +75,15 @@ origin 上打开浏览器。
   `coffer-callback` 进程 —— 隧道唯一会指向的东西 —— 是另一个端口上的另一个应用，不受
   影响；它以按频道的签名校验入站流量，再经 loopback 转发给 daemon。
 - **不由 daemon 提供的浏览器页面没有 token。** 那就是 Vite dev server，而它已经从
-  `daemon.json` 注入同一个全局变量。不存在第三种情况。
+  `daemon.json` 注入同一个全局变量。
+
+  **2026-09-12 修订：** 现在存在第三种情况。恢复后的桌面外壳把页面作为本地 asset 承载，
+  所以没有人「供出」那份文档，这套注入够不到它；外壳改为在首次渲染前通过一条 IPC 命令
+  提供同样那两个全局变量（[桌面壳回归](./desktop-shell-over-a-shared-frontend.zh.md)，
+  spec mcp-gateway FR-030）。上面的一切都不变：注入仍然是浏览器取得凭据的方式，让它安全的
+  `Host` 守卫也原封不动。第三种情况揭示的是：不变量从来不是「daemon 供出 token」，而是
+  「谁承载文档谁供给它」—— 而前端两边读的是同一对全局变量，所以它多出的是一个供给者，
+  不是一条分支。
 
 ## 备选方案
 
