@@ -97,7 +97,14 @@ lint:
 	$(PY) -m ruff check $(BACKEND) evals
 	$(PY) -m ruff format --check $(BACKEND) evals
 	$(PY) -m mypy --config-file $(BACKEND)/pyproject.toml $(BACKEND)/coffer
-	.venv/bin/lint-imports --config $(BACKEND)/pyproject.toml
+# PYTHONPATH is load-bearing, not decorative: lint-imports resolves `coffer`
+# by import, so in a git worktree (whose .venv symlinks to the main
+# checkout's, whose editable install points at the MAIN checkout's backend)
+# a bare invocation silently analyses the other checkout's code and reports
+# contract violations for modules this tree does not have. In the main
+# checkout it resolves to the same code either way, so setting it always is
+# free and makes the two environments agree.
+	PYTHONPATH=$(BACKEND) .venv/bin/lint-imports --config $(BACKEND)/pyproject.toml
 	@if [ -d $(FRONTEND)/node_modules ]; then \
 		cd $(FRONTEND) && npm run lint && npm run typecheck; \
 	else \
