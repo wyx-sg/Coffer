@@ -79,8 +79,13 @@ Tauri    → shell invokes get_daemon_info → setDaemonConnection(...)  (FR-030
 ```
 
 Three files change: `lib/tauri.ts` returns, `lib/auth.ts` regains
-`setDaemonConnection`, and `main.tsx` awaits the handshake before render when
-`isTauri()`. `getCofferBaseUrl` / `getCofferToken` are untouched — both hosts
+`setDaemonConnection`, and `main.tsx` starts the handshake when `isTauri()` —
+alongside the first render, never before it. Blocking on it would undo the
+paragraph above: the handshake spawns a daemon and polls when none is running,
+so a launch after a reboot would sit on an empty window for most of that.
+Rendering first shows the real application immediately with the banner
+explaining the gap, and the queries that went out uncredentialed are refetched
+when the handshake lands. `getCofferBaseUrl` / `getCofferToken` are untouched — both hosts
 converge on the same globals, which is why this is a second *supplier* and not a
 second *path*.
 

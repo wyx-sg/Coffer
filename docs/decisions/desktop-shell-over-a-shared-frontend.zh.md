@@ -45,7 +45,7 @@ Tauri 壳于 2026-09-09 退役。当时的理由是运维成本，而且这个�
 Tauri   → 壳 invoke get_daemon_info → setDaemonConnection(...) （FR-030）
 ```
 
-动三个文件：`lib/tauri.ts` 回来，`lib/auth.ts` 加回 `setDaemonConnection`，`main.tsx` 在 `isTauri()` 时先等握手再 render。`getCofferBaseUrl` / `getCofferToken` 一行不动——两个宿主收敛到同样的全局变量上，这正是它之所以是第二个**供给者**而不是第二条**路径**的原因。
+动三个文件：`lib/tauri.ts` 回来，`lib/auth.ts` 加回 `setDaemonConnection`，`main.tsx` 在 `isTauri()` 时**发起**握手——与首次渲染并行，绝不在它之前。阻塞会推翻上一段：没有 daemon 在跑时这次握手要拉起一个并轮询，于是重启后的一次启动会有大半时间对着空窗口。先渲染意味着立刻看到真正的应用，由横幅解释这段空档，而那些未带凭据发出的请求会在握手落地后被重新拉取。`getCofferBaseUrl` / `getCofferToken` 一行不动——两个宿主收敛到同样的全局变量上，这正是它之所以是第二个**供给者**而不是第二条**路径**的原因。
 
 其余一概不分叉。尤其是 2026-09-09 删掉的 Tauri `dialog` / `opener` 插件分支**继续保持删除**：`filePicker.ts`、`fsActions.ts`、`FileActions.tsx`、`FolderPicker.tsx` 在两个宿主里都走 daemon。把它们还原回来，等于重建那套让前端改不动的 `isTauri()` 分叉，换来的是用户完全感知不到的东西。
 
