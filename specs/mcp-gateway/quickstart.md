@@ -33,8 +33,8 @@ On first launch Coffer:
    and the shim can find each other. The address does not move between
    restarts, so a browser bookmark to Coffer's UI keeps working. If something
    else on your machine wants 8000, Coffer refuses to start rather than landing
-   somewhere else, and names the process holding it; `coffer daemon port set
-   <other>` moves Coffer instead.
+   somewhere else, and names the process holding it;
+   `coffer daemon port set <other>` moves Coffer instead.
 2. Initialises the SQLite database under `~/.coffer/coffer.db`.
 3. Seeds default retention policies (audit: 365 days, invocations: 30 days).
 
