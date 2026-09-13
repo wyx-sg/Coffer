@@ -20,15 +20,18 @@
 // first state: disabled beats any scope. Disabling deliberately LEAVES the
 // scope untouched, so re-enabling restores the agent selection the user had.
 //
-// Mutation pattern (unchanged): immediate PUT/POST per change, no local
-// staging + Save button. Every control already represents a complete, valid
-// value on its own:
+// Mutation pattern: the two whole-value segments write immediately, because
+// each already names a complete state. The agent list does not — a selection
+// is only finished when the user stops picking — so it stages locally and
+// writes once, when the panel closes:
 //   - "Disabled" posts .../disable and writes no scope.
 //   - "Every agent" enables if needed and writes `null`.
-//   - "Selected agents" enables if needed, writes `[]` when the scope was
-//     `null` ("selected, nothing selected yet" is itself a well-defined state —
-//     the dormant warning in the popover), and opens the agent list.
-//   - A checkbox adds/removes that agent from the list.
+//   - "Selected agents" opens the list and writes NOTHING yet.
+//   - A checkbox edits a local draft.
+//   - Closing the list writes the draft, once, if it differs from what is
+//     stored. Writing per tick refetched the resource list under the open
+//     panel, and since the row it is anchored to can move, the panel appeared
+//     under a different row.
 // An agent name in the list that isn't registered here is legal (a resource can
 // be scoped in before the agent exists), so it renders as an extra row.
 //
@@ -45,6 +48,7 @@
 // costs zero extra requests. Passing `scope` also asserts "this kind supports
 // scope", which is true of the only two kinds whose lists mount it. The detail
 // pages pass nothing and keep fetching, since they render one resource.
+import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -112,9 +116,28 @@ export function ScopeControl({ kind, name, enabled, scope: presetScope }: Props)
     enableIfNeeded();
     if (scope !== null) update.mutate(null);
   };
-  const goSelected = () => {
+  // The agent list's staged selection: `null` while the panel is closed.
+  const [draft, setDraft] = useState<string[] | null>(null);
+
+  const openList = (open: boolean) => {
+    if (open) {
+      setDraft(scope ?? []);
+      return;
+    }
+    const staged = draft;
+    setDraft(null);
+    if (staged === null) return;
+    // Enabling is part of what the segment means on a disabled resource, but it
+    // waits for the close like the scope does: writing on open is what moved
+    // the row out from under the panel.
     enableIfNeeded();
-    if (scope === null) update.mutate([]);
+    const current = scope;
+    const unchanged =
+      current !== null &&
+      current.length === staged.length &&
+      current.every((name) => staged.includes(name));
+    if (unchanged) return;
+    update.mutate(staged);
   };
 
   if (!supportsScope) {
@@ -130,7 +153,8 @@ export function ScopeControl({ kind, name, enabled, scope: presetScope }: Props)
     );
   }
 
-  const selected = scope ?? [];
+  const stored = scope ?? [];
+  const selected = draft ?? stored;
   const registered = (agentsData ?? []).map((a) => a.name);
   const unknown = selected.filter((n) => !registered.includes(n));
   const rows = [
@@ -139,7 +163,10 @@ export function ScopeControl({ kind, name, enabled, scope: presetScope }: Props)
   ];
 
   const toggleAgent = (agentName: string, checked: boolean) => {
-    update.mutate(checked ? [...selected, agentName] : selected.filter((a) => a !== agentName));
+    setDraft((current) => {
+      const base = current ?? selected;
+      return checked ? [...base, agentName] : base.filter((a) => a !== agentName);
+    });
   };
 
   const selectedLabel =
@@ -155,9 +182,9 @@ export function ScopeControl({ kind, name, enabled, scope: presetScope }: Props)
       <Button {...segment(enabled && scope === null)} onClick={goEveryAgent}>
         {t("scope.everyAgent")}
       </Button>
-      <Popover>
+      <Popover open={draft !== null} onOpenChange={openList}>
         <PopoverTrigger asChild>
-          <Button {...segment(isSelected)} onClick={goSelected}>
+          <Button {...segment(isSelected)}>
             {selectedLabel}
             <ChevronDown className="size-3.5" aria-hidden />
           </Button>

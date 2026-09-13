@@ -19,7 +19,7 @@ shaped to prevent:
 * ``offered()`` / ``suggest()`` — what a PICKER should show. Usually the same
   list: the agent's catalogue is what the agent itself can run, and nothing
   narrows it — not the agent, and not the surface doing the asking. Curation
-  lived on the agent once and on the channel after that; migration 0067 took the
+  lived on the agent once and on the channel after that; migration 0068 took the
   last of it away, so the web picker and a channel's ``/model`` card both offer
   the whole list.
 

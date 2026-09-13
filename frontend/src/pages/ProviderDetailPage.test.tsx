@@ -225,32 +225,36 @@ describe("ProviderDetailPage", () => {
     expect(await screen.findAllByText(/listing this endpoint's models/i)).not.toHaveLength(0);
   });
 
-  test("an empty model selection reads as unrestricted", async () => {
+  test("an empty model selection shows every offered model switched on", async () => {
+    // An empty curated set means NO RESTRICTION, so the table says that the
+    // only way a table can: every row on. It used to render them all off and
+    // explain the contradiction in a sentence above.
     apiMock.get.mockResolvedValue(makeProvider({ models: [] }));
+    endpointServes(chat("gpt-5", "gpt-5-codex"));
     renderPage();
     await openModelsTab();
 
-    expect(await screen.findByText(/no restriction/i)).toBeInTheDocument();
-    // Nothing curated and the endpoint listed nothing — say that, and say the
-    // empty selection still means every model it offers is available.
-    expect(screen.getByText(/this endpoint listed no models/i)).toBeInTheDocument();
+    expect(await screen.findByRole("switch", { name: "Status: gpt-5" })).toBeChecked();
+    expect(switchFor("gpt-5-codex")).toBeChecked();
+    expect(screen.queryByText(/no restriction/i)).not.toBeInTheDocument();
   });
 
-  test("the models the endpoint serves are listed on open and flipping one on writes the selection", async () => {
+  test("narrowing away from no-restriction writes the list it stood for, minus that row", async () => {
     apiMock.get.mockResolvedValue(makeProvider({ models: [] }));
-    apiMock.update.mockResolvedValue(makeProvider({ models: chat("gpt-5") }));
+    apiMock.update.mockResolvedValue(makeProvider({ models: chat("gpt-5-codex") }));
     endpointServes(chat("gpt-5", "gpt-5-codex"));
     renderPage();
     await openModelsTab();
 
     const toggle = await screen.findByRole("switch", { name: "Status: gpt-5" });
-    expect(toggle).not.toBeChecked();
+    expect(toggle).toBeChecked();
     fireEvent.click(toggle);
 
     await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-    // The curated entry carries the kind the row is showing, not a bare id.
+    // Everything that was implicitly on, explicitly, minus the one turned off —
+    // each carrying the kind its row is showing, not a bare id.
     expect(apiMock.update).toHaveBeenCalledWith("acme", {
-      models: [{ id: "gpt-5", modality: "text" }],
+      models: [{ id: "gpt-5-codex", modality: "text" }],
     });
   });
 
@@ -263,7 +267,6 @@ describe("ProviderDetailPage", () => {
     // The curated set renders without a fetch — it is the connection's own state.
     const toggle = await screen.findByRole("switch", { name: "Status: gpt-5" });
     expect(toggle).toBeChecked();
-    expect(screen.getByText(/2 model\(s\) picked/i)).toBeInTheDocument();
 
     fireEvent.click(toggle);
     await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
@@ -366,24 +369,47 @@ describe("ProviderDetailPage", () => {
   });
 
   test("a type picked before the switch is the one the curated entry is stored with", async () => {
-    apiMock.get.mockResolvedValue(makeProvider({ models: [] }));
+    // An EXPLICIT list that does not name this row: nothing in the id says
+    // "embedding", so the guess is wrong, and there is no curated entry to
+    // patch the correction into until the row is switched on.
+    apiMock.get.mockResolvedValue(makeProvider({ models: chat("gpt-5") }));
     apiMock.update.mockResolvedValue(makeProvider());
-    // Nothing in the id says "embedding", so the guess is wrong — and this row
-    // is not offered yet, so there is nothing to patch the correction into.
-    endpointServes(chat("house-embeddings-v2"));
+    endpointServes(chat("gpt-5", "house-embeddings-v2"));
     renderPage();
     await openModelsTab();
     await screen.findByText("house-embeddings-v2");
 
     setModality("house-embeddings-v2", "Embedding");
     expect(typePickerFor("house-embeddings-v2")).toHaveTextContent("Embedding");
-    // Held locally: a row that is not offered has nowhere to be written.
     expect(apiMock.update).not.toHaveBeenCalled();
 
     fireEvent.click(switchFor("house-embeddings-v2"));
     await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
     expect(apiMock.update).toHaveBeenCalledWith("acme", {
-      models: [{ id: "house-embeddings-v2", modality: "embedding" }],
+      models: [
+        { id: "gpt-5", modality: "text" },
+        { id: "house-embeddings-v2", modality: "embedding" },
+      ],
+    });
+  });
+
+  test("under no restriction, correcting a type writes the list it stood for", async () => {
+    // Every row is already on, so the correction has somewhere to go at once —
+    // there is no "switch it on later" step to hold it for.
+    apiMock.get.mockResolvedValue(makeProvider({ models: [] }));
+    apiMock.update.mockResolvedValue(makeProvider());
+    endpointServes(chat("gpt-5", "house-embeddings-v2"));
+    renderPage();
+    await openModelsTab();
+    await screen.findByText("house-embeddings-v2");
+
+    setModality("house-embeddings-v2", "Embedding");
+    await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
+    expect(apiMock.update).toHaveBeenCalledWith("acme", {
+      models: [
+        { id: "gpt-5", modality: "text" },
+        { id: "house-embeddings-v2", modality: "embedding" },
+      ],
     });
   });
 

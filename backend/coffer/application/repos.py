@@ -47,12 +47,12 @@ class AuditRepo(Protocol):
     async def insert(self, entry: AuditEntry) -> None: ...
     # Move every row recorded against (kind, old_name) onto ``new_name``;
     # returns the number of rows moved.
-    async def repoint(self, kind: str, old_name: str, new_name: str) -> int: ...
     async def query(
         self,
         *,
         kind: str | None = None,
         name: str | None = None,
+        resource_id: int | None = None,
         event_type: str | None = None,
         since: datetime | None = None,
         limit: int = 50,

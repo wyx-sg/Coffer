@@ -15,6 +15,19 @@ from coffer.surfaces.http.auth import set_active_token
 TOKEN = "test-token-011"
 
 
+def _ref_of(c, name: str) -> str:
+    """The vault address a connection's config names.
+
+    Read rather than spelled out: the ref is an ADDRESS the config holds, and
+    deriving it from the connection's name is exactly what made the name a key.
+    """
+    return c.get(f"/api/v1/providers/{name}").json()["credential_ref"]
+
+
+def _key_present(c, ref: str) -> bool:
+    return c.get(f"/api/v1/credentials/{ref}/exists").json()["present"] is True
+
+
 def _app(tmp_path: pathlib.Path, monkeypatch, port_start: int):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
@@ -62,9 +75,12 @@ def test_create_with_inline_secret(tmp_path, monkeypatch):
     with _client(app) as c:
         r = c.post("/api/v1/providers", json=_anthropic_body())
         assert r.status_code == 201, r.text
-        assert r.json()["credential_ref"] == "provider/acme/key"
-        # the secret landed in the vault under the minted ref
-        ex = c.get("/api/v1/credentials/provider/acme/key/exists")
+        # The minted ref is opaque — the connection's name must not be
+        # recoverable from it, or the name is a key again.
+        ref = r.json()["credential_ref"]
+        assert ref.startswith("provider/") and "acme" not in ref
+        # the secret landed in the vault under that ref
+        ex = c.get(f"/api/v1/credentials/{ref}/exists")
         assert ex.status_code == 200 and ex.json()["present"] is True
         # ...but never in the API response
         assert "sk-secret-value" not in r.text
@@ -125,6 +141,28 @@ def test_update_profile(tmp_path, monkeypatch):
         assert r.json()["base_url"] == "https://gw/anthropic/v2"
 
 
+def test_patch_can_correct_the_wire(tmp_path, monkeypatch):
+    """The wire is a property of the endpoint, not the connection's identity.
+
+    Nothing keys off it — projection targets come from ``compatible_agents`` —
+    so a probe that guessed wrong is corrected in place rather than by deleting
+    the connection and re-entering its key. ``credential_ref`` stays immutable:
+    that one IS an address.
+    """
+    app = _app(tmp_path, monkeypatch, 59755)
+    with _client(app) as c:
+        c.post("/api/v1/providers", json=_anthropic_body())
+        r = c.patch("/api/v1/providers/acme", json={"protocol": "openai"})
+        assert r.status_code == 200, r.text
+        assert r.json()["protocol"] == "openai"
+
+        # The one rule the wire still carries: an ollama connection holds no
+        # key, so switching a keyed one to it is refused rather than silently
+        # orphaning the secret.
+        bad = c.patch("/api/v1/providers/acme", json={"protocol": "ollama"})
+        assert bad.status_code == 422, bad.text
+
+
 @pytest.mark.acceptance(spec="provider-switching", scenario="list provider profiles")
 def test_list_profiles(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59760)
@@ -144,10 +182,11 @@ def test_delete_cleans_owned_credential(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59770)
     with _client(app) as c:
         c.post("/api/v1/providers", json=_anthropic_body())
-        assert c.get("/api/v1/credentials/provider/acme/key/exists").json()["present"] is True
+        ref = _ref_of(c, "acme")
+        assert _key_present(c, ref)
         r = c.delete("/api/v1/providers/acme")
         assert r.status_code == 204, r.text
-        assert c.get("/api/v1/credentials/provider/acme/key/exists").json()["present"] is False
+        assert not _key_present(c, ref)
 
 
 @pytest.mark.acceptance(
@@ -648,12 +687,13 @@ def test_reject_malformed_curated_models(tmp_path, monkeypatch):
     spec="provider-switching",
     scenario="rename a connection and keep its credential, audit trail and projection",
 )
-def test_rename_moves_credential_audit_and_projection(tmp_path, monkeypatch):
+def test_rename_moves_the_row_and_the_projection(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59920)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
         _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
         c.post("/api/v1/providers", json=_anthropic_body(name="acme"))
+        ref_before = _ref_of(c, "acme")
         assert c.post("/api/v1/providers/acme/activate").status_code == 200
 
         r = c.post("/api/v1/providers/acme/rename", json={"new_name": "acme-prod"})
@@ -664,25 +704,30 @@ def test_rename_moves_credential_audit_and_projection(tmp_path, monkeypatch):
         assert c.get("/api/v1/providers/acme").status_code == 404
         assert c.get("/api/v1/providers/acme-prod").status_code == 200
 
-        # The owned vault entry moved with it — no secret orphaned under the
-        # old ref, which delete-time cleanup would never collect.
-        assert r.json()["credential_ref"] == "provider/acme-prod/key"
-        assert c.get("/api/v1/credentials/provider/acme-prod/key/exists").json()["present"] is True
-        assert c.get("/api/v1/credentials/provider/acme/key/exists").json()["present"] is False
+        # The vault entry did not move, because it never named the connection:
+        # the ref is an address, so a rename has nothing to do to it.
+        assert r.json()["credential_ref"] == ref_before
+        assert _key_present(c, ref_before)
 
         # The projection names the NEW connection, so the agent's apiKeyHelper
         # still shells out to something that exists.
         data = json.loads((cfg / "settings.json").read_text())
         assert data["apiKeyHelper"] == "coffer provider key --connection acme-prod"
 
-        # The audit trail followed the resource instead of being stranded under
-        # a name that no longer resolves.
+        # The trail follows the resource — asking under the new name returns
+        # the whole history, including the events from before the rename.
         moved = c.get("/api/v1/audit", params={"kind": "provider", "name": "acme-prod"})
         assert moved.status_code == 200, moved.text
-        types = {e["event_type"] for e in moved.json()["entries"]}
+        entries = moved.json()["entries"]
+        types = {e["event_type"] for e in entries}
         assert {"resource_created", "provider_switched", "resource_renamed"} <= types
-        stale = c.get("/api/v1/audit", params={"kind": "provider", "name": "acme"})
-        assert stale.json()["entries"] == []
+
+        # …and it follows WITHOUT being rewritten: the row that recorded the
+        # creation still says the connection was called "acme" then, because it
+        # was. Repointing those rows onto the new name used to make the log
+        # claim "acme-prod" had been created, which never happened.
+        created = next(e for e in entries if e["event_type"] == "resource_created")
+        assert created["resource_name"] == "acme"
 
 
 @pytest.mark.acceptance(
@@ -701,8 +746,8 @@ def test_rename_onto_taken_name_is_rejected(tmp_path, monkeypatch):
 
         # Nothing moved: both connections still resolve under their own names,
         # each still holding its own key.
-        assert c.get("/api/v1/providers/first").json()["credential_ref"] == "provider/first/key"
-        assert c.get("/api/v1/providers/second").json()["credential_ref"] == "provider/second/key"
+        assert _key_present(c, _ref_of(c, "first"))
+        assert _key_present(c, _ref_of(c, "second"))
         assert c.get("/api/v1/providers/first/key").json()["value"] == "sk-first"
         assert c.get("/api/v1/providers/second/key").json()["value"] == "sk-second"
 
@@ -752,7 +797,7 @@ def test_rename_to_the_same_name_is_a_noop(tmp_path, monkeypatch):
         assert r.status_code == 200, r.text
         # Nothing moved — not the row (updated_at included), not the vault entry.
         assert r.json() == before
-        assert c.get("/api/v1/credentials/provider/acme/key/exists").json()["present"] is True
+        assert _key_present(c, before["credential_ref"])
 
 
 def test_rename_unknown_connection_is_404(tmp_path, monkeypatch):

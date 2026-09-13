@@ -303,14 +303,13 @@ class ResourceService:
         return await _update_scope(self, ref, scope, actor=actor)
 
     async def rename(self, ref: ResourceRef, new_name: str, actor: str) -> Resource:
-        """Move a resource to ``new_name``, carrying its audit trail with it.
+        """Move a resource to ``new_name``.
 
-        A name is a resource's IDENTITY, not a config field, so this is its own
-        operation rather than an ``update_config`` on the name: the row moves,
-        and every audit row recorded against the old name is repointed at the
-        new one (see ``AuditService.repoint``) so the history stays reachable
-        through the same kind+name filter that finds the resource. The rename
-        is then recorded as its own event, which is where the old name lives on.
+        Its own operation rather than an ``update_config`` on the name because
+        a name is not config — but all it does is move the row. The audit trail
+        needs no repointing: rows carry the resource's stable id, so history
+        follows it while each row keeps saying what the resource was called
+        when that event happened. The rename is recorded as its own event.
         """
         kind_def = self._require_kind(ref.kind)
         # Same CODE-030 name check ``register`` applies, BEFORE any DB write.
@@ -321,7 +320,6 @@ class ResourceService:
                 raise ConfigValidationError(str(e)) from e
         await self.get(ref)  # 404 for an absent resource, before anything moves
         renamed = await self._repo.rename(ref, new_name)
-        await self._audit.repoint(ref.kind, ref.name, new_name)
         await self._audit.record(
             AuditEventType.RESOURCE_RENAMED.value,
             ref=ResourceRef(ref.kind, new_name),

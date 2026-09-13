@@ -454,7 +454,6 @@
       "secret": "API Key",
       "searchPlaceholder": "搜索模型提供商…",
       "allVendors": "全部厂商",
-      "internalEngine": "Coffer 引擎",
       "bulkDeleteConfirm": "删除选中的 {{count}} 个模型提供商？它们保存的凭据也会一并删除。",
       "detail": {
         "back": "返回模型提供商",
@@ -467,8 +466,6 @@
         "updated": "更新时间",
         "models": "模型",
         "modelsHint": "选择该端点的哪些模型由本提供商对外提供，以及每个模型属于哪一类。下游各处的选择器随后只会看到你勾选的、且类型对得上的模型 —— 对话模型下拉框永远不会出现向量模型。",
-        "unrestricted": "未限制——该接入地址提供的所有模型都可用。",
-        "restricted": "已选择 {{count}} 个模型——Agent 只会看到这些。",
         "fetchFailed": "无法列出该接入地址的模型（{{error}}）。当前选择保持不变。",
         "loadingModels": "正在列出该接入地址的模型…",
         "retryFetch": "重试",
@@ -918,11 +915,11 @@
   },
   "knowledge": {
     "title": "知识",
-    "subtitle": "按作用域组织的本地知识库——既包含 agent 写下的内容，也包含你上传的文档，均可通过 MCP 网关检索。全局与每个项目的作用域会自动创建。",
+    "subtitle": "你和 agent 共同编辑的 markdown 文件——一个集合一个文件夹，用 coffer__list 和 coffer__grep 读。集合是你亲手建的，只有你授权的 agent 看得到。",
     "add": "新建集合",
-    "empty": "还没有知识作用域。可以先创建一个集合，或等待全局与项目作用域随 agent 工作自动出现。",
-    "loadFailed": "加载知识作用域失败",
-    "searchPlaceholder": "搜索知识作用域…",
+    "empty": "还没有集合。建一个，然后往它的文件夹里丢 markdown——或者等 agent 写下第一条。",
+    "loadFailed": "加载集合失败",
+    "searchPlaceholder": "搜索集合…",
     "cols": {
       "name": "名称",
       "description": "描述",

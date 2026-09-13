@@ -45,7 +45,7 @@ ChannelConfig (discriminator: channel_type)
 - channel 不带任何模型策展。它曾短暂拥有自己的 `default_model` 与 `models` 允许范围，
   两者都已移除：channel 只绑定一个 agent、别无其他——新会话跑在所绑定 agent 自己的 CLI
   默认模型上，`/model` 卡片提供该 agent 的整份 catalogue，且不拒绝任何 id。迁移
-  `20260912_0067_drop_channel_model_curation.py` 单向地把这两个键从每一条既有 channel
+  `20260912_0068_drop_channel_model_curation.py` 单向地把这两个键从每一条既有 channel
   config 里剥掉，不留 load-time 垫片（房规）——`_CommonChannelFields` 禁止多余键，
   仍带着它们的行在加载时会校验失败。
 - `delivery` 决定 SeaTalk 那几个字段哪些合法，整条规则由一个

@@ -505,7 +505,7 @@ is offered and fails when it is picked.
   narrowed a chat on a phone and a person opening the agent page at once. The
   field, its shape validator and revision 0060's backfill are all gone, stripped
   by **revision 0063** with no load-time shim (house rule). The answer then moved
-  to the CHANNEL and was withdrawn there too (revision 0067): no resource curates
+  to the CHANNEL and was withdrawn there too (revision 0068): no resource curates
   models, and every surface offers the whole K1-filtered catalogue.
 - **K3 — One model question is left to ask an agent over HTTP, and the catalogue
   route is it.** `GET|PUT …/models/selection` is **removed** along with

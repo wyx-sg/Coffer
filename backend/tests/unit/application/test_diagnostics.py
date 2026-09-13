@@ -25,10 +25,9 @@ class _FakeAuditRepo:
     async def insert(self, entry: AuditEntry) -> None:  # pragma: no cover - unused
         raise AssertionError("diagnose must never write")
 
-    async def repoint(self, kind, old_name, new_name) -> int:  # pragma: no cover - unused
-        raise AssertionError("diagnose must never write")
-
-    async def query(self, *, kind=None, name=None, event_type=None, since=None, limit=50):
+    async def query(
+        self, *, kind=None, name=None, resource_id=None, event_type=None, since=None, limit=50
+    ):
         self.calls.append(
             {"kind": kind, "name": name, "event_type": event_type, "since": since, "limit": limit}
         )
