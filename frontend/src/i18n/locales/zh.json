@@ -29,7 +29,9 @@
     "disabled": "已禁用",
     "saving": "保存中…",
     "deleting": "删除中…",
+    "retry": "重试",
     "clear": "清除",
+    "rawLog": "原始日志",
     "done": "完成",
     "moreActions": "更多操作",
     "showPassword": "显示",
@@ -78,7 +80,7 @@
     "expand": "展开侧边栏",
     "agents": "Agent",
     "channels": "渠道",
-    "audit": "审计日志",
+    "activity": "活动",
     "chat": "聊天",
     "modelProviders": "模型提供商"
   },
@@ -144,7 +146,8 @@
         "overview": "概览",
         "tools": "工具",
         "resources": "资源",
-        "prompts": "提示词"
+        "prompts": "提示词",
+        "invocations": "调用记录"
       },
       "overview": {
         "config": "配置",
@@ -172,6 +175,28 @@
       "header": {
         "name": "名称",
         "enabled": "已启用"
+      }
+    },
+    "invocations": {
+      "empty": "暂无调用记录。",
+      "noMatches": "没有调用记录匹配当前筛选条件。",
+      "loading": "加载调用记录中…",
+      "searchPlaceholder": "搜索调用记录",
+      "filterSearch": "搜索",
+      "filterStatus": "状态",
+      "header": {
+        "time": "时间",
+        "server": "服务器",
+        "type": "类型",
+        "key": "键名",
+        "duration": "耗时",
+        "status": "状态"
+      },
+      "status": {
+        "ok": "成功",
+        "error": "失败",
+        "timeout": "超时",
+        "denied": "已拒绝"
       }
     },
     "health": {
@@ -227,6 +252,9 @@
   "audit": {
     "filter": {
       "actor": "操作者",
+      "all": "全部",
+      "from": "起始",
+      "to": "结束",
       "search": "搜索",
       "searchPlaceholder": "搜索活动"
     },
@@ -238,6 +266,97 @@
       "user": "用户",
       "agent": "智能体",
       "channel": "渠道"
+    },
+    "timeRange": {
+      "1h": "最近 1 小时",
+      "6h": "最近 6 小时",
+      "24h": "最近 24 小时",
+      "7d": "最近 7 天",
+      "30d": "最近 30 天",
+      "all": "全部时间",
+      "custom": "自定义范围…"
+    },
+    "applyRange": "应用",
+    "activity": {
+      "agent_config_file_deleted": "删除了 {{resource}} 配置（{{key}}）",
+      "agent_config_file_written": "编辑了 {{resource}} 配置（{{key}}）",
+      "agent_mcp_entry_adopted": "将一个 MCP 条目纳管到 {{resource}}",
+      "agent_mcp_entry_removed": "从 {{resource}} 移除了一个 MCP 条目",
+      "agent_mcp_installed": "已把 Coffer MCP 安装到 {{resource}}",
+      "agent_mcp_uninstalled": "已从 {{resource}} 移除 Coffer MCP",
+      "agent_plugin_toggled": "切换了 {{resource}} 的一个插件",
+      "agent_plugin_uninstalled": "从 {{resource}} 卸载了一个插件",
+      "capability_disabled": "停用了{{capType}} {{key}}（{{resource}}）",
+      "capability_enabled": "启用了{{capType}} {{key}}（{{resource}}）",
+      "channel_paired": "完成了 {{resource}} 渠道的配对",
+      "channel_pairing_issued": "为 {{resource}} 签发了配对码",
+      "credential_deleted": "已删除凭证",
+      "credential_migrated": "凭证已从系统 keychain 迁移",
+      "credential_read": "已读取凭证",
+      "credential_set": "已存储凭证",
+      "daemon_port_set": "设置了守护进程端口",
+      "embedding_config_updated": "更新了向量嵌入配置",
+      "internal_engine_model_set": "设置了内部引擎使用的模型",
+      "knowledge_deleted": "从 {{resource}} 删除了一篇笔记",
+      "knowledge_tidied": "整理了 {{resource}} 集合",
+      "knowledge_written": "向 {{resource}} 写入了一篇笔记",
+      "master_key_exported": "导出了主密钥",
+      "master_key_imported": "导入了一把主密钥",
+      "master_key_relocated": "主密钥存储位置已变更",
+      "provider_internal_default_set": "把 {{resource}} 设为内部引擎的默认连接",
+      "provider_switched": "切换到了 provider {{resource}}",
+      "resource_created": "注册了 {{resource}}",
+      "resource_deleted": "删除了 {{resource}}",
+      "resource_disabled": "停用了 {{resource}}",
+      "resource_enabled": "启用了 {{resource}}",
+      "resource_renamed": "重命名为 {{resource}}",
+      "resource_scope_updated": "更新了 {{resource}} 的范围",
+      "resource_updated": "重新配置了 {{resource}}",
+      "retention_updated": "更新了数据保留策略",
+      "skill_adopted": "纳管了技能 {{resource}}",
+      "skill_bound": "将技能 {{resource}} 绑定到 {{key}}",
+      "skill_drift_remediated": "已从主存储重新下发技能 {{resource}}",
+      "skill_imported": "导入了技能 {{resource}}",
+      "skill_relinked": "重新链接了技能 {{resource}}",
+      "skill_unbound": "将技能 {{resource}} 从 {{key}} 解绑",
+      "skill_unmanaged_deleted": "删除了未纳管技能 {{resource}}",
+      "skill_updated": "更新了技能 {{resource}}",
+      "token_rotated": "已轮换访问令牌",
+      "vault_backed_up": "备份了金库"
+    },
+    "capType": {
+      "tool": "工具",
+      "resource": "资源",
+      "prompt": "提示词"
+    }
+  },
+  "activity": {
+    "title": "活动",
+    "subtitle": "Coffer 保存的三份记录 —— 金库变更、它代理的调用，以及守护进程自己的日志 —— 各占一个标签页，按时间倒序。",
+    "tabs": {
+      "changes": "变更",
+      "mcp": "MCP 调用",
+      "daemon": "守护进程"
+    },
+    "changes": {
+      "emptyState": "没有匹配的活动记录。",
+      "table": {
+        "time": "时间",
+        "activity": "活动",
+        "actor": "操作者"
+      }
+    },
+    "daemon": {
+      "emptyState": "没有匹配的日志记录。",
+      "errorsOnly": "仅错误",
+      "noMessage": "（无消息的日志记录）",
+      "searchPlaceholder": "搜索日志记录",
+      "table": {
+        "time": "时间",
+        "level": "级别",
+        "logger": "Logger",
+        "message": "消息"
+      }
     }
   },
   "settings": {

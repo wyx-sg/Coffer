@@ -14,24 +14,33 @@ Coffer's approach is deliberately lean: a pair of local database tables, not a t
 
 ## Who reads this
 
-**An agent, not a person.** The audit log had a web page; it is removed, because
-nobody opened it. Someone does not sit down to browse "what changed in my
-vault" — they notice something is broken and ask whoever is helping them, and
-that is an agent.
+**An agent and a person, asking the same question.** These records once had
+three readers and three shapes: an audit-log page nobody opened, an invocation
+tab whose every row belonged to an agent, and a daemon log that had to be found
+on disk and grepped. The pages went. What came back is the need underneath
+them: when something is misbehaving, nobody asks "what changed" or "what was
+called" or "what errored" — they ask *what happened*.
 
-So both records are shaped for that reader:
+So the records are shaped for that one question, and reached two ways:
 
-- **`coffer__diagnose`** is the way in. One call returns the audit log (what
-  changed, and who) and the daemon log (what happened, including failures) on a
-  single newest-first timeline, because an agent hitting a failure does not know
-  which of the two it needs — it needs to know what happened.
-- **Event types stay as wire values.** They were translated into plain-language
-  activity lines for the removed page ("Enabled demo-fs"); the 39 strings per
-  locale went with it. An agent wants `resource_enabled`.
+- **`coffer__diagnose`** is the agent's way in. One call returns the audit log
+  (what changed, and who) and the daemon log (what happened, including
+  failures) on a single newest-first timeline, because an agent hitting a
+  failure does not know which of the two it needs.
+- **`/activity`** is the person's — one page, one tab and one table per record,
+  each with the columns that record actually has and rows that expand to their
+  raw form. Reading across the three is the tool's job, not the page's: one
+  table could only have shown what all three have in common.
+- **Event types carry both shapes.** The page renders them as plain-language
+  activity lines ("Enabled demo-fs"), translated in both locales and guarded
+  by the same CI check that guards error codes; the tool returns the wire value
+  (`resource_enabled`), which is what an agent wants.
 - **Every audited event is also a log line**, so the two records share
   vocabulary and an agent grepping one finds the other.
 
-`GET /api/v1/audit` and `coffer audit` are unchanged for scripting.
+`GET /api/v1/audit` and `coffer audit` are unchanged for scripting. The page's
+other two lanes read `GET /api/v1/mcp/invocations` (cross-server) and
+`GET /api/v1/daemon/logs`.
 
 ## Audit log: lifecycle changes
 

@@ -179,6 +179,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mcp/invocations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every server's invocations on one timeline, newest-first. */
+        get: operations["listAllMcpInvocations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/resources/mcp_server/{name}/invocations": {
         parameters: {
             query?: {
@@ -292,6 +309,23 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getDaemonStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/daemon/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The tail of daemon.log, newest-first. */
+        get: operations["listDaemonLogs"];
         put?: never;
         post?: never;
         delete?: never;
@@ -582,6 +616,8 @@ export interface components {
         InvocationOut: {
             /** Format: date-time */
             timestamp: string;
+            /** @description Which upstream server the call went to. */
+            resource_name: string;
             /** @enum {string} */
             capability_type: "tool" | "resource" | "prompt";
             capability_key: string;
@@ -664,6 +700,19 @@ export interface components {
         TokenRotationOut: {
             /** @description New token; clients must re-read daemon.json */
             token: string;
+        };
+        DaemonLogRecordOut: {
+            timestamp?: string | null;
+            level?: string | null;
+            /** @description structlog's `event` field — the message. */
+            event?: string | null;
+            /** @description The whole parsed line: a structlog record's full dict, or `{"raw": "<line>"}` for a line that is not JSON (usually a traceback, and usually the interesting one). */
+            record: {
+                [key: string]: unknown;
+            };
+        };
+        DaemonLogListOut: {
+            records: components["schemas"]["DaemonLogRecordOut"][];
         };
     };
     responses: {
@@ -1039,6 +1088,33 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    listAllMcpInvocations: {
+        parameters: {
+            query?: {
+                /** @description Narrow to one upstream server. */
+                name?: string;
+                since?: string;
+                limit?: number;
+                status?: "ok" | "error" | "timeout" | "denied";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvocationListOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
     listMcpInvocations: {
         parameters: {
             query?: {
@@ -1214,6 +1290,31 @@ export interface operations {
                     "application/json": components["schemas"]["DaemonStatusOut"];
                 };
             };
+        };
+    };
+    listDaemonLogs: {
+        parameters: {
+            query?: {
+                since?: string;
+                errors_only?: boolean;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonLogListOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
     };
     shutdownDaemon: {

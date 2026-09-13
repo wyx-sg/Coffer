@@ -29,7 +29,9 @@
     "disabled": "Disabled",
     "saving": "Saving…",
     "deleting": "Deleting…",
+    "retry": "Retry",
     "clear": "Clear",
+    "rawLog": "Raw log",
     "done": "Done",
     "moreActions": "More actions",
     "showPassword": "Show",
@@ -78,7 +80,7 @@
     "expand": "Expand sidebar",
     "agents": "Agents",
     "channels": "Channels",
-    "audit": "Audit log",
+    "activity": "Activity",
     "chat": "Chat",
     "modelProviders": "Model providers"
   },
@@ -144,7 +146,8 @@
         "overview": "Overview",
         "tools": "Tools",
         "resources": "Resources",
-        "prompts": "Prompts"
+        "prompts": "Prompts",
+        "invocations": "Invocations"
       },
       "overview": {
         "config": "Configuration",
@@ -172,6 +175,28 @@
       "header": {
         "name": "Name",
         "enabled": "Enabled"
+      }
+    },
+    "invocations": {
+      "empty": "No invocations yet.",
+      "noMatches": "No invocations match your filters.",
+      "loading": "Loading invocations…",
+      "searchPlaceholder": "Search invocations",
+      "filterSearch": "Search",
+      "filterStatus": "Status",
+      "header": {
+        "time": "Time",
+        "server": "Server",
+        "type": "Type",
+        "key": "Key",
+        "duration": "Duration",
+        "status": "Status"
+      },
+      "status": {
+        "ok": "OK",
+        "error": "Error",
+        "timeout": "Timeout",
+        "denied": "Denied"
       }
     },
     "health": {
@@ -227,6 +252,9 @@
   "audit": {
     "filter": {
       "actor": "Actor",
+      "all": "All",
+      "from": "From",
+      "to": "To",
       "search": "Search",
       "searchPlaceholder": "Search activity"
     },
@@ -238,6 +266,97 @@
       "user": "User",
       "agent": "Agent",
       "channel": "Channel"
+    },
+    "timeRange": {
+      "1h": "Last 1 hour",
+      "6h": "Last 6 hours",
+      "24h": "Last 24 hours",
+      "7d": "Last 7 days",
+      "30d": "Last 30 days",
+      "all": "All time",
+      "custom": "Custom range…"
+    },
+    "applyRange": "Apply",
+    "activity": {
+      "agent_config_file_deleted": "Deleted {{resource}} config ({{key}})",
+      "agent_config_file_written": "Edited {{resource}} config ({{key}})",
+      "agent_mcp_entry_adopted": "Adopted an MCP entry into {{resource}}",
+      "agent_mcp_entry_removed": "Removed an MCP entry from {{resource}}",
+      "agent_mcp_installed": "Installed Coffer MCP into {{resource}}",
+      "agent_mcp_uninstalled": "Removed Coffer MCP from {{resource}}",
+      "agent_plugin_toggled": "Toggled a plugin on {{resource}}",
+      "agent_plugin_uninstalled": "Uninstalled a plugin from {{resource}}",
+      "capability_disabled": "Disabled {{capType}} {{key}} on {{resource}}",
+      "capability_enabled": "Enabled {{capType}} {{key}} on {{resource}}",
+      "channel_paired": "Paired the {{resource}} channel",
+      "channel_pairing_issued": "Issued a pairing code for {{resource}}",
+      "credential_deleted": "Removed a credential",
+      "credential_migrated": "Credential migrated from OS keychain",
+      "credential_read": "Read a credential",
+      "credential_set": "Stored a credential",
+      "daemon_port_set": "Set the daemon's port",
+      "embedding_config_updated": "Updated the embedding configuration",
+      "internal_engine_model_set": "Set the internal engine's model",
+      "knowledge_deleted": "Deleted a note from {{resource}}",
+      "knowledge_tidied": "Tidied the {{resource}} collection",
+      "knowledge_written": "Wrote a note to {{resource}}",
+      "master_key_exported": "Exported the master key",
+      "master_key_imported": "Imported a master key",
+      "master_key_relocated": "Master key storage changed",
+      "provider_internal_default_set": "Made {{resource}} the internal engine's default",
+      "provider_switched": "Switched to provider {{resource}}",
+      "resource_created": "Registered {{resource}}",
+      "resource_deleted": "Removed {{resource}}",
+      "resource_disabled": "Disabled {{resource}}",
+      "resource_enabled": "Enabled {{resource}}",
+      "resource_renamed": "Renamed to {{resource}}",
+      "resource_scope_updated": "Updated scope for {{resource}}",
+      "resource_updated": "Reconfigured {{resource}}",
+      "retention_updated": "Updated a data-retention policy",
+      "skill_adopted": "Adopted skill {{resource}}",
+      "skill_bound": "Bound skill {{resource}} to {{key}}",
+      "skill_drift_remediated": "Re-delivered drifted skill {{resource}} from master",
+      "skill_imported": "Imported skill {{resource}}",
+      "skill_relinked": "Re-linked skill {{resource}}",
+      "skill_unbound": "Unbound skill {{resource}} from {{key}}",
+      "skill_unmanaged_deleted": "Deleted unmanaged skill {{resource}}",
+      "skill_updated": "Updated skill {{resource}}",
+      "token_rotated": "Access token rotated",
+      "vault_backed_up": "Backed up the vault"
+    },
+    "capType": {
+      "tool": "tool",
+      "resource": "resource",
+      "prompt": "prompt"
+    }
+  },
+  "activity": {
+    "title": "Activity",
+    "subtitle": "The three records Coffer keeps — what changed, what it proxied, and what its daemon logged — each on its own tab, newest first.",
+    "tabs": {
+      "changes": "Changes",
+      "mcp": "MCP calls",
+      "daemon": "Daemon"
+    },
+    "changes": {
+      "emptyState": "No matching activity.",
+      "table": {
+        "time": "Time",
+        "activity": "Activity",
+        "actor": "Actor"
+      }
+    },
+    "daemon": {
+      "emptyState": "No matching log records.",
+      "errorsOnly": "Errors only",
+      "noMessage": "(log record with no message)",
+      "searchPlaceholder": "Search log records",
+      "table": {
+        "time": "Time",
+        "level": "Level",
+        "logger": "Logger",
+        "message": "Message"
+      }
     }
   },
   "settings": {

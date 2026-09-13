@@ -10,6 +10,7 @@ import {
   PanelLeftOpen,
   Radio,
   Server,
+  ScrollText,
   Settings as SettingsIcon,
   Sparkles,
   type LucideIcon,
@@ -43,9 +44,10 @@ interface NavGroup {
  *   that has a list UI: MCP servers, skills, knowledge, model providers, and
  *   channels. A channel is a credentialed transport the vault owns, so it
  *   belongs here rather than beside the agents that happen to answer on it.
- * - **System** — cross-cutting tooling: Settings, and whatever operational
- *   surface a person actually opens. The audit log is deliberately NOT here:
- *   its reader is an agent diagnosing a problem, not a person browsing rows.
+ * - **System** — cross-cutting tooling: Activity (the three records Coffer
+ *   keeps, a tab and a table each) and Settings. Observability (system health
+ *   / metrics) is a reserved future surface and is not Activity: a record of
+ *   what happened is not a measurement of how the system is doing.
  *
  * Sidebar policy (ADR everything-is-a-resource-kind): show only what ships today — no "soon"
  * placeholders, and no entry outliving its feature. The sidebar collapses to
@@ -74,7 +76,10 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     labelKey: "nav.group.system",
-    items: [{ to: "/settings", labelKey: "nav.settings", icon: SettingsIcon }],
+    items: [
+      { to: "/activity", labelKey: "nav.activity", icon: ScrollText, end: true },
+      { to: "/settings", labelKey: "nav.settings", icon: SettingsIcon },
+    ],
   },
 ];
 

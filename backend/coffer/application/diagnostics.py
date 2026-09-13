@@ -22,13 +22,13 @@ construction (see ``docs-site/architecture/observability.md``).
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
+from coffer.application.log_reader import matches_level, parse_log_line, tail_lines
 from coffer.application.repos import AuditRepo
 
 #: A debugging window, not an archive. An agent asking "what just happened"
@@ -38,48 +38,6 @@ _MAX_SINCE_MINUTES = 60 * 24 * 7
 
 _DEFAULT_LIMIT = 40
 _MAX_LIMIT = 200
-
-#: Read from the tail rather than the head: the interesting line is the last
-#: one. Bounded so a 10 MB log cannot be pulled into memory.
-_TAIL_BYTES = 512 * 1024
-
-
-def _tail_lines(path: Path, *, max_bytes: int = _TAIL_BYTES) -> list[str]:
-    """The last lines of a file, best-effort. Never raises."""
-    try:
-        with path.open("rb") as fh:
-            fh.seek(0, 2)
-            size = fh.tell()
-            fh.seek(max(0, size - max_bytes))
-            blob = fh.read()
-    except OSError:
-        return []
-    text = blob.decode("utf-8", errors="replace")
-    if len(blob) == max_bytes and "\n" in text:
-        # The window almost certainly cut the first line in half.
-        text = text.split("\n", 1)[1]
-    return [ln for ln in text.splitlines() if ln.strip()]
-
-
-def _parse_log_line(line: str) -> dict[str, Any]:
-    """A structlog JSON line as a dict; a non-JSON line as raw text.
-
-    Upstream servers now log to their own files, but a stray non-JSON line
-    (a traceback, a library writing straight to stderr) must not make the
-    whole tool fail — it is often the most interesting line in the file.
-    """
-    try:
-        parsed = json.loads(line)
-    except ValueError:
-        return {"raw": line}
-    return parsed if isinstance(parsed, dict) else {"raw": line}
-
-
-def _matches_level(record: dict[str, Any], errors_only: bool) -> bool:
-    if not errors_only:
-        return True
-    level = str(record.get("level", "")).lower()
-    return level in {"error", "critical", "exception"} or "raw" in record
 
 
 def register_diagnostics_builtin_tools(
@@ -118,11 +76,11 @@ def register_diagnostics_builtin_tools(
         ]
 
         records: list[dict[str, Any]] = []
-        for line in reversed(_tail_lines(log_path())):
+        for line in reversed(tail_lines(log_path())):
             if len(records) >= limit:
                 break
-            record = _parse_log_line(line)
-            if not _matches_level(record, errors_only):
+            record = parse_log_line(line)
+            if not matches_level(record, errors_only):
                 continue
             at = str(record.get("timestamp", ""))
             # Cheap prefilter: ISO-8601 sorts lexically, so a string compare

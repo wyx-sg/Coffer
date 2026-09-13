@@ -21,6 +21,9 @@ from coffer.infrastructure.persistence.engine import (
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_invocation_repo
+from coffer.surfaces.http.mcp.invocation_routes import (
+    aggregate_router as invocation_aggregate_router,
+)
 from coffer.surfaces.http.mcp.invocation_routes import router as invocation_router
 
 
@@ -61,6 +64,7 @@ async def _build_app(
     app = FastAPI()
     err_handlers.register(app)
     app.include_router(invocation_router)
+    app.include_router(invocation_aggregate_router)
     app.dependency_overrides[get_invocation_repo] = lambda: inv_repo
 
     return app, engine, inv_repo
@@ -251,3 +255,77 @@ async def test_invocation_response_shape(inv_client: tuple) -> None:
     assert inv["status"] == "ok"
     assert inv["session_id"] == "sess-123"
     assert inv["error_message"] is None
+
+
+# ---------------------------------------------------------------------------
+# Cross-server timeline (/api/v1/mcp/invocations)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_aggregate_returns_rows_across_servers(inv_client: tuple) -> None:
+    """The Activity page shows one timeline, so the row has to say which server
+    it came from — the per-server path no longer supplies that context."""
+    client, _engine, repo = inv_client
+    await repo.insert(_make_invocation("fs"))
+    await repo.insert(_make_invocation("jira", capability_key="search_issues"))
+
+    r = await client.get("/api/v1/mcp/invocations")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert {inv["resource_name"] for inv in body["invocations"]} == {"fs", "jira"}
+
+
+@pytest.mark.asyncio
+async def test_aggregate_requires_auth(tmp_path: Path) -> None:
+    app, engine, _repo = await _build_app(tmp_path)
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+            headers={"X-Coffer-Token": "bad-token"},
+        ) as client:
+            r = await client.get("/api/v1/mcp/invocations")
+            assert r.status_code == 401
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_aggregate_name_filter_narrows_to_one_server(inv_client: tuple) -> None:
+    client, _engine, repo = inv_client
+    await repo.insert(_make_invocation("fs"))
+    await repo.insert(_make_invocation("jira", capability_key="search_issues"))
+
+    r = await client.get("/api/v1/mcp/invocations?name=jira")
+    assert r.status_code == 200
+    [inv] = r.json()["invocations"]
+    assert inv["resource_name"] == "jira"
+    assert inv["capability_key"] == "search_issues"
+
+
+@pytest.mark.asyncio
+async def test_aggregate_status_and_limit_filters(inv_client: tuple) -> None:
+    client, _engine, repo = inv_client
+    await repo.insert(_make_invocation("fs", status="ok"))
+    await repo.insert(_make_invocation("jira", capability_key="a", status="error"))
+    await repo.insert(_make_invocation("jira", capability_key="b", status="error"))
+
+    r = await client.get("/api/v1/mcp/invocations?status=error")
+    assert {inv["resource_name"] for inv in r.json()["invocations"]} == {"jira"}
+    assert len(r.json()["invocations"]) == 2
+
+    r = await client.get("/api/v1/mcp/invocations?status=error&limit=1")
+    assert len(r.json()["invocations"]) == 1
+
+    assert (await client.get("/api/v1/mcp/invocations?limit=0")).status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_per_server_route_also_carries_resource_name(inv_client: tuple) -> None:
+    client, _engine, repo = inv_client
+    await repo.insert(_make_invocation("fs"))
+
+    r = await client.get("/api/v1/resources/mcp_server/fs/invocations")
+    [inv] = r.json()["invocations"]
+    assert inv["resource_name"] == "fs"

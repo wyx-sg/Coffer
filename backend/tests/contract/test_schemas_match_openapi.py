@@ -56,6 +56,8 @@ def openapi_components() -> dict[str, Any]:
         ("PruneResultOut", "PruneResultOut", {"tables"}),
         ("DaemonStatusOut", "DaemonStatusOut", {"status", "version", "started_at", "port"}),
         ("TokenRotationOut", "TokenRotationOut", {"token"}),
+        ("DaemonLogRecordOut", "DaemonLogRecordOut", {"record"}),
+        ("DaemonLogListOut", "DaemonLogListOut", {"records"}),
         # MCP / credentials schemas
         ("CredentialSetIn", "CredentialSetIn", {"ref", "value"}),
         ("CredentialGetOut", "CredentialGetOut", {"value"}),
@@ -75,7 +77,14 @@ def openapi_components() -> dict[str, Any]:
         (
             "InvocationOut",
             "InvocationOut",
-            {"timestamp", "capability_type", "capability_key", "duration_ms", "status"},
+            {
+                "timestamp",
+                "resource_name",
+                "capability_type",
+                "capability_key",
+                "duration_ms",
+                "status",
+            },
         ),
         ("InvocationListOut", "InvocationListOut", {"invocations"}),
     ],

@@ -20,6 +20,7 @@ RESOURCES
   Model providers  vendor endpoints and their keys
   Channels         the IM transports your agents answer on
 SYSTEM
+  Activity         what changed, what was called, what broke
   Settings
 ```
 
@@ -227,15 +228,29 @@ channel is registered with its credentials, paired with you through a single-use
 bound to a default agent. It used to sit under AGENTS; a channel is a credentialed
 transport the vault owns, so it belongs with the other resources.
 
-### Audit log
+### Activity
 
-There is no audit-log page. `/audit` is not routed and nothing in the sidebar links to it.
+Open `/activity` for everything Coffer recorded. One tab per record, each its
+own newest-first table:
 
-In practice nobody opened it. A person does not sit down to browse "what changed in my vault" — they notice something is broken and ask whoever is helping them, which is an agent. So the log kept its reader and lost its page.
+- **Changes** — the audit log: what changed in the vault, who changed it, when.
+- **MCP calls** — every call the gateway proxied: server, capability, duration,
+  outcome.
+- **Daemon** — Coffer's own log: level, logger, message, including what broke.
 
-An agent reads it with **`coffer__diagnose`**, which returns both records at once — the audit log (what changed, and who changed it) and the daemon's own log (what happened, including failures) — on one newest-first timeline. Ask your agent "why did that fail?" and it has the tool in hand.
+Each tab filters by free text and time range, plus the one filter its record
+affords — the actor, the call's status, errors only. Click any row to expand it
+to its raw underlying record. A single server's calls are also on its own detail
+page, under **Invocations** — the same table, scoped to that server.
 
-For scripting, `GET /api/v1/audit` and `coffer audit` are unchanged.
+They are three tables rather than one because one table could only show what all
+three records have in common, and that is not much: a call's duration and a log
+record's level would have had nowhere to go. Reading *across* the three is your
+agent's job, not a filter's: **`coffer__diagnose`** returns all of them already
+joined on one timeline, so "why did that fail?" is a question you can just ask.
+
+For scripting, `GET /api/v1/audit` and `coffer audit` are unchanged. `/audit` and
+`/observability` redirect here.
 
 ### Settings
 

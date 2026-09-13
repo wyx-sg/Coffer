@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import { createBrowserRouter, Navigate, type RouteObject } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { LegacyScopeRedirect } from "./components/LegacyScopeRedirect";
 import { AgentsPage } from "./pages/AgentsPage";
@@ -10,6 +10,7 @@ import { SkillsPage } from "./pages/SkillsPage";
 import { SkillDetailPage } from "./pages/SkillDetailPage";
 import { KnowledgePage } from "./pages/KnowledgePage";
 import { KnowledgeDetailPage } from "./kinds/knowledge/KnowledgeDetailPage";
+import { ActivityPage } from "./pages/activity/ActivityPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
 import { ResourceDetailPage } from "./pages/ResourceDetailPage";
 import { SettingsLayout } from "./pages/settings/SettingsLayout";
@@ -23,7 +24,11 @@ import { ModelProvidersPage } from "./pages/ModelProvidersPage";
 import { ProviderDetailPage } from "./pages/ProviderDetailPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
-export const router = createBrowserRouter([
+// Exported as data, not only as a built router: a test that has to prove a
+// legacy URL still lands somewhere (rather than on "page not found") needs the
+// real route table under a memory router, and rebuilding it in the test would
+// prove nothing about this one.
+export const routes: RouteObject[] = [
   {
     path: "/",
     element: <Layout />,
@@ -53,6 +58,13 @@ export const router = createBrowserRouter([
       { path: "knowledge-bases/:name", element: <LegacyScopeRedirect /> },
       { path: "memory", element: <Navigate to="/knowledge" replace /> },
       { path: "memory/:name", element: <LegacyScopeRedirect /> },
+      { path: "activity", element: <ActivityPage /> },
+      // Legacy routes — the audit log had its own page at /audit, and
+      // "Observability" was the name this surface carried before Activity
+      // gathered all three records. Keep old bookmarks and links working by
+      // redirecting to the page that now holds what they were asking for.
+      { path: "audit", element: <Navigate to="/activity" replace /> },
+      { path: "observability", element: <Navigate to="/activity" replace /> },
       {
         path: "settings",
         element: <SettingsLayout />,
@@ -82,4 +94,6 @@ export const router = createBrowserRouter([
       { path: "*", element: <NotFoundPage /> },
     ],
   },
-]);
+];
+
+export const router = createBrowserRouter(routes);

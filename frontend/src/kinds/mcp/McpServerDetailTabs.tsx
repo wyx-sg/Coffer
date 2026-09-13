@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CodeView } from "@/components/preview/CodeView";
 import { CapabilityList } from "./CapabilityList";
+import { InvocationsTable } from "./InvocationsTable";
 import type { components } from "@/lib/api/types";
 
 type CapabilityListOut = components["schemas"]["CapabilityListOut"];
@@ -61,6 +62,7 @@ export function McpServerDetailTabs({
           <TabsTrigger value="tools">{t("mcp.server.tabs.tools")}</TabsTrigger>
           <TabsTrigger value="resources">{t("mcp.server.tabs.resources")}</TabsTrigger>
           <TabsTrigger value="prompts">{t("mcp.server.tabs.prompts")}</TabsTrigger>
+          <TabsTrigger value="invocations">{t("mcp.server.tabs.invocations")}</TabsTrigger>
         </TabsList>
         <Button
           size="sm"
@@ -147,6 +149,9 @@ export function McpServerDetailTabs({
           prompts={capabilities?.prompts}
           error={capsError}
         />
+      </TabsContent>
+      <TabsContent value="invocations" className="pt-6">
+        <InvocationsTable serverName={serverName} />
       </TabsContent>
     </Tabs>
   );
