@@ -4,10 +4,13 @@
 // picker sets agent_config.model — the agent's own model, passed through to its
 // CLI (the builtin-agent-is-internal-capability and provider-switching
 // ADRs), mirroring the channel `/model` command. An empty
-// value inherits the active provider profile's projected default.
+// value inherits the active provider profile's projected default. Beside it,
+// for the agents whose models take one, the reasoning effort that model runs
+// at; it renders nothing for the agents that have no such setting.
 import { Bot } from "lucide-react";
 
-import { useAgentConfig, useSetAgentModel } from "@/lib/hooks/useConversations";
+import { useAgentConfig, useSetAgentEffort, useSetAgentModel } from "@/lib/hooks/useConversations";
+import { EffortPicker } from "./EffortPicker";
 import { ModelPicker } from "./ModelPicker";
 
 interface Props {
@@ -16,13 +19,14 @@ interface Props {
   agentKey: string;
   /** Display name of the conversation's agent, from the agents API. */
   agentLabel?: string;
-  /** Archived/read-only conversation — the model picker is disabled. */
+  /** Archived/read-only conversation — the pickers are disabled. */
   disabled?: boolean;
 }
 
 export function AgentModelBar({ conversationId, agentKey, agentLabel, disabled = false }: Props) {
   const agentConfig = useAgentConfig(conversationId);
   const setModel = useSetAgentModel();
+  const setEffort = useSetAgentEffort();
 
   return (
     <div className="flex items-center gap-3 border-b border-border bg-card/50 px-4 py-2">
@@ -36,6 +40,13 @@ export function AgentModelBar({ conversationId, agentKey, agentLabel, disabled =
         value={agentConfig.data?.model ?? null}
         disabled={disabled}
         onCommit={(model) => setModel.mutate({ id: conversationId, model })}
+      />
+      <EffortPicker
+        agentKey={agentKey}
+        model={agentConfig.data?.model ?? null}
+        value={agentConfig.data?.effort ?? null}
+        disabled={disabled}
+        onCommit={(effort) => setEffort.mutate({ id: conversationId, effort })}
       />
     </div>
   );

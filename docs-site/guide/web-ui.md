@@ -138,13 +138,14 @@ automatically. Each agent is registered against a single **config directory** (f
 The agent detail page has four tabs:
 
 - **Overview** — the agent's type and config directory, plus its LLM connection. On the
-  built-in login the panel lists the models the agent's own CLI reports, each with a
-  checkbox. Tick the ones your account can actually run and only those are offered in the
-  model pickers and the chat `/model` card; tick none and all of them are, which is how a
-  fresh install behaves. Coffer cannot work this out for you — which models an account may
-  run is a server-side fact with no copy on your machine, and the CLI's catalogue lists
-  every model the installed release has ever known. Models the CLI itself marks as retired
-  are dropped before you ever see them.
+  built-in login the panel lists what the agent's own CLI offers, and the model pickers and
+  the chat `/model` card offer exactly that — there is nothing to tick. For Claude Code
+  that is its tier aliases (`opus`, `sonnet`, `haiku`, `fable`), each labelled with the
+  model it resolves to today ("Opus 5"), because that is what the CLI's own picker offers
+  and the only choice that cannot fail: which versioned models an account may run is a
+  server-side fact with no copy on your machine. Your account's own extra options (a
+  1M-context variant, say) come from the CLI's config file and appear alongside them. Codex
+  answers with the models its own app-server reports.
 - **Skills** — the skills Coffer manages for this agent, each with an enable/disable toggle.
   An **Install skills** button opens a picker dialog (search, filter, pagination,
   multi-select) to bind more skills to the agent.

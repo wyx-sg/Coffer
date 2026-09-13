@@ -100,7 +100,15 @@ class CodexAppServerProvider:
                 message=f"agent_config.cwd is not an existing directory: {cwd!r}",
             )
         model = agent_config.get("model")
-        config = AgentConfig(cwd=str(resolved), model=model if isinstance(model, str) else None)
+        effort = agent_config.get("effort")
+        config = AgentConfig(
+            cwd=str(resolved),
+            model=model if isinstance(model, str) else None,
+            # Codex's own reasoning level, accepted here so a conversation can
+            # be created already set to one. Validated no more than the model
+            # is: Codex owns the namespace and is what refuses a bad value.
+            effort=effort if isinstance(effort, str) and effort.strip() else None,
+        )
         await self._conversations.set_agent_config(conversation_id, config)
 
     async def build_adapter(self, conversation_id: str) -> AgentAdapter:
@@ -144,7 +152,7 @@ class CodexAppServerProvider:
             cwd=config.cwd,
             system_context=system_context,
             resume_session=config.session_id,
-            extra={"model": config.model},
+            extra={"model": config.model, "effort": config.effort},
             session_factory=self._session_factory,
             on_session=_save_session,
             env=env,

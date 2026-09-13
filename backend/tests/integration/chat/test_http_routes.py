@@ -266,7 +266,7 @@ def test_agent_config_set_and_get_model_roundtrip() -> None:
         # Empty by default — inherits the global default.
         before = client.get(f"/api/v1/chat/conversations/{conv_id}/agent-config")
         assert before.status_code == 200, before.text
-        assert before.json() == {"cwd": None, "model": None}
+        assert before.json() == {"cwd": None, "model": None, "effort": None}
 
         # Set the agent's own model (free-text passthrough).
         resp = client.patch(
@@ -274,7 +274,7 @@ def test_agent_config_set_and_get_model_roundtrip() -> None:
             json={"model": "claude-opus-4-8"},
         )
         assert resp.status_code == 200, resp.text
-        assert resp.json() == {"cwd": None, "model": "claude-opus-4-8"}
+        assert resp.json() == {"cwd": None, "model": "claude-opus-4-8", "effort": None}
 
         # Reads back.
         after = client.get(f"/api/v1/chat/conversations/{conv_id}/agent-config").json()
@@ -352,6 +352,35 @@ async def test_agent_config_set_model_preserves_cwd_and_session() -> None:
     again = await get_agent_config_route(conv.id, svc=chat_svc)
     assert again.cwd == "/work"
     assert (await chat_svc.get_agent_config(conv.id)).session_id == "sess-1"
+
+
+async def test_agent_config_model_and_effort_do_not_clobber_each_other() -> None:
+    """The two are set from two controls, one field at a time, so a body that
+    mentions one must leave the other exactly where it was — otherwise picking a
+    model would silently reset how hard Codex thinks."""
+    from coffer.surfaces.http.chat.conversation_routes import (
+        set_agent_config as set_agent_config_route,
+    )
+    from coffer.surfaces.http.chat.schemas import AgentConfigPatch
+
+    chat_svc, _orchestrator = _make_services()
+    conv = await chat_svc.create_conversation(agent_key="builtin", agent_config={})
+
+    await set_agent_config_route(conv.id, AgentConfigPatch(model="gpt-5.5"), svc=chat_svc)
+    with_effort = await set_agent_config_route(
+        conv.id, AgentConfigPatch(effort="xhigh"), svc=chat_svc
+    )
+    assert (with_effort.model, with_effort.effort) == ("gpt-5.5", "xhigh")
+
+    # Changing the model alone keeps the level.
+    remodelled = await set_agent_config_route(
+        conv.id, AgentConfigPatch(model="gpt-5.4"), svc=chat_svc
+    )
+    assert (remodelled.model, remodelled.effort) == ("gpt-5.4", "xhigh")
+
+    # An empty level clears it back to the agent's own default, model intact.
+    cleared = await set_agent_config_route(conv.id, AgentConfigPatch(effort="  "), svc=chat_svc)
+    assert (cleared.model, cleared.effort) == ("gpt-5.4", None)
 
 
 # ---------------------------------------------------------------------------

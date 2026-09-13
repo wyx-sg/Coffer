@@ -42,6 +42,11 @@ class AgentModelOut(BaseModel):
     id: str
     label: str
     description: str = ""
+    #: The reasoning-effort levels this model runs at, in the agent's own order;
+    #: empty for an agent that takes no such setting.
+    efforts: list[str] = []
+    #: The level the agent itself would use when none is chosen.
+    default_effort: str | None = None
 
 
 class AgentModelsOut(BaseModel):
@@ -92,10 +97,12 @@ async def list_agent_models(
 ) -> AgentModelsOut:
     """The models this agent can be put on, as the agent itself reports them.
 
-    Concrete models only. The CLIs' tier aliases (``sonnet``, ``opus``,
-    ``best``, ``sonnet[1m]``, …) are not listed: each resolves to a model that
-    already appears here, so listing both filled the picker with label-less
-    duplicates. An alias can still be TYPED wherever a model name is accepted.
+    Whatever the agent's own picker offers: Claude Code's tier aliases, each
+    labelled with the model it resolves to today; Codex's versioned ids, each
+    carrying the reasoning-effort levels it can run at and the one Codex would
+    pick itself. An effort is not part of a model NAME — Codex takes it as its
+    own field on a turn — so it rides beside the id instead of multiplying the
+    list.
 
     Nothing narrows this list, on either side. It is what the agent itself can be
     put on, which is the only question the agent resource answers, and no
@@ -107,5 +114,14 @@ async def list_agent_models(
     _known(registry, agent_key)
     models = await catalogue.catalogue(agent_key)
     return AgentModelsOut(
-        models=[AgentModelOut(id=m.id, label=m.label, description=m.description) for m in models]
+        models=[
+            AgentModelOut(
+                id=m.id,
+                label=m.label,
+                description=m.description,
+                efforts=list(m.efforts),
+                default_effort=m.default_effort,
+            )
+            for m in models
+        ]
     )

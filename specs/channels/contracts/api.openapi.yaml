@@ -147,11 +147,13 @@ paths:
       responses:
         '200':
           description: >
-            The concrete models the installed agent itself reported, minus the
-            ones its own retirement table says are gone. The order is
-            meaningful (newest first). Nothing narrows it, on either side: the
-            agent answers only "what can this agent be put on", and no surface
-            curates over it — the chat page's picker offers the whole list.
+            What the installed agent itself offers, in the order it offers it:
+            for Claude Code its tier aliases (`opus`, `sonnet`, …), each
+            labelled with the model it currently resolves to, plus whatever the
+            CLI's own config and the agent's RPC report. Nothing narrows it, on
+            either side: the agent answers only "what can this agent be put
+            on", and no surface curates over it — the chat page's picker offers
+            the whole list.
           content:
             application/json:
               schema:
@@ -505,13 +507,25 @@ components:
         id:
           type: string
           description: >-
-            The id passed verbatim to the agent's CLI. Concrete models only —
-            tier aliases (`sonnet`, `opus`, `best`, `sonnet[1m]`, …) are not
-            listed, since each resolves to a model already in the list.
+            The id passed verbatim to the agent's CLI — whatever that agent
+            calls the choice, which for Claude Code is a tier alias (`opus`,
+            `sonnet`, …) and for Codex a versioned model name.
         label:
           type: string
         description:
           type: string
+        efforts:
+          type: array
+          items: { type: string }
+          description: >-
+            The reasoning-effort levels this model runs at, in the agent's own
+            order; empty for an agent that takes no such setting. An effort is
+            not part of the model name — Codex carries it as its own field on a
+            turn — so it is chosen beside the model, not instead of one.
+        default_effort:
+          type: string
+          nullable: true
+          description: The level the agent itself would use when none is chosen.
 
     AgentModelsOut:
       type: object
@@ -748,6 +762,14 @@ components:
             The managed agent's model (free-text, passed through to its CLI).
             Empty or null clears the override; `cwd` and `session_id` are
             preserved.
+        effort:
+          type: string
+          nullable: true
+          description: >-
+            How hard that model should think, for an agent that takes a
+            reasoning effort of its own (Codex). Empty or null clears it, so the
+            agent runs at whatever its own config says. A body that mentions
+            only one of the two fields leaves the other where it was.
 
     AgentConfigOut:
       type: object
@@ -755,6 +777,7 @@ components:
       properties:
         cwd: { type: string, nullable: true }
         model: { type: string, nullable: true }
+        effort: { type: string, nullable: true }
 
     ContentBlockOut:
       type: object

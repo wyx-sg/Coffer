@@ -1281,6 +1281,11 @@
       "placeholder": "Model (optional)",
       "inheritNoModel": "Default"
     },
+    "effortPicker": {
+      "label": "Reasoning effort",
+      "placeholder": "Effort (optional)",
+      "inheritNoEffort": "Agent default"
+    },
     "draft": {
       "guide": "Message {{agent}} to start a new conversation.",
       "workdirNeeded": "Enter a working directory above to start chatting with {{agent}}.",

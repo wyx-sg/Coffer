@@ -1,68 +1,54 @@
-"""``ClaudeBinaryModelDiscovery`` — read Claude Code's model list out of its own
-compiled binary.
+"""``ClaudeBinaryModelDiscovery`` — read Claude Code's tier aliases, and what
+each one resolves to today, out of its own compiled binary.
 
 WHY this exists at all. The CLI has no ``list models`` command and no local API
 that answers "what can I run?", so the only machine-readable copy of that answer
 on this machine is the one the CLI itself was built with. It ships as a single
 bun-compiled executable that embeds a hand-maintained catalog, marked in the
-bundle by a literal comment. Coffer reads that rather than writing the names
-down, because a written-down list goes stale and — more importantly — cannot
-tell two releases of the same tier apart. The catalog carries the version in
-every display name; that is the whole point of reading it.
+bundle by a literal comment. Coffer reads that rather than writing anything
+down, because a written-down list goes stale the day a release moves.
 
-WHY ONLY the catalog. The bundle also carries the tier-alias array the
-``--model`` flag accepts (``sonnet``, ``opus``, ``best``, ``sonnet[1m]``,
-``opusplan``, …), and this source used to emit those alongside the catalog. It
-no longer does. Every alias resolves to a model the catalog already lists, so
-emitting both padded the picker with nine label-less entries sitting next to the
-real models they point at. The CLI itself treats them as pointers, not models —
-it strips a trailing ``[1m]`` before comparing two model names, so ``sonnet[1m]``
-and ``sonnet`` are the same model to it, differing only in a context-window
-flag. Nothing becomes unreachable: ``/model <name>`` and the agent's own config
-still accept any alias string, and the CLI validates it. The cost, accepted
-knowingly: ``best`` and ``opusplan`` are routing BEHAVIOURS rather than single
-models, so after this they can only be set by typing the name, not by picking
-one from a list. That is a decision, not an oversight.
+WHAT IS OFFERED: the four names the CLI itself lets a user pick — ``opus``,
+``sonnet``, ``haiku``, ``fable`` — each labelled with the model it currently
+means. Both halves come from the same embedded table: the catalog is followed by
+an ``aliases`` object pairing every alias with the model it resolves to on a
+first-party account, and the catalog entry for that model carries its display
+name. So the picker offers ``opus`` and shows "Opus 5", and a CLI upgrade that
+moves the alias onto a new release relabels the picker by itself.
 
-WHY THE RETIREMENT TABLE TOO. The catalog is cumulative — it keeps every model
-the CLI has ever known, including ones the account can no longer run — so the
-raw scan offers a picker full of names that fail the moment they are chosen.
-The bundle carries the answer for a subset of them: a second table pairing a
-model id with its per-provider retirement dates and, for the ones the CLI
-silently reroutes, the tier it is remapped to. The CLI's own predicate treats a
-model as gone when it carries a ``remappedTo`` or when its retirement date has
-passed, and this source now applies exactly that predicate over ``firstParty``
-— the column describing a direct Anthropic account, which is what Coffer's
-users are on; Bedrock/Vertex/Foundry describe deployments Coffer does not
-configure and whose dates differ. The clock is injected so the rule is testable
-without writing a test that expires.
+WHY NOT THE VERSIONED CATALOG, which this source used to emit. That catalog is
+cumulative and account-blind: it keeps every model the CLI has ever known —
+including the internal families most accounts cannot run — and nothing on this
+machine says which of them a given account may use. The CLI's own answer to that
+question (``modelAccessCache`` in ``.claude.json``) is server-provided and
+routinely empty, so no local rule can stand in for it. Offering the raw catalog
+therefore filled the picker with names that fail the moment they are chosen. An
+alias cannot fail that way: the CLI resolves it against the account at turn
+time, which is precisely the knowledge Coffer does not have. Version information
+is not lost in the trade — it moves into the label.
 
-WHAT THIS DOES NOT DO. It does not answer "which models may THIS account run".
-That is a server-provided account fact — the CLI gets it in its own config
-payload, and nothing on disk holds it — so no local rule can derive it. Pricing,
-capabilities, knowledge cutoffs and version numbers were all checked against a
-known-good set and separate none of them. Curating the remainder is the user's
-job (see ``AgentConfig.models``); all this table can do is keep the list they
-curate from carrying models that are dead for everyone.
+WHAT THIS COSTS, knowingly: a model that is not the current head of its family
+can no longer be PICKED from this list. Nothing becomes unreachable — a model
+NAME typed anywhere is passed to the CLI verbatim, and the account's own extra
+options (a 1M-context variant, a promoted preview) still reach the picker from
+``.claude.json`` through ``NativeConfigModelDiscovery``. The routing BEHAVIOURS
+the CLI also accepts (``best``, ``opusplan``, the ``[1m]`` suffixes) stay out:
+they are pointers and modifiers, not models, and the bundle marks them as such.
 
-WHAT this costs when it breaks. The bundle's shapes are an implementation
-detail of a release we do not control. If a future CLI renames a marker or
-changes a literal layout, that anchor simply fails to match: a missing catalog
-anchor returns nothing, and a missing retirement anchor returns the catalog
-UNFILTERED rather than a filter built from half a table. It cannot return wrong
-data, and it cannot fail a request.
+WHAT this costs when it breaks. The bundle's shapes are an implementation detail
+of a release we do not control. If a future CLI renames the marker or changes
+the table's layout, that anchor simply fails to match and this source returns
+nothing. It cannot return wrong data, and it cannot fail a request.
 """
 
 from __future__ import annotations
 
 import asyncio
-import datetime as dt
 import logging
 import pathlib
 import re
 import shutil
-from collections.abc import Callable
-from typing import IO, NamedTuple
+from typing import IO
 
 from coffer.domain.agent.model_catalogue import AgentModel
 
@@ -75,86 +61,34 @@ _AGENT_KEY = "claude_code"
 #: only stable landmark in a minified 200 MB bundle.
 _MARKER = b"Hand-maintained baked-in model catalog"
 
-#: How much of the bundle to keep from the marker on. The catalog entries run a
-#: fair way past it; this is a generous multiple of what was observed.
+#: How much of the bundle to keep from the marker on. The catalog entries and
+#: the alias table that follows them run a fair way past it; this is a generous
+#: multiple of what was observed.
 _AFTER = 128 * 1024
-
-#: The retirement table has no comment above it, so the landmark is the shape of
-#: its first entry's date block — a literal that appears nowhere else.
-_RETIRE_MARKER = b"retirementDates:{firstParty:"
-
-#: The marker lands INSIDE the first entry, so the window has to start before it
-#: to catch that entry's own id. One entry is ~300 bytes; this is ample.
-_RETIRE_BEFORE = 8 * 1024
-
-#: The whole table was ~1.4 KB when this was written; a generous multiple.
-_RETIRE_AFTER = 64 * 1024
 
 #: Streaming scan block size — the bundle is far too large to read whole.
 _BLOCK = 4 * 1024 * 1024
 
-#: One catalog entry. ``family`` is not used in the output; it is here purely as
-#: an anchor, so a bare ``{id:"…"}`` elsewhere in the bundle cannot match.
-_ENTRY_RE = re.compile(
-    rb'\{id:"(claude-[^"]+)",family:"[^"]+",display_name:"([^"]+)"'
-    rb'(?:,knowledge_cutoff:"([^"]*)")?'
-)
+#: Where the alias table starts, inside the window. It follows the catalog's
+#: closing bracket, which is what keeps this from matching an ``aliases:``
+#: elsewhere in the bundle.
+_ALIASES_MARKER = b"],aliases:{"
 
-#: One retirement-table entry: the id, the ``firstParty`` date (or ``null``),
-#: and whether a ``remappedTo`` follows the date block. ``[^{}]*`` is safe
-#: because the date block carries no nested object.
-_RETIRE_RE = re.compile(
-    rb'"(claude-[^"]+)":\{modelName:"[^"]*",retirementDates:\{'
-    rb'firstParty:(null|"[^"]+")[^{}]*\}(,remappedTo:)?'
-)
+#: How much of the window past that marker can be the table. It was ~450 bytes
+#: when this was written; a generous multiple, and bounded so the tables that
+#: follow it (``latest_per_family``, ``alias_migration``) stay out of reach.
+_ALIASES_AFTER = 8 * 1024
 
-#: Month names as the table spells them ("June 15, 2026"). Parsed by hand rather
-#: than with ``strptime('%B …')``, whose month names follow the process locale —
-#: a daemon started under a non-English locale would silently parse nothing.
-_MONTHS = {
-    "january": 1,
-    "february": 2,
-    "march": 3,
-    "april": 4,
-    "may": 5,
-    "june": 6,
-    "july": 7,
-    "august": 8,
-    "september": 9,
-    "october": 10,
-    "november": 11,
-    "december": 12,
-}
+#: One alias: its name and the model it resolves to on a first-party account.
+#: The ``{default:"`` shape is the anchor — the sibling ``per_provider`` object
+#: (deployments Coffer does not configure) opens with a provider name instead,
+#: and ``latest_per_family`` holds bare strings, so neither can match.
+_ALIAS_RE = re.compile(rb'([a-z][a-z0-9_]*):\{default:"(claude-[^"]+)"')
 
-_DATE_RE = re.compile(r"^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$")
-
-
-class _Retirement(NamedTuple):
-    """One row of the CLI's retirement table, kept unevaluated.
-
-    The date is held as TEXT and compared per call rather than at scan time: the
-    scan is cached for the life of an installed binary, and a retirement date
-    can fall due while the daemon is running.
-    """
-
-    model_id: str
-    first_party: str | None
-    remapped: bool
-
-
-def _parse_date(text: str) -> dt.date | None:
-    """``"June 15, 2026"`` → a date; anything unrecognised → ``None`` (which
-    this module reads as "no opinion", never as "retired")."""
-    m = _DATE_RE.match(text.strip())
-    if m is None:
-        return None
-    month = _MONTHS.get(m.group(1).lower())
-    if month is None:
-        return None
-    try:
-        return dt.date(int(m.group(3)), month, int(m.group(2)))
-    except ValueError:
-        return None
+#: One catalog entry, read only for its display name. ``family`` is not used in
+#: the output; it is here purely as an anchor, so a bare ``{id:"…"}`` elsewhere
+#: in the bundle cannot match.
+_ENTRY_RE = re.compile(rb'\{id:"(claude-[^"]+)",family:"[^"]+",display_name:"([^"]+)"')
 
 
 class ClaudeBinaryModelDiscovery:
@@ -162,26 +96,17 @@ class ClaudeBinaryModelDiscovery:
 
     Cached in-process on (resolved path, mtime, size): the scan touches a
     200 MB file, and the answer only changes when the CLI is upgraded — which
-    replaces the symlink target, so the key changes with it. The retirement
-    VERDICT is not cached — only the table it is computed from — so a date that
-    falls due mid-session still takes effect.
+    replaces the symlink target, so the key changes with it.
     """
 
-    def __init__(
-        self,
-        *,
-        binary_name: str = "claude",
-        today: Callable[[], dt.date] | None = None,
-    ) -> None:
+    def __init__(self, *, binary_name: str = "claude") -> None:
         self._binary_name = binary_name
-        self._today = today or dt.date.today
-        self._cache: tuple[tuple[str, int, int], list[AgentModel], tuple[_Retirement, ...]] | None
-        self._cache = None
+        self._cache: tuple[tuple[str, int, int], list[AgentModel]] | None = None
 
     async def discover(
         self, *, agent_key: str, config_dir: pathlib.Path | None
     ) -> list[AgentModel]:
-        """The CLI's versioned catalog, minus the models it says are gone.
+        """The CLI's tier aliases, labelled with the model each one is today.
 
         ``config_dir`` is unused: this reads the executable on PATH, which is
         the same one Coffer will spawn regardless of where the user's config
@@ -207,29 +132,10 @@ class ClaudeBinaryModelDiscovery:
             return []
         key = (str(path), stat.st_mtime_ns, stat.st_size)
         if self._cache is not None and self._cache[0] == key:
-            _, models, retirements = self._cache
-        else:
-            models, retirements = self._scan(path)
-            self._cache = (key, models, retirements)
-        gone = self._gone(retirements)
-        return [m for m in models if m.id not in gone]
-
-    def _gone(self, retirements: tuple[_Retirement, ...]) -> frozenset[str]:
-        """The CLI's own ``$J`` predicate: a model is gone when the CLI silently
-        reroutes it (``remappedTo``) or when its first-party retirement date is
-        in the past. An empty table means no opinion, so nothing is filtered."""
-        today = self._today()
-        out: set[str] = set()
-        for entry in retirements:
-            if entry.remapped:
-                out.add(entry.model_id)
-                continue
-            if entry.first_party is None:
-                continue
-            retires = _parse_date(entry.first_party)
-            if retires is not None and retires < today:
-                out.add(entry.model_id)
-        return frozenset(out)
+            return list(self._cache[1])
+        models = self._scan(path)
+        self._cache = (key, models)
+        return list(models)
 
     def _resolve(self) -> pathlib.Path | None:
         """The real executable behind the launcher. ``resolve()`` matters: the
@@ -243,114 +149,75 @@ class ClaudeBinaryModelDiscovery:
         except OSError:
             return None
 
-    def _scan(self, path: pathlib.Path) -> tuple[list[AgentModel], tuple[_Retirement, ...]]:
-        """One streaming pass for both landmarks, then the two slices they name.
+    def _scan(self, path: pathlib.Path) -> list[AgentModel]:
+        """One streaming pass to the marker, then the slice it names.
 
-        Both tables live in the same 200 MB file half a megabyte apart, so
-        looking for them separately would read the bundle twice.
+        The catalog and the alias table sit within a few kilobytes of each other
+        past the same marker, so one window carries both.
         """
         try:
             with path.open("rb") as fh:
-                offsets = self._find_markers(fh, (_MARKER, _RETIRE_MARKER))
-                catalog = self._slice(fh, offsets.get(_MARKER), before=0, after=_AFTER)
-                table = self._slice(
-                    fh,
-                    offsets.get(_RETIRE_MARKER),
-                    before=_RETIRE_BEFORE,
-                    after=_RETIRE_AFTER,
-                )
+                window = self._slice(fh, self._find_marker(fh, _MARKER))
         except OSError:
             _log.debug("agent.model_discovery.binary_unreadable path=%s", path, exc_info=True)
-            return [], ()
-        if catalog is None:
-            return [], ()
-        return self._catalog(catalog), self._retirements(table)
+            return []
+        if window is None:
+            return []
+        return self._aliases(window)
 
     @staticmethod
-    def _find_markers(fh: IO[bytes], markers: tuple[bytes, ...]) -> dict[bytes, int]:
-        """Absolute offset of each marker's FIRST occurrence, in one pass.
+    def _find_marker(fh: IO[bytes], marker: bytes) -> int | None:
+        """Absolute offset of the marker's FIRST occurrence, or ``None``.
 
-        Consecutive blocks are stitched by an overlap of the longest marker so a
-        landmark straddling a block boundary is still found. A marker that never
-        appears is simply absent from the result.
+        Consecutive blocks are stitched by an overlap of the marker's length so
+        a landmark straddling a block boundary is still found.
         """
-        overlap = max(len(m) for m in markers) - 1
-        found: dict[bytes, int] = {}
+        overlap = len(marker) - 1
         consumed = 0
         tail = b""
-        while len(found) < len(markers):
+        while True:
             block = fh.read(_BLOCK)
             if not block:
-                break
+                return None
             buf = tail + block
-            base = consumed - len(tail)
-            for marker in markers:
-                if marker in found:
-                    continue
-                hit = buf.find(marker)
-                if hit >= 0:
-                    found[marker] = base + hit
+            hit = buf.find(marker)
+            if hit >= 0:
+                return consumed - len(tail) + hit
             consumed += len(block)
             tail = buf[-overlap:] if overlap else b""
-        return found
 
     @staticmethod
-    def _slice(fh: IO[bytes], offset: int | None, *, before: int, after: int) -> bytes | None:
-        """The window around ``offset``; ``None`` when the marker was absent."""
+    def _slice(fh: IO[bytes], offset: int | None) -> bytes | None:
+        """The window from ``offset`` on; ``None`` when the marker was absent."""
         if offset is None:
             return None
-        start = max(0, offset - before)
-        fh.seek(start)
-        return fh.read((offset - start) + after)
+        fh.seek(offset)
+        return fh.read(_AFTER)
 
     @staticmethod
-    def _catalog(after: bytes) -> list[AgentModel]:
-        """The versioned entries, REVERSED.
+    def _aliases(window: bytes) -> list[AgentModel]:
+        """The alias table, in the bundle's own order, labelled from the catalog.
 
-        This is not a real sort — nothing here parses version numbers. The
-        bundle happens to list each family oldest-first, so reversing puts the
-        recent releases at the top of the picker, which is where a user looks
-        first. If a future release orders the table differently the picker is
-        merely ordered oddly; nothing breaks.
+        An alias whose target the catalog does not describe keeps its own name
+        as the label: a picker entry reading "Opus" is worse than one reading
+        "Opus 5", but far better than an empty one.
         """
+        start = window.find(_ALIASES_MARKER)
+        if start < 0:
+            return []
+        table = window[start : start + _ALIASES_AFTER]
+        display = {
+            model_id.decode("utf-8", "replace"): name.decode("utf-8", "replace").strip()
+            for model_id, name in _ENTRY_RE.findall(window)
+        }
         out: list[AgentModel] = []
-        for model_id, display, cutoff in _ENTRY_RE.findall(after):
-            ident = model_id.decode("utf-8", "replace").strip()
-            if not ident:
+        for raw_alias, raw_target in _ALIAS_RE.findall(table):
+            alias = raw_alias.decode("utf-8", "replace").strip()
+            if not alias:
                 continue
-            label = display.decode("utf-8", "replace").strip()
-            known_to = cutoff.decode("utf-8", "replace").strip()
-            out.append(
-                AgentModel(
-                    id=ident,
-                    label=label,
-                    # The only per-model prose the bundle carries. Rendered as a
-                    # sentence because a bare date reads as noise in a picker.
-                    description=f"Knowledge cutoff {known_to}" if known_to else "",
-                )
-            )
-        out.reverse()
+            target = raw_target.decode("utf-8", "replace").strip()
+            out.append(AgentModel(id=alias, label=display.get(target) or alias.capitalize()))
         return out
-
-    @staticmethod
-    def _retirements(window: bytes | None) -> tuple[_Retirement, ...]:
-        """The retirement table as rows, or EMPTY when the anchor did not match.
-
-        Empty means "no filter", which is the only safe failure: a table this
-        module cannot read must cost the user a slightly longer list, never a
-        model wrongly hidden.
-        """
-        if window is None:
-            return ()
-        rows: list[_Retirement] = []
-        for model_id, date_text, remapped in _RETIRE_RE.findall(window):
-            ident = model_id.decode("utf-8", "replace").strip()
-            if not ident:
-                continue
-            raw = date_text.decode("utf-8", "replace")
-            first_party = None if raw == "null" else raw.strip('"')
-            rows.append(_Retirement(ident, first_party, bool(remapped)))
-        return tuple(rows)
 
 
 __all__ = ["ClaudeBinaryModelDiscovery"]

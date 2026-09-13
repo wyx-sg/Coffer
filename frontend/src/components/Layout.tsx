@@ -58,8 +58,10 @@ const NAV_GROUPS: NavGroup[] = [
   {
     labelKey: "nav.group.agents",
     items: [
-      { to: "/chat", labelKey: "nav.chat", icon: MessageSquare },
+      // Agents first: the agents are the subject, and a chat is one thing you
+      // do with one of them.
       { to: "/agents", labelKey: "nav.agents", icon: Bot, end: true },
+      { to: "/chat", labelKey: "nav.chat", icon: MessageSquare },
     ],
   },
   {

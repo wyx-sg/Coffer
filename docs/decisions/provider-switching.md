@@ -273,3 +273,58 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-11b](../../
   in-process, pages through all of it and refuses no id. Nothing validates a
   model NAME against a catalogue — the CLI accepts names outside it entirely, so
   a model name stays raw passthrough everywhere.
+
+## Amendment 2026-09-13 — the Claude Code picker offers tier aliases
+
+Authoritative design: the [spec provider-switching Amendment 2026-09-13](../../specs/provider-switching/spec.md)
+(M1–M3).
+
+- **D14 — Offer what the CLI offers, not what its binary remembers.** D12 said
+  entitlement is not locally derivable and accepted that a model this account
+  cannot run fails when it is picked. That cost turned out to be the whole
+  experience: the catalog is cumulative, so the picker filled with names — whole
+  internal families among them — that fail on use. Claude Code's own picker never
+  asks for a versioned id; it offers four tier aliases and resolves each against
+  the account at turn time. Coffer now offers exactly those, read from the
+  `aliases` table that sits beside the catalog in the same bundle, each labelled
+  with the display name of the model it currently resolves to — so the per-release
+  distinction H1 went looking for survives, in the label instead of the id.
+- **D15 — One table in the CLI binary, not two.** D11's retirement table is no
+  longer read, and its injected clock is gone with it: an alias does not retire,
+  and that table's only job was pruning the versioned list nothing offers now. The
+  failure mode is unchanged in kind — an anchor that stops matching costs this
+  source, never a wrong answer — but it now costs the whole source rather than
+  the filter, which is the safe direction when the fallback would be the list this
+  amendment exists to stop offering.
+
+## Amendment 2026-09-13b — the effort a Codex turn thinks at is Coffer's to offer
+
+Authoritative design: the [spec provider-switching Amendment 2026-09-13b](../../specs/provider-switching/spec.md)
+(N1–N4).
+
+- **D16 — An effort is a field beside the model, not a name inside it.** D14 made
+  the picker offer what the agent's own picker offers; for Codex that is two
+  things, not one. `model/list` reports a `supportedReasoningEfforts` list and a
+  `defaultReasoningEffort` per model, and Coffer read neither — so on a machine
+  whose `model/list` answers with a single model, the picker offered the one
+  thing that was already decided and none of the thing that wasn't. The effort now
+  rides beside the id the whole way: `AgentModel.efforts` / `.default_effort` out
+  of the `…/models` route, `AgentConfig.effort` beside `AgentConfig.model` in the
+  conversation's provider-owned blob, `effort` beside `model` on
+  `PATCH …/agent-config` (mention one, the other is left alone; empty clears).
+  Beside rather than inside because that is how the protocol takes it — a level
+  baked into the name would be four entries for one model under ids Coffer made
+  up, which J3 (ids stay opaque, never a name Coffer writes down) rules out. And nothing
+  validates the level, for the same reason nothing validates a model name: the
+  namespace is Codex's, so a fifth level works the day it ships.
+- **D17 — Per turn, because the two alternatives are a lie and a dependency.**
+  `thread/start` accepts an effort field and ignores it — the response goes on
+  echoing the config default — so a thread-level control would have looked like it
+  worked while changing nothing. `thread/settings/update` is real but gated behind
+  the `experimentalApi` capability, which Coffer will not declare to set a field it
+  can set without it. So the effort goes on `turn/start`, and was confirmed there
+  by measurement rather than by reading: the same prompt reported 53 reasoning
+  output tokens at `low` and 2569 at `xhigh`, ~48x, from Codex's own token-usage
+  notification. For a setting whose effect never shows up in the response that
+  acknowledges it, a number is the only acceptance test. An agent that reports no
+  efforts sends no field and shows no control — the path is inert, not defaulted.

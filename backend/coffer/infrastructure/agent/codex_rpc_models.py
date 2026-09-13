@@ -3,7 +3,8 @@
 WHY this exists. Codex has no ``list models`` command either, but its
 app-server protocol — the one Coffer already drives to run a turn — answers a
 ``model/list`` request. So the honest source for "what can Codex run today" is
-Codex, asked at runtime. A list written into Coffer was not merely stale, it was
+Codex, asked at runtime — including, per model, the reasoning-effort levels it
+offers and the one it would pick itself. A list written into Coffer was not merely stale, it was
 wrong: the names it carried did not exist on this machine at all.
 
 WHAT this costs when it breaks. A Codex that is missing, broken, not logged in,
@@ -175,14 +176,44 @@ class CodexRpcModelDiscovery:
                 continue
             label = entry.get("displayName")
             description = entry.get("description")
+            default = entry.get("defaultReasoningEffort")
+            efforts = _efforts(entry.get("supportedReasoningEfforts"))
             out.append(
                 AgentModel(
                     id=ident.strip(),
                     label=label.strip() if isinstance(label, str) else "",
                     description=description.strip() if isinstance(description, str) else "",
+                    efforts=efforts,
+                    # Only a default that is actually on the menu: a level the
+                    # picker cannot show is worse than no default at all.
+                    default_effort=(
+                        default.strip()
+                        if isinstance(default, str) and default.strip() in efforts
+                        else None
+                    ),
                 )
             )
         return out
+
+
+def _efforts(raw: Any) -> tuple[str, ...]:
+    """The levels one model can be run at, in the order Codex listed them.
+
+    Codex reports these per model (``[{"reasoningEffort": "low", …}, …]``) and
+    takes the chosen one as its own field on a turn, not as part of the model
+    name — so they travel beside the id rather than multiplying it. A model that
+    reports none simply has none; nothing is invented for it.
+    """
+    if not isinstance(raw, list):
+        return ()
+    found: list[str] = []
+    for entry in raw:
+        level = entry.get("reasoningEffort") if isinstance(entry, dict) else entry
+        if not isinstance(level, str) or not level.strip():
+            continue
+        if level.strip() not in found:
+            found.append(level.strip())
+    return tuple(found)
 
 
 __all__ = ["CodexRpcModelDiscovery", "SessionFactory"]

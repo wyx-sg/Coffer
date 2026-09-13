@@ -82,13 +82,17 @@ class ConversationPatch(BaseModel):
 class AgentConfigPatch(BaseModel):
     """Body for PATCH /conversations/{id}/agent-config.
 
-    Sets the managed agent's own model (free-text, passed through to its CLI).
-    An empty or null ``model`` clears the override so the conversation inherits
-    the active provider profile's projected default. ``cwd`` / ``session_id`` are
+    Sets the managed agent's own model (free-text, passed through to its CLI)
+    and how hard it should think. An empty or null ``model`` clears the override
+    so the conversation inherits the active provider profile's projected
+    default; an empty or null ``effort`` clears it so the agent keeps whatever
+    its own config says. Each field is written only when the body mentions it,
+    so setting one leaves the other alone; ``cwd`` / ``session_id`` are
     preserved (ADR builtin-agent-is-internal-capability → ADR provider-switching).
     """
 
     model: str | None = None
+    effort: str | None = None
 
 
 class AgentConfigOut(BaseModel):
@@ -99,6 +103,9 @@ class AgentConfigOut(BaseModel):
 
     cwd: str | None
     model: str | None
+    #: The reasoning-effort level the turn runs at, for an agent that takes one
+    #: (Codex). ``None`` means the agent's own default.
+    effort: str | None = None
 
 
 class ChannelBindingOut(BaseModel):
