@@ -110,9 +110,20 @@ def fixed_port_conflict_message(
         f"  held by: {held_by}",
     ]
     if holder is not None and holder.is_coffer_daemon:
+        # Do NOT lead with "kill it". Now that every start binds one port, the
+        # likeliest holder is the user's own healthy daemon that the liveness
+        # probe missed while it was still warming up (see bootstrap's
+        # _LIVENESS_PROBE_TIMEOUT) — and a start that has already reached this
+        # message will find it serving a moment later. Telling someone to kill
+        # that drops every MCP client attached to it. A daemon from another
+        # vault is the second reading, not the first.
         lines.append(
-            f"           that is a Coffer daemon this vault does not know about "
-            f"(most often a test run under a throwaway HOME) — stop it with: kill {holder.pid}"
+            "           that is another Coffer daemon. Most often it is your own, still "
+            "starting up — give it a few seconds and try again, or check: coffer daemon status"
+        )
+        lines.append(
+            f"           if it belongs to a different vault (a test run under a throwaway "
+            f"HOME, say), stop it with: kill {holder.pid}"
         )
     lines += [
         "  fix one of:",

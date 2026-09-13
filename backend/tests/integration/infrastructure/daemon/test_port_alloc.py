@@ -157,15 +157,30 @@ def test_a_held_scan_port_cannot_be_bound_again():
 
 
 def test_conflict_message_names_a_coffer_daemon_squatter(monkeypatch):
-    """A stray Coffer daemon from another vault (a live test under a throwaway
-    HOME is the usual source) is never killed for us — so the message has to
-    say what that process is, or the user is left staring at an opaque pid."""
+    """Another Coffer daemon is never killed for us, so the message has to say
+    what that process is — otherwise the user stares at an opaque pid.
+
+    It must lead with "probably your own, still starting up". Now that every
+    start binds one port, the likeliest holder is the user's own healthy daemon
+    that the liveness probe missed mid-warm-up, and a start that reached this
+    message will find it serving moments later. Killing on that advice drops
+    every MCP client attached to it. `kill` stays in the message, but as the
+    second reading and explicitly conditioned on the daemon being another
+    vault's."""
     monkeypatch.setattr(port_alloc, "pid_is_coffer_daemon", lambda pid: True)
     message = fixed_port_conflict_message(8000, PortHolder(pid=4321, command="/x/coffer-daemon"))
     assert "pid 4321" in message
-    assert "Coffer daemon this vault does not know about" in message
+    assert "still starting up" in message
+    assert "coffer daemon status" in message
     assert "kill 4321" in message
     assert "coffer daemon port set" in message
+
+    # Ordering is the whole point: the wait-and-see reading must reach the eye
+    # before the kill does.
+    assert message.index("still starting up") < message.index("kill 4321")
+    # And the kill must stay tied to its precondition rather than floating free.
+    kill_line = next(ln for ln in message.splitlines() if "kill 4321" in ln)
+    assert "different vault" in kill_line, kill_line
 
 
 def test_conflict_message_stays_quiet_about_an_unrelated_squatter(monkeypatch):

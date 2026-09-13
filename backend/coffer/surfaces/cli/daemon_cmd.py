@@ -48,14 +48,24 @@ def _refuse_if_the_port_is_taken() -> None:
     then have to open. The daemon binds one port and refuses to move, so this
     applies to every start, not only to a start whose port the user chose.
 
-    The check is the real bind, done once and immediately let go: it is the
-    only probe that agrees with the daemon's own attempt in every case that
-    matters — a port in TIME_WAIT from the daemon this ``restart`` just stopped
-    is bindable and must not be reported as a conflict, and a holder owned by
+    The check is the real bind, done once and immediately let go, because that
+    is the probe that agrees with the daemon's own attempt where it matters
+    most: a port in TIME_WAIT from the daemon this ``restart`` just stopped is
+    bindable and must not be reported as a conflict, and a holder owned by
     another user is unidentifiable but still blocks. Closing a socket that
-    never accepted anything leaves nothing behind, and losing the race in the
-    window between this close and the daemon's own bind costs only the early
-    diagnosis — the daemon then fails with this very same message.
+    never accepted anything leaves nothing behind.
+
+    It can report "free" when the port is not, and only ever errs that way. Two
+    windows do it: the ordinary TOCTOU gap between this close and the daemon's
+    own bind, and — on Linux specifically — a daemon that is bound but has not
+    yet called ``listen``, which ``SO_REUSEADDR`` lets a second socket bind
+    straight through (the platform difference CODE-041 turns on; see
+    ``port_alloc._new_socket``). Both are safe to lose. The spawn this
+    function guards goes on to take the daemon spawn lock and re-probe
+    liveness, so a missed conflict resolves as "daemon already running" rather
+    than as two daemons. What is lost is this early, actionable message — never
+    correctness — which is why the probe is allowed to be optimistic and must
+    never be made pessimistic.
 
     Only the caller's ordering makes this correct: ``live_daemon()`` is probed
     first, so *our own* daemon holding the port stays the clean "already
