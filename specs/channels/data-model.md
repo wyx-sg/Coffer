@@ -79,7 +79,7 @@ Validation rules:
   already are. Nothing is reinterpreted, no value changes meaning, and there is
   no row whose behaviour depends on being rewritten; a migration here would write
   `webhook` on top of rows that already behave as `webhook`. (Contrast migration
-  `0067` above, which had to *remove* keys the model no longer accepts: a new
+  `0068` above, which had to *remove* keys the model no longer accepts: a new
   field with a default that matches the stored reality is the opposite case.)
   This is also why no load-time shim appears anywhere — there is no old shape to
   translate.
