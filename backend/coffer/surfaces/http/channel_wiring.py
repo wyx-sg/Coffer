@@ -37,6 +37,7 @@ from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.surfaces.http import daemon_routes
 from coffer.surfaces.http.auth import get_active_token
 from coffer.surfaces.http.channel_routes import get_channel_service, set_channel_service
+from coffer.surfaces.http.dependencies import get_ingest_service, get_knowledge_service
 from coffer.surfaces.http.turn_dependencies import (
     get_agent_model_catalogue,
     get_agent_registry,
@@ -85,6 +86,15 @@ def wire_channel_kind(
         # catalogue service's ``suggest`` IS the ModelSuggestionPort shape, so
         # it goes in directly rather than through a hardcoded local list.
         model_suggestions=get_agent_model_catalogue(),
+        # `/save` (spec knowledge FR-036): both already satisfy the channel
+        # core's Protocol shape structurally (``CollectionCatalogPort`` /
+        # ``IngestPort``), so the knowledge kind's own services go in
+        # directly — the channel core never imports the knowledge kind itself
+        # (import-linter contract 5f). Wiring order matters here: this runs
+        # after ``wire_knowledge_kind`` (see ``app.py``), so both are already
+        # registered.
+        collections=get_knowledge_service(),
+        ingest=get_ingest_service(),
     )
 
     # Production injects the EncryptedCredentialStore; None (tests) falls back

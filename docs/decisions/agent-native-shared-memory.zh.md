@@ -2,10 +2,10 @@
 
 > English: [agent-native-shared-memory.md](./agent-native-shared-memory.md)
 
-**Status**: 部分被 [Memory via MCP](memory-via-mcp-not-native-projection.md) 取代（2026-06-18）—— 下文决策中「原生投影」那一半已移除；Coffer 绝不写 agent 自己的原生记忆文件。「共享单一 store」那一半依然成立，也正是本 ADR 现在所记录的内容。2026-09-10 以知识层词汇重新表述，2026-09-11 收敛为两条 lane（见修订历史）。
+**Status**: 部分被 [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md) 取代（2026-06-18）—— 下文决策中「原生投影」那一半已移除；Coffer 绝不写 agent 自己的原生记忆文件。「共享单一 store」那一半依然成立，也正是本 ADR 现在所记录的内容。2026-09-10 以知识层词汇重新表述，2026-09-11 收敛为两条 lane（见修订历史）。
 **Date**: 2026-06-09（2026-09-11 修订；见修订历史）
 **Deciders**: Yuxing Wu
-**Related**: spec `knowledge`（知识层 spec）、[Files as Truth](files-as-truth-sqlite-retrieval.md)、[Everything Is a Resource Kind](everything-is-a-resource-kind.md)、[Cross-Platform Skill Delivery](cross-platform-skill-delivery.md)、[Memory via MCP](memory-via-mcp-not-native-projection.md)
+**Related**: spec `knowledge`（知识层 spec）、[Files as Truth](files-as-truth-sqlite-retrieval.md)、[Everything Is a Resource Kind](everything-is-a-resource-kind.md)、[Cross-Platform Skill Delivery](cross-platform-skill-delivery.md)、[Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md)
 
 ## Context
 
@@ -32,7 +32,7 @@ agent 各写一份，并**分叉**：每份副本被独立编辑，agent 们对�
 
 **Coffer 持有一个共享 store，每个 agent 都通过 Coffer 自己的工具读写它。一条事实
 只写一次，写进 Coffer 的 `knowledge` 层，并对该 scope 下的每个 agent 可见。Coffer
-不保留任何逐 agent 的副本；自 [Memory via MCP](memory-via-mcp-not-native-projection.md)
+不保留任何逐 agent 的副本；自 [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md)
 起，也不写入任何 agent 的原生记忆文件。**
 
 今天的具体形态：
@@ -74,7 +74,7 @@ agent 的原生位置 —— 每个 agent 一个 `AgentMemoryAdapter`，`project
 `SYMLINK | RENDER | NONE`，把规范目录 symlink 到 Claude Code 的 auto-memory 路径，
 把一个 marker 围栏的托管块 render 进 Codex 配置文件，并**关闭每个 agent 自己的原生
 记忆**，使规范 store 保持为唯一写入者。
-[Memory via MCP](memory-via-mcp-not-native-projection.md) 于 2026-06-18 整体撤回
+[Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md) 于 2026-06-18 整体撤回
 了它：写入并关闭别的工具的配置是侵入性的；逐 agent 适配器得追踪上游一直在变的
 格式；而当初为之付费的那份环境式加载收益，改用注入同样能拿到。存活下来、也是本
 ADR 今天被读的理由，是「共享单一 store」这个决策本身。
@@ -136,7 +136,7 @@ ADR 今天被读的理由，是「共享单一 store」这个决策本身。
 - **2026-06-09** —— 初版决定：一个规范的、逐条 markdown 的记忆 store，跨 agent
   共享方式为「MCP 读写 + 逐 agent 原生投影（`SYMLINK | RENDER | NONE`）」的混合
   机制，并关闭每个被投影 agent 自己的原生记忆。作用域为两层：global + per-project。
-- **2026-06-18** —— [Memory via MCP](memory-via-mcp-not-native-projection.md)
+- **2026-06-18** —— [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md)
   移除了投影那一半：Coffer 绝不写入或关闭 agent 的原生记忆文件。共享 store 那一半
   不受影响。
 - **2026-09-10** —— 为知识层合并重新表述。本 ADR 跨 agent 共享的那个 store，现在

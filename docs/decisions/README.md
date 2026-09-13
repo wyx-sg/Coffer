@@ -97,7 +97,7 @@ section that future readers most often want — don't skip it.>
 | [`cross-platform-skill-delivery`](cross-platform-skill-delivery.md) | Cross-Platform Skill Delivery — Symlink / Junction / Copy-Fallback | Accepted |
 | [`files-as-truth-sqlite-retrieval`](files-as-truth-sqlite-retrieval.md) | Retrieval Stack — Markdown Files as Truth, SQLite FTS5 + sqlite-vec, Configurable Embeddings | Superseded by [Knowledge Is Plain Files](knowledge-is-plain-files.md) |
 | [`knowledge-is-plain-files`](knowledge-is-plain-files.md) | The knowledge layer is a directory of files, not an index | Accepted |
-| [`agent-native-shared-memory`](agent-native-shared-memory.md) | One Shared Knowledge Store Across Agents | Accepted — projection half superseded by [Memory via MCP](memory-via-mcp-not-native-projection.md) |
+| [`agent-native-shared-memory`](agent-native-shared-memory.md) | One Shared Knowledge Store Across Agents | Accepted — projection half superseded by [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md) |
 | [`channel-adapter-framework`](channel-adapter-framework.md) | Channel Adapter Framework | Accepted |
 | [`envelope-encrypted-credential-store`](envelope-encrypted-credential-store.md) | Envelope-Encrypted Credential Store | Accepted |
 | [`vault-export-import`](vault-export-import.md) | Vault Export and Import | Accepted |
@@ -107,7 +107,7 @@ section that future readers most often want — don't skip it.>
 | [`channel-entrypoint-differentiation`](channel-entrypoint-differentiation.md) | Channel Entrypoint Differentiation Layer | Accepted |
 | [`builtin-agent-is-internal-capability`](builtin-agent-is-internal-capability.md) | The Built-in Agent Is an Internal Capability, Not a Chat Persona | Accepted |
 | [`remove-tool-approval`](remove-tool-approval.md) | Remove the Tool-Approval System; Owner-Pairing Is the Gate | Accepted |
-| [`memory-via-mcp-not-native-projection`](memory-via-mcp-not-native-projection.md) | Memory via MCP, not native projection | Accepted |
+| [`aggregate-agent-memory-never-write-it`](aggregate-agent-memory-never-write-it.md) | Aggregate the agents' memory; never write it | Proposed — rewrites *Memory via MCP, not native projection* (2026-06-18) |
 | [`skill-content-trust-layer`](skill-content-trust-layer.md) | Skill Content Trust Layer (Heuristic Scan, Warn-Don't-Block) | Reverted (2026-06-20) |
 | [`consume-official-mcp-registry`](consume-official-mcp-registry.md) | Consume the official MCP Registry for server discovery | Reverted (2026-06-20) |
 | [`chat-single-owner-live-mirror`](chat-single-owner-live-mirror.md) | Chat Is a Single-Owner Live Mirror | Accepted |

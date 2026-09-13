@@ -14,16 +14,23 @@ import {
   createCollection,
   deleteFile,
   getFile,
+  getIndexStatus,
   getTree,
   listCollections,
+  rebuildIndex,
+  search,
   tidyCollection,
+  uploadFile,
 } from "./api";
+import type { SearchOut } from "./types";
 
 export const knowledgeKey = ["knowledge"] as const;
 export const collectionsKey = () => [...knowledgeKey, "collections"] as const;
 /** One directory level; `path` is relative to the knowledge root. */
 export const treeKey = (path: string) => [...knowledgeKey, "tree", path] as const;
 export const fileKey = (path: string) => [...knowledgeKey, "file", path] as const;
+/** The disposable sidecar's status — one global query, not per-collection. */
+export const indexKey = () => [...knowledgeKey, "index"] as const;
 
 export function useKnowledgeCollections() {
   return useQuery({
@@ -93,6 +100,67 @@ export function useTidyCollection(collection: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: knowledgeKey });
       toast.success(t("knowledge.detail.tidyDone"));
+    },
+    onError: (error) => toast.error(translateApiError(t, error)),
+  });
+}
+
+/**
+ * Convert one uploaded document into a knowledge file. The new file can land
+ * at any level under the collection, and its ancestors' file counts all
+ * change with it, so success invalidates the whole `["knowledge"]` subtree —
+ * same breadth as tidy — rather than guessing which single level to refresh.
+ */
+export function useUploadKnowledgeFile() {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: (vars: { collection: string; directory?: string | null; file: File }) =>
+      uploadFile(vars),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),
+    onError: (error) => toast.error(translateApiError(t, error)),
+  });
+}
+
+/**
+ * Ranked (or literal-fallback) search over one collection. Modelled as a
+ * mutation rather than a query: it runs when the user submits, not whenever
+ * its inputs change, and the answer is never cached — a stale ranked result
+ * would defeat the point of it being ranked.
+ */
+export function useKnowledgeSearch() {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation<SearchOut, unknown, { query: string; collection?: string | null }>({
+    mutationFn: (vars) => search(vars.query, vars.collection),
+    onError: (error) => toast.error(translateApiError(t, error)),
+  });
+}
+
+/** The disposable sidecar's status: available/staleness, read on the page load. */
+export function useIndexStatus() {
+  return useQuery({
+    queryKey: indexKey(),
+    queryFn: getIndexStatus,
+  });
+}
+
+/**
+ * Re-embed every visible file from scratch. Runs synchronously on the
+ * backend (the mutation's own `isPending` IS the "running" state — there is
+ * no separate progress poll), and its answer is the freshest status there is,
+ * so it seeds the cache directly rather than merely invalidating it.
+ */
+export function useRebuildIndex() {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: rebuildIndex,
+    onSuccess: (data) => {
+      qc.setQueryData(indexKey(), data);
+      toast.success(t("knowledge.index.rebuildDone"));
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });

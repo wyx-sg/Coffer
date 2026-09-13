@@ -33,6 +33,13 @@ os.environ.setdefault("COFFER_LOG_DIR", str(_TEST_LOG_DIR))
 _TEST_KNOWLEDGE_ROOT = Path(tempfile.gettempdir()) / "coffer-test-knowledge"
 os.environ.setdefault("COFFER_KNOWLEDGE_ROOT", str(_TEST_KNOWLEDGE_ROOT))
 
+# Same failure mode again, one layer over: ``paths.memory_root()`` (spec
+# memory) falls back to ``$HOME/.coffer/memory`` when ``COFFER_MEMORY_ROOT``
+# is unset, and that tree is a developer's real aggregated memory — a test
+# that forgets to pin this would delete and rewrite it, not just pollute a log.
+_TEST_MEMORY_ROOT = Path(tempfile.gettempdir()) / "coffer-test-memory"
+os.environ.setdefault("COFFER_MEMORY_ROOT", str(_TEST_MEMORY_ROOT))
+
 
 @pytest.fixture(autouse=True)
 def _isolated_knowledge_root(tmp_path, monkeypatch):
@@ -46,6 +53,12 @@ def _isolated_knowledge_root(tmp_path, monkeypatch):
     migration walk, say) overrides it with its own monkeypatch, which wins.
     """
     monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge-root"))
+
+
+@pytest.fixture(autouse=True)
+def _isolated_memory_root(tmp_path, monkeypatch):
+    """Give every test its own memory tree, for the same reason as knowledge's."""
+    monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory-root"))
 
 
 # Accept any Host header across the suite. The loopback-Host guard

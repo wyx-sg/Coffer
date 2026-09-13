@@ -160,6 +160,7 @@ class FakeAuditRepo:
         name=None,
         resource_id=None,
         event_type=None,
+        event_prefix=None,
         since=None,
         limit=50,
     ):

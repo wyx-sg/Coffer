@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0069"
+HEAD_REVISION = "0070"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -123,7 +123,10 @@ HEAD_REVISION = "0069"
 # strips ``default_model`` + ``models`` from every ``kind='channel'``
 # ``config_json`` (a channel curates no models — the bound agent's CLI default
 # opens a conversation and ``/model`` offers that agent's whole catalogue) — no
-# DDL, table/column set unchanged at head.
+# DDL, table/column set unchanged at head. 0070 CREATEs ``memory_overrides`` —
+# the developer's hide/pin/supersede/settle decisions about a fact, the one
+# table spec memory adds (FR-040/FR-070); present at head, dropped by its own
+# downgrade, and absent from every revision below it.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",
@@ -139,13 +142,14 @@ EXPECTED_TABLES = {
     "channel_peers",
     "channel_thread_conversations",
     "sync_remotes",
+    "memory_overrides",
 }
 
 # Below revision 0052 the two side tables still carry their pre-merge names
 # (0052 renames them on the way up and back on the way down), so every stepwise
 # assertion under 0052 compares against this set instead. ``sync_remotes`` comes
 # out too: 0062 created it, so nothing below 0052 has ever seen it.
-PRE_MERGE_TABLES = (EXPECTED_TABLES - {"sync_remotes"}) | {
+PRE_MERGE_TABLES = (EXPECTED_TABLES - {"sync_remotes", "memory_overrides"}) | {
     # 0066 drops these at head; every revision below it still has them, and
     # 0066's downgrade recreates them empty so those revisions can drop them.
     "documents",
@@ -816,6 +820,12 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     def _sync_config_columns() -> set[str]:
         with sqlite3.connect(db_path) as conn:
             return {r[1] for r in conn.execute("PRAGMA table_info(sync_config)")}
+
+    # 0070 adds memory_overrides (the developer's decisions about a fact) —
+    # present at head, dropped by its own downgrade one step below head.
+    assert "memory_overrides" in _user_tables(db_path)
+    command.downgrade(cfg, "0069")
+    assert "memory_overrides" not in _user_tables(db_path)
 
     # 0062 adds sync_remotes (the one backup remote) — present at head, and
     # dropped by its own downgrade on the way to 0049.

@@ -11,6 +11,7 @@ from coffer.surfaces.cli import (
     credentials_cmd,
     daemon_cmd,
     knowledge_cmd,
+    memory_cmd,
     open_cmd,
     provider_cmd,
     resource_cmd,
@@ -51,6 +52,7 @@ app.add_typer(agent_cmd.app, name="agent")
 app.add_typer(channel_cmd.app, name="channel")
 app.add_typer(skill_cmd.app, name="skill")
 app.add_typer(knowledge_cmd.app, name="knowledge")
+app.add_typer(memory_cmd.app, name="memory")
 app.add_typer(provider_cmd.app, name="provider")
 app.add_typer(sync_cmd.app, name="sync")
 

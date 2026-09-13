@@ -126,7 +126,6 @@ pretty = true
 # (→ import-not-found); ignoring missing imports keeps mypy stable across both.
 [[tool.mypy.overrides]]
 module = [
-    "sqlite_vec.*",
     "markitdown.*",
     "ruamel.*",
 ]
@@ -175,6 +174,31 @@ forbidden_modules = ["coffer.surfaces"]
 # knowledge-is-plain-files); what is left is thin enough that routing it through
 # a port would be ceremony. So the application MAY import these substrate
 # modules, but no other infrastructure.
+#
+# Second exception: ``coffer.application.memory.overrides`` (spec memory
+# FR-070) composes ``MemoryOverrideModel`` from
+# ``coffer.infrastructure.persistence.models`` directly, the same
+# ``sqlite_insert(...).on_conflict_do_update(...)`` idiom every other repo in
+# this codebase uses. One key plus four decision columns has no query
+# complexity a port/adapter pair would earn its keep abstracting away — the
+# same reasoning as the knowledge exception above, applied to the memory
+# layer's one table instead of a file substrate.
+#
+# Third exception: the rest of ``coffer.application.memory`` (``service.py``,
+# ``aggregate.py``) composes ``coffer.infrastructure.memory`` — the fact-file
+# store, its path layout, its source-digest cache, and the two reader
+# adapters — directly, the same substrate reasoning as knowledge above: there
+# is no engine behind a port, only file I/O and two format parsers, and this
+# is the whole layer's one consumer of them.
+#
+# Fourth exception: ``coffer.application.ranked_retrieval`` — the kind-agnostic
+# engine behind both ``coffer__search`` and ``coffer__recall`` (spec memory
+# FR-052 asks the latter to reuse the former's retrieval wholesale) — composes
+# ``coffer.infrastructure.knowledge.index`` directly: the disposable-sidecar
+# substrate, namespaced so knowledge and memory each get their own file under
+# one root. It is substrate for the same reason the first exception's is: no
+# engine sits behind it to route through a port, just a namespaced on-disk
+# cache either caller may delete at any time.
 [[tool.importlinter.contracts]]
 name = "Application does not import infrastructure"
 type = "forbidden"
@@ -182,6 +206,8 @@ source_modules = ["coffer.application"]
 forbidden_modules = ["coffer.infrastructure"]
 ignore_imports = [
     "coffer.application.knowledge.* -> coffer.infrastructure.knowledge.*",
+    "coffer.application.memory.* -> coffer.infrastructure.memory.*",
+    "coffer.application.ranked_retrieval -> coffer.infrastructure.retrieval.*",
 ]
 
 # Contract 3: domain is pure — no imports from any other project layer, no
@@ -461,16 +487,17 @@ forbidden_modules = [
     "coffer.surfaces.http.channel_routes",
 ]
 
-# Contract 7: converter confinement. ``markitdown`` has exactly one consumer —
+# Contract 7: converter confinement. ``markitdown`` has exactly two consumers —
 # ``infrastructure.chat.document_extract``, which turns an inbound channel
-# attachment into text (spec channels FR-030). It used to live in the knowledge
-# substrate; the knowledge layer converts nothing now (ADR
-# knowledge-is-plain-files), so the rule keeps it out of every other package
-# rather than granting one an exemption. The vector-index and embedding SDKs it
-# also used to fence are gone from the dependency set entirely and are banned by
-# Contract 8 instead, so a reintroduction has to be a deliberate act.
+# attachment into text (spec channels FR-030), and
+# ``infrastructure.knowledge.converters``, which turns an uploaded document
+# into a Markdown file (spec knowledge FR-033/FR-080) — so the rule keeps it
+# out of every other package rather than granting either an exemption. The
+# vector-index and embedding SDKs it also used to fence are gone from the
+# dependency set entirely and are banned by Contract 8 instead, so a
+# reintroduction has to be a deliberate act.
 [[tool.importlinter.contracts]]
-name = "Engine confinement: the markdown converter lives in infrastructure.chat only"
+name = "Engine confinement: the markdown converter lives in infrastructure.chat and infrastructure.knowledge only"
 type = "forbidden"
 source_modules = [
     "coffer.domain",
@@ -478,7 +505,6 @@ source_modules = [
     "coffer.infrastructure.mcp",
     "coffer.infrastructure.agent",
     "coffer.infrastructure.skill",
-    "coffer.infrastructure.knowledge",
     "coffer.infrastructure.persistence",
     "coffer.infrastructure.credentials",
     "coffer.infrastructure.daemon",

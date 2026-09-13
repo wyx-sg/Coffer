@@ -11,6 +11,8 @@ import { SkillDetailPage } from "./pages/SkillDetailPage";
 import { KnowledgePage } from "./pages/KnowledgePage";
 import { KnowledgeDetailPage } from "./kinds/knowledge/KnowledgeDetailPage";
 import { ActivityPage } from "./pages/activity/ActivityPage";
+import { MemoryPage } from "./pages/MemoryPage";
+import { MemoryDetailPage } from "./kinds/memory/MemoryDetailPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
 import { ResourceDetailPage } from "./pages/ResourceDetailPage";
 import { SettingsLayout } from "./pages/settings/SettingsLayout";
@@ -49,15 +51,17 @@ export const routes: RouteObject[] = [
       { path: "skills/:name", element: <SkillDetailPage /> },
       { path: "knowledge", element: <KnowledgePage /> },
       { path: "knowledge/:scope", element: <KnowledgeDetailPage /> },
+      { path: "memory", element: <MemoryPage /> },
+      { path: "memory/:name", element: <MemoryDetailPage /> },
       { path: "model-providers", element: <ModelProvidersPage /> },
       { path: "model-providers/:name", element: <ProviderDetailPage /> },
-      // Legacy routes — `memory` and `knowledge_base` were two resource kinds
-      // with two surfaces before they merged into the one Knowledge kind. Keep
-      // old bookmarks and links working by redirecting to the merged paths.
+      // Legacy route — `knowledge_base` was a resource kind with its own
+      // surface before it merged into the one Knowledge kind. Keep old
+      // bookmarks and links working by redirecting to the merged path.
+      // (`memory` used to redirect here too, before spec memory split it back
+      // out into its own kind and surface above.)
       { path: "knowledge-bases", element: <Navigate to="/knowledge" replace /> },
       { path: "knowledge-bases/:name", element: <LegacyScopeRedirect /> },
-      { path: "memory", element: <Navigate to="/knowledge" replace /> },
-      { path: "memory/:name", element: <LegacyScopeRedirect /> },
       { path: "activity", element: <ActivityPage /> },
       // Legacy routes — the audit log had its own page at /audit, and
       // "Observability" was the name this surface carried before Activity

@@ -24,6 +24,7 @@ from typing import Any
 
 from coffer.application.channel.commands import ChannelCommands, SafeSend
 from coffer.application.channel.ports import ChannelBinding, ChannelPeerRepoPort
+from coffer.application.channel.turn_driver import SessionAccessor
 from coffer.domain.channel.envelopes import InboundCallback, InboundLifecycle, InboundStop
 
 __all__ = ["EXTERNAL_GROUP_WARNING", "InboundEvents"]
@@ -51,6 +52,11 @@ class InboundEvents:
     #: Stops every live session of one chat — drain task cancelled, running turn
     #: interrupted. The same machinery ``unbind`` uses for a whole channel.
     stop_chat_sessions: Callable[[str, str], None]
+    #: Looks up (creating if absent) the session for one ``(channel, chat,
+    #: thread)`` — the same registry ``InboundProcessor``/``TurnDriver`` share.
+    #: A card tap needs it only for a ``collection:`` choice (spec knowledge
+    #: FR-036): the pending document a `/save` tap saves lives there.
+    session: SessionAccessor
 
     async def on_callback(self, binding: ChannelBinding, cb: InboundCallback) -> None:
         """A selection-card button tap. Owner-gated exactly like ``on_message``
@@ -89,6 +95,7 @@ class InboundEvents:
             peer,
             cb.data,
             self.safe_send,
+            session=self.session(binding.name, cb.chat_id, cb.thread_id),
             chat_kind=cb.chat_kind,
             thread_id=cb.thread_id,
             card_message_id=cb.platform_message_id,

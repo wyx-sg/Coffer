@@ -97,11 +97,47 @@ def test_a_hand_placed_file_needs_no_import(knowledge_root) -> None:  # type: ig
 @pytest.mark.acceptance(spec="knowledge", scenario="a path escaping the knowledge root is rejected")
 @pytest.mark.parametrize(
     "bad",
-    ["../etc/passwd", "shopee/../../outside", ".history/old.md", "shopee/.history/old.md"],
+    [
+        "../etc/passwd",
+        "shopee/../../outside",
+        ".history/old.md",
+        "shopee/.history/old.md",
+        ".raw/original.pdf",
+        "shopee/.raw/original.pdf",
+    ],
 )
 def test_paths_that_leave_the_root_or_name_a_hidden_entry_are_rejected(bad: str) -> None:
     with pytest.raises(UnsafeKnowledgePath):
         paths.resolve(bad)
+
+
+def test_raw_path_round_trips_a_nested_file_and_keeps_the_original_extension() -> None:
+    converted = paths.raw_path("shopee/account/gateway.md", "Gateway Overview.docx")
+    assert converted == paths.raw_dir("shopee") / "account" / "gateway.docx"
+
+    flat = paths.raw_path("shopee/report.md", "Q3 Report.pdf")
+    assert flat == paths.raw_dir("shopee") / "report.pdf"
+
+
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="an uploaded original is kept under .raw/ and stays out of retrieval"
+)
+def test_raw_dir_is_excluded_from_the_catalogue_and_its_count(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    fs.write_file(directory="shopee", title="Visible", description="d", body="b")
+    raw = paths.raw_dir("shopee")
+    raw.mkdir(parents=True, exist_ok=True)
+    (raw / "original.pdf").write_bytes(b"%PDF-1.4 not markdown")
+
+    level = fs.list_level("shopee")
+    assert [f.title for f in level.files] == ["Visible"]
+    assert fs.list_collections()[0].file_count == 1
+
+
+def test_raw_dir_is_not_addressable_through_split_or_resolve() -> None:
+    with pytest.raises(UnsafeKnowledgePath):
+        paths.split("shopee/.raw/original.pdf")
+    with pytest.raises(UnsafeKnowledgePath):
+        paths.resolve("shopee/.raw/original.pdf")
 
 
 def test_readme_is_a_description_not_a_listed_file(knowledge_root) -> None:  # type: ignore[no-untyped-def]

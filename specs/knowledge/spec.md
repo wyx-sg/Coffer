@@ -2,11 +2,13 @@
 
 > 中文版: [spec.zh.md](./spec.zh.md)
 
-**Created**: 2026-05-22 (as *Memory*) · **Merged with the Knowledge Base**: 2026-09-10 · **Reduced to plain files**: 2026-09-12
+**Created**: 2026-05-22 (as *Memory*) · **Merged with the Knowledge Base**: 2026-09-10 · **Reduced to plain files**: 2026-09-12 · **Ingestion and ranked retrieval restored**: 2026-09-12
 **Status**: Accepted
 **Folder name**: this spec lives at `specs/knowledge/`, the spec id every inbound link and `scripts/audit_acceptance.py` keys on.
 
-**Input**: Coffer holds one thing — **knowledge about the user's working environment**: their repositories, services, projects, the people they work with, the decisions and traps worth surviving a session. It is a **directory of Markdown files**. An agent finds what it needs by reading a catalogue and grepping, the way it navigates a codebase; a human finds it by opening a folder. There is **no derived index**: nothing is chunked, embedded or reconciled, so what one party writes the other sees immediately. See [Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md).
+**Input**: Coffer holds **knowledge about the user's working environment**: their repositories, services, projects, the people they work with, the decisions and traps worth surviving a session. It is what the human uploads and what the human and an agent write together, filed into **collections**. It is a **directory of Markdown files** — the files are the sole truth, and a human finds what they need by opening a folder. An agent finds it by reading a catalogue, grepping, or asking for the passage that means what it needs. See [Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md).
+
+**Knowledge is not memory.** Knowledge is about the world — a platform's API contract, a service's ownership, a document someone published — and it arrives because a person put it there. Memory is about the user and their projects, and it accrues on its own as agents work. They differ in every dimension that matters — who authors them, how they are partitioned, how they are delivered, and whether an entry can be *superseded* — so they are two layers: this one, filed by collection and **pulled** when needed, and spec [memory](../memory/spec.md), partitioned by project and **pushed** at session start.
 
 ## The principle this layer answers to
 
@@ -17,6 +19,16 @@
 An audit of the live installation found most of this layer had never executed: `embedding_config` was an empty table, `.history/` did not exist on disk, 50 of 50 documents carried `converter: passthrough`, and every knowledge tool call in a month's history landed on the single day an agent built the corpus. Two structural mistakes explained it — properties had been built as directories (`notes/` ÷ `docs/`, `global` ÷ `project-<ULID>` ÷ collection), and once embeddings were never configured, an index bought only ranking that the agent does for itself.
 
 Removed: any-format conversion and the converter registry; the `.raw/` lane; external source tracking; `source_mode` and the re-conversion lock; the lane split; cwd-derived scopes, auto-provisioning and `project-<ULID>` naming; FTS5, sqlite-vec, hybrid fusion, chunking, lazy reindex-on-read and explicit reindex; per-scope retrieval configuration; scope display labels. Eleven tables went with them.
+
+## What came back on 2026-09-12, and why
+
+Three of those removals are reversed the same day, for reasons the removal did not weigh. This is not a reversal of the reduction — **path is still identity, frontmatter is still the metadata, and the files are still the sole truth**. What returns is an entrance and a ranking, both built so that the two failures the audit found cannot recur.
+
+**Ingestion returns because the filesystem is not reachable from where the user actually is.** "Put a Markdown file in the directory" is an entrance that exists only while the user is sitting at the machine. Their live entrance is a phone: a channel already accepts attachments and already extracts them for a turn (spec [channels](../channels/spec.md) FR-030). Sending a document to Coffer from that chat and having it land in a collection is the ingestion path this layer lacked — and it makes the Web upload worth having again as the same path's other end.
+
+**Ranked retrieval returns because it is now a dependency, not a convenience.** The removal was right that with an agent reading a catalogue, ranking bought little. But spec [memory](../memory/spec.md) has to answer "what do I know that bears on *this* task" against material the caller has no exact words for, under a token budget that forbids handing over the catalogue. That is retrieval, and it cannot be grep. The reduction's own Assumptions anticipated exactly this: *past that, the answer is a real semantic retrieval stack, built for that need*. This is that need.
+
+**Two constraints keep the old failures from returning.** The audit's root cause was not that an index is wrong but that the index was *unconfigurable in practice* (`embedding_config` was an empty table because it asked the user to set up a second provider) and that it was *a second truth to reconcile*. So: embeddings ride the **already-configured internal connection** with no settings surface of their own (FR-026), and the index is a **disposable sidecar outside the vault** that may be deleted at any moment without losing anything (FR-025).
 
 ## User Scenarios & Testing
 
@@ -56,6 +68,18 @@ Notes accumulate and duplicate. The developer triggers a tidy pass that merges a
 
 **Independent Test**: run a tidy pass over a collection holding duplicates; confirm `.history/` holds the prior revisions and that the archived copies never appear in grep results.
 
+### User Story 7 — A document gets into the vault from wherever the user is (Priority: P1)
+
+The developer is handed a PDF in a chat. They forward it to their Coffer channel, say which collection it belongs in, and it lands there as Markdown with its title and description filled in, the original kept aside. At the desk they do the same thing by dropping the file on the Knowledge page. Either way it is a file in a collection afterwards, indistinguishable from one they wrote by hand.
+
+**Independent Test**: upload a non-Markdown document through the REST surface and confirm a Markdown file appears in the collection with frontmatter, the original under `.raw/`, and the converted text readable by `read`.
+
+### User Story 8 — Ask for the passage you cannot name (Priority: P1)
+
+An agent needs what the vault knows about a problem it can only describe, not quote — and it cannot afford to page through a catalogue first. It asks in its own words and gets back the few files that mean that, ranked, with the lines that matched. When the installation has no internal connection configured, the same call still answers, by falling back to a literal search rather than failing.
+
+**Independent Test**: with the internal connection configured, ask for a concept whose wording appears nowhere in the corpus and confirm the right file ranks first; unset the connection and confirm the same call returns literal matches instead of an error.
+
 ## Acceptance Scenarios
 
 ### Scenario: a written note lands as a markdown file with a readable name
@@ -92,7 +116,25 @@ Notes accumulate and duplicate. The developer triggers a tidy pass that merges a
 
 ### Scenario: a path escaping the knowledge root is rejected
 
-### Scenario: the five built-in knowledge tools appear in the client tool list
+### Scenario: the six built-in knowledge tools appear in the client tool list
+
+### Scenario: search ranks a file whose wording never matches the query
+
+### Scenario: search falls back to literal matching when no internal connection is configured
+
+### Scenario: search spans only the collections the caller may see
+
+### Scenario: the index picks up a file edited out-of-band
+
+### Scenario: deleting the index sidecar loses no knowledge
+
+### Scenario: an uploaded document lands as markdown with frontmatter
+
+### Scenario: an uploaded original is kept under .raw/ and stays out of retrieval
+
+### Scenario: an upload of an unsupported type is refused with its reason
+
+### Scenario: a document forwarded to a channel lands in a collection
 
 ### Scenario: tidy archives the prior revision before rewriting
 
@@ -110,7 +152,7 @@ Notes accumulate and duplicate. The developer triggers a tidy pass that merges a
 
 ### Storage
 
-- **FR-001**: Knowledge MUST be stored as Markdown files under `~/.coffer/knowledge/<collection>/`. The files are the **sole source of truth**; the system MUST NOT maintain any derived index of their content — no chunk table, no full-text index, no embeddings, and therefore no reconciliation of any kind.
+- **FR-001**: Knowledge MUST be stored as Markdown files under `~/.coffer/knowledge/<collection>/`. The files are the **sole source of truth**. The system MAY keep a derived retrieval index, but only under FR-025's disposability rule: no answer may depend on it, deleting it may lose nothing, and it MUST never be read as authority over the file.
 - **FR-002**: A file's **path is its identity**. There MUST be no separate id field in frontmatter and no id-to-path mapping anywhere. File names MUST be human-readable slugs derived from the title; a collision appends a short suffix.
 - **FR-003**: Every file MUST carry YAML frontmatter with `title`, `description`, `actor` (`agent` | `user`), `created_at` and `updated_at`, and nothing else. `description` is **required**, not optional: with no ranked index, the catalogue is the retrieval surface and a file that fails to describe itself is unfindable.
 - **FR-004**: A collection MAY contain arbitrarily nested subdirectories. The system MUST NOT assign them meaning, MUST NOT require them, and MUST NOT create them.
@@ -131,30 +173,43 @@ Notes accumulate and duplicate. The developer triggers a tidy pass that merges a
 - **FR-021**: `list` MUST walk **one level at a time**: with no path it returns every collection the caller may see, each with its README description and its file count; with a path it returns that directory's immediate subdirectories and files, each file with its `title` and `description`.
 - **FR-022**: `grep` MUST run ripgrep over the files of the collections the caller may see, matching literally or by regex, recursively, and returning file, line number and matching line. Matches MUST be bounded and the response MUST flag truncation.
 - **FR-023**: `read` MUST return a file's full text by path. There MUST be no chunking, no passage granularity and no `top_k`.
-- **FR-024**: There MUST be **no `search` tool** and no retrieval mode anywhere on any surface.
+- **FR-024**: `search` MUST take a natural-language query and return the files that mean it, ranked, each with its path, title, description and the best-matching lines. It MUST NOT return chunk fragments as if they were files, and there MUST be no retrieval *mode* on any surface — the caller asks; how the answer was found is Coffer's business.
 
-### Writing
+### Ranked retrieval
+
+- **FR-025**: The retrieval index MUST be a **disposable sidecar**: it lives outside the knowledge root and outside `coffer.db`, at a single path the user may delete at any time, and MUST be excluded from every export and backup. The system MUST rebuild it on demand without reading anything but the files themselves, and MUST answer `search` correctly — by FR-027's fallback — while it is missing, empty or mid-rebuild.
+- **FR-026**: Embeddings MUST come from the installation's existing **internal connection** (`internal_default`, spec [provider-switching](../provider-switching/spec.md)). There MUST be no embedding provider, model, endpoint or key setting of this layer's own, and no settings page for it: the layer that was removed went unused because it asked the user to configure a second provider, and asking again would repeat that.
+- **FR-027**: With no internal connection configured — or when embedding fails — `search` MUST degrade to a literal/regex search over the same files and say in its response that it did, never error and never return empty for that reason.
+- **FR-028**: A file MUST become searchable without an explicit reindex step. Freshness MUST be decided from the file itself (path, size, mtime, content hash), so a file written by an editor, a channel, `write`, or `git` is picked up the same way.
+- **FR-029**: Indexing MUST be confined to files under a collection the caller may see, MUST skip hidden directories (`.history/`, `.raw/`), and MUST NOT send a file's content anywhere except to the internal connection the user configured.
+
+### Writing and ingestion
 
 - **FR-030**: `write` MUST create a file from `title`, `description` and body text, or replace one when given an existing path. A write MUST be a plain file write — no LLM, no conversion, no indexing step.
 - **FR-031**: `delete` MUST remove a file from disk.
-- **FR-032**: The system MUST NOT accept uploads or convert any format. A human adds a document by placing a Markdown file in the directory; the filesystem is the ingestion surface.
+- **FR-032**: Placing a Markdown file in the directory MUST remain a complete way to add knowledge — no import, no registration, no conversion step. Ingestion below is an additional entrance for the cases where the filesystem is out of reach, never a required one.
+- **FR-033**: The system MUST accept a document upload into a named collection and convert it to Markdown. Supported inputs MUST be exactly what `markitdown` handles plus plain text and CSV; an unsupported type MUST be refused with the type named, never stored half-converted.
+- **FR-034**: A converted document MUST land as an ordinary Markdown file, indistinguishable afterwards from one written by hand: a readable slug for a name, and FR-003's frontmatter — `title` from the document (falling back to its file name) and `description` filled in, by the internal connection when one is configured and from the document's opening prose when not.
+- **FR-035**: The uploaded original MUST be kept under a single hidden `.raw/` directory at the **collection's root**, at the converted file's path relative to that root, so a bad conversion can be redone from the bytes the user sent. `.raw/` MUST be excluded from the catalogue, from grep, from search and from the index, and MUST be removed when its converted file is deleted. Coffer MUST NOT re-convert it on a schedule or track it as an external source — the two mechanisms the 2026-09-12 reduction removed for never being used.
+- **FR-036**: A document sent to a Coffer channel MUST be ingestible into a collection through the same conversion path, so the phone and the Knowledge page are two ends of one entrance (spec [channels](../channels/spec.md)). The channel MUST confirm the collection with the owner before storing, and MUST NOT store anything from a non-owner.
+- **FR-037**: Upload MUST be bounded: one file per call, a size ceiling, and a refusal that names the limit. A conversion failure MUST leave neither a Markdown file nor a `.raw/` original behind.
 
 ### Tools and delivery
 
-- **FR-040**: Coffer's MCP gateway MUST expose exactly **five** built-in knowledge tools under the `coffer__` prefix: `list`, `grep`, `read`, `write`, `delete`.
+- **FR-040**: Coffer's MCP gateway MUST expose exactly **six** built-in knowledge tools under the `coffer__` prefix: `list`, `grep`, `read`, `search`, `write`, `delete`. Upload is not among them — a document enters through a human surface (the Knowledge page or a channel), not through an agent's tool call.
 - **FR-041**: Built-in invocations MUST continue to record one `mcp_invocations` row (tool, actor, duration, outcome — no arguments, no content). A write or delete MUST additionally record an audit event with the agent as actor.
-- **FR-042**: Coffer MUST deliver a **knowledge skill** through the existing skill-delivery channel (spec [skill-manager](../skill-manager/spec.md)), teaching the catalogue-then-grep motion. It MUST NOT install a hook, inject session context, or write into any agent's own memory files.
+- **FR-042**: Coffer MUST deliver a **knowledge skill** through the existing skill-delivery channel (spec [skill-manager](../skill-manager/spec.md)), teaching the catalogue-then-grep motion and when to reach for `search` instead. This layer MUST NOT push anything into a session of its own accord and MUST NOT write into any agent's own memory files: knowledge is pulled. Session-start delivery belongs to spec [memory](../memory/spec.md), which carries its own budget and its own consent.
 
 ### Tidy
 
-- **FR-050**: The system MUST provide a bounded agentic **tidy** pass over a collection, driven by the internal model connection, whose tool surface is the same five operations. It MUST copy a file's prior revision into `.history/` before any overwrite or merge. With no internal connection configured it MUST be a clean no-op.
+- **FR-050**: The system MUST provide a bounded agentic **tidy** pass over a collection, driven by the internal model connection, whose tool surface is the four file operations — `list`, `read`, `write`, `delete`. It MUST copy a file's prior revision into `.history/` before any overwrite or merge. With no internal connection configured it MUST be a clean no-op.
 - **FR-051**: Tidy MUST be triggerable by hand from the UI and from `coffer knowledge organize`. A background worker MAY run it on an interval, governed by one **installation-wide setting that is off by default**.
 - **FR-052**: `.history/` MUST be dot-prefixed and therefore excluded from the catalogue and from grep.
 
 ### Surfaces
 
-- **FR-060**: The REST API under `/api/v1/knowledge` and the `coffer knowledge` CLI group MUST cover: create a collection, list the catalogue at a path, read a file, write one, delete one, and trigger tidy. Collection deletion goes through the Resource framework (`DELETE /api/v1/resources/knowledge/{name}`). There MUST be no upload, reindex, check-sources, update-source, embedding or per-scope settings endpoint.
-- **FR-061**: The web UI MUST present the knowledge root as a **single tree** — no lane tabs — rendering content **read-only** through the unified file preview, with open-in-external-editor and reveal-in-file-manager on a file and its folder. There MUST be no in-app editor.
+- **FR-060**: The REST API under `/api/v1/knowledge` and the `coffer knowledge` CLI group MUST cover: create a collection, list the catalogue at a path, read a file, search, upload a document, write a file, delete one, trigger tidy, and rebuild the index. Collection deletion goes through the Resource framework (`DELETE /api/v1/resources/knowledge/{name}`). There MUST be no check-sources, update-source, embedding-configuration or per-scope settings endpoint.
+- **FR-061**: The web UI MUST present the knowledge root as a **single tree** — no lane tabs — rendering content **read-only** through the unified file preview, with open-in-external-editor and reveal-in-file-manager on a file and its folder. There MUST be no in-app editor. It MUST offer upload into the collection in view, and MUST say when the index is stale or absent and offer the rebuild.
 - **FR-062**: Read responses MUST carry the file's absolute path and its containing folder's absolute path.
 
 ### Migration
@@ -164,18 +219,23 @@ Notes accumulate and duplicate. The developer triggers a tidy pass that merges a
 
 ### Constraints
 
-- **FR-080**: No knowledge module may import an index, embedding or conversion library, and `sqlite-vec`, `fastembed`, mem0, chroma and LlamaIndex MUST NOT appear in the dependency set at all. `markitdown` stays, because inbound channel attachments still need extracting (spec [channels](../channels/spec.md) FR-030) — importlinter confines it to `infrastructure.chat`, its one consumer, so it cannot drift back into this layer.
-- **FR-081**: The knowledge layer MUST NOT add any table to the database. A collection is a row in the kind-agnostic `resources` table like every other Resource.
+- **FR-080**: Ranked retrieval MUST add **no vector-store or embedding-model dependency**: `sqlite-vec`, `fastembed`, mem0, chroma and LlamaIndex MUST NOT appear in the dependency set. Vectors are obtained from the internal connection over the HTTP client the installation already has, and similarity is computed in-process — the corpus this serves is hundreds of files, and a native index for that is the over-build the 2026-09-12 reduction was right about. `markitdown` becomes this layer's converter as well as the channel's; the importlinter contract MUST admit exactly those two consumers and no others.
+- **FR-081**: The knowledge layer MUST NOT add any table to `coffer.db`, and the retrieval index MUST NOT be stored there. A collection is a row in the kind-agnostic `resources` table like every other Resource; the index is a single file on disk under FR-025.
+- **FR-082**: The layer MUST record enough to tell whether ranked retrieval is earning its place: each `search` call's existing `mcp_invocations` row, plus whether it answered from the index or from the FR-027 fallback. Nothing about the query or the result content may be persisted.
 
 ## Success Criteria
 
 - **SC-001**: A fact written by one agent is readable by a different agent through the catalogue, with no index step in between.
 - **SC-002**: A file the human adds or edits outside Coffer is returned by the next call with no import, reindex or reconciliation.
 - **SC-003**: An agent authorized for one collection cannot see another through any built-in tool.
-- **SC-004**: The layer holds no knowledge-specific database table and no derived copy of any file's content.
+- **SC-004**: The layer holds no knowledge-specific table in `coffer.db`, and every derived copy of a file's content lives in one deletable sidecar.
 - **SC-005**: A grep over the corpus returns matching file and line, including for CJK content, without a tokenizer.
+- **SC-006**: Deleting the index sidecar and restarting loses no knowledge: the catalogue, grep and read are unaffected and `search` still answers.
+- **SC-007**: A document sent from a channel is a Markdown file in the intended collection afterwards, with its original recoverable, and the agent reads it the same way as any other file.
+- **SC-008**: Ranked retrieval works on a fresh installation with nothing configured beyond the internal connection the user already set — there is no embedding setting to find.
 
 ## Assumptions
 
-- The corpus stays small enough that a catalogue fits in an agent's context. At roughly 40 tokens an entry this is comfortable into the hundreds of files; the live corpus is 51. Past that the answer is a real semantic retrieval stack, built for that need — not the one removed here, which was never configured.
+- The corpus stays in the hundreds of files. The catalogue still fits an agent's context at that size, so `search` is an addition to catalogue-then-grep rather than a replacement, and in-process similarity is fast enough that no native index is warranted. Tens of thousands of files would be a different design and a different decision.
 - Tidy rewrites files with no review step, so `.history/` is the whole safety net. It ships off by default for that reason.
+- The internal connection is the one place user content may leave the machine, exactly as spec [channels](../channels/spec.md) FR-022 already establishes for voice. Ranked retrieval sends file text there and is therefore off — degraded to literal search — until the user configures one.

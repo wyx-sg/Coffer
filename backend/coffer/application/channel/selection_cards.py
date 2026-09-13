@@ -82,7 +82,7 @@ def parse_page_turn(value: str) -> tuple[str, int] | None:
     if prefix != PAGE_PREFIX:
         return None
     kind, _, index = rest.partition(":")
-    if kind not in ("agent", "model") or not index.isdigit():
+    if kind not in ("agent", "model", "collection") or not index.isdigit():
         return None
     return kind, int(index)
 
@@ -237,5 +237,31 @@ def model_card(
         options=options,
         current_value=f"model:{current}" if current else None,
         current_label=shown,
+        page=page,
+    )
+
+
+def collection_card(*, choices: Sequence[str], page: int | None = None) -> SelectionCard:
+    """Pick which collection a pending `/save` document lands in (spec
+    knowledge FR-036).
+
+    Unlike agent/model there is no "current" choice to tick — every save is a
+    fresh decision, never a toggle a card must show as already in effect. A
+    single-collection vault still renders one button rather than acting on it
+    unasked: FR-036 requires the owner confirm, and a lone collection is not
+    an exemption from that.
+    """
+    options = [
+        ChoiceButton(label=name, value=f"collection:{name}")
+        for name in choices
+        if callback_fits(f"collection:{name}")
+    ]
+    return _paginate(
+        kind="collection",
+        title="Save to which collection?",
+        header="Tap a collection to save the document there:",
+        options=options,
+        current_value=None,
+        current_label="",
         page=page,
     )

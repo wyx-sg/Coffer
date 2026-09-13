@@ -31,6 +31,7 @@ import logging
 from collections.abc import Callable, Sequence
 from typing import Any, Protocol
 
+from coffer.application.engine_ports import ModelSelectorPort
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.application.knowledge.tidy_tools import (
     Counters,
@@ -78,12 +79,6 @@ class AgenticTidyPort(Protocol):
         credential_resolver: Callable[[str], str],
         recursion_limit: int,
     ) -> dict[str, Any]: ...
-
-
-class ModelSelectorPort(Protocol):
-    """Resolves Coffer's internal-engine connection (the internal-default one)."""
-
-    async def get_default(self) -> ResolvedConnection | None: ...
 
 
 async def run_tidy(

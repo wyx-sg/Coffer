@@ -50,7 +50,7 @@ async def _repo(tmp_path: Any) -> tuple[ConversationRepo, Any]:
     return ConversationRepo(session_maker(engine)), engine
 
 
-def _conv(agent_key: str = "codex") -> Conversation:
+def _conv(agent_key: str = "codex", channel_name: str | None = None) -> Conversation:
     now = datetime.now(tz=UTC)
     return Conversation(
         id=uuid.uuid4().hex,
@@ -59,6 +59,7 @@ def _conv(agent_key: str = "codex") -> Conversation:
         model_id=None,
         created_at=now,
         updated_at=now,
+        channel_name=channel_name,
     )
 
 
@@ -369,4 +370,77 @@ async def test_on_conversation_deleted_is_noop(tmp_path: Any) -> None:
     repo, engine = await _repo(tmp_path)
     provider = CodexAppServerProvider(conversations=repo)
     await provider.on_conversation_deleted("any-id")
+    await engine.dispose()
+
+
+# ---------------------------------------------------------------------------
+# system-prompt appends — the notes Codex went without until now
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_channel_turn_carries_the_notes_codex_used_to_miss(tmp_path: Any) -> None:
+    """Codex built no system-prompt append at all until the app-server's
+    ``developerInstructions`` made one possible, so a Codex agent answering a
+    phone had no idea it was on one and could not see which model Coffer had
+    put it on. It now composes the same three appends the SDK provider does —
+    channel note, memory digest (spec memory FR-053), model note — through the
+    shared composer, so the two providers cannot drift apart again.
+    """
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv(channel_name="SeaTalk"))
+    factory, server = _make_factory()
+
+    calls: list[tuple[str, str]] = []
+
+    async def _memory(agent_key: str, cwd: str) -> str | None:
+        calls.append((agent_key, cwd))
+        return "## Coffer memory\n- Always develops in a worktree."
+
+    async def _models(_agent_key: str) -> list[str]:
+        return ["gpt-5.4"]
+
+    provider = CodexAppServerProvider(
+        conversations=repo,
+        session_factory=factory,
+        list_models=_models,
+        compose_memory_context=_memory,
+    )
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path), "model": "gpt-5.4"})
+    adapter = await provider.build_adapter(conv.id)
+    await _collect(adapter, _user_turn("hi", conv.id))
+
+    start_params = next(p for m, p in server.requests if m == "thread/start")
+    instructions = start_params["developerInstructions"]
+    assert "SeaTalk" in instructions
+    assert "## Coffer memory" in instructions
+    assert "gpt-5.4" in instructions
+    # Resolved per turn, keyed by this agent and the conversation's cwd.
+    assert calls == [("codex", str(tmp_path))]
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_a_turn_with_no_channel_gets_no_memory_digest(tmp_path: Any) -> None:
+    """Memory rides a channel turn only. An agent the developer drives
+    themselves receives it through its own session-start hook (FR-054) — never
+    both, or the same facts arrive twice."""
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv())
+    factory, server = _make_factory()
+
+    async def _memory(_agent_key: str, _cwd: str) -> str | None:  # pragma: no cover - must not run
+        raise AssertionError("memory must not be composed for a non-channel turn")
+
+    provider = CodexAppServerProvider(
+        conversations=repo, session_factory=factory, compose_memory_context=_memory
+    )
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+    adapter = await provider.build_adapter(conv.id)
+    await _collect(adapter, _user_turn("hi", conv.id))
+
+    start_params = next(p for m, p in server.requests if m == "thread/start")
+    assert "## Coffer memory" not in start_params["developerInstructions"]
+
     await engine.dispose()

@@ -67,6 +67,7 @@ from coffer.surfaces.http.credential_composition import (
     run_legacy_keychain_migration,
 )
 from coffer.surfaces.http.dependencies import (
+    get_agent_service,
     get_invocation_repo_optional,
     get_master_key_manager,
     get_mcp_session_factory,
@@ -82,6 +83,11 @@ from coffer.surfaces.http.knowledge_wiring import wire_knowledge_kind
 from coffer.surfaces.http.mcp.protocol_routes import (
     shutdown_all_sessions,
     start_session_reaper,
+)
+from coffer.surfaces.http.memory_wiring import (
+    start_organise_worker,
+    stop_organise_worker,
+    wire_memory_kind,
 )
 from coffer.surfaces.http.migrations_runner import run_migrations
 from coffer.surfaces.http.provider_wiring import (
@@ -134,6 +140,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     db_path = pathlib.Path(_db_url().split("///", 1)[1]).expanduser()
     credential_store = await init_credential_store(engine, db_path)
+    # Computed once, up front, so every internal-LLM consumer below (knowledge
+    # search/ingest, the tidy pass) shares one resolver rather than each
+    # re-wrapping the same store.
+    _credential_resolver = make_credential_resolver(credential_store)
 
     audit_repo = SqlAlchemyAuditRepo(sm)
     resource_repo = SqlAlchemyResourceRepo(sm)
@@ -187,15 +197,30 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # active profile into each agent's native config (see provider_wiring).
     wire_provider_kind(app, resource_svc, audit, credential_store, sm)
 
-    # The one knowledge kind: a directory of markdown files. Registers the five
-    # built-in knowledge tools into `builtin_tools`.
-    knowledge_service = wire_knowledge_kind(app, resource_svc, audit, builtin_tools)
+    # The one knowledge kind: a directory of markdown files. Also builds ranked
+    # retrieval and document ingestion, and registers the six built-in
+    # knowledge tools into `builtin_tools`.
+    knowledge_service = wire_knowledge_kind(
+        app, resource_svc, audit, builtin_tools, get_provider_service(), _credential_resolver
+    )
 
     # The layer's delivery half (spec knowledge FR-042): a skill that tells an
     # agent this directory is here, shipped down the skill channel that already
     # reaches every managed agent. Best-effort — a failed seed must not stop the
     # daemon, and the tools work either way.
     await seed_knowledge_skill(get_skill_service())
+
+    # Before wire_mcp_kind below, so the gateway advertises `coffer__recall`.
+    wire_memory_kind(
+        app,
+        resource_svc,
+        audit,
+        builtin_tools,
+        get_provider_service(),
+        _credential_resolver,
+        sm,
+        get_agent_service(),
+    )
 
     # Wire up MCP-specific plumbing (after other kinds so the gateway picks
     # their built-in tools).
@@ -212,10 +237,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # its upstreams; shutdown disposes it first (on_dispose deregisters; idempotent).
     app.state.mcp_session_supervisors = session_supervisors
 
-    # The one internal-LLM knowledge consumer: the tidy pass over a collection.
-    # Built here so the composition root keeps a single internal-LLM call site;
-    # `start_tidy_worker` further down decides whether it ever fires by itself.
-    _credential_resolver = make_credential_resolver(credential_store)
+    # Another internal-LLM knowledge consumer: the tidy pass over a collection.
+    # Reuses the resolver built above; `start_tidy_worker` further down decides
+    # whether it ever fires by itself.
     wire_tidy(app, knowledge_service, get_provider_service(), _credential_resolver)
 
     # Wire the channel kind (spec channels) AFTER wire_chat: the inbound processor
@@ -257,6 +281,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # The notes tidy pass: on idle after a write, and on a periodic sweep.
     start_tidy_worker(app, knowledge_service)
+    start_organise_worker(app, resource_svc)
     # Vault export/import (spec vault-export-import). Export and import act
     # only when the user asks; the backup half runs on a timer beside the
     # retention worker, re-reading its interval from the configured remote.
@@ -290,6 +315,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         worker.stop()
         await stop_backup_worker(app)
         await stop_tidy_worker(app)
+        await stop_organise_worker(app)
         # Stop channel adapters first so no new turns start mid-teardown.
         # Order matters: cancel the reconciler task BEFORE dispose() so an
         # in-flight tick cannot resurrect adapters dispose() just stopped;

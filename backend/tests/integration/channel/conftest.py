@@ -108,6 +108,7 @@ def inbound(
     platform_message_id: str = "pm-1",
     ephemeral_id: str = "",
     sender_mention_id: str = "",
+    attachments: Sequence[InboundAttachment] = (),
 ) -> InboundMessage:
     return InboundMessage(
         channel=channel,
@@ -124,6 +125,7 @@ def inbound(
         chat_title=chat_title,
         addressed=addressed,
         mentions_others=mentions_others,
+        attachments=tuple(attachments),
     )
 
 
@@ -484,6 +486,68 @@ class FakeModelSuggestions:
         return list(self._by_agent.get(agent_key, []))
 
 
+@dataclass
+class FakeIngestedDocument:
+    """Duck-typed stand-in for the real ``IngestedDocument`` (spec knowledge
+    FR-036) — only the two attributes `/save`'s confirmation message reads."""
+
+    path: str
+    title: str
+
+
+class FakeCollectionCatalog:
+    """In-memory ``CollectionCatalogPort``: a fixed visible-collections list,
+    exactly like the real ``KnowledgeService.visible_collections`` but with no
+    knowledge kind behind it (the channel core never imports one — import-linter
+    contract 5f)."""
+
+    def __init__(self, names: Sequence[str] = ()) -> None:
+        self.names = list(names)
+        # Every agent this fake was asked about, positionally aligned with the
+        # answer returned — so a test can assert `/save` resolved visibility
+        # against the thread's OWN agent, not a hardcoded one.
+        self.calls: list[str | None] = []
+
+    async def visible_collections(self, agent: str | None) -> list[str]:
+        self.calls.append(agent)
+        return list(self.names)
+
+
+class FakeIngestService:
+    """In-memory ``IngestPort``: records every call, and can be scripted to
+    raise — the one-line-message contract `/save` relies on (never a stack
+    trace to the chat) — or to return a scripted document."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+        #: Set by a test to make the next ``ingest`` raise instead of succeed.
+        self.fails_with: Exception | None = None
+
+    async def ingest(
+        self,
+        *,
+        collection: str,
+        filename: str,
+        data: bytes,
+        directory: str | None = None,
+        actor: str,
+        agent: str | None = None,
+    ) -> FakeIngestedDocument:
+        self.calls.append(
+            {
+                "collection": collection,
+                "filename": filename,
+                "data": data,
+                "directory": directory,
+                "actor": actor,
+                "agent": agent,
+            }
+        )
+        if self.fails_with is not None:
+            raise self.fails_with
+        return FakeIngestedDocument(path=f"{collection}/{filename}.md", title=filename)
+
+
 class StubListenerController:
     """Recording ``ListenerControllerPort`` (no real child process)."""
 
@@ -604,6 +668,8 @@ class ChannelEnv:
     provider: ScriptedAgentProvider
     registry: AgentProviderRegistry
     model_suggestions: FakeModelSuggestions
+    collections: FakeCollectionCatalog
+    ingest: FakeIngestService
     chat: ChatService
     orchestrator: TurnOrchestrator
     processor: InboundProcessor
@@ -722,6 +788,8 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
     )
     orchestrator = TurnOrchestrator(chat_service=chat, registry=registry)
     model_suggestions = FakeModelSuggestions()
+    collections = FakeCollectionCatalog()
+    ingest = FakeIngestService()
     processor = InboundProcessor(
         peers=peers,
         threads=threads,
@@ -731,6 +799,8 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         audit=audit,
         agents=registry,
         model_suggestions=model_suggestions,
+        collections=collections,
+        ingest=ingest,
     )
 
     created_adapters: list[FakeChannelAdapter] = []
@@ -779,6 +849,8 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         provider=provider,
         registry=registry,
         model_suggestions=model_suggestions,
+        collections=collections,
+        ingest=ingest,
         chat=chat,
         orchestrator=orchestrator,
         processor=processor,

@@ -66,6 +66,7 @@ async def list_audit(
     kind: str | None = Query(default=None),
     name: str | None = Query(default=None),
     event_type: str | None = Query(default=None),
+    event_prefix: str | None = Query(default=None),
     since: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=500),
     svc: AuditService = Depends(get_audit_service),  # noqa: B008
@@ -75,6 +76,7 @@ async def list_audit(
         kind=kind,
         name=name,
         event_type=event_type,
+        event_prefix=event_prefix,
         since=since_dt,
         limit=limit,
     )

@@ -55,3 +55,18 @@ class UnsafeKnowledgePath(KnowledgeError):  # noqa: N818
         super().__init__(f"unsafe knowledge path {path!r}: {reason}")
         self.path = path
         self.reason = reason
+
+
+class UploadTooLarge(KnowledgeError):  # noqa: N818
+    """An ingest upload past the size ceiling (FR-037).
+
+    Refused before any conversion or write is attempted, naming the limit so
+    the caller knows exactly what to shrink below.
+    """
+
+    code = "KNOWLEDGE_UPLOAD_TOO_LARGE"
+
+    def __init__(self, size: int, limit: int) -> None:
+        super().__init__(f"upload of {size} bytes exceeds the {limit} byte limit")
+        self.size = size
+        self.limit = limit

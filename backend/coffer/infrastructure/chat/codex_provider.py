@@ -21,6 +21,11 @@ from coffer.application.chat.service import ConversationRepo
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.errors import AgentConfigRejected, ConversationNotFound
 from coffer.domain.provider.projection import CODEX_ENV_KEY
+from coffer.infrastructure.chat.adapter_support import (
+    MemoryContextComposer,
+    ModelLister,
+    compose_system_context,
+)
 from coffer.infrastructure.chat.codex_agent import CodexAppServerAdapter
 from coffer.infrastructure.chat.codex_app_server import (
     AppServerSessionFactory,
@@ -60,6 +65,8 @@ class CodexAppServerProvider:
         which: Any = shutil.which,
         resolve_key: KeyResolver | None = None,
         transcriber_factory: TranscriberFactory | None = None,
+        list_models: ModelLister | None = None,
+        compose_memory_context: MemoryContextComposer | None = None,
     ) -> None:
         self._conversations = conversations
         self._session_factory: AppServerSessionFactory = (
@@ -73,6 +80,12 @@ class CodexAppServerProvider:
         # None ⇒ voice is never transcribed and the audio file reaches the agent
         # as-is. That is the default: nothing leaves the machine unasked.
         self._transcriber_factory = transcriber_factory
+        # The same two notes the SDK provider has always sent, plus the memory
+        # digest. Codex sent none of them until the app-server's
+        # ``developerInstructions`` field made it possible — so a Codex agent
+        # answering a phone had no idea it was on one.
+        self._list_models = list_models
+        self._compose_memory_context = compose_memory_context
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
@@ -118,8 +131,18 @@ class CodexAppServerProvider:
             if key:
                 env = {**os.environ, CODEX_ENV_KEY: key}
 
+        system_context = await compose_system_context(
+            agent_key=self.agent_key,
+            channel_name=conv.channel_name or "",
+            cwd=config.cwd,
+            model=config.model,
+            list_models=self._list_models,
+            compose_memory=self._compose_memory_context,
+        )
+
         return CodexAppServerAdapter(
             cwd=config.cwd,
+            system_context=system_context,
             resume_session=config.session_id,
             extra={"model": config.model},
             session_factory=self._session_factory,

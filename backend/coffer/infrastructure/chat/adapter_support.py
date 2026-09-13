@@ -117,3 +117,48 @@ __all__ = [
     "last_user_text",
     "model_system_context",
 ]
+
+
+#: Resolves the models an agent could be switched to, for the per-turn note.
+ModelLister = Callable[[str], Awaitable[Sequence[str]]]
+#: (agent_key, cwd) -> the memory digest for this turn, or None (spec memory FR-053).
+MemoryContextComposer = Callable[[str, str], Awaitable[str | None]]
+
+
+async def compose_system_context(
+    *,
+    agent_key: str,
+    channel_name: str,
+    cwd: str,
+    model: str | None,
+    list_models: ModelLister | None,
+    compose_memory: MemoryContextComposer | None,
+) -> str:
+    """The appends every provider owes its agent, joined into one.
+
+    Three of them, and the order is the order they matter in:
+
+    * a channel-originated conversation drives the agent from a phone chat, so
+      tell it so — concise replies, no clickable dialogs;
+    * a channel-driven turn also carries the memory digest (spec memory
+      FR-053): Coffer composes this turn's context itself, so memory reaches
+      the agent with no session-start hook and no install. **Only** a channel
+      turn gets it — an agent the developer drives themselves receives memory
+      through its own hook (FR-054), never both;
+    * every conversation gets the model note, because the agent cannot see
+      which model Coffer put it on and otherwise invents an answer.
+
+    Shared rather than written twice because both providers owe the same
+    thing: Codex went without any of it until this was extracted, which is
+    exactly the drift a second copy invites.
+    """
+    parts: list[str] = []
+    if channel_name:
+        parts.append(channel_system_context(channel_name))
+        if compose_memory is not None:
+            memory = await compose_memory(agent_key, cwd)
+            if memory:
+                parts.append(memory)
+    available = await list_models(agent_key) if list_models else []
+    parts.append(model_system_context(model, available))
+    return "\n\n".join(parts)

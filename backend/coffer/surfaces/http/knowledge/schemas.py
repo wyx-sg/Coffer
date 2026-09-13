@@ -87,3 +87,55 @@ class TidyOut(BaseModel):
     collection: str
     merged: int = 0
     rewritten: int = 0
+
+
+class SearchRequest(BaseModel):
+    query: str = Field(min_length=1)
+    #: Restrict to one collection; omitted, every collection the caller may
+    #: see is searched.
+    collection: str | None = None
+
+
+class SearchLineOut(BaseModel):
+    line_number: int
+    line: str
+
+
+class SearchHitOut(BaseModel):
+    path: str
+    title: str
+    description: str
+    #: Cosine score in ranked mode; ``None`` when the answer came from ripgrep.
+    score: float | None
+    #: The section heading a ranked hit matched under; empty in literal mode.
+    heading: str
+    lines: list[SearchLineOut]
+
+
+class SearchOut(BaseModel):
+    #: ``ranked`` or ``literal`` — there is no retrieval mode a caller picks,
+    #: only what the answer says it did (FR-082).
+    mode: str
+    #: Why the answer is literal rather than ranked; empty in ranked mode.
+    reason: str = ""
+    results: list[SearchHitOut]
+
+
+class IndexStatusOut(BaseModel):
+    #: False when no internal connection is configured — ranking is off.
+    available: bool
+    files_indexed: int
+    files_total: int
+    #: Absolute path of the disposable sidecar (FR-025).
+    path: str
+
+
+class IngestedDocumentOut(BaseModel):
+    #: Path of the converted Markdown file, relative to the knowledge root.
+    path: str
+    title: str
+    description: str
+    #: Which converter produced this file.
+    converter: str
+    #: Path of the kept original under the collection's hidden ``.raw/`` (FR-035).
+    raw_path: str

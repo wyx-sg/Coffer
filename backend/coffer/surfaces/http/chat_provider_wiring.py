@@ -16,6 +16,7 @@ from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.domain.agent.types import AgentType
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.provider.errors import NoActiveProvider
+from coffer.infrastructure.chat.adapter_support import MemoryContextComposer
 from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
 from coffer.infrastructure.llm.transcription import remote_transcriber_factory
@@ -29,6 +30,7 @@ if TYPE_CHECKING:
 def build_agent_provider_registry(
     conv_repo: ConversationRepo,
     credential_resolver: Callable[[str], str] | None = None,
+    compose_memory_context: MemoryContextComposer | None = None,
 ) -> AgentProviderRegistry:
     """Construct and populate the agent-provider registry.
 
@@ -37,6 +39,15 @@ def build_agent_provider_registry(
     one that runs the knowledge tidy pass. Without it (and without such a
     connection) audio is handed to the agent untouched and nothing leaves the
     machine. That is the default.
+
+    ``compose_memory_context`` is the memory kind's own third system-prompt
+    append (spec memory FR-053) for a channel-driven turn — a plain callable
+    so this module, like ``claude_sdk_provider``, never imports anything from
+    ``application.memory`` itself. Its real closure over
+    ``MemoryService``/``OverrideRepository`` is built one level up, where
+    those services are constructed; wire it in from there once they exist.
+    ``None`` here (the default) means no memory append at all, not a header
+    with nothing under it.
     """
     registry = AgentProviderRegistry()
 
@@ -64,6 +75,7 @@ def build_agent_provider_registry(
             conversations=conv_repo,
             list_models=_list_models,
             transcriber_factory=transcriber_factory,
+            compose_memory_context=compose_memory_context,
         ),
         display_name="Claude Code",
     )
@@ -90,6 +102,8 @@ def build_agent_provider_registry(
             conversations=conv_repo,
             resolve_key=_key_resolver(AgentType.CODEX),
             transcriber_factory=transcriber_factory,
+            list_models=_list_models,
+            compose_memory_context=compose_memory_context,
         ),
         display_name="Codex",
     )

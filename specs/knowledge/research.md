@@ -61,7 +61,7 @@ second copy to keep in sync.
 also projected canonical content into agents' native locations — a directory
 symlink for Claude Code, a marker-fenced block in `AGENTS.md` for Codex — and
 that half was removed
-([Memory via MCP](../../docs/decisions/memory-via-mcp-not-native-projection.md)):
+([Aggregate Agent Memory](../../docs/decisions/aggregate-agent-memory-never-write-it.md)):
 Coffer never writes into an agent's own memory files, disables nothing, and
 injects nothing into a session.
 

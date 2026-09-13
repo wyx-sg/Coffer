@@ -2,10 +2,10 @@
 
 > 中文版: [agent-native-shared-memory.zh.md](./agent-native-shared-memory.zh.md)
 
-**Status**: Partially superseded by [Memory via MCP](memory-via-mcp-not-native-projection.md) (2026-06-18) — the native-projection half of the decision below was removed; Coffer never writes an agent's own native memory files. The shared-store half stands, and is what this ADR records. Re-expressed in knowledge-layer vocabulary 2026-09-10 and narrowed to two lanes 2026-09-11. The store's SHAPE — lanes, scopes, the tool list — is superseded by [Knowledge Is Plain Files](knowledge-is-plain-files.md) (2026-09-12); read the body below for the decision, not for the layout (see Revision history).
+**Status**: Partially superseded by [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md) (2026-06-18) — the native-projection half of the decision below was removed; Coffer never writes an agent's own native memory files. The shared-store half stands, and is what this ADR records. Re-expressed in knowledge-layer vocabulary 2026-09-10 and narrowed to two lanes 2026-09-11. The store's SHAPE — lanes, scopes, the tool list — is superseded by [Knowledge Is Plain Files](knowledge-is-plain-files.md) (2026-09-12); read the body below for the decision, not for the layout (see Revision history).
 **Date**: 2026-06-09 (revised 2026-09-11; see Revision history)
 **Deciders**: Yuxing Wu
-**Related**: spec `knowledge` (the Knowledge Layer spec), [Files as Truth](files-as-truth-sqlite-retrieval.md), [Everything Is a Resource Kind](everything-is-a-resource-kind.md), [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md), [Memory via MCP](memory-via-mcp-not-native-projection.md)
+**Related**: spec `knowledge` (the Knowledge Layer spec), [Files as Truth](files-as-truth-sqlite-retrieval.md), [Everything Is a Resource Kind](everything-is-a-resource-kind.md), [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md), [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md)
 
 ## Context
 
@@ -37,7 +37,7 @@ divergent copies.
 **Coffer holds one shared store, and every agent reads and writes it through
 Coffer's own tools. A fact is written once, into Coffer's `knowledge` layer,
 and is visible to every agent in that scope. Coffer does not keep a per-agent
-copy, and — since [Memory via MCP](memory-via-mcp-not-native-projection.md) —
+copy, and — since [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md) —
 does not write into any agent's native memory files either.**
 
 Concrete shape, as it stands today:
@@ -90,7 +90,7 @@ projected the canonical store *outward* into each agent's native location — an
 Code's auto-memory path, rendering a marker-fenced managed block into Codex
 config files, and **disabling each agent's own native memory** so the canonical
 store stayed the only writer.
-[Memory via MCP](memory-via-mcp-not-native-projection.md) withdrew all of it
+[Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md) withdrew all of it
 in 2026-06-18: writing and disabling another tool's config is intrusive, the
 per-agent adapters had to track upstream formats that keep moving, and the
 ambient-loading benefit that justified the cost is obtainable by injection
@@ -172,7 +172,7 @@ second thing to keep in sync for no gain.
   store, shared across agents by a hybrid of MCP read/write plus per-agent
   native projection (`SYMLINK | RENDER | NONE`), with each projected agent's own
   native memory disabled. Scope was two-layer: global + per-project.
-- **2026-06-18** — [Memory via MCP](memory-via-mcp-not-native-projection.md)
+- **2026-06-18** — [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md)
   removed the projection half: Coffer never writes or disables an agent's native
   memory files. The shared-store half was unaffected.
 - **2026-09-10** — Re-expressed for the knowledge-layer merge. The store this

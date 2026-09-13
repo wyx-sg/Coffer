@@ -1,14 +1,15 @@
 """``coffer knowledge …`` — the knowledge directory from the terminal.
 
 Thin HTTP shells over the daemon, matching the other CLI groups and their
-exit-code mapping (``_cli_client.check``). One module is enough now: there is
-no ingest, reindex, source-tracking or settings command left to split out,
-because none of those operations exist (spec knowledge FR-060).
+exit-code mapping (``_cli_client.check``). ``search``, ``upload``, ``index``
+and ``reindex`` round out the group with ranked retrieval and document
+ingestion (spec knowledge FR-060).
 """
 
 from __future__ import annotations
 
 import json as _json
+import pathlib
 
 import typer
 from rich.console import Console
@@ -184,3 +185,100 @@ def organize(
         r = c.post(f"/knowledge/collections/{collection}/tidy")
         _cli_client.check(r, verbose=_verbose(ctx))
     typer.echo(_json.dumps(r.json(), indent=2))
+
+
+@app.command("search")
+def search(
+    ctx: typer.Context,
+    query: str = typer.Argument(..., help="What you're looking for, in your own words"),
+    collection: str = typer.Option("", "--collection", help="Restrict to one collection"),
+    output_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """Find files by meaning, ranked — falling back to a literal search when no
+    internal connection is configured (and saying so)."""
+    payload = {"query": query, "collection": collection or None}
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post("/knowledge/search", json=payload)
+        _cli_client.check(r, verbose=_verbose(ctx))
+    data = r.json()
+    if output_json:
+        typer.echo(_json.dumps(data, indent=2))
+        return
+    if data["mode"] == "literal":
+        typer.echo(f"(literal match — {data['reason']})", err=True)
+    for hit in data["results"]:
+        score = f"{hit['score']:.3f}" if hit["score"] is not None else "-"
+        typer.echo(f"{hit['path']}  [{score}]  {hit['title']}")
+        if hit["heading"]:
+            typer.echo(f"  under: {hit['heading']}")
+        for line in hit["lines"]:
+            typer.echo(f"  {line['line_number']}: {line['line']}")
+
+
+@app.command("upload")
+def upload(
+    ctx: typer.Context,
+    file: pathlib.Path = typer.Argument(  # noqa: B008 — typer option declaration
+        ..., help="Document to ingest", exists=True
+    ),
+    collection: str = typer.Option(..., "--collection", help="Collection to ingest it into"),
+    directory: str = typer.Option("", "--directory", help="Folder inside the collection, if any"),
+) -> None:
+    """Convert a document to Markdown and file it into a collection."""
+    # httpx encodes a `None` form value as an empty field rather than
+    # omitting it, which would arrive as "" and not the server's own
+    # default — so an empty --directory is left out of the body entirely.
+    form: dict[str, str] = {"collection": collection}
+    if directory:
+        form["directory"] = directory
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        with file.open("rb") as fh:
+            r = c.post(
+                "/knowledge/upload",
+                data=form,
+                files={"file": (file.name, fh)},
+            )
+        _cli_client.check(r, verbose=_verbose(ctx))
+    typer.echo(r.json()["path"])
+
+
+@app.command("index")
+def index_status(
+    ctx: typer.Context,
+    output_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """Show the ranked-retrieval index's status."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get("/knowledge/index")
+        _cli_client.check(r, verbose=_verbose(ctx))
+    data = r.json()
+    if output_json:
+        typer.echo(_json.dumps(data, indent=2))
+        return
+    if not data["available"]:
+        typer.echo("no internal connection configured — ranked search is unavailable")
+        return
+    typer.echo(f"{data['files_indexed']}/{data['files_total']} files indexed at {data['path']}")
+
+
+@app.command("reindex")
+def reindex(
+    ctx: typer.Context,
+    output_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """Rebuild the ranked-retrieval index from scratch."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post("/knowledge/index/rebuild")
+        _cli_client.check(r, verbose=_verbose(ctx))
+    data = r.json()
+    if output_json:
+        typer.echo(_json.dumps(data, indent=2))
+        return
+    if not data["available"]:
+        typer.echo("no internal connection configured — nothing to rebuild")
+        return
+    typer.echo(f"{data['files_indexed']}/{data['files_total']} files indexed at {data['path']}")

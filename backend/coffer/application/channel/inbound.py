@@ -39,6 +39,7 @@ from coffer.application.channel.ports import (
     ContextFetchPort,
     ModelSuggestionPort,
 )
+from coffer.application.channel.save_ports import CollectionCatalogPort, IngestPort
 from coffer.application.channel.turn_driver import (
     QUEUE_MAX as _QUEUE_MAX,
 )
@@ -79,6 +80,8 @@ class InboundProcessor:
         audit: AuditService,
         agents: AgentCatalogPort,
         model_suggestions: ModelSuggestionPort,
+        collections: CollectionCatalogPort,
+        ingest: IngestPort,
     ) -> None:
         self._peers = peers
         self._threads = threads
@@ -96,6 +99,8 @@ class InboundProcessor:
             turns=turns,
             agents=agents,
             model_suggestions=model_suggestions,
+            collections=collections,
+            ingest=ingest,
         )
         self._turn_driver = TurnDriver(
             peers=peers,
@@ -110,6 +115,7 @@ class InboundProcessor:
             commands=self._commands,
             safe_send=safe_send,
             stop_chat_sessions=self._stop_chat_sessions,
+            session=self._session,
         )
 
     # -- runtime registry ------------------------------------------------
@@ -228,6 +234,14 @@ class InboundProcessor:
         attachments = tuple(
             Attachment(path=a.path, mime=a.mime, filename=a.filename) for a in msg.attachments
         )
+        if attachments:
+            # Remember it (owner-gated already) for a `/save` that follows
+            # (spec knowledge FR-036) — never the thread-history attachments
+            # folded in below. The turn below still runs unchanged; `/save`
+            # only ALSO makes this saveable. One slot, first file only: the
+            # ingest service takes one file per call (FR-037).
+            session = self._session(binding.name, peer.chat_id, msg.thread_id)
+            session.pending_document = attachments[0]
         # A slash command is text-only; a caption starting with "/" alongside an
         # attachment is a normal message, not a command. Decide on the message's
         # OWN text/attachments, before any thread history is folded in (a

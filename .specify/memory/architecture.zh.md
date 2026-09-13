@@ -48,13 +48,20 @@ coffer 中每一个由用户管理的实体都是一个**资源 (Resource)**，�
 | `skill`          | [skill-manager](../../specs/skill-manager/spec.md)   | 一个主 skill 包，Coffer 可将其投递到一个或多个 agent 的 skill 目录。workspace 修订新增了未托管 skill 扫描（把手工放置的 skill adopt 进主库）。投递由 skill 自身的 `enabled` 与其 agent scope 取交集决定，任一侧变化即调谐——本行曾描述的那套 agent 侧 follow-master-library 策略已删除。                                                                                        |
 | `knowledge`      | [knowledge](../../specs/knowledge/spec.md)                 | 一个 **collection**——`~/.coffer/knowledge/` 下的一个顶层文件夹，装着 markdown 文件，用户爱怎么嵌套怎么嵌套。collection 是系统唯一认得的边界，它之所以是 Resource，就是为了让框架的 per-agent scope 能授权它；没有任何东西从 cwd 推导，也没有任何东西自动开通。agent 经 MCP 读写它，人在自己的编辑器里读写它，双方触及的是同一批字节。见 [Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)。 |
 | `channel`        | [channels](../../specs/channels/spec.md)             | 一个消息 channel 绑定（Telegram、SeaTalk）。承载传输配置 + 凭据 ref 与一个默认 agent；已配对的 owner 从 IM 应用里与受管 agent 对话并接收通知。薄 adapter 架在 turn 平台的接缝之上（spec channels FR-043…FR-055），Web 端 Chat 页面作为第二个接口面也架在同一层上（spec channels FR-072…FR-078）——消息一旦到达 turn 编排器，下游就不再知道它来自哪个接口面（[Channel Adapter Framework](../../docs/decisions/channel-adapter-framework.zh.md)、[Chat 是单属主的实时镜像](../../docs/decisions/chat-single-owner-live-mirror.zh.md)）。                                                         |
+| `memory`         | [memory](../../specs/memory/spec.md)                 | 一个聚合 agent 记忆的 **partition**——一个项目，或 `global`。其事实（fact）读自已注册 agent 各自的原生记忆，从不写回；磁盘上的一切都是派生且可重建的，开发者自己的覆盖决定是唯一不是派生出来的东西。Scope 决定 digest 送达哪些 agent，默认送回它数据来源的那些 agent（[Aggregate Agent Memory](../../docs/decisions/aggregate-agent-memory-never-write-it.md)）。                                                         |
 
-知识层是**一个目录，不是一个索引**。`~/.coffer/knowledge/<collection>/` 下的
-markdown 文件就是任何东西的唯一副本：没有 `documents` 表、没有 chunk 表、没有
-FTS5 索引、也没有向量，因此没有任何东西需要对账，用户在自己编辑器里改过的文件
-下一次读取就是活的
+知识层是**一个目录，不是一个数据库**。`~/.coffer/knowledge/<collection>/` 下的
+markdown 文件就是任何东西的唯一副本：没有 `documents` 表，也没有 chunk 表，因此
+没有任何东西需要对账，用户在自己编辑器里改过的文件下一次读取就是活的
 （[Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)，
 它取代了 Files as Truth 与 Retrieval Mode Is Internal）。
+
+带排序的检索架在这套体系之上，却不会成为第二个事实来源。向量存在
+`~/.coffer/index/` 下的一个**可丢弃的 sidecar**里——在仓库之外，也在 `coffer.db`
+之外，导出与备份都不包含它，随时可以删掉。Embedding 走本机已有的
+`internal_default` 连接，因此这一层没有属于自己的 embedding 设置；没有配置、
+或 sidecar 缺失/正在重建时，`search` 会退化为字面检索并如实说明。它不给依赖
+集合添一行东西：相似度就在进程内对几百篇文件的语料算出来。
 
 文件的**路径就是它的身份**——名字是可读的 slug，不是 ULID，因为没有索引之后，
 文件名正是 agent 在 grep 结果里读到的东西。frontmatter 只带 `title`、
@@ -75,7 +82,7 @@ FTS5 索引、也没有向量，因此没有任何东西需要对账，用户在
 （spec knowledge FR-042），因为这套设计背后的审计发现：只靠工具描述，agent 从不
 主动伸手够这一层——一个月里每一次知识调用都发生在语料被建起来的那一天。没有任何
 东西被注入会话，也不往任何 agent 自己的记忆里写
-（[Memory via MCP](../../docs/decisions/memory-via-mcp-not-native-projection.md)）。
+（[Aggregate Agent Memory](../../docs/decisions/aggregate-agent-memory-never-write-it.md)）。
 
 **tidy** 这一趟保留了下来：对单个 collection 的一次有界 agentic 改写，由
 internal-engine 连接驱动，动手之前先把每个旧版本归档进隐藏的 `.history/`。它随时
@@ -83,8 +90,11 @@ internal-engine 连接驱动，动手之前先把每个旧版本归档进隐藏�
 `internal_engine_config` 上一个安装级设置控制，**默认关闭**，因为一个会在无人值守
 下改写人与 agent 共享文件的东西，应该由操作者自己打开。
 
-没有摄取界面。人添加知识的方式就是把一个 markdown 文件放进目录——文件系统就是
-上传路径，下一次调用就能看见。
+把一个 markdown 文件放进目录，仍然是添加知识的完整方式——不需要导入，不需要
+注册，下一次调用就能看见。摄取（ingestion）是第二个入口，用在文件系统够不着
+的地方：从 Knowledge 页面上传、或转发进某个 channel 的文档，会被 `markitdown`
+转换成 Markdown，落地为一个带 frontmatter 的普通文件，并把原件保留在 collection
+根目录下隐藏的 `.raw/` 里，供转换失败时重做。上传是面向人的界面，不是 agent 工具。
 
 ## 代码布局 (Code layout)
 

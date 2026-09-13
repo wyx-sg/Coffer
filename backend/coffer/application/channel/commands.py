@@ -1,20 +1,23 @@
-"""Slash-command handling for channels: /help /new /agent /model /stop /status.
+"""Slash-command handling for channels: /help /new /agent /model /stop /status
+/save.
 
 The router owns the structural switch (/agent → a fresh conversation, sticky on
 the peer) and the parametric switch (/model → next turn, same conversation).
 Conversation creation is delegated to ``conversation_ops`` so the inbound
 turn-driver and this router agree on how a channel conversation is born.
+``/save`` (spec knowledge FR-036) and ``/model`` both live in their own
+sibling module (``document_save``/``model_switch``) for this file's size
+budget — ``handle`` below still dispatches every command from one place.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import replace
 from typing import Any, Protocol
 
+from coffer.application.channel import document_save, model_switch
 from coffer.application.channel.card_delivery import deliver_card, dispatch_card_tap
 from coffer.application.channel.conversation_ops import (
-    ensure_conversation,
     explain_conversation_error,
     open_conversation,
 )
@@ -25,7 +28,8 @@ from coffer.application.channel.ports import (
     ChannelThreadConversationRepoPort,
     ModelSuggestionPort,
 )
-from coffer.application.channel.selection_cards import agent_card, model_card
+from coffer.application.channel.save_ports import CollectionCatalogPort, IngestPort
+from coffer.application.channel.selection_cards import agent_card
 from coffer.domain.channel.commands import help_text
 from coffer.domain.channel.envelopes import ChoiceButton, EphemeralTarget
 from coffer.domain.errors import CofferError
@@ -68,12 +72,16 @@ class ChannelCommands:
         turns: Any,
         agents: AgentCatalogPort,
         model_suggestions: ModelSuggestionPort,
+        collections: CollectionCatalogPort,
+        ingest: IngestPort,
     ) -> None:
         self._threads = threads
         self._conversations = conversations
         self._turns = turns
         self._agents = agents
         self._model_suggestions = model_suggestions
+        self._collections = collections
+        self._ingest = ingest
 
     async def handle(
         self,
@@ -109,6 +117,10 @@ class ChannelCommands:
         elif command == "/stop":
             await self.interrupt(
                 binding, peer, session, send, chat_kind=chat_kind, thread_id=thread_id
+            )
+        elif command == "/save":
+            await document_save.cmd_save(
+                self, binding, peer, text, session, send, chat_kind=chat_kind, thread_id=thread_id
             )
         elif command == "/status":
             running = session.drain_task is not None and not session.drain_task.done()
@@ -169,6 +181,9 @@ class ChannelCommands:
                 chat_kind=chat_kind,
                 thread_id=thread_id,
             )
+
+    # `/save` (spec knowledge FR-036) lives in ``document_save`` (this file's
+    # size budget): ``handle`` and a collection-card tap call it directly.
 
     # -- structural switches (open a fresh conversation, sticky on the peer) ------
 
@@ -239,7 +254,8 @@ class ChannelCommands:
             thread_id=thread_id,
         )
 
-    # -- parametric switch (/model: same conversation, next turn) -----------------
+    # -- parametric switch (/model: same conversation, next turn) — split into
+    # ``model_switch`` for this file's size budget, exactly like /save. -------
 
     async def _cmd_model(
         self,
@@ -251,46 +267,8 @@ class ChannelCommands:
         chat_kind: str = "direct",
         thread_id: str = "",
     ) -> None:
-        try:
-            conversation_id = await ensure_conversation(
-                self._conversations, self._threads, binding, peer, thread_id
-            )
-        except CofferError as e:
-            await send(
-                binding,
-                peer.chat_id,
-                explain_conversation_error(e),
-                chat_kind=chat_kind,
-                thread_id=thread_id,
-            )
-            return
-        parts = text.split()
-        if len(parts) < 2:
-            # Show the current model. Coffer-managed CLI agents own their own
-            # model namespace (the builtin model-registry agent is retired),
-            # so we just report what will be passed through to the agent's CLI.
-            cfg = await self._conversations.get_agent_config(conversation_id)
-            current = cfg.model or "(CLI default)"
-            if binding.adapter.capabilities.supports_buttons:
-                row = await self._threads.get(binding.resource_id, peer.chat_id, thread_id)
-                key = (row.preferred_agent if row is not None else None) or binding.default_agent
-                picks = await self._model_suggestions.suggest(key)
-                card = model_card(current=cfg.model, picks=picks)
-                # Same fallback as /agent: a refused card degrades to text.
-                if await deliver_card(
-                    binding, peer, card, chat_kind=chat_kind, thread_id=thread_id
-                ):
-                    return
-            await send(
-                binding,
-                peer.chat_id,
-                f"Model: {current}\n(passed through to the agent's CLI)",
-                chat_kind=chat_kind,
-                thread_id=thread_id,
-            )
-            return
-        await self.apply_model(
-            binding, peer, parts[1], send, chat_kind=chat_kind, thread_id=thread_id
+        await model_switch.cmd_model(
+            self, binding, peer, text, send, chat_kind=chat_kind, thread_id=thread_id
         )
 
     async def apply_model(
@@ -303,36 +281,10 @@ class ChannelCommands:
         chat_kind: str = "direct",
         thread_id: str = "",
     ) -> None:
-        """The parametric switch: set the next-turn model on the peer's
-        conversation. Shared by the text ``/model <name>`` path and a card tap.
-
-        Pure passthrough: ANY name reaches the CLI verbatim, whose namespace we
-        do not own, so a bad one surfaces as its own error next turn. Nothing is
-        refused here — a channel curates no models."""
-        try:
-            conversation_id = await ensure_conversation(
-                self._conversations, self._threads, binding, peer, thread_id
-            )
-        except CofferError as e:
-            await send(
-                binding,
-                peer.chat_id,
-                explain_conversation_error(e),
-                chat_kind=chat_kind,
-                thread_id=thread_id,
-            )
-            return
-        cfg = await self._conversations.get_agent_config(conversation_id)
-        await self._conversations.set_agent_config(conversation_id, replace(cfg, model=name))
-        await send(
-            binding,
-            peer.chat_id,
-            f"🧠 Model set to '{name}' for the next turn.",
-            chat_kind=chat_kind,
-            thread_id=thread_id,
+        """The parametric switch, shared by the text path and a card tap."""
+        await model_switch.apply_model(
+            self, binding, peer, name, send, chat_kind=chat_kind, thread_id=thread_id
         )
-
-    # -- card tap → the same switch (owner gate enforced by the processor) ---------
 
     async def dispatch_callback(
         self,
@@ -341,6 +293,7 @@ class ChannelCommands:
         data: str,
         send: SafeSend,
         *,
+        session: Any,
         chat_kind: str = "direct",
         thread_id: str = "",
         card_message_id: str = "",
@@ -355,7 +308,8 @@ class ChannelCommands:
         the new choice — otherwise it sits in the chat still offering the option
         the user just took, which is the one thing a selection card must never
         do. The routing itself lives in ``card_delivery`` beside the rendering
-        it drives."""
+        it drives. ``session`` is read only by a ``collection:`` tap (spec
+        knowledge FR-036), for the pending document held there."""
         await dispatch_card_tap(
             self,
             binding,
@@ -365,6 +319,7 @@ class ChannelCommands:
             chat_kind=chat_kind,
             thread_id=thread_id,
             card_message_id=card_message_id,
+            session=session,
         )
 
     async def _open_and_report(
