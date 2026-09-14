@@ -1,28 +1,33 @@
-// frontend/src/components/memory/MemoryDeliveryPanel.tsx
+// frontend/src/components/agents/AgentMemoryDelivery.tsx
 //
-// Per-agent delivery state (spec memory FR-054/FR-055, ADR
-// aggregate-agent-memory-never-write-it). This is the surface the removed
-// injection layer never had: it shipped a working hook that was never once
-// installed, and nothing said so for two months. So the signal here is NOT
-// "installed" — it is "installed" is dead-highlighted with a warning until
-// `last_fired_at` is non-empty, because a hook that never fires is
-// indistinguishable from no feature at all.
+// ONE agent's memory-delivery state (spec memory FR-054/FR-055, ADR
+// aggregate-agent-memory-never-write-it), rendered on that agent's own detail
+// page. Delivery installs a hook into THIS agent's own settings file, so it is
+// per-agent state and belongs beside the agent — it used to sit on the
+// standalone Memory page as a list with a row per agent, which put a per-agent
+// act on a resource page and made the reader pick their agent out of a list
+// they had already navigated past.
 //
-// Delivery is not partition-scoped (it lives in an agent's own settings, not
-// under any one partition's directory), so this renders once, above the
-// partitions table, rather than per-partition.
+// Because the agent is fixed by the page, there is no picker here: the query
+// is `GET /memory/delivery?agent=<name>`, which answers for that one agent.
+//
+// The signal is NOT "installed". The removed injection layer shipped a working
+// hook that was never once installed, and nothing said so for two months — so
+// an installed hook that has never fired renders as a warning, not a success,
+// until `last_fired_at` is non-empty (FR-055).
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { translateApiError } from "@/lib/api/errors";
 import type { DeliveryStatusOut } from "@/kinds/memory/types";
 import { useInstallDelivery, useMemoryDelivery, useRemoveDelivery } from "@/kinds/memory/useMemory";
 
-function DeliveryRow({ status }: { status: DeliveryStatusOut }) {
+function DeliveryState({ status }: { status: DeliveryStatusOut }) {
   const { t } = useTranslation();
   const install = useInstallDelivery();
   const remove = useRemoveDelivery();
@@ -33,12 +38,11 @@ function DeliveryRow({ status }: { status: DeliveryStatusOut }) {
 
   return (
     <div
-      className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 py-3 last:border-0"
-      data-testid={`memory-delivery-row-${status.agent}`}
+      className="flex flex-wrap items-center justify-between gap-3"
+      data-testid={`memory-delivery-${status.agent}`}
     >
-      <div className="space-y-1">
+      <div className="min-w-0 space-y-1">
         <div className="flex items-center gap-2">
-          <span className="font-medium">{status.agent}</span>
           {status.installed ? (
             neverFired ? (
               <Badge
@@ -78,6 +82,7 @@ function DeliveryRow({ status }: { status: DeliveryStatusOut }) {
           type="button"
           variant="outline"
           size="sm"
+          className="shrink-0"
           disabled={busy}
           onClick={() => setConfirmingRemove(true)}
         >
@@ -88,6 +93,7 @@ function DeliveryRow({ status }: { status: DeliveryStatusOut }) {
           type="button"
           variant="outline"
           size="sm"
+          className="shrink-0"
           disabled={busy}
           onClick={() => install.mutate(status.agent)}
         >
@@ -112,28 +118,29 @@ function DeliveryRow({ status }: { status: DeliveryStatusOut }) {
   );
 }
 
-export function MemoryDeliveryPanel() {
+export function AgentMemoryDelivery({ agentName }: { agentName: string }) {
   const { t } = useTranslation();
-  const { data, isPending, error } = useMemoryDelivery();
-  const rows = data ?? [];
+  const { data, isPending, error } = useMemoryDelivery(agentName);
+  // The by-agent query answers for exactly one agent; anything else is the
+  // daemon disagreeing with its own contract, and is treated as "no state".
+  const status = data?.[0];
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{t("memory.delivery.title")}</CardTitle>
-        <p className="text-sm text-muted-foreground">{t("memory.delivery.subtitle")}</p>
-      </CardHeader>
-      <CardContent>
-        {isPending ? (
-          <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-        ) : error ? (
-          <p className="text-sm text-destructive">{t("memory.delivery.loadFailed")}</p>
-        ) : rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t("memory.delivery.empty")}</p>
-        ) : (
-          rows.map((r) => <DeliveryRow key={r.agent} status={r} />)
-        )}
-      </CardContent>
+    <Card className="space-y-3 p-4">
+      <div className="space-y-1">
+        <h3 className="text-sm font-medium text-muted-foreground">{t("memory.delivery.title")}</h3>
+        <p className="text-xs text-muted-foreground">{t("memory.delivery.subtitle")}</p>
+      </div>
+
+      {isPending ? (
+        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+      ) : error ? (
+        <p className="text-sm text-destructive">{translateApiError(t, error)}</p>
+      ) : status ? (
+        <DeliveryState status={status} />
+      ) : (
+        <p className="text-sm text-muted-foreground">{t("memory.delivery.unsupported")}</p>
+      )}
     </Card>
   );
 }

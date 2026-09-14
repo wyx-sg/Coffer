@@ -173,7 +173,9 @@ Coffer 之前建过记忆闭环的两半，又都删掉了。**Transcript 蒸馏
 
 - **FR-060**: MCP 网关 MUST 恰好新增暴露一个内置工具，`coffer__recall`。MUST NOT 存在 `remember` 工具：本层的事实派生自 agent 自己的记忆，而 agent 要记下什么，就按它本来的方式记下来。
 - **FR-061**: `/api/v1/memory` 下的一族 REST API 与一个 `coffer memory` CLI 组 MUST 覆盖：列出 partition 与事实、展示某条事实连同它的来源与冲突、跑一次同步、跑一次 organise、组装会话上下文、施加与清除每一种覆盖项，以及为某个 agent 安装／查看／移除投递。
-- **FR-062**: Web UI MUST 呈现 partition 及其事实，把冲突作为待裁定的成对项摆出来，暴露那四种覆盖项，展示逐 agent 的投递状态（含上一次触发时间），并读取本 kind 的审计日志。
+- **FR-062**: Web UI MUST 以**表格**呈现 partition，且无论有没有 partition 都保持同一形态——尚无 partition 的安装 MUST 看到这张表自己的空行以及仍可点到的同步入口，而不是换成另一个页面——并 MUST 呈现单个 partition 的事实，把冲突作为待裁定的成对项摆出来，暴露那四种覆盖项。
+- **FR-064**: 逐 agent 的投递状态（含上一次触发时间，FR-055）MUST 呈现在**该 agent 自己的详情页**上，而不是 partition 列表页。投递写的是某一个 agent 的设置文件，因此它是逐 agent 的状态；已经限定到某个 agent 的页面 MUST NOT 再让读者选一次 agent。
+- **FR-065**: 本层 MUST NOT 自带审计界面。它的事件在各 kind 共用的全库审计界面上阅读；kind 维度的第二份拷贝属于重复界面，因此本层记录的每一种事件类型 MUST 在那里可读，而不是显示为原始事件码。
 - **FR-063**: 每一个生命周期动作——聚合、organise、每一种覆盖项、投递的安装或移除——MUST 记录一条带 actor 的审计事件。一次 recall MUST 记录照常的那行 `mcp_invocations`，且不记录任何关于它的查询或结果的东西。
 
 ### 约束

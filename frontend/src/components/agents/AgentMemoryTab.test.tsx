@@ -10,7 +10,7 @@
 
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AgentMemoryTab } from "./AgentMemoryTab";
@@ -29,6 +29,25 @@ vi.mock("@/lib/hooks/useAgentNativeMemory", () => ({
   agentNativeMemoryKey: (name: string) => ["agents", name, "native-memory"],
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgentMcpStatus: vi.fn() }));
+// Section B's own network hooks. Delivery has its own suite
+// (AgentMemoryDelivery.test.tsx); here we only assert it is ON this tab.
+vi.mock("@/kinds/memory/useMemory", () => ({
+  useMemoryDelivery: vi.fn(() => ({
+    data: [
+      {
+        agent: "claude",
+        installed: true,
+        command: "coffer memory context --agent claude",
+        last_fired_at: "2026-09-12T10:00:00Z",
+        event: "SessionStart",
+      },
+    ],
+    isPending: false,
+    error: null,
+  })),
+  useInstallDelivery: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useRemoveDelivery: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+}));
 
 const nativeHooks = await import("@/lib/hooks/useAgentNativeMemory");
 const agentHooks = await import("@/lib/hooks/useAgents");
@@ -114,12 +133,23 @@ describe("AgentMemoryTab", () => {
     stubNative();
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
     expect(screen.getByText(/coffer mcp isn't installed on this agent/i)).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /open the memory page/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /open the memory page/i })).not.toBeInTheDocument();
     // Section B (the agent's own native memory) is independent of the gateway —
     // it still renders when Coffer MCP is not installed.
     expect(screen.getByText("Coffer")).toBeInTheDocument();
+  });
+
+  test("delivery for this agent renders on the tab, with its last-fired state", () => {
+    // Delivery installs a hook into THIS agent's settings file, so it belongs
+    // here rather than on the Memory resource page — and FR-055's whole point
+    // is that the surface says when it last actually fired, not just that it
+    // is installed.
+    stubMcp(true);
+    stubNative();
+    render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
+
+    const delivery = within(screen.getByTestId("memory-delivery-claude"));
+    expect(delivery.getByText(/last fired/i)).toBeInTheDocument();
   });
 
   test("renders the agent's native per-project memory stores as a table", () => {

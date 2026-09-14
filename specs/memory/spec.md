@@ -173,7 +173,9 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 
 - **FR-060**: The MCP gateway MUST expose exactly one new built-in tool, `coffer__recall`. There MUST be no `remember` tool: this layer's facts are derived from agents' own memories, and an agent records something by recording it the way it already does.
 - **FR-061**: A REST family under `/api/v1/memory` and a `coffer memory` CLI group MUST cover: list partitions and facts, show one fact with its origins and conflicts, run a sync, run an organise pass, compose the session context, apply and clear each override, and install/inspect/remove delivery for an agent.
-- **FR-062**: The web UI MUST present partitions and their facts, surface conflicts as pairs to settle, expose the four overrides, show per-agent delivery state including last-fired, and read the audit log for this kind.
+- **FR-062**: The web UI MUST present partitions **as a table**, in the same shape whether or not any exist — an installation with no partitions yet MUST get that table's own empty row and a reachable sync, not a different page — and MUST present one partition's facts, surface conflicts as pairs to settle, and expose the four overrides.
+- **FR-064**: Per-agent delivery state, including last-fired (FR-055), MUST be presented on **that agent's own detail page**, not on the partitions surface. Delivery writes one agent's settings file, so it is per-agent state; a surface that is already scoped to an agent MUST NOT make the reader pick one again.
+- **FR-065**: This layer MUST NOT carry an audit surface of its own. Its events are read on the vault-wide audit surface, which every kind shares; a kind-scoped second copy is a duplicate surface, and every event type this layer records MUST therefore be legible there rather than shown as a raw event code.
 - **FR-063**: Every lifecycle act — aggregation, organise, each override, delivery installed or removed — MUST record an audit event with its actor. A recall MUST record the usual `mcp_invocations` row and nothing about its query or results.
 
 ### Constraints

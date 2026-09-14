@@ -1,6 +1,6 @@
 // frontend/src/components/agents/AgentMemoryTab.tsx
-// "Memory" tab on the agent detail page, in two read-only sections that mirror
-// the Skills and MCP-servers tabs (Coffer-managed vs the agent's own):
+// "Memory" tab on the agent detail page, in three sections that mirror the
+// Skills and MCP-servers tabs (Coffer-managed vs the agent's own):
 //
 //   A. Coffer-managed memory — Coffer aggregates every agent's native memory
 //      into its own partitions, and an agent reaches those back through the MCP
@@ -8,7 +8,13 @@
 //      tab does not re-list them: the shared CofferGatewayRow points straight
 //      there. Knowledge is a different layer with its own page and its own tab
 //      pointer — this one must not send the user there.
-//   B. The agent's own memory — the coding agent's OWN native per-project memory
+//   B. Delivery — whether Coffer's session-start hook is installed in THIS
+//      agent's own settings, and when it last actually fired (spec memory
+//      FR-054/FR-055). The only section here that writes anything, and the only
+//      one that is per-agent rather than per-partition: a hook lives in one
+//      agent's settings file, so it belongs on that agent's page rather than on
+//      the Memory resource page, where it used to render as a list of agents.
+//   C. The agent's own memory — the coding agent's OWN native per-project memory
 //      stores (e.g. Claude Code's ~/.claude/projects/<project>/memory/), shown
 //      read-only as a table of (project, path, item count) with open / reveal
 //      row actions. This is NOT Coffer knowledge and NOT the CLAUDE.md
@@ -18,6 +24,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import { CofferGatewayRow } from "@/components/agents/AgentManagedLink";
+import { AgentMemoryDelivery } from "@/components/agents/AgentMemoryDelivery";
 import { DataTable, type Column } from "@/components/DataTable";
 import { RowActions } from "@/components/RowActions";
 import { Card } from "@/components/ui/card";
@@ -88,6 +95,10 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
           notInstalledHint={t("agents.memoryTab.notInstalled")}
         />
       </Card>
+
+      {/* Delivery: this agent's own session-start hook — installed, and whether
+          it has ever actually fired. */}
+      <AgentMemoryDelivery agentName={agent.name} />
 
       <Card className="space-y-3 p-4">
         <div className="space-y-1">

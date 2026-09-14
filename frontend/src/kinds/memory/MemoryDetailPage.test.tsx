@@ -87,4 +87,18 @@ describe("MemoryDetailPage", () => {
     expect(screen.getByTestId("scope-control")).toBeInTheDocument();
     expect(screen.getByText("Develop in a worktree")).toBeInTheDocument();
   });
+
+  test("offers the way back to the partitions list", () => {
+    // A partition is reached by clicking a row, so leaving it must not depend
+    // on the browser's own back button — every other detail page carries this.
+    factsMock.mockReturnValue({
+      data: FACTS,
+      isPending: false,
+      error: null,
+    } as unknown as ReturnType<typeof useMemoryFacts>);
+
+    renderPage();
+
+    expect(screen.getByRole("button", { name: /back to memory/i })).toBeInTheDocument();
+  });
 });
