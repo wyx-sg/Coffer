@@ -68,11 +68,21 @@ class SqlAlchemyResourceRepo:
         enabled: bool | None = None,
     ) -> list[Resource]:
         async with self._sm() as session:
+            # Ordered, because the caller renders this as a LIST and the user
+            # clicks a row in it. Without an ORDER BY, SQLite is free to hand
+            # back whatever order the b-tree scan happens to produce, and an
+            # UPDATE can move a row within it: enabling one server made it
+            # trade places with another, the refetched list re-rendered in the
+            # new order, and the row the user had just clicked was no longer
+            # where they clicked it — which reads as "I clicked row 1 and row 4
+            # changed". Name is the column a reader scans, and (kind, name) is
+            # unique, so the order is total and never depends on a write.
             stmt = select(ResourceModel)
             if kind is not None:
                 stmt = stmt.where(ResourceModel.kind == kind)
             if enabled is not None:
                 stmt = stmt.where(ResourceModel.enabled == enabled)
+            stmt = stmt.order_by(ResourceModel.kind, ResourceModel.name)
             rows = (await session.execute(stmt)).scalars().all()
             return [_to_domain(r) for r in rows]
 
