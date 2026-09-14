@@ -1,4 +1,4 @@
-"""auto-sync remote-head probe cadence (spec vault-export-import amendment, near-real-time sync)
+"""auto-sync remote-head probe cadence (spec vault-sync amendment, near-real-time sync)
 
 Revision ID: 0044
 Revises: 0043

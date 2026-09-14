@@ -33,6 +33,7 @@ from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.mcp.sync_state import McpPreferenceSyncState
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
+from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.infrastructure.channel.media_retention import default_media_sweep
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
@@ -60,6 +61,7 @@ def wire_mcp_kind(
     audit: AuditService,
     sm: object,
     credential_store: Any,
+    scope_evaluator: ScopeEvaluator,
     builtin_tools: BuiltinToolRegistry | None = None,
     embedder_provider: Callable[[], Awaitable[Any | None]] | None = None,
 ) -> tuple[SubprocessSupervisor, dict[str, SubprocessSupervisor]]:
@@ -129,6 +131,7 @@ def wire_mcp_kind(
             preferences=prefs_repo,
             invocations=inv_repo,
             on_dispose=_drop_supervisor,
+            scope_evaluator=scope_evaluator,
             builtin_tools=builtin_tools,
             embedder_provider=embedder_provider,
         )

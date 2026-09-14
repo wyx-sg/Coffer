@@ -3,7 +3,7 @@
 **状态**：Proposed
 **日期**：2026-06-13
 **决策者**：Yuxing Wu
-**关联**：`.specify/memory/constitution.md`、[`agents/testing.md`](../../agents/testing.zh.md)、[`agents/workflow.md`](../../agents/workflow.zh.md)、[Channel Adapter Framework](channel-adapter-framework.zh.md)、[Vault Export and Import](vault-export-import.zh.md)、specs `channels` / `vault-export-import`
+**关联**：`.specify/memory/constitution.md`、[`agents/testing.md`](../../agents/testing.zh.md)、[`agents/workflow.md`](../../agents/workflow.zh.md)、[Channel Adapter Framework](channel-adapter-framework.zh.md)、[Vault Export and Import](vault-sync.zh.md)、specs `channels` / `vault-sync`
 
 ## 背景
 

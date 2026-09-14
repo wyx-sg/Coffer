@@ -23,10 +23,13 @@ def test_manifest_carries_version_and_creation_time() -> None:
     }
 
 
-def test_manifest_stamps_a_creation_time_when_none_is_given() -> None:
-    # created_at is the one field that legitimately differs between two
-    # exports of an unchanged vault.
-    assert "created_at" in Manifest().to_dict()
+def test_manifest_omits_a_creation_time_nobody_supplied() -> None:
+    # The manifest a converge export writes must be byte-identical on every
+    # machine and on every round: it lives in the working tree git three-way
+    # merges, so a stamped-per-export timestamp would make an unchanged vault
+    # commit and would conflict two machines on their first contact before they
+    # had disagreed about anything real (spec vault-sync "Determinism").
+    assert Manifest().to_dict() == {"schema_version": SCHEMA_VERSION}
 
 
 def test_manifest_round_trip() -> None:

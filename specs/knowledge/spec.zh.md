@@ -64,7 +64,7 @@ Coffer 投递的一个 skill 告诉 agent 这一层在这里、怎么用。它�
 
 ### 用户故事 6 — 人要求的时候才整理（优先级 P3）
 
-笔记会堆积、会重复。开发者触发一次 tidy，它先归档每个旧版本，再合并改写。他也可以让它定时跑，但必须先自己打开。
+笔记会堆积、会重复。开发者触发一次 tidy，它先归档每个旧版本，再合并改写。他也可以让它定时跑，但必须先自己打开——而且在 vault 同步之后，只会在被指名为 tidy owner 的那一台机器上跑。
 
 **独立测试**：对一个有重复内容的 collection 跑一次 tidy；确认 `.history/` 里有旧版本，且归档副本永远不出现在 grep 结果里。
 
@@ -203,8 +203,11 @@ agent 需要 vault 里关于某个问题的东西，而它只能描述这个问�
 ### 整理
 
 - **FR-050**: 系统 MUST 提供针对某个 collection 的有界 agentic **tidy** 过程，由内部模型连接驱动，其工具面是四个文件操作——`list`、`read`、`write`、`delete`。它 MUST 在任何覆盖或合并之前把文件旧版本复制进 `.history/`。没有配置内部连接时 MUST 是干净的 no-op。
-- **FR-051**: tidy MUST 可从 UI 和 `coffer knowledge organize` 手动触发。后台 worker MAY 按间隔运行它，由一个**默认关闭的安装级设置**控制。
+- **FR-051**: tidy MUST 可从 UI 和 `coffer knowledge organize` 手动触发。后台 worker MAY 按间隔运行它，由一个**默认关闭的安装级设置**控制。该设置 MUST 同时**指名一台机器**。它今天是 singleton `internal_engine_config` 行上那一个 `auto_tidy_enabled` 布尔值，worker 的 enabled-check 每一跳都读它；它 MUST 再带上一个 owner 机器 id——取自同步机器注册表的 `machine_id`（spec [vault-sync](../vault-sync/spec.md)），在没有选定 owner 之前为 null——这样这个开关读起来是*在这里开着*，而不只是*开着*。
 - **FR-052**: `.history/` MUST 以点开头，因此被排除在目录和 grep 之外。
+- **FR-053**: tidy 设置 MUST 是**同步状态**，随 vault 走在已经承载它的 `internal-engine` 文档里，让每台机器对 owner 是谁达成一致。一次 tidy MUST 只在设置指名的那台机器上运行，在其它每一台上 MUST 是干净的 no-op。没有这条规则，两台机器会各自改写同一份语料：它们把同一对笔记合并进一篇主题文档，却是*不同*的两篇，而 git 干净地合并了结果——两边都同意原始文件已删除，两篇主题文档又是不同路径上的新增——于是 vault 里同一份知识存了两遍，且没有任何冲突被报出来。如果 owner 机器是关着的，那就根本不会有 tidy 发生；对一个后台的锦上添花功能来说，这是可以接受的取舍。
+- **FR-054**: 一次 tidy 与一轮 converge MUST NOT 重叠。两者都在写 vault，改写进行到一半时取的导出是一份被撕开的快照，所以它们 MUST 取同一把锁。此外，只要还有未解决的冲突或待确认事项，这次 tidy MUST 被跳过，绝不把改写叠在一次没解决的分歧之上。
+- **FR-055**: 当 owner 的 tidy 删掉了一个文件，而另一台机器编辑过它时，**编辑 MUST 胜出**：文件带着它的编辑保留下来，删除被丢弃，且这一轮 MUST NOT 报冲突。一次新鲜的编辑是人或 agent 刚刚做出的决定；而删除只是一个整理上的判断，下一次 tidy 自然会再做一遍。
 
 ### Surface
 

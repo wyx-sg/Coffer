@@ -95,9 +95,9 @@ describe("McpServerDetailPage", () => {
       expect(screen.getByText("fs")).toBeInTheDocument();
     });
 
-    // Resource is enabled=true, scope is null, so "Every agent" is the live
+    // Resource is enabled=true, scope is null, so "Everywhere" is the live
     // segment. Clicking "Disabled" takes the resource out of service.
-    expect(screen.getByRole("button", { name: /every agent/i })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /everywhere/i })).toHaveAttribute(
       "aria-pressed",
       "true",
     );

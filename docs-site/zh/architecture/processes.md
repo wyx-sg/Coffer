@@ -44,7 +44,7 @@ CLI（`coffer …`）是一个短生命周期的子进程。用户用它执行�
 - **保留 worker。** 按配置的保留策略修剪日志型表（审计日志、调用日志）。
 - **通道适配器协调器**（[Channel Adapter Framework](/zh/reference/adr/channel-adapter-framework)）。每个 tick 它都会把已启用的通道资源与运行中的适配器做 diff，并启动/停止/重启以保持一致——并随 SeaTalk 通道集合启动或停止回调监听器。REST/CLI/UI 永不直接启动或停止适配器；协调器持有全部运行时状态转换，从而让状态保持真实。
 
-仓库的导出与导入（[Vault Export and Import](/zh/reference/adr/vault-export-import)）刻意**不在**其列：它们只在用户主动发起时、就在发起它们的那次请求里运行，没有 worker，也没有后台复制。
+仓库的导出与导入（[Vault Export and Import](/zh/reference/adr/vault-sync)）刻意**不在**其列：它们只在用户主动发起时、就在发起它们的那次请求里运行，没有 worker，也没有后台复制。
 
 ## Detect-or-spawn（ADR daemon-detect-or-spawn）
 

@@ -14,6 +14,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ResourceNotFound, ScopeInvalidError
 from coffer.domain.resource import Kind, ResourceRef
+from coffer.domain.scope import Scope
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -74,7 +75,7 @@ async def test_register_keeps_scope_none(tmp_path):
 async def test_update_scope_round_trips_agent_list_through_real_repo(tmp_path):
     svc, _, engine = await _service(tmp_path)
     await svc.register(kind="scoped_kind", name="t", config={"foo": 1}, actor="cli")
-    agents = ["agent-a", "agent-b"]
+    agents = Scope(agents=["agent-a", "agent-b"])
     updated = await svc.update_scope(ResourceRef("scoped_kind", "t"), agents, actor="cli")
     assert updated.scope == agents
 
@@ -82,10 +83,10 @@ async def test_update_scope_round_trips_agent_list_through_real_repo(tmp_path):
     fetched = await svc.get(ResourceRef("scoped_kind", "t"))
     assert fetched.scope == agents
 
-    # The dormant scope ([]) round-trips distinctly from None.
-    dormant = await svc.update_scope(ResourceRef("scoped_kind", "t"), [], actor="cli")
-    assert dormant.scope == []
-    assert (await svc.get(ResourceRef("scoped_kind", "t"))).scope == []
+    # The dormant scope (an empty agents axis) round-trips distinctly from None.
+    dormant = await svc.update_scope(ResourceRef("scoped_kind", "t"), Scope(agents=[]), actor="cli")
+    assert dormant.scope == Scope(agents=[])
+    assert (await svc.get(ResourceRef("scoped_kind", "t"))).scope == Scope(agents=[])
 
     # Clearing scope (back to unscoped) round-trips to None as well.
     cleared = await svc.update_scope(ResourceRef("scoped_kind", "t"), None, actor="cli")
@@ -100,10 +101,12 @@ async def test_update_scope_on_kind_without_scope_raises(tmp_path):
     svc, _, engine = await _service(tmp_path)
     await svc.register(kind="unscopable_kind", name="t", config={"foo": 1}, actor="cli")
     with pytest.raises(ScopeInvalidError):
-        await svc.update_scope(ResourceRef("unscopable_kind", "t"), ["agent-a"], actor="cli")
-    # Even the empty list is rejected — the kind carries no scope at all.
+        await svc.update_scope(
+            ResourceRef("unscopable_kind", "t"), Scope(agents=["agent-a"]), actor="cli"
+        )
+    # Even an empty (dormant) scope is rejected — the kind carries no scope at all.
     with pytest.raises(ScopeInvalidError):
-        await svc.update_scope(ResourceRef("unscopable_kind", "t"), [], actor="cli")
+        await svc.update_scope(ResourceRef("unscopable_kind", "t"), Scope(agents=[]), actor="cli")
     # Rejected before any write — scope stays None.
     fetched = await svc.get(ResourceRef("unscopable_kind", "t"))
     assert fetched.scope is None
@@ -114,14 +117,14 @@ async def test_update_scope_on_kind_without_scope_raises(tmp_path):
 async def test_update_scope_records_audit_event(tmp_path):
     svc, audit, engine = await _service(tmp_path)
     await svc.register(kind="scoped_kind", name="t", config={"foo": 1}, actor="cli")
-    scope = ["agent-a"]
+    scope = Scope(agents=["agent-a"])
     await svc.update_scope(ResourceRef("scoped_kind", "t"), scope, actor="api")
     entries = await audit.query(event_type=AuditEventType.RESOURCE_SCOPE_UPDATED.value)
     assert len(entries) == 1
     assert entries[0].resource_kind == "scoped_kind"
     assert entries[0].resource_name == "t"
     assert entries[0].actor == "api"
-    assert entries[0].details["scope"] == scope
+    assert entries[0].details["scope"] == {"agents": ["agent-a"], "machines": None}
     await engine.dispose()
 
 
@@ -129,7 +132,9 @@ async def test_update_scope_records_audit_event(tmp_path):
 async def test_update_scope_unknown_ref_raises(tmp_path):
     svc, _, engine = await _service(tmp_path)
     with pytest.raises(ResourceNotFound):
-        await svc.update_scope(ResourceRef("scoped_kind", "nope"), ["agent-a"], actor="cli")
+        await svc.update_scope(
+            ResourceRef("scoped_kind", "nope"), Scope(agents=["agent-a"]), actor="cli"
+        )
     await engine.dispose()
 
 
@@ -138,11 +143,11 @@ async def test_kind_pre_validation_rejects_before_any_write(tmp_path):
     """``Kind.validate_scope_for`` is the scope path's counterpart to
     ``on_update_config``: the kind gets a say BEFORE persistence, so a rejected
     scope leaves the row — and the audit log — untouched."""
-    seen: list[tuple[str, list[str] | None]] = []
+    seen: list[tuple[str, Scope | None]] = []
 
     def _reject_b(resource, scope):
         seen.append((resource.name, scope))
-        if scope and "agent-b" in scope:
+        if scope is not None and "agent-b" in (scope.agents or []):
             raise ValueError("agent-b may not have this")
 
     svc, audit, engine = await _service(
@@ -159,15 +164,19 @@ async def test_kind_pre_validation_rejects_before_any_write(tmp_path):
     )
     await svc.register(kind="picky_kind", name="t", config={"foo": 1}, actor="cli")
     with pytest.raises(ScopeInvalidError, match="agent-b"):
-        await svc.update_scope(ResourceRef("picky_kind", "t"), ["agent-b"], actor="cli")
+        await svc.update_scope(
+            ResourceRef("picky_kind", "t"), Scope(agents=["agent-b"]), actor="cli"
+        )
     # The hook saw the resource as it still stands, and nothing was written.
-    assert seen == [("t", ["agent-b"])]
+    assert seen == [("t", Scope(agents=["agent-b"], machines=None))]
     assert (await svc.get(ResourceRef("picky_kind", "t"))).scope is None
     assert await audit.query(event_type=AuditEventType.RESOURCE_SCOPE_UPDATED.value) == []
 
     # An acceptable scope still lands.
-    updated = await svc.update_scope(ResourceRef("picky_kind", "t"), ["agent-a"], actor="cli")
-    assert updated.scope == ["agent-a"]
+    updated = await svc.update_scope(
+        ResourceRef("picky_kind", "t"), Scope(agents=["agent-a"]), actor="cli"
+    )
+    assert updated.scope == Scope(agents=["agent-a"], machines=None)
     await engine.dispose()
 
 
@@ -193,7 +202,9 @@ async def test_kind_pre_validation_may_be_async(tmp_path):
     )
     await svc.register(kind="picky_kind", name="t", config={"foo": 1}, actor="cli")
     with pytest.raises(ScopeInvalidError, match="never"):
-        await svc.update_scope(ResourceRef("picky_kind", "t"), ["agent-a"], actor="cli")
+        await svc.update_scope(
+            ResourceRef("picky_kind", "t"), Scope(agents=["agent-a"]), actor="cli"
+        )
     await engine.dispose()
 
 
@@ -204,8 +215,10 @@ async def test_a_kind_with_no_pre_validation_hook_is_unaffected(tmp_path):
     svc, _, engine = await _service(tmp_path)
     assert svc._require_kind("scoped_kind").validate_scope_for is None
     await svc.register(kind="scoped_kind", name="t", config={"foo": 1}, actor="cli")
-    updated = await svc.update_scope(ResourceRef("scoped_kind", "t"), ["anything"], actor="cli")
-    assert updated.scope == ["anything"]
+    updated = await svc.update_scope(
+        ResourceRef("scoped_kind", "t"), Scope(agents=["anything"]), actor="cli"
+    )
+    assert updated.scope == Scope(agents=["anything"], machines=None)
     await engine.dispose()
 
 
@@ -223,6 +236,8 @@ async def test_update_scope_works_for_lifecycle_kind_without_opt_in(tmp_path):
         actor="owning-service",
         allow_lifecycle_kind=True,
     )
-    updated = await svc.update_scope(ResourceRef("lifecycle_kind", "t"), ["agent-a"], actor="cli")
-    assert updated.scope == ["agent-a"]
+    updated = await svc.update_scope(
+        ResourceRef("lifecycle_kind", "t"), Scope(agents=["agent-a"]), actor="cli"
+    )
+    assert updated.scope == Scope(agents=["agent-a"])
     await engine.dispose()

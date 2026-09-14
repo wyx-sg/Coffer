@@ -16,11 +16,11 @@ import { MemoryDetailPage } from "./kinds/memory/MemoryDetailPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
 import { ResourceDetailPage } from "./pages/ResourceDetailPage";
 import { SettingsLayout } from "./pages/settings/SettingsLayout";
+import { SyncPage } from "./pages/sync/SyncPage";
 import { GeneralSettings } from "./pages/settings/GeneralSettings";
 import { DataSettings } from "./pages/settings/DataSettings";
 import { EngineSettings } from "./pages/settings/EngineSettings";
 import { SecuritySettings } from "./pages/settings/SecuritySettings";
-import { SyncSettings } from "./pages/settings/SyncSettings";
 import { AboutPage } from "./pages/settings/AboutPage";
 import { ModelProvidersPage } from "./pages/ModelProvidersPage";
 import { ProviderDetailPage } from "./pages/ProviderDetailPage";
@@ -53,6 +53,7 @@ export const routes: RouteObject[] = [
       { path: "knowledge/:scope", element: <KnowledgeDetailPage /> },
       { path: "memory", element: <MemoryPage /> },
       { path: "memory/:name", element: <MemoryDetailPage /> },
+      { path: "sync", element: <SyncPage /> },
       { path: "model-providers", element: <ModelProvidersPage /> },
       { path: "model-providers/:name", element: <ProviderDetailPage /> },
       // Legacy route — `knowledge_base` was a resource kind with its own
@@ -90,7 +91,9 @@ export const routes: RouteObject[] = [
           // Legacy route — embedding/chunking config is now one of the two
           // cards on the Engine tab. Keep old bookmarks working by redirecting.
           { path: "embedding", element: <Navigate to="/settings/engine" replace /> },
-          { path: "sync", element: <SyncSettings /> },
+          // Legacy route — Sync was a Settings tab before it became a
+          // top-level page. Keep old bookmarks and links working.
+          { path: "sync", element: <Navigate to="/sync" replace /> },
           { path: "security", element: <SecuritySettings /> },
           { path: "about", element: <AboutPage /> },
         ],

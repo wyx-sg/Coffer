@@ -1,210 +1,583 @@
-"""HTTP contract tests for /api/v1/sync (spec vault-export-import vault export/import)."""
+"""HTTP contract tests for /api/v1/sync (spec vault-sync ``## Surfaces``).
+
+Every route is driven against a **real** :class:`ConvergeService` built by
+``tests/integration/sync/harness.py``: two whole vaults, two SQLite databases,
+two master keys and one real bare git repository between them. Nothing below
+the git binary is faked, so a route that reports ``applied``/``published``
+counts or a commit is reporting what git actually did, and a route with a side
+effect can be checked against the vault and against the remote's tree.
+
+Nothing here may reach the developer's real ``~/.coffer``: the harness pins
+every root under ``tmp_path`` and injects the machine id, and the two roots the
+production code would otherwise read from the environment are pinned as well.
+
+There is no ``/export`` or ``/import`` any more (spec ``## Out of scope``);
+that they are gone is asserted, and nothing else in this file mentions them.
+"""
 
 from __future__ import annotations
 
-import json
+import pathlib
 
-import pytest_asyncio
+import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from pydantic import BaseModel
 
-from coffer.application.audit_service import AuditService
-from coffer.application.resource_service import ResourceService
-from coffer.application.sync.exporter import SyncExporter
-from coffer.application.sync.importer import SyncImporter
-from coffer.application.sync.service import SyncService
-from coffer.domain.resource import Kind
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
-from coffer.infrastructure.credentials.master_key import MasterKeyManager
-from coffer.infrastructure.persistence.base import Base
-from coffer.infrastructure.persistence.engine import (
-    create_async_engine_with_pragmas,
-    session_maker,
+from coffer.domain.scope import Scope
+from coffer.domain.sync.backup import (
+    DEFAULT_BRANCH,
+    DEFAULT_INTERVAL_SECONDS,
+    DEFAULT_WORKTREE,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
-from coffer.infrastructure.sync.bundle import Bundle
-from coffer.infrastructure.sync.credentials import CredentialSyncAdapter
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.sync_routes import router as sync_router
-from coffer.surfaces.http.sync_routes import set_sync_service
+from coffer.surfaces.http.sync_routes import (
+    router as sync_router,
+)
+from coffer.surfaces.http.sync_routes import (
+    set_machine_registry,
+    set_sync_service,
+)
+from tests.integration.sync.harness import MACHINE_A, MACHINE_B, VaultMachine, two_machines
 
-_TOKEN = "test-token"
+pytestmark = pytest.mark.timeout(180)
 
+_TOKEN = "test-token-sync-http"
 
-class _Cfg(BaseModel):
-    value: str = ""
-
-
-class _NoKeyring:
-    def get(self, ref: str) -> str | None:
-        return None
-
-    def set(self, ref: str, value: str) -> None:
-        pass
-
-    def delete(self, ref: str) -> None:
-        pass
+#: Five notes: the deletion guard's default share is 20%, so removing one of
+#: five is exactly at the threshold rather than over it. Scenarios that are not
+#: about the guard seed this many so an ordinary deletion can travel.
+_ROOMY = 5
 
 
-@pytest_asyncio.fixture
-async def client(tmp_path):  # type: ignore[no-untyped-def]
-    db_path = tmp_path / "c.db"
-    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{db_path}")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    sm = session_maker(engine)
-    audit = AuditService(SqlAlchemyAuditRepo(sm))
-    resources = ResourceService(
-        kinds={"mcp_server": Kind(name="mcp_server", display_name="X", config_schema=_Cfg)},
-        repo=SqlAlchemyResourceRepo(sm),
-        audit=audit,
-    )
-    master_key = MasterKeyManager(tmp_path / "master.key", _NoKeyring())
-    master_key.resolve(allow_create=True)
-    cred_sync = CredentialSyncAdapter(db_path, master_key)
-    knowledge = tmp_path / "knowledge"
-    knowledge.mkdir()
-    trees = [("knowledge", knowledge)]
+@pytest.fixture
+async def fleet(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
+    """Two whole vaults, ``a`` being the one the routes are wired to."""
+    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "pinned-knowledge"))
+    monkeypatch.setenv("COFFER_SKILLS_ROOT", str(tmp_path / "pinned-skills"))
+    a, b = await two_machines(tmp_path)
+    try:
+        yield a, b
+    finally:
+        await a.close()
+        await b.close()
 
-    service = SyncService(
-        exporter=SyncExporter(resources, cred_sync, home=None),
-        importer=SyncImporter(resources, cred_sync, home=None),
-        credentials=cred_sync,
-        master_key=master_key,
-        audit=audit,
-        bundle_factory=lambda p: Bundle(p, trees=trees),
-    )
-    set_sync_service(service)
 
+@pytest.fixture
+async def client(fleet):
+    """A minimal app carrying only the sync router, over machine ``a``."""
+    a, _b = fleet
+    set_sync_service(a.service())
+    set_machine_registry(a.registry)
     app = FastAPI()
     app.include_router(sync_router)
     err_handlers.register(app)
     set_active_token(_TOKEN)
-    transport = ASGITransport(app)
     async with AsyncClient(
-        transport=transport, base_url="http://t", headers={"X-Coffer-Token": _TOKEN}
+        transport=ASGITransport(app),
+        base_url="http://t",
+        headers={"X-Coffer-Token": _TOKEN},
     ) as c:
-        c.tmp_path = tmp_path  # type: ignore[attr-defined]
-        c.resources = resources  # type: ignore[attr-defined]
-        c.db_path = db_path  # type: ignore[attr-defined]
-        c.master_key = master_key  # type: ignore[attr-defined]
         yield c
     set_active_token(None)
-    await engine.dispose()
 
 
-async def test_export_then_import_round_trip(client) -> None:  # type: ignore[no-untyped-def]
-    await client.resources.register("mcp_server", "files", {"value": "a"}, "user")
-    (client.tmp_path / "knowledge" / "n.md").write_text("hi", encoding="utf-8")
-    out = client.tmp_path / "bundle"
+async def _configure(client: AsyncClient, machine: VaultMachine) -> None:
+    r = await client.put("/api/v1/sync/remote", json={"url": machine.remote_url})
+    assert r.status_code == 200, r.text
 
-    r = await client.post("/api/v1/sync/export", json={"path": str(out)})
+
+def _code(response) -> str:  # type: ignore[no-untyped-def]
+    return str(response.json()["error"]["code"])
+
+
+# --- the remote -------------------------------------------------------------
+
+
+async def test_remote_on_a_fresh_vault_is_unconfigured_not_an_error(client) -> None:
+    """Sync being off is the ordinary state, so it is a 200 with a flag."""
+    r = await client.get("/api/v1/sync/remote")
+
     assert r.status_code == 200
-    body = r.json()
-    assert body["path"] == str(out)
-    assert body["credentials_included"] is False
-    assert {a["area"]: a["count"] for a in body["areas"]}["resources"] == 1
-    assert body["failures"] == []
+    assert r.json() == {"configured": False, "remote": None}
 
-    r = await client.post("/api/v1/sync/import", json={"path": str(out)})
+
+async def test_put_remote_with_a_bare_url_fills_in_the_spec_defaults(client, fleet) -> None:
+    a, _b = fleet
+
+    r = await client.put("/api/v1/sync/remote", json={"url": a.remote_url})
+
     assert r.status_code == 200
-    body = r.json()
-    assert {a["area"]: a["count"] for a in body["areas"]}["resources"] == 1
-    assert body["locked_refs"] == []
+    assert r.json() == {
+        "url": a.remote_url,
+        "branch": DEFAULT_BRANCH,
+        "credential_ref": None,
+        "include_credentials": False,
+        "interval_seconds": DEFAULT_INTERVAL_SECONDS,
+        "enabled": True,
+        "worktree_path": DEFAULT_WORKTREE,
+    }
+    stored = (await client.get("/api/v1/sync/remote")).json()
+    assert stored["configured"] is True
+    assert stored["remote"]["url"] == a.remote_url
 
 
-async def test_export_with_credentials_is_opt_in(client) -> None:  # type: ignore[no-untyped-def]
-    key = client.master_key.export_key()
-    assert key is not None
-    EncryptedCredentialStore(client.db_path, key).set("mcp/files/token", "s3cret")
+async def test_put_remote_that_cannot_be_reached_is_rejected_at_the_front_door(
+    client, tmp_path
+) -> None:
+    """The user is here now with the URL in front of them — the only cheap moment."""
+    r = await client.put("/api/v1/sync/remote", json={"url": str(tmp_path / "no-such.git")})
 
-    plain = client.tmp_path / "plain"
-    r = await client.post("/api/v1/sync/export", json={"path": str(plain)})
-    assert r.json()["credentials_included"] is False
-    assert not (plain / "credentials").exists()
-
-    withcreds = client.tmp_path / "withcreds"
-    r = await client.post(
-        "/api/v1/sync/export", json={"path": str(withcreds), "with_credentials": True}
-    )
-    assert r.json()["credentials_included"] is True
-    assert (withcreds / "credentials" / "mcp" / "files" / "token.enc").exists()
-
-
-async def test_import_of_a_newer_bundle_is_409(client) -> None:  # type: ignore[no-untyped-def]
-    out = client.tmp_path / "bundle"
-    await client.post("/api/v1/sync/export", json={"path": str(out)})
-    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
-    manifest["schema_version"] += 1
-    (out / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-
-    r = await client.post("/api/v1/sync/import", json={"path": str(out)})
-    assert r.status_code == 409
-    assert r.json()["error"]["code"] == "SYNC_BUNDLE_TOO_NEW"
-
-
-async def test_import_of_a_non_bundle_is_422(client) -> None:  # type: ignore[no-untyped-def]
-    r = await client.post("/api/v1/sync/import", json={"path": str(client.tmp_path / "nope")})
     assert r.status_code == 422
-    assert r.json()["error"]["code"] == "SYNC_BUNDLE_INVALID"
+    assert _code(r) == "BACKUP_REMOTE_INVALID"
+    assert (await client.get("/api/v1/sync/remote")).json()["configured"] is False
 
 
-async def test_key_fingerprint_never_returns_the_key(client) -> None:  # type: ignore[no-untyped-def]
-    r = await client.get("/api/v1/sync/key/fingerprint")
+async def test_delete_remote_is_idempotent(client, fleet) -> None:
+    a, _b = fleet
+    await _configure(client, a)
+
+    first = await client.delete("/api/v1/sync/remote")
+    second = await client.delete("/api/v1/sync/remote")
+
+    assert first.status_code == 200
+    assert first.json() == {"cleared": True}
+    assert second.status_code == 200
+    assert second.json() == {"cleared": False}
+    assert (await client.get("/api/v1/sync/remote")).json()["configured"] is False
+
+
+# --- rounds -----------------------------------------------------------------
+
+
+async def test_run_publishes_the_vault_to_a_real_remote(client, fleet) -> None:
+    a, _b = fleet
+    a.write_knowledge("notes", "one", "first note\n")
+    await a.register("mcp_server", "files")
+    await _configure(client, a)
+
+    r = await client.post("/api/v1/sync/run", json={})
+
     assert r.status_code == 200
     body = r.json()
-    assert body["present"] is True
-    assert len(body["fingerprint"]) == 12
-    key = client.master_key.export_key()
+    assert body["status"] == "ok"
+    assert body["applied"] == {"added": 0, "modified": 0, "deleted": 0}
+    assert body["published"]["added"] >= 2  # the note and the resource
+    assert body["published"]["deleted"] == 0
+    assert body["commit"] is not None
+    # The round reports the commit it reached; git resolves it to the branch tip.
+    assert await a.mirror.resolve_revision(body["commit"]) == await a.mirror.head()
+    assert await a.remote_commit_count() == 1
+    assert body["conflicts"] == []
+    assert body["failures"] == []
+    assert body["pending"] is None
+
+    remote = await a.remote_paths()
+    assert "knowledge/notes/one.md" in remote
+    assert f"machines/{MACHINE_A}.yaml" in remote
+    assert await a.remote_text("knowledge/notes/one.md") == "first note\n"
+
+
+async def test_run_without_a_remote_is_a_disabled_round(client) -> None:
+    r = await client.post("/api/v1/sync/run", json={})
+
+    assert r.status_code == 200
+    assert r.json()["status"] == "disabled"
+    assert r.json()["commit"] is None
+
+
+async def test_adopt_joins_as_new_when_the_registry_has_never_seen_this_machine(
+    client, fleet
+) -> None:
+    a, b = fleet
+    b.write_knowledge("notes", "from-b", "written on the desktop\n")
+    await b.converge()
+    await b.converge()
+    a.write_knowledge("notes", "from-a", "written on the laptop\n")
+    await _configure(client, a)
+
+    r = await client.post("/api/v1/sync/adopt", json={})
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["join"] == "new"
+    assert body["status"] == "ok"
+    # A new machine takes the union: it gains B's note and loses none of its own.
+    assert body["applied"]["deleted"] == 0
+    assert body["published"]["deleted"] == 0
+    assert a.read_knowledge("notes", "from-b") == "written on the desktop\n"
+    assert a.read_knowledge("notes", "from-a") == "written on the laptop\n"
+    assert {"knowledge/notes/from-a.md", "knowledge/notes/from-b.md"} <= await a.remote_paths()
+
+
+async def test_adopt_needs_a_choice_when_a_returning_machine_has_lost_its_base(
+    client, fleet
+) -> None:
+    """A first round publishes a descriptor naming no commit; a reinstall on
+    that same day leaves the base unrecoverable, and neither default is safe."""
+    a, _b = fleet
+    a.write_knowledge("notes", "one", "first note\n")
+    await _configure(client, a)
+    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+    a.state.forget()  # what a reinstall does to the machine-local pointer
+
+    refused = await client.post("/api/v1/sync/adopt", json={})
+
+    assert refused.status_code == 200
+    assert refused.json()["status"] == "failed"
+    assert "cannot be recovered" in (refused.json()["error"] or "")
+    assert refused.json()["join"] is None
+
+    chosen = await client.post("/api/v1/sync/adopt", json={"choice": "keep-local"})
+
+    assert chosen.status_code == 200
+    assert chosen.json()["join"] == "new"
+    assert chosen.json()["status"] in {"ok", "no_change"}
+    assert a.read_knowledge("notes", "one") == "first note\n"
+
+
+# --- the deletion guard -----------------------------------------------------
+
+
+async def _held_publish_round(client: AsyncClient, a: VaultMachine) -> dict:
+    """Seed one note, publish it, delete it — the guard holds the deletion."""
+    a.write_knowledge("notes", "only", "the only note\n")
+    await _configure(client, a)
+    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+    a.delete_knowledge("notes", "only")
+
+    r = await client.post("/api/v1/sync/run", json={})
+    body = r.json()
+    assert r.status_code == 200
+    assert body["status"] == "awaiting_confirmation", body
+    return body
+
+
+async def test_a_round_that_would_delete_a_whole_area_is_held(client, fleet) -> None:
+    a, _b = fleet
+
+    body = await _held_publish_round(client, a)
+
+    pending = body["pending"]
+    assert pending["direction"] == "publish"
+    assert pending["breaches"] == [{"area": "knowledge", "deleted": 1, "total": 1}]
+    assert pending["paths"] == ["knowledge/notes/only.md"]
+    assert pending["raised_at"]
+    # Held means held: the remote still has the document.
+    assert "knowledge/notes/only.md" in await a.remote_paths()
+
+
+async def test_confirm_lets_a_held_round_finish(client, fleet) -> None:
+    a, _b = fleet
+    await _held_publish_round(client, a)
+
+    r = await client.post("/api/v1/sync/confirm", json={})
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ok", body
+    assert body["published"]["deleted"] == 1
+    assert body["pending"] is None
+    assert "knowledge/notes/only.md" not in await a.remote_paths()
+    assert await a.state.pending() is None
+
+
+async def test_reject_discards_a_held_round_and_the_remote_keeps_the_document(
+    client, fleet
+) -> None:
+    a, _b = fleet
+    await _held_publish_round(client, a)
+
+    r = await client.post("/api/v1/sync/reject", json={})
+
+    assert r.status_code == 200
+    assert r.json() == {"cleared": True}
+    assert "knowledge/notes/only.md" in await a.remote_paths()
+    assert await a.state.pending() is None
+
+
+async def test_confirm_with_nothing_held_is_409(client) -> None:
+    r = await client.post("/api/v1/sync/confirm", json={})
+
+    assert r.status_code == 409
+    assert _code(r) == "SYNC_NOTHING_PENDING"
+
+
+async def test_reject_with_nothing_held_is_409(client) -> None:
+    r = await client.post("/api/v1/sync/reject", json={})
+
+    assert r.status_code == 409
+    assert _code(r) == "SYNC_NOTHING_PENDING"
+
+
+# --- undoing ----------------------------------------------------------------
+
+
+async def test_rollback_with_no_snapshot_is_409(client) -> None:
+    r = await client.post("/api/v1/sync/rollback", json={})
+
+    assert r.status_code == 409
+    assert _code(r) == "SYNC_NOTHING_TO_ROLL_BACK"
+
+
+async def test_rollback_undoes_the_last_applied_round(client, fleet) -> None:
+    a, b = fleet
+    for i in range(_ROOMY):
+        a.write_knowledge("notes", f"n{i}", f"original {i}\n")
+    await _configure(client, a)
+    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+    await b.converge()
+    await b.converge()
+
+    b.write_knowledge("notes", "n0", "rewritten by B\n")
+    b.write_knowledge("notes", "extra", "new from B\n")
+    await b.converge()
+    applied = await client.post("/api/v1/sync/run", json={})
+    assert applied.json()["status"] == "ok", applied.json()
+    assert a.read_knowledge("notes", "n0") == "rewritten by B\n"
+    assert a.read_knowledge("notes", "extra") == "new from B\n"
+
+    r = await client.post("/api/v1/sync/rollback", json={})
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ok"
+    assert body["applied"]["deleted"] == 1  # "extra" goes back to not existing
+    assert a.read_knowledge("notes", "n0") == "original 0\n"
+    assert a.read_knowledge("notes", "extra") is None
+
+
+async def test_restore_brings_back_a_deleted_document(client, fleet) -> None:
+    a, _b = fleet
+    for i in range(_ROOMY):
+        a.write_knowledge("notes", f"n{i}", f"note {i}\n")
+    await _configure(client, a)
+    before = (await client.post("/api/v1/sync/run", json={})).json()["commit"]
+    assert before
+
+    a.delete_knowledge("notes", "n0")
+    deleted = await client.post("/api/v1/sync/run", json={})
+    assert deleted.json()["status"] == "ok", deleted.json()
+    assert a.read_knowledge("notes", "n0") is None
+    a.write_knowledge("notes", "since", "gained after the deletion\n")
+
+    r = await client.post("/api/v1/sync/restore", json={"at": before})
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ok"
+    # A round abbreviates the sha it reports; a restore names the revision in full.
+    assert body["commit"] == await a.mirror.resolve_revision(before)
+    assert body["applied"]["added"] == 1
+    assert body["applied"]["deleted"] == 0  # a restore never throws work away
+    assert a.read_knowledge("notes", "n0") == "note 0\n"
+    assert a.read_knowledge("notes", "since") == "gained after the deletion\n"
+
+
+async def test_restore_without_a_remote_is_409(client) -> None:
+    r = await client.post("/api/v1/sync/restore", json={"at": None})
+
+    assert r.status_code == 409
+    assert _code(r) == "SYNC_NOTHING_TO_ROLL_BACK"
+
+
+# --- status -----------------------------------------------------------------
+
+
+async def test_status_on_a_fresh_vault_still_names_this_machine(client) -> None:
+    r = await client.get("/api/v1/sync/status")
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["configured"] is False
+    assert body["remote"] is None
+    assert body["last_run"] is None
+    assert body["machine_id"] == MACHINE_A
+    assert body["machine_id_is_derived"] is True
+
+
+async def test_status_reports_the_remote_and_the_last_round(client, fleet) -> None:
+    a, _b = fleet
+    a.write_knowledge("notes", "one", "first note\n")
+    await _configure(client, a)
+    run = (await client.post("/api/v1/sync/run", json={})).json()
+
+    body = (await client.get("/api/v1/sync/status")).json()
+
+    assert body["configured"] is True
+    assert body["remote"]["url"] == a.remote_url
+    assert body["remote"]["branch"] == DEFAULT_BRANCH
+    assert body["last_run"]["status"] == "ok"
+    assert body["last_run"]["commit"] == run["commit"]
+    assert body["last_run"]["published"] == run["published"]
+
+
+# --- machines ---------------------------------------------------------------
+
+
+async def test_machines_without_a_remote_is_empty(client) -> None:
+    r = await client.get("/api/v1/sync/machines")
+
+    assert r.status_code == 200
+    assert r.json() == {"machines": []}
+
+
+async def test_machines_lists_every_machine_sharing_the_vault(client, fleet) -> None:
+    a, b = fleet
+    b.write_knowledge("notes", "from-b", "desktop\n")
+    await b.converge()
+    await b.converge()
+    await _configure(client, a)
+    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+
+    r = await client.get("/api/v1/sync/machines")
+
+    assert r.status_code == 200
+    rows = {m["machine_id"]: m for m in r.json()["machines"]}
+    assert set(rows) == {MACHINE_A, MACHINE_B}
+    assert rows[MACHINE_A]["is_self"] is True
+    assert rows[MACHINE_A]["name"] == "laptop"
+    assert rows[MACHINE_A]["coffer_version"] == "test"
+    assert rows[MACHINE_A]["key_matches"] is True
+    assert rows[MACHINE_B]["is_self"] is False
+    assert rows[MACHINE_B]["name"] == "desktop"
+    # Two machines that never exchanged a key cannot read each other's ciphertext.
+    assert rows[MACHINE_B]["key_matches"] is False
+    assert rows[MACHINE_B]["last_converged_on"]
+
+
+async def test_rename_self_renames_this_machine(client, fleet) -> None:
+    a, _b = fleet
+    await _configure(client, a)
+
+    r = await client.patch("/api/v1/sync/machines/self", json={"name": "kitchen table"})
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["machine_id"] == MACHINE_A
+    assert body["is_self"] is True
+    assert body["name"] == "kitchen table"
+    assert a.name == "kitchen table"
+
+
+async def test_retiring_this_machine_is_refused(client, fleet) -> None:
+    a, _b = fleet
+    await _configure(client, a)
+
+    r = await client.delete(f"/api/v1/sync/machines/{MACHINE_A}")
+
+    assert r.status_code == 422
+    assert _code(r) == "SYNC_CANNOT_RETIRE_SELF"
+
+
+async def test_retiring_a_machine_strips_it_from_every_scope(client, fleet) -> None:
+    a, b = fleet
+    await b.converge()
+    await b.converge()
+    await a.register("mcp_server", "shared")
+    await _configure(client, a)
+    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+    await a.set_scope("mcp_server", "shared", Scope(machines=[MACHINE_B]))
+
+    r = await client.delete(f"/api/v1/sync/machines/{MACHINE_B}")
+
+    assert r.status_code == 200
+    assert r.json() == {"removed": True, "scopes_updated": 1}
+    remaining = {
+        m["machine_id"] for m in (await client.get("/api/v1/sync/machines")).json()["machines"]
+    }
+    assert remaining == {MACHINE_A}
+    resource = await a.find("mcp_server", "shared")
+    assert resource is not None
+    assert resource.scope is None or MACHINE_B not in (resource.scope.machines or [])
+
+
+# --- the master key ---------------------------------------------------------
+
+
+async def test_key_fingerprint_is_short_and_is_not_the_key(client, fleet) -> None:
+    a, _b = fleet
+
+    r = await client.get("/api/v1/sync/key/fingerprint")
+
+    assert r.status_code == 200
+    fingerprint = r.json()["fingerprint"]
+    assert isinstance(fingerprint, str)
+    assert len(fingerprint) == 12
+    key = a.master_key.export_key()
     assert key is not None
-    assert body["fingerprint"] not in key.decode()
+    assert fingerprint not in key.decode()
+    assert fingerprint == a.key_fingerprint()
 
 
-async def test_key_export_then_import(client) -> None:  # type: ignore[no-untyped-def]
+async def test_key_export_hands_back_material_and_import_takes_it_again(client, fleet) -> None:
     """The key crosses as material, not as a path the daemon writes: a browser
     has no path to hand over, and the caller decides where the bytes land."""
-    r = await client.post("/api/v1/sync/key/export", json={})
+    a, _b = fleet
+
+    exported = await client.post("/api/v1/sync/key/export", json={})
+
+    assert exported.status_code == 200
+    material = exported.json()["material"]
+    key = a.master_key.export_key()
+    assert key is not None
+    assert material == key.decode("utf-8")
+
+    imported = await client.post("/api/v1/sync/key/import", json={"material": material})
+
+    assert imported.status_code == 200
+    assert imported.json() == {"locked_refs": []}
+    assert a.master_key.export_key() == key
+
+
+async def test_key_import_reports_what_it_still_cannot_read(client, fleet) -> None:
+    a, b = fleet
+    a.set_credential("mcp/files/token", "s3cret-value")
+    await a.register("mcp_server", "files", {"value": "f", "credential_ref": "mcp/files/token"})
+    await _configure(client, a)
+    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+    # B absorbs A's ciphertext without A's key, so the ref is locked there.
+    await b.converge()
+    await b.converge()
+    assert b.credentials.locked_refs() == ["mcp/files/token"]
+
+    other = b.master_key.export_key()
+    assert other is not None
+    r = await client.post("/api/v1/sync/key/import", json={"material": other.decode("utf-8")})
+
     assert r.status_code == 200
-    material = r.json()["material"]
-    assert material
-
-    r = await client.post("/api/v1/sync/key/import", json={"material": material})
-    assert r.status_code == 200
-    assert r.json()["locked_refs"] == []
+    # A now holds B's key, so A's own ciphertext is the unreadable one.
+    assert r.json()["locked_refs"] == ["mcp/files/token"]
 
 
-async def test_key_import_of_empty_material_is_422(client) -> None:  # type: ignore[no-untyped-def]
+async def test_key_import_of_empty_material_is_422(client) -> None:
     r = await client.post("/api/v1/sync/key/import", json={"material": "   "})
+
     assert r.status_code == 422
-    assert r.json()["error"]["code"] == "MASTER_KEY_FILE_INVALID"
+    assert _code(r) == "MASTER_KEY_FILE_INVALID"
 
 
-async def test_key_import_of_junk_material_is_422(client) -> None:  # type: ignore[no-untyped-def]
+async def test_key_import_of_junk_material_is_422(client) -> None:
     r = await client.post("/api/v1/sync/key/import", json={"material": "not-a-fernet-key"})
+
     assert r.status_code == 422
-    assert r.json()["error"]["code"] == "MASTER_KEY_FILE_INVALID"
+    assert _code(r) == "MASTER_KEY_FILE_INVALID"
 
 
-async def test_routes_require_the_token(client) -> None:  # type: ignore[no-untyped-def]
-    r = await client.post(
-        "/api/v1/sync/export",
-        json={"path": str(client.tmp_path / "x")},
-        headers={"X-Coffer-Token": "wrong"},
-    )
+# --- the guards around every route ------------------------------------------
+
+
+async def test_a_wrong_token_is_401(client) -> None:
+    r = await client.get("/api/v1/sync/status", headers={"X-Coffer-Token": "wrong"})
+
     assert r.status_code == 401
 
 
-async def test_withdrawn_continuous_sync_routes_are_gone(client) -> None:  # type: ignore[no-untyped-def]
-    # Vault export/import withdrew continuous sync; its surface must not linger.
-    # ``/status`` came back for the backup remote (spec ## Backup) and is
-    # covered in test_sync_backup_routes.py — it reports one machine's last
-    # backup run, not the convergence state this test was written about.
-    assert (await client.get("/api/v1/sync/config")).status_code == 404
-    assert (await client.post("/api/v1/sync/run", json={})).status_code == 404
-    assert (await client.get("/api/v1/sync/machines")).status_code == 404
-    assert (await client.get("/api/v1/sync/overrides")).status_code == 404
+async def test_the_bundle_directory_routes_are_gone(client, tmp_path) -> None:
+    """Writing a bundle to a directory and reading one back was a wholesale
+    overwrite with no base — the 2026-07-10 mutual deletion — and it has no
+    place beside the diff-based round (spec ``## Out of scope``)."""
+    body = {"path": str(tmp_path / "bundle")}
+
+    assert (await client.post("/api/v1/sync/export", json=body)).status_code == 404
+    assert (await client.post("/api/v1/sync/import", json=body)).status_code == 404

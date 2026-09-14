@@ -2,7 +2,7 @@
 
 A *resource document* is the plain-dict form written to
 ``resources/<kind>/<name>.yaml`` in an export bundle. Determinism is
-load-bearing (spec vault-export-import "Determinism"): machine-local, churn-prone fields
+load-bearing (spec vault-sync "Determinism"): machine-local, churn-prone fields
 (``id``, ``created_at``, ``updated_at``) are excluded and the encoder
 (infrastructure) dumps with sorted keys — so two exports of an unchanged vault
 produce byte-identical files, and the user can diff a bundle to see exactly
@@ -18,6 +18,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from coffer.domain.scope import Scope
 from coffer.domain.sync.errors import SyncSerializationError
 
 #: Fields that are part of the document, in canonical order.
@@ -34,7 +35,7 @@ class ResourceDoc:
     enabled: bool
     config: dict[str, Any]
     # Activation scope (ADR per-agent-resource-scope). An ordinary field with no dedicated
-    # machinery (spec vault-export-import "Scope"): it names agents, never paths, so it is
+    # machinery (spec vault-sync "Scope"): it names agents, never paths, so it is
     # exempt from ${HOME} normalization and rides the document unmodified.
     scope: Any = None
 
@@ -54,6 +55,13 @@ def resource_to_doc(
     machine-local and would make two exports of the same vault differ.
     ``scope`` is always emitted (even ``None``) so files stay byte-identical
     across exports, matching ``description``'s always-present-may-be-null style.
+
+    A :class:`~coffer.domain.scope.Scope` is projected to its plain-dict form
+    here rather than by each caller. A document is dicts and scalars all the
+    way down — that is what makes it dumpable, diffable by the user's own
+    tools, and readable by a build that does not share our classes — and a
+    dataclass reaching the encoder is not a formatting nicety missed but an
+    export that cannot be written at all.
     """
     return {
         "kind": kind,
@@ -61,7 +69,7 @@ def resource_to_doc(
         "description": description,
         "enabled": enabled,
         "config": dict(config),
-        "scope": scope,
+        "scope": scope.to_json() if isinstance(scope, Scope) else scope,
     }
 
 

@@ -19,6 +19,7 @@ from coffer.application.provider.boot_reconcile import ProviderProjectionBootHea
 from coffer.domain.provider.config import Protocol
 from coffer.domain.provider.projection import anthropic_api_key_helper, apply_anthropic_settings
 from coffer.domain.resource import Resource
+from coffer.domain.scope import Scope
 
 _NOW = datetime(2026, 9, 10, tzinfo=UTC)
 _BASE_URL = "https://gateway.example/v1"
@@ -30,7 +31,7 @@ def _resource(
     config: dict[str, Any],
     *,
     enabled: bool = True,
-    scope: list[str] | None = None,
+    scope: Scope | None = None,
 ) -> Resource:
     return Resource(
         id=1,
@@ -67,7 +68,7 @@ def _connection(*, is_active: bool = True) -> Resource:
         # The shape that surfaced this: an openai endpoint routed to Claude
         # Code. That routing is the resource's per-agent scope now
         # (ADR per-agent-resource-scope), not a config field.
-        scope=["claude_code"],
+        scope=Scope(agents=["claude_code"]),
     )
 
 

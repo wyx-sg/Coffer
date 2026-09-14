@@ -20,10 +20,11 @@ import { BulkReachActions } from "@/components/reach/BulkReachActions";
 import { ScopeControl } from "@/components/ScopeControl";
 import { memoryKey } from "@/kinds/memory/useMemory";
 import type { PartitionOut } from "@/kinds/memory/types";
+import type { Scope } from "@/lib/hooks/useScope";
 
 export interface MemoryPartitionRow extends PartitionOut {
   enabled: boolean;
-  scope: string[] | null;
+  scope: Scope | null;
 }
 
 export function MemoryPartitionsTable({ rows }: { rows: MemoryPartitionRow[] }) {

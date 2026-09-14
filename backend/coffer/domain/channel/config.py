@@ -74,7 +74,7 @@ class _CommonChannelFields(BaseModel):
     #
     # NOTE: there is no runtime-affinity field here any more. `runs_on` (the
     # machine whose runtime started this channel's adapter) went away with
-    # continuous multi-machine sync (ADR vault-export-import) — an enabled channel runs on
+    # continuous multi-machine sync (ADR vault-sync) — an enabled channel runs on
     # this, the only, machine. Pydantic ignores unknown keys, so a stored
     # pre-withdrawal config carrying `runs_on` still validates.
 

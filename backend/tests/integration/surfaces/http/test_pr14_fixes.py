@@ -20,6 +20,8 @@ from pathlib import Path
 
 import pytest
 
+from coffer.application.scope_evaluator import ScopeEvaluator
+
 # CODE-006 ------------------------------------------------------------------- #
 
 
@@ -250,6 +252,7 @@ async def test_session_dispose_invokes_on_dispose_cleanup() -> None:
 
     registry: dict[str, object] = {}
     session = MCPGatewaySession(
+        scope_evaluator=ScopeEvaluator(machine_id="test-machine"),
         session_id="s1",
         resource_service=object(),  # type: ignore[arg-type]
         supervisor=_StubSupervisor(),  # type: ignore[arg-type]

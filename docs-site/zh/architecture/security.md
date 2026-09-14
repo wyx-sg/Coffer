@@ -78,7 +78,7 @@ envelope 加密意味着数据库之外只剩唯一一份密钥材料：Fernet *
 
 ## 导出安全
 
-仓库的导出与导入（[Vault Export and Import](/zh/reference/adr/vault-export-import)）以**一个用户自己命名、自己搬运的目录**在机器之间搬运 vault 状态。其安全性建立在把密钥材料排除在该目录之外：
+仓库的导出与导入（[Vault Export and Import](/zh/reference/adr/vault-sync)）以**一个用户自己命名、自己搬运的目录**在机器之间搬运 vault 状态。其安全性建立在把密钥材料排除在该目录之外：
 
 - **完全没有网络出口。** 导出与导入只触碰本地文件系统——没有远程、没有 git 子进程、没有后台复制。搬运这个目录的手段（`scp`、U 盘、用户自己的 git 仓库）都在 Coffer 之外，用的是用户自己的工具与凭据。
 - **凭据是 opt-in 的。** 不给 `--with-credentials` 时，导出完全不包含任何凭据材料，因为一个导出目录很容易被随手落在什么地方。

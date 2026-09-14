@@ -1,0 +1,182 @@
+"""Wire shapes for /api/v1/sync (spec vault-sync).
+
+Split out of ``sync_routes.py`` for the file-size tier. Remote shapes carry
+``credential_ref`` and never the push credential itself, so a remote can be
+rendered in a browser, logged, or pasted into a bug report with nothing to
+redact.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+from pydantic import BaseModel
+
+from coffer.domain.sync.backup import (
+    DEFAULT_BRANCH,
+    DEFAULT_INTERVAL_SECONDS,
+    DEFAULT_WORKTREE,
+)
+
+
+class DiffCountsOut(BaseModel):
+    added: int = 0
+    modified: int = 0
+    deleted: int = 0
+
+
+class FailureOut(BaseModel):
+    path: str
+    reason: str
+
+
+class BreachOut(BaseModel):
+    area: str
+    deleted: int
+    total: int
+
+
+class PendingConfirmationOut(BaseModel):
+    """A round the deletion guard held.
+
+    ``direction`` says which way it tripped: ``apply`` means the remote would
+    delete too much of this vault, ``publish`` means this vault would delete
+    too much of the remote — the case where this machine is the damaged one.
+    """
+
+    direction: str
+    breaches: list[BreachOut]
+    paths: list[str]
+    raised_at: datetime
+
+
+class RoundOut(BaseModel):
+    """One converge round's outcome."""
+
+    status: str
+    #: ``new`` or ``returning`` when this round joined a remote; null otherwise.
+    join: str | None = None
+    applied: DiffCountsOut
+    published: DiffCountsOut
+    commit: str | None = None
+    conflicts: list[str] = []
+    #: Paths an agent merged. Always reported, successful or not: a silent
+    #: machine merge of the user's own notes is what they would most want told.
+    agent_resolved: list[str] = []
+    failures: list[FailureOut] = []
+    locked_refs: list[str] = []
+    pending: PendingConfirmationOut | None = None
+    error: str | None = None
+
+
+class AdoptIn(BaseModel):
+    #: Only for a returning machine whose recorded base is gone from the
+    #: remote's history: ``keep-local`` joins as new and publishes this vault's
+    #: documents as additions. Absent, that case is refused rather than guessed.
+    choice: str | None = None
+
+
+class SyncRemoteIn(BaseModel):
+    """The remote as the user configures it.
+
+    Every field but the URL carries the spec's default, so a ``PUT`` with a
+    bare URL is a complete configuration rather than a half-set one.
+    """
+
+    url: str
+    branch: str = DEFAULT_BRANCH
+    #: A name in the credential store — never the secret. The daemon resolves
+    #: it at push time and nowhere else.
+    credential_ref: str | None = None
+    include_credentials: bool = False
+    interval_seconds: int = DEFAULT_INTERVAL_SECONDS
+    enabled: bool = True
+    worktree_path: str = DEFAULT_WORKTREE
+
+
+class SyncRemoteOut(BaseModel):
+    url: str
+    branch: str
+    credential_ref: str | None
+    include_credentials: bool
+    interval_seconds: int
+    enabled: bool
+    worktree_path: str
+
+
+class SyncRemoteStateOut(BaseModel):
+    #: ``False`` on a fresh vault. Sync being off is the ordinary state, not an
+    #: error, so an unconfigured remote is a 200 with ``remote: null``.
+    configured: bool
+    remote: SyncRemoteOut | None
+
+
+class SyncRemoteClearedOut(BaseModel):
+    #: ``False`` when there was nothing to clear — delete is idempotent.
+    cleared: bool
+
+
+class SyncStatusOut(BaseModel):
+    configured: bool
+    remote: SyncRemoteOut | None
+    last_run: RoundOut | None
+    #: This machine's own id, so a surface can mark its row in the registry.
+    machine_id: str
+    #: ``False`` when the id came from the local fallback file rather than the
+    #: host, which means it does not survive deleting ``~/.coffer``.
+    machine_id_is_derived: bool
+
+
+class MachineOut(BaseModel):
+    machine_id: str
+    name: str
+    os: str
+    hostname: str
+    coffer_version: str
+    #: The *day* this machine last converged. A day rather than an instant
+    #: because an idle machine must not commit a heartbeat every round.
+    last_converged_on: str | None
+    #: Null when either side has published no fingerprint yet. ``False`` means
+    #: that machine's credentials cannot be decrypted here.
+    key_matches: bool | None
+    agents: list[str]
+    is_self: bool
+
+
+class MachineListOut(BaseModel):
+    machines: list[MachineOut]
+
+
+class MachineRenameIn(BaseModel):
+    name: str
+
+
+class MachineRemovedOut(BaseModel):
+    removed: bool
+    #: How many resources had this machine stripped from their scope, in the
+    #: same change — a descriptor removed while scopes still name it would
+    #: leave resources dormant on a machine nobody can see.
+    scopes_updated: int
+
+
+class RestoreIn(BaseModel):
+    #: A sha, a ref, or a ``YYYY-MM-DD`` date resolving to the last commit at
+    #: or before it — the tip cannot return something deleted last week.
+    at: str | None = None
+    from_url: str | None = None
+
+
+class KeyMaterialIn(BaseModel):
+    material: str
+
+
+class KeyMaterialOut(BaseModel):
+    material: str
+
+
+class KeyImportOut(BaseModel):
+    locked_refs: list[str]
+
+
+class KeyFingerprintOut(BaseModel):
+    fingerprint: str | None

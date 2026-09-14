@@ -61,10 +61,16 @@ class AuditEventType(StrEnum):
     # spec channels
     CHANNEL_PAIRING_ISSUED = "channel_pairing_issued"
     CHANNEL_PAIRED = "channel_paired"
-    # spec vault-export-import
+    # spec vault-sync
     MASTER_KEY_EXPORTED = "master_key_exported"
     MASTER_KEY_IMPORTED = "master_key_imported"
-    VAULT_BACKED_UP = "vault_backed_up"
+    SYNC_RUN = "sync_run"
+    SYNC_CONFIRMED = "sync_confirmed"
+    SYNC_REJECTED = "sync_rejected"
+    SYNC_ROLLED_BACK = "sync_rolled_back"
+    SYNC_MACHINE_REMOVED = "sync_machine_removed"
+    # spec mcp-gateway FR-028
+    DAEMON_PORT_SET = "daemon_port_set"
     # spec provider-switching
     PROVIDER_SWITCHED = "provider_switched"
     PROVIDER_INTERNAL_DEFAULT_SET = "provider_internal_default_set"

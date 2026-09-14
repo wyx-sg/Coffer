@@ -2,7 +2,7 @@
 //
 // The skills list renders via the shared DataTable: rows navigate to the detail
 // page on click, each row carries the three-state ScopeControl (the skill's
-// reach: Disabled / Every agent / Selected agents — the same control the detail
+// reach: Disabled / Everywhere / Restricted — the same control the detail
 // page mounts) + a Delete action (which opens a styled confirmation dialog — no
 // window.confirm), a status filter narrows the rows by that same reach, and a
 // checkbox column enables the bulk bar: that same three-state reach control
@@ -130,7 +130,7 @@ const SAMPLE: SkillOut[] = [
     description: "Only for cc",
     source: { type: "local_import", original_path: "/tmp/scoped" },
     enabled: true,
-    scope: ["cc"],
+    scope: { agents: ["cc"], machines: null },
     version_hash: "111222333444",
     master_path: "/master/scoped-skill",
     last_synced_from_source_at: null,
@@ -188,11 +188,11 @@ describe("SkillsTable", () => {
       "aria-pressed",
       "false",
     );
-    expect(bar.getByRole("button", { name: /every agent/i })).toHaveAttribute(
+    expect(bar.getByRole("button", { name: /everywhere/i })).toHaveAttribute(
       "aria-pressed",
       "false",
     );
-    expect(bar.getByRole("button", { name: /selected agents/i })).toBeInTheDocument();
+    expect(bar.getByRole("button", { name: /restricted/i })).toBeInTheDocument();
   });
 
   test("the status cell is the three-state scope control, not an on/off switch", () => {
@@ -202,13 +202,13 @@ describe("SkillsTable", () => {
     expect(screen.queryByRole("switch")).toBeNull();
     const row = within(rowFor("hello-skill"));
     expect(row.getByTestId("scope-control")).toBeInTheDocument();
-    expect(row.getByRole("button", { name: /every agent/i })).toHaveAttribute(
+    expect(row.getByRole("button", { name: /everywhere/i })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    // A scoped skill lands on "Selected agents"; a disabled one on "Disabled".
+    // A scoped skill lands on "Restricted"; a disabled one on "Disabled".
     expect(
-      within(rowFor("scoped-skill")).getByRole("button", { name: /selected agents/i }),
+      within(rowFor("scoped-skill")).getByRole("button", { name: /restricted/i }),
     ).toHaveAttribute("aria-pressed", "true");
     expect(
       within(rowFor("git-skill")).getByRole("button", { name: /^disabled$/i }),
@@ -234,7 +234,7 @@ describe("SkillsTable", () => {
     fireEvent.click(within(rowFor("hello-skill")).getByRole("button", { name: /^disabled$/i }));
     expect(disableMutate).toHaveBeenCalledWith({ kind: "skill", name: "hello-skill" });
 
-    fireEvent.click(within(rowFor("git-skill")).getByRole("button", { name: /every agent/i }));
+    fireEvent.click(within(rowFor("git-skill")).getByRole("button", { name: /everywhere/i }));
     expect(enableMutate).toHaveBeenCalledWith({ kind: "skill", name: "git-skill" });
   });
 
@@ -244,7 +244,7 @@ describe("SkillsTable", () => {
 
     fireEvent.click(within(rowFor("hello-skill")).getByRole("button", { name: /^disabled$/i }));
     fireEvent.click(
-      within(rowFor("hello-skill")).getByRole("button", { name: /selected agents/i }),
+      within(rowFor("hello-skill")).getByRole("button", { name: /restricted/i }),
     );
     expect(navigateMock).not.toHaveBeenCalled();
 
@@ -261,12 +261,12 @@ describe("SkillsTable", () => {
     expect(screen.queryByText("hello-skill")).toBeNull();
     expect(screen.getByText("git-skill")).toBeInTheDocument();
 
-    selectStatus("Every agent");
+    selectStatus("Everywhere");
     expect(screen.getByText("hello-skill")).toBeInTheDocument();
     expect(screen.queryByText("git-skill")).toBeNull();
     expect(screen.queryByText("scoped-skill")).toBeNull();
 
-    selectStatus("Selected agents");
+    selectStatus("Restricted…");
     expect(screen.getByText("scoped-skill")).toBeInTheDocument();
     expect(screen.queryByText("hello-skill")).toBeNull();
   });

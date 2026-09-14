@@ -127,7 +127,7 @@ describe("ChannelsTable", () => {
 
     const row = within(screen.getByText("tg").closest("tr") as HTMLElement);
     expect(row.getByTestId("scope-control")).toBeInTheDocument();
-    expect(row.getByRole("button", { name: /every agent/i })).toHaveAttribute(
+    expect(row.getByRole("button", { name: /everywhere/i })).toHaveAttribute(
       "aria-pressed",
       "true",
     );

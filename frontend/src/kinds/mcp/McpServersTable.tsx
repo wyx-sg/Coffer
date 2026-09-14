@@ -77,8 +77,8 @@ export function McpServersTable({ resources }: { resources: ResourceOut[] }) {
   // The status filter tracks the status column: now that the column shows reach
   // rather than on/off, a bare "enabled" would no longer match anything the
   // user can see, so the filter offers the control's own three states —
-  // disabled beats scope, and an enabled server is either unscoped (every
-  // agent) or scoped (selected).
+  // disabled beats scope, and an enabled server is either unscoped
+  // (everywhere) or restricted.
   const filters: FilterDef<ResourceOut>[] = [
     {
       key: "status",
@@ -88,8 +88,8 @@ export function McpServersTable({ resources }: { resources: ResourceOut[] }) {
         !r.enabled ? "disabled" : (r.scope ?? null) === null ? "every" : "selected",
       options: [
         { value: "disabled", label: t("common.disabled") },
-        { value: "every", label: t("scope.everyAgent") },
-        { value: "selected", label: t("scope.selectedAgents") },
+        { value: "every", label: t("scope.everywhere") },
+        { value: "selected", label: t("scope.restricted") },
       ],
     },
   ];

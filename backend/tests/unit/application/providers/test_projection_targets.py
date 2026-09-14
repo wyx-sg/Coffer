@@ -23,6 +23,7 @@ from coffer.application.provider.targets import projection_targets, scoped_targe
 from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.resource import Resource
+from coffer.domain.scope import Scope
 
 _NOW = datetime(2026, 9, 13, tzinfo=UTC)
 
@@ -30,7 +31,7 @@ _NOW = datetime(2026, 9, 13, tzinfo=UTC)
 def _connection(
     *,
     protocol: str = "openai",
-    scope: list[str] | None = None,
+    scope: Scope | None = None,
     enabled: bool = True,
 ) -> tuple[Resource, ProviderConfig]:
     config: dict[str, Any] = {"protocol": protocol, "base_url": "https://gw/v1"}
@@ -51,7 +52,7 @@ def _connection(
 
 
 def test_an_explicit_scope_is_the_reach() -> None:
-    resource, cfg = _connection(scope=["claude_code"])
+    resource, cfg = _connection(scope=Scope(agents=["claude_code"]))
     assert projection_targets(resource, cfg) == [AgentType.CLAUDE_CODE]
 
 
@@ -64,13 +65,13 @@ def test_an_unscoped_connection_reaches_every_agent() -> None:
 
 
 def test_a_dormant_connection_reaches_nothing() -> None:
-    resource, cfg = _connection(scope=[])
+    resource, cfg = _connection(scope=Scope(agents=[]))
     assert projection_targets(resource, cfg) == []
 
 
 def test_a_disabled_connection_reaches_nothing() -> None:
     # ``enabled`` is the user's switch on the resource; it beats everything.
-    resource, cfg = _connection(scope=["claude_code"], enabled=False)
+    resource, cfg = _connection(scope=Scope(agents=["claude_code"]), enabled=False)
     assert projection_targets(resource, cfg) == []
 
 
@@ -78,12 +79,12 @@ def test_a_keyless_connection_reaches_nothing_whatever_its_scope_says() -> None:
     # ollama is Coffer's internal engine's endpoint: there is no key to write
     # into an agent's config, so a scope naming one is ignored rather than
     # producing a projection that cannot work.
-    resource, cfg = _connection(protocol="ollama", scope=["claude_code"])
+    resource, cfg = _connection(protocol="ollama", scope=Scope(agents=["claude_code"]))
     assert projection_targets(resource, cfg) == []
 
 
 def test_an_unknown_agent_name_in_the_scope_never_matches() -> None:
-    resource, cfg = _connection(scope=["codex", "retired-agent"])
+    resource, cfg = _connection(scope=Scope(agents=["codex", "retired-agent"]))
     assert projection_targets(resource, cfg) == [AgentType.CODEX]
 
 
@@ -95,13 +96,18 @@ def test_the_configured_reach_survives_the_user_switching_the_connection_off() -
     # disabled connection's agent chips render as "—", so disabling looked like
     # it had erased the agent list and re-enabling looked like it restored data.
     # `enabled` travels on the same payload, so the client can intersect.
-    resource, cfg = _connection(scope=["claude_code"], enabled=False)
+    resource, cfg = _connection(scope=Scope(agents=["claude_code"]), enabled=False)
     assert scoped_targets(resource, cfg) == [AgentType.CLAUDE_CODE]
     assert projection_targets(resource, cfg) == []
 
 
 def test_the_two_agree_whenever_the_connection_is_enabled() -> None:
-    for scope in (None, [], ["codex"], ["claude_code", "codex"]):
+    for scope in (
+        None,
+        Scope(agents=[]),
+        Scope(agents=["codex"]),
+        Scope(agents=["claude_code", "codex"]),
+    ):
         resource, cfg = _connection(scope=scope)
         assert scoped_targets(resource, cfg) == projection_targets(resource, cfg)
 
@@ -110,5 +116,5 @@ def test_a_keyless_connection_covers_nothing_even_as_configured_reach() -> None:
     # Unlike `enabled`, the ollama rule is not a switch the user flipped: there
     # is no key to write into any agent's config, so the connection does not
     # cover an agent even in principle and reporting one would be a lie.
-    resource, cfg = _connection(protocol="ollama", scope=["claude_code"])
+    resource, cfg = _connection(protocol="ollama", scope=Scope(agents=["claude_code"]))
     assert scoped_targets(resource, cfg) == []

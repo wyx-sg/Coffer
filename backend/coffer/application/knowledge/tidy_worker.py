@@ -41,6 +41,7 @@ class TidyWorker:
         list_collections: CollectionLister,
         start_delay_s: float = DEFAULT_START_DELAY_S,
         interval_s: float = DEFAULT_INTERVAL_S,
+        lock: asyncio.Lock | None = None,
     ) -> None:
         self._service = service
         self._tidy = tidy
@@ -48,6 +49,12 @@ class TidyWorker:
         self._list_collections = list_collections
         self._start_delay_s = start_delay_s
         self._interval_s = interval_s
+        # The vault-write lock a converge round also takes (spec vault-sync
+        # ``## Unattended rewriters``): a pass and a round both rewrite vault
+        # content, and an export taken half-way through a rewrite is a torn
+        # snapshot that git reads as a deliberate change. None on a vault with
+        # no sync wired, where there is nothing to interleave with.
+        self._lock = lock
 
     async def run_forever(self) -> None:
         await asyncio.sleep(self._start_delay_s)
@@ -66,6 +73,13 @@ class TidyWorker:
         """One sweep over every collection, or nothing at all when disabled."""
         if not await self._is_enabled():
             return
+        if self._lock is None:
+            await self._sweep()
+            return
+        async with self._lock:
+            await self._sweep()
+
+    async def _sweep(self) -> None:
         for collection in await self._list_collections():
             try:
                 await self._tidy(self._service, collection, actor="system")

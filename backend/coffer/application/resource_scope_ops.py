@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ResourceNotFound, ScopeInvalidError
 from coffer.domain.resource import Resource, ResourceRef
-from coffer.domain.scope import validate_scope
+from coffer.domain.scope import Scope, validate_scope
 
 if TYPE_CHECKING:
     from coffer.application.resource_service import ResourceService
@@ -24,11 +24,11 @@ if TYPE_CHECKING:
 async def update_scope(
     service: ResourceService,
     ref: ResourceRef,
-    scope: list[str] | None,
+    scope: Scope | None,
     *,
     actor: str,
 ) -> Resource:
-    """Set (or clear) a resource's per-agent activation scope (ADR per-agent-resource-scope).
+    """Set (or clear) a resource's activation scope (ADR per-agent-resource-scope).
 
     Framework-level: unlike ``update_config``/``delete``, this is NOT gated
     on ``allow_lifecycle_kind`` — scope is orthogonal to a kind's creation
@@ -69,9 +69,10 @@ async def update_scope(
         AuditEventType.RESOURCE_SCOPE_UPDATED.value,
         ref=ref,
         actor=actor,
-        # Scope carries only agent names — no secrets — so it is audited
-        # verbatim (no redactor needed, unlike config).
-        details={"scope": scope},
+        # Scope carries only agent and machine names — no secrets — so it is
+        # audited verbatim (no redactor needed, unlike config), in the same
+        # two-axis shape the column stores.
+        details={"scope": scope.to_json() if scope is not None else None},
     )
     # Kind-level reconciliation: runs AFTER persistence +
     # audit, unlike ``on_update_config`` — by the time this fires the new

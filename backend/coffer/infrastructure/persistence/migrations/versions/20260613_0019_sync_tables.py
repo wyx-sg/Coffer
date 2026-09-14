@@ -1,4 +1,4 @@
-"""sync_config and sync_state tables for multi-machine sync (spec vault-export-import)
+"""sync_config and sync_state tables for multi-machine sync (spec vault-sync)
 
 Revision ID: 0019
 Revises: 0018

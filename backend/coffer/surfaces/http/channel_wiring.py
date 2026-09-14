@@ -22,8 +22,10 @@ from coffer.application.channel.ports import ChannelAdapter
 from coffer.application.channel.runtime import ChannelRuntime
 from coffer.application.channel.service import ChannelService
 from coffer.application.credentials.resolver import CredentialResolver
+from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.channel.config import parse_channel_config
 from coffer.domain.resource import ResourceRef
+from coffer.domain.scope import Scope
 from coffer.infrastructure.channel.listener_spawn import CallbackListenerController
 from coffer.infrastructure.channel.persistence import (
     ChannelPeerRepo,
@@ -69,6 +71,7 @@ def wire_channel_kind(
     resource_svc: ResourceService,
     audit: AuditService,
     sm: async_sessionmaker,  # type: ignore[type-arg]
+    scope_evaluator: ScopeEvaluator,
     credential_store: Any = None,
 ) -> ChannelRuntime:
     peers = ChannelPeerRepo(sm)
@@ -120,6 +123,10 @@ def wire_channel_kind(
         adapter_factory=adapter_factory,
         processor=processor,
         pairing=pairing,
+        # A channel is an inbound surface: its scope's machine axis decides
+        # which of a converged vault's machines answers it, so the runtime is
+        # the one consumer that has to know which machine this is.
+        scope=scope_evaluator,
         listener=listener,
         tunnel=TunnelController(),
         # FR-071: websocket-delivery channels converge the same way, and their
@@ -134,10 +141,11 @@ def wire_channel_kind(
     async def on_delete(ref: ResourceRef) -> None:
         await runtime.evict(ref.name)
 
-    async def channel_scope(ref: ResourceRef) -> list[str] | None:
-        """The channel's own per-agent scope, for the edit-time default_agent
-        check. Read live off the row rather than cached: an edit lands after
-        whatever scope the row carries right now."""
+    async def channel_scope(ref: ResourceRef) -> Scope | None:
+        """The channel's own scope, for the edit-time default_agent check. Read
+        live off the row rather than cached: an edit lands after whatever scope
+        the row carries right now. The whole scope travels; the validator is the
+        one that decides it reads only the agent axis."""
         return (await resource_svc.get(ref)).scope
 
     app.state.kinds["channel"] = make_channel_kind(
@@ -163,7 +171,7 @@ def wire_channel_kind(
         http_client=httpx.AsyncClient(),
     )
     set_channel_service(service)
-    # Pairing identity syncs across machines (spec vault-export-import state area); the sync
+    # Pairing identity syncs across machines (spec vault-sync state area); the sync
     # composition root (wired later) picks the provider up from app.state.
     providers = getattr(app.state, "sync_state_providers", None)
     if providers is None:

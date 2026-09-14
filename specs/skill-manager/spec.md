@@ -65,7 +65,7 @@ Files in agents' `config_dir/skills` folders can be tampered with (deleted, repl
 
 ### User Story 6 — Manage skills through the web UI (Priority: P2)
 
-The user opens Coffer, sees the Skills page rendered as a data table (search, filter, pagination, row multi-select for bulk actions), can import via file picker and browse the list. The Skills page manages the skill resource itself, not its per-agent bindings: clicking a skill opens a detail view with an Overview metadata tab and a Files tab (file tree + a read-only file viewer that renders Markdown and shows other text files raw). The viewer does not edit content; to change a file the user opens it (or its containing folder) in their own external editor or file manager — every file and folder offers "open in external editor" and "reveal in file manager" affordances, performed by the local daemon. The delivery decision is made on the skill — its `enabled` flag and its scope — and the list's status column states both at once, as the one three-state control (Disabled / Every agent / Selected agents) the detail page also carries, so the user never has to open a skill to change who it reaches; the list's status filter offers those same three states. The agent detail page decides nothing about delivery: the agent's "Skills" tab points at the Skills page (where the whole library, its delivery state and the "Copied" degradation chip live) and otherwise carries only the unmanaged skills found on that agent's disk, which exist nowhere else in the UI.
+The user opens Coffer, sees the Skills page rendered as a data table (search, filter, pagination, row multi-select for bulk actions), can import via file picker and browse the list. The Skills page manages the skill resource itself, not its per-agent bindings: clicking a skill opens a detail view with an Overview metadata tab and a Files tab (file tree + a read-only file viewer that renders Markdown and shows other text files raw). The viewer does not edit content; to change a file the user opens it (or its containing folder) in their own external editor or file manager — every file and folder offers "open in external editor" and "reveal in file manager" affordances, performed by the local daemon. The delivery decision is made on the skill — its `enabled` flag and its scope — and the list's status column states both at once, as the one three-state reach control (Disabled / Everywhere / Restricted… — where "restricted" opens the two scope axes, agents and machines) the detail page also carries, so the user never has to open a skill to change who it reaches, or where; the list's status filter offers those same three states. The agent detail page decides nothing about delivery: the agent's "Skills" tab points at the Skills page (where the whole library, its delivery state and the "Copied" degradation chip live) and otherwise carries only the unmanaged skills found on that agent's disk, which exist nowhere else in the UI.
 
 **Why this priority**: Non-CLI users need a visual surface for daily management.
 
@@ -150,6 +150,7 @@ The user should not have to configure delivery twice. A skill's own two fields s
 
 - a skill with no scope reaches every registered agent
 - a skill scoped to no agent reaches nobody
+- a skill scoped to another machine is delivered to nobody here
 - import delivers a skill only where its scope grants it
 - disabling a skill reclaims every delivered copy
 - re-enabling a skill redelivers it
@@ -173,37 +174,59 @@ The user should not have to configure delivery twice. A skill's own two fields s
 
 ## Skill delivery scope ([ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.md))
 
-A `skill` resource carries a framework-level `scope` — a list of agent names,
-or `None` for "every agent". Together with the resource's own `enabled` flag it
-is the WHOLE delivery rule:
+A `skill` resource carries a framework-level `scope` — two independent
+allow-lists, `agents` and `machines`, `AND`-ed, each `null` meaning
+unrestricted (spec vault-sync, "Scope gains a machine axis"). Together with the
+resource's own `enabled` flag it is the WHOLE delivery rule:
 
 ```
-delivered(skill, agent)  ⟺  skill.enabled AND agent_in_scope(skill.scope, agent)
+delivered(skill, agent) here  ⟺  skill.enabled
+                              AND scope.agents   admits this agent    (null admits any)
+                              AND scope.machines admits THIS machine  (null admits any)
 ```
+
+The daemon knows which machine it is running on, so the second axis needs no
+input from the session: it is bound once and asked alongside the agent
+(`ScopeEvaluator.is_active(skill.scope, agent)`).
 
 Nothing else gates delivery. This is the same shape `mcp_server` already uses,
-where scope alone decides which agent sees a server's tools.
+where scope alone decides which agent, on which machine, sees a server's tools.
 
-- **The three scope states.** `None` — every registered agent receives the
-  skill (the default for a fresh import). `["claude_code"]` — only the named
-  agents receive it; names that are not registered yet are legal and simply
-  never match. `[]` — no agent receives it, while the skill stays in the
-  library, exported and visible.
+- **The scope states.** `None` — every registered agent, on every machine,
+  receives the skill (the default for a fresh import). `{"agents":
+  ["claude_code"]}` — only the named agents receive it, on any machine; names
+  that are not registered yet are legal and simply never match. `{"machines":
+  ["a3f21c9e4b7d2610"]}` — every agent receives it, but only on that machine.
+  Both axes set — only where both match. `[]` on either axis — nobody
+  receives it anywhere, while the skill stays in the library, synced and
+  visible.
+- **A skill scoped to another machine is delivered to nobody here.** It still
+  converges to this machine, still appears in the library, and stays editable
+  and exportable from here — but no agent on this machine is written into,
+  whatever its agent axis says. Dormant-on-this-machine is not the same as
+  disabled: `enabled` is a statement about the skill everywhere, the machine
+  axis says where it belongs. Where a skill is inactive here the UI says which
+  axis excluded it, and the machine axis is named first.
 - **`enabled` is the on/off switch, and it is real.** Disabling a skill
   reclaims every delivered copy — each symlink is removed, the master folder
-  untouched. Re-enabling redelivers it to every agent its scope still grants.
-- **Scope is a hard grant.** Narrowing a skill's scope to exclude an agent it
-  was previously delivered to reclaims that delivery on the next reconcile,
-  even if the copy got there some other way; widening the scope delivers it.
-  There is no per-agent state that can hold a copy against the skill's scope,
-  and none that can keep a copy away from an agent the scope grants.
+  untouched. Re-enabling redelivers it to every agent its scope still grants
+  on this machine.
+- **Scope is a hard grant, on both axes.** Narrowing a skill's scope to exclude
+  an agent it was previously delivered to reclaims that delivery on the next
+  reconcile, even if the copy got there some other way; widening the scope
+  delivers it. Dropping this machine out of `scope.machines` reclaims every
+  copy here on the same seam, and adding it back redelivers them. There is no
+  per-agent state that can hold a copy against the skill's scope, and none
+  that can keep a copy away from an agent the scope grants.
 - **Reconcile is the enforcement seam** — including the post-import reconcile
-  hook (spec vault-export-import). It runs whenever the answer to the predicate can have
+  hook (spec vault-sync). It runs whenever the answer to the predicate can have
   changed: a skill is enabled or disabled, a skill's scope is edited, a skill
   is imported, a skill is removed, an agent is registered, an agent's
   `config_dir` changes, and after a sync import. Each run recomputes the
-  agent's wanted set, delivers what is missing, and reclaims what is no longer
-  wanted.
+  agent's wanted set **for the machine it runs on**, delivers what is missing,
+  and reclaims what is no longer wanted — so the same skill row can be wanted
+  on one machine and reclaimed on another, which is exactly what the machine
+  axis is for.
 - **The trade-off, stated plainly.** There is no longer a single per-agent
   "this agent gets nothing" switch. To exclude one agent from everything,
   remove it from each skill's scope — which is exactly how `mcp_server`
@@ -377,6 +400,12 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **When** the user sets the skill's scope to `[]`,
 - **Then** both delivered copies are reclaimed, the skill remains in the library (still listed, still exported), and no agent receives it until its scope grants one again.
 
+### Scenario: a skill scoped to another machine is delivered to nobody here
+
+- **Given** a registered agent holding a delivered copy of an enabled skill whose scope grants that agent,
+- **When** the user narrows the skill's `machines` axis to a machine that is not this one,
+- **Then** the delivered copy is reclaimed here and no agent on this machine receives it, while the skill itself stays in the library — listed, editable, and converging with the remote — and is delivered on the machine its scope names. Dormant on a machine is not disabled.
+
 ### Scenario: import delivers a skill only where its scope grants it
 
 - **Given** two registered agents, `claude_code` and `codex`,
@@ -451,7 +480,7 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **FR-010**: Reclaiming a delivered copy MUST remove the target link without touching the master folder.
 - **FR-011**: Delivery MUST report, never overwrite: when the target path already holds something that is not a Coffer-managed link, that skill is reported as a conflict and the existing target is left exactly as it was, while the rest of the delivery proceeds. (Backing a target up before relinking exists only inside the explicit opt-in drift repair of FR-029.)
 - **FR-012**: When symlinks/directory junctions are unavailable (e.g., FAT32, network share), System MAY fall back to copy mode for that target; the binding records `link_mode=copy_fallback` (audited as `mode: copy_fallback` on the enable event) and the UI MUST surface the degradation (the Skills page badges such a skill with a "Copied" warning chip).
-- **FR-012a** ([ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.md)): A skill MUST be delivered to an agent if and only if the skill resource is enabled AND the agent is within the skill's scope — `skill.enabled AND agent_in_scope(skill.scope, agent)`. No other flag decides which agents a skill is FOR: neither the delivery bookkeeping of FR-008 nor any field on the agent resource. A DISABLED AGENT is a separate matter and is never written into at all — the predicate names the agents a skill belongs to, while an agent the user switched off is one Coffer does not touch; its held copies are reclaimed and re-enabling it reconciles them back. A reconcile that finds a delivered copy the predicate no longer grants MUST reclaim it (remove the link, clear the delivery record) per FR-010, and MUST deliver a copy the predicate now grants but the agent does not hold.
+- **FR-012a** ([ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.md)): A skill MUST be delivered to an agent on this machine if and only if the skill resource is enabled AND the skill's scope admits both that agent and this machine — `skill.enabled AND is_active(skill.scope, agent=<agent>, machine=<this machine>)`, the scope's two allow-lists `AND`-ed, an axis left `null` admitting anything. A skill whose `scope.machines` does not name this machine is therefore delivered to NO agent here, however its agent axis reads: it still converges here, stays listed, editable and exportable, and is delivered on the machines it does name. Dormant on a machine is not disabled. No other flag decides which agents a skill is FOR: neither the delivery bookkeeping of FR-008 nor any field on the agent resource. A DISABLED AGENT is a separate matter and is never written into at all — the predicate names the agents a skill belongs to, while an agent the user switched off is one Coffer does not touch; its held copies are reclaimed and re-enabling it reconciles them back. A reconcile that finds a delivered copy the predicate no longer grants MUST reclaim it (remove the link, clear the delivery record) per FR-010, and MUST deliver a copy the predicate now grants but the agent does not hold.
 
 **Drift**
 
@@ -467,7 +496,7 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 
 **Delivery reconciliation (workspace amendment)**
 
-- **FR-025**: The system MUST reconcile deliveries per agent from the FR-012a predicate alone. A reconcile computes the agent's wanted set as `{s.name for s in skills if s.enabled and agent_in_scope(s.scope, agent_name)}`, delivers every wanted skill the agent does not hold, and reclaims every held copy that is no longer wanted. It MUST run on: a skill being enabled or disabled, a skill's scope being edited, a skill being imported, a skill being removed, an agent being registered, an agent being enabled or disabled, an agent's `config_dir` changing, and the post-import hook after a sync import. A disabled agent's wanted set is empty, so the same reconcile reclaims its copies and restores them when it is enabled again. Conflicts at target paths follow FR-011 (report, never overwrite). The agent resource carries no skill-delivery policy of any kind — no follow flag, no exclusion list, no per-agent opt-out; the only inputs are the skill's `enabled` flag and its `scope`.
+- **FR-025**: The system MUST reconcile deliveries per agent from the FR-012a predicate alone. A reconcile computes the agent's wanted set as `{s.name for s in skills if s.enabled and scope.is_active(s.scope, agent_name)}`, where `scope` is the `ScopeEvaluator` holding this machine's derived id, so both axes are tested and the same skill row can be wanted here and unwanted on another machine. It delivers every wanted skill the agent does not hold, and reclaims every held copy that is no longer wanted. It MUST run on: a skill being enabled or disabled, a skill's scope being edited, a skill being imported, a skill being removed, an agent being registered, an agent being enabled or disabled, an agent's `config_dir` changing, and the post-import hook after a sync import. A disabled agent's wanted set is empty, so the same reconcile reclaims its copies and restores them when it is enabled again. Conflicts at target paths follow FR-011 (report, never overwrite). The agent resource carries no skill-delivery policy of any kind — no follow flag, no exclusion list, no per-agent opt-out; the only inputs are the skill's `enabled` flag and its `scope`.
 - **FR-026**: Unmanaged-skill operations MUST be available through the REST API, the `coffer agent skill …` / `coffer skill …` CLI (with `--json` on reads), and the agent's Skills tab in the web UI. Delivery itself is not an operation on this surface: it is controlled by the skill resource's `enabled` flag and `scope` through the generic resource enable/disable and scope surfaces.
 
 **Lifecycle**
@@ -489,7 +518,7 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 
 ### Key Entities
 
-- **Skill**: A Resource of kind `skill`, identified by `skill:<name>` (name from SKILL.md frontmatter). Holds source provenance, content hash, and metadata; the content folder lives on disk at `~/.coffer/skills/<name>/`. Carries a framework-level `scope` (a list of agent names, or `None` for every agent) which, together with the resource's own `enabled` flag, determines delivery outright (ADR per-agent-resource-scope; see "Skill delivery scope").
+- **Skill**: A Resource of kind `skill`, identified by `skill:<name>` (name from SKILL.md frontmatter). Holds source provenance, content hash, and metadata; the content folder lives on disk at `~/.coffer/skills/<name>/`. Carries a framework-level `scope` (two `AND`-ed allow-lists, `agents` and `machines`, each `null` meaning unrestricted; `None` for every agent on every machine) which, together with the resource's own `enabled` flag, determines delivery outright (ADR per-agent-resource-scope; see "Skill delivery scope").
 - **Skill Source**: A record capturing where the skill came from. For local imports, it includes the original path for informational purposes only.
 - **Skill–Agent Binding**: Internal delivery bookkeeping, not a user-facing toggle. A row joining one skill Resource and one agent Resource (kind `agent`, per spec agent-registry) records that this agent currently holds a delivered copy, with last-link-path, link-mode and last-linked-at metadata. Symlink existence on disk is the live representation; the row is the persistent record of what was delivered.
 - **Drift Report**: An ephemeral structure produced by `verify` listing each binding whose on-disk target disagrees with the binding state, categorized by drift type with a suggested remedy.

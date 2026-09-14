@@ -17,14 +17,20 @@ _console = Console()
 
 def _scope_label(skill: dict[str, Any]) -> str:
     """Render the delivery rule: a skill reaches an agent iff it is enabled and
-    the agent is in its scope. ``coffer scope set skill:<name>`` edits the
-    scope; ``coffer resource enable/disable skill:<name>`` flips the flag."""
+    that agent, on this machine, is inside its scope. ``coffer scope set
+    skill:<name>`` edits the scope; ``coffer resource enable/disable
+    skill:<name>`` flips the flag."""
     if not skill["enabled"]:
         return "disabled"
-    scope: list[str] | None = skill["scope"]
+    scope: dict[str, list[str] | None] | None = skill["scope"]
     if scope is None:
-        return "every agent"
-    return ", ".join(scope) if scope else "no agent"
+        return "everywhere"
+    parts = [
+        f"{axis}: " + (", ".join(names) if names else "none")
+        for axis in ("agents", "machines")
+        if (names := scope.get(axis)) is not None
+    ]
+    return "; ".join(parts) if parts else "everywhere"
 
 
 @app.command("list")

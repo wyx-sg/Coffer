@@ -2,6 +2,7 @@
 
 import { getCofferBaseUrl, getCofferToken } from "../auth";
 import { ApiError } from "./errors";
+import type { Scope } from "@/lib/hooks/useScope";
 
 export type SkillSourceType = "local_import";
 
@@ -29,9 +30,10 @@ export interface SkillOut {
   description: string;
   source: SkillSource;
   /** The two halves of the delivery predicate: a skill reaches an agent iff
-   *  `enabled` and the agent is in `scope` (null = every agent, [] = none). */
+   *  `enabled` and that agent, on this machine, falls inside `scope`
+   *  (null = everywhere; an axis given [] matches nothing). */
   enabled: boolean;
-  scope: string[] | null;
+  scope: Scope | null;
   version_hash: string;
   master_path: string;
   last_synced_from_source_at: string | null;

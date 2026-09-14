@@ -10,6 +10,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Radio,
+  RefreshCw,
   Server,
   ScrollText,
   Settings as SettingsIcon,
@@ -83,6 +84,7 @@ const NAV_GROUPS: NavGroup[] = [
     labelKey: "nav.group.system",
     items: [
       { to: "/activity", labelKey: "nav.activity", icon: ScrollText, end: true },
+      { to: "/sync", labelKey: "nav.sync", icon: RefreshCw, end: true },
       { to: "/settings", labelKey: "nav.settings", icon: SettingsIcon },
     ],
   },

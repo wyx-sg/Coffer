@@ -43,7 +43,7 @@ from __future__ import annotations
 from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import Protocol, ProviderConfig
 from coffer.domain.resource import Resource
-from coffer.domain.scope import agent_in_scope
+from coffer.domain.scope import agent_axis_admits
 
 
 def scoped_targets(resource: Resource, cfg: ProviderConfig) -> list[AgentType]:
@@ -58,10 +58,18 @@ def scoped_targets(resource: Resource, cfg: ProviderConfig) -> list[AgentType]:
 
     ``enabled`` is not consulted — see this module's docstring for why the
     configured reach and the effective projection are kept apart.
+
+    Only the scope's AGENT axis is read. "Which agent types does this
+    connection cover" is a question about agents, and the answer must be the
+    same wherever it is asked — the management surface renders it as the
+    connection's chips, and a converged vault shows the same connection on
+    every machine. Machine-axis enforcement, where a kind needs it, belongs at
+    that kind's own activation gate (``channel``'s runtime), not inside a
+    reach description.
     """
     if cfg.protocol is Protocol.OLLAMA:
         return []
-    return [t for t in AgentType if agent_in_scope(resource.scope, t.value)]
+    return [t for t in AgentType if agent_axis_admits(resource.scope, t.value)]
 
 
 def projection_targets(resource: Resource, cfg: ProviderConfig) -> list[AgentType]:

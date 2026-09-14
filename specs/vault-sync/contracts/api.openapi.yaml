@@ -1,0 +1,944 @@
+openapi: 3.0.3
+info:
+  title: Coffer — Vault Sync API
+  version: 0.3.0
+  description: 'REST surface for bidirectional vault sync (spec vault-sync, ADR: vault-sync). Sync is
+    a cross-cutting service, not a resource kind, so it has its own endpoints rather than riding /resources.
+    All paths require the loopback bearer token.
+
+    No request or response carries vault content: a round moves documents through the git working tree
+    the daemon owns, and these endpoints only configure it, trigger it, and report what it did. The master
+    key is the one exception — `key/export` returns the key **material** and `key/import` accepts it,
+    because the daemon opens no filesystem path a caller named: a browser has no path to hand it, and
+    `<input type="file">` gives the contents directly. The key therefore crosses the token-guarded loopback
+    API, which is acceptable because exporting a master key means the caller holds the plaintext either
+    way.
+
+    The old `/sync/export` and `/sync/import` operations are **deleted**. A wholesale bundle overwrite
+    has no base and is the operation the 2026-07-10 incident was made of; a new machine uses `/sync/adopt`
+    instead.
+
+    '
+servers:
+- url: http://127.0.0.1:8000
+security:
+- bearerAuth: []
+paths:
+  /api/v1/sync/remote:
+    get:
+      summary: The one sync remote this vault converges with
+      operationId: getSyncRemote
+      tags:
+      - sync
+      responses:
+        '200':
+          description: 'Sync being unconfigured is the ordinary state of a fresh vault, not an error:
+            it is a 200 with `remote: null`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncRemoteStateOut'
+    put:
+      summary: Configure the sync remote
+      operationId: setSyncRemote
+      tags:
+      - sync
+      description: Every field but the URL has the spec's default, so a bare URL is a complete configuration.
+        The push credential is named by **reference**; the secret itself never reaches this payload, the
+        repository's git config, or a git argument vector.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncRemoteIn'
+      responses:
+        '200':
+          description: Remote stored; the converge worker picks it up
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncRemoteOut'
+        '422':
+          description: Invalid url/branch/interval (`SYNC_REMOTE_INVALID`), or the remote could not be
+            reached with the credential given (`SYNC_REMOTE_UNREACHABLE`, whose `details.hint` says whether
+            it looked like auth, not-found or network).
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      summary: Clear the sync remote
+      operationId: clearSyncRemote
+      tags:
+      - sync
+      description: Idempotent. The working tree and its history are left on disk — they are the vault's
+        local backup, and the remote is a rendezvous rather than a system of record.
+      responses:
+        '200':
+          description: Cleared, or nothing was configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncRemoteClearedOut'
+  /api/v1/sync/run:
+    post:
+      summary: Run one converge round now
+      operationId: runSyncRound
+      tags:
+      - sync
+      description: Serialize, merge, diff, guard, apply, publish. Returns the same `RoundOut` for every
+        terminal state; read `status` to tell them apart. A round that starts without a pointer also reports
+        `join`.
+      responses:
+        '200':
+          description: The round ran to a terminal state. `ok`, `no_change` and `joined` advanced the
+            pointer; `conflict`, `awaiting_confirmation`, `push_failed` and `error` did not, and left
+            the vault untouched except where `applied` says otherwise.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundOut'
+        '409':
+          description: No remote configured (`SYNC_NOT_CONFIGURED`), or the working tree declares a schema
+            version this build does not know (`SYNC_TREE_TOO_NEW`); nothing was applied.
+          $ref: '#/components/responses/Conflict'
+  /api/v1/sync/adopt:
+    post:
+      summary: Join a remote — configure it and run the first round
+      operationId: adoptSyncRemote
+      tags:
+      - sync
+      description: 'Configures the remote as `PUT /sync/remote` does, then runs a round with no pointer.
+        The join detection it triggers is a property of the converge service, not of this route: **any**
+        pointer-less round performs it, so a machine that merely forgot its pointer cannot skip it by
+        configuring the remote the other way.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdoptIn'
+      responses:
+        '200':
+          description: 'The join was attempted and `join` says which kind it was — `new` (id absent from
+            the registry: pointer is git''s empty tree, the union is taken, deletion is structurally impossible)
+            or `returning` (id present: the base is recovered from this machine''s own descriptor and
+            the round proceeds as an ordinary stale-machine round).'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundOut'
+        '422':
+          description: Invalid remote (`SYNC_REMOTE_INVALID`, `SYNC_REMOTE_UNREACHABLE`)
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/sync/status:
+    get:
+      summary: Where this machine stands
+      operationId: getSyncStatus
+      tags:
+      - sync
+      responses:
+        '200':
+          description: 'The remote, this machine, the pointer, the last round and the next one, plus anything
+            outstanding: pending paths, paths not applicable here, unresolved conflicts, and a pending
+            confirmation in **either** direction.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncStatusOut'
+  /api/v1/sync/restore:
+    post:
+      summary: Restore the vault from the remote's history
+      operationId: restoreVault
+      tags:
+      - sync
+      description: Moves the working tree to a revision and applies the difference from the current pointer,
+        so a document deleted last week returns without discarding anything the vault has gained since.
+        Always explicit — a round never reaches back into history on its own.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreIn'
+      responses:
+        '200':
+          description: The difference was applied; reported as an ordinary round
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundOut'
+        '409':
+          description: No remote configured (`SYNC_NOT_CONFIGURED`)
+          $ref: '#/components/responses/Conflict'
+        '422':
+          description: The revision or date does not resolve (`SYNC_REMOTE_INVALID`)
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/sync/confirm:
+    post:
+      summary: Decide a round the circuit breaker held
+      operationId: confirmSyncRound
+      tags: &id001
+      - sync
+      description: A round whose diff would delete more than the configured share of documents does not
+        proceed; it is recorded as awaiting confirmation in one of two directions. `apply` performs it,
+        `reject` leaves the vault and the remote untouched, and `rebuild` — valid only for a **publish**-side
+        hold — takes the remote's state instead, discarding this machine's local-only documents rather
+        than publishing their absence as a deletion.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmIn'
+      responses:
+        '200':
+          description: The held round was decided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundOut'
+        '409':
+          description: Nothing is awaiting confirmation (`SYNC_NOTHING_TO_CONFIRM`), or `rebuild` was
+            asked of an apply-side hold (`SYNC_AWAITING_CONFIRMATION`).
+          $ref: '#/components/responses/Conflict'
+  /api/v1/sync/rollback:
+    post:
+      summary: Undo the last round's apply
+      operationId: rollbackSyncRound
+      tags: &id002
+      - sync
+      description: Every round tags the vault's state immediately before it applied. Rollback is the same
+        applier run backwards over that snapshot, and the pointer returns with it. The ten most recent
+        snapshots are kept.
+      responses:
+        '200':
+          description: The vault is back on the pre-apply snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundOut'
+        '409':
+          description: No snapshot to roll back to (`SYNC_NO_SNAPSHOT`)
+          $ref: '#/components/responses/Conflict'
+  /api/v1/sync/machines:
+    get:
+      summary: The machine registry
+      operationId: listSyncMachines
+      tags:
+      - sync
+      description: 'A derived view, not a synced table: it is whatever `machines/*.yaml` in the working
+        tree currently holds. Each machine writes only its own descriptor, so the documents occupy disjoint
+        paths and cannot conflict.'
+      responses:
+        '200':
+          description: Every machine that has converged, with the local one marked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MachineListOut'
+  /api/v1/sync/machines/self:
+    patch:
+      summary: Rename this machine
+      operationId: renameSelfMachine
+      tags:
+      - sync
+      description: The name is a label and nothing keys on it — `scope.machines` references the derived
+        id — so renaming costs nothing and breaks no scope. A machine may rename only itself; it writes
+        no other machine's descriptor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MachineRenameIn'
+      responses:
+        '200':
+          description: Renamed; the new name is published on the next round
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MachineOut'
+        '422':
+          description: Empty or unusable name (`SYNC_REMOTE_INVALID`)
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/sync/machines/{machine_id}:
+    delete:
+      summary: Remove a retired machine from the registry
+      operationId: removeSyncMachine
+      tags:
+      - sync
+      description: Deletes that machine's descriptor from the working tree. For a machine that is gone
+        for good, or one whose fallback id did not survive deleting `~/.coffer` and has reappeared under
+        a new one. Resources scoped to the removed id become dormant rather than broken.
+      parameters:
+      - name: machine_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The 16-hex-character machine id, as the registry reports it
+      responses:
+        '200':
+          description: The descriptor was removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MachineRemovedOut'
+        '404':
+          description: No such machine in the registry (`SYNC_MACHINE_UNKNOWN`)
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: That is this machine (`SYNC_MACHINE_IS_SELF`) — removing your own descriptor would
+            republish it on the next round.
+          $ref: '#/components/responses/Conflict'
+  /api/v1/sync/key/fingerprint:
+    get:
+      summary: Short SHA-256 fingerprint of the master key (never the key itself)
+      operationId: getKeyFingerprint
+      tags:
+      - sync
+      responses:
+        '200':
+          description: Whether a key exists here and its fingerprint. It is the same value each machine
+            publishes in its descriptor, so the machines table can state that another machine's credentials
+            cannot be decrypted here.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KeyFingerprintOut'
+  /api/v1/sync/key/export:
+    post:
+      summary: Return this machine's master key material (out-of-band transfer)
+      operationId: exportMasterKey
+      tags:
+      - sync
+      requestBody:
+        required: true
+        description: Empty object — the caller decides where the material lands.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmptyIn'
+      responses:
+        '200':
+          description: The Fernet key text. The caller writes it wherever it belongs — the CLI to the
+            file path its argument names, the web UI to a browser download. The daemon writes nothing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KeyMaterialOut'
+        '422':
+          description: No master key on this machine (`MASTER_KEY_FILE_INVALID`)
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/sync/key/import:
+    post:
+      summary: Install master key material brought from another machine
+      operationId: importMasterKey
+      tags:
+      - sync
+      requestBody:
+        required: true
+        description: The key material itself. The CLI reads it from the file its argument names; the web
+          UI reads it from an `<input type="file">`. An existing different key is backed up to a timestamped
+          sibling before it is replaced, never truncated in place.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeyMaterialIn'
+      responses:
+        '200':
+          description: Key installed; credential refs that remain locked here
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KeyImportOut'
+        '422':
+          description: Not a valid Fernet key (`MASTER_KEY_FILE_INVALID`)
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/sync/reject:
+    post:
+      tags: *id001
+      summary: Discard a round held at the deletion guard
+      description: The vault was never touched — the guard runs before the apply — so rejecting only returns
+        the working tree to the pointer.
+      operationId: rejectHeldRound
+      responses:
+        '200':
+          description: Discarded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncRemoteClearedOut'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/sync/rebuild:
+    post:
+      tags: *id002
+      summary: Rebuild this machine from the remote
+      description: 'Replaces this vault with the remote''s, discarding documents only this machine holds.
+        The answer for a machine whose vault is gone: confirming a held round would publish the loss to
+        every other machine, and rejecting would refuse the same round forever. Destructive on purpose;
+        nothing is pushed.'
+      operationId: rebuildFromRemote
+      responses:
+        '200':
+          description: Rebuilt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundOut'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  responses:
+    ValidationError:
+      description: Invalid request body
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Conflicting state
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: No such resource
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    SyncRemoteIn:
+      type: object
+      required:
+      - url
+      properties:
+        url:
+          type: string
+          description: A git repository the user owns
+        branch:
+          type: string
+          default: main
+        credential_ref:
+          type: string
+          nullable: true
+          description: A name in the credential store — never the secret. The daemon resolves it at push
+            time and nowhere else.
+        include_credentials:
+          type: boolean
+          default: false
+          description: Carry Fernet ciphertext under credentials/. Off by default; the master key is never
+            written regardless.
+        interval_seconds:
+          type: integer
+          default: 3600
+          minimum: 1
+        enabled:
+          type: boolean
+          default: true
+        worktree_path:
+          type: string
+          default: ~/.coffer/sync
+    SyncRemoteOut:
+      type: object
+      required:
+      - url
+      - branch
+      - credential_ref
+      - include_credentials
+      - interval_seconds
+      - enabled
+      - worktree_path
+      properties:
+        url:
+          type: string
+        branch:
+          type: string
+        credential_ref:
+          type: string
+          nullable: true
+        include_credentials:
+          type: boolean
+        interval_seconds:
+          type: integer
+        enabled:
+          type: boolean
+        worktree_path:
+          type: string
+    SyncRemoteStateOut:
+      type: object
+      required:
+      - configured
+      - remote
+      properties:
+        configured:
+          type: boolean
+          description: False on a fresh vault — being unconfigured is not an error
+        remote:
+          allOf:
+          - $ref: '#/components/schemas/SyncRemoteOut'
+          nullable: true
+    SyncRemoteClearedOut:
+      type: object
+      required:
+      - cleared
+      properties:
+        cleared:
+          type: boolean
+          description: False when there was nothing to clear — delete is idempotent
+    AdoptIn:
+      type: object
+      required:
+      - url
+      description: The same fields as SyncRemoteIn — adopting configures a remote and joins it.
+      properties:
+        url:
+          type: string
+        branch:
+          type: string
+          default: main
+        credential_ref:
+          type: string
+          nullable: true
+        include_credentials:
+          type: boolean
+          default: false
+        interval_seconds:
+          type: integer
+          default: 3600
+          minimum: 1
+        worktree_path:
+          type: string
+          default: ~/.coffer/sync
+    AreaCountOut:
+      type: object
+      required:
+      - area
+      - count
+      properties:
+        area:
+          type: string
+          description: knowledge, skills, resources, state/<area>, credentials, machines
+        count:
+          type: integer
+    AppliedPathOut:
+      type: object
+      required:
+      - path
+      - change
+      properties:
+        path:
+          type: string
+          description: Path in the working tree
+        change:
+          type: string
+          enum:
+          - added
+          - modified
+          - deleted
+    PathFailureOut:
+      type: object
+      required:
+      - path
+      - reason
+      properties:
+        path:
+          type: string
+        reason:
+          type: string
+    ConflictOut:
+      type: object
+      required:
+      - path
+      - resolution
+      properties:
+        path:
+          type: string
+        resolution:
+          type: string
+          enum:
+          - credential_freshness
+          - agent
+          - unresolved
+          description: How the path was settled. `credential_freshness` is the fresher Fernet encryption
+            winning, which applies to credentials/*.enc and nothing else. `agent` is the bounded pass,
+            which ran in the working tree only and passed the validation gate; it is always reported,
+            because a silent machine merge of the user's own notes is precisely what they would want to
+            know about. `unresolved` aborted the round.
+    PendingConfirmationOut:
+      type: object
+      required:
+      - direction
+      - documents
+      - area_counts
+      properties:
+        direction:
+          type: string
+          enum:
+          - apply
+          - publish
+          description: Which side the circuit breaker held. `apply` protects this vault from a remote
+            that went wrong; `publish` protects the other machines from this one — a vault emptied by
+            a reinstall, a failed restore or a stray `rm -rf` would otherwise publish the loss as an ordinary
+            deletion.
+        documents:
+          type: array
+          items:
+            type: string
+          description: The paths the round would remove
+        area_counts:
+          type: array
+          items:
+            $ref: '#/components/schemas/AreaCountOut'
+          description: How many of each area's documents that is
+    JoinOut:
+      type: object
+      required:
+      - kind
+      - last_converged_at
+      - last_converged_commit
+      - remote_changed
+      - local_changed
+      description: 'Present on exactly the rounds that started without a pointer. Joining is an explicit,
+        reported act: the surfaces state what was found before anything is applied.'
+      properties:
+        kind:
+          type: string
+          enum:
+          - new
+          - returning
+          description: '`new` — this machine''s id is absent from the remote''s registry, so the pointer
+            is git''s empty tree, the union is taken, and deletion is structurally impossible. `returning`
+            — the id is present, so the base is recovered from this machine''s own descriptor and the
+            round is an ordinary stale-machine round. Treating a returning machine as new would republish
+            everything the others deleted while it was away.'
+        last_converged_at:
+          type: string
+          format: date
+          nullable: true
+          description: From this machine's descriptor; null for a new machine
+        last_converged_commit:
+          type: string
+          nullable: true
+          description: The recovered base; null for a new machine
+        remote_changed:
+          type: integer
+          description: Documents the remote has changed since that commit
+        local_changed:
+          type: integer
+          description: Documents this vault has changed since that commit
+    RoundOut:
+      type: object
+      required:
+      - status
+      - commit
+      - areas
+      - applied
+      - failures
+      - not_applicable
+      - pending
+      - conflicts
+      description: One shape for every terminal state; `status` discriminates. The list fields are always
+        present, populated or not, so a surface renders one component for a run, an adopt, a restore,
+        a confirm and a rollback.
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          - no_change
+          - joined
+          - conflict
+          - awaiting_confirmation
+          - push_failed
+          - error
+        commit:
+          type: string
+          nullable: true
+          description: The pointer after the round; unchanged when the round did not absorb
+        areas:
+          type: array
+          items:
+            $ref: '#/components/schemas/AreaCountOut'
+        applied:
+          type: array
+          items:
+            $ref: '#/components/schemas/AppliedPathOut'
+        failures:
+          type: array
+          items:
+            $ref: '#/components/schemas/PathFailureOut'
+          description: Per-path failures. They are reported and never abort the round
+        not_applicable:
+          type: array
+          items:
+            $ref: '#/components/schemas/PathFailureOut'
+          description: Paths that cannot apply on this machine at all — an agent whose config_dir does
+            not exist here. Preserved like a pending path, but not retried and not an error; scope them
+            to the machines where they belong.
+        pending:
+          type: array
+          items:
+            type: string
+          description: The retry set after the round. The exporter must not delete these
+        conflicts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConflictOut'
+        confirmation:
+          allOf:
+          - $ref: '#/components/schemas/PendingConfirmationOut'
+          nullable: true
+          description: Set when status is awaiting_confirmation
+        join:
+          allOf:
+          - $ref: '#/components/schemas/JoinOut'
+          nullable: true
+          description: Set when the round started without a pointer
+        worktree_path:
+          type: string
+          nullable: true
+          description: Named on a conflict, because that is where the user resolves it with their own
+            git tools.
+        error:
+          type: string
+          nullable: true
+          description: Already redacted of the push credential
+        ran_at:
+          type: string
+          format: date-time
+          nullable: true
+    RestoreIn:
+      type: object
+      properties:
+        at:
+          type: string
+          nullable: true
+          description: A sha, a ref, or a YYYY-MM-DD date resolving to the last commit at or before it
+            — the tip cannot return something deleted last week.
+    ConfirmIn:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum:
+          - apply
+          - reject
+          - rebuild
+          default: apply
+          description: '`rebuild` is valid only for a publish-side hold: take the remote''s state and
+            discard this machine''s local-only documents, rather than publishing their absence.'
+    SyncStatusOut:
+      type: object
+      required:
+      - configured
+      - remote
+      - machine_id
+      - machine_name
+      - pointer
+      - pending
+      - not_applicable
+      - conflicts
+      properties:
+        configured:
+          type: boolean
+        remote:
+          allOf:
+          - $ref: '#/components/schemas/SyncRemoteOut'
+          nullable: true
+        machine_id:
+          type: string
+        machine_name:
+          type: string
+        key_fingerprint:
+          type: string
+          nullable: true
+        pointer:
+          type: string
+          nullable: true
+          description: Null means this machine is joining; the next round detects which kind
+        last_round:
+          allOf:
+          - $ref: '#/components/schemas/RoundOut'
+          nullable: true
+        next_round_at:
+          type: string
+          format: date-time
+          nullable: true
+        pending:
+          type: array
+          items:
+            type: string
+        not_applicable:
+          type: array
+          items:
+            $ref: '#/components/schemas/PathFailureOut'
+        conflicts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConflictOut'
+        confirmation:
+          allOf:
+          - $ref: '#/components/schemas/PendingConfirmationOut'
+          nullable: true
+          description: A pending confirmation in either direction, with the documents it would remove.
+            Present here as well as on the round, because a hold outlives the request that produced it.
+        join:
+          allOf:
+          - $ref: '#/components/schemas/JoinOut'
+          nullable: true
+          description: The most recent join, kept visible after the fact
+        worktree_path:
+          type: string
+        snapshots:
+          type: array
+          items:
+            $ref: '#/components/schemas/SnapshotOut'
+          description: The ten most recent pre-apply snapshots, newest first
+    SnapshotOut:
+      type: object
+      required:
+      - tag
+      - commit
+      - created_at
+      properties:
+        tag:
+          type: string
+        commit:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    MachineOut:
+      type: object
+      required:
+      - machine_id
+      - name
+      - os
+      - hostname
+      - coffer_version
+      - is_self
+      properties:
+        machine_id:
+          type: string
+          description: sha256("coffer-machine:" + the host identifier) truncated to 16 hex characters.
+            The raw host identifier is never published.
+        name:
+          type: string
+          description: The user's label; mutable at no cost
+        os:
+          type: string
+        hostname:
+          type: string
+        coffer_version:
+          type: string
+        last_converged_at:
+          type: string
+          format: date
+          nullable: true
+          description: A date, restamped at most once per calendar day, so an idle machine commits no
+            heartbeat. It means "last converged day".
+        last_converged_commit:
+          type: string
+          nullable: true
+          description: That machine's published pointer — what a returning machine recovers
+        key_fingerprint:
+          type: string
+          nullable: true
+        key_matches:
+          type: boolean
+          description: Whether that machine's key fingerprint equals this one's. False means its credentials
+            cannot be decrypted here.
+        agents:
+          type: array
+          items:
+            type: string
+          description: The agents registered on that machine
+        is_self:
+          type: boolean
+    MachineListOut:
+      type: object
+      required:
+      - machines
+      properties:
+        machines:
+          type: array
+          items:
+            $ref: '#/components/schemas/MachineOut'
+    MachineRenameIn:
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
+    MachineRemovedOut:
+      type: object
+      required:
+      - machine_id
+      - removed
+      properties:
+        machine_id:
+          type: string
+        removed:
+          type: boolean
+    KeyFingerprintOut:
+      type: object
+      required:
+      - present
+      - fingerprint
+      properties:
+        present:
+          type: boolean
+        fingerprint:
+          type: string
+          nullable: true
+          description: First 12 hex chars of SHA-256(master key); null when absent
+    EmptyIn:
+      type: object
+      additionalProperties: false
+      description: No fields — key export takes no arguments.
+    KeyMaterialIn:
+      type: object
+      required:
+      - material
+      properties:
+        material:
+          type: string
+          description: The Fernet key text to install here
+    KeyMaterialOut:
+      type: object
+      required:
+      - material
+      properties:
+        material:
+          type: string
+          description: The Fernet key text. Crosses the token-guarded loopback API only; it is never written
+            into the sync repository under any setting.
+    KeyImportOut:
+      type: object
+      required:
+      - locked_refs
+      properties:
+        locked_refs:
+          type: array
+          items:
+            type: string
+          description: Credential refs whose ciphertext still cannot be decrypted here. Affected resources
+            refuse to spawn rather than failing decryption silently.
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true

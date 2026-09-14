@@ -134,7 +134,7 @@ The `kb_*` and `memory_*` prefixes are historical: they were the wire values bef
 | `provider_switched`             | When a connection is projected into an agent's native config |
 | `provider_internal_default_set` | When a connection becomes Coffer's internal engine           |
 
-**Export / import:** the resource writes an import performs are recorded as ordinary resource lifecycle events, so an imported change is as traceable as one made by hand. There are no configuration or conflict events, because there is no sync configuration and no conflict state ([Vault Export and Import](/reference/adr/vault-export-import)).
+**Export / import:** the resource writes an import performs are recorded as ordinary resource lifecycle events, so an imported change is as traceable as one made by hand. There are no configuration or conflict events, because there is no sync configuration and no conflict state ([Vault Export and Import](/reference/adr/vault-sync)).
 
 ## What is worth auditing
 

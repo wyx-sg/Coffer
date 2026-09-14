@@ -98,7 +98,7 @@ section that future readers most often want — don't skip it.>
 | [`agent-native-shared-memory`](agent-native-shared-memory.zh.md) | 跨 agent 共享的单一知识 store | Accepted —— 投影那一半被 [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.zh.md) 取代 |
 | [`channel-adapter-framework`](channel-adapter-framework.zh.md) | Channel Adapter 框架 | Accepted |
 | [`envelope-encrypted-credential-store`](envelope-encrypted-credential-store.zh.md) | 信封加密的凭据存储 | Accepted |
-| [`vault-export-import`](vault-export-import.zh.md) | 仓库导出与导入 | Accepted |
+| [`vault-sync`](vault-sync.zh.md) | 仓库多机同步 | Accepted |
 | [`industrial-grade-harness-in-layers`](industrial-grade-harness-in-layers.zh.md) | 工业级 Harness，分层建设 | Proposed |
 | [`tool-retrieval-for-overload`](tool-retrieval-for-overload.zh.md) | 面向聚合过载的工具检索 | Accepted —— 被 [Built-in Agent Is Internal](builtin-agent-is-internal-capability.zh.md) 与 [Budget-Driven Tool Tiering](budget-driven-tool-tiering.zh.md) 修订 |
 | [`close-the-eval-flywheel`](close-the-eval-flywheel.zh.md) | 闭合 Eval 飞轮（Loop Engineering） | Accepted |

@@ -3,7 +3,7 @@
 **Status**: Proposed
 **Date**: 2026-06-13
 **Deciders**: Yuxing Wu
-**Related**: `.specify/memory/constitution.md`, [`agents/testing.md`](../../agents/testing.md), [`agents/workflow.md`](../../agents/workflow.md), [Channel Adapter Framework](channel-adapter-framework.md), [Vault Export and Import](vault-export-import.md), specs `channels` / `vault-export-import`
+**Related**: `.specify/memory/constitution.md`, [`agents/testing.md`](../../agents/testing.md), [`agents/workflow.md`](../../agents/workflow.md), [Channel Adapter Framework](channel-adapter-framework.md), [Vault Export and Import](vault-sync.md), specs `channels` / `vault-sync`
 
 ## Context
 

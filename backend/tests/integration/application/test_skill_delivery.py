@@ -2,7 +2,11 @@
 
 One rule decides delivery and nothing else does::
 
-    delivered(skill, agent) == skill.enabled and agent_in_scope(skill.scope, agent)
+    delivered(skill, agent) == skill.enabled and scope.is_active(skill.scope, agent)
+
+``scope`` there is the ``ScopeEvaluator`` the composition root binds this
+machine's id into, so ``is_active`` answers both axes at once: the skill's
+``agents`` axis, and its ``machines`` axis against the machine actually running.
 
 Same construction style as ``test_skill_unmanaged.py`` (real sqlite + real
 MasterStore / SyncEngine over tmp_path); the reconciliation hooks are wired the
@@ -20,12 +24,14 @@ from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.service import AgentService
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
+from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.application.skill.kind import make_skill_kind
 from coffer.application.skill.service import SkillService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
 from coffer.domain.errors import ScopeInvalidError
 from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.scope import Scope
 from coffer.domain.workspace_errors import SkillOutOfScope
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
@@ -80,6 +86,7 @@ async def _setup(tmp_path: pathlib.Path, *, reconcile_hooks: bool = True):
     placeholder_kinds: dict = {}
     rs = ResourceService(kinds=placeholder_kinds, repo=SqlAlchemyResourceRepo(sm), audit=audit)
     skill_svc = SkillService(
+        scope_evaluator=ScopeEvaluator(machine_id="test-machine"),
         resource_service=rs,
         audit=audit,
         binding_repo=binding_repo,
@@ -180,8 +187,8 @@ async def test_dormant_skill_reaches_nobody(tmp_path):
     await _import_skill(skill_svc, tmp_path, "dormant")
     assert (dir1 / "dormant").is_symlink()
 
-    # scope == [] is dormant: no agent is in scope.
-    await skill_svc._rs.update_scope(ResourceRef("skill", "dormant"), [], actor="cli")
+    # An empty agents axis is dormant: no agent is in scope.
+    await skill_svc._rs.update_scope(ResourceRef("skill", "dormant"), Scope(agents=[]), actor="cli")
     assert not (dir1 / "dormant").exists()
     assert await _delivered_names(skill_svc, a1) == set()
 
@@ -189,6 +196,59 @@ async def test_dormant_skill_reaches_nobody(tmp_path):
     a2, dir2 = await _register_agent(agent_svc, tmp_path, name="a2")
     assert not (dir2 / "dormant").exists()
     assert await _delivered_names(skill_svc, a2) == set()
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="a skill scoped to another machine is delivered to nobody here",
+)
+async def test_skill_scoped_to_another_machine_reaches_nobody_here(tmp_path):
+    """The machine axis reclaims a copy the agent axis would still grant.
+
+    The two axes are ``AND``-ed, so this is not a variation on the dormant
+    case: the agent axis here says yes throughout. What changes is where the
+    skill runs, and the delivery seam has to notice that on a machine whose id
+    the skill does not name — otherwise a converged vault would deliver every
+    machine's skills to every machine.
+    """
+    skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
+    a1, dir1 = await _register_agent(agent_svc, tmp_path, name="a1")
+    await _import_skill(skill_svc, tmp_path, "elsewhere")
+
+    # The agent axis grants this agent, and keeps granting it throughout.
+    await skill_svc._rs.update_scope(
+        ResourceRef("skill", "elsewhere"), Scope(agents=[a1.name]), actor="cli"
+    )
+    assert (dir1 / "elsewhere").is_symlink()
+
+    # Narrowing the OTHER axis to a machine that is not this one ("test-machine")
+    # reclaims the copy even though the agent axis is unchanged.
+    await skill_svc._rs.update_scope(
+        ResourceRef("skill", "elsewhere"),
+        Scope(agents=[a1.name], machines=["some-other-machine"]),
+        actor="cli",
+    )
+    assert not (dir1 / "elsewhere").exists()
+    assert await _delivered_names(skill_svc, a1) == set()
+
+    # Dormant here is not disabled: the skill is still in the library, still
+    # enabled, and an agent registered afterwards still gets nothing.
+    still = await skill_svc._rs.get(ResourceRef("skill", "elsewhere"))
+    assert still is not None and still.enabled
+    _a2, dir2 = await _register_agent(agent_svc, tmp_path, name="a2")
+    assert not (dir2 / "elsewhere").exists()
+
+    # Naming this machine hands it back, with no other edit.
+    await skill_svc._rs.update_scope(
+        ResourceRef("skill", "elsewhere"),
+        Scope(agents=[a1.name], machines=["test-machine"]),
+        actor="cli",
+    )
+    assert (dir1 / "elsewhere").is_symlink()
+    assert await _delivered_names(skill_svc, a1) == {"elsewhere"}
+
     await engine.dispose()
 
 
@@ -203,7 +263,9 @@ async def test_import_delivers_only_where_scope_grants(tmp_path):
 
     # Import, then narrow the scope to a1 only.
     await _import_skill(skill_svc, tmp_path, "only-a1")
-    await skill_svc._rs.update_scope(ResourceRef("skill", "only-a1"), ["a1"], actor="cli")
+    await skill_svc._rs.update_scope(
+        ResourceRef("skill", "only-a1"), Scope(agents=["a1"]), actor="cli"
+    )
     assert (dir1 / "only-a1").is_symlink()
     assert not (dir2 / "only-a1").exists()
 
@@ -304,7 +366,9 @@ async def test_scoping_away_reclaims_the_delivered_copy(tmp_path):
     assert (skill_dir / "shared").is_symlink()
     assert await _delivered_names(skill_svc, agent) == {"shared"}
 
-    await skill_svc._rs.update_scope(ResourceRef("skill", "shared"), ["other"], actor="cli")
+    await skill_svc._rs.update_scope(
+        ResourceRef("skill", "shared"), Scope(agents=["other"]), actor="cli"
+    )
 
     assert not (skill_dir / "shared").exists()
     assert await _delivered_names(skill_svc, agent) == set()
@@ -334,11 +398,15 @@ async def test_scoping_back_in_redelivers(tmp_path):
     the copy back, with no unrelated trigger."""
     skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
     await _import_skill(skill_svc, tmp_path, "elsewhere")
-    await skill_svc._rs.update_scope(ResourceRef("skill", "elsewhere"), ["other"], actor="cli")
+    await skill_svc._rs.update_scope(
+        ResourceRef("skill", "elsewhere"), Scope(agents=["other"]), actor="cli"
+    )
     agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
     assert not (skill_dir / "elsewhere").exists()
 
-    await skill_svc._rs.update_scope(ResourceRef("skill", "elsewhere"), ["a1"], actor="cli")
+    await skill_svc._rs.update_scope(
+        ResourceRef("skill", "elsewhere"), Scope(agents=["a1"]), actor="cli"
+    )
 
     assert (skill_dir / "elsewhere").is_symlink()
     assert await _delivered_names(skill_svc, agent) == {"elsewhere"}
@@ -434,7 +502,9 @@ async def test_manual_enable_refused_out_of_scope(tmp_path):
     out-of-scope agent — scope is a hard grant."""
     skill_svc, agent_svc, _audit, engine = await _setup(tmp_path, reconcile_hooks=False)
     await _import_skill(skill_svc, tmp_path, "denied")
-    await skill_svc._rs.update_scope(ResourceRef("skill", "denied"), ["other"], actor="test")
+    await skill_svc._rs.update_scope(
+        ResourceRef("skill", "denied"), Scope(agents=["other"]), actor="test"
+    )
     await _register_agent(agent_svc, tmp_path, name="a1")
 
     with pytest.raises(SkillOutOfScope):
@@ -477,5 +547,7 @@ async def test_update_scope_on_agent_kind_is_rejected(tmp_path):
     skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
     await _register_agent(agent_svc, tmp_path, name="a1")
     with pytest.raises(ScopeInvalidError):
-        await skill_svc._rs.update_scope(ResourceRef("agent", "a1"), ["a1"], actor="cli")
+        await skill_svc._rs.update_scope(
+            ResourceRef("agent", "a1"), Scope(agents=["a1"]), actor="cli"
+        )
     await engine.dispose()

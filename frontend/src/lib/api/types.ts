@@ -488,6 +488,21 @@ export interface components {
          * @example mcp_server:filesystem
          */
         ResourceRef: string;
+        /** @description Where a resource is active: two independent allow-lists, AND-ed. null on an axis means unrestricted; [] matches nothing, i.e. dormant. Machines are named by their derived id, never their display name. */
+        ScopeOut: {
+            /**
+             * @example [
+             *       "claude-code"
+             *     ]
+             */
+            agents: string[] | null;
+            /**
+             * @example [
+             *       "a3f21c9e4b7d2610"
+             *     ]
+             */
+            machines: string[] | null;
+        } | null;
         ResourceOut: {
             ref: components["schemas"]["ResourceRef"];
             kind: string;
@@ -496,7 +511,7 @@ export interface components {
             config: {
                 [key: string]: unknown;
             };
-            scope?: string[] | null;
+            scope?: components["schemas"]["ScopeOut"];
             enabled: boolean;
             /** Format: date-time */
             created_at: string;

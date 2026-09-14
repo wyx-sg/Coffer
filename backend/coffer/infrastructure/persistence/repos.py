@@ -38,8 +38,13 @@ def _to_domain(row: ResourceModel) -> Resource:
         enabled=row.enabled,
         created_at=row.created_at,
         updated_at=row.updated_at,
-        scope=json.loads(row.scope_json) if row.scope_json else None,
+        scope=Scope.from_json(json.loads(row.scope_json)) if row.scope_json else None,
     )
+
+
+def _scope_json(scope: Scope | None) -> str | None:
+    """The column's text for ``scope``: the two-axis object, or NULL."""
+    return json.dumps(scope.to_json()) if scope is not None else None
 
 
 class SqlAlchemyResourceRepo:
@@ -81,7 +86,7 @@ class SqlAlchemyResourceRepo:
                 enabled=resource.enabled,
                 created_at=resource.created_at,
                 updated_at=resource.updated_at,
-                scope_json=json.dumps(resource.scope) if resource.scope is not None else None,
+                scope_json=_scope_json(resource.scope),
             )
             session.add(row)
             try:
@@ -140,7 +145,7 @@ class SqlAlchemyResourceRepo:
             row = (await session.execute(stmt)).scalar_one_or_none()
             if row is None:
                 return None
-            row.scope_json = json.dumps(scope) if scope is not None else None
+            row.scope_json = _scope_json(scope)
             row.updated_at = datetime.now(tz=UTC)
             await session.commit()
             await session.refresh(row)
@@ -290,10 +295,15 @@ class SqlAlchemyInternalEngineConfigRepo:
                 model=row.model,
                 updated_at=updated,
                 auto_tidy_enabled=bool(row.auto_tidy_enabled),
+                tidy_owner_machine_id=row.tidy_owner_machine_id,
             )
 
     async def set(
-        self, *, model: str | None, auto_tidy_enabled: bool | None = None
+        self,
+        *,
+        model: str | None,
+        auto_tidy_enabled: bool | None = None,
+        tidy_owner_machine_id: str | None = None,
     ) -> GlobalInternalEngineConfig:
         async with self._sm() as session:
             stmt = select(InternalEngineConfigModel).where(InternalEngineConfigModel.id == 1)
@@ -305,6 +315,9 @@ class SqlAlchemyInternalEngineConfigRepo:
             row.model = model
             if auto_tidy_enabled is not None:
                 row.auto_tidy_enabled = auto_tidy_enabled
+            if tidy_owner_machine_id is not None:
+                # The empty string clears it back to "wherever this is read".
+                row.tidy_owner_machine_id = tidy_owner_machine_id or None
             row.updated_at = now
             await session.commit()
             await session.refresh(row)
@@ -312,4 +325,5 @@ class SqlAlchemyInternalEngineConfigRepo:
                 model=row.model,
                 updated_at=now,
                 auto_tidy_enabled=bool(row.auto_tidy_enabled),
+                tidy_owner_machine_id=row.tidy_owner_machine_id,
             )

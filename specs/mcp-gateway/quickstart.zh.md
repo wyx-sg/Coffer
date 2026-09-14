@@ -174,6 +174,6 @@ coffer credentials set github-token "<new value>"
 
 ### 拷贝 vault
 
-markdown 树（`knowledge/`、`memory/`、`skills/`）是事实源；`coffer.db` 只是其上可重建的索引。Coffer 不再自带备份命令——全部事实源都经由 spec vault-export-import 的 vault 导出流转；若要逐字节拷贝整个目录，在 daemon 停止的前提下执行 `cp -r ~/.coffer/ <dest>` 即可。
+markdown 树（`knowledge/`、`memory/`、`skills/`）是事实源；`coffer.db` 只是其上可重建的索引。Coffer 不再自带备份命令——全部事实源都经由 spec vault-sync 的 vault 导出流转；若要逐字节拷贝整个目录，在 daemon 停止的前提下执行 `cp -r ~/.coffer/ <dest>` 即可。
 
 **Master key。** `master.key` 用于解密 `coffer.db` 中的凭据密文。把它和它解密的密文放在一起会让加密形同虚设，因此拷贝出机器的内容中不要包含它；缺少该 key 的 vault 除了**读取**此前存储的凭据外都可正常工作，这些密钥可用 `coffer credentials set` 重新录入。

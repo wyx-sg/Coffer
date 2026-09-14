@@ -29,6 +29,7 @@ from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
+from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.errors import UpstreamUnavailable
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind
@@ -174,6 +175,7 @@ async def test_secret_value_never_in_db_or_logs(
         preferences=prefs,
     )
     session = MCPGatewaySession(
+        scope_evaluator=ScopeEvaluator(machine_id="test-machine"),
         session_id="leak-session",
         resource_service=rsvc,
         supervisor=supervisor,

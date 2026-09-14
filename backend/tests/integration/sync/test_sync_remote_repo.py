@@ -1,4 +1,4 @@
-"""The single-row backup-remote config survives a round-trip (spec vault-export-import).
+"""The single-row backup-remote config survives a round-trip (spec vault-sync).
 
 Against a real SQLite file rather than a fake repo: the thing under test is
 precisely that the schema holds one row and that every field comes back as it
@@ -15,7 +15,15 @@ from datetime import UTC, datetime
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from coffer.domain.sync.backup import BackupRemote, BackupRun, BackupRunStatus
+from coffer.domain.sync.backup import BackupRemote
+from coffer.domain.sync.convergence import (
+    ConvergeRun,
+    ConvergeStatus,
+    GuardDirection,
+    JoinKind,
+    PendingConfirmation,
+)
+from coffer.domain.sync.diff import ChangeStatus, DiffSummary, DocChange
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -74,19 +82,117 @@ async def test_clear_removes_it(sm: async_sessionmaker) -> None:  # type: ignore
     assert await repo.get() is None
 
 
-async def test_record_run_is_readable_back(sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
+async def test_record_run_round_trips_a_whole_round(sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
+    """A round is columns plus one JSON document, and both halves come back.
+
+    Only what a status surface reads at a glance is a column; everything else
+    is written once as a single payload, so no column can disagree with the
+    document beside it. This asserts the seam by putting a round with something
+    in every field through it.
+    """
     repo = SqlAlchemySyncRemoteRepo(sm)
     await repo.set(BackupRemote(url="https://example.invalid/vault.git"))
+    started = datetime(2026, 9, 12, 9, 0, tzinfo=UTC)
+    finished = datetime(2026, 9, 12, 9, 0, 30, tzinfo=UTC)
+    run = ConvergeRun(
+        status=ConvergeStatus.PUSH_FAILED,
+        started_at=started,
+        finished_at=finished,
+        join=JoinKind.RETURNING,
+        applied=DiffSummary.of([DocChange("knowledge/notes/a.md", ChangeStatus.ADDED)]),
+        published=DiffSummary.of([DocChange("skills/gone/SKILL.md", ChangeStatus.DELETED)]),
+        commit="abc1234",
+        conflicts=("knowledge/notes/contested.md",),
+        agent_resolved=("resources/mcp_server/x.yaml",),
+        failures=(("resources/agent/codex.yaml", "config dir missing here"),),
+        locked_refs=("mcp/files/token",),
+        error="offline",
+    )
+
+    await repo.record_run(run)
+
+    got = await repo.last_run()
+    assert got is not None
+    assert got.status is ConvergeStatus.PUSH_FAILED
+    assert got.join is JoinKind.RETURNING
+    assert got.commit == "abc1234"
+    assert got.error == "offline"
+    assert got.started_at == started
+    assert got.finished_at == finished
+    assert got.applied.paths(ChangeStatus.ADDED) == ("knowledge/notes/a.md",)
+    assert got.published.paths(ChangeStatus.DELETED) == ("skills/gone/SKILL.md",)
+    assert got.conflicts == ("knowledge/notes/contested.md",)
+    assert got.agent_resolved == ("resources/mcp_server/x.yaml",)
+    assert got.failures == (("resources/agent/codex.yaml", "config dir missing here"),)
+    assert got.locked_refs == ("mcp/files/token",)
+    assert got.pending is None
+
+
+async def test_a_held_round_comes_back_with_what_it_would_delete(sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
+    """The user answers a held round from what the surface shows them, so the
+    breach list and the paths have to survive the write."""
+    repo = SqlAlchemySyncRemoteRepo(sm)
+    await repo.set(BackupRemote(url="https://example.invalid/vault.git"))
+    raised = datetime(2026, 9, 12, 10, 0, tzinfo=UTC)
+    pending = PendingConfirmation(
+        direction=GuardDirection.PUBLISH,
+        commit="def5678",
+        remote_tip="0123456",
+        breaches=(("knowledge", 9, 10),),
+        paths=tuple(f"knowledge/notes/n{i}.md" for i in range(9)),
+        raised_at=raised,
+    )
+
     await repo.record_run(
-        BackupRun(
-            status=BackupRunStatus.PUSH_FAILED,
-            commit="abc1234",
-            error="offline",
-            ran_at=datetime(2026, 9, 12, tzinfo=UTC),
+        ConvergeRun(
+            status=ConvergeStatus.AWAITING_CONFIRMATION,
+            started_at=raised,
+            finished_at=raised,
+            pending=pending,
         )
     )
-    run = await repo.last_run()
-    assert run is not None
-    assert run.status is BackupRunStatus.PUSH_FAILED
-    assert run.commit == "abc1234"
-    assert run.error == "offline"
+
+    got = await repo.last_run()
+    assert got is not None and got.pending is not None
+    assert got.pending.direction is GuardDirection.PUBLISH
+    assert got.pending.commit == "def5678"
+    assert got.pending.remote_tip == "0123456"
+    assert got.pending.breaches == (("knowledge", 9, 10),)
+    assert got.pending.paths == pending.paths
+    assert got.pending.raised_at == raised
+
+
+async def test_a_push_failed_round_keeps_the_commit_still_waiting(sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
+    """A round that reports no new commit must not erase the one outstanding:
+    that revision is what the user is being told is still unpushed."""
+    repo = SqlAlchemySyncRemoteRepo(sm)
+    await repo.set(BackupRemote(url="https://example.invalid/vault.git"))
+    at = datetime(2026, 9, 12, tzinfo=UTC)
+    await repo.record_run(
+        ConvergeRun(status=ConvergeStatus.OK, started_at=at, finished_at=at, commit="abc1234")
+    )
+
+    await repo.record_run(
+        ConvergeRun(status=ConvergeStatus.FAILED, started_at=at, finished_at=at, error="boom")
+    )
+
+    got = await repo.last_run()
+    assert got is not None
+    assert got.status is ConvergeStatus.FAILED
+    assert got.commit == "abc1234"
+
+
+async def test_a_run_recorded_with_no_remote_configured_is_discarded(
+    sm: async_sessionmaker,
+) -> None:  # type: ignore[type-arg]
+    """A run result belongs to a remote. Clearing the remote mid-round must
+    discard the result rather than resurrect the row it described."""
+    repo = SqlAlchemySyncRemoteRepo(sm)
+    at = datetime(2026, 9, 12, tzinfo=UTC)
+
+    await repo.record_run(
+        ConvergeRun(status=ConvergeStatus.OK, started_at=at, finished_at=at, commit="abc1234")
+    )
+
+    assert await repo.get() is None
+    assert await repo.last_run() is None

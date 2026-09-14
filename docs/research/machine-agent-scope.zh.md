@@ -2,14 +2,18 @@
 
 > English: [machine-agent-scope.md](./machine-agent-scope.md)
 
-> **历史记录。** 本笔记是在持续多机同步之上设计的**机器 × agent** scope 矩阵。
-> 二者此后均已被撤销：同步现在是一次性的仓库导出/导入
-> （[Vault Export and Import](../decisions/vault-export-import.zh.md)），机器轴也已移除，
-> `scope` 只剩一个 agent 名字列表
-> （[Per-Agent Resource Scope](../decisions/per-agent-resource-scope.zh.md)）。当前形态请以
-> 这两份 ADR 为准；下文保留的是 agent 轴当初是怎么得出来的记录。
+> **历史记录。** 本笔记是在持续多机同步之上设计的机器 × agent scope **矩阵**。
+> 多机同步已经回来了——形式是与用户自有的 git 交汇点做收敛轮
+> （[Vault Sync](../../specs/vault-sync/spec.zh.md)）；`scope` 也重新长回了机器
+> 轴，但**不是本笔记设计的那个矩阵**：最终落地的是两条相互独立、按 `AND` 组合
+> 的允许列表 `agents` 与 `machines`，某一轴为 `null` 即该轴不设限
+> （[Per-Agent Resource Scope](../decisions/per-agent-resource-scope.zh.md)）。
+> 矩阵是被有意舍弃的：成对矩阵相对两条轴唯一多出来的表达力，是在同一个资源上
+> 为每台机器点名**不同**的 agent——「台式机上的 Claude Code **加上**笔记本上
+> 的 Codex」——而没有任何已观察到的用法需要它。当前形态请以那份 spec 与 ADR
+> 为准；下文保留的是两条轴（连同矩阵）当初是怎么得出来的记录。
 
-将机器身份（spec vault-export-import，以及已移除的机器身份 ADR）推广为资源框架级 **scope** 设施的设计笔记，
+将机器身份（spec vault-sync，以及已移除的机器身份 ADR）推广为资源框架级 **scope** 设施的设计笔记，
 外加顶级 **Machines** 舰队视图。经 2026-07-10 头脑风暴会话确认；本笔记是后续
 ADR + spec 修订（承载产品契约）的输入。
 

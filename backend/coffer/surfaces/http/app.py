@@ -35,13 +35,11 @@ from coffer.application.binary_deploy import deploy_frozen_sidecars
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.diagnostics import register_diagnostics_builtin_tools
-from coffer.application.knowledge.skill_seed import seed_knowledge_skill
 from coffer.application.resource_service import ResourceService
-from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.resource import Kind, ResourceRef
 from coffer.infrastructure.daemon.orphan_sweep import startup_sweep
 from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
-from coffer.infrastructure.logging.files import log_dir, prune_log_dir
+from coffer.infrastructure.logging.files import log_dir
 from coffer.infrastructure.logging.setup import configure_logging
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -51,18 +49,18 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyResourceRepo,
 )
+from coffer.infrastructure.sync.identity import coffer_dir
 from coffer.surfaces.http import cors, daemon_routes, host_guard, webui
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_skill_wiring import (
     run_skill_drift_boot_heal,
-    wire_agent_and_skill_kinds,
 )
 from coffer.surfaces.http.app_mcp_composition import (
     build_retention_service,
     reaper_kwargs_from_env,
-    wire_mcp_kind,
 )
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.background_workers import start_background_workers
 from coffer.surfaces.http.channel_wiring import wire_channel_kind
 from coffer.surfaces.http.credential_composition import (
     init_credential_store,
@@ -70,37 +68,32 @@ from coffer.surfaces.http.credential_composition import (
     run_legacy_keychain_migration,
 )
 from coffer.surfaces.http.dependencies import (
-    get_agent_service,
     get_invocation_repo_optional,
-    get_master_key_manager,
     get_mcp_session_factory,
     get_provider_service,
-    get_skill_service,
     set_audit_service,
     set_internal_engine_config_service,
     set_resource_service,
     set_retention_service,
 )
 from coffer.surfaces.http.engine_config_composition import build_config_services
-from coffer.surfaces.http.knowledge_wiring import wire_knowledge_kind
+from coffer.surfaces.http.kind_wiring import wire_resource_kinds
 from coffer.surfaces.http.mcp.protocol_routes import (
     shutdown_all_sessions,
     start_session_reaper,
 )
 from coffer.surfaces.http.memory_wiring import (
-    start_organise_worker,
     stop_organise_worker,
-    wire_memory_kind,
 )
 from coffer.surfaces.http.migrations_runner import run_migrations
 from coffer.surfaces.http.provider_wiring import (
     run_provider_projection_sweep,
-    wire_provider_kind,
 )
 from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
 from coffer.surfaces.http.routing import include_all_routers
-from coffer.surfaces.http.sync_wiring import start_backup_worker, start_sync, stop_backup_worker
-from coffer.surfaces.http.tidy_wiring import start_tidy_worker, stop_tidy_worker, wire_tidy
+from coffer.surfaces.http.scope_composition import build_scope_evaluator
+from coffer.surfaces.http.sync_wiring import stop_converge_worker
+from coffer.surfaces.http.tidy_wiring import stop_tidy_worker, wire_tidy
 from coffer.surfaces.http.wiring import wire_chat
 
 
@@ -112,7 +105,7 @@ def _db_url() -> str:
 
 
 def _daemon_json_path() -> pathlib.Path:
-    return pathlib.Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "daemon.json"
+    return coffer_dir() / "daemon.json"
 
 
 _logger = logging.getLogger(__name__)
@@ -171,9 +164,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         # credential must fail registration with a named ref, no partial state).
         credentials=credential_store,
     )
+    scope_evaluator = await build_scope_evaluator()
+
     retention_svc = build_retention_service(sm, audit=audit)
     await retention_svc.initialize_defaults()
-    # Also registers the engine-settings synced state area (spec vault-export-import slice 7).
+    # Also registers the engine-settings synced state area (spec vault-sync).
     internal_engine_config_svc = build_config_services(app, sm, audit)
 
     set_resource_service(resource_svc)
@@ -185,50 +180,22 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Created before kind wiring so skill + knowledge can register into it.
     builtin_tools = BuiltinToolRegistry()
 
-    # Coffer's own history, read by the agent debugging Coffer. The audit log
-    # and the daemon log both lost their human reader — the audit page is gone
-    # and nobody greps a log by hand — so the reader is the agent, and the way
-    # in is a tool it already holds.
+    # Coffer's own history, read by the agent debugging Coffer: the audit log
+    # and the daemon log both lost their human reader, so the reader is the
+    # agent and the way in is a tool it already holds.
     register_diagnostics_builtin_tools(
         builtin_tools, audit_repo=audit_repo, log_path=lambda: log_dir() / "daemon.log"
     )
 
-    # Agent + skill kinds (004/005), lockstep: on_delete cascade + skill tools → gateway.
-    wire_agent_and_skill_kinds(app, resource_svc, audit, sm, builtin_tools, credential_store)
-
-    # Provider switching (spec provider-switching) — AFTER the agent kind: it projects the
-    # active profile into each agent's native config (see provider_wiring).
-    wire_provider_kind(app, resource_svc, audit, credential_store, sm)
-
-    # The one knowledge kind: a directory of markdown files. Also builds ranked
-    # retrieval and document ingestion, and registers the six built-in
-    # knowledge tools into `builtin_tools`.
-    knowledge_service = wire_knowledge_kind(
-        app, resource_svc, audit, builtin_tools, get_provider_service(), _credential_resolver
-    )
-
-    # The layer's delivery half (spec knowledge FR-042): a skill that tells an
-    # agent this directory is here, shipped down the skill channel that already
-    # reaches every managed agent. Best-effort — a failed seed must not stop the
-    # daemon, and the tools work either way.
-    await seed_knowledge_skill(get_skill_service())
-
-    # Before wire_mcp_kind below, so the gateway advertises `coffer__recall`.
-    wire_memory_kind(
+    knowledge_service, process_supervisor, session_supervisors = await wire_resource_kinds(
         app,
-        resource_svc,
-        audit,
-        builtin_tools,
-        get_provider_service(),
-        _credential_resolver,
-        sm,
-        get_agent_service(),
-    )
-
-    # Wire up MCP-specific plumbing (after other kinds so the gateway picks
-    # their built-in tools).
-    process_supervisor, session_supervisors = wire_mcp_kind(
-        app, resource_svc, audit, sm, credential_store, builtin_tools
+        resource_svc=resource_svc,
+        audit=audit,
+        sm=sm,
+        scope_evaluator=scope_evaluator,
+        builtin_tools=builtin_tools,
+        credential_store=credential_store,
+        credential_resolver=_credential_resolver,
     )
 
     # Wire the chat feature (spec channels). Must come AFTER all other wiring so the
@@ -247,7 +214,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Wire the channel kind (spec channels) AFTER wire_chat: the inbound processor
     # drives turns through the chat service handles wire_chat published.
-    channel_runtime = wire_channel_kind(app, resource_svc, audit, sm, credential_store)
+    channel_runtime = wire_channel_kind(
+        app, resource_svc, audit, sm, scope_evaluator, credential_store
+    )
 
     # One-time move of legacy OS-keychain secrets into the encrypted store
     # (best-effort; see credential_composition for the mechanics).
@@ -278,22 +247,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Frozen builds only; no-op from source (FR-026, see binary_deploy).
     await asyncio.to_thread(deploy_frozen_sidecars)
 
-    worker = RetentionWorker(retention_svc, prune_logs=prune_log_dir)
-    worker_task = asyncio.create_task(worker.run())
-    app.state.retention_worker = worker
-    app.state.retention_worker_task = worker_task
-
-    # The notes tidy pass: on idle after a write, and on a periodic sweep.
-    start_tidy_worker(app, knowledge_service)
-    start_organise_worker(app, resource_svc)
-    # Vault export/import (spec vault-export-import). Export and import act
-    # only when the user asks; the backup half runs on a timer beside the
-    # retention worker, re-reading its interval from the configured remote.
-    start_backup_worker(
+    start_background_workers(
         app,
-        start_sync(
-            app, resource_svc, audit, db_path, get_master_key_manager(), sm, credential_store
-        ),
+        retention_svc=retention_svc,
+        knowledge_service=knowledge_service,
+        resource_svc=resource_svc,
+        audit=audit,
+        db_path=db_path,
+        sm=sm,
+        credential_store=credential_store,
     )
 
     # Channel adapter reconciler (spec channels). Started after the daemon token is
@@ -316,8 +278,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         daemon_routes.set_daemon_phase("draining")
-        worker.stop()
-        await stop_backup_worker(app)
+        app.state.retention_worker.stop()
+        await stop_converge_worker(app)
         await stop_tidy_worker(app)
         await stop_organise_worker(app)
         # Stop channel adapters first so no new turns start mid-teardown.
@@ -332,10 +294,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         with contextlib.suppress(Exception):
             await channel_runtime.dispose()
         # Best-effort shutdown
+        retention_task = app.state.retention_worker_task
         try:
-            await asyncio.wait_for(worker_task, timeout=2.0)
+            await asyncio.wait_for(retention_task, timeout=2.0)
         except (TimeoutError, asyncio.CancelledError):
-            worker_task.cancel()
+            retention_task.cancel()
         reaper_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await reaper_task

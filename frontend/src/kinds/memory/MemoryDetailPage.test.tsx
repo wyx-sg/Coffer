@@ -5,6 +5,7 @@
 // query. Data hooks are mocked, mirroring KnowledgeDetailPage.test.tsx.
 import { describe, expect, test, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { MemoryDetailPage } from "./MemoryDetailPage";
@@ -57,12 +58,17 @@ const FACTS: FactSummaryOut[] = [
 ];
 
 function renderPage() {
+  // ScopeControl reads the machine registry to build its pick-list (scope's
+  // machine axis, spec vault-sync), so the page needs a query client.
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={["/memory/coffer"]}>
-      <Routes>
-        <Route path="/memory/:name" element={<MemoryDetailPage />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={["/memory/coffer"]}>
+        <Routes>
+          <Route path="/memory/:name" element={<MemoryDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

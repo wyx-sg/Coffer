@@ -1,22 +1,33 @@
-"""Provider profiles round-trip through an export bundle (spec provider-switching).
+"""A provider connection crosses machines on the generic machinery alone.
 
-A ``provider`` resource rides the generic ResourceDoc machinery, so it carries
-across machines with no export/import changes of its own. Two vaults exchange
-one bundle directory on disk.
+A ``provider`` resource is pure config, so it rides ``ResourceDoc`` like any
+other kind: :class:`SyncExporter` writes it and :class:`ResourceApplier` puts it
+back, with no sync-specific code of its own anywhere in the provider module.
+This is the regression test for that claim — if someone gives ``provider`` a
+bespoke export path, or a new config field stops surviving the YAML round trip
+(the curated ``models`` list and its per-entry modality are the fragile part),
+it fails here.
+
+Two independent vaults — separate SQLite files, separate homes — meet through
+one bundle directory on disk. No git, no round, no convergence state.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import pathlib
 
 import pytest
+import yaml
 
 from coffer.application.audit_service import AuditService
 from coffer.application.provider.kind import make_provider_kind
 from coffer.application.resource_service import ResourceService
+from coffer.application.sync.appliers import ResourceApplier
 from coffer.application.sync.exporter import SyncExporter
-from coffer.application.sync.importer import SyncImporter
 from coffer.domain.resource import ResourceRef
+from coffer.domain.scope import Scope
+from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
@@ -26,67 +37,176 @@ from coffer.infrastructure.persistence.engine import (
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
 from coffer.infrastructure.sync.bundle import Bundle
 from coffer.infrastructure.sync.credentials import CredentialSyncAdapter
+from tests.integration.sync.harness import NoKeyring
+
+pytestmark = pytest.mark.timeout(60)
+
+DOC = "resources/provider/acme.yaml"
+
+CONFIG = {
+    "protocol": "openai",
+    "base_url": "https://gw/v1",
+    "credential_ref": "provider/acme/key",
+    # The curated set the connection offers downstream rides along with it,
+    # each entry keeping the modality that says which picker may offer it.
+    "models": [
+        {"id": "gpt-5", "modality": "text"},
+        {"id": "text-embedding-3-large", "modality": "embedding"},
+    ],
+    "is_active": True,
+    "internal_default": False,
+}
 
 
-class _NoKeyring:
-    def get(self, ref: str) -> str | None:
-        return None
+@dataclasses.dataclass
+class Vault:
+    resources: ResourceService
+    credentials: CredentialSyncAdapter
+    home: pathlib.Path
+    engine: object
+    #: The vault's own master key, so a test can put a real secret in the
+    #: store the exporter reads ciphertext out of.
+    key: bytes
 
-    def set(self, ref: str, value: str) -> None:  # pragma: no cover - unused
-        raise AssertionError("keychain not used")
 
-    def delete(self, ref: str) -> None:  # pragma: no cover - unused
-        pass
-
-
-async def _vault(root: pathlib.Path) -> tuple[ResourceService, CredentialSyncAdapter]:
+async def _vault(root: pathlib.Path) -> Vault:
+    """One vault, whole enough to serialize a provider and take one back."""
     root.mkdir(parents=True, exist_ok=True)
     db = root / "coffer.db"
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{db}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    sm = session_maker(engine)
-    audit = AuditService(SqlAlchemyAuditRepo(sm))
+    sessions = session_maker(engine)
     resources = ResourceService(
         kinds={"provider": make_provider_kind()},
-        repo=SqlAlchemyResourceRepo(sm),
-        audit=audit,
+        repo=SqlAlchemyResourceRepo(sessions),
+        audit=AuditService(SqlAlchemyAuditRepo(sessions)),
     )
-    master_key = MasterKeyManager(root / "master.key", _NoKeyring())
-    master_key.resolve(allow_create=True)
-    return resources, CredentialSyncAdapter(db, master_key)
+    master_key = MasterKeyManager(root / "master.key", NoKeyring())
+    key = master_key.resolve(allow_create=True)
+    assert key is not None
+    return Vault(
+        resources=resources,
+        credentials=CredentialSyncAdapter(db, master_key),
+        home=root,
+        engine=engine,
+        key=key,
+    )
+
+
+@pytest.fixture
+async def machines(tmp_path: pathlib.Path):
+    """Two vaults and the bundle directory between them."""
+    a = await _vault(tmp_path / "A")
+    b = await _vault(tmp_path / "B")
+    yield a, b, tmp_path / "bundle"
+    await a.engine.dispose()  # type: ignore[attr-defined]
+    await b.engine.dispose()  # type: ignore[attr-defined]
+
+
+def _exporter(vault: Vault) -> SyncExporter:
+    return SyncExporter(vault.resources, vault.credentials, home=str(vault.home))
+
+
+def _applier(vault: Vault, bundle_dir: pathlib.Path) -> ResourceApplier:
+    return ResourceApplier(vault.resources, worktree=bundle_dir, home=str(vault.home))
+
+
+async def test_a_provider_connection_crosses_to_another_vault_unchanged(machines) -> None:  # type: ignore[no-untyped-def]
+    a, b, bundle_dir = machines
+    await a.resources.register("provider", "acme", dict(CONFIG), "test", description="Acme gateway")
+    # Narrowed past the wire's own default, so the assertion below can tell a
+    # scope that crossed from one the other vault would have minted itself.
+    await a.resources.update_scope(
+        ResourceRef("provider", "acme"), Scope(agents=["claude_code"], machines=None), actor="test"
+    )
+
+    summary = await _exporter(a).export(Bundle(bundle_dir, trees=[]))
+    assert summary.failures == []
+
+    # The document on disk is plain scalars — no python object tags, nothing a
+    # build that does not share our classes would choke on.
+    raw = (bundle_dir / DOC).read_text(encoding="utf-8")
+    assert "!!python" not in raw
+    assert yaml.safe_load(raw)["config"]["models"] == CONFIG["models"]
+
+    await _applier(b, bundle_dir).upsert(DOC)
+
+    got = await b.resources.get(ResourceRef("provider", "acme"))
+    assert got.config == CONFIG
+    assert got.description == "Acme gateway"
+    assert got.enabled is True
+    # Which agents the connection reaches is its framework scope, not a config
+    # field any more, so it crosses on the generic machinery too.
+    assert got.scope == Scope(agents=["claude_code"], machines=None)
+    # Spelled out: the curated set keeps its order AND each entry's modality,
+    # which is what stops a chat picker from offering an embedding model.
+    assert got.config["models"] == [
+        {"id": "gpt-5", "modality": "text"},
+        {"id": "text-embedding-3-large", "modality": "embedding"},
+    ]
+
+
+async def test_a_changed_provider_connection_crosses_again(machines) -> None:  # type: ignore[no-untyped-def]
+    a, b, bundle_dir = machines
+    await a.resources.register("provider", "acme", dict(CONFIG), "test", description="Acme gateway")
+    await _exporter(a).export(Bundle(bundle_dir, trees=[]))
+    await _applier(b, bundle_dir).upsert(DOC)
+
+    edited = dict(CONFIG)
+    edited["base_url"] = "https://gw-2/v1"
+    edited["is_active"] = False
+    edited["models"] = [{"id": "gpt-5-mini", "modality": "text"}]
+    await a.resources.update_config(
+        ResourceRef("provider", "acme"), edited, "test", description="Acme gateway (eu)"
+    )
+
+    await _exporter(a).export(Bundle(bundle_dir, trees=[]))
+    await _applier(b, bundle_dir).upsert(DOC)
+
+    got = await b.resources.get(ResourceRef("provider", "acme"))
+    assert got.config == edited
+    assert got.description == "Acme gateway (eu)"
+    assert [r.name for r in await b.resources.list(kind="provider")] == ["acme"]
 
 
 @pytest.mark.acceptance(
     spec="provider-switching",
     scenario="a provider profile round-trips through sync export and import",
 )
-async def test_provider_round_trips_through_a_bundle(tmp_path):  # type: ignore[no-untyped-def]
-    out = tmp_path / "bundle"
-    config = {
-        "protocol": "openai",
-        "base_url": "https://gw/v1",
-        "credential_ref": "provider/acme/key",
-        # The curated set the connection offers downstream rides along with it,
-        # each entry keeping the modality that says which picker may offer it.
-        "models": [
-            {"id": "gpt-5", "modality": "text"},
-            {"id": "text-embedding-3-large", "modality": "embedding"},
-        ],
-        "is_active": True,
-        "internal_default": False,
-    }
+async def test_a_provider_key_crosses_as_ciphertext_and_never_as_plaintext(
+    machines,  # type: ignore[no-untyped-def]
+    tmp_path: pathlib.Path,
+) -> None:
+    """The profile crosses with its key, and the key crosses encrypted.
 
-    res_a, cred_a = await _vault(tmp_path / "A")
-    await res_a.register("provider", "acme", config, "test")
-    await SyncExporter(res_a, cred_a, home=None).export(Bundle(out, trees=[]))
+    The two halves travel by different machinery — the row through
+    ``ResourceDoc``, the secret as one Fernet blob at
+    ``credentials/<ref>.enc`` — and the bundle must be readable end to end
+    without the plaintext appearing anywhere in it.
+    """
+    a, b, bundle_dir = machines
+    secret = "sk-acme-do-not-leak"
+    EncryptedCredentialStore(a.home / "coffer.db", a.key).set(CONFIG["credential_ref"], secret)
+    await a.resources.register("provider", "acme", dict(CONFIG), "test", description="Acme gateway")
 
-    res_b, cred_b = await _vault(tmp_path / "B")
-    await SyncImporter(res_b, cred_b, home=None).import_(Bundle(out, trees=[]))
+    bundle = Bundle(bundle_dir, trees=[])
+    summary = await _exporter(a).export(bundle, with_credentials=True)
 
-    got = await res_b.get(ResourceRef("provider", "acme"))
-    assert got.config == config
-    assert got.config["models"] == [
-        {"id": "gpt-5", "modality": "text"},
-        {"id": "text-embedding-3-large", "modality": "embedding"},
-    ]
+    assert summary.failures == []
+    assert summary.credentials_included is True
+    blob = bundle_dir / "credentials" / "provider" / "acme" / "key.enc"
+    assert blob.is_file()
+    assert blob.read_text(encoding="utf-8").startswith("gAAAAA")
+    # Nothing in the bundle — the resource document included — carries the
+    # secret or the key that would open it.
+    for rel in bundle.list_files():
+        content = (bundle_dir / rel).read_bytes()
+        assert secret.encode() not in content
+        assert a.key not in content
+
+    # The profile itself still lands on the other vault intact.
+    await _applier(b, bundle_dir).upsert(DOC)
+    got = await b.resources.get(ResourceRef("provider", "acme"))
+    assert got.config["credential_ref"] == CONFIG["credential_ref"]
+    assert got.config == CONFIG

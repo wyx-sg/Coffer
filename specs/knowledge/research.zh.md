@@ -121,5 +121,5 @@ Coffer 绝不写入 agent 自己的记忆文件，不禁用任何东西，也不
 - 读取时的 rerank、HyDE、multi-query 或 LLM 综述——综述由 agent 做。
 - 把某个专有的 agent 记忆格式反解回规范格式（业界未解；改为经 MCP 共享来规避）。
 - 监听文件系统。没有任何东西是派生的，也就没有任何东西需要失效。
-- 跨机器收敛（章程约束；导出、导入与单向备份属于 vault-export-import spec）。
+- 跨机器收敛（章程约束；导出、导入与单向备份属于 vault-sync spec）。
 - 在文件自己的 `title` 与 `description` 之外再做分类。

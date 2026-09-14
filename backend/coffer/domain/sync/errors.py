@@ -1,4 +1,4 @@
-"""Export/import error family (spec vault-export-import). Surfaces map these to HTTP codes."""
+"""Export/import error family (spec vault-sync). Surfaces map these to HTTP codes."""
 
 from __future__ import annotations
 
@@ -63,3 +63,26 @@ class BackupRemoteInvalid(CofferError):  # noqa: N818
     def __init__(self, reason: str) -> None:
         super().__init__(f"backup remote invalid: {reason}")
         self.reason = reason
+
+
+class SyncJoinAmbiguous(CofferError):  # noqa: N818
+    """A returning machine whose base cannot be recovered. Maps to 409.
+
+    Its descriptor is in the remote's registry, so this machine has converged
+    before — but the commit it reached is gone (history rewritten, or the
+    descriptor predates the field). Neither default is safe to pick silently:
+    joining as new republishes everything the other machines deleted while this
+    one was away, and rebuilding from the remote discards whatever this vault
+    has that the remote does not. So the user chooses.
+    """
+
+    code = "SYNC_JOIN_AMBIGUOUS"
+
+    def __init__(self, machine_id: str) -> None:
+        super().__init__(
+            f"this machine ({machine_id}) has synced with this remote before, but the "
+            "commit it reached is no longer in the remote's history, so its base cannot "
+            "be recovered. Re-run the join choosing either to keep this vault's own "
+            "documents or to rebuild this machine from the remote."
+        )
+        self.machine_id = machine_id

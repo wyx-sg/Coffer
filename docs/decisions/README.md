@@ -100,7 +100,7 @@ section that future readers most often want — don't skip it.>
 | [`agent-native-shared-memory`](agent-native-shared-memory.md) | One Shared Knowledge Store Across Agents | Accepted — projection half superseded by [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md) |
 | [`channel-adapter-framework`](channel-adapter-framework.md) | Channel Adapter Framework | Accepted |
 | [`envelope-encrypted-credential-store`](envelope-encrypted-credential-store.md) | Envelope-Encrypted Credential Store | Accepted |
-| [`vault-export-import`](vault-export-import.md) | Vault Export and Import | Accepted |
+| [`vault-sync`](vault-sync.md) | Vault Sync | Accepted |
 | [`industrial-grade-harness-in-layers`](industrial-grade-harness-in-layers.md) | Industrial-Grade Harness, Built in Layers | Proposed |
 | [`tool-retrieval-for-overload`](tool-retrieval-for-overload.md) | Tool Retrieval for Aggregation Overload | Accepted — amended by [Built-in Agent Is Internal](builtin-agent-is-internal-capability.md) and [Budget-Driven Tool Tiering](budget-driven-tool-tiering.md) |
 | [`close-the-eval-flywheel`](close-the-eval-flywheel.md) | Close the Eval Flywheel (Loop Engineering) | Accepted |

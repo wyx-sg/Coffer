@@ -191,7 +191,7 @@ by ref.)
 The markdown trees (`knowledge/`, `memory/`, `skills/`) are the system of
 record; `coffer.db` is a rebuildable index over them. Coffer ships no backup
 command of its own — everything that is a system of record moves through the
-spec vault-export-import vault export, and a byte-copy of the whole directory is `cp -r
+spec vault-sync vault export, and a byte-copy of the whole directory is `cp -r
 ~/.coffer/ <dest>` while the daemon is stopped.
 
 **Master key.** `master.key` decrypts the credential ciphertext in

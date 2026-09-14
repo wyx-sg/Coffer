@@ -29,6 +29,7 @@ from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import CuratedModel, Protocol
 from coffer.domain.provider.modality import Modality
 from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.scope import Scope
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.agent.model_discovery import NativeConfigModelDiscovery
 from coffer.infrastructure.persistence.base import Base
@@ -165,7 +166,9 @@ async def _gateway(
     # Which agents a connection reaches is its framework scope now, not a
     # create argument (ADR per-agent-resource-scope).
     await env.resources.update_scope(
-        ResourceRef("provider", name), [a.value for a in agents], actor="test"
+        ResourceRef("provider", name),
+        Scope(agents=[a.value for a in agents], machines=None),
+        actor="test",
     )
     await env.providers.activate(name)
 

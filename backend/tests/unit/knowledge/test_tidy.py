@@ -13,6 +13,7 @@ import pytest
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.application.knowledge.tidy import run_tidy
 from coffer.application.knowledge.tidy_worker import TidyWorker
+from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.resource import Resource
 from coffer.infrastructure.knowledge import fs, paths
 
@@ -83,7 +84,11 @@ class _RewritingAgent:
 def service(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     fs.create_collection_dir("shopee")
-    return KnowledgeService(resources=_Resources(["shopee"]), audit=_Audit())
+    return KnowledgeService(
+        resources=_Resources(["shopee"]),
+        audit=_Audit(),
+        scope_evaluator=ScopeEvaluator(machine_id="test-machine"),
+    )
 
 
 @pytest.mark.asyncio

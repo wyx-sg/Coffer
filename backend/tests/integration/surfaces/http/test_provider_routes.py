@@ -414,7 +414,10 @@ def test_openai_connection_scoped_to_claude_code(tmp_path, monkeypatch):
         assert r.status_code == 201, r.text
         # A new connection starts on the wire default...
         assert r.json()["compatible_agents"] == ["claude_code", "codex"]
-        scoped = c.put("/api/v1/resources/provider/agnes/scope", json={"scope": ["claude_code"]})
+        scoped = c.put(
+            "/api/v1/resources/provider/agnes/scope",
+            json={"scope": {"agents": ["claude_code"]}},
+        )
         assert scoped.status_code == 200, scoped.text
         # ...and the reported effective set follows the scope.
         assert c.get("/api/v1/providers/agnes").json()["compatible_agents"] == ["claude_code"]
@@ -841,7 +844,9 @@ def test_the_key_a_wire_resolves_follows_the_scope(tmp_path, monkeypatch):
             },
         )
         for name, agents in (("for-claude", ["claude_code"]), ("for-codex", ["codex"])):
-            r = c.put(f"/api/v1/resources/provider/{name}/scope", json={"scope": agents})
+            r = c.put(
+                f"/api/v1/resources/provider/{name}/scope", json={"scope": {"agents": agents}}
+            )
             assert r.status_code == 200, r.text
         assert c.post("/api/v1/providers/for-claude/activate").status_code == 200
         assert c.post("/api/v1/providers/for-codex/activate").status_code == 200
@@ -868,14 +873,20 @@ def test_a_disabled_connection_resolves_no_key_for_its_agent(tmp_path, monkeypat
 
 
 def test_scoping_a_connection_to_no_agent_retires_its_reach(tmp_path, monkeypatch):
-    """The dormant case for a connection: ``[]`` reaches nobody, so no agent
-    resolves its key — the same "dormant" meaning every other scoped kind has."""
+    """The dormant case for a connection: an empty agent axis reaches nobody, so
+    no agent resolves its key — the same "dormant" meaning every other scoped
+    kind has."""
     app = _app(tmp_path, monkeypatch, 59940)
     with _client(app) as c:
         c.post("/api/v1/providers", json=_anthropic_body("acme"))
         assert c.post("/api/v1/providers/acme/activate").status_code == 200
 
-        assert c.put("/api/v1/resources/provider/acme/scope", json={"scope": []}).status_code == 200
+        assert (
+            c.put(
+                "/api/v1/resources/provider/acme/scope", json={"scope": {"agents": []}}
+            ).status_code
+            == 200
+        )
 
         assert c.get("/api/v1/providers/active-key/anthropic").status_code == 404
         assert c.get("/api/v1/providers/acme").json()["compatible_agents"] == []

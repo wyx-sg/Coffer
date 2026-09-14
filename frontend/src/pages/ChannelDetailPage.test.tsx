@@ -27,11 +27,15 @@ vi.mock("@/lib/hooks/useAgentProviders", () => ({
 // scope, so the hooks behind it are stubbed rather than served by a real client.
 // `channel` declares scope, so the control renders all three segments.
 vi.mock("@/lib/hooks/useScope", () => ({
+  UNRESTRICTED: { agents: null, machines: null },
   useResourceScope: vi.fn(() => ({ data: { scope: null, supports_scope: true } })),
   useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({
   useAgents: vi.fn(() => ({ data: [{ name: "cc" }] })),
+}));
+vi.mock("@/lib/hooks/useMachines", () => ({
+  useMachines: vi.fn(() => ({ data: { machines: [] } })),
 }));
 vi.mock("@/lib/hooks/useResourceMutations", () => ({
   useEnableResource: vi.fn(),
@@ -199,11 +203,11 @@ describe("ChannelDetailPage", () => {
     // the row does, so the two surfaces say the same thing about the same
     // channel — including "answer only for these agents", which a Switch cannot.
     expect(screen.queryByRole("switch")).toBeNull();
-    expect(screen.getByRole("button", { name: /every agent/i })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /everywhere/i })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: /selected agents/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /restricted/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^disabled$/i }));
     expect(disable.mutate).toHaveBeenCalledWith({ kind: "channel", name: "st" });
     expect(enable.mutate).not.toHaveBeenCalled();

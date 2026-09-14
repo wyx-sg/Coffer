@@ -563,23 +563,20 @@ status / notify`。
 
 ## 渠道在哪里运行
 
-渠道的平台身份（被轮询的 bot、webhook 端点）只容许一个消费者。Coffer 每台机器
-只有一个仓库，且从不复制一个正在运行的仓库
-（[Vault Export and Import](../../docs/decisions/vault-export-import.zh.md)），因此没有
-任何需要仲裁的东西：**启用的渠道就在本机运行它的适配器**——即持有它的守护进程
-所在的那台机器——被禁用的渠道则在任何地方都不运行。不存在机器绑定，没有亲和性
-字段，也没有 per-machine override。
+渠道的平台身份（被轮询的 bot、webhook 端点）只容许一个消费者。收敛后的仓库
+（spec vault-sync）横跨多台机器，每一行 channel 都会到达所有机器——配对状态随
+`channel-peers` 状态区一同带过去，因此无需重新配对——所以「哪台机器来应答这个
+bot」是一个真问题，而回答它的是渠道 `scope` 的**机器轴**
+（[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.zh.md)）。
+**启用的渠道只在其 scope 命名的机器上运行适配器**；在 scope 之外的机器上，它照样
+被注册、可见、可编辑，但适配器永远不会启动。未加限制的 scope 就是不限制，也就是
+哪里启用就在哪里运行——这正是同步之前的行为，对只有一台机器的用户毫无变化。若在
+两台机器上都启用而不收窄机器轴，仍会让两个适配器指向同一个 bot 身份；那依旧是
+用户的一次刻意操作，而机器轴就是避免它的工具。
 
-`channel` kind 确实声明了 `scope`
-（[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.zh.md)），但它
-回答的问题与「适配器在哪台机器上跑」不同——见 FR-079。scope 命名的是这条渠道**可以
-驱动哪些 agent**；启用与否说的是它在本机到底跑不跑。两者只在一处交汇：一条什么 agent
-都驱动不了的渠道不会运行。
-
-如果用户把一个 bundle 带到第二台机器（spec vault-export-import），该渠道在那里也会被注册——配对
-状态随 bundle 的 `channel-peers` 状态区一同带过去，因此无需重新配对——而在两边
-同时启用，就会让两个适配器指向同一个 bot 身份。那是用户的一次刻意操作，而不是
-Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制能自行造成这种局面。
+scope 的 **agent 轴**回答的是另一个问题，与「适配器在哪台机器上跑」不同——见
+FR-079。它命名的是这条渠道**可以驱动哪些 agent**；机器轴与 `enabled` 说的才是它
+到底在哪里跑。两者只在一处交汇：一条什么 agent 都驱动不了的渠道不会运行。
 
 ## Acceptance Scenarios
 
@@ -1449,6 +1446,13 @@ Coffer 需要仲裁的状态——导出/导入模型里没有任何后台复制
 - **Then** 这次编辑被拒绝，消息同时点出 default agent 与被提议的 scope，什么都不落库，
   渠道继续运行——收窄 scope 绝不会悄无声息地把 bot 弄下线。
 
+### Scenario: a channel scoped to another machine is registered but dark
+
+- **Given** 一个收敛后的仓库，其中启用的渠道被限定到另一台机器
+- **When** 本机的渠道 runtime 做一次 reconcile
+- **Then** 该行照样被注册、仍可编辑，适配器永远不会启动，只有它 scope 命名的那台
+  机器应答这个 bot
+
 ### Scenario: edit a dormant channel's configuration
 
 - **Given** 一条被属主用「scope 为空」关掉的渠道，
@@ -1835,31 +1839,38 @@ Turn 平台有第二个接口面：Web UI 里的一个 **Chat 页面**，对着�
   的连接是可选的覆盖项，不是前置条件（见
   [Provider Switching](../../docs/decisions/provider-switching.zh.md) 的 2026-06-22 修订）。
 
-- **FR-079**：渠道必须承载框架级的 per-agent `scope`
+- **FR-079**：渠道必须承载框架级的 `scope`
   （[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.zh.md)），
-  读法是**这条渠道可以驱动哪些 agent**。其他所有 kind 的 scope 命名的是资源被*投递给*
-  哪些 agent；而渠道不被任何 agent 消费——它是一个入站面——所以这个轴是被反转，而不是
-  照搬。这里明确写出来，因为按惯常读法理解的读者会正好读反。
+  即两条互相独立、`AND` 起来的轴（spec vault-sync）。它的 **agent 轴**读法是**这条渠道
+  可以驱动哪些 agent**。其他所有 kind 的 scope 命名的是资源被*投递给*哪些 agent；而渠道
+  不被任何 agent 消费——它是一个入站面——所以这条轴是被反转，而不是照搬。这里明确写出来，
+  因为按惯常读法理解的读者会正好读反。它的**机器轴**则按通常读法——这个资源在哪里生效
+  ——对一个入站面来说，就是哪台机器来应答这个 bot。
 
-  - `scope = null` 必须表示所有已注册的 agent。这就是 scope 之前的行为，也是现存每一条
-    渠道所携带的值，因此渠道不需要任何数据迁移。
-  - `scope = [<agent>, …]` 必须在 `/agent` 的三个面上同时收窄：列表、选择卡片，以及对
+  - agent 轴不加限制时必须表示所有已注册的 agent。这就是 scope 之前的行为，也是现存每一
+    条渠道所携带的值，因此渠道不需要任何数据迁移。
+  - `agents: [<agent>, …]` 必须在 `/agent` 的三个面上同时收窄：列表、选择卡片，以及对
     所选 key 的校验（键入或点按）。三者必须读同一个收窄后的集合——卡片提供了一个紧接着
     就被校验拒掉的 agent，正是本条要防的那个具体故障。
-  - **不变量**：渠道的 `default_agent` 必须是这条渠道可以驱动的 agent——只要 scope 非空，
-    它就必须落在 scope 之内。这条不变量必须在**两条写入路径上同时**强制，从而让不一致的
-    状态根本无法落库：编辑配置时，若它命名了当前 scope 之外的 `default_agent`，该编辑被
-    拒绝；编辑 scope 时，若被提议的非空 scope 排除了当前的 `default_agent`，该编辑同样被
-    拒绝。scope 编辑**不得**先被接受、再让渠道跑不起来——收窄可达范围却悄悄把一个活着的
-    bot 弄下线，正是本条要防的那个具体故障。每次拒绝都必须同时点出 default agent 与
-    scope，好让属主看见两条出路：放宽 scope，或者先改掉 default agent。
-  - `scope = []`（休眠）必须表示这条渠道驱动不了任何东西，并且必须尽早失败而不是逐 turn
+  - **不变量**：渠道的 `default_agent` 必须是这条渠道可以驱动的 agent——只要 agent 轴非
+    空，它就必须落在该轴之内。这条不变量必须在**两条写入路径上同时**强制，从而让不一致
+    的状态根本无法落库：编辑配置时，若它命名了当前 agent 轴之外的 `default_agent`，该编
+    辑被拒绝；编辑 scope 时，若被提议的非空 agent 轴排除了当前的 `default_agent`，该编辑
+    同样被拒绝。scope 编辑**不得**先被接受、再让渠道跑不起来——收窄可达范围却悄悄把一个
+    活着的 bot 弄下线，正是本条要防的那个具体故障。每次拒绝都必须同时点出 default agent
+    与被提议的集合，好让属主看见两条出路：放宽 scope，或者先改掉 default agent。
+  - `agents: []`（休眠）必须表示这条渠道驱动不了任何东西，并且必须尽早失败而不是逐 turn
     失败：runtime 不会启动它的适配器，因此不会出现「先收下消息再拒绝」。管理面把它报告
-    为未运行。属主放宽 scope 即可让它回来。
-  - `scope = []` 必须在两条写入路径上都被接受。它是整个 vault 通用的「休眠」含义——这条
+    为未运行。属主放宽这条轴即可让它回来。
+  - `agents: []` 必须在两条写入路径上都被接受。它是整个 vault 通用的「休眠」含义——这条
     渠道是关着的——而「关着」**不得**同时意味着「冻结」：被属主刻意关掉的渠道必须仍然可
     编辑，好让写错的 bot token 或 tunnel token 无需先重新激活就能改对。
-  - 一旦 scope 不再容许某个 thread 粘滞的 `/agent` 选择，该选择必须让位于渠道默认值，
+  - **机器轴**必须且只能把守 runtime：机器轴排除了本机的渠道，在本机必须照样被注册、可见
+    且可编辑，而它的适配器必须不启动。正是这一点阻止了同一个收敛仓库的两台机器同时应答
+    同一个 bot 身份。两条写入路径都不得读这条轴——因为「这条渠道属于另一台机器」而拒绝一
+    次编辑，会让收敛后的仓库里存在一条谁坐在哪都改不动的渠道——`/agent` 同样不得读它，因
+    为它只会在已经通过那道门的机器上运行。
+  - 一旦 agent 轴不再容许某个 thread 粘滞的 `/agent` 选择，该选择必须让位于渠道默认值，
     这样收窄 scope 会在下一次会话就生效，而不必等设置它的人改回来。
 
 ## Deliberately out of scope

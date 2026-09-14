@@ -1,4 +1,4 @@
-"""Path portability for exported config (spec vault-export-import, ADR: vault-export-import).
+"""Path portability for exported config (spec vault-sync, ADR: vault-sync).
 
 The user's machines have different usernames/home layouts, so absolute paths
 inside resource configs (``config_dir``, command paths) break when carried

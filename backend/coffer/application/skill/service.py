@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
+from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.application.skill.ports import (
     MasterStorePort,
     SkillBindingRepoPort,
@@ -65,6 +66,7 @@ class SkillService:
         master_store: MasterStorePort,
         sync_engine: SyncEnginePort,
         agent_skill_dir_resolver: AgentSkillDirResolver,
+        scope_evaluator: ScopeEvaluator,
         size_limit_bytes: int = 50 * 1024 * 1024,
         workspace_scan: WorkspaceScanPort | None = None,
         agent_scan_locations_resolver: AgentScanLocationsResolver | None = None,
@@ -76,6 +78,10 @@ class SkillService:
         self._store = master_store
         self._sync = sync_engine
         self._resolve_agent_skill_dir = agent_skill_dir_resolver
+        # Activation scope with this machine bound in: the delivery predicate
+        # asks it, never ``domain.scope`` directly, so no ops module has to
+        # know a machine axis exists (see application/scope_evaluator.py).
+        self._scope = scope_evaluator
         self._size_limit = size_limit_bytes
         # Unmanaged-skill discovery deps (FR-022). Optional only so existing
         # construction sites keep working until the composition root wires

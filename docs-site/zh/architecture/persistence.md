@@ -22,7 +22,7 @@ SQLite 选择的实际后果塑造了持久化层的每一个细节：
 
 - **单写入者** — SQLite 的写并发有限；由一个写入者（daemon）负责，从设计上消除了所有写冲突。daemon 序列化每一次变更；需要写入的接口面（CLI 命令、HTTP handler）都通过 loopback HTTP 经由 daemon 进行。
 - **WAL 模式** — Write-Ahead Logging 允许读取者（例如调用 REST API 的 `coffer mcp list` 命令）与写入者并发执行，而不会被锁阻塞。实际效果是 `coffer mcp list` 不会因等待正在进行的迁移而挂起。
-- **零基础设施拷贝** — 由于所有 Coffer 状态都在 `~/.coffer/` 下，迁移或复制一个 vault 不需要任何工具：在 daemon 停止的前提下 `cp -r ~/.coffer/ <dest>` 就是一份完整的逐字节拷贝，而 spec vault-export-import 的 vault 导出会把全部事实源带到另一台机器。Coffer 不再自带备份命令；拷贝出机器的内容中不要包含 `master.key`。
+- **零基础设施拷贝** — 由于所有 Coffer 状态都在 `~/.coffer/` 下，迁移或复制一个 vault 不需要任何工具：在 daemon 停止的前提下 `cp -r ~/.coffer/ <dest>` 就是一份完整的逐字节拷贝，而 spec vault-sync 的 vault 导出会把全部事实源带到另一台机器。Coffer 不再自带备份命令；拷贝出机器的内容中不要包含 `master.key`。
 
 ## SQLAlchemy 2.0 异步 ORM
 
@@ -57,7 +57,7 @@ Schema 演化由 Alembic 管理，配置文件为 `backend/alembic.ini`，迁移
 | `0002`   | `20260521_0002_mcp_tables.py`        | `mcp_capability_preferences`、`mcp_invocations` |
 | `0003`   | `20260522_0003_mcp_server_health.py` | `mcp_server_health`                             |
 
-后续修订版本陆续加入了 skill、knowledge、embedding 配置、chat、channel、credentials 等表（以及若干索引和数据修复修订版本）；在持续同步被撤销之后，又有一个修订版本把 sync 相关的表删除（[Vault Export and Import-vault-export-import](/zh/reference/adr/Vault Export and Import-vault-export-import)）。在 daemon 首次启动时，`alembic upgrade head` 会在 HTTP 服务开始接受连接之前运行。由于 Alembic 迁移作为数据文件被打包进 PyInstaller daemon 二进制文件，最终用户的安装在首次启动时也能正确创建 schema，无需单独的迁移步骤。
+后续修订版本陆续加入了 skill、knowledge、embedding 配置、chat、channel、credentials 等表（以及若干索引和数据修复修订版本）；在持续同步被撤销之后，又有一个修订版本把 sync 相关的表删除（[Vault Export and Import-vault-sync](/zh/reference/adr/Vault Export and Import-vault-sync)）。在 daemon 首次启动时，`alembic upgrade head` 会在 HTTP 服务开始接受连接之前运行。由于 Alembic 迁移作为数据文件被打包进 PyInstaller daemon 二进制文件，最终用户的安装在首次启动时也能正确创建 schema，无需单独的迁移步骤。
 
 ## 数据库表概览
 
@@ -122,7 +122,7 @@ Schema 演化由 Alembic 管理，配置文件为 `backend/alembic.ini`，迁移
 | ---------------------- | --------------------------------------------- |
 | `skill_agent_bindings` | 记录哪些技能绑定到哪些 agent 工作区。          |
 
-**导出 / 导入：** 没有表。导出与导入是对活着的仓库执行的一次性操作；没有需要持久化的配置、没有上次运行状态、没有机器注册表，也没有墓碑账本（[Vault Export and Import-vault-export-import](/zh/reference/adr/Vault Export and Import-vault-export-import)）。
+**导出 / 导入：** 没有表。导出与导入是对活着的仓库执行的一次性操作；没有需要持久化的配置、没有上次运行状态、没有机器注册表，也没有墓碑账本（[Vault Export and Import-vault-sync](/zh/reference/adr/Vault Export and Import-vault-sync)）。
 
 ## 文件即事实源，SQLite 是可重建的索引（Files as Truth）
 

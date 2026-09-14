@@ -15,6 +15,7 @@ from coffer.surfaces.http.schemas import (
     ResourceScopeOut,
     ResourceScopeUpdate,
     ResourceUpdate,
+    ScopeOut,
 )
 
 router = APIRouter(
@@ -31,7 +32,7 @@ def _to_out(r: Resource) -> ResourceOut:
         name=r.name,
         description=r.description,
         config=r.config,
-        scope=r.scope,
+        scope=ScopeOut.of(r.scope),
         enabled=r.enabled,
         created_at=r.created_at,
         updated_at=r.updated_at,
@@ -142,7 +143,7 @@ async def get_resource_scope(
     svc: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> ResourceScopeOut:
     r = await svc.get(ResourceRef(kind, name))
-    return ResourceScopeOut(scope=r.scope, supports_scope=svc.supports_scope(r.kind))
+    return ResourceScopeOut(scope=ScopeOut.of(r.scope), supports_scope=svc.supports_scope(r.kind))
 
 
 @router.put("/{kind}/{name}/scope", response_model=ResourceOut)
@@ -156,5 +157,6 @@ async def update_resource_scope(
     # Deliberately NOT gated on allow_lifecycle_kind — scope is a
     # framework-level concern orthogonal to a kind's creation invariants
     # (ResourceService.update_scope, ADR: per-agent-resource-scope).
-    r = await svc.update_scope(ResourceRef(kind, name), body.scope, actor=actor)
+    scope = body.scope.to_domain() if body.scope is not None else None
+    r = await svc.update_scope(ResourceRef(kind, name), scope, actor=actor)
     return _to_out(r)

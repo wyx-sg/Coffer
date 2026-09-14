@@ -16,9 +16,11 @@ from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
+from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.errors import ResourceNotFound, ToolDisabled
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind, ResourceRef
+from coffer.domain.scope import Scope
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
@@ -37,6 +39,11 @@ from coffer.infrastructure.persistence.repos import (
 from tests.fixtures.keyring import install_in_memory_keyring
 
 _FAKE = Path(__file__).resolve().parents[3] / "fixtures" / "fake_mcp_server.py"
+
+#: Every gateway seam in this file answers activation for the same fixed
+#: machine, so the evaluator is built once and shared by _setup and by the
+#: tests that drive gateway_handlers directly.
+_SCOPE = ScopeEvaluator(machine_id="test-machine")
 
 
 async def _safe_dispose(engine: object) -> None:
@@ -120,6 +127,7 @@ async def _setup(
         preferences=prefs_repo,
     )
     session = MCPGatewaySession(
+        scope_evaluator=_SCOPE,
         session_id="test-session",
         resource_service=resource_svc,
         supervisor=supervisor,
@@ -149,7 +157,7 @@ async def test_tools_list_excludes_dormant_server_and_unscoped_is_unaffected(
         },
     )
     try:
-        await rsvc.update_scope(ResourceRef("mcp_server", "gh"), [], actor="test")
+        await rsvc.update_scope(ResourceRef("mcp_server", "gh"), Scope(agents=[]), actor="test")
         await session.handle_initialize(
             {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent": "claude-code"}}
         )
@@ -162,7 +170,7 @@ async def test_tools_list_excludes_dormant_server_and_unscoped_is_unaffected(
         # The dormant doc is present/visible even though nothing activates it.
         visible = await rsvc.get(ResourceRef("mcp_server", "gh"))
         assert visible is not None
-        assert visible.scope == []
+        assert visible.scope == Scope(agents=[])
     finally:
         await session.dispose()
         await _safe_dispose(engine)
@@ -227,7 +235,7 @@ async def _tools_list_names_for_agent(
     tmp_path: Path,
     subdir: str,
     configs: dict,  # type: ignore[type-arg]
-    scope: list[str] | None,
+    scope: Scope | None,
     agent: str | None,
 ) -> set[str]:
     """Spin up one isolated session (own tmp_path/engine), scope `gh`,
@@ -267,7 +275,7 @@ async def test_tools_list_agent_scoped_server_visible_only_to_matching_agent(
         "fs": _stdio_config(tools=["read_file"]),
         "gh": _stdio_config(tools=["create_issue"]),
     }
-    scope = ["claude-code"]
+    scope = Scope(agents=["claude-code"])
 
     assert await _tools_list_names_for_agent(tmp_path, "a", configs, scope, "claude-code") == {
         "fs__read_file",
@@ -322,7 +330,9 @@ async def test_tools_call_refused_for_server_excluded_by_agent_axis(
         {"gh": _stdio_config(tools=["create_issue"])},
     )
     try:
-        await rsvc.update_scope(ResourceRef("mcp_server", "gh"), ["claude-code"], actor="test")
+        await rsvc.update_scope(
+            ResourceRef("mcp_server", "gh"), Scope(agents=["claude-code"]), actor="test"
+        )
         await session.handle_initialize(
             {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent": "codex"}}
         )
@@ -351,7 +361,9 @@ async def test_tools_call_allowed_for_server_included_by_agent_axis(
         {"gh": _stdio_config(tools=["create_issue"])},
     )
     try:
-        await rsvc.update_scope(ResourceRef("mcp_server", "gh"), ["claude-code"], actor="test")
+        await rsvc.update_scope(
+            ResourceRef("mcp_server", "gh"), Scope(agents=["claude-code"]), actor="test"
+        )
         await session.handle_initialize(
             {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent": "claude-code"}}
         )
@@ -380,7 +392,7 @@ async def test_tools_call_refused_for_dormant_server(
         {"gh": _stdio_config(tools=["create_issue"])},
     )
     try:
-        await rsvc.update_scope(ResourceRef("mcp_server", "gh"), [], actor="test")
+        await rsvc.update_scope(ResourceRef("mcp_server", "gh"), Scope(agents=[]), actor="test")
         await session.handle_initialize(
             {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent": "claude-code"}}
         )
@@ -1158,6 +1170,7 @@ async def test_handler_disabled_records_denied_invocation(
                 session_id="t",
                 clock=lambda: datetime.now(tz=UTC),
                 ensure_subscribed=_noop_subscribe,
+                scope=_SCOPE,
             )
 
         rows = await inv.query(resource_name="fs")
@@ -1249,6 +1262,7 @@ async def test_handler_records_timeout_invocation_on_upstream_timeout(
                 session_id="t",
                 clock=lambda: datetime.now(tz=UTC),
                 ensure_subscribed=_noop_subscribe,
+                scope=_SCOPE,
             )
 
         rows = await inv.query(resource_name="fs")
@@ -1300,6 +1314,7 @@ async def test_upstream_crash_mid_resource_read_then_respawn(
                 session_id="t",
                 clock=lambda: datetime.now(tz=UTC),
                 ensure_subscribed=_noop_subscribe,
+                scope=_SCOPE,
             )
 
         # supervisor.evict() must have been called with the server name.
@@ -1352,6 +1367,7 @@ async def test_upstream_crash_mid_prompt_get_then_respawn(
                 session_id="t",
                 clock=lambda: datetime.now(tz=UTC),
                 ensure_subscribed=_noop_subscribe,
+                scope=_SCOPE,
             )
 
         assert spy_supervisor._evicted == ["gh"], (
@@ -1423,6 +1439,7 @@ async def test_mcp_error_does_not_evict_healthy_upstream(
                 session_id="t",
                 clock=lambda: datetime.now(tz=UTC),
                 ensure_subscribed=_noop_subscribe,
+                scope=_SCOPE,
             )
 
         # The healthy upstream must survive — no eviction.
@@ -1489,6 +1506,7 @@ async def test_inband_iserror_result_is_recorded_as_error(
             session_id="t",
             clock=lambda: datetime.now(tz=UTC),
             ensure_subscribed=_noop_subscribe,
+            scope=_SCOPE,
         )
 
         # The isError result is relayed unchanged — Coffer is a pass-through proxy.
@@ -1554,6 +1572,7 @@ async def test_transport_drop_still_evicts_for_self_heal(
                 session_id="t",
                 clock=lambda: datetime.now(tz=UTC),
                 ensure_subscribed=_noop_subscribe,
+                scope=_SCOPE,
             )
 
         assert evicted == ["fs"], f"transport drop must evict; evicted={evicted}"

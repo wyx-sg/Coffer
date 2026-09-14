@@ -14,11 +14,13 @@ import pytest
 
 from coffer.application.knowledge.ingest import MAX_UPLOAD_BYTES, IngestedDocument, IngestService
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
+from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.knowledge.converter import UnsupportedDocument
 from coffer.domain.knowledge.entry import ACTOR_USER
 from coffer.domain.knowledge.errors import CollectionNotFound, KnowledgeFileNotFound, UploadTooLarge
 from coffer.domain.provider.config import ProviderConfig, ResolvedConnection
 from coffer.domain.resource import Resource
+from coffer.domain.scope import Scope
 from coffer.infrastructure.knowledge import fs, paths
 from coffer.infrastructure.knowledge.converters.registry import default_registry
 
@@ -26,7 +28,7 @@ from coffer.infrastructure.knowledge.converters.registry import default_registry
 class _Resources:
     """A fake ``ResourceService``: just enough for ``visible_collections``."""
 
-    def __init__(self, entries: list[tuple[str, list[str] | None]]) -> None:
+    def __init__(self, entries: list[tuple[str, Scope | None]]) -> None:
         now = datetime.now(tz=UTC)
         self._rows = [
             Resource(
@@ -97,8 +99,14 @@ def knowledge(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     (``shopee``) and one an unrelated agent may not see (``restricted``)."""
     monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     fs.create_collection_dir("shopee")
-    resources = _Resources([("shopee", None), ("restricted", ["only-agent"])])
-    return KnowledgeService(resources=resources, audit=_Audit())
+    resources = _Resources(
+        [("shopee", None), ("restricted", Scope(agents=["only-agent"], machines=None))]
+    )
+    return KnowledgeService(
+        resources=resources,
+        audit=_Audit(),
+        scope_evaluator=ScopeEvaluator(machine_id="test-machine"),
+    )
 
 
 def _service(knowledge, *, models=None, completion=None, credential_resolver=None):  # type: ignore[no-untyped-def]

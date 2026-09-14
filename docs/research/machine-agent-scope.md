@@ -2,16 +2,21 @@
 
 > 中文版: [machine-agent-scope.zh.md](./machine-agent-scope.zh.md)
 
-> **Historical record.** This note designed a **machine × agent** scope matrix
-> on top of continuous multi-machine sync. Both have since been withdrawn: sync
-> is now a one-shot vault export/import
-> ([Vault Export and Import](../decisions/vault-export-import.md)) and the machine axis
-> is gone, leaving `scope` as a plain list of agent names
-> ([Per-Agent Resource Scope](../decisions/per-agent-resource-scope.md)). Read the two
-> ADRs for the shipped shape; what follows is the record of how the agent axis
-> was arrived at.
+> **Historical record.** This note designed a machine × agent scope **matrix**
+> on top of continuous multi-machine sync. Multi-machine sync is back — as a
+> converge round against a git rendezvous the user owns
+> ([Vault Sync](../../specs/vault-sync/spec.md)) — and `scope` carries a
+> machine axis again, but **not the matrix designed here**: what shipped is two
+> independent allow-lists, `agents` and `machines`, `AND`-ed, each `null`
+> meaning unrestricted
+> ([Per-Agent Resource Scope](../decisions/per-agent-resource-scope.md)). The
+> matrix was dropped on purpose. The only thing a pair-wise matrix expresses
+> that two axes cannot is naming a *different* agent per machine on one
+> resource — "the desktop's Claude Code **plus** the laptop's Codex" — and no
+> observed use needs it. Read the spec and the ADR for the shipped shape; what
+> follows is the record of how both axes were arrived at, matrix included.
 
-Design note for generalizing machine identity (spec vault-export-import, and the since-removed
+Design note for generalizing machine identity (spec vault-sync, and the since-removed
 machine-identity ADR) into a
 resource-framework-level **scope** facility, plus a top-level **Machines**
 fleet view. Validated in a brainstorming session on 2026-07-10; this note is

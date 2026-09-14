@@ -2,7 +2,7 @@
 
 > 中文版：本文件 · English: [multi-machine-sync.md](./multi-machine-sync.md)
 >
-> 面向 Coffer 多机同步（spec vault-export-import，[Vault Export and Import](../decisions/vault-export-import.zh.md)）的内部竞品调研报告。**日期：** 2026-06-16。
+> 面向 Coffer 多机同步（spec vault-sync，[Vault Export and Import](../decisions/vault-sync.zh.md)）的内部竞品调研报告。**日期：** 2026-06-16。
 > **方法：** deep-research harness。**来源说明：** 本轮在核验中途撞到 API 会话上限——1 条
 > claim（整文件加密支持）经 3-0 确认；其余为项目文档一手来源但未复核。请做轻量复核。
 
@@ -102,7 +102,7 @@
   ——已存在的走 `update_config` + `set_enabled`，新增的走 `register`，上游删除的走 `delete`
   ——绝非对文件的盲目覆盖。`update_config` 会重新校验配置、探测凭证引用并运行各 kind 的跨版本
   钩子，因此这是一次经校验、感知 kind 的对账。[`backend/coffer/application/sync/importer.py:71-110`；
-  `backend/coffer/application/resource_service.py:206-243`；仓库导出/导入 ADR；spec vault-export-import]
+  `backend/coffer/application/resource_service.py:206-243`；仓库导出/导入 ADR；spec vault-sync]
 - **chezmoi 整文件加密经四种后端**——age、git-crypt、gpg、transcrypt；加密文件以
   ASCII-armored 形态存于源目录并带 `encrypted_` 属性，仅在需要时自动解密。
   https://github.com/twpayne/chezmoi/blob/master/assets/chezmoi.io/docs/user-guide/encryption.md

@@ -10,6 +10,7 @@ import pytest
 from coffer.application.channel.kind import make_channel_kind
 from coffer.domain.channel.config import ChannelConfigModel
 from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.scope import Scope
 
 _NOW = datetime(2026, 9, 13, tzinfo=UTC)
 
@@ -172,12 +173,15 @@ def test_update_rejects_default_agent_outside_scope():
 
     with pytest.raises(ConfigValidationError, match="outside this channel's scope"):
         _update_validate(
-            {"channel_type": "telegram", "default_agent": "claude_code"}, scope=["codex"]
+            {"channel_type": "telegram", "default_agent": "claude_code"},
+            scope=Scope(agents=["codex"]),
         )
 
 
 def test_update_accepts_default_agent_inside_scope():
-    _update_validate({"channel_type": "telegram", "default_agent": "codex"}, scope=["codex"])
+    _update_validate(
+        {"channel_type": "telegram", "default_agent": "codex"}, scope=Scope(agents=["codex"])
+    )
 
 
 def test_update_unscoped_channel_admits_every_registered_agent():
@@ -193,7 +197,9 @@ def test_update_on_a_dormant_channel_is_allowed():
     # ``scope == []`` means the channel is OFF, the same as for every other
     # kind — it must not also mean frozen, or a channel the owner deliberately
     # switched off could never have its bot token corrected.
-    _update_validate({"channel_type": "telegram", "default_agent": "claude_code"}, scope=[])
+    _update_validate(
+        {"channel_type": "telegram", "default_agent": "claude_code"}, scope=Scope(agents=[])
+    )
 
 
 def test_create_time_validation_needs_no_scope_reader():
@@ -237,21 +243,23 @@ def test_scope_hook_is_always_wired():
 )
 def test_scope_narrowed_past_the_default_agent_is_rejected():
     with pytest.raises(ValueError, match="claude_code"):
-        _validate_scope(["codex"])
+        _validate_scope(Scope(agents=["codex"]))
 
 
 def test_scope_rejection_names_the_proposed_scope_too():
     # Both sides, so the owner can see the two ways out of it.
     with pytest.raises(ValueError, match="codex"):
-        _validate_scope(["codex"], {"channel_type": "telegram", "default_agent": "claude_code"})
+        _validate_scope(
+            Scope(agents=["codex"]), {"channel_type": "telegram", "default_agent": "claude_code"}
+        )
 
 
 def test_scope_containing_the_default_agent_is_accepted():
-    _validate_scope(["claude_code", "codex"])
+    _validate_scope(Scope(agents=["claude_code", "codex"]))
 
 
 def test_a_channel_with_an_explicit_default_agent_is_read_from_its_config():
-    _validate_scope(["codex"], {"channel_type": "telegram", "default_agent": "codex"})
+    _validate_scope(Scope(agents=["codex"]), {"channel_type": "telegram", "default_agent": "codex"})
 
 
 @pytest.mark.acceptance(
@@ -259,7 +267,7 @@ def test_a_channel_with_an_explicit_default_agent_is_read_from_its_config():
     scenario="a channel scoped to no agent is dormant",
 )
 def test_the_dormant_scope_is_always_accepted():
-    _validate_scope([])
+    _validate_scope(Scope(agents=[]))
 
 
 def test_clearing_the_scope_is_always_accepted():

@@ -72,6 +72,7 @@ from coffer.application.mcp.ports import (
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.mcp.tiering_config import TieringConfig, load_tiering_config
 from coffer.application.resource_service import ResourceService
+from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.errors import UpstreamUnavailable
 
 _logger = logging.getLogger(__name__)
@@ -95,6 +96,7 @@ class MCPGatewaySession:
         invocations: MCPInvocationRepoPort,
         downstream_sink: NotificationSink | None = None,
         *,
+        scope_evaluator: ScopeEvaluator,
         clock: Callable[[], datetime] | None = None,
         on_dispose: Callable[[], None] | None = None,
         builtin_tools: BuiltinToolRegistry | None = None,
@@ -108,6 +110,10 @@ class MCPGatewaySession:
         self._prefs = preferences
         self._invocations = invocations
         self._downstream_sink = downstream_sink
+        # Activation scope with this machine's id already bound in, so neither
+        # the listing filter nor the invocation gate below has to carry a
+        # machine argument (see application/scope_evaluator.py).
+        self._scope = scope_evaluator
         self._clock = clock or (lambda: datetime.now(tz=UTC))
         # Per-agent scope: the session's bound agent identity, set
         # from the shim's self-reported ``--agent`` name on the ``initialize``
@@ -212,7 +218,7 @@ class MCPGatewaySession:
         return self._server_request_registry.handle_response(envelope)
 
     async def _enabled_mcp_servers(self) -> list[str]:
-        return await enabled_mcp_servers(self._resources, self._session_agent)
+        return await enabled_mcp_servers(self._resources, self._session_agent, self._scope)
 
     async def _ensure_subscribed(self, server_name: str) -> None:
         """Attach notification + server-request handlers to the upstream connection lazily."""
@@ -342,6 +348,7 @@ class MCPGatewaySession:
             ensure_subscribed=self._ensure_subscribed,
             on_evict=self._on_upstream_evicted,
             session_agent=self._session_agent,
+            scope=self._scope,
         )
 
     async def _handle_resources_read(self, params: dict[str, Any]) -> Any:

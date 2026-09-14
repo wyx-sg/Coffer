@@ -1,4 +1,4 @@
-"""Vault export/import domain (spec vault-export-import, ADR: vault-export-import).
+"""Vault export/import domain (spec vault-sync, ADR: vault-sync).
 
 Pure value objects and contracts: the bundle manifest, the export/import
 summaries, deterministic resource serialization, path portability, and the

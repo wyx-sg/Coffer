@@ -121,10 +121,20 @@ Surfaced fields (`UnmanagedView` in `application/skill/unmanaged_ops.py`):
 Delivery has exactly one input pair, both on the `skill` resource itself: the
 framework-level `enabled` flag and the framework-level `scope`
 ([ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.md)).
+`scope` is two independent allow-lists, `AND`-ed — `agents` and `machines`,
+each `null` meaning unrestricted — so the answer depends on the machine
+asking as well as the agent:
 
 ```
-delivered(skill, agent)  ⟺  skill.enabled AND agent_in_scope(skill.scope, agent)
+delivered(skill, agent) here  ⟺  skill.enabled
+                              AND scope.is_active(skill.scope, agent)
 ```
+
+`scope` there is the `ScopeEvaluator` (`application/scope_evaluator.py`) the
+composition root builds with this machine's derived id already bound, so no
+delivery call site passes a machine argument. A skill whose `scope.machines`
+excludes this machine is delivered to no agent here — it is dormant on this
+machine, not disabled.
 
 The agent resource carries **no** skill-delivery policy: `follow_all_skills`
 and `skill_exclusions` are gone from `AgentConfig` (spec agent-registry's schema), and
@@ -137,7 +147,7 @@ them.
 which lived in `follow_ops.py`). It computes
 
 ```
-wanted = {s.name for s in skills if s.enabled and agent_in_scope(s.scope, agent_name)}
+wanted = {s.name for s in skills if s.enabled and scope.is_active(s.scope, agent_name)}
 ```
 
 then delivers `wanted - bound` and reclaims `bound - wanted`, where `bound` is
@@ -149,9 +159,11 @@ post-import hook. The skill/agent enable and scope edits reach it through the
 kind hooks `on_enabled_changed` and `on_scope_changed`, so skill code still
 never imports agent-kind code (Contract 5c).
 
-**Wire shapes.** `SkillOut` gains `scope` (`list[str] | None`, always emitted,
-placed right after `enabled`) — the agent names this skill is delivered to,
-`null` meaning every agent and `[]` meaning none. `SkillBindingOut` loses
+**Wire shapes.** `SkillOut` gains `scope` (`ScopeOut | None`, always emitted,
+placed right after `enabled`) — the two allow-lists `{agents, machines}` this
+skill is delivered under, `null` on the whole field meaning every agent on
+every machine, `null` on one axis meaning that axis is unrestricted, and `[]`
+on an axis meaning nothing matches it. `SkillBindingOut` loses
 `enabled`: it now carries only `agent_name`, `last_linked_at`,
 `last_link_path`, and `link_mode`, and a row present at all means "this agent
 currently holds a delivered copy". The per-`(skill, agent)`
@@ -281,7 +293,7 @@ to the skill subpackage, same style as `lifecycle_ops.py`):
 | `list_unmanaged(agent_name) -> list[UnmanagedView]`                    | FR-022 read-only scan over the agent's skill locations (see Unmanaged Skill above).                                                                                              |
 | `adopt_unmanaged(agent_name, skill_name, location, actor) -> Resource` | FR-023: validate → move to `~/.coffer/skills/<name>/` → register → deliver the managed link to `<config_dir>/skills/<name>` → record an enabled binding; audits `skill_adopted`. |
 | `delete_unmanaged(agent_name, skill_name, location, actor) -> None`    | FR-024: delete only that folder from disk; audits `skill_unmanaged_deleted`.                                                                                                     |
-| delivery reconciliation (`delivery_ops.py`)                            | FR-025: `apply_scope_for_agent` — recompute the agent's wanted set from `skill.enabled AND agent_in_scope(skill.scope, agent)`, deliver what is missing, reclaim what is no longer wanted.                                 |
+| delivery reconciliation (`delivery_ops.py`)                            | FR-025: `apply_scope_for_agent` — recompute the agent's wanted set from `skill.enabled AND scope.is_active(skill.scope, agent)` (both scope axes, this machine bound into the evaluator), deliver what is missing, reclaim what is no longer wanted.                                 |
 
 ### File viewer (`application/skill/file_ops.py`)
 

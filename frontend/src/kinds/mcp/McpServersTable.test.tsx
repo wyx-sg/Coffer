@@ -96,7 +96,7 @@ const SAMPLE: ResourceOut[] = [
     kind: "mcp_server",
     name: "notes",
     enabled: true,
-    scope: ["cc"],
+    scope: { agents: ["cc"], machines: null },
     description: "Scoped to one agent",
     config: { transport: { type: "sse" } },
     created_at: "2026-05-22T00:00:00Z",
@@ -139,8 +139,8 @@ describe("McpServersTable", () => {
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
     const bar = within(screen.getByTestId("bulk-reach-control"));
     expect(bar.getByRole("button", { name: /^disabled$/i })).toBeInTheDocument();
-    expect(bar.getByRole("button", { name: /every agent/i })).toBeInTheDocument();
-    expect(bar.getByRole("button", { name: /selected agents/i })).toBeInTheDocument();
+    expect(bar.getByRole("button", { name: /everywhere/i })).toBeInTheDocument();
+    expect(bar.getByRole("button", { name: /restricted/i })).toBeInTheDocument();
     // Delete stays its own button beside it.
     expect(screen.getByRole("button", { name: /^delete$/i })).toBeInTheDocument();
   });
@@ -155,11 +155,11 @@ describe("McpServersTable", () => {
     render(<McpServersTable resources={SAMPLE} />, { wrapper: wrap(null) });
 
     expect(screen.queryByRole("switch")).toBeNull();
-    expect(rowFor("files").getByRole("button", { name: /every agent/i })).toHaveAttribute(
+    expect(rowFor("files").getByRole("button", { name: /everywhere/i })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(rowFor("notes").getByRole("button", { name: /selected agents/i })).toHaveAttribute(
+    expect(rowFor("notes").getByRole("button", { name: /restricted/i })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -195,7 +195,7 @@ describe("McpServersTable", () => {
 
     fireEvent.click(rowFor("files").getByRole("button", { name: /^disabled$/i }));
     expect(disableMutate).toHaveBeenCalledWith({ kind: "mcp_server", name: "files" });
-    fireEvent.click(rowFor("web").getByRole("button", { name: /every agent/i }));
+    fireEvent.click(rowFor("web").getByRole("button", { name: /everywhere/i }));
     expect(enableMutate).toHaveBeenCalledWith({ kind: "mcp_server", name: "web" });
     expect(navigateMock).not.toHaveBeenCalled();
 
@@ -211,11 +211,11 @@ describe("McpServersTable", () => {
     expect(screen.queryByText("files")).toBeNull();
     expect(screen.getByText("web")).toBeInTheDocument();
 
-    selectStatus("Every agent");
+    selectStatus("Everywhere");
     expect(screen.getByText("files")).toBeInTheDocument();
     expect(screen.queryByText("notes")).toBeNull();
 
-    selectStatus("Selected agents");
+    selectStatus("Restricted…");
     expect(screen.getByText("notes")).toBeInTheDocument();
     expect(screen.queryByText("files")).toBeNull();
   });
