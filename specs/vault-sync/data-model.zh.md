@@ -159,15 +159,16 @@ diff 时 `manifest.json` 在两个方向上都被忽略。
 kind: mcp_server
 name: confluence
 description: "..."
-enabled: true
-scope:
-  agents: [claude-code]
-  machines: ["a3f21c9e4b7d2610"]
 config: { ... }          # the validated, json-mode config; keys sorted
 ```
 
 - `created_at` / `updated_at` / 本地 `id` 被**排除**——它们仅属于本机，且会让每一轮
   都产生一次提交。
+- `enabled` 与 `scope` 被**排除**，理由比「减少无谓变更」更硬：它们是一件事——
+  这个资源的触达范围——而触达范围是本机专属的（spec `## 不同步什么`）。由较旧版本
+  写出的文档里仍然带着它们；它们会被解析后丢弃，而绝不被拒绝，这样一台还没升级的
+  机器就不会拖住其余机器的收敛。
+- `channel` 根本没有文档，两个方向都没有。
 - 映射的键是排序的；每个资源恰好一个文档，因此未发生变化的 vault 产出未发生变化的树。
 - 本机 home 之下的字符串值被归一化为 `${HOME}/...`，并在应用时对着应用方机器的 home
   展开（见下）。
@@ -177,26 +178,30 @@ config: { ... }          # the validated, json-mode config; keys sorted
 整个 diff 应用完毕后，每个 kind 的导入后钩子会依据当前状态重新执行它仅本机的副作用
 ——原生配置投影、shim、skill 投递。
 
-### `scope_json` —— 从一个列表变成两条轴
+### `scope_json` —— 退回一条轴
 
-持久化形态发生变化，并由一条 migration 改写每一行：
+机器轴被移除，并由一条 migration 改写每一行带着它的数据：
 
 | | 之前 | 之后 |
 | --- | --- | --- |
 | 不受限 | `null` | `null` |
-| 只限 agent | `["claude-code"]` | `{"agents": ["claude-code"], "machines": null}` |
-| 只限机器 | —— | `{"agents": null, "machines": ["a3f21c9e4b7d2610"]}` |
-| 两者都限 | —— | `{"agents": ["claude-code"], "machines": ["a3f21c9e4b7d2610"]}` |
-| 休眠 | `[]` | `{"agents": [], "machines": null}` |
+| 只限 agent | `{"agents": ["claude-code"], "machines": null}` | `{"agents": ["claude-code"]}` |
+| 休眠 | `{"agents": [], "machines": null}` | `{"agents": []}` |
+| 点名了机器，本机在其中 | `{"agents": A, "machines": [… 含本机 id …]}` | `{"agents": A}` |
+| 点名了机器，本机不在其中 | `{"agents": A, "machines": [… 别的 id …]}` | `{"agents": []}` |
 
-两条轴是 `AND` 的关系，且各自 `null` 表示不受限，因此每一行既有数据都是**只增不减**
-地迁移过去：`machines: null` 精确复现今天的行为。迁移是一次性的，不留任何加载期垫片
-——`Scope.from_json` 只接受对象形态。
+最后两行就是这条 migration 全部的论证。一行点名了机器的数据，*在本机*要么被那份
+列表准入、要么正因它而休眠，而它在这里本来就已经给出的答案，正是它必须继续给出的
+答案：把这个键直接丢掉，会把「只在台式机上活跃」变成「到处都活跃」，而这恰恰是唯一
+不能允许的方向。机器 id 取自数据库旁边的 `daemon-config.json` 缓存——也就是运行中的
+daemon 当时据以求解 scope 的那个值——而在无法确定时，该行取 `agents: []`，即休眠，
+因为收窄是看得见、可撤销的，放宽却是无声的。
 
-机器轴以 `machine_id` 为键，绝不以显示名为键，因此重命名一台机器毫无代价。未知的
-machine id 是合法的，只是永远匹配不上，与今天未知的 agent 名字完全一样。scope 编辑器
-从注册表构建机器列表，而不是接受自由文本，因此一个敲错的 id 不可能静默地让某个资源
-失效。
+这条 migration 是幂等的：没有 `machines` 键的行不被触碰，因此重跑一次谁都匹配不上。
+它是一次性的，不留任何加载期垫片——`Scope.from_json` 只接受单轴形态。
+
+未知的 agent 名字是合法的，只是永远匹配不上，因此一个资源可以被 scope 到一个尚未在
+本机注册过的 agent 上。
 
 ### 机器描述符（`machines/<machine_id>.yaml`）
 
@@ -227,8 +232,9 @@ agents: [claude-code, codex]
 | `agents` | 该机器上已注册的 agent 名字 |
 
 id 被缓存在 `daemon-config.json` 里、丢了就重新算；名字住在这里，因此它会同步。这种
-不对称很要紧：`machine_id` 是描述符的文件名、是 `scope.machines` 的引用、是表格的键，
-而一台以新身份回来的机器会变成幽灵——所有 scope 到旧身份的东西都会悄无声息地停掉。
+不对称很要紧：`machine_id` 是描述符的文件名、是 tidy owner 的引用、是表格的键，
+而一台以新身份回来的机器会变成幽灵——它是以陌生人的身份重新入伙，旧描述符留在那里
+没人再去更新它，而所有点过它名字的东西都不再指向这台机器。
 
 应用 diff 时对 `machines/*.yaml` 在两个方向上都**什么都不做**：注册表是从树里读出来的，
 绝不投影进任何本地的东西。
@@ -238,9 +244,6 @@ id 被缓存在 `daemon-config.json` 里、丢了就重新算；名字住在这�
 由各模块自有、属于 vault 而非某一台机器的共享状态。每个模块实现 `SyncedStatePort`，
 由组合根注册这些 provider——sync 切片从不 import kind 模块。当前的状态区：
 
-- `channel-peers/<channel>/<chat>.yaml` —— 配对身份（chat_id、sender_id、显示名、
-  首选 agent、paired_at；仅本机的 `active_conversation_id` 永不随行）。引用了本机
-  不存在的 channel 的文档会被报为逐路径失败并进入重试集。
 - `mcp-preferences/<server>.yaml` —— 每个服务器上被**禁用**的能力（启用是默认值；
   seen 时间戳仅属本机）。
 - `agent-plugins/<agent>.yaml` —— 插件清单：每台机器上每个 agent 装了哪些插件与

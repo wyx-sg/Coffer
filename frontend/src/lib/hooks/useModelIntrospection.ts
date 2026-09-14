@@ -2,8 +2,7 @@
 //
 // Provider introspection (specs channels and knowledge): list a provider's models + test a
 // connection, so the model forms offer a fetched dropdown (with manual
-// fallback) and a Test button — DevPilot-style. Hand-written fetch, mirroring
-// useEmbeddingConfig.
+// fallback) and a Test button — DevPilot-style. Hand-written fetch.
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { getCofferBaseUrl, getCofferToken } from "@/lib/auth";
@@ -113,17 +112,6 @@ export function useEndpointModels(name: string, probe: ProviderProbe) {
 export function useTestConnection() {
   return useMutation({
     mutationFn: (p: ProviderProbe) => post<TestResult>("/models/test-connection", p),
-  });
-}
-
-/** Probe one embedding model ON A CONNECTION; success reports the vector
- *  dimension. The wire, base URL and key are the named connection's, resolved
- *  by the daemon (knowledge FR-077) — the same resolution saving the config
- *  does, so a green test means the settings will save. */
-export function useTestEmbedding() {
-  return useMutation({
-    mutationFn: (p: { connection: string; model: string }) =>
-      post<TestResult>("/embedding/test", { connection: p.connection, model: p.model }),
   });
 }
 

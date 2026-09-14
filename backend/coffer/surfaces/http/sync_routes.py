@@ -292,8 +292,8 @@ async def rename_self(body: MachineRenameIn) -> MachineOut:
 
 @router.delete("/machines/{machine_id}", response_model=MachineRemovedOut)
 async def retire_machine(machine_id: str) -> MachineRemovedOut:
-    updated = await get_sync_service().retire_machine(get_machine_registry(), machine_id)
-    return MachineRemovedOut(removed=True, scopes_updated=updated)
+    await get_sync_service().retire_machine(get_machine_registry(), machine_id)
+    return MachineRemovedOut(removed=True)
 
 
 # --- master key -------------------------------------------------------------

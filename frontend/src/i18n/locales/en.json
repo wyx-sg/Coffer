@@ -297,7 +297,6 @@
       "credential_read": "Read a credential",
       "credential_set": "Stored a credential",
       "daemon_port_set": "Set the daemon's port",
-      "embedding_config_updated": "Updated the embedding configuration",
       "internal_engine_model_set": "Set the internal engine's model",
       "knowledge_deleted": "Deleted a note from {{resource}}",
       "knowledge_tidied": "Tidied the {{resource}} collection",
@@ -428,26 +427,6 @@
         "license": "License",
         "source": "Source"
       }
-    },
-    "embedding": {
-      "title": "Embedding",
-      "description": "One global embedding model powers vector search across every knowledge base and memory store. Pick a model provider and one of its embedding models; the endpoint and API key come from that provider. Turn it off to use keyword and grep only.",
-      "enabled": "Enable vector embedding",
-      "enabledHint": "When off, all stores fall back to keyword/grep.",
-      "empty": "No embedding model configured — vector retrieval falls back to keyword/grep.",
-      "changeModelTitle": "Change embedding model?",
-      "changeModelConfirm": "Changing the embedding model re-embeds all content in every knowledge base and memory store, which may take a while. Continue?",
-      "changeModelConfirmLabel": "Change & re-embed",
-      "model": "Embedding model",
-      "dimensions": "Dimensions",
-      "chunkingTitle": "Chunking defaults",
-      "chunkingHint": "Default chunk size/overlap for NEW knowledge bases. Each knowledge base can override these in its settings.",
-      "chunkSize": "Chunk size",
-      "chunkOverlap": "Chunk overlap",
-      "connection": "Embedding provider",
-      "connectionPlaceholder": "Select a model provider",
-      "modelPlaceholder": "Select a model",
-      "noEmbeddingModels": "This provider offers no embedding model. Add one on its Models tab with the type “Embedding”, or pick another provider."
     },
     "security": {
       "masterKey": {
@@ -597,7 +576,6 @@
     "DAEMON_NOT_READY": "Coffer daemon is still starting up. Try again in a moment.",
     "DB_SCHEMA_TOO_NEW": "This database was written by a newer version of Coffer. Upgrade to open it.",
     "DOCUMENT_NOT_FOUND": "Document not found",
-    "EMBEDDING_UNAVAILABLE": "The embedding model is unavailable",
     "ENGINE_UNAVAILABLE": "The retrieval engine is unavailable",
     "FORBIDDEN": "This action is not permitted.",
     "FS_PATH_NOT_BROWSABLE": "That path can't be browsed",
@@ -1034,13 +1012,7 @@
     "search": {
       "placeholder": "Search this collection…",
       "button": "Search",
-      "noResults": "No results for this search.",
-      "literalNotice": "Showing literal matches, not ranked results — {{reason}}.",
-      "reasonText": {
-        "noConnection": "no internal connection is configured for ranking",
-        "embeddingUnavailable": "the embedding call failed",
-        "noneAboveThreshold": "nothing scored high enough to rank"
-      }
+      "noResults": "No results for this search."
     }
   },
   "memory": {
@@ -1368,21 +1340,16 @@
     "bulkDeleteConfirm": "Delete {{count}} channels? Their adapters stop and their pairings are removed."
   },
   "scope": {
-    "subtitle": "Where this is active: which agents, and which machines. The two are independent and both must match. Out of scope it stays registered, just not exposed or delivered.",
+    "subtitle": "Where this is active: which agents can reach it. Out of scope it stays registered, just not exposed or delivered.",
+    "machineLocal": "Reach is set on this machine only — it is not synced, so each machine you use sets its own.",
     "everywhere": "Everywhere",
     "restricted": "Restricted…",
     "agentsSection": "Agents",
-    "machinesSection": "Machines",
     "everyAgent": "Every agent",
-    "everyMachine": "Every machine",
-    "dormant": "Nothing selected on one of the axes — dormant. This stays registered but reaches nobody until at least one entry is selected.",
+    "dormant": "No agent selected — dormant. This stays registered but reaches nobody until at least one agent is selected.",
     "noAgents": "No agents registered yet.",
-    "noMachines": "No machines yet — this vault has not converged with a remote.",
     "unknownAgent": "Not registered here",
-    "unknownMachine": "Not in the registry",
-    "thisMachine": "This machine",
-    "inactiveHereMachine": "Inactive on this machine — its machine scope does not name it.",
-    "inactiveHereAgent": "Inactive here — its agent scope names no agent registered on this machine.",
+    "inactiveHereAgent": "Inactive here — its scope names no agent registered on this machine.",
     "bulkReach": "Reach for the selected"
   },
   "sync": {
@@ -1532,8 +1499,8 @@
       "noAgents": "None",
       "retire": "Retire",
       "retireTitle": "Retire {{name}}?",
-      "retireBody": "Its descriptor is removed from the registry, and the machine is stripped from the scope of every resource naming it — otherwise those resources would stay dormant on a machine nobody can see.",
-      "retired": "{{name}} retired; {{count}} resource scopes updated.",
+      "retireBody": "Its descriptor is removed from the registry, and nothing else in the vault changes — no resource references a machine id, because reach is set on each machine rather than recorded against one.",
+      "retired": "{{name}} retired.",
       "derivedNote": "This machine's id is stored in a local file rather than derived from the host, so deleting ~/.coffer makes it come back as a new machine and this row has to be retired by hand."
     }
   }

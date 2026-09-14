@@ -27,15 +27,12 @@ vi.mock("@/lib/hooks/useAgentProviders", () => ({
 // scope, so the hooks behind it are stubbed rather than served by a real client.
 // `channel` declares scope, so the control renders all three segments.
 vi.mock("@/lib/hooks/useScope", () => ({
-  UNRESTRICTED: { agents: null, machines: null },
+  UNRESTRICTED: { agents: null },
   useResourceScope: vi.fn(() => ({ data: { scope: null, supports_scope: true } })),
   useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({
   useAgents: vi.fn(() => ({ data: [{ name: "cc" }] })),
-}));
-vi.mock("@/lib/hooks/useMachines", () => ({
-  useMachines: vi.fn(() => ({ data: { machines: [] } })),
 }));
 vi.mock("@/lib/hooks/useResourceMutations", () => ({
   useEnableResource: vi.fn(),

@@ -174,11 +174,10 @@ class MachineRenameIn(BaseModel):
 
 
 class MachineRemovedOut(BaseModel):
+    #: Retiring a machine removes its descriptor and nothing else. Nothing in
+    #: the vault references a machine id — reach is machine-local, so no scope
+    #: can name one — which is why this answer has no second half.
     removed: bool
-    #: How many resources had this machine stripped from their scope, in the
-    #: same change — a descriptor removed while scopes still name it would
-    #: leave resources dormant on a machine nobody can see.
-    scopes_updated: int
 
 
 class RestoreIn(BaseModel):

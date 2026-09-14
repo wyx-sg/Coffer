@@ -170,8 +170,8 @@ def write_fixed_port(port: int | None) -> None:
 # because the daemon needs it before it has published anything, and because
 # nothing references it — a rename costs nothing.
 #
-# ``machine_id`` is a key: it names this machine's descriptor, every
-# ``scope.machines`` entry, and the registry row. It is DERIVED from the host
+# ``machine_id`` is a key: it names this machine's descriptor and its registry
+# row in the vault the machines share. It is DERIVED from the host
 # (see ``infrastructure.sync.machine_id``), and what is written here is only a
 # cache, so the daemon does not shell out to ``ioreg`` on every boot. The cache
 # is never authoritative: deleting it recomputes the same value, and a cached

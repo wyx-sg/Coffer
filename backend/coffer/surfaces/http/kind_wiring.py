@@ -17,7 +17,6 @@ from coffer.application.audit_service import AuditService
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.application.knowledge.skill_seed import seed_knowledge_skill
 from coffer.application.resource_service import ResourceService
-from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.surfaces.http.agent_skill_wiring import wire_agent_and_skill_kinds
 from coffer.surfaces.http.app_mcp_composition import wire_mcp_kind
 from coffer.surfaces.http.dependencies import (
@@ -36,15 +35,12 @@ async def wire_resource_kinds(
     resource_svc: ResourceService,
     audit: AuditService,
     sm: Any,
-    scope_evaluator: ScopeEvaluator,
     builtin_tools: Any,
     credential_store: Any,
     credential_resolver: Any,
 ) -> tuple[KnowledgeService, Any, Any]:
     # Agent + skill kinds (004/005), lockstep: on_delete cascade + skill tools → gateway.
-    wire_agent_and_skill_kinds(
-        app, resource_svc, audit, sm, scope_evaluator, builtin_tools, credential_store
-    )
+    wire_agent_and_skill_kinds(app, resource_svc, audit, sm, builtin_tools, credential_store)
 
     # Provider switching (spec provider-switching) — AFTER the agent kind: it projects the
     # active profile into each agent's native config (see provider_wiring).
@@ -59,7 +55,6 @@ async def wire_resource_kinds(
         builtin_tools,
         get_provider_service(),
         credential_resolver,
-        scope_evaluator,
     )
 
     # The layer's delivery half (spec knowledge FR-042): a skill that tells an
@@ -78,12 +73,11 @@ async def wire_resource_kinds(
         credential_resolver,
         sm,
         get_agent_service(),
-        scope_evaluator,
     )
 
     # Wire up MCP-specific plumbing (after other kinds so the gateway picks
     # their built-in tools).
     process_supervisor, session_supervisors = wire_mcp_kind(
-        app, resource_svc, audit, sm, credential_store, scope_evaluator, builtin_tools
+        app, resource_svc, audit, sm, credential_store, builtin_tools
     )
     return knowledge_service, process_supervisor, session_supervisors

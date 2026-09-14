@@ -37,9 +37,8 @@ def _get_scope(kind: str, name: str) -> dict:
 
 
 def _put_scope(kind: str, name: str, scope: object) -> None:
-    """Write a scope over HTTP. The wire shape is the two-axis object
-    (``{"agents": [...], "machines": [...]}``) or ``null`` — never a bare
-    list."""
+    """Write a scope over HTTP. The wire shape is the one-axis object
+    (``{"agents": [...]}``) or ``null`` — never a bare list."""
     client, _info = _cli_client.client_or_exit()
     r = client.put(f"/resources/{kind}/{name}/scope", json={"scope": scope})
     assert r.status_code == 200, r.text
@@ -72,12 +71,11 @@ def test_scope_show_reports_kinds_without_scope(in_proc_daemon):
 
 def test_scope_show_reflects_current_scope(in_proc_daemon):
     _register("fake_scoped", "w1")
-    _put_scope("fake_scoped", "w1", {"agents": ["claude-code", "codex"], "machines": None})
+    _put_scope("fake_scoped", "w1", {"agents": ["claude-code", "codex"]})
     result = _runner.invoke(cli_app, ["scope", "show", "fake_scoped:w1"])
     assert result.exit_code == 0, result.output
     assert json.loads(result.output)["scope"] == {
         "agents": ["claude-code", "codex"],
-        "machines": None,
     }
 
 
@@ -100,52 +98,23 @@ def test_scope_set_with_agents(in_proc_daemon):
     # An axis the command did not name is written null — unrestricted, not dormant.
     assert _get_scope("fake_scoped", "w1")["scope"] == {
         "agents": ["claude-code", "codex"],
-        "machines": None,
     }
 
 
 def test_scope_set_replaces_the_whole_list(in_proc_daemon):
     _register("fake_scoped", "w1")
-    _put_scope("fake_scoped", "w1", {"agents": ["claude-code", "codex"], "machines": None})
+    _put_scope("fake_scoped", "w1", {"agents": ["claude-code", "codex"]})
     result = _runner.invoke(cli_app, ["scope", "set", "fake_scoped:w1", "--agents", "cursor"])
     assert result.exit_code == 0, result.output
-    assert _get_scope("fake_scoped", "w1")["scope"] == {"agents": ["cursor"], "machines": None}
+    assert _get_scope("fake_scoped", "w1")["scope"] == {"agents": ["cursor"]}
 
 
 def test_scope_set_no_agents_is_dormant(in_proc_daemon):
     _register("fake_scoped", "w1")
     result = _runner.invoke(cli_app, ["scope", "set", "fake_scoped:w1", "--no-agents"])
     assert result.exit_code == 0, result.output
-    assert _get_scope("fake_scoped", "w1")["scope"] == {"agents": [], "machines": None}
+    assert _get_scope("fake_scoped", "w1")["scope"] == {"agents": []}
     assert "dormant" in result.output.lower()
-
-
-def test_scope_set_with_machines(in_proc_daemon):
-    """``--machines`` restricts the machine axis and leaves agents unrestricted."""
-    _register("fake_scoped", "w1")
-    result = _runner.invoke(
-        cli_app, ["scope", "set", "fake_scoped:w1", "--machines", "m-desktop,m-laptop"]
-    )
-    assert result.exit_code == 0, result.output
-    assert _get_scope("fake_scoped", "w1")["scope"] == {
-        "agents": None,
-        "machines": ["m-desktop", "m-laptop"],
-    }
-
-
-def test_scope_set_both_axes_are_written_together(in_proc_daemon):
-    """Naming both axes restricts both — they are ``AND``-ed, so this says
-    "that agent, on that machine"."""
-    _register("fake_scoped", "w1")
-    result = _runner.invoke(
-        cli_app,
-        ["scope", "set", "fake_scoped:w1", "--agents", "claude-code", "--machines", "m-desktop"],
-    )
-    assert result.exit_code == 0, result.output
-    assert _get_scope("fake_scoped", "w1")["scope"] == {
-        "agents": ["claude-code"],
-        "machines": ["m-desktop"],
-    }
 
 
 def test_scope_set_requires_exactly_one_mode(in_proc_daemon):
@@ -187,7 +156,7 @@ def test_scope_set_bad_ref_exit_2(in_proc_daemon):
 
 def test_scope_clear_restores_active_for_every_agent(in_proc_daemon):
     _register("fake_scoped", "w1")
-    _put_scope("fake_scoped", "w1", {"agents": ["claude-code"], "machines": None})
+    _put_scope("fake_scoped", "w1", {"agents": ["claude-code"]})
     result = _runner.invoke(cli_app, ["scope", "clear", "fake_scoped:w1"])
     assert result.exit_code == 0, result.output
     assert _get_scope("fake_scoped", "w1")["scope"] is None
@@ -196,7 +165,7 @@ def test_scope_clear_restores_active_for_every_agent(in_proc_daemon):
 
 def test_scope_clear_from_dormant(in_proc_daemon):
     _register("fake_scoped", "w1")
-    _put_scope("fake_scoped", "w1", {"agents": [], "machines": None})
+    _put_scope("fake_scoped", "w1", {"agents": []})
     result = _runner.invoke(cli_app, ["scope", "clear", "fake_scoped:w1"])
     assert result.exit_code == 0, result.output
     assert _get_scope("fake_scoped", "w1")["scope"] is None

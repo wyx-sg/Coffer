@@ -91,7 +91,6 @@ from coffer.surfaces.http.provider_wiring import (
 )
 from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
 from coffer.surfaces.http.routing import include_all_routers
-from coffer.surfaces.http.scope_composition import build_scope_evaluator
 from coffer.surfaces.http.sync_wiring import stop_converge_worker
 from coffer.surfaces.http.tidy_wiring import stop_tidy_worker, wire_tidy
 from coffer.surfaces.http.wiring import wire_chat
@@ -164,7 +163,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         # credential must fail registration with a named ref, no partial state).
         credentials=credential_store,
     )
-    scope_evaluator = await build_scope_evaluator()
 
     retention_svc = build_retention_service(sm, audit=audit)
     await retention_svc.initialize_defaults()
@@ -192,7 +190,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         resource_svc=resource_svc,
         audit=audit,
         sm=sm,
-        scope_evaluator=scope_evaluator,
         builtin_tools=builtin_tools,
         credential_store=credential_store,
         credential_resolver=_credential_resolver,
@@ -214,9 +211,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Wire the channel kind (spec channels) AFTER wire_chat: the inbound processor
     # drives turns through the chat service handles wire_chat published.
-    channel_runtime = wire_channel_kind(
-        app, resource_svc, audit, sm, scope_evaluator, credential_store
-    )
+    channel_runtime = wire_channel_kind(app, resource_svc, audit, sm, credential_store)
 
     # One-time move of legacy OS-keychain secrets into the encrypted store
     # (best-effort; see credential_composition for the mechanics).

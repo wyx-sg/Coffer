@@ -16,7 +16,6 @@ from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
-from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.errors import ResourceNotFound, ToolDisabled
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind, ResourceRef
@@ -39,11 +38,6 @@ from coffer.infrastructure.persistence.repos import (
 from tests.fixtures.keyring import install_in_memory_keyring
 
 _FAKE = Path(__file__).resolve().parents[3] / "fixtures" / "fake_mcp_server.py"
-
-#: Every gateway seam in this file answers activation for the same fixed
-#: machine, so the evaluator is built once and shared by _setup and by the
-#: tests that drive gateway_handlers directly.
-_SCOPE = ScopeEvaluator(machine_id="test-machine")
 
 
 async def _safe_dispose(engine: object) -> None:
@@ -127,7 +121,6 @@ async def _setup(
         preferences=prefs_repo,
     )
     session = MCPGatewaySession(
-        scope_evaluator=_SCOPE,
         session_id="test-session",
         resource_service=resource_svc,
         supervisor=supervisor,
@@ -1170,7 +1163,6 @@ async def test_handler_disabled_records_denied_invocation(
                 session_id="t",
                 clock=lambda: datetime.now(tz=UTC),
                 ensure_subscribed=_noop_subscribe,
-                scope=_SCOPE,
             )
 
         rows = await inv.query(resource_name="fs")
@@ -1262,7 +1254,6 @@ async def test_handler_records_timeout_invocation_on_upstream_timeout(
                 session_id="t",
                 clock=lambda: datetime.now(tz=UTC),
                 ensure_subscribed=_noop_subscribe,
-                scope=_SCOPE,
             )
 
         rows = await inv.query(resource_name="fs")
@@ -1314,7 +1305,6 @@ async def test_upstream_crash_mid_resource_read_then_respawn(
                 session_id="t",
                 clock=lambda: datetime.now(tz=UTC),
                 ensure_subscribed=_noop_subscribe,
-                scope=_SCOPE,
             )
 
         # supervisor.evict() must have been called with the server name.
@@ -1367,7 +1357,6 @@ async def test_upstream_crash_mid_prompt_get_then_respawn(
                 session_id="t",
                 clock=lambda: datetime.now(tz=UTC),
                 ensure_subscribed=_noop_subscribe,
-                scope=_SCOPE,
             )
 
         assert spy_supervisor._evicted == ["gh"], (
@@ -1439,7 +1428,6 @@ async def test_mcp_error_does_not_evict_healthy_upstream(
                 session_id="t",
                 clock=lambda: datetime.now(tz=UTC),
                 ensure_subscribed=_noop_subscribe,
-                scope=_SCOPE,
             )
 
         # The healthy upstream must survive — no eviction.
@@ -1506,7 +1494,6 @@ async def test_inband_iserror_result_is_recorded_as_error(
             session_id="t",
             clock=lambda: datetime.now(tz=UTC),
             ensure_subscribed=_noop_subscribe,
-            scope=_SCOPE,
         )
 
         # The isError result is relayed unchanged — Coffer is a pass-through proxy.
@@ -1572,7 +1559,6 @@ async def test_transport_drop_still_evicts_for_self_heal(
                 session_id="t",
                 clock=lambda: datetime.now(tz=UTC),
                 ensure_subscribed=_noop_subscribe,
-                scope=_SCOPE,
             )
 
         assert evicted == ["fs"], f"transport drop must evict; evicted={evicted}"

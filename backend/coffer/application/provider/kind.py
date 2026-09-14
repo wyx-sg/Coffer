@@ -31,18 +31,9 @@ def _provider_default_scope(config: dict[str, Any]) -> Scope:
     connection's own ``compatible_agents`` used to give it (an ollama
     connection reaches no agent at all). The wire is already known at create
     time, so the pre-fill is exact rather than a guess.
-
-    Only the agent axis is pre-filled. A new connection is left unrestricted on
-    the machine axis because a pre-filled machine would pin every connection to
-    whichever machine happened to create it, and a converged vault would then
-    project nothing anywhere else — the opposite of preserving the old
-    behaviour.
     """
     protocol = config.get("protocol")
-    return Scope(
-        agents=default_scope_for_protocol(str(protocol) if protocol is not None else ""),
-        machines=None,
-    )
+    return Scope(agents=default_scope_for_protocol(str(protocol) if protocol is not None else ""))
 
 
 def make_provider_kind() -> Kind:
@@ -53,7 +44,7 @@ def make_provider_kind() -> Kind:
         config_schema=ProviderConfig,
         credential_ref_extractor=_provider_credential_ref_extractor,
         # Per-agent scope: a connection's scope names the agents it projects
-        # into — the axis this kind used to carry itself, as
+        # into — the reach this kind used to carry itself, as
         # ``compatible_agents`` inside its config, before the framework grew
         # one (ADR per-agent-resource-scope). The projection seam
         # (``application.provider.targets``) is the enforcement point: the

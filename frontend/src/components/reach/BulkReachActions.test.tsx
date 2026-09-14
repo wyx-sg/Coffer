@@ -19,11 +19,6 @@ vi.mock("@/lib/api/scope", () => ({ scopeApi: { get: vi.fn(), put: vi.fn() } }))
 vi.mock("@/lib/hooks/useAgents", () => ({
   useAgents: vi.fn(() => ({ data: [{ name: "claude" }, { name: "codex" }] })),
 }));
-vi.mock("@/lib/hooks/useMachines", () => ({
-  useMachines: vi.fn(() => ({
-    data: { machines: [{ machine_id: "a3f21c9e4b7d2610", name: "laptop", is_self: true }] },
-  })),
-}));
 
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
@@ -100,8 +95,8 @@ describe("BulkReachActions", () => {
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
     await waitFor(() => expect(scope.put).toHaveBeenCalledTimes(2));
     expect(scope.put.mock.calls.map((c) => [c[1], c[2]])).toEqual([
-      ["writing", { agents: ["claude"], machines: null }],
-      ["reviewing", { agents: ["claude"], machines: null }],
+      ["writing", { agents: ["claude"] }],
+      ["reviewing", { agents: ["claude"] }],
     ]);
   });
 

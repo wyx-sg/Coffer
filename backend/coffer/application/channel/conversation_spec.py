@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from coffer.domain.scope import Scope, agent_axis_admits
+from coffer.domain.scope import Scope, is_active
 
 
 @dataclass(frozen=True)
@@ -35,19 +35,17 @@ def resolve_conversation_spec(
 ) -> ConversationSpec:
     """Combine the peer's sticky agent preference with the channel defaults.
 
-    ``agent_scope`` is the channel's scope (ADR per-agent-resource-scope); its
-    AGENT axis names the agents it may drive. A sticky preference outside that
-    axis is dropped in favour of the channel default, so narrowing a channel's
-    scope takes effect on the very next conversation instead of waiting for
-    whoever set that preference to change it back. An unrestricted axis keeps
-    every preference, which is what every channel did before scope existed. The
-    machine axis says nothing about agents and is not read here — the runtime
-    settled it before this channel was ever bound.
+    ``agent_scope`` is the channel's scope (ADR per-agent-resource-scope): it
+    names the agents the channel may drive. A sticky preference outside it is
+    dropped in favour of the channel default, so narrowing a channel's scope
+    takes effect on the very next conversation instead of waiting for whoever
+    set that preference to change it back. An unrestricted scope keeps every
+    preference, which is what every channel did before scope existed.
 
     An empty resulting config is normalized to ``None`` (matching the
     historical pass-through of an absent ``default_agent_config``).
     """
-    if preferred_agent and agent_axis_admits(agent_scope, preferred_agent):
+    if preferred_agent and is_active(agent_scope, preferred_agent):
         agent_key = preferred_agent
     else:
         agent_key = default_agent

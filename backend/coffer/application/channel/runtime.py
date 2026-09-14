@@ -37,10 +37,9 @@ from coffer.application.channel.supervision_ports import (
     TunnelControllerPort,
     WebSocketControllerPort,
 )
-from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.channel.config import DEFAULT_AGENT, parse_channel_config
 from coffer.domain.resource import Resource
-from coffer.domain.scope import Scope
+from coffer.domain.scope import Scope, is_active
 
 if TYPE_CHECKING:
     from coffer.application.resource_service import ResourceService
@@ -66,13 +65,6 @@ class ChannelRuntime:
         adapter_factory: AdapterFactory,
         processor: InboundProcessor,
         pairing: PairingManager,
-        # This machine's answer to the scope question. A channel is an inbound
-        # surface, so its machine axis is what stops two converged machines from
-        # both answering it, and the gate in ``_enabled_channels`` is the one
-        # place that reads it. Required rather than defaulted: a forgotten
-        # evaluator reads as "no machine", which would silently keep every
-        # machine-scoped channel dark with nothing to say why.
-        scope: ScopeEvaluator,
         listener: ListenerControllerPort | None = None,
         tunnel: TunnelControllerPort | None = None,
         websockets: WebSocketControllerPort | None = None,
@@ -83,7 +75,6 @@ class ChannelRuntime:
         self._factory = adapter_factory
         self._processor = processor
         self._pairing = pairing
-        self._scope = scope
         self._listener = listener
         self._tunnel = tunnel
         self._websockets = websockets
@@ -212,24 +203,21 @@ class ChannelRuntime:
             _logger.exception("channel.runtime.tick_failed")
 
     async def _enabled_channels(self) -> Desired:
-        # ``enabled`` means it runs here. Where "here" is, is now scope's
-        # machine axis again (spec vault-sync): a converged vault spans several
-        # machines, and a channel scoped to another one is registered here but
-        # does not start — which is what stops two machines answering the same
-        # inbound surface. Scope's agent axis is the second gate: a channel's
-        # scope names the agents it may DRIVE (ADR per-agent-resource-scope), so a channel whose
-        # own ``default_agent`` is outside it can drive nothing and does not
-        # run. That is the loud, early failure: the adapter never starts, the
-        # management surface says the channel is not running, and no message is
-        # ever accepted only to be refused.
+        # ``enabled`` means it runs here; scope is the second gate. A
+        # channel's scope names the agents it may DRIVE (ADR
+        # per-agent-resource-scope), so a channel whose own ``default_agent``
+        # is outside it can drive nothing and does not run. That is the loud,
+        # early failure: the adapter never starts, the management surface says
+        # the channel is not running, and no message is ever accepted only to
+        # be refused.
         #
-        # Both write paths now hold ``default_agent`` inside a non-empty agent
-        # axis (the channel kind's ``on_update_config`` and
-        # ``validate_scope_for``), so the only agent-axis case this gate can
-        # reach is the deliberate one: an empty axis, dormant, the owner
-        # switched the channel off. It stays as written rather than narrowing to
-        # that check, as defence-in-depth for a row that predates the scope-path
-        # validation and could still carry the inconsistent combination.
+        # Both write paths now hold ``default_agent`` inside a non-empty scope
+        # (the channel kind's ``on_update_config`` and ``validate_scope_for``),
+        # so the only case this gate can reach is the deliberate one: an empty
+        # allow-list, dormant, the owner switched the channel off. It stays as
+        # written rather than narrowing to that check, as defence-in-depth for
+        # a row that predates the scope-path validation and could still carry
+        # the inconsistent combination.
         rows = await self._resources.list(kind="channel")
         live: list[Resource] = []
         for r in rows:
@@ -238,20 +226,15 @@ class ChannelRuntime:
             # Read straight off the stored config rather than parsing it: a row
             # this cannot read is not one ``_start_adapter`` could start either.
             default_agent = r.config.get("default_agent") or DEFAULT_AGENT
-            # One call answers both gates, in the order that makes the log
-            # useful: ``excluded_by`` reports the MACHINE axis first (this
-            # channel belongs to another machine) and the AGENT axis second
-            # (dormant, or the rare legacy row whose default_agent sits outside
-            # its own scope), so the reason is in the record rather than
-            # reconstructed from the scope by hand.
-            excluded = self._scope.excluded_by(r.scope, str(default_agent))
-            if excluded is not None:
+            if not is_active(r.scope, str(default_agent)):
+                # The scope and the agent it refused are both in the record, so
+                # the reason a bot went quiet is readable without reconstructing
+                # the comparison by hand.
                 _logger.info(
                     "channel.not_started",
                     extra={
                         "channel": r.name,
                         "default_agent": default_agent,
-                        "excluded_by": excluded,
                         "scope": r.scope.to_json() if r.scope is not None else None,
                     },
                 )

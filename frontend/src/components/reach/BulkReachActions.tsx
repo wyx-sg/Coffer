@@ -2,10 +2,9 @@
 //
 // The same three-way reach choice (ReachControl) applied to a whole table
 // selection, replacing the Enable / Disable pair the bulk bars used to carry.
-// Enable/Disable could not say "expose these to exactly these agents, on
-// exactly these machines", which is the state the per-row control has offered
-// since ADR per-agent-resource-scope — so the bar offered strictly less than
-// the row it summarises.
+// Enable/Disable could not say "expose these to exactly these agents", which is
+// the state the per-row control has offered since ADR per-agent-resource-scope
+// — so the bar offered strictly less than the row it summarises.
 //
 // A bulk write is a NEW INTENT, not an edit of one row's value: the control is
 // mounted with `mode={null}` (no segment reads as live, because a mixed
@@ -81,8 +80,8 @@ export function BulkReachActions({ rows, supportsScope = true, invalidate = [], 
       ariaLabel={t("scope.bulkReach")}
       onDisabled={goDisabled}
       onEverywhere={() => goEnabled(null)}
-      // Both axes left unrestricted is "everywhere" under a second name; the
-      // row control normalises it the same way.
+      // Every agent left ticked is "everywhere" under a second name; the row
+      // control normalises it the same way.
       onRestricted={(scope) => goEnabled(sameScope(scope, UNRESTRICTED) ? null : scope)}
     />
   );

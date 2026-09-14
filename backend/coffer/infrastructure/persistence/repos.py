@@ -43,7 +43,7 @@ def _to_domain(row: ResourceModel) -> Resource:
 
 
 def _scope_json(scope: Scope | None) -> str | None:
-    """The column's text for ``scope``: the two-axis object, or NULL."""
+    """The column's text for ``scope``: the agent allow-list object, or NULL."""
     return json.dumps(scope.to_json()) if scope is not None else None
 
 

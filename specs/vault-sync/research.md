@@ -130,6 +130,13 @@ was the one guard in the whole slice that was provably correct without a key —
 and **scope's machine axis**, which had been withdrawn only because the machine
 registry that keyed it was going away.
 
+> The machine axis came back and was withdrawn again the same day. The reason
+> this time is not that machines stopped existing: a resource's *reach* — its
+> `enabled` flag and its `scope` — was declared machine-local instead, so each
+> machine answers "what does this reach here?" for itself and the axis had
+> nothing left to express. See
+> [Per-agent resource scope](../../docs/decisions/per-agent-resource-scope.md).
+
 ### 3. What replaced it did not answer the question, and half of it came back anyway
 
 Export/import is a wholesale overwrite with no base: the importer takes the

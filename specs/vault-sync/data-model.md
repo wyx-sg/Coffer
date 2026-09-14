@@ -183,15 +183,17 @@ Deterministic projection of a `Resource`:
 kind: mcp_server
 name: confluence
 description: "..."
-enabled: true
-scope:
-  agents: [claude-code]
-  machines: ["a3f21c9e4b7d2610"]
 config: { ... }          # the validated, json-mode config; keys sorted
 ```
 
 - `created_at` / `updated_at` / the local `id` are **excluded** — machine-local,
   and they would make every round produce a commit.
+- `enabled` and `scope` are **excluded** for a stronger reason than churn: they
+  are one thing, the resource's reach, and reach is machine-local (spec
+  `## What does not sync`). A document written by an older build still carries
+  them; they are parsed and discarded, never rejected, so one machine that has
+  not upgraded cannot stall convergence for the rest.
+- There is no document for a `channel` at all, in either direction.
 - Mapping keys are sorted; there is exactly one document per resource, so an
   unchanged vault produces an unchanged tree.
 - String values under this machine's home are normalized to `${HOME}/...` and
@@ -204,28 +206,35 @@ resource cites. After the whole diff is applied, each kind's post-import hook
 re-applies its machine-local side effects — native config projections, shims,
 skill deliveries — from current state.
 
-### `scope_json` — from a list to two axes
+### `scope_json` — back to one axis
 
-The persisted shape changes, and a migration rewrites every row:
+The machine axis is removed, and a migration rewrites every row that carried
+one:
 
 | | before | after |
 | --- | --- | --- |
 | unrestricted | `null` | `null` |
-| agents only | `["claude-code"]` | `{"agents": ["claude-code"], "machines": null}` |
-| machines only | — | `{"agents": null, "machines": ["a3f21c9e4b7d2610"]}` |
-| both | — | `{"agents": ["claude-code"], "machines": ["a3f21c9e4b7d2610"]}` |
-| dormant | `[]` | `{"agents": [], "machines": null}` |
+| agents only | `{"agents": ["claude-code"], "machines": null}` | `{"agents": ["claude-code"]}` |
+| dormant | `{"agents": [], "machines": null}` | `{"agents": []}` |
+| named machines, this one among them | `{"agents": A, "machines": [… this id …]}` | `{"agents": A}` |
+| named machines, this one not among them | `{"agents": A, "machines": [… other ids …]}` | `{"agents": []}` |
 
-The two axes are `AND`-ed and each `null` means unrestricted, so every existing
-row migrates **by addition**: `machines: null` reproduces today's behaviour
-exactly. The migration is one-way and leaves no load-time shim — `Scope.from_json`
-accepts the object shape only.
+The last two rows are the whole of the migration's argument. A row that named
+machines was, *on this machine*, either admitted by that list or dormant because
+of it, and the answer it already gave here is the answer it must keep giving:
+dropping the key outright would turn "active only on the desktop" into "active
+everywhere", which is the one direction that cannot be allowed. The machine id
+is read from the `daemon-config.json` cache beside the database — the very value
+the running daemon evaluated scope against — and when it cannot be determined
+the row takes `agents: []`, dormant, because narrowing is visible and reversible
+while widening is silent.
 
-The machine axis is keyed by `machine_id`, never by the display name, so
-renaming a machine costs nothing. An unknown machine id is legal and simply
-never matches, exactly as an unknown agent name already is. A scope editor
-builds the machine list from the registry rather than accepting free text, so a
-mistyped id cannot silently disable a resource.
+The migration is idempotent: a row with no `machines` key is left untouched, so
+a re-run matches nothing. It is one-way and leaves no load-time shim —
+`Scope.from_json` accepts the single-axis shape only.
+
+An unknown agent name is legal and simply never matches, so a resource can be
+scoped to an agent that has not been registered here yet.
 
 ### Machine descriptor (`machines/<machine_id>.yaml`)
 
@@ -258,9 +267,10 @@ agents: [claude-code, codex]
 
 The id is cached in `daemon-config.json` and recomputed if lost; the name lives
 here, so it syncs. The asymmetry matters: `machine_id` is the descriptor
-filename, a `scope.machines` reference and a table key, and a machine that comes
-back under a new identity becomes a ghost — everything scoped to the old one
-silently stops.
+filename, the tidy owner's reference and a table key, and a machine that comes
+back under a new identity becomes a ghost — it rejoins as a stranger, its old
+descriptor lingers with nobody to update it, and anything that named it stops
+meaning this machine.
 
 Applying a diff does **nothing** with `machines/*.yaml` in either direction: the
 registry is read from the tree, never projected into anything local.
@@ -271,10 +281,6 @@ Module-owned shared state that belongs to the vault rather than to one machine.
 Each module implements `SyncedStatePort` and the composition root registers the
 providers — the sync slice never imports kind modules. Current areas:
 
-- `channel-peers/<channel>/<chat>.yaml` — pairing identity (chat_id, sender_id,
-  display name, preferred agent, paired_at; the machine-local
-  `active_conversation_id` never travels). A document referencing a channel not
-  present here is reported as a per-path failure and joins the retry set.
 - `mcp-preferences/<server>.yaml` — the DISABLED capabilities per server
   (enabled is the default; seen-timestamps stay machine-local).
 - `agent-plugins/<agent>.yaml` — the plugin inventory: which plugins and

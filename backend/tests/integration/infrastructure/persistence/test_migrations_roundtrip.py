@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0075"
+HEAD_REVISION = "0077"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -140,7 +140,11 @@ HEAD_REVISION = "0075"
 # downgrade drops the column. 0075 CREATEs ``sync_runs`` — every converge round
 # rather than only the last, which the remote's ``last_*`` columns keep
 # answering unchanged; present at head, dropped by its own downgrade, and
-# absent from every revision below it.
+# absent from every revision below it. 0076 is DATA-only: it takes the machine
+# axis back off ``resources.scope_json`` (``{"agents": a, "machines": m}`` ->
+# ``{"agents": a}``), resolving each machine list against this machine's cached
+# id rather than dropping the key, so no row's reach widens — no DDL,
+# table/column set unchanged at head.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",

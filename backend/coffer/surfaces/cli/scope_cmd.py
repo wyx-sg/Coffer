@@ -5,16 +5,18 @@ Same ``<kind>:<name>`` ref parsing (``kind, _, name = ref.partition(":")`` +
 ``typer.Exit(2)`` guard) and the same ``client_or_exit()`` + ``check()``
 call shape as the other resource sub-groups.
 
-Two independent axes, ``AND``-ed, mirroring ``coffer.domain.scope``:
+One allow-list of agents, mirroring ``coffer.domain.scope``:
 
 - ``scope show``                         — read the current one
 - ``scope set <ref> --agents a,b``       — active only for those agents
-- ``scope set <ref> --machines x,y``     — active only on those machines
 - ``scope set <ref> --no-agents``        — dormant (matches no agent)
-- ``scope clear <ref>``                  — unscoped (every agent, every machine)
+- ``scope clear <ref>``                  — unscoped (every agent)
 
-``set`` is a whole-value write: an axis you do not name is written ``null``,
-which is unrestricted.
+``set`` is a whole-value write, not a read-modify-write.
+
+A scope applies to THIS machine and is never synced: every machine holding the
+vault sets its own, so the answer is always the one you can verify from the
+machine you are sitting at.
 """
 
 from __future__ import annotations
@@ -41,7 +43,7 @@ def _parse_ref(ref: str) -> tuple[str, str]:
 
 
 def _axis(names: str | None, empty: bool, flag: str) -> list[str] | None:
-    """One axis of the written scope: a list, the empty list, or unrestricted."""
+    """The written allow-list: a list, the empty list, or unrestricted."""
     if names and empty:
         typer.echo(f"pick at most one of --{flag} / --no-{flag}", err=True)
         raise typer.Exit(2)
@@ -87,32 +89,24 @@ def set_(
     no_agents: bool = typer.Option(
         False, "--no-agents", help="Make the resource dormant (active for no agent)"
     ),
-    machines: str | None = typer.Option(
-        None, "--machines", help="Comma-separated machine ids this resource is active on"
-    ),
-    no_machines: bool = typer.Option(
-        False, "--no-machines", help="Make the resource dormant (active on no machine)"
-    ),
 ) -> None:
-    """Replace a resource's scope with an explicit pair of allow-lists.
+    """Replace a resource's scope with an explicit allow-list of agents.
 
-    Whole-value write (no read-modify-write): an axis you name restricts to
-    exactly those names, and an axis you leave out becomes ``null``, which is
-    unrestricted. ``--no-agents``/``--no-machines`` write the empty list, which
-    is DORMANT — use ``scope clear`` to go back to everywhere.
+    Whole-value write (no read-modify-write): ``--agents`` restricts to exactly
+    those names. ``--no-agents`` writes the empty list, which is DORMANT — use
+    ``scope clear`` to go back to every agent.
+
+    The scope written here applies to THIS machine only and is not synced.
     """
     verbose = _verbose(ctx)
     kind, name = _parse_ref(ref)
-    if not (agents or no_agents or machines or no_machines):
-        typer.echo("name at least one axis (--agents/--machines, or their --no- forms)", err=True)
+    if not (agents or no_agents):
+        typer.echo("name the agents (--agents, or --no-agents)", err=True)
         raise typer.Exit(2)
 
-    scope = {
-        "agents": _axis(agents, no_agents, "agents"),
-        "machines": _axis(machines, no_machines, "machines"),
-    }
-    if no_agents or no_machines:
-        typer.echo(f"{kind}:{name} is now DORMANT — an empty axis matches nothing")
+    scope = {"agents": _axis(agents, no_agents, "agents")}
+    if no_agents:
+        typer.echo(f"{kind}:{name} is now DORMANT — an empty allow-list matches nothing")
 
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -126,15 +120,12 @@ def clear(
     ctx: typer.Context,
     ref: str = typer.Argument(..., help="Resource as <kind>:<name>"),
 ) -> None:
-    """Clear the scope back to unscoped — every agent, every machine."""
+    """Clear the scope back to unscoped — active for every agent on this machine."""
     verbose = _verbose(ctx)
     kind, name = _parse_ref(ref)
     c, _info = _cli_client.client_or_exit()
     with c:
-        typer.echo(
-            f"clearing scope for {kind}:{name} — "
-            "it becomes active for every agent, on every machine"
-        )
+        typer.echo(f"clearing scope for {kind}:{name} — it becomes active for every agent")
         put_r = c.put(f"/resources/{kind}/{name}/scope", json={"scope": None})
         _cli_client.check(put_r, verbose=verbose)
     typer.echo(_json.dumps({"scope": put_r.json()["scope"]}, indent=2))

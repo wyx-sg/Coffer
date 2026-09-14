@@ -130,8 +130,6 @@ export interface MachineList {
 
 export interface MachineRemoved {
   removed: boolean;
-  /** How many resources had this machine stripped from their scope with it. */
-  scopes_updated: number;
 }
 
 /** The remote as it is written: every field but the URL carries a default. */

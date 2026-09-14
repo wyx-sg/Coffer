@@ -72,7 +72,6 @@ from coffer.application.mcp.ports import (
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.mcp.tiering_config import TieringConfig, load_tiering_config
 from coffer.application.resource_service import ResourceService
-from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.errors import UpstreamUnavailable
 
 _logger = logging.getLogger(__name__)
@@ -96,11 +95,9 @@ class MCPGatewaySession:
         invocations: MCPInvocationRepoPort,
         downstream_sink: NotificationSink | None = None,
         *,
-        scope_evaluator: ScopeEvaluator,
         clock: Callable[[], datetime] | None = None,
         on_dispose: Callable[[], None] | None = None,
         builtin_tools: BuiltinToolRegistry | None = None,
-        embedder_provider: Callable[[], Awaitable[Any | None]] | None = None,
         tiering: TieringConfig | None = None,
     ) -> None:
         self.id = session_id or str(uuid.uuid4())
@@ -110,10 +107,6 @@ class MCPGatewaySession:
         self._prefs = preferences
         self._invocations = invocations
         self._downstream_sink = downstream_sink
-        # Activation scope with this machine's id already bound in, so neither
-        # the listing filter nor the invocation gate below has to carry a
-        # machine argument (see application/scope_evaluator.py).
-        self._scope = scope_evaluator
         self._clock = clock or (lambda: datetime.now(tz=UTC))
         # Per-agent scope: the session's bound agent identity, set
         # from the shim's self-reported ``--agent`` name on the ``initialize``
@@ -134,7 +127,6 @@ class MCPGatewaySession:
         # handle_initialize's instructions text. 0 until the client has listed
         # once — the honest value, since nothing has been hidden yet.
         self.last_hidden_count = 0
-        self._embedder_provider = embedder_provider  # semantic search_tools; None → BM25
         self._initialized = False
         # FR-004: the agent's launch cwd, reported by the shim at the
         # ``initialize`` handshake (params._meta["coffer/cwd"]). Threaded into
@@ -181,8 +173,9 @@ class MCPGatewaySession:
         # requests appropriately (T-061: sampling capability check).
         self._client_capabilities = params.get("capabilities", {}) or {}
         self._session_cwd = _extract_cwd(params)
-        # Scope's agent axis (Task 9): the shim's self-reported `--agent`
-        # identity, when it stamped one (params._meta["coffer/agent"]).
+        # The identity scope is evaluated against (Task 9): the shim's
+        # self-reported `--agent` name, when it stamped one
+        # (params._meta["coffer/agent"]).
         self._session_agent = _extract_agent(params)
         self._initialized = True
         # Tool tiering: the instructions field is the only channel into the client's
@@ -218,7 +211,7 @@ class MCPGatewaySession:
         return self._server_request_registry.handle_response(envelope)
 
     async def _enabled_mcp_servers(self) -> list[str]:
-        return await enabled_mcp_servers(self._resources, self._session_agent, self._scope)
+        return await enabled_mcp_servers(self._resources, self._session_agent)
 
     async def _ensure_subscribed(self, server_name: str) -> None:
         """Attach notification + server-request handlers to the upstream connection lazily."""
@@ -299,14 +292,12 @@ class MCPGatewaySession:
             outcome = await list_tools_across(
                 self._discovery, self._ensure_subscribed, await self._enabled_mcp_servers()
             )
-            embedder = await self._embedder_provider() if self._embedder_provider else None
             return await dispatch_tool_search(
                 params=params,
                 aggregated_tools=outcome.items,
                 invocations=self._invocations,
                 session_id=self.id,
                 clock=self._clock,
-                embedder=embedder,
             )
         if self._builtin.is_builtin(name):
             params = self._inject_session_context(name, params)
@@ -348,7 +339,6 @@ class MCPGatewaySession:
             ensure_subscribed=self._ensure_subscribed,
             on_evict=self._on_upstream_evicted,
             session_agent=self._session_agent,
-            scope=self._scope,
         )
 
     async def _handle_resources_read(self, params: dict[str, Any]) -> Any:

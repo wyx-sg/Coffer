@@ -45,9 +45,10 @@ class MachinesMixin:
     async def rename_self(self, registry: MachineRegistry, name: str) -> MachineView:
         """Rename this machine.
 
-        Costs nothing else: ``scope`` references the derived id, never the
-        label, so no resource has to be rewritten. The name reaches the other
-        machines on the next round, inside this machine's own descriptor.
+        Costs nothing else: nothing outside the registry references a machine
+        at all — not by id and not by label — so no resource has to be
+        rewritten. The name reaches the other machines on the next round,
+        inside this machine's own descriptor.
 
         Two writes, and both are needed. ``_set_machine_name`` persists it, so
         it survives a restart; ``registry.rename`` is what makes the running
@@ -65,21 +66,27 @@ class MachinesMixin:
             descriptor=(await registry.describe_self()), is_self=True, key_matches=True
         )
 
-    async def retire_machine(self, registry: MachineRegistry, machine_id: str) -> int:
-        """Remove a machine and every scope that names it, in one change."""
+    async def retire_machine(self, registry: MachineRegistry, machine_id: str) -> None:
+        """Drop a machine from the registry.
+
+        One change and one effect: the descriptor goes. Retiring used to strip
+        the id out of every scope that named it as well, which is why it once
+        returned a count; reach is machine-local now and no scope can name a
+        machine, so there is nothing else in the vault to reach for and the
+        audit entry records the machine alone.
+        """
         bundle = await self._bundle()
         if bundle is None:
             # The registry lives in the working tree, so there is nothing to
             # retire from until a remote exists.
             raise BackupRemoteInvalid("no sync remote is configured on this machine")
         async with self._lock:
-            updated = await registry.retire(bundle, machine_id, actor="user")
+            await registry.retire(bundle, machine_id)
         await self._audit.record(
             AuditEventType.SYNC_MACHINE_REMOVED.value,
             actor="user",
-            details={"machine_id": machine_id, "scopes_updated": updated},
+            details={"machine_id": machine_id},
         )
-        return updated
 
     async def _bundle(self) -> BundlePort | None:
         remote = await self._remotes.get()

@@ -21,14 +21,18 @@ from collections.abc import Mapping, Sequence
 import yaml
 
 from coffer.application.resource_service import ResourceService
+from coffer.application.sync.exporter import MACHINE_LOCAL_KINDS
 from coffer.application.sync.ports import CredentialSyncPort, ImportGate, SyncedStatePort
 from coffer.domain.error_base import CofferError
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.resource import Resource, ResourceRef
-from coffer.domain.scope import Scope
 from coffer.domain.sync.errors import SyncSerializationError
 from coffer.domain.sync.fernet_time import is_fresher
 from coffer.domain.sync.portability import expand_home
+
+#: The bundle paths a machine-local kind occupies, derived from the exporter's
+#: own list so the two halves of the rule cannot drift apart.
+_MACHINE_LOCAL_PREFIXES = tuple(f"resources/{kind}/" for kind in sorted(MACHINE_LOCAL_KINDS))
 
 
 class TreeApplier:
@@ -81,6 +85,15 @@ class ResourceApplier:
     through ``ResourceService.delete``, which releases the credentials no
     remaining resource cites — the orphaned-credential path that seeded the
     2026-07-10 clobber.
+
+    What an incoming document may change is narrower than what it used to be.
+    It carries the resource — identity, description, config — and it does not
+    carry the resource's **reach**: ``enabled`` and ``scope`` are one decision
+    the user makes per machine, on the machine, and an import never touches
+    them here. A row that already exists keeps the reach it was given; a row
+    that has just arrived takes the framework's own default, because a resource
+    nobody on this machine has looked at yet has not been given a reach here
+    either.
     """
 
     prefix = "resources/"
@@ -101,31 +114,50 @@ class ResourceApplier:
         self._actor = actor
 
     async def upsert(self, path: str) -> None:
+        if _is_machine_local(path):
+            return
         doc = await asyncio.to_thread(_read_yaml, self._worktree / path)
         kind, name = _ref_from(doc, path)
+        if kind in MACHINE_LOCAL_KINDS:
+            # The path said otherwise but the document is what gets registered,
+            # and ``_ref_from`` believes the document over the path. Checking
+            # both is what makes "a channel never arrives here" true rather
+            # than merely usual.
+            return
         raw_config = doc.get("config")
         config: dict[str, object] = dict(raw_config) if isinstance(raw_config, Mapping) else {}
         if self._home:
             config = expand_home(config, self._home)
-        scope = Scope.from_json(doc.get("scope"))
 
         gate = self._gates.get(kind)
         if gate is not None:
-            await gate.validate(config, scope=scope)
+            # The gate sees the config alone. It used to be handed the
+            # document's scope as well, so a scope-aware gate could wave a
+            # dormant doc past a machine-local precondition; reach does not
+            # travel any more, and a gate that still wants that leniency reads
+            # this machine's own row for it — the only place the answer was
+            # ever true.
+            await gate.validate(config)
 
         ref = ResourceRef(kind, name)
         existing = await self._find(ref)
         raw_description = doc.get("description")
         description = raw_description if isinstance(raw_description, str) else None
-        enabled = bool(doc.get("enabled", True))
         if existing is None:
-            created = await self._resources.register(
+            # Whatever reach the framework gives a fresh row — the kind's
+            # ``default_scope`` and the ``enabled`` default — is the right one.
+            # This resource has just arrived; nobody on THIS machine has said
+            # yet how far it should reach, and inventing an answer from the
+            # other machine's would be exactly the silent re-answering the
+            # document stopped carrying reach to prevent.
+            await self._resources.register(
                 kind, name, config, self._actor, description=description, allow_lifecycle_kind=True
             )
-            if not enabled:
-                await self._resources.set_enabled(ref, False, self._actor)
-            current_scope = created.scope
         else:
+            # Config and description only. The local ``enabled`` and ``scope``
+            # are left exactly as this machine set them — that is the whole
+            # decision, and it is a decision about *this* machine that an
+            # incoming document has no standing to revise.
             await self._resources.update_config(
                 ref,
                 config,
@@ -133,12 +165,10 @@ class ResourceApplier:
                 description=description,
                 allow_lifecycle_kind=True,
             )
-            await self._resources.set_enabled(ref, enabled, self._actor)
-            current_scope = existing.scope
-        if scope != current_scope:
-            await self._resources.update_scope(ref, scope, actor=self._actor)
 
     async def remove(self, path: str) -> None:
+        if _is_machine_local(path):
+            return
         kind, name = _ref_from({}, path)
         ref = ResourceRef(kind, name)
         if await self._find(ref) is None:
@@ -228,6 +258,26 @@ def _read_yaml(path: pathlib.Path) -> dict[str, object]:
     if not isinstance(raw, Mapping):
         raise SyncSerializationError(f"{path.name} is not a mapping")
     return dict(raw)
+
+
+def _is_machine_local(path: str) -> bool:
+    """Whether this path belongs to a kind that never travels.
+
+    Both directions, and the removal direction is the one that matters. The
+    exporter no longer writes channel documents, so the first differential
+    export after this build lands publishes the channel documents already in
+    the shared tree as *deletions* — a genuine diff, indistinguishable at the
+    git layer from the user having deleted those channels. An applier that
+    honoured it would walk every other machine's own channels out of its
+    registry, taking their pairings and credentials with them, on the round
+    that was supposed to stop channels travelling in the first place.
+
+    So this is a safety property, not tidiness: whatever a ``resources/<kind>/``
+    path says for a machine-local kind, this machine's answer is that the path
+    is not about it. The round still marks it absorbed and the pointer still
+    advances, which is what keeps the deletion from being retried forever.
+    """
+    return path.startswith(_MACHINE_LOCAL_PREFIXES)
 
 
 def _ref_from(doc: Mapping[str, object], path: str) -> tuple[str, str]:

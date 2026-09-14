@@ -488,7 +488,7 @@ export interface components {
          * @example mcp_server:filesystem
          */
         ResourceRef: string;
-        /** @description Where a resource is active: two independent allow-lists, AND-ed. null on an axis means unrestricted; [] matches nothing, i.e. dormant. Machines are named by their derived id, never their display name. */
+        /** @description Which agents a resource is active for, on THIS machine. null means every agent; [] matches nothing, i.e. dormant. Scope is machine-local — it is set on the machine it applies to and is never synced to the others. Unknown properties are rejected (422) rather than ignored: a client still sending the withdrawn `machines` axis means "only there", and silently keeping what is left would store "every agent" — widening the restriction the request was written to make. */
         ScopeOut: {
             /**
              * @example [
@@ -496,12 +496,6 @@ export interface components {
              *     ]
              */
             agents: string[] | null;
-            /**
-             * @example [
-             *       "a3f21c9e4b7d2610"
-             *     ]
-             */
-            machines: string[] | null;
         } | null;
         ResourceOut: {
             ref: components["schemas"]["ResourceRef"];

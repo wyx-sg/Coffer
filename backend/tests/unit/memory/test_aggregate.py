@@ -23,7 +23,6 @@ from coffer.application.memory.aggregate import (
     merge_duplicates,
 )
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
-from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.memory.errors import UnreadableMemory
 from coffer.domain.memory.fact import TYPE_FEEDBACK, TYPE_PROJECT, TYPE_USER, Fact, Origin
@@ -162,7 +161,6 @@ def _service(resources: _FakeResources, readers: dict) -> MemoryService:
         resources=resources,
         audit=_FakeAudit(),
         agent_source_resolver=_resolver,
-        scope_evaluator=ScopeEvaluator(machine_id="test-machine"),
         readers=readers,
     )
 
@@ -507,10 +505,8 @@ async def test_a_new_partition_is_scoped_to_its_source_agents() -> None:
     await _service(resources, {"claude_code": reader}).aggregate()
 
     row = await resources.get(ResourceRef(KIND_MEMORY, "coffer"))
-    # Agents only: a partition is aggregated from whichever machine holds those
-    # agents, so pinning it to one machine would make it dormant elsewhere for
-    # no reason (spec vault-sync "Scope gains a machine axis").
-    assert row.scope == Scope(agents=["claude-code"], machines=None)
+    # The partition is scoped to the agent it was aggregated from.
+    assert row.scope == Scope(agents=["claude-code"])
     assert row.config["project_root"] == "/home/dev/coffer"
 
 
@@ -526,9 +522,7 @@ async def test_an_existing_partitions_scope_is_never_overwritten() -> None:
     await service.aggregate()
 
     # The developer narrows the scope by hand.
-    await resources.update_scope(
-        ResourceRef(KIND_MEMORY, "coffer"), Scope(agents=[], machines=None), actor="dev"
-    )
+    await resources.update_scope(ResourceRef(KIND_MEMORY, "coffer"), Scope(agents=[]), actor="dev")
 
     # A later pass with a changed source must not touch the scope again.
     reader.set_sources("/cc", [SourceFile(path=source.path, digest="d2")])
@@ -536,7 +530,7 @@ async def test_an_existing_partitions_scope_is_never_overwritten() -> None:
     await service.aggregate()
 
     row = await resources.get(ResourceRef(KIND_MEMORY, "coffer"))
-    assert row.scope == Scope(agents=[], machines=None)
+    assert row.scope == Scope(agents=[])
 
 
 @pytest.mark.asyncio

@@ -120,11 +120,26 @@ coffer sync history --limit 20
 
 Rounds that changed nothing are listed like any other. They are the majority, and they are what makes a **gap** visible: without them, a vault that stopped converging on Tuesday looks the same as one that has had nothing to do.
 
-A path that fails to apply is reported and rejoins the next round rather than aborting this one. A path that cannot apply on this machine **at all** — an agent whose `config_dir` does not exist here — is recorded as *not applicable here*: it is preserved, not retried, not counted as an error, and it is usually a sign the resource wants scoping.
+A path that fails to apply is reported and rejoins the next round rather than aborting this one. A path that cannot apply on this machine **at all** — an agent whose `config_dir` does not exist here — is recorded as *not applicable here*: it is preserved, not retried, and not counted as an error.
 
-## Scope something to one machine
+## What a machine keeps to itself
 
-Some things belong on one machine only — a work MCP server, a skill that needs a binary the laptop does not have. List the machines to get an id:
+Two things deliberately stay put, and both are the same idea: what a machine *does* with the vault belongs to that machine.
+
+**Reach does not sync.** A resource's on/off switch and its agent scope — the Disabled / Everywhere / Restricted control in the web UI, and `coffer resource enable|disable` / `coffer scope set` on the command line — are set on the machine they apply to. Every machine sets its own, and a converge round never reads or writes either one. So "this work MCP server belongs on the desktop, not the laptop" is said at the laptop:
+
+```bash
+coffer resource disable mcp_server:work-jira      # on the laptop
+coffer scope set mcp_server:work-jira --agents claude-code
+```
+
+The server itself still converges to both machines — it is registered and visible everywhere, and a change to its configuration reaches both — it simply does not **activate** on the laptop, and the gateway exposes none of its tools to any session there. The desktop is untouched, and stays untouched, because nothing about reach is ever published.
+
+The cost is worth knowing: a resource arriving on a machine for the first time starts at that machine's default reach, not at the reach it has elsewhere. That is a state you can see on the page and change in one click, and it is the direction that asks rather than assumes.
+
+**Channels do not sync at all.** A channel is an inbound surface bound to one machine — its port, its tunnel, the webhook URL the platform was told to call — so a channel arriving on a second machine would at best do nothing and at worst answer the same conversation twice. Configure channels on each machine that needs one.
+
+## The machines in your vault
 
 ```bash
 coffer sync machine list
@@ -136,20 +151,7 @@ Laptop  (this machine) a3f21c9e  darwin  2026-09-13      ✓    claude-code, cod
 Desktop                b7c40d29  darwin  2026-09-13      ✓    claude-code
 ```
 
-Then scope by id:
-
-```bash
-coffer scope set mcp_server:work-jira --machines b7c40d29e1f58a33
-```
-
-The resource still converges to both machines — it is registered and visible everywhere — it simply does not **activate** on the laptop, and the gateway exposes none of its tools to any session there. The machine and agent axes combine, so "only the Claude Code on the desktop" is one command:
-
-```bash
-coffer scope set mcp_server:work-jira \
-  --machines b7c40d29e1f58a33 --agents claude-code
-```
-
-Rename a machine whenever you like — scope references the id, so the label costs nothing. Retiring one strips it from every scope that named it:
+Rename one whenever you like — nothing in the vault references the label, or the id. Retiring one removes its descriptor and rewrites nothing else:
 
 ```bash
 coffer sync machine rename "Work desktop"
@@ -234,8 +236,8 @@ manifest.json  knowledge/  skills/  resources/  state/  credentials/  machines/
 
 - **Knowledge** — the Markdown files under `~/.coffer/knowledge/`.
 - **Skills** — the master skill store under `~/.coffer/skills/`.
-- **Config resources** — `mcp_server`, `agent`, `skill`, `channel`, `knowledge` and `provider` definitions, serialized to one deterministic YAML each. Paths under `$HOME` are stored against a `~` sentinel and expanded against each machine's own home.
-- **Shared state** — the areas that belong to the vault rather than to one machine: channel peer pairings, MCP capability preferences, internal engine settings, and the agent plugin inventory.
+- **Config resources** — `mcp_server`, `agent`, `skill`, `knowledge`, `memory` and `provider` definitions, serialized to one deterministic YAML each. What a resource **is** travels: its name, its description and its configuration. What it **reaches** does not — see [What a machine keeps to itself](#what-a-machine-keeps-to-itself). `channel` is not serialized at all. Paths under `$HOME` are stored against a `~` sentinel and expanded against each machine's own home.
+- **Shared state** — the areas that belong to the vault rather than to one machine: MCP capability preferences, internal engine settings, and the agent plugin inventory.
 - **Credentials** — Fernet **ciphertext only**, and only with `--with-credentials`.
 - **Machine descriptors** — one document per machine, at `machines/<id>.yaml`. Each machine writes only its own, so they can never conflict; the registry is simply whatever those files currently hold.
 

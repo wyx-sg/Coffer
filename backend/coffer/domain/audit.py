@@ -18,13 +18,12 @@ class AuditEventType(StrEnum):
     RESOURCE_DELETED = "resource_deleted"
     # A resource moved to a new name: its identity, not its config, changed.
     RESOURCE_RENAMED = "resource_renamed"
-    # Per-Agent Resource Scope: framework-level machine x agent activation scope
+    # Per-Agent Resource Scope: framework-level per-agent activation scope
     RESOURCE_SCOPE_UPDATED = "resource_scope_updated"
     CAPABILITY_ENABLED = "capability_enabled"
     CAPABILITY_DISABLED = "capability_disabled"
     TOKEN_ROTATED = "token_rotated"
     RETENTION_UPDATED = "retention_updated"
-    EMBEDDING_CONFIG_UPDATED = "embedding_config_updated"
     INTERNAL_ENGINE_MODEL_SET = "internal_engine_model_set"
     CREDENTIAL_SET = "credential_set"
     CREDENTIAL_READ = "credential_read"

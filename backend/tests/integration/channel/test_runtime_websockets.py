@@ -11,7 +11,6 @@ from __future__ import annotations
 from typing import Any
 
 from coffer.application.channel.runtime import ChannelRuntime
-from coffer.application.scope_evaluator import ScopeEvaluator
 
 from .conftest import StubWebSocketController
 
@@ -28,7 +27,6 @@ def _runtime(websockets: Any, *, materialize: Any = _materialize) -> ChannelRunt
         adapter_factory=None,  # type: ignore[arg-type]
         processor=None,  # type: ignore[arg-type]
         pairing=None,  # type: ignore[arg-type]
-        scope=ScopeEvaluator(machine_id="this-machine"),
         websockets=websockets,
         materialize=materialize,
     )

@@ -65,10 +65,11 @@ class Resource:
     enabled: bool
     created_at: datetime
     updated_at: datetime
-    # Framework-level activation scope (ADR per-agent-resource-scope): two
-    # independent allow-lists, agents and machines, AND-ed. None means
-    # unscoped (active for every agent, on every machine) — the pre-scope
-    # default, so every existing constructor keeps working unchanged.
+    # Framework-level activation scope (ADR per-agent-resource-scope): one
+    # allow-list of agents. None means unscoped (active for every agent) — the
+    # pre-scope default, so every existing constructor keeps working unchanged.
+    # Scope is machine-local: it is set on the machine it applies to and does
+    # not travel with the vault (spec vault-sync ``## What does not sync``).
     # Interpreted via coffer.domain.scope; only kinds whose Kind.supports_scope
     # is True may set it (validate_scope).
     scope: Scope | None = None

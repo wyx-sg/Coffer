@@ -96,7 +96,7 @@ const SAMPLE: ResourceOut[] = [
     kind: "mcp_server",
     name: "notes",
     enabled: true,
-    scope: { agents: ["cc"], machines: null },
+    scope: { agents: ["cc"] },
     description: "Scoped to one agent",
     config: { transport: { type: "sse" } },
     created_at: "2026-05-22T00:00:00Z",

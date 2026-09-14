@@ -26,7 +26,6 @@ from coffer.application.agent.transcript_service import AgentTranscriptService
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.resource_service import ResourceService
-from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.application.skill.boot_reconcile import SkillDriftBootHeal
 from coffer.application.skill.builtin_tools import register_skill_builtin_tools
 from coffer.application.skill.kind import make_skill_kind
@@ -68,7 +67,6 @@ def wire_agent_and_skill_kinds(
     resource_svc: ResourceService,
     audit: AuditService,
     sm: object,
-    scope_evaluator: ScopeEvaluator,
     builtin_tools: BuiltinToolRegistry | None = None,
     credential_store: Any = None,
 ) -> None:
@@ -104,7 +102,6 @@ def wire_agent_and_skill_kinds(
         master_store=master_store,
         sync_engine=sync_engine,
         agent_skill_dir_resolver=_agent_skill_dir,
-        scope_evaluator=scope_evaluator,
         workspace_scan=WorkspaceScan(),
         agent_scan_locations_resolver=_agent_scan_locations,
     )

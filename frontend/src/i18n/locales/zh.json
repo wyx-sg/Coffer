@@ -297,7 +297,6 @@
       "credential_read": "已读取凭证",
       "credential_set": "已存储凭证",
       "daemon_port_set": "设置了守护进程端口",
-      "embedding_config_updated": "更新了向量嵌入配置",
       "internal_engine_model_set": "设置了内部引擎使用的模型",
       "knowledge_deleted": "从 {{resource}} 删除了一篇笔记",
       "knowledge_tidied": "整理了 {{resource}} 集合",
@@ -428,26 +427,6 @@
         "license": "许可证",
         "source": "源代码"
       }
-    },
-    "embedding": {
-      "title": "向量模型（Embedding）",
-      "description": "全局唯一的向量模型驱动所有知识库与记忆库的向量检索。选一个模型提供商，再选它的一个向量模型；端点与 API Key 都来自该提供商。关闭后仅使用关键词与 grep。",
-      "enabled": "启用向量 embedding",
-      "enabledHint": "关闭后所有库回退到关键词/grep。",
-      "empty": "尚未配置向量模型 —— 向量检索回退到关键词 / grep。",
-      "changeModelTitle": "更换向量模型？",
-      "changeModelConfirm": "更换向量模型会重新嵌入所有知识库和记忆库的全部内容，可能耗时较久。确定继续？",
-      "changeModelConfirmLabel": "更换并重嵌入",
-      "model": "向量模型",
-      "dimensions": "维度",
-      "chunkingTitle": "分块默认值",
-      "chunkingHint": "新建知识库的默认分块大小/重叠。每个知识库可在自己的设置里覆盖。",
-      "chunkSize": "分块大小",
-      "chunkOverlap": "分块重叠",
-      "connection": "向量模型提供商",
-      "connectionPlaceholder": "选择模型提供商",
-      "modelPlaceholder": "选择模型",
-      "noEmbeddingModels": "该提供商没有可用的向量模型。请在它的「模型」标签页里把某个模型的类型标为「向量」，或换一个提供商。"
     },
     "security": {
       "masterKey": {
@@ -597,7 +576,6 @@
     "DAEMON_NOT_READY": "Coffer 守护进程仍在启动，请稍后重试。",
     "DB_SCHEMA_TOO_NEW": "该数据库由更新版本的 Coffer 写入，请升级后再打开。",
     "DOCUMENT_NOT_FOUND": "未找到文档",
-    "EMBEDDING_UNAVAILABLE": "向量嵌入模型不可用",
     "ENGINE_UNAVAILABLE": "检索引擎不可用",
     "FORBIDDEN": "无权限执行此操作。",
     "FS_PATH_NOT_BROWSABLE": "该路径无法浏览",
@@ -1034,13 +1012,7 @@
     "search": {
       "placeholder": "搜索本集合…",
       "button": "搜索",
-      "noResults": "没有匹配的结果。",
-      "literalNotice": "以下是字面匹配结果，并非排序结果——{{reason}}。",
-      "reasonText": {
-        "noConnection": "尚未配置用于排序的内部连接",
-        "embeddingUnavailable": "向量化调用失败",
-        "noneAboveThreshold": "没有结果的相关度达到排序阈值"
-      }
+      "noResults": "没有匹配的结果。"
     }
   },
   "memory": {
@@ -1368,21 +1340,16 @@
     "bulkDeleteConfirm": "确定删除 {{count}} 个消息渠道？它们的适配器将停止，配对关系也会被移除。"
   },
   "scope": {
-    "subtitle": "这项资源在哪里生效：哪些 agent，以及哪些机器。两者相互独立，必须同时命中。不在范围内时它依然保持注册，只是不会被暴露或分发。",
+    "subtitle": "这项资源对哪些 agent 生效。不在范围内时它依然保持注册，只是不会被暴露或分发。",
+    "machineLocal": "生效范围只在本机设置——它不参与同步，你用的每台机器都要各自设置。",
     "everywhere": "全部生效",
     "restricted": "限定范围…",
     "agentsSection": "Agent",
-    "machinesSection": "机器",
     "everyAgent": "所有 agent",
-    "everyMachine": "所有机器",
-    "dormant": "某一个维度上一个都没选——处于休眠状态。它依然保持注册，但在至少选中一项之前不会到达任何地方。",
+    "dormant": "一个 agent 都没选——处于休眠状态。它依然保持注册，但在至少选中一项之前不会到达任何地方。",
     "noAgents": "还没有注册任何 agent。",
-    "noMachines": "还没有任何机器——本 vault 尚未与远端收敛过。",
     "unknownAgent": "本机未注册",
-    "unknownMachine": "不在注册表中",
-    "thisMachine": "本机",
-    "inactiveHereMachine": "在本机未生效——它的机器作用域没有点名本机。",
-    "inactiveHereAgent": "在此未生效——它的 agent 作用域没有点名本机注册的任何 agent。",
+    "inactiveHereAgent": "在此未生效——它的作用域没有点名本机注册的任何 agent。",
     "bulkReach": "所选项的生效范围"
   },
   "sync": {
@@ -1532,8 +1499,8 @@
       "noAgents": "无",
       "retire": "下线",
       "retireTitle": "下线 {{name}}？",
-      "retireBody": "它的描述文件会从注册表中移除，同时所有点名了这台机器的资源作用域也会把它剥离——否则那些资源会永远休眠在一台谁也看不见的机器上。",
-      "retired": "{{name}} 已下线；更新了 {{count}} 个资源作用域。",
+      "retireBody": "它的描述文件会从注册表里移除，仓库里的其他任何东西都不会变——没有任何资源引用机器 id，因为生效范围是在每台机器上各自设置的，而不是记在某台机器名下。",
+      "retired": "{{name}} 已退役。",
       "derivedNote": "本机的 id 保存在本地文件里，而不是从宿主机派生的，所以删掉 ~/.coffer 之后它会以一台新机器的身份重新出现，这一行需要手动下线。"
     }
   }

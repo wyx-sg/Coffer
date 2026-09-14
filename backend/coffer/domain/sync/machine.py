@@ -4,12 +4,14 @@ Identity and name are separate things, and keeping them separate is the whole
 point of this module:
 
 * ``machine_id`` is **derived from the host** and never changes. It keys the
-  descriptor's filename, every ``scope.machines`` entry, and the registry
-  table. It must survive reinstalling and uninstalling Coffer, because a
-  machine that comes back under a new id is a ghost — everything scoped to the
-  old one silently stops — and because only a surviving id can tell a machine
-  *returning* to a remote from one joining it for the first time. Those two
-  cases need opposite handling, so that distinction is load-bearing.
+  descriptor's filename and nothing else — no resource names a machine, because
+  a resource's reach is machine-local and therefore held by the machine rather
+  than written down about it. The id must still survive reinstalling and
+  uninstalling Coffer, for the reason that is left and that is the load-bearing
+  one: only a surviving id can tell a machine *returning* to a remote from one
+  joining it for the first time, and those two cases need opposite handling —
+  a returning machine that is mistaken for a new one republishes everything the
+  others deleted while it was away.
 * ``name`` is a label the user may change at any time, at no cost, because
   nothing references it.
 

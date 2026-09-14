@@ -22,7 +22,6 @@ from coffer.application.channel.ports import ChannelAdapter
 from coffer.application.channel.runtime import ChannelRuntime
 from coffer.application.channel.service import ChannelService
 from coffer.application.credentials.resolver import CredentialResolver
-from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.channel.config import parse_channel_config
 from coffer.domain.resource import ResourceRef
 from coffer.domain.scope import Scope
@@ -50,7 +49,6 @@ from coffer.surfaces.http.turn_dependencies import (
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from coffer.application.channel.sync_state import ChannelPeerSyncState
 from coffer.application.resource_service import ResourceService
 
 
@@ -71,7 +69,6 @@ def wire_channel_kind(
     resource_svc: ResourceService,
     audit: AuditService,
     sm: async_sessionmaker,  # type: ignore[type-arg]
-    scope_evaluator: ScopeEvaluator,
     credential_store: Any = None,
 ) -> ChannelRuntime:
     peers = ChannelPeerRepo(sm)
@@ -123,10 +120,6 @@ def wire_channel_kind(
         adapter_factory=adapter_factory,
         processor=processor,
         pairing=pairing,
-        # A channel is an inbound surface: its scope's machine axis decides
-        # which of a converged vault's machines answers it, so the runtime is
-        # the one consumer that has to know which machine this is.
-        scope=scope_evaluator,
         listener=listener,
         tunnel=TunnelController(),
         # FR-071: websocket-delivery channels converge the same way, and their
@@ -144,8 +137,7 @@ def wire_channel_kind(
     async def channel_scope(ref: ResourceRef) -> Scope | None:
         """The channel's own scope, for the edit-time default_agent check. Read
         live off the row rather than cached: an edit lands after whatever scope
-        the row carries right now. The whole scope travels; the validator is the
-        one that decides it reads only the agent axis."""
+        the row carries right now."""
         return (await resource_svc.get(ref)).scope
 
     app.state.kinds["channel"] = make_channel_kind(
@@ -171,11 +163,12 @@ def wire_channel_kind(
         http_client=httpx.AsyncClient(),
     )
     set_channel_service(service)
-    # Pairing identity syncs across machines (spec vault-sync state area); the sync
-    # composition root (wired later) picks the provider up from app.state.
-    providers = getattr(app.state, "sync_state_providers", None)
-    if providers is None:
-        providers = []
-        app.state.sync_state_providers = providers
-    providers.append(ChannelPeerSyncState(resource_svc, peers))
+    # Pairing identity registers no synced state area. It used to: the argument
+    # was that pairings are platform-level, so rebinding a channel to another
+    # machine would need no re-pairing. A channel does not reach another machine
+    # any more (spec vault-sync ``## What does not sync``), so there is no
+    # rebinding for the pairings to save — every pulled document would name a
+    # channel the other machine does not have and be skipped forever, and the
+    # only thing publishing them still achieved was putting chat ids, display
+    # names and sender ids in the remote for nothing.
     return runtime

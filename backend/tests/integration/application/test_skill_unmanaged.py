@@ -18,7 +18,6 @@ from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.service import AgentService
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
-from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.application.skill.kind import make_skill_kind
 from coffer.application.skill.service import SkillService
 from coffer.domain.agent.config import AgentConfig
@@ -81,7 +80,6 @@ async def _setup(tmp_path: pathlib.Path):
     placeholder_kinds: dict = {}
     rs = ResourceService(kinds=placeholder_kinds, repo=SqlAlchemyResourceRepo(sm), audit=audit)
     skill_svc = SkillService(
-        scope_evaluator=ScopeEvaluator(machine_id="test-machine"),
         resource_service=rs,
         audit=audit,
         binding_repo=binding_repo,

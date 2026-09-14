@@ -54,8 +54,8 @@ class SkillOut(BaseModel):
     description: str
     source: dict[str, Any]
     # The two halves of the delivery predicate: a skill reaches an agent iff
-    # ``enabled`` and this agent, on this machine, is inside ``scope``
-    # (None = everywhere; an axis given [] matches nothing).
+    # ``enabled`` and that agent is inside ``scope``
+    # (None = every agent; [] matches nothing).
     enabled: bool
     scope: ScopeOut | None
     version_hash: str

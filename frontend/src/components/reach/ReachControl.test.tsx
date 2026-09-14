@@ -10,9 +10,10 @@
 // writes refetched the list under the open popover, moving the row it was
 // anchored to out from under it.
 //
-// The second load-bearing rule is that BOTH axes are here — agents and machines
-// — so the bulk bar cannot offer less than a row does, and neither of them can
-// grow a machine field the other lacks.
+// The second load-bearing rule is the machine-local line: reach does not sync,
+// and this panel is the only place a user is told so. A user who assumed it
+// synced would set reach once and never understand why the other machine
+// ignored it — so the line is asserted here rather than left to a doc.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 
@@ -20,29 +21,13 @@ import { ReachControl, type ReachMode } from "./ReachControl";
 import type { Scope } from "@/lib/hooks/useScope";
 
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: vi.fn() }));
-vi.mock("@/lib/hooks/useMachines", () => ({ useMachines: vi.fn() }));
 
 const agentHooks = await import("@/lib/hooks/useAgents");
-const machineHooks = await import("@/lib/hooks/useMachines");
 
-const LOCAL_ID = "a3f21c9e4b7d2610";
-const OTHER_ID = "bb11cc22dd33ee44";
-
-const MACHINES = [
-  { machine_id: LOCAL_ID, name: "laptop", is_self: true },
-  { machine_id: OTHER_ID, name: "desktop", is_self: false },
-];
-
-function seed(
-  agents: { name: string }[] = [{ name: "claude" }, { name: "codex" }],
-  machines: typeof MACHINES = MACHINES,
-) {
+function seed(agents: { name: string }[] = [{ name: "claude" }, { name: "codex" }]) {
   vi.mocked(agentHooks.useAgents).mockReturnValue({
     data: agents,
   } as unknown as ReturnType<typeof agentHooks.useAgents>);
-  vi.mocked(machineHooks.useMachines).mockReturnValue({
-    data: { machines },
-  } as unknown as ReturnType<typeof machineHooks.useMachines>);
 }
 
 const handlers = () => ({
@@ -51,10 +36,7 @@ const handlers = () => ({
   onRestricted: vi.fn(),
 });
 
-const only = (agents: string[] | null, machines: string[] | null = null): Scope => ({
-  agents,
-  machines,
-});
+const only = (agents: string[] | null): Scope => ({ agents });
 
 const segment = (label: RegExp) => screen.getByRole("button", { name: label });
 const openList = () => fireEvent.click(segment(/restricted/i));
@@ -121,8 +103,52 @@ describe("the three segments", () => {
   });
 });
 
-describe("the panel stages both axes, then commits once on close", () => {
-  test("opening the panel writes nothing, and starts dormant on the agent axis", () => {
+describe("the panel says reach is machine-local", () => {
+  test("the panel states that reach is set on this machine only", () => {
+    // The decision it reports — reach does not sync — is invisible everywhere
+    // else in the app, so the panel where reach is chosen is the one place a
+    // user can learn it without reading a doc.
+    seed();
+    mount("everywhere");
+    openList();
+    const line = screen.getByTestId("reach-machine-local");
+    expect(line).toHaveTextContent(/this machine only/i);
+    expect(line).toHaveTextContent(/not synced/i);
+  });
+
+  test("the whole-value segments carry it too, since they never open the panel", () => {
+    // "Disabled" and "Everywhere" commit on the click. A user who only ever
+    // uses those two would set reach for the life of this machine without the
+    // panel — and its line — ever appearing, so the fact rides the segments as
+    // well.
+    seed();
+    mount("everywhere");
+    expect(segment(/^disabled$/i)).toHaveAttribute("title", expect.stringMatching(/this machine/i));
+    expect(segment(/^everywhere$/i)).toHaveAttribute("title", expect.stringMatching(/not synced/i));
+  });
+
+  test("a dormancy note outranks it on the Restricted segment", () => {
+    // Two things want that one tooltip. The note is about THIS resource and is
+    // the more urgent, so it wins; the standing fact is still one click away
+    // inside the panel.
+    seed();
+    mount("restricted", { initialScope: only(["claude"]), note: "Inactive here" });
+    expect(segment(/^restricted/i)).toHaveAttribute("title", "Inactive here");
+  });
+
+  test("it is a quiet line, not one of the amber warnings", () => {
+    // Amber is reserved for a scope that currently reaches nobody. A standing
+    // fact rendered in the same colour would read as a fault every time.
+    seed();
+    mount("restricted", { initialScope: only(["claude"]) });
+    openList();
+    expect(screen.getByTestId("reach-machine-local").className).toContain("text-muted-foreground");
+    expect(screen.getByTestId("reach-machine-local").className).not.toContain("status-warn");
+  });
+});
+
+describe("the panel stages the agent list, then commits once on close", () => {
+  test("opening the panel writes nothing, and starts dormant", () => {
     seed();
     const h = mount("everywhere");
     openList();
@@ -143,59 +169,38 @@ describe("the panel stages both axes, then commits once on close", () => {
     expect(h.onRestricted).toHaveBeenCalledWith(only(["claude", "codex"]));
   });
 
-  test("the machine axis is a pick-list of the registry, never free text", () => {
+  test("the agent axis is a pick-list of what is registered, never free text", () => {
+    // A mistyped name would match nothing, which makes the resource dormant
+    // silently rather than failing — so the names are never typed.
     seed();
     mount("restricted", { initialScope: only(["claude"]) });
     openList();
-    // The rows are there with "every machine" still ticked — they are
-    // checkboxes, not an input.
-    const row = within(screen.getByTestId(`scope-machine-${OTHER_ID}`));
-    expect(row.getByText("desktop")).toBeInTheDocument();
+    const row = within(screen.getByTestId("scope-agent-codex"));
+    expect(row.getByText("codex")).toBeInTheDocument();
     expect(row.getByRole("checkbox")).toBeInTheDocument();
     expect(
-      within(screen.getByTestId("scope-machine-axis")).queryByRole("textbox"),
+      within(screen.getByTestId("scope-agent-axis")).queryByRole("textbox"),
     ).not.toBeInTheDocument();
   });
 
-  test("both axes travel together in the one commit, machines by derived id", () => {
+  test("an agent can be picked while 'every agent' is still ticked", () => {
+    // The rows stay on screen under "every agent" rather than hiding until it
+    // is un-ticked: ticking a row IS the un-tick, so narrowing is one click
+    // from where the user already is instead of two in a discovered order.
     seed();
-    const h = mount("restricted", { initialScope: only(["claude"]) });
-    openList();
-    fireEvent.click(within(screen.getByTestId(`scope-machine-${OTHER_ID}`)).getByRole("checkbox"));
-    closeList();
-    expect(h.onRestricted).toHaveBeenCalledOnce();
-    expect(h.onRestricted).toHaveBeenCalledWith(only(["claude"], [OTHER_ID]));
-  });
-
-  test("a machine can be picked while 'every machine' is still ticked", () => {
-    // The panel opens on `machines: null`, so hiding the rows under "every
-    // machine" meant the machine axis opened showing no machine at all — the
-    // one control whose purpose is naming a machine named none, and the user
-    // had to guess that un-ticking a box would reveal a list. The rows are
-    // always on screen; ticking one IS the un-tick of "every machine".
-    seed();
-    const h = mount("restricted", { initialScope: only(["claude"]) });
+    const h = mount("restricted", { initialScope: only(null) });
     openList();
 
-    const every = screen.getByRole("checkbox", { name: /every machine/i });
+    const every = screen.getByRole("checkbox", { name: /every agent/i });
     expect(every).toBeChecked();
-    const row = within(screen.getByTestId(`scope-machine-${OTHER_ID}`)).getByRole("checkbox");
+    const row = within(screen.getByTestId("scope-agent-codex")).getByRole("checkbox");
     expect(row).not.toBeChecked();
 
     fireEvent.click(row);
-    expect(screen.getByRole("checkbox", { name: /every machine/i })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /every agent/i })).not.toBeChecked();
 
     closeList();
-    expect(h.onRestricted).toHaveBeenCalledWith(only(["claude"], [OTHER_ID]));
-  });
-
-  test("the local machine's row is marked as this machine", () => {
-    seed();
-    mount("restricted", { initialScope: only(null, [LOCAL_ID]) });
-    openList();
-    expect(
-      within(screen.getByTestId(`scope-machine-${LOCAL_ID}`)).getByText(/this machine/i),
-    ).toBeInTheDocument();
+    expect(h.onRestricted).toHaveBeenCalledWith(only(["codex"]));
   });
 
   test("the panel opens on `initialScope`", () => {
@@ -215,14 +220,14 @@ describe("the panel stages both axes, then commits once on close", () => {
     ).not.toBeChecked();
   });
 
-  test("unticking every-agent commits the empty axis — dormant, not 'unchanged'", () => {
+  test("unticking every-agent commits the empty list — dormant, not 'unchanged'", () => {
     seed();
-    const h = mount("restricted", { initialScope: only(null, [LOCAL_ID]) });
+    const h = mount("restricted", { initialScope: only(null) });
     openList();
     fireEvent.click(screen.getByRole("checkbox", { name: /every agent/i }));
     expect(screen.getByText(/dormant/i)).toBeInTheDocument();
     closeList();
-    expect(h.onRestricted).toHaveBeenCalledWith(only([], [LOCAL_ID]));
+    expect(h.onRestricted).toHaveBeenCalledWith(only([]));
   });
 
   test("closing an untouched panel still commits, leaving 'unchanged' to the consumer", () => {
@@ -237,25 +242,17 @@ describe("the panel stages both axes, then commits once on close", () => {
   });
 
   test("a seeded agent that is not registered here still renders, badged", () => {
+    // Dropping it would rewrite the user's scope behind their back, and a name
+    // can legally be scoped in before that agent is registered here.
     seed([{ name: "claude" }]);
-    mount("restricted", { initialScope: only(["ghost"]) });
+    const h = mount("restricted", { initialScope: only(["ghost"]) });
     openList();
     const row = within(screen.getByTestId("scope-agent-ghost"));
     expect(row.getByText("ghost")).toBeInTheDocument();
     expect(row.getByText(/not registered/i)).toBeInTheDocument();
-  });
-
-  test("a machine id the registry does not hold is kept and badged, never dropped", () => {
-    // Dropping it would rewrite the user's scope behind their back, and a
-    // machine can legally be named before its descriptor has arrived here.
-    seed();
-    const h = mount("restricted", { initialScope: only(null, ["deadbeefdeadbeef"]) });
-    openList();
-    const row = within(screen.getByTestId("scope-machine-deadbeefdeadbeef"));
-    expect(row.getByText(/not in the registry/i)).toBeInTheDocument();
     expect(row.getByRole("checkbox")).toBeChecked();
     closeList();
-    expect(h.onRestricted).toHaveBeenCalledWith(only(null, ["deadbeefdeadbeef"]));
+    expect(h.onRestricted).toHaveBeenCalledWith(only(["ghost"]));
   });
 
   test("ticking an agent preserves the unregistered names already seeded", () => {
@@ -274,19 +271,12 @@ describe("the panel stages both axes, then commits once on close", () => {
     expect(screen.getByText(/no agents registered/i)).toBeInTheDocument();
   });
 
-  test("with no machine in the registry, the machine axis says so", () => {
-    seed(undefined, []);
-    mount("restricted", { initialScope: only(null, []) });
-    openList();
-    expect(screen.getByText(/no machines yet/i)).toBeInTheDocument();
-  });
-
   test("the consumer's `note` is shown in the panel and on the trigger", () => {
     seed();
-    mount("restricted", { initialScope: only(["claude"]), note: "Inactive on this machine" });
-    expect(segment(/restricted/i)).toHaveAttribute("title", "Inactive on this machine");
+    mount("restricted", { initialScope: only(["claude"]), note: "Inactive here" });
+    expect(segment(/restricted/i)).toHaveAttribute("title", "Inactive here");
     openList();
-    expect(screen.getByText("Inactive on this machine")).toBeInTheDocument();
+    expect(screen.getByText("Inactive here")).toBeInTheDocument();
   });
 
   test("the bulk mount is labelled, so it is distinguishable from a row's", () => {

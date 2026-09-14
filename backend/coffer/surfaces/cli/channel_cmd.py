@@ -113,10 +113,10 @@ def register(
         raise typer.Exit(int(ExitCode.INVALID_INPUT))
     c, _info = _cli_client.client_or_exit()
     with c:
-        # A new channel is created unscoped, so an enabled one starts here
-        # (ADR per-agent-resource-scope, spec vault-sync). Narrowing which
-        # machine of a converged vault answers it is a later, separate edit —
-        # ``coffer scope set channel:<name> --machines <id>`` — not something
+        # A new channel is created unscoped, so an enabled one starts here and
+        # may drive every registered agent (ADR per-agent-resource-scope).
+        # Narrowing the agents it may drive is a later, separate edit —
+        # ``coffer scope set channel:<name> --agents <keys>`` — not something
         # register has to ask about.
         r = c.post("/resources", json={"kind": "channel", "name": name, "config": config})
         _cli_client.check(r, verbose=verbose)

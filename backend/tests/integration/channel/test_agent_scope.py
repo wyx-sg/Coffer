@@ -6,10 +6,8 @@ consumes, so its scope names the agents the channel may DRIVE.
 
 Three things must agree, or the owner sees a card offering an agent the very
 next check rejects: the `/agent` listing, the `/agent` card, and the validation
-of a chosen key (typed or tapped). The dormant case (an empty agent axis) is
-the runtime's: such a channel never starts, so it accepts no turn at all — and
-so is the MACHINE axis, which is what keeps two machines of one converged vault
-from both answering the same inbound surface.
+of a chosen key (typed or tapped). The dormant case (an empty agent list) is
+the runtime's: such a channel never starts, so it accepts no turn at all.
 """
 
 from __future__ import annotations
@@ -20,7 +18,6 @@ from coffer.domain.errors import ScopeInvalidError
 from coffer.domain.scope import Scope
 
 from .conftest import (
-    THIS_MACHINE,
     ChannelEnv,
     FakeChannelAdapter,
     Resource,
@@ -179,61 +176,3 @@ async def test_widening_a_scope_rebinds_without_a_daemon_restart(env: ChannelEnv
     await env.runtime.reconcile_once()
 
     assert env.runtime.is_running("tg") is True
-
-
-@pytest.mark.acceptance(
-    spec="channels", scenario="a channel scoped to another machine is registered but dark"
-)
-async def test_a_channel_scoped_to_another_machine_is_registered_but_never_started(
-    env: ChannelEnv,
-) -> None:
-    """The machine axis, which only the runtime reads.
-
-    A converged vault carries every machine's channels on every machine. If
-    both started the adapter, both would answer the same inbound surface and
-    the owner would get two replies to one message. So the row is registered
-    here and the adapter simply never starts.
-    """
-    resource = await env.register_channel("tg")
-    await env.resources.update_scope(
-        resource.ref, Scope(machines=["some-other-machine"]), actor="test"
-    )
-
-    await env.runtime.reconcile_once()
-
-    assert env.runtime.is_running("tg") is False
-    assert env.created_adapters == []
-    # Registered, not deleted — it is still here to be edited or re-scoped.
-    assert (await env.resources.get(resource.ref)).scope == Scope(
-        agents=None, machines=["some-other-machine"]
-    )
-
-
-async def test_a_channel_scoped_to_this_machine_runs(env: ChannelEnv) -> None:
-    """The other side of the same gate, so the test above cannot pass by the
-    runtime refusing to start anything at all."""
-    resource = await env.register_channel("tg")
-    await env.resources.update_scope(resource.ref, Scope(machines=[THIS_MACHINE]), actor="test")
-
-    await env.runtime.reconcile_once()
-
-    assert env.runtime.is_running("tg") is True
-
-
-async def test_a_machine_only_narrowing_is_accepted_from_any_machine(env: ChannelEnv) -> None:
-    """The write path judges the AGENT axis alone.
-
-    Scoping a channel to a machine that is not this one is a legitimate edit —
-    it is how a converged vault hands an inbound surface to another machine —
-    so the kind's ``validate_scope_for`` must not read it as "this channel can
-    now drive nothing".
-    """
-    resource = await env.register_channel("tg")
-
-    await env.resources.update_scope(
-        resource.ref, Scope(machines=["some-other-machine"]), actor="test"
-    )
-
-    assert (await env.resources.get(resource.ref)).scope == Scope(
-        agents=None, machines=["some-other-machine"]
-    )

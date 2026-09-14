@@ -71,17 +71,13 @@ def machine_rename(ctx: typer.Context, name: str = typer.Argument(...)) -> None:
 
 @machine_app.command("remove")
 def machine_remove(ctx: typer.Context, machine_id: str = typer.Argument(...)) -> None:
-    """Retire a machine and strip it from every scope that names it."""
+    """Remove a retired machine's descriptor from the registry."""
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.delete(f"/sync/machines/{machine_id}")
         _cli_client.check(r, verbose=verbose)
-        payload = r.json()
-    _console.print(
-        f"[green]retired[/green] {machine_id} · "
-        f"{payload.get('scopes_updated', 0)} resource scopes updated"
-    )
+    _console.print(f"[green]retired[/green] {machine_id}")
 
 
 # --- master key -------------------------------------------------------------

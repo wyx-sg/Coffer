@@ -39,7 +39,6 @@ from coffer.application.chat.turn_orchestrator import (
 )
 from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.resource_service import ResourceService
-from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.audit import AuditEntry
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
@@ -69,10 +68,6 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyResourceRepo,
 )
 from tests.unit.chat.conftest import FakeAgentAdapter
-
-#: The machine id the channel runtime under test believes it is running on, so
-#: a test can scope a channel here (active) or elsewhere (registered, dark).
-THIS_MACHINE = "machine-here"
 
 # ---------------------------------------------------------------------------
 # Deterministic waiting
@@ -832,9 +827,6 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         adapter_factory=adapter_factory,
         processor=processor,
         pairing=pairing,
-        # A fixed id so a test can scope a channel to this machine or to
-        # another one and get a deterministic answer either way.
-        scope=ScopeEvaluator(machine_id=THIS_MACHINE),
         listener=listener,
         websockets=websockets,
         materialize=materialize,

@@ -83,13 +83,3 @@ def test_effective_agent_drops_a_sticky_choice_the_scope_excludes() -> None:
 
 def test_effective_agent_falls_back_when_nothing_is_sticky() -> None:
     assert effective_agent(_binding(None), None) == "claude_code"
-
-
-def test_the_machine_axis_does_not_narrow_routing() -> None:
-    """A binding exists only because the runtime's gate already admitted this
-    channel on this machine, so re-asking the machine question here could only
-    return the same yes — at the cost of every routing seam needing a machine
-    id. Reading it would instead make a bound channel drive nothing at all."""
-    b = _binding(Scope(agents=None, machines=["some-other-machine"]))
-    assert routable_keys(b, _Catalog()) == ["claude_code", "codex"]
-    assert effective_agent(b, "codex") == "codex"

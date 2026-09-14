@@ -14,8 +14,8 @@
 // shared DataTable like every other list surface (ConnectionsTable): the page
 // itself owns only the header + the add dialog. Editing a connection moved to
 // its detail page. Coffer's own engine (which connection + model its memory
-// organizer runs on) and its own embedding model live in Settings → Engine:
-// both configure Coffer itself rather than being a resource served to agents.
+// organizer runs on) lives in Settings → Engine: it configures Coffer itself
+// rather than being a resource served to agents.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Boxes, Plus } from "lucide-react";

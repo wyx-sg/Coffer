@@ -27,6 +27,8 @@ coffer resource disable skill:my-skill                 # 一次性从所有 agen
 coffer skill verify                                    # 报告漂移;有则非零退出
 ```
 
+这两项设置——启用开关与 scope——都**只属于本机**。它们从不参与同步,因此同一个技能收敛到你的笔记本和台式机之后,可以在两边分别送达不同的 agent,而这要在每台机器上各自设置。见[同步](/zh/guide/sync)。
+
 - 投递就是在该 agent 的 `skills/` 目录下创建一个指向主副本的符号链接;上面两个输入任一改变,链接都会被自动创建或回收。
 - Coffer 从不自动修复漂移。`verify` 报告缺失、被篡改或孤立的链接;你显式修复(`coffer skill update`,或重新应用 scope)。
 - `coffer skill rm <name>` 删除技能并拆除其所有链接。

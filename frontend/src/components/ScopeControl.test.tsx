@@ -11,7 +11,6 @@ vi.mock("@/lib/hooks/useScope", async (importOriginal) => ({
   useUpdateResourceScope: vi.fn(),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: vi.fn() }));
-vi.mock("@/lib/hooks/useMachines", () => ({ useMachines: vi.fn() }));
 vi.mock("@/lib/hooks/useResourceMutations", () => ({
   useEnableResource: vi.fn(),
   useDisableResource: vi.fn(),
@@ -19,34 +18,18 @@ vi.mock("@/lib/hooks/useResourceMutations", () => ({
 
 const scopeHooks = await import("@/lib/hooks/useScope");
 const agentHooks = await import("@/lib/hooks/useAgents");
-const machineHooks = await import("@/lib/hooks/useMachines");
 const resourceHooks = await import("@/lib/hooks/useResourceMutations");
 
 const mutate = vi.fn();
 const enableMutate = vi.fn();
 const disableMutate = vi.fn();
 
-const LOCAL_ID = "a3f21c9e4b7d2610";
-const OTHER_ID = "bb11cc22dd33ee44";
-
-/** Two registered machines: this one, and one the user also owns. */
-const MACHINES = [
-  { machine_id: LOCAL_ID, name: "laptop", is_self: true },
-  { machine_id: OTHER_ID, name: "desktop", is_self: false },
-];
-
 function seed(opts: {
   scope: Scope | null;
   supports_scope?: boolean;
   agents?: { name: string }[];
-  machines?: typeof MACHINES;
 }) {
-  const {
-    scope,
-    supports_scope = true,
-    agents = [{ name: "claude" }, { name: "codex" }],
-    machines = MACHINES,
-  } = opts;
+  const { scope, supports_scope = true, agents = [{ name: "claude" }, { name: "codex" }] } = opts;
   vi.mocked(scopeHooks.useResourceScope).mockReturnValue({
     data: { scope, supports_scope },
     isPending: false,
@@ -58,9 +41,6 @@ function seed(opts: {
   vi.mocked(agentHooks.useAgents).mockReturnValue({
     data: agents,
   } as unknown as ReturnType<typeof agentHooks.useAgents>);
-  vi.mocked(machineHooks.useMachines).mockReturnValue({
-    data: { machines },
-  } as unknown as ReturnType<typeof machineHooks.useMachines>);
   vi.mocked(resourceHooks.useEnableResource).mockReturnValue({
     mutate: enableMutate,
     isPending: false,
@@ -71,10 +51,7 @@ function seed(opts: {
   } as unknown as ReturnType<typeof resourceHooks.useDisableResource>);
 }
 
-const only = (agents: string[] | null, machines: string[] | null = null): Scope => ({
-  agents,
-  machines,
-});
+const only = (agents: string[] | null): Scope => ({ agents });
 
 /** Close the picker, which is when the staged selection is written. */
 function closeList() {
@@ -90,7 +67,7 @@ const segment = (label: RegExp) => screen.getByRole("button", { name: label });
 afterEach(() => vi.clearAllMocks());
 
 describe("ScopeControl", () => {
-  test("everywhere marks that segment active and hides the pick-lists", () => {
+  test("everywhere marks that segment active and hides the pick-list", () => {
     seed({ scope: null });
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
     expect(segment(/everywhere/i)).toHaveAttribute("aria-pressed", "true");
@@ -99,7 +76,7 @@ describe("ScopeControl", () => {
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
-  test("switching everywhere -> restricted opens the lists and PUTs on close", () => {
+  test("switching everywhere -> restricted opens the list and PUTs on close", () => {
     seed({ scope: null });
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
     openList();
@@ -119,7 +96,7 @@ describe("ScopeControl", () => {
     expect(enableMutate).not.toHaveBeenCalled();
   });
 
-  test("checking an agent adds it to the agent axis alone", () => {
+  test("checking an agent adds it to the stored selection", () => {
     seed({ scope: only(["claude"]) });
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
     openList();
@@ -128,67 +105,15 @@ describe("ScopeControl", () => {
     expect(mutate).toHaveBeenCalledWith(only(["claude", "codex"]));
   });
 
-  test("the machine axis is a pick-list of the registry, never free text", () => {
-    seed({ scope: only(["claude"]) });
-    render(<ScopeControl kind="mcp_server" name="fs" enabled />);
-    openList();
-    // Unrestricted to start with, so the rows only appear once "every machine"
-    // is unticked — and then they are checkboxes, not an input.
-    fireEvent.click(screen.getByRole("checkbox", { name: /every machine/i }));
-    const row = within(screen.getByTestId(`scope-machine-${OTHER_ID}`));
-    expect(row.getByText("desktop")).toBeInTheDocument();
-    expect(row.getByRole("checkbox")).toBeInTheDocument();
-    expect(
-      within(screen.getByTestId("scope-machine-axis")).queryByRole("textbox"),
-    ).not.toBeInTheDocument();
-  });
-
-  test("selecting a machine writes the derived id, not the display name", () => {
-    seed({ scope: only(["claude"]) });
-    render(<ScopeControl kind="mcp_server" name="fs" enabled />);
-    openList();
-    fireEvent.click(screen.getByRole("checkbox", { name: /every machine/i }));
-    fireEvent.click(within(screen.getByTestId(`scope-machine-${OTHER_ID}`)).getByRole("checkbox"));
-    closeList();
-    expect(mutate).toHaveBeenCalledWith(only(["claude"], [OTHER_ID]));
-  });
-
-  test("the local machine's row is marked as this machine", () => {
-    seed({ scope: only(null, [LOCAL_ID]) });
-    render(<ScopeControl kind="mcp_server" name="fs" enabled />);
-    openList();
-    expect(
-      within(screen.getByTestId(`scope-machine-${LOCAL_ID}`)).getByText(/this machine/i),
-    ).toBeInTheDocument();
-  });
-
-  test("a machine axis that excludes this machine says so", () => {
-    seed({ scope: only(null, [OTHER_ID]) });
-    render(<ScopeControl kind="mcp_server" name="fs" enabled />);
-    openList();
-    expect(screen.getByText(/inactive on this machine/i)).toBeInTheDocument();
-  });
-
-  test("the machine axis is reported in preference to the agent axis", () => {
-    // Both axes exclude this session. The API reports the machine axis first,
-    // and so must the UI: a resource dormant on the whole machine is a
-    // different thing to explain.
-    seed({ scope: only(["ghost"], [OTHER_ID]) });
-    render(<ScopeControl kind="mcp_server" name="fs" enabled />);
-    openList();
-    expect(screen.getByText(/inactive on this machine/i)).toBeInTheDocument();
-    expect(screen.queryByText(/names no agent registered/i)).not.toBeInTheDocument();
-  });
-
-  test("an agent axis naming nobody registered here is explained as the agent axis", () => {
-    seed({ scope: only(["ghost"], [LOCAL_ID]) });
+  test("a scope naming nobody registered here is explained on the trigger and in the panel", () => {
+    seed({ scope: only(["ghost"]) });
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
     openList();
     expect(screen.getByText(/names no agent registered/i)).toBeInTheDocument();
   });
 
   test("a scope that excludes nothing raises no note", () => {
-    seed({ scope: only(["claude"], [LOCAL_ID]) });
+    seed({ scope: only(["claude"]) });
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
     openList();
     expect(screen.queryByText(/inactive/i)).not.toBeInTheDocument();
@@ -203,25 +128,17 @@ describe("ScopeControl", () => {
     expect(row.getByText(/not registered/i)).toBeInTheDocument();
   });
 
-  test("a machine id in scope that the registry does not hold is kept and badged", () => {
-    seed({ scope: only(null, ["deadbeefdeadbeef"]) });
-    render(<ScopeControl kind="mcp_server" name="fs" enabled />);
-    openList();
-    const row = within(screen.getByTestId("scope-machine-deadbeefdeadbeef"));
-    expect(row.getByText(/not in the registry/i)).toBeInTheDocument();
-  });
-
-  test("unticking every-agent stages an empty agent axis and warns it is dormant", () => {
-    seed({ scope: only(null, [LOCAL_ID]) });
+  test("unticking every-agent stages an empty agent list and warns it is dormant", () => {
+    seed({ scope: only(null) });
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
     openList();
     fireEvent.click(screen.getByRole("checkbox", { name: /every agent/i }));
     expect(screen.getByText(/dormant/i)).toBeInTheDocument();
     closeList();
-    expect(mutate).toHaveBeenCalledWith(only([], [LOCAL_ID]));
+    expect(mutate).toHaveBeenCalledWith(only([]));
   });
 
-  test("a restricted scope relaxed to both axes unrestricted normalises to null", () => {
+  test("a restricted scope relaxed to every agent normalises to null", () => {
     seed({ scope: only(["claude"]) });
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
     openList();
@@ -235,13 +152,6 @@ describe("ScopeControl", () => {
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
     openList();
     expect(screen.getByText(/no agents registered/i)).toBeInTheDocument();
-  });
-
-  test("shows the empty hint when the registry holds no machine", () => {
-    seed({ scope: only(null, []), machines: [] });
-    render(<ScopeControl kind="mcp_server" name="fs" enabled />);
-    openList();
-    expect(screen.getByText(/no machines yet/i)).toBeInTheDocument();
   });
 
   test("a kind that declares no scope still gets a working enable/disable", () => {
@@ -328,7 +238,7 @@ describe("ScopeControl", () => {
 describe("the selection commits when the popover closes", () => {
   afterEach(() => vi.clearAllMocks());
 
-  test("opening the lists writes nothing", () => {
+  test("opening the list writes nothing", () => {
     // Clicking the segment used to PUT straight away. That refetched the
     // resource list under an open popover, and the row it is anchored to moved
     // — so the panel appeared under a different row.

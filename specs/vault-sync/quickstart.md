@@ -132,10 +132,33 @@ An unchanged vault makes no commit at all. The serialization is deterministic,
 so a round with nothing to say produces nothing, and the repository's history
 records changes rather than heartbeats.
 
-## 5. Scope something to one machine
+## 5. Keep something off one machine
 
 Some things belong on one machine only — a work MCP server, a skill that needs a
-binary the laptop doesn't have. List your machines to get the id:
+binary the laptop doesn't have. The resource itself converges to both machines,
+because its configuration is worth having in both places. What it **reaches**
+does not: reach is set on the machine it applies to, and every machine sets its
+own.
+
+So say it on the laptop, sitting at the laptop:
+
+```bash
+coffer resource disable mcp_server:work-jira
+```
+
+It stays registered and visible there, its configuration keeps converging, and
+the gateway exposes none of its tools to any session on that machine. The
+desktop is untouched — and stays untouched, because nothing about reach is
+published.
+
+Restricting to one agent works the same way, and is also local to the machine
+you run it on:
+
+```bash
+coffer scope set mcp_server:work-jira --agents claude-code
+```
+
+List your machines whenever you want to see who is in the vault:
 
 ```bash
 coffer sync machines
@@ -147,24 +170,7 @@ a3f21c9e4b7d2610  Laptop    darwin  2026-09-13      4f2a91c0b8de  (this machine)
 b7c40d29e1f58a33  Desktop   darwin  2026-09-13      4f2a91c0b8de
 ```
 
-Then scope by id:
-
-```bash
-coffer scope set mcp_server:work-jira --machines b7c40d29e1f58a33
-```
-
-The resource still converges to both machines — it is registered and visible
-everywhere — it simply does not activate on the laptop, and the gateway exposes
-none of its tools to any session there. Combine the axes to say "only the Claude
-Code on the desktop":
-
-```bash
-coffer scope set mcp_server:work-jira \
-  --machines b7c40d29e1f58a33 --agents claude-code
-```
-
-Rename a machine whenever you like — scope references the id, so the label costs
-nothing:
+Rename one whenever you like — nothing keys on the label:
 
 ```bash
 coffer sync machine rename "Work desktop"

@@ -25,8 +25,8 @@ export type AgentType = "claude_code" | "codex";
  * What KIND of model a curated entry names (provider-switching FR-029). One
  * endpoint serves more than chat — the same base URL and key answer for
  * embeddings, images, video and speech — so every picker asks for the kind it
- * needs instead of being handed every id: a chat dropdown takes `text`, the
- * global embedding setting takes `embedding`.
+ * needs instead of being handed every id: a chat dropdown takes `text`. This
+ * says what the ENDPOINT serves; Coffer itself embeds nothing.
  */
 export type Modality = "text" | "embedding" | "image" | "video" | "audio";
 

@@ -555,26 +555,35 @@ async def test_retiring_this_machine_is_refused(client, fleet) -> None:
     assert _code(r) == "SYNC_CANNOT_RETIRE_SELF"
 
 
-async def test_retiring_a_machine_strips_it_from_every_scope(client, fleet) -> None:
+async def test_retiring_a_machine_removes_its_descriptor_and_nothing_else(client, fleet) -> None:
+    """The answer has one half, because the operation has one effect.
+
+    It used to carry a ``scopes_updated`` count: retiring a machine also
+    rewrote every scope that named it. No scope can name a machine now — reach
+    is machine-local — so there is nothing else to rewrite and nothing else to
+    report.
+    """
     a, b = fleet
     await b.converge()
     await b.converge()
     await a.register("mcp_server", "shared")
     await _configure(client, a)
     assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
-    await a.set_scope("mcp_server", "shared", Scope(machines=[MACHINE_B]))
+    await a.set_scope("mcp_server", "shared", Scope(agents=["claude-code"]))
 
     r = await client.delete(f"/api/v1/sync/machines/{MACHINE_B}")
 
     assert r.status_code == 200
-    assert r.json() == {"removed": True, "scopes_updated": 1}
+    assert r.json() == {"removed": True}
     remaining = {
         m["machine_id"] for m in (await client.get("/api/v1/sync/machines")).json()["machines"]
     }
     assert remaining == {MACHINE_A}
     resource = await a.find("mcp_server", "shared")
     assert resource is not None
-    assert resource.scope is None or MACHINE_B not in (resource.scope.machines or [])
+    assert resource.scope == Scope(agents=["claude-code"]), (
+        "retiring a machine rewrote a resource's reach"
+    )
 
 
 # --- the master key ---------------------------------------------------------

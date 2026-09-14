@@ -171,9 +171,7 @@ async def test_export_writes_every_area_and_counts_it(vault: VaultMachine) -> No
         "kind": "mcp_server",
         "name": "files",
         "description": None,
-        "enabled": True,
         "config": {"value": "files", "config_dir": "", "credential_ref": ""},
-        "scope": None,
     }
     assert (root / "resources" / "agent" / "coder.yaml").is_file()
 
@@ -193,6 +191,47 @@ async def test_export_writes_every_area_and_counts_it(vault: VaultMachine) -> No
         "state/peers": 1,
     }
     assert summary.path == str(root)
+    assert summary.failures == []
+
+
+async def test_export_leaves_reach_behind(vault: VaultMachine) -> None:
+    """The document is the resource, not the user's answer about it.
+
+    ``enabled`` and ``scope`` read like two fields and are one thing — how far
+    this resource reaches — and it is set per machine. A document that carried
+    it would let the machine that exported last silently re-answer, every
+    round, a question the other machine had already answered for itself.
+    """
+    await vault.register("mcp_server", "files", {"value": "files"})
+    await vault.set_enabled("mcp_server", "files", False)
+    await vault.set_scope("mcp_server", "files", Scope(agents=["codex"]))
+
+    await vault.exporter.export(vault.bundle, with_credentials=False)
+
+    path = pathlib.Path(vault.bundle.path) / "resources" / "mcp_server" / "files.yaml"
+    assert set(_doc(path)) == {"kind", "name", "description", "config"}
+    # Not merely absent as keys — absent as text, so a future encoder cannot
+    # smuggle either back in under a nested name.
+    raw = path.read_text(encoding="utf-8")
+    assert "enabled" not in raw
+    assert "scope" not in raw
+
+
+async def test_export_withholds_a_machine_local_kind_entirely(vault: VaultMachine) -> None:
+    """A channel is one host's inbound surface — its webhook URL, its tunnel,
+    its port — so it gets no document at all, and is not counted as one either.
+
+    The counting half matters: a withheld kind reported as a failure would read
+    to the user like a row that could not be published, and a withheld kind
+    counted as exported would be a document nobody can find."""
+    await vault.register("mcp_server", "files", {"value": "files"})
+    await vault.register("channel", "seatalk", {"value": "port-8787"})
+
+    summary = await vault.exporter.export(vault.bundle, with_credentials=False)
+
+    root = pathlib.Path(vault.bundle.path)
+    assert not (root / "resources" / "channel").exists()
+    assert _areas(summary)["resources"] == 1
     assert summary.failures == []
 
 
@@ -250,7 +289,7 @@ async def test_an_export_never_deletes_a_path_this_vault_has_not_absorbed(
     # machine's documents: files in the tree that local state does not produce.
     pending = {
         "resources/mcp_server/theirs.yaml": yaml.safe_dump(
-            {"kind": "mcp_server", "name": "theirs", "enabled": True, "config": {"value": "b"}},
+            {"kind": "mcp_server", "name": "theirs", "config": {"value": "b"}},
             sort_keys=True,
         ),
         "state/peers/peer-2.yaml": yaml.safe_dump({"paired": False}, sort_keys=True),
@@ -444,20 +483,24 @@ async def test_resource_applier_registers_then_updates_a_row(vault: VaultMachine
             "kind": "mcp_server",
             "name": "files",
             "description": "the file server",
-            "enabled": False,
             "config": {"value": "first", "config_dir": "${HOME}/.files"},
-            "scope": {"agents": ["claude-code"], "machines": None},
         },
     )
 
     await applier.upsert(path)
     created = await vault.resources.get(ResourceRef("mcp_server", "files"))
     assert created.description == "the file server"
-    assert created.enabled is False
     assert created.config["value"] == "first"
     # ``${HOME}`` expands against THIS machine's home, not the exporter's.
     assert created.config["config_dir"] == f"{vault.home}/.files"
-    assert created.scope == Scope(agents=["claude-code"], machines=None)
+    # A row nobody here has looked at yet gets this machine's own default
+    # reach, because nobody here has answered that question for it.
+    assert created.enabled is True
+    assert created.scope is None
+
+    # What the user does next is the reach decision, made here.
+    await vault.set_enabled("mcp_server", "files", False)
+    await vault.set_scope("mcp_server", "files", Scope(agents=["claude-code"]))
 
     _stage_doc(
         vault.worktree,
@@ -466,9 +509,7 @@ async def test_resource_applier_registers_then_updates_a_row(vault: VaultMachine
             "kind": "mcp_server",
             "name": "files",
             "description": "renamed in the doc",
-            "enabled": True,
             "config": {"value": "second", "config_dir": "${HOME}/elsewhere"},
-            "scope": None,
         },
     )
     await applier.upsert(path)
@@ -476,11 +517,96 @@ async def test_resource_applier_registers_then_updates_a_row(vault: VaultMachine
     updated = await vault.resources.get(ResourceRef("mcp_server", "files"))
     assert updated.id == created.id, "the row was updated, not replaced"
     assert updated.description == "renamed in the doc"
-    assert updated.enabled is True
     assert updated.config["value"] == "second"
     assert updated.config["config_dir"] == f"{vault.home}/elsewhere"
-    assert updated.scope is None
+    # The update carried config and description and revised no reach: the
+    # answer this machine gave a moment ago is still the answer.
+    assert updated.enabled is False
+    assert updated.scope == Scope(agents=["claude-code"])
     assert await vault.resource_names("mcp_server") == ["files"]
+
+
+async def test_resource_applier_takes_an_older_builds_document_without_its_reach(
+    vault: VaultMachine,
+) -> None:
+    """The shared tree still holds documents written before reach stopped
+    travelling, and machines that have not upgraded keep writing more.
+
+    Such a document must import — refusing it the way an unknown field is
+    refused would quarantine it on every upgraded machine, so one stale machine
+    would stall the fleet — and what it says about reach must go nowhere.
+    """
+    applier = ResourceApplier(
+        vault.resources, worktree=vault.worktree, gates=[], home=str(vault.home)
+    )
+    await vault.register("mcp_server", "files", {"value": "local"})
+    await vault.set_enabled("mcp_server", "files", False)
+    await vault.set_scope("mcp_server", "files", Scope(agents=["claude-code"]))
+
+    path = "resources/mcp_server/files.yaml"
+    _stage_doc(
+        vault.worktree,
+        path,
+        {
+            "kind": "mcp_server",
+            "name": "files",
+            "description": None,
+            "enabled": True,
+            "config": {"value": "from-the-old-build"},
+            "scope": {"agents": [], "machines": [MACHINE_B]},
+        },
+    )
+
+    await applier.upsert(path)
+
+    got = await vault.resources.get(ResourceRef("mcp_server", "files"))
+    assert got.config["value"] == "from-the-old-build", "the document must still import"
+    # Neither half of the reach it carried — not the ``enabled: true`` that
+    # would have switched this server back on, nor the two scope axes, one of
+    # which names a machine this build has no field for.
+    assert got.enabled is False
+    assert got.scope == Scope(agents=["claude-code"])
+
+
+async def test_bundle_reads_an_older_builds_document_but_not_a_misspelled_one(
+    vault: VaultMachine,
+) -> None:
+    """The same leniency at the seam that validates a whole document.
+
+    ``Bundle.read_resource_docs`` is where a document is parsed rather than
+    merely read key by key, so it is where "tolerate the two retired reach
+    fields, refuse anything else" is decidable. Tolerated means *dropped*: the
+    parsed document has no field left to carry reach in.
+    """
+    root = pathlib.Path(vault.bundle.path)
+    _stage_doc(
+        root,
+        "resources/mcp_server/old.yaml",
+        {
+            "kind": "mcp_server",
+            "name": "old",
+            "description": None,
+            "enabled": False,
+            "config": {"value": "v"},
+            "scope": {"agents": [], "machines": [MACHINE_B]},
+        },
+    )
+
+    docs = vault.bundle.read_resource_docs()
+
+    assert [(d.kind, d.name, d.config) for d in docs] == [("mcp_server", "old", {"value": "v"})]
+    assert not hasattr(docs[0], "enabled")
+    assert not hasattr(docs[0], "scope")
+
+    # And a typo'd key is still a document that would import as something
+    # other than what it says.
+    _stage_doc(
+        root,
+        "resources/mcp_server/typo.yaml",
+        {"kind": "mcp_server", "name": "typo", "description": None, "config": {}, "scop": None},
+    )
+    with pytest.raises(SyncSerializationError):
+        vault.bundle.read_resource_docs()
 
 
 async def test_resource_applier_runs_the_gate_before_it_writes_anything(
@@ -497,9 +623,7 @@ async def test_resource_applier_runs_the_gate_before_it_writes_anything(
         {
             "kind": "mcp_server",
             "name": "blocked",
-            "enabled": True,
             "config": {"value": "nope", "config_dir": "${HOME}/.gone"},
-            "scope": {"agents": ["codex"], "machines": None},
         },
     )
 
@@ -510,12 +634,90 @@ async def test_resource_applier_runs_the_gate_before_it_writes_anything(
     assert await vault.find("mcp_server", "blocked") is None
     assert await vault.resource_names("mcp_server") == []
 
-    # And the gate judged this machine's view of the document — expanded
-    # config, parsed scope — rather than the portable form on disk.
-    assert len(vault.gate.seen) == 1
-    config, scope = vault.gate.seen[0]
-    assert config["config_dir"] == f"{vault.home}/.gone"
-    assert scope == Scope(agents=["codex"], machines=None)
+    # And the gate judged this machine's view of the document — the expanded
+    # config — rather than the portable form on disk. It is handed the config
+    # and nothing else: reach does not travel, so there is no scope to pass.
+    assert vault.gate.seen == [{"value": "nope", "config_dir": f"{vault.home}/.gone"}]
+
+
+# --- apply: the kind that never travels -------------------------------------
+
+
+async def test_resource_applier_ignores_a_channel_document(vault: VaultMachine) -> None:
+    """A channel is withheld in both directions, and ``upsert`` is the easy
+    half: a document that reached this machine anyway — written by a build that
+    still published channels — must not register one here."""
+    applier = ResourceApplier(
+        vault.resources, worktree=vault.worktree, gates=[], home=str(vault.home)
+    )
+    _stage_doc(
+        vault.worktree,
+        "resources/channel/theirs.yaml",
+        {
+            "kind": "channel",
+            "name": "theirs",
+            "description": None,
+            "config": {"value": "their-port-8787"},
+        },
+    )
+
+    await applier.upsert("resources/channel/theirs.yaml")
+
+    assert await vault.resource_names("channel") == []
+
+
+async def test_a_channel_deletion_in_the_tree_does_not_delete_the_local_channel(
+    vault: VaultMachine,
+) -> None:
+    """The safety property, asserted where the damage would be done.
+
+    The exporter stopped writing channel documents, so the first differential
+    export after this build lands publishes the channel documents already in
+    the shared tree as *deletions* — a genuine diff, indistinguishable at the
+    git layer from the user having deleted those channels. A machine that
+    honoured it would walk its own channels out of its registry, taking their
+    pairings and their credentials with them, on the round that was supposed to
+    stop channels travelling in the first place.
+
+    So whatever a ``resources/channel/`` path says, this machine's answer is
+    that the path is not about it.
+    """
+    applier = ResourceApplier(
+        vault.resources, worktree=vault.worktree, gates=[], home=str(vault.home)
+    )
+    # This machine's own channel, registered here and configured for this host.
+    await vault.register("channel", "seatalk", {"value": "my-port-8787"})
+    vault.set_credential("channel/seatalk/token", "pairing-secret")
+    # And the document an older build published, sitting in the working tree
+    # under the same name — which is what makes the deletion look addressed to
+    # this machine's channel.
+    _stage_doc(
+        vault.worktree,
+        "resources/channel/seatalk.yaml",
+        {
+            "kind": "channel",
+            "name": "seatalk",
+            "description": None,
+            "config": {"value": "someone-elses-port-8787"},
+        },
+    )
+
+    await applier.remove("resources/channel/seatalk.yaml")
+
+    surviving = await vault.find("channel", "seatalk")
+    assert surviving is not None, (
+        "a channel document's deletion walked this machine's own channel out of the registry"
+    )
+    assert surviving.config["value"] == "my-port-8787"
+    # And the credential the channel cites was not released along with it —
+    # deleting the row is what would have orphaned it.
+    assert vault.has_credential("channel/seatalk/token")
+
+    # A kind that does travel is still removable through the same applier, so
+    # this is a rule about channels and not a removal that stopped working.
+    await vault.register("mcp_server", "files", {"value": "files"})
+    await applier.remove("resources/mcp_server/files.yaml")
+    assert await vault.resource_names("mcp_server") == []
 
 
 async def test_resource_applier_removes_a_row_and_agrees_when_it_is_already_gone(

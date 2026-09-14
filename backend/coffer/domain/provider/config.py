@@ -93,8 +93,9 @@ class CuratedModel(BaseModel):
     """One entry of a connection's offered set: an opaque id plus its kind.
 
     The modality is what lets one connection serve several surfaces from a
-    single credential — a chat picker narrows to ``text``, the global embedding
-    setting to ``embedding`` — instead of every id being offered everywhere. It
+    single credential — a chat picker narrows to ``text`` — instead of every id
+    being offered everywhere. It records what the ENDPOINT serves, which is why
+    ``embedding`` remains a valid kind although Coffer embeds nothing. It
     is STORED, not derived: Coffer guesses a value only when introspection
     discovers an id the user has not classified yet, and the user corrects it.
     """

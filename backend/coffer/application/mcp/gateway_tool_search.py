@@ -9,23 +9,13 @@ invocation-logging + result-wrapping live in ``gateway_builtin`` (DRY).
 
 from __future__ import annotations
 
-import hashlib
-import logging
-from collections.abc import Sequence
 from typing import Any
 
 from coffer.application.builtin_tools import COFFER_TOOL_PREFIX
-from coffer.domain.mcp.tool_search import ScoredTool, rank_by_similarity, rank_tools
+from coffer.domain.mcp.tool_search import rank_tools
 from coffer.domain.mcp.tool_tiering import split_prefixed
 
-_logger = logging.getLogger(__name__)
-
 TOOL_SEARCH_NAME = f"{COFFER_TOOL_PREFIX}search_tools"
-
-# A tool's embedding is stable for a given (name + description), so cache it
-# across searches: only the query is embedded each call (the upstream catalogue
-# is small and changes rarely). Keyed by a hash of the embedded text.
-_EMBED_CACHE: dict[str, list[float]] = {}
 
 _DEFAULT_TOP_K = 5
 _MAX_TOP_K = 20
@@ -88,15 +78,14 @@ def _clamp_top_k(raw: Any) -> int:
 async def execute_tool_search(
     args: dict[str, Any],
     aggregated_tools: list[dict[str, Any]],
-    embedder: Any | None = None,
 ) -> dict[str, Any]:
     """Rank ``aggregated_tools`` against ``args['query']``; return the top-k.
 
     Coffer's own ``coffer__`` built-ins are excluded so search only surfaces
-    upstream capabilities (the overload source). When an ``embedder`` is
-    configured, ranking is semantic (cosine over embeddings); otherwise — or if
-    embedding fails — it falls back to the deterministic BM25 ranker
-    (ADR builtin-agent-is-internal-capability).
+    upstream capabilities (the overload source). Ranking is the deterministic
+    BM25 ranker (ADR builtin-agent-is-internal-capability); the alternative
+    cosine-over-embeddings path was removed with every other use of embeddings
+    in Coffer, and was never wired to a real embedder in any case.
     """
     query = args.get("query")
     if not isinstance(query, str) or not query.strip():
@@ -108,7 +97,7 @@ async def execute_tool_search(
     ]
     catalogue = _search_corpus(candidates)
 
-    ranked = await _rank(query, catalogue, top_k, embedder)
+    ranked = rank_tools(query, catalogue, top_k)
 
     tools = [
         {
@@ -120,55 +109,6 @@ async def execute_tool_search(
         for s in ranked
     ]
     return {"tools": tools, "total_searched": len(candidates)}
-
-
-async def _rank(
-    query: str,
-    catalogue: list[tuple[str, str]],
-    top_k: int,
-    embedder: Any | None,
-) -> list[ScoredTool]:
-    """Semantic ranking when an embedder is configured; BM25 otherwise.
-
-    Any embedding failure (engine unavailable, empty vectors, …) degrades to the
-    BM25 ranker so search_tools never hard-fails on an embedder problem.
-    """
-    if embedder is None:
-        return rank_tools(query, catalogue, top_k)
-    try:
-        ranked = await _semantic_rank(query, catalogue, top_k, embedder)
-    except Exception:
-        _logger.warning("search_tools semantic ranking failed; falling back to BM25", exc_info=True)
-        return rank_tools(query, catalogue, top_k)
-    return ranked if ranked else rank_tools(query, catalogue, top_k)
-
-
-async def _semantic_rank(
-    query: str,
-    catalogue: list[tuple[str, str]],
-    top_k: int,
-    embedder: Any,
-) -> list[ScoredTool]:
-    doc_texts = [f"{name}: {description}" for name, description in catalogue]
-    doc_vecs = await _embed_cached(doc_texts, embedder)
-    query_vecs = await embedder.embed([query])
-    if not query_vecs:
-        return []
-    return rank_by_similarity(query_vecs[0], doc_vecs, top_k)
-
-
-async def _embed_cached(texts: Sequence[str], embedder: Any) -> list[list[float]]:
-    """Embed ``texts``, reusing cached vectors and batching the misses."""
-    missing = [t for t in texts if _cache_key(t) not in _EMBED_CACHE]
-    if missing:
-        vectors = await embedder.embed(missing)
-        for text, vector in zip(missing, vectors, strict=False):
-            _EMBED_CACHE[_cache_key(text)] = list(vector)
-    return [_EMBED_CACHE[_cache_key(t)] for t in texts]
-
-
-def _cache_key(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 __all__ = [

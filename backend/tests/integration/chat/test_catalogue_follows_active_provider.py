@@ -167,7 +167,7 @@ async def _gateway(
     # create argument (ADR per-agent-resource-scope).
     await env.resources.update_scope(
         ResourceRef("provider", name),
-        Scope(agents=[a.value for a in agents], machines=None),
+        Scope(agents=[a.value for a in agents]),
         actor="test",
     )
     await env.providers.activate(name)

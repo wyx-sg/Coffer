@@ -11,8 +11,8 @@
 //
 // EMPTY selection = NO RESTRICTION — every model the endpoint serves is offered.
 // A non-empty one narrows every downstream picker to exactly those entries OF
-// THE MODALITY it serves (useAgentConnectionDraft takes the `text` ones, the
-// global embedding setting the `embedding` ones). That is why the banner above
+// THE MODALITY it serves (useAgentConnectionDraft takes the `text` ones). That
+// is why the banner above
 // the table, not the table itself, is what tells the user where they stand: an
 // empty table is not an empty offering.
 //

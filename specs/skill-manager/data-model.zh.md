@@ -103,19 +103,19 @@ frontmatter 的 `description` 持久化在 skill kind 自己的 config 字段 `S
 投递恰好只有一对输入，二者都在 `skill` 资源自身上：框架级的 `enabled` 标志与
 框架级的 `scope`
 （[ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.zh.md)）。
-`scope` 是两条相互独立、按 `AND` 组合的允许列表——`agents` 与 `machines`，
-某一轴为 `null` 即该轴不设限——所以答案既取决于哪个 agent 在问，也取决于是哪台
-机器在问：
+`scope` 是一条 agent 允许列表，为 `null` 即不设限，所以答案只取决于哪个 agent
+在问，别无其他：
 
 ```
-delivered(skill, agent) 于本机  ⟺  skill.enabled
-                               AND scope.is_active(skill.scope, agent)
+delivered(skill, agent)  ⟺  skill.enabled
+                         AND is_active(skill.scope, agent)
 ```
 
-这里的 `scope` 是 `ScopeEvaluator`（`application/scope_evaluator.py`），由组装根
-构造时就已经把本机的派生 id 绑了进去，因此投递侧没有任何调用点需要再传一个
-machine 参数。一个 `scope.machines` 排除了本机的 skill，在本机不会被投递给任何
-agent——它是在本机休眠，而不是被禁用。
+`is_active` 就是 `domain/scope.py` 里的自由函数。组装根不需要构造任何 evaluator
+对象，也没有机器 id 要绑进去；投递侧的调用点直接调这个判定。它读到的这一对就是
+该 skill 的触达（reach），而触达从不离开本机（spec vault-sync
+`## What does not sync`）——所以「在本机休眠、在笔记本上被投递」是两行各有各的
+答案，而不是一条 scope 带着两条轴。
 
 agent 资源**不**携带任何 skill 投递策略：`follow_all_skills` 与
 `skill_exclusions` 已从 `AgentConfig`（spec agent-registry 的 schema）中移除，迁移
@@ -127,7 +127,7 @@ agent 资源**不**携带任何 skill 投递策略：`follow_all_skills` 与
 原先位于 `follow_ops.py`）。它计算
 
 ```
-wanted = {s.name for s in skills if s.enabled and scope.is_active(s.scope, agent_name)}
+wanted = {s.name for s in skills if s.enabled and is_active(s.scope, agent_name)}
 ```
 
 然后投递 `wanted - bound`、收回 `bound - wanted`；其中 `bound` 是
@@ -139,9 +139,9 @@ wanted = {s.name for s in skills if s.enabled and scope.is_active(s.scope, agent
 import agent-kind 代码（Contract 5c）。
 
 **Wire 结构。** `SkillOut` 新增 `scope`（`ScopeOut | None`，始终输出，位置紧
-跟在 `enabled` 之后）——即这个 skill 依据哪两条允许列表 `{agents, machines}`
-被投递：整个字段为 `null` 表示每台机器上的每个 agent；某一轴为 `null` 表示该轴
-不设限；某一轴为 `[]` 表示该轴什么都匹配不上。`SkillBindingOut` 去掉 `enabled`：它现在只带
+跟在 `enabled` 之后）——即这个 skill 依据哪条允许列表 `{agents}` 被投递：整个
+字段为 `null` 表示每个 agent；为 `[]` 表示没有任何 agent 匹配得上。
+`SkillBindingOut` 去掉 `enabled`：它现在只带
 `agent_name`、`last_linked_at`、`last_link_path` 与 `link_mode`，而这一行本身
 存在就意味着「该 agent 当前持有一份已投递副本」。按 `(skill, agent)` 的
 `POST /skills/{name}/enable` 与 `/disable` 两条路由（及其
@@ -262,7 +262,7 @@ workspace 修订的新增能力（以自由函数实现于 `unmanaged_ops.py` /
 | `list_unmanaged(agent_name) -> list[UnmanagedView]`                    | FR-022 对 agent skill 位置的只读扫描（见上文「未托管 skill」）。                                                                                                   |
 | `adopt_unmanaged(agent_name, skill_name, location, actor) -> Resource` | FR-023：校验 → 移动到 `~/.coffer/skills/<name>/` → 注册 → 把托管链接投递到 `<config_dir>/skills/<name>` → 为该 agent 记录这次投递；audit `skill_adopted`。 |
 | `delete_unmanaged(agent_name, skill_name, location, actor) -> None`    | FR-024：仅从磁盘删除该文件夹；audit `skill_unmanaged_deleted`。                                                                                                    |
-| 投递调和（`delivery_ops.py`）                                          | FR-025：`apply_scope_for_agent` —— 按 `skill.enabled AND scope.is_active(skill.scope, agent)`（两条 scope 轴都判定，本机已绑进 evaluator）重算该 agent 应有的集合，投递缺失的部分、收回不再需要的部分。        |
+| 投递调和（`delivery_ops.py`）                                          | FR-025：`apply_scope_for_agent` —— 按 `skill.enabled AND is_active(skill.scope, agent)` 重算该 agent 应有的集合，投递缺失的部分、收回不再需要的部分。        |
 
 ### 文件查看器（`application/skill/file_ops.py`）
 
