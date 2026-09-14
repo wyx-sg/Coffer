@@ -305,6 +305,9 @@
       "master_key_exported": "Exported the master key",
       "master_key_imported": "Imported a master key",
       "master_key_relocated": "Master key storage changed",
+      "memory_aggregated": "Synced memory from the agents' own stores",
+      "memory_delivery_installed": "Installed memory delivery into {{resource}}",
+      "memory_delivery_removed": "Removed memory delivery from {{resource}}",
       "provider_internal_default_set": "Made {{resource}} the internal engine's default",
       "provider_switched": "Switched to provider {{resource}}",
       "resource_created": "Registered {{resource}}",
@@ -323,8 +326,12 @@
       "skill_unbound": "Unbound skill {{resource}} from {{key}}",
       "skill_unmanaged_deleted": "Deleted unmanaged skill {{resource}}",
       "skill_updated": "Updated skill {{resource}}",
-      "token_rotated": "Access token rotated",
-      "vault_backed_up": "Backed up the vault"
+      "sync_confirmed": "Confirmed a held converge round",
+      "sync_machine_removed": "Retired a machine from the sync registry",
+      "sync_rejected": "Rejected a held converge round",
+      "sync_rolled_back": "Rolled a converge round back",
+      "sync_run": "Ran a converge round",
+      "token_rotated": "Access token rotated"
     },
     "capType": {
       "tool": "tool",
@@ -406,6 +413,10 @@
         "conversations": {
           "name": "Delete archived chats",
           "description": "Delete archived conversations this many days after archival (with their messages)."
+        },
+        "sync_runs": {
+          "name": "Sync rounds",
+          "description": "History of converge rounds against the sync remote."
         }
       }
     },
@@ -640,8 +651,13 @@
     "SKILL_FILE_STALE": "The skill file changed on disk since you loaded it. Reload and retry.",
     "SKILL_INVALID": "The skill is invalid",
     "SKILL_OUT_OF_SCOPE": "This skill isn't in scope for this agent on this machine",
+    "SYNC_APPLIER_MISSING": "Nothing in this vault knows how to apply that path",
     "SYNC_BUNDLE_INVALID": "That folder is not a Coffer export bundle",
     "SYNC_BUNDLE_TOO_NEW": "That bundle was written by a newer Coffer; upgrade before importing",
+    "SYNC_CANNOT_RETIRE_SELF": "A machine cannot retire itself",
+    "SYNC_JOIN_AMBIGUOUS": "This machine has converged with this remote before, but the commit it reached is gone from the remote's history — re-run the join and choose whether to keep this vault's own documents or rebuild this machine from the remote",
+    "SYNC_NOTHING_PENDING": "No converge round is waiting for confirmation",
+    "SYNC_NOTHING_TO_ROLL_BACK": "There is no round to roll back to",
     "SYNC_SERIALIZATION_INVALID": "That bundle's contents could not be read",
     "TARGET_CONFLICT": "A skill already exists at the target location",
     "TOOL_DISABLED": "This capability is disabled",
@@ -1025,16 +1041,6 @@
         "embeddingUnavailable": "the embedding call failed",
         "noneAboveThreshold": "nothing scored high enough to rank"
       }
-    },
-    "index": {
-      "unavailableTitle": "Ranked search is unavailable",
-      "unavailableBody": "No internal connection is configured, so search falls back to a literal match over the files. Set one up in Settings to enable ranked search.",
-      "goToSettings": "Go to Settings",
-      "staleTitle": "Index is behind",
-      "staleBody": "{{indexed}} of {{total}} files are indexed for ranked search. The rest are searched literally until you rebuild.",
-      "rebuild": "Rebuild index",
-      "rebuilding": "Rebuilding…",
-      "rebuildDone": "Index rebuilt."
     }
   },
   "memory": {
@@ -1043,7 +1049,7 @@
     "sync": "Sync",
     "syncing": "Syncing…",
     "syncDone": "Synced {{count}} facts across {{partitions}} partitions.",
-    "syncFailures": "{{count}} source(s) failed to parse — see the audit log below.",
+    "syncFailures": "{{count}} source(s) failed to parse — see the Activity page.",
     "loadFailed": "Failed to load partitions",
     "empty": "No partitions yet. Sync to read what your registered agents already know.",
     "searchPlaceholder": "Search partitions…",
@@ -1056,9 +1062,8 @@
     },
     "delivery": {
       "title": "Delivery",
-      "subtitle": "Session-start delivery for an agent you drive yourself, through its own hook. Installed is not the signal — last fired is.",
+      "subtitle": "Coffer's session-start hook in this agent's own settings. Installed is not the signal — last fired is.",
       "loadFailed": "Failed to load delivery status",
-      "empty": "No agent supports session-start delivery yet.",
       "installed": "Installed",
       "notInstalled": "Not installed",
       "neverFired": "Installed — never fired",
@@ -1070,20 +1075,8 @@
       "removeConfirmTitle": "Remove delivery for {{agent}}?",
       "removeConfirmDescription": "This only takes out Coffer's own marker-scoped entry — nothing else {{agent}} has configured is touched.",
       "installDone": "Delivery installed.",
-      "removeDone": "Delivery removed."
-    },
-    "audit": {
-      "title": "Audit log",
-      "loadFailed": "Failed to load the audit log",
-      "empty": "No memory activity recorded yet.",
-      "events": {
-        "memory_aggregated": "Synced",
-        "memory_organised": "Organised",
-        "memory_override_set": "Override set",
-        "memory_override_cleared": "Override cleared",
-        "memory_delivery_installed": "Delivery installed",
-        "memory_delivery_removed": "Delivery removed"
-      }
+      "removeDone": "Delivery removed.",
+      "unsupported": "This agent has no hook event delivery can attach to."
     },
     "factType": {
       "user": "Preference",
@@ -1397,6 +1390,7 @@
     "subtitle": "Converge this vault with a git repository you own, so every machine you work on holds the same knowledge, skills and configuration.",
     "tabs": {
       "status": "Status",
+      "history": "History",
       "machines": "Machines"
     },
     "areas": {
@@ -1451,6 +1445,29 @@
       "failure": "{{path}} — {{reason}}",
       "lockedRefs": "Credentials this machine cannot decrypt",
       "lockedRefsHint": "This vault holds their ciphertext but not the key that opens it. Import the master key from the machine that has it, below."
+    },
+    "history": {
+      "title": "History",
+      "description": "Every converge round this machine has run, newest first. The rounds that changed nothing are listed too — they are what shows the vault was still converging.",
+      "searchPlaceholder": "Search rounds…",
+      "empty": "No round has run yet.",
+      "nothingFurther": "This round reported nothing further.",
+      "ran": "Ran {{from}} → {{to}}",
+      "countsShort": "+{{added}} ~{{modified}} −{{deleted}}",
+      "joinShort": {
+        "new": "Joined as new",
+        "returning": "Rejoined"
+      },
+      "filter": {
+        "outcome": "Outcome"
+      },
+      "table": {
+        "when": "When",
+        "outcome": "Outcome",
+        "applied": "Applied here",
+        "published": "Published",
+        "commit": "Commit"
+      }
     },
     "conflict": {
       "title": "A conflict stopped this round",
