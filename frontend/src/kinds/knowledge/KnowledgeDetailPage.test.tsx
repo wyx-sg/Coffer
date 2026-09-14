@@ -134,4 +134,27 @@ describe("KnowledgeDetailPage", () => {
     renderPage();
     expect(screen.getByText(/select a file/i)).toBeInTheDocument();
   });
+
+  test("offers the way back to the collection list", () => {
+    // A collection is reached by clicking a row, so leaving it must not depend
+    // on the browser's own back button — every other detail page carries this.
+    treeMock.mockReturnValue({
+      data: { path: "shopee", directories: [], files: [] },
+      isPending: false,
+      error: null,
+    } as unknown as ReturnType<typeof useKnowledgeTree>);
+    fileMock.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      error: null,
+    } as unknown as ReturnType<typeof useKnowledgeFile>);
+    tidyMock.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as unknown as ReturnType<typeof useTidyCollection>);
+    stubInertDefaults();
+
+    renderPage();
+    expect(screen.getByRole("button", { name: /back to knowledge/i })).toBeInTheDocument();
+  });
 });
